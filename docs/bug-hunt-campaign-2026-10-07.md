@@ -204,10 +204,11 @@ gate-off arm and a hidden-information permutation in its test.
   planner prunes surplus (a Gauntlet-of-Might Mountain beside a Sol Ring
   for {1}{R}); Winter's Night carries no bonus descriptor (the run-time
   stop covers its burn).
-- **For the owner:** the Deck Lab's default rules preset is `modern` (no
-  mana burn) while a player's default is `modern_mana_burn`; Lab
-  measurements therefore hide mana-burn mistakes. Changing the default
-  moves every Lab baseline, so it is left as it is.
+- **Ruled by the owner after the campaign:** the Deck Lab's default rules
+  preset was `modern` (no mana burn) while a player's default is
+  `modern_mana_burn`, so Lab measurements hid mana-burn mistakes. The Lab
+  now defaults to the player's preset (`DeckLab/README.md`, "The rules
+  default"); a baseline taken before is reproduced with `--rules modern`.
 - Unconfirmed by any probe, so not changed: a damage source's colour after
   it has left play is read as printed; cards drawn into the opening hand
   count as "drawn this turn" on turn 1; Su-Chi's death mana in combat.

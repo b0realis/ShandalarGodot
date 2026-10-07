@@ -18821,10 +18821,14 @@ failing probe; nine test-first fixers on disjoint files fixed them
   instant-speed responses still hold a tap-trigger cast and retry it (only
   the main-phase cast uses the bracket); the planner never swaps a
   colour-choice source's colour when pruning; a deck saved stale before
-  0.50.16 asks for its pack at battle setup until re-saved. **For the
-  owner**: the Deck Lab's default rules preset is `modern` (no mana burn)
-  while the player's default is `modern_mana_burn`, so Lab measurements hide
-  mana-burn mistakes; changing it moves every Lab baseline.
+  0.50.16 asks for its pack at battle setup until re-saved.
+- **Ruled by the owner afterwards (2026-10-07)**: the Deck Lab's default
+  rules preset is now the player's own, `modern_mana_burn` (it was plain
+  `modern`, which hid mana-burn mistakes); `--rules` takes every preset id,
+  a run interrupted before 0.50.16 resumes under `modern`, and a baseline
+  from before is reproduced with `--rules modern` (`DeckLab/README.md`,
+  "The rules default"). The CI shards' suite guard is 40 minutes
+  (`SUITE_TIMEOUT: 2400` in `gate.yml`; shard 1 had taken 29m42s).
 
 ## 2026-10-06 — Pack 9: the Tempest block (0.50.15)
 

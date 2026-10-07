@@ -338,9 +338,12 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
                       AI profile's own `sideboard_swaps`, so
                       --profile-a/--profile-b change this too, and
                       apprentice never sideboards at all.
-  --rules NAME        fifth | modern (default modern). `fifth` turns every
-                      rules fork to the 1997 answer, so a whole pool can
-                      be replayed under the ruleset the original played.
+  --rules NAME        modern_mana_burn | modern | fifth (default
+                      modern_mana_burn: the table a player's own duel
+                      starts at — modern rules, mana burn on). `modern`
+                      turns mana burn off; `fifth` turns every rules fork
+                      to the 1997 answer, so a whole pool can be replayed
+                      under the ruleset the original played.
   --rule KEY=on|off   Override one fork on top of --rules. Repeatable.
                       Keys: mana_burn, attackers_revocable,
                       tapped_artifacts_stop, life_checked_at_phase_end,
@@ -705,6 +708,7 @@ func _main(argv: PackedStringArray) -> int:
 				return _refuse(2, refusal, {"kind": "packs"})
 			_packs_in_force = chosen.ids
 	var opts := _parse_args(argv + _resume_chrome)
+	_rules_in_force = String(opts.get("rules", RulesOptions.DEFAULT_PRESET))
 	_quiet = bool(opts.get("quiet", false))
 	_banner_wanted = not bool(opts.get("no_banner", false)) \
 		and OS.get_environment(LabConsole.NO_BANNER_ENV) != "1"
@@ -1352,13 +1356,16 @@ func _main(argv: PackedStringArray) -> int:
 const RUN_JSON := "run.json"
 var _argv := PackedStringArray()
 var _run_started := 0
+## The rules preset the run plays under, written into every run.json so a
+## `--resume` reads it back (see [method resume_rules]).
+var _rules_in_force := RulesOptions.DEFAULT_PRESET
 
 
 func _run_json(out_dir: String, exit: Variant, run: Dictionary) -> bool:
 	var record := {
 		"tool": "deck_lab", "version": LabConsole.version(),
 		"git": LabConsole.git_sha(),
-		"argv": Array(_argv),
+		"argv": Array(_argv), "rules": _rules_in_force,
 		"packs": _packs_in_force, "packs_on": packs_on(),
 		"out": out_dir,
 		"started": Time.get_datetime_string_from_unix_time(_run_started) + "Z",
@@ -1443,10 +1450,32 @@ func _resume(dir: String) -> int:
 	if argv.has("--resume"):
 		return _refuse(2, "the run in '%s' was itself a --resume line; nothing to read back" % dir,
 			{"kind": "resume", "path": dir, "flag": "--resume"})
+	argv = resume_rules(argv, run)
 	_resume_dir = dir
 	_run_id = String(run.get("run_id", ""))
 	_reused = checkpoint_records(absolute.path_join(CHECKPOINT), _run_id)
 	return _main(argv)
+
+
+## A run started before the default became modern_mana_burn (0.50.16,
+## the owner's ruling of 2026-10-07) wrote no `rules` into its run.json and
+## played plain modern unless its line said otherwise: a resume finishes it
+## under the rules it started with, not under today's default.
+static func resume_rules(argv: PackedStringArray, run: Dictionary) -> PackedStringArray:
+	if argv.has("--rules") or run.has("rules"):
+		return argv
+	var out := argv.duplicate()
+	out.append_array(PackedStringArray(["--rules", "modern"]))
+	return out
+
+
+## The rules forks a Lab duel plays under: the `--rules` preset (default
+## RulesOptions.DEFAULT_PRESET, the player's own table), then each
+## `--rule` override on top.
+static func apply_rules(rules: RulesOptions, duel_opts: Dictionary) -> void:
+	rules.set_preset(String(duel_opts.get("rules", RulesOptions.DEFAULT_PRESET)))
+	for key in duel_opts.get("rule_overrides", {}):
+		rules.set_fork(String(key), bool(duel_opts["rule_overrides"][key]))
 
 
 ## What names a task across two runs of one line: its arm (-1 outside a
@@ -2318,9 +2347,7 @@ func _play_duel(seat_decks: Array, seat_profiles: Array, duel_seed: int,
 	# THE RULES FORKS — the duel screen applies these from Settings; here
 	# they come from --rules / --rule, so a whole pool can be replayed
 	# under the 1997 ruleset instead of the modern one.
-	game.rules.set_edition(String(_duel_opts.get("rules", "modern")))
-	for key in _duel_opts.get("rule_overrides", {}):
-		game.rules.set_fork(String(key), bool(_duel_opts["rule_overrides"][key]))
+	apply_rules(game.rules, _duel_opts)
 	# THE ANTE, staked between the shuffle and the deal — the duel screen's
 	# own order (`DuelScreen._new_game`). Neither seat is human here, so
 	# neither gets the player's basic-land exemption.
@@ -2942,7 +2969,7 @@ const FLAG_HINTS := {
 	"--format": "--format NAME: unrestricted|wild|type1|type1.5|highlander",
 	"--group": "--group NAME: keep one deck group when a folder is expanded, or `all` for every group",
 	"--mulligan": "--mulligan on|off: offer the mulligan before turn 1, default off",
-	"--rules": "--rules fifth|modern: which ruleset, default modern",
+	"--rules": "--rules modern_mana_burn|modern|fifth: which ruleset, default modern_mana_burn (the player's default table)",
 	"--rule": "--rule KEY=on|off: override one rules fork; repeatable",
 	"--best-of": "--best-of N: play matches of 1, 3 or 5 duels instead of single duels",
 	"--sideboard": "--sideboard on|off: AI sideboards between duels; needs --best-of 3 or 5",
@@ -3053,7 +3080,12 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		# before the flag existed — see the class doc.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
 		"format": "", "group": "", "mulligan": false,
-		"rules": "modern", "rule_overrides": {},
+		# THE RULES (owner, 2026-10-07): the player's own default table,
+		# RulesOptions.DEFAULT_PRESET — modern rules with mana burn on —
+		# not plain modern, so a Lab measurement sees the mana burn a
+		# player's duel would punish. Runs before 0.50.16 played `modern`
+		# (a resumed one still does: `_resume`).
+		"rules": RulesOptions.DEFAULT_PRESET, "rule_overrides": {},
 		# THE MATCH PARAMETERS. Both default to `&Free play` — one duel,
 		# no sideboarding — which is exactly what this script did before
 		# they existed, so the determinism baseline is untouched.
@@ -3252,8 +3284,9 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 					return {"error": "--sideboard takes on or off"}
 				opts.sideboard = value.to_lower() == "on"
 			"--rules":
-				if not ["fifth", "modern"].has(value.to_lower()):
-					return {"error": "--rules takes fifth or modern"}
+				var ids: Array = RulesOptions.PRESETS.map(func(p: Dictionary) -> String: return String(p["id"]))
+				if not ids.has(value.to_lower()):
+					return {"error": "--rules takes %s" % " or ".join(PackedStringArray(ids))}
 				opts.rules = value.to_lower()
 			"--rule":
 				var split := value.split("=", false)
@@ -3669,7 +3702,7 @@ func _settings_line(opts: Dictionary) -> String:
 		parts.append("best of %d" % opts.best_of)
 	if opts.sideboard:
 		parts.append("sideboard on")
-	if opts.rules != "modern":
+	if opts.rules != RulesOptions.DEFAULT_PRESET:
 		parts.append("rules %s" % opts.rules)
 	for key in opts.rule_overrides:
 		parts.append("%s=%s" % [key, "on" if opts.rule_overrides[key] else "off"])

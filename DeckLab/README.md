@@ -511,16 +511,32 @@ that runs a thousand games.
 | `--format NAME` | require a deck format: `unrestricted`, `wild`, `type1`, `type1.5`, `highlander`. An illegal deck **fails at parse time**, naming the card. Since 2026-09-01 the check counts the deck's `SB:` SIDEBOARD with its maindeck — which is also what keeps a sideboarded deck legal at duel 2, since a one-for-one swap leaves the union of the two piles alone | none |
 | `--group NAME` | when a DIR is expanded, keep only one deck group: `originals`, `ancients`, `planeswalkers`, `coyote_tex`, `kevin_bane`, `other`, `starter`, `tournament`, `community`, `extended_community`, `user` (one per `DeckGroups.ORDER` heading). Since 2026-09-02 a DIR given with `--group` is walked **into its subfolders** — that is how the 312 ported decks under `decks/1997/<group>/`, `decks/tournament/`, `decks/community/` and `decks/extended_community/` ([decks-1997.md](decks-1997.md)) are reached: `--gauntlet decks/ --group originals` is the 55 enemy decks of the 1997 game, `--group community` the 48 proxy-free community decks. Without `--group` a DIR is its own files only, so the default field is still the five starter decks. A DIR deck that holds proxy cards is skipped with a note on stderr (a named file is never skipped; the loader refuses it and says why) | all |
 | `--mulligan on\|off` | offer the mulligan before turn 1 — since 2026-09-08 the PARIS one (any hand, one card fewer each redraw, until the seat keeps), each seat judged by its pilot (`AiProfile.mulligans`; the plain rule when that knob is off) | **off** — see below |
-| `--rules NAME` | `fifth` or `modern`; `fifth` turns every fork to the 1997 answer | `modern` |
+| `--rules NAME` | a rules preset: `modern_mana_burn` (the player's default table: modern rules, mana burn on), `modern` (mana burn off) or `fifth` (every fork at the 1997 answer) | **`modern_mana_burn`** — see below |
 | `--rule KEY=on\|off` | override one fork on top of `--rules`; repeatable | — |
 | `--best-of N` | play MATCHES of up to N duels (1, 3 or 5) instead of single duels — the original's `&Best of:` | 0 (`&Free play`) |
 | `--sideboard on\|off` | let each AI seat swap cards with its own sideboard between the duels of a match; needs `--best-of 3` or `5` | off |
 
-**Every default above is what this tool did before the flag existed.** The
-determinism check — same seed, same win/loss split, byte-identical
-`matchups.csv` — is how this project proves an engine change was safe, and a
-moved default silently invalidates it. A run at the defaults prints no
-`settings:` line and writes the same report it always has.
+**Every default above is what this tool did before the flag existed — with
+one deliberate exception, `--rules`.** The determinism check — same seed,
+same win/loss split, byte-identical `matchups.csv` — is how this project
+proves an engine change was safe, and a moved default silently invalidates
+it. A run at the defaults prints no `settings:` line and writes the same
+report it always has.
+
+**The rules default (owner, 2026-10-07, 0.50.16).** The Lab plays the table
+a player's own duel starts at, `RulesOptions.DEFAULT_PRESET` — modern rules
+with **mana burn on**. Until 0.50.16 it played plain `modern` (no mana burn),
+and the whole-game campaign found Lab measurements blind to the AI's
+mana-burn mistakes because of it (392 points of self-inflicted burn in 300
+tournament duels that a `modern` Lab run could not see). So:
+
+- **a baseline taken before 0.50.16 was taken under `modern`**: compare it
+  with a new run by passing `--rules modern`, or retake it;
+- a run interrupted before 0.50.16 resumes (`--resume`) under the `modern`
+  it started with — its `run.json` names no rules — and every run since
+  records its preset in `run.json`;
+- a run at the new default prints no `rules` on its `settings:` line;
+  `--rules modern` and `--rules fifth` do.
 
 `--rules fifth` is the one worth reaching for on its own: it replays a whole
 pool under the ruleset the 1997 game actually played (mana burn on, attacker

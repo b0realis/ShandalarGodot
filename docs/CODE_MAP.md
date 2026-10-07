@@ -203,6 +203,12 @@ and the `BONUS_ANY_LAND` / `BONUS_ENCHANTED_LAND` bonus descriptors;
   and `SealedPool.sheets` match the old code and stay linear; a
   save-folder keystroke refreshes only the folder note; a spin-box step
   stays, and a number typed without Enter still counts at Launch.
+- `tests/tools/test_deck_lab_rules_default_2026_10_07.gd`: the Deck Lab
+  plays the player's own table (owner, 2026-10-07) — `--rules` defaults to
+  `RulesOptions.DEFAULT_PRESET` (modern rules, mana burn on) and takes
+  every preset id (`apply_rules`); the settings line names only a move from
+  it; a run started before the change resumes under plain `modern`
+  (`resume_rules`).
 
 ## Portal Second Age in Pack 6 (2026-09-24)
 
@@ -1612,7 +1618,10 @@ with AI and go over MCP code for bugfix and improvement run!"*
   `timeout-minutes: 40` under the job's 45 — a step that runs out
   fails and the `if: always()` upload still runs (a job-level cancel
   skips it: shard 2 of run 36869119748, no log, no artifact). The
-  comment above the step says why.
+  comment above the step says why. Since 2026-10-07 (owner) the step sets
+  `SUITE_TIMEOUT: 2400` — a 40-minute suite guard, shard 1 having taken
+  29m42s against the default 30 — under a step clock of 52 and a job
+  clock of 56.
 - `run_tests.sh`: `all_scripts` and the skin-marked list are
   `LC_ALL=C sort`ed — the deal no longer follows the shell's collation
   (`en_US` and `C.UTF-8` ordered 38 of 548 scripts differently, so a

@@ -15,9 +15,9 @@
 # (docs/release-builds.md). Card art and the 1997 skin are not in the
 # repository and never reach a runner: run_tests.sh builds the card packs
 # it needs from cards/data/, and leaves out BY NAME the scripts that pin
-# the 1997 look (seventeen of 793 on 2026-10-07, each marked "Needs the
+# the 1997 look (seventeen of 794 on 2026-10-07, each marked "Needs the
 # imported 1997 skin") — those run on a desk that has imported it. The
-# gate here is 776 scripts, and the log's first lines name the rest.
+# gate here is 777 scripts, and the log's first lines name the rest.
 name: Gate
 
 on:
@@ -39,7 +39,7 @@ jobs:
   gut:
     name: GUT shard ${{ matrix.shard }} of 4
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 56
     strategy:
       fail-fast: false
       matrix:
@@ -69,18 +69,21 @@ jobs:
           ../tools/godot --version
 
       # The step has its own clock, shorter than the job's: when the job's
-      # 45 minutes cancel a job, GitHub skips every later step, `if:
+      # minutes cancel a job, GitHub skips every later step, `if:
       # always()` included, and the engine log is lost with it (shard 2 of
       # run 36869119748, 2026-10-01: cancelled at 45 min, no log, no
       # artifact, nothing to read). A step that times out instead FAILS,
       # and the upload below still runs. run_tests.sh's own guards (import
-      # 10 min, suite 30 min) add up to under 42 minutes, so a healthy
-      # shard never reaches this clock; a stalled runner does.
+      # 10 min, suite SUITE_TIMEOUT) add up to under this clock, so a
+      # healthy shard never reaches it; a stalled runner does. The suite
+      # guard is 40 minutes here, not run_tests.sh's 30 (owner, 2026-10-07):
+      # shard 1 of run 37629189768 took 29m42s with the 0.50.16 gate.
       - name: Shard ${{ matrix.shard }} of 4
-        timeout-minutes: 40
+        timeout-minutes: 52
         env:
           SHARDS: 4
           SHARD: ${{ matrix.shard }}
+          SUITE_TIMEOUT: 2400
           SHANDALAR_TEST_DATA_HOME: ${{ runner.temp }}/shandalar-test-data
         run: ./run_tests.sh
 

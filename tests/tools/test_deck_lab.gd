@@ -406,7 +406,10 @@ func test_every_new_flag_defaults_to_what_the_lab_always_did() -> void:
 	assert_eq(opts.format, "", "no format required")
 	assert_eq(opts.group, "", "every deck group")
 	assert_false(opts.mulligan, "OFF: turning it on changes every opening hand")
-	assert_eq(opts.rules, "modern")
+	# The one deliberate move (owner, 2026-10-07): the Lab plays the
+	# player's own default table, modern rules with mana burn on — a
+	# baseline taken before 0.50.16 was taken under plain `modern`.
+	assert_eq(opts.rules, RulesOptions.DEFAULT_PRESET)
 	assert_eq(opts.rule_overrides, {})
 	assert_eq(opts.best_of, MatchState.FREE_PLAY,
 		"`&Free play` — one duel and no record, as before matches existed")

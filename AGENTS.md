@@ -143,7 +143,8 @@ Plays decks against decks headless and measures. Modes by switch:
 Deck paths resolve as given, then `decks/NAME`, then `res://decks/NAME`.
 `--games N` per matchup, `--seed N`, `--jobs N` threads, `--procs N`
 worker processes, `--packs 1,3|all|none`, `--profile-a/-b NAME[:knob=v]`,
-`--best-of 3 --sideboard on`, `--rules fifth|modern`, `--format
+`--best-of 3 --sideboard on`, `--rules modern_mana_burn|modern|fifth` (default
+`modern_mana_burn`, the player's table, since 0.50.16), `--format
 unrestricted|wild|type1|type1.5|highlander`, `--group NAME` (one deck
 group of an expanded folder — `tournament` is the good decks), `--top N`,
 `--record losses|stalls|all` (`--record-max N`, default 50), `--out DIR`,
