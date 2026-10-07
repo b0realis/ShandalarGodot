@@ -144,8 +144,10 @@ static func _revert_one(game: MtgGame, _source: CardInstance, event: GameEvent) 
 		if a_mine != b_mine:
 			return a_mine
 		return a.id < b.id)
+	# ORDERED (campaign 2026-10, w1-3): one's own mired lands first, so a
+	# heuristic seat frees its own land rather than the opponent's.
 	var pick := game.agents[controller].choose_card(game, controller, candidates,
-		"Cyclopean Tomb: Select land to revert.")
+		"Cyclopean Tomb: Select land to revert.", false, false, true)
 	if pick == null or not candidates.has(pick):
 		pick = candidates[0]
 	game.log_line("Cyclopean Tomb: %s reverts" % pick.data.card_name)

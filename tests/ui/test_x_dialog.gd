@@ -314,7 +314,12 @@ func test_every_x_spell_in_the_pool_offers_a_bound_it_can_pay() -> void:
 			continue
 		seen += 1
 		var pips := data.cost.mana_value()   # {X} counts as 0 (CR 202.3b)
-		screen._click_hand_card(_give(card_name))
+		var card := _give(card_name)
+		# A spell with nothing to aim at is refused before its X is asked
+		# (campaign w5-5 — Detonate, Howl from Beyond, Venarian Gold, Power
+		# Sink, Spell Blast on this bare board): give it something first.
+		var staged := _stage_a_target_for(card)
+		screen._click_hand_card(card)
 		if data.is_modal():
 			# Alabaster Potion is the pool's one modal {X} spell: the mode
 			# is asked first and the X question comes after it
@@ -323,6 +328,7 @@ func test_every_x_spell_in_the_pool_offers_a_bound_it_can_pay() -> void:
 			screen._on_mode_chosen(0)
 		assert_not_null(screen._x_dialog, "%s asks for X" % card_name)
 		if screen._x_dialog == null:
+			_unstage(staged)
 			continue
 		var want: int = 20 - pips
 		# A doubled {X}{X} (Part Water, Recall) is rounded down to a whole
@@ -356,7 +362,43 @@ func test_every_x_spell_in_the_pool_offers_a_bound_it_can_pay() -> void:
 		assert_eq(int(screen._x_spin.max_value), want,
 			"%s (%s) offers its lands" % [card_name, data.cost.text])
 		screen._on_x_canceled()
+		_unstage(staged)
 	assert_eq(seen, 24, "the pool's {X} spells, all of them asked")
+
+
+## Something for [param card] to be cast at, when the bare board has
+## nothing (campaign w5-5): seat 1's Ornithopter (a creature AND an
+## artifact) stays for the rest of the walk; a Grizzly Bears spell of seat
+## 1's is put on the chain for a counterspell and returned by [method
+## _unstage]. Null when nothing went on the chain.
+func _stage_a_target_for(card: CardInstance) -> StackItem:
+	if screen._has_something_to_aim_at(card):
+		return null
+	var g: MtgGame = screen.game
+	var has_thopter := false
+	for perm in g.players[1].battlefield:
+		has_thopter = has_thopter or perm.data.card_name == "Ornithopter"
+	if not has_thopter:
+		_put(1, "Ornithopter")
+		g.recalculate()
+		if screen._has_something_to_aim_at(card):
+			return null
+	var bears := CardInstance.new(CardRegistry.get_card("Grizzly Bears"),
+		g._next_instance_id, 1)
+	g._next_instance_id += 1
+	g._instances[bears.id] = bears
+	bears.zone = Mtg.Zone.STACK
+	var item := StackItem.new()
+	item.kind = Mtg.StackKind.SPELL
+	item.controller = 1
+	item.card = bears
+	g.stack.append(item)
+	return item
+
+
+func _unstage(item: StackItem) -> void:
+	if item != null:
+		screen.game.stack.erase(item)
 
 
 func test_every_x_ability_in_the_pool_offers_a_bound_it_can_pay() -> void:

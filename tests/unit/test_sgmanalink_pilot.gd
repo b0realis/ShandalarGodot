@@ -95,10 +95,16 @@ func test_no_target_cancels_before_tapping_mana() -> void:
 	assert_eq(terror.zone, Mtg.Zone.HAND)
 
 
-func test_network_pilot_waits_for_mana_tap_triggers_and_reuses_floating_mana() -> void:
+func test_network_pilot_casts_a_sorcery_speed_spell_paid_over_mana_tap_triggers() -> void:
 	# Eight-player campaign, draw seed 4250, semifinal game seed 4255:
-	# "Giant Spider can only be cast in your main phase with an empty stack".
-	# The local Wizard already waits here; the DTO-only test pilot did not.
+	# "Giant Spider can only be cast in your main phase with an empty stack"
+	# — the Manabarbs triggers its payment raised were put on the stack
+	# mid-cast, and the pilot had to cancel and wait them out. Since the
+	# whole-game campaign (2026-10-07, w7-5) the referee's autopay opens the
+	# engine's announcement bracket (MtgGame.begin_announcement): mana
+	# abilities activated while casting do not interrupt it, their triggers
+	# wait until the spell is on the stack (CR 601.2g, 603.3) and go on
+	# above it — the pilot simply submits.
 	advance_to_step(Mtg.Step.MAIN1)
 	var spider := give_hand(0, "Giant Spider")
 	for i in 6: put_battlefield(0, "Forest")
@@ -107,11 +113,13 @@ func test_network_pilot_waits_for_mana_tap_triggers_and_reuses_floating_mana() -
 	var pilot := Pilot.new()
 	assert_ok(referee.act(0, pilot.choose(referee.view(0), 0)))
 	assert_ok(referee.act(0, pilot.choose(referee.view(0), 0)))
-	assert_eq(g.stack.size(), 4)
+	assert_eq(g.stack.size(), 0, "the four Manabarbs triggers wait for the spell")
 	var decision: Dictionary = pilot.choose(referee.view(0), 0)
-	assert_eq(decision.op, "cancel", "wait for the tap triggers before attempting a sorcery-speed cast")
-	if decision.op != "cancel": return
+	assert_eq(decision.op, "submit", "the paid-for creature is cast at once")
+	if decision.op != "submit": return
 	assert_ok(referee.act(0, decision))
+	assert_eq(g.stack.size(), 5, "the Spider, and the four triggers above it")
+	assert_eq(g.stack[0].card, spider)
 	var turn := g.turn_number
 	for i in 40:
 		if spider.zone == Mtg.Zone.BATTLEFIELD: break
@@ -133,9 +141,9 @@ func test_network_pilot_can_still_submit_an_instant_over_mana_tap_triggers() -> 
 	var pilot := Pilot.new()
 	assert_ok(referee.act(0, pilot.choose(referee.view(0), 0)))
 	assert_ok(referee.act(0, pilot.choose(referee.view(0), 0)))
-	assert_eq(g.stack.size(), 1)
+	assert_eq(g.stack.size(), 0, "the trigger waits for the spell (campaign w7-5)")
 	var decision: Dictionary = pilot.choose(referee.view(0), 0)
-	assert_eq(decision.op, "submit", "instant timing is still legal over the trigger")
+	assert_eq(decision.op, "submit", "instant timing is legal either way")
 	assert_ok(referee.act(0, decision))
 	assert_eq(g.stack.size(), 2)
 

@@ -100,6 +100,22 @@ that code reads. Difficulty is made of two things, in this order:
    block dropped. It is rolled on the game's own RNG, so a seeded duel
    replays the same fumbles. This is the 1997 model exactly: weak AIs
    know how to play and sometimes don't; strong AIs stop fumbling.
+
+   **What a fumble never is** (whole-game campaign, 2026-10-07,
+   `forecasts_tactics`). The roll is made where it always was, so a seeded
+   duel replays the same random stream; three of its outcomes are then
+   ignored, because none is a weak player's mistake but a game the model
+   throws away. No fumble is taken while mana already floats in the seat's
+   pool — a cast whose payment raised a tap trigger, a resolved Dark
+   Ritual; "stops developing" there was mana burn at the step's end (419
+   points of Apprentice burn in 400 seeded fifth-rules duels). No fumble
+   drops a LETHAL line: payable burn that ends the game now, an attack
+   lethal through the defender's best blocks, a body that is gone at end
+   of turn anyway (Ball Lightning, an animated land), or the block without
+   which the declared swing reaches our life (the Apprentice left a lethal
+   Ball Lightning home in 13 of 40 seeds). A 1997 damage step the seat
+   holds nothing for is passed without a roll. Every other fumble stands
+   at the rates below.
 2. **Capabilities.** A handful of whole LAYERS of play are switched off
    below a rung — holding instants, sideboarding, reading the opponent's
    crack-back, the seven "does it understand…" knobs of the control sweeps
@@ -271,7 +287,9 @@ is written down.
 
 ## 3. Rung by rung, in the player's terms
 
-**Apprentice.** Knows every play and fumbles a third of them. Swings
+**Apprentice.** Knows every play and fumbles a third of them — never a
+lethal swing or the burn that wins, never the block it needs to live, and
+never with mana already tapped. Swings
 recklessly (`aggression` 0.75): attacks that trade badly, burn at the
 face. Plays "my turn only" Magic — it never holds mana open, never
 counters, never Fogs, never casts a trick in your combat, and lets the

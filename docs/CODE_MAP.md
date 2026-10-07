@@ -41,6 +41,169 @@ needed); card files have NO class_name (they register by name instead);
   its tests and the recorded referee lines they read. AGENTS.md,
   "Decision models", is the contract.
 
+## The whole-game campaign (2026-10-07)
+
+Seven read-only hunters, nine test-first fixers
+([bug-hunt-campaign-2026-10-07.md](bug-hunt-campaign-2026-10-07.md), 0.50.16).
+New mechanisms: `StaticAbility.working_while_tapped()` (statics the 1997
+tapped-artifacts rule does not switch off, read per ability by
+`ContinuousEffects._tap_suspended`); `MtgGame.begin_announcement` /
+`end_announcement` / `announcement_open` (triggers from the payer's own mana
+abilities wait above the announced object); `MtgGame.activation_refusal` and
+`target_refusal_at` (the duel screen's non-mutating checks);
+`CombatState._keep_band_blocked`; `CardData.script_set` (the folder a card's
+script ships in — the Ice Age / Fallen Empires readings gate on it) and
+`CardData.combat_price` / `with_combat_price` (Time Elemental);
+`AdditionalObjectCosts` as a bipartite matching (`can_assign`, `max_x`,
+`extendable`); `ManaPlanner.source_rank` / `RANK_*`, least-surplus covers
+and the `BONUS_ANY_LAND` / `BONUS_ENCHANTED_LAND` bonus descriptors;
+`CardPacks.requirements_to_save`.
+
+- `tests/unit/test_campaign_fix_engine_tapped_artifacts.gd`: the 1997
+  tapped-artifacts rule spares `working_while_tapped` statics (Time Vault,
+  Basalt Monolith and Mana Vault stay tapped; Zelyon Sword, Spirit Shield,
+  Tawnos's Weaponry, Ashnod's Battle Gear work while tapped; a census of
+  every artifact that bans its own untap); a {T} activation recalculates.
+- `tests/unit/test_campaign_fix_engine_damage_window.gd`: the 1997 damage
+  steps open on public information (hidden-hand permutations), the AI
+  passes at once, and only items cast in the step resolve in it.
+- `tests/unit/test_campaign_fix_engine_journal_apnap.gd`: the journal
+  restores a game's end and the damage steps; graveyard triggers in APNAP
+  order with battlefield ones.
+- `tests/unit/test_campaign_fix_engine_band_blocks.gd`: a blocked band
+  stays blocked when its blocked member leaves combat (bounce, phasing);
+  False Orders frees a band.
+- `tests/unit/test_campaign_fix_engine_announcement.gd`: the announcement
+  bracket (`begin_announcement` / `end_announcement`).
+- `tests/unit/test_campaign_fix_cards_object_matching.gd`: additional object
+  costs' distinct-object check as a bipartite matching (`can_assign` /
+  `max_x` / `extendable` speed and contract, randomized cross-checks
+  against the ordering search).
+- `tests/cards/test_campaign_fix_cards_core.gd`: core-card fixes —
+  Vesuvan's targeted upkeep copy, Drain Power's ability choice, Fellwar
+  Stone's "could produce", ordered card asks (Kudzu, Drop of Honey,
+  Juxtapose, Enchantment Alteration, Eureka, Cyclopean Tomb), the
+  bonus-mana descriptors of Mana Flare, Wild Growth and Gauntlet of Might.
+- `tests/cards/test_campaign_fix_cards_packs.gd`: pack-card fixes — menace
+  grants under Humility (Imposing Visage, Goblin War Drums); Deep Spawn,
+  Icy Prison, Demonic Consultation, Lim-Dûl's Vault and token-Dreadnought
+  hints; Overgrowth's bonus descriptor.
+- `tests/unit/test_campaign_fix_mana_planner.gd`: the planner pays with the
+  least left over — Sol Ring, Mana Vault, Workshop, Urza lands and Black
+  Lotus against a basic; untap-locked sources after painful ones; the
+  coloured half (a plain Forest before a doubled one, in the matching
+  too); described bonus mana (any land, enchanted land, the land's own
+  colour, `max_affordable_x`); `run_plan`'s bill; `plan_and_pay` and
+  `try_pay` under a real Mana Flare in both burning presets; tap-toll Auras
+  (Psychic Venom, Blight, Kudzu, Relic Bind) last but still reachable.
+- `tests/ai/test_campaign_fix_mana_ai.gd`: the Wizard through the planner
+  under `modern_mana_burn` and `fifth` — Hill Giant under either seat's
+  Mana Flare, Icy's {1} from the Island not the Mana Vault, Black Vise
+  from the Mountain not the Sol Ring (both battlefield orders), the cursed
+  Forest spared; a hidden hand/library permutation.
+- `tests/ui/test_campaign_fix_mana_autocast.gd`: the double-click auto-cast
+  under Mana Flare floats nothing (both presets; the screen's mid-plan
+  submit is the `settled` stop), the Venomed Forest left alone, a one-drop
+  paid from the Mountain.
+- `tests/ai/test_campaign_fix_ai_a_burn.gd`: burn lethal only together
+  (`_burn_volley`, `_volley_choice`, `_face_dealt`) fired at the face in our
+  main and at their end step, spoiled by a public prevention shield; the
+  cleanup's doomed instant fired (`_fire_surplus_instants`); discards by
+  castability (`_discard_worth`, `_next_turn_reach`).
+- `tests/ai/test_campaign_fix_ai_a_arrivals.gd`: mandatory targeted arrival
+  triggers that could hit only our own board (`_forced_arrival_harm`):
+  Fire Imp, Man-o'-War's self-bounce loop, Oubliette, Nekrataal.
+- `tests/ai/test_campaign_fix_ai_a_removal.gd`: the escape on demand
+  (`_escapes_on_demand`: Blinking Spirit, Foul Familiar), the regeneration
+  they can still pay for (`_regenerates_from`; Incinerate's
+  `ignores_regeneration` in `EffectIntent`), the answer already on the
+  stack (`_answered_on_stack`: Killer Bees).
+- `tests/ai/test_campaign_fix_ai_a_costs.gd`: payment-row instants as combat
+  answers (Fireblast at lethal only, Spinning Darkness, a humbled Soltari
+  Lancer); the target is not the fodder (Wicked Reward); Cone of Flame's
+  partner slots spare our board.
+- `tests/ai/test_campaign_fix_ai_a_asks.gd`: a keep offer about a permanent
+  across the table takes the card's per-player hint (Icy Prison); an
+  ordered ask is answered with its first candidate (Drop of Honey).
+- `tests/ai/test_campaign_fix_ai_b_licid_budget.gd`,
+  `tests/ai/test_campaign_fix_ai_b_symmetric_statics.gd`,
+  `tests/ai/test_campaign_fix_ai_b_provider.gd`,
+  `tests/ai/test_campaign_fix_ai_b_card_flow.gd`: the licid decision's
+  budget (one plan per decision, only the hosts that can matter, at most
+  ten readings at a shared node allowance, small boards checked against
+  the full-budget reading); symmetric statics projected onto the board
+  before casting (Humility, Dread of Night, Light of Day, Choke; Stasis
+  left to the lock reader) and Living Death's returns priced as they would
+  arrive; the Ice Age and Fallen Empires readings gated on
+  `CardData.script_set` whichever pack provides the reprint;
+  Necropotence's life line from the visible swing, Echo Chamber skipping a
+  copy that does not stay, Demonic Consultation naming a nonland.
+- `tests/ai/test_campaign_fix_ai_c_mistakes.gd`,
+  `tests/ai/test_campaign_fix_ai_c_casting.gd`,
+  `tests/ai/test_campaign_fix_ai_c_combat.gd`,
+  `tests/ai/test_campaign_fix_ai_c_engines.gd`: the mistake model's
+  exemptions (floating mana, the winning burn, the lethal attack and the
+  end-of-turn body, the block that keeps us alive, the damage step with
+  nothing to use), the announced cast under a tap trigger, the lost library
+  race's kept turns, the sweeper first, the Ritual's use, the freeze in
+  force and the repeated engine (Stasis, Pestilence), Animate Artifact's
+  0/0, Drop of Honey's first meal, the discard-or-sacrifice arrivals, Time
+  Elemental's combat price, the bought first strike, Weakstone's
+  zero-power attackers, Pestilence's empty-board toll, Varchild's
+  War-Riders' Survivors, the priced mana burn and tap toll, the zero-swing
+  and one-a-turn wheel.
+- `tests/ui/test_campaign_fix_ui_auto_pass.gd`: the automatic pass and the
+  lights against abilities — the floating pool for abilities, free
+  abilities not prepared (a printed timing rider still holds), non-mana
+  costs in the engine's verdict, foreign "any player may" abilities lit and
+  offered, the 1997 damage step held only for a usable effect, the empty
+  block declared for the player.
+- `tests/ui/test_campaign_fix_ui_casting.gd`: the human cast chain —
+  caster-only target slots, aiming at the pending X, a declined tutor
+  search, no-target refusal and per-mode lights, a cast held for priority
+  under both rulesets, the X cap from cards to discard.
+- `tests/ui/test_campaign_fix_ui_net_specials.gd`: the referee's ransom on
+  the network table's menus and bar, taken as a `special` message.
+- `tests/ui/test_campaign_fix_ui_announcement.gd`: the announcement bracket
+  at the local screen — City of Brass's ping above the cast (double-click
+  and manual taps), Cancel releases it.
+- `tests/tools/test_campaign_fix_net_referee.gd`: the referee at a LAN table
+  that blinks — the other seat away and its own reconnect are waited for,
+  never counted (`FlakyTable`); a client that gives up or never returns
+  ends `offline`; `--table NAME` joins that table; an unseeded duel's seed
+  only in the result; a kept game's departed client's whole lines still
+  read.
+- `tests/ui/test_campaign_fix_net_table.gd`: payable ransom/prevention set
+  `respond` (Channel never; nothing the 1997 damage step does not admit),
+  unpayable specials not offered, prevention taps its {1}, no land
+  playable in the step, protocol 29's `choice.cards` and the client's
+  ID-tag lines, the special discard, the announcement bracket's call
+  sites, autopay stopping at the bill, the protocol/`RULES_REVISION` pin.
+- `tests/ui/test_campaign_fix_net_lobby.gd`: OK on a tournament result
+  returns to the hall once a blinking connection is back.
+- `tools/test_campaign_fix_net.py`: the decision-menu `Driver` never
+  concedes and waits at a table, Magnetic Web companions, every engine
+  keyword worded; `shandalar_mcp` `until` stops in the 1997 steps and for a
+  payable ransom; choice cards; a drawn seed from the result.
+- `tests/ui/test_campaign_fix_persist_pack_requirements.gd`: a save drops a
+  declared pack no card in either pile needs (Pack 8 on or off, Pack 1 by
+  its four cards), keeps an unknown pack id, and the shared-reprint rule
+  holds; a file saved stale opens without the pack question.
+- `tests/ui/test_campaign_fix_persist_window_close.gd`: the window's close
+  button asks first — the builder holds `auto_accept_quit` while shown;
+  unsaved work walks `@SAVE` (Cancel keeps the window); the Booster Draft
+  setup over a builder holds the close for it, and a draft started from
+  the builder saves the draft before the builder asks.
+- `tests/unit/test_campaign_fix_persist_deck_store.gd`: titles in other
+  scripts or with accents get stems of their own (ASCII part plus a
+  digest); ASCII titles and the 2026-10-03 digest stems unchanged; a deck
+  saved under the old fold keeps its file; a linked `user://decks` is the
+  player's; `..`, siblings and folders linked below `decks` are refused.
+- `tests/ui/test_campaign_fix_persist_draft_pool.gd`: `DraftPoolConfig.selected`
+  and `SealedPool.sheets` match the old code and stay linear; a
+  save-folder keystroke refreshes only the folder note; a spin-box step
+  stays, and a number typed without Enter still counts at Launch.
+
 ## Portal Second Age in Pack 6 (2026-09-24)
 
 - `cards/sets/p02/`: 117 new card definitions; `_rules.gd` dispatches to
@@ -1994,6 +2157,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.16.md`: the whole-game campaign — 84 findings over
+  the rules, mana payment, the computer opponent, the duel table, SGManalink
+  protocol 29, the agent's seat and saving.
 - `docs/releases/0.50.15.md`: Pack 9 — the Tempest block (Tempest,
   Stronghold, Exodus; 574 new cards), shadow, buyback and payment rows,
   licids, Humility as printed, the engine-wide follow-up fixes, the AI,
@@ -3645,7 +3811,15 @@ shandalar/
 │   │                          several colours is one generic-only row (the
 │   │                          owner's rule: auto-tap only for a colourless
 │   │                          request or a known colour, else ask);
-│   │                          run_plan() reports a hold
+│   │                          run_plan() reports a hold.
+│   │                          Since 2026-10-07 (campaign): generic mana
+│   │                          is paid with the LEAST SURPLUS in tiers —
+│   │                          nothing spent, painful, stays tapped, tap
+│   │                          toll (source_rank / RANK_*), sacrifice —
+│   │                          via _cover_generic / _least_surplus /
+│   │                          _drop_surplus; run_plan() stops at the bill;
+│   │                          described bonus mana (BONUS_ANY_LAND,
+│   │                          BONUS_ENCHANTED_LAND) is planned for
 │   ├── mtg_game.gd          class MtgGame — THE ORCHESTRATOR. Public API:
 │   │                        _has_damage_gates / _damage_gates /
 │   │                        _damage_gate_applies / _apply_damage_gate —
@@ -11169,6 +11343,9 @@ shandalar/
     │                          what was found, left open and verified
     ├── bug-pass-2026-10-06-tempest.md  The Tempest block bug pass
     │                          (0.50.15): six hunters, six fixers,
+    │                          what was found, left open and verified
+    ├── bug-hunt-campaign-2026-10-07.md  The whole-game campaign
+    │                          (0.50.16): seven hunters, nine fixers,
     │                          what was found, left open and verified
     ├── decklab-audit-2026-09-13.md  DeckLab and base-game audit: seed
     │                          transport, Elo failure status, CSV titles,

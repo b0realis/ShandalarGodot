@@ -313,6 +313,12 @@ func auto_prepare(pid: int, card: CardInstance, action: Dictionary, excluded: Di
 ## cursed creature's controller holds priority, and a list a program must
 ## stop for should never hold a payment it cannot make. `card` is the
 ## permanent an entry belongs to (the presentation's `special_rows`).
+## THE OTHER THREE ARE USABLE ONLY TOO (whole-game campaign 2026-10-07):
+## Channel while the seat has a life to pay, a point of prevention and a
+## ransom while the engine would take them now and the seat's mana —
+## floating, or the sources it could still tap — reaches the cost
+## ([method special_refusal]). An unpayable ransom was offered, and the
+## `special` op then refused it ("not enough mana to pay {2}").
 func special_entries(pid: int) -> Array:
 	var entries: Array = []
 	if game.players[pid].life_for_mana:
@@ -323,7 +329,8 @@ func special_entries(pid: int) -> Array:
 			"kind": "prevention", "target": entry.target, "card": shielded})
 	for entry in game.settleable_delayed_triggers(pid):
 		entries.append({"label": "Pay %s: %s" % [entry.settle_cost, entry.desc], "kind": "settle", "id": entry.id,
-			"card": _existing(entry.get("source"))})
+			"card": _existing(entry.get("source")), "cost": entry.settle_cost})
+	entries = entries.filter(func(entry: Dictionary) -> bool: return special_refusal(pid, entry).is_empty())
 	for row: Dictionary in game.special_actions(pid):
 		if String(row.kind) not in ["licid_end", "ignore_effect"]: continue
 		if not game.special_action_refusal(pid, row).is_empty(): continue
@@ -343,6 +350,37 @@ func _existing(card: Variant) -> CardInstance:
 	return live if live == card else null
 
 
+## Why [param entry] — a Channel, a paid point of prevention or a ransom
+## of [method special_entries] — cannot be taken by [param pid] now, in the
+## engine's own words ([method MtgGame.pay_life_for_mana], [method
+## MtgGame.pay_for_prevention], [method MtgGame.settle_delayed_trigger]),
+## or "". Nothing is touched: the mana is priced by the engine's own plan,
+## the way the local screen greys the same three (DuelScreen
+## ._special_action_refusal).
+func special_refusal(pid: int, entry: Dictionary) -> String:
+	if game.game_over: return "the game is over"
+	if game.awaiting_choice != null: return "waiting for a choice to be made"
+	match String(entry.get("kind", "")):
+		"channel":
+			return "" if game.players[pid].life >= 1 else "not enough life to pay 1"
+		"settle", "prevention":
+			if game.awaiting_attackers or game.awaiting_blockers or game.awaiting_discard \
+					or game.awaiting_damage_assignment:
+				return "a declaration is waiting"
+			if game.priority_player != pid: return "you don't have priority"
+			var cost: ManaCost = entry.get("cost") if entry.get("cost") is ManaCost else ManaCost.parse("{1}")
+			if String(entry.kind) == "prevention":
+				if game.awaiting_regeneration: return "only regeneration effects may be used now"
+				var target: TargetRef = entry.target
+				if not target.is_player:
+					var inst := game.find_instance(target.instance_id)
+					if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD: return "that is no longer on the battlefield"
+			var pool: ManaPool = game.players[pid].mana_pool
+			if not pool.can_pay(cost, 0, [], game.players[pid].mana_substitutions) and not game.can_afford_cost(pid, cost):
+				return "not enough mana to pay %s" % str(cost)
+	return ""
+
+
 func specials(pid: int) -> Array:
 	var labels: Array = []
 	for entry in special_entries(pid): labels.append(entry.label)
@@ -355,7 +393,15 @@ func special(pid: int, index: int) -> String:
 	var entry: Dictionary = entries[index]
 	match entry.kind:
 		"channel": return game.pay_life_for_mana(pid)
-		"prevention": return game.pay_for_prevention(pid, entry.target)
+		"prevention":
+			# The engine spends the POOL for a point of prevention; the
+			# referee taps for it first, as the local screen does
+			# (DuelScreen._take_special_action) — an offered point is one
+			# the seat's sources reach ([method special_refusal]).
+			var one := ManaCost.parse("{1}")
+			if not ManaPlanner.plan_and_pay(game, pid, one):
+				return "not enough mana to pay {1}"
+			return game.pay_for_prevention(pid, entry.target)
 		"settle": return game.settle_delayed_trigger(pid, entry.id)
 		# The engine's one door (Pack 9): a licid's end is paid by the
 		# referee itself; an ignore holds its sacrifice as a cost question
@@ -511,7 +557,19 @@ func autopay(pid: int, excluded: Dictionary, count: int) -> String:
 	# kind of mana instead of picking a colour for them (2026-09-17).
 	var plan := ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(game, pid, sources_out),
 		due.cost, int(due.extra), due.usage)
+	# THE ANNOUNCEMENT BRACKET (whole-game campaign 2026-10-07, w7-5): the
+	# seat is paying for its announced spell or ability (CR 601.2g), so
+	# what its mana abilities trigger — City of Brass, Manabarbs — waits
+	# until the object is on the stack (CR 603.3; MtgGame
+	# .begin_announcement). A creature paid for with City of Brass was
+	# refused "main phase with an empty stack" at its submit.
+	if not plan.is_empty(): game.begin_announcement(pid)
 	for step in plan:
+		# COVERED ALREADY (whole-game campaign 2026-10-07, fix-mana's w1-1):
+		# a mana trigger's bonus (Mana Flare, Wild Growth) can fill the pool
+		# before the plan's last step — a land per pip tapped on and the
+		# spare mana burned. Stop once the pool pays the bill.
+		if game.players[pid].mana_pool.can_pay(due.cost, int(due.extra), due.usage): break
 		if step[0] == null: continue
 		var error := ManaPlanner.run_step(game, pid, step)
 		if not error.is_empty(): return error
@@ -615,17 +673,39 @@ func _keep_order(pid: int, question: PlayerChoice) -> String:
 	return ""
 
 
-func choice_view(pid: int) -> Dictionary:
+## The open question for [param pid], as the wire carries it. `cards`
+## (protocol 29, whole-game campaign 2026-10-07): per line, the handle of
+## the board card it stands for — [param handle] turns a card into the
+## seat's handle — or "" (a yes/no, a colour, a named or hidden card). A
+## line between two Grizzly Bears said only "Grizzly Bears — yours
+## [choice 1]": nothing tied it to a card on the board (the local screen
+## names namesakes by their ID tags, DuelScreen.choice_card_lines). Such a
+## line now ends in its handle instead of the sort ordinal ("Grizzly
+## Bears — yours [c12]"), the name a program reads on its board; the
+## networked screen shows the card's ID tag there (SgDuelProjection
+## .choice_lines).
+func choice_view(pid: int, handle: Callable = Callable()) -> Dictionary:
 	var question := game.awaiting_choice
 	if question == null or question.pid != pid: return {}
 	var labels: Array = []
-	for entry in _choice_entries(): labels.append(entry.label)
+	var cards: Array = []
+	for entry in _choice_entries():
+		var card: CardInstance = game.find_instance(int(entry.answer)) if entry.answer is int \
+			and question.kind in [PlayerChoice.Kind.CARD, PlayerChoice.Kind.DISCARD] else null
+		var key := String(handle.call(card)) if card != null and handle.is_valid() else ""
+		var line := String(entry.label)
+		if key != "":
+			var ordinal := line.rfind(" [choice ")
+			if ordinal >= 0: line = line.left(ordinal)
+			line += " [%s]" % key
+		labels.append(line)
+		cards.append(key)
 	var shown: Array = []
 	for info in question.information:
 		if info.viewer in [-1, pid]: shown.append({"title": info.title, "cards": info.cards.duplicate()})
 	return {"prompt": question.prompt, "source": question.source, "options": labels, "information": shown,
 		"count": mini(question.count, labels.size()) if question.kind == PlayerChoice.Kind.DISCARD else 1,
-		"cancel": question.is_cost and not question.adverse}
+		"cancel": question.is_cost and not question.adverse, "cards": cards}
 
 
 func answer(pid: int, picks: Array) -> String:

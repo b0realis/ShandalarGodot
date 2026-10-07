@@ -265,6 +265,13 @@ func test_the_1997_preset_opens_every_blocker_at_once() -> void:
 	screen._on_card_clicked(cast[2])
 	screen._on_card_clicked(cast[1])
 	assert_false(game.awaiting_damage_assignment)
+	# The 1997 damage steps follow — the hands are not empty, so publicly
+	# either seat might hold an answer (campaign fix-engine w4-3); nobody
+	# uses them here.
+	var guard := 0
+	while (game.awaiting_damage_prevention or game.awaiting_regeneration) and guard < 8:
+		assert_eq(game.pass_priority(game.priority_player), "")
+		guard += 1
 	assert_eq(cast[2].zone, Mtg.Zone.GRAVEYARD, "the second blocker took lethal")
 	assert_eq(cast[1].damage, 1)
 
@@ -424,6 +431,11 @@ func test_a_misaimed_click_prints_the_1997_reason() -> void:
 	# requirement is what the prompt above already says.
 	var game: MtgGame = screen.game
 	var forest := _make(1, "Forest", Mtg.Zone.BATTLEFIELD)
+	# A creature Terror COULD be aimed at: with none on the table the cast
+	# is refused before any aiming (whole-game campaign, w5-5 — TargetPlan
+	# refuses it whatever is paid), and the misclick below needs a cast
+	# in progress to be a misclick at all.
+	_make(1, "Grizzly Bears", Mtg.Zone.BATTLEFIELD)
 	var terror := _make(0, "Terror", Mtg.Zone.HAND)
 	game.active_player = 0
 	game.players[0].mana_pool.add(Mtg.ManaColor.B, 1)
@@ -443,6 +455,9 @@ func test_the_reason_is_never_a_concatenation() -> void:
 	var game: MtgGame = screen.game
 	var knight := _make(1, "Black Knight", Mtg.Zone.HAND)  # pro white, and
 	                                                       # in the wrong zone
+	# Something Swords COULD exile, so the cast starts (campaign w5-5: with
+	# no creature on the table it is refused before any aiming).
+	_make(1, "Grizzly Bears", Mtg.Zone.BATTLEFIELD)
 	var swords := _make(0, "Swords to Plowshares", Mtg.Zone.HAND)
 	game.active_player = 0
 	game.players[0].mana_pool.add(Mtg.ManaColor.W, 1)

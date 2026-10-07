@@ -40,11 +40,10 @@ static func object_price(g: MtgGame, pilot, s: CardInstance, groups: Array, x :=
 			continue
 		var best := INF
 		var chosen := -1
-		for i in slots[index].cards:
-			if used.has(i.id): continue
-			var next := used.duplicate()
-			next[i.id] = true
-			if not COSTS.can_assign(slots, index + 1, next): continue
+		# The cards that leave every later slot payable, from ONE matching
+		# (engine/additional_object_costs.gd `extendable`, campaign w7-1) —
+		# the set a can_assign per candidate gave, in the same order.
+		for i in COSTS.extendable(slots, index, used):
 			var price := _object_unit_price(g, pilot, slots[index].group, i)
 			if price < best:
 				best = price
@@ -148,7 +147,14 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			if e.target_spec == null: return result(6.0)
 			if refs.is_empty(): return {}
 			if not bool(e.ai_parameters.get("opponent_chooses", false)): return result(6.0)
-			return result(Evaluator.permanent_value(_their_pick(g, s, e.target_spec, refs), pilot.profile))
+			var pick := _their_pick(g, s, e.target_spec, refs)
+			# A COPY THAT DOES NOT STAY (campaign fix-ai-b, w3-6): a copy of
+			# a body whose arrival trigger sacrifices it unless a price is
+			# paid (Phyrexian Dreadnought's power 12) is a one-turn token
+			# nobody pays that price for — it is gone as it arrives — and a
+			# body the state-based check kills is gone too.
+			if keeps_only_for_a_price(pick) or preload("res://engine/ai/mirage_tactics.gd").dies_on_arrival(g, pilot, pick): return {}
+			return result(Evaluator.permanent_value(pick, pilot.profile))
 		&"fight":
 			for ref in refs:
 				var i := g.find_instance(ref.instance_id)
@@ -339,6 +345,19 @@ static func _their_pick(g: MtgGame, s: CardInstance, spec: TargetSpec, refs: Arr
 			return Evaluator.permanent_value(g.find_instance(a.instance_id)) \
 				< Evaluator.permanent_value(g.find_instance(b.instance_id)))
 	return g.find_instance((ordered[0] as TargetRef).instance_id)
+
+## Does [param body]'s copy sacrifice itself on arrival unless something is
+## paid ("When this creature enters, sacrifice it unless you sacrifice any
+## number of creatures with total power 12 or greater")? Read off its live
+## arrival triggers' printed lines (campaign fix-ai-b, w3-6).
+static func keeps_only_for_a_price(body: CardInstance) -> bool:
+	if body == null:
+		return false
+	for t in body.cur_triggered_abilities:
+		if t.event_type == Mtg.EventType.ENTERS_BATTLEFIELD \
+				and t.text.to_lower().contains("sacrifice it unless"):
+			return true
+	return false
 
 ## The stack item that holds [param card], or null.
 static func _stack_item_of(g: MtgGame, card: CardInstance) -> StackItem:

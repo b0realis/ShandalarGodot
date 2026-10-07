@@ -790,14 +790,52 @@ func test_the_status_line_names_the_damage_prevention_step() -> void:
 
 func test_a_run_stops_at_the_damage_prevention_step() -> void:
 	# A run that blew through the window would make a Circle of Protection
-	# unusable: it is the only moment the card can be played at all.
+	# unusable: it is the only moment the card can be played at all — for
+	# the player who holds one. Since the whole-game campaign (w5-8) a
+	# window with nothing of the player's own usable in it does not hold
+	# them (the second half below).
+	var g: MtgGame = screen.game
+	var seat := g.priority_player
+	g._probing = true
+	g.players[seat].hand.clear()
+	var plains := _own_window_card(seat, "Plains", Mtg.Zone.BATTLEFIELD)
+	_own_window_card(seat, "Healing Salve", Mtg.Zone.HAND)      # prevention
+	var swamp := _own_window_card(seat, "Swamp", Mtg.Zone.BATTLEFIELD)
+	_own_window_card(seat, "Drudge Skeletons", Mtg.Zone.BATTLEFIELD)   # regeneration
+	g.recalculate()
+	g._probing = false
 	assert_eq(screen._advance_stop_reason(), "",
 		"nothing is holding the duel yet")
-	screen.game.awaiting_damage_prevention = true
+	g.awaiting_damage_prevention = true
 	assert_eq(screen._advance_stop_reason(), "damage prevention is waiting")
-	screen.game.awaiting_damage_prevention = false
-	screen.game.awaiting_regeneration = true
+	g.awaiting_damage_prevention = false
+	g.awaiting_regeneration = true
 	assert_eq(screen._advance_stop_reason(), "damage prevention is waiting")
+	# Nothing usable in it (the mana for both is spent): no hold.
+	plains.tapped = true
+	swamp.tapped = true
+	assert_eq(screen._advance_stop_reason(), "", "a regeneration window with nothing to use")
+	g.awaiting_regeneration = false
+	g.awaiting_damage_prevention = true
+	assert_eq(screen._advance_stop_reason(), "", "a prevention window with nothing to use")
+	g.awaiting_damage_prevention = false
+
+
+## A card of [param seat]'s for the damage-window test, untapped and ready.
+func _own_window_card(seat: int, card_name: String, zone: int) -> CardInstance:
+	var g: MtgGame = screen.game
+	var data := CardRegistry.get_card(card_name)
+	assert_not_null(data, card_name)
+	var inst := CardInstance.new(data, g._next_instance_id, seat)
+	g._next_instance_id += 1
+	g._instances[inst.id] = inst
+	if zone == Mtg.Zone.HAND:
+		inst.zone = Mtg.Zone.HAND
+		g.players[seat].hand.append(inst)
+	else:
+		g._put_on_battlefield(inst, seat)
+		inst.summoning_sick = false
+	return inst
 
 
 func test_the_human_seat_asks_for_the_window_but_the_fork_decides() -> void:

@@ -313,6 +313,11 @@ func test_a_watchdog_owing_a_block_is_orange() -> void:
 
 
 func test_a_watchdog_that_cannot_block_the_attacker_is_not_orange() -> void:
+	# Nothing here could block, so since the whole-game campaign (w5-9) the
+	# empty declaration would make itself; a Stop on the blockers icon
+	# keeps the question the player's, which is what this test reads.
+	screen.stops.set_marked(PhaseStops.Half.OPPONENTS, PhaseStops.Bar.COMBAT,
+		CombatBar.Slot.DECLARE_BLOCKERS, true)
 	var dog := _make(0, _watchdog(), Mtg.Zone.BATTLEFIELD)
 	var flier := _make(1, _flier(), Mtg.Zone.BATTLEFIELD)
 	var g := _attack_into_blocks([flier])

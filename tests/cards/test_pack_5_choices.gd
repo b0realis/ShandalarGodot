@@ -178,9 +178,15 @@ func test_vault_keeps_five_top_cards_and_preserves_every_card() -> void:
 
 ## Keeps the first five it is shown and orders them by [member order]
 ## (instance ids, top first), noting the library's size at every ask.
+## (Campaign 2026-10, w2-10: "look again?" is a yes/no since then — it is
+## answered no here, and counted with the card asks.)
 class VaultOrderSeat extends DecisionAgent:
 	var order: Array = []
 	var library_sizes: Array = []
+
+	func answer_yes_no(game: MtgGame, pid: int, _prompt: String, _hint: bool) -> bool:
+		library_sizes.append(game.players[pid].library.size())
+		return false
 
 	func answer_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 			_prompt: String) -> CardInstance:
@@ -213,7 +219,7 @@ func test_vault_orders_the_kept_five_on_top_without_lifting_them_out() -> void:
 	for card in before:
 		assert_eq(now.count(card), 1)
 		assert_eq(card.zone, Mtg.Zone.LIBRARY)
-	assert_eq(seat.library_sizes.size(), 6, "keep these five, then five ordering picks")
+	assert_eq(seat.library_sizes.size(), 6, "keep these five (a no to looking again), then five ordering picks")
 	for size in seat.library_sizes:
 		assert_eq(size, before.size(), "every card stayed in the library while asked")
 	assert_eq(g.players[0].life, 20)

@@ -327,6 +327,32 @@ func changing_colors() -> StaticAbility:
 	return self
 
 
+## Does this static keep working while its source is a TAPPED artifact
+## under the 1997 rule (manual p.124, [member
+## RulesOptions.tapped_artifacts_stop]: "When an artifact is tapped, its
+## continuous effects cease")? Two kinds of static are ABOUT being tapped
+## and so cannot cease with it:
+##  * the card's own UNTAP LOCK — "This artifact doesn't untap during your
+##    untap step" (Basalt Monolith, Mana Vault, Time Vault). The lock only
+##    ever matters while the artifact is tapped; switched off by the rule it
+##    let all three untap for free every turn (Time Vault: an extra turn
+##    every turn);
+##  * the bonus that lasts "for as long as this artifact remains tapped"
+##    (Tawnos's Weaponry, Ashnod's Battle Gear, Zelyon Sword, Spirit
+##    Shield) — a duration that starts by tapping it, so ceasing whenever
+##    it is tapped meant the card did nothing at all.
+## [method ContinuousEffects.recalculate] skips a suspended source's
+## statics one by one and passes over a flagged one; every other static of
+## the same artifact still ceases. Campaign fix-engine (w4-1, w2-1).
+var works_while_tapped: bool = false
+
+## Fluent: mark this static as one the 1997 "tapped artifacts stop
+## working" rule does not switch off (see [member works_while_tapped]).
+func working_while_tapped() -> StaticAbility:
+	works_while_tapped = true
+	return self
+
+
 ## Mtg.EventType values of the TRIGGERED abilities this static grants to
 ## other permanents (Energy Flux's upkeep tax on every artifact). The
 ## dispatcher's early-out index is rebuilt from the printed lists when the

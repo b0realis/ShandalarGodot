@@ -4,7 +4,7 @@ extends RefCounted
 ## library's contents, or the random generator's future state.
 
 static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: String) -> Variant:
-	if s.data.set_code != "ice": return null
+	if s.data.script_set != "ice": return null   # the script's own set (campaign w3-3)
 	var pid: int = pilot.pid
 	var a: ActivatedAbility = s.cur_activated_abilities[index]
 	if a.effects.is_empty(): return null    # a granted, effect-less ability is not ours to score
@@ -185,8 +185,11 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			if int(entry.controller) == pid and entry.source != null and entry.source.data.card_name == "Necropotence": arriving += 1
 		for item in g.stack:
 			if item.controller == pid and item.card != null and item.card.data.card_name == "Necropotence" and item.kind == Mtg.StackKind.ABILITY: arriving += 1
-		var budget := mini(6, maxi(0, g.players[pid].life - 5))
-		return result(5.0) if g.players[pid].hand.size() + arriving < budget else {}
+		var held := g.players[pid].hand.size() + arriving
+		if not pilot.profile.forecasts_tactics:
+			var budget := mini(6, maxi(0, g.players[pid].life - 5))
+			return result(5.0) if held < budget else {}
+		return result(5.0) if necro_digs(g, pilot, held, arriving) else {}
 	if name == "Jester's Cap":
 		return result(15.0, [TargetRef.player(1 - pid)]) if g.players[1 - pid].library.size() > 0 else {}
 	if name == "Jester's Mask":
@@ -260,6 +263,40 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			if best.is_empty() or value > float(best.value): best = result(value + 1.0, [ref])
 		return best
 	return null
+
+# --- Campaign fix-ai-b: Necropotence priced against the table (w2-2) ---
+
+## The life a Necropotence pilot keeps above what the table shows it:
+## a Lightning Bolt's worth and a point — their hand is hidden.
+const NECRO_MARGIN := 4
+
+
+## THE LIFE PRICED AGAINST THE TABLE (whole-game campaign 2026-10-07,
+## w2-2; [member AiProfile.forecasts_tactics]). Necropotence skips the
+## draw step: paying life is the deck's only card flow. The pilot kept a
+## flat five life and a hand of at most `life - 5` — at 7 life holding two
+## cards it could not use, facing an empty board, it never drew again (the
+## Deck Lab: sixteen turns at 7 life doing nothing). The line it keeps is
+## now what their creatures could swing for next turn ([method
+## AiPlayer._could_attack_next_turn], public) plus [constant NECRO_MARGIN]
+## for what a hidden hand may hold; above it the hand is filled as before
+## (up to six, [param held] counting the cards already on their way), and
+## while life stays at or above that line it still takes ONE card a turn
+## ([param arriving] none yet) — the draw the card took away — never into
+## a full hand.
+static func necro_digs(g: MtgGame, pilot, held: int, arriving: int) -> bool:
+	var pid: int = pilot.pid
+	var life: int = g.players[pid].life
+	var threat := 0
+	for body in g.players[g.opponent_of(pid)].battlefield:
+		if body.is_creature() and pilot._could_attack_next_turn(g, body, pid):
+			threat += maxi(body.cur_power, 0)
+	var keep := threat + NECRO_MARGIN
+	if held < mini(6, maxi(0, life - keep)):
+		return true
+	return arriving == 0 and held < 7 and life >= keep + 1
+# --- end campaign fix-ai-b Necropotence ---
+
 
 static func result(value: float, targets: Array = []) -> Dictionary:
 	return {"value": value, "targets": targets}
@@ -401,7 +438,7 @@ static func respond(g: MtgGame, pilot) -> String:
 	return ""
 
 static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x: int, mode: int) -> Variant:
-	if s.data.set_code != "ice": return null
+	if s.data.script_set != "ice": return null   # the script's own set (campaign w3-3)
 	var pid: int = pilot.pid
 	var name := s.data.card_name
 	if pilot.profile.forecasts_tactics and name in ["Venomous Breath", "Battle Cry"]:

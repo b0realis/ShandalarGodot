@@ -217,10 +217,13 @@ static func _consult(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: 
 	# Named from the caster's own DECKLIST, most copies unaccounted for
 	# first (the 2026-09-07 ruling: never every name in the pool). A bare
 	# game without a decklist names nothing and the search runs dry.
-	var names: Array[String] = load("res://cards/sets/leg/petra_sphinx.gd").RiddleEffect.nameable(g, pid)
+	var riddle = load("res://cards/sets/leg/petra_sphinx.gd").RiddleEffect
+	var names: Array[String] = riddle.nameable(g, pid)
 	var named := ""
 	if not names.is_empty():
-		named = names[g.agents[pid].choose_option(g, pid, names, "Demonic Consultation: name a card", 0)]
+		var hint := _consult_hint(names, riddle.unaccounted(g, pid))
+		named = names[clampi(g.agents[pid].choose_option(g, pid, names, "Demonic Consultation: name a card", hint),
+			0, names.size() - 1)]
 	g.log_line("Demonic Consultation names " + named)
 	for _i in 6: _exile_top_face_up(g, pid)
 	while not g.players[pid].library.is_empty():
@@ -230,6 +233,26 @@ static func _consult(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: 
 			g.top_of_library_to_hand(pid)
 			return
 		_exile_top_face_up(g, pid)
+## The HINT for Demonic Consultation's name (campaign 2026-10, w2-9): the
+## list stays ordered by copies unaccounted for, but the default is the
+## most valuable NONLAND name with a copy still unaccounted for — a tutor
+## that exiles six cards is not spent on a basic land — then a land, and
+## never a name with no copy left (that would exile the whole library).
+## Valued off the decklist and the visible board only (docs/fair-play.md).
+static func _consult_hint(names: Array[String], left: Dictionary) -> int:
+	var best := -1
+	var best_key := []
+	for i in names.size():
+		var copies := int(left.get(names[i], 0))
+		if copies <= 0 or names[i] == "Demonic Consultation":
+			continue
+		var data := CardRegistry.get_card(names[i])
+		var nonland := data != null and not data.is_land()
+		var key := [int(nonland), Evaluator.card_value(data) if data != null else 0.0, copies]
+		if best < 0 or key > best_key:
+			best = i
+			best_key = key
+	return maxi(best, 0)
 static func _exile_top_face_up(g: MtgGame, pid: int) -> void:
 	var i := g.exile_top_of_library(pid)
 	if i != null:

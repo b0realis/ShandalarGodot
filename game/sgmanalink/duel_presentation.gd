@@ -140,6 +140,30 @@ static func special_rows(m: SgPracticeMatch, pid: int, result: Dictionary) -> vo
 		result.special_rows.append([String(entry.kind), handle])
 
 
+## A PAYMENT ON THE SEAT IS A RESPONSE (whole-game campaign 2026-10-07):
+## `respond` read only fast spells and abilities, and the networked
+## screen's automatic pass walked a bitten seat past the opponent's end
+## step — the last window for Sabertooth Cobra's "pay {2} before your next
+## upkeep". As the local screen counts them (DuelScreen._could_respond,
+## Mirage bug pass H1-F1): a ransom or a paid point of prevention the seat
+## can pay now ([method SgDuelActions.special_entries] lists only those);
+## a licid's end or a Curse's ignore only while something waits on the
+## chain; never Channel, which is mana.
+static func special_response(m: SgPracticeMatch, pid: int, result: Dictionary) -> void:
+	# The 1997 damage steps admit their own effects only: a point of
+	# prevention in the damage-prevention step (special_entries leaves it
+	# out of the regeneration step), never a ransom, a licid's end or an
+	# ignore — the step would otherwise hold a seat at every damage step.
+	var window_open := m.game.awaiting_damage_prevention or m.game.awaiting_regeneration
+	for entry: Dictionary in m.actions.special_entries(pid):
+		if window_open and String(entry.kind) != "prevention": continue
+		match String(entry.kind):
+			"settle", "prevention":
+				result.respond = true
+			"licid_end", "ignore_effect":
+				if not m.game.stack.is_empty(): result.respond = true
+
+
 static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 	var g := m.game
 	var sources := ManaPlanner.sources(g, pid)
@@ -154,6 +178,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		"untap_capped": not g.untap_caps.is_empty(), "block_taxes": [], "phase_holds": [],
 		"attack_companions": [], "special_rows": []}
 	for key in RULES: result.rules[key] = g.rules.get(key)
+	var window_open := g.awaiting_damage_prevention or g.awaiting_regeneration
 	for seat in 2:
 		var p := g.players[seat]
 		# The land drop as the whole rule, not just the counter: a seat's
@@ -198,6 +223,16 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 				row.castable = g.cast_timing_refusal(pid, card).is_empty() \
 					and (not open_modes.is_empty() if rowed
 						else SgPayment.affordable(g, pid, card, true) and SgDuelActions.spell_aimed(g, pid, card, 0, -1))
+				# THE 1997 DAMAGE STEPS ADMIT THEIR OWN EFFECTS ONLY (whole-game
+				# campaign 2026-10-07): under the fifth rules the damage-
+				# prevention step opens whenever damage is pending and a hand
+				# holds a card, and a Lightning Bolt was `castable` — and so a
+				# response — in it, holding a network seat at every damage
+				# step. The engine's own announcement check says what the step
+				# admits (MtgGame.spell_announce_refusal; a spell with modes
+				# or rows asked it already, through its open modes).
+				if row.castable and not rowed and window_open:
+					row.castable = g.spell_announce_refusal(pid, card, 0, 0).is_empty()
 				# A FAST EFFECT is anything castable now although a sorcery
 				# could not be (Pack 8): an instant, FLASH, the Mirage flash
 				# rider or a Winding Canyons grant — the engine's own
@@ -210,7 +245,8 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 					# row (Fireblast's two Mountains) would otherwise stop
 					# every Done and auto-pass of the duel. RESPOND weighs
 					# every row, like the local _payable_now.
-					result.floating = result.floating or SgPayment.affordable(g, pid, card, false, false)
+					result.floating = result.floating or (SgPayment.affordable(g, pid, card, false, false)
+						and (row.castable or not window_open))
 					result.respond = result.respond or row.castable
 			# A face-down card this seat may LOOK at (Three Wishes) offers its
 			# actions to that seat; every other face-down card offers none.
@@ -271,6 +307,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 	block_taxes(m, pid, tax_blockers, result)
 	attack_companions(m, pid, result)
 	special_rows(m, pid, result)
+	special_response(m, pid, result)
 	for item in g.stack:
 		var card := item.card
 		# A source can have left for a private zone while its ability remains.

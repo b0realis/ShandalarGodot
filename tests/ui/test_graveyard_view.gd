@@ -122,6 +122,10 @@ func test_raise_dead_is_castable_through_the_ui() -> void:
 func test_an_illegal_pile_card_is_refused_not_ignored() -> void:
 	var game: MtgGame = screen.game
 	var mountain := _bury(0, "Mountain")     # not a creature card
+	# ...and a creature card it COULD return: with none, the cast is refused
+	# before any aiming (whole-game campaign, w5-5), and the misclick below
+	# needs a cast in progress to be refused at all.
+	_bury(0, "Grizzly Bears")
 	var raise := _hand(0, "Raise Dead")
 	# Sorcery timing: our own main phase, empty chain, the mana floating.
 	game.active_player = 0

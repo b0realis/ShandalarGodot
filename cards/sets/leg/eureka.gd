@@ -84,12 +84,14 @@ class EurekaEffect extends EffectBase:
 			game.put_from_hand_into_play(pick, pid)
 			return true
 		# CR 303.4f: the Aura's controller chooses what it enchants as it
-		# enters — the hint is the helpful side's biggest body.
+		# enters — the hint is the helpful side's biggest body, and the ask
+		# is ORDERED (campaign 2026-10, w1-3: a heuristic seat put a hostile
+		# Aura on its own best creature by card value).
 		var hosts := _hosts(game, pick)
 		var friendly := EffectIntent.aura_aim(pick.data) != EffectIntent.Aim.HOSTILE
 		hosts.sort_custom(_host_order.bind(pid, friendly))
 		var host := game.agents[pid].choose_card(game, pid, hosts,
-			"Choose what %s enchants" % pick.data.card_name)
+			"Choose what %s enchants" % pick.data.card_name, false, false, true)
 		if host == null or not hosts.has(host):
 			host = hosts[0]
 		game.attach_aura_from_anywhere(pick, host, pid)

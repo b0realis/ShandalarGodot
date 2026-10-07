@@ -28,6 +28,14 @@ extends CardScript
 ## the whole point of the card. Left 2026-09-07: a face-down spell on the
 ## stack is an engine mechanic, not a prompt, and the owner's ruling of
 ## that day asks for the simple thing that reuses what exists.
+##
+## SIMPLIFIED too (same ledger row; campaign 2026-10, w1-8): "whose mana
+## cost could be paid by some amount of, or all of, the mana you spent on
+## {X}" is read as MANA VALUE <= X — the colours of the mana spent are not
+## checked, so five colourless mana can mask a Serra Angel ({3}{W}{W}). The
+## engine keeps no record of which mana paid an activation's {X} (only the
+## storage artifacts ask for one, a question per mana), and asking it here
+## would put X colour questions before every Mask activation.
 
 
 ## "Activate only as a sorcery" (CR 307.1): your turn, a main phase,

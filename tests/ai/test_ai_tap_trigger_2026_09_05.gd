@@ -70,20 +70,25 @@ func test_a_tap_trigger_does_not_cost_the_turn_its_cast() -> void:
 	assert_eq(g.turn_number, turn, "and it did so on the same turn")
 
 
-## The FIRST act is not a pass and not a cast: the lands are tapped, the
-## triggers are on the stack, and the seat says so rather than giving up.
+## The FIRST act is not a pass and not a refusal. Since the whole-game
+## campaign (fix-engine w7-5, wired into the AI's cast by fix-ai-c) the AI
+## ANNOUNCES the cast before it taps (CR 601.2a-i): the four Manabarbs
+## triggers wait and go on the stack ABOVE the Giant, so the cast lands on
+## the first action and there is nothing to hold. ([method
+## AiPlayer._wait_out] still answers for a payment made outside the
+## bracket — see test_an_empty_stack_means_the_refusal_stands.)
 func test_the_first_action_holds_the_card_rather_than_refusing_it() -> void:
 	var ai := _wizard()
 	for _i in 4:
 		put_battlefield(0, "Mountain")
 	put_battlefield(1, "Manabarbs")
-	give_hand(0, "Hill Giant")
+	var giant := give_hand(0, "Hill Giant")
 	advance_to_step(Mtg.Step.MAIN1)
 	var did := ai.act(g)
-	assert_string_contains(did, "holds Hill Giant")
-	assert_false(g.stack.is_empty(), "the tap triggers are on the stack")
-	assert_false(ai._refused.has(str(g.players[0].hand[0].id)),
-		"a refusal the planner can wait out must not enter the memo")
+	assert_eq(did, "cast Hill Giant", "announced: the triggers wait for the spell")
+	assert_eq(g.stack[0].card, giant, "the Giant is on the stack, under the triggers")
+	assert_eq(g.stack.size(), 5, "the Giant and four Manabarbs triggers above it")
+	assert_false(ai._refused.has(str(giant.id)), "nothing was refused")
 
 
 ## The retry spends the FLOATING mana. Tapping again would be a second
@@ -162,4 +167,6 @@ func test_the_deferral_does_not_repeat_once_the_cast_lands() -> void:
 	for line in g.log_lines:
 		if line.contains("(AI holds "):
 			holds += 1
-	assert_eq(holds, 1, "the card is held exactly once, then cast")
+	# Announced before it taps (w7-5), the card is never held at all.
+	assert_eq(holds, 0, "the card is cast on its first action, never held")
+	assert_true(_battlefield_names(0).has("Hill Giant"))

@@ -7,15 +7,23 @@ const SETTING := "draft_pool_cards"
 const OPTIONS := "draft_options"
 
 
+## The remembered eligible cards that are in play and on a sheet, once
+## each, sorted. LINEAR (whole-game campaign 2026-10): the draft setup asks
+## this on every spin-box step and keystroke, and the de-duplication was an
+## `Array.has` per entry — ~56 ms of a 3,093-card pool on every ask. The
+## whole library is only listed when nothing is remembered.
 static func selected() -> Array[String]:
 	CardRegistry.ensure_loaded()
 	var out: Array[String] = []
-	var saved: Variant = Settings.get_value(SETTING, CardRegistry.all_names())
+	var saved: Variant = Settings.get_value(SETTING, []) if Settings.has_value(SETTING) \
+		else CardRegistry.all_names()
 	if saved is Array or saved is PackedStringArray:
+		var seen := {}
 		for entry in saved:
-			if entry is String and CardRegistry.has_card(entry) and not out.has(entry) \
-					and SealedPool.SLOT_ORDER.has(SealedPool.slot_of(entry)):
-				out.append(entry)
+			if entry is String and not seen.has(entry):
+				seen[entry] = true
+				if CardRegistry.has_card(entry) and SealedPool.SLOT_ORDER.has(SealedPool.slot_of(entry)):
+					out.append(entry)
 	out.sort()
 	return out
 

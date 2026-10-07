@@ -242,12 +242,14 @@ static func _herald_entered(_game: MtgGame, source: CardInstance, event: GameEve
 # ===================================================== the version stamp --
 
 func test_protocol_28_and_the_tempest_rules_revision() -> void:
-	assert_eq(SgProtocol.VERSION, 28)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v28")
-	assert_eq(SgCompatibility.RULES_REVISION, "sgmanalink-tempest-block-2026-10-06")
+	# Pack 9's additions travel since protocol 28 (the exact version and
+	# rules revision are pinned by the latest bump's own test: 29 and the
+	# whole-game campaign's, tests/ui/test_campaign_fix_net_table.gd).
+	assert_true(SgProtocol.VERSION >= 28)
+	assert_ne(SgCompatibility.RULES_REVISION, "sgmanalink-mirage-bugpass-2026-10-04")
 	assert_true(SgCompatibility.valid_stamp(SgCompatibility.stamp()), "the stamp's rules text fits the wire")
 	assert_true(SgProtocol.subprotocols().has("sgmanalink-local-v27"),
-		"the last protocol is still named, so a 27 build is told, not hung up on")
+		"an earlier protocol is still named, so a 27 build is told, not hung up on")
 
 
 # ======================================================= combat on the wire --

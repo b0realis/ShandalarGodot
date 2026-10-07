@@ -211,9 +211,13 @@ func _main_phase_action(game: MtgGame) -> String:
 	if _try_play_land(game):
 		return "played a land"
 	# Mistake injection: a fumbled turn just stops developing (the classic
-	# weak-AI look) — rolled once per potential cast.
+	# weak-AI look) — rolled once per potential cast. Never into mana
+	# already tapped, never over the burn that wins ([method
+	# _fumble_spares_the_pool], [method _fumble_spares_lethal]; campaign
+	# fix-ai-c).
 	if profile.mistake_chance > 0.0 \
-			and game.rng.randf() < profile.mistake_chance:
+			and game.rng.randf() < profile.mistake_chance \
+			and not _fumble_spares_the_pool(game) and not _fumble_spares_lethal(game):
 		return ""
 	# THE LIFE ALREADY SOLD (2026-09-10, AiProfile.reads_lethal_x): a
 	# life-for-mana grant is open and the burn in hand ends the game with
@@ -230,6 +234,256 @@ func _main_phase_action(game: MtgGame) -> String:
 	if diamond != "":
 		return diamond
 	return _try_activate(game)
+
+
+# --- Campaign fix-ai-c: the mistake model's exemptions ---
+#
+# THE FUMBLE IS A TURN THAT STOPS DEVELOPING, NOT A GAME THROWN AWAY
+# (whole-game campaign, 2026-10-07; [member AiProfile.forecasts_tactics];
+# docs/ai-difficulty.md §1). [member AiProfile.mistake_chance] is still
+# rolled at every site exactly as before — a seeded duel keeps its random
+# stream — and the roll is then IGNORED in three places where the mistake
+# is not a weak player's mistake at all:
+#  * mana already floating (w6-6): a cast held while a tap trigger
+#    resolved (City of Brass, Psychic Venom), a resolved Dark Ritual's
+#    three black. "Just stops developing" there is the pool burning at the
+#    end of the step (CR 500.4 under mana burn) — 419 points of Apprentice
+#    burn in 400 seeded fifth-rules duels;
+#  * an attack that is LETHAL through their best blocks, or a body gone at
+#    end of turn anyway (Ball Lightning, an animated land) (w6-14): the
+#    Apprentice left a lethal Ball Lightning home in 13 of 40 seeds — and
+#    the main phase's own LETHAL_WORTH line, payable burn that ends the
+#    game now;
+#  * the block without which the declared swing kills us (w6-14).
+# Every other fumble is untouched; off, the old rolls.
+
+
+## w6-6: is mana already in our pool? Then the main-phase fumble is not
+## taken — the mana was tapped for a cast this step already decided on.
+func _fumble_spares_the_pool(game: MtgGame) -> bool:
+	return profile.forecasts_tactics and game.players[pid].mana_pool.total() > 0
+
+
+## w6-14, the main phase's half: is a card in hand, payable now, burn that
+## ends the game ([method _lethal_burn] at the X the mana reaches)? Then
+## the main-phase fumble is not taken: that line is LETHAL_WORTH, and a
+## weak player still casts the Fireball that wins.
+func _fumble_spares_lethal(game: MtgGame) -> bool:
+	if not profile.forecasts_tactics:
+		return false
+	var sources := _mana_sources(game)
+	for inst in game.playable_cards(pid):
+		if inst.is_land() or inst.data.spell_effects.is_empty() \
+				or _cast_gate(game, inst) != "":
+			continue
+		var intent := _intent_of(inst)
+		if intent.target_spec == null:
+			continue
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		var keys: Array = game.mana_usage_keys(inst.data, inst)
+		var max_x := 0
+		if inst.data.cost.has_x:
+			max_x = _max_affordable_x(game, inst.data.cost, surcharge, sources,
+				inst.data.x_color, keys)
+			if max_x <= 0:
+				continue
+		elif not _free_at(inst.data.cost, surcharge) \
+				and _plan_taps_from(sources, inst.data.cost, surcharge, keys).is_empty():
+			continue
+		if _lethal_burn(game, intent, max_x):
+			return true
+	return false
+
+
+## w6-14: is [param dropped], fumbled out of [param attackers], kept in?
+## Yes when the declaration is lethal through [param defender]'s best
+## blocks ([method _damage_through_blocks], the lethal push's own count),
+## or when the body is gone at end of turn whatever it does
+## ([method _gone_at_end_of_turn]).
+func _fumble_spares_attack(game: MtgGame, attackers: Array, dropped: CardInstance,
+		defender: int) -> bool:
+	if not profile.forecasts_tactics or dropped == null:
+		return false
+	if _gone_at_end_of_turn(game, dropped):
+		return true
+	var bodies: Array[CardInstance] = []
+	for id in attackers:
+		var inst := game.find_instance(id)
+		if inst != null:
+			bodies.append(inst)
+	var blockers: Array[CardInstance] = []
+	for inst in game.players[defender].battlefield:
+		if inst.is_creature() and not inst.tapped:
+			blockers.append(inst)
+	return _damage_through_blocks(game, bodies, blockers, defender) \
+		>= game.players[defender].life
+
+
+## A creature this turn and not the next: animated until end of turn
+## ([method _creature_until_end_of_turn]), or one whose own unconditional
+## end-step trigger sacrifices it or returns it to the hand — read off the
+## printed line (Ball Lightning's "sacrifice Ball Lightning", Viashino
+## Sandstalker's "return this creature to its owner's hand"), the way
+## [method _card_freezes] reads a static.
+func _gone_at_end_of_turn(game: MtgGame, inst: CardInstance) -> bool:
+	if inst == null:
+		return false
+	if _creature_until_end_of_turn(game, inst):
+		return true
+	var own := inst.data.card_name.to_lower()
+	for trigger in inst.cur_triggered_abilities:
+		if trigger.event_type != Mtg.EventType.END_STEP_START or trigger.condition.is_valid():
+			continue
+		var lower: String = trigger.text.to_lower()
+		if lower.contains("sacrifice " + own) or lower.contains("sacrifice this creature") \
+				or lower.contains("return this creature to its owner's hand"):
+			return true
+	return false
+
+
+## w6-14: is the fumbled assignment of [param blocker_id] kept in
+## [param block_map]? Yes when the declared attack's unblocked power reaches
+## our life without it and not with it.
+func _fumble_spares_block(game: MtgGame, block_map: Dictionary, blocker_id: Variant) -> bool:
+	if not profile.forecasts_tactics:
+		return false
+	var life := game.players[pid].life
+	var kept := block_map.duplicate()
+	kept.erase(blocker_id)
+	return _unblocked_power(game, kept) >= life and _unblocked_power(game, block_map) < life
+
+
+## The power of the declared attackers no entry of [param block_map]
+## (blocker id -> attacker id, or an Array of them) blocks.
+func _unblocked_power(game: MtgGame, block_map: Dictionary) -> int:
+	var blocked: Dictionary = {}
+	for blocker_id in block_map:
+		var reach: Variant = block_map[blocker_id]
+		for attacker_id in (reach if reach is Array else [reach]):
+			blocked[int(attacker_id)] = true
+	var total := 0
+	for attacker_id in game.combat.attackers:
+		var attacker := game.find_instance(attacker_id)
+		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD \
+				or blocked.has(int(attacker_id)):
+			continue
+		total += maxi(attacker.cur_power, 0)
+	return total
+
+# --- end Campaign fix-ai-c: the mistake model's exemptions ---
+
+
+# --- Campaign fix-ai-c: combat prices ---
+
+
+## w6-7: [param free] without the bodies that pay for blocking at all
+## ([member CardData.combat_price] — Time Elemental: sacrificed, and five
+## damage to us, at end of combat) unless the block is what keeps us alive:
+## the swing through the other bodies' blocks is lethal, and through every
+## body's — the desperate ladder, chumps allowed — plus the price, it is
+## not. A 0/2 that soaked a 1/1 for free on the ladder's free-absorb rung
+## cost the Elemental and five life for one. forecasts_tactics; off, [param
+## free] unchanged.
+func _priced_blockers_out(game: MtgGame, free: Array[CardInstance],
+		attackers: Array[CardInstance]) -> Array[CardInstance]:
+	if not profile.forecasts_tactics or attackers.is_empty():
+		return free
+	var plain: Array[CardInstance] = []
+	var price := 0
+	for inst in free:
+		if inst.data.combat_price.is_empty():
+			plain.append(inst)
+		else:
+			price = maxi(price, int(inst.data.combat_price.get("life", 0)))
+	if plain.size() == free.size():
+		return free
+	var life := game.players[pid].life
+	if _damage_after_value_blocks(game, attackers, plain, {}, true) < life:
+		return plain   # we live without them
+	if _damage_after_value_blocks(game, attackers, free, {}, true) + price >= life:
+		return plain   # and die with them anyway
+	return free
+
+
+## w2-4: would FIRST STRIKE, bought now, save [param inst] in the combat it
+## is in? It dies to [param opposite] as things stand ([param bonus] the
+## pumps already on their way), and with first strike it kills every
+## opposing body that would otherwise hit it before that body deals its
+## damage — a body with first strike of its own still strikes with it.
+## The Knight of Stromgald's {B} turned a Bears trade into a free kill and
+## was never once activated: only power and toughness were priced.
+func _first_strike_saves(game: MtgGame, inst: CardInstance, opposite: Array[int],
+		bonus: Vector2i) -> bool:
+	if not profile.forecasts_tactics or inst.has_keyword(Mtg.Keyword.FIRST_STRIKE):
+		return false
+	var incoming := _incoming_combat_damage(game, inst, opposite)
+	if incoming <= 0 or inst.damage + incoming < inst.cur_toughness + bonus.y:
+		return false   # it lives already
+	var after := 0
+	for other_id in opposite:
+		var other := game.find_instance(other_id)
+		if other == null or other.zone != Mtg.Zone.BATTLEFIELD:
+			continue
+		if other.has_keyword(Mtg.Keyword.FIRST_STRIKE) or opposite.size() > 1 \
+				or not _dies_to(game, other, inst, Vector2i.ZERO, bonus):
+			after += _damage_from(other, inst)
+	return inst.damage + after < inst.cur_toughness + bonus.y
+
+
+## w1-7: would [param inst] deal nothing the moment it attacks? A body with
+## power now that a static of the table's — "Attacking creatures get
+## -1/-0." (Weakstone), read off the printed line by [method
+## _attacking_power_shift] — takes to zero is no attacker: a Prodigal
+## Sorcerer swung as a 0/1 every turn and never pinged. A body with no
+## power to begin with is the pump planner's and the cohort's (they
+## already drop it unpumped). Never a conscript. forecasts_tactics.
+func _attacks_for_nothing(game: MtgGame, inst: CardInstance) -> bool:
+	if not profile.forecasts_tactics or inst.cur_power <= 0 or _conscripted(game, inst):
+		return false
+	var shift := _attacking_power_shift(game, inst)
+	return shift < 0 and inst.cur_power + shift <= 0
+
+
+var _attacking_shift_re: RegEx = null   # [method _attacking_power_shift]'s, compiled once
+
+
+## The power a static on the battlefield gives [param inst] while it is
+## attacking: the sum of every "Attacking creatures get +N/+M." line, and
+## of every "Attacking creatures you control get ..." line its controller
+## also controls. Read off the static's printed text — the whole line, so
+## an "until end of turn" effect is never mistaken for one.
+func _attacking_power_shift(game: MtgGame, inst: CardInstance) -> int:
+	var shift := 0
+	for perm in game.all_battlefield():
+		if perm.face_down:
+			continue
+		for ability in perm.data.static_abilities:
+			var line := String(ability.text).strip_edges().to_lower()
+			if not line.begins_with("attacking creatures"):
+				continue
+			if _attacking_shift_re == null:
+				_attacking_shift_re = RegEx.new()
+				_attacking_shift_re.compile(
+					"^attacking creatures( you control)? get ([+-]\\d+)/[+-]\\d+\\.?$")
+			var m := _attacking_shift_re.search(line)
+			if m == null:
+				continue
+			if m.get_string(1) != "" and perm.controller_id != inst.controller_id:
+				continue
+			shift += int(m.get_string(2))
+	return shift
+
+
+## w2-4: is a first-strike grant from [param inst] already on the stack?
+func _first_strike_pending(game: MtgGame, inst: CardInstance) -> bool:
+	for item in game.stack:
+		if item.kind == Mtg.StackKind.ABILITY and item.card == inst \
+				and EffectIntent.read(item.effects, inst.data.card_name).pump_keywords \
+					.has(Mtg.Keyword.FIRST_STRIKE):
+			return true
+	return false
+
+# --- end Campaign fix-ai-c: combat prices ---
 
 
 # ------------------------------------------------- develop after combat --
@@ -737,6 +991,8 @@ func _try_cast_best(game: MtgGame) -> String:
 	# `canCastWhileReserving`, `heuristic.go`): a sorcery-speed cast that
 	# would tap us out of it must be worth half again as much.
 	var reserve := _held_reserve(game)
+	var volley := _burn_volley(game, sources)   # campaign fix-ai-a (w6-3)
+	var ranked: Array = []   # campaign fix-ai-c (w6-9): every ranked cast, for the sweeper's order
 	for inst in game.playable_cards(pid):
 		if inst.is_land():
 			continue
@@ -748,8 +1004,12 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # locked, banned, or "Cast this spell only ..." — not now
 		if _arrival_wasted(game, inst.data):
 			continue   # a second legend, a second world: a card thrown away
+		if _arrival_refused(game, inst):
+			continue   # campaign fix-ai-c: a freeze in force, our creature the Drop's meal, nothing to discard
 		if MIRAGE_TACTICS.dies_on_arrival(game, self, inst):
 			continue   # a 2/0 with nothing to count, a Dreadnought with nothing to feed it (Pack 8)
+		if _forced_arrival_harm(game, inst):
+			continue   # campaign fix-ai-a (w6-4): its forced "target" arrival can only hit ours
 		if profile.holds_repeats and EffectIntent.permanent_repeats(inst.data, game, pid):
 			continue   # a second Kismet, a second Winter Orb: the same card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
@@ -817,6 +1077,7 @@ func _try_cast_best(game: MtgGame) -> String:
 		# 514.2, [method _finishes_damaged]).
 		if _is_held_instant(inst, intent) \
 				and not _lethal_burn(game, intent, max_x) \
+				and not volley.has(inst.id) \
 				and not _finishes_damaged(game, inst, intent):
 			continue
 		# Dark Ritual is worth exactly what it lets us cast this turn.
@@ -830,7 +1091,8 @@ func _try_cast_best(game: MtgGame) -> String:
 		if intent.mana_for_life and profile.reads_lethal_x \
 				and not _life_mana_enables(game, inst, sources):
 			continue
-		var sized := _plan_spell_choice(game, inst, max_x)   # {} = wait
+		var sized := _volley_choice(game, inst, volley) if volley.has(inst.id) \
+			else _plan_spell_choice(game, inst, max_x)   # {} = wait
 		if sized.is_empty():
 			continue
 		var mode: int = sized["mode"]
@@ -840,6 +1102,8 @@ func _try_cast_best(game: MtgGame) -> String:
 		var value: float = sized["value"]
 		if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
 			continue   # our own Skulking Ghost would be sacrificed (Pack 8)
+		if not _cost_spares_targets(game, inst, targets, mode, x):
+			continue   # campaign fix-ai-a (w6-12): the cost would eat the target
 		# THE TARGET IS NOT THE PAYMENT (2026-10-03): with the targets
 		# known, the plan is made again without any permanent of ours
 		# among them — a Firebreathing aimed at a Tinder Wall was paid for
@@ -925,6 +1189,10 @@ func _try_cast_best(game: MtgGame) -> String:
 		if _cast_veto(game, inst, intent, targets, x):
 			continue
 		value += _study_cast_bonus(game, inst, value)
+		if not inst.data.cost.has_x:   # campaign fix-ai-c (w6-1): the burn it leaves, priced
+			value -= _burn_price(game, sources, plan,
+				game.spell_cost_for(pid, inst.data, x, mode, inst).mana_value() + surcharge)
+		value -= _tap_toll_price(game, sources, plan)   # campaign fix-ai-c (fix-mana handover, w1-2)
 		if profile.action_search_nodes > 0:
 			proposals.append({"id": inst.id, "card": inst, "value": value,
 				"x": x, "mode": mode, "targets": targets,
@@ -935,12 +1203,33 @@ func _try_cast_best(game: MtgGame) -> String:
 					and inst.data.static_abilities.is_empty()
 					and not inst.data.sacrifice_condition.is_valid()
 					and inst.data.additional_sacrifice.is_empty()})
+		ranked.append({"card": inst, "value": value, "x": x, "mode": mode,
+			"targets": targets})   # campaign fix-ai-c (w6-9)
 		if value > best_value:
 			best = inst
 			best_value = value
 			best_targets = targets
 			best_x = x
 			best_mode = mode
+	# --- Campaign fix-ai-c (w6-9): THE SWEEPER GOES FIRST ---
+	# A permanent our own sweep in hand would kill waits until the sweep
+	# has been cast ([method _swept_by_our_sweeper]); the best of the rest
+	# is chosen again from the same ranking.
+	var swept := _swept_by_our_sweeper(game, ranked)
+	if not swept.is_empty():
+		proposals = proposals.filter(func(p: Dictionary) -> bool:
+			return not swept.has(int(p["id"])))
+		best = null
+		best_value = 0.0
+		for r in ranked:
+			if swept.has((r["card"] as CardInstance).id) or float(r["value"]) <= best_value:
+				continue
+			best = r["card"]
+			best_value = r["value"]
+			best_targets = r["targets"]
+			best_x = r["x"]
+			best_mode = r["mode"]
+	# --- end Campaign fix-ai-c (w6-9) ---
 	if best == null:
 		return ""
 	if profile.action_search_nodes > 0 and not proposals.is_empty():
@@ -962,11 +1251,23 @@ func _try_cast_best(game: MtgGame) -> String:
 					+ _generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data)):
 		_action_line.clear()
 		return ""
-	for step in plan:
-		if step[0] != null:   # floating mana is already in the pool
-			ManaPlanner.run_step(game, pid, step)
+	# THE ANNOUNCEMENT (campaign fix-ai-c, the fix-engine handover of w7-5,
+	# CR 601.2a-i): the cast is announced before a land is tapped, so a tap
+	# trigger raised while paying (City of Brass, Psychic Venom, Manabarbs)
+	# waits and goes on the stack ABOVE the spell — the cast is no longer
+	# refused and held with the mana floating ([method _wait_out]). The
+	# cast closes the bracket; a refusal closes it below.
+	var announced := game.begin_announcement(pid) == ""
+	# Floating mana is already in the pool; the run stops tapping once the
+	# pool covers the bill (campaign fix-mana, w1-1: a Mana Flare's bonus).
+	ManaPlanner.run_plan(game, pid, plan, game.spell_cost_for(pid, best.data, best_x, best_mode, best),
+		_generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data), game.mana_usage_keys(best.data, best))
+	_cost_spares = _own_target_ids(game, best_targets)   # campaign fix-ai-a (w6-12)
 	var err := game.cast_spell(pid, best, best_targets, best_x, best_mode)
+	_cost_spares = {}
 	if err != "":
+		if announced:
+			game.end_announcement(pid)   # campaign fix-ai-c (w7-5): the payment's triggers go on now
 		if _wait_out(game, best):
 			return "holds %s until the stack clears" % best.data.card_name
 		# A plan/engine disagreement is an AI bug worth hearing about, but
@@ -974,6 +1275,8 @@ func _try_cast_best(game: MtgGame) -> String:
 		game.log_line("(AI cast of %s refused: %s)" % [best.data.card_name, err])
 		_refused[str(best.id)] = true
 		return ""
+	if _intent_of(best).wheels > 0:
+		_wheel_turn = _turn_key(game)   # campaign fix-ai-c (w6-15): one wheel a turn
 	return "cast %s" % best.data.card_name
 
 
@@ -1009,6 +1312,348 @@ func _wait_out(game: MtgGame, inst: CardInstance) -> bool:
 	game.log_line("(AI holds %s: the stack filled up while it was paying)"
 		% inst.data.card_name)
 	return true
+
+
+# --- Campaign fix-ai-c: casting policy ---
+#
+# Readings the cast ranking ([method _try_cast_best]) asks before it
+# prices a card (whole-game campaign, 2026-10-07; all under [member
+# AiProfile.forecasts_tactics], off = the old ranking). Every shape is read
+# off the board and off the card's PRINTED lines — the channel [method
+# _card_freezes] and [method _rent_of_data] already read — never off a
+# card's name.
+
+
+## The turn this seat last cast a wheel (w6-15): one wheel a turn. "" none.
+var _wheel_turn := ""
+
+
+## This game's turn, as a key a memo can hold across games.
+static func _turn_key(game: MtgGame) -> String:
+	return "%d:%d" % [game.get_instance_id(), game.turn_number]
+
+
+## Is [param inst] a card whose arrival does nothing but harm right now?
+## Four readings, each a card thrown away:
+##  * w1-5 a FREEZER while the freeze is already in force, and any rent
+##    card whose only text is statics that do not stack, beside a copy of
+##    our own ([method _freeze_in_force], [method _rent_copy_in_play]) —
+##    a second Stasis doubles the rent and changes nothing;
+##  * a second copy of an engine one copy already repeats (Pestilence,
+##    [method _repeatable_copy_in_play]);
+##  * w6-13 a permanent whose upkeep destroys THE CREATURE WITH THE LEAST
+##    POWER while that creature is ours, or while there is none at all
+##    ([method _least_power_meal_is_ours]) — Drop of Honey beside our own
+##    Llanowar Elves ate our board one upkeep at a time;
+##  * w2-5 a creature sacrificed on arrival unless we discard a card we do
+##    not hold ([method _arrival_discard_unpaid]) — Balduvian Horde into an
+##    empty hand, Thundering Wurm with no land card.
+func _arrival_refused(game: MtgGame, inst: CardInstance) -> bool:
+	if not profile.forecasts_tactics:
+		return false
+	return _freeze_in_force(game, inst.data) or _rent_copy_in_play(game, inst.data) \
+		or _repeatable_copy_in_play(game, inst.data) \
+		or _least_power_meal_is_ours(game, inst) or _arrival_discard_unpaid(game, inst)
+
+
+## w1-5: does [param data] freeze the untap step ([method _card_freezes])
+## while every land on both sides of the table already skips it? The freeze
+## is global, so one in force — ours or theirs — is the whole of it.
+func _freeze_in_force(game: MtgGame, data: CardData) -> bool:
+	if not _card_freezes(data):
+		return false
+	var lands := 0
+	for inst in game.all_battlefield():
+		if not inst.is_land():
+			continue
+		if not inst.cur_skips_untap:
+			return false
+		lands += 1
+	return lands > 0
+
+
+## w1-5, generalised: a rent card ([method _rent_of_data]) whose only other
+## text is statics that do not stack ([method EffectIntent.stacks]), with a
+## face-up copy already on our battlefield. The copy's statics already
+## apply; the second adds only its rent.
+func _rent_copy_in_play(game: MtgGame, data: CardData) -> bool:
+	if not data.is_permanent_type() or data.is_creature() or data.is_land() \
+			or data.is_aura() or data.static_abilities.is_empty():
+		return false
+	if _rent_of_data(data) == "" or data.triggered_abilities.size() != 1 \
+			or not data.activated_abilities.is_empty() or not data.mana_abilities.is_empty():
+		return false
+	if EffectIntent.stacks(data):
+		return false
+	for perm in game.players[pid].battlefield:
+		if not perm.face_down and perm.data.card_name == data.card_name:
+			return true
+	return false
+
+
+## Pestilence (w3, seen outside its area): a permanent whose whole worth
+## is activated abilities ONE copy already repeats — no {T}, no limit a
+## turn, no sacrifice or counter in the cost, no static, and no trigger
+## but its own sacrifice clause — with a face-up copy on our battlefield.
+## The second Pestilence adds no activation the first does not have, and
+## one more card for the empty board to take at end of turn; in hand it is
+## the backup a Disenchant cannot reach. The Wizard cast three.
+func _repeatable_copy_in_play(game: MtgGame, data: CardData) -> bool:
+	if not data.is_permanent_type() or data.is_creature() or data.is_land() \
+			or data.is_aura() or not data.static_abilities.is_empty() \
+			or not data.mana_abilities.is_empty() or data.activated_abilities.is_empty():
+		return false
+	for ability in data.activated_abilities:
+		if ability.tap_cost or ability.sacrifice_cost or ability.max_per_turn > 0 \
+				or ability.turn_restriction != 0 or ability.counter_cost_kind != "" \
+				or ability.sacrifice_filter.is_valid() or ability.exile_cost \
+				or ability.return_cost:
+			return false
+	var own := data.card_name.to_lower()
+	for trigger in data.triggered_abilities:
+		var lower: String = trigger.text.to_lower()
+		if not (lower.contains("sacrifice " + own) or lower.contains("sacrifice this")):
+			return false
+	for perm in game.players[pid].battlefield:
+		if not perm.face_down and perm.data.card_name == data.card_name:
+			return true
+	return false
+
+
+## Pestilence: what a sweep that leaves NO creature on the battlefield costs
+## in the permanents that are sacrificed for it — every one whose end-step
+## trigger reads "if there are no creatures on the battlefield, sacrifice"
+## (Pestilence's own clause), ours at minus its worth and theirs at plus,
+## on [method _sweep_value]'s own scale (before W_BOARD). 0.0 when a
+## creature survives [param effect] at [param n] in [param scope], when no
+## creature dies at all, and off [member AiProfile.forecasts_tactics]. Two
+## activations that took a Dauthi Slayer of ours with their last creature
+## took all three of our Pestilences at the end step.
+func _empty_board_toll(game: MtgGame, effect: EffectBase, n: int, scope: int) -> float:
+	if not profile.forecasts_tactics:
+		return 0.0
+	var died := false
+	for inst in game.all_battlefield():
+		if not inst.is_creature():
+			continue
+		if not _sweep_kills(effect, inst, n, scope):
+			return 0.0   # a creature is left: nothing is sacrificed
+		died = true
+	if not died:
+		return 0.0
+	var toll := 0.0
+	for perm in game.all_battlefield():
+		for trigger in perm.cur_triggered_abilities:
+			if trigger.event_type == Mtg.EventType.END_STEP_START \
+					and trigger.text.to_lower().contains("if there are no creatures on the battlefield, sacrifice"):
+				var worth := Evaluator.permanent_value(perm, profile)
+				toll += -worth if perm.controller_id == pid else worth
+				break
+	return toll
+
+
+## A cumulative upkeep paid in bodies for THEM (Varchild's War-Riders,
+## w3, seen outside its area): "Give an opponent N Survivors for cumulative
+## upkeep?" The gift is N creatures on their side for good, each a 1/1 that
+## attacks us and blocks for them; the body kept is its power on our side.
+## Kept while its power is more than the bodies it hands over — the hint
+## (N <= 3) paid three upkeeps, handed over six Survivors and lost the race
+## they ran. Returns 1 (pay), 0 (let it go), or -1 when [param prompt] is
+## not this question. forecasts_tactics.
+func _upkeep_gift_answer(game: MtgGame, prompt: String) -> int:
+	if not profile.forecasts_tactics or game.current_step() != Mtg.Step.UPKEEP:
+		return -1
+	var lower := prompt.to_lower()
+	if not lower.begins_with("give an opponent ") or not lower.contains("for cumulative upkeep"):
+		return -1
+	var count := lower.trim_prefix("give an opponent ").get_slice(" ", 0).to_int()
+	if count <= 0:
+		return -1
+	var source: CardInstance = null
+	for inst in game.players[pid].battlefield:
+		if inst.data.card_name == game.current_resolution_source():
+			source = inst
+			break
+	if source == null:
+		return -1
+	return 1 if source.cur_power > count else 0
+
+
+## w6-13: does one of the upkeep [param triggers] destroy "the creature
+## with the least power"? Read off the printed line (Drop of Honey).
+static func _destroys_least_power(triggers: Array) -> bool:
+	for trigger in triggers:
+		if trigger.event_type == Mtg.EventType.UPKEEP_START \
+				and trigger.text.to_lower().contains("destroy the creature with the least power"):
+			return true
+	return false
+
+
+## The creature a least-power feeder controlled by [param chooser] takes
+## from [param bodies] (skipping [param skip]): the least power on the
+## table, and of a tie the one NOT the chooser's — the choice is the
+## feeder's controller's (Drop of Honey's "you choose one of them"), and
+## nobody feeds their own board. Null with no creature at all.
+static func _least_power_meal(bodies: Array, chooser: int, skip: Array = []) -> CardInstance:
+	var meal: CardInstance = null
+	for inst in bodies:
+		if not inst.is_creature() or skip.has(inst):
+			continue
+		if meal == null or inst.cur_power < meal.cur_power \
+				or (inst.cur_power == meal.cur_power and meal.controller_id == chooser
+					and inst.controller_id != chooser):
+			meal = inst
+	return meal
+
+
+## w6-13: would [param inst], cast now, eat a creature of OURS at our next
+## upkeep — or find nothing to eat (it then sacrifices itself)?
+func _least_power_meal_is_ours(game: MtgGame, inst: CardInstance) -> bool:
+	if not _destroys_least_power(inst.data.triggered_abilities):
+		return false
+	var meal := _least_power_meal(game.all_battlefield(), pid)
+	return meal == null or meal.controller_id == pid
+
+
+## w2-5: is [param inst] a creature whose arrival trigger sacrifices it
+## "unless you discard a card" (Balduvian Horde: "a card at random";
+## Thundering Wurm, Fallow Wurm: "a land card"; Mercenary Knight: "a
+## creature card") with no such card in our hand besides itself?
+func _arrival_discard_unpaid(game: MtgGame, inst: CardInstance) -> bool:
+	if not inst.data.is_creature():
+		return false
+	for trigger in inst.data.triggered_abilities:
+		if trigger.event_type != Mtg.EventType.ENTERS_BATTLEFIELD:
+			continue
+		var lower: String = trigger.text.to_lower()
+		var at := lower.find("unless you discard a ")
+		if at < 0:
+			continue
+		var wanted := lower.substr(at + "unless you discard a ".length())
+		var paid := false
+		for card in game.players[pid].hand:
+			if card == inst:
+				continue
+			if wanted.begins_with("land card") and not card.data.is_land():
+				continue
+			if wanted.begins_with("creature card") and not card.data.is_creature():
+				continue
+			paid = true
+			break
+		if not paid:
+			return true
+	return false
+
+
+## w6-9: the ids of the permanents in [param ranked] (the cast ranking's
+## rows) that a SWEEPER in the same ranking, worth casting now, would kill
+## if it were cast after them — Wrath of God after the White Knight it then
+## destroys. Read with the sweep's own death rule ([method _sweep_kills])
+## on the card as it would arrive, at the X the sweep is ranked at, and the
+## sweep's scope (a sweep of their side alone kills nothing of ours).
+func _swept_by_our_sweeper(game: MtgGame, ranked: Array) -> Dictionary:
+	var out: Dictionary = {}
+	if not profile.forecasts_tactics or ranked.size() < 2:
+		return out
+	for row in ranked:
+		var sweeper: CardInstance = row["card"]
+		if float(row["value"]) <= 0.0 or sweeper.data.is_modal():
+			continue
+		for effect in sweeper.data.spell_effects:
+			if not (effect is DestroyAllEffect or effect is DamageAllEffect):
+				continue
+			var n := 0
+			if effect is DamageAllEffect:
+				n = int(row["x"]) if effect.use_x else effect.amount
+			var scope := MIRAGE_TACTICS.sweep_scope(game, effect, pid)
+			for other in ranked:
+				var card: CardInstance = other["card"]
+				if card != sweeper and card.data.is_permanent_type() \
+						and _sweep_kills(effect, card, n, scope):
+					out[card.id] = true
+	return out
+
+
+## w6-10: does [param ritual]'s mana make a card in hand castable AND worth
+## casting — the ranking's own question ([method _size_and_aim]: targets,
+## X, value; the engine's [method MtgGame.cast_refusal]) asked with the
+## Ritual's mana in place of the source that paid for it? The old reading
+## summed mana and printed worth, and three black mana for a Contagion
+## with no creature to hit burned (Mishra's Factory animated, the source
+## the sum still counted).
+func _ritual_has_a_use(game: MtgGame, ritual: CardInstance, sources: Array) -> bool:
+	var surcharge := game.spell_surcharge(pid, ritual.data)
+	var keys: Array = game.mana_usage_keys(ritual.data, ritual)
+	var paid := _plan_taps_from(sources, ritual.data.cost, surcharge, keys)
+	if paid.is_empty() and not _free_at(ritual.data.cost, surcharge):
+		return false
+	var rows: Array = sources.filter(func(s: Array) -> bool:
+		for step in paid:
+			if step[0] == s[0] and int(step[1]) == int(s[1]):
+				return false
+		return true)
+	var unit := 0
+	for e in ritual.data.spell_effects:
+		if e is AddManaEffect:
+			for pair in e.produces:
+				for k in int(pair[1]):
+					rows.append([null, MIRAGE_TACTICS.LAND_UNIT_BASE + unit, int(pair[0]),
+						1, false, "", 0, 0])
+					unit += 1
+	for other in game.players[pid].hand:
+		if other == ritual or other.is_land() or _is_reactive(other.data):
+			continue
+		if _refused.has(str(other.id)) or _cast_gate(game, other) != "" \
+				or _arrival_wasted(game, other.data) or _arrival_refused(game, other):
+			continue
+		if Evaluator.card_value(other.data) < 3.0:
+			continue   # the old bar: a Ritual is a card too
+		var extra := game.spell_surcharge(pid, other.data)
+		var other_keys: Array = game.mana_usage_keys(other.data, other)
+		if _free_at(other.data.cost, extra):
+			continue
+		var max_x := 0
+		if other.data.cost.has_x:
+			if _max_affordable_x(game, other.data.cost, extra, sources,
+					other.data.x_color, other_keys) >= 1:
+				continue   # castable already
+			max_x = _max_affordable_x(game, other.data.cost, extra, rows,
+				other.data.x_color, other_keys)
+			if max_x < 1:
+				continue
+		else:
+			if not _plan_taps_from(sources, other.data.cost, extra, other_keys).is_empty():
+				continue   # castable already: the Ritual is not what it waits for
+			if _plan_taps_from(rows, other.data.cost, extra, other_keys).is_empty():
+				continue   # still short, colours included
+		var mode := _pick_mode(game, other.data)
+		var choice := _size_and_aim(game, other, _mode_intent(other.data, mode), max_x, mode)
+		if choice.is_empty() or float(choice.get("value", 0.0)) <= 0.0:
+			continue   # nothing to aim at, nothing worth doing
+		if game.cast_refusal(pid, other, choice.get("targets", []),
+				int(choice.get("x", 0)), mode) != "":
+			continue
+		return true
+	return false
+
+
+## w1-6: would [param aura], hung on [param host], animate a non-creature
+## into a body of no size — a static that sets the host's power and
+## toughness "equal to its mana value" (Animate Artifact), on a host whose
+## mana value is 0 (a Mox, a token)? It dies to the state-based check the
+## moment it is a creature (CR 704.5f). Read off the printed line.
+func _animates_to_nothing(aura: CardData, host: CardInstance) -> bool:
+	if not profile.forecasts_tactics or not aura.is_aura() or host.is_creature() \
+			or host.data.cost.mana_value() > 0:
+		return false
+	for ability in aura.static_abilities:
+		var lower: String = ability.text.to_lower()
+		if lower.contains("equal to its mana value") \
+				or lower.contains("equal to its converted mana cost"):
+			return true
+	return false
+
+# --- end Campaign fix-ai-c: casting policy ---
 
 
 ## THE ONE-PLY VETO (2026-09-10, [member AiProfile.checks_before_casting];
@@ -2128,7 +2773,7 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	if ability.exile_cost or ability.exile_filter.is_valid():
 		return false
 	if ability.random_discard_cost > 0 or ability.discard_cost > 0:
-		if inst.data.set_code not in ["fem", "ice"] or not priced_sacrifice or not profile.plays_engines \
+		if inst.data.script_set not in ["fem", "ice"] or not priced_sacrifice or not profile.plays_engines \
 				or game.players[pid].hand.size() < ability.random_discard_cost + ability.discard_cost:
 			return false
 		if ability.discard_filter.is_valid():
@@ -2676,7 +3321,10 @@ func _pay_without_source(game: MtgGame, inst: CardInstance,
 	var plan := _plan_taps_from(src, ability.cost, surcharge, game.ability_mana_usage_keys(inst))
 	if plan.is_empty() or _pain_kills(game, src, plan):
 		return false
-	ManaPlanner.run_plan(game, pid, plan)
+	# The run stops tapping once the pool covers the bill (campaign
+	# fix-mana handover, w1-1: a Mana Flare's bonus is mana no plan priced).
+	ManaPlanner.run_plan(game, pid, plan, ability.cost, surcharge,
+		game.ability_mana_usage_keys(inst))
 	return true
 
 
@@ -2974,6 +3622,17 @@ func _library_slack(game: MtgGame) -> int:
 	for taker in game.extra_turns:
 		lead += -ours_rate if taker == pid else ours_rate
 	if lead < 0:
+		# --- Campaign fix-ai-c (w6-5): THE LOST RACE STILL NEEDS A LIBRARY ---
+		# Lost, the race is not ours to protect — but the game is still
+		# ours to win, and it is won by the turns our board needs, each of
+		# which starts with a draw. So the cards kept are those turns: our
+		# clock on them ([method _race_clocks]), never read past
+		# [constant RACE_HORIZON] (no clock at all reads as the horizon).
+		# Braingeyser for 7 of the last 8 decked the pilot two draw steps
+		# later with the opponent at 6. Off: unbounded, as before.
+		if profile.forecasts_tactics:
+			var need := mini(_race_clocks(game, them).x, RACE_HORIZON)
+			return maxi(mine - ours_rate * need, 0)
 		return 1 << 20   # the race is lost already: not ours to protect
 	return maxi(lead, mine - ours_rate * (PACE_HORIZON + 1))
 
@@ -3020,15 +3679,15 @@ func _decking_draw(game: MtgGame, source: CardInstance, intent: EffectIntent,
 func _kills_by_damage(game: MtgGame, source: CardInstance, intent: EffectIntent,
 		inst: CardInstance, x_value: int) -> bool:
 	if intent.removes or intent.bounces:
-		return intent.kills(inst, x_value)
+		return intent.kills(inst, x_value) and not _regenerates_from(game, intent, inst)
 	if profile.forecasts_tactics:
 		if inst.controller_id != pid and MIRAGE_TACTICS.dies_when_targeted(inst, game):
 			return true
 		var dmg := intent.damage_at(x_value)
 		if dmg > 0 and MIRAGE_TACTICS.damage_is_shaped(game, inst):
 			return bool(game.predict_damage(source, TargetRef.card(inst), dmg,
-				false, -1, pid)["dies"])
-	return intent.kills(inst, x_value)
+				false, -1, pid)["dies"]) and not _regenerates_from(game, intent, inst)
+	return intent.kills(inst, x_value) and not _regenerates_from(game, intent, inst)
 
 
 func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
@@ -3045,6 +3704,8 @@ func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 			continue
 		if not intent.target_spec.is_legal(game, TargetRef.card(inst), source):
 			continue
+		if _escapes_on_demand(game, inst):
+			continue   # campaign fix-ai-a (w6-11): Blinking Spirit bounces in response
 		var value := _victim_value(game, inst)
 		if value > best_value:
 			best = inst
@@ -3770,6 +4431,7 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int,
 		var worth := Evaluator.land_value(game, inst) if levels_lands \
 			else Evaluator.permanent_value(inst, profile)
 		swing += -worth if inst.controller_id == pid else worth
+	swing += _empty_board_toll(game, effect, n, scope)   # campaign fix-ai-c (Pestilence)
 	swing *= Evaluator.W_BOARD
 	# THE DROUGHT IS WON BY WHOEVER STILL HAS A CLOCK (2026-09-10,
 	# AiProfile.levels_boards). An all-lands sweep kills nothing on the
@@ -4162,6 +4824,19 @@ func _upkeep_meals(game: MtgGame, who: int,
 					meal = inst
 			if meal != null:
 				eaten.append(meal)
+	# --- Campaign fix-ai-c (w6-13): THE LEAST-POWER APPETITE ---
+	# A feeder of [param who]'s whose upkeep destroys "the creature with
+	# the least power" (Drop of Honey) eats from the WHOLE table, ties the
+	# other side's ([method _least_power_meal]); a meal of who's is one of
+	# the creatures their upkeep takes from them. forecasts_tactics.
+	if profile.forecasts_tactics:
+		for feeder in alive:
+			if feeder.controller_id != who \
+					or not _destroys_least_power(feeder.cur_triggered_abilities):
+				continue
+			var least := _least_power_meal(alive, who, eaten)
+			if least != null and least.controller_id == who:
+				eaten.append(least)
 	return eaten
 
 
@@ -4810,6 +5485,15 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 			var swing := _wheel_swing(game, inst, intent)
 			if swing < 0:
 				return {}   # a gift of cards, refused (casting P5)
+			# A WHEEL THAT MOVES NOTHING (campaign fix-ai-c, w6-15,
+			# forecasts_tactics): both hands end where they began, and the
+			# card and its mana are spent for nothing — a Black Lotus into a
+			# Timetwister, shuffled back and redrawn, 190 times in one main.
+			# And ONE WHEEL A TURN: a second re-deals the hands the first
+			# just dealt, and the "swing" it reads is only the cards we
+			# spent in between (the Lotus, the wheel itself).
+			if profile.forecasts_tactics and (swing == 0 or _wheel_turn == _turn_key(game)):
+				return {}
 			return {"x": max_x, "targets": [],
 				"value": _cast_value(game, inst, [], max_x)
 					+ float(swing) * profile.w_hand}
@@ -5635,6 +6319,8 @@ func _mana_spell_enables(game: MtgGame, ritual: CardInstance, sources: Array) ->
 		if e is AddManaEffect:
 			for pair in e.produces:
 				net += int(pair[1])
+	if net > 0 and profile.forecasts_tactics:
+		return _ritual_has_a_use(game, ritual, sources)   # campaign fix-ai-c (w6-10)
 	if net <= 0:
 		return false
 	var available := 0
@@ -5825,6 +6511,7 @@ func _fire_held_instant(game: MtgGame) -> String:
 	# untap is next — and with the untap step gone it is not, so the Bolt
 	# that would tap the Stasis's {U} away waits like a main-phase cast.
 	var rent: Dictionary = _rent_reserve(game) if profile.pays_the_rent else {}
+	var volley := _burn_volley(game, sources)   # campaign fix-ai-a (w6-3)
 	for inst in me.hand:
 		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
 		if not _is_held_instant(inst, intent) or intent.pumps:
@@ -5849,7 +6536,11 @@ func _fire_held_instant(game: MtgGame) -> String:
 			continue
 		var targets: Array = []
 		var value := 0.0
-		if intent.draws > 0:
+		if volley.has(inst.id):
+			# THE VOLLEY ([method _burn_volley]): lethal together, at the face.
+			targets = [TargetRef.player(opponent)]
+			value = LETHAL_WORTH
+		elif intent.draws > 0:
 			# THE DRAW THAT WINS (2026-09-07): an Ancestral at a library
 			# of three is lethal at their next draw step.
 			if _decking_draw(game, inst, intent, intent.draws, 0) >= 0:
@@ -5910,7 +6601,8 @@ func _fire_held_instant(game: MtgGame) -> String:
 func _respond_action(game: MtgGame) -> String:
 	if not game.stack.is_empty() and game.stack.back().controller == pid:
 		return ""
-	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance:
+	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance \
+			and not _fumble_spares_the_pool(game):   # campaign fix-ai-c (w6-6)
 		return ""   # a fumbled reaction is no reaction
 	var portal_response := PORTAL_TACTICS.special_spell(game, self)
 	if portal_response != "": return portal_response
@@ -5989,6 +6681,11 @@ func _respond_action(game: MtgGame) -> String:
 				response = _try_activate(game, Moment.PRE_ATTACK)
 			Mtg.Step.END:
 				response = _end_of_their_turn(game)
+	# OUR OWN END STEP over the hand size (campaign fix-ai-a, w2-8): the
+	# instant the cleanup would discard is fired first.
+	elif game.active_player == pid and game.stack.is_empty() \
+			and game.current_step() == Mtg.Step.END:
+		response = _fire_surplus_instants(game)
 	if response != "":
 		return response
 	# LAST, after every responder above has had its say and declined: the
@@ -7033,6 +7730,13 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 					if _band_kills(game, other, band, owed):
 						worth = true
 						break
+			# THE FIRST STRIKE (campaign fix-ai-c, w2-4): a granted keyword
+			# is priced too — bought when striking first is what lets the
+			# body live ([method _first_strike_saves]).
+			if not worth and source == inst \
+					and intent.pump_keywords.has(Mtg.Keyword.FIRST_STRIKE) \
+					and not _first_strike_pending(game, inst):
+				worth = _first_strike_saves(game, inst, opposite, pending_bonus)
 			if not worth:
 				continue
 			if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability)):
@@ -8728,10 +9432,26 @@ func _defensive_combat_response(game: MtgGame) -> String:
 			worth_killing.append(attacker)
 	worth_killing.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		return gains[a.id] > gains[b.id])
+	# Campaign fix-ai-a (forecasts_tactics): an attacker our removal on the
+	# stack already kills (w6-8) is not answered twice, nor — short of the
+	# game — one that leaves in response for free (w6-11).
+	if profile.forecasts_tactics:
+		var still: Array[CardInstance] = []
+		for victim in worth_killing:
+			if _answered_on_stack(game, victim):
+				continue
+			if float(gains[victim.id]) < LETHAL_WORTH and _escapes_on_demand(game, victim):
+				continue
+			still.append(victim)
+		worth_killing = still
 	for victim in worth_killing:
-		var killer := _find_instant_removal_for(game, victim)
+		# The row it pays with (w3-4): Fireblast's two Mountains — any
+		# payable row when this attacker's swing is the game.
+		var lethal := float(gains[victim.id]) >= LETHAL_WORTH
+		var killer := _find_instant_removal_for(game, victim, true, lethal)
 		if killer != null:
-			return _cast_response(game, killer, [TargetRef.card(victim)])
+			return _cast_response(game, killer, [TargetRef.card(victim)],
+				maxi(_response_row(game, killer, lethal), 0))
 	# Activated removal (Royal Assassin executing a tapped attacker):
 	# battlefield tap-abilities with a targeted DestroyEffect, aimed down
 	# the same most-valuable-first list.
@@ -9372,11 +10092,20 @@ func _cast_response(game: MtgGame, inst: CardInstance, targets: Array,
 			else _buyback_row(game, inst.data)
 		if bought >= 0 and game.cast_refusal(pid, inst, targets, x_value, bought) == "":
 			mode = bought
+	# THE ROW A PAYMENT-ROW CARD PAYS WITH (campaign fix-ai-a, w3-4): a
+	# responder that hands Fireblast or Spinning Darkness row 0 is given
+	# the row the card's own picker names ([method _paying_mode]).
+	elif mode == 0 and profile.forecasts_tactics and _payment_rows_only(inst.data):
+		var row := _response_row(game, inst)
+		if row > 0 and game.cast_refusal(pid, inst, targets, x_value, row) == "":
+			mode = row
 	if game.cast_refusal(pid, inst, targets, x_value, mode) != "":
 		_refused[str(inst.id)] = true
 		return ""
 	if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
 		return ""   # our own Skulking Ghost would be sacrificed (Pack 8)
+	if not _cost_spares_targets(game, inst, targets, mode, x_value):
+		return ""   # campaign fix-ai-a (w6-12): the cost would eat the target
 	# THE ROW IT WAS HANDED (Pack 9 E2, 2026-10-06): the cost of row
 	# [param mode] — a buyback row, or a row a permanent grants (Dream
 	# Halls) past the card's own — read through the engine's own helper;
@@ -9394,7 +10123,9 @@ func _cast_response(game: MtgGame, inst: CardInstance, targets: Array,
 	if not _plan_and_pay(game, response_cost, response_extra, game.mana_usage_keys(inst.data, inst),
 			_own_target_ids(game, targets)):
 		return ""
+	_cost_spares = _own_target_ids(game, targets)   # campaign fix-ai-a (w6-12)
 	var err := game.cast_spell(pid, inst, targets, x_value, mode)
+	_cost_spares = {}
 	if err != "":
 		game.log_line("(AI response %s refused: %s)" % [inst.data.card_name, err])
 		_refused[str(inst.id)] = true
@@ -9408,7 +10139,7 @@ func _cast_response(game: MtgGame, inst: CardInstance, targets: Array,
 ## outright, exiles it, or bounces it ([param allow_bounce]) — and that
 ## this seat can pay for.
 func _find_instant_removal_for(game: MtgGame, victim: CardInstance,
-		allow_bounce := true) -> CardInstance:
+		allow_bounce := true, any_row := false) -> CardInstance:
 	var sources := _mana_sources(game)
 	for inst in game.players[pid].hand:
 		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data):
@@ -9426,9 +10157,10 @@ func _find_instant_removal_for(game: MtgGame, victim: CardInstance,
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # locked, banned, "cast only ...", or refused this step
-		var surcharge := game.spell_surcharge(pid, inst.data)
-		if _plan_taps_from(sources, inst.data.cost, surcharge).is_empty() \
-				and not game.players[pid].mana_pool.can_pay(inst.data.cost):
+		# THE ROW IT PAYS WITH (campaign fix-ai-a, w3-4; the printed cost
+		# with the gate off): Fireblast's two Mountains, Spinning
+		# Darkness's graveyard — [method _response_row].
+		if _response_row(game, inst, any_row, sources) == NO_ROW:
 			continue
 		return inst
 	return null
@@ -9689,6 +10421,8 @@ func _attack_candidates(game: MtgGame, defender: int) -> Array[CardInstance]:
 				and _attack_costs_payable(game, inst):
 			if held.has(inst.id) and not _conscripted(game, inst):
 				continue
+			if _attacks_for_nothing(game, inst):
+				continue   # campaign fix-ai-c (w1-7): Weakstone makes it a 0/x the moment it attacks
 			candidates.append(inst)
 	return candidates
 
@@ -10331,7 +11065,8 @@ func _declare_attacks(game: MtgGame) -> String:
 			and game.rng.randf() < profile.mistake_chance:
 		var drop_index := game.rng.randi_range(0, attackers.size() - 1)
 		var dropped := game.find_instance(attackers[drop_index])
-		if not _conscripted(game, dropped):
+		if not _conscripted(game, dropped) \
+				and not _fumble_spares_attack(game, attackers, dropped, defender):
 			attackers.remove_at(drop_index)
 	# RESTRICTIONS beat requirements (CR 508.1d): a blanket ban (Festival)
 	# empties the declaration; an attacker cap (Caverns of Despair) trims
@@ -11446,12 +12181,19 @@ func _declare_blocks(game: MtgGame) -> String:
 	# Biggest threats first.
 	attackers.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		return a.cur_power > b.cur_power)
-	block_map = _block_choice_once_pumped(game, attackers, free, used) \
-		if profile.pumps_to_attack else _block_choice(game, attackers, free, used)
-	# Mistake injection: drop one assignment.
+	# THE BLOCKER THAT PAYS FOR BLOCKING (campaign fix-ai-c, w6-7): planned
+	# only when the block is what keeps us alive ([method _priced_blockers_out]);
+	# the requirement repairs below still see every body.
+	var plan_free := _priced_blockers_out(game, free, attackers)
+	block_map = _block_choice_once_pumped(game, attackers, plan_free, used) \
+		if profile.pumps_to_attack else _block_choice(game, attackers, plan_free, used)
+	# Mistake injection: drop one assignment — never the one that keeps us
+	# alive ([method _fumble_spares_block], campaign fix-ai-c).
 	if block_map.size() > 0 and profile.mistake_chance > 0.0 \
 			and game.rng.randf() < profile.mistake_chance:
-		block_map.erase(block_map.keys()[game.rng.randi_range(0, block_map.size() - 1)])
+		var fumbled: Variant = block_map.keys()[game.rng.randi_range(0, block_map.size() - 1)]
+		if not _fumble_spares_block(game, block_map, fumbled):
+			block_map.erase(fumbled)
 	# REQUIREMENTS and RESTRICTIONS (CR 509.1c): the creatures the rules
 	# order into a block go where they are ordered — every able body onto
 	# a lured attacker, a Blaze of Glory conscript onto every attacker it
@@ -12295,6 +13037,80 @@ func _pain_kills(game: MtgGame, src: Array, tap_plan: Array) -> bool:
 func _burn_kills(game: MtgGame, src: Array, tap_plan: Array, paid: int) -> bool:
 	if not profile.forecasts_tactics or not game.rules.mana_burn or tap_plan.is_empty():
 		return false
+	var left := _burn_left(src, tap_plan, paid)
+	return left > 0 and left >= game.players[pid].life
+
+
+## THE MANA THAT BURNS, PRICED (campaign fix-ai-c, w6-1): not only the
+## burn that is our last life ([method _burn_kills]) but every point a
+## plan's taps leave floating against [param paid], at the reaper's rate
+## ([method _life_price]) and never dearer than the evaluator's own point
+## of life ([constant Evaluator.W_LIFE]) — so the ranking prefers the cast
+## that spends what it taps (the Sol Ring on the two-drop, not on the
+## one-drop), while a point of burn at five life for a Merfolk off a Karoo
+## stays the price the Mirage bug pass ruled it is, not a refusal. 0.0 off
+## mana-burn rules, and off [member AiProfile.forecasts_tactics].
+func _burn_price(game: MtgGame, src: Array, tap_plan: Array, paid: int) -> float:
+	if not profile.forecasts_tactics or not game.rules.mana_burn or tap_plan.is_empty():
+		return 0.0
+	return float(_burn_left(src, tap_plan, paid)) \
+		* minf(_life_price(game.players[pid].life), Evaluator.W_LIFE)
+
+
+## THE TAP TOLL, PRICED (campaign fix-ai-c, the fix-mana handover of w1-2):
+## the planner taps a source wearing a "becomes tapped" Aura
+## ([constant ManaPlanner.RANK_TAP_TOLL] — Psychic Venom, Blight, Kudzu)
+## only when nothing else pays, and then the toll is part of the cast's
+## price. Read off the Aura's printed line, as a shape: "destroy it" costs
+## the land ([method Evaluator.land_value]), "deals N damage" costs N at the
+## reaper's rate — and N that is our last life is never paid
+## ([constant LETHAL_WORTH]) — and any other toll a land's worth
+## ([constant Evaluator.W_LANDS]). 0.0 off [member AiProfile.forecasts_tactics].
+func _tap_toll_price(game: MtgGame, src: Array, tap_plan: Array) -> float:
+	if not profile.forecasts_tactics or tap_plan.is_empty():
+		return 0.0
+	var life := game.players[pid].life
+	var damage := 0
+	var price := 0.0
+	for step in tap_plan:
+		if step[0] == null:
+			continue
+		var tolled := false
+		for s in src:
+			if s[0] == step[0] and int(s[1]) == int(step[1]):
+				tolled = (ManaPlanner.source_rank(s) & ManaPlanner.RANK_TAP_TOLL) != 0
+				break
+		if not tolled:
+			continue
+		var land: CardInstance = step[0]
+		for id in land.attachments:
+			var aura := game.find_instance(id)
+			if aura == null or aura.zone != Mtg.Zone.BATTLEFIELD:
+				continue
+			for trigger in aura.cur_triggered_abilities:
+				if trigger.is_mana_trigger or not trigger.listens(Mtg.EventType.BECAME_TAPPED):
+					continue
+				var line: String = trigger.text.to_lower()
+				if line.contains("destroy it"):
+					price += Evaluator.land_value(game, land)
+				else:
+					var m := RegEx.create_from_string("deals (\\d+) damage").search(line)
+					if m != null:
+						damage += int(m.get_string(1))
+					else:
+						price += Evaluator.W_LANDS
+	if damage > 0:
+		if damage >= life:
+			return LETHAL_WORTH
+		price += float(damage) * _life_price(life)
+	return price
+
+
+## What the TAPS of [param tap_plan] (rows of [param src]) leave in the
+## pool once [param paid] mana is spent — 0 when the plan taps nothing
+## (mana already floating burns whatever we cast, so it is not charged to
+## this one) or leaves nothing over.
+func _burn_left(src: Array, tap_plan: Array, paid: int) -> int:
 	var made := 0
 	var floating := 0
 	for step in tap_plan:
@@ -12305,8 +13121,9 @@ func _burn_kills(game: MtgGame, src: Array, tap_plan: Array, paid: int) -> bool:
 			if s[0] == step[0] and int(s[1]) == int(step[1]):
 				made += _row_output(s)
 				break
-	var left := made + floating - paid
-	return made > 0 and left > 0 and left >= game.players[pid].life
+	if made <= 0:
+		return 0
+	return maxi(made + floating - paid, 0)
 
 
 ## All the mana one tap of source row [param s] makes ([method
@@ -12521,9 +13338,14 @@ func _paying_mode(game: MtgGame, data: CardData, inst: CardInstance = null) -> i
 ## Searing Touch held and fired like a Shock — and [method _cast_response]
 ## pays its buyback row when it is worth it. With the gate off, and for
 ## every card without buyback, exactly [method CardData.is_modal].
+## THE ALTERNATIVE COST IS ONE SPELL TOO (campaign fix-ai-a, w3-4): every
+## card whose rows are only PAYMENT rows — Fireblast's two Mountains,
+## Spinning Darkness's three black cards — not just buyback's. Skipped as
+## "modal" by the combat responders, the pilot died holding a Fireblast
+## at a lethal attacker; the row it pays with is the card's own picker's
+## ([method _paying_mode]), handed to [method _cast_response].
 func _choice_modal(data: CardData) -> bool:
-	return data.is_modal() and not (profile.forecasts_tactics and data.has_buyback()
-		and _payment_rows_only(data))
+	return data.is_modal() and not (profile.forecasts_tactics and _payment_rows_only(data))
 
 
 ## Are [param data]'s modes nothing but PAYMENT ROWS of one spell — every
@@ -12939,6 +13761,19 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 				and MIRAGE_TACTICS.dies_when_targeted(inst, game)
 			if fragile and inst.controller_id == pid:
 				continue
+			# Campaign fix-ai-a (forecasts_tactics). OUR OWN BODY IN A
+			# PARTNER'S SLOT (w6-12): a KNOWN harmful slot bound to an
+			# earlier pick shops our side too, and Cone of Flame's "another
+			# target" and "a third target" took our Hill Giant and Gray Ogre
+			# to deal one damage to an empty board's controller — ours only
+			# when giving it up is worth it ([method _worth_giving_up]).
+			# THE ESCAPE (w6-11): nor one of theirs that leaves in response.
+			if harmful and profile.forecasts_tactics and intent != null and not intent.unknown \
+					and inst.controller_id == pid \
+					and not _worth_giving_up(game, source, effect, inst, x_value):
+				continue
+			if harmful and not fragile and _escapes_on_demand(game, inst):
+				continue
 			# Don't waste damage — fixed or X — on what it can't kill.
 			if harmful and intent != null and intent.damage_at(x_value) > 0 \
 					and inst.is_creature() and not fragile \
@@ -12966,6 +13801,11 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 					and inst.is_creature() \
 					and inst.cur_toughness + mini(MIRAGE_TACTICS.aura_pump(source.data).y,
 						EffectIntent.aura_worst_toughness(source.data)) <= inst.damage:
+				continue
+			# ...and never an aura that ANIMATES its host at a size of
+			# nothing (campaign fix-ai-c, w1-6): Animate Artifact on our
+			# own Mox is a 0/0 that dies with it (CR 704.5f).
+			if not harmful and _animates_to_nothing(source.data, inst):
 				continue
 			# ...and never the SAME aura twice on one host, ours or theirs:
 			# the owner's second Regeneration on a creature already
@@ -13242,10 +14082,18 @@ func _answer_on_the_chain(game: MtgGame, prevention: bool) -> bool:
 
 ## One action inside whichever window is open, or "" to leave it.
 func _window_action(game: MtgGame) -> String:
+	# NOTHING TO DO IN IT, NOTHING ROLLED (campaign fix-engine handover,
+	# w4-3): the 1997 steps now open on public information — any card in
+	# any hand — and a seat with no window effect of its own (its own hand
+	# and board, [method MtgGame._has_window_effect]) passes at once,
+	# without spending the game's random stream on a fumble of nothing.
+	if not game._has_window_effect(pid, not game.awaiting_regeneration):
+		return ""
 	# One mistake roll per priority round in the window. A fumbled window
 	# is a window nobody used, which is what a weak player's damage step
 	# actually looks like — the same shape as `_respond_action`'s roll.
-	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance:
+	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance \
+			and not _fumble_spares_the_pool(game):   # campaign fix-ai-c (w6-6)
 		return ""
 	if game.awaiting_regeneration:
 		return _regeneration_action(game)
@@ -13831,6 +14679,12 @@ func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[Str
 func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> bool:
 	if profile.forecasts_tactics and p_pid == pid and prompt == "Exile the targeted creature cards and gain life instead of assigning combat damage?":
 		return HOMELANDS_TACTICS.trade_damage_for_life(game, self, hint)
+	# A CUMULATIVE UPKEEP PAID IN BODIES FOR THEM (campaign fix-ai-c):
+	# Varchild's War-Riders, [method _upkeep_gift_answer].
+	if hint and p_pid == pid:
+		var gift := _upkeep_gift_answer(game, prompt)
+		if gift >= 0:
+			return gift == 1
 	# THE FREEZE THAT IS AGAINST US (2026-09-26, [member
 	# AiProfile.pays_the_rent]): a rent on a permanent that takes the
 	# untap step away is paid while the freeze is worth having ([method
@@ -14150,9 +15004,14 @@ func assign_combat_damage(game: MtgGame, source: CardInstance,
 func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance]:
 	var hand := game.players[p_pid].hand.duplicate()
 	var keep_lands := p_pid == pid and _land_light(game)
+	# Campaign fix-ai-a (w2-8, forecasts_tactics): our own card is kept by
+	# how soon it can be cast ([method _discard_worth]).
+	var reach := _next_turn_reach(game) if profile.forecasts_tactics and p_pid == pid else -1
 	var worth := func(inst: CardInstance) -> float:
 		if keep_lands and inst.is_land():
 			return 5.0   # above any bear, below any angel
+		if reach >= 0:
+			return _discard_worth(inst, reach)
 		return Evaluator.card_value(inst.data)
 	hand.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		return worth.call(a) < worth.call(b))
@@ -14211,9 +15070,12 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 	# the ignore was bought for died with it.
 	var freed: CardInstance = _freed_by_cost(game, candidates, asked) \
 		if paying and profile.forecasts_tactics and candidates.size() > 1 else null
+	# ...nor the target of the spell being cast (campaign fix-ai-a, w6-12).
+	var spare_targets := paying and p_pid == pid and not _cost_spares.is_empty() \
+		and candidates.any(func(c: CardInstance) -> bool: return not _cost_spares.has(c.id))
 	var best: CardInstance = null
 	for inst in candidates:
-		if inst == freed:
+		if inst == freed or (spare_targets and _cost_spares.has(inst.id)):
 			continue
 		if best == null:
 			best = inst
@@ -14761,3 +15623,514 @@ func _try_delay(game: MtgGame, top_ref: TargetRef) -> String:
 			if cast != "":
 				return cast
 	return ""
+
+
+# --- Campaign fix-ai-a: burn, removal and targeting (2026-10-07) ---
+#
+# The whole-game campaign's targeting pass. Every reading below is behind
+# [member AiProfile.forecasts_tactics] (off: the pilot as it was) and reads
+# the public table and this seat's own hand only (docs/fair-play.md).
+
+
+## THE VOLLEY (campaign w6-3): the burn in hand that, cast now at the
+## opponent's face, deals at least their life BETWEEN THEM, as `{instance
+## id: X}` (X is 0 for a fixed spell) — or `{}`. [method _lethal_burn]
+## asks one spell at a time, so two Lightning Bolts at six life were each
+## "not lethal", were held for a creature, and the won game was passed.
+##
+## One mana plan pays the whole volley ([method _combined_cost] over the
+## board's sources): the fixed spells biggest first, then at most one X
+## spell sized by what that plan leaves — only in a main phase of ours,
+## where [method _try_cast_best] casts it at that X. A spell's face damage
+## is the engine's own public prediction ([method MtgGame.predict_damage],
+## this seat the viewer): a prevention shield or Ali from Cairo's floor on
+## the table is read, a card their hand may hold is not. The volley's
+## recoil must leave us alive. A single spell that is lethal alone is a
+## volley of one, and it is aimed at the face like the rest.
+func _burn_volley(game: MtgGame, sources: Array) -> Dictionary:
+	if not profile.forecasts_tactics:
+		return {}
+	var me := game.players[pid]
+	var opponent := game.opponent_of(pid)
+	var life := game.players[opponent].life
+	if life <= 0:
+		return {}
+	var face := TargetRef.player(opponent)
+	var main := game.sorcery_timing_open(pid)
+	var fixed: Array = []   # [dealt, inst, intent]
+	var xs: Array = []      # [inst, intent]
+	for inst in me.hand:
+		if inst.is_land() or _choice_modal(inst.data):
+			continue
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "" \
+				or game.cast_timing_refusal(pid, inst) != "":
+			continue
+		var intent := _intent_of(inst)
+		if intent.target_spec == null or intent.sweeper != null or intent.unknown:
+			continue
+		if intent.damage <= 0 and not intent.damage_uses_x and intent.life_loss <= 0:
+			continue
+		if _target_slots(inst.data) != 1:
+			continue   # Cone of Flame's 1-2-3 is not six at one face
+		if not inst.data.additional_sacrifice.is_empty() or inst.data.life_payment(0) > 0 \
+				or not game.spell_object_costs(inst.data, 0, pid, inst).is_empty():
+			continue   # Kaervek's Spite discards the rest of the volley
+		if not intent.target_spec.is_legal(game, face, inst):
+			continue
+		if inst.data.cost.has_x:
+			if main and intent.damage_uses_x and inst.data.x_color == 0 \
+					and not inst.data.additional_life_is_x:
+				xs.append([inst, intent])
+			continue
+		var dealt := _face_dealt(game, inst, intent, 0, face)
+		if dealt > 0:
+			fixed.append([dealt, inst, intent])
+	if fixed.is_empty() and xs.is_empty():
+		return {}
+	fixed.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) > int(b[0]))
+	var out := {}
+	var total := 0
+	var recoil := 0
+	var cost := ManaCost.new()
+	var extra := 0
+	for row in fixed:
+		var inst: CardInstance = row[1]
+		var intent: EffectIntent = row[2]
+		if recoil + intent.self_damage >= me.life:
+			continue
+		var next_cost := _combined_cost(cost, inst.data.cost)
+		var next_extra := extra + game.spell_surcharge(pid, inst.data)
+		if not _volley_payable(game, sources, next_cost, next_extra):
+			continue
+		cost = next_cost
+		extra = next_extra
+		recoil += intent.self_damage
+		total += int(row[0])
+		out[inst.id] = 0
+		if total >= life:
+			return out
+	for row in xs:
+		var inst: CardInstance = row[0]
+		var intent: EffectIntent = row[1]
+		if recoil + intent.self_damage >= me.life:
+			continue
+		var surcharge := extra + game.spell_surcharge(pid, inst.data)
+		var x := _max_affordable_x(game, inst.data.cost, surcharge + cost.mana_value(),
+			sources, inst.data.x_color, game.mana_usage_keys(inst.data, inst))
+		while x > 0 and not _volley_payable(game, sources,
+				_combined_cost(cost, game.spell_cost_for(pid, inst.data, x)),
+				surcharge + _generic_x(inst.data, x)):
+			x -= 1
+		if x > 0 and total + _face_dealt(game, inst, intent, x, face) >= life:
+			out[inst.id] = x
+			return out
+	return {}
+
+
+## [method _burn_volley]'s plan test: [param cost] plus [param extra]
+## generic, paid from [param sources] without the taps' pain being our
+## last life.
+func _volley_payable(game: MtgGame, sources: Array, cost: ManaCost, extra: int) -> bool:
+	if _free_at(cost, extra):
+		return true
+	var plan := _plan_taps_from(sources, cost, extra)
+	return not plan.is_empty() and not _pain_kills(game, sources, plan)
+
+
+## What [param inst] at X = [param x] would take off [param face]'s life:
+## the damage the engine predicts lands (public prevention read, this
+## seat the viewer) plus a life loss nothing prevents.
+func _face_dealt(game: MtgGame, inst: CardInstance, intent: EffectIntent,
+		x: int, face: TargetRef) -> int:
+	var dealt := 0
+	var dmg := intent.damage_at(x)
+	if dmg > 0:
+		dealt = int(game.predict_damage(inst, face, dmg, false, 1, pid)["dealt"])
+	return dealt + maxi(intent.life_loss, 0)
+
+
+## How many targets [param data]'s spell names — one per targeted effect,
+## its minimum count where it asks for several.
+static func _target_slots(data: CardData) -> int:
+	var n := 0
+	for e in data.spell_effects:
+		if e.target_spec != null:
+			n += maxi(e.target_min, 1)
+	return n
+
+
+## The ranking choice [method _try_cast_best] makes for a member of the
+## volley: the face, the volley's X, the game's worth.
+func _volley_choice(game: MtgGame, inst: CardInstance, volley: Dictionary) -> Dictionary:
+	return {"mode": 0, "x": int(volley[inst.id]),
+		"targets": [TargetRef.player(game.opponent_of(pid))], "value": LETHAL_WORTH}
+
+
+## THE CLEANUP'S SURPLUS (campaign w2-8): at our own end step, with more
+## cards than the hand may keep, an instant the discard would throw away
+## ([method answer_discard]'s own pick) is cast first when it has any use
+## at all — removal at their best victim, or burn at their face. A Bolt
+## that goes to the graveyard unused is a card thrown away twice. A draw
+## is not fired (it only grows the hand) and neither is a pump. "" when
+## nothing qualifies.
+func _fire_surplus_instants(game: MtgGame) -> String:
+	if not profile.forecasts_tactics:
+		return ""
+	var me := game.players[pid]
+	var over := me.hand.size() - me.max_hand_size
+	if over <= 0:
+		return ""
+	var opponent := game.opponent_of(pid)
+	var sources := _mana_sources(game)
+	for inst in answer_discard(game, pid, over):
+		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data) \
+				or inst.data.cost.has_x:
+			continue
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue
+		var intent := _intent_of(inst)
+		if intent.target_spec == null or intent.pumps or intent.draws > 0 \
+				or intent.draws_use_x or intent.self_damage >= me.life:
+			continue
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		if not _volley_payable(game, sources, inst.data.cost, surcharge):
+			continue
+		var targets: Array = []
+		if intent.answers_creatures():
+			var victim := _best_victim(game, inst, intent, 0)
+			if victim != null:
+				targets = [TargetRef.card(victim)]
+		if targets.is_empty() and (intent.damage > 0 or intent.life_loss > 0) \
+				and intent.target_spec.is_legal(game, TargetRef.player(opponent), inst):
+			targets = [TargetRef.player(opponent)]
+		if targets.is_empty():
+			continue
+		var cast := _cast_response(game, inst, targets, 0,
+			"cast %s rather than discard it" % inst.data.card_name)
+		if cast != "":
+			return cast
+	return ""
+
+
+## What a card in our hand is worth KEEPING at a discard (campaign w2-8):
+## its printed worth, divided by one plus the mana it is still short of —
+## [param reach] is the mana our table makes and a land drop in hand adds
+## ([method _next_turn_reach]). A Craw Wurm on two lands is four turns from
+## being anything and goes before a Lightning Bolt castable tonight; a land
+## is priced by the caller's own rule.
+static func _discard_worth(inst: CardInstance, reach: int) -> float:
+	var value := Evaluator.card_value(inst.data)
+	if inst.is_land() or value <= 0.0:
+		return value
+	var gap := maxi(inst.data.cost.mana_value() - reach, 0)
+	return value / float(1 + gap)
+
+
+## The mana this seat's table makes (tapped or not: next turn's — [method
+## _mana_reach]), plus one for a land in hand.
+func _next_turn_reach(game: MtgGame) -> int:
+	var reach := _mana_reach(game, null)
+	for inst in game.players[pid].hand:
+		if inst.is_land():
+			reach += 1
+			break
+	return reach
+
+
+## THE ARRIVAL THAT CAN ONLY HIT US (campaign w6-4): would casting
+## [param inst] put a MANDATORY "when this enters, <harm> target …"
+## trigger on the stack whose every legal target is ours? A target is
+## chosen as the trigger goes on the stack (CR 603.3d) and a trigger with
+## any legal target cannot be skipped, so with nothing of theirs to name
+## Fire Imp kills our Bears, Nekrataal destroys our own creature,
+## Oubliette phases ours out — and Man-o'-War, with no other creature on
+## the table, names itself and was cast again in the same main phase,
+## mana spent for nothing each time. Read off the card: the trigger's own
+## target spec against the public board (the arriving body counted as a
+## target of ours where the spec would take it), its harm from the effect
+## it carries ([method _arrival_trigger_harms]). A target of theirs, no
+## legal target at all (the trigger is removed), a "may" trigger or a
+## liability of ours to name all leave the cast alone.
+func _forced_arrival_harm(game: MtgGame, inst: CardInstance) -> bool:
+	if not profile.forecasts_tactics or not inst.data.is_permanent_type():
+		return false
+	var entry := GameEvent.new(Mtg.EventType.ENTERS_BATTLEFIELD,
+		{"instance": inst, "controller": pid})
+	for trig in inst.data.triggered_abilities:
+		if not trig.listens(Mtg.EventType.ENTERS_BATTLEFIELD) or trig.target_spec == null \
+				or trig.target_min < 1:
+			continue
+		if trig.condition.is_valid() and not bool(trig.condition.call(game, inst, entry)):
+			continue
+		if not _arrival_trigger_harms(trig):
+			continue
+		var spec: TargetSpec = trig.target_spec
+		var theirs := false
+		var ours: Array = []
+		for ref in spec.legal_targets(game, inst):
+			if ref.is_player:
+				if ref.player_id != pid: theirs = true
+				else: ours.append(null)
+				continue
+			var card := game.find_instance(ref.instance_id)
+			if card == null:
+				continue
+			if card.controller_id != pid: theirs = true
+			else: ours.append(card)
+		if theirs:
+			continue
+		# The arriving body is a target of ours where the spec takes it.
+		if inst.data.is_creature() and spec.kind in [TargetSpec.Kind.CREATURE,
+				TargetSpec.Kind.PERMANENT, TargetSpec.Kind.ANY] \
+				and (not spec.filter.is_valid() or bool(spec.filter.call(inst))):
+			ours.append(inst)
+		if ours.is_empty():
+			continue   # no legal target: the trigger is removed (CR 603.3d)
+		var relief := false
+		for card in ours:
+			if card is CardInstance and card != inst and _own_value(game, card) < 0.0:
+				relief = true   # a liability of ours is worth naming
+		if not relief:
+			return true
+	return false
+
+
+## Does an arrival trigger HARM what it targets, and must it? The effect
+## the trigger carries when the card binds one (Portal's
+## `enter(c, effect, optional)` shape: [method EffectIntent.is_harmful],
+## and a bound `true` after it is "you may"); otherwise its printed line
+## ([constant ARRIVAL_HARM_WORDS]), and never a line that says "you may".
+func _arrival_trigger_harms(trig: TriggeredAbility) -> bool:
+	var line := trig.text.to_lower()
+	if line.contains("you may"):
+		return false
+	var args: Array = trig.on_resolve.get_bound_arguments() if trig.on_resolve.is_valid() else []
+	for i in args.size():
+		if not (args[i] is EffectBase):
+			continue
+		if i + 1 < args.size() and args[i + 1] is bool and bool(args[i + 1]):
+			return false   # optional: the seat declines an own target
+		var effect: EffectBase = args[i]
+		if effect.ai_helpful:
+			return false
+		var intent := EffectIntent.read([effect])
+		if not intent.unknown:
+			return intent.is_harmful()
+		line = effect.describe().to_lower()
+		break
+	for word in ARRIVAL_HARM_WORDS:
+		if line.contains(word):
+			return true
+	return false
+
+
+## The printed words of an arrival trigger that harms its target.
+const ARRIVAL_HARM_WORDS: Array[String] = ["destroy target", "damage to target",
+	"target creature phases out", "return target", "exile target", "tap target",
+	"sacrifice target"]
+
+
+## THE ESCAPE ON DEMAND (campaign w6-11, w2-3): can [param victim]'s
+## controller take it out of reach of a spell or ability aimed at it, in
+## response, right now — "{0}: Return this creature to its owner's hand"
+## (Blinking Spirit), Foul Familiar's {B} and a life, Selenia's two life,
+## Ephemeron's discard, a phase-out of its own (Rainbow Efreet), a gift of
+## shroud? The regeneration shield is read before removal is spent
+## ([method _shieldable]); this is the same reading for the escape, and
+## for the same reason: every one of the 28 fizzles in 256 Deck Lab games
+## was burn aimed at a Blinking Spirit that bounced in response. The
+## ability is public, its costs are read the way [method _shieldable]
+## reads theirs (open mana through our seat's eyes, a life above the
+## price, a card in a hand for a discard — the hand's SIZE is public, its
+## contents are not read), and its timing at this moment. Ours is never
+## asked about: our own escapes are the responders' business.
+func _escapes_on_demand(game: MtgGame, victim: CardInstance) -> bool:
+	if not profile.forecasts_tactics or victim == null or victim.controller_id == pid:
+		return false
+	var who := victim.controller_id
+	for ability in victim.cur_activated_abilities:
+		if not _saves_itself(ability):
+			continue
+		if ability.tap_cost and not MIRAGE_TACTICS.can_tap_now(victim):
+			continue
+		if ability.sacrifice_cost or ability.exile_cost or ability.only_opponents_may_activate:
+			continue
+		if ability.life_cost > 0 and game.players[who].life <= ability.life_cost:
+			continue
+		if ability.discard_cost + ability.random_discard_cost > game.players[who].hand.size():
+			continue
+		if game.ability_timing_refusal(who, victim, ability) != "":
+			continue
+		if ability.cost != null and not _their_payable(game, who, ability.cost,
+				_ability_extra(game, who, victim, ability), _tap_spared(victim, ability)):
+			continue
+		return true
+	return false
+
+
+## Is [param ability] one that takes its own source out of reach — a
+## return of itself to hand (an untargeted [ReturnToHandEffect], or the
+## declared `self_bounce` / `self_bounce_gift` roles, which include the
+## grant of shroud or protection) or a phase-out of itself
+## (`phase_out_self`)?
+static func _saves_itself(ability: ActivatedAbility) -> bool:
+	for e in ability.effects:
+		if e is ReturnToHandEffect and e.target_spec == null:
+			return true
+		if e.ai_role in [&"self_bounce", &"self_bounce_gift", &"phase_out_self"]:
+			return true
+	return false
+
+
+## THE SHIELD THEY CAN STILL BUY (campaign w1-4): would [param inst], a
+## creature of theirs that [param intent] kills, be regenerated — a shield
+## already on it, or one its controller can pay for now ([method
+## _shieldable], their open mana through our seat's eyes)? Never for an
+## effect that ignores regeneration (Swords to Plowshares, Disintegrate,
+## Terror), a bounce, or a creature of ours. Two Fireballs went into one
+## Will-o'-the-Wisp with {B} open behind it.
+func _regenerates_from(game: MtgGame, intent: EffectIntent, inst: CardInstance) -> bool:
+	if not profile.forecasts_tactics or inst.controller_id == pid or not inst.is_creature():
+		return false
+	if intent.removal_ignores_regeneration or (intent.bounces and not intent.removes):
+		return false
+	return _shieldable(game, inst)
+
+
+## THE ANSWER ALREADY ON THE STACK (campaign w6-8): does a spell or
+## ability of OURS on the stack, aimed at [param victim], already take it
+## off the table — at the size it will be when that item resolves? Every
+## pump above the item resolves first (CR 608.1, last in first out), so
+## their toughness is counted; a pump under it is not, and neither is a
+## pump they have not yet cast (open mana is not a card — fair play). The
+## defending pilot Bolted a pumping Killer Bees, saw a pump go on top of
+## its Bolt, and Bolted again for nothing.
+func _answered_on_stack(game: MtgGame, victim: CardInstance) -> bool:
+	if not profile.forecasts_tactics:
+		return false
+	for i in game.stack.size():
+		var item: StackItem = game.stack[i]
+		if item.controller != pid or not _item_aims_at(item, victim):
+			continue
+		var intent := EffectIntent.read(item.effects,
+			item.card.data.card_name if item.card != null else "")
+		if victim.regeneration_shields > 0 and not intent.removal_ignores_regeneration:
+			continue
+		if intent.removes:
+			if not victim.cur_indestructible:
+				return true
+			continue
+		var grow := 0
+		for j in range(i + 1, game.stack.size()):
+			grow += _stack_toughness_bonus(game.stack[j], victim)
+		var dmg := intent.damage_at(item.x_value)
+		if dmg > 0 and dmg >= victim.cur_toughness + grow - victim.damage:
+			return true
+	return false
+
+
+## Does [param item] name [param victim] among its targets?
+static func _item_aims_at(item: StackItem, victim: CardInstance) -> bool:
+	for ref in item.targets:
+		if ref != null and not ref.is_player and not ref.is_damage and not ref.is_ability \
+				and ref.instance_id == victim.id:
+			return true
+	return false
+
+
+## The toughness [param item] adds to [param victim] when it resolves: a
+## pump aimed at it, or a pump of its own ability ("{G}: this creature
+## gets +1/+1" — Killer Bees). 0 for anything else.
+static func _stack_toughness_bonus(item: StackItem, victim: CardInstance) -> int:
+	var intent := EffectIntent.read(item.effects,
+		item.card.data.card_name if item.card != null else "")
+	if not intent.pumps or intent.pump_toughness <= 0:
+		return 0
+	if (intent.pump_self and item.card == victim) or _item_aims_at(item, victim):
+		return intent.pump_toughness
+	return 0
+
+
+## The permanents of ours the cast in progress names as targets
+## (campaign w6-12), `{id: true}` — set by [method _cast_response] and
+## [method _try_cast_best] around their `cast_spell` and read by
+## [method answer_card], so a cost question never eats the creature the
+## spell is for while anything else can pay it.
+var _cost_spares: Dictionary = {}
+
+
+## THE TARGET IS NOT THE FODDER (campaign w6-12): can [param inst]'s
+## sacrifice-shaped costs at [param mode] and X = [param x] be paid with
+## none of our own [param targets]? Wicked Reward ("as an additional cost,
+## sacrifice a creature; target creature gets +4/+2") was cast to pump our
+## only attacker, the cost ate that attacker, and the spell fizzled — two
+## cards for nothing, six times in nine casts over the Pack 8 audit. The
+## engine's own pools ([method AdditionalObjectCosts.pools]) with our
+## targets taken out of every slot that removes a permanent, and its own
+## matching. True with the gate off, or with no target of ours.
+func _cost_spares_targets(game: MtgGame, inst: CardInstance, targets: Array,
+		mode: int, x := 0) -> bool:
+	if not profile.forecasts_tactics:
+		return true
+	var spared := _own_target_ids(game, targets)
+	if spared.is_empty():
+		return true
+	if not inst.data.additional_sacrifice.is_empty():
+		var left := 0
+		for body in game.spell_cost_bodies(pid, inst)["bodies"]:
+			if not spared.has(body.id):
+				left += 1
+		if left == 0:
+			return false
+	var groups: Array = game.spell_object_costs(inst.data, mode, pid, inst)
+	if groups.is_empty():
+		return true
+	var slots: Array = game.OBJECT_COSTS.pools(game, pid, groups, inst, x)
+	for slot in slots:
+		var group: Dictionary = slot["group"]
+		if int(group.get("zone", Mtg.Zone.BATTLEFIELD)) != Mtg.Zone.BATTLEFIELD \
+				or not (String(group.get("operation", "")) in ["sacrifice", "return", "exile"]):
+			continue
+		slot["cards"] = slot["cards"].filter(func(card: CardInstance) -> bool:
+			return not spared.has(card.id))
+	return game.OBJECT_COSTS.can_assign(slots)
+
+
+## [method _response_row]'s "no row of this card can be paid now".
+const NO_ROW := -2
+
+
+## THE ROW A RESPONSE PAYS WITH (campaign w3-4): the row [param inst] is
+## cast with right now — the one its own picker names ([method
+## _paying_mode]; -1, the printed cost, for every card without payment
+## rows and for every card with the gate off) when that one can be paid;
+## with [param any_row] (an answer to a LETHAL attack — the picker keeps
+## Fireblast's Mountains for a 3-power body or the face, and the pilot
+## died at one life with two Mountains and the card in hand) any other
+## payment row of the same spell that can. [constant NO_ROW] when none.
+func _response_row(game: MtgGame, inst: CardInstance, any_row := false,
+		sources: Array = []) -> int:
+	if sources.is_empty():
+		sources = _mana_sources(game)
+	var picked := _paying_mode(game, inst.data, inst)
+	if _row_payable(game, inst, picked, sources):
+		return picked
+	if any_row and profile.forecasts_tactics and _payment_rows_only(inst.data):
+		for row in inst.data.modes.size():
+			if row != picked and _row_payable(game, inst, row, sources):
+				return row
+	return NO_ROW
+
+
+## Can row [param row] of [param inst] (-1 = the printed cost) be paid
+## from [param sources] now — its objects, its mana and the surcharge?
+func _row_payable(game: MtgGame, inst: CardInstance, row: int, sources: Array) -> bool:
+	var surcharge := game.spell_surcharge(pid, inst.data)
+	var cost: ManaCost = inst.data.cost if row < 0 \
+		else game.spell_cost_for(pid, inst.data, 0, row, inst)
+	if row >= 0 and game.object_costs_refusal(pid,
+			game.spell_object_costs(inst.data, row, pid, inst), inst) != "":
+		return false
+	return not _plan_taps_from(sources, cost, surcharge).is_empty() \
+		or (profile.forecasts_tactics and _free_at(cost, surcharge)) \
+		or game.players[pid].mana_pool.can_pay(cost)

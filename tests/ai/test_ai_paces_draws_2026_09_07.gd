@@ -96,13 +96,35 @@ func test_with_our_draw_step_next_the_slack_is_the_lead_less_one() -> void:
 
 
 func test_a_race_already_lost_is_not_ours_to_protect() -> void:
-	var ai := _ai(_pacing())
+	# The rule as it was, pinned on its null arm since the whole-game
+	# campaign (fix-ai-c, w6-5): with [member AiProfile.forecasts_tactics]
+	# off a lost race is unbounded slack.
+	var profile := _pacing()
+	profile.forecasts_tactics = false
+	var ai := _ai(profile)
 	_their_turn_at(Mtg.Step.END)
 	_libraries(5, 9)
 	assert_true(ai._library_slack(g) >= 1 << 20, "behind: draw for value")
 	_libraries(9, 9)
 	assert_true(ai._library_slack(g) >= 1 << 20,
 		"level with our draw step next: we empty first whatever we do")
+
+
+func test_a_race_already_lost_still_keeps_the_turns_our_board_needs() -> void:
+	# THE LOST RACE STILL NEEDS A LIBRARY (campaign fix-ai-c, w6-5): the
+	# game is won by our clock on them, each turn of it a draw step — so
+	# that many cards are kept, the clock read no further than
+	# RACE_HORIZON (no clock at all reads as the horizon). Braingeyser
+	# drew 7 of the last 8 into a loss two draw steps later.
+	var ai := _ai(_pacing())
+	_their_turn_at(Mtg.Step.END)
+	_libraries(5, 9)
+	assert_eq(ai._library_slack(g), 5 - AiPlayer.RACE_HORIZON, "no clock of ours: four turns kept")
+	_libraries(9, 9)
+	assert_eq(ai._library_slack(g), 9 - AiPlayer.RACE_HORIZON)
+	put_battlefield(0, "Craw Wurm")
+	put_battlefield(0, "Craw Wurm")   # twelve a turn at their twenty: two turns
+	assert_eq(ai._library_slack(g), 9 - 2, "a two-turn clock keeps two cards")
 
 
 func test_beyond_the_horizon_the_libraries_do_not_decide_the_game() -> void:

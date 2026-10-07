@@ -46,14 +46,25 @@ extends SceneTree
 ## line ({decisions, refusals, awaiting, n, finished}) and, when a
 ## decision is awaited, that decision again with the WHOLE journal.
 ## One client at a time: a newcomer with the token replaces the last.
+## A client that goes away leaves its whole lines to be read (a
+## concession sent just before its socket closed is the next answer).
 ## stdout still carries every line (the transcript), stdin is not read.
 ## `--idle SECONDS` (1800; 0 never) concedes the seat when a decision
 ## has waited that long with nobody connected (`reason: idle`).
 ##
 ## THE TABLE BY NAME. `--table NAME` asks the LAN (SgLanDiscovery) for
 ## an OPEN host advertising a table of that name and joins with the
-## invitation its advert carries; an invitation-only host's table is
-## named back as such — paste its invitation with `--join` instead.
+## invitation its advert carries — and sits at THAT table of the host's
+## (campaign 2026-10-07; it took the host's first open one); an
+## invitation-only host's table is named back as such — paste its
+## invitation with `--join` instead.
+##
+## THE TABLE RECONNECTING (campaign 2026-10-07). A table is waited for
+## while this seat's own client reconnects or the other seat is away (the
+## host keeps an absent seat five minutes): an answer sent meanwhile is
+## held and sent again once the table is whole, never counted among the
+## refusals. `offline` ends the duel only when the client stops retrying
+## or the wait outlasts the host's own grace.
 ##
 ## THE TABLE THE REFEREE HOSTS (2026-10-03). `--host NAME --deck DECK`
 ## runs the game's own LAN host (SgLocalServer) in this process, opens
@@ -101,7 +112,7 @@ const SEATS := {"agent": {}, "apprentice": {"level": 0, "unfair": false},
 ## [constant SgProtocol.FIELDS] that is not a lobby or tournament op.
 const DUEL_OPS := ["concede", "order", "keep", "mulligan", "pass", "play", "tap", "mana",
 	"prepare", "autoprepare", "autopay", "submit", "cancel", "choice", "special",
-	"attack", "attack_bands", "block", "damage", "discard"]
+	"attack", "attack_bands", "block", "damage", "discard", "discard_special"]
 ## What a line may leave out of these ops (2026-10-04); the referee fills
 ## it in before the wire's exact keys are checked ([method _parse_action]).
 const DEFAULTS := {
@@ -129,6 +140,19 @@ const MAX_DECISIONS := 20000
 ## Refused answers IN A ROW before the seat is conceded (`reason:
 ## refusals`): a program that cannot read its options is not playing.
 const MAX_REFUSALS := 20
+## THE TABLE RECONNECTING (campaign 2026-10-07): how long a table that is
+## not whole — this seat's own client reconnecting, or the other seat away
+## — is waited for before the duel is given up (`reason: offline`): the
+## host's own grace for a disconnected seat (SgLocalServer
+## .RECONNECT_GRACE_MS, five minutes, after which it concedes that seat
+## itself) and half a minute more. A client that stops retrying (its
+## `connecting()` false) is given up at once.
+const RECONNECT_PATIENCE_MS := 330000
+## The host's refusal of a game action while the other seat is away
+## (SgLocalServer.SEAT_AWAY) and the client's own while its connection is
+## down (SgLocalClient.NOT_CONNECTED): never the program's refusals.
+const SEAT_AWAY := "Waiting for the other player to reconnect."
+const NOT_CONNECTED := "Wait for the connection or the current action."
 ## A computer seat's steps without the table changing before the duel
 ## is called (`reason: stalled`).
 const IDLE_BOT_STEPS := 100
@@ -172,7 +196,8 @@ SWITCHES
   --deck-a / --deck-b PATH  each seat's deck file, tried as typed and
                             then under decks/ (the Lab's own rule)
   --seed N                  the shuffle; unset, a random seed is drawn
-                            and reported in `hello`
+                            and reported in `result` only (hello says
+                            -1: the seed deals both hands)
   --turns N                 the duel is called a draw past turn N (200)
   --packs LIST              all|none|a,b: the card packs in play
   --log FILE                the duel's log at the end: the engine's own
@@ -252,6 +277,9 @@ THE ANSWERS (stdin), one JSON object a line, the game's wire actions
              TOKEN may be a card handle or player:N
             {"op":"mana","card":ID,"index":I}  {"op":"tap","card":ID}
             {"op":"special","index":I}
+            {"op":"discard_special","card":ID}  a hand card that may be
+             discarded any time an instant could be cast (Circling
+             Vultures): options.discard_special.cards
   attack    {"op":"attack","cards":[ID...]}
             {"op":"attack_bands","cards":[ID...],"bands":[[ID...]...]}
   block     {"op":"block","pairs":[[BLOCKER,ATTACKER]...]}
@@ -273,7 +301,7 @@ const FLAG_HINTS := {
 	"--deck-b": "--deck-b PATH: seat B's deck file, tried as typed and then under decks/",
 	"--seat-a": "--seat-a SEAT: who holds seat A — agent, apprentice, magician, sorcerer, wizard or unfair",
 	"--seat-b": "--seat-b SEAT: who holds seat B — agent, apprentice, magician, sorcerer, wizard or unfair",
-	"--seed": "--seed N: the shuffle, a non-negative integer; unset, one is drawn and reported",
+	"--seed": "--seed N: the shuffle, a non-negative integer; unset, one is drawn and reported in the result",
 	"--turns": "--turns N: the turn past which the duel is called a draw (200)",
 	"--packs": "--packs LIST: all, none, or the pack ids in play, comma-separated",
 	"--log": "--log FILE: where to write the duel's log — the engine's lines, or a joined table's journal",
@@ -306,6 +334,8 @@ var last_result: Dictionary = {}
 var last_plan: Dictionary = {}
 var decisions := 0
 var refusals := 0
+## [constant RECONNECT_PATIENCE_MS], shortened by a test.
+var reconnect_patience_ms := RECONNECT_PATIENCE_MS
 var _empty_reads := 0
 var _journal_sent: Array[int] = [0, 0]
 # The pump: a joined table's socket must keep being polled while the
@@ -489,15 +519,18 @@ func _send_peer(line: String) -> void:
 ## One line from the kept game's client, or null once a decision has
 ## waited `--idle` long with nobody connected (`_eof_reason` = idle).
 ## The server is polled here — no frame runs while the program thinks.
+## A whole line a client sent before it went away is still read
+## ([method _serve] keeps it): `referee_stop`'s concession, sent between
+## two decisions just before its socket closed, is the next answer.
 func _read_socket(tick: Callable) -> Variant:
 	while true:
 		tick.call()
 		_serve()
+		var cut := _cut_line(_peer_buffer)
+		if not cut.is_empty():
+			_peer_buffer = cut.rest
+			return String(cut.line)
 		if _peer != null:
-			var cut := _cut_line(_peer_buffer)
-			if not cut.is_empty():
-				_peer_buffer = cut.rest
-				return String(cut.line)
 			if _peer_buffer.size() > LINE_LIMIT:
 				_peer_buffer = PackedByteArray()
 		elif _awaiting and _idle_ms > 0 and Time.get_ticks_msec() - _idle_since >= _idle_ms:
@@ -524,10 +557,13 @@ func _serve() -> void:
 			var parsed = JSON.parse_string(String(cut.line))
 			_knock_buffer = cut.rest
 			if parsed is Dictionary and parsed.get("token") is String and String(parsed.token) == _token:
+				# A live client replaced takes its unread bytes with it; the
+				# whole lines one that had already gone left are read first.
 				if _peer != null:
 					_peer.disconnect_from_host()
+					_peer_buffer = PackedByteArray()
 				_peer = _knock
-				_peer_buffer = _knock_buffer
+				_peer_buffer.append_array(_knock_buffer)
 				_knock = null
 				_replay()
 			else:
@@ -541,9 +577,20 @@ func _serve() -> void:
 		var got := _drain(_peer, _peer_buffer)
 		_peer_buffer = got.bytes
 		if not bool(got.alive):
+			# A CLIENT GONE KEEPS ITS WHOLE LINES (campaign 2026-10-07):
+			# `referee_stop` on a kept game with no decision pending sends
+			# its concession and closes the socket; the buffer was dropped
+			# with the client and the duel played on for nobody until
+			# `--idle`. Only a line cut off mid-way goes.
 			_peer = null
-			_peer_buffer = PackedByteArray()
+			_peer_buffer = _whole_lines(_peer_buffer)
 			_idle_since = now
+
+
+## [param buffer] up to and including its last newline: the whole lines.
+static func _whole_lines(buffer: PackedByteArray) -> PackedByteArray:
+	var last := buffer.rfind(10)
+	return buffer.slice(0, last + 1) if last >= 0 else PackedByteArray()
 
 
 ## Polls one connection and appends the bytes that arrived: {bytes,
@@ -816,7 +863,13 @@ func _play(opts: Dictionary) -> int:
 	for pid in 2:
 		if players[pid] != "agent" and not m.set_bot(pid, _bot_options(players[pid])):
 			return _refuse(1, "seat %d could not be given to the %s" % [pid, players[pid]], {"kind": "option"})
-	_hello({"seats": seats, "seed": seed_value, "toss": m.toss_winner, "turns": int(opts.turns), "rules": rules_name(String(opts.rules)),
+	# A DRAWN SEED IS THE RESULT'S, NOT HELLO'S (campaign 2026-10-07): the
+	# seed and the two deck files deal both opening hands and order both
+	# libraries, so a seat told it before play could replay the duel
+	# beside it and read the opponent's hidden hand (CONTRIBUTING.md hard
+	# rule 8). Hello says -1, as at a table; the result names it for the
+	# replay. A seed the caller chose is theirs already and is echoed.
+	_hello({"seats": seats, "seed": int(opts.seed), "toss": m.toss_winner, "turns": int(opts.turns), "rules": rules_name(String(opts.rules)),
 		"packs": packs, "log": opts.log})
 	var result := _referee_local(m, int(opts.turns))
 	result["seed"] = seed_value
@@ -914,8 +967,11 @@ static func _mark(m: SgPracticeMatch, state: Dictionary) -> Array:
 ## the input closed, "refusals" when too many answers in a row could
 ## not be applied. [param fresh] builds the seat's current view, [param
 ## apply] applies an action and returns the refusal, [param tick] keeps
-## a table alive while the program thinks.
-func _ask(seat: int, mode: String, fresh: Callable, apply: Callable, tick: Callable) -> String:
+## a table alive while the program thinks. [param stop], when given, is
+## asked after a refusal: a reason ("offline": the table is gone for good)
+## ends the duel there, uncounted and unasked again.
+func _ask(seat: int, mode: String, fresh: Callable, apply: Callable, tick: Callable,
+		stop: Callable = Callable()) -> String:
 	decisions += 1
 	var n := decisions
 	var view: Dictionary = fresh.call()
@@ -939,6 +995,10 @@ func _ask(seat: int, mode: String, fresh: Callable, apply: Callable, tick: Calla
 			if refusal == "":
 				_awaiting = false
 				return "conceded" if action.op == "concede" else ""
+		var ended := String(stop.call()) if stop.is_valid() else ""
+		if ended != "":
+			_awaiting = false
+			return ended
 		consecutive += 1
 		refusals += 1
 		# THE DECISION IS ASKED AGAIN, as a `decision` line with the same
@@ -1230,7 +1290,9 @@ static func options_for(view: Dictionary, seat: int) -> Dictionary:
 		"choice":
 			out["choice"] = {"op": "choice", "prompt": view.choice.get("prompt", ""), "source": view.choice.get("source", ""),
 				"options": Array(view.choice.get("options", [])), "count": int(view.choice.get("count", 1)),
-				"information": Array(view.choice.get("information", []))}
+				"information": Array(view.choice.get("information", [])),
+				# Per line, the board card it stands for (protocol 29) or "".
+				"cards": Array(view.choice.get("cards", []))}
 			if bool(view.choice.get("cancel", false)):
 				out["cancel"] = {"op": "cancel"}
 		"priority":
@@ -1284,6 +1346,21 @@ static func options_for(view: Dictionary, seat: int) -> Dictionary:
 				for i in labels.size():
 					specials.append({"index": i, "label": labels[i]})
 				out["special"] = {"op": "special", "specials": specials}
+				# THE HAND'S SPECIAL-ACTION DISCARD (campaign 2026-10-07):
+				# Circling Vultures' "You may discard this card any time you
+				# could cast an instant" (CR 116.2, MtgGame
+				# .discard_as_special_action) — the wire has carried
+				# `discard_special` since protocol 26 and the person's screen
+				# offers it; the pipe refused it as an unknown op. The card's
+				# own printed rule says which; the 1997 prevention and
+				# regeneration windows admit no such action.
+				var discardable: Array = []
+				if not bool(p.get("prevention", false)) and not bool(p.get("regeneration", false)):
+					for card in view.get("hand", []):
+						var printed := String(card.get("name", ""))
+						if CardRegistry.has_card(printed) and CardRegistry.get_card(printed).discard_special_action:
+							discardable.append({"card": card.id, "name": card.name})
+				out["discard_special"] = {"op": "discard_special", "cards": discardable}
 				out["respond"] = bool(p.get("respond", false))
 	return out
 
@@ -1571,14 +1648,20 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		if hosted != "":
 			return {"error": "the table could not be opened: %s" % hosted, "status": String(client.status)}
 	else:
+		# THE TABLE BY NAME IS THE TABLE JOINED (campaign 2026-10-07): one
+		# host lists every table its players open, and `--table Kitchen`
+		# found the host by Kitchen's advert, then sat down at whichever
+		# open table it listed first. A `--join` names no table: the first.
+		var wanted := String(opts.get("table", ""))
 		var open_room := func() -> Dictionary:
 			if not client.state.room.is_empty():
 				return client.state.room
 			for room in client.state.rooms:
-				if bool(room.get("open", false)):
+				if bool(room.get("open", false)) and (wanted == "" or String(room.get("name", "")) == wanted):
 					return room
 			return {}
-		failed = until.call(func() -> bool: return not open_room.call().is_empty(), "no open table appeared")
+		failed = until.call(func() -> bool: return not open_room.call().is_empty(),
+			"no open table appeared" + ("" if wanted == "" else " called '%s'" % wanted))
 		if failed != "":
 			return {"error": failed, "status": String(client.status)}
 		if client.state.room.is_empty():
@@ -1637,13 +1720,71 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 	# pump so the table's socket is served while the program thinks.
 	if _server == null:
 		_pump_start()
+	# THE TABLE RECONNECTING (campaign 2026-10-07): a LAN table is not
+	# whole while this seat's own client reconnects (SgLocalClient goes
+	# offline for every transient drop and resumes the seat with its
+	# resume code) or while the other seat is away (the host keeps it for
+	# SgLocalServer.RECONNECT_GRACE_MS and refuses every game action
+	# meanwhile, SEAT_AWAY). The duel used to end at the first offline
+	# tick (`offline`), and every answer sent meanwhile counted as the
+	# program's refusal — twenty, and the seat conceded (`refusals`): a
+	# person's brief drop lost the agent its game. Now the table is waited
+	# for, and an answer that met it reconnecting is held and sent again
+	# once it is whole — still this seat's decision — uncounted.
+	# `offline` is final only when the client stops retrying or the wait
+	# outlasts the host's own grace ([member reconnect_patience_ms]).
+	var away := func() -> bool:
+		if not client.online:
+			return true
+		var seated: Dictionary = client.state.room
+		var duel: Dictionary = seated.get("game", {})
+		if seated.is_empty() or duel.is_empty() or String(duel.get("mode", "")) == "finished":
+			return false
+		var connected: Array = seated.get("connected", [true, true])
+		return connected.size() == 2 and not (bool(connected[0]) and bool(connected[1]))
+	var lost := {"offline": false}
+	var hold := func() -> bool:
+		var since := Time.get_ticks_msec()
+		while away.call() or client.busy():
+			var given_up: bool = not client.online and client.has_method("connecting") and not client.connecting()
+			if given_up or Time.get_ticks_msec() - since > reconnect_patience_ms:
+				lost.offline = true
+				return false
+			tick.call()
+		return true
+	var act := func(action: Dictionary) -> String:
+		var asked := String(client.state.room.get("game", {}).get("mode", ""))
+		while true:
+			var answer: String = send.call(action)
+			if answer == "":
+				return ""
+			# Sent, and still unanswered when the wait ran out: the link
+			# dropped under it, and the client sends it again once it is back.
+			var in_flight: bool = client.busy()
+			if not (in_flight or away.call() or answer == SEAT_AWAY or answer == NOT_CONNECTED):
+				return answer
+			if not hold.call():
+				return answer
+			if in_flight:
+				# Its own answer came with the link: applied, or refused.
+				if refused.is_empty():
+					return ""
+				if String(refused[0]) != SEAT_AWAY:
+					return String(refused[0])
+			# Overtaken while it waited (the host conceded a seat that never
+			# came back, the decision moved on): the loop below reads on.
+			var now: Dictionary = client.state.room.get("game", {})
+			if now.is_empty() or String(now.mode) == "finished" or int(now.actor) != seat or String(now.mode) != asked:
+				return ""
+		return ""
 	var reason := ""
 	var acted_revision := -1
 	while reason == "":
 		tick.call()
-		if not client.online:
-			reason = "offline"
-			break
+		if away.call():
+			if not hold.call():
+				reason = "offline"
+			continue
 		var view: Dictionary = client.state.room.get("game", {})
 		if view.is_empty():
 			if client.state.room.is_empty():
@@ -1663,7 +1804,7 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		acted_revision = int(client.state.room.revision)
 		reason = _ask(seat, String(view.mode),
 			func() -> Dictionary: return client.state.room.get("game", {}),
-			send, tick)
+			act, tick, func() -> String: return "offline" if bool(lost.offline) else "")
 	if reason in ["eof", "idle", "refusals", "limit", "decisions"] and String(client.state.room.get("game", {}).get("mode", "")) != "finished":
 		send.call({"op": "concede"})
 		until.call(func() -> bool: return String(client.state.room.get("game", {}).get("mode", "")) == "finished", "the concession never landed")

@@ -90,7 +90,8 @@ MODES = ("opening", "priority", "attack", "block", "discard", "damage", "choice"
 TYPE_BITS = ((1, "land"), (2, "creature"), (4, "artifact"), (8, "enchantment"),
              (16, "instant"), (32, "sorcery"))
 KEYWORDS = ("flying", "reach", "vigilance", "haste", "trample", "defender", "first strike",
-            "must attack", "banding", "unblockable", "fear", "flash", "phasing", "flanking")
+            "must attack", "banding", "unblockable", "fear", "flash", "phasing", "flanking",
+            "shadow")
 KW_FLYING = 0
 KW_MUST_ATTACK = 7
 OWN_MAIN = ("MAIN1", "MAIN2")
@@ -339,7 +340,10 @@ def _prompt(decision: dict, sub: dict | None) -> dict:
                 "min": slot.get("min", 0), "max": slot.get("max", 0)}
     if mode == "choice":
         choice = options.get("choice") or {}
-        return {k: choice.get(k) for k in ("prompt", "source", "options", "count") if choice.get(k) not in (None, "")}
+        out = {k: choice.get(k) for k in ("prompt", "source", "options", "count") if choice.get(k) not in (None, "")}
+        if any(isinstance(c, str) and c for c in choice.get("cards") or []):
+            out["cards"] = list(choice["cards"])   # the board card of each line (protocol 29)
+        return out
     if mode == "discard":
         return {"discard": (options.get("discard") or {}).get("count", view.get("discard_count", 0))}
     if mode == "damage":
@@ -951,11 +955,42 @@ def must_attack(decision: dict) -> list[str]:
     return out
 
 
+def attack_companions(decision: dict) -> dict:
+    """The presentation's `attack_companions` (protocol 28 — Magnetic Web:
+    "if a creature with a magnet counter on it attacks, all creatures with
+    magnet counters on them attack if able"): `{attacker: [the creatures it
+    drags in]}`."""
+    out: dict = {}
+    for row in _presentation(_view(decision)).get("attack_companions") or []:
+        if isinstance(row, (list, tuple)) and len(row) == 2 and isinstance(row[0], str) \
+                and isinstance(row[1], (list, tuple)):
+            out[row[0]] = [h for h in row[1] if isinstance(h, str)]
+    return out
+
+
+def with_companions(decision: dict, selected: list) -> list:
+    """`selected` and every attackable creature its members drag in, and
+    theirs in turn (campaign 2026-10-07: the menu declared a magnet
+    creature without its companions, and the referee refused it)."""
+    companions = attack_companions(decision)
+    if not companions:
+        return list(selected)
+    attackable = {c["card"] for c in _attackable(decision)}
+    out = list(selected)
+    at = 0
+    while at < len(out):
+        for other in companions.get(out[at], []):
+            if other in attackable and other not in out:
+                out.append(other)
+        at += 1
+    return out
+
+
 def attack_items(decision: dict, sub: dict | None, blocked) -> list[dict]:
     view = _view(decision)
     index = card_index(view, _seat(decision))
     attackable = _attackable(decision)
-    required = must_attack(decision)
+    required = with_companions(decision, must_attack(decision))
     selected = list((sub or {}).get("selected") or required)
     everyone = [c["card"] for c in attackable]
     names = {c["card"]: c.get("name", c["card"]) for c in attackable}
@@ -974,8 +1009,11 @@ def attack_items(decision: dict, sub: dict | None, blocked) -> list[dict]:
             continue
         card = index.get(handle, ({}, "", ""))[0]
         pt = f" ({card.get('power', 0)}/{card.get('toughness', 0)})" if card else ""
-        items.append(_item(f"attack:add:{handle}", f"Add attacker {names[handle]}{pt}", "attack_add",
-                           {"sub": {"kind": "attack", "n": decision.get("n"), "selected": selected + [handle]}},
+        grown = with_companions(decision, selected + [handle])
+        dragged = [names.get(c, c) for c in grown if c not in selected and c != handle]
+        along = f", with {', '.join(dragged)}" if dragged else ""
+        items.append(_item(f"attack:add:{handle}", f"Add attacker {names[handle]}{pt}{along}", "attack_add",
+                           {"sub": {"kind": "attack", "n": decision.get("n"), "selected": grown}},
                            {"card": handle, "name": names[handle], "power": card.get("power"),
                             "toughness": card.get("toughness")}))
     return items
@@ -1114,6 +1152,8 @@ def choice_items(decision: dict, sub: dict | None, blocked) -> list[dict]:
     options = _options(decision)
     choice = options.get("choice") or {}
     labels = list(choice.get("options") or [])
+    # The board card each line stands for (protocol 29), "" for none.
+    cards = [c if isinstance(c, str) else "" for c in (choice.get("cards") or [])]
     raw = choice.get("count", 1)
     count = int(raw) if isinstance(raw, int) and not isinstance(raw, bool) else 1
     picked = list((sub or {}).get("picked") or [])
@@ -1126,12 +1166,15 @@ def choice_items(decision: dict, sub: dict | None, blocked) -> list[dict]:
         if i in picked:
             continue
         chosen = picked + [i]
+        card = cards[i] if i < len(cards) else ""
+        info = {"index": i, **({"card": card} if card else {})}
+        shown = f"{label} [{card}]" if card and f"[{card}]" not in str(label) else str(label)
         if len(chosen) >= min(count, len(labels)):
-            items.append(_item(f"choice:{i}", str(label), "choice", {"send": [{"op": "choice", "picks": chosen}]},
-                               {"index": i}))
+            items.append(_item(f"choice:{i}", shown, "choice", {"send": [{"op": "choice", "picks": chosen}]},
+                               info))
         else:
-            items.append(_item(f"choice:{i}", f"{label} ({len(chosen)} of {count})", "choice",
-                               {"sub": {"kind": "choice", "n": decision.get("n"), "picked": chosen}}, {"index": i}))
+            items.append(_item(f"choice:{i}", f"{shown} ({len(chosen)} of {count})", "choice",
+                               {"sub": {"kind": "choice", "n": decision.get("n"), "picked": chosen}}, info))
     if "cancel" in options:
         items.append(_item("choice:cancel", "Withdraw (cancel the cost)", "cancel", {"send": [{"op": "cancel"}]}))
     return items
@@ -1244,7 +1287,7 @@ def fallback_action(decision: dict) -> dict:
     if mode == "priority":
         return {"op": "cancel"} if options.get("announcement") else {"op": "pass"}
     if mode == "attack":
-        return {"op": "attack", "cards": must_attack(decision)}
+        return {"op": "attack", "cards": with_companions(decision, must_attack(decision))}
     if mode == "block":
         return {"op": "block", "pairs": []}
     if mode == "choice":
@@ -1295,6 +1338,9 @@ class Driver:
         self.decision: dict | None = None
         self.result: dict | None = None
         self.error: dict | None = None
+        # True when the last read found nothing yet (a person at the table
+        # is thinking): no decision, and the game is not over.
+        self.waiting = False
         self.sub: dict | None = None
         self.plan: dict | None = None
         self.blocked: dict = {}
@@ -1334,6 +1380,14 @@ class Driver:
                 self.decision = None
                 return refusals
             kind = record.get("type")
+            if kind == "pending":
+                # Nothing yet (the MCP link's read timed out): at a table the
+                # next decision comes after the person has played. The
+                # Driver waits with no decision; the caller reads on.
+                self.waiting = True
+                self.decision = None
+                return refusals
+            self.waiting = False
             if kind == "hello":
                 self.hello = record
             elif kind == "refused":
@@ -1374,6 +1428,12 @@ class Driver:
                 self.blocked = {}
             for scope in (block_scope(decision), board_signature(decision)):
                 self.blocked.setdefault(scope, set()).add(key)
+        self._menu = None
+
+    def _unblock(self, decision: dict) -> None:
+        """Every item refused at `decision` is offered again."""
+        for scope in (block_scope(decision), board_signature(decision)):
+            self.blocked.pop(scope, None)
         self._menu = None
 
     def menu(self) -> list:
@@ -1452,7 +1512,11 @@ class Driver:
         `until` — a callable(decision) returning a reason to stop, "" to
         pass — then passes priority while it says pass (the MCP server's
         pass-until). Returns `{item, refused}` and, with `until`, `stop`
-        and `passed`."""
+        and `passed`. While the Driver waits for the table (`waiting`: no
+        decision has arrived yet) nothing is sent: `{item: None, refused:
+        [], pending: True}`."""
+        if self.decision is None and self.waiting and not self.done:
+            return {"item": None, "refused": [], "pending": True}
         menu = self.menu()
         item = resolve_pick(menu, choice)
         self.stats["decisions"] += 1
@@ -1669,12 +1733,24 @@ class Driver:
             if self.decision is None:
                 return
             if not menu:
-                # Every item refused: the quiet answer, then a cancel, and only
-                # then the seat concedes (the referee would after 20 refusals).
+                # Every item refused: the quiet answer, then a cancel. NEVER A
+                # CONCESSION FOR THE MODEL (campaign 2026-10-07): a LAN table's
+                # host refuses every action while the other seat reconnects,
+                # and the Driver conceded a game it had five minutes to wait
+                # out. Still refused, the decision is handed back with its
+                # whole menu; the referee's own rule (twenty refusals in a
+                # row) is the only concession nobody chose.
                 self.stats["forced"] += 1
-                for action in (fallback_action(self.decision), {"op": "cancel"}, {"op": "concede"}):
+                held = True
+                for action in (fallback_action(self.decision), {"op": "cancel"}):
+                    if action.get("op") == "concede":
+                        continue
                     if not self._send_one(action) or self.decision is None:
+                        held = False
                         break
+                if held and self.decision is not None:
+                    self._unblock(self.decision)
+                    return
                 continue
             if self.skip_forced and len(menu) == 1:
                 self.stats["forced"] += 1
@@ -1703,12 +1779,16 @@ class Driver:
             self._settle()
         if self.done:
             reason = "the game is over"
+        elif self.decision is None and self.waiting:
+            reason = "waiting for the table"
         return {"stop": reason, "passed": passes}
 
     def resync(self, decision: dict | None) -> None:
         """Take up `decision` as the current one — the line moved on without
         this Driver (another tool answered the decision it was showing):
         the sub-menu, the cast plan and the cached menu are dropped."""
+        if decision is not None:
+            self.waiting = False
         if decision is self.decision:
             return
         if decision is not None and self.decision is not None and decision.get("n") == self.decision.get("n") \
@@ -1730,9 +1810,12 @@ def attach_game(game, timeout: float = 120.0, **options) -> Driver:
     `error`, `memory`). Kept in `game.memory["decide"]`, so a sub-menu
     and the probe cache last from one call to the next; taken up again
     from `game.pending` when another tool answered meanwhile. A read that
-    times out raises DriverError (the referee answers in milliseconds; a
-    silence is a broken game). `options` are Driver's (`probe`,
-    `skip_forced`, `features`) and apply when the Driver is made."""
+    times out is WAITING, not an error (campaign 2026-10-07: at a joined
+    or hosted table the next decision comes only after the person has
+    played, and a pick raised mid-way after 120 s): the Driver stops with
+    no decision (`waiting`), and `referee_wait` reads on. `options` are
+    Driver's (`probe`, `skip_forced`, `features`) and apply when the
+    Driver is made."""
     driver = game.memory.get("decide") if isinstance(getattr(game, "memory", None), dict) else None
     buffer: list = []
 
@@ -1740,10 +1823,11 @@ def attach_game(game, timeout: float = 120.0, **options) -> Driver:
         if buffer:
             return buffer.pop(0)
         state = game.advance(timeout, render=False)
-        if state.get("pending"):
-            raise DriverError(f"the referee said nothing for {timeout:.0f} s")
         for record in state.get("refused") or []:
             buffer.append({**record, "type": "refused"})
+        if state.get("pending"):
+            buffer.append({"type": "pending"})
+            return buffer.pop(0)
         if game.pending is not None:
             buffer.append(game.pending)
         elif game.result is not None:
@@ -1796,6 +1880,9 @@ def menu_state(driver: Driver, rich: bool = False) -> dict:
     obs = driver.observe()
     out = {"n": driver.stats["decisions"], "obs": obs, "menu": public_menu(driver.menu(), rich),
            "stats": dict(driver.stats)}
+    if driver.decision is None and not driver.done:
+        out["pending"] = True
+        out["note"] = "no decision yet (the table is thinking); referee_wait reads on, then referee_menu"
     if driver.result is not None:
         out["result"] = driver.result
     if driver.error is not None:

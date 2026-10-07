@@ -22,6 +22,10 @@ extends CardScript
 ## untap step (MtgGame._untap_step, `@ISLAND_FISH_JASCONIUS`'s two-line
 ## form: "Untap <name>." / "Don't untap."); the heuristic keeps it tapped
 ## while it is sustaining something and untaps it otherwise.
+##
+## The effect lasts WHILE the Gear is tapped, so the 1997 "tapped
+## artifacts stop working" rule cannot switch it off
+## (StaticAbility.working_while_tapped).
 
 
 func build() -> CardData:
@@ -30,7 +34,8 @@ func build() -> CardData:
 	return CardData.new("Ashnod's Battle Gear", "{2}", Mtg.CardType.ARTIFACT) \
 		.with_may_skip_untap() \
 		.static_ability(StaticAbility.new(
-			_apply, "The equipped creature gets +2/-2 while the Gear stays tapped.")) \
+			_apply, "The equipped creature gets +2/-2 while the Gear stays tapped.") \
+			.working_while_tapped()) \
 		.activated(ActivatedAbility.new(
 			"{2}", true, [EquipEffect.new(spec)],
 			"{2}, {T}: Target creature you control gets +2/-2 for as long as Ashnod's "

@@ -639,7 +639,8 @@ func _names_of(id: String) -> Array:
 ## of them is a shared reprint another enabled pack provides too — the
 ## implied requirement ([method packs_required_by]) then names the pack in
 ## play. Pack 1's ids (its printings) and a declaration no card in the
-## deck explains are kept as written.
+## deck explains are kept as written — by the gates; a save drops the
+## latter ([method requirements_to_save], campaign 2026-10).
 func effective_requirements(declared: Array[String], names: Array[String]) -> Array[String]:
 	var out: Array[String] = []
 	for id in declared:
@@ -662,6 +663,40 @@ func _provided_elsewhere(id: String, names: Array[String]) -> bool:
 			return false
 		any = true
 	return any
+
+
+# --- Campaign 2026-10 fix-persist (w7-6): what a SAVE declares ---
+## THE PACKS A SAVED DECK DECLARES, of those its file already declared
+## (whole-game campaign 2026-10, w7-6). [method effective_requirements]
+## keeps a declaration no card in the deck explains, because the gates
+## honour a file's `# requires-pack:` line as written (2026-09-17) — and
+## the Deck Builder's save carried it the same way, so a deck whose last
+## Mirage card was taken out went on saying `# requires-pack: pack-8`, and
+## the battle setup screen then refused that all-core deck with Pack 8
+## off. A save is the one place the line is AUTHORED, so it is judged
+## there: a declared id this build knows stays only while a card in the
+## deck ([param names], both piles) is one the pack provides (Pack 1's
+## four cards included), on top of [method effective_requirements]'
+## shared-reprint rule. An id this build does not know is kept as written —
+## a deck from a newer build names a pack whose cards are proxies here, and
+## "needs Pack N" is the better refusal.
+func requirements_to_save(declared: Array[String], names: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	var known := known_ids()
+	for id in effective_requirements(declared, names):
+		if not known.has(id) or _provides_any(id, names):
+			out.append(id)
+	return out
+
+
+## Does the deck hold at least one card pack [param id] provides?
+func _provides_any(id: String, names: Array[String]) -> bool:
+	var provides := _names_of(id)
+	for name in names:
+		if provides.has(name):
+			return true
+	return false
+# --- end campaign fix-persist (w7-6) ---
 
 
 func disable_warning(id: String) -> String:

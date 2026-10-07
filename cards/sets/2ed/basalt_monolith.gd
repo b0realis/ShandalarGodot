@@ -7,12 +7,17 @@ extends CardScript
 ## Implementation: Mana Vault's bigger sibling — cur_skips_untap static,
 ## a {C}{C}{C} mana ability, and a {3} activated self-untap (net +0, so
 ## no loop pays for itself — matching the printed card's math).
+##
+## The lock works while the Monolith is tapped — which is the only time it
+## matters — so the 1997 "tapped artifacts stop working" rule does not
+## switch it off (StaticAbility.working_while_tapped).
 
 
 func build() -> CardData:
 	return CardData.new("Basalt Monolith", "{3}", Mtg.CardType.ARTIFACT) \
 		.static_ability(StaticAbility.new(
-			_lock, "This artifact doesn't untap during your untap step.")) \
+			_lock, "This artifact doesn't untap during your untap step.") \
+			.working_while_tapped()) \
 		.mana(ManaAbility.new(Mtg.ManaColor.C, 3)) \
 		.activated(ActivatedAbility.new(
 			"{3}", false,

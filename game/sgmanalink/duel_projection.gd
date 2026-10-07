@@ -54,6 +54,27 @@ func handle(id: int) -> String:
 	return String(card.get_meta("sg_handle", "")) if card != null else ""
 
 
+## A choice's lines as this seat reads them (protocol 29, whole-game
+## campaign 2026-10-07): a line that stands for a board card ends in that
+## card's ID tag — "#7", the number `Show ID tags` (Ctrl+T) draws on it —
+## in place of the handle the referee ends it with ("[c12]", a program's
+## name for the card, nothing a person sees), so two Grizzly Bears are
+## told apart as the local screen tells them (DuelScreen
+## .choice_card_lines). Display only: a pick is still the line's index.
+func choice_lines(choice: Dictionary) -> Array:
+	var lines: Array = []
+	var cards: Array = choice.get("cards", [])
+	for i in choice.options.size():
+		var line := String(choice.options[i])
+		var key := String(cards[i]) if i < cards.size() else ""
+		if key != "":
+			var tail := " [%s]" % key
+			if line.ends_with(tail): line = line.left(line.length() - tail.length())
+			line += " #%d" % local_id(key)
+		lines.append(line)
+	return lines
+
+
 func ingest(room: Dictionary) -> void:
 	seat = int(room.seat)
 	view = room.game
@@ -198,7 +219,7 @@ func ingest(room: Dictionary) -> void:
 		if not view.choice.is_empty():
 			awaiting_choice.prompt = view.choice.prompt
 			awaiting_choice.source = view.choice.source
-			awaiting_choice.options.assign(view.choice.options)
+			awaiting_choice.options.assign(choice_lines(view.choice))
 			awaiting_choice.count = int(view.choice.count)
 			awaiting_choice.is_cost = view.choice.cancel
 			for info in view.choice.information:

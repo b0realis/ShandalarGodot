@@ -84,6 +84,10 @@ var _invite_prompt: Label
 var _pending_join := ""
 ## The finished room OK on its result asked to leave (2026-10-03).
 var _leave_room := ""
+## The finished TOURNAMENT game OK on its result asked to return to the
+## hall from: {room, event} (whole-game campaign 2026-10-07), kept like
+## [member _leave_room] until the connection can carry it.
+var _return_hall: Dictionary = {}
 var _room_copy: Button
 
 
@@ -874,6 +878,17 @@ func _refresh() -> void:
 		elif client.online and not client.busy():
 			_leave_room = ""
 			_send({"op": "leave"})
+	# OK on a TOURNAMENT result returns to the hall the same way (whole-game
+	# campaign 2026-10-07): sent once on the spot, the return was lost when
+	# the connection blinked as the player pressed OK, and the seat stayed
+	# at the finished table with no result window left to press — the
+	# table holding up the next round.
+	if not _return_hall.is_empty():
+		if String(room.get("id", "")) != String(_return_hall.room): _return_hall = {}
+		elif client.online and not client.busy():
+			var back := String(_return_hall.event)
+			_return_hall = {}
+			_send({"op": "t_return", "event": back})
 	if not room.is_empty():
 		_page = "room"
 	elif not _room_id.is_empty():
@@ -897,7 +912,10 @@ func _refresh() -> void:
 			_duel.leave_requested.connect(func() -> void:
 				_leave_room = String(client.state.room.get("id", ""))
 				_queue_refresh())
-			_duel.hall_requested.connect(func() -> void: _send({"op": "t_return", "event": client.state.tournament.id}))
+			_duel.hall_requested.connect(func() -> void:
+				_return_hall = {"room": String(client.state.room.get("id", "")),
+					"event": String(client.state.get("tournament", {}).get("id", ""))}
+				_queue_refresh())
 			_duel.tournament_requested.connect(_open_master)
 		_duel.present(room, client.online, client.busy(), service != null)
 	elif is_instance_valid(_duel):
@@ -1002,6 +1020,7 @@ func _disconnect() -> void:
 	_selected_host.clear()
 	_pending_join = ""
 	_leave_room = ""
+	_return_hall = {}
 	_host_pending = false
 	_tournament_pending.clear()
 	_tournament_id = ""

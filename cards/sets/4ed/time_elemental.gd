@@ -16,7 +16,8 @@ extends CardScript
 ## is bounced or is sacrificed still burns "you" for five — only the
 ## sacrifice half is skipped (CR 608.2, "as much as possible"); so does
 ## one that someone else controls by then, which "you" can't sacrifice
-## (CR 701.17a). A 0/2 that should never be in combat.
+## (CR 701.17a). A 0/2 that should never be in combat — and
+## [member CardData.combat_price] says so to the AI's block declaration.
 ##
 ## "Blocks" listens to BECOMES_BLOCKER, once per creature that starts
 ## blocking (2026-10-03): BLOCKED is one event per block PAIR, and a band
@@ -30,6 +31,7 @@ func build() -> CardData:
 	return CardData.new("Time Elemental", "{2}{U}", Mtg.CardType.CREATURE) \
 		.pt(0, 2) \
 		.with_subtypes(["elemental"]) \
+		.with_combat_price(true, 5) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.DECLARED_ATTACKERS, _schedule_doom,
 			"When Time Elemental attacks, at end of combat sacrifice it and "

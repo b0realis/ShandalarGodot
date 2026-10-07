@@ -58,8 +58,22 @@ class RiddleEffect extends EffectBase:
 	## The names in the chooser's own DECKLIST, each once — most copies
 	## not accounted for first, alphabetical within a tie.
 	static func nameable(game: MtgGame, pid: int) -> Array[String]:
+		var left := unaccounted(game, pid)
+		var names: Array[String] = []
+		for n in left:
+			names.append(n)
+		names.sort_custom(func(a: String, b: String) -> bool:
+			if int(left[a]) != int(left[b]):
+				return int(left[a]) > int(left[b])
+			return a < b)
+		return names
+
+	## name -> copies of [param pid]'s DECKLIST not accounted for by a card
+	## [param pid] can see (their hand; every face-up card on a battlefield,
+	## in a graveyard, in exile or in the ante) — never the library itself.
+	static func unaccounted(game: MtgGame, pid: int) -> Dictionary:
 		var p := game.players[pid]
-		var left: Dictionary = {}   # name -> copies not legally accounted for
+		var left: Dictionary = {}
 		for n in p.deck_names:
 			left[n] = int(left.get(n, 0)) + 1
 		var known: Array = p.hand.duplicate()
@@ -72,14 +86,7 @@ class RiddleEffect extends EffectBase:
 			if inst.is_token or inst.owner_id != pid: continue
 			var n: String = inst.data.card_name
 			if left.has(n): left[n] = maxi(int(left[n]) - 1, 0)
-		var names: Array[String] = []
-		for n in left:
-			names.append(n)
-		names.sort_custom(func(a: String, b: String) -> bool:
-			if int(left[a]) != int(left[b]):
-				return int(left[a]) > int(left[b])
-			return a < b)
-		return names
+		return left
 
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:

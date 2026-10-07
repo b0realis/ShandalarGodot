@@ -330,18 +330,57 @@ func test_your_own_turn_stops_for_a_question() -> void:
 
 func test_your_own_turn_stops_for_the_damage_windows() -> void:
 	# §6.8: the prevention and regeneration windows are the one moment a
-	# Circle of Protection can be used at all.
+	# Circle of Protection can be used at all — so they hold the player who
+	# holds something for them (a prevention spell, a regeneration
+	# ability), and since the whole-game campaign (w5-8) ONLY that player:
+	# a window with nothing of theirs usable in it passes like any other
+	# quiet one (the damage division below is a declaration, and always
+	# holds).
 	var g := _human_priority_on_your_turn(Mtg.Step.COMBAT_DAMAGE)
 	screen.stops.clear_all()
+	g.players[0].hand.clear()
+	var plains := _own(g, "Plains", Mtg.Zone.BATTLEFIELD)
+	_own(g, "Healing Salve", Mtg.Zone.HAND)        # its prevention mode
+	var swamp := _own(g, "Swamp", Mtg.Zone.BATTLEFIELD)
+	_own(g, "Drudge Skeletons", Mtg.Zone.BATTLEFIELD)   # {B}: Regenerate
 	g.awaiting_damage_prevention = true
-	assert_false(screen._auto_pass_applies())
+	assert_false(screen._auto_pass_applies(), "a usable prevention effect holds the window")
 	g.awaiting_damage_prevention = false
 	g.awaiting_regeneration = true
-	assert_false(screen._auto_pass_applies())
+	assert_false(screen._auto_pass_applies(), "a usable regeneration effect holds the window")
 	g.awaiting_regeneration = false
 	g.awaiting_damage_assignment = true
 	assert_false(screen._auto_pass_applies())
 	g.awaiting_damage_assignment = false
+	# ...and with nothing usable in them — the mana for both spent — the
+	# two windows pass themselves.
+	plains.tapped = true
+	swamp.tapped = true
+	g.awaiting_damage_prevention = true
+	assert_true(screen._auto_pass_applies(), "nothing of ours fits the prevention window")
+	g.awaiting_damage_prevention = false
+	g.awaiting_regeneration = true
+	assert_true(screen._auto_pass_applies(), "nothing of ours fits the regeneration window")
+	g.awaiting_regeneration = false
+
+
+## A card of seat 0's, untapped and ready, in [param zone].
+func _own(g: MtgGame, card_name: String, zone: int) -> CardInstance:
+	var data := CardRegistry.get_card(card_name)
+	assert_not_null(data, card_name)
+	var inst := CardInstance.new(data, g._next_instance_id, 0)
+	g._next_instance_id += 1
+	g._probing = true          # no refresh (and no automatic pass) mid-setup
+	g._instances[inst.id] = inst
+	if zone == Mtg.Zone.HAND:
+		inst.zone = Mtg.Zone.HAND
+		g.players[0].hand.append(inst)
+	else:
+		g._put_on_battlefield(inst, 0)
+		inst.summoning_sick = false
+	g.recalculate()
+	g._probing = false
+	return inst
 
 
 func test_your_own_turn_stops_for_a_chain_item_you_can_answer() -> void:

@@ -40,11 +40,24 @@ static func _host_tapped(_game: MtgGame, source: CardInstance, event: GameEvent)
 	return tapped != null and source.attached_to == tapped.id
 
 
-## Untapped lands first, then anything: an already-tapped land is spent for
-## the turn anyway, so a player moving the vine puts it on a land they have
-## not used yet only when nothing better is left.
-static func _tapped_first(a: CardInstance, b: CardInstance) -> bool:
-	return int(a.tapped) > int(b.tapped)
+## The HINT for the dying land's controller [param pid] (campaign 2026-10,
+## w1-3/w1-12): somebody else's land first — the vine handed back is the
+## printed defence — their most valuable, then an untapped one (it dies the
+## next time they tap it); one's OWN land last, an already-tapped one (spent
+## for the turn) before an untapped one, the least valuable first. The ask
+## is ORDERED: a heuristic seat takes the head of the list.
+static func _hop_order(game: MtgGame, pid: int, a: CardInstance, b: CardInstance) -> bool:
+	var a_theirs := a.controller_id != pid
+	var b_theirs := b.controller_id != pid
+	if a_theirs != b_theirs:
+		return a_theirs
+	if a.tapped != b.tapped:
+		return a.tapped != a_theirs   # theirs: untapped first; ours: tapped first
+	var av := Evaluator.land_value(game, a)
+	var bv := Evaluator.land_value(game, b)
+	if av != bv:
+		return av > bv if a_theirs else av < bv
+	return a.id < b.id
 
 
 static func _strangle(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
@@ -61,13 +74,18 @@ static func _strangle(game: MtgGame, source: CardInstance, event: GameEvent) -> 
 	for inst in game.all_battlefield():
 		if inst.is_land() and inst != host:
 			candidates.append(inst)
-	candidates.sort_custom(_tapped_first)
+	candidates.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		return _hop_order(game, pid, a, b))
+	# "MAY": declining lets the vine die with the land, which beats moving it
+	# onto one's own — so the hint says yes only when somebody else has a land.
+	var hand_back := not candidates.is_empty() and candidates[0].controller_id != pid
 	var next_host: CardInstance = null
 	if source.zone == Mtg.Zone.BATTLEFIELD and not candidates.is_empty() \
 			and game.agents[pid].choose_yes_no(game, pid,
-				"Move %s to another of your lands?" % source.data.card_name, true):
+				"Attach %s to a land of your choice (any player's)?" % source.data.card_name,
+				hand_back):
 		next_host = game.agents[pid].choose_card(game, pid, candidates,
-			"Choose a land for %s" % source.data.card_name)
+			"Choose a land for %s" % source.data.card_name, false, false, true)
 		if next_host == null or not candidates.has(next_host):
 			next_host = candidates[0]
 	if next_host != null:

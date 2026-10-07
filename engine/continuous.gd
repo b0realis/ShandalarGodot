@@ -812,6 +812,19 @@ static func _by_timestamp_rank_entry(a: Dictionary, b: Dictionary) -> bool:
 	return int(a["i"]) < int(b["i"])
 
 
+# --- Campaign fix-engine: statics that work while tapped (w4-1, w2-1) ---
+## Has [param ability] of [param inst] CEASED under the 1997 rule (manual
+## p.124, [member RulesOptions.tapped_artifacts_stop])? The rule marks the
+## whole tapped artifact ([member CardInstance.cur_statics_suspended]) and
+## every static pass asks this per ABILITY, so a static that is about being
+## tapped ([member StaticAbility.works_while_tapped]: an untap lock, a
+## "for as long as this artifact remains tapped" bonus) keeps working while
+## the rest of the same artifact's statics stop.
+static func _tap_suspended(inst: CardInstance, ability: StaticAbility) -> bool:
+	return inst.cur_statics_suspended and not ability.works_while_tapped
+# --- end campaign fix-engine block ---
+
+
 func _floating_statics_pass(game: MtgGame, which: int) -> void:
 	# The statics of SPELLS ON THE STACK (CR 611.3) ride the same sub-pass
 	# as the floating ones: like them, their source is not on the
@@ -883,10 +896,10 @@ static func _runs_in(ability: StaticAbility, which: int) -> bool:
 func _layer_five(game: MtgGame) -> void:
 	var entries: Array[Dictionary] = []
 	for inst in game.battlefield_with_statics():
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue
 		for ability in inst.data.static_abilities:
-			if ability.changes_colors:
+			if ability.changes_colors and not _tap_suspended(inst, ability):
 				entries.append({"ts": inst.layer_timestamp, "static": ability, "source": inst})
 	for entry in _floating_statics:
 		var floater: StaticAbility = entry["ability"]
@@ -1011,11 +1024,12 @@ func _layer_six(game: MtgGame) -> void:
 	for loss in _losses:
 		entries.append({"ts": int(loss.get("ts", 0)), "loss": loss})
 	for inst in game.battlefield_with_ability_statics():
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue   # Titania's Song silenced it in the first pass
 		for ability in inst.data.static_abilities:
 			if ability.changes_abilities and not ability.changes_types \
-					and not ability.silences_abilities:
+					and not ability.silences_abilities \
+					and not _tap_suspended(inst, ability):
 				(dependent if ability.reads_abilities else entries).append(
 					{"ts": inst.layer_timestamp, "static": ability, "source": inst})
 	for entry in _floating_statics:
@@ -1210,6 +1224,9 @@ func recalculate(game: MtgGame) -> void:
 	# suspended a Cursed Rack the Poltergeist had just made a creature —
 	# while the comment here claimed the opposite. What it still misses is
 	# a permanent animated by a STATIC in pass 2a, which has not run yet.
+	# The mark is the ARTIFACT's; each pass below then skips its statics
+	# one by one, except a static that is about being tapped ([method
+	# _tap_suspended] — campaign fix-engine, w4-1/w2-1).
 	if game.rules.tapped_artifacts_stop:
 		for inst in battlefield:
 			if inst.tapped and inst.is_type(Mtg.CardType.ARTIFACT) \
@@ -1270,10 +1287,11 @@ func recalculate(game: MtgGame) -> void:
 		var which: int = _StaticPass.LAND_TYPE_READERS if wave else _StaticPass.LAND_TYPES
 		var entries: Array[Dictionary] = []
 		for inst in type_sources:
-			if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+			if inst.cur_abilities_silenced:
 				continue
 			for ability in inst.data.static_abilities:
-				if ability.changes_land_types and ability.reads_land_types == wave:
+				if ability.changes_land_types and ability.reads_land_types == wave \
+						and not _tap_suspended(inst, ability):
 					entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
 						"source": inst, "ability": ability, "live": true})
 		for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
@@ -1295,17 +1313,18 @@ func recalculate(game: MtgGame) -> void:
 			# A live source an earlier entry of this wave retyped has lost
 			# its abilities (CR 305.7) and contributes nothing more.
 			if entry.has("live") and (source.cur_abilities_silenced \
-					or source.cur_statics_suspended):
+					or _tap_suspended(source, entry["ability"])):
 				continue
 			entry["ability"].apply.call(game, source)
 	# 2a-2 — LAYER 4, the rest: animations that ADD a type ("all Swamps
 	# are 1/1 creatures"), reading the board the retypers just settled.
 	for inst in type_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue
 		for ability in inst.data.static_abilities:
 			if ability.changes_types and not ability.changes_land_types \
-					and not ability.silences_abilities:
+					and not ability.silences_abilities \
+					and not _tap_suspended(inst, ability):
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.TYPES)
 	# 2a-3 — LAYER 6's DEPENDENCY HALF for a pure "loses all abilities"
@@ -1373,7 +1392,7 @@ func recalculate(game: MtgGame) -> void:
 			inst.cur_toughness += delta.y * n
 
 	for inst in static_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue   # Titania's Song silenced it in an earlier pass
 		for ability in inst.data.static_abilities:
 			# The silencers ran first, in 2a-0; they do not run again here,
@@ -1383,7 +1402,8 @@ func recalculate(game: MtgGame) -> void:
 			if not ability.sets_base_pt and not ability.changes_types \
 					and not ability.changes_abilities \
 					and not ability.silences_abilities \
-					and not ability.reads_pt and not ability.changes_colors:
+					and not ability.reads_pt and not ability.changes_colors \
+					and not _tap_suspended(inst, ability):
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.REST)
 
@@ -1464,10 +1484,10 @@ func recalculate(game: MtgGame) -> void:
 	# In the anthem pass the answer depended on which permanent entered
 	# first, and no entry order could have shown them a Giant Growth at all.
 	for inst in static_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue
 		for ability in inst.data.static_abilities:
-			if ability.reads_pt:
+			if ability.reads_pt and not _tap_suspended(inst, ability):
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.PT_READERS)
 	# Characteristic definitions work in every zone. Ordinary battlefield
@@ -1537,10 +1557,9 @@ var _silence_strips: Array[Dictionary] = []
 func _silence_pass(game: MtgGame, which: int, type_sources: Array[CardInstance]) -> void:
 	var entries: Array[Dictionary] = []
 	for inst in type_sources:
-		if inst.cur_statics_suspended:
-			continue
 		for ability in inst.data.static_abilities:
-			if ability.silences_abilities and _runs_in(ability, which):
+			if ability.silences_abilities and _runs_in(ability, which) \
+					and not _tap_suspended(inst, ability):
 				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
 					"source": inst, "ability": ability, "live": true})
 	for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
@@ -1614,6 +1633,11 @@ func _strip_abilities(inst: CardInstance) -> void:
 	inst.cur_cant_block_power_ge = 0
 	inst.cur_cant_be_blocked_by_power_ge = 0
 	inst.cur_extra_blocks = 0
+	# Menace-style "can't be blocked except by two or more" granted EARLIER
+	# (Imposing Visage, Goblin War Drums — layer-6 grants since campaign
+	# fix-cards w3-7) goes with every other ability (campaign fix-engine,
+	# relayed for fix-cards).
+	inst.cur_min_blockers = 1
 	inst.cur_mana_abilities.clear()
 	inst.cur_activated_abilities.clear()
 	inst.cur_triggered_abilities.clear()
@@ -1665,21 +1689,23 @@ func _layer_seven_b(game: MtgGame, static_sources: Array[CardInstance]) -> void:
 	if _animations.is_empty() and _base_pt.is_empty() \
 			and _floating_statics.is_empty() and _stack_sources.is_empty():
 		for inst in static_sources:
-			if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+			if inst.cur_abilities_silenced:
 				continue
 			for ability in inst.data.static_abilities:
 				if ability.sets_base_pt and not ability.changes_types \
 						and not ability.changes_abilities \
 						and not ability.silences_abilities \
-						and not ability.reads_abilities:
+						and not ability.reads_abilities \
+						and not _tap_suspended(inst, ability):
 					ability.apply.call(game, inst)
 		return
 	var entries: Array[Dictionary] = []
 	for inst in static_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue
 		for ability in inst.data.static_abilities:
-			if ability.sets_base_pt and _runs_in(ability, _StaticPass.BASE_PT):
+			if ability.sets_base_pt and _runs_in(ability, _StaticPass.BASE_PT) \
+					and not _tap_suspended(inst, ability):
 				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
 					"static": ability, "source": inst})
 	for entry in _floating_statics:
@@ -1733,11 +1759,12 @@ func _layer_seven_b(game: MtgGame, static_sources: Array[CardInstance]) -> void:
 func _cda_readers_pass(game: MtgGame, static_sources: Array[CardInstance]) -> bool:
 	var entries: Array[Dictionary] = []
 	for inst in static_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+		if inst.cur_abilities_silenced:
 			continue
 		for ability in inst.data.static_abilities:
 			if ability.reads_abilities and ability.sets_base_pt \
-					and _runs_in(ability, _StaticPass.BASE_PT_READERS):
+					and _runs_in(ability, _StaticPass.BASE_PT_READERS) \
+					and not _tap_suspended(inst, ability):
 				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
 					"static": ability, "source": inst})
 	for entry in _floating_statics:

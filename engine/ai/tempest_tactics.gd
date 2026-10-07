@@ -173,38 +173,46 @@ static func licid_option(g: MtgGame, pilot, s: CardInstance, index: int,
 	if window != "MAIN" or g.active_player != pid \
 			or g.current_step() != Mtg.Step.MAIN1 or not g.stack.is_empty():
 		return {}
-	var spec: TargetSpec = a.effects[0].target_spec
+	# THE DECISION'S BUDGET (campaign fix-ai-b, w6-2): the hosts worth a
+	# reading, the node allowance every reading runs at, and the readings
+	# this decision already made — shared by every licid the scan asks.
+	var plan := licid_plan(g, pilot)
+	var answers: Dictionary = plan["answers"]
+	var twin := licid_twin_key(s)
+	if answers.has(twin):
+		return twin_answer(answers[twin], s, g)
+	var rows: Dictionary = plan["hosts"].get(s.id, {})
+	if rows.is_empty():
+		rows = trim_hosts(licid_hosts(g, pilot, s, a),
+			{"ours": int(plan["quota"]), "theirs": int(plan["quota"])})
 	var defender := g.opponent_of(pid)
-	var before := attack_worth(g, pilot, defender)
+	var keep: int = pilot.profile.combat_search_nodes
+	pilot.profile.combat_search_nodes = mini(keep, int(plan["nodes"]))
+	if not plan.has("before"):
+		plan["before"] = attack_worth(g, pilot, defender)
+		plan["threat"] = their_attack_worth(g, pilot)
+	var before: float = plan["before"]
 	var toll := toll_value(g, pilot, s)
 	var best := {}
-	for host in g.players[pid].battlefield:
-		if host == s or not host.is_creature():
-			continue
-		var ref := TargetRef.card(host)
-		if spec == null or not spec.is_legal(g, ref, s):
-			continue
+	for id in rows["ours"]:
+		var host := g.find_instance(int(id))
 		# A recurring toll the Aura half charges its host's controller is
 		# charged to US on our own creature.
 		var gain := attack_worth_dressed(g, pilot, s, host, defender) - before - toll
 		if best.is_empty() or gain > float(best["value"]):
-			best = {"value": gain, "targets": [ref]}
-	var threat := their_attack_worth(g, pilot)
+			best = {"value": gain, "targets": [TargetRef.card(host)]}
+	var threat: float = plan["threat"]
 	# The body given up: its attacks and blocks over the Aura's turns are
 	# already in the two attack readings; the rest of its worth is
 	# discounted by half — the end cost buys it back.
 	var body: float = pilot._own_value(g, s) * 0.5
-	for host in g.players[defender].battlefield:
-		if not host.is_creature():
-			continue
-		var ref := TargetRef.card(host)
-		if spec == null or not spec.is_legal(g, ref, s):
-			continue
-		if preload("res://engine/ai/mirage_tactics.gd").dies_when_targeted(host, g):
-			continue   # the Aura would have no host to land on
+	for id in rows["theirs"]:
+		var host := g.find_instance(int(id))
 		var gain := hostile_gain(g, pilot, s, host, before, threat) + toll - body
 		if best.is_empty() or gain > float(best["value"]):
-			best = {"value": gain, "targets": [ref]}
+			best = {"value": gain, "targets": [TargetRef.card(host)]}
+	pilot.profile.combat_search_nodes = keep
+	answers[twin] = {"id": s.id, "best": best.duplicate()}
 	return best
 
 
@@ -330,6 +338,301 @@ static func toll_value(g: MtgGame, pilot, licid: CardInstance) -> float:
 		var per_turn := 1.0 if trig.event_type == Mtg.EventType.UPKEEP_START else 0.6
 		total += float(n) * per_turn * AURA_TURNS * pilot._life_price(g.players[g.opponent_of(pilot.pid)].life)
 	return total
+
+
+# --- Campaign fix-ai-b: the licid decision's budget (w6-2) ---
+#
+# THE THINK TIME (whole-game campaign 2026-10-07, w6-2). Every licid the
+# activation scan asks read the whole attack again for every host on both
+# sides — the pilot's own attack planner, a combat study of up to
+# [member AiProfile.combat_search_nodes] nodes each — and read the board's
+# two base readings (`before`, `threat`) once per licid. Seven licids took
+# one Wizard main-phase decision to 9.7 s (a pass); two or three took
+# every main phase of a licid duel to one to six seconds, with the duel
+# screen frozen for it. Four things now bound it, all deterministic (no
+# clock is read: the same board gets the same answer on any machine):
+#  * ONE PLAN PER DECISION ([method licid_plan]), kept on the pilot and
+#    keyed by the exact public board ([method licid_stamp]): the base
+#    readings are made once, and a licid identical to one already read
+#    ([method licid_twin_key]: two untouched Tempting Licids) takes its
+#    twin's answer ([method twin_answer]) instead of reading it again.
+#  * ONLY THE HOSTS THE AURA HALF CAN MATTER ON ([method licid_hosts]):
+#    the dressing is read under the journal first ([method
+#    dressed_reading], a recalculation, not an attack plan) — a host it
+#    makes stronger is a host of ours worth dressing, one it makes weaker
+#    (can't attack, can't block, smaller, stolen) one of theirs worth
+#    denying; "must be blocked" and any line the reading cannot classify
+#    count both ways. A Calming Licid is no longer priced on our own
+#    creatures nor a Gliding Licid on theirs: the reading ranked those
+#    below the bar, at the price of a full attack plan each.
+#  * AT MOST [constant LICID_READINGS] READINGS A DECISION: past it, each
+#    licid's side keeps its likeliest hosts ([method trim_hosts]) — ours
+#    that can attack once dressed and hit hardest, theirs worth the most.
+#  * ONE NODE BUDGET ([constant LICID_NODES]) shared by the decision's
+#    readings: each runs the pilot's own planner at that share of it —
+#    never more than the profile's own budget, never less than
+#    [constant LICID_MIN_NODES] — the truncation the Sorcerer's half
+#    budget already is. The base readings run at the same allowance, so a
+#    gain compares like with like.
+# A board with a licid or two and a handful of creatures is read exactly as
+# before: under the cap, and searched within its share.
+
+const SIDE_OURS := 1
+const SIDE_THEIRS := 2
+const LICID_READINGS := 10
+const LICID_NODES := 6000
+const LICID_MIN_NODES := 200
+const LICID_PLAN_META := &"tempest_licid_plan"
+
+
+## The decision's plan: `{stamp, hosts: {licid id: {ours, theirs}},
+## quota, nodes, answers}` — made on the first ask of a decision, reused by
+## every later ask while the board stays [method licid_stamp]'s. Held as
+## metadata on the pilot (never a static: the Deck Lab plays its duels on
+## worker threads), so it dies with the seat.
+static func licid_plan(g: MtgGame, pilot) -> Dictionary:
+	var stamp := licid_stamp(g, pilot)
+	if pilot.has_meta(LICID_PLAN_META):
+		var held: Dictionary = pilot.get_meta(LICID_PLAN_META)
+		if String(held.get("stamp", "")) == stamp:
+			return held
+	var pid: int = pilot.pid
+	var rows := {}
+	var twins := {}
+	var readings := 1
+	var sides := 0
+	for inst in g.players[pid].battlefield:
+		if not inst.is_creature():
+			continue
+		for index in inst.cur_activated_abilities.size():
+			var a: ActivatedAbility = inst.cur_activated_abilities[index]
+			if a.effects.is_empty() or a.effects[0].ai_role != LICID_ROLE:
+				continue
+			var key := licid_twin_key(inst)
+			if twins.has(key) or not ability_ready(g, pilot, inst, index):
+				break
+			twins[key] = true
+			var found := licid_hosts(g, pilot, inst, a)
+			rows[inst.id] = found
+			readings += found["ours"].size() + found["theirs"].size()
+			sides += int(not found["ours"].is_empty()) + int(not found["theirs"].is_empty())
+			break
+	# Past the cap the readings are dealt out a host at a time, every side
+	# in battlefield order, until they run out: each side its likeliest
+	# host first, a side with fewer hosts leaving its share to the rest.
+	var quota := -1
+	var quotas := {}
+	for id in rows:
+		quotas[id] = {"ours": -1, "theirs": -1}
+	if readings > LICID_READINGS and sides > 0:
+		quota = maxi(1, (LICID_READINGS - 1) / sides)
+		var left := LICID_READINGS - 1
+		for id in rows:
+			quotas[id] = {"ours": 0, "theirs": 0}
+		var grew := true
+		while left > 0 and grew:
+			grew = false
+			for id in rows:
+				for side in ["ours", "theirs"]:
+					if left > 0 and int(quotas[id][side]) < rows[id][side].size():
+						quotas[id][side] = int(quotas[id][side]) + 1
+						left -= 1
+						grew = true
+	var hosts := {}
+	var made := 1
+	for id in rows:
+		hosts[id] = trim_hosts(rows[id], quotas[id])
+		made += hosts[id]["ours"].size() + hosts[id]["theirs"].size()
+	var plan := {"stamp": stamp, "hosts": hosts, "quota": quota, "answers": {},
+		"nodes": maxi(LICID_MIN_NODES, LICID_NODES / made)}
+	pilot.set_meta(LICID_PLAN_META, plan)
+	return plan
+
+
+## The exact public board one decision is made on: the moment, both
+## players' public counts, every permanent's id and visible state, and
+## our own hand. A change to any of them is a new decision.
+static func licid_stamp(g: MtgGame, pilot) -> String:
+	var parts := PackedStringArray()
+	parts.append("%d:%d:%d:%d:%d:%d:%d" % [g.get_instance_id(), pilot.pid, g.turn_number,
+		g.current_step(), g.priority_player, g.stack.size(), g.log_lines.size()])
+	for pl in g.players:
+		parts.append("%d:%d:%d:%d:%d" % [pl.life, pl.hand.size(), pl.library.size(),
+			pl.graveyard.size(), pl.mana_pool.total()])
+		for inst in pl.battlefield:
+			parts.append("%d:%d:%d:%d:%d:%d:%d:%d:%d" % [inst.id, inst.controller_id,
+				int(inst.tapped), int(inst.summoning_sick), inst.damage, inst.attached_to,
+				inst.cur_power, inst.cur_toughness, inst.counters.size()])
+	for inst in g.players[pilot.pid].hand:
+		parts.append(str(inst.id))
+	return "|".join(parts)
+
+
+## Two licids with this key are interchangeable for the arm: the same
+## card in the same visible state.
+static func licid_twin_key(s: CardInstance) -> String:
+	return "%s:%d:%d:%d:%d:%d:%d:%d:%s" % [s.data.card_name, int(s.tapped),
+		int(s.summoning_sick), s.damage, s.cur_power, s.cur_toughness,
+		s.attachments.size(), s.regeneration_shields, str(s.counters)]
+
+
+## The answer [param entry] (`{id, best}`) gave its licid, given to its
+## twin [param s]: the same value at the same host — or, when that host was
+## [param s] itself, at the licid that was read (each dresses the other).
+## Always a copy: the scan prices pain into the option it is handed.
+static func twin_answer(entry: Dictionary, s: CardInstance, g: MtgGame = null) -> Dictionary:
+	var best: Dictionary = entry["best"]
+	if best.is_empty():
+		return {}
+	var out := best.duplicate()
+	var ref: TargetRef = best["targets"][0]
+	if int(entry["id"]) != s.id and ref.instance_id == s.id and g != null:
+		var read := g.find_instance(int(entry["id"]))
+		if read != null:
+			out["targets"] = [TargetRef.card(read)]
+	return out
+
+
+## Every legal host of [param s]'s licid ability [param a] the Aura half
+## can matter on: `{ours: [{id, prior}], theirs: [{id, prior}]}` in
+## battlefield order — ours where the dressing makes the host stronger (or
+## gives its controller an ability for it), theirs where it makes the host
+## weaker, charges its controller or takes it ([method dressed_reading],
+## [method aura_sides]). [code]prior[/code] ranks them for [method
+## trim_hosts].
+static func licid_hosts(g: MtgGame, pilot, s: CardInstance, a: ActivatedAbility) -> Dictionary:
+	var ours: Array = []
+	var theirs: Array = []
+	var spec: TargetSpec = a.effects[0].target_spec
+	if spec == null:
+		return {"ours": ours, "theirs": theirs}
+	var pid: int = pilot.pid
+	var defender := g.opponent_of(pid)
+	var shared := aura_sides(g, s)
+	for host in g.players[pid].battlefield:
+		if host == s or not host.is_creature() or not spec.is_legal(g, TargetRef.card(host), s):
+			continue
+		var seen := dressed_reading(g, s, host)
+		if (shared | int(seen["sides"])) & SIDE_OURS:
+			ours.append({"id": host.id, "prior": [int(seen["attacks"]), int(seen["power"]),
+				Evaluator.permanent_value(host, pilot.profile)]})
+	for host in g.players[defender].battlefield:
+		if not host.is_creature() or not spec.is_legal(g, TargetRef.card(host), s):
+			continue
+		if preload("res://engine/ai/mirage_tactics.gd").dies_when_targeted(host, g):
+			continue   # the Aura would have no host to land on
+		var seen := dressed_reading(g, s, host)
+		if (shared | int(seen["sides"])) & SIDE_THEIRS:
+			theirs.append({"id": host.id, "prior": [Evaluator.permanent_value(host, pilot.profile)]})
+	return {"ours": ours, "theirs": theirs}
+
+
+## The sides [param s]'s Aura half matters on whatever its host: a steal
+## or a toll ([method toll_value]'s lines) is theirs; an ability the Aura
+## gives its controller for the host (Nurturing Licid's regeneration) is
+## ours; any other triggered line is read both ways.
+static func aura_sides(g: MtgGame, s: CardInstance) -> int:
+	var data: CardData = g.licid_aura_data(s)
+	if data == null:
+		return SIDE_OURS | SIDE_THEIRS
+	var sides := 0
+	if data.licid_steals:
+		sides |= SIDE_THEIRS
+	if not data.activated_abilities.is_empty():
+		sides |= SIDE_OURS
+	for trig in data.triggered_abilities:
+		var lower := trig.text.to_lower()
+		if lower.contains("damage to that player") \
+				or lower.contains("damage to that creature's controller"):
+			sides |= SIDE_THEIRS
+		else:
+			sides |= SIDE_OURS | SIDE_THEIRS
+	return sides
+
+
+## [param licid] made an Aura on [param host] under the search journal —
+## a recalculation, no attack plan: `{sides, attacks, power}`, the
+## [constant SIDE_OURS] / [constant SIDE_THEIRS] bits for what changed on
+## the host (stronger / weaker; "must be blocked" both), and whether it can
+## attack and how hard once dressed. A search in progress keeps its journal.
+static func dressed_reading(g: MtgGame, licid: CardInstance, host: CardInstance) -> Dictionary:
+	var was := host_shape(g, host)
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g.become_licid_aura(licid, host)
+	var now := host_shape(g, host)
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	var sides := 0
+	if int(now["power"]) > int(was["power"]) or int(now["toughness"]) > int(was["toughness"]):
+		sides |= SIDE_OURS
+	if int(now["power"]) < int(was["power"]) or int(now["toughness"]) < int(was["toughness"]):
+		sides |= SIDE_THEIRS
+	for k in now["keywords"]:
+		if not was["keywords"].has(k):
+			sides |= SIDE_OURS
+	for k in was["keywords"]:
+		if not now["keywords"].has(k):
+			sides |= SIDE_THEIRS
+	for field in ["landwalk", "protection", "unblockable_by", "min_blockers"]:
+		if int(now[field]) > int(was[field]):
+			sides |= SIDE_OURS
+	if bool(now["attacks"]) and not bool(was["attacks"]):
+		sides |= SIDE_OURS
+	for field in ["cant_attack", "cant_block", "skips_untap"]:
+		if bool(now[field]) and not bool(was[field]):
+			sides |= SIDE_THEIRS
+	if bool(was["attacks"]) and not bool(now["attacks"]):
+		sides |= SIDE_THEIRS
+	if int(now["controller"]) != int(was["controller"]):
+		sides |= SIDE_THEIRS
+	if bool(now["must_be_blocked"]) and not bool(was["must_be_blocked"]):
+		sides |= SIDE_OURS | SIDE_THEIRS
+	return {"sides": sides, "attacks": now["attacks"], "power": now["power"]}
+
+
+## The visible combat shape of [param host] [method dressed_reading] compares.
+static func host_shape(g: MtgGame, host: CardInstance) -> Dictionary:
+	var keywords: Array = host.cur_keywords.duplicate()
+	return {"power": host.cur_power, "toughness": host.cur_toughness, "keywords": keywords,
+		"landwalk": host.cur_landwalk.size(), "protection": host.cur_protection,
+		"unblockable_by": host.cur_cant_be_blocked_by.size(), "min_blockers": host.cur_min_blockers,
+		"cant_attack": host.cur_cant_attack, "cant_block": host.cur_cant_block_filter.is_valid(),
+		"skips_untap": host.cur_skips_untap, "must_be_blocked": host.cur_must_be_blocked,
+		"controller": host.controller_id,
+		"attacks": CombatState.attack_illegality(g, host, g.opponent_of(host.controller_id), false) == ""}
+
+
+## [param rows] ([method licid_hosts]) as plain id lists in battlefield
+## order, each side cut to its quota in [param quotas] (`{ours, theirs}`)
+## of likeliest hosts by their prior (highest first, the earlier host on a
+## tie) — all of them where the quota is negative.
+static func trim_hosts(rows: Dictionary, quotas: Dictionary) -> Dictionary:
+	var out := {}
+	for side in ["ours", "theirs"]:
+		var list: Array = rows[side]
+		var quota := int(quotas[side])
+		var keep: Array = []
+		if quota >= 0 and list.size() > quota:
+			var ranked := range(list.size())
+			ranked.sort_custom(func(x: int, y: int) -> bool:
+				var px: Array = list[x]["prior"]
+				var py: Array = list[y]["prior"]
+				for k in px.size():
+					if not is_equal_approx(float(px[k]), float(py[k])):
+						return float(px[k]) > float(py[k])
+				return x < y)
+			var chosen: Array = ranked.slice(0, quota)
+			chosen.sort()
+			for i in chosen:
+				keep.append(list[i]["id"])
+		else:
+			for row in list:
+				keep.append(row["id"])
+		out[side] = keep
+	return out
+# --- end campaign fix-ai-b licid budget ---
 
 
 ## THE LICID SAVED (CR 116.2c): one of our licids is an Aura whose host —

@@ -28,6 +28,15 @@ extends CardScript
 ## upkeep trigger asks BOTH of its questions — whether to shift, and into
 ## what — through that funnel; until 2026-09-17 it picked the biggest body
 ## itself and never offered a smaller shape at all.
+##
+## The upkeep shape is a TARGET (campaign 2026-10, w1-9): chosen as the
+## trigger goes on the stack (CR 603.3d), so protection from blue (Blue
+## Ward) keeps a creature out of the list, the opponent sees what is
+## aimed at and may respond, and a target gone or turned illegal by
+## resolution makes the trigger do nothing (CR 608.2b). "You may" is asked
+## on resolution. The Doppelganger itself is no candidate: becoming a copy
+## of itself changes nothing (and would stack a second copy of this
+## ability onto the copied definition).
 
 
 static func _any_creature(inst: CardInstance) -> bool:
@@ -40,7 +49,26 @@ static func _shift_ability() -> TriggeredAbility:
 	return TriggeredAbility.new(
 		Mtg.EventType.UPKEEP_START, _shift,
 		"At the beginning of your upkeep, you may have this creature become a copy of target creature, except it doesn't copy that creature's color and it has this ability.",
-		_your_upkeep)
+		_your_upkeep) \
+		.targeting(TargetSpec.creature("target creature").with_source_filter(_not_itself),
+			_biggest_first, "Select a creature for Vesuvan Doppelganger to copy.")
+
+
+static func _not_itself(_game: MtgGame, source: CardInstance, inst: CardInstance) -> bool:
+	return source == null or inst != source
+
+
+## Biggest body first (power + toughness), then the oldest — the heuristic
+## seat's pick and the human seat's default highlight.
+static func _biggest_first(game: MtgGame, _source: CardInstance,
+		a: TargetRef, b: TargetRef) -> bool:
+	var ia := game.find_instance(a.instance_id)
+	var ib := game.find_instance(b.instance_id)
+	var va := ia.cur_power + ia.cur_toughness
+	var vb := ib.cur_power + ib.cur_toughness
+	if va != vb:
+		return va > vb
+	return ia.id < ib.id
 
 
 ## "…and it has this ability": adopt the target's definition PLUS the
@@ -68,37 +96,26 @@ static func _shift(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 	# become_copy itself does not ask.
 	if not game.is_present(source):
 		return
-	var pid := source.controller_id
-	# "…become a copy of TARGET creature" — every other creature on the
-	# table is a candidate, ranked biggest first so the head of the list is
-	# the heuristic's pick and the human seat's default highlight.
-	var shapes: Array[CardInstance] = []
-	for inst in game.all_battlefield():
-		if inst != source and inst.is_creature():
-			shapes.append(inst)
-	if shapes.is_empty():
+	# "…become a copy of TARGET creature" — chosen as the trigger went on
+	# the stack; the engine hands over only a target still legal (CR 608.2b).
+	var refs: Array = game.current_targets()
+	if refs.is_empty():
 		return
-	shapes.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
-		var va := a.cur_power + a.cur_toughness
-		var vb := b.cur_power + b.cur_toughness
-		if va != vb:
-			return va > vb
-		return a.id < b.id)
-	# "YOU MAY": the hint is the old heuristic — shift only when the best
-	# shape available is an upgrade — but the answer is the seat's, so a
-	# smaller body that flies, taps for mana or dodges a sweeper is a line
-	# the controller may take (it was unreachable until 2026-09-17).
-	var worth_it: bool = shapes[0].cur_power + shapes[0].cur_toughness \
+	var shape := game.find_instance(refs[0].instance_id)
+	if shape == null or shape == source or not game.is_present(shape) or not shape.is_creature():
+		return
+	var pid := source.controller_id
+	# "YOU MAY": the hint is the old heuristic — shift only when the shape
+	# is an upgrade — but the answer is the seat's, so a smaller body that
+	# flies, taps for mana or dodges a sweeper is a line the controller may
+	# take (it was unreachable until 2026-09-17). The prompt names the shape
+	# as the stack line does (a face-down one stays nameless, CR 708.2).
+	var worth_it: bool = shape.cur_power + shape.cur_toughness \
 		> source.cur_power + source.cur_toughness
 	if not game.agents[pid].choose_yes_no(game, pid,
-			"Have Vesuvan Doppelganger become a copy of another creature?",
+			"Have Vesuvan Doppelganger become a copy of %s?" % game.target_label(refs[0]),
 			worth_it):
 		return
-	# WHICH creature is the seat's own choice too, not the engine's.
-	var shape := game.agents[pid].choose_card(game, pid, shapes,
-		"Become a copy of which creature?", false, false, true)
-	if shape == null or not shapes.has(shape):
-		shape = shapes[0]
 	# Copiable values (CR 707.2): a face-down shape is a nameless 2/2, never
 	# the card underneath (CR 708.2; bug pass 2026-10-03).
 	game.become_copy(source, _keep_the_ability(game.copiable_data(shape)), 0, true)

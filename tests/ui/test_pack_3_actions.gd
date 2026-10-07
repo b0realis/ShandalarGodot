@@ -29,6 +29,14 @@ func give(name: String) -> CardInstance:
 
 func test_fire_covenant_opens_a_life_budget_with_safe_zero_default() -> void:
 	var covenant := give("Fire Covenant")
+	# A creature to divide the damage among: with none the cast is refused
+	# before its X is asked (campaign w5-5 — "any number of target
+	# creatures" is at least one, and TargetPlan refuses an empty table).
+	var bears := CardInstance.new(CardRegistry.get_card("Grizzly Bears"),
+		screen.game._next_instance_id, 1)
+	screen.game._next_instance_id += 1
+	screen.game._instances[bears.id] = bears
+	screen.game._put_on_battlefield(bears, 1)
 	screen.game.players[0].life = 17
 	screen._click_hand_card(covenant)
 	assert_not_null(screen._x_dialog)

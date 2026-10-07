@@ -216,7 +216,9 @@ static func _configure(c: CardData) -> CardData:
 			c.with_may_skip_untap()
 			c.activated(_ability("{2}" if power == 0 else "{3}", true,
 				Action.new(_hold.bind(power, toughness), "target creature gets a bonus while this remains tapped", TargetSpec.creature(), true)))
-			c.static_ability(StaticAbility.new(_hold_static, "The held creature keeps its bonus while this remains tapped."))
+			# Works WHILE tapped, so the 1997 "tapped artifacts stop working"
+			# rule cannot switch it off (StaticAbility.working_while_tapped).
+			c.static_ability(StaticAbility.new(_hold_static, "The held creature keeps its bonus while this remains tapped.").working_while_tapped())
 		"Spore Cloud":
 			c.spell(Action.new(_cloud, "tap blocking creatures; attackers and blockers skip their next untap"))
 			c.spell(PreventCombatDamageEffect.new())
@@ -343,12 +345,22 @@ static func _shroud(g: MtgGame, source: CardInstance, pid: int, _target: TargetR
 	source.skip_next_untap = true
 	g.tap_permanent(source)
 
+## Deep Spawn's upkeep (campaign 2026-10, w2-6). A Spawn that has left (or
+## changed hands) has nothing left to keep: the "unless" offers nothing and
+## is not asked (the Mirage precedent, mir/_triggers.gd). The hint mills
+## only while two draws are left after the mill — this turn's draw step
+## and the next — so a heuristic seat never decks itself to keep it: with
+## three cards the mill leaves one, this turn's draw takes it, and next
+## turn's draw loses the game.
 static func _deep_upkeep(g: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	var pid := int(g.trigger_context(source).get("controller", source.controller_id))
 	var present := _same_trigger_source(g, source) and source.controller_id == pid
-	if g.players[pid].library.size() >= 2 and g.agents[pid].choose_yes_no(g, pid, "Mill two cards to keep Deep Spawn?", present):
+	if not present:
+		return
+	var library := g.players[pid].library.size()
+	if library >= 2 and g.agents[pid].choose_yes_no(g, pid, "Mill two cards to keep Deep Spawn?", library - 2 >= 2):
 		g.mill(pid, 2)
-	elif present:
+	else:
 		g.sacrifice_permanent(source)
 
 static func _derelor_tax(_g: MtgGame, pid: int, card: CardData, source: CardInstance) -> Dictionary:
@@ -667,7 +679,9 @@ static func _advanced(c: CardData) -> CardData:
 			c.triggered(TriggeredAbility.new(Mtg.EventType.COMBAT_START, _flotilla_fee,
 				"Unless you pay {R}, creatures blocking or blocked by this creature gain first strike this combat."))
 		"Goblin War Drums":
-			c.static_ability(StaticAbility.new(_menace, "Creatures you control can't be blocked except by two or more creatures."))
+			# Oracle: "Creatures you control have menace." — a layer-6 grant
+			# (CR 613.1f; campaign 2026-10, w3-7): a newer Humility takes it.
+			c.static_ability(StaticAbility.new(_menace, "Creatures you control have menace.").changing_abilities())
 		"Goblin Warrens":
 			var ability := _ability("{2}{R}", false, CreateTokenEffect.new("Goblin", 1, 1, Mtg.ManaColor.R, "goblin", 3))
 			ability.with_sacrifice_of("Goblin", _subtype.bind("goblin"))

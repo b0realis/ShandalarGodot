@@ -805,8 +805,11 @@ def _prompt_lines(view: dict, options: dict, cards: dict, rows: dict) -> list[st
         source = f" ({choice['source']})" if choice.get("source") else ""
         lines.append(f"CHOICE{source}: {choice.get('prompt', '')} — pick {choice.get('count', 1)}"
                      + (" (cancel allowed)" if choice.get("cancel") else ""))
+        cards = choice.get("cards") or []
         for i, label in enumerate(choice.get("options", []) or []):
-            lines.append(f"  {i}: {label}")
+            # The board card a line stands for (protocol 29): its handle.
+            card = cards[i] if i < len(cards) and isinstance(cards[i], str) else ""
+            lines.append(f"  {i}: {label}" + (f" [{card}]" if card and f"[{card}]" not in str(label) else ""))
         for info in choice.get("information", []) or []:
             if isinstance(info, dict):
                 lines.append(f"  shown — {info.get('title', '')}: {', '.join(str(c) for c in info.get('cards', []) or [])}")
@@ -967,6 +970,8 @@ def menu_text(state: dict, decision: dict | None, journal: list | None, me: int 
         lines.append("MENU (answer with referee_pick {pick: N}):")
         for i, item in enumerate(state.get("menu") or []):
             lines.append(f"  {i}. {item.get('label')}  [{item.get('id')}]")
+    elif state.get("pending"):
+        lines.append(f"WAITING: {state.get('note', 'no decision yet; referee_wait reads on')}")
     result = state.get("result")
     if isinstance(result, dict):
         lines.append(result_line(result, me))
@@ -1090,6 +1095,9 @@ def stop_reason(decision: dict, until: str, origin: dict | None) -> str:
     theirs = view.get("active") is not None and int(view.get("active")) != seat
     respond = bool(options.get("respond"))
     stack = view.get("stack") or []
+    window = window_stop(options, view)
+    if window and until != "mine-strict":
+        return window
     if until in ("mine", "mine-strict"):
         return mine_stop(options, view, seat, step, theirs, stack, strict=until == "mine-strict")
     if stack and isinstance(stack[-1], dict) and stack[-1].get("controller") != seat and respond:
@@ -1116,6 +1124,44 @@ def stop_reason(decision: dict, until: str, origin: dict | None) -> str:
         if own_main and can_act:
             return "your main phase, with something to play"
     return ""
+
+
+def specials_held(options: dict, view: dict) -> list[str]:
+    """The special actions that are a RESPONSE right now (campaign
+    2026-10-07), read from the options' usable-only `special.specials` and
+    the kinds the view's `presentation.special_rows` gives them: a ransom
+    to pay off (Sabertooth Cobra's "before your next upkeep" — the
+    opponent's end step is its last window) and a point of prevention to
+    buy (Guardian Angel); a licid's end or a Curse's ignore only while
+    something waits on the stack; never Channel, which is mana."""
+    rows = (view.get("presentation") or {}).get("special_rows") or []
+    specials = (options.get("special") or {}).get("specials") or []
+    stack = view.get("stack") or []
+    held = []
+    for i, entry in enumerate(specials):
+        row = rows[i] if i < len(rows) and isinstance(rows[i], (list, tuple)) and rows[i] else [""]
+        kind = row[0]
+        if kind in ("settle", "prevention") or (kind in ("licid_end", "ignore_effect") and stack):
+            held.append(str((entry or {}).get("label", kind)) if isinstance(entry, dict) else str(entry))
+    return held
+
+
+def window_stop(options: dict, view: dict) -> str:
+    """The 1997 DAMAGE-PREVENTION or REGENERATION window (the `fifth`
+    rules' fork: `presentation.prevention` / `.regeneration`) while the
+    seat holds something usable in it — a Circle of Protection, whose 1997
+    form works only there, a regeneration ability. One chance: the damage
+    lands when the window closes, so every `until` but `mine-strict` stops
+    (campaign 2026-10-07: `mine` and `main` passed the window, the Circle
+    in hand and the giant's damage waiting). The options are usable-only,
+    so in the window they list what the window admits."""
+    presentation = view.get("presentation") or {}
+    window = ("damage-prevention" if presentation.get("prevention")
+              else "regeneration" if presentation.get("regeneration") else "")
+    if not window:
+        return ""
+    held = usable_now(options)
+    return f"the {window} window is open; you hold {', '.join(held)}" if held else ""
 
 
 def ability_usable(row) -> bool:
@@ -1171,7 +1217,7 @@ def mine_stop(options: dict, view: dict, seat: int, step: str, theirs: bool, sta
         return "your main phase, with something to play"
     if strict:
         return ""
-    held = usable_now(options)
+    held = usable_now(options) + specials_held(options, view)
     if not held:
         return ""
     hold = "you hold " + ", ".join(held)
@@ -2078,6 +2124,9 @@ class Game:
             out["seed"] = self.hello.get("seed")
             if self.hello.get("table"):
                 out["table"] = self.hello["table"]
+        if self.result is not None and "seed" in self.result:
+            # A drawn seed is told in the result only (it deals both hands).
+            out["seed"] = self.result["seed"]
         if self.pending is not None:
             out["pending"] = {k: self.pending.get(k) for k in ("n", "seat", "mode", "turn", "step")}
         if self.result is not None:
@@ -2652,7 +2701,8 @@ class Server:
                        {"deck_a": prop("string", "seat 0's deck, as typed, under `decks/` or in the workspace"),
                         "deck_b": prop("string", "seat 1's deck"),
                         "seat_a": seat, "seat_b": seat,
-                        "seed": prop("integer", "the shuffle (unset: drawn and reported in `hello`)"),
+                        "seed": prop("integer", "the shuffle (unset: drawn and reported in the "
+                                     "`result` only — hello says -1, since the seed deals both hands)"),
                         "turns": prop("integer", "the duel is a draw past this turn (default 200)"),
                         "packs": packs,
                         "rules": prop("string", "the table's rules preset, passed to the referee: `modern`, "

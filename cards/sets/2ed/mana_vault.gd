@@ -17,12 +17,17 @@ extends CardScript
 ## priority, i.e. after the draw (CR 603.3, 503.1a). A player who draws
 ## from an empty library loses to state-based actions before the burn
 ## can resolve (CR 704.5b), which is what happens at the table too.
+##
+## The lock is about being tapped, so the 1997 "tapped artifacts stop
+## working" rule does not switch it off (StaticAbility.working_while_tapped):
+## under that rule too the Vault stays tapped and burns its controller.
 
 
 func build() -> CardData:
 	return CardData.new("Mana Vault", "{1}", Mtg.CardType.ARTIFACT) \
 		.static_ability(StaticAbility.new(
-			_lock, "This artifact doesn't untap during your untap step.")) \
+			_lock, "This artifact doesn't untap during your untap step.") \
+			.working_while_tapped()) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _offer_untap,
 			"At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.",

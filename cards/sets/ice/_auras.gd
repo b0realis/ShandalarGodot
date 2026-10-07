@@ -32,7 +32,9 @@ static func configure(c: CardData) -> bool:
 				"Enchanted creature has flying and first strike.").changing_abilities())
 		"Imposing Visage":
 			c.enchants(TargetSpec.creature())
-			c.static_ability(StaticAbility.new(_host_menace, "Enchanted creature has menace."))
+			# A layer-6 grant (CR 613.1f; campaign 2026-10, w3-7): a newer
+			# Humility takes the menace away.
+			c.static_ability(StaticAbility.new(_host_menace, "Enchanted creature has menace.").changing_abilities())
 		"Leshrac's Rite":
 			c.enchants(TargetSpec.creature())
 			c.static_ability(StaticAbility.new(_swampwalk, "Enchanted creature has swampwalk.").changing_abilities())

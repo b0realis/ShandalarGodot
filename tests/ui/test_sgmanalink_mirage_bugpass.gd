@@ -408,7 +408,14 @@ func test_the_network_special_actions_still_show_beside_the_gated_local_menu() -
 	var screen := _screen()
 	screen.action_requested.connect(func(action: Dictionary) -> void: assert_eq(referee.act(0, action), ""))
 	await _pump()
-	assert_eq(screen._special_actions(0), [], "the local screen's own door stays shut at a network table")
+	# Since the whole-game campaign (w7-3) the shared menus list every row
+	# the REFEREE lists — taking one is a `special` message, never an act on
+	# the projection — so the Channel row is there, and it is the referee's.
+	var rows: Array = screen._special_actions(0)
+	assert_eq(rows.size(), 1, "the referee's row, on the shared menus too")
+	if rows.size() == 1:
+		assert_eq(String(rows[0].get("kind", "")), "channel")
+		assert_eq(int(rows[0].get("id", -1)), 0, "known by the referee's index")
 	screen._show_specials()
 	var line: Button = null
 	for button: Button in screen._network_dialog.find_children("*", "Button", true, false):

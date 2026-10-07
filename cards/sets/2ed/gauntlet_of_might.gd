@@ -17,12 +17,18 @@ extends CardScript
 
 
 func build() -> CardData:
+	var bonus := TriggeredAbility.new(
+		Mtg.EventType.TAPPED_FOR_MANA, _double,
+		"Whenever a Mountain is tapped for mana, its controller adds an additional {R}.",
+		_is_mountain).as_mana_trigger()
+	# The planner's public description (ManaPlanner._bonus_triggers): a
+	# Mountain makes one more {R}.
+	bonus.mana_bonus_subtype = "mountain"
+	bonus.mana_bonus_color = Mtg.ManaColor.R
+	bonus.mana_bonus_amount = 1
 	return CardData.new("Gauntlet of Might", "{4}", Mtg.CardType.ARTIFACT) \
 		.static_ability(StaticAbility.new(_apply, "Red creatures get +1/+1.")) \
-		.triggered(TriggeredAbility.new(
-			Mtg.EventType.TAPPED_FOR_MANA, _double,
-			"Whenever a Mountain is tapped for mana, its controller adds an additional {R}.",
-			_is_mountain).as_mana_trigger()) \
+		.triggered(bonus) \
 		.oracle("Red creatures get +1/+1.\nWhenever a Mountain is tapped for mana, "
 			+ "its controller adds an additional {R}.")
 

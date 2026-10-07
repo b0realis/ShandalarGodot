@@ -790,6 +790,7 @@ const TURN_FIELDS: Array[StringName] = [
 	&"_damage_cursor", &"_wave_assigned", &"awaiting_damage_assignment",
 	&"awaiting_damage_prevention", &"awaiting_regeneration",
 	&"regeneration_candidates", &"damage_pending",
+	&"_damage_window_floor",   # campaign fix-engine w4-2
 	# the per-turn tallies CLEANUP empties wholesale — each is journaled
 	# at its own write site as well, but nothing else records the wipe
 	&"damage_dealt_this_turn", &"creatures_died_this_turn",
@@ -3612,6 +3613,12 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	if ability.tap_cost:
 		if undo_log != null: _rec(inst, &"tapped")
 		inst.tapped = true
+		# Campaign fix-engine (w4-4): the tap feeds the statics that read
+		# tapped state (Castle's +0/+2, Maraxus) and the 1997 "tapped
+		# artifacts stop" mark at once — as tap_permanent and tap_for_mana
+		# do — so the state-based check before the activator keeps priority
+		# sees the tapped creature's real toughness (CR 613, 704.3).
+		_recalculate_for_tap_change()
 		# The PERMANENT'S controller, not the activator — the convention
 		# this event keeps at all five of its dispatch sites (the long note
 		# at the BECAME_TAPPED dispatch in tap_for_mana has the reasoning,
@@ -3771,6 +3778,13 @@ func pass_priority(pid: int) -> String:
 		return err
 	if priority_player != pid:
 		return "you don't have priority"
+	# A seat passing with its announcement bracket open has abandoned the
+	# cast (campaign fix-engine w7-5): what its payment triggered goes on
+	# the stack FIRST, and the pass then starts a fresh round over it.
+	if _announcing == pid:
+		end_announcement(pid)
+		if game_over or awaiting_choice != null or priority_player != pid:
+			return ""   # held on a trigger's target question, or over
 	if undo_log != null:
 		_rec(self, &"_passes")
 		_rec(self, &"priority_player")
@@ -3781,13 +3795,17 @@ func pass_priority(pid: int) -> String:
 		return ""
 	# Both passed.
 	_passes = 0
-	if not stack.is_empty():
+	if (awaiting_damage_prevention or awaiting_regeneration) \
+			and stack.size() <= _damage_window_floor:
+		# Nothing was cast IN the step: it ends. An OLDER item (a Giant
+		# Growth cast before the Bolt whose damage is waiting) does not
+		# resolve inside it (campaign fix-engine w4-2, `Duel.hlp`).
+		_close_damage_window()
+	elif not stack.is_empty():
 		# A prevention effect cast INSIDE the window still resolves inside
 		# it — the window is a priority round like any other, and its
 		# pools are drawn down when the packets land (§6.8).
 		_resolve_top()
-	elif awaiting_damage_prevention or awaiting_regeneration:
-		_close_damage_window()
 	else:
 		_advance_step()
 	return ""
@@ -4149,8 +4167,11 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 		for attacker_id in against:
 			# CR 509.1h: being blocked is a status the attacker keeps for
 			# the rest of the combat, even if every blocker later dies or
-			# leaves.
-			combat.blocked_attackers[int(attacker_id)] = true
+			# leaves. And CR 702.22h: blocking one member of a BAND blocks
+			# every member (campaign fix-engine w3-1) — the band stays
+			# blocked if the member named here leaves combat.
+			for member_id in combat.band_of(int(attacker_id)):
+				combat.blocked_attackers[int(member_id)] = true
 			var blocked := find_instance(int(attacker_id))
 			# BLOCK HISTORY (the Glyph cycle): the blocker remembers WHO it
 			# blocked this turn and who controlled them at that moment —
@@ -6230,8 +6251,10 @@ func _queue_damage(packet: DamagePacket) -> bool:
 		# own answer.
 		if existing.matches(packet) and existing.after_landing.is_empty() \
 				and packet.after_landing.is_empty():
+			if undo_log != null: undo_log.record_object(existing)   # w4-5
 			existing.absorb(packet)
 			return true
+	_rec(self, &"damage_pending")   # campaign fix-engine w4-5: journaled
 	damage_pending.append(packet)
 	return true
 
@@ -6241,23 +6264,31 @@ func _queue_damage(packet: DamagePacket) -> bool:
 ## every moment a player would receive priority — the same moment CR 704.3
 ## checks state-based actions, and the moment `Duel.hlp` puts the step.
 ##
-## AUTO-SKIP when no seat holds a prevention effect at all. That is not a
-## rules shortcut: the window's ONLY legal action is a prevention effect,
-## so a window nobody could act in can only be passed.
+## AUTO-SKIP when no seat COULD hold a prevention effect — judged on PUBLIC
+## information only ([method _window_publicly_possible], campaign
+## fix-engine w4-3): the window's ONLY legal action is a prevention effect,
+## so a window nobody could act in can only be passed. Until the campaign
+## this read the HANDS, and whether the step appeared told a seat with
+## nothing to use that the other held a Healing Salve. Each seat now passes
+## the step on its own information (the AI at once; the duel screen
+## auto-passes a human with nothing usable).
+##
+## THE FLOOR (w4-2): the stack height as the step opens. Both players
+## passing in the step resolves only what was cast IN it (a prevention
+## effect); with nothing above the floor they end the step — an older
+## spell (a Giant Growth cast before the Bolt) waits until after it.
 func _maybe_open_damage_window() -> bool:
 	if awaiting_damage_prevention or awaiting_regeneration:
 		return false
 	if damage_pending.is_empty() or not _damage_window_armed():
 		return false
-	var anyone := false
-	for p in players:
-		if _has_window_effect(p.id, true):
-			anyone = true
-			break
-	if not anyone:
+	if not _window_publicly_possible(true):
 		_land_pending_damage()
 		return awaiting_regeneration
+	_rec(self, &"awaiting_damage_prevention")
+	_rec(self, &"_damage_window_floor")
 	awaiting_damage_prevention = true
+	_damage_window_floor = stack.size()
 	log_line("Damage prevention")   # @PROMPT_CHECKFEPHASE[0]
 	return true
 
@@ -6303,12 +6334,19 @@ func damage_prevention_request() -> Dictionary:
 ## the regeneration window releases the deferred state-based actions, which
 ## is when the creatures nobody saved finally die.
 func _close_damage_window() -> void:
+	# Campaign fix-engine w4-5: every write journaled, so a search that
+	# explored a step's end puts it back.
 	if awaiting_regeneration:
+		_rec(self, &"awaiting_regeneration")
+		_rec(self, &"regeneration_candidates")
+		_rec(self, &"_defer_depth")
+		_rec(self, &"_defer_state_based_actions")
 		awaiting_regeneration = false
 		regeneration_candidates.clear()
 		end_simultaneous()   # the bracket _land_pending_damage left open
 		_open_priority()
 		return
+	_rec(self, &"awaiting_damage_prevention")
 	awaiting_damage_prevention = false
 	_land_pending_damage()
 
@@ -6320,6 +6358,11 @@ func _close_damage_window() -> void:
 ## are still simultaneous (CR 510.4 / 104.4b) — and so nothing dies before
 ## the regeneration window, which is why the bracket is left OPEN across it.
 func _land_pending_damage() -> void:
+	# Campaign fix-engine w4-5: the waiting packets and the simultaneous
+	# bracket (left OPEN across a regeneration step) are journaled.
+	_rec(self, &"damage_pending")
+	_rec(self, &"_defer_depth")
+	_rec(self, &"_defer_state_based_actions")
 	var packets := damage_pending.duplicate()
 	damage_pending.clear()
 	begin_simultaneous()
@@ -6336,6 +6379,16 @@ func _land_pending_damage() -> void:
 		_open_priority()
 		return
 	if _open_regeneration_window():
+		# The step is a priority round of its own, and it starts with the
+		# ACTIVE player, as every other priority round does — not with
+		# whoever happened to pass the prevention step last (campaign
+		# fix-engine: the prevention step now opens on public information,
+		# so the two steps follow each other far more often).
+		_rec(self, &"priority_player")
+		_rec(self, &"_passes")
+		priority_player = active_player
+		_passes = 0
+		_emit_state()
 		return
 	end_simultaneous()
 	_open_priority()
@@ -6366,23 +6419,24 @@ func _flush_stranded_damage() -> void:
 ## the doomed creatures are still on the battlefield and their controller
 ## can still pay.
 ##
-## Auto-skips when nobody holds a regeneration effect, for the same reason
-## the prevention window does: it is the window's only legal action.
+## Auto-skips when nobody COULD hold a regeneration effect, for the same
+## reason the prevention window does: it is the window's only legal action
+## — judged on public information only, and with the same stack FLOOR
+## (campaign fix-engine w4-3, w4-2; see [method _maybe_open_damage_window]).
 func _open_regeneration_window() -> bool:
 	if not _damage_window_armed():
 		return false
-	regeneration_candidates = _creatures_about_to_die()
-	if regeneration_candidates.is_empty():
+	var doomed := _creatures_about_to_die()
+	if doomed.is_empty():
 		return false
-	var anyone := false
-	for p in players:
-		if _has_window_effect(p.id, false):
-			anyone = true
-			break
-	if not anyone:
-		regeneration_candidates.clear()
+	if not _window_publicly_possible(false):
 		return false
+	_rec(self, &"regeneration_candidates")
+	_rec(self, &"awaiting_regeneration")
+	_rec(self, &"_damage_window_floor")
+	regeneration_candidates = doomed
 	awaiting_regeneration = true
+	_damage_window_floor = stack.size()
 	log_line("Use Regeneration Effects")   # @PROMPT_CHECKFEPHASE[11]
 	return true
 
@@ -6406,6 +6460,10 @@ func _creatures_about_to_die() -> Array[int]:
 ## Does [param pid] hold anything they could legally use in the window —
 ## a spell in hand or an activated ability on the battlefield whose every
 ## effect is of the right family? [param prevention] picks which window.
+## THE SEAT'S OWN QUESTION (it reads [param pid]'s hand): for that seat's
+## agent or screen deciding to pass an open step at once — never for
+## whether the step opens, which [method _window_publicly_possible] decides
+## on public information (campaign fix-engine w4-3).
 ## Affordability is deliberately NOT checked: a player may tap lands
 ## during the step (a mana source "is neither a spell nor an effect",
 ## manual p.95).
@@ -9042,10 +9100,11 @@ func _spell_target_specs(data: CardData, mode := 0) -> Array[TargetSpec]:
 # standing untapped beside it.
 #
 # SIMPLIFIED (engine-wide, docs/ROADMAP.md): the payer does not CHOOSE the
-# sources — the planner's own order decides (sacrifices last, painless
-# before painful, the least flexible source first, and among equals the one
-# holding nothing back) — and the two shapes that would ASK a question to
-# activate are left out of the plan (see [method _mana_ability_asks]).
+# sources — the planner's own order decides (sacrifice last, then a tap an
+# Aura punishes, then a source that does not untap, painful after
+# painless; the least surplus within those) — and the two shapes that
+# would ASK a question to activate are left out of the plan (see [method
+# _mana_ability_asks]).
 
 ## Can [param pid] cover [param cost] right now? (Pure check — the hint
 ## for choose_yes_no offers, and the duel screen's activatable highlight.)
@@ -9067,6 +9126,11 @@ func try_pay(pid: int, cost: ManaCost, usage_keys: Array = []) -> bool:
 	if plan == null:
 		return false
 	for step in plan:
+		# Campaign fix-mana (2026-10-07, w1-1): covered already — a mana
+		# trigger the plan did not price (Mana Flare) made the rest, and
+		# every further tap would only float mana to burn.
+		if players[pid].mana_pool.can_pay(cost, 0, usage_keys):
+			break
 		if step[0] == null:
 			continue   # mana already floating — there is nothing to tap
 		if ManaPlanner.run_step(self, pid, step) != "":
@@ -11310,12 +11374,17 @@ func remove_from_combat(inst: CardInstance, unblock_solo_attackers := false) -> 
 	# blocker. Whatever it was blocking STAYS blocked (509.1h) unless the
 	# card below says otherwise.
 	combat.forget(inst.id)
+	# A BAND it was blocking (CR 702.22h) had become blocked by it as a
+	# whole, so the whole band goes free when no blocker of the band is
+	# left (campaign fix-engine w3-1: every member is marked blocked now).
+	var band: Array = combat.band_of(was_blocking) if was_blocking != -1 else []
 	if unblock_solo_attackers and was_blocking != -1 \
-			and combat.blockers_of(was_blocking).is_empty():
-		combat.blocked_attackers.erase(was_blocking)
-		var freed := find_instance(was_blocking)
-		if freed != null:
-			log_line("%s is unblocked" % freed.data.card_name)
+			and combat.blockers_of_band(band).is_empty():
+		for member_id in band:
+			combat.blocked_attackers.erase(int(member_id))
+			var freed := find_instance(int(member_id))
+			if freed != null:
+				log_line("%s is unblocked" % freed.data.card_name)
 	recalculate()
 
 
@@ -12174,6 +12243,11 @@ func _newest_duplicate_legend(legend_name: String) -> CardInstance:
 func draw_game(reason: String) -> void:
 	if game_over:
 		return
+	# Journaled (campaign fix-engine w4-5): a search that explored a
+	# game-ending line puts the game back unfinished.
+	_rec(self, &"game_over")
+	_rec(self, &"is_draw")
+	_rec(self, &"winner")
 	game_over = true
 	is_draw = true
 	winner = -1
@@ -12242,6 +12316,10 @@ func _lose(pid: int, reason: String) -> void:
 	# [member winner] or emit [signal game_ended] again.
 	if game_over or players[pid].has_lost:
 		return
+	# Journaled (campaign fix-engine w4-5), as draw_game is.
+	_rec(players[pid], &"has_lost")
+	_rec(self, &"game_over")
+	_rec(self, &"winner")
 	players[pid].has_lost = true
 	game_over = true
 	winner = opponent_of(pid)
@@ -12287,15 +12365,17 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 	# GRAVEYARD listeners (Nether Shadow) — only the turn-based events reach
 	# them, so the dispatcher's hot path (damage, taps, draws) is untouched.
 	#
-	# APNAP (CR 603.3b) HOLDS HERE ONLY BECAUSE EVERY GRAVEYARD TRIGGER IN
-	# THE POOL IS SELF-SCOPED. These go on the stack in seat order and
-	# BEFORE the battlefield pass, so they resolve after every battlefield
-	# trigger. That is legal while they can only belong to the ACTIVE player
-	# — "at the beginning of YOUR upkeep" (Nether Shadow, Hazezon Tamar's
-	# delayed sandstorm), where the order among one player's own triggers is
-	# that player's choice. A graveyard trigger that fired on the OPPONENT's
-	# upkeep or on a shared end step would need this loop folded into the
-	# APNAP pass below.
+	# APNAP (CR 603.3b) ACROSS ZONES (campaign fix-engine w4-6). Graveyard
+	# triggers are no longer all self-scoped: Krovikan Horror's "at the
+	# beginning of THE end step" fires for both seats on either turn. So
+	# they are COLLECTED here per seat and put on the stack with that
+	# seat's battlefield triggers in the APNAP pass below — the active
+	# player's first (each seat's graveyard ones ahead of its battlefield
+	# ones, the order among one player's own triggers being that player's
+	# choice). Until the campaign they went on in seat order ahead of every
+	# battlefield trigger, so on the second seat's turn the first seat's
+	# trigger went on first and resolved last.
+	var grave_items: Array = [[], []]
 	if type == Mtg.EventType.UPKEEP_START or type == Mtg.EventType.END_STEP_START:
 		for p in players:
 			var crawl: Array[CardInstance] = []
@@ -12316,7 +12396,7 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 					grave_item.event = event
 					grave_item.description = "%s — %s" % [
 						buried.data.card_name, grave_trig.text]
-					_push_trigger(grave_item)
+					(grave_items[buried.owner_id] as Array).append(grave_item)
 	# "When this card is put into your graveyard from your library" (Gaea's
 	# Blessing, CR 603.6a): the card that just MOVED hears its own trip
 	# with its graveyard triggers. Only the moved card is offered, so the
@@ -12339,6 +12419,10 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 	var delayed_listen := _delayed_listens(type)
 	var death_batch := type in [Mtg.EventType.DIES, Mtg.EventType.LEAVES_BATTLEFIELD] and not _departure_batch.is_empty()
 	if also_listen == null and not delayed_listen and not death_batch and not _trigger_index.has(type):
+		# No battlefield listener: the graveyard triggers alone, APNAP.
+		for seat in [active_player, opponent_of(active_player)]:
+			for grave_item in grave_items[seat]:
+				_push_trigger(grave_item)
 		return
 	# APNAP: the active player's permanents are offered the event first, so
 	# their triggers go on the stack first and resolve last (CR 603.3b) —
@@ -12364,6 +12448,8 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 			else int(data.get("from_controller", data.get("controller", also_listen.controller_id)))
 	for seat_index in seats.size():
 		var pid := seats[seat_index]
+		for grave_item in grave_items[pid]:   # this seat's graveyard triggers (w4-6)
+			_push_trigger(grave_item)
 		var listeners: Array[CardInstance] = players[pid].battlefield.duplicate()
 		if departed_seat == pid and not listeners.has(also_listen):
 			listeners.append(also_listen)
@@ -12451,6 +12537,12 @@ func _unfreeze_stack() -> void:
 		_rec(self, &"_stack_frozen")
 		_rec(self, &"_waiting_triggers")
 	_stack_frozen = false
+	# The object an announcement was paying for is on the stack: the
+	# bracket ([method begin_announcement], campaign fix-engine w7-5)
+	# ends with this freeze, and what it held goes on above the object.
+	if _announcing != -1:
+		_rec(self, &"_announcing")
+		_announcing = -1
 	if _waiting_triggers.is_empty():
 		return
 	var waiting := _waiting_triggers
@@ -16608,3 +16700,181 @@ func grant_protection_permanently(inst: CardInstance, colors: int) -> void:
 func _row_forces_x_zero(inst: CardInstance, payment: Dictionary) -> bool:
 	return inst.data.cost.x_count > 0 and is_alternative_payment(payment) \
 		and not (payment.get("cost", inst.data.cost) as ManaCost).has_x
+
+
+# --- Campaign fix-engine: the 1997 damage steps on public information, the announcement bracket ---
+
+## The stack height as the open damage-prevention or regeneration step
+## began (campaign w4-2). Both players passing in the step resolve only
+## an item ABOVE it — a prevention or regeneration effect used in the step
+## — and with nothing above it they end the step; an older spell waits
+## until after. Set by [method _maybe_open_damage_window] and [method
+## _open_regeneration_window]; read by [method pass_priority]. Journaled
+## at its writes and in [constant TURN_FIELDS].
+var _damage_window_floor := 0
+
+
+## COULD anyone act in a damage step of this kind — asked on PUBLIC
+## information only (campaign w4-3 = w5-8): an activated ability of the
+## step's family on a seat's battlefield, a paid prevention the seat holds
+## (Guardian Angel, [member MtgPlayer.paid_prevention]), or ANY card in a
+## seat's hand — how many cards a hand holds is public, which ones is not,
+## so a hand that is not empty may hold the Healing Salve. This is what
+## decides whether the step appears; whether a seat has anything USABLE
+## is that seat's own question ([method _has_window_effect]), asked by the
+## seat's agent or screen to pass the step at once. Every hand card that
+## [method _has_window_effect] would find opens the step here too, so no
+## seat that holds an answer ever loses the step.
+func _window_publicly_possible(prevention: bool) -> bool:
+	for p in players:
+		if not p.hand.is_empty():
+			return true
+		if prevention and not p.paid_prevention.is_empty():
+			return true
+		for inst in p.battlefield:
+			for ability in inst.cur_activated_abilities:
+				if _effects_fit_window(ability.effects, prevention):
+					return true
+	return false
+
+
+## THE ANNOUNCEMENT BRACKET (campaign w7-5, CR 601.2a-i, 603.3). The seat
+## whose announced spell or ability is being paid for, or -1. While it is
+## open the stack is FROZEN ([member _stack_frozen]): what the seat's mana
+## abilities trigger as it pays — City of Brass's "becomes tapped",
+## Manabarbs, Kudzu, Psychic Venom — waits in [member _waiting_triggers],
+## because nobody receives priority between the announcement and the
+## object being on the stack. Journaled at every write.
+var _announcing := -1
+
+
+## [param pid] has ANNOUNCED a spell or an ability (CR 601.2a) and is about
+## to activate mana abilities to pay for it (601.2g) — the front end's call
+## as it starts paying for its pending cast (the duel screen's paying
+## mode and auto-tap, the network referee's autopay). Opens the bracket:
+## every trigger raised from here on waits, and the cast or activation
+## that follows ([method cast_spell], [method activate_ability]) closes it
+## by putting them on the stack ABOVE the object, in APNAP order — the
+## freeze those two already take for the cost they pay themselves. Without
+## an announcement a mana ability's trigger goes on the stack at once (CR
+## 117.3c: its activator receives priority afterward), and a creature
+## cannot then be cast over it.
+##
+## "" when open (also when it already was, for this seat), else why not:
+## only the seat holding priority announces, and not while a question, a
+## declaration or a cost being paid holds the duel. The bracket ends with
+## the cast or activation, [method end_announcement] (an abandoned
+## announcement), the seat passing priority, or the step ending.
+func begin_announcement(pid: int) -> String:
+	if _announcing == pid:
+		return ""
+	var err := _act_precheck(pid)
+	if err != "":
+		return err
+	if priority_player != pid:
+		return "you don't have priority"
+	if _announcing != -1 or _stack_frozen:
+		return "a cost is already being paid"
+	_rec(self, &"_announcing")
+	_announcing = pid
+	_freeze_stack()
+	return ""
+
+
+## Close [param pid]'s announcement bracket WITHOUT casting (the player
+## cancelled, or the front end gave up on the cast): whatever its payment
+## triggered goes on the stack now, in APNAP order, and the seat keeps
+## priority (CR 117.3c) with the mana it made still in its pool. A no-op
+## when the seat has no bracket open — safe to call from every way out of
+## a pending cast, the successful one included.
+func end_announcement(pid: int) -> void:
+	if _announcing != pid or pid < 0:
+		return
+	_rec(self, &"_announcing")
+	_announcing = -1
+	_unfreeze_stack()
+	if not game_over:
+		_resume_priority(pid)
+
+
+## Is [param pid]'s announcement bracket open ([method begin_announcement])?
+func announcement_open(pid: int) -> bool:
+	return pid >= 0 and _announcing == pid
+
+
+# --- Campaign fix-ui helpers ---
+
+## WOULD [method activate_ability] REFUSE [param inst]'s ability
+## [param index] for [param pid] whatever targets and X the player chose?
+## "" when some choice of them goes through now. The front end's one
+## reading of "this ability can be used" — the actionable-permanent cue,
+## the response test and the floated-mana stop of the duel screen ask it,
+## so a light or a held window is never an activation the engine refuses
+## (campaign w5-4, w5-7, w5-10).
+##
+## What it reads, in [method activate_ability]'s order: the announcement
+## ([method ability_announce_refusal] — the holds, the zone, phasing, WHO
+## may activate it (an opponents-only ability on your own permanent is
+## refused, an any-player one on theirs is not), the damage window, the
+## printed timing and the bans, once each turn, a {T} source, the cost
+## bodies, the life, cards and counters), then a legal candidate for every
+## target group that wants one — the caster's AND the ones the game or an
+## opponent fills, which the engine refuses just the same when empty —
+## judged at the least X the ability takes ([method casting_x]), then the
+## MANA at that X ([method ability_payment]): the floating pool alone with
+## [param floating_only], else the pool and every source [ManaPlanner]
+## could still tap, minus [param excluded] (the 1997 `Don't auto tap`
+## set) and minus the source itself when the ability taps it.
+##
+## PRIORITY IS NOT AMONG THEM — a moment, not a property of the ability,
+## exactly as for [method ability_announce_refusal]. Pure reads: the
+## proposed X is pushed and popped inside this call.
+func activation_refusal(pid: int, inst: CardInstance, index: int,
+		excluded: Dictionary = {}, floating_only := false) -> String:
+	var why := ability_announce_refusal(pid, inst, index)
+	if why != "":
+		return why
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var x := maxi(0, ability.min_x)
+	var was := _push_proposed_x(inst, x)
+	for effect in ability.effects:
+		var spec: TargetSpec = effect.target_spec
+		if spec == null or effect.target_count_is_x or effect.target_range(x).x <= 0:
+			continue
+		if spec.legal_targets(self, inst).is_empty():
+			why = "no legal target for '%s'" % spec.description
+			break
+	_pop_proposed_x(inst, was)
+	if why != "":
+		return why
+	var payment := ability_payment(pid, inst, index, x)
+	var cost: ManaCost = payment["cost"]
+	var extra := int(payment["extra"])
+	if ManaPlanner.cost_is_free(cost) and extra <= 0:
+		return ""
+	if players[pid].mana_pool.can_pay(cost, extra, payment["usage"],
+			players[pid].mana_substitutions):
+		return ""
+	var unpaid := "not enough mana (%s)" % (ability.cost.text if ability.cost.text != "" else "{0}")
+	if floating_only:
+		return unpaid
+	var skip := excluded
+	if ability.tap_cost:
+		skip = excluded.duplicate()
+		skip[inst.id] = true
+	if ManaPlanner.plan(self, pid, cost, extra, payment["usage"], skip).is_empty():
+		return unpaid
+	return ""
+
+
+## [param spec]'s refusal of [param ref] if [param source] were cast or
+## activated for X = [param x_value] — the WHY-word twin of
+## [method target_legal_at], for a front end aiming a "mana value X" spell
+## (Detonate, Spell Blast, Gorilla Shaman) before it is announced
+## (campaign w5-2). "" when legal. Pure: the proposal is popped inside.
+func target_refusal_at(spec: TargetSpec, ref: TargetRef, source: CardInstance,
+		x_value: int, earlier: Array = []) -> String:
+	var was := _push_proposed_x(source, x_value)
+	var why := spec.refusal_reason(self, ref, source, earlier)
+	_pop_proposed_x(source, was)
+	return why

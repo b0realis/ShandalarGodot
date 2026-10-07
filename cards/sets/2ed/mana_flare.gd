@@ -30,12 +30,19 @@ extends CardScript
 
 
 func build() -> CardData:
+	var bonus := TriggeredAbility.new(
+		Mtg.EventType.TAPPED_FOR_MANA,
+		_bonus_mana,
+		"Whenever a player taps a land for mana, that player adds one mana of any type that land produced.") \
+		.as_mana_trigger()
+	# The planner's public description of the bonus (ManaPlanner.
+	# _bonus_triggers): every land, one more mana of the type it made
+	# (colour 0), so a plan taps two Mountains for a Hill Giant.
+	bonus.mana_bonus_subtype = ManaPlanner.BONUS_ANY_LAND
+	bonus.mana_bonus_color = 0
+	bonus.mana_bonus_amount = 1
 	return CardData.new("Mana Flare", "{2}{R}", Mtg.CardType.ENCHANTMENT) \
-		.triggered(TriggeredAbility.new(
-			Mtg.EventType.TAPPED_FOR_MANA,
-			_bonus_mana,
-			"Whenever a player taps a land for mana, that player adds one mana of any type that land produced.")
-			.as_mana_trigger()) \
+		.triggered(bonus) \
 		.oracle("Whenever a player taps a land for mana, that player adds one mana of any type that land produced.")
 
 

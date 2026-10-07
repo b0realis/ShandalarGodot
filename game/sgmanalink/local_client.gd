@@ -9,6 +9,9 @@ const COMMAND_TIMEOUT_MS := 15000
 ## Connections a host may close on the hello, without a welcome or a reason,
 ## before this client stops retrying it (2026-10-03).
 const UNANSWERED_LIMIT := 3
+## [method command]'s refusal while the connection is down or a command
+## is still in flight — never the seat's own mistake.
+const NOT_CONNECTED := "Wait for the connection or the current action."
 var state: Dictionary = {"rooms": [], "room": {}}
 var status := "Not connected"
 var command_error := ""
@@ -163,7 +166,7 @@ func reconnect() -> void:
 
 
 func command(action: Dictionary) -> bool:
-	command_error = "Wait for the connection or the current action."
+	command_error = NOT_CONNECTED
 	if not online or busy() or _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return false
 	var message := {"v": SgProtocol.VERSION, "type": "command", "seq": _seq,

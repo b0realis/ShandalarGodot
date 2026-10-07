@@ -53,6 +53,13 @@ func _bitten_by_cobra(token: bool) -> CardInstance:
 	run_combat([cobra.id])
 	assert_eq(g.players[0].poison, 1, "bitten")
 	assert_eq(g.settleable_delayed_triggers(0).size(), 1, "the ransom is owed")
+	# The referee offers a ransom only while the seat could pay it now
+	# (whole-game campaign 2026-10-07, SgDuelActions.special_refusal):
+	# two Islands to pay with, and the seat holding priority.
+	put_battlefield(0, "Island")
+	put_battlefield(0, "Island")
+	if g.priority_player == 1: assert_ok(g.pass_priority(1))
+	assert_eq(g.priority_player, 0)
 	return cobra
 
 

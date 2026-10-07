@@ -177,16 +177,27 @@ func test_the_pace_counts_turns_and_not_cards() -> void:
 			assert_eq(ai._library_slack(g), 1,
 				"a race held by two turns, one card of it spendable")
 		else:
-			assert_eq(ai._library_slack(g), 1 << 20,
+			# Lost — and since the whole-game campaign (fix-ai-c, w6-5)
+			# the turns our board needs are still kept (no clock here:
+			# RACE_HORIZON); the unbounded answer is the forecasts_tactics
+			# null arm's.
+			assert_eq(ai._library_slack(g), 12 - AiPlayer.RACE_HORIZON,
 				"off: 12 minus 30 is negative, so the race reads lost")
+			ai.profile.forecasts_tactics = false
+			assert_eq(ai._library_slack(g), 1 << 20, "null arm: unbounded")
 
 
 func test_the_pace_is_the_expression_it_always_was_with_no_mill() -> void:
 	# THE NULL. Every count below is the one `paces_draws` has answered
-	# since 2026-09-07, on both arms, because `_mill_rate` is 0.
+	# since 2026-09-07, on both arms, because `_mill_rate` is 0 — except a
+	# LOST race (10/10 and 40/40, our draw step next), which since the
+	# whole-game campaign (fix-ai-c, w6-5) keeps the turns our board needs
+	# (no clock here: RACE_HORIZON) instead of reading unbounded; the old
+	# unbounded answer is pinned on the forecasts_tactics null arm in
+	# test_ai_paces_draws_2026_09_07.gd.
 	for knob in [false, true]:
-		for pair in [[20, 12, 7], [10, 10, 1 << 20], [40, 40, 1 << 20],
-				[30, 5, 24], [25, 1, 23]]:
+		for pair in [[20, 12, 7], [10, 10, 10 - AiPlayer.RACE_HORIZON],
+				[40, 40, 40 - AiPlayer.RACE_HORIZON], [30, 5, 24], [25, 1, 23]]:
 			before_each()
 			var ai := _ai(_on() if knob else _off())
 			_libraries(pair[0], pair[1])
@@ -197,7 +208,9 @@ func test_the_pace_is_the_expression_it_always_was_with_no_mill() -> void:
 func test_a_mill_of_theirs_shortens_our_own_pace() -> void:
 	# Their Millstone takes our twenty cards to seven turns against their
 	# twelve: a race we have already lost, and a lost race is not ours to
-	# protect — `paces_draws`' own rule, reached through the rate.
+	# protect — `paces_draws`' own rule, reached through the rate. Since the
+	# whole-game campaign (fix-ai-c, w6-5) the turns our board needs are
+	# still kept, three cards a turn (RACE_HORIZON turns with no clock).
 	for knob in [false, true]:
 		before_each()
 		var ai := _ai(_on() if knob else _off())
@@ -205,7 +218,10 @@ func test_a_mill_of_theirs_shortens_our_own_pace() -> void:
 		_libraries(20, 12)
 		if knob:
 			assert_eq(ai._deck_clock(g, 0), 7, "20 over 3")
-			assert_eq(ai._library_slack(g), 1 << 20, "seven turns against twelve")
+			assert_eq(ai._library_slack(g), 20 - 3 * AiPlayer.RACE_HORIZON,
+				"seven turns against twelve: lost, and four turns of ours kept")
+			ai.profile.forecasts_tactics = false
+			assert_eq(ai._library_slack(g), 1 << 20, "null arm: not ours to protect")
 		else:
 			assert_eq(ai._library_slack(g), 7, "off: 20 minus 12 minus 1")
 

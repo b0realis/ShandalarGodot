@@ -44,10 +44,15 @@ extends RefCounted
 
 ## The untapped mana sources [param pid] has right now, sorted the way the
 ## planner wants them:
-## `[inst, ability_index, color, amount, sacrifice, restriction_key, pain,
+## `[inst, ability_index, color, amount, rank, restriction_key, pain,
 ## holds]`. Opted-in mana converters add a ninth Dictionary with their
 ## activation cost, repeatability and floating-pool snapshot. They are never
 ## counted as free sources; `mana_conversion_planner.gd` orders their costs.
+## `amount` counts the bonus mana of the mana triggers on the battlefield
+## that describe themselves ([method _bonus_reaches]). `rank` is what the
+## tap spends BESIDES the mana ([method source_rank]): 0 for a Forest, and
+## bits for a source that does not untap, one an Aura punishes for being
+## tapped, and one that is sacrificed or exiled.
 ## `restriction_key` is "" for ordinary mana and the
 ## [member ManaAbility.restriction_key] of mana that may pay only for one
 ## kind of spell (Mishra's Workshop's "artifact") — a source a plan may use
@@ -83,18 +88,21 @@ extends RefCounted
 ## planning its own casts.
 static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 		mind_pain := true, viewer := -1) -> Array:
-	var out: Array = []   # [inst, index, color, amount, sacrifice, key, pain, holds]
+	var out: Array = []   # [inst, index, color, amount, rank, key, pain, holds]
 	# Mana already floating (a resolved Dark Ritual) is a source that costs
 	# nothing to "tap": a null instance the executors skip. Without it the
 	# Ritual's {B}{B}{B} sat in the pool until the step ended and burned.
 	var pool := game.players[pid].mana_pool
 	for color in Mtg.ManaColor.values():
 		for unit in pool.amount_of(color):
-			out.append([null, unit, color, 1, false, "", 0, 0])   # one unit per entry
+			out.append([null, unit, color, 1, 0, "", 0, 0])   # one unit per entry
 	for key in pool._restricted:
 		for color in pool._restricted[key]:
 			for unit in int(pool._restricted[key][color]):
-				out.append([null, unit, int(color), 1, false, String(key), 0, 0])
+				out.append([null, unit, int(color), 1, 0, String(key), 0, 0])
+	# The mana triggers that describe their bonus, read once per build
+	# rather than once per row ([method _bonus_triggers]).
+	var bonus_triggers := _bonus_triggers(game)
 	var candidates: Array[CardInstance] = game.players[pid].battlefield + game.players[pid].hand
 	# ACTIVATION BANS reach mana abilities (CR 605.1a — Null Rod's Mox,
 	# Cursed Totem's Elves, City of Solitude's off-turn lands): a banned
@@ -115,6 +123,7 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 		# Read once per instance, not once per comparison: the sort asks for
 		# it O(n log n) times and the answer is the same every time.
 		var holds := holds_untapped(inst)
+		var tap_rank := _tap_rank(game, inst)
 		for index in inst.cur_mana_abilities.size():
 			var ability := game.mana_ability_for(pid, inst, index)
 			var borrowed := inst.zone == Mtg.Zone.BATTLEFIELD and inst.controller_id != pid
@@ -176,7 +185,8 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 				colors = [int(ability.dynamic_color.call(game, inst))]
 			for color_choice in colors:
 				var row := _source_row(game, pool, inst, index, ability,
-					int(color_choice), amount, holds, mind_pain, borrowed)
+					int(color_choice), amount, holds, mind_pain, borrowed,
+					bonus_triggers, tap_rank)
 				if borrowed and not row.is_empty():
 					# These legacy restrictions already mean spells only;
 					# conjunct keys preserve any other restriction as well.
@@ -189,8 +199,9 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 					out.append(row)
 	if pool.spend_as_any != 0 or pool.colorless_only != 0:
 		out = _under_spending_rule(out, pool)
-	# Fewer options first; painful sources after painless; sacrifices last;
-	# and last of all, the source that is holding something back.
+	# Sacrifices last, then a tap an Aura punishes, then a source that does
+	# not untap; painful sources after painless; fewer options first; and
+	# last of all, the source that is holding something back.
 	out.sort_custom(cheapest_source_first)
 	return out
 
@@ -240,33 +251,30 @@ static func _counter_kills(inst: CardInstance, ability: ManaAbility) -> bool:
 ## [method sources]); `[]` when the ability is not one the planner models.
 static func _source_row(game: MtgGame, pool: ManaPool, inst: CardInstance,
 		index: int, ability: ManaAbility, color: int, amount: int, holds: int,
-		mind_pain: bool, borrowed := false) -> Array:
+		mind_pain: bool, borrowed := false, bonus_triggers: Array = [],
+		tap_rank := 0) -> Array:
 	# Only public descriptors, never speculative callbacks or RNG.
 	# Snowfall's restricted blue bonus is not ordinary island mana,
 	# and High Tide still adds BLUE after Darkness recolors the land.
 	var bonuses: Array = []
 	if ability.taps_source and inst.is_land():
-		var triggers: Array = []
-		for entry in game.delayed_triggers: triggers.append(entry.trigger)
-		for permanent in game.all_battlefield():
-			if not permanent.cur_abilities_silenced:
-				triggers.append_array(permanent.cur_triggered_abilities)
-				continue
-			# Lost all its abilities: a trigger granted AFTER that still
-			# works, its printed ones never do — as the dispatcher reads it
-			# (MtgGame.trigger_silenced, CR 613.7 / 613.8a).
-			for granted in permanent.cur_triggered_abilities:
-				if not MtgGame.trigger_silenced(permanent, granted): triggers.append(granted)
-		for trigger in triggers:
-			if not trigger.is_mana_trigger or trigger.mana_bonus_amount <= 0 or not inst.has_subtype(trigger.mana_bonus_subtype): continue
+		for pair in bonus_triggers:
+			var trigger: TriggeredAbility = pair[0]
+			if not _bonus_reaches(trigger.mana_bonus_subtype, pair[1], inst): continue
 			var restriction: String = trigger.mana_bonus_restriction
 			if restriction == "cumulative_upkeep" and game.current_step() != Mtg.Step.UPKEEP: continue
 			var bonus: int = trigger.mana_bonus_amount
 			if (inst.cur_supertypes & Mtg.Supertype.SNOW) != 0: bonus += trigger.mana_bonus_snow_extra
-			if not borrowed and trigger.mana_bonus_color == color and restriction == ability.restriction_key: amount += bonus
-			else: bonuses.append([trigger.mana_bonus_color, bonus, restriction])
+			# Colour 0: "one mana of any type that land produced" (Mana
+			# Flare) — the colour this row makes.
+			var bonus_color: int = trigger.mana_bonus_color if trigger.mana_bonus_color != 0 else color
+			if not borrowed and bonus_color == color and restriction == ability.restriction_key: amount += bonus
+			else: bonuses.append([bonus_color, bonus, restriction])
+	var rank := RANK_SPENDS_SOURCE if ability.sacrifice_source or ability.exile_source else 0
+	if ability.taps_source:
+		rank |= tap_rank
 	var row: Array = [inst, index, color,
-		amount, ability.sacrifice_source or ability.exile_source, ability.restriction_key,
+		amount, rank, ability.restriction_key,
 		ability.pain if mind_pain else 0, holds]
 	if ability.planner_counter_cost and not ability.taps_source:
 		# Finite counter fuel, never a reusable free source. Search
@@ -293,6 +301,101 @@ static func _source_row(game: MtgGame, pool: ManaPool, inst: CardInstance,
 		row.append({"cost": null, "repeatable": false, "outputs": outputs,
 			"floating": pool._mana.duplicate(), "restricted": pool._restricted.duplicate(true)})
 	return row
+
+
+# --- Campaign fix-mana: bonus mana, tap tolls, untap locks (2026-10-07) ---
+
+## [member TriggeredAbility.mana_bonus_subtype] for a bonus on EVERY land
+## tapped for mana — Mana Flare's "whenever a player taps a land for mana".
+const BONUS_ANY_LAND := ""
+## [member TriggeredAbility.mana_bonus_subtype] for a bonus on the land the
+## trigger's own permanent ENCHANTS — Wild Growth's and Overgrowth's
+## "whenever enchanted land is tapped for mana". Two words, so it can never
+## be a land type.
+const BONUS_ENCHANTED_LAND := "enchanted land"
+
+## [method source_rank] bits: what tapping a source spends besides its mana.
+## A source that does not untap (Mana Vault, Basalt Monolith, anything under
+## a Meekstone- or Paralyze-style lock): the mana is had once.
+const RANK_STAYS_TAPPED := 1
+## A source wearing an Aura that punishes its tapping (Psychic Venom, Blight,
+## Kudzu, Orcish Mine, Relic Bind, Seizures, a Stinging Licid).
+const RANK_TAP_TOLL := 2
+## A source that is sacrificed or exiled to make its mana (Black Lotus,
+## Elvish Spirit Guide) — the planner's oldest "last".
+const RANK_SPENDS_SOURCE := 4
+
+
+## Every mana trigger on the battlefield (and every delayed one — High Tide)
+## that DESCRIBES its bonus ([member TriggeredAbility.mana_bonus_amount]),
+## as `[trigger, the permanent it is on or null]`: the planner counts that
+## mana as part of the land's own tap. Before 2026-10-07 the description
+## could name only a land TYPE and the land's own colour, so the bonus of a
+## Mana Flare, a Wild Growth or a Gauntlet of Might was unknown to every
+## plan: Hill Giant tapped four Mountains under a Flare, made eight red and
+## the four left over burned (w1-1, a Deck Lab Wizard burned for 11 at 5
+## life). [constant BONUS_ANY_LAND] and [constant BONUS_ENCHANTED_LAND]
+## widen what the description can say, and colour 0 means "a mana of the
+## type the land made" ([method _source_row]).
+static func _bonus_triggers(game: MtgGame) -> Array:
+	var out: Array = []
+	for entry in game.delayed_triggers:
+		var delayed: TriggeredAbility = entry.trigger
+		if delayed.is_mana_trigger and delayed.mana_bonus_amount > 0:
+			out.append([delayed, null])
+	for permanent in game.all_battlefield():
+		for trigger in permanent.cur_triggered_abilities:
+			if not trigger.is_mana_trigger or trigger.mana_bonus_amount <= 0:
+				continue
+			# Lost all its abilities: a trigger granted AFTER that still
+			# works, its printed ones never do — as the dispatcher reads it
+			# (MtgGame.trigger_silenced, CR 613.7 / 613.8a).
+			if permanent.cur_abilities_silenced and MtgGame.trigger_silenced(permanent, trigger):
+				continue
+			out.append([trigger, permanent])
+	return out
+
+
+## Does a bonus described for [param subtype] reach the land [param inst],
+## the trigger being on [param source] (null for a delayed one)?
+static func _bonus_reaches(subtype: String, source: CardInstance, inst: CardInstance) -> bool:
+	if subtype == BONUS_ANY_LAND:
+		return true
+	if subtype == BONUS_ENCHANTED_LAND:
+		return source != null and source.attached_to == inst.id
+	return inst.has_subtype(subtype)
+
+
+## The [method source_rank] bits a TAP of [param inst] costs, read once per
+## instance: [constant RANK_STAYS_TAPPED] and [constant RANK_TAP_TOLL]
+## (only a mana ability that taps the source pays them — [method _source_row]).
+##
+## THE TAP TOLL (w1-2): an attached Aura with a "becomes tapped" trigger —
+## Psychic Venom's 2 damage, Blight's and Kudzu's destroyed land, Orcish
+## Mine's ore counter, Relic Bind's ping, Seizures' {3}-or-3, Stinging
+## Licid's 2. Every one of them hurts the permanent's controller, whoever
+## controls the Aura (a Kudzu the victim passed back is its caster's own,
+## and still eats the land), so the controller is not asked. Read as a
+## SHAPE: the trigger's event, never the card. Until 2026-10-07 the planner
+## tapped the Venomed Forest first while two plain Forests stood untapped,
+## for the AI and for the human's double-click alike.
+static func _tap_rank(game: MtgGame, inst: CardInstance) -> int:
+	var rank := 0
+	if inst.zone == Mtg.Zone.BATTLEFIELD and (inst.cur_skips_untap or inst.skip_next_untap
+			or inst.skip_untaps > 0 or not inst.skip_untap_for.is_empty()):
+		rank |= RANK_STAYS_TAPPED
+	for id in inst.attachments:
+		var aura := game.find_instance(id)
+		if aura == null or aura.zone != Mtg.Zone.BATTLEFIELD or aura.attached_to != inst.id:
+			continue
+		for trigger in aura.cur_triggered_abilities:
+			if trigger.is_mana_trigger or not trigger.listens(Mtg.EventType.BECAME_TAPPED):
+				continue
+			if aura.cur_abilities_silenced and MtgGame.trigger_silenced(aura, trigger):
+				continue
+			rank |= RANK_TAP_TOLL
+			break
+	return rank
 
 
 ## The tap plan covering [param cost] against a pre-built [param src] list:
@@ -388,34 +491,240 @@ static func _plan_free_sources(src: Array, cost: ManaCost, x_value: int,
 	var generic := cost.generic + x_value
 	var floating := pool_check.total() - cost.mana_value() + cost.generic
 	generic -= maxi(floating, 0)
-	var generic_rows: Dictionary = {}   # source key -> true: taken by THIS pass
+	if not _cover_generic(src, generic, usage_keys, out, used_instances, cost.colored):
+		return []
+	_drop_surplus(out, used_instances, cost, x_value, usage_keys)
+	return out
+
+
+## THE GENERIC MANA, PAID WITH THE LEAST LEFT OVER (2026-10-07, w6-1).
+## The pass this replaces took sources in [method sources]' order until the
+## cost was covered, and the size of a source was no key of that order: a
+## Sol Ring paid a one-drop beside an untapped Mountain, a Mana Vault paid an
+## Icy Manipulator's {1} beside an Island and stayed tapped, and under mana
+## burn (the 1997 rule — [member RulesOptions.mana_burn]) the rest burned:
+## 392 life in 300 tournament-deck duels, a Millstone activation to 1 life.
+##
+## Floating mana goes first, unit by unit — it is in the pool whatever is
+## tapped. Then each PERMANENT is one group (its rows are the ways it can
+## tap; a permanent a coloured pip already took offers only its richer rows
+## of that same colour, counted as the extra they make — THE SAME
+## PERMANENT'S RICHER ROW of 2026-10-03: Crystal Vein's "{T}, Sacrifice:
+## Add {C}{C}" beside its plain "{T}: Add {C}"). Tiers are climbed one at a
+## time ([method _tier]: nothing spent, then a painful tap, then a source
+## that stays tapped, a tolled one, a sacrifice), and the first tier whose
+## sources can cover the cost is searched for the cover with the LEAST
+## SURPLUS ([method _least_surplus]); among covers that leave as little,
+## the one that takes the sources earliest in [method sources]' order.
+## A permanent that can tap for several colours offers the colours of
+## [param pips] first (the cost's own coloured pips): a Black Lotus paying
+## the {1} of a {1}{U} makes blue, so [method _drop_surplus] can then let
+## the Island that paid the {U} go.
+## Appends to [param out] / [param used]; false when nothing covers it.
+static func _cover_generic(src: Array, need: int, usage_keys: Array, out: Array,
+		used: Dictionary, pips: Dictionary = {}) -> bool:
 	for s in src:
-		if generic <= 0:
-			break
-		if not source_usable(s, usage_keys):
-			continue
-		var key := source_key(s)
-		if used_instances.has(key):
-			# THE SAME PERMANENT'S RICHER ROW (2026-10-03). A source lists
-			# one row per mana ability, and only its first was ever tried:
-			# Crystal Vein's "{T}, Sacrifice: Add {C}{C}" sorts after its
-			# plain "{T}: Add {C}" (sacrifices last), found the instance
-			# taken and was skipped, so the Vein could not pay {2}. Once
-			# every cheaper row is spent and the cost is still short, a
-			# taken permanent may trade its row for a richer one — any
-			# colour for a row this pass took, the SAME colour for one a
-			# coloured pip took (the pip stays paid).
-			var upgraded := _upgrade_row(out, used_instances, key, s,
-				generic_rows.has(key))
-			generic -= upgraded
+		if need <= 0:
+			return true
+		if s[0] != null or used.has(source_key(s)) or not source_usable(s, usage_keys):
 			continue
 		out.append(step_of(s))
-		used_instances[key] = s
-		generic_rows[key] = true
-		generic -= s[3]
-	if generic > 0:
-		return []
+		used[source_key(s)] = s
+		need -= int(s[3])
+	if need <= 0:
+		return true
+	var groups: Array = []        # [key, [[amount, tier, row], ...], upgrade]
+	var at: Dictionary = {}       # key -> index into groups
+	var tiers: Dictionary = {}
+	for s in src:
+		if s[0] == null or not source_usable(s, usage_keys):
+			continue
+		var key := source_key(s)
+		var amount: int = int(s[3])
+		var upgrade := used.has(key)
+		if upgrade:
+			var was: Array = used[key]
+			if int(s[2]) != int(was[2]) or amount <= int(was[3]):
+				continue   # the pip it pays stays paid, in its own colour
+			amount -= int(was[3])
+		if not at.has(key):
+			at[key] = groups.size()
+			groups.append([key, [], upgrade])
+		var tier := _tier(s)
+		groups[int(at[key])][1].append([amount, tier, s])
+		tiers[tier] = true
+	for group in groups:
+		group[1] = _pip_colours_first(group[1], pips)
+	var ladder: Array = tiers.keys()
+	ladder.sort()
+	for top in ladder:
+		var picked := _least_surplus(groups, need, int(top))
+		if picked.is_empty():
+			continue
+		for choice in picked:
+			var group: Array = groups[int(choice[0])]
+			var row: Array = choice[1][2]
+			var key: String = group[0]
+			if bool(group[2]):
+				var old_step := step_of(used[key])
+				for i in out.size():
+					if out[i] == old_step:
+						out[i] = step_of(row)
+						break
+			else:
+				out.append(step_of(row))
+			used[key] = row
+		return true
+	return false
+
+
+## One permanent's [param options] (`[amount, tier, row]`, in
+## [method sources]' order) with, inside each tier, the rows making a
+## colour of [param pips] before the rest; stable otherwise.
+static func _pip_colours_first(options: Array, pips: Dictionary) -> Array:
+	if options.size() < 2 or pips.is_empty():
+		return options
+	var out: Array = []
+	var placed: Dictionary = {}
+	var tiers: Array = []
+	for option in options:
+		if not tiers.has(int(option[1])):
+			tiers.append(int(option[1]))
+	tiers.sort()
+	for tier in tiers:
+		for wanted in [true, false]:
+			for i in options.size():
+				var option: Array = options[i]
+				if placed.has(i) or int(option[1]) != tier \
+						or pips.has(int(option[2][2])) != wanted:
+					continue
+				placed[i] = true
+				out.append(option)
 	return out
+
+
+## The least-surplus cover of [param need] from [param groups] (see
+## [method _cover_generic]), using only options of tier [param top] or
+## better: `[[group index, option], ...]`, or `[]` when they cannot reach
+## [param need]. A subset sum over the groups — at most one option each —
+## bounded by `need + the biggest option - 1`, since a cover past that
+## still covers with any one source dropped. The walk back takes a group
+## whenever the rest can still make the target, so the earliest sources are
+## the ones spent.
+static func _least_surplus(groups: Array, need: int, top: int) -> Array:
+	var options: Array = []       # per group: its options at or under `top`
+	var total := 0
+	var biggest := 1
+	for group in groups:
+		var mine: Array = []
+		var best := 0
+		for option in group[1]:
+			if int(option[1]) <= top:
+				mine.append(option)
+				best = maxi(best, int(option[0]))
+		options.append(mine)
+		total += best
+		biggest = maxi(biggest, best)
+	if total < need:
+		return []
+	var cap := need + biggest - 1
+	var n := groups.size()
+	var reach: Array[PackedByteArray] = []   # reach[i][s]: groups i.. make exactly s
+	reach.resize(n + 1)
+	var tail := PackedByteArray()
+	tail.resize(cap + 1)
+	tail.fill(0)
+	tail[0] = 1
+	reach[n] = tail
+	for i in range(n - 1, -1, -1):
+		var after: PackedByteArray = reach[i + 1]
+		var here: PackedByteArray = after.duplicate()
+		for option in options[i]:
+			var a: int = int(option[0])
+			for sum in range(cap - a, -1, -1):
+				if after[sum] == 1:
+					here[sum + a] = 1
+		reach[i] = here
+	var target := -1
+	for sum in range(need, cap + 1):
+		if reach[0][sum] == 1:
+			target = sum
+			break
+	if target < 0:
+		return []
+	var picked: Array = []
+	var left := target
+	for i in n:
+		if left == 0:
+			break
+		for option in options[i]:
+			var a: int = int(option[0])
+			if a <= left and reach[i + 1][left - a] == 1:
+				picked.append([i, option])
+				left -= a
+				break
+	return picked
+
+
+## THE TAP THE PLAN DID NOT NEED (2026-10-07). The coloured pips are covered
+## before the generic, so a source that makes MORE than one mana of a
+## colour (a Forest under Wild Growth makes {G}{G}) can arrive after a plain
+## Forest already took the {G} — and then pay the {1} alone, with the plain
+## Forest's mana left over. While the plan makes more than [param cost]
+## asks, drop the step whose mana the rest can do without — the worst tier
+## first, then the biggest — checked against [method ManaPool.can_pay], the
+## payment's own rule. Floating mana is never dropped: it is in the pool.
+static func _drop_surplus(out: Array, used: Dictionary, cost: ManaCost,
+		x_value: int, usage_keys: Array) -> void:
+	var due := cost.mana_value() - cost.generic + maxi(0, cost.generic + x_value)
+	while true:
+		var made := 0
+		for key in used:
+			made += int(used[key][3])
+		var surplus := made - due
+		if surplus <= 0:
+			return
+		var candidates: Array = []   # [tier, amount, position, key]
+		for key in used:
+			var row: Array = used[key]
+			if row[0] == null or int(row[3]) > surplus:
+				continue
+			candidates.append([_tier(row), int(row[3]), out.find(step_of(row)), key])
+		candidates.sort_custom(_worst_first)
+		var dropped := false
+		for candidate in candidates:
+			var key: String = candidate[3]
+			if _rows_pay(used, key, cost, x_value, usage_keys):
+				out.erase(step_of(used[key]))
+				used.erase(key)
+				dropped = true
+				break
+		if not dropped:
+			return
+
+
+## [method _drop_surplus]'s order: the worse tier, then the bigger source,
+## then the later step.
+static func _worst_first(a: Array, b: Array) -> bool:
+	for k in 3:
+		if int(a[k]) != int(b[k]):
+			return int(a[k]) > int(b[k])
+	return false
+
+
+## Would the rows of [param used], all but [param skip], pay [param cost]?
+static func _rows_pay(used: Dictionary, skip: String, cost: ManaCost,
+		x_value: int, usage_keys: Array) -> bool:
+	var pool := ManaPool.new()
+	for key in used:
+		if key == skip:
+			continue
+		var row: Array = used[key]
+		if String(row[5]) == "":
+			pool.add(int(row[2]), int(row[3]))
+		else:
+			pool.add_restricted(int(row[2]), int(row[3]), String(row[5]))
+	return pool.can_pay(cost, x_value, usage_keys)
 
 
 ## Trade the row [param used] holds for [param key] for the richer row
@@ -448,18 +757,32 @@ static func _cover_colored_greedy(src: Array, cost: ManaCost, usage_keys: Array,
 		out: Array, used: Dictionary, pool_check: ManaPool) -> bool:
 	for color in cost.colored:
 		for _n in cost.colored[color]:
-			if pool_check.amount_of(color) >= int(cost.colored[color]):
+			var short := int(cost.colored[color]) - pool_check.amount_of(color)
+			if short <= 0:
 				break   # one charged source can cover several coloured pips
-			var found := false
+			# The first source of the colour — unless one of the SAME tier
+			# ([method _tier]) further on makes no more than the pips still
+			# ask: a plain Forest pays {G} before a Forest under Wild Growth
+			# (2026-10-07, w6-1's coloured half).
+			var pick: Array = []
 			for s in src:
 				if used.has(source_key(s)) or s[2] != color \
 						or not source_usable(s, usage_keys):
 					continue
-				out.append(step_of(s))
-				used[source_key(s)] = s
-				pool_check.add(s[2], s[3])
-				found = true
-				break
+				if pick.is_empty():
+					pick = s
+					if int(s[3]) <= short:
+						break
+				elif _tier(s) != _tier(pick):
+					break
+				elif int(s[3]) <= short:
+					pick = s
+					break
+			var found := not pick.is_empty()
+			if found:
+				out.append(step_of(pick))
+				used[source_key(pick)] = pick
+				pool_check.add(pick[2], pick[3])
 			if not found:
 				# No untouched source left: a taken permanent may still
 				# make MORE of this colour on another of its rows (a
@@ -521,6 +844,7 @@ static func _cover_colored_matched(src: Array, cost: ManaCost, usage_keys: Array
 			order.append(key)
 		if not rows[key].has(int(s[2])):
 			rows[key][int(s[2])] = s
+	order = _fitting_first(order, rows, cost)
 	var owner: Array[String] = []     # slot -> source key, "" while open
 	owner.resize(slot_color.size())
 	var held: Dictionary = {}         # source key -> [colour, pips covered]
@@ -540,6 +864,36 @@ static func _cover_colored_matched(src: Array, cost: ManaCost, usage_keys: Array
 		used[owner[slot]] = s   # the row, so the generic pass may enrich it
 		pool_check.add(s[2], s[3])
 	return true
+
+
+## [param order] (source keys in [method sources]' order) with, inside each
+## [method _tier], the sources that make no more of a colour than the cost
+## has pips of it before the ones that make more (2026-10-07) — the
+## matching's half of [method _cover_colored_greedy]'s rule. Stable
+## otherwise, so the preference the order carries is kept.
+static func _fitting_first(order: Array[String], rows: Dictionary,
+		cost: ManaCost) -> Array[String]:
+	var buckets: Dictionary = {}   # tier -> [fitting keys, the rest]
+	for key in order:
+		var mine: Dictionary = rows[key]
+		var tier := -1
+		var fits := true
+		for color in mine:
+			var s: Array = mine[color]
+			tier = _tier(s) if tier < 0 else mini(tier, _tier(s))
+			if int(s[3]) > int(cost.colored.get(color, 0)):
+				fits = false
+		if not buckets.has(tier):
+			buckets[tier] = [[], []]
+		buckets[tier][0 if fits else 1].append(key)
+	var tiers: Array = buckets.keys()
+	tiers.sort()
+	var out: Array[String] = []
+	for tier in tiers:
+		for part in buckets[tier]:
+			for key in part:
+				out.append(String(key))
+	return out
 
 
 ## One augmenting path from source [param key] to an open slot, re-routing
@@ -616,9 +970,16 @@ static func source_usable(s: Array, usage_keys: Array) -> bool:
 ## still spent before the dual and the dual's flexibility still wins. That
 ## case is a second question with a second measurement, and it is left
 ## open rather than folded in here (`docs/ai-difficulty.md` §5).
+##
+## THE FIRST KEY IS NOW A RANK (2026-10-07, [method source_rank]): the
+## sacrifice is still last of all, and below it, in that order, a source an
+## Aura punishes for tapping and a source that does not untap — a Mana
+## Vault is spent after a City of Brass, and a Venomed Forest after both.
 static func cheapest_source_first(a: Array, b: Array) -> bool:
-	if a[4] != b[4]:
-		return not a[4]
+	var rank_a := source_rank(a)
+	var rank_b := source_rank(b)
+	if rank_a != rank_b:
+		return rank_a < rank_b
 	var pain_a := source_pain(a)
 	var pain_b := source_pain(b)
 	if (pain_a > 0) != (pain_b > 0):
@@ -690,6 +1051,21 @@ static func source_holds(s: Array) -> int:
 ## The life a source's tap costs its controller ([member ManaAbility.pain]).
 static func source_pain(s: Array) -> int:
 	return int(s[6]) if s.size() > 6 else 0
+
+
+## What a source row's activation spends besides its mana, as the
+## RANK_* bits ([constant RANK_SPENDS_SOURCE], [constant RANK_TAP_TOLL],
+## [constant RANK_STAYS_TAPPED]); 0 for a Forest and for floating mana.
+static func source_rank(s: Array) -> int:
+	return int(s[4]) if s.size() > 4 else 0
+
+
+## The TIER a plan reaches for a source in: [method source_rank], then
+## painless before painful — the two keys of [method cheapest_source_first]
+## that a plan never trades away to save mana. Within one tier the plan
+## pays with the least left over ([method _cover_generic]).
+static func _tier(s: Array) -> int:
+	return source_rank(s) * 2 + (1 if source_pain(s) > 0 else 0)
 
 
 ## The life [param tap_plan] would cost, summed over the sources in
@@ -800,8 +1176,29 @@ static func cost_is_free(cost: ManaCost) -> bool:
 ## question stands, so the caller finishes the plan once it is answered
 ## (DuelScreen._auto_tap_for_pending, SgDuelActions.autopay). Returns
 ## true when every step ran.
-static func run_plan(game: MtgGame, pid: int, tap_plan: Array) -> bool:
+##
+## THE BILL (2026-10-07, w1-1): given the [param bill] the plan was made
+## for ([param extra] generic on top, [param usage_keys] as in
+## [method plan_from]), the run STOPS TAPPING ONCE THE POOL COVERS IT and
+## reports true. A mana trigger the plan did not count — a Mana Flare, a
+## Wild Growth with no bonus description — makes mana the plan never
+## priced, and every tap after the pool already covered the cost made only
+## mana to burn: Hill Giant tapped four Mountains under a Flare and floated
+## four red. Without a bill every step runs, as before.
+##
+## [param settled] — a caller whose bill can be PAID WHILE THE PLAN RUNS:
+## the duel screen submits a waiting cast from its refresh the moment a tap
+## makes the pool cover it ([method DuelScreen._retry_payment]), so the
+## pool is empty again before the next step and the bill no longer
+## describes anything owed. True from it stops the run the same way.
+static func run_plan(game: MtgGame, pid: int, tap_plan: Array,
+		bill: ManaCost = null, extra := 0, usage_keys: Array = [],
+		settled := Callable()) -> bool:
 	for step in tap_plan:
+		if bill != null and game.players[pid].mana_pool.can_pay(bill, extra, usage_keys):
+			return true
+		if settled.is_valid() and bool(settled.call()):
+			return true
 		if step[0] != null:
 			run_step(game, pid, step)
 			if game.awaiting_choice != null:
@@ -829,7 +1226,7 @@ static func plan_and_pay(game: MtgGame, pid: int, cost: ManaCost, extra := 0,
 	var tap_plan := plan(game, pid, cost, extra, usage_keys, excluded)
 	if tap_plan.is_empty():
 		return false
-	run_plan(game, pid, tap_plan)
+	run_plan(game, pid, tap_plan, cost, extra, usage_keys)
 	return game.players[pid].mana_pool.can_pay(cost, extra, usage_keys)
 
 
@@ -841,6 +1238,9 @@ static func plan_and_pay(game: MtgGame, pid: int, cost: ManaCost, extra := 0,
 ## *"If you double-click to auto-cast an X spell, ALL of the mana you have
 ## available in your pool and from land sources will be put into that
 ## spell"* (`Duel.hlp`, topic **Hands**; topic **Spells** says it again).
+## ALL of it includes a described mana trigger's bonus (2026-10-07): a
+## Fireball under a Mana Flare is counted with the Flare's mana, which the
+## rows' amounts carry ([method _bonus_triggers]).
 static func max_affordable_x(game: MtgGame, pid: int, cost: ManaCost,
 		extra := 0, src: Array = [], x_color := 0,
 		usage_keys: Array = [], excluded: Dictionary = {}) -> int:

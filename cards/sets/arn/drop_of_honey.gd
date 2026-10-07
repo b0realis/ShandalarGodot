@@ -60,12 +60,29 @@ static func _dissolve(game: MtgGame, source: CardInstance, event: GameEvent) -> 
 			tied.append(inst)
 	if tied.is_empty():
 		return
-	# The enemy's creatures first: "you choose one of them" is the Drop's
-	# controller's choice, and no one feeds their own board to it.
+	# The enemy's creatures first, their most valuable first; one's own
+	# last, the least valuable first: "you choose one of them" is the Drop's
+	# controller's choice, and no one feeds their own board to it. The ask
+	# is ORDERED (campaign 2026-10, w1-3): a heuristic seat takes the head.
 	tied.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
-		return int(a.controller_id == pid) < int(b.controller_id == pid))
+		return _victim_order(pid, a, b))
 	var chosen := game.agents[pid].choose_card(game, pid, tied,
-		"Choose the creature %s destroys" % source.data.card_name)
+		"Choose the creature %s destroys" % source.data.card_name, false, false, true)
 	if chosen == null or not tied.has(chosen):
 		chosen = tied[0]
 	game.destroy(chosen, false)
+
+
+## The hint among creatures tied for least power, for the Drop's
+## controller [param pid]: an opponent's before one's own; among the
+## opponent's the most valuable first, among one's own the least.
+static func _victim_order(pid: int, a: CardInstance, b: CardInstance) -> bool:
+	var a_theirs := a.controller_id != pid
+	var b_theirs := b.controller_id != pid
+	if a_theirs != b_theirs:
+		return a_theirs
+	var av := Evaluator.permanent_value(a)
+	var bv := Evaluator.permanent_value(b)
+	if av != bv:
+		return av > bv if a_theirs else av < bv
+	return a.id < b.id

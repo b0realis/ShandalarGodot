@@ -355,7 +355,9 @@ least one `agent`): `agent` is the program on the pipe — both seats,
 and it plays itself; `apprentice`, `magician`, `sorcerer`, `wizard` are
 the shipped computer players; `unfair` the wizard that reads hidden
 cards. A deck is tried as typed, then under `decks/`. `--seed` unset
-draws one and reports it. `--turns` (200) calls the duel a draw past
+draws one and reports it in the `result` only — `hello` says `seed: -1`,
+since the seed deals both hands and orders both libraries (campaign
+2026-10-07; a seed given is echoed). `--turns` (200) calls the duel a draw past
 that turn. `--log FILE` writes the engine's own log at the end (at a
 table, the journal this seat saw). `--rules PRESET` (2026-10-04) is the
 rules forks the duel plays under, one of the Options screen's presets:
@@ -382,8 +384,12 @@ as one JSON line and plays nothing.
   read from its view**: per mode the ops it takes and what each takes
   — `play{lands[{card,name}]}`, `prepare{casts[],abilities[]}` (each
   with its `budget`), `mana{sources[]}`, `special{specials[]}`,
-  `respond`, `attack{attackable[]}`, `block{blockable[]}`,
-  `choice{prompt,options,count}`, `discard{count,hand}`,
+  `respond` (a ransom or a point of prevention the seat can pay counts
+  too), `attack{attackable[]}`, `block{blockable[]}`,
+  `choice{prompt,options,count,cards}` (`cards`: per line, the handle of
+  the board card it stands for, or "" — two same-named permanents' lines
+  end in their handles, `Grizzly Bears — yours [c12]`),
+  `discard_special{cards[]}`, `discard{count,hand}`,
   `damage{request}` — and `concede: true` always. **`casts` and
   `abilities` are usable-only** (2026-10-04): an entry is there only
   when the engine would accept it right now — a cast whose timing
@@ -396,7 +402,9 @@ as one JSON line and plays nothing.
   cost bodies, life, cards and counters are there (Zuran Orb needs a
   land to sacrifice), with something to aim at and reachable mana.
   `mana.sources` lists only sources the engine would tap (no tapped
-  land, no sick Elf). `respond` is true when an instant-speed cast or
+  land, no sick Elf). `special.specials` lists only what the seat could
+  pay now (campaign 2026-10-07): a ransom, a point of prevention (the
+  referee taps its {1}), Channel, a licid's end, a Curse's ignore. `respond` is true when an instant-speed cast or
   an ability is listed — the "holds something" signal a pass-through
   loop stops on. A spell with modes or payment rows (Fireblast's
   "sacrifice two Mountains", Force of Will's pitch, a "Choose one —")
@@ -453,7 +461,9 @@ once), `{"op":"keep"}`, `{"op":"mulligan"}`; priority `{"op":"pass"}`,
 "mode":M,"excluded":[],"count":1}` to prepare and pay in one line, and
 with `"targets":[TARGET...]` the three in one (below),
 `{"op":"mana","card":ID,"index":I}`, `{"op":"tap","card":ID}`,
-`{"op":"special","index":I}`; attack `{"op":"attack","cards":[ID...]}`;
+`{"op":"special","index":I}`, `{"op":"discard_special","card":ID}` (a
+hand card that may be discarded any time an instant could be cast —
+Circling Vultures; `options.discard_special.cards` lists them); attack `{"op":"attack","cards":[ID...]}`;
 block `{"op":"block","pairs":[[BLOCKER,ATTACKER]...]}`; discard
 `{"op":"discard","cards":[ID...]}`; damage
 `{"op":"damage","points":[[ID|"player",N]...]}`; choice
@@ -495,14 +505,21 @@ invitation). `--deck` is the deck this seat brings, `--name` its
 nickname (`Agent`), `--wait` (300 s) how long to wait for an open
 table, `--log FILE` where the journal this seat saw — every line of the
 game as the table told it — is written at the end. The referee joins
-the first open room, sends the deck when the table plays own decks,
-readies, and then asks the pipe whenever the table's view says it is
-this seat's decision; `hello` carries `table{id, name, seat, hosted}`,
-`log` and `seed: -1` (the host shuffles). The host sees an ordinary
-guest. A lobby command the room moved on under (the lobby's "The room
-changed. Please try again." — the other seat's mark or deck landed
-meanwhile) is sent again with the fresh revision, up to five times;
-a game action is not — the seat decides afresh from the next view.
+the open room `--table` named (with `--join`, the first open room),
+sends the deck when the table plays own decks, readies, and then asks
+the pipe whenever the table's view says it is this seat's decision;
+`hello` carries `table{id, name, seat, hosted}`, `log` and `seed: -1`
+(the host shuffles). The host sees an ordinary guest. A lobby command
+the room moved on under (the lobby's "The room changed. Please try
+again." — the other seat's mark or deck landed meanwhile) is sent again
+with the fresh revision, up to five times; a game action is not — the
+seat decides afresh from the next view. **A table that blinks**
+(campaign 2026-10-07): while this seat's own client reconnects or the
+other seat is away (the host keeps an absent seat five minutes and
+refuses every game action meanwhile), the referee waits; an answer sent
+meanwhile is held and sent again once the table is whole — never a
+`refused` line, never counted. `offline` ends the duel only when the
+client stops retrying or the wait outlasts the host's grace.
 
 **A hosted table** (`--host NAME`, 2026-10-03): the referee runs the
 game's own LAN host in-process, opens one table of that name with this
@@ -529,7 +546,9 @@ referee and never put on a command line); a client connects to
 `127.0.0.1:port`, sends `{"token": ..., "client": ...}` as its first
 line and is told where the duel stands (`hello`, `resume`, the awaited
 decision). One client at a time: a newcomer with the token replaces
-the last; a connection without it is dropped. stdout still carries
+the last; a connection without it is dropped; the whole lines a
+client sent before it went away are still read (`referee_stop`'s
+concession with no decision pending is the next answer). stdout still carries
 every line — the transcript — and stdin is not read. `--idle SECONDS`
 (1800; 0 never) concedes the seat when a decision has waited that long
 with nobody connected (`reason: idle`). Protocol 1 still: the pipe's
@@ -761,6 +780,11 @@ card types): "their Lightning Bolt is on the stack; you hold Disenchant
 exhausted once-a-turn ability — is passed straight through.
 `"mine-strict"` never stops on the opponent's account at all (its own
 decisions and its own main phase only), for a client that wants speed.
+Under the `fifth` rules every `until` but `mine-strict` also stops in
+the 1997 damage-prevention and regeneration windows
+(`presentation.prevention` / `regeneration`) while the seat holds
+something usable there — a Circle of Protection, whose 1997 form works
+only in that window, a regeneration ability (campaign 2026-10-07).
 
 **One-call actions** (2026-10-04). `referee_cast {game, card, kind,
 index, x, mode, targets, exclude, until, view}` casts a spell (`kind:
@@ -820,7 +844,10 @@ false` turns that off for the game). In the `compact` view the answer's
 Strength → Grizzly Bears — opponent's  [cast:c16->c24]`) in place of the
 wire's options. A game the menu tools touched stays playable by every
 other referee tool, and the next `referee_menu` takes its decision up
-afresh.
+afresh. At a joined or hosted table a pick whose next decision waits on
+the person (their turn, their response) answers `pending: true` with no
+menu once `timeout` runs out — `referee_wait` reads on, then
+`referee_menu` (campaign 2026-10-07; it was an error mid-pick).
 
 **The kept game.** `referee_start`/`referee_join`/`referee_host` take
 `keep` (a join and a host are kept by default, a start is not): the
@@ -931,7 +958,13 @@ cancelled at once — never left half-announced — and the action leaves
 the menu until the turn, step, stack or board changes; every refusal is
 counted (`refusals`, the referee's own in `referee_refusals`). A payment
 that asks a question (a colour, a land to return) shows it to the model
-and submits after the answer.
+and submits after the answer. With every item refused, the bridge sends
+the quiet answer (pass, cancel, no attack) and a cancel; still refused,
+the decision goes back to the model with its whole menu — the bridge
+never concedes for it (campaign 2026-10-07; a LAN host refuses every
+action while the other seat reconnects); twenty refusals in a row are
+the referee's own concession. An attack item adds the creatures a
+Magnetic Web drags in with it (`presentation.attack_companions`).
 
 **The observation** (`obs`): `mode`, `turn`, `step`, `active` (`me`/
 `opp`), `me`/`opp` (life, hand and library counts, mana, poison, the

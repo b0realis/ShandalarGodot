@@ -1408,3 +1408,34 @@ func graveyard_top_copy_of(top: CardData, holder_id: int) -> CardData:
 func with_cant_be_countered() -> CardData:
 	cant_be_countered = true
 	return self
+
+
+# --- Campaign fix-ai-c: the price of being in combat ---
+## THE COMBAT PRICE (whole-game campaign, 2026-10-07): what this creature
+## costs its own controller for attacking or blocking at all, declared for
+## the AI's combat readings — `{"sacrifice": true, "life": 5}` for Time
+## Elemental ("When this creature attacks or blocks, at end of combat,
+## sacrifice it and it deals 5 damage to you"). The card's own triggers do
+## the charging; nothing in the rules engine reads this. Empty for every
+## other card. Read by AiPlayer's block declaration.
+var combat_price: Dictionary = {}
+
+
+## Fluent: see [member combat_price].
+func with_combat_price(sacrifice: bool, life: int) -> CardData:
+	combat_price = {"sacrifice": sacrifice, "life": life}
+	return self
+# --- end Campaign fix-ai-c ---
+
+
+# --- Campaign fix-ai-b: the script's own set ---
+## THE FOLDER THE IMPLEMENTATION SHIPS IN (whole-game campaign 2026-10-07,
+## w3-3) — "ice" for res://cards/sets/ice/necropotence.gd whichever pack
+## provides the card. [member set_code] is the DISPLAYED set: a reprint pack
+## loads that same script under its own code (Fifth Edition's Necropotence
+## is "5ed"), so a policy written for the script's own rules — the Ice Age
+## and Fallen Empires AI modules — asks this, never [member set_code].
+## Filled in by the CardRegistry loader; equal to [member set_code] for a
+## card loaded from its own folder.
+var script_set: String = ""
+# --- end Campaign fix-ai-b ---

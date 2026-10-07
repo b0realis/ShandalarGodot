@@ -187,7 +187,8 @@ var sideboard: Dictionary = {}
 var group := ""
 ## Gameplay packs declared by the loaded file. [method required_pack_ids]
 ## also derives requirements from the actual card names before every save,
-## so metadata cannot go stale after editing.
+## and keeps a declared pack only while a card still needs it, so metadata
+## cannot go stale after editing.
 var required_packs: Array[String] = []
 ## One preferred printing per card name, shared by main deck and sideboard.
 var printings: Dictionary = {}
@@ -1017,13 +1018,19 @@ func to_text() -> String:
 ## enabled pack provides is dropped (bug pass 2026-10-03, [method
 ## CardPacks.effective_requirements]): it gated the Deck Builder's load,
 ## and every re-save under another provider declared one pack more.
+## A declared pack no card in the deck needs any more is dropped too
+## (campaign 2026-10, w7-6, [method CardPacks.requirements_to_save]): the
+## last Mirage card taken out of a deck left `# requires-pack: pack-8` in
+## its file, and the battle setup screen refused the all-core deck with
+## Pack 8 off. The Deck Builder's load asks this same question, so a file
+## already saved with such a line opens without the pack and saves clean.
 func required_pack_ids() -> Array[String]:
 	var all_names := names()
 	all_names.append_array(side_names())
 	# Command-line SceneTree scripts compile their dependencies before
 	# autoload identifiers exist (Deck Lab's Pack 3 campaign reproduced it).
 	var packs := (Engine.get_main_loop() as SceneTree).root.get_node("CardPacks")
-	var out: Array[String] = packs.effective_requirements(required_packs, all_names)
+	var out: Array[String] = packs.requirements_to_save(required_packs, all_names)
 	for pack_id in packs.packs_required_by(all_names):
 		if not out.has(pack_id):
 			out.append(pack_id)

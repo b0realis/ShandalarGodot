@@ -10,8 +10,10 @@ extends CardScript
 ## the greatest mana value on both sides and handing the pair to
 ## MtgGame.exchange_control (CR 701.10). Each half of a tie is broken by the
 ## permanent's OWN controller, through their agent, because the printed card
-## says so; the greedy default offers the biggest body first, which is the
-## one a player would keep hold of if they could.
+## says so. The pick is the one HANDED OVER, so the hint offers the least
+## valuable first (campaign 2026-10, w1-3 — it offered the biggest body, and
+## a heuristic seat gave away its Serra Angel for a tied vanilla 4/5); the
+## ask is ORDERED, so a heuristic seat takes the head of the list.
 ##
 ## The exchange is all-or-nothing (CR 701.10c): a side with no creature at
 ## all means no creature trade, and the artifact pass then runs on its own.
@@ -81,16 +83,17 @@ class JuxtaposeEffect extends EffectBase:
 			return null
 		if tied.size() == 1:
 			return tied[0]
-		tied.sort_custom(JuxtaposeEffect._biggest_first)
+		tied.sort_custom(JuxtaposeEffect._least_first)
 		var pick := game.agents[pid].choose_card(game, pid, tied,
-			"Choose which %s Juxtapose takes" % what)
+			"Choose which %s Juxtapose takes" % what, false, false, true)
 		return pick if pick != null and tied.has(pick) else tied[0]
 
-	static func _biggest_first(a: CardInstance, b: CardInstance) -> bool:
-		var av := a.cur_power + a.cur_toughness
-		var bv := b.cur_power + b.cur_toughness
+	## The least valuable first: it is the one its controller gives away.
+	static func _least_first(a: CardInstance, b: CardInstance) -> bool:
+		var av := Evaluator.permanent_value(a)
+		var bv := Evaluator.permanent_value(b)
 		if av != bv:
-			return av > bv
+			return av < bv
 		return a.id < b.id
 
 	func describe() -> String:

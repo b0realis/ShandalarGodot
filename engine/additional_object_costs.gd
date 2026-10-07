@@ -177,23 +177,109 @@ static func pools(g: MtgGame, pid: int, groups: Array, source_card: CardInstance
 		for unused in count: out.append({"group": group, "cards": candidates.duplicate()})
 	return out
 
+## Can every slot from [param index] on take a DIFFERENT card, none of them
+## in [param used] (card id -> true)? A bipartite matching by augmenting
+## paths — polynomial in slots × candidates. (Campaign 2026-10, w7-1: this
+## was an ordering search that walked every permutation before it could
+## say no, so Firestorm's "discard X cards" with ten cards in hand froze
+## the host for seconds on every view, X window and AI turn.)
 static func can_assign(slots: Array, index := 0, used := {}) -> bool:
 	if index >= slots.size(): return true
-	for card in slots[index].cards:
-		if used.has(card.id): continue
-		var next := used.duplicate()
-		next[card.id] = true
-		if can_assign(slots, index + 1, next): return true
+	var order := range(index, slots.size())
+	# Pigeonhole first: more slots than distinct free candidates never fit
+	# (an X far above the hand is refused without a search).
+	var free := {}
+	for i in order:
+		for card in slots[i].cards:
+			if not used.has(card.id): free[card.id] = true
+	if order.size() > free.size(): return false
+	var owner := {}
+	for i in order:
+		if not _augment(slots, i, used, owner, {}): return false
+	return true
+
+
+## Give slot [param i] a card, re-seating earlier slots along an augmenting
+## path when every card it could take is held ([param owner]: card id ->
+## the slot holding it, updated in place). False when no path exists: then
+## no assignment covers the matched slots and this one together, and
+## [param owner] is unchanged.
+static func _augment(slots: Array, i: int, used: Dictionary, owner: Dictionary, seen: Dictionary) -> bool:
+	var cards: Array = slots[i].cards
+	for card in cards:
+		if not used.has(card.id) and not owner.has(card.id):
+			owner[card.id] = i
+			return true
+	for card in cards:
+		if used.has(card.id) or seen.has(card.id): continue
+		seen[card.id] = true
+		if _augment(slots, int(owner[card.id]), used, owner, seen):
+			owner[card.id] = i
+			return true
 	return false
+
+## The candidates of slot [param index] (none in [param used]) that leave
+## every LATER slot payable — what [method choose] offers, in the slot's
+## own order. The same set as asking [method can_assign] for each one, from
+## ONE matching of the later slots: a card no later slot holds leaves it
+## intact; a held one is offered when the slot holding it can be re-seated
+## without it (CR 601.2h's distinct objects; campaign 2026-10, w7-1).
+static func extendable(slots: Array, index: int, used := {}) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	if index >= slots.size(): return out
+	var owner := {}
+	for i in range(index + 1, slots.size()):
+		if not _augment(slots, i, used, owner, {}): return out
+	for card: CardInstance in slots[index].cards:
+		if used.has(card.id): continue
+		if not owner.has(card.id):
+			out.append(card)
+			continue
+		var without := used.duplicate()
+		without[card.id] = true
+		var trial := owner.duplicate()
+		trial.erase(card.id)
+		if _augment(slots, int(owner[card.id]), without, trial, {}): out.append(card)
+	return out
 
 static func refusal(g: MtgGame, pid: int, groups: Array, source: CardInstance = null, x := 0) -> String:
 	return "" if can_assign(pools(g, pid, groups, source, x)) else "not enough distinct eligible cards to pay the additional costs"
 
 ## The largest X the count-is-X groups of [param groups] can be paid for
-## right now, or -1 when no group's count is X (no object bound at all).
-## The AI sizes X with it; the engine's own refusal is [method refusal].
+## right now, or -1 when no group's count is X (no object bound at all);
+## 0 when even the fixed groups cannot be paid. The AI sizes X with it; the
+## engine's own refusal is [method refusal].
+## ONE matching (campaign 2026-10, w7-1): the fixed slots first, then one
+## more slot per X group a round, each by an augmenting path, until a round
+## fails — a failed slot means no assignment covers the slots so far, so X
+## rounds was the bound (the same answer as asking X = 1, 2, … in turn).
 static func max_x(g: MtgGame, pid: int, groups: Array, source: CardInstance = null) -> int:
 	if not uses_x(groups): return -1
+	for group in groups:
+		if group.get("count_is_x", false) and String(group.get("position", "")) == "top":
+			return _max_x_stepwise(g, pid, groups, source)
+	var slots := pools(g, pid, groups, source, 0)
+	var owner := {}
+	for i in slots.size():
+		if not _augment(slots, i, {}, owner, {}): return 0
+	# One slot of each X group: a non-positional group's candidates do not
+	# depend on X, so every round reuses it.
+	var x_slots: Array = []
+	for slot in pools(g, pid, groups, source, 1):
+		if slot.group.get("count_is_x", false): x_slots.append(slot)
+	var x := 0
+	while x < 200:
+		for slot in x_slots:
+			slots.append(slot)
+			if not _augment(slots, slots.size() - 1, {}, owner, {}): return x
+		x += 1
+	return x
+
+
+## [method max_x] asking X = 1, 2, … in turn — for a POSITIONAL X group
+## ("the top X cards"), whose candidates are the topmost X and so change
+## with X. Each ask is one polynomial [method can_assign].
+static func _max_x_stepwise(g: MtgGame, pid: int, groups: Array, source: CardInstance) -> int:
 	var x := 0
 	while x < 200 and can_assign(pools(g, pid, groups, source, x + 1)):
 		x += 1
@@ -236,12 +322,7 @@ static func choose(g: MtgGame, pid: int, source: CardInstance, groups: Array, re
 			# Nobody chooses: the card is rolled as the cost is paid.
 			chosen.append({"group": group, "random": true, "source": source})
 			continue
-		var offered: Array[CardInstance] = []
-		for card in slots[index].cards:
-			if used.has(card.id): continue
-			var next := used.duplicate()
-			next[card.id] = true
-			if can_assign(slots, index + 1, next): offered.append(card)
+		var offered := extendable(slots, index, used)
 		if offered.is_empty(): return []
 		var pick: CardInstance = offered[0]
 		if group.get("position", "") != "top":

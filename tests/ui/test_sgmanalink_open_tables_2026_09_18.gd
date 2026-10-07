@@ -273,9 +273,10 @@ func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> 
 	# 2026-10-03): phased-out lists, block life taxes, `discard_special`.
 	# 27 (Mirage bug pass, 2026-10-04): one block-tax row per tax.
 	# 28 (Pack 9, 2026-10-06): combat flags, special rows, attack
-	# companions, counted target slots.
-	assert_eq(SgProtocol.VERSION, 28)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v28")
+	# companions, counted target slots. 29 (whole-game campaign,
+	# 2026-10-07): a choice's lines name their board cards.
+	assert_eq(SgProtocol.VERSION, 29)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v29")
 	assert_eq(SgLanDiscovery.MAX_PACKET, 16384, "room for the certificate inside an open advert")
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}

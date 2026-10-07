@@ -123,9 +123,13 @@ func test_an_ordinary_removal_spell_still_asks() -> void:
 
 
 func test_an_empty_chain_leaves_the_counter_aiming_at_nothing() -> void:
-	# No legal target at all: the screen opens targeting and the player
-	# reaches for Cancel, which is the pre-existing behaviour and still
-	# right — the auto-target must not invent one.
+	# No legal target at all: the auto-target must not invent one. Since
+	# the whole-game campaign (w5-5) the cast is refused before it starts,
+	# in one sentence — the screen used to open a crosshair with nothing
+	# under it and leave the player to reach for Cancel (and a double-click
+	# tapped the lands for it first).
 	screen._click_hand_card(_counterspell())
-	assert_eq(screen.mode, DuelScreen.Mode.TARGETING)
+	assert_eq(screen.mode, DuelScreen.Mode.NORMAL, "no crosshair over nothing")
+	assert_null(screen._pending_card, "nothing pending")
+	assert_string_contains(screen._prompt_label.text, "no legal target")
 	assert_eq(screen.game.stack.size(), 0)

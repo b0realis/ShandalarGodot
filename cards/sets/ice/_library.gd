@@ -131,10 +131,20 @@ static func _prison(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		g._rec(s, &"memory")
 		s.memory["prison_id"] = i.id
 		s.memory["prison_stamp"] = i.exile_entry
+## "Unless ANY player pays {3}" — asked of each seat, the active player
+## first. The HINT is per seat (campaign 2026-10, w2-7): keeping the Prison
+## is worth {3} only to a player who does not own the card it holds (the
+## card returns under its OWNER's control); to the owner, and to everyone
+## when it holds nothing, the hint is no.
 static func _prison_pay(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if not F._same_trigger_source(g, s): return
+	var held := g.find_instance(int(s.memory.get("prison_id", -1)))
+	if held != null and (held.zone != Mtg.Zone.EXILE
+			or held.exile_entry != int(s.memory.get("prison_stamp", -1))):
+		held = null
 	for who in [g.active_player, 1 - g.active_player]:
-		if EffectBase.unless_paid(g, who, ManaCost.parse("{3}"), "Pay {3} to keep Icy Prison?"): return
+		var worth_it: bool = held != null and held.owner_id != int(who)
+		if EffectBase.unless_paid(g, who, ManaCost.parse("{3}"), "Pay {3} to keep Icy Prison?", worth_it): return
 	g.sacrifice_permanent(s)
 static func _prison_context(_g: MtgGame, _s: CardInstance, e: GameEvent) -> Dictionary: return e.data.memory.duplicate()
 static func _prison_return(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:

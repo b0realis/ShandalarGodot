@@ -213,7 +213,11 @@ func test_a_title_with_no_latin_letters_gets_a_file_of_its_own() -> void:
 	assert_eq(DeckStore.file_stem("  колода огня "), fire,
 		"spacing and case fold as they do for a Latin title")
 	assert_eq(DeckStore.file_stem("New Deck"), "new_deck", "existing stems are unchanged")
-	assert_eq(DeckStore.file_stem("Ωmega"), "mega")
+	# A title that folds to something AND has letters beyond ASCII got
+	# a digest too in the campaign of 2026-10 (`Ωmega` and `Σmega` were
+	# one `mega.deck`); tests/unit/test_campaign_fix_persist_deck_store.gd.
+	assert_true(DeckStore.file_stem("Ωmega").begins_with("mega_"), DeckStore.file_stem("Ωmega"))
+	assert_ne(DeckStore.file_stem("Ωmega"), DeckStore.file_stem("Σmega"))
 	assert_eq(DeckStore.file_stem("Knights!"), "knights")
 	assert_eq(DeckStore.file_stem(""), "new_deck", "an empty title is still the default")
 	var a := _deck("Колода огня", ["Lightning Bolt"])

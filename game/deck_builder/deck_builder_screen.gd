@@ -401,6 +401,9 @@ var _saved_extras: Dictionary = {}
 var _bar_ground: Control
 var _side_ground: Control
 var _status_timer := 0.0
+## True while THIS builder turned `auto_accept_quit` off and so answers
+## the window's close request itself ([method _enter_tree]).
+var _holds_window_close := false
 
 
 func _ready() -> void:
@@ -496,6 +499,11 @@ func _apply_music_switch() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED and _inventory != null:
 		_layout()
+	# --- campaign 2026-10 fix-persist (w7-7) ---
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST and _holds_window_close and is_inside_tree():
+		_on_window_close_request()
+	elif what == NOTIFICATION_VISIBILITY_CHANGED and is_inside_tree():
+		_claim_window_close(is_visible_in_tree())
 
 
 ## [method refresh] tells [CardPacks] the deck on the surface, for the
@@ -505,6 +513,59 @@ func _notification(what: int) -> void:
 func _exit_tree() -> void:
 	var none: Array[String] = []
 	CardPacks.set_current_deck_names(none)
+	# --- campaign 2026-10 fix-persist (w7-7) ---
+	_claim_window_close(false)
+
+
+# --- campaign 2026-10 fix-persist (w7-7): the window's close button ---
+## THE WINDOW'S CLOSE BUTTON IS AN `Exit game` (whole-game campaign
+## 2026-10, w7-7). `Exit game` and `Return to main menu` walk every slot
+## with unsaved work through `@SAVE` ([method _confirm_discard_all]), but
+## `auto_accept_quit` was on, so the title-bar X, Alt+F4 or Cmd+Q ended
+## the process with up to three unsaved decks and no question. While the
+## builder is the screen on show it takes the request — the way
+## [DraftSession] does — UNLESS the policy was already off when it came
+## in: then whoever turned it off (the draft session around a
+## [DraftBuilder]) answers the close itself, and this builder neither asks
+## nor hands the policy back. Hidden behind another screen (`Booster
+## Draft` hides it under [DraftSetup]) it lets the request go, so that
+## screen and the draft session it starts keep the close they had: a
+## question asked on a hidden builder would hold the window shut with
+## nothing to answer.
+func _enter_tree() -> void:
+	_claim_window_close(is_visible_in_tree())
+
+
+func _claim_window_close(claim: bool) -> void:
+	if claim and not _holds_window_close and get_tree().auto_accept_quit:
+		get_tree().auto_accept_quit = false
+		_holds_window_close = true
+	elif not claim and _holds_window_close:
+		_holds_window_close = false
+		get_tree().auto_accept_quit = true
+
+
+## Nothing unsaved: the window goes at once, whatever is open. Unsaved
+## work: the same walk `Exit game` takes, and `Cancel` keeps the window. A
+## request that arrives while a window is already up (a question, Stats,
+## a card viewer) cannot start the walk — one dialog at a time — so it
+## says so on the status line rather than vanishing.
+func _on_window_close_request() -> void:
+	var unsaved := _unsaved_slots()
+	if unsaved.is_empty():
+		_end_process()
+		return
+	if _dialog_busy():
+		_say("%d deck%s not saved — close the open window first, then close again." % [
+			unsaved.size(), " is" if unsaved.size() == 1 else "s are"], true)
+		return
+	_confirm_discard_all(_end_process)
+
+
+## Ends the process; a seam so a test can count the close instead.
+func _end_process() -> void:
+	get_tree().quit()
+# --- end campaign fix-persist (w7-7) ---
 
 
 ## The 1997 order, read off the screenshot from the bottom up: the
@@ -5719,8 +5780,7 @@ func _run_menu_entry(label: String) -> void:
 ## drop work silently.
 func _quit_game() -> void:
 	_audio.play(DeckAudio.CUE_BUTTON)
-	_confirm_discard_all(func() -> void:
-		get_tree().quit())
+	_confirm_discard_all(_end_process)
 
 
 

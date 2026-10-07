@@ -159,7 +159,17 @@ func remove_from_bands(attacker_id: int) -> void:
 ## knows current attackers). [method attackers_blocked_by] can therefore
 ## name an id that is no longer an attacker; every consumer looks the
 ## instance up and tolerates a miss.
+##
+## A BAND IS DIFFERENT (campaign fix-engine w3-1, CR 702.22h): a blocker
+## declared against one member blocks EVERY member, so when that member
+## leaves combat (phased out, bounced, removed) the blocker still blocks
+## the rest of its band. Its entries are re-pointed to the band's next
+## member — [method blockers_of_band] still finds it, the damage step
+## still pairs them — and the remaining members keep the blocked status
+## (CR 509.1h). The announced damage order, keyed by the band's first
+## member, moves with the band.
 func forget(instance_id: int) -> void:
+	_keep_band_blocked(instance_id)
 	attackers.erase(instance_id)
 	remove_from_bands(instance_id)
 	blocked_attackers.erase(instance_id)
@@ -175,6 +185,39 @@ func forget(instance_id: int) -> void:
 	for key in extra_blocks:
 		var also: Array = extra_blocks[key]
 		also.erase(instance_id)
+
+
+# --- Campaign fix-engine: a band stays blocked (w3-1) ---
+## [method forget]'s band half, run BEFORE the departing attacker is taken
+## out of its band: hand its blocks to the band's next member. A no-op for
+## anything that is not a band member with someone left in the band.
+func _keep_band_blocked(instance_id: int) -> void:
+	if not attackers.has(instance_id):
+		return
+	var band := band_of(instance_id)
+	var heir := -1
+	for id in band:
+		if int(id) != instance_id:
+			heir = int(id)
+			break
+	if heir == -1:
+		return
+	if blocked_attackers.has(instance_id):
+		for id in band:
+			if int(id) != instance_id:
+				blocked_attackers[int(id)] = true
+	for blocker_id in blocks:
+		var also: Array = extra_blocks.get(blocker_id, [])
+		if int(blocks[blocker_id]) == instance_id:
+			blocks[blocker_id] = heir
+			also.erase(heir)          # one entry per blocked attacker
+		elif also.has(instance_id) and not also.has(heir) \
+				and int(blocks[blocker_id]) != heir:
+			also[also.find(instance_id)] = heir
+	if int(band[0]) == instance_id and damage_order.has(instance_id) \
+			and not damage_order.has(heir):
+		damage_order[heir] = damage_order[instance_id]
+# --- end campaign fix-engine block ---
 
 
 ## The band containing [param attacker_id] — [id] alone when unbanded.

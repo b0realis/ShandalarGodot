@@ -372,10 +372,18 @@ static func options(value: Variant) -> bool:
 static func choice(value: Variant) -> bool:
 	if not value is Dictionary: return false
 	if value.is_empty(): return true
-	return SgProtocol.exact(value, ["prompt", "source", "options", "count", "cancel", "information"]) \
+	return SgProtocol.exact(value, ["prompt", "source", "options", "count", "cancel", "information", "cards"]) \
 		and text(value.prompt, 4096) and text(value.source, 128) and labels(value.options, 4096) \
 		and SgProtocol.integer(value.count, 0, mini(SgProtocol.MAX_CARDS, value.options.size())) \
-		and value.cancel is bool and information(value.information)
+		and value.cancel is bool and information(value.information) and choice_cards(value.cards, value.options.size())
+
+
+## A choice's `cards` (protocol 29): one opaque handle or "" per line.
+static func choice_cards(value: Variant, lines: int) -> bool:
+	if not value is Array or value.size() != lines: return false
+	for item in value:
+		if not (SgProtocol.literal(item, "") or SgProtocol.short_text(item, 16)): return false
+	return true
 
 
 static func information(value: Variant) -> bool:

@@ -6,7 +6,7 @@ extends RefCounted
 
 static func option(game: MtgGame, pilot, source: CardInstance, index: int,
 		window: String) -> Variant:
-	if source.data.set_code != "fem":
+	if source.data.script_set != "fem":   # the script's own set (campaign w3-3)
 		return null
 	var ability: ActivatedAbility = source.cur_activated_abilities[index]
 	var pid: int = pilot.pid

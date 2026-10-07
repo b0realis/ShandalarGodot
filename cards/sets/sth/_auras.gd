@@ -43,9 +43,14 @@ static func configure(c: CardData) -> bool:
 				"{R}: Enchanted creature gets +1/-1 until end of turn."))
 		"Overgrowth":
 			c.enchants(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target land", _land))
-			c.triggered(TriggeredAbility.new(Mtg.EventType.TAPPED_FOR_MANA, _overgrowth,
+			var bonus := TriggeredAbility.new(Mtg.EventType.TAPPED_FOR_MANA, _overgrowth,
 				"Whenever enchanted land is tapped for mana, its controller adds an additional {G}{G}.",
-				_host_tapped).as_mana_trigger())
+				_host_tapped).as_mana_trigger()
+			# The planner's public description (ManaPlanner._bonus_triggers).
+			bonus.mana_bonus_subtype = ManaPlanner.BONUS_ENCHANTED_LAND
+			bonus.mana_bonus_color = Mtg.ManaColor.G
+			bonus.mana_bonus_amount = 2
+			c.triggered(bonus)
 		"Samite Blessing":
 			c.enchants(TargetSpec.creature())
 			var blessing := ActivatedAbility.new("", true, [BlessingShield.new()],

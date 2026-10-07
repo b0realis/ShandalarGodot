@@ -318,6 +318,7 @@ static func _load_set_at(root_path: String, set_code: String) -> void:
 			push_error("CardRegistry: %s/%s built null" % [set_code, file])
 			continue
 		data.set_code = set_code
+		data.script_set = set_code
 		data.artist = artist_of(data.card_name, set_code)
 		register(data)
 		if data.oracle_text == "" and not data.is_land() \
@@ -348,8 +349,23 @@ static func _load_optional_script(spec: Dictionary) -> void:
 			expected, data.card_name])
 		return
 	data.set_code = set_code
+	data.script_set = script_set_of(path, set_code)
 	data.artist = artist_of(data.card_name, set_code)
 	register(data)
+
+
+## THE SCRIPT'S OWN SET (campaign 2026-10-07, w3-3): the set folder under
+## [constant SETS_ROOT] that [param path] lives in — "ice" for Fifth
+## Edition's Necropotence, which Pack 7 loads from cards/sets/ice/ as
+## "5ed" — or [param fallback] (the displayed code) for a script kept
+## elsewhere (Pack 1's dormant cards). See [member CardData.script_set].
+static func script_set_of(path: String, fallback: String) -> String:
+	var root := SETS_ROOT + "/"
+	if path.begins_with(root):
+		var folder := path.trim_prefix(root).get_slice("/", 0)
+		if folder != "":
+			return folder
+	return fallback
 
 
 ## Register one card. Registering the same name twice is an authoring error

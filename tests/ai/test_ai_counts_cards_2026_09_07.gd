@@ -111,7 +111,16 @@ func test_braingeyser_is_sized_to_the_room_in_our_hand() -> void:
 
 
 func test_braingeyser_never_draws_the_last_card() -> void:
-	var ai := _ai(_counting())
+	# A library of three against thirty is a race already lost. Since the
+	# whole-game campaign (fix-ai-c, w6-5) a lost race still keeps the
+	# turns our board needs, so with no clock on the table the shipped
+	# pilot draws none of the three (test_campaign_fix_ai_c_casting.gd);
+	# the bound pinned here — never the last card — is the one under it,
+	# asked on the forecasts_tactics null arm where the lost race reads
+	# unbounded.
+	var profile := _counting()
+	profile.forecasts_tactics = false
+	var ai := _ai(profile)
 	give_hand(0, "Braingeyser")
 	_lands(0, "Island", 12)
 	g.players[0].library.resize(3)   # test surgery: a library of three

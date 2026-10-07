@@ -1492,8 +1492,13 @@ func _on_card_clicked(inst: CardInstance) -> void:
 			# then read a card that was no longer there (2026-09-02).
 			if _modal_open():
 				return
-			if not _is_human(inst.controller_id) and not (_is_human(game.priority_player) and game.may_tap_foreign_land(game.priority_player, inst)):
-				return   # AI cards are not the human's to operate
+			# AI cards are not the human's to operate — but for a land they
+			# may tap, and for an ability its card hands to any player or to
+			# its controller's opponents (campaign w5-7: Ifh-Bíff Efreet,
+			# Land's Edge, Mercenaries, Clergy of the Holy Nimbus).
+			if not _is_human(inst.controller_id) and not (_is_human(game.priority_player) and game.may_tap_foreign_land(game.priority_player, inst)) \
+					and not (inst.zone == Mtg.Zone.BATTLEFIELD and _offers_foreign_ability(_foreign_actor(), inst)):
+				return
 			if inst.zone == Mtg.Zone.HAND:
 				_click_hand_card(inst)
 			elif inst.zone == Mtg.Zone.BATTLEFIELD:
@@ -1562,7 +1567,7 @@ func _ability_highlight(item: StackItem) -> int:
 		if chosen.is_ability and chosen.ability_id == item.id:
 			return MiniCard.Highlight.TARGET_CHOSEN
 	var spec: TargetSpec = _pending_slots[_pending_slot]["spec"]
-	if spec.is_legal(game, TargetRef.ability(item), _pending_card):
+	if _aim_legal(spec, TargetRef.ability(item)):
 		return MiniCard.Highlight.TARGET_LEGAL
 	return MiniCard.Highlight.NONE
 
@@ -1611,7 +1616,7 @@ func _player_is_targetable(pid: int) -> bool:
 	if mode != Mode.TARGETING or _pending_slot >= _pending_slots.size():
 		return false
 	var spec: TargetSpec = _pending_slots[_pending_slot]["spec"]
-	return spec.is_legal(game, TargetRef.player(pid), _pending_card)
+	return _aim_legal(spec, TargetRef.player(pid))
 
 
 ## A panel can only be turned over if there is a face to turn it to — the
@@ -1963,7 +1968,7 @@ func _repopulate_graveyard() -> void:
 	if mode == Mode.TARGETING and _pending_slot < _pending_slots.size():
 		var spec: TargetSpec = _pending_slots[_pending_slot]["spec"]
 		legal = func(inst: CardInstance) -> bool:
-			return spec.is_legal(game, TargetRef.card(inst), _pending_card)
+			return _aim_legal(spec, TargetRef.card(inst))
 	# The dim covers the screen (s30) but the SHELVES lay out over the
 	# BOARD only: the sidebar holds the big card they fill, and a pile
 	# sitting on top of it would hide the very thing hovering is for.
@@ -2000,7 +2005,8 @@ func _pile_card_playable(seat: int, inst: CardInstance) -> bool:
 		return inst.is_land() or game.cast_timing_refusal(seat, inst) == ""
 	if inst.is_land():
 		return _land_drop_open(seat)
-	return game.cast_timing_refusal(seat, inst) == "" and _payable_now(seat, inst)
+	return game.cast_timing_refusal(seat, inst) == "" and _payable_now(seat, inst) \
+		and _has_something_to_aim_at(inst)
 
 
 ## Could [param pid] play a land right now — the land drop, mirroring
@@ -2130,6 +2136,16 @@ func _start_cast(inst: CardInstance) -> void:
 	if when_why != "":
 		_report(when_why)
 		return
+	# ...AND SO IS A SPELL WITH NOTHING TO AIM AT (campaign w5-5): a
+	# Counterspell over an empty chain, a Terror with no creature, an Aura
+	# with nothing to enchant. TargetPlan refuses it whatever is paid, and
+	# the double-click used to tap the lands for it first. The test is the
+	# castable light's ([method _has_something_to_aim_at]), so a card that
+	# is not lit for want of a target says why instead of opening a
+	# crosshair with nothing under it.
+	if not _has_something_to_aim_at(inst):
+		_report(NO_TARGET_PROMPT % inst.data.card_name)
+		return
 	_pending_card = inst
 	_pending_ability_index = -1
 	_pending_pid = pid
@@ -2240,6 +2256,31 @@ func _pending_wants_x() -> bool:
 		and not (row_cost as ManaCost).has_x)
 
 
+## The human seat a click on the OPPONENT'S permanent acts for: the seat
+## answering at a private hotseat, else the human seat holding priority,
+## else the seat the screen is drawn for (a player may reach for a card
+## while the other seat finishes its beat, as with their own).
+func _foreign_actor() -> int:
+	if config.private_hotseat():
+		return _private_decision_seat()
+	if _is_human(game.priority_player):
+		return game.priority_player
+	return _human_seat()
+
+
+## Does [param inst] — a permanent [param seat] does not control — carry an
+## activated ability its card lets [param seat] activate ([method
+## _may_activate]: "any player may activate this ability", "only your
+## opponents may")? What opens its menu to that seat (campaign w5-7).
+func _offers_foreign_ability(seat: int, inst: CardInstance) -> bool:
+	if seat < 0 or not _is_human(seat) or inst.controller_id == seat:
+		return false
+	for ability in inst.cur_activated_abilities:
+		if _may_activate(seat, inst, ability):
+			return true
+	return false
+
+
 func _click_permanent(inst: CardInstance) -> void:
 	if game.may_tap_foreign_land(game.priority_player, inst):
 		_open_ability_menu(inst, true)
@@ -2258,6 +2299,23 @@ func _click_permanent(inst: CardInstance) -> void:
 ## ([constant Mode.PAYING]): MANA ONLY. One mana ability taps straight
 ## away; several open the same menu the normal click does, with the
 ## activated abilities left out of it.
+## THE ANNOUNCEMENT BRACKET (campaign w7-5, CR 601.2g-h, 603.3): the
+## pending cast or activation is ANNOUNCED and its mana is now being paid,
+## so what that mana triggers — City of Brass's damage, Manabarbs, Kudzu,
+## Psychic Venom — waits ([method MtgGame.begin_announcement]) and goes on
+## the stack ABOVE the object once it is cast. Opened before every tap
+## made for the pending object (the double-click's plan, a land clicked in
+## [constant Mode.PAYING], a mana ability chosen from the menu there) and
+## closed by the cast itself, or by [method _clear_pending] for an
+## abandoned one. Not at an SGManalink table: there the referee pays.
+## A refusal (no priority yet, a question open) leaves the taps as they
+## always were.
+func _open_payment_bracket() -> void:
+	if _pending_card == null or _network_opponent():
+		return
+	game.begin_announcement(_pending_pid)
+
+
 func _tap_for_payment(inst: CardInstance) -> void:
 	var mana_count := inst.cur_mana_abilities.size()
 	if mana_count == 0:
@@ -2265,6 +2323,7 @@ func _tap_for_payment(inst: CardInstance) -> void:
 	if mana_count == 1:
 		if _pending_mana_conflicts(inst, 0):
 			return
+		_open_payment_bracket()
 		_report(game.tap_for_mana(_pending_pid, inst))
 		return
 	_open_ability_menu(inst, true)
@@ -2329,7 +2388,7 @@ func _advance_pending() -> void:
 		# where the markers are lit and waiting.
 		var damage_spec: TargetSpec = slot["spec"]
 		if damage_spec.kind == TargetSpec.Kind.DAMAGE:
-			var markers := damage_spec.legal_targets(game, _pending_card)
+			var markers := _aim_targets(damage_spec)
 			if markers.size() == 1:
 				_pending_groups[_pending_slot].append(markers[0])
 				_auto_slots.append(_pending_slot)
@@ -2403,6 +2462,24 @@ func _advance_pending() -> void:
 func _submit_pending() -> void:
 	if _pending_card == null or _submitting:
 		return
+	# A FINISHED CAST WAITS FOR PRIORITY (campaign w5-6). [method
+	# _start_cast] lets a player start aiming while the other seat is still
+	# finishing its beat; the last target click used to submit at once, the
+	# engine refused it ("you don't have priority"), the refusal dropped the
+	# cast — and the mana the double-click had already tapped floated, to
+	# burn under the 1997 rules. The cast is held instead and handed to the
+	# engine the moment priority arrives ([method _release_held_cast]).
+	if game.priority_player != _pending_pid:
+		_await_priority = true
+		_set_target_cursor(false)
+		_set_prompt(PRIORITY_WAIT_PROMPT % _pending_card.data.card_name)
+		return
+	# The double-click's taps, deferred until now ([method _auto_cast]):
+	# they tap and submit in one go.
+	if _auto_tap_deferred:
+		_auto_tap_deferred = false
+		_auto_tap_for_pending()
+		return
 	_submitting = true
 	var err: String
 	if _pending_ability_index < 0:
@@ -2437,6 +2514,28 @@ func _submit_pending() -> void:
 ## [method _submit_pending] is on the engine's side of the door right now
 ## — see its re-entrancy note.
 var _submitting := false
+
+
+## A finished cast held until its seat has priority (campaign w5-6) — see
+## [method _submit_pending] — and the double-click's taps, deferred to the
+## same moment ([method _auto_cast]).
+var _await_priority := false
+var _auto_tap_deferred := false
+
+## The bar's line while a finished cast waits for priority.
+const PRIORITY_WAIT_PROMPT := "%s is ready: it is cast when you get priority."
+
+
+## Priority has come to the seat a held cast belongs to: hand it to the
+## engine. Called from [method _refresh], which every pass reaches through
+## `state_changed`, whichever seat or driver passed.
+func _release_held_cast() -> void:
+	if not _await_priority or _pending_card == null or _submitting:
+		return
+	if game.priority_player != _pending_pid or game.awaiting_choice != null:
+		return
+	_await_priority = false
+	_submit_pending()
 
 
 ## COULD THE PENDING ACTION STILL BE PAID FOR, from everything this seat
@@ -2620,8 +2719,10 @@ func _auto_cast(inst: CardInstance) -> void:
 		# life. Fire Covenant always keeps its explicit payment question.
 		if _pending_ability_index < 0 and _pending_card.data.additional_life_is_x: return
 		# ...nor a count of the player's permanents or cards (Infernal
-		# Harvest's Swamps): an object-counted X is always asked.
-		if not _object_x_groups().is_empty(): return
+		# Harvest's Swamps): an object-counted X is always asked — and so is
+		# a printed {X} that counts cards as well (campaign w5-11: Abandon
+		# Hope's "discard X cards").
+		if not _object_x_groups().is_empty() or _object_x_cap() >= 0: return
 		var budget := _auto_x_budget()
 		_x_spin.max_value = maxi(budget, int(_x_spin.max_value))
 		_x_spin.value = budget
@@ -2630,8 +2731,45 @@ func _auto_cast(inst: CardInstance) -> void:
 		return          # the X answer finished or abandoned the cast
 	if _modal_open():
 		return          # a mode or a tutor pick is the player's to make
+	# NOTHING TO AIM AT, NOTHING TAPPED (campaign w5-5). The X the gesture
+	# chose can leave the slot empty — a Detonate for all the mana there is
+	# facing no artifact of that mana value — and the lands used to be
+	# tapped first and the cast found unaimable after: mana that burns
+	# under the 1997 rules. The cast stays open for Cancel or another X.
+	if not _open_slot_aimable():
+		_set_prompt(NO_TARGET_PROMPT % inst.data.card_name)
+		_refresh()
+		return
+	# NOT WITHOUT PRIORITY (campaign w5-6). A player may reach for a card
+	# while the other seat finishes its beat ([method _start_cast]); the
+	# gesture's taps wait until priority is theirs ([method
+	# _release_held_cast]), so a cast the opponent's answer makes illegal
+	# leaves no mana floating to burn.
+	if game.priority_player != _pending_pid:
+		_auto_tap_deferred = true
+		_refresh()
+		return
 	_auto_tap_for_pending()
 	_refresh()
+
+
+## The bar's line for a cast with nothing to aim at (campaign w5-5).
+const NO_TARGET_PROMPT := "%s has no legal target."
+
+
+## Has the targeting slot now open anything to take — or does it want
+## nothing (an optional slot, or no slot open)? Asked at the pending X with
+## the earlier slots' picks in hand ([method _aim_targets]).
+func _open_slot_aimable() -> bool:
+	if mode != Mode.TARGETING or _pending_slot >= _pending_slots.size():
+		return true
+	var slot: Dictionary = _pending_slots[_pending_slot]
+	if int(slot["min"]) <= 0 and int(slot["divided"]) <= 0:
+		return true
+	var earlier: Array = []
+	for index in _pending_slot:
+		earlier.append_array(_pending_groups[index])
+	return not _aim_targets(slot["spec"], earlier).is_empty()
 
 
 ## The mana of the largest X the pending cast could pay, the gesture's
@@ -2762,7 +2900,10 @@ func _auto_tap_for_pending() -> void:
 			_pending_ability_index, _pending_x)
 	var tap_plan := ManaPlanner.plan_from(_pending_payment_sources(_no_auto_tap, true),
 		payment["cost"], int(payment["extra"]), payment["usage"])
-	if not ManaPlanner.run_plan(game, _pending_pid, tap_plan):
+	_open_payment_bracket()   # campaign w7-5: the taps' triggers wait for the cast
+	if not ManaPlanner.run_plan(game, _pending_pid, tap_plan,
+			payment["cost"], int(payment["extra"]), payment["usage"],
+			(func(card: CardInstance) -> bool: return _pending_card != card).bind(_pending_card)):
 		_auto_resume = true
 		_auto_hold_pool = _payment_pool_state()
 		return
@@ -2832,12 +2973,37 @@ func _lone_counter_target(slot: Dictionary) -> TargetRef:
 		if item.controller != foe:
 			continue
 		var ref := TargetRef.card(item.card)
-		if not spec.is_legal(game, ref, _pending_card):
+		if not _aim_legal(spec, ref):
 			continue
 		if only != null:
 			return null   # two or more: the player chooses
 		only = ref
 	return only
+
+
+# THE AIM AT THE X BEING PAID (campaign w5-2). "Target artifact with mana
+# value X" (Detonate), "target spell with mana value X" (Spell Blast),
+# Gorilla Shaman's and Kaervek's Purge's: the X is part of the targeting
+# restriction (CR 115.4, 601.2c), and the engine's filters read it through
+# [method MtgGame.casting_x] — which the picker never fed, so every target
+# was judged at X = 0 and a Detonate for 2 could not be aimed at a
+# two-drop. Every legality the targeting loop asks goes through these
+# three, with the pending action's own X proposed for the length of the
+# question ([method MtgGame.target_legal_at] and its twins).
+
+## Is [param ref] legal for [param spec] at the pending action's X?
+func _aim_legal(spec: TargetSpec, ref: TargetRef, earlier: Array = []) -> bool:
+	return game.target_legal_at(spec, ref, _pending_card, _pending_x, earlier)
+
+
+## Every legal target of [param spec] at the pending action's X.
+func _aim_targets(spec: TargetSpec, earlier: Array = []) -> Array[TargetRef]:
+	return game.legal_targets_at(spec, _pending_card, _pending_x, earlier)
+
+
+## Why [param ref] is not legal for [param spec] at the pending X, or "".
+func _aim_refusal(spec: TargetSpec, ref: TargetRef, earlier: Array = []) -> String:
+	return game.target_refusal_at(spec, ref, _pending_card, _pending_x, earlier)
 
 
 func _try_take_target(ref: TargetRef) -> void:
@@ -2848,7 +3014,7 @@ func _try_take_target(ref: TargetRef) -> void:
 	var earlier: Array = []
 	for index in _pending_slot: earlier.append_array(_pending_groups[index])
 	if spec.compare_within_group: earlier.append_array(_pending_groups[_pending_slot])
-	var why := spec.refusal_reason(game, ref, _pending_card, earlier)
+	var why := _aim_refusal(spec, ref, earlier)
 	if why != "":
 		# @PROMPT_ILLEGALTARGET, UIStrings.txt:1145 — "Illegal target."
 		# and "Illegal target (%s)." with the reason in the brackets, and
@@ -2987,6 +3153,12 @@ static func _ordinal(n: int) -> String:
 ## tutor pick, if any, stays parked for the resolution that will ask for
 ## it. Every other way out of the chain abandons the cast and the pick.
 func _clear_pending(cast := false) -> void:
+	# An announcement abandoned with its mana half paid closes its bracket:
+	# what that mana triggered goes on the stack now (campaign w7-5). A
+	# cast that went through has closed it already — a no-op then. Closed
+	# LAST, once nothing is pending: the engine refreshes the table from
+	# inside, and a refresh that still saw the cast would retry it.
+	var bracket_pid := _pending_pid if _pending_card != null and not _network_opponent() else -1
 	mode = Mode.NORMAL
 	_close_mode_overlay()
 	_pending_card = null
@@ -3000,10 +3172,14 @@ func _clear_pending(cast := false) -> void:
 	_pending_target_count = -1
 	_paying_pool = []
 	_auto_resume = false
+	_await_priority = false
+	_auto_tap_deferred = false
 	# A parked-but-uncast tutor pick must not leak into the next search.
 	if not cast and _humans.has(_pending_pid):
 		_humans[_pending_pid].preselect("")
 	_set_target_cursor(false)
+	if bracket_pid >= 0:
+		game.end_announcement(bracket_pid)
 
 
 ## `Input.set_custom_mouse_cursor` is PROCESS-GLOBAL: begin targeting,
@@ -3048,7 +3224,7 @@ func _specs_for_cast(inst: CardInstance, chosen_mode: int) -> Array[TargetSpec]:
 	var effects: Array = _row_effects(inst, chosen_mode)
 	var specs: Array[TargetSpec] = []
 	for e in effects:
-		if e.target_spec != null:
+		if e.target_spec != null and e.target_spec.is_supplied_by_caster():
 			specs.append(e.target_spec)
 	return specs
 
@@ -3098,7 +3274,13 @@ func _build_target_slots(data: CardData, chosen_mode: int) -> void:
 	var effects: Array = _cast_effects(data, chosen_mode)
 	var counted := false
 	for e in effects:
-		if e.target_spec == null:
+		# A target the CASTER does not name — an opponent's choice
+		# (Preacher, Arena, Nova Pentacle) or the game's roll (Orcish
+		# Catapult, Goblin Polka Band, Faerie Dragon) — is the engine's to
+		# fill (CR 601.2c, [method TargetSpec.is_supplied_by_caster]), and
+		# it takes no ref for it: asking the player for one built a cast the
+		# engine refused, "takes N target(s), got M" (campaign w5-1).
+		if e.target_spec == null or not e.target_spec.is_supplied_by_caster():
 			continue
 		var span: Vector2i = e.target_range(_pending_x)
 		# `# Targets:` (§6.14): when the X dialog asked how many, the
@@ -3128,7 +3310,9 @@ func _build_ability_slots(ability: ActivatedAbility, x_value := 0) -> void:
 	_pending_groups = []
 	_pending_slot = 0
 	for e in ability.effects:
-		if e.target_spec == null:
+		# The caster's targets only — see [method _build_target_slots]
+		# (Cuombajj Witches' second target is the opponent's choice).
+		if e.target_spec == null or not e.target_spec.is_supplied_by_caster():
 			continue
 		var span: Vector2i = e.target_range(x_value)
 		_pending_slots.append({
@@ -3235,6 +3419,11 @@ func _open_mode_menu(inst: CardInstance) -> void:
 		if why == "" or MtgGame.is_unpaid_refusal(why):
 			var announce := game.spell_announce_refusal(payer, inst, 0, i)
 			if announce != "": why = announce
+		# ...and a row with nothing to aim at (campaign w5-5): Active
+		# Volcano's "destroy target blue permanent" with no blue permanent.
+		if (why == "" or MtgGame.is_unpaid_refusal(why)) and not inst.data.is_aura() \
+				and not _effects_aimable(_row_effects(inst, i), inst):
+			why = "no legal target"
 		if why != "" and not MtgGame.is_unpaid_refusal(why):
 			opt.disabled = true
 			opt.tooltip_text = why
@@ -3365,9 +3554,16 @@ func _on_search_confirmed() -> void:
 	_close_search_dialog()
 	if _pending_card == null:
 		return
-	if chosen != "" and _humans.has(_pending_pid):
-		_humans[_pending_pid].preselect(chosen)
-	# No selection = deliberate "fail to find" — legal for searches.
+	# No selection = deliberate "fail to find" — legal for searches — and
+	# PARKED as one (campaign w5-3): parking nothing read as "not asked
+	# yet" in [method _continue_cast_chain], which opened the picker again,
+	# so a tutor with nothing to find (Nature's Lore, no Forest left) could
+	# only be cancelled.
+	if _humans.has(_pending_pid):
+		if chosen != "":
+			_humans[_pending_pid].preselect(chosen)
+		else:
+			_humans[_pending_pid].decline_search()
 	_continue_cast_chain()
 
 
@@ -3715,6 +3911,62 @@ func _block_cost_note() -> String:
 ## it can block at least one it is not already set against. The reason is
 ## the first attacker's, which for the case that matters — a tapped
 ## creature — is the same for all of them ("tapped creatures can't block").
+## THE EMPTY BLOCK DECLARES ITSELF (campaign w5-9, [QoL]) — the defending
+## twin of the owner's Stop-off combat skip ([constant SKIP_OFFER], *"it
+## just skips if no creatures are on your board"*) and of the 2026-09-03
+## rule, *"if nothing happens on a phase... it should go automatically EVEN
+## FOR ME"*. True when the declaration owed here has exactly one legal
+## answer, NO BLOCKERS: not one creature of the defending player's could
+## block any attacker ([method _cannot_block_anything], the engine's own
+## legality — so a creature that must block if able, a Lure, a paid block
+## all still ask), and the player has not put a Stop on the Combat Bar's
+## blockers icon (a Stop means "it cannot pass automatically"). Never at a
+## hotseat (no seat is "the opponent", as for the automatic pass) or an
+## SGManalink table (the referee's declaration, not this projection's).
+## Before, every AI attack into a board that could not block cost a Done.
+func _nothing_can_block() -> bool:
+	if game == null or game.game_over or _toss_active or _network_opponent():
+		return false
+	if _ais.is_empty():
+		return false
+	var here := _phase_key()
+	if stops != null and stops.is_marked(here[0], here[1], here[2]):
+		return false
+	var defender := game.opponent_of(game.active_player)
+	for inst in game.players[defender].battlefield:
+		if inst.is_creature() and _cannot_block_anything(inst) == "":
+			return false
+	return true
+
+
+## Declare no blockers for the player and say so for a moment; false
+## (nothing declared) when the engine refuses, and the declaration is then
+## the player's as it always was. Under the standing orders' re-entrancy
+## guard, as every pass made on the player's behalf is.
+func _declare_no_blockers() -> bool:
+	_drop_cast_for_declaration()
+	_advancing = true
+	# The engine refreshes the table from INSIDE the declaration (its
+	# recalculation emits `state_changed` while it is still waiting on the
+	# blockers): that refresh must neither declare again nor put the table
+	# in BLOCKERS mode under a declaration already being made.
+	_declaring_no_blockers = true
+	var refused := game.declare_blockers(game.block_chooser(), {})
+	_declaring_no_blockers = false
+	_advancing = false
+	if refused != "":
+		return false
+	_report(NO_BLOCKERS_NOTE)
+	return true
+
+
+## [method _declare_no_blockers] is inside the engine's declaration.
+var _declaring_no_blockers := false
+
+## The bar's moment when the empty block declared itself.
+const NO_BLOCKERS_NOTE := "No creature can block."
+
+
 func _cannot_block_anything(blocker: CardInstance) -> String:
 	var defender := game.opponent_of(game.active_player)
 	var first := ""
@@ -4804,8 +5056,31 @@ func _fast_spells(pid: int) -> Array:
 ## not prepared anything.
 func _payable_now(pid: int, inst: CardInstance) -> bool:
 	return (game.could_afford(pid, inst.data, _no_auto_tap, inst)
-			and _printed_object_costs_payable(pid, inst)) \
+			and _printed_object_costs_payable(pid, inst)
+			and _printed_row_announceable(pid, inst)) \
 		or _alternative_row_payable(pid, inst)
+
+
+## Would the engine ANNOUNCE [param inst] for [param pid] through one of its
+## PRINTED rows — a mode of a modal spell, or the card's own cost with or
+## without buyback — for everything but the targets and the mana
+## ([method MtgGame.spell_announce_refusal]: the clock, the 1997 damage
+## window's whitelist, the row's life and object costs, and the older
+## "sacrifice a Goblin" additional cost the object groups do not carry)?
+##
+## WITHOUT IT (campaign w5-10, w5-8) a Goblin Grenade with no Goblin was
+## lit yellow and held the opponent's end step as a "response", and a
+## Lightning Bolt in hand held the damage-prevention window, where the
+## engine takes nothing but prevention and regeneration.
+func _printed_row_announceable(pid: int, inst: CardInstance) -> bool:
+	var data := inst.data
+	for mode in maxi(data.modes.size(), 1):
+		if data.is_modal() and MtgGame.is_alternative_payment(
+				Dictionary(data.modes[mode]).get("payment", {})):
+			continue   # an alternative row is [method _alternative_row_payable]'s
+		if game.spell_announce_refusal(pid, inst, 0, mode) == "":
+			return true
+	return false
 
 
 ## Can [param pid] pay the PRINTED row's OBJECT costs right now — *"As an
@@ -4846,6 +5121,10 @@ func _alternative_row_payable(pid: int, inst: CardInstance) -> bool:
 	for mode in rows.size():
 		var row: Dictionary = Dictionary(rows[mode]).get("payment", {})
 		if row.is_empty():
+			continue
+		# The row's announcement first (campaign w5-8): a Fireblast's two
+		# Mountains are no response in the damage-prevention window.
+		if game.spell_announce_refusal(pid, inst, 0, mode) != "":
 			continue
 		var why := game.payment_row_refusal(pid, inst, mode, false)
 		if why == "":
@@ -4893,21 +5172,94 @@ func _has_affordable_fast_effect(pid: int) -> bool:
 		# ([method MtgGame.targeting_surcharge_floor]).
 		# ...and its "as an additional cost" objects (H8-2): floating
 		# {B}{B} is no prepared Wicked Reward with nothing to sacrifice.
+		# ...and (campaign w5-5/w5-8) what the engine refuses before any
+		# mana: the damage window, the "sacrifice a Goblin" of the printed
+		# row, a target to aim at.
 		if game.can_afford(pid, inst.data, inst) \
-				and _printed_object_costs_payable(pid, inst):
+				and _printed_object_costs_payable(pid, inst) \
+				and _printed_row_announceable(pid, inst) \
+				and _has_something_to_aim_at(inst):
 			return true
-	for inst in game.all_battlefield():
-		if inst.controller_id != pid:
+	# `cur_activated_abilities` never holds mana abilities — those are their
+	# own list (`cur_mana_abilities`), which is right: "Drawing mana from a
+	# mana source is neither a spell nor an effect" (manual p.95), so it is
+	# not a fast effect either.
+	#
+	# THE FLOATING POOL FOR ABILITIES TOO (campaign w5-4). The ability half
+	# priced through `can_afford_cost`, whose plan taps untapped lands — so
+	# a Shivan Dragon beside one open Mountain, an untapped Prodigal
+	# Sorcerer or a Mogg Fanatic (no mana at all) stopped every step of
+	# both turns, and Return (Done) was refused on the spot, silently. The
+	# documented rule above is the FLOATING pool, and an ability whose
+	# cost holds no mana is nothing the player has prepared: it is a
+	# response ([method _could_respond]) wherever a window is for one, and
+	# not a reason to hold a quiet step.
+	#
+	# ONE EXCEPTION, the owner's (2026-09-25, Nettling Imp: *"plays like
+	# instant on the opponent turns only"*): a free ability whose PRINTED
+	# TIMING RIDER confines it to a moment ([method _has_timing_rider] —
+	# the Imp's "during an opponent's turn, before attackers are
+	# declared") is held for in that moment, which is all the rider leaves
+	# it; the automatic pass would otherwise walk the player past the
+	# Imp's whole window on every turn it has one.
+	for pair in _abilities_open_to(pid):
+		var inst: CardInstance = pair[0]
+		var index: int = pair[1]
+		if _ability_costs_no_mana(pid, inst, index) \
+				and not _has_timing_rider(inst.cur_activated_abilities[index]):
 			continue
-		# `cur_activated_abilities` never holds mana abilities — those are
-		# their own list (`cur_mana_abilities`), which is right: "Drawing
-		# mana from a mana source is neither a spell nor an effect"
-		# (manual p.95), so it is not a fast effect either.
-		for ability in inst.cur_activated_abilities:
-			if _ability_open(pid, inst, ability) \
-					and game.can_afford_cost(pid, ability.cost):
-				return true
+		if game.activation_refusal(pid, inst, index, {}, true) == "":
+			return true
 	return false
+
+
+## Every `[permanent, ability index]` [param pid] may activate by the
+## card's WHO rule — the abilities of their own permanents, and on anyone's
+## an "any player may activate this ability" (Ifh-Bíff Efreet, Land's
+## Edge, Mercenaries) or an "only your opponents may" (Clergy of the Holy
+## Nimbus) one — whose source is untapped where it must be and whose
+## printed timing admits the moment ([method _ability_open]). The cheap
+## sieve; [method MtgGame.activation_refusal] is the verdict (campaign w5-7).
+func _abilities_open_to(pid: int) -> Array:
+	var out: Array = []
+	for inst in game.all_battlefield():
+		for index in inst.cur_activated_abilities.size():
+			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+			if _may_activate(pid, inst, ability) and _ability_open(pid, inst, ability):
+				out.append([inst, index])
+	return out
+
+
+## May [param pid] activate [param ability] of [param inst] at all — the
+## card's WHO rule, as [method MtgGame.ability_announce_refusal] reads it:
+## any player, only the owner, only an opponent, else the controller.
+static func _may_activate(pid: int, inst: CardInstance, ability: ActivatedAbility) -> bool:
+	if ability.any_player_may_activate:
+		return true
+	if ability.only_owner_may_activate:
+		return inst.owner_id == pid
+	if ability.only_opponents_may_activate:
+		return inst.controller_id != pid
+	return inst.controller_id == pid
+
+
+## Does [param ability] carry a printed TIMING rider — "activate only
+## during combat", "only during the <step>", "only before the <step>",
+## "only during your turn / an opponent's turn", or a card's own condition
+## (Nettling Imp's "before attackers are declared")? What
+## [method MtgGame.ability_timing_refusal] reads.
+static func _has_timing_rider(ability: ActivatedAbility) -> bool:
+	return ability.only_during_combat or ability.only_during_step >= 0 \
+		or ability.only_before_step >= 0 or ability.turn_restriction != 0 \
+		or ability.activation_condition.is_valid()
+
+
+## Does [param inst]'s ability [param index] cost [param pid] no mana at
+## its least X (Prodigal Sorcerer's {T}, Mogg Fanatic's sacrifice)?
+func _ability_costs_no_mana(pid: int, inst: CardInstance, index: int) -> bool:
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var payment := game.ability_payment(pid, inst, index, maxi(0, ability.min_x))
+	return ManaPlanner.cost_is_free(payment["cost"]) and int(payment["extra"]) <= 0
 
 
 ## Is this ability of [param inst] one its controller could pay for with
@@ -4956,27 +5308,70 @@ func _ability_open(pid: int, inst: CardInstance, ability: ActivatedAbility) -> b
 ## THE LICENCE is `Duel.hlp`, topic **Hands**: a card is *"useable"* when
 ## *"all the necessary conditions are met"*, and a target is one. It is
 ## asked only of instants the mana could already reach, so the walk over
-## the board is rare and short; a modal spell (Healing Salve) is left as
-## a response, because its modes want different things and one may be
-## castable — the conservative answer, which costs a click and never a
-## play. Optional and "X target" slots (`target_min` 0, `target_count_is_x`)
-## are left alone for the same reason.
+## the board is rare and short. A MODAL spell has something to aim at when
+## ANY of its modes does (campaign w5-5: a Blue Elemental Blast with no red
+## spell and no red permanent is not useable, Healing Salve always is) —
+## the mode is the player's choice, and each mode's targets are its own.
+## Optional and "X target" slots (`target_min` 0, `target_count_is_x`) are
+## left alone: they can always be cast with what exists.
 func _has_something_to_aim_at(inst: CardInstance) -> bool:
 	if inst.data.is_modal():
-		return true
+		for chosen in inst.data.modes:
+			if _effects_aimable(Dictionary(chosen).get("effects", []), inst):
+				return true
+		return false
 	# An AURA's one target is what it will enchant (CR 303.4a) — a Mirage
 	# flash-rider Aura (Armor of Thorns) with no creature on the table has
 	# nothing to be cast at, and has no spell effects for the walk below.
 	if inst.data.is_aura():
 		return inst.data.aura_target == null \
-			or not inst.data.aura_target.legal_targets(game, inst).is_empty()
-	for effect in inst.data.spell_effects:
+			or _spec_reachable(inst.data.aura_target, inst)
+	return _effects_aimable(inst.data.spell_effects, inst)
+
+
+## Has every targeting effect of [param effects] that demands a target one
+## [param inst] could reach ([method _spec_reachable])?
+func _effects_aimable(effects: Array, inst: CardInstance) -> bool:
+	for effect in effects:
 		var spec: TargetSpec = effect.target_spec
 		if spec == null or effect.target_min <= 0 or effect.target_count_is_x:
 			continue
-		if spec.legal_targets(game, inst).is_empty():
+		# A ROLLED division of X (Orcish Catapult) rolls nothing at X = 0
+		# and is cast with no target at all (the engine's own reading,
+		# `_random_targets_refusal`).
+		if spec.chosen_at_random and effect.divided_uses_x:
+			continue
+		# As many distinct targets as the effect demands (Death's Duet's
+		# "two target creature cards", CR 601.2c).
+		if not _spec_reachable(spec, inst, effect.target_min):
 			return false
 	return true
+
+
+## The X values an aim at a "mana value X" target is tried at before the
+## light gives up on it — no board in this pool holds a permanent or a
+## spell of mana value above this.
+const X_TARGET_PROBE := 16
+
+
+## Has [param spec] a legal target for [param inst] at SOME X the card could
+## be cast for? At X = 0 first ([method MtgGame.legal_targets_at] — never the
+## X a previous cast left stamped on the card); a card with {X} in its cost
+## whose filter reads that X (Detonate's "artifact with mana value X",
+## Spell Blast's "spell with mana value X") is tried at each X up to
+## [constant X_TARGET_PROBE], so a Detonate facing only a two-drop is still
+## lit (campaign w5-2). Optimistic about the mana on purpose: that is
+## [method _payable_now]'s question, not this one's.
+func _spec_reachable(spec: TargetSpec, inst: CardInstance, need := 1) -> bool:
+	need = maxi(need, 1)
+	if game.legal_targets_at(spec, inst, 0).size() >= need:
+		return true
+	if not inst.data.cost.has_x:
+		return false
+	for x in range(1, X_TARGET_PROBE + 1):
+		if game.legal_targets_at(spec, inst, x).size() >= need:
+			return true
+	return false
 
 
 ## HAS [param pid] A RESPONSE AT ALL — an instant in hand or an activated
@@ -5013,16 +5408,17 @@ func _could_respond(pid: int) -> bool:
 	for inst in _fast_spells(pid):
 		if _payable_now(pid, inst) and _has_something_to_aim_at(inst):
 			return true
-	for inst in game.all_battlefield():
-		if inst.controller_id != pid:
-			continue
-		for ability in inst.cur_activated_abilities:
-			# `can_afford_cost` builds the engine's own tap plan, so an
-			# ability's mana is priced the same way an instant's is:
-			# floating first, then the lands the plan could still tap.
-			if _ability_open(pid, inst, ability) \
-					and game.can_afford_cost(pid, ability.cost):
-				return true
+	# THE ENGINE'S OWN VERDICT (campaign w5-10, w5-7): [method
+	# MtgGame.activation_refusal] prices the mana the way an instant's is
+	# priced — floating first, then the sources a plan could still tap —
+	# AND every cost that is not mana (a Goblin Bombardment with no creature
+	# to sacrifice, a counter to remove, an untapped Coral Reef's Island to
+	# tap), a target to aim at, the damage window's whitelist and WHO may
+	# activate it: an "any player may" ability on the opponent's permanent
+	# is a response of this seat's, an opponents-only one on its own is not.
+	for pair in _abilities_open_to(pid):
+		if game.activation_refusal(pid, pair[0], pair[1]) == "":
+			return true
 	# A PAYMENT ON THE SEAT IS A RESPONSE TOO (H1-F1, 2026-10-04): Sabertooth
 	# Cobra's ransom, due before the seat's next upkeep — the opponent's end
 	# step is the last window for it, and the automatic pass walked the
@@ -5039,6 +5435,10 @@ func _could_respond(pid: int) -> bool:
 		if String(entry["kind"]) == "channel":
 			continue
 		if String(entry["kind"]) == "prevention" and game.awaiting_regeneration:
+			continue
+		# The damage window takes a point of prevention and nothing else.
+		if (game.awaiting_damage_prevention or game.awaiting_regeneration) \
+				and String(entry["kind"]) != "prevention":
 			continue
 		if ENGINE_SPECIAL_KINDS.has(String(entry["kind"])):
 			if not game.stack.is_empty() and _special_action_refusal(pid, entry) == "":
@@ -5131,7 +5531,17 @@ func _required_action_reason() -> String:
 	# original made leaving it a deliberate click of its own
 	# (`@PROMPT_ENDHEALING` = `end damage prevention`), and here that click
 	# is the Done button's single pass.
-	if game.awaiting_damage_prevention or game.awaiting_regeneration:
+	#
+	# ...FOR A PLAYER WHO HOLDS SOMETHING FOR IT (campaign w5-8). The window
+	# opens on every damage event under the 1997 rules, whoever holds what,
+	# and with nothing of the player's own it could take — no prevention or
+	# regeneration effect they could pay for and aim, no paid point of
+	# prevention ([method _could_respond], whose every half the window's
+	# whitelist now narrows) — it is a click with no decision in it, and it
+	# is passed like any other quiet window. The test reads only the
+	# player's own hand and board: what the computer holds never decides it.
+	if (game.awaiting_damage_prevention or game.awaiting_regeneration) \
+			and _window_holds_for(game.priority_player):
 		return "damage prevention is waiting"
 	if mode != Mode.NORMAL:
 		return "an action is in progress"
@@ -5141,6 +5551,18 @@ func _required_action_reason() -> String:
 	if game.awaiting_choice != null:
 		return "a choice is waiting"
 	return ""
+
+
+## Does the open damage-prevention or regeneration window hold [param pid]
+## — a human seat with something of its own it could use in it ([method
+## _could_respond], every half of which hears the window's whitelist)?
+## At an SGManalink table the window always holds: the projection's
+## response flag is the referee's reading of the whole moment, not of the
+## window's whitelist (campaign w5-8).
+func _window_holds_for(pid: int) -> bool:
+	if _network_opponent():
+		return true
+	return _is_human(pid) and _could_respond(pid)
 
 
 ## Why the duel must not advance one more time, or "" to keep going. The
@@ -5774,6 +6196,13 @@ func _open_x_dialog() -> void:
 			budget = mini(budget, x_targets)          # the field IS X
 		elif per_target <= 0 and not repeats:
 			budget = mini(budget, x_targets * per_x)  # the field is X's mana
+	# A PRINTED {X} THAT ALSO COUNTS OBJECTS (campaign w5-11): Abandon Hope's
+	# "As an additional cost to cast this spell, discard X cards", Aether
+	# Tide's X creature cards, Scorched Earth's X land cards. The mana bought
+	# 34 points of X over a hand of one; the cards decide as much as the mana.
+	var object_cap := _object_x_cap()
+	if object_cap >= 0 and per_target <= 0 and not repeats and not life_x:
+		budget = mini(budget, object_cap * per_x)
 	_pending_target_count = -1
 	if _x_dialog != null:
 		_x_dialog.queue_free()
@@ -5794,6 +6223,16 @@ const OC := preload("res://engine/additional_object_costs.gd")
 ## mana — the spell prints no {X}. Empty otherwise. A payment row's own
 ## groups (an alternative cost, CR 118.9) are included for the chosen row.
 func _object_x_groups() -> Array:
+	var found := _pending_object_groups()
+	if found.is_empty() or int(found[0]) > 0 or not OC.uses_x(found[1]):
+		return []
+	return found[1]
+
+
+## `[printed x_count, object-cost groups]` of the pending action — the
+## ability's, or the spell's with its chosen row's — or `[]` when there is
+## no pending action (or its ability has gone).
+func _pending_object_groups() -> Array:
 	if _pending_card == null:
 		return []
 	var groups: Array = []
@@ -5810,9 +6249,20 @@ func _object_x_groups() -> Array:
 		# The ROW's own groups — a buyback's, a granted row's (Pack 9).
 		groups.append_array(game.payment_option_for(_pending_pid, _pending_card.data,
 			_pending_mode, _pending_card).get("object_costs", []))
-	if printed.x_count > 0 or not OC.uses_x(groups):
-		return []
-	return groups
+	return [printed.x_count, groups]
+
+
+## The most X a PRINTED {X} may be announced for when the action's object
+## costs count X as well (campaign w5-11 — Abandon Hope's "discard X
+## cards"): the engine's own count of what the seat could pay with
+## (`AdditionalObjectCosts.max_x`). -1 when no object cost counts X, or
+## when no {X} is printed — then X counts objects only, and
+## [method _object_x_groups] is the window's whole question.
+func _object_x_cap() -> int:
+	var found := _pending_object_groups()
+	if found.is_empty() or int(found[0]) <= 0 or not OC.uses_x(found[1]):
+		return -1
+	return maxi(0, OC.max_x(game, _pending_pid, found[1], _pending_card))
 
 
 ## The X window's question for an object-counted X: "X — Return a Swamp
@@ -5855,7 +6305,10 @@ func _x_target_ceiling() -> int:
 		effects = _row_effects(_pending_card, _pending_mode)
 	var ceiling := -1
 	for e in effects:
-		if e.target_spec == null or not e.target_count_is_x:
+		# A rolled "X random targets" (Orcish Catapult) is bounded by the
+		# engine's roll, not by the caster (campaign w5-1).
+		if e.target_spec == null or not e.target_count_is_x \
+				or not e.target_spec.is_supplied_by_caster():
 			continue
 		var found: int = e.target_spec.legal_targets(game, _pending_card).size()
 		ceiling = found if ceiling < 0 else mini(ceiling, found)
@@ -5931,17 +6384,27 @@ func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 	var actor := _pending_pid if mode == Mode.PAYING else game.priority_player
 	var borrowed := inst.controller_id != actor and game.may_tap_foreign_land(actor, inst)
 	if borrowed: mana_only = true
+	# THE OTHER SEAT'S PERMANENT (campaign w5-7) offers only what its card
+	# hands this seat — "any player may activate", "only your opponents
+	# may"; its mana is its controller's. And on a seat's own permanent an
+	# ability only its opponents may use is greyed, not offered.
+	var foreign := not borrowed and mode != Mode.PAYING and not _is_human(inst.controller_id)
+	var who := _foreign_actor() if foreign else inst.controller_id
 	var id := 0
 	for ability in inst.cur_mana_abilities:
 		_ability_menu.add_item(str(game.mana_ability_for(actor, inst, id)), id)
-		_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone
+		_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone or foreign
 			or (borrowed and not game.may_tap_foreign_land(actor, inst, id))
 			or (mode == Mode.PAYING and _pending_mana_conflicts(inst, id)))
 		id += 1
 	if not mana_only:
 		for ability in inst.cur_activated_abilities:
 			_ability_menu.add_item(ability.text, id)
-			_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone)
+			var may := _may_activate(who, inst, ability)
+			_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone or not may)
+			if not may:
+				_ability_menu.set_item_tooltip(id, "Only your opponents may activate this ability."
+					if ability.only_opponents_may_activate else "That ability is not yours to activate.")
 			for effect in ability.effects:
 				if effect.is_regeneration:
 					_ability_menu.set_item_tooltip(id,
@@ -5951,6 +6414,7 @@ func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 					break
 			id += 1
 	_ability_menu.set_meta("mana_only", mana_only)
+	_ability_menu.set_meta("foreign", foreign)
 	_ability_menu.set_meta("actor", actor if borrowed or mode == Mode.PAYING else inst.controller_id)
 	_ability_menu.set_meta("instance_id", inst.id)
 	_ability_menu.position = Vector2i(_pointer())
@@ -5973,6 +6437,10 @@ func _on_ability_chosen(id: int) -> void:
 	if id < mana_count:
 		if mode == Mode.PAYING and _pending_mana_conflicts(inst, id):
 			return
+		if bool(_ability_menu.get_meta("foreign", false)):
+			return   # the other seat's mana is its controller's (campaign w5-7)
+		if mode == Mode.PAYING:
+			_open_payment_bracket()   # campaign w7-5
 		_report(game.tap_for_mana(int(_ability_menu.get_meta("actor", inst.controller_id)), inst, id))
 		return
 	if bool(_ability_menu.get_meta("mana_only", false)):
@@ -6115,6 +6583,10 @@ func _refresh() -> void:
 		# asks (docs/glossary-1997.md).
 		_set_prompt("Combat phase: Choose attackers.")
 	elif game.awaiting_blockers and mode != Mode.BLOCKERS \
+			and _is_human(game.block_chooser()) and (_declaring_no_blockers \
+				or (_nothing_can_block() and _declare_no_blockers())):
+		pass   # declared for the player: nothing could block (campaign w5-9)
+	elif game.awaiting_blockers and mode != Mode.BLOCKERS \
 			and _is_human(game.block_chooser()):
 		_drop_cast_for_declaration()
 		mode = Mode.BLOCKERS
@@ -6165,6 +6637,7 @@ func _refresh() -> void:
 	# [method _retry_payment].
 	_resume_auto_tap()
 	_retry_payment()
+	_release_held_cast()
 	_maybe_schedule_ai()
 
 	for pid in 2:
@@ -6334,7 +6807,7 @@ func _pile_holds_a_target(pid: int) -> bool:
 	for zone in [game.players[pid].graveyard, game.players[pid].exile,
 			game.players[pid].ante]:
 		for inst in zone:
-			if spec.is_legal(game, TargetRef.card(inst), _pending_card):
+			if _aim_legal(spec, TargetRef.card(inst)):
 				return true
 	return false
 
@@ -6935,9 +7408,9 @@ func _on_territory_menu_chosen(id: int) -> void:
 # holds the windows a response does ([method _could_respond]) and names
 # itself on the Situation Bar ([method _special_action_note]).
 #
-# Not at an SGManalink table ([method _network_opponent]): there the
-# referee's own window is the door, and nothing here may act on the
-# projection.
+# At an SGManalink table ([method _network_opponent]) the same menus list
+# the referee's rows (campaign w7-3), and taking one is a message to it —
+# nothing here acts on the projection (see below).
 #
 # PACK 9 ADDS TWO THAT BELONG TO A PERMANENT (CR 116.2c-d), read off the
 # engine's own list ([method MtgGame.special_actions]) and taken through
@@ -6986,8 +7459,24 @@ func _special_actions(pid: int) -> Array:
 	if game == null or game.game_over \
 			or pid < 0 or pid >= game.players.size() or not _is_human(pid):
 		return out
+	# AT AN SGMANALINK TABLE EVERY ROW THE REFEREE LISTS (campaign w7-3):
+	# the projection holds no delayed trigger, paid prevention or Channel of
+	# its own, so the referee's list ([method SgDuelProjection
+	# .special_actions] — a ransom, a point of prevention, Channel, a
+	# licid's end, a curse's ignore, by the `special` op's index) is the
+	# whole list. Keeping only the Pack 9 kinds left the Sabertooth Cobra's
+	# ransom off the territory menu, the Cobra's own menu and the bar.
 	if _network_opponent():
-		return _engine_special_actions(pid)
+		var listed: Array = []
+		for row: Dictionary in game.special_actions(pid):
+			# A ransom's words arrive as its menu line, "Pay {2}: <what is
+			# owed>"; the bar names what is owed ([method _special_action_note]).
+			var label := String(row.get("label", ""))
+			if String(row.get("kind", "")) == "settle" and label.begins_with("Pay ") \
+					and label.contains(": "):
+				row["desc"] = label.substr(label.find(": ") + 2)
+			listed.append(row)
+		return listed
 	for entry in game.settleable_delayed_triggers(pid):
 		var cost: ManaCost = entry["settle_cost"]
 		out.append({"kind": "settle", "id": int(entry["id"]), "cost": cost,
@@ -7033,6 +7522,10 @@ func _special_action_refusal(pid: int, entry: Dictionary) -> String:
 		return "the game is over"
 	if game.awaiting_choice != null:
 		return "waiting for a choice to be made"
+	# The referee listed only what it would take now; the projection says
+	# whether this seat may send it (campaign w7-3).
+	if _network_opponent():
+		return game.special_action_refusal(pid, entry)
 	match String(entry.get("kind", "")):
 		"channel":
 			# CR 119.4: not more life than the total (paying down to 0 is
@@ -7082,6 +7575,11 @@ func _take_special_action(pid: int, entry: Dictionary) -> void:
 	for now: Dictionary in _special_actions(pid):
 		if String(now["kind"]) != String(entry.get("kind", "")):
 			continue
+		# A networked row is the referee's list entry, known by its place
+		# in that list (campaign w7-3) — it carries no target of its own.
+		if _network_opponent():
+			if int(now.get("id", -1)) == int(entry.get("id", -2)): live = now
+			continue
 		match String(now["kind"]):
 			"settle", "licid_end", "ignore_effect":
 				if int(now["id"]) == int(entry["id"]): live = now
@@ -7112,7 +7610,11 @@ func _take_special_action(pid: int, entry: Dictionary) -> void:
 			and not ManaPlanner.cost_is_free(live["cost"]) \
 			and not ManaPlanner.plan_and_pay(game, pid, live["cost"], 0, [], _no_auto_tap):
 		why = "not enough mana to pay %s" % str(live["cost"])
-	if why == "":
+	if why == "" and _network_opponent():
+		# Every kind is a MESSAGE to the referee there, by its list index
+		# (SgDuelProjection.take_special_action — campaign w7-3).
+		why = game.take_special_action(pid, live)
+	elif why == "":
 		match kind:
 			"channel": why = game.pay_life_for_mana(pid)
 			"settle": why = game.settle_delayed_trigger(pid, int(live["id"]))
@@ -7910,7 +8412,7 @@ func _update_damage_markers() -> void:
 	var slot := _damage_slot()
 	if not slot.is_empty():
 		var spec: TargetSpec = slot["spec"]
-		for ref in spec.legal_targets(game, _pending_card):
+		for ref in _aim_targets(spec):
 			legal.append(ref.packet_id)
 		for ref in _pending_groups[_pending_slot]:
 			if ref.is_damage:
@@ -9410,7 +9912,7 @@ func _target_state_for(inst: CardInstance) -> int:
 	if inst.zone != Mtg.Zone.BATTLEFIELD:
 		return -1
 	var spec: TargetSpec = _pending_slots[_pending_slot]["spec"]
-	if spec.is_legal(game, TargetRef.card(inst), _pending_card):
+	if _aim_legal(spec, TargetRef.card(inst)):
 		return -1
 	return MiniCard.State.CANT_TARGET
 
@@ -9437,7 +9939,7 @@ func _highlight_for(inst: CardInstance) -> int:
 				for chosen in _pending_groups[_pending_slot]:
 					if not chosen.is_player and chosen.instance_id == inst.id:
 						return MiniCard.Highlight.TARGET_CHOSEN
-				if spec.is_legal(game, TargetRef.card(inst), _pending_card):
+				if _aim_legal(spec, TargetRef.card(inst)):
 					return MiniCard.Highlight.TARGET_LEGAL
 		Mode.ATTACKERS:
 			if _band_candidate != -1 and inst.id != _band_candidate \
@@ -9554,8 +10056,16 @@ func _highlight_for(inst: CardInstance) -> int:
 			# castable outside its main phase; a King Cheetah, an Armor
 			# of Thorns or a creature under Winding Canyons is yellow in
 			# the opponent's combat and the Grizzly Bears beside it is not.
+			#
+			# ...AND SOMETHING TO AIM AT (campaign w5-5). `Duel.hlp`'s *"all
+			# the necessary conditions"* include a target: a Counterspell
+			# over an empty chain, a Terror with no creature, an Aura with
+			# nothing to enchant was lit, and its double-click tapped the
+			# lands before finding nothing to aim at — mana that burns under
+			# the 1997 rules. The same test the response windows make.
 			elif game.cast_timing_refusal(inst.owner_id, inst) == "" \
-					and _payable_now(inst.owner_id, inst):
+					and _payable_now(inst.owner_id, inst) \
+					and _has_something_to_aim_at(inst):
 				return MiniCard.Highlight.OPTIONAL
 	return MiniCard.Highlight.NONE
 
@@ -9600,15 +10110,26 @@ func _must_block_now(inst: CardInstance) -> bool:
 ## Deliberately narrower than s30's, which counts anything actionable:
 ## MANA abilities are excluded, because every untapped land has one and
 ## lighting the whole mana base up turns the cue into wallpaper. Ask the
-## engine what a cost costs (`can_afford_cost` folds in the modifiers);
-## never re-derive it here.
+## engine what a cost costs; never re-derive it here.
+##
+## THE ENGINE'S WHOLE VERDICT since the campaign (w5-10, w5-7):
+## [method MtgGame.activation_refusal] — the mana from what is floating or
+## untapped as before, and every cost that is not mana (Goblin Bombardment
+## with no creature, Hand of Justice with no white creature to tap, a
+## counter cost with no counter), a target to aim at, and WHO may activate
+## it. So the seat holding priority sees an "any player may activate"
+## ability on the OPPONENT'S permanent lit (Ifh-Bíff Efreet, Land's Edge,
+## Clergy of the Holy Nimbus — those a human seat may reach), and its own
+## Clergy, whose ability only an opponent may use, dark.
 func _can_act_on(inst: CardInstance) -> bool:
-	if inst.controller_id != game.priority_player:
+	var seat := game.priority_player
+	if seat < 0 or (inst.controller_id != seat and not _is_human(seat)):
 		return false
-	for ability in inst.cur_activated_abilities:
-		if not _ability_open(inst.controller_id, inst, ability):
+	for index in inst.cur_activated_abilities.size():
+		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+		if not _may_activate(seat, inst, ability) or not _ability_open(seat, inst, ability):
 			continue
-		if game.can_afford_cost(inst.controller_id, ability.cost):
+		if game.activation_refusal(seat, inst, index) == "":
 			return true
 	return false
 

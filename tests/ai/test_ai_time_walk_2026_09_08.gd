@@ -73,8 +73,14 @@ func test_our_queued_extra_turn_is_a_card_off_the_lead() -> void:
 	g.extra_turns.append(0)
 	assert_eq(ai._library_slack(g), 0, "our extra draw step spends the spare card")
 	g.extra_turns.append(0)
+	# Lost — and since the whole-game campaign (fix-ai-c, w6-5) a lost
+	# race still keeps the turns our board needs (no clock: RACE_HORIZON);
+	# the unbounded answer is the forecasts_tactics null arm's.
+	assert_eq(ai._library_slack(g), 10 - AiPlayer.RACE_HORIZON,
+		"two of ours from a lead of one: the race is lost, four turns kept")
+	ai.profile.forecasts_tactics = false
 	assert_true(ai._library_slack(g) >= 1 << 20,
-		"two of ours from a lead of one: the race is lost, not ours to protect")
+		"null arm: the race is lost, not ours to protect")
 
 
 func test_their_queued_extra_turn_is_a_card_for_the_lead() -> void:

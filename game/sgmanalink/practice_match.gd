@@ -246,10 +246,24 @@ func _playable(pid: int, card: CardInstance) -> bool:
 		or game.mulligan_open or game.priority_player != pid:
 		return false
 	if card.is_land():
+		# The 1997 damage-prevention and regeneration windows admit their own
+		# effects only (MtgGame.play_land's refusal; whole-game campaign
+		# 2026-10-07: a hand land stayed `playable` in a main-phase window
+		# and the referee then refused the play).
 		return game.active_player == pid and Mtg.is_main_step(game.current_step()) \
+			and not game.awaiting_damage_prevention and not game.awaiting_regeneration \
 			and game.stack.is_empty() and game.land_drop_available(pid) \
 			and game.hand_lock_reason(card).is_empty() and game.play_banned(pid, card.data).is_empty() and game.entry_refused(card, pid).is_empty()
 	return game.cast_timing_refusal(pid, card).is_empty() and SgPayment.affordable(game, pid, card)
+
+
+## A mana source tapped by hand while [param pid]'s announcement is open
+## pays for it (CR 601.2g): the announcement bracket opens first (whole-game
+## campaign 2026-10-07, w7-5 — MtgGame.begin_announcement), so a City of
+## Brass's trigger waits for the spell instead of blocking its cast.
+func _paying(pid: int) -> void:
+	if not actions.draft.is_empty() and int(actions.draft.pid) == pid and actions.draft.kind != "mana":
+		game.begin_announcement(pid)
 
 
 func decision_state() -> Dictionary:
@@ -340,7 +354,8 @@ func view(pid: int) -> Dictionary:
 		"turn": game.turn_number, "step": Mtg.Step.keys()[game.current_step()],
 		"first": first_player, "winner": game.winner, "draw": game.is_draw,
 		"discard_count": game.discard_count, "damage_request": damage,
-		"choice": actions.choice_view(pid), "announcement": actions.request(pid),
+		"choice": actions.choice_view(pid, func(card: CardInstance) -> String:
+			return _handle(pid, card) if _visible(pid, card) else ""), "announcement": actions.request(pid),
 		"information": actions.information[pid].duplicate(true), "specials": actions.specials(pid),
 		"journal": journal.entries[pid].duplicate(true)}
 	result.presentation = SgDuelPresentation.build(self, pid, result)
@@ -389,6 +404,7 @@ func act(pid: int, action: Dictionary) -> String:
 		"mana":
 			var card := _card(pid, action.card)
 			if card == null: return "Card unavailable."
+			_paying(pid)
 			return game.tap_for_mana(pid, card, int(action.index))
 		"autopay", "autoprepare":
 			var excluded := {}
@@ -421,6 +437,10 @@ func act(pid: int, action: Dictionary) -> String:
 				var error := game.cancel_choice()
 				if not error.is_empty(): return error
 			actions.clear()
+			# A withdrawn announcement: what its payment triggered goes on
+			# the stack now, the seat keeping priority (MtgGame
+			# .end_announcement; a no-op when nothing was paid).
+			game.end_announcement(pid)
 			return ""
 		"prepare": return actions.prepare(pid, _card(pid, action.card), action)
 		"submit": return actions.submit(pid, action.targets)
@@ -434,6 +454,7 @@ func act(pid: int, action: Dictionary) -> String:
 			if op == "tap":
 				if not game.players[pid].battlefield.has(card) or not card.is_land():
 					return "Card unavailable."
+				_paying(pid)
 				return game.tap_for_mana(pid, card)
 			if not game.players[pid].hand.has(card) and not game.can_play_from_exile(pid, card):
 				return "Card unavailable."

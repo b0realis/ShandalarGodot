@@ -17,6 +17,10 @@ const LOBBY_GRACE_MS := 30000
 ## What a seat reads when the referee's view of its duel fails the wire
 ## validator its own client runs (see [method _room_game]).
 const VIEW_REFUSED := "The host could not send this duel's table: it failed its own check (a host bug; the host's log names the room). Connection stopped."
+## A game action refused while either seat is disconnected (the other
+## seat keeps its chair for [constant RECONNECT_GRACE_MS]): the referee's
+## pipe (DeckLab/referee.gd) holds such an answer instead of counting it.
+const SEAT_AWAY := "Waiting for the other player to reconnect."
 var port := 0
 var access_code := ""
 var _listener := TCPServer.new()
@@ -685,7 +689,7 @@ func _command(sid: int, action: Dictionary, revision: int) -> String:
 	if room.match == null:
 		return "Both players must be ready."
 	if op != "concede" and (not _connected(room.seats[0]) or not _connected(room.seats[1])):
-		return "Waiting for the other player to reconnect."
+		return SEAT_AWAY
 	var generation: int = room.match.state_generation
 	var draft: Dictionary = room.match.actions.draft.duplicate()
 	var error: String = room.match.act(seat, action)

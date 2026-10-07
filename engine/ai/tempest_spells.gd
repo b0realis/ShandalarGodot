@@ -214,7 +214,10 @@ static func permanent_harm(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	var feast := _role_ability(data, &"take_all_counters")
 	if feast != null:
 		return cannibal_choice(g, pilot, inst, ability_parameters(feast))
-	return donation_choice(g, pilot, inst)
+	var donated: Variant = donation_choice(g, pilot, inst)
+	if donated != null:
+		return donated
+	return symmetric_static_choice(g, pilot, inst)
 
 
 ## THE OATHS (role `oath`, parameters `measure` — `func(game, pid) -> int`,
@@ -364,6 +367,119 @@ static func donation_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	if gift - fodder < float(pilot.ABILITY_BAR_MAIN):
 		return {}
 	return {"x": 0, "targets": [], "value": gift - fodder}
+
+
+# --- Campaign fix-ai-b: the symmetric static (w3-2, w3-5) ---
+
+## THE SYMMETRIC STATIC (whole-game campaign 2026-10-07, w3-2 / w3-5): a
+## global static reads both sides of the table, and the generic value only
+## ever priced the card — Humility was cast into our own two Serra Angels,
+## Dread of Night into our own white weenies, Light of Day against our own
+## black creatures, Choke on our own Islands. [param inst], a noncreature,
+## non-Aura permanent card in our hand with a static ability, is put onto
+## the battlefield under the search journal ([method static_projection])
+## and each side's board is priced before and after ([method side_worth]).
+## `{}` (never now) when it costs our side and costs it more than theirs;
+## null otherwise — a static that hurts them more, helps us, or changes
+## nothing is the generic value's, as before. Public board only.
+static func symmetric_static_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
+	var data := inst.data
+	if inst.zone != Mtg.Zone.HAND or data.is_creature() or data.is_land() \
+			or data.static_abilities.is_empty() or data.aura_target != null \
+			or data.subtypes.has("aura"):
+		return null
+	# A freeze of every untap step (Stasis) is the lock reader's — its rent
+	# and its holes are priced there ([method AiPlayer._lock_worth],
+	# [member AiProfile.pays_the_rent]).
+	if pilot._card_freezes(data):
+		return null
+	var swing := static_projection(g, pilot, inst)
+	var ours: float = swing["ours"]
+	var theirs: float = swing["theirs"]
+	if ours < -STATIC_EPSILON and ours - theirs < -STATIC_EPSILON:
+		return {}
+	return null
+
+
+## Below this a change in a side's worth is rounding, not a change.
+const STATIC_EPSILON := 0.01
+
+
+## `{ours, theirs}`: the change in each side's [method side_worth] were
+## [param inst] (in our hand) on the battlefield under our control now —
+## a STATIC-BOARD counterfactual, the arrival half of [method
+## MtgGame.value_without_permanent]: the card is moved and the continuous
+## effects recalculated under the search journal, with no trigger, no entry
+## choice and no state-based action; [method side_worth] reads a body its
+## static leaves at 0 toughness as gone. A search in progress keeps its
+## journal.
+static func static_projection(g: MtgGame, pilot, inst: CardInstance) -> Dictionary:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	var ours := side_worth(g, pilot, pid, inst)
+	var theirs := side_worth(g, pilot, foe, inst)
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec_move(inst, pid, Mtg.Zone.BATTLEFIELD)
+	g._rec(inst, &"controller_id")
+	g._rec(inst, &"layer_timestamp")
+	g._rec(inst, &"summoning_sick")
+	g._rec(g, &"_battlefield_order")
+	g.players[inst.owner_id].hand.erase(inst)
+	inst.zone = Mtg.Zone.BATTLEFIELD
+	inst.controller_id = pid
+	inst.layer_timestamp = g.continuous.next_timestamp()
+	inst.summoning_sick = true
+	g.players[pid].battlefield.append(inst)
+	g._battlefield_order.append(inst.id)
+	g._battlefield_changed()
+	g.recalculate()
+	var out := {"ours": side_worth(g, pilot, pid, inst) - ours,
+		"theirs": side_worth(g, pilot, foe, inst) - theirs}
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return out
+
+
+## What [param who]'s creatures and lands are worth to the table as they
+## stand, [param skip] left out: each creature at [method
+## Evaluator.permanent_value] — none for one at 0 toughness or less, a
+## share for one that can't attack (a defender aside) or can't block — and
+## each land a point. What does not untap is read by its tapped state (the
+## lock's own question, [method AiPlayer._lock_worth]): a tapped land that
+## stays tapped is worth nothing, an untapped one is one more use; a tapped
+## creature that stays tapped neither attacks nor blocks, an untapped one
+## still blocks.
+static func side_worth(g: MtgGame, pilot, who: int, skip: CardInstance) -> float:
+	var total := 0.0
+	for p in g.players[who].battlefield:
+		if p == skip or p.phased_out:
+			continue
+		if p.is_creature():
+			if p.cur_toughness <= 0 or (p.damage >= p.cur_toughness and not p.cur_indestructible):
+				continue   # the state-based action takes it
+			var v := Evaluator.permanent_value(p, pilot.profile)
+			var no_attack := p.cur_cant_attack and not p.has_keyword(Mtg.Keyword.DEFENDER)
+			var no_block := p.cur_cant_block_filter.is_valid()
+			if p.cur_skips_untap:
+				no_block = no_block or p.tapped
+				no_attack = no_attack or p.tapped \
+					or not p.has_keyword(Mtg.Keyword.VIGILANCE)
+			if no_attack and no_block:
+				v *= 0.25
+			elif no_attack:
+				v *= 0.6
+			elif no_block:
+				v *= 0.8
+			total += v
+		elif p.is_land():
+			if not p.cur_skips_untap:
+				total += 1.0
+			elif not p.tapped:
+				total += 0.5
+	return total
+# --- end campaign fix-ai-b symmetric static ---
 
 
 # ------------------------------------------------- damage counted as it resolves --
@@ -626,15 +742,78 @@ static func _nonbasics(g: MtgGame, who: int) -> int:
 ## theirs gained.
 static func living_death(g: MtgGame, pilot, inst: CardInstance) -> Dictionary:
 	var swing := 0.0
+	# The returning cards as they would arrive (campaign fix-ai-b): under
+	# Humility each is a 1/1, not its printed body.
+	var arriving := living_death_arrivals(g, pilot, inst)
 	for p in [pilot.pid, g.opponent_of(pilot.pid)]:
-		var gain := 0.0
-		for card in g.players[p].graveyard:
-			if card.data.is_creature() and card != inst:
-				gain += Evaluator.card_value(card.data)
+		var gain: float = arriving[p]
 		for body in g.players[p].creatures():
 			gain -= _worth(g, pilot, body)
 		swing += gain if p == pilot.pid else -gain
 	return {} if swing < SWEEP_BAR else {"x": 0, "targets": [], "value": swing}
+
+
+# --- Campaign fix-ai-b: Living Death's arrivals as they would be ---
+
+## THE ARRIVALS AS THEY WOULD BE (whole-game campaign 2026-10-07, the w3
+## note on Living Death under Humility): the creature cards Living Death
+## returns were priced at their PRINTED size ([method
+## Evaluator.card_value]) while the bodies they replace were priced as they
+## stand — under Humility every returning card is a 1/1 with no abilities,
+## and a graveyard of Dragons read as Dragons. Now, under the search
+## journal, every creature leaves the battlefield and every creature card in
+## a graveyard ([param inst] aside) enters it under its owner — a
+## static-board counterfactual: no trigger, no choice, no state-based
+## action — and each arrival is priced at [method Evaluator.permanent_value]
+## (none at 0 toughness or less). Per seat, indexed by player. A search in
+## progress keeps its journal.
+static func living_death_arrivals(g: MtgGame, pilot, inst: CardInstance) -> Array:
+	var worth: Array = []
+	worth.resize(g.players.size())
+	worth.fill(0.0)
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec(g, &"_battlefield_order")
+	for pl in g.players:
+		g._rec(pl, &"battlefield")
+		g._rec(pl, &"graveyard")
+	for pl in g.players:
+		for body in pl.battlefield.duplicate():
+			if not body.is_creature():
+				continue
+			g._rec(body, &"zone")
+			pl.battlefield.erase(body)
+			g._battlefield_order.erase(body.id)
+			body.zone = Mtg.Zone.EXILE
+	var arrivals: Array[CardInstance] = []
+	for p in g.players.size():
+		var pl := g.players[p]
+		for card in pl.graveyard.duplicate():
+			if card == inst or not card.data.is_creature():
+				continue
+			g._rec(card, &"zone")
+			g._rec(card, &"controller_id")
+			g._rec(card, &"layer_timestamp")
+			g._rec(card, &"summoning_sick")
+			pl.graveyard.erase(card)
+			card.zone = Mtg.Zone.BATTLEFIELD
+			card.controller_id = p
+			card.layer_timestamp = g.continuous.next_timestamp()
+			card.summoning_sick = true
+			pl.battlefield.append(card)
+			g._battlefield_order.append(card.id)
+			arrivals.append(card)
+	g._battlefield_changed()
+	g.recalculate()
+	for card in arrivals:
+		if card.is_creature() and card.cur_toughness > 0:
+			worth[card.controller_id] = float(worth[card.controller_id]) \
+				+ Evaluator.permanent_value(card, pilot.profile)
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return worth
+# --- end campaign fix-ai-b Living Death ---
 
 
 ## EXTINCTION (`sweep_chosen_type`): "destroy all creatures of the creature

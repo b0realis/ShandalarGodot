@@ -82,9 +82,26 @@ var forecast_safe := false
 ## Public policy descriptor: this self-death trigger schedules its source's
 ## automatic return. Not executable permission and not a hidden-zone read.
 var returns_source_after_death := false
-## Optional public mana-planning description for a delayed mana trigger.
-## Resolution still belongs to on_resolve. The planner may count this
-## only for a matching land subtype producing the same color.
+## Optional public mana-planning description for a mana trigger (a delayed
+## one — High Tide — or one on a permanent — Mana Flare, Wild Growth).
+## Resolution still belongs to on_resolve; nothing is described while
+## [member mana_bonus_amount] is 0. ManaPlanner (_bonus_triggers,
+## _bonus_reaches, _source_row) counts [member mana_bonus_amount] more mana
+## on a land's own tap when:
+## - [member mana_bonus_subtype] reaches the land: a land subtype
+##   ("mountain" — Gauntlet of Might, High Tide's "island"), "" for ANY land
+##   (ManaPlanner.BONUS_ANY_LAND — Mana Flare), or "enchanted land" for the
+##   land the trigger's own permanent enchants
+##   (ManaPlanner.BONUS_ENCHANTED_LAND — Wild Growth, Overgrowth);
+## - [member mana_bonus_color] is the colour of the bonus mana, or 0 for
+##   "a mana of the type the land made" (Mana Flare). The same colour as the
+##   land's ability makes adds to that ability's amount (High Tide on an
+##   Island); another colour rides the same tap as a second output (Wild
+##   Growth's {G} on a Plains).
+## - [member mana_bonus_restriction] / [member mana_bonus_snow_extra]: a
+##   bonus spendable only on one thing (Snowfall's cumulative upkeep) and
+##   extra mana from a snow land.
+## Campaign 2026-10 (fix-mana w1-1) added "" / "enchanted land" and colour 0.
 var mana_bonus_subtype := ""
 var mana_bonus_color := 0
 var mana_bonus_amount := 0

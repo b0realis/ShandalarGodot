@@ -30,13 +30,19 @@ extends CardScript
 ## the same information. The ruling that goes with it is the same either
 ## way: "As your turn begins (and before your untap phase begins), you
 ## decide whether or not to skip that turn."
+##
+## The untap ban is about being tapped, so the 1997 "tapped artifacts stop
+## working" rule does not switch it off (StaticAbility.working_while_tapped)
+## — switched off, the Vault untapped for free and took an extra turn every
+## turn.
 
 
 func build() -> CardData:
 	return CardData.new("Time Vault", "{2}", Mtg.CardType.ARTIFACT) \
 		.with_enters_tapped() \
 		.static_ability(StaticAbility.new(_never_untaps,
-			"This artifact doesn't untap during your untap step.")) \
+			"This artifact doesn't untap during your untap step.") \
+			.working_while_tapped()) \
 		.with_skip_turn_to_untap() \
 		.activated(ActivatedAbility.new("", true, [ExtraTurnEffect.new()],
 			"{T}: Take an extra turn after this one.")) \

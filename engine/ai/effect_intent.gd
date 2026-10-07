@@ -351,6 +351,15 @@ const CARD_LOCAL := {
 	"Swords to Plowshares": {"removes": true, "ignores_regeneration": true},
 	"Drain Life": {"damage_x": true},
 	"Disintegrate": {"damage_x": true, "ignores_regeneration": true},
+	# "A creature dealt damage this way can't be regenerated this turn"
+	# (campaign fix-ai-a). The card's DamageEffect subclass reads as 3
+	# damage already; this row adds only the rider, so the regeneration a
+	# victim's controller could still buy is no reason to hold it
+	# ([method AiPlayer._regenerates_from]). The only damage spell in the
+	# pool with the rider besides Disintegrate; the no-regeneration
+	# DESTROY spells (Terror, Slaughter, Afterlife, Fatal Blow, ...) are
+	# DestroyEffects built with `can_regenerate = false`, read above.
+	"Incinerate": {"ignores_regeneration": true},
 	# "Destroy target artifact with mana value X. It can't be regenerated.
 	# Detonate deals X damage to that artifact's controller." Removal, of
 	# the no-regeneration kind; the X sizes the TARGET, not the damage

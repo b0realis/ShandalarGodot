@@ -189,13 +189,41 @@ static func colors_of(list: DeckList) -> int:
 static func is_user_deck(path: String) -> bool:
 	# [QoL] Reproduced 2026-09-12: delete_deck("user://decks_guard_...deck")
 	# returned "" and removed a fixture OUTSIDE user://decks. A string
-	# prefix also admitted parent escapes. Check the directory boundary
-	# after normalisation, and keep linked/external places out of deletion.
-	if not GamePaths.is_own(path):
+	# prefix also admitted parent escapes. The path is judged as WRITTEN,
+	# component by component: it must name a file below `user://decks`, and
+	# it may not climb (`..`) at all — a path this store lists never does,
+	# and on disk `link/../x` follows the link, which normalising would hide.
+	#
+	# A LINKED `user://decks` IS STILL THE PLAYER'S (whole-game campaign
+	# 2026-10). This used to ask [method GamePaths.is_own], whose rule
+	# refuses every linked place for "Forget my zips" — so a player who
+	# keeps their decks in a synced folder (`user://decks` a symlink to it)
+	# saw every deck they own filed under "Starter decks", with no Delete
+	# and "is one of the decks the game ships". The decks folder is where
+	# the player's decks live whatever it points at; it is the folder this
+	# store saves into and lists. A folder linked in BELOW it still leads
+	# elsewhere and is still refused (nothing here lists into one); a
+	# linked FILE in it is listed as theirs, and Delete removes the link,
+	# never the file it points at.
+	var written := path.replace("\\", "/")
+	if not written.begins_with("user://"):
 		return false
-	var root := ProjectSettings.globalize_path(USER_DIR).simplify_path().trim_suffix("/")
-	var full := ProjectSettings.globalize_path(path.replace("\\", "/")).simplify_path()
-	return full.begins_with(root + "/")
+	var parts: Array[String] = []
+	for part in written.trim_prefix("user://").split("/", false):
+		if part == ".":
+			continue
+		if part == "..":
+			return false
+		parts.append(part)
+	if parts.size() < 2 or parts[0] != USER_DIR.trim_prefix("user://"):
+		return false
+	var current := ProjectSettings.globalize_path(USER_DIR)
+	for i in range(1, parts.size() - 1):
+		var parent := DirAccess.open(current)
+		if parent != null and parent.is_link(parts[i]):
+			return false
+		current = current.path_join(parts[i])
+	return true
 
 
 # ------------------------------------------- provenance: the shipped decks --
@@ -360,34 +388,100 @@ static func title_in(text: String) -> String:
 ## eight-character DOS names had, and it is caught the same way: `Save
 ## deck` checks [method exists] and puts `@DECKEXISTS` up naming the FILE
 ## before it overwrites anything.
+##
+## A DECK SAVED UNDER THE FOLD BEFORE 2026-10 KEEPS ITS FILE (whole-game
+## campaign 2026-10): a title with letters beyond ASCII has a stem of its
+## own since then ([method file_stem]), and the file such a deck was saved
+## to earlier — `2.deck` for "Красная 2" — is still its file while no
+## file under the new stem exists and the title inside it is this title.
+## A re-save then writes it in place instead of leaving a second copy
+## beside it, and a DIFFERENT title that shared the old fold is not told
+## that file is its own.
 static func path_for(deck_name: String) -> String:
-	return "%s/%s%s" % [USER_DIR, file_stem(deck_name), EXTENSION]
+	var path := "%s/%s%s" % [USER_DIR, file_stem(deck_name), EXTENSION]
+	var before := _stem_before_2026_10(deck_name)
+	if before != "" and not FileAccess.file_exists(path):
+		var old := "%s/%s%s" % [USER_DIR, before, EXTENSION]
+		# Not [method read_text]: its counter is the setup screen's.
+		if FileAccess.file_exists(old) and title_in(FileAccess.get_file_as_string(old)) \
+				.strip_edges().to_lower() == deck_name.strip_edges().to_lower():
+			return old
+	return path
 
 
 static func file_stem(deck_name: String) -> String:
-	var out := ""
-	for ch in deck_name.strip_edges().to_lower():
-		out += ch if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9") else "_"
-	while out.contains("__"):
-		out = out.replace("__", "_")
-	out = out.trim_prefix("_").trim_suffix("_")
-	# [QoL] Portable even when the deck is created on Linux or macOS.
-	# Reproduced 2026-09-13: path_for("CON") -> user://decks/con.deck.
-	# Windows reserves these device stems even with an extension:
-	# https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
-	var numbered_device := out.length() == 4 and out.left(3) in ["com", "lpt"] \
-		and out[3] >= "1" and out[3] <= "9"
-	if out in ["con", "prn", "aux", "nul"] or numbered_device:
-		return "deck_" + out
+	var title := deck_name.strip_edges().to_lower()
+	var out := _ascii_fold(title)
+	# A TITLE WITH LETTERS BEYOND ASCII (whole-game campaign 2026-10): the
+	# fold drops them, so `Красная 2` and `Синяя 2` both came to `2`,
+	# `白デッキ2` and `黒デッキ2` too, `Ωmega` and `Σmega` to `mega` — one
+	# file for two decks, and the second save asked to overwrite a file
+	# named for neither. Such a title keeps what folds and adds a digest of
+	# the whole title, so it is still recognisable and its own; a title
+	# that is ASCII (punctuation from beyond it included — see [method
+	# _has_letters_beyond_ascii]) keeps the stem it always had.
+	if out != "" and _has_letters_beyond_ascii(title):
+		return out + "_" + title.md5_text().left(10)
 	# A TITLE WITH NOTHING LATIN IN IT (bug pass of 2026-10-03): `Колода
 	# огня` and `龍のデッキ` both folded to "" and so to `new_deck` — the
 	# default deck's file, and each other's, so the second save asked to
 	# overwrite the first. Such a title gets a stem of its own from its
-	# digest; every title that folds to something keeps the stem it had.
-	var title := deck_name.strip_edges().to_lower()
+	# digest.
 	if out == "" and title != "":
 		return "deck_" + title.md5_text().left(10)
-	return out if out != "" else "new_deck"
+	return _device_safe(out) if out != "" else "new_deck"
+
+
+## The title (already lower-cased) folded to a-z, 0-9 and single
+## underscores, trimmed — every stem's base.
+static func _ascii_fold(title: String) -> String:
+	var out := ""
+	for ch in title:
+		out += ch if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9") else "_"
+	while out.contains("__"):
+		out = out.replace("__", "_")
+	return out.trim_prefix("_").trim_suffix("_")
+
+
+## [QoL] Portable even when the deck is created on Linux or macOS.
+## Reproduced 2026-09-13: path_for("CON") -> user://decks/con.deck.
+## Windows reserves these device stems even with an extension:
+## https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+static func _device_safe(out: String) -> String:
+	var numbered_device := out.length() == 4 and out.left(3) in ["com", "lpt"] \
+		and out[3] >= "1" and out[3] <= "9"
+	if out in ["con", "prn", "aux", "nul"] or numbered_device:
+		return "deck_" + out
+	return out
+
+
+## Does [param title] hold a character the fold would drop that tells two
+## titles apart — a letter, digit or mark of any script past ASCII (Latin
+## with accents from U+00C0 on, Cyrillic, Greek, CJK, …), or a symbol?
+## The punctuation past ASCII is NOT such a character: Latin-1's no-break
+## space, quotes and signs (below U+00C0, and × ÷) and the General
+## Punctuation block (dashes, curly quotes, the ellipsis) fold exactly as
+## their ASCII twins do, so "Red — Deck" stays `red_deck`.
+static func _has_letters_beyond_ascii(title: String) -> bool:
+	for ch in title:
+		var code: int = String(ch).unicode_at(0)
+		if code < 0xC0 or code == 0xD7 or code == 0xF7 or code == 0xFEFF:
+			continue
+		if code >= 0x2000 and code <= 0x206F:
+			continue
+		return true
+	return false
+
+
+## The stem [param deck_name] had before the campaign of 2026-10 gave
+## titles with letters beyond ASCII stems of their own, or "" where that
+## stem is today's ([method path_for] finds a deck saved under it).
+static func _stem_before_2026_10(deck_name: String) -> String:
+	var title := deck_name.strip_edges().to_lower()
+	var out := _ascii_fold(title)
+	if out == "" or not _has_letters_beyond_ascii(title):
+		return ""
+	return _device_safe(out)
 
 
 static func exists(deck_name: String) -> bool:

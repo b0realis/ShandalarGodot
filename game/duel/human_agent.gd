@@ -62,6 +62,22 @@ func preselect(card_name: String) -> void:
 	_preselected_name = card_name
 
 
+## What [method decline_search] parks: no card is named this, so the
+## search it answers finds nothing.
+const DECLINED_PICK := "\u0000declined"
+
+
+## The player looked at the library picker and chose NOTHING — "fail to
+## find", which the engine allows for every search it runs
+## (`MtgGame.search_library` asks with the decline open). Parked like a
+## pick (campaign w5-3): until then OK on an empty selection parked
+## nothing, the screen read "no pick yet" and opened the picker again,
+## so a Nature's Lore with no Forest left in the library could only be
+## cancelled. The resolution's question is answered with no card.
+func decline_search() -> void:
+	_preselected_name = DECLINED_PICK
+
+
 func has_preselection() -> bool:
 	return _preselected_name != ""
 

@@ -89,12 +89,26 @@ static func _ordered(g: MtgGame, pid: int, cards: Array[CardInstance], prompt: S
 		result.append(pick)
 		remaining.erase(pick)
 	return result
+## Lim-Dûl's Vault. Each look is shown to the caster alone (a rule-
+## authorized reveal, carried on the question that follows it), then a
+## yes/no: pay 1 life to bottom these and look at the next five? (Campaign
+## 2026-10, w2-10: the look used to be an optional card pick whose CANCEL
+## meant "dig" — a heuristic seat, which always picks a card, never dug,
+## and kept five Islands on top of a flooded board.) The hint is
+## [method _vault_digs].
 static func _vault(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	var cards := _top(g, pid, 5)
+	var looks := 0
 	while not cards.is_empty():
-		# An explicit card offer exposes only these five to the chooser.
-		var keep := g.agents[pid].choose_card(g, pid, cards, "Keep these five? Select any card to keep; cancel to pay 1 life and try the next five", true)
-		if keep != null or g.players[pid].life <= 0: break
+		looks += 1
+		var names: Array = []
+		for card in cards: names.append(card.data.card_name)
+		g.reveal_information(pid, "Lim-Dûl's Vault — look %d, the top %d card(s), top first" % [looks, cards.size()], names)
+		# Paying 1 life needs 1 life to pay (CR 119.4).
+		if g.players[pid].life < 1 or not g.agents[pid].choose_yes_no(g, pid,
+				"Lim-Dûl's Vault: pay 1 life to put these cards on the bottom of your library and look at the next five?",
+				_vault_digs(g, pid, cards, looks)):
+			break
 		g.adjust_life(pid, -1)
 		for card in _ordered(g, pid, cards, "Choose the next card to put on the bottom"): g.put_on_bottom_of_library(card)
 		cards = _top(g, pid, 5)
@@ -106,6 +120,21 @@ static func _vault(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: in
 	var ordered := _ordered(g, pid, cards, "Choose the next card from the top")
 	ordered.reverse()
 	for card in ordered: g.move_library_card_to_top(card)
+## The HINT for another look: only while the five hold nothing the caster
+## can use — no nonland card, and no land while it has fewer than five in
+## play — its life is comfortable (above 5), the library holds more than
+## these five, and it has dug fewer than three times. Its own five
+## cards, board and life only (docs/fair-play.md).
+static func _vault_digs(g: MtgGame, pid: int, cards: Array[CardInstance], looks: int) -> bool:
+	if looks > 3 or g.players[pid].life <= 5 or g.players[pid].library.size() <= cards.size():
+		return false
+	var lands := 0
+	for perm in g.players[pid].battlefield:
+		if perm.is_land(): lands += 1
+	for card in cards:
+		if not card.data.is_land() or lands < 5:
+			return false
+	return true
 static func _portal(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:
 	if g.players[pid].library.size() < 10: return
 	var rest := _top(g, pid, 10)

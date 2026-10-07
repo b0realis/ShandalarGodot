@@ -16,8 +16,11 @@ extends RefCounted
 ## (`attack_companions`, Magnetic Web) and a target slot whose count an
 ## earlier target sets (`counts`, Reap). Payment rows a permanent grants
 ## (Dream Halls, Aluren) and buyback rows ride the existing `modes`.
-const VERSION := 28
-const SUBPROTOCOL := "sgmanalink-local-v28"
+## 29 (whole-game campaign, 2026-10-07): a choice's lines name the board
+## card each stands for (`choice.cards`, a handle or "" per line), so two
+## same-named permanents can be told apart at a network table.
+const VERSION := 29
+const SUBPROTOCOL := "sgmanalink-local-v29"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]

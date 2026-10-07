@@ -71,15 +71,22 @@ class AlterEffect extends EffectBase:
 			return
 		# The HINT: a harmful Aura (one its controller aimed at somebody
 		# else) is pushed onto the enemy's biggest permanent; a helpful one
-		# onto our own.
-		var hostile := aura.controller_id != host.controller_id
+		# onto our own. An Aura that holds a STOLEN host (Control Magic: its
+		# controller controls a creature somebody else owns) is the caster's
+		# to aim at the enemy too — stealing theirs if the Aura is ours,
+		# freeing ours onto one they already own if it is theirs. The ask
+		# is ORDERED (campaign 2026-10, w1-3): a heuristic seat takes the head.
+		var hostile := aura.controller_id != host.controller_id \
+			or (host.owner_id != host.controller_id and aura.controller_id == host.controller_id)
 		var wanted := game.opponent_of(controller) if hostile else controller
 		candidates.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 			var a_key := int(a.controller_id == wanted) * 100 + a.cur_power + a.cur_toughness
 			var b_key := int(b.controller_id == wanted) * 100 + b.cur_power + b.cur_toughness
-			return a_key > b_key)
+			if a_key != b_key:
+				return a_key > b_key
+			return a.id < b.id)
 		var pick := game.agents[controller].choose_card(game, controller, candidates,
-			"Attach %s to" % aura.data.card_name)
+			"Attach %s to" % aura.data.card_name, false, false, true)
 		game.move_aura(aura, pick if pick != null and candidates.has(pick) else candidates[0])
 
 	func describe() -> String:

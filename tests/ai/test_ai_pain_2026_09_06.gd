@@ -88,17 +88,14 @@ func test_the_ai_does_not_tap_a_city_for_its_last_life() -> void:
 	assert_eq(ai.act(g), "pass", "two lands, one of them lethal to tap")
 	assert_eq(bears.zone, Mtg.Zone.HAND)
 	assert_eq(g.players[0].life, 1)
-	# At 2 life the same tap is a life for a body, and it is taken: the
-	# City's sting goes on the stack mid-payment, the AI holds the cast
-	# until it resolves (see AiPlayer._wait_out), then casts from the
-	# floating mana.
+	# At 2 life the same tap is a life for a body, and it is taken. Since
+	# the whole-game campaign (fix-engine w7-5, wired into the AI's cast by
+	# fix-ai-c) the cast is announced before the City is tapped: its sting
+	# waits and goes on the stack above the Bears, so the cast lands on the
+	# first action instead of being held (AiPlayer._wait_out).
 	g.players[0].life = 2
 	g.priority_player = 0
-	assert_eq(ai.act(g), "holds Grizzly Bears until the stack clears")
-	resolve_stack()
-	assert_eq(g.players[0].life, 1, "the City stung")
-	g.priority_player = 0
-	assert_string_contains(ai.act(g), "cast Grizzly Bears")
+	assert_eq(ai.act(g), "cast Grizzly Bears")
 	resolve_stack()
 	assert_eq(bears.zone, Mtg.Zone.BATTLEFIELD)
 	assert_eq(g.players[0].life, 1, "one life, once")

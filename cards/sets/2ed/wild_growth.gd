@@ -20,13 +20,19 @@ extends CardScript
 func build() -> CardData:
 	var land_spec := TargetSpec.new(TargetSpec.Kind.PERMANENT, "target land",
 		func(inst: CardInstance) -> bool: return inst.is_land())
+	var bonus := TriggeredAbility.new(
+		Mtg.EventType.TAPPED_FOR_MANA,
+		_bonus_green,
+		"Whenever enchanted land is tapped for mana, its controller adds an additional {G}.",
+		_is_my_host).as_mana_trigger()
+	# The planner's public description (ManaPlanner._bonus_triggers): the
+	# enchanted land makes one more {G}.
+	bonus.mana_bonus_subtype = ManaPlanner.BONUS_ENCHANTED_LAND
+	bonus.mana_bonus_color = Mtg.ManaColor.G
+	bonus.mana_bonus_amount = 1
 	return CardData.new("Wild Growth", "{G}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(land_spec) \
-		.triggered(TriggeredAbility.new(
-			Mtg.EventType.TAPPED_FOR_MANA,
-			_bonus_green,
-			"Whenever enchanted land is tapped for mana, its controller adds an additional {G}.",
-			_is_my_host).as_mana_trigger()) \
+		.triggered(bonus) \
 		.oracle("Enchant land.\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}.")
 
 

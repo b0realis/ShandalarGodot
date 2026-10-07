@@ -22,10 +22,15 @@ func _cast_reverse(reverse: CardInstance) -> bool:
 	resolve_stack()
 	return true
 
+## Leave the open step and any that follows it — a card left in a hand
+## opens the regeneration step too, on public information (campaign
+## fix-engine w4-3).
 func _end_window() -> void:
 	assert_ok(g.end_damage_prevention(g.priority_player))
-	if g.awaiting_damage_prevention or g.awaiting_regeneration:
+	var guard := 0
+	while (g.awaiting_damage_prevention or g.awaiting_regeneration) and guard < 8:
 		assert_ok(g.end_damage_prevention(g.priority_player))
+		guard += 1
 
 func _bolt(target: TargetRef) -> CardInstance:
 	var bolt := give_hand(0, "Lightning Bolt")

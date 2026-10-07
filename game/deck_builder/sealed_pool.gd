@@ -114,15 +114,20 @@ static func pack_size(shape: Dictionary) -> int:
 
 ## The four sheets out of [param library] (an Array of [CardData]), keyed
 ## by [constant SLOT_ORDER]; sorted by name so a seed means the same pool
-## whatever order the registry handed the cards over in.
+## whatever order the registry handed the cards over in. A name is placed
+## once however often the library repeats it; the check is a set, not
+## `Array.has` on a sheet of a thousand-odd commons (whole-game campaign
+## 2026-10: the draft setup validates the pool on every keystroke).
 static func sheets(library: Array) -> Dictionary:
 	var out := {"rare": [], "uncommon": [], "common": [], "land": []}
+	var placed := {}
 	for data in library:
-		if data == null:
+		if data == null or placed.has(data.card_name):
 			continue
+		placed[data.card_name] = true
 		var tier := "land" if LAND_NAMES.has(data.card_name) else DeckStats.rarity_of(data.card_name)
 		if out.has(tier):
-			if not out[tier].has(data.card_name): out[tier].append(data.card_name)
+			out[tier].append(data.card_name)
 	for slot in out:
 		out[slot].sort()
 	return out

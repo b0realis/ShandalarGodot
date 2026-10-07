@@ -24,20 +24,44 @@ func build() -> CardData:
 
 
 ## Every colour an opponent's lands could make right now, in WUBRG order.
+## "Could produce" (CR 106.7) is what each mana ability WOULD make if it
+## resolved now: a Gem Bazaar's chosen colour (not the white its first
+## entry spells out), a Reflecting Pool's census, and nothing from an
+## ability that would make no mana at all (campaign 2026-10, w1-11).
 static func _available_colors(game: MtgGame, source: CardInstance) -> Array[int]:
 	var found := 0
 	var enemy := game.opponent_of(source.controller_id)
 	for inst in game.players[enemy].battlefield:
-		if not inst.is_land():
+		if not inst.is_land() or not game.is_present(inst):
 			continue
-		for ability in inst.cur_mana_abilities:
-			for pair in ability.produces:
-				if int(pair[0]) != Mtg.ManaColor.C:
-					found |= int(pair[0])
+		for ability: ManaAbility in inst.cur_mana_abilities:
+			for color in _could_produce(game, inst, ability):
+				if int(color) != Mtg.ManaColor.C:
+					found |= int(color)
 	var out: Array[int] = []
 	for c in Mtg.WUBRG:
 		if (found & c) != 0:
 			out.append(c)
+	return out
+
+
+## The colours [param ability] of [param land] would add if it resolved
+## now — its first entry rewritten by a colour choice or a dynamic colour,
+## and dropped when its dynamic amount is zero; later entries as printed.
+static func _could_produce(game: MtgGame, land: CardInstance, ability: ManaAbility) -> Array:
+	var out: Array = []
+	for i in ability.produces.size():
+		if i > 0:
+			if int(ability.produces[i][1]) > 0: out.append(int(ability.produces[i][0]))
+			continue
+		if ability.dynamic_amount.is_valid() and ability.amount_for(game, land) <= 0:
+			continue
+		if ability.color_options.is_valid():
+			out.append_array(ability.color_options.call(game, land))
+		elif ability.dynamic_color.is_valid():
+			out.append(int(ability.dynamic_color.call(game, land)))
+		elif int(ability.produces[0][1]) > 0:
+			out.append(int(ability.produces[0][0]))
 	return out
 
 

@@ -2718,7 +2718,7 @@ picker before tutor casts).
 | **Block requirements are maximised by a BOUNDED search** (`CombatDeclaration.must_block_error`, `SEARCH_BUDGET` 8000 nodes; Tempest bug pass 2026-10-06). CR 509.1c asks a declaration to obey as many requirements as possible; beyond the budget the declaration in hand is accepted, and a creature that may block several attackers is tried with its most-requirements set, that set without menace attackers, and each single attacker — not every subset. Both approximations can only make the engine more lenient, never leave a seat without a legal declaration. | An exhaustive search over every blocker subset |
 | **A licid keeps its entry timestamp when it becomes an Aura** (`MtgGame.become_licid_aura`, Pack 9, 2026-10-06). CR 613.7e gives an Aura a new timestamp when it becomes attached; `CardInstance.layer_timestamp` is also the engine's object identity (control rows, cost records, Animate Dead's raise), so it is not renewed, as for every Aura moved after it entered. Only a timestamp-ordered layer-6 interaction with another source can differ; Humility never meets it (a creature licid under Humility has no ability to activate). | A separate attachment timestamp for layer ordering |
 | ~~Triggers can't target (`TriggeredAbility`)~~ **DONE 2026-09-02** — `TriggeredAbility.targeting(spec, order, prompt)` gives a trigger a real target, chosen by its controller AS IT GOES ON THE STACK (CR 603.3d; `MtgGame._arm_trigger_targets`): the controller's seat is asked through the `DecisionAgent` funnel (a human seat is HELD on the question through the cost mailbox, provisional pick on the stack meanwhile — `StackItem.target_held`), the pick is shown in the stack description for the opponent to respond to, shroud keeps a creature off the list, and the trigger fizzles on resolution when the target has left (CR 608.2b) or never goes on the stack with nothing legal. `.modal(labels, hint, prompt)` announces a MODE before the target the same way (CR 603.3c; `MtgGame.current_mode()`). Triggers fired by a player's own action (cast, activate, tap for mana) reach that hold through `MtgGame._resume_priority` (CR 117.3c). Lifted the eight-card "triggers that pick their own victim" row (Oubliette, Halfdane, Dance of Many, Blazing Effigy, Axelrod Gunnarson, Floral Spuzzem, Relic Bind, Erhnam Djinn). Pinned by `tests/unit/test_targeted_triggers.gd` and `tests/cards/test_fidelity_2026_09_02_targeted_triggers.gd` | One target spec per trigger — enough for the 1997 pool |
-| ~~Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first)~~ **THE "LANDS ONLY" HALF DONE 2026-09-11** — `_payment_plan` builds its plan through `ManaPlanner` (`sources` / `plan_from`), the planner the AI seat and the human's double-click auto-cast already shared, so every untapped mana source the payer controls pays a mid-trigger cost: **CR 605.3a**, a player may activate a mana ability whenever a rule or effect asks them to pay a mana cost. A Sol Ring, the five Moxen, a Mana Crypt, a Basalt Monolith, a Black Lotus (sorted last, reached only when nothing else is), a Llanowar Elves. Restricted mana is refused up front now rather than by accident of a simulation (Mishra's Workshop, CR 106.6). The reproduction was the prison land of the era killing a Grizzly Bears with a Sol Ring standing untapped beside it; 45 card files reach this path. Five helpers that served only the old scan are gone. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. **STILL SIMPLIFIED, and the marker says exactly this**: the payer does not CHOOSE the sources — the planner's order decides — and a source whose activation would ASK (a colour CHOICE, Fellwar Stone; a mana battery with charge counters, CR 601.2b) is left OUT of the plan (`MtgGame._mana_ability_asks`), because a payment nested in a resolution cannot hold the duel open for the answer: the COST hold re-issues the mana ability alone and the trigger paying for it would be lost. Six cards under-reported, never over-reported | Let the payer choose the sources; and give a payment nested in a resolution somewhere to put a cost question, which is what the six asking sources are waiting on |
+| ~~Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first)~~ **THE "LANDS ONLY" HALF DONE 2026-09-11** — `_payment_plan` builds its plan through `ManaPlanner` (`sources` / `plan_from`), the planner the AI seat and the human's double-click auto-cast already shared, so every untapped mana source the payer controls pays a mid-trigger cost: **CR 605.3a**, a player may activate a mana ability whenever a rule or effect asks them to pay a mana cost. A Sol Ring, the five Moxen, a Mana Crypt, a Basalt Monolith, a Black Lotus (sorted last, reached only when nothing else is), a Llanowar Elves. Restricted mana is refused up front now rather than by accident of a simulation (Mishra's Workshop, CR 106.6). The reproduction was the prison land of the era killing a Grizzly Bears with a Sol Ring standing untapped beside it; 45 card files reach this path. Five helpers that served only the old scan are gone. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. **STILL SIMPLIFIED, and the marker says exactly this**: the payer does not CHOOSE the sources — the planner's order decides — and a source whose activation would ASK (a colour CHOICE, Fellwar Stone; a mana battery with charge counters, CR 601.2b) is left OUT of the plan (`MtgGame._mana_ability_asks`), because a payment nested in a resolution cannot hold the duel open for the answer: the COST hold re-issues the mana ability alone and the trigger paying for it would be lost. Six cards under-reported, never over-reported. **The order since 2026-10-07** (campaign, w6-1/w1-2): sacrifice last, then a tap an Aura punishes, then a source that does not untap, painful after painless; the least surplus within those | Let the payer choose the sources; and give a payment nested in a resolution somewhere to put a cost question, which is what the six asking sources are waiting on |
 | ~~No banding~~ **DONE** (attack bands wave 3, defensive banding 2026-09-01, "bands with other [quality]" 2026-09-02 — `CardInstance.cur_bands_with` / `grant_bands_with`, `CombatState.shared_bands_with` / `bands_with_offered` / `bands_with_among`; the five Legends banding lands and Master of the Hunt's Wolves grant the real per-quality restriction, not plain banding, pinned by `tests/cards/test_fidelity_2026_09_02_bands_with_other.gd`). No protection-from-artifacts etc. | As stubs demand them |
 | ~~Mid-resolution questions are answered by a heuristic~~ **DONE 2026-08-31, FINISHED 2026-09-01** — every ask is a first-class `PlayerChoice` on the record. 103 of the 109 call sites are inside a stack resolution and the engine PRE-FLIGHTS each one over a `GameSnapshot` rewind point, then holds it open on `MtgGame.awaiting_choice` until `answer_choice`. The four COST payments outside the stack (`tap_for_mana`'s sacrifice, Fellwar Stone's colour, `cast_spell`'s additional sacrifice, `activate_ability`'s sacrifice cost) are held open by `MtgGame._pending_action` — a record of the ACTION that `answer_choice` re-issues, no rewind point, because all four ask after every refusal check and before any mutation (CR 601.2h). Same overlay, same `answer_choice`, told apart by `PlayerChoice.is_cost` (docs/duel-todo.md §1.3) | Only `CardData.as_it_enters` run from a NON-resolution path is left, and reached the ordinary way (a creature resolving) even that is inside the probe. Fellwar Stone's colour moved out of the card into `ManaAbility.color_options` on the way, which also fixed it being asked TWICE per activation and being asked after the source was already tapped |
 | **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"*, Fasting's *"you may skip that step"* and Breathstealer's Crypt's *"that player discards it unless they pay 3 life"* (vis, Pack 8 — `vis/_misc.gd`, `_breathstealer_draw`; added by the Mirage bug pass, 2026-10-04) are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
@@ -18769,6 +18769,62 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-07 — The whole-game campaign (0.50.16)
+
+The owner, after Pack 9: *"Ok now do another bug hunt campaign and later bug
+fix campaign. This will be it for some time regarding card packs. Lets make
+the whole game play smoothly and correctly and with good AI player."* Seven
+read-only hunters (the core pool; packs 2–5; cross-pack 6–9; the engine
+core; the duel screen; the AI over 1,400 timed AI duels; network, the agent
+seat and persistence) found **84 problems (11 high)**, each reproduced by a
+failing probe; nine test-first fixers on disjoint files fixed them
+([bug-hunt-campaign-2026-10-07.md](bug-hunt-campaign-2026-10-07.md),
+[releases/0.50.16.md](releases/0.50.16.md)):
+
+- **Rules**: the 1997 tapped-artifacts rule no longer switches off a card's
+  own untap lock or its "while tapped" bonus (`StaticAbility.working_while_tapped()`
+  — Time Vault gave a human an extra turn every turn); a band stays blocked
+  when its blocked member leaves combat; the 1997 damage steps open on
+  public information and resolve only what was cast inside them; the
+  announcement bracket (`MtgGame.begin_announcement`) puts a City of Brass
+  ping raised while paying above the spell (CR 601.2g–h); a {T} activation
+  recalculates; APNAP graveyard triggers; the journal restores a game's end.
+- **Mana payment**: one planner for the AI and the human's auto-cast pays
+  with the least surplus, sorts painful, untap-locked, tolled and
+  sacrificed sources last, stops at the bill and plans for described bonus
+  mana (Mana Flare, Wild Growth, Gauntlet of Might, Overgrowth) — 392
+  points of self-inflicted burn in 300 tournament duels before.
+- **The AI** (behind `forecasts_tactics`, gate-off arms and hidden-
+  information permutations): lethal burn summed across the hand; mandatory
+  arrival triggers, symmetric statics and sweepers priced against its own
+  board; free escapes and payable regeneration read before removal; the
+  Fifth Edition and Mirage reprints of Ice Age and Fallen Empires cards read
+  by `CardData.script_set`; licid decisions from 9.7 s to 1.3 s; the
+  Apprentice's fumbles never with mana floating, never a lethal line.
+- **Duel screen**: the auto-pass prices abilities against floating mana;
+  nine cards asking the caster for an opponent-chosen target usable again;
+  lights and refusals know targets, X and non-mana costs; tutors can fail to
+  find; the empty block is declared when nothing can block [QoL].
+- **SGManalink protocol 29** (`RULES_REVISION`
+  `sgmanalink-campaign-2026-10-07`): choice lines carry card handles; the
+  network table stops for a payable ransom; the referee waits through a LAN
+  reconnect instead of conceding the agent; the drawn seed only in the
+  result; holding Firestorm no longer stalls the host (the distinct-object
+  check is a bipartite matching).
+- **Saving**: the window's close button asks to save the Deck Builder's
+  work (also from the Booster Draft setup and a draft started from the
+  builder); a pack requirement no longer outlives its last card; titles in
+  other alphabets get their own file.
+- **Known, not done**: Illusionary Mask reads "the mana you spent on {X}"
+  as mana value ≤ X (`docs/simplified-cards.md`); the AI's activations and
+  instant-speed responses still hold a tap-trigger cast and retry it (only
+  the main-phase cast uses the bracket); the planner never swaps a
+  colour-choice source's colour when pruning; a deck saved stale before
+  0.50.16 asks for its pack at battle setup until re-saved. **For the
+  owner**: the Deck Lab's default rules preset is `modern` (no mana burn)
+  while the player's default is `modern_mana_burn`, so Lab measurements hide
+  mana-burn mistakes; changing it moves every Lab baseline.
 
 ## 2026-10-06 — Pack 9: the Tempest block (0.50.15)
 

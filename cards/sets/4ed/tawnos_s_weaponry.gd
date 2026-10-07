@@ -18,13 +18,18 @@ extends CardScript
 ## untap step (MtgGame._untap_step, `@ISLAND_FISH_JASCONIUS`'s two-line
 ## form: "Untap <name>." / "Don't untap."); the heuristic keeps it tapped
 ## while it is sustaining something and untaps it otherwise.
+##
+## The bonus lasts WHILE the Weaponry is tapped, so the 1997 "tapped
+## artifacts stop working" rule cannot switch it off
+## (StaticAbility.working_while_tapped).
 
 
 func build() -> CardData:
 	return CardData.new("Tawnos's Weaponry", "{2}", Mtg.CardType.ARTIFACT) \
 		.with_may_skip_untap() \
 		.static_ability(StaticAbility.new(
-			_apply, "The equipped creature gets +1/+1 while the Weaponry stays tapped.")) \
+			_apply, "The equipped creature gets +1/+1 while the Weaponry stays tapped.") \
+			.working_while_tapped()) \
 		.activated(ActivatedAbility.new(
 			"{2}", true, [EquipEffect.new()],
 			"{2}, {T}: Target creature gets +1/+1 for as long as Tawnos's Weaponry "

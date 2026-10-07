@@ -745,7 +745,8 @@ static func _dreadnought(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 			if reachable < 12: greedy += 1
 			reachable += i.cur_power
 	if reachable >= 12 and g.agents[pid].choose_yes_no(g, pid,
-			"Sacrifice creatures with total power 12 or greater to keep Phyrexian Dreadnought?", greedy <= 2):
+			"Sacrifice creatures with total power 12 or greater to keep Phyrexian Dreadnought?",
+			greedy <= 2 and (not s.is_token or _dreadnought_token_lethal(g, s, pid))):
 		var picked: Array[CardInstance] = []
 		var power := 0
 		while power < 12 and not pool.is_empty():
@@ -759,6 +760,31 @@ static func _dreadnought(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 			g.end_simultaneous()
 			return
 	g.sacrifice_permanent(s)
+
+
+## The hint for a TOKEN Dreadnought (campaign 2026-10, w3-6): a token copy
+## is a one-turn body (Echo Chamber exiles it at the next end step), so it
+## is worth the creatures only when it swings for lethal THIS turn — its
+## controller's turn before attackers are declared, able to attack, and its
+## power (less every untapped enemy body's toughness for a trampler, all of
+## it only past no blocker at all) reaching the opponent's life. Public
+## board only.
+static func _dreadnought_token_lethal(g: MtgGame, s: CardInstance, pid: int) -> bool:
+	if g.active_player != pid or g.current_step() not in [Mtg.Step.UPKEEP, Mtg.Step.DRAW,
+			Mtg.Step.MAIN1, Mtg.Step.COMBAT_BEGIN]:
+		return false
+	if s.summoning_sick and not s.has_keyword(Mtg.Keyword.HASTE):
+		return false
+	var foe := g.opponent_of(pid)
+	var soak := 0
+	var blockers := 0
+	for i in g.players[foe].battlefield:
+		if i.is_creature() and not i.tapped and g.is_present(i):
+			blockers += 1
+			soak += maxi(i.cur_toughness - i.damage, 0)
+	var through := s.cur_power - soak if s.has_keyword(Mtg.Keyword.TRAMPLE) \
+		else (s.cur_power if blockers == 0 else 0)
+	return through >= g.players[foe].life
 
 
 # ---------------------------------------------------------------- Sand Golem --

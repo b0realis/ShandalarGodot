@@ -31,11 +31,25 @@ func _arm(pid: int) -> void:
 	g.set_agent(pid, Duelist.new())
 
 
-## Both seats leave the open window, which closes it.
+## Both seats leave the open window, which closes it — and any step that
+## follows it (campaign fix-engine w4-3: a card in a hand may now open the
+## regeneration step after the prevention one, judged on public information).
 func _end_window() -> void:
 	assert_ok(g.end_damage_prevention(g.priority_player))
-	if g.awaiting_damage_prevention or g.awaiting_regeneration:
+	var guard := 0
+	while (g.awaiting_damage_prevention or g.awaiting_regeneration) and guard < 8:
 		assert_ok(g.end_damage_prevention(g.priority_player))
+		guard += 1
+
+
+## Both seats pass a PREVENTION step if one is open (a card in a hand opens
+## it on public information, campaign fix-engine w4-3), so a test about the
+## regeneration step reaches it.
+func _through_prevention() -> void:
+	var guard := 0
+	while g.awaiting_damage_prevention and guard < 4:
+		assert_ok(g.end_damage_prevention(g.priority_player))
+		guard += 1
 
 
 # ------------------------------------------------------ the window opening --
@@ -98,8 +112,10 @@ func test_no_window_opens_when_no_seat_asked_for_one() -> void:
 
 func test_a_window_nobody_could_act_in_is_skipped() -> void:
 	# Not a shortcut: the window's ONLY legal action is a prevention
-	# effect, so a window in which neither seat holds one can only be
-	# passed. With no Salve in hand there is nothing to hold it open for.
+	# effect, so a window in which neither seat COULD hold one can only be
+	# passed. Judged on public information (campaign fix-engine w4-3):
+	# both hands are empty and no board ability fits, so there is nothing
+	# to hold it open for — a card in either hand would open it.
 	_arm(1)
 	var wurm := put_battlefield(0, "Craw Wurm")
 	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
@@ -282,6 +298,7 @@ func test_only_regeneration_effects_may_be_used_in_that_window() -> void:
 	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
 	assert_ok(g.declare_blockers(1, {bones.id: wurm.id}))
 	advance_to_step(Mtg.Step.COMBAT_DAMAGE)
+	_through_prevention()   # P1 holds a card: publicly, it might prevent
 	assert_true(g.awaiting_regeneration)
 	assert_ok(g.end_damage_prevention(0))
 	add_mana(1, Mtg.ManaColor.R)
@@ -328,6 +345,7 @@ func test_death_ward_can_only_be_cast_on_something_that_is_dying() -> void:
 	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
 	assert_ok(g.declare_blockers(1, {bones.id: wurm.id}))
 	advance_to_step(Mtg.Step.COMBAT_DAMAGE)
+	_through_prevention()   # P1 holds a card: publicly, it might prevent
 	assert_true(g.awaiting_regeneration)
 	assert_ok(g.end_damage_prevention(0))
 	add_mana(1, Mtg.ManaColor.W)
