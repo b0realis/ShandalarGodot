@@ -1415,7 +1415,10 @@ keys wants a keyboard. 0.50.3.
   full-drive line, the fallback mapper's argv, the missing mapper named
   before any start).
 - `packaging/handhelds/shandalar.gptk`: L2 the duel log (`l`), R2 reads
-  the card (`r`), R3 mute (`m`), the right stick's up/down Page Up/Down.
+  the card (`r`), R3 mute (`m`), the right stick's up/down Page Up/Down;
+  Select is `q` since 2026-10-08 (the duel's pause menu, the Deck
+  Builder's menu — both hold Exit game; `ArkosMappingTest` in
+  `tools/test_handheld_launchers.py`).
 - `game/input/controls.gd` + `project.godot` `[input]`: a twelfth action
   `duel_read` ("Read the card", `R` / R3). `Controls.names()` is 21.
 - `game/duel/fullscreen_card.gd`: `open_card(by_key := false)` — by key

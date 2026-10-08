@@ -242,5 +242,43 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
             self.assertEqual(result.returncode, 0, result.stderr)
 
 
+
+class ArkosMappingTest(unittest.TestCase):
+    """The shipped gptokeyb map: what each ArkOS button types into the game.
+
+    The R36 Ultra tester (2026-10-08) had to press the power button to
+    leave the game and asked for a shortcut that opens the pause menu
+    directly: Select is Q, the duel's own pause key (`duel_pause`, which
+    opens the menu whatever else is going on) and the Deck Builder's menu
+    key; Start stays Escape.
+    """
+
+    def mapping(self):
+        out = {}
+        for line in (ROOT / "packaging/handhelds/shandalar.gptk").read_text().splitlines():
+            line = line.split("#", 1)[0].strip()
+            if "=" in line:
+                key, value = line.split("=", 1)
+                out[key.strip()] = value.strip()
+        return out
+
+    def test_select_opens_the_pause_menu_and_start_is_escape(self):
+        mapping = self.mapping()
+        self.assertEqual(mapping.get("back"), "q")
+        self.assertEqual(mapping.get("start"), "esc")
+
+    def test_q_is_still_the_duels_pause_key(self):
+        project = (ROOT / "project.godot").read_text()
+        start = project.index("duel_pause={")
+        binding = project[start:project.index("}\n", start)]
+        self.assertIn('"keycode":81', binding, "Q (keycode 81) opens the duel's pause menu")
+
+    def test_no_two_buttons_type_the_same_key(self):
+        typed = [value for value in self.mapping().values()
+                 if value not in ('"', "") and not value.startswith("mouse_")
+                 and not value.replace(".", "").isdigit()
+                 and value not in ("scaled_radial",)]
+        self.assertEqual(len(typed), len(set(typed)), typed)
+
 if __name__ == '__main__':
     unittest.main()

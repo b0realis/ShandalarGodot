@@ -203,8 +203,16 @@ read comfortably; there is no dedicated small-screen reflow in this package.
 | Right stick up / down | Page Up / Page Down where supported |
 | L3 | Backspace: remove selected card in Deck Builder |
 | R3 | Mute for this session |
-| Start | Escape: cancel / pause |
+| Start | Escape: cancel one layer; with nothing to cancel, the pause menu |
+| Select | Q: the pause menu in a duel whatever else is going on, the menu in the Deck Builder — both hold **Exit game** |
 | PortMaster hotkey + Start | Emergency exit; may interrupt unsaved work |
+
+**Leaving the game.** Select opens the menu that holds **Exit game** in a
+duel or the Deck Builder; on the title screen, **Exit** is the bottom
+button, and Start (Escape) steps back from any other screen. (Asked for by
+the R36 Ultra tester, 2026-10-08, who had to use the power button: Select
+was unmapped, and Start opens the pause menu only when there is nothing
+left to cancel.)
 
 Text entry uses the game's own **on-screen keyboard** (see above): a board
 of keys appears whenever a deck name, a table name or the Deck Builder's
