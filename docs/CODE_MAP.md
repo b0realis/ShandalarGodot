@@ -41,6 +41,27 @@ needed); card files have NO class_name (they register by name instead);
   its tests and the recorded referee lines they read. AGENTS.md,
   "Decision models", is the contract.
 
+## The title menu's bullet (2026-10-08)
+
+- `game/menu_bullet.gd`: class `MenuBullet` — the 1997 title menu's
+  Celtic-knot bullet with its pink gem at the left of each title-menu
+  button (`Main._menu_button`), from the imported skin's `begin_menu`
+  sheet (`Begin.spr`, every frame, one column of 265x24 cells; the bullet
+  is cells 14-17). Three states, the owner's call: at rest (14), hovered —
+  the pointer, the focus or the press — (15), dimmed (17) for a disabled
+  button or a placeholder (Shandalar, Save / Load); cell 16, the 1997
+  press, is a 22x22 sunken bullet and is not shown. Read off the button's
+  draw mode on every redraw; without the sheet `attach` adds nothing.
+- `tools/import_original.py`: `begin_menu` <- `Begin.spr` (MANIFEST),
+  `SPR_SHEETS` 18 cells of 265x24, `SPR_COLUMNS` (one column) and
+  `SPR_PALETTES` (`Menubak.pic`, the screen it stands on, not
+  `Todpal.tr`); `_raw_spr_sheet` lays out any column count. Tests:
+  `TestTheTitleMenuSprite` in `tools/test_import_original.py`.
+- `tests/ui/test_menu_bullet_2026_10_08.gd`: the state table, the cells,
+  a button wearing it at its left and following its state, no sheet no
+  bullet, and the title menu's eight bullets with Shandalar and
+  Save / Load dimmed.
+
 ## The opt-in timing log (2026-10-08)
 
 - `game/perf_log.gd`: class `PerfLog` — a stutter report for a tester

@@ -492,6 +492,26 @@ MANIFEST: dict[str, list[str]] = {
     # adventure layer. Its dark-on-light lettering IS our evidence for
     # how the original letters a button face.
     "stat_buttons":          ["Statbutt.spr", "Statbutt.spr.png"],
+    # THE TITLE MENU'S SPRITE, `Begin.spr` (2026-10-08, the owner: *"Lets
+    # import every frame there but we will use only icon for now"*): ALL
+    # EIGHTEEN frames, one column of 265x24 cells, top to bottom —
+    #    0 Start New Game   1 lit
+    #    2 Load Saved Game  3 lit  4 greyed
+    #    5 Resume Game      6 lit  7 greyed
+    #    8 Set Options      9 lit
+    #   10 Exit            11 lit
+    #   12 Hall of Fame    13 lit
+    #   14-17 the Celtic-knot bullet with its pink gem, at the cell's
+    #   left: at rest, hovered (24x24), pressed (22x22 — the 1997 press
+    #   sinks it), and dimmed (24x24, the gem dull — a choice that is
+    #   not open).
+    # Painted with `Menubak.pic`'s palette (SPR_PALETTES), the screen it
+    # stands on; `Todpal.tr` turns it to rust. The game reads the bullet
+    # (`MenuBullet`, three states: the 22x22 press is kept, not shown);
+    # the words are kept for later. No conversion is
+    # named: s30's `Begin.spr.png` drops two of the four bullets and
+    # paints the rest in the wrong palette.
+    "begin_menu":            ["Begin.spr"],
     # The stack window, the message bar, and the enlarged-card window
     # (s30: spellChainBg / messageBg / the examine view).
     "spell_chain_panel":     ["Winbk_Spellchain.pic",
@@ -2626,13 +2646,23 @@ def _raw_pic_rgba(key: str, path: Path,
 ## key -> (candidate names, cells, cell width, cell height).
 SPR_SHEETS: dict[str, tuple[list[str], int, int, int]] = {
     "stat_buttons": (["Statbutt.spr"], 16, 48, 48),
+    "begin_menu": (["Begin.spr"], 18, 265, 24),
 }
+## How many cells a sheet puts on one row; a sheet not named here is one
+## row of every cell. `begin_menu` is one COLUMN, so frame N is row N.
+SPR_COLUMNS: dict[str, int] = {"begin_menu": 1}
+## A sheet whose sprite belongs to a screen with its own palette, not the
+## adventure's `Todpal.tr` (SPR_PALETTE): the title menu's `Begin.spr`
+## stands on `Menubak.pic` and is painted with that picture's `M0` block
+## — gold words and a grey knot with a pink gem, the 1997 title menu.
+SPR_PALETTES: dict[str, list[str]] = {"begin_menu": ["Menubak.pic"]}
 
 
 def _raw_spr_sheet(key: str, path: Path,
                    palette: bytes | None) -> tuple[int, int, bytes] | None:
     """One `.spr` -> a row of clipped cells as RGBA, or None."""
     cells, cell_w, cell_h = SPR_SHEETS[key][1:]
+    columns = SPR_COLUMNS.get(key, cells)
     if palette is None:
         print("  %-24s SKIPPED %s (no palette beside it)" % (key, path.name))
         return None
@@ -2641,16 +2671,20 @@ def _raw_spr_sheet(key: str, path: Path,
     except (ValueError, IndexError, OSError, struct.error) as err:
         print("  %-24s SKIPPED %s (%s)" % (key, path.name, err))
         return None
-    width = cell_w * cells
-    indices = bytearray(width * cell_h)
+    rows = (cells + columns - 1) // columns
+    width = cell_w * columns
+    height = cell_h * rows
+    indices = bytearray(width * height)
     for slot, (frame_w, frame_h, pixels) in enumerate(frames[:cells]):
+        left = (slot % columns) * cell_w
+        top = (slot // columns) * cell_h
         for y in range(min(frame_h, cell_h)):
             row = pixels[y * frame_w:y * frame_w + min(frame_w, cell_w)]
-            start = y * width + slot * cell_w
+            start = (top + y) * width + left
             indices[start:start + len(row)] = row
     # Index 0 is the sprite format's transparency (decode_spr's own
     # convention, and `paint` without a mask reads it that way).
-    return width, cell_h, paint(bytes(indices), palette)
+    return width, height, paint(bytes(indices), palette)
 
 
 def import_raw_texture(key: str, source: Path, index: dict[str, Path],
@@ -2662,7 +2696,7 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
     it is per-key except which palette family the file belongs to.
     """
     if key in SPR_SHEETS:
-        palette, origin = _resolve_palette(index, SPR_PALETTE)
+        palette, origin = _resolve_palette(index, SPR_PALETTES.get(key, SPR_PALETTE))
         sheet = _raw_spr_sheet(key, source, palette)
         if sheet is None:
             return False

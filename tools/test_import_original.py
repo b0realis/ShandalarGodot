@@ -1154,6 +1154,86 @@ class TestSprSheet(RawStepCase):
             self.assertEqual(pixels[7], 255)
 
 
+class TestTheTitleMenuSprite(TestSprSheet):
+    """`begin_menu` <- `Begin.spr` (2026-10-08): the 1997 title menu's
+    sprite, EVERY frame — the owner: *"Lets import every frame there but
+    we will use only icon for now"*. Fourteen 265x24 word strips and the
+    four 24x24 states of the Celtic-knot bullet, one column, painted with
+    the palette of the screen they stand on (`Menubak.pic`), not the
+    adventure's `Todpal.tr`."""
+
+    ## A row's runs are one byte each, so a 265-wide word row is written
+    ## the way the 1997 file writes its lettering: ten clear pixels, then
+    ## 255 of ink.
+    CLEAR = 10
+
+    def _frames(self) -> list[tuple[int, int, bytes]]:
+        frames = []
+        for i in range(14):
+            row = bytes(self.CLEAR) + bytes([10 + i] * (265 - self.CLEAR))
+            frames.append((265, 24, row * 24))
+        frames += [(24, 24, bytes([40 + i] * (24 * 24))) for i in range(4)]
+        return frames
+
+    def _spr(self, frames: list[tuple[int, int, bytes]]) -> bytes:
+        """`TestSprSheet._spr` with each row's leading clear pixels as
+        the run's skip, so a row wider than 255 still fits its byte."""
+        out = bytearray()
+        for width, height, pixels in frames:
+            body = bytearray()
+            for y in range(height):
+                row = pixels[y * width:(y + 1) * width]
+                skip = len(row) - len(row.lstrip(b"\x00"))
+                ink = row[skip:]
+                body += bytes([skip, 0xFE, len(ink)]) + ink
+            head = struct.pack("<IHHHHHH", len(body) + 16, width, height,
+                               0, 0, 0, 0)
+            out += head + body
+        return bytes(out) + struct.pack("<I", 0xFFFFFFFF)
+
+    def test_every_frame_is_one_row_of_a_single_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            root.mkdir(parents=True)
+            (root / "BEGIN.SPR").write_bytes(self._spr(self._frames()))
+            menu = ramp_palette()
+            (root / "MENUBAK.PIC").write_bytes(
+                make_pic(2, 2, bytes([1, 2, 3, 4]), menu))
+            # The adventure palette beside it must NOT be the one used.
+            other = bytes(255 - b for b in menu)
+            (root / "Todpal.tr").write_text(tr_palette(other))
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            width, height, channels, pixels = read_png(
+                (dest / "begin_menu.png").read_bytes())
+            self.assertEqual((width, height, channels), (265, 18 * 24, 4))
+            self.assertIn("palette: MENUBAK.PIC", log)
+
+            def at(x, y):
+                i = (y * 265 + x) * 4
+                return bytes(pixels[i:i + 4])
+            for frame in range(14):
+                index = 10 + frame
+                self.assertEqual(at(200, frame * 24 + 5),
+                                 menu[index * 3:index * 3 + 3] + b"\xff",
+                                 "row %d is word frame %d" % (frame, frame))
+            for state in range(4):
+                index = 40 + state
+                row = (14 + state) * 24
+                self.assertEqual(at(5, row + 5),
+                                 menu[index * 3:index * 3 + 3] + b"\xff",
+                                 "row %d is bullet state %d" % (14 + state, state))
+                self.assertEqual(at(100, row + 5)[3], 0,
+                                 "a 24-wide bullet leaves the rest of its row clear")
+
+    def test_the_row_names_the_raw_file_and_the_menu_palette(self):
+        self.assertEqual(imp.MANIFEST["begin_menu"], ["Begin.spr"])
+        self.assertEqual(imp.SPR_SHEETS["begin_menu"], (["Begin.spr"], 18, 265, 24))
+        self.assertEqual(imp.SPR_COLUMNS["begin_menu"], 1)
+        self.assertEqual(imp.SPR_PALETTES["begin_menu"], ["Menubak.pic"])
+        self.assertNotIn("stat_buttons", imp.SPR_PALETTES,
+                         "the adventure strip keeps Todpal.tr")
+
 class TestAssembledSheets(RawStepCase):
     """THE TWO GRIDS 1997 NEVER SHIPPED AS ONE FILE, and the two that are
     OURS.

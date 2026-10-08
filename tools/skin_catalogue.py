@@ -187,6 +187,13 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The same button greyed out."),
     ("Buttons", "stat_buttons",
      "The 1997 statistics buttons sheet. NOT READ by the game yet."),
+    ("Buttons", "begin_menu",
+     "The 1997 title menu's sprite, every frame, one column of 265x24 "
+     "cells: the six menu words at rest and lit (0-13; Load Saved Game "
+     "and Resume Game also greyed), then the Celtic-knot bullet at the "
+     "cell's left — at rest, hovered, pressed (22x22, NOT READ) and "
+     "dimmed (14-17). The bullet stands beside the title screen's menu "
+     "buttons; the words are NOT READ yet."),
 
     ("The phase bars", "phase_bar",
      "The turn's steps down the table's edge: two columns of 41 px "

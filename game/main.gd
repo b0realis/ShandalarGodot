@@ -192,7 +192,7 @@ func _ready() -> void:
 	# ENABLED rather than greyed, because a disabled button in Godot
 	# swallows its own tooltip and a player deserves to be told WHY a
 	# front door is shut. Each opens one sentence.
-	var shandalar := _menu_button("Shandalar")
+	var shandalar := _menu_button("Shandalar", true)
 	shandalar.pressed.connect(func() -> void:
 		UiChrome.explain_popup(self, "Shandalar",
 			"The adventure — the world map, its cities and dungeons, the "
@@ -201,7 +201,7 @@ func _ready() -> void:
 			+ "duel it will be played through is what exists today."))
 	box.add_child(shandalar)
 
-	var save_load := _menu_button("Save / Load")
+	var save_load := _menu_button("Save / Load", true)
 	save_load.pressed.connect(func() -> void:
 		UiChrome.explain_popup(self, "Save / Load",
 			"Nothing to save yet. A duel is one sitting, and the "
@@ -1110,8 +1110,14 @@ static func pack_9_probe() -> Dictionary:
 
 
 ## One shell button, at this screen's size.
-static func _menu_button(label: String) -> Button:
-	return UiChrome.menu_button(label, MENU_BUTTON, MENU_FONT, MENU_BOLD)
+## A title-menu button, with the 1997 menu's Celtic-knot bullet at its
+## left when the imported skin has it ([MenuBullet]; 2026-10-08) —
+## [param placeholder] shows it dimmed, for a door not open yet that still
+## explains itself.
+static func _menu_button(label: String, placeholder := false) -> Button:
+	var button := UiChrome.menu_button(label, MENU_BUTTON, MENU_FONT, MENU_BOLD)
+	MenuBullet.attach(button, placeholder)
+	return button
 
 
 ## The shared treatment of the two corner labels (see the wordmark above).
