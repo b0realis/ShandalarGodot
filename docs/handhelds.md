@@ -240,6 +240,23 @@ and writes a line to `portmaster.log` when `/tmp` has under a megabyte
 free. The game then runs — but free the system drive anyway: PortMaster's
 own dialogs and device detection fail the same way while it is full.
 
+**If the game stutters: the timing log.** Off unless you ask for it, one
+launch at a time. Put an **empty file named `perf-log`** (or `perf-log.txt`)
+in the `shandalar/` folder beside `Shandalar.arm64`, start the game, play
+until it stutters — a duel against the computer is the useful test — and
+leave through the menu's Exit game. Every line lands in
+`shandalar/portmaster.log` (marked `[perf]`), and also in
+`shandalar/conf/godot/app_userdata/Shandalar/logs/perf.log`. Send
+`portmaster.log`, say what you were doing when it stuttered, and **delete
+`perf-log`** again: the next launch is back to normal. The log says how long
+the start took, every second that had a slow frame, each frame of a tenth of
+a second or more with what ran inside it (the computer's decision, the
+screen's refresh — or nothing labelled, which points at the drawing), and a
+summary every minute. On a Steam Deck or a desktop the same file beside the
+executable works, or the launch option `SHANDALAR_PERF_LOG=1 %command%`, or
+`-- --perf-log` on the command line; the log is then at
+`~/.local/share/godot/app_userdata/Shandalar/logs/perf.log`.
+
 If launch fails, keep `shandalar/portmaster.log` and
 `shandalar/portmaster.previous.log`. Report the exact device/board, ArkOS build,
 PortMaster version and screen size. A launch test must check pointer movement,

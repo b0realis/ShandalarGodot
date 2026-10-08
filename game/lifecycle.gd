@@ -27,7 +27,9 @@ extends Node
 ## 2026-09-18) hangs on the tree here for the same reason: one process,
 ## one hook, every hover text wrapped to the window. And the Android
 ## corner ([AndroidCorner], 2026-09-29) is made here for the same reason
-## again: before the autoloads that read it.
+## again: before the autoloads that read it. And the opt-in timing log
+## ([PerfLog], 2026-10-08) is asked here: nothing at all unless this
+## launch asked for it.
 
 
 func _ready() -> void:
@@ -36,6 +38,7 @@ func _ready() -> void:
 	# before any screen reads the map.
 	Controls.apply()
 	UiChrome.watch_tooltips(get_tree())
+	PerfLog.start_if_asked(get_tree())
 	# On Android the corner the player pushes into is made here, before
 	# SkinPack and CardPacks read it, and what is there goes to the log
 	# and to the start report in the corner ([AndroidCorner]); the tracer

@@ -41,6 +41,24 @@ needed); card files have NO class_name (they register by name instead);
   its tests and the recorded referee lines they read. AGENTS.md,
   "Decision models", is the contract.
 
+## The opt-in timing log (2026-10-08)
+
+- `game/perf_log.gd`: class `PerfLog` — a stutter report for a tester
+  (the R36 Ultra on ArkOS). Nothing is built unless THIS launch asks
+  (`asked` / `asked_from`: `SHANDALAR_PERF_LOG=1`, `-- --perf-log`, or a
+  `perf-log` / `perf-log.txt` file beside the executable);
+  `start_if_asked` from `Lifecycle._ready`. Asked, one node at the root
+  times every main-loop frame and the labelled work the game reports
+  through `now()` / `span()` (`DuelScreen._ai_step`: "computer decision";
+  `DuelScreen._refresh`: "screen refresh"), writing
+  `user://logs/perf.log` (previous run kept) and stdout `[perf]` lines: a
+  header, a line per slow second, a HITCH line per frame of 100 ms or more
+  with the work inside it, a SUMMARY a minute and on exit.
+- `tests/ui/test_perf_log_2026_10_08.gd`: off unless asked (no node, no
+  clock, nothing written), the three ways a launch asks, the hitch line
+  naming its work, quiet seconds silent, the summary's percentiles and
+  labels, and the duel reporting its decision and refresh.
+
 ## The whole-game campaign (2026-10-07)
 
 Seven read-only hunters, nine test-first fixers

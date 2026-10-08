@@ -4458,7 +4458,11 @@ func _ai_step() -> void:
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
+		# The opt-in timing log ([PerfLog]): the decision runs on the
+		# thread that draws the screen, so its length is a frozen screen.
+		var perf_start := PerfLog.now()
 		_ais[pid].act(game)
+		PerfLog.span("computer decision", perf_start)
 	_refresh()   # act() already refreshed via signals; this reschedules
 
 
@@ -6553,6 +6557,7 @@ func _drop_cast_for_declaration() -> void:
 func _refresh() -> void:
 	if game == null or _hotseat_passing:
 		return
+	var perf_start := PerfLog.now()
 	_settle_hotseat_priority()
 	_sync_hotseat()
 	_show_waiting_reveals()
@@ -6781,6 +6786,7 @@ func _refresh() -> void:
 	_update_arrows()
 	_update_damage_markers()
 	_repopulate_graveyard()
+	PerfLog.span("screen refresh", perf_start)
 	# LAST: a standing Run to / Done order takes the duel as far as it can.
 	# Here rather than in a blocking loop of its own, so that a run waiting
 	# on an AI seat resumes the moment its pacing timer moves the game.
