@@ -101,6 +101,13 @@ dialog or the Deck Builder's menu. It was asked for by a tester on a
 3.5-inch screen, where the sidebar card is too small to read and the
 table at a glance is still fine.
 
+The full-size card opens with its text in the 1997 box, so the art is
+clear. **Text: 1997 / Text: full**, beside the card's bottom right, grows
+the box up over the art for a card whose text does not fit, and back;
+Enter does the same (X on ArkOS). The choice is kept for the next card and
+the next launch, and it is the reader's own: the Deck Builder's *Text*
+button, for the sidebar card, is a separate switch.
+
 ## On-screen keyboard
 
 A handheld with a pointer and no keys cannot name a deck, a table or a

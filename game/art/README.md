@@ -124,26 +124,29 @@ image or SVG is read or embedded.
 | `filter_wth_off.png` | Weatherlight — matching dim stone skyship, 48x48 | `tools/draw_our_art.gd` (`_skyship`, `_stone_medallion`) | GPL-3.0 | `159c583d9c924bae7ce4adae98f254298ffb017bed453bf56865cbbea9f2023c` |
 
 The Tempest block (Pack 9) has three sets and three emblems of our own,
-drawn as polygons by `_storm`, `_keep` and `_bird` in the same gold relief
-and carved stone as the earlier packs. Each is evocative of its set, not a
-copy of any printed set symbol: **Tempest** a heaped thundercloud with a
-lightning bolt striking down out of a slot in its belly, **Stronghold** a
-crenellated keep with a wide arched gate between two lower battlemented
-walls, **Exodus** a bird in flight with its wings raised and swept out to
-drooping tips — the escape from Rath. No reference image or SVG is read or
-embedded.
+drawn as polygons by `_storm`, `_gateway` and `_bridge` in the same gold
+relief and carved stone as the earlier packs. **Tempest** is evocative of
+its set, a heaped thundercloud with a lightning bolt striking down out of a
+slot in its belly. **Stronghold** and **Exodus** are the sets' own marks,
+redrawn to the owner's reference on 2026-10-10 (they were a crenellated
+keep and a bird in flight, evocative only, and the owner asked for them
+*"more like originals"*): Stronghold a round arch of keystone and two arch
+stones on two pillars with a portcullis in the opening, Exodus a bridge
+arched over one span with a windowed railing and ball-topped piers on
+coved footings. As with the Fallen Empires crown, the reference images are
+not read, embedded or required; the shapes are polygons in this script.
 
 | File | Artwork | Generator | License | SHA-256 |
 |---|---|---|---|---|
 | `set_icon_tmp.png` | Tempest — gold thundercloud and lightning bolt, 48x48 | `tools/draw_our_art.gd` (`_storm`) | GPL-3.0 | `cc6b3bc7c51761ca02934773b9039cebe11f63f34a12321239217e7e7ed39aa8` |
 | `filter_tmp_on.png` | Tempest — storm carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_storm`, `_stone_medallion`) | GPL-3.0 | `01a45b2457651081f0cef194d25637c28e76550ba5a4a5c3e68f9781d4ec7efb` |
 | `filter_tmp_off.png` | Tempest — matching dim stone storm, 48x48 | `tools/draw_our_art.gd` (`_storm`, `_stone_medallion`) | GPL-3.0 | `68b49224ff42e398a4f64ab8bc5acd0a1f6b0935159361d7d689f17b33a791f3` |
-| `set_icon_sth.png` | Stronghold — gold crenellated keep between two walls, 48x48 | `tools/draw_our_art.gd` (`_keep`) | GPL-3.0 | `97368d0649b6c5f8a086702ea0e8f015e42b825505a878cb9b818bbb2a042c60` |
-| `filter_sth_on.png` | Stronghold — keep carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_keep`, `_stone_medallion`) | GPL-3.0 | `1238233339141fe53161ffd3fb6d8706921057562d3e32dabe332490cd450116` |
-| `filter_sth_off.png` | Stronghold — matching dim stone keep, 48x48 | `tools/draw_our_art.gd` (`_keep`, `_stone_medallion`) | GPL-3.0 | `9a5bce6bff563e464a7cc52ae36c3bc9d637954785066c181193ea4f903dd8ac` |
-| `set_icon_exo.png` | Exodus — gold bird in flight, 48x48 | `tools/draw_our_art.gd` (`_bird`) | GPL-3.0 | `a7a9e663dd9896cc8815d03394d6957c342a3e8d7d6cd8cdfd1e1ff0a2c31522` |
-| `filter_exo_on.png` | Exodus — bird carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_bird`, `_stone_medallion`) | GPL-3.0 | `6bccf0154ee1bbce5f9118431e4528043c59d2b2eccb2f6511b4ba603916c941` |
-| `filter_exo_off.png` | Exodus — matching dim stone bird, 48x48 | `tools/draw_our_art.gd` (`_bird`, `_stone_medallion`) | GPL-3.0 | `38b5f482614f53873d8a083fa4fe12dcc9add56d29251b0dff8ee61d6b919fb3` |
+| `set_icon_sth.png` | Stronghold — gold arched gateway with keystone and portcullis, 48x48 | `tools/draw_our_art.gd` (`_gateway`) | GPL-3.0 | `6e5b30596c7e103c4aa3c4c886aa6b20c57a47ad7d4c8a3f96cc0e2586ee135c` |
+| `filter_sth_on.png` | Stronghold — gateway carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_gateway`, `_stone_medallion`) | GPL-3.0 | `6ab2d8802bbb39864a36f4a80109c129ce74c6e2a9af36a47df43430dc9bffa8` |
+| `filter_sth_off.png` | Stronghold — matching dim stone gateway, 48x48 | `tools/draw_our_art.gd` (`_gateway`, `_stone_medallion`) | GPL-3.0 | `b000470b9c7705155b2f0ab552fd4cb9dc984d19d42cad9b0efc78bad6eceee8` |
+| `set_icon_exo.png` | Exodus — gold arched bridge with windowed railing and ball-topped piers, 48x48 | `tools/draw_our_art.gd` (`_bridge`) | GPL-3.0 | `0f09ccd7ac8f06bd0e8d7247015826afcc4dc7098b2b63e54609c60d08c4a0ec` |
+| `filter_exo_on.png` | Exodus — bridge carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_bridge`, `_stone_medallion`) | GPL-3.0 | `b7c6a2d20fc7d2aeb48eaac7964e2fa79fe0226919445e5bff33379b80a90632` |
+| `filter_exo_off.png` | Exodus — matching dim stone bridge, 48x48 | `tools/draw_our_art.gd` (`_bridge`, `_stone_medallion`) | GPL-3.0 | `387483ff32642e8748ad56d6cdb80b115b0bcbc992b74b79d7cfc16ed6bc6f55` |
 
 The card-variant medallion floats at 32px just below the large card's lower-right
 corner, over the unchanged information area. Its overlapping frames distinguish artwork selection

@@ -18770,6 +18770,32 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-10 — The bullet, the reader's text box, two set marks (0.50.17)
+
+A short round after the campaign, mostly playtest reports
+([releases/0.50.17.md](releases/0.50.17.md)):
+
+- **The title menu's 1997 bullet** (`MenuBullet`, 2026-10-08), and then
+  the report that Magic Battle's gem was lit with no hover: it holds the
+  focus the title opens on. The gem now lights for what the player last
+  used — the pointer's button, or the focused one after an arrow, Tab or
+  Enter — never both.
+- **The full-screen reader's own Text toggle**: the owner, *"they
+  sometimes want to examine the art"*. It opens on the 1997 box; Text:
+  full / Enter grows the box when the text needs it; kept as
+  `fullscreen_card_full_text`, apart from the sidebar's Expand.
+- **Stronghold and Exodus** redrawn to the owner's reference, *"more like
+  originals"*: a gateway with a portcullis and an arched bridge
+  (`_gateway`, `_bridge` in `tools/draw_our_art.gd`).
+- Already pushed since 0.50.16: ArkOS Select opens the pause menu; the
+  opt-in timing log (`PerfLog`) for the ArkOS stutter report; Deck Lab
+  plays `modern_mana_burn` by default.
+
+**Open, not built** (the owner, 2026-10-10: *"No it is ok for now"*): a
+LAN seat shows the 1997 duelist face of its deck's dominant colour — the
+LAN identity is a nickname only, and no portrait is chosen or sent. Sending
+the chosen portrait would need a protocol bump.
+
 ## 2026-10-07 — The whole-game campaign (0.50.16)
 
 The owner, after Pack 9: *"Ok now do another bug hunt campaign and later bug

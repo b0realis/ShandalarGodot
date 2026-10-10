@@ -2,6 +2,7 @@ extends GutTest
 ## [QoL] Real screens keep their controls, privacy and local AI safe while reading.
 
 var _saved: Variant
+var _saved_text: Variant
 var _touch_active: bool
 var stage: CanvasLayer
 
@@ -9,6 +10,10 @@ var stage: CanvasLayer
 func before_each() -> void:
 	_saved = Settings.get_value("fullscreen_cards", false) if Settings.has_value("fullscreen_cards") else null
 	Settings.set_value("fullscreen_cards", true, false)
+	# Enter switches the reader's text box (2026-10-10), and these tests
+	# press it: whatever they leave, the profile gets its own value back.
+	_saved_text = Settings.get_value(FullscreenCard.FULL_TEXT_SETTING, false) \
+		if Settings.has_value(FullscreenCard.FULL_TEXT_SETTING) else null
 	_touch_active = TouchControls.is_active()
 	stage = CanvasLayer.new()
 	stage.layer = 10
@@ -18,6 +23,8 @@ func before_each() -> void:
 func after_each() -> void:
 	if _saved == null: Settings.clear_value("fullscreen_cards")
 	else: Settings.set_value("fullscreen_cards", _saved)
+	if _saved_text == null: Settings.clear_value(FullscreenCard.FULL_TEXT_SETTING)
+	else: Settings.set_value(FullscreenCard.FULL_TEXT_SETTING, _saved_text)
 	TouchControls.set_active(_touch_active)
 	for i in 3: await get_tree().process_frame
 

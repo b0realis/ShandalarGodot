@@ -71,12 +71,14 @@ each basic land, chosen as `tmp:<number>` variants (331–350) through the
 name has one printing. Decks stay name-based and record required packs;
 loading while disabled offers the enable flow.
 
-The emblems are our own drawings, evocative of each set and not copies of
-any printed set symbol: Tempest a heaped **storm** cloud with a lightning
-bolt, Stronghold a fortress **keep**, Exodus a **bird** in flight.
-`tools/draw_our_art.gd` (`_storm`, `_keep`, `_bird`) draws each in the gold
-card relief and the lit/dim carved-stone medallions; the hashes are in
-`game/art/README.md`.
+The emblems are our own drawings: Tempest a heaped **storm** cloud with a
+lightning bolt, evocative of the set; Stronghold an arched **gateway** with
+a portcullis and Exodus an arched **bridge**, the sets' own marks redrawn
+to the owner's reference on 2026-10-10 (they were a fortress keep and a
+bird in flight until the owner asked for them *"more like originals"*).
+`tools/draw_our_art.gd` (`_storm`, `_gateway`, `_bridge`) draws each in
+the gold card relief and the lit/dim carved-stone medallions; the hashes
+are in `game/art/README.md`.
 
 ## Rules, reprints and providers
 

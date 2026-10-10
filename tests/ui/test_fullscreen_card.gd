@@ -5,6 +5,7 @@ var viewport: SubViewport
 var source: CardPreview
 var viewer: FullscreenCard
 var _saved: Variant
+var _saved_text: Variant
 var _touch_active: bool
 var presses := 0
 
@@ -12,6 +13,9 @@ var presses := 0
 func before_each() -> void:
 	CardRegistry.ensure_loaded()
 	_saved = Settings.get_value("fullscreen_cards", false) if Settings.has_value("fullscreen_cards") else null
+	_saved_text = Settings.get_value(FullscreenCard.FULL_TEXT_SETTING, false) \
+		if Settings.has_value(FullscreenCard.FULL_TEXT_SETTING) else null
+	Settings.clear_value(FullscreenCard.FULL_TEXT_SETTING)
 	_touch_active = TouchControls.is_active()
 	Settings.set_value("fullscreen_cards", true, false)
 	viewport = SubViewport.new()
@@ -38,6 +42,8 @@ func after_each() -> void:
 	viewer.dismiss()
 	if _saved == null: Settings.clear_value("fullscreen_cards")
 	else: Settings.set_value("fullscreen_cards", _saved)
+	if _saved_text == null: Settings.clear_value(FullscreenCard.FULL_TEXT_SETTING)
+	else: Settings.set_value(FullscreenCard.FULL_TEXT_SETTING, _saved_text)
 	TouchControls.set_active(_touch_active)
 	await get_tree().process_frame
 
@@ -108,7 +114,7 @@ func test_same_card_refresh_keeps_reader_open_and_preserves_printing() -> void:
 	assert_eq(viewer._card._artist_label.text, source._artist_label.text)
 	source.show_card(source._shown, printing)
 	assert_true(viewer.is_open())
-	assert_true(viewer._card.text_is_expanded())
+	assert_false(viewer._card.text_is_expanded(), "the reader opens on the 1997 box (2026-10-10)")
 	assert_false(source.text_is_expanded(), "reading does not change the sidebar")
 
 

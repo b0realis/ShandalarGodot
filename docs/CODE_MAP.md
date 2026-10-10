@@ -47,20 +47,48 @@ needed); card files have NO class_name (they register by name instead);
   Celtic-knot bullet with its pink gem at the left of each title-menu
   button (`Main._menu_button`), from the imported skin's `begin_menu`
   sheet (`Begin.spr`, every frame, one column of 265x24 cells; the bullet
-  is cells 14-17). Three states, the owner's call: at rest (14), hovered —
-  the pointer, the focus or the press — (15), dimmed (17) for a disabled
-  button or a placeholder (Shandalar, Save / Load); cell 16, the 1997
-  press, is a 22x22 sunken bullet and is not shown. Read off the button's
-  draw mode on every redraw; without the sheet `attach` adds nothing.
+  is cells 14-17). Three states, the owner's call: at rest (14), hovered
+  (15), dimmed (17) for a disabled button or a placeholder (Shandalar,
+  Save / Load); cell 16, the 1997 press, is a 22x22 sunken bullet and is
+  not shown. Hovered is the press, plus — since 2026-10-10 — EITHER the
+  button under the pointer OR the focused one, whichever the player last
+  used (`by_pointer`, `input_kind`: a pointer event, or an arrow / Tab /
+  Enter from keys or pad; a pad driving the pad pointer counts as the
+  pointer). The playtest saw Magic Battle lit with no hover: it holds the
+  focus the title opens on. A launch starts on the pointer, a handheld
+  launcher on the keys. Read off the button's draw mode on every redraw
+  and on every switch (the `menu_bullets` group); without the sheet
+  `attach` adds nothing.
 - `tools/import_original.py`: `begin_menu` <- `Begin.spr` (MANIFEST),
   `SPR_SHEETS` 18 cells of 265x24, `SPR_COLUMNS` (one column) and
   `SPR_PALETTES` (`Menubak.pic`, the screen it stands on, not
   `Todpal.tr`); `_raw_spr_sheet` lays out any column count. Tests:
   `TestTheTitleMenuSprite` in `tools/test_import_original.py`.
-- `tests/ui/test_menu_bullet_2026_10_08.gd`: the state table, the cells,
-  a button wearing it at its left and following its state, no sheet no
-  bullet, and the title menu's eight bullets with Shandalar and
-  Save / Load dimmed.
+- `tests/ui/test_menu_bullet_2026_10_08.gd`: the state table on the
+  pointer and on the keys, which events say which, the cells, a button
+  wearing it at its left and following its state, no sheet no bullet, the
+  title menu's eight bullets with Shandalar and Save / Load dimmed and
+  none lit at open, and Magic Battle lit only once the keys are used.
+
+## The reader's Text toggle; Stronghold and Exodus redrawn (2026-10-10)
+
+- `game/duel/fullscreen_card.gd`: the full-screen card reader's own
+  `Text: 1997` / `Text: full` toggle (`_text_toggle`, `toggle_text`,
+  `full_text_wanted`, setting `fullscreen_card_full_text`, default false —
+  the 1997 box, so the art is clear). It stands beside the card's bottom
+  right, or at the right of the hint's row when there is no room beside
+  it; Enter (`ui_accept`) switches it too. The pointer reaches the toggle
+  (and hovers it) and nothing else; any other click still closes. The
+  sidebar's Expand (`CardPreview.expand_wanted`) is separate and untouched.
+- `tests/ui/test_fullscreen_card_text_2026_10_10.gd`: opens on 1997, the
+  click switches and keeps the reader open, the choice is kept, Enter,
+  the sidebar's Expand independent, the placement on wide, square and
+  portrait screens.
+- `tools/draw_our_art.gd`: `_gateway` (Stronghold) and `_bridge` (Exodus)
+  replace `_keep` and `_bird` — the sets' own marks redrawn as polygons to
+  the owner's reference; `game/art/set_icon_{sth,exo}.png` and
+  `filter_{sth,exo}_{on,off}.png` regenerated, hashes in
+  `game/art/README.md`.
 
 ## The opt-in timing log (2026-10-08)
 
@@ -315,9 +343,11 @@ and the `BONUS_ANY_LAND` / `BONUS_ENCHANTED_LAND` bonus descriptors;
   `_shadow.gd`, `_licids.gd`, `_slivers.gd`, `_spikes.gd`, `_misc.gd`;
   unclaimed cards carry the `_pending` cast guard.
 - `game/art/set_icon_tmp.png`, `set_icon_sth.png`, `set_icon_exo.png`,
-  `filter_{tmp,sth,exo}_{on,off}.png`: the gold storm, keep and bird and
-  their carved-stone medallions; drawn by `tools/draw_our_art.gd`
-  (`_storm`, `_keep`, `_bird`), hashed in `game/art/README.md`.
+  `filter_{tmp,sth,exo}_{on,off}.png`: the gold storm, gateway and bridge
+  and their carved-stone medallions; drawn by `tools/draw_our_art.gd`
+  (`_storm`, `_gateway`, `_bridge` — the last two the sets' own marks,
+  redrawn to the owner's reference on 2026-10-10), hashed in
+  `game/art/README.md`.
 - `tools/pack_9_tempest_block.py`, `tools/test_pack_9_tempest_block.py`:
   pinned-printing fetcher over the three sets, deterministic local builder
   and bounded archive validation tests.
@@ -7273,6 +7303,8 @@ shandalar/
 │    tests/ui/test_fullscreen_card.gd — [QoL] optional full-screen card
 │    reader: aspect-fit, printing, modal input, click-through prevention,
 │    focus restoration and clearing concealed faces;
+│    tests/ui/test_fullscreen_card_text_2026_10_10.gd — the reader's own
+│    Text toggle: 1997 by default, click / Enter, kept, placement;
 │    tests/ui/test_fullscreen_card_screens.gd — real Deck Builder and duel
 │    click/touch integration, hotseat privacy, local AI pause/resume and
 │    keyboard isolation. Online projection coverage lives in
@@ -10719,6 +10751,9 @@ shandalar/
 │       │                      closes on click/tap, Escape or Cancel;
 │       │                      forgets hidden faces and blocks underlying
 │       │                      input. Options stores `fullscreen_cards`.
+│       │                      Its own Text: 1997 / full toggle at the
+│       │                      card's bottom right (Enter too), kept as
+│       │                      `fullscreen_card_full_text`, 1997 default.
 │       ├── card_preview.gd  class CardPreview — the enlarged card, docked
 │       │                      in the sidebar (s30 cardPreviewX/Y); frame
 │       │                      fraction-anchored to the 1997 Cardbk frames;

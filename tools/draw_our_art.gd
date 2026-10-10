@@ -142,10 +142,10 @@ func _init() -> void:
 	_write(_stone_medallion(false, _skyship()), dir, "filter_wth_off.png")
 	_write(_stone_medallion(true, _storm()), dir, "filter_tmp_on.png")
 	_write(_stone_medallion(false, _storm()), dir, "filter_tmp_off.png")
-	_write(_stone_medallion(true, _keep()), dir, "filter_sth_on.png")
-	_write(_stone_medallion(false, _keep()), dir, "filter_sth_off.png")
-	_write(_stone_medallion(true, _bird()), dir, "filter_exo_on.png")
-	_write(_stone_medallion(false, _bird()), dir, "filter_exo_off.png")
+	_write(_stone_medallion(true, _gateway()), dir, "filter_sth_on.png")
+	_write(_stone_medallion(false, _gateway()), dir, "filter_sth_off.png")
+	_write(_stone_medallion(true, _bridge()), dir, "filter_exo_on.png")
+	_write(_stone_medallion(false, _bridge()), dir, "filter_exo_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -225,9 +225,9 @@ func _glyph(code: String) -> Array:
 		"tmp":
 			return _storm()
 		"sth":
-			return _keep()
+			return _gateway()
 		"exo":
-			return _bird()
+			return _bridge()
 	return []
 
 
@@ -327,51 +327,138 @@ func _storm() -> Array:
 	]
 
 
-## STRONGHOLD — a keep: a tall crenellated tower with a wide arched gate,
-## between two lower walls with their own battlements. The three blocks
-## stand apart, so the gaps read as the tower's corners even at fourteen
-## pixels. Our own drawing of Volrath's fortress, not a trace of any
-## printed symbol.
-func _keep() -> Array:
-	var gate := PackedVector2Array([Vector2(0.385, 0.95), Vector2(0.385, 0.70)])
+## STRONGHOLD — a gateway, the set's own mark redrawn to the owner's
+## reference (2026-10-10: *"the set icons for stronghold and exodus sets
+## should be more like originals"*): a round arch broken into a wedge
+## keystone and two arch stones by two slanted joints, standing on two
+## square pillars with a level joint between stone and pillar, and a
+## portcullis in the opening — three bars down, two across, standing
+## free of the stone. Worked on a square in [code]u[/code], [code]v[/code]
+## (the arch is as wide as it is tall). The bars are a little heavier
+## than a printed symbol's, because this picture is drawn at fourteen
+## pixels and a hairline is the first thing that goes.
+func _gateway() -> Array:
+	var at := func(u: float, v: float) -> Vector2:
+		return Vector2(0.03 + u * 0.94, 0.03 + v * 0.94)
+	var centre := Vector2(0.5, 0.48)
+	# The arch: the outer half-disc down to the stones' level joint, less
+	# the inner one carried down past it.
+	var outer := PackedVector2Array()
+	var inner := PackedVector2Array()
+	for n in 33:
+		var t := PI + PI * float(n) / 32.0
+		outer.append(at.call(centre.x + cos(t) * 0.497, centre.y + sin(t) * 0.497))
+		inner.append(at.call(centre.x + cos(t) * 0.285, centre.y + sin(t) * 0.285))
+	outer.append(at.call(0.997, 0.503))
+	outer.append(at.call(0.003, 0.503))
+	inner.append(at.call(0.785, 0.60))
+	inner.append(at.call(0.215, 0.60))
+	# The keystone, and its two joints: the keystone's own sides moved out
+	# by the joint's width, through the whole depth of the arch.
+	var keystone := PackedVector2Array([at.call(0.295, 0.0), at.call(0.705, 0.0),
+		at.call(0.62, 0.253), at.call(0.38, 0.253)])
+	var joints := PackedVector2Array([at.call(0.19, -0.10), at.call(0.81, -0.10),
+		at.call(0.69, 0.36), at.call(0.31, 0.36)])
+	var ops: Array = [
+		{"op": "add", "poly": outer},
+		{"op": "sub", "poly": inner},
+		{"op": "sub", "poly": joints},
+		{"op": "add", "poly": keystone},
+		# the pillars, under the level joint
+		{"op": "add", "poly": PackedVector2Array([at.call(0.003, 0.574), at.call(0.216, 0.574),
+			at.call(0.216, 1.0), at.call(0.003, 1.0)])},
+		{"op": "add", "poly": PackedVector2Array([at.call(0.784, 0.574), at.call(0.997, 0.574),
+			at.call(0.997, 1.0), at.call(0.784, 1.0)])},
+	]
+	# the portcullis: three bars down from under the keystone to the
+	# ground, two across between the pillars, touching neither
+	for u in [0.3625, 0.5, 0.6375]:
+		ops.append({"op": "add", "poly": PackedVector2Array([at.call(u - 0.0225, 0.309),
+			at.call(u + 0.0225, 0.309), at.call(u + 0.0225, 1.0), at.call(u - 0.0225, 1.0)])})
+	for v in [0.507, 0.749]:
+		ops.append({"op": "add", "poly": PackedVector2Array([at.call(0.26, v - 0.02),
+			at.call(0.74, v - 0.02), at.call(0.74, v + 0.02), at.call(0.26, v + 0.02)])})
+	return ops
+
+
+## EXODUS — a bridge, the set's own mark redrawn to the owner's reference
+## (2026-10-10, see [method _gateway]): a deck arched high over one round
+## span, a railing on it with three windows between its posts, and at
+## each end a pier with a ball on top, standing on a footing that spreads
+## out and is coved away underneath. Worked in [code]u[/code] across the
+## bridge and [code]v[/code] down it, on a picture 0.46 as tall as it is
+## wide — taller than a printed symbol, so the railing and the knobs keep
+## a shape at the size a card draws them.
+func _bridge() -> Array:
+	var tall := 0.46
+	var at := func(u: float, v: float) -> Vector2:
+		return Vector2(0.02 + u * 0.96, 0.5 + (v - 0.5) * 0.96 * tall)
+	# A curve whose control point sits midway across, so it can be read at
+	# any u: the railing's top and the deck's.
+	var along := func(u: float, u0: float, u1: float, ends: float, middle: float) -> float:
+		var s := (u - u0) / (u1 - u0)
+		return (1.0 - s) * (1.0 - s) * ends + 2.0 * s * (1.0 - s) * middle + s * s * ends
+	var rail_top := func(u: float) -> float: return along.call(u, 0.175, 0.825, 0.33, -0.33)
+	var deck_top := func(u: float) -> float: return along.call(u, 0.26, 0.74, 0.40, 0.24)
+	const RAIL := 0.13
+	# The footing: a slab across the whole bridge, coved under both ends.
+	var footing := PackedVector2Array([at.call(0.0, 0.60), at.call(1.0, 0.60)])
+	for n in 9:
+		var t := -PI / 2.0 - PI / 2.0 * float(n) / 8.0
+		footing.append(at.call(1.0 + cos(t) * 0.06, 0.90 + sin(t) * 0.13))
+	footing.append(at.call(0.94, 1.0))
+	footing.append(at.call(0.06, 1.0))
+	for n in 9:
+		var t := -PI / 2.0 + PI / 2.0 * float(8 - n) / 8.0
+		footing.append(at.call(cos(t) * 0.06, 0.90 + sin(t) * 0.13))
+	# The deck, from end to end over the span.
+	var deck := PackedVector2Array()
 	for n in 17:
-		var t := PI - PI * float(n) / 16.0
-		gate.append(Vector2(0.50, 0.70) + Vector2(cos(t), -sin(t)) * 0.115)
-	gate.append(Vector2(0.615, 0.95))
-	return [
-		# the tower, three merlons on top
-		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.30, 0.92), Vector2(0.30, 0.07), Vector2(0.385, 0.07),
-			Vector2(0.385, 0.17), Vector2(0.455, 0.17), Vector2(0.455, 0.07),
-			Vector2(0.545, 0.07), Vector2(0.545, 0.17), Vector2(0.615, 0.17),
-			Vector2(0.615, 0.07), Vector2(0.70, 0.07), Vector2(0.70, 0.92)])},
-		# the left wall, two merlons
-		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.05, 0.92), Vector2(0.05, 0.42), Vector2(0.12, 0.42),
-			Vector2(0.12, 0.50), Vector2(0.19, 0.50), Vector2(0.19, 0.42),
-			Vector2(0.26, 0.42), Vector2(0.26, 0.92)])},
-		# the right wall, its mirror
-		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.74, 0.92), Vector2(0.74, 0.42), Vector2(0.81, 0.42),
-			Vector2(0.81, 0.50), Vector2(0.88, 0.50), Vector2(0.88, 0.42),
-			Vector2(0.95, 0.42), Vector2(0.95, 0.92)])},
-		{"op": "sub", "poly": gate},
+		var u := 0.26 + 0.48 * float(n) / 16.0
+		deck.append(at.call(u, deck_top.call(u)))
+	deck.append(at.call(0.74, 0.62))
+	deck.append(at.call(0.26, 0.62))
+	# The railing and its posts as one panel: the railing's arc on top,
+	# down at both ends onto the deck.
+	var panel := PackedVector2Array()
+	for n in 25:
+		var u := 0.175 + 0.65 * float(n) / 24.0
+		panel.append(at.call(u, rail_top.call(u)))
+	panel.append(at.call(0.825, 0.35))
+	panel.append(at.call(0.74, 0.42))
+	panel.append(at.call(0.26, 0.42))
+	panel.append(at.call(0.175, 0.35))
+	# The span: half an ellipse from the footing up to under the deck.
+	var span := PackedVector2Array()
+	for n in 33:
+		var t := PI + PI * float(n) / 32.0
+		span.append(at.call(0.5 + cos(t) * 0.25, 1.0 + sin(t) * 0.525))
+	span.append(at.call(0.75, 1.1))
+	span.append(at.call(0.25, 1.1))
+	var ops: Array = [
+		{"op": "add", "poly": footing},
+		{"op": "add", "poly": deck},
+		{"op": "add", "poly": panel},
 	]
-
-
-## EXODUS — the escape: a bird in flight, wings raised high and swept
-## out to drooping tips over a small body and a short fanned tail — the
-## shape a gull makes against the sky. Our own drawing of the flight from
-## Rath, not a trace of any printed symbol.
-func _bird() -> Array:
-	return [
-		{"op": "add", "poly": _strip(Vector2(0.47, 0.60), Vector2(0.27, 0.06), Vector2(0.02, 0.56), 0.10, 0.024, 32)},
-		{"op": "add", "poly": _strip(Vector2(0.53, 0.60), Vector2(0.73, 0.06), Vector2(0.98, 0.56), 0.10, 0.024, 32)},
-		{"op": "add", "poly": _circle_poly(Vector2(0.50, 0.62), 0.085, 28)},
-		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.44, 0.64), Vector2(0.56, 0.64), Vector2(0.61, 0.84),
-			Vector2(0.50, 0.79), Vector2(0.39, 0.84)])},
-	]
+	# the three windows, from under the railing down to the deck
+	for window in [[0.335, 0.40], [0.47, 0.53], [0.60, 0.665]]:
+		var a: float = window[0]
+		var b: float = window[1]
+		ops.append({"op": "sub", "poly": PackedVector2Array([
+			at.call(a, rail_top.call(a) + RAIL), at.call(b, rail_top.call(b) + RAIL),
+			at.call(b, deck_top.call(b)), at.call(a, deck_top.call(a))])})
+	ops.append({"op": "sub", "poly": span})
+	# the piers, each a block and a neck with a ball on top
+	for side in [0.0, 1.0]:
+		var mirror := func(u: float) -> float: return u if side == 0.0 else 1.0 - u
+		ops.append({"op": "add", "poly": PackedVector2Array([
+			at.call(mirror.call(0.08), 0.35), at.call(mirror.call(0.21), 0.35),
+			at.call(mirror.call(0.21), 0.62), at.call(mirror.call(0.08), 0.62)])})
+		ops.append({"op": "add", "poly": PackedVector2Array([
+			at.call(mirror.call(0.113), 0.24), at.call(mirror.call(0.162), 0.24),
+			at.call(mirror.call(0.162), 0.36), at.call(mirror.call(0.113), 0.36)])})
+		ops.append({"op": "add", "poly": _circle_poly(at.call(mirror.call(0.1375), 0.17), 0.04, 28)})
+	return ops
 
 
 ## A circle as a polygon, so the stone medallion (polygons only) can carve it.
