@@ -18770,10 +18770,10 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
-## 2026-10-10 — The bullet, the reader's text box, two set marks (0.50.17)
+## 2026-10-10 — The bullet, the reader's text box, two set marks (0.50.17, 0.50.18)
 
 A short round after the campaign, mostly playtest reports
-([releases/0.50.17.md](releases/0.50.17.md)):
+([releases/0.50.18.md](releases/0.50.18.md)):
 
 - **The title menu's 1997 bullet** (`MenuBullet`, 2026-10-08), and then
   the report that Magic Battle's gem was lit with no hover: it holds the
@@ -18783,7 +18783,10 @@ A short round after the campaign, mostly playtest reports
 - **The full-screen reader's own Text toggle**: the owner, *"they
   sometimes want to examine the art"*. It opens on the 1997 box; Text:
   full / Enter grows the box when the text needs it; kept as
-  `fullscreen_card_full_text`, apart from the sidebar's Expand.
+  `fullscreen_card_full_text`, apart from the sidebar's Expand. 0.50.18:
+  the CI gate (no imported skin) caught the plain fallback button, taller
+  than the hint's row, over the card's bottom edge on a square screen; the
+  bottom row now grows to hold it.
 - **Stronghold and Exodus** redrawn to the owner's reference, *"more like
   originals"*: a gateway with a portcullis and an arched bridge
   (`_gateway`, `_bridge` in `tools/draw_our_art.gd`).

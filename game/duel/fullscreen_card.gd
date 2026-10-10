@@ -204,27 +204,32 @@ func _source_changed() -> void:
 func _fit() -> void:
 	var area := get_viewport().get_visible_rect().size
 	_shade.size = area
-	var available := (area - Vector2(MARGIN * 2, MARGIN * 2 + HINT_HEIGHT)).max(Vector2.ONE)
+	# The bottom row holds the hint and, where there is no room beside the
+	# card, the toggle — so it is as tall as the taller of the two. The
+	# toggle's height is the skin's: without the imported 1997 buttons it
+	# is a plain one a few pixels taller than the hint (the CI gate's
+	# square screen, 2026-10-10, had it over the card's bottom edge).
+	var toggle := _text_toggle.get_combined_minimum_size().max(TOGGLE_SIZE)
+	_text_toggle.size = toggle
+	var row := maxf(HINT_HEIGHT, toggle.y)
+	var available := (area - Vector2(MARGIN * 2, MARGIN * 2 + row)).max(Vector2.ONE)
 	var factor := minf(available.x / CardPreview.SIZE.x, available.y / CardPreview.SIZE.y)
 	_card.scale = Vector2.ONE * factor
 	if is_open():
 		_sharpen(factor)
 	_card.position = Vector2((area.x - CardPreview.SIZE.x * factor) * 0.5,
 		MARGIN + (available.y - CardPreview.SIZE.y * factor) * 0.5)
-	_hint.position = Vector2(MARGIN, area.y - MARGIN - HINT_HEIGHT)
+	_hint.position = Vector2(MARGIN, area.y - MARGIN - (row + HINT_HEIGHT) * 0.5)
 	_hint.size = Vector2(maxf(1.0, area.x - MARGIN * 2), HINT_HEIGHT)
 	# The toggle stands at the card's bottom right, beside it, where it
 	# covers neither the art nor the power and toughness. A screen with no
-	# room beside the card (a portrait phone) has it at the right of the
-	# hint's row instead, and the hint gives it the room.
-	var toggle := _text_toggle.get_combined_minimum_size().max(TOGGLE_SIZE)
-	_text_toggle.size = toggle
+	# room beside the card (a portrait phone, a square) has it at the right
+	# of the bottom row instead, and the hint gives it the room.
 	var card_end := _card.position + CardPreview.SIZE * factor
 	if area.x - MARGIN - card_end.x >= TOGGLE_GAP + toggle.x:
 		_text_toggle.position = Vector2(card_end.x + TOGGLE_GAP, card_end.y - toggle.y)
 	else:
-		_text_toggle.position = Vector2(area.x - MARGIN - toggle.x,
-			area.y - MARGIN - HINT_HEIGHT + (HINT_HEIGHT - toggle.y) * 0.5)
+		_text_toggle.position = Vector2(area.x - MARGIN - toggle.x, area.y - MARGIN - (row + toggle.y) * 0.5)
 		_hint.size.x = maxf(1.0, _text_toggle.position.x - MARGIN * 2)
 
 

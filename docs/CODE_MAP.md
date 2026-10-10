@@ -77,13 +77,15 @@ needed); card files have NO class_name (they register by name instead);
   `full_text_wanted`, setting `fullscreen_card_full_text`, default false —
   the 1997 box, so the art is clear). It stands beside the card's bottom
   right, or at the right of the hint's row when there is no room beside
-  it; Enter (`ui_accept`) switches it too. The pointer reaches the toggle
-  (and hovers it) and nothing else; any other click still closes. The
-  sidebar's Expand (`CardPreview.expand_wanted`) is separate and untouched.
+  it; Enter (`ui_accept`) switches it too. The bottom row is as tall as
+  the taller of hint and toggle (without the imported skin the toggle is
+  a plain, taller button). The pointer reaches the toggle (and hovers it)
+  and nothing else; any other click still closes. The sidebar's Expand
+  (`CardPreview.expand_wanted`) is separate and untouched.
 - `tests/ui/test_fullscreen_card_text_2026_10_10.gd`: opens on 1997, the
   click switches and keeps the reader open, the choice is kept, Enter,
   the sidebar's Expand independent, the placement on wide, square and
-  portrait screens.
+  portrait screens, and a taller (unskinned) toggle never over the card.
 - `tools/draw_our_art.gd`: `_gateway` (Stronghold) and `_bridge` (Exodus)
   replace `_keep` and `_bird` — the sets' own marks redrawn as polygons to
   the owner's reference; `game/art/set_icon_{sth,exo}.png` and

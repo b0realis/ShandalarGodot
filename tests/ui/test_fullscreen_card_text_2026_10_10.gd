@@ -180,3 +180,20 @@ func test_the_toggle_stands_at_the_cards_bottom_right() -> void:
 		assert_lte(toggle.end.x, float(dimensions.x), "%s: on the screen" % dimensions)
 		assert_lte(toggle.end.y, float(dimensions.y), "%s: on the screen" % dimensions)
 		assert_lte(hint.end.x, toggle.position.x, "%s: the hint stops short of it" % dimensions)
+
+
+## Without the imported 1997 buttons (a fresh install, the CI gate) the
+## toggle is a plain button taller than the hint's row: the row grows to
+## hold it, and it still covers no part of the card on any screen.
+func test_a_taller_toggle_never_covers_the_card() -> void:
+	viewer._text_toggle.custom_minimum_size = Vector2(FullscreenCard.TOGGLE_SIZE.x, 44)
+	assert_true(viewer.open_card())
+	for dimensions in [Vector2i(1280, 800), Vector2i(720, 720), Vector2i(360, 640)]:
+		viewport.size = dimensions
+		await get_tree().process_frame
+		var card := viewer._card.get_global_rect()
+		var toggle := viewer._text_toggle.get_global_rect()
+		assert_eq(toggle.size.y, 44.0)
+		assert_false(card.intersects(toggle), "%s: card %s, toggle %s" % [dimensions, card, toggle])
+		assert_lte(toggle.end.y, float(dimensions.y), "%s: on the screen" % dimensions)
+		assert_lte(card.end.y, viewer._hint.position.y, "%s: the hint is under the card" % dimensions)
