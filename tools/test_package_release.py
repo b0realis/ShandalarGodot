@@ -209,23 +209,39 @@ class PackageReleaseTest(unittest.TestCase):
                                 self.assertNotIn(prefix + door, entries)
                             # The push script: install, start once so the
                             # game makes its own folders (a folder made
-                            # from the shell is the shell's), then push
-                            # into them — and it is executable.
+                            # from the shell is the shell's), then copy
+                            # into them THROUGH THE DOWNLOAD FOLDER — a
+                            # direct adb push into the game's folder is
+                            # refused on the headset (2026-10-11) — and it
+                            # is executable. Its behaviour against a fake
+                            # adb is tools/test_quest_scripts.py.
                             script = archive.read(prefix + "push_to_quest.sh").decode()
-                            self.assertTrue(script.startswith("#!/bin/sh\n"))
+                            self.assertEqual(script, (pack.ROOT / "packaging/handhelds/push_to_quest.sh").read_text())
+                            self.assertTrue(script.startswith("#!/usr/bin/env bash\n"))
                             self.assertIn("adb install -r Shandalar.apk", script)
                             self.assertIn("monkey -p \"$P\" -c android.intent.category.LAUNCHER 1", script)
                             self.assertIn("am force-stop", script)
                             self.assertIn("chmod 775", script)
-                            self.assertIn('adb push "$zip" "$F/skin/"', script)
-                            self.assertIn('adb push cardpacks/. "$F/cardpacks/"', script)
-                            self.assertNotIn("mkdir", script.split("set -eu")[1])
+                            self.assertIn("T=/sdcard/Download/shandalar-push\n", script)
+                            self.assertIn('adb push "$f" "$T/$name"', script)
+                            self.assertIn("cp $T/$name $dest/$name", script)
+                            for line in script.splitlines():
+                                if "adb push" in line and not line.lstrip().startswith("#"):
+                                    self.assertNotIn("$F", line, "never a push into the game's folder")
+                                if "mkdir" in line and not line.lstrip().startswith("#"):
+                                    self.assertNotIn("$F", line, "never a folder the game did not make")
                             self.assertIn("P=" + pack.QUEST_PACKAGE + "\n", script)
-                            self.assertIn("F=" + pack.QUEST_FILES + "\n", script)
-                            self.assertLess(script.index("adb install"), script.index("monkey"))
-                            self.assertLess(script.index("monkey"), script.index("adb push"))
+                            self.assertIn("F=/sdcard/Android/data/$P/files\n", script)
+                            self.assertEqual(pack.QUEST_FILES, "/sdcard/Android/data/" + pack.QUEST_PACKAGE + "/files")
+                            # The commands' order, not the header comment's words.
+                            self.assertLess(script.index("adb install -r"), script.index("adb shell monkey"))
+                            self.assertLess(script.index("adb shell monkey"), script.index('adb push "$f"'))
                             mode = archive.getinfo(prefix + "push_to_quest.sh").external_attr >> 16
                             self.assertTrue(mode & 0o111, "executable")
+                            fresh = archive.read(prefix + "quest_fresh_install.sh").decode()
+                            self.assertEqual(fresh, (pack.ROOT / "packaging/handhelds/quest_fresh_install.sh").read_text())
+                            self.assertIn("./quest_fresh_install.sh", readme)
+                            self.assertTrue(archive.getinfo(prefix + "quest_fresh_install.sh").external_attr >> 16 & 0o111)
                             self.assertIn("  push_to_quest.sh\n",
                                           archive.read(outer + "SHA256SUMS").decode())
 

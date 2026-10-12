@@ -352,29 +352,57 @@ told to trust this computer — put it on and answer the prompt.
    ./push_to_quest.sh
    ```
 
-   It installs the APK, starts the game once when its folders are not
-   there yet so that **the game makes them**, then pushes `skin/*.zip`
-   and `cardpacks/` into them and lists the two folders. Your own faces
-   go in `portraits/` and your own tunes in `music/` the same way
-   (`adb push my_face.png /sdcard/Android/data/com.b0realis.shandalar/files/portraits/`);
-   the sixteen faces the game ships are in the APK already and need no
-   push.
+   It installs or updates the APK (the game's settings and decks are
+   kept), starts the game once when its folders are not there yet so
+   that **the game makes them**, then copies `skin/*.zip` and
+   `cardpacks/` into them **through the headset's Download folder**,
+   one zip at a time with its size checked, and skips any zip the
+   headset already holds byte for byte. For a clean install from
+   nothing — the game, its settings, its decks and its zips deleted
+   first, then every step one at a time, with the start recorded at
+   the end — run `./quest_fresh_install.sh` instead.
+
+   **Why the Download folder** (2026-10-11, the owner's Quest 3): an
+   `adb push` straight into the game's folder now fails with *"remote
+   fchown failed: Operation not permitted"* — the bytes go over, then
+   adb's last step, setting the file's owner, is refused, for a new
+   file as much as for one already there. It worked at 0.50.0, so a
+   headset update most likely changed it. A copy made on the headset
+   (`adb shell cp`) sets no owner and is not refused. Your own faces go
+   in `portraits/` and your own tunes in `music/` the same way:
+
+   ```sh
+   adb push my_face.png /sdcard/Download/
+   adb shell cp /sdcard/Download/my_face.png /sdcard/Android/data/com.b0realis.shandalar/files/portraits/
+   ```
+
+   The sixteen faces the game ships are in the APK already and need no
+   copy.
 4. In the headset, the game is under **Library > Unknown Sources**. The
-   first start after a push checks every card picture once (a minute on
-   the headset for seven packs); every later start is quick — the packs
-   are sealed by their zip table and the pictures are not read again
-   until the file changes (`PackSeal`).
+   first start after a pack is added or changed reads every card picture
+   in it once and checks it against the pack's manifest, on a screen
+   that says which pack and how far — **minutes on the headset** for
+   all nine packs (six on the owner's Quest 3 at 0.50.18, which showed
+   only the splash screen meanwhile). Since 0.50.19 the pictures are
+   read in one pass through each zip — on a desk Pack 9's check went
+   from 9.9 s to 2.4 s; the headset's new figure is still to be
+   measured, and its start report has a line per pack with the
+   milliseconds. Every later start is quick: the packs are
+   sealed by their zip table and the pictures are not read again until
+   the file changes (`PackSeal`).
 
 By hand, the same three steps in the same order — install, start the
-game once, push into the folders it made:
+game once, copy into the folders it made through the Download folder:
 
 ```sh
 adb install -r Shandalar.apk
 adb shell monkey -p com.b0realis.shandalar -c android.intent.category.LAUNCHER 1
 adb shell am force-stop com.b0realis.shandalar
-adb push skin/original_skin.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/
-adb push skin/cardart.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/
-adb push cardpacks/. /sdcard/Android/data/com.b0realis.shandalar/files/cardpacks/
+F=/sdcard/Android/data/com.b0realis.shandalar/files
+T=/sdcard/Download/shandalar-push
+adb shell mkdir -p $T
+adb push skin/original_skin.zip skin/cardart.zip cardpacks/. $T/
+adb shell "cp $T/original_skin.zip $T/cardart.zip $F/skin/ && cp $T/Pack-*.zip $F/cardpacks/ && rm -r $T"
 ```
 
 **The folders must be the game's own.** This is what the first headset
@@ -448,8 +476,9 @@ the focus), which the file does not.
 decks and the tournament checkpoints — the files the game writes — and
 nothing outside the app can write into it. The three folders **you** fill
 therefore sit in the app's own corner of the shared storage,
-`/sdcard/Android/data/com.b0realis.shandalar/files/`, where `adb push`
-writes and the app reads without any permission: `cardpacks/`,
+`/sdcard/Android/data/com.b0realis.shandalar/files/`, where a copy
+made on the headset (`adb shell cp`, see above) writes and the app reads
+without any permission: `cardpacks/`,
 `portraits/`, `music/` and `skin/` under it, the desktop play copy's
 layout one level down. The `cardpacks_folder`, `portraits_folder` and
 `music_folder` keys in `settings.cfg` still move them (`GamePaths`).

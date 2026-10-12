@@ -97,30 +97,34 @@ func discover() -> void:
 	_rejections.clear()
 	_art_cache.clear()
 	report_lines.clear()
-	for path in candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) + candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) + candidate_paths(FifthEditionPack.ID) + candidate_paths(MirageBlockPack.ID) + candidate_paths(TempestBlockPack.ID):
-		if not FileAccess.file_exists(path):
-			continue
-		var id := FallenEmpiresPack.ID if path.get_file() == FallenEmpiresPack.FILE_NAME else ID
-		if path.get_file() == IceAgePack.FILE_NAME:
-			id = IceAgePack.ID
-		if path.get_file() == HomelandsPack.FILE_NAME:
-			id = HomelandsPack.ID
-		if path.get_file() == AlliancesPack.FILE_NAME:
-			id = AlliancesPack.ID
-		if path.get_file() == PortalPack.FILE_NAME:
-			id = PortalPack.ID
-		if path.get_file() == FifthEditionPack.FILE_NAME:
-			id = FifthEditionPack.ID
-		if path.get_file() == MirageBlockPack.FILE_NAME:
-			id = MirageBlockPack.ID
-		if path.get_file() == TempestBlockPack.FILE_NAME:
-			id = TempestBlockPack.ID
+	var paths: Array = []
+	for path in _all_candidate_paths():
+		if FileAccess.file_exists(path):
+			paths.append(path)
+	# The packs whose pictures will be read now — the first file of each
+	# pack that has no seal — and the screen that says so ([PackCheckScreen]).
+	var unsealed := 0
+	var counted := {}
+	for path in paths:
+		var pack_id := _id_for(path)
+		if counted.has(pack_id): continue
+		counted[pack_id] = true
+		if not PackSeal.sealed(PackSeal.fingerprint(path)): unsealed += 1
+	var screen: PackCheckScreen = PackCheckScreen.open(get_viewport()) if unsealed > 0 else null
+	var checked := 0
+	for path in paths:
+		var id := _id_for(path)
 		if _available.has(id):
 			continue
 		var started := Time.get_ticks_msec()
 		var seal := PackSeal.fingerprint(path)
 		var was_sealed := PackSeal.sealed(seal)
+		if not was_sealed and screen != null:
+			checked += 1
+			screen.begin_pack(checked, unsealed, String(path).get_file())
+			PackSeal.progress = screen.pictures
 		var report := inspect(path, was_sealed)
+		PackSeal.progress = Callable()
 		if bool(report.get("ok", false)):
 			if bool(report.get("has_art", false)) \
 					and not ProjectSettings.load_resource_pack(path, false):
@@ -145,6 +149,30 @@ func discover() -> void:
 		_rejections.append({"id": id, "path": path, "why": report.get("why", "invalid")})
 		report_lines.append("card pack: %s refused — %s" % [path, report.get("why", "invalid")])
 		push_warning(report_lines.back())
+	# Gone before the title's first frame.
+	if screen != null:
+		screen.close()
+
+
+## Every place a pack may be, pack by pack, in the order they are tried.
+func _all_candidate_paths() -> Array:
+	return candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) \
+		+ candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) \
+		+ candidate_paths(FifthEditionPack.ID) + candidate_paths(MirageBlockPack.ID) + candidate_paths(TempestBlockPack.ID)
+
+
+## Which pack a file is, by its exact name; Pack 1 for any other name.
+static func _id_for(path: String) -> String:
+	match path.get_file():
+		FallenEmpiresPack.FILE_NAME: return FallenEmpiresPack.ID
+		IceAgePack.FILE_NAME: return IceAgePack.ID
+		HomelandsPack.FILE_NAME: return HomelandsPack.ID
+		AlliancesPack.FILE_NAME: return AlliancesPack.ID
+		PortalPack.FILE_NAME: return PortalPack.ID
+		FifthEditionPack.FILE_NAME: return FifthEditionPack.ID
+		MirageBlockPack.FILE_NAME: return MirageBlockPack.ID
+		TempestBlockPack.FILE_NAME: return TempestBlockPack.ID
+	return ID
 
 
 ## Re-read the configured folder immediately. An enabled id remains in
@@ -270,7 +298,7 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 	if not (artwork is Dictionary) \
 			or int(artwork.get("files", -1)) != art_names.size() \
 			or String(artwork.get("sha256", "")) != PackSeal.artwork_sha256(reader,
-				art_names, PackSeal.claimed_artwork(manifest) if art_trusted else ""):
+				art_names, PackSeal.claimed_artwork(manifest) if art_trusted else "", path):
 		reader.close()
 		return _refusal("its artwork checksum does not match")
 	var version := String(manifest.get("version", ""))

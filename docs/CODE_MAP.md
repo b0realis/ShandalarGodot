@@ -92,6 +92,43 @@ needed); card files have NO class_name (they register by name instead);
   `filter_{sth,exo}_{on,off}.png` regenerated, hashes in
   `game/art/README.md`.
 
+## The Quest's first start: the pack check, faster and on the screen; the adb scripts (2026-10-11)
+
+- `game/pack_seal.gd`: `artwork_sha256(reader, names, trusted, path)` —
+  given the pack's path the pictures go through `_indexed_sha256s`: the
+  zip's directory read once, the entries taken in file order through
+  `WINDOW`-sized reads (`_window_bytes`), each deflate entry inflated by
+  the engine's gzip reader with the directory's CRC-32 and size as its
+  trailer. `ZIPReader.read_file` walks the directory from its first
+  record for every picture; Pack 9 on a desk 9.9 s -> 2.4 s, the same
+  digest. Anything it does not take (zip64, encryption, another method,
+  a missing name, an entry that will not inflate to its size) is {} and
+  the old ZIPReader loop decides. `progress` (a Callable) hears every
+  picture. The eight pack classes' `_inspect` take `path` through.
+- `game/pack_check_screen.gd`: class `PackCheckScreen` — "Checking the
+  card packs, Pack 3 of 9 · file · 54%" with a bar, drawn by
+  `RenderingServer.force_draw` (the check runs in `CardPacks.discover`
+  at the start, before any frame); none in a headless run.
+  `CardPacks.discover` counts the unsealed packs first (`_id_for`,
+  `_all_candidate_paths`), opens the screen when there are any and frees
+  it before the title.
+- `packaging/handhelds/push_to_quest.sh` (install or update, keeps the
+  game's settings and decks) and `packaging/handhelds/quest_fresh_install.sh`
+  (a clean install, step by step, the start recorded): both copy each zip
+  through `/sdcard/Download/shandalar-push` and `adb shell cp` into the
+  game's folders, sizes checked at both stops — a direct `adb push` there
+  fails on the owner's Quest 3 with "remote fchown failed". The update
+  skips a zip the headset holds with the same SHA-256. Shipped by
+  `tools/package_release.py` through `HANDHELD_FILES["meta-quest"]`
+  (the inline `QUEST_PUSH` is gone).
+- Tests: `tests/unit/test_pack_check_2026_10_11.gd` (the same digest
+  deflated and stored, the fallbacks, a changed picture changes it,
+  progress, the screen's words, no callback left behind);
+  `tools/test_quest_scripts.py` (both scripts against a stand-in adb that
+  refuses a push into the game's folder as the headset does);
+  `tools/test_package_release.py` (the meta-quest package ships both,
+  executable, byte for byte).
+
 ## The opt-in timing log (2026-10-08)
 
 - `game/perf_log.gd`: class `PerfLog` — a stutter report for a tester
@@ -1860,7 +1897,9 @@ with AI and go over MCP code for bugfix and improvement run!"*
   `push_to_quest.sh` of the meta-quest package (install, start once so
   the game makes its folders, `chmod 775` a shell-made one, push
   `skin/*.zip` and `cardpacks/`), `START["meta-quest"]` names it and the
-  folder rule.
+  folder rule. (Since 2026-10-11 the script is the file
+  `packaging/handhelds/push_to_quest.sh` and copies through the Download
+  folder — see "The Quest's first start" below.)
 - Tests: `tests/unit/test_pack_seal_2026_09_29.gd` (the fingerprint, the
   list, the stream, a Pack 2 built with pictures by Python's zipfile —
   hashed passes and counts 408, one changed picture is refused hashed

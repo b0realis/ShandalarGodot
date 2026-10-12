@@ -39,6 +39,8 @@ const KEPT := 64
 ## most 65535, at the very end of the file.
 const EOCD_SIZE := 22
 const EOCD_SCAN := EOCD_SIZE + 65535
+## The pictures are read this many bytes at a time ([method _window_bytes]).
+const WINDOW := 8 * 1024 * 1024
 
 static var pictures_hashed := 0
 
@@ -137,21 +139,166 @@ static func claimed_artwork(manifest: Variant) -> String:
 ## hex SHA-256 of the file and a newline into one SHA-256. Given a
 ## [param trusted] value — the manifest's claim, on a sealed pack — that
 ## value comes back and no picture is read.
-static func artwork_sha256(reader: ZIPReader, names: Array, trusted := "") -> String:
+##
+## Given the pack's [param path] the pictures are read through
+## [method _indexed_sha256s], several times faster on every machine and
+## most on the headset (see there); the digest is the same stream either
+## way, and a zip that reader does not take is read through [param reader]
+## as it always was.
+static func artwork_sha256(reader: ZIPReader, names: Array, trusted := "", path := "") -> String:
 	if trusted != "" and not names.is_empty():
 		return trusted
 	var ordered := names.duplicate()
 	ordered.sort()
+	var sums: Dictionary = _indexed_sha256s(path, ordered) if path != "" else {}
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)
+	var done := 0
 	for value in ordered:
 		var name := String(value)
 		hashing.update(name.to_utf8_buffer())
 		hashing.update(PackedByteArray([0]))
-		hashing.update(_sha256(reader.read_file(name)).to_utf8_buffer())
+		if sums.is_empty():
+			hashing.update(_sha256(reader.read_file(name)).to_utf8_buffer())
+			pictures_hashed += 1
+			done += 1
+			_report(done, ordered.size())
+		else:
+			hashing.update(String(sums[name]).to_utf8_buffer())
 		hashing.update("\n".to_utf8_buffer())
-		pictures_hashed += 1
 	return hashing.finish().hex_encode()
+
+
+## Told of each picture read — `(read, of)` — while a pack is checked: the
+## start's progress screen ([PackCheckScreen]). Not set, nothing is called.
+static var progress := Callable()
+
+
+static func _report(done: int, total: int) -> void:
+	if progress.is_valid():
+		progress.call(done, total)
+
+
+## THE PICTURES IN ONE PASS (2026-10-11, the owner's Quest: the first
+## start after nine packs were copied over took six minutes on the splash
+## screen, Pack 3 alone 54 s). [method ZIPReader.read_file] finds an entry
+## by walking the zip's directory from its first record, reading record
+## after record through the file, so a pack of 2,474 pictures read ~3
+## million records to read its pictures — 9.9 s for Pack 9 on a desk
+## (measured), and on the headset, where every one of those small reads
+## goes through Java, about 3 MB/s.
+##
+## Here the directory is read ONCE, the pictures are taken in the order
+## they lie in the file, through reads of a few megabytes, and each is
+## inflated by the engine's own gzip reader — a raw deflate stream given
+## the gzip header and the trailer the directory already holds (its CRC-32
+## and size), so the inflate also checks the CRC. Pack 9 on the same desk:
+## 2.4 s, the same digest (measured on all nine packs).
+##
+## Returns {name: hex SHA-256} for every name in [param names], or {} for
+## anything it does not take — no file, a zip64 or encrypted entry, a
+## method other than stored or deflate, a name the directory does not
+## hold, an entry that does not inflate to its size — and the caller reads
+## through [ZIPReader] exactly as before, which decides what is wrong.
+static func _indexed_sha256s(path: String, names: Array) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	var size := file.get_length()
+	var tail_size := mini(size, EOCD_SCAN)
+	file.seek(size - tail_size)
+	var tail := file.get_buffer(tail_size)
+	var at := tail.size() - EOCD_SIZE
+	while at >= 0 and not (tail[at] == 0x50 and tail[at + 1] == 0x4B \
+			and tail[at + 2] == 0x05 and tail[at + 3] == 0x06):
+		at -= 1
+	if at < 0:
+		return {}
+	var count := tail.decode_u16(at + 10)
+	var directory_size := tail.decode_u32(at + 12)
+	var directory_at := tail.decode_u32(at + 16)
+	if count == 0xFFFF or directory_size == 0xFFFFFFFF or directory_at == 0xFFFFFFFF \
+			or directory_at + directory_size > size:
+		return {}
+	file.seek(directory_at)
+	var directory := file.get_buffer(directory_size)
+	var wanted := {}
+	for value in names:
+		wanted[String(value)] = true
+	var entries: Array = []   # [local offset, name, method, crc, packed, unpacked]
+	var p := 0
+	for i in count:
+		if p + 46 > directory.size() or directory.decode_u32(p) != 0x02014B50:
+			return {}
+		var flags := directory.decode_u16(p + 8)
+		var method := directory.decode_u16(p + 10)
+		var packed := directory.decode_u32(p + 20)
+		var unpacked := directory.decode_u32(p + 24)
+		var name_size := directory.decode_u16(p + 28)
+		var record := 46 + name_size + directory.decode_u16(p + 30) + directory.decode_u16(p + 32)
+		var name := directory.slice(p + 46, p + 46 + name_size).get_string_from_utf8()
+		if wanted.has(name):
+			if flags & 1 or not method in [0, 8] or packed == 0xFFFFFFFF or unpacked == 0xFFFFFFFF:
+				return {}
+			entries.append([directory.decode_u32(p + 42), name, method,
+				directory.decode_u32(p + 16), packed, unpacked])
+		p += record
+	if entries.size() != wanted.size():
+		return {}
+	entries.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var sums := {}
+	var window := PackedByteArray()
+	var window_at := 0
+	for entry: Array in entries:
+		var local: int = entry[0]
+		var head := _window_bytes(file, size, local, 30, window, window_at)
+		if head.is_empty():
+			return {}
+		window = head[1]
+		window_at = head[2]
+		var header: PackedByteArray = head[0]
+		if header.decode_u32(0) != 0x04034B50:
+			return {}
+		var data_at: int = local + 30 + header.decode_u16(26) + header.decode_u16(28)
+		var body := _window_bytes(file, size, data_at, int(entry[4]), window, window_at)
+		if body.is_empty():
+			return {}
+		window = body[1]
+		window_at = body[2]
+		var payload: PackedByteArray = body[0]
+		if int(entry[2]) == 8:
+			var gzip := PackedByteArray([0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 0xFF])
+			gzip.append_array(payload)
+			var trailer := PackedByteArray()
+			trailer.resize(8)
+			trailer.encode_u32(0, int(entry[3]))
+			trailer.encode_u32(4, int(entry[5]))
+			gzip.append_array(trailer)
+			payload = gzip.decompress(int(entry[5]), FileAccess.COMPRESSION_GZIP) \
+				if int(entry[5]) > 0 else PackedByteArray()
+		if payload.size() != int(entry[5]):
+			return {}
+		sums[entry[1]] = _sha256(payload)
+		pictures_hashed += 1
+		_report(sums.size(), entries.size())
+	return sums
+
+
+## [param length] bytes at [param at] out of [param window] (which starts
+## at [param window_at] in the file), reading a fresh window of at least
+## [constant WINDOW] bytes when they are not in it. Returns
+## [bytes, window, window_at], or [] past the end of the file.
+static func _window_bytes(file: FileAccess, size: int, at: int, length: int,
+		window: PackedByteArray, window_at: int) -> Array:
+	if at < 0 or at + length > size:
+		return []
+	if at < window_at or at + length > window_at + window.size():
+		file.seek(at)
+		window = file.get_buffer(mini(maxi(length, WINDOW), size - at))
+		window_at = at
+		if window.size() < length:
+			return []
+	return [window.slice(at - window_at, at - window_at + length), window, window_at]
 
 
 static func _sha256(payload: PackedByteArray) -> String:

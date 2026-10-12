@@ -18770,6 +18770,31 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-11 — The Quest's first start, on the screen and faster (0.50.19)
+
+Installing 0.50.18 on the owner's Meta Quest 3
+([releases/0.50.19.md](releases/0.50.19.md)):
+
+- **`adb push` into the game's folder is refused** on current headset
+  software ("remote fchown failed: Operation not permitted", new files
+  too), so `push_to_quest.sh` stopped at its first zip. Both Quest
+  scripts — `push_to_quest.sh` (update, keeps settings and decks, skips
+  identical zips) and the new `quest_fresh_install.sh` (clean, step by
+  step, the start recorded) — copy through `/sdcard/Download` and `adb
+  shell cp`; they are files in `packaging/handhelds/` now, tested against
+  a stand-in adb that refuses as the headset does.
+- **The first start checked nine packs for six minutes on a still
+  splash.** `PackSeal` reads each zip's directory once and the pictures
+  in file order (ZIPReader walked the directory from its start for every
+  picture): the nine packs 7.5 s on a desk, Pack 9 9.9 -> 2.4 s, the
+  same digests. `PackCheckScreen` draws "Checking the card packs, Pack 3
+  of 9, 54%" straight onto the rendering server meanwhile — Controls
+  showed nothing, since they paint in a deferred call and the check runs
+  before the first frame (Xvfb screenshots of a real start).
+- The "Godot splash" before the game's own is Android's start screen
+  showing the app icon, which is ours (the yin-yang with the Godot robot
+  on one half); the owner keeps it.
+
 ## 2026-10-10 — The bullet, the reader's text box, two set marks (0.50.17, 0.50.18)
 
 A short round after the campaign, mostly playtest reports

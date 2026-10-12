@@ -130,12 +130,12 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
 		return {"ok": false, "why": "not a ZIP file"}
-	var report := _inspect(reader, art_trusted)
+	var report := _inspect(reader, art_trusted, path)
 	reader.close()
 	report["path"] = path
 	return report
 
-static func _inspect(reader: ZIPReader, art_trusted := false) -> Dictionary:
+static func _inspect(reader: ZIPReader, art_trusted := false, path := "") -> Dictionary:
 	var core := [PREFIX + "manifest.json", PREFIX + "catalog.json",
 		PREFIX + "cards.json", PREFIX + "README.txt"]
 	var artwork: Array = []
@@ -186,7 +186,7 @@ static func _inspect(reader: ZIPReader, art_trusted := false) -> Dictionary:
 	# The pictures' digest, or the manifest's word for it on a sealed
 	# pack whose pictures passed at an earlier start ([PackSeal]).
 	var art_sum := PackSeal.artwork_sha256(reader, artwork if has_art else [],
-		PackSeal.claimed_artwork(manifest) if art_trusted and has_art else "")
+		PackSeal.claimed_artwork(manifest) if art_trusted and has_art else "", path)
 	var expected := {"algorithm": "sha256", "metadata": sums,
 		"artwork": {"files": artwork.size() if has_art else 0, "sha256": art_sum}}
 	if not PortalPack._same(manifest.get("checksums"), expected):
