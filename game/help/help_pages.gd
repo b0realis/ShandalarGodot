@@ -267,7 +267,7 @@ static func _page_table() -> Dictionary:
 		_heading("Hand, library and graveyard"),
 		_text("Your hand holds cards you can play. The face-down library supplies draws. Click either graveyard to inspect discarded cards; the menu also gives access to exile."),
 		_heading("Hotseat · Take turns privately"),
-		_text("Player 1 uses the lower playfield; Player 2 uses the upper one. Names carry (below) or (above). Drag either hand stack by its title bar; both buttons move with it. Press Show hand when the other player looks away. Hide hand (or H) conceals it again. The other hand shows only its card count. Opening hands and mulligans use the same Show/Hide button. The opening screen gives one privacy reminder; during the duel, the Situation Bar names the player who must act and keeps the phase or choice instruction visible."),
+		_text("Player 1 uses the lower playfield; Player 2 uses the upper one. Names carry (below) or (above). Drag either hand stack by its title bar; both buttons move with it. Press Show hand when the other player looks away. Hide hand%s conceals it again. The other hand shows only its card count. Opening hands and mulligans use the same Show/Hide button. The opening screen gives one privacy reminder; during the duel, the Situation Bar names the player who must act and keeps the phase or choice instruction visible." % _or_key("duel_hand")),
 		_heading("Hotseat · Let your opponent respond"),
 		_text("The turn player keeps control through routine phases. Before pressing Done, give your opponent time to say they want to respond. Press Opponent below Show/Hide to hand over; the other player reveals their hand and can cast an instant or use an ability. Their Done returns control. This shortcut assumes the silent opponent passes: it cannot rewind an action already resolved. Blockers, combat-damage assignments and required card choices still hand over automatically. Every handover and new turn hides both hands."),
 		_heading("Demo · Watch both players"),
@@ -287,7 +287,7 @@ static func _page_mana() -> Dictionary:
 		]},
 		_text("{X} is an amount you choose while casting. {T} is a tap cost: turn that permanent sideways to pay it."),
 		_heading("Spend it before it empties"),
-		_text("Mana does not carry into the next step under modern pool timing. The 1997 timing option empties pools at phase boundaries instead. Mana burn is on by default: lose 1 life for each unspent mana when the pool empties. You can change either option in Settings."),
+		_text("Mana does not carry into the next step under modern pool timing. The 1997 timing option empties pools at phase boundaries instead. Mana burn is on by default: lose 1 life for each unspent mana when the pool empties. You can change either option in Options, under Rules."),
 	]}
 
 
@@ -478,7 +478,7 @@ static func _page_icons_mana() -> Dictionary:
 			+ "arrived.", {"src": SRC_MANA, "sym": "T"}, "{T}"),
 	]
 	return {"title": "Icons — the mana symbols", "blocks": [
-		_text("The original's mana sheet holds nineteen symbols: {X}, the "
+		_text("The original's mana sheet draws eighteen symbols: {X}, the "
 			+ "numbers {0} through {10}, the five colors, and the tap "
 			+ "symbol. You meet them on the enlarged card in the Showcase, "
 			+ "and at a small card's bottom-left corner, where they show an "
@@ -677,8 +677,10 @@ static func _page_icons_small_card() -> Dictionary:
 			_icon("Tapped — the card lies sideways",
 				"It has been used this turn and carries a small (T). It "
 				+ "untaps at the start of its controller's next turn. A "
-				+ "tapped creature can neither attack nor block; a tapped "
-				+ "non-creature artifact stops working entirely.",
+				+ "tapped creature can neither attack nor block. Under the "
+				+ "1997 rule Tapped artifacts stop working (Options, Rules), "
+				+ "a tapped non-creature artifact's continuous effects stop "
+				+ "as well.",
 				{"src": SRC_DRAWN}, MiniCard.TAPPED_MARK),
 			_icon("An aura steps out from behind the card",
 				"Every enchantment attached to a card is drawn as a WHOLE "
@@ -1096,8 +1098,8 @@ static func _page_icons_combat_bar() -> Dictionary:
 		{"kind": ICONS, "entries": entries},
 		_text("The lit icon and the red Stop dots mean here exactly what "
 			+ "they mean on the Phase Bar. While you are choosing attackers "
-			+ "or blockers, clicking a sub-phase icon is a third way to say "
-			+ "Done, beside the Done button and the mini-menu."),
+			+ "or blockers, clicking a sub-phase icon is another way to say "
+			+ "Done, beside the Done button."),
 	]}
 
 
@@ -1698,6 +1700,14 @@ static func _heading(text: String) -> Dictionary:
 
 static func _text(text: String) -> Dictionary:
 	return {"kind": TEXT, "text": text}
+
+
+## " (or H)" — the key bound to [param action] NOW, read when the page is
+## built, so a key moved under Options → Controls is the key the page
+## names (bug campaign 2026-10-12); nothing when the action has no key.
+static func _or_key(action: String) -> String:
+	var key := Controls.key_text(action)
+	return "" if key == Controls.UNBOUND else " (or %s)" % key
 
 
 static func _cards(examples: Array, printing := "") -> Dictionary:

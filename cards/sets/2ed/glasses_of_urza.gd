@@ -20,15 +20,23 @@ class PeekEffect extends EffectBase:
 	func _init() -> void:
 		target_spec = TargetSpec.player()
 
-	func resolve(game: MtgGame, _source: CardInstance, controller: int,
+	## Named after the card that looks — Clairvoyance borrows this effect
+	## (campaign 2026-10-12, b4-6). A look at the looker's own hand keeps
+	## the names out of the public line: the other seat never saw them.
+	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
+		var looker := source.data.card_name if source != null else "Glasses of Urza"
 		var names := PackedStringArray()
 		for inst in game.players[target.player_id].hand:
 			names.append(inst.data.card_name)
-		game.reveal_information(controller, "Glasses of Urza — hand", Array(names))
-		game.log_line("Glasses of Urza reveals %s's hand: %s" % [
-			game.players[target.player_id].player_name,
-			", ".join(names) if names.size() > 0 else "(empty)"])
+		game.reveal_information(controller, "%s — hand" % looker, Array(names))
+		var whose := game.players[target.player_id].player_name
+		var line := "%s reveals %s's hand: %s" % [looker, whose,
+			", ".join(names) if names.size() > 0 else "(empty)"]
+		if target.player_id == controller and names.size() > 0:
+			game.log_line(line, null, "", controller, "%s looks at %s's hand" % [looker, whose])
+		else:
+			game.log_line(line)
 
 	func describe() -> String:
 		return "look at target player's hand"

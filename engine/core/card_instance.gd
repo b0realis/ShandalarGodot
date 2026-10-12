@@ -401,8 +401,18 @@ var face_down: bool = false
 
 ## Whether this creature BLOCKED this turn (set in declare_blockers,
 ## cleared at cleanup). Lurker's "unless it attacked or blocked this
-## turn" reads it alongside attacked_this_turn.
+## turn" reads it alongside attacked_this_turn. NOT "was blocked" — that is
+## [member became_blocked_turn].
 var blocked_this_turn: bool = false
+
+## The turn this creature last BECAME BLOCKED (CR 509.1h, 509.3c: by
+## declared blockers, a blocker re-pointed onto it, or an effect such as
+## Dazzling Beauty's), -1 for never; stamped by MtgGame on BECOMES_BLOCKED.
+## "If it was blocked this turn" (Fyndhorn Druid) is
+## [method MtgGame.was_blocked_this_turn]. A turn number rather than a
+## per-turn flag, so nothing has to clear it at cleanup (campaign
+## 2026-10-12 b4-2).
+var became_blocked_turn := -1
 
 ## Increments whenever this object blocks or becomes blocked. Unlike the
 ## per-turn flag it survives cleanup (Wiitigo's "since your last upkeep").
@@ -548,6 +558,8 @@ var last_counters: Dictionary = {}
 ## CR 603.4) reads this (2026-10-03).
 var last_tapped := false
 var last_blocked_this_turn := false
+## [member became_blocked_turn] as it left (campaign 2026-10-12 b4-2).
+var last_became_blocked_turn := -1
 var last_regenerations_this_turn := 0
 var last_toughness: int = 0
 var last_types: int = 0
@@ -1177,6 +1189,7 @@ func clear_battlefield_state() -> void:
 	last_counters = counters.duplicate()
 	last_tapped = tapped
 	last_blocked_this_turn = blocked_this_turn
+	last_became_blocked_turn = became_blocked_turn
 	last_regenerations_this_turn = regenerations_this_turn
 	last_toughness = cur_toughness
 	last_types = cur_types
@@ -1216,6 +1229,7 @@ func clear_battlefield_state() -> void:
 	attacked_this_turn = false
 	could_attack_this_turn = false
 	blocked_this_turn = false
+	became_blocked_turn = -1   # a new object was never blocked (CR 400.7)
 	block_history_sequence = 0
 	blocked_ids_this_turn.clear()
 	must_block_this_turn = false

@@ -43,18 +43,24 @@ if [[ -z "$controlfolder" ]]; then
     printf '%s\n' 'Install/update PortMaster first: https://portmaster.games/installation.html'
     exit 1
 fi
-# PortMaster may redirect controlfolder to another installation. Search both
-# locations for its runtime later, rather than downloading a redundant copy.
-source "$controlfolder/control.txt" || exit 1
-if [[ -f "$controlfolder/mod_${CFW_NAME}.txt" ]]; then
-    source "$controlfolder/mod_${CFW_NAME}.txt" || exit 1
-fi
-get_controls || exit 1
 sg_fail() {
     printf 'Shandalar: %s\n' "$*"
     if declare -F pm_message >/dev/null; then pm_message "$*"; fi
     exit 1
 }
+# PortMaster may redirect controlfolder to another installation. Search both
+# locations for its runtime later, rather than downloading a redundant copy.
+# Each of PortMaster's own steps says why it stopped: an empty
+# portmaster.log tells a tester nothing.
+sg_pm_files=$controlfolder
+source "$controlfolder/control.txt" ||
+    sg_fail "PortMaster's control.txt in $sg_pm_files stopped with an error; update PortMaster, then retry."
+if [[ -f "$controlfolder/mod_${CFW_NAME:-}.txt" ]]; then
+    source "$controlfolder/mod_${CFW_NAME}.txt" ||
+        sg_fail "PortMaster's mod_${CFW_NAME}.txt in $controlfolder stopped with an error; update PortMaster, then retry."
+fi
+get_controls ||
+    sg_fail "PortMaster could not set up the controls (get_controls failed); update PortMaster, then retry."
 [[ $(uname -m) == aarch64 ]] || sg_fail 'This package needs 64-bit ARM Linux.'
 # Word-split PortMaster's two commands in the shell itself: no here-string,
 # so no temporary file, and no glob expansion of their words.

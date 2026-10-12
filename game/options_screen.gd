@@ -98,6 +98,9 @@ func _ready() -> void:
 		title.add_theme_font_override("font", title_font)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(title)
+	# --- campaign 2026-10-12 f-settings: settings.cfg trouble, said here ---
+	content.add_child(_c2_fsettings_problem_line())
+	# --- end campaign 2026-10-12 f-settings ---
 
 	_add_display_section(content)
 
@@ -332,6 +335,12 @@ func _add_controls_section(content: VBoxContainer) -> void:
 		pad.tooltip_text = "The controller button for %s. Click, then press a button." % String(entry["label"]).to_lower()
 		pad.pressed.connect(_listen.bind(action, "pad"))
 		row.add_child(pad)
+		# A row whose command is still dark is listed, greyed and says why
+		# (campaign 2026-10-12 f-shell, b6-5) — the rules forks' habit.
+		if not Controls.available(action):
+			for slot in [key, pad]:
+				slot.disabled = true
+				slot.tooltip_text = "Not available yet."
 		_control_slots[action] = [key, pad]
 		content.add_child(row)
 	var reset := UiChrome.menu_button("Reset controls", Vector2(180, 32), 14)
@@ -355,7 +364,14 @@ func _refresh_control_rows() -> void:
 ## The `Press a key` popup: the next key (or pad button, for the pad
 ## slot) goes on [param action] and the popup closes; Cancel leaves the
 ## binding alone. Esc is a key like any other here — it is bindable —
-## so the only way out without binding is the button.
+## so the only way out of the KEY popup without binding is the button
+## (under the pad popup Esc is no button, and cancels it).
+##
+## WITH THE PAD POINTER ON (bug campaign 2026-10-12, r2-3) the layer's
+## own buttons — A, LB, the D-pad — are the pointer's: the pad popup does
+## not take them, so the pointer can still reach Cancel and A clicks it.
+## They used to be bound: A meant for Cancel became the one button, which
+## the layer eats, and the pad could no longer advance the game.
 func _listen(action: String, kind: String) -> void:
 	if _listening != null:
 		return
@@ -366,8 +382,12 @@ func _listen(action: String, kind: String) -> void:
 	var now := Controls.key_text(action) if kind == "key" else Controls.pad_text(action)
 	var ask := "Press the key for %s (now %s)." % [label.to_lower(), now] if kind == "key" \
 		else "Press the controller button for %s (now %s)." % [label.to_lower(), now]
+	var layer := get_node_or_null(^"/root/PadControls")
+	if kind == "pad" and layer != null and layer.is_active():
+		ask += " A, LB and the D-pad move and click the pad pointer and are not offered."
 	var veil := UiChrome.action_popup(self, label, ask, [
-		{"label": "Cancel", "name": "Cancel", "callable": func() -> void: _listening = null}])
+		{"label": "Cancel", "name": "Cancel", "cancel": true,
+			"callable": func() -> void: _listening = null}])
 	veil.name = "ControlsListener"
 	var listener := ControlsListener.new()
 	listener.kind = kind
@@ -389,6 +409,10 @@ class ControlsListener:
 	func _input(event: InputEvent) -> void:
 		var wanted := (event is InputEventKey) if kind == "key" else (event is InputEventJoypadButton)
 		if not wanted or not Controls.bindable(event):
+			return
+		# The pad pointer's own buttons are its to spend (see [method _listen]).
+		var layer := get_node_or_null(^"/root/PadControls")
+		if layer != null and layer.owns(event):
 			return
 		get_viewport().set_input_as_handled()
 		bound.emit(event)
@@ -456,6 +480,9 @@ func _add_skin_section(content: VBoxContainer) -> void:
 		+ "with the 1997 art, or your own drawn to the same names. It is kept in "
 		+ "the skins folder and worn from then on. SKIN.txt beside the game lists "
 		+ "every file."))
+	# --- campaign 2026-10-12 f-packs: the skin refusal reason line ---
+	content.add_child(_c2_fpacks_refused_line())
+	# --- end campaign 2026-10-12 f-packs ---
 	if not web:
 		var use_folder := CheckButton.new()
 		use_folder.name = "UseSkinFolder"
@@ -617,6 +644,9 @@ func _on_skin_changed(_kind: String) -> void:
 	var forget := find_child("ForgetSkins", true, false) as Button
 	if forget != null:
 		forget.visible = SkinPack.has_own()
+	# --- campaign 2026-10-12 f-packs: the skin refusal reason line ---
+	_c2_fpacks_on_skin_changed("")
+	# --- end campaign 2026-10-12 f-packs ---
 
 
 func _on_skin_transfer(fraction: float) -> void:
@@ -953,3 +983,89 @@ func _exit_tree() -> void:
 		SkinPack.changed.disconnect(_on_skin_changed)
 	if SkinPack.fetch_progressed.is_connected(_on_skin_transfer):
 		SkinPack.fetch_progressed.disconnect(_on_skin_transfer)
+
+
+# --- campaign 2026-10-12 f-shell: Escape is Back ---
+## ESCAPE IS BACK (bug campaign 2026-10-12, r2-9): Escape, a pad's B with
+## the pointer off or on, the Quest's back gesture and the R36's Start all
+## arrive as `ui_cancel`, and every other room of the shell answers it.
+## With a popup up it is that popup's Cancel (or its only button) instead
+## ([method UiChrome.dismiss_popup]); the `Press a key` popup takes Esc as
+## a key before it gets here.
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("ui_cancel", false, true):
+		return
+	accept_event()
+	var popup := UiChrome.open_popup(self)
+	if popup != null:
+		UiChrome.dismiss_popup(popup)
+	else:
+		get_tree().change_scene_to_file("res://game/main.tscn")
+# --- end campaign 2026-10-12 f-shell ---
+
+
+# --- campaign 2026-10-12 f-packs: the skin refusal reason line ---
+## A zip of the player's that the game would not wear, and why — one line
+## per zip, in warning ink, under the skin row ([method
+## SkinPack.refusal_lines]). The zip itself stays where it is (it used to
+## be deleted at the start, with nothing said). Hidden when there is
+## nothing to say; re-read with the other rows when a pack arrives
+## ([method _on_skin_changed] calls [method _c2_fpacks_on_skin_changed]),
+## so the screen holds no second connection to the autoload's signal.
+func _c2_fpacks_refused_line() -> Label:
+	var line := UiChrome.body_label("", 12)
+	line.name = "SkinRefused"
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.add_theme_color_override("font_color", Color8(232, 176, 96))
+	line.tooltip_text = "The game will not wear this zip; it is left where it is. " \
+		+ "A skin zip has every file under one skin/ folder."
+	line.mouse_filter = Control.MOUSE_FILTER_PASS
+	_c2_fpacks_fill_refused(line)
+	return line
+
+
+func _c2_fpacks_on_skin_changed(_kind: String) -> void:
+	var line := find_child("SkinRefused", true, false) as Label
+	if line != null:
+		_c2_fpacks_fill_refused(line)
+
+
+static func _c2_fpacks_fill_refused(line: Label) -> void:
+	line.text = "\n".join(SkinPack.refusal_lines())
+	line.visible = line.text != ""
+# --- end campaign 2026-10-12 f-packs ---
+
+
+# --- campaign 2026-10-12 f-settings: settings.cfg trouble, said here ---
+## WHAT WENT WRONG WITH settings.cfg, under the screen's title, for as long
+## as it holds ([method Settings.problem]): a save that failed (a full or
+## read-only card, a read-only file — the switch looked saved and was gone
+## at the next start), a file that could not be read, a hand edit kept
+## aside. Hidden when there is nothing to say. Every control here saves
+## through [Settings], so the line reads the class each frame rather than
+## each control telling it.
+func _c2_fsettings_problem_line() -> Label:
+	var line := _C2FSettingsProblemLine.new()
+	line.name = "SettingsProblem"
+	var font := GameSkin.font("font_body")
+	if font != null:
+		line.add_theme_font_override("font", font)
+	line.add_theme_font_size_override("font_size", 13)
+	UiChrome.shadowed(line)
+	line.add_theme_color_override("font_color", UiChrome.ACCENT)
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.custom_minimum_size.x = PANEL_WIDTH - 60.0
+	line.refresh()
+	return line
+
+
+class _C2FSettingsProblemLine extends Label:
+	func _process(_delta: float) -> void:
+		refresh()
+
+	func refresh() -> void:
+		var now := Settings.problem()
+		if text != now:
+			text = now
+		visible = now != ""
+# --- end campaign 2026-10-12 f-settings ---

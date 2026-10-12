@@ -217,6 +217,9 @@ static func permanent_harm(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	var donated: Variant = donation_choice(g, pilot, inst)
 	if donated != null:
 		return donated
+	var granted: Variant = casting_grant_choice(g, pilot, inst)   # campaign 2026-10-12 (b5-3)
+	if granted != null:
+		return granted
 	return symmetric_static_choice(g, pilot, inst)
 
 
@@ -480,6 +483,123 @@ static func side_worth(g: MtgGame, pilot, who: int, skip: CardInstance) -> float
 				total += 0.5
 	return total
 # --- end campaign fix-ai-b symmetric static ---
+
+
+# --- campaign 2026-10-12 f-aiB: the casting grant (b5-3) ---
+
+## THE CASTING GRANT (bug-hunt campaign 2026-10-12, b5-3): a permanent that
+## grants EVERY player's spells a payment row ([method
+## CardData.with_granted_alternative_cost] — Dream Halls' "discard a card
+## that shares a colour with it", Aluren's free creature of mana value 3
+## or less) changes neither side's board, so [method static_projection]
+## read it as nothing and the card's flat value cast it: Dream Halls cast
+## holding nothing it could use, and the opponent's licids then cast by
+## discarding (the Pack 9 round robin: its caster used it 3 times, the
+## opponent 17). Priced on both sides now:
+##  * OURS ([method grant_uses]): the cards of our hand the pilot would
+##    cast through its row once it is out — [method AiPlayer._granted_row]
+##    asked with the card moved onto the battlefield under the search
+##    journal, as [method static_projection] moves it;
+##  * THEIRS ([method their_grant_uses]): their PUBLIC hand size times the
+##    share of their seen spells (battlefield, graveyard, exile; never the
+##    hand's identities) the grant would take, divided among the cards
+##    each use eats (a Dream Halls cast needs a second card to discard);
+##    half a share when nothing of theirs has been seen.
+## `{}` (hold) when it serves them at least as well as us; null otherwise
+## — the generic value decides, as before.
+static func casting_grant_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
+	var grant: Callable = inst.data.cost_modifier.get("alternative_cost", Callable())
+	if not grant.is_valid() or inst.zone != Mtg.Zone.HAND:
+		return null
+	var theirs := their_grant_uses(g, pilot, inst, grant)
+	if theirs <= 0.0:
+		return null
+	return {} if float(grant_uses(g, pilot, inst)) <= theirs else null
+
+
+## How many cards of our hand the pilot would cast through [param inst]'s
+## granted row were it on the battlefield under our control now. A search
+## in progress keeps its journal; the game is left as it was.
+static func grant_uses(g: MtgGame, pilot, inst: CardInstance) -> int:
+	var pid: int = pilot.pid
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec_move(inst, pid, Mtg.Zone.BATTLEFIELD)
+	g._rec(inst, &"controller_id")
+	g._rec(inst, &"layer_timestamp")
+	g._rec(inst, &"summoning_sick")
+	g._rec(g, &"_battlefield_order")
+	g.players[inst.owner_id].hand.erase(inst)
+	inst.zone = Mtg.Zone.BATTLEFIELD
+	inst.controller_id = pid
+	inst.layer_timestamp = g.continuous.next_timestamp()
+	inst.summoning_sick = true
+	g.players[pid].battlefield.append(inst)
+	g._battlefield_order.append(inst.id)
+	g._battlefield_changed()
+	g.recalculate()
+	var uses := 0
+	for card in g.players[pid].hand.duplicate():
+		if card.data.is_land():
+			continue
+		var row: int = pilot._granted_row(g, card.data, card)
+		if row < 0:
+			continue
+		var rows := g.payment_rows(pid, card)
+		if row < rows.size() and int((rows[row] as Dictionary).get("granted_by", -1)) == inst.id:
+			uses += 1
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return uses
+
+
+## The casts [param grant] (the card's granted-row callback) is expected to
+## give the opponent from their hand: its public size times the share of
+## their public spells the grant takes, over the cards each cast eats.
+static func their_grant_uses(g: MtgGame, pilot, inst: CardInstance, grant: Callable) -> float:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	var held := g.players[foe].hand.size()
+	if held == 0:
+		return 0.0
+	var seen := 0
+	var taken := 0
+	var eats := -1
+	for zone in [g.players[foe].battlefield, g.players[foe].graveyard, g.players[foe].exile]:
+		for card: CardInstance in zone:
+			if card.face_down or card.is_token or card.data.is_land():
+				continue
+			seen += 1
+			var rows: Array = grant.call(g, foe, card, inst)
+			if rows.is_empty():
+				continue
+			taken += 1
+			if eats < 0:
+				eats = _cards_eaten(rows[0])
+	if eats < 0:
+		# Nothing of theirs the grant takes has been seen: the row's shape
+		# read off a spell of our own hand, as if theirs.
+		for card in g.players[pid].hand:
+			if card == inst or card.data.is_land():
+				continue
+			var rows: Array = grant.call(g, foe, card, inst)
+			if not rows.is_empty():
+				eats = _cards_eaten(rows[0])
+				break
+	var share := 0.5 if seen == 0 else float(taken) / float(seen)
+	return float(held) * share / float(1 + maxi(eats, 0))
+
+
+## The hand cards a granted row eats besides the spell (its object-cost
+## groups that take from the hand).
+static func _cards_eaten(row: Dictionary) -> int:
+	var count := 0
+	for group in row.get("object_costs", []):
+		if int((group as Dictionary).get("zone", -1)) == Mtg.Zone.HAND:
+			count += int((group as Dictionary).get("count", 1))
+	return count
+# --- end campaign 2026-10-12 f-aiB casting grant ---
 
 
 # ------------------------------------------------- damage counted as it resolves --

@@ -372,6 +372,9 @@ func _ready() -> void:
 	# screen has nothing to do on the way out.
 	ShellMusic.play()
 	_warm_screens()
+	# --- campaign 2026-10-12 f-settings: settings.cfg trouble, said once ---
+	_c2_fsettings_tell_problem()
+	# --- end campaign 2026-10-12 f-settings ---
 
 
 ## THE SCREENS THE BUTTONS OPEN COMPILE IN THE BACKGROUND TOO (2026-09-30):
@@ -1179,3 +1182,18 @@ func _let_go() -> void:
 	_waiting_button = null
 	_waiting_text = ""
 	_pending_open = ""
+
+
+# --- campaign 2026-10-12 f-settings: settings.cfg trouble, said once ---
+## A SETTINGS FILE THE GAME COULD NOT READ OR SAVE IS SAID HERE, ONCE
+## (robustness campaign of 2026-10-12). A hand edit that would not parse
+## was kept aside and the options below its bad line started from their
+## defaults, and the console was the only place that said so — which a
+## Steam Deck, an ArkOS handheld or the Quest never shows. The Options
+## screen carries the same words as a line while they hold
+## ([method Settings.problem]).
+func _c2_fsettings_tell_problem() -> void:
+	var problem := Settings.untold_problem()
+	if problem != "":
+		UiChrome.explain_popup(self, "Options", problem, 560.0)
+# --- end campaign 2026-10-12 f-settings ---

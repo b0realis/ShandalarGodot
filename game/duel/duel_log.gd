@@ -93,6 +93,9 @@ signal closed
 ## A line for the Situation Bar: where a save went, or that the log is on
 ## the clipboard. The screen owns the bar; this window only has the words.
 signal notice(text: String)
+## A save that did not happen, and why — for the bar's refusal ink
+## (campaign 2026-10-12, r3-9).
+signal failed(text: String)
 
 ## The reserve-strip control ([member DuelScreen._qol_reserve]'s third
 ## tenant, after Arrange and Expand): the same stone face, a glyph of a
@@ -117,9 +120,18 @@ static func button(on_toggled: Callable) -> Button:
 	btn.focus_mode = Control.FOCUS_NONE
 	OriginalDialog.dress_bar_button(btn)
 	btn.icon = glyph()
-	btn.tooltip_text = "Duel log (L)"
+	btn.tooltip_text = "Duel log" + _key_words("duel_log")
 	btn.toggled.connect(on_toggled)
 	return btn
+
+
+## " (L)": the key the player has bound to [param action], in brackets for
+## a tooltip, or "" when nothing is bound. Read from the binding, never
+## written as a literal, so a key moved on the Options screen is the key
+## the tooltip names (campaign 2026-10-12, b6-5).
+static func _key_words(action: String) -> String:
+	var key := Controls.key_text(action)
+	return "" if key == Controls.UNBOUND else " (%s)" % key
 
 
 ## A page of ruled lines, drawn here for the same reason Arrange's cards
@@ -213,11 +225,13 @@ func _init() -> void:
 	copy.pressed.connect(copy_to_clipboard)
 	row.add_child(copy)
 	var save := OriginalDialog.gadget("Save", 50.0)
-	save.tooltip_text = "Save the log as a text file (beside the F12 screenshots)"
+	var shot_key := Controls.key_text("duel_screenshot")
+	save.tooltip_text = "Save the log as a text file (beside the %sscreenshots)" \
+		% ("" if shot_key == Controls.UNBOUND else shot_key + " ")
 	save.pressed.connect(save_to_file)
 	row.add_child(save)
 	var close := OriginalDialog.gadget("×", 26.0)
-	close.tooltip_text = "Close (L)"
+	close.tooltip_text = "Close" + _key_words("duel_log")
 	close.pressed.connect(dismiss)
 	row.add_child(close)
 
@@ -395,17 +409,25 @@ func copy_to_clipboard() -> void:
 	notice.emit("Duel log copied (%d lines)" % _count)
 
 
-## `Save`: `user://duel_log_<ms>.txt`, the F12 screenshot's own naming,
-## and the absolute path on the bar so the player can find it. Returns
-## the path, or "" when the write failed (the bar says so too).
-func save_to_file() -> String:
-	var path := "%s%d.txt" % [SAVE_PREFIX, Time.get_ticks_msec()]
+## `Save`: `user://duel_log_<ms>.txt`, the screenshot's own naming, and
+## the absolute path on the bar so the player can find it. Returns the
+## path, or "" when the write failed — and then the bar says so, in the
+## refusal's red ([signal failed]), rather than naming a file that is not
+## there or holds half the log (campaign 2026-10-12, r3-9: the write's
+## own result was never read). [param prefix] is the folder and the name's
+## start; a test points it somewhere unwritable.
+func save_to_file(prefix := SAVE_PREFIX) -> String:
+	var path := "%s%d.txt" % [prefix, Time.get_ticks_msec()]
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
-		notice.emit("Could not write %s" % ProjectSettings.globalize_path(path))
+		failed.emit("Duel log could not be saved (%s)." % error_string(FileAccess.get_open_error()))
 		return ""
-	file.store_string(text())
+	var wrote := file.store_string(text())
+	var err := file.get_error()
 	file.close()
+	if not wrote or (err != OK and err != ERR_FILE_EOF):
+		failed.emit("Duel log could not be saved (%s)." % error_string(err if err != OK else ERR_FILE_CANT_WRITE))
+		return ""
 	notice.emit("Duel log saved: %s" % ProjectSettings.globalize_path(path))
 	return path
 
@@ -440,6 +462,13 @@ func _on_bar_input(event: InputEvent) -> void:
 		if _drag_moved:
 			position = event.global_position - _drag_offset
 			_clamp_on_screen()
+
+
+## ...AND NOT AFTER A RESIZE EITHER (campaign 2026-10-12, r2-8): a window
+## shrunk from 2560 wide to 640 left the title bar near x = 5000. The
+## clamp now runs the moment the view changes size.
+func _ready() -> void:
+	get_viewport().size_changed.connect(_clamp_on_screen)
 
 
 ## NEVER OFF THE EDGE. A window dragged past the viewport cannot be

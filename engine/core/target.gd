@@ -719,7 +719,7 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 				# this state: `STATE_OUBLIETTED` is how the 1997 engine
 				# spells "phased out" (`targets.c:230`).
 				return WHY["cant_target"]
-			if source != null and (inst.cur_protection & source.cur_colors) != 0:
+			if source != null and (inst.cur_protection & _c2a_colors(game, source)) != 0:
 				return WHY["abilities"]
 			if inst.cur_shroud and (source == null or not inst.cur_shroud_ignored_by.has(who)):
 				return WHY["abilities"]
@@ -767,7 +767,9 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 		# own shroud check does exactly that (`targets.c:219`) — and
 		# `,color` is reserved for a spell that demands a colour of its
 		# target, not for one whose colour the target is proof against.
-		if source != null and (inst.cur_protection & source.cur_colors) != 0:
+		# A source that has left is read as it last existed (CR 113.7a):
+		# a laced, sacrificed Mogg Fanatic pings as a blue source.
+		if source != null and (inst.cur_protection & _c2a_colors(game, source)) != 0:
 			return WHY["abilities"]
 		# "Can't be the target of Aura spells" (Bartel Runeaxe, Tetsuo
 		# Umezawa). An Aura only ever targets while it is being cast (its
@@ -848,3 +850,12 @@ func _sibling_ok(game: MtgGame, source: CardInstance, ref: TargetRef,
 	if not sibling_filter.is_valid() or earlier.is_empty():
 		return true
 	return bool(sibling_filter.call(game, source, ref, earlier))
+
+
+# --- campaign 2026-10-12 f-engA: a departed source's colour ---
+
+## [param source]'s colour for protection's targeting half — last-known for
+## a source that has left the zone its ability expects it in
+## ([method MtgGame.source_colors]), live otherwise.
+static func _c2a_colors(game: MtgGame, source: CardInstance) -> int:
+	return game.source_colors(source) if game != null else source.cur_colors

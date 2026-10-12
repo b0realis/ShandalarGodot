@@ -3607,9 +3607,12 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 			inst.data.card_name, ability.counter_cost_count, ability.counter_cost_kind])
 		_counter_removal_event(inst, ability.counter_cost_kind, ability.counter_cost_count)
 		recalculate()
-	if ability.max_per_turn > 0:
-		_rec(inst, &"ability_uses")
-		inst.ability_uses[index] = int(inst.ability_uses.get(index, 0)) + 1
+	# EVERY activation is counted (campaign 2026-10-12 b4-1), not only one
+	# with a fixed max_per_turn: a limit that varies — Withering Wisps' "no
+	# more times each turn than the number of snow Swamps you control" —
+	# reads the same tally through its activation condition.
+	_rec(inst, &"ability_uses")
+	inst.ability_uses[index] = int(inst.ability_uses.get(index, 0)) + 1
 	if ability.tap_cost:
 		if undo_log != null: _rec(inst, &"tapped")
 		inst.tapped = true
@@ -4360,8 +4363,10 @@ func block_chooser() -> int:
 	return block_chooser_override if block_chooser_override >= 0 else opponent_of(active_player)
 func damage_source_colors(source: CardInstance) -> int:
 	if source == null: return 0
-	if ghostly_flame_active and (source.cur_colors & (Mtg.ManaColor.B | Mtg.ManaColor.R)) != 0: return 0
-	return source.cur_colors
+	# Last-known for a source that has left (CR 113.7a): [method source_colors].
+	var colors := source_colors(source)
+	if ghostly_flame_active and (colors & (Mtg.ManaColor.B | Mtg.ManaColor.R)) != 0: return 0
+	return colors
 
 func deal_damage(source: CardInstance, target: TargetRef, amount: int,
 		is_combat := false, after := Callable(), unpreventable_to_creatures := false, local_prevention := 0) -> int:
@@ -4564,6 +4569,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		# heuristic seat plays the board this engine always played.
 		if _has_damage_gates(p, source, packet):
 			var gates := _damage_gates(packet, p, source)
+			var applied: Array = []   # CR 614.5: each effect applies once
 			while not gates.is_empty():
 				var pick := 0
 				if gates.size() > 1:
@@ -4575,26 +4581,29 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 						"Which effect applies to that damage first?",
 						0, false, true))
 				var chosen: Dictionary = gates[pick]
-				gates.remove_at(pick)
+				applied.append(_c2a_player_gate_id(p, chosen))
 				var verdict := _apply_damage_gate(packet, p, chosen)
 				if verdict >= 0:
 					return verdict
 				amount = packet.remaining()
 				if amount <= 0:
 					return 0
-				# CR 616.1 is applied again only to what STILL applies: the
-				# gate just taken may have shrunk the packet below a cap's
-				# threshold or emptied a pool.
-				for i in range(gates.size() - 1, -1, -1):
-					if not _damage_gate_applies(packet, p, gates[i]):
-						gates.remove_at(i)
+				# CR 616.1e: the rule is applied again to the MODIFIED event,
+				# so the list is built afresh — an effect the event did not
+				# reach before may reach it now (Ali from Cairo after Furnace
+				# of Rath doubled a Bolt; campaign 2026-10-12) — less every
+				# effect already applied. What no longer applies drops out
+				# of the rebuild by itself.
+				gates = _c2a_player_gates_again(packet, p, source, applied)
 		if undo_log != null:
 			_rec(p, &"artifact_damage_this_turn")
 			_rec(p, &"damage_taken_this_turn")
 			_rec(p, &"life")
 			_rec(self, &"damage_dealt_this_turn")
 			_rec(source, &"damaged_players_this_turn")
-		if source.is_type(Mtg.CardType.ARTIFACT):   # live types, as above
+		# Live types — or last-known ones for a source that has left
+		# (CR 113.7a): a sacrificed artifact's ping is an artifact's damage.
+		if (source_types(source) & Mtg.CardType.ARTIFACT) != 0:
 			p.artifact_damage_this_turn += amount
 		p.damage_taken_this_turn += amount
 		if packet.source_was_spell and source.is_type(Mtg.CardType.INSTANT | Mtg.CardType.SORCERY) and (source.cur_colors & Mtg.ManaColor.R) != 0 and amount > 0:
@@ -4668,6 +4677,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		var elsewhere := 0
 		if _has_creature_damage_gates(inst, source, packet):
 			var gates := _creature_damage_gates(packet, inst, source)
+			var applied: Array = []   # CR 614.5: each effect applies once
 			while not gates.is_empty():
 				var pick := 0
 				if gates.size() > 1:
@@ -4680,7 +4690,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 						"Which effect applies to that damage first?",
 						0, false, true))
 				var chosen: Dictionary = gates[pick]
-				gates.remove_at(pick)
+				applied.append(_c2a_creature_gate_id(inst, chosen))
 				var verdict := _apply_creature_damage_gate(packet, inst, chosen)
 				# A metered REDIRECT is the one gate that both moves damage
 				# away and lets the event carry on, so what it landed
@@ -4695,12 +4705,12 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 					# can shed its last point of toughness with them.
 					check_state_based_actions()
 					return elsewhere
-				# CR 616.1 is applied again only to what STILL applies: the
-				# gate just taken may have emptied a pool, spent the last
-				# counter, or left an event nobody else is watching.
-				for i in range(gates.size() - 1, -1, -1):
-					if not _creature_damage_gate_applies(packet, inst, gates[i]):
-						gates.remove_at(i)
+				# CR 616.1e: the rule is applied again to the MODIFIED event —
+				# built afresh, less every effect already applied (CR
+				# 614.5), as on the player branch above. A gate that emptied
+				# a pool or spent the last counter drops out by itself; one
+				# the event reaches only now joins (campaign 2026-10-12).
+				gates = _c2a_creature_gates_again(packet, inst, source, applied)
 		return elsewhere + _mark_creature_damage(packet, inst)
 	check_state_based_actions()
 	return amount
@@ -6052,9 +6062,10 @@ func find_packet(id: int) -> DamagePacket:
 
 
 ## "A source of your choice" (CR 609.7): every object a player may name
-## as a source of damage right now — each permanent on either side and
-## each spell on the stack (the objects on the stack refer to; the
-## command zone does not exist here). Classic pending damage also retains
+## as a source of damage right now — each permanent on either side, each
+## spell on the stack, and the source of each ability on the stack wherever
+## that card now is (the objects on the stack refer to; the command zone
+## does not exist here). Classic pending damage also retains
 ## its source after that spell resolves or permanent leaves play.
 ## [param accept] narrows it
 ## (`func(source: CardInstance) -> bool` — "a red source", "an artifact
@@ -6069,6 +6080,16 @@ func damage_sources(accept: Callable = Callable(),
 			out.append(inst)
 	for item in stack:
 		if item.card != null and item.card.zone == Mtg.Zone.STACK \
+				and not out.has(item.card):
+			if not accept.is_valid() or bool(accept.call(item.card)):
+				out.append(item.card)
+	# CR 609.7a: also "any object referred to by an object on the stack ...
+	# even if that object is no longer in the zone it used to be in" — the
+	# source of an ability waiting there, sacrificed to pay for it (Mogg
+	# Fanatic) or killed in response (a Prodigal Sorcerer). It is read as
+	# it last existed ([method source_colors]); campaign 2026-10-12, b3-3.
+	for item in stack:
+		if item.kind != Mtg.StackKind.SPELL and item.card != null \
 				and not out.has(item.card):
 			if not accept.is_valid() or bool(accept.call(item.card)):
 				out.append(item.card)
@@ -11007,6 +11028,11 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	# been offered the event, so a Clone of Onulet still pays out (608.2h).
 	inst.restore_printed_identity()
 	recalculate()
+	# A Living Lands going takes its Forests out of combat at once (CR
+	# 506.4; campaign 2026-10-12 b3-6) — this departure runs no state-based
+	# check of its own. Held inside a departure batch: its close checks.
+	if _depart_hold == 0:
+		_drop_noncreatures_from_combat()
 
 
 ## Create [param count] TOKENS from [param data] under [param controller]'s
@@ -11621,9 +11647,11 @@ func aura_can_enchant(aura: CardInstance, host: CardInstance) -> bool:
 
 ## Put [param count] counters of [param kind] on a permanent ("+1/+1",
 ## "-1/-1", ...). Characteristics recompute; -1/-1 deaths fall out of the
-## toughness state-based action.
+## toughness state-based action. A [param count] of 0 or less puts nothing
+## (campaign 2026-10-12 b3-7): taking counters off is [method
+## remove_counters], which never leaves a counter "at 0" and announces it.
 func add_counters(inst: CardInstance, kind: String, count := 1) -> void:
-	if not is_present(inst):   # CR 702.26b
+	if not is_present(inst) or count <= 0:   # CR 702.26b
 		return
 	_rec(inst, &"counters")
 	inst.counters[kind] = int(inst.counters.get(kind, 0)) + count
@@ -11823,7 +11851,10 @@ func _death_listener_snapshot() -> Array[Dictionary]:
 
 
 func check_state_based_actions() -> void:
-	if game_over or _defer_state_based_actions or _resolution_sba_hold > 0:
+	# _depart_hold: a batch of victims is still leaving (campaign 2026-10-12
+	# b3-4) — its own close checks, on the settled board.
+	if game_over or _defer_state_based_actions or _resolution_sba_hold > 0 \
+			or _depart_hold > 0:
 		return
 	var acted := true
 	while acted:
@@ -11868,6 +11899,9 @@ func check_state_based_actions() -> void:
 		if rules.counters_annihilate() and _annihilate_counters():
 			acted = true
 			continue
+		# CR 506.4 (campaign 2026-10-12 b3-6): no longer a creature, no
+		# longer in combat. Two emptiness tests outside combat.
+		_drop_noncreatures_from_combat()
 		# FAST PASS — the checks that apply to any permanent at all. This
 		# whole method runs on every mutation AND every time a player would
 		# get priority, so it stays two comparisons per permanent.
@@ -11882,7 +11916,11 @@ func check_state_based_actions() -> void:
 			_rec(self, &"_departure_batch")
 			_departure_batch = _death_listener_snapshot()
 			# Decide the simultaneous set BEFORE an anthem or a death
-			# listener leaves. Every member sees the same pre-event board.
+			# listener leaves. Every member sees the same pre-event board —
+			# and is READ on it as it leaves: the recalculation each death
+			# would run is held until the whole set has gone (campaign
+			# 2026-10-12 b3-4, [method depart_together]).
+			_hold_departures()
 			for row in lethal:
 				var inst: CardInstance = row[0]
 				if inst.zone != Mtg.Zone.BATTLEFIELD: continue
@@ -11892,6 +11930,7 @@ func check_state_based_actions() -> void:
 				else:
 					log_line("%s has lethal damage" % inst.data.card_name, inst)
 					destroy(inst, true)
+			_release_departures()   # the board settles once
 			_departure_batch = []
 			acted = true
 		if acted:
@@ -12009,6 +12048,9 @@ func check_state_based_actions() -> void:
 						and not aura_can_enchant(inst, host):
 					log_line("%s can no longer enchant %s and is put into the graveyard" % [
 						inst.data.card_name, host.data.card_name])
+					# Journaled FIRST (campaign 2026-10-12 b3-1): an AI search
+					# that sheds the Aura must get the whole list back.
+					_rec(host, &"attachments")
 					host.attachments.erase(inst.id)
 					_move_to_graveyard(inst, false)
 					acted = true
@@ -12027,6 +12069,7 @@ func check_state_based_actions() -> void:
 				if (host.protection_apart_from(inst.id) & inst.cur_colors) != 0:
 					log_line("%s falls off %s (protection)" % [
 						inst.data.card_name, host.data.card_name])
+					_rec(host, &"attachments")   # b3-1, as above
 					host.attachments.erase(inst.id)
 					_move_to_graveyard(inst, false)
 					acted = true
@@ -12347,6 +12390,8 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 		for body in [data.attacker, data.blocker]:
 			_rec(body, &"block_history_sequence")
 			body.block_history_sequence += 1
+	elif type == Mtg.EventType.BECOMES_BLOCKED:
+		_note_became_blocked(data.get("instance"))   # campaign 2026-10-12 b4-2
 	var event := GameEvent.new(type, data)
 	if not _probing:
 		event_occurred.emit(event)
@@ -12942,11 +12987,26 @@ func _hold_trigger_targets(actor := -1) -> bool:
 			_set_trigger_mode(item, _ask_trigger_mode(item, mode_q))
 		if trig.target_spec == null:
 			continue
+		# ONE LEGAL TARGET PER SLOT IS NO QUESTION (campaign 2026-10-12
+		# b6-7): "target opponent" in a duel, the only creature in play. A
+		# trigger is mandatory — there is no take-back for the one-line
+		# question to protect — so the lone candidate is set without
+		# holding the duel on it, every Mogg Maniac hit and every upkeep.
 		if not slot_refs.is_empty():
+			var lone: Array[TargetRef] = []
+			for candidates in slot_refs:
+				if (candidates as Array).size() == 1:
+					lone.append(candidates[0])
+			if lone.size() == slot_refs.size():
+				_set_trigger_targets(item, lone)
+				continue
 			if _pick_trigger_slots(item, slot_refs, replay): return true
 			continue
 		if trig.target_min != 1 or trig.target_max != 1:
 			if _pick_multiple_trigger_targets(item, refs, replay): return true
+			continue
+		if refs.size() == 1:
+			_set_trigger_target(item, refs[0])
 			continue
 		var question := _trigger_question(item, refs)
 		if _hold_cost_choice(question, replay):
@@ -13028,6 +13088,11 @@ func _recalculate_for_tap_change() -> void:
 
 ## Re-derive all current characteristics (continuous-effects pipeline).
 func recalculate() -> void:
+	# Campaign 2026-10-12 f-engB (b3-4): held while a batch of victims is
+	# leaving together — see [method depart_together].
+	if _depart_hold > 0:
+		_depart_recalc_due = true
+		return
 	continuous.recalculate(self)
 	if CONTROL_LAYERS.refresh(self): continuous.recalculate(self)
 	# Floating grants can outlive the permanent that originally registered
@@ -14743,8 +14808,13 @@ func lethal_remaining(inst: CardInstance, already: Dictionary) -> int:
 
 
 ## Does [param request] present a real DIVISION for its assigner to make?
-## Two or more blockers, or trample (how much spills over is a choice on
-## its own). A single blocker with no trample has exactly one legal answer.
+## Two or more blockers, or trample with more damage than the blocker still
+## needs (how much spills over is then a choice on its own). A single
+## blocker with no trample has exactly one legal answer — and so does a
+## trampler that cannot even reach lethal on its one blocker: every point
+## must go there first (CR 702.19b), so a War Mammoth blocked by a Wall of
+## Stone is not a question (campaign 2026-10-12, b6-6). "Lethal" counts the
+## damage already marked and what this step has already put on it.
 func _request_is_a_choice(request: Dictionary) -> bool:
 	if int(request["amount"]) <= 0:
 		return false
@@ -14753,7 +14823,16 @@ func _request_is_a_choice(request: Dictionary) -> bool:
 	if request.get("special", "") == "redirect": return not targets.is_empty()
 	if bool(request["spill_to_last"]):
 		return targets.size() >= 2
-	return targets.size() >= 2 or (bool(request["trample"]) and targets.size() >= 1)
+	if targets.size() >= 2:
+		return true
+	if not bool(request["trample"]) or targets.is_empty():
+		return false
+	var needed := 0
+	for id in targets:
+		var blocker := find_instance(int(id))
+		if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:
+			needed += lethal_remaining(blocker, _wave_assigned)
+	return int(request["amount"]) > needed
 
 
 ## Validate one split against its request. "" when legal, else the refusal
@@ -16878,3 +16957,285 @@ func target_refusal_at(spec: TargetSpec, ref: TargetRef, source: CardInstance,
 	var why := spec.refusal_reason(self, ref, source, earlier)
 	_pop_proposed_x(source, was)
 	return why
+
+
+# --- campaign 2026-10-12 f-engB: simultaneous departures, combat, blocked stamps ---
+
+## How many [method depart_together] batches are open. While it is above 0
+## [method recalculate] only notes that it is due ([member
+## _depart_recalc_due]) and the state-based check waits; the batch's close
+## runs both. Opened and closed inside one engine call, so a search mark
+## never falls inside one and neither field needs the journal.
+var _depart_hold := 0
+var _depart_recalc_due := false
+
+
+## ONE SIMULTANEOUS DEPARTURE (campaign 2026-10-12 b3-4): a mass removal —
+## "destroy all", "exile all", "return all" — moves its [param victims] at
+## once, so each is judged on the board as it was BEFORE any of them left:
+## its own triggers as it left (CR 603.10a), its own "would die" replacement
+## (a Firestorm Phoenix under Humility has none, CR 614.12), the text
+## Volrath's Shapeshifter borrows from its graveyard (CR 613.2). The
+## victims still move one call at a time, so the batch HOLDS the
+## recalculation every departure would run until the last has moved — the
+## board is settled once, then the bracket's state-based check runs.
+## [param move] is called with each victim still on the battlefield
+## (destroy, exile_permanent, return_to_hand…). Brackets itself
+## ([method begin_simultaneous]); the state-based death batch in
+## [method check_state_based_actions] holds the same way.
+func depart_together(victims: Array, move: Callable) -> void:
+	begin_simultaneous()
+	_hold_departures()
+	for inst in victims:
+		if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD:
+			move.call(inst)
+	_release_departures()
+	end_simultaneous()
+
+
+func _hold_departures() -> void:
+	_depart_hold += 1
+
+
+## Close one hold; the last one recalculates if anything asked to.
+func _release_departures() -> void:
+	_depart_hold = maxi(_depart_hold - 1, 0)
+	if _depart_hold == 0 and _depart_recalc_due:
+		_depart_recalc_due = false
+		recalculate()
+
+
+## CR 506.4 (campaign 2026-10-12 b3-6): "A permanent that's removed from
+## combat stops being an attacking, blocking, blocked, and/or unblocked
+## creature" — and one that stops being a CREATURE is removed. A Forest
+## animated by Living Lands kept attacking after the Living Lands was
+## destroyed and was dealt combat damage as a land. Checked with the
+## state-based actions and as a permanent goes to the graveyard (the one
+## departure that runs no state-based check of its own). Whatever a
+## removed blocker blocked stays blocked (CR 509.1h). True when anything
+## was removed.
+func _drop_noncreatures_from_combat() -> bool:
+	if combat.attackers.is_empty() and combat.blocks.is_empty():
+		return false
+	var gone: Array[CardInstance] = []
+	for id in combat.attackers.keys() + combat.blocks.keys():
+		var inst := find_instance(int(id))
+		if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD \
+				and not inst.is_creature() and not gone.has(inst):
+			gone.append(inst)
+	for inst in gone:
+		log_line("%s is no longer a creature and is removed from combat"
+			% inst.data.card_name, inst)
+		remove_from_combat(inst)
+	return not gone.is_empty()
+
+
+## Campaign 2026-10-12 b4-2: [param inst] just BECAME BLOCKED (CR 509.3c —
+## declared blockers, a blocker re-pointed onto it, or an effect such as
+## Dazzling Beauty's): remember the turn, for "if it was blocked this turn"
+## (Fyndhorn Druid). Journaled. Called from [method dispatch_event] on
+## BECOMES_BLOCKED, the one event all three paths send.
+func _note_became_blocked(inst: CardInstance) -> void:
+	if inst == null:
+		return
+	_rec(inst, &"became_blocked_turn")
+	inst.became_blocked_turn = turn_number
+
+
+## Did [param inst] become blocked during the current turn? Reads the
+## last-known value for a card that has left the battlefield (CR 608.2h).
+func was_blocked_this_turn(inst: CardInstance) -> bool:
+	if inst == null:
+		return false
+	var stamp := inst.became_blocked_turn if inst.zone == Mtg.Zone.BATTLEFIELD \
+		else inst.last_became_blocked_turn
+	return stamp == turn_number
+
+
+# --- campaign 2026-10-12 f-engA: damage, sources, the trample question ---
+
+## CR 614.5 in the CR 616.1 walk: "a replacement effect ... gets only one
+## opportunity to affect an event". [method _land_damage_impl] rebuilds its
+## candidate list after every effect it applies (CR 616.1e — an effect the
+## modified event reaches only now must be offered), and these name a gate
+## so the rebuild can leave out what was already applied. A String for a
+## gate that is one of a kind, the entry Dictionary itself for an effect
+## held in a seat's own list. The DERIVED lists (damage caps, the static
+## shields, a creature's immunities) are rebuilt by every recalculation —
+## which a gate applied in between can run — so their entries are named
+## by place instead.
+func _c2a_player_gate_id(p: MtgPlayer, gate: Dictionary) -> Variant:
+	var kind := StringName(gate["kind"])
+	match kind:
+		&"fx":
+			return "fx|" + DAMAGE_FX.guard_key(gate["entry"])
+		&"replacement", &"filter_shield":
+			return gate["entry"]
+		&"cap":
+			return "cap|%d" % _c2a_index_of(p.damage_caps, gate["entry"])
+		&"static_shield":
+			return "static_shield|%d" % _c2a_index_of(
+				p.static_prevention_shields, gate["entry"])
+		&"colour_shield":
+			return "colour_shield|%d" % int(gate["mask"])
+	return String(kind)
+
+
+func _c2a_creature_gate_id(inst: CardInstance, gate: Dictionary) -> Variant:
+	var kind := StringName(gate["kind"])
+	match kind:
+		&"fx":
+			return "fx|" + DAMAGE_FX.guard_key(gate["entry"])
+		&"martyr":
+			return "martyr|%d" % int(gate["pid"])
+		&"creature_redirect":
+			return "creature_redirect|%d" % int(gate["index"])
+		&"tracked_pool":
+			return "tracked_pool|%d" % int(gate["receipt"])
+		&"immunity":
+			return "immunity|%d" % _c2a_index_of(
+				inst.cur_damage_immunity, gate["entry"])
+	return String(kind)
+
+
+func _c2a_index_of(list: Array, entry: Variant) -> int:
+	for i in list.size():
+		if is_same(list[i], entry):
+			return i
+	return -1
+
+
+func _c2a_gate_applied(applied: Array, id: Variant) -> bool:
+	for done in applied:
+		if typeof(done) != typeof(id):
+			continue
+		if id is Dictionary:
+			if is_same(done, id):
+				return true
+		elif done == id:
+			return true
+	return false
+
+
+## The player branch's candidates for the MODIFIED event (CR 616.1e): what
+## applies now, less what [param applied] already holds. More than
+## [constant _C2A_MAX_GATES] effects on one event is no board anyone plays,
+## and stopping there keeps the walk finite whatever a card's handler adds.
+const _C2A_MAX_GATES := 32
+
+func _c2a_player_gates_again(packet: DamagePacket, p: MtgPlayer,
+		source: CardInstance, applied: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if applied.size() >= _C2A_MAX_GATES:
+		return out
+	for gate in _damage_gates(packet, p, source):
+		if not _c2a_gate_applied(applied, _c2a_player_gate_id(p, gate)):
+			out.append(gate)
+	return out
+
+
+## The creature branch's twin of [method _c2a_player_gates_again].
+func _c2a_creature_gates_again(packet: DamagePacket, inst: CardInstance,
+		source: CardInstance, applied: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if applied.size() >= _C2A_MAX_GATES:
+		return out
+	for gate in _creature_damage_gates(packet, inst, source):
+		if not _c2a_gate_applied(applied, _c2a_creature_gate_id(inst, gate)):
+			out.append(gate)
+	return out
+
+
+## The COLOURS [param source] has for every rule that reads a source's
+## colour — protection's targeting and damage halves, "a red source of your
+## choice", a colour-keyed shield. LAST-KNOWN (CR 113.7a, 608.2h) for a
+## source that has left the zone its ability expects it in: a Mogg Fanatic
+## made blue by Thoughtlace and then sacrificed pings as a BLUE source, and
+## a Clone that was a Mogg Fanatic as a RED one, though the card in the
+## graveyard has gone back to its printed colour (campaign 2026-10-12,
+## b3-5). Live everywhere else. [method damage_source_colors] adds Ghostly
+## Flame's damage-only rule on top of this.
+func source_colors(source: CardInstance) -> int:
+	if source == null:
+		return 0
+	return source.last_colors if source_reads_last_known(source) \
+		else source.cur_colors
+
+
+## The card TYPES [param source] has, by the same rule as
+## [method source_colors] — a sacrificed artifact's damage is an
+## artifact's damage.
+func source_types(source: CardInstance) -> int:
+	if source == null:
+		return 0
+	return source.last_types if source_reads_last_known(source) \
+		else source.cur_types
+
+
+## Is [param source] read as it LAST EXISTED? Only when it is no longer
+## where the object dealing its damage expects it (CR 113.7a): off the
+## battlefield and off the stack, with that object still in flight —
+##  * an ABILITY being resolved or waiting on the stack, unless it was
+##    activated in the graveyard and its card is still there (the same
+##    graveyard entry the activation recorded);
+##  * a TRIGGER, unless it is one that listens from the graveyard or exile
+##    and its card is still there;
+##  * damage waiting in the 1997 prevention step that a permanent dealt.
+## A card nothing refers to any more is just its own card again — the
+## laced Fanatic in the graveyard is red once its ping has resolved — and
+## a card that never left the battlefield has nothing captured to read.
+func source_reads_last_known(source: CardInstance) -> bool:
+	if source == null or source.zone == Mtg.Zone.BATTLEFIELD \
+			or source.zone == Mtg.Zone.STACK:
+		return false
+	if source.last_types == 0 and source.last_colors == 0:
+		return false
+	var item := _c2a_item_of(source)
+	if item == null:
+		for packet in damage_pending:
+			if packet.source == source and not packet.source_was_spell \
+					and packet.source_timestamp == source.layer_timestamp:
+				return true
+		return false
+	match item.kind:
+		Mtg.StackKind.SPELL:
+			return false
+		Mtg.StackKind.ABILITY:
+			return not (source.zone == Mtg.Zone.GRAVEYARD
+				and source.graveyard_entry
+					== int(item.cost_paid.get("_source_graveyard_entry", -1)))
+	if item.trigger != null:
+		if source.zone == Mtg.Zone.GRAVEYARD \
+				and source.data.graveyard_triggers.has(item.trigger):
+			return false
+		if source.zone == Mtg.Zone.EXILE \
+				and source.data.exile_triggers.has(item.trigger):
+			return false
+	return true
+
+
+## The ability or trigger [param source] is acting through right now: the
+## one resolving, else the topmost one waiting on the stack. Null when none
+## is (a spell is its own card, on the stack).
+func _c2a_item_of(source: CardInstance) -> StackItem:
+	if _resolving_item != null and _resolving_item.card == source:
+		return _resolving_item
+	for i in range(stack.size() - 1, -1, -1):
+		if stack[i].card == source and stack[i].kind != Mtg.StackKind.SPELL:
+			return stack[i]
+	return null
+
+
+## The CONTROLLER [param source] had, by the same rule as
+## [method source_colors]. Leaving the battlefield sends a card home to its
+## owner, but "that source's controller" for a stolen Mogg Fanatic the
+## thief sacrificed is the thief (CR 113.7a) — the seat its ability on the
+## stack belongs to. Live everywhere else.
+func source_controller(source: CardInstance) -> int:
+	if source == null:
+		return -1
+	if source_reads_last_known(source):
+		var item := _c2a_item_of(source)
+		if item != null:
+			return item.controller
+	return source.controller_id

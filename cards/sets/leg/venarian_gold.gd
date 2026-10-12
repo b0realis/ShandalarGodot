@@ -86,4 +86,4 @@ static func _wake_up(game: MtgGame, source: CardInstance, _event: GameEvent) -> 
 	var host := _host_of(game, source)
 	if host == null or int(host.counters.get("sleep", 0)) <= 0:
 		return
-	game.add_counters(host, "sleep", -1)
+	game.remove_counters(host, "sleep", 1)

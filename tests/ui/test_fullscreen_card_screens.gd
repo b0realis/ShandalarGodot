@@ -123,10 +123,20 @@ func test_duel_click_blocks_phase_keys_and_preserves_right_click_menu() -> void:
 	_click(screen._card_preview.get_global_rect().get_center())
 	assert_true(screen._fullscreen_card.is_open())
 	var before := screen.game.log_lines.size()
-	for code in [KEY_SPACE, KEY_ENTER, KEY_Q]: _press(code)
+	for code in [KEY_SPACE, KEY_ENTER]: _press(code)
 	assert_true(screen._fullscreen_card.is_open())
 	assert_eq(screen.game.log_lines.size(), before)
 	assert_false(screen.is_paused())
+	# THE PAUSE KEY goes through (campaign 2026-10-12, b6-2): it closes the
+	# reader and opens the pause menu, "whatever else is going on".
+	_press(KEY_Q)
+	assert_false(screen._fullscreen_card.is_open(), "Q closed the reader")
+	assert_true(screen.is_paused(), "and opened the pause menu")
+	assert_eq(screen.game.log_lines.size(), before, "nothing else happened")
+	screen._close_pause()
+	await get_tree().process_frame   # the pause window's veil leaves the tree
+	_click(screen._card_preview.get_global_rect().get_center())
+	assert_true(screen._fullscreen_card.is_open(), "control: reading again")
 	_press(KEY_ESCAPE)
 	assert_false(screen._fullscreen_card.is_open())
 	assert_false(screen.is_paused())

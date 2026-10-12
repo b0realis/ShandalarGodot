@@ -16,7 +16,8 @@
 #   4. copies the skin, the card art and the card packs into them, one file at
 #      a time, through the Download folder — a direct `adb push` into the
 #      game's folder is refused on current headset software ("remote fchown
-#      failed: Operation not permitted") — and checks every file's size
+#      failed: Operation not permitted") — and checks every file's size; a
+#      file is copied to <name>.part and moved into place only whole
 #   5. records the game's log while you start it again, and fetches the
 #      game's own start report
 #
@@ -27,6 +28,13 @@ set -u
 P=com.b0realis.shandalar
 F=/sdcard/Android/data/$P/files
 T=/sdcard/Download/shandalar-push
+# The card packs under the names the game reads (each pack's FILE_NAME in
+# game/); a zip under any other name is never opened by the game.
+PACKS=(Pack-1-DotP-complete.zip Pack-2-Fallen-Empires.zip Pack-3-Ice_Age.zip
+	Pack-4-Homelands.zip Pack-5-Alliances.zip Pack-6-Portal.zip
+	Pack-7-Fifth-Edition.zip Pack-8-Mirage-Block.zip Pack-9-Tempest-Block.zip)
+# Room left free on the headset beyond the copies, so it keeps working.
+SPARE_KB=102400
 STAMP=$(date +%Y%m%d-%H%M%S)
 LOG="quest-$STAMP.log"
 REPORT="start_report-$STAMP.txt"
@@ -42,10 +50,29 @@ fail()  { printf '\n  \033[31mSTOPPED:\033[0m %s\n\n' "$*"; exit 1; }
 pause() { printf '\n'; read -r -p "  ${1:-Press Enter to go on (Ctrl+C stops here)} " _; }
 ask()   { local a; read -r -p "  $1 [y/n] " a; [ "${a:-}" = y ] || [ "${a:-}" = Y ]; }
 # A command on the headset, its output without Android's carriage returns.
+# Every path in one is in single quotes: the headset's shell splits the line.
 dev()   { adb shell "$1" 2>/dev/null | tr -d '\r'; }
 size_here()  { wc -c < "$1" | tr -d ' '; }
-size_there() { dev "stat -c %s $1 2>/dev/null"; }
-folders_made() { [ "$(dev "[ -d $F/skin ] && [ -d $F/cardpacks ] && echo yes")" = yes ]; }
+size_there() { dev "stat -c %s '$1' 2>/dev/null"; }
+folders_made() { [ "$(dev "[ -d '$F/skin' ] && [ -d '$F/cardpacks' ] && echo yes")" = yes ]; }
+# Free space on the headset in KB, "" when it cannot be read.
+free_kb() { dev "df -k /sdcard 2>/dev/null | tail -1" | awk '$4 ~ /^[0-9]+$/ { print $4 }'; }
+# KB as megabytes to a tenth, rounded down (room) or up (a need).
+mb_down() { awk -v k="$1" 'BEGIN { printf "%.1f", int(k * 10 / 1024) / 10 }'; }
+mb_up()   { awk -v k="$1" 'BEGIN { t = k * 10 / 1024; printf "%.1f", (t == int(t) ? t : int(t) + 1) / 10 }'; }
+is_pack() { local p; for p in "${PACKS[@]}"; do [ "$p" = "$1" ] && return 0; done; return 1; }
+# The pack a misnamed zip most likely is ("Pack-9-… (1).zip"), or "".
+pack_like() {
+	local n p
+	case "$1" in Pack-[0-9]*-*) n=${1#Pack-}; n=${n%%-*} ;; *) return 0 ;; esac
+	for p in "${PACKS[@]}"; do case "$p" in "Pack-$n-"*) printf '%s' "$p"; return 0 ;; esac; done
+}
+# A copy that did not complete: take away what it left on the headset (the
+# half-made .part and the Download copy), then stop with the reason.
+stop_copy() {
+	dev "rm -f '$dest/$name.part'; rm -rf '$T'" > /dev/null
+	fail "$1"
+}
 stop_log() {
 	if [ -n "$LOGPID" ]; then kill "$LOGPID" 2>/dev/null; wait "$LOGPID" 2>/dev/null; LOGPID=""; fi
 }
@@ -59,30 +86,65 @@ command -v adb > /dev/null || fail "adb is not installed (Debian/Ubuntu: sudo ap
 [ -f Shandalar.apk ] || fail "Shandalar.apk is not in this folder. Run the script from the unpacked Shandalar-…-meta-quest folder."
 
 FILES=()
-for f in skin/original_skin.zip skin/cardart.zip cardpacks/Pack-*.zip; do
+for f in skin/original_skin.zip skin/cardart.zip; do
 	[ -f "$f" ] && FILES+=("$f")
+done
+for name in "${PACKS[@]}"; do
+	[ -f "cardpacks/$name" ] && FILES+=("cardpacks/$name")
 done
 TOTAL=0
 LARGEST=0
-for f in "${FILES[@]}"; do
+# ${FILES[@]+…}: an empty array is "unbound" to macOS's bash 3.2 under set -u.
+for f in ${FILES[@]+"${FILES[@]}"}; do
 	s=$(size_here "$f"); TOTAL=$((TOTAL + s)); [ "$s" -gt "$LARGEST" ] && LARGEST=$s
 done
 
 DEVICES=$(adb devices 2>/dev/null | tr -d '\r' | awk 'NR > 1 && $2 == "device" { print $1 }')
 COUNT=$(printf '%s\n' "$DEVICES" | grep -c . || true)
 [ "$COUNT" -eq 1 ] || fail "'adb devices' lists $COUNT ready headsets, not one. Plug the headset in, put it on and allow USB debugging, then run this again."
+# Every adb call below goes to this headset, whatever else is plugged in:
+# adb counts an unauthorized phone or an offline emulator too, and without
+# a serial every command would fail "more than one device/emulator".
+export ANDROID_SERIAL="$DEVICES"
+[ "$(dev 'echo here')" = here ] || fail "the headset $DEVICES does not answer adb. Unplug it, plug it in again and put it on, then run this again."
 ok "headset $DEVICES"
+APK_KB=$(( ($(size_here Shandalar.apk) + 1023) / 1024 ))
 ok "Shandalar.apk ($(( $(size_here Shandalar.apk) / 1048576 )) MB)"
 if [ ${#FILES[@]} -eq 0 ]; then
 	warn "no skin and no card packs here: the game is installed bare"
 else
 	for f in "${FILES[@]}"; do ok "$(printf '%-40s %5d MB' "$f" $(( $(size_here "$f") / 1048576 )))"; done
 fi
-FREE_KB=$(dev "df -k /sdcard | tail -1" | awk '{ print $4 }')
-NEED_KB=$(( (TOTAL + LARGEST) / 1024 + 102400 ))
-if [ -n "$FREE_KB" ] && [ "$FREE_KB" -gt 0 ] 2>/dev/null; then
-	[ "$FREE_KB" -ge "$NEED_KB" ] || fail "the headset has $((FREE_KB / 1024)) MB free; this needs about $((NEED_KB / 1024)) MB."
-	ok "$((FREE_KB / 1024)) MB free on the headset (about $((NEED_KB / 1024)) MB needed)"
+for f in cardpacks/*.zip; do
+	[ -f "$f" ] || continue
+	name=$(basename "$f")
+	is_pack "$name" && continue
+	like=$(pack_like "$name")
+	if [ -z "$like" ]; then
+		warn "$f is not copied: it is not one of the card packs the game reads."
+	elif [ -f "cardpacks/$like" ]; then
+		warn "$f is not copied: a second copy of $like under another name."
+	else
+		warn "$f is not copied: the game reads a pack only under its own name — rename it to $like."
+	fi
+done
+# The room this needs: the APK, every zip, the largest twice (its Download
+# copy and its copy in place at once) and 100 MB to spare. Step 1 frees
+# what the old install kept, so that counts as room.
+FREE_KB=$(free_kb)
+OLD_KB=$(dev "du -sk '/sdcard/Android/data/$P' 2>/dev/null" | awk '$1 ~ /^[0-9]+$/ { print $1 }')
+NEED_KB=$(( (TOTAL + LARGEST + 1023) / 1024 + APK_KB + SPARE_KB ))
+if [ -n "$FREE_KB" ]; then
+	ROOM_KB=$(( FREE_KB + ${OLD_KB:-0} ))
+	if [ "${OLD_KB:-0}" -gt 0 ]; then
+		HAS="has $(mb_down "$FREE_KB") MB free, $(mb_down "$ROOM_KB") MB once step 1 has removed the old install"
+	else
+		HAS="has $(mb_down "$FREE_KB") MB free"
+	fi
+	[ "$ROOM_KB" -ge "$NEED_KB" ] || fail "the headset $HAS; this needs about $(mb_up "$NEED_KB") MB. Free some space on it, then run this again; nothing was deleted."
+	ok "the headset $HAS (about $(mb_up "$NEED_KB") MB needed)"
+else
+	warn "the headset's free space could not be read"
 fi
 
 # ------------------------------------------------------------------ step 1 --
@@ -93,14 +155,22 @@ printf '\n'
 read -r -p "  Type yes to delete them: " answer
 [ "${answer:-}" = yes ] || fail "nothing was deleted."
 adb shell am force-stop "$P" > /dev/null 2>&1
-if adb uninstall "$P" 2>&1 | tr -d '\r' | grep -q Success; then ok "uninstalled"; else note "it was not installed"; fi
-dev "rm -rf /sdcard/Android/data/$P $T" > /dev/null
+# Android answers an uninstall with Success or a Failure (not installed);
+# anything else is adb itself failing to reach the headset — an error, not
+# "it was not installed".
+OUT=$(adb uninstall "$P" 2>&1 | tr -d '\r')
+case "$OUT" in
+	*Success*) ok "uninstalled" ;;
+	*Failure*) note "it was not installed" ;;
+	*) fail "the headset did not answer the uninstall (${OUT:-no answer}). Unplug it, plug it in again and put it on, then run this again." ;;
+esac
+dev "rm -rf '/sdcard/Android/data/$P' '$T'" > /dev/null
 sleep 2
-if [ -z "$(dev "ls -d /sdcard/Android/data/$P 2>/dev/null")" ]; then
-	ok "its folders are gone"
-else
-	warn "/sdcard/Android/data/$P is still there; the reinstall reuses it"
-fi
+case "$(dev "[ -e '/sdcard/Android/data/$P' ] && echo there || echo gone")" in
+	gone) ok "its folders are gone" ;;
+	there) warn "/sdcard/Android/data/$P is still there; the reinstall reuses it" ;;
+	*) fail "the headset stopped answering while its folders were deleted. Unplug it, plug it in again and put it on, then run this again." ;;
+esac
 
 # ------------------------------------------------------------------ step 2 --
 say "Step 2 of 5 — install Shandalar.apk"
@@ -147,7 +217,7 @@ else
 	note "copies it into the game's folder and the Download copy is deleted."
 	note "Every file's size is checked at both stops. This takes a few minutes."
 	pause
-	dev "mkdir -p $T" > /dev/null
+	dev "rm -rf '$T'; mkdir -p '$T'" > /dev/null
 	i=0
 	for f in "${FILES[@]}"; do
 		i=$((i + 1))
@@ -155,20 +225,40 @@ else
 		case "$f" in skin/*) dest=$F/skin ;; *) dest=$F/cardpacks ;; esac
 		want=$(size_here "$f")
 		printf '\n  [%d/%d] %s, %d MB\n' "$i" "${#FILES[@]}" "$name" $((want / 1048576))
-		adb push "$f" "$T/$name" 2>&1 | tr -d '\r' | tail -1 | sed 's/^/        /'
+		room=$(free_kb)
+		need=$(( (2 * want + 1023) / 1024 + SPARE_KB ))
+		if [ -n "$room" ] && [ "$room" -lt "$need" ]; then
+			stop_copy "the headset is out of space: $name needs about $(mb_up "$need") MB free (twice its size while it is copied, and 100 MB to spare) and the headset has $(mb_down "$room") MB. Free some space on it, then run this script again."
+		fi
+		PUSHED=$(adb push "$f" "$T/$name" 2>&1 | tr -d '\r')
+		printf '%s\n' "$PUSHED" | tail -1 | sed 's/^/        /'
 		got=$(size_there "$T/$name")
-		[ "$got" = "$want" ] || fail "$name reached the Download folder with ${got:-no} bytes of $want."
-		dev "cp $T/$name $dest/$name; rm -f $T/$name" > /dev/null
+		if [ "$got" != "$want" ]; then
+			case "$PUSHED" in
+				*"No space"*) stop_copy "the headset is out of space: $name could not reach its Download folder. Free some space on it, then run this script again." ;;
+				*) stop_copy "$name reached the Download folder with ${got:-no} bytes of $want." ;;
+			esac
+		fi
+		COPY=$(dev "cp '$T/$name' '$dest/$name.part' 2>&1")
+		got=$(size_there "$dest/$name.part")
+		if [ "$got" != "$want" ]; then
+			case "$COPY" in
+				*"No space"*) stop_copy "the headset is out of space: $name did not fit in $dest (${got:-no} bytes of $want). Free some space on it, then run this script again." ;;
+				*) stop_copy "$name did not arrive in $dest (${got:-no} bytes of $want${COPY:+: $COPY})." ;;
+			esac
+		fi
+		dev "mv -f '$dest/$name.part' '$dest/$name'" > /dev/null
 		got=$(size_there "$dest/$name")
-		[ "$got" = "$want" ] || fail "$name did not arrive in $dest (${got:-no} bytes of $want)."
+		[ "$got" = "$want" ] || stop_copy "$name could not be put in place in $dest (${got:-no} bytes of $want)."
+		dev "rm -f '$T/$name'" > /dev/null
 		ok "$name is in place"
 		COPIED=$((COPIED + 1))
 		sleep 1
 	done
-	dev "rm -rf $T" > /dev/null
+	dev "rm -rf '$T'" > /dev/null
 	printf '\n'
 	note "On the headset now:"
-	dev "ls -l $F/skin $F/cardpacks" | sed 's/^/    /'
+	dev "ls -l '$F/skin' '$F/cardpacks'" | sed 's/^/    /'
 fi
 
 # ------------------------------------------------------------------ step 5 --

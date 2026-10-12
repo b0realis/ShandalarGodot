@@ -28,8 +28,11 @@ class NaturalSelectionEffect extends EffectBase:
 	func _init() -> void:
 		target_spec = TargetSpec.player()
 
-	func resolve(game: MtgGame, _source: CardInstance, controller: int,
+	## Named after the card that looks — Portent borrows this effect
+	## (campaign 2026-10-12, b4-6).
+	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
+		var looker := source.data.card_name if source != null else "Natural Selection"
 		var pile: Array[CardInstance] = game.players[target.player_id].library
 		if pile.is_empty():
 			return
@@ -38,7 +41,7 @@ class NaturalSelectionEffect extends EffectBase:
 			left.append(pile[pile.size() - 1 - i])
 		var seen: Array = []
 		for card in left: seen.append(card.data.card_name)
-		game.reveal_information(controller, "Natural Selection — top cards, top first", seen)
+		game.reveal_information(controller, "%s — top cards, top first" % looker, seen)
 		# The first card named ends on top.
 		if target.player_id == controller:
 			left.sort_custom(NaturalSelectionEffect._cheaper_first)
@@ -59,7 +62,7 @@ class NaturalSelectionEffect extends EffectBase:
 			game.shuffle_library(target.player_id)
 			return
 		game.reorder_top_of_library(target.player_id, ordered)
-		game.log_line("Natural Selection restacks %s's library" % victim)
+		game.log_line("%s restacks %s's library" % [looker, victim])
 
 	static func _cheaper_first(a: CardInstance, b: CardInstance) -> bool:
 		return a.data.cost.mana_value() < b.data.cost.mana_value()

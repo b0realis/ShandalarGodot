@@ -216,7 +216,9 @@ with the opponent's hand and the library order changed.
 - `engine/ai/tempest_spells.gd` (casting and spell readers, hooked from
   `AiPlayer`): responses pay through the payment row they were offered;
   Dream Halls and Aluren rows when what they eat is worth less than the
-  mana saved; buyback paid only when it can afford to recast and keep
+  mana saved, and Dream Halls and Aluren themselves held while the
+  opponent's hand would use them at least as much as ours (2026-10-12; a
+  licid decision covers at most 480 combat cells of readings); buyback paid only when it can afford to recast and keep
   developing (X sized first, Forbid's two cards, a life floor); Memory
   Crystal valued from the AI's own buyback cards; counterspells not wasted
   on Scragnoth; Ertai's Meddling at its best X; Reap's count from the

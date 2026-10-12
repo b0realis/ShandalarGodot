@@ -461,9 +461,9 @@ const LEVELLERS := ["Balance"]
 #   fuse_count, fuse_turn — the card's own memory keys for the count and
 #     the turn it belongs to, so the pilot can ask how many breaths of
 #     this turn are already spent. The count lives in
-#     [member CardInstance.memory] because [member CardInstance.ability_uses]
-#     is only kept for an ability with a [member ActivatedAbility.max_per_turn]
-#     and these two have none — the fuse is not a cap, it is a price.
+#     [member CardInstance.memory]: [member CardInstance.ability_uses]
+#     counts every activation this turn; the fuse lives in memory because
+#     it is a price, not a cap.
 #
 # RAINBOW KNIGHTS IS DELIBERATELY ABSENT, and it is the third card the
 # 2026-09-09 pass was asked about. Its {W}{W} is "+0/+0, +1/+0 or +2/+0

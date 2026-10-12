@@ -4,6 +4,8 @@ extends RefCounted
 ## library's contents, or the random generator's future state.
 
 static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: String) -> Variant:
+	var shaped: Variant = role_option(g, pilot, s, index, window)   # campaign 2026-10-12 (b4-3)
+	if shaped != null: return shaped
 	if s.data.script_set != "ice": return null   # the script's own set (campaign w3-3)
 	var pid: int = pilot.pid
 	var a: ActivatedAbility = s.cur_activated_abilities[index]
@@ -298,6 +300,174 @@ static func necro_digs(g: MtgGame, pilot, held: int, arriving: int) -> bool:
 # --- end campaign fix-ai-b Necropotence ---
 
 
+# --- campaign 2026-10-12 f-aiB: the shapes no reader read (b4-3) ---
+#
+# THE CARDS THE PILOT NEVER USED (bug-hunt campaign 2026-10-12, b4-3;
+# [member AiProfile.forecasts_tactics]). Five Ice Age effects are bare
+# `Action`s that no shared reader can classify, so the pilot had no arm for
+# them — Gangrenous Zombies and Time Bomb were never fired, not even for
+# exact lethal; Goblin Lyre was never flipped with nothing to lose; Spoils
+# of Evil was never cast at four life; Forgotten Lore never with a stocked
+# graveyard. Their card modules now declare the shape
+# ([member EffectBase.ai_role]) and these readers price it — shape, never
+# name; the public board, our own hand and both public graveyards; a coin
+# at one half:
+#  * `sweep_each_creature_and_player`, parameter `amount`
+#    (`func(game, source) -> int`, the damage the sweep would deal now):
+#    the shared sweeper's own price ([method AiPlayer._sweep_value]), its
+#    timing ([method AiPlayer._defers_sweep]) and its lethal line. A body
+#    sacrificed to pay for it is the scorer's sacrifice price, so the sweep
+#    does not charge it a second time.
+#  * `coin_creature_count_damage` ("flip a coin: win, this deals damage to
+#    target opponent equal to the creatures you control; lose, it deals
+#    you damage equal to the creatures that opponent controls"): half the
+#    win less half the loss, either side the game when it is lethal.
+#  * `graveyard_count_life_mana`, parameter `count` (`func(game, pid) ->
+#    int`, what the effect counts in that player's graveyard): the life at
+#    the reaper's rate, less what mana burn takes back of the mana our hand
+#    cannot spend now.
+#  * `opponent_picks_regrowth`, parameter `rejection` (the mana that
+#    rejects a pick): the opponent hands back our WORST card, or the next
+#    worst for each rejection we can pay; a card worth no more than the
+#    spell spent on it is no trade.
+
+## The readings of [param s]'s ability [param index] by its declared
+## shape, or null (not a shape of this block; the gate off).
+static func role_option(g: MtgGame, pilot, s: CardInstance, index: int, window: String) -> Variant:
+	if not pilot.profile.forecasts_tactics:
+		return null
+	var a: ActivatedAbility = s.cur_activated_abilities[index]
+	if a.effects.is_empty():
+		return null
+	var e: EffectBase = a.effects[0]
+	match e.ai_role:
+		&"sweep_each_creature_and_player": return sweep_option(g, pilot, s, a, e, window)
+		&"coin_creature_count_damage": return coin_count_option(g, pilot, s, e, window)
+	return null
+
+
+## The readings of the spell [param s] by its declared shape, or null.
+static func role_spell_choice(g: MtgGame, pilot, s: CardInstance) -> Variant:
+	if not pilot.profile.forecasts_tactics or s.data.spell_effects.is_empty():
+		return null
+	var e: EffectBase = s.data.spell_effects[0]
+	match e.ai_role:
+		&"graveyard_count_life_mana": return graveyard_life_choice(g, pilot, s, e)
+		&"opponent_picks_regrowth": return regrowth_choice(g, pilot, s, e)
+	return null
+
+
+## `sweep_each_creature_and_player`: the damage the sweep would deal now
+## to each creature and each player, priced as the shared sweeper is.
+static func sweep_option(g: MtgGame, pilot, s: CardInstance, a: ActivatedAbility,
+		e: EffectBase, window: String) -> Dictionary:
+	var amount_of: Callable = e.ai_parameters.get("amount", Callable())
+	var amount := int(amount_of.call(g, s)) if amount_of.is_valid() else 0
+	if amount <= 0:
+		return {}
+	var sweep := DamageAllEffect.new(amount).and_each_player()
+	var value: float = pilot._sweep_value(g, sweep, 0, s)
+	if value >= AiPlayer.LETHAL_WORTH:
+		return result(value)
+	if value <= -AiPlayer.LETHAL_WORTH or window in ["RESPONSE", "PRE_ATTACK"]:
+		return {}
+	# The body the cost sacrifices is the scorer's price, not the sweep's.
+	if a.sacrifice_cost and s.is_creature() and pilot._sweep_kills(sweep, s, amount):
+		value += Evaluator.permanent_value(s, pilot.profile) * Evaluator.W_BOARD
+	if value <= 0.0:
+		return {}
+	if pilot._defers_sweep(g, s, a, sweep, int(AiPlayer.Moment.get(window, -1))):
+		return {}
+	return result(value)
+
+
+## `coin_creature_count_damage`: half the win less half the loss.
+static func coin_count_option(g: MtgGame, pilot, s: CardInstance, e: EffectBase,
+		window: String) -> Dictionary:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	var ref := TargetRef.player(foe)
+	if e.target_spec != null and not g.target_legal_at(e.target_spec, ref, s, 0):
+		return {}
+	var dealt := damage_through(g, s, ref, g.players[pid].creatures().size())
+	var taken := g.players[foe].creatures().size()
+	var gain: float = AiPlayer.LETHAL_WORTH if dealt >= g.players[foe].life \
+		else pilot._face_damage_value(g, dealt, foe)
+	var risk: float = AiPlayer.LETHAL_WORTH if taken >= g.players[pid].life \
+		else pilot._face_damage_value(g, taken, pid)
+	var expected := (gain - risk) * 0.5
+	if expected <= 0.0:
+		return {}
+	# A flip that cannot win the game waits for a moment that has no other use.
+	if gain < AiPlayer.LETHAL_WORTH and window in ["RESPONSE", "COMBAT", "PRE_ATTACK"]:
+		return {}
+	return result(expected, [ref])
+
+
+## `graveyard_count_life_mana`: the life it gains, less what mana burn takes
+## back of the mana the hand cannot spend, plus a little for the mana that
+## casts something now.
+static func graveyard_life_choice(g: MtgGame, pilot, s: CardInstance, e: EffectBase) -> Dictionary:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	var ref := TargetRef.player(foe)
+	if e.target_spec != null and not g.target_legal_at(e.target_spec, ref, s, 0):
+		return {}
+	var count_of: Callable = e.ai_parameters.get("count", Callable())
+	var count := int(count_of.call(g, foe)) if count_of.is_valid() else 0
+	if count <= 0:
+		return {}
+	var room := mini(count, generic_room(g, pid, s))
+	var kept := room if g.rules.mana_burn else count
+	if kept <= 0:
+		return {}
+	var value: float = float(kept) * pilot._life_price(g.players[pid].life) + 0.5 * float(room)
+	return {"x": 0, "targets": [ref], "value": value}
+
+
+## The generic mana the other cards of [param pid]'s hand could spend at
+## this moment's speed — an upper bound on what an added pool of colourless
+## mana casts before it empties. Our own hand only.
+static func generic_room(g: MtgGame, pid: int, skip: CardInstance) -> int:
+	var room := 0
+	for card in g.players[pid].hand:
+		if card == skip or card.data.is_land() or g.cast_timing_refusal(pid, card) != "":
+			continue
+		room += card.data.cost.generic
+	return room
+
+
+## `opponent_picks_regrowth`: the opponent picks the card we get back, so
+## it is our worst — or, for each rejection the mana left after the cast
+## pays, the next worst.
+static func regrowth_choice(g: MtgGame, pilot, s: CardInstance, e: EffectBase) -> Dictionary:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	var ref := TargetRef.player(foe)
+	if e.target_spec != null and not g.target_legal_at(e.target_spec, ref, s, 0):
+		return {}
+	var worths: Array[float] = []
+	for card in g.players[pid].graveyard:
+		worths.append(pilot._card_value(card.data))
+	if worths.is_empty():
+		return {}
+	worths.sort()
+	var rejection := String(e.ai_parameters.get("rejection", ""))
+	var rejections := 0
+	if rejection != "":
+		var sources: Array = pilot._mana_sources(g)
+		while rejections + 1 < worths.size():
+			var cost := ManaCost.parse(s.data.cost.text + rejection.repeat(rejections + 1))
+			if ManaPlanner.plan_from(sources, cost, 0).is_empty():
+				break
+			rejections += 1
+	var worth: float = worths[rejections]
+	if worth < pilot._card_value(s.data):
+		return {}
+	return {"x": 0, "targets": [ref], "value": worth}
+# --- end campaign 2026-10-12 f-aiB shapes ---
+
+
 static func result(value: float, targets: Array = []) -> Dictionary:
 	return {"value": value, "targets": targets}
 
@@ -438,6 +608,8 @@ static func respond(g: MtgGame, pilot) -> String:
 	return ""
 
 static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x: int, mode: int) -> Variant:
+	var shaped: Variant = role_spell_choice(g, pilot, s)   # campaign 2026-10-12 (b4-3)
+	if shaped != null: return shaped
 	if s.data.script_set != "ice": return null   # the script's own set (campaign w3-3)
 	var pid: int = pilot.pid
 	var name := s.data.card_name

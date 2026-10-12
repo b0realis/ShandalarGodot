@@ -65,7 +65,6 @@ var _hotseat_revealed := false
 var _hotseat_response_seat := -1
 var _hotseat_response_turn: Array = []
 var _hotseat_passing := false
-var _hotseat_refresh_pending := false
 
 ## THE STOPS the player has marked on the two bars — *"a lasting
 ## instruction"* (manual p.117), loaded from and saved to `Settings`, so it
@@ -1225,6 +1224,38 @@ func _set_prompt(text: String) -> void:
 	_clear_warning_ink()
 
 
+# --- campaign 2026-10-12 f-duel: the bar's notes (b6-9) ---
+## A NOTE THE PLAYER ASKED FOR — "Sound muted", where a screenshot or a
+## saved log went, a library's count — HELD on the Situation Bar like a
+## refusal ([method _report]: the same [constant FLASH_MS], the same timer
+## handing the bar back), but in the bar's own ink. Written with
+## [method _set_prompt] they were gone at the next redraw, which in NORMAL
+## mode puts the status line straight back — within a frame on the
+## opponent's turn.
+func _note(text: String) -> void:
+	_prompt_label.text = _hotseat_prompt(text)
+	_clear_warning_ink()
+	_flash_until_ms = Time.get_ticks_msec() + FLASH_MS
+	if _flash_timer != null:
+		_flash_timer.start(FLASH_MS / 1000.0)
+
+
+## The screenshot key's work: write [param shot] to [param path] and say
+## where it went — or, in the refusal's red, that it was NOT saved and why
+## (campaign 2026-10-12, r3-9). The bar used to name the file whether or
+## not the write had worked.
+func _save_screenshot(shot: Image, path: String) -> void:
+	var err := ERR_INVALID_DATA
+	if shot != null and not shot.is_empty():
+		err = shot.save_png(path)
+	if err != OK:
+		_report("Screenshot could not be saved (%s)." % (error_string(err)
+			if shot != null and not shot.is_empty() else "the screen could not be read"))
+		return
+	_note("Screenshot: %s" % ProjectSettings.globalize_path(path))
+# --- end campaign 2026-10-12 f-duel (b6-9) ---
+
+
 ## [QoL] Name the player answering, not necessarily the player whose turn
 ## it is. Never replace an action/phase instruction with a privacy tutorial.
 func _hotseat_prompt(text: String) -> String:
@@ -1503,6 +1534,7 @@ func _on_card_clicked(inst: CardInstance) -> void:
 				_click_hand_card(inst)
 			elif inst.zone == Mtg.Zone.BATTLEFIELD:
 				_click_permanent(inst)
+	_flush_refresh()   # a land played, a mana tapped: drawn before the click returns (r1-1)
 
 
 ## A CLICK ON AN ACTIVATED ABILITY SITTING ON THE CHAIN. While targeting,
@@ -1917,6 +1949,7 @@ func _open_graveyard(pid: int) -> void:
 		_grave_view.card_picked.connect(_on_graveyard_card)
 		_grave_view.dismissed.connect(_close_graveyard)
 		add_child(_grave_view)
+		get_viewport().size_changed.connect(_refit_graveyard_soon)   # r2-8
 	# The pile's cards fill the SAME docked big card as the hand and the
 	# battlefield ([QoL], the owner's "only big preview and mini cards").
 	_grave_view.preview = _card_preview
@@ -1959,6 +1992,20 @@ func _close_graveyard() -> void:
 ## screenshot tour asks.)
 func graveyard_is_open() -> bool:
 	return _grave_open_pile >= 0
+
+
+# --- campaign 2026-10-12 f-duel: the view re-fits a resized window (r2-8) ---
+## The window changed size under an open graveyard view: lay its shelves
+## and its Done button out again over the board as it now is — on the next
+## frame, once the board's own containers have taken the new size. Until
+## this the view kept the old size's layout, Done below the new bottom
+## edge (an 800x1280 view turned to 1280x800 put it at y = 2004).
+func _refit_graveyard_soon() -> void:
+	if not is_inside_tree() or not graveyard_is_open():
+		return
+	if not get_tree().process_frame.is_connected(_repopulate_graveyard):
+		get_tree().process_frame.connect(_repopulate_graveyard, CONNECT_ONE_SHOT)
+# --- end campaign 2026-10-12 f-duel (r2-8) ---
 
 
 func _repopulate_graveyard() -> void:
@@ -2082,6 +2129,7 @@ func _click_hand_card(inst: CardInstance) -> void:
 	var pid := inst.exile_playable_by if inst.zone == Mtg.Zone.EXILE else inst.owner_id
 	if inst.is_land():
 		_report(game.play_land(pid, inst))
+		_flush_refresh()   # r1-1: the land on the table before the click returns
 		return
 	# A CARD THAT CAN ALSO BE DISCARDED AS A SPECIAL ACTION (Circling
 	# Vultures, Pack 8) asks which, the way a permanent with two abilities
@@ -2289,6 +2337,7 @@ func _click_permanent(inst: CardInstance) -> void:
 	var ability_count := inst.cur_activated_abilities.size()
 	if mana_count == 1 and ability_count == 0:
 		_report(game.tap_for_mana(inst.controller_id, inst))
+		_flush_refresh()   # r1-1
 	elif mana_count + ability_count > 0:
 		_open_ability_menu(inst)
 	# Permanents with nothing to activate: click is a no-op (hover shows
@@ -2325,6 +2374,7 @@ func _tap_for_payment(inst: CardInstance) -> void:
 			return
 		_open_payment_bracket()
 		_report(game.tap_for_mana(_pending_pid, inst))
+		_flush_refresh()   # r1-1: the waiting cast retried before the click returns
 		return
 	_open_ability_menu(inst, true)
 	# Permanents with nothing to activate: click is a no-op (hover shows
@@ -2755,6 +2805,9 @@ func _auto_cast(inst: CardInstance) -> void:
 
 ## The bar's line for a cast with nothing to aim at (campaign w5-5).
 const NO_TARGET_PROMPT := "%s has no legal target."
+## The ability menu's hover line on an ability greyed for the same reason
+## (campaign 2026-10-12, r1-3).
+const NO_TARGET_TOOLTIP := "That ability has no legal target."
 
 
 ## Has the targeting slot now open anything to take — or does it want
@@ -2921,6 +2974,17 @@ func _auto_tap_for_pending() -> void:
 ## a colour choice.
 func _retry_payment() -> void:
 	if mode != Mode.PAYING or _pending_card == null:
+		return
+	# NOT UNDER A HELD QUESTION (campaign 2026-10-12, r1-1). A mana source
+	# that asks (Fellwar Stone's "What kind of mana?") holds the duel open;
+	# a cast submitted under it is refused — "waiting for a choice" — and
+	# that refusal, not being an unpaid one, DROPPED the cast with the mana
+	# already made floating. The answer moves the pool and the next redraw
+	# retries; a double-click waiting on it resumes in [method
+	# _resume_auto_tap]. (While every announcement redrew at once the
+	# intermediate redraws happened to step around this; one redraw per
+	# frame does not, and neither did private hotseat.)
+	if game.awaiting_choice != null or _auto_resume:
 		return
 	var now := _payment_pool_state()
 	if now == _paying_pool:
@@ -4463,7 +4527,7 @@ func _ai_step() -> void:
 		var perf_start := PerfLog.now()
 		_ais[pid].act(game)
 		PerfLog.span("computer decision", perf_start)
-	_refresh()   # act() already refreshed via signals; this reschedules
+	_refresh()   # draws what act() did (once — r1-1) and reschedules
 
 
 func _on_pass() -> void:
@@ -4679,6 +4743,53 @@ static func choice_is_multi(choice: PlayerChoice) -> bool:
 	return choice.kind == PlayerChoice.Kind.DISCARD and choice.count > 1
 
 
+# --- campaign 2026-10-12 f-duel: number questions (b6-1) ---
+#
+# A NUMBER QUESTION READS AS ITS NUMBERS. "Choose a number" is one OPTION
+# question whose answers are the numbers themselves
+# ([method DecisionAgent.choose_number]: Land Tax's "up to 3", Power Leak,
+# Mind Bomb, Shapeshifter, Tetravus...), and the trigger's "How many
+# targets?" lists "0 targets", "1 target", "2 targets". Drawn with s30's
+# line numbers they read "1. 0", "2. 1", "3. 2", "4. 3", and the 3 key —
+# which answers the third LINE — fetched two lands for Land Tax. Read off
+# the labels rather than a flag on the question, so an SGManalink table,
+# whose questions arrive as labels only, reads them the same way.
+
+## The whole number a choice line starts with — "3", "2 targets" — or -1.
+static func _line_number(label: String) -> int:
+	var head := label.get_slice(" ", 0)
+	if head.is_empty() or not head.is_valid_int() or not head.lstrip("0123456789").is_empty():
+		return -1
+	return head.to_int()
+
+
+## Does [param choice] read as numbers: an OPTION question each of whose
+## lines starts with its own whole number, no two the same?
+static func choice_reads_as_numbers(choice: PlayerChoice) -> bool:
+	if choice == null or choice.kind != PlayerChoice.Kind.OPTION or choice.options.is_empty():
+		return false
+	var seen := {}
+	for label in choice.options:
+		var n := _line_number(String(label))
+		if n < 0 or seen.has(n):
+			return false
+		seen[n] = true
+	return true
+
+
+## The line the number key [param digit] (1 to 9) answers: on a number
+## question the line that says that number (-1 when none does), on any
+## other the [param digit]-th line.
+static func choice_line_for_digit(choice: PlayerChoice, digit: int) -> int:
+	if not choice_reads_as_numbers(choice):
+		return digit - 1
+	for i in choice.options.size():
+		if _line_number(String(choice.options[i])) == digit:
+			return i
+	return -1
+# --- end campaign 2026-10-12 f-duel (b6-1) ---
+
+
 ## Open the overlay for whatever the engine is holding open. Idempotent —
 ## _refresh calls it on every state change.
 func _open_choice_overlay() -> void:
@@ -4747,8 +4858,11 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 		revealed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		column.add_child(revealed)
 	for i in labels.size():
-		# s30's `fmt.Sprintf("%d. %s", i+1, opt.Label)` and its number keys.
+		# s30's `fmt.Sprintf("%d. %s", i+1, opt.Label)` and its number keys
+		# — except on a NUMBER question, whose lines are their own numbers
+		# and whose digit k answers k (campaign 2026-10-12, b6-1).
 		var text: String = "%d. %s" % [i + 1, labels[i]] if i < 9 \
+				and not choice_reads_as_numbers(choice) \
 			else String(labels[i])
 		if _choice_picks.has(i):
 			text += "  *"
@@ -5334,8 +5448,12 @@ func _has_something_to_aim_at(inst: CardInstance) -> bool:
 
 
 ## Has every targeting effect of [param effects] that demands a target one
-## [param inst] could reach ([method _spec_reachable])?
-func _effects_aimable(effects: Array, inst: CardInstance) -> bool:
+## [param inst] could reach ([method _spec_reachable])? [param x_cost]: the
+## cost being paid has an {X} of its own (an activated ability's — the
+## card's printed cost answers for a spell), so a target judged at that X
+## is tried at every X it could be paid for.
+func _effects_aimable(effects: Array, inst: CardInstance, x_cost := false) -> bool:
+	var bound := false
 	for effect in effects:
 		var spec: TargetSpec = effect.target_spec
 		if spec == null or effect.target_min <= 0 or effect.target_count_is_x:
@@ -5347,9 +5465,93 @@ func _effects_aimable(effects: Array, inst: CardInstance) -> bool:
 			continue
 		# As many distinct targets as the effect demands (Death's Duet's
 		# "two target creature cards", CR 601.2c).
-		if not _spec_reachable(spec, inst, effect.target_min):
+		if not _spec_reachable(spec, inst, effect.target_min, x_cost):
 			return false
+		if spec.sibling_filter.is_valid() or spec.compare_within_group:
+			bound = true
+	# campaign 2026-10-12 f-duel (r1-2): a slot bound to its siblings needs
+	# a whole legal GROUP, not just enough candidates one by one.
+	if bound and not _groups_reachable(effects, inst, x_cost):
+		return false
 	return true
+
+
+# --- campaign 2026-10-12 f-duel: a whole legal group (r1-2) ---
+#
+# A SLOT BOUND TO ITS SIBLINGS ([member TargetSpec.sibling_filter], and
+# [member TargetSpec.compare_within_group] for refs in one slot) is legal
+# only beside the others: Cannibalize's "two target creatures controlled by
+# the same player", Gauntlets of Chaos's "a permanent an opponent controls
+# that shares one of those types with it". Counting candidates one slot at
+# a time lit Cannibalize with one creature a side — there were two
+# creatures, but no PAIR — and the cast opened a target slot whose second
+# pick could only ever be refused. The light now looks for one complete
+# choice the way the engine's plan will judge it (TargetPlan._validate:
+# each group with the earlier groups' refs in hand, distinct objects in a
+# group), at the X values [method _spec_reachable] would try.
+
+## How many candidate picks the search may try before it gives up and
+## calls the card aimable — optimistic, as the light always was: the click
+## and the engine still refuse a choice that is not legal. No board in
+## this pool comes near it (a pair over 30 creatures is under 900 picks).
+const GROUP_SEARCH_BUDGET := 3000
+
+
+## Is there one complete legal choice of targets for [param effects]?
+func _groups_reachable(effects: Array, inst: CardInstance, x_cost := false) -> bool:
+	var slots: Array = []
+	for effect in effects:
+		var spec: TargetSpec = effect.target_spec
+		if spec == null or effect.target_min <= 0 or effect.target_count_is_x:
+			continue
+		# Not the activator's to choose: an opponent's or the game's roll.
+		if spec.chosen_at_random or spec.chosen_by_opponent:
+			continue
+		slots.append([spec, int(effect.target_min)])
+	if slots.is_empty():
+		return true
+	var tries: Array[int] = [0]
+	if inst.data.cost.has_x or x_cost:
+		tries.assign(range(0, X_TARGET_PROBE + 1))
+	for x in tries:
+		var budget: Array[int] = [GROUP_SEARCH_BUDGET]
+		if _fill_slots(slots, 0, [], [], inst, x, budget) or budget[0] <= 0:
+			return true
+	return false
+
+
+## Depth-first: fill slot [param k]'s group one pick at a time, every pick
+## judged with the earlier slots' refs (and, for a slot that compares within
+## itself, the group's own) in hand.
+func _fill_slots(slots: Array, k: int, earlier: Array, group: Array,
+		inst: CardInstance, x: int, budget: Array[int]) -> bool:
+	if k >= slots.size():
+		return true
+	var spec: TargetSpec = slots[k][0]
+	if group.size() >= int(slots[k][1]):
+		var next: Array = earlier.duplicate()
+		next.append_array(group)
+		return _fill_slots(slots, k + 1, next, [], inst, x, budget)
+	var seen: Array = earlier.duplicate()
+	if spec.compare_within_group:
+		seen.append_array(group)
+	for ref in game.legal_targets_at(spec, inst, x, seen):
+		budget[0] -= 1
+		if budget[0] <= 0:
+			return false
+		var taken := false
+		for chosen in group:
+			if (chosen as TargetRef).same_object(ref):
+				taken = true
+				break
+		if taken:
+			continue
+		var more: Array = group.duplicate()
+		more.append(ref)
+		if _fill_slots(slots, k, earlier, more, inst, x, budget):
+			return true
+	return false
+# --- end campaign 2026-10-12 f-duel (r1-2) ---
 
 
 ## The X values an aim at a "mana value X" target is tried at before the
@@ -5366,11 +5568,11 @@ const X_TARGET_PROBE := 16
 ## [constant X_TARGET_PROBE], so a Detonate facing only a two-drop is still
 ## lit (campaign w5-2). Optimistic about the mana on purpose: that is
 ## [method _payable_now]'s question, not this one's.
-func _spec_reachable(spec: TargetSpec, inst: CardInstance, need := 1) -> bool:
+func _spec_reachable(spec: TargetSpec, inst: CardInstance, need := 1, x_cost := false) -> bool:
 	need = maxi(need, 1)
 	if game.legal_targets_at(spec, inst, 0).size() >= need:
 		return true
-	if not inst.data.cost.has_x:
+	if not inst.data.cost.has_x and not x_cost:
 		return false
 	for x in range(1, X_TARGET_PROBE + 1):
 		if game.legal_targets_at(spec, inst, x).size() >= need:
@@ -5971,17 +6173,20 @@ func _auto_pass_applies() -> bool:
 	return true
 
 
-## Pass ONE priority window for the human. Returns true when it did. Runs
-## under [member _advancing] like the standing orders do, because
-## `pass_priority` emits `state_changed` and that re-enters [method
-## _refresh] — and therefore this — before it returns. One window per
-## refresh is the whole pacing model: the next one needs a new state
-## change, which on either turn means the AI seat has moved.
+## Pass ONE priority window for the human. Returns true when it did. The
+## pass is drawn at once, under [member _advancing] like the standing
+## orders' steps, so the redraw does not drive on: one window per
+## refresh is the whole pacing model — the next one needs a new state
+## change, which on either turn means the AI seat has moved. (Until the
+## 2026-10-12 campaign the engine's own announcements re-entered
+## [method _refresh] from inside `pass_priority`; they now ask for one
+## redraw at the end of the frame, which this one makes unnecessary.)
 func _auto_pass_priority() -> bool:
 	if _advancing or not _auto_pass_applies():
 		return false
 	_advancing = true
 	var refused := game.pass_priority(game.priority_player)
+	_refresh()
 	_advancing = false
 	return refused == ""
 
@@ -6043,8 +6248,7 @@ func _drive_advance() -> void:
 				break
 			_clear_attack_lineup()
 			mode = Mode.NORMAL
-			if config.private_hotseat():
-				_refresh()
+			_refresh()   # every mode since 2026-10-12 (r1-1): one redraw per step
 			continue
 		var reason := _advance_stop_reason()
 		if reason != "":
@@ -6078,13 +6282,13 @@ func _drive_advance() -> void:
 			if _advance_mode == Advance.SKIP_COMBAT \
 					and _ais.has(game.priority_player) \
 					and _ais[game.priority_player].act(game) != "":
+				_refresh()       # its reply drawn before the next lap reads it (r1-1)
 				continue
 			break                   # the AI's timer takes it from here
 		if game.pass_priority(game.priority_player) != "":
 			_cancel_advance()
 			break
-		if config.private_hotseat():
-			_refresh()
+		_refresh()   # every mode since 2026-10-12 (r1-1): one redraw per step
 	_advancing = false
 
 
@@ -6405,10 +6609,17 @@ func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 		for ability in inst.cur_activated_abilities:
 			_ability_menu.add_item(ability.text, id)
 			var may := _may_activate(who, inst, ability)
-			_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone or not may)
+			# campaign 2026-10-12 f-duel (r1-3): an ability with nothing to
+			# aim at cannot be activated (CR 602.2b, 601.2c) — greyed, as a
+			# spell with no target is not lit.
+			var aimable := _effects_aimable(ability.effects, inst, ability.cost.has_x)
+			_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone or not may
+				or not aimable)
 			if not may:
 				_ability_menu.set_item_tooltip(id, "Only your opponents may activate this ability."
 					if ability.only_opponents_may_activate else "That ability is not yours to activate.")
+			elif not aimable:
+				_ability_menu.set_item_tooltip(id, NO_TARGET_TOOLTIP)
 			for effect in ability.effects:
 				if effect.is_regeneration:
 					_ability_menu.set_item_tooltip(id,
@@ -6446,6 +6657,7 @@ func _on_ability_chosen(id: int) -> void:
 		if mode == Mode.PAYING:
 			_open_payment_bracket()   # campaign w7-5
 		_report(game.tap_for_mana(int(_ability_menu.get_meta("actor", inst.controller_id)), inst, id))
+		_flush_refresh()   # r1-1: the mana drawn (and a waiting cast retried) now
 		return
 	if bool(_ability_menu.get_meta("mana_only", false)):
 		return   # the menu offered nothing else; the board changed under it
@@ -6453,6 +6665,12 @@ func _on_ability_chosen(id: int) -> void:
 	if ability_index >= inst.cur_activated_abilities.size():
 		return   # the board changed under the open menu
 	var ability: ActivatedAbility = inst.cur_activated_abilities[ability_index]
+	# campaign 2026-10-12 f-duel (r1-3): chosen although greyed (a menu the
+	# board changed under, a pad, a script) — refused with the reason
+	# before anything is pending or paid, the way a spell is.
+	if not _effects_aimable(ability.effects, inst, ability.cost.has_x):
+		_report(NO_TARGET_PROMPT % inst.data.card_name)
+		return
 	_pending_card = inst
 	_pending_ability_index = ability_index
 	_pending_pid = inst.owner_id if inst.zone == Mtg.Zone.GRAVEYARD else inst.controller_id
@@ -6508,23 +6726,62 @@ func _watch_for_extra_turn() -> void:
 		_drawn_active = game.active_player
 
 
+# --- campaign 2026-10-12 f-duel: one redraw per frame (r1-1) ---
+#
+# ONE REDRAW PER FRAME, IN EVERY MODE. The engine announces `state_changed`
+# from dozens of places, and one action can announce it dozens of times —
+# an AI paying a big X one land at a time announces every tap. Outside
+# private hotseat this screen used to rebuild the whole board on EVERY
+# announcement, inside the one frame: 51 full rebuilds for one Fireball
+# paid with 24 Mountains, a multi-second freeze, and every replaced
+# generation of widgets alive until the frame ended (+430 MB on the r1
+# hunter's replay — out-of-memory territory on a 1 GB handheld). And
+# because [method _refresh] ends by driving the standing orders, the
+# automatic pass could fire from INSIDE an engine resolution that had
+# announced itself halfway.
+#
+# Private hotseat already drew this way; now every mode does. An
+# announcement marks the table stale and asks for ONE redraw at the end
+# of the frame. The screen's own handlers (a click, a key, the AI's timer)
+# still redraw at once after the call they made, and that redraw clears
+# the mark, so the frame's deferred one is skipped when nothing moved
+# since. Engine drivers that are not the screen — a network view arriving,
+# a test's direct call — are drawn by the end of the frame.
+
+## Full redraws so far — a plain counter, for the tests and the timing
+## probes (one AI action should cost one or two).
+var refresh_count := 0
+## An engine announcement this screen has not drawn yet.
+var _state_dirty := false
+## The end-of-frame redraw is already asked for.
+var _refresh_pending := false
+
+
 func _on_engine_state_changed() -> void:
-	if not config.private_hotseat():
-		_refresh()
-		return
 	# Some effects emit state halfway through resolving (draws, payments,
 	# recalculation). A shortcut must not pass priority from that signal.
-	# UI action handlers refresh synchronously AFTER the API call returns;
-	# other engine drivers get one coalesced, deferred refresh here.
-	if _hotseat_passing or _hotseat_refresh_pending:
+	if _hotseat_passing:
 		return
-	_hotseat_refresh_pending = true
-	_refresh_hotseat_after_action.call_deferred()
+	_state_dirty = true
+	if _refresh_pending:
+		return
+	_refresh_pending = true
+	_refresh_after_engine.call_deferred()
 
 
-func _refresh_hotseat_after_action() -> void:
-	_hotseat_refresh_pending = false
-	_refresh()
+func _refresh_after_engine() -> void:
+	_refresh_pending = false
+	if _state_dirty:
+		_refresh()
+
+
+## Draw NOW whatever the engine announced since the last redraw: the end
+## of a click the screen handled itself, so the player sees the answer
+## before the handler returns. A no-op when the handler already redrew.
+func _flush_refresh() -> void:
+	if _state_dirty:
+		_refresh()
+# --- end campaign 2026-10-12 f-duel (r1-1) ---
 
 
 ## A DECLARATION THE ENGINE NOW DEMANDS OUTRANKS A CAST LEFT HANGING
@@ -6557,6 +6814,11 @@ func _drop_cast_for_declaration() -> void:
 func _refresh() -> void:
 	if game == null or _hotseat_passing:
 		return
+	# campaign 2026-10-12 f-duel (r1-1): this redraw reads the engine as it
+	# stands now, so an end-of-frame redraw already asked for is not needed
+	# unless something announces itself after this line.
+	_state_dirty = false
+	refresh_count += 1
 	var perf_start := PerfLog.now()
 	_settle_hotseat_priority()
 	_sync_hotseat()
@@ -7364,6 +7626,20 @@ func _menu_seat() -> int:
 	return _viewing_seat()
 
 
+## WHOSE CONCEDE IS IT (campaign 2026-10-12 f-duel, b6-8)? At a PRIVATE
+## hotseat, always the player at the screen ([method _viewing_seat]): the
+## territory menu opens on either half, and its Concede used to give up
+## the half that was right-clicked — Player 2, deciding, right-clicked
+## Player 1's half, said "Yes, I'm sure", and Player 1 lost. The clicked
+## half still owns that menu's Arrange entries. At an open hotseat both
+## hands are on the table and the clicked half says who is giving up, as
+## it always has ([method _menu_seat]).
+func _concede_seat() -> int:
+	if config != null and config.private_hotseat():
+		return _viewing_seat()
+	return _menu_seat()
+
+
 func _on_territory_menu_chosen(id: int) -> void:
 	if id >= SPECIAL_BASE:
 		var at := id - SPECIAL_BASE
@@ -7781,7 +8057,8 @@ func _open_duel_log() -> void:
 		return
 	var window := DuelLog.new()
 	window.closed.connect(_on_duel_log_closed)
-	window.notice.connect(_set_prompt)
+	window.notice.connect(_note)        # held on the bar (b6-9)
+	window.failed.connect(_report)      # in red when a save did not happen (r3-9)
 	add_child(window)
 	# Where the screen puts it when the player never moved it: the upper
 	# right of the table, clear of the hand along the bottom and of the
@@ -7959,7 +8236,9 @@ func _toggle_pause() -> void:
 
 
 func _open_pause() -> void:
-	if is_paused() or game == null or _toss_active:
+	# Over the coin toss too since 2026-10-12 (b6-2): Exit and Main menu
+	# were unreachable through the whole opening hand.
+	if is_paused() or game == null:
 		return
 	var menu := DuelPause.new()
 	menu.z_index = 270          # over the splash's 260 and the toss's 250
@@ -7984,6 +8263,11 @@ func _close_pause() -> void:
 	_refresh()
 
 
+## The bar's word when the pause menu's Concede is pressed before the duel
+## has begun (campaign 2026-10-12, b6-2).
+const TOSS_CONCEDE_NOTE := "The duel has not begun yet: there is nothing to concede."
+
+
 func _on_pause_chosen(action: int) -> void:
 	match action:
 		DuelPause.Action.RESUME:
@@ -7995,6 +8279,12 @@ func _on_pause_chosen(action: int) -> void:
 			# same `Yes, I'm sure` the territory menu's own Concede opens
 			# ([method _ask_to_concede]). One window, not a second copy.
 			_close_pause()
+			# The pause menu opens over the coin toss and the opening hand
+			# (campaign 2026-10-12, b6-2), but a duel that has not begun is
+			# not conceded — the 2026-09-02 rule; Exit and Main menu leave.
+			if _toss_active:
+				_report(TOSS_CONCEDE_NOTE)
+				return
 			_territory_menu_pid = -1     # this concede is the HUMAN's
 			_ask_to_concede()
 		DuelPause.Action.EXIT_DUEL:
@@ -8015,14 +8305,20 @@ func _ask_to_concede() -> void:
 	_concede_dialog = TerritoryMenu.concede_window()
 	_concede_dialog.add_button(TerritoryMenu.CONCEDE_CONFIRM) \
 		.pressed.connect(_confirm_concede)
-	_concede_dialog.add_button("Cancel").pressed.connect(
-		func() -> void: _concede_dialog.dismiss())
+	_concede_dialog.add_button("Cancel").pressed.connect(_cancel_concede)
 	_concede_dialog.closed.connect(func() -> void: _concede_dialog = null)
 	add_child(_concede_dialog)
 
 
+## campaign 2026-10-12 f-duel (r2-6): a second press of Cancel in the same
+## frame (a double click, a doubled tap) finds the question already closed.
+func _cancel_concede() -> void:
+	if _concede_dialog != null and is_instance_valid(_concede_dialog):
+		_concede_dialog.dismiss()
+
+
 func _confirm_concede() -> void:
-	var seat := _menu_seat()
+	var seat := _concede_seat()
 	if _concede_dialog != null and is_instance_valid(_concede_dialog):
 		_concede_dialog.dismiss()
 	_report(game.concede(seat))
@@ -8230,7 +8526,7 @@ func _on_library_menu_chosen(id: int) -> void:
 	# their names: `Your library` and `%s library`.
 	var whose := "Your library" if pid == _human_seat() \
 		else "%s library" % game.players[pid].player_name
-	_set_prompt("%s: %d cards" % [whose, game.players[pid].library.size()])
+	_note("%s: %d cards" % [whose, game.players[pid].library.size()])   # held (b6-9)
 
 
 ## A right-click on a hand WINDOW (not on a card in it — a card has its
@@ -10647,6 +10943,7 @@ func _build_ui() -> void:
 	_card_preview.set_text_expanded(
 		CardPreview.expand_wanted())
 	_fullscreen_card = FullscreenCard.new()
+	_fullscreen_card.pause_passes = true   # the pause key reaches the pause menu (b6-2)
 	add_child(_fullscreen_card)
 	_fullscreen_card.watch(_card_preview, func() -> bool:
 		return not _toss_active and not _modal_open() and not _dialogs_open() \
@@ -11445,7 +11742,10 @@ func _on_control(event: InputEvent) -> void:
 		return
 	if _fullscreen_card_open():
 		_fullscreen_card._input(event)
-		return
+		# ...except the pause key, which closed the reader and goes on to
+		# the pause menu (campaign 2026-10-12, b6-2).
+		if _fullscreen_card_open() or not Controls.pressed(event, "duel_pause"):
+			return
 	# Inspection owns the keyboard/controller, never the duel beneath it.
 	for badge in _protection_badges:
 		if badge != null and badge.details_open():
@@ -11455,7 +11755,14 @@ func _on_control(event: InputEvent) -> void:
 	# over a table the engine has not started (turn 0): a Return here
 	# used to leave a standing Done order that auto-passed the first
 	# main phase, and a Space walked turn 0's steps (2026-09-02).
+	# The PAUSE KEY alone still answers (campaign 2026-10-12, b6-2): the
+	# pause menu's Exit and Main menu are reachable over the toss and the
+	# opening hand too — its Concede is not ([method _on_pause_chosen]) —
+	# and the same key, or Esc, closes it again.
 	if _toss_active:
+		if Controls.pressed(event, "duel_pause") \
+				or (is_paused() and Controls.pressed(event, "duel_cancel")):
+			_toggle_pause()
 		return
 	# THE PAUSE WINDOW owns both its keys while it is up, and nothing
 	# else reaches the table under it (§ the Pause block above).
@@ -11474,11 +11781,21 @@ func _on_control(event: InputEvent) -> void:
 	# — `ebiten.Key1 + ebiten.Key(i)` for the first nine options), and so
 	# does ours; while it is up they mean nothing else (§1.3) — except
 	# Esc, which withdraws a COST question and nothing else
-	# ([method _on_escape]).
+	# ([method _on_escape]), and the PAUSE key, which opens the pause menu
+	# "whatever else is going on" (its Controls row; campaign 2026-10-12,
+	# b6-2): Q, ArkOS Select and the pad's Start reached nothing under a
+	# held question, so Exit and Concede waited on the answer.
 	if _choice_overlay != null:
 		var choice := Controls.choice_index(event)
 		if choice >= 0:
-			_on_choice_option(choice)
+			# A NUMBER question's digit k answers the line that says k
+			# (b6-1); any other question's, the k-th line.
+			if game != null and game.awaiting_choice != null:
+				choice = choice_line_for_digit(game.awaiting_choice, choice + 1)
+			if choice >= 0:
+				_on_choice_option(choice)
+		elif Controls.pressed(event, "duel_pause"):
+			_toggle_pause()
 		elif Controls.pressed(event, "duel_cancel"):
 			_on_escape()
 		return
@@ -11559,7 +11876,7 @@ func _on_control(event: InputEvent) -> void:
 		# ([GameAudio.set_hushed]). Muting to take a phone call
 		# must not still be muted next week.
 		GameAudio.set_hushed(not GameAudio.is_hushed())
-		_set_prompt("Sound %s" %
+		_note("Sound %s" %
 			("muted" if GameAudio.is_hushed() else "on"))
 	elif Controls.pressed(event, "duel_id_tags"):
 		# `Show ID tags\tCtrl+T` (§6.3a). Ctrl is load-bearing: a
@@ -11573,8 +11890,5 @@ func _on_control(event: InputEvent) -> void:
 		# `Show all cards' summoning sickness\tCtrl+U`.
 		_accelerate_toggle("ShowAllCardsSummonSickness")
 	elif Controls.pressed(event, "duel_screenshot"):
-		var shot := get_viewport().get_texture().get_image()
-		var shot_path := "user://screenshot_%d.png" % Time.get_ticks_msec()
-		shot.save_png(shot_path)
-		_set_prompt("Screenshot: %s" %
-			ProjectSettings.globalize_path(shot_path))
+		_save_screenshot(get_viewport().get_texture().get_image(),
+			"user://screenshot_%d.png" % Time.get_ticks_msec())

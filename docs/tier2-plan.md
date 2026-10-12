@@ -587,7 +587,10 @@ you it is busy rather than slowing down. Treat the dwell as `[s30]`.
 ### The design
 
 Our architecture is different in one load-bearing way: **s30 consumes a
-message queue; we render synchronously off `state_changed`.** Do not build
+message queue; we render synchronously off `state_changed`.** (True until
+2026-10-12: since the robustness campaign an engine change asks for ONE
+redraw at the end of the frame — `DuelScreen._refresh_after_engine` — and
+only the screen's own clicks, keys and AI timer draw at once.) Do not build
 a queue. Instead:
 
 - New file **`game/duel/duel_pacing.gd`** — `class_name DuelPacing`,

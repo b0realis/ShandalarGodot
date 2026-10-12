@@ -529,6 +529,7 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance) -> Variant:
 			if me.library.size() > 10: return result(2.5)
 		&"reset_hands":
 			if me.library.size() > 20 and me.hand.size() <= 2 and g.players[1 - pid].hand.size() >= 4: return result(6.0)
+		&"army_menace": return army_menace(g, pilot)   # campaign 2026-10-12 (b4-4)
 		&"untap_fog":
 			if g.current_step() != Mtg.Step.DECLARE_BLOCKERS or g.awaiting_blockers: return {}
 			var targets: Array = []
@@ -581,3 +582,70 @@ static func _fog(g: MtgGame, pilot) -> Dictionary:
 	g.unmake_to(mark)
 	if not nested: g.end_search()
 	return result(H.swing(g, pilot, before, after))
+
+
+# --- campaign 2026-10-12 f-aiB: menace for the whole army (b4-4) ---
+
+## THE WAR CRY (bug-hunt campaign 2026-10-12, b4-4; [member
+## AiProfile.forecasts_tactics]): "All creatures gain menace until end of
+## turn" (Gorilla War Cry, role `army_menace`) was read by nothing, so the
+## card never left a hand — not even when menace turned an alpha strike
+## into the game. Its moment is our own declared attack, before blocks:
+## worth what menace adds to the damage their untapped creatures can no
+## longer stop ([method menace_through] against the pilot's own [method
+## AiPlayer._damage_through_blocks]) — the game when that makes the attack
+## lethal. Their creatures' menace is nothing this turn: they are not
+## attacking. Public board only.
+static func army_menace(g: MtgGame, pilot) -> Dictionary:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	if g.active_player != pid or g.current_step() != Mtg.Step.DECLARE_ATTACKERS \
+			or g.combat.attackers.is_empty() or g.combat_damage_prevented:
+		return {}
+	var attackers: Array[CardInstance] = []
+	for id in g.combat.attackers:
+		var body := g.find_instance(int(id))
+		if body != null:
+			attackers.append(body)
+	var blockers: Array[CardInstance] = []
+	for body in g.players[foe].battlefield:
+		if body.is_creature() and not body.tapped:
+			blockers.append(body)
+	if attackers.is_empty() or blockers.is_empty():
+		return {}
+	var before: int = pilot._damage_through_blocks(g, attackers, blockers, foe)
+	var after := menace_through(g, pilot, attackers, blockers, foe)
+	if after <= before:
+		return {}
+	var life: int = g.players[foe].life
+	if after >= life and before < life:
+		return result(AiPlayer.LETHAL_WORTH)
+	return result(pilot._face_damage_value(g, after, foe) - pilot._face_damage_value(g, before, foe))
+
+
+## The least damage [param attackers] put through [param blockers] once
+## every attacker needs two blockers (menace): each block takes two of
+## them, so the defender stops at most the hardest hitters that two of its
+## creatures can legally block, one per pair. A lower bound — a blocked
+## trampler's excess and any trade are left out.
+static func menace_through(g: MtgGame, pilot, attackers: Array[CardInstance],
+		blockers: Array[CardInstance], foe: int) -> int:
+	var total := 0
+	var stoppable: Array[int] = []
+	for body in attackers:
+		if body.cur_power <= 0:
+			continue
+		total += body.cur_power
+		var legal := 0
+		for blocker in blockers:
+			if CombatState.block_illegality(g, blocker, body, foe, true, pilot.pid) == "":
+				legal += 1
+		if legal >= maxi(2, body.cur_min_blockers):
+			stoppable.append(body.cur_power)
+	stoppable.sort()
+	stoppable.reverse()
+	var stopped := 0
+	for i in mini(blockers.size() / 2, stoppable.size()):
+		stopped += stoppable[i]
+	return total - stopped
+# --- end campaign 2026-10-12 f-aiB menace ---

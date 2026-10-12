@@ -57,7 +57,7 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 
 static func _discharge(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
 	# Phased out: no counter can come off it, so "if you do" never happens
-	# (CR 702.26b) — add_counters would refuse while the life still came.
+	# (CR 702.26b) — remove_counters would refuse while the life still came.
 	if not game.is_present(source):
 		return
 	if int(source.counters.get("vitality", 0)) <= 0:
@@ -66,5 +66,5 @@ static func _discharge(game: MtgGame, source: CardInstance, event: GameEvent) ->
 	if not game.agents[pid].choose_yes_no(game, pid,
 			"Spend a vitality counter from %s for 1 life?" % source.data.card_name, true):
 		return
-	game.add_counters(source, "vitality", -1)
+	game.remove_counters(source, "vitality", 1)
 	game.adjust_life(pid, 1)

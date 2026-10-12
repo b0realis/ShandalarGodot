@@ -469,7 +469,8 @@ block `{"op":"block","pairs":[[BLOCKER,ATTACKER]...]}`; discard
 `{"op":"discard","cards":[ID...]}`; damage
 `{"op":"damage","points":[[ID|"player",N]...]}`; choice
 `{"op":"choice","picks":[I...]}`; any time `{"op":"concede"}`. A blank
-line is skipped. Card IDs are the view's handles (`c7`), and every
+line is skipped; only the end of the input concedes, and a line longer
+than 65,536 bytes is refused once, whole. Card IDs are the view's handles (`c7`), and every
 `options` row names the card beside its handle.
 
 **What a casting line may leave out** (2026-10-04; the referee fills it
@@ -498,7 +499,9 @@ line there: answer it, then `submit`.
 **A table** (`--join`, `--table`): the same pipe at a table the game
 hosts — a person, or another program. `--join` takes the LAN invitation
 (`sglan1:...`) the host's screen shows, or the same-computer access
-code with `--port`; `--table NAME` instead asks the LAN (the Game
+code with `--port` (`--join env:NAME` reads the invitation from that
+environment variable, off the command line — the MCP server's
+`referee_join` does this); `--table NAME` instead asks the LAN (the Game
 Browser's discovery) for an OPEN host advertising a table of that name
 and joins with the invitation its advert carries (an invitation-only
 host's table is refused by name — `kind: "table"` — paste its
@@ -536,7 +539,9 @@ chair is held — `kind: "host"`, exit 2 when nobody sits — and the
 rest as at a joined table. The host's seat is marked ready again each
 time the lobby clears the marks (a guest sitting down, their deck), so
 the duel starts on the guest's own mark; `hello.table.hosted` is true;
-the host stops with the result. The guest sees an ordinary host.
+after the result the host waits up to 3 s for the person still seated to
+leave, then closes; their game reads "The host closed its tables." The
+guest sees an ordinary host.
 
 **A kept game** (`--listen FILE`): the same lines served on a loopback
 TCP socket instead of the pipe, so the program may go away and come

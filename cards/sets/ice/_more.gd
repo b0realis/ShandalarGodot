@@ -78,11 +78,16 @@ static func own_pump(p: int, t: int, keywords: Array = []) -> PumpEffect:
 static func _forest(i: CardInstance) -> bool: return i.is_land() and i.has_subtype("forest")
 static func _small_toughness(i: CardInstance) -> bool: return i.cur_toughness <= 2
 static func _slow_draw(g: MtgGame, s: CardInstance, pid: int) -> void: DelayedDrawEffect.new().resolve(g, s, pid, null)
-static func _bauble(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:
+## "Look at a card at random in target player's hand": the card is shown to
+## the activator alone; the public log says only that a look was taken
+## (campaign 2026-10-12, b4-7 — the house rule Orcish Spy keeps).
+static func _bauble(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:
 	var hand := g.players[t.player_id].hand
 	if not hand.is_empty():
 		var shown: CardInstance = hand[g.rng.randi_range(0, hand.size() - 1)]
-		g.log_line("%s looks at %s with Urza's Bauble" % [g.players[pid].player_name, shown.data.card_name])
+		var whose := g.players[t.player_id].player_name
+		g.reveal_information(pid, "%s — a card from %s's hand" % [s.data.card_name, whose], [shown.data.card_name])
+		g.log_line("%s looks at a card at random in %s's hand with %s" % [g.players[pid].player_name, whose, s.data.card_name])
 static func target_from_activation(g: MtgGame) -> CardInstance:
 	var refs := g.current_targets()
 	return g.find_instance(refs[0].instance_id) if not refs.is_empty() else null

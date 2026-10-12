@@ -388,10 +388,10 @@ static func _apocalypse(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _
 	var doomed: Array[CardInstance] = []
 	for i in g.all_battlefield():
 		if g.is_present(i): doomed.append(i)
-	g.begin_simultaneous()
-	for i in doomed:
-		if i.zone == Mtg.Zone.BATTLEFIELD: g.exile_permanent(i)
-	g.end_simultaneous()
+	# One departure: each permanent leaves as the board stood before any
+	# did (campaign 2026-10-12 b3-4 — a humbled Floodgate has no leave
+	# trigger even when the Humility is exiled first).
+	g.depart_together(doomed, g.exile_permanent)
 	g.discard_hand(pid)
 
 

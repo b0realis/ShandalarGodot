@@ -116,7 +116,9 @@ func test_nothing_saved_or_nonsense_saved_opens_with_everything_on() -> void:
 	assert_true(screen.filter.completion_pack_on)
 	assert_true(screen.filter.set_on("fem"))
 	assert_eq(screen._inventory.entry_count(), 1003)
-	assert_eq(Settings.get_value(DeckBuilderScreen.EXTRAS_SETTING, {}), "not a dictionary",
+	# `null` reads the stored value as it is: a `{}` default now coerces a
+	# wrong-typed value to the default (campaign 2026-10-12, Settings).
+	assert_eq(Settings.get_value(DeckBuilderScreen.EXTRAS_SETTING, null), "not a dictionary",
 		"and opening writes nothing")
 	await _close(screen)
 	Settings.set_value(DeckBuilderScreen.EXTRAS_SETTING, {"original": false, "sets": 7})

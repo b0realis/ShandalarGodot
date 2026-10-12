@@ -160,7 +160,7 @@ func _ready() -> void:
 	_fifth_disable.pressed.connect(_request_disable.bind(AlliancesPack.ID))
 	fifth_actions.add_child(_fifth_disable)
 	content.add_child(fifth_actions)
-	content.add_child(UiChrome.body_label("6-POR — Pack 6: Portal", 18))
+	content.add_child(UiChrome.body_label("6-POR — Pack 6: Portal & Second Age", 18))
 	_sixth_status = UiChrome.body_label("", 14)
 	_sixth_status.name = "Pack6Status"
 	_sixth_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -236,8 +236,7 @@ func _ready() -> void:
 
 	var back := UiChrome.menu_button("Back", Vector2(180, 40))
 	back.name = "Back"
-	back.pressed.connect(func() -> void:
-		get_tree().change_scene_to_file("res://game/options_screen.tscn"))
+	back.pressed.connect(_back)
 	var back_row := HBoxContainer.new()
 	back_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	back_row.add_child(back)
@@ -246,6 +245,8 @@ func _ready() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.name = "PackListScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# A ring walked down the list by the arrows or a D-pad brings it along.
+	scroll.follow_focus = true
 	scroll.custom_minimum_size = Vector2(PANEL_WIDTH - 40, 560)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(content)
@@ -264,6 +265,11 @@ func _ready() -> void:
 	CardPacks.rescanned.connect(_refresh)
 	CardPacks.locks_changed.connect(_refresh)
 	_refresh()
+	# THE RING STARTS ON BACK (bug campaign 2026-10-12, r2-5): reached
+	# from Options by the keyboard or a D-pad, this page used to open with
+	# nothing focused — the arrows, Tab and the D-pad had nothing to move
+	# from and there was no way back without a mouse. Up walks the list.
+	back.grab_focus()
 
 
 func _refresh() -> void:
@@ -305,7 +311,14 @@ func _refresh() -> void:
 	if sixth.available:
 		_sixth_status.text = "Status: %s — Version: %s — Minimum game: %s\n" % [
 			"Enabled" if sixth.enabled else "Disabled", sixth.version, sixth.minimum_game_version]
-		_sixth_status.text += "200 names · 215 printings · 173 new identities\nDeck Builder filter: Extras > Portal"
+		# BOTH OF ITS SETS (bug campaign 2026-10-12, b2-8): Pack 6 is Portal
+		# and Portal Second Age, counted from the pack's own manifest.
+		var counts: Dictionary = sixth.get("counts", PortalPack.COUNTS)
+		_sixth_status.text += "%d names · %d printings · %d new identities\n" % [
+			int(counts.get("distinct_cards", 0)), int(counts.get("published_printings", 0)),
+			int(counts.get("new_rules_identities", 0))] \
+			+ "Portal %d · Second Age %d\nDeck Builder filters: Extras > Portal, Second Age" % [
+				int(PortalPack.SET_COUNTS["por"][1]), int(PortalPack.SET_COUNTS["p02"][1])]
 	else:
 		_sixth_status.text = "Status: Not available\nExpected: %s\nReason: %s" % [
 			PortalPack.FILE_NAME, sixth.rejection]
@@ -395,11 +408,32 @@ func _request_disable(id := CardPacks.ID) -> void:
 	if is_instance_valid(_warning):
 		return
 	_warning = UiChrome.action_popup(self, "Current deck uses " + CardPacks.label_for(id), warning, [
-		{"label": "Keep enabled", "name": "KeepEnabled"},
+		{"label": "Keep enabled", "name": "KeepEnabled", "cancel": true},
 		{"label": "Disable anyway", "name": "DisableAnyway",
 			"callable": CardPacks.set_enabled.bind(id, false)},
 	], 570.0)
 	_warning.tree_exited.connect(func() -> void: _warning = null)
+
+
+## ESCAPE IS BACK (bug campaign 2026-10-12, r2-9) — to Options, the room
+## this page is opened from; Escape, pad B, the Quest's back gesture and
+## the R36's Start all arrive as `ui_cancel`. With the warning up it is
+## the warning's `Keep enabled` instead.
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("ui_cancel", false, true):
+		return
+	accept_event()
+	var popup := UiChrome.open_popup(self)
+	if popup != null:
+		UiChrome.dismiss_popup(popup)
+	else:
+		_back()
+
+
+## Back to Options, the room this page is opened from — the button's way
+## and Escape's.
+func _back() -> void:
+	get_tree().change_scene_to_file("res://game/options_screen.tscn")
 
 
 static func _grouped(value: int) -> String:

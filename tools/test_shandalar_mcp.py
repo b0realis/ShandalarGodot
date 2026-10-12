@@ -1069,7 +1069,8 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(self.calls()[-1][:5], ["referee", "--deck-a", own, "--deck-b", "tournament/burn.deck"])
         self.client.payload("referee_stop", {"game": opened["game"]})
         joined = self.client.payload("referee_join", {"invitation": "sglan1:x", "deck": "own.deck"})
-        self.assertEqual(self.calls()[-1][:5], ["referee", "--join", "sglan1:x", "--deck", own])
+        # the invitation travels in the environment, never in argv (2026-10-12)
+        self.assertEqual(self.calls()[-1][:5], ["referee", "--join", "env:SHANDALAR_INVITATION", "--deck", own])
         self.client.payload("referee_stop", {"game": joined["game"]})
         typo = self.client.call("lab", {"deck_a": "missing.deck", "deck_b": "own.deck"})
         self.assertTrue(typo["isError"], "a name nowhere is still the door's refusal")
@@ -1319,8 +1320,9 @@ class FakeDoorTest(unittest.TestCase):
         record = json.loads((self.workspace / "games" / (game + ".json")).read_text(encoding="utf-8"))
         self.assertEqual(record["game"], game)
         keep = str(self.workspace / "games" / (game + ".keep.json"))
-        self.assertIn(["referee", "--join", "sglan1:abc", "--deck", "a.deck", "--wait", "77",
+        self.assertIn(["referee", "--join", "env:SHANDALAR_INVITATION", "--deck", "a.deck", "--wait", "77",
                        "--listen", keep, "--idle", str(mcp.KEEP_IDLE)], self.calls())
+        self.assertNotIn("sglan1:abc", json.dumps(record))
         self.assertTrue(json.loads(Path(keep).read_text(encoding="utf-8"))["port"] > 0)
         stopped = self.client.payload("referee_stop", {"game": game})
         self.assertEqual(stopped["result"]["reason"], "concede")

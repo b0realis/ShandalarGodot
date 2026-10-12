@@ -450,9 +450,85 @@ static func plan_from(src: Array, cost: ManaCost, x_value: int,
 	for row in src:
 		if row.size() <= 8: ordinary.append(row)
 	var simple := _plan_free_sources(ordinary, cost, x_value, usage_keys)
-	if not simple.is_empty() or (cost.mana_value() + x_value == 0):
+	if cost.mana_value() + x_value == 0:
+		return simple
+	# THE KAROO PAYS WHERE IT FITS (campaign 2026-10-12 f-aiA, b5-7):
+	# [method _plan_with_lump].
+	var lump := _plan_with_lump(src, ordinary, cost, x_value, usage_keys)
+	if not lump.is_empty():
+		return lump
+	if not simple.is_empty():
 		return simple
 	return preload("res://engine/mana_conversion_planner.gd").plan(src, cost, x_value, usage_keys)
+
+
+# --- campaign 2026-10-12 f-aiA: the Karoo pays where it fits ---
+
+## The unit index a [method _plan_with_lump] stand-in row carries: below
+## every real floating unit, so its plan steps are told apart.
+const LUMP_UNIT_BASE := -1000
+
+
+## A plan that taps a COUPLED source — one tap, two different mana: a
+## Karoo's {C}{G}, Adarkar Unicorn's — whose whole output [param cost]
+## absorbs, with nothing left over anywhere in the plan; `[]` when no such
+## source fits. [method plan_from] reached for a coupled source only when
+## the plain sources could not pay, so a Karoo was the LAST source spent in
+## a turn, and the last cost of a turn is usually the smallest: Jungle
+## Troll from Forest, Mountain and Forest, then the Ooze's {G} from the
+## Jungle Basin and its {C} burned (the P8 Karoo deck: 147 points of mana
+## burn in 400 Lab games). Spent where it fits exactly, it leaves the
+## single sources for the next cost. Each output stands in as a floating
+## unit (spent first, never dropped), the rest is the ordinary plan, and the
+## stand-ins become the source's one tap.
+static func _plan_with_lump(src: Array, ordinary: Array, cost: ManaCost,
+		x_value: int, usage_keys: Array) -> Array:
+	var due := cost.mana_value() - cost.generic + maxi(0, cost.generic + x_value)
+	for row in src:
+		if row.size() <= 8 or row[0] == null or not (row[8] is Dictionary) \
+				or not row[8].has("outputs") or row[8].get("cost") != null:
+			continue
+		var units: Array = []
+		for output in row[8]["outputs"]:
+			for k in int(output[1]):
+				units.append([null, LUMP_UNIT_BASE - units.size(), int(output[0]), 1, 0,
+					String(output[2]), 0, 0])
+		if units.size() < 2 or units.size() > due:
+			continue   # nothing to absorb, or more than the cost
+		var rest: Array = units.duplicate()
+		for s in ordinary:
+			if s[0] != row[0]:
+				rest.append(s)   # the same permanent taps once
+		var plan := _plan_free_sources(rest, cost, x_value, usage_keys)
+		if plan.is_empty():
+			continue
+		var out: Array = [step_of(row)]
+		var lumped := 0
+		var made := 0
+		for step in plan:
+			if step[0] == null and int(step[1]) <= LUMP_UNIT_BASE:
+				lumped += 1
+				made += 1
+				continue
+			out.append(step)
+			made += _step_amount(rest, step)
+		if lumped == units.size() and made == due:
+			return out
+	return []
+
+
+## The mana the row of [param src] behind plan step [param step] makes
+## (one for a unit already floating).
+static func _step_amount(src: Array, step: Array) -> int:
+	if step[0] == null:
+		return 1
+	for s in src:
+		if s[0] == step[0] and int(s[1]) == int(step[1]) \
+				and (step.size() < 3 or int(s[2]) == int(step[2])):
+			return int(s[3])
+	return 0
+
+# --- end campaign 2026-10-12 f-aiA ---
 
 
 ## One restricted-X mixture at a time: the earliest colour of

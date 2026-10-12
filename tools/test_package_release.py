@@ -224,7 +224,8 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn("chmod 775", script)
                             self.assertIn("T=/sdcard/Download/shandalar-push\n", script)
                             self.assertIn('adb push "$f" "$T/$name"', script)
-                            self.assertIn("cp $T/$name $dest/$name", script)
+                            self.assertIn("cp '$T/$name' '$dest/$name.part'", script)
+                            self.assertIn("mv -f '$dest/$name.part' '$dest/$name'", script)
                             for line in script.splitlines():
                                 if "adb push" in line and not line.lstrip().startswith("#"):
                                     self.assertNotIn("$F", line, "never a push into the game's folder")

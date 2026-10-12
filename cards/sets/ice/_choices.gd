@@ -17,7 +17,8 @@ static func configure(c: CardData) -> bool:
 		"Minion of Leshrac":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, _minion, "Sacrifice another creature or take 5 damage; if damaged, tap this creature.", F._your_upkeep))
 			c.activated(F._ability("", true, DestroyEffect.new(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target creature or land", _creature_land))))
-		"Goblin Lyre": c.activated(F._ability("", false, F.Action.new(_lyre, "flip a coin: creatures determine damage to your opponent or you", TargetSpec.opponent())).with_sacrifice_cost())
+		"Goblin Lyre": c.activated(F._ability("", false, F.Action.new(_lyre, "flip a coin: creatures determine damage to your opponent or you", TargetSpec.opponent()) \
+			.with_ai_role(&"coin_creature_count_damage")).with_sacrifice_cost())
 		"Game of Chaos": c.spell(F.Action.new(_chaos, "flip a coin for life, then the winner may double the stakes and repeat", TargetSpec.opponent()))
 		"Amulet of Quoz":
 			c.activated(F._ability("", true, F.Action.new(_quoz, "opponent may ante a card, otherwise flip a coin to decide who loses", TargetSpec.opponent())).with_sacrifice_cost().during_step(Mtg.Step.UPKEEP).your_turn_only())

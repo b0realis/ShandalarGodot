@@ -129,6 +129,10 @@ const NAME_YOUR_DECK := "You must name your deck before saving."
 ## `@NEWDECK` — what an untitled deck is called. The manual: *"if you
 ## haven't given the deck a title, it's just called 'New Deck'"*.
 const DEFAULT_NAME := "New Deck"
+## [QoL] The longest title the Deck Info field takes (campaign 2026-10-12).
+## Any title still saves — [method DeckStore.file_stem] caps the file
+## name — but a field without a limit took a paste of any length.
+const TITLE_MAX := 200
 
 ## [QoL] HOW BIG A SIDEBOARD SHOULD BE — fifteen cards, and the number is
 ## a MODERN-MAGIC CONVENTION rather than anything 1997 said. See the class
@@ -1047,7 +1051,14 @@ static func notes_from_text(text: String) -> String:
 		var line := raw_line.strip_edges()
 		if line.begins_with("# note:"):
 			found.append(line.substr(7).strip_edges())
+		elif line.begins_with(DEC_NOTE_PREFIX):
+			# The exported `.dec`'s form ([method to_dec_text]).
+			found.append(line.substr(DEC_NOTE_PREFIX.length()).strip_edges())
 	return "\n".join(found)
+
+
+## How a `.dec` export carries a Deck notes line (campaign 2026-10-12).
+const DEC_NOTE_PREFIX := "// note:"
 
 
 static func draft_comments_from_text(text: String) -> String:
@@ -1084,9 +1095,14 @@ func to_dec_text() -> String:
 	var lines := PackedStringArray()
 	lines.append("// NAME : %s" % deck_name)
 	lines.append_array(DeckPrintings.comments(printings, names() + side_names(), true))
+	# `// note: …`, NOT a bare `// …` (campaign 2026-10-12): a note line
+	# reading "Name: the sideboard plan" became `// Name: the sideboard
+	# plan`, which every `.dec` reader — ours included — takes as the
+	# deck's title, and the notes themselves never came back on import.
+	# A field named `note` is still a plain comment to other programs.
 	for line in notes.strip_edges().split("\n"):
 		if line.strip_edges() != "":
-			lines.append("// %s" % line.strip_edges())
+			lines.append("%s %s" % [DEC_NOTE_PREFIX, line.strip_edges()])
 	for card_name in names():
 		lines.append("%d %s" % [int(counts[card_name]), card_name])
 	# `SB:` is Apprentice's own sideboard line and the reason [DeckList]

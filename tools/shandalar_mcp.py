@@ -132,6 +132,9 @@ RESULT_LIMIT = 50
 KEEP_BOOT = 60
 KEEP_RESUME = 5
 KEEP_IDLE = 1800
+# The environment variable a joining referee reads its invitation from
+# (`--join env:SHANDALAR_INVITATION`), so the secret is in no argv.
+INVITATION_ENV = "SHANDALAR_INVITATION"
 
 INSTRUCTIONS = (
     "Shandalar is a Magic: The Gathering engine with computer players. "
@@ -1851,7 +1854,8 @@ def detached_popen(argv: list[str], cwd: Path, stdout, stderr, env: dict) -> sub
 
 class Game:
     def __init__(self, ident: str, argv: list[str], view: str, cwd: Path, stderr_path: Path,
-                 keep: dict | None = None, resume: bool = False, cancelled=None):
+                 keep: dict | None = None, resume: bool = False, cancelled=None,
+                 secrets: dict | None = None):
         self.ident = ident
         # The server's "is the call in flight cancelled?" — read while a
         # line is waited for, so a cancelled wait stops within a beat.
@@ -1896,6 +1900,10 @@ class Game:
         env = dict(os.environ)
         env["SHANDALAR_NO_BANNER"] = "1"
         env["NO_COLOR"] = "1"
+        # What the referee reads from its environment rather than its
+        # command line (an invitation: `ps` shows every argv), and which
+        # no record or summary carries (2026-10-12).
+        env.update(secrets or {})
         self.proc: subprocess.Popen | None = None
         if keep is None:
             self.stderr_file = stderr_path.open("w", encoding="utf-8")
@@ -1980,11 +1988,13 @@ class Game:
             if line is None:
                 self.close(grace=0.1)
                 if self.result is None and self.error is None:
-                    self.error = {"tool": "referee", "exit": self.proc.returncode if self.proc else None,
+                    code = self.proc.poll() if self.proc else None
+                    self.error = {"tool": "referee", "exit": code,
                                   "kind": "run",
                                   "message": (f"game {self.ident}: the kept referee went away without a result"
                                               if self.kept else
-                                              f"game {self.ident}: the referee ended without a result"),
+                                              f"game {self.ident}: the referee ended without a result")
+                                  + (f" (stopped by signal {-code})" if isinstance(code, int) and code < 0 else ""),
                                   "stderr": self.stderr_tail()}
                 self.pending = None
                 return self._state(refused, render=render)
@@ -2031,6 +2041,33 @@ class Game:
                 self.result = record
                 self.pending = None
                 return self._state(refused, render=render)
+
+    def notice_end(self, wait: float = 2.0) -> bool:
+        """A REFEREE THAT DIED SAYS SO (2026-10-12). When the transport
+        is gone — the process killed or crashed, the kept referee's
+        socket closed — with no result or error read yet, what it left
+        is read to its end now: a result line printed before it went, or
+        the end of the stream, which records the exit code and the
+        stderr tail. Before, `referee_wait`/`referee_resume` handed back
+        the stale decision as live, `referee_act` said only "is over",
+        and `referee_stop` reported no error at all."""
+        if self.closed or self.transport.alive or self.result is not None or self.error is not None:
+            return False
+        deadline = time.monotonic() + max(0.0, wait)
+        while self.result is None and self.error is None and not self.closed:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            self.advance(left, render=False)
+        if self.result is None and self.error is None:
+            # Gone, yet its stream never ended (a child still holds it).
+            code = self.proc.poll() if self.proc else None
+            self.error = {"tool": "referee", "exit": code, "kind": "run",
+                          "message": f"game {self.ident}: the referee is gone without a result",
+                          "stderr": self.stderr_tail()}
+            self.pending = None
+            self.close(grace=0.1)
+        return True
 
     def _state(self, refused: list[dict], pending: bool = False, render: bool = True) -> dict:
         out: dict = {"game": self.ident, "decisions": self.decisions, "refusals": self.refusals}
@@ -3415,13 +3452,14 @@ class Server:
             self.next_game = number
             return ident
 
-    def new_game(self, argv: list[str], view: str, keep: bool = False, text: str = "compact") -> Game:
+    def new_game(self, argv: list[str], view: str, keep: bool = False, text: str = "compact",
+                 secrets: dict | None = None) -> Game:
         ident = self.claim_game()
         folder = self.workspace / "games"
         stderr = folder / f"{ident}.stderr"
         if not keep:
             game = Game(ident, self.command("referee", argv), view, self.root, stderr,
-                        cancelled=self.is_cancelled)
+                        cancelled=self.is_cancelled, secrets=secrets)
             game.text = text
             self.games[ident] = game
             return game
@@ -3435,15 +3473,16 @@ class Server:
                 pass
         full = self.command("referee", argv + ["--listen", record["keep"], "--idle", str(KEEP_IDLE)])
         record["command"] = full
-        game = Game(ident, full, view, self.root, stderr, keep=record, cancelled=self.is_cancelled)
+        game = Game(ident, full, view, self.root, stderr, keep=record, cancelled=self.is_cancelled,
+                    secrets=secrets)
         game.text = text
         (folder / f"{ident}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         self.games[ident] = game
         return game
 
     def open_game(self, argv: list[str], view: str, timeout: float, keep: bool = False,
-                  until_table: bool = False, text: str = "compact") -> dict:
-        game = self.new_game(argv, view, keep, text)
+                  until_table: bool = False, text: str = "compact", secrets: dict | None = None) -> dict:
+        game = self.new_game(argv, view, keep, text, secrets)
         state = game.advance(timeout, until_table=until_table)
         if game.error is not None and game.hello is None:
             game.close(grace=2)
@@ -3615,13 +3654,21 @@ class Server:
         if invitation and table:
             raise refusal(tool, "option", "`invitation` and `table` are two ways to name one table — give one",
                           flag="table")
-        argv = (["--join", str(invitation)] if invitation else ["--table", str(table)]) + ["--deck", self.deck_arg(args["deck"])]
+        # THE INVITATION IS NOT ON THE COMMAND LINE (2026-10-12): an
+        # invitation-only host's secret went into the referee's argv —
+        # which `ps` shows anyone on the computer — and from there into
+        # the kept game's record on disk and every summary. The referee
+        # reads it from its environment now (`--join env:NAME`).
+        secrets = {INVITATION_ENV: str(invitation)} if invitation else None
+        argv = (["--join", "env:" + INVITATION_ENV] if invitation else ["--table", str(table)]) \
+            + ["--deck", self.deck_arg(args["deck"])]
         for key in ("port", "name", "wait", "turns", "packs"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
             argv += ["--log", str(self.inside(args["log"], tool, "log"))]
         return self.shown_state(self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
-                                               keep=bool(args.get("keep", True)), text=self.text_of(args)))
+                                               keep=bool(args.get("keep", True)), text=self.text_of(args),
+                                               secrets=secrets))
 
     def tool_referee_host(self, args: dict) -> dict:
         tool = "referee"
@@ -3658,6 +3705,10 @@ class Server:
         if game is None:
             raise refusal("referee", "game", f"no game {ident}", game=ident,
                           games=sorted(self.games))
+        # A referee that died since the last call: its end is read first,
+        # so no tool hands back its stale decision (2026-10-12).
+        if game.notice_end():
+            self.settle(game)
         return game
 
     def present(self, game: Game | None, state: dict, view: str | None = None):
@@ -4382,8 +4433,15 @@ class Server:
         answers a `ping` at once and applies `notifications/cancelled` to
         the call in flight (or to a call still queued) while the worker is
         busy. At end of input every request already read is still answered
-        — a client may pipe a file of requests — and then the games end."""
-        source = source or sys.stdin
+        — a client may pipe a file of requests — and then the games end.
+
+        ONE BAD LINE IS ONE PARSE ERROR (2026-10-12): the input is read as
+        bytes and each line decoded on its own, so a line that is not
+        UTF-8 is a -32700 instead of a UnicodeDecodeError that ended the
+        server (and every pipe game with it); so is JSON nested past
+        Python's recursion limit (a RecursionError, which is no
+        ValueError). A text `source` (a test's) is read as it is."""
+        source = source or getattr(sys.stdin, "buffer", sys.stdin)
         sink = sink or sys.stdout
         self.sink = sink
         work: queue.Queue = queue.Queue()
@@ -4391,20 +4449,30 @@ class Server:
         worker.start()
         try:
             for raw in source:
-                line = raw.strip()
-                if not line:
-                    continue
                 try:
-                    message = json.loads(line)
-                except ValueError:
-                    self.emit(sink, error_response(None, -32700, "Parse error"))
-                    continue
-                if isinstance(message, list) and not message:
-                    self.emit(sink, error_response(None, -32600, "Invalid Request"))
-                    continue
-                if isinstance(message, dict) and self._urgent(message, sink):
-                    continue
-                work.put(message)
+                    if isinstance(raw, (bytes, bytearray)):
+                        try:
+                            raw = bytes(raw).decode("utf-8")
+                        except UnicodeDecodeError:
+                            self.emit(sink, error_response(None, -32700, "Parse error", "the line is not UTF-8"))
+                            continue
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        message = json.loads(line)
+                    except (ValueError, RecursionError):
+                        self.emit(sink, error_response(None, -32700, "Parse error"))
+                        continue
+                    if isinstance(message, list) and not message:
+                        self.emit(sink, error_response(None, -32600, "Invalid Request"))
+                        continue
+                    if isinstance(message, dict) and self._urgent(message, sink):
+                        continue
+                    work.put(message)
+                except Exception as exc:  # noqa: BLE001 — one line never ends the server
+                    print(f"shandalar_mcp: a line could not be answered: {type(exc).__name__}: {exc}",
+                          file=sys.stderr)
         finally:
             if self.stopping:
                 self.cancel_all(work)
@@ -4441,14 +4509,38 @@ class Server:
             message = work.get()
             if message is None:
                 return
-            if isinstance(message, list):
-                answers = [a for a in (self._dispatch(m) for m in message) if a is not None]
-                if answers:
-                    self.emit(sink, answers)
-                continue
-            answer = self._dispatch(message)
-            if answer is not None:
-                self.emit(sink, answer)
+            # EACH REQUEST ON ITS OWN (2026-10-12): an answer that cannot
+            # be written is a -32603 for its id; the worker reads on.
+            # Before, one exception here ended the thread, and every later
+            # request went unanswered while `ping` (the reader's) still did.
+            try:
+                if isinstance(message, list):
+                    answers = [a for a in (self._dispatch(m) for m in message) if a is not None]
+                    if answers:
+                        self.emit(sink, answers)
+                    continue
+                answer = self._dispatch(message)
+                if answer is not None:
+                    self.emit(sink, answer)
+            except Exception as exc:  # noqa: BLE001 — the protocol answer is the report
+                self._unanswerable(sink, message, exc)
+
+    def _unanswerable(self, sink, message, exc: Exception) -> None:
+        """A request whose answer could not be made or written: -32603 for
+        each id it carried (a notification gets none), and a line on
+        stderr."""
+        print(f"shandalar_mcp: an answer could not be written: {type(exc).__name__}: {str(exc)[:200]}",
+              file=sys.stderr)
+        rows = message if isinstance(message, list) else [message]
+        errors = [error_response(row.get("id"), -32603, f"{type(exc).__name__}: the answer could not be written")
+                  for row in rows if isinstance(row, dict) and "id" in row
+                  and not isinstance(row.get("id"), (bool, dict, list))]
+        if not errors:
+            return
+        try:
+            self.emit(sink, errors if isinstance(message, list) else errors[0])
+        except Exception as again:  # noqa: BLE001 — stdout itself is gone
+            print(f"shandalar_mcp: nor its error: {type(again).__name__}: {again}", file=sys.stderr)
 
     def _dispatch(self, message) -> dict | None:
         """One message through `handle`, as the call in flight: a request
@@ -4516,8 +4608,24 @@ def error_response(ident, code: int, message: str, data=None) -> dict:
     return {"jsonrpc": "2.0", "id": ident, "error": error}
 
 
+def wire_text(message) -> str:
+    """One message as its line: UTF-8 as it is (a card's "Æ" stays
+    readable) — but escaped to ASCII when a string in it holds half a
+    character (2026-10-12): a lone surrogate such as "\\ud83d", which a
+    model writes and `json.loads` accepts, cannot be encoded in UTF-8,
+    and writing it raised in the worker thread and ended it, so every
+    later request went unanswered. Escaped, the client reads back the
+    very string it sent."""
+    text = json.dumps(message, ensure_ascii=False, default=str)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        text = json.dumps(message, default=str)
+    return text
+
+
 def emit(sink, message) -> None:
-    sink.write(json.dumps(message, ensure_ascii=False, default=str) + "\n")
+    sink.write(wire_text(message) + "\n")
     sink.flush()
 
 

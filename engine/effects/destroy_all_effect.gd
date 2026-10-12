@@ -33,7 +33,9 @@ func _init(p_description: String = "all creatures",
 ## THE WHOLE SWEEP IS ONE RESOLUTION (CR 704.3, fixed 2026-09-10). State-based
 ## actions are checked when a player WOULD receive priority, never in the
 ## middle of one resolution, so the loop below is bracketed by
-## [method MtgGame.begin_simultaneous] / [method MtgGame.end_simultaneous].
+## [method MtgGame.begin_simultaneous] / [method MtgGame.end_simultaneous]
+## — through [method MtgGame.depart_together], which also holds the
+## recalculation until every victim has gone (campaign 2026-10-12 b3-4).
 ##
 ## WHY IT MATTERED, and it is an OUTCOME rather than an ordering:
 ## [method MtgGame.destroy] does not check state-based actions itself, but
@@ -58,12 +60,14 @@ func resolve(game: MtgGame, _source: CardInstance, _controller: int, _target: Ta
 				victims.append(inst)
 		elif inst.is_creature():
 			victims.append(inst)
-	# NOTHING MAY RETURN BETWEEN THESE TWO CALLS: a deferral left open
-	# freezes state-based actions for the rest of the game.
-	game.begin_simultaneous()
-	for inst in victims:
-		game.destroy(inst, can_regenerate)
-	game.end_simultaneous()
+	# ONE departure (campaign 2026-10-12 b3-4): every victim is destroyed as
+	# the board stood before any of them left — a Rukh Egg humbled by the
+	# Humility this same sweep takes has no dies trigger, a humbled
+	# Firestorm Phoenix no "return it instead". depart_together brackets
+	# the loop and holds the recalculation until the last victim has gone.
+	var regenerate := can_regenerate
+	game.depart_together(victims, func(inst: CardInstance) -> void:
+		game.destroy(inst, regenerate))
 
 
 ## One-line log/UI text.

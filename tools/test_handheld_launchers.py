@@ -248,9 +248,10 @@ class ArkosMappingTest(unittest.TestCase):
 
     The R36 Ultra tester (2026-10-08) had to press the power button to
     leave the game and asked for a shortcut that opens the pause menu
-    directly: Select is Q, the duel's own pause key (`duel_pause`, which
-    opens the menu whatever else is going on) and the Deck Builder's menu
-    key; Start stays Escape.
+    directly: Select was Q, the duel's own pause key (`duel_pause`) and the
+    Deck Builder's menu key; Start stays Escape. Since the bug campaign of
+    2026-10-12 Select is F10 (`Controls.MENU_KEY`): a focused text field
+    typed the Q as a letter, and no text field types F10.
     """
 
     def mapping(self):
@@ -264,7 +265,7 @@ class ArkosMappingTest(unittest.TestCase):
 
     def test_select_opens_the_pause_menu_and_start_is_escape(self):
         mapping = self.mapping()
-        self.assertEqual(mapping.get("back"), "q")
+        self.assertEqual(mapping.get("back"), "f10")
         self.assertEqual(mapping.get("start"), "esc")
 
     def test_q_is_still_the_duels_pause_key(self):

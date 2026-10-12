@@ -92,6 +92,168 @@ needed); card files have NO class_name (they register by name instead);
   `filter_{sth,exo}_{on,off}.png` regenerated, hashes in
   `game/art/README.md`.
 
+## The robustness campaign (2026-10-12)
+
+Eleven read-only hunters (five robustness — long play, screens and input,
+hostile files, network, packages and long sessions; six bug hunts —
+everything since 0.50.16, the deck flows, rules interactions, untested card
+scripts, AI quality, the duel screen and its words) found 105 problems
+(9 HIGH), each reproduced; eleven fixers on disjoint files fixed them
+([robustness-campaign-2026-10-12.md](robustness-campaign-2026-10-12.md)).
+The tests each fixer added, by owner:
+
+- Engine, damage and sources:
+  - `tests/unit/test_c2_f_enga_damage_reapply.gd`: CR 616.1e — the damage
+    gates are rebuilt after each one applied (Ali from Cairo and Forethought
+    Amulet after Furnace of Rath, a creature's threshold shield); CR 614.5
+    keeps an applied effect out.
+  - `tests/unit/test_c2_f_enga_departed_source.gd`: "a source of your choice"
+    names the departed source of an ability on the stack; a departed source is
+    read as it last existed (colour, types, controller) only while its ability
+    is in flight (`MtgGame.source_colors` / `source_types` / `source_controller`).
+  - `tests/unit/test_c2_f_enga_trample_question.gd`: a lone-blocker trampler is
+    asked only when its damage exceeds the blocker's lethal remaining.
+- Engine, state-based actions and zones:
+  - `tests/unit/test_c2_f_engb_journal.gd`: an AI search that sheds an Aura
+    (illegal host or protection) restores both sides of the attachment.
+  - `tests/unit/test_c2_f_engb_simultaneous.gd`: mass removal and the
+    state-based death batch judge every victim on the board before any left
+    (`MtgGame.depart_together`: Humility, Rukh Egg, Phoenix, Shapeshifter,
+    Apocalypse, Evacuation).
+  - `tests/unit/test_c2_f_engb_combat.gd`: a creature that stops being a
+    creature leaves combat (CR 506.4); Fyndhorn Druid's "was blocked this turn"
+    (`CardInstance.became_blocked_turn`, `MtgGame.was_blocked_this_turn`).
+  - `tests/unit/test_c2_f_engb_counters.gd`: `add_counters` refuses a count of
+    0 or less; Venarian Gold, Living Artifact, Cocoon and Tetravus remove
+    counters cleanly.
+  - `tests/unit/test_c2_f_engb_trigger_targets.gd`: a held trigger with one
+    legal target per slot is not asked.
+  - `tests/cards/test_c2_f_engb_wisps.gd`: Withering Wisps' snow-Swamp
+    activation limit (`ability_uses` counts every activation).
+- The AI:
+  - `tests/ai/test_c2_f_aia_counter_reserve.gd`, `test_c2_f_aia_ritual.gd`,
+    `test_c2_f_aia_paid_first_strike.gd`, `test_c2_f_aia_life_gain.gd`,
+    `test_c2_f_aia_karoo_sequencing.gd`, `test_c2_f_aia_upkeep_burn.gd`: the
+    counter reserve keyed to the cheapest payable counter (`_payable_counter`;
+    the cast paid around its sources), dropped under board pressure
+    (`_board_pressure`) and kept at low life with no creature across; Dark
+    Ritual licensed only by a card the ranking would cast, floating mana under
+    mana burn casts a held instant; a paid first strike (Burning Shield Askari)
+    in `_dies_to` and the combat model; life gain by need (`_life_gain_worth`);
+    a cumulative upkeep's mana burn priced and a lethal one refused; a
+    coupled-output source (a Karoo) spent on a cost that absorbs its whole
+    output (`ManaPlanner._plan_with_lump`, also the human's auto-tap).
+  - `tests/ai/test_c2_f_aib_ice_shapes.gd`: the Ice Age shapes no reader read
+    (Gangrenous Zombies and Time Bomb as sweeps, Goblin Lyre's coin, Spoils of
+    Evil net of mana burn, Forgotten Lore's opponent-picked card) and Gorilla
+    War Cry's army menace.
+  - `tests/ai/test_c2_f_aib_casting_grant.gd`: Dream Halls and Aluren priced on
+    both sides before casting (`TempestSpells.casting_grant_choice`).
+  - `tests/ai/test_c2_f_aib_licid_budget.gd`: a licid decision's work bounded
+    by the combat's size (`TempestTactics.readings_cap`, `LICID_WORK`).
+  - `tests/cards/test_c2_f_aib_card_fixes.gd`: Talisman target ranking;
+    Clairvoyance and Portent looks named; Urza's Bauble's private look; Tornado
+    and Earthlore menu costs.
+- The duel screen:
+  - `tests/ui/test_c2_f_duel_refresh.gd`: one redraw per frame
+    (`_refresh_after_engine`); none inside the AI's action; clicks draw at once.
+  - `tests/ui/test_c2_f_duel_concede.gd`: Concede at a private hotseat is the
+    seat at the screen's; a doubled Cancel is harmless.
+  - `tests/ui/test_c2_f_duel_aim.gd`: a whole legal target set for linked
+    targets; abilities with no legal target greyed and refused; X abilities;
+    the soak clicker never stands in a dead end.
+  - `tests/ui/test_c2_f_duel_number_keys.gd`, `test_c2_f_duel_number_keys_online.gd`:
+    number questions read as their numbers and digit k answers k, locally and
+    at an SGManalink table.
+  - `tests/ui/test_c2_f_duel_bar_and_keys.gd`: Situation Bar notes held; failed
+    saves said in red; the pause key under a question, over the reader and
+    during the coin toss; key names follow rebinding.
+  - `tests/ui/test_c2_f_duel_resize.gd`: the graveyard view, the duel log and
+    the hand window re-fit when the window changes size.
+  - `tests/ui/test_c2_f_duel_human_agent.gd`: the "declined" marker has no NUL.
+- Menus, input layers, Help, the reader:
+  - `tests/ui/test_c2_f_shell_help.gd`: Help's Escape, pad B and D-pad, its
+    focus ring, its wording truths.
+  - `tests/ui/test_c2_f_shell_pad.gd`: a pad that leaves is let go of; the
+    stale-press backstop (`PadControls`).
+  - `tests/ui/test_c2_f_shell_reader.gd`: the reader leaves the pad pointer's
+    events to it; a right click closes; Enter / keypad Enter (not Space) switch
+    the text.
+  - `tests/ui/test_c2_f_shell_popups.gd`: `UiChrome` popups keep and hand back
+    the focus ring.
+  - `tests/ui/test_c2_f_shell_controls.gd`: the Controls popup with the pad
+    pointer; digits shared with the choice answers; the dark row; F10.
+  - `tests/ui/test_c2_f_shell_screens.gd`: Card Packs focus; Escape on Options
+    and Card Packs; Pack 6's two sets.
+  - `tests/ui/test_c2_f_shell_badges.gd`: the set badge popup while the pool
+    builds.
+  - `tests/ui/test_c2_f_shell_select.gd`: F10 (`Controls.MENU_KEY`) opens the
+    Deck Builder menu over a focused search.
+  - `tools/test_c2_f_shell_gptk.py`: Select = F10 in the ArkOS map, the game
+    and the doc.
+- Settings and atomic writes:
+  - `tests/unit/test_c2_f_settings_types.gd`: settings.cfg values of the wrong
+    type read as meant or as the default (`Settings.coerce`); the rules
+    migration finishes over words.
+  - `tests/unit/test_c2_f_settings_files.gd`: `write_atomically` through links,
+    read-only refused, the mode kept, a pending name per process and thread
+    (`Settings.pending_path`), the two-instance merge, the Elo ledger written
+    whole.
+  - `tests/ui/test_c2_f_settings_problem.gd`: `Settings.problem()` shown once on
+    the title and as a line in Options.
+- Deck files, the deck flows, setup and the Gauntlet:
+  - `tests/ui/test_c2_f_deck_setup.gd`: random rows follow the format; the
+    empty-bag note and refusal; blank names; the pack-not-installed wording;
+    Escape is Back.
+  - `tests/ui/test_c2_f_deck_builder.gd`: Save after Load writes the loaded
+    file (`DeckStore.save(deck, path)`); save-as on rename; the legality window
+    names the refusing formats; the title cap.
+  - `tests/ui/test_c2_f_deck_draft.gd`: the draft shelf ignores the Extras
+    memory; Card pool by printed set plus Basic lands; Clear keeps the draft
+    title; the setup's set count.
+  - `tests/ui/test_c2_f_deck_gauntlet.gd`: the chosen portrait
+    (`PortraitLibrary.chosen_for`); the bed stops under the duel.
+  - `tests/unit/test_c2_f_deck_deck_files.gd`: `.dec` notes; Arena, Moxfield
+    and Forge imports (`DeckList.parse_foreign`, `looks_like_forge`); linear
+    proxies; delete and read-only wording; capped stems (`DeckStore.STEM_MAX`).
+  - `tests/tools/test_c2_f_deck_sim_stats.gd`: the Deck Lab median for an even
+    number of games.
+- Card packs and skins:
+  - `tests/ui/test_c2_f_packs_skin_refused.gd`: a refused skin zip is kept off
+    the web build and its reason shown in Options > Skin
+    (`SkinPack.refused`, `refusal_lines`).
+  - `tests/unit/test_c2_f_packs_art_cache.gd`: pack pictures within
+    `GameSkin.ART_CACHE_CAP` (`CardPacks.art_texture`); emptied when a pack is
+    switched off.
+  - `tests/unit/test_c2_f_packs_pack_seal.gd`: a seal tied to its file
+    (`PackSeal.bind`, `table_fingerprint`); old seals honoured for one file;
+    remembered refusals; the local header checked; Pack 1's pictures last.
+- Handhelds and the timing log:
+  - `tests/ui/test_c2_f_handheld_perf_log.gd`: a job inside a job is its own
+    row and the outer leaves it out; tool runs never start it; lines on
+    stderr; one summary after a long sleep; the marker beside
+    `GamePaths.executable_dir` or in the Quest's files folder; the previous log
+    kept.
+  - `tests/ui/test_c2_f_handheld_frame_cap.gd`: `GameDisplay.frame_cap_from` —
+    no V-Sync and no cap gives the screen's rate or 60; a launcher's cap kept.
+  - `tools/test_c2_f_handheld_arkos.py`: `arkos.sh` says why PortMaster's
+    `control.txt`, `mod_<CFW>.txt` or `get_controls` stopped it.
+  - `tools/test_quest_scripts.py` (extended): `.part` then `mv`, a free-space
+    check per zip, `ANDROID_SERIAL` pinned, only the nine pack names, the
+    by-hand recipe.
+- SGManalink and the agent tools:
+  - `tools/test_c2_f_net_mcp.py`: MCP lone surrogates, bad stdin lines, a dead
+    referee's end reported, the invitation through the environment; the decide
+    door's malformed answers.
+  - `tests/ui/test_c2_f_net_sockets.gd`: a closing host tells its guests (plain
+    and TLS); the restarted-host message; the handshake budget, time and
+    per-address cap; the discovery flood.
+  - `tests/tools/test_c2_f_net_referee.gd`: the referee pipe read byte by byte
+    (blank lines, an over-long line), `--join env:NAME`, a hosted table's end
+    (`_close_table`).
+  - `tests/unit/test_c2_f_net_wire.gd`: the native wire checks equal the old
+    ones and beat the replaced loops.
+
 ## The Quest's first start: the pack check, faster and on the screen; the adb scripts (2026-10-11)
 
 - `game/pack_seal.gd`: `artwork_sha256(reader, names, trusted, path)` —

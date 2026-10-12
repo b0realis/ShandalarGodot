@@ -195,6 +195,9 @@ var _trigger_down := {JOY_AXIS_TRIGGER_RIGHT: false, JOY_AXIS_TRIGGER_LEFT: fals
 ## The pad buttons of ours that are down, by button index — over every
 ## device, so a second pad reporting the same press is not a second press.
 var _pad_down := {}
+## Which device pressed each of those, by button index — what [method
+## _stale_press] asks [Input] about.
+var _pad_device := {}
 ## When this layer last pressed each mouse button, and when a real mouse
 ## last did; and whether the real release of a button is owed to an
 ## eaten real press.
@@ -266,6 +269,25 @@ func is_awake() -> bool:
 	return _awake
 
 
+## Whether [param event] is this layer's to spend: the layer is active
+## and the event is one of the buttons it types the mouse with (A, LB, the
+## D-pad), a stick or a trigger. A screen that reads the pad itself — the
+## card reader, the Help screen's page turns, the Options screen's `Press
+## the controller button` — leaves these alone, so the pointer still moves
+## and clicks over it and no press or release is lost to it (bug campaign
+## 2026-10-12).
+func owns(event: InputEvent) -> bool:
+	if not _active:
+		return false
+	if event is InputEventJoypadButton:
+		var button := (event as InputEventJoypadButton).button_index
+		return button == CLICK_BUTTON or button == MENU_BUTTON or HOPS.has(button)
+	if event is InputEventJoypadMotion:
+		var axis := (event as InputEventJoypadMotion).axis
+		return TRIGGERS.has(axis) or (axis >= JOY_AXIS_LEFT_X and axis <= JOY_AXIS_RIGHT_Y)
+	return false
+
+
 ## Where the layer's pointer is.
 func pointer() -> Vector2:
 	return _pointer
@@ -299,7 +321,26 @@ func _on_pads_changed(device: int, connected: bool) -> void:
 	print("pad %d %s: %s" % [device, "connected" if connected else "gone",
 		Input.get_joy_name(device) if connected else "-"])
 	_pad_down.clear()           # a pad gone mid-press owes no release
+	if not connected:
+		_forget_the_pad()
 	apply_settings()
+
+
+## A PAD THAT LEAVES SENDS NOTHING MORE (bug campaign 2026-10-12): no
+## axis back to rest, no button up — the engine only says it is gone. A
+## layer that stays active (`on`, or a second pad still there) would drive
+## the pointer for ever on the last tilt and hold a left button down. So
+## what the pad was doing is let go of here: the buttons it held (the
+## screen under them is told), the sticks, the triggers, the wheel's
+## fraction and anything not yet spent.
+func _forget_the_pad() -> void:
+	_queue.clear()
+	_let_go()
+	_axes = [0.0, 0.0, 0.0, 0.0]
+	_wheel_accum = 0.0
+	for axis in _trigger_down:
+		_trigger_down[axis] = false
+	_pad_device.clear()
 
 
 # ---------------------------------------------------------------- input --
@@ -324,9 +365,15 @@ func _input(event: InputEvent) -> void:
 		if not ours:
 			return              # the duel's own buttons: not ours to touch
 		if jb.pressed == _pad_down.get(jb.button_index, false):
-			_take()             # a second pad's copy of a press, or a release owed nothing
-			return
+			if not (jb.pressed and _stale_press(jb)):
+				_take()         # a second pad's copy of a press, or a release owed nothing
+				return
+			# A press this layer still holds although the pad let it go —
+			# its release went to someone else. Let go of it, then press.
+			_pad_down[jb.button_index] = false
+			_queue_release(jb.button_index)
 		_pad_down[jb.button_index] = jb.pressed
+		_pad_device[jb.button_index] = jb.device
 		if jb.button_index == CLICK_BUTTON:
 			_queue.append({"kind": "click", "button": MOUSE_BUTTON_LEFT, "pressed": jb.pressed})
 		elif jb.button_index == MENU_BUTTON:
@@ -354,6 +401,26 @@ func _trigger(axis: int, value: float) -> void:
 	_trigger_down[axis] = now
 	_queue.append({"kind": "click", "button": TRIGGERS[axis], "pressed": now})
 	_take()
+
+
+## THE BACKSTOP FOR A RELEASE THIS LAYER NEVER SAW (bug campaign
+## 2026-10-12). A screen that reads the pad before the autoloads do — the
+## card reader did, eating A's release — leaves [member _pad_down] saying
+## "down" after the pad let go, and the next press would be dropped as a
+## second pad's copy. [Input] saw the release whoever ate it: a press is
+## stale when it comes from the very pad that pressed it (no pad presses
+## twice without letting go), or when that pad no longer holds it.
+func _stale_press(jb: InputEventJoypadButton) -> bool:
+	var device: int = _pad_device.get(jb.button_index, jb.device)
+	return device == jb.device or not Input.is_joy_button_pressed(device, jb.button_index)
+
+
+## The release a stale press is owed, queued ahead of the new press.
+func _queue_release(button: int) -> void:
+	if button == CLICK_BUTTON:
+		_queue.append({"kind": "click", "button": MOUSE_BUTTON_LEFT, "pressed": false})
+	elif button == MENU_BUTTON:
+		_queue.append({"kind": "click", "button": MOUSE_BUTTON_RIGHT, "pressed": false})
 
 
 ## A real mouse button: Steam's copy of a press this layer made within

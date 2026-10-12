@@ -32,8 +32,9 @@ extends SceneTree
 ## line, the lobby's own wire actions ([constant SgProtocol.FIELDS]):
 ## `{"op": "pass"}`, `{"op": "play", "card": "c3"}`, `{"op":
 ## "prepare", "card": "c5", "kind": "spell", "index": 0, "x": 0,
-## "mode": 0}` and so on. Blank lines are skipped; three empty reads in
-## a row are the end of the input, and the seat concedes.
+## "mode": 0}` and so on. Blank lines are skipped; the end of the input
+## (the program closed the pipe) concedes the seat. A line longer than
+## [constant LINE_LIMIT] bytes is refused once, whole.
 ##
 ## THE KEPT GAME (2026-10-03). With `--listen FILE` the same lines are
 ## served on a loopback TCP socket instead of the pipe, so the program
@@ -156,14 +157,22 @@ const NOT_CONNECTED := "Wait for the connection or the current action."
 ## A computer seat's steps without the table changing before the duel
 ## is called (`reason: stalled`).
 const IDLE_BOT_STEPS := 100
-## Empty reads in a row that mean the input has closed: Godot's stdin
-## line reader returns "" for a blank line and for end-of-file alike.
-const EMPTY_READS := 3
+## What [method _read_line_from] hands on for a line longer than
+## [constant LINE_LIMIT]: refused once as such ([method _parse_action]).
+## Its ends survive `strip_edges`; no program writes it.
+const OVERLONG_LINE := "=\u0001the line was too long\u0001="
 const BOT_PACE_MS := 50
 ## The lobby's refusal of a command that carried an old revision; it
 ## asks for the same command again, and a lobby command is sent again
 ## this many times (a game action is not — the seat decides afresh).
 const ROOM_CHANGED := "The room changed. Please try again."
+## A hosted table's end (robustness campaign 2026-10-12): how long the host
+## waits, after the result, for the person still seated to leave before it
+## closes and tells them so (see [method _close_table]).
+const HOST_LINGER_MS := 3000
+## `--join env:NAME` reads the invitation from that environment variable,
+## off the command line (which `ps` shows anyone on the computer).
+const JOIN_FROM_ENV := "env:"
 const LOBBY_TRIES := 5
 
 const HELP := """Referee — one duel played through a pipe, a program in a seat
@@ -206,7 +215,9 @@ SWITCHES
   --dry-run                 print the plan as JSON, play nothing
   --join TEXT               sit at a table the game hosts: a LAN
                             invitation (sglan1:...) or the same-computer
-                            access code the host screen shows
+                            access code the host screen shows;
+                            env:NAME reads it from that environment
+                            variable (off the command line)
   --table NAME              sit at the open LAN table of that name, as
                             the Game Browser lists it (no paste: the
                             open host's advert carries its invitation)
@@ -305,7 +316,7 @@ const FLAG_HINTS := {
 	"--turns": "--turns N: the turn past which the duel is called a draw (200)",
 	"--packs": "--packs LIST: all, none, or the pack ids in play, comma-separated",
 	"--log": "--log FILE: where to write the duel's log — the engine's lines, or a joined table's journal",
-	"--join": "--join TEXT: a LAN invitation (sglan1:...) or the host screen's same-computer access code",
+	"--join": "--join TEXT: a LAN invitation (sglan1:...) or the host screen's same-computer access code; env:NAME reads it from that environment variable",
 	"--table": "--table NAME: the open LAN table of that name, as the Game Browser lists it",
 	"--deck": "--deck PATH: the deck to bring to a joined or hosted table",
 	"--host": "--host NAME: host a table of that name with the game's own LAN host and hold seat 0 for a guest",
@@ -336,7 +347,6 @@ var decisions := 0
 var refusals := 0
 ## [constant RECONNECT_PATIENCE_MS], shortened by a test.
 var reconnect_patience_ms := RECONNECT_PATIENCE_MS
-var _empty_reads := 0
 var _journal_sent: Array[int] = [0, 0]
 # The pump: a joined table's socket must keep being polled while the
 # program thinks, so at a table the input is read on a thread and taken
@@ -365,6 +375,8 @@ var _idle_since := 0
 var _awaiting := false
 var _last_journal: Array = []
 var _eof_reason := ""
+## Bytes the pipe reader read past a newline ([method _read_line_from]).
+var _stdin_rest := PackedByteArray()
 ## The UDP port a hosted table is advertised on; a test's own host
 ## takes an ephemeral one so the system-wide port stays free.
 var discovery_port: int = SgLanDiscovery.PORT
@@ -377,15 +389,46 @@ func _init() -> void:
 
 # ---------------------------------------------------------- the pipe --
 
+## THE PIPE, BYTE BY BYTE (robustness campaign 2026-10-12). Godot's stdin
+## line reader returns "" for a blank line and for the end of the input
+## alike — three blank lines conceded the seat with the program still
+## there — and cut a line longer than its buffer in two, two refusals and
+## two decisions for one answer, so a client read out of step. Its buffer
+## reader tells the end apart (nothing at all), but with a bigger buffer
+## it waits for that buffer to fill: one byte at a time it is, which a
+## line of a few hundred bytes does not feel.
 func _read_stdin() -> Variant:
+	return _read_line_from(func() -> PackedByteArray: return OS.read_buffer_from_stdin(1))
+
+
+## One line from [param next_bytes] (bytes as they come; an empty array is
+## the end of the input): its text without the newline ("" for a blank
+## line), [constant OVERLONG_LINE] for a line over [constant LINE_LIMIT]
+## bytes (read to its end and dropped), or null at the end. A last line
+## with no newline before the end is still a line; bytes read past a
+## newline wait for the next call.
+func _read_line_from(next_bytes: Callable) -> Variant:
+	var line := PackedByteArray()
+	var over := false
 	while true:
-		var line := OS.read_string_from_stdin(65536)
-		if line != "":
-			_empty_reads = 0
-			return line
-		_empty_reads += 1
-		if _empty_reads >= EMPTY_READS:
-			return null
+		var got: PackedByteArray = _stdin_rest
+		_stdin_rest = PackedByteArray()
+		if got.is_empty():
+			got = next_bytes.call()
+		if got.is_empty():
+			return null if line.is_empty() or over else line.get_string_from_utf8()
+		var cut := got.find(10)
+		if cut >= 0:
+			_stdin_rest = got.slice(cut + 1)
+			got = got.slice(0, cut)
+		if not over:
+			if line.size() + got.size() > LINE_LIMIT:
+				over = true
+				line = PackedByteArray()
+			else:
+				line.append_array(got)
+		if cut >= 0:
+			return OVERLONG_LINE if over else line.get_string_from_utf8()
 	return null
 
 
@@ -1166,6 +1209,8 @@ func _decision(n: int, seat: int, mode: String, view: Dictionary) -> void:
 ## duel op, keys that are not that op's ([constant SgProtocol.FIELDS]),
 ## a value the wire would not carry, or a `seat` that is not this one.
 static func _parse_action(text: String, seat: int) -> Dictionary:
+	if text == OVERLONG_LINE:
+		return {"refusal": "the line is longer than %d bytes; none of it was read" % LINE_LIMIT, "action": {}}
 	var json := JSON.new()
 	if json.parse(text) != OK or not json.data is Dictionary:
 		return {"refusal": "not a JSON object: %s" % text.left(80), "action": {}}
@@ -1441,7 +1486,16 @@ func _join(opts: Dictionary, packs: Variant) -> int:
 	if one.has("error"):
 		return _refuse(2, one.error.message, one.error.detail)
 	var invitation := String(opts.join)
-	if invitation == "":
+	if invitation.begins_with(JOIN_FROM_ENV):
+		# THE INVITATION OFF THE COMMAND LINE (robustness campaign
+		# 2026-10-12): the MCP server hands it over in the environment.
+		var variable := invitation.trim_prefix(JOIN_FROM_ENV)
+		var valid := RegEx.create_from_string("^[A-Za-z_][A-Za-z0-9_]{0,63}$").search(variable) != null
+		invitation = OS.get_environment(variable).strip_edges() if valid else ""
+		if invitation == "":
+			return _refuse(2, "--join %s: the environment variable %s holds no invitation" % [opts.join, variable],
+				{"kind": "option", "flag": "--join"})
+	elif invitation == "":
 		var discovery := SgLanDiscovery.new()
 		var found := _find_table(String(opts.table), int(opts.wait), discovery)
 		discovery.free()
@@ -1537,9 +1591,34 @@ func _host(opts: Dictionary, packs: Variant) -> int:
 	else:
 		outcome = _referee_table(client, one.deck, opts, packs, hosting, company)
 	client.free()
-	server.stop()
+	var code := _finish_table(outcome, opts, "--host")
+	_close_table(server, company)
 	server.free()
-	return _finish_table(outcome, opts, "--host")
+	return code
+
+
+## THE HOSTED TABLE'S END (robustness campaign 2026-10-12). The result
+## line is out; the person still seated gets a moment to read their result
+## and leave — the host waits while anyone sits at one of its tables, at
+## most [param linger_ms] — then it closes, and the person reads "The host
+## closed its tables." Before, the host stopped the moment the duel ended
+## and said nothing: the person's game reconnected to nothing, forever,
+## over the finished duel. The told connections are polled until they are
+## closed (encrypted ones are kept open until the guest has read why).
+func _close_table(server: Object, company: Callable, linger_ms := HOST_LINGER_MS) -> void:
+	var deadline := Time.get_ticks_msec() + linger_ms
+	while Time.get_ticks_msec() < deadline and int(server.seated_guests()) > 0:
+		if company.is_valid():
+			company.call()
+		OS.delay_msec(10)
+	server.stop()
+	deadline = Time.get_ticks_msec() + 1000
+	while int(server.closing()) > 0 and Time.get_ticks_msec() < deadline:
+		if company.is_valid():
+			company.call()
+		else:
+			server.poll()
+		OS.delay_msec(10)
 
 
 ## The invitation of the open LAN table called [param name], asked of

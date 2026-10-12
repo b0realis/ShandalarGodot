@@ -2683,6 +2683,20 @@ all-or-nothing guard.
 
 ## Engine simplifications still to lift (in rough priority order)
 
+Robustness campaign (2026-10-12): **Sacrifice when you control no** `<land
+type>` / a `<subtype>` / `<condition>` (`CardData.sacrifice_if_no_land_type`,
+`sacrifice_condition`, `sacrifice_if_you_control_subtype`) is checked as a
+state-based action under every preset — the 1997 rules' "Bury … if at any
+time" reading, faithful there. Modern Oracle prints it as a state trigger
+(CR 603.8), so under the modern presets the doomed permanent's own abilities
+can't be used in response (a Pirate Ship can't ping as its last Island
+goes); the sacrifice itself never changes. A preset-dependent state trigger
+would touch 18 cards (Dandân, Drop of Honey, Endangered Armodon, Giant
+Shark, Goblins of the Flarg, Gorilla Pack, Island Fish Jasconius, Jihad,
+Kukemssa Serpent, Mana Vortex, Manta Ray, Merchant Ship, Pirate Ship, Sea
+Serpent, Seasinger, Serendib Djinn, Skeleton Ship, Vodalian Knights) and the
+AI's `sacrifice_condition` reader.
+
 Wave 3 additions (2026-08-30): **multi-block** with lethal-first
 auto-assignment · **banding** (attack bands, band-blocking, band damage
 spread — defensive banding excluded, see combat.gd) · live landwalk grants
@@ -18769,6 +18783,27 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-12 — The robustness campaign (0.50.20)
+
+The owner, after 0.50.19: *"Lets do a robustness campaign and then a bug hunt
+and bug fix campaign. After fixes commit and push 0.50.20 and then we will
+rebuild."* Five robustness hunters (long play, screens and input, hostile
+files, a hostile network and agent seat, the packages and long sessions) and
+six bug hunters (everything since 0.50.16, the deck flows, rules interactions,
+the 558 untested card scripts, the AI over ~1,450 duels, the duel screen and
+its words) found **105 problems (9 high)**, each reproduced; eleven fixers on
+disjoint files fixed them ([robustness-campaign-2026-10-12.md](robustness-campaign-2026-10-12.md),
+[releases/0.50.20.md](releases/0.50.20.md)). The nine high: the duel screen
+rebuilt once per engine change (now once per frame); a refused skin zip
+deleted at start; pack art cached without a limit; the AI's preview corrupting
+Aura attachments; CR 616.1e damage re-checks; the AI holding back for an
+unpayable counterspell; a private hotseat's territory Concede; the MCP server
+locked by a lone surrogate; a closing host never telling its guests. Left for
+the owner: the Forethought Amulet / Furnace of Rath default order, an AutoDeck
+list pool filtered by the remembered Extras; kept and documented: "sacrifice
+when you control no Islands" as a state-based action (SIMPLIFIED under the
+modern presets, see "Engine simplifications still to lift").
 
 ## 2026-10-11 — The Quest's first start, on the screen and faster (0.50.19)
 

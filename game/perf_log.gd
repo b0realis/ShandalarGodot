@@ -15,20 +15,43 @@ extends Node
 ##     (`Shandalar.x86_64 -- --perf-log`);
 ##   - an empty file named `perf-log` (or `perf-log.txt`) beside the
 ##     executable — on ArkOS the `shandalar/` folder in `ports/`, where no
-##     script has to be edited. Delete the file and the next launch is
-##     back to normal.
+##     script has to be edited; on a Mac beside `Shandalar.app`, where
+##     `skin/` and `cardpacks/` go ([method GamePaths.executable_dir]); on
+##     the Meta Quest in the game's files folder
+##     ([method GamePaths.android_files_dir]), the one place adb reaches.
+##     Delete the file and the next launch is back to normal.
+##
+## NEVER IN A TOOL RUN (2026-10-12). The Deck Lab, `lab_query`, the
+## referee, the auto-deck builder and the pack checks are this same
+## executable, run headless, and their stdout is a report a program reads:
+## a marker left in the release folder or the variable left set put
+## `[perf]` lines into their JSON, and each run renamed the game's own
+## `perf.log` away. A headless run, or one with a tool's flag, never
+## starts the log ([method is_tool_run]); there is nothing on a screen to
+## time in one anyway.
 ##
 ## Asked, one node joins the root and measures every main-loop frame (the
 ## time between two of its own `_process` calls — so a frame the screen
 ## spent waiting on the computer opponent counts, which a rendering
 ## counter alone would hide), and the game reports labelled work through
-## [method span]: each computer decision (`DuelScreen._ai_step`) and each
-## duel screen refresh (`DuelScreen._refresh`). A call is one bool test
-## when the log is off.
+## [method now] and [method span]: each computer decision
+## (`DuelScreen._ai_step`) and each duel screen refresh
+## (`DuelScreen._refresh`). A call is one bool test when the log is off.
 ##
-## WHAT IT WRITES — `user://logs/perf.log` (the previous run's kept as
-## `perf.previous.log`), every line also on stdout with a `[perf]` prefix,
-## which on ArkOS is `portmaster.log` in the game folder:
+## A JOB INSIDE A JOB (2026-10-12). Labelled work can run inside other
+## labelled work — a screen refresh the computer's move set off, inside
+## the computer's decision. Each job then counts its OWN time: the inner
+## one is its own row, named `screen refresh (inside computer decision)`,
+## and the outer one's time leaves it out, so no millisecond is blamed on
+## two jobs or counted twice in a summary. [method now] opens a job and
+## [method span] closes it; a job never closed is dropped at the end of
+## its frame.
+##
+## WHAT IT WRITES — `user://logs/perf.log` (on the Quest `perf.log` in the
+## game's files folder, for `adb pull`; the previous run's kept as
+## `perf.previous.log`), every line also on stderr with a `[perf]` prefix,
+## which on ArkOS is `portmaster.log` in the game folder and on the Quest
+## the system log (`adb logcat`):
 ##
 ##   - a header: version, system, processor, renderer, screen, window,
 ##     frame cap, power saver, the handheld the launcher named, and how
@@ -59,12 +82,20 @@ const SLOW_SPAN_MS := 20.0
 ## in the last bucket — percentiles without keeping every frame.
 const HISTOGRAM_MS := 2000
 const SUMMARY_EVERY_S := 60.0
+## The flags that make this executable a tool rather than the game
+## (`game/main.gd`): the Deck Lab, the auto-deck builder, lab_query, the
+## referee; and every `--verify-pack-N` ([constant TOOL_FLAG_PREFIX]).
+const TOOL_FLAGS: Array[String] = ["--deck-lab", "--auto-deck", "--lab-query", "--referee"]
+const TOOL_FLAG_PREFIX := "--verify-pack-"
 
 static var _active: PerfLog = null
 
 ## Where this run's lines go; a test points it elsewhere before adding the
 ## node to the tree.
 var path := PATH
+## Rename a log already at [member path] to `perf.previous.log` before
+## writing: the launch's own log does, a test's scratch one does not.
+var keep_previous := false
 ## How this launch asked (for the header).
 var asked_by := ""
 
@@ -88,16 +119,56 @@ var _sec_spans := {}        # label -> [count, total_ms, worst_ms]
 var _frame_spans: Array = []  # [label, ms]
 # The whole run: label -> [count, total_ms, worst_ms]
 var _run_spans := {}
+# The jobs opened with [method now] and not yet closed, innermost last.
+var _open_jobs := PackedInt64Array()
+# Jobs closed inside one still open, waiting for its label:
+# [started_us, label, own_ms, total_ms, children (the same shape)].
+var _held_jobs: Array = []
 
 
-## Does THIS launch ask for the log? "" when not; otherwise the way it
-## asked, for the header.
+## Does THIS launch ask for the log? "" when not, and always "" in a tool
+## run ([method is_tool_run]); otherwise the way it asked, for the header.
 static func asked() -> String:
+	if is_tool_run(DisplayServer.get_name(), OS.get_cmdline_user_args()):
+		return ""
 	return asked_from(OS.get_environment(ENV), OS.get_cmdline_user_args(),
-		"" if OS.has_feature("editor") else OS.get_executable_path().get_base_dir())
+		marker_dir("" if OS.has_feature("editor") else OS.get_executable_path(),
+			OS.has_feature("macos"), GamePaths.android_files_dir()))
 
 
-## [method asked] on its inputs, for the tests.
+## Whether this run is a tool's, not the game's: headless (the Deck Lab,
+## lab_query, the referee, the auto-deck builder and the test suite all
+## run so), or with a tool's flag after `--`.
+static func is_tool_run(display_server: String, user_args: PackedStringArray) -> bool:
+	if display_server == "headless":
+		return true
+	for arg in user_args:
+		if arg in TOOL_FLAGS or arg.begins_with(TOOL_FLAG_PREFIX):
+			return true
+	return false
+
+
+## The folder a marker file is looked for in: beside the game, the way
+## its other files are ([method GamePaths.executable_dir] — beside a
+## macOS app, not inside it), or on Android the game's files folder
+## ([param files_dir]), the one place adb can put a file. "" for an
+## editor run ([param executable] "").
+static func marker_dir(executable: String, macos: bool, files_dir: String) -> String:
+	if files_dir != "":
+		return files_dir
+	return "" if executable == "" else GamePaths.executable_dir(executable, macos)
+
+
+## Where this launch's log is written: `user://logs/perf.log`, or on
+## Android `perf.log` in the game's files folder ([param files_dir]),
+## where `adb pull` fetches it — `user://` is private there.
+static func log_path(files_dir: String) -> String:
+	return PATH if files_dir == "" else files_dir.path_join("perf.log")
+
+
+## [method asked] on its inputs, for the tests: the environment value,
+## the user args and the folder a marker is looked for in
+## ([method marker_dir]; "" for none).
 static func asked_from(env_value: String, user_args: PackedStringArray, executable_dir: String) -> String:
 	if env_value.strip_edges().to_lower() in ["1", "on", "yes", "true"]:
 		return "environment %s=%s" % [ENV, env_value.strip_edges()]
@@ -120,20 +191,27 @@ static func start_if_asked(tree: SceneTree) -> void:
 		return
 	var node := PerfLog.new()
 	node.asked_by = how
+	node.path = log_path(GamePaths.android_files_dir())
+	node.keep_previous = true
 	tree.root.add_child.call_deferred(node)
 
 
-## A clock reading for [method span]; 0 when the log is off, so a caller
-## pays one test and no clock.
+## A clock reading for [method span], which opens a job: every job
+## opened after it and closed before its [method span] is inside it. 0
+## when the log is off, so a caller pays one test and no clock.
 static func now() -> int:
-	return Time.get_ticks_usec() if _active != null else 0
+	if _active == null:
+		return 0
+	var started := Time.get_ticks_usec()
+	_active._open_jobs.append(started)
+	return started
 
 
 ## Labelled work that began at [param started_us] ([method now]) has ended.
 static func span(label: String, started_us: int) -> void:
 	if _active == null or started_us == 0:
 		return
-	_active._record(label, float(Time.get_ticks_usec() - started_us) / 1000.0)
+	_active._close_job(label, started_us, Time.get_ticks_usec())
 
 
 static func is_active() -> bool:
@@ -157,6 +235,7 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	_flush_jobs()
 	_close_second()
 	_summary("SUMMARY (exit)")
 	if _file != null:
@@ -175,6 +254,7 @@ func _process(_delta: float) -> void:
 ## One main-loop frame of [param ms], ending at [param now_us]. The test
 ## seam: a test feeds frames here without a real clock.
 func _frame(ms: float, now_us: int) -> void:
+	_flush_jobs()
 	var second := int(float(now_us - _started_us) / 1000000.0)
 	if second != _second:
 		_close_second()
@@ -196,9 +276,64 @@ func _frame(ms: float, now_us: int) -> void:
 		_say("[%6.1fs] HITCH %.0f ms%s" % [float(now_us - _started_us) / 1000000.0, ms,
 			(" — inside it: " + ", ".join(inside)) if not inside.is_empty() else " — no labelled work inside it (drawing, loading or the system)"])
 	_frame_spans.clear()
-	if float(now_us - _started_us) / 1000000.0 >= _next_summary_s:
-		_next_summary_s += SUMMARY_EVERY_S
+	var elapsed_s := float(now_us - _started_us) / 1000000.0
+	if elapsed_s >= _next_summary_s:
+		# Past the elapsed time in one step: a frame that came back from a
+		# ten-minute sleep is one summary, not one per minute slept.
+		_next_summary_s = (floorf(elapsed_s / SUMMARY_EVERY_S) + 1.0) * SUMMARY_EVERY_S
 		_summary("SUMMARY (every minute)")
+
+
+## A job opened at [param started_us] has closed at [param ended_us]: its
+## own time is its length less the jobs closed inside it. With no job
+## still open around it, it and the jobs inside it are recorded now;
+## otherwise it waits for the job around it, whose label it is named by.
+func _close_job(label: String, started_us: int, ended_us: int) -> void:
+	var total_ms := float(ended_us - started_us) / 1000.0
+	var at := -1
+	for i in range(_open_jobs.size() - 1, -1, -1):
+		if _open_jobs[i] == started_us:
+			at = i
+			break
+	if at == -1:      # opened before this log began
+		_record(label, total_ms)
+		return
+	_open_jobs.resize(at)    # and any opened inside it and never closed
+	var children: Array = []
+	var waiting: Array = []
+	var inner_ms := 0.0
+	for held in _held_jobs:
+		if int(held[0]) >= started_us:
+			children.append(held)
+			inner_ms += float(held[3])
+		else:
+			waiting.append(held)
+	var job := [started_us, label, maxf(total_ms - inner_ms, 0.0), total_ms, children]
+	if _open_jobs.is_empty():
+		_held_jobs = waiting
+		_commit_job(job, "")
+	else:
+		waiting.append(job)
+		_held_jobs = waiting
+
+
+## [param job] and the jobs inside it into the tables, each inner one
+## named by the job around it.
+func _commit_job(job: Array, around: String) -> void:
+	var label := String(job[1])
+	_record(label if around == "" else "%s (inside %s)" % [label, around], float(job[2]))
+	for child in job[4]:
+		_commit_job(child, label)
+
+
+## The end of a frame: a job opened and never closed is dropped, and the
+## jobs that were waiting for it are recorded as they stand.
+func _flush_jobs() -> void:
+	_open_jobs.clear()
+	var held := _held_jobs
+	_held_jobs = []
+	for job in held:
+		_commit_job(job, "")
 
 
 func _record(label: String, ms: float) -> void:
@@ -278,20 +413,23 @@ func header() -> PackedStringArray:
 	lines.append("file: %s" % ProjectSettings.globalize_path(path))
 	lines.append("A line per second with a frame over %d ms or labelled work over %d ms; HITCH = one frame of %d ms or more."
 		% [int(SLOW_MS), int(SLOW_SPAN_MS), int(HITCH_MS)])
+	lines.append("Each job counts its own time: work done inside another job is its own row, \"(inside …)\".")
 	return lines
 
 
 func _open() -> void:
 	var folder := path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
-	if path == PATH and FileAccess.file_exists(PATH):
-		DirAccess.rename_absolute(ProjectSettings.globalize_path(PATH),
-			ProjectSettings.globalize_path(PREVIOUS))
+	if keep_previous and FileAccess.file_exists(path):
+		DirAccess.rename_absolute(ProjectSettings.globalize_path(path),
+			ProjectSettings.globalize_path(folder.path_join(PREVIOUS.get_file())))
 	_file = FileAccess.open(path, FileAccess.WRITE)
 
 
+## A line to the file and to stderr: never stdout, which a tool's report
+## owns (ArkOS's launcher sends both to portmaster.log).
 func _say(line: String) -> void:
-	print("[perf] " + line)
+	printerr("[perf] " + line)
 	if _file != null:
 		_file.store_line(line)
 		_file.flush()

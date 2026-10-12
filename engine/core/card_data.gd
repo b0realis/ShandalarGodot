@@ -276,9 +276,12 @@ var attack_needs_defender_land: String = ""
 
 ## "When you control no [land type], sacrifice this" (Sea Serpent,
 ## Pirate Ship, Dandan, Merchant Ship). Lowercase land subtype,
-## "" = no clause. Enforced as a state-based action in MtgGame — the
-## printed wording is a state trigger, and in this engine the two are
-## indistinguishable (both fire the moment the condition becomes true).
+## "" = no clause. The modern wording is a state trigger (CR 603.8);
+## checked here as a state-based action — the 1997 rules' "Bury … if at
+## any time" — so no response window opens (docs/mechanics.md).
+## SIMPLIFIED (docs/ROADMAP.md, "Sacrifice when you control no"): under the
+## modern presets the doomed permanent's own abilities can't be used in
+## response.
 var sacrifice_if_no_land_type: String = ""
 
 ## "Cast this spell only ..." — a TIMING rider on a spell (Reset's "only

@@ -1,6 +1,6 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.19**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.20**. A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -27,7 +27,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.19 development builds** and enabled packs on both computers. The older
+Use matching **0.50.20 development builds** and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -118,7 +118,8 @@ with its Save button. Previously public observations remain history even if a
 card later becomes hidden; they are not live access to that hidden card.
 
 The host must keep its lobby and application open for the whole duel.
-Closing that host stops its service and all rooms. There is no account
+Closing that host stops its service and all rooms; every connected guest
+reads "The host closed its tables." and stops reconnecting. There is no account
 setup, router configuration, automatic port forwarding or external service.
 
 An open table publishes its invitation in its LAN listing on purpose: anyone
@@ -350,8 +351,11 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   Builder source filters do not change the active catalogue. A new connection
   fingerprints the current pool, including enabled packs. See the
   [integration audit](packs-sgmanalink-integration.md).
-  Invalid invitations, expired seats, incompatible builds and full hosts report
-  distinct failures and do not trigger endless automatic retries.
+  Invalid invitations, expired seats, incompatible builds, full hosts, a seat at
+  a host that has restarted since and a host that closed report distinct
+  failures and do not trigger endless automatic retries. An unfinished
+  WebSocket handshake gets 1.5 s of the host's own polling and under 4 KB; one
+  address holds at most 16.
 - Each client receives a detached allowlisted view. Opponent hands and library
   order are not transmitted unless a card rule expressly permits that look/reveal.
   Engine logs, RNG state and raw engine IDs are never transmitted. Deck lists

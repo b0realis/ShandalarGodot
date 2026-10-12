@@ -110,7 +110,7 @@ static func brood(game: MtgGame, source: CardInstance) -> Array[CardInstance]:
 
 static func _bud(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	# Phased out: no counter can be removed, so no Tetravite is made (CR
-	# 702.26b) — add_counters would refuse while the tokens still came.
+	# 702.26b) — remove_counters would refuse while the tokens still came.
 	if not game.is_present(source):
 		return
 	var pid := source.controller_id
@@ -124,7 +124,7 @@ static func _bud(game: MtgGame, source: CardInstance, _event: GameEvent) -> void
 		have)
 	if many <= 0:
 		return
-	game.add_counters(source, "+1/+1", -many)
+	game.remove_counters(source, "+1/+1", many)
 	var ids: Array = source.memory.get("brood", []).duplicate()
 	for tok in game.create_token(pid, _tetravite(), many):
 		ids.append(tok.id)

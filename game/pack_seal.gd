@@ -17,9 +17,15 @@ extends RefCounted
 ##
 ## WHAT THE SEAL IS. The SHA-256 of the file's size and of its central
 ## directory — the zip's own table of every entry's name, sizes and
-## CRC-32 — read from the end of the file ([method fingerprint]). A
+## CRC-32 — read from the end of the file ([method table_fingerprint]),
+## bound since 2026-10-12 to the file itself: its path and modification
+## time ([method fingerprint]; a copy damaged in its data has the good
+## pack's table, and inherited its seal). A
 ## pack rebuilt, repaired, re-zipped or replaced has another table and
-## is hashed in full again; a truncated one has another size. The check
+## is hashed in full again; a truncated one has another size; a copy
+## elsewhere or written anew is another file. A pack REFUSED after its
+## pictures were read is remembered the same way ([method refuse]), so a
+## damaged copy is not read again at every start. The check
 ## exists against a corrupt or mislabelled pack and against code in a
 ## pack; the second is the file list, read every start. It is not a
 ## defence against the player's own hand editing a picture under an
@@ -45,10 +51,44 @@ const WINDOW := 8 * 1024 * 1024
 static var pictures_hashed := 0
 
 
-## The fingerprint of the pack file at [param path]: "" where there is
-## no file, no zip tail or a zip64 table (never sealed — hashed every
-## start, as before).
+## The fingerprint of the pack FILE at [param path]: its table ([method
+## table_fingerprint]) bound to where the file is and when it was last
+## written; "" where the table is "" (never sealed — hashed every start,
+## as before).
+##
+## ONE FILE'S SEAL (robustness campaign of 2026-10-12). The table alone
+## was the seal until then, and a copy damaged in its DATA has the good
+## pack's table: a damaged copy in the card folder was refused at one
+## start while the good copy in another folder was hashed and sealed —
+## and at the next start the damaged copy came first and was taken as
+## sealed, broken pictures and all. A copy written over a sealed pack
+## (same name, same table, other bytes) was never checked either. Bound
+## to the file, a copy elsewhere is checked for itself, and a copy over
+## the same name has another modification time. (A copy made keeping the
+## old file's time, `cp -p`, over the same name, is still taken: the
+## engine reads no change time to tell.)
 static func fingerprint(path: String) -> String:
+	return bind(table_fingerprint(path), path)
+
+
+## [param table] (a [method table_fingerprint]) bound to the file at
+## [param path] — its full path and modification time; "" for "".
+static func bind(table: String, path: String) -> String:
+	if table == "":
+		return ""
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(("%s\n%s\n%d\n" % [table, ProjectSettings.globalize_path(path),
+		FileAccess.get_modified_time(path)]).to_utf8_buffer())
+	return hashing.finish().hex_encode()
+
+
+## The fingerprint of the ZIP's TABLE at [param path]: the SHA-256 of the
+## file's size and its central directory — what the seal was before
+## 2026-10-12, and what an older build's seal still is ([method
+## CardPacks._hash_plan] honours one for the single file that has that
+## table). "" where there is no file, no zip tail or a zip64 table.
+static func table_fingerprint(path: String) -> String:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return ""
@@ -85,20 +125,89 @@ static func sealed(seal: String) -> bool:
 
 
 ## Put [param seal] on the list (last; the oldest drops past
-## [constant KEPT]).
-static func seal(seal: String) -> void:
+## [constant KEPT]), taking [param replaces] off it in the same write (an
+## older build's table seal, now bound to its file) and any refusal
+## remembered for [param seal].
+static func seal(seal: String, replaces := "") -> void:
 	if seal == "":
 		return
 	var seals := _seals()
 	seals.erase(seal)
+	if replaces != "":
+		seals.erase(replaces)
 	seals.append(seal)
 	while seals.size() > KEPT:
 		seals.pop_front()
+	var refused := _refused()
+	refused.erase(seal)
+	_write(seals, refused)
+
+
+## Write the list (and the refusals, when there are any) whole.
+static func _write(seals: Array, refused: Dictionary) -> void:
+	var data := {"seals": seals}
+	if not refused.is_empty():
+		data["refused"] = refused
 	# Whole or not at all (bug pass of 2026-10-03): a list cut short by a
 	# failed write in place read back as no seals, and every pack was
 	# hashed in full again. A list that cannot be written is left as it
 	# was; this pack is simply hashed again at the next start.
-	Settings.write_atomically(FILE, JSON.stringify({"seals": seals}).to_utf8_buffer())
+	Settings.write_atomically(FILE, JSON.stringify(data).to_utf8_buffer())
+
+
+# --- campaign 2026-10-12 f-packs: a refused pack is remembered ---
+
+## REMEMBER A REFUSAL (robustness campaign of 2026-10-12). A pack refused
+## after its pictures were read — a damaged copy — was never sealed, so
+## every start read all its pictures again (the check screen at every
+## start, tens of seconds on the headset) to refuse it again, three engine
+## errors each time. [param seal] is the FILE's fingerprint ([method
+## fingerprint]), so the memory is that file's alone — the good copy of
+## the same pack elsewhere is another file — and it is kept with the game
+## version that judged it: another version may judge the file otherwise
+## and reads it again. A file written anew has another fingerprint.
+static func refuse(seal: String, why: String) -> void:
+	if seal == "":
+		return
+	var refused := _refused()
+	refused.erase(seal)
+	refused[seal] = {"why": why, "game": _game_version()}
+	while refused.size() > KEPT:
+		refused.erase(refused.keys()[0])
+	var seals := _seals()
+	seals.erase(seal)
+	_write(seals, refused)
+
+
+## Why the file whose fingerprint is [param seal] was refused at an
+## earlier start by this game version, or "".
+static func refusal(seal: String) -> String:
+	if seal == "":
+		return ""
+	var one: Variant = _refused().get(seal, null)
+	if not (one is Dictionary) or String(one.get("game", "")) != _game_version():
+		return ""
+	return String(one.get("why", ""))
+
+
+static func _refused() -> Dictionary:
+	if not FileAccess.file_exists(FILE):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(FILE))
+	if not (parsed is Dictionary) or not (parsed.get("refused", null) is Dictionary):
+		return {}
+	var out := {}
+	for key in parsed["refused"]:
+		var one: Variant = parsed["refused"][key]
+		if key is String and one is Dictionary and one.get("why", null) is String:
+			out[key] = one
+	return out
+
+
+static func _game_version() -> String:
+	return String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
+# --- end campaign 2026-10-12 f-packs ---
 
 
 ## Forget every seal — a test's clean slate, or a player who wants the
@@ -225,7 +334,7 @@ static func _indexed_sha256s(path: String, names: Array) -> Dictionary:
 	var wanted := {}
 	for value in names:
 		wanted[String(value)] = true
-	var entries: Array = []   # [local offset, name, method, crc, packed, unpacked]
+	var entries: Array = []   # [local offset, name, method, crc, packed, unpacked, name bytes]
 	var p := 0
 	for i in count:
 		if p + 46 > directory.size() or directory.decode_u32(p) != 0x02014B50:
@@ -241,7 +350,8 @@ static func _indexed_sha256s(path: String, names: Array) -> Dictionary:
 			if flags & 1 or not method in [0, 8] or packed == 0xFFFFFFFF or unpacked == 0xFFFFFFFF:
 				return {}
 			entries.append([directory.decode_u32(p + 42), name, method,
-				directory.decode_u32(p + 16), packed, unpacked])
+				directory.decode_u32(p + 16), packed, unpacked,
+				directory.slice(p + 46, p + 46 + name_size)])
 		p += record
 	if entries.size() != wanted.size():
 		return {}
@@ -251,13 +361,14 @@ static func _indexed_sha256s(path: String, names: Array) -> Dictionary:
 	var window_at := 0
 	for entry: Array in entries:
 		var local: int = entry[0]
-		var head := _window_bytes(file, size, local, 30, window, window_at)
+		var name_bytes: PackedByteArray = entry[6]
+		var head := _window_bytes(file, size, local, 30 + name_bytes.size(), window, window_at)
 		if head.is_empty():
 			return {}
 		window = head[1]
 		window_at = head[2]
 		var header: PackedByteArray = head[0]
-		if header.decode_u32(0) != 0x04034B50:
+		if header.decode_u32(0) != 0x04034B50 or not _local_agrees(header, entry):
 			return {}
 		var data_at: int = local + 30 + header.decode_u16(26) + header.decode_u16(28)
 		var body := _window_bytes(file, size, data_at, int(entry[4]), window, window_at)
@@ -304,5 +415,32 @@ static func _window_bytes(file: FileAccess, size: int, at: int, length: int,
 static func _sha256(payload: PackedByteArray) -> String:
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)
-	hashing.update(payload)
+	# An empty buffer is an engine error in `update` (robustness campaign
+	# of 2026-10-12: a picture the zip library could not read came back
+	# empty, and every start that read it logged one); the empty digest
+	# is the same without it.
+	if not payload.is_empty():
+		hashing.update(payload)
 	return hashing.finish().hex_encode()
+
+
+## THE LOCAL HEADER AGREES WITH THE DIRECTORY (robustness campaign of
+## 2026-10-12). The zip library the engine reads through — [ZIPReader],
+## and the mounted pack the pictures are drawn from — refuses an entry
+## whose local header disagrees with its directory record: another
+## method, and unless the entry's sizes and CRC follow its data (flag bit
+## 3), another CRC or size; another name length. This reader took the
+## header's two lengths and nothing else, so a bit flipped in a local
+## CRC passed the check, the pack was sealed, and the picture failed to
+## load from the mounted pack at every start. It now asks what the
+## library asks, and the name itself besides; [param header] holds the
+## 30 bytes and the name, [param entry] the directory's record.
+static func _local_agrees(header: PackedByteArray, entry: Array) -> bool:
+	var name_bytes: PackedByteArray = entry[6]
+	if header.decode_u16(8) != int(entry[2]):
+		return false
+	if (header.decode_u16(6) & 8) == 0 and (header.decode_u32(14) != int(entry[3]) \
+			or header.decode_u32(18) != int(entry[4]) or header.decode_u32(22) != int(entry[5])):
+		return false
+	return header.decode_u16(26) == name_bytes.size() \
+		and header.slice(30, 30 + name_bytes.size()) == name_bytes

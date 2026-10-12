@@ -363,6 +363,15 @@ func _set_collapsed(value: bool) -> void:
 	populate(_hand, _hidden, _click_cb, _highlight_cb)
 
 
+## The view changing size re-fits the window at once (campaign 2026-10-12,
+## r2-8): a desktop window dragged smaller, a Deck docked or undocked, left
+## the hand hanging off the edge until something redrew it. (The hotseat's
+## seat windows, [HotseatHand], connect their own clamp in their own
+## `_ready`.)
+func _ready() -> void:
+	get_viewport().size_changed.connect(_clamp_on_screen)
+
+
 func _clamp_on_screen() -> void:
 	if get_parent() == null or pinned:
 		return

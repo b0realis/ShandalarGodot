@@ -491,6 +491,13 @@ static func tar_beside(kind: String, beside: String) -> String:
 ## `art` counts the entries under `skin/cardart/`; a zip that holds
 ## nothing else is of kind "cardart", anything else is a "skin".
 static func inspect(path: String) -> Dictionary:
+	# A file that is there but may not be opened is said so (robustness
+	# campaign 2026-10-12): "not a zip file" sent a player to look for
+	# damage in a zip whose only fault was its permissions.
+	# (The engine reports a refused open as ERR_FILE_CANT_OPEN, not as a
+	# permission error; a file that exists and will not open is that.)
+	if FileAccess.file_exists(path) and FileAccess.open(path, FileAccess.READ) == null:
+		return _refusal("the game may not read it (check its permissions)")
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
 		return _refusal("not a zip file")
@@ -528,11 +535,14 @@ func mount(path: String, replace: bool) -> bool:
 	if not report["ok"]:
 		report_lines.append("skin pack: %s refused — %s" % [path, report["why"]])
 		push_warning(report_lines.back())
+		refused[path] = String(report["why"])
 		return false
 	if not ProjectSettings.load_resource_pack(path, replace):
 		report_lines.append("skin pack: %s could not be mounted" % path)
 		push_warning(report_lines.back())
+		refused[path] = "the game could not mount it"
 		return false
+	refused.erase(path)
 	mounted.erase(path)
 	if replace:
 		mounted.push_front(path)
@@ -551,11 +561,44 @@ func mount(path: String, replace: bool) -> bool:
 func _mount_if_present(path: String, replace: bool) -> void:
 	if not FileAccess.file_exists(path):
 		return
-	if not mount(path, replace) and path.begins_with(USER_DIR + "/"):
+	if not mount(path, replace) and refused_zip_is_disposable(path, OS.has_feature("web")):
 		# A stored zip that is not a skin (a download that was a 404
 		# page, say) is never going to be one; clear it so the browser
 		# fetches again next time.
 		DirAccess.remove_absolute(path)
+
+
+# --- campaign 2026-10-12 f-packs: a refused zip is kept, and why is said ---
+
+## Every zip [method mount] refused this run, by path: the reason in the
+## player's words. A zip worn after all leaves the list.
+var refused: Dictionary = {}
+
+
+## Whether a stored zip that would not mount is the game's to delete: in
+## a browser only, and only in the skins folder, where every file is one
+## the game fetched or read in itself (a 404 page saved as a zip is never
+## going to be a skin, and the page fetches again once it is gone). On a
+## desktop, a handheld or a headset the folder is the player's — a zip
+## made by hand, a copy cut short, a file with the wrong permissions — and
+## it stays where it is, the reason said in Options (robustness campaign
+## 2026-10-12: the game deleted the player's own zip at every start).
+static func refused_zip_is_disposable(path: String, web: bool) -> bool:
+	return web and path.begins_with(USER_DIR + "/")
+
+
+## One line per zip refused this run that is still there and not worn —
+## "Not worn: <the path the player can open> — <why>." — for Options >
+## Skin. A zip since deleted or worn after all is not talked about.
+func refusal_lines() -> Array[String]:
+	var out: Array[String] = []
+	for path: String in refused:
+		if mounted.has(path) or not FileAccess.file_exists(path):
+			continue
+		out.append("Not worn: %s — %s." % [GamePaths.shown(path), String(refused[path])])
+	return out
+
+# --- end campaign 2026-10-12 f-packs ---
 
 
 ## How many files a mounted [param path] holds of [param kind] — the

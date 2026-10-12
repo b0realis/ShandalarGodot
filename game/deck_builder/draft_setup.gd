@@ -238,15 +238,45 @@ func options(commit := true) -> Dictionary:
 func _refresh() -> void:
 	if pool_summary == null or status == null or folder == null: return
 	var names := DraftPoolConfig.selected()
-	var sets: Dictionary = {}
-	for card_name in names: sets[CardRegistry.get_card(card_name).set_code] = true
-	pool_summary.text = "%d eligible cards from %d sets · remembered for next time" % [names.size(), sets.size()]
+	pool_summary.text = "%d eligible cards from %d sets · remembered for next time" % [names.size(), _sets_holding(names)]
 	var config := options(false)
 	var refusal := DraftPoolConfig.validate(config, names)
 	var total := int(config.boosters) * 15 + int(config.starters) * 60 + int(config.free_lands) * 5 + int(config.extras)
 	_pool_ok = refusal == ""
 	_pool_status = refusal if refusal != "" else "%d cards to build with · aim for at least %d cards in your deck" % [total, DeckModel.MIN_CARDS]
 	_refresh_folder_note()
+
+
+# --- campaign 2026-10-12 f-deck: sets counted by what they printed ---
+
+## Set code -> its names ([method CardRegistry.names_in_set]), for the
+## sets in play when it was built; rebuilt when that list changes.
+var _set_members: Dictionary = {}
+var _set_members_for: Array[String] = []
+
+
+## How many sets in play printed at least one of [param names] — the
+## membership the Card pool window groups by ([DraftPoolDialog]). Counted
+## by each card's script set only, a Fifth Edition draft (every card a
+## reprint) read "from 0 sets" of its own and a reprint's set went
+## uncounted. The members are read once per set list, not per keystroke.
+func _sets_holding(names: Array[String]) -> int:
+	var active := CardRegistry.active_set_order()
+	if active != _set_members_for:
+		_set_members.clear()
+		for code in active:
+			_set_members[code] = CardRegistry.names_in_set(code)
+		_set_members_for = active
+	var chosen := {}
+	for card_name in names:
+		chosen[card_name] = true
+	var count := 0
+	for code in active:
+		for card_name in _set_members[code]:
+			if chosen.has(card_name):
+				count += 1
+				break
+	return count
 
 
 ## THE STATUS LINE'S FOLDER HALF ON ITS OWN (whole-game campaign 2026-10).

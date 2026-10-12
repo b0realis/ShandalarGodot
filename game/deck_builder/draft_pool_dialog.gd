@@ -24,7 +24,7 @@ func _ready() -> void:
 		saved.assign(CardRegistry.all_names())
 	for card_name in saved:
 		selected_cards[card_name] = true
-	var intro := OriginalDialog.label("Choose whole sets or expand a set to choose individual cards. Only checked cards can be dealt. Choices for disabled packs are kept until those packs return. Changes here do not limit ordinary duels.", 15)
+	var intro := OriginalDialog.label("Choose whole sets or expand a set to choose individual cards. A card printed in several sets is listed under each, and checking it once checks it everywhere. Only checked cards can be dealt. Choices for disabled packs are kept until those packs return. Changes here do not limit ordinary duels.", 15)
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body().add_child(intro)
 	var search := OriginalDialog.text_field()
@@ -37,25 +37,7 @@ func _ready() -> void:
 	tree.add_theme_stylebox_override("panel", OriginalDialog.panel_style("panel_dark_stone", 6))
 	body().add_child(tree)
 	var root := tree.create_item()
-	for card_name in CardRegistry.all_names():
-		if not SealedPool.SLOT_ORDER.has(SealedPool.slot_of(card_name)):
-			selected_cards.erase(card_name)
-			continue
-		var code := CardRegistry.get_card(card_name).set_code
-		if not groups.has(code):
-			var group := tree.create_item(root)
-			group.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
-			group.set_editable(0, true)
-			group.set_text(0, String(DeckFilter.SET_LABELS.get(code, code)))
-			group.set_metadata(0, {"set": code})
-			group.collapsed = true
-			groups[code] = group
-		var row := tree.create_item(groups[code])
-		row.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
-		row.set_editable(0, true)
-		row.set_text(0, card_name)
-		row.set_metadata(0, {"card": card_name})
-		rows[card_name] = row
+	_build_groups(root)
 	summary = OriginalDialog.label("", 14)
 	body().add_child(summary)
 	tree.item_edited.connect(_edited)
@@ -69,6 +51,84 @@ func _ready() -> void:
 	# would otherwise keep focus and answer the next Enter. The finder is
 	# where a hand goes first here, and Enter in it does nothing.
 	search.grab_focus()
+
+
+# --- campaign 2026-10-12 f-deck: whole sets, reprints included ---
+
+## Card name -> every row that names it. A reprint is listed under each
+## set that printed it, and checking it anywhere checks it everywhere: the
+## choice is the NAME, which is what the draft deals.
+var name_rows: Dictionary = {}
+## The heading of the always-offered basic lands, keyed in [member groups].
+const BASICS_GROUP := "basic"
+
+
+## ONE GROUP PER SET IN PLAY, by what the set PRINTED ([method
+## CardRegistry.names_in_set], the membership [method
+## CardRegistry.card_in_set] answers for the Deck Builder's set filter, its
+## Sealed window and AutoDeck) — not by the one set each card's script is
+## filed under. Filed that way, Fifth Edition (every card a reprint) had no
+## group at all, Fourth Edition listed 149 of its 368 names, and a "Fourth
+## Edition only" draft had no basic land to deal.
+##
+## The five BASIC LANDS head the list as a group of their own, whatever
+## sets are in play — a booster's land slot is a basic, whichever set
+## printed it, as the Sealed window deals it. A name no set claims stays
+## under its script's set, so nothing on a sheet goes missing.
+func _build_groups(root: TreeItem) -> void:
+	var eligible := {}
+	for card_name in CardRegistry.all_names():
+		if SealedPool.SLOT_ORDER.has(SealedPool.slot_of(card_name)):
+			eligible[card_name] = true
+		else:
+			selected_cards.erase(card_name)
+	var basics: Array[String] = []
+	for land in SealedPool.LAND_NAMES:
+		if eligible.has(land):
+			basics.append(String(land))
+	if not basics.is_empty():
+		_add_group(root, BASICS_GROUP, "Basic lands", basics)
+	for code in CardRegistry.active_set_order():
+		var members: Array[String] = []
+		for card_name in CardRegistry.names_in_set(code):
+			if eligible.has(card_name):
+				members.append(card_name)
+		if members.is_empty():
+			continue
+		members.sort()
+		_add_group(root, code, String(DeckFilter.SET_LABELS.get(code, code)), members)
+	for card_name in eligible:
+		if name_rows.has(card_name):
+			continue
+		var code := CardRegistry.get_card(card_name).set_code
+		if not groups.has(code):
+			_add_group(root, code, String(DeckFilter.SET_LABELS.get(code, code)), [])
+		_add_row(groups[code], card_name)
+
+
+func _add_group(root: TreeItem, key: String, label: String, members: Array[String]) -> void:
+	var group := tree.create_item(root)
+	group.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
+	group.set_editable(0, true)
+	group.set_text(0, label)
+	group.set_metadata(0, {"set": key})
+	group.collapsed = true
+	groups[key] = group
+	for card_name in members:
+		_add_row(group, card_name)
+
+
+func _add_row(group: TreeItem, card_name: String) -> void:
+	var row := tree.create_item(group)
+	row.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
+	row.set_editable(0, true)
+	row.set_text(0, card_name)
+	row.set_metadata(0, {"card": card_name})
+	if not rows.has(card_name):
+		rows[card_name] = row
+	if not name_rows.has(card_name):
+		name_rows[card_name] = []
+	name_rows[card_name].append(row)
 
 
 func body() -> VBoxContainer:
@@ -110,8 +170,9 @@ func _edited() -> void:
 func _refresh() -> void:
 	_updating = true
 	var slots := {"rare": 0, "uncommon": 0, "common": 0, "land": 0}
-	for card_name in rows:
-		rows[card_name].set_checked(0, selected_cards.has(card_name))
+	for card_name in name_rows:
+		for row: TreeItem in name_rows[card_name]:
+			row.set_checked(0, selected_cards.has(card_name))
 		if selected_cards.has(card_name):
 			slots[SealedPool.slot_of(card_name)] += 1
 	for group: TreeItem in groups.values():

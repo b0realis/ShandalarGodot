@@ -48,12 +48,23 @@ extends RefCounted
 ## Off on a desk unless asked; on under a handheld launcher unless the
 ## player says otherwise ([method Settings.power_saver]). Applied at boot
 ## with the window mode, and at once from the Options row.
+##
+## THE FRAME CAP WHERE V-SYNC IS REFUSED (2026-10-12). V-Sync is what
+## paces the frames on a desk. Where the graphics driver will not set it —
+## Xvfb, a virtual machine, some remote desktops; the engine logs "Could
+## not set V-Sync mode" and the window's mode reads DISABLED — nothing
+## did, and the title screen idled at ~700 frames a second on eight cores.
+## The boot then caps the frame rate at the screen's refresh rate (60
+## where that is unknown) ([method apply_frame_cap]). A cap a launcher set
+## (ArkOS's `--max-fps 30`) is kept.
 
 ## The [Settings] key. `false` is the shipped window — 1280x800, resizable
 ## — which is what the game has always opened into.
 const KEY := "fullscreen"
 ## The [Settings] key of the power saver.
 const POWER_KEY := "power_saver"
+## The frame cap where V-Sync is refused and the screen's rate is unknown.
+const FALLBACK_FPS := 60
 
 
 ## What the stored setting asks the window to be.
@@ -70,6 +81,7 @@ static func apply_settings() -> void:
 	apply_power_saver()
 	if DisplayServer.get_name() == "headless":
 		return
+	apply_frame_cap()
 	if not Settings.has_value(KEY) and launcher_asked_fullscreen():
 		return          # the launcher's word, until the player has one
 	var wanted := wanted_mode()
@@ -135,3 +147,27 @@ static func apply_power_saver() -> void:
 static func set_power_saver(on: bool) -> void:
 	Settings.set_value(POWER_KEY, on)
 	apply_power_saver()
+
+
+## Cap the frame rate when V-Sync does not pace it (class doc). Silent
+## headless, where there is nothing to draw, and on the web, where the
+## browser paces every frame. Idempotent: once capped, the cap stands.
+static func apply_frame_cap() -> void:
+	if DisplayServer.get_name() == "headless" or OS.has_feature("web"):
+		return
+	var cap := frame_cap_from(Engine.max_fps, DisplayServer.window_get_vsync_mode(),
+		DisplayServer.screen_get_refresh_rate())
+	if cap != Engine.max_fps:
+		Engine.max_fps = cap
+
+
+## The rule, pure, so a headless test can pin it: the frame cap for a
+## window whose cap is [param max_fps] (0: none), whose V-Sync is
+## [param vsync_mode] and whose screen refreshes [param refresh_rate]
+## times a second (NaN or -1 when unknown).
+static func frame_cap_from(max_fps: int, vsync_mode: int, refresh_rate: float) -> int:
+	if max_fps != 0 or vsync_mode != DisplayServer.VSYNC_DISABLED:
+		return max_fps
+	if is_finite(refresh_rate) and refresh_rate >= 30.0 and refresh_rate <= 500.0:
+		return roundi(refresh_rate)
+	return FALLBACK_FPS

@@ -125,6 +125,16 @@ var _deck_titles: Dictionary = {}
 ## [method _scan_decks] makes of each file, and the seats share the answer.
 var _grouped_paths: Dictionary = {}
 var _grouped_playable: Dictionary = {}
+# --- campaign 2026-10-12 f-deck: the random rows follow the chosen format ---
+## Deck path -> `[cards, sideboard]` for every playable deck, from the one
+## parse [method _scan_decks] makes of it, so the chosen format can be
+## asked of every deck without reading a file again.
+var _playable_lists: Dictionary = {}
+## Deck path -> its heading, from the same scan.
+var _scan_groups: Dictionary = {}
+## Format -> the playable decks it accepts ([method _format_playable]),
+## worked out the first time that format is chosen.
+var _legal_by_format: Dictionary = {}
 ## `Go!` has been pressed and the duel built. `queue_free()` defers, so a
 ## second press in the same frame (a double-click, a held Return) used to
 ## build a second duel under `root` and orphan the first, still running
@@ -204,7 +214,7 @@ const FACE_SIZE := Vector2(120, 88)
 ## 1997 face fills the box exactly and anything else is fitted into it.
 const PORTRAIT_SIZE := Vector2(120, 148)
 ## Where a seat's chosen portrait is remembered, by ID.
-const PORTRAIT_KEY := "Portrait%d"
+const PORTRAIT_KEY := PortraitLibrary.SEAT_KEY
 ## Where the rest of the screen is remembered ([method _remember_choices]):
 ## one [Settings] key per control, under this prefix — `battle_mode`,
 ## `battle_deck_0`, ... — so they read as one family in the file and
@@ -366,6 +376,8 @@ func _scan_decks() -> void:
 			_deck_paths.append(path)
 			_playable_paths.append(path)
 			_deck_titles[path] = deck.deck_name
+			# Kept for the format the player picks ([method _format_playable]).
+			_playable_lists[path] = [deck.cards, deck.sideboard]
 			continue
 		if lenient.errors.is_empty() and not lenient.proxies.is_empty() \
 				and lenient.cards.size() >= DeckModel.CASUAL_MIN_CARDS:
@@ -374,6 +386,7 @@ func _scan_decks() -> void:
 			_deck_titles[path] = lenient.deck_name
 	_deck_paths.sort()
 	_playable_paths.sort()
+	_scan_groups = groups
 	_grouped_paths = DeckGroups.grouped(_deck_paths, groups)
 	_grouped_playable = DeckGroups.grouped(_playable_paths, groups)
 
@@ -535,6 +548,7 @@ func _build_ui() -> void:
 		seat_box.add_child(UiChrome.body_label("Name:"))
 		var name_edit := LineEdit.new()
 		name_edit.text = "Player %d" % (pid + 1)
+		name_edit.max_length = SEAT_NAME_MAX
 		seat_box.add_child(name_edit)
 		_name_edits.append(name_edit)
 
@@ -613,7 +627,7 @@ func _build_ui() -> void:
 	# Unrestricted first, as the original lists it, and it is also the only
 	# choice that can never refuse a deck — so the default refuses nothing.
 	_format_option.select(0)
-	_format_option.item_selected.connect(func(_i: int) -> void: _refresh_format_note())
+	_format_option.item_selected.connect(func(_i: int) -> void: _on_format_changed())
 	format_row.add_child(_format_option)
 	var explain := UiChrome.menu_button("?", Vector2(34, 30))
 	explain.pressed.connect(_explain_formats)
@@ -891,8 +905,7 @@ func _build_action_row() -> Control:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 20)
 	var back := UiChrome.menu_button("Back", Vector2(180, 42))
-	back.pressed.connect(func() -> void:
-		get_tree().change_scene_to_file("res://game/main.tscn"))
+	back.pressed.connect(_go_back)
 	buttons.add_child(back)
 	var go := UiChrome.menu_button("Go!", Vector2(180, 42))
 	go.pressed.connect(_start_battle)
@@ -987,15 +1000,10 @@ func _update_portrait(pid: int) -> void:
 ## the library's face for that seat. Until the bug pass of 2026-10-03 the
 ## chooser showed that default while the duel was handed "" and wore the
 ## deck-colour duelist instead. `{}` when there is no portrait art at all.
+## The rule itself is [method PortraitLibrary.chosen_for] since the
+## campaign of 2026-10-12, so the Gauntlet hands its duels the same face.
 func _chosen_portrait(pid: int) -> Dictionary:
-	var faces := PortraitLibrary.all()
-	if faces.is_empty():
-		return {}
-	var current := String(Settings.get_value(PORTRAIT_KEY % pid, ""))
-	for face in faces:
-		if face["id"] == current:
-			return face
-	return faces[mini(pid, faces.size() - 1)]
+	return PortraitLibrary.chosen_for(pid)
 
 
 ## Repoint one seat's portrait at whatever its picker now names. On
@@ -1089,14 +1097,16 @@ func _fill_deck_options(option: OptionButton) -> void:
 		# draw at all, and `_deck_path_for` would fall back to the whole
 		# pool, quietly handing the player the opposite of what the row
 		# promised. Two is the smallest number that makes the row honest.
-		var drawable: Array = _grouped_playable.get(group, [])
+		# Playable UNDER THE CHOSEN FORMAT (campaign 2026-10-12): a row
+		# drawing from decks the format then refuses is the same broken
+		# promise as a row with no deck in it.
+		var drawable: Array = _grouped_format_playable().get(group, [])
 		if drawable.size() >= 2:
 			option.add_item("<random from %s>" % group)
 			option.set_item_metadata(option.item_count - 1,
 				GROUP_RANDOM + String(group))
 			option.set_item_tooltip(option.item_count - 1,
-				"Let the duel's seed choose one of the %d playable decks "
-				% drawable.size() + "under %s, and nothing else." % group)
+				_pool_tooltip(String(group), drawable.size()))
 		for path in by_group[group]:
 			var label := _deck_label(path)
 			# A DECK THAT CANNOT BE PLAYED SAYS SO ON ITS OWN ROW, in its
@@ -1151,13 +1161,38 @@ func _deck_label(path: String, title := "") -> String:
 ## Builder's own words for the same line: the pack it declares, and where
 ## it is turned on. One sentence for the row's tooltip, the note under the
 ## picker and the refusal on `Go!`.
+##
+## A PACK THAT IS NOT HERE AT ALL IS NOT "DISABLED" (campaign 2026-10-12):
+## a deck copied to a handheld without its pack's zip was sent to Options
+## to enable a pack the Card Packs page greys out as not available. Such a
+## pack gets the Deck Builder's sentence for the same case instead — the
+## exact file, and where to put it.
 func _pack_refusal(path: String) -> String:
+	var packs := _card_packs()
 	var labels := PackedStringArray()
+	var off := PackedStringArray()
+	var absent := PackedStringArray()
 	for pack_id in _pack_paths.get(path, []):
-		labels.append(_pack_label(String(pack_id)))
-	var noun := "pack" if labels.size() == 1 else "packs"
-	return "This deck requires %s, which is disabled. Enable the %s under Options, Card packs, and come back." \
-		% [", ".join(labels), noun]
+		var id := String(pack_id)
+		labels.append(_pack_label(id))
+		if packs != null and not packs.has_pack(id):
+			absent.append(String(packs.file_name_for(id)))
+		else:
+			off.append(_pack_label(id))
+	if absent.is_empty():
+		var noun := "pack" if labels.size() == 1 else "packs"
+		return "This deck requires %s, which is disabled. Enable the %s under Options, Card packs, and come back." \
+			% [", ".join(labels), noun]
+	var text := "This deck requires %s." % ", ".join(labels)
+	if not off.is_empty():
+		text += " %s %s disabled: enable %s under Options, Card packs." % [
+			", ".join(off), "is" if off.size() == 1 else "are",
+			"it" if off.size() == 1 else "them"]
+	if absent.size() == 1:
+		text += " The exact %s file is not available; place a locally built copy" % absent[0]
+	else:
+		text += " The exact %s files are not available; place locally built copies" % ", ".join(absent)
+	return text + " in the Card Packs folder and Rescan from Options."
 
 
 ## The row of the pooled `<random from …>` entry for [param group], or -1.
@@ -1194,23 +1229,29 @@ static func _row_of_deck(option: OptionButton, nth: int) -> int:
 func _deck_path_for(pid: int, picker: RandomNumberGenerator) -> String:
 	var meta: Variant = _deck_options[pid].get_selected_metadata()
 	var chosen := str(meta) if meta != null else ""
+	# THE BAG IS THE CHOSEN FORMAT'S (campaign 2026-10-12): both random
+	# rows drew from every playable deck, and `Go!` then refused the one
+	# a seed drew under any format but Unrestricted — 42 seeds in 80, 20
+	# in 20 for the 1997 originals under Highlander.
+	var playable := _format_playable()
 	if chosen.begins_with(GROUP_RANDOM):
 		# POOLED RANDOM. Drawn from the same RNG as the unpooled one and
 		# in the same place, so a seed still reproduces the whole duel —
 		# only the bag it draws from is narrower.
-		var pool := paths_in_group(_playable_paths,
-			chosen.substr(GROUP_RANDOM.length()))
+		var pool: Array[String] = []
+		pool.assign(_grouped_format_playable().get(
+			chosen.substr(GROUP_RANDOM.length()), []))
 		if not pool.is_empty():
 			return random_deck_path(pool, picker)
 		# A pool that has emptied since the list was built (a deck deleted
 		# under us) draws from everything rather than handing the seat no
 		# deck at all — the same fallback `<random deck>` already makes.
-		return random_deck_path(_playable_paths, picker)
+		return random_deck_path(playable, picker)
 	if chosen != "":
 		return chosen
 	# `<random deck>` draws from the PLAYABLE decks only — see
 	# [member _playable_paths].
-	return random_deck_path(_playable_paths, picker)
+	return random_deck_path(playable, picker)
 
 
 ## One deck path out of [param paths], drawn from [param rng]. Static and
@@ -1255,7 +1296,145 @@ func _resolve_seed() -> int:
 
 ## The chosen format.
 func deck_format() -> String:
+	# The pickers are filled before the format row is built, and it opens
+	# on Unrestricted.
+	if _format_option == null:
+		return DeckFormat.UNRESTRICTED
 	return DeckFormat.ORDER[_format_option.selected]
+
+
+# --- campaign 2026-10-12 f-deck: the random rows follow the chosen format ---
+
+## The playable decks [param format] accepts ([method DeckFormat.legal],
+## sideboard included) — the chosen format's when none is named. The bag
+## `<random deck>` and every `<random from …>` row draw from, so a seed
+## can never hand a seat a deck `Go!` is then going to refuse. Worked out
+## once per format from the scan's own lists; no file is read here.
+func _format_playable(format := "") -> Array[String]:
+	if format == "":
+		format = deck_format()
+	if format == DeckFormat.UNRESTRICTED:
+		return _playable_paths
+	if not _legal_by_format.has(format):
+		var out: Array[String] = []
+		for path in _playable_paths:
+			var lists: Array = _playable_lists.get(path, [[], []])
+			if DeckFormat.legal(lists[0], format, lists[1]) == "":
+				out.append(path)
+		_legal_by_format[format] = {"paths": out,
+			"grouped": DeckGroups.grouped(out, _scan_groups)}
+	return _legal_by_format[format]["paths"]
+
+
+## [method _format_playable] under its headings, for the pooled rows.
+func _grouped_format_playable() -> Dictionary:
+	if deck_format() == DeckFormat.UNRESTRICTED:
+		return _grouped_playable
+	_format_playable()
+	return _legal_by_format[deck_format()]["grouped"]
+
+
+## The pooled row's tooltip: how many decks it draws from, and under the
+## format when that format narrows the bag.
+func _pool_tooltip(group: String, count: int) -> String:
+	if deck_format() == DeckFormat.UNRESTRICTED:
+		return "Let the duel's seed choose one of the %d playable decks " % count \
+			+ "under %s, and nothing else." % group
+	return "Let the duel's seed choose one of the %d decks under %s " % [count, group] \
+		+ "that %s allows, and nothing else." % deck_format()
+
+
+## The popup this screen has up, if any ([method _explain]).
+var _open_popup: Control = null
+
+
+## Every explanation and refusal this screen raises, through one door so
+## Escape knows what is up ([method _unhandled_input]).
+func _explain(title: String, body: String, width := 470.0) -> Control:
+	_open_popup = UiChrome.explain_popup(self, title, body, width)
+	return _open_popup
+
+
+## `Back`: the title screen, whose bed this screen shares.
+func _go_back() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	get_tree().change_scene_to_file("res://game/main.tscn")
+
+
+## ESCAPE IS `BACK` HERE TOO (campaign 2026-10-12) — the Quest's back
+## gesture and a handheld's Start arrive as Escape ([Lifecycle]), and on
+## this screen they did nothing. A popup that is up is closed first, as
+## its OK would close it; an open picker list has already taken the key.
+func _unhandled_input(event: InputEvent) -> void:
+	if _leaving or not event.is_action_pressed("ui_cancel"):
+		return
+	get_viewport().set_input_as_handled()
+	if is_instance_valid(_open_popup) and not _open_popup.is_queued_for_deletion():
+		_open_popup.queue_free()
+		_open_popup = null
+		return
+	_go_back()
+
+
+## The longest seat name the Name field takes — the tournament panel's
+## own cap, so a name reads whole in the duel's log and on its panels.
+const SEAT_NAME_MAX := 32
+
+
+## THE NAME A SEAT TAKES INTO THE DUEL (campaign 2026-10-12): the field's
+## text, trimmed and capped, or the seat's own default when the field was
+## emptied — a blank name reached the duel as " casts …" and "'s turn".
+## A remembered name from an older build is capped the same way.
+func _seat_name(pid: int) -> String:
+	var typed := _name_edits[pid].text.strip_edges()
+	if typed == "":
+		return _default_name(pid, _mode)
+	return typed.left(SEAT_NAME_MAX).strip_edges()
+
+
+## Why a random row has nothing to draw under the chosen format — the
+## note under the picker says it before `Go!` does.
+func _no_legal_deck() -> String:
+	return "No deck in the list meets %s." % deck_format()
+
+
+## A NEW FORMAT RE-DEALS THE POOLED ROWS: a `<random from …>` row is
+## offered only where two decks under its heading meet the format, as it
+## is offered only where two are playable at all. A seat on a row the new
+## format takes away falls back to `<random deck>`, which then draws from
+## every deck the format accepts. Nothing is rebuilt when the rows are the
+## same ones; their tooltips are brought up to date.
+func _on_format_changed() -> void:
+	var wanted: Array[String] = []
+	for group in _grouped_paths:
+		if (_grouped_format_playable().get(group, []) as Array).size() >= 2:
+			wanted.append(GROUP_RANDOM + String(group))
+	for pid in _deck_options.size():
+		var option: OptionButton = _deck_options[pid]
+		var shown: Array[String] = []
+		for i in option.item_count:
+			var meta := str(option.get_item_metadata(i))
+			if not option.is_item_separator(i) and meta.begins_with(GROUP_RANDOM):
+				shown.append(meta)
+		if shown == wanted:
+			for i in option.item_count:
+				var meta := str(option.get_item_metadata(i))
+				if not option.is_item_separator(i) and meta.begins_with(GROUP_RANDOM):
+					var group := meta.substr(GROUP_RANDOM.length())
+					option.set_item_tooltip(i, _pool_tooltip(group,
+						(_grouped_format_playable().get(group, []) as Array).size()))
+			continue
+		var selected_meta: Variant = option.get_selected_metadata()
+		var keep := str(selected_meta) if selected_meta != null else ""
+		option.clear()
+		_fill_deck_options(option)
+		var row := _row_of_metadata(option, keep)
+		option.select(row if row >= 0 else 0)
+		_update_face(pid)
+	_update_territory_preview()
+	_refresh_format_note()
 
 
 ## The note under the picker: the format's one line, plus — if a chosen
@@ -1279,8 +1458,12 @@ func _refresh_format_note() -> void:
 	for pid in 2:
 		var meta: Variant = _deck_options[pid].get_selected_metadata()
 		var path := str(meta) if meta != null else ""
-		if path == "":
-			continue     # `<random deck>`: nothing to check until "Go!"
+		if path == "" or path.begins_with(GROUP_RANDOM):
+			# `<random deck>` / `<random from …>`: no deck to check until
+			# "Go!" — but a bag the format has emptied is said now.
+			if _format_playable().is_empty():
+				text += "\n Seat %d — %s" % [pid + 1, _no_legal_deck()]
+			continue
 		if _pack_paths.has(path):
 			text += "\n Seat %d — %s" % [pid + 1, _pack_refusal(path)]
 			continue
@@ -1309,7 +1492,7 @@ func _explain_formats() -> void:
 		lines.append("%s\n%s" % [format, DeckFormat.SUMMARY[format]])
 	lines.append("Copy limits count the main deck and sideboard together. "
 		+ "Basic lands are exempt. See Help for the restricted and banned card lists.")
-	UiChrome.explain_popup(self, "Deck format", "\n\n".join(lines), 560.0)
+	_explain("Deck format", "\n\n".join(lines), 560.0)
 
 
 ## Grey what free play cannot use: the length, and the sideboard step
@@ -1468,6 +1651,13 @@ func _restore_choices() -> void:
 	if mode < BattleMode.HOTSEAT or mode > BattleMode.DEMO:
 		mode = BattleMode.VS_AI
 	_apply_mode(mode)
+	# THE FORMAT BEFORE THE DECKS (campaign 2026-10-12): it decides which
+	# pooled rows the pickers carry, so a remembered `<random from …>`
+	# row is looked for among the rows of the format it was played under.
+	var format := DeckFormat.ORDER.find(str(_remembered("format", "")))
+	if format >= 0 and format != _format_option.selected:
+		_format_option.select(format)
+		_on_format_changed()
 	for pid in 2:
 		var key := "deck_%d" % pid
 		if Settings.has_value(REMEMBER_PREFIX + key):
@@ -1490,9 +1680,6 @@ func _restore_choices() -> void:
 			_fair_skills[pid] = skill
 		_unfair_checks[pid].set_pressed_no_signal(bool(_remembered("unfair_%d" % pid, false)))
 		_difficulty_options[pid].select(3 if _unfair_checks[pid].button_pressed else _fair_skills[pid])
-	var format := DeckFormat.ORDER.find(str(_remembered("format", "")))
-	if format >= 0:
-		_format_option.select(format)
 	_ante_check.button_pressed = bool(_remembered("ante",
 		_ante_check.button_pressed))
 	var length := MatchState.LENGTHS.find(int(_remembered("best_of",
@@ -1591,6 +1778,15 @@ func _build_config() -> DuelConfig:
 	var paths: Array[String] = []
 	for pid in 2:
 		paths.append(_deck_path_for(pid, picker))
+	# A RANDOM ROW WITH AN EMPTY BAG says so in a sentence, rather than as
+	# the parser's "cannot open ''" below (campaign 2026-10-12): the
+	# chosen format accepts none of the decks in the list.
+	for pid in 2:
+		if paths[pid] == "" and _format_playable().is_empty() \
+				and not _playable_paths.is_empty():
+			_explain(
+				"Seat %d cannot play this deck" % (pid + 1), _no_legal_deck())
+			return null
 	# A DECK HOLDING PROXIES STOPS HERE, NAMING THEM. This is the door the
 	# whole [ProxyCard] boundary exists to hold: a proxy has no rules
 	# behind it, so one that reached [MtgGame] would be a card that cannot
@@ -1605,13 +1801,13 @@ func _build_config() -> DuelConfig:
 		# player to the Deck Builder to replace cards that only need
 		# their pack enabled.
 		if _pack_paths.has(paths[pid]):
-			UiChrome.explain_popup(self,
+			_explain(
 				"Seat %d cannot play this deck" % (pid + 1), _pack_refusal(paths[pid]))
 			return null
 		var listed := DeckList.load_file(paths[pid], false)
 		var proxied := ProxyCard.refusal_for(listed.cards, listed.sideboard)
 		if proxied != "":
-			UiChrome.explain_popup(self,
+			_explain(
 				"Seat %d cannot play this deck" % (pid + 1), proxied)
 			return null
 	for pid in 2:
@@ -1625,20 +1821,20 @@ func _build_config() -> DuelConfig:
 		# call proxies) and neither can the format check below (no format
 		# has a minimum deck size), so an empty library reached MtgGame.
 		if not deck.errors.is_empty():
-			UiChrome.explain_popup(self,
+			_explain(
 				"Seat %d cannot play this deck" % (pid + 1),
 				"\n".join(PackedStringArray(deck.errors)))
 			return null
 		# Recheck at launch: a file may have changed after scanning it.
 		if deck.cards.size() < DeckModel.CASUAL_MIN_CARDS:
-			UiChrome.explain_popup(self, "Seat %d cannot play this deck" % (pid + 1), DeckModel.TOO_FEW_CARDS)
+			_explain("Seat %d cannot play this deck" % (pid + 1), DeckModel.TOO_FEW_CARDS)
 			return null
 		config.decks[pid] = deck.cards
 		config.printings[pid] = deck.printings.duplicate()
 		# The `SB:` cards the file has always carried. Nothing read them
 		# until `Side&board between duels` existed (docs/ROADMAP.md).
 		config.sideboards[pid] = deck.sideboard
-		config.player_names[pid] = _name_edits[pid].text
+		config.player_names[pid] = _seat_name(pid)
 		# What the pre-duel splash says under each portrait and the duel's
 		# sidebar repeats under the piles. THE DECK'S name, by the row's
 		# own rule — not the row's text, which for `<random deck>` and
@@ -1666,7 +1862,7 @@ func _build_config() -> DuelConfig:
 		var refusal := DeckFormat.legal(config.decks[pid], config.deck_format,
 			config.sideboards[pid])
 		if refusal != "":
-			UiChrome.explain_popup(self, "Seat %d cannot play this deck" % (pid + 1),
+			_explain("Seat %d cannot play this deck" % (pid + 1),
 				refusal)
 			return null
 	config.best_of = best_of()

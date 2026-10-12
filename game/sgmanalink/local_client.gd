@@ -227,6 +227,15 @@ func poll() -> void:
 	_socket.poll()
 	var connection := _socket.get_ready_state()
 	if connection == WebSocketPeer.STATE_CLOSED:
+		# THE HOST CLOSED (robustness campaign 2026-10-12): its own close
+		# code, read even when its fatal message was dropped unread with the
+		# connection in this one poll. Nothing to come back to: no retry.
+		if _socket.get_close_code() == SgLocalServer.HOST_CLOSED_CODE:
+			_wanted = false
+			online = false
+			status = SgLocalServer.HOST_CLOSED
+			changed.emit()
+			return
 		if _socket.get_close_code() == 4001:
 			_wanted = false
 			online = false
@@ -344,6 +353,11 @@ func poll() -> void:
 				_wanted = false
 				online = false
 				status = message.error
+				# A seat resumed at a host that restarted: an older host
+				# answers its stale access code "Invalid invitation" — the
+				# seat is gone, and the guest is told so (2026-10-12).
+				if has_session() and message.error == SgLocalServer.INVALID_INVITATION:
+					status = SgLocalServer.HOST_RESTARTED
 				_socket.close(-1)
 			_: _socket.close(-1)
 		changed.emit()

@@ -356,7 +356,9 @@ static func destination(g: MtgGame, packet: DamagePacket, e: Dictionary) -> Targ
 	if bool(e["to_source_controller"]):
 		if packet.source == null:
 			return null
-		return TargetRef.player(packet.source.controller_id)
+		# The source's controller as it last existed: a stolen source that
+		# has left play is still the thief's (CR 113.7a; campaign 2026-10-12).
+		return TargetRef.player(g.source_controller(packet.source))
 	var to: Dictionary = e.get("to", {})
 	if to.has("player"):
 		return TargetRef.player(int(to["player"]))

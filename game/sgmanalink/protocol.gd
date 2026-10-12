@@ -58,7 +58,12 @@ const FIELDS := {
 ## Earlier versions a handshake still names (see [method subprotocols]).
 const OLDER_SUBPROTOCOLS := 64
 const SUBPROTOCOL_PREFIX := "sgmanalink-local-v"
+## Bit 7 of each of eight bytes read as one little-endian int64
+## (0x8080808080808080): [method decode_payload]'s ASCII check.
+const _HIGH_BITS := -9187201950435737472
 static var _unicode_pattern: RegEx
+static var _short_pattern: RegEx
+static var _token_pattern: RegEx
 
 
 ## THE OTHER VERSION IS NAMED, NOT HUNG UP ON (bug pass 2026-10-03). Every
@@ -102,22 +107,24 @@ static func exact(value: Dictionary, keys: Array) -> bool:
 	return true
 
 
+## Letters, digits, spaces, dashes and underscores, not all spaces. The
+## character test is one native match, not a GDScript loop per character
+## (robustness campaign 2026-10-12: every state a guest reads checks
+## hundreds of these).
 static func short_text(value: Variant, limit := 32) -> bool:
 	if not value is String or value.is_empty() or value.length() > limit:
 		return false
-	for c in value:
-		if not "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_".contains(c):
-			return false
-	return not value.strip_edges().is_empty()
+	if _short_pattern == null:
+		_short_pattern = RegEx.create_from_string("^[A-Za-z0-9 _-]+\\z")
+	return _short_pattern.search(value) != null and not value.strip_edges().is_empty()
 
 
 static func token(value: Variant) -> bool:
 	if not value is String or value.length() != 64:
 		return false
-	for c in value:
-		if not "0123456789abcdef".contains(c):
-			return false
-	return true
+	if _token_pattern == null:
+		_token_pattern = RegEx.create_from_string("^[0-9a-f]{64}\\z")
+	return _token_pattern.search(value) != null
 
 
 static func nickname(value: Variant) -> bool:
@@ -139,37 +146,57 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 	return message if valid(message) else {}
 
 
+## ASCII JSON, an object at the top, nested at most [param max_depth] deep
+## (the top object counts one) — or {}.
+##
+## CHECKED NATIVELY (robustness campaign 2026-10-12). A GDScript loop over
+## every byte — NUL, past 127, bracket depth — was 6-14 ms of a late-game
+## state (40-80 KB) on every guest action, twice that on a slow machine.
+## Now a NUL is found natively, bytes past 127 are tested eight at a time,
+## Godot's own parser (which refuses its own recursion limit, 1024 deep,
+## without a word) reads the text, and the nesting is measured on the
+## parsed tree, containers only.
 static func decode_payload(bytes: PackedByteArray, max_depth := 12) -> Dictionary:
 	if bytes.is_empty() or bytes.size() > MAX_BYTES:
 		return {}
-	# This protocol deliberately uses ASCII JSON. Bound nesting BEFORE parsing.
-	var depth := 0
-	var quoted := false
-	var escaped := false
-	for byte in bytes:
-		if byte == 0 or byte > 127:
-			return {}
-		if quoted:
-			if escaped:
-				escaped = false
-			elif byte == 92:
-				escaped = true
-			elif byte == 34:
-				quoted = false
-		elif byte == 34:
-			quoted = true
-		elif byte == 91 or byte == 123:
-			depth += 1
-			if depth > max_depth:
-				return {}
-		elif byte == 93 or byte == 125:
-			depth -= 1
-			if depth < 0:
-				return {}
+	if bytes.find(0) >= 0 or not _ascii(bytes):
+		return {}
 	var parser := JSON.new()
 	if parser.parse(bytes.get_string_from_ascii()) != OK or not parser.data is Dictionary:
 		return {}
+	if not _nested_within(parser.data, max_depth):
+		return {}
 	return parser.data
+
+
+## No byte past 127: the bytes read as little-endian int64 words, each
+## tested against the eight high bits at once.
+static func _ascii(bytes: PackedByteArray) -> bool:
+	var padded := bytes
+	if bytes.size() % 8 != 0:
+		padded = bytes.duplicate()
+		padded.resize((bytes.size() + 7) / 8 * 8)
+	for word in padded.to_int64_array():
+		if word & _HIGH_BITS != 0:
+			return false
+	return true
+
+
+## Does [param value] open at most [param room] containers, itself included?
+static func _nested_within(value: Variant, room: int) -> bool:
+	if value is Dictionary:
+		if room <= 0:
+			return false
+		for item in value.values():
+			if (item is Dictionary or item is Array) and not _nested_within(item, room - 1):
+				return false
+	elif value is Array:
+		if room <= 0:
+			return false
+		for item in value:
+			if (item is Dictionary or item is Array) and not _nested_within(item, room - 1):
+				return false
+	return true
 
 
 static func valid(message: Dictionary) -> bool:

@@ -8,7 +8,9 @@ editing stays intact when you visit draft setup and return.
 ## Choose a pool and launch
 
 **Card pool…** lets you check entire implemented sets or expand a set and
-check individual cards. Search finds names and sets. All and None affect all
+check individual cards. Each set lists every card it printed, reprints
+included; a card in several sets is one choice. The basic lands are their own
+group at the top. Search finds names and sets. All and None affect all
 currently available cards, not just search results. **Save pool** remembers this
 selection; Cancel leaves it unchanged. These choices do not restrict ordinary duels.
 Original-skin and card-art ZIPs supply pictures, not additional playable cards.

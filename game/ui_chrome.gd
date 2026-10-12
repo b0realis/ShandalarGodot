@@ -261,8 +261,19 @@ static func explain_popup(host: Control, title: String, body: String,
 
 
 ## The same in-game modal with an action row. Each action is a Dictionary
-## with `label`, optional `name`, `disabled`, and a zero-argument
-## `callable`. The popup closes after any enabled action runs.
+## with `label`, optional `name`, `disabled`, `cancel` (the action Escape
+## stands for on a screen that offers it, [method dismiss_popup]; a popup
+## with one action needs none), and a zero-argument `callable`. The popup
+## closes after any enabled action runs.
+##
+## THE RING STAYS ON IT AND COMES BACK (bug campaign 2026-10-12). The
+## first enabled action takes the keyboard focus, and the row is FENCED:
+## Left and Right walk it and wrap, Up and Down stay, Tab goes round it —
+## the arrows used to walk the ring off the popup onto the buttons under
+## the veil, and Enter then pressed a covered one. When the popup goes,
+## the focus goes back to whatever held it before (hidden again if the
+## mouse had given it) unless something new has taken it meanwhile — a
+## popup that one of this one's actions opened.
 static func action_popup(host: Control, title: String, body: String,
 		actions: Array, width := 470.0) -> Control:
 	var veil := Control.new()
@@ -292,6 +303,8 @@ static func action_popup(host: Control, title: String, body: String,
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 10)
 	var first: Button = null
+	var live: Array[Button] = []
+	var cancel: Button = null
 	for action in actions:
 		if not (action is Dictionary):
 			continue
@@ -302,8 +315,17 @@ static func action_popup(host: Control, title: String, body: String,
 		button.pressed.connect(_popup_action.bind(
 			action.get("callable", Callable()), veil))
 		row.add_child(button)
+		if button.disabled:
+			button.focus_mode = Control.FOCUS_NONE
+		else:
+			live.append(button)
+		if bool(action.get("cancel", false)):
+			cancel = button
 		if first == null and not button.disabled:
 			first = button
+	if cancel == null and live.size() == 1:
+		cancel = live[0]
+	veil.set_meta(&"cancel_button", cancel)
 	column.add_child(row)
 
 	var panel := panel_around(column, 18.0)
@@ -314,9 +336,74 @@ static func action_popup(host: Control, title: String, body: String,
 	veil.add_child(panel)
 
 	host.add_child(veil)
-	if first != null:
-		first.grab_focus()
+	veil.add_to_group(POPUP_GROUP)
+	var viewport := host.get_viewport()
+	var before: Control = viewport.gui_get_focus_owner() if viewport != null else null
+	var hidden := before != null and not before.has_focus(true)
+	if live.is_empty():
+		# Nothing to press: the veil itself holds the ring, so it is not
+		# left on a covered button either.
+		veil.focus_mode = Control.FOCUS_ALL
+		live.append(veil)
+	_fence(live)
+	(first if first != null else veil).grab_focus()
+	veil.tree_exited.connect(_give_focus_back.bind(viewport,
+		weakref(before) if before != null else null, hidden))
 	return veil
+
+
+## Every action popup's veil is in this group, so a screen whose Escape
+## closes the one on top can find it ([method open_popup]).
+const POPUP_GROUP := &"ui_chrome_popup"
+
+
+## The popup most recently opened on [param host] and still up, or null.
+static func open_popup(host: Node) -> Control:
+	var found: Control = null
+	for child in host.get_children():
+		if child is Control and child.is_in_group(POPUP_GROUP) \
+				and not child.is_queued_for_deletion():
+			found = child
+	return found
+
+
+## Escape on a popup: its `cancel` action (or its only one) as if pressed,
+## else it simply closes.
+static func dismiss_popup(veil: Control) -> void:
+	if not is_instance_valid(veil):
+		return
+	var cancel := veil.get_meta(&"cancel_button", null) as Button
+	if cancel != null and is_instance_valid(cancel) and not cancel.disabled:
+		cancel.pressed.emit()
+	else:
+		veil.queue_free()
+
+
+## The ring goes round [param ring] and nowhere else.
+static func _fence(ring: Array) -> void:
+	var count := ring.size()
+	for i in count:
+		var here: Control = ring[i]
+		var left: Control = ring[(i - 1 + count) % count]
+		var right: Control = ring[(i + 1) % count]
+		here.focus_neighbor_left = here.get_path_to(left)
+		here.focus_neighbor_right = here.get_path_to(right)
+		here.focus_neighbor_top = here.get_path_to(here)
+		here.focus_neighbor_bottom = here.get_path_to(here)
+		here.focus_previous = here.get_path_to(left)
+		here.focus_next = here.get_path_to(right)
+
+
+## The popup has gone: the focus back where it was, unless something has
+## taken it since or the old holder has gone too.
+static func _give_focus_back(viewport: Viewport, was: WeakRef, hidden: bool) -> void:
+	if was == null or not is_instance_valid(viewport) or viewport.gui_get_focus_owner() != null:
+		return
+	var control := was.get_ref() as Control
+	if control == null or not control.is_inside_tree() or not control.is_visible_in_tree() \
+			or control.focus_mode == Control.FOCUS_NONE:
+		return
+	control.grab_focus(hidden)
 
 
 static func _popup_action(callback: Callable, veil: Control) -> void:

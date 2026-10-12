@@ -76,7 +76,9 @@ static func _horde(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var who := int(g.trigger_context(s).controller)
 	if not g.players[who].hand.is_empty() and g.agents[who].choose_yes_no(g, who, "Discard a card at random to keep Balduvian Horde?", true): g.discard_random(who, 1)
 	elif F._same_trigger_source(g, s) and s.controller_id == who: g.sacrifice_permanent(s)
-static func _druid_died(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool: return e.data.instance == s and s.last_blocked_this_turn
+## "If it was BLOCKED this turn" — it became blocked (campaign 2026-10-12
+## b4-2), read as it left; not "it blocked" (CardInstance.blocked_this_turn).
+static func _druid_died(g: MtgGame, s: CardInstance, e: GameEvent) -> bool: return e.data.instance == s and g.was_blocked_this_turn(s)
 static func _creature_died(_g: MtgGame, _s: CardInstance, e: GameEvent) -> bool: return (e.data.instance.last_types & Mtg.CardType.CREATURE) != 0
 static func _druid(g: MtgGame, s: CardInstance, _e: GameEvent) -> void: g.adjust_life(int(g.trigger_context(s).controller), 4)
 static func _host_death(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool: return e.data.instance.id == (s.attached_to if s.zone == Mtg.Zone.BATTLEFIELD else s.last_attached_to)

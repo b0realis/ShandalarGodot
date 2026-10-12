@@ -168,13 +168,19 @@ const TOGGLES: Array[Dictionary] = [
 ##    the drawing was filtered.
 ##
 ## All three default OFF, which is the view the duel has today.
+## `action` names the duel key ([Controls]) that toggles it from the
+## keyboard — the accelerator the menus write after the tab is read from
+## that binding (campaign 2026-10-12, b6-5); `accel` stays the 1997 string's
+## own default, for the record.
 const MENU_TOGGLES: Array[Dictionary] = [
 	{"label": "Show ID tags", "accel": "Ctrl+T", "key": "ShowIDTagsOnCards",
-		"default": false, "live": true},
+		"default": false, "live": true, "action": "duel_id_tags"},
 	{"label": "Show invisible effects", "accel": "Ctrl+I",
-		"key": "ShowInvisibleEffectCards", "default": false, "live": false},
+		"key": "ShowInvisibleEffectCards", "default": false, "live": false,
+		"action": "duel_invisible"},
 	{"label": "Show all cards' summoning sickness", "accel": "Ctrl+U",
-		"key": "ShowAllCardsSummonSickness", "default": false, "live": true},
+		"key": "ShowAllCardsSummonSickness", "default": false, "live": true,
+		"action": "duel_sickness"},
 ]
 
 
@@ -225,16 +231,24 @@ static func menu_toggle_live(key: String) -> bool:
 
 
 ## The accelerator a toggle's menu entry shows — `Ctrl+T` / `Ctrl+I` /
-## `Ctrl+U`, the `accel` the 1997 strings write after their tab
+## `Ctrl+U` by default, the `accel` the 1997 strings write after their tab
 ## (`UIStrings.txt:927-929`), now that [DuelScreen] honours them (§6.3a).
 ## A DARK command keeps none: its key does nothing, and a menu that
 ## advertises a shortcut it does not honour is worse than one that stays
-## quiet. `KEY_NONE` for a dark or unknown key.
+## quiet. `KEY_NONE` for a dark or unknown key, or one with no key bound.
+##
+## READ FROM THE BINDING (campaign 2026-10-12, b6-5): the player can move
+## `Show ID tags` to another key on the Options screen, and the menus went
+## on advertising Ctrl+T, which then did nothing.
 static func menu_toggle_accelerator(key: String) -> Key:
 	for row in MENU_TOGGLES:
 		if row["key"] == key and bool(row["live"]):
-			var letter := String(row["accel"]).get_slice("+", 1)
-			return (KEY_MASK_CTRL | OS.find_keycode_from_string(letter)) as Key
+			var bound := Controls.key_of(String(row.get("action", "")))
+			if bound == null:
+				return KEY_NONE
+			if bound.keycode == KEY_NONE and bound.physical_keycode != KEY_NONE:
+				return bound.get_physical_keycode_with_modifiers()
+			return bound.get_keycode_with_modifiers()
 	return KEY_NONE
 
 
@@ -335,12 +349,18 @@ const COIN_FLIP_STYLES: Array[Dictionary] = [
 ## unrecognised answers with the default rather than erroring, exactly as
 ## [method territory_type_row] does.
 static func coin_flip_style() -> String:
-	var raw: Variant = Settings.get_value(COIN_FLIP_KEY, COIN_FLIP_DEFAULT)
+	# Read AS STORED (a null default): the value may be the 1997 registry's
+	# 0/1 or a switch as well as a style name, and a typed default would
+	# have it coerced to text — or dropped — before it is looked at
+	# ([method Settings.coerce], campaign 2026-10-12).
+	var raw: Variant = Settings.get_value(COIN_FLIP_KEY, null)
+	if raw == null:
+		return COIN_FLIP_DEFAULT
 	if typeof(raw) == TYPE_BOOL:
 		return COIN_FLIP_DEFAULT if bool(raw) else COIN_INSTANT
 	if typeof(raw) == TYPE_INT or typeof(raw) == TYPE_FLOAT:
 		return COIN_FLIP_DEFAULT if float(raw) != 0.0 else COIN_INSTANT
-	return _coin_flip_style_or_default(String(raw))
+	return _coin_flip_style_or_default(raw if raw is String else "")
 
 
 ## Set the presentation. An unknown name is refused into the default, so

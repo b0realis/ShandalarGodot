@@ -86,7 +86,7 @@ static func _hatch(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 	if source.zone != Mtg.Zone.BATTLEFIELD:
 		return
 	if int(source.counters.get("pupa", 0)) > 0:
-		game.add_counters(source, "pupa", -1)
+		game.remove_counters(source, "pupa", 1)
 		return
 	var host := _host_of(game, source)
 	game.sacrifice_permanent(source)

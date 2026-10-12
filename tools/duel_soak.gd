@@ -539,7 +539,17 @@ class HumanClicker:
 		var want_min := int(slot["min"])
 		var want_max := int(slot["max"])
 		var divided := int(slot["divided"])
-		var candidates: Array = spec.legal_targets(game, duel._pending_card)
+		# ONLY WHAT THE SLOT ACCEPTS NOW (campaign 2026-10-12, r1-2): judged
+		# the way the screen judges the click — with the picks already made
+		# in hand, so a slot bound to its siblings (Cannibalize's "controlled
+		# by the same player") offers only partners that fit, and a slot
+		# left with none is cancelled below instead of clicked forever.
+		var earlier: Array = []
+		for index in duel._pending_slot:
+			earlier.append_array(duel._pending_groups[index])
+		if spec.compare_within_group:
+			earlier.append_array(group)
+		var candidates: Array = duel._aim_targets(spec, earlier)
 		if divided <= 0:
 			var fresh: Array = []
 			for ref in candidates:
@@ -563,6 +573,12 @@ class HumanClicker:
 			clicks += 1
 			return
 		_click_ref(candidates[rng.randi_range(0, candidates.size() - 1)])
+		# A pick the screen still refused is a dead end for a fuzzer: give
+		# the cast up rather than click it again (r1-2).
+		if duel.mode == DuelScreen.Mode.TARGETING \
+				and duel._prompt_label.text.contains("Illegal target"):
+			duel._on_cancel()
+			clicks += 1
 
 	## Deliver a target the way the widget for it would: a card on the
 	## table or in a hand is a card click, a player is a life-register

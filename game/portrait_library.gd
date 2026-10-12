@@ -283,3 +283,28 @@ static func _is_image(file: String) -> bool:
 	# has already turned `x.png.import` into `x.png`; a `README.txt` or a
 	# stray `.remap` of something that is not a picture stays out.
 	return EXTENSIONS.has(file.get_extension().to_lower())
+
+
+# --- campaign 2026-10-12 f-deck: one resolver for a seat's face ---
+
+## Where a seat's chosen portrait is remembered, by id — the battle-setup
+## screen's chooser writes it ([constant SetupScreen.PORTRAIT_KEY] is this).
+const SEAT_KEY := "Portrait%d"
+
+
+## THE FACE SEAT [param seat] WEARS — the one resolver the battle-setup
+## chooser shows and `Go!` hands the duel, and the Gauntlet hands its
+## duels too (campaign 2026-10-12: a gauntlet duel wore the deck-colour
+## duelist whatever face the player had chosen — the owner's ruling of
+## 2026-10-03 is the library face). The stored id when it names a portrait
+## there is; otherwise the seat's own default, the library's face for that
+## seat. `{}` when there is no portrait art at all.
+static func chosen_for(seat: int) -> Dictionary:
+	var faces := all()
+	if faces.is_empty():
+		return {}
+	var current := String(Settings.get_value(SEAT_KEY % seat, ""))
+	for face in faces:
+		if face["id"] == current:
+			return face
+	return faces[mini(seat, faces.size() - 1)]

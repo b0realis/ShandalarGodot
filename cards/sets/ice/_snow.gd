@@ -29,7 +29,8 @@ static func configure(c: CardData) -> bool:
 			ability.tap_permanent_filter = _snow_land
 			c.activated(ability)
 		"Gangrenous Zombies":
-			c.activated(F._ability("", true, F.Action.new(_zombies, "deal 1 damage to each creature and player, or 2 with a snow Swamp")).with_sacrifice_cost())
+			c.activated(F._ability("", true, F.Action.new(_zombies, "deal 1 damage to each creature and player, or 2 with a snow Swamp") \
+				.with_ai_role(&"sweep_each_creature_and_player", {"amount": _zombies_amount})).with_sacrifice_cost())
 		"Balduvian Conjurer":
 			c.activated(F._ability("", true, F.Action.new(_animate_snow, "target snow land becomes a 2/2 creature this turn",
 				TargetSpec.new(TargetSpec.Kind.PERMANENT, "target snow land", _snow_land), true)))
@@ -73,7 +74,8 @@ static func configure(c: CardData) -> bool:
 		"Time Bomb":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, F._counter_upkeep.bind("time"),
 				"Put a time counter on this artifact.", F._your_upkeep))
-			c.activated(F._ability("{1}", true, F.Action.new(_time_bomb, "deal damage equal to time counters to each creature and player")).with_sacrifice_cost())
+			c.activated(F._ability("{1}", true, F.Action.new(_time_bomb, "deal damage equal to time counters to each creature and player") \
+				.with_ai_role(&"sweep_each_creature_and_player", {"amount": _time_bomb_amount})).with_sacrifice_cost())
 		_:
 			return false
 	return true
@@ -177,6 +179,14 @@ static func _add_ice(g: MtgGame, source: CardInstance, _pid: int, _t: TargetRef,
 static func _time_bomb(g: MtgGame, source: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	var counters: Dictionary = g.cost_paid("_source_counters", {})
 	DamageAllEffect.new(int(counters.get("time", 0))).and_each_player().resolve(g, source, pid, null)
+# --- campaign 2026-10-12 f-aiB: the sweep each shape declares (b4-3) ---
+## What the sweep would deal if activated now — the `amount` the AI's
+## `sweep_each_creature_and_player` reader prices (engine/ai/ice_age_tactics.gd).
+static func _zombies_amount(g: MtgGame, source: CardInstance) -> int:
+	return 2 if snow_count(g, source.controller_id, "swamp") > 0 else 1
+static func _time_bomb_amount(_g: MtgGame, source: CardInstance) -> int:
+	return int(source.counters.get("time", 0))
+# --- end campaign 2026-10-12 f-aiB ---
 
 class SnowDestroy extends DestroyEffect:
 	var gain: bool

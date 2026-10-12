@@ -91,7 +91,13 @@ static func _riders(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if g.agents[pid].choose_yes_no(g, pid, "Give an opponent %d Survivors for cumulative upkeep?" % age, age <= 3):
 		g.create_token(1 - pid, CardData.new("Survivor", "", Mtg.CardType.CREATURE).pt(1, 1).with_colors(Mtg.ManaColor.R).with_subtypes(["survivor"]), age)
 	elif s.controller_id == pid: g.sacrifice_permanent(s)
-static func _tornado_ability(life: int) -> ActivatedAbility: return F._ability("{2}{G}", false, Tornado.new()).with_life_cost(life).per_turn(1)
+## The menu names the life the current velocity charges (campaign
+## 2026-10-12, b4-9): "{2}{G}, Pay 6 life: …" at two counters.
+static func _tornado_ability(life: int) -> ActivatedAbility:
+	var a := F._ability("{2}{G}", false, Tornado.new()).with_life_cost(life)
+	a.text = "{2}{G}%s: Destroy target permanent and put a velocity counter on this enchantment." \
+		% (", Pay %d life" % life if life > 0 else "")
+	return a.per_turn(1)
 static func _velocity_price(_g: MtgGame, s: CardInstance) -> void:
 	if not s.cur_activated_abilities.is_empty(): s.cur_activated_abilities[0] = _tornado_ability(3 * int(s.counters.get("velocity", 0)))
 class Tornado extends DestroyEffect:

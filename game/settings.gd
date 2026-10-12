@@ -27,6 +27,22 @@ static var write_count := 0
 ## Set when the file on disk could not be read AND could not be copied
 ## aside (see [method _load]): nothing is written over it this session.
 static var _unwritable_reason := ""
+## Where a file that would not parse was copied aside this session
+## ([method _keep_aside]), for [method problem]; "" when none was.
+static var _kept_aside_as := ""
+## Why the last save failed, while its changes are still pending; OK
+## once a save goes through. For [method problem].
+static var _save_error: Error = OK
+## The file's bytes as this instance last read or wrote them, and the
+## keys it has changed since — `key -> [value]`, or `key -> []` for a key
+## it cleared. See [method _merge_from_disk].
+static var _seen := PackedByteArray()
+static var _changed: Dictionary = {}
+## The [method problem] the title screen has already shown.
+static var _told := ""
+## The copy aside was of a file changed under a running game
+## ([method _merge_from_disk]), not of the one read at start.
+static var _kept_while_running := false
 
 
 static func _ensure() -> void:
@@ -51,10 +67,28 @@ static func _ensure() -> void:
 static func _load() -> void:
 	_config = ConfigFile.new()
 	_unwritable_reason = ""
+	_kept_aside_as = ""
+	_kept_while_running = false
+	_save_error = OK
+	_changed = {}
+	_told = ""
+	_seen = _read_quietly(PATH)
 	var err := _config.load(PATH)
 	if err != OK and FileAccess.file_exists(PATH):
 		_keep_aside(err)
 	_migrate_rules()
+
+
+## The bytes of [param path], or none for a file that is missing or will
+## not open — without the engine error [method FileAccess.get_file_as_bytes]
+## prints for a file it cannot open.
+static func _read_quietly(path: String) -> PackedByteArray:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return PackedByteArray()
+	var bytes := file.get_buffer(file.get_length())
+	file.close()
+	return bytes
 
 
 ## See [method _load]. Reads the file itself rather than through
@@ -81,6 +115,7 @@ static func _keep_aside(err: Error) -> void:
 		if kept == "" and write_atomically(candidate, bytes) == OK:
 			kept = candidate
 	if kept != "":
+		_kept_aside_as = kept
 		printerr(("settings: %s could not be read (%s) — a copy of it is kept "
 			+ "as %s. The game goes on with what it could read and the "
 			+ "defaults; fix the line or copy your keys back from the copy.")
@@ -106,12 +141,19 @@ const RULES_REVISION := 2
 ## modern, that false was the preset's, not the player's, and it moves
 ## with the preset; a mixed file is a custom choice and is left alone.
 ## The marker means each file is looked at once.
+##
+## The stored forks are read as [method get_value] reads them (robustness
+## campaign of 2026-10-12): a fork hand-typed as `"false"` used to stop
+## this function with a script error before it could write its marker, so
+## it ran — and failed — on every start. A word that is no yes or no is
+## not a choice either way and leaves the decision to the others.
 static func _migrate_rules() -> void:
-	if int(_config.get_value("options", RULES_REVISION_KEY, 1)) >= RULES_REVISION:
+	if int(coerce(_config.get_value("options", RULES_REVISION_KEY, 1), 1)) >= RULES_REVISION:
 		return
 	if not _config.has_section_key("options", "rule_free_damage_assignment"):
 		return       # nothing stored: the built-in default applies
-	var all_modern := not bool(_config.get_value("options", "rule_free_damage_assignment", true))
+	var free_division: Variant = _yes_or_no(_config.get_value("options", "rule_free_damage_assignment"))
+	var all_modern: bool = free_division is bool and not free_division
 	for fork in RulesOptions.FORKS:
 		var key: String = fork["key"]
 		if key == "free_damage_assignment":
@@ -119,27 +161,139 @@ static func _migrate_rules() -> void:
 		# An unstored fork already reads modern; a stored one has to —
 		# and "modern" here is the OLD answer, `not fifth_value` for every
 		# fork, because that is what a revision-1 file was written under.
-		if _config.has_section_key("options", "rule_" + key) \
-				and bool(_config.get_value("options", "rule_" + key)) == bool(fork["fifth_value"]):
+		if not _config.has_section_key("options", "rule_" + key):
+			continue
+		var stored: Variant = _yes_or_no(_config.get_value("options", "rule_" + key))
+		if stored is bool and stored == bool(fork["fifth_value"]):
 			all_modern = false
 	if all_modern:
-		_config.set_value("options", "rule_free_damage_assignment", true)
-	_config.set_value("options", RULES_REVISION_KEY, RULES_REVISION)
+		_put("rule_free_damage_assignment", true)
+	_put(RULES_REVISION_KEY, RULES_REVISION)
 	_save()
 
 
+## The stored value of [param key], or [param default_value] when there is
+## none — IN THE DEFAULT'S TYPE (robustness campaign of 2026-10-12).
+##
+## settings.cfg is a text file the docs invite a player to edit, and an
+## older build may have written a key in another type. A `"yes"` where a
+## switch is read, a `"fast"` where a number is, a list where the table of
+## bindings is, raised a script error on every start — in the typed
+## accessors below, in every `bool(Settings.get_value(...))` of the shell,
+## in [method Controls.apply] — and left the reader with nothing. So the
+## default says the type: a near value is read as meant and anything else
+## is the default ([method coerce]). A null default asks for the value
+## exactly as stored — for a reader that maps foreign types itself — and
+## is null for a key that is not there.
 static func get_value(key: String, default_value):
 	_ensure()
-	return _config.get_value("options", key, default_value)
+	if default_value == null and not _config.has_section_key("options", key):
+		return null      # ConfigFile prints an error for a missing key with no default
+	return coerce(_config.get_value("options", key, default_value), default_value)
+
+
+## [param value] in the type of [param default_value]:
+## - the same type is itself (a float that is not a number — `nan`,
+##   `inf` — is not a number a reader can use, and is the default);
+## - a switch reads `true`/`yes`/`on`/`1` and `false`/`no`/`off`/`0`, in
+##   any case and spacing, and a number as on unless it is 0;
+## - a whole number reads a float (cut to its whole part), a switch, or
+##   text that is a whole number; a number reads a whole number or text
+##   that is a number;
+## - text reads a StringName or a NodePath, and the other way round;
+## - a position reads its whole-number or fractional twin;
+## - a list reads a packed list, and a packed list any list, whose
+##   entries its reader checks (the phase stops do);
+## - a null default asks for the value as it is.
+## Anything else is [param default_value].
+static func coerce(value: Variant, default_value: Variant) -> Variant:
+	var want := typeof(default_value)
+	var have := typeof(value)
+	if want == TYPE_NIL:
+		return value
+	var text := have == TYPE_STRING or have == TYPE_STRING_NAME
+	var finite := have != TYPE_FLOAT or is_finite(value)
+	if have == want:
+		return value if finite else default_value
+	match want:
+		TYPE_BOOL:
+			if (have == TYPE_INT or have == TYPE_FLOAT) and finite:
+				return value != 0
+			if text and _yes_or_no(value) != null:
+				return _yes_or_no(value)
+		TYPE_INT:
+			if have == TYPE_BOOL or (have == TYPE_FLOAT and finite):
+				return int(value)
+			if text and String(value).strip_edges().is_valid_int():
+				return String(value).strip_edges().to_int()
+		TYPE_FLOAT:
+			if have == TYPE_INT:
+				return float(value)
+			if text and String(value).strip_edges().is_valid_float():
+				var number := String(value).strip_edges().to_float()
+				if is_finite(number):
+					return number
+		TYPE_STRING:
+			if have == TYPE_STRING_NAME or have == TYPE_NODE_PATH:
+				return String(value)
+		TYPE_STRING_NAME:
+			if have == TYPE_STRING or have == TYPE_NODE_PATH:
+				return StringName(String(value))
+		TYPE_NODE_PATH:
+			if text:
+				return NodePath(String(value))
+		TYPE_VECTOR2:
+			if have == TYPE_VECTOR2I:
+				return Vector2(value)
+		TYPE_VECTOR2I:
+			if have == TYPE_VECTOR2 and is_finite(value.x) and is_finite(value.y):
+				return Vector2i(value)
+		TYPE_ARRAY:
+			if _is_packed(have):
+				return Array(value)
+		_:
+			if _is_packed(want) and (have == TYPE_ARRAY or _is_packed(have)):
+				return value
+	return default_value
+
+
+static func _is_packed(type: int) -> bool:
+	return type >= TYPE_PACKED_BYTE_ARRAY and type <= TYPE_PACKED_VECTOR4_ARRAY
+
+
+## true or false for a stored switch, or null for a value that is neither
+## (see [method coerce]).
+static func _yes_or_no(value: Variant) -> Variant:
+	match typeof(value):
+		TYPE_BOOL:
+			return value
+		TYPE_INT:
+			return value != 0
+		TYPE_FLOAT:
+			return value != 0.0 if is_finite(value) else null
+		TYPE_STRING, TYPE_STRING_NAME:
+			var word := String(value).strip_edges().to_lower()
+			if word in ["true", "yes", "on", "1"]:
+				return true
+			if word in ["false", "no", "off", "0"]:
+				return false
+	return null
 
 
 static func set_value(key: String, value, persist := true) -> void:
 	_ensure()
-	_config.set_value("options", key, value)
+	_put(key, value)
 	if persist:
 		_save()
 	else:
 		_dirty = true
+
+
+## Set [param key] in memory and remember that this instance set it
+## ([method _merge_from_disk]).
+static func _put(key: String, value: Variant) -> void:
+	_config.set_value("options", key, value)
+	_changed[key] = [value]
 
 
 static func _save() -> void:
@@ -153,35 +307,97 @@ static func _save() -> void:
 		printerr("settings: not saving over %s, which could not be read (%s); changes remain pending" % [
 			PATH, _unwritable_reason])
 		return
+	_merge_from_disk()
+	if _unwritable_reason != "":
+		_dirty = true        # a changed file that could not even be kept aside
+		return
 	# WHOLE OR NOT AT ALL (bug pass of 2026-10-03): [method ConfigFile.save]
 	# truncates the file in place and never says whether the bytes went
 	# down, so a full disk left an empty settings.cfg and reported OK.
-	var err := write_atomically(PATH, _config.encode_to_text().to_utf8_buffer())
+	var bytes := _config.encode_to_text().to_utf8_buffer()
+	var err := write_atomically(PATH, bytes)
 	_dirty = err != OK
+	_save_error = err
 	if err == OK:
 		write_count += 1
+		_seen = bytes
+		_changed = {}
 	else:
 		printerr("settings: cannot save %s (%s); changes remain pending" % [
 			PATH, error_string(err)])
 
 
+## TWO INSTANCES, ONE FILE (robustness campaign of 2026-10-12). A LAN host
+## and its client on one desk share the profile, and each wrote its whole
+## cached file — so a pack switched on in one was switched off again by
+## the other's next unrelated save. Before a save, a file that is not what
+## this instance last read or wrote is read again, and only the keys this
+## instance changed since are laid over it: the other's changes stand
+## unless this one changed the same key since. A changed file that will
+## not parse (a hand edit made while the game ran) is kept aside first,
+## exactly as one found at start is ([method _keep_aside]), and this
+## instance's own file is what is written.
+static func _merge_from_disk() -> void:
+	if not FileAccess.file_exists(PATH):
+		return
+	var bytes := _read_quietly(PATH)
+	if bytes == _seen:
+		return
+	var fresh := ConfigFile.new()
+	var err := fresh.parse(bytes.get_string_from_utf8())
+	if err != OK:
+		_keep_aside(err)
+		_kept_while_running = _kept_aside_as != ""
+		_seen = bytes
+		return
+	for key in _changed:
+		var change: Array = _changed[key]
+		if change.is_empty():
+			if fresh.has_section_key("options", key):
+				fresh.erase_section_key("options", key)
+		else:
+			fresh.set_value("options", key, change[0])
+	_config = fresh
+	_seen = bytes
+
+
 ## The tail of the file [method write_atomically] writes before it is
-## renamed into place.
+## renamed into place; [method pending_path] adds whose write it is.
 const PENDING_TAIL := ".tmp"
 
 
 ## WRITE [param bytes] TO [param path] WHOLE OR NOT AT ALL (bug pass of
 ## 2026-10-03) — the player's files ([Settings], [method DeckStore.save]
-## and its export, [method PackSeal.seal]) used to be truncated in place
-## with the write never checked, so a full disk or a quota cut a deck
-## short and the game said it had been saved. The bytes go to `path` +
-## [constant PENDING_TAIL], are checked (the write's own error and the
-## length that reached the disk) and only then renamed over the old file
-## — the pattern `DraftStore._write` and the tournament store already
-## use. Anything but OK leaves the old file exactly as it was and no
-## pending file behind.
+## and its export, [method PackSeal.seal], the Deck Lab's [EloLedger])
+## used to be truncated in place with the write never checked, so a full
+## disk or a quota cut a deck short and the game said it had been saved.
+## The bytes go to a pending file ([method pending_path]), are checked
+## (the write's own error and the length that reached the disk) and only
+## then renamed over the old file — the pattern `DraftStore._write` and
+## the tournament store already use. Anything but OK leaves the old file
+## exactly as it was and no pending file behind.
+##
+## AND WHERE AND AS THE FILE IS (robustness campaign of 2026-10-12): a
+## rename replaces whatever sits at the path, so
+## - a LINK (a deck kept in a synced folder, a settings.cfg in a dotfiles
+##   repository) is followed to the file it names, and the pending file
+##   is written beside THAT file — the link stays a link and the file it
+##   names is the one that changes;
+## - a file the player made READ-ONLY to keep it as it is is refused
+##   ([constant ERR_FILE_NO_PERMISSION]) rather than replaced;
+## - a rewritten file keeps its mode (an `rw-------` settings.cfg stays
+##   private);
+## - two writers of one file at once (two game instances on one profile)
+##   never share a pending file: each process and thread has its own, so
+##   the file that lands is always one whole version.
 static func write_atomically(path: String, bytes: PackedByteArray) -> Error:
-	var pending := path + PENDING_TAIL
+	var target := _followed(path)
+	var mode := 0
+	if FileAccess.file_exists(target):
+		if _read_only(target):
+			return ERR_FILE_NO_PERMISSION
+		mode = _mode_of(target)
+	var pending := _pending_beside(target)
 	var file := FileAccess.open(pending, FileAccess.WRITE)
 	if file == null:
 		var why := FileAccess.get_open_error()
@@ -198,11 +414,62 @@ static func write_atomically(path: String, bytes: PackedByteArray) -> Error:
 			err = ERR_FILE_CANT_WRITE
 		if check != null:
 			check.close()   # closed before the rename: Windows will not move an open file
+	# Only where it differs: a card formatted FAT (a handheld's) gives
+	# every file the one mode its mount says and refuses to change it.
+	if err == OK and mode != 0 and _mode_of(pending) != mode:
+		FileAccess.set_unix_permissions(pending, mode)
 	if err == OK:
-		err = DirAccess.rename_absolute(pending, path)
+		err = DirAccess.rename_absolute(pending, target)
 	if err != OK and FileAccess.file_exists(pending):
 		DirAccess.remove_absolute(pending)
 	return err
+
+
+## The pending file [method write_atomically] writes for [param path]
+## from the calling thread: beside the file a link names, tagged with
+## this process and thread. Tests take this name with a folder to make a
+## write fail on purpose.
+static func pending_path(path: String) -> String:
+	return _pending_beside(_followed(path))
+
+
+static func _pending_beside(target: String) -> String:
+	return "%s%s.%d.%d" % [target, PENDING_TAIL, OS.get_process_id(), OS.get_thread_caller_id()]
+
+
+## [param path], or the file it names when it is a link — through a chain
+## of links, a relative one read from the link's own folder. Sixteen deep
+## at most, as a loop of links must end somewhere.
+static func _followed(path: String) -> String:
+	var at := path
+	for _hop in 16:
+		var dir := DirAccess.open(at.get_base_dir())
+		if dir == null or not dir.is_link(at.get_file()):
+			return at
+		var named := dir.read_link(at.get_file())
+		if named == "":
+			return at
+		if named.is_relative_path():
+			named = ProjectSettings.globalize_path(at.get_base_dir()).path_join(named).simplify_path()
+		at = named
+	return at
+
+
+## The file's owner may not write it: the read-only attribute on Windows,
+## the owner's write bit elsewhere. A platform that reports no mode at
+## all (0) is not read as read-only.
+static func _read_only(target: String) -> bool:
+	if OS.get_name() == "Windows":
+		return FileAccess.get_read_only_attribute(target)
+	var mode := _mode_of(target)
+	return mode != 0 and (mode & 128) == 0      # 128 = 0o200, the owner's write bit
+
+
+## The file's permission bits (0o7777), or 0 where the platform has none.
+static func _mode_of(target: String) -> int:
+	if OS.get_name() == "Windows":
+		return 0
+	return FileAccess.get_unix_permissions(target) & 4095
 
 
 ## Write out whatever [method set_value] was asked not to. A no-op when
@@ -242,12 +509,66 @@ static func clear_value(key: String) -> void:
 	_ensure()
 	if _config.has_section_key("options", key):
 		_config.erase_section_key("options", key)
+		_changed[key] = []
 		_save()
 
 
 static func has_value(key: String) -> bool:
 	_ensure()
 	return _config.has_section_key("options", key)
+
+
+## WHAT WENT WRONG WITH THE FILE, IN THE PLAYER'S WORDS (robustness
+## campaign of 2026-10-12), or "" when nothing did. A settings.cfg that
+## would not parse, one that could not be read, and a save that failed
+## were said on stderr only — which a Steam Deck, an ArkOS handheld or
+## the Quest never shows: the options below a bad line quietly started
+## from their defaults, and a switch moved on a full or read-only card
+## looked saved and was gone at the next start. The title screen shows
+## this once ([method untold_problem]); the Options screen carries it as
+## a line for as long as it holds.
+static func problem() -> String:
+	_ensure()
+	var lines: Array[String] = []
+	if _unwritable_reason != "":
+		lines.append(("settings.cfg could not be read (%s), so the game leaves it "
+			+ "as it is: options set now are not saved. Fix or remove it "
+			+ "(%s) and start the game again.")
+			% [_unwritable_reason, ProjectSettings.globalize_path(PATH)])
+	elif _dirty and _save_error != OK:
+		lines.append("Options could not be saved (%s). Changes made now last until the game closes."
+			% _why_not_saved(_save_error))
+	if _kept_aside_as != "" and _kept_while_running:
+		lines.append(("settings.cfg was changed while the game ran into a file "
+			+ "the game could not read, so the game saved its own options over "
+			+ "it. The changed file is kept as %s.") % ProjectSettings.globalize_path(_kept_aside_as))
+	elif _kept_aside_as != "":
+		lines.append(("settings.cfg had a line the game could not read, so the "
+			+ "options from that line on started from their defaults. Your file "
+			+ "is kept as %s — fix the line there and copy it back, or set "
+			+ "those options again.") % ProjectSettings.globalize_path(_kept_aside_as))
+	return "\n".join(lines)
+
+
+## [method problem] the first time it is asked for each problem, and ""
+## after — the title screen's notice, once per problem and start.
+static func untold_problem() -> String:
+	var now := problem()
+	if now == "" or now == _told:
+		return ""
+	_told = now
+	return now
+
+
+static func _why_not_saved(err: Error) -> String:
+	match err:
+		ERR_FILE_NO_PERMISSION:
+			return "settings.cfg or its folder is read-only"
+		ERR_FILE_CANT_OPEN, ERR_CANT_CREATE:
+			return "its folder cannot be written"
+		ERR_FILE_CANT_WRITE:
+			return "the disk did not take the file; it may be full"
+	return error_string(err)
 
 
 # Typed accessors for the options the game actually has.

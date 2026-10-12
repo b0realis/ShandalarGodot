@@ -63,8 +63,11 @@ func preselect(card_name: String) -> void:
 
 
 ## What [method decline_search] parks: no card is named this, so the
-## search it answers finds nothing.
-const DECLINED_PICK := "\u0000declined"
+## search it answers finds nothing. Plain text (campaign 2026-10-12,
+## r1-4): it was "\u0000declined", and Godot strings cannot hold a NUL —
+## every launch that compiled this printed three "Unexpected NUL
+## character" lines and the mark became U+FFFD + "declined".
+const DECLINED_PICK := "<declined>"
 
 
 ## The player looked at the library picker and chose NOTHING — "fail to

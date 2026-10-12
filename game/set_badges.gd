@@ -194,6 +194,14 @@ static func describe(code: String) -> String:
 	if facts.is_empty():
 		return ""
 	var printed := int(facts.get("printed", 0))
+	# THE TITLE NEVER WAITS FOR THE POOL (bug campaign 2026-10-12, r2-7):
+	# counting this game's cards joins a build still in flight, which froze
+	# the window on a badge clicked in the title's first seconds. Until the
+	# pool is in, the popup gives the date and the set's size, and says so.
+	if CardRegistry.is_loading():
+		return "%s — %d cards in the set; how many are in this game is still loading.\n\n%s" % [
+			_date_words(String(facts.get("released", ""))), printed,
+			String(facts.get("lore", ""))]
 	var here := cards_here(code)
 	# An em dash, not a middle dot: the imported MPlantin has no U+00B7
 	# and drops it silently, which read as a hole in the sentence.

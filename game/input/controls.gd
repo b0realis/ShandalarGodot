@@ -61,7 +61,7 @@ const ACTIONS: Array[Dictionary] = [
 	{"name": "duel_cancel", "label": "Cancel",
 		"tip": "Cancel, one layer at a time — and with nothing to cancel, the pause menu."},
 	{"name": "duel_pause", "label": "Pause menu",
-		"tip": "Opens and closes the pause menu whatever else is going on."},
+		"tip": "Opens and closes the pause menu whatever else is going on. F10 does too (a handheld's Select)."},
 	{"name": "duel_hand", "label": "Show or hide the hand",
 		"tip": "Folds the hand out of the way of your own attackers, and back."},
 	{"name": "duel_log", "label": "Duel log",
@@ -73,7 +73,8 @@ const ACTIONS: Array[Dictionary] = [
 	{"name": "duel_id_tags", "label": "Show ID tags",
 		"tip": "The Duel Options toggle, from the keyboard."},
 	{"name": "duel_invisible", "label": "Show invisible effects",
-		"tip": "The Duel Options toggle, from the keyboard."},
+		"tip": "The Duel Options toggle, from the keyboard — not available yet: the menus grey it too.",
+		"available": false},
 	{"name": "duel_sickness", "label": "Show summoning sickness",
 		"tip": "The Duel Options toggle, from the keyboard."},
 	{"name": "duel_screenshot", "label": "Screenshot",
@@ -116,9 +117,13 @@ static func apply() -> void:
 	var stored: Dictionary = Settings.get_value(SETTINGS_KEY, {})
 	for action in names():
 		var events := defaults(action)
-		if stored.get(action) is Array:
+		# The choices are always the project's digits (campaign 2026-10-12
+		# f-shell): a stored row for one is the old bug's leftover (r2-10).
+		if stored.get(action) is Array and not CHOICES.has(action):
 			events.clear()
 			for text in stored[action]:
+				if not (text is String):
+					continue        # a hand-edited file's number is no binding
 				var event := decode(String(text))
 				if event != null:
 					events.append(event)
@@ -192,6 +197,12 @@ static func bind(action: String, event: InputEvent) -> bool:
 	for other in names():
 		if other == action:
 			continue
+		# A LISTED ACTION NEVER TAKES A DIGIT OFF THE CHOICES (campaign
+		# 2026-10-12 f-shell, r2-10): the choice list reads its digits
+		# before anything else while it is up, so the two share the key,
+		# and the nine answers have no row to show — or restore — a gap.
+		if CHOICES.has(other) and not CHOICES.has(action):
+			continue
 		var kept: Array[InputEvent] = []
 		var changed := false
 		for bound in bindings(other):
@@ -216,7 +227,7 @@ static func bind(action: String, event: InputEvent) -> bool:
 static func bindable(event: InputEvent) -> bool:
 	if event is InputEventKey:
 		return event.pressed and not event.echo and not MODIFIERS.has(event.keycode) \
-			and event.keycode != KEY_NONE
+			and event.keycode != KEY_NONE and event.keycode != MENU_KEY
 	if event is InputEventJoypadButton:
 		return event.pressed
 	return false
@@ -245,7 +256,7 @@ static func is_default(action: String) -> bool:
 static func _store() -> void:
 	var out := {}
 	for action in names():
-		if is_default(action):
+		if is_default(action) or CHOICES.has(action):
 			continue
 		var texts: Array = []
 		for event in bindings(action):
@@ -282,6 +293,8 @@ static func pressed(event: InputEvent, action: String) -> bool:
 		return false
 	if event is InputEventKey and event.echo:
 		return false
+	if action == "duel_pause" and is_menu_key(event):
+		return true
 	return event.is_action_pressed(action, false, true)
 
 
@@ -375,3 +388,37 @@ static func decode(text: String) -> InputEvent:
 			pad.button_index = int(name.substr(7)) as JoyButton
 			return pad
 	return null
+
+
+# --- campaign 2026-10-12 f-shell: the handheld's menu key, dark rows ---
+
+## THE HANDHELD'S MENU KEY (bug campaign 2026-10-12, b1-8). ArkOS's
+## Select types this through gptokeyb (`packaging/handhelds/
+## shandalar.gptk`). It used to type `q`, the pause key — and a focused
+## text field (the Deck Builder's search, after the screen keyboard) took
+## it as a letter, so the menu with Exit game did not open. F10 is a key
+## no text field types: it is the pause key in a duel ([method pressed])
+## and the menu key in the Deck Builder, besides whatever key the player
+## gave those, and no other action can take it ([method bindable]). Not
+## a row on the Options list: it is the device's, not the player's.
+const MENU_KEY := KEY_F10
+
+
+## Whether [param event] is a press of [constant MENU_KEY], no modifiers.
+static func is_menu_key(event: InputEvent) -> bool:
+	if not (event is InputEventKey):
+		return false
+	var key := event as InputEventKey
+	return key.pressed and not key.echo and key.keycode == MENU_KEY \
+		and not key.ctrl_pressed and not key.alt_pressed and not key.meta_pressed \
+		and not key.shift_pressed
+
+
+## Whether the listed [param action] does something yet. A row whose
+## command is still dark (`Show invisible effects`, greyed on the duel's
+## menus as well) is listed but not offered for rebinding (b6-5).
+static func available(action: String) -> bool:
+	for entry in ACTIONS:
+		if String(entry["name"]) == action:
+			return bool(entry.get("available", true))
+	return true

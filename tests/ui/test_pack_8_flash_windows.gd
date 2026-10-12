@@ -146,7 +146,9 @@ func _drive(steps: int, until: Callable = Callable(), press_done := false) -> vo
 			return
 		var acting := screen._ai_seat_to_act()
 		if acting != -1:
-			screen._ais[acting].act(screen.game)
+			# The AI's beat as the live screen runs it: the action, then the
+			# one redraw that follows it (2026-10-12 campaign, r1-1).
+			screen._ai_step()
 		elif press_done and screen.game.priority_player == 0 \
 				and screen.mode == DuelScreen.Mode.NORMAL \
 				and not screen._auto_pass_applies():

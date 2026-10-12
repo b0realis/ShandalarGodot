@@ -82,15 +82,19 @@ func save() -> bool:
 	var on_disk := _on_disk(path)
 	if not on_disk.get_base_dir().is_empty():
 		DirAccess.make_dir_recursive_absolute(on_disk.get_base_dir())
-	var file := FileAccess.open(on_disk, FileAccess.WRITE)
-	if file == null:
-		printerr("EloLedger: cannot write %s (%s)" % [path,
-			error_string(FileAccess.get_open_error())])
-		return false
-	file.store_line("# Shandalar Deck Lab — Elo ledger (see DeckLab/README.md)")
-	file.store_line("# Standard Elo, K=%d per game, start %d. Safe to hand-edit." % [
-		int(K), int(STARTING_ELO)])
-	file.store_line("# deck | elo | games | wins | losses | updated")
+	# WHOLE OR NOT AT ALL (robustness campaign of 2026-10-12): the ledger
+	# was the last file written in place — opened for WRITE, which empties
+	# it first — so a full disk or a kill mid-write left 108 of 402 decks
+	# and only "Elo NOT SAVED" on the console. It now goes the way the
+	# player's own files go ([method Settings.write_atomically]): the old
+	# ledger stays whole until the new one is down, a linked ledger is
+	# written where the link points, and a read-only one is left alone.
+	var lines := PackedStringArray([
+		"# Shandalar Deck Lab — Elo ledger (see DeckLab/README.md)",
+		"# Standard Elo, K=%d per game, start %d. Safe to hand-edit." % [
+			int(K), int(STARTING_ELO)],
+		"# deck | elo | games | wins | losses | updated",
+	])
 	var names := entries.keys()
 	# Rating first, name second, so two decks at one rating keep one
 	# order and the ledger's diff shows ratings that moved and nothing
@@ -101,13 +105,13 @@ func save() -> bool:
 		return a < b)
 	for deck_name in names:
 		var e: Dictionary = entries[deck_name]
-		file.store_line("%s | %.1f | %d | %d | %d | %s" % [
+		lines.append("%s | %.1f | %d | %d | %d | %s" % [
 			_escaped(deck_name), e.elo, e.games, e.wins, e.losses, e.updated])
-	file.flush()
-	var err := file.get_error()
-	file.close()
+	var text := "\n".join(lines) + "\n"
+	var err := Settings.write_atomically(on_disk, text.to_utf8_buffer())
 	if err != OK:
-		printerr("EloLedger: cannot finish writing %s (%s)" % [path, error_string(err)])
+		printerr("EloLedger: cannot write %s (%s); the ledger on disk is as it was" % [
+			path, error_string(err)])
 	return err == OK
 
 

@@ -19,7 +19,8 @@ static func configure(c: CardData) -> bool:
 			c.with_additional_sacrifice("a creature", _creature)
 			c.spell(SearchLibraryEffect.new("a creature card", _creature))
 		"Songs of the Damned": c.spell(Songs.new())
-		"Spoils of Evil": c.spell(F.Action.new(_spoils, "add mana and gain life for artifacts and creatures in target opponent's graveyard", TargetSpec.opponent(), true))
+		"Spoils of Evil": c.spell(F.Action.new(_spoils, "add mana and gain life for artifacts and creatures in target opponent's graveyard", TargetSpec.opponent(), true) \
+			.with_ai_role(&"graveyard_count_life_mana", {"count": _spoils_count}))
 		"Gravebind":
 			c.spell(F.Action.new(_ban_regeneration, "target creature can't be regenerated this turn", TargetSpec.creature()))
 			c.spell(DelayedDrawEffect.new())
@@ -58,7 +59,8 @@ static func configure(c: CardData) -> bool:
 			var gain := GainLifeEffect.new(5)
 			gain.target_spec = TargetSpec.opponent()
 			c.spell(gain)
-		"Forgotten Lore": c.spell(F.Action.new(_forgotten, "target opponent chooses a card to return from your graveyard", TargetSpec.opponent(), true))
+		"Forgotten Lore": c.spell(F.Action.new(_forgotten, "target opponent chooses a card to return from your graveyard", TargetSpec.opponent(), true) \
+			.with_ai_role(&"opponent_picks_regrowth", {"rejection": "{G}"}))
 		_: return false
 	return true
 
@@ -109,11 +111,16 @@ static func _vision(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: i
 static func _stunted(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
 	_hand_top(g, t.player_id, 3)
 static func _spoils(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:
-	var count := 0
-	for i in g.players[t.player_id].graveyard:
-		if i.is_creature() or i.is_type(Mtg.CardType.ARTIFACT): count += 1
+	var count := _spoils_count(g, t.player_id)
 	g.players[pid].mana_pool.add(Mtg.ManaColor.C, count)
 	g.adjust_life(pid, count)
+## The artifact and creature cards in [param who]'s graveyard — what Spoils
+## of Evil counts, and the `count` its AI shape reads (campaign 2026-10-12, b4-3).
+static func _spoils_count(g: MtgGame, who: int) -> int:
+	var count := 0
+	for i in g.players[who].graveyard:
+		if i.is_creature() or i.is_type(Mtg.CardType.ARTIFACT): count += 1
+	return count
 static func _ban_regeneration(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
 	var i := g.find_instance(t.instance_id)
 	if i != null:

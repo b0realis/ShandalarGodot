@@ -148,7 +148,7 @@ static func _destroy_all(g: MtgGame, doomed: Array[CardInstance]) -> void:
 static func _red_rider(g: MtgGame, packet: DamagePacket, amount: int,
 		passage: CardInstance, _pid: int) -> void:
 	if (g.damage_source_colors(packet.source) & Mtg.ManaColor.R) != 0 and amount > 0:
-		g.deal_damage(passage, TargetRef.player(packet.source.controller_id), amount)
+		g.deal_damage(passage, TargetRef.player(g.source_controller(packet.source)), amount)
 
 
 # ------------------------------------------------------------ Peace Talks --

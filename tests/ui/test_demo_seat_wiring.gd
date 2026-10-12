@@ -93,11 +93,15 @@ func test_demo_both_hands_update_without_concealment_on_draw_play_and_new_turn()
 		_stand_in(pid, Mtg.Step.MAIN1)
 		_assert_both_stacks_open()
 		screen.game.draw_cards(1 - pid, 1)
+		# An engine change is drawn at the end of the frame (one redraw per
+		# frame since the 2026-10-12 campaign, r1-1).
+		await get_tree().process_frame
 		_assert_both_stacks_open()
 		var card: CardInstance = screen.game.players[pid].hand[0]
 		screen._on_card_clicked(card)
 		assert_eq(card.zone, Mtg.Zone.HAND, "both open hands remain read-only for spectators")
 		assert_eq(screen.game.play_land(pid, card), "")
+		await get_tree().process_frame
 		_assert_both_stacks_open()
 		# A new turn must never conceal either hand, even though hotseat does.
 		screen.game.turn_number += 1

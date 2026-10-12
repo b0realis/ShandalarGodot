@@ -2101,7 +2101,8 @@ The seats are `agent` (the pipe — both, and it plays itself),
 game's own players at the Lab's own settings; `--turns` (200) calls a
 draw, `--log FILE` keeps the engine's log, `--packs` is the Lab's
 switch. `--join` seats the same pipe at a table the game hosts — a LAN
-invitation or the same-computer access code — so a program plays a
+invitation or the same-computer access code (`--join env:NAME` reads it from
+that environment variable, off the command line) — so a program plays a
 person, or another program at another table; `--table NAME` finds an
 open LAN table by the name the Game Browser lists (the advert carries
 the invitation), and at a table `--log` keeps the journal the seat saw.

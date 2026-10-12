@@ -227,12 +227,18 @@ func test_a_binding_takes_the_same_event_off_any_other_action() -> void:
 	assert_eq(Controls.key_text("duel_space"), "Space", "which keeps its Space")
 
 
-func test_the_choices_are_actions_too_and_a_digit_moves_like_any_key() -> void:
+## The choices are actions too, but a listed action SHARES a digit with
+## them rather than taking it (bug campaign 2026-10-12, r2-10): the
+## choice list reads its digits first while it is up, and the nine
+## answers have no row that could show or restore a gap.
+func test_the_choices_are_actions_too_and_a_listed_action_shares_their_digit() -> void:
 	assert_true(Controls.bind("duel_mute", _key(KEY_3)))
-	assert_eq(Controls.choice_index(_key(KEY_3)), -1, "3 answers nothing now")
-	assert_eq(Controls.key_text("duel_choice_3"), Controls.UNBOUND)
+	assert_true(Controls.pressed(_key(KEY_3), "duel_mute"), "3 mutes outside a choice list")
+	assert_eq(Controls.choice_index(_key(KEY_3)), 2, "and still answers the third choice")
+	assert_eq(Controls.key_text("duel_choice_3"), "3")
 	Controls.reset()
-	assert_eq(Controls.choice_index(_key(KEY_3)), 2, "and reset gives it back")
+	assert_eq(Controls.choice_index(_key(KEY_3)), 2)
+	assert_eq(Controls.key_text("duel_mute"), "M", "reset gives Mute its M back")
 
 
 func test_the_binding_carries_the_modifiers() -> void:

@@ -94,9 +94,12 @@ shelves closes it, and a double click on the plate leaves it open.
 R2 on ArkOS; Options → Controls) brings the sidebar's card — the one the
 duel or the Deck Builder is showing large — up full-size to read, whether
 or not *Full-screen card on click* is on, and the same key closes it
-again; so does Escape, controller Cancel, or a click or tap on the card.
-Nothing else happens while the card is up: Space does not pass the turn
-and Enter does not press Done. The key waits under a pause menu, a
+again; so does Escape, controller Cancel, or a click, right click or tap
+on the card. Nothing else happens while the card is up: Space does not
+pass the turn and Enter does not press Done. With the pad pointer on, the
+stick and the D-pad still move the pointer over the card and A is still
+its click — on the Text button it switches the box, anywhere else it
+closes the card. The key waits under a pause menu, a
 dialog or the Deck Builder's menu. It was asked for by a tester on a
 3.5-inch screen, where the sidebar card is too small to read and the
 table at a glance is still fine.
@@ -104,7 +107,8 @@ table at a glance is still fine.
 The full-size card opens with its text in the 1997 box, so the art is
 clear. **Text: 1997 / Text: full**, beside the card's bottom right, grows
 the box up over the art for a card whose text does not fit, and back;
-Enter does the same (X on ArkOS). The choice is kept for the next card and
+Enter or the keypad's Enter does the same (X on ArkOS; a pad's A while the
+pad pointer is off), Space does not. The choice is kept for the next card and
 the next launch, and it is the reader's own: the Deck Builder's *Text*
 button, for the sidebar card, is a separate switch.
 
@@ -211,12 +215,14 @@ read comfortably; there is no dedicated small-screen reflow in this package.
 | L3 | Backspace: remove selected card in Deck Builder |
 | R3 | Mute for this session |
 | Start | Escape: cancel one layer; with nothing to cancel, the pause menu |
-| Select | Q: the pause menu in a duel whatever else is going on, the menu in the Deck Builder — both hold **Exit game** |
+| Select | F10, the game's menu key: the pause menu in a duel whatever else is going on — under a question, over the full-size card (which it closes), during the coin toss and the opening hand (Concede waits until the duel begins) — and the menu in the Deck Builder; both hold **Exit game**, and it types nothing into a text field |
 | PortMaster hotkey + Start | Emergency exit; may interrupt unsaved work |
 
 **Leaving the game.** Select opens the menu that holds **Exit game** in a
 duel or the Deck Builder; on the title screen, **Exit** is the bottom
-button, and Start (Escape) steps back from any other screen. (Asked for by
+button, and Start (Escape) steps back from any other screen — Magic
+Battle, Options and Card Packs included, each closing an open popup first
+(2026-10-12). (Asked for by
 the R36 Ultra tester, 2026-10-08, who had to use the power button: Select
 was unmapped, and Start opens the pause menu only when there is nothing
 left to cancel.)
@@ -259,14 +265,29 @@ leave through the menu's Exit game. Every line lands in
 the start took, every second that had a slow frame, each frame of a tenth of
 a second or more with what ran inside it (the computer's decision, the
 screen's refresh — or nothing labelled, which points at the drawing), and a
-summary every minute. On a Steam Deck or a desktop the same file beside the
-executable works, or the launch option `SHANDALAR_PERF_LOG=1 %command%`, or
-`-- --perf-log` on the command line; the log is then at
-`~/.local/share/godot/app_userdata/Shandalar/logs/perf.log`.
+summary every minute. Each job counts its own time: a refresh that ran
+inside the computer's decision is its own row, `screen refresh (inside
+computer decision)`, and the decision's time leaves it out. On a Steam Deck
+or a desktop the same file beside the executable works (on a Mac beside
+`Shandalar.app`, where `skin/` and `cardpacks/` go), or the launch option
+`SHANDALAR_PERF_LOG=1 %command%`, or `-- --perf-log` on the command line;
+the log is then at
+`~/.local/share/godot/app_userdata/Shandalar/logs/perf.log`, and its lines
+are also on the game's stderr (never stdout). On the Meta Quest the file
+goes in the game's own folder and the log comes back from there:
+`adb shell touch /sdcard/Android/data/com.b0realis.shandalar/files/perf-log`,
+play, then
+`adb pull /sdcard/Android/data/com.b0realis.shandalar/files/perf.log` (and
+`adb shell rm` the `perf-log` file afterwards). The tools that ship beside
+the game — the Deck Lab, `lab_query`, the referee, the pack checks — never
+start the log, whatever file or variable is there: their output is a report
+a program reads.
 
 If launch fails, keep `shandalar/portmaster.log` and
-`shandalar/portmaster.previous.log`. Report the exact device/board, ArkOS build,
-PortMaster version and screen size. A launch test must check pointer movement,
+`shandalar/portmaster.previous.log`; every way the launcher stops writes a
+`Shandalar:` line there saying why, PortMaster's own `control.txt`, the
+firmware's `mod_<name>.txt` and its controller set-up included. Report the
+exact device/board, ArkOS build, PortMaster version and screen size. A launch test must check pointer movement,
 dragging, no double actions, text readability, a complete duel, save/restart
 and returning to Ports. Until those pass, treat this as a porting test build.
 
@@ -362,6 +383,18 @@ told to trust this computer — put it on and answer the prompt.
    first, then every step one at a time, with the start recorded at
    the end — run `./quest_fresh_install.sh` instead.
 
+   Both scripts read the headset's free space before each zip (it
+   needs twice the zip while it is copied, and 100 MB to spare) and
+   stop with "out of space" rather than start a copy that cannot
+   finish; the headset copies each zip to `<name>.part` and moves it
+   over the old one only when it is whole, so a zip that worked is
+   never replaced by half a zip. They talk to the one headset `adb
+   devices` lists as ready even with a phone or an emulator plugged
+   in beside it. They copy the card packs only under the names the
+   game reads (`Pack-1-DotP-complete.zip` … `Pack-9-Tempest-Block.zip`);
+   a browser's second download, `Pack-9-Tempest-Block (1).zip`, is
+   named on screen with the name to give it.
+
    **Why the Download folder** (2026-10-11, the owner's Quest 3): an
    `adb push` straight into the game's folder now fails with *"remote
    fchown failed: Operation not permitted"* — the bytes go over, then
@@ -388,11 +421,16 @@ told to trust this computer — put it on and answer the prompt.
    from 9.9 s to 2.4 s; the headset's new figure is still to be
    measured, and its start report has a line per pack with the
    milliseconds. Every later start is quick: the packs are
-   sealed by their zip table and the pictures are not read again until
-   the file changes (`PackSeal`).
+   sealed — the zip's table and the file itself, where it is and when
+   it was written — and the pictures are not read again until the file
+   changes; a damaged copy refused after its pictures were read is
+   remembered the same way and not read again either (`PackSeal`).
 
 By hand, the same three steps in the same order — install, start the
-game once, copy into the folders it made through the Download folder:
+game once, copy into the folders it made through the Download folder,
+one zip at a time (a zip you do not have, such as `cardart.zip`, is
+simply passed over; the headset copies each to a `.part` file first, so
+a copy cut short never replaces a zip that worked):
 
 ```sh
 adb install -r Shandalar.apk
@@ -401,8 +439,13 @@ adb shell am force-stop com.b0realis.shandalar
 F=/sdcard/Android/data/com.b0realis.shandalar/files
 T=/sdcard/Download/shandalar-push
 adb shell mkdir -p $T
-adb push skin/original_skin.zip skin/cardart.zip cardpacks/. $T/
-adb shell "cp $T/original_skin.zip $T/cardart.zip $F/skin/ && cp $T/Pack-*.zip $F/cardpacks/ && rm -r $T"
+for f in skin/original_skin.zip skin/cardart.zip cardpacks/Pack-*.zip; do
+  [ -f "$f" ] || continue
+  n=$(basename "$f"); case "$f" in skin/*) d=$F/skin ;; *) d=$F/cardpacks ;; esac
+  adb push "$f" "$T/$n" &&
+    adb shell "cp '$T/$n' '$d/$n.part' && mv '$d/$n.part' '$d/$n' && rm '$T/$n'"
+done
+adb shell rm -r $T
 ```
 
 **The folders must be the game's own.** This is what the first headset

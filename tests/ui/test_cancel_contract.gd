@@ -541,6 +541,9 @@ func test_a_forced_declaration_drops_a_cast_left_aiming() -> void:
 	screen._on_card_clicked(growth)
 	assert_eq(screen.mode, DuelScreen.Mode.TARGETING, "aiming during the other seat's beat")
 	assert_eq(g.pass_priority(1), "")
+	# The other seat's pass is drawn at the end of the frame (one redraw
+	# per frame since the 2026-10-12 campaign, r1-1).
+	await get_tree().process_frame
 	assert_true(g.awaiting_attackers, "the engine now waits on the attackers")
 	assert_eq(screen.mode, DuelScreen.Mode.ATTACKERS)
 	assert_null(screen._pending_card, "the cast left hanging was dropped")
@@ -558,6 +561,7 @@ func test_a_forced_declaration_closes_the_x_question_and_drops_its_cast() -> voi
 	screen._on_card_clicked(howl)
 	assert_not_null(screen._x_dialog, "Howl from Beyond asks for X first")
 	assert_eq(g.pass_priority(1), "")
+	await get_tree().process_frame   # drawn at the end of the frame (r1-1)
 	assert_true(g.awaiting_attackers)
 	assert_eq(screen.mode, DuelScreen.Mode.ATTACKERS)
 	assert_null(screen._x_dialog, "the X question went with the cast")

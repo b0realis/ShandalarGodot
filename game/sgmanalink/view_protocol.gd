@@ -4,15 +4,25 @@ extends RefCounted
 ## No object/resource decoding or unconstrained UI arrays.
 
 
+static var _plain_pattern: RegEx
+
+
+## Display-safe text: no control character but the newline, no C1 control,
+## no bidirectional override or isolate. One native match over the whole
+## string (robustness campaign 2026-10-12) — the GDScript loop per
+## character it replaces was most of a guest's 6-10 ms validating a
+## late-game state (rules texts run to 4 KB). The match fails closed: text
+## the matcher cannot read at all is refused, as text with a forbidden
+## character is.
 static func text(value: Variant, limit := 128) -> bool:
 	if not value is String or value.length() > limit:
 		return false
-	for character in value:
-		var code: int = character.unicode_at(0)
-		if (code < 32 and code != 10) or code == 127 or (code >= 0x80 and code <= 0x9f) \
-			or code in [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]:
-			return false
-	return true
+	if value.is_empty():
+		return true
+	if _plain_pattern == null:
+		_plain_pattern = RegEx.create_from_string(
+			"^[^\\x{0}-\\x{9}\\x{b}-\\x{1f}\\x{7f}-\\x{9f}\\x{202a}-\\x{202e}\\x{2066}-\\x{2069}]*\\z")
+	return _plain_pattern.search(value) != null
 
 
 static func valid(message: Dictionary) -> bool:

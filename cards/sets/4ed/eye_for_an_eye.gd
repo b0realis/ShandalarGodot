@@ -76,7 +76,7 @@ class MirrorEffect extends EffectBase:
 	static func _reflect(game: MtgGame, packet: DamagePacket,
 			eye: CardInstance) -> int:
 		var back := packet.remaining()
-		var culprit: int = packet.source.controller_id
+		var culprit: int = game.source_controller(packet.source)
 		game.deal_damage(eye, TargetRef.player(culprit), back)
 		return -1   # your half carries on through the ordinary gates
 

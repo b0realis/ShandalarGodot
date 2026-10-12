@@ -2275,6 +2275,7 @@ func _copy_deck_to(index: int) -> void:
 	copy.deck_name = "%s (copy)" % deck.deck_name
 	_slots[index] = copy
 	_slot_dirty[index] = true
+	_remember_file(index, "", "")
 	refresh()
 	_say("Copied to Deck%d as %s" % [index + 1, copy.deck_name])
 
@@ -2489,6 +2490,7 @@ func _take_auto_deck(auto: AutoDeck) -> void:
 	var before := deck.duplicate_model()
 	var built := auto.build()
 	_set_deck(built)
+	_remember_file(_slot, "", "")
 	_remember(before, AI_COMMAND)
 	_cleared = null
 	_sorted = false
@@ -3374,6 +3376,7 @@ func _import_pasted(text: String) -> void:
 ## must ask.
 func _take_import(model: DeckModel, report: Array) -> void:
 	_set_deck(model)
+	_remember_file(_slot, "", "")    # an import saves under its title
 	_cleared = null
 	_undo = null
 	_sorted = false
@@ -4025,6 +4028,7 @@ func _confirm_discard_all(then: Callable, answered: Array[int] = []) -> void:
 func _new_deck() -> void:
 	_confirm_discard(func() -> void:
 		_set_deck(DeckModel.new())
+		_remember_file(_slot, "", "")
 		_sorted = false
 		_dirty = false
 		_undo = null
@@ -4193,6 +4197,7 @@ func _open_deck_info(then := Callable(), reason := "",
 	# The era's sunken stone, not a bare Godot field — the same box the
 	# Filter strip's type-ahead wears.
 	var edit := OriginalDialog.text_field()
+	edit.max_length = DeckModel.TITLE_MAX
 	edit.text = suggested if suggested != "" else deck.deck_name
 	dialog.body().add_child(edit)
 	dialog.add_button("OK").pressed.connect(func() -> void:
@@ -4454,6 +4459,11 @@ func _mark_unsaved_after_delete(path: String, title: String) -> bool:
 			continue
 		var saves_there := ProjectSettings.globalize_path(
 			DeckStore.path_for(model.deck_name)).simplify_path() == gone
+		# The file the slot was loaded from counts too, and is forgotten.
+		var loaded := String(_slot_files.get(i, ""))
+		if loaded != "" and ProjectSettings.globalize_path(loaded).simplify_path() == gone:
+			saves_there = true
+			_remember_file(i, "", "")
 		if saves_there or (title != "" and model.deck_name == title):
 			if i == _slot:
 				_dirty = true
@@ -4497,7 +4507,7 @@ func _load_deck(path: String) -> void:
 	if not missing.is_empty():
 		_offer_required_pack(path, loaded, report, missing[0])
 		return
-	_finish_load(loaded, report)
+	_finish_load(loaded, report, path)
 
 
 ## A Pack 1 deck never silently becomes a proxy deck. The player may enable
@@ -4524,7 +4534,7 @@ func _offer_required_pack(path: String, loaded: DeckModel, report: Array,
 				"disabled": not available or not refusal.is_empty(),
 				"callable": _enable_pack_and_reload.bind(pack_id, path)},
 			{"label": "Load as proxies", "name": "LoadAsProxies",
-				"callable": _finish_load.bind(loaded, report)},
+				"callable": _finish_load.bind(loaded, report, path)},
 			{"label": "Cancel", "name": "Cancel"},
 		], 600.0)
 	var notice := _pack_requirement_notice
@@ -4550,8 +4560,10 @@ func _enable_pack_and_reload(pack_id: String, path: String) -> void:
 		_say(CardPacks.change_refusal(), true)
 
 
-func _finish_load(loaded: DeckModel, report: Array) -> void:
+func _finish_load(loaded: DeckModel, report: Array, path := "") -> void:
 	_set_deck(loaded)
+	# The file it came from is where `Save deck` writes it back.
+	_remember_file(_slot, path, loaded.deck_name)
 	_cleared = null
 	_undo = null
 	_sorted = false
@@ -4588,8 +4600,8 @@ func _save_deck(then := Callable()) -> void:
 	if DeckStore.is_shipped_name(deck.deck_name):
 		_save_under_a_new_name(then)
 		return
-	if DeckStore.exists(deck.deck_name):
-		var file := DeckStore.path_for(deck.deck_name).get_file()
+	if FileAccess.file_exists(_save_path()):
+		var file := _save_path().get_file()
 		var dialog := _deck_save_question(DeckStore.DECK_EXISTS % file, 170.0)
 		dialog.add_button("OK").pressed.connect(func() -> void:
 			dialog.dismiss()
@@ -4598,6 +4610,42 @@ func _save_deck(then := Callable()) -> void:
 		_show_dialog(dialog)
 		return
 	_write_deck(then)
+
+
+# --- campaign 2026-10-12 f-deck: Save writes the file that was loaded ---
+
+## Slot -> the player's own deck file its deck was loaded from or last
+## saved to ("" for none), and the title the deck had at that moment.
+var _slot_files: Dictionary = {}
+var _slot_file_titles: Dictionary = {}
+
+
+## Remember (or, with "", forget) the file slot [param slot]'s deck lives
+## in. Only one of the player's own files is remembered: a shipped deck is
+## never written ([method DeckStore.is_user_deck]).
+func _remember_file(slot: int, path: String, title: String) -> void:
+	if path == "" or not DeckStore.is_user_deck(path):
+		_slot_files.erase(slot)
+		_slot_file_titles.erase(slot)
+		return
+	_slot_files[slot] = path
+	_slot_file_titles[slot] = title
+
+
+## WHERE `Save deck` WRITES THE DECK ON THE SURFACE (campaign 2026-10-12):
+## back into the file it was loaded from, while it still has the title it
+## was loaded under. Save wrote [method DeckStore.path_for] of the title
+## and nothing else, so any deck whose file is not named after its title —
+## every Booster Draft deck (`draft-<stamp>-<hex>.deck`), a hand-copied
+## file, an older stem — got a second file of the same title on its first
+## save, and the file the player opened never changed. A NEW title is a
+## save-as, as before: the file that title names.
+func _save_path() -> String:
+	var path := String(_slot_files.get(_slot, ""))
+	if path != "" and String(_slot_file_titles.get(_slot, "")) == deck.deck_name \
+			and DeckStore.is_user_deck(path):
+		return path
+	return DeckStore.path_for(deck.deck_name)
 
 
 ## A SAVE THAT WOULD TAKE A SHIPPED DECK'S NAME, TURNED INTO A SAVE-AS.
@@ -4626,13 +4674,15 @@ func _save_under_a_new_name(then := Callable()) -> void:
 
 
 func _write_deck(then := Callable()) -> void:
-	var refusal := DeckStore.save(deck)
+	var path := _save_path()
+	var refusal := DeckStore.save(deck, path)
 	if refusal != "":
 		_say(refusal, true)
 		return
 	_dirty = false
 	_slot_dirty[_slot] = false
-	_say(DeckStore.saved_message(deck))
+	_remember_file(_slot, path, deck.deck_name)
+	_say(DeckStore.saved_message(deck, path))
 	if then.is_valid():
 		then.call()
 	_warn_about_legality()
@@ -4681,10 +4731,7 @@ func _warn_about_legality() -> void:
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		item.custom_minimum_size.x = 500
 		dialog.body().add_child(item)
-	var tail := OriginalDialog.label(
-		"The deck is saved either way — this is the deck builder, not a"
-		+ " tournament. It is Unrestricted, and the battle-setup screen"
-		+ " will refuse it under any of the other four formats.", 12)
+	var tail := OriginalDialog.label(_legality_tail(), 12)
 	tail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tail.custom_minimum_size.x = 500
 	dialog.body().add_child(tail)
@@ -4695,6 +4742,41 @@ func _warn_about_legality() -> void:
 	# which card to keep and the dialog cannot make it.
 	dialog.add_button("OK").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
+
+
+# --- campaign 2026-10-12 f-deck: the legality window names the formats ---
+
+## The legality window's last line: WHICH formats the battle-setup screen
+## will refuse this deck under, asked of [method DeckFormat.legal] itself.
+## It used to say "Unrestricted ... any of the other four formats" for
+## every deck, and Highlander — which ignores the banned list — accepts a
+## singleton deck whose one offence is a banned card.
+func _legality_tail() -> String:
+	var cards := deck.to_card_list()
+	var side := deck.to_side_list()
+	var fits := PackedStringArray()
+	var refuses := PackedStringArray()
+	for format in DeckFormat.ORDER:
+		if DeckFormat.legal(cards, format, side) == "":
+			fits.append(format)
+		else:
+			refuses.append(format)
+	var text := "The deck is saved either way — this is the deck builder, not a tournament. "
+	if fits.size() == 1 and fits[0] == DeckFormat.UNRESTRICTED:
+		return text + "It is Unrestricted, and the battle-setup screen will refuse it" \
+			+ " under any of the other %s formats." % _count_word(refuses.size())
+	return text + "It is legal under %s; the battle-setup screen will refuse it under %s." \
+		% [_and_list(fits), _and_list(refuses)]
+
+
+static func _and_list(items: PackedStringArray) -> String:
+	if items.size() <= 1:
+		return "".join(items)
+	return ", ".join(items.slice(0, items.size() - 1)) + " and " + items[items.size() - 1]
+
+
+static func _count_word(n: int) -> String:
+	return ["no", "one", "two", "three", "four"][n] if n >= 0 and n <= 4 else str(n)
 
 
 ## `Stats (%d cards)` (`@STATS`) — the original's own statistics window.
@@ -5839,6 +5921,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_on_escape()
 		accept_event()
 		return
+	# --- campaign 2026-10-12 f-shell: the handheld's menu key (b1-8) ---
+	# ArkOS's Select types F10 ([constant Controls.MENU_KEY]), a key no
+	# text field types: it opens this menu the way Q does, and reaches
+	# here even with the search box still holding the keyboard.
+	if Controls.is_menu_key(event):
+		_toggle_deck_menu()
+		accept_event()
+		return
+	# --- end campaign 2026-10-12 f-shell ---
 	if event.keycode == KEY_Q and not event.ctrl_pressed \
 			and not event.alt_pressed and not event.meta_pressed:
 		# Q CARRIES NO OTHER DUTY ON THIS SCREEN, so unlike Esc it toggles

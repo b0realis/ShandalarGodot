@@ -415,8 +415,11 @@ cast worth less than `reserve.value * 1.5` if the plan cannot pay both
 (`:279-282`), and refuses any cast under 6.0 that would leave fewer than
 two untapped blue sources while a counter is in hand (`:283-286`,
 `_holding_counter` `:1295`, `_blue_after_plan` `:1303`). That is a real
-counterspell reservation, keyed to the counter's own cost, and Forge has no
-equivalent.
+counterspell reservation, and Forge has no equivalent. Since the 2026-10-12
+campaign it is keyed to the cost of the cheapest counter the lasting
+sources can pay (`_payable_counter`), books nothing for an unpayable one,
+and is dropped while their creatures put us on the panic line
+(`_board_pressure`) — before, it held mana for a counter it could not pay.
 
 
 ---

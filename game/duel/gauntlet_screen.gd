@@ -185,6 +185,13 @@ func _apply_music_switch() -> void:
 	_music.play_one(MusicLibrary.single_for(GAUNTLET_BEDS))
 
 
+## The bed back on under one of this screen's own windows, after a duel
+## stopped it ([method _play_match]); already playing, it plays on.
+func _resume_bed() -> void:
+	if is_instance_valid(_music):
+		_apply_music_switch()
+
+
 ## Stops on the way out, so the duel starts against silence and the PCM
 ## is dropped rather than carried.
 func _exit_tree() -> void:
@@ -333,6 +340,15 @@ func _apply_options() -> bool:
 	# saw the setup screen print "<random deck>" for a drawn one).
 	config.deck_names[0] = GauntletOptions.deck_title(mine)
 	config.panel_colors[0] = DuelConfig.dominant_color(deck.cards)
+	# YOUR FACE IS THE ONE YOU CHOSE (campaign 2026-10-12): the battle-setup
+	# screen's portrait for seat 1, through the same resolver
+	# ([method PortraitLibrary.chosen_for]). A run used to start from the
+	# hotseat default, whose portraits are empty, and every gauntlet duel
+	# wore the deck-colour duelist. The opponents keep theirs: each round
+	# is a different deck, and its colour is its face. A config that names
+	# a face already keeps it.
+	if String(config.portraits[0]) == "":
+		config.portraits[0] = String(PortraitLibrary.chosen_for(0).get("id", ""))
 	return true
 
 
@@ -345,6 +361,7 @@ func _refuse_your_deck(message: String) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	_close_window()
+	_resume_bed()
 	var dialog := OriginalDialog.create(GauntletState.TITLE,
 		Vector2(430, 150), "panel_dark_stone")
 	dialog.z_index = WINDOW_Z
@@ -380,6 +397,12 @@ func _start_match() -> void:
 
 ## The match itself: a whole [MatchScreen] against the round's opponent.
 func _play_match(round_config: DuelConfig) -> void:
+	# THE BED STOPS UNDER THE DUEL (campaign 2026-10-12): the gauntlet's
+	# screen stays in the tree while its match plays on top, and its bed
+	# went on under every duel's own tune. It comes back with the next
+	# window of this screen's ([method _resume_bed]).
+	if is_instance_valid(_music):
+		_music.stop_music()
 	_match = load("res://game/match_screen.tscn").instantiate()
 	_match.config = round_config
 	# Both before it enters the tree: the match must know its last word is
@@ -412,6 +435,7 @@ func _play_match(round_config: DuelConfig) -> void:
 ## after it at all.
 func _show_announcement(round_config: DuelConfig) -> void:
 	_close_window()
+	_resume_bed()
 	# Measured, not guessed: two lines and a foot. The round window is 250
 	# for five lines and this is the same stone at the same rhythm — the
 	# screenshot pass caught 190 leaving a hand's width of bare rock
@@ -536,6 +560,7 @@ func _drop_match() -> void:
 func _show_round_window(lines: Array[String]) -> void:
 	if _window != null:
 		_window.queue_free()
+	_resume_bed()
 	# The run's last word wears the End of Duel ground, whose bevel is the
 	# only INSET one in the set — the same treatment the duel's own
 	# verdict gets.

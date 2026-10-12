@@ -399,8 +399,14 @@ static func title_in(text: String) -> String:
 ## that file is its own.
 static func path_for(deck_name: String) -> String:
 	var path := "%s/%s%s" % [USER_DIR, file_stem(deck_name), EXTENSION]
-	var before := _stem_before_2026_10(deck_name)
-	if before != "" and not FileAccess.file_exists(path):
+	if FileAccess.file_exists(path):
+		return path
+	# A DECK SAVED UNDER AN OLDER STEM KEEPS ITS FILE: the fold before
+	# 2026-10 (above), and a long title's uncapped stem from before the
+	# cap of 2026-10-12 ([constant STEM_MAX]).
+	for before in [_stem_before_2026_10(deck_name), _stem_before_cap(deck_name)]:
+		if before == "":
+			continue
 		var old := "%s/%s%s" % [USER_DIR, before, EXTENSION]
 		# Not [method read_text]: its counter is the setup screen's.
 		if FileAccess.file_exists(old) and title_in(FileAccess.get_file_as_string(old)) \
@@ -421,7 +427,15 @@ static func file_stem(deck_name: String) -> String:
 	# that is ASCII (punctuation from beyond it included — see [method
 	# _has_letters_beyond_ascii]) keeps the stem it always had.
 	if out != "" and _has_letters_beyond_ascii(title):
-		return out + "_" + title.md5_text().left(10)
+		return _capped(out) + "_" + title.md5_text().left(10)
+	# A LONG TITLE IS CAPPED (campaign 2026-10-12): the stem had no limit,
+	# so a title past ~245 characters — a long name pasted in, a `.dec`
+	# import's `// NAME :` — named a file the filesystem refuses, and that
+	# deck could never be saved or exported. A stem past [constant
+	# STEM_MAX] keeps its first part and adds a digest of the whole title,
+	# so two long titles that begin alike are still two files.
+	if out.length() > STEM_MAX:
+		return _capped(out) + "_" + title.md5_text().left(10)
 	# A TITLE WITH NOTHING LATIN IN IT (bug pass of 2026-10-03): `Колода
 	# огня` and `龍のデッキ` both folded to "" and so to `new_deck` — the
 	# default deck's file, and each other's, so the second save asked to
@@ -484,6 +498,32 @@ static func _stem_before_2026_10(deck_name: String) -> String:
 	return _device_safe(out)
 
 
+# --- campaign 2026-10-12 f-deck: a capped stem ---
+
+## The longest folded part of a stem, in bytes (the fold is ASCII). With
+## the digest, the extension and a pending-write suffix the file name stays
+## far inside the 255 bytes a filesystem allows.
+const STEM_MAX := 80
+
+
+static func _capped(out: String) -> String:
+	if out.length() <= STEM_MAX:
+		return out
+	return out.left(STEM_MAX).trim_suffix("_")
+
+
+## The stem [param deck_name] had before [constant STEM_MAX] capped it, or
+## "" where that stem is today's.
+static func _stem_before_cap(deck_name: String) -> String:
+	var title := deck_name.strip_edges().to_lower()
+	var out := _ascii_fold(title)
+	if out.length() <= STEM_MAX:
+		return ""
+	if _has_letters_beyond_ascii(title):
+		return out + "_" + title.md5_text().left(10)
+	return _device_safe(out)
+
+
 static func exists(deck_name: String) -> bool:
 	return FileAccess.file_exists(path_for(deck_name))
 
@@ -497,7 +537,13 @@ static func exists(deck_name: String) -> bool:
 ## THE PATH IS ALWAYS [constant USER_DIR]. There is no branch here that
 ## can write anywhere else, which is what makes "a shipped deck can never
 ## be written" a property of the code rather than a promise.
-static func save(deck: DeckModel) -> String:
+##
+## [param path] is the file to write when it is not the one the title names
+## — the file the deck was LOADED from (campaign 2026-10-12: Save after
+## Load wrote a second same-titled file beside a draft deck's
+## `draft-<stamp>.deck`). It must be one of the player's own
+## ([method is_user_deck]); anything else is refused, never written.
+static func save(deck: DeckModel, path := "") -> String:
 	if deck.deck_name.strip_edges() == "":
 		return DeckModel.NAME_YOUR_DECK
 	# THE LAST DOOR, not the only one. The Deck Builder catches this
@@ -507,20 +553,22 @@ static func save(deck: DeckModel) -> String:
 	# a test — still cannot put a second `Cleric` in `user://decks`.
 	if is_shipped_name(deck.deck_name):
 		return shipped_name_refusal(deck.deck_name)
+	if path == "":
+		path = path_for(deck.deck_name)
+	elif not is_user_deck(path):
+		return SAVE_ERROR % path.get_file()
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path(USER_DIR))
-	var path := path_for(deck.deck_name)
 	# WHOLE OR NOT AT ALL (bug pass of 2026-10-03): the deck was written
 	# over in place and the write never checked, so a full disk cut the
 	# player's deck short and this said it had been saved.
-	if Settings.write_atomically(path, deck.to_text().to_utf8_buffer()) != OK:
-		return SAVE_ERROR % path.get_file()
-	return ""
+	return _write_refusal(path, Settings.write_atomically(path, deck.to_text().to_utf8_buffer()))
 
 
-## `%s has been saved.` — the line to show after a successful save.
-static func saved_message(deck: DeckModel) -> String:
-	return SAVED % path_for(deck.deck_name).get_file()
+## `%s has been saved.` — the line to show after a successful save, naming
+## [param path] when the save was given one ([method save]).
+static func saved_message(deck: DeckModel, path := "") -> String:
+	return SAVED % (path if path != "" else path_for(deck.deck_name)).get_file()
 
 
 ## Load one deck file into a [DeckModel]. Null means the file is not a
@@ -621,15 +669,25 @@ const IMPORT_FILTERS := ["*.deck ; Shandalar deck", "*.dec ; Decklist",
 ## already routes it — `.dck` to the MicroProse parser, everything else to
 ## the text one.
 static func import_file(path: String, out_report: Array) -> DeckModel:
-	var lenient := DeckList.load_file(path, false)
+	# ONE READ serves the cards and the `# note:` / `# group:` lines, and
+	# the text is SNIFFED as well as routed by extension (campaign
+	# 2026-10-12): Forge writes `.dck` too, and an Arena or Moxfield list
+	# saved as `.txt` has its own headers ([method foreign_list]).
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		out_report.append(LOAD_ERROR % path.get_file())
+		out_report.append("cannot open '%s'" % path)
+		return null
+	var text := file.get_as_text()
+	file.close()
+	var lenient := foreign_list(text, path)
 	if not lenient.errors.is_empty():
 		out_report.append(LOAD_ERROR % path.get_file())
 		out_report.append_array(lenient.errors)
 		return null
 	var model := _fold(lenient, out_report)
 	# A pasted-in or foreign file carries no `# note:` / `# group:` of
-	# ours unless it came FROM us, and reading them costs one file read.
-	var text := read_text(path)
+	# ours unless it came FROM us.
 	model.notes = DeckModel.notes_from_text(text)
 	model.draft_comments = DeckModel.draft_comments_from_text(text)
 	model.group = DeckGroups.raw_in(text)
@@ -650,7 +708,7 @@ static func import_text(text: String, fallback_name: String,
 	if looks_like_dck(text):
 		lenient.parse_dck(text, fallback_name, false)
 	else:
-		lenient.parse(text, fallback_name, false, true)
+		lenient.parse_foreign(text, fallback_name, true)
 	if not lenient.errors.is_empty():
 		out_report.append(PASTE_ERROR)
 		out_report.append_array(lenient.errors)
@@ -659,6 +717,22 @@ static func import_text(text: String, fallback_name: String,
 	model.notes = DeckModel.notes_from_text(text)
 	model.draft_comments = DeckModel.draft_comments_from_text(text)
 	return model
+
+
+## [param text] read from [param path] the way Import reads a file: the
+## 1997 `.dck` by its card lines (or by its extension when it is not a
+## Forge file), everything else LENIENTLY and with other programs' exports
+## understood ([method DeckList.parse_foreign]) — a plain `.txt` with its
+## blank-line sideboard, a `.dec` or `.deck` without one, as before.
+static func foreign_list(text: String, path: String) -> DeckList:
+	var list := DeckList.new()
+	var base := path.get_file().get_basename()
+	var ext := path.get_extension().to_lower()
+	if looks_like_dck(text) or (ext == "dck" and not DeckList.looks_like_forge(text)):
+		list.parse_dck(text, base, false)
+	else:
+		list.parse_foreign(text, base, ext == "txt")
+	return list
 
 
 ## `@DECKLOADERROR` has a file name in it and a pasted list has none, so
@@ -741,10 +815,26 @@ static func export_deck(deck: DeckModel, extension: String,
 	# Whole or not at all, as [method save] writes.
 	var text := deck.to_dck_text(dck_ids()) if extension == ".dck" \
 		else deck.to_dec_text()
-	if Settings.write_atomically(path, text.to_utf8_buffer()) != OK:
-		return SAVE_ERROR % path.get_file()
+	var refusal := _write_refusal(path, Settings.write_atomically(path, text.to_utf8_buffer()))
+	if refusal != "":
+		return refusal
 	out_path.append(path)
 	return ""
+
+
+## The sentence for a write that did not happen, or "" when it did. A file
+## the player made read-only is refused rather than replaced
+## ([method Settings.write_atomically], campaign 2026-10-12) and is said
+## as such; anything else is `@DECKSAVEERROR`.
+static func _write_refusal(path: String, err: Error) -> String:
+	if err == OK:
+		return ""
+	if err == ERR_FILE_NO_PERMISSION:
+		return READ_ONLY % path.get_file()
+	return SAVE_ERROR % path.get_file()
+
+
+const READ_ONLY := "%s is read-only. The deck has not been saved."
 
 
 ## card name -> the original's numeric id, from the 371-entry table
@@ -782,5 +872,11 @@ static func delete_deck(path: String) -> String:
 		return SHIPPED_NAME % path.get_file()
 	var err := DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	if err != OK:
-		return SAVE_ERROR % path.get_file()
+		# ITS OWN SENTENCE (campaign 2026-10-12): a refused Delete said "The
+		# deck has not been saved", which is the save's.
+		return DELETE_ERROR % [path.get_file(), error_string(err)]
 	return ""
+
+
+## A Delete the folder refused, and the system's reason.
+const DELETE_ERROR := "%s could not be deleted (%s)."

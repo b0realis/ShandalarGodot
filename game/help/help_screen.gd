@@ -24,10 +24,11 @@ extends Control
 ## since the first skin pass and, until now, never used.
 ##
 ## TURNING PAGES: the ◀ / ▶ buttons, Left/Right, PageUp/PageDown, and
-## Home/End. Paging is clamped at both ends (the buttons grey out there);
-## Escape returns to the menu. The keys are read in [method _input] and
-## marked handled, so a focused button's own arrow-key focus navigation
-## can never eat a page turn.
+## Home/End — and a controller's D-pad left/right while the pad pointer
+## is off. Paging is clamped at both ends (the buttons grey out there);
+## Escape (or pad B) returns to the menu. The keys are read in [method
+## _input] and marked handled, so a focused button's own arrow-key focus
+## navigation can never eat a page turn.
 ##
 ## THE MUSIC is the shell's own bed, carried on rather than restarted —
 ## see `game/shell_music.gd`.
@@ -220,29 +221,67 @@ func _close() -> void:
 	get_tree().change_scene_to_file("res://game/main.tscn")
 
 
+## THE KEYS AND THE PAD (bug campaign 2026-10-12). The keyboard's keys by
+## keycode, as always; and a controller's D-pad left and right and its B
+## (`ui_left`, `ui_right`, `ui_cancel`) turn the pages and close the
+## screen too — except the D-pad while the pad pointer is on, which is the
+## pointer's to hop with ([method PadControls.owns]). The press is marked
+## handled BEFORE it is acted on: Close changes the scene, and a screen
+## out of the tree has no viewport to mark it on (it was a SCRIPT ERROR on
+## every Escape).
 func _input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed:
+	var command := _command_for(event)
+	if command.is_empty():
 		return
-	var key := event as InputEventKey
-	match key.keycode:
-		KEY_LEFT, KEY_PAGEUP:
-			go_to(_page - 1)
-		KEY_RIGHT, KEY_PAGEDOWN:
-			go_to(_page + 1)
-		KEY_HOME:
-			go_to(0)
-		KEY_END:
-			go_to(_pages.size() - 1)
-		KEY_ESCAPE:
-			_close()
-		_:
-			return
 	get_viewport().set_input_as_handled()
+	match command:
+		"back":
+			go_to(_page - 1)
+		"next":
+			go_to(_page + 1)
+		"first":
+			go_to(0)
+		"last":
+			go_to(_pages.size() - 1)
+		"close":
+			_close()
+
+
+func _command_for(event: InputEvent) -> String:
+	if event is InputEventKey:
+		if not event.pressed:
+			return ""
+		match (event as InputEventKey).keycode:
+			KEY_LEFT, KEY_PAGEUP:
+				return "back"
+			KEY_RIGHT, KEY_PAGEDOWN:
+				return "next"
+			KEY_HOME:
+				return "first"
+			KEY_END:
+				return "last"
+			KEY_ESCAPE:
+				return "close"
+		return ""
+	if not (event is InputEventJoypadButton) or not event.pressed:
+		return ""
+	var pad := get_node_or_null(^"/root/PadControls")
+	if pad != null and pad.owns(event):
+		return ""
+	if event.is_action_pressed("ui_cancel"):
+		return "close"
+	if event.is_action_pressed("ui_left"):
+		return "back"
+	if event.is_action_pressed("ui_right"):
+		return "next"
+	return ""
 
 
 # -------------------------------------------------------------- drawing --
 
 func _rebuild() -> void:
+	var had := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	var hidden := had != null and not had.has_focus(true)
 	var page: Dictionary = _pages[_page]
 	_title_label.text = String(page.get("title", ""))
 	_counter_label.text = "Page %d of %d" % [_page + 1, _pages.size()]
@@ -262,6 +301,25 @@ func _rebuild() -> void:
 		_add_block(block)
 	if _scroll != null:
 		_scroll.scroll_vertical = 0
+	_keep_the_ring(hidden)
+
+
+## THE RING STAYS ON THE SCREEN (bug campaign 2026-10-12). The keyboard
+## and a D-pad with the pad pointer off start on the contents' first
+## topic, the way the Options rows start on their first; and a topic
+## pressed leaves with its page, so the ring goes to `Next` (`Contents`
+## on the last page) instead of to nothing — where the arrows and Enter
+## would have nothing to move from. A focus the mouse gave stays hidden.
+func _keep_the_ring(hidden: bool) -> void:
+	if not is_inside_tree():
+		return
+	var holder := get_viewport().gui_get_focus_owner()
+	if holder != null and is_ancestor_of(holder):
+		return
+	var topic := _body.find_child("HelpTopic*", true, false) as Button
+	var target: Button = topic if _page == 0 and topic != null \
+		else (_next_button if not _next_button.disabled else _contents_button)
+	target.grab_focus(hidden)
 
 
 func _add_block(block: Dictionary) -> void:

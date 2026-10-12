@@ -565,13 +565,21 @@ def systemone_pick(answer: dict, request: dict) -> int:
     """The menu index the model's answer names: its `choice`, or else the
     option it gave the highest probability."""
     names = list(request["questions"]["action"]["criteria"])
-    reply = ((answer or {}).get("answers") or {}).get("action") or {}
+    # AN ANSWER OF THE WRONG SHAPE IS A ValueError (2026-10-12), which the
+    # line protocol answers with {"error"} and the same decision — not an
+    # AttributeError that ended the door (`{"answers": "action"}`).
+    answers = answer.get("answers") if isinstance(answer, dict) else None
+    reply = answers.get("action") if isinstance(answers, dict) else None
+    if not isinstance(reply, dict):
+        raise ValueError('an answer object is {"answers": {"action": {"choice": NAME}}}')
     choice = reply.get("choice")
     odds = reply.get("probabilities")
-    if choice not in names and isinstance(odds, dict) and odds:
-        choice = max(odds, key=lambda name: odds[name] if name in names else -1.0)
-    if choice not in names:
-        raise ValueError(f"the model answered {choice!r}, not one of the {len(names)} options")
+    if not isinstance(choice, str) or choice not in names:
+        scored = {name: float(odds[name]) for name in names if isinstance(odds, dict)
+                  and isinstance(odds.get(name), (int, float)) and not isinstance(odds.get(name), bool)}
+        choice = max(scored, key=scored.__getitem__) if scored else choice
+    if not isinstance(choice, str) or choice not in names:
+        raise ValueError(f"the model answered {str(choice)[:80]!r}, not one of the {len(names)} options")
     return names.index(choice)
 
 
@@ -649,16 +657,37 @@ def describe() -> dict:
 
 
 def emit(record: dict) -> None:
-    sys.stdout.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    text = json.dumps(record, ensure_ascii=False, default=str)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        # Half a character (a lone surrogate echoed from a pick) cannot be
+        # written as UTF-8: the line goes out escaped (2026-10-12).
+        text = json.dumps(record, default=str)
+    sys.stdout.write(text + "\n")
     sys.stdout.flush()
 
 
+def reconfigure_streams() -> None:
+    """UTF-8 both ways; a byte on stdin that is not UTF-8 is read as U+FFFD
+    — a pick no menu item has, answered with an error — rather than a
+    UnicodeDecodeError that ended the door (2026-10-12)."""
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+
 def parse_pick(line: str):
+    """The pick on a line: its JSON, or the text itself (an id). A line
+    nested past the parser's depth is a ValueError (said once)."""
     text = line.strip()
     if not text:
         return None
     try:
         return json.loads(text)
+    except RecursionError:
+        raise ValueError("the answer is nested too deeply to read") from None
     except ValueError:
         return text
 
@@ -681,15 +710,15 @@ def interactive(env: Env, rich: bool, source=None, systemone: bool = False) -> i
                 env.close()
                 emit({"result": env.result, "summary": env.stats(), "note": "the input closed: the seat left"})
                 return 0
-            pick = parse_pick(line)
-            if pick is None:
-                continue
             try:
+                pick = parse_pick(line)
+                if pick is None:
+                    continue
                 if isinstance(pick, dict) and "answers" in pick:      # a Laya/Jev answer object
                     pick = systemone_pick(pick, systemone_request(obs, menu))
                 obs, _reward, _done, info = env.step(pick)
             except ValueError as exc:
-                emit({"n": env.driver.stats["decisions"], "error": str(exc), "menu_size": len(menu)})
+                emit({"n": env.driver.stats["decisions"], "error": str(exc)[:300], "menu_size": len(menu)})
                 emit({"n": env.driver.stats["decisions"], "obs": obs, "menu": menu})
                 continue
             break
@@ -748,9 +777,7 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return int(exc.code or 0)
-    for stream in (sys.stdin, sys.stdout):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8")
+    reconfigure_streams()
     if args.describe:
         emit(describe())
         return 0

@@ -48,7 +48,7 @@ func after_each() -> void:
 	Engine.print_error_messages = true
 	if OS.get_name() in ["Linux", "macOS"] and FileAccess.file_exists(_settings_path):
 		OS.execute("chmod", ["644", _settings_path])
-	DirAccess.remove_absolute(_settings_path + PENDING)
+	DirAccess.remove_absolute(Settings.pending_path(_settings_path))
 	if _settings_existed:
 		var file := FileAccess.open(_settings_path, FileAccess.WRITE)
 		file.store_buffer(_settings_backup)
@@ -60,7 +60,7 @@ func after_each() -> void:
 			DirAccess.remove_absolute(_settings_path.get_base_dir().path_join(name))
 	Settings.reload_file()
 	for path in _deck_files:
-		DirAccess.remove_absolute(path + PENDING)
+		DirAccess.remove_absolute(Settings.pending_path(path))
 		DirAccess.remove_absolute(path)
 
 
@@ -156,9 +156,9 @@ func test_a_settings_write_that_cannot_finish_leaves_the_file_and_stays_pending(
 	var text := "[options]\n\nhand_style=\"fan\"\n"
 	_write_settings(text)
 	Settings.reload_file()
-	DirAccess.make_dir_recursive_absolute(_settings_path + PENDING)
+	DirAccess.make_dir_recursive_absolute(Settings.pending_path(_settings_path))
 	Settings.set_value("ai_pace", 0.5)
-	DirAccess.remove_absolute(_settings_path + PENDING)
+	DirAccess.remove_absolute(Settings.pending_path(_settings_path))
 	assert_true(Settings.is_dirty(), "a write that did not happen is still pending")
 	assert_eq(FileAccess.get_file_as_string(Settings.PATH), text,
 		"the file is never opened for writing in place")
@@ -173,28 +173,28 @@ func test_a_deck_save_that_cannot_finish_keeps_the_old_deck_and_says_so() -> voi
 	_deck_files.append(path)
 	assert_eq(DeckStore.save(deck), "")
 	var before := FileAccess.get_file_as_string(path)
-	DirAccess.make_dir_recursive_absolute(path + PENDING)
+	DirAccess.make_dir_recursive_absolute(Settings.pending_path(path))
 	deck.add("Mountain")
 	assert_eq(DeckStore.save(deck), DeckStore.SAVE_ERROR % path.get_file(),
 		"a save that did not happen says so")
-	DirAccess.remove_absolute(path + PENDING)
+	DirAccess.remove_absolute(Settings.pending_path(path))
 	assert_eq(FileAccess.get_file_as_string(path), before, "and the old deck is whole")
 	assert_eq(DeckStore.save(deck), "", "the next save goes through")
 	var report := []
 	assert_eq(DeckStore.load_deck(path, report).total(), 4)
-	assert_false(FileAccess.file_exists(path + PENDING), "nothing pending left behind")
+	assert_false(FileAccess.file_exists(Settings.pending_path(path)), "nothing pending left behind")
 
 
 func test_an_export_that_cannot_finish_says_so() -> void:
 	var deck := _deck("zz Export Pending Probe", ["Lightning Bolt", "Mountain"])
 	var path := "%s/%s.dec" % [DeckStore.EXPORT_DIR, DeckStore.file_stem(deck.deck_name)]
 	_deck_files.append(path)
-	DirAccess.make_dir_recursive_absolute(path + PENDING)
+	DirAccess.make_dir_recursive_absolute(Settings.pending_path(path))
 	var written := []
 	assert_eq(DeckStore.export_deck(deck, ".dec", written),
 		DeckStore.SAVE_ERROR % path.get_file())
 	assert_eq(written, [], "no path is named for a file that was not written")
-	DirAccess.remove_absolute(path + PENDING)
+	DirAccess.remove_absolute(Settings.pending_path(path))
 	assert_eq(DeckStore.export_deck(deck, ".dec", written), "")
 	assert_eq(written, [path])
 	assert_string_contains(FileAccess.get_file_as_string(path), "Lightning Bolt")

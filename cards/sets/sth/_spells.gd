@@ -193,16 +193,14 @@ class ElvenRite extends CounterMarkerEffect:
 # ---------------------------------------------------------------- Evacuation --
 
 ## Every creature at once (one bracket, CR 704.3 — nothing is checked
-## until all of them have left).
+## until all of them have left), each read as the board stood before any
+## left (MtgGame.depart_together, campaign 2026-10-12 b3-4).
 static func _evacuation(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	var leaving: Array[CardInstance] = []
 	for i in g.all_battlefield():
-		if i.is_creature(): leaving.append(i)
+		if i.is_creature() and g.is_present(i): leaving.append(i)
 	if leaving.is_empty(): return
-	g.begin_simultaneous()
-	for i in leaving:
-		if g.is_present(i): g.return_to_hand(i)
-	g.end_simultaneous()
+	g.depart_together(leaving, g.return_to_hand)
 
 
 # ---------------------------------------------------------------- Flame Wave --

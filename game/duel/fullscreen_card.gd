@@ -50,6 +50,10 @@ var _hint: Label
 var _text_toggle: Button
 var _previous_focus: WeakRef
 var _sharpening := false
+## campaign 2026-10-12 f-duel (b6-2): set by the duel screen — its pause
+## key closes the reader and reaches the duel's pause menu (see [method
+## _input]). Off elsewhere (the Deck Builder keeps its own keys).
+var pause_passes := false
 
 
 func _init() -> void:
@@ -142,9 +146,7 @@ func open_card(by_key: bool = false) -> bool:
 		return false
 	if _may_open.is_valid() and not _may_open.call():
 		return false
-	var read := Controls.text("duel_read")
-	_hint.text = "Click / tap to close · Esc / Cancel" \
-		+ ("" if read == Controls.UNBOUND else " · " + read) + " · Enter: text"
+	_hint.text = _hint_line()
 	var focus := get_viewport().gui_get_focus_owner()
 	_previous_focus = weakref(focus) if focus != null else null
 	# The card is a back while the reader is shut ([method dismiss]), so
@@ -261,6 +263,15 @@ func _input(event: InputEvent) -> void:
 		return
 	if not is_open():
 		return
+	# THE PAD POINTER'S OWN PASS (bug campaign 2026-10-12). This runs before
+	# the `PadControls` autoload's `_input`, and it used to mark every pad
+	# event handled: A's release was lost (the next A dropped as a copy),
+	# the stick could not reach the toggle and a stick let go under the
+	# card drifted the pointer afterwards. While that layer is active its
+	# own — A, LB, the D-pad, the sticks, the triggers — are its to spend,
+	# and its clicks come back here as the mouse; B, R3 and Esc stay ours.
+	if _pad_layer_owns(event):
+		return
 	# The pointer reaches the reader's own controls — the toggle, which
 	# lights under it and is clicked like any button — and nothing else:
 	# the shade stops it there.
@@ -268,15 +279,58 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and _text_toggle.get_global_rect().has_point(event.position):
 		return
+	# --- campaign 2026-10-12 f-duel (b6-2): the duel's pause key ---
+	# Over a duel ([member pause_passes]) the pause key — Q, ArkOS Select's
+	# F10, a pad's Start — closes the reader and goes on, unhandled, to the
+	# screen beneath, which opens its pause menu: "whatever else is going on".
+	if pause_passes and Controls.pressed(event, "duel_pause"):
+		dismiss()
+		return
+	# --- end campaign 2026-10-12 f-duel (b6-2) ---
 	get_viewport().set_input_as_handled()
 	if event is InputEventMouseButton:
-		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# A right press closes it too: ArkOS's B is a right click, and the
+		# card has no menu of its own.
+		if event.pressed and (event.button_index == MOUSE_BUTTON_LEFT
+				or event.button_index == MOUSE_BUTTON_RIGHT):
 			dismiss()
 	elif Controls.pressed(event, "duel_cancel") or Controls.pressed(event, "duel_read") \
 			or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
 		dismiss()
-	elif event.is_action_pressed("ui_accept"):
+	elif _switches_text(event):
 		toggle_text()
+
+
+## THE TEXT SWITCH'S KEYS: Enter and the keypad's Enter (the R36's X), or
+## a pad's A while the pad pointer is off (on, A is the pointer's click and
+## never reaches here). Not `ui_accept` as such: that holds Space too —
+## the keyboard's one button, R1 on ArkOS — which must do nothing here.
+static func _switches_text(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		return key.pressed and not key.echo and not key.ctrl_pressed and not key.alt_pressed \
+			and not key.meta_pressed and (key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER)
+	if event is InputEventJoypadButton:
+		return event.is_action_pressed("ui_accept")
+	return false
+
+
+## Whether the pad pointer layer is active and [param event] is its own.
+## Through the tree, like [method _touch_translator_active].
+func _pad_layer_owns(event: InputEvent) -> bool:
+	var pad := get_node_or_null(^"/root/PadControls")
+	return pad != null and pad.has_method("owns") and pad.owns(event)
+
+
+## The words under the card. With the pad pointer active a pad has no
+## Enter: the toggle is reached the way any button is, A on it.
+func _hint_line() -> String:
+	var read := Controls.text("duel_read")
+	var pad := get_node_or_null(^"/root/PadControls")
+	var pointer: bool = pad != null and pad.has_method("is_active") and pad.is_active()
+	return "Click / tap to close · Esc / Cancel" \
+		+ ("" if read == Controls.UNBOUND else " · " + read) \
+		+ (" · Text: point and press A" if pointer else " · Enter: text")
 
 
 func _touch_translator_active() -> bool:

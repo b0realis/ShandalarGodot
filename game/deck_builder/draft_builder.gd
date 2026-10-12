@@ -30,6 +30,36 @@ func _ready() -> void:
 	refresh()
 
 
+# --- campaign 2026-10-12 f-deck: the dealt shelf and the draft's title ---
+
+## THE DEALT POOL IS NOT FILTERED BY THE ORDINARY BUILDER'S EXTRAS. Those
+## switches are remembered for the whole-library Inventory
+## ([constant DeckBuilderScreen.EXTRAS_SETTING]); restored here they hid
+## every dealt card of a source switched off last time ("1997" off: a
+## base-set draft showed 0 pool cards while the clock ran, and nothing said
+## why). A draft opens with every source on, as an untouched builder does.
+func _restore_extras() -> void:
+	_saved_extras = _extras_state()
+
+
+## ...and whatever the Extras window does during a draft stays in the
+## draft: the ordinary builder's remembered switches are not written.
+func _remember_extras() -> void:
+	pass
+
+
+## `Clear deck` empties the piles and KEEPS THE DRAFT'S TITLE: [method
+## DeckModel.clear] renames a cleared deck `New Deck`, and the draft's
+## checkpoints then saved it — and Load deck and Magic Battle listed it —
+## under that name instead of `Draft <date time>`.
+func _clear_deck() -> void:
+	var title := deck.deck_name
+	super._clear_deck()
+	if deck.deck_name == DeckModel.DEFAULT_NAME and title != DeckModel.DEFAULT_NAME:
+		deck.deck_name = title
+		refresh()
+
+
 func _deck_rect() -> Rect2:
 	var area := super._deck_rect()
 	area.position.y += 60.0

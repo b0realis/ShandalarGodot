@@ -658,10 +658,10 @@ func test_off_a_blocked_whelp_bounces_off_the_wall() -> void:
 
 
 func test_the_fuse_counts_the_breaths_already_taken_this_turn() -> void:
-	# The count is the card's own memory (CardInstance.ability_uses is
-	# only kept for an ability with a max_per_turn and this one has none),
-	# and it is stamped with the turn, so a breath a turn is harmless
-	# forever.
+	# The count is the card's own memory (CardInstance.ability_uses counts
+	# every activation this turn; the fuse lives in memory because it is a
+	# price, not a cap), and it is stamped with the turn, so a breath a
+	# turn is harmless forever.
 	var ai := _ai(_on())
 	var whelp := put_battlefield(0, "Dragon Whelp")
 	_lands(0, "Mountain", 6)

@@ -183,7 +183,7 @@ static func licid_option(g: MtgGame, pilot, s: CardInstance, index: int,
 		return twin_answer(answers[twin], s, g)
 	var rows: Dictionary = plan["hosts"].get(s.id, {})
 	if rows.is_empty():
-		rows = trim_hosts(licid_hosts(g, pilot, s, a),
+		rows = trim_hosts(licid_hosts(g, pilot, s, a, int(plan["cap"])),
 			{"ours": int(plan["quota"]), "theirs": int(plan["quota"])})
 	var defender := g.opponent_of(pid)
 	var keep: int = pilot.profile.combat_search_nodes
@@ -376,6 +376,25 @@ static func toll_value(g: MtgGame, pilot, licid: CardInstance) -> float:
 #    gain compares like with like.
 # A board with a licid or two and a handful of creatures is read exactly as
 # before: under the cap, and searched within its share.
+#
+# THE WORK THE BOARD ALLOWS (bug-hunt campaign 2026-10-12, b5-8). A
+# reading's cost is not its nodes: it is the pilot's attack planner
+# (`_choose_attack_cohort`), which grows with the combat — about a
+# millisecond a cell, our creatures times theirs, on the desk that
+# measured it — so ten readings of an eighteen-licid mirror (13 x 9)
+# still took one Wizard decision to 1.1–1.7 s, and every licid had first
+# dressed every host on both sides. Now:
+#  * THE READINGS COVER AT MOST [constant LICID_WORK] CELLS: the cap is
+#    [constant LICID_READINGS] up to the 8 x 6 board the budget was set on,
+#    and shrinks past it ([method readings_cap]), never below
+#    [constant LICID_MIN_READINGS] (the base reading and one host);
+#  * EACH LICID DRESSES AT MOST THE CAP'S WORTH OF HOSTS A SIDE (a few
+#    more tried, [constant LICID_SPARE_DRESSINGS]), the likeliest first
+#    by what the board shows undressed ([method licid_hosts]);
+#  * A HOST IDENTICAL TO ONE ALREADY DRESSED ([method licid_twin_key]:
+#    two untouched Grizzly Bears) is not dressed again — it would read
+#    the same, and the first in battlefield order is the one a tie keeps.
+# Deterministic still: counts, never a clock.
 
 const SIDE_OURS := 1
 const SIDE_THEIRS := 2
@@ -383,6 +402,19 @@ const LICID_READINGS := 10
 const LICID_NODES := 6000
 const LICID_MIN_NODES := 200
 const LICID_PLAN_META := &"tempest_licid_plan"
+## The combat cells (our creatures times theirs) one decision's readings
+## may cover: ten readings of the 8 x 6 board the old budget was set on.
+const LICID_WORK := 480
+const LICID_MIN_READINGS := 2
+## Dressings a licid may try a side past its cap before it stops looking.
+const LICID_SPARE_DRESSINGS := 2
+
+
+## The readings one decision may make on a board of [param cells] combat
+## cells (our creatures times theirs): [constant LICID_READINGS] while the
+## board is no bigger than the one that budget was set on, fewer past it.
+static func readings_cap(cells: int) -> int:
+	return clampi(LICID_WORK / maxi(cells, 1), LICID_MIN_READINGS, LICID_READINGS)
 
 
 ## The decision's plan: `{stamp, hosts: {licid id: {ours, theirs}},
@@ -401,6 +433,11 @@ static func licid_plan(g: MtgGame, pilot) -> Dictionary:
 	var twins := {}
 	var readings := 1
 	var sides := 0
+	# THE WORK THE BOARD ALLOWS (campaign 2026-10-12, b5-8): the readings
+	# cap and each licid's dressings a side, scaled to the combat's size.
+	var cap := readings_cap(g.players[pid].creatures().size() \
+		* g.players[g.opponent_of(pid)].creatures().size())
+	var dressed := 0
 	for inst in g.players[pid].battlefield:
 		if not inst.is_creature():
 			continue
@@ -412,7 +449,8 @@ static func licid_plan(g: MtgGame, pilot) -> Dictionary:
 			if twins.has(key) or not ability_ready(g, pilot, inst, index):
 				break
 			twins[key] = true
-			var found := licid_hosts(g, pilot, inst, a)
+			var found := licid_hosts(g, pilot, inst, a, cap)
+			dressed += int(found["dressed"])
 			rows[inst.id] = found
 			readings += found["ours"].size() + found["theirs"].size()
 			sides += int(not found["ours"].is_empty()) + int(not found["theirs"].is_empty())
@@ -424,9 +462,9 @@ static func licid_plan(g: MtgGame, pilot) -> Dictionary:
 	var quotas := {}
 	for id in rows:
 		quotas[id] = {"ours": -1, "theirs": -1}
-	if readings > LICID_READINGS and sides > 0:
-		quota = maxi(1, (LICID_READINGS - 1) / sides)
-		var left := LICID_READINGS - 1
+	if readings > cap and sides > 0:
+		quota = maxi(1, (cap - 1) / sides)
+		var left := cap - 1
 		for id in rows:
 			quotas[id] = {"ours": 0, "theirs": 0}
 		var grew := true
@@ -444,7 +482,7 @@ static func licid_plan(g: MtgGame, pilot) -> Dictionary:
 		hosts[id] = trim_hosts(rows[id], quotas[id])
 		made += hosts[id]["ours"].size() + hosts[id]["theirs"].size()
 	var plan := {"stamp": stamp, "hosts": hosts, "quota": quota, "answers": {},
-		"nodes": maxi(LICID_MIN_NODES, LICID_NODES / made)}
+		"nodes": maxi(LICID_MIN_NODES, LICID_NODES / made), "cap": cap, "dressed": dressed}
 	pilot.set_meta(LICID_PLAN_META, plan)
 	return plan
 
@@ -499,32 +537,106 @@ static func twin_answer(entry: Dictionary, s: CardInstance, g: MtgGame = null) -
 ## gives its controller an ability for it), theirs where it makes the host
 ## weaker, charges its controller or takes it ([method dressed_reading],
 ## [method aura_sides]). [code]prior[/code] ranks them for [method
-## trim_hosts].
-static func licid_hosts(g: MtgGame, pilot, s: CardInstance, a: ActivatedAbility) -> Dictionary:
+## trim_hosts]. `dressed`: the dressings made.
+##
+## THE DRESSINGS, BOUNDED (campaign 2026-10-12, b5-8): a host identical to
+## one already dressed on its side ([method licid_twin_key]) is skipped —
+## the first in battlefield order is the one a tie keeps anyway; with
+## [param side_cap] set, a side with more hosts than that is dressed
+## likeliest first by what the board shows undressed ([method
+## undressed_prior]) and stops at [param side_cap] hosts that matter or
+## [constant LICID_SPARE_DRESSINGS] more tries. Negative: every host.
+static func licid_hosts(g: MtgGame, pilot, s: CardInstance, a: ActivatedAbility,
+		side_cap := -1) -> Dictionary:
 	var ours: Array = []
 	var theirs: Array = []
 	var spec: TargetSpec = a.effects[0].target_spec
 	if spec == null:
-		return {"ours": ours, "theirs": theirs}
+		return {"ours": ours, "theirs": theirs, "dressed": 0}
 	var pid: int = pilot.pid
 	var defender := g.opponent_of(pid)
 	var shared := aura_sides(g, s)
+	var dressed := 0
+	var mine: Array[CardInstance] = []
+	var keys := {}
 	for host in g.players[pid].battlefield:
 		if host == s or not host.is_creature() or not spec.is_legal(g, TargetRef.card(host), s):
 			continue
+		var key := licid_twin_key(host)
+		if not keys.has(key):
+			keys[key] = true
+			mine.append(host)
+	var tried := 0
+	for host in likeliest_first(g, pilot, mine, side_cap, true):
+		if side_cap >= 0 and (ours.size() >= side_cap or tried >= side_cap + LICID_SPARE_DRESSINGS):
+			break
+		tried += 1
 		var seen := dressed_reading(g, s, host)
 		if (shared | int(seen["sides"])) & SIDE_OURS:
-			ours.append({"id": host.id, "prior": [int(seen["attacks"]), int(seen["power"]),
-				Evaluator.permanent_value(host, pilot.profile)]})
+			ours.append({"id": host.id, "at": mine.find(host), "prior": [int(seen["attacks"]),
+				int(seen["power"]), Evaluator.permanent_value(host, pilot.profile)]})
+	dressed += tried
+	var yours: Array[CardInstance] = []
+	keys.clear()
 	for host in g.players[defender].battlefield:
 		if not host.is_creature() or not spec.is_legal(g, TargetRef.card(host), s):
 			continue
 		if preload("res://engine/ai/mirage_tactics.gd").dies_when_targeted(host, g):
 			continue   # the Aura would have no host to land on
+		var key := licid_twin_key(host)
+		if not keys.has(key):
+			keys[key] = true
+			yours.append(host)
+	tried = 0
+	for host in likeliest_first(g, pilot, yours, side_cap, false):
+		if side_cap >= 0 and (theirs.size() >= side_cap or tried >= side_cap + LICID_SPARE_DRESSINGS):
+			break
+		tried += 1
 		var seen := dressed_reading(g, s, host)
 		if (shared | int(seen["sides"])) & SIDE_THEIRS:
-			theirs.append({"id": host.id, "prior": [Evaluator.permanent_value(host, pilot.profile)]})
-	return {"ours": ours, "theirs": theirs}
+			theirs.append({"id": host.id, "at": yours.find(host),
+				"prior": [Evaluator.permanent_value(host, pilot.profile)]})
+	dressed += tried
+	# Back into battlefield order, which the deal and a tie read.
+	var by_place := func(x: Dictionary, y: Dictionary) -> bool: return int(x["at"]) < int(y["at"])
+	ours.sort_custom(by_place)
+	theirs.sort_custom(by_place)
+	return {"ours": ours, "theirs": theirs, "dressed": dressed}
+
+
+## [param hosts] (battlefield order) as they are — or, when there are more
+## than [param side_cap] of them, likeliest first by [method
+## undressed_prior] (the earlier host on a tie).
+static func likeliest_first(g: MtgGame, pilot, hosts: Array[CardInstance], side_cap: int,
+		ours: bool) -> Array[CardInstance]:
+	if side_cap < 0 or hosts.size() <= side_cap:
+		return hosts
+	var priors := {}
+	for host in hosts:
+		priors[host.id] = undressed_prior(g, pilot, host, ours)
+	var ranked := hosts.duplicate()
+	var place := {}
+	for i in hosts.size():
+		place[hosts[i].id] = i
+	ranked.sort_custom(func(x: CardInstance, y: CardInstance) -> bool:
+		var px: Array = priors[x.id]
+		var py: Array = priors[y.id]
+		for k in px.size():
+			if not is_equal_approx(float(px[k]), float(py[k])):
+				return float(px[k]) > float(py[k])
+		return int(place[x.id]) < int(place[y.id]))
+	return ranked
+
+
+## What [param host] shows the board before any dressing, in [method
+## trim_hosts]' prior's shape: one of ours by whether it can attack now,
+## its power and its worth; one of theirs by its worth.
+static func undressed_prior(g: MtgGame, pilot, host: CardInstance, ours: bool) -> Array:
+	var worth := Evaluator.permanent_value(host, pilot.profile)
+	if not ours:
+		return [worth]
+	var attacks := CombatState.attack_illegality(g, host, g.opponent_of(host.controller_id), false) == ""
+	return [int(attacks), host.cur_power, worth]
 
 
 ## The sides [param s]'s Aura half matters on whatever its host: a steal

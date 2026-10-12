@@ -88,7 +88,15 @@ static func summarize(records: Array) -> Dictionary:
 		sorted_turns.sort()
 		# An int on purpose: a record read back from results.json holds
 		# floats, and "median 12.0" is not the report's line (2026-09-26).
-		s["median_turns"] = int(sorted_turns[sorted_turns.size() / 2])
+		# An EVEN count is the mean of the two middle values, rounded
+		# (campaign 2026-10-12): the upper one alone made two games of 13
+		# and 50 turns "avg 31.5 turns (median 50)".
+		var middle := sorted_turns.size() / 2
+		if sorted_turns.size() % 2 == 1:
+			s["median_turns"] = int(sorted_turns[middle])
+		else:
+			s["median_turns"] = roundi((float(sorted_turns[middle - 1])
+				+ float(sorted_turns[middle])) / 2.0)
 	return s
 
 

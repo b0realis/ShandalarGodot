@@ -446,7 +446,9 @@ static func classify(cards: Array, sideboard: Array = []) -> String:
 ## and the Help page's summary. Ours, not 1997's — the original shipped no
 ## explanation of these anywhere.
 const SUMMARY := {
-	UNRESTRICTED: "Anything goes: no banned cards, no copy limit, no list.",
+	# "nothing is banned", not "no banned cards" (campaign 2026-10-12): the
+	# same three words are Wild's RULE one line down.
+	UNRESTRICTED: "Anything goes: nothing is banned, no copy limit, no list.",
 	WILD: "At most four of any card, and no banned cards — but the restricted list is ignored.",
 	RESTRICTED_T1: "At most four of any card, no banned cards, and at most ONE copy of a restricted card.",
 	TOURNAMENT_T15: "At most four of any card, no banned cards, and no restricted card at all.",

@@ -17,6 +17,16 @@ const PORT := 17898
 ## on a LAN. [method update_tables] drops the last rows of an advert that
 ## would not fit — a receiver discards a bigger packet unread.
 const MAX_PACKET := 16384
+## A UDP FLOOD COSTS LITTLE (robustness campaign 2026-10-12). A query is a
+## hundred bytes: a host reads nothing longer, and nobody reads a packet
+## that is not a JSON object, before any decoding. Each pump drains the
+## socket to empty within [constant PUMP_BYTES] (it read 32 packets, and
+## the rest piled up), and the receive buffer holds what the system queues
+## between two frames, so Godot never drops packets with a warning each.
+const MAX_QUERY := 512
+const PUMP_BYTES := 1048576
+const PUMP_PACKETS := 512
+const RECEIVE_BUFFER := 524288
 const ACCESS := ["open", "invitation"]
 const MAX_HOSTS := 64
 ## One address can list a few hosts (a development machine runs two), never
@@ -74,7 +84,7 @@ func advertise(advert: Dictionary, discovery_port := PORT) -> Error:
 ## preset asks for it); the host's socket RECEIVES the Game Browsers'
 ## broadcast queries, so it needs the lock as much as the scanner does.
 func _bind_broadcast(port: int) -> Error:
-	var error := _socket.bind(port, "0.0.0.0", 65536)
+	var error := _socket.bind(port, "0.0.0.0", RECEIVE_BUFFER)
 	if error == OK:
 		_socket.set_broadcast_enabled(true)
 	return error
@@ -275,13 +285,17 @@ func pump() -> void:
 	if now - _reply_window >= 1000:
 		_reply_window = now
 		_replies = 0
-	for i in 32:
-		if _socket.get_available_packet_count() == 0:
+	var budget := PUMP_BYTES
+	for i in PUMP_PACKETS:
+		if budget <= 0 or _socket.get_available_packet_count() == 0:
 			break
 		var bytes := _socket.get_packet()
+		budget -= bytes.size()
+		if bytes.is_empty() or bytes.size() > (MAX_PACKET if scanning else MAX_QUERY) or bytes[0] != 123:
+			continue
 		var source := _socket.get_packet_ip()
 		var source_port := _socket.get_packet_port()
-		if bytes.size() > MAX_PACKET or not SgLanInvite.address(source):
+		if not SgLanInvite.address(source):
 			continue
 		# Query: root. Reply: root > host > stamp > packs list (depth 4).
 		var data := SgProtocol.decode_payload(bytes, 4)

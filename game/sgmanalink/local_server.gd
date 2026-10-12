@@ -21,6 +21,34 @@ const VIEW_REFUSED := "The host could not send this duel's table: it failed its 
 ## seat keeps its chair for [constant RECONNECT_GRACE_MS]): the referee's
 ## pipe (DeckLab/referee.gd) holds such an answer instead of counting it.
 const SEAT_AWAY := "Waiting for the other player to reconnect."
+## A hello whose access code is not this host's.
+const INVALID_INVITATION := "Invalid invitation. Ask the host for a current invitation."
+## A HOST THAT CLOSES TELLS ITS GUESTS (robustness campaign 2026-10-12):
+## what every connected guest reads when [method stop] closes the host, and
+## the WebSocket close code that carries it — read by the guest even when
+## the fatal message and the close land in one poll (the socket then drops
+## the message unread).
+const HOST_CLOSED := "The host closed its tables."
+const HOST_CLOSED_CODE := 4002
+## A seat resumed at a host that has restarted since: the old invitation's
+## access code is gone with the old process, and so is the seat.
+const HOST_RESTARTED := "The host restarted; this seat is gone. Ask the host for the new invitation."
+## A HANDSHAKE IS CHECKED BEFORE IT IS POLLED (robustness campaign
+## 2026-10-12; see [method _handshake_fair]): the host's own polling time a
+## connection may spend in its WebSocket handshake, the bytes it may send
+## before that handshake is done (Godot's socket reads 4 KB of upgrade
+## headers, then prints an error on every poll), the host's polling time
+## before its hello, and how many such unfinished connections one address
+## may hold at once.
+const HANDSHAKE_MS := 1500
+const HANDSHAKE_BYTES := 4096
+const HELLO_MS := 5000
+const PENDING_PER_ADDRESS := 16
+## How long a told TLS guest's connection is kept open for it to read why
+## (see [method _tell_closing]), and how long a host being freed still
+## waits for those guests.
+const CLOSING_MS := 1000
+const CLOSING_WAIT_MS := 150
 var port := 0
 var access_code := ""
 var _listener := TCPServer.new()
@@ -49,6 +77,9 @@ var _bot_due: Dictionary = {}
 var _bot_cursor := 0
 # Test-only pacing override; never accepted from a network command.
 var bot_pace_override := -1
+## Encrypted connections told [constant HOST_CLOSED], kept open until the
+## guest has read it: [{socket, until}] (see [method _tell_closing]).
+var _closing: Array = []
 
 
 ## Local organiser entry point, deliberately not a remote command. A visitor
@@ -172,6 +203,7 @@ func start_local(requested_port := 17897) -> Error:
 
 
 func stop() -> void:
+	_tell_closing()
 	CardPacks.unlock_catalogue(self)
 	_listener.stop()
 	if tournament != null:
@@ -201,6 +233,65 @@ func stop() -> void:
 	discovery_error = OK
 
 
+## A HOST THAT CLOSES TELLS ITS GUESTS (robustness campaign 2026-10-12).
+## Every open connection hears [constant HOST_CLOSED] twice before
+## [method stop] drops it: as the fatal message every client has read since
+## protocol 6, then as the reason of a close frame with
+## [constant HOST_CLOSED_CODE] — which the client reads when both land in
+## one poll, where the socket drops the message unread. Before, the drop
+## alone left a seated guest reconnecting forever over the finished duel.
+## An encrypted connection is not cut at once: a guest's TLS layer that
+## reads the end of the stream with the frames throws them away unread,
+## so the connection is kept (polled by [method poll], by a host being
+## freed for [constant CLOSING_WAIT_MS]) until the guest closes it or
+## [constant CLOSING_MS] pass.
+func _tell_closing() -> void:
+	var now := Time.get_ticks_msec()
+	for id: int in _peers.keys():
+		var peer: Dictionary = _peers[id]
+		var socket: WebSocketPeer = peer.socket
+		if peer.has("reject_until") or socket.get_ready_state() != WebSocketPeer.STATE_OPEN: continue
+		_send(id, {"type": "fatal", "error": HOST_CLOSED})
+		if socket.get_ready_state() != WebSocketPeer.STATE_OPEN: continue
+		socket.close(HOST_CLOSED_CODE, HOST_CLOSED)
+		socket.poll()
+		if peer.get("tls") != null:
+			_closing.append({"socket": socket, "until": now + CLOSING_MS})
+			_peers.erase(id)
+
+
+## The told encrypted connections: each polled until its guest has closed
+## it, or its time is up.
+func _poll_closing() -> void:
+	if _closing.is_empty(): return
+	var now := Time.get_ticks_msec()
+	for row: Dictionary in _closing.duplicate():
+		var socket: WebSocketPeer = row.socket
+		socket.poll()
+		if socket.get_ready_state() == WebSocketPeer.STATE_CLOSED or now >= int(row.until):
+			socket.close(-1)
+			_closing.erase(row)
+
+
+## How many told connections are still open (a host polled by hand — the
+## referee's — polls until none is).
+func closing() -> int:
+	return _closing.size()
+
+
+func _notification(what: int) -> void:
+	# Freed right after stop() (the lobby's Disconnect): the guests get a
+	# moment to read why, then the connections go.
+	if what == NOTIFICATION_PREDELETE and not _closing.is_empty():
+		var deadline := Time.get_ticks_msec() + CLOSING_WAIT_MS
+		while not _closing.is_empty() and Time.get_ticks_msec() < deadline:
+			_poll_closing()
+			OS.delay_msec(5)
+		for row: Dictionary in _closing:
+			row.socket.close(-1)
+		_closing.clear()
+
+
 func _exit_tree() -> void:
 	stop()
 
@@ -210,6 +301,7 @@ func _process(_delta: float) -> void:
 
 
 func poll() -> void:
+	_poll_closing()
 	if not _listener.is_listening():
 		return
 	var now := Time.get_ticks_msec()
@@ -233,8 +325,9 @@ func poll() -> void:
 		if not _listener.is_connection_available():
 			break
 		var stream := _listener.take_connection()
+		var address := stream.get_connected_host()
 		if _peers.size() >= MAX_CONNECTIONS or (not lan_address.is_empty() \
-			and not SgLanInvite.address(stream.get_connected_host())):
+			and not SgLanInvite.address(address)) or _pending_from(address) >= PENDING_PER_ADDRESS:
 			stream.disconnect_from_host()
 			continue
 		var transport: StreamPeer = stream
@@ -252,20 +345,30 @@ func poll() -> void:
 		socket.max_queued_packets = 64
 		socket.heartbeat_interval = 10.0
 		if socket.accept_stream(transport) == OK:
+			# `waited` is the host's own polling time before the hello, so a
+			# host that stalls (a long think) drops no guest mid-handshake.
 			_peers[_next_peer] = {"socket": socket, "session": 0,
-				"opened": now, "window": now, "count": 0}
+				"opened": now, "window": now, "count": 0, "address": address, "tcp": stream,
+				"tls": transport if _tls_options != null else null, "waited": 0, "polled": now,
+				"handshake_bytes": 0}
 			_next_peer += 1
 	for id: int in _peers.keys():
 		if not _peers.has(id):
 			continue
 		var peer: Dictionary = _peers[id]
 		var socket: WebSocketPeer = peer.socket
+		if peer.session == 0 and not peer.has("reject_until"):
+			peer.waited = int(peer.get("waited", 0)) + mini(now - int(peer.get("polled", now)), 50)
+			peer.polled = now
+			if socket.get_ready_state() == WebSocketPeer.STATE_CONNECTING and not _handshake_fair(peer):
+				_drop(id)
+				continue
 		socket.poll()
 		if peer.has("reject_until"):
 			if now >= int(peer.reject_until): _drop(id)
 			continue
 		if socket.get_ready_state() == WebSocketPeer.STATE_CLOSED \
-			or (peer.session == 0 and now - int(peer.opened) > 5000):
+			or (peer.session == 0 and int(peer.get("waited", 0)) > HELLO_MS):
 			_drop(id)
 			continue
 		if socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
@@ -302,6 +405,36 @@ func poll() -> void:
 	_flush_publish()
 
 
+## [param peer] (still in its WebSocket handshake) may be polled: its
+## stream is up, it has sent less than [constant HANDSHAKE_BYTES] and spent
+## less than [constant HANDSHAKE_MS] of the host's polling on it. Godot's
+## socket prints an error on EVERY poll of a handshake whose headers have
+## filled its 4 KB buffer, or whose stream has failed under it: one
+## connection, no invitation needed, had the host print every frame for
+## five seconds (robustness campaign 2026-10-12). Such a peer is let go
+## before that poll, quietly. An honest handshake — TLS included — is a
+## fraction of the bytes and of the time.
+func _handshake_fair(peer: Dictionary) -> bool:
+	var tcp: StreamPeerTCP = peer.tcp
+	tcp.poll()
+	if tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+		return false
+	var tls: Variant = peer.tls
+	if tls is StreamPeerTLS and not tls.get_status() in [StreamPeerTLS.STATUS_HANDSHAKING, StreamPeerTLS.STATUS_CONNECTED]:
+		return false
+	peer.handshake_bytes = int(peer.handshake_bytes) + tcp.get_available_bytes()
+	return int(peer.handshake_bytes) < HANDSHAKE_BYTES and int(peer.waited) <= HANDSHAKE_MS
+
+
+## Connections from [param address] that have not said hello yet.
+func _pending_from(address: String) -> int:
+	var count := 0
+	for peer: Dictionary in _peers.values():
+		if int(peer.session) == 0 and String(peer.get("address", "")) == address:
+			count += 1
+	return count
+
+
 func _drop(id: int) -> void:
 	if not _peers.has(id):
 		return
@@ -331,7 +464,7 @@ func _version_refusal(bytes: PackedByteArray, negotiated: int) -> String:
 			return ""
 		theirs = int(hello.v)
 	if not SgProtocol.literal(hello.get("access"), access_code):
-		return "Invalid invitation. Ask the host for a current invitation."
+		return INVALID_INVITATION
 	var stamp: Variant = hello.get("stamp")
 	var their_game := String(stamp.game) if stamp is Dictionary and SgCompatibility.plain(stamp.get("game"), 24) else ""
 	return SgCompatibility.protocol_difference(theirs, SgProtocol.VERSION, their_game, SgCompatibility.game_version())
@@ -402,7 +535,10 @@ func _receive(id: int, message: Dictionary) -> void:
 	var sid := int(_peers[id].session)
 	if sid == 0:
 		if message.type != "hello" or message.access != access_code:
-			_reject(id, "Invalid invitation. Ask the host for a current invitation.")
+			# A seat resumed with an access code this host never gave out:
+			# the host it was seated at has restarted since (2026-10-12).
+			var resumed: bool = message.type == "hello" and not String(message.resume).is_empty()
+			_reject(id, HOST_RESTARTED if resumed else INVALID_INVITATION)
 			return
 		if message.build != SgCompatibility.fingerprint():
 			# Name the difference for the guest, who reads this refusal.
@@ -445,6 +581,8 @@ func _receive(id: int, message: Dictionary) -> void:
 		if previous != 0 and _peers.has(previous):
 			_peers[previous].session = 0
 			_peers[previous].opened = Time.get_ticks_msec()
+			_peers[previous].waited = 0
+			_peers[previous].polled = Time.get_ticks_msec()
 			_peers[previous].socket.close(4001, "Session moved")
 		# Readiness survives a reconnect, so a seat that readied while the other
 		# one was away comes back to a room already marked [true, true]. Nothing
@@ -508,6 +646,16 @@ func _bump_room(room_id: String) -> void:
 
 func _connected(sid: int) -> bool:
 	return sid != 0 and _sessions.has(sid) and (_is_bot(sid) or int(_sessions[sid].peer) != 0)
+
+
+## Connected people seated at one of this host's tables (a computer seat
+## is no person): the referee's hosted table waits for them to leave.
+func seated_guests() -> int:
+	var count := 0
+	for sid: int in _sessions:
+		if not _is_bot(sid) and _connected(sid) and not String(_sessions[sid].room).is_empty():
+			count += 1
+	return count
 
 
 func _is_bot(sid: int) -> bool:

@@ -101,32 +101,56 @@ func discover() -> void:
 	for path in _all_candidate_paths():
 		if FileAccess.file_exists(path):
 			paths.append(path)
-	# The packs whose pictures will be read now — the first file of each
-	# pack that has no seal — and the screen that says so ([PackCheckScreen]).
-	var unsealed := 0
-	var counted := {}
-	for path in paths:
-		var pack_id := _id_for(path)
-		if counted.has(pack_id): continue
-		counted[pack_id] = true
-		if not PackSeal.sealed(PackSeal.fingerprint(path)): unsealed += 1
-	var screen: PackCheckScreen = PackCheckScreen.open(get_viewport()) if unsealed > 0 else null
-	var checked := 0
+	_take_packs(paths)
+
+
+## Judge [param paths] in order, the first valid file of each pack taking
+## it: [method discover]'s body. [param mount] false judges without
+## mounting a pack's pictures — for the tests, whose mounts would outlive
+## them; the game always mounts.
+func _take_packs(paths: Array, mount := true) -> void:
+	# The packs whose pictures will be read now, and the screen that says
+	# so ([PackCheckScreen]), opened only when one will be read.
+	var plan := _hash_plan(paths)
+	var files: Dictionary = plan["files"]
+	var to_hash: int = plan["to_hash"]
+	var screen: PackCheckScreen = PackCheckScreen.open(get_viewport()) if to_hash > 0 else null
+	var checked := {"packs": 0}
 	for path in paths:
 		var id := _id_for(path)
 		if _available.has(id):
 			continue
 		var started := Time.get_ticks_msec()
-		var seal := PackSeal.fingerprint(path)
-		var was_sealed := PackSeal.sealed(seal)
-		if not was_sealed and screen != null:
-			checked += 1
-			screen.begin_pack(checked, unsealed, String(path).get_file())
-			PackSeal.progress = screen.pictures
-		var report := inspect(path, was_sealed)
-		PackSeal.progress = Callable()
+		var file: Dictionary = files[path]
+		var seal := String(file["seal"])
+		var was_sealed := bool(file["sealed"]) or bool(file["legacy"])
+		var report: Dictionary
+		var read_pictures := false
+		if String(file["remembered"]) != "":
+			# Refused at an earlier start, after its pictures were read; the
+			# file has not changed since (PackSeal.refuse).
+			report = {"ok": false, "why": String(file["remembered"]), "path": path}
+		elif file.has("early"):
+			# Refused by the quick look the count took: no picture read.
+			report = file["early"]
+		else:
+			if not was_sealed and screen != null:
+				# On the screen from its first picture: a pack refused before
+				# one is read never takes a place in the count.
+				var shown := String(path).get_file()
+				var began := {"yet": false}
+				PackSeal.progress = func(done: int, of: int) -> void:
+					if not began["yet"]:
+						began["yet"] = true
+						checked["packs"] += 1
+						screen.begin_pack(checked["packs"], to_hash, shown)
+					screen.pictures(done, of)
+			var before := PackSeal.pictures_hashed
+			report = inspect(path, was_sealed)
+			read_pictures = PackSeal.pictures_hashed > before
+			PackSeal.progress = Callable()
 		if bool(report.get("ok", false)):
-			if bool(report.get("has_art", false)) \
+			if mount and bool(report.get("has_art", false)) \
 					and not ProjectSettings.load_resource_pack(path, false):
 				var why := "its metadata is valid but its artwork could not be mounted"
 				_rejections.append({"id": id, "path": path, "why": why})
@@ -134,8 +158,10 @@ func discover() -> void:
 				push_warning(report_lines.back())
 				continue
 			_available[id] = report
-			if not was_sealed:
-				PackSeal.seal(seal)
+			if not bool(file["sealed"]):
+				# Hashed now, or sealed by an older build as its table alone:
+				# sealed as this file from now on, the old seal used up.
+				PackSeal.seal(seal, String(file["table"]) if bool(file["legacy"]) else "")
 			# stderr, because the Deck Lab's stdout is its report and a
 			# tool reading it saw this line first (2026-09-26). Sealed:
 			# its pictures passed at an earlier start and were not read
@@ -149,9 +175,76 @@ func discover() -> void:
 		_rejections.append({"id": id, "path": path, "why": report.get("why", "invalid")})
 		report_lines.append("card pack: %s refused — %s" % [path, report.get("why", "invalid")])
 		push_warning(report_lines.back())
+		if read_pictures:
+			# Not read again while the file is unchanged (PackSeal.refuse).
+			PackSeal.refuse(seal, String(report.get("why", "invalid")))
 	# Gone before the title's first frame.
 	if screen != null:
 		screen.close()
+
+
+# --- campaign 2026-10-12 f-packs: per-file seals, refusals remembered, an honest count ---
+
+## What [method _take_packs] will do with each of [param paths], before
+## it does it: `{files: {path: {seal, table, sealed, legacy, remembered,
+## early?}}, to_hash}`.
+##   * `seal` — the file's fingerprint ([method PackSeal.fingerprint]);
+##     `sealed` — whether its pictures passed at an earlier start.
+##   * `legacy` — an older build's seal (the zip's table alone, [method
+##     PackSeal.table_fingerprint]) stands for this file: honoured for the
+##     ONE file that has that table, so no player's packs are all read
+##     again after the update; where two files share it (a damaged copy
+##     beside the good one — the very case the old seal got wrong) it
+##     stands for neither, and both are read.
+##   * `remembered` — why this unchanged file was refused after its
+##     pictures were read at an earlier start ([method PackSeal.refusal]),
+##     or "".
+##   * `early` — the refusal a quick look found (the inspection with the
+##     manifest's word for the pictures, which reads none): a file that
+##     fails that fails before a picture is read.
+## `to_hash` counts the packs whose pictures will be read — for each pack,
+## the first file that is neither sealed nor refused at once — so the
+## check screen says "Pack 2 of 2", not "of 4" with two refused in a
+## millisecond.
+func _hash_plan(paths: Array) -> Dictionary:
+	var files := {}
+	var shared := {}
+	for path in paths:
+		var table := PackSeal.table_fingerprint(path)
+		var seal := PackSeal.bind(table, path)
+		files[path] = {"seal": seal, "table": table, "sealed": PackSeal.sealed(seal),
+			"legacy": false, "remembered": ""}
+		if table != "":
+			shared[table] = int(shared.get(table, 0)) + 1
+	for path in paths:
+		var file: Dictionary = files[path]
+		if bool(file["sealed"]):
+			continue
+		var table := String(file["table"])
+		file["legacy"] = table != "" and int(shared.get(table, 0)) == 1 and PackSeal.sealed(table)
+		if not bool(file["legacy"]):
+			file["remembered"] = PackSeal.refusal(String(file["seal"]))
+	var to_hash := 0
+	var decided := {}
+	for path in paths:
+		var id := _id_for(path)
+		if decided.has(id):
+			continue
+		var file: Dictionary = files[path]
+		if String(file["remembered"]) != "":
+			continue
+		if bool(file["sealed"]) or bool(file["legacy"]):
+			decided[id] = true
+			continue
+		var early := inspect(path, true)
+		if not bool(early.get("ok", false)):
+			file["early"] = early
+			continue
+		decided[id] = true
+		to_hash += 1
+	return {"files": files, "to_hash": to_hash}
+
+# --- end campaign 2026-10-12 f-packs ---
 
 
 ## Every place a pack may be, pack by pack, in the order they are tried.
@@ -290,17 +383,6 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 			or checksums.get("metadata", {}) != metadata_hashes:
 		reader.close()
 		return _refusal("its metadata checksum does not match")
-	var artwork: Variant = checksums.get("artwork", {})
-	var art_names: Array = []
-	for name in names:
-		if not metadata.has(name):
-			art_names.append(name)
-	if not (artwork is Dictionary) \
-			or int(artwork.get("files", -1)) != art_names.size() \
-			or String(artwork.get("sha256", "")) != PackSeal.artwork_sha256(reader,
-				art_names, PackSeal.claimed_artwork(manifest) if art_trusted else "", path):
-		reader.close()
-		return _refusal("its artwork checksum does not match")
 	var version := String(manifest.get("version", ""))
 	var minimum := String(manifest.get("minimum_game_version", ""))
 	var game_version := String(ProjectSettings.get_setting(
@@ -312,7 +394,6 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 		reader.close()
 		return _refusal("requires game version %s or newer (this is %s)" % [
 			minimum, game_version])
-	reader.close()
 	if manifest.get("pack_format", 0) != 1 or manifest.get("id", "") != ID \
 			or manifest.get("file_name", "") != FILE_NAME:
 		return _refusal("its manifest does not identify Pack 1")
@@ -367,6 +448,23 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 	for wanted in ADDED_NAMES:
 		if not got_names.has(wanted):
 			return _refusal("its four new rules identities do not match Pack 1")
+	# THE PICTURES LAST (robustness campaign of 2026-10-12), as Packs 2–9
+	# always had them: a Pack 1 refused for its version, its identity or
+	# its checklists is refused before a single picture is read — it was
+	# read whole first, and a pack refused that way, never sealed, was
+	# read whole again at every start.
+	var artwork: Variant = checksums.get("artwork", {})
+	var art_names: Array = []
+	for name in names:
+		if not metadata.has(name):
+			art_names.append(name)
+	var art_ok := artwork is Dictionary \
+			and int(artwork.get("files", -1)) == art_names.size() \
+			and String(artwork.get("sha256", "")) == PackSeal.artwork_sha256(reader,
+				art_names, PackSeal.claimed_artwork(manifest) if art_trusted else "", path)
+	reader.close()
+	if not art_ok:
+		return _refusal("its artwork checksum does not match")
 	return {"ok": true, "why": "", "path": path, "manifest": manifest,
 		"catalog": catalog, "cards": cards, "has_art": names == complete}
 
@@ -505,6 +603,10 @@ func set_enabled(id: String, enabled: bool) -> bool:
 	elif not enabled:
 		ids.erase(id)
 	Settings.set_enabled_card_packs(ids)
+	if not enabled:
+		# A pack switched off draws nothing ([method art_path]); what was
+		# kept of its pictures, and the others', is let go.
+		_art_cache.clear()
 	_configure_registry()
 	CardRegistry.ensure_loaded()
 	changed.emit(id, enabled)
@@ -602,7 +704,11 @@ func art_texture(card_name: String, set_code: String, full_card := false, number
 	if path == "":
 		return null
 	if _art_cache.has(path):
-		return _art_cache[path]
+		# Asked for again: the youngest now, as in GameSkin.card_art.
+		var hit: Texture2D = _art_cache[path]
+		_art_cache.erase(path)
+		_art_cache[path] = hit
+		return hit
 	var bytes := FileAccess.get_file_as_bytes(path)
 	var image := Image.new()
 	if bytes.is_empty() or image.load_jpg_from_buffer(bytes) != OK:
@@ -611,6 +717,17 @@ func art_texture(card_name: String, set_code: String, full_card := false, number
 		image.generate_mipmaps()
 	var texture := ImageTexture.create_from_image(image)
 	_art_cache[path] = texture
+	# THE SAME BOUND AS THE SKIN'S CARD ART (robustness campaign of
+	# 2026-10-12): this cache kept every picture it ever decoded — crops
+	# with their mipmaps and full-card scans alike — until a rescan, and a
+	# long Deck Builder browse with packs on took a gigabyte (texture
+	# memory 29 -> 530 MB over 60 page cycles). Least recently used goes
+	# first, past [constant GameSkin.ART_CACHE_CAP] pictures; one still on
+	# a card stays alive on that card.
+	while _art_cache.size() > GameSkin.ART_CACHE_CAP:
+		for oldest in _art_cache:
+			_art_cache.erase(oldest)
+			break
 	return texture
 
 

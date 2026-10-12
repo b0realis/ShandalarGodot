@@ -1,9 +1,11 @@
 # Mouse-driven menus and duels. Labels use PortMaster's logical button names.
 # Select + Start is PortMaster's emergency exit; prefer the in-game menu's
-# Exit game. Select alone is Q: the pause menu in a duel whatever else is
-# going on, the menu in the Deck Builder (both hold Exit game). Start is
+# Exit game. Select alone is F10, the game's menu key (Controls.MENU_KEY):
+# the pause menu in a duel, the menu in the Deck Builder (both hold Exit
+# game). Not Q: a text field with the keyboard (the Deck Builder's search)
+# typed Q as a letter, and F10 is a key no text field types. Start is
 # Escape: cancel one layer, and with nothing to cancel the pause menu.
-back = q
+back = f10
 guide = "
 start = esc
 a = mouse_left

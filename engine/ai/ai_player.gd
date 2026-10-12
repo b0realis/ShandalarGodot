@@ -991,8 +991,13 @@ func _try_cast_best(game: MtgGame) -> String:
 	# `canCastWhileReserving`, `heuristic.go`): a sorcery-speed cast that
 	# would tap us out of it must be worth half again as much.
 	var reserve := _held_reserve(game)
+	# The counter the gate below keeps payable (campaign 2026-10-12 f-aiA,
+	# b5-1/b5-2): read once, like the reserve. Unused with the gate off.
+	var counter_kept: Dictionary = _counter_to_keep(game, sources) \
+		if profile.holds_instants and profile.forecasts_tactics else {}
 	var volley := _burn_volley(game, sources)   # campaign fix-ai-a (w6-3)
 	var ranked: Array = []   # campaign fix-ai-c (w6-9): every ranked cast, for the sweeper's order
+	var counter_spared: Dictionary = {}   # campaign 2026-10-12 f-aiA: ids paid around the counter
 	for inst in game.playable_cards(pid):
 		if inst.is_land():
 			continue
@@ -1075,10 +1080,14 @@ func _try_cast_best(game: MtgGame) -> String:
 		# second half of a chain and the damage it borrows is wiped in
 		# this turn's cleanup (2026-09-10, AiProfile.holds_x_burn; CR
 		# 514.2, [method _finishes_damaged]).
+		# ...or unless mana floating under a mana-burn rule would burn with
+		# nothing else ranked, and this card's plan spends it (campaign
+		# 2026-10-12 f-aiA, b5-4: [method _spending_the_pool]).
 		if _is_held_instant(inst, intent) \
 				and not _lethal_burn(game, intent, max_x) \
 				and not volley.has(inst.id) \
-				and not _finishes_damaged(game, inst, intent):
+				and not _finishes_damaged(game, inst, intent) \
+				and not (_pool_pass and _plan_spends_pool(plan)):
 			continue
 		# Dark Ritual is worth exactly what it lets us cast this turn.
 		if inst.data.card_name == "High Tide" and not FALLEN_EMPIRES_TACTICS.high_tide_enables(game, self, inst, sources):
@@ -1171,10 +1180,22 @@ func _try_cast_best(game: MtgGame) -> String:
 					_generic_x(inst.data, x) + surcharge).is_empty():
 			continue
 		# Phase 2: hold counterspell mana open. A marginal main-phase cast
-		# that would tap us below {U}{U} while we hold a counter waits.
+		# that would tap us below {U}{U} while we hold a counter waits —
+		# below the CHEAPEST PAYABLE counter's own cost, with the gate on
+		# (campaign 2026-10-12 f-aiA, b5-1: [method _counter_gate_holds]).
 		if profile.holds_instants and value < 6.0 \
-				and _holding_counter(game) and _blue_after_plan(game, plan) < 2:
-			continue
+				and _counter_gate_holds(game, plan, sources, counter_kept):
+			# ...unless another plan pays for it AROUND the counter's own
+			# sources (the planner's first plan may tap the one Island a
+			# Remove Soul needs while three Mountains stand idle); the cast
+			# then pays that way ([method _plan_around_counter]).
+			var around := _plan_around_counter(counter_kept, sources,
+				game.spell_cost_for(pid, inst.data, x, mode, inst),
+				_generic_x(inst.data, x) + surcharge, keys)
+			if around.is_empty():
+				continue
+			plan = around
+			counter_spared[inst.id] = true
 		# THE PLAN IS PUT TO THE ENGINE BEFORE A LAND IS TAPPED. Everything
 		# above mirrors a rule; this asks the rule itself, with the FINAL
 		# X, the player filter, the arity a rolled slot demands and the
@@ -1231,6 +1252,13 @@ func _try_cast_best(game: MtgGame) -> String:
 			best_mode = r["mode"]
 	# --- end Campaign fix-ai-c (w6-9) ---
 	if best == null:
+		# THE POOL THAT WOULD BURN (campaign 2026-10-12 f-aiA, b5-4): one
+		# more pass, a held instant the floating mana pays for let in.
+		if _spending_the_pool(game):
+			_pool_pass = true
+			var spent := _try_cast_best(game)
+			_pool_pass = false
+			return spent
 		return ""
 	if profile.action_search_nodes > 0 and not proposals.is_empty():
 		var picked := _planned_cast(game, proposals, sources, reserve)
@@ -1238,9 +1266,14 @@ func _try_cast_best(game: MtgGame) -> String:
 		best_x = picked["x"]
 		best_mode = picked["mode"]
 		best_targets = picked["targets"]
+	# The sources the kept counter pays with stay untapped when the ranking
+	# priced this cast around them (campaign 2026-10-12 f-aiA, b5-1).
+	var spared_now := _own_target_ids(game, best_targets)
+	if counter_spared.has(best.id):
+		spared_now.merge(_counter_plan_ids(counter_kept, sources))
 	var plan := _plan_taps(game, game.spell_cost_for(pid, best.data, best_x, best_mode, best),
 		_generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data),
-		game.mana_usage_keys(best.data, best), _own_target_ids(game, best_targets))
+		game.mana_usage_keys(best.data, best), spared_now)
 	# Revalidate the entire selected choice before spending any source.
 	if game.cast_refusal(pid, best, best_targets, best_x, best_mode) != "" \
 			or (plan.is_empty() and not _free_at(game.spell_cost_for(pid, best.data, best_x, best_mode, best),
@@ -1632,6 +1665,11 @@ func _ritual_has_a_use(game: MtgGame, ritual: CardInstance, sources: Array) -> b
 			continue   # nothing to aim at, nothing worth doing
 		if game.cast_refusal(pid, other, choice.get("targets", []),
 				int(choice.get("x", 0)), mode) != "":
+			continue
+		# ...AND THE RANKING WOULD THEN CAST IT (campaign 2026-10-12 f-aiA,
+		# b5-4): a Terror held for their turn licensed the Ritual and was
+		# then held, and the three black mana burned.
+		if _ranking_would_wait(game, other, choice, mode, rows):
 			continue
 		return true
 	return false
@@ -2125,7 +2163,20 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 	# mana is worth. The 1.5x rule in [method _try_cast_best] then does
 	# the rest: something clearly better than the thing we would counter
 	# still gets cast.
-	if profile.holds_instants:
+	#
+	# ONLY A COUNTER THAT CAN BE PAID, AND NOT UNDER THE PANIC LINE
+	# (robustness campaign 2026-10-12, b5-1 and b5-2, forecasts_tactics):
+	# the counter booked is the cheapest one the mana still there on their
+	# turn can pay ([method _counter_to_keep]) — a Counterspell on one
+	# Island booked {U}{U} and kept a Merfolk in hand for three turns — and
+	# none while their board already puts us on the panic line. Off, any
+	# counterspell in hand, as before.
+	if profile.holds_instants and profile.forecasts_tactics:
+		var counter := _counter_to_keep(game, row_sources)
+		if not counter.is_empty() and profile.counter_threshold > float(out.get("value", 0.0)):
+			out = {"cost": counter["cost"], "value": profile.counter_threshold,
+				"for": (counter["inst"] as CardInstance).id}
+	elif profile.holds_instants:
 		for inst in me.hand:
 			if not _is_counterspell(inst.data):
 				continue
@@ -5050,6 +5101,14 @@ func _blue_after_plan(game: MtgGame, plan: Array) -> int:
 ## other lethal line in this file — a Detonate on their Nevinyrral's Disk
 ## with the opponent at four is a kill the pilot could not see.
 func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int) -> float:
+	# LIFE GAIN IS WORTH WHAT IT IS NEEDED FOR (campaign 2026-10-12 f-aiA,
+	# b5-6, forecasts_tactics): a spell that only gains us life is priced
+	# at the life it gains ([method _life_gain_worth]), not at its printed
+	# worth or X x 1.5 — Stream of Life went for one life at twenty.
+	if profile.forecasts_tactics:
+		var gain := _own_life_gain(inst.data.spell_effects, targets, x_value)
+		if gain >= 0:
+			return _life_gain_worth(game, gain) + _vise_relief(game, inst)
 	var value := _card_value(inst.data)
 	if inst.data.cost.has_x:
 		value = maxf(value, float(x_value) * 1.5)
@@ -7982,8 +8041,13 @@ func _dies_in_combat(game: MtgGame, inst: CardInstance) -> bool:
 ## it as dead before it struck. An indestructible hitter survives the
 ## first strike and strikes too; a regenerating one does not (CR
 ## 701.15a removes it from combat), so only the first is spared here.
+##
+## [param firsts] (campaign 2026-10-12 f-aiA, b5-5): who strikes first, as
+## bits — 1 the hitter, 2 the victim — when the caller has read more than
+## the keyword ([method _strikes_first]: their PAID first strike); -1, the
+## default, reads the keyword as before.
 func _damage_from(hitter: CardInstance, victim: CardInstance,
-		hitter_bonus := Vector2i.ZERO, victim_bonus := Vector2i.ZERO) -> int:
+		hitter_bonus := Vector2i.ZERO, victim_bonus := Vector2i.ZERO, firsts := -1) -> int:
 	# A hitter its own NEGATIVE bonus leaves without toughness — a blocker
 	# flanking shrank ([method _flank_pair]) — is gone before combat damage
 	# (CR 704.5f), or destroyed by the damage already marked on it
@@ -7993,8 +8057,11 @@ func _damage_from(hitter: CardInstance, victim: CardInstance,
 		var left := hitter.cur_toughness + hitter_bonus.y
 		if left <= 0 or (left <= hitter.damage and not hitter.cur_indestructible):
 			return 0
-	if victim.has_keyword(Mtg.Keyword.FIRST_STRIKE) \
-			and not hitter.has_keyword(Mtg.Keyword.FIRST_STRIKE) \
+	var hitter_first := hitter.has_keyword(Mtg.Keyword.FIRST_STRIKE) if firsts < 0 \
+		else (firsts & 1) != 0
+	var victim_first := victim.has_keyword(Mtg.Keyword.FIRST_STRIKE) if firsts < 0 \
+		else (firsts & 2) != 0
+	if victim_first and not hitter_first \
 			and not hitter.cur_indestructible \
 			and _damage_after_prevention(victim, hitter, victim_bonus) \
 				>= hitter.cur_toughness + hitter_bonus.y - hitter.damage:
@@ -8097,7 +8164,11 @@ func _dies_to(game: MtgGame, victim: CardInstance, hitter: CardInstance,
 	# nothing about a gaze.
 	if profile.reads_pumps:
 		victim_bonus += _pump_reach(game, victim)
-	var hit := _damage_from(hitter, victim, hitter_bonus, victim_bonus)
+	# THEIR FIRST STRIKE IS PUBLIC TOO (campaign 2026-10-12 f-aiA, b5-5):
+	# Burning Shield Askari's {R}{R} with two Mountains open is a first
+	# striker to this predicate ([method _first_strike_bits]).
+	var hit := _damage_from(hitter, victim, hitter_bonus, victim_bonus,
+		_first_strike_bits(game, hitter, victim))
 	# THE DAMAGE SUITE (Pack 8, 2026-10-03, forecasts_tactics): where the
 	# table changes combat damage — Blind Fury's double, a damage-to-
 	# counters creature, Ogre Enforcer's single source — the engine's own
@@ -10801,9 +10872,9 @@ func _pump_reserve(game: MtgGame, sources: Array) -> ManaCost:
 ## end step of a game that ended in this combat cost nothing.
 ##
 ## The count is the card's own ([member CardInstance.memory], keyed by
-## the row in [constant EffectIntent.CARD_LOCAL_PUMPS]) because
-## [member CardInstance.ability_uses] is only kept for an ability with a
-## [member ActivatedAbility.max_per_turn] and the fuse is not one. The
+## the row in [constant EffectIntent.CARD_LOCAL_PUMPS]):
+## [member CardInstance.ability_uses] counts every activation this turn;
+## the fuse lives in memory because it is a price, not a cap. The
 ## activations already on the stack count too — they have paid their mana
 ## and not yet written their tally.
 func _activations_left(game: MtgGame, inst: CardInstance, index: int,
@@ -11671,7 +11742,9 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
 		search.d_bypass[j] = 1 if inst.cur_damage_as_unblocked else 0
 		search.d_soak[j] = maxi(inst.cur_toughness - inst.damage, 0)
-		search.d_first[j] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
+		# Their PAID first strike counts (campaign 2026-10-12 f-aiA, b5-5),
+		# as it does in [method _dies_to], which fills we_kill below.
+		search.d_first[j] = 1 if _strikes_first(game, inst) else 0
 		var d_shield := _shieldable(game, inst)
 		search.d_immune[j] = 1 if (inst.cur_indestructible or d_shield) else 0
 		search.d_regen[j] = 1 if (d_shield and not inst.cur_indestructible) else 0
@@ -13408,7 +13481,11 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 					game.mana_usage_keys(inst.data, inst)).is_empty(): continue
 		if profile.plans_modes and inst.data.is_modal() and not intent.unknown:
 			if intent.life_gain > 0:
-				choice["value"] = float(intent.life_gain) * _life_price(game.players[pid].life)
+				# ...and nothing at full life with no attacker across the
+				# table (campaign 2026-10-12 f-aiA, b5-6: [method _life_gain_worth]).
+				choice["value"] = _life_gain_worth(game, intent.life_gain) \
+					if profile.forecasts_tactics \
+					else float(intent.life_gain) * _life_price(game.players[pid].life)
 			if intent.sweeper != null:
 				choice["value"] = _sweep_value(game, intent.sweeper, x)
 			if intent.damage > 0 or intent.damage_uses_x:
@@ -14634,6 +14711,14 @@ func choose_mulligan(game: MtgGame, p_pid: int) -> bool:
 ## left to its author's hint.
 func cumulative_upkeep_hint(game: MtgGame, p_pid: int, source: CardInstance,
 		cost: ManaCost, life: int, lands: int) -> bool:
+	# THE MANA THAT BURNS (campaign 2026-10-12 f-aiA, b5-7, forecasts_tactics):
+	# a payment whose taps leave mana floating loses that life at the end
+	# of the upkeep under a mana-burn rule ([method _upkeep_burn]) — a
+	# Karoo's {C} under seven green for an Uktabi Efreet. A burn that is our
+	# last life is never paid, at any rung.
+	var burn := _upkeep_burn(game, cost) if p_pid == pid else 0
+	if burn > 0 and burn + life >= game.players[pid].life:
+		return false
 	if p_pid != pid or not profile.prices_offers:
 		return super(game, p_pid, source, cost, life, lands)
 	var me := game.players[pid]
@@ -14648,6 +14733,7 @@ func cumulative_upkeep_hint(game: MtgGame, p_pid: int, source: CardInstance,
 		if pressure >= me.life: return true
 	var value := _own_value(game, source)
 	var price := cost.mana_value() * 0.75 + life * _life_price(me.life) + lands * Evaluator.W_LANDS
+	price += float(burn) * minf(_life_price(me.life), Evaluator.W_LIFE)   # b5-7
 	return value >= price
 
 func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[String], hint: int) -> int:
@@ -16134,3 +16220,355 @@ func _row_payable(game: MtgGame, inst: CardInstance, row: int, sources: Array) -
 	return not _plan_taps_from(sources, cost, surcharge).is_empty() \
 		or (profile.forecasts_tactics and _free_at(cost, surcharge)) \
 		or game.players[pid].mana_pool.can_pay(cost)
+
+
+# --- campaign 2026-10-12 f-aiA: the counter reserve, the Ritual, their paid first strike, life gain ---
+#
+# The robustness campaign of 2026-10-12 (hunter b5: the computer opponent's
+# play, measured). Every reading here is under [member
+# AiProfile.forecasts_tactics]; off, the callers keep the readings they had.
+# Each reads the public board and this seat's own hand — never the
+# opponent's hand, never a library (docs/fair-play.md).
+
+
+## b5-1: [param sources] without the mana floating in the pool — the
+## sources still there when the opponent's turn comes. A pool empties at the
+## end of the step (CR 500.4), so a Dark Ritual's {B}{B}{B} keeps no
+## counter open for their turn. [param sources] empty: built here.
+func _lasting_sources(game: MtgGame, sources: Array = []) -> Array:
+	if sources.is_empty():
+		sources = _mana_sources(game)
+	return sources.filter(func(row: Array) -> bool: return row[0] != null)
+
+
+## b5-1: the CHEAPEST counterspell in hand ([method _is_counterspell]) the
+## lasting sources ([method _lasting_sources]) can pay for, as
+## `{inst, cost, extra, keys}` — `{}` when no counter in hand can be paid
+## tonight. The reserve and the main-phase gate kept {U}{U} open for a
+## Counterspell held with one Island: the Blue Skies starter held its
+## Merfolk of the Pearl Trident for three turns, the Humility deck its Wall
+## of Tears behind a Dismiss on two lands (274 such turn-ends in ~900 Lab
+## duels). An {X} counter is booked at X = 0, its printed floor.
+func _payable_counter(game: MtgGame, sources: Array = []) -> Dictionary:
+	var lasting := _lasting_sources(game, sources)
+	var best: Dictionary = {}
+	var best_price := 0
+	for inst in game.players[pid].hand:
+		if not _is_counterspell(inst.data):
+			continue
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue
+		var extra := game.spell_surcharge(pid, inst.data)
+		var keys: Array = game.mana_usage_keys(inst.data, inst)
+		var cost: ManaCost = inst.data.cost
+		if not _free_at(cost, extra) and _plan_taps_from(lasting, cost, extra, keys).is_empty():
+			continue
+		var price := cost.mana_value() + maxi(extra, 0)
+		if best.is_empty() or price < best_price:
+			best = {"inst": inst, "cost": cost, "extra": extra, "keys": keys}
+			best_price = price
+	return best
+
+
+## b5-2: the counter whose mana a hold keeps open — [method
+## _payable_counter] — or `{}` while their board puts us on the panic line
+## ([method _board_pressure], the damage their creatures would land through
+## our value blocks). The creatures already on the table are the threat
+## then, and a counter answers only a spell that may never come: Jamuraa
+## at 11 life held Warping Wurm, Striped Bears and Ophidian behind a
+## Dissipate while two Stalking Tigers hit it each turn, and died with a
+## full hand (of 1,582 Lab turn-ends holding a counter over a castable
+## creature, 89% saw no counter cast in the opponent's next turn).
+func _counter_to_keep(game: MtgGame, sources: Array = []) -> Dictionary:
+	var counter := _payable_counter(game, sources)
+	if counter.is_empty() or _board_pressure(game):
+		return {}
+	return counter
+
+
+## b5-2: [method _in_danger]'s panic line, asked of their CREATURES only:
+## true when the damage their board would land through our value blocks
+## puts us on it. With no creature across the table it is false — at low
+## life the counter is then the answer to the burn spell that would end
+## the game, and it stays held.
+func _board_pressure(game: MtgGame) -> bool:
+	var theirs: Array[CardInstance] = []
+	for inst in game.players[game.opponent_of(pid)].battlefield:
+		if inst.is_creature() and inst.cur_power > 0 \
+				and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+			theirs.append(inst)
+	if theirs.is_empty():
+		return false
+	var mine: Array[CardInstance] = []
+	for inst in game.players[pid].battlefield:
+		if inst.is_creature():
+			mine.append(inst)
+	var through := _damage_after_value_blocks(game, theirs, mine)
+	return through > 0 and game.players[pid].life - through <= profile.chump_threshold
+
+
+## b5-1: could [param counter] (a [method _payable_counter] answer) still be
+## paid from [param sources] once [param plan] has tapped what it taps?
+## Floating mana never counts: it is gone by their turn.
+func _counter_payable_after(counter: Dictionary, plan: Array, sources: Array) -> bool:
+	if _free_at(counter["cost"], int(counter["extra"])):
+		return true
+	var tapped: Dictionary = {}
+	for step in plan:
+		if step[0] != null:
+			tapped[(step[0] as CardInstance).id] = true
+	var left := sources.filter(func(row: Array) -> bool:
+		return row[0] != null and not tapped.has((row[0] as CardInstance).id))
+	return not _plan_taps_from(left, counter["cost"], int(counter["extra"]),
+		counter["keys"]).is_empty()
+
+
+## The main-phase counter gate of [method _try_cast_best]: does a marginal
+## cast paying with [param plan] tap the held counter out? With the gate on,
+## the counter is [param kept] ([method _counter_to_keep], read once per
+## ranking) and the question is whether IT can still be paid — a Mana Leak
+## needs one blue source, not two, and an unpayable Counterspell keeps
+## nothing open. Off, the old reading: any counter in hand, two blue sources.
+func _counter_gate_holds(game: MtgGame, plan: Array, sources: Array,
+		kept: Dictionary) -> bool:
+	if not profile.forecasts_tactics:
+		return _holding_counter(game) and _blue_after_plan(game, plan) < 2
+	return not kept.is_empty() and not _counter_payable_after(kept, plan, sources)
+
+
+## b5-1: the permanents (`{id: true}`) the counter [param counter] would be
+## paid with — its own plan over the lasting sources in [param sources].
+func _counter_plan_ids(counter: Dictionary, sources: Array) -> Dictionary:
+	var out: Dictionary = {}
+	if counter.is_empty():
+		return out
+	var lasting := sources.filter(func(row: Array) -> bool: return row[0] != null)
+	for step in _plan_taps_from(lasting, counter["cost"], int(counter["extra"]), counter["keys"]):
+		if step[0] != null:
+			out[(step[0] as CardInstance).id] = true
+	return out
+
+
+## b5-1: a plan for [param cost] (+ [param extra] generic) that leaves
+## [param counter] payable, drawn from [param sources] without the
+## counter's own sources ([method _counter_plan_ids]) — `[]` when there is
+## none. The planner's first plan for a Gray Ogre may tap the one Island a
+## Remove Soul needs while a Mountain stands idle; this is the plan that
+## pays with the Mountain.
+func _plan_around_counter(counter: Dictionary, sources: Array, cost: ManaCost,
+		extra: int, keys: Array) -> Array:
+	var keep := _counter_plan_ids(counter, sources)
+	if keep.is_empty():
+		return []
+	var plan := _plan_taps_from(_sources_sparing(sources, keep), cost, extra, keys)
+	if plan.is_empty() or not _counter_payable_after(counter, plan, sources):
+		return []
+	return plan
+
+
+## b5-4: true while [method _try_cast_best] makes its second pass — a held
+## instant the floating mana pays for let into the ranking.
+var _pool_pass := false
+
+
+## b5-4: is mana floating that would BURN at the end of this step (a
+## mana-burn rule — fifth, modern_mana_burn), with the ranking's first pass
+## finding nothing to cast? Then a held instant the pool pays for is cast
+## now rather than let three black mana cost three life: a Dark Ritual
+## resolves, the card it was cast for goes away, and a Terror waiting for
+## their turn is the only thing left that can spend it. Under the modern
+## rules the pool empties for nothing and the instant keeps its moment.
+func _spending_the_pool(game: MtgGame) -> bool:
+	return profile.forecasts_tactics and not _pool_pass and game.rules.mana_burn \
+		and game.players[pid].mana_pool.total() > 0
+
+
+## b5-4: does [param plan] spend floating mana (a null-instance step)?
+static func _plan_spends_pool(plan: Array) -> bool:
+	for step in plan:
+		if step[0] == null:
+			return true
+	return false
+
+
+## b5-4: would the main-phase ranking ([method _try_cast_best]) still hold
+## [param other] — sized as [param choice] at [param mode] — once the
+## Ritual's mana is in [param rows]? [method _ritual_has_a_use] asked only
+## whether the card became castable and worth aiming, and a Terror kept for
+## the opponent's turn licensed the Ritual; the ranking then held that very
+## Terror and the {B}{B}{B} burned (16 of 86 resolved Rituals in the Lab,
+## three of them for all three). These are the ranking's own waits, asked
+## in its own order: the held instant (unless it wins now or finishes a
+## damaged creature), the reserve's 1.5x rule, the counter gate, the
+## one-ply veto.
+func _ranking_would_wait(game: MtgGame, other: CardInstance, choice: Dictionary,
+		mode: int, rows: Array) -> bool:
+	var intent := _mode_intent(other.data, mode)
+	var x := int(choice.get("x", 0))
+	var targets: Array = choice.get("targets", [])
+	var value := float(choice.get("value", 0.0))
+	if _is_held_instant(other, intent) and not _lethal_burn(game, intent, x) \
+			and not _finishes_damaged(game, other, intent):
+		return true
+	var cost := game.spell_cost_for(pid, other.data, x, mode, other)
+	var extra := _generic_x(other.data, x) + game.spell_surcharge(pid, other.data)
+	var reserve := _held_reserve(game)
+	if not reserve.is_empty() and int(reserve.get("for", -1)) != other.id \
+			and value < float(reserve["value"]) * 1.5 \
+			and _plan_taps_from(rows, _combined_cost(cost, reserve["cost"]), extra).is_empty():
+		return true
+	if profile.holds_instants and value < 6.0:
+		var plan := _plan_taps_from(rows, cost, extra, game.mana_usage_keys(other.data, other))
+		if _counter_gate_holds(game, plan, rows, _counter_to_keep(game, rows)):
+			return true
+	return _cast_veto(game, other, intent, targets, x)
+
+
+## b5-5: does [param inst] strike first in this combat? The keyword — or,
+## for a creature of THEIRS, an activated ability of its own that gives it
+## first strike and that its controller's untapped permanents can pay for
+## now ([method _paid_first_strike]). Burning Shield Askari's "{R}{R}: gains
+## first strike" with two Mountains open: a Hill Giant blocking it is
+## flanked to a 2/2 and struck down first, and the Askari lives (34 Lab
+## blocks on such knights, a 5/4 Wildebeests lost at 16 life). Their open
+## mana and the printed ability are on the table; their hand is not read.
+## Ours is not this reading's: our own breaths are priced where we pay
+## them. Under [member AiProfile.forecasts_tactics] with [member
+## AiProfile.reads_pumps], the profiles that read their pumps at all.
+func _strikes_first(game: MtgGame, inst: CardInstance) -> bool:
+	if inst == null:
+		return false
+	if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE):
+		return true
+	if not (profile.forecasts_tactics and profile.reads_pumps):
+		return false
+	if inst.controller_id == pid or inst.cur_activated_abilities.is_empty():
+		return false
+	return _paid_first_strike(game, inst)
+
+
+## b5-5: an activated ability of [param inst] (theirs) that gives it first
+## strike, with no tap and a cost that is mana alone — the gates [method
+## _cheapest_pump_of] keeps for their power pumps — payable from its
+## controller's sources as [method ManaPlanner.sources] lists them for OUR
+## seat (a Spirit Guide hidden in their hand is not open mana).
+func _paid_first_strike(game: MtgGame, inst: CardInstance) -> bool:
+	if not inst.is_creature() or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	var who := inst.controller_id
+	var src: Array = []
+	var listed := false
+	for index in inst.cur_activated_abilities.size():
+		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+		if ability.tap_cost or ability.cost == null or ability.cost.has_x \
+				or ability.sacrifice_cost or ability.sacrifice_filter.is_valid() \
+				or ability.exile_cost or ability.exile_filter.is_valid() \
+				or ability.discard_cost > 0 or ability.random_discard_cost > 0 \
+				or ability.life_cost > 0 or ability.counter_cost_kind != "":
+			continue
+		if ability.only_owner_may_activate and inst.owner_id != who:
+			continue
+		if ability.max_per_turn > 0 \
+				and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
+			continue
+		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+		if intent.unknown or not intent.pump_self \
+				or not intent.pump_keywords.has(Mtg.Keyword.FIRST_STRIKE):
+			continue
+		if not _animation_timing_open(game, inst, ability, who):
+			continue
+		if not listed:
+			src = ManaPlanner.sources(game, who, {}, true, pid)
+			listed = true
+		var extra := _ability_extra(game, who, inst, ability)
+		if _free_at(ability.cost, extra) \
+				or not ManaPlanner.plan_from(src, ability.cost, extra).is_empty():
+			return true
+	return false
+
+
+## b5-5: [method _damage_from]'s `firsts` bits for the pair — 1 the hitter
+## strikes first, 2 the victim — or -1 when the keywords already say it
+## (nearly every pair, and every pair with the gate off).
+func _first_strike_bits(game: MtgGame, hitter: CardInstance, victim: CardInstance) -> int:
+	if not (profile.forecasts_tactics and profile.reads_pumps):
+		return -1
+	var h := _strikes_first(game, hitter)
+	var v := _strikes_first(game, victim)
+	if h == hitter.has_keyword(Mtg.Keyword.FIRST_STRIKE) \
+			and v == victim.has_keyword(Mtg.Keyword.FIRST_STRIKE):
+		return -1
+	return (1 if h else 0) | (2 if v else 0)
+
+
+## b5-6: the life total at and above which gained life buys nothing while
+## no creature of theirs can attack — the duel's own starting life.
+const FULL_LIFE := 20
+
+
+## b5-6: what [param gain] life is worth to us now: [method _life_price] a
+## point for the life it is gained at — the reaper's rate every other life
+## reading here uses — and nothing at all at [constant FULL_LIFE] or more
+## with no creature of theirs that could attack ([method
+## _attackers_across]). The old price was the card's printed worth, or
+## X x 1.5 for an X spell — a point of gained life dearer than this seat's
+## own price of a point of life — and Stream of Life went for one life at
+## twenty, Healing Salve's three at nineteen.
+func _life_gain_worth(game: MtgGame, gain: int) -> float:
+	if gain <= 0:
+		return 0.0
+	var life := game.players[pid].life
+	if life >= FULL_LIFE and not _attackers_across(game):
+		return 0.0
+	return float(gain) * _life_price(life)
+
+
+## b5-6: a creature of theirs with power that could attack us next turn
+## ([method _could_attack_next_turn]) — the pressure that makes life worth
+## having. Public board only.
+func _attackers_across(game: MtgGame) -> bool:
+	for inst in game.players[game.opponent_of(pid)].battlefield:
+		if inst.is_creature() and inst.cur_power > 0 and _could_attack_next_turn(game, inst):
+			return true
+	return false
+
+
+## b5-6: the life a spell made of nothing but "gain life" gives US at
+## [param x_value] with [param targets] — every effect a gain (an amount, or
+## the X), and a targeted one aimed at our own seat — or -1 for any other
+## spell, which keeps its own price.
+func _own_life_gain(effects: Array, targets: Array, x_value: int) -> int:
+	if effects.is_empty():
+		return -1
+	var gain := 0
+	for e in effects:
+		if not (e is GainLifeEffect) or (not e.use_x and e.amount <= 0):
+			return -1
+		if e.target_spec != null:
+			var ours := false
+			for t in targets:
+				if t is TargetRef and t.is_player and t.player_id == pid:
+					ours = true
+			if not ours:
+				return -1
+		gain += x_value if e.use_x else e.amount
+	return gain
+
+
+## b5-7: the mana the engine's payment of a cumulative upkeep [param cost]
+## would leave floating — [method MtgGame.try_pay] plans it over the
+## seat's sources, as here — and so burn at the end of the upkeep under a
+## mana-burn rule: seven green for an Uktabi Efreet out of Karoos, each
+## tapping for {C}{G}. 0 off [member AiProfile.forecasts_tactics], under
+## the modern rules, or when nothing would be left over.
+func _upkeep_burn(game: MtgGame, cost: ManaCost) -> int:
+	if not profile.forecasts_tactics or not game.rules.mana_burn \
+			or ManaPlanner.cost_is_free(cost):
+		return 0
+	var src := ManaPlanner.sources(game, pid)
+	var plan := ManaPlanner.plan_from(src, cost, 0, CumulativeUpkeep.USAGE)
+	if plan.is_empty():
+		return 0
+	return _burn_left(src, plan, cost.mana_value())
+
+# --- end campaign 2026-10-12 f-aiA ---

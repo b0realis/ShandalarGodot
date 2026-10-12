@@ -27,6 +27,8 @@ static func configure(c: CardData) -> bool:
 			pump.target_spec = TargetSpec.creature("target blocking creature").with_game_filter(F._blocking)
 			var ability := F._ability("", false, pump).only_if(_untapped_host)
 			ability.on_cost_paid = _tap_host
+			# The menu names the cost the hook pays (campaign 2026-10-12, b4-9).
+			ability.text = "Tap enchanted land: " + ability.text
 			c.activated(ability)
 		"Snowblind":
 			c.enchants(TargetSpec.creature())

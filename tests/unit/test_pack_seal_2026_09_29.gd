@@ -63,9 +63,9 @@ func before_each() -> void:
 ## game cannot write (a folder sits there) leaves the old list whole.
 func test_a_seal_list_that_cannot_be_written_whole_is_left_as_it_was() -> void:
 	PackSeal.seal("aaa")
-	DirAccess.make_dir_recursive_absolute(PackSeal.FILE + ".tmp")
+	DirAccess.make_dir_recursive_absolute(Settings.pending_path(PackSeal.FILE))
 	PackSeal.seal("bbb")
-	DirAccess.remove_absolute(PackSeal.FILE + ".tmp")
+	DirAccess.remove_absolute(Settings.pending_path(PackSeal.FILE))
 	assert_true(PackSeal.sealed("aaa"), "the old list is still read, whole")
 	assert_false(PackSeal.sealed("bbb"), "never opened for writing in place")
 	PackSeal.seal("bbb")

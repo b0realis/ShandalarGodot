@@ -173,7 +173,13 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 ## [param blank_sideboard] enables plain-text blank-line sections. Explicit
 ## SB: lines take precedence for the entire list; .deck/.dec keep their
 ## existing meaning of blank lines as formatting, not a section boundary.
-func parse(text: String, fallback_name := "deck", strict := true, blank_sideboard := false) -> void:
+## [param foreign] reads OTHER programs' exports as well (campaign
+## 2026-10-12; the lenient import path only, see [method parse_foreign]):
+## section lines (`Deck`, `Sideboard`, `SIDEBOARD:`, Forge's `[Main]`),
+## a name line under Arena's `About` or Forge's `[metadata]`, and a
+## printing after a card's name (`(M10) 146`, `[M10]`, `|M10`).
+func parse(text: String, fallback_name := "deck", strict := true, blank_sideboard := false,
+		foreign := false) -> void:
 	deck_name = fallback_name
 	if strict:
 		CardRegistry.ensure_loaded()
@@ -182,9 +188,13 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 	var infer_sideboard := blank_sideboard
 	if infer_sideboard:
 		for raw in lines:
-			if raw.strip_edges().to_upper().begins_with("SB:"):
+			if raw.strip_edges().to_upper().begins_with("SB:") \
+					or (foreign and _foreign_section(raw) == SECTION_SIDE):
 				infer_sideboard = false
 				break
+	# What a foreign section line last opened; "" outside any.
+	var section := ""
+	var tail: RegEx = null
 	var saw_main_card := false
 	var in_sideboard := false
 	var line_number := 0
@@ -194,6 +204,22 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 		if line.is_empty():
 			if infer_sideboard and saw_main_card: in_sideboard = true
 			continue
+		if foreign:
+			var opened := _foreign_section(line)
+			if opened != "":
+				section = opened
+				if opened == SECTION_MAIN or opened == SECTION_SIDE:
+					in_sideboard = opened == SECTION_SIDE
+				continue
+			if section == SECTION_ABOUT or section == SECTION_SKIP:
+				# Arena's `Name X`, Forge's `Name=X`; the rest is not cards.
+				var lowered := line.to_lower()
+				if lowered.begins_with("name=") or (section == SECTION_ABOUT \
+						and lowered.begins_with("name ")):
+					var title := line.substr(5).strip_edges()
+					if title != "":
+						deck_name = title
+				continue
 		if DeckPrintings.read_comment(line, printings): continue
 		if line.to_lower().begins_with(REQUIRED_PACK_PREFIX):
 			var pack_id := line.substr(REQUIRED_PACK_PREFIX.length()).strip_edges()
@@ -230,6 +256,10 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 			continue
 		var count := _read_count(count_token)
 		var card_name := line.substr(space + 1).strip_edges()
+		if foreign:
+			if tail == null:
+				tail = _printing_tail()
+			card_name = _foreign_name(card_name, tail)
 		if count < 1:
 			errors.append("line %d: count must be positive" % line_number)
 			continue
@@ -268,9 +298,95 @@ static func _too_large(line_number: int) -> String:
 ## Record one name the registry does not know, ONCE. Both parsers call it
 ## on the lenient path and only there; a name that appears four times is
 ## one proxy the player has to replace, not four.
+##
+## A SET BESIDE THE LIST (campaign 2026-10-12): `proxies.has` per line made
+## a lenient parse quadratic in unknown names — 20,000 of them took a
+## second and a half, and the setup screen, the Load list and AutoDeck's
+## card pool parse every file they open.
 func _note_proxy(card_name: String) -> void:
-	if not proxies.has(card_name):
+	if not _proxy_seen.has(card_name):
+		_proxy_seen[card_name] = true
 		proxies.append(card_name)
+
+
+## [member proxies] as a set, for [method _note_proxy].
+var _proxy_seen: Dictionary = {}
+
+
+# --- campaign 2026-10-12 f-deck: other programs' exports (lenient only) ---
+
+const SECTION_MAIN := "main"
+const SECTION_SIDE := "side"
+## Arena's `About` block: a `Name …` line, nothing to deal.
+const SECTION_ABOUT := "about"
+## A section that holds no card of a deck — Forge's `[metadata]` (its
+## `Name=` line is read), a maybeboard, a Forge section for another game.
+const SECTION_SKIP := "skip"
+
+
+## LENIENT READING OF ANOTHER PROGRAM'S LIST — the paste box's and Import
+## deck's door, which is where these arrive: MTG Arena's export (`Deck` /
+## `Sideboard` headers, `4 Lightning Bolt (M10) 146`), Moxfield and MTGO
+## text (`SIDEBOARD:`), Forge's `.dck` (`[metadata]` / `Name=` / `[Main]`,
+## `4 Lightning Bolt|M10`). Each used to be refused whole, or read as
+## proxies named "Lightning Bolt (M10) 146". Never [param strict]: a name
+## the registry does not know is a proxy, as on every import. The strict
+## loaders — a `.deck` the setup screen plays — are untouched.
+func parse_foreign(text: String, fallback_name := "deck", blank_sideboard := true) -> void:
+	parse(text, fallback_name, false, blank_sideboard, true)
+
+
+## Is [param text] a Forge deck file? Its `[metadata]` or `[Main]` line
+## says so — no other format this reads has a bracketed section line.
+static func looks_like_forge(text: String) -> bool:
+	for raw_line in text.split("\n"):
+		var line := raw_line.strip_edges().to_lower()
+		if line == "[metadata]" or line == "[main]":
+			return true
+	return false
+
+
+## The section a foreign list's line opens, or "" for any other line.
+static func _foreign_section(raw_line: String) -> String:
+	var word := raw_line.strip_edges().to_lower()
+	var bracketed := word.begins_with("[") and word.ends_with("]")
+	if bracketed:
+		word = word.substr(1, word.length() - 2).strip_edges()
+	word = word.trim_suffix(":").strip_edges()
+	match word:
+		"deck", "main", "maindeck", "main deck", "mainboard", "commander":
+			return SECTION_MAIN
+		"sideboard", "side", "side board", "companion":
+			return SECTION_SIDE
+		"about":
+			return SECTION_ABOUT
+		"metadata", "maybeboard", "considering":
+			return SECTION_SKIP
+	# Forge's other sections ([Avatar], [Planes], [Schemes]) hold cards of
+	# other games; an unknown bracketed line is never a card line.
+	return SECTION_SKIP if bracketed else ""
+
+
+## A card name as another program writes it, less the printing after it:
+## `Lightning Bolt (M10) 146`, `Lightning Bolt (2X2) 117 *F*`,
+## `Lightning Bolt [M10]`, `Lightning Bolt|M10|1`. A name the registry
+## knows as written is left alone; no card is named like those tails.
+static func _foreign_name(card_name: String, tail: RegEx) -> String:
+	if CardRegistry.has_card(card_name):
+		return card_name
+	var bar := card_name.find("|")
+	if bar > 0:
+		return card_name.substr(0, bar).strip_edges()
+	var found := tail.search(card_name) if tail != null else null
+	if found != null:
+		return found.get_string(1).strip_edges()
+	return card_name
+
+
+## The printing tail [method _foreign_name] strips, compiled once per parse.
+static func _printing_tail() -> RegEx:
+	return RegEx.create_from_string(
+		"^(.+?)\\s+[\\(\\[][A-Za-z0-9]{2,6}[\\)\\]](\\s+[A-Za-z0-9\\-]+)?(\\s+\\*[A-Za-z]+\\*)?$")
 
 
 func _to_string() -> String:

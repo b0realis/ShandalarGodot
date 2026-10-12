@@ -412,6 +412,13 @@ withdrawn.
 
 Not hypotheticals. Each of these has a date and a cost.
 
+**The duel screen redraws once per frame (2026-10-12).** An engine change
+no longer rebuilds the board on the spot — a big X spell tapping 25 lands
+used to rebuild it 50 times inside one frame (1.5 s and 430 MB). A UI test
+that calls the engine directly must wait a frame (or call `_refresh()`)
+before reading the screen, and should drive the AI with `_ai_step()`, not
+`_ais[pid].act()`.
+
 **A git worktree has no `assets/`.** `assets/original/` and `assets/cardart/`
 are gitignored, so a worktree or a fresh clone has nothing there, and the
 tests that measure against the real 1997 material fail for a reason that is

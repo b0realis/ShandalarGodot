@@ -8,7 +8,7 @@ const TALISMANS := {"Hematite Talisman": Mtg.ManaColor.R, "Lapis Lazuli Talisman
 static func configure(c: CardData) -> bool:
 	if TALISMANS.has(c.card_name):
 		c.triggered(TriggeredAbility.new(Mtg.EventType.SPELL_CAST, _talisman, "You may pay {3} to untap target permanent.",
-			_colored_spell.bind(int(TALISMANS[c.card_name]))).targeting(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target permanent")))
+			_colored_spell.bind(int(TALISMANS[c.card_name]))).targeting(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target permanent"), _talisman_order))
 		return true
 	match c.card_name:
 		"Arenson's Aura":
@@ -143,6 +143,15 @@ static func _talisman(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var who := int(g.trigger_context(s).controller)
 	var i := g.find_instance(targets[0].instance_id)
 	if EffectBase.unless_paid(g, who, ManaCost.parse("{3}"), "%s: pay {3} to untap %s?" % [s.data.card_name, i.data.card_name], i.tapped and i.controller_id == who): g.untap_permanent(i)
+## The Talisman's target preference (campaign 2026-10-12, b4-5): an untap
+## is worth something only on a tapped permanent of the trigger's
+## controller, the dearest first; anything else after.
+static func _talisman_order(_g: MtgGame, s: CardInstance, a: TargetRef, b: TargetRef) -> bool:
+	return _untap_worth(_g, s, a) > _untap_worth(_g, s, b)
+static func _untap_worth(g: MtgGame, s: CardInstance, ref: TargetRef) -> float:
+	var i := g.find_instance(ref.instance_id)
+	if i == null or not i.tapped or i.controller_id != s.controller_id: return 0.0
+	return Evaluator.permanent_value(i)
 static func _skip_untap(_g: MtgGame, s: CardInstance) -> void: s.cur_skips_untap = true
 static func _golem(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var targets := g.current_targets()
