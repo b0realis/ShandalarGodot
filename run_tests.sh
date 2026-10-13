@@ -460,10 +460,12 @@ reset_packs() {
 # ONE PROCESS: the whole suite, one deal of it, or whatever the command
 # line selects — streamed through tee as it always was, then gated.
 if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
-	reset_packs
+	# A failed reset ended the run here without a word (2026-10-13).
+	reset_packs || { echo "SUITE IS NOT GREEN: the test profile's packs could not be reset (log: $XDG_DATA_HOME/reset-packs.log)." >&2; exit 1; }
 	if [ -n "${SHARD:-}" ]; then
 		selection="-gtest=$(deal "$SHARDS" "$SHARD")" || exit 1
-		echo "Shard $SHARD of $SHARDS: $(printf '%s' "$selection" | tr ',' '\n' | grep -c .) of $script_count scripts."
+		dealt="$(printf '%s' "$selection" | tr ',' '\n' | grep -c .)"
+		echo "Shard $SHARD of $SHARDS: $dealt of $script_count scripts."
 	elif [ "$skin_left_out" -gt 0 ]; then
 		# The one deal of one, so GUT gets the list and not the directory.
 		selection="-gtest=$(deal 1 1)" || exit 1
@@ -499,6 +501,15 @@ if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
 	trap - INT TERM
 	set -e
 	read_gate "$log" "$status" "the run" || exit $?
+	# ONE CI SHARD IS HELD TO ITS DEAL (2026-10-13), as the whole run is
+	# held to the files on disk below: a script GUT never saw did not run.
+	if [ -n "${SHARD:-}" ] && [ "$#" -eq 0 ]; then
+		ran="$(total_of Scripts "$log")"
+		if [ "$ran" != "$dealt" ]; then
+			echo "SUITE IS NOT GREEN: shard $SHARD of $SHARDS was dealt $dealt test scripts, GUT ran ${ran:-none}." >&2
+			exit 1
+		fi
+	fi
 	if [ -z "${SHARD:-}" ] && [ "$#" -eq 0 ]; then
 		ran="$(total_of Scripts "$log")"
 		if [ "$ran" != "$script_count" ]; then
@@ -532,7 +543,9 @@ while [ "$i" -le "$SHARDS" ]; do
 	list="$(deal "$SHARDS" "$i")" || exit 1
 	(
 		export XDG_DATA_HOME="$home"
-		reset_packs
+		# A failed reset says so in THIS run's gut.log; the shard's log
+		# used to be the last run's, and the gate read that (2026-10-13).
+		reset_packs || { echo "SUITE IS NOT GREEN: the test profile's packs could not be reset (log: $home/reset-packs.log)."; exit 1; } >"$home/gut.log" 2>&1
 		exec "$SHANDALAR_TIMEOUT" -k 5 "$SUITE_TIMEOUT" "$GODOT" --headless --path . \
 			--log-file "$home/gut-engine.log" \
 			-s addons/gut/gut_cmdln.gd \

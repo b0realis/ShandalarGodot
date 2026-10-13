@@ -164,8 +164,13 @@ const RULES_REVISION := 3
 ## when the presets disagree about it, as they do about
 ## `damage_effects_fixed_order`.
 ##
-## A file with no fork stored at all is not looked at (the built-in
-## defaults apply, and nothing is written).
+## A file with no fork stored at all is not looked at: the built-in
+## defaults apply and nothing is written now. But the marker goes into
+## memory (repository check 2026-10-13), so the first save carries it.
+## Without it, the first rule a player set on this build was read at the
+## next start as an older build's file, and the migrations above changed
+## it: "Free damage assignment" turned off came back on, and a row left at
+## the player default in an otherwise 1997 mix took the 1997 answer.
 static func _migrate_rules() -> void:
 	var revision := int(coerce(_config.get_value("options", RULES_REVISION_KEY, 1), 1))
 	if revision >= RULES_REVISION:
@@ -176,7 +181,11 @@ static func _migrate_rules() -> void:
 			stored_any = true
 			break
 	if not stored_any:
-		return       # nothing stored: the built-in defaults apply
+		# Nothing stored: the built-in defaults apply. The marker waits in
+		# memory for the next save, so a rule set on this build is never
+		# taken for an older build's.
+		_put(RULES_REVISION_KEY, RULES_REVISION)
+		return
 	if revision < 2:
 		_migrate_free_division()
 	if revision < 3:

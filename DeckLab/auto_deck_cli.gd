@@ -190,7 +190,8 @@ const MANIFEST_COLUMNS: Array[String] = ["file", "index", "seed", "source",
 	"variety", "cards", "land_count", "creature_count", "spell_count",
 	"distinct", "deck_name"]
 
-## The progress shapes, [DeckLab]'s own four (see DeckLab/simulate.gd).
+## The progress shapes: the Deck Lab's own first four (its
+## [constant Lab.PROGRESS_MODES] adds `json`; see DeckLab/simulate.gd).
 const PROGRESS_AUTO := "auto"
 const PROGRESS_BAR := "bar"
 const PROGRESS_LOG := "log"
@@ -202,7 +203,7 @@ const PROGRESS_QUIET_SECONDS := 2.0
 const PROGRESS_LOG_SECONDS := 60.0
 
 ## EVERY FLAG THAT TAKES A VALUE, one line each saying what the value is
-## — the Deck Lab's own contract ([constant DeckLab.FLAG_HINTS]): this
+## — the Deck Lab's own contract ([constant Lab.FLAG_HINTS]): this
 ## table IS the parser's list, so an argument that is not a key here is
 ## an unknown option, and a flag with nothing after it answers its own
 ## question by quoting its line.

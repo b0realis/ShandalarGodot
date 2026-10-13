@@ -3,12 +3,16 @@
 These packages contain the same game as the corresponding desktop release,
 with handheld launchers and instructions. They do not alter rules, decks,
 the card pool or the existing desktop layout. Both plain and original-skin
-variants are available. Card pictures remain separate: copy your own card
-packs into `skin/` beside the executable, or import them through Options.
+variants are available. Card pictures and card packs remain separate: put
+your own `cardart.zip` in `skin/` and the `Pack-*.zip` files in
+`cardpacks/`, both beside the executable (see
+[card-art-and-packs.md](card-art-and-packs.md)); Options → Skin can import
+the card pictures too.
 
 The Steam Deck package has been through three owner playtests; the ArkOS
-package has not been on physical hardware, and the Meta Quest APK below is
-new. This is not a claim of Steam Deck Verified status, membership of the
+package has been run by a tester on an R36 Ultra (2026-10-02, 2026-10-08)
+but is not validated, and the Meta Quest APK has been tried on the owner's
+Quest 3. This is not a claim of Steam Deck Verified status, membership of the
 PortMaster catalogue or a Horizon Store review. The controller pointer
 described below is verified by the test suite's synthetic pad events and,
 on the Deck, by a pad in a hand.
@@ -380,9 +384,10 @@ told to trust this computer — put it on and answer the prompt.
 
    It installs or updates the APK (the game's settings and decks are
    kept), starts the game once when its folders are not there yet so
-   that **the game makes them**, then copies `skin/*.zip` and
-   `cardpacks/` into them **through the headset's Download folder**,
-   one zip at a time with its size checked, and skips any zip the
+   that **the game makes them**, then copies `skin/original_skin.zip`,
+   `skin/cardart.zip` and the card packs in `cardpacks/` into them
+   **through the headset's Download folder**, one zip at a time with
+   its size checked, and skips any zip the
    headset already holds byte for byte. For a clean install from
    nothing — the game, its settings, its decks and its zips deleted
    first, then every step one at a time, with the start recorded at
@@ -522,7 +527,7 @@ the focus), which the file does not.
 **Where the files live.** On Android the game's private `user://` folder
 (`/data/data/com.b0realis.shandalar/files`) holds `settings.cfg`, the
 decks and the tournament checkpoints — the files the game writes — and
-nothing outside the app can write into it. The three folders **you** fill
+nothing outside the app can write into it. The four folders **you** fill
 therefore sit in the app's own corner of the shared storage,
 `/sdcard/Android/data/com.b0realis.shandalar/files/`, where a copy
 made on the headset (`adb shell cp`, see above) writes and the app reads
@@ -530,8 +535,8 @@ without any permission: `cardpacks/`,
 `portraits/`, `music/` and `skin/` under it, the desktop play copy's
 layout one level down. The `cardpacks_folder`, `portraits_folder` and
 `music_folder` keys in `settings.cfg` still move them (`GamePaths`).
-"Forget my zips" in Options empties only the game's private folder and so
-does nothing there: what you pushed is yours to remove with `adb shell rm`.
+Options has no "Forget my zips" on the headset (that button is the browser
+build's): what you pushed is yours to remove with `adb shell rm`.
 Uninstalling the app removes both folders.
 
 The on-screen keyboard opens for a name or a search field. The headset's

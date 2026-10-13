@@ -28,15 +28,18 @@ const OBJECT_COSTS := preload("res://engine/additional_object_costs.gd")
 ##
 ## Scope notes (the full list is docs/ROADMAP.md; card-scoped deviations are
 ## docs/simplified-cards.md, and docs/mechanics.md catalogues what IS
-## implemented): no priority in the cleanup step, the end-step and
-## end-of-combat pools are turn-based actions rather than stacked delayed
-## triggers (the ones that must outlive their source use [member
-## delayed_triggers], which are real ones), and the CR 613 layer passes
-## have no dependency analysis. Every one of them is
-## marked SIMPLIFIED: inline at the exact spot a future implementation
-## replaces. Ante, first strike, regeneration, protection, banding, phasing,
-## poison, copying and multi-blocker combat all DO exist — this comment used
-## to say otherwise, which is why it now names the docs instead.
+## implemented): the end-step and end-of-combat pools are turn-based
+## actions rather than stacked delayed triggers (the ones that must outlive
+## their source use [member delayed_triggers], which are real ones), and
+## the CR 613 layer passes have no GENERAL dependency analysis (layer 4's
+## land-type dependency is resolved in two waves and by
+## [method ContinuousEffects._ordered_readers]). Each has its row in
+## docs/ROADMAP.md and is marked SIMPLIFIED: inline at the exact spot a
+## future implementation replaces. The cleanup step does give priority
+## when CR 514.3a says so ([method _cleanup_triggers]). Ante, first
+## strike, regeneration, protection, banding, phasing, poison, copying and
+## multi-blocker combat all DO exist — this comment used to say otherwise,
+## which is why it now names the docs instead.
 
 # ------------------------------------------------------------------ signals --
 # Presentation hooks. The engine never depends on anyone listening.
@@ -6382,9 +6385,11 @@ func _land_pending_damage() -> void:
 
 ## BACKSTOP: a damage packet must never survive the turn that made it.
 ## Every real path lands one at the next priority (the window opens and
-## closes in [method _open_priority]), but cleanup grants no priority at
-## all and its damage wipe would otherwise erase a packet's victim's
-## marked damage before the packet ever landed. Lands whatever is still
+## closes in [method _open_priority]), but an ordinary cleanup grants no
+## priority (CR 514.3a gives it only when a state-based action or a trigger
+## happens there — [method _cleanup_triggers]) and its damage wipe would
+## otherwise erase a packet's victim's marked damage before the packet
+## ever landed. Lands whatever is still
 ## waiting, redirects included, without opening a window over it — there
 ## is nobody left to answer one.
 func _flush_stranded_damage() -> void:
@@ -9550,7 +9555,7 @@ func can_meet_minimum_blockers(attacker: CardInstance, defender: int,
 
 ## Does [param inst]'s cost modifier apply right now? "Spells cost {1}
 ## less" (Helm of Awakening), Gloom's tax, Derelor's {B} are STATIC
-## abilities, gated as [member ContinuousEffects] gates every other static:
+## abilities, gated as [ContinuousEffects] gates every other static:
 ## only while present (CR 702.26b), not silenced (Titania's Song, CR
 ## 613.1f) and — the 1997 rule (manual p.124,
 ## RulesOptions.tapped_artifacts_stop) — not a tapped noncreature
@@ -14315,6 +14320,12 @@ func _enter_step(index: int) -> void:
 		Mtg.Step.COMBAT_DAMAGE:
 			_combat_damage_step(false)
 		Mtg.Step.COMBAT_END:
+			# SIMPLIFIED (docs/ROADMAP.md, "Delayed effects are turn-based
+			# actions"): the end-of-combat pools here and the end-step pools
+			# below (the dooms, the actions, the tokens) run as the step
+			# begins, not as delayed triggers on the stack (CR 603.7), so
+			# nobody can respond to them.
+			#
 			# The basilisk gaze: condemned creatures die now (CR 511-era
 			# "at end of combat"), before combat state clears.
 			for doomed_id in _end_of_combat_doom:
@@ -17499,6 +17510,12 @@ func _c2o_walk_creature(packet: DamagePacket, inst: CardInstance,
 
 ## Put the player branch's question to the damaged seat. The labels are
 ## the gates' own; the prompt names the damage ([method _c2o_prompt]).
+##
+## SIMPLIFIED (docs/ROADMAP.md, "The damage-order question during combat
+## damage"): a person can be held on this question, and on
+## [method _c2o_ask_creature]'s, only while a spell or ability resolves.
+## Asked from combat damage, a person's seat answers with the hint (the
+## fixed order) and [method record_choice] logs it as decided for them.
 func _c2o_ask_player(packet: DamagePacket, p: MtgPlayer,
 		gates: Array[Dictionary], applied: Array) -> int:
 	var labels: Array[String] = []

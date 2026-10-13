@@ -5,8 +5,14 @@ Portal starter regression: `tests/ui/test_portal_starters.gd` pins the two
 small-library engine behavior and Help fallback with Portal disabled.
 Deck provenance and teaching references: `docs/portal-starters.md`.
 
-Every file in the project and what lives in it. Keep this current: **any PR
-that adds/moves a file updates this map** (the review checklist enforces it).
+Every source, scene, tool and document file in the project and what lives in
+it — in the dated sections below for anything added since 2026-09, and in the
+file tree at the end. Test scripts are mapped with the work that added them;
+not every one has a row of its own, and its header comment says what it pins.
+Keep this current: **any PR that adds/moves a file updates this map**
+(`tools/test_tracked_tree.py` fails on a `.gd`, `.py`, `.sh` or `.tscn` file
+under `engine/`, `game/`, `tools/` or `DeckLab/`, or a root `.sh`, that the
+map does not name, and on a path the map names that is gone).
 
 Conventions: engine classes use `class_name` (globally visible, no imports
 needed); card files have NO class_name (they register by name instead);
@@ -1338,7 +1344,8 @@ and the `BONUS_ANY_LAND` / `BONUS_ENCHANTED_LAND` bonus descriptors;
 - `tests/unit/test_two_lures_2026_09_25.gd`: two Lures attacking together —
   one blocker on each, both on one, a block on a bystander still refused, a
   two-block creature taking both, and the AI declaring instead of
-  conceding (`MtgGame._blocks_lures_to_capacity`, CR 509.1c).
+  conceding (CR 509.1c; since Pack 9 the rule is `must_block_error` in
+  `engine/core/combat_declaration.gd`).
 - `docs/releases/0.40.14.md`: the release note.
 
 ## Sanity over every pack (2026-09-25)
@@ -1834,8 +1841,10 @@ with AI and go over MCP code for bugfix and improvement run!"*
 
 - `game/sgmanalink/table_rules.gd` (`SgTableRules`): THE TABLE RULES — the
   starting life (`MIN_LIFE` 1 … `MAX_LIFE` 400, `DEFAULT_LIFE` 20) and the
-  seven implemented RulesOptions forks (`FORKS` = `RulesOptions.IMPLEMENTED`)
-  as one wire dictionary `{"life", "forks": {key: bool}}`; `standard()`
+  implemented RulesOptions forks (`FORKS` = `RulesOptions.IMPLEMENTED`; seven
+  when this was written, nine since 2026-10-13, and `upgraded` gives a table
+  an older build saved the missing forks' answers from the preset it
+  matches) as one wire dictionary `{"life", "forks": {key: bool}}`; `standard()`
   (20 life under the player default preset — modern rules, mana burn on),
   `from_options`, `valid` (exact fields, an integral life in range, exactly
   the implemented forks each a bool), `normalize` (a private copy, the
@@ -2166,7 +2175,8 @@ with AI and go over MCP code for bugfix and improvement run!"*
 - `tools/package_release.py`: `QUEST_PACKAGE`, `QUEST_PUSH` — the
   `push_to_quest.sh` of the meta-quest package (install, start once so
   the game makes its folders, `chmod 775` a shell-made one, push
-  `skin/*.zip` and `cardpacks/`), `START["meta-quest"]` names it and the
+  `skin/original_skin.zip`, `skin/cardart.zip` and the card packs in
+  `cardpacks/`), `START["meta-quest"]` names it and the
   folder rule. (Since 2026-10-11 the script is the file
   `packaging/handhelds/push_to_quest.sh` and copies through the Download
   folder — see "The Quest's first start" below.)
@@ -2389,8 +2399,10 @@ run finishes from its checkpoint, and a program sits in a seat.
   `_join`, `--dry-run` → `last_plan` as one line, else
   `SgPracticeMatch` + `set_bot` → `_hello` → `_referee_local` → `--log`
   → `_result`). The pipe: `reader`/`writer` Callables (stdin/stdout by
-  default — `OS.read_string_from_stdin` says `""` for an empty line AND
-  for EOF, so `EMPTY_READS` consecutive empties close the pipe), `_emit`,
+  default — `_read_stdin` reads one byte at a time with
+  `OS.read_buffer_from_stdin` through `_read_line_from`, which tells a
+  blank line from the end of the input and drops a line over `LINE_LIMIT`
+  as `OVERLONG_LINE`, since 2026-10-12), `_emit`,
   `_refuse` (the family envelope, `tool: referee`, kept in
   `last_error`), `_next_line` (direct, or through the pump). `_ask`
   numbers a decision, emits it (`_decision`: `options_for` + the view
@@ -2549,6 +2561,26 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.22.md`: the repository check's fixes (SGManalink
+  tables' windows and keys, a new profile's rules, smaller packages, the
+  Help's words) on top of everything in 0.50.21 and 0.50.20.
+- `docs/releases/0.50.21.md`: who orders two effects on the same damage
+  (Options › Rules), forced sacrifices that can wait, help inside the duel,
+  and the robustness round of 0.50.20 that it also carries.
+- `docs/releases/0.50.20.md`: the robustness round (not released on its
+  own) — smoother duels, rules, the computer opponent, the duel screen,
+  menus, decks, files, LAN and the agent tools, handhelds; the record is
+  `docs/robustness-campaign-2026-10-12.md`.
+- `docs/releases/0.50.19.md`: from installing 0.50.18 on a Meta Quest 3 —
+  the first start's card pack check on screen and faster,
+  `push_to_quest.sh` working again.
+- `docs/releases/0.50.18.md`: the short playtest round after 0.50.16 (the
+  title menu's 1997 bullet, the full-screen card's art, the Stronghold and
+  Exodus symbols, ArkOS Select, the opt-in timing log), released with the
+  fix that 0.50.17 waited for.
+- `docs/releases/0.50.17.md`: the same round, not released (its full-screen
+  **Text** button sat over the card's bottom edge on a square or portrait
+  screen without the 1997 art).
 - `docs/releases/0.50.16.md`: the whole-game campaign — 84 findings over
   the rules, mana payment, the computer opponent, the duel table, SGManalink
   protocol 29, the agent's seat and saving.
@@ -3376,7 +3408,10 @@ per-card reveals and is respected by network views and fair observations.
 - `docs/pack-1-mechanics.md`: the four-identity mechanic audit, simplification
   decisions, engine mappings, AI policy, and criteria for future fidelity.
 - `packaging/card_packs/pack_1_dotp_complete/`: Pack 1 manifest, player README,
-  and source records for its four new rules identities.
+  and source records for its four new rules identities —
+  `missing_cards.json`, the Scryfall rows of Chaos Orb, Word of Command,
+  Shahrazad and Falling Star, which `tools/pack_1_dotp_complete.py`
+  (`source_cards`) refuses unless it names exactly the four in `MISSING`.
 - `tools/pack_1_dotp_complete.py`: separate Pack 1 census, Scryfall art fetch,
   deterministic checksum-bearing ZIP build and strict verification. The
   generated artifact is local-only and never included by release packaging; it has
@@ -3700,6 +3735,10 @@ and Elo. `docs/manalink-planning.md` records scope, references and validation.
 that hook to study its own registered list and reset pending plans. The
 existing combat search below remains the specialised/legacy fallback.
 
+The file tree below is the map's oldest part and does not list every file:
+much of what was added since 2026-09 (and most test scripts) is mapped only
+in the dated sections above.
+
 ```
 shandalar/
 ├── project.godot            Godot 4.7 project config; main scene = game/main.tscn
@@ -3758,6 +3797,11 @@ shandalar/
 │                              shard fails the step and still uploads
 ├── .gitignore               Ignores .godot/ cache, *.import, assets/cardart/,
 │                              packs/ (build_card_packs.py --out packs)
+├── DEVELOPMENT.md           The front door for a fresh clone (2026-09-12):
+│                              orientation, the gate, a tour of the folders;
+│                              it points at CONTRIBUTING.md,
+│                              docs/ARCHITECTURE.md and this map rather than
+│                              repeating them
 │
 ├── engine/                  ← THE RULES ENGINE (pure, headless, no Node)
 │   ├── core/                Data model & vocabulary
@@ -4218,11 +4262,15 @@ shandalar/
 │   │                        CR 616.1 for damage aimed at a PLAYER: every
 │   │                        applicable replacement and prevention
 │   │                        collected in the order the fixed chain ran
-│   │                        them, the damaged seat picks which applies
-│   │                        first, the rule put again to what still
-│   │                        applies. One candidate asks nobody; none
-│   │                        skips the walk. The creature branch still
-│   │                        runs a fixed order, pinned by a test.
+│   │                        them; the walk (_c2o_walk_player, and
+│   │                        _c2o_walk_creature over _creature_damage_gates
+│   │                        for a creature) asks the damaged seat or the
+│   │                        creature's controller which applies first
+│   │                        under the modern presets and takes the fixed
+│   │                        order under the 1997 one (RulesOptions.
+│   │                        damage_effects_fixed_order, 0.50.21); the
+│   │                        rule is put again to the modified event. One
+│   │                        candidate asks nobody; none skips the walk.
 │   │                        _freeze_stack / _unfreeze_stack /
 │   │                        _waiting_triggers — triggers raised while a cost
 │   │                        is being paid WAIT and go on the stack ABOVE the
@@ -4252,7 +4300,8 @@ shandalar/
 │   │                          has moved it into the future — Drain Life).
 │   │                          Two halves since §6.8: _plan_damage builds
 │   │                          the DamagePacket, _land_damage runs it
-│   │                          through the eight prevention gates,
+│   │                          through the CR 616.1 gate walks
+│   │                          (_c2o_walk_player / _c2o_walk_creature),
 │   │                          draw_cards, destroy, adjust_life,
 │   │                          sacrifice_permanent, exile_from_graveyard,
 │   │                          doom_at_end_of_combat (basilisk gazes),
@@ -4578,9 +4627,9 @@ shandalar/
 │   │                          that many off a landing packet into a new
 │   │                          one aimed at the seat — landed now, or
 │   │                          queued as Duel.hlp's "second prevention
-│   │                          step" under the window — and
-│   │                          _land_damage_rest (the creature branch's
-│   │                          tail: the remaining gates + marking) takes
+│   │                          step" under the window — and the creature
+│   │                          walk (_c2o_walk_creature: the remaining
+│   │                          gates, then _mark_creature_damage) takes
 │   │                          the rest.
 │   │                          CONTROL: change_control (one permanent) and
 │   │                          exchange_control (CR 701.10 — a PAIR, all or
@@ -6434,18 +6483,6 @@ shandalar/
 │   ├── svg_charts.gd        class SvgCharts — dependency-free SVG charts
 │   │                          (win-rate bars + CI whiskers, turn
 │   │                          histograms, matrix heatmap)
-│   ├── variants/            The 2 decks of OURS, counted apart from the
-│   │                          port (tests/unit/test_decks_1997.gd,
-│   │                          VARIANT_TOTAL): the_deck_playable (the
-│   │                          Disk for Chaos Orb — The Deck as this pool
-│   │                          can play it) and the_deck_serra (two Serra
-│   │                          Angels for two Mishra's Factories), which
-│   │                          since 2026-09-11 says in its own header
-│   │                          that it is a STUDY LIST and not a better
-│   │                          deck: the only playable list holding a
-│   │                          feeder AND a creature, so the only one on
-│   │                          which checks_before_casting's appetite and
-│   │                          the refused holds_the_closer fire at all
 │   ├── elo_ledger.gd        class EloLedger — decks/ratings.txt, the Deck
 │   │                          Lab's running Elo (K=8 per game); read and
 │   │                          written through an absolute on-disk path
@@ -6589,6 +6626,27 @@ shandalar/
 │   │                          lists (2014-18) and two Reanimator lists
 │   │                          that lean on cards outside the pool; one
 │   │                          proxy-free
+│   ├── variants/            The 4 decks of OURS, counted apart from the
+│   │                          port (tests/unit/test_decks_1997.gd,
+│   │                          VARIANT_TOTAL): the_deck_playable (the
+│   │                          Disk for Chaos Orb — The Deck as this pool
+│   │                          can play it), the_deck_serra (two Serra
+│   │                          Angels for two Mishra's Factories), which
+│   │                          since 2026-09-11 says in its own header
+│   │                          that it is a STUDY LIST and not a better
+│   │                          deck: the only playable list holding a
+│   │                          feeder AND a creature, so the only one on
+│   │                          which checks_before_casting's appetite and
+│   │                          the refused holds_the_closer fire at all;
+│   │                          and portal_starter_a_40 / portal_starter_b_40,
+│   │                          the 40-card adaptations of Portal's two
+│   │                          starters (2026-09-24, docs/portal-starters.md)
+│   ├── portal/              Portal's 2 unmodified 35-card starters
+│   │                          (PORTAL_TOTAL; docs/portal-starters.md)
+│   ├── portal_second_age/   Portal Second Age's 7 archived originals: five
+│   │                          40-card theme decks and the two unmodified
+│   │                          30-card starters (SECOND_AGE_TOTAL;
+│   │                          docs/portal-second-age-decks.md)
 │   └── ratings.txt          The Deck Lab's Elo ledger (DeckLab/elo_ledger.gd)
 ├── sim_results/             Deck Lab output, run_<stamp>/ per run; not
 │                              source. Carries a .gdignore (and the tool
@@ -6597,7 +6655,10 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 6789 tests / 264 578 asserts, ~399 s
+├── tests/                   GUT suite — 861 scripts, 13,379 tests /
+│                              580,913 asserts (the 0.50.21 gate). Files
+│                              added since 2026-09 are mapped in the dated
+│                              sections at the top of this file, not here
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -9850,7 +9911,7 @@ shandalar/
 │   │                          adds PACK_DIR (`res://skin`) after the
 │   │                          player's folder and the loose portable copy
 │   │                          while `pack_mounted` is true — the one flag
-│   │                          SkinPack raises; _locate() keeps `res://`
+│   │                          SkinPack raises; locate() keeps `res://`
 │   │                          paths as they are (globalize_path on a pack
 │   │                          path names a folder that does not exist);
 │   │                          clear_caches() is what a pack arriving
@@ -10207,7 +10268,8 @@ shandalar/
 │   │   │                      a layer of its own (210/209), and both ways
 │   │   │                      out walk `_confirm_discard_all`; and this
 │   │   │                      screen's own SFX/music boxes on that menu
-│   │   │                      (see deck_audio.gd). `_slab_line` letters it
+│   │   │                      (see deck_audio.gd). `_dress_slab` (behind
+│   │   │                      `_slab_button` and `_slab_switch`) letters it
 │   │   │                      in UiChrome.INK on its pale seat, ACCENT
 │   │   │                      under the pointer, and `_menu_heading` puts
 │   │   │                      the title in the BODY because
@@ -11453,7 +11515,12 @@ shandalar/
 │       │                      offer rather than shortening its menu.
 │       │                      `build()` fills a PopupMenu, turning a row
 │       │                      with a `toggle` key into a check item over
-│       │                      DuelOptions.MENU_TOGGLES
+│       │                      DuelOptions.MENU_TOGGLES. Since 2026-10-13:
+│       │                      @MENU_GRAVEYARD (GRAVEYARD, opened on the
+│       │                      graveyard and exile plates), every table's
+│       │                      `Help...` live (HELP, HELP_CARD, help_id),
+│       │                      opening DuelMiniHelp — see "The duel's mini
+│       │                      help (2026-10-13)" above
 │       ├── fireball_dialog.gd class FireballDialog — @DIALOG_FIREBALL
 │       │                      (UIStrings.txt:657), the X dialog, named
 │       │                      after the card that needs all seven of its
@@ -11753,6 +11820,16 @@ shandalar/
     ├── ARCHITECTURE.md      Design decisions & layer model — READ FIRST
     ├── CODE_MAP.md          This file
     ├── adding-cards.md      The card-authoring pipeline + checklist
+    ├── adventure-implementation-notes.md  Living notes for the adventure
+    │                          mode (M5, 2026-10-04 on; nothing built):
+    │                          the overworld, towns, enemies, dungeons,
+    │                          castles, world magics and Arzakon, with
+    │                          sources and a log at the bottom
+    ├── world-builder-adventure-notes.md  Its companion: how the 1997 game
+    │                          generated a fresh world for every new game
+    │                          (research notes, not a plan)
+    ├── deck-lab.md          A "Moved." stub kept so old links still land:
+    │                          the Deck Lab's manual is DeckLab/README.md
     ├── audit-vs-mage-go.md  Scrutiny audit vs the mage-go reference:
     │                          per-card/system discrepancy table, what was
     │                          fixed, what's deferred, where mage-go itself
@@ -11931,3 +12008,56 @@ the game): `../s30/` (Go remake), `../shandalar-src/` (Manalink snapshot),
 tools/build_card_packs.py: one .tar.gz per downloaded set plus the
 dotp-1997 purist bundle, index.json and a Scryfall cache — outside res://
 so Godot never imports it, outside git because it carries Scryfall art).
+
+## The repository check (2026-10-13)
+
+The files added by the whole-repository check of code, scripts and docs;
+each behaviour fix is pinned by its own test. The record is
+`docs/repository-check-2026-10-13.md` (what the four read-only checks
+found, what was fixed, what was left and why).
+
+<!-- repo check 2026-10-13 fx-scripts: packaging and shell tests -->
+- `tools/test_c3_fx_scripts_export_filter.py`: every preset in
+  `export_presets.cfg.example` keeps `branding/` (the README screenshots and
+  the logo master) and `tests/`, `tools/`, `docs/`, `addons/`, `assets/` out
+  of the .pck; nothing the game runs loads `res://branding`.
+- `tools/test_c3_fx_scripts_shell.py`: the shell fixes, run with a stand-in
+  Godot, adb or SDK — `build_release.sh --quest` with no Java settings and no
+  SDK, `--help` from any folder (`shandalar.sh`, `build_release.sh`,
+  `tools/lan_smoke.sh`, the packaged door), long `find` lists under pipefail,
+  the skin zip searched for the home folder, a trailing `--out`/`--preset`, a
+  Ctrl-C reaching the duel soak's Godot, `run_tests.sh`'s failed pack reset
+  and one CI shard held to its deal, the Quest log's line count, and
+  `tools/runtime.sh` choosing a Godot on a Mac.
+<!-- end repo check 2026-10-13 fx-scripts -->
+
+<!-- repo check 2026-10-13 fx-code: behaviour fixes -->
+- `tests/ui/test_c3_fx_code_minihelp_on_top.gd`: the mini help at an
+  SGManalink table, where the duel goes on under it. A question for this seat
+  closes it and is in front at once; a click on its way to Close answers
+  nothing, and once the question has settled a click answers it. The other
+  seat's question leaves the help up; revealed cards, the End of Duel window
+  or anything else added goes under it, and Close is still the panel's; the
+  Pause window closes it.
+- `tests/ui/test_c3_fx_code_table_escape.gd`: one Escape at a table inside the
+  lobby opens the Pause window and leaves it open; over the mini help it
+  closes only the help.
+- `tests/ui/test_c3_fx_code_table_overlays.gd`: at an SGManalink table a
+  question arriving under the Pause window waits behind it (its buttons still
+  work, a click on it never answers the question, which answers once the
+  pause closes); revealed cards and the End of Duel window go under it, a
+  window drawn over it stays over it. Under a tournament organiser's Master
+  Panel no key reaches the table: Escape only closes the panel, leaving a
+  begun cast alone, and the pause and log keys open nothing behind it.
+- `tests/ui/test_c3_fx_code_lobby_selection.gd`: the Game Browser's
+  mismatched-invitation notice names Stop LAN search, which clears the
+  selected host; a search the lobby stops by itself drops the selection too.
+- `tests/unit/test_c3_fx_code_rules_marker.gd`: a rule set on a fresh profile
+  (a settings file with no rule stored, or no file at all) stays at the next
+  start, a row-by-row 1997 mix stays Custom, the start itself writes nothing,
+  and an older build's file is still migrated.
+- `tests/unit/test_c3_fx_code_help_words.gd`: Help names the key bound to
+  Cancel on the targeting cursor (or the Situation Bar's Cancel button), the
+  packs as the Card Packs screen names them, and both of the life register's
+  flip entries.
+<!-- end repo check 2026-10-13 fx-code -->

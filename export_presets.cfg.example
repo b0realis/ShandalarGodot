@@ -34,8 +34,13 @@
 ; never through the import pipeline, so shipping them in the .pck would
 ; be dead weight — and the original art is the player's own copy of the
 ; 1997 game, which this project never redistributes (GameSkin's class doc).
+; branding/ is excluded too (2026-10-13): its README screenshots show the
+; optional 1997 skin with card art on it and logo.png is the 1.5 MB master,
+; about 4 MB of every pack until then. Nothing the game runs loads
+; res://branding — the window icon and the boot splash live in game/.
+; tools/test_c3_fx_scripts_export_filter.py pins this list for every preset.
 ;
-; Included by hand: `*.deck` (the 317 shipped decks — DeckStore lists
+; Included by hand: `*.deck` (the 330 shipped decks — DeckStore lists
 ; `res://decks` at runtime) and `*.txt` (`cards/data/dck_ids.txt`). Godot
 ; treats neither extension as a resource, so without this line the
 ; exported game has no decks at all. The JSON includes retain the trusted
@@ -70,7 +75,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/linux64/Shandalar.x86_64"
 patches=PackedStringArray()
 encryption_include_filters=""
@@ -112,7 +117,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/web/index.html"
 patches=PackedStringArray()
 encryption_include_filters=""
@@ -158,7 +163,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/macos/Shandalar.app"
 script_export_mode=2
 
@@ -185,7 +190,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/windows64/Shandalar.exe"
 script_export_mode=2
 
@@ -215,7 +220,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/macos-arm64/Shandalar.app"
 script_export_mode=2
 
@@ -244,7 +249,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/macos-intel/Shandalar.app"
 script_export_mode=2
 
@@ -273,7 +278,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/raspberry-pi5-arm64/Shandalar.arm64"
 script_export_mode=2
 
@@ -315,7 +320,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/quest/Shandalar.apk"
 patches=PackedStringArray()
 encryption_include_filters=""
@@ -393,7 +398,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*, branding/*"
 export_path="../shandalar-build/web-threaded/index.html"
 script_export_mode=2
 

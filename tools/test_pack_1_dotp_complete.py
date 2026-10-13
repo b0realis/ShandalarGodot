@@ -8,6 +8,7 @@ import json
 import unittest.mock
 import shutil
 import unittest
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -102,7 +103,10 @@ class PackOneTests(unittest.TestCase):
             forged = Path(tmp) / "forged" / pack.FILE_NAME
             forged.parent.mkdir()
             target = pack.PREFIX + "cards.json"
-            with zipfile.ZipFile(forged, "w") as out:
+            # The duplicate is the point; zipfile's "Duplicate name" warning
+            # is not news in every gate log (packs 2-5 quiet it the same way).
+            with warnings.catch_warnings(), zipfile.ZipFile(forged, "w") as out:
+                warnings.simplefilter("ignore", UserWarning)
                 for name, payload in entries:
                     if name == target:
                         pack.write_entry(out, name, b'[{"name": "Evil", "set": "2ed"}]')

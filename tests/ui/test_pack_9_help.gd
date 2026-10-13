@@ -177,7 +177,8 @@ func test_the_table_page_says_where_the_licid_and_curse_payments_are() -> void:
 
 func test_the_pack_entry_points_at_the_abilities_pages() -> void:
 	var text := HelpPages.all_text()
-	assert_string_contains(text, "Pack 9 · The Tempest Block brings Tempest, Stronghold and Exodus")
+	# "Pack 9:" as the Card Packs screen names it (repository check 2026-10-13, d1-26).
+	assert_string_contains(text, "Pack 9: The Tempest Block brings Tempest, Stronghold and Exodus")
 	assert_string_contains(text, "The Abilities pages at the end of this Help explain shadow, buyback, licids, Slivers, Spikes")
 
 

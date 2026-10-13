@@ -1,6 +1,6 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.21**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.22**. A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -27,7 +27,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.21 development builds** and enabled packs on both computers. The older
+Use matching **0.50.22 development builds** and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -105,9 +105,10 @@ count. Life-X, such as Fire Covenant, starts at zero and must be chosen manually
 double-click never chooses a life payment for you.
 
 Pack enabling/disabling and rescanning are locked while hosting, connected or
-waiting to reconnect. Close/forget connections and stop hosting before changing
-the catalogue. A deck needing a disabled pack explains this lock; it can still
-be loaded as proxies. Deck Builder's cosmetic source filters remain available.
+waiting to reconnect. Disconnect (**Overview → Disconnect**, which also stops
+hosting) before changing the catalogue. A deck needing a disabled pack
+explains this lock; it can still be loaded as proxies. Deck Builder's
+cosmetic source filters remain available.
 
 The normal **L** duel log now shows a filtered online history. It records public
 actions and information your seat was allowed to see, including private looks;
@@ -137,7 +138,8 @@ again generates new credentials. Names are not globally reserved.
 
 All shipped and locally saved decks whose cards are implemented can be selected.
 The host accepts names from the complete registered card pool, not scripts,
-resources or paths from another computer. Main decks contain **40–250 cards**;
+resources or paths from another computer. Main decks contain **8–250 cards**
+in a duel room (40 is advised; LAN tournaments require at least 40);
 sideboards may contain up to 250 and can be reviewed but are not used in this
 single-duel format. Build and save a custom list in the existing Deck Builder
 before opening SGManalink. No selection leaves the explicitly named 40-card
@@ -145,8 +147,9 @@ Forest practice deck as a fallback, not a card-pool restriction.
 
 Room decks are **Unrestricted**. The host chooses the table's starting life
 (1–400) and its rules forks under **RULES → Table rules…** on the Host Game
-page — the Options screen's presets or any custom mix of the seven implemented
-forks — and the choice is remembered on that computer for the next table. The
+page — the Options screen's presets or any custom mix of the implemented
+forks (all nine at 0.50.21) — and the choice is remembered on that computer
+for the next table. The
 standard table is 20 life under modern rules with mana burn on and free
 combat-damage assignment; the Game Browser's row, the waiting room and the
 opening card name the table's rules. The referee flips the coin; its winner
@@ -221,10 +224,14 @@ representative mechanic tests are not an exhaustive online playtest of every car
   seconds. Each host replies directly to the querying computer; there is
   no shared directory. Listings expire after seven seconds without replies.
 - Listings contain a temporary host name, address, game port, public
-  certificate fingerprint, open-room count and, when present, tournament name.
-  They contain no invitations,
-  access/resume secrets, private keys, hands or decks. Discovery is not an
-  identity guarantee; the separately shared invitation pins the TLS host.
+  certificate fingerprint, open-room count, build and compatibility stamp,
+  access (open or invitation only), each table's name, deck rule and rules,
+  and, when present, the tournament name. An open host's listing also
+  carries its invitation, so anyone on the network can join; an
+  invitation-only listing never carries the invitation, its secret or the
+  certificate. No listing carries resume secrets, private keys, hands or
+  decks. Discovery is not an identity guarantee; an invitation pins the TLS
+  host it names.
 - Default gameplay port: **TCP 17897**, or the port selected by the host.
   Allow the game on both computers' **private/local network** when the operating
   system asks. Do not disable the firewall or open router/Internet ports.
@@ -237,9 +244,10 @@ representative mechanic tests are not an exhaustive online playtest of every car
   listener; the UI reports this and direct invitations still work. Only
   one advertising service per computer is supported in this milestone.
 - If a selected discovery result does not match an invitation's address,
-  port and certificate fingerprint, joining is refused. **Clear selection**
-  to deliberately join the pasted invitation instead. If the host restarted,
-  request its new invitation.
+  port and certificate fingerprint, joining is refused. Choose **Stop LAN
+  search** (it also clears the selected listing) to deliberately join the
+  pasted invitation instead. If the host restarted, request its new
+  invitation.
 - Use a currently assigned private IPv4 address. IPv6, public IPs,
   hostnames/DNS and Internet NAT traversal are outside this milestone.
   Private-address checks are a scope restriction, not a substitute for a
@@ -260,10 +268,11 @@ an important playtest even after automated local-socket tests pass.
 
 ## Same-computer fallback
 
-For an isolated two-window check, **Host Game -> Same-computer testing ->
-Start local service** retains the original loopback path. Use **Host a duel**
-to create its room. Copy its access code and port into the other window's
-**Game Browser -> Same-computer testing**, using the **Local test port**, and Connect.
+For an isolated two-window check, **Host Game -> Network settings… ->
+Same-computer testing -> Start local service** retains the original loopback
+path. Use **Host a duel** to create its room. Copy its access code and port
+into the other window's **Game Browser -> Join by invitation… ->
+Same-computer testing**, using the **Local test port**, and Connect.
 This path uses plain `ws://` only on `127.0.0.1`, does
 not advertise and cannot connect to another computer. LAN invitations
 always use encrypted `wss://`; they never fall back to plain WebSocket.
@@ -311,8 +320,9 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   bounded JSON nesting, arrays, bytes, command queues and acknowledgements;
   32 KiB commands, 2 MiB views and a 512-card limit per transmitted collection
   (legal-block adjacency is bounded separately by rows and columns);
-  handshake deadline and message rate limits. Discovery has a 64-host cache,
-  768-byte packet ceiling and at most sixteen replies per second per host.
+  handshake deadline and message rate limits. Discovery has a 64-host cache
+  (at most four hosts per address), a 16 KiB advert ceiling, reads queries
+  only up to 512 bytes and sends at most sixteen replies per second per host.
   An oversized command is rejected locally with an explanation before it
   consumes a sequence or enters the retry queue; limits apply after encoding.
 - Server commands and host-to-client DTOs are validated before use. No
@@ -320,8 +330,9 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   dispatch. Duplicate/contradictory card locations, absent combat-card references
   and unknown keyword values are rejected before replacing the client view.
   Seat authorization comes from the connection, not a player
-  number submitted by the client. The data protocol is version 27 from 0.50.12 (all players
-  need this updated build, including the table's rules, its deck rule and assigned deck,
+  number submitted by the client. The data protocol is version 29 since
+  0.50.16 (28 came with 0.50.15, 27 with 0.50.12; all players need this
+  updated build, including the table's rules, its deck rule and assigned deck,
   the open host's published invitation, viewer-specific exile-play permissions,
   public hack-effect reminders, live ability badges, the protection-from-
   artifacts badge, each face's printed power/toughness, the turn's
@@ -337,17 +348,22 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   those taxes travel as one row per imposing tax — the attackers it
   protects and the blockers that owe it — where 26's row per blocker ×
   attacker × tax outgrew the view's bound on a big board and cut the
-  defender off; a view that fails the host's own check is never sent, the
-  seat is told why);
-  the invitation keeps the `sglan1:` envelope prefix and carries the same
-  protocol-22 compatibility check inside it. A handshake fingerprint additionally
+  defender off; since 28, the Tempest block's block requirements, the
+  seat's special actions as rows (`special_rows`), attack companions and
+  target counts an earlier target sets; since 29, the board card each
+  choice line stands for (`choice.cards`); a view that fails the host's own
+  check is never sent, the seat is told why);
+  the invitation keeps the `sglan1:` envelope prefix and carries the
+  protocol version inside it, so an invitation from another version is
+  named before connecting. A handshake fingerprint additionally
   checks the release version, maintained rules revision and printed card catalogue,
   and a readable stamp `{game, rules, packs}` travels beside it in the hello and
   in every LAN advert, so a refusal — and the game browser's BUILD column — can
   say which of the three differs instead of "incompatible build".
   It detects incompatible builds, not modified-client cheating or player identity.
   Enable the same gameplay packs before connecting. Hosting, connecting and
-  resumable sessions lock pack changes/rescans until Stop/Forget; ordinary Deck
+  resumable sessions lock pack changes/rescans until **Overview →
+  Disconnect**; ordinary Deck
   Builder source filters do not change the active catalogue. A new connection
   fingerprints the current pool, including enabled packs. See the
   [integration audit](packs-sgmanalink-integration.md).

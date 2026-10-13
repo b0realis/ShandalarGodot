@@ -288,6 +288,9 @@ class InvitationTest(Base):
 
     def test_a_kept_join_writes_no_secret_to_its_record(self):
         state = self.server.call("referee_join", {"invitation": SECRET, "deck": "a.deck", "timeout": 0.5})
+        # A kept referee outlives the server by design (shutdown detaches
+        # it), so the test stops the stand-in door itself.
+        self.addCleanup(mcp.stop_tree, self.server.games[state["game"]].proc)
         record = self.door_log()[0]
         self.assertEqual(record["invitation"], SECRET)
         self.assertNotIn(SECRET, json.dumps(record["argv"]))

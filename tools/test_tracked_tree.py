@@ -115,7 +115,7 @@ class CodeMapTest(unittest.TestCase):
                    and not self.mentioned(name)]
         self.assertEqual(missing, [], "add a docs/CODE_MAP.md row for these")
 
-    def test_the_four_shell_entry_points_have_a_row(self):
+    def test_the_root_shell_entry_points_have_a_row(self):
         missing = [name for name in self.tracked
                    if "/" not in name and name.endswith(".sh")
                    and not self.mentioned(name)]

@@ -1,6 +1,6 @@
 # LAN tournaments
 
-Development implementation on `main`, **0.50.21** (protocol **29**). Internet play, permanent accounts,
+Development implementation on `main`, **0.50.22** (protocol **29**). Internet play, permanent accounts,
 MElo and tournament-integrated drafting are parked. A separate
 [timed draft builder](booster-draft.md) is available for local practice.
 Windows, Linux and macOS use the existing LAN
@@ -133,7 +133,8 @@ ready; previously recorded wins remain. There is no seamless host migration.
 Save failure suspends tournament advancement. The organiser reads the storage
 instruction they can act on; every other hall says that play resumes when the
 organiser retries the save and that recorded scores are kept.
-The organiser's own **Forget** empties the organiser's chair, not the event:
+An organiser session that is let go (its client abandons it rather than
+reconnecting) empties the organiser's chair, not the event:
 the resume code goes with the session, but an event in registration or under
 way keeps running at its tables and its checkpoint stays current. The host's
 own lobby takes the chair back with the seat it holds next, without a table
@@ -145,7 +146,7 @@ same table, same hands, same controls. Only a host restart goes through the
 checkpoint and the recovery codes below.
 Recovery requires a matching build and the same enabled gameplay packs. Earlier
 development checkpoints remain untouched but are not migrated across a changed
-build fingerprint. Use matching 0.50.21 builds and enabled packs for recovery.
+build fingerprint. Use matching 0.50.22 builds and enabled packs for recovery.
 Computer entries retain their settings and are recreated without recovery codes.
 
 **Tournament setup → Save folder** offers a typed path, **Browse…** and
@@ -163,7 +164,7 @@ application cannot reclaim an entry by matching its nickname.
 
 ## Play on a LAN
 
-1. Use matching builds (0.50.21 uses protocol 29) and enabled card packs. Open the globe, choose a
+1. Use matching builds (0.50.22 uses protocol 29) and enabled card packs. Open the globe, choose a
    temporary name, and check the LAN address/port under **Host Game →
    Network settings…** if the computer has several adapters.
 2. Open **Tournament**. Name the event, choose 2–40 maximum entrants and a

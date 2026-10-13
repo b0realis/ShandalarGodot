@@ -61,7 +61,7 @@ replace this allowlist with a recursive copy of a local decks directory.
 The packager rejects missing, duplicate, hidden, traversing or linked entries.
 Verify listing and reading in the extracted package, then check and play a
 returned deck path with the packaged engine.
-The seven numbered-pack builders and their Python dependencies are bundled,
+The numbered-pack builders and their Python dependencies are bundled,
 alongside explicitly allowlisted `cards/data/` and `packaging/card_packs/`
 metadata. Pack 1's base assignments are generated from the source registry
 at packaging time, avoiding a dependency on the checkout's card scripts.
@@ -75,8 +75,8 @@ pictures. Validate the supplied skin with `tools/skin_catalogue.py --check`.
 
 The seven-target local matrix consists of fourteen game ZIPs, the same
 `original_skin.zip` as a separate download, and `SHA256SUMS` covering those
-fifteen assets. Adding both handheld targets below brings this to eighteen game
-ZIPs plus the separate skin (nineteen ZIPs). Keep a local verification report separate from the game
+fifteen assets. Each handheld target below adds two more game ZIPs (plain
+and skin). Keep a local verification report separate from the game
 archives, describing native versus cross-export checks. The web game fetches
 the bundled skin ZIP from its server on first load; manual import also works.
 The Pi launcher selects OpenGL ES 3 and caps rendering at 60 FPS; this is not

@@ -113,7 +113,7 @@ func update_tables(tables: Array) -> void:
 		rows.pop_back()
 
 
-## The byte count of this advert's reply to a query, as [method poll] sends it.
+## The byte count of this advert's reply to a query, as [method pump] sends it.
 func reply_size() -> int:
 	return SgProtocol.encode({"v": SgProtocol.VERSION, "type": "sg-lan-host",
 		"nonce": "0".repeat(64), "host": _advert}).length()

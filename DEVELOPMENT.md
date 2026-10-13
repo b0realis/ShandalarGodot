@@ -18,9 +18,10 @@ When changing computer play or card-choice hints, read
 [`docs/fair-play.md`](docs/fair-play.md) first. Fair-information access is a
 hard rule, including evaluation, search and caches—not just the visible UI.
 
-Everything here was verified against the tree on **2026-09-12** (version
-`0.20.0-dev`). Numbers that are somebody else's measurement carry the date
-they were measured.
+This guide was first checked against the tree on **2026-09-12** (version
+`0.20.0-dev`) and corrected against it on **2026-10-13** (version `0.50.21`).
+A number that is a measurement carries the date it was taken; for what the
+tree holds today, `docs/CODE_MAP.md` is the census.
 
 ---
 
@@ -32,17 +33,17 @@ remake with a **fidelity standard**, and that standard is the thing that makes
 this codebase unusual to work in.
 
 **Port, don't invent.** Where the 1997 game made a decision, that decision
-wins, and its own files are the authority. `Provenance.md` (674 lines, repo
-root) is the register: three tiers of source, which outranks which, and the
-traps in reading each one. Read it before you cite anything. A behaviour
-carries a marker at the site saying where it came from — measured today:
+wins, and its own files are the authority. `Provenance.md` (repo root) is
+the register: three tiers of source, which outranks which, and the traps in
+reading each one. Read it before you cite anything. A behaviour carries a
+marker at the site saying where it came from — measured on 2026-10-13:
 
 | Marker | Sites | Means |
 |---|---|---|
 | `[1997]` | 18 | the original did this, and the source is named |
-| `[QoL]` | 285 | ours, a modern convenience, deliberately labelled |
+| `[QoL]` | 368 | ours, a modern convenience, deliberately labelled |
 | `[s30]` | 9 | taken from the 30th-anniversary remake, which the 1997 game did not have |
-| `[forge]` | 18 | a mechanism read out of Forge's AI, naming file, lines and commit |
+| `[forge]` | 20 | a mechanism read out of Forge's AI, naming file, lines and commit |
 
 (`grep -rn '\[QoL\]' engine/ game/ cards/ | wc -l` and friends.) `[QoL]` is by
 far the largest because the rule is that every convenience is labelled, not
@@ -53,19 +54,22 @@ is part of the citation and not an afterthought.
 **Every shortcut is written down.** A rules simplification carries the word
 `SIMPLIFIED` in caps at the exact site *and* a row in a ledger:
 `docs/simplified-cards.md` for a card-scoped one, `docs/ROADMAP.md` for an
-engine-wide one. Today: **three card files** carry the marker
-(`grep -rlw SIMPLIFIED cards/sets/`) against two live ledger rows, and **four
-engine files** carry engine-wide ones. `tests/test_simplified_ledger.gd` pins
+engine-wide one. `grep -rlw SIMPLIFIED cards/sets/` lists the card files that
+carry the marker and `grep -rlw SIMPLIFIED engine/` the engine files that
+carry engine-wide ones. `tests/test_simplified_ledger.gd` pins
 marker and ledger to each other in three directions — a marked file nobody
 wrote down, a row that outlived its marker, and (since 2026-09-11) an
 `engine/` marker that names no doc. Lifting a simplification means deleting
 the marker, deleting the row, and pinning the full behaviour with a test.
 
 **Where the 1997 rules and modern Magic genuinely disagree, it is a switch,
-not a default.** `engine/rules_options.gd` holds all seven forks (mana burn,
-revocable attackers, ...), each with the manual page that establishes the 1997
-answer; all seven are implemented, and every one defaults to the modern
-answer.
+not a default.** `engine/rules_options.gd` holds every fork (mana burn,
+revocable attackers, ..., the fixed order for damage effects, forced
+sacrifices waiting on the chain), each with the manual page or CR rule that
+establishes its answer; `RulesOptions.IMPLEMENTED` lists the ones that are
+live, which is all of them today. Every fork defaults to the modern answer
+except `sacrifice_clauses_wait`, which every preset keeps at the 1997 answer
+(the owner's ruling of 2026-10-13).
 
 ---
 
@@ -105,9 +109,11 @@ Keep shared game code portable and isolate platform-specific integration.
 Other Godot export options should remain possible too.
 
 A green run on one target does not certify the others: Web needs browser
-verification as well as a successful export. The tracked example currently
-contains Linux, Web and macOS presets; Windows preset setup and native
-build/runtime verification remain separate work, not something the macOS
+verification as well as a successful export. The tracked
+`export_presets.cfg.example` holds a preset for every target
+`docs/release-builds.md` builds (Linux 64, Windows 64, the three macOS
+presets, Raspberry Pi 5 ARM64, Android Quest, Web and Web Threaded); native
+Windows runtime verification remains separate work, not something the macOS
 gate proves.
 
 ### The gate
@@ -134,13 +140,13 @@ Actions for every push to `main` and every pull request
 (`.github/workflows/gate.yml`: the official 4.7.2 Linux binary, pinned by
 checksum, four shards plus the Python tests and the boot smoke) — the
 runners hold no card art and upload only logs. Without the imported 1997
-skin (`assets/original`, see `tools/import_original.py`) the seventeen
-scripts that pin that look are left out by name and counted as such —
-the log's first lines list them and its last line says "(17 left out: no
-1997 skin)". A fresh clone is therefore green at 462 scripts; the whole
-479 need the skin, and a script that needs it must say so on its first
-doc line (`## Needs the imported 1997 skin`) or it goes red where there
-is none.
+skin (`assets/original`, see `tools/import_original.py`) the scripts that
+pin that look are left out by name and counted as such — the log's first
+lines list them and its last line says how many ("(17 left out: no 1997
+skin)" on 2026-10-13, when 850 of the 867 scripts ran without it). A fresh
+clone is therefore green without them; the whole suite needs the skin, and
+a script that needs it must say so on its first doc line (`## Needs the
+imported 1997 skin`) or it goes red where there is none.
 
 Measured counts and timings live in the dated verification records rather
 than another counter here: `docs/decklab-audit-2026-09-13.md` for the latest
@@ -189,7 +195,8 @@ soak. The suite drives one widget at a time and cannot see what the soak
 catches. It passes only on `SOAK done` with no
 `ERROR`/`WARNING`/`STALL` line — exit 2 means a duel stood still or never
 started (a stuck prompt, which is what it exists to catch), 3 a bad argument,
-124 the whole-run guard, 1 a stray line Godot printed. Its header has the
+124 the whole-run guard (137 if Godot had to be killed), 130 a Ctrl-C, 1 a
+stray line Godot printed. Its header has the
 rest.
 
 ### Where `user://` goes
@@ -216,9 +223,10 @@ geometry, and nothing is unreachable. The *suite* is a different matter: a
 handful of UI tests measure against the real 1997 files and fail if they are
 absent — see §6 before you read a red suite as your fault.
 
-`README.md`'s "The art, and how to reconstruct it" is the complete recipe
-(`tools/mtg_assets.py` reads your own copy of the 1997 game and writes a skin
-zip; `tools/fetch_card_art.py` fetches card art from Scryfall).
+`README.md`'s "Art and skins" and `docs/card-art-and-packs.md` are the
+complete recipe (`tools/mtg_assets.py` reads your own copy of the 1997
+game and writes a skin zip; `tools/fetch_card_art.py` fetches card art from
+Scryfall).
 `docs/player-files.md` maps every path the built game reads or writes, and
 `docs/skin-catalogue.txt` lists every picture, font, sound and tune a skin has
 to contain, so one can be drawn from scratch.
@@ -229,17 +237,17 @@ to contain, so one can be drawn from scratch.
 
 | Folder | What is in it | May depend on | Why the boundary |
 |---|---|---|---|
-| `engine/` | The MTG rules engine. 71 `.gd` files: `core/` (data model and the shared enum vocabulary), `effects/`, `abilities/`, `ai/`, and `mtg_game.gd` — the orchestrator and the single mutation surface | nothing but itself | See below. This is the load-bearing boundary of the project |
-| `cards/` | `sets/<set>/` — **897 default card files, one card per file**, filename = snake_case card name, no `class_name`; `optional/pack_1/` — four dormant digital adaptations gated by validated Pack 1 metadata; `data/` — the Scryfall-derived JSON the files were generated from, plus the 1997 `.dck` id table; `todo/` — eight set folders, empty *on purpose* and held in git by a `.gitkeep` that says why | `engine/` only | A card is data plus composed behaviour objects. Pack 1 does not load scripts from its ZIP: trusted optional implementations ship dormant and the registry activates them only while that exact pack is enabled |
-| `game/` | The Godot presentation layer. 83 `.gd`, 8 `.tscn`: `duel/` (49 files — the duel screen, its widgets, and the gauntlet), `deck_builder/`, `help/`, `input/` (the touch layer), plus the title screen, options, skin loading and `paths.gd` | `engine/`, `cards/` | Everything that knows what a Node is lives here |
-| `decks/` | **319 `.deck` files**: five starters at the root, then one subfolder per provenance group — `1997/` (157), `tournament/` (76), `community/` (64), `extended_community/` (15), `variants/` (2, ours) — plus `ratings.txt`, the Deck Lab's committed Elo ledger | data only | `docs/decks-1997.md` carries the provenance of every group, pinned by `tests/unit/test_decks_1997.gd` |
-| `tests/` | GUT suite: 353 test scripts under `unit/` (73), `cards/` (116), `ui/` (91), `ai/` (70), `tools/` (2), plus `game_test.gd` — the `GameTest` harness DSL — and `test_simplified_ledger.gd` at the root | everything | Setup helpers may bend the rules; the action under test goes through the real public API |
-| `tools/` | Pipelines, Python 3 stdlib only: 13 `.py` (seven tools, five unittest files, the shared banner) and 6 `.gd` (SceneTree scripts — the soak player, two benches, the deck-format converter, the art generator, the screenshot tour) | — | Run *at* the repo, not *by* the game: the export preset excludes `tools/*` from the `.pck` outright. Four of them (plus the shared banner) are copied *beside* a packaged game, so a player can build their own art from their own copy of 1997 |
+| `engine/` | The MTG rules engine: `core/` (data model and the shared enum vocabulary), `effects/`, `abilities/`, `ai/`, and `mtg_game.gd` — the orchestrator and the single mutation surface | nothing but itself | See below. This is the load-bearing boundary of the project |
+| `cards/` | `sets/<set>/` — **one card per file**, filename = snake_case card name, no `class_name`: the eight core set folders hold the 897 default cards, and the other set folders hold the numbered packs' scripts, dormant until their pack is enabled; `optional/pack_1/` — four dormant digital adaptations gated by validated Pack 1 metadata; `data/` — the Scryfall-derived JSON the files were generated from, plus the 1997 `.dck` id table; `todo/` — eight set folders, empty *on purpose* and held in git by a `.gitkeep` that says why | `engine/` only | A card is data plus composed behaviour objects. Pack 1 does not load scripts from its ZIP: trusted optional implementations ship dormant and the registry activates them only while that exact pack is enabled |
+| `game/` | The Godot presentation layer: `duel/` (the duel screen, its widgets, and the gauntlet), `deck_builder/`, `help/`, `input/` (key bindings, the controller and the touch layer), `sgmanalink/` (LAN play), `art/` (the pictures this project drew), plus the title screen, options, the card packs, skin loading and `paths.gd` | `engine/`, `cards/` | Everything that knows what a Node is lives here |
+| `decks/` | **The `.deck` files**: five starters at the root, then one subfolder per provenance group — `1997/`, `tournament/`, `community/`, `extended_community/`, `portal/` and `portal_second_age/` (the Portal decks), `variants/` (ours) — plus `ratings.txt`, the Deck Lab's committed Elo ledger | data only | `docs/decks-1997.md` carries the provenance of every group, pinned by `tests/unit/test_decks_1997.gd` |
+| `tests/` | GUT suite: test scripts under `unit/`, `cards/`, `ui/`, `ai/` and `tools/`, shared helpers in `support/`, plus `game_test.gd` — the `GameTest` harness DSL — and `test_simplified_ledger.gd` at the root | everything | Setup helpers may bend the rules; the action under test goes through the real public API |
+| `tools/` | Pipelines, Python 3 stdlib only (the art and skin tools, the card-pack builders, the MCP server, their unittest files and the shared banner), `.gd` SceneTree scripts (the soak player, benches, the packs' duel audits and screen soaks, the deck-format converter, the art generator, the screenshot tour) and a few shell helpers | — | Run *at* the repo, not *by* the game: the export preset excludes `tools/*` from the `.pck` outright. The player-facing ones (`package_release.TOOLS`) are copied *beside* a packaged game, so a player can build their own art and card packs from their own copy of 1997 |
 | `DeckLab/` | The headless AI-vs-AI measurement harness: `simulate.gd` (a `SceneTree` script), Wilson intervals, SVG charts, the Elo ledger, and `deck_lab.sh` | `engine/` only | It is the instrument §5 is about. It must not need a window, a scene or a frame |
 | `addons/gut/` | Vendored GUT 9.6.1, unmodified | — | Pinned framework + pinned engine = a reproducible suite regardless of system state |
 | `assets/` | Not in git. The 1997 material and the card art, on the developer's own machine | — | §2 |
-| `docs/` | 27 markdown files, three `.txt` files that travel with a build (the player's setup notes and the skin catalogue), and two provenance notes. §8 says how to read the big ones | — | — |
-| `branding/` | The project wordmark: `logo.png` (the master) and the 360px cut the README shows | — | `game/icon.png` is the 256px cut of the same master, and it ships |
+| `docs/` | The design and record documents, `releases/` (the release notes), `forge/` (the Forge AI readings), three `.txt` files that travel with a build (the player's setup notes and the skin catalogue), and two provenance notes. §8 says how to read the big ones | — | — |
+| `branding/` | The project wordmark: `logo.png` (the master) and the 360px cut the README shows; `screenshots/`, the README's two screenshots; a README listing each file | — | `game/icon.png` is the 256px cut of the same master, and it ships |
 
 Four things this table is deliberately brief about, because `docs/CODE_MAP.md`
 is not:
@@ -271,7 +279,7 @@ API calls reproduces a game exactly. Everything in §5 rests on it.
 
 ## 4. The rules of engagement
 
-`CONTRIBUTING.md` has the seven hard rules and a "Gotchas" section; read them
+`CONTRIBUTING.md` has the numbered hard rules and a "Gotchas" section; read them
 rather than a summary. The three that catch people who have not read them are
 rule 1 (above), rule 5 — **rules code reads `cur_power`/`cur_toughness`/
 `cur_keywords`, the live values rebuilt after every state change, never
@@ -319,7 +327,7 @@ the incident behind the rule.
 ### Every AI change is a knob, and every knob is measured
 
 Nothing about the AI is "improved". An AI change is a **named field on
-`AiProfile`** (`engine/ai/ai_profile.gd` — 49 fields today) — so that "make
+`AiProfile`** (`engine/ai/ai_profile.gd`) — so that "make
 the AI stronger, weaker or different" never means editing decision code, and
 so that the change can be turned off exactly. A capability knob is off below
 the difficulty rung it belongs to and on above it; `docs/ai-difficulty.md`'s
@@ -434,7 +442,7 @@ failing test the moment you look.
 
 **`../tools/godot` does not resolve from a worktree.** §2. Set `GODOT`.
 
-**101 of the 319 decks cannot be loaded, and it is not a bug.** A *proxy* is a
+**Some shipped decks cannot be loaded, and it is not a bug.** A *proxy* is a
 card name a deck holds that the registry does not know
 (`engine/proxy_card.gd`), and every door into a duel asks before it deals.
 Counted once on 2026-09-11: 319 deck files, **218 load, 101 are proxy-blocked
@@ -547,39 +555,42 @@ A few files in `docs/` are long enough that a newcomer needs to be told how
 they are shaped. `docs/CODE_MAP.md`'s own `docs/` section annotates all of
 them and everything else in the folder.
 
-- **`docs/ROADMAP.md` (12 183 lines, 127 `##` sections) is a dated ledger, not
-  a plan.** It is append-only and **newest at the bottom**; the original
-  milestone record (M1–M5) sits in the middle, kept as history. Start at the
-  top — `## STATE AS OF …` is the running summary — then jump to the end for
-  what happened this week. Every section is dated in its heading, so search by
-  date or by the phrase you are chasing, and **never cite it, or anything else
-  here, by line number**: a row in this file that cited engine code by line
-  number was pointing a thousand lines from the code it meant, which is how the
-  ledger test came to check engine markers too. The last section is "Standing
-  quality gates", and it is three lines long.
-- **`docs/CODE_MAP.md` (6 900 lines)** is one annotated tree of the whole
-  project. It is the thing to grep when you want to know where something lives
+- **`docs/ROADMAP.md` is a dated ledger, not a plan.** It is append-only;
+  the original milestone record (M1–M5) sits in the middle, kept as history.
+  Start at the top — `## STATE AS OF …` is the running summary — then go to
+  the entries since October, which run newest first just above the last
+  section, for what happened this week. Every section is dated in its
+  heading, so search by date or by the phrase you are chasing, and **never
+  cite it, or anything else here, by line number**: a row in this file that
+  cited engine code by line number was pointing a thousand lines from the
+  code it meant, which is how the ledger test came to check engine markers
+  too. The last section is "Standing quality gates", and it is three lines
+  long.
+- **`docs/CODE_MAP.md`** is one annotated tree of the whole project. It is
+  the thing to grep when you want to know where something lives
   and what it does. It is currently exact; a change that moves a file and not
   its row here is an incomplete change.
 - **`docs/duel-todo.md` and `docs/duel-screen-design.md`** are the duel
   screen's work list (cleared) and its design record, with the 1997 citation
   behind every decision.
-- **`docs/ai-difficulty.md` (4 052 lines)** is what the four difficulties
+- **`docs/ai-difficulty.md`** is what the four difficulties
   actually do, knob by knob, with the measurement behind each.
 
-The rest of the reading list is `README.md`'s "Getting oriented" table.
+The rest of the reading list is `docs/ARCHITECTURE.md`'s "Documentation map".
 
 ---
 
 ## 9. What is not done
 
-Stated plainly, because the README's Status section is a summary and this is
-the working view.
+Stated plainly, because the README's roadmap is a summary and this is the
+working view.
 
 - **M5, adventure mode — the overworld, cities, quests, dungeons, world
   magics, the ante economy — is not started.** It has a placeholder section in
-  `docs/ROADMAP.md` and gets its own design document before any code. It is
-  the largest remaining piece of the project by a wide margin.
+  `docs/ROADMAP.md` and gets its own design document before any code; that
+  document is growing in `docs/adventure-implementation-notes.md`, beside the
+  research in `docs/world-builder-adventure-notes.md`. It is the largest
+  remaining piece of the project by a wide margin.
 - **The AI's plan of 2026-09-08 is closed, not abandoned.**
   `docs/AI-next-wave.md` was written as the next wave's work list and every row
   of it was settled in the week that followed — some shipped, several built,
@@ -594,8 +605,9 @@ the working view.
   the site. If a future card makes a second one, this is where it lands.
   `docs/ARCHITECTURE.md` points to this distinction too.
 - **The web build has been checked in a desktop browser pretending to be a
-  tablet, not on a real one** (`README.md`, "Play in the browser").
-- **Numbered card packs 1–5 are implemented**, including validation, independent
+  tablet, not on a real one** (the touch controls are in `docs/setup-web.txt`).
+- **The numbered card packs (`docs/card-art-and-packs.md` lists them) are
+  implemented**, including validation, independent
   enablement, artwork and trusted dormant rules. Build them locally; ZIPs and
   card artwork are not distributed. See `docs/adding-card-packs.md` for new packs
   and `docs/packs-sgmanalink-integration.md` for the LAN integration audit.

@@ -193,8 +193,9 @@ Lanczos filter for the pack — the button draws it at 52 px and the lobby
 heading at 56, and `ManalinkGlobe` builds its own mipmaps for that
 (`game/manalink_globe.gd`), so the import settings of an ignored
 `.import` file are not what keeps it from shimmering. The master is not
-in the repository; `branding/` ships in the pack, and a 1.7 MB picture
-that nothing loads is 1.7 MB of pack for nothing.
+in the repository; a 1.7 MB picture that nothing loads would be 1.7 MB
+of pack for nothing (`branding/` has been left out of the pack since
+2026-10-13).
 
 The eight set glyphs are the sets' own marks — an anvil, a scimitar, a
 comet, a crescent, a numeral, a column, a crown and a snow crystal. What is drawn here is this

@@ -19,8 +19,10 @@
 # a stuck prompt is exactly what this exists to catch.
 #
 # EXIT CODES are the .gd's own when it set one: 2 for a STALL (a duel
-# that stood still, or never started), 3 for a bad argument, 124 for the
-# whole-run guard — and 1 when Godot exited 0 but printed an error or a
+# that stood still, or never started), 3 for a bad argument (and from this
+# script for a missing Godot, timeout or xvfb), 124 for the whole-run
+# guard (137 when Godot had to be killed after it), 130/143 for a Ctrl-C
+# or a TERM — and 1 when Godot exited 0 but printed an error or a
 # warning, or never reached `SOAK done`. Godot's status is read FIRST,
 # because a STALL line is also an "ERROR/WARNING/STALL" line and reading
 # the grep first turned every exit 2 into an exit 1.
@@ -101,10 +103,22 @@ elif [ "$(uname -s)" != Darwin ]; then
 	command -v xvfb-run >/dev/null 2>&1 || { echo "Install xvfb to run the duel soak." >&2; exit 3; }
 	display_runner=(xvfb-run -a "${display_runner[@]}")
 fi
+# A CTRL-C MUST REACH GODOT (2026-10-13, run_tests.sh's pattern).
+# `timeout` puts itself in a process group of its own, so the terminal's
+# INT never reached it: the script waited up to SOAK_TIMEOUT and then
+# carried on. So the soak runs in the background and an INT or a TERM is
+# trapped, passed on and waited for. Under xvfb-run the pid is xvfb-run,
+# which passes nothing on, so its own children (`timeout`, which passes
+# it to Godot, and Xvfb) get the TERM as well.
 "${display_runner[@]}" "$GODOT" "${display_options[@]}" \
 	--log-file "$SHANDALAR_TEST_DATA_HOME/soak-engine.log" \
-	-s res://tools/duel_soak.gd -- "$@" > "$log" 2>&1 </dev/null
+	-s res://tools/duel_soak.gd -- "$@" > "$log" 2>&1 </dev/null &
+soak_pid=$!
+trap 'pkill -TERM -P "$soak_pid" 2>/dev/null; kill -TERM "$soak_pid" 2>/dev/null; wait; exit 130' INT
+trap 'pkill -TERM -P "$soak_pid" 2>/dev/null; kill -TERM "$soak_pid" 2>/dev/null; wait; exit 143' TERM
+wait "$soak_pid"
 status=$?
+trap - INT TERM
 
 grep -E '^SOAK ' "$log" || true
 
@@ -113,7 +127,7 @@ offending="$(grep -nE 'ERROR|WARNING|STALL' "$log" | grep -vE "$noise" | head -4
 
 if [ "$status" -ne 0 ]; then
 	echo
-	echo "SOAK IS NOT CLEAN: Godot exited $status (2 = a duel stood still or never started, 3 = bad argument, 124 = the whole-run timeout)." >&2
+	echo "SOAK IS NOT CLEAN: Godot exited $status (2 = a duel stood still or never started, 3 = bad argument, 124 or 137 = the whole-run timeout)." >&2
 	if [ -n "$offending" ]; then
 		echo "Godot printed:" >&2
 		echo "$offending" >&2

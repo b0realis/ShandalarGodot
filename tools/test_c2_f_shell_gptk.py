@@ -8,7 +8,6 @@ not open. Select now types F10, which the game reads as its menu key
 field types. These pin the three places that must agree.
 """
 from pathlib import Path
-import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]

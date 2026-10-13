@@ -1029,9 +1029,10 @@ that would not write — the reason on stderr). No JSON envelope here yet.
 `--auto-deck`, `--lab-query` and `--referee`, each hosting that headless
 tool inside the game binary (what a release's `deck_lab.sh`,
 `auto_deck.sh`, `lab_query.sh` and `referee.sh` are), and
-`--verify-pack-1..5`; the LAN protocol is 24
-(`docs/sgmanalink-*.md`). Headless soaks and audits live under
-`tools/*.gd` (`./duel_soak.sh --help`). `./run_tests.sh` is the gate:
+`--verify-pack-1` … `--verify-pack-5`, `--verify-pack-8` and
+`--verify-pack-9`; the LAN protocol is 29 at 0.50.22 (`SgProtocol.VERSION`;
+`docs/sgmanalink-*.md`). Headless soaks and audits live under `tools/*.gd`
+(`./duel_soak.sh --help`). `./run_tests.sh` is the gate:
 trust its exit code, not the printed tally.
 
 ## A session, in order

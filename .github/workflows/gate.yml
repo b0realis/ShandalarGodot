@@ -1,5 +1,6 @@
-# The gate, on every push and pull request — the same three commands
-# CONTRIBUTING.md asks for before a commit, on GitHub's runners:
+# The gate, on every push and pull request — the release-gate commands of
+# CONTRIBUTING.md (Commands) and DEVELOPMENT.md (The gate), on GitHub's
+# runners:
 #
 #   ./run_tests.sh              the GUT suite, here dealt over four runners
 #                               (SHARDS=4 SHARD=n — run_tests.sh's own deal,
@@ -15,9 +16,16 @@
 # (docs/release-builds.md). Card art and the 1997 skin are not in the
 # repository and never reach a runner: run_tests.sh builds the card packs
 # it needs from cards/data/, and leaves out BY NAME the scripts that pin
-# the 1997 look (seventeen of 861 on 2026-10-13, each marked "Needs the
+# the 1997 look (seventeen of 867 on 2026-10-13, each marked "Needs the
 # imported 1997 skin") — those run on a desk that has imported it. The
-# gate here is 844 scripts, and the log's first lines name the rest.
+# gate here is 850 scripts, and the log's first lines name the rest.
+#
+# THE RUNNER IS PINNED to ubuntu-24.04 (2026-10-13): the image the gate
+# has been green on ("Image: ubuntu-24.04" in the log of run 38360118334,
+# 0.50.21): the Godot download, the headless suite and the tools job were
+# tested there. ubuntu-latest moves to Ubuntu 26 from 2026-10-19; move
+# the pin when a run there is green.
+# upload-artifact is v7 (Node 24); v5 ran on the deprecated Node 20.
 name: Gate
 
 on:
@@ -38,7 +46,7 @@ env:
 jobs:
   gut:
     name: GUT shard ${{ matrix.shard }} of 4
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 56
     strategy:
       fail-fast: false
@@ -89,7 +97,7 @@ jobs:
 
       - name: Keep the engine log and the JUnit report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: gut-shard-${{ matrix.shard }}
           path: |
@@ -100,7 +108,7 @@ jobs:
 
   tools-and-boot:
     name: Python tools and the boot smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5

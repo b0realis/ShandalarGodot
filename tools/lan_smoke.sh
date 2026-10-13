@@ -61,7 +61,8 @@ shandalar_banner_hint "$#" \
 	'./tools/lan_smoke.sh -h                    # --address, --port, --no-discovery'
 
 usage() {
-	sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+	# tools/"${0##*/}", not "$0": the cd above made a relative $0 point nowhere.
+	sed -n '2,12p' "tools/${0##*/}" | sed 's/^# \{0,1\}//'
 	cat <<'EOF'
 
 Options (everything else is rejected):

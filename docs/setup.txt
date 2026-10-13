@@ -3,6 +3,10 @@ SHANDALAR — SETUP
 
 A remake of MicroProse's Magic: The Gathering (1997), built in Godot.
 
+This file maps the Linux x86-64 package; README.txt in this folder gives
+the start line for your platform (Shandalar.exe, Shandalar.app,
+Shandalar.arm64, the APK or the web page).
+
 The game runs the moment you unzip it. Everything below is about making
 it LOOK like 1997 — which is optional, in the strict sense that with no
 art at all every panel, button, card and portrait falls back to a drawn
@@ -24,7 +28,7 @@ your home directory.
 ---------------------------------------------------------------------
 
     Shandalar.x86_64     the game
-    Shandalar.pck        its code, the 897 cards' rules, and 319 decks
+    Shandalar.pck        its code, the 897 cards' rules, and the decks
     skin/                the art's folder, EMPTY BUT FOR THE CATALOGUE:
                          the art is not in this zip (see below)
     skin/SKIN.txt        the catalogue: every file a skin holds, its
@@ -38,20 +42,23 @@ your home directory.
     deck_lab.sh          headless deck testing (section 6)
     DECKLAB.md           its manual
     setup.txt            this file
-    mtg_assets.py        builds the art archive from your own 1997 disc
-                         (section 5)
-    import_original.py   the importer it runs, for loose files instead
-                         of a zip (section 5)
-    fetch_card_art.py    the card pictures, from Scryfall (section 4)
-    skin_catalogue.py    says what a skin zip of yours is missing
-    tool_banner.py       the banner and the version line those four
-                         share; not a tool of its own
+    tools/               the Python tools, run from this folder as
+                         `python3 tools/NAME.py`:
+      mtg_assets.py        builds the art archive from your own 1997
+                           disc (section 5)
+      import_original.py   the importer it runs, for loose files
+                           instead of a zip (section 5)
+      fetch_card_art.py    the card pictures, from Scryfall (section 4)
+      skin_catalogue.py    says what a skin zip of yours is missing
+      tool_banner.py       the banner and the version line they share;
+                           not a tool of its own
+                         and the card-pack builders, pack_N_*.py
+                         (CARD-ART-AND-PACKS.md)
 
-Every script in this folder answers `-h` for its own manual and
-`--version` for the build it came from, and run with nothing after its
-name it shows you what to type before it does anything. Those four .py
-files need nothing but Python 3.10 or newer — no libraries, no
-installation.
+Every script here answers `-h` for its own manual and `--version` for
+the build it came from, and run with nothing after its name it shows
+you what to type before it does anything. The .py tools need nothing
+but Python 3.10 or newer — no libraries, no installation.
 
 The .pck holds no art of any kind, and neither does this zip: the game
 is one download, the art another. Art is read off the filesystem at
@@ -68,7 +75,7 @@ is kept (section 3). The two zips the game wears:
     cardart.zip          the card pictures (193 MB). NOT downloadable
                          here — the pictures are Scryfall's, on their
                          own licence — but built in a few minutes by
-                         the two scripts in this folder (section 4).
+                         two of the scripts in tools/ (section 4).
                          Goes in skin/ beside the game the same way, or
                          in the card folder.
 
@@ -114,7 +121,7 @@ So anything you put in (1) or (2) overrides what shipped in (3). Portraits
 and music are searched slightly differently, because your own come first
 AND ARE ADDED TO THE 1997 ONES, not put in their place: a face you drop
 in portraits/ appears in the portrait chooser beside the sixteen the game
-ships and the sixty-odd originals, a tune in music/ plays among the
+ships and the seventy originals, a tune in music/ plays among the
 original scores.
 
     portraits:  portraits/ -> original_skin/portraits/ -> skin/portraits/ -> the zips' -> the game's own sixteen
@@ -132,8 +139,9 @@ row shows the path; in a browser, where there is no folder to open,
 the screen has a "Forget my zips" button instead) to go back to what
 shipped. A zip must have a `skin/` folder at
 its top and everything inside that folder, or it is refused whole (the
-game says so). SKIN.txt lists what goes in; `python3 skin_catalogue.py
---check my_skin.zip` reports what a zip of yours is missing.
+game says so). SKIN.txt lists what goes in, and
+`python3 tools/skin_catalogue.py --check my_skin.zip` reports what a zip
+of yours is missing.
 
 A TAR.GZ WORKS AT THE SAME DOORS (.tgz and a plain .tar too): choose it
 or drop it, and the game — which can only mount a zip — repacks it into
@@ -148,9 +156,9 @@ it into the game's own skins/ or cardpacks/ folder, from where every
 later start reads it — the tar is read once and left alone.
 
 THE SKIN FOLDER INSTEAD OF THE ZIP: if you would rather work with loose
-files — `python3 import_original.py --source /path/to/1997/game` beside
-this file fills original_skin/ from your own copy — tick "Use the skin folder
-instead of the zip" in Options > Skin. From the next start the folder
+files — `python3 tools/import_original.py --source /path/to/1997/game`
+from this folder fills original_skin/ from your own copy — tick "Use the
+skin folder instead of the zip" in Options > Skin. From the next start the folder
 alone dresses the game and the zip stays closed: a file missing from
 the folder is drawn by the game, not taken from the zip. Unticked, the
 zip is worn and a file in the folder still overrides the same file in
@@ -203,10 +211,10 @@ into Save As, with the new name already filled in.
 897 cards. The art is not in the 1997 install in any usable form, and
 it is not shipped with the game either — the pictures are Scryfall's,
 on a licence of their own, so what ships is the script that fetches
-them, beside this file:
+them, in tools/. From this folder:
 
-    python3 fetch_card_art.py --out cardart/
-    python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
+    python3 tools/fetch_card_art.py --out cardart/
+    python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
 
 Needs Python 3.10 or newer and a network connection, nothing else. It
 takes a few minutes (it is deliberately polite to the API — about eight
@@ -230,9 +238,9 @@ only the illustration is missing.
 If you own the original and would rather import it yourself than use
 the original_skin.zip download:
 
-    python3 mtg_assets.py                          explains what it needs
-    python3 mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
-    python3 mtg_assets.py --install /path/to/game  imports, writes a zip
+    python3 tools/mtg_assets.py                          explains what it needs
+    python3 tools/mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
+    python3 tools/mtg_assets.py --install /path/to/game  imports, writes a zip
 
 It reads your install and never writes to it. A 1997 install is enough
 on its own: every picture, sheet, font, sound and portrait the game
@@ -246,8 +254,8 @@ the game's window, or put it where the download goes:
 To have the same material as loose files instead — the skin folder,
 section 3, for the "Use the skin folder instead of the zip" tick box:
 
-    python3 mtg_assets.py      --check  /path/to/game
-    python3 import_original.py --source /path/to/game
+    python3 tools/mtg_assets.py      --check  /path/to/game
+    python3 tools/import_original.py --source /path/to/game
 
 A partial install makes a partial archive and that is fine — every asset
 is independent. To draw a skin of your own, SKIN.txt is the list of
@@ -267,7 +275,7 @@ interval that says how much of it to believe.
                   --deck-b res://decks/blue_skies.deck --games 200
     ./deck_lab.sh --matrix res://decks/ --games 200
 
-The 319 decks that shipped with the game live inside it and are addressed
+The decks that shipped with the game live inside it and are addressed
 as `res://decks/...`; a deck of your own is an ordinary path. Results go
 to a folder you name with --out: a readable report.txt, a results.json, a
 matchups.csv and two SVG charts.
@@ -296,7 +304,7 @@ AVIs in `skin/movies/` beside them. Carrying the source matters, because
 a conversion without its source is a dead end — if you installed the art
 on a machine with no decoder and have since installed ffmpeg:
 
-    python3 mtg_assets.py --transcode-movies skin/
+    python3 tools/mtg_assets.py --transcode-movies skin/
 
 rebuilds the sheets from the movies already there, with no 1997 disc
 needed. Building your own archive keeps the movies too; --no-bundle-movies
@@ -312,7 +320,7 @@ Without any of it the toss plays a coin the game draws itself.
 Unreadable text on a panel, a missing picture, a card with no frame: the
 game is almost certainly finding SOME of the art and not the rest. Run
 
-    python3 mtg_assets.py --check /path/to/your/1997/install
+    python3 tools/mtg_assets.py --check /path/to/your/1997/install
 
 which reports on eight groups of files separately, and re-import.
 

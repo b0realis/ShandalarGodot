@@ -202,9 +202,11 @@ never started. 3: a bad argument (a non-number is a bad argument)."""
 
 ## `--rules`: every fork to one edition, IN MEMORY — the duel screen reads
 ## `Settings.rule(key)` at each duel's start, and this is the same door
-## the Options screen uses, so the soak plays what a player who chose
-## that preset would play. Nothing is persisted (`persist = false`), and
-## [method _restore_rules] puts the player's values back at the end.
+## the Options screen uses. It is the EDITION, not a preset: `--rules
+## modern` plays every fork's modern answer, the sacrifice clauses' wait
+## included, which no preset switches on. Nothing is persisted
+## (`persist = false`), and [method _restore_rules] puts the player's
+## values back at the end.
 func _apply_rules() -> void:
 	if rules_edition == "":
 		return

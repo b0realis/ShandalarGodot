@@ -564,7 +564,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif is_instance_valid(_deck_picker):
 			_close_decks()
 		elif is_instance_valid(_duel):
-			_duel.toggle_menu()
+			# THE TABLE ANSWERS ITS OWN ESCAPE (repository check 2026-10-13):
+			# it is this lobby's child, so it had the key first
+			# ([method DuelScreen._unhandled_key_input]). Handing it on again
+			# toggled the Pause window twice in one press, and over the mini
+			# help opened the Pause window as the help closed.
+			pass
 		elif _page not in ["home", "room"]:
 			_show_page("home")
 		else:
@@ -798,7 +803,9 @@ func _connect_local() -> void:
 		if not _selected_host.is_empty() and (data.is_empty() \
 			or data.address != _selected_host.address or data.port != _selected_host.port \
 			or data.fingerprint != _selected_host.fingerprint):
-			_notice.text = "This invitation does not match the selected host. Clear the selection to join it directly."
+			# The search button clears the selection ([method _scan_lan]);
+			# it reads "Stop LAN search" while a host can be selected.
+			_notice.text = "This invitation does not match the selected host. Choose Stop LAN search to join it directly."
 			return
 		result = client.connect_invitation(invitation, _nickname.text)
 	else:
@@ -959,6 +966,10 @@ func _refresh() -> void:
 	_scan.text = "Stop LAN search" if _discovery != null and _discovery.scanning else "Find LAN games"
 	if (_page != "browser" or client.online) and _discovery != null and _discovery.scanning:
 		_discovery.stop()
+		# A stopped search drops its selection, as Stop LAN search does
+		# ([method _scan_lan]; repository check 2026-10-13): its host is no
+		# longer listed, and must not refuse a pasted invitation.
+		_selected_host = {}
 	_connect_button.disabled = client.online or client.busy() or client.connecting()
 	_connect_button.text = "Connected" if client.online else ("Connecting…" if client.connecting() else ("Reconnect" if client.has_session() else "Connect"))
 	_code.editable = not locked

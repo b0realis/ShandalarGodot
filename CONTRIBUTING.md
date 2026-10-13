@@ -100,8 +100,10 @@ or their own named project; changing XDG alone does not protect player data.
 - Duel soak: `./duel_soak.sh` — whole duels through the live duel screen
   under Xvfb (AI seats and a fuzzed human seat); passes only on `SOAK
   done` with no ERROR/WARNING/STALL line (exit 2 = a duel stood still or
-  never started, 3 = bad argument, 124 = whole-run timeout, 1 = a stray
-  line). `--rules fifth|modern` plays every duel under that ruleset
+  never started, 3 = bad argument, 124 = whole-run timeout (137 if Godot
+  had to be killed), 130 = Ctrl-C, 1 = a stray line). `--rules fifth|modern` sets every rules fork to its 1997 or its
+  modern answer for the run (so `modern` is no mana burn with forced
+  sacrifices waiting on the chain — not one of the Options presets)
   instead of whatever the (isolated — see above) `user://settings.cfg`
   holds, which with no player file to read is the built-in defaults. Use
   relevant seeds, modes and rules for changes needing live duel-flow coverage;
@@ -147,15 +149,19 @@ or their own named project; changing XDG alone does not protect player data.
   `tools/package_release.py --guard` — the packager's own guard: every
   spelling of the home, the members of every zip; since 0.50.10) — a
   stale README once carried one. `--quest` reads its APK the same way
-  and checks its manifest asks for the network. A release is the five zips: two Linux, two
-  web, the skin. Since 2026-09-08 a built game mounts
+  and checks its manifest asks for the network. `--package` and
+  `--web --package` write five of a release's zips (two Linux, two web,
+  the skin); a full release is the platform matrix in
+  `docs/release-builds.md`. Since 2026-09-08 a built game mounts
   the skin as TWO zips (`SkinPack`, `load_resource_pack`): the 1997
   material and, apart, the card art — a zip's kind is what it holds,
   not its name. A player chooses either in Options → Skin, or drops it
   on the window: a skin zip lands in `user://skins/` (the `skin_zip` key
   names the one worn), a card pack in `user://cardpacks/`, where every
-  zip is mounted. The five places a player can fill — and their
-  `settings.cfg` keys — live in ONE file, `game/paths.gd` (`GamePaths`);
+  zip is mounted. The places a player can fill (the skin zip and folder,
+  the card folder, portraits, music, the tournament and draft folders) —
+  and their `settings.cfg` keys — live in ONE file, `game/paths.gd`
+  (`GamePaths`);
   read a place through it, never through a literal `user://...`, and
   never write a key as a default. `tools/skin_catalogue.py --check`
   says whether a zip is complete.
@@ -169,8 +175,8 @@ or their own named project; changing XDG alone does not protect player data.
   wordmark naming itself (2026-09-11). The version comes from ONE place,
   `project.godot`'s `config/version` — no tool keeps a copy, and one that
   cannot find the file says "version unknown" and where it looked rather
-  than guessing (which is what the four tools shipped beside a packaged
-  game see). The wordmark, the caption and the five mana pips are
+  than guessing (which is what the tools shipped beside a packaged game
+  see). The wordmark, the caption and the five mana pips are
   `DeckLab/lab_console.gd`'s design, shared by `tools/tool_banner.py`
   (Python) and `tools/banner.sh` (shell); all three draw ONLY on stderr
   and ONLY when stderr is a terminal, because several of these tools have
@@ -262,10 +268,12 @@ scratch script plays through the live screen is appended there too.
 
 ## Hard rules
 
-SGManalink compatibility: when engine or card behavior changes between release
-versions, bump `SgCompatibility.RULES_REVISION`. The handshake also hashes the
-printed catalogue and protocol/release versions. This portable stamp is a
-compatibility check, not player authentication or executable attestation.
+SGManalink compatibility: the handshake hashes the printed catalogue, the
+protocol version, the release version (`config/version`) and
+`SgCompatibility.RULES_REVISION`, so a version bump already separates two
+builds. When engine or card behavior changes WITHOUT a version bump (two
+local builds of one version), bump `RULES_REVISION`. This portable stamp is
+a compatibility check, not player authentication or executable attestation.
 
 1. `engine/` and `cards/` stay pure: RefCounted only — never Node, scenes,
    Input, or anything from `game/`. Must run headless.

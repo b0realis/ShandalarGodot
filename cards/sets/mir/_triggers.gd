@@ -4,7 +4,8 @@ extends RefCounted
 ## Conventions every handler here keeps (the 2026-10-03 bug pass's lessons):
 ## - A triggered ability exists apart from its source (CR 603.6 / 608.2h):
 ##   it resolves even when the source has left, acting for the seat that
-##   controlled it ([method _pid], MtgGame.current_resolution_controller) and
+##   controlled it ([method MtgGame.current_resolution_controller]; `_pid`
+##   in mir/_misc.gd) and
 ##   dealing damage from the source as it last existed. Only the clauses
 ##   that name the source itself ("put a counter on it", "sacrifice it")
 ##   check that the very same object is still there

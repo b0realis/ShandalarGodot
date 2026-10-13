@@ -8,8 +8,13 @@ local clone shows scaling to ~900 cards.
 ## The rules
 
 1. **One card per file.** `cards/sets/<set>/<snake_case_name>.gd`. The folder
-   name is the set code; dropping the file in the folder ships the card (the
-   registry scans folders — there is no list to update).
+   name is the set code. In the eight core folders (`CardRegistry.SET_ORDER`)
+   dropping the file in ships the card (the registry scans those folders —
+   there is no list to update). No other folder is scanned: a numbered pack's
+   scripts load by name from its trusted loader's reviewed catalogue
+   (`game/*_pack.gd`, which reads `packaging/card_packs/pack_N_*/cards*.json`;
+   `CardPacks._configure_registry`), and only while that pack is enabled —
+   see docs/adding-card-packs.md.
 2. **Every card file documents itself.** The header doc comment carries: name
    line with cost/type/rarity, exact oracle text, implementation notes, and
    any simplification (with a row in docs/simplified-cards.md).
@@ -195,7 +200,8 @@ named set entries representing 901 unique rules identities; the default
 897-card core is unchanged when it is disabled.
 
 The pool's identity is the original game + its expansion. Community
-mini-packs are welcome under new set folders, with one hard rule
+mini-packs are welcome as numbered packs (docs/adding-card-packs.md; a new
+folder under `cards/sets/` alone is never loaded), with one hard rule
 inherited from the project owner: **added cards must not change the balance
 of the original game** — no new tournament staples into rogue decks, no
 power-level creep; think flavor, variety, and filling curve gaps. Pack

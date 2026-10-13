@@ -734,7 +734,6 @@ func _main2_mana_held(game: MtgGame) -> Dictionary:
 ## `chooseBestLand` (`heuristic.go`, "land that produces the most needed
 ## colour"). Ties keep hand order, so a seeded duel replays the same.
 func _try_play_land(game: MtgGame) -> bool:
-	var me := game.players[pid]
 	if not game.land_drop_available(pid):
 		return false
 	var shortfall := _colour_shortfall(game)
@@ -2584,9 +2583,10 @@ func _turn_is_dead(game: MtgGame) -> bool:
 # profiles that [member AiProfile.pays_sacrifices] says may pay one.
 
 const ABILITY_BAR_MAIN := 3.0
-## The most an object cost may price at ([method AlliancesTactics
-## object_price]) and still be spent by a caller that does not price it —
-## graveyard fuel (Pack 8, 2026-10-03; see [method _ability_available]).
+## The most an object cost may price at
+## ([method AlliancesTactics.object_price]) and still be spent by a caller
+## that does not price it — graveyard fuel (Pack 8, 2026-10-03; see
+## [method _ability_available]).
 const OBJECT_FUEL_PRICE := 0.5
 const ABILITY_BAR_UPKEEP := 2.0
 const ABILITY_BAR_SINK := 0.5
@@ -6935,8 +6935,8 @@ func _claimed_by_a_responder(data: CardData, intent: EffectIntent) -> bool:
 ## What [param inst] is worth cast into THIS moment: `{targets, value}`,
 ## or `{}` when the arm has no reading for its shape or the board gives
 ## the shape nothing to do. [param reserve] is [method _held_reserve]'s
-## answer, already built by the caller. The value is on [method
-## Evaluator]'s stat scale, the way every other price in this file is.
+## answer, already built by the caller. The value is on [Evaluator]'s
+## stat scale, the way every other price in this file is.
 func _window_worth(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		reserve: Dictionary) -> Dictionary:
 	var theirs := game.active_player != pid
@@ -11046,7 +11046,7 @@ func _attack_declaration(game: MtgGame, candidates: Array[CardInstance],
 ## they would have to pay for again. That is the same judgement [method
 ## _build_combat_model] already records about its own defensive reads —
 ## over-including a body that might block or swing is the safe way to be
-## wrong — and it is the mirror of [member animates_to_attack]'s ruling
+## wrong — and it is the mirror of [member AiProfile.animates_to_attack]'s ruling
 ## about OUR animated body, which is excluded because holding it home
 ## buys nothing.
 func _attack_choice_reading_manlands(game: MtgGame,
@@ -13724,7 +13724,7 @@ func _extra_targets(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# what opens that door: _own_value may now answer below zero,
 			# and a slot may take a permanent of ours when it does — but
 			# only a slot that RELIEVES it. Tapping our own dead Mana
-			# Vault leaves it dead and tapped ([method _relieves]).
+			# Vault leaves it dead and tapped ([method _worth_giving_up]).
 			if harmful and found != null and owner_pid == pid \
 					and profile.spares_own \
 					and not _worth_giving_up(game, source, effect, found, x_value):
@@ -15467,7 +15467,7 @@ func _tutor_worth(game: MtgGame, inst: CardInstance) -> float:
 # --- Pack 9 E2: buyback rows ---
 
 ## The least life the pilot keeps after paying a LIFE buyback ("Buyback—
-## Pay 4 life", Slaughter): the same line [member AiProfile] pilots draw
+## Pay 4 life", Slaughter): the same line [member AiProfile.minds_pain] pilots draw
 ## for a pain land's last points, set high because the card it buys back
 ## is a repeat, not an answer the game needs now.
 const BUYBACK_LIFE_FLOOR := 10

@@ -207,9 +207,10 @@ On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 1. [ ] **Adventure** — the Shandalar world, quests and campaign.
 2. [ ] **Commander** — dedicated rules and deck-building support.
 3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
-4. [x] **Card packs** — nine optional, toggleable packs beside the core pool,
-   from Fallen Empires to the Tempest block. Each is built locally from its
-   guide in `docs/`; ZIPs and downloaded art stay local.
+4. [x] **Card packs** — nine optional, toggleable packs beside the core pool:
+   Pack 1 (DotP Complete), then Fallen Empires through the Tempest block.
+   Each is built locally from its guide in `docs/`; ZIPs and downloaded art
+   stay local.
 
 Experienced multiplayer, networking and backend developers are especially
 welcome to help improve LAN play and explore those longer-term ideas.
@@ -228,8 +229,8 @@ build releases. Start with [DEVELOPMENT.md](DEVELOPMENT.md) and
 
 ```sh
 godot -e --path .
-./run_tests.sh              # the whole suite in one Godot
-SHARDS=4 ./run_tests.sh     # the same suite over four
+./run_tests.sh              # the whole suite (half the cores, at most six, on Linux)
+SHARDS=1 ./run_tests.sh     # the same suite in one Godot
 ```
 
 Explore the [architecture](docs/ARCHITECTURE.md),

@@ -9,6 +9,22 @@ them reprints, four new identities); it does not yet implement the new-set
 expansion proposed below. Historical statements are dated, and every number
 that is not a file count is labelled as an estimate.
 
+**Since then (2026-10-13 note): the expansion shipped, in another shape.**
+Packs 2–9 add Fallen Empires, Ice Age, Homelands, Alliances, Portal and
+Portal Second Age, Fifth Edition, the Mirage block (Mirage, Visions and
+Weatherlight — so "Mirage/Visions stay out" below was overtaken) and the
+Tempest block, each an exact-name numbered ZIP with its own trusted loader
+(`game/*_pack.gd`), managed by the `CardPacks` autoload
+(`game/card_packs.gd`: `discover`, `rescan`, `set_enabled`,
+`_configure_registry`) and pushed into the engine through
+`CardRegistry.configure_optional_pack` / `configure_expansion_packs`; the
+player turns them on under **Options → Card Packs...**
+(`CardPacksScreen`). `CardRegistry.active_set_order` shipped as sketched;
+the sketch's `CardRegistry.PACKS`, `enabled_packs`, `reload`,
+`Settings.enabled_packs`, `set_pack_enabled` and `_add_packs_section` do
+not exist. Read the rest as the plan of 2026-09-02, not the design that
+shipped — `docs/adding-card-packs.md` is the recipe.
+
 ## The short answers
 
 **Can an additional, self-contained, toggleable "old MTG up to Alliances /

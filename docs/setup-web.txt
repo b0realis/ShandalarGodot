@@ -38,7 +38,7 @@ addresses or clearing browser storage.
 
 On a tablet the game types the mouse for your finger: tap clicks, hold
 and lift right-clicks, drag drags, a swipe scrolls a list; Options >
-Touch controls is Auto / On / Off. The table is landscape.
+Display > Touch controls is Auto / On / Off. The table is landscape.
 
 
 ---------------------------------------------------------------------

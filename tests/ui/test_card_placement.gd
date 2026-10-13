@@ -19,7 +19,9 @@ var screen: DuelScreen
 func before_each() -> void:
 	screen = load("res://game/duel/duel_screen.tscn").instantiate()
 	add_child_autofree(screen)
-	screen.size = Vector2(1280, 800)
+	# Deferred: set straight after add_child, Godot warns that a full-rect
+	# node's size is overridden after _ready() (one warning per test).
+	screen.set_deferred("size", Vector2(1280, 800))
 	await get_tree().process_frame
 	await get_tree().process_frame
 

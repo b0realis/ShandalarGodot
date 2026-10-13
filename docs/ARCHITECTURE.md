@@ -26,7 +26,7 @@ The project is split into two worlds with a hard boundary:
 **The engine never imports anything from `game/`.** It runs identically inside
 the editor, in an exported game, and under the headless test runner. This is
 the same boundary s30 draws between its Ebiten screens and mage-go, and it is
-what makes 50 (eventually thousands of) tests run in under a second.
+what lets the suite's thousands of rules tests run headless in a terminal.
 
 ## Engine design (engine/, cards/)
 
@@ -50,7 +50,9 @@ helpers (`deal_damage`, `draw_cards`, `destroy`, ...). Consequences:
 
 - the whole rules surface is auditable by reading one file;
 - every change is logged (`MtgGame.log_lines`) and signaled;
-- replay/undo/networking later means intercepting one class.
+- the AI search's undo journal (`engine/undo_log.gd`) records at those
+  helpers, and the LAN referee (`game/sgmanalink/`) runs `MtgGame` on the
+  host and sends each seat a filtered view: both build on this one class.
 
 ### Synchronous, imperative API
 
@@ -63,7 +65,7 @@ var err := game.cast_spell(0, bolt, [TargetRef.card(bear)])
 ```
 
 The same API serves the UI (button handlers call it, show refusals verbatim),
-the future AI (search over legal calls), and the tests. Unlike mage-go's
+the AI (which plans over legal calls), and the tests. Unlike mage-go's
 goroutine/channel design, there is no concurrency: Godot's scene tree is
 single-threaded and GDScript has `await` if the UI ever needs to yield. A
 duel's flow control is just: call methods; when both players pass priority the
@@ -112,12 +114,16 @@ New mechanics are new effect/ability classes in `engine/effects/` or
 
 ### The card registry
 
-`CardRegistry` (engine/card_registry.gd) scans `cards/sets/<set>/` at first
-use. **Every `.gd` file in a set folder is exactly one card** (filename =
-snake_case card name); the folder name becomes the card's set code. There is
-no manifest to maintain — dropping a file in the folder ships the card. Cards
-extend `CardScript` and implement `build() -> CardData`. See
-docs/adding-cards.md for the authoring pipeline.
+`CardRegistry` (engine/card_registry.gd) loads the eight core set folders
+under `cards/sets/` (`SET_ORDER`: 2ed, arn, atq, leg, drk, 4ed, past, phpr)
+at first use. **Every `.gd` file in a set folder is exactly one card**
+(filename = snake_case card name); the folder name becomes the card's set
+code. There is no manifest to maintain — dropping a file into one of those
+eight folders ships the card. The numbered packs' own set folders (`fem/`,
+`ice/` and the rest) load only while their pack is enabled; see
+docs/adding-card-packs.md. Cards extend `CardScript` and
+implement `build() -> CardData`. See docs/adding-cards.md for the authoring
+pipeline.
 
 ### Events and triggers
 
@@ -131,7 +137,7 @@ read straight from `event.data` — no fragile global state.
 
 All randomness flows through `MtgGame.rng` (seedable). A seed + the sequence
 of API calls reproduces a game exactly — the foundation for bug reports,
-replays, and AI self-play later.
+replays and the Deck Lab's AI-versus-AI runs.
 
 ## Testing (tests/)
 
@@ -168,7 +174,8 @@ card is not "done" until its test quotes the oracle-text behavior.
 
 `game/main.tscn` is the working title screen. Magic Battle leads through
 battle setup to the duel screen; the shell also exposes Gauntlet, Deck
-Builder, Options and Help. The duel screen holds an `MtgGame`, renders its
+Builder, Options, Help and the globe (SGManalink LAN duels and tournaments,
+`game/sgmanalink/`). The duel screen holds an `MtgGame`, renders its
 state and signals, and calls the same public API the tests use. Whole duels
 through this presentation layer are checked by `duel_soak.sh` in addition to
 the component tests. See `docs/CODE_MAP.md` for the implemented scene layout.
@@ -187,11 +194,13 @@ milestone. Its title-screen entries currently explain that status.
 
 ## Provenance & upstream references
 
-- `~/PROJECTS/ShandalarGodot/s30/` — Go remake (screens, adventure systems,
-  rogue decks in `assets/configs/rogues/`, original text in `assets/text/`).
-- `~/PROJECTS/ShandalarGodot/scratchpad or mage-go clone` — rules engine
-  reference; its `cards/limited/` is our implementation checklist.
-- `~/PROJECTS/ShandalarGodot/shandalar-src/` — Manalink 3.0 snapshot (original
-  game binaries + assets; engine internals documented in `src/manalink.h`).
-- `~/PROJECTS/ShandalarGodot/docs/SHANDALAR_LORE.md` — game/lore reference
-  (world magics, lairs, enemy tiers, difficulty tables).
+These sit beside the repository, not in it; `Provenance.md` ranks them.
+
+- `../s30/` — Go remake (screens, adventure systems, rogue decks in
+  `assets/configs/rogues/`, original text in `assets/text/`).
+- `../mage-go/` — a local clone of the rules-engine reference; its
+  `cards/limited/` is our implementation checklist.
+- `../shandalar-src/` — Manalink 3.0 snapshot (original game binaries +
+  assets; engine internals documented in `src/manalink.h`).
+- `../docs/SHANDALAR_LORE.md` — game/lore reference (world magics, lairs,
+  enemy tiers, difficulty tables).

@@ -404,6 +404,13 @@ static func forced_block_targets(g: MtgGame, pid: int, blocker: CardInstance,
 ## How many search nodes one question may spend. A board past it (a dozen
 ## creatures under orders against menace attackers) is answered leniently:
 ## the declaration in hand stands, so no seat can ever be left without one.
+##
+## SIMPLIFIED (docs/ROADMAP.md, "Block requirements are maximised by a
+## BOUNDED search"): CR 509.1c asks for the most requirements any legal
+## declaration obeys. Past this budget the declaration in hand stands, and
+## a creature that may block several attackers is tried with only a few
+## block sets ([method _block_options]), not every subset. Both can only
+## make the check more lenient.
 const SEARCH_BUDGET := 8000
 
 

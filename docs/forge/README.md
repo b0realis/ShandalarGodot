@@ -50,7 +50,7 @@ is not to be copied. Provenance is at the end.
    rule), priced chump blocks, a cohort-priced attack, a deterministic
    crack-back search, a hidden-information rule with tests, and every 1995
    rule (legend rule, prevention step, mana burn — Forge has three old-rules
-   switches to our seven).
+   switches to our seven at the time of writing; nine at 0.50.21).
 3. **The biggest single gap is timing.** Forge develops in main 2 by default
    (`PermanentAi.java:38`, `castPermanentInMain1` `ComputerUtil.java:1141-1297`)
    and casts instants at the opponent's end step; ours casts everything in
@@ -154,7 +154,7 @@ Recorded so nobody "fixes" them toward Forge.
   deterministic Balance.
 - The whole 1995 rule set: the 1995 legend rule, the prevention step, the
   window of the damage-prevention request, mana burn, ante, the seven
-  `RulesOptions` switches.
+  `RulesOptions` switches of 2026-09-08 (nine at 0.50.21).
 - `GameSnapshot` (3.44 ms rewind) and `UndoLog` (0.13 µs per field); Forge
   copies by re-parsing cards and the shipped AI never copies at all.
 - A card is one readable file with its own test; Forge's is a script whose

@@ -213,9 +213,9 @@ targeting effect and validates the whole choice at once.
 | Costs that eat a card | "Exile a creature you control", "Exile a creature card from your graveyard", "Discard a card" — all paid in `activate_ability` with the mana (CR 601.2h), all chosen by the paying player, and what went is left on the source's memory. | 601.2h | `ActivatedAbility.with_exile_of` / `with_exile_from_graveyard` / `with_discard_cost` | City of Shadows (`drk/city_of_shadows.gd`), Necropolis (`drk/necropolis.gd`), Land's Edge (`leg/land_s_edge.gd`) |
 | Unpreventable damage | "Damage ... can't be prevented or dealt instead to another permanent or player" — bypasses Fog, source-side prevention, protection, Hydra's counters and every redirection gate. | 615.12 | `CardInstance.damage_unpreventable_this_turn` | Whippoorwill (`drk/whippoorwill.gd`) |
 | Damage CAPS | "If a source would deal 3 or more damage to you, it deals 2 instead" — a replacement applied before any prevention. | 614.1 | `MtgPlayer.damage_caps` | Forethought Amulet (`leg/forethought_amulet.gd`) |
-| Seat-level damage REPLACEMENTS | The whole "the next time a source of your choice would deal damage to you this turn, instead ..." family, as one list of candidates for the CR 616.1 choice below. A handler returns -1 ("carry on with what is left") or >= 0 ("the event ends here, that much was dealt"); an entry is one-shot unless it says `all_turn`, and one that says `until_upkeep_of` survives cleanup and ends as that player's upkeep begins (CR 611.2b — Soul Echo, Pack 8). | 614, 616, 611.2b | `MtgPlayer.damage_replacements`, applied in `MtgGame._land_damage_impl` | Forcefield (`2ed/forcefield.gd`), Dark Sphere (`drk/dark_sphere.gd`), Eye for an Eye (`4ed/eye_for_an_eye.gd`), Nova Pentacle (`leg/nova_pentacle.gd`), Shimian Night Stalker (`leg/shimian_night_stalker.gd`) |
+| Seat-level damage REPLACEMENTS | The whole "the next time a source of your choice would deal damage to you this turn, instead ..." family, as one list of candidates for the CR 616.1 choice below. A handler returns -1 ("carry on with what is left") or >= 0 ("the event ends here, that much was dealt"); an entry is one-shot unless it says `all_turn`, and one that says `until_upkeep_of` survives cleanup and ends as that player's upkeep begins (CR 611.2b — Soul Echo, Pack 8). | 614, 616, 611.2b | `MtgPlayer.damage_replacements`, offered in the CR 616.1 walk (`MtgGame._damage_gates`, `_c2o_walk_player`) and applied by `MtgGame._apply_damage_gate` | Forcefield (`2ed/forcefield.gd`), Dark Sphere (`drk/dark_sphere.gd`), Eye for an Eye (`4ed/eye_for_an_eye.gd`), Nova Pentacle (`leg/nova_pentacle.gd`), Shimian Night Stalker (`leg/shimian_night_stalker.gd`) |
 | The DAMAGED SEAT orders them | Every replacement and prevention that would apply to one packet aimed at a player is collected in the order the engine used to run them, the damaged seat picks which applies FIRST, and the rule is put again to the modified event: the list is built afresh, so an effect the event reaches only now joins it (Ali from Cairo after Furnace of Rath doubles a Bolt; Forethought Amulet after it doubles a Shock), less every effect already applied (2026-10-12). Taking a Circle of Protection ahead of a Nova Pentacle prevents the damage outright and leaves the Pentacle waiting; taking the Pentacle deflects it and leaves the Circle up. One candidate is not a choice and nobody is asked; none skips the walk. WHO IS ASKED IS A RULES FORK (the owner's ruling of 2026-10-12, `RulesOptions.damage_effects_fixed_order`, Options row "Fixed order for damage effects"): the 1997 preset asks nobody and takes the fixed order — what helps the victim first, what hurts it last; both modern presets ask, a person through the duel's choice overlay ("Which applies first to the 3 damage from Lightning Bolt?"), and the computer answers from a look-ahead over this same walk (`MtgGame.damage_order_outcomes`: each first pick followed by its best continuation, exhaustive up to five effects, counting only damage that lands on the damaged player) and takes the least damage, so a Lightning Bolt into its own Forethought Amulet under a Furnace of Rath lands 2 (Furnace first) rather than the fixed order's 4. | 616.1, 616.1e, 614.5 | `MtgGame._has_damage_gates` / `_damage_gates` / `_damage_gate_applies` / `_apply_damage_gate`, `_c2o_walk_player` / `_c2o_ask_player`, `_c2a_player_gates_again` / `_c2a_player_gate_id`, `damage_order_question` / `damage_order_outcomes`, `AiPlayer._damage_order_pick` | Circle of Protection: Red (`2ed/circle_of_protection_red.gd`) against Nova Pentacle (`leg/nova_pentacle.gd`) |
-| The PERMANENT'S CONTROLLER orders them | The same CR 616.1 question for a packet aimed at a CREATURE, and the rule's own words put it to the affected OBJECT'S CONTROLLER — not to the seat the damage may end up on, so a Jade Monolith the opponent activated on your blocker is still your blocker's event to order. Eleven gates in the order the fixed chain ran them (Reverberation, Blood of the Martyr, Rock Hydra's counters, protection, Uncle Istvan, Jade Monolith, Personal Incarnation, a whole-damage prevention, Gaseous Form, the source-filtered immunities, a prevention pool); three of them are METERED and order like any other, because a gate is applied ONCE, in full, and the rule is then put again to what is left — rebuilt for the modified event, less what was applied. 2 damage into a Rock Hydra with three +1/+1 counters and two of its own {R} shields leaves either a 1/1 with its shields or a 3/3 without them. One candidate is not a choice and nobody is asked; none skips the walk, which is every creature in every ordinary combat. The same rules fork decides whether anyone is asked (2026-10-12): under the 1997 preset nobody is and the fixed order applies; under the modern presets the controller is ("Which applies first to the 3 damage from Lightning Bolt to Craw Wurm?"), and the computer picks the first effect whose best continuation keeps its creature on the battlefield and then marks the least damage on it. | 616.1 | `MtgGame._has_creature_damage_gates` / `_creature_damage_gates` / `_creature_damage_gate_applies` / `_creature_damage_gate_label` / `_apply_creature_damage_gate` / `_mark_creature_damage`, `_c2o_walk_creature` / `_c2o_ask_creature`, `_c2a_creature_gates_again` | Rock Hydra (`2ed/rock_hydra.gd`) against its own `{R}`; Gaseous Form (`4ed/gaseous_form.gd`) against Jade Monolith (`2ed/jade_monolith.gd`) |
+| The PERMANENT'S CONTROLLER orders them | The same CR 616.1 question for a packet aimed at a CREATURE, and the rule's own words put it to the affected OBJECT'S CONTROLLER — not to the seat the damage may end up on, so a Jade Monolith the opponent activated on your blocker is still your blocker's event to order. The gates are collected in the order the fixed chain ran them (`_creature_damage_gates`; the full list is §6's "Damage to a creature": the chain's eleven — Reverberation, Blood of the Martyr, Rock Hydra's counters, protection, Uncle Istvan, Jade Monolith, Personal Incarnation, a whole-damage prevention, Gaseous Form, the source-filtered immunities, a prevention pool — joined since by a packet's own prevention, the damage replacement suite, redirects to another creature and tracked shields); the METERED ones order like any other, because a gate is applied ONCE, in full, and the rule is then put again to what is left — rebuilt for the modified event, less what was applied. 2 damage into a Rock Hydra with three +1/+1 counters and two of its own {R} shields leaves either a 1/1 with its shields or a 3/3 without them. One candidate is not a choice and nobody is asked; none skips the walk, which is every creature in every ordinary combat. The same rules fork decides whether anyone is asked (2026-10-12): under the 1997 preset nobody is and the fixed order applies; under the modern presets the controller is ("Which applies first to the 3 damage from Lightning Bolt to Craw Wurm?"), and the computer picks the first effect whose best continuation keeps its creature on the battlefield and then marks the least damage on it. | 616.1 | `MtgGame._has_creature_damage_gates` / `_creature_damage_gates` / `_creature_damage_gate_applies` / `_creature_damage_gate_label` / `_apply_creature_damage_gate` / `_mark_creature_damage`, `_c2o_walk_creature` / `_c2o_ask_creature`, `_c2a_creature_gates_again` | Rock Hydra (`2ed/rock_hydra.gd`) against its own `{R}`; Gaseous Form (`4ed/gaseous_form.gd`) against Jade Monolith (`2ed/jade_monolith.gd`) |
 | Taking a creature's damage yourself | "If damage would be dealt to any creature, you MAY have that damage dealt to you instead" — offered per packet, redirected as the same damage. | 614.1 | `MtgPlayer.may_take_creature_damage` | Blood of the Martyr (`drk/blood_of_the_martyr.gd`) |
 | Counter-eating armour | "For each 1 damage that would be dealt to this creature, if it has a +1/+1 counter, remove one and prevent that 1 damage" — point for point, and one of the three METERED gates the creature's controller orders (below). | 614.1 | `CardInstance.damage_eats_counters` | Rock Hydra (`2ed/rock_hydra.gd`) |
 | Metered redirect | "The next 1 damage that would be dealt to this creature this turn is dealt to its owner instead" — each activation books ONE point; when damage lands that many points split off as a new packet to the owner and the rest is marked on the creature (`Duel.hlp`: "may redirect any amount of damage from it"; the 1997 "How much?" prompt = N activations). Under the 1997 window the moved part gets its own second prevention step. | 614.1c, 615 | `MtgGame.add_point_redirect` / `_divert_damage_points`, `DamagePacket.divert` / `redirected`, `CardInstance.damage_point_redirects` | Personal Incarnation (`2ed/personal_incarnation.gd`) |
@@ -379,30 +379,64 @@ player-side shields, pools, replacements and pending recoveries. Source names
 are restricted to face-up public zones. The portrait badge is presentation-only;
 LAN sends bounded text, never the effects' Callables or private card identity.
 
-Damage to a **player** is filtered in this order:
+Before any gate, damage is stopped outright when its source has "prevent
+all damage it would deal" (`cur_prevent_all_damage_dealt`) or, for combat
+damage, the combat-only version (`cur_prevent_combat_damage_dealt`, or
+Fog's `MtgGame.combat_damage_prevented`) — `MtgGame._damage_prevented_before_gates`;
+unpreventable damage to a creature skips this. Everything else that would
+apply is a GATE of the CR 616.1 walk (the DAMAGED SEAT and PERMANENT'S
+CONTROLLER rows above). The
+lists below are the order the engine collects the gates in: the fixed
+order the 1997 preset applies with nobody asked
+(`RulesOptions.damage_effects_fixed_order`), and the first line — the
+default answer — when the modern presets ask. After each gate taken the
+list is built again for what is left.
 
-1. source has "prevent all damage it would deal" (`cur_prevent_all_damage_dealt`);
-2. combat-only version of the same (`cur_prevent_combat_damage_dealt`);
-3. reverse-to-life shields (`MtgPlayer.reverse_damage_shields`) — Reverse Damage;
-4. unblocked-attacker redirection (`MtgPlayer.combat_damage_redirect`) — Veteran Bodyguard;
-5. artifact-source redirection (`MtgPlayer.artifact_damage_redirect`) — Martyrs of Korlis;
-6. colour-matched one-shot shields (`MtgPlayer.prevention_shields`) — the Circles of Protection;
-7. predicate one-shot shields (`MtgPlayer.prevention_shield_filters`) — CoP: Artifacts;
-8. the amount-based prevention pool (`MtgPlayer.damage_prevention`) — Healing Salve;
-9. the life floor (`MtgPlayer.min_life_from_damage`) — Ali from Cairo;
-10. life is lost, bookkeeping updated, `DAMAGE_DEALT` fires.
+The gates a packet aimed at a **player** can meet, in the order
+`MtgGame._damage_gates` collects them (the walk is `_c2o_walk_player`):
 
-Damage to a **creature**:
+1. prevention that belongs to this damage alone (`DamagePacket.local_prevention`) — Errant Minion;
+2. the source's "all damage it would deal this turn is dealt to a player instead" (`CardInstance.damage_all_redirect_to`) — Reverberation;
+3. the damage replacement suite's entries that help the victim (`MtgGame.damage_effects` / `static_damage_effects`, `engine/damage_replacements.gd`) — Shadowbane, Benevolent Unicorn;
+4. seat-level one-shot replacements, the newest first (`MtgPlayer.damage_replacements`) — Forcefield, Nova Pentacle;
+5. damage caps (`MtgPlayer.damage_caps`) — Forethought Amulet;
+6. reverse-to-life (`MtgPlayer.reverse_damage_sources`) — Reverse Damage;
+7. unblocked-attacker redirection (`MtgPlayer.combat_damage_redirect`) — Veteran Bodyguard;
+8. artifact-source redirection (`MtgPlayer.artifact_damage_redirect`) — Martyrs of Korlis;
+9. colour-matched one-shot shields (`MtgPlayer.prevention_shields`) — the Circles of Protection;
+10. predicate one-shot shields (`MtgPlayer.prevention_shield_filters`) — CoP: Artifacts;
+11. static shields (`MtgPlayer.static_prevention_shields`) — Energy Storm;
+12. the amount-based prevention pool (`MtgPlayer.damage_prevention`) — Healing Salve;
+13. the life floor (`MtgPlayer.min_life_from_damage`) — Ali from Cairo;
+14. the suite's entries that hurt the victim, last — Furnace of Rath, Desperate Gambit's doubling;
 
-1. protection from the source's colours (the D of DEBT, `cur_protection`);
-2. "prevent all damage from creatures" (`cur_prevent_damage_from_creatures`);
-3. one-shot redirection to a player (`damage_redirect_to` / `damage_redirects`) — Jade Monolith; then the METERED one (`damage_point_redirect_to` / `damage_point_redirects`, one point per activation, the rest of the event carries on down this list) — Personal Incarnation;
-4. a face-down permanent is turned face up first;
-5. "prevent all damage taken" (`cur_prevent_all_damage_taken`);
-6. combat-only version (`cur_prevent_combat_damage_taken`);
-7. source-filtered immunities (`cur_damage_immunity`) — Camel (`arn/camel.gd`), Argothian Pixies (`atq/argothian_pixies.gd`);
-8. the amount-based pool (`CardInstance.prevention`);
-9. damage is marked, life-on-damage watchers pay out, `DAMAGE_DEALT` fires.
+then life is lost, bookkeeping updated, `DAMAGE_DEALT` fires.
+
+Damage to a **creature**: a face-down permanent is turned face up first,
+ahead of every gate. Unpreventable damage (`damage_unpreventable_this_turn`
+— Whippoorwill; `DamagePacket.unpreventable_to_creatures` — Lava Burst)
+meets only the suite's entries. Otherwise the gates, in the order
+`MtgGame._creature_damage_gates` collects them (the walk is
+`_c2o_walk_creature`, and the creature's controller is the one asked):
+
+1. prevention that belongs to this damage alone (`DamagePacket.local_prevention`);
+2. the source's all-damage redirect (`CardInstance.damage_all_redirect_to`) — Reverberation;
+3. a player's offer to take the damage instead (`MtgPlayer.may_take_creature_damage`) — Blood of the Martyr;
+4. the suite's entries that help the victim — Shadowbane;
+5. counter-eating armour (`damage_eats_counters`, METERED) — Rock Hydra;
+6. protection from the source's colours (the D of DEBT, `cur_protection`);
+7. "prevent all damage from creatures" (`cur_prevent_damage_from_creatures`) — Uncle Istvan;
+8. one-shot redirection to a player (`damage_redirect_to` / `damage_redirects`) — Jade Monolith;
+9. the METERED redirection to a player (`damage_point_redirect_to` / `damage_point_redirects`, one point per activation, the rest of the event carries on) — Personal Incarnation;
+10. METERED redirection to another creature (`creature_damage_redirects`) — Daughter of Autumn, Hazduhr the Abbot;
+11. "prevent all damage taken" (`cur_prevent_all_damage_taken`);
+12. combat-only version (`cur_prevent_combat_damage_taken`) — Gaseous Form;
+13. source-filtered immunities (`cur_damage_immunity`) — Camel (`arn/camel.gd`), Argothian Pixies (`atq/argothian_pixies.gd`);
+14. the amount-based pool (`CardInstance.prevention`) — Samite Healer;
+15. tracked shields whose prevention has a later consequence (`CardInstance.tracked_prevention`) — Sacred Boon;
+16. the suite's entries that hurt the victim, last — Blind Fury, Lichenthrope, Furnace of Rath;
+
+then `MtgGame._mark_creature_damage`: damage is marked, life-on-damage watchers pay out, `DAMAGE_DEALT` fires.
 
 | Mechanic | What it does | CR | Engine | Example |
 |---|---|---|---|---|
@@ -450,7 +484,7 @@ be built inside. What it does today, in order:
 | 6 | Until-EOT COLOUR changes, in creation order (last cast wins). | layer 5 | `_color_changes` |
 | 6b | **LAYER 6, WHOLE, IN TIMESTAMP ORDER**: every ability GRANT and every ability LOSS in one sorted pass — a pump's keywords, a bare keyword grant, a landwalk grant, the until-EOT losses, and every STATIC that grants or removes one named ability (marked `changing_abilities()`, carrying its source's `layer_timestamp`). The later effect wins whichever kind it is, so Radjan Spirit then Flight leaves the Angel flying. It sits ahead of every layer-7 pass, which is also what lets a rules-modifying static that READS an ability (Moat) see the settled answer. A layer-6 static that decides whom it affects BY an ability (Chaosphere's "creatures without flying have reach", `reading_abilities()`) depends on every grant and loss of it and runs after them (CR 613.8a). Since Pack 9 two more kinds join the clock: each silencer's STRIP, at its source's timestamp — keywords, landwalk, protection (a Ward's own grant included), rampage, "bands with", shroud, `cur_blocks_shadow`, the printed evasion fields and the live mana, activated and triggered lists: what was printed or granted EARLIER goes, a grant stamped LATER (an Aura attached after Humility, a Jump, a Life Matrix activation) is applied after it and survives — and the granted activated abilities, floating protection and floating rampage, which a strip can now remove. | 613.1f, 613.6, 613.7, 613.7b, 613.8a | `_layer_six`, `_silence_strips` / `_strip_abilities`, `StaticAbility.changing_abilities` / `reads_abilities`, `CardInstance.layer_timestamp` |
 | 6c | A characteristic-defining P/T that COUNTS an ability (Dauthi Warlord's "creatures with shadow", a `setting_base_pt()` static marked `reading_abilities()`): after the whole of layer 6, so a creature that gained shadow this turn counts and one that lost it does not; when it ran, the 7b list is applied again so a 7b setter still wins over it. | 613.1, 613.4a-b | `_cda_readers_pass`, `StaticAbility.reads_abilities` |
-| 7 | COUNTERS: any counter whose NAME parses as `+A/+B` moves P/T by that delta times its count. | layer 7d | `_parse_pt_counter` |
+| 7 | COUNTERS: any counter whose NAME parses as `+A/+B` moves P/T by that delta times its count. | layer 7d | `ContinuousEffects.parse_pt_counter` |
 | 8 | All remaining statics (the anthems and everything untagged), in timestamp order. | layer 7c and the rest | `battlefield_with_statics()` |
 | 8b | FLOATING STATICS — a `StaticAbility` whose source has left the battlefield — run at the tail of each static sub-pass above, in the same layer order (their layer-6 half runs in 6b with the rest). | the same layers, later timestamp | `_floating_statics`, `_floating_statics_pass` |
 | 9 | Floating until-EOT PUMPS (the P/T half; their keywords went in 6b), in creation order. | layer 7c | `_floating` |
@@ -587,7 +621,7 @@ ANTE. Two more piles live on `MtgPlayer` without being zone values:
 | Outside the game | Empty in a plain duel; the adventure layer will fill it. | 400 | `MtgPlayer.outside_the_game`, `MtgGame.take_from_outside_the_game` | Ring of Ma'rûf (`arn/ring_of_ma_ruf.gd`) |
 | Putting a card from HAND onto the battlefield | Without casting it: the card leaves the hand and enters properly (ETB, summoning sickness, SBAs). Never a land drop. | 701.19 | `MtgGame.put_from_hand_into_play` | Eureka (`leg/eureka.gd`), Gaea's Touch (`drk/gaea_s_touch.gd`), Triassic Egg (`leg/triassic_egg.gd`) |
 | Library and graveyard moves | Search-and-take, put into play, put into graveyard, return to hand / library top, reanimate, exile from graveyard, mill, shuffle hand and/or graveyard back in, return from exile to play / hand / graveyard. | 701.19 | `pick_from_library`, `search_library`, `put_into_play`, `put_into_graveyard`, `return_from_graveyard_to_hand`, `return_from_graveyard_to_library_top`, `reanimate`, `exile_from_graveyard`, `mill`, `shuffle_graveyard_into_library`, `shuffle_hand_into_library`, `shuffle_hand_and_graveyard_into_library`, `return_from_exile_to_play` / `_to_hand` / `_to_graveyard` | Demonic Tutor (`2ed/demonic_tutor.gd`), Timetwister (`2ed/timetwister.gd`), Feldon's Cane (`atq/feldon_s_cane.gd`) |
-| Counters | Any kind by name; the pipeline reads the P/T ones by parsing the name, so a card may invent `-0/-2` or `+1/+0` and it just works. Counters vanish with the zone change. | 121.2 | `CardInstance.counters`, `MtgGame.add_counters`, `ContinuousEffects._parse_pt_counter` | Clockwork Beast (`2ed/clockwork_beast.gd`) |
+| Counters | Any kind by name; the pipeline reads the P/T ones by parsing the name, so a card may invent `-0/-2` or `+1/+0` and it just works. Counters vanish with the zone change. | 121.2 | `CardInstance.counters`, `MtgGame.add_counters`, `ContinuousEffects.parse_pt_counter` | Clockwork Beast (`2ed/clockwork_beast.gd`) |
 | Auras | Cast targeting what they enchant; attach on resolution; steal or reanimate the host if flagged; detach and settle the host on any exit. | 303.4a | `CardData.enchants` / `aura_steals` / `reanimates`, `MtgGame._detach_departing_aura`, `attach_aura_from_anywhere` | Control Magic, Animate Dead, Takklemaggot (`leg/takklemaggot.gd`) |
 | Moving an Aura | Re-attach an Aura already on the battlefield to a new host. NOT a zone change: nothing triggers, counters and floats survive, the timestamp does not move; refused when the new host is not something that Aura could enchant. | 701.3, 701.3d | `MtgGame.move_aura` | Kudzu (`2ed/kudzu.gd`) |
 | Game end | A player loses (life, poison, empty draw, or a card saying so); a DRAW leaves `winner` at -1. | 104.2-4 | `MtgGame._lose`, `lose_game`, `draw_game`, `is_draw`, signal `game_ended` | Divine Intervention (`leg/divine_intervention.gd`) |

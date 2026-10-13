@@ -172,9 +172,9 @@ fork and measured at scale.
 
 | § | Why it stays open |
 |---|---|
-| 3.4 | Menace pre-flight would mean first inventing the restriction it pre-flights. No card in our pool has menace. Revisit only if one arrives. |
+| 3.4 | Menace pre-flight would mean first inventing the restriction it pre-flights. No card in our pool has menace. Revisit only if one arrives. **Since then (checked 2026-10-13):** the optional packs carry menace — Goblin War Drums (Pack 2), Imposing Visage (Pack 3), Gorilla War Cry (Pack 5) — and the engine has the rule: `CardInstance.cur_min_blockers`, which `MtgGame.declare_blockers` enforces by refusing "…must be blocked by at least N creatures". The screen still has no pre-flight of its own on Done; the engine's refusal is what the player sees. |
 | 3.9 | The stack's description reaching the message bar. Verified WORSE than the item claimed: `StackItem.description` carries neither targets nor X, so there was never anything to forward. Weighed twice more (§6.10, §6.8) and still not cheap; it needs a naming function plus two description sites, and every test that reads the log. **The two sites are `MtgGame.cast_spell` (the `SIMPLIFIED:` marker, `"%s casts %s"`) and `MtgGame.activate_ability` (`"%s activates %s: %s"`) — re-found 2026-09-11, because `docs/ROADMAP.md`'s row for it still cites the line numbers they had before the engine grew past them, and a row that points at the wrong line is how the next pass loses an hour.** |
-| 9.8 | `auto-cast` / `Don't Auto Tap` / `locked land`. Blocked behind `@MENU_MANAPOOL`'s per-mana spends, which our one-call `cast_spell` has no half-paid state to spend into — a held-open payment of §1.3's shape. |
+| 9.8 | `auto-cast` / `Don't Auto Tap` / `locked land`. Blocked behind `@MENU_MANAPOOL`'s per-mana spends, which our one-call `cast_spell` has no half-paid state to spend into — a held-open payment of §1.3's shape. **BUILT 2026-09-03 without that payment:** the left double-click auto-cast (`DuelScreen._auto_cast`) and the per-card `Don't auto tap this card` tick (`DuelScreen._no_auto_tap`). Only the per-mana spends stay grey. |
 
 Two sections are reference rather than work: **§6.0** (the names the original
 gives its own screen) and **§6.20** (what the manual adds), and they stay.
@@ -189,15 +189,23 @@ the game most:
    fix, because another agent owned the file. **Its HIGH entry (the
    cost-payment records) was fixed on 2026-09-02**; the latent and
    small-but-real entries below it are still unowned, which makes them
-   the likeliest thing here to rot.
+   the likeliest thing here to rot. **DONE 2026-09-02:** both of those
+   lists are stamped "ALL FIXED 2026-09-02" there; what that section
+   still holds is verified-and-left notes and two unmeasured performance
+   candidates.
 2. **`docs/simplified-cards.md`** — the fidelity ledger, now 55 rows over
    86 card files (was 88 over 128 on the morning of 2026-09-01; defensive
    banding and the durations cluster both landed). This is where the
    remaining *rules* divergence lives now that the pool is complete. Its
    grep invariant is ONE-DIRECTIONAL — see the ROADMAP section above.
+   **Now (2026-10-13): 12 rows over 25 marked files**, and
+   `tests/test_simplified_ledger.gd` has pinned both directions since
+   2026-09-02 (ROADMAP, "A gap in a guarantee we rely on — CLOSED").
 3. **AI sideboarding** (`docs/ROADMAP.md`, M4 phase 2.x) — designed, not
    built. It gates `--best-of` and `--sideboard` in the Deck Lab and makes
-   the between-duels step meaningful against an AI seat.
+   the between-duels step meaningful against an AI seat. **BUILT
+   2026-09-02** (ROADMAP, "STATE AS OF 2026-09-02"): `--best-of` and
+   `--sideboard` are live in the Deck Lab.
 4. **AI phase 2.x/3 generally** — activation breadth, trick anticipation,
    deck-aware mulligan, and the search-based phase 3.
 5. **M5, the adventure layer** — the overworld, which is out of this
@@ -205,6 +213,8 @@ the game most:
 6. **The 1997 ruleset as a playable whole.** Seven forks exist and
    `--rules fifth` runs them; what has never been done is a full pass
    asking whether the fifth-edition side is as finished as the modern one.
+   **DONE 2026-09-02** (ROADMAP, "THE FIFTH-EDITION RULESET, AUDITED AS A
+   WHOLE"); there are nine forks now (`RulesOptions.IMPLEMENTED`).
 
 ## The heading audit (2026-09-01)
 
@@ -234,7 +244,7 @@ earned. What the probe printed, verbatim:
 | § | The probe | What it printed |
 |---|---|---|
 | 3.3 | opponent's lone Lightning Bolt on the chain, click Counterspell | `mode=TARGETING  prompt="Select target spell."` — no auto-cast |
-| 3.4 | `Mtg.Keyword.keys()` | no `MENACE`; eleven keywords, none a blocker-count restriction |
+| 3.4 | `Mtg.Keyword.keys()` | no `MENACE`; eleven keywords, none a blocker-count restriction (2026-10-13: fifteen now, still no `MENACE` — menace is the `cur_min_blockers` count, see §3.4) |
 | 3.6 | `H` pressed with the stack hand on screen | `collapsed=false` — the key does nothing |
 | 3.7 | NORMAL mode, human holds priority | `done.modulate=(1,1,1,1)` — unlit |
 | 3.9 | a spell on the chain, then read the bar | item description `"Black Wizard casts Lightning Bolt"`, bar `"Upkeep Phase"` |
@@ -1417,6 +1427,18 @@ s30's pool has menace. **Do not build this until a card needs it.** When
 one does, §5.10 comes first and this becomes a twenty-line pre-flight in
 `_on_confirm`.
 
+**Since then (checked 2026-10-13): cards that need it arrived, and §5.10
+came first.** The optional packs carry menace — Goblin War Drums (Pack 2,
+`fem/_rules.gd`), Imposing Visage (Pack 3, `ice/_auras.gd`) and Gorilla War
+Cry (Pack 5, `all/_spells.gd`) — each as a blocker COUNT, not a keyword:
+they raise `CardInstance.cur_min_blockers` to 2, and
+`MtgGame.declare_blockers` refuses a block that puts one or more but fewer
+than that many blockers on the attacker ("…must be blocked by at least N
+creatures"). `Mtg.Keyword` has fifteen entries and still no `MENACE`, so
+the icon map's omission and `test_menace_is_not_badged` still hold. What
+is still not built is this item itself: Done sends the declaration and
+`_on_confirm` reports the engine's refusal, with no pre-flight of its own.
+
 ### 3.5 [s30] Pending attackers/blockers are not cleared when the step moves under us — DONE (2026-08-31)
 
 `duel.go:1629-1656` clears `pendingAttackers` the moment the declare-
@@ -1864,7 +1886,7 @@ already tracks an item, that is said so we do not double-count it.
 | 5.7 | **"If you would draw a card…" replacement** with an `isNormalDraw` flag | `pkg/mage/game.go:3559-3601`; `replacement.go:621-767` | ALREADY TRACKED (ROADMAP) | Four `cards/todo/` files wait on exactly this: Sylvan Library, Aladdin's Lamp, Island Sanctuary, Chains of Mephistopheles | M |
 | 5.8 | **Reveal primitives** (top-of-library and hand) | `pkg/mage/reveal.go:28-203` | MISSING (`grep reveal engine/` is empty) | Sylvan Library, Nebuchadnezzar, Petra Sphinx; and a hidden-information UI needs a legal way to show a reveal | M |
 | 5.9 | **Control layer as a fixed-point loop**, plus `cant_change_control` | `pkg/mage/effect_manager.go:624-679`; `effect_control.go:11-60` | PARTIAL — leashed control exists and the FLAG landed 2026-09-01 (`CardInstance.cur_cant_change_control`, gated in `MtgGame.change_control`, which lifted Guardian Beast's ledger row); no convergence loop | Chained control (Old Man of the Sea + Rubinia) still resolves by pipeline order | M |
-| 5.10 | **One blocker blocking several attackers**; **minimum-blocker restrictions**; **defensive banding** | `pkg/mage/game.go:3754-3763`; `combat_restrictions.go:50-66`; `combat.go:396-676` | ALREADY TRACKED (ROADMAP, simplified-cards) | Two-Headed Giant of Foriys, Blaze of Glory, Wall of Caltrops | M |
+| 5.10 | **One blocker blocking several attackers**; **minimum-blocker restrictions**; **defensive banding** | `pkg/mage/game.go:3754-3763`; `combat_restrictions.go:50-66`; `combat.go:396-676` | ALREADY TRACKED (ROADMAP, simplified-cards). **DONE, all three:** defensive banding 2026-09-01 (ROADMAP's simplifications table, `free_order`); the one-to-many block map 2026-09-02 (`CombatState.extra_blocks`, `CardData.extra_blocks`, `CardInstance.extra_blocks_this_turn`); minimum blockers with the packs' menace cards (`CardInstance.cur_min_blockers`, enforced in `MtgGame.declare_blockers` — see §3.4) | Two-Headed Giant of Foriys, Blaze of Glory, Wall of Caltrops | M |
 | 5.11 | **Effect durations beyond EOT/EOC**, plus conditional durations | `pkg/mage/core/layer.go:19-27`; `effect_manager.go:60-90` | ALREADY TRACKED for the enum; the CONDITION slot is not | Xenic Poltergeist, Brine Hag, Wall of Tombstones | M |
 | 5.12 | **Explicit layer enum with per-layer iteration** | `pkg/mage/core/layer.go:5-16`; `effect_manager.go:429-622` | ALREADY TRACKED (`mechanics.md §7`) | Our pass order was re-ordered twice by the 2026-09 audit; a declarative layer tag stops that | L |
 | 5.13 | **Turn schedule** — insertable/skippable steps | `pkg/mage/turn_schedule.go:16-142`; `game.go:92-141` | PARTIAL — `extra_turns` + the whole-turn skip (`_begin_turn`/`_skip_turn`, Time Vault, 2026-09-02), plus two conditional SKIPS hard-coded in `_advance_step` (no attackers → jump to end of combat; no first strikers → skip `FIRST_STRIKE_DAMAGE`). `STEP_ORDER` is still a const walked by index | §1.6 landed WITHOUT this, which is evidence the const array is not the blocker the entry assumed; what a real schedule buys is per-turn insertion, not conditional skipping | M |
@@ -3952,7 +3974,7 @@ What each one does now:
 
 | Table | State |
 |---|---|
-| `@MENU_SMALLCARD` | LIVE — `Original type` and `Show full card` both dock the card in the Showcase, plus the three display toggles. `View in full card` needs the Advanced Layout (§6.4), `Don't auto tap this card` needs an auto-tap, `Help...` needs §6.20l — live since 2026-10-13 (the mini help, f-minihelp). |
+| `@MENU_SMALLCARD` | LIVE — `Original type` and `Show full card` both dock the card in the Showcase, plus the three display toggles. `View in full card` needs the Advanced Layout (§6.4), `Don't auto tap this card` needs an auto-tap — live since 2026-09-03, a tick kept in `DuelScreen._no_auto_tap` that the double-click auto-cast (`DuelScreen._auto_cast`) skips, `Help...` needs §6.20l — live since 2026-10-13 (the mini help, f-minihelp). |
 | `@MENU_LIBRARY` | LIVE — `Count library cards` prints `Your library: N cards` in the Situation Bar, the count `Duel.hlp` says the pile deliberately does not show. |
 | `@MENU_HAND` | Listed; it is `Help...` and nothing else, so the whole menu was grey. It answers the gesture rather than swallowing it. Live since 2026-10-13: the hand's mini help (f-minihelp, §6.20l). |
 | `@MENU_MANAPOOL` | Listed, all seven spends grey — see below. |
@@ -3978,7 +4000,9 @@ call — there is no half-paid spell for a mana to be spent INTO — so the
 entry has nothing to mean yet. Building it is a held-open payment, the
 same shape §1.3 gave the mid-resolution questions, and it is the
 prerequisite for the auto-tap that `Don't auto tap this card` proves the
-original had. Note the seventh column, `artifact`: that pool is already
+original had. (The auto-tap came first after all: the double-click
+auto-cast, 2026-09-03, plans the whole payment at once, so the spends
+are still grey.) Note the seventh column, `artifact`: that pool is already
 modelled (`ManaPool`'s restricted pool); only the command is missing.
 
 Pinned by `tests/ui/test_card_menus.gd` (17 tests).
@@ -4365,13 +4389,23 @@ for, and the active player's declare-attackers step is an unconditional
 brake once per turn. **Lifting it needs an engine `potential_mana(pid)` /
 `could_afford(pid, cost)` that walks untapped mana sources** — worth
 having anyway for the AI's planner and for the castable-highlight hint.
+**Since 2026-09-03 the query exists and the simplification is
+deliberate:** `MtgGame.could_afford` prices against untapped sources and
+the castable highlight uses it, but `DuelScreen._has_affordable_fast_effect`
+stays on `can_afford` (the floating pool) on purpose — pointed at
+`could_afford`, Done and the opponent's-turn auto-pass would stop in every
+phase where the player merely holds an instant with a land untapped, the
+clicking the owner's 2026-09-03 playtest was about.
 
 Still open here: `Go To` (p.112) *"ends the current phase and moves you on
 to the next one"* has no control of ours. Our Done BUTTON passes priority
 exactly once, which is finer than `Go To` and finer than `Done`; keeping it
 is a **[QoL]** choice (it is the only way to stop inside a phase you did
 not mark), but it means the Situation Bar's Done and the manual's Done are
-not the same verb. `Go To` belongs with §6.3's Territory menu.
+not the same verb. `Go To` belongs with §6.3's Territory menu. **BUILT
+since:** the Territory menu's `Go to: next phase` is that verb
+(`DuelScreen._order_next_phase`, an advance that leaves the phase it is
+standing in).
 
 **b. Damage is an OBJECT you can click — DONE (engine 2026-09-01 §6.8 slice 3; the WIDGET 2026-09-01).**
 `TargetSpec.Kind.DAMAGE` and `TargetRef.damage()` make a packet targetable;
@@ -4411,7 +4445,7 @@ somewhere; only `Phased` was still unanswerable, for the reason
 board began drawing phased-out permanents (`DuelScreen._table_cards`) and
 the small card gained `MiniCard.State.PHASED`. All ten are drawn now.
 
-**c. Attackers and blockers are IRREVOCABLE — S, UI (a deliberate divergence).**
+**c. Attackers and blockers are IRREVOCABLE — S, UI (a deliberate divergence). The attacker half is BUILT as the RULES FORK `attackers_revocable` (revocable by default; off makes a named attacker final — `DuelScreen._toggle_attacker`, `_can_cancel`); blockers are not forked and stay revocable up to Done.**
 Manual p.126: *"Once you have added a creature to the attack lineup, there
 is no way to change your mind and remove it."* p.128: *"If you put in a
 blocker, but then change your mind about it, there is no way for you to
@@ -4432,7 +4466,7 @@ between draws. Effects can add potential draws or let you decline one
 disappears"*). The hand window labels it `Draw a card`. We draw silently
 inside the draw step.
 
-**e. Artifacts stop working while tapped — M, engine.**
+**e. Artifacts stop working while tapped — M, engine. BUILT as the RULES FORK `tapped_artifacts_stop` (the recalculation suspends a tapped non-creature artifact's statics in every layer, `continuous.gd`; activated abilities untouched).**
 Manual p.124: *"**When an artifact is tapped, its continuous effects
 cease.** This does not apply to artifact creatures."* This is a Fifth
 Edition rule with no modern counterpart, and it changes how a large slice
@@ -4441,7 +4475,7 @@ anywhere. Check it against every implemented artifact before adopting —
 it may be the single largest behavioural difference between our engine and
 the original.
 
-**f. Life is checked at PHASE boundaries, and negative life is survivable — S/M, engine.**
+**f. Life is checked at PHASE boundaries, and negative life is survivable — S/M, engine. BUILT as the RULES FORK `life_checked_at_phase_end` (`MtgGame._check_lethal_life` at the phase boundary; poison still kills at once; two players dying on the same boundary is a draw).**
 Manual p.174: *"If a player has less than 1 life at the end of a phase or
 the start or end of an attack, that player loses the duel. **You can go
 below 0 life and not lose if you manage to gain back enough life to put
@@ -4556,11 +4590,16 @@ shows no face-up card. `@MENU_GRAVEYARD` (graveyard and exile plates) and
 click, so their `Help...` can be pressed. The duel waits while the panel is
 up (no AI, no automatic pass, no standing order); nothing dims; Escape, the
 pad's B, a click outside, a right click, Close or the pause key close it,
-and the focus goes back. At an SGManalink table it is local only. No
+and the focus goes back. At an SGManalink table it is local only. There a
+question for this seat closes it and comes to the front; for a moment the
+question ignores clicks, so a click meant for Close answers nothing. Any
+other window that arrives goes under it, and the Pause window closes it
+(the repository check, 2026-10-13). No
 hyperlinks: a "More in Help on the main menu: <page>" line names the page.
 A mouse hover over a menu's `Help...` does not preview it (the menu's own
 item is the one gesture every device shares). Tests:
-`tests/ui/test_c2_f_minihelp_{menus,panel,online}.gd`.
+`tests/ui/test_c2_f_minihelp_{menus,panel,online}.gd`,
+`tests/ui/test_c3_fx_code_minihelp_on_top.gd`.
 <!-- end 2026-10-13 f-minihelp -->
 
 **m. Who goes first — the manual contradicts itself, and p.110 wins — S, both.**
@@ -4828,7 +4867,7 @@ mapping instead. Nothing below renames a step.
 
 | # | Ours now | Should read | Source | Where |
 |---|---|---|---|---|
-| 9.1 | ~~`Opp Hand (5)`~~ | **DONE (fortieth pass)** — `Opponent (N)`, and the chip is now the hand window's own title bar (`StackHand.title_plate`), nine-patched like the player's instead of the raw 145x51 sheet squashed into a 150x22 button | `UIStrings.txt:155` `@WINDOWTITLES`; manual p.114 | `duel_screen.gd` `OPPONENT_HAND_TITLE`, `stack_hand.gd` |
+| 9.1 | ~~`Opp Hand (5)`~~ | **DONE (fortieth pass)** — `Opponent (N)`, and the chip is now the hand window's own title bar (`StackHand.title_plate`), nine-patched like the player's instead of the raw 145x51 sheet squashed into a 150x22 button. The plate was retired on 2026-09-27: the opponent's hand is now a floating `StackHand` of its own whose `title_word` is `OPPONENT_HAND_WORD` (`tests/ui/test_opponent_hand_window_2026_09_27.gd`) | `UIStrings.txt:155` `@WINDOWTITLES`; manual p.114 | `duel_screen.gd` `OPPONENT_HAND_WORD`, `stack_hand.gd` `title_word` |
 | 9.2 | ~~`Tossing for the lead...`~~ **DONE 2026-09-01** | **`Start of Duel`** (the dialog's title) and `%s won the toss` + `and will play first.` — see §6.2 for the full play-or-draw set | `UIStrings.txt:483,487`; manual p.110 | `duel_screen.gd:306,359` |
 | 9.3 | ~~`Ability Effect` / `Triggered Ability` / `%s casts` on chain items~~ **DONE 2026-09-01** | **`%s casts...`**, **`%s activates...`**, **`%s processes...`** shipped, with `X is %d` when there is an X (`DuelScreen._chain_caption`). Still open: `Damage` / `Activation` / `Upkeep` / `Draw a card` for effect cards, which need the effect cards themselves | `UIStrings.txt:1118,1123,1134,255`; §6.6 | `duel_screen.gd` `_chain_caption` |
 | 9.4 | ~~`GAME OVER — %s wins!`~~ **DONE 2026-09-01** | **`%s won`** / **`You won!`** / **`The duel is a draw`** | `UIStrings.txt:514`; §6.16 | `duel_screen.gd:184,456` |
@@ -4848,7 +4887,7 @@ original's name and there is nothing to rename later.
 |---|---|---|---|
 | the combat step strip | **Combat Bar** (SEVEN icons — `Duel.hlp`, not the manual's five; it REPLACES the Phase Bar) — BUILT as `CombatBar` | `Duel.hlp` topic *Combat Bar*, manual p.117 | §6.5 |
 | the attack lineup window | **Combat window**, titled `Your attack` — BUILT as `CombatWindow` | manual p.126 | §6.5 |
-| the per-phase pause marker | **Stop**, set from the Phase Bar mini-menu via **Mark**; skipping forward is **Run to**; ending just this phase is **Go To** — BUILT as `PhaseStops` / `PhaseBar`, except `Go To` (§6.3) | manual p.116-117 | §6.1, §6.3 |
+| the per-phase pause marker | **Stop**, set from the Phase Bar mini-menu via **Mark**; skipping forward is **Run to**; ending just this phase is **Go To** — BUILT as `PhaseStops` / `PhaseBar`; `Go To` is the Territory menu's `Go to: next phase` (`DuelScreen._order_next_phase`, §6.3) | manual p.116-117 | §6.1, §6.3 |
 | the settings panel | **Duel Options** (window title) / the **Dueling Options** window (prose) | manual p.113 | §6.4 |
 | context help | **Dueling Help** — context-sensitive on the object right-clicked | manual p.14 | §6.20l — our mini help since 2026-10-13 |
 | the opponent's portrait | **Duelist's Face**, reached by **Flip to Face** on the Life Register | manual p.119 | §6.5 |
@@ -4873,7 +4912,7 @@ pass with the suite green either side. None of them touch `engine/`.
 |---|---|---|---|
 | 9.11 | "board half" → **territory**: `_board_half()` → `_territory()`, `_half_rows` → `_territory_rows`, and the comments that say "half" | `duel_screen.gd` (~15 sites) | S |
 | 9.12 | `CardPreview` → **`Showcase`**, `_preview_dock` → `_showcase_dock`, `preview` fields on `StackHand`/`CardPile` | `card_preview.gd`, `duel_screen.gd`, `stack_hand.gd`, `card_pile.gd`, `tests/ui/*`, `docs/CODE_MAP.md` | M |
-| 9.13 | the message bar → **Situation Bar**: `_prompt_label`/`msg_popup` → `_situation_label`/`_situation_bar` | `duel_screen.gd` (~10 sites) | S |
+| 9.13 | the message bar → **Situation Bar**: `_prompt_label` → `_situation_label` (the bar itself is already `_situation_bar`; `msg_popup` no longer exists — checked 2026-10-13) | `duel_screen.gd` | S |
 | 9.14 | `_life_buttons` → **`_life_registers`** | `duel_screen.gd`, `target_arrows.gd` (`player_anchors` doc), `tests/ui/*` | S |
 | 9.15 | `_chain_box` → **`_spell_chain`** (the UI's word; `MtgGame.stack` stays `stack`, which is correct CR) | `duel_screen.gd` | S |
 

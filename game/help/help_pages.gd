@@ -155,7 +155,7 @@ static func pages() -> Array:
 static func _page_portal_a() -> Dictionary:
 	return {"title": "Portal · Starter A", "blocks": [
 		_heading("White · Red · Green — creatures and fire"),
-		_text("Enable Pack 6 · Portal in Options → Card Packs. In Magic Battle, look under Playable variants for Portal Starter A (40-card play version). Pair it with Starter B for a gentle first matchup."),
+		_text("Enable Pack 6: Portal & Second Age in Options → Card Packs. In Magic Battle, look under Playable variants for Portal Starter A (40-card play version). Pair it with Starter B for a gentle first matchup."),
 		_heading("Your game plan"),
 		_text("Play inexpensive creatures, keep enough defenders to survive, and attack where your opponent cannot trade profitably. Plains and Mountains cast most of your spells; a Forest unlocks your green creatures."),
 		_cards([
@@ -173,7 +173,7 @@ static func _page_portal_a() -> Dictionary:
 static func _page_portal_b() -> Dictionary:
 	return {"title": "Portal · Starter B", "blocks": [
 		_heading("Blue · Black · Green — delay and outlast"),
-		_text("Enable Pack 6 · Portal in Options → Card Packs. In Magic Battle, choose Portal Starter B (40-card play version) under Playable variants. Try it against Starter A, then swap decks to learn the other side."),
+		_text("Enable Pack 6: Portal & Second Age in Options → Card Packs. In Magic Battle, choose Portal Starter B (40-card play version) under Playable variants. Try it against Starter A, then swap decks to learn the other side."),
 		_heading("Your game plan"),
 		_text("Use creatures to hold the ground while your flyers attack. Removal and return-to-hand effects buy time; drawing cards helps you keep playing threats. Look for Islands and Swamps early, with a Forest for your green creatures."),
 		_cards([
@@ -192,7 +192,7 @@ static func _page_portal_b() -> Dictionary:
 static func _page_second_age() -> Dictionary:
 	return {"title": "Second Age · Explore the set", "blocks": [
 		_heading("A second doorway into Magic"),
-		_text("Enable Pack 6 · Portal & Second Age in Options → Card Packs. Deck Builder → Extras has separate Portal and Second Age switches. Second Age has 155 different cards and 165 original English printings, including three illustrations for each basic land. Use the floating Card variant medallion to choose your artwork."),
+		_text("Enable Pack 6: Portal & Second Age in Options → Card Packs. Deck Builder → Extras has separate Portal and Second Age switches. Second Age has 155 different cards and 165 original English printings, including three illustrations for each basic land. Use the floating Card variant medallion to choose your artwork."),
 		_cards([
 			["Forest", "Keep the original land design", "The large mana symbol remains visible on the original basic-land face. Your saved deck remembers one printing for each card name."],
 			["Lone Wolf", "A choice, not trample", "When blocked, you may put all its combat damage on the opponent instead of its blockers. The blockers still deal their damage to the Wolf. Cunning Giant has a different choice: when unblocked, it can deal all its damage to one of the defending player's creatures."],
@@ -1129,12 +1129,17 @@ static func _page_icons_table() -> Dictionary:
 			+ "Dragon, Gem Bazaar, Whimsy and the rest.",
 			{"src": SRC_SET, "code": "past"}, "AST"),
 	]
+	# The key bound to Cancel NOW (repository check 2026-10-13), as the
+	# other pages read theirs; the Situation Bar's button when none is.
+	var cancel := Controls.key_text("duel_cancel")
+	var cancels := "The Cancel button on the Situation Bar cancels." \
+		if cancel == Controls.UNBOUND else "%s cancels." % cancel
 	return {"title": "Icons — around the table", "blocks": [
 		{"kind": ICONS, "entries": [
 			_icon("The targeting cursor",
 				"The pointer becomes this while a spell or effect is asking "
 				+ "what to aim at. Click a card — or a life register, to "
-				+ "target that player. Escape cancels.",
+				+ "target that player. " + cancels,
 				{"src": SRC_CURSOR}, "✛", 48.0),
 			_icon("The window icon",
 				"Cue card: \"Minimized attack window\". It appears in the "
@@ -1261,12 +1266,12 @@ static func _page_builder() -> Dictionary:
 			+ "Your saved deck remembers one printing for every copy of that card name, including the sideboard. "
 			+ "Rules, copy limits and draft pools stay the same. Missing artwork falls back to the normal face. "
 			+ "Portal, Fifth Edition, Mirage and Tempest include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
-		_text("Pack 8 · The Mirage Block brings Mirage, Visions and Weatherlight: 669 different cards "
+		_text("Pack 8: The Mirage Block brings Mirage, Visions and Weatherlight: 669 different cards "
 			+ "and 684 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
 			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
 			+ "usual rules, and a card whose rules script lives in Ice Age, Homelands, Portal or Portal Second Age "
 			+ "can be played with either that pack or Pack 8 installed."),
-		_text("Pack 9 · The Tempest Block brings Tempest, Stronghold and Exodus: 621 different cards "
+		_text("Pack 9: The Tempest Block brings Tempest, Stronghold and Exodus: 621 different cards "
 			+ "and 636 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
 			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
 			+ "usual rules, and a card whose rules script lives in Ice Age, Portal, Portal Second Age or Mirage "
@@ -1903,7 +1908,7 @@ static func mini(subject: String) -> Dictionary:
 				+ "a spell asks you to target a player, click that player's "
 				+ "life register or use the Target entries on this menu. Flip "
 				+ "over to face turns the register round to show the duelist; "
-				+ "choose it again to flip it back.", "The Dueling Table")
+				+ "Flip back to lifepoints turns it back.", "The Dueling Table")
 		MINI_GRAVEYARD:
 			return _mini("Graveyard", "Used spells, discarded cards and "
 				+ "destroyed permanents go to their owner's graveyard; exile, "

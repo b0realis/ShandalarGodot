@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-import urllib.parse
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

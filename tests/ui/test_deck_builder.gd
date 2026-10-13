@@ -784,7 +784,7 @@ func test_the_wells_message_is_pale_and_has_room_for_two_lines() -> void:
 	assert_eq(screen._status_label.max_lines_visible, 2, "two lines at the shipping height")
 	assert_gte(screen._status_label.size.y, line * 2,
 		"and the height of the two lines it may show")
-	assert_gte(screen._count_label.size.y, screen._count_label.get_line_height(),
+	assert_gte(screen._count_label.size.y, float(screen._count_label.get_line_height()),
 		"and the count line has its own")
 	# At 720 the column has no room for a second line, and the well gives
 	# it up rather than the column overrunning the filter strip.

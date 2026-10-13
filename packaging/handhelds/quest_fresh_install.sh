@@ -279,7 +279,9 @@ RESULT=y
 ask "Did it reach the title screen?" || RESULT=n
 sleep 2
 stop_log
-ok "log: $LOG ($(grep -c . "$LOG" 2>/dev/null || echo 0) lines)"
+# grep -c prints 0 AND exits 1 for an empty log, so `|| echo 0` said "0" twice.
+lines=$(grep -c . "$LOG" 2>/dev/null)
+ok "log: $LOG (${lines:-0} lines)"
 if adb pull "$F/start_report.txt" "$REPORT" > /dev/null 2>&1; then
 	ok "the game's start report: $REPORT"
 	note "its last lines:"

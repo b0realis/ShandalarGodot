@@ -1458,7 +1458,7 @@ var reads_race := false
 ## already priced against — but only where the trick has a JOB: only on
 ## our own turn, only before the blocks are in, and only when there is a
 ## body of ours that the pump makes a sound attacker and that is not one
-## without it ([method AiPlayer._trick_bait], which is the rider's own
+## without it ([method AiPlayer._trick_reserve], which is the rider's own
 ## question asked one phase earlier). An empty board on the other side
 ## books nothing, because with nothing to block us every attack is
 ## already sound. Its worth is the bait's own worth, so [method

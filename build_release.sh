@@ -151,7 +151,7 @@ usage() {
 	awk 'NR < 2 { next }
 	     !/^#/ { exit }
 	     /^# [A-Z][A-Z]/ { exit }
-	     { sub(/^# ?/, ""); print }' "$0"
+	     { sub(/^# ?/, ""); print }' "${0##*/}"  # the cd above made a relative $0 point nowhere
 	shandalar_banner_help
 }
 
@@ -167,8 +167,10 @@ QUEST=0
 CARDART=0
 while [ $# -gt 0 ]; do
 	case "$1" in
-		--out) OUT="$2"; shift 2 ;;
-		--preset) PRESET="$2"; shift 2 ;;
+		--out | --preset)
+			[ $# -ge 2 ] || { echo "build_release: $1 needs a value" >&2; exit 3; }
+			if [ "$1" = --out ]; then OUT="$2"; else PRESET="$2"; fi
+			shift 2 ;;
 		--skin) LINK_SKIN=1; shift ;;
 		--package) PACKAGE=1; shift ;;
 		--cardart) CARDART=1; shift ;;
@@ -248,7 +250,10 @@ stage_copy() {  # stage_copy SRC_DIR STAGE_DIR — copy SRC_DIR/. into STAGE_DIR
 	fi
 	rm -f "$stage.cp.log"
 	find "$stage" -name '.gdignore' -delete
-	short="$(find "$stage" -type f -size 0 | head -3)"
+	# sed, not head: head stops reading after three lines, and with more
+	# than a pipe's worth of names find dies of SIGPIPE — under pipefail
+	# that was exit 141 and no BUILD FAILED line (2026-10-13).
+	short="$(find "$stage" -type f -size 0 | sed -n '1,3p')"
 	if [ -n "$short" ]; then
 		echo "BUILD FAILED: empty files in the staged copy of $src (disk full?):" >&2
 		echo "$short" >&2
@@ -319,7 +324,7 @@ guard_stage() {  # guard_stage STAGE_DIR
 		echo "$pack_zip" >&2
 		exit 1
 	fi
-	link="$(find "$1" -type l | head -5)"
+	link="$(find "$1" -type l | sed -n '1,5p')"  # sed, not head: see stage_copy
 	if [ -n "$link" ]; then
 		echo "BUILD FAILED: a symlink in the package (zip would pack whatever it points at):" >&2
 		echo "$link" >&2
@@ -361,6 +366,7 @@ zip_stage() {  # zip_stage STAGE_DIR NAME — writes PKG_DIR/NAME.zip and NAME-w
 	skin_zip "$PKG_DIR/original_skin.zip"
 	if [ -f "$PKG_DIR/original_skin.zip" ]; then
 		cp -p "$PKG_DIR/original_skin.zip" "$stage/skin/"
+		guard_stage "$stage"  # again, with the skin zip in it (2026-10-13)
 		zip="$PKG_DIR/$name-with-skin.zip"
 		(cd "$PKG_DIR" && zip -qr "$zip" "$(basename "$stage")")
 		echo "package: $zip ($(du -h "$zip" | cut -f1)) — the game with the skin zip in skin/"
@@ -435,7 +441,9 @@ if [ "$QUEST" = 1 ]; then
 		set -a; . "$QUEST_KEY_ENV"; set +a
 	fi
 	if [ -z "${JAVA_HOME:-}" ]; then
-		JAVA_FROM_EDITOR="$(sed -n 's/^export\/android\/java_sdk_path = "\(.*\)"$/\1/p' "$HOME/.config/godot/editor_settings-4.7.tres" 2>/dev/null | head -1)"
+		# `|| …=""`: with no editor settings file sed exits 2, and under
+		# pipefail that ended the build without a word (2026-10-13).
+		JAVA_FROM_EDITOR="$(sed -n 's/^export\/android\/java_sdk_path = "\(.*\)"$/\1/p' "$HOME/.config/godot/editor_settings-4.7.tres" 2>/dev/null | head -1)" || JAVA_FROM_EDITOR=""
 		[ -n "$JAVA_FROM_EDITOR" ] && export JAVA_HOME="$JAVA_FROM_EDITOR"
 	fi
 fi
@@ -508,7 +516,11 @@ if [ "$WEB" = 1 ]; then
 		# Share the complete builder dependency/data list with every other platform.
 		python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "tools"); from package_release import stage_player_tools; stage_player_tools(Path(sys.argv[1]))' "$STAGE"
 		zip_stage "$STAGE" "Shandalar-$VERSION-$WEB_PLATFORM"
-		echo "release files: $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM.zip + $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM-with-skin.zip"
+		if [ -f "$PKG_DIR/original_skin.zip" ]; then
+			echo "release files: $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM.zip + $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM-with-skin.zip"
+		else  # no skin here: no with-skin zip was written (2026-10-13)
+			echo "release files: $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM.zip"
+		fi
 	fi
 	exit 0
 fi
@@ -540,7 +552,9 @@ if [ "$QUEST" = 1 ]; then
 	# takes when CHANGE_WIFI_MULTICAST_STATE is declared — neither can be
 	# given after a sideload. The preset in export_presets.cfg.example asks
 	# for both; a machine's own export_presets.cfg may be an older copy.
-	AAPT="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/aapt 2>/dev/null | sort -V | tail -1)"
+	# `|| …=""`, here and for apksigner: with no SDK `ls` exits 2, and
+	# under pipefail that ended the build before the note (2026-10-13).
+	AAPT="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/aapt 2>/dev/null | sort -V | tail -1)" || AAPT=""
 	if [ -n "$AAPT" ]; then
 		perms="$("$AAPT" dump permissions "$BIN" 2>&1)" || { echo "BUILD FAILED: aapt could not read the APK's manifest:" >&2; echo "$perms" >&2; exit 1; }
 		for need in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_MULTICAST_STATE; do
@@ -552,10 +566,12 @@ if [ "$QUEST" = 1 ]; then
 	else
 		echo "note: no aapt in the Android SDK's build-tools — the APK's permissions were not checked" >&2
 	fi
-	APKSIGNER="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+	APKSIGNER="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)" || APKSIGNER=""
 	if [ -n "$APKSIGNER" ]; then
 		"$APKSIGNER" verify --print-certs "$BIN" > "$OUT/apksigner.log" 2>&1 || { echo "BUILD FAILED: the APK is not signed (log: $OUT/apksigner.log)" >&2; exit 1; }
 		grep -q "CN=b0realis" "$OUT/apksigner.log" || { echo "BUILD FAILED: the APK is signed with the wrong key (log: $OUT/apksigner.log)" >&2; exit 1; }
+	else
+		echo "note: no apksigner in the Android SDK's build-tools — the APK's signature was not checked" >&2
 	fi
 	echo "ok: $(du -sh "$BIN" | cut -f1) Meta Quest APK (release template, arm64, signed)"
 	echo "install it with: adb install -r \"$BIN\""
@@ -732,7 +748,7 @@ SHORTCUT
 #   ./deck_lab.sh --deck-a res://decks/big_green.deck \
 #                 --deck-b res://decks/blue_skies.deck --games 200
 #
-# The 319 shipped decks live inside the game and are addressed as
+# The 330 shipped decks live inside the game and are addressed as
 # `res://decks/...`; your own are ordinary paths. DECKLAB.md is the manual.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -821,7 +837,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 verb="${1:-}"
 case "$verb" in
-	"" | -h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	"" | -h | --help) sed -n '2,20p' "${0##*/}" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;
 esac
 shift
@@ -870,6 +886,10 @@ RUNNER
 	zip_stage "$STAGE" "Shandalar-$VERSION-linux64"
 	cardart_zip "$LOCAL_DIR/cardart.zip"
 	[ -f "$LOCAL_DIR/cardart.zip" ] && cp -p "$LOCAL_DIR/cardart.zip" "$STAGE/skin/"
-	echo "release files: $PKG_DIR/Shandalar-$VERSION-linux64.zip + $PKG_DIR/Shandalar-$VERSION-linux64-with-skin.zip + $PKG_DIR/original_skin.zip"
+	if [ -f "$PKG_DIR/original_skin.zip" ]; then
+		echo "release files: $PKG_DIR/Shandalar-$VERSION-linux64.zip + $PKG_DIR/Shandalar-$VERSION-linux64-with-skin.zip + $PKG_DIR/original_skin.zip"
+	else  # no skin here: neither skin zip was written (2026-10-13)
+		echo "release files: $PKG_DIR/Shandalar-$VERSION-linux64.zip"
+	fi
 	echo "play copy (both packs in skin/, not for release): $STAGE/"
 fi

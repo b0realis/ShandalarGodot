@@ -6,7 +6,9 @@ shandalar_find_godot() {
 	if [ -z "${GODOT:-}" ]; then
 		if [ "$(uname -s)" = Darwin ] && [ -x ../tools/Godot.app/Contents/MacOS/Godot ]; then
 			GODOT=../tools/Godot.app/Contents/MacOS/Godot
-		elif [ -x ../tools/godot ]; then
+		# On a Mac without the app, ../tools/godot is the Linux binary (exit
+		# 126 on every tool): a `godot` on PATH comes first there.
+		elif [ -x ../tools/godot ] && { [ "$(uname -s)" != Darwin ] || ! command -v godot >/dev/null 2>&1; }; then
 			GODOT=../tools/godot
 		else
 			GODOT=godot

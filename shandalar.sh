@@ -25,7 +25,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 usage() {
-	sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+	# "${0##*/}", not "$0": the cd above made a relative $0 point nowhere.
+	sed -n '2,23p' "${0##*/}" | sed 's/^# \{0,1\}//'
 }
 
 verb="${1:-}"

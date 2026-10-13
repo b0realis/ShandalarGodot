@@ -101,7 +101,7 @@ def project_version(start: str | Path | None = None) -> str | None:
     `start` (default: this file's own directory), or None.
 
     Walks UP rather than guessing a depth: a tool is run from the repo
-    root, from `tools/`, and — for the four that ship with the game —
+    root, from `tools/`, and — for the ones that ship with the game —
     from a folder that has no `project.godot` at all. None is the honest
     answer for the last one; nothing here ever invents a number.
     """

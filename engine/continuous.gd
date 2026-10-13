@@ -239,7 +239,8 @@ var _switches: Array[Dictionary] = []
 ## DERIVED, rebuilt at the top of every [method recalculate]: the spells on
 ## the stack carrying statics that function there
 ## ([member CardData.stack_static_abilities], CR 611.3 — Torrent of Lava).
-## Read by [method _stack_statics_pass]; never journaled.
+## Read by [method _floating_statics_pass], [method _layer_five],
+## [method _layer_six] and [method _silence_pass]; never journaled.
 var _stack_sources: Array[CardInstance] = []
 
 ## Did the LAST recalculation paint any card outside the battlefield
@@ -1283,6 +1284,11 @@ func recalculate(game: MtgGame) -> void:
 	# their age, so a Blanket of Night cast AFTER the Charm ("each land is
 	# a Swamp in addition") was undone by it, and the Forest was an Island
 	# where CR 613.7 makes it an Island Swamp.
+	#
+	# SIMPLIFIED (docs/ROADMAP.md, "Simplified layers"): these two waves and
+	# [method _ordered_readers] are the only CR 613.8 dependency this engine
+	# resolves. No other dependency between two effects is detected; they
+	# apply in the order their layer's pass takes them.
 	for wave in [false, true]:
 		var which: int = _StaticPass.LAND_TYPE_READERS if wave else _StaticPass.LAND_TYPES
 		var entries: Array[Dictionary] = []

@@ -4816,6 +4816,11 @@ func _open_choice_overlay() -> void:
 
 
 func _build_choice_overlay(choice: PlayerChoice) -> void:
+	# repository check 2026-10-13 fx-code (c1-1): a question for this seat
+	# closes the mini help ([method _settle_question]).
+	var help_gave_way := mini_help_open()
+	if help_gave_way:
+		_mini_help.dismiss()
 	# s30's `vector.FillRect(..., color.RGBA{0,0,0,160})`: the board stays
 	# readable behind the question but stops competing with it.
 	var scrim := ColorRect.new()
@@ -4891,6 +4896,32 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 		lines.add_child(back)
 	dialog.add_child(lines)
 	_add_private_hide_action(scrim)
+	if help_gave_way:   # repository check 2026-10-13 fx-code (c1-1)
+		_settle_question(scrim)
+
+
+# --- repo check 2026-10-13 fx-code: the question that closes the mini help ---
+## How long a question that closed the mini help ignores the pointer.
+const QUESTION_SETTLE_MS := 400
+
+
+## A QUESTION FOR THIS SEAT CLOSES THE MINI HELP (finding c1-1). At an
+## SGManalink table the duel goes on under the help, and a question can
+## arrive while it is open. The help is a hover help and the table is
+## waiting on this seat's answer, so the help gives way and the question is
+## in front at once, rather than waiting half-hidden behind the panel. The
+## player's pointer may already be on its way to the panel's Close, and the
+## question's lines may lie under it, so for [constant QUESTION_SETTLE_MS] a
+## clear cover over [param scrim] takes every click: a click aimed at Close
+## answers nothing, and the next one does.
+func _settle_question(scrim: Control) -> void:
+	var cover := Control.new()
+	cover.name = "Settle"
+	cover.mouse_filter = Control.MOUSE_FILTER_STOP
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scrim.add_child(cover)
+	get_tree().create_timer(QUESTION_SETTLE_MS / 1000.0).timeout.connect(cover.queue_free)
+# --- end repo check 2026-10-13 fx-code ---
 
 
 ## Keep Hide reachable without letting mouse input through a modal scrim.
@@ -5058,7 +5089,7 @@ func _withdraw_choice() -> void:
 #   3. *"If you have placed a Stop on a phase, progress pauses at that
 #      phase."*
 # and then: *"When the duel pauses to take care of something like this, your
-# original 'destination' phase is forgotten."* — [member _run_slot] is
+# original 'destination' phase is forgotten."* — [member _run_to] is
 # cleared on ANY of the three, which is the difference between a run and a
 # modern auto-pass.
 #
@@ -5955,7 +5986,6 @@ func _skip_offer_applies() -> bool:
 func _has_a_legal_attacker(pid: int) -> bool:
 	if game.no_attacks_this_turn:
 		return false
-	var defender := game.opponent_of(pid)
 	for inst in game.players[pid].battlefield:
 		if _attack_refusal(inst) == "":
 			return true
@@ -8272,10 +8302,15 @@ func _open_pause() -> void:
 	menu.build(config)
 	menu.chosen.connect(_on_pause_chosen)
 	_pause_menu = menu
+	# repository check 2026-10-13 fx-code: it stays on top while it is open.
+	if not child_order_changed.is_connected(_keep_pause_on_top):
+		child_order_changed.connect(_keep_pause_on_top)
 	_refresh()
 
 
 func _close_pause() -> void:
+	if child_order_changed.is_connected(_keep_pause_on_top):   # fx-code
+		child_order_changed.disconnect(_keep_pause_on_top)
 	if _pause_menu != null and is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
 	# Cleared BEFORE the refresh, and before the free actually happens:
@@ -8284,6 +8319,37 @@ func _close_pause() -> void:
 	# and leave every clock stopped.
 	_pause_menu = null
 	_refresh()
+
+
+# --- repo check 2026-10-13 fx-code: the Pause window stays on top ---
+## THE PAUSE WINDOW STAYS ON TOP WHILE IT IS OPEN. At an SGManalink table
+## the duel goes on under it, and a question for this seat, revealed cards
+## or the End of Duel window can be added to the screen while it is up.
+## A click is found by tree order, whatever the z, so the newcomer took the
+## clicks the Pause window was drawn over: its dim swallowed "Return to
+## game", and a click on the Pause window over an answer line answered the
+## question. So a window that arrives while the Pause window is open, and
+## is drawn under it, goes under it in the tree as well; the question waits
+## behind it, dimmed, until the pause closes. One drawn over it (a higher
+## z) keeps its place over it. The keys were already the Pause window's
+## ([method _on_control]).
+var _ordering_pause := false
+
+
+func _keep_pause_on_top() -> void:
+	if _ordering_pause or not is_paused() or _pause_menu.is_queued_for_deletion():
+		return
+	_ordering_pause = true
+	var at := _pause_menu.get_index()
+	var i := at + 1
+	while i < get_child_count():
+		var later := get_child(i) as CanvasItem
+		if later != null and later.z_index <= _pause_menu.z_index:
+			move_child(later, at)   # just under the Pause window
+			at += 1
+		i += 1
+	_ordering_pause = false
+# --- end repo check 2026-10-13 fx-code ---
 
 
 ## The bar's word when the pause menu's Concede is pressed before the duel
@@ -8677,7 +8743,11 @@ func _on_attack_menu_chosen(id: int) -> void:
 # _can_cancel]), and the keys reach the panel alone ([method _on_control]):
 # Escape and the pad's B close it, the pause key closes it and opens the
 # Pause window. At an SGManalink table it is the screen's alone: nothing is
-# sent and the other seat waits for nothing.
+# sent and the other seat waits for nothing. The duel there goes on under
+# it, so a question for this seat closes it ([method _settle_question]) and
+# any other window that arrives goes under it
+# ([method DuelMiniHelp._on_host_children_changed]; repository check
+# 2026-10-13).
 
 ## The meta each mini-menu carries: where it was opened, for the panel.
 const MINI_HELP_AT := &"mini_help_at"

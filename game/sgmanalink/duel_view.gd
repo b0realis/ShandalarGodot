@@ -923,6 +923,22 @@ func _modal_open() -> bool:
 	return _tournament_panel_open or is_instance_valid(_intro_overlay) or is_instance_valid(_network_dialog) or is_instance_valid(_network_opening) or super._modal_open()
 
 
+# --- repo check 2026-10-13 fx-code: the Master Panel covers the table ---
+## NO KEY REACHES A TABLE THE MASTER PANEL COVERS. A tournament organiser
+## opens the lobby's Master Panel over their own table; it is opaque and on
+## top, and the lobby closes it on Escape ([method SgLobby._unhandled_key_input]).
+## But the table is the lobby's child and had every key first: one Escape
+## withdrew a cast begun on the table and THEN closed the panel, and the
+## pause key, the log key and the rest acted on a table nobody could see.
+## While the panel is open the table takes no key at all, so Escape does
+## one thing — it closes the panel.
+func _on_control(event: InputEvent) -> void:
+	if _tournament_panel_open:
+		return
+	super._on_control(event)
+# --- end repo check 2026-10-13 fx-code ---
+
+
 ## THE TOP RUNG OF THE CANCEL LADDER IS THE WINDOW THAT IS OPEN, and the
 ## Manalink windows are bare [OriginalDialog]s exactly as `Give up this
 ## duel?` and `Duel Options...` are — so [method DuelScreen._dialogs_open]

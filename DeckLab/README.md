@@ -509,7 +509,7 @@ that runs a thousand games.
 | `--ante N` | stake N cards each before the deal (the original's `&Ante`) | 0 |
 | `--names A,B` | seat names in the log | `SeatZero,SeatOne` |
 | `--format NAME` | require a deck format: `unrestricted`, `wild`, `type1`, `type1.5`, `highlander`. An illegal deck **fails at parse time**, naming the card. Since 2026-09-01 the check counts the deck's `SB:` SIDEBOARD with its maindeck — which is also what keeps a sideboarded deck legal at duel 2, since a one-for-one swap leaves the union of the two piles alone | none |
-| `--group NAME` | when a DIR is expanded, keep only one deck group: `originals`, `ancients`, `planeswalkers`, `coyote_tex`, `kevin_bane`, `other`, `starter`, `tournament`, `community`, `extended_community`, `user` (one per `DeckGroups.ORDER` heading). Since 2026-09-02 a DIR given with `--group` is walked **into its subfolders** — that is how the 312 ported decks under `decks/1997/<group>/`, `decks/tournament/`, `decks/community/` and `decks/extended_community/` ([decks-1997.md](decks-1997.md)) are reached: `--gauntlet decks/ --group originals` is the 55 enemy decks of the 1997 game, `--group community` the 48 proxy-free community decks. Without `--group` a DIR is its own files only, so the default field is still the five starter decks. A DIR deck that holds proxy cards is skipped with a note on stderr (a named file is never skipped; the loader refuses it and says why) | all |
+| `--group NAME` | when a DIR is expanded, keep only one deck group: `originals`, `ancients`, `planeswalkers`, `coyote_tex`, `kevin_bane`, `other`, `starter`, `tournament`, `community`, `extended_community`, `user` — or `all`, every group at once. The Portal 1997 starters, the Portal Second Age decks and the Playable variants have no value of their own; `--group all` includes them. Since 2026-09-02 a DIR given with `--group` is walked **into its subfolders** — that is how the 312 ported decks under `decks/1997/<group>/`, `decks/tournament/`, `decks/community/` and `decks/extended_community/` ([decks-1997.md](decks-1997.md)) are reached: `--gauntlet decks/ --group originals` is the 55 enemy decks of the 1997 game, `--group community` the 48 proxy-free community decks. Without `--group` a DIR is its own files only, so the default field is still the five starter decks. A DIR deck that holds proxy cards is skipped with a note on stderr (a named file is never skipped; the loader refuses it and says why) | all |
 | `--mulligan on\|off` | offer the mulligan before turn 1 — since 2026-09-08 the PARIS one (any hand, one card fewer each redraw, until the seat keeps), each seat judged by its pilot (`AiProfile.mulligans`; the plain rule when that knob is off) | **off** — see below |
 | `--rules NAME` | a rules preset: `modern_mana_burn` (the player's default table: modern rules, mana burn on), `modern` (mana burn off) or `fifth` (every fork at the 1997 answer) | **`modern_mana_burn`** — see below |
 | `--rule KEY=on\|off` | override one fork on top of `--rules`; repeatable | — |
@@ -2155,8 +2155,9 @@ catalogue an MCP client reads before it acts — `status`, `contract`, `play_gui
 `manual`, `packs`, `cards`, `check_deck`, `list_decks`, `read_deck`,
 `write_deck`, `convert_deck`, `autodeck`, `lab`, `lab_resume`,
 `read_run`, `lab_next`, `referee_start`, `referee_join`, `referee_host`,
-`referee_act`, `referee_autoplay`, `referee_wait`, `referee_stop`,
-`referee_resume` —
+`referee_act`, `referee_cast`, `referee_play_land`, `referee_view`,
+`referee_menu`, `referee_pick`, `referee_autoplay`, `referee_wait`,
+`referee_stop`, `referee_resume` —
 each with a description a program can act on and a schema with every
 argument described. Dependency-free: the Python that runs the other tools runs
 this one. Every tool is thin: the door runs as a subprocess, its JSON is

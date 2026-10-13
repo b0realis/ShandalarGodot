@@ -28,13 +28,19 @@ extends Control
 ##   - the menu key again: a right click (LB under the pad pointer, a long
 ##     press on a touchscreen) anywhere, inside the panel or out;
 ##   - the pause key, which closes it and goes on to the duel's pause menu,
-##     as the card reader does ([method FullscreenCard._input]).
+##     as the card reader does ([method FullscreenCard._input]); the Pause
+##     window opened any other way closes it too;
+##   - a question for this seat (repository check 2026-10-13): the duel at
+##     an SGManalink table goes on under the panel, and a question arriving
+##     closes it, so the question is in front at once
+##     ([method DuelScreen._build_choice_overlay]).
 ##
 ## THE DUEL WAITS while it is up: [method DuelScreen.mini_help_open] stops
 ## the computer's clock, the automatic pass and a standing Run to / Done
 ## order, and the duel's keys reach nothing but this panel. At an
 ## SGManalink table it is the local screen's alone: nothing is sent, and
-## the other seat waits for nothing.
+## the other seat waits for nothing. Any other window that arrives there
+## while it is open goes under it ([method _on_host_children_changed]).
 ##
 ## READABLE ON A SMALL SCREEN. The duel is laid out on a 1280x800 canvas
 ## and a 640x480 handheld draws that canvas at half size, so the panel's
@@ -115,8 +121,10 @@ func open_on(host: Control, what: String, words: Dictionary, at: Vector2) -> voi
 	_hide_focus = before != null and not before.has_focus(true)
 	host.add_child(self)
 	# PICKING IS TREE ORDER, whatever the z ([GraveyardView.Z]): the last
-	# child is the one a click finds first.
+	# child is the one a click finds first. It stays the last while it is
+	# open ([method _on_host_children_changed]).
 	host.move_child(self, -1)
+	host.child_order_changed.connect(_on_host_children_changed)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	_fit()
@@ -149,6 +157,9 @@ func dismiss() -> void:
 	if not _open:
 		return
 	_open = false
+	var host := get_parent()
+	if host != null and host.child_order_changed.is_connected(_on_host_children_changed):
+		host.child_order_changed.disconnect(_on_host_children_changed)
 	var viewport := get_viewport()
 	visible = false
 	if _close != null and _close.has_focus():
@@ -191,6 +202,34 @@ static func place(anchor: Vector2, panel_size: Vector2, room: Vector2,
 	at.x = minf(at.x, room.x - margin - panel_size.x)
 	at.y = minf(at.y, room.y - margin - panel_size.y)
 	return Vector2(maxf(at.x, margin), maxf(at.y, margin))
+
+
+# --------------------------------------------------------------- on top --
+
+## THE PANEL STAYS ON TOP WHILE IT IS OPEN (repository check 2026-10-13).
+## At an SGManalink table the duel goes on under it, and a window added to
+## the duel after the panel — revealed cards, the End of Duel window — is
+## found first by a click, though drawn under the panel: Close could not be
+## clicked, and a click on it reached the window underneath. So whenever
+## the duel's own windows change, the panel moves back to the end. A window
+## drawn OVER the panel (the Pause window, [constant Z]) is meant to be on
+## top instead, and it closes the panel, as the pause key does. A question
+## for this seat closes it too ([method DuelScreen._build_choice_overlay]).
+func _on_host_children_changed() -> void:
+	if not _open or not is_inside_tree() or is_queued_for_deletion():
+		return
+	var host := get_parent()
+	if host == null or host.is_queued_for_deletion():
+		return
+	var last := host.get_child_count() - 1
+	if get_index() == last:
+		return
+	for i in range(get_index() + 1, last + 1):
+		var later := host.get_child(i) as CanvasItem
+		if later != null and later.visible and later.z_index > Z:
+			dismiss()
+			return
+	host.move_child(self, -1)
 
 
 # ------------------------------------------------------------- building --

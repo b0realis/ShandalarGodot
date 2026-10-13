@@ -13,7 +13,7 @@ extends RefCounted
 ## and portraits by the user are added to originals and displayed on
 ## portrait selection."*
 ##
-## SIX KEYS, under `[options]` like every other setting, and NONE IS
+## EIGHT KEYS, under `[options]` like every other setting, and NONE IS
 ## WRITTEN until the player changes it — a default materialised into
 ## the file is a default that can never change (see
 ## [method Settings.clear_value] for the "fan" hand that shipped once):
@@ -30,6 +30,10 @@ extends RefCounted
 ##                     in the portrait chooser;      user://portraits
 ##   music_folder      the player's own tunes, played among the 1997
 ##                     ones;                         user://music
+##   tournaments_folder  the LAN organiser's checkpoints;
+##                     user://tournaments
+##   drafts_folder     where a Booster Draft's decks are saved; the
+##                     ordinary deck collection,     user://decks
 ##
 ## On Android those three defaults sit in the app's shared-storage
 ## corner instead ([method android_files_dir]): `user://` is private

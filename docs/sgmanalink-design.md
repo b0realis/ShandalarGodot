@@ -6,8 +6,8 @@ Internet hosting/discovery, permanent identities and MElo are parked for lack
 of resources. The account and public-service proposals below are retained as
 design history, not a dependency or an implementation commitment.
 
-Status: design and staged implementation, 2026-09-14. Development branch:
-`sgmanalink`, starting at `5b0b037`. The first
+Status: design and staged implementation, 2026-09-14 (developed on a
+`sgmanalink` branch from `5b0b037`, since merged into `main`). The first
 [LAN practice implementation](sgmanalink-local-playtest.md) now
 exercises decentralized desktop LAN host/discover/join and a host-refereed duel. Public online
 service, permanent personas, durable matches and player MElo remain
@@ -30,7 +30,9 @@ The goal is dependable online duels behind the familiar Shandalar stone,
 scrolls, portraits and globe. Keep Windows, Linux, macOS and web clients;
 offline duels, hotseat and the Deck Builder must remain usable without an
 account or a network connection. Start with browse/host/join duels; leave
-booster drafting and complete tournaments for later milestones.
+booster drafting and complete tournaments for later milestones. (LAN
+knockout tournaments and an offline Booster Draft have since been
+implemented.)
 
 ## Three separate responsibilities
 
@@ -288,7 +290,9 @@ whose turn it is, reconnection status and whether a result affects MElo.
    recovery and result-assurance policies only when returning to this scope.
    Higher-assurance ranked play needs approved referees and audited,
    idempotent results. Casual player hosting does not require accounts.
-   Tournaments/drafting remain later work.
+   Rated tournaments and tournament-integrated drafting remain later work;
+   LAN knockout tournaments are implemented
+   ([guide](sgmanalink-tournaments.md)).
 
 Every implementation milestone must retain existing regression gates and
 offline compatibility. Hosting budget/provider, official domain, auth
