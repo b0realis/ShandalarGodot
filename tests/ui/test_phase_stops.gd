@@ -365,7 +365,7 @@ func test_the_mini_menu_is_the_1997_four_entries_verbatim() -> void:
 	] as Array[String])
 
 
-func test_the_menu_offers_all_four_with_help_disabled() -> void:
+func test_the_menu_offers_all_four_with_help_live() -> void:
 	if screen._phase_menu == null:
 		pass_test("no menu built")
 		return
@@ -375,16 +375,12 @@ func test_the_menu_offers_all_four_with_help_disabled() -> void:
 	assert_eq(menu.item_count, 4, "all four entries, none silently dropped")
 	for i in 4:
 		assert_eq(menu.get_item_text(i), PhaseStops.MENU_ENTRIES[i])
-	# There is no Dueling Help yet (§6.20l): the entries are shown GREYED
-	# rather than invented or removed.
-	assert_false(menu.is_item_disabled(
-		menu.get_item_index(DuelScreen.PhaseMenu.RUN_TO)))
-	assert_false(menu.is_item_disabled(
-		menu.get_item_index(DuelScreen.PhaseMenu.MARK)))
-	assert_true(menu.is_item_disabled(
-		menu.get_item_index(DuelScreen.PhaseMenu.HELP_PHASE)))
-	assert_true(menu.is_item_disabled(
-		menu.get_item_index(DuelScreen.PhaseMenu.HELP)))
+	# All four live. The two Help entries were greyed until 2026-10-13 (no
+	# Dueling Help, §6.20l); they open the duel's mini help now
+	# (tests/ui/test_c2_f_minihelp_menus.gd).
+	for id in [DuelScreen.PhaseMenu.RUN_TO, DuelScreen.PhaseMenu.MARK,
+			DuelScreen.PhaseMenu.HELP_PHASE, DuelScreen.PhaseMenu.HELP]:
+		assert_false(menu.is_item_disabled(menu.get_item_index(id)))
 	menu.hide()
 
 

@@ -12,8 +12,10 @@ extends CardScript
 ## controller's DecisionAgent with the enemy's creatures offered first —
 ## which is the choice a player would make. "It can't be regenerated" is
 ## MtgGame.destroy's can_regenerate flag. The last line is a state trigger
-## (CardData.sacrifices_when, checked as a state-based action), so a Drop
-## of Honey cast onto an empty board buries itself immediately.
+## (CardData.sacrifices_when, checked at once), so a Drop of Honey cast
+## onto an empty board buries itself immediately — or, under the rules
+## option RulesOptions.sacrifice_clauses_wait, as its state trigger
+## resolves.
 ##
 ## Note the printed 1997 card is a TARGETED ability ("bury target creature
 ## with power no greater than that of any other creature Drop of Honey

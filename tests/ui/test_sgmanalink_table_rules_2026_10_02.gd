@@ -1,7 +1,7 @@
 extends GutTest
 ## THE TABLE RULES (2026-10-02). The owner's word: *"establish a
 ## togglable, modifiable basic table rules when you host the game"*. A
-## host chooses the starting life and the seven implemented rules forks
+## host chooses the starting life and the implemented rules forks
 ## for their table; the choice crosses the wire as one validated
 ## dictionary (SgTableRules), reaches the listings as a one-line brief,
 ## the room view whole, and the referee's game as life and forks. The
@@ -140,7 +140,8 @@ func test_the_standard_table_is_the_table_every_host_opened_before() -> void:
 	assert_eq(SgTableRules.brief(custom), "Custom  ·  20 life")
 	assert_string_contains(SgTableRules.summary(custom), "Damage prevention step: on")
 	assert_string_contains(SgTableRules.summary(custom), "Mana burn: on")
-	assert_eq(SgTableRules.detail(custom).split("  ·  ").size(), 7, "every implemented fork is named")
+	assert_eq(SgTableRules.detail(custom).split("  ·  ").size(), RulesOptions.IMPLEMENTED.size(),
+		"every implemented fork is named")
 	assert_lte(SgTableRules.brief(custom).length(), 64, "a brief fits a listing row")
 	for entry in RulesOptions.PRESETS:
 		var options := RulesOptions.new()
@@ -194,12 +195,15 @@ func test_a_hosted_table_plays_under_its_rules_and_the_wire_carries_them() -> vo
 	assert_true(room.match.game.rules.damage_prevention_window)
 	assert_true(room.match.game.rules.mana_burn)
 	assert_false(room.match.game.rules.attackers_revocable)
+	assert_true(room.match.game.rules.damage_effects_fixed_order, "the 1997 order of damage effects (2026-10-12)")
 	for client: SgLocalClient in [fox, owl]:
 		var game: Dictionary = client.state.room.game
 		assert_eq(int(game.players[0].life), 30)
 		assert_eq(int(game.players[1].life), 30)
 		assert_true(bool(game.presentation.rules.damage_prevention_window))
 		assert_false(bool(game.presentation.rules.attackers_revocable))
+		assert_true(bool(game.presentation.rules.damage_effects_fixed_order),
+			"every implemented fork reaches each seat's view (2026-10-12)")
 		_same_table(client.state.room.rules, fifth, "the view keeps the table while the duel runs")
 
 

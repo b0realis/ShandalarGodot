@@ -88,15 +88,22 @@ func test_forethought_amulet_caps_the_doubled_shock() -> void:
 # caps it at 2, Furnace doubles that to 4 — and the Amulet, which has
 # already had its turn, does NOT cap it again (the rebuilt list must not
 # offer it twice). Taking Furnace first: 6, then the Amulet: 2.
+#
+# Under the 1997 rules nobody is asked (the owner's ruling of 2026-10-12,
+# `RulesOptions.damage_effects_fixed_order`; tests/unit/
+# test_c2_f_order_damage_order.gd): the fixed order takes the Amulet
+# first, and the doubled 4 is still not capped a second time.
 func test_an_effect_already_applied_is_not_offered_again() -> void:
 	for preset in PRESETS:
+		var asked: bool = preset != "fifth"
 		_fresh(preset)
 		var orderer := Orderer.new()
 		orderer.take = 0
 		g.set_agent(0, orderer)
 		put_battlefield(0, "Forethought Amulet")
 		_burn_p0("Lightning Bolt")
-		assert_eq(orderer.asked.size(), 1, "%s: one question, two candidates" % preset)
+		assert_eq(orderer.asked.size(), 1 if asked else 0,
+			"%s: one question, two candidates — or none under 1997" % preset)
 		assert_eq(g.players[0].life, 16, "%s: Amulet, then Furnace — 4" % preset)
 
 		_fresh(preset)
@@ -105,7 +112,8 @@ func test_an_effect_already_applied_is_not_offered_again() -> void:
 		g.set_agent(0, orderer)
 		put_battlefield(0, "Forethought Amulet")
 		_burn_p0("Lightning Bolt")
-		assert_eq(g.players[0].life, 18, "%s: Furnace, then Amulet — 2" % preset)
+		assert_eq(g.players[0].life, 18 if asked else 16,
+			"%s: Furnace, then Amulet — 2; the fixed order under 1997 — 4" % preset)
 
 
 # The creature branch walks the same rule. A test shield that only stops

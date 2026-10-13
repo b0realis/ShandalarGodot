@@ -76,11 +76,11 @@ func test_a_rules_fork_written_as_a_word() -> void:
 			var key: String = fork["key"]
 			var value := bool(rules.get_fork(key))
 			# Marked as migrated: this is a reader's test, not the migration's.
-			_boot_with('rules_revision=2\nrule_%s="%s"' % [key, "True" if value else "no"])
+			_boot_with('rules_revision=%d\nrule_%s="%s"' % [Settings.RULES_REVISION, key, "True" if value else "no"])
 			assert_eq(Settings.rule(key), value, "%s, %s: the word is the choice" % [preset, key])
 	var defaults := RulesOptions.new()
 	defaults.set_preset(RulesOptions.DEFAULT_PRESET)
-	_boot_with('rules_revision=2\nrule_attackers_revocable="sometimes"')
+	_boot_with('rules_revision=%d\nrule_attackers_revocable="sometimes"' % Settings.RULES_REVISION)
 	assert_eq(Settings.rule("attackers_revocable"), bool(defaults.get_fork("attackers_revocable")),
 		"a word that is neither: the player's default")
 
@@ -149,7 +149,7 @@ func test_the_rules_migration_finishes_over_words() -> void:
 	assert_eq(Settings.rule("free_damage_assignment"), true,
 		"the old preset's false moves with the preset, as for a real false")
 	var text := FileAccess.get_file_as_string(PATH)
-	assert_string_contains(text, "rules_revision=2", "and the marker is on disk")
+	assert_string_contains(text, "rules_revision=%d" % Settings.RULES_REVISION, "and the marker is on disk")
 	# A file whose other forks read FIFTH (in words) is a custom choice and
 	# keeps its false.
 	var body := 'rule_free_damage_assignment="false"\n'

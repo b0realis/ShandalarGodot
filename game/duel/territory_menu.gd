@@ -26,9 +26,10 @@ extends RefCounted
 ##
 ## THE REST OF THE TABLE went live on 2026-09-01: **Concede** and its
 ## confirmation, **Minimize**, and two of the three display toggles.
-## `Show invisible effects` and `Help...` stay greyed — we have no
-## invisible effect cards and no help window — on §6.1's own precedent for
-## `@MENU_PHASEBAR`'s two Help entries.
+## `Show invisible effects` stays greyed — we have no invisible effect
+## cards — on §6.1's own precedent. `Help...` went live on 2026-10-13: the
+## territory's MINI HELP ([DuelMiniHelp]), a small panel over the table;
+## the full Help screen stays the main menu's (it closes to the title).
 ##
 ## ONE ENTRY IS DELIBERATELY ABSENT. `Save game...\tCtrl+S` is in the table
 ## but the manual is explicit (p.112) that it *"appears **only** if you are
@@ -127,7 +128,7 @@ const REST: Array[Dictionary] = [
 	{"toggle": "ShowInvisibleEffectCards"},
 	{"toggle": "ShowAllCardsSummonSickness"},
 	{"label": "Minimize", "live": true, "todo": ""},
-	{"label": "Help...", "live": false, "todo": "§6.20l"},
+	{"label": "Help...", "live": true, "todo": ""},
 	{"label": "Concede", "live": true, "todo": ""},
 ]
 

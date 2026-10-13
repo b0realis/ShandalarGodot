@@ -32,7 +32,12 @@ static func configure(c: CardData) -> bool:
 		"Call to Arms":
 			c.as_it_enters(_arms_enter)
 			c.static_ability(StaticAbility.new(_arms, "White creatures get +1/+1 while the chosen color is strictly most common."))
-			c.triggered(TriggeredAbility.new(Mtg.EventType.STATE_CHECK, _arms_sacrifice, "Sacrifice this enchantment when the chosen color is not strictly most common.", _arms_fails))
+			# "When the chosen color isn't the most common ... sacrifice this
+			# enchantment." The engine's clause, so it follows the rules fork
+			# (RulesOptions.sacrifice_clauses_wait, 2026-10-13); switched on it
+			# is a state trigger with no intervening "if": restoring the
+			# colour's lead after it triggered does not stop the sacrifice.
+			c.sacrifices_when(_arms_gone)
 		_: return false
 	return true
 
@@ -254,7 +259,4 @@ static func _arms(g: MtgGame, s: CardInstance) -> void:
 		if i.is_creature() and (i.cur_colors & Mtg.ManaColor.W) != 0:
 			i.cur_power += 1
 			i.cur_toughness += 1
-static func _arms_sacrifice(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	# A state trigger, not an intervening-if trigger: restoring the color
-	# lead after this occurrence triggered does not stop its sacrifice.
-	if F._same_trigger_source(g, s): g.sacrifice_permanent(s)
+static func _arms_gone(g: MtgGame, s: CardInstance) -> bool: return _arms_fails(g, s, null)

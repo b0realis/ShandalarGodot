@@ -49,7 +49,12 @@ static func configure(c: CardData) -> bool:
 			c.activated(F._ability("{X}{X}{1}", true, effect))
 		"Phyrexian Devourer":
 			c.activated(F._ability("", false, F.Action.new(_devour, "put +1/+1 counters equal to the exiled card's mana value on this creature", null, true)).with_library_exile_cost(1))
-			c.triggered(TriggeredAbility.new(Mtg.EventType.STATE_CHECK, _devourer_sacrifice, "Sacrifice this creature if its power is 7 or greater.", _too_large))
+			# "When this creature's power is 7 or greater, sacrifice it." The
+			# engine's clause, so it follows the rules fork
+			# (RulesOptions.sacrifice_clauses_wait, 2026-10-13): at once by
+			# default; switched on, a state trigger with no intervening "if"
+			# — exiling more cards in response does not save it.
+			c.sacrifices_when(_too_large)
 		"Helm of Obedience": c.activated(F._ability("{X}", true, F.Action.new(_helm, "opponent mills until X cards or a creature enters their graveyard; sacrifice this artifact and put that creature under your control", TargetSpec.opponent())).with_min_x(1))
 		"Balduvian Dead":
 			c.activated(F._ability("{2}{R}", false, F.Action.new(_dead, "create a 3/1 black and red Graveborn with haste; sacrifice it at the next end step", null, true)).with_exile_from_graveyard("creature card", B._creature))
@@ -140,9 +145,7 @@ static func _devour(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: i
 	if not B.live_source(g, s): return
 	var cards: Array = g.cost_paid("_library_exiled", [])
 	if not cards.is_empty(): g.add_counters(s, "+1/+1", int(cards[0].mana_value))
-static func _too_large(_g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return s.cur_power >= 7
-static func _devourer_sacrifice(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s) and s.cur_power >= 7 and s.controller_id == int(g.trigger_context(s).controller): g.sacrifice_permanent(s)
+static func _too_large(_g: MtgGame, s: CardInstance) -> bool: return s.cur_power >= 7
 static func _helm(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, x: int) -> void:
 	var put := 0
 	var who := t.player_id

@@ -5,7 +5,8 @@ extends CardScript
 ##
 ## Implementation: printed mountainwalk plus the engine's
 ## with_sacrifice_if_you_control("dwarf") clause — a state-based check
-## that fires the instant a Dwarf joins their controller's battlefield.
+## that fires the instant a Dwarf joins their controller's battlefield (a
+## state trigger under the rules option RulesOptions.sacrifice_clauses_wait).
 ## The Dark's goblins-versus-dwarves flavour, enforced by the rules
 ## engine rather than by the honour system.
 

@@ -348,7 +348,8 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
                       Keys: mana_burn, attackers_revocable,
                       tapped_artifacts_stop, life_checked_at_phase_end,
                       pool_empties_on_attack, damage_prevention_window,
-                      free_damage_assignment.
+                      free_damage_assignment, damage_effects_fixed_order,
+                      sacrifice_clauses_wait (off under every preset).
 
 THE SWEEP (measuring one AI knob the way this project measures every one)
   --sweep KNOB=V1,V2,.. Play the three-pair measurement for one AI profile

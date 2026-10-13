@@ -86,7 +86,22 @@ func test_marjhan_untap_sacrifice_and_islandhome_remain_distinct() -> void:
 	assert_eq(CombatState.attack_illegality(g, serpent, 1), "")
 	g.destroy(island)
 	g.check_state_based_actions()
+	# The engine's "when you control no Islands" clause since 2026-10-13: at
+	# once by default, the 1997 way, under every preset ...
+	assert_true(g.stack.is_empty(), "islandhome is checked at once by default")
+	assert_eq(serpent.zone, Mtg.Zone.GRAVEYARD)
+
+
+func test_marjhan_islandhome_waits_on_the_stack_with_the_rules_option() -> void:
+	# ... and the respondable state trigger with
+	# RulesOptions.sacrifice_clauses_wait on.
+	g.rules.sacrifice_clauses_wait = true
+	var island := put_battlefield(0, "Island")
+	var serpent := put_battlefield(0, "Marjhan")
+	g.destroy(island)
+	g.check_state_based_actions()
 	assert_false(g.stack.is_empty(), "islandhome uses a respondable state trigger")
+	assert_eq(serpent.zone, Mtg.Zone.BATTLEFIELD)
 	resolve_stack()
 	assert_eq(serpent.zone, Mtg.Zone.GRAVEYARD)
 

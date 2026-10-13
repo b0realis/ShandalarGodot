@@ -112,6 +112,11 @@ pad pointer is off), Space does not. The choice is kept for the next card and
 the next launch, and it is the reader's own: the Deck Builder's *Text*
 button, for the sidebar card, is a separate switch.
 
+A duel menu's **Help...** opens a small help panel over the table, and the
+duel waits while it is up; on a 640x480 screen its letters are drawn up to
+1.75× larger. B or a click outside closes it. The full Help stays on the
+main menu.
+
 ## On-screen keyboard
 
 A handheld with a pointer and no keys cannot name a deck, a table or a

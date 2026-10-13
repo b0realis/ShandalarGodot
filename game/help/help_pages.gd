@@ -380,6 +380,8 @@ static func _page_damage() -> Dictionary:
 		_heading("1997 damage prevention step: wait for the prompt"),
 		_text("With Damage prevention step enabled, damage waits for prevention, healing and redirection. A regeneration window follows for creatures that would still be destroyed. Use regeneration there when the prompt asks for it."),
 		_text("Reverse Damage protects you, not a creature. Jade Monolith can save a creature by redirecting its damage to you. In the classic window, Simulacrum and Reverse Polarity also recover damage from that window as it actually reaches you; prevented or redirected-away damage earns no life. In modern rules they count only damage already dealt when they resolve."),
+		_heading("When two effects change the same damage"),
+		_text("A Lightning Bolt aimed at you with your Forethought Amulet and an opponent's Furnace of Rath on the table: the Amulet first makes it 2 and the Furnace doubles that to 4; the Furnace first makes it 6 and the Amulet brings it down to 2. Under modern rules, when a spell or ability would deal such damage to you or your creature, you choose which applies first and the rest apply to the result. With Fixed order for damage effects on (the 1997 rules), nobody is asked, and whatever increases the damage applies after everything else."),
 		_heading("Read your active protection"),
 		_text("A small shield on a player's portrait shows active damage effects. Click it for the source, what the effect does and its duration. The list updates as shields are used or expire, including online. Eye for an Eye mirrors damage; it does not prevent your damage."),
 		_heading("What regeneration cannot save"),
@@ -1744,3 +1746,265 @@ static func _badge_icon(keyword: int, name: String, text: String) -> Dictionary:
 	return _icon(name, text,
 		{"src": SRC_BADGE, "slot": MiniCard.BADGE_SLOT[keyword]},
 		name.substr(0, 1), 32.0)
+
+
+# --- 2026-10-13 f-minihelp: the duel's mini help ---
+## THE DUEL'S MINI HELP — the words a duel menu's `Help...` shows, in a
+## small panel over the table ([DuelMiniHelp]). The full Help screen stays
+## the main menu's: it closes to the title, so a duel cannot open it (the
+## owner, 2026-10-13: *"here we only keep focused mini help hover over and
+## leave the main help as is reachable from the main menu"*).
+##
+## ONE SOURCE. Every entry is a few sentences DERIVED from the page it
+## names in `page` — the panel's "More in Help" line, which a test holds
+## to a real page title — and where a page already says the thing in so
+## many words (the Spell Chain's three sentences, each Phase Bar and
+## Combat Bar icon, the ability glossary) the entry READS that page rather
+## than repeating it, so the two can never drift. The same rules as the
+## rest of this file apply: player-facing facts, our own behaviour, no
+## sources on the screen.
+
+## One subject per duel mini-menu that carries `Help...`.
+const MINI_TERRITORY := "territory"
+const MINI_CARD := "card"
+const MINI_LIBRARY := "library"
+const MINI_HAND := "hand"
+const MINI_MANA_POOL := "mana_pool"
+const MINI_SHOWCASE := "showcase"
+const MINI_COMBAT_WINDOW := "combat_window"
+const MINI_SPELL_CHAIN := "spell_chain"
+const MINI_PHASE_BAR := "phase_bar"
+const MINI_COMBAT_BAR := "combat_bar"
+const MINI_LIFE := "life"
+const MINI_GRAVEYARD := "graveyard"
+const MINI_SUBJECTS: Array[String] = [
+	MINI_TERRITORY, MINI_CARD, MINI_LIBRARY, MINI_HAND, MINI_MANA_POOL,
+	MINI_SHOWCASE, MINI_COMBAT_WINDOW, MINI_SPELL_CHAIN, MINI_PHASE_BAR,
+	MINI_COMBAT_BAR, MINI_LIFE, MINI_GRAVEYARD,
+]
+
+## The words of a rules text that the ability glossary explains, and the
+## glossary entry for each — what `Help for this card...` looks for
+## ([method mini_card]). Matched as whole words in the card's own rules
+## text, lower-cased.
+const MINI_CARD_TERMS: Array = [
+	["flying", "Flying and reach"], ["reach", "Flying and reach"],
+	["first strike", "First strike"], ["trample", "Trample"],
+	["vigilance", "Vigilance, haste and defender"],
+	["haste", "Vigilance, haste and defender"],
+	["defender", "Vigilance, haste and defender"],
+	["landwalk", "Landwalk and menace"], ["islandwalk", "Landwalk and menace"],
+	["swampwalk", "Landwalk and menace"], ["forestwalk", "Landwalk and menace"],
+	["mountainwalk", "Landwalk and menace"], ["plainswalk", "Landwalk and menace"],
+	["menace", "Landwalk and menace"],
+	["banding", "Banding when attacking"], ["bands with other", "Banding when attacking"],
+	["protection from", "Protection"], ["shroud", "Shroud"],
+	["regenerate", "Regeneration"], ["cumulative upkeep", "Cumulative upkeep"],
+	["phasing", "Phasing"], ["flanking", "Flanking"], ["flash", "Flash"],
+	["shadow", "Shadow"], ["buyback", "Buyback"], ["snow", "Snow lands"],
+	["spore counter", "Spore counters"], ["spore counters", "Spore counters"],
+	["storage counter", "Storage lands"], ["storage counters", "Storage lands"],
+	["licid", "Licids"], ["sliver", "Slivers"], ["slivers", "Slivers"],
+	["spike", "Spikes"],
+]
+## At most this many glossary entries under `Help for this card...`.
+const MINI_CARD_MAX := 4
+
+
+## The short help for [param subject] (one of [constant MINI_SUBJECTS]):
+## `{"title", "text", "page"}`, `page` being the Help page it comes from.
+## Empty for a subject this file does not know. Keys are read when it is
+## asked, so a key moved under Options → Controls is the key it names.
+static func mini(subject: String) -> Dictionary:
+	match subject:
+		MINI_TERRITORY:
+			return _mini("Territory", "The lower territory is yours and the "
+				+ "upper one is your opponent's. On this menu, the Go to "
+				+ "entries run the duel forward to the phase they name, "
+				+ "stopping early if something needs you; Arrange sorts that "
+				+ "territory's cards "
+				+ "without changing the duel; Duel Options changes how the "
+				+ "table looks; Concede gives up the duel once you confirm. "
+				+ "Payments that belong to no card's ability appear at the top "
+				+ "of the menu when you can make one.", "The Dueling Table")
+		MINI_CARD:
+			return _mini("The small card", "Hover over a card to read it in "
+				+ "the Showcase, or choose Show full card. Hold the right "
+				+ "button on a card to lift it above the cards around it. "
+				+ "Don't auto tap this card keeps a mana source out of "
+				+ "automatic mana payment until you clear the mark; you can "
+				+ "still tap it yourself. The marks a small card can wear are "
+				+ "explained in Help under Icons — the small card.",
+				"Icons — the small card")
+		MINI_LIBRARY:
+			return _mini("Library", "Your library is the face-down pile you "
+				+ "draw from. The number on it is how many cards are left, and "
+				+ "Count library cards writes it on the Situation Bar. A "
+				+ "player who has to draw from an empty library loses.",
+				"The Dueling Table")
+		MINI_HAND:
+			var fold := Controls.text("duel_hand")
+			return _mini("Your hand", "Your hand holds the cards you can "
+				+ "play. Click a card to cast it, or double-click to have its "
+				+ "mana paid automatically; you still choose its targets. "
+				+ "Right-click a card for its own menu, or hold the right "
+				+ "button to lift it to the front."
+				+ ("" if fold == Controls.UNBOUND else
+					" %s folds your hand window away and back." % fold),
+				"Casting spells and the Spell Chain")
+		MINI_MANA_POOL:
+			return _mini("Mana pool", "Mana you have made but not spent waits "
+				+ "here, beside your life register, and pays your costs as you "
+				+ "cast — which is why this menu's spend entries stay greyed. "
+				+ "The pool empties as each step ends, or each phase with the "
+				+ "1997 timing option. With mana burn on, you lose 1 life for "
+				+ "each mana still in it.", "Mana — the fuel of every spell")
+		MINI_SHOWCASE:
+			var read := Controls.text("duel_read")
+			return _mini("Showcase", "The Showcase shows the card you last "
+				+ "hovered over, as printed; the small card on the table shows "
+				+ "its current power and toughness. Expand text box lets the "
+				+ "text area grow over the art when a card's text does not "
+				+ "fit. Help for this card... tells what the Help says about "
+				+ "the card's abilities."
+				+ ("" if read == Controls.UNBOUND else
+					" %s brings the card up full-size to read." % read),
+				"The Dueling Table")
+		MINI_COMBAT_WINDOW:
+			return _mini("Combat window", "During combat the attacking "
+				+ "creatures, and the creatures blocking them, line up in this "
+				+ "window. Minimize shrinks it to an icon in the middle of the "
+				+ "Phase Bar so you can see the board underneath; Restore, or a "
+				+ "click on that icon, brings it back.", "Icons — around the table")
+		MINI_SPELL_CHAIN:
+			# The casting page's own three sentences, read rather than copied.
+			return _mini("Spell Chain", _example_text(_page_casting(),
+				"Counterspell") + " The band over each card says who put it "
+				+ "there; rest the pointer on the card to see what it aims at.",
+				"Casting spells and the Spell Chain")
+		MINI_PHASE_BAR:
+			return _mini("Phase Bar", "The lower half of the bar is your turn "
+				+ "and the upper half your opponent's; the lit icon is the "
+				+ "current phase. Click an icon to run to that phase. "
+				+ "Right-click it and choose Mark this phase to always stop to "
+				+ "put a red Stop there: the duel waits for you at that phase. "
+				+ "Help for this phase... explains the one icon.",
+				"The Phase Bar — running and stopping")
+		MINI_COMBAT_BAR:
+			return _mini("Combat Bar", "During an attack the Combat Bar takes "
+				+ "the Phase Bar's place: seven icons for the steps of combat, "
+				+ "blue when you attack and gold when your opponent does. "
+				+ "Running to a step and Stops work on it just as on the Phase "
+				+ "Bar. Help for this phase... explains the one icon.",
+				"Icons — the Combat Bar")
+		MINI_LIFE:
+			return _mini("Life register", "Both players normally start at 20 "
+				+ "life, and a player whose life reaches 0 or less loses. When "
+				+ "a spell asks you to target a player, click that player's "
+				+ "life register or use the Target entries on this menu. Flip "
+				+ "over to face turns the register round to show the duelist; "
+				+ "choose it again to flip it back.", "The Dueling Table")
+		MINI_GRAVEYARD:
+			return _mini("Graveyard", "Used spells, discarded cards and "
+				+ "destroyed permanents go to their owner's graveyard; exile, "
+				+ "beside it, is a separate zone. Click either pile, or choose "
+				+ "a View entry on this menu, to lay out both players' "
+				+ "graveyards, exiled cards and ante. Hover over a card there "
+				+ "to read it; Done or a click outside closes the view.",
+				"The kinds of card")
+	return {}
+
+
+## `Help for this phase...` on the Phase Bar's (or the Combat Bar's) menu:
+## the icon's own line from the Help page that explains it, titled with
+## [param title] (the icon's cue card). Those lines are written for the
+## player's own turn — the opponent's half of the bar, and the steps of
+## the opponent's attack, say so first.
+static func mini_phase(bar: int, slot: int, yours: bool, title: String) -> Dictionary:
+	var combat := bar == PhaseStops.Bar.COMBAT
+	var page := _page_icons_combat_bar() if combat else _page_icons_phase_bar()
+	var meaning := ""
+	for block in page["blocks"]:
+		if String(block.get("kind", "")) == ICONS:
+			var entries: Array = block["entries"]
+			if slot >= 0 and slot < entries.size():
+				meaning = String(entries[slot]["text"])
+	if meaning == "":
+		return {}
+	if not yours:
+		meaning = ("The same step in your opponent's attack works the same way "
+			+ "for them. In your own attack: " if combat else
+			"The same phase in your opponent's turn works the same way for "
+			+ "them. In your own turn: ") + meaning
+	return _mini(title, meaning, String(page["title"]))
+
+
+## `Help for this card...` on the Showcase's menu: what the Help says about
+## the card shown there — the ability glossary's entries that name the
+## card itself (not for a basic land, whose name is a land type every
+## page uses), then the ones for the abilities its rules text names
+## ([constant MINI_CARD_TERMS]), at most [constant MINI_CARD_MAX] of them.
+static func mini_card(card_name: String, rules_text: String, basic := false) -> Dictionary:
+	var pairs: Array = []   # [heading, text, page title]
+	for page in preload("res://game/help/ability_glossary.gd").pages():
+		var blocks: Array = page["blocks"]
+		for i in range(0, blocks.size() - 1):
+			if String(blocks[i].get("kind", "")) == HEADING \
+					and String(blocks[i + 1].get("kind", "")) == TEXT:
+				pairs.append([String(blocks[i]["text"]), String(blocks[i + 1]["text"]),
+					String(page["title"])])
+	var found: Array = []
+	if not basic and card_name != "":
+		for pair in pairs:
+			if _mini_names(pair[0] + "\n" + pair[1], card_name):
+				found.append(pair)
+	var words := rules_text.to_lower()
+	for term in MINI_CARD_TERMS:
+		if not _mini_names(words, String(term[0])):
+			continue
+		for pair in pairs:
+			if pair[0] == String(term[1]) and not found.has(pair):
+				found.append(pair)
+	found = found.slice(0, MINI_CARD_MAX)
+	if found.is_empty():
+		return _mini(card_name, "The Help has nothing about this card in "
+			+ "particular. Its text, in the Showcase, says everything it does.",
+			"The parts of a card")
+	var lines := PackedStringArray()
+	for pair in found:
+		lines.append("%s — %s" % [pair[0], pair[1]])
+	return _mini(card_name, "\n\n".join(lines), String(found[0][2]))
+
+
+static func _mini(title: String, text: String, page: String) -> Dictionary:
+	return {"title": title, "text": text, "page": page}
+
+
+## The caption text of the example card [param card_name] on [param page].
+static func _example_text(page: Dictionary, card_name: String) -> String:
+	for block in page["blocks"]:
+		if String(block.get("kind", "")) == CARDS:
+			for example in block["examples"]:
+				if String(example[0]) == card_name:
+					return String(example[2])
+	return ""
+
+
+## Whether [param text] holds [param word] as a whole word (or phrase).
+static func _mini_names(text: String, word: String) -> bool:
+	var from := 0
+	while true:
+		var at := text.find(word, from)
+		if at < 0:
+			return false
+		var end := at + word.length()
+		if (at == 0 or not _mini_word_char(text[at - 1])) \
+				and (end >= text.length() or not _mini_word_char(text[end])):
+			return true
+		from = at + 1
+	return false
+
+
+static func _mini_word_char(c: String) -> bool:
+	return c.to_lower() != c.to_upper() or (c >= "0" and c <= "9")
+# --- end 2026-10-13 f-minihelp ---

@@ -4567,34 +4567,21 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		# The hint is index 0 — the head of the old order — and
 		# [method DecisionAgent.answer_option] returns its hint, so every
 		# heuristic seat plays the board this engine always played.
+		#
+		# WHO IS ASKED IS A RULES FORK (the owner's ruling of 2026-10-12,
+		# `RulesOptions.damage_effects_fixed_order`): the 1997 game asked
+		# nobody and took the fixed order; modern rules ask, and the
+		# computer answers from a look-ahead over this very walk
+		# ([method damage_order_outcomes]). The walk lives in
+		# [method _c2o_walk_player] so that look-ahead can run it with
+		# scripted picks.
 		if _has_damage_gates(p, source, packet):
-			var gates := _damage_gates(packet, p, source)
-			var applied: Array = []   # CR 614.5: each effect applies once
-			while not gates.is_empty():
-				var pick := 0
-				if gates.size() > 1:
-					var labels: Array[String] = []
-					for gate in gates:
-						labels.append(String(gate["label"]))
-					pick = maxi(0, agents[target.player_id].choose_option(
-						self, target.player_id, labels,
-						"Which effect applies to that damage first?",
-						0, false, true))
-				var chosen: Dictionary = gates[pick]
-				applied.append(_c2a_player_gate_id(p, chosen))
-				var verdict := _apply_damage_gate(packet, p, chosen)
-				if verdict >= 0:
-					return verdict
-				amount = packet.remaining()
-				if amount <= 0:
-					return 0
-				# CR 616.1e: the rule is applied again to the MODIFIED event,
-				# so the list is built afresh — an effect the event did not
-				# reach before may reach it now (Ali from Cairo after Furnace
-				# of Rath doubled a Bolt; campaign 2026-10-12) — less every
-				# effect already applied. What no longer applies drops out
-				# of the rebuild by itself.
-				gates = _c2a_player_gates_again(packet, p, source, applied)
+			var verdict := _c2o_walk_player(packet, p, source, [])
+			if verdict >= 0:
+				return verdict
+			amount = packet.remaining()
+			if amount <= 0:
+				return 0
 		if undo_log != null:
 			_rec(p, &"artifact_damage_this_turn")
 			_rec(p, &"damage_taken_this_turn")
@@ -4674,43 +4661,21 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		# altogether ([method _has_creature_damage_gates]), which is every
 		# creature in every ordinary combat and is what keeps this off the
 		# price of the combat-damage path.
+		#
+		# Who is asked is the same rules fork as on the player branch
+		# (`RulesOptions.damage_effects_fixed_order`, 2026-10-12), and the
+		# walk is [method _c2o_walk_creature] for the same reason.
 		var elsewhere := 0
 		if _has_creature_damage_gates(inst, source, packet):
-			var gates := _creature_damage_gates(packet, inst, source)
-			var applied: Array = []   # CR 614.5: each effect applies once
-			while not gates.is_empty():
-				var pick := 0
-				if gates.size() > 1:
-					var labels: Array[String] = []
-					for gate in gates:
-						labels.append(_creature_damage_gate_label(
-							inst, source, gate))
-					pick = maxi(0, agents[inst.controller_id].choose_option(
-						self, inst.controller_id, labels,
-						"Which effect applies to that damage first?",
-						0, false, true))
-				var chosen: Dictionary = gates[pick]
-				applied.append(_c2a_creature_gate_id(inst, chosen))
-				var verdict := _apply_creature_damage_gate(packet, inst, chosen)
-				# A metered REDIRECT is the one gate that both moves damage
-				# away and lets the event carry on, so what it landed
-				# elsewhere is added to this call's answer whatever happens
-				# next (see [method _apply_creature_damage_gate]).
-				elsewhere += int(chosen.get("elsewhere", 0))
-				if verdict >= 0:
-					return elsewhere + verdict
-				if packet.remaining() <= 0:
-					# The gate that emptied the packet may also have changed
-					# the body: Rock Hydra sheds +1/+1 counters to do it and
-					# can shed its last point of toughness with them.
-					check_state_based_actions()
-					return elsewhere
-				# CR 616.1e: the rule is applied again to the MODIFIED event —
-				# built afresh, less every effect already applied (CR
-				# 614.5), as on the player branch above. A gate that emptied
-				# a pool or spent the last counter drops out by itself; one
-				# the event reaches only now joins (campaign 2026-10-12).
-				gates = _c2a_creature_gates_again(packet, inst, source, applied)
+			# A metered REDIRECT is the one gate that both moves damage
+			# away and lets the event carry on, so what it landed
+			# elsewhere is added to this call's answer whatever happens
+			# next (see [method _apply_creature_damage_gate]).
+			var tally := {"elsewhere": 0}
+			var verdict := _c2o_walk_creature(packet, inst, source, [], tally)
+			elsewhere = int(tally["elsewhere"])
+			if verdict >= 0:
+				return elsewhere + verdict
 		return elsewhere + _mark_creature_damage(packet, inst)
 	check_state_based_actions()
 	return amount
@@ -11963,42 +11928,39 @@ func check_state_based_actions() -> void:
 			# lost all its abilities obeys none of them (bug pass
 			# 2026-10-03 — a masked Sea Serpent was sacrificed for want of
 			# an Island).
-			var printed_clauses := not inst.cur_abilities_silenced
+			#
+			# A RULES FORK (the owner's ruling of 2026-10-13,
+			# RulesOptions.sacrifice_clauses_wait, off under every preset):
+			# checked HERE, the 1997 printings' "Bury ... if at any time" —
+			# no response — unless the player switched the modern state
+			# trigger on, when [method _check_state_triggers] puts each
+			# clause on the stack instead ([method _c2s_queue_clause_triggers]).
+			# The three conditions are one predicate either way
+			# ([method sacrifice_clause_holds]).
+			var printed_clauses := not inst.cur_abilities_silenced \
+				and not rules.sacrifice_clauses_wait
 			# "When you control a Dwarf, sacrifice this" (Goblins of the
 			# Flarg) — the mirror of the clause below.
-			if printed_clauses and inst.data.sacrifice_if_you_control_subtype != "":
-				var hated := inst.data.sacrifice_if_you_control_subtype
-				for other in players[inst.controller_id].battlefield:
-					if other != inst and other.is_creature() and other.has_subtype(hated):
-						log_line("%s is sacrificed — its controller has a %s" % [
-							inst.data.card_name, hated.capitalize()])
-						sacrifice_permanent(inst)
-						acted = true
-						break
-				if acted:
-					break
+			if printed_clauses and sacrifice_clause_holds(inst, SacrificeClause.SUBTYPE):
+				log_line("%s is sacrificed — its controller has a %s" % [
+					inst.data.card_name, inst.data.sacrifice_if_you_control_subtype.capitalize()])
+				sacrifice_permanent(inst)
+				acted = true
+				break
 			# "When you control no Islands, sacrifice this" (Sea Serpent,
 			# Dandan, Merchant Ship). Printed as a state trigger; checked
 			# here because a state-based check fires at exactly the same
 			# moments and needs no stack.
-			if printed_clauses and inst.data.sacrifice_if_no_land_type != "":
-				var kind := inst.data.sacrifice_if_no_land_type
-				var has_one := false
-				for land in players[inst.controller_id].battlefield:
-					if land.is_land() and land.has_subtype(kind):
-						has_one = true
-						break
-				if not has_one:
-					log_line("%s is sacrificed — its controller has no %s" % [
-						inst.data.card_name, kind.capitalize()])
-					sacrifice_permanent(inst)
-					acted = true
-					break
+			if printed_clauses and sacrifice_clause_holds(inst, SacrificeClause.NO_LAND):
+				log_line("%s is sacrificed — its controller has no %s" % [
+					inst.data.card_name, inst.data.sacrifice_if_no_land_type.capitalize()])
+				sacrifice_permanent(inst)
+				acted = true
+				break
 			# The general "When <condition>, sacrifice this permanent"
 			# (Jihad). Same state-trigger-as-SBA treatment as the clause
 			# above; the predicate lives on the card.
-			if printed_clauses and inst.data.sacrifice_condition.is_valid() \
-					and inst.data.sacrifice_condition.call(self, inst):
+			if printed_clauses and sacrifice_clause_holds(inst, SacrificeClause.CONDITION):
 				log_line("%s is sacrificed — its condition is no longer met" % \
 					inst.data.card_name)
 				sacrifice_permanent(inst)
@@ -12083,13 +12045,18 @@ func check_state_based_actions() -> void:
 ## until that occurrence resolves or leaves the stack. Ordinary pools pay
 ## only the listener-index lookup; no extra battlefield scan.
 func _check_state_triggers() -> void:
-	if not _trigger_index.has(Mtg.EventType.STATE_CHECK):
+	# The printed sacrifice clauses join the state triggers when the rules
+	# fork says so (campaign 2026-10-13 f-sac); off, nothing below changes.
+	var clauses := rules.sacrifice_clauses_wait and _c2s_any_clause()
+	if not clauses and not _trigger_index.has(Mtg.EventType.STATE_CHECK):
 		return
 	var event := GameEvent.new(Mtg.EventType.STATE_CHECK, {})
 	for pid in [active_player, opponent_of(active_player)]:
 		for inst in players[pid].battlefield:
 			if inst.phased_out:
 				continue
+			if clauses:
+				_c2s_queue_clause_triggers(inst, pid, event)
 			for trig in inst.cur_triggered_abilities:
 				# Silenced: only a grant made after the removal (Pack 9 F).
 				if inst.cur_abilities_silenced and trigger_silenced(inst, trig):
@@ -17070,7 +17037,18 @@ func _c2a_player_gate_id(p: MtgPlayer, gate: Dictionary) -> Variant:
 		&"fx":
 			return "fx|" + DAMAGE_FX.guard_key(gate["entry"])
 		&"replacement", &"filter_shield":
-			return gate["entry"]
+			# An entry that LASTS the turn (Shimian Night Stalker,
+			# Scarecrow) stays in its list once applied, and a look-ahead's
+			# rewind puts the list back as COPIES (UndoLog duplicates
+			# containers), so it is named by its place among the lasting
+			# ones (campaign 2026-10-12 f-order). A one-shot leaves the
+			# list as it is applied and is named by the entry itself.
+			var entry: Dictionary = gate["entry"]
+			if bool(entry.get("all_turn", false)):
+				return "%s|turn|%d" % [kind, _c2o_lasting_index(
+					p.damage_replacements if kind == &"replacement"
+						else p.prevention_shield_filters, entry)]
+			return entry
 		&"cap":
 			return "cap|%d" % _c2a_index_of(p.damage_caps, gate["entry"])
 		&"static_shield":
@@ -17239,3 +17217,544 @@ func source_controller(source: CardInstance) -> int:
 		if item != null:
 			return item.controller
 	return source.controller_id
+
+
+# --- campaign 2026-10-12 f-order: who orders the damage effects ---
+#
+# THE OWNER'S RULING OF 2026-10-12. When several replacement and prevention
+# effects would modify the same damage, the order can change what lands: a
+# Lightning Bolt into a Forethought Amulet ("3 or more ... deals 2 instead")
+# and a Furnace of Rath ("double that damage") deals 4 with the Amulet
+# taken first and 2 with the Furnace first. The 1997 game asked nobody;
+# modern Magic (CR 616.1) asks the affected player, or the affected
+# creature's controller, and then applies the rule again. Both are kept, as
+# `RulesOptions.damage_effects_fixed_order`.
+#
+# The two CR 616.1 walks of [method _land_damage_impl] live here, so that
+# [method damage_order_outcomes] — the look-ahead an agent reads to answer
+# the question — runs the very walk the damage does, with scripted picks
+# and under the search journal, rather than a model of it.
+
+## What a trial walk returns when its script has run out at a choice point
+## (the trial dictionary's `open` then says how many lines it had).
+const _C2O_OPEN := -2
+
+## The look-ahead is EXHAUSTIVE over the remaining orders while the
+## question has at most this many lines, and greedy beyond (see
+## [method damage_order_outcomes]).
+const DAMAGE_ORDER_EXHAUSTIVE := 5
+
+## The most trial walks one look-ahead runs: 5! orders with room to spare.
+## Past it every unsettled question takes the fixed order.
+const _C2O_TRIAL_BUDGET := 720
+
+## The CR 616.1 question being put right now — `{}` when none. Set around
+## the ask in [method _c2o_ask_player] / [method _c2o_ask_creature] (an ask
+## nested inside it puts the outer one back), and read through
+## [method damage_order_question].
+var _c2o_question: Dictionary = {}
+
+
+## The CR 616.1 question being put to a seat right now, or `{}`:
+## `branch` (&"player" / &"creature"), `seat` (who is asked), `player`
+## (the damaged player) or `creature` + `stamp` (the damaged creature's id
+## and battlefield incarnation), `packet`, `labels` (the lines, in the
+## order offered — index 0 is the fixed order's first) and `applied` (the
+## effects already applied to this event). An agent answering
+## [method DecisionAgent.answer_option] reads it to know the question is
+## this one.
+func damage_order_question() -> Dictionary:
+	return _c2o_question.duplicate()
+
+
+## THE LOOK-AHEAD FOR THE CR 616.1 QUESTION being put right now (see
+## [method damage_order_question]; `[]` when none): for each line, in the
+## order offered, `{pick, label, damage, gone}` — the damage that would
+## finally land on the AFFECTED player or creature if that effect were
+## applied first and every later question were answered as well as it can
+## be ([method damage_order_better]: the creature kept on the battlefield
+## first, then the least damage).
+##
+## HOW: each line is the engine's own walk ([method _c2o_walk_player] /
+## [method _c2o_walk_creature]) run with SCRIPTED picks between a
+## [method make_mark] and an [method unmake_to] — the packet, the seats'
+## shield lists and the damage-effect registry recorded first — with the
+## default agents in the seats, so nothing inside asks anyone. The later
+## questions are searched EXHAUSTIVELY while the first has at most
+## [constant DAMAGE_ORDER_EXHAUSTIVE] lines, and GREEDILY beyond (at each
+## later question the line that does best with the fixed order after it),
+## within [constant _C2O_TRIAL_BUDGET] trials. Deterministic: the journal
+## puts the random stream back, and a search node is a probe — no log
+## line, signal or question of a trial reaches the duel.
+##
+## WHAT COUNTS: only damage that lands on the affected one. A
+## REDIRECTION counts where it lands — what goes to another player or
+## creature counts nothing here (and damage that comes back to the
+## affected one counts). A LIFE FLOOR (Ali from Cairo) is a prevention like
+## any other: what it stops never lands. Life gained on the way (Reverse
+## Damage) is not damage and is not netted. A creature that leaves the
+## battlefield during the walk (Rock Hydra shedding its last counter) is
+## `gone`, with 0 damage.
+func damage_order_outcomes() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var question := _c2o_question
+	if question.is_empty():
+		return out
+	var labels: Array = question["labels"]
+	var budget := {"trials": 0,
+		"exhaustive": labels.size() <= DAMAGE_ORDER_EXHAUSTIVE}
+	for i in labels.size():
+		var best := _c2o_best(question, [i], budget)
+		out.append({"pick": i, "label": String(labels[i]),
+			"damage": int(best["damage"]), "gone": bool(best["gone"])})
+	return out
+
+
+## Is outcome [param a] better for the affected one than [param b]? A
+## creature kept on the battlefield beats one that is not; then less damage
+## beats more. A tie is not better, so a caller scanning from the hint
+## keeps the hint.
+static func damage_order_better(a: Dictionary, b: Dictionary) -> bool:
+	if bool(a.get("gone", false)) != bool(b.get("gone", false)):
+		return not bool(a.get("gone", false))
+	return int(a.get("damage", 0)) < int(b.get("damage", 0))
+
+
+## The best outcome of [param question] with [param picks] taken at its
+## first choice points (see [method damage_order_outcomes]).
+func _c2o_best(question: Dictionary, picks: Array, budget: Dictionary) -> Dictionary:
+	if int(budget["trials"]) >= _C2O_TRIAL_BUDGET:
+		return _c2o_trial(question, picks, true, budget)
+	var result := _c2o_trial(question, picks, false, budget)
+	var lines := int(result["open"])
+	if lines == 0:
+		return result
+	if bool(budget["exhaustive"]):
+		var best := {}
+		for j in lines:
+			var line := _c2o_best(question, picks + [j], budget)
+			if best.is_empty() or damage_order_better(line, best):
+				best = line
+		return best
+	var take := 0
+	var top := {}
+	for j in lines:
+		var line := _c2o_trial(question, picks + [j], true, budget)
+		if top.is_empty() or damage_order_better(line, top):
+			top = line
+			take = j
+	return _c2o_best(question, picks + [take], budget)
+
+
+## ONE TRIAL: the rest of [param question]'s walk with [param picks]
+## scripted, measured and rewound. Returns `{damage, gone, open}` — `open`
+## is the line count of the first unscripted question when the script ran
+## out ([param hint_after] takes the fixed order there instead).
+func _c2o_trial(question: Dictionary, picks: Array, hint_after: bool,
+		budget: Dictionary) -> Dictionary:
+	budget["trials"] = int(budget["trials"]) + 1
+	var packet: DamagePacket = question["packet"]
+	var result := {"damage": 0, "gone": false, "open": 0}
+	var nested := undo_log != null
+	var mark := make_mark()
+	_rec_turn()
+	_rec(self, &"agents")
+	# The packet predates the mark, and its gates write it directly.
+	undo_log.record_object(packet)
+	if packet.local_prevention != null:
+		_rec(packet.local_prevention, &"remaining")
+	agents = [DecisionAgent.new(), DecisionAgent.new()]
+	var trial := {"picks": picks, "hint_after": hint_after, "open": 0}
+	var applied: Array = (question["applied"] as Array).duplicate()
+	if StringName(question["branch"]) == &"player":
+		var p := players[int(question["player"])]
+		var before := p.damage_taken_this_turn
+		var verdict := _c2o_walk_player(packet, p, packet.source, applied, trial)
+		if verdict != _C2O_OPEN:
+			result["damage"] = maxi(0, p.damage_taken_this_turn - before
+				+ (packet.remaining() if verdict < 0 else 0))
+	else:
+		var inst := find_instance(int(question["creature"]))
+		var stamp := int(question["stamp"])
+		if inst != null:
+			var before := inst.damage
+			var tally := {"elsewhere": 0}
+			var verdict := _c2o_walk_creature(packet, inst, packet.source,
+				applied, tally, trial)
+			if verdict != _C2O_OPEN:
+				if inst.zone != Mtg.Zone.BATTLEFIELD or inst.layer_timestamp != stamp:
+					result["gone"] = true
+				else:
+					result["damage"] = maxi(0, inst.damage - before
+						+ (packet.remaining() if verdict < 0 else 0))
+	result["open"] = int(trial["open"])
+	unmake_to(mark)
+	if not nested:
+		end_search()
+	return result
+
+
+## How a choice point of [param count] lines is settled WITHOUT asking: a
+## trial's next scripted pick (the fixed order's first once the script is
+## spent, when the trial says so — or [constant _C2O_OPEN] to stop there),
+## the fixed order's first under the 1997 rules
+## (`RulesOptions.damage_effects_fixed_order`), or -1: ask.
+func _c2o_settled_pick(trial: Dictionary, asked: int, count: int) -> int:
+	if not trial.is_empty():
+		var picks: Array = trial["picks"]
+		if asked < picks.size():
+			return clampi(int(picks[asked]), 0, count - 1)
+		if bool(trial.get("hint_after", false)):
+			return 0
+		trial["open"] = count
+		return _C2O_OPEN
+	if rules.damage_effects_fixed_order:
+		return 0
+	return -1
+
+
+## THE PLAYER BRANCH'S CR 616.1 WALK (out of [method _land_damage_impl]):
+## every effect that would apply to [param packet] aimed at [param p], the
+## seat's pick of which applies first (or the fixed order, under the 1997
+## rules or in a [param trial]), then the rule put again to the MODIFIED
+## event — CR 616.1e: the list is built afresh, so an effect the event
+## reaches only now joins it (Ali from Cairo after Furnace of Rath doubled
+## a Bolt), less every effect already applied ([param applied], CR 614.5).
+## Returns -1 when the event carries on with what is left of the packet,
+## the amount dealt when an effect ended it, or [constant _C2O_OPEN] when a
+## trial's script ran out.
+func _c2o_walk_player(packet: DamagePacket, p: MtgPlayer, source: CardInstance,
+		applied: Array, trial: Dictionary = {}) -> int:
+	var gates := _damage_gates(packet, p, source) if applied.is_empty() \
+		else _c2a_player_gates_again(packet, p, source, applied)
+	var asked := 0
+	while not gates.is_empty():
+		var pick := 0
+		if gates.size() > 1:
+			pick = _c2o_settled_pick(trial, asked, gates.size())
+			asked += 1
+			if pick == _C2O_OPEN:
+				return _C2O_OPEN
+			if pick < 0:
+				pick = _c2o_ask_player(packet, p, gates, applied)
+				# The seat may have LOOKED AHEAD, and a search's rewind
+				# puts the shield lists back as copies — so the candidates
+				# are collected again (they are pure) and the pick is taken
+				# at the same place.
+				gates = _c2a_player_gates_again(packet, p, source, applied)
+				if gates.is_empty():
+					break
+				pick = clampi(pick, 0, gates.size() - 1)
+		var chosen: Dictionary = gates[pick]
+		applied.append(_c2a_player_gate_id(p, chosen))
+		var verdict := _apply_damage_gate(packet, p, chosen)
+		if verdict >= 0:
+			return verdict
+		if packet.remaining() <= 0:
+			return 0
+		gates = _c2a_player_gates_again(packet, p, source, applied)
+	return -1
+
+
+## THE CREATURE BRANCH'S CR 616.1 WALK, the twin of
+## [method _c2o_walk_player] for a packet aimed at [param inst]: the
+## question goes to the creature's CONTROLLER. Returns the same codes;
+## what a metered redirect landed elsewhere on the way is added to
+## [param tally]'s `elsewhere`. An effect that empties the packet may also
+## have changed the body (Rock Hydra sheds +1/+1 counters to do it and can
+## shed its last point of toughness with them), so the state-based actions
+## are checked before 0 is returned.
+func _c2o_walk_creature(packet: DamagePacket, inst: CardInstance,
+		source: CardInstance, applied: Array, tally: Dictionary,
+		trial: Dictionary = {}) -> int:
+	var gates := _creature_damage_gates(packet, inst, source) if applied.is_empty() \
+		else _c2a_creature_gates_again(packet, inst, source, applied)
+	var asked := 0
+	while not gates.is_empty():
+		var pick := 0
+		if gates.size() > 1:
+			pick = _c2o_settled_pick(trial, asked, gates.size())
+			asked += 1
+			if pick == _C2O_OPEN:
+				return _C2O_OPEN
+			if pick < 0:
+				pick = _c2o_ask_creature(packet, inst, source, gates, applied)
+				gates = _c2a_creature_gates_again(packet, inst, source, applied)
+				if gates.is_empty():
+					break
+				pick = clampi(pick, 0, gates.size() - 1)
+		var chosen: Dictionary = gates[pick]
+		applied.append(_c2a_creature_gate_id(inst, chosen))
+		var verdict := _apply_creature_damage_gate(packet, inst, chosen)
+		tally["elsewhere"] = int(tally.get("elsewhere", 0)) \
+			+ int(chosen.get("elsewhere", 0))
+		if verdict >= 0:
+			return verdict
+		if packet.remaining() <= 0:
+			check_state_based_actions()
+			return 0
+		gates = _c2a_creature_gates_again(packet, inst, source, applied)
+	return -1
+
+
+## Put the player branch's question to the damaged seat. The labels are
+## the gates' own; the prompt names the damage ([method _c2o_prompt]).
+func _c2o_ask_player(packet: DamagePacket, p: MtgPlayer,
+		gates: Array[Dictionary], applied: Array) -> int:
+	var labels: Array[String] = []
+	for gate in gates:
+		labels.append(String(gate["label"]))
+	var outer := _c2o_question
+	_c2o_question = {"branch": &"player", "seat": p.id, "player": p.id,
+		"packet": packet, "applied": applied.duplicate(),
+		"labels": labels.duplicate()}
+	var pick := agents[p.id].choose_option(self, p.id, labels,
+		_c2o_prompt(packet, null), 0, false, true)
+	_c2o_question = outer
+	return maxi(0, pick)
+
+
+## Put the creature branch's question to the creature's controller. The
+## lines are built only here, where there really is a question
+## ([method _creature_damage_gates] says why that matters).
+func _c2o_ask_creature(packet: DamagePacket, inst: CardInstance,
+		source: CardInstance, gates: Array[Dictionary], applied: Array) -> int:
+	var labels: Array[String] = []
+	for gate in gates:
+		labels.append(_creature_damage_gate_label(inst, source, gate))
+	var seat := inst.controller_id
+	var outer := _c2o_question
+	_c2o_question = {"branch": &"creature", "seat": seat,
+		"creature": inst.id, "stamp": inst.layer_timestamp, "packet": packet,
+		"applied": applied.duplicate(), "labels": labels.duplicate()}
+	var pick := agents[seat].choose_option(self, seat, labels,
+		_c2o_prompt(packet, inst), 0, false, true)
+	_c2o_question = outer
+	return maxi(0, pick)
+
+
+## The question's own words: the damage as it stands now, its source and,
+## for a creature, the creature — "Which applies first to the 3 damage
+## from Lightning Bolt?", "... to Craw Wurm?".
+func _c2o_prompt(packet: DamagePacket, victim: CardInstance) -> String:
+	var from := packet.source.data.card_name if packet.source != null else "its source"
+	if victim == null:
+		return "Which applies first to the %d damage from %s?" % [
+			packet.remaining(), from]
+	return "Which applies first to the %d damage from %s to %s?" % [
+		packet.remaining(), from, victim.data.card_name]
+
+
+## [param entry]'s place among the entries of [param list] that last the
+## turn, -1 when it is not there (see [method _c2a_player_gate_id]).
+func _c2o_lasting_index(list: Array, entry: Dictionary) -> int:
+	var place := 0
+	for other in list:
+		if is_same(other, entry):
+			return place
+		if bool((other as Dictionary).get("all_turn", false)):
+			place += 1
+	return -1
+
+
+# --- campaign 2026-10-13 f-sac: the sacrifice clauses' option ---
+#
+# "WHEN YOU CONTROL NO ISLANDS, SACRIFICE THIS" AND ITS FAMILY, AS A RULES
+# FORK (the owner's ruling of 2026-10-13, RulesOptions.sacrifice_clauses_wait).
+# Three printed clauses live on CardData: `sacrifice_if_no_land_type` (Sea
+# Serpent, Pirate Ship, Dandân, Gorilla Pack's Forests ...),
+# `sacrifice_if_you_control_subtype` (Goblins of the Flarg's Dwarf) and
+# `sacrifice_condition` (Jihad, Drop of Honey, Serendib Djinn, Floodgate,
+# Phyrexian Devourer ...). The 1997 printings read "Bury ... if at any time
+# you control no islands" — a check nobody can answer — and that stays the
+# answer under every preset: [method check_state_based_actions] sacrifices
+# the permanent the moment its clause holds. The modern Oracle text is a
+# STATE TRIGGER (CR 603.8), and the player may switch that on: the clause
+# then triggers once while it holds, waits on the stack (the doomed
+# permanent gets one more use — a Pirate Ship pings once more as its last
+# Island goes), cannot trigger again while it waits, and on resolution
+# sacrifices the permanent with NO intervening "if" — none of the modern
+# Oracle lines prints one, so an Island that came back does not save it.
+#
+# One trigger per clause kind, shared by every permanent; a waiting
+# occurrence is told apart by its card and that card's timestamp. The
+# trigger captures the source's timestamp and controller as it triggers:
+# a permanent that left (even if it came back — a new object, CR 400.7),
+# phased out (CR 702.26b) or changed controllers (CR 701.17a — only its
+# controller may sacrifice it) is not sacrificed, and the next check asks
+# its clause again for the new controller.
+
+## The three printed clauses (see [method sacrifice_clause_holds]).
+enum SacrificeClause { SUBTYPE, NO_LAND, CONDITION }
+
+## The clause triggers, by [enum SacrificeClause]. Definitions, built once
+## per game and never written to; a [StackItem] points at one of them.
+var _c2s_clause_triggers: Array[TriggeredAbility] = _c2s_build_clause_triggers()
+
+
+static func _c2s_build_clause_triggers() -> Array[TriggeredAbility]:
+	var out: Array[TriggeredAbility] = []
+	for text in ["When you control a creature of that type, sacrifice this.",
+			"When you control no land of that type, sacrifice this.",
+			"When its condition is met, sacrifice this."]:
+		# Public, deterministic aftermath: a forecast may resolve it like a
+		# death trigger (MtgGame._forecast_aftermath), so a preview reads
+		# the doomed permanent as gone under both answers of the fork.
+		out.append(TriggeredAbility.new(Mtg.EventType.STATE_CHECK,
+			_c2s_resolve_clause, text).capturing(_c2s_clause_context).public_aftermath())
+	return out
+
+
+## Does [param inst]'s printed sacrifice clause of [param kind] hold right
+## now? "You" is the permanent's controller. The state-based check and the
+## state trigger ask this one predicate, so the two answers of the fork can
+## never disagree about WHEN; whether the permanent has abilities at all
+## (face down, humbled) is the caller's question.
+func sacrifice_clause_holds(inst: CardInstance, kind: int) -> bool:
+	match kind:
+		SacrificeClause.SUBTYPE:
+			var hated := inst.data.sacrifice_if_you_control_subtype
+			if hated == "":
+				return false
+			for other in players[inst.controller_id].battlefield:
+				if other != inst and other.is_creature() and other.has_subtype(hated):
+					return true
+			return false
+		SacrificeClause.NO_LAND:
+			var land_type := inst.data.sacrifice_if_no_land_type
+			if land_type == "":
+				return false
+			for land in players[inst.controller_id].battlefield:
+				if land.is_land() and land.has_subtype(land_type):
+					return false
+			return true
+		SacrificeClause.CONDITION:
+			return inst.data.sacrifice_condition.is_valid() \
+				and bool(inst.data.sacrifice_condition.call(self, inst))
+	return false
+
+
+## Does [param data] print any of the three clauses?
+static func _c2s_has_clause(data: CardData) -> bool:
+	return data.sacrifice_if_you_control_subtype != "" \
+		or data.sacrifice_if_no_land_type != "" \
+		or data.sacrifice_condition.is_valid()
+
+
+## Is any permanent on the battlefield carrying a clause? Every one is in
+## [member _sba_watch], so a board without one pays one short scan.
+func _c2s_any_clause() -> bool:
+	all_battlefield()
+	for inst in _sba_watch:
+		if _c2s_has_clause(inst.data):
+			return true
+	return false
+
+
+## CR 603.8 for [param inst]'s clauses, with the fork on: each one that
+## holds triggers, unless an occurrence of it for this very object is
+## already waiting — on the stack, in the cost freeze, or resolving.
+## [param pid] is the seat whose battlefield it is on: its controller, who
+## controls the trigger (CR 603.3a).
+func _c2s_queue_clause_triggers(inst: CardInstance, pid: int, event: GameEvent) -> void:
+	if inst.cur_abilities_silenced or not _c2s_has_clause(inst.data):
+		return   # face down (CR 708.2) or humbled: no abilities at all
+	for kind in [SacrificeClause.SUBTYPE, SacrificeClause.NO_LAND, SacrificeClause.CONDITION]:
+		if not sacrifice_clause_holds(inst, kind):
+			continue
+		var trig: TriggeredAbility = _c2s_clause_triggers[kind]
+		if _c2s_clause_pending(inst, trig):
+			continue
+		var item := StackItem.new()
+		item.kind = Mtg.StackKind.TRIGGER
+		item.card = inst
+		item.controller = pid
+		item.trigger = trig
+		item.event = event
+		item.description = "%s — %s" % [inst.data.card_name, _c2s_clause_text(inst.data, kind)]
+		_push_trigger(item)
+
+
+## Is an occurrence of [param trig] for this incarnation of [param inst]
+## still waiting? A permanent that left and came back is a new object
+## (CR 400.7) whose clause may trigger at once.
+func _c2s_clause_pending(inst: CardInstance, trig: TriggeredAbility) -> bool:
+	var queued: Array = stack + _waiting_triggers
+	if _resolving_item != null:
+		queued.append(_resolving_item)
+	for item: StackItem in queued:
+		if item.trigger == trig and item.card == inst \
+				and _c2s_captured(item, "timestamp") == inst.layer_timestamp:
+			return true
+	return false
+
+
+static func _c2s_captured(item: StackItem, key: String) -> int:
+	var context: Dictionary = item.cost_paid.get("_trigger_context", {})
+	return int(context.get(key, -1))
+
+
+## What the clause trigger remembers as it triggers: which incarnation of
+## its source, under whose control.
+static func _c2s_clause_context(_g: MtgGame, s: CardInstance, _e: GameEvent) -> Dictionary:
+	return {"timestamp": s.layer_timestamp, "controller": s.controller_id}
+
+
+## "... sacrifice this." No intervening "if": the clause is not asked
+## again. The same object, still on the battlefield and still its
+## controller's to sacrifice — or nothing happens.
+static func _c2s_resolve_clause(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
+	var context := g.trigger_context(s)
+	if not g.is_present(s) \
+			or s.layer_timestamp != int(context.get("timestamp", -1)) \
+			or s.controller_id != int(context.get("controller", -1)):
+		return
+	g.sacrifice_permanent(s)
+
+
+## The card's own printed line for the clause, for the stack and the log
+## ("Pirate Ship — When you control no Islands, sacrifice Pirate Ship.").
+static func _c2s_clause_text(data: CardData, kind: int) -> String:
+	var marker := ""
+	match kind:
+		SacrificeClause.SUBTYPE: marker = "control a"
+		SacrificeClause.NO_LAND: marker = "control no"
+	for line in data.oracle_text.split("\n"):
+		if line.begins_with("When ") and line.contains(", sacrifice ") \
+				and (marker == "" or line.contains(marker)):
+			return line
+	match kind:
+		SacrificeClause.SUBTYPE:
+			return "When you control a %s, sacrifice it." % \
+				data.sacrifice_if_you_control_subtype.capitalize()
+		SacrificeClause.NO_LAND:
+			return "When you control no %s, sacrifice it." % \
+				data.sacrifice_if_no_land_type.capitalize()
+	return "Sacrifice it."
+
+
+## The permanent [param item] will sacrifice as it resolves, or null: a
+## waiting clause trigger whose source is still the same object under the
+## same controller. Public reading for the AI — a stack item is public.
+func sacrifice_clause_victim(item: StackItem) -> CardInstance:
+	if item == null or item.kind != Mtg.StackKind.TRIGGER \
+			or item.trigger == null or not _c2s_clause_triggers.has(item.trigger):
+		return null
+	var s := item.card
+	if not is_present(s) or s.layer_timestamp != _c2s_captured(item, "timestamp") \
+			or s.controller_id != _c2s_captured(item, "controller"):
+		return null
+	return s
+
+
+## Is [param inst] doomed by a clause trigger waiting on the stack (or in
+## the cost freeze)? Never true with the fork off: the clause has already
+## sacrificed it.
+func sacrifice_clause_pending(inst: CardInstance) -> bool:
+	if inst == null or (stack.is_empty() and _waiting_triggers.is_empty()):
+		return false
+	for item in stack + _waiting_triggers:
+		if sacrifice_clause_victim(item) == inst:
+			return true
+	return false
+# --- end campaign 2026-10-13 f-sac ---

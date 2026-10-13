@@ -58,6 +58,11 @@ func test_an_older_modern_preset_file_moves_with_the_preset() -> void:
 	# answer, the division order included.
 	var stored := {}
 	for fork in RulesOptions.FORKS:
+		# A fork born after this file's build was never written by it — and
+		# the one whose Modern preset keeps its 1997 answer
+		# (`sacrifice_clauses_wait`, 2026-10-13) would read as a choice.
+		if fork["key"] == "sacrifice_clauses_wait":
+			continue
 		stored["rule_" + fork["key"]] = not bool(fork["fifth_value"])
 	assert_false(stored["rule_free_damage_assignment"], "the old modern answer")
 	_boot_with(stored)

@@ -20,6 +20,9 @@ extends RefCounted
 ## touching this class behaves exactly as it did before the class existed.
 ## For most forks that means false; for `attackers_revocable` the modern
 ## answer is TRUE, which is why each fork declares its own direction.
+## One flag defaults to its 1997 answer instead: `sacrifice_clauses_wait`,
+## which the "Modern rules" preset itself keeps off (see [member PRESETS]),
+## so a fresh engine still reads as that preset.
 ##
 ## Adding a fork: add the flag, cite the manual, implement it behind the
 ## flag, then flip [member IMPLEMENTED] — the Options screen greys out
@@ -31,7 +34,8 @@ extends RefCounted
 const IMPLEMENTED := ["mana_burn", "attackers_revocable",
 	"tapped_artifacts_stop", "life_checked_at_phase_end",
 	"pool_empties_on_attack", "free_damage_assignment",
-	"damage_prevention_window"]
+	"damage_prevention_window", "damage_effects_fixed_order",
+	"sacrifice_clauses_wait"]
 
 ## THE PRESETS — the Options screen's list, in its order. A preset is one
 ## edition's answers ([method set_edition]) with named exceptions on top,
@@ -40,10 +44,16 @@ const IMPLEMENTED := ["mana_burn", "attackers_revocable",
 ## install plays under: the owner's ruling of 2026-09-13 has mana burn on
 ## by default (Settings.rule), and their word of 2026-09-25 is that this
 ## one mix has a name — *"all other mix and match should be custom"*.
+##
+## BOTH MODERN PRESETS keep `sacrifice_clauses_wait` at the 1997 answer
+## (the owner's ruling of 2026-10-13: "leave it as is" under every preset),
+## so a sacrifice clause is checked at once whichever preset is chosen and
+## switching it on is a "Custom" mix of the player's own.
 const PRESETS := [
-	{"id": "modern", "label": "Modern rules", "edition": "modern", "except": {}},
+	{"id": "modern", "label": "Modern rules", "edition": "modern",
+		"except": {"sacrifice_clauses_wait": false}},
 	{"id": "modern_mana_burn", "label": "Modern rules, mana burn on",
-		"edition": "modern", "except": {"mana_burn": true}},
+		"edition": "modern", "except": {"mana_burn": true, "sacrifice_clauses_wait": false}},
 	{"id": "fifth", "label": "1997 — Fifth Edition", "edition": "fifth", "except": {}},
 ]
 
@@ -111,7 +121,7 @@ const FORKS := [
 			+ "prevention, healing and redirection effects on it, and then "
 			+ "regenerate whatever still has lethal damage.",
 		"modern": "Prevention is applied automatically as the damage is "
-			+ "dealt, in a fixed order, with no window to respond in.",
+			+ "dealt, with no window to respond in.",
 		"source": "Duel.hlp topic Damage Dealing (\"During damage dealing, "
 			+ "players may use only damage prevention fast effects\"); the "
 			+ "prevention step was removed in Sixth Edition (1999), which is "
@@ -130,6 +140,42 @@ const FORKS := [
 			+ "blockers, %d points left\"); the damage assignment order came "
 			+ "with Magic 2010 (CR 509.2/510.1c, 2009) and left with "
 			+ "Foundations (CR 510.1c, November 2024)",
+	},
+	{
+		"key": "damage_effects_fixed_order",
+		"label": "Fixed order for damage effects",
+		"fifth_value": true,
+		"fifth": "When several effects would change the same damage, they "
+			+ "apply in a fixed order and nobody is asked (the 1997 game).",
+		"modern": "The player — or the controller of the creature — the "
+			+ "damage would hit chooses which effect applies first, then "
+			+ "the rest apply to the result; the computer picks the order "
+			+ "best for itself.",
+		"source": "CR 616.1 (\"the affected object's controller ... or the "
+			+ "affected player chooses one to apply, and then the rule is "
+			+ "applied again\"); the owner's ruling of 2026-10-12 keeps the "
+			+ "1997 game's fixed order as the Fifth Edition answer",
+	},
+	{
+		"key": "sacrifice_clauses_wait",
+		"label": "Forced sacrifices wait on the chain",
+		"fifth_value": false,
+		"fifth": "A card that must go when its condition is met — a Pirate "
+			+ "Ship when you control no Islands, Goblins of the Flarg when "
+			+ "you control a Dwarf — is sacrificed the moment it happens, "
+			+ "with no chance to use it once more.",
+		"modern": "The sacrifice waits on the Spell Chain like any other "
+			+ "triggered ability, so the card gets one more use: a Pirate "
+			+ "Ship can ping once more as your last Island goes. It is "
+			+ "sacrificed even if an Island comes back in the meantime. "
+			+ "Every preset leaves this off; switch it on to play this way.",
+		"source": "CR 603.8 (a state trigger triggers once while its "
+			+ "condition holds and not again until it has left the stack) "
+			+ "and the modern Oracle wording \"When you control no Islands, "
+			+ "sacrifice Pirate Ship\", which has no intervening \"if\"; the "
+			+ "1997 printings read \"Bury ... if at any time you control no "
+			+ "islands\", a check with no response. The owner's ruling of "
+			+ "2026-10-13 keeps the 1997 answer under every preset",
 	},
 ]
 
@@ -217,6 +263,50 @@ var free_damage_assignment := true
 ## graveyard."*
 var damage_prevention_window := false
 
+## WHO ORDERS THE DAMAGE EFFECTS (the owner's ruling of 2026-10-12). When
+## two or more replacement and/or prevention effects would modify the same
+## damage, the order can change what lands: a Lightning Bolt into a
+## Forethought Amulet ("3 or more ... deals 2 instead") and a Furnace of
+## Rath ("double that damage") deals 4 with the Amulet taken first and 2
+## with the Furnace first.
+##
+## Modern Magic puts it to the affected one — CR 616.1: *"the affected
+## object's controller ... or the affected player chooses one to apply, and
+## then the rule is applied again"* — so with this OFF (the modern answer)
+## the damaged player, or the damaged creature's controller, picks which
+## applies first ([method MtgGame._c2o_walk_player] and
+## [method MtgGame._c2o_walk_creature]); a person is shown the choice and
+## the computer picks the order that leaves it the least damage
+## ([method MtgGame.damage_order_outcomes]). The 1997 game asked nobody:
+## ON, every walk takes the engine's fixed order — what helps the victim
+## first, what hurts it last — the way the original applied its effects.
+## LIVE.
+var damage_effects_fixed_order := false
+
+## THE SACRIFICE CLAUSES (the owner's ruling of 2026-10-13). "When you
+## control no Islands, sacrifice this" (Pirate Ship, Sea Serpent, Dandân
+## and every land type in the pool), its mirror "when you control a Dwarf"
+## (Goblins of the Flarg) and the general "when <condition>, sacrifice
+## this" (Jihad, Drop of Honey, Floodgate, Phyrexian Devourer ...) — the
+## CardData fields `sacrifice_if_no_land_type`,
+## `sacrifice_if_you_control_subtype` and `sacrifice_condition`.
+##
+## The 1997 printings read "Bury ... if at any time you control no
+## islands": a check with no response, which is what OFF does — the
+## state-based check sacrifices the permanent the moment its condition
+## holds. Modern Oracle prints a STATE TRIGGER (CR 603.8): ON, the clause
+## triggers once while its condition holds, waits on the stack (so the
+## doomed permanent gets one more use — a Pirate Ship pings once more as
+## its last Island goes), cannot trigger again while it waits, and on
+## resolution sacrifices the permanent with no intervening "if" — an
+## Island that came back does not save it
+## ([method MtgGame._c2s_queue_clause_triggers]).
+##
+## OFF UNDER EVERY PRESET, the modern ones included: "leave it as is" is
+## the owner's word, so this is the one fork whose default is NOT its
+## modern answer, and turning it on reads "Custom". LIVE.
+var sacrifice_clauses_wait := false
+
 
 ## CR 704.5q — "if a permanent has both a +1/+1 counter and a -1/-1
 ## counter on it, N +1/+1 and N -1/-1 counters are removed from it" — is
@@ -286,6 +376,11 @@ static func preset_label(id: String) -> String:
 ## so a stale saved name cannot break a duel.
 func set_preset(id: String) -> void:
 	var preset := find_preset(id)
+	# Plain modern is the "Modern rules" PRESET, its exceptions included:
+	# the modern edition alone would switch the sacrifice clauses' wait on
+	# (2026-10-13), which no preset does.
+	if preset.is_empty():
+		preset = find_preset("modern")
 	set_edition(String(preset.get("edition", "modern")))
 	var except: Dictionary = preset.get("except", {})
 	for key in except:
@@ -303,6 +398,25 @@ func preset() -> String:
 		if matches(wanted):
 			return candidate["id"]
 	return "custom"
+
+
+## The first of [member PRESETS] whose answers match every fork named in
+## [param known] (key → bool), or "" when none does. For a ruleset an
+## OLDER build saved, which knew fewer forks: the forks added since take
+## that preset's answers, so a 1997 table stays the 1997 table
+## (`Settings._migrate_rules`, `SgTableRules.upgraded`; 2026-10-12).
+static func preset_matching(known: Dictionary) -> String:
+	for entry in PRESETS:
+		var candidate := RulesOptions.new()
+		candidate.set_preset(entry["id"])
+		var same := true
+		for key in known:
+			if candidate.get_fork(String(key)) != bool(known[key]):
+				same = false
+				break
+		if same:
+			return String(entry["id"])
+	return ""
 
 
 ## Every fork answered the same as [param other]'s.

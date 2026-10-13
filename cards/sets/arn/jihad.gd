@@ -11,9 +11,10 @@ extends CardScript
 ## memory (in a duel the opponent picks itself; the colour is the one they
 ## hold MOST of, which is the choice a player would make), plus a static
 ## anthem gated on that colour still being on their board, and a
-## CardData.sacrifices_when clause (checked as a state-based action,
-## exactly like Sea Serpent's "when you control no Islands") that buries
-## Jihad the moment that colour is gone.
+## CardData.sacrifices_when clause (checked at once, exactly like Sea
+## Serpent's "when you control no Islands", or a state trigger under the
+## rules option RulesOptions.sacrifice_clauses_wait) that buries Jihad the
+## moment that colour is gone.
 ##
 ## "As Jihad enters, choose a colour and an opponent" — the colour is the
 ## CASTER's, asked through their DecisionAgent as the enchantment enters,

@@ -253,6 +253,114 @@ The tests each fixer added, by owner:
     (`_close_table`).
   - `tests/unit/test_c2_f_net_wire.gd`: the native wire checks equal the old
     ones and beat the replaced loops.
+- The damage effects' order (the owner's ruling of 2026-10-12): the rules fork
+  `RulesOptions.damage_effects_fixed_order` — the 1997 fixed order, nobody
+  asked, or CR 616.1's choice by the affected player or creature controller;
+  the two walks are `MtgGame._c2o_walk_player` / `_c2o_walk_creature`, the
+  look-ahead `MtgGame.damage_order_question` / `damage_order_outcomes`:
+  - `tests/unit/test_c2_f_order_damage_order.gd`: the presets, both modes on
+    both branches (Forethought Amulet and Furnace of Rath against a Lightning
+    Bolt; a shielded Craw Wurm), the prompt's words, the look-ahead's numbers
+    and its clean rewind (a redirection included), a lasting effect not offered
+    twice across a look-ahead.
+  - `tests/ai/test_c2_f_order_ai_pick.gd`: the computer takes 2, not 4, on both
+    branches (`AiPlayer._damage_order_pick`, `forecasts_tactics`); gate off and
+    the 1997 rules keep the fixed order; a tie keeps the hint; the opponent's
+    hidden cards do not move the pick.
+  - `tests/ui/test_c2_f_order_selector.gd`: the duel holds the question for the
+    person, whose Furnace-first answer lands 2; under 1997 nobody is asked.
+  - `tests/unit/test_c2_f_order_saved_rules.gd`: a settings file or remembered
+    LAN table saved before the fork keeps its preset (`Settings._migrate_rules`
+    revision 3, `RulesOptions.preset_matching`, `SgTableRules.upgraded`).
+
+<!-- 2026-10-13 f-minihelp -->
+## The duel's mini help (2026-10-13)
+
+The owner's ruling: the full Help stays the main menu's (it closes to the
+title); in a duel every mini-menu's `Help...` opens a focused mini help.
+
+- `game/duel/mini_help.gd`: class `DuelMiniHelp` — the panel. A transparent
+  catcher over the whole duel (no dimming; last in the tree, `Z` 265) and,
+  beside where the menu stood (`place`), a small panel on the menus' dark
+  stone: title, the words in a `ScrollContainer`, "More in Help on the main
+  menu: <page>", and `Close`. Closes on Close, Escape / pad B / the accept
+  keys (`answer`, routed by the duel), a left click outside on its release
+  (not within `SETTLE_MS`, not a double click's second press), a right click
+  anywhere, and the pause key (which then opens the Pause window). The focus
+  starts on Close, the arrows scroll and never walk off, and it goes back to
+  its old holder on closing. `reading_scale` grows the letters when the
+  window shows the 1280x800 canvas smaller (a 640x480 handheld: at most
+  `MAX_SCALE`); it re-fits on `resized`.
+- `game/help/help_pages.gd` (block "f-minihelp"): `mini(subject)` →
+  `{title, text, page}` for the twelve `MINI_SUBJECTS`; `mini_phase` (one
+  Phase Bar / Combat Bar icon, read off the icon pages); `mini_card` (`Help
+  for this card...`: the ability glossary's entries naming the card or a
+  word of its rules text, `MINI_CARD_TERMS`, at most `MINI_CARD_MAX`).
+- `game/duel/duel_screen.gd` (blocks "f-minihelp"): `mini_help_open`,
+  `_open_mini_help` / `_show_mini_help`, `_menu_anchor` (each menu's
+  `MINI_HELP_AT` meta), `_open_card_help`, `_beside_showcase` (the
+  Showcase's helps open at its right edge, the card in view); the gates —
+  `_modal_open`, `_can_cancel`, `_maybe_schedule_ai`, `_ai_step`,
+  `_drive_advance`, `_on_control`; `_on_game_over` closes an open help;
+  the two menus the tables had and nothing opened:
+  `@MENU_GRAVEYARD` on the graveyard and exile plates (`_open_graveyard_menu`,
+  `_on_grave_plate_input`) and `@MENU_SPELLCHAIN` on a chain card's tan band
+  (`_open_chain_menu`, `_on_chain_band_input`).
+- `game/duel/card_menu.gd`: every table's `Help...` live, `GRAVEYARD`,
+  `HELP` / `HELP_CARD`, `help_id`, `index_of`; `territory_menu.gd`,
+  `phase_stops.gd`, `duelist_face.gd`: their Help entries live.
+- `tests/ui/test_c2_f_minihelp_menus.gd`: every menu's `Help...` live and
+  opening its own subject's words (territory, small card, library, hand,
+  mana pool, Showcase and `Help for this card...`, Combat window both ways,
+  Phase Bar and Combat Bar with `Help for this phase...`, life register,
+  graveyard, Spell Chain); the words short, sourced from real pages and free
+  of source notes; the full Help reached from the main menu only.
+- `tests/ui/test_c2_f_minihelp_panel.gd`: closing by Escape, pad B (a doubled
+  Escape dropped), a click outside, the menu key, Close and the pause key;
+  the duel's keys swallowed; the focus starts on Close and comes back; the
+  AI clock, the automatic pass and a standing order hold and resume; no dim;
+  on screen at 640x480 and 1280x720, scrolling when long, after a resize.
+- `tests/ui/test_c2_f_minihelp_online.gd`: the same help at an SGManalink
+  table; nothing sent while it is up, a host's new table under it, closing
+  it, and the held pass going out afterwards.
+<!-- end 2026-10-13 f-minihelp -->
+
+<!-- 2026-10-13 f-sac -->
+## The sacrifice clauses' option (2026-10-13)
+
+The owner's ruling: "when you control no Islands, sacrifice this" and its
+family stay checked at once (the 1997 way) under every preset; a ninth
+rules fork, `RulesOptions.sacrifice_clauses_wait` (Options › Rules "Forced
+sacrifices wait on the chain"), makes each clause the modern state trigger
+(CR 603.8). Engine: `MtgGame.sacrifice_clause_holds`, `_check_state_triggers`
+→ the block "f-sac" at the end of `engine/mtg_game.gd`. Cards: the 23 of the
+family use the three `CardData` clauses — Marjhan (`cards/sets/hml/_links.gd`),
+Floodgate and Afiya Grove (`cards/sets/mir/_triggers.gd`), Phyrexian
+Devourer (`cards/sets/all/_resources.gd`) and Call to Arms
+(`cards/sets/ice/_patterns.gd`) no longer write it as a trigger of their own.
+AI: `AiPlayer._c2s_last_use` / `_own_value` (`forecasts_tactics`).
+
+- `tests/unit/test_c2_f_sac_clauses.gd`: every preset sacrifices at once with
+  no stack item; switched on, a Pirate Ship pings once more, the trigger fires
+  once, an Island that comes back does not save it (no intervening "if"); a
+  Dwarf and the Goblins of the Flarg, Jihad's colour; a ship that left, came
+  back, was stolen (with and without an Island), turned face down or phased
+  out; the search journal's rewind; the 1997 damage step in a custom mix.
+- `tests/cards/test_c2_f_sac_family.gd`: all 23 cards of the family over the
+  nine packs, at once under every preset and waiting when switched on; the
+  family is exactly the cards with a clause and none writes its own state
+  trigger; Phyrexian Devourer's missing "if", Gorilla Pack's Forests,
+  Marjhan both ways.
+- `tests/ai/test_c2_f_sac_ai.gd`: the doomed Pirate Ship pings in answer
+  (its own turn and theirs); gate off, the old pass; their hidden hand does
+  not move it; a self pump or mana is no last use; a sacrifice the computer
+  must make takes the doomed permanent first.
+- `tests/ui/test_c2_f_sac_rules_option.gd`: the fork's two answers and words;
+  every preset keeps it off and reads by its name, on reads "Custom"; the
+  player default; a settings file or LAN table from an older build keeps its
+  preset with nothing written; the LAN table and every seat's view carry it;
+  Help's rules page; the Options row flips the readout and back.
+<!-- end 2026-10-13 f-sac -->
 
 ## The Quest's first start: the pack check, faster and on the screen; the adb scripts (2026-10-11)
 
@@ -4799,7 +4907,9 @@ shandalar/
 │   │                          CR are allowed to disagree, as switches rather
 │   │                          than as a silent default. Every flag defaults
 │   │                          to the MODERN answer and cites the manual page
-│   │                          for the other; the Options screen and
+│   │                          for the other (bar sacrifice_clauses_wait, the
+│   │                          ninth, which every preset keeps off — f-sac
+│   │                          2026-10-13); the Options screen and
 │   │                          duel_soak.sh's `--rules fifth|modern` set them
 │   ├── ai/                  THE AI OPPONENT (pure engine, headless)
 │   │   ├── ai_profile.gd    class AiProfile — the difficulty surface:
@@ -11327,7 +11437,8 @@ shandalar/
 │       │                      cover — plus the rest of the table, live or
 │       │                      greyed, and the `Concede` / `Yes, I'm sure`
 │       │                      confirmation. Only `Show invisible effects`
-│       │                      and `Help...` are still dark.
+│       │                      is still dark (`Help...` opens the mini
+│       │                      help since 2026-10-13, mini_help.gd).
 │       │                      `Save game...` is deliberately absent
 │       │                      (manual p.112: Duel only)
 │       ├── card_menu.gd     class CardMenu — the OTHER `@MENU_*` tables

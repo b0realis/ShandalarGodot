@@ -60,8 +60,9 @@ static func configure(c: CardData) -> bool:
 				"{X}: Put X vortex counters on this enchantment. Activate only during your upkeep.")
 				.during_step(Mtg.Step.UPKEEP).your_turn_only())
 		"Floodgate":
-			c.triggered(TriggeredAbility.new(Mtg.EventType.STATE_CHECK, sacrifice_source,
-				"When this creature has flying, sacrifice it.", _has_flying))
+			# The engine's "sacrifice this when" clause, so it follows the
+			# rules fork (RulesOptions.sacrifice_clauses_wait, 2026-10-13).
+			c.sacrifices_when(_has_flying)
 			c.triggered(TriggeredAbility.new(Mtg.EventType.LEAVES_BATTLEFIELD, _floodgate_wave,
 				"When this creature leaves the battlefield, it deals damage to each nonblue creature without flying equal to half the number of Islands you control, rounded down.",
 				F._self_enter))
@@ -102,8 +103,8 @@ static func configure(c: CardData) -> bool:
 				"At the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature.",
 				F._your_upkeep).targeting(TargetSpec.creature(), friendly_first,
 				"Move a +1/+1 counter from Afiya Grove onto target creature."))
-			c.triggered(TriggeredAbility.new(Mtg.EventType.STATE_CHECK, sacrifice_source,
-				"When this enchantment has no +1/+1 counters on it, sacrifice it.", _no_plus_counters))
+			# The engine's "sacrifice this when" clause (see Floodgate).
+			c.sacrifices_when(_no_plus_counters)
 		"Nettletooth Djinn":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, self_damage.bind(1),
 				"At the beginning of your upkeep, this creature deals 1 damage to you.", F._your_upkeep))
@@ -385,9 +386,10 @@ static func _vortex_feed(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, 
 
 # ----------------------------------------------------------------- Floodgate --
 
-## A STATE trigger (CR 603.8): it triggers once whenever the creature has
-## flying and not again until it has resolved (MtgGame._check_state_triggers).
-static func _has_flying(_g: MtgGame, s: CardInstance, _e: GameEvent) -> bool:
+## "When this creature has flying, sacrifice it." — CardData.sacrifices_when:
+## checked at once, or a state trigger (CR 603.8) under the rules fork
+## (MtgGame.sacrifice_clause_holds).
+static func _has_flying(_g: MtgGame, s: CardInstance) -> bool:
 	return s.has_keyword(Mtg.Keyword.FLYING)
 
 static func _floodgate_wave(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
@@ -527,7 +529,9 @@ static func _emberwilde(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
 
 # --------------------------------------------------------------- Afiya Grove --
 
-static func _no_plus_counters(_g: MtgGame, s: CardInstance, _e: GameEvent) -> bool:
+## "When this enchantment has no +1/+1 counters on it, sacrifice it." (as
+## Floodgate's clause).
+static func _no_plus_counters(_g: MtgGame, s: CardInstance) -> bool:
 	return int(s.counters.get("+1/+1", 0)) <= 0
 
 ## "Move a +1/+1 counter from this enchantment": with the Grove gone (or

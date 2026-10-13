@@ -60,7 +60,7 @@ func test_unimplemented_forks_are_disabled() -> void:
 
 
 func test_the_live_forks_are_switchable() -> void:
-	assert_eq(RulesOptions.IMPLEMENTED.size(), 7)
+	assert_eq(RulesOptions.IMPLEMENTED.size(), 9)
 	var rows := _rows()
 	assert_false(rows["Mana burn"].disabled, "mana burn really works")
 	assert_false(rows["Attacker selection revocable"].disabled,
@@ -126,7 +126,7 @@ func test_the_preset_writes_the_settings_file_once() -> void:
 	var before: int = Settings.write_count
 	preset.item_selected.emit(_row_of("fifth"))          # 1997 — Fifth Edition
 	assert_eq(Settings.write_count - before, 1,
-		"seven forks, ONE write — not one per fork")
+		"every fork, ONE write — not one per fork")
 	assert_false(Settings.is_dirty(), "and nothing is left waiting")
 	# The gesture did what it says: every fork now reads the 1997 way.
 	for fork in RulesOptions.FORKS:
@@ -134,8 +134,12 @@ func test_the_preset_writes_the_settings_file_once() -> void:
 	before = Settings.write_count
 	preset.item_selected.emit(_row_of("modern"))          # Modern rules
 	assert_eq(Settings.write_count - before, 1, "and back, in one write")
+	# Modern Magic's answers, bar the preset's one named exception: the
+	# sacrifice clauses stay the 1997 way under every preset (2026-10-13).
 	for fork in RulesOptions.FORKS:
-		assert_eq(Settings.rule(fork["key"]), RulesOptions.modern_answer(fork), fork["key"])
+		var want := false if fork["key"] == "sacrifice_clauses_wait" \
+			else RulesOptions.modern_answer(fork)
+		assert_eq(Settings.rule(fork["key"]), want, fork["key"])
 
 
 func test_the_custom_readout_is_not_a_command() -> void:
@@ -174,11 +178,13 @@ func test_choosing_the_named_default_writes_once_and_burns_mana() -> void:
 	Settings.flush()
 	var before: int = Settings.write_count
 	preset.item_selected.emit(_row_of("modern_mana_burn"))
-	assert_eq(Settings.write_count - before, 1, "seven forks, ONE write")
+	assert_eq(Settings.write_count - before, 1, "every fork, ONE write")
 	assert_true(Settings.rule("mana_burn"))
 	for fork in RulesOptions.FORKS:
 		if fork["key"] != "mana_burn":
-			assert_eq(Settings.rule(fork["key"]), RulesOptions.modern_answer(fork), fork["key"])
+			var want := false if fork["key"] == "sacrifice_clauses_wait" \
+				else RulesOptions.modern_answer(fork)
+			assert_eq(Settings.rule(fork["key"]), want, fork["key"])
 	assert_true(_rows()["Mana burn"].button_pressed, "and the row shows it")
 
 

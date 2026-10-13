@@ -84,7 +84,17 @@ Both "things to decide" are decided: the Fifth-Edition-vs-modern
 divergences (§6.20n) are **RULES FORKS** in `engine/rules_options.gd`,
 each defaulting to the modern answer and each carrying its manual page —
 SEVEN of them now that §1.4's `free_damage_assignment` and §6.8's
-`damage_prevention_window` have joined them —
+`damage_prevention_window` have joined them, and EIGHT since the owner's
+ruling of 2026-10-12 made `damage_effects_fixed_order` one (who orders the
+replacement and prevention effects on one damage event: nobody in 1997,
+the affected player or creature controller under CR 616.1),
+<!-- 2026-10-13 f-sac -->
+and NINE since the owner's ruling of 2026-10-13 made
+`sacrifice_clauses_wait` one ("when you control no Islands, sacrifice
+this" and its family: checked at once in 1997, a state trigger waiting on
+the stack under CR 603.8 — the one fork NOT defaulting to its modern
+answer: off under every preset, the modern ones included)
+<!-- end 2026-10-13 f-sac --> —
 and attacker selection stays revocable as a labelled fork
 (`attackers_revocable`).
 One DERIVED rule rides on them without being a fork of its own (Mirage bug
@@ -2257,7 +2267,7 @@ divergences, both deliberate:
 | | Ours | Why |
 |---|---|---|
 | un-marking | the same `Mark this phase to always stop` entry, as a CHECK item that toggles | the 1997 table ships **no unmark string** — searched `Program/UIStrings.txt`, `Program/Text.res` and `Duel.hlp`. The tick is the only affordance the table leaves room for |
-| the two `Help` entries | present and **disabled** | there is no Dueling Help yet (§6.20l). Greying them says the menu is complete and the help is missing; dropping them would say the original's menu had two items |
+| the two `Help` entries | present and **disabled** — LIVE since 2026-10-13 (f-minihelp): the duel's mini help, §6.20l | there was no Dueling Help (§6.20l). Greying them said the menu was complete and the help missing; dropping them would have said the original's menu had two items |
 
 ### 6.2 [1997] The mulligan is the SHANDALAR rule, and you choose play or draw — DONE (2026-08-31; the opening WINDOW 2026-09-01) — **the RULE replaced 2026-09-08, see the foot of this item**
 
@@ -2519,7 +2529,8 @@ of them proved:
   stay that way for a while: *"toggles the appearance of those effect
   cards (the temporary yellow cards that pop up all the time) that are not
   normally displayed."* Our engine has no effect-card objects to show.
-- **`Help...` — LISTED AND GREY** (§6.20l).
+- **`Help...` — LISTED AND GREY** (§6.20l) — **LIVE since 2026-10-13**
+  (f-minihelp): the territory's mini help, §6.20l.
 
 The three toggles' keys are the 1997 executable's own —
 `ShowIDTagsOnCards`, `ShowInvisibleEffectCards`,
@@ -3023,7 +3034,8 @@ Opponent       Your hand        Save Game      Load Saved Game
   `Help...`; `@MENU_MINIMIZEDATTACK` (`:848`) = `Restore` / `Help...`;
   its minimised state is named `Minimized attack window` in
   `@CUECARD_OTHER` (`:667`), which is the window icon's tooltip. Only
-  `Help...` is still missing (there is no Dueling Help at all).
+  `Help...` is still missing (there is no Dueling Help at all) — live since
+  2026-10-13: the Combat window's mini help (f-minihelp, §6.20l).
 - **`Spell Chain`** — ours has no title bar and no minimise;
   `@MENU_SPELLCHAIN` (`:853`) gives it the same pair (`Minimize` /
   `Help...`), `@MENU_MINIMIZEDSPELLCHAIN` (`:856`) the restored pair
@@ -3940,13 +3952,13 @@ What each one does now:
 
 | Table | State |
 |---|---|
-| `@MENU_SMALLCARD` | LIVE — `Original type` and `Show full card` both dock the card in the Showcase, plus the three display toggles. `View in full card` needs the Advanced Layout (§6.4), `Don't auto tap this card` needs an auto-tap, `Help...` needs §6.20l. |
+| `@MENU_SMALLCARD` | LIVE — `Original type` and `Show full card` both dock the card in the Showcase, plus the three display toggles. `View in full card` needs the Advanced Layout (§6.4), `Don't auto tap this card` needs an auto-tap, `Help...` needs §6.20l — live since 2026-10-13 (the mini help, f-minihelp). |
 | `@MENU_LIBRARY` | LIVE — `Count library cards` prints `Your library: N cards` in the Situation Bar, the count `Duel.hlp` says the pile deliberately does not show. |
-| `@MENU_HAND` | Listed; it is `Help...` and nothing else, so the whole menu is grey. It answers the gesture rather than swallowing it. |
+| `@MENU_HAND` | Listed; it is `Help...` and nothing else, so the whole menu was grey. It answers the gesture rather than swallowing it. Live since 2026-10-13: the hand's mini help (f-minihelp, §6.20l). |
 | `@MENU_MANAPOOL` | Listed, all seven spends grey — see below. |
 | `@MENU_FULLCARD` | LIVE — `Expand text box`, persisted as the 1997 key `ExpandTextBoxOnBigCard`; the Showcase's text area grows UPWARD over the art, and only when the card's text needs it — corrected 2026-09-04 against `Duel.hlp` (*"when necessary"*) and the 1997 DLL's own `fullcard_expand_text_box`, which measures the overflow and moves the top up by exactly that much. |
 | `@MENU_ATTACK` / `@MENU_MINIMIZEDATTACK` | LIVE — the Combat window already had both actions; the menu flips its one entry with the window's state. |
-| `@MENU_SPELLCHAIN` / `@MENU_MINIMIZEDSPELLCHAIN` | Tabled, not live: our chain has no minimised state, and the 1997 restore route is the Phase Bar's window icon, which our icon already spends on the Combat window. |
+| `@MENU_SPELLCHAIN` / `@MENU_MINIMIZEDSPELLCHAIN` | Tabled, not live: our chain has no minimised state, and the 1997 restore route is the Phase Bar's window icon, which our icon already spends on the Combat window. Since 2026-10-13 (f-minihelp) a right click on a chain card's tan band opens `@MENU_SPELLCHAIN` — `Minimize` grey, `Help...` the Spell Chain's mini help; `@MENU_GRAVEYARD` likewise opens on the graveyard and exile plates (§6.20l). |
 
 **Two findings from building it.**
 
@@ -4525,6 +4537,32 @@ the cursor, and hyperlinked. Our card files already carry oracle text and
 implementation notes in their header comments — that is most of the
 content already written (`docs/duel-screen-design.md §5` spotted this).
 
+<!-- 2026-10-13 f-minihelp -->
+**DONE (2026-10-13) as the duel's MINI HELP.** The owner's ruling: *"Maybe
+here we only keep focused mini help hover over and leave the main help as
+is reachable from the main menu."* The Help screen closes to the title, so
+a duel cannot open it; it stays the main menu's, unchanged. In the duel
+every mini-menu's `Help...` is live and opens a small panel over the table,
+beside where the menu stood, with the short help for exactly that subject —
+territory, small card, library, hand, mana pool, Showcase, Combat window,
+Spell Chain, Phase Bar, Combat Bar, life register, graveyard
+(`game/duel/mini_help.gd`, words from `HelpPages.mini`). Both
+`Help for this ...` entries are live too: the Phase Bar's explains the one
+icon (its line on the Help's Phase Bar / Combat Bar page), the Showcase's
+shows what the Help's ability glossary says about the card shown — entries
+naming the card or a word of its rules text — greyed while the Showcase
+shows no face-up card. `@MENU_GRAVEYARD` (graveyard and exile plates) and
+`@MENU_SPELLCHAIN` (a chain card's tan band) are now opened by a right
+click, so their `Help...` can be pressed. The duel waits while the panel is
+up (no AI, no automatic pass, no standing order); nothing dims; Escape, the
+pad's B, a click outside, a right click, Close or the pause key close it,
+and the focus goes back. At an SGManalink table it is local only. No
+hyperlinks: a "More in Help on the main menu: <page>" line names the page.
+A mouse hover over a menu's `Help...` does not preview it (the menu's own
+item is the one gesture every device shares). Tests:
+`tests/ui/test_c2_f_minihelp_{menus,panel,online}.gd`.
+<!-- end 2026-10-13 f-minihelp -->
+
 **m. Who goes first — the manual contradicts itself, and p.110 wins — S, both.**
 p.60: *"Who goes first is determined at random — unless one of you has a
 first strike advantage."* p.110, flagged *"new to the Fifth Edition
@@ -4812,7 +4850,7 @@ original's name and there is nothing to rename later.
 | the attack lineup window | **Combat window**, titled `Your attack` — BUILT as `CombatWindow` | manual p.126 | §6.5 |
 | the per-phase pause marker | **Stop**, set from the Phase Bar mini-menu via **Mark**; skipping forward is **Run to**; ending just this phase is **Go To** — BUILT as `PhaseStops` / `PhaseBar`, except `Go To` (§6.3) | manual p.116-117 | §6.1, §6.3 |
 | the settings panel | **Duel Options** (window title) / the **Dueling Options** window (prose) | manual p.113 | §6.4 |
-| context help | **Dueling Help** — context-sensitive on the object right-clicked | manual p.14 | §6.20l |
+| context help | **Dueling Help** — context-sensitive on the object right-clicked | manual p.14 | §6.20l — our mini help since 2026-10-13 |
 | the opponent's portrait | **Duelist's Face**, reached by **Flip to Face** on the Life Register | manual p.119 | §6.5 |
 | the Lich display | **Lich Register** | `Duel.cnt:697` | §6.5 |
 | exile | the original's **"out of play" area** in USER TEXT only — keep `Mtg.Zone.EXILE` in code, because "removed from play" reads as "left the battlefield" to a modern player | manual p.118 | — |

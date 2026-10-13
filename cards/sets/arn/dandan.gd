@@ -7,7 +7,8 @@ extends CardScript
 ## Implementation: both clauses are engine features now —
 ## with_attack_needs_defender_land("island") for the attack restriction
 ## and with_sacrifice_if_no_land("island") for the drowning clause, which
-## MtgGame checks as a state-based action. A 4/1 for two, playable only in
+## MtgGame checks at once (a state trigger under the rules option
+## RulesOptions.sacrifice_clauses_wait). A 4/1 for two, playable only in
 ## a mirror-ish Island world; the same clause pair lifted the Sea Serpent
 ## and Pirate Ship ledger rows.
 

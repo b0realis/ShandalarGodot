@@ -60,7 +60,7 @@ numbers:
 | Test suite | **6326 tests, 0 failing, 371 scripts** (235 026 asserts, the 2026-09-14 Pack 1 gate); tools self-tests **217 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
-| Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found. Plus one DERIVED rule, not a fork: CR 704.5q counter annihilation under the modern presets, following `damage_prevention_window` (`RulesOptions.counters_annihilate`, 0.50.11) |
+| Rules forks | **9** in `engine/rules_options.gd`, all defaulting modern except `sacrifice_clauses_wait` (off under every preset, the owner's ruling of 2026-10-13) — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found. Plus one DERIVED rule, not a fork: CR 704.5q counter annihilation under the modern presets, following `damage_prevention_window` (`RulesOptions.counters_annihilate`, 0.50.11) |
 | Modes | Magic Battle, Deck Builder, **Gauntlet** (the fourth 1997 mode, built 2026-09-02) |
 
 **What moved on 2026-09-02.** A second day of concurrent passes; each has
@@ -2683,19 +2683,28 @@ all-or-nothing guard.
 
 ## Engine simplifications still to lift (in rough priority order)
 
-Robustness campaign (2026-10-12): **Sacrifice when you control no** `<land
+Robustness campaign (2026-10-12), LIFTED 2026-10-13 — no longer a
+simplification but a RULES OPTION: **Sacrifice when you control no** `<land
 type>` / a `<subtype>` / `<condition>` (`CardData.sacrifice_if_no_land_type`,
-`sacrifice_condition`, `sacrifice_if_you_control_subtype`) is checked as a
-state-based action under every preset — the 1997 rules' "Bury … if at any
-time" reading, faithful there. Modern Oracle prints it as a state trigger
-(CR 603.8), so under the modern presets the doomed permanent's own abilities
-can't be used in response (a Pirate Ship can't ping as its last Island
-goes); the sacrifice itself never changes. A preset-dependent state trigger
-would touch 18 cards (Dandân, Drop of Honey, Endangered Armodon, Giant
+`sacrifice_condition`, `sacrifice_if_you_control_subtype`) is
+`RulesOptions.sacrifice_clauses_wait`, Options › Rules "Forced sacrifices
+wait on the chain". The owner's ruling: OFF under every preset, the modern
+ones included — the clause is checked at once as a state-based action, the
+1997 printings' "Bury … if at any time", exactly as before; switched on (a
+"Custom" mix) it is the modern Oracle's state trigger (CR 603.8): it waits
+on the stack, so a Pirate Ship pings once more as its last Island goes, it
+cannot trigger again while it waits, and it sacrifices on resolution with no
+intervening "if" (`MtgGame.sacrifice_clause_holds`,
+`_c2s_queue_clause_triggers`). It covers the whole family, 23 cards over the
+nine packs: the 18 above (Dandân, Drop of Honey, Endangered Armodon, Giant
 Shark, Goblins of the Flarg, Gorilla Pack, Island Fish Jasconius, Jihad,
 Kukemssa Serpent, Mana Vortex, Manta Ray, Merchant Ship, Pirate Ship, Sea
-Serpent, Seasinger, Serendib Djinn, Skeleton Ship, Vodalian Knights) and the
-AI's `sacrifice_condition` reader.
+Serpent, Seasinger, Serendib Djinn, Skeleton Ship, Vodalian Knights) and
+five that wrote the clause as a state trigger of their own and now use the
+engine's (Marjhan, Floodgate, Afiya Grove, Phyrexian Devourer, Call to
+Arms — so their default is now "at once" too). The AI spends a doomed
+permanent's lasting abilities in answer (`AiPlayer._c2s_last_use`,
+`forecasts_tactics`).
 
 Wave 3 additions (2026-08-30): **multi-block** with lethal-first
 auto-assignment · **banding** (attack bands, band-blocking, band damage
@@ -2736,6 +2745,7 @@ picker before tutor casts).
 | ~~No banding~~ **DONE** (attack bands wave 3, defensive banding 2026-09-01, "bands with other [quality]" 2026-09-02 — `CardInstance.cur_bands_with` / `grant_bands_with`, `CombatState.shared_bands_with` / `bands_with_offered` / `bands_with_among`; the five Legends banding lands and Master of the Hunt's Wolves grant the real per-quality restriction, not plain banding, pinned by `tests/cards/test_fidelity_2026_09_02_bands_with_other.gd`). No protection-from-artifacts etc. | As stubs demand them |
 | ~~Mid-resolution questions are answered by a heuristic~~ **DONE 2026-08-31, FINISHED 2026-09-01** — every ask is a first-class `PlayerChoice` on the record. 103 of the 109 call sites are inside a stack resolution and the engine PRE-FLIGHTS each one over a `GameSnapshot` rewind point, then holds it open on `MtgGame.awaiting_choice` until `answer_choice`. The four COST payments outside the stack (`tap_for_mana`'s sacrifice, Fellwar Stone's colour, `cast_spell`'s additional sacrifice, `activate_ability`'s sacrifice cost) are held open by `MtgGame._pending_action` — a record of the ACTION that `answer_choice` re-issues, no rewind point, because all four ask after every refusal check and before any mutation (CR 601.2h). Same overlay, same `answer_choice`, told apart by `PlayerChoice.is_cost` (docs/duel-todo.md §1.3) | Only `CardData.as_it_enters` run from a NON-resolution path is left, and reached the ordinary way (a creature resolving) even that is inside the probe. Fellwar Stone's colour moved out of the card into `ManaAbility.color_options` on the way, which also fixed it being asked TWICE per activation and being asked after the source was already tapped |
 | **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"*, Fasting's *"you may skip that step"* and Breathstealer's Crypt's *"that player discards it unless they pay 3 life"* (vis, Pack 8 — `vis/_misc.gd`, `_breathstealer_draw`; added by the Mirage bug pass, 2026-10-04) are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
+| **The damage-order question during combat damage** (`MtgGame._c2o_walk_player` / `_c2o_walk_creature`, 2026-10-12). Under the modern answer of `damage_effects_fixed_order` a person is asked which damage effect applies first (CR 616.1) only while a spell or ability resolves; during combat damage — and when the 1997 prevention step closes on a Custom table — the fixed order is taken for them and LEDGERED by `MtgGame.record_choice` ("(decided for P0) Which applies first to the 2 damage from Grizzly Bears?"). The fixed order applies what helps the victim first, and Forethought Amulet's cap never applies to combat damage, so it rarely costs anything | The same third hold as the row above, for the combat-damage step |
 | **Two draw replacements are applied in a fixed order** (`_replace_draw`): one-shots first, then statics in battlefield timestamp order. CR 616.1 gives the AFFECTED PLAYER the choice | A choice when more than one applies. No pair in the 1997 pool can be on the table at once and disagree, so this is invisible today |
 | **A shield's rider runs per packet** (`engine/damage_replacements.gd`, `apply`; Pack 8, 2026-10-03). "If damage from a black source is prevented this way, you gain that much life" (Shadowbane) and "... deals that much damage to the source's controller" (Honorable Passage) are ONE additional effect after the whole prevented event (CR 615.5); ours runs once per damage PACKET the shield stopped, with that packet's amount. The total is the same; a simultaneous event against several victims (a Pestilence against you and your creatures) gains the life, or deals the damage, in several pieces — visible only to a "whenever you gain life" trigger or a per-event damage cap | Collect the rider's amount per (effect, event) and run it once as the event ends (the end of the simultaneous bracket or of the resolution) |
 | ~~A static ability cannot outlive its source, and nothing runs at the INSTANT a permanent leaves~~ **DONE 2026-09-02** — `CardData.as_it_leaves` is the twin of `as_it_enters`: `MtgGame._run_leave_hook` calls it from all four battlefield exits (graveyard, exile, hand, ante) after the leave-triggers are on the stack and after `forget_instance`, but BEFORE `recalculate()`, and hands it the parting memory snapshot. A trigger cannot do this work — it resolves after the world has been recomputed without the departing permanent. `ContinuousEffects.add_floating_static` is what the hook registers: the same `StaticAbility`, run in the same five sub-passes of `recalculate` in the same layer order, with only the source's presence lifted (CR 611.3a — such an effect is NOT locked in). Lifted Titania's Song's rider and made Oubliette's *"until this enchantment leaves the battlefield"* the duration it is printed as rather than a trigger. Pinned by `tests/unit/test_leave_hook.gd` | — |
@@ -18783,6 +18793,53 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-13 — Forced sacrifices and the duel's mini help (0.50.21)
+
+The owner, on the campaign's two remaining questions: *"Build it but build a
+on-off rule in options for this option / default leave it as is (1997) but
+user can select for one more ping"* — and, on the greyed "Help..." in the
+duel's menus, *"we only keep focused mini help hover over and leave the main
+help as is reachable From the main menu."*
+
+- **`RulesOptions.sacrifice_clauses_wait`** (Options › Rules, "Forced
+  sacrifices wait on the chain"): the clauses "sacrifice this when you
+  control no <land type>", "… when you control a <creature type>" and the
+  general condition (`CardData.sacrifice_if_no_land_type`,
+  `sacrifice_if_you_control_subtype`, `sacrifice_condition`) — 23 cards in
+  all, five of them (Marjhan, Floodgate, Afiya Grove, Phyrexian Devourer,
+  Call to Arms) re-routed from their own stack triggers onto the clause.
+  OFF under every preset — the 1997 "bury … if at any time", checked at
+  once; ON, a CR 603.8 state trigger on the Spell Chain with no intervening
+  "if", and the computer uses its doomed permanent once more when that is
+  worth something (`AiPlayer._c2s_last_use`, behind `forecasts_tactics`).
+  The engine simplification of 2026-10-12 is lifted.
+- **The duel's mini help** (`DuelMiniHelp`, `game/duel/mini_help.gd`):
+  every duel menu's "Help..." (twelve menus, the graveyard's and the Spell
+  Chain's newly opened) shows a small panel over the table with the short
+  help for what was right-clicked, drawn from the Help pages; "Help for this
+  card..." and "Help for this phase..." are live too. The duel waits while
+  it is up; the full Help stays the main menu's.
+
+## 2026-10-12 — The damage effects' order (0.50.21)
+
+The owner, on the campaign's open question (Forethought Amulet and Furnace of
+Rath on one Lightning Bolt — the Amulet first makes 4, the Furnace first 2):
+*"1997 rules … no one could cast new spells or abilities while a batch was
+resolving … Modern rules: CR 616.1 … the player or controller of the object
+being affected chooses the order … We should keep this also in options and
+implement a selector ingame for modern."* A new rules fork,
+`RulesOptions.damage_effects_fixed_order` (Options › Rules, "Fixed order for
+damage effects"): ON under the 1997 preset — a fixed order, nobody asked —
+and OFF under the modern presets, where the person the damage would hit (or
+the creature's controller) is asked "Which applies first to the N damage
+from …?" and the computer tries every order on the search journal
+(`MtgGame.damage_order_outcomes`, `AiPlayer._damage_order_pick`, behind
+`forecasts_tactics`) and takes the one that hurts it least — 2, not 4. The
+fork reaches LAN tables, the duel's opening screen, Help and the Deck Lab; a
+settings file saved under a preset by an older build gets that preset's
+answer (`Settings` rules revision 3). Known: during combat damage a person
+is not asked (the row "The damage-order question during combat damage").
 
 ## 2026-10-12 — The robustness campaign (0.50.20)
 

@@ -265,14 +265,22 @@ func test_floodgate_leaving_damages_nonblue_ground_creatures_by_half_your_island
 
 
 func test_floodgate_is_sacrificed_when_it_has_flying() -> void:
-	var gate := put_battlefield(0, "Floodgate")
-	put_battlefield(0, "Island")
-	g.continuous.add_until_eot_keywords(gate.id, [Mtg.Keyword.FLYING])
-	g.recalculate()
-	g.check_state_based_actions()
-	assert_eq(g.stack.size(), 1, "a state trigger (CR 603.8)")
-	resolve_stack()
-	assert_eq(gate.zone, Mtg.Zone.GRAVEYARD)
+	# The engine's "sacrifice this when" clause since 2026-10-13: at once by
+	# default (only its own leave trigger is left on the stack), a state
+	# trigger (CR 603.8) with RulesOptions.sacrifice_clauses_wait on.
+	for wait in [false, true]:
+		before_each()
+		g.rules.sacrifice_clauses_wait = wait
+		var gate := put_battlefield(0, "Floodgate")
+		put_battlefield(0, "Island")
+		g.continuous.add_until_eot_keywords(gate.id, [Mtg.Keyword.FLYING])
+		g.recalculate()
+		g.check_state_based_actions()
+		assert_eq(gate.zone, Mtg.Zone.BATTLEFIELD if wait else Mtg.Zone.GRAVEYARD,
+			"wait=%s" % wait)
+		assert_eq(g.stack.size(), 1, "the clause's trigger, or the leave trigger (wait=%s)" % wait)
+		resolve_stack()
+		assert_eq(gate.zone, Mtg.Zone.GRAVEYARD)
 
 
 # -------------------------------------------------------------- Merfolk Seer --

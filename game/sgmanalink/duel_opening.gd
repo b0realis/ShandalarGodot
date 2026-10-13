@@ -26,7 +26,7 @@ func build_match(config: DuelConfig, rules: RulesOptions, tournament: Dictionary
 	replace_antes(panel)
 	_panel = panel
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 8)
 	panel.add_child(column)
 	_column = column
 	column.sort_children.connect(_fit_titles)
@@ -72,10 +72,14 @@ func build_match(config: DuelConfig, rules: RulesOptions, tournament: Dictionary
 		"Round %d · Game %d · Series %d–%d · First to %d" % [int(tournament.round), int(tournament.game),
 		int(tournament.wins[0]), int(tournament.wins[1]), int(tournament.target)], 17, 2))
 	column.add_child(_wrapped("Unrestricted decks · %d starting life" % config.lives[0], 16, 1))
+	# THE RULES, TWO TO A ROW. The ninth fork (2026-10-13,
+	# `sacrifice_clauses_wait`) made a fifth row, and the rows stand
+	# closer so the slot keeps what it had: under the shipped font a long
+	# deck title still gives up one line, not two ([method _fit_titles]).
 	var details := GridContainer.new()
 	details.columns = 2
 	details.add_theme_constant_override("h_separation", 16)
-	details.add_theme_constant_override("v_separation", 4)
+	details.add_theme_constant_override("v_separation", 2)
 	column.add_child(details)
 	for fork in RulesOptions.FORKS:
 		var on := bool(rules.get(fork.key))

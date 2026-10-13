@@ -218,7 +218,7 @@ func _apply_rules() -> void:
 
 ## THE WHOLE SETTINGS FILE, byte for byte, before the fuzzer touches it.
 ##
-## `_restore_rules` guards the seven RULE keys, which is what `--rules`
+## `_restore_rules` guards the RULE keys (one per fork), which is what `--rules`
 ## writes. It is not enough: the soak's human seat is a FUZZER clicking
 ## through the live duel screen, and that screen carries the Dueling
 ## Options panel — so a run can flip any option a player owns and leave it

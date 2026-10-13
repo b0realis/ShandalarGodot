@@ -67,6 +67,10 @@ const SETTING_KEY := "phase_stoppers"
 ## `@MENU_PHASEBAR`, `shandalar-src/Program/UIStrings.txt:947` (the same
 ## four entries at `Program/Text.res:1903`) — the entire mini-menu a
 ## right-click on a phase icon opens, verbatim and in the table's order.
+## Both Help entries are LIVE since 2026-10-13 and open the duel's mini help
+## ([DuelMiniHelp]): `Help for this phase...` that icon's own explanation
+## from the Help's Phase Bar or Combat Bar page ([method
+## HelpPages.mini_phase]), `Help...` the bar's.
 const MENU_RUN_TO := "Run to this phase"
 const MENU_MARK := "Mark this phase to always stop"
 const MENU_HELP_PHASE := "Help for this phase..."

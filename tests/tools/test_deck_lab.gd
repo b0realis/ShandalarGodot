@@ -502,7 +502,9 @@ func test_fifth_edition_really_flips_every_fork() -> void:
 	var rules := RulesOptions.new()
 	rules.set_edition("fifth")
 	assert_eq(rules.preset(), "fifth")
-	rules.set_edition("modern")
+	# `--rules modern` is the PRESET (set_preset), which keeps the sacrifice
+	# clauses the 1997 way like every preset (2026-10-13).
+	rules.set_preset("modern")
 	assert_eq(rules.preset(), "modern")
 
 

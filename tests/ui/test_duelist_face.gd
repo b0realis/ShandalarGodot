@@ -121,12 +121,12 @@ func test_the_menu_reads_whichever_way_the_panel_faces() -> void:
 	screen._life_menu.hide()
 
 
-func test_help_is_listed_and_greyed() -> void:
-	# There is no Dueling Help to open; the original greys what it cannot
-	# offer rather than shortening its menu (§6.1's precedent).
+func test_help_is_listed_and_live() -> void:
+	# Greyed until 2026-10-13 (there was no Dueling Help to open); it opens
+	# the life register's mini help now (tests/ui/test_c2_f_minihelp_menus.gd).
 	screen._open_life_menu(0, Vector2(10, 10))
 	assert_eq(screen._life_menu.item_count, 4, "all four entries listed")
-	assert_true(screen._life_menu.is_item_disabled(3), "Help... is greyed")
+	assert_false(screen._life_menu.is_item_disabled(3), "Help... is live")
 	screen._life_menu.hide()
 
 

@@ -137,8 +137,10 @@ static func configure(c: CardData) -> bool:
 				"{1}{G}: Regenerate this creature."))
 		"Endangered Armodon":
 			# The pool's "when you control …, sacrifice this" shape: a state
-			# check (CardData.sacrifices_when — Jihad, Sea Serpent). "A
-			# creature" is any creature you control, the Armodon included.
+			# check, or a state trigger under the rules option
+			# RulesOptions.sacrifice_clauses_wait (CardData.sacrifices_when —
+			# Jihad, Sea Serpent). "A creature" is any creature you control,
+			# the Armodon included.
 			c.sacrifices_when(_armodon)
 		"Skyshroud Archer":
 			var shrink := PumpEffect.new(-1, -1)

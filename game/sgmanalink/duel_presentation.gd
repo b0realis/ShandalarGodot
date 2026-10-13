@@ -22,9 +22,12 @@ const DECLARATION := preload("res://engine/core/combat_declaration.gd")
 ## `-1` is "any number" on either block permission — the static one and
 ## Blaze of Glory's grant for the turn.
 const COUNTED_FLAGS := ["cur_extra_blocks", "extra_blocks_this_turn", "skip_untaps"]
-const RULES := ["mana_burn", "attackers_revocable", "tapped_artifacts_stop",
-	"life_checked_at_phase_end", "pool_empties_on_attack", "free_damage_assignment",
-	"damage_prevention_window"]
+## The rules forks every seat's view carries — exactly the implemented ones,
+## in their order. It was a hand-kept copy of the first seven, so the
+## eighth (`damage_effects_fixed_order`, 2026-10-12) reached no guest and
+## the duel's opening showed it Off at a 1997 table (campaign 2026-10-12
+## f-order).
+const RULES := RulesOptions.IMPLEMENTED
 const CUES := ["sfx_cast", "sfx_land", "sfx_draw", "sfx_tap", "sfx_attack",
 	"sfx_block", "sfx_life_loss", "sfx_damage", "sfx_mana_burn", "sfx_buried", "sfx_discard",
 	"sfx_summon", "sfx_cast_artifact", "sfx_cast_enchantment", "sfx_cast_sorcery",

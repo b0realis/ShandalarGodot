@@ -44,7 +44,8 @@ extends RefCounted
 
 ## The four entries of `@MENU_LIFE` (`Program/Text.res:1873`), the
 ## mini-menu a right-click on the LIFEPOINTS side opens. `%s` is the other
-## duelist's name.
+## duelist's name. `Help...` opens the life register's mini help
+## ([DuelMiniHelp], since 2026-10-13).
 const MENU_LIFE: Array[String] = [
 	"Target %s", "Target yourself", "Flip over to face", "Help...",
 ]

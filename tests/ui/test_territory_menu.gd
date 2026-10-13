@@ -58,14 +58,15 @@ func test_the_rest_of_the_table_is_present_and_mostly_greyed() -> void:
 	assert_eq(TerritoryMenu.CONCEDE_CONFIRM, "Yes, I'm sure")
 
 
-func test_only_two_entries_are_still_greyed() -> void:
+func test_only_one_entry_is_still_greyed() -> void:
 	# What is left: `Show invisible effects` (we have no effect cards to
-	# show) and `Help...` (§6.20l). Everything else in the table is live.
+	# show). `Help...` (§6.20l) opens the duel's mini help since 2026-10-13.
+	# Everything else in the table is live.
 	var dark: Array = []
 	for entry in TerritoryMenu.REST:
 		if not TerritoryMenu.rest_is_live(entry):
 			dark.append(TerritoryMenu.rest_label(entry))
-	assert_eq(dark, ["Show invisible effects", "Help..."])
+	assert_eq(dark, ["Show invisible effects"])
 
 
 func test_save_game_is_deliberately_absent() -> void:
@@ -157,15 +158,15 @@ func test_the_unbuilt_entries_are_shown_disabled() -> void:
 	# The live set grew as the sections landed: the fourteen `Go to:`
 	# destinations and the two `Arrange` commands (§6.1, §2.3),
 	# `Duel Options...` (§6.4), and now Concede, Minimize and two of the
-	# three display toggles. Two entries are still greyed and both have a
-	# reason.
+	# three display toggles, and (2026-10-13) Help..., the mini help. One
+	# entry is still greyed, with a reason.
 	screen._open_territory_menu(0, Vector2.ZERO)
 	var menu := screen._territory_menu
 	for i in menu.item_count:
 		if menu.is_item_separator(i):
 			continue
 		var text := menu.get_item_text(i)
-		var dark := text == "Show invisible effects" or text == "Help..."
+		var dark := text == "Show invisible effects"
 		assert_eq(menu.is_item_disabled(i), dark, text)
 	screen._territory_menu.hide()
 

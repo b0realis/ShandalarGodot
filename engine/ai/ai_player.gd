@@ -2612,7 +2612,11 @@ const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
 ## or "" when nothing does. One activation per call, like every other action.
-func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
+## [param only] (campaign 2026-10-13 f-sac): look at that permanent's
+## abilities alone, and only at those whose effect outlasts it
+## ([method _c2s_last_use]); null is every ability, as before.
+func _try_activate(game: MtgGame, moment: int = Moment.MAIN,
+		only: CardInstance = null) -> String:
 	var bar: float = ABILITY_BAR_MAIN
 	if moment == Moment.UPKEEP or moment == Moment.COMBAT or moment == Moment.RESPONSE \
 			or moment == Moment.PRE_ATTACK:
@@ -2633,9 +2637,13 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 			and not (profile.pays_the_rent and _mana_frozen(game)) \
 		else _held_reserve(game)
 	for inst in _activation_sources(game):
+		if only != null and inst != only:
+			continue
 		for index in inst.cur_activated_abilities.size():
 			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 			if not _ability_available(game, inst, index, true):
+				continue
+			if only != null and not _c2s_outlasts(ability, inst):
 				continue
 			var surcharge := game.ability_surcharge(pid, inst)
 			# THE FLOORED REDUCTION (Pack 9 E7, 2026-10-06, forecasts_tactics):
@@ -2672,9 +2680,11 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 			# — with the hand held, `_try_cast_best` returns "" in Main 1
 			# and a Jayemdae Tome would spend on a card the mana the
 			# whole point was to keep open.
-			if not option.is_empty() and _develops_late(game) \
+			if not option.is_empty() and only == null and _develops_late(game) \
 					and not _activation_changes_combat(game, inst, index, option):
 				continue
+			if only != null and _c2s_aims_at(option, only):
+				continue   # the doomed permanent itself is no target worth one more use
 			if not option.is_empty() and profile.minds_pain:
 				# THE LIFE THE TAPS COST. A Rod ping at their end step is
 				# "mana about to be wasted" only from a Mountain; from a
@@ -4044,6 +4054,11 @@ func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
 	# keep, and the first thing to give up.
 	if profile.forecasts_tactics and inst.zone == Mtg.Zone.BATTLEFIELD \
 			and bool(inst.memory.get("flash_cast", false)):
+		return 0.0
+	# ...and so is one whose forced sacrifice already waits on the stack
+	# (campaign 2026-10-13 f-sac, RulesOptions.sacrifice_clauses_wait): the
+	# same 0 the clause gives it at once when the rule is off.
+	if profile.forecasts_tactics and game.sacrifice_clause_pending(inst):
 		return 0.0
 	if not inst.is_land():
 		if priced and _dead_weight(game, inst):
@@ -6659,7 +6674,10 @@ func _fire_held_instant(game: MtgGame) -> String:
 ## same response would fire again) and is simply correct Magic.
 func _respond_action(game: MtgGame) -> String:
 	if not game.stack.is_empty() and game.stack.back().controller == pid:
-		return ""
+		# ...but a forced sacrifice of our own waiting there is our doomed
+		# permanent's last chance to act (campaign 2026-10-13 f-sac,
+		# [method _c2s_last_use]); "" with the gate off.
+		return _c2s_last_use(game)
 	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance \
 			and not _fumble_spares_the_pool(game):   # campaign fix-ai-c (w6-6)
 		return ""   # a fumbled reaction is no reaction
@@ -14745,6 +14763,13 @@ func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[Str
 	if p_pid == pid and profile.takes_the_turn and options.size() == 2 \
 			and prompt.begins_with("Skip this turn to untap"):
 		return 1 if _turn_is_dead(game) else 0
+	# THE ORDER OF OUR DAMAGE EFFECTS (campaign 2026-10-12 f-order, CR
+	# 616.1): [method _damage_order_pick]. Gate off, the hint — the fixed
+	# order — exactly as before.
+	if p_pid == pid and profile.forecasts_tactics:
+		var order := _damage_order_pick(game, options, hint)
+		if order >= 0:
+			return order
 	if p_pid == pid and profile.forecasts_tactics and game.current_resolution_source() == "Deflection" \
 			and prompt == "Deflection: choose the spell's new target":
 		var refs := game.current_targets()
@@ -14760,6 +14785,40 @@ func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[Str
 					value = worth
 			if candidates.size() == options.size(): return best
 	return super(game, p_pid, prompt, options, hint)
+
+
+## WHICH OF OUR DAMAGE EFFECTS APPLIES FIRST (campaign 2026-10-12 f-order;
+## [member AiProfile.forecasts_tactics]). Under the modern rules the
+## engine asks the affected player, or the affected creature's controller,
+## which replacement or prevention effect applies first (CR 616.1), with
+## the fixed order's first as the hint — and the fixed order puts what
+## helps the victim ahead of what hurts it, which is the wrong way round
+## when a cap meets an increase: a Lightning Bolt into our Forethought
+## Amulet under their Furnace of Rath lands 4 in that order and 2 with the
+## Furnace first. So the question is answered from the engine's own
+## look-ahead ([method MtgGame.damage_order_outcomes]): the first line
+## whose best continuation leaves our creature on the battlefield and then
+## lands the least damage ([method MtgGame.damage_order_better]); a tie
+## keeps the hint. Everything it reads is on the table, so it is fair play
+## (docs/fair-play.md). -1 when the question is not that one, or not ours.
+func _damage_order_pick(game: MtgGame, options: Array[String], hint: int) -> int:
+	var question := game.damage_order_question()
+	if question.is_empty() or int(question["seat"]) != pid:
+		return -1
+	var labels: Array = question["labels"]
+	if labels.size() != options.size():
+		return -1
+	for i in labels.size():
+		if String(labels[i]) != options[i]:
+			return -1
+	var outcomes := game.damage_order_outcomes()
+	if outcomes.size() != options.size():
+		return -1
+	var best := clampi(hint, 0, outcomes.size() - 1)
+	for i in outcomes.size():
+		if MtgGame.damage_order_better(outcomes[i], outcomes[best]):
+			best = i
+	return best
 
 
 func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> bool:
@@ -16572,3 +16631,53 @@ func _upkeep_burn(game: MtgGame, cost: ManaCost) -> int:
 	return _burn_left(src, plan, cost.mana_value())
 
 # --- end campaign 2026-10-12 f-aiA ---
+
+
+# --- campaign 2026-10-13 f-sac: one more use before a forced sacrifice ---
+#
+# With the rules option "Forced sacrifices wait on the chain" on
+# (RulesOptions.sacrifice_clauses_wait), a "when you control no Islands,
+# sacrifice this" clause is a trigger on the stack, and until it resolves the
+# doomed permanent is still ours to use: a Pirate Ship pings once more, a
+# Skeleton Ship shrinks one more creature. [method _respond_action] never
+# answers our own object on top, so without this the pilot passed and let
+# the permanent go unused. Priced as the mana sink is — whatever it could do
+# is about to be lost anyway — and only for effects that outlast it: a
+# pump, a regeneration shield, an untap, an animation of its own or a
+# control effect that ends as it leaves buys nothing, and mana is not an
+# activated ability here at all. Public information only: the stack, our
+# own board and the targets on the table. [member AiProfile.forecasts_tactics];
+# off, the old pass. With the option off the clause has already sacrificed
+# the permanent and there is nothing to answer.
+
+## Our doomed permanent's best activation in answer to its own forced
+## sacrifice on top of the stack, or "".
+func _c2s_last_use(game: MtgGame) -> String:
+	if not profile.forecasts_tactics:
+		return ""
+	var doomed := game.sacrifice_clause_victim(game.stack.back())
+	if doomed == null or doomed.controller_id != pid:
+		return ""
+	return _try_activate(game, Moment.SINK, doomed)
+
+
+## Does [param ability]'s effect outlast its source? Read from the effect
+## classes ([EffectIntent]), never from a card name.
+static func _c2s_outlasts(ability: ActivatedAbility, source: CardInstance) -> bool:
+	var intent := EffectIntent.read(ability.effects, source.data.card_name)
+	if intent.unknown or intent.adds_mana or intent.pump_self or intent.pump_host \
+			or intent.regenerates or intent.animates != null:
+		return false
+	return intent.damage > 0 or intent.removes or intent.shrinks() \
+		or intent.draws > 0 or intent.bounces or intent.discards != 0 \
+		or intent.counters or intent.mills > 0 or intent.life_gain > 0 \
+		or intent.life_loss > 0 or not intent.makes_token.is_empty()
+
+
+## Is the doomed permanent among [param option]'s targets?
+static func _c2s_aims_at(option: Dictionary, doomed: CardInstance) -> bool:
+	for ref in option.get("targets", []):
+		if ref is TargetRef and not ref.is_player and ref.instance_id == doomed.id:
+			return true
+	return false
+# --- end campaign 2026-10-13 f-sac ---

@@ -21,7 +21,9 @@ extends CardScript
 ##   fires on EVERY player's upkeep — which is the whole card.
 ## - "When there are no lands on the battlefield" is
 ##   CardData.sacrifices_when, a state-based check, so the Vortex eats
-##   itself the moment the board runs dry rather than waiting for an upkeep.
+##   itself the moment the board runs dry rather than waiting for an upkeep
+##   (a state trigger under the rules option
+##   RulesOptions.sacrifice_clauses_wait).
 
 
 func build() -> CardData:

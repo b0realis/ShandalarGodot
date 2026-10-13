@@ -275,13 +275,14 @@ var enters_tapped: bool = false
 var attack_needs_defender_land: String = ""
 
 ## "When you control no [land type], sacrifice this" (Sea Serpent,
-## Pirate Ship, Dandan, Merchant Ship). Lowercase land subtype,
-## "" = no clause. The modern wording is a state trigger (CR 603.8);
-## checked here as a state-based action — the 1997 rules' "Bury … if at
-## any time" — so no response window opens (docs/mechanics.md).
-## SIMPLIFIED (docs/ROADMAP.md, "Sacrifice when you control no"): under the
-## modern presets the doomed permanent's own abilities can't be used in
-## response.
+## Pirate Ship, Dandan, Merchant Ship, Gorilla Pack's Forests). Lowercase
+## land subtype, "" = no clause. A RULES FORK since 2026-10-13
+## (RulesOptions.sacrifice_clauses_wait, off under every preset): off, it
+## is checked as a state-based action — the 1997 printings' "Bury … if at
+## any time", no response window; on, it is the modern Oracle's state
+## trigger (CR 603.8), waiting on the stack so the doomed permanent gets
+## one more use (MtgGame.sacrifice_clause_holds, docs/mechanics.md). The
+## two clauses below follow the same switch.
 var sacrifice_if_no_land_type: String = ""
 
 ## "Cast this spell only ..." — a TIMING rider on a spell (Reset's "only
@@ -306,11 +307,13 @@ func castable_only_when(cb: Callable) -> CardData:
 
 ## The general form of the clause above: "When <condition>, sacrifice
 ## this permanent" (Jihad's "when the chosen player controls no nontoken
-## permanents of the chosen color"). A predicate
+## permanents of the chosen color", Floodgate's "when this creature has
+## flying"). A predicate
 ## [code]func(game: MtgGame, source: CardInstance) -> bool[/code] that
 ## returns true when the permanent must go. Unset = no such clause.
-## Enforced as a state-based action in MtgGame, like its land-typed
-## sibling; set it with [method sacrifices_when].
+## Enforced by MtgGame exactly like its land-typed sibling — a state-based
+## check, or a state trigger under the rules fork — so a card never writes
+## this clause as a trigger of its own; set it with [method sacrifices_when].
 var sacrifice_condition: Callable = Callable()
 
 ## Fluent: attach a "sacrifice this when <condition>" clause.
@@ -517,7 +520,8 @@ func with_attack_needs_defender_land(land_type: String) -> CardData:
 
 ## "When you control a <creature subtype>, sacrifice this" (Goblins of
 ## the Flarg's Dwarf clause). Lowercase subtype, "" = no clause;
-## enforced as a state-based action in MtgGame.
+## enforced by MtgGame like [member sacrifice_if_no_land_type], under the
+## same rules fork.
 var sacrifice_if_you_control_subtype: String = ""
 
 ## Add a "when you control a <subtype>, sacrifice this" clause.

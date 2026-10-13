@@ -183,6 +183,10 @@ var _hand_menu: PopupMenu = null        # @MENU_HAND
 var _mana_menu: PopupMenu = null        # @MENU_MANAPOOL
 var _full_card_menu: PopupMenu = null   # @MENU_FULLCARD
 var _attack_menu: PopupMenu = null      # @MENU_ATTACK / @MENU_MINIMIZEDATTACK
+var _grave_menu: PopupMenu = null       # @MENU_GRAVEYARD (f-minihelp, 2026-10-13)
+var _chain_menu: PopupMenu = null       # @MENU_SPELLCHAIN (f-minihelp, 2026-10-13)
+## The duel's mini help while one is up ([DuelMiniHelp], f-minihelp).
+var _mini_help: DuelMiniHelp = null
 ## Which card the open `@MENU_SMALLCARD` belongs to.
 var _card_menu_inst: CardInstance = null
 ## `Concede` → `Yes, I'm sure` (§6.3).
@@ -792,6 +796,10 @@ func _sees_private_log(seat: int) -> bool:
 ## the set with a SUNKEN bevel: the duel's verdict is carved in, not
 ## raised. The Situation Bar carries the same words behind it.
 func _on_game_over(winner_id: int) -> void:
+	# f-minihelp: the duel's end is what the player sees next — a mini help
+	# still up (the other seat conceded at an SGManalink table) closes.
+	if mini_help_open():
+		_mini_help.dismiss()
 	# `@DIALOG_SHANDALARENDDUEL` has THREE lines, and the third one is the
 	# draw — which this used to fall through to `game.players[-1]` and
 	# announce as a win for seat 2 (found 2026-09-01 while building the
@@ -1698,8 +1706,8 @@ func _on_life_input(event: InputEvent, pid: int) -> void:
 ## with the third one reading whichever way the panel is facing. The two
 ## `Target` entries do exactly what a click on the exposed face does
 ## (*"simply click on the appropriate exposed face"*), so they are live on
-## the same condition and route through the same handler; `Help...` is
-## disabled because there is no Dueling Help to open, as everywhere else.
+## the same condition and route through the same handler; `Help...` opens
+## the life register's mini help (2026-10-13, [DuelMiniHelp]).
 func _open_life_menu(pid: int, at: Vector2) -> void:
 	if _life_menu == null:
 		return
@@ -1712,11 +1720,12 @@ func _open_life_menu(pid: int, at: Vector2) -> void:
 	for i in labels.size():
 		_life_menu.add_item(labels[i], i)
 	var live := [_player_is_targetable(theirs), _player_is_targetable(mine),
-		_can_flip(pid), false]
+		_can_flip(pid), true]   # f-minihelp: Help... is the mini help
 	for i in live.size():
 		_life_menu.set_item_disabled(_life_menu.get_item_index(i), not live[i])
 	_life_menu.reset_size()
 	_life_menu.position = Vector2i(at) + Vector2i(6, 0)
+	_life_menu.set_meta(MINI_HELP_AT, at)   # f-minihelp
 	_life_menu.popup()
 
 
@@ -1730,6 +1739,7 @@ func _on_life_menu_chosen(id: int) -> void:
 		DuelistFace.FLIP:
 			_face_flipped[_life_menu_pid] = not _face_flipped[_life_menu_pid]
 			_refresh()
+		3: _open_mini_help(HelpPages.MINI_LIFE, _menu_anchor(_life_menu))   # f-minihelp
 
 
 # ------------------------------------------------- the discard phase (§1.1) --
@@ -4177,7 +4187,8 @@ func _modal_open() -> bool:
 		if badge != null and badge.details_open(): return true
 	return graveyard_is_open() or _mode_overlay != null \
 		or _search_dialog != null or _x_dialog != null \
-		or _choice_overlay != null or is_paused() or _fullscreen_card_open()
+		or _choice_overlay != null or is_paused() or _fullscreen_card_open() \
+		or mini_help_open()   # f-minihelp: the duel waits under the mini help
 
 
 func _fullscreen_card_open() -> bool:
@@ -4207,7 +4218,7 @@ func _can_cancel() -> bool:
 	# button behind the scrim, and Space must stay dead under it. It IS a
 	# modal for every other purpose, which is why this reads it out again
 	# rather than leaving it out of [method _modal_open].
-	if is_paused():
+	if is_paused() or mini_help_open():   # f-minihelp: the same for the mini help
 		return false
 	if _modal_open():
 		return true
@@ -4496,7 +4507,7 @@ func _maybe_schedule_ai() -> void:
 	# window is up, and [method _ai_step] refuses an already-armed one, so
 	# a player who walks away does not come back to three lost turns.
 	if _ai_pending or _toss_active or is_paused() or _fullscreen_card_open() \
-			or _ai_seat_to_act() == -1:
+			or mini_help_open() or _ai_seat_to_act() == -1:   # f-minihelp
 		return
 	_ai_pending = true
 	var mine := _humans.has(game.active_player)
@@ -4518,7 +4529,7 @@ func _ai_step() -> void:
 	# under the splash and the coin and had a seat act on a duel that had
 	# not begun (turn 0, the mulligans still open). The toss's last line
 	# refreshes, and that arms a fresh one.
-	if is_paused() or _fullscreen_card_open() or _toss_active:
+	if is_paused() or _fullscreen_card_open() or _toss_active or mini_help_open():   # f-minihelp
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
@@ -6194,7 +6205,9 @@ func _auto_pass_priority() -> bool:
 ## Take the duel as far as the standing order allows. Called from
 ## [method _refresh], so an AI seat's pacing timer resumes it for free.
 func _drive_advance() -> void:
-	if _advancing or game == null:
+	# f-minihelp: a standing order holds under the mini help; closing it
+	# redraws, and the redraw comes back here.
+	if _advancing or game == null or mini_help_open():
 		return
 	if config.private_hotseat() and not _hotseat_revealed:
 		return
@@ -7473,10 +7486,11 @@ enum PhaseMenu { RUN_TO, MARK, HELP_PHASE, HELP }
 ##   * the 1997 table ships no "unmark" string, so **Mark this phase to
 ##     always stop** is a CHECK item that toggles — the tick is the only
 ##     thing added, and it is how the player takes a Stop off again;
-##   * both `Help` entries are present and DISABLED, because there is no
-##     Dueling Help yet (§6.20l). Showing them greyed says the menu is
-##     complete and the help is missing; dropping them would say the
-##     original's menu had two items.
+##   * both `Help` entries open the duel's MINI HELP (2026-10-13; they
+##     were greyed until then, §6.20l): `Help for this phase...` the
+##     icon's own explanation from the Help, `Help...` the bar's
+##     ([method _on_phase_menu_chosen]). The full Help screen is the main
+##     menu's and closes to the title, so a duel cannot open it.
 func _open_phase_menu(half: int, bar: int, slot: int, at: Vector2) -> void:
 	if _phase_menu == null:
 		return
@@ -7489,10 +7503,9 @@ func _open_phase_menu(half: int, bar: int, slot: int, at: Vector2) -> void:
 		stops != null and stops.is_marked(half, bar, slot))
 	_phase_menu.add_item(PhaseStops.MENU_HELP_PHASE, PhaseMenu.HELP_PHASE)
 	_phase_menu.add_item(PhaseStops.MENU_HELP, PhaseMenu.HELP)
-	for id in [PhaseMenu.HELP_PHASE, PhaseMenu.HELP]:
-		_phase_menu.set_item_disabled(_phase_menu.get_item_index(id), true)
 	_phase_menu.reset_size()
 	_phase_menu.position = Vector2i(at) + Vector2i(6, 0)
+	_phase_menu.set_meta(MINI_HELP_AT, at)   # f-minihelp
 	_phase_menu.popup()
 
 
@@ -7520,6 +7533,14 @@ func _on_phase_menu_chosen(id: int) -> void:
 				_phase_menu_label(half, bar, slot),
 				"Stop set" if now else "Stop removed"])
 			_refresh()
+		# --- 2026-10-13 f-minihelp: the two Help entries ---
+		PhaseMenu.HELP_PHASE:
+			_show_mini_help(MINI_HELP_PHASE, HelpPages.mini_phase(bar, slot,
+				half == PhaseStops.Half.YOURS, _phase_menu_label(half, bar, slot)),
+				_menu_anchor(_phase_menu))
+		PhaseMenu.HELP:
+			_open_mini_help(HelpPages.MINI_COMBAT_BAR if bar == PhaseStops.Bar.COMBAT
+				else HelpPages.MINI_PHASE_BAR, _menu_anchor(_phase_menu))
 
 
 ## The name of one icon, for the message bar — its 1997 cue card.
@@ -7602,6 +7623,7 @@ func _open_territory_menu(pid: int, at: Vector2) -> void:
 				_territory_menu.get_item_index(id), true)
 	_territory_menu.reset_size()
 	_territory_menu.position = Vector2i(at) + Vector2i(6, 0)
+	_territory_menu.set_meta(MINI_HELP_AT, at)   # f-minihelp
 	_territory_menu.popup()
 
 
@@ -7660,6 +7682,7 @@ func _on_territory_menu_chosen(id: int) -> void:
 		1: _arrange_seat(1 - _menu_seat(), not _arranged[1 - _menu_seat()])
 		2: _open_duel_options()
 		6: _minimize_window()
+		7: _open_mini_help(HelpPages.MINI_TERRITORY, _menu_anchor(_territory_menu))   # f-minihelp
 		8: _ask_to_concede()
 
 
@@ -8332,6 +8355,8 @@ func _confirm_concede() -> void:
 # *"Depending on the situation, one or more of these options is
 # available"* — by GREYING what we cannot offer rather than dropping it,
 # so each menu reads as complete and the missing features read as missing.
+# Every `Help...` is live since 2026-10-13 and opens the duel's mini help
+# for the menu's subject ([method _open_mini_help]).
 
 ## Build one mini-menu in the duel's own stone and voice.
 func _dress_menu(handler: Callable, menu_font: Font) -> PopupMenu:
@@ -8351,6 +8376,7 @@ func _dress_menu(handler: Callable, menu_font: Font) -> PopupMenu:
 func _popup_menu_at(menu: PopupMenu, at: Vector2) -> void:
 	menu.reset_size()
 	menu.position = Vector2i(at) + Vector2i(6, 0)
+	menu.set_meta(MINI_HELP_AT, at)   # f-minihelp: where its Help... opens
 	menu.popup()
 
 
@@ -8413,6 +8439,9 @@ func _open_card_menu(inst: CardInstance, at: Vector2) -> void:
 
 
 func _on_card_menu_chosen(id: int) -> void:
+	if id == CardMenu.help_id(CardMenu.SMALL_CARD):   # f-minihelp
+		_open_mini_help(HelpPages.MINI_CARD, _menu_anchor(_card_menu))
+		return
 	if id == CARD_MENU_HAND_MANA and _card_menu_inst != null and _hand_mana(_card_menu_inst):
 		_open_ability_menu(_card_menu_inst, true)
 		return
@@ -8519,6 +8548,9 @@ func _open_library_menu(pid: int, at: Vector2) -> void:
 
 
 func _on_library_menu_chosen(id: int) -> void:
+	if id == CardMenu.help_id(CardMenu.LIBRARY):   # f-minihelp
+		_open_mini_help(HelpPages.MINI_LIBRARY, _menu_anchor(_library_menu))
+		return
 	if id != 0:
 		return
 	var pid := int(_library_menu.get_meta("pid", _human_seat()))
@@ -8539,9 +8571,10 @@ func _on_hand_input(event: InputEvent) -> void:
 		_open_hand_menu(mb.global_position)
 
 
-## `@MENU_HAND` and `@MENU_MANAPOOL` — both complete, both entirely
-## greyed. They answer the gesture rather than swallowing it, which is the
-## point of listing a menu you cannot yet fill.
+## `@MENU_HAND` and `@MENU_MANAPOOL` — both complete. Until 2026-10-13
+## both were entirely greyed, answering the gesture rather than swallowing
+## it; now each one's `Help...` opens its mini help, and the pool's seven
+## spends stay grey ([constant CardMenu.MANA_POOL] says why).
 func _open_hand_menu(at: Vector2) -> void:
 	CardMenu.build(_hand_menu, CardMenu.HAND)
 	_popup_menu_at(_hand_menu, at)
@@ -8550,6 +8583,18 @@ func _open_hand_menu(at: Vector2) -> void:
 func _open_mana_menu(at: Vector2) -> void:
 	CardMenu.build(_mana_menu, CardMenu.MANA_POOL)
 	_popup_menu_at(_mana_menu, at)
+
+
+# --- 2026-10-13 f-minihelp: the hand's and the pool's Help... ---
+func _on_hand_menu_chosen(id: int) -> void:
+	if id == CardMenu.help_id(CardMenu.HAND):
+		_open_mini_help(HelpPages.MINI_HAND, _menu_anchor(_hand_menu))
+
+
+func _on_mana_menu_chosen(id: int) -> void:
+	if id == CardMenu.help_id(CardMenu.MANA_POOL):
+		_open_mini_help(HelpPages.MINI_MANA_POOL, _menu_anchor(_mana_menu))
+# --- end f-minihelp ---
 
 
 ## `@MENU_FULLCARD` — the SHOWCASE's own menu, and its one live entry is
@@ -8568,10 +8613,23 @@ func _open_full_card_menu(at: Vector2) -> void:
 	_full_card_menu.set_item_as_checkable(at_index, true)
 	_full_card_menu.set_item_checked(at_index,
 		CardPreview.expand_wanted())
+	# `Help for this card...` needs a card to be about (f-minihelp): greyed
+	# while the Showcase shows none, or shows a card face down.
+	_full_card_menu.set_item_disabled(_full_card_menu.get_item_index(
+		CardMenu.index_of(CardMenu.FULL_CARD, CardMenu.HELP_CARD)),
+		_showcased_card() == null)
 	_popup_menu_at(_full_card_menu, at)
 
 
 func _on_full_card_menu_chosen(id: int) -> void:
+	# --- 2026-10-13 f-minihelp: the Showcase's two Help entries ---
+	if id == CardMenu.help_id(CardMenu.FULL_CARD):
+		_open_mini_help(HelpPages.MINI_SHOWCASE, _beside_showcase(_menu_anchor(_full_card_menu)))
+		return
+	if id == CardMenu.index_of(CardMenu.FULL_CARD, CardMenu.HELP_CARD):
+		_open_card_help(_beside_showcase(_menu_anchor(_full_card_menu)))
+		return
+	# --- end f-minihelp ---
 	if id == 0 and _expand_button != null:
 		# The menu and the button are two doors onto one setting, so each
 		# has to show what the other did.
@@ -8596,6 +8654,162 @@ func _open_attack_menu(at: Vector2) -> void:
 func _on_attack_menu_chosen(id: int) -> void:
 	if id == 0:
 		_on_combat_minimized(not _combat_minimized)
+	elif id == CardMenu.help_id(CardMenu.ATTACK):   # f-minihelp
+		_open_mini_help(HelpPages.MINI_COMBAT_WINDOW, _menu_anchor(_attack_menu))
+
+
+# --- 2026-10-13 f-minihelp: the duel's mini help ---
+#
+# THE OWNER'S RULING (2026-10-13): *"Maybe here we only keep focused mini
+# help hover over and leave the main help as is reachable from the main
+# menu."* The Help screen closes to the title, so a duel cannot open it;
+# every duel menu's `Help...` opens a small panel over the table instead,
+# beside where the menu stood, with the short help for exactly that menu's
+# subject ([DuelMiniHelp]; the words are [method HelpPages.mini]'s).
+#
+# THE DUEL WAITS while it is up, the way it waits under the Pause window
+# and the card reader: [method _modal_open] counts it (no automatic pass,
+# no card clicks, no Return or Space), [method _maybe_schedule_ai] arms no
+# dwell and [method _ai_step] drops one already armed, and [method
+# _drive_advance] holds a standing Run to / Done order. Closing it redraws,
+# which arms a fresh dwell and resumes the order — the duel goes on exactly
+# as it stood. Under it the Situation Bar grows no Cancel ([method
+# _can_cancel]), and the keys reach the panel alone ([method _on_control]):
+# Escape and the pad's B close it, the pause key closes it and opens the
+# Pause window. At an SGManalink table it is the screen's alone: nothing is
+# sent and the other seat waits for nothing.
+
+## The meta each mini-menu carries: where it was opened, for the panel.
+const MINI_HELP_AT := &"mini_help_at"
+## The two subjects that are not a menu's own: one phase icon's help, and
+## the card in the Showcase.
+const MINI_HELP_PHASE := "phase"
+const MINI_HELP_CARD := "card_help"
+
+
+## Is the mini help up? Public, like [method is_paused]: the duel is
+## standing still while it is.
+func mini_help_open() -> bool:
+	return _mini_help != null and is_instance_valid(_mini_help) and _mini_help.is_open()
+
+
+## Open the mini help for one of [constant HelpPages.MINI_SUBJECTS] beside
+## [param at].
+func _open_mini_help(subject: String, at: Vector2) -> void:
+	_show_mini_help(subject, HelpPages.mini(subject), at)
+
+
+func _show_mini_help(subject: String, words: Dictionary, at: Vector2) -> void:
+	if words.is_empty() or game == null:
+		return
+	if mini_help_open():
+		_mini_help.dismiss()
+	var panel := DuelMiniHelp.new()
+	_mini_help = panel
+	panel.closed.connect(_on_mini_help_closed.bind(panel))
+	panel.open_on(self, subject, words, at)
+
+
+func _on_mini_help_closed(panel: DuelMiniHelp) -> void:
+	if _mini_help == panel:
+		_mini_help = null
+	# Redrawn on the next frame, once the panel's own input has finished:
+	# that redraw arms the computer's dwell and resumes a standing order.
+	_refresh.call_deferred()
+
+
+## Where [param menu] was opened (its [constant MINI_HELP_AT]); the
+## pointer when it does not say.
+func _menu_anchor(menu: PopupMenu) -> Vector2:
+	if menu != null and menu.has_meta(MINI_HELP_AT):
+		return menu.get_meta(MINI_HELP_AT)
+	return get_global_mouse_position()
+
+
+## The card the Showcase shows face up, or null.
+func _showcased_card() -> CardInstance:
+	if _card_preview == null:
+		return null
+	var inst: CardInstance = _card_preview._shown
+	return inst if inst != null and not inst.face_down else null
+
+
+## The Showcase's helps open at its right edge rather than over it, so the
+## card they are about stays in view beside them.
+func _beside_showcase(at: Vector2) -> Vector2:
+	if _card_preview == null or not _card_preview.is_inside_tree():
+		return at
+	return Vector2(maxf(at.x, _card_preview.get_global_rect().end.x), at.y)
+
+
+## `Help for this card...`: what the Help says about the Showcase's card.
+func _open_card_help(at: Vector2) -> void:
+	var inst := _showcased_card()
+	if inst == null:
+		return
+	_show_mini_help(MINI_HELP_CARD, HelpPages.mini_card(inst.data.card_name,
+		inst.data.oracle_text, (inst.data.supertypes & Mtg.Supertype.BASIC) != 0), at)
+
+
+## `@MENU_GRAVEYARD` on a graveyard or exile plate: the three views, each
+## the one overlay ([GraveyardView]) and greyed while its own pile is
+## empty, and `Help...`.
+func _open_graveyard_menu(pid: int, at: Vector2) -> void:
+	if _grave_menu == null or game == null:
+		return
+	_grave_menu.set_meta("pid", pid)
+	CardMenu.build(_grave_menu, CardMenu.GRAVEYARD)
+	var players: Array = game.players
+	var live := [not players[pid].graveyard.is_empty(), not players[pid].exile.is_empty(),
+		not (players[0].ante.is_empty() and players[1].ante.is_empty())]
+	for i in live.size():
+		_grave_menu.set_item_disabled(_grave_menu.get_item_index(i), not live[i])
+	_popup_menu_at(_grave_menu, at)
+
+
+func _on_graveyard_menu_chosen(id: int) -> void:
+	if id == CardMenu.help_id(CardMenu.GRAVEYARD):
+		_open_mini_help(HelpPages.MINI_GRAVEYARD, _menu_anchor(_grave_menu))
+		return
+	if id < 0 or id > 2:
+		return
+	var pid := int(_grave_menu.get_meta("pid", _human_seat()))
+	if _grave_open_pile != pid:
+		_open_graveyard(pid)
+
+
+## A right-click on a graveyard or exile plate. The left click keeps what
+## it did ([method _on_grave_pile_clicked]).
+func _on_grave_plate_input(event: InputEvent, pid: int) -> void:
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed:
+		return
+	if mb.button_index == MOUSE_BUTTON_LEFT:
+		_on_grave_pile_clicked(pid)
+	elif mb.button_index == MOUSE_BUTTON_RIGHT:
+		_open_graveyard_menu(pid, mb.global_position)
+
+
+## `@MENU_SPELLCHAIN` on a right-click of the tan band over a card on the
+## chain: `Minimize` (grey — the chain has no minimised state) and `Help...`.
+func _open_chain_menu(at: Vector2) -> void:
+	if _chain_menu == null:
+		return
+	CardMenu.build(_chain_menu, CardMenu.SPELL_CHAIN)
+	_popup_menu_at(_chain_menu, at)
+
+
+func _on_chain_menu_chosen(id: int) -> void:
+	if id == CardMenu.help_id(CardMenu.SPELL_CHAIN):
+		_open_mini_help(HelpPages.MINI_SPELL_CHAIN, _menu_anchor(_chain_menu))
+
+
+func _on_chain_band_input(event: InputEvent, band: Control) -> void:
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+		band.accept_event()
+		_open_chain_menu(mb.global_position)
+# --- end 2026-10-13 f-minihelp ---
 
 
 ## `Duel Options...`, entry 17 of `@MENU_TERRITORY` (§6.4). Everything in
@@ -8819,6 +9033,12 @@ func _rebuild_stack() -> void:
 		caption.add_theme_font_size_override("font_size", 10)
 		caption.add_theme_color_override("font_color", Color(0.16, 0.11, 0.06))
 		caption_box.add_child(caption)
+		# `@MENU_SPELLCHAIN` on the band (f-minihelp, 2026-10-13); the card
+		# under it keeps its own menu. STOP so the press ends here, and the
+		# band carries the entry's tooltip itself for the same reason.
+		caption_box.mouse_filter = Control.MOUSE_FILTER_STOP
+		caption_box.tooltip_text = item.description
+		caption_box.gui_input.connect(_on_chain_band_input.bind(caption_box))
 		entry.add_child(caption_box)
 		# The card itself — fully wired by _make_card: clickable (which is
 		# how a counterspell TAKES a chain object as its target, through
@@ -10982,11 +11202,13 @@ func _build_ui() -> void:
 	# same voice, one menu per table.
 	_card_menu = _dress_menu(_on_card_menu_chosen, menu_font)
 	_library_menu = _dress_menu(_on_library_menu_chosen, menu_font)
-	_hand_menu = _dress_menu(func(_i: int) -> void: pass, menu_font)
-	_mana_menu = _dress_menu(func(_i: int) -> void: pass, menu_font)
+	_hand_menu = _dress_menu(_on_hand_menu_chosen, menu_font)   # f-minihelp
+	_mana_menu = _dress_menu(_on_mana_menu_chosen, menu_font)   # f-minihelp
 	_full_card_menu = _dress_menu(_on_full_card_menu_chosen, menu_font)
 	_attack_menu = _dress_menu(_on_attack_menu_chosen, menu_font)
 	_hand_action_menu = _dress_menu(_on_hand_action_chosen, menu_font)
+	_grave_menu = _dress_menu(_on_graveyard_menu_chosen, menu_font)   # f-minihelp
+	_chain_menu = _dress_menu(_on_chain_menu_chosen, menu_font)   # f-minihelp
 
 	# THE LIFE REGISTER'S mini-menu (`@MENU_LIFE` / `@MENU_FACE`, §6.5),
 	# same stone again. Rebuilt on every open because its third entry is
@@ -11231,10 +11453,9 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	grave_icon.set_meta("pad_target", true)
 	grave_icon.tooltip_text = "Your graveyard" if pid == _human_seat() and not config.private_hotseat() \
 		else "%s graveyard" % config.seat_name(pid)
-	grave_icon.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.pressed \
-				and event.button_index == MOUSE_BUTTON_LEFT:
-			_on_grave_pile_clicked(pid))
+	# The left click opens the pile; the right one `@MENU_GRAVEYARD`
+	# (f-minihelp, 2026-10-13 — until then a right click here did nothing).
+	grave_icon.gui_input.connect(_on_grave_plate_input.bind(pid))
 	var ring := Panel.new()
 	var ring_box := StyleBoxFlat.new()
 	ring_box.bg_color = Color(0, 0, 0, 0)
@@ -11277,10 +11498,7 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	# `@MENU_GRAVEYARD`'s three views live in ONE overlay, so this plate
 	# opens the very viewer the graveyard does — the exile section is
 	# already in it — rather than a second one of its own.
-	exile_icon.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.pressed \
-				and event.button_index == MOUSE_BUTTON_LEFT:
-			_on_grave_pile_clicked(pid))
+	exile_icon.gui_input.connect(_on_grave_plate_input.bind(pid))
 	# The count rides ON the plate (the row has no width to spare beside
 	# the mana column) and is blank while the pile is empty.
 	_exile_labels.resize(2)
@@ -11740,6 +11958,14 @@ var _last_stroke := {"action": "", "key": false, "device": 0, "ms": -1000000}
 func _on_control(event: InputEvent) -> void:
 	if _is_doubled(event):
 		return
+	# --- 2026-10-13 f-minihelp: the mini help owns the keys while it is up ---
+	# Escape, the pad's B and the accept keys close it; the pause key closes
+	# it and goes on to the Pause window; nothing else reaches the duel.
+	if mini_help_open():
+		_mini_help.answer(event)
+		if mini_help_open() or not Controls.pressed(event, "duel_pause"):
+			return
+	# --- end f-minihelp ---
 	if _fullscreen_card_open():
 		_fullscreen_card._input(event)
 		# ...except the pause key, which closed the reader and goes on to

@@ -25,6 +25,15 @@ extends RefCounted
 ## labels: §6.1 dropped `@MENU_PHASEBAR`'s because the gestures were not
 ## ours, and the three display toggles' gestures still are not — but the
 ## strings are worth keeping where the work will find them.
+##
+## EVERY `Help...` IS LIVE (2026-10-13, the owner's ruling: *"Maybe here we
+## only keep focused mini help hover over and leave the main help as is
+## reachable from the main menu."*). The full Help screen closes to the
+## title, so a duel cannot open it; each table's `Help...` opens the duel's
+## MINI HELP instead — a small panel over the table, beside where the menu
+## stood, with the short help for exactly this menu's subject
+## ([DuelMiniHelp], words from [method HelpPages.mini]). The duel waits
+## while it is up. [method help_id] finds the entry in any table.
 
 ## `@MENU_SMALLCARD` (`UIStrings.txt:936`), eight entries in the table's
 ## own order. What each one is, from `Duel.hlp`'s **Territory** topic
@@ -52,7 +61,7 @@ extends RefCounted
 ##    string — the same one-entry-both-ways shape as the Stops'
 ##    `Mark this phase to always stop`.
 ##  - the three display toggles — [constant DuelOptions.MENU_TOGGLES].
-##  - **Help...** — the Dueling Help window (§6.20l).
+##  - **Help...** — the mini help on the small card (§6.20l, 2026-10-13).
 const SMALL_CARD: Array[Dictionary] = [
 	{"label": "Original type", "live": true},
 	{"label": "Show full card", "accel": "R DblClk", "live": true},
@@ -61,24 +70,24 @@ const SMALL_CARD: Array[Dictionary] = [
 	{"toggle": "ShowIDTagsOnCards"},
 	{"toggle": "ShowInvisibleEffectCards"},
 	{"toggle": "ShowAllCardsSummonSickness"},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 
 ## `@MENU_LIBRARY` (`:878`). `Duel.hlp`, **Libraries**: *"The number of
 ## cards left in your library is represented inexactly, as in real life.
 ## If you must know, you can right-click on a library to find out the
 ## exact number of cards left in it."* — which is what the one live entry
-## does, in the Situation Bar.
+## does, in the Situation Bar. `Help...` is the library's mini help.
 const LIBRARY: Array[Dictionary] = [
 	{"label": "Count library cards", "live": true},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 
-## `@MENU_HAND` (`:874`) — one entry, and it is the help. The whole menu
-## is greyed, which is exactly what the original's own table amounts to
-## for us; it is here so the gesture answers rather than doing nothing.
+## `@MENU_HAND` (`:874`) — one entry, and it is the help: the hand's mini
+## help, live since 2026-10-13. Until then the whole menu was greyed; it
+## was kept so the gesture answered rather than doing nothing.
 const HAND: Array[Dictionary] = [
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 
 ## `@MENU_MANAPOOL` (`:890`), eight entries. `Duel.hlp`, **Mana Pool**:
@@ -98,7 +107,8 @@ const HAND: Array[Dictionary] = [
 ## Note the seventh column: `artifact`. The original tracked restricted
 ## artifact mana as a pool of its own, which is exactly our
 ## [ManaPool] restricted pool — so the row is already modelled even though
-## the command is not.
+## the command is not. `Help...` is live: the mana pool's mini help, which
+## says why the spends are grey.
 const MANA_POOL: Array[Dictionary] = [
 	{"label": "Spend 1 mana: black", "live": false},
 	{"label": "Spend 1 mana: blue", "live": false},
@@ -107,7 +117,7 @@ const MANA_POOL: Array[Dictionary] = [
 	{"label": "Spend 1 mana: white", "live": false},
 	{"label": "Spend 1 mana: colorless", "live": false},
 	{"label": "Spend 1 mana: artifact", "live": false},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 
 ## `@MENU_FULLCARD` (`:868`) — the SHOWCASE's own menu. `Duel.hlp`,
@@ -118,10 +128,17 @@ const MANA_POOL: Array[Dictionary] = [
 ## annoying, you can always toggle Expand off again."* The setting is
 ## persisted under the 1997 executable's own key,
 ## `ExpandTextBoxOnBigCard`.
+##
+## `Help for this card...` is live (2026-10-13) whenever the Showcase shows
+## a face-up card — the caller greys it otherwise. Its honest meaning is
+## what the Help itself says about that card: the ability glossary's
+## entries that name it or name an ability its rules text uses
+## ([method HelpPages.mini_card]), in the same mini help panel. `Help...`
+## is the Showcase's own mini help.
 const FULL_CARD: Array[Dictionary] = [
 	{"label": "Expand text box", "key": "ExpandTextBoxOnBigCard", "live": true},
-	{"label": "Help for this card...", "live": false},
-	{"label": "Help...", "live": false},
+	{"label": "Help for this card...", "live": true},
+	{"label": "Help...", "live": true},
 ]
 
 ## `@MENU_ATTACK` (`:841`) and `@MENU_MINIMIZEDATTACK` (`:846`) — the
@@ -131,28 +148,65 @@ const FULL_CARD: Array[Dictionary] = [
 ## the minimized window, click on the window icon in the center area of
 ## the Phase Bar."* Both actions exist on our Combat window already
 ## (`DuelScreen._on_combat_minimized`, `_on_window_icon_pressed`).
+## `Help...` is the Combat window's mini help.
 const ATTACK: Array[Dictionary] = [
 	{"label": "Minimize", "live": true},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 const MINIMIZED_ATTACK: Array[Dictionary] = [
 	{"label": "Restore", "live": true},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 
 ## `@MENU_SPELLCHAIN` (`:851`) and `@MENU_MINIMIZEDSPELLCHAIN` (`:856`) —
-## the same two words for the chain window. NOT live: our chain has no
-## minimised state to restore from, and the 1997 restore route is the
-## Phase Bar's window icon, which our icon already spends on the Combat
-## window. Listed so the four-menu gap §6.12's table has is on the record.
+## the same two words for the chain window. `Minimize` / `Restore` are NOT
+## live: our chain has no minimised state to restore from, and the 1997
+## restore route is the Phase Bar's window icon, which our icon already
+## spends on the Combat window. Since 2026-10-13 `@MENU_SPELLCHAIN` is
+## OPENED — a right-click on the tan band over a card on the chain (the
+## card itself keeps its own `@MENU_SMALLCARD`) — so its `Help...`, the
+## Spell Chain's mini help, has somewhere to be pressed. The minimised
+## twin is never shown (there is nothing minimised to right-click).
 const SPELL_CHAIN: Array[Dictionary] = [
 	{"label": "Minimize", "live": false},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
 const MINIMIZED_SPELL_CHAIN: Array[Dictionary] = [
 	{"label": "Restore", "live": false},
-	{"label": "Help...", "live": false},
+	{"label": "Help...", "live": true},
 ]
+
+## `@MENU_GRAVEYARD` (`:901`) — the graveyard's own right-click menu, OPENED
+## since 2026-10-13 on the graveyard and exile plates (until then a right
+## click there did nothing). Its three views are one overlay here
+## ([GraveyardView], which lays out both seats' graveyards, exiled cards
+## and antes together), so each `View` entry opens that overlay, greyed by
+## the caller while its own pile is empty. `Help...` is the graveyard's
+## mini help.
+const GRAVEYARD: Array[Dictionary] = [
+	{"label": "View the graveyard", "live": true},
+	{"label": "View exiled cards", "live": true},
+	{"label": "View both antes", "live": true},
+	{"label": "Help...", "live": true},
+]
+
+## The label every table's last entry carries.
+const HELP := "Help..."
+## The Showcase's second entry.
+const HELP_CARD := "Help for this card..."
+
+
+## The id [method build] gives [param table]'s `Help...` (its index), or -1.
+static func help_id(table: Array[Dictionary]) -> int:
+	return index_of(table, HELP)
+
+
+## The id [method build] gives the row labelled [param label], or -1.
+static func index_of(table: Array[Dictionary], label: String) -> int:
+	for i in table.size():
+		if String(table[i].get("label", "")) == label:
+			return i
+	return -1
 
 
 ## Fill [param menu] from one of the tables above, ids counting from

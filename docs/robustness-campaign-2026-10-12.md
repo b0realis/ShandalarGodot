@@ -124,19 +124,24 @@ it opens the menu even after typing in the Deck Builder's search.
 
 ## Left open
 
-- **For the owner:**
-  - When Forethought Amulet and Furnace of Rath both apply from the start,
-    the default order (which the AI takes) applies the Amulet first: 4 damage
-    instead of 2. Applying increases first would always favour the damaged
-    player but changes the documented order — left as it is.
-  - An AutoDeck card-list pool in the ordinary Deck Builder is still
-    filtered by the remembered Extras switches (they are on screen there;
-    only the draft's hidden trap was fixed).
-- **Kept as is, documented:** "Sacrifice when you control no Islands" stays a
-  state-based action under every preset — the 1997 reading; under the modern
-  presets the only difference is the missing response window (SIMPLIFIED,
-  `docs/ROADMAP.md`). "Help..." in the duel's menus stays greyed (Help closes
-  to the title; it would need to be an overlay).
+- **Settled by the owner (2026-10-12):**
+  - Forethought Amulet and Furnace of Rath on one Bolt: the 1997 game's
+    fixed order stays as a rules option, and under the modern rules the
+    damaged player chooses (CR 616.1) — 0.50.21, Options › Rules › "Fixed
+    order for damage effects"; the computer picks the order that hurts it
+    least (2 damage, not 4).
+  - An AutoDeck card-list pool in the ordinary Deck Builder stays filtered
+    by the remembered Extras switches (they are on screen there): "this is
+    fine!"
+- **Settled after the campaign (2026-10-13, the owner's rulings):** "Sacrifice
+  when you control no Islands" and its relatives (23 cards, every land type,
+  creature type and condition) became a rules option, "Forced sacrifices
+  wait on the chain" — off under every preset, so they keep the 1997
+  reading and go at once; switched on, the sacrifice waits on the Spell
+  Chain and a Pirate Ship pings once more. "Help..." in the duel's menus is now a focused mini help
+  (2026-10-13, the owner's ruling): a small panel over the table with the
+  short help for what was right-clicked, while the duel waits; the full Help
+  stays the main menu's (it closes to the title).
 - **To verify on hardware:** the Quest scripts' rename of a `.part` file over
   a zip in the game's folder (fails safe if refused) and the Quest timing-log
   marker; whether a desktop window manager says "not responding" during a
@@ -145,12 +150,19 @@ it opens the menu even after typing in the Deck Builder's search.
 - **Known gaps:** a copy that keeps the old file's modification time (`cp -p`)
   over the same name inherits its seal; about 45 card scripts' own sweepers
   could move to `depart_together` for the same simultaneity.
-- **Hunter probes that still fail by design:** the refresh-storm probe counts
-  engine signals (still 51 for the Fireball — the redraws are what changed);
-  a Cannibalize cast is now refused at the click instead of opening; probes
-  asserting the old Help or legality wording; the ArkOS probe that presses
-  `q` (still a letter for desk players); Godot's own TLS and HTTP lines for
-  hostile connections; the zip library's own lines for a damaged entry.
+- **Hunter probes that still fail by design** (re-run on 2026-10-13 against
+  0.50.21: 64 of 76 probe files pass; each of the other twelve fails only
+  for the reason given): the refresh-storm probe counts engine signals
+  (still 51 for the Fireball — the redraws are what changed); a Cannibalize
+  cast is now refused at the click instead of opening; probes asserting the
+  old Help or legality wording, or a settings value that stays a String;
+  the Save-after-Load probe never answers the 1997 "over write?" question;
+  the last-known-colour probe reads damage on a creature that now dies; the
+  ArkOS probe that presses `q` (still a letter for desk players); Pirate
+  Ship's sacrifice (kept a state-based action, above); Godot's own TLS and
+  HTTP lines for hostile connections, and its "could not create directory"
+  lines in a fresh profile made read-only; the zip library's own lines for a
+  damaged entry; the full-disk skin probe needs a zip placed by its runner.
 
 ## Verification
 

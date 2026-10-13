@@ -8,7 +8,8 @@ extends CardScript
 ## with_attack_needs_defender_land("island") — CombatState.attack_illegality
 ## checks the DEFENDER's lands by subtype (their Tropical Island counts) —
 ## plus with_sacrifice_if_no_land("island") for the printed second line,
-## which MtgGame enforces as a state-based action (wave 27 lifted the old
+## which MtgGame enforces at once, or as a state trigger under the rules
+## option RulesOptions.sacrifice_clauses_wait (wave 27 lifted the old
 ## ledger row).
 
 

@@ -180,7 +180,9 @@ func test_the_presets_round_trip() -> void:
 	assert_true(rules.mana_burn, "1997 burns mana")
 	assert_false(rules.attackers_revocable,
 		"and does NOT let an attacker be taken back")
-	rules.set_edition("modern")
+	# The Modern rules PRESET: the modern edition bar its named exception
+	# (the sacrifice clauses stay the 1997 way, 2026-10-13).
+	rules.set_preset("modern")
 	assert_eq(rules.preset(), "modern")
 	assert_false(rules.mana_burn)
 	assert_true(rules.attackers_revocable)

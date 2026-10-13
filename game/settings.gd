@@ -131,9 +131,9 @@ static func _keep_aside(err: Error) -> void:
 
 ## The marker a file carries once [method _migrate_rules] has looked at it.
 const RULES_REVISION_KEY := "rules_revision"
-const RULES_REVISION := 2
+const RULES_REVISION := 3
 
-## ONE fork changed its modern answer (2026-09-18): free combat damage
+## REVISION 2 — ONE fork changed its modern answer (2026-09-18): free combat damage
 ## division is now what modern Magic does too (Foundations, 2024), so a
 ## stored `rule_free_damage_assignment = false` written by an older
 ## build's "Modern rules" preset would keep the 2009-2024 order in force
@@ -147,9 +147,66 @@ const RULES_REVISION := 2
 ## this function with a script error before it could write its marker, so
 ## it ran — and failed — on every start. A word that is no yes or no is
 ## not a choice either way and leaves the decision to the others.
+##
+## REVISION 3 — A FORK ARRIVED (2026-10-12): `damage_effects_fixed_order`,
+## after a player may have saved "1997 — Fifth Edition". Unstored, it
+## reads the player default (the modern answer: the damaged player is
+## asked), and the Options screen would call that player's rules "Custom".
+## So a file whose other forks — stored, or their defaults — are exactly
+## one preset's answers takes that preset's answer for the new fork too
+## ([method RulesOptions.preset_matching]); only the 1997 preset's differs
+## from the default, so only such a file is written.
+##
+## THE NINTH FORK NEEDS NO REVISION (2026-10-13): every preset answers
+## `sacrifice_clauses_wait` OFF, and so does the player default, so a file
+## from any older build reads the same rules without it, its preset keeps
+## its name, and there is nothing to write. A new fork needs a revision only
+## when the presets disagree about it, as they do about
+## `damage_effects_fixed_order`.
+##
+## A file with no fork stored at all is not looked at (the built-in
+## defaults apply, and nothing is written).
 static func _migrate_rules() -> void:
-	if int(coerce(_config.get_value("options", RULES_REVISION_KEY, 1), 1)) >= RULES_REVISION:
+	var revision := int(coerce(_config.get_value("options", RULES_REVISION_KEY, 1), 1))
+	if revision >= RULES_REVISION:
 		return
+	var stored_any := false
+	for fork in RulesOptions.FORKS:
+		if _config.has_section_key("options", "rule_" + String(fork["key"])):
+			stored_any = true
+			break
+	if not stored_any:
+		return       # nothing stored: the built-in defaults apply
+	if revision < 2:
+		_migrate_free_division()
+	if revision < 3:
+		_migrate_new_forks(["damage_effects_fixed_order"])
+	_put(RULES_REVISION_KEY, RULES_REVISION)
+	_save()
+
+
+## Revision 3 (see [method _migrate_rules]): give each of [param added] —
+## forks an older build never stored — the answer of the preset the
+## file's other forks match, when they match one.
+static func _migrate_new_forks(added: Array) -> void:
+	var known := {}
+	for fork in RulesOptions.FORKS:
+		var key: String = fork["key"]
+		if not added.has(key):
+			known[key] = rule(key)
+	var preset := RulesOptions.preset_matching(known)
+	if preset == "":
+		return       # a custom mix: the new forks keep the player default
+	var answers := RulesOptions.new()
+	answers.set_preset(preset)
+	for key: String in added:
+		if not _config.has_section_key("options", "rule_" + key) \
+				and answers.get_fork(key) != rule(key):
+			_put("rule_" + key, answers.get_fork(key))
+
+
+## Revision 2 (see [method _migrate_rules]): the division order.
+static func _migrate_free_division() -> void:
 	if not _config.has_section_key("options", "rule_free_damage_assignment"):
 		return       # nothing stored: the built-in default applies
 	var free_division: Variant = _yes_or_no(_config.get_value("options", "rule_free_damage_assignment"))
@@ -168,8 +225,6 @@ static func _migrate_rules() -> void:
 			all_modern = false
 	if all_modern:
 		_put("rule_free_damage_assignment", true)
-	_put(RULES_REVISION_KEY, RULES_REVISION)
-	_save()
 
 
 ## The stored value of [param key], or [param default_value] when there is
@@ -755,7 +810,7 @@ static func rule(key: String) -> bool:
 
 
 ## Set one rules fork (see [method rule]). `persist` is [method set_value]'s:
-## the Options screen's preset sets seven forks in one gesture and writes
+## the Options screen's preset sets every fork in one gesture and writes
 ## the file once, through [method flush].
 static func set_rule(key: String, value: bool, persist := true) -> void:
 	set_value("rule_" + key, value, persist)

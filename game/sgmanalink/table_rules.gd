@@ -1,7 +1,7 @@
 class_name SgTableRules
 extends RefCounted
 ## THE TABLE RULES (2026-10-02). What a host chooses for their table and
-## every seat plays under: the starting life and the seven implemented
+## every seat plays under: the starting life and the implemented
 ## RulesOptions forks. The owner's word: *"establish a togglable,
 ## modifiable basic table rules when you host the game"*. A plain
 ## dictionary on the wire — `{"life": 20, "forks": {key: bool, ...}}` —
@@ -56,12 +56,44 @@ static func normalize(value: Variant) -> Dictionary:
 	return {"life": int(value.life), "forks": (value.forks as Dictionary).duplicate()}
 
 
+## A table an OLDER build saved (the host's remembered table,
+## [SgTableRulesSetup]), whose forks are exactly the implemented ones bar
+## some added since: those are filled with the answer of the preset the
+## table's forks match — the 1997 table stays the 1997 table
+## ([method RulesOptions.preset_matching]) — or the standard table's for a
+## custom one. Anything else is handed back untouched for
+## [method normalize] to judge (campaign 2026-10-12 f-order:
+## `damage_effects_fixed_order` arrived after tables were remembered).
+static func upgraded(value: Variant) -> Variant:
+	if not value is Dictionary or not (value as Dictionary).get("forks") is Dictionary:
+		return value
+	var forks: Dictionary = value.forks
+	var missing: Array = []
+	for key: String in FORKS:
+		if not forks.has(key): missing.append(key)
+	if missing.is_empty(): return value
+	for key in forks:
+		if not FORKS.has(key) or not forks[key] is bool: return value
+	var fill := RulesOptions.new()
+	var preset := RulesOptions.preset_matching(forks)
+	fill.set_preset(preset if preset != "" else RulesOptions.DEFAULT_PRESET)
+	var out: Dictionary = (value as Dictionary).duplicate(true)
+	for key: String in missing:
+		out.forks[key] = fill.get_fork(key)
+	# The wire's order: exactly the implemented forks, in theirs.
+	var ordered := {}
+	for key: String in FORKS:
+		ordered[key] = out.forks[key]
+	out.forks = ordered
+	return out
+
+
 static func life(rules: Dictionary) -> int:
 	return clampi(int(rules.get("life", DEFAULT_LIFE)), MIN_LIFE, MAX_LIFE)
 
 
 ## The RulesOptions a table plays under: the engine's own answers for
-## every fork it cannot set, the table's for the seven it can.
+## every fork it cannot set, the table's for the ones it can.
 static func options(rules: Dictionary) -> RulesOptions:
 	var result := RulesOptions.new()
 	var forks: Dictionary = rules.get("forks", {})

@@ -99,7 +99,9 @@ func test_the_hand_menu_is_help_and_nothing_else() -> void:
 			"the hand window listens for the mini-menu")
 	screen._open_hand_menu(Vector2.ZERO)
 	assert_eq(_labels(screen._hand_menu), ["Help..."], "@MENU_HAND, :874")
-	assert_true(screen._hand_menu.is_item_disabled(0))
+	# Live since 2026-10-13: the hand's mini help (the duel's Help... no
+	# longer greys; tests/ui/test_c2_f_minihelp_menus.gd).
+	assert_false(screen._hand_menu.is_item_disabled(0))
 	screen._hand_menu.hide()
 
 
@@ -114,6 +116,10 @@ func test_the_mana_pool_menu_lists_seven_spends_and_greys_them_all() -> void:
 		"Spend 1 mana: colorless", "Spend 1 mana: artifact", "Help...",
 	])
 	for i in screen._mana_menu.item_count:
+		if screen._mana_menu.get_item_text(i) == "Help...":
+			# Live since 2026-10-13: the pool's mini help says why.
+			assert_false(screen._mana_menu.is_item_disabled(i), "Help... is live")
+			continue
 		assert_true(screen._mana_menu.is_item_disabled(i),
 			"nothing to spend INTO until a cost can be held open")
 	screen._mana_menu.hide()
@@ -140,9 +146,11 @@ func test_the_attack_window_menu_flips_with_the_window() -> void:
 
 
 func test_the_spell_chain_menus_are_recorded_even_though_unbuilt() -> void:
-	# The other two of the four §6.12 missed. Not live: our chain has no
-	# minimised state, and the 1997 restore route is the Phase Bar's window
-	# icon, which our icon already spends on the Combat window.
+	# The other two of the four §6.12 missed. Minimize is not live: our chain
+	# has no minimised state, and the 1997 restore route is the Phase Bar's
+	# window icon, which our icon already spends on the Combat window. (The
+	# menu itself opens on the chain's band since 2026-10-13, for its live
+	# Help... — tests/ui/test_c2_f_minihelp_menus.gd.)
 	assert_eq(CardMenu.SPELL_CHAIN[0]["label"], "Minimize")
 	assert_eq(CardMenu.MINIMIZED_SPELL_CHAIN[0]["label"], "Restore")
 	assert_false(bool(CardMenu.SPELL_CHAIN[0]["live"]))

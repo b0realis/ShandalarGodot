@@ -46,7 +46,9 @@ var uses_tactical_effects := false
 ## False retains the previous mass-effect scorer byte-for-byte. This is a
 ## correctness read, not extra hidden information or a new aggression weight.
 ## Also guards Ice Age's divided-burn lethal sizing and damage retargeting;
-## off preserves their first-pass decisions for paired audit runs.
+## off preserves their first-pass decisions for paired audit runs. And the
+## order of our own damage effects under the modern rules (CR 616.1,
+## `AiPlayer._damage_order_pick`, 2026-10-12): off takes the fixed order.
 var forecasts_tactics := false
 
 ## Probability in [0, 1] that an intended action degrades — a cast skipped,

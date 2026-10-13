@@ -25,7 +25,11 @@ static func configure(c: CardData) -> bool:
 		"Marjhan":
 			c.static_ability(StaticAbility.new(R._no_untap, "Doesn't untap during your untap step."))
 			c.with_attack_needs_defender_land("island")
-			c.triggered(TriggeredAbility.new(Mtg.EventType.STATE_CHECK, _marjhan_sacrifice, "Sacrifice this creature.", _no_island))
+			# "When you control no Islands, sacrifice this creature": the
+			# engine's clause, so it follows the rules fork like every other
+			# (checked at once by default, a state trigger when switched on —
+			# RulesOptions.sacrifice_clauses_wait, 2026-10-13).
+			c.with_sacrifice_if_no_land("island")
 			c.activated(F._ability("{U}{U}", false, F.Action.new(R._untap_self, "untap this creature", null, true)).with_sacrifice_of("creature", R._creature).may_sacrifice_itself().during_step(Mtg.Step.UPKEEP).your_turn_only())
 			c.activated(F._ability("{U}{U}", false, MarjhanDamage.new()))
 		"Joven's Tools":
@@ -98,12 +102,6 @@ static func _tools(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int
 static func _walls_only(g: MtgGame, _s: CardInstance, id: int) -> void:
 	var i := g.find_instance(id)
 	if i != null: i.cur_block_restrictions.append({"desc": "Wall", "filter": F._subtype.bind("wall")})
-static func _no_island(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool:
-	for i in g.players[s.controller_id].battlefield:
-		if R._island(i): return false
-	return true
-static func _marjhan_sacrifice(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s) and s.controller_id == int(g.trigger_context(s).controller): g.sacrifice_permanent(s)
 class MarjhanDamage extends DamageEffect:
 	func _init() -> void:
 		super(1)

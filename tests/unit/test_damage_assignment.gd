@@ -74,11 +74,11 @@ func test_free_division_is_the_default_and_both_editions_agree() -> void:
 	assert_true(RulesOptions.new().free_damage_assignment, "a fresh engine")
 	for edition in ["modern", "fifth"]:
 		var rules := RulesOptions.new()
-		rules.set_edition(edition)
+		rules.set_preset(edition)
 		assert_true(rules.free_damage_assignment, edition)
 		assert_eq(rules.preset(), edition, "the shared answer keeps the preset readable")
 	var rules := RulesOptions.new()
-	rules.set_edition("modern")
+	rules.set_preset("modern")
 	rules.free_damage_assignment = false
 	assert_eq(rules.preset(), "custom", "the 2009-2024 order is a custom choice")
 	g.agents[0] = PromptAgent.new()

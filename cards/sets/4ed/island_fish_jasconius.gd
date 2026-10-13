@@ -11,7 +11,8 @@ extends CardScript
 ## place — Brass Man's cur_skips_untap static and its "pay to untap" upkeep
 ## offer, Sea Serpent's attack restriction
 ## (CardData.attack_needs_defender_land) and Dandân's state trigger
-## (CardData.sacrifice_if_no_land_type, checked as a state-based action).
+## (CardData.sacrifice_if_no_land_type: checked at once, or a state
+## trigger under the rules option RulesOptions.sacrifice_clauses_wait).
 ## Note the two Island clauses look at DIFFERENT players: the attack asks
 ## about the DEFENDER's Islands, the sacrifice about your own.
 

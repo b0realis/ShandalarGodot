@@ -7,7 +7,10 @@ extends CardScript
 ##
 ## Implementation: the Sea Serpent attack clause + a Prodigal-style tap
 ## ping + with_sacrifice_if_no_land("island") for the drowning clause,
-## enforced as a state-based action (wave 27 lifted the old ledger row).
+## enforced at once by default (wave 27 lifted the old ledger row). With
+## the Options rule "Forced sacrifices wait on the chain" on (2026-10-13)
+## it is the modern state trigger, and the Ship may ping once more in
+## response as its last Island goes.
 
 
 func build() -> CardData:

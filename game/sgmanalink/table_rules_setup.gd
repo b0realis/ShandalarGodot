@@ -22,9 +22,11 @@ var _live := RulesOptions.new()
 var _readout: Label
 
 
-## The host's remembered table, or the standard one.
+## The host's remembered table, or the standard one. A table an older
+## build remembered is brought up to this build's forks first
+## ([method SgTableRules.upgraded]).
 static func remembered() -> Dictionary:
-	return SgTableRules.normalize(Settings.get_value(KEY, {}))
+	return SgTableRules.normalize(SgTableRules.upgraded(Settings.get_value(KEY, {})))
 
 
 ## Keep [param rules] for the next host page; the standard table clears
