@@ -2561,6 +2561,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.25.md`: small fixes, carrying the 0.50.24, 0.50.23,
+  0.50.22, 0.50.21 and 0.50.20 notes below them.
 - `docs/releases/0.50.24.md`: small fixes, carrying the 0.50.23, 0.50.22,
   0.50.21 and 0.50.20 notes below them.
 - `docs/releases/0.50.23.md`: small fixes, carrying the 0.50.22, 0.50.21

@@ -123,6 +123,11 @@ func _ready() -> void:
 	demo.pressed.connect(func() -> void: DemoSetup.open_on(self))
 	content.add_child(demo)
 
+	var draw := UiChrome.menu_button(DrawSetup.DRAW_TITLE, Vector2(320, 36))
+	draw.name = "DrawCards"
+	draw.pressed.connect(func() -> void: DrawSetup.draw_on(self))
+	content.add_child(draw)
+
 	content.add_child(UiChrome.body_label("Hand display:"))
 	var hand_style := OptionButton.new()
 	hand_style.add_item("Fan of cards", 0)
@@ -1107,6 +1112,13 @@ class DemoSetup extends Control:
 	static var _last := {"source": "", "list": "", "mode": DemoScreen.Mode.SOLITAIRE,
 		"faces": DemoScreen.Faces.FRONT, "foil": true}
 
+	## This window's own copy of the session's choices: [member _last] here,
+	## the draw window's in [DrawSetup].
+	var memory: Dictionary
+	## The Options button that opened the window, by name, and the prefix of
+	## the window's own nodes.
+	var opener := "DemoScreen"
+	var prefix := "Demo"
 	var window: OriginalDialog
 	var go_button: Button
 	var source_list: OptionButton
@@ -1119,6 +1131,10 @@ class DemoSetup extends Control:
 	var demo: DemoScreen
 	var _previous: Control
 	var _show_layer: CanvasLayer
+
+
+	func _init() -> void:
+		memory = _last
 
 
 	## Open the window over [param previous] (the Options screen).
@@ -1210,13 +1226,13 @@ class DemoSetup extends Control:
 	## What the window's foot says about the keys, in the player's own
 	## bindings where the game has one. One key a line: the window's lettering
 	## has no middle dot to run them together with.
-	static func keys_text() -> String:
+	static func keys_text(again := "new cards", pad_again := "deals new cards") -> String:
 		var lines: Array[String] = ["Click or Esc: back to this window",
-			"R: new cards", "Space: pause"]
+			"R: %s" % again, "Space: pause"]
 		var shot := Controls.key_text("duel_screenshot")
 		if shot != Controls.UNBOUND:
 			lines.append("%s: save the screen as a picture" % shot)
-		lines.append("On a pad: A or B goes back, Y deals new cards, Start pauses.")
+		lines.append("On a pad: A or B goes back, Y %s, Start pauses." % pad_again)
 		return "\n".join(lines)
 
 
@@ -1235,26 +1251,51 @@ class DemoSetup extends Control:
 
 
 	func _build_window() -> OriginalDialog:
-		var dialog := OriginalDialog.create(TITLE, Vector2(500, 560))
+		var dialog := OriginalDialog.create(_title(), Vector2(500, 560))
 		var box := dialog.body()
+		_add_source_rows(box)
+		_add_show_rows(box)
 
+		box.add_child(HSeparator.new())
+		var keys := OriginalDialog.wrapped(_keys_text(), 13)
+		keys.name = prefix + "Keys"
+		box.add_child(keys)
+
+		go_button = GauntletOptions.fit(dialog.add_button(GO))
+		go_button.name = prefix + "Go"
+		go_button.pressed.connect(start)
+		GauntletOptions.fit(dialog.add_button(BACK)).pressed.connect(close)
+		_refresh()
+		return dialog
+
+
+	func _title() -> String:
+		return TITLE
+
+
+	func _keys_text() -> String:
+		return keys_text()
+
+
+	## Which cards: the source list, the list box under it and its check.
+	func _add_source_rows(box: VBoxContainer) -> void:
 		box.add_child(OriginalDialog.label(CARDS_FROM, 14, true))
 		source_list = OptionButton.new()
-		source_list.name = "DemoSource"
+		source_list.name = prefix + "Source"
 		source_list.fit_to_longest_item = false
 		source_list.clip_text = true
 		source_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		for entry in sources():
 			source_list.add_item(String(entry.label))
 			source_list.set_item_metadata(source_list.item_count - 1, String(entry.id))
-		_select_source(String(_last.source))
+		_select_source(String(memory.source))
 		source_list.item_selected.connect(func(_index: int) -> void:
-			_last.source = _source_id()
+			memory.source = _source_id()
 			_refresh())
 		box.add_child(source_list)
 
 		list_box = TextEdit.new()
-		list_box.name = "DemoList"
+		list_box.name = prefix + "List"
 		list_box.placeholder_text = LIST_HINT
 		list_box.custom_minimum_size = Vector2(0, 110)
 		list_box.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
@@ -1268,20 +1309,23 @@ class DemoSetup extends Control:
 		var body_font := GameSkin.font("font_body")
 		if body_font != null:
 			list_box.add_theme_font_override("font", body_font)
-		list_box.text = String(_last.list)
+		list_box.text = String(memory.list)
 		list_box.text_changed.connect(func() -> void:
-			_last.list = list_box.text
+			memory.list = list_box.text
 			# Typing a list means dealing from it.
 			if list_box.text.strip_edges() != "" and _source_id() != LIST:
 				_select_source(LIST)
-				_last.source = LIST
+				memory.source = LIST
 			_refresh())
 		box.add_child(list_box)
 
 		check_label = OriginalDialog.wrapped("", 13)
-		check_label.name = "DemoCheck"
+		check_label.name = prefix + "Check"
 		box.add_child(check_label)
 
+
+	## The show's own choices: which show, which side, the foil.
+	func _add_show_rows(box: VBoxContainer) -> void:
 		box.add_child(OriginalDialog.label(SHOW, 14, true))
 		mode_list = OptionButton.new()
 		mode_list.name = "DemoMode"
@@ -1301,27 +1345,18 @@ class DemoSetup extends Control:
 		faces_list.item_selected.connect(func(index: int) -> void:
 			_last.faces = index)
 		box.add_child(faces_list)
+		_add_foil_row(box)
 
+
+	func _add_foil_row(box: VBoxContainer) -> void:
 		foil_check = CheckBox.new()
-		foil_check.name = "DemoFoil"
+		foil_check.name = prefix + "Foil"
 		foil_check.text = FOIL
-		foil_check.button_pressed = bool(_last.get("foil", true))
+		foil_check.button_pressed = bool(memory.get("foil", true))
 		foil_check.add_theme_color_override("font_color", OriginalDialog.CHOICE)
 		foil_check.toggled.connect(func(on: bool) -> void:
-			_last.foil = on)
+			memory.foil = on)
 		box.add_child(foil_check)
-
-		box.add_child(HSeparator.new())
-		var keys := OriginalDialog.wrapped(keys_text(), 13)
-		keys.name = "DemoKeys"
-		box.add_child(keys)
-
-		go_button = GauntletOptions.fit(dialog.add_button(GO))
-		go_button.name = "DemoGo"
-		go_button.pressed.connect(start)
-		GauntletOptions.fit(dialog.add_button(BACK)).pressed.connect(close)
-		_refresh()
-		return dialog
 
 
 	func _source_id() -> String:
@@ -1358,18 +1393,34 @@ class DemoSetup extends Control:
 			go_button.disabled = count == 0
 
 
+	## The cards Go deals from.
+	func _pool() -> Array[String]:
+		return pool_for(_source_id(), list_box.text)
+
+
+	## The set whose printings the show draws, or "" for each card's own.
+	func _printing() -> String:
+		var id := _source_id()
+		return id if id != "" and id != LIST else ""
+
+
+	## The show Go starts, not yet in the tree.
+	func _make_show(pool: Array[String]) -> DemoScreen:
+		var show_now := DemoScreen.new()
+		show_now.pool = pool
+		show_now.printing = _printing()
+		show_now.mode = mode_list.selected
+		show_now.faces = faces_list.selected
+		show_now.foil = foil_check.button_pressed
+		return show_now
+
+
 	## Go: the show over everything, this window hidden under it.
 	func start() -> void:
-		var pool := pool_for(_source_id(), list_box.text)
+		var pool := _pool()
 		if pool.is_empty():
 			return
-		var id := _source_id()
-		demo = DemoScreen.new()
-		demo.pool = pool
-		demo.printing = id if id != "" and id != LIST else ""
-		demo.mode = mode_list.selected
-		demo.faces = faces_list.selected
-		demo.foil = foil_check.button_pressed
+		demo = _make_show(pool)
 		demo.left.connect(_show_left)
 		# Its own layer, over the shell's own layers too.
 		_show_layer = CanvasLayer.new()
@@ -1400,9 +1451,9 @@ class DemoSetup extends Control:
 		if is_instance_valid(_show_layer):
 			_show_layer.queue_free()
 		if is_instance_valid(_previous):
-			var opener := _previous.find_child("DemoScreen", true, false) as Control
-			if opener != null and opener.is_visible_in_tree():
-				opener.grab_focus()
+			var button := _previous.find_child(opener, true, false) as Control
+			if button != null and button.is_visible_in_tree():
+				button.grab_focus()
 		queue_free()
 
 
@@ -1540,6 +1591,8 @@ class DemoScreen extends Control:
 	var _resize_due := -1.0
 	## The screen the deal was laid out for.
 	var _view := Vector2.ZERO
+	## Set while a show changes the viewport's text sharpness.
+	var _sharpening := false
 
 	var _sol_card := Vector2.ZERO
 	var _unit := 1.0
@@ -1673,6 +1726,11 @@ class DemoScreen extends Control:
 		_table.add_child(_ground())
 		if pool.is_empty():
 			return
+		_deal_show(view)
+
+
+	## This show's cards on the new table.
+	func _deal_show(view: Vector2) -> void:
 		if mode == Mode.SOLITAIRE:
 			_deal_solitaire(view)
 		elif mode == Mode.MESS:
@@ -2268,11 +2326,17 @@ class DemoScreen extends Control:
 			_note.visible = _note_left > 0.0
 		if _resize_due >= 0.0:
 			_resize_due -= delta
-			if _resize_due < 0.0:
+			if _resize_due < 0.0 and (get_viewport_rect().size != _view
+					or not is_equal_approx(_phys_scale(), _phys)):
 				regenerate()
 		if paused:
 			return
 		_run_jobs()
+		_tick(delta)
+
+
+	## This show's moving part, once a frame while it is not paused.
+	func _tick(delta: float) -> void:
 		if _trail != null:
 			_solitaire_tick(delta)
 		elif mode == Mode.FLIP_WALL:
@@ -2296,6 +2360,10 @@ class DemoScreen extends Control:
 
 
 	func _on_resized() -> void:
+		# The viewport says the same for a change of its text sharpness,
+		# which is no new screen.
+		if _sharpening:
+			return
 		# A drag of the window edge sends a stream of these; deal once it stops.
 		_resize_due = 0.3
 
@@ -2381,3 +2449,399 @@ class DemoScreen extends Control:
 		_leaving = true
 		left.emit()
 		queue_free()
+
+
+# ----------------------------------------------------- draw random cards --
+
+class DrawSetup extends DemoSetup:
+	## The `Draw random card(s)` window, opened from Options: which cards (a
+	## set, every set or a list, as the demo window has them), the Deck
+	## Builder's colour medallions, how many (one to seven), and Go. A list
+	## shorter than the number asked for is drawn whole.
+
+	const DRAW_TITLE := "Draw random card(s)"
+	const COLOURS := "Colours:"
+	const COLOUR_NOTE := "As in the Deck Builder: lands and colourless cards are always in."
+	const HOW_MANY := "How many:"
+
+	static var _kept := {"source": "", "list": "", "colours": [true, true, true, true, true],
+		"gold": true, "count": 1, "foil": true}
+
+	var count_list: OptionButton
+	## The five colour medallions, then Gold.
+	var colour_buttons: Array[Button] = []
+
+
+	func _init() -> void:
+		memory = _kept
+		opener = "DrawCards"
+		prefix = "Draw"
+
+
+	## Open the window over [param previous] (the Options screen).
+	static func draw_on(previous: Control) -> DrawSetup:
+		var setup := DrawSetup.new()
+		setup._previous = previous
+		previous.add_child(setup)
+		return setup
+
+
+	## [param names] as the Deck Builder's Color Filters would show them:
+	## [param colours] lit in [constant DeckFilter.COLOR_ORDER], and the Gold
+	## button for multicoloured cards.
+	static func colour_pool(names: Array[String], colours: Array, gold: bool) -> Array[String]:
+		var filter := DeckFilter.new()
+		for i in DeckFilter.COLOR_ORDER.size():
+			if not bool(colours[i]):
+				filter.toggle_color(DeckFilter.COLOR_ORDER[i])
+		filter.gold = gold
+		var out: Array[String] = []
+		for card_name in names:
+			var d := CardRegistry.get_card(card_name)
+			if d != null and filter.matches_color(d):
+				out.append(card_name)
+		return out
+
+
+	func _title() -> String:
+		return DRAW_TITLE
+
+
+	func _keys_text() -> String:
+		return keys_text("draw again", "draws again")
+
+
+	func _add_show_rows(box: VBoxContainer) -> void:
+		box.add_child(OriginalDialog.label(COLOURS, 14, true))
+		var row := HBoxContainer.new()
+		row.name = "DrawColours"
+		row.add_theme_constant_override("separation", 6)
+		colour_buttons.clear()
+		for i in DeckFilter.COLOR_ORDER.size():
+			var color := DeckFilter.COLOR_ORDER[i]
+			row.add_child(_medallion(String(DeckFilter.COLOR_LABELS[color]),
+				FilterBar.COLOR_CELL[color], bool(memory.colours[i]),
+				func(on: bool) -> void: memory.colours[i] = on))
+		row.add_child(_medallion("Gold", FilterBar.GOLD_CELL, bool(memory.gold),
+			func(on: bool) -> void: memory.gold = on))
+		box.add_child(row)
+		box.add_child(OriginalDialog.wrapped(COLOUR_NOTE, 12))
+
+		box.add_child(OriginalDialog.label(HOW_MANY, 14, true))
+		count_list = OptionButton.new()
+		count_list.name = "DrawCount"
+		for n in range(1, DrawScreen.MOST + 1):
+			count_list.add_item("%d card%s" % [n, "" if n == 1 else "s"])
+		count_list.select(clampi(int(memory.count), 1, DrawScreen.MOST) - 1)
+		count_list.item_selected.connect(func(index: int) -> void:
+			memory.count = index + 1
+			_refresh())
+		box.add_child(count_list)
+		_add_foil_row(box)
+
+
+	## One of the Deck Builder's colour medallions, lit while it is on.
+	func _medallion(label: String, cell: Array, on: bool, keep: Callable) -> Button:
+		var button := Button.new()
+		button.name = "Draw" + label
+		button.toggle_mode = true
+		button.focus_mode = Control.FOCUS_ALL
+		FilterBar.dress_medallion(button, cell, label)
+		button.set_pressed_no_signal(on)
+		button.tooltip_text = DeckFilter.cue_card(label, on)
+		button.toggled.connect(func(lit: bool) -> void:
+			keep.call(lit)
+			button.tooltip_text = DeckFilter.cue_card(label, lit)
+			_refresh())
+		colour_buttons.append(button)
+		return button
+
+
+	func _all_colours() -> bool:
+		return bool(memory.gold) and not (memory.colours as Array).has(false)
+
+
+	func _pool() -> Array[String]:
+		return colour_pool(super(), memory.colours, bool(memory.gold))
+
+
+	## The demo window's check, then what the colours leave and whether the
+	## number asked for is more than there are.
+	func _refresh() -> void:
+		super()
+		if check_label == null or go_button == null:
+			return
+		var usable := _pool().size()
+		var words := check_label.text
+		if not _all_colours() and not go_button.disabled:
+			words += " %d in the chosen colours." % usable
+		var wanted := int(memory.count)
+		if usable > 0 and usable < wanted:
+			words += " Fewer than %d, so all %d are drawn." % [wanted, usable]
+		check_label.text = words
+		go_button.disabled = usable == 0
+
+
+	func _make_show(pool: Array[String]) -> DemoScreen:
+		var draw := DrawScreen.new()
+		draw.pool = pool
+		draw.printing = _printing()
+		draw.count = int(memory.count)
+		draw.foil = foil_check.button_pressed
+		return draw
+
+
+class DrawScreen extends DemoScreen:
+	## Random cards drawn from [member pool]: each comes out of the middle
+	## of the table small and face down, turning over and over and spinning
+	## flat as it grows, a different card on each turn, slowing until it
+	## lands face up in its place as the card drawn — one in the middle, or
+	## up to [constant MOST] in one row or two. The same keys as the demo
+	## screen; R draws again.
+	##
+	## Big cards keep sharp letters: while the draw is up the viewport's
+	## text is cut at the cards' size ([method _sharpen]), as the full-screen
+	## card does it.
+
+	const MOST := 7
+	## How long one card's spin takes, how far into it the card is in its
+	## place, and how long after the one before it each card starts.
+	const SPIN_SECONDS := 2.4
+	const ARRIVE := 0.7
+	const STAGGER := 0.4
+	## Whole turns over in a spin; each turn shows another card.
+	const TURNS := 6
+	## A card starts this small, and lands no bigger than [constant
+	## MOST_SCALE], the cards together at most [constant FILL] of the
+	## screen's height.
+	const FROM_SCALE := 0.08
+	const MOST_SCALE := 1.5
+	const FILL := 0.84
+	const GAP := 18.0
+	const SIDE_EDGE := 24.0
+	## A landed card's light: how bright it flashes, then rests.
+	const GLOW_FLASH := 0.95
+	const GLOW_REST := 0.4
+
+	var count := 1
+	## The cards this draw lands, in their places' order.
+	var drawn: Array[String] = []
+	var _spinners: Array[Dictionary] = []
+
+	static var _glow_texture: GradientTexture2D
+
+
+	func _init() -> void:
+		mode = Mode.COLLECTOR_BIG
+
+
+	## Where [param n] drawn cards land on [param view]: one row, or two
+	## when two give bigger cards (the top row the fuller). Returns the
+	## cards' `scale` and each card's centre (`spots`).
+	static func layout(view: Vector2, n: int) -> Dictionary:
+		var best := {"scale": 0.0, "spots": [] as Array[Vector2]}
+		for rows in range(1, 3):
+			if rows > n:
+				continue
+			var cols := ceili(float(n) / rows)
+			var by_width := (view.x - 2.0 * SIDE_EDGE - (cols - 1) * GAP) / cols \
+				/ CardPreview.SIZE.x
+			var by_height := (view.y * FILL - (rows - 1) * GAP) / rows / CardPreview.SIZE.y
+			var s := minf(minf(by_width, by_height), MOST_SCALE)
+			if s <= float(best.scale):
+				continue
+			var card := CardPreview.SIZE * s
+			var top := (view.y - (rows * card.y + (rows - 1) * GAP)) * 0.5
+			var spots: Array[Vector2] = []
+			var left := n
+			for r in rows:
+				var here := mini(cols, left)
+				left -= here
+				var x0 := (view.x - (here * card.x + (here - 1) * GAP)) * 0.5
+				for c in here:
+					spots.append(Vector2(x0 + c * (card.x + GAP) + card.x * 0.5,
+						top + r * (card.y + GAP) + card.y * 0.5))
+			best = {"scale": s, "spots": spots}
+		return best
+
+
+	func _deal_show(view: Vector2) -> void:
+		_spinners.clear()
+		drawn = _pick(mini(count, pool.size()))
+		var where := layout(view, drawn.size())
+		_sharpen(float(where.scale))
+		for i in drawn.size():
+			_spinners.append(_spinner(drawn[i], where.spots[i], float(where.scale),
+				i * STAGGER))
+
+
+	func _spinner(card_name: String, spot: Vector2, s: float, delay: float) -> Dictionary:
+		var holder := Control.new()
+		holder.size = CardPreview.SIZE
+		holder.pivot_offset = CardPreview.SIZE * 0.5
+		holder.visible = false
+		var glow := TextureRect.new()
+		glow.name = "Glow"
+		glow.texture = _glow()
+		glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		glow.stretch_mode = TextureRect.STRETCH_SCALE
+		glow.size = CardPreview.SIZE * 1.6
+		glow.position = -CardPreview.SIZE * 0.3
+		glow.modulate.a = 0.0
+		holder.add_child(glow)
+		var turn := Control.new()
+		turn.name = "Card"
+		turn.size = CardPreview.SIZE
+		turn.pivot_offset = CardPreview.SIZE * 0.5
+		holder.add_child(turn)
+		var face := CardPreview.new()
+		face.docked = true
+		turn.add_child(face)
+		var back := CardPreview.new()
+		back.docked = true
+		back.show_back()
+		turn.add_child(back)
+		_quiet(holder)
+		_table.add_child(holder)
+		# A card for each turn over, the last the one drawn.
+		var faces: Array[String] = []
+		for k in TURNS:
+			faces.append(pool[rng.randi_range(0, pool.size() - 1)])
+		faces.append(card_name)
+		var side := 1.0 if rng.randf() < 0.5 else -1.0
+		return {"node": holder, "turn": turn, "face": face, "back": back, "glow": glow,
+			"name": card_name, "faces": faces, "shown": -1, "spot": spot, "scale": s,
+			"from": _view * Vector2(0.5, 0.56) + Vector2(rng.randf_range(-0.04, 0.04), 0.0) * _view.x,
+			"roll": TAU * rng.randf_range(0.6, 1.2) * side,
+			"swirl": rng.randf_range(0.8, 1.6) * side,
+			"tilt": 0.0 if drawn.size() == 1 else rng.randf_range(-0.03, 0.03),
+			"delay": delay, "t": 0.0, "landed": false}
+
+
+	func _tick(delta: float) -> void:
+		for spinner in _spinners:
+			if spinner.landed or not is_instance_valid(spinner.node):
+				continue
+			spinner.t = float(spinner.t) + delta
+			_place_spinner(spinner)
+
+
+	## Where a spinning card is: on a curve out of the middle to its place,
+	## growing, spinning flat and turning over, all slowing to a stop — the
+	## turns slowest, so the last card comes up slowly in its place.
+	func _place_spinner(spinner: Dictionary) -> void:
+		var holder: Control = spinner.node
+		var local := float(spinner.t) - float(spinner.delay)
+		holder.visible = local >= 0.0
+		if local < 0.0:
+			return
+		var p := clampf(local / SPIN_SECONDS, 0.0, 1.0)
+		var arrive := clampf(local / (SPIN_SECONDS * ARRIVE), 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - p, 3.0)
+		var ea := 1.0 - pow(1.0 - arrive, 3.0)
+		var spot: Vector2 = spinner.spot
+		var away: Vector2 = (spinner.from - spot) * (1.0 - ea)
+		var centre := spot + away.rotated(float(spinner.swirl) * (1.0 - ea))
+		holder.scale = Vector2.ONE * float(spinner.scale) * lerpf(FROM_SCALE, 1.0, ea)
+		holder.position = centre - CardPreview.SIZE * 0.5
+		holder.rotation = float(spinner.tilt) + float(spinner.roll) * (1.0 - ea)
+		# Face down to start with; each time the face comes round it is
+		# another card, and the last time the one drawn.
+		var flip := PI + (TAU * TURNS - PI) * e
+		var window := clampi(roundi(flip / TAU), 1, TURNS)
+		if window != int(spinner.shown):
+			spinner.shown = window
+			_dress(spinner.face, String(spinner.faces[window]), false)
+		var facing := cos(flip)
+		var turn: Control = spinner.turn
+		turn.scale = Vector2(maxf(absf(facing), 0.02), 1.0)
+		var light := 0.7 + 0.3 * absf(facing)
+		turn.modulate = Color(light, light, light)
+		(spinner.face as Control).visible = facing >= 0.0
+		(spinner.back as Control).visible = facing < 0.0
+		if p >= 1.0:
+			_land(spinner)
+
+
+	## Down: the card face up and still, a light behind it, a little bump,
+	## the foil if it is rare, and the draw's sound.
+	func _land(spinner: Dictionary) -> void:
+		spinner.landed = true
+		var holder: Control = spinner.node
+		var s := float(spinner.scale)
+		holder.rotation = float(spinner.tilt)
+		var turn: Control = spinner.turn
+		turn.scale = Vector2.ONE
+		turn.modulate = Color.WHITE
+		(spinner.face as Control).visible = true
+		(spinner.back as Control).visible = false
+		if foil and _is_rare(String(spinner.name)):
+			turn.add_child(_foil(CardPreview.SIZE))
+		var glow: Control = spinner.glow
+		var light := holder.create_tween()
+		light.tween_property(glow, "modulate:a", GLOW_FLASH, 0.12)
+		light.tween_property(glow, "modulate:a", GLOW_REST, 0.9) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		var bump := holder.create_tween()
+		bump.tween_property(holder, "scale", Vector2.ONE * s * 1.05, 0.08) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		bump.tween_property(holder, "scale", Vector2.ONE * s, 0.2) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_sound()
+
+
+	## How many have landed (tests).
+	func landed() -> int:
+		return _spinners.filter(func(spinner: Dictionary) -> bool: return spinner.landed).size()
+
+
+	## The duel's own draw sound, from the player's imported 1997 files.
+	func _sound() -> void:
+		if DisplayServer.get_name() == "headless" or not Settings.sound_enabled():
+			return
+		var stream := GameSkin.sound("sfx_draw")
+		if stream == null:
+			return
+		var voice := AudioStreamPlayer.new()
+		voice.bus = GameAudio.SFX_BUS
+		voice.stream = stream
+		add_child(voice)
+		voice.finished.connect(voice.queue_free)
+		voice.play()
+
+
+	static func _glow() -> GradientTexture2D:
+		if _glow_texture == null:
+			var gradient := Gradient.new()
+			gradient.set_color(0, Color(1.0, 0.86, 0.55, 0.7))
+			gradient.set_color(1, Color(1.0, 0.75, 0.35, 0.0))
+			_glow_texture = GradientTexture2D.new()
+			_glow_texture.gradient = gradient
+			_glow_texture.fill = GradientTexture2D.FILL_RADIAL
+			_glow_texture.fill_from = Vector2(0.5, 0.5)
+			_glow_texture.fill_to = Vector2(0.5, 0.0)
+			_glow_texture.width = 128
+			_glow_texture.height = 128
+		return _glow_texture
+
+
+	## Letters cut at the size the cards land at, so a card drawn bigger
+	## than the sidebar's reads as sharp; the viewport's own value again
+	## when the draw goes ([method _exit_tree]).
+	func _sharpen(s: float) -> void:
+		var viewport := get_viewport()
+		if viewport == null:
+			return
+		_sharpening = true
+		viewport.oversampling_override = 0.0
+		if s > 1.0:
+			viewport.oversampling_override = viewport.get_oversampling() * s
+		_sharpening = false
+
+
+	func _exit_tree() -> void:
+		var viewport := get_viewport()
+		if viewport != null:
+			_sharpening = true
+			viewport.oversampling_override = 0.0
+			_sharpening = false

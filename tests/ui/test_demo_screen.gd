@@ -1,7 +1,8 @@
 extends GutTest
 ## The demo screen opened from Options: its window, the card-list check and
 ## the four shows (solitaire's end, the mess table, the two collector
-## tables), with fronts, backs or both, and its keys.
+## tables), with fronts, backs or both, and its keys. Then the draw of
+## random cards beside it: its window, its colours, and the spin.
 
 const Options := preload("res://game/options_screen.gd")
 const POOL: Array[String] = ["Lightning Bolt", "Forest", "Serra Angel",
@@ -471,3 +472,224 @@ func test_the_note_says_where_a_picture_went_and_fades() -> void:
 	assert_true(demo._note.visible)
 	demo._process(Options.DemoScreen.NOTE_SECONDS + 0.1)
 	assert_false(demo._note.visible)
+
+
+# ------------------------------------------------------ draw random cards --
+
+func _draw(count: int, pool: Array[String] = POOL) -> Options.DrawScreen:
+	var draw := Options.DrawScreen.new()
+	draw.pool = pool.duplicate()
+	draw.count = count
+	add_child_autofree(draw)
+	draw._opened_ms = -Options.DemoScreen.SETTLE_MS * 10
+	return draw
+
+
+## Run a draw's spin by hand, [param seconds] of it, a frame at a time.
+func _spin(draw: Options.DrawScreen, seconds: float, each: Callable = Callable()) -> void:
+	var t := 0.0
+	while t < seconds:
+		draw._tick(1.0 / 60.0)
+		if each.is_valid():
+			each.call()
+		t += 1.0 / 60.0
+
+
+func test_options_has_the_draw_button_and_its_window_draws_and_comes_back() -> void:
+	var saved: Dictionary = Options.DrawSetup._kept.duplicate(true)
+	Options.DrawSetup._kept = {"source": "", "list": "", "colours": [true, true, true, true, true],
+		"gold": true, "count": 1, "foil": true}
+	var options_screen: Control = load("res://game/options_screen.tscn").instantiate()
+	add_child_autofree(options_screen)
+	var button := options_screen.find_child("DrawCards", true, false) as Button
+	assert_not_null(button)
+	assert_eq(button.text, "Draw random card(s)")
+	button.pressed.emit()
+	var window: Options.DrawSetup = null
+	for child in options_screen.get_children():
+		if child is Options.DrawSetup:
+			window = child
+	assert_not_null(window, "the window opened")
+	assert_string_contains(window.find_child("DrawKeys", true, false).text, "R: draw again")
+	assert_eq(window.colour_buttons.size(), 6, "five colours and Gold")
+	for medallion in window.colour_buttons:
+		assert_true(medallion.button_pressed, "%s starts on" % medallion.name)
+	assert_eq(window.count_list.selected, 0, "one card to begin with")
+	assert_eq(window.count_list.item_count, 7)
+
+	window.list_box.text = "Forest\nCounterspell\nSerra Angel"
+	window.list_box.text_changed.emit()
+	assert_string_contains(window.check_label.text, "3 cards found")
+	# Blue and White off: the Forest stays, as a land does in the Deck Builder.
+	window.colour_buttons[0].button_pressed = false
+	window.colour_buttons[1].button_pressed = false
+	assert_eq(Options.DrawSetup._kept.colours, [false, false, true, true, true])
+	assert_string_contains(window.check_label.text, "1 in the chosen colours")
+	window.count_list.select(6)
+	window.count_list.item_selected.emit(6)
+	assert_eq(int(Options.DrawSetup._kept.count), 7)
+	assert_string_contains(window.check_label.text, "Fewer than 7, so all 1 are drawn")
+	assert_false(window.go_button.disabled)
+
+	window.start()
+	await get_tree().process_frame
+	var draw := window.demo as Options.DrawScreen
+	assert_not_null(draw, "the draw is up")
+	assert_eq(draw.pool, ["Forest"] as Array[String])
+	assert_eq(draw.count, 7)
+	assert_eq(draw.drawn, ["Forest"] as Array[String], "fewer than asked for: all of them")
+	assert_false(window.visible)
+	draw.leave()
+	await get_tree().process_frame
+	assert_true(window.visible, "back to the window")
+	assert_eq(get_viewport().oversampling_override, 0.0, "the text sharpness back as it was")
+
+	# Every colour off and no Gold: only lands and colourless cards are left.
+	for medallion in window.colour_buttons:
+		medallion.button_pressed = false
+	window.list_box.text = "Counterspell"
+	window.list_box.text_changed.emit()
+	assert_true(window.go_button.disabled, "nothing to draw")
+	window.close()
+	assert_true(button.has_focus(), "back on the button that opened it")
+	await get_tree().process_frame
+	Options.DrawSetup._kept = saved
+
+
+func test_the_colours_filter_as_the_deck_builder_does() -> void:
+	var gold_card := ""
+	for card_name in CardRegistry.all_names():
+		var d := CardRegistry.get_card(card_name)
+		if not d.is_land() and DeckFilter.WUBRG_MASK & d.color_mask() \
+				and (d.color_mask() & (d.color_mask() - 1)) & DeckFilter.WUBRG_MASK:
+			gold_card = card_name
+			break
+	assert_ne(gold_card, "", "the game has a gold card")
+	var names: Array[String] = POOL.duplicate()
+	names.append(gold_card)
+	names.append("Sol Ring")
+	var red := Options.DrawSetup.colour_pool(names, [false, false, false, true, false], false)
+	assert_eq(red, ["Lightning Bolt", "Forest", "Shivan Dragon", "Sol Ring"] as Array[String],
+		"red, and the land and the artifact the colours never filter")
+	var gold := Options.DrawSetup.colour_pool(names, [false, false, false, false, false], true)
+	assert_has(gold, gold_card)
+	assert_does_not_have(gold, "Lightning Bolt")
+	assert_eq(Options.DrawSetup.colour_pool(names, [true, true, true, true, true], true), names)
+
+
+func test_the_drawn_cards_land_in_the_middle_in_one_row_or_two() -> void:
+	var view := Vector2(1280, 800)
+	var one := Options.DrawScreen.layout(view, 1)
+	assert_eq(one.spots, [view * 0.5] as Array[Vector2], "one card: the middle")
+	assert_eq(float(one.scale), Options.DrawScreen.MOST_SCALE, "and big")
+	var four := Options.DrawScreen.layout(view, 4)
+	assert_eq(four.spots.size(), 4)
+	for spot in four.spots:
+		assert_almost_eq(spot.y, view.y * 0.5, 0.01, "four in one row")
+	var seven := Options.DrawScreen.layout(view, 7)
+	var rows := {}
+	for spot in seven.spots:
+		rows[roundi(spot.y)] = int(rows.get(roundi(spot.y), 0)) + 1
+	assert_eq(rows.values(), [4, 3], "seven in two rows, the top one fuller")
+	assert_gt(float(seven.scale), (view.x / 7.0) / CardPreview.SIZE.x,
+		"bigger than seven in one row would be")
+	for n in range(1, Options.DrawScreen.MOST + 1):
+		var where := Options.DrawScreen.layout(view, n)
+		var card: Vector2 = CardPreview.SIZE * float(where.scale)
+		for i in where.spots.size():
+			var rect := Rect2(where.spots[i] - card * 0.5, card)
+			assert_true(Rect2(Vector2.ZERO, view).encloses(rect), "%d cards: on the screen" % n)
+			for k in range(i + 1, where.spots.size()):
+				assert_false(rect.intersects(Rect2(where.spots[k] - card * 0.5, card)),
+					"%d cards: none over another" % n)
+
+
+func test_a_draw_takes_each_card_once_and_all_of_a_short_pool() -> void:
+	var draw := _draw(3)
+	assert_eq(draw.drawn.size(), 3)
+	for card_name in draw.drawn:
+		assert_has(POOL, card_name)
+		assert_eq(draw.drawn.count(card_name), 1, "once each")
+	var short := _draw(7, ["Forest", "Counterspell"] as Array[String])
+	assert_eq(short.drawn.size(), 2)
+	assert_has(short.drawn, "Forest")
+	assert_has(short.drawn, "Counterspell")
+
+
+func test_each_card_spins_face_down_first_and_lands_face_up_as_the_card_drawn() -> void:
+	var draw := _draw(3)
+	var first: Dictionary = draw._spinners[0]
+	var third: Dictionary = draw._spinners[2]
+	var saw := {"back": false, "edge": false, "faces": {}}
+	draw._tick(0.01)
+	assert_true((first.node as Control).visible)
+	assert_true((first.back as Control).visible, "face down to start with")
+	assert_false((third.node as Control).visible, "the third waits its turn")
+	assert_lt((first.node as Control).scale.x, float(first.scale) * 0.2, "small, far away")
+	_spin(draw, Options.DrawScreen.SPIN_SECONDS * 0.9, func() -> void:
+		if (first.back as Control).visible:
+			saw.back = true
+		if (first.turn as Control).scale.x < 0.2:
+			saw.edge = true
+		if (first.face as Control).visible:
+			saw.faces[(first.face as CardPreview)._shown] = true)
+	assert_true(saw.back and saw.edge, "it turns over and over")
+	assert_eq(draw.landed(), 0)
+	assert_true((third.node as Control).visible, "the third is on its way")
+	_spin(draw, Options.DrawScreen.SPIN_SECONDS + 2.0 * Options.DrawScreen.STAGGER)
+	assert_eq(draw.landed(), 3, "all down")
+	for spinner in draw._spinners:
+		var holder: Control = spinner.node
+		var spot: Vector2 = spinner.spot
+		assert_almost_eq(holder.position + CardPreview.SIZE * 0.5, spot, Vector2.ONE * 0.01,
+			"in its place")
+		assert_true((spinner.face as Control).visible, "face up")
+		assert_false((spinner.back as Control).visible)
+		assert_eq((spinner.turn as Control).scale, Vector2.ONE, "flat")
+		assert_eq((spinner.face as CardPreview)._shown.data.card_name, spinner.name,
+			"as the card drawn")
+		assert_almost_eq(holder.rotation, float(spinner.tilt), 0.0001, "still")
+	assert_eq(draw.drawn, draw._spinners.map(func(s: Dictionary) -> String: return s.name))
+
+
+func test_a_rare_drawn_card_wears_the_foil_unless_it_is_switched_off() -> void:
+	var rare := ""
+	for card_name in CardRegistry.all_names():
+		if CardRegistry.rarity_of(card_name, "") == "rare":
+			rare = card_name
+			break
+	var lit := _draw(1, [rare] as Array[String])
+	_spin(lit, Options.DrawScreen.SPIN_SECONDS + 0.1)
+	assert_not_null((lit._spinners[0].turn as Control).find_child("Foil", false, false))
+	var plain := _draw(1, [rare] as Array[String])
+	plain.foil = false
+	plain.regenerate()
+	_spin(plain, Options.DrawScreen.SPIN_SECONDS + 0.1)
+	assert_null((plain._spinners[0].turn as Control).find_child("Foil", false, false))
+
+
+func test_r_draws_again_and_a_pause_holds_the_spin() -> void:
+	var draw := _draw(2)
+	_spin(draw, 1.0)
+	var first: Dictionary = draw._spinners[0]
+	draw._input(_key(KEY_SPACE))
+	var t := float(first.t)
+	draw._process(0.5)
+	assert_eq(float(first.t), t, "paused")
+	draw._input(_key(KEY_SPACE))
+	draw._input(_key(KEY_R))
+	assert_ne(draw._spinners[0], first, "R draws again")
+	assert_eq(float(draw._spinners[0].t), 0.0, "from the start")
+	assert_eq(draw.landed(), 0)
+
+
+func test_big_cards_cut_their_letters_at_their_size_and_no_new_deal_follows() -> void:
+	get_viewport().oversampling_override = 0.0
+	var auto := get_viewport().get_oversampling()
+	var draw := _draw(1)
+	assert_almost_eq(get_viewport().oversampling_override,
+		auto * Options.DrawScreen.MOST_SCALE, 0.001)
+	assert_lt(draw._resize_due, 0.0, "the sharpness is no new screen")
+	draw.leave()
+	await get_tree().process_frame
+	assert_eq(get_viewport().oversampling_override, 0.0)
