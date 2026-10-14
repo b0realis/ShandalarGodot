@@ -104,7 +104,7 @@ func test_the_sources_are_every_set_each_set_and_the_list() -> void:
 func test_options_has_the_button_and_the_window_runs_a_show_and_comes_back() -> void:
 	var saved: Dictionary = Options.DemoSetup._last.duplicate()
 	Options.DemoSetup._last = {"source": "", "list": "", "mode": Options.DemoScreen.Mode.COLLECTOR_SMALL,
-		"faces": Options.DemoScreen.Faces.FRONT}
+		"faces": Options.DemoScreen.Faces.FRONT, "foil": true}
 	var options_screen: Control = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(options_screen)
 	var button := options_screen.find_child("DemoScreen", true, false) as Button
@@ -128,9 +128,13 @@ func test_options_has_the_button_and_the_window_runs_a_show_and_comes_back() -> 
 	assert_string_contains(window.check_label.text, "2 cards found")
 	assert_string_contains(window.check_label.text, "Not A Card")
 
+	assert_true(window.foil_check.button_pressed, "foil starts on")
+	window.foil_check.button_pressed = false
+	assert_false(Options.DemoSetup._last.foil)
 	window.start()
 	await get_tree().process_frame
 	var demo := window.demo
+	assert_false(demo.foil, "the window's foil switch reaches the show")
 	assert_not_null(demo, "the show is up")
 	assert_true(demo.is_inside_tree())
 	assert_eq(demo.pool, ["Forest", "Counterspell"] as Array[String])
@@ -226,6 +230,22 @@ func test_the_collector_tables_fill_the_screen_in_a_sorted_grid() -> void:
 			assert_eq(foil != null, card_name == "Shivan Dragon", card_name)
 
 
+func test_the_foil_switch_takes_the_glint_away() -> void:
+	var demo := _demo(Options.DemoScreen.Mode.COLLECTOR_BIG)
+	demo.foil = false
+	demo.regenerate()
+	_deal_all(demo)
+	var glints := _found(demo._table, ColorRect).filter(
+		func(node: Node) -> bool: return node.name == "Foil")
+	assert_eq(glints.size(), 0, "no foil with the switch off")
+	demo.foil = true
+	demo.regenerate()
+	_deal_all(demo)
+	glints = _found(demo._table, ColorRect).filter(
+		func(node: Node) -> bool: return node.name == "Foil")
+	assert_gt(glints.size(), 0, "the rare one glints with it on")
+
+
 func test_backs_and_a_mix_of_both() -> void:
 	var backs := _demo(Options.DemoScreen.Mode.COLLECTOR_SMALL, Options.DemoScreen.Faces.BACK)
 	_deal_all(backs)
@@ -318,13 +338,24 @@ func test_the_flip_wall_turns_cards_over() -> void:
 	var turning := demo._flippers.filter(func(turn: Control) -> bool:
 		return turn.get_meta("turning", false))
 	assert_eq(turning.size(), 1, "one card at a time")
-	# Fronts only: a front turns into another front.
-	var turn: Control = demo._flippers[0]
-	var before := turn.get_child(0)
-	demo._turn_over(turn)
-	assert_false(turn.get_meta("back"))
-	assert_ne(turn.get_child(0), before, "a new face")
-	assert_false(is_instance_valid(before) and before.is_inside_tree())
+	# A wall of fronts: the card turns DOWN to its back, lies a moment, and
+	# comes back up as another card.
+	var busy := turning.duplicate()
+	var tween := demo.flip_one()
+	var fresh := demo._flippers.filter(func(turn: Control) -> bool:
+		return turn.get_meta("turning", false) and not busy.has(turn))
+	assert_eq(fresh.size(), 1)
+	var turn: Control = fresh[0]
+	var face := turn.get_child(0)
+	tween.custom_step(Options.DemoScreen.FLIP_HALF + 0.01)
+	assert_true(turn.get_meta("back"), "turned down to its back")
+	tween.custom_step(Options.DemoScreen.FLIP_HOLD * 0.5)
+	assert_true(turn.get_meta("back"), "lying face down a moment")
+	tween.custom_step(Options.DemoScreen.FLIP_HOLD + Options.DemoScreen.FLIP_HALF * 2.0)
+	assert_false(turn.get_meta("back"), "up again")
+	assert_ne(turn.get_child(0), face, "as another card's face")
+	assert_false(turn.get_meta("turning"))
+	assert_almost_eq(turn.scale.x, 1.0, 0.001, "and open flat")
 
 
 func test_a_wall_of_backs_turns_cards_up_and_down_again() -> void:
@@ -351,8 +382,24 @@ func test_the_card_rain_falls_far_cards_behind_and_comes_round_again() -> void:
 	assert_gt(float(drops.back().speed), float(drops.front().speed), "near falls faster")
 	var first: Dictionary = drops.front()
 	var y := float(first.y)
+	var x := (first.node as Control).position.x
 	demo._rain_tick(0.5)
 	assert_gt(float(first.y), y, "falling")
+	assert_eq((first.node as Control).position.x, x, "straight down, no sway")
+	# Turning over as it falls: its back is the card back, its face a card.
+	first.flip = PI
+	demo._place_drop(first)
+	assert_true((first.back as Control).visible)
+	assert_false((first.face as Control).visible)
+	assert_true((first.back as CardPreview)._back.visible, "the back is a card back")
+	first.flip = 0.0
+	demo._place_drop(first)
+	assert_true((first.face as Control).visible)
+	assert_false((first.back as Control).visible)
+	assert_false((first.face as CardPreview)._back.visible, "the face is a card")
+	first.flip = PI * 0.5
+	demo._place_drop(first)
+	assert_lt((first.turn as Control).scale.x, 0.05, "edge-on half way over")
 	# Past the bottom: back in at the top.
 	first.y = demo._view.y * 3.0
 	demo._rain_tick(0.01)

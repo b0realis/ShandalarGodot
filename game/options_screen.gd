@@ -1094,6 +1094,7 @@ class DemoSetup extends Control:
 	const LIST_HINT := "One card name per line. A deck list works too."
 	const SHOW := "Show:"
 	const SIDE := "Cards:"
+	const FOIL := "Foil on rare cards"
 	const GO := "Go"
 	const BACK := "Back"
 	## The ids [member _last] keeps for the source: "" for every set, a set
@@ -1104,7 +1105,7 @@ class DemoSetup extends Control:
 
 	## The session's last choices, so the window reopens as it was left.
 	static var _last := {"source": "", "list": "", "mode": DemoScreen.Mode.SOLITAIRE,
-		"faces": DemoScreen.Faces.FRONT}
+		"faces": DemoScreen.Faces.FRONT, "foil": true}
 
 	var window: OriginalDialog
 	var go_button: Button
@@ -1113,6 +1114,7 @@ class DemoSetup extends Control:
 	var check_label: Label
 	var mode_list: OptionButton
 	var faces_list: OptionButton
+	var foil_check: CheckBox
 	## The running show, while there is one.
 	var demo: DemoScreen
 	var _previous: Control
@@ -1300,6 +1302,15 @@ class DemoSetup extends Control:
 			_last.faces = index)
 		box.add_child(faces_list)
 
+		foil_check = CheckBox.new()
+		foil_check.name = "DemoFoil"
+		foil_check.text = FOIL
+		foil_check.button_pressed = bool(_last.get("foil", true))
+		foil_check.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+		foil_check.toggled.connect(func(on: bool) -> void:
+			_last.foil = on)
+		box.add_child(foil_check)
+
 		box.add_child(HSeparator.new())
 		var keys := OriginalDialog.wrapped(keys_text(), 13)
 		keys.name = "DemoKeys"
@@ -1358,6 +1369,7 @@ class DemoSetup extends Control:
 		demo.printing = id if id != "" and id != LIST else ""
 		demo.mode = mode_list.selected
 		demo.faces = faces_list.selected
+		demo.foil = foil_check.button_pressed
 		demo.left.connect(_show_left)
 		# Its own layer, over the shell's own layers too.
 		_show_layer = CanvasLayer.new()
@@ -1485,6 +1497,9 @@ class DemoScreen extends Control:
 	## so often, each turn this long a half.
 	const FLIP_EVERY := 0.6
 	const FLIP_HALF := 0.18
+	## A wall of fronts: how long a card lies face down before it comes up
+	## as another card.
+	const FLIP_HOLD := 1.2
 
 	## The card rain: enough cards to cover this much of the screen at once,
 	## at depths from far (small, slow, dim) to near; a fall from top to
@@ -1494,6 +1509,10 @@ class DemoScreen extends Control:
 	const RAIN_MAX := 90
 	const RAIN_DEPTH := Vector2(0.45, 1.0)
 	const RAIN_FALL := 9.0
+	## How fast a falling card turns over (radians a second, either way) and
+	## spins flat on the glass.
+	const RAIN_TURN := Vector2(0.6, 2.2)
+	const RAIN_SPIN := 0.5
 
 	const SOLITAIRE_GREEN := Color8(0, 128, 0)
 	const FELT := [Color(0.13, 0.45, 0.20), Color(0.03, 0.15, 0.07)]
@@ -1504,6 +1523,9 @@ class DemoScreen extends Control:
 	var printing := ""
 	var mode: int = Mode.SOLITAIRE
 	var faces: int = Faces.FRONT
+	## Rare cards wear a passing glint of foil on the collector tables and
+	## the flip wall.
+	var foil := true
 	var rng := RandomNumberGenerator.new()
 	var paused := false
 
@@ -1538,7 +1560,6 @@ class DemoScreen extends Control:
 	var _flip_left := 0.0
 	## The rain: one entry per falling card.
 	var _drops: Array[Dictionary] = []
-	var _rain_time := 0.0
 
 	static var _foil_shader: Shader
 
@@ -1634,7 +1655,6 @@ class DemoScreen extends Control:
 		_flippers.clear()
 		_flip_left = FLIP_EVERY
 		_drops.clear()
-		_rain_time = 0.0
 		if _table != null:
 			remove_child(_table)
 			_table.queue_free()
@@ -1829,7 +1849,7 @@ class DemoScreen extends Control:
 		face.size = native
 		face.scale = turn.size / native
 		turn.add_child(face)
-		if not back and _is_rare(card_name):
+		if foil and not back and _is_rare(card_name):
 			turn.add_child(_foil(turn.size))
 		turn.set_meta("card_name", card_name)
 		turn.set_meta("back", back)
@@ -1847,9 +1867,12 @@ class DemoScreen extends Control:
 		flip_one()
 
 
-	## Turn one card that is not already turning: it narrows to an edge,
-	## becomes another card (or its back), and opens again.
-	func flip_one() -> Control:
+	## Turn one card that is not already turning over, as a card turns: it
+	## narrows to an edge and opens again showing its other side. On a wall
+	## of fronts the card lies face down a moment and comes back up as
+	## another card; otherwise it stays as it landed, a back turned up, a
+	## card turned down. Returns the turn's tween.
+	func flip_one() -> Tween:
 		var still := _flippers.filter(func(turn: Control) -> bool:
 			return is_instance_valid(turn) and not turn.get_meta("turning", false))
 		if still.is_empty():
@@ -1857,20 +1880,27 @@ class DemoScreen extends Control:
 		var turn: Control = still[rng.randi_range(0, still.size() - 1)]
 		turn.set_meta("turning", true)
 		var tween := turn.create_tween()
+		_half_turns(tween, turn)
+		if faces == Faces.FRONT:
+			tween.tween_interval(FLIP_HOLD)
+			_half_turns(tween, turn)
+		tween.tween_callback(func() -> void: turn.set_meta("turning", false))
+		return tween
+
+
+	## One turn over: to the edge, the other side, open again.
+	func _half_turns(tween: Tween, turn: Control) -> void:
 		tween.tween_property(turn, "scale:x", 0.0, FLIP_HALF) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 		tween.tween_callback(_turn_over.bind(turn))
 		tween.tween_property(turn, "scale:x", 1.0, FLIP_HALF) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tween.tween_callback(func() -> void: turn.set_meta("turning", false))
-		return turn
 
 
-	## The far side of a turning card. Fronts only: another card. Backs, or
-	## both: the other side — a back turns up a card, a card turns down.
+	## The other side of a card: a face turns down to its back, a back turns
+	## up as a card.
 	func _turn_over(turn: Control) -> void:
-		var was_back: bool = turn.get_meta("back", false)
-		var back := false if faces == Faces.FRONT else not was_back
+		var back := not bool(turn.get_meta("back", false))
 		var card_name: String = turn.get_meta("card_name", pool[0])
 		if not back:
 			card_name = _pick(1)[0]
@@ -1880,9 +1910,11 @@ class DemoScreen extends Control:
 
 	# -------------------------------------------------------------- card rain --
 
-	## Cards drifting down like leaves, swaying and tumbling, far ones small,
-	## slow and dim behind near ones. The screen starts full, and a card that
-	## falls out of the bottom comes back in at the top as another card.
+	## Cards falling straight down, far ones small, slow and dim behind near
+	## ones, each turning over as it falls — its back is the card back — and
+	## spinning slowly flat on the glass. The screen starts full, and a card
+	## that falls out of the bottom comes back in at the top as another
+	## card.
 	func _deal_rain(view: Vector2) -> void:
 		var f := density_scale(_phys)
 		var near := CardPreview.SIZE * MESS_SCALE * f
@@ -1904,12 +1936,22 @@ class DemoScreen extends Control:
 		holder.scale = Vector2.ONE * (near.x / CardPreview.SIZE.x) * depth
 		var shade := lerpf(0.45, 1.0, inverse_lerp(RAIN_DEPTH.x, RAIN_DEPTH.y, depth))
 		holder.modulate = Color(shade, shade, shade, 0.0)
+		# The turning part, and the card's two sides in it.
+		var turn := Control.new()
+		turn.size = CardPreview.SIZE
+		turn.pivot_offset = CardPreview.SIZE * 0.5
+		holder.add_child(turn)
 		var face := CardPreview.new()
 		face.docked = true
-		holder.add_child(face)
+		turn.add_child(face)
+		var back := CardPreview.new()
+		back.docked = true
+		back.show_back()
+		turn.add_child(back)
 		_quiet(holder)
 		_table.add_child(holder)
-		var drop := {"node": holder, "face": face, "depth": depth, "y": y}
+		var drop := {"node": holder, "turn": turn, "face": face, "back": back,
+			"depth": depth, "y": y}
 		_respawn(drop, view, false)
 		drop.y = y
 		_drops.append(drop)
@@ -1923,30 +1965,43 @@ class DemoScreen extends Control:
 		drop.x = rng.randf_range(-0.05, 1.05) * view.x
 		if at_top:
 			drop.y = -height
-		drop.sway = rng.randf_range(0.02, 0.06) * view.x
-		drop.rate = rng.randf_range(0.3, 0.8)
-		drop.phase = rng.randf() * TAU
-		drop.tilt = rng.randf_range(-0.3, 0.3)
 		drop.speed = view.y / RAIN_FALL * float(drop.depth) * rng.randf_range(0.85, 1.15)
-		_dress(drop.face, _pick(1)[0], _wants_back())
+		drop.spin = rng.randf() * TAU
+		drop.spin_rate = rng.randf_range(-RAIN_SPIN, RAIN_SPIN)
+		# Which side it starts on is the window's Cards choice; the turning
+		# shows the other one soon enough.
+		drop.flip = (PI if _wants_back() else 0.0) + rng.randf_range(-0.6, 0.6)
+		drop.flip_rate = rng.randf_range(RAIN_TURN.x, RAIN_TURN.y) \
+			* (1.0 if rng.randf() < 0.5 else -1.0)
+		_dress(drop.face, _pick(1)[0], false)
 
 
 	func _rain_tick(delta: float) -> void:
-		_rain_time += delta
 		for drop in _drops:
 			drop.y = float(drop.y) + float(drop.speed) * delta
+			drop.spin = float(drop.spin) + float(drop.spin_rate) * delta
+			drop.flip = fmod(float(drop.flip) + float(drop.flip_rate) * delta, TAU)
 			var size_now: Vector2 = CardPreview.SIZE * (drop.node as Control).scale
 			if float(drop.y) - size_now.y > _view.y:
 				_respawn(drop, _view, true)
 			_place_drop(drop)
 
 
+	## Where a falling card is and which way it faces: straight down its
+	## column, turned flat by its spin, and narrowed by its turn — the face
+	## while the face is towards the glass, the back while the back is,
+	## both a little darker edge-on.
 	func _place_drop(drop: Dictionary) -> void:
 		var holder: Control = drop.node
-		var swing := sin(_rain_time * float(drop.rate) * TAU + float(drop.phase))
-		var centre := Vector2(float(drop.x) + swing * float(drop.sway), float(drop.y))
-		holder.position = centre - CardPreview.SIZE * 0.5
-		holder.rotation = float(drop.tilt) + swing * 0.35
+		holder.position = Vector2(float(drop.x), float(drop.y)) - CardPreview.SIZE * 0.5
+		holder.rotation = float(drop.spin)
+		var facing := cos(float(drop.flip))
+		var turn: Control = drop.turn
+		turn.scale = Vector2(maxf(absf(facing), 0.02), 1.0)
+		var light := 0.7 + 0.3 * absf(facing)
+		turn.modulate = Color(light, light, light)
+		(drop.face as Control).visible = facing >= 0.0
+		(drop.back as Control).visible = facing < 0.0
 
 
 	static func _pocket_style(f: float) -> StyleBoxFlat:
