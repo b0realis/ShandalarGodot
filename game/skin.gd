@@ -140,9 +140,42 @@ static var _art_cache: Dictionary = {}
 static var _art_missing: Dictionary = {}
 
 
+## THE SEASONS' CARD BACKS: two pictures of this project's own
+## (`game/art/`) that every card back in the game wears for a while each
+## year, over the skin's back or the plain one alike.
+const SEASON_BACKS := {"halloween": "card_back_moon", "christmas": "card_back_holly"}
+## The date [method season] reads, as `{"month": m, "day": d}`; empty
+## means the player's own calendar, today. The test runner pins it
+## (`tests/support/pin_calendar.gd`) so the suite answers the same on any
+## day of the year.
+static var season_date: Dictionary = {}
+
+
+## Which season [param month]/[param day] falls in, or "": the week up to
+## Halloween, and the two weeks over Christmas and the New Year.
+static func season_for(month: int, day: int) -> String:
+	if month == 10 and day >= 25:
+		return "halloween"
+	if (month == 12 and day >= 21) or (month == 1 and day <= 3):
+		return "christmas"
+	return ""
+
+
+static func season() -> String:
+	var date := season_date if not season_date.is_empty() \
+		else Time.get_date_dict_from_system()
+	return season_for(int(date.get("month", 0)), int(date.get("day", 0)))
+
+
 ## Texture for a manifest key ("card_frame_red", "duel_pattern_green"...)
 ## or null when the skin doesn't provide it.
 static func texture(key: String) -> Texture2D:
+	if key == "card_back":
+		var seasonal := season()
+		if seasonal != "":
+			var back := our_art(String(SEASON_BACKS[seasonal]))
+			if back != null:
+				return back
 	if _texture_cache.has(key):
 		return _texture_cache[key]
 	var result: Texture2D = null

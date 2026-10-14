@@ -2561,6 +2561,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.23.md`: small fixes, carrying the 0.50.22, 0.50.21
+  and 0.50.20 notes below them.
 - `docs/releases/0.50.22.md`: the repository check's fixes (SGManalink
   tables' windows and keys, a new profile's rules, smaller packages, the
   Help's words) on top of everything in 0.50.21 and 0.50.20.

@@ -452,6 +452,11 @@ print_totals() {
 
 # A killed test cannot run after_each; do not inherit its enabled packs.
 # The helper refuses to touch a non-test profile, and changes no player data.
+# THE SUITE'S CALENDAR. A few things in the game follow the date; GUT
+# runs a hook first that pins it to a day where none of them applies, so
+# the suite answers the same on any day it runs.
+PIN_CALENDAR="res://tests/support/pin_calendar.gd"
+
 reset_packs() {
 	"$SHANDALAR_TIMEOUT" -k 5 60 "$GODOT" --headless --path . \
 		-s tools/reset_test_packs.gd >"$XDG_DATA_HOME/reset-packs.log" 2>&1 </dev/null
@@ -490,7 +495,7 @@ if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
 	# shellcheck disable=SC2086  # the selection is one or two GUT flags
 	"$SHANDALAR_TIMEOUT" -k 5 "$SUITE_TIMEOUT" "$GODOT" --headless --path . \
 		--log-file "$SHANDALAR_TEST_DATA_HOME/gut-engine.log" \
-		-s addons/gut/gut_cmdln.gd \
+		-s addons/gut/gut_cmdln.gd -gpre_run_script="$PIN_CALENDAR" \
 		$selection -gjunit_xml_file="$SHANDALAR_TEST_DATA_HOME/gut-junit.xml" \
 		-gexit "$@" </dev/null >"$fifo" 2>&1 &
 	suite_pid=$!
@@ -548,7 +553,7 @@ while [ "$i" -le "$SHARDS" ]; do
 		reset_packs || { echo "SUITE IS NOT GREEN: the test profile's packs could not be reset (log: $home/reset-packs.log)."; exit 1; } >"$home/gut.log" 2>&1
 		exec "$SHANDALAR_TIMEOUT" -k 5 "$SUITE_TIMEOUT" "$GODOT" --headless --path . \
 			--log-file "$home/gut-engine.log" \
-			-s addons/gut/gut_cmdln.gd \
+			-s addons/gut/gut_cmdln.gd -gpre_run_script="$PIN_CALENDAR" \
 			-gtest="$list" -gjunit_xml_file="$home/gut-junit.xml" \
 			-gexit </dev/null >"$home/gut.log" 2>&1
 	) &

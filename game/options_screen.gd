@@ -118,6 +118,11 @@ func _ready() -> void:
 	draft.pressed.connect(func() -> void: DraftSetup.open_on(self))
 	content.add_child(draft)
 
+	var demo := UiChrome.menu_button("Demo screen", Vector2(320, 36))
+	demo.name = "DemoScreen"
+	demo.pressed.connect(func() -> void: DemoSetup.open_on(self))
+	content.add_child(demo)
+
 	content.add_child(UiChrome.body_label("Hand display:"))
 	var hand_style := OptionButton.new()
 	hand_style.add_item("Fan of cards", 0)
@@ -1069,3 +1074,1255 @@ class _C2FSettingsProblemLine extends Label:
 			text = now
 		visible = now != ""
 # --- end campaign 2026-10-12 f-settings ---
+
+
+# ------------------------------------------------------------ demo screen --
+
+class DemoSetup extends Control:
+	## The `Demo screen` window, opened from Options: which cards (a set, every
+	## set, or a list typed or pasted in), which show, fronts or backs, and Go.
+	## The window stays up under the show and comes back when the show is left,
+	## so a second show is one click away.
+	##
+	## The choices last for the session ([member _last]) and are written
+	## nowhere: nothing here touches `settings.cfg`.
+
+	const TITLE := "Demo screen"
+	const CARDS_FROM := "Cards from:"
+	const ALL_SETS := "All sets"
+	const CARD_LIST := "Card list (below)"
+	const LIST_HINT := "One card name per line. A deck list works too."
+	const SHOW := "Show:"
+	const SIDE := "Cards:"
+	const GO := "Go"
+	const BACK := "Back"
+	## The ids [member _last] keeps for the source: "" for every set, a set
+	## code, or this.
+	const LIST := "list"
+	## A list longer than this is cut, so a pasted file cannot stall the window.
+	const MAX_LIST_LINES := 2000
+
+	## The session's last choices, so the window reopens as it was left.
+	static var _last := {"source": "", "list": "", "mode": DemoScreen.Mode.SOLITAIRE,
+		"faces": DemoScreen.Faces.FRONT}
+
+	var window: OriginalDialog
+	var go_button: Button
+	var source_list: OptionButton
+	var list_box: TextEdit
+	var check_label: Label
+	var mode_list: OptionButton
+	var faces_list: OptionButton
+	## The running show, while there is one.
+	var demo: DemoScreen
+	var _previous: Control
+	var _show_layer: CanvasLayer
+
+
+	## Open the window over [param previous] (the Options screen).
+	static func open_on(previous: Control) -> DemoSetup:
+		var setup := DemoSetup.new()
+		setup._previous = previous
+		previous.add_child(setup)
+		return setup
+
+
+	## Each source the window offers, in the order its list shows them:
+	## every set, then each set the game has cards for, then the typed list.
+	static func sources() -> Array[Dictionary]:
+		var out: Array[Dictionary] = [{"id": "", "label": ALL_SETS}]
+		for code in CardRegistry.active_set_order():
+			if CardRegistry.names_in_set(code).is_empty():
+				continue
+			out.append({"id": code,
+				"label": String(DeckFilter.SET_LABELS.get(code, code.to_upper()))})
+		out.append({"id": LIST, "label": CARD_LIST})
+		return out
+
+
+	## THE LIST CHECK. Each line is a card name, matched without regard to
+	## case or to curly apostrophes; a deck list's counts (`4 Lightning Bolt`,
+	## `4x Lightning Bolt`, `Lightning Bolt x4`, `SB: 2 Disenchant`) are read
+	## past, and a line that is no card name is tried again split at its
+	## commas, so `Lightning Bolt, Forest` works while `Ertai, Wizard Adept`
+	## stays one card. Returns `found` (each card once, in the order typed)
+	## and `unknown` (as typed).
+	static func check_list(text: String) -> Dictionary:
+		var lookup := {}
+		for card_name in CardRegistry.all_names():
+			lookup[_folded(String(card_name))] = String(card_name)
+		var found: Array[String] = []
+		var unknown: Array[String] = []
+		var lines := text.replace(";", "\n").split("\n")
+		for i in mini(lines.size(), MAX_LIST_LINES):
+			var line := _bare(lines[i])
+			if line == "":
+				continue
+			var pieces: Array[String] = [line]
+			if not lookup.has(_folded(line)) and line.contains(","):
+				pieces.clear()
+				for piece in line.split(","):
+					if _bare(piece) != "":
+						pieces.append(_bare(piece))
+			for piece in pieces:
+				var known: String = lookup.get(_folded(piece), "")
+				if known == "":
+					if not unknown.has(piece):
+						unknown.append(piece)
+				elif not found.has(known):
+					found.append(known)
+		return {"found": found, "unknown": unknown}
+
+
+	## A line without its deck-list furniture: comments, `SB:`, counts.
+	static func _bare(line: String) -> String:
+		var s := line.strip_edges()
+		if s.begins_with("#") or s.begins_with("//"):
+			return ""
+		if s.to_lower().begins_with("sb:"):
+			s = s.substr(3).strip_edges()
+		var lead := RegEx.create_from_string("^\\d+\\s*[x×]?\\s+")
+		s = lead.sub(s, "")
+		var tail := RegEx.create_from_string("\\s+[x×]\\s*\\d+$")
+		s = tail.sub(s, "")
+		return s.strip_edges()
+
+
+	static func _folded(card_name: String) -> String:
+		return card_name.replace("’", "'").replace("‘", "'").strip_edges().to_lower()
+
+
+	## The cards a source deals from: a set's own, every card the game has,
+	## or the list's found cards.
+	static func pool_for(source_id: String, list_text: String) -> Array[String]:
+		var out: Array[String] = []
+		if source_id == LIST:
+			out.assign(check_list(list_text).found)
+		elif source_id == "":
+			out.assign(CardRegistry.all_names())
+		else:
+			out.assign(CardRegistry.names_in_set(source_id))
+		return out
+
+
+	## What the window's foot says about the keys, in the player's own
+	## bindings where the game has one. One key a line: the window's lettering
+	## has no middle dot to run them together with.
+	static func keys_text() -> String:
+		var lines: Array[String] = ["Click or Esc: back to this window",
+			"R: new cards", "Space: pause"]
+		var shot := Controls.key_text("duel_screenshot")
+		if shot != Controls.UNBOUND:
+			lines.append("%s: save the screen as a picture" % shot)
+		lines.append("On a pad: A or B goes back, Y deals new cards, Start pauses.")
+		return "\n".join(lines)
+
+
+	func _ready() -> void:
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		z_index = 150
+		var shade := ColorRect.new()
+		shade.color = Color(0, 0, 0, 0.55)
+		shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		shade.mouse_filter = Control.MOUSE_FILTER_STOP
+		add_child(shade)
+		window = _build_window()
+		add_child(window)
+		window.fit_height()
+		go_button.grab_focus()
+
+
+	func _build_window() -> OriginalDialog:
+		var dialog := OriginalDialog.create(TITLE, Vector2(500, 560))
+		var box := dialog.body()
+
+		box.add_child(OriginalDialog.label(CARDS_FROM, 14, true))
+		source_list = OptionButton.new()
+		source_list.name = "DemoSource"
+		source_list.fit_to_longest_item = false
+		source_list.clip_text = true
+		source_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for entry in sources():
+			source_list.add_item(String(entry.label))
+			source_list.set_item_metadata(source_list.item_count - 1, String(entry.id))
+		_select_source(String(_last.source))
+		source_list.item_selected.connect(func(_index: int) -> void:
+			_last.source = _source_id()
+			_refresh())
+		box.add_child(source_list)
+
+		list_box = TextEdit.new()
+		list_box.name = "DemoList"
+		list_box.placeholder_text = LIST_HINT
+		list_box.custom_minimum_size = Vector2(0, 110)
+		list_box.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+		for state in ["normal", "focus"]:
+			list_box.add_theme_stylebox_override(state,
+				OriginalDialog.panel_style("panel_dark_stone", 5.0))
+		list_box.add_theme_color_override("font_color", OriginalDialog.CHOICE_LIT)
+		list_box.add_theme_color_override("caret_color", OriginalDialog.CHOICE_LIT)
+		list_box.add_theme_color_override("font_placeholder_color",
+			OriginalDialog.PLACEHOLDER)
+		var body_font := GameSkin.font("font_body")
+		if body_font != null:
+			list_box.add_theme_font_override("font", body_font)
+		list_box.text = String(_last.list)
+		list_box.text_changed.connect(func() -> void:
+			_last.list = list_box.text
+			# Typing a list means dealing from it.
+			if list_box.text.strip_edges() != "" and _source_id() != LIST:
+				_select_source(LIST)
+				_last.source = LIST
+			_refresh())
+		box.add_child(list_box)
+
+		check_label = OriginalDialog.wrapped("", 13)
+		check_label.name = "DemoCheck"
+		box.add_child(check_label)
+
+		box.add_child(OriginalDialog.label(SHOW, 14, true))
+		mode_list = OptionButton.new()
+		mode_list.name = "DemoMode"
+		for title in DemoScreen.MODE_TITLES:
+			mode_list.add_item(title)
+		mode_list.select(int(_last.mode))
+		mode_list.item_selected.connect(func(index: int) -> void:
+			_last.mode = index)
+		box.add_child(mode_list)
+
+		box.add_child(OriginalDialog.label(SIDE, 14, true))
+		faces_list = OptionButton.new()
+		faces_list.name = "DemoFaces"
+		for title in DemoScreen.FACES_TITLES:
+			faces_list.add_item(title)
+		faces_list.select(int(_last.faces))
+		faces_list.item_selected.connect(func(index: int) -> void:
+			_last.faces = index)
+		box.add_child(faces_list)
+
+		box.add_child(HSeparator.new())
+		var keys := OriginalDialog.wrapped(keys_text(), 13)
+		keys.name = "DemoKeys"
+		box.add_child(keys)
+
+		go_button = GauntletOptions.fit(dialog.add_button(GO))
+		go_button.name = "DemoGo"
+		go_button.pressed.connect(start)
+		GauntletOptions.fit(dialog.add_button(BACK)).pressed.connect(close)
+		_refresh()
+		return dialog
+
+
+	func _source_id() -> String:
+		var index := source_list.selected
+		return "" if index < 0 else String(source_list.get_item_metadata(index))
+
+
+	func _select_source(id: String) -> void:
+		for i in source_list.item_count:
+			if String(source_list.get_item_metadata(i)) == id:
+				source_list.select(i)
+				return
+		source_list.select(0)
+
+
+	## The check line and Go, after any change to the source or the list.
+	func _refresh() -> void:
+		var id := _source_id()
+		if id == LIST:
+			var checked := check_list(list_box.text)
+			var found: Array = checked.found
+			var unknown: Array = checked.unknown
+			var words := "No cards yet." if found.is_empty() \
+				else "%d card%s found." % [found.size(), "" if found.size() == 1 else "s"]
+			if not unknown.is_empty():
+				var shown := unknown.slice(0, 6)
+				words += " Not in the game: %s%s" % [", ".join(shown),
+					", ..." if unknown.size() > shown.size() else "."]
+			check_label.text = words
+			go_button.disabled = found.is_empty()
+		else:
+			var count := pool_for(id, "").size()
+			check_label.text = "%d cards." % count
+			go_button.disabled = count == 0
+
+
+	## Go: the show over everything, this window hidden under it.
+	func start() -> void:
+		var pool := pool_for(_source_id(), list_box.text)
+		if pool.is_empty():
+			return
+		var id := _source_id()
+		demo = DemoScreen.new()
+		demo.pool = pool
+		demo.printing = id if id != "" and id != LIST else ""
+		demo.mode = mode_list.selected
+		demo.faces = faces_list.selected
+		demo.left.connect(_show_left)
+		# Its own layer, over the shell's own layers too.
+		_show_layer = CanvasLayer.new()
+		_show_layer.layer = 90
+		_show_layer.add_child(demo)
+		get_viewport().gui_release_focus()
+		visible = false
+		if is_instance_valid(_previous):
+			_previous.visible = false
+		get_tree().root.add_child(_show_layer)
+
+
+	func _show_left() -> void:
+		if is_instance_valid(_show_layer):
+			_show_layer.queue_free()
+		_show_layer = null
+		demo = null
+		if is_instance_valid(_previous):
+			_previous.visible = true
+		visible = true
+		if is_inside_tree():
+			go_button.grab_focus()
+
+
+	## Back: the window goes, Options is as it was, the keyboard and the pad
+	## on the button that opened it.
+	func close() -> void:
+		if is_instance_valid(_show_layer):
+			_show_layer.queue_free()
+		if is_instance_valid(_previous):
+			var opener := _previous.find_child("DemoScreen", true, false) as Control
+			if opener != null and opener.is_visible_in_tree():
+				opener.grab_focus()
+		queue_free()
+
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if not visible or demo != null:
+			return
+		if event.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			close()
+
+
+	func _exit_tree() -> void:
+		if is_instance_valid(_show_layer):
+			_show_layer.queue_free()
+
+
+class DemoScreen extends Control:
+	## The demo screen: cards from [member pool] laid out for looking at, in
+	## one of its shows ([enum Mode]). Opened by [DemoSetup]; a click, Esc,
+	## a pad's A or B goes back to it, R (a pad's Y) deals new cards, Space (a
+	## pad's Start) pauses, and the screenshot key saves the screen as a
+	## picture at the window's full resolution.
+	##
+	## Every card is the game's own renderer — [CardPreview] for a whole card,
+	## [MiniCard] for the table's small one — so the art is whatever the
+	## player's packs carry and the backs are the skin's, as in a duel.
+	##
+	## MORE CARDS ON A BIGGER SCREEN. The game lays out on 1280x800 and
+	## stretches that to the window, which alone would show a 4K screen the
+	## same twenty cards, only larger. [method density_scale] shrinks the
+	## cards by the square root of the stretch instead, so a screen with
+	## twice the pixels each way shows twice as many cards, each still bigger
+	## on the glass than at 1280x800.
+
+	signal left
+
+	enum Mode { SOLITAIRE, MESS, COLLECTOR_BIG, COLLECTOR_SMALL, FLIP_WALL, CARD_RAIN }
+	enum Faces { FRONT, BACK, BOTH }
+	const MODE_TITLES: Array[String] = ["Solitaire end", "Mess table",
+		"Collector table big", "Collector table small", "Flip wall", "Card rain"]
+	const FACES_TITLES: Array[String] = ["Card fronts", "Card backs",
+		"Fronts and backs"]
+
+	## A click or key this soon after Go is the one that pressed Go.
+	const SETTLE_MS := 300
+	## The deal builds cards for at most this long per frame, so a big table
+	## comes down card by card instead of freezing the screen.
+	const BUILD_BUDGET_MS := 6
+	## How long a note ("Saved: ...") stays up.
+	const NOTE_SECONDS := 3.0
+
+	## The collector tables: the whole card at half size, or the table's small
+	## card at its own; the pocket gap between them and the edge around them.
+	const BIG_SCALE := 0.5
+	const SMALL_SCALE := 1.0
+	const BIG_GAP := 14.0
+	const SMALL_GAP := 10.0
+	const EDGE := 22.0
+	## A rare card's glint passes once in this many seconds.
+	const FOIL_PERIOD := 9.0
+
+	## The mess: cards a little under half size, enough of them to cover the
+	## table this many times over.
+	const MESS_SCALE := 0.42
+	const MESS_COVER := 2.4
+	const MESS_MIN := 12
+	const MESS_MAX := 240
+
+	## Solitaire's end: four foundations of thirteen at the top right, one
+	## card in flight at a time, stepped sixty times a second whatever the
+	## frame rate. Speeds are per step in units of a 480-row screen, the
+	## height the 1990s original played on, so the arcs keep their shape on
+	## any window.
+	const SOL_SCALE := 0.36
+	const SOL_PILES := 4
+	const SOL_PILE_CARDS := 13
+	const STEP := 1.0 / 60.0
+	const GRAVITY := 1.0
+	const BOUNCE := 0.75
+	const SPEED_X := Vector2(2.5, 8.0)
+	const LIFT := 10.0
+	## Most cards leave to the left, across the whole table.
+	const LEFTWARD := 0.75
+	## Copies of the flying card, so a frame that runs two or three steps
+	## still leaves every one of them in the trail.
+	const STAMPS := 3
+	## After the last card has gone, the finished screen stays this long
+	## before a new deal.
+	const SOL_REST := 2.5
+
+	## The flip wall: the big collector table, one card turning over every
+	## so often, each turn this long a half.
+	const FLIP_EVERY := 0.6
+	const FLIP_HALF := 0.18
+
+	## The card rain: enough cards to cover this much of the screen at once,
+	## at depths from far (small, slow, dim) to near; a fall from top to
+	## bottom takes [constant RAIN_FALL] seconds for the nearest.
+	const RAIN_COVER := 0.9
+	const RAIN_MIN := 8
+	const RAIN_MAX := 90
+	const RAIN_DEPTH := Vector2(0.45, 1.0)
+	const RAIN_FALL := 9.0
+
+	const SOLITAIRE_GREEN := Color8(0, 128, 0)
+	const FELT := [Color(0.13, 0.45, 0.20), Color(0.03, 0.15, 0.07)]
+	const VELVET := [Color(0.17, 0.14, 0.22), Color(0.04, 0.03, 0.06)]
+
+	var pool: Array[String] = []
+	## The set whose printings to show, or "" for each card's own.
+	var printing := ""
+	var mode: int = Mode.SOLITAIRE
+	var faces: int = Faces.FRONT
+	var rng := RandomNumberGenerator.new()
+	var paused := false
+
+	## Everything one deal put down; a new deal frees it whole.
+	var _table: Control
+	var _note: Label
+	var _note_left := 0.0
+	var _jobs: Array[Callable] = []
+	var _phys := 1.0
+	var _opened_ms := 0
+	var _leaving := false
+	var _resize_due := -1.0
+	## The screen the deal was laid out for.
+	var _view := Vector2.ZERO
+
+	var _sol_card := Vector2.ZERO
+	var _unit := 1.0
+	var _piles: Array = []
+	var _pile_spots: Array[Vector2] = []
+	var _pile_faces: Array[CardPreview] = []
+	var _trail: SubViewport
+	var _stamps: Array[CardPreview] = []
+	var _flying := false
+	var _pos := Vector2.ZERO
+	var _vel := Vector2.ZERO
+	var _next_pile := 0
+	var _acc := 0.0
+	var _rest := 0.0
+
+	## The flip wall's cards (each the turning part of its pocket).
+	var _flippers: Array[Control] = []
+	var _flip_left := 0.0
+	## The rain: one entry per falling card.
+	var _drops: Array[Dictionary] = []
+	var _rain_time := 0.0
+
+	static var _foil_shader: Shader
+
+
+	func _ready() -> void:
+		rng.randomize()
+		_opened_ms = Time.get_ticks_msec()
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_note = Label.new()
+		_note.name = "DemoNote"
+		_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		_note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_note.position.y -= 40.0
+		_note.add_theme_font_size_override("font_size", 16)
+		_note.add_theme_constant_override("outline_size", 6)
+		_note.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_note.visible = false
+		_note.z_index = 10
+		add_child(_note)
+		get_viewport().size_changed.connect(_on_resized)
+		regenerate()
+
+
+	# ------------------------------------------------------------ the maths --
+
+	## How much smaller than at 1280x800 a card is drawn on a window stretched
+	## [param phys] times: the square root, so the count grows with the screen
+	## and each card still grows a little too. Never larger than the layout's
+	## own size.
+	static func density_scale(phys: float) -> float:
+		return 1.0 / sqrt(maxf(phys, 1.0))
+
+
+	## Columns and rows of [param card]-sized pockets, [param gap] apart, that
+	## fit [param view] inside an [param edge]; at least one of each.
+	static func grid_fit(view: Vector2, card: Vector2, gap: float, edge: float) -> Vector2i:
+		var cols := int(floor((view.x - 2.0 * edge + gap) / (card.x + gap)))
+		var rows := int(floor((view.y - 2.0 * edge + gap) / (card.y + gap)))
+		return Vector2i(maxi(cols, 1), maxi(rows, 1))
+
+
+	## How many cards cover [param view] [constant MESS_COVER] times over.
+	static func mess_count(view: Vector2, card: Vector2) -> int:
+		var area := maxf(card.x * card.y, 1.0)
+		return clampi(ceili(MESS_COVER * view.x * view.y / area), MESS_MIN, MESS_MAX)
+
+
+	## A binder's order: white, blue, black, red, green, gold, artifacts,
+	## lands.
+	static func colour_rank(d: CardData) -> int:
+		if d.is_land():
+			return 7
+		var mask := d.color_mask()
+		if mask == 0:
+			return 6
+		return int({Mtg.ManaColor.W: 0, Mtg.ManaColor.U: 1, Mtg.ManaColor.B: 2,
+			Mtg.ManaColor.R: 3, Mtg.ManaColor.G: 4}.get(mask, 5))
+
+
+	static func _binder_order(a: String, b: String) -> bool:
+		var ra := colour_rank(CardRegistry.get_card(a))
+		var rb := colour_rank(CardRegistry.get_card(b))
+		return ra < rb if ra != rb else a < b
+
+
+	## One step of a flying card: it moves, falls, and bounces off
+	## [param floor_y] losing a quarter of its speed. Returns the new
+	## position and velocity.
+	static func fly(pos: Vector2, vel: Vector2, unit: float, floor_y: float) -> Array[Vector2]:
+		pos += vel
+		vel.y += GRAVITY * unit
+		if pos.y > floor_y:
+			pos.y = floor_y
+			vel.y = -vel.y * BOUNCE
+		return [pos, vel]
+
+
+	# ------------------------------------------------------------- the deal --
+
+	## A new deal of the same show: new cards, new places.
+	func regenerate() -> void:
+		_jobs.clear()
+		_trail = null
+		_stamps.clear()
+		_pile_faces.clear()
+		_piles.clear()
+		_flying = false
+		_acc = 0.0
+		_rest = 0.0
+		_flippers.clear()
+		_flip_left = FLIP_EVERY
+		_drops.clear()
+		_rain_time = 0.0
+		if _table != null:
+			remove_child(_table)
+			_table.queue_free()
+		var view := get_viewport_rect().size
+		_view = view
+		_phys = _phys_scale()
+		_table = Control.new()
+		_table.name = "DemoTable"
+		_table.size = view
+		_table.clip_contents = true
+		_table.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_table.process_mode = Node.PROCESS_MODE_DISABLED if paused \
+			else Node.PROCESS_MODE_INHERIT
+		add_child(_table)
+		move_child(_table, 0)
+		_table.add_child(_ground())
+		if pool.is_empty():
+			return
+		if mode == Mode.SOLITAIRE:
+			_deal_solitaire(view)
+		elif mode == Mode.MESS:
+			_deal_mess(view)
+		elif mode == Mode.CARD_RAIN:
+			_deal_rain(view)
+		else:
+			_deal_collector(view, mode != Mode.COLLECTOR_SMALL)
+
+
+	## How many window pixels one layout pixel is.
+	func _phys_scale() -> float:
+		var view := get_viewport_rect().size
+		var window := get_window()
+		if window == null or view.y <= 0.0 or window.size.y <= 0:
+			return 1.0
+		return maxf(float(window.size.y) / view.y, 0.25)
+
+
+	func _ground() -> Control:
+		if mode == Mode.SOLITAIRE:
+			var flat := ColorRect.new()
+			flat.color = SOLITAIRE_GREEN
+			flat.size = _view
+			flat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			return flat
+		var colours: Array = VELVET if mode != Mode.MESS else FELT
+		var gradient := Gradient.new()
+		gradient.set_color(0, colours[0])
+		gradient.set_color(1, colours[1])
+		var fill := GradientTexture2D.new()
+		fill.gradient = gradient
+		fill.fill = GradientTexture2D.FILL_RADIAL
+		fill.fill_from = Vector2(0.5, 0.5)
+		fill.fill_to = Vector2(1.1, 1.1)
+		fill.width = 256
+		fill.height = 256
+		var ground := TextureRect.new()
+		ground.texture = fill
+		ground.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ground.stretch_mode = TextureRect.STRETCH_SCALE
+		ground.size = _view
+		ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return ground
+
+
+	## [param count] names from the pool, each once while the pool lasts.
+	func _pick(count: int) -> Array[String]:
+		var out: Array[String] = []
+		while out.size() < count:
+			var round_of := pool.duplicate()
+			for i in range(round_of.size() - 1, 0, -1):
+				var j := rng.randi_range(0, i)
+				var keep: String = round_of[i]
+				round_of[i] = round_of[j]
+				round_of[j] = keep
+			for card_name in round_of:
+				if out.size() >= count:
+					break
+				out.append(String(card_name))
+		return out
+
+
+	func _wants_back() -> bool:
+		if faces == Faces.BOTH:
+			return rng.randf() < 0.5
+		return faces == Faces.BACK
+
+
+	## One card as the game draws it: whole ([param big]) or the table's
+	## small card; face up, or its back.
+	func _face(card_name: String, big: bool, back: bool) -> Control:
+		if big:
+			var preview := CardPreview.new()
+			preview.docked = true
+			_dress(preview, card_name, back)
+			return preview
+		var mini := MiniCard.new(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
+		# The widget's own switch, as the duel turns a card down; the
+		# instance's flag alone leaves the face showing.
+		mini.face_down = back
+		if not back and printing != "":
+			var art := CardPrintings.texture(card_name, printing)
+			if art != null:
+				mini.art_override = art
+				mini.refresh()
+		mini.disabled = true
+		mini.focus_mode = Control.FOCUS_NONE
+		return mini
+
+
+	func _dress(preview: CardPreview, card_name: String, back: bool) -> void:
+		if back:
+			preview.show_back()
+		else:
+			preview.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0),
+				printing)
+
+
+	func _is_rare(card_name: String) -> bool:
+		return CardRegistry.rarity_of(card_name, printing) == "rare"
+
+
+	## Nothing on the table takes the mouse: a click anywhere is "back".
+	static func _quiet(node: Node) -> void:
+		if node is Control:
+			(node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+			(node as Control).tooltip_text = ""
+		for child in node.get_children():
+			_quiet(child)
+
+
+	# ------------------------------------------------------- collector table --
+
+	func _deal_collector(view: Vector2, big: bool) -> void:
+		var f := density_scale(_phys)
+		var native := CardPreview.SIZE if big else MiniCard.SIZE
+		var card := native * (BIG_SCALE if big else SMALL_SCALE) * f
+		var gap := (BIG_GAP if big else SMALL_GAP) * f
+		var grid := grid_fit(view, card, gap, EDGE * f)
+		var names := _pick(grid.x * grid.y)
+		if mode != Mode.FLIP_WALL:
+			names.sort_custom(_binder_order)
+		var pitch := card + Vector2.ONE * gap
+		var used := Vector2(grid) * pitch - Vector2.ONE * gap
+		var origin := ((view - used) * 0.5).floor()
+		var pocket := _pocket_style(f)
+		for i in names.size():
+			var at := origin + Vector2(i % grid.x, floori(float(i) / grid.x)) * pitch
+			var card_name := names[i]
+			_jobs.append(func() -> void:
+				_put_collector_card(card_name, at, card, native, big, gap * 0.3, pocket))
+
+
+	func _put_collector_card(card_name: String, at: Vector2, card: Vector2,
+			native: Vector2, big: bool, pad: float, pocket: StyleBox) -> void:
+		var holder := Control.new()
+		holder.position = at
+		holder.size = card
+		holder.pivot_offset = card * 0.5
+		var sleeve := Panel.new()
+		sleeve.add_theme_stylebox_override("panel", pocket)
+		sleeve.position = -Vector2.ONE * pad
+		sleeve.size = card + Vector2.ONE * pad * 2.0
+		holder.add_child(sleeve)
+		# The card itself, apart from its pocket, so the flip wall can turn
+		# it over in place.
+		var turn := Control.new()
+		turn.name = "Card"
+		turn.size = card
+		turn.pivot_offset = card * 0.5
+		holder.add_child(turn)
+		_lay_card(turn, card_name, _wants_back(), big, native)
+		_quiet(holder)
+		_table.add_child(holder)
+		if mode == Mode.FLIP_WALL:
+			_flippers.append(turn)
+		holder.modulate.a = 0.0
+		holder.scale = Vector2.ONE * 0.9
+		var tween := holder.create_tween().set_parallel()
+		tween.tween_property(holder, "modulate:a", 1.0, 0.25)
+		tween.tween_property(holder, "scale", Vector2.ONE, 0.3) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+	## [param turn]'s card: [param card_name] (or its back) at the pocket's
+	## size, with the foil if it is a rare face.
+	func _lay_card(turn: Control, card_name: String, back: bool, big: bool,
+			native: Vector2) -> void:
+		for old in turn.get_children():
+			turn.remove_child(old)
+			old.queue_free()
+		var face := _face(card_name, big, back)
+		face.size = native
+		face.scale = turn.size / native
+		turn.add_child(face)
+		if not back and _is_rare(card_name):
+			turn.add_child(_foil(turn.size))
+		turn.set_meta("card_name", card_name)
+		turn.set_meta("back", back)
+
+
+	# -------------------------------------------------------------- flip wall --
+
+	func _flip_tick(delta: float) -> void:
+		if _flippers.is_empty() or not _jobs.is_empty():
+			return
+		_flip_left -= delta
+		if _flip_left > 0.0:
+			return
+		_flip_left = FLIP_EVERY
+		flip_one()
+
+
+	## Turn one card that is not already turning: it narrows to an edge,
+	## becomes another card (or its back), and opens again.
+	func flip_one() -> Control:
+		var still := _flippers.filter(func(turn: Control) -> bool:
+			return is_instance_valid(turn) and not turn.get_meta("turning", false))
+		if still.is_empty():
+			return null
+		var turn: Control = still[rng.randi_range(0, still.size() - 1)]
+		turn.set_meta("turning", true)
+		var tween := turn.create_tween()
+		tween.tween_property(turn, "scale:x", 0.0, FLIP_HALF) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tween.tween_callback(_turn_over.bind(turn))
+		tween.tween_property(turn, "scale:x", 1.0, FLIP_HALF) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func() -> void: turn.set_meta("turning", false))
+		return turn
+
+
+	## The far side of a turning card. Fronts only: another card. Backs, or
+	## both: the other side — a back turns up a card, a card turns down.
+	func _turn_over(turn: Control) -> void:
+		var was_back: bool = turn.get_meta("back", false)
+		var back := false if faces == Faces.FRONT else not was_back
+		var card_name: String = turn.get_meta("card_name", pool[0])
+		if not back:
+			card_name = _pick(1)[0]
+		_lay_card(turn, card_name, back, true, CardPreview.SIZE)
+		_quiet(turn)
+
+
+	# -------------------------------------------------------------- card rain --
+
+	## Cards drifting down like leaves, swaying and tumbling, far ones small,
+	## slow and dim behind near ones. The screen starts full, and a card that
+	## falls out of the bottom comes back in at the top as another card.
+	func _deal_rain(view: Vector2) -> void:
+		var f := density_scale(_phys)
+		var near := CardPreview.SIZE * MESS_SCALE * f
+		var count := clampi(ceili(RAIN_COVER * view.x * view.y / (near.x * near.y * 0.55)),
+			RAIN_MIN, RAIN_MAX)
+		var depths: Array[float] = []
+		for i in count:
+			depths.append(rng.randf_range(RAIN_DEPTH.x, RAIN_DEPTH.y))
+		depths.sort()
+		for depth in depths:
+			var y := rng.randf_range(-near.y, view.y)
+			_jobs.append(func() -> void: _put_drop(depth, y, near, view))
+
+
+	func _put_drop(depth: float, y: float, near: Vector2, view: Vector2) -> void:
+		var holder := Control.new()
+		holder.size = CardPreview.SIZE
+		holder.pivot_offset = CardPreview.SIZE * 0.5
+		holder.scale = Vector2.ONE * (near.x / CardPreview.SIZE.x) * depth
+		var shade := lerpf(0.45, 1.0, inverse_lerp(RAIN_DEPTH.x, RAIN_DEPTH.y, depth))
+		holder.modulate = Color(shade, shade, shade, 0.0)
+		var face := CardPreview.new()
+		face.docked = true
+		holder.add_child(face)
+		_quiet(holder)
+		_table.add_child(holder)
+		var drop := {"node": holder, "face": face, "depth": depth, "y": y}
+		_respawn(drop, view, false)
+		drop.y = y
+		_drops.append(drop)
+		holder.create_tween().tween_property(holder, "modulate:a", 1.0, 0.4)
+		_place_drop(drop)
+
+
+	## A drop back at the top as another card, on a new path.
+	func _respawn(drop: Dictionary, view: Vector2, at_top: bool) -> void:
+		var height: float = CardPreview.SIZE.y * (drop.node as Control).scale.y
+		drop.x = rng.randf_range(-0.05, 1.05) * view.x
+		if at_top:
+			drop.y = -height
+		drop.sway = rng.randf_range(0.02, 0.06) * view.x
+		drop.rate = rng.randf_range(0.3, 0.8)
+		drop.phase = rng.randf() * TAU
+		drop.tilt = rng.randf_range(-0.3, 0.3)
+		drop.speed = view.y / RAIN_FALL * float(drop.depth) * rng.randf_range(0.85, 1.15)
+		_dress(drop.face, _pick(1)[0], _wants_back())
+
+
+	func _rain_tick(delta: float) -> void:
+		_rain_time += delta
+		for drop in _drops:
+			drop.y = float(drop.y) + float(drop.speed) * delta
+			var size_now: Vector2 = CardPreview.SIZE * (drop.node as Control).scale
+			if float(drop.y) - size_now.y > _view.y:
+				_respawn(drop, _view, true)
+			_place_drop(drop)
+
+
+	func _place_drop(drop: Dictionary) -> void:
+		var holder: Control = drop.node
+		var swing := sin(_rain_time * float(drop.rate) * TAU + float(drop.phase))
+		var centre := Vector2(float(drop.x) + swing * float(drop.sway), float(drop.y))
+		holder.position = centre - CardPreview.SIZE * 0.5
+		holder.rotation = float(drop.tilt) + swing * 0.35
+
+
+	static func _pocket_style(f: float) -> StyleBoxFlat:
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color(1, 1, 1, 0.05)
+		box.border_color = Color(1, 1, 1, 0.10)
+		box.set_border_width_all(1)
+		box.set_corner_radius_all(int(round(6.0 * f)))
+		box.shadow_color = Color(0, 0, 0, 0.35)
+		box.shadow_size = int(round(4.0 * f))
+		return box
+
+
+	## A rare card's foil: a band of rainbow light that sweeps across it now
+	## and then, each card on its own clock.
+	func _foil(card: Vector2) -> ColorRect:
+		if _foil_shader == null:
+			_foil_shader = Shader.new()
+			_foil_shader.code = """
+	shader_type canvas_item;
+	render_mode blend_add;
+	uniform float period = 9.0;
+	uniform float offset = 0.0;
+	void fragment() {
+		float t = mod(TIME + offset, period) / period * 4.0 - 1.0;
+		float d = UV.x * 0.6 + UV.y * 0.4 - t;
+		float band = smoothstep(0.12, 0.0, abs(d));
+		vec3 hue = 0.6 + 0.4 * cos(6.2831 * (UV.y * 1.2 + t + vec3(0.0, 0.33, 0.67)));
+		COLOR = vec4(hue, band * 0.45);
+	}
+	"""
+		var glint := ColorRect.new()
+		glint.name = "Foil"
+		glint.size = card
+		var shading := ShaderMaterial.new()
+		shading.shader = _foil_shader
+		shading.set_shader_parameter("period", FOIL_PERIOD)
+		shading.set_shader_parameter("offset", rng.randf() * FOIL_PERIOD)
+		glint.material = shading
+		return glint
+
+
+	# ------------------------------------------------------------ mess table --
+
+	## Cards dropped all over the table at every angle. The places are a
+	## shuffled, jittered grid over a little more than the screen, so the
+	## table is covered without holes and without a pattern.
+	func _deal_mess(view: Vector2) -> void:
+		var card := CardPreview.SIZE * MESS_SCALE * density_scale(_phys)
+		var count := mess_count(view, card)
+		var span := view * 1.1
+		var cols := maxi(1, int(ceil(sqrt(count * span.x / span.y))))
+		var rows := maxi(1, int(ceil(float(count) / cols)))
+		var cell := span / Vector2(cols, rows)
+		var cells: Array[int] = []
+		for i in cols * rows:
+			cells.append(i)
+		for i in range(cells.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var keep := cells[i]
+			cells[i] = cells[j]
+			cells[j] = keep
+		var names := _pick(cells.size())
+		var shadow := _shadow_style(density_scale(_phys))
+		for i in cells.size():
+			var at := Vector2(cells[i] % cols, floori(float(cells[i]) / cols)) * cell \
+				+ Vector2(rng.randf(), rng.randf()) * cell - view * 0.05
+			var turn := rng.randf() * TAU
+			var card_name := names[i]
+			_jobs.append(func() -> void:
+				_put_mess_card(card_name, at, turn, card, shadow))
+
+
+	func _put_mess_card(card_name: String, centre: Vector2, turn: float,
+			card: Vector2, shadow: StyleBox) -> void:
+		var holder := Control.new()
+		holder.size = card
+		holder.pivot_offset = card * 0.5
+		holder.position = centre - card * 0.5
+		holder.rotation = turn
+		var shade := Panel.new()
+		shade.add_theme_stylebox_override("panel", shadow)
+		shade.size = card
+		shade.position = Vector2(4, 6) * card.x / 126.0
+		holder.add_child(shade)
+		var face := _face(card_name, true, _wants_back())
+		face.scale = card / CardPreview.SIZE
+		holder.add_child(face)
+		_quiet(holder)
+		_table.add_child(holder)
+		holder.modulate.a = 0.0
+		holder.scale = Vector2.ONE * 1.3
+		var tween := holder.create_tween().set_parallel()
+		tween.tween_property(holder, "modulate:a", 1.0, 0.18)
+		tween.tween_property(holder, "scale", Vector2.ONE, 0.22) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+
+	static func _shadow_style(f: float) -> StyleBoxFlat:
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color(0, 0, 0, 0.4)
+		box.set_corner_radius_all(int(round(8.0 * f)))
+		return box
+
+
+	# ------------------------------------------------------- solitaire's end --
+
+	## THE TRAIL is a picture that is never wiped: a [SubViewport] that clears
+	## once and then keeps every frame's drawing, so the flying card only has
+	## to be drawn where it is now and the whole history stays on the glass.
+	## It renders at the window's own resolution, so the trail is as sharp as
+	## the cards over it.
+	func _deal_solitaire(view: Vector2) -> void:
+		var f := density_scale(_phys)
+		_sol_card = CardPreview.SIZE * SOL_SCALE * f
+		_unit = view.y / 480.0
+		var gap := 12.0 * f
+		var margin := 16.0 * f
+		_pile_spots.clear()
+		for i in SOL_PILES:
+			_pile_spots.append(Vector2(
+				view.x - margin - (SOL_PILES - i) * (_sol_card.x + gap) + gap, margin))
+		var names := _pick(SOL_PILES * SOL_PILE_CARDS)
+		for i in SOL_PILES:
+			var pile: Array = []
+			for k in SOL_PILE_CARDS:
+				pile.append({"name": names[i * SOL_PILE_CARDS + k], "back": _wants_back()})
+			_piles.append(pile)
+
+		var sharp := maxf(_phys, 1.0)
+		_trail = SubViewport.new()
+		_trail.name = "Trail"
+		_trail.transparent_bg = true
+		_trail.disable_3d = true
+		_trail.gui_disable_input = true
+		_trail.size = Vector2i((view * sharp).round())
+		_trail.size_2d_override = Vector2i(view.round())
+		_trail.size_2d_override_stretch = true
+		# Letters drawn at the size they end up on the glass: the stamps are
+		# whole cards at a third of their size, and a glyph cut at full size
+		# and shrunk that far breaks up.
+		_trail.oversampling_override = sharp * SOL_SCALE * f
+		_trail.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		_trail.render_target_clear_mode = SubViewport.CLEAR_MODE_ONCE
+		_table.add_child(_trail)
+		# The empty foundations are drawn on the table, so the trails pass
+		# over them.
+		var slot_style := StyleBoxFlat.new()
+		slot_style.bg_color = Color(0, 0, 0, 0)
+		slot_style.border_color = Color(0.0, 0.32, 0.0)
+		slot_style.set_border_width_all(maxi(1, int(round(2.0 * f))))
+		slot_style.set_corner_radius_all(int(round(6.0 * f)))
+		for i in SOL_PILES:
+			var slot := Panel.new()
+			slot.add_theme_stylebox_override("panel", slot_style)
+			slot.position = _pile_spots[i]
+			slot.size = _sol_card
+			_table.add_child(slot)
+		for i in STAMPS:
+			var stamp := CardPreview.new()
+			stamp.docked = true
+			stamp.scale = Vector2.ONE * SOL_SCALE * f
+			stamp.visible = false
+			_trail.add_child(stamp)
+			_stamps.append(stamp)
+		var shown := TextureRect.new()
+		shown.name = "TrailView"
+		shown.texture = _trail.get_texture()
+		shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		shown.stretch_mode = TextureRect.STRETCH_SCALE
+		shown.size = view
+		shown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_table.add_child(shown)
+
+		for i in SOL_PILES:
+			var face := CardPreview.new()
+			face.docked = true
+			face.position = _pile_spots[i]
+			face.scale = Vector2.ONE * SOL_SCALE * f
+			_table.add_child(face)
+			_pile_faces.append(face)
+			_show_pile(i)
+		_quiet(_table)
+
+
+	func _show_pile(i: int) -> void:
+		var face := _pile_faces[i]
+		if _piles[i].is_empty():
+			face.visible = false
+			return
+		var top: Dictionary = _piles[i].back()
+		_dress(face, String(top.name), bool(top.back))
+
+
+	func _solitaire_tick(delta: float) -> void:
+		# Never more than a few steps to catch up after a stall: a long frame
+		# would otherwise fire a burst of steps and leave a gap in the trail.
+		_acc = minf(_acc + delta, STEP * (STAMPS + 0.5))
+		var spots: Array[Vector2] = []
+		while _acc >= STEP:
+			_acc -= STEP
+			if not _flying and not _launch():
+				_rest += STEP
+				if _rest >= SOL_REST:
+					regenerate.call_deferred()
+					return
+				continue
+			var next := fly(_pos, _vel, _unit, _view.y - _sol_card.y)
+			_pos = next[0]
+			_vel = next[1]
+			spots.append(_pos)
+			if _pos.x + _sol_card.x < 0.0 or _pos.x > _view.x:
+				# Gone. The next card waits for the next frame, so the stamps
+				# drawn this frame are all of this one.
+				_flying = false
+				break
+		_place_stamps(spots)
+
+
+	## The next card off the foundations, taking them in turn.
+	func _launch() -> bool:
+		for k in SOL_PILES:
+			var i := (_next_pile + k) % SOL_PILES
+			if _piles[i].is_empty():
+				continue
+			var card: Dictionary = _piles[i].pop_back()
+			_next_pile = (i + 1) % SOL_PILES
+			_pos = _pile_spots[i]
+			var direction := -1.0 if rng.randf() < LEFTWARD else 1.0
+			_vel = Vector2(direction * rng.randf_range(SPEED_X.x, SPEED_X.y),
+				-rng.randf() * LIFT) * _unit
+			for stamp in _stamps:
+				_dress(stamp, String(card.name), bool(card.back))
+				stamp.visible = false
+			_show_pile(i)
+			_flying = true
+			return true
+		return false
+
+
+	func _place_stamps(spots: Array[Vector2]) -> void:
+		var first := maxi(0, spots.size() - STAMPS)
+		for k in _stamps.size():
+			var index := first + k
+			_stamps[k].visible = index < spots.size()
+			if _stamps[k].visible:
+				_stamps[k].position = spots[index]
+
+
+	## How many cards are still on the foundations (tests).
+	func cards_left() -> int:
+		var total := 0
+		for pile in _piles:
+			total += pile.size()
+		return total
+
+
+	# ------------------------------------------------------------- per frame --
+
+	func _process(delta: float) -> void:
+		if _note.visible:
+			_note_left -= delta
+			_note.modulate.a = clampf(_note_left, 0.0, 1.0)
+			_note.visible = _note_left > 0.0
+		if _resize_due >= 0.0:
+			_resize_due -= delta
+			if _resize_due < 0.0:
+				regenerate()
+		if paused:
+			return
+		_run_jobs()
+		if _trail != null:
+			_solitaire_tick(delta)
+		elif mode == Mode.FLIP_WALL:
+			_flip_tick(delta)
+		elif mode == Mode.CARD_RAIN:
+			_rain_tick(delta)
+
+
+	func _run_jobs() -> void:
+		var until := Time.get_ticks_msec() + BUILD_BUDGET_MS
+		while not _jobs.is_empty():
+			var job: Callable = _jobs.pop_front()
+			job.call()
+			if Time.get_ticks_msec() >= until:
+				break
+
+
+	## Cards still to be put down (tests).
+	func cards_to_deal() -> int:
+		return _jobs.size()
+
+
+	func _on_resized() -> void:
+		# A drag of the window edge sends a stream of these; deal once it stops.
+		_resize_due = 0.3
+
+
+	func set_paused(on: bool) -> void:
+		paused = on
+		if _table != null:
+			_table.process_mode = Node.PROCESS_MODE_DISABLED if on \
+				else Node.PROCESS_MODE_INHERIT
+		if on:
+			say("Paused")
+		elif _note.text == "Paused":
+			_note.visible = false
+
+
+	# ----------------------------------------------------------------- input --
+
+	## Every key and button is the show's while it is up: nothing reaches the
+	## screens under it.
+	func _input(event: InputEvent) -> void:
+		if not is_visible_in_tree() or _leaving:
+			return
+		var key := event as InputEventKey
+		var mouse := event as InputEventMouseButton
+		var pad := event as InputEventJoypadButton
+		var touch := event as InputEventScreenTouch
+		if key == null and mouse == null and pad == null and touch == null:
+			return
+		get_viewport().set_input_as_handled()
+		if not event.is_pressed() or event.is_echo():
+			return
+		if Time.get_ticks_msec() - _opened_ms < SETTLE_MS:
+			return
+		if key != null:
+			if Controls.pressed(event, "duel_screenshot"):
+				save_picture()
+			elif key.keycode == KEY_R:
+				regenerate()
+			elif key.keycode == KEY_SPACE or key.keycode == KEY_P:
+				set_paused(not paused)
+			elif key.keycode == KEY_ESCAPE or event.is_action("ui_cancel"):
+				leave()
+		elif mouse != null:
+			if mouse.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT,
+					MOUSE_BUTTON_MIDDLE]:
+				leave()
+		elif pad != null:
+			if pad.button_index in [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_BACK]:
+				leave()
+			elif pad.button_index in [JOY_BUTTON_Y, JOY_BUTTON_X]:
+				regenerate()
+			elif pad.button_index == JOY_BUTTON_START:
+				set_paused(not paused)
+		else:
+			leave()
+
+
+	## The screen as it is now, at the window's resolution, into the game's
+	## folder beside the duel's screenshots.
+	func save_picture() -> void:
+		var shot := get_viewport().get_texture().get_image()
+		var path := "user://screenshot_%d.png" % Time.get_ticks_msec()
+		var err := ERR_INVALID_DATA
+		if shot != null and not shot.is_empty():
+			err = shot.save_png(path)
+		say("Saved: %s" % ProjectSettings.globalize_path(path) if err == OK
+			else "The picture could not be saved (%s)." % error_string(err))
+
+
+	func say(text: String) -> void:
+		_note.text = text
+		_note.reset_size()
+		_note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM,
+			Control.PRESET_MODE_KEEP_SIZE, 30)
+		_note_left = NOTE_SECONDS
+		_note.modulate.a = 1.0
+		_note.visible = true
+
+
+	func leave() -> void:
+		if _leaving:
+			return
+		_leaving = true
+		left.emit()
+		queue_free()
