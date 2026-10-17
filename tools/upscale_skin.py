@@ -51,6 +51,25 @@ GitHub release, checked against ENGINE_SHA256 and kept in
 Pictures are read and written with Pillow (`python3-pil`, or `pip install
 pillow`), the one thing this tool needs that the other skin tools do not.
 
+TWO KNOWN LOOKS, LEFT AS THEY ARE (examined 2026-10-17; the owner: *"No
+lets leave as is and document for the future"*). Fifteen pictures carry
+their look in single 1997 pixels, which is the scale the anime model
+redraws and the colour fix's 1 px blur does not reach:
+  * the scanline duelist faces (`duelist_face_*`): one-pixel dark rows
+    the model inks as near-black lines — row brightness 0.38..0.54 in
+    1997, 0.17..0.66 shipped (contrast 0.16 -> 0.50). A stripe every two
+    or three pixels already averages to the right colour, so the fix has
+    nothing to correct;
+  * the dithered grounds (`duel_mana_*`, `duel_pattern_*`): single red
+    and green dots, 17% of the pixels, that the model takes for noise
+    (4.6% left after the fix) and whose cluster edges it inks as strokes,
+    so the carved symbols stand alone and read as embossed stone.
+Measured on `duel_mana_green` and `duelist_face_green`. The way out, if
+it is ever wanted: give those fifteen keys another method — exact pixel
+doubling (the 1997 look, crisp, no second engine; the one recommended)
+or waifu2x CUNet (dots kept, 18.7%; stripes 0.34) — rather than a finer
+blur, which would bring the dither dots back on every picture.
+
 LEFT ALONE: the coin-toss movie sheets (2240x2160 already; twice that is
 past the 4096-pixel texture limit of older GPUs), the sounds, the fonts,
 the card pictures, and any `@2x` file already there.

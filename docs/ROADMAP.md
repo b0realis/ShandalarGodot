@@ -18897,6 +18897,20 @@ and 2x) and we will add it later to releases."*
   pick to 0.34 of 255 on average. Not a release file yet, and the game
   does not read `@2x` yet: the loader (report the 1997 size, about 70
   pixel cuts in 19 scripts to scale) is the next step.
+- **Two known looks, left as they are** (examined after 0.50.29; the
+  owner: *"No lets leave as is and document for the future"*). The
+  scanline duelist faces come out with hard lines and the dithered mana
+  and pattern grounds look embossed. Both pictures carry their look in
+  single 1997 pixels: the anime model inks the faces' one-pixel dark rows
+  near-black (row contrast 0.16 in 1997, 0.50 shipped) and takes the
+  grounds' single red and green dots for noise (17% of the pixels in
+  1997, 4.6% shipped), inking the edges of where they clustered. The
+  colour fix's 1 px blur is deliberately too coarse to reach either: a
+  finer one would bring the dither dots back everywhere. If it is ever
+  wanted, those fifteen keys get another method in `upscale_skin.py` —
+  exact pixel doubling (recommended: the 1997 look, crisp, no second
+  engine) or waifu2x CUNet (dots kept, stripes 0.34). The numbers and
+  both options are in the tool's docstring, TWO KNOWN LOOKS.
 - Tests: `tools/test_upscale_skin.py` (22, with a stand-in engine);
   `tools/test_tool_banner.py` and `tools/test_package_release.py` with
   the tool listed.
