@@ -184,6 +184,20 @@ python3 tools/mtg_assets.py --check /path/to/manalink --manalink
 python3 tools/mtg_assets.py --install /path/to/manalink --manalink
 ```
 
+**A 2x skin for big screens.** `tools/upscale_skin.py` makes a copy of
+every skin picture at twice the size, as `<name>@2x.png`, into
+`original_skin_realesrgan-anime_2x.zip`. It runs Real-ESRGAN's anime
+model, which is free and open source, then takes the colours back from the
+1997 picture, so the art gets sharper without changing its colours. On
+Linux the tool fetches the upscaler once; it needs Pillow and a Vulkan GPU
+driver. The 1997 skin is still needed beside the copy, which leaves out the
+sounds, fonts and coin-toss movie. The game does not read the 2x copies
+yet:
+
+```sh
+python3 tools/upscale_skin.py --skin original_skin.zip
+```
+
 See the [player-files guide](docs/player-files.md) for pack locations and the
 [skin catalogue](docs/skin-catalogue.txt) for creating your own skin; the
 [same catalogue as a table](docs/skin-catalogue.csv) lists every file of

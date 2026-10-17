@@ -72,6 +72,10 @@ The older `build_release.sh --package` Linux/web paths use the same staging
 helper, so they also carry the full construction toolkit and README instructions.
 Only `-with-skin` includes `skin/original_skin.zip`; no package carries card
 pictures. Validate the supplied skin with `tools/skin_catalogue.py --check`.
+The 2x skin is built from the same 1997 skin, apart from the packages:
+`python3 tools/upscale_skin.py --skin assets/original --zip
+../shandalar-build/pkg/original_skin_realesrgan-anime_2x.zip`. It is not
+a release file yet.
 
 The seven-target local matrix consists of fourteen game ZIPs, the same
 `original_skin.zip` as a separate download, and `SHA256SUMS` covering those

@@ -18811,6 +18811,52 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — The 2x skin (0.50.28)
+
+The owner: *"can the game use upscaled assets on modern screens if we
+generate them?"*, then a prototype outside the repository comparing the
+free Linux upscalers on the whole skin, and: *"lets keep this default an
+lets supply this tool. And lets build an upscaled skin (add a tool suffix
+and 2x) and we will add it later to releases."*
+
+- **The comparison.** Eleven variants on thirteen test pictures, then the
+  survivors on all 168: Lanczos, xBRZ, Real-ESRGAN `x4plus`,
+  `x4plus-anime` and `animevideo`, waifu2x CUNet (denoise 0, 2, 3), photo
+  and anime-style, and the game-texture model 2xAoMR_mosr. Real-CUGAN
+  (its weights carry no licence) and upscayl (the same engine; its
+  best-known models are non-commercial) were left out. The art is
+  256-colour and dithered: waifu2x keeps the dither and sharpens it,
+  `x4plus` and `x4plus-anime` remove it, `animevideo` turns it into
+  worms. The owner chose `x4plus-anime` for a first clean look.
+- **Its colour push, taken back.** The anime model saturates: the red
+  duel picture +26 points, 3x `x4plus`'s colour drift. `colour_fix` keeps
+  the model's detail and takes the broad colour from the 1997 picture,
+  `out = model + blur(1997) - blur(model)`, the blur tuned at 1 px of 1997
+  size (0.75 to 4 tried; at 1 the stone's mottling returns without the
+  dither dots). Over the skin: drift 3.3 -> 0.9, saturation +4.2 -> 0.0,
+  measured with each result shrunk back and both lightly blurred.
+- **`tools/upscale_skin.py`.** Writes `<key>@2x.png` for the 98 skin
+  pictures and the 70 portraits, into
+  `original_skin_realesrgan-anime_2x.zip` (the method and the scale in the
+  name) or a folder; the coin-toss sheets (past a 4096 texture limit at
+  2x), sounds, fonts and card art stay the 1997 skin's. Hidden pixels are
+  filled from their neighbours (no dark fringe), borders padded from the
+  edge and the four repeated textures with a wrapped copy (no seam), the
+  transparency scaled here and kept on/off. The engine, Real-ESRGAN
+  ncnn-vulkan 20220424, is fetched once into `~/.cache/shandalar/`,
+  checked against its SHA-256. It ships in every package's `tools/`;
+  it needs Pillow and a Vulkan driver.
+- **The first 2x skin**, built from the developer's 1997 skin (no Manalink
+  label): `../shandalar-build/pkg/original_skin_realesrgan-anime_2x.zip`,
+  168 pictures, 62 MB, in 50 s on an RTX 4060; `check_skin` passes, every
+  picture is exactly 2x with on/off alpha, and it matches the prototype's
+  pick to 0.34 of 255 on average. Not a release file yet, and the game
+  does not read `@2x` yet: the loader (report the 1997 size, about 70
+  pixel cuts in 19 scripts to scale) is the next step.
+- Tests: `tools/test_upscale_skin.py` (22, with a stand-in engine);
+  `tools/test_tool_banner.py` and `tools/test_package_release.py` with
+  the tool listed.
+
 ## 2026-10-17 — The asset checklist and the Manalink door (0.50.27)
 
 The owner: *"lets have a list of needed assets and check what is missing.

@@ -50,7 +50,8 @@ SGR = re.compile("\x1b\\[[0-9;]*m")
 ## its wordmark. The test suite imports them, so a tool that stops being
 ## importable — or loses its banner — fails here.
 PY_TOOLS = ["build_card_packs", "fetch_card_art", "fetch_cards",
-            "gen_cards", "import_original", "mtg_assets", "skin_catalogue"]
+            "gen_cards", "import_original", "mtg_assets", "skin_catalogue",
+            "upscale_skin"]
 
 ## Every shell tool, relative to the repo root.
 SH_TOOLS = ["build_release.sh", "deck_convert.sh", "duel_soak.sh",

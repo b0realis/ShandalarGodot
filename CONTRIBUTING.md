@@ -169,7 +169,13 @@ or their own named project; changing XDG alone does not protect player data.
   only skin in releases"*): `import_original.py --manalink` is a backup
   in the tool for a player's own folder, and the build refuses a skin
   it wrote into — its label, `from_manalink.txt`, fails `skin_zip` and
-  `package_release.check_skin` alike. `docs/` carries a `.gdignore`:
+  `package_release.check_skin` alike. THE 2x SKIN is a copy, never a
+  replacement: `tools/upscale_skin.py` (Real-ESRGAN's anime model, its
+  colours taken back from 1997 — the owner's pick of 2026-10-17) writes
+  `<key>@2x.png` beside the 1997 key, into
+  `original_skin_realesrgan-anime_2x.zip`, and leaves the coin-toss
+  sheets, sounds and fonts to the 1997 skin; a Manalink label rides into
+  the copy and is refused the same way. `docs/` carries a `.gdignore`:
   Godot imports any `.csv` as a translation table, and
   `docs/skin-catalogue.csv` is a catalogue, not one.
   The build is the LOCAL step and the GitHub release is a separate one:

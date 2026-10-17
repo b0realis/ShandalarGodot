@@ -76,6 +76,20 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The 2x skin (2026-10-17)
+
+- `tools/upscale_skin.py` (new): a player's 1997 skin (a folder or a skin
+  zip) to `<key>@2x.png` copies, in `original_skin_realesrgan-anime_2x.zip`
+  or a folder — Real-ESRGAN ncnn-vulkan's `realesrgan-x4plus-anime` at 4x,
+  brought down to 2x, its colours taken back from 1997 (`colour_fix`,
+  `COLOUR_BLUR`); `bleed`, `pad`/`pad_size` (`TILED` wrapped),
+  `alpha_up`; `fetch_engine` (pinned URL and SHA-256, into
+  `~/.cache/shandalar/`). See its tree row.
+- `tools/package_release.py`: `TOOLS` ships it in every package's
+  `tools/`; `tools/test_tool_banner.py`: in `PY_TOOLS`.
+- Tests: `tools/test_upscale_skin.py` (new); `tools/test_tracked_tree.py`'s
+  `ALLOWED_EMAIL` reads `name@2x.png` as a file name, not an address.
+
 ## The asset checklist and the Manalink door (2026-10-17)
 
 - `tools/import_original.py`: `--check` (THE CHECKLIST — every asset the
@@ -2613,6 +2627,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.28.md`: the 2x skin tool, carrying the 0.50.27 …
+  0.50.20 notes below it.
 - `docs/releases/0.50.27.md`: the asset checklist, the Manalink backup
   and the skin catalogue as a table, carrying the 0.50.26 … 0.50.20 notes
   below them.
@@ -6254,6 +6270,33 @@ shandalar/
 │   │                          zip (outside-skin/ refused, .import
 │   │                          sidecars ignored, missing + unknown listed);
 │   │                          the committed table, row for row
+│   ├── upscale_skin.py      THE 2x SKIN (2026-10-17) — a player's 1997
+│   │                          skin (folder or skin zip) to <key>@2x.png
+│   │                          copies, in original_skin_realesrgan-anime_
+│   │                          2x.zip or --out a folder (beside the 1x).
+│   │                          Real-ESRGAN ncnn-vulkan's realesrgan-x4plus-
+│   │                          anime at 4x, brought down to 2x, then
+│   │                          colour_fix: model + blur(1997) - blur(model)
+│   │                          at COLOUR_BLUR (1 px at 1997 size), the
+│   │                          owner's pick of eleven upscalers. Before
+│   │                          the model: bleed (hidden pixels from their
+│   │                          neighbours), pad (PAD from the edge; TILED
+│   │                          wrapped with a whole copy); after: the
+│   │                          on/off alpha by alpha_up. Leaves the
+│   │                          coin-toss sheets, sounds, fonts, card art
+│   │                          and @2x files alone; a Manalink label rides
+│   │                          into the copy. fetch_engine: the pinned
+│   │                          Linux release by URL and SHA-256, only
+│   │                          ENGINE_MEMBERS unpacked, into
+│   │                          ~/.cache/shandalar/; --engine names another.
+│   │                          Needs Pillow — the one skin tool that does
+│   ├── test_upscale_skin.py  unittest with a stand-in engine (4x, red
+│   │                          pushed +40): what is upscaled and left
+│   │                          alone, wrap and edge padding, the bleed,
+│   │                          the colour fix, on/off alpha, the zip (and
+│   │                          check_skin), a zip input, the same bytes
+│   │                          twice, --out beside the 1x, the label
+│   │                          refused, a failing engine, the checksum
 │   ├── import_original.py   1997 skin importer: copies original art/fonts
 │   │                          from the USER'S OWN game copy into
 │   │                          assets/original/ (gitignored) per its

@@ -51,7 +51,10 @@ FORBIDDEN_TOOLS = re.compile(
 ## An address, anywhere. The project's own author identity is a GitHub
 ## noreply, which is the one form that is not private.
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-ALLOWED_EMAIL = re.compile(r"(?i)@users\.noreply\.github\.com$")
+## A picture's scale suffix is a file name, not an address:
+## `title_background@2x.png`, the 2x skin's naming (tools/upscale_skin.py).
+ALLOWED_EMAIL = re.compile(r"(?i)@users\.noreply\.github\.com$"
+                           r"|^[^@]+@[0-9]+x\.(?:png|jpe?g|webp)$")
 
 
 def tracked_files() -> list[str]:

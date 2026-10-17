@@ -98,6 +98,8 @@ exit 2
 
 TOOLS = ("mtg_assets.py", "import_original.py", "import_manalink.py",
          "fetch_card_art.py",
+         # The 2x skin (2026-10-17): a player's own skin, twice the size.
+         "upscale_skin.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
          "shandalar_mcp.py",
          # The decision-model door (2026-10-04): it imports the MCP server's

@@ -604,6 +604,13 @@ everywhere the clean fallback skin would otherwise show. Nothing in that
 pipeline puts an original asset into version control, and the game is
 complete and playable without it.
 
+The 2x copy of that skin is made the same way, from it:
+`tools/upscale_skin.py` writes `<key>@2x.png` with Real-ESRGAN
+ncnn-vulkan (MIT) and its `realesrgan-x4plus-anime` model (BSD-3, Xintao
+Wang et al.). The tool fetches the program and the model from that
+project's GitHub release at run time and checks them against a pinned
+checksum. Neither is in this repository, and neither is in a package.
+
 Card names and rules text are Wizards of the Coast's; card data comes from
 Scryfall's public API and is used the way every fan tool uses it. Card
 images are downloaded per-player, never redistributed.
