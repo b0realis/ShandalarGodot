@@ -169,19 +169,25 @@ or their own named project; changing XDG alone does not protect player data.
   only skin in releases"*): `import_original.py --manalink` is a backup
   in the tool for a player's own folder, and the build refuses a skin
   it wrote into — its label, `from_manalink.txt`, fails `skin_zip` and
-  `package_release.check_skin` alike. THE 2x SKIN is a copy, never a
-  replacement: `tools/upscale_skin.py` (Real-ESRGAN's anime model, its
-  colours taken back from 1997 — the owner's pick of 2026-10-17) writes
-  `<key>@2x.png` beside the 1997 key, into
-  `original_skin_realesrgan-anime_2x.zip`, and leaves the coin-toss
-  sheets, sounds and fonts to the 1997 skin; a Manalink label rides into
-  the copy and is refused the same way. The game wears a copy only beside
-  its own picture, as a texture whose size is overridden to the 1997 one
-  (`GameSkin.picture`), so whatever DRAWS it stays in 1997 coordinates;
-  code that reads a skin picture's PIXELS goes through `GameSkin.cut`,
-  `texture_of`, `scale_of`, and decides a colour key or a measurement on
-  `GameSkin.original` (the 1997 pixels), carried up by `lift_alpha` —
-  never `get_image().get_region()` at 1997 coordinates. `docs/` carries a `.gdignore`:
+  `package_release.check_skin` alike. THE 2x SKIN IS A SKIN (the owner,
+  2026-10-17: *"A skin is a skin and gets applied after game reset. No
+  switches."*): `tools/upscale_skin.py` (Real-ESRGAN's anime model, its
+  colours taken back from 1997 — the owner's pick of 2026-10-17) writes a
+  whole skin, `original_skin_realesrgan-anime_2x.zip` — every 1997 file,
+  each picture's `<key>@2x.png` beside it, and a `catalogue.txt` naming
+  them — chosen like any skin; a Manalink label rides into it and is
+  refused the same way. No switch, no second zip worn beside the skin:
+  ONE skin zip is worn (`SkinPack`, ONE SKIN), and the loose folders only
+  when none is (`GameSkin.zip_worn`). A slot's file is the catalogue's
+  line, else its `@2x` sibling, else its own name (`GameSkin._in_place`);
+  a picture at 2-4x its slot's size (`GameSkin.SIZES`, held to
+  `docs/skin-catalogue.csv` by `tools/test_skin_catalogue.py`) is a
+  texture whose size is overridden to the slot's (`GameSkin.picture`), so
+  whatever DRAWS it stays in 1997 coordinates; code that reads a skin
+  picture's PIXELS goes through `GameSkin.cut`, `texture_of`, `scale_of`,
+  and decides a colour key or a measurement on `GameSkin.original` (the
+  slot's 1x file, else the picture shrunk back), carried up by
+  `lift_alpha` — never `get_image().get_region()` at 1997 coordinates. `docs/` carries a `.gdignore`:
   Godot imports any `.csv` as a translation table, and
   `docs/skin-catalogue.csv` is a catalogue, not one.
   The build is the LOCAL step and the GitHub release is a separate one:

@@ -184,22 +184,25 @@ python3 tools/mtg_assets.py --check /path/to/manalink --manalink
 python3 tools/mtg_assets.py --install /path/to/manalink --manalink
 ```
 
-**A 2x skin for big screens.** `tools/upscale_skin.py` makes a copy of
-every skin picture at twice the size, as `<name>@2x.png`, into
-`original_skin_realesrgan-anime_2x.zip`. It runs Real-ESRGAN's anime
-model, which is free and open source, then takes the colours back from the
-1997 picture, so the art gets sharper without changing its colours. On
-Linux the tool fetches the upscaler once; it needs Pillow and a Vulkan GPU
-driver. The 1997 skin is still needed beside the copy, which leaves out the
-sounds, fonts and coin-toss movie. The game wears the copies at the same
-size, so the layout doesn't change and every picture is sharper on a big
-screen. Put the zip beside the game as
-`skin/original_skin_realesrgan-anime_2x.zip`, choose it in Options → Skin,
-or drop it on the window; Options → Skin → **Wear the 2x pictures**
-switches the copies off:
+**A hi-res skin for big screens.** `tools/upscale_skin.py` makes a second
+skin out of your 1997 one, `original_skin_realesrgan-anime_2x.zip`: every
+1997 file, and beside each picture the same picture at twice the size,
+`<name>@2x.png`. It runs Real-ESRGAN's anime model, which is free and open
+source, then takes the colours back from the 1997 picture, so the art gets
+sharper without changing its colours. On Linux the tool fetches the
+upscaler once; it needs Pillow and a Vulkan GPU driver. The hi-res skin is
+a skin like the 1997 one: choose it in Options → Skin or drop it on the
+window, and it is worn from the next start. The game draws each 2x picture
+at the 1997 size, so the layout doesn't change and every picture is sharper
+on a big screen; choose the 1997 skin again to go back. Its `catalogue.txt`
+says which file the game wears in each place, so mixing is one line —
+`duelist_face_red.png = duelist_face_red.png` puts the 1997 picture back
+there. A zip of 2x copies made by 0.50.28 is reused rather than upscaled
+again with `--reuse`:
 
 ```sh
 python3 tools/upscale_skin.py --skin original_skin.zip
+python3 tools/upscale_skin.py --skin original_skin.zip --reuse old_2x.zip
 ```
 
 See the [player-files guide](docs/player-files.md) for pack locations and the

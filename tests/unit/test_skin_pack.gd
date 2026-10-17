@@ -39,12 +39,14 @@ const KEYS: Array[String] = [GamePaths.KEY_CARDPACKS, GamePaths.KEY_SKIN_ZIP,
 	GamePaths.KEY_USE_SKIN_FOLDER, GamePaths.KEY_SKIN_FOLDER]
 
 var _was_mounted := false
+var _was_worn := false
 var _aside: Array[String] = []
 var _saved: Dictionary = {}
 
 
 func before_each() -> void:
 	_was_mounted = GameSkin.pack_mounted
+	_was_worn = GameSkin.zip_worn
 	DirAccess.make_dir_recursive_absolute(SCRATCH)
 	DirAccess.make_dir_recursive_absolute(ASIDE)
 	DirAccess.make_dir_recursive_absolute(PACKS)
@@ -62,6 +64,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameSkin.pack_mounted = _was_mounted
+	GameSkin.zip_worn = _was_worn
 	GameSkin.clear_caches()
 	PortraitLibrary.refresh()
 	MusicLibrary.refresh()

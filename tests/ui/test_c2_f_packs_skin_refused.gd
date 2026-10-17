@@ -94,8 +94,10 @@ func test_a_zip_worn_after_all_is_no_longer_refused() -> void:
 	packer.close_file()
 	packer.close()
 	var was := GameSkin.pack_mounted
+	var worn := GameSkin.zip_worn
 	assert_true(SkinPack.mount(ZIP, false), "the repaired zip mounts")
 	GameSkin.pack_mounted = was
+	GameSkin.zip_worn = worn
 	assert_false(SkinPack.refused.has(ZIP), "and is no longer said to be refused")
 	assert_false("\n".join(SkinPack.refusal_lines()).contains(GamePaths.shown(ZIP)))
 	SkinPack.mounted.erase(ZIP)

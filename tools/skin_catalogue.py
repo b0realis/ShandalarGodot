@@ -36,6 +36,7 @@ import argparse
 import csv
 import io
 import json
+import re
 import struct
 import sys
 import textwrap
@@ -83,7 +84,9 @@ EPILOG = """\
 
 The catalogue is GENERATED from import_original.py's MANIFEST and
 measured off an imported skin, so it cannot drift from the code; a key
-with no note in this script makes the run refuse to write. Every run that
+with no note in this script makes the run refuse to write. --check
+reads a skin's own catalogue.txt the way the game does, and says how
+many of its pictures are worn at 1x, 2x, 3x or 4x their 1997 size. Every run that
 writes the text writes the same catalogue as a table beside it, one row
 per file of the skin zip (--out X.txt writes X.csv too).
 --stdout IS the catalogue, so it goes to stdout alone and the banner
@@ -408,14 +411,15 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
   * Chosen in Options > Skin: the Skin row says which zip dresses the
     game now, by its path, and its Choose... button opens a file box.
     A skin zip chosen is copied into the game's skins folder
-    (user://skins/, under its own name) and worn from then on; a card
-    art zip goes into the card folder (user://cardpacks/), where EVERY
-    zip is a pack the game wears, in name order, the first to hold a
-    picture winning — so packs for card sets of the future sit beside
-    the first. The Card folder row names the folder and every pack in
-    it; to go back to what shipped, delete the zip from the folder the
-    row names. In a browser the file box is the browser's own, and
-    Forget my zips (there is no folder to open) deletes them all.
+    (user://skins/, under its own name) and worn from the next start;
+    a card art zip goes into the card folder (user://cardpacks/), where
+    EVERY zip is a pack the game wears, in name order, the first to
+    hold a picture winning — so packs for card sets of the future sit
+    beside the first. The Card folder row names the folder and every
+    pack in it; to go back to what shipped, delete the zip from the
+    folder the row names. In a browser the file box is the browser's
+    own, and Forget my zips (there is no folder to open) deletes them
+    all.
   * Dropped on the window: drag any zip onto the running game. The
     same as choosing it.
   * A tar.gz (or .tgz, or a plain .tar) works at every door a zip
@@ -426,32 +430,99 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
     was. Beside the game the same: skin/original_skin.tar.gz (or
     skin/cardart.tar.gz) where the zip would go is repacked at the
     first start into the game's own folder and read from there.
-  * A zip of your own (chosen, dropped or fetched) has precedence over
-    the one beside the game. One chosen on the title screen shows at
-    once; one chosen anywhere else shows from the next start.
+  * ONE SKIN IS WORN, never two mixed: your own skin zip (chosen,
+    dropped or fetched; the skin_zip key names it) or, without one, the
+    one beside the game. A skin chosen or dropped is worn from the next
+    start, and the notice that says so offers the restart; only on the
+    title screen, with no skin worn yet, does the title simply start
+    again in it.
   * In a browser: the same choosing and dropping, or a skin zip served
     beside the page as skin/original_skin.zip (and, on a page served
     on your own machine, skin/cardart.zip), which the game fetches
     once and keeps.
-  * A loose folder still works too: <the game's folder>/skin/ with the
-    same files unzipped, or the skin folder, user://original_skin/
-    (what import_original.py fills). The game looks in the skin
-    folder, then beside itself, then in the mounted zips. "Use the
-    skin folder instead of the zip" in Options > Skin leaves the skin
-    zip closed and lets the folder alone dress the game.
+  * A loose folder works too, when no skin zip is worn: the skin
+    folder, user://original_skin/ (what import_original.py fills),
+    then <the game's folder>/skin/ with the same files unzipped. "Use
+    the skin folder instead of the zip" in Options > Skin leaves every
+    skin zip closed, so the folder dresses the game even where a zip
+    is there.
   * Every one of those places — the skin zip, the skin folder, the
     card folder, and the portraits and music folders — is shown by
     its path in Options > Skin and can be moved in settings.cfg
     (skin_zip, skin_folder, cardpacks_folder, portraits_folder,
     music_folder under [options]); the screen names the file.
 
-NAMING. Names are exact, lower case, snake_case, with the extensions
-given here. A picture is a PNG (RGB, or RGBA where a mask is wanted);
-a font is TrueType; a sound is a WAV. The sizes below are the 1997
-originals' — a skin may use other sizes where a note does not say
-otherwise, but SHEETS (files the game cuts into cells) must keep their
-grid, and frames and panels keep their proportions or the text drawn on
-them lands wrong.
+NAMING. The names below are the PLACES the game looks for: exact,
+lower case, snake_case, with the extensions given here. The file of a
+place's own name is worn there, unless the skin's catalogue (below)
+puts another file there. A picture is a PNG (RGB, or RGBA where a mask
+is wanted); a font is TrueType; a sound is a WAV. The sizes below are
+the 1997 originals'; SIZES AND SCALES says what else a picture may be.
+
+THE CATALOGUE. A skin may carry skin/catalogue.txt, which says which of
+its files the game wears in each place, one line a place:
+
+    title_background.png = title_background@2x.png
+    duelist_face_red.png = duelist_face_red.png
+    portraits/agnosia.png = faces/my_agnosia.png
+
+The place on the left is a name from the lists below (a portrait's
+too); the file on the right is any file of the same skin, its path from
+skin/. Blank lines and lines starting with # are notes; spaces around
+the = do not matter; a line with no =, with nothing on one side, or
+with a file that starts with /, holds a \\ or climbs out with .., is
+ignored; a place named twice takes its last line, and a line whose file
+is not in the skin counts as no line. For a place with no line the game
+takes, for a picture, <name>@2x.png beside it when the skin holds one
+(the name tools/upscale_skin.py gives its 2x pictures), and otherwise
+the file of the place's own name — so a skin without a catalogue, every
+1997 skin among them, is worn as it always was.
+
+MIX AND MATCH is changing a line. The 2x skin (below) keeps the 1997
+pictures under their own names beside its @2x ones, so pointing a line
+back at the 1997 file (duelist_face_red.png = duelist_face_red.png)
+wears the 1997 picture in that place. Deleting the line is not the
+same: with no line the @2x picture beside it is still worn. A line may
+as well name any picture you add. Unzip, edit, zip again — or edit the
+catalogue of a loose skin folder; the game reads it at the next start.
+--check (below) reads it too.
+
+SIZES AND SCALES. Every picture place has the 1997 size listed below,
+and the game lays its screens out at that size. A picture may be:
+  * that size (1x): worn as it is;
+  * exactly 2, 3 or 4 times it, in both directions (2x, 3x, 4x): drawn
+    at the 1997 size with all its pixels, so on a big screen it is
+    sharp where a 1x picture is stretched. Everything the game cuts out
+    of a picture (a sheet's cells, a panel's border, a badge, a sprite)
+    it cuts at the picture's own resolution, from the same place;
+  * any other size: drawn at its own size, as a skin always could be —
+    fine for a backdrop or a panel the game stretches, but a SHEET (a
+    file the game cuts into cells) must keep its grid, and frames and
+    panels their proportions, or the text drawn on them lands wrong.
+A few pictures are KEYED: the game takes a colour out of them (the
+black around the mana stripes and the set symbols, the white of the
+combat bar), reads an image+mask pair's mask (below), or measures them
+(a territory's black edge, the grave plate's colours, the target
+cursor). For a 2x, 3x or 4x picture it decides those on the 1x file of
+the place's own name, when the skin holds one at the 1997 size, and
+carries the result up — so an upscaled picture keys exactly as its
+1997 one did; without one, on the picture shrunk back to the 1997 size,
+which is less exact. So KEEP THE 1x FILE BESIDE A 2x PICTURE for the
+keyed places — mana_stripes, card_set_symbols, combat_bar,
+card_counters, the image+mask sprites (summon_sick, state_*, attack_*,
+target_cursor), and every duel_pattern_*, duel_picture_*, duel_mana_*
+and grave_panel_* — as the 2x skin upscale_skin.py makes does. The
+mana stripes on the cards, the set symbols and the territories' edges
+are hi-res either way, but cut exactly only with the 1x file: measured
+on the real 2x pictures, without it the stripes' cut-out edges differ
+by up to a tenth, the set symbols lose their ink box and the
+territories their black-edge trim. --check names every keyed picture
+worn above 1x without its 1x file.
+
+Portraits and card art are fitted to their frames at any size (a 2x
+portrait beside its own 1x file is one face, drawn at the 1x size); the
+coin-toss sheets are read as their .json describes them, in their own
+pixels.
 
 MASKS. Some 1997 sprites carry their transparency as a second picture:
 the file is twice as wide as the sprite, the left half the image and
@@ -483,6 +554,15 @@ where its own pictures fit, for your own copy only; see first, file by
 file, what you would get:
     python3 tools/mtg_assets.py --check /path/to/manalink --manalink
     python3 tools/mtg_assets.py --install /path/to/manalink --manalink
+And from your own 1997 skin, a 2x one — every picture again at twice
+the size (Real-ESRGAN's anime model, with the 1997 colours), the 1997
+files kept beside them and a catalogue that wears the 2x ones:
+    python3 tools/upscale_skin.py --skin original_skin.zip
+With the 2x pictures alone, made before (the zip the 0.50.28 tool
+wrote), --reuse takes them as they are and makes the whole skin around
+them without upscaling again:
+    python3 tools/upscale_skin.py --skin original_skin.zip \\
+        --reuse original_skin_realesrgan-anime_2x.zip
 """
 
 PORTRAITS_NOTE = """\
@@ -522,7 +602,12 @@ def png_size(path: Path) -> tuple[int, int, str] | None:
         head = path.read_bytes()[:33]
     except OSError:
         return None
-    if head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+    return png_shape(head)
+
+
+def png_shape(head: bytes) -> tuple[int, int, str] | None:
+    """[method png_size] of a PNG's first 33 bytes, wherever they were read."""
+    if len(head) < 26 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
         return None
     width, height = struct.unpack(">II", head[16:24])
     kind = {0: "grey", 2: "RGB", 3: "palette", 4: "grey+alpha",
@@ -952,22 +1037,206 @@ def kind_of(names: list[str]) -> str:
     return "skin"
 
 
-## THE 2x COPIES (tools/upscale_skin.py, 2026-10-17): `<key>@2x.png`, a
-## picture again at twice the size, to sit beside `<key>.png`. A zip of
-## nothing else is a 2x zip; in a skin they are counted apart, never as
-## portraits of their own or as files the catalogue does not know.
+# ------------------------------------------------------------ the catalogue --
+#
+# THE SKIN'S OWN CATALOGUE (2026-10-17). The owner: *"game should just
+# pickup images according to some catalogue in the skin where every image
+# is assigned to a specific location game looks for (not looking for
+# specific image file names) - maybe the key should be original file
+# names but modders can then put any image to these names"*. So a skin may
+# carry `skin/catalogue.txt`, one line a place, `<place> = <file>`: the
+# place a name the game looks for (this catalogue's lists), the file any
+# file of the same skin. A place with no line, or whose file is not there,
+# is worn from the file of its own name — which is every skin made before
+# it. The game reads it in game/skin.gd; [method parse_catalogue] is that
+# reading, rule for rule, so `--check` says what the game will do.
+CATALOGUE = "catalogue.txt"
+## Files a skin carries that are no place of the game's: the catalogue
+## itself, and tools/upscale_skin.py's note on how its 2x pictures were made.
+SKIN_NOTES = (CATALOGUE, "UPSCALE.txt")
+
+## THE @2x NAME. tools/upscale_skin.py has called a 2x picture
+## `<name>@2x.png`, beside `<name>.png`, since 0.50.28, and the owner kept
+## those names (2026-10-17: *"I already have built 2x skin so we will
+## reuse it also so keep the previous skin filenames also valid for skin
+## reader"*). So for a picture place the game looks, in order, for the
+## catalogue line's file, then `<name>@2x.png` beside the place, then the
+## place's own name ([method worn_file]) — a line `x.png = x.png` is what
+## wears the 1x file over an @2x one. `@2x` only: a 3x or 4x picture is
+## worn through a catalogue line.
 SCALED_SUFFIX = "@2x"
-SCALED_COMPANIONS = ("UPSCALE.txt", manalink.LABEL)
+
+
+def scaled_name(place: str) -> str:
+    """`portraits/agnosia.png` -> `portraits/agnosia@2x.png`."""
+    return place[:-len(".png")] + SCALED_SUFFIX + ".png"
 
 
 def is_scaled(name: str) -> bool:
-    return Path(name).stem.endswith(SCALED_SUFFIX)
+    return name.endswith(SCALED_SUFFIX + ".png")
 
 
-def scaled_source(name: str) -> str:
-    """`portraits/agnosia@2x.png` -> `portraits/agnosia.png`."""
-    path = Path(name)
-    return str(path.with_name(path.stem[:-len(SCALED_SUFFIX)] + path.suffix))
+def worn_file(place: str, places: dict[str, str], have: set[str]) -> str | None:
+    """The file the game wears in [param place]: its catalogue line's file
+    when that is in the skin; for a picture, else `<name>@2x.png` beside
+    it; else the place's own name; None when the skin holds none of them."""
+    line = places.get(place)
+    if line is not None and line in have:
+        return line
+    if place.endswith(".png") and scaled_name(place) in have:
+        return scaled_name(place)
+    return place if place in have else None
+
+
+def parse_catalogue(text: str) -> tuple[dict[str, str], list[str]]:
+    """(place -> file, the lines the game ignores). Blank lines and lines
+    whose first non-space character is `#` are notes. A line is split at
+    its first `=`, both sides stripped; one with no `=`, an empty side, or
+    a file that starts with `/`, holds a backslash or has a `..` part is
+    ignored. A place named twice takes its last line."""
+    places: dict[str, str] = {}
+    ignored: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        place, equals, file = line.partition("=")
+        place, file = place.strip(), file.strip()
+        if (not equals or not place or not file or file.startswith("/")
+                or "\\" in file or ".." in file.split("/")):
+            ignored.append(line)
+            continue
+        places[place] = file
+    return places, ignored
+
+
+def read_catalogue(text: str) -> dict[str, str]:
+    """The places a catalogue's text gives files for (parse_catalogue)."""
+    return parse_catalogue(text)[0]
+
+
+def read_files(target: Path, names: set[str], limit: int | None = None) -> dict[str, bytes]:
+    """The bytes of each of [param names] (paths under `skin/`) that a
+    skin folder, zip or tar holds — the first [param limit] of each, or
+    all of it. One pass over a tar."""
+    out: dict[str, bytes] = {}
+    size = -1 if limit is None else limit
+    if target.is_dir():
+        for name in names:
+            path = target / name
+            if path.is_file():
+                with path.open("rb") as handle:
+                    out[name] = handle.read(size)
+        return out
+    if is_tar(target):
+        with tarfile.open(target) as tf:
+            for member in tf.getmembers():
+                if member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE):
+                    continue
+                name = tidy(member.name)
+                if name.startswith(PREFIX) and name[len(PREFIX):] in names:
+                    handle = tf.extractfile(member)
+                    if handle is not None:
+                        out[name[len(PREFIX):]] = handle.read(size)
+        return out
+    with zipfile.ZipFile(target) as zf:
+        for name in names:
+            try:
+                with zf.open(PREFIX + name) as handle:
+                    out[name] = handle.read(size)
+            except KeyError:
+                pass
+    return out
+
+
+# ------------------------------------------------------ sizes and scales --
+#
+# WHAT A PICTURE MAY MEASURE (2026-10-17, the owner: *"document what kind
+# of resolutions are supported so croppers in game know what to do"*).
+# Every picture place has its 1997 size, the size the game lays the
+# screens out at (game/skin.gd's SIZES, held to the table below by
+# tools/test_skin_catalogue.py). A picture exactly 1, 2, 3 or 4 times it
+# is drawn at that size with all its pixels, and the game's cutters cut it
+# at its own resolution; any other size is drawn at its own size, as a
+# skin always could be. `--check` reads them against the catalogue's own
+# table: docs/skin-catalogue.csv in a checkout, SKIN.csv in the skin/
+# folder beside a packaged game, where this tool ships flat.
+SIZE_TABLES = (ROOT / "docs" / "skin-catalogue.csv", HERE / "skin" / "SKIN.csv")
+MAX_SCALE = 4
+
+## THE KEYED PLACES: the pictures a game cutter takes a colour out of,
+## reads a mask from or measures, and what does it. For a 2x, 3x or 4x
+## picture the cutter decides on the 1x file of the place's own name when
+## the skin holds one, and on the picture shrunk back without it — which
+## the owner had measured on the real 2x pictures (2026-10-17, *"that is
+## important, tell the player"*): with the 1x file every keyed cut equals
+## the 1997 one; without it the mana stripes differ by 0.4-9.6% at their
+## cut-out edges, the set symbols lose their ink box and 14 of the 15
+## territory grounds their black-edge trim (the image+mask sprites and
+## the counter stones stay within 0.01%). `--check` names every keyed
+## place worn above 1x without its 1x file. A name ending in `_` is a
+## family.
+KEYED = (
+    ("mana_stripes", "MiniCard.stripe_texture keys the black around each stripe"),
+    ("card_set_symbols", "SetBadges.symbol_from_sheet keys black, measures the ink"),
+    ("combat_bar", "CombatBar.keyed_texture keys its near-white"),
+    ("card_counters", "CounterMarks.tile reads the mask cell every stone wears"),
+    ("summon_sick", "MiniCard.masked_sprite reads its mask half"),
+    ("state_dying", "MiniCard.masked_sprite reads its mask half"),
+    ("state_cant_target", "MiniCard.masked_sprite reads its mask half"),
+    ("state_will_untap", "MiniCard.masked_sprite reads its mask half"),
+    ("attack_sword", "MiniCard.masked_sprite reads its mask half"),
+    ("attack_shield", "MiniCard.masked_sprite reads its mask half"),
+    ("attack_bones", "MiniCard.masked_sprite reads its mask half (image over mask)"),
+    ("target_cursor", "MiniCard.masked_sprite and the mouse cursor read its mask half"),
+    ("duel_pattern_", "TerritoryGround._inner measures the 1px black edge"),
+    ("duel_picture_", "TerritoryGround._inner measures the 1px black edge"),
+    ("duel_mana_", "TerritoryGround._inner measures the 1px black edge"),
+    ("grave_panel_", "ExilePlate.plate counts the plate's colours"),
+)
+
+
+def keyed_by(place: str) -> str | None:
+    """Which cutter keys or measures [param place] (`mana_stripes.png`),
+    or None for a picture that is only cut and drawn."""
+    stem = place[:-len(".png")] if place.endswith(".png") else place
+    for name, cutter in KEYED:
+        if stem == name or (name.endswith("_") and stem.startswith(name)):
+            return cutter
+    return None
+
+
+def sizes_1997(tables: tuple[Path, ...] = SIZE_TABLES) -> dict[str, tuple[int, int]]:
+    """Place (`title_background.png`) -> its 1997 (width, height), for
+    every picture place the first table found lists — not the coin-toss
+    sheets, whose .json gives their frames in their own pixels, nor the
+    portraits, which are fitted. Empty when no table is found."""
+    for table in tables:
+        if not table.is_file():
+            continue
+        out: dict[str, tuple[int, int]] = {}
+        with table.open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                name = row.get("file", "")
+                if not name.startswith(PREFIX) or row.get("kind") != "picture":
+                    continue
+                name = name[len(PREFIX):]
+                if "/" in name or name.startswith("coin_toss_"):
+                    continue
+                found = re.match(r"(\d+) x (\d+) px", row.get("format", ""))
+                if found:
+                    out[name] = (int(found.group(1)), int(found.group(2)))
+        return out
+    return {}
+
+
+def scale_of(width: int, height: int, size: tuple[int, int]) -> int | None:
+    """1 to MAX_SCALE when (width, height) is that many times [param
+    size] in both directions, else None (drawn at its own size)."""
+    for scale in range(1, MAX_SCALE + 1):
+        if (width, height) == (size[0] * scale, size[1] * scale):
+            return scale
+    return None
 
 
 def check(target: Path) -> int:
@@ -975,12 +1244,9 @@ def check(target: Path) -> int:
     if names is None:
         print("!! %s is not a skin zip or folder" % target)
         return 1
-    scaled = [n for n in names if is_scaled(n)]
-    if scaled and all(is_scaled(n) or n in SCALED_COMPANIONS for n in names):
-        return check_scaled(target, scaled)
-    names = [n for n in names if not is_scaled(n)]
     have = set(names)
-    portraits = [n for n in names if n.startswith("portraits/") and n.endswith(".png")]
+    portraits = [n for n in names if n.startswith("portraits/") and n.endswith(".png")
+                 and not is_scaled(n)]
     art = [n for n in names if n.startswith("cardart/")]
     if kind_of(names) == "cardart":
         odd = [n for n in art if not n.lower().endswith((".jpg", ".jpeg", ".png"))]
@@ -991,13 +1257,51 @@ def check(target: Path) -> int:
             for name in odd:
                 print("    " + name)
         return 0
-    missing = [f for f in expected_files() if f not in have]
+    places: dict[str, str] = {}
+    ignored: list[str] = []
+    if CATALOGUE in have:
+        text = read_files(target, {CATALOGUE}).get(CATALOGUE, b"")
+        places, ignored = parse_catalogue(text.decode("utf-8-sig", "replace"))
+    # What each catalogued place is worn from; a line naming a file that
+    # is not here counts as no line.
+    worn = {place: file for place, file in places.items() if file in have}
+    dangling = {place: file for place, file in places.items() if file not in have}
+    expected = expected_files()
+    known = set(expected)
+    missing = [f for f in expected if worn_file(f, places, have) is None]
     print("%s: skin, %d files" % (target, len(names)))
     print("  %d of %d named files present, %d portraits, %d card pictures"
-          % (len(expected_files()) - len(missing), len(expected_files()),
-             len(portraits), len(art)))
-    if scaled:
-        print("  and %d 2x copies beside them (<name>@2x.png)" % len(scaled))
+          % (len(expected) - len(missing), len(expected), len(portraits), len(art)))
+    if any(is_scaled(n) for n in names) and all(
+            is_scaled(n) or n in SKIN_NOTES or n == manalink.LABEL for n in names):
+        print("  pictures only: the 2x pictures of a 1997 skin (<name>%s.png), no 1997"
+              % SCALED_SUFFIX)
+        print("  pictures, sounds or fonts beside them. A whole skin of them, every")
+        print("  picture reused and nothing upscaled again:")
+        print("    python3 %supscale_skin.py --skin original_skin.zip --reuse %s"
+              % (tool_banner.here_prefix(__file__), target.name))
+    if CATALOGUE in have:
+        nowhere = [place for place in places if place not in known
+                   and not place.startswith(("portraits/", "cardart/"))]
+        moved = sum(1 for place, file in worn.items()
+                    if file != place and place not in nowhere)
+        print("  %s: %d place%s, %d worn from a file of another name"
+              % (CATALOGUE, len(places), "" if len(places) == 1 else "s", moved))
+        if ignored:
+            print("  catalogue lines the game ignores (no '=', an empty side, "
+                  "or a file outside skin/):")
+            for line in ignored:
+                print("    " + line)
+        if dangling:
+            print("  catalogue lines naming a file that is not here (the game "
+                  "looks for the place under its own name instead):")
+            for place, file in dangling.items():
+                print("    %s = %s" % (place, file))
+        if nowhere:
+            print("  places the game never looks for (those lines do nothing):")
+            for place in nowhere:
+                print("    " + place)
+    report_scales(target, have, places, expected)
     stood_in = [f for f in missing if f in SHIPPED_BY_THE_GAME]
     drawn = [f for f in missing if f not in SHIPPED_BY_THE_GAME]
     if stood_in:
@@ -1009,7 +1313,10 @@ def check(target: Path) -> int:
         print("  missing (the game draws its own for each):")
         for name in drawn:
             print("    " + name)
-    unknown = [n for n in names if "/" not in n and n not in set(expected_files())]
+    worn_from = set(worn.values())
+    unknown = [n for n in names if "/" not in n and n not in known
+               and n not in worn_from and n not in SKIN_NOTES
+               and not (is_scaled(n) and n.replace(SCALED_SUFFIX + ".png", ".png") in known)]
     if unknown:
         print("  not in the catalogue (ignored by the game):")
         for name in unknown:
@@ -1017,19 +1324,50 @@ def check(target: Path) -> int:
     return 0
 
 
-def check_scaled(target: Path, scaled: list[str]) -> int:
-    """A 2x zip or folder: how many copies, and any that copy no picture
-    the catalogue knows (a portrait may be any face)."""
-    expected = set(expected_files())
-    stray = [n for n in scaled if not n.startswith("portraits/")
-             and scaled_source(n) not in expected]
-    print("%s: 2x pictures, %d copies — they sit beside a 1997 skin, "
-          "which is still needed" % (target, len(scaled)))
-    if stray:
-        print("  copies of no picture in the catalogue (ignored by the game):")
-        for name in stray:
-            print("    " + name)
-    return 0
+def report_scales(target: Path, have: set[str], places: dict[str, str],
+                  expected: list[str]) -> None:
+    """How many of the pictures worn are 1x, 2x, 3x and 4x their place's
+    1997 size, which are another size (SIZES AND SCALES), and which keyed
+    pictures are worn above 1x without the 1x file they key on (KEYED)."""
+    sizes = sizes_1997()
+    wearing = {}
+    for place in expected:
+        file = worn_file(place, places, have) if place in sizes else None
+        if file is not None:
+            wearing[place] = file
+    if not wearing:
+        return
+    heads = read_files(target, set(wearing.values()) | set(wearing), 33)
+    counts: dict[int, int] = {}
+    odd: list[str] = []
+    rough: list[str] = []
+    for place, file in wearing.items():
+        shape = png_shape(heads.get(file, b""))
+        scale = scale_of(shape[0], shape[1], sizes[place]) if shape else None
+        shown = place if file == place else "%s = %s" % (place, file)
+        if scale is None:
+            measured = "%d x %d" % shape[:2] if shape else "not a PNG, not measured"
+            odd.append("    %-34s %s (1997: %d x %d)" % ((shown, measured) + sizes[place]))
+            continue
+        counts[scale] = counts.get(scale, 0) + 1
+        # The 1x file the cutter keys on: the place's own name, at the 1997
+        # size — the file worn in it when it is not the picture itself.
+        own = png_shape(heads.get(place, b"")) if file != place else None
+        if scale > 1 and keyed_by(place) and (own is None or own[:2] != sizes[place]):
+            rough.append("    %-24s %s" % (place, keyed_by(place)))
+    if counts:
+        print("  pictures by size: %s — drawn at the 1997 size"
+              % ", ".join("%d at %dx" % (counts[k], k) for k in sorted(counts)))
+    if odd:
+        print("  pictures at another size (drawn at their own size; a sheet "
+              "must keep its grid):")
+        for line in odd:
+            print(line)
+    if rough:
+        print("  keyed pictures at 2x-4x with no 1x file of their own name — cut less")
+        print("  exactly without the 1997 file beside it (SKIN.txt, SIZES AND SCALES):")
+        for line in rough:
+            print(line)
 
 
 def main() -> int:

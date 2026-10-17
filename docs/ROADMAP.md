@@ -18811,6 +18811,78 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — A skin is a skin: the catalogue and the hi-res skin (0.50.30)
+
+The owner, the same evening, on 0.50.29: *"It is a bit confusing now. We
+have change skin in the menu but also we have a switch wear 2x pictures
+in the menu? Users are confused and also when they turn off the wear 2d
+pictures the game still Uses them! This should be separate. And also
+users should be able to mix and match some upscaled and some downscaled
+images as they wished. So lets fix this. A skin is a skin and gets
+applied after game reset. No switches. And game should just pickup
+images according to some catalogue in the skin where every image is
+assigned to a specific location game looks for (not looking for specific
+image file names) - maybe the key should be original lile names but
+modders can then put any image to these names. Lets just document what
+kind of resoutions are supported ao croppers n game Know what to do"*;
+then *"So hires skin zip is hires, low res skin zip is low res oroginal -
+simple"*; then *"I allready have built 2x skin so we will reuse it also
+so keep the previous skin filenames also valid for skin reader ;)"*.
+
+- **Why the switch "still used them".** `skin_2x` was read as each
+  picture first loaded, and every skin picture is loaded once a run: off
+  changed nothing until the next start, and its line said so only after
+  the click. Gone, with the `2x pictures:` row and the "skin2x" kind of
+  zip that was mounted BESIDE the skin. A `skin_2x` row left in a
+  settings.cfg is read by nothing.
+- **The catalogue.** A skin may carry `catalogue.txt`, one line per place:
+  `title_background.png = title_background@2x.png` — the slot by its 1997
+  file name, then any file of the same skin (`GameSkin.parse_catalogue`,
+  `catalogue_at`, `_in_place`). No line: the slot's `@2x` picture if the
+  place has one (0.50.28's names, still read), else its own name — so
+  every skin made before keeps working, and a line `x.png = x.png` picks
+  the 1997 file back: mixing is a line. Fonts, sounds and sidecars go
+  through it too; portraits through `GameSkin.worn`, and a face's `@2x`
+  picture is folded into the face in the chooser.
+- **The sizes.** `GameSkin.SIZES` holds every picture slot's 1997 size
+  (`docs/skin-catalogue.csv`, held to it by
+  `tools/test_skin_catalogue.py`). A picture at exactly 2x, 3x or 4x its
+  slot's size — the 1997 one, else that of the slot's own 1x file beside
+  it — is worn at the slot's size with all its pixels; any other size as
+  before, at its own (`scale_for`, `picture`). The cutters are those of
+  0.50.29; `GameSkin.original` is now the slot's own 1x file when the skin
+  has one, else the picture shrunk back (`shrunk`: halved by
+  `shrink_x2`). Written for modders in `docs/skin-catalogue.txt`, THE
+  CATALOGUE and SIZES AND SCALES.
+- **Why the hi-res skin keeps the 1997 files.** Measured on the real 2x
+  pictures, every keyed cut taken with the 1997 file beside the picture
+  and with the picture alone: beside it, all equal the 1997 cuts (0.00%
+  of the pixels); alone, the image+mask sprites and the counter stones
+  stay within 0.01%, but the mana stripes on the cards differ 0.4-9.6% at
+  their cut-out edges, the set symbols lose their ink box and fourteen of
+  the fifteen territory grounds their black-edge trim (an upscaler's
+  black is not black). So `tools/upscale_skin.py` writes a WHOLE skin —
+  every 1997 file, each picture's `<key>@2x.png` beside it, and a
+  catalogue naming them all — and `skin_catalogue.py --check` names the
+  keyed places worn at 2x without their 1997 file. `--reuse` builds it
+  from a 0.50.28 zip of copies without upscaling again.
+- **One skin.** The player's own skin zip, else the one beside the game —
+  never both any more (the shipped one filled every file the player's
+  lacked, and its `catalogue.txt` would have dressed a skin that has
+  none); and while a skin zip is worn the loose folders are not read
+  (`GameSkin.zip_worn`): a skin folder's 1997 files stood over every
+  place of a chosen zip. Card art still reads every place. A skin that
+  arrives while another is worn is worn from the next start (the engine
+  cannot unmount, and the two would mix); the title starts again on the
+  first one (`SkinPack.plan_after_arrival`).
+- Tests: `tests/ui/test_skin_2x_2026_10_17.gd` (37): the doubling proof
+  over every cutter, with the 1x file beside and, for the keyed ones, the
+  2x picture alone; the catalogue's rules, mixing, any file in a slot, a
+  missing file, the `@2x` names with and without a line, 0.50.28's zip
+  alone, 3x and 4x, other sizes, a stale `skin_2x`, faces, one skin, the
+  zip kind, the restart, no switch in Options. `tools/test_upscale_skin.py`,
+  `tools/test_skin_catalogue.py`.
+
 ## 2026-10-17 — The game wears the 2x pictures (0.50.29)
 
 The owner, after 0.50.28 left the game unable to read the copies:

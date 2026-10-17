@@ -76,7 +76,51 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## A skin is a skin: the catalogue and the hi-res skin (2026-10-17)
+
+- `game/skin.gd`: THE CATALOGUE — `CATALOGUE` (`catalogue.txt`),
+  `parse_catalogue`, `catalogue_at` (per place, cleared by
+  `clear_caches`), THE @2x NAME (`SCALED_SUFFIX`, `scaled_path`,
+  `is_scaled_name`), `_in_place` (the line's file, else the `@2x`
+  sibling, else the slot's own name; `own` the slot's 1x file), `_slot`
+  (`_find` through it), `worn` (a listed portrait). THE 2x PICTURES —
+  `SIZES` (every picture slot's 1997 size), `MAX_SCALE`, `scale_for`,
+  `picture(path, key, own)`, `original` (the 1x file, else `shrunk`).
+  ONE SKIN — `zip_worn` (set by `SkinPack.mount`): `search_dirs(every)`
+  leaves the loose folders out while a skin zip is worn, except for the
+  card art (`card_art` passes `every`).
+- `game/skin_pack.gd`: ONE SKIN — `_ready` mounts the shipped skin zip
+  only when the player wears none; `mount` raises `GameSkin.zip_worn`;
+  `adopt`/`_take` pass `replaced` to `_arrived` and
+  `plan_after_arrival(scene, replaced)`: a skin replacing a worn one
+  waits for the restart. The "skin2x" kind, `_mount_scaled`,
+  `SCALED_FILE_NAME`, `SCALED_COMPANIONS`, `_describe_scaled`,
+  `scaled_at` are gone.
+- `game/paths.gd`: the `skin_2x` key and `use_skin_2x`/`set_use_skin_2x`
+  are gone (eight keys). `game/options_screen.gd`: `_add_scaled_rows` is
+  gone; the skin tooltips say one skin, worn from the next start.
+- `game/portrait_library.gd`: a face's `@2x` picture is folded into the
+  face (`_files_in`; a lone one goes by the face's name); `texture` reads
+  through `GameSkin.worn`.
+- `tools/upscale_skin.py`: writes a WHOLE skin — every 1997 file, each
+  picture's `<key>@2x.png` beside it, `catalogue.txt` — and `--reuse`
+  takes a 0.50.28 zip's copies instead of upscaling again.
+  `tools/skin_catalogue.py`: `read_catalogue` (the game's rules), `--check`
+  reads the catalogue and the `@2x` names, reports the scales against the
+  CSV and names keyed places worn at 2x without their 1997 file; the
+  preamble's THE CATALOGUE and SIZES AND SCALES.
+- Tests: `tests/ui/test_skin_2x_2026_10_17.gd` (rewritten: the catalogue,
+  the `@2x` names, the sizes, every cutter beside its 1x file and keyed
+  ones alone, faces, one skin, the restart, no switch);
+  `tests/unit/test_skin_pack.gd`, `tests/ui/test_options_skin.gd`,
+  `tests/ui/test_c2_f_packs_skin_refused.gd` put `zip_worn` back;
+  `tools/test_upscale_skin.py`, `tools/test_skin_catalogue.py` (the
+  `SIZES` table against the CSV).
+
 ## The game wears the 2x pictures (2026-10-17)
+
+(The switch, the `skin_2x` key and the "skin2x" kind below went again in
+0.50.30, above.)
 
 - `game/skin.gd`: THE 2x PICTURES — `picture(path)` wears `<key>@2x.png`
   from beside `<key>.png` (exactly twice its size, `skin_2x` on) as a
@@ -2660,6 +2704,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.30.md`: the hi-res skin, mixing through a skin's
+  catalogue, one skin at a time, carrying the 0.50.27 … 0.50.20 notes
+  below them (0.50.28's and 0.50.29's are folded into it).
 - `docs/releases/0.50.29.md`: the game wears the 2x skin, carrying the
   0.50.28 … 0.50.20 notes below it.
 - `docs/releases/0.50.28.md`: the 2x skin tool, carrying the 0.50.27 …
@@ -6306,9 +6353,13 @@ shandalar/
 │   │                          sidecars ignored, missing + unknown listed);
 │   │                          the committed table, row for row
 │   ├── upscale_skin.py      THE 2x SKIN (2026-10-17) — a player's 1997
-│   │                          skin (folder or skin zip) to <key>@2x.png
-│   │                          copies, in original_skin_realesrgan-anime_
-│   │                          2x.zip or --out a folder (beside the 1x).
+│   │                          skin (folder or skin zip) to a WHOLE hi-res
+│   │                          skin: every 1997 file, each picture's
+│   │                          <key>@2x.png beside it, catalogue.txt naming
+│   │                          them, in original_skin_realesrgan-anime_
+│   │                          2x.zip or --out a folder (in place when it
+│   │                          is the skin's own); --reuse takes a 0.50.28
+│   │                          zip's copies instead of upscaling again.
 │   │                          Real-ESRGAN ncnn-vulkan's realesrgan-x4plus-
 │   │                          anime at 4x, brought down to 2x, then
 │   │                          colour_fix: model + blur(1997) - blur(model)
@@ -6330,7 +6381,8 @@ shandalar/
 │   │                          alone, wrap and edge padding, the bleed,
 │   │                          the colour fix, on/off alpha, the zip (and
 │   │                          check_skin), a zip input, the same bytes
-│   │                          twice, --out beside the 1x, the label
+│   │                          twice, --out (and in place), --reuse, the
+│   │                          catalogue it writes, the label
 │   │                          refused, a failing engine, the checksum
 │   ├── import_original.py   1997 skin importer: copies original art/fonts
 │   │                          from the USER'S OWN game copy into
@@ -10123,7 +10175,17 @@ shandalar/
 │   │                          paths as they are (globalize_path on a pack
 │   │                          path names a folder that does not exist);
 │   │                          clear_caches() is what a pack arriving
-│   │                          mid-run calls before the title is rebuilt
+│   │                          mid-run calls before the title is rebuilt.
+│   │                          THE CATALOGUE AND THE 2x PICTURES
+│   │                          (2026-10-17): a place's catalogue.txt
+│   │                          (`slot = file`) says which file stands in a
+│   │                          slot, else its <key>@2x.png, else its own
+│   │                          name (_in_place); a picture at 2-4x its
+│   │                          slot's SIZES is worn at the slot's size
+│   │                          (picture, scale_for), cut by cut/texture_of
+│   │                          and keyed on original (the 1x file, else
+│   │                          shrunk). ONE SKIN: zip_worn keeps the loose
+│   │                          folders out while a skin zip is worn.
 │   ├── skin_pack.gd         AUTOLOAD `SkinPack` — THE SKIN AS TWO ZIPS
 │   │                          ([QoL], 2026-09-08: "a /skin/ folder …
 │   │                          the zip with our assets named

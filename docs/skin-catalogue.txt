@@ -51,14 +51,15 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
   * Chosen in Options > Skin: the Skin row says which zip dresses the
     game now, by its path, and its Choose... button opens a file box.
     A skin zip chosen is copied into the game's skins folder
-    (user://skins/, under its own name) and worn from then on; a card
-    art zip goes into the card folder (user://cardpacks/), where EVERY
-    zip is a pack the game wears, in name order, the first to hold a
-    picture winning — so packs for card sets of the future sit beside
-    the first. The Card folder row names the folder and every pack in
-    it; to go back to what shipped, delete the zip from the folder the
-    row names. In a browser the file box is the browser's own, and
-    Forget my zips (there is no folder to open) deletes them all.
+    (user://skins/, under its own name) and worn from the next start;
+    a card art zip goes into the card folder (user://cardpacks/), where
+    EVERY zip is a pack the game wears, in name order, the first to
+    hold a picture winning — so packs for card sets of the future sit
+    beside the first. The Card folder row names the folder and every
+    pack in it; to go back to what shipped, delete the zip from the
+    folder the row names. In a browser the file box is the browser's
+    own, and Forget my zips (there is no folder to open) deletes them
+    all.
   * Dropped on the window: drag any zip onto the running game. The
     same as choosing it.
   * A tar.gz (or .tgz, or a plain .tar) works at every door a zip
@@ -69,32 +70,99 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
     was. Beside the game the same: skin/original_skin.tar.gz (or
     skin/cardart.tar.gz) where the zip would go is repacked at the
     first start into the game's own folder and read from there.
-  * A zip of your own (chosen, dropped or fetched) has precedence over
-    the one beside the game. One chosen on the title screen shows at
-    once; one chosen anywhere else shows from the next start.
+  * ONE SKIN IS WORN, never two mixed: your own skin zip (chosen,
+    dropped or fetched; the skin_zip key names it) or, without one, the
+    one beside the game. A skin chosen or dropped is worn from the next
+    start, and the notice that says so offers the restart; only on the
+    title screen, with no skin worn yet, does the title simply start
+    again in it.
   * In a browser: the same choosing and dropping, or a skin zip served
     beside the page as skin/original_skin.zip (and, on a page served
     on your own machine, skin/cardart.zip), which the game fetches
     once and keeps.
-  * A loose folder still works too: <the game's folder>/skin/ with the
-    same files unzipped, or the skin folder, user://original_skin/
-    (what import_original.py fills). The game looks in the skin
-    folder, then beside itself, then in the mounted zips. "Use the
-    skin folder instead of the zip" in Options > Skin leaves the skin
-    zip closed and lets the folder alone dress the game.
+  * A loose folder works too, when no skin zip is worn: the skin
+    folder, user://original_skin/ (what import_original.py fills),
+    then <the game's folder>/skin/ with the same files unzipped. "Use
+    the skin folder instead of the zip" in Options > Skin leaves every
+    skin zip closed, so the folder dresses the game even where a zip
+    is there.
   * Every one of those places — the skin zip, the skin folder, the
     card folder, and the portraits and music folders — is shown by
     its path in Options > Skin and can be moved in settings.cfg
     (skin_zip, skin_folder, cardpacks_folder, portraits_folder,
     music_folder under [options]); the screen names the file.
 
-NAMING. Names are exact, lower case, snake_case, with the extensions
-given here. A picture is a PNG (RGB, or RGBA where a mask is wanted);
-a font is TrueType; a sound is a WAV. The sizes below are the 1997
-originals' — a skin may use other sizes where a note does not say
-otherwise, but SHEETS (files the game cuts into cells) must keep their
-grid, and frames and panels keep their proportions or the text drawn on
-them lands wrong.
+NAMING. The names below are the PLACES the game looks for: exact,
+lower case, snake_case, with the extensions given here. The file of a
+place's own name is worn there, unless the skin's catalogue (below)
+puts another file there. A picture is a PNG (RGB, or RGBA where a mask
+is wanted); a font is TrueType; a sound is a WAV. The sizes below are
+the 1997 originals'; SIZES AND SCALES says what else a picture may be.
+
+THE CATALOGUE. A skin may carry skin/catalogue.txt, which says which of
+its files the game wears in each place, one line a place:
+
+    title_background.png = title_background@2x.png
+    duelist_face_red.png = duelist_face_red.png
+    portraits/agnosia.png = faces/my_agnosia.png
+
+The place on the left is a name from the lists below (a portrait's
+too); the file on the right is any file of the same skin, its path from
+skin/. Blank lines and lines starting with # are notes; spaces around
+the = do not matter; a line with no =, with nothing on one side, or
+with a file that starts with /, holds a \ or climbs out with .., is
+ignored; a place named twice takes its last line, and a line whose file
+is not in the skin counts as no line. For a place with no line the game
+takes, for a picture, <name>@2x.png beside it when the skin holds one
+(the name tools/upscale_skin.py gives its 2x pictures), and otherwise
+the file of the place's own name — so a skin without a catalogue, every
+1997 skin among them, is worn as it always was.
+
+MIX AND MATCH is changing a line. The 2x skin (below) keeps the 1997
+pictures under their own names beside its @2x ones, so pointing a line
+back at the 1997 file (duelist_face_red.png = duelist_face_red.png)
+wears the 1997 picture in that place. Deleting the line is not the
+same: with no line the @2x picture beside it is still worn. A line may
+as well name any picture you add. Unzip, edit, zip again — or edit the
+catalogue of a loose skin folder; the game reads it at the next start.
+--check (below) reads it too.
+
+SIZES AND SCALES. Every picture place has the 1997 size listed below,
+and the game lays its screens out at that size. A picture may be:
+  * that size (1x): worn as it is;
+  * exactly 2, 3 or 4 times it, in both directions (2x, 3x, 4x): drawn
+    at the 1997 size with all its pixels, so on a big screen it is
+    sharp where a 1x picture is stretched. Everything the game cuts out
+    of a picture (a sheet's cells, a panel's border, a badge, a sprite)
+    it cuts at the picture's own resolution, from the same place;
+  * any other size: drawn at its own size, as a skin always could be —
+    fine for a backdrop or a panel the game stretches, but a SHEET (a
+    file the game cuts into cells) must keep its grid, and frames and
+    panels their proportions, or the text drawn on them lands wrong.
+A few pictures are KEYED: the game takes a colour out of them (the
+black around the mana stripes and the set symbols, the white of the
+combat bar), reads an image+mask pair's mask (below), or measures them
+(a territory's black edge, the grave plate's colours, the target
+cursor). For a 2x, 3x or 4x picture it decides those on the 1x file of
+the place's own name, when the skin holds one at the 1997 size, and
+carries the result up — so an upscaled picture keys exactly as its
+1997 one did; without one, on the picture shrunk back to the 1997 size,
+which is less exact. So KEEP THE 1x FILE BESIDE A 2x PICTURE for the
+keyed places — mana_stripes, card_set_symbols, combat_bar,
+card_counters, the image+mask sprites (summon_sick, state_*, attack_*,
+target_cursor), and every duel_pattern_*, duel_picture_*, duel_mana_*
+and grave_panel_* — as the 2x skin upscale_skin.py makes does. The
+mana stripes on the cards, the set symbols and the territories' edges
+are hi-res either way, but cut exactly only with the 1x file: measured
+on the real 2x pictures, without it the stripes' cut-out edges differ
+by up to a tenth, the set symbols lose their ink box and the
+territories their black-edge trim. --check names every keyed picture
+worn above 1x without its 1x file.
+
+Portraits and card art are fitted to their frames at any size (a 2x
+portrait beside its own 1x file is one face, drawn at the 1x size); the
+coin-toss sheets are read as their .json describes them, in their own
+pixels.
 
 MASKS. Some 1997 sprites carry their transparency as a second picture:
 the file is twice as wide as the sprite, the left half the image and
@@ -126,6 +194,15 @@ where its own pictures fit, for your own copy only; see first, file by
 file, what you would get:
     python3 tools/mtg_assets.py --check /path/to/manalink --manalink
     python3 tools/mtg_assets.py --install /path/to/manalink --manalink
+And from your own 1997 skin, a 2x one — every picture again at twice
+the size (Real-ESRGAN's anime model, with the 1997 colours), the 1997
+files kept beside them and a catalogue that wears the 2x ones:
+    python3 tools/upscale_skin.py --skin original_skin.zip
+With the 2x pictures alone, made before (the zip the 0.50.28 tool
+wrote), --reuse takes them as they are and makes the whole skin around
+them without upscaling again:
+    python3 tools/upscale_skin.py --skin original_skin.zip \
+        --reuse original_skin_realesrgan-anime_2x.zip
 
 
 BACKDROPS

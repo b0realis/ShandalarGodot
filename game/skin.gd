@@ -15,6 +15,11 @@ extends RefCounted
 ##                                      left closed when the player set
 ##                                      `use_skin_folder`)
 ##   4. res://assets/original/         (development — gitignored)
+## The first two are not searched while a skin zip is worn: one skin
+## dresses the game ([method search_dirs]). In each place the skin's own
+## `catalogue.txt` may say which of its files stands in which place, and
+## a picture may come at up to four times its 1997 size (THE CATALOGUE,
+## THE 2x PICTURES below).
 ## Every accessor returns null when the asset is absent, and callers fall
 ## back to the clean built-in skin — so the game is complete without any
 ## original files, and dresses up automatically when they exist.
@@ -83,14 +88,35 @@ const PACK_DIR := "res://skin"
 ## read by [method search_dirs]; nothing else writes it.
 static var pack_mounted := false
 
+## Whether one of those zips is a SKIN (not only card art) — then that
+## zip is the skin worn. Set by [SkinPack] alone, beside [member
+## pack_mounted].
+static var zip_worn := false
+
 
 ## [constant SEARCH_DIRS] with the portable copy and the mounted pack
 ## spliced in, in order of precedence.
-static func search_dirs() -> Array:
-	var out := [GamePaths.skin_folder()]
-	var beside := portable_dir()
-	if beside != "":
-		out.append(beside)
+##
+## ONE SKIN IS WORN (2026-10-17; the owner: *"A skin is a skin"*). With a
+## skin zip worn the loose folders — the skin folder and the `skin/`
+## beside the executable — are not searched: until then they were
+## searched FIRST, file by file, so a player who had imported the 1997
+## pictures into the skin folder and then chose another skin zip (the 2x
+## one) kept seeing the folder's 1997 pictures in every place both had. A
+## folder dresses the game when no skin zip is worn, or when the player
+## leaves the zip closed for it (`use_skin_folder`, [SkinPack]). The
+## checkout's own `assets/original` stays last, for development.
+##
+## [param every]: all of them whatever is worn — for the CARD ART, which is
+## no part of a skin and travels apart (a loose `cardart/` folder beside
+## the game is read with any skin, [method card_art]).
+static func search_dirs(every := false) -> Array:
+	var out := []
+	if every or not zip_worn:
+		out.append(GamePaths.skin_folder())
+		var beside := portable_dir()
+		if beside != "":
+			out.append(beside)
 	if pack_mounted:
 		out.append(PACK_DIR)
 	out.append(SEARCH_DIRS[1])
@@ -111,6 +137,7 @@ static func clear_caches() -> void:
 	_set_icon_cache.clear()
 	_region_cache.clear()
 	_original_cache.clear()
+	_catalogue_cache.clear()
 
 static var _texture_cache: Dictionary = {}
 static var _font_cache: Dictionary = {}
@@ -168,66 +195,312 @@ static func season() -> String:
 	return season_for(int(date.get("month", 0)), int(date.get("day", 0)))
 
 
-## THE 2x PICTURES (2026-10-17). `tools/upscale_skin.py` writes a copy of
-## each skin picture at twice the size, `<key>@2x.png`, to sit BESIDE
-## `<key>.png` — loose in the same folder, or in its own zip
-## (`original_skin_realesrgan-anime_2x.zip`) mounted into the same
-## `res://skin/` ([SkinPack]). The game is laid out for 1280x800 and
-## drawn at the screen's real resolution, so on a big screen the 1997
-## pictures are stretched; the copy gives that stretch real pixels.
+## THE CATALOGUE (2026-10-17). A skin may carry `catalogue.txt` at its
+## top, beside its pictures, saying which of its files the game wears in
+## each place. The owner: *"game should just pickup images according to
+## some catalogue in the skin where every image is assigned to a specific
+## location game looks for (not looking for specific image file names) -
+## maybe the key should be original lile names but modders can then put
+## any image to these names"*. One line per place:
 ##
-## A 2x picture is worn as an ImageTexture of the big image whose SIZE is
-## overridden to the 1997 one ([method picture]). Everything that DRAWS
+##     title_background.png = title_background@2x.png
+##
+## The left side is the SLOT, named by the file the game looks for (the
+## 1997 names, `docs/skin-catalogue.txt`); the right side is any file of
+## the same skin. A `#` line is a comment and the first `=` splits; a file
+## that would leave the skin (a leading `/`, a `..` part, a backslash) is
+## not read, and a slot named twice takes its last line
+## ([method parse_catalogue]). A slot the catalogue does not name — every
+## slot of every skin made before it — is looked for under its own name,
+## and so is one whose line names a file that is not there. Each place
+## ([method search_dirs]) reads its own: a loose folder's catalogue
+## speaks for that folder, the worn zip's for the zip.
+const CATALOGUE := "catalogue.txt"
+
+static var _catalogue_cache: Dictionary = {}
+
+
+## [param text] as `{slot: file}` — the rules above, and nothing else
+## (`tools/skin_catalogue.py` reads a catalogue the same way for --check).
+static func parse_catalogue(text: String) -> Dictionary:
+	var out := {}
+	for raw in text.trim_prefix("﻿").split("\n"):
+		var line := raw.strip_edges()
+		if line == "" or line.begins_with("#"):
+			continue
+		var at := line.find("=")
+		if at < 0:
+			continue
+		var slot := line.substr(0, at).strip_edges()
+		var file := line.substr(at + 1).strip_edges()
+		if slot == "" or file == "" or file.begins_with("/") \
+				or file.contains("\\") or ".." in file.split("/"):
+			continue
+		out[slot] = file
+	return out
+
+
+## The catalogue of the place [param dir] ([method search_dirs]), `{}`
+## when it has none.
+static func catalogue_at(dir: String) -> Dictionary:
+	if not _catalogue_cache.has(dir):
+		var path := locate(dir + "/" + CATALOGUE)
+		_catalogue_cache[dir] = parse_catalogue(FileAccess.get_file_as_string(path)) \
+			if FileAccess.file_exists(path) else {}
+	return _catalogue_cache[dir]
+
+
+## THE @2x NAME, STILL READ. 0.50.28's tool wrote each big picture as
+## `<key>@2x.png` beside `<key>.png`, and 0.50.29 wore it from there; the
+## owner, the same evening: *"I allready have built 2x skin so we will
+## reuse it also so keep the previous skin filenames also valid for skin
+## reader ;)"*. So a picture slot the catalogue does not name wears its
+## `@2x` file when the place has one — an unwritten line `x.png =
+## x@2x.png` — and a written `x.png = x.png` picks the 1x file over it.
+## The 2x skin tools/upscale_skin.py writes uses these names too, and
+## lists them all.
+const SCALED_SUFFIX := "@2x"
+
+
+## The `@2x` name of a picture's file: `title_background.png` ->
+## `title_background@2x.png`.
+static func scaled_path(path: String) -> String:
+	return path.get_basename() + SCALED_SUFFIX + "." + path.get_extension()
+
+
+## Whether [param file] is a `@2x` picture rather than a slot of its own —
+## the portrait chooser folds one into the face it doubles.
+static func is_scaled_name(file: String) -> bool:
+	return file.get_basename().ends_with(SCALED_SUFFIX)
+
+
+## What the place [param dir] wears for [param slot], `{path, own}`, the
+## path empty when the place has nothing for it: the file its catalogue
+## names, else the slot's `@2x` picture, else the slot's own file. `own`
+## is the slot's own file in the same place when the path is another one
+## ("" otherwise) — the 1x pixels [method original] reads.
+static func _in_place(dir: String, slot: String) -> Dictionary:
+	var own := locate(dir + "/" + slot)
+	var own_there := FileAccess.file_exists(own)
+	var listed := String(catalogue_at(dir).get(slot, ""))
+	if listed != "":
+		var path := locate(dir + "/" + listed)
+		if FileAccess.file_exists(path):
+			return {"path": path, "own": own if own_there and path != own else ""}
+	if slot.get_extension() == "png" and not is_scaled_name(slot):
+		var twice := locate(dir + "/" + scaled_path(slot))
+		if FileAccess.file_exists(twice):
+			return {"path": twice, "own": own if own_there else ""}
+	return {"path": own if own_there else "", "own": ""}
+
+
+## [param path], a file the portrait chooser found by listing a folder,
+## as its place wears it: `{path, own}` the way [method _slot] answers.
+## The place is the search folder it lies in, else its own folder.
+static func worn(path: String) -> Dictionary:
+	var dir := path.get_base_dir()
+	for place in search_dirs():
+		if path.begins_with(String(place) + "/"):
+			dir = place
+			break
+	var found := _in_place(dir, path.trim_prefix(dir + "/"))
+	return found if String(found["path"]) != "" else {"path": locate(path), "own": ""}
+
+
+## THE 2x PICTURES — the sizes a skin's picture may come in (2026-10-17;
+## the owner: *"Lets just document what kind of resoutions are supported
+## ao croppers n game Know what to do"*).
+##
+## The game is laid out for 1280x800 around the 1997 pictures and drawn
+## at the screen's real resolution, so on a big screen a 1997 picture is
+## stretched. A skin may therefore give any picture at 1x, 2x, 3x or 4x
+## ITS SLOT'S SIZE — [constant SIZES], the 1997 file's, or, failing that,
+## the size of the 1x file the same place holds under the slot's own name
+## (a portrait beside its 2x copy) — and the game wears it at the slot's
+## size with all its pixels ([method picture]). Any other size is worn at
+## its own size, as every picture was before: right for what is stretched
+## (backdrops, panels), wrong for a SHEET, whose cells are cut at fixed
+## coordinates. `docs/skin-catalogue.txt` (SIZES AND SCALES) says so to
+## the people who draw them.
+##
+## A big picture is an ImageTexture of the big image whose SIZE is
+## overridden to the slot's ([method texture_of]). Everything that DRAWS
 ## it therefore keeps working in 1997 coordinates — measured under Xvfb
 ## on 2026-10-17: AtlasTexture regions, NinePatchRect and StyleBoxTexture
 ## margins, `region_rect`, tiling and `draw_texture_rect_region` all read
 ## the overridden size — and only code that reads the PIXELS
 ## (`get_image()`) sees the big picture. That code asks [method scale_of],
 ## cuts with [method cut], wraps what it made in [method texture_of], and
-## decides colour keys on [method original]'s 1997 pixels, which [method
-## lift_alpha] carries up to the big ones.
+## decides colour keys on [method original]'s pixels at the slot's size,
+## which [method lift_alpha] carries up to the big ones.
 ##
-## The copy is read only from the folder its 1997 picture came from — a 2x
-## copy of the 1997 skin never dresses a skin somebody drew themselves —
-## and only when it is exactly twice that picture's size. The `skin_2x`
-## key ([method GamePaths.use_skin_2x]) switches the copies off.
-const SCALED_SUFFIX := "@2x"
-const PICTURE_SCALE := 2
-## Where a 2x texture keeps its scale and its 1997 file.
+## Until 2026-10-17 the big pictures were COPIES, `<key>@2x.png` beside
+## the 1997 file, out of a zip of their own mounted beside the skin and
+## worn under a switch (`skin_2x`, Options > Skin > "Wear the 2x
+## pictures"). The owner: *"Users are confused and also when they turn
+## off the wear 2d pictures the game still Uses them! ... A skin is a
+## skin and gets applied after game reset. No switches."* — and *"hires
+## skin zip is hires, low res skin zip is low res oroginal - simple"*.
+## The switch was read as each picture first loaded, so turning it off
+## changed nothing on screen until a restart. Now a big picture is simply
+## what the worn skin holds: the 2x skin `tools/upscale_skin.py` writes is
+## a whole skin, chosen like the 1997 one — every 1997 file, each
+## picture's `<key>@2x.png` beside it, and a catalogue naming them — and
+## mixing is a catalogue line.
+
+## THE 1997 SIZE OF EVERY PICTURE SLOT, by key — what a picture's size is
+## measured against ([method scale_for]). The sizes `docs/skin-catalogue.csv`
+## lists, measured off a 1997 skin by `tools/skin_catalogue.py`;
+## `tools/test_skin_catalogue.py` holds this table to that file. The
+## coin-toss sheets are not here (their `.json` describes their own
+## pixels) and neither are the portraits (fitted to their frame, any size).
+const SIZES := {
+	"title_background": Vector2i(640, 480),
+	"menu_background": Vector2i(640, 480),
+	"character_select_background": Vector2i(640, 480),
+	"duel_pattern_white": Vector2i(721, 381),
+	"duel_pattern_blue": Vector2i(721, 381),
+	"duel_pattern_black": Vector2i(888, 381),
+	"duel_pattern_red": Vector2i(888, 381),
+	"duel_pattern_green": Vector2i(721, 381),
+	"duel_picture_white": Vector2i(888, 381),
+	"duel_picture_blue": Vector2i(721, 381),
+	"duel_picture_black": Vector2i(888, 381),
+	"duel_picture_red": Vector2i(721, 381),
+	"duel_picture_green": Vector2i(888, 381),
+	"duel_mana_white": Vector2i(721, 381),
+	"duel_mana_blue": Vector2i(721, 381),
+	"duel_mana_black": Vector2i(721, 381),
+	"duel_mana_red": Vector2i(721, 381),
+	"duel_mana_green": Vector2i(721, 381),
+	"card_back": Vector2i(228, 323),
+	"card_frame_white": Vector2i(228, 325),
+	"card_frame_blue": Vector2i(228, 325),
+	"card_frame_black": Vector2i(228, 325),
+	"card_frame_red": Vector2i(228, 325),
+	"card_frame_green": Vector2i(228, 325),
+	"card_frame_gold": Vector2i(228, 325),
+	"card_frame_artifact": Vector2i(228, 325),
+	"card_frame_land_white": Vector2i(228, 325),
+	"card_frame_land_blue": Vector2i(228, 325),
+	"card_frame_land_black": Vector2i(228, 325),
+	"card_frame_land_red": Vector2i(228, 325),
+	"card_frame_land_green": Vector2i(228, 325),
+	"life_panel_white": Vector2i(120, 88),
+	"life_panel_blue": Vector2i(120, 88),
+	"life_panel_black": Vector2i(120, 88),
+	"life_panel_red": Vector2i(120, 88),
+	"life_panel_green": Vector2i(120, 88),
+	"duelist_face_white": Vector2i(120, 88),
+	"duelist_face_blue": Vector2i(120, 88),
+	"duelist_face_black": Vector2i(120, 88),
+	"duelist_face_red": Vector2i(120, 88),
+	"duelist_face_green": Vector2i(120, 88),
+	"panel_stone": Vector2i(400, 350),
+	"versus_background": Vector2i(659, 394),
+	"versus_splash": Vector2i(500, 400),
+	"panel_dark_stone": Vector2i(289, 274),
+	"panel_knot": Vector2i(481, 323),
+	"panel_end_duel": Vector2i(272, 422),
+	"attack_panel": Vector2i(888, 316),
+	"mana_pool_panel": Vector2i(128, 188),
+	"spell_chain_panel": Vector2i(139, 200),
+	"message_panel": Vector2i(600, 35),
+	"big_card_panel": Vector2i(552, 402),
+	"button_normal": Vector2i(131, 36),
+	"button_pressed": Vector2i(131, 36),
+	"button_disabled": Vector2i(131, 36),
+	"stat_buttons": Vector2i(768, 48),
+	"begin_menu": Vector2i(265, 432),
+	"phase_bar": Vector2i(82, 760),
+	"combat_bar": Vector2i(164, 760),
+	"attack_min": Vector2i(39, 70),
+	"attack_sword": Vector2i(56, 132),
+	"attack_shield": Vector2i(44, 128),
+	"attack_bones": Vector2i(777, 70),
+	"hand_panel_white": Vector2i(145, 51),
+	"hand_panel_blue": Vector2i(145, 51),
+	"hand_panel_black": Vector2i(145, 51),
+	"hand_panel_red": Vector2i(145, 51),
+	"hand_panel_green": Vector2i(145, 51),
+	"grave_panel_white": Vector2i(61, 91),
+	"grave_panel_blue": Vector2i(61, 91),
+	"grave_panel_black": Vector2i(61, 91),
+	"grave_panel_red": Vector2i(61, 91),
+	"grave_panel_green": Vector2i(61, 91),
+	"mana_stripes": Vector2i(54, 126),
+	"summon_sick": Vector2i(194, 97),
+	"state_dying": Vector2i(194, 97),
+	"state_cant_target": Vector2i(130, 65),
+	"state_will_untap": Vector2i(110, 59),
+	"ability_icons": Vector2i(22, 396),
+	"damage_marker": Vector2i(94, 20),
+	"card_counters": Vector2i(24, 750),
+	"target_cursor": Vector2i(122, 61),
+	"set_icon_atq": Vector2i(40, 40),
+	"set_icon_arn": Vector2i(40, 40),
+	"set_icon_past": Vector2i(40, 40),
+	"set_icon_drk": Vector2i(40, 40),
+	"set_icon_4ed": Vector2i(40, 40),
+	"set_icon_leg": Vector2i(40, 40),
+	"card_set_symbols": Vector2i(330, 15),
+	"mana_symbols": Vector2i(342, 18),
+	"filter_icons": Vector2i(360, 120),
+	"filter_icons_hover": Vector2i(360, 120),
+	"filter_icons_pressed": Vector2i(360, 120),
+	"deck_slot_plaques": Vector2i(585, 200),
+	"deck_title_slab": Vector2i(291, 73),
+	"deck_bar_ground": Vector2i(1006, 198),
+	"deck_tile_olive": Vector2i(32, 32),
+	"deck_tile_slate": Vector2i(32, 32),
+}
+
+## Up to how many times its slot's size a picture is worn as a big one.
+const MAX_SCALE := 4
+## Where a big texture keeps its scale, and the slot's own 1x file.
 const SCALE_META := &"skin_scale"
 const ORIGINAL_META := &"skin_original"
 
 
-## The 2x copy's file name for a picture's: `title_background.png` ->
-## `title_background@2x.png`.
-static func scaled_path(path: String) -> String:
-	return path.get_basename() + SCALED_SUFFIX + "." + path.get_extension()
+## How many times [param slot] a picture of [param size] is: 2, 3 or 4
+## for an exact multiple, 1 for anything else (and for no slot size).
+static func scale_for(size: Vector2i, slot: Vector2i) -> int:
+	if slot.x <= 0 or slot.y <= 0:
+		return 1
+	for scale in range(2, MAX_SCALE + 1):
+		if size == slot * scale:
+			return scale
+	return 1
 
 
-## Whether [param file] is a 2x copy rather than a picture of its own —
-## a folder listing (the portraits) skips them.
-static func is_scaled_name(file: String) -> bool:
-	return file.get_basename().ends_with(SCALED_SUFFIX)
-
-
-## A skin picture's texture: its 2x copy beside it when there is one and
-## the copies are on, the 1997 file otherwise. Null when unreadable.
-static func picture(path: String) -> Texture2D:
+## A skin picture's texture: the file at [param path], worn at its slot's
+## size when it is a whole multiple of it. [param key] names the slot
+## ([constant SIZES]); [param own] is the slot's own 1x file in the same
+## place when the catalogue wears another one, "" when there is none.
+## Null when unreadable.
+static func picture(path: String, key := "", own := "") -> Texture2D:
 	var img := Image.load_from_file(path)
 	if img == null:
 		return null
-	if GamePaths.use_skin_2x():
-		var big_path := scaled_path(path)
-		if FileAccess.file_exists(big_path):
-			var big := Image.load_from_file(big_path)
-			if big != null and big.get_size() == img.get_size() * PICTURE_SCALE:
-				var tex := texture_of(big, img.get_size())
-				# Only the path: [method original] reads the 1997 pixels for
-				# the few cutters that key or measure, and keeping every 1x
-				# image beside its 2x texture would hold the skin twice.
-				tex.set_meta(ORIGINAL_META, path)
-				return tex
-	return ImageTexture.create_from_image(img)
+	if own == path:
+		own = ""
+	var slot: Vector2i = SIZES.get(key, Vector2i.ZERO)
+	var scale := scale_for(img.get_size(), slot)
+	if scale == 1 and own != "":
+		# No 1997 size it fits: the slot's own file says what 1x is here.
+		var one := Image.load_from_file(own)
+		if one != null:
+			slot = one.get_size()
+			scale = scale_for(img.get_size(), slot)
+	if scale == 1:
+		return ImageTexture.create_from_image(img)
+	var tex := texture_of(img, slot)
+	if own != "":
+		# Only the path: [method original] reads the 1x pixels for the few
+		# cutters that key or measure, and keeping every 1x image beside
+		# its big texture would hold the skin twice.
+		tex.set_meta(ORIGINAL_META, own)
+	return tex
 
 
 ## How many image pixels [param tex] holds per drawn pixel: 2 for a 2x
@@ -239,7 +512,7 @@ static func scale_of(tex: Texture2D) -> int:
 
 
 ## A texture of [param img] that is drawn at [param logical] — the size
-## the 1997 picture had. Same size: a plain texture.
+## its slot has. Same size: a plain texture.
 static func texture_of(img: Image, logical: Vector2i) -> ImageTexture:
 	var tex := ImageTexture.create_from_image(img)
 	if logical.x > 0 and img.get_size() != logical:
@@ -260,29 +533,52 @@ static func cut(tex: Texture2D, rect: Rect2i) -> Image:
 	return tex.get_image().get_region(image_rect(tex, rect))
 
 
-## [param tex]'s 1997 pixels, at its drawn size: the file the 2x copy was
-## made from, or the texture's own image. For code that MEASURES a picture
-## or keys a colour out of it — an exact key (pure black, near white)
-## answers on the 1997 palette, never on an upscaler's blend of it.
+## [param tex]'s pixels at its drawn size, for code that MEASURES a
+## picture or keys a colour out of it. A 1x texture's own image. A big
+## one's: the slot's own 1x file when the skin holds one at that size —
+## the 2x skin keeps every 1997 picture beside its `@2x` one, so an exact
+## key (pure black, near white) answers on the 1997 palette, never on an
+## upscaler's blend of it — else the big picture shrunk back ([method
+## shrunk]), whose every pixel is the average of the block it stands for.
 static var _original_cache: Dictionary = {}
 
 static func original(tex: Texture2D) -> Image:
 	if tex == null:
 		return null
-	if not tex.has_meta(ORIGINAL_META):
+	var scale := scale_of(tex)
+	if scale == 1:
 		return tex.get_image()
-	var path := String(tex.get_meta(ORIGINAL_META))
-	if not _original_cache.has(path):
-		_original_cache[path] = Image.load_from_file(path)
-	var img: Image = _original_cache[path]
-	return (img.duplicate() as Image) if img != null else tex.get_image()
+	var drawn := Vector2i(tex.get_size())
+	if tex.has_meta(ORIGINAL_META):
+		var path := String(tex.get_meta(ORIGINAL_META))
+		if not _original_cache.has(path):
+			_original_cache[path] = Image.load_from_file(path)
+		var img: Image = _original_cache[path]
+		if img != null and img.get_size() == drawn:
+			return img.duplicate() as Image
+	return shrunk(tex.get_image(), scale)
 
 
-## [param big] with the transparency [param small] decided at 1997 size:
-## smoothed up to big's size and cut at half, so an edge stays on or off
-## the way the 1997 key left it, without the 1997 staircase — the same
-## step tools/upscale_skin.py takes for a cut-out. A [param small] of
-## big's own size is used as it is. Both are RGBA8; big is changed and
+## [param img] brought down to a [param scale]th of its size, a block's
+## average per pixel: halved by halving while it can be (`shrink_x2`
+## averages exactly), resampled for the rest (a 3x picture).
+static func shrunk(img: Image, scale: int) -> Image:
+	var out := img.duplicate() as Image
+	var target := img.get_size() / scale
+	var left := scale
+	while left % 2 == 0:
+		out.shrink_x2()
+		left /= 2
+	if out.get_size() != target:
+		out.resize(target.x, target.y, Image.INTERPOLATE_TRILINEAR)
+	return out
+
+
+## [param big] with the transparency [param small] decided at the drawn
+## size: smoothed up to big's size and cut at half, so an edge stays on
+## or off the way the 1x key left it, without the 1997 staircase — the
+## same step tools/upscale_skin.py takes for a cut-out. A [param small]
+## of big's own size is used as it is. Both are RGBA8; big is changed and
 ## returned.
 static func lift_alpha(small: Image, big: Image) -> Image:
 	if small.get_size() == big.get_size():
@@ -317,9 +613,9 @@ static func texture(key: String) -> Texture2D:
 	if _texture_cache.has(key):
 		return _texture_cache[key]
 	var result: Texture2D = null
-	var path := _find(key + ".png")
-	if path != "":
-		result = picture(path)
+	var found := _slot(key + ".png")
+	if String(found["path"]) != "":
+		result = picture(String(found["path"]), key, String(found["own"]))
 	_texture_cache[key] = result
 	return result
 
@@ -559,7 +855,7 @@ static func card_art(card_name: String) -> Texture2D:
 	# tools/fetch_card_art.py downloads Scryfall art_crop JPGs (the s30
 	# approach, pre-fetched) into assets/cardart/; skin dirs may override
 	# with PNGs (community art packs).
-	for candidate in [_find(key + ".png"), _find(key + ".jpg"),
+	for candidate in [_find(key + ".png", true), _find(key + ".jpg", true),
 			ProjectSettings.globalize_path("res://assets/cardart/%s.jpg" % _snake(card_name)),
 			ProjectSettings.globalize_path("res://assets/cardart/%s.png" % _snake(card_name))]:
 		if candidate != "" and FileAccess.file_exists(candidate):
@@ -926,9 +1222,16 @@ static func locate(path: String) -> String:
 	return ProjectSettings.globalize_path(path)
 
 
-static func _find(filename: String) -> String:
-	for dir in search_dirs():
-		var path := locate(dir + "/" + filename)
-		if FileAccess.file_exists(path):
-			return path
-	return ""
+## Where the slot [param filename] is worn from: `{path, own}` from the
+## first place that has anything for it ([method _in_place]). An empty
+## path: no place has it.
+static func _slot(filename: String, every := false) -> Dictionary:
+	for dir in search_dirs(every):
+		var found := _in_place(dir, filename)
+		if String(found["path"]) != "":
+			return found
+	return {"path": "", "own": ""}
+
+
+static func _find(filename: String, every := false) -> String:
+	return String(_slot(filename, every)["path"])

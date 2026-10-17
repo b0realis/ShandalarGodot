@@ -16,6 +16,7 @@ rather than going undocumented. The committed TABLE, docs/skin-catalogue
 import csv
 import io
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -271,41 +272,216 @@ class TestCheckingASkin(unittest.TestCase):
         self.assertNotIn("title_background.png", report,
                          "card art is not held to the skin's list")
 
-    def test_a_2x_zip_is_counted_as_copies_not_as_a_skin(self):
-        # tools/upscale_skin.py's zip: pictures at twice the size, named
-        # <key>@2x.png, and the tool's note. Not "every file missing".
-        path = self._zip("twice.zip", {"skin/card_back@2x.png": png_bytes(4, 4),
-                                       "skin/portraits/x@2x.png": png_bytes(4, 4),
-                                       "skin/no_such_key@2x.png": png_bytes(4, 4),
-                                       "skin/UPSCALE.txt": b"note"})
+    def test_check_wears_what_the_catalogue_says_and_names_what_it_cannot(self):
+        catalogue = "\n".join([
+            "# a note, and a blank line",
+            "",
+            "card_back.png = 2x/card_back.png",           # worn from another name
+            "card_frame_red.png = gone/card_frame_red.png",  # not in the skin
+            "title_background.png = ../outside.png",        # out of skin/: ignored
+            "no_such_place.png = card_back.png",            # nothing looks for it
+            "portraits/x.png = faces/x.png",                # a portrait: a place
+        ])
+        path = self._zip("mixed.zip", {
+            "skin/catalogue.txt": catalogue.encode(),
+            "skin/UPSCALE.txt": b"note",
+            "skin/2x/card_back.png": png_bytes(456, 646),
+            "skin/card_back.png": png_bytes(228, 323),
+            "skin/faces/x.png": png_bytes(4, 4),
+            "skin/mana_symbols.png": png_bytes(342, 18),
+            "skin/button_normal.png": png_bytes(140, 40)})
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(cat.check(path), 0)
         text = out.getvalue()
-        self.assertIn("2x pictures, 3 copies", text)
-        self.assertIn("still needed", text)
-        self.assertIn("no_such_key@2x.png", text, "a copy of nothing is named")
-        self.assertNotIn("card_back@2x.png", text)
-        self.assertNotIn("missing", text)
+        self.assertIn("catalogue.txt: 4 places, 2 worn from a file of another name", text)
+        self.assertIn("ignores", text)
+        self.assertIn("    title_background.png = ../outside.png\n", text)
+        self.assertIn("    card_frame_red.png = gone/card_frame_red.png\n", text)
+        self.assertIn("never looks for", text)
+        self.assertIn("    no_such_place.png\n", text)
+        # Present: card_back (by the catalogue), mana_symbols, button_normal.
+        self.assertIn("3 of %d named files present" % len(cat.expected_files()), text)
+        # The 2x card back, the 1x mana sheet, and a button of no multiple.
+        self.assertIn("pictures by size: 1 at 1x, 1 at 2x", text)
+        self.assertIn("button_normal.png", text.split("another size")[1])
+        self.assertIn("140 x 40 (1997: 131 x 36)", text)
+        tail = text.split("ignored by the game")[-1] if "not in the catalogue" in text else ""
+        for name in ("catalogue.txt", "UPSCALE.txt", "2x/card_back.png"):
+            self.assertNotIn(name, tail, "%s is no stray file" % name)
 
-    def test_copies_in_a_skin_are_neither_portraits_nor_unknown(self):
-        path = self._zip("both.zip", {"skin/card_back.png": png_bytes(2, 2),
-                                      "skin/card_back@2x.png": png_bytes(4, 4),
-                                      "skin/portraits/x.png": png_bytes(2, 2),
-                                      "skin/portraits/x@2x.png": png_bytes(4, 4)})
+    def _report(self, path: Path) -> str:
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(cat.check(path), 0)
-        text = out.getvalue()
-        self.assertIn(", 1 portraits,", text)
-        self.assertIn("2 2x copies beside them", text)
-        self.assertNotIn("card_back@2x.png", text)
+        return out.getvalue()
+
+    def test_an_at_2x_picture_beside_its_place_is_worn_there(self):
+        # The 0.50.28 names, kept (the owner: *"keep the previous skin
+        # filenames also valid"*): no catalogue, <name>@2x.png beside.
+        text = self._report(self._zip("beside.zip", {
+            "skin/card_back.png": png_bytes(228, 323),
+            "skin/card_back@2x.png": png_bytes(456, 646),
+            "skin/mana_symbols@2x.png": png_bytes(684, 36),
+            "skin/portraits/x.png": png_bytes(4, 4),
+            "skin/portraits/x@2x.png": png_bytes(8, 8),
+            "skin/nothing@2x.png": png_bytes(8, 8)}))
+        self.assertIn("2 of %d named files present, 1 portraits," % len(cat.expected_files()),
+                      text, "a copy is its place's picture, never a portrait of its own")
+        self.assertIn("pictures by size: 2 at 2x", text)
+        unknown = text.split("not in the catalogue")[-1]
+        self.assertNotIn("card_back@2x.png", unknown)
+        self.assertNotIn("mana_symbols@2x.png", unknown)
+        self.assertIn("nothing@2x.png", unknown, "a copy of no place is still a stray")
+        self.assertNotIn("pictures only", text)
+
+    def test_a_line_naming_the_place_itself_wears_the_1x_over_the_at_2x(self):
+        files = {"skin/card_back.png": png_bytes(228, 323),
+                 "skin/card_back@2x.png": png_bytes(456, 646)}
+        self.assertIn("1 at 2x", self._report(self._zip("a.zip", files)))
+        files["skin/catalogue.txt"] = b"card_back.png = card_back.png\n"
+        self.assertIn("pictures by size: 1 at 1x —", self._report(self._zip("b.zip", files)))
+        self.assertEqual(cat.worn_file("card_back.png", {}, set(n[5:] for n in files)),
+                         "card_back@2x.png")
+        sound_copy = "sfx_tap" + cat.SCALED_SUFFIX + ".wav"
+        self.assertEqual(cat.worn_file("sfx_tap.wav", {}, {sound_copy}), None,
+                         "the @2x name is a picture's alone")
+
+    def test_the_0_50_28_zip_is_pictures_only_and_says_how_to_make_a_skin(self):
+        text = self._report(self._zip("original_skin_realesrgan-anime_2x.zip", {
+            "skin/card_back@2x.png": png_bytes(456, 646),
+            "skin/portraits/x@2x.png": png_bytes(8, 8),
+            "skin/UPSCALE.txt": b"note"}))
+        self.assertIn("pictures only", text)
+        self.assertIn("upscale_skin.py --skin original_skin.zip --reuse "
+                      "original_skin_realesrgan-anime_2x.zip", text)
+        self.assertIn(", 0 portraits,", text)
+
+    def test_a_keyed_picture_above_1x_wants_its_1x_file_beside_it(self):
+        """The owner, 2026-10-17: *"that is important, tell the player"* —
+        a keyed picture worn at 2x without the 1997 file of its own name is
+        cut less exactly; with it, exactly. A picture nothing keys is
+        never named."""
+        rough = self._report(self._zip("rough.zip", {
+            "skin/mana_stripes@2x.png": png_bytes(108, 252),
+            "skin/duel_mana_red.png": png_bytes(1442, 762),      # 2x, own name
+            "skin/card_back@2x.png": png_bytes(456, 646)}))      # not keyed
+        listed = rough.split("cut less")[1] if "cut less" in rough else ""
+        self.assertIn("    mana_stripes.png ", listed)
+        self.assertIn("MiniCard.stripe_texture", listed)
+        self.assertIn("duel_mana_red.png", listed)
+        self.assertIn("TerritoryGround._inner", listed)
+        self.assertNotIn("card_back", listed)
+        exact = self._report(self._zip("exact.zip", {
+            "skin/mana_stripes.png": png_bytes(54, 126),
+            "skin/mana_stripes@2x.png": png_bytes(108, 252)}))
+        self.assertNotIn("cut less", exact)
+
+    def test_the_keyed_places_are_named_with_their_cutters(self):
+        self.assertIn("SetBadges", cat.keyed_by("card_set_symbols.png"))
+        self.assertIn("masked_sprite", cat.keyed_by("attack_bones.png"))
+        self.assertIn("TerritoryGround", cat.keyed_by("duel_picture_green.png"))
+        self.assertIn("ExilePlate", cat.keyed_by("grave_panel_blue.png"))
+        self.assertIsNone(cat.keyed_by("card_back.png"))
+        self.assertIsNone(cat.keyed_by("duel_mana.png"), "a family is a prefix of a name")
+        sizes = cat.sizes_1997()
+        for name, _ in cat.KEYED:
+            if name.endswith("_"):
+                self.assertTrue(any(place.startswith(name) for place in sizes), name)
+            else:
+                self.assertIn(name + ".png", sizes, "a keyed place the game draws")
+
+    def test_a_catalogue_in_a_folder_and_in_a_tar_is_read_the_same(self):
+        files = {"catalogue.txt": b"card_back.png = big/back.png\n",
+                 "big/back.png": png_bytes(684, 969)}
+        folder = self.dir / "skin"
+        for name, body in files.items():
+            (folder / name).parent.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_bytes(body)
+        tar = self.dir / "skin.tar.gz"
+        with tarfile.open(tar, "w:gz") as tf:
+            for name, body in files.items():
+                info = tarfile.TarInfo("skin/" + name)
+                info.size = len(body)
+                tf.addfile(info, io.BytesIO(body))
+        for target in (folder, tar):
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(cat.check(target), 0)
+            self.assertIn("1 at 3x", out.getvalue(), target)
+            self.assertEqual(cat.read_files(target, {"big/back.png"}, 33)["big/back.png"],
+                             png_bytes(684, 969)[:33])
 
     def test_check_refuses_what_is_not_a_skin(self):
         path = self.dir / "page.zip"
         path.write_bytes(b"<html>")
         with redirect_stdout(io.StringIO()):
             self.assertEqual(cat.check(path), 1)
+
+
+class TestTheSkinsOwnCatalogue(unittest.TestCase):
+    """skin/catalogue.txt, read the way game/skin.gd reads it (the owner,
+    2026-10-17: *"every image is assigned to a specific location game
+    looks for"*), and the 1997 sizes a picture is measured against."""
+
+    def test_a_line_is_a_place_and_the_file_worn_there(self):
+        self.assertEqual(cat.read_catalogue(
+            "title_background.png = 2x/title_background.png\n"
+            "  portraits/agnosia.png=faces/a b.png  \n"
+            "sfx_tap.wav = sounds/tap.wav\r\n"),
+            {"title_background.png": "2x/title_background.png",
+             "portraits/agnosia.png": "faces/a b.png",
+             "sfx_tap.wav": "sounds/tap.wav"})
+
+    def test_notes_and_blank_lines_are_nothing(self):
+        self.assertEqual(cat.parse_catalogue("# card_back.png = x.png\n\n   \n"
+                                             "   # indented note = y\n"), ({}, []))
+
+    def test_the_first_equals_splits_and_the_last_line_wins(self):
+        self.assertEqual(cat.read_catalogue("card_back.png = a=b.png\n"
+                                            "card_back.png = c.png\n"
+                                            "mana_symbols.png = 1.png\n"),
+                         {"card_back.png": "c.png", "mana_symbols.png": "1.png"})
+
+    def test_a_line_the_game_cannot_take_is_ignored_and_said(self):
+        lines = ["no equals here", "= nameless.png", "card_back.png =",
+                 "card_back.png = /etc/passwd", "card_back.png = ..\\up.png",
+                 "card_back.png = ../up.png", "card_back.png = a/../../up.png",
+                 "card_back.png = 2x\\card_back.png"]
+        places, ignored = cat.parse_catalogue("\n".join(lines + ["card_back.png = ok..png"]))
+        self.assertEqual(places, {"card_back.png": "ok..png"},
+                         "dots in a name are a name; '..' as a part is a climb")
+        self.assertEqual(ignored, lines)
+
+    def test_the_1997_sizes_are_the_tables_pictures(self):
+        sizes = cat.sizes_1997()
+        self.assertEqual(sizes["title_background.png"], (640, 480))
+        self.assertEqual(sizes["mana_symbols.png"], (342, 18))
+        self.assertNotIn("coin_toss_heads.png", sizes, "a movie sheet has no place size")
+        self.assertFalse(any(name.startswith("portraits/") for name in sizes))
+        self.assertEqual(cat.sizes_1997((ROOT / "no_such.csv",)), {})
+
+    def test_whole_multiples_up_to_four_are_scales(self):
+        self.assertEqual(cat.scale_of(640, 480, (640, 480)), 1)
+        self.assertEqual(cat.scale_of(1280, 960, (640, 480)), 2)
+        self.assertEqual(cat.scale_of(2560, 1920, (640, 480)), 4)
+        self.assertIsNone(cat.scale_of(3200, 2400, (640, 480)), "5x is past the top")
+        self.assertIsNone(cat.scale_of(1280, 480, (640, 480)), "both ways or not at all")
+        self.assertIsNone(cat.scale_of(800, 600, (640, 480)))
+
+    def test_the_game_knows_the_same_sizes(self):
+        """game/skin.gd's SIZES — what the game lays a picture out at, and
+        measures its scale against — is this catalogue's table, place for
+        place (coin-toss sheets and portraits have no place size)."""
+        source = (ROOT / "game" / "skin.gd").read_text(encoding="utf-8")
+        block = re.search(r"^const SIZES := \{\n(.*?)^\}", source, re.M | re.S)
+        self.assertIsNotNone(block, "game/skin.gd has no `const SIZES := {` block")
+        game = {}
+        for line in block.group(1).splitlines():
+            found = re.fullmatch(r'\t"([a-z0-9_]+)": Vector2i\((\d+), (\d+)\),', line)
+            self.assertIsNotNone(found, "one entry a line: %r" % line)
+            game[found.group(1) + ".png"] = (int(found.group(2)), int(found.group(3)))
+        self.assertEqual(game, cat.sizes_1997((ROOT / "docs" / "skin-catalogue.csv",)))
 
 
 class TestCheckRefusesWhatTheGameRefuses(unittest.TestCase):

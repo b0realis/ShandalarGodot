@@ -158,7 +158,8 @@ static func all() -> Array[Dictionary]:
 		looked.append(dirs[i])
 	for dir_path in looked:
 		for file in _files_in(dir_path):
-			var id := file.get_basename()
+			# A lone `x@2x.png` is the face `x` (GameSkin, THE @2x NAME).
+			var id := file.get_basename().trim_suffix(GameSkin.SCALED_SUFFIX)
 			if seen.has(id):
 				continue          # an earlier directory already has it
 			seen[id] = true
@@ -196,9 +197,12 @@ static func texture(id: String) -> Texture2D:
 				path.trim_prefix(GameSkin.OUR_ART_DIR + "/").get_basename())
 			break
 		# `GameSkin.locate`, not a bare globalize: a portrait inside the
-		# mounted skin pack is read at its `res://skin/` name. Read the way
-		# a skin picture is, so its 2x copy beside it is worn at its size.
-		result = GameSkin.picture(GameSkin.locate(path))
+		# mounted skin pack is read at its `res://skin/` name. Through its
+		# skin's catalogue (`portraits/x.png = 2x/portraits/x.png`) and read
+		# the way a skin picture is, so a 2x face is worn at its 1x one's
+		# size (GameSkin, THE CATALOGUE, THE 2x PICTURES).
+		var found := GameSkin.worn(path)
+		result = GameSkin.picture(String(found["path"]), "", String(found["own"]))
 		break
 	_textures[id] = result
 	return result
@@ -269,13 +273,16 @@ static func _files_in(dir_path: String) -> PackedStringArray:
 	while file != "":
 		if not dir.current_is_dir():
 			var named := file.trim_suffix(".import").trim_suffix(".remap")
-			# A 2x copy is the face beside it, not a face of its own
-			# (GameSkin, THE 2x PICTURES).
-			if _is_image(named) and not GameSkin.is_scaled_name(named) \
-					and not out.has(named):
+			if _is_image(named) and not out.has(named):
 				out.append(named)
 		file = dir.get_next()
 	dir.list_dir_end()
+	# A face's `@2x` picture beside it is that face, worn through it
+	# ([method GameSkin.worn]), not a face of its own.
+	for named in out.duplicate():
+		if GameSkin.is_scaled_name(named) and out.has(
+				named.get_basename().trim_suffix(GameSkin.SCALED_SUFFIX) + "." + named.get_extension()):
+			out.remove_at(out.find(named))
 	out.sort()
 	return out
 

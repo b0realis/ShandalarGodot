@@ -105,18 +105,23 @@ extends Node
 ## `build_release.sh --web --skin` places both zips, `--web` alone does
 ## not.
 
-## THE 2x ZIP (2026-10-17): `tools/upscale_skin.py` writes the skin's
-## pictures again at twice the size, `skin/<key>@2x.png`, into a zip of
-## their own (`original_skin_realesrgan-anime_2x.zip`). It is a third
-## kind, "skin2x" — known by what it holds, every picture an `@2x` one
-## ([method inspect]) — and it is never WORN the way a skin zip is: it
-## dresses nothing alone, it sits beside the skin. So it is mounted
-## alongside, after the skin zips: every such zip in the skins folder and
-## beside the game at boot ([method _mount_scaled]), and one chosen or
-## dropped is kept in the skins folder and mounted at once without
-## taking the `skin_zip` key ([method _wear]). [GameSkin] reads a 2x copy
-## only beside its own 1997 picture, which for a zip means both mounted
-## at `res://skin/`.
+## ONE SKIN (2026-10-17; the owner: *"A skin is a skin and gets
+## applied after game reset. No switches."*, *"hires skin zip is hires,
+## low res skin zip is low res oroginal - simple"*). Exactly one skin zip
+## is worn: the player's own when there is one, else the one beside the
+## game — until then both were mounted and the shipped one filled every
+## file the player's lacked, which a skin with a catalogue
+## ([GameSkin], THE CATALOGUE) cannot survive: the other zip's
+## `catalogue.txt` and `2x/` pictures would dress a skin that has
+## neither. While a skin zip is worn the loose folders are not read
+## either ([member GameSkin.zip_worn]). A skin that arrives while
+## another is worn is worn from the next start, the notice offering the
+## restart — the engine cannot unmount, so the two would mix until then;
+## on the title screen with no skin zip worn yet nothing can mix, and
+## the title is simply started again on it. The 2x skin
+## (`tools/upscale_skin.py`) is a skin like any other: until 2026-10-17
+## its pictures were a zip of `@2x` copies, a kind of its own ("skin2x")
+## mounted BESIDE the skin and worn under a switch (`skin_2x`).
 
 ## A pack was mounted after boot; the argument is its kind.
 signal changed(kind: String)
@@ -130,12 +135,6 @@ const KINDS: Array[String] = ["skin", "cardart"]
 ## The zips' names, wherever they live.
 const FILE_NAME := "original_skin.zip"
 const ART_FILE_NAME := "cardart.zip"
-## The name a 2x zip falls back to when it arrives under no usable name
-## of its own ([method home_for]).
-const SCALED_FILE_NAME := "original_skin_2x.zip"
-## What a 2x zip may hold besides its pictures: the tool's note, and the
-## label of a skin the Manalink door filled (tools/import_manalink.py).
-const SCALED_COMPANIONS: Array[String] = ["UPSCALE.txt", "from_manalink.txt"]
 ## The player's own SKIN zips: dropped, chosen or fetched; the one worn
 ## is [method own_skin_zip]. Card packs go in the card folder instead
 ## ([method GamePaths.cardpacks_folder]).
@@ -256,10 +255,10 @@ func _ready() -> void:
 	if not folder_instead:
 		_mount_if_present(own_skin_zip(), false)
 	_mount_art_cardpacks()
-	if not folder_instead:
+	# ONE SKIN: the one beside the game only when the player wears none.
+	if not folder_instead and not has("skin"):
 		_mount_if_present(portable_zip("skin"), false)
 	_mount_if_present(portable_zip("cardart"), false)
-	_mount_scaled()
 	# A tar beside the game, where a zip was looked for and none found.
 	repack_beside(GameSkin.portable_dir())
 	get_tree().root.files_dropped.connect(_on_files_dropped)
@@ -324,25 +323,7 @@ func _process(_delta: float) -> void:
 
 ## The name a zip of [param kind] goes by.
 static func file_name(kind: String) -> String:
-	if kind == "skin2x":
-		return SCALED_FILE_NAME
 	return ART_FILE_NAME if kind == "cardart" else FILE_NAME
-
-
-## Every 2x zip in the skins folder and beside the game, mounted after
-## the skin zips — the order its pictures are looked for in, by name.
-## Only a zip that is one is mounted: the skins folder holds the
-## player's other skin zips too, and they stay closed.
-func _mount_scaled() -> void:
-	var places: Array[String] = _zips_in(USER_DIR)
-	var beside := GameSkin.portable_dir()
-	if beside != "":
-		places.append_array(_zips_in(beside))
-	for path in places:
-		if mounted.has(path):
-			continue
-		if String(inspect(path).get("kind", "")) == "skin2x":
-			mount(path, false)
 
 
 ## Where a zip of [param kind] the player chose, dropped or fetched goes
@@ -362,10 +343,6 @@ static func home_for(kind: String, name: String) -> String:
 	var file := name.get_file()
 	if file.get_extension().to_lower() != "zip" or not file.is_valid_filename():
 		file = file_name(kind)
-	# A 2x zip under the skin zip's own name would land on the player's
-	# skin zip and take its place.
-	if kind == "skin2x" and file == FILE_NAME:
-		file = SCALED_FILE_NAME
 	return user_zip(kind).get_base_dir().path_join(file)
 
 
@@ -545,8 +522,6 @@ static func inspect(path: String) -> Dictionary:
 		return _refusal("not a zip file")
 	var files := 0
 	var art := 0
-	var scaled := 0
-	var companions := 0
 	for name in reader.get_files():
 		if name.ends_with("/"):
 			continue
@@ -557,15 +532,9 @@ static func inspect(path: String) -> Dictionary:
 		files += 1
 		if name.begins_with(ART_PREFIX):
 			art += 1
-		elif GameSkin.is_scaled_name(name.get_file()):
-			scaled += 1
-		elif SCALED_COMPANIONS.has(name.trim_prefix(PREFIX)):
-			companions += 1
 	reader.close()
 	if files == 0:
 		return _refusal("no skin/ folder inside")
-	if scaled > 0 and scaled + companions == files:
-		return {"ok": true, "kind": "skin2x", "files": scaled, "art": 0, "why": ""}
 	return {"ok": true, "kind": "cardart" if art == files else "skin",
 		"files": files, "art": art, "why": ""}
 
@@ -600,6 +569,8 @@ func mount(path: String, replace: bool) -> bool:
 		mounted.append(path)
 	_reports[path] = report
 	GameSkin.pack_mounted = true
+	if report["kind"] == "skin":
+		GameSkin.zip_worn = true
 	# stderr, like the card packs' "found" line: a released binary mounts
 	# its skin zip before the Deck Lab prints, and the Lab's stdout is its
 	# report (found by the 0.40.28 play copy — the line sat ahead of the JSON).
@@ -655,13 +626,6 @@ func refusal_lines() -> Array[String]:
 ## card pictures, or everything else.
 func _holds(path: String, kind: String) -> int:
 	var report: Dictionary = _reports.get(path, {})
-	# A 2x zip holds 2x pictures and nothing a skin or card art zip holds;
-	# a skin zip that carries some 2x copies of its own still counts them
-	# as the skin's files.
-	if String(report.get("kind", "")) == "skin2x":
-		return int(report.get("files", 0)) if kind == "skin2x" else 0
-	if kind == "skin2x":
-		return 0
 	var art := int(report.get("art", 0))
 	return art if kind == "cardart" else int(report.get("files", 0)) - art
 
@@ -722,8 +686,6 @@ static func source_of(path: String) -> String:
 func describe(kind: String) -> Dictionary:
 	if kind == "cardart":
 		return _describe_packs()
-	if kind == "skin2x":
-		return _describe_scaled()
 	for path in mounted:
 		var count := _holds(path, kind)
 		if count > 0:
@@ -739,40 +701,6 @@ func describe(kind: String) -> Dictionary:
 		return {"source": "missing", "name": GamePaths.shown(GamePaths.skin_folder()),
 			"files": 0}
 	return {"source": "none", "name": "", "files": 0}
-
-
-## The 2x pictures, for the Options row: the first 2x zip mounted, else
-## the first search folder with 2x copies loose in it (its own and its
-## `portraits/`), else none.
-func _describe_scaled() -> Dictionary:
-	for path in mounted:
-		var count := _holds(path, "skin2x")
-		if count > 0:
-			return {"source": source_of(path), "name": GamePaths.shown(path),
-				"files": count}
-	for dir in GameSkin.search_dirs():
-		if dir == GameSkin.PACK_DIR:
-			continue
-		var count := scaled_at(dir) + scaled_at(dir.path_join("portraits"))
-		if count > 0:
-			return {"source": "folder", "name": GamePaths.shown(dir), "files": count}
-	return {"source": "none", "name": "", "files": 0}
-
-
-## How many 2x copies lie loose in [param folder].
-static func scaled_at(folder: String) -> int:
-	var dir := DirAccess.open(GameSkin.locate(folder))
-	if dir == null or dir.list_dir_begin() != OK:
-		return 0
-	var count := 0
-	var file := dir.get_next()
-	while file != "":
-		if not dir.current_is_dir() and file.get_extension().to_lower() == "png" \
-				and GameSkin.is_scaled_name(file):
-			count += 1
-		file = dir.get_next()
-	dir.list_dir_end()
-	return count
 
 
 func _describe_packs() -> Dictionary:
@@ -817,14 +745,6 @@ const WHOSE := {"yours": "your own", "shipped": "beside the game",
 ## folder and every pack in it.
 static func status_line(kind: String, about: Dictionary) -> String:
 	var source := String(about["source"])
-	if kind == "skin2x":
-		if source == "none":
-			return "2x pictures: none — tools/upscale_skin.py makes them from your skin"
-		if source == "folder":
-			return "2x pictures: a loose folder, %s — %s" % [String(about["name"]),
-				_count(int(about["files"]), "picture")]
-		return "2x pictures: %s — %s, %s" % [String(about["name"]),
-			_count(int(about["files"]), "picture"), WHOSE[source]]
 	if kind == "cardart":
 		var head := "Card folder: %s — " % String(about.get("folder", ""))
 		var packs: Array = about.get("packs", [])
@@ -873,10 +793,11 @@ func adopt(source: String) -> bool:
 			and DirAccess.copy_absolute(source, dest) != OK:
 		_complain(source.get_file(), "could not be copied into the game's folder")
 		return false
+	var replaced := kind == "skin" and GameSkin.zip_worn
 	if not mount(dest, true):
 		return false
 	_wear(kind, dest)
-	_arrived(kind)
+	_arrived(kind, replaced)
 	return true
 
 
@@ -920,11 +841,12 @@ func _take(landed: String, shown: String, named := "") -> bool:
 	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
 	if FileAccess.file_exists(dest):
 		DirAccess.remove_absolute(dest)
+	var replaced := kind == "skin" and GameSkin.zip_worn
 	if DirAccess.rename_absolute(landed, dest) != OK or not mount(dest, true):
 		DirAccess.remove_absolute(landed)
 		return false
 	_wear(kind, dest)
-	_arrived(kind)
+	_arrived(kind, replaced)
 	return true
 
 
@@ -1002,31 +924,30 @@ func forget() -> void:
 # --------------------------------------------------------- the arrival --
 
 ## What happens the moment a pack is mounted after boot: the title is
-## rebuilt on it; any other screen is offered a restart. See the class
-## doc for why the two differ.
-func _arrived(kind: String) -> void:
+## rebuilt on it; any other screen is offered a restart, and so is the
+## title when a skin [param replaced] the one worn (ONE SKIN above). See
+## the class doc for why the two differ.
+func _arrived(kind: String, replaced := false) -> void:
 	GameSkin.clear_caches()
 	PortraitLibrary.refresh()
 	MusicLibrary.refresh()
 	_arrived_at = Time.get_ticks_msec() / 1000.0
 	changed.emit(kind)
-	if plan_after_arrival(_current_scene_path()) == "reload":
+	if plan_after_arrival(_current_scene_path(), replaced) == "reload":
 		get_tree().reload_current_scene.call_deferred()
 	elif kind == "cardart":
 		_show_notice("The card art is in.",
 			"The cards wear it from the next start.", true)
-	elif kind == "skin2x":
-		_show_notice("The 2x pictures are in.",
-			"The skin wears them from the next start.", true)
 	else:
-		_show_notice("The 1997 art is in.",
+		_show_notice("The skin is in.",
 			"It dresses the game from the next start.", true)
 
 
 ## "reload" when the pack arrived on the title screen, "restart"
-## anywhere else — kept pure so the choice can be tested without a tree.
-static func plan_after_arrival(scene_path: String) -> String:
-	return "reload" if scene_path == TITLE_SCENE else "restart"
+## anywhere else, and after a skin that [param replaced] the one worn —
+## kept pure so the choice can be tested without a tree.
+static func plan_after_arrival(scene_path: String, replaced := false) -> String:
+	return "reload" if scene_path == TITLE_SCENE and not replaced else "restart"
 
 
 func _current_scene_path() -> String:
