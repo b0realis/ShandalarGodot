@@ -18811,6 +18811,68 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — The asset checklist and the Manalink door
+
+The owner: *"lets have a list of needed assets and check what is missing.
+Lets have an option for the tool to use later manalink install for all
+assets if user does not have original install of 1997!"*
+
+- **The checklist.** `import_original.py --check` (and
+  `mtg_assets.py --check`, after its landmarks) runs the import into a
+  throwaway folder and prints every asset the game can wear — 155 skin
+  files the game reads (nine more it writes but never reads: the set
+  symbols and the dagger are ours, two grounds nothing draws), 70
+  portraits, the two coin-toss movies — with where each comes from, or
+  what is missing and why. The owner's `MagicTG`: 155/155, 70/70, 2/2.
+- **The Manalink door**, off unless `--manalink`. The 1997 rows run first
+  as before; `tools/import_manalink.py` then answers what is missing from
+  a Manalink install's own files. Measured on `shandalar-src` (a Manalink
+  3 tree) alone: 72 of 164 without the door, **134 with it**, in 17 s.
+  Each key is taken only in a shape the game can use, by a rule read off
+  the code that draws it (a read of every consumer, 2026-10-17): the 1997
+  size or exactly twice it (halved) where the game cuts by pixel, resized
+  where its cells are fractions or still land, its own size where the
+  game fits or tiles the file. The twelve card frames are Manalink's
+  Classic stone and plate laid together at 228x325 (the 1997 fractions
+  hold within about 1 %); the card back is its JPEG, halved, through
+  ffmpeg.
+- **What Manalink cannot give**, named in the checklist rather than
+  imported: the life register's faces (a grey gradient), the hand panels
+  (one grey bar for every colour), the combat sword, shield and bones (no
+  readable mask), the ability badges (a 10x5 grid in another order), the
+  versus splash (its wells elsewhere), the filter medallions, deck
+  plaques, set and mana symbol sheets (not there), 44 of the 55 rogue
+  faces and the coin-toss movies. Several it does give are its own
+  restyles: all fifteen territories are one green felt, the dialog
+  grounds plain grey. A real 1997 install remains the skin.
+- **A backup, never a release skin.** The owner: *"No the default is 1997
+  skin. Manalink we will ship only the tool as a backup! - we will never
+  generate or include manalink only skin in releases."* The default is the
+  1997 game alone, and the docs say so wherever they name the option. A
+  folder the door wrote into carries `from_manalink.txt`, the keys it took
+  (a `Program/` sound copy among them); a later 1997 run over the same
+  folder drops the keys it writes over, and the label goes with the last
+  one. `build_release.sh`'s `skin_zip` fails on the label before it stages
+  anything, and `package_release.check_skin` refuses it inside a zip.
+  Measured: the Manalink tree alone labels 62 keys; the 1997 install
+  imported over it clears the label; a clean 1997 import has none.
+- **The catalogue as a table.** The owner: *"Create also a csv list of all
+  assets (also concrete filenames) in the skin zip (folder) so we have a
+  catalogue!"* `tools/skin_catalogue.py` writes `docs/skin-catalogue.csv`
+  beside the text: 241 rows, one per file of a complete
+  `original_skin.zip` by its name in the zip — 169 named files and sheet
+  layouts, the 70 portraits, the two movies — each with its section, kind,
+  whether the game reads it, its format measured off the 1997 skin, the
+  1997 file it comes from, the Manalink backup's source and the note.
+  Against the developer's skin folder: the same 241 files, both ways.
+  Shipped as `skin/SKIN.csv` beside `skin/SKIN.txt`.
+- **`docs/.gdignore`.** Godot imports any `.csv` as a translation table:
+  the first import wrote seven `skin-catalogue.*.translation` files into
+  `docs/` (measured on a scratch copy). Nothing under `docs/` is a Godot
+  resource; the tests that read `res://docs/*.md` pass with it ignored.
+- Packaging: `import_manalink.py` ships beside the importer (it is
+  imported at start), pinned by `tools/test_tool_banner.py`.
+
 ## 2026-10-17 — The bug pass over 0.50.26 (0.50.26)
 
 The owner: *"Do a bug pass over new features / correct any documentation;

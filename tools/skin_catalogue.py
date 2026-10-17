@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Write `docs/skin-catalogue.txt` — everything a skin has to contain.
 
+And beside it `docs/skin-catalogue.csv`, the same catalogue as a table:
+one row per file of a complete `original_skin.zip`, by its concrete name
+(see THE TABLE below).
+
 A SKIN is one zip, `original_skin.zip`, with a `skin/` folder inside it
 and every picture, font, sound, tune, movie and portrait the game dresses
 itself in; the CARD ART is a second zip, `cardart.zip`, with one picture
@@ -19,7 +23,7 @@ off an imported skin folder, and every key must have a note here or the
 script refuses to write. `tools/test_skin_catalogue.py` holds the
 committed text to the manifest.
 
-    python3 tools/skin_catalogue.py                  # rewrite docs/skin-catalogue.txt
+    python3 tools/skin_catalogue.py                  # rewrite docs/skin-catalogue.txt + .csv
     python3 tools/skin_catalogue.py --skin DIR       # measure a different folder
     python3 tools/skin_catalogue.py --check my_skin.zip   # what a skin is missing
     python3 tools/skin_catalogue.py --check my_skin/      # a folder works too
@@ -29,6 +33,8 @@ Standard library only.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import struct
 import sys
@@ -42,6 +48,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import import_original as importer  # noqa: E402
+import import_manalink as manalink  # noqa: E402
 import tool_banner  # noqa: E402  — the family banner and the one version
 
 TOOL = "skin_catalogue.py"
@@ -76,7 +83,9 @@ EPILOG = """\
 
 The catalogue is GENERATED from import_original.py's MANIFEST and
 measured off an imported skin, so it cannot drift from the code; a key
-with no note in this script makes the run refuse to write.
+with no note in this script makes the run refuse to write. Every run that
+writes the text writes the same catalogue as a table beside it, one row
+per file of the skin zip (--out X.txt writes X.csv too).
 --stdout IS the catalogue, so it goes to stdout alone and the banner
 never joins it.
 
@@ -468,6 +477,12 @@ TO BUILD THE 1997 ONES from your own disc, and the card art:
     python3 tools/mtg_assets.py --install /path/to/the/1997/game
     python3 tools/fetch_card_art.py --out cardart/
     python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
+The 1997 skin is the default, and the only one a release carries. With
+no 1997 disc, the tool can read a later Manalink install as a backup,
+where its own pictures fit, for your own copy only; see first, file by
+file, what you would get:
+    python3 tools/mtg_assets.py --check /path/to/manalink --manalink
+    python3 tools/mtg_assets.py --install /path/to/manalink --manalink
 """
 
 PORTRAITS_NOTE = """\
@@ -727,6 +742,123 @@ def render(skin: Path, cardart: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ------------------------------------------------------------- the table --
+#
+# THE SAME CATALOGUE AS A TABLE. The owner, 2026-10-17: *"Create also a
+# csv list of all assets (also concrete filenames) in the skin zip
+# (folder) so we have a catalogue!"* One row per file a complete
+# `original_skin.zip` holds, by the name it has inside the zip: every
+# named file and sheet layout, each of the seventy portraits by its own
+# name, and the two movies. The notes and the measurements are the text's
+# own, so the two cannot disagree. Card art is its own zip, one picture
+# per card, and is left out. Written beside the text
+# (`docs/skin-catalogue.csv`, shipped as `skin/SKIN.csv`).
+#
+# `from_the_1997_game` is the file (or files) the importer takes it from;
+# `manalink_backup` is what `import_original.py --manalink` would take
+# instead for a player with no 1997 copy — a backup in the tool for a
+# player's own folder, never a release skin (tools/import_manalink.py).
+CSV_COLUMNS = ("file", "section", "kind", "read_by_game", "format",
+               "from_the_1997_game", "manalink_backup", "description")
+
+KINDS = {".png": "picture", ".json": "sheet layout", ".ttf": "font",
+         ".wav": "sound", ".avi": "movie"}
+
+
+def read_by_game(key: str) -> str:
+    if file_name(key) in SHIPPED_BY_THE_GAME:
+        return "no: the game always uses its own"
+    if key in importer.NOT_READ or key in importer.PIC_SCREENS:
+        return "no: nothing reads it yet"
+    return "yes"
+
+
+def from_1997(key: str) -> str:
+    if key in importer.PIC_SHEETS:
+        cells = importer.PIC_SHEETS[key][0]
+        return "assembled from %d cells: %s" % (len(cells), " ".join(cells))
+    if key in importer.DERIVED_SHEETS:
+        return "ours, drawn from %s.png" % importer.DERIVED_SHEETS[key][0]
+    if key in importer.VIDEOS:
+        return "cut from " + " or ".join(importer.VIDEOS[key])
+    names = importer.MANIFEST.get(key) or importer.PIC_SCREENS.get(key) or []
+    return " or ".join(names)
+
+
+def manalink_backup(key: str) -> str:
+    if key in manalink.NOT_USED:
+        return "not used: " + manalink.NOT_USED[key]
+    if key in manalink.FRAMES:
+        return "Classic %s + %s, laid together" % manalink.FRAMES[key]
+    if key in manalink.MANALINK:
+        return " or ".join(manalink.MANALINK[key].names)
+    if importer.is_sound_key(key):
+        return "Manalink's own copy of the same file, where it has one"
+    return ""
+
+
+def portrait_rows() -> list[tuple[str, str, str]]:
+    """(file name, the 1997 source, description) for every face a
+    complete 1997 install gives, in the importer's own names."""
+    rows = [(importer.portrait_name(i) + ".png", "16faces.spr frame %d" % i,
+             "A player's face, from the 1997 character sheet")
+            for i in range(len(importer.PORTRAIT_NAMES))]
+    rows.append((importer.PLAYER_FACE_NAME + ".png", "Face.pic",
+                 "The Facemaker face, the one the 1997 face builder wrote"))
+    rows += [(importer.rogue_name(slot) + ".png", "Faces/%03d.pic" % slot,
+              "An enemy's face (@DECKFACES entry %d)" % slot)
+             for slot in range(1, len(importer.ROGUE_NAMES) + 1)]
+    return rows
+
+
+def table_rows(skin: Path) -> list[dict[str, str]]:
+    def shape(path: Path) -> str:
+        return measure(path) if path.is_file() else ""
+
+    rows: list[dict[str, str]] = []
+    grouped = sections()
+    for section in SECTION_ORDER:
+        for note, family in families_of(grouped[section]):
+            for key in family:
+                names = [file_name(key)]
+                if key in importer.VIDEOS:
+                    names.append(key + ".json")
+                for name in names:
+                    rows.append({
+                        "file": PREFIX + name, "section": section,
+                        "kind": KINDS.get(Path(name).suffix, "file"),
+                        "read_by_game": read_by_game(key),
+                        "format": shape(skin / name),
+                        "from_the_1997_game": from_1997(key),
+                        "manalink_backup": manalink_backup(key),
+                        "description": note})
+    for name, source, what in portrait_rows():
+        rows.append({
+            "file": PREFIX + "portraits/" + name, "section": "Portraits",
+            "kind": "portrait", "read_by_game": "yes",
+            "format": shape(skin / "portraits" / name),
+            "from_the_1997_game": source, "manalink_backup": "",
+            "description": what})
+    for key, sources in importer.VIDEOS.items():
+        name = sources[0].lower()
+        rows.append({
+            "file": PREFIX + "movies/" + name, "section": "Movies",
+            "kind": "movie",
+            "read_by_game": "no: kept to re-cut %s.png" % key,
+            "format": shape(skin / "movies" / name),
+            "from_the_1997_game": sources[0], "manalink_backup": "",
+            "description": "The original coin-toss movie (optional)"})
+    return rows
+
+
+def render_csv(skin: Path) -> str:
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=CSV_COLUMNS, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(table_rows(skin))
+    return out.getvalue()
+
+
 # -------------------------------------------------------------- checking --
 
 ## THE GAME'S DOOR, MIRRORED (bug pass 2026-10-03). `--check` approved —
@@ -891,6 +1023,10 @@ def main() -> int:
         return 0
     args.out.write_text(text, encoding="utf-8")
     print("wrote %s (%d lines)" % (args.out, text.count("\n")))
+    table = render_csv(args.skin)
+    args.out.with_suffix(".csv").write_text(table, encoding="utf-8")
+    print("wrote %s (%d files)" % (args.out.with_suffix(".csv"),
+                                   table.count("\n") - 1))
     return 0
 
 

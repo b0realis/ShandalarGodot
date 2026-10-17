@@ -9,9 +9,11 @@ PNG header, a WAV from the `wave` module, a font's magic), so no art
 travels with the tests. And the COMMITTED catalogue, docs/skin-catalogue
 .txt, is held to the importer's manifest: every file the importer writes
 is named in it, so a key added to MANIFEST without a note fails here
-rather than going undocumented.
+rather than going undocumented. The committed TABLE, docs/skin-catalogue
+.csv, is held the same way, row for row.
 """
 
+import csv
 import io
 import os
 import struct
@@ -135,6 +137,39 @@ class TestTheManifestIsCatalogued(unittest.TestCase):
         for heading in ("PORTRAITS", "CARD ART", "MOVIES", "original_skin.zip",
                         "cardart.zip", "Options > Skin", "TO DRAW YOUR OWN"):
             self.assertIn(heading, text)
+
+    def test_the_committed_table_lists_every_file_by_its_name(self):
+        """The owner, 2026-10-17: a CSV of every asset in the skin zip,
+        concrete file names and all. Held to the code the way the text
+        is: the same rows, in the same order, as a fresh run."""
+        with (ROOT / "docs" / "skin-catalogue.csv").open(encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(tuple(rows[0].keys()), cat.CSV_COLUMNS)
+        files = [row["file"] for row in rows]
+        self.assertEqual(len(files), len(set(files)), "no file listed twice")
+        with tempfile.TemporaryDirectory() as tmp:
+            fresh = [row["file"] for row in cat.table_rows(Path(tmp))]
+        self.assertEqual(files, fresh, "regenerate: python3 tools/skin_catalogue.py")
+        for name in cat.expected_files():
+            self.assertIn("skin/" + name, files)
+        self.assertEqual(sum(f.startswith("skin/portraits/") for f in files),
+                         imp.PORTRAITS_WANTED)
+        self.assertIn("skin/portraits/rogue_witch.png", files)
+        self.assertIn("skin/movies/cointoss_heads.avi", files)
+        self.assertTrue(all(row["description"] for row in rows))
+
+    def test_the_table_needs_no_art_and_says_where_each_file_comes_from(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows = {row["file"]: row for row in cat.table_rows(Path(tmp))}
+        back = rows["skin/card_back.png"]
+        self.assertEqual(back["format"], "", "nothing measured off no skin")
+        self.assertEqual(back["read_by_game"], "yes")
+        self.assertIn("CardBack.pic", back["manalink_backup"])
+        self.assertIn("not used", rows["skin/attack_sword.png"]["manalink_backup"])
+        self.assertTrue(rows["skin/set_icon_atq.png"]["read_by_game"].startswith("no"))
+        self.assertEqual(rows["skin/filter_icons_hover.png"]["from_the_1997_game"],
+                         "ours, drawn from filter_icons.png")
+        self.assertIn("27 cells", rows["skin/filter_icons.png"]["from_the_1997_game"])
 
     def test_the_counter_strip_is_catalogued_with_its_mask_cell(self):
         """A skin maker who draws their own stones has to be told that

@@ -166,9 +166,28 @@ python3 tools/mtg_assets.py --install /path/to/game
 **The original skin requires only the original 1997 MicroProse game:**
 its CD, or the folder you installed it to. Nothing from a later
 re-release or another project is needed or read. The importer reads your
-installation without changing it. See the
-[player-files guide](docs/player-files.md) for pack locations and the
-[skin catalogue](docs/skin-catalogue.txt) for creating your own skin.
+installation without changing it. The 1997 skin is the default, and the
+only skin a release ever carries.
+
+**No 1997 copy? A Manalink install as a backup.** The tool can also read
+a later Manalink install, if you add `--manalink`. Each file the 1997 game
+would give is then taken from Manalink's own where it fits the shape the
+game draws (some are Manalink's restyles, and a few stay the game's own
+drawing). This is only an option of the tool, for your own skin folder:
+no release is built from a Manalink install or carries a Manalink skin,
+and the release build refuses a skin folder the option wrote into.
+`--check` lists every asset and where it would come from, and writes
+nothing:
+
+```sh
+python3 tools/mtg_assets.py --check /path/to/manalink --manalink
+python3 tools/mtg_assets.py --install /path/to/manalink --manalink
+```
+
+See the [player-files guide](docs/player-files.md) for pack locations and the
+[skin catalogue](docs/skin-catalogue.txt) for creating your own skin; the
+[same catalogue as a table](docs/skin-catalogue.csv) lists every file of
+the skin zip by name.
 Card pictures stay personal—do not include them in a public web build.
 
 ## DeckLab CLI

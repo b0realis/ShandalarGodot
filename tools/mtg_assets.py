@@ -235,6 +235,22 @@ WHAT THIS NEEDS
 
   It reads. It never writes to, moves, or modifies your install.
 
+  NO 1997 CD? A LATER MANALINK INSTALL AS A BACKUP (since 2026-10-17).
+  The 1997 skin is the default, and the only one a release carries.
+  Without it, add --manalink and every file the 1997 game would give is
+  asked of the Manalink install instead — where its own picture fits
+  the shape the game draws (resized or laid together where that is all
+  it takes). Some of Manalink's are its own restyles rather than the
+  1997 art, and a few it does not have in a usable shape; those stay
+  drawn. That skin is for your own copy: it carries from_manalink.txt,
+  and no release is built from one. See what you would get, file by
+  file, before importing anything:
+
+      python3 mtg_assets.py --check /path/to/manalink --manalink
+
+  --check lists EVERY asset the game can wear and where it would come
+  from, with or without --manalink.
+
   ONE STEP NEEDS A HELPER: the two coin-toss movies are AVIs, which
   neither Python nor Godot can read, so they are transcoded into sprite
   sheets using ffmpeg or gst-launch-1.0 — whichever you have. With
@@ -333,16 +349,24 @@ def report(root: Path) -> bool:
     return any_hit
 
 
-def run_importer(sources: list[Path], dest: Path, videos: bool) -> int:
+def run_importer(sources: list[Path], dest: Path | None, videos: bool,
+                 manalink: bool = False) -> int:
+    """The importer on `sources`; `dest` None runs its --check instead,
+    which writes nothing and prints THE CHECKLIST."""
     if not IMPORTER.exists():
         print(f"!! {IMPORTER.name} must sit next to this script.")
         return 2
-    argv = [sys.executable, str(IMPORTER), "--dest", str(dest)]
+    argv = [sys.executable, str(IMPORTER)]
+    argv += ["--check"] if dest is None else ["--dest", str(dest)]
     for source in sources:
         argv += ["--source", str(source)]
-    if not videos:
+    if not videos and dest is not None:
         argv.append("--no-videos")
-    print()
+    if manalink:
+        argv.append("--manalink")
+    # Flushed first: into a pipe this script's own lines are buffered, and
+    # the importer's would otherwise land above the report they follow.
+    print(flush=True)
     return subprocess.call(argv)
 
 
@@ -449,7 +473,12 @@ def main() -> int:
     parser.add_argument("--install", action="append", metavar="DIR",
                         help="your 1997 install; repeatable, first match wins")
     parser.add_argument("--check", action="append", metavar="DIR",
-                        help="report on an install and write nothing")
+                        help="report on an install, asset by asset, and "
+                             "write nothing")
+    parser.add_argument("--manalink", action="store_true",
+                        help="no 1997 CD? also take a later Manalink "
+                             "install's own files where they fit (with "
+                             "--install or --check)")
     parser.add_argument("--from-skin", metavar="DIR",
                         help="archive an ALREADY imported skin folder")
     parser.add_argument("--from-cardart", metavar="DIR",
@@ -489,9 +518,11 @@ def main() -> int:
         return transcode_movies(Path(args.transcode_movies).expanduser())
 
     if args.check:
-        for source in args.check:
-            report(Path(source).expanduser())
-        return 0
+        sources = [Path(source).expanduser() for source in args.check]
+        if not all([report(source) for source in sources]):
+            return 0
+        return run_importer(sources, None, videos=False,
+                            manalink=args.manalink)
 
     if args.from_cardart:
         art = Path(args.from_cardart).expanduser()
@@ -535,7 +566,8 @@ def main() -> int:
         temp = tempfile.mkdtemp(prefix="shandalar-skin-")
         dest = Path(temp)
     try:
-        code = run_importer(sources, dest, videos=not args.no_videos)
+        code = run_importer(sources, dest, videos=not args.no_videos,
+                            manalink=args.manalink)
         if code != 0:
             print(f"\n!! the importer exited {code}; archiving what it wrote")
         if not args.no_bundle_movies:

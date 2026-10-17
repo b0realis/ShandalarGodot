@@ -213,8 +213,13 @@ None of the three is provably 1997. **The importer therefore does not try
 to pick the "real" one: it picks the folder the GAME reads** (`DuelSounds/`
 and `Sound/`, the paths `windows.c:1228` and `deckdll.cpp:2047` build),
 never a `Program/…` copy (since 2026-10-15: the skin is built off the
-1997 install alone), and prints the date of every file it took. What a
-player's own copy plays is what they get.
+1997 install alone — unless a player with no 1997 copy asks for their
+Manalink install with `--manalink`, 2026-10-17, `tools/import_manalink.py`:
+a backup in the tool for the player's own skin folder, never a release
+skin, and the release build refuses a folder it wrote into),
+and prints the date of every file it took. What a player's own copy plays
+is what they get. Either way the files come off the player's own
+install, and none of them is in this repository or a release.
 
 **s30 ships the 2009 masters too**, which is a fourth witness and a useful
 cross-check. Decoding its `assets/audio/sfx/*.ogg` back to 22 050 Hz mono

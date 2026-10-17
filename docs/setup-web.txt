@@ -102,5 +102,17 @@ the original_skin.zip download:
 It reads your install and never writes to it. The original skin
 requires ONLY the original 1997 game — its CD, or the folder you
 installed it to; nothing from a later re-release or another project is
-read. The zip it produces is a skin zip, the same shape as the download,
-and goes through the same doors.
+read. --check lists every asset the game can wear, where it would come
+from and what is missing, and writes nothing. The zip it produces is a
+skin zip, the same shape as the download, and goes through the same
+doors.
+
+The 1997 skin is the default, and the only skin a release ever
+carries. With no 1997 copy, the tool can read a later Manalink install
+as a backup: add --manalink, and each file is taken from Manalink's own
+where it fits the shape the game draws (some are Manalink's restyles,
+and a few stay the game's own drawing). That skin is for your own copy
+only; no release carries one.
+
+    python3 tools/mtg_assets.py --check   /path/to/manalink --manalink
+    python3 tools/mtg_assets.py --install /path/to/manalink --manalink

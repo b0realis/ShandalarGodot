@@ -39,6 +39,9 @@ WHAT THIS HOLDS:
     whatever folder the game was unpacked in — a space (`My Games`), a
     quote, a dollar, a backslash, a percent sign (where GLib cannot look
     the program up, sh is the program and the game its argument).
+  * NEVER A MANALINK SKIN IN A RELEASE: skin_zip refuses an
+    assets/original that `import_original.py --manalink` wrote into (the
+    owner, 2026-10-17).
   * THE RELEASE'S ONE DOOR refuses an unknown verb as one VALID JSON
     line whatever bytes the verb held.
 """
@@ -86,6 +89,34 @@ class LeakGateTest(unittest.TestCase):
             done = subprocess.run(["grep", flags, pattern], input="ObjectDB ok\n",
                                   text=True, capture_output=True)
             self.assertEqual(done.returncode, 1, "a clean log passes")
+
+
+def shell_function(name):
+    """`name() { ... }` out of build_release.sh, as text bash can run."""
+    head = name + "() {"
+    return head + SOURCE.split(head, 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+
+
+class SkinZipTest(unittest.TestCase):
+    """The owner, 2026-10-17: a release never carries a Manalink skin. The
+    label tools/import_manalink.py leaves in a folder it filled stops
+    skin_zip before anything is staged or zipped."""
+
+    def test_a_skin_the_manalink_door_filled_fails_the_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skin = root / "assets" / "original"
+            skin.mkdir(parents=True)
+            (skin / "card_back.png").write_bytes(b"\x89PNG")
+            (skin / "from_manalink.txt").write_text("card_back\n")
+            done = subprocess.run(
+                ["bash", "-c", shell_function("stage_copy") + shell_function("skin_zip")
+                 + 'WORK_DIR="$1/work"; skin_zip "$1/out/original_skin.zip"', "skin-test",
+                 str(root)], capture_output=True, text=True, cwd=str(root))
+            self.assertNotEqual(done.returncode, 0)
+            self.assertIn("Manalink", done.stderr)
+            self.assertFalse((root / "out" / "original_skin.zip").exists())
+            self.assertFalse((root / "work").exists(), "refused before staging")
 
 
 class GuardStageTest(unittest.TestCase):

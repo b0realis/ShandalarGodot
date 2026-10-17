@@ -26,7 +26,7 @@ class PackageReleaseTest(unittest.TestCase):
         with zipfile.ZipFile(self.skin, "w") as archive:
             archive.writestr("skin/frame.png", b"frame")
         for name in (*("tools/" + n for n in pack.TOOLS), "LICENSE",
-                     "docs/setup.txt", "docs/skin-catalogue.txt",
+                     "docs/setup.txt", "docs/skin-catalogue.txt", "docs/skin-catalogue.csv",
                      "docs/releases/1.2.3.md", "DeckLab/README.md", "AGENTS.md", "game/icon.png",
                      "docs/setup-web.txt", "docs/card-art-and-packs.md", "agentic-playgude-mtg.md"):
             path = self.root / name
@@ -417,6 +417,14 @@ class PackageReleaseTest(unittest.TestCase):
                     archive.writestr(name, b"payload")
                 with self.assertRaises(ValueError):
                     pack.check_skin(self.skin)
+
+    def test_a_skin_the_manalink_door_filled_is_refused(self):
+        # The owner, 2026-10-17: a release never carries a Manalink skin.
+        with zipfile.ZipFile(self.skin, "w") as archive:
+            archive.writestr("skin/card_back.png", b"payload")
+            archive.writestr("skin/from_manalink.txt", b"card_back\n")
+        with self.assertRaisesRegex(ValueError, "Manalink"):
+            pack.check_skin(self.skin)
 
     def test_missing_payload_refuses_before_output(self):
         with self.assertRaises(ValueError):

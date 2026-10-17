@@ -85,7 +85,8 @@
 # where every zip is worn — the places and their settings.cfg keys are
 # `game/paths.gd`). With them goes `skin/SKIN.txt`, the catalogue of
 # everything the zips hold (docs/skin-catalogue.txt), so a player can
-# draw a skin of their own.
+# draw a skin of their own, and `skin/SKIN.csv`, the same catalogue as a
+# table of every file in the skin zip (docs/skin-catalogue.csv).
 #
 # WHAT IS RELEASED, AND WHAT IS NOT (the owner, 2026-09-08: "separately
 # … Cardart we dont release, only scripts to build it — licence"). The
@@ -266,6 +267,17 @@ skin_zip() {  # skin_zip DEST_FILE — the 1997 material, or nothing without ass
 	log="$WORK_DIR/shandalar-skin-zip.log"
 	rm -f "$out"
 	[ -d assets/original ] || return 0
+	# NEVER A MANALINK SKIN IN A RELEASE (the owner, 2026-10-17: "we will
+	# never generate or include manalink only skin in releases"). A folder
+	# `import_original.py --manalink` wrote into carries the label
+	# (tools/import_manalink.py, THE LABEL); package_release refuses it
+	# again inside the zip.
+	if [ -e assets/original/from_manalink.txt ]; then
+		echo "BUILD FAILED: assets/original holds files from a Manalink install" >&2
+		echo "(assets/original/from_manalink.txt). A release ships the 1997 skin only:" >&2
+		echo "import into an empty folder from the 1997 game alone, without --manalink." >&2
+		exit 1
+	fi
 	mkdir -p "$(dirname "$out")" "$WORK_DIR"
 	stage="$(mktemp -d "$WORK_DIR/shandalar-skin.XXXXXX")"
 	stage_copy assets/original "$stage"
@@ -483,6 +495,7 @@ if [ "$WEB" = 1 ]; then
 		skin_zip "$PKG_DIR/original_skin.zip"
 		[ -f "$PKG_DIR/original_skin.zip" ] && cp -p "$PKG_DIR/original_skin.zip" "$OUT/skin/"
 		cp -p docs/skin-catalogue.txt "$OUT/skin/SKIN.txt"
+		cp -p docs/skin-catalogue.csv "$OUT/skin/SKIN.csv"
 		if [ "$CARDART" = 1 ]; then
 			cardart_zip "$LOCAL_DIR/cardart.zip"
 			[ -f "$LOCAL_DIR/cardart.zip" ] && cp -p "$LOCAL_DIR/cardart.zip" "$OUT/skin/"
@@ -505,12 +518,16 @@ if [ "$WEB" = 1 ]; then
 		mkdir -p "$STAGE/skin" "$STAGE/tools"
 		cp -p "$OUT"/index.* "$STAGE/"
 		cp -p docs/skin-catalogue.txt "$STAGE/skin/SKIN.txt"
+		cp -p docs/skin-catalogue.csv "$STAGE/skin/SKIN.csv"
 		cp -p docs/setup-web.txt "$STAGE/README.txt"
 		# tool_banner.py is NOT optional here: the four scripts above
 		# import it for their banner and their --version, and the stage
 		# is flat, so leaving it behind ships four tools that cannot
-		# start. tools/test_tool_banner.py pins this list to that fact.
+		# start. import_manalink.py is the same for import_original.py,
+		# which loads it at start (2026-10-17). tools/test_tool_banner.py
+		# pins this list to that fact.
 		cp -p tools/mtg_assets.py tools/import_original.py \
+		      tools/import_manalink.py \
 		      tools/fetch_card_art.py tools/skin_catalogue.py \
 		      tools/tool_banner.py "$STAGE/tools/"
 		# Share the complete builder dependency/data list with every other platform.
@@ -867,12 +884,14 @@ DOOR
 	cp -p AGENTS.md "$STAGE/AGENTS.md"
 	# tool_banner.py rides with them — see the web stage above.
 	cp -p tools/mtg_assets.py tools/import_original.py \
+	      tools/import_manalink.py \
 	      tools/fetch_card_art.py tools/skin_catalogue.py \
 	      tools/tool_banner.py "$STAGE/"
 	# Keep the historical flat helpers, and add the common tools/ layout plus
 	# numbered-pack metadata and player README used by all current platforms.
 	python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "tools"); from package_release import stage_player_tools; stage_player_tools(Path(sys.argv[1]))' "$STAGE"
 	cp -p docs/skin-catalogue.txt "$STAGE/skin/SKIN.txt"
+	cp -p docs/skin-catalogue.csv "$STAGE/skin/SKIN.csv"
 	cat > "$STAGE/run.sh" <<'RUNNER'
 #!/usr/bin/env bash
 # Run the game from wherever this folder happens to be.

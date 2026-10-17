@@ -133,7 +133,7 @@ or their own named project; changing XDG alone does not protect player data.
   machine only. `--package`, since the owner's ruling of 2026-09-08
   ("Cardart we dont release, only scripts to build it — licence"),
   writes the game zip (`pkg/Shandalar-<ver>-linux64.zip` — the game,
-  `skin/SKIN.txt`, `icon.png`, `shortcut.sh`, the tools, NO art), the
+  `skin/SKIN.txt` and `skin/SKIN.csv`, `icon.png`, `shortcut.sh`, the tools, NO art), the
   same again with the skin zip in its `skin/`
   (`…-linux64-with-skin.zip`, "so only cards are needed to play"), the
   skin zip beside them (`pkg/original_skin.zip`, a download of its own)
@@ -142,7 +142,7 @@ or their own named project; changing XDG alone does not protect player data.
   staged folder the game zip was made from is left with both packs in
   its `skin/` as the play copy. `--web --package` zips the web folder
   the same two ways (`…-web.zip`, `…-web-with-skin.zip`: the page's
-  files, `skin/SKIN.txt`, the tools under `tools/`, `docs/setup-web.txt`
+  files, `skin/SKIN.txt` and `.csv`, the tools under `tools/`, `docs/setup-web.txt`
   as README.txt — never the card art, whatever `--cardart` put beside
   the page). Every stage is read for the builder's home path before
   it is zipped and the build fails on a hit (`guard_stage`, through
@@ -164,7 +164,14 @@ or their own named project; changing XDG alone does not protect player data.
   (`GamePaths`);
   read a place through it, never through a literal `user://...`, and
   never write a key as a default. `tools/skin_catalogue.py --check`
-  says whether a zip is complete.
+  says whether a zip is complete. THE RELEASED SKIN IS THE 1997 GAME'S
+  (the owner, 2026-10-17: *"we will never generate or include manalink
+  only skin in releases"*): `import_original.py --manalink` is a backup
+  in the tool for a player's own folder, and the build refuses a skin
+  it wrote into — its label, `from_manalink.txt`, fails `skin_zip` and
+  `package_release.check_skin` alike. `docs/` carries a `.gdignore`:
+  Godot imports any `.csv` as a translation table, and
+  `docs/skin-catalogue.csv` is a catalogue, not one.
   The build is the LOCAL step and the GitHub release is a separate one:
   a local build gets played first, and `gh release create` runs only
   when the owner asks for the release — never as the automatic tail of a

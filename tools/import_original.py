@@ -17,7 +17,20 @@ Accepted --source directories (searched recursively, case-insensitive):
     reaches every key (164/164, the 70 portraits and the coin toss,
     measured against the owner's own `MagicTG` on 2026-10-15). The body
     font is not a key: every player reads the game's own Spectral.
+  * with --manalink, ALSO a later Manalink install, for a player with no
+    1997 CD (the owner, 2026-10-17: *"Lets have an option for the tool to
+    use later manalink install for all assets if user does not have
+    original install of 1997!"*). The 1997 rows run first exactly as
+    without it; tools/import_manalink.py then answers what is still
+    missing from Manalink's own files, each in a shape the game can use.
+    Off by default, and a BACKUP for the player's own folder only (the
+    owner, 2026-10-17: *"we will never generate or include manalink only
+    skin in releases"*): the folder gets `from_manalink.txt`, which the
+    release build refuses.
 Multiple --source flags may be given; first match per file wins.
+
+--check lists every asset the game can wear, where each would come from
+and what is missing, and writes nothing (THE CHECKLIST, at the end).
 
 Default destination: in a checkout, <project>/assets/original (gitignored —
 dev builds load it via res://); beside the packaged game, the player's
@@ -62,6 +75,8 @@ tiler drops frames — see SPR_SHEETS.
 """
 
 import argparse
+import contextlib
+import io
 import os
 import datetime
 import json
@@ -79,6 +94,7 @@ from pathlib import Path
 # the flat folder beside the packaged game rather than from a checkout.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tool_banner  # noqa: E402
+import import_manalink  # noqa: E402
 
 TOOL = "import_original.py"
 ## The tool's name in the half-height box-drawing face the whole family is
@@ -114,7 +130,11 @@ EPILOG = """\
 
 The skin needs ONLY your own copy of the original 1997 game: the CD, or
 the folder it was installed to. Nothing from a later re-release or from
-another project is read.
+another project is read — unless you have no 1997 copy and ask for a
+Manalink install with --manalink, a backup that takes its files where
+they fit, for your own copy only (the folder gets from_manalink.txt, and
+no release carries such a skin). --check lists every asset, and where it
+would come from, first.
 
 Every --source is searched recursively and case-insensitively, and the
 first source that has a file wins, so the CD and the install folder can
@@ -2950,6 +2970,14 @@ def main() -> int:
                         help="skin output directory (default: %(default)s)")
     parser.add_argument("--no-videos", action="store_true",
                         help="skip the AVI transcoding step (see VIDEOS)")
+    parser.add_argument("--check", action="store_true",
+                        help="list every asset the game needs, where each "
+                             "would come from and what is missing; writes "
+                             "nothing (see THE CHECKLIST)")
+    parser.add_argument("--manalink", action="store_true",
+                        help="no 1997 install? ALSO take a later Manalink "
+                             "install's own files for what the 1997 files "
+                             "do not supply (tools/import_manalink.py)")
     tool_banner.add_version_flag(parser, TOOL, __file__)
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
     # per-key report below is stdout, and mtg_assets.py reads this run's
@@ -2969,9 +2997,21 @@ def main() -> int:
         tool_banner.show(WORDMARK, CAPTION, __file__)
 
     index = build_index([Path(s).expanduser() for s in args.source])
+    if args.check:
+        return check(args, index)
     dest = Path(args.dest).expanduser()
     dest.mkdir(parents=True, exist_ok=True)
+    run_import(args, index, dest)
+    return 0
 
+
+def run_import(args: argparse.Namespace, index: dict[str, Path],
+               dest: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """The import proper, into `dest`. Returns `(origin, notes)`: key ->
+    where it came from, and key -> why a file the Manalink door found was
+    not used — what THE CHECKLIST prints."""
+    origin: dict[str, str] = {}
+    notes: dict[str, str] = {}
     found, missing = 0, []
     # Raw 1997 files this could NOT decode, reported at the end so a
     # player pointing this at their own CD is told WHY a key is absent
@@ -2987,8 +3027,10 @@ def main() -> int:
     chosen: dict[str, Path] = {}
     # Texture candidates that turned out to be PNGs wearing a 1997 name.
     refused_png: list[tuple[str, str]] = []
-    # Sound candidates that turned out to be Manalink's `Program/` copies.
+    # Sound candidates that turned out to be Manalink's `Program/` copies:
+    # refused, or with --manalink taken and counted as Manalink's.
     refused_program: list[tuple[str, str]] = []
+    program_copies: list[str] = []
     for key, candidates in MANIFEST.items():
         # Texture keys become <key>.png; font/sound keys keep extensions.
         out_name = key if key.endswith((".ttf", ".wav")) else key + ".png"
@@ -3012,9 +3054,11 @@ def main() -> int:
                 source_path = None
                 continue
             if is_sound_key(key) and is_manalink_sound_copy(source_path):
-                refused_program.append((key, str(source_path)))
-                source_path = None
-                continue
+                if not args.manalink:
+                    refused_program.append((key, str(source_path)))
+                    source_path = None
+                    continue
+                program_copies.append(key)
             break
         if source_path is None:
             missing.append(key)
@@ -3049,10 +3093,32 @@ def main() -> int:
         missing.remove(key)
         found += 1
         decoded += 1
+        origin[key] = "the 1997 game, assembled from its cells"
     ours = import_derived_sheets(dest, missing)
     for key in ours:
         missing.remove(key)
         found += 1
+        origin[key] = "ours, drawn from filter_icons"
+    for key, path in chosen.items():
+        origin[key] = "%s (under its 1997 name)" % path.name
+    for key in program_copies:
+        origin[key] = "%s (Manalink's copy under Program/)" % chosen[key].name
+    # THE MANALINK DOOR, only when asked for and only for what is still
+    # missing — see tools/import_manalink.py.
+    from_manalink: list[str] = list(program_copies)
+    if args.manalink:
+        taken, notes = import_manalink.fill(index, dest, missing, write_png)
+        for key, path, how in taken:
+            missing.remove(key)
+            found += 1
+            chosen[key] = path
+            origin[key] = "%s (Manalink, %s)" % (path.name, how)
+            from_manalink.append(key)
+    # Kept true on EVERY import, with or without the door, so a plain 1997
+    # run over a folder the door once filled clears what it wrote over.
+    import_manalink.write_label(
+        dest, from_manalink,
+        set(MANIFEST) - set(missing) - set(from_manalink))
 
     print(f"\nimported {found}/{len(MANIFEST)} skin assets -> {dest}")
     if decoded:
@@ -3060,6 +3126,9 @@ def main() -> int:
               f"(.pic/.spr), not copied")
     if ours:
         print(f"  {len(ours)} are OURS, not 1997: {', '.join(sorted(ours))}")
+    if from_manalink:
+        print(f"  {len(from_manalink)} from the Manalink install (--manalink); "
+              f"THE CHECKLIST (--check --manalink) says how each was taken")
     if skipped_raw:
         print("skipped — these RAW 1997 files are here but would not")
         print("decode; the reason is printed beside each above:")
@@ -3070,7 +3139,7 @@ def main() -> int:
         if only:
             print(f"{len(only)} of them are here only as a PNG under a 1997")
             print("name — a later restyle (Manalink's), not the 1997 file —")
-            print("which this tool does not import:")
+            print("which this tool does not import without --manalink:")
             for key, name in only[:8]:
                 print(f"  - {key:22s} ({name})")
             if len(only) > 8:
@@ -3080,7 +3149,7 @@ def main() -> int:
         if only:
             print(f"{len(only)} of them are here only as Manalink's copy under")
             print("Program/, not the 1997 game's own folder, which this tool")
-            print("does not import:")
+            print("does not import without --manalink:")
             for key, name in only[:8]:
                 print(f"  - {key:22s} ({name})")
             if len(only) > 8:
@@ -3102,7 +3171,96 @@ def main() -> int:
     import_portraits(index, dest)
     # Raw `.pic` screens, decoded rather than copied — see PIC_SCREENS.
     import_pic_screens(index, dest)
+    return origin, notes
+
+
+# ----------------------------------------------------------- THE CHECKLIST --
+#
+# The owner, 2026-10-17: *"lets have a list of needed assets and check what
+# is missing."* `--check` runs the import proper into a scratch folder that
+# is thrown away — the same code a real import runs, so the list cannot
+# promise what the import would not deliver — and prints one line per
+# asset the game can wear: where it comes from, or what is missing.
+
+## Faces a complete 1997 install gives: fourteen players, fifty-five
+## rogues and the Facemaker face (import_portraits).
+PORTRAITS_WANTED = 70
+
+## Keys this writes that the game does NOT read, so a gap there costs
+## nothing: the six set symbols and the dagger are always the game's own
+## (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and 2026-10-15),
+## and two grounds no screen draws yet (a read of every consumer,
+## 2026-10-17).
+NOT_READ = {"set_icon_atq", "set_icon_arn", "set_icon_past", "set_icon_drk",
+            "set_icon_4ed", "set_icon_leg", "damage_marker",
+            "deck_tile_olive", "spell_chain_panel"}
+
+
+def check(args: argparse.Namespace, index: dict[str, Path]) -> int:
+    with tempfile.TemporaryDirectory(prefix="shandalar-check-") as tmp:
+        dest = Path(tmp)
+        args.no_videos = True
+        with contextlib.redirect_stdout(io.StringIO()):
+            origin, notes = run_import(args, index, dest)
+        print_checklist(dest, origin, notes, index, args.manalink)
     return 0
+
+
+def print_checklist(dest: Path, origin: dict[str, str],
+                    notes: dict[str, str], index: dict[str, Path],
+                    manalink: bool) -> None:
+    print("THE CHECKLIST — every asset the game can wear, and where it "
+          "comes from")
+    have = 0
+    lacking: list[str] = []
+    for key, names in MANIFEST.items():
+        out_name = key if key.endswith((".ttf", ".wav")) else key + ".png"
+        if key in NOT_READ:
+            state = "here" if (dest / out_name).exists() else "absent"
+            print(f"  unused   {key:28s} ({state}; the game does not read it)")
+            continue
+        if (dest / out_name).exists():
+            have += 1
+            print(f"  ok       {key:28s} <- {origin.get(key, 'the 1997 game')}")
+            continue
+        lacking.append(key)
+        if names:
+            wants = "the 1997 game's " + " or ".join(names)
+        elif key in PIC_SHEETS:
+            wants = "the 1997 game's %d cells in %s" % (
+                len(PIC_SHEETS[key][0]), "Dbart/")
+        else:
+            wants = "filter_icons first"
+        if key in notes:
+            wants += "; Manalink's " + notes[key]
+        elif manalink and key in import_manalink.MANALINK:
+            wants += "; no Manalink file either"
+        print(f"  MISSING  {key:28s} ({wants})")
+    for key, names in PIC_SCREENS.items():
+        state = "ok     " if (dest / (key + ".png")).exists() else "MISSING"
+        print(f"  {state}  {key:28s} ({' or '.join(names)})")
+    faces = len(list((dest / "portraits").glob("*.png"))) \
+        if (dest / "portraits").is_dir() else 0
+    print(f"  {'ok     ' if faces >= PORTRAITS_WANTED else 'MISSING'}  "
+          f"{'portraits/':28s} {faces} of {PORTRAITS_WANTED} faces")
+    movies = 0
+    decoder = find_decoder()
+    for key, names in VIDEOS.items():
+        path = next((index[n.lower()] for n in names if n.lower() in index),
+                    None)
+        if path is None:
+            print(f"  MISSING  {key:28s} ({' or '.join(names)}; the game "
+                  f"plays its own toss)")
+            continue
+        movies += 1
+        print(f"  ok       {key:28s} <- {path.name} (transcoded at import: "
+              f"{decoder[1] if decoder else 'NEEDS ffmpeg or gst-launch-1.0'})")
+    print(f"\n{have} of the {len(MANIFEST) - len(NOT_READ)} skin files the game "
+          f"reads, {faces} of {PORTRAITS_WANTED} portraits, {movies} of "
+          f"{len(VIDEOS)} coin-toss movies.")
+    if lacking:
+        print("Nothing here is fatal: the game draws its own for every "
+              "missing file.")
 
 
 if __name__ == "__main__":

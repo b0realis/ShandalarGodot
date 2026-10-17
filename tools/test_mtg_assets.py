@@ -274,5 +274,45 @@ class TestAFailedImportIsAFailedInstall(unittest.TestCase):
                               "what it wrote is still archived")
 
 
+class TestCheckAndTheManalinkDoor(unittest.TestCase):
+    """`--check` reports the landmarks AND runs the importer's own
+    `--check`, the asset-by-asset list (2026-10-17, the owner: *"lets have
+    a list of needed assets and check what is missing"*); `--manalink`
+    reaches the importer from both doors."""
+
+    def _argv_seen(self, argv: list[str]) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            install = root / "install"
+            install.mkdir()
+            (install / "Magim___.ttf").write_bytes(b"ttf")
+            seen: list[list[str]] = []
+            argv = [a.replace("INSTALL", str(install)) for a in argv]
+            argv = [a.replace("OUT", str(root / "skin.zip")) for a in argv]
+            with mock.patch.object(mtg_assets.subprocess, "call",
+                                   side_effect=lambda a: seen.append(a) or 0), \
+                    mock.patch.object(sys, "argv", argv), \
+                    redirect_stdout(io.StringIO()):
+                mtg_assets.main()
+            self.assertEqual(len(seen), 1)
+            return seen[0]
+
+    def test_check_runs_the_checklist_and_writes_nothing(self):
+        called = self._argv_seen(["mtg_assets.py", "--check", "INSTALL"])
+        self.assertIn("--check", called)
+        self.assertNotIn("--dest", called)
+        self.assertNotIn("--manalink", called)
+
+    def test_manalink_reaches_the_importer_from_check_and_install(self):
+        called = self._argv_seen(["mtg_assets.py", "--check", "INSTALL",
+                                  "--manalink"])
+        self.assertIn("--manalink", called)
+        called = self._argv_seen(["mtg_assets.py", "--install", "INSTALL",
+                                  "--manalink", "--out", "OUT",
+                                  "--no-videos", "--no-bundle-movies"])
+        self.assertIn("--manalink", called)
+        self.assertIn("--dest", called)
+
+
 if __name__ == "__main__":
     unittest.main()

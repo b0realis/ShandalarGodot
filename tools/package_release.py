@@ -22,6 +22,7 @@ import zipfile
 import zlib
 
 import tool_banner
+import import_manalink
 import pack_1_dotp_complete as pack_one
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,7 +96,8 @@ echo "shandalar.sh: unknown verb '$verb' - try ./shandalar.sh --help" >&2
 exit 2
 """
 
-TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
+TOOLS = ("mtg_assets.py", "import_original.py", "import_manalink.py",
+         "fetch_card_art.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
          "shandalar_mcp.py",
          # The decision-model door (2026-10-04): it imports the MCP server's
@@ -219,6 +221,11 @@ def check_skin(path: Path) -> None:
                     or "\\" in entry.filename or "cardart" in entry.filename.lower()
                     or stat.S_ISLNK(entry.external_attr >> 16)):
                 raise ValueError("Skin contains unsafe entries or card pictures")
+            # The 1997 skin only, never one the Manalink door filled (the
+            # owner, 2026-10-17) — tools/import_manalink.py, THE LABEL.
+            if parts[-1] == import_manalink.LABEL:
+                raise ValueError("Skin holds files from a Manalink install; "
+                                 "a release ships the 1997 skin only")
         if archive.testzip() is not None:
             raise ValueError("Corrupt skin archive")
 
@@ -509,6 +516,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
     files.update({"LICENSE.txt": root / "LICENSE",
                   "setup.txt": root / "docs" / "setup.txt",
                   "skin/SKIN.txt": root / "docs" / "skin-catalogue.txt",
+                  "skin/SKIN.csv": root / "docs" / "skin-catalogue.csv",
                   "RELEASE_NOTES.md": root / "docs" / "releases" / f"{version}.md",
                   "DECKLAB.md": root / "DeckLab" / "README.md",
                   "AGENTS.md": root / "AGENTS.md",

@@ -120,6 +120,12 @@ TO BUILD THE 1997 ONES from your own disc, and the card art:
     python3 tools/mtg_assets.py --install /path/to/the/1997/game
     python3 tools/fetch_card_art.py --out cardart/
     python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
+The 1997 skin is the default, and the only one a release carries. With
+no 1997 disc, the tool can read a later Manalink install as a backup,
+where its own pictures fit, for your own copy only; see first, file by
+file, what you would get:
+    python3 tools/mtg_assets.py --check /path/to/manalink --manalink
+    python3 tools/mtg_assets.py --install /path/to/manalink --manalink
 
 
 BACKDROPS

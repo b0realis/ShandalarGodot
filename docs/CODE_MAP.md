@@ -76,6 +76,34 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The asset checklist and the Manalink door (2026-10-17)
+
+- `tools/import_original.py`: `--check` (THE CHECKLIST — every asset the
+  game can wear, where it comes from or what is missing; writes nothing),
+  `--manalink` (after the 1997 rows, a Manalink install's own files for
+  what is still missing), `NOT_READ`, `PORTRAITS_WANTED`; `main` split
+  into `run_import`, `check` and `print_checklist`.
+- `tools/import_manalink.py` (new): the rows and rules, the Classic frame
+  laying, the BMP/PNG decoders and the resampling; see its tree row.
+- `tools/mtg_assets.py`: `--check` runs the importer's list after the
+  landmarks; `--manalink` passes through; GUIDE says when to use it.
+- `tools/package_release.py`, `build_release.sh`,
+  `tools/test_tool_banner.py`: `import_manalink.py` ships beside the
+  importer in every package.
+- Never a release skin: `import_manalink.LABEL` (`from_manalink.txt`)
+  and `write_label`, kept true on every import by `run_import`;
+  `build_release.sh`'s `skin_zip` and `package_release.check_skin`
+  refuse it.
+- `tools/skin_catalogue.py`: THE TABLE — `render_csv`/`table_rows` write
+  `docs/skin-catalogue.csv` beside the text, one row per file of the
+  skin zip; shipped as `skin/SKIN.csv` (`build_release.sh`,
+  `package_release.py`). `docs/.gdignore` keeps Godot from importing it
+  as a translation.
+- Tests: `tools/test_import_manalink.py` (new), `tools/test_mtg_assets.py`
+  (`TestCheckAndTheManalinkDoor`), `tools/test_skin_catalogue.py` (the
+  committed table), `tools/test_package_release.py` and
+  `tools/test_build_release_sh.py` (`SkinZipTest`: the label refused).
+
 ## The skin off the 1997 install alone; our dagger and our body face (2026-10-15)
 
 - `game/skin.gd`: `font("font_body")` is Spectral for every player, on a
@@ -6141,7 +6169,11 @@ shandalar/
 │   │                          shandalar-art-1997.zip was built);
 │   │                          --from-cardart archives a folder of card
 │   │                          pictures under skin/cardart/ as the
-│   │                          separate cardart.zip (2026-09-08). A skin
+│   │                          separate cardart.zip (2026-09-08). --check
+│   │                          also runs the importer's own --check (the
+│   │                          asset-by-asset list) and --manalink reaches
+│   │                          the importer from --check and --install
+│   │                          (2026-10-17). A skin
 │   │                          archive leaves RETIRED names out
 │   │                          (font_body.ttf, 2026-10-17), so a folder
 │   │                          imported before the body face became ours
@@ -6203,14 +6235,22 @@ shandalar/
 │   │                          drop, beside the binary) and "TO DRAW YOUR
 │   │                          OWN". --check ZIP_OR_DIR reports what a skin
 │   │                          of a player's own is missing, or counts the
-│   │                          pictures of a card art zip
+│   │                          pictures of a card art zip. THE TABLE
+│   │                          (2026-10-17): the same run writes
+│   │                          docs/skin-catalogue.csv (shipped as
+│   │                          skin/SKIN.csv), one row per file of the skin
+│   │                          zip by its name — portraits and movies too —
+│   │                          with section, kind, read_by_game, format,
+│   │                          the 1997 source, the Manalink backup's source
+│   │                          and the note
 │   ├── test_skin_catalogue.py  unittest: the measurers on files built
 │   │                          in the test (a PNG header, a `wave` WAV,
 │   │                          a font's magic, a sidecar), every manifest
 │   │                          key catalogued, the COMMITTED catalogue
 │   │                          naming every expected file, --check on a
 │   │                          zip (outside-skin/ refused, .import
-│   │                          sidecars ignored, missing + unknown listed)
+│   │                          sidecars ignored, missing + unknown listed);
+│   │                          the committed table, row for row
 │   ├── import_original.py   1997 skin importer: copies original art/fonts
 │   │                          from the USER'S OWN game copy into
 │   │                          assets/original/ (gitignored) per its
@@ -6277,7 +6317,47 @@ shandalar/
 │   │                          14 player (@PLAYERNAMES), 55 rogue
 │   │                          (@DECKFACES, one-based, rogue_ prefix) and
 │   │                          the Facemaker face; PIC_SCREENS decodes
-│   │                          Advfac64.pic to a skin key nothing reads yet
+│   │                          Advfac64.pic to a skin key nothing reads yet.
+│   │                          --check (2026-10-17) runs the import into a
+│   │                          throwaway folder and prints THE CHECKLIST:
+│   │                          every asset the game can wear, where it came
+│   │                          from or what is missing (NOT_READ keys
+│   │                          marked unused), portraits of 70, the movies.
+│   │                          --manalink opens import_manalink.py's door
+│   │                          after the 1997 rows (and lets Program/
+│   │                          sound copies in); main is split into
+│   │                          run_import + check/print_checklist
+│   ├── import_manalink.py   THE MANALINK DOOR (2026-10-17, the owner: an
+│   │                          option for a player with no 1997 install).
+│   │                          Off unless --manalink. fill() answers what
+│   │                          the 1997 rows left missing from a Manalink
+│   │                          install's own files, by a per-key Row and
+│   │                          RULE read off each consumer: SAME (1997 size
+│   │                          or exactly 2x, halved), FIT (resized to the
+│   │                          1997 size), OWN (its own size; 2x halved);
+│   │                          FRAMES lays Classic/CardBk_* under CardOv_*
+│   │                          into the 12 card frames at 228x325; NOT_USED
+│   │                          names what Manalink has in an unusable
+│   │                          shape (faces, hand bars, sword/shield/bones,
+│   │                          ability grid, versus wells). Standard-library
+│   │                          decode_bmp / decode_png (any non-interlaced
+│   │                          PNG), decode_jpeg through ffmpeg (the card
+│   │                          back), halve / resize (separable tent, alpha
+│   │                          weighted), over. Ships beside the importer
+│   │                          in every package (it is imported at start).
+│   │                          A BACKUP, NEVER A RELEASE SKIN (the owner):
+│   │                          write_label keeps LABEL (from_manalink.txt)
+│   │                          true in a folder it filled, and the build
+│   │                          refuses a skin that carries it
+│   ├── test_import_manalink.py  unittest: the decoders on files built in
+│   │                          the test (BMP 24/32/8-bit, every PNG
+│   │                          filter, palette+tRNS, 16-bit), halve and
+│   │                          resize, each RULE through fill, the frame
+│   │                          laying (Classic, not Modern), NOT_USED named
+│   │                          and not written, every row a MANIFEST key;
+│   │                          the importer's door shut without --manalink
+│   │                          and --check writing nothing; the label
+│   │                          written, and dropped key by key
 │   ├── fetch_card_art.py    Scryfall art_crop → assets/cardart/ (gitignored,
 │   │                          s30's card-image approach pre-downloaded);
 │   │                          resume-safe, --force re-fetches, --out DIR
@@ -11867,6 +11947,14 @@ shandalar/
     │                          settings retries, home paths and verification
     ├── ARCHITECTURE.md      Design decisions & layer model — READ FIRST
     ├── CODE_MAP.md          This file
+    ├── .gdignore            Keeps Godot's importer out of docs/
+    │                          (2026-10-17): it reads any .csv as a
+    │                          translation table; nothing here is a resource
+    ├── skin-catalogue.txt   The skin's catalogue, and skin-catalogue.csv
+    │                          the same as a table, one row per file of the
+    │                          skin zip — both generated by
+    │                          tools/skin_catalogue.py, shipped as
+    │                          skin/SKIN.txt and skin/SKIN.csv
     ├── adding-cards.md      The card-authoring pipeline + checklist
     ├── adventure-implementation-notes.md  Living notes for the adventure
     │                          mode (M5, 2026-10-04 on; nothing built):
