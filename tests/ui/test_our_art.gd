@@ -358,7 +358,8 @@ func test_nothing_in_gitignore_would_keep_them_out_of_the_repository() -> void:
 
 # ------------------------------------------------------------- 4. the face --
 # `game/art/fonts/`, since 2026-09-09 — the floor under
-# `GameSkin.font("font_body")`. Spectral Regular, chosen because its
+# `GameSkin.font("font_body")`, and since 2026-10-15 that face for every
+# player, skin or none. Spectral Regular, chosen because its
 # x-height is MPlantin's to three decimals; see `game/art/README.md`
 # § The face and `docs/ROADMAP.md`.
 

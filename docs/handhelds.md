@@ -24,14 +24,15 @@ starting the game; an Android build has no launcher and is the handheld
 itself, so its word is `android` unless the variable says otherwise. Under
 that word, three settings that you have **never changed** open on a
 handheld's defaults instead of the desktop's: **Full screen** on,
-**Full-screen card on click** on, and **Power saver** on. A choice you make
+**Full-screen card on click** on (the desktop's default too, since 0.50.26),
+and **Power saver** on. A choice you make
 in Options is written and always wins — a handheld that you set to windowed
 stays windowed — and nothing is written until you choose. Starting the
 executable directly, without the launcher, gives the desktop's defaults.
 
-**Full-screen card on click**: click or tap the large preview in a duel or
-Deck Builder to fit the card to the screen; click again, Escape or controller
-Cancel closes it. Local computer play waits while reading; a network opponent
+**Full-screen card on click** (on by default; Options → Display switches it
+off): click or tap the large preview in a duel or Deck Builder to fit the
+card to the screen; click again, Escape or controller Cancel closes it. Local computer play waits while reading; a network opponent
 and host keep playing. The normal sidebar layout is unchanged.
 
 **Power saver** (Options → Display) puts the engine into its low-processor

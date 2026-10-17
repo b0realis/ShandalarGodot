@@ -36,10 +36,13 @@ func build_match(config: DuelConfig, rules: RulesOptions, tournament: Dictionary
 	# EACH SEAT IS A ROW — the portrait BESIDE the name and deck, portraits
 	# on the outside and the two names facing each other across the `vs.`.
 	# Stacked (portrait above name above deck) the page did not fit the slot
-	# under the shipped body font even with one-line titles: its line is
-	# taller than a skin's, and the column stood 45 px over the room with
-	# nothing left to give. Beside, a seat is the portrait's height, and a
-	# name and a title of two lines each stand within it under either font.
+	# under the shipped body font even with one-line titles: its line was
+	# taller than a skin's MPlantin, and the column stood 45 px over the
+	# room with nothing left to give. Beside, a seat is the portrait's
+	# height, and a name and a title of two lines each stood within it
+	# under either font. Since 2026-10-15 every player sets the shipped
+	# face (Spectral), on trimmed lines (`GameSkin._tightened`) whose height
+	# falls between the two.
 	var seats := HBoxContainer.new()
 	seats.add_theme_constant_override("separation", 12)
 	column.add_child(seats)
@@ -74,8 +77,11 @@ func build_match(config: DuelConfig, rules: RulesOptions, tournament: Dictionary
 	column.add_child(_wrapped("Unrestricted decks · %d starting life" % config.lives[0], 16, 1))
 	# THE RULES, TWO TO A ROW. The ninth fork (2026-10-13,
 	# `sacrifice_clauses_wait`) made a fifth row, and the rows stand
-	# closer so the slot keeps what it had: under the shipped font a long
-	# deck title still gives up one line, not two ([method _fit_titles]).
+	# closer so the slot keeps what it had: under the shipped font as it
+	# stood then (Spectral untrimmed) a long deck title still gave up one
+	# line, not two ([method _fit_titles]). On the trimmed lines every
+	# player sets since 2026-10-15 it gives up none — the column measured
+	# 354 px of its 420 with two long names over two long titles.
 	var details := GridContainer.new()
 	details.columns = 2
 	details.add_theme_constant_override("h_separation", 16)

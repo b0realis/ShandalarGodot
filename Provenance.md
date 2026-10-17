@@ -212,8 +212,9 @@ are ONE recording at three gain stagings:
 None of the three is provably 1997. **The importer therefore does not try
 to pick the "real" one: it picks the folder the GAME reads** (`DuelSounds/`
 and `Sound/`, the paths `windows.c:1228` and `deckdll.cpp:2047` build),
-falls back to `Program/…`, and prints the date of every file it took.
-What a player's own copy plays is what they get.
+never a `Program/…` copy (since 2026-10-15: the skin is built off the
+1997 install alone), and prints the date of every file it took. What a
+player's own copy plays is what they get.
 
 **s30 ships the 2009 masters too**, which is a fourth witness and a useful
 cross-check. Decoding its `assets/audio/sfx/*.ogg` back to 22 050 Hz mono
@@ -617,7 +618,7 @@ gets a row here before it is committed.
 | `game/art/manalink_globe.png` | the Manalink button's mark, 2026-09-17 | ours — the owner's own picture, reduced to 256 px; the first file in `game/art/` no generator drew — the portraits below are the others | ours (GPL-3.0) |
 | `game/art/card_back_holly.png`, `card_back_moon.png` | two card backs, 2026-10-14 | ours — the owner's own pictures, reduced to 342×479; hashed in `game/art/README.md` | ours (GPL-3.0) |
 | `game/art/portraits/*.png` | sixteen portraits for the Magic Battle chooser — the faces an install has before the player adds one, 2026-10-01 | ours — the owner's own pictures, 138×170 on a transparent ground, handed over as a zip; renamed to the chooser's names, bytes untouched; hashed one by one in `game/art/README.md` § The portraits | ours (GPL-3.0) |
-| `game/art/fonts/Spectral-Regular.ttf` | **Spectral Regular 2.005**, the body face the game falls back to when no 1997 font is imported, 2026-09-09 | fetched over HTTPS from the family's own upstream directory, Google Fonts' `ofl/spectral` (designed by Production Type) | **SIL Open Font Licence 1.1** — a redistribution licence; `game/art/fonts/OFL.txt` ships beside the file, as it requires |
+| `game/art/fonts/Spectral-Regular.ttf` | **Spectral Regular 2.005**, the body face for every player, with or without a skin (2026-09-09; the only one since 2026-10-15) | fetched over HTTPS from the family's own upstream directory, Google Fonts' `ofl/spectral` (designed by Production Type) | **SIL Open Font Licence 1.1** — a redistribution licence; `game/art/fonts/OFL.txt` ships beside the file, as it requires |
 | `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B, 2026-09-09 | ours — generated, see below | ours (GPL-3.0) |
 
 This table is the REGISTER — where a file came from and under what
@@ -627,15 +628,20 @@ test that holds those hashes to the bytes — is `game/art/README.md`;
 The two pictures that predate all of it, `game/icon.png` and
 `game/boot_splash.png`, are in this register and not in that inventory.
 
-**Why a font is here at all.** The rules text is set in `font_body`,
-which is MPlantin with the 1997 files imported — Monotype's, and never
-redistributed by this project. Without an import there was nothing under
-it but Godot's default sans. Spectral was chosen from twenty-two free
-serifs on 2026-09-09 because its x-height is 0.450 of the em against
-MPlantin's 0.450 and its text width is within 1.2%; it is a FLOOR and
-never an override, so an imported MPlantin still wins
-(`GameSkin.font`, and `game/art/README.md` § The face for the whole
-argument). Nothing here is a 1997 file or anyone's restyle of one.
+**Why a font is here at all.** The rules text, the log and every
+window are set in `font_body`. Until 2026-10-15 that was MPlantin when a
+skin carried it — Monotype's, never redistributed by this project, and
+never on the 1997 disc (only a Manalink tree has it) — and Spectral
+underneath. Spectral was chosen from twenty-two free serifs on
+2026-09-09 because its x-height is 0.450 of the em against MPlantin's
+0.450 and its text width is within 1.2%. Since 2026-10-15 it is the body
+face for every player, set 3 px tighter above and below, and a skin's
+`font_body.ttf` is not read (the owner: *"Spectral, with the dialog
+spacing tightened for everyone!! It is an open source font. Thats is
+very important."*; `GameSkin.font`, and `game/art/README.md` § The face
+for the whole argument). Every font the game ships is under the OFL
+(`README.md` § Licence). Nothing here is a 1997 file or anyone's restyle
+of one.
 
 **What this sound is.** Noise and arithmetic — white noise through a
 minimum-phase FIR, shaped by a macro envelope, normalised, written as a

@@ -152,26 +152,56 @@ func test_online_introduction_maps_both_players_and_contains_long_deck_names() -
 	assert_eq(screen.config.deck_names, [referee.deck_names[1], referee.deck_names[0]])
 	_assert_introduction_on_the_paper(intro)
 	for title in intro._deck_titles:
-		assert_eq(title.max_lines_visible, 3, "a title that fits under the skin's font gives nothing away")
+		assert_eq(title.max_lines_visible, 3, "a title that fits under the body face gives nothing away")
 	assert_null(intro._hand)
 	for card in intro._cards: assert_false(card.is_visible_in_tree())
 
 
-func test_long_deck_names_give_way_under_the_shipped_font_and_keep_the_whole_name_in_the_tooltip() -> void:
-	# The plain build has no skin: its body font is the shipped one, whose
-	# line is taller than a skin's. Two long names over two long titles
-	# stand taller than the portraits beside them and the column leaves
-	# its slot, so each title gives up a line; the tooltip keeps the whole
-	# name, and nothing under the seats moves.
+## Two long names over two long titles, the body face held at [param face]
+## while the introduction lays itself out.
+func _long_names_intro(face: Font) -> SgDuelOpening:
 	var fonts := GameSkin._font_cache.duplicate()
-	GameSkin._font_cache["font_body"] = GameSkin.our_font("font_body")
+	GameSkin._font_cache["font_body"] = face
 	player_names = ["Azure Fox of the Northern Marches", "Amber Owl the Elder of Thune"]
 	referee = SgPracticeMatch.new(42)
 	referee.deck_names = ["White Knights ".repeat(6).strip_edges(), "Black-Red Raiders ".repeat(5).strip_edges()]
 	var screen := _screen(1)
 	for i in 8: await get_tree().process_frame
 	GameSkin._font_cache = fonts
-	var intro := screen._intro_overlay
+	return screen._intro_overlay
+
+
+func test_long_deck_names_keep_three_lines_under_the_shipped_font_and_the_whole_name_in_the_tooltip() -> void:
+	# The face every build sets since 2026-10-15: Spectral on the trimmed
+	# lines `GameSkin.font` gives it. Two long names over two long titles
+	# fit the slot with room over (measured that day: the column 354 px
+	# of 420), so no title gives a line away; the tooltip still carries the
+	# whole name a three-line title trims. (This test used to stand the
+	# UNTRIMMED face in for "the plain build", under which the column left
+	# its slot — no build ships that face now; the give-way is the next
+	# test's.)
+	var intro: SgDuelOpening = await _long_names_intro(
+		GameSkin._tightened(GameSkin.our_font("font_body")))
+	_assert_introduction_on_the_paper(intro)
+	assert_eq(intro._deck_titles.size(), 2)
+	for title in intro._deck_titles:
+		assert_eq(title.max_lines_visible, 3, "the shipped face keeps every line: " + title.text)
+		assert_eq(title.get_visible_line_count(), 3)
+		assert_true(title.tooltip_text.begins_with(title.text.left(12)))
+		assert_gt(title.tooltip_text.length(), 40, "the tooltip keeps the whole name")
+	var note: Label = intro._column.get_child(intro._column.get_child_count() - 1)
+	assert_true(note.text.begins_with("Temporary player names"))
+	assert_eq(note.get_visible_line_count(), 2, "the note under the rules lost nothing")
+
+
+func test_a_column_that_outgrows_its_slot_gives_way_a_title_line_at_a_time() -> void:
+	# THE GIVE-WAY, which the shipped face no longer needs and the column
+	# still has to have (another rules row, a taller face). A face with a
+	# taller line stands in for that day: Spectral UNTRIMMED, the body face
+	# until 2026-10-15, under which the same names leave the slot. Each
+	# title gives up one line, not two; the tooltip keeps the whole name,
+	# and nothing under the seats moves.
+	var intro: SgDuelOpening = await _long_names_intro(GameSkin.our_font("font_body"))
 	_assert_introduction_on_the_paper(intro)
 	assert_eq(intro._deck_titles.size(), 2)
 	for title in intro._deck_titles:

@@ -157,13 +157,16 @@ Web can import/fetch the skin and base cardart ZIPs into browser storage;
 this build has no browser installation path for numbered gameplay packs.
 Its included Python tools run on your computer and can build packs for desktop.
 
-To rebuild the original skin from your own game installation:
+To rebuild the original skin from your own copy of the game:
 
 ```sh
 python3 tools/mtg_assets.py --install /path/to/game
 ```
 
-The importer reads your installation without changing it. See the
+**The original skin requires only the original 1997 MicroProse game:**
+its CD, or the folder you installed it to. Nothing from a later
+re-release or another project is needed or read. The importer reads your
+installation without changing it. See the
 [player-files guide](docs/player-files.md) for pack locations and the
 [skin catalogue](docs/skin-catalogue.txt) for creating your own skin.
 Card pictures stay personal—do not include them in a public web build.
@@ -257,6 +260,11 @@ Have fun, build something unexpected, and enjoy the duels.
 Code and project-created assets: **[GPL-3.0](LICENSE)**.
 Third-party components and fonts retain their own licences; see the
 [asset inventory](game/art/README.md) and [provenance](Provenance.md).
+
+Every font shipped with the game is an open-source font under the
+[SIL Open Font License 1.1](game/art/fonts/OFL.txt): Spectral for the text
+and Open Sans, Godot's built-in face. The 1997 title lettering appears only
+when you install the skin from your own copy of the original game.
 
 ## Legal
 

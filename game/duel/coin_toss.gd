@@ -605,11 +605,12 @@ static func result_badge(config: DuelConfig, winner: int,
 ##
 ## It was a Label carrying `▲` / `▼` for one screenshot, and the
 ## screenshot is why it is not one now: [method OriginalDialog.ink_label]
-## dresses its text in the 1997 body face (MPlantin), **which has no
+## dressed its text in the body face of the day (MPlantin), **which has no
 ## triangle glyphs**, so the badge came out as a coin with a name under it
-## and nothing pointing anywhere. The same trap as the graveyard shelf's
-## `◀ ▶`, which get away with it only because they are drawn in the
-## fallback font.
+## and nothing pointing anywhere. The body face has been our Spectral for
+## every player since 2026-10-15 and Spectral does carry `▲ ▼` (and the
+## graveyard shelf's `◀ ▶`), but a drawn pointer depends on no face at
+## all, so it stays drawn.
 ##
 ## Painted in the panel's own two voices — the pale outline that lifts ink
 ## off the sandstone speckle, then the ink itself — so it belongs to the

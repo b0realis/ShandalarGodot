@@ -413,7 +413,8 @@ static func _popup_action(callback: Callable, veil: Control) -> void:
 		veil.queue_free()
 
 
-## Text label in the era's body font.
+## Text label in the body face — our Spectral for every player since
+## 2026-10-15 ([method GameSkin.font]), in place of the era's MPlantin.
 static func body_label(text: String, size := 14) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -435,8 +436,9 @@ static func body_label(text: String, size := 14) -> Label:
 ## playtested with the report "all white text is unreadable on
 ## sand-colored menu boxes". See the class doc.
 ##
-## The SEAT is what the black shadow used to be: menu text is MPlantin, a
-## thin serif, so the seat has to hold the glyph without eating its
+## The SEAT is what the black shadow used to be: menu text is a thin
+## serif (MPlantin when this was written, our Spectral for every player
+## since 2026-10-15), so the seat has to hold the glyph without eating its
 ## hairlines — a 1px outline and a 2px offset, now pale, which lifts dark
 ## letters off mottled stone the same way the dark one lifted pale ones
 ## off a dark ground.

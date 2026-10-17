@@ -17,9 +17,12 @@ extends SceneTree
 ## or embedded: run without any 1997 game or Manalink install and this
 ## produces exactly the same pictures.
 ##
-## They are the FLOOR, not the ceiling. A player who imports their own
-## 1997 art still gets the 1997 art — `GameSkin` checks the imported skin
-## first and only falls through to these (see `GameSkin.our_art`).
+## They are what EVERY player sees, imported 1997 art or not: a skin's
+## file under any of these names is not read. The set glyphs have been
+## ours alone since 2026-09-10 (`GameSkin.set_icon`), the Deck Builder's
+## medallions come from `GameSkin.our_art` alone, and since 2026-10-15
+## so does the dagger (`MiniCard.ALWAYS_OURS`) — until then it was a
+## floor under an imported one.
 ##
 ## HOW IT DRAWS. Every glyph is a list of ops (`add`/`sub` polygons,
 ## ellipses and capsules) in a 0..1 unit square. The ops are sampled onto

@@ -129,16 +129,18 @@ func test_the_sizes_are_the_1997_ratios_of_the_cards_height() -> void:
 			"%s: x-height %.2f px against a %.2f px target" % [row[3], got, target])
 
 
-## **AND THE FIX IS A NO-OP FOR THE FACES THE PROJECT SHIPS.** The letter
+## **AND THE FIX IS A NO-OP FOR THE ORIGINAL TITLE FACE.** The letter
 ## ratios were re-derived from the sizes the old line-box fit landed on
-## (see [constant CardPreview.BODY_X_HEIGHT]), so on MPlantin and the
-## original title face the two fits have to agree exactly — on a face whose
-## line box is one em they are the same statement. If this ever fails, the
-## re-derivation is wrong and the card the owner looks at has moved.
-func test_the_letter_fit_gives_the_shipped_faces_what_the_cell_fit_gave() -> void:
-	if GameSkin.font("font_body") == null or GameSkin.font("font_title") == null:
+## (see [constant CardPreview.BODY_X_HEIGHT]), so on a face whose line box
+## is one em — the imported MagicMedieval — the two fits have to agree
+## exactly. If this ever fails, the re-derivation is wrong and the card the
+## owner looks at has moved. (The body face was MPlantin, the other one-em
+## face, until 2026-10-15; it is Spectral for every player now, whose box
+## is not one em, and the letter fit is what holds its card still — see
+## [method test_the_body_face_keeps_the_1997_advance].)
+func test_the_letter_fit_gives_the_title_face_what_the_cell_fit_gave() -> void:
+	if GameSkin.font("font_title") == null:
 		return   # no 1997 files on this machine — there is nothing to hold still
-	var box: float = (0.902 - (CardPreview.TEXT_TOP + 0.019)) * CardPreview.SIZE.y
 	var rows := [
 		[_preview._title_font, _preview._name_size,
 			CardPreview._size_for_height(_preview._title_font,
@@ -146,36 +148,26 @@ func test_the_letter_fit_gives_the_shipped_faces_what_the_cell_fit_gave() -> voi
 		[_preview._title_font, _preview._type_size,
 			CardPreview._size_for_height(_preview._title_font,
 				CardPreview.TYPE_RATIO * CardPreview.SIZE.y), "type"],
-		[_preview._body_font, _preview._pt_size,
-			CardPreview._size_for_height(_preview._body_font,
-				CardPreview.PT_RATIO * CardPreview.SIZE.y), "P/T"],
-		[_preview._body_font, _preview._rules_size,
-			CardPreview._size_for_lines(_preview._body_font,
-				CardPreview.RULES_LINES, box), "rules text"],
 	]
 	for row in rows:
 		assert_eq(int(row[1]), int(row[2]),
 			"%s: the letter fit gives %d where the 1997-cell fit gave %d"
 				% [row[3], int(row[1]), int(row[2])])
-	assert_eq(_preview._illus_size,
-		CardPreview._size_for_height(_preview._body_font,
-			_preview._body_font.get_height(_preview._rules_size)
-				* CardPreview.ILLUS_RATIO_OF_RULES),
-		"the credit too")
 
 
-## The leading is the nominal pixel on a face whose line box is one em —
-## which both shipped faces are — at every size the ladder can reach. It
-## goes negative only where a face has baked air into its box, and there is
-## none here to take back.
-func test_the_leading_is_the_nominal_pixel_on_the_shipped_face() -> void:
-	if GameSkin.font("font_body") == null or GameSkin.font("font_title") == null:
-		return   # no 1997 files on this machine — there is nothing to hold still
+## The 1997 ADVANCE holds on the body face at every size the ladder can
+## reach: line box plus leading never opens the baselines wider than one
+## em plus the cell slack plus the nominal pixel — the leading takes back
+## whatever air the face carries ([method CardPreview._rules_leading]),
+## so the ink sits where a one-em face would put it.
+func test_the_body_face_keeps_the_1997_advance() -> void:
 	for step in CardPreview.RULES_STEPS:
 		var size: int = _preview._step_size(int(step))
-		assert_eq(CardPreview._rules_leading(_preview._body_font, size),
-			CardPreview.RULES_LINE_SPACING,
-			"step %d (size %d): the shipped face keeps its one pixel"
+		var advance: float = _preview._body_font.get_height(size) \
+			+ CardPreview._rules_leading(_preview._body_font, size)
+		assert_lte(advance, float(size) + ManaText.CELL_SLACK
+			+ float(CardPreview.RULES_LINE_SPACING),
+			"step %d (size %d): the baselines keep the 1997 advance"
 				% [int(step), size])
 
 
@@ -198,18 +190,21 @@ func test_the_ladder_steps_by_the_letter_and_bottoms_out_on_one() -> void:
 			+ float(int(step)) * CardPreview.BODY_X_HEIGHT
 		assert_between(x_em * size, want - x_em, want + CardPreview.LETTER_SLACK,
 			"step %d lands on its letter" % int(step))
-		# ...and on the shipped face every rung is the point step it always
-		# was, which is what makes the fix a no-op for the WHOLE POOL and
-		# not merely for the base size: [method CardPreview._fit_rules_size]
-		# then walks an identical ladder with an identical leading, so it
-		# cannot reach a different verdict on any card.
+		# ...and on the body face every rung is a whole point step under
+		# the base. On MPlantin, the face this was written against, that
+		# made the fix a no-op for the WHOLE POOL and not merely for the
+		# base size: [method CardPreview._fit_rules_size] walked an
+		# identical ladder with an identical leading, so it could not reach
+		# a different verdict on any card. The body face is Spectral for
+		# every player since 2026-10-15, and its rungs still fall a point a
+		# step.
 		if GameSkin.font("font_body") != null:
 			assert_eq(size, _preview._rules_size + int(step),
-				"step %d is the same rung it always was" % int(step))
+				"step %d is a whole point step under the base" % int(step))
 	if GameSkin.font("font_body") != null:
 		assert_eq(last, _preview._rules_size
 			+ int(CardPreview.RULES_STEPS[CardPreview.RULES_STEPS.size() - 1]),
-			"and on the shipped face the bottom is the 10 pt it always was")
+			"and on the body face the bottom is the last step under the base")
 
 
 ## The rules text is sized by the LINE COUNT, which is the invariant the
@@ -434,15 +429,15 @@ func test_the_symbols_did_not_cost_the_pool_a_single_step() -> void:
 ## **A FLOOR IS A MEASUREMENT OF A FACE**, and since 2026-09-09 there are
 ## two faces to measure. The numbers above were counted on MPlantin, the
 ## face the original names, and they stay exactly where they were. On a
-## machine with nothing imported the body face is now the Spectral this
+## machine with nothing imported the body face was then the Spectral this
 ## project ships (`GameSkin.our_font`, `game/art/fonts/`), whose advances
 ## run a hair wider than MPlantin's at the same x-height — the survey put
 ## the difference at 1.2% of text width — and 808 of the pool read at the
 ## full size instead of 810. Two cards, and they are two cards that gain a
 ## step, not a clipped line. Writing 808 down here is what makes it a
 ## measurement rather than a surprise: the count may go UP, and must not
-## go down, on EITHER face.
-const EXPAND_FLOOR_IMPORTED := 810
+## go down. Since 2026-10-15 Spectral is the body face for EVERY player
+## (`GameSkin.font`), on its trimmed line box — and still 808.
 const EXPAND_FLOOR_OURS := 808
 
 func test_expand_reads_at_least_as_many_cards_at_full_size_as_the_braces_did()\
@@ -454,13 +449,9 @@ func test_expand_reads_at_least_as_many_cards_at_full_size_as_the_braces_did()\
 		if _preview._oracle.get_theme_font_size("font_size") \
 				== _preview._rules_size:
 			full += 1
-	var ours: bool = GameSkin.font("font_body") \
-		== GameSkin.our_font("font_body")
-	var floor_count: int = EXPAND_FLOOR_OURS if ours \
-		else EXPAND_FLOOR_IMPORTED
-	assert_gte(full, floor_count,
-		"%d cards at full size with Expand on, on %s" % [full,
-			"the face this project ships" if ours else "the imported face"])
+	assert_gte(full, EXPAND_FLOOR_OURS,
+		"%d cards at full size with Expand on, on the face this project ships"
+			% full)
 
 
 ## **AND IT STILL READS WITH NO 1997 FILES AT ALL.** Take the sheet away

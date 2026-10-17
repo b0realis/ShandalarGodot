@@ -270,12 +270,10 @@ func _init() -> void:
 	var body := GameSkin.font("font_body")
 	if body != null:
 		_text.add_theme_font_override("normal_font", body)
-		# The skin's face has no bold cut (see `UiChrome.menu_button`), so
-		# a cast's card name is the same face emboldened by outline.
-		var thick := FontVariation.new()
-		thick.base_font = body
-		thick.variation_embolden = 0.6
-		_text.add_theme_font_override("bold_font", thick)
+		# The body face is our Spectral, and we ship its Regular cut only
+		# (see `UiChrome.menu_button`), so a cast's card name is the same
+		# face emboldened — `GameSkin.emboldened` keeps the trimmed lines.
+		_text.add_theme_font_override("bold_font", GameSkin.emboldened(body, 0.6))
 	add_child(_text)
 
 

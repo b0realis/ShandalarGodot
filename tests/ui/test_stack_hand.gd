@@ -438,16 +438,17 @@ func test_ui_divides_damage_across_chosen_targets() -> void:
 
 
 func test_wounded_creature_wears_the_damage_marker() -> void:
-	# The original marks damage with Damage.pic's dagger plus the amount
-	# (its raw 84x26 file is a clean image+mask pair; the converted copy
-	# is not, which is why the import prefers the raw one).
+	# The original marks damage with Damage.pic's dagger plus the amount.
+	# The dagger is the game's own since 2026-10-15 (`game/art/
+	# damage_marker.png`, 64x40, real alpha — [constant
+	# MiniCard.ALWAYS_OURS]); a skin's damage_marker.png is not read.
 	var hurt := _instance("Serra Angel")
 	hurt.zone = Mtg.Zone.BATTLEFIELD
 	hurt.damage = 3
 	var card := MiniCard.new(hurt)
 	add_child_autofree(card)
 	assert_true(card._damage_icon.visible, "a wounded creature shows the marker")
-	assert_not_null(card._damage_icon.texture, "the mask decoded")
+	assert_not_null(card._damage_icon.texture, "the dagger is there")
 	assert_eq(card._damage_count.text, "3")
 
 	var whole := _instance("Serra Angel")

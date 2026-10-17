@@ -64,6 +64,27 @@ class TestWriteZip(unittest.TestCase):
         self.assertIn("skin/original_skin.zip", report.getvalue())
         self.assertIn("Options > Skin", report.getvalue())
 
+    def test_a_body_font_left_in_the_folder_stays_out_of_the_skin_zip(self):
+        """A folder imported before 2026-10-15 still holds MPlantin as
+        `font_body.ttf`. The game no longer reads it and it was never on
+        the 1997 disc, so `build_release.sh`'s skin zip must not carry it
+        on; a card picture of that name is not a skin file and is kept."""
+        skin = self._folder("old_skin", {"font_body.ttf": b"ttf", "font_title.ttf": b"ttf",
+                                         "card_back.png": b"png"})
+        out = self.dir / "old.zip"
+        report = io.StringIO()
+        with redirect_stdout(report):
+            self.assertEqual(mtg_assets.write_zip(skin, out), 0)
+        with zipfile.ZipFile(out) as zf:
+            self.assertEqual(sorted(zf.namelist()),
+                             ["skin/card_back.png", "skin/font_title.ttf"])
+        self.assertIn("left out: font_body.ttf", report.getvalue())
+        art = self._folder("odd_art", {"font_body.ttf": b"ttf"})
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(mtg_assets.write_zip(art, self.dir / "art.zip", inner="cardart"), 0)
+        with zipfile.ZipFile(self.dir / "art.zip") as zf:
+            self.assertEqual(zf.namelist(), ["skin/cardart/font_body.ttf"])
+
     def test_a_folder_of_card_pictures_is_zipped_under_skin_cardart(self):
         art = self._folder("cardart", {"serra_angel.jpg": b"jpg", "ley_druid.png": b"png"})
         out = self.dir / "b.zip"

@@ -56,28 +56,29 @@ func _walk(node: Node) -> Array:
 	return out
 
 
-func test_fullscreen_card_option_is_off_by_default_without_writing() -> void:
+## On by default since 0.50.26 (the owner, 2026-10-15), still unwritten.
+func test_fullscreen_card_option_is_on_by_default_without_writing() -> void:
 	var switch := screen.find_child("FullscreenCards", true, false) as CheckButton
 	assert_not_null(switch)
-	assert_false(switch.button_pressed)
-	assert_false(Settings.fullscreen_cards())
+	assert_true(switch.button_pressed)
+	assert_true(Settings.fullscreen_cards())
 	assert_false(Settings.has_value("fullscreen_cards"))
 
 
 func test_fullscreen_card_choice_is_persisted_and_restored() -> void:
 	var switch := screen.find_child("FullscreenCards", true, false) as CheckButton
-	switch.button_pressed = true
-	assert_eq(_on_disk("fullscreen_cards"), true)
+	switch.button_pressed = false
+	assert_eq(_on_disk("fullscreen_cards"), false)
 	Settings.reload_file()
-	assert_true(Settings.fullscreen_cards())
+	assert_false(Settings.fullscreen_cards(), "switched off, it stays off")
 	var fresh: Control = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(fresh)
 	await get_tree().process_frame
 	var restored := fresh.find_child("FullscreenCards", true, false) as CheckButton
-	assert_true(restored.button_pressed)
-	restored.button_pressed = false
-	assert_false(Settings.fullscreen_cards())
-	assert_eq(_on_disk("fullscreen_cards"), false)
+	assert_false(restored.button_pressed)
+	restored.button_pressed = true
+	assert_true(Settings.fullscreen_cards())
+	assert_eq(_on_disk("fullscreen_cards"), true)
 
 
 ## The one CheckButton that says so.

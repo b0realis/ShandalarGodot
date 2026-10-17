@@ -66,7 +66,7 @@ func _options() -> Control:
 func test_without_the_word_every_default_is_the_desktops() -> void:
 	assert_eq(Settings.handheld(), "", "no launcher named a device")
 	assert_false(Settings.fullscreen())
-	assert_false(Settings.fullscreen_cards())
+	assert_true(Settings.fullscreen_cards(), "the card reader is the desk's default too (0.50.26)")
 	assert_false(Settings.power_saver())
 	for key in KEYS:
 		assert_false(Settings.has_value(key), "%s: reading writes nothing" % key)

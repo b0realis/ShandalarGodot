@@ -214,8 +214,8 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(cards)
 	content.add_child(cards)
 	var card_hint := UiChrome.body_label(
-		"For small screens: click or tap the large card in a duel or "
-		+ "Deck Builder to enlarge it. Click again or press Esc to close.", 14)
+		"Click or tap the large card in a duel or the Deck Builder to "
+		+ "read it full screen. Click again or press Esc to close.", 14)
 	card_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(card_hint)
 

@@ -260,7 +260,7 @@ static func _page_table() -> Dictionary:
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
 		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect, a licid's cost to end its effect, and the permanent sacrificed to ignore Volrath's Curse. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
 		_heading("Keep these keys handy"),
-		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
+		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again; a click on the card does the same unless Options, Display turns that off. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
 			Controls.key_text("duel_done"), Controls.key_text("duel_cancel"), Controls.key_text("duel_space"),
 			Controls.pad_text("duel_space"), Controls.pad_text("duel_done"), Controls.pad_text("duel_cancel"),
 			Controls.pad_text("duel_pause"), Controls.text("duel_read")]),
@@ -1871,7 +1871,8 @@ static func mini(subject: String) -> Dictionary:
 				+ "its current power and toughness. Expand text box lets the "
 				+ "text area grow over the art when a card's text does not "
 				+ "fit. Help for this card... tells what the Help says about "
-				+ "the card's abilities."
+				+ "the card's abilities. Click the card to read it full "
+				+ "screen; Options, Display turns this off."
 				+ ("" if read == Controls.UNBOUND else
 					" %s brings the card up full-size to read." % read),
 				"The Dueling Table")

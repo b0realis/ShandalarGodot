@@ -393,7 +393,8 @@ static func bar_style(content_margin := 6.0) -> StyleBox:
 ##
 ## THE LETTERING IS A UI SANS, ON PURPOSE (2026-09-10), and it is the one
 ## thing on a dialog that does NOT take `font_body`. Every label, line and
-## text field below reaches for the skin's body face; a BUTTON does not,
+## text field below reaches for the body face (our Spectral for every
+## player since 2026-10-15, [method GameSkin.font]); a BUTTON does not,
 ## and 1997 drew the same line where it had to draw one: the duel screen's
 ## font table (`Duelart/Duel.dat`) names a face for the card text, the
 ## card titles, the P/T, the damage, the life, the message strip, the chat

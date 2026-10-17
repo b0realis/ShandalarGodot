@@ -1771,9 +1771,11 @@ func _move_to_deck(card_name: String) -> void:
 	_remember(before, "Move %s into the deck" % card_name)
 	_dirty = true
 	refresh()
-	# "TO THE", NOT AN ARROW. `MPlantin` has no U+2192 and the well drew
-	# the move as "Circle of Protection: Red    sideboard (18)" — a gap
-	# where the direction was (caught by screenshotting it, 2026-09-06).
+	# "TO THE", NOT AN ARROW. `MPlantin`, the body face then, had no
+	# U+2192 and the well drew the move as "Circle of Protection: Red
+	# sideboard (18)" — a gap where the direction was (caught by
+	# screenshotting it, 2026-09-06). Spectral has the arrow; the words
+	# stayed.
 	_say("%s to the deck (%d)" % [card_name, deck.total()])
 
 
@@ -2087,9 +2089,10 @@ func _update_count_line() -> void:
 
 ## A line ON THE DARK WELL: white, no outline, and emboldened when it is
 ## the count — the owner asked for *"white text, larger and bold on that
-## inset"*. `MPlantin` ships one cut, so the weight is synthesised by
-## growing the outline the way [method UiChrome.menu_button] does for the
-## shell buttons; there is no bold companion to ask for.
+## inset"*. The body face is our Spectral and we ship its Regular cut
+## only, so the weight is synthesised ([method GameSkin.emboldened]) the
+## way [method UiChrome.menu_button] does for the shell buttons; there is
+## no bold companion to ask for.
 func _well_label(size: int, heavy: bool) -> Label:
 	var lab := Label.new()
 	lab.add_theme_font_size_override("font_size", size)
@@ -2103,10 +2106,7 @@ func _well_label(size: int, heavy: bool) -> Label:
 	var body: Font = GameSkin.font("font_body")
 	if body != null:
 		if heavy:
-			var thick := FontVariation.new()
-			thick.base_font = body
-			thick.variation_embolden = 0.05
-			lab.add_theme_font_override("font", thick)
+			lab.add_theme_font_override("font", GameSkin.emboldened(body, 0.05))
 		else:
 			lab.add_theme_font_override("font", body)
 	return lab

@@ -135,10 +135,10 @@ func _build_face() -> void:
 	add_child(_source_label)
 
 	# THE DAGGER, the mark already drawn on a wounded creature — the same
-	# art, on the object the damage IS. `Damage.pic` when the player has
-	# imported the original's set, and since 2026-09-09 OUR OWN drawing
-	# (`game/art/damage_marker.png`) when nobody has, so the marker wears
-	# a blade on every machine instead of leaving the numeral alone.
+	# art, on the object the damage IS: OUR OWN drawing (`game/art/
+	# damage_marker.png`) on every machine, skin or none ([constant
+	# MiniCard.ALWAYS_OURS], 2026-10-15), so the marker wears the same
+	# blade everywhere instead of leaving the numeral alone.
 	_dagger = TextureRect.new()
 	_dagger.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	_dagger.offset_left = 10

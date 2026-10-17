@@ -706,14 +706,18 @@ static func ai_pace() -> float:
 ## the handheld's default instead of the desk's: full screen on (a
 ## handheld has no desktop to keep a window on), the click-to-enlarge
 ## card reader on (a 7-inch screen is what that row was made for), and
-## the power saver on (a battery). Three things a Deck owner would
-## otherwise set by hand on first run, and nothing else. The file
-## always wins: once the player has written a key, the launcher's word
-## on it is never read again — so an Options choice made on the Deck is
-## as durable as one made on the desk. The desk, with the variable
-## unset, is exactly what it was. An Android build (the Meta Quest
-## panel, 2026-09-29) has no launcher to name it and IS the handheld:
-## the word there is `android` unless the variable says otherwise.
+## the power saver on (a battery). Three keys and nothing else — and
+## since 0.50.26 the reader is the desk's default too, so the handheld
+## now differs from the desk in two of them: full screen and the power
+## saver, the two things a Deck owner would otherwise set by hand on
+## first run. The reader stays in the table so the handheld's word on it
+## does not hang on the desk's. The file always wins: once the player has
+## written a key, the launcher's word on it is never read again — so an
+## Options choice made on the Deck is as durable as one made on the desk.
+## The desk, with the variable unset, is exactly what it was. An Android
+## build (the Meta Quest panel, 2026-09-29) has no launcher to name it and
+## IS the handheld: the word there is `android` unless the variable says
+## otherwise.
 const HANDHELD_ENV := "SHANDALAR_HANDHELD"
 const ANDROID_HANDHELD := "android"
 const HANDHELD_DEFAULTS := {
@@ -754,9 +758,12 @@ static func fullscreen() -> bool:
 
 ## [QoL] Optional click-to-enlarge for the duel and Deck Builder showcases.
 ## Reading the default never writes it to the player's settings file.
-## On by default under a handheld launcher ([method default_for]).
+## On by default everywhere since 0.50.26 (the owner, 2026-10-15: *"Full
+## screen card on click should be default on"*); before that only under a
+## handheld launcher ([method default_for]), which still says on. A player
+## who switched it off has `false` written and keeps it.
 static func fullscreen_cards() -> bool:
-	return get_value("fullscreen_cards", default_for("fullscreen_cards", false))
+	return get_value("fullscreen_cards", default_for("fullscreen_cards", true))
 
 
 ## [QoL] `Power saver` on the Options screen — [member OS.low_processor_usage_mode]:

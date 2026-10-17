@@ -18811,6 +18811,77 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — The bug pass over 0.50.26 (0.50.26)
+
+The owner: *"Do a bug pass over new features / correct any documentation;
+write that original skin requires ONLY 1997 original game install; and
+then commit and push."* Three read-only checks (the body face's
+consumers; the importer, tools and every skin instruction; the dagger and
+the card reader) found no functional bug in the four changes. Found and
+fixed:
+
+- **A Manalink sound could still come in.** No row names
+  `Program/DuelSounds/` or `Program/Sound/`, but the index reaches a file
+  there by its two-part and bare names; `is_manalink_sound_copy` refuses
+  it where the candidate is chosen (`TestTheSkinIsBuiltOffTheDiscAlone`).
+- **A stale body face could ship.** The importer never deletes from
+  `--dest`, so a skin folder imported before 2026-10-15 kept MPlantin, and
+  `build_release.sh` zips that folder whole; `mtg_assets.py`'s `RETIRED`
+  leaves `font_body.ttf` out of a skin zip (`TestWriteZip`).
+- `mtg_assets.py --check`'s font landmark named two faces the importer
+  never imports; it is "the title font", `Magim___.ttf`.
+- The developer's `assets/original` was rebuilt from the 1997 install
+  alone (its `damage_marker.png` is now the disc's 94x20, unread);
+  `docs/skin-catalogue.txt` regenerated.
+- Living documents that still described the skin's MPlantin, a Manalink or
+  s30 source, Pillow, or our art as a floor under the skin: `README.md`,
+  `docs/setup.txt`, `docs/setup-web.txt`, `docs/player-files.md`,
+  `Provenance.md`, `docs/duel-screen-design.md`, `docs/card-states.md`,
+  `game/art/README.md`, the importer's and `mtg_assets.py`'s help, and the
+  code comments. **The original skin requires only the original 1997
+  game** is now said wherever the skin is built, and `README.md` § Licence
+  says every font the game ships is under the OFL (Spectral, and Godot's
+  Open Sans).
+- The Options hint for the card reader no longer says "For small
+  screens", and the Help says a click on the large card opens it.
+
+## 2026-10-15 — The skin off the 1997 install alone; our dagger, our body face (0.50.26)
+
+A skin rebuilt on the Mac from the 1997 install carried the disc's own
+body face, the narrow MPZurich Cn BT, where ours carried MPlantin — which
+only a Manalink tree has. The owner: the skin pipeline works off the
+original CD install alone, *"we build our own damage dagger just to be
+independent"*, and for the body face *"Spectral, with the dialog spacing
+tightened for everyone!! It is an open source font. Thats is very
+important."*
+
+- **The dagger is ours for everybody** (`MiniCard.ALWAYS_OURS`), as the
+  set symbols have been since 2026-09-10: `game/art/damage_marker.png`.
+- **The body face is Spectral for everybody** (`GameSkin.font`), on a
+  line box trimmed 3 px top and bottom: Spectral's own is 1.52 em against
+  MPlantin's 1.000, which stood every dialog row half as tall again (13 px:
+  21 a line, now 15; MPlantin 14). The card renderer sets its own
+  baselines, so the cards keep their sizes and the 808 that read whole at
+  full size with Expand; the rules text sits 3 px higher.
+- **The importer reads a 1997 install only.** Every Manalink fallback
+  (MPlantin, Garamond, MagicMedieval, Goudy, the `Program/DBArt` and
+  `CardArt` restyles, `Program/DuelSounds` and `Program/Sound`) and every
+  s30 conversion (`*.pic.png`, `sprite_sheet*`, `Bldr_sheet`,
+  `16faces.spr.png`, `--allow-conversions`) is gone; a PNG under a 1997
+  name is refused, and no body face is imported. The owner's `MagicTG`
+  alone gives 164/164 keys, 70 portraits and the coin toss, byte-identical
+  to the skin built before apart from the two files the game no longer
+  reads.
+
+## 2026-10-15 — The card reader on by default (0.50.26)
+
+The owner: *"Full screen card on click should be default on."*
+`Settings.fullscreen_cards()` now reads true for a key never written, on
+the desk as on a handheld (`HANDHELD_DEFAULTS` keeps its word, which is
+the same). A player who switched the reader off has `false` written and
+keeps it; nothing is written by reading. `tests/ui/test_options_display.gd`
+and `tests/ui/test_handheld_defaults.gd` pin the new default.
+
 ## 2026-10-13 — The repository check (0.50.22)
 
 The owner: *"Ok check all Repo for any problems, obvious bugs.

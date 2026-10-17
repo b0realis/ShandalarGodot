@@ -19,16 +19,16 @@ extends RefCounted
 ## back to the clean built-in skin — so the game is complete without any
 ## original files, and dresses up automatically when they exist.
 ##
-## BETWEEN THOSE TWO THERE IS NOW A FLOOR THAT IS OURS ([method our_art],
-## [method our_font], 2026-09-09): `game/art/`, a handful of pictures this
-## project DREW — the six set glyphs and the damage dagger — plus the BODY
-## FACE it ships, all of it travelling inside the game's own pack. They
-## are checked after every skin directory and before the code-drawn
-## fallback, so a player who has imported nothing still sees a symbol on
-## the card, a dagger on a wounded creature and rules text in a serif
-## chosen for the job, and a player who HAS imported keeps the 1997 art
-## and the 1997 lettering exactly as before. Ours is the floor, never the
-## ceiling.
+## AND THERE IS WHAT IS OURS ([method our_art], [method our_font],
+## 2026-09-09): `game/art/`, a handful of pictures this project DREW — the
+## six set glyphs and the damage dagger — plus the BODY FACE it ships, all
+## of it travelling inside the game's own pack. Until 2026-10-15 they were
+## a floor under the skin; since then they are what EVERY player sees, and
+## a skin's file under those names is not read ([method set_icon],
+## `MiniCard.ALWAYS_OURS`, [method font]; the owner: *"we build our own
+## damage dagger just to be independent"*, *"Spectral, with the dialog
+## spacing tightened for everyone!!"*). Every other key is still the
+## skin's when it has one, the 1997 title lettering among them.
 ##
 ## Loading a SKIN goes through Image.load_from_file/FontFile, bypassing
 ## Godot's import pipeline entirely — that is what lets gitignored and
@@ -192,24 +192,75 @@ static func texture(key: String) -> Texture2D:
 ## neither a skin nor this project has one — the caller then gets Godot's
 ## own default face.
 ##
-## THE ORDER IS THE WHOLE POINT (2026-09-09): the player's imported skin,
-## then a development checkout's `assets/original`, then OURS ([method
-## our_font]), then nothing. An imported face still wins outright — the
-## 1997 lettering is what a player who went and found their CD came for —
-## and the face this project ships is only what stands under it.
-static func font(key: String) -> FontFile:
+## A KEY WE SHIP A FACE FOR IS OURS FOR EVERY PLAYER (the owner,
+## 2026-10-15: *"Spectral, with the dialog spacing tightened for
+## everyone!! It is an open source font. Thats is very important."*).
+## Until then ours was only a FLOOR under an imported face, and the
+## imported face depended on where the skin was built: MPlantin out of a
+## Manalink tree, the 1997 CD's narrow MPZurich out of the disc alone.
+## So `font_body` is Spectral ([method our_font]) whatever a skin holds,
+## set on [constant BODY_TRIM_TOP]/[constant BODY_TRIM_BOTTOM] tighter
+## lines ([method _tightened]); a skin's `font_body.ttf` is not read.
+## `font_title`, which we ship no face for, is still the skin's
+## (MagicMedieval), then nothing.
+static func font(key: String) -> Font:
 	if _font_cache.has(key):
 		return _font_cache[key]
-	var result: FontFile = null
-	var path := _find(key + ".ttf")
-	if path != "":
-		var f := FontFile.new()
-		if f.load_dynamic_font(path) == OK:
-			result = f
-	if result == null:
-		result = our_font(key)
+	var result: Font = null
+	if OUR_FONTS.has(key):
+		result = _tightened(our_font(key))
+	else:
+		var path := _find(key + ".ttf")
+		if path != "":
+			var f := FontFile.new()
+			if f.load_dynamic_font(path) == OK:
+				result = f
 	_font_cache[key] = result
 	return result
+
+
+## SPECTRAL'S LINE BOX, TRIMMED. Godot measures its own at 1.52 em
+## (ascent 1.059, descent 0.463 — most of the descent air below its
+## deepest accents) where MPlantin, the face it replaced, set a 1.000 em
+## box, so every dialog row and every wrapped line stood half as tall
+## again (measured 2026-10-15 at 13 px: 21 px a line against MPlantin's
+## 14). Three pixels off the top and three off the bottom bring 13 px to
+## 15 and 18 px to 23 (measured 2026-10-17: 10 px 10, 12 px 13, 16 px 19).
+## Pixels and not ems because that is what [FontVariation] offers, so the
+## trim weighs most on small text: at 10 px, the card's smallest rules
+## step, the box keeps 2 px of the 2.4 a descender reaches, and below
+## about 9 px the box would collapse (nothing sets text that small).
+## The card keeps its sizes and the 808 that read whole: its rules text
+## is top-aligned, so the first line sits 3 px higher than under the
+## untrimmed face, and [method CardPreview._rules_leading], which sets the
+## baselines from whatever box the face reports, moves the line pitch by
+## a pixel at some sizes (`tests/ui/test_card_preview.gd`).
+const BODY_TRIM_TOP := 3
+const BODY_TRIM_BOTTOM := 3
+
+static func _tightened(face: Font) -> Font:
+	if face == null:
+		return null
+	var tight := FontVariation.new()
+	tight.base_font = face
+	tight.spacing_top = -BODY_TRIM_TOP
+	tight.spacing_bottom = -BODY_TRIM_BOTTOM
+	return tight
+
+
+## [param face] emboldened by [param amount] — a COPY of a variation
+## rather than a variation over it, because a [FontVariation] whose base
+## is another one keeps none of the inner one's spacing: a bold line in
+## the trimmed body face would stand as tall as the untrimmed one.
+static func emboldened(face: Font, amount: float) -> Font:
+	var thick: FontVariation
+	if face is FontVariation:
+		thick = (face as FontVariation).duplicate()
+	else:
+		thick = FontVariation.new()
+		thick.base_font = face
+	thick.variation_embolden = amount
+	return thick
 
 
 ## WHERE THE PICTURES THIS PROJECT DREW LIVE — `game/art/`, written by
@@ -285,8 +336,9 @@ const OUR_FONTS := {"font_body": "Spectral-Regular.ttf"}
 ## exported game loads that, on desktop and in a browser alike.
 ##
 ## Not cleared by [method clear_caches]: a skin arriving cannot change
-## what this project ships. [method font]'s own cache is cleared, so the
-## skin's face takes over there the moment it lands.
+## what this project ships. [method font]'s own cache is cleared too, and
+## for a key in [constant OUR_FONTS] it answers this face again: since
+## 2026-10-15 a skin's `font_body.ttf` is never read.
 static var _our_font_cache: Dictionary = {}
 
 static func our_font(key: String) -> FontFile:

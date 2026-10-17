@@ -98,11 +98,12 @@ WIDTH = 78
 # ------------------------------------------------------- the drawn floor --
 # THE SEVEN KEYS THE GAME ALREADY HAS A PICTURE FOR. Since 2026-09-09 this
 # project ships art of its own — `game/art/`, drawn from scratch by
-# `tools/draw_our_art.gd`, never anybody else's file — and `GameSkin`
-# checks it AFTER every skin directory. So a skin that leaves one of these
-# out is not missing anything: the game already has a picture and simply
-# keeps it. Every other absent file is drawn in code instead, which is a
-# different (and plainer) thing, and `--check` says which is which.
+# `tools/draw_our_art.gd`, never anybody else's file — and for these seven
+# the game uses ITS OWN whatever the skin holds (the set symbols since
+# 2026-09-10, the dagger since 2026-10-15). So a skin that leaves one of
+# these out is not missing anything. Every other absent file is drawn in
+# code instead, which is a different (and plainer) thing, and `--check`
+# says which is which.
 
 SHIPPED_BY_THE_GAME = {
     "set_icon_arn.png", "set_icon_atq.png", "set_icon_leg.png",
@@ -237,9 +238,9 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The 'will untap' mark (image+mask)."),
     ("Marks on a card", "damage_marker",
      "The dagger on a wounded creature, image+mask left/right; the damage "
-     "count is printed beside it. THE GAME SHIPS ONE OF ITS OWN (64x40, "
-     "real alpha, no mask half): leave this out and the drawn dagger "
-     "stands, supply it and yours is used instead."),
+     "count is printed beside it. THE GAME ALWAYS USES ITS OWN (64x40, "
+     "real alpha, no mask half), the same for every player: a file here "
+     "is not read."),
     ("Marks on a card", "card_counters",
      "The counter stones: one column of 25 cells, 24 oval stones (a "
      "scythe, five lightning bolts, a gear, five ankhs, yin-yangs in "
@@ -269,12 +270,10 @@ FAMILIES: list[tuple[str, str, str]] = [
      "past, drk, leg, 4ed). The original's own are 40x40 bevelled stone "
      "tiles carrying a gold-ringed medallion — the same art as cells of "
      "the filter sheet — and the game cuts each one down to that "
-     "medallion's circle before drawing it on a card. Manalink's "
-     "restyle is 35x36 with no tile and no ring, a gold glyph on flat "
-     "grey; the game keys that grey away instead. Either shape works. "
-     "THE GAME SHIPS SIX OF ITS OWN (48x48, gold glyph, transparent "
-     "ground, nothing to cut): leave these out and those stand, supply "
-     "them and yours are used instead."),
+     "medallion's circle before drawing it on a card. "
+     "THE GAME ALWAYS USES SIX OF ITS OWN (48x48, gold glyph, "
+     "transparent ground), the same for every player: files here are "
+     "not read."),
 
     ("The Deck Builder", "filter_icons",
      "The filter bar's medallions: 9 columns x 3 rows of 40 px cells, "
@@ -304,10 +303,10 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Fonts", "font_title",
      "The display face: titles, headings, the card's name "
      "(the original's MagicMedieval)."),
-    ("Fonts", "font_body",
-     "The reading face: card text, menus, the log. The original's is "
-     "MPZurich Cn BT, which its own font table puts on the rules text "
-     "and the message strip; MPlantin is the later stand-in."),
+    # NO `font_body` NOTE: there is no such key. The reading face — card
+    # text, menus, the log — is the game's own Spectral (OFL, shipped in
+    # the game) for every player; a skin's body font is not read
+    # (2026-10-15).
 
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "
@@ -355,11 +354,11 @@ movies and portraits of the 1997 game, or any set drawn to the same
 shapes. Without one the game is complete and playable in its own plain
 drawing; with one, every panel, card and button wears the art. Every
 file is optional: a file that is missing falls back, one file at a
-time, to what the game already has. For seven of the names below —
-the six set symbols and the damage dagger — that is a PICTURE THE GAME
-SHIPS, drawn by the project itself; for every other name it is a shape
-drawn in code. Either way the skin's own file wins whenever it is
-there.
+time, to a shape drawn in code, and the skin's own file wins whenever
+it is there. Seven names below are the exception — the six set symbols
+and the damage dagger: the game always wears its OWN picture for those,
+drawn by the project itself, and a skin's file under those names is not
+read.
 
 TWO ZIPS. The skin and the card art travel apart, because they come
 from different places (a 1997 disc; a download) and are different
@@ -561,7 +560,7 @@ def sidecar_shape(path: Path) -> str | None:
 
 def file_name(key: str) -> str:
     """The file a manifest key names: pictures get `.png`, the rest carry
-    their extension in the key (`sfx_tap.wav`, `font_body.ttf`)."""
+    their extension in the key (`sfx_tap.wav`, `font_title.ttf`)."""
     return key if "." in key else key + ".png"
 
 

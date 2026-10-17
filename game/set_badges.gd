@@ -203,8 +203,9 @@ static func describe(code: String) -> String:
 			_date_words(String(facts.get("released", ""))), printed,
 			String(facts.get("lore", ""))]
 	var here := cards_here(code)
-	# An em dash, not a middle dot: the imported MPlantin has no U+00B7
-	# and drops it silently, which read as a hole in the sentence.
+	# An em dash, not a middle dot: the imported MPlantin, the body face
+	# until 2026-10-15, had no U+00B7 and dropped it silently, which read
+	# as a hole in the sentence. (Spectral has the dot; the dash stayed.)
 	var line := "%s — %d named cards are available (%d published " % [
 		_date_words(String(facts.get("released", ""))), here, printed] \
 		+ "collector slots)"

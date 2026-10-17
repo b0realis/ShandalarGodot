@@ -87,7 +87,7 @@ class TestMeasuring(unittest.TestCase):
         self.assertEqual(cat.measure(path), "22050 Hz 16-bit stereo, 12.0 s")
 
     def test_a_font_is_known_by_its_magic(self):
-        path = self.dir / "font_body.ttf"
+        path = self.dir / "font_title.ttf"
         path.write_bytes(b"\x00\x01\x00\x00" + b"\x00" * 12)
         self.assertEqual(cat.measure(path), "TrueType")
         path.write_bytes(b"not a font")
@@ -114,7 +114,7 @@ class TestTheManifestIsCatalogued(unittest.TestCase):
     def test_pictures_get_png_and_the_rest_keep_their_extension(self):
         self.assertEqual(cat.file_name("card_back"), "card_back.png")
         self.assertEqual(cat.file_name("sfx_tap.wav"), "sfx_tap.wav")
-        self.assertEqual(cat.file_name("font_body.ttf"), "font_body.ttf")
+        self.assertEqual(cat.file_name("font_title.ttf"), "font_title.ttf")
 
     def test_the_expected_files_include_the_movie_sidecars(self):
         files = cat.expected_files()

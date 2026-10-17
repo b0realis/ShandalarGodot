@@ -44,8 +44,10 @@ extends Control
 const ACCENT := UiChrome.ACCENT
 
 ## THE TYPE SCALE. Every size on the page in one place, a step up from
-## what it was: MPlantin is a thin 1997 serif and the page is a mottled
-## stone ground, so what reads at 16pt in a browser does not read here —
+## what it was: the body face is a thin serif (MPlantin when this was set,
+## our Spectral for every player since 2026-10-15) and the page is a
+## mottled stone ground, so what reads at 16pt in a browser does not read
+## here —
 ## the 2026-09-03 playtest asked for "a bit bigger to be more readable".
 ## The steps stay in proportion, because a heading that no longer leads
 ## its paragraph is a different bug from a small one.

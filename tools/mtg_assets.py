@@ -37,9 +37,7 @@ drawn equivalent that keeps the same geometry, which is why a missing file
 is reported and skipped rather than raised. An archive built from a
 partial install is a perfectly good archive.
 
-Standard library only. Pillow is needed by exactly one FALLBACK path in
-the importer (cutting a community-converted portrait sheet) and it says so
-rather than failing.
+Standard library only, and so is the importer it runs.
 """
 
 import argparse
@@ -123,7 +121,10 @@ LANDMARKS = {
     # twenty-seven 40x40 medallions of `filter_icons` live beside them.
     "the deck builder art": ["dbart", "dektile1.pic", "bldr01c.pic"],
     "the portraits": ["16faces.spr", "faces", "face.pic"],
-    "the fonts": ["magim___.ttf", "magis___.ttf", "magicmedieval.ttf"],
+    # ONE FONT IS IMPORTED, the title face (`Magim___.ttf`, MagicMedieval):
+    # the body face is the game's own Spectral since 2026-10-15, so the
+    # disc's other faces are not a sign the skin can be built.
+    "the title font": ["magim___.ttf"],
     "the sounds": ["duelsounds", "sound"],
     "the card database": ["master.csv", "info.csv"],
     "the coin-toss movies": ["cointoss_heads.avi", "cointoss_tails.avi"],
@@ -141,6 +142,13 @@ DECODERS = ["ffmpeg", "gst-launch-1.0"]
 ## archive until 2026-09-04 — `build_release.sh` had always stripped it and
 ## this path had not.
 ZIP_SKIP = (".import", ".gdignore", ".DS_Store", "Thumbs.db")
+
+## Skin files the game no longer reads, left out of a skin archive so a
+## folder imported before the rule changed does not carry them on.
+## `font_body.ttf` was MPlantin, a Manalink file and never on the 1997
+## disc; the text face is the game's own Spectral since 2026-10-15
+## (game/skin.gd, OUR_FONTS).
+RETIRED = ("font_body.ttf",)
 
 ## WHERE THE SOURCE MOVIES RIDE. The coin toss reaches the game as two
 ## sprite sheets, because neither Python nor Godot can decode the AVIs —
@@ -211,21 +219,13 @@ WHAT THIS NEEDS
   script at the folder that CONTAINS the game; it searches downwards, so
   the top of the install is the right place to aim.
 
-  Two kinds of folder work, and they can be combined (pass --install
-  more than once; the first copy of each file wins):
-
-    * a genuine 1997 install    — the best source, the whole point, and
-                                  since 2026-09-09 a COMPLETE one on its
-                                  own: every picture, sheet, font, sound
-                                  and portrait the game wears is decoded
-                                  out of its raw .PIC, .SPR and .TTF
-                                  files. Its portraits alone hold five
-                                  faces that exist in no conversion
-                                  anywhere.
-    * a Manalink 3.0 install    — the 1997 game with a later patch on
-                                  it. Nothing needs it any more; it is
-                                  kept as a fallback for a copy that is
-                                  missing a file.
+  THE 1997 GAME IS ALL IT NEEDS. Since 2026-09-09 a 1997 install is a
+  COMPLETE source on its own: every picture, sheet, font, sound and
+  portrait the game wears is decoded out of its raw .PIC, .SPR and .TTF
+  files. Its portraits alone hold five faces that exist in no conversion
+  anywhere. The CD and the folder it was installed to can be combined
+  (pass --install more than once; the first copy of each file wins).
+  Nothing from a later re-release is read (since 2026-10-15).
 
   YOUR OWN GAME AND NOTHING ELSE. This imports from the copy of the 1997
   game you own; it does not import from another project's converted art,
@@ -382,6 +382,11 @@ def write_zip(skin: Path, out: Path,
     zip once, at the door (`game/tar_pack.gd`)."""
     files = sorted(p for p in skin.rglob("*")
                    if p.is_file() and not p.name.endswith(ZIP_SKIP))
+    if not inner:
+        for path in [p for p in files if p.parent == skin
+                     and p.name.lower() in RETIRED]:
+            print(f"  left out: {path.name} (the game no longer reads it)")
+            files.remove(path)
     if not files:
         print(f"!! nothing to archive: {skin} is empty")
         return 1

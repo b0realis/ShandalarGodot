@@ -25,7 +25,7 @@ import sys
 import tempfile
 import unittest
 import zlib
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -584,18 +584,14 @@ def tr_palette(palette: bytes) -> str:
 class RawStepCase(unittest.TestCase):
     """Shared plumbing for the steps that run the importer end to end."""
 
-    def _run(self, root: Path, dest: Path, conversions: bool = False) -> str:
+    def _run(self, root: Path, dest: Path) -> str:
         """The importer's own main, so what is pinned is what a player
-        gets rather than a helper called the way a test finds handy.
-        [param conversions] opens the maintainer's door
-        (`--allow-conversions`), which a player never has: without it a
-        reimplementation's `*.pic.png` is not a source at all (the
-        owner's ruling, 2026-09-09)."""
+        gets rather than a helper called the way a test finds handy. There
+        is no other door: the 1997 install is the only source (the
+        owner's rulings, 2026-09-09 and 2026-10-15)."""
         argv = sys.argv
         sys.argv = ["import_original.py", "--source", str(root),
                     "--dest", str(dest), "--no-videos"]
-        if conversions:
-            sys.argv.append("--allow-conversions")
         log = io.StringIO()
         try:
             with redirect_stdout(log):
@@ -692,20 +688,22 @@ class TestTheGenericRawTexture(RawStepCase):
             self.assertIn("no palette in it and none beside it", log)
             self.assertFalse((dest / "life_panel_white.png").exists())
 
-    def test_a_manalink_png_wearing_a_pic_name_is_still_copied(self):
+    def test_a_png_wearing_a_pic_name_is_refused(self):
         """Every `*.pic` in a Manalink install's `Program/DBArt/` and
         `Program/CardArt/` is a PNG wearing the 1997 name
-        (Provenance.md). The decode branch must not swallow those: they
-        are the fallback the MANIFEST rows describe, and a copy is what
-        they need."""
+        (Provenance.md). Until 2026-10-15 those were COPIED as the
+        fallback; now no 1997 file is a PNG, so one under a 1997 name is
+        a later restyle and the key is missing rather than Manalink's
+        (the owner: *"Yes remove manalink fallbacks"*)."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "Program" / "CardArt"
             root.mkdir(parents=True)
             imp.write_png(root / "Summon.pic", 4, 2, bytes(24))
             dest = Path(tmp) / "skin"
-            self._run(Path(tmp), dest)
-            self.assertEqual((dest / "summon_sick.png").read_bytes(),
-                             (root / "Summon.pic").read_bytes())
+            log = self._run(Path(tmp), dest)
+            self.assertFalse((dest / "summon_sick.png").exists())
+            self.assertIn("only as a PNG under a 1997", log)
+            self.assertIn("  - summon_sick", log)
 
 
 class TestSprFramePadding(unittest.TestCase):
@@ -814,43 +812,12 @@ class TestCounterStones(RawStepCase):
                         out.append(255 if (x + y) % 7 == 0 else row)
         return bytes(out)
 
-    # ------------------------------------------- the converted tree --
-
-    def test_the_card_conversion_is_copied_whole_and_the_duel_one_is_not(self):
-        """s30 ships the strip TWICE and only one of them is right: the
-        `card/` copy hangs tRNS on 255 and the `screens/duel/` copy does
-        not (see the MANIFEST row). The candidate order says which, and
-        the file lands byte for byte — a split or a rescale here is a
-        silently broken mask row."""
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "s30"
-            wanted = root / "assets/art/card/Cardcounters.pic.png"
-            other = root / "assets/art/screens/duel/Cardcounters.pic.png"
-            for path in (wanted, other):
-                path.parent.mkdir(parents=True, exist_ok=True)
-            pixels = bytes(bytearray(
-                b for i in range(self.WIDTH * self.HEIGHT) for b in (i % 251, 7, 9)))
-            imp.write_png(wanted, self.WIDTH, self.HEIGHT, pixels)
-            imp.write_png(other, self.WIDTH, self.HEIGHT, bytes(len(pixels)))
-            dest = Path(tmp) / "skin"
-            # The maintainer's door: a conversion tree is not a source
-            # without it, which the next test pins.
-            log = self._run(root, dest, conversions=True)
-            out = dest / "card_counters.png"
-            self.assertEqual(out.read_bytes(), wanted.read_bytes(),
-                             "copied whole, not split, scaled or repacked")
-            self.assertEqual(read_png(out.read_bytes())[:3],
-                             (self.WIDTH, self.HEIGHT, 3))
-            self.assertIn("card_counters", log)
-            self.assertNotIn("decoded", log, "a conversion needs no decode")
-
-    def test_the_manifest_row_asks_for_the_raw_file_first(self):
-        """Raw-first since 2026-09-09; the `card/` conversion is what a
-        maintainer reaches with `--allow-conversions` and nothing else."""
-        self.assertEqual(imp.MANIFEST["card_counters"][:2],
+    def test_the_manifest_row_names_the_raw_file_and_nothing_else(self):
+        """Raw-first since 2026-09-09, raw-ONLY since 2026-10-15: s30's
+        `card/` and `screens/duel/` conversions were candidates until the
+        owner's *"remove any s30 dependency or s30 fallback"*."""
+        self.assertEqual(imp.MANIFEST["card_counters"],
                          ["Cardart/Cardcounters.pic", "Cardcounters.pic"])
-        self.assertEqual(imp.MANIFEST["card_counters"][2],
-                         "card/Cardcounters.pic.png")
 
     # ------------------------------------------------ the raw strip --
 
@@ -903,48 +870,23 @@ class TestCounterStones(RawStepCase):
                              "the mask cell's corner is clear, which is what "
                              "CounterMarks.tile reads the polarity off")
 
-    def test_the_raw_file_beats_a_conversion_at_either_door(self):
-        """The raw 1997 file wins whether or not `--allow-conversions` is
-        given, because the row leads with it (2026-09-09). The
-        maintainer's door only ADDS a source for a key that has no raw
-        file in the tree at all; it never overrides one that does. The
-        owner, 2026-09-09: *"our original skin/art creation tool should
-        only use original 1997 install and NOT s30 that is
-        reimplementation project itself"*."""
-        for allowed in (True, False):
-            with tempfile.TemporaryDirectory() as tmp:
-                root = self._raw_tree(tmp)
-                converted = root / "card" / "Cardcounters.pic.png"
-                converted.parent.mkdir(parents=True)
-                imp.write_png(converted, self.WIDTH, self.HEIGHT,
-                              bytes(self.WIDTH * self.HEIGHT * 3))
-                dest = Path(tmp) / "skin"
-                log = self._run(root, dest, conversions=allowed)
-                out = (dest / "card_counters.png").read_bytes()
-                self.assertNotEqual(out, converted.read_bytes(),
-                                    "the 1997 file is the source, not the "
-                                    "conversion beside it")
-                self.assertIn("decoded 24x750", log)
-
-    def test_without_the_raw_file_only_the_dev_door_reaches_the_key(self):
-        """And this is what the door is FOR: a tree that holds nothing
-        but conversions is not a source for a player, and is one for the
-        maintainer filling this checkout's gitignored `assets/original/`."""
-        for allowed in (True, False):
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "s30"
-                converted = root / "card" / "Cardcounters.pic.png"
-                converted.parent.mkdir(parents=True)
-                imp.write_png(converted, self.WIDTH, self.HEIGHT,
-                              bytes(self.WIDTH * self.HEIGHT * 3))
-                dest = Path(tmp) / "skin"
-                log = self._run(root, dest, conversions=allowed)
-                if allowed:
-                    self.assertEqual((dest / "card_counters.png").read_bytes(),
-                                     converted.read_bytes())
-                else:
-                    self.assertFalse((dest / "card_counters.png").exists())
-                    self.assertIn("  - card_counters", log)
+    def test_a_conversion_is_never_a_source(self):
+        """A tree holding nothing but s30's converted strip reaches no
+        key: there is no door for it any more (the maintainer's
+        `--allow-conversions` went on 2026-10-15). The owner, 2026-09-09:
+        *"our original skin/art creation tool should only use original
+        1997 install and NOT s30 that is reimplementation project
+        itself"*."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "s30"
+            converted = root / "card" / "Cardcounters.pic.png"
+            converted.parent.mkdir(parents=True)
+            imp.write_png(converted, self.WIDTH, self.HEIGHT,
+                          bytes(self.WIDTH * self.HEIGHT * 3))
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertFalse((dest / "card_counters.png").exists())
+            self.assertIn("  - card_counters", log)
 
     def test_a_file_that_is_not_a_pic_is_reported_not_raised(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -977,20 +919,15 @@ class TestDamageMarkerPair(RawStepCase):
     deliver is a fully opaque pair with both tones intact.
     """
 
-    def test_manalinks_dagger_leads_and_the_1997_one_is_the_fallback(self):
-        """THE OWNER'S RULING, 2026-09-09, made by looking at both on the
-        same three wounded creatures: the 1997 `Damage.pic` decodes to a
-        long needle-thin blade that reads as a scratch at a 132px card,
-        Manalink's `Program/CardArt/Damage.pic` to a shorter, fatter,
-        brighter dagger that reads as one at a glance, and the brighter
-        one is what the game wears. The 1997 file stays in the row so a
-        disc-only install still gets a dagger — which the pair test below
-        is about — and the Manalink candidate is PATH-QUALIFIED because a
-        1997 install has a `Cardart/Damage.pic` of its own and the bare
-        name would find that one first."""
-        row = imp.MANIFEST["damage_marker"]
-        self.assertEqual(row[0], "program/cardart/damage.pic")
-        self.assertIn("Damage.pic", row, "the disc's own file is the fallback")
+    def test_the_row_is_the_discs_own_dagger_alone(self):
+        """Manalink's `Program/CardArt/Damage.pic` led this row from
+        2026-09-09 (legibility). On 2026-10-15 the game took its OWN
+        dagger for every player (`MiniCard.ALWAYS_OURS`: *"we build our
+        own damage dagger just to be independent"*) and the owner removed
+        the Manalink fallbacks, so the row is the 1997 file alone — kept,
+        like the set symbols', so a player's skin folder holds their own
+        disc's dagger."""
+        self.assertEqual(imp.MANIFEST["damage_marker"], ["Damage.pic"])
 
     def test_the_pair_arrives_whole_with_the_mask_readable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1035,31 +972,24 @@ class TestSetIcons(RawStepCase):
     these anywhere and the raw decode is the only way to them. The 1997
     files are 40x40 (`MagicTG/Dbart/Antiquit.pic` and its five
     neighbours), not the 35x36 the checkout's gitignored
-    `assets/original/` holds — those are Manalink's own greyscale restyle,
-    a PNG wearing a `.pic` name, and they are still the fallback.
+    `assets/original/` held — those are Manalink's own greyscale restyle,
+    a PNG wearing a `.pic` name, and since 2026-10-15 not a candidate.
     """
 
     NAMES = {"set_icon_atq": "Antiquit.pic", "set_icon_arn": "ArabNite.pic",
              "set_icon_past": "Astral.pic", "set_icon_drk": "Dark.pic",
              "set_icon_4ed": "Fourth.pic", "set_icon_leg": "Legends.pic"}
 
-    def test_the_raw_1997_medallion_leads_and_manalinks_restyle_follows(self):
-        """THE OWNER'S RULING, 2026-09-10, and it reverses the one made the
-        day before. For one day these rows led with Manalink's restyle,
-        because its gold glyph read better than the 1997 medallion in the
-        enlarged card's 14x17px symbol box. The game now draws its OWN six
-        glyphs for every player and reads neither import
-        (`GameSkin.set_icon`), so that argument is gone and what is left is
-        INDEPENDENCE: nothing in the chain should prefer a
-        reimplementation's drawing. The disc's own file leads; Manalink's
-        stays in the row as the fallback for a Manalink-only tree; neither
-        is what a card wears."""
+    def test_each_row_is_the_raw_1997_medallion_alone(self):
+        """THE OWNER'S RULING, 2026-09-10, made complete on 2026-10-15. For
+        one day these rows led with Manalink's restyle, because its gold
+        glyph read better than the 1997 medallion in the enlarged card's
+        14x17px symbol box. The game draws its OWN six glyphs for every
+        player and reads neither import (`GameSkin.set_icon`), so what is
+        left is INDEPENDENCE: the disc's own file, and since the owner's
+        *"Yes remove manalink fallbacks"* nothing besides it."""
         for key, raw in self.NAMES.items():
-            row = imp.MANIFEST[key]
-            self.assertEqual(row[0], raw, key)
-            self.assertTrue(
-                any(name.startswith("program/dbart/") for name in row),
-                "Manalink's copy is still reachable: %s" % row)
+            self.assertEqual(imp.MANIFEST[key], [raw], key)
 
     def test_a_raw_dbart_icon_decodes_at_its_own_size(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1348,10 +1278,10 @@ class TestEveryKeyIsReachableFromA1997Install(unittest.TestCase):
     def test_no_texture_key_needs_a_conversion(self):
         for key in self.texture_keys():
             if key in imp.PIC_SHEETS or key in imp.DERIVED_SHEETS:
+                self.assertEqual(imp.MANIFEST[key], [],
+                                 "%s is assembled, not copied" % key)
                 continue
-            first = imp.MANIFEST[key][0]
-            self.assertFalse(imp._is_conversion(first),
-                             "%s still leads with %s" % (key, first))
+            self.assertTrue(imp.MANIFEST[key], "%s names a 1997 file" % key)
 
     def test_the_only_assembled_or_ours_keys_are_the_named_ones(self):
         self.assertEqual(sorted(imp.PIC_SHEETS),
@@ -1365,21 +1295,111 @@ class TestEveryKeyIsReachableFromA1997Install(unittest.TestCase):
         for key, (parent, _factor) in imp.DERIVED_SHEETS.items():
             self.assertIn(parent, imp.PIC_SHEETS)
 
-    def test_both_fonts_lead_with_the_1997_8_3_name(self):
+    def test_the_title_face_is_the_one_font_and_the_body_is_ours(self):
         """`Magic.exe`'s string table names eight `.TTF` files and they
         are all on the disc; `Magim___.ttf` is byte-identical to the
-        `MagicMedieval.ttf` a Manalink tree ships, and `Tt0298m_.ttf` is
-        the `MPZurich Cn BT` that `Duelart/Duel.dat`'s `[fonts]` section
-        puts on the rules text and the message strip."""
-        self.assertEqual(imp.MANIFEST["font_title.ttf"][0], "Magim___.ttf")
-        # THE BODY FACE IS THE ONE EXCEPTION, and it is a ruling rather
-        # than a fact about the disc (the owner, 2026-09-09, from a
-        # side-by-side shot): the 1997 face is a narrow grey sans the
-        # card's auto-fit lands three points smaller, so MPlantin leads
-        # and `Tt0298m_.ttf` is the fallback a disc-only install reaches.
-        self.assertEqual(imp.MANIFEST["font_body.ttf"][0],
-                         "MPlantin-Regular.ttf")
-        self.assertIn("Tt0298m_.ttf", imp.MANIFEST["font_body.ttf"])
+        `MagicMedieval.ttf` a Manalink tree ships, and is imported by the
+        disc's own name alone. THE BODY FACE IS NOT IMPORTED AT ALL (the
+        owner, 2026-10-15: *"It is an open source font. Thats is very
+        important."*): every player reads the game's own Spectral, so
+        neither the 1997 `MPZurich Cn BT` (`Tt0298m_.ttf`) nor the
+        Manalink `MPlantin` that led the row from 2026-09-09 is a key."""
+        self.assertEqual(imp.MANIFEST["font_title.ttf"], ["Magim___.ttf"])
+        self.assertNotIn("font_body.ttf", imp.MANIFEST)
+        fonts = [k for k in imp.MANIFEST if k.endswith(".ttf")]
+        self.assertEqual(fonts, ["font_title.ttf"])
+
+
+class TestTheSkinIsBuiltOffTheDiscAlone(unittest.TestCase):
+    """THE 1997 INSTALL AND NOTHING ELSE (the owner, 2026-10-15: *"Yes
+    remove manalink fallbacks"*, *"Check we dont need s30 and remove any
+    s30 dependency or s30 fallback"*). Measured the same day: the owner's
+    own `MagicTG` alone reaches every key (164/164 once the body font
+    left the skin), the 70 portraits and the coin toss, byte for byte
+    what the importer wrote before the fallbacks went. This stops a row
+    from quietly bringing one back."""
+
+    ## Names that only ever came from a Manalink tree.
+    MANALINK_ONLY = {"mplantin-regular.ttf", "garamond.ttf",
+                     "magicmedieval.ttf", "goudymedieval-pre8th.ttf",
+                     "manalink.wav"}
+
+    def every_candidate(self) -> list[tuple[str, str]]:
+        out = [(k, n) for k, row in imp.MANIFEST.items() for n in row]
+        for key, (names, *_rest) in imp.PIC_SHEETS.items():
+            out += [(key, n) for n in names]
+        for table in (imp.PIC_SCREENS, imp.VIDEOS):
+            out += [(k, n) for k, row in table.items() for n in row]
+        for name in (imp.PORTRAIT_SHEET_RAW + imp.PORTRAIT_PALETTE_PIC
+                     + imp.PORTRAIT_PALETTE_TR + imp.ROGUE_PALETTE_TR
+                     + imp.ROGUE_PALETTE_PIC):
+            out.append(("portraits", name))
+        return out
+
+    def test_no_candidate_is_a_converted_png(self):
+        for key, name in self.every_candidate():
+            self.assertFalse(name.lower().endswith(".png"),
+                             "%s names a conversion: %s" % (key, name))
+
+    def test_no_candidate_is_a_manalink_file(self):
+        for key, name in self.every_candidate():
+            low = name.lower()
+            self.assertFalse(low.startswith("program/"),
+                             "%s names a Manalink path: %s" % (key, name))
+            self.assertNotIn(low, self.MANALINK_ONLY,
+                             "%s names a Manalink file: %s" % (key, name))
+            self.assertFalse(low.endswith(".bmp"),
+                             "%s names a .bmp (never 1997): %s" % (key, name))
+
+    def test_the_conversion_door_is_gone(self):
+        self.assertFalse(hasattr(imp, "_is_conversion"))
+        self.assertFalse(hasattr(imp, "PORTRAIT_SHEET_PNG"))
+        self.assertFalse(hasattr(imp, "_portraits_from_sheet"))
+        argv = sys.argv
+        sys.argv = ["import_original.py", "--source", ".",
+                    "--allow-conversions"]
+        try:
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    imp.main()
+        finally:
+            sys.argv = argv
+
+    def _import(self, files: dict[str, bytes]) -> tuple[Path, str]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "src"
+        for name, data in files.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_bytes(data)
+        dest = Path(tmp.name) / "skin"
+        argv = sys.argv
+        sys.argv = ["import_original.py", "--source", str(root),
+                    "--dest", str(dest), "--no-videos"]
+        log = io.StringIO()
+        try:
+            with redirect_stdout(log):
+                self.assertEqual(imp.main(), 0)
+        finally:
+            sys.argv = argv
+        return dest, log.getvalue()
+
+    def test_manalinks_program_sound_copies_are_refused(self):
+        """No row names `Program/DuelSounds/` or `Program/Sound/`, but the
+        index reaches a file there by its two-part name AND by its bare
+        one — so a Manalink source tree's copy used to come in anyway
+        when the 1997 folder was absent. Found by the 2026-10-17 bug
+        pass; refused where the candidate is chosen."""
+        dest, log = self._import({"Program/DuelSounds/Grey.wav": b"RIFF manalink",
+                                  "Program/Sound/LocMus3.wav": b"RIFF manalink"})
+        self.assertFalse((dest / "sfx_land_grey.wav").exists())
+        self.assertFalse((dest / "music_location_3.wav").exists())
+        self.assertIn("Program/", log)
+        dest, _log = self._import({"Duelsounds/Grey.wav": b"RIFF installed",
+                                   "Program/DuelSounds/Grey.wav": b"RIFF manalink",
+                                   "Sound/LocMus3.wav": b"RIFF installed"})
+        self.assertEqual((dest / "sfx_land_grey.wav").read_bytes(), b"RIFF installed")
+        self.assertEqual((dest / "music_location_3.wav").read_bytes(), b"RIFF installed")
 
     def test_the_readback_is_the_inverse_of_write_png(self):
         """`import_derived_sheets` reads a sheet back off disk, so the
@@ -1472,7 +1492,6 @@ class TestSoundManifest(unittest.TestCase):
 
     def test_mana_burn_imports_the_duel_sound_not_ordinary_life_loss(self):
         root = self._tree({"Duelsounds/Manaburn.wav": b"installed burn",
-                           "Program/DuelSounds/ManaBurn.wav": b"source burn",
                            "Duelsounds/LifeLoss.wav": b"ordinary life loss"})
         candidates = imp.MANIFEST.get("sfx_mana_burn.wav", [])
         self.assertTrue(candidates, "mana burn must be included in skin imports")
@@ -1482,7 +1501,8 @@ class TestSoundManifest(unittest.TestCase):
         found = imp._first_of(index, candidates)
         self.assertIsNotNone(found)
         self.assertEqual(found.read_bytes(), b"installed burn")
-        self.assertIn("Program/DuelSounds/ManaBurn.wav", candidates)
+        self.assertNotIn("Program/DuelSounds/ManaBurn.wav", candidates,
+                         "the Manalink source copy is not a candidate")
 
     def test_endphase_is_not_imported_because_a_phase_is_silent(self):
         # The owner's ruling, 2026-09-03: "The changing phases or combat
@@ -1586,24 +1606,16 @@ class TestDefaultDestination(unittest.TestCase):
                 os.environ["XDG_DATA_HOME"] = was
 
 
-def _has_pillow() -> bool:
-    try:
-        import PIL  # noqa: F401
-    except ImportError:
-        return False
-    return True
+class TestThePortraitSheetIsNeverCut(RawStepCase):
+    """s30's `16faces.spr.png` IS A CONVERSION, AND THERE IS NO DOOR.
 
-
-class TestThePortraitSheetIsBehindTheConversionDoor(RawStepCase):
-    """s30's `16faces.spr.png` IS A CONVERSION, AND THE DOOR IS SHUT
-    (bug pass 2026-10-03).
-
-    The copy loop has refused a `*.png` conversion without
-    `--allow-conversions` since 2026-09-09, but the portrait step had its
-    own way in: with no raw `16faces.spr` in the tree it cut the
-    converted sheet regardless, so a player's run against an s30 checkout
-    came out wearing a reimplementation's faces — the one thing the
-    owner's ruling forbids.
+    Bug pass 2026-10-03: the portrait step had its own way in — with no
+    raw `16faces.spr` in the tree it cut the converted sheet, so a
+    player's run against an s30 checkout came out wearing a
+    reimplementation's faces. It was put behind `--allow-conversions`
+    then; on 2026-10-15 the flag and the sheet-cutting path went
+    altogether (the owner: *"remove any s30 dependency or s30
+    fallback"*).
     """
 
     CELLS = 3
@@ -1623,15 +1635,7 @@ class TestThePortraitSheetIsBehindTheConversionDoor(RawStepCase):
             faces = sorted((dest / "portraits").glob("*.png")) \
                 if (dest / "portraits").is_dir() else []
             self.assertEqual(faces, [])
-            self.assertIn("--allow-conversions", log, "the refusal says why")
-
-    @unittest.skipUnless(_has_pillow(), "cutting a sheet needs Pillow")
-    def test_the_maintainers_door_still_cuts_it(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp) / "skin"
-            self._run(self._tree(tmp), dest, conversions=True)
-            self.assertEqual(len(list((dest / "portraits").glob("*.png"))),
-                             self.CELLS)
+            self.assertIn("portraits: no face art found", log)
 
 
 class TestTheCoinSheetIsCutAtTheSizeItWasDecodedAt(unittest.TestCase):

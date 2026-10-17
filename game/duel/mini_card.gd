@@ -2496,11 +2496,10 @@ static func sick_spiral_texture() -> Texture2D:
 	return masked_sprite("summon_sick")
 
 
-## The damage marker drawn on a wounded creature — the original's
-## `Damage.pic` when the player has imported it, and OURS (`game/art/
-## damage_marker.png`, drawn by `tools/draw_our_art.gd`) when nobody has.
-## Until 2026-09-09 an unskinned board had no dagger at all and the
-## number stood alone.
+## The damage marker drawn on a wounded creature — OURS (`game/art/
+## damage_marker.png`, drawn by `tools/draw_our_art.gd`) for every player,
+## whatever skin is imported ([constant ALWAYS_OURS]). Until 2026-09-09 an
+## unskinned board had no dagger at all and the number stood alone.
 static func damage_marker_texture() -> Texture2D:
 	return masked_sprite("damage_marker")
 
@@ -2521,12 +2520,22 @@ static func damage_marker_texture() -> Texture2D:
 ## Cached per key and axis.
 static var _masked_cache: Dictionary = {}
 
+## THE SPRITES THAT NEVER TAKE A SKIN — answered by [method
+## GameSkin.our_art] alone, the way [method GameSkin.set_icon] is. The
+## dagger (the owner, 2026-10-15: *"we build our own damage dagger just
+## to be independent"*): Manalink's `Damage.pic` was preferred over the
+## 1997 one for legibility, and the skin is now built from the original
+## CD alone, which would have handed every player the 1997 needle — a
+## scratch at a small card's size. Ours is the same for everybody and
+## no part of it is anybody else's drawing.
+const ALWAYS_OURS := ["damage_marker"]
+
 static func masked_sprite(key: String, vertical := false) -> Texture2D:
 	var cache_key := key + ("|v" if vertical else "")
 	if _masked_cache.has(cache_key):
 		return _masked_cache[cache_key]
 	var result: Texture2D = null
-	var sheet := GameSkin.texture(key)
+	var sheet: Texture2D = null if key in ALWAYS_OURS else GameSkin.texture(key)
 	if sheet != null:
 		var full := sheet.get_image()
 		var w: int = full.get_width()
@@ -2565,13 +2574,14 @@ static func masked_sprite(key: String, vertical := false) -> Texture2D:
 				img.set_pixel(x, y, px)
 		result = ImageTexture.create_from_image(img)
 	else:
-		# NO SKIN SUPPLIES THIS SPRITE — so ours does, if we drew one.
-		# `GameSkin.our_art` hands back a picture that already carries its
-		# own alpha, which is why it goes straight through and never past
-		# the image+mask split above: there is no mask half to find. Today
-		# `damage_marker` is the only key with a drawn version
-		# (`game/art/`, `tools/draw_our_art.gd`, 2026-09-09) and every
-		# other key falls through as null exactly as before.
+		# NO SKIN SUPPLIES THIS SPRITE, or it is one of [constant
+		# ALWAYS_OURS] — so ours does, if we drew one. `GameSkin.our_art`
+		# hands back a picture that already carries its own alpha, which is
+		# why it goes straight through and never past the image+mask split
+		# above: there is no mask half to find. Today `damage_marker` is the
+		# only key with a drawn version (`game/art/`, `tools/draw_our_art.gd`,
+		# 2026-09-09) and every other key falls through as null exactly as
+		# before.
 		result = GameSkin.our_art(key)
 	_masked_cache[cache_key] = result
 	return result

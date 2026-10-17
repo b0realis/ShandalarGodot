@@ -99,6 +99,8 @@ the original_skin.zip download:
     python3 tools/mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
     python3 tools/mtg_assets.py --install /path/to/game  imports, writes a zip
 
-It reads your install and never writes to it. The zip it produces is
-a skin zip, the same shape as the download, and goes through the same
-doors.
+It reads your install and never writes to it. The original skin
+requires ONLY the original 1997 game — its CD, or the folder you
+installed it to; nothing from a later re-release or another project is
+read. The zip it produces is a skin zip, the same shape as the download,
+and goes through the same doors.

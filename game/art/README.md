@@ -19,14 +19,13 @@ That distinction is the whole reason the folder exists. The 1997 art is
 the player's own copy and is never redistributed (`Provenance.md`,
 `README.md` § Legal); a Manalink install's flat gold set glyphs and its
 damage dagger are a **third party's restyle** of MicroProse's drawings
-and are not ours to copy either. So the game's default look does not
-borrow from either of them: it is drawn here, and a player who imports
-their own 1997 files still gets the 1997 files, because the loader
-checks every skin directory first and only then falls through to this
-folder (`GameSkin.our_art`, `GameSkin.our_font`, `GameSkin.set_icon`,
-`MiniCard.masked_sprite`).
-
-**Ours is the floor, never the ceiling.**
+and are not ours to copy either. So the game's look does not borrow
+from either of them: it is drawn here. Since 2026-10-15 the six set
+symbols, the damage dagger and the body face are OURS FOR EVERY PLAYER,
+skin or no skin — a skin's file under those names is not read
+(`GameSkin.set_icon`, `MiniCard.ALWAYS_OURS`, `GameSkin.font`; § The
+face below). Every other picture a player imports from their own 1997
+copy is still the 1997 picture.
 
 ## Why the files live under `game/` and not under `assets/`
 
@@ -237,12 +236,13 @@ the small card draws it at.
 
 ## The face
 
-The rules text, the duel log and every dialog are set in `font_body`.
-With the 1997 files imported that is MPlantin, the commercial Monotype
-face the original names — **which this project may not redistribute**, so
-without an import there was nothing under it but Godot's own sans, and a
-Magic card set in a UI sans is not a Magic card. This is what stands
-under it now.
+The rules text, the duel log and every dialog are set in `font_body`,
+and since 2026-10-15 that is this face for EVERY player, skin or none
+(the owner: *"It is an open source font. Thats is very important."*),
+on a line box trimmed 3 px top and bottom (`GameSkin.BODY_TRIM_TOP`).
+It was chosen to stand under MPlantin, the commercial Monotype face a
+Manalink tree carries — **which this project may not redistribute** —
+and the 1997 disc's own body face, MPZurich Cn BT, is not imported.
 
 | file | what it is | source | licence | SHA-256 |
 |---|---|---|---|---|
@@ -289,8 +289,10 @@ written beside it, load through the accessor that reaches it, and sit
 somewhere the export cannot silently drop.
 
 *Where a name is a skin key* (`set_icon_<code>`, `damage_marker`), it is
-deliberately the SAME key `tools/skin_catalogue.py` publishes, so a skin
-that supplies its own simply replaces ours, one file at a time.
+the SAME key `tools/skin_catalogue.py` publishes, but the game reads ours
+for it whatever the skin holds — the set symbols since 2026-09-10, the
+dagger since 2026-10-15 (`MiniCard.ALWAYS_OURS`), so every player sees
+the same drawing and none of it is anybody else's.
 
 ## The portraits
 

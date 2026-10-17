@@ -58,8 +58,10 @@ policy as card art — see cards/data). Faithfulness is achieved in layers:
    builds and new players get.
 3. **Original-assets import path** (SHIPPED — `tools/import_original.py`
    + `game/skin.gd`): owners of the original game run the importer against
-   their own copy (PNG conversions from an s30 checkout and/or a Manalink
-   install; a native .PIC decoder is on the roadmap). Assets land in
+   their own copy, and it needs ONLY the 1997 install (the CD or the folder
+   it was installed to): every `.pic`/`.spr` is decoded natively, and
+   nothing from a later re-release or another project is read (2026-09-09;
+   2026-10-15). Assets land in
    `res://assets/original/` (gitignored, dev) or `user://original_skin/`
    (players/exports); `GameSkin` loads them at runtime, bypassing the
    import pipeline, and every UI surface falls back to the clean skin when
@@ -67,8 +69,9 @@ policy as card art — see cards/data). Faithfulness is achieved in layers:
    title font, **all fifteen `Terr_<colour><type>` territory backgrounds**
    (five colours x three styles — see the forty-eighth pass below), all
    12 original card frames (5 colors +
-   gold + artifact + 5 land frames) on every card widget, and MPlantin on
-   the duel's reading surfaces. Imported-and-waiting for future UI work:
+   gold + artifact + 5 land frames) on every card widget. The reading
+   surfaces wear the game's own Spectral for every player (MPlantin until
+   2026-10-15). Imported-and-waiting for future UI work:
    card back, mana-symbol and ability-icon sheets, damage marker, the
    original targeting cursor. **One key is CONVERTED rather than copied:**
    `coin_toss_heads` / `coin_toss_tails` are sprite sheets transcoded from

@@ -8,12 +8,15 @@ skin up at runtime (game/skin.gd) and the 1997 look appears everywhere the
 clean fallback skin would otherwise show.
 
 Accepted --source directories (searched recursively, case-insensitive):
-  * an s30 checkout           (converted .pic.png / .spr.png files)
-  * a Manalink 3.0 install    (fonts; .PIC decoding itself is future work —
-                               see notes at the bottom of this docstring)
-  * a genuine 1997 install    (the portrait step reads its raw .SPR and
-                               .PIC files — seventy faces, of which five
-                               exist in no conversion)
+  * a genuine 1997 install, and nothing else. The skin is built off the
+    player's own copy of the original CD (the owner, 2026-09-09 and again
+    2026-10-15: *"Yes remove manalink fallbacks"*, *"remove any s30
+    dependency or s30 fallback"*). Every row names the raw 1997 file and
+    nothing besides it — no reimplementation's `*.pic.png` conversion, no
+    Manalink 3 font, restyle or remastered sound — and that one install
+    reaches every key (164/164, the 70 portraits and the coin toss,
+    measured against the owner's own `MagicTG` on 2026-10-15). The body
+    font is not a key: every player reads the game's own Spectral.
 Multiple --source flags may be given; first match per file wins.
 
 Default destination: in a checkout, <project>/assets/original (gitignored —
@@ -37,7 +40,7 @@ block for the whole argument.
 
 Note on raw .PIC/.SPR decoding: BOTH original formats are decoded here
 with nothing but the standard library, and since 2026-09-09 that is how
-almost the whole skin arrives — a genuine 1997 install alone now reaches
+the whole skin arrives — a genuine 1997 install alone now reaches
 EVERY key (the owner's goal: *"all art should be available in original
 install"*), where before it reached 68 of 163 and the rest waited on
 somebody else's `*.pic.png`.
@@ -109,8 +112,12 @@ EPILOG = """\
 %s
     python3 %simport_original.py --source /cdrom --source ~/old-install
 
+The skin needs ONLY your own copy of the original 1997 game: the CD, or
+the folder it was installed to. Nothing from a later re-release or from
+another project is read.
+
 Every --source is searched recursively and case-insensitively, and the
-first source that has a file wins, so an install and a patch folder can
+first source that has a file wins, so the CD and the install folder can
 be given together. Nothing here is fatal: a key the sources do not hold
 is reported and skipped, and the game draws its own fallback for it.
 
@@ -126,8 +133,7 @@ result. Use this one to write LOOSE files into a skin folder.
 #
 # `build_index` keys every file by its bare filename AND by every trailing
 # piece of its path, so a candidate written `DuelSounds/Button.wav`
-# matches only a `Button.wav` that is actually in a `DuelSounds` folder,
-# and `Program/DuelSounds/Button.wav` names the other one exactly.
+# matches only a `Button.wav` that is actually in a `DuelSounds` folder.
 # That is not decoration. A 1997 install has THREE files called
 # `Button.wav` — `Duelsounds/Button.wav` and `Sound/Button.wav` (75 270
 # bytes, the game's own click) and `autoplay/Button.wav` (1 732 bytes,
@@ -137,34 +143,35 @@ result. Use this one to write LOOSE files into a skin folder.
 # install it picked autoplay's, so every button in the duel played a
 # 39-millisecond installer blip. Found 2026-09-03; this is the fix.
 #
-# THE ORDER IS THE GAME'S OWN FOLDER FIRST. `DuelSounds/` and `Sound/`
-# are the directories the 1997 executables read (`windows.c:1228` builds
+# THE GAME'S OWN FOLDER, AND ONLY IT. `DuelSounds/` and `Sound/` are the
+# directories the 1997 executables read (`windows.c:1228` builds
 # `DuelSounds\%s`; `deckdll.cpp:2047` builds `Sound\LocMus%d.wav`), so
-# they are what the player's copy actually plays. `Program/DuelSounds/`
-# and `Program/Sound/` exist only inside a Manalink 3 SOURCE tree, and
-# hold a different MASTERING of the same recordings — see the audio
-# section of `Provenance.md`. They are the fallback, never the first
-# choice, so that pointing this at a checkout and pointing it at a real
-# install give the same answer wherever both are present.
+# they are what the player's copy actually plays. The `Program/DuelSounds/`
+# and `Program/Sound/` copies a Manalink 3 SOURCE tree carries (a
+# different mastering — `Provenance.md`, the audio) were the fallback
+# until 2026-10-15, when the owner ruled the skin is built off the 1997
+# install alone: *"Yes remove manalink fallbacks"*. No row names them, and
+# because the index still reaches them by their two-part and bare names,
+# `is_manalink_sound_copy` refuses them where a candidate is chosen.
 
 
 def duel_sound(name: str, bare: bool = True) -> list[str]:
-    """`DuelSounds/` first, the Manalink source copy second."""
-    out = ["DuelSounds/" + name, "Program/DuelSounds/" + name]
+    """`DuelSounds/` — the duel's own folder."""
+    out = ["DuelSounds/" + name]
     return out + [name] if bare else out
 
 
 def shell_sound(name: str, bare: bool = True) -> list[str]:
     """`Sound/` — the adventure shell's folder, where all the music is."""
-    out = ["Sound/" + name, "Program/Sound/" + name]
+    out = ["Sound/" + name]
     return out + [name] if bare else out
 
 
 # skin key -> candidate source filenames (checked in order, case-insensitive)
 MANIFEST: dict[str, list[str]] = {
     # menus
-    "title_background":      ["Title.pic", "Title.pic.png", "Title.png"],
-    "menu_background":       ["Menubak.pic", "Menubak.pic.png"],
+    "title_background":      ["Title.pic"],
+    "menu_background":       ["Menubak.pic"],
     # ------------------------------------------- YOUR TERRITORY BACKGROUND --
     # `@DIALOG_DUELOPTIONS` (UIStrings.txt:598, latin-1 — grep needs -a)
     # ends with `Your &territory background` and NINE choices, which
@@ -186,12 +193,11 @@ MANIFEST: dict[str, list[str]] = {
     # ALL FIFTEEN ARE NOW IMPORTED. A CORRECTION, recorded so it is not
     # undone (2026-09-02): the note this file and `docs/ROADMAP.md` used
     # to carry — *"the only copies of the other two in ../shandalar-src
-    # are Manalink `.bmp`s"* — was TRUE of `shandalar-src` and IRRELEVANT,
-    # because the importer does not read `shandalar-src` for art. It reads
-    # the s30 conversions, and `s30/assets/art/screens/duel/` holds all
-    # fifteen `Terr_*.pic.png` files sitting in the same directory as the
-    # five `patt` files that were already being imported from it. Nothing
-    # had to be decoded; the rows below simply had never been written.
+    # are Manalink `.bmp`s"* — was TRUE of `shandalar-src` and IRRELEVANT:
+    # all fifteen `Terr_*.pic` are in the 1997 `Duelart/`, and the rows
+    # below simply had never been written. (They were first read off s30's
+    # conversions; since 2026-09-09 the raw files are decoded, and since
+    # 2026-10-15 nothing else is a source.)
     #
     # WHAT EACH OF THE THREE ACTUALLY IS, opened with PIL at 3-8x
     # (2026-09-02) rather than inferred from the `Life_*` trio's comment
@@ -235,21 +241,21 @@ MANIFEST: dict[str, list[str]] = {
     # fifteen carry a 1px BLACK edge from the conversion; `Terr_Redpict`
     # is the exception (it is also the only one with a full-colour
     # palette, 92 colours against 7-28 for the rest).
-    "duel_pattern_white":    ["Terr_Whitepatt.pic", "Terr_Whitepatt.pic.png"],
-    "duel_pattern_blue":     ["Terr_Bluepatt.pic", "Terr_Bluepatt.pic.png"],
-    "duel_pattern_black":    ["Terr_Blackpatt.pic", "Terr_Blackpatt.pic.png"],
-    "duel_pattern_red":      ["Terr_Redpatt.pic", "Terr_Redpatt.pic.png"],
-    "duel_pattern_green":    ["Terr_Greenpatt.pic", "Terr_Greenpatt.pic.png"],
-    "duel_picture_white":    ["Terr_Whitepict.pic", "Terr_Whitepict.pic.png"],
-    "duel_picture_blue":     ["Terr_Bluepict.pic", "Terr_Bluepict.pic.png"],
-    "duel_picture_black":    ["Terr_Blackpict.pic", "Terr_Blackpict.pic.png"],
-    "duel_picture_red":      ["Terr_Redpict.pic", "Terr_Redpict.pic.png"],
-    "duel_picture_green":    ["Terr_Greenpict.pic", "Terr_Greenpict.pic.png"],
-    "duel_mana_white":       ["Terr_Whitemana.pic", "Terr_Whitemana.pic.png"],
-    "duel_mana_blue":        ["Terr_Bluemana.pic", "Terr_Bluemana.pic.png"],
-    "duel_mana_black":       ["Terr_Blackmana.pic", "Terr_Blackmana.pic.png"],
-    "duel_mana_red":         ["Terr_Redmana.pic", "Terr_Redmana.pic.png"],
-    "duel_mana_green":       ["Terr_Greenmana.pic", "Terr_Greenmana.pic.png"],
+    "duel_pattern_white":    ["Terr_Whitepatt.pic"],
+    "duel_pattern_blue":     ["Terr_Bluepatt.pic"],
+    "duel_pattern_black":    ["Terr_Blackpatt.pic"],
+    "duel_pattern_red":      ["Terr_Redpatt.pic"],
+    "duel_pattern_green":    ["Terr_Greenpatt.pic"],
+    "duel_picture_white":    ["Terr_Whitepict.pic"],
+    "duel_picture_blue":     ["Terr_Bluepict.pic"],
+    "duel_picture_black":    ["Terr_Blackpict.pic"],
+    "duel_picture_red":      ["Terr_Redpict.pic"],
+    "duel_picture_green":    ["Terr_Greenpict.pic"],
+    "duel_mana_white":       ["Terr_Whitemana.pic"],
+    "duel_mana_blue":        ["Terr_Bluemana.pic"],
+    "duel_mana_black":       ["Terr_Blackmana.pic"],
+    "duel_mana_red":         ["Terr_Redmana.pic"],
+    "duel_mana_green":       ["Terr_Greenmana.pic"],
     # card frames (the in-duel card backgrounds) + the card back
     #
     # THERE IS NO BLANK / PAPER CARD IN THE ORIGINAL'S SET, and the search
@@ -272,24 +278,19 @@ MANIFEST: dict[str, list[str]] = {
     # in the era's idiom: the geometry is these frames' own measured
     # regions and the palette is `Cardbk_White`'s pale stone with the
     # colour taken out of it.
-    "card_back":             ["Cardback.pic", "Cardback.pic.png"],
-    "card_frame_white":      ["Cardbk_White.pic", "Cardbk_White.pic.png"],
-    "card_frame_blue":       ["Cardbk_Blue.pic", "Cardbk_Blue.pic.png"],
-    "card_frame_black":      ["Cardbk_Black.pic", "Cardbk_Black.pic.png"],
-    "card_frame_red":        ["Cardbk_Red.pic", "Cardbk_Red.pic.png"],
-    "card_frame_green":      ["Cardbk_Green.pic", "Cardbk_Green.pic.png"],
-    "card_frame_gold":       ["Cardbk_Gold.pic", "Cardbk_Gold.pic.png"],
-    "card_frame_artifact":   ["Cardbk_Artifact.pic",
-                              "Cardbk_Artifact.pic.png"],
-    "card_frame_land_white": ["Cardbk_Whiteland.pic",
-                              "Cardbk_Whiteland.pic.png"],
-    "card_frame_land_blue":  ["Cardbk_Blueland.pic",
-                              "Cardbk_Blueland.pic.png"],
-    "card_frame_land_black": ["Cardbk_Blackland.pic",
-                              "Cardbk_Blackland.pic.png"],
-    "card_frame_land_red":   ["Cardbk_Redland.pic", "Cardbk_Redland.pic.png"],
-    "card_frame_land_green": ["Cardbk_Greenland.pic",
-                              "Cardbk_Greenland.pic.png"],
+    "card_back":             ["Cardback.pic"],
+    "card_frame_white":      ["Cardbk_White.pic"],
+    "card_frame_blue":       ["Cardbk_Blue.pic"],
+    "card_frame_black":      ["Cardbk_Black.pic"],
+    "card_frame_red":        ["Cardbk_Red.pic"],
+    "card_frame_green":      ["Cardbk_Green.pic"],
+    "card_frame_gold":       ["Cardbk_Gold.pic"],
+    "card_frame_artifact":   ["Cardbk_Artifact.pic"],
+    "card_frame_land_white": ["Cardbk_Whiteland.pic"],
+    "card_frame_land_blue":  ["Cardbk_Blueland.pic"],
+    "card_frame_land_black": ["Cardbk_Blackland.pic"],
+    "card_frame_land_red":   ["Cardbk_Redland.pic"],
+    "card_frame_land_green": ["Cardbk_Greenland.pic"],
     # ------------------------------------- THE LIFE REGISTER, BOTH FACES --
     # `Duel.hlp`, topic **Duelist's Face**: *"When the Life Register flips
     # around to show a face, one of two things is the case. Either you have
@@ -334,11 +335,11 @@ MANIFEST: dict[str, list[str]] = {
     # `Life_Liched.pic` (the LICH REGISTER — `Duel.hlp` has a topic for it)
     # is surveyed and NOT imported: Lich is not in our card pool, so the
     # substitute register has nothing to substitute for. §6.5 tracks it.
-    "life_panel_white":      ["Life_Whitepatt.pic", "Life_Whitepatt.pic.png"],
-    "life_panel_blue":       ["Life_Bluepatt.pic", "Life_Bluepatt.pic.png"],
-    "life_panel_black":      ["Life_Blackpatt.pic", "Life_Blackpatt.pic.png"],
-    "life_panel_red":        ["Life_Redpatt.pic", "Life_Redpatt.pic.png"],
-    "life_panel_green":      ["Life_Greenpatt.pic", "Life_Greenpatt.pic.png"],
+    "life_panel_white":      ["Life_Whitepatt.pic"],
+    "life_panel_blue":       ["Life_Bluepatt.pic"],
+    "life_panel_black":      ["Life_Blackpatt.pic"],
+    "life_panel_red":        ["Life_Redpatt.pic"],
+    "life_panel_green":      ["Life_Greenpatt.pic"],
     # THE DUELIST'S FACE — the register's other side (manual p.119: *"You
     # can right-click on either life register and select Flip to Face if
     # you'd rather see your opponent's face."*).
@@ -371,22 +372,21 @@ MANIFEST: dict[str, list[str]] = {
     #    that set is the pre-duel VERSUS portrait pair, not the register's
     #    flip side. If the versus screen ever wants faces, that is the
     #    archive to go back to, and this is the note that says so.
-    "duelist_face_white":    ["Life_Whitepict.pic", "Life_Whitepict.pic.png"],
-    "duelist_face_blue":     ["Life_Bluepict.pic", "Life_Bluepict.pic.png"],
-    "duelist_face_black":    ["Life_Blackpict.pic", "Life_Blackpict.pic.png"],
-    "duelist_face_red":      ["Life_Redpict.pic", "Life_Redpict.pic.png"],
-    "duelist_face_green":    ["Life_Greenpict.pic", "Life_Greenpict.pic.png"],
+    "duelist_face_white":    ["Life_Whitepict.pic"],
+    "duelist_face_blue":     ["Life_Bluepict.pic"],
+    "duelist_face_black":    ["Life_Blackpict.pic"],
+    "duelist_face_red":      ["Life_Redpict.pic"],
+    "duelist_face_green":    ["Life_Greenpict.pic"],
     # Window chrome: the original's beveled sandstone dialog panel (a
     # 9-patch behind every dialog, the duel-opening coin toss included),
     # and the pre-duel Start Duel screen's own backdrop.
-    "panel_stone":           ["Winbk_Options.pic", "Winbk_Options.pic.png"],
-    "versus_background":     ["Winbk_Startduel.pic",
-                              "Winbk_Startduel.pic.png"],
+    "panel_stone":           ["Winbk_Options.pic"],
+    "versus_background":     ["Winbk_Startduel.pic"],
     # The PRE-DUEL SPLASH (500x400): brown marble with two sunken wells at
     # (50, 59) and (281, 59), each 162x192 — measured 2026-09-03, and the
     # numbers `DuelIntro` lays itself out with. s30's own art notes call
     # this file "Player vs opponent splash".
-    "versus_splash":         ["Winbk_Versus.pic", "Winbk_Versus.pic.png"],
+    "versus_splash":         ["Winbk_Versus.pic"],
     # ------------------------------------------------------- 1997 DIALOGS --
     # Every one of these is a DIALOG GROUND with the era's bevel baked
     # into its own edge pixels: a 2-4px highlight along top+left and the
@@ -394,9 +394,8 @@ MANIFEST: dict[str, list[str]] = {
     # reproduces the window frame at any size. Measured per file (the
     # numbers live in game/duel/original_dialog.gd PANELS).
     #
-    # ALWAYS take the s30 `.pic.png` conversion of the 1997 file. The
-    # same-named `.bmp` in a Manalink install is Manalink 3's own flat
-    # restyle — WinBk_TellUser.bmp is a plain grey gradient at 900x53
+    # ALWAYS the 1997 `.pic`. The same-named `.bmp` in a Manalink install
+    # is Manalink 3's own flat restyle — WinBk_TellUser.bmp is a plain grey gradient at 900x53
     # where the 1997 .pic is 600x35 of mottled red-brown stone, and
     # WinBk_EndDuel.bmp / WinBk_StartDuelButton*.bmp are likewise flat
     # grey and flat olive. Filename candidates below never name a .bmp.
@@ -405,18 +404,16 @@ MANIFEST: dict[str, list[str]] = {
     # ground the original puts under a question that must not compete
     # with the card art beside it (our X, library-search and game-over
     # dialogs).
-    "panel_dark_stone":      ["Winbk_Questmana.pic",
-                              "Winbk_Questmana.pic.png"],
+    "panel_dark_stone":      ["Winbk_Questmana.pic"],
     # Winbk_Changetext: the blue celtic-knot ground of the "change word /
     # to" dialog (@DIALOG_CHANGETEXT) — the original's ground for a
     # dialog that asks the player to pick from a LIST.
-    "panel_knot":            ["Winbk_Changetext.pic",
-                              "Winbk_Changetext.pic.png"],
+    "panel_knot":            ["Winbk_Changetext.pic"],
     # Winbk_Endduel: the end-of-duel window's dark blue-and-gold rings.
     # Its bevel is INSET (dark top/left, light bottom/right) — the only
     # sunken window in the set, which is why the duel's last word looks
     # carved rather than raised.
-    "panel_end_duel":        ["Winbk_Endduel.pic", "Winbk_Endduel.pic.png"],
+    "panel_end_duel":        ["Winbk_Endduel.pic"],
     # THE 1997 BUTTON, three states (131x36 each). The only generic
     # button art in DuelArt, and the source of the era's button
     # language: a DOUBLE rule — 2px highlight (207,209,209) on top+left
@@ -424,14 +421,11 @@ MANIFEST: dict[str, list[str]] = {
     # face, then the same pair again at 5-6px in, then the face. Normal
     # is raised twice; Depressed inverts BOTH rules; Disabled inverts
     # only the inner one.
-    "button_normal":         ["Winbk_Startduelbuttonnormal.pic",
-                              "Winbk_Startduelbuttonnormal.pic.png"],
-    "button_pressed":        ["Winbk_Startduelbuttondepressed.pic",
-                              "Winbk_Startduelbuttondepressed.pic.png"],
-    "button_disabled":       ["Winbk_Startduelbuttondisabled.pic",
-                              "Winbk_Startduelbuttondisabled.pic.png"],
+    "button_normal":         ["Winbk_Startduelbuttonnormal.pic"],
+    "button_pressed":        ["Winbk_Startduelbuttondepressed.pic"],
+    "button_disabled":       ["Winbk_Startduelbuttondisabled.pic"],
     # duel chrome: the original's vertical phase bar and graveyard piles
-    "phase_bar":             ["Winbk_Phase.pic", "Winbk_Phase.pic.png"],
+    "phase_bar":             ["Winbk_Phase.pic"],
     # ---------------------------------------------------------- THE COMBAT --
     # Winbk_Phasecombat 164x760 — THE COMBAT BAR (manual p.117, Duel.hlp
     # topic "Combat Bar"): the miniature Phase Bar that REPLACES the Phase
@@ -445,20 +439,18 @@ MANIFEST: dict[str, list[str]] = {
     # shield, sword-through-shield, and the Phase Bar's own mirrored
     # crescent. They line up one-for-one with the last seven
     # @CUECARD_PHASEBAR strings and with Duel.hlp's own list.
-    "combat_bar":            ["Winbk_Phasecombat.pic",
-                              "Winbk_Phasecombat.pic.png"],
+    "combat_bar":            ["Winbk_Phasecombat.pic"],
     # Winbk_Attack 888x316 — the COMBAT WINDOW's ground, a field of
     # SKULLS. Like Winbk_Telluser it carries NO bevel of its own (every
     # edge row is plain texture), so the window is RULED by
     # OriginalDialog's own frame routine.
-    "attack_panel":          ["Winbk_Attack.pic", "Winbk_Attack.pic.png"],
+    "attack_panel":          ["Winbk_Attack.pic"],
     # Winbk_Attackmin 39x70 — the MINIMISED Combat window: a dagger on
     # dark green inside a blue rule. 39 wide against a 41-wide Phase Bar
     # column and 70 tall against its ~100px centre band: this is the
     # "window icon in the center area of the Phase Bar" (manual p.126)
     # that restores the window, drawn at 1:1.
-    "attack_min":            ["Winbk_Attackmin.pic",
-                              "Winbk_Attackmin.pic.png"],
+    "attack_min":            ["Winbk_Attackmin.pic"],
     # The window's furniture, all IMAGE+MASK pairs (MiniCard.masked_sprite):
     #   Winbk_Attacksword  56x132 -> a 28x132 steel sword, hilt up: the
     #                               ATTACKERS' lane marker
@@ -466,20 +458,17 @@ MANIFEST: dict[str, list[str]] = {
     #                               BLOCKERS' lane marker
     #   Winbk_Attackbones 777x70  -> a 777x35 strip of bones, split TOP
     #                               image / BOTTOM mask: the window's floor
-    "attack_sword":          ["Winbk_Attacksword.pic",
-                              "Winbk_Attacksword.pic.png"],
-    "attack_shield":         ["Winbk_Attackshield.pic",
-                              "Winbk_Attackshield.pic.png"],
-    "attack_bones":          ["Winbk_Attackbones.pic",
-                              "Winbk_Attackbones.pic.png"],
+    "attack_sword":          ["Winbk_Attacksword.pic"],
+    "attack_shield":         ["Winbk_Attackshield.pic"],
+    "attack_bones":          ["Winbk_Attackbones.pic"],
     # The hand window's title bar, per seat color (s30: drawHandPanel).
-    "hand_panel_white":      ["Hand_White.pic", "Hand_White.pic.png"],
-    "hand_panel_blue":       ["Hand_Blue.pic", "Hand_Blue.pic.png"],
-    "hand_panel_black":      ["Hand_Black.pic", "Hand_Black.pic.png"],
-    "hand_panel_red":        ["Hand_Red.pic", "Hand_Red.pic.png"],
-    "hand_panel_green":      ["Hand_Green.pic", "Hand_Green.pic.png"],
+    "hand_panel_white":      ["Hand_White.pic"],
+    "hand_panel_blue":       ["Hand_Blue.pic"],
+    "hand_panel_black":      ["Hand_Black.pic"],
+    "hand_panel_red":        ["Hand_Red.pic"],
+    "hand_panel_green":      ["Hand_Green.pic"],
     # The sidebar mana-pool panel (s30: drawManaPool).
-    "mana_pool_panel":       ["Winbk_Manapool.pic", "Winbk_Manapool.pic.png"],
+    "mana_pool_panel":       ["Winbk_Manapool.pic"],
     # Statbutt sprite sheet: 16 x 48px cells. Opened cell by cell
     # (2026-08-31): 0-4 the five mana symbols, then THREE STATES EACH of
     # "WIZ STATS" (5-7), "JOURNAL" (8-10) and "DONE" (11-13), a dark bar
@@ -491,7 +480,7 @@ MANIFEST: dict[str, list[str]] = {
     # (button_normal/pressed/disabled) and keep this sheet for the
     # adventure layer. Its dark-on-light lettering IS our evidence for
     # how the original letters a button face.
-    "stat_buttons":          ["Statbutt.spr", "Statbutt.spr.png"],
+    "stat_buttons":          ["Statbutt.spr"],
     # THE TITLE MENU'S SPRITE, `Begin.spr` (2026-10-08, the owner: *"Lets
     # import every frame there but we will use only icon for now"*): ALL
     # EIGHTEEN frames, one column of 265x24 cells, top to bottom —
@@ -514,10 +503,9 @@ MANIFEST: dict[str, list[str]] = {
     "begin_menu":            ["Begin.spr"],
     # The stack window, the message bar, and the enlarged-card window
     # (s30: spellChainBg / messageBg / the examine view).
-    "spell_chain_panel":     ["Winbk_Spellchain.pic",
-                              "Winbk_Spellchain.pic.png"],
-    "message_panel":         ["Winbk_Telluser.pic", "Winbk_Telluser.pic.png"],
-    "big_card_panel":        ["Winbk_Bigcard.pic", "Winbk_Bigcard.pic.png"],
+    "spell_chain_panel":     ["Winbk_Spellchain.pic"],
+    "message_panel":         ["Winbk_Telluser.pic"],
+    "big_card_panel":        ["Winbk_Bigcard.pic"],
     # SURVEYED AND DELIBERATELY NOT IMPORTED (2026-08-31) — opened with
     # PIL, one by one, so the next pass need not guess again:
     #   Winbk_Attackrats.pic      142x210  SIX 71x35 frames (image+mask) of
@@ -545,8 +533,7 @@ MANIFEST: dict[str, list[str]] = {
     #                                      but not popup chrome
     # Diagonal mana stripes marking what colours a card can produce,
     # drawn on its hand row (54x126: 6 cells of 54x21, W U B R G C).
-    "mana_stripes":          ["Manastripes.pic", "Manastripes.pic.png",
-                              "ManaStripes.pic.png"],
+    "mana_stripes":          ["Manastripes.pic"],
     # ------------------------------------------- THE SMALL-CARD STATE ART --
     # `@CUECARD_SMALLCARD` (UIStrings.txt:732, latin-1 — grep needs -a)
     # names TEN states a card on the table can be in, and FIVE of them ship
@@ -561,30 +548,25 @@ MANIFEST: dict[str, list[str]] = {
     # 254x127 where the 1997 file is 194x97, CantTarget/Target 206x103
     # against 130x65 / 122x61, WillUntap 152x76 against 110x59. They are
     # the same drawings, upscaled, and their masks are two-tone
-    # silhouettes rather than real alpha. So the s30 `.pic.png`
-    # conversion goes FIRST in every candidate list below and the
-    # Manalink file is the fallback (masked_sprite handles both, see its
-    # doc comment). One more wrinkle: `Dying.pic` also exists at a
-    # Manalink install's ROOT as a genuine raw 1997 X0 container
-    # (magic `X0`, u16 len, u16 w=194, u16 h=97) which nothing here can
-    # decode — if that one is what the index finds, the overlay simply
-    # does not draw. It never crashes.
+    # silhouettes rather than real alpha. No row names them, and [main]
+    # refuses a PNG under a 1997 name, so the rows below take the 1997
+    # `Cardart/*.pic` alone (decoded, see THE RAW 1997 ART).
     #
     # The SUMMONING-SICKNESS spiral drawn over a creature's art. 194x97:
     # left half the image, right half its mask (black = opaque). A grey
     # spiral. Cue card: "Summoning sickness".
-    "summon_sick":           ["Summon.pic", "Summon.pic.png"],
+    "summon_sick":           ["Summon.pic"],
     # Dying 194x97 -> a 97x97 field of SILVER CRACKS spreading across the
     # card, the original's "this dies at the next check" mark. Cue card:
     # "Dying".
-    "state_dying":           ["Dying.pic", "Dying.pic.png"],
+    "state_dying":           ["Dying.pic"],
     # CantTarget 130x65 -> a 65x65 ORANGE CIRCLE-SLASH (a no-entry sign).
     # Cue card: "Can't target this".
-    "state_cant_target":     ["CantTarget.pic", "Canttarget.pic.png"],
+    "state_cant_target":     ["CantTarget.pic"],
     # WillUntap 110x59 -> a 55x59 BLUE CURVED ARROW (the untap symbol's
     # ancestor). Note the halves are NOT square. Cue card: "This card
     # will untap".
-    "state_will_untap":      ["WillUntap.pic", "Willuntap.pic.png"],
+    "state_will_untap":      ["WillUntap.pic"],
     # SURVEYED AND DELIBERATELY NOT IMPORTED — Poison.pic. Reason (1) below
     # was CORRECTED on 2026-09-01 and the pairing with "Damage to player"
     # with it: that cue is @CUECARD_SMALLCARD's, and @CUECARD_LIFE
@@ -611,18 +593,13 @@ MANIFEST: dict[str, list[str]] = {
     # (`GameSkin.set_icon`), so preferring a reimplementation's art here
     # bought nothing and left the chain reaching for somebody else's
     # drawing. A player who imports their own disc gets their own disc's
-    # medallions in their skin folder; Manalink's stays the fallback for
-    # a Manalink-only tree. Neither is what a card wears.
-    "set_icon_atq":          ["Antiquit.pic", "Antiquit.pic.png",
-                              "program/dbart/antiquit.pic"],
-    "set_icon_arn":          ["ArabNite.pic", "ArabNite.pic.png",
-                              "program/dbart/arabnite.pic"],
-    "set_icon_past":         ["Astral.pic", "Astral.pic.png",
-                              "program/dbart/astral.pic"],
-    "set_icon_drk":          ["Dark.pic", "Dark.pic.png",
-                              "program/dbart/dark.pic"],
-    "set_icon_4ed":          ["Fourth.pic", "Fourth.pic.png",
-                              "program/dbart/fourth.pic"],
+    # medallions in their skin folder, and since 2026-10-15 Manalink's are
+    # not a candidate at all. Neither is what a card wears.
+    "set_icon_atq":          ["Antiquit.pic"],
+    "set_icon_arn":          ["ArabNite.pic"],
+    "set_icon_past":         ["Astral.pic"],
+    "set_icon_drk":          ["Dark.pic"],
+    "set_icon_4ed":          ["Fourth.pic"],
     # THE 1997 EXPANSION-SYMBOL STRIP — the sheet the game stamps on CARDS,
     # as opposed to the `set_icon_*` medallions above, which are the Deck
     # Builder's filter buttons. 330x15 = five 66-wide slots, each an image
@@ -634,9 +611,8 @@ MANIFEST: dict[str, list[str]] = {
     # Only five sets have one, and that is the printed truth, not a gap:
     # Unlimited, Fourth Edition and the promos carried no expansion symbol,
     # which is why `SetBadges` letters those three instead.
-    "card_set_symbols":      ["Cardsets.pic", "Cardsets.pic.png"],
-    "set_icon_leg":          ["Legends.pic", "Legends.pic.png",
-                              "program/dbart/legends.pic"],
+    "card_set_symbols":      ["Cardsets.pic"],
+    "set_icon_leg":          ["Legends.pic"],
     # --------------------------------------------------- THE DECK BUILDER --
     # The 1997 Deck Builder was its own module (Program/Deckdll.dll), so
     # there is no C source for it — but its ART survives, and the manual's
@@ -650,14 +626,18 @@ MANIFEST: dict[str, list[str]] = {
     # StatBak1 (800x600), FilterBkg (287x486) and InfoBkg (488x405) are
     # FLAT GREY NOISE; DekBar1, DekTit1 and BtnBkg are FLAT GREY GRADIENTS;
     # Bldr01C-05C render the mana glyphs flat black on flat grey. Check the
-    # MAGIC BYTES, not the extension. The s30 .pic.png conversions below
-    # are the 1997 art, and they carry the era's palette — Dekbar1's
-    # speckle includes (82,111,140), the same slate as the 1997 button
-    # shadow above.
+    # MAGIC BYTES, not the extension ([main] refuses a PNG under a 1997
+    # name). The 1997 `Dbart/*.pic` are the art, and they carry the era's
+    # palette — Dekbar1's speckle includes (82,111,140), the same slate as
+    # the 1997 button shadow above.
     #
-    # sprite_sheet.png 360x120 — THE FILTER STRIP: a 9x3 grid of 40x40
-    # bevelled stone tiles, each holding a recessed medallion, in three
-    # sheets (normal/hover/pressed). The cell->filter map was DECODED, not
+    # THE FILTER STRIP, 360x120: a 9x3 grid of 40x40 bevelled stone tiles,
+    # each holding a recessed medallion, in three sheets (normal/hover/
+    # pressed). NO FILE IS COPIED FOR IT: the normal sheet is ASSEMBLED
+    # from the 27 raw `Dbart/*.pic` cells (PIC_SHEETS) and the other two
+    # are DERIVED from it (DERIVED_SHEETS, ours) — which is why the three
+    # rows below name nothing. s30's `sprite_sheet*.png` stood here until
+    # 2026-10-15. The cell->filter map was DECODED, not
     # guessed: Manalink's DBArt icons are the same glyphs RECOLOURED, so
     # each 35x36 DBArt file was rendered beside each cell and matched by
     # shape. Eighteen match exactly, which fixes the grid as
@@ -713,11 +693,13 @@ MANIFEST: dict[str, list[str]] = {
     # at all. The warm/cool `ON_TINT`/`OFF_TINT` pair the building pass
     # invented to separate the states is therefore retired.
     # game/deck_builder/filter_bar.gd's TYPE_CELL is the live map.
-    "filter_icons":          ["sprite_sheet.png"],
-    "filter_icons_hover":    ["sprite_sheet_hover.png"],
-    "filter_icons_pressed":  ["sprite_sheet_pressed.png"],
-    # Bldr_sheet 585x200 (s30's assembly of DBArt's Bldr01C..05C, from the
-    # 1997 originals): 5 cells of 117 x 2 rows of 100. Top row warm
+    "filter_icons":          [],
+    "filter_icons_hover":    [],
+    "filter_icons_pressed":  [],
+    # THE DECK-SLOT PLAQUES, 585x200, ASSEMBLED from the ten raw 1997
+    # `Dbart/Bldr0*b/c.pic` (PIC_SHEETS; s30's `Bldr_sheet.png` stood here
+    # until 2026-10-15, so the row names nothing): 5 cells of 117 x 2 rows
+    # of 100. Top row warm
     # brown-gold sandstone, bottom row cool blue slate, each with a mana
     # glyph carved into it. Column order B W R G U (skull, sun,
     # fire-dragon, tree, drop).
@@ -741,23 +723,23 @@ MANIFEST: dict[str, list[str]] = {
     # The Colour Filter buttons in the same screenshot are plain 40x40
     # `sprite_sheet` medallions like every other filter — see the cell map
     # below.
-    "deck_slot_plaques":     ["Bldr_sheet.png"],
+    "deck_slot_plaques":     [],
     # Dektit1 291x73 — the DECK HEADER's slab, veined blue-grey marble in a
     # 2px pale bevel. The manual: "At the top left corner of the screen is
     # the Deck Header box… the title of your deck is displayed."
-    "deck_title_slab":       ["Dektit1.pic", "Dektit1.pic.png"],
+    "deck_title_slab":       ["Dektit1.pic"],
     # Dekbar1 1006x198 — the INVENTORY's ground ("Along the bottom of the
     # screen, in the Inventory area, is every card you can put into a
     # deck"). A 14-colour 50/50 dither of dark teal (42,83,92) and slate
     # (82,106,111) with NO bevel and NO frame anywhere on its edges: a
     # field to lay a row of cards on, never a widget. s30 uses the same
     # file behind its 1024x180 collection carousel.
-    "deck_bar_ground":       ["Dekbar1.pic", "Dekbar1.pic.png"],
+    "deck_bar_ground":       ["Dekbar1.pic"],
     # The seamless 32x32 grounds the screen tiles: Dektile1 olive-brown
     # (s30 tiles it over the whole edit-deck screen) and Dektile4 navy
     # slate (its deck area). Both verified tileable by PIL.
-    "deck_tile_olive":       ["Dektile1.pic", "Dektile1.pic.png"],
-    "deck_tile_slate":       ["Dektile4.pic", "Dektile4.pic.png"],
+    "deck_tile_olive":       ["Dektile1.pic"],
+    "deck_tile_slate":       ["Dektile4.pic"],
     # SURVEYED, NOT IMPORTED (2026-08-31):
     #   Program/seedeck.pic       640x480  THE genuine 1997 full-screen deck
     #                                      screen, and the one thing here we
@@ -814,11 +796,11 @@ MANIFEST: dict[str, list[str]] = {
     #     .pic.png                         chain panel in its edit_deck folder;
     #                                      already imported as
     #                                      `spell_chain_panel` from DuelArt
-    "grave_panel_white":     ["Grave_White.pic", "Grave_White.pic.png"],
-    "grave_panel_blue":      ["Grave_Blue.pic", "Grave_Blue.pic.png"],
-    "grave_panel_black":     ["Grave_Black.pic", "Grave_Black.pic.png"],
-    "grave_panel_red":       ["Grave_Red.pic", "Grave_Red.pic.png"],
-    "grave_panel_green":     ["Grave_Green.pic", "Grave_Green.pic.png"],
+    "grave_panel_white":     ["Grave_White.pic"],
+    "grave_panel_blue":      ["Grave_Blue.pic"],
+    "grave_panel_black":     ["Grave_Black.pic"],
+    "grave_panel_red":       ["Grave_Red.pic"],
+    "grave_panel_green":     ["Grave_Green.pic"],
     # NO EXILE PLATE EXISTS — surveyed 2026-08-31, do not hunt again.
     #   The 1997 table drew no "removed from the game" pile: the zone was
     #   reached from the graveyard's own right-click menu, @MENU_GRAVEYARD
@@ -837,7 +819,7 @@ MANIFEST: dict[str, list[str]] = {
     # sheets (mana_symbols layout, decoded from the original sheet itself:
     # 19 cells of 18x18 — X, 0..10, W, R, U, B, G, tap — consumed by
     # game/duel/mana_icons.gd)
-    "mana_symbols":          ["Manasymbols.pic", "Manasymbols.pic.png"],
+    "mana_symbols":          ["Manasymbols.pic"],
     # Abilities.pic 22x396 — ONE COLUMN of 18 cells of 22x22, consumed by
     # MiniCard.badge_from_slot. Every cell is a DISC on an opaque black
     # square, so the cell is masked to its inscribed circle before use
@@ -854,24 +836,18 @@ MANIFEST: dict[str, list[str]] = {
     # colour. s30 maps Menace there (duel.go:1047-1121); the 1997 game had
     # no menace keyword and no icon for it, so that mapping would blit a
     # black square. Do not "complete" the map.
-    "ability_icons":         ["Abilities.pic", "Abilities.pic.png"],
-    # Prefer the RAW .pic: it is a clean image+mask pair (84x26, white
-    # background / black silhouette), while the converted copy is a
-    # different size and decodes as neither a sprite nor a pair.
-    # Cue card: "Damage: %d".
-    # WHICH DAGGER, DECIDED BY LOOKING (the owner, 2026-09-09). Both
-    # installs carry one and they are not the same drawing: the 1997
-    # `Damage.pic` decodes to 94x20 — a long, needle-thin, dark blood-red
-    # blade lying almost flat, which at a 132px card reads as a SCRATCH —
-    # while Manalink's `Program/CardArt/Damage.pic` (a PNG wearing a
-    # `.pic` extension, Provenance's third rule) is 84x26: shorter,
-    # fatter, bright salmon, at a clear diagonal with a modelled hilt,
-    # and it reads as a dagger at a glance. Shot side by side on the same
-    # three wounded creatures and chosen for legibility, so MANALINK'S
-    # LEADS and the 1997 file is the fallback for a disc-only install.
-    # `masked_sprite` has no hard-coded size and cuts either one right.
-    "damage_marker":         ["program/cardart/damage.pic", "Damage.pic",
-                              "Damage.pic.png"],
+    "ability_icons":         ["Abilities.pic"],
+    # Cue card: "Damage: %d". The 1997 `Damage.pic` decodes to 94x20 — a
+    # long, needle-thin, dark blood-red blade lying almost flat, which at
+    # a 132px card reads as a SCRATCH. Manalink's `Program/CardArt/
+    # Damage.pic` (a PNG wearing a `.pic` extension) led this row from
+    # 2026-09-09 for legibility; on 2026-10-15 the owner ruled the skin
+    # is the 1997 install alone and the game draws ITS OWN dagger for
+    # every player (*"we build our own damage dagger just to be
+    # independent"*, `MiniCard.ALWAYS_OURS`). So NOTHING READS THIS KEY;
+    # the row stays, like the set symbols', so the disc's own file is in
+    # the player's skin folder.
+    "damage_marker":         ["Damage.pic"],
     # THE COUNTER STONES, Cardcounters.pic — 24x750, ONE COLUMN of 25
     # cells at a 30 px pitch (Magic.exe 0x4d3d20 divides the bitmap's
     # height by 25): rows 0-23 the oval "stone" a permanent's counters
@@ -884,27 +860,25 @@ MANIFEST: dict[str, list[str]] = {
     # id (Magic.exe 0x4d4ca0, 27 cards -> 22 stones; the five "standard"
     # counters other cards put down use fixed rows, 0x4d3cc0) — the table
     # is transcribed in game/duel/counter_marks.gd. Raw 1997 file:
-    # MagicTG/Cardart/Cardcounters.pic, an X0 container of 1997-07-22 with
-    # the same indices under Duelpalall.tr. The s30 `card/` conversion is
-    # the one to take: it hangs tRNS on 255, so the mask row's outside
-    # loads transparent and the decode measures its own polarity off the
-    # corner (the ink is forced back to opaque black in code); the
-    # `screens/duel/` copy is the same indices under a palette with no
-    # tRNS and 254 white, and would need the polarity read the other way.
+    # MagicTG/Cardart/Cardcounters.pic, an X0 container of 1997-07-22,
+    # decoded under Duelpalall.tr with 255 transparent, so the mask row's
+    # outside loads transparent and the decode measures its own polarity
+    # off the corner (the ink is forced back to opaque black in code).
+    # The row names the `Cardart/` copy first, path-qualified, and the
+    # bare name second. (s30's two `.pic.png` conversions of it were
+    # candidates until 2026-10-15.)
     # `Program/CardArt/CardCounters.bmp` is MANALINK's own strip
     # (Provenance.md: a .bmp in the install is never 1997) — not a
     # candidate. Cue cards: "@CUECARD_COUNTERS_<Card>", UIStrings.txt:
     # 745-840, one line per card ("Carrion counters: %d"). Added
     # 2026-09-08 [1997].
-    "card_counters":         ["Cardart/Cardcounters.pic", "Cardcounters.pic",
-                              "card/Cardcounters.pic.png",
-                              "Cardcounters.pic.png"],
+    "card_counters":         ["Cardart/Cardcounters.pic", "Cardcounters.pic"],
     # Target.pic 122x61 -> a 61x61 RED CROSSHAIR. ONE FILE, TWO USES: the
     # duel screen's targeting CURSOR (DuelScreen._set_target_cursor takes
     # the image half raw) and the small card's "Is a target" STAMP
     # (MiniCard.STATE_OVERLAYS, via masked_sprite). Imported once under
     # this key — a second key would be a second copy of the same bytes.
-    "target_cursor":         ["Target.pic", "Target.pic.png"],
+    "target_cursor":         ["Target.pic"],
     # ------------------------------------------------- THE 1997 TYPEFACES --
     # BOTH FONTS ARE ON THE 1997 DISC, under the 8.3 names the installer
     # gave them, and until 2026-09-09 this importer asked only for the
@@ -915,10 +889,10 @@ MANIFEST: dict[str, list[str]] = {
     # `Tt0300m_.TTF` `Tt0530m_.TTF`.
     #
     # WHICH IS WHICH, read out of each file's own `name` table:
-    #   Magim___  MagicMedieval    — and it is BYTE-IDENTICAL to the
+    #   Magim___  MagicMedieval    — BYTE-IDENTICAL to the
     #                                `MagicMedieval.ttf` a Manalink tree
-    #                                ships (md5 6d2dac9052), so the two
-    #                                candidates below are one font.
+    #                                ships (md5 6d2dac9052); the disc's
+    #                                name is the only candidate.
     #   Magis___  MagicSymbols     — the 1997 mana-symbol face. No key
     #                                reads it: our symbols come from
     #                                `Manasymbols.pic`. Left for whoever
@@ -940,24 +914,21 @@ MANIFEST: dict[str, list[str]] = {
     #   `fontBigCardTitle`/`Subtitle`, `fontFace`, `fontChat` = Benguiat.
     #   `fontBigCardPT`, `fontDamage`, `fontLife`, `fontShellText` =
     #       CentSchbook BT — the NUMBERS.
-    # So `font_body` is `Tt0298m_.ttf` and nothing else, and MPlantin —
-    # the modern printed-card face a Manalink tree carries — is the
-    # FALLBACK it always should have been. TO PUT THE OLD LOOK BACK, swap
-    # the two names on that row; nothing else depends on the order.
-    "font_title.ttf":        ["Magim___.ttf", "MagicMedieval.ttf",
-                              "GoudyMedieval-Pre8th.ttf"],
-    # THE BODY FACE, DECIDED BY LOOKING (the owner, 2026-09-09).
-    # `Duelart/Duel.dat`'s own `[fonts]` table names `MPZurich Cn BT`
-    # (`Tt0298m_.ttf`) for the rules text, and it IS the 1997 face — but
-    # it is a narrow grey sans, and the card's auto-fit lands it at 15pt
-    # where MPlantin gets 18pt, so the same rules text comes out a third
-    # smaller and much lighter, going grey against a red plate and
-    # leaving the text box half empty. Shot side by side on three cards
-    # and chosen for legibility: MPLANTIN LEADS, the 1997 face is the
-    # fallback. (The auto-fit's own part in that is a separate defect,
-    # `docs/ROADMAP.md`.)
-    "font_body.ttf":         ["MPlantin-Regular.ttf", "Tt0298m_.ttf",
-                              "Garamond.ttf"],
+    # So the 1997 body face is `Tt0298m_.ttf`. THE TITLE FACE IS THE ONE
+    # FONT IMPORTED, by the disc's own name alone (2026-10-15, the owner:
+    # *"Yes remove manalink fallbacks"*): the Manalink-era
+    # `MagicMedieval.ttf` and `GoudyMedieval-Pre8th.ttf` are not
+    # candidates.
+    "font_title.ttf":        ["Magim___.ttf"],
+    # THERE IS NO `font_body.ttf` ROW, ON PURPOSE. The body face — card
+    # text, the log, every dialog — is the project's own SPECTRAL, an open
+    # font shipped in the game (`game/art/fonts/`, OFL-1.1), the same for
+    # every player whatever skin they import (the owner, 2026-10-15: *"It
+    # is an open source font. Thats is very important."*). Neither 1997
+    # candidate is imported: `MPZurich Cn BT` (`Tt0298m_.ttf`, the face
+    # `Duel.dat` names) is a narrow grey sans the card's auto-fit lands at
+    # 15pt, and `MPlantin` — which led this row from 2026-09-09, chosen by
+    # looking — was never on the disc, only in a Manalink tree.
     # sounds (the original's Duelsounds/ and Sound/ folders). Keys are
     # what GameSkin.sound() serves; game/duel/duel_audio.gd maps game
     # events to them and game/music_player.gd plays the tunes.
@@ -1627,7 +1598,6 @@ def import_videos(index: dict[str, Path], dest: Path) -> None:
 # (274x169 = 137 image + 137 mask) is one finished face, the chosen one
 # written back out. Neither is a portrait pool this can cut.
 PORTRAIT_SHEET_RAW: list[str] = ["16faces.spr", "16faceslow.spr"]
-PORTRAIT_SHEET_PNG: list[str] = ["16faces.spr.png", "16faceslow.spr.png"]
 PORTRAIT_CELL = (137, 169)
 ## The palette the character-select screen loads before the sheet, then
 ## the plain text palette that covers all but its undefined entries.
@@ -2244,54 +2214,6 @@ def _portraits_from_raw(index: dict[str, Path], out_dir: Path) -> int:
     return written
 
 
-def _portraits_from_sheet(index: dict[str, Path], out_dir: Path) -> int:
-    """Cut s30's converted `16faces.spr.png`. Returns how many.
-
-    NEEDS PILLOW, and says so rather than failing: this is the same policy
-    the videos follow with their decoder. Reading an arbitrary PNG back is
-    the one thing the standard library will not do, and a hand-rolled
-    decoder for one sheet would be a worse trade than an optional
-    dependency. The RAW path above needs no such thing.
-    """
-    source = _first_of(index, PORTRAIT_SHEET_PNG)
-    if source is None:
-        return 0
-    try:
-        from PIL import Image
-    except ImportError:
-        print("\nportraits: found %s but Pillow is not installed;"
-              " `pip install pillow` and re-run to cut it" % source.name)
-        return 0
-    try:
-        sheet = Image.open(source).convert("RGBA")
-    except Exception as err:
-        # A raw 1997 file whose name happens to end `.png` is not an
-        # image any library reads. Say which file was refused instead of
-        # ending the whole import in a traceback, which is what it did
-        # the first time a real install was handed to it (2026-09-03).
-        print("\nportraits: %s is not a readable image (%s);"
-              " point --source at a converted sheet" % (source, err))
-        return 0
-    width, height = PORTRAIT_CELL
-    count = sheet.width // width if sheet.height == height else 0
-    if count == 0:
-        print("\nportraits: %s is %dx%d, not a row of %dx%d cells"
-              % (source.name, sheet.width, sheet.height, width, height))
-        return 0
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for i in range(count):
-        cell = sheet.crop((i * width, 0, (i + 1) * width, height))
-        cell.save(out_dir / (portrait_name(i) + ".png"))
-    print("\nportraits: %d faces <- %s -> %s" % (count, source, out_dir))
-    if count < len(PORTRAIT_NAMES):
-        print("  this is a CONVERTED sheet and it is short: the 1997"
-              " `16faces.spr` holds %d faces, this one %d. Point --source"
-              " at your own install to get the rest."
-              % (len(PORTRAIT_NAMES), count))
-    return count
-
-
 def _resolve_palette(index: dict[str, Path],
                      names: list[str]) -> tuple[bytes | None, str]:
     """First readable palette in `names`, and where it came from.
@@ -2416,8 +2338,7 @@ def _player_face_from_pic(index: dict[str, Path], out_dir: Path) -> int:
     return 1
 
 
-def import_portraits(index: dict[str, Path], dest: Path,
-                     allow_conversions: bool = False) -> None:
+def import_portraits(index: dict[str, Path], dest: Path) -> None:
     """Write `<dest>/portraits/<name>.png`, one per face.
 
     THREE POOLS, and every one of them optional:
@@ -2427,32 +2348,16 @@ def import_portraits(index: dict[str, Path], dest: Path,
       * `Face.pic`, the Facemaker face — one more, and on a player's own
         install it is the one they made.
 
-    THE RAW FILES COME FIRST and the converted sheet second, which is the
-    opposite of every other step in this importer. Everywhere else a
-    converted PNG is the only thing that can be read; here the 1997 files
-    are readable with nothing but the standard library, they carry five
-    faces the conversion lost, and they are the player's own copy rather
-    than a third party's rendering of it. No path can fail the import:
-    each reports and returns.
-
-    THE CONVERTED SHEET IS BEHIND THE CONVERSION DOOR like every other
-    `*.png` conversion (see `main`): [param allow_conversions] is
-    `--allow-conversions`, the maintainer's flag. Until 2026-10-03 this
-    step cut s30's `16faces.spr.png` without it, so a player's run
-    against a reimplementation's tree came out wearing its faces.
+    THE RAW FILES ONLY. They are readable with nothing but the standard
+    library, they carry five faces a converted sheet lost, and they are
+    the player's own copy rather than a third party's rendering of it.
+    The cut of s30's converted `16faces.spr.png` that stood behind
+    `--allow-conversions` is gone with that flag (2026-10-15, the owner:
+    *"remove any s30 dependency or s30 fallback"*). No path can fail the
+    import: each reports and returns.
     """
     out_dir = dest / "portraits"
     written = _portraits_from_raw(index, out_dir)
-    if written == 0:
-        if allow_conversions:
-            written = _portraits_from_sheet(index, out_dir)
-        else:
-            sheet = _first_of(index, PORTRAIT_SHEET_PNG)
-            if sheet is not None:
-                print("\nportraits: %s is a reimplementation's CONVERTED"
-                      " sheet, not a 1997 file; it is not cut without"
-                      " --allow-conversions (THE CONVERSION DOOR)"
-                      % sheet.name)
     written += _player_face_from_pic(index, out_dir)
     written += _rogues_from_raw(index, out_dir)
     if written == 0:
@@ -2514,8 +2419,9 @@ def import_pic_screens(index: dict[str, Path], dest: Path) -> None:
 # `*.pic.png` CONVERSION, so with the conversion door shut (the ruling of
 # 2026-09-09) a 1997 disc reached 68 of 163 keys while the files it needed
 # sat unread in `Duelart/`, `Cardart/` and `Dbart/`. Every one of those
-# rows now names the RAW 1997 file FIRST, and the copy loop in [main]
-# DECODES a candidate that is not already a PNG instead of skipping it.
+# rows now names the RAW 1997 file — and since 2026-10-15 nothing else
+# (the conversions and the conversion door are gone) — and the loop in
+# [main] DECODES every texture instead of copying it.
 # One path, not ninety special cases: the row says which file, this
 # section says how to turn one into a PNG.
 #
@@ -2962,8 +2868,11 @@ def report_audio_dates(chosen: dict[str, Path]) -> None:
     anything later than 1997 is called what it is.
 
     Never fatal, never a prompt: it is the player's own copy of their own
-    game and a patched install is the normal case — Manalink is how most
-    surviving copies still run. This tells them what they have.
+    game, and an install that a later patch rewrote in place is common
+    (the owner's own `MagicTG` is one: its 66 sounds are dated 2009). The
+    files read are still the 1997 game's own folders, never a later
+    product's copies (`is_manalink_sound_copy`). This tells them what they
+    have.
     """
     sounds = {k: v for k, v in chosen.items() if is_sound_key(k)}
     if not sounds:
@@ -2981,12 +2890,12 @@ def report_audio_dates(chosen: dict[str, Path]) -> None:
                    if datetime.date.fromtimestamp(v.stat().st_mtime).year > 1997)
     if not later:
         return
-    print("  Either your copy has been patched — Manalink and the 2009")
-    print("  re-release both rewrite Duelsounds/ and Sound/ — or the source")
-    print("  is a git checkout, which keeps no original dates at all. The")
-    print("  sounds themselves are almost certainly the originals at a")
-    print("  different mastering; see Provenance.md, \"The audio\". Imported")
-    print("  either way: it is what your game plays.")
+    print("  Either a later patch rewrote Duelsounds/ and Sound/ in your")
+    print("  install, or the files were copied without their dates (a git")
+    print("  checkout keeps none). The sounds themselves are almost")
+    print("  certainly the originals at a different mastering; see")
+    print("  Provenance.md, \"The audio\". Imported either way: they are")
+    print("  what your installed game plays.")
     print("  Example: %s <- %s" % (later[0], sounds[later[0]]))
 
 
@@ -3014,13 +2923,21 @@ def default_dest() -> Path:
     return godot_user_dir() / "original_skin"
 
 
-## A candidate that is a REIMPLEMENTATION'S CONVERSION of a 1997 file
-## rather than a 1997 file: `Cardcounters.pic.png`, `16faces.spr.png`.
-## The 1997 game shipped `.pic`, `.spr`, `.bmp`, `.ttf`, `.wav`, `.csv`
-## and `.avi`; a `.png` in a manifest row is always somebody's export of
-## one of those. See THE CONVERSION DOOR in [main].
-def _is_conversion(name: str) -> bool:
-    return name.lower().endswith(".png")
+## A PNG's first eight bytes. No 1997 file is a PNG: a texture candidate
+## that opens with these is somebody else's file wearing the 1997 name —
+## every `*.pic` in a Manalink install's `Program/DBArt/` and
+## `Program/CardArt/` is one (Provenance.md) — and is never taken.
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+## A sound under `Program/DuelSounds/` or `Program/Sound/` is a Manalink 3
+## SOURCE tree's copy (a different mastering — `Provenance.md`, the audio):
+## the 1997 install keeps both folders at its top and has no `Program/`.
+## The index reaches such a copy by its two-part name and by its bare one,
+## so it is refused where it is chosen rather than left out of the rows.
+def is_manalink_sound_copy(path: Path) -> bool:
+    return (path.parent.name.lower() in ("duelsounds", "sound")
+            and path.parent.parent.name.lower() == "program")
 
 
 def main() -> int:
@@ -3033,11 +2950,6 @@ def main() -> int:
                         help="skin output directory (default: %(default)s)")
     parser.add_argument("--no-videos", action="store_true",
                         help="skip the AVI transcoding step (see VIDEOS)")
-    parser.add_argument("--allow-conversions", action="store_true",
-                        help="ALSO take already-converted PNGs of the 1997 "
-                             "art (a reimplementation's tree). Off by "
-                             "default and not a player's door — see THE "
-                             "CONVERSION DOOR")
     tool_banner.add_version_flag(parser, TOOL, __file__)
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
     # per-key report below is stdout, and mtg_assets.py reads this run's
@@ -3073,57 +2985,49 @@ def main() -> int:
     # key -> the file it actually came from, so the audio step can report
     # dates without hunting for the source a second time.
     chosen: dict[str, Path] = {}
-    refused_conversions: list[tuple[str, str]] = []
+    # Texture candidates that turned out to be PNGs wearing a 1997 name.
+    refused_png: list[tuple[str, str]] = []
+    # Sound candidates that turned out to be Manalink's `Program/` copies.
+    refused_program: list[tuple[str, str]] = []
     for key, candidates in MANIFEST.items():
+        # Texture keys become <key>.png; font/sound keys keep extensions.
+        out_name = key if key.endswith((".ttf", ".wav")) else key + ".png"
+        texture = not out_name.endswith((".ttf", ".wav"))
         source_path = None
         for name in candidates:
             source_path = index.get(name.lower())
             if source_path is None:
                 continue
-            # THE CONVERSION DOOR IS SHUT UNLESS IT IS ASKED FOR (the
-            # owner, 2026-09-09: *"our original skin/art creation tool
-            # should only use original 1997 install and NOT s30 that is
-            # reimplementation project itself"*). A `*.pic.png` or
-            # `*.spr.png` is not a file the 1997 game shipped: it is a
-            # REIMPLEMENTATION'S conversion of it, redistributed by that
-            # project, and a skin built out of one is not the player's own
-            # copy of their own game — which is the one thing this
-            # importer exists to keep true (`GameSkin`'s class doc, and
-            # `Provenance.md`'s tiers: s30 is Tier 3).
-            #
-            # It stays reachable behind `--allow-conversions` for ONE
-            # reader: the maintainer filling this checkout's gitignored
-            # `assets/original/` from a tree that has no raw file at all.
-            # Since 2026-09-09 that is a door onto almost nothing: every
-            # texture row names its RAW 1997 file FIRST and the loop below
-            # DECODES it, so the conversion is reached only when the raw
-            # one is absent from every source. `mtg_assets.py` — the
-            # player's front door — never passes it, and every key that
-            # only a conversion can serve is named in the summary, so the
-            # list of decoders still to write is the tool's own output.
-            if _is_conversion(name) and not args.allow_conversions:
-                refused_conversions.append((key, source_path.name))
+            # THE 1997 INSTALL AND NOTHING ELSE (the owner, 2026-09-09:
+            # *"our original skin/art creation tool should only use
+            # original 1997 install and NOT s30 that is reimplementation
+            # project itself"*; 2026-10-15: *"Yes remove manalink
+            # fallbacks"*, *"remove any s30 dependency or s30
+            # fallback"*). No row names a conversion or a Manalink file any
+            # more, and a texture that is a PNG under a 1997 name — a
+            # Manalink install's `Program/DBArt/*.pic` restyle, reached by
+            # its bare name — is refused here rather than copied.
+            if texture and source_path.read_bytes()[:8] == PNG_MAGIC:
+                refused_png.append((key, str(source_path)))
+                source_path = None
+                continue
+            if is_sound_key(key) and is_manalink_sound_copy(source_path):
+                refused_program.append((key, str(source_path)))
                 source_path = None
                 continue
             break
         if source_path is None:
             missing.append(key)
             continue
-        # Texture keys become <key>.png; font/sound keys keep extensions.
-        out_name = key if key.endswith((".ttf", ".wav")) else key + ".png"
         # A TEXTURE KEY MUST BE HANDED A REAL PNG, and a raw 1997 file is
         # not one: copying `Damage.pic` to `damage_marker.png` writes a
         # file the game cannot decode and the skin quietly breaks (a run
         # against a real CD produced twelve of those on 2026-09-03, and
         # the suite found it as "Not a PNG file" rather than as anything
-        # about importing). So a candidate that is not already a PNG goes
-        # to the DECODER instead — see THE RAW 1997 ART, DECODED IN PLACE.
-        # A Manalink install's `Program/DBArt/*.pic` and `CardArt/*.pic`
-        # ARE PNGs wearing a `.pic` name (Provenance.md), so they still
-        # take the copy branch, which is what keeps them working as the
-        # fallback the MANIFEST rows describe.
-        if not out_name.endswith((".ttf", ".wav")) \
-                and source_path.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
+        # about importing). So every texture goes to the DECODER — see
+        # THE RAW 1997 ART, DECODED IN PLACE; only fonts and sounds are
+        # copied as they are.
+        if texture:
             if not import_raw_texture(key, source_path, index, dest):
                 skipped_raw.append((key, source_path.name))
                 missing.append(key)
@@ -3161,12 +3065,22 @@ def main() -> int:
         print("decode; the reason is printed beside each above:")
         for key, name in skipped_raw:
             print(f"  - {key:22s} ({name})")
-    if refused_conversions:
-        only = [(k, n) for k, n in refused_conversions if k in missing]
+    if refused_png:
+        only = [(k, n) for k, n in refused_png if k in missing]
         if only:
-            print(f"{len(only)} of them are here ONLY as a reimplementation's")
-            print("converted PNG, which this tool does not import from; each")
-            print("one is a raw 1997 decoder still to write:")
+            print(f"{len(only)} of them are here only as a PNG under a 1997")
+            print("name — a later restyle (Manalink's), not the 1997 file —")
+            print("which this tool does not import:")
+            for key, name in only[:8]:
+                print(f"  - {key:22s} ({name})")
+            if len(only) > 8:
+                print(f"  ... and {len(only) - 8} more")
+    if refused_program:
+        only = [(k, n) for k, n in refused_program if k in missing]
+        if only:
+            print(f"{len(only)} of them are here only as Manalink's copy under")
+            print("Program/, not the 1997 game's own folder, which this tool")
+            print("does not import:")
             for key, name in only[:8]:
                 print(f"  - {key:22s} ({name})")
             if len(only) > 8:
@@ -3185,7 +3099,7 @@ def main() -> int:
     # The portraits are their own step for the same reason: sheets and
     # `.pic`s cut rather than copied, and skippable without failing the
     # import.
-    import_portraits(index, dest, args.allow_conversions)
+    import_portraits(index, dest)
     # Raw `.pic` screens, decoded rather than copied — see PIC_SCREENS.
     import_pic_screens(index, dest)
     return 0

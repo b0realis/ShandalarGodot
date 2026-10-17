@@ -76,6 +76,30 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The skin off the 1997 install alone; our dagger and our body face (2026-10-15)
+
+- `game/skin.gd`: `font("font_body")` is Spectral for every player, on a
+  trimmed line box (`BODY_TRIM_TOP`/`BODY_TRIM_BOTTOM`, `_tightened`); a
+  skin's `font_body.ttf` is not read. `emboldened(face, amount)` for the
+  bold cuts in `game/duel/duel_log.gd` and
+  `game/deck_builder/deck_builder_screen.gd`.
+- `game/duel/mini_card.gd`: `ALWAYS_OURS` — `masked_sprite` answers the
+  dagger with `game/art/damage_marker.png` whatever the skin holds.
+- `tools/import_original.py`: the 1997 install only — no Manalink and no
+  s30 candidate, no `font_body` key; see its tree row.
+- `tests/ui/test_skin.gd`, `tests/ui/test_card_preview.gd`: the dagger and
+  the body face are ours with a skin present; the 1997 advance holds on
+  the body face. `tools/test_import_original.py`,
+  `tools/test_skin_catalogue.py`; `docs/skin-catalogue.txt` regenerated.
+- The 2026-10-17 bug pass over these: `import_original.py`'s
+  `is_manalink_sound_copy` (a `Program/` sound copy reached by name is
+  refused), `mtg_assets.py`'s `RETIRED` (a skin zip leaves a stale
+  `font_body.ttf` out) and its "the title font" landmark; tests in
+  `tools/test_import_original.py` (`TestTheSkinIsBuiltOffTheDiscAlone`) and
+  `tools/test_mtg_assets.py` (`TestWriteZip`). `README.md` says the
+  original skin needs only the 1997 game, and that every font the game
+  ships is under the OFL.
+
 ## The reader's Text toggle; Stronghold and Exodus redrawn (2026-10-10)
 
 - `game/duel/fullscreen_card.gd`: the full-screen card reader's own
@@ -2561,6 +2585,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.26.md`: one text face for every player (Spectral),
+  the game's own dagger, the skin from the 1997 game alone and the card
+  reader on by default, carrying the 0.50.25 … 0.50.20 notes below them.
 - `docs/releases/0.50.25.md`: small fixes, carrying the 0.50.24, 0.50.23,
   0.50.22, 0.50.21 and 0.50.20 notes below them.
 - `docs/releases/0.50.24.md`: small fixes, carrying the 0.50.23, 0.50.22,
@@ -6096,7 +6123,7 @@ shandalar/
 │   ├── mtg_assets.py       THE PLAYER'S FRONT DOOR to the art (2026-09-04).
 │   │                          Three jobs in one script: say what kind of
 │   │                          1997 install is needed, --check one and
-│   │                          report on EIGHT groups of files separately
+│   │                          report on NINE groups of files separately
 │   │                          — every landmark a RAW 1997 name, on
 │   │                          purpose (the owner, 2026-09-09: the tool
 │   │                          imports from the player's own 1997 install
@@ -6104,7 +6131,9 @@ shandalar/
 │   │                          art), so a tree of .pic.png is not an
 │   │                          install here and --install refuses it;
 │   │                          "the counter stones" is its own group, the
-│   │                          one row the importer decodes,
+│   │                          one row the importer decodes, and "the
+│   │                          title font" names only Magim___.ttf, the
+│   │                          one face imported (2026-10-17),
 │   │                          and --install it into ONE zip whose inner
 │   │                          folder is `skin/` so it unpacks beside the
 │   │                          binary with no path to type. --from-skin
@@ -6112,7 +6141,11 @@ shandalar/
 │   │                          shandalar-art-1997.zip was built);
 │   │                          --from-cardart archives a folder of card
 │   │                          pictures under skin/cardart/ as the
-│   │                          separate cardart.zip (2026-09-08). Wraps
+│   │                          separate cardart.zip (2026-09-08). A skin
+│   │                          archive leaves RETIRED names out
+│   │                          (font_body.ttf, 2026-10-17), so a folder
+│   │                          imported before the body face became ours
+│   │                          does not carry MPlantin on. Wraps
 │   │                          import_original.py, which must sit beside
 │   │                          it; reads the install, never writes to it.
 │   ├── test_mtg_assets.py   unittest (TestLandmarks, 2026-09-09: what
@@ -6201,9 +6234,10 @@ shandalar/
 │   │                          nothing, and before the summary counts.
 │   │                          THE RAW 1997 ART, DECODED IN PLACE
 │   │                          (2026-09-09): every texture MANIFEST row
-│   │                          names its raw .pic/.spr FIRST and main's
-│   │                          copy loop hands a non-PNG candidate to
-│   │                          import_raw_texture — own M0 palette →
+│   │                          names its raw .pic/.spr (since 2026-10-15
+│   │                          nothing else) and main's copy loop hands
+│   │                          every texture to import_raw_texture — own
+│   │                          M0 palette →
 │   │                          opaque RGB, bare indices → Duelpalall.tr
 │   │                          with index 255 clear, .spr sheets →
 │   │                          Todpal.tr. That one path replaced
@@ -6221,18 +6255,17 @@ shandalar/
 │   │                          reference's early break, which is what
 │   │                          finally reads the ten adventure .spr files
 │   │                          whose last frame ends FF CD CD.
-│   │                          THE CONVERSION DOOR (2026-09-09): a
-│   │                          candidate ending .png is a reimplementation's
-│   │                          export of a 1997 file, not a 1997 file, and
-│   │                          is refused unless --allow-conversions is
-│   │                          passed — the maintainer's door for filling
-│   │                          the gitignored assets/original/ while a raw
-│   │                          decoder is written, which mtg_assets.py
-│   │                          never passes. 68/163 keys from a 1997 disc
-│   │                          + Manalink today; the summary NAMES the 84
-│   │                          that only a conversion can serve, which is
-│   │                          the list of decoders still to write.
-│   │                          the extension.
+│   │                          THE 1997 INSTALL ONLY (2026-10-15): no
+│   │                          conversion (.png) and no Manalink candidate
+│   │                          anywhere (TestTheSkinIsBuiltOffTheDiscAlone),
+│   │                          --allow-conversions gone, PNG_MAGIC refuses
+│   │                          a PNG under a 1997 name, and no font_body
+│   │                          key (the body face is the game's Spectral).
+│   │                          is_manalink_sound_copy refuses a sound
+│   │                          under Program/DuelSounds/ or Program/Sound/
+│   │                          that the index reaches by its two-part or
+│   │                          bare name (2026-10-17 bug pass).
+│   │                          The owner's MagicTG alone gives 164/164.
 │   │                          IT ALSO DECODES BOTH 1997 ART FORMATS with
 │   │                          the standard library: decode_spr (.SPR) and,
 │   │                          since 2026-09-03, decode_pic (.PIC — LZW
@@ -9891,9 +9924,17 @@ shandalar/
 │   │                          inside a pack there is no filesystem path —
 │   │                          and NOT cleared by clear_caches: a skin
 │   │                          arriving cannot change what this project
-│   │                          ships. An imported face still wins outright;
-│   │                          the ORDER is pinned in both states of the
-│   │                          world by tests/ui/test_skin.gd.
+│   │                          ships. SINCE 2026-10-15 OURS, NOT A FLOOR,
+│   │                          for the dagger (MiniCard.ALWAYS_OURS) and
+│   │                          font_body: font() answers a key in
+│   │                          OUR_FONTS with _tightened(our_font) — a
+│   │                          FontVariation BODY_TRIM_TOP/BOTTOM (3 px
+│   │                          each) off Spectral's 1.6 em line box — and
+│   │                          never reads a skin's font_body.ttf;
+│   │                          emboldened(face, amount) copies a
+│   │                          variation so a bold cut keeps the trim.
+│   │                          font_title is still the skin's. Pinned by
+│   │                          tests/ui/test_skin.gd.
 │   │                          card_art (and card_scan through it)
 │   │                          GENERATES MIPMAPS since 2026-09-04: a
 │   │                          ~582x467 Scryfall crop drawn at ~110px is a
@@ -11125,7 +11166,8 @@ shandalar/
 │       │                      player's own (it was a static plate in a
 │       │                      row of the opponent's half, title_plate(),
 │       │                      the fortieth pass — retired).
-│       ├── fullscreen_card.gd class FullscreenCard — [QoL] off-by-default
+│       ├── fullscreen_card.gd class FullscreenCard — [QoL] on-by-default
+│       │                      (since 0.50.26; off before)
 │       │                      full-screen reader attached only to the
 │       │                      duel/editor showcase. Reuses CardPreview,
 │       │                      preserves printing and sidebar geometry,

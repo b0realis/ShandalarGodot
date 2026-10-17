@@ -179,7 +179,10 @@ static func runs(text: String) -> Array:
 ## box makes the shaper give the line more room, which would cost the
 ## six-line rules box a line the moment a card mentioned `{T}`. At 75% of
 ## the line box nothing grows on any face this project ships, and the loop
-## is the guarantee that a skin with a different face cannot change that.
+## is the guarantee that a different face cannot change that. (Since
+## 2026-10-15 no skin changes the body face at all — it is our Spectral for
+## every player, [method GameSkin.font] — so the loop guards the face
+## itself, and any face a later change brings.)
 static func symbol_metrics(font: Font, font_size: int) -> Array:
 	var key := "%d:%d" % [font.get_instance_id(), font_size]
 	if _metrics_cache.has(key):

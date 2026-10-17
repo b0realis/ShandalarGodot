@@ -29,38 +29,44 @@ func test_original_fonts_load() -> void:
 		pass_test("no original skin imported — nothing to load")
 		return
 	assert_not_null(GameSkin.font("font_title"), "MagicMedieval")
-	assert_not_null(GameSkin.font("font_body"), "MPlantin")
+	assert_not_null(GameSkin.font("font_body"), "Spectral, ours")
 
 
 # ------------------------------------------------------- the order of faces --
-# THE FALLBACK CHAIN, 2026-09-09: the player's imported skin, then a
-# development checkout's `assets/original`, then the face this project
-# ships (`GameSkin.our_font`, `game/art/fonts/`), then Godot's own
-# default. Ours is a FLOOR and not a preference — an imported MPlantin
-# must still win outright, because it is what a player who went and found
-# their own copy of the 1997 game came for.
-#
-# Both states of the world are one test: the machine either has a
-# `font_body.ttf` in a skin directory or it does not, and the chain says
-# something different and checkable in each case. Nothing here is skipped
-# on either kind of machine.
+# THE BODY FACE IS OURS FOR EVERY PLAYER (the owner, 2026-10-15: *"Spectral,
+# with the dialog spacing tightened for everyone!! It is an open source
+# font. Thats is very important."*). Until then ours was a floor under an
+# imported face, and which face a skinned player read depended on where
+# the skin was built. A key we ship a face for never reads the skin now;
+# `font_title`, which we ship none for, still does.
 
-func test_an_imported_face_beats_ours_and_ours_beats_godots_default() -> void:
+func test_the_body_face_is_ours_even_when_a_skin_has_one() -> void:
 	var ours := GameSkin.our_font("font_body")
-	assert_not_null(ours, "the floor is in the checkout on every machine")
+	assert_not_null(ours, "the face is in the checkout on every machine")
 	var chosen := GameSkin.font("font_body")
-	assert_not_null(chosen,
-		"font_body can no longer come back empty — that is what the floor "
-		+ "is for")
-	if GameSkin._find("font_body.ttf") != "":
-		assert_ne(chosen, ours,
-			"a skin supplies font_body and it must be what renders")
-		assert_ne(chosen.get_font_name(), "Spectral",
-			"the imported face, not the shipped one")
-	else:
-		assert_eq(chosen, ours,
-			"nothing imported: the shipped face is what renders")
+	assert_true(chosen is FontVariation, "our face, on its trimmed line box")
+	if chosen is FontVariation:
+		assert_eq((chosen as FontVariation).base_font, ours,
+			"Spectral whatever a skin holds (font_body.ttf in one: %s)"
+				% (GameSkin._find("font_body.ttf") != ""))
 		assert_eq(chosen.get_font_name(), "Spectral")
+
+
+func test_the_body_face_is_trimmed_and_a_bold_cut_keeps_the_trim() -> void:
+	var chosen := GameSkin.font("font_body")
+	var ours := GameSkin.our_font("font_body")
+	for size in [12, 13, 14, 18]:
+		assert_eq(chosen.get_height(size), ours.get_height(size)
+			- GameSkin.BODY_TRIM_TOP - GameSkin.BODY_TRIM_BOTTOM,
+			"%d px: the box, %d px off it" % [size,
+				GameSkin.BODY_TRIM_TOP + GameSkin.BODY_TRIM_BOTTOM])
+		assert_gt(chosen.get_descent(size), 0.0, "the descenders keep room")
+	var bold := GameSkin.emboldened(chosen, 0.6)
+	assert_eq(bold.get_height(13), chosen.get_height(13),
+		"a variation OVER the trimmed one would stand untrimmed")
+	assert_almost_eq((bold as FontVariation).variation_embolden, 0.6, 0.0001)
+	assert_eq(chosen.variation_embolden if chosen is FontVariation else 0.0, 0.0,
+		"and the shared face itself is never emboldened")
 
 
 func test_the_floor_answers_only_the_keys_it_has_a_face_for() -> void:
@@ -84,7 +90,7 @@ func test_a_skin_arriving_re_resolves_the_face_but_not_ours() -> void:
 	GameSkin.clear_caches()
 	assert_eq(GameSkin.our_font("font_body"), before,
 		"a skin arriving cannot change what this project ships")
-	assert_not_null(GameSkin.font("font_body"), "and the floor is still there")
+	assert_not_null(GameSkin.font("font_body"), "and ours is still there")
 
 
 func test_cached_lookups_are_stable() -> void:
@@ -296,7 +302,10 @@ func test_every_imported_set_icon_loses_its_ground() -> void:
 # through [method GameSkin.our_art]. They sit BETWEEN the two states this
 # file already tests: after every skin directory (an imported 1997 file
 # still wins) and before the code-drawn fallback (a machine with no skin
-# is no longer left with nothing). These tests pin that sandwich.
+# is no longer left with nothing). These tests pin that sandwich — for
+# every key EXCEPT the set glyphs (2026-09-10, [method GameSkin.set_icon])
+# and the dagger (2026-10-15, [constant MiniCard.ALWAYS_OURS]), which are
+# ours for every player: a skin's file under those names is not read.
 
 ## Every key `game/art/` answers, and the size each file is authored at.
 const OURS := {
@@ -368,19 +377,28 @@ func _planted(key: String, call: Callable) -> Vector2i:
 	return size
 
 
-func test_an_imported_skin_beats_ours() -> void:
-	# The rule for every picture this project ships: ours is a FLOOR, and
-	# a file the player imported stands on top of it. The dagger arrives
-	# through [method MiniCard.masked_sprite], which SPLITS a 1997 sprite
-	# into its image and mask halves — so a planted 9x9 comes back 4x9,
-	# and that halving is itself the proof the imported file is what was
-	# read (ours is 64x40 and carries real alpha, so it is never split).
+## THE DAGGER IS OURS EVEN WHEN A SKIN HAS ONE (the owner, 2026-10-15:
+## *"we build our own damage dagger just to be independent"*), as the set
+## symbol below is. It arrives through [method MiniCard.masked_sprite],
+## which SPLITS a skin's sprite into its image and mask halves — so a
+## planted 9x9 would come back 4x9; ours is 64x40 with real alpha.
+func test_the_dagger_is_ours_even_when_a_skin_has_one() -> void:
 	assert_eq(_planted("damage_marker",
 		func() -> Texture2D: return MiniCard.damage_marker_texture()),
+		Vector2i(64, 40), "ours, at the size draw_our_art.gd writes")
+
+
+func test_another_sprite_still_takes_the_skins_file() -> void:
+	# Only [constant MiniCard.ALWAYS_OURS] skips the skin: every other
+	# image+mask sprite is the imported file, halved by the mask split.
+	assert_eq(MiniCard.ALWAYS_OURS, ["damage_marker"])
+	assert_eq(_planted("summon_sick",
+		func() -> Texture2D: return MiniCard.sick_spiral_texture()),
 		Vector2i(4, 9), "the skin's own file, halved by the mask split")
 
 
-## THE SET SYMBOL IS THE ONE EXCEPTION, and it is deliberate (the owner,
+## THE SET SYMBOL WAS THE FIRST EXCEPTION (the dagger above joined it on
+## 2026-10-15), and it is deliberate (the owner,
 ## 2026-09-10: *"Lets always use our own designed glyphs and thats it for
 ## all players. Simplest."*). The enlarged card's symbol box is 14x17
 ## PIXELS and the three possible sources read very differently there —
@@ -417,12 +435,13 @@ func test_ours_stands_when_no_skin_has_the_key() -> void:
 func test_the_dagger_reaches_the_card_with_no_skin_at_all() -> void:
 	# [method MiniCard.masked_sprite] is the one accessor every dagger on
 	# the table goes through, and until 2026-09-09 it simply returned null
-	# with no skin, so a wounded creature wore a number and no mark.
-	if GameSkin.texture("damage_marker") != null:
-		pass_test("a skin on this machine supplies the dagger")
-		return
+	# with no skin, so a wounded creature wore a number and no mark. Ours
+	# on every machine now, whatever this one has imported.
 	MiniCard._masked_cache.clear()
-	assert_not_null(MiniCard.damage_marker_texture(), "ours stands in")
+	var tex := MiniCard.damage_marker_texture()
+	assert_not_null(tex, "ours, skin or none")
+	if tex != null:
+		assert_eq(Vector2i(tex.get_width(), tex.get_height()), Vector2i(64, 40))
 
 
 func test_a_key_with_no_drawing_anywhere_is_still_quietly_null() -> void:

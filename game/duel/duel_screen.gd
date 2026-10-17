@@ -11316,9 +11316,10 @@ func _build_ui() -> void:
 	_audio = DuelAudio.new()
 	add_child(_audio)
 
-	# (The original body font — MPlantin, the card face of the era — is
-	# applied by OriginalDialog.label, the one place the bar's voice and
-	# every dialog's reading surface are defined.)
+	# (The body face — our Spectral for every player since 2026-10-15,
+	# in place of MPlantin, the card face of the era — is applied by
+	# OriginalDialog.label, the one place the bar's voice and every
+	# dialog's reading surface are defined.)
 
 
 

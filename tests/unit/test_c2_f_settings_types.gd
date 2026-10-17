@@ -64,7 +64,7 @@ func test_switches_read_the_words_a_hand_types() -> void:
 	assert_eq(Settings.fullscreen(), true)
 	assert_eq(Settings.power_saver(), false, "0 is off")
 	assert_eq(typeof(Settings.fullscreen_cards()), TYPE_BOOL)
-	assert_eq(Settings.fullscreen_cards(), Settings.default_for("fullscreen_cards", false),
+	assert_eq(Settings.fullscreen_cards(), Settings.default_for("fullscreen_cards", true),
 		"a word that is neither: the default")
 
 

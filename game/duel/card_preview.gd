@@ -184,15 +184,17 @@ const PT_RATIO := 72.0 / 1152.0
 ## and it worked for exactly one reason: the faces the original names have
 ## a line box of ONE EM, so the cell the table asks for and the letter that
 ## lands in it are the same number. `assets/original/font_body.ttf`
-## (MPlantin, the face the rules text is set in) measures a 1.000 em box at
-## 400 ppem, and so does exactly ONE of the twenty-two free serif faces
-## surveyed on 2026-09-09 (Newsreader). Every other modern OFL face bakes
-## 10-65% of leading INTO that box — Spectral 1.53 em, Charis SIL 1.64 — so
-## the same cell buys a much smaller letter, and the old fit handed the
-## substitute a size that was not small by opinion but by arithmetic: on
-## Rock Hydra, MPlantin sets at 10 px with a 4.5 px x-height where Charis
-## SIL sets at 7 px with 3.4. Whichever face this project ends up shipping
-## would have paid that tax.
+## (MPlantin, the face the rules text was set in until 2026-10-15 — it is
+## our Spectral for every player now, [method GameSkin.font], and
+## MPlantin's letter is only the reference Spectral is fitted to)
+## measures a 1.000 em box at 400 ppem, and so does exactly ONE of the
+## twenty-two free serif faces surveyed on 2026-09-09 (Newsreader). Every
+## other modern OFL face bakes 10-65% of leading INTO that box — Spectral
+## 1.53 em, Charis SIL 1.64 — so the same cell buys a much smaller
+## letter, and the old fit handed the substitute a size that was not small
+## by opinion but by arithmetic: on Rock Hydra, MPlantin sets at 10 px
+## with a 4.5 px x-height where Charis SIL sets at 7 px with 3.4.
+## Whichever face this project ends up shipping would have paid that tax.
 ##
 ## So the SIZE is picked by the letter and the LEADING is set separately
 ## ([method _rules_leading]). x-height and not cap-height: it is what the
@@ -204,8 +206,9 @@ const PT_RATIO := 72.0 / 1152.0
 ## table: the letter each element wears today is the one that was looked at
 ## and kept (2026-09-04, "the legible body face"), and the fix must not
 ## move it by a pixel. Each ratio above is therefore resolved ONCE against
-## the face the project ships, and the x-height that lands there is the
-## constant every substitute is fitted to:
+## the faces the card was set in then (MPlantin for the body), and the
+## x-height that lands there is the constant every substitute — Spectral
+## included — is fitted to:
 ##
 ## | element | 1997 cell | face | its box | size today | x-height | / 428 |
 ## |---|---|---|---|---|---|---|
@@ -222,7 +225,9 @@ const PT_RATIO := 72.0 / 1152.0
 ##
 ## The two x-heights are what [method _x_height] reads off the shipped
 ## faces' own outlines, by the SAME measurement it makes of a substitute,
-## so the pair cancels exactly and the shipped card cannot move. Their true
+## so the pair cancels exactly and the shipped card cannot move. (That
+## holds for the title face still; the body one is MPlantin's, kept as the
+## reference since Spectral took the rules text on 2026-10-15.) Their true
 ## values, taken with FreeType at 400 ppem, are 0.450 and 0.405; the third
 ## decimal here is Godot's grid fitting, and it belongs in the constant
 ## because it is in the measurement.
