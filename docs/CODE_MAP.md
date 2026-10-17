@@ -76,6 +76,23 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The hi-res skin is the 1997 skin's own files (2026-10-17)
+
+- `tools/upscale_skin.py`: the hi-res skin is the SAME file set as the
+  1997 skin it is made from, every picture replaced at twice the size
+  under its own name (no `@2x` copies, no 1x duplicates, no catalogue;
+  the provenance is the zip's comment); the pictures whose keys or
+  measures an upscaler's blend would move are made to average back to
+  their 1997 pixels block by block (the whole picture, or a territory's
+  edge ring); `--reuse` takes a 0.50.28 zip's copies only where they
+  match their picture; `--out` refuses the 1997 folder itself.
+  `tools/skin_catalogue.py`: `--check` no longer lists keyed places of
+  a skin without 1x files; the preamble says how they are cut.
+- `game/skin.gd`: the docs of THE @2x NAME, THE 2x PICTURES and
+  `original` say so; the catalogue's BOM is an escape, not a character.
+- Tests: `tests/ui/test_skin_2x_2026_10_17.gd` (+1: a 2x picture under
+  its own name); `tools/test_upscale_skin.py`, `tools/test_skin_catalogue.py`.
+
 ## A skin is a skin: the catalogue and the hi-res skin (2026-10-17)
 
 - `game/skin.gd`: THE CATALOGUE — `CATALOGUE` (`catalogue.txt`),
@@ -2704,6 +2721,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.31.md`: the hi-res skin as the 1997 skin's own
+  files at twice the size, mixing, one skin at a time, carrying the
+  0.50.27 … 0.50.20 notes below them (0.50.28-0.50.30 folded into it).
 - `docs/releases/0.50.30.md`: the hi-res skin, mixing through a skin's
   catalogue, one skin at a time, carrying the 0.50.27 … 0.50.20 notes
   below them (0.50.28's and 0.50.29's are folded into it).
@@ -6354,12 +6374,13 @@ shandalar/
 │   │                          the committed table, row for row
 │   ├── upscale_skin.py      THE 2x SKIN (2026-10-17) — a player's 1997
 │   │                          skin (folder or skin zip) to a WHOLE hi-res
-│   │                          skin: every 1997 file, each picture's
-│   │                          <key>@2x.png beside it, catalogue.txt naming
-│   │                          them, in original_skin_realesrgan-anime_
-│   │                          2x.zip or --out a folder (in place when it
-│   │                          is the skin's own); --reuse takes a 0.50.28
-│   │                          zip's copies instead of upscaling again.
+│   │                          skin: the same files under the same names,
+│   │                          every picture at twice the size, in
+│   │                          original_skin_realesrgan-anime_2x.zip or
+│   │                          --out another folder; the keyed pictures
+│   │                          average back to their 1997 pixels exactly;
+│   │                          --reuse takes a 0.50.28 zip's copies where
+│   │                          they match instead of upscaling again.
 │   │                          Real-ESRGAN ncnn-vulkan's realesrgan-x4plus-
 │   │                          anime at 4x, brought down to 2x, then
 │   │                          colour_fix: model + blur(1997) - blur(model)
@@ -6381,9 +6402,10 @@ shandalar/
 │   │                          alone, wrap and edge padding, the bleed,
 │   │                          the colour fix, on/off alpha, the zip (and
 │   │                          check_skin), a zip input, the same bytes
-│   │                          twice, --out (and in place), --reuse, the
-│   │                          catalogue it writes, the label
-│   │                          refused, a failing engine, the checksum
+│   │                          twice, --out (never over the 1997 folder),
+│   │                          --reuse, the key-exact pictures, the
+│   │                          label refused, a failing engine, the
+│   │                          checksum
 │   ├── import_original.py   1997 skin importer: copies original art/fonts
 │   │                          from the USER'S OWN game copy into
 │   │                          assets/original/ (gitignored) per its

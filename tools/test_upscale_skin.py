@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Self-test for tools/upscale_skin.py — the 2x skin. No network, no GPU.
+"""Self-test for tools/upscale_skin.py — the hi-res skin. No network, no GPU.
 
 A STAND-IN ENGINE (FAKE_ENGINE) does to a folder what realesrgan-ncnn-vulkan
 does — every picture four times the size — and pushes the red up by 40
 the way the anime model pushes colour, so everything AROUND the model is
 proved here: what is upscaled and what is left alone, the padding and the
 bleed, the colour fix bringing the 1997 colour back, the on/off
-transparency, the complete skin it writes (every 1997 file as it was, the
-`@2x` pictures beside them, the catalogue that wears them), reusing a 2x
-zip already built, the zip, the Manalink label and the engine's checksum. Whether the model's pictures LOOK right
+transparency, the hi-res skin it writes (the same files as the 1997 skin,
+under the same names, every picture at twice the size, how it was made
+in the zip's comment), the key-exact places, reusing 2x copies already
+made — and refusing a copy of another picture — the Manalink label and
+the engine's checksum. Whether the model's pictures LOOK right
 is the owner's eye on a real run, not a test.
 
 Run from the repo root:
@@ -65,6 +67,30 @@ def solid(size, colour, mode="RGB"):
     return Image.new(mode, size, colour)
 
 
+def doubled(picture, tint=0):
+    """[param picture] with every pixel doubled — a 2x copy of it — its
+    blue moved by [param tint], so a reused copy is known by its bytes
+    while still being a copy of the same picture."""
+    big = picture.resize((picture.width * 2, picture.height * 2), Image.NEAREST)
+    if tint:
+        bands = list(big.split())
+        bands[2] = bands[2].point(lambda v: min(255, v + tint))
+        big = Image.merge(big.mode, bands)
+    return big
+
+
+def block_sums(big, small):
+    """For every 1997 pixel of [param small]: (x, y, its RGBA, the sums of
+    its 2x2 block's R, G and B in [param big], the block's alphas)."""
+    b = big.convert("RGBA").load()
+    p = small.convert("RGBA").load()
+    for y in range(small.height):
+        for x in range(small.width):
+            cells = [b[2 * x + i, 2 * y + j] for j in (0, 1) for i in (0, 1)]
+            yield (x, y, p[x, y], [sum(c[k] for c in cells) for k in range(3)],
+                   [c[3] for c in cells])
+
+
 @unittest.skipIf(Image is None, "Pillow is not installed")
 class PictureTest(unittest.TestCase):
     """The steps around the model, one at a time."""
@@ -81,9 +107,8 @@ class PictureTest(unittest.TestCase):
                          "title.png.import"):
                 (skin / name).write_bytes(b"x")
             self.assertEqual(up.pictures(skin), ["title", "portraits/face"])
-            self.assertEqual(up.places(skin), ["coin_toss_heads", "title", "portraits/face"])
 
-    def test_every_file_rides_along_but_card_pictures_and_old_copies(self):
+    def test_every_file_rides_along_but_card_pictures_and_old_leftovers(self):
         with tempfile.TemporaryDirectory() as tmp:
             skin = Path(tmp)
             for name in ("title.png", "title.png.import", "title@2x.png",
@@ -171,25 +196,85 @@ class PictureTest(unittest.TestCase):
         self.assertEqual(up.upscaled_name("title_background"), "title_background@2x.png")
         self.assertEqual(up.upscaled_name("portraits/agnosia"), "portraits/agnosia@2x.png")
         self.assertEqual(up.ZIP_NAME, "original_skin_realesrgan-anime_2x.zip")
-        self.assertEqual(up.CATALOGUE, "catalogue.txt")
 
-    def test_the_catalogue_wears_the_2x_pictures_and_names_the_rest(self):
-        text = up.catalogue(["title", "coin_toss_heads", "portraits/face"],
-                            ["title", "portraits/face"])
-        self.assertTrue(text.startswith("# THE CATALOGUE"))
-        self.assertIn("#     duelist_face_red.png = duelist_face_red.png\n", text)
-        self.assertIn("Deleting the line is not the same", text)
-        entries = [line for line in text.splitlines()
-                   if line and not line.startswith("#")]
-        self.assertEqual(entries, ["coin_toss_heads.png = coin_toss_heads.png",
-                                   "portraits/face.png = portraits/face@2x.png",
-                                   "title.png = title@2x.png"])
-        # The game's own reading of it (skin_catalogue.read_catalogue
-        # follows game/skin.gd): every place, the comments nothing.
-        self.assertEqual(skin_catalogue.read_catalogue(text), {
-            "coin_toss_heads.png": "coin_toss_heads.png",
-            "portraits/face.png": "portraits/face@2x.png",
-            "title.png": "title@2x.png"})
+    # ------------------------------------------------- key-exact places --
+
+    def test_which_places_are_made_key_exact(self):
+        self.assertEqual(up.exactness("mana_stripes"), "whole")
+        self.assertEqual(up.exactness("card_set_symbols"), "whole")
+        self.assertEqual(up.exactness("target_cursor"), "whole")
+        self.assertEqual(up.exactness("grave_panel_green"), "whole")
+        for family in ("duel_pattern_red", "duel_picture_blue", "duel_mana_white"):
+            self.assertEqual(up.exactness(family), "ring", family)
+        for name in ("card_back", "summon_sick", "combat_bar", "card_counters",
+                     "duel_mana", "portraits/grave_panel_x"):
+            self.assertIsNone(up.exactness(name), name)
+
+    def scrambled(self, size, seed):
+        """A picture of every colour a block can need: random levels,
+        black and white among them, alpha on and off."""
+        import random
+        rnd = random.Random(seed)
+        picture = Image.new("RGBA", size)
+        levels = (0, 0, 1, 2, 127, 253, 254, 255, 255)
+        for y in range(size[1]):
+            for x in range(size[0]):
+                picture.putpixel((x, y), tuple(rnd.choice(levels) if rnd.random() < 0.5
+                                               else rnd.randrange(256) for _ in range(3))
+                                 + (rnd.choice((0, 255)),))
+        return picture
+
+    def test_a_whole_key_exact_picture_averages_back_to_1997_exactly(self):
+        small = self.scrambled((13, 9), 1)
+        big = self.scrambled((26, 18), 2)    # the model: anything at all
+        exact = up.key_exact(big, small, ring=False)
+        for x, y, want, sums, alphas in block_sums(exact, small):
+            self.assertEqual(sums, [4 * want[0], 4 * want[1], 4 * want[2]], (x, y))
+            self.assertEqual(alphas, [want[3]] * 4, (x, y))
+        # What the game does with it (shrink_x2: (a+b+c+d+2)>>2 a channel)
+        # gives back the 1997 picture to the level; Pillow's reduce agrees.
+        self.assertEqual(up.back_to_1x(exact).tobytes(), small.tobytes())
+
+    def test_a_ring_makes_the_edge_exact_and_leaves_the_middle(self):
+        small = self.scrambled((8, 6), 3)
+        big = self.scrambled((16, 12), 4)
+        exact = up.key_exact(big, small, ring=True)
+        for x, y, want, sums, alphas in block_sums(exact, small):
+            edge = x in (0, 7) or y in (0, 5)
+            if edge:
+                self.assertEqual(sums, [4 * want[0], 4 * want[1], 4 * want[2]], (x, y))
+            else:
+                for i in (0, 1):
+                    for j in (0, 1):
+                        self.assertEqual(exact.getpixel((2 * x + i, 2 * y + j)),
+                                         big.getpixel((2 * x + i, 2 * y + j)), (x, y))
+
+    def test_an_opaque_picture_stays_rgb(self):
+        small = Image.new("RGB", (3, 3), (0, 128, 255))
+        big = Image.new("RGB", (6, 6), (40, 120, 200))
+        exact = up.key_exact(big, small, ring=False)
+        self.assertEqual(exact.mode, "RGB")
+        self.assertEqual(up.back_to_1x(exact).tobytes(), small.tobytes())
+
+    def test_a_spread_stays_within_a_level_s_range(self):
+        for start, total in (([255] * 4, 0), ([0] * 4, 1020), ([250, 0, 3, 255], 1019),
+                             ([10, 10, 10, 10], 41), ([255, 255, 0, 0], 2)):
+            block = [[v, 0, 0] for v in start]
+            up._spread(block, 0, total)
+            self.assertEqual(sum(px[0] for px in block), total, (start, total))
+            self.assertTrue(all(0 <= px[0] <= 255 for px in block))
+
+    # ---------------------------------------------------------- reuse --
+
+    def test_a_copy_of_the_same_picture_is_near_and_another_far(self):
+        picture = Image.new("RGB", (20, 12), (90, 70, 50))
+        picture.paste((200, 40, 40), (0, 0, 10, 12))
+        near = up.difference(doubled(picture, tint=3), picture)
+        self.assertLess(near[0], up.REUSE_MATCH)
+        self.assertEqual(near[1], 0.0)
+        other = Image.new("RGB", (20, 12), (90, 70, 50))
+        other.paste((40, 40, 200), (10, 0, 20, 12))
+        self.assertGreater(up.difference(doubled(other), picture)[0], up.REUSE_MATCH)
 
 
 @unittest.skipIf(Image is None, "Pillow is not installed")
@@ -206,22 +291,32 @@ class RunTest(unittest.TestCase):
         self.engine.chmod(0o755)
         self.skin = self.tmp / "skin"
         (self.skin / "portraits").mkdir(parents=True)
-        # An opaque painting, a cut-out over hidden black, a portrait with
-        # the same, a repeated tile, and what is never upscaled.
+        # An opaque painting, a cut-out over hidden black (key-exact, the
+        # cursor) and the same as a portrait (not), a repeated tile, a
+        # territory (its edge ring key-exact), and what is never upscaled.
         Image.new("RGB", (30, 20), (90, 70, 50)).save(self.skin / "title_background.png")
         cut = Image.new("RGBA", (16, 12), (0, 0, 0, 0))
         cut.paste((180, 160, 40, 255), (4, 2, 12, 10))
         cut.save(self.skin / "target_cursor.png")
         cut.save(self.skin / "portraits" / "agnosia.png")
         Image.new("RGBA", (8, 8), (60, 80, 60, 255)).save(self.skin / "deck_tile_olive.png")
+        ground = Image.new("RGB", (12, 10), (0, 0, 0))
+        ground.paste((150, 30, 30), (1, 1, 11, 9))
+        ground.save(self.skin / "duel_mana_red.png")
         Image.new("RGB", (8, 8), (1, 1, 1)).save(self.skin / "coin_toss_heads.png")
         (self.skin / "coin_toss_heads.json").write_text('{"cols": 1}')
         (self.skin / "sfx_draw.wav").write_bytes(b"RIFF")
         (self.skin / "font_title.ttf").write_bytes(b"\x00\x01\x00\x00")
-        # What a dev checkout's folder holds and a 2x skin does not.
+        # What a dev checkout's folder holds and the hi-res skin leaves out.
         (self.skin / "title_background.png.import").write_text("[remap]")
         (self.skin / "cardart").mkdir()
         Image.new("RGB", (4, 4)).save(self.skin / "cardart" / "island.png")
+
+    SKIN_FILES = ["coin_toss_heads.json", "coin_toss_heads.png", "deck_tile_olive.png",
+                  "duel_mana_red.png", "font_title.ttf", "portraits/agnosia.png",
+                  "sfx_draw.wav", "target_cursor.png", "title_background.png"]
+    PICTURES = ["deck_tile_olive", "duel_mana_red", "target_cursor", "title_background",
+                "portraits/agnosia"]
 
     def run_tool(self, skin=None, zip_out=None, folder_out=None, reuse=None):
         with open(os.devnull, "w") as quiet:
@@ -233,50 +328,66 @@ class RunTest(unittest.TestCase):
             finally:
                 sys.stdout = stdout
 
-    def test_the_zip_is_the_whole_skin_with_every_picture_at_twice_the_size(self):
+    def picture(self, archive, name):
+        return Image.open(io.BytesIO(archive.read("skin/" + name)))
+
+    def test_the_zip_is_the_same_files_with_the_pictures_at_twice_the_size(self):
+        # The owner: "Each skin pack zip should contain all required assets.
+        # Just in the upscaled the relevant assets are upscaled!"
         out = self.tmp / up.ZIP_NAME
         self.assertEqual(self.run_tool(zip_out=out), 0)
+        self.assertEqual(up.pictures(self.skin), self.PICTURES)
         with zipfile.ZipFile(out) as archive:
             names = sorted(archive.namelist())
-            self.assertEqual(names, ["skin/" + up.PROVENANCE,
-                                     "skin/catalogue.txt",
-                                     "skin/coin_toss_heads.json",
-                                     "skin/coin_toss_heads.png",
-                                     "skin/deck_tile_olive.png",
-                                     "skin/deck_tile_olive@2x.png",
-                                     "skin/font_title.ttf",
-                                     "skin/portraits/agnosia.png",
-                                     "skin/portraits/agnosia@2x.png",
-                                     "skin/sfx_draw.wav",
-                                     "skin/target_cursor.png",
-                                     "skin/target_cursor@2x.png",
-                                     "skin/title_background.png",
-                                     "skin/title_background@2x.png"])
-            pictures = {n: Image.open(io.BytesIO(archive.read(n))) for n in names
-                        if n.endswith(".png")}
-            note = archive.read("skin/" + up.PROVENANCE).decode()
-            places = skin_catalogue.read_catalogue(archive.read("skin/catalogue.txt").decode())
-            # The 1997 files are the 1997 files, byte for byte.
+            self.assertEqual(names, ["skin/" + n for n in self.SKIN_FILES],
+                             "the same files, under the same names, and no other")
+            self.assertEqual(len(names), len(up.skin_files(self.skin)))
             for name in ("sfx_draw.wav", "font_title.ttf", "coin_toss_heads.json",
-                         "coin_toss_heads.png", "title_background.png"):
+                         "coin_toss_heads.png"):
                 self.assertEqual(archive.read("skin/" + name),
-                                 (self.skin / name).read_bytes(), name)
-        self.assertEqual(pictures["skin/title_background@2x.png"].size, (60, 40))
-        self.assertEqual(pictures["skin/title_background@2x.png"].mode, "RGB")
-        self.assertEqual(pictures["skin/target_cursor@2x.png"].size, (32, 24))
-        self.assertEqual(pictures["skin/target_cursor@2x.png"].mode, "RGBA")
-        self.assertEqual(pictures["skin/portraits/agnosia@2x.png"].size, (32, 24))
-        self.assertEqual(places, {
-            "coin_toss_heads.png": "coin_toss_heads.png",
-            "deck_tile_olive.png": "deck_tile_olive@2x.png",
-            "portraits/agnosia.png": "portraits/agnosia@2x.png",
-            "target_cursor.png": "target_cursor@2x.png",
-            "title_background.png": "title_background@2x.png"})
-        self.assertIn(up.MODEL, note)
-        self.assertIn("catalogue.txt", note)
+                                 (self.skin / name).read_bytes(), "%s as it was" % name)
+            for key in self.PICTURES:
+                with Image.open(self.skin / (key + ".png")) as small:
+                    big = self.picture(archive, key + ".png")
+                    self.assertEqual(big.size, (small.width * 2, small.height * 2), key)
+                    self.assertEqual(big.mode, small.mode, key)
+            note = archive.comment.decode()
+        self.assertIn(up.MODEL, note, "how it was made: the zip's comment")
+        self.assertIn("5\n           pictures at twice the size, 2 of them key-exact", note)
         package_release.check_skin(out)  # the shape a release accepts
 
-    def test_the_skin_checker_reads_it_as_a_complete_skin_at_2x(self):
+    def test_the_key_exact_places_give_back_their_1997_pixels(self):
+        out = self.tmp / up.ZIP_NAME
+        self.run_tool(zip_out=out)
+        with zipfile.ZipFile(out) as archive:
+            cursor = self.picture(archive, "target_cursor.png")
+            face = self.picture(archive, "portraits/agnosia.png")
+            ground = self.picture(archive, "duel_mana_red.png")
+        with Image.open(self.skin / "target_cursor.png") as small:
+            self.assertEqual(up.back_to_1x(cursor).tobytes(), small.convert("RGBA").tobytes(),
+                             "the whole cursor, brought back to 1x, is the 1997 cursor")
+        # Every other picture keeps the model's pixels: the same run with no
+        # key-exact place changes the cursor and the ground and nothing else.
+        plain = self.tmp / "plain.zip"
+        kept, up.KEY_EXACT = up.KEY_EXACT, ()
+        try:
+            self.run_tool(zip_out=plain)
+        finally:
+            up.KEY_EXACT = kept
+        with zipfile.ZipFile(out) as a, zipfile.ZipFile(plain) as b:
+            for name in ("title_background.png", "deck_tile_olive.png",
+                         "portraits/agnosia.png"):
+                self.assertEqual(a.read("skin/" + name), b.read("skin/" + name), name)
+        with Image.open(self.skin / "duel_mana_red.png") as small:
+            back = up.back_to_1x(ground).load()
+            for x in range(12):
+                for y in (0, 9):
+                    self.assertEqual(back[x, y], small.getpixel((x, y)), (x, y))
+            for y in range(10):
+                for x in (0, 11):
+                    self.assertEqual(back[x, y], small.getpixel((x, y)), (x, y))
+
+    def test_the_skin_checker_reads_it_as_a_skin(self):
         out = self.tmp / up.ZIP_NAME
         self.run_tool(zip_out=out)
         report = io.StringIO()
@@ -286,21 +397,16 @@ class RunTest(unittest.TestCase):
         finally:
             sys.stdout = stdout
         text = report.getvalue()
-        self.assertIn("catalogue.txt: 5 places", text)
-        self.assertNotIn("naming a file that is not here", text,
-                         "every line names a file in the skin")
-        # The 2x pictures, the catalogue and the note are not files the
-        # game ignores. (The stand-in pictures are not the 1997 sizes, so
-        # the size report has things to say; that is skin_catalogue's test.)
+        self.assertIn(": skin, 9 files", text)
+        self.assertNotIn("catalogue", text)
         self.assertNotIn("ignored by the game", text)
-        self.assertNotIn(up.PROVENANCE, text)
 
     def test_the_pushed_colour_comes_back(self):
         out = self.tmp / up.ZIP_NAME
         self.run_tool(zip_out=out)
         with zipfile.ZipFile(out) as archive:
-            painting = Image.open(io.BytesIO(archive.read("skin/title_background@2x.png")))
-            tile = Image.open(io.BytesIO(archive.read("skin/deck_tile_olive@2x.png")))
+            painting = self.picture(archive, "title_background.png")
+            tile = self.picture(archive, "deck_tile_olive.png")
         for got, want in zip(ImageStat.Stat(painting).mean, (90, 70, 50)):
             self.assertAlmostEqual(got, want, delta=1.0)
         for got, want in zip(ImageStat.Stat(tile).mean[:3], (60, 80, 60)):
@@ -310,20 +416,18 @@ class RunTest(unittest.TestCase):
         out = self.tmp / up.ZIP_NAME
         self.run_tool(zip_out=out)
         with zipfile.ZipFile(out) as archive:
-            cursor = Image.open(io.BytesIO(archive.read("skin/target_cursor@2x.png")))
-        alpha = cursor.getchannel("A")
+            face = self.picture(archive, "portraits/agnosia.png")
+        alpha = face.getchannel("A")
         self.assertEqual(set(alpha.getdata()) - {0, 255}, set())
-        self.assertEqual(cursor.getpixel((0, 0)), (0, 0, 0, 0))
-        self.assertEqual(cursor.getpixel((16, 12))[3], 255)
+        self.assertEqual(face.getpixel((0, 0)), (0, 0, 0, 0))
+        self.assertEqual(face.getpixel((16, 12))[3], 255)
         # No dark fringe: the opaque pixels right at the edge keep the
         # colour, because the model never saw the hidden black.
-        edge = cursor.getpixel((8, 12))
+        edge = face.getpixel((8, 12))
         self.assertEqual(edge[3], 255)
         self.assertGreater(edge[0], 150)
 
     def test_a_skin_zip_works_like_a_folder(self):
-        # Its sounds, fonts and sheet layouts are carried too, not just its
-        # pictures (0.50.28's zip of copies read the pictures alone).
         packed = self.tmp / "original_skin.zip"
         with zipfile.ZipFile(packed, "w") as archive:
             for path in sorted(self.skin.rglob("*")):
@@ -340,61 +444,57 @@ class RunTest(unittest.TestCase):
         self.run_tool(zip_out=second)
         self.assertEqual(first.read_bytes(), second.read_bytes())
 
-    def test_out_writes_the_whole_skin_into_a_folder(self):
-        out = self.tmp / "skin2x"
+    def test_out_writes_the_hi_res_skin_into_a_folder(self):
+        out = self.tmp / "hires"
         self.assertEqual(self.run_tool(folder_out=out), 0)
         written = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+        self.assertEqual(written, self.SKIN_FILES)
         zipped = self.tmp / up.ZIP_NAME
         self.run_tool(zip_out=zipped)
         with zipfile.ZipFile(zipped) as archive:
-            self.assertEqual(written, sorted(n[len("skin/"):] for n in archive.namelist()),
-                             "the folder holds what the zip's skin/ holds")
-            self.assertEqual((out / "title_background@2x.png").read_bytes(),
-                             archive.read("skin/title_background@2x.png"))
+            for name in written:
+                self.assertEqual((out / name).read_bytes(), archive.read("skin/" + name), name)
 
-    def test_out_the_skin_folder_itself_adds_the_2x_skin_in_place(self):
+    def test_out_never_writes_over_the_skin_it_reads(self):
         before = {p: p.read_bytes() for p in self.skin.rglob("*") if p.is_file()}
-        self.assertEqual(self.run_tool(folder_out=self.skin), 0)
-        self.assertTrue((self.skin / "title_background@2x.png").is_file())
-        self.assertTrue((self.skin / "portraits" / "agnosia@2x.png").is_file())
-        self.assertTrue((self.skin / up.CATALOGUE).is_file())
-        self.assertTrue((self.skin / up.PROVENANCE).is_file())
-        for path, data in before.items():
-            self.assertEqual(path.read_bytes(), data, "%s is left as it was" % path)
-        # A second run over the same folder upscales the 1997 pictures
-        # again, not the @2x ones beside them, and writes the same catalogue.
-        self.assertEqual(up.pictures(self.skin), ["deck_tile_olive", "target_cursor",
-                                                  "title_background", "portraits/agnosia"])
-        first = (self.skin / up.CATALOGUE).read_bytes()
-        self.assertEqual(self.run_tool(folder_out=self.skin), 0)
-        self.assertEqual((self.skin / up.CATALOGUE).read_bytes(), first)
-        self.assertEqual([p.name for p in self.tmp.iterdir() if p.name.startswith(".upscale")],
-                         [], "the work folder is cleared")
+        self.assertEqual(self.run_tool(folder_out=self.skin), 2)
+        self.assertEqual({p: p.read_bytes() for p in self.skin.rglob("*") if p.is_file()},
+                         before)
 
-    def test_a_2x_skin_made_again_is_made_afresh(self):
-        # The 2x skin as the source: its @2x pictures, catalogue and note
-        # are written new, never carried over from it.
-        first = self.tmp / "first"
-        self.run_tool(folder_out=first)
-        again = self.tmp / "again.zip"
-        self.assertEqual(self.run_tool(skin=first, zip_out=again), 0)
+    def test_what_an_earlier_tool_left_is_not_carried(self):
+        # 0.50.28's copies beside the pictures, 0.50.30's catalogue and the
+        # note: never files of the hi-res skin, and never read as pictures.
         straight = self.tmp / "straight.zip"
         self.run_tool(zip_out=straight)
+        doubled(Image.open(self.skin / "title_background.png")).save(
+            self.skin / "title_background@2x.png")
+        (self.skin / "catalogue.txt").write_text("title_background.png = x.png\n")
+        (self.skin / "UPSCALE.txt").write_text("note")
+        again = self.tmp / "again.zip"
+        self.assertEqual(self.run_tool(zip_out=again), 0)
         self.assertEqual(again.read_bytes(), straight.read_bytes())
 
     # ------------------------------------------------------ --reuse --
     # The owner, 2026-10-17: *"I already have built 2x skin so we will
     # reuse it"* — the 0.50.28 zip, `<key>@2x.png` and its note alone.
 
-    def old_2x_zip(self, sizes: dict[str, tuple[int, int]]) -> Path:
-        """A zip shaped like 0.50.28's: one `@2x` picture per key, flat
-        colours the engine would never make, so a reused one is known."""
+    def old_2x_zip(self, keys, tint=3, other=(), size_off=()) -> Path:
+        """A zip shaped like 0.50.28's: one `@2x` copy per key — its 1997
+        picture doubled, the blue raised by [param tint] so a reused copy
+        is known by its bytes; of another picture for the keys in [param
+        other]; a pixel too wide for [param size_off]."""
         path = self.tmp / "old_2x.zip"
         with zipfile.ZipFile(path, "w") as archive:
             archive.writestr("skin/UPSCALE.txt", "copies")
-            for key, size in sizes.items():
+            for key in keys:
+                with Image.open(self.skin / (key + ".png")) as small:
+                    copy = doubled(small.copy(), tint)
+                if key in other:
+                    copy = Image.new(copy.mode, copy.size, (7, 77, 177))
+                if key in size_off:
+                    copy = copy.resize((copy.width + 1, copy.height))
                 data = io.BytesIO()
-                Image.new("RGBA", size, (7, 77, 177, 255)).save(data, "PNG")
+                copy.save(data, "PNG")
                 archive.writestr("skin/%s@2x.png" % key, data.getvalue())
         return path
 
@@ -403,46 +503,56 @@ class RunTest(unittest.TestCase):
         return log.read_text().split() if log.exists() else []
 
     def test_reuse_with_every_copy_never_runs_the_engine(self):
-        old = self.old_2x_zip({"title_background": (60, 40), "target_cursor": (32, 24),
-                               "deck_tile_olive": (16, 16), "portraits/agnosia": (32, 24)})
+        old = self.old_2x_zip(self.PICTURES)
         self.engine.write_text(BROKEN_ENGINE)   # it would fail if it were run
         out = self.tmp / up.ZIP_NAME
         self.assertEqual(self.run_tool(zip_out=out, reuse=old), 0)
         self.assertEqual(self.seen(), [], "the engine never saw a picture")
         with zipfile.ZipFile(out) as archive, zipfile.ZipFile(old) as before:
-            for key in ("title_background", "target_cursor", "portraits/agnosia"):
-                name = "skin/%s@2x.png" % key
-                self.assertEqual(archive.read(name), before.read(name), "%s taken as it was" % key)
-            note = archive.read("skin/" + up.PROVENANCE).decode()
-            self.assertIn("sfx_draw.wav", " ".join(archive.namelist()), "a whole skin")
-        self.assertIn("4 of them taken as they were from\n           old_2x.zip", note)
+            self.assertEqual(sorted(archive.namelist()), ["skin/" + n for n in self.SKIN_FILES])
+            for key in ("title_background", "deck_tile_olive", "portraits/agnosia"):
+                self.assertEqual(archive.read("skin/%s.png" % key),
+                                 before.read("skin/%s@2x.png" % key),
+                                 "%s taken as it was, under its own name" % key)
+            cursor = self.picture(archive, "target_cursor.png")
+            note = archive.comment.decode()
+        with Image.open(self.skin / "target_cursor.png") as small:
+            self.assertEqual(up.back_to_1x(cursor).tobytes(), small.convert("RGBA").tobytes(),
+                             "a reused copy is made key-exact too")
+        self.assertIn("5 of them taken as they were from old_2x.zip", note)
         package_release.check_skin(out)
 
-    def test_reuse_upscales_only_what_the_old_zip_lacks_or_has_wrong(self):
-        # The cursor's copy is missing; the tile's is not twice its size.
-        old = self.old_2x_zip({"title_background": (60, 40), "deck_tile_olive": (17, 16),
-                               "portraits/agnosia": (32, 24)})
+    def test_reuse_upscales_what_the_old_zip_lacks_has_wrong_or_is_another_picture(self):
+        # The cursor's copy is missing, the tile's is not twice its size,
+        # the painting's is a copy of another picture.
+        keys = [k for k in self.PICTURES if k != "target_cursor"]
+        old = self.old_2x_zip(keys, other=("title_background",), size_off=("deck_tile_olive",))
         out = self.tmp / up.ZIP_NAME
         self.assertEqual(self.run_tool(zip_out=out, reuse=old), 0)
-        self.assertEqual(sorted(self.seen()), ["deck_tile_olive.png", "target_cursor.png"])
+        self.assertEqual(sorted(self.seen()), ["deck_tile_olive.png", "target_cursor.png",
+                                               "title_background.png"])
         with zipfile.ZipFile(out) as archive:
-            tile = Image.open(io.BytesIO(archive.read("skin/deck_tile_olive@2x.png")))
-            painting = Image.open(io.BytesIO(archive.read("skin/title_background@2x.png")))
-            note = archive.read("skin/" + up.PROVENANCE).decode()
-        self.assertEqual(tile.size, (16, 16), "the wrong-size copy is made again")
-        self.assertEqual(painting.getpixel((0, 0))[:3], (7, 77, 177), "the good copy is kept")
+            painting = self.picture(archive, "title_background.png")
+            face = archive.read("skin/portraits/agnosia.png")
+            note = archive.comment.decode()
+        with zipfile.ZipFile(old) as before:
+            self.assertEqual(face, before.read("skin/portraits/agnosia@2x.png"), "a good copy is kept")
+        self.assertNotEqual(painting.getpixel((0, 0))[:3], (7, 77, 177),
+                            "never worn over the wrong art")
         self.assertIn("2 of them taken as they were", note)
 
-    def test_reuse_from_a_folder_and_from_the_skin_folder_itself(self):
-        # 0.50.28's --out put the copies beside the 1997 pictures: that
-        # folder is its own reuse, and the copies stay where they are.
-        self.run_tool(folder_out=self.skin)
-        first = {p.name: p.read_bytes() for p in self.skin.glob("*@2x.png")}
-        log = self.engine.parent / "seen.txt"
-        log.unlink()
-        self.assertEqual(self.run_tool(folder_out=self.skin, reuse=self.skin), 0)
-        self.assertEqual(self.seen(), [], "nothing to upscale again")
-        self.assertEqual({p.name: p.read_bytes() for p in self.skin.glob("*@2x.png")}, first)
+    def test_reuse_reads_a_hi_res_skin_by_its_own_names(self):
+        first = self.tmp / "first.zip"
+        self.run_tool(zip_out=first)
+        (self.engine.parent / "seen.txt").unlink()
+        self.engine.write_text(BROKEN_ENGINE)
+        again = self.tmp / "again.zip"
+        self.assertEqual(self.run_tool(zip_out=again, reuse=first), 0)
+        self.assertEqual(self.seen(), [])
+        with zipfile.ZipFile(first) as a, zipfile.ZipFile(again) as b:
+            self.assertEqual(sorted(a.namelist()), sorted(b.namelist()))
+            for name in a.namelist():
+                self.assertEqual(a.read(name), b.read(name), name)
 
     def test_reuse_on_the_command_line(self):
         missing = subprocess.run([sys.executable, str(Path(up.__file__)), "--skin",
@@ -459,8 +569,6 @@ class RunTest(unittest.TestCase):
         self.run_tool(zip_out=out)
         with zipfile.ZipFile(out) as archive:
             self.assertIn("skin/" + import_manalink.LABEL, archive.namelist())
-            self.assertNotIn(import_manalink.LABEL,
-                             archive.read("skin/catalogue.txt").decode().split("=")[-1])
         with self.assertRaises(ValueError):
             package_release.check_skin(out)
 

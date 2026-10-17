@@ -1,48 +1,67 @@
 #!/usr/bin/env python3
-"""Make a 2x skin out of a 1997 one: every picture again at twice the size.
+"""Make the hi-res skin: a 1997 skin with every picture at twice the size.
 
-    python3 upscale_skin.py                              # assets/original -> the 2x skin zip
+    python3 upscale_skin.py                              # assets/original -> the hi-res skin zip
     python3 upscale_skin.py --skin original_skin.zip     # a skin zip works too
-    python3 upscale_skin.py --skin DIR --out DIR         # the 2x skin into a folder
+    python3 upscale_skin.py --skin DIR --out DIR2        # the hi-res skin into a folder
     python3 upscale_skin.py --skin original_skin.zip --reuse original_skin_realesrgan-anime_2x.zip
 
 The game is laid out for 1280x800 and drawn at the screen's real
 resolution, so on a 4K screen the 1997 pictures are stretched about 2.7x
-and look soft. This writes a COMPLETE SKIN — the zip
-`original_skin_realesrgan-anime_2x.zip`, or a folder: every file of the
-1997 skin as it was (sounds, fonts, movie sheets, portraits) and beside
-each picture `<name>@2x.png`, the same picture again at twice the size,
-with a `catalogue.txt` that tells the game to wear the 2x one in each
-place. A skin is a skin (the owner, 2026-10-17: *"A skin is a skin and
-gets applied after game reset. No switches."*): choose the zip in
-Options > Skin or drop it on the window and it is worn from the next
-start, or put it beside the game as `skin/original_skin.zip` in place of
-the 1997 one.
+and look soft. This writes THE HI-RES SKIN — the zip
+`original_skin_realesrgan-anime_2x.zip`, or a folder: THE SAME FILES as
+the 1997 skin it is made from, under the same names — the music, sounds,
+fonts, sheet layouts, movies and portraits as they were — and every
+picture REPLACED by the same picture at twice the size. Built from a
+242-file `original_skin.zip` it holds 242 files. The owner, 2026-10-17:
+*"A skin is a skin and gets applied after game reset. No switches."*,
+*"hires skin zip is hires, low res skin zip is low res oroginal -
+simple"*, *"Each skin pack zip should contain all required assets. Just
+in the upscaled the relevant assets are upscaled!"*. It is a skin like
+the 1997 one: choose it in Options > Skin or drop it on the window and it
+is worn from the next start, with the same layout — the game draws a
+picture of exactly twice its place's 1997 size at the 1997 size, with all
+its pixels (game/skin.gd, THE 2x PICTURES). Choose the 1997 skin again to
+go back. How this was made goes in the zip's COMMENT, not in a file, so
+the two skins hold the same files.
 
 MIX AND MATCH (the owner, the same day: *"users should be able to mix and
-match some upscaled and some downscaled images as they wished"*). The 1997
-pictures stay in the skin under their own names, so wearing one of them
-instead is one line of `catalogue.txt`: point it at the 1997 file
-(`duelist_face_red.png = duelist_face_red.png`). Deleting the line is not
-the same — with no line the game still wears `<name>@2x.png` where it
-sits beside the picture (SKIN.txt, THE CATALOGUE). A line may also name
-any picture you add. The catalogue's rules, and the sizes the game wears
-(1x to 4x a place's 1997 size), are SKIN.txt's (`docs/skin-catalogue.txt`,
-THE CATALOGUE and SIZES AND SCALES). The 1997 file under the place's own
-name is also what the game decides its exact colour keys on (a black or a
-white key, an image+mask sprite, a territory's edge), so a 2x picture
-keys the way its 1997 picture did — the reason the 2x skin keeps them.
+match some upscaled and some downscaled images as they wished"*). Put a
+1997 picture back into the hi-res zip under its own name, and that place
+wears the 1997 picture again; or give the skin a `catalogue.txt` that
+points a place at any file (SKIN.txt, THE CATALOGUE). The sizes the game
+wears — 1x to 4x a place's 1997 size — are SKIN.txt's, SIZES AND SCALES.
+
+KEY-EXACT PICTURES. A few places the game does not only draw: it takes a
+colour out of them, crops them to their ink, or measures them (KEY_EXACT,
+each with the cutter that needs it). With no 1x file beside a 2x
+picture the game decides those on the picture brought back to its 1997
+size — every 2x2 block averaged — and an upscaler's blend moves the
+answer: measured on the real pictures, the mana stripes' cut-out edges
+differed 0.4-9.6%, the set symbols lost their ink box, 14 of the 15
+territory grounds their black-edge trim, and the exile plate's palette
+drifted. So for those places every 2x2 block of the 2x picture is made
+to average EXACTLY to its 1997 pixel (its RGB sums are four times the
+1997 value, the correction spread over the block; its alpha is the 1997
+alpha) — the whole picture for the small sheets and the grave plates,
+only the outer ring of 1997 pixels (the conversion edge the game trims)
+for the territory grounds — and the game's own shrink gives back the
+1997 picture, so it cuts exactly what the 1997 skin cuts. Every other
+picture keeps the model's pixels as they are.
 
 REUSE (the owner, 2026-10-17: *"I already have built 2x skin so we will
-reuse it"*). `--reuse` takes each picture's `<name>@2x.png` from a 2x
-zip or folder already made — the 0.50.28 tool's zip of copies alone, or
-a skin this one wrote — instead of running the engine again. A copy is
-taken only when it is exactly twice its 1997 picture's size; a picture
-with none is upscaled as usual, and a run that finds every copy never
-fetches or starts the engine. That turns the 0.50.28 zip into a whole
-skin in seconds:
-
-    python3 upscale_skin.py --skin original_skin.zip --reuse original_skin_realesrgan-anime_2x.zip
+reuse it"*). `--reuse` takes each picture's 2x copy from a zip or folder
+already made — `<name>@2x.png` (the 0.50.28 tool's zip), or a picture of
+its own name that is exactly twice its 1997 size (a hi-res skin this tool
+wrote) — instead of running the engine again. A copy is taken only when
+it is exactly twice its picture's size AND, brought back to 1x and
+softened by REUSE_BLUR, it is within REUSE_MATCH of the picture (alpha
+within REUSE_ALPHA): every copy of this method lies within 4.6 of its own
+picture there, while any other picture of the same size lies 10 or more
+away — so a copy made from another skin's picture is
+upscaled again rather than worn over the wrong art. The key-exact step
+is applied to a reused copy too. A run that reuses every picture never
+fetches or starts the engine.
 
 THE METHOD (the owner, 2026-10-17, after comparing eleven upscalers on
 the skin: *"lets keep this default"*). Real-ESRGAN's anime model
@@ -93,25 +112,24 @@ redraws and the colour fix's 1 px blur does not reach:
     (4.6% left after the fix) and whose cluster edges it inks as strokes,
     so the carved symbols stand alone and read as embossed stone.
 Measured on `duel_mana_green` and `duelist_face_green`. A player who
-prefers the 1997 look there wears it with one catalogue line per place
-(MIX AND MATCH, above). The way out for the tool, if it is ever wanted:
-give those fifteen keys another method — exact pixel doubling (the 1997
-look, crisp, no second engine; the one recommended) or waifu2x CUNet
-(dots kept, 18.7%; stripes 0.34) — rather than a finer blur, which would
-bring the dither dots back on every picture.
+prefers the 1997 look there puts those 1997 files back into the hi-res
+zip (MIX AND MATCH, above). The way out for the tool, if it is ever
+wanted: give those fifteen keys another method — exact pixel doubling
+(the 1997 look, crisp, no second engine; the one recommended) or waifu2x
+CUNet (dots kept, 18.7%; stripes 0.34) — rather than a finer blur, which
+would bring the dither dots back on every picture.
 
-LEFT ALONE, copied as they are: the coin-toss movie sheets (2240x2160
-already; twice that is past the 4096-pixel texture limit of older GPUs;
-their catalogue lines name themselves), the sounds, the fonts, the sheet
-layouts and the movies. NOT COPIED: card pictures (`cardart/`, a zip of
-their own), Godot's `.import` files, and what this tool writes —
-`catalogue.txt`, `UPSCALE.txt` and the `<name>@2x.png` copies a skin
-already holds are made afresh (or taken through --reuse), never carried
-over from the skin read.
+LEFT AS THEY ARE, under their own names: the coin-toss movie sheets
+(2240x2160 already; twice that is past the 4096-pixel texture limit of
+older GPUs), the sounds, the fonts, the sheet layouts and the movies.
+NOT CARRIED: card pictures (`cardart/`, a zip of their own), Godot's
+`.import` files, and what an earlier tool left in a skin — a
+`catalogue.txt`, an `UPSCALE.txt`, `<name>@2x.png` copies (reuse those
+with --reuse).
 
 A skin the Manalink door filled (`import_original.py --manalink`) keeps
-its label in the 2x skin (`from_manalink.txt`), and a release refuses it
-the same way it refuses the skin it came from (tools/import_manalink.py).
+its label in the hi-res skin (`from_manalink.txt`), and a release refuses
+it the same way it refuses the skin it came from (tools/import_manalink.py).
 """
 
 from __future__ import annotations
@@ -135,7 +153,7 @@ import import_manalink  # noqa: E402  — THE LABEL a Manalink-filled skin carri
 import tool_banner  # noqa: E402  — the family banner and the one version
 
 try:
-    from PIL import Image, ImageChops, ImageFilter
+    from PIL import Image, ImageChops, ImageFilter, ImageStat
 except ImportError:  # said at the door (need_pillow), not as a traceback
     Image = None
 
@@ -147,14 +165,14 @@ WORDMARK = (
     "│ │├─┘└─┐│  ├─┤│  ├┤ ",
     "└─┘┴  └─┘└─┘┴ ┴┴─┘└─┘",
 )
-CAPTION = ("Shandalar 1997 · the 2x skin", "twice the size, the 1997 colours")
+CAPTION = ("Shandalar 1997 · the hi-res skin", "twice the size, the 1997 colours")
 
 ## `tools/` in a checkout, nothing beside a packaged game
 ## (tool_banner.here_prefix()).
 WHERE = tool_banner.here_prefix(__file__)
 HINT = (
-    "python3 %supscale_skin.py --skin original_skin.zip   # the 2x skin zip" % WHERE,
-    "python3 %supscale_skin.py --skin DIR --out DIR       # into a folder" % WHERE,
+    "python3 %supscale_skin.py --skin original_skin.zip   # the hi-res skin" % WHERE,
+    "python3 %supscale_skin.py --skin DIR --out DIR2      # into a folder" % WHERE,
     "python3 %supscale_skin.py -h          # --reuse, --zip, --engine" % WHERE,
 )
 
@@ -165,14 +183,15 @@ EPILOG = """\
     python3 %supscale_skin.py --gpu 1                 pick the Vulkan GPU
     python3 %supscale_skin.py --skin skin.zip --reuse 2x.zip   reuse a 2x zip
 
-Writes a complete skin, original_skin_realesrgan-anime_2x.zip (or with
---out a folder; --out the skin folder itself adds to it in place): every
-file of the 1997 skin as it was, <name>@2x.png beside every picture
+Writes the hi-res skin, original_skin_realesrgan-anime_2x.zip (or with
+--out another folder): the same files as the 1997 skin, under the same
+names, every picture replaced by the same picture at twice the size
 (Real-ESRGAN's anime model, its colours taken back from the 1997
-picture), and catalogue.txt, which wears the 2x pictures — change a line
-to wear a 1997 one. --reuse takes the @2x pictures of a 2x zip or folder
-already made and upscales only what it lacks. Needs Pillow and a Vulkan
-GPU driver; on Linux the engine is fetched once into ~/.cache/shandalar/.
+picture). Choose it in Options > Skin like the 1997 one; to mix, put a
+1997 picture back into it under its name. --reuse takes the 2x pictures
+of a zip or folder already made and upscales only what it lacks. Needs
+Pillow and a Vulkan GPU driver; on Linux the engine is fetched once into
+~/.cache/shandalar/.
 
 %s
 """ % (tool_banner.examples(HINT), WHERE, WHERE, WHERE, WHERE,
@@ -185,25 +204,57 @@ SCALE = 2
 ## game reads: a second method would be a second zip beside this one.
 METHOD = "realesrgan-anime"
 ZIP_NAME = "original_skin_%s_%dx.zip" % (METHOD, SCALE)
-## What a 2x picture is called: `title_background.png` ->
-## `title_background@2x.png`, `portraits/agnosia.png` ->
-## `portraits/agnosia@2x.png` — beside its 1997 picture, which keeps its
-## own name (MIX AND MATCH). The names the 0.50.28 tool gave its copies,
-## kept (the owner: *"keep the previous skin filenames also valid for skin
-## reader"*): the game wears `<name>@2x.png` in its place even with no
-## catalogue line (game/skin.gd), and the portrait chooser skips them.
+## What the 0.50.28 tool called a 2x picture: `title_background.png` ->
+## `title_background@2x.png`. This tool writes the picture under its OWN
+## name; it reads `@2x` copies only to reuse them (--reuse), and never
+## carries one over from the skin it reads. The game still wears one
+## (game/skin.gd, THE @2x NAME).
 SUFFIX = "@%dx" % SCALE
-## THE CATALOGUE (docs/skin-catalogue.txt): which file the game wears in
-## each place. Written by this tool, read by the game (game/skin.gd) and
-## by `skin_catalogue.py --check`.
-CATALOGUE = "catalogue.txt"
-PROVENANCE = "UPSCALE.txt"
-## What a 2x skin made again is made afresh from: a skin this tool wrote
-## already holds these, and they are written new rather than copied.
-OWN_FILES = (CATALOGUE, PROVENANCE)
-## Never copied into the 2x skin: card pictures travel in a zip of their
-## own, and a release refuses a skin that holds them.
+## What earlier tools left in a skin, never carried into the hi-res one:
+## the catalogue 0.50.30's wrote, the note 0.50.28's wrote.
+OLD_FILES = ("catalogue.txt", "UPSCALE.txt")
+## Never copied into the hi-res skin: card pictures travel in a zip of
+## their own, and a release refuses a skin that holds them.
 NOT_COPIED_DIRS = ("cardart",)
+
+## REUSE (above): a copy is taken when, brought back to 1x and both
+## softened by a REUSE_BLUR px blur, its colour is within REUSE_MATCH (the
+## mean of |difference| over the picture's opaque pixels, per channel, in
+## 8-bit levels) of the picture, and its on/off alpha differs on no more
+## than REUSE_ALPHA of the pixels. Calibrated 2026-10-17 on the 0.50.28
+## zip against the released original_skin.zip: its 167 copies of the
+## same art lie 0.38-4.55 away (the far one a portrait whose hidden
+## pixels the blur reaches, rogue_kiska-ra); each of the 3604 copies
+## against another picture of the same size, 10.04 or more; the one
+## picture whose art differs (damage_marker.png, a size apart) is
+## upscaled again. 7.0 sits between the two.
+REUSE_BLUR = 1.0
+REUSE_MATCH = 7.0
+REUSE_ALPHA = 0.01
+
+## THE KEY-EXACT PLACES (above): what the game does with each without its
+## 1x file, and how much of the picture is made exact — "whole", or
+## "ring", the outer 1997 pixels alone. A name ending in `_` is a family.
+## Everything the game only cuts and draws, or whose key survives the
+## upscale as it is (the image+mask sprites, the counter stones, the
+## combat bar: within 0.01% measured), keeps the model's pixels.
+KEY_EXACT = (
+    # MiniCard.stripe_texture keys the near-black around each stripe:
+    # the upscaler's blend at a stripe's edge is neither black nor band.
+    ("mana_stripes", "whole"),
+    # SetBadges.symbol keys pure black and crops the symbol to its ink.
+    ("card_set_symbols", "whole"),
+    # DuelScreen builds the mouse cursor from the picture's 1x pixels.
+    ("target_cursor", "whole"),
+    # ExilePlate paints the exile plate from the grave plate's palette,
+    # counted colour by colour.
+    ("grave_panel_", "whole"),
+    # TerritoryGround._inner trims the 1px black conversion edge when it
+    # measures one: only that ring, which is never shown, is made exact.
+    ("duel_pattern_", "ring"),
+    ("duel_picture_", "ring"),
+    ("duel_mana_", "ring"),
+)
 
 ENGINE_EXE = "realesrgan-ncnn-vulkan"
 ENGINE_BUILD = "20220424"
@@ -231,30 +282,24 @@ LEFT_ALONE = ("coin_toss_",)
 
 # ---------------------------------------------------------------- the skin
 
-def places(skin: Path) -> list[str]:
-    """Every picture place of the skin, as a key: the top-level and
-    portrait PNGs, minus the `@2x` copies a skin may already hold."""
+def pictures(skin: Path) -> list[str]:
+    """The keys to upscale: every top-level and portrait PNG, minus the
+    movie sheets and the `@2x` copies a skin may already hold."""
     found = sorted(skin.glob("*.png")) + sorted(skin.glob("portraits/*.png"))
     return [path.relative_to(skin).as_posix()[:-4] for path in found
-            if "@" not in path.name]
-
-
-def pictures(skin: Path) -> list[str]:
-    """The keys to upscale: every place but the movie sheets."""
-    return [key for key in places(skin)
-            if not PurePosixPath(key).name.startswith(LEFT_ALONE)]
+            if not path.name.startswith(LEFT_ALONE) and SUFFIX not in path.name]
 
 
 def skin_files(skin: Path) -> list[str]:
-    """Every file of the skin that the 2x skin carries as it is, by its
-    name under `skin/`: everything but card pictures, Godot's `.import`
-    sidecars and what this tool writes (its two files, `@2x` copies)."""
+    """Every file the hi-res skin holds, by its name under `skin/`: the
+    skin's own, but card pictures, Godot's `.import` sidecars and what
+    an earlier tool left (OLD_FILES, `@2x` copies)."""
     out = []
     for path in sorted(skin.rglob("*")):
         if not path.is_file():
             continue
         name = path.relative_to(skin).as_posix()
-        if (name.split("/")[0] in NOT_COPIED_DIRS or name in OWN_FILES
+        if (name.split("/")[0] in NOT_COPIED_DIRS or name in OLD_FILES
                 or name.endswith(".import")
                 or (path.suffix.lower() == ".png" and path.stem.endswith(SUFFIX))):
             continue
@@ -414,61 +459,124 @@ def flat(key: str) -> str:
 
 
 def upscaled_name(key: str) -> str:
-    """`title_background` -> `title_background@2x.png`."""
+    """The 0.50.28 name of a 2x copy: `title_background` ->
+    `title_background@2x.png` — read by --reuse, never written."""
     return key + SUFFIX + ".png"
 
 
-def reusable(source: Path, skin: Path, keys: list[str]) -> dict[str, Path]:
-    """The `@2x` copies in [param source] (a folder holding what skin/
-    holds) that can stand for this run's: exactly twice their 1997
-    picture's size. Anything else — no copy, another size, not a picture —
-    is left to the engine."""
-    out = {}
+def back_to_1x(big: "Image.Image") -> "Image.Image":
+    """[param big] brought down to half: each 2x2 block averaged, every
+    channel on its own — what the game does to a 2x picture it has no 1x
+    file for (game/skin.gd, `shrunk`: Godot's `shrink_x2`, (a+b+c+d+2)>>2
+    a channel). Band by band, because Pillow reduces an RGBA picture with
+    its alpha premultiplied and a hidden pixel's colour would come back
+    black."""
+    return Image.merge(big.mode, [band.reduce(SCALE) for band in big.split()])
+
+
+def difference(copy: "Image.Image", picture: "Image.Image") -> tuple[float, float]:
+    """How far [param copy] (2x) is from [param picture] (1x): the mean of
+    |difference| per channel over the picture's opaque pixels, both
+    softened by REUSE_BLUR, and the share of pixels whose on/off alpha
+    differs."""
+    back = back_to_1x(copy.convert("RGBA"))
+    small = picture.convert("RGBA")
+    opaque = small.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
+    blur = ImageFilter.GaussianBlur(REUSE_BLUR)
+    stat = ImageStat.Stat(ImageChops.difference(back.convert("RGB").filter(blur),
+                                                small.convert("RGB").filter(blur)), opaque)
+    colour = sum(stat.mean) / 3 if stat.count[0] else 0.0
+    on = back.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
+    flips = ImageStat.Stat(ImageChops.difference(on, opaque)).mean[0] / 255
+    return colour, flips
+
+
+def reusable(source: Path, skin: Path, keys: list[str]) -> tuple[dict[str, Path], dict[str, str]]:
+    """The copies in [param source] (a folder holding what skin/ holds)
+    that can stand for this run's pictures — `<name>@2x.png`, else a
+    picture of the key's own name — and why each other key has none:
+    `({key: copy}, {key: why})`. A copy stands when it is exactly twice
+    its picture's size and within REUSE_MATCH and REUSE_ALPHA of it."""
+    taken: dict[str, Path] = {}
+    refused: dict[str, str] = {}
     for key in keys:
-        copy = source / upscaled_name(key)
-        if not copy.is_file():
-            continue
-        try:
-            with Image.open(copy) as big, Image.open(skin / (key + ".png")) as small:
-                fits = big.size == (small.width * SCALE, small.height * SCALE)
-        except OSError:
-            fits = False
-        if fits:
-            out[key] = copy
+        why = "no copy"
+        for copy in (source / upscaled_name(key), source / (key + ".png")):
+            if not copy.is_file():
+                continue
+            try:
+                with Image.open(copy) as big, Image.open(skin / (key + ".png")) as small:
+                    if big.size != (small.width * SCALE, small.height * SCALE):
+                        why = "%d x %d, not twice %d x %d" % (big.size + small.size)
+                        continue
+                    colour, flips = difference(big, small)
+            except OSError:
+                why = "not a picture"
+                continue
+            if colour > REUSE_MATCH or flips > REUSE_ALPHA:
+                why = "another picture (%.1f from it)" % colour
+                continue
+            taken[key] = copy
+            break
+        if key not in taken:
+            refused[key] = why
+    return taken, refused
+
+
+def exactness(key: str) -> str | None:
+    """"whole", "ring" or None — how much of [param key]'s 2x picture is
+    made key-exact (KEY_EXACT)."""
+    if "/" in key:
+        return None   # a portrait: drawn, never keyed
+    for place, how in KEY_EXACT:
+        if key == place or (place.endswith("_") and key.startswith(place)):
+            return how
+    return None
+
+
+def _spread(block: list[list[int]], channel: int, total: int) -> None:
+    """Make [param block]'s four values of [param channel] sum to
+    [param total] (0..1020): the difference shared out evenly, kept
+    within 0..255, the rest moved a level at a time where there is room."""
+    step, extra = divmod(total - sum(px[channel] for px in block), 4)
+    for i, px in enumerate(block):
+        px[channel] = min(255, max(0, px[channel] + step + (1 if i < extra else 0)))
+    left = total - sum(px[channel] for px in block)
+    while left:
+        for px in block:
+            if left > 0 and px[channel] < 255:
+                px[channel] += 1
+                left -= 1
+            elif left < 0 and px[channel] > 0:
+                px[channel] -= 1
+                left += 1
+
+
+def key_exact(big: "Image.Image", picture: "Image.Image", ring: bool) -> "Image.Image":
+    """[param big] with every 2x2 block over a 1997 pixel of [param
+    picture] — all of them, or with [param ring] the outer ones alone —
+    averaging EXACTLY to that pixel: its RGB sums are four times the 1997
+    value, its alpha the 1997 alpha. Brought back to 1x, the block is the
+    1997 pixel again, to the level."""
+    out = big.copy()
+    pixels = out.load()
+    small = picture.convert("RGBA").load()
+    width, height = picture.size
+    alpha = out.mode == "RGBA"
+    for y in range(height):
+        for x in range(width):
+            if ring and 0 < x < width - 1 and 0 < y < height - 1:
+                continue
+            want = small[x, y]
+            cells = ((2 * x, 2 * y), (2 * x + 1, 2 * y), (2 * x, 2 * y + 1), (2 * x + 1, 2 * y + 1))
+            block = [list(pixels[cell]) for cell in cells]
+            for channel in range(3):
+                _spread(block, channel, 4 * want[channel])
+            for cell, px in zip(cells, block):
+                if alpha:
+                    px[3] = want[3]
+                pixels[cell] = tuple(px)
     return out
-
-
-def catalogue(keys: list[str], upscaled: list[str]) -> str:
-    """The skin's catalogue.txt: a note on how to read and change it, then
-    one line per picture place, sorted — the 2x picture where there is
-    one, the place's own file where it was left alone."""
-    done = set(upscaled)
-    lines = [
-        "# THE CATALOGUE of this skin: which file the game wears in each place.",
-        "# Made by upscale_skin.py; change it as you like.",
-        "#",
-        "#     <place> = <file>",
-        "#",
-        "# A place is a name the game looks for (SKIN.txt, beside the game, lists",
-        "# them all); the file is any file in this skin, its path from skin/. A",
-        "# place with no line, or whose file is not here, is worn from",
-        "# <name>@2x.png beside it when there is one, else from the file of its",
-        "# own name.",
-        "#",
-        "# MIX AND MATCH: to wear the 1997 picture in a place instead of the 2x",
-        "# one, point its line at it:",
-        "#     duelist_face_red.png = duelist_face_red.png",
-        "# (Deleting the line is not the same: with no line the game still",
-        "# wears <name>@2x.png where one sits beside the picture.) A line may",
-        "# name any picture you add. A picture may be 1x, 2x, 3x or 4x its",
-        "# place's 1997 size (SKIN.txt, SIZES AND SCALES); the game draws it at",
-        "# the 1997 size with all its pixels.",
-        "",
-    ]
-    for key in sorted(keys):
-        place = key + ".png"
-        lines.append("%s = %s" % (place, upscaled_name(key) if key in done else place))
-    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------- the engine
@@ -542,30 +650,32 @@ def run_engine(exe: Path, src: Path, dst: Path, gpu: str | None) -> None:
 
 # ---------------------------------------------------------------- the output
 
-def provenance(count: int, reused: int = 0, source: str = "") -> str:
-    again = ("\n  reused   %d of them taken as they were from\n"
-             "           %s, made before by this tool\n"
-             % (reused, source)) if reused else "\n"
+def provenance(count: int, reused: int = 0, source: str = "", exact: int = 0) -> str:
+    """How the hi-res skin was made — the zip's comment, never a file of
+    it, so it holds the same files as the skin it was made from."""
+    again = ("\n  reused   %d of them taken as they were from %s\n" % (reused, source)
+             if reused else "\n")
     return (
-        "A 1997 skin at twice the size, made by upscale_skin.py (Shandalar %s).\n\n"
-        "  files    every file of the 1997 skin, as it was, and <name>%s.png beside\n"
-        "           each picture: %d pictures again at twice the size. %s\n"
-        "           says which of the two the game wears in each place; change\n"
-        "           a line to wear the 1997 one%s"
+        "A 1997 skin with its pictures at twice the size, made by upscale_skin.py\n"
+        "(Shandalar %s).\n\n"
+        "  files    the same files as the 1997 skin, under the same names; %d\n"
+        "           pictures at twice the size, %d of them key-exact%s"
         "  engine   Real-ESRGAN ncnn-vulkan %s (MIT), model %s\n"
         "           (BSD-3, Xintao Wang et al.), run at %dx and brought down to %dx\n"
         "  colours  taken back from the 1997 picture:\n"
         "           out = model + blur(1997) - blur(model), blur %g px at 1997 size\n"
-        % (tool_banner.version_text(ROOT), SUFFIX, count, CATALOGUE, again,
+        % (tool_banner.version_text(ROOT), count, exact, again,
            ENGINE_BUILD, MODEL, MODEL_SCALE, SCALE, COLOUR_BLUR))
 
 
-def write_zip(files: dict[str, Path], out: Path) -> None:
+def write_zip(files: dict[str, Path], out: Path, comment: str = "") -> None:
     """`skin/<name>` for each, sorted and dated 1980-01-01, so one skin
-    and one engine always make the same bytes."""
+    and one engine always make the same bytes; [param comment] is the
+    zip's comment."""
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.name + ".part")
     with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        archive.comment = comment.encode("utf-8")
         for name in sorted(files):
             info = zipfile.ZipInfo("skin/" + name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
@@ -578,17 +688,23 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
             engine: Path | None, gpu: str | None, reuse: Path | None = None) -> int:
     with opened(skin) as folder, \
             (opened(reuse) if reuse is not None else nullcontext()) as earlier:
+        if folder_out is not None and folder_out.resolve() == folder.resolve():
+            print("!! --out is the skin itself: that would write over its 1997 "
+                  "pictures; name another folder", file=sys.stderr)
+            return 2
         keys = pictures(folder)
         if not keys:
             print("!! no pictures to upscale in %s" % skin, file=sys.stderr)
             return 1
         if (folder / import_manalink.LABEL).exists():
-            print("note: this skin holds files from a Manalink install; the 2x skin "
+            print("note: this skin holds files from a Manalink install; the hi-res skin "
                   "keeps the label (%s) and a release refuses it" % import_manalink.LABEL)
-        taken = reusable(earlier, folder, keys) if earlier is not None else {}
+        taken, refused = reusable(earlier, folder, keys) if earlier is not None else ({}, {})
         fresh = [key for key in keys if key not in taken]
         if reuse is not None:
             print("%d of %d pictures reused from %s" % (len(taken), len(keys), reuse))
+            for key in sorted(refused):
+                print("  upscaled again: %s.png — %s" % (key, refused[key]))
         near = (zip_out or folder_out).resolve().parent
         near.mkdir(parents=True, exist_ok=True)
         # The work folder sits beside the output, on its disk: the engine's
@@ -597,8 +713,7 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
             work = Path(tmp)
             done = work / "done"
             done.mkdir()
-            # What this run makes: the 2x pictures, the catalogue, the note.
-            made: dict[str, Path] = {upscaled_name(key): path for key, path in taken.items()}
+            big: dict[str, Path] = dict(taken)
             if fresh:
                 # Only now: a run that reuses every picture never needs it.
                 exe = find_engine(engine)
@@ -606,42 +721,46 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
                 meta = prepare(folder, fresh, work / "in")
                 run_engine(exe, work / "in", work / "raw", gpu)
                 for key in fresh:
-                    target = done / upscaled_name(key)
+                    target = done / (key + ".png")
                     target.parent.mkdir(parents=True, exist_ok=True)
                     finish(key, meta[key], work / "in", work / "raw").save(target)
-                    made[upscaled_name(key)] = target
-            (done / CATALOGUE).write_text(catalogue(places(folder), keys), encoding="utf-8")
-            made[CATALOGUE] = done / CATALOGUE
-            (done / PROVENANCE).write_text(
-                provenance(len(keys), len(taken), reuse.name if reuse is not None else ""),
-                encoding="utf-8")
-            made[PROVENANCE] = done / PROVENANCE
-            # And the 1997 skin around them, as it was.
+                    big[key] = target
+            exact = 0
+            for key in keys:
+                how = exactness(key)
+                if how is None:
+                    continue
+                with Image.open(big[key]) as picture, Image.open(folder / (key + ".png")) as small:
+                    picture.load()
+                    mode = "RGBA" if "A" in small.mode or "transparency" in small.info else "RGB"
+                    made = key_exact(picture.convert(mode), small, how == "ring")
+                target = done / (key + ".png")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                made.save(target)
+                big[key] = target
+                exact += 1
+            # The skin as it was, every picture replaced by its 2x one.
             files = {name: folder / name for name in skin_files(folder)}
-            files.update(made)
+            for key, path in big.items():
+                files[key + ".png"] = path
+            note = provenance(len(keys), len(taken), reuse.name if reuse is not None else "",
+                              exact)
             if folder_out is not None:
-                in_place = folder_out.resolve() == folder.resolve()
-                for name, path in sorted((made if in_place else files).items()):
+                for name, path in sorted(files.items()):
                     target = folder_out / name
-                    if target.resolve() == path.resolve():
-                        continue   # a copy reused from where it already is
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(path, target)
-                print("wrote %d pictures at 2x %s %s" % (
-                    len(keys), "into the skin folder" if in_place else "and the skin into",
-                    folder_out))
-                print("A skin folder dresses the game when no skin zip is worn, or with")
-                print("\"Use the skin folder instead of the zip\" in Options > Skin.")
+                print("wrote the hi-res skin into %s (%d files, %d pictures at 2x)"
+                      % (folder_out, len(files), len(keys)))
             if zip_out is not None:
-                write_zip(files, zip_out)
-                print("wrote %s (%d pictures at 2x, %d files, %.0f MB)"
-                      % (zip_out, len(keys), len(files), zip_out.stat().st_size / 1e6))
-                print("Choose it in Options > Skin, or drop it on the window: it is worn")
-                print("from the next start. Or put it beside the game as")
-                print("skin/original_skin.zip, in place of the 1997 one.")
-            print("To wear a 1997 picture in a place instead, point its line in %s"
-                  % CATALOGUE)
-            print("at the 1997 file (duelist_face_red.png = duelist_face_red.png).")
+                write_zip(files, zip_out, note)
+                print("wrote %s (%d files, %d pictures at 2x, %.0f MB)"
+                      % (zip_out, len(files), len(keys), zip_out.stat().st_size / 1e6))
+            print(note.rstrip())
+            print("It is a skin like the 1997 one: choose it in Options > Skin, or drop")
+            print("it on the window, and it is worn from the next start; choose the")
+            print("1997 skin again to go back. To wear a 1997 picture in one place, put")
+            print("the 1997 file back into it under its own name.")
     return 0
 
 
@@ -653,15 +772,16 @@ def main() -> int:
                         help="the 1997 skin: a folder or a skin zip "
                              "(default: this checkout's assets/original)")
     parser.add_argument("--zip", type=Path, default=None,
-                        help="write the 2x skin zip here (default: %s in this "
-                             "folder, unless --out is given)" % ZIP_NAME)
+                        help="write the hi-res skin zip here (default: %s in "
+                             "this folder, unless --out is given)" % ZIP_NAME)
     parser.add_argument("--out", type=Path, default=None,
-                        help="write the 2x skin into this folder instead (the "
-                             "skin folder itself: add to it in place)")
+                        help="write the hi-res skin into this folder instead "
+                             "(never the skin read)")
     parser.add_argument("--reuse", type=Path, default=None, metavar="ZIP_OR_DIR",
-                        help="take each picture's @2x copy from this 2x zip or "
-                             "folder (exactly twice its size) instead of "
-                             "upscaling it again; the rest are upscaled")
+                        help="take each picture's 2x copy (<name>@2x.png, or its "
+                             "own name at twice the size) from this zip or "
+                             "folder instead of upscaling it again, when it is "
+                             "a copy of the same picture; the rest are upscaled")
     parser.add_argument("--engine", type=Path, default=None,
                         help="your own realesrgan-ncnn-vulkan (the program or "
                              "its folder) instead of the fetched one")

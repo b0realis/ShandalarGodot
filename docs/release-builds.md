@@ -72,9 +72,10 @@ The older `build_release.sh --package` Linux/web paths use the same staging
 helper, so they also carry the full construction toolkit and README instructions.
 Only `-with-skin` includes `skin/original_skin.zip`; no package carries card
 pictures. Validate the supplied skin with `tools/skin_catalogue.py --check`.
-The 2x skin — a whole skin, the 1997 files with each picture's
-`<key>@2x.png` beside it — is built from the same 1997 skin, apart from
-the packages: `python3 tools/upscale_skin.py --skin assets/original --zip
+The hi-res skin — the same files as `original_skin.zip`, every picture at
+twice the size under its own name — is built from that zip, apart from
+the packages: `python3 tools/upscale_skin.py --skin
+../shandalar-build/pkg/original_skin.zip --zip
 ../shandalar-build/pkg/original_skin_realesrgan-anime_2x.zip` (with
 `--reuse <a 0.50.28 2x zip>`, its copies are taken instead of upscaling
 again). It is not a release file yet.

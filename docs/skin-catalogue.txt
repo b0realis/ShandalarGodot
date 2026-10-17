@@ -114,21 +114,24 @@ with a file that starts with /, holds a \ or climbs out with .., is
 ignored; a place named twice takes its last line, and a line whose file
 is not in the skin counts as no line. For a place with no line the game
 takes, for a picture, <name>@2x.png beside it when the skin holds one
-(the name tools/upscale_skin.py gives its 2x pictures), and otherwise
-the file of the place's own name — so a skin without a catalogue, every
-1997 skin among them, is worn as it always was.
+(the name the 0.50.28 tool gave its 2x pictures), and otherwise the
+file of the place's own name — so a skin without a catalogue, every
+1997 skin and the hi-res skin among them, is worn as it always was.
 
-MIX AND MATCH is changing a line. The 2x skin (below) keeps the 1997
-pictures under their own names beside its @2x ones, so pointing a line
-back at the 1997 file (duelist_face_red.png = duelist_face_red.png)
-wears the 1997 picture in that place. Deleting the line is not the
-same: with no line the @2x picture beside it is still worn. A line may
-as well name any picture you add. Unzip, edit, zip again — or edit the
-catalogue of a loose skin folder; the game reads it at the next start.
---check (below) reads it too.
+MIX AND MATCH. The hi-res skin (below) is the 1997 skin's files with
+the pictures at twice the size, under the same names: to wear a 1997
+picture in one place, put the 1997 file back into it under its name.
+A catalogue does the same without replacing anything: keep the 1997
+picture under another name, or the 2x one as <name>@2x.png beside the
+1997 <name>.png, and point the place's line where you want it — a line
+naming the place itself (duelist_face_red.png = duelist_face_red.png)
+wears the 1x file over an @2x one. Unzip, edit, zip again — or edit a
+loose skin folder; the game reads it at the next start. --check (below)
+reads it too.
 
 SIZES AND SCALES. Every picture place has the 1997 size listed below,
-and the game lays its screens out at that size. A picture may be:
+and the game lays its screens out at that size. The hi-res skin's
+pictures are its places' own names at twice it. A picture may be:
   * that size (1x): worn as it is;
   * exactly 2, 3 or 4 times it, in both directions (2x, 3x, 4x): drawn
     at the 1997 size with all its pixels, so on a big screen it is
@@ -143,24 +146,28 @@ A few pictures are KEYED: the game takes a colour out of them (the
 black around the mana stripes and the set symbols, the white of the
 combat bar), reads an image+mask pair's mask (below), or measures them
 (a territory's black edge, the grave plate's colours, the target
-cursor). For a 2x, 3x or 4x picture it decides those on the 1x file of
-the place's own name, when the skin holds one at the 1997 size, and
-carries the result up — so an upscaled picture keys exactly as its
-1997 one did; without one, on the picture shrunk back to the 1997 size,
-which is less exact. So KEEP THE 1x FILE BESIDE A 2x PICTURE for the
-keyed places — mana_stripes, card_set_symbols, combat_bar,
+cursor). For a 2x, 3x or 4x picture it decides those on the picture
+brought back to its 1997 size — every 2x2 block averaged — and carries
+the result up; the mana stripes on the cards, the set symbols and the
+territories' edges stay hi-res. tools/upscale_skin.py makes those
+pictures KEY-EXACT: each block averages to its 1997 pixel, so what the
+game brings back is the 1997 picture and it cuts exactly what the 1997
+skin cuts. A plain upscale does not (measured on the real 2x pictures:
+the stripes' cut-out edges moved by up to a tenth, the set symbols lost
+their ink box, the territories their black-edge trim). For a skin of
+your own at 2x, keep the key colours clean — the black around the
+stripes and symbols, the white of the combat bar, a territory's 1px
+black edge — or keep the 1x file beside the 2x one: <name>.png at the
+1997 size, <name>@2x.png at twice it, and the game keys on the 1x file.
+The keyed places: mana_stripes, card_set_symbols, combat_bar,
 card_counters, the image+mask sprites (summon_sick, state_*, attack_*,
 target_cursor), and every duel_pattern_*, duel_picture_*, duel_mana_*
-and grave_panel_* — as the 2x skin upscale_skin.py makes does. The
-mana stripes on the cards, the set symbols and the territories' edges
-are hi-res either way, but cut exactly only with the 1x file: measured
-on the real 2x pictures, without it the stripes' cut-out edges differ
-by up to a tenth, the set symbols lose their ink box and the
-territories their black-edge trim. --check names every keyed picture
-worn above 1x without its 1x file.
+and grave_panel_*. --check says when a skin wears keyed places above
+1x with no 1x file.
 
 Portraits and card art are fitted to their frames at any size (a 2x
-portrait beside its own 1x file is one face, drawn at the 1x size); the
+portrait — its own name at twice the size, or <name>@2x.png beside its
+1x file — is one face, drawn at the 1x size); the
 coin-toss sheets are read as their .json describes them, in their own
 pixels.
 
@@ -194,13 +201,15 @@ where its own pictures fit, for your own copy only; see first, file by
 file, what you would get:
     python3 tools/mtg_assets.py --check /path/to/manalink --manalink
     python3 tools/mtg_assets.py --install /path/to/manalink --manalink
-And from your own 1997 skin, a 2x one — every picture again at twice
-the size (Real-ESRGAN's anime model, with the 1997 colours), the 1997
-files kept beside them and a catalogue that wears the 2x ones:
+And from your own 1997 skin, THE HI-RES SKIN: the same files as your
+1997 skin, under the same names, every picture at twice the size
+(Real-ESRGAN's anime model, with the 1997 colours, the keyed places
+made exact), original_skin_realesrgan-anime_2x.zip. Choose it in
+Options > Skin like the 1997 one, and choose the 1997 one to go back:
     python3 tools/upscale_skin.py --skin original_skin.zip
-With the 2x pictures alone, made before (the zip the 0.50.28 tool
-wrote), --reuse takes them as they are and makes the whole skin around
-them without upscaling again:
+With 2x pictures made before (the zip the 0.50.28 tool wrote), --reuse
+takes each one that is a copy of the same picture as it is and upscales
+only the rest:
     python3 tools/upscale_skin.py --skin original_skin.zip \
         --reuse original_skin_realesrgan-anime_2x.zip
 

@@ -353,29 +353,29 @@ class TestCheckingASkin(unittest.TestCase):
             "skin/portraits/x@2x.png": png_bytes(8, 8),
             "skin/UPSCALE.txt": b"note"}))
         self.assertIn("pictures only", text)
+        self.assertIn("The hi-res skin of them", text)
         self.assertIn("upscale_skin.py --skin original_skin.zip --reuse "
                       "original_skin_realesrgan-anime_2x.zip", text)
         self.assertIn(", 0 portraits,", text)
 
-    def test_a_keyed_picture_above_1x_wants_its_1x_file_beside_it(self):
+    def test_keyed_pictures_above_1x_with_no_1x_file_are_said_once(self):
         """The owner, 2026-10-17: *"that is important, tell the player"* —
-        a keyed picture worn at 2x without the 1997 file of its own name is
-        cut less exactly; with it, exactly. A picture nothing keys is
-        never named."""
+        a keyed picture worn at 2x with no 1x file is cut from the picture
+        brought back to 1x. The checker cannot tell a key-exact one
+        (tools/upscale_skin.py's) from a plain upscale, so it says so once,
+        with how many, rather than listing faults; a picture nothing keys
+        is never counted, and a 1x file beside makes it nothing to say."""
         rough = self._report(self._zip("rough.zip", {
             "skin/mana_stripes@2x.png": png_bytes(108, 252),
             "skin/duel_mana_red.png": png_bytes(1442, 762),      # 2x, own name
             "skin/card_back@2x.png": png_bytes(456, 646)}))      # not keyed
-        listed = rough.split("cut less")[1] if "cut less" in rough else ""
-        self.assertIn("    mana_stripes.png ", listed)
-        self.assertIn("MiniCard.stripe_texture", listed)
-        self.assertIn("duel_mana_red.png", listed)
-        self.assertIn("TerritoryGround._inner", listed)
-        self.assertNotIn("card_back", listed)
+        self.assertIn("2 keyed places at 2x-4x with no 1x file: cut from the picture "
+                      "brought\n  back to 1x (upscale_skin.py makes them exact", rough)
+        self.assertNotIn("    mana_stripes.png ", rough, "no list of faults")
         exact = self._report(self._zip("exact.zip", {
             "skin/mana_stripes.png": png_bytes(54, 126),
             "skin/mana_stripes@2x.png": png_bytes(108, 252)}))
-        self.assertNotIn("cut less", exact)
+        self.assertNotIn("keyed place", exact)
 
     def test_the_keyed_places_are_named_with_their_cutters(self):
         self.assertIn("SetBadges", cat.keyed_by("card_set_symbols.png"))

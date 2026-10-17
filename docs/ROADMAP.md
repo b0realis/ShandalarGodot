@@ -18811,6 +18811,51 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — The hi-res skin is the 1997 skin's own files (0.50.31)
+
+0.50.30's hi-res zip held every 1997 file AND each picture's `@2x` copy
+beside it, 411 files and 147 MB against the 1997 zip's 242. The owner:
+*"The upscaled skin is not 147 Mb and skin does not contain 411 files ?
+What ?"*, *"Shouldnt the upscale have the same number of files?"*, *"We
+dont want one zip with everything inside !!"* and *"No. Each skin pack
+zip should contain all required assets. Just in the upscaled the
+relevant assets are upscaled!"*
+
+- **The same files.** `tools/upscale_skin.py` writes the hi-res skin as
+  the file set of the skin it is made from — built from the released
+  `original_skin.zip`, 242 files under the same names — every picture
+  replaced at twice the size, the music, sounds, fonts and coin toss
+  byte for byte; no `@2x` copies, no 1x duplicates, no catalogue, the
+  provenance in the zip's comment. 143 MB: the pictures have four times
+  the pixels. One skin is worn at a time (0.50.30), so each zip carries
+  everything; to mix, a 1997 picture goes back into the zip under its
+  name, or a skin's `catalogue.txt` names another file. The game side
+  was already right — a picture at exactly 2x its slot's size is worn at
+  the slot's size (`GameSkin.SIZES`) — and only its docs changed.
+- **Exact keys without 1x files.** The hi-res skin has no 1997 picture
+  for `GameSkin.original` to key on, so it keys on the picture shrunk
+  back, and 0.50.30's measurement showed what an upscaler's blend does
+  there. The tool therefore makes the pictures whose keys or measures
+  move average back to their 1997 pixels exactly, block by block — the
+  whole of `mana_stripes`, `card_set_symbols`, `target_cursor` and the
+  five `grave_panel_*`, and the outer ring of the fifteen territory
+  grounds (the 1 px edge the game measures and trims) — and leaves every
+  other picture as the model drew it. Measured on the built zip worn
+  alone against the 1997 pictures with the 0.50.28 copies beside them:
+  the stripes, set symbols, combat bar, counter stones and exile plates
+  cut identically (0.00% of the pixels), all fifteen edges found, the
+  three image+mask sprites within 0.01%.
+- **`--reuse`** takes a 0.50.28 zip's copies only where one is exactly
+  twice its picture's size and, averaged back, matches it (mean
+  difference after a 1 px blur under 7.0: genuine copies 0.38-4.55, any
+  other picture of the same size 10.04 at the nearest): 167 of the 168
+  reused, `damage_marker.png` upscaled again (the released zip's differs
+  from the checkout's, and the game never reads it). `--out` refuses
+  the 1997 folder itself, which it would overwrite.
+- Tests: `tests/ui/test_skin_2x_2026_10_17.gd` (+1, a 2x picture under
+  its own name), `tools/test_upscale_skin.py` (37),
+  `tools/test_skin_catalogue.py` (44).
+
 ## 2026-10-17 — A skin is a skin: the catalogue and the hi-res skin (0.50.30)
 
 The owner, the same evening, on 0.50.29: *"It is a bit confusing now. We

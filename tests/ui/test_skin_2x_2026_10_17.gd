@@ -347,6 +347,23 @@ func test_a_2x_picture_is_worn_at_its_slots_size() -> void:
 		"and its pixels at the drawn size are to hand, shrunk back")
 
 
+func test_a_2x_picture_under_its_own_name_is_worn_at_its_slots_size() -> void:
+	# The hi-res skin's own shape (0.50.31): the 1997 names, twice the size,
+	# no 1x file and no catalogue.
+	var small := _blocks(Vector2i(131, 36), PALETTE)
+	var big := small.duplicate() as Image
+	big.resize(262, 72, Image.INTERPOLATE_NEAREST)
+	big.save_png(_at("button_normal.png"))
+	_clear()
+	var tex := GameSkin.texture("button_normal")
+	assert_eq(GameSkin.scale_of(tex), 2)
+	assert_eq(tex.get_size(), Vector2(131, 36), "drawn at the 1997 size")
+	var img := GameSkin.original(tex)
+	img.convert(Image.FORMAT_RGBA8)
+	assert_eq(img.get_data(), small.get_data(),
+		"shrunk back, a block averaging to its 1997 pixel gives that pixel")
+
+
 func test_the_slots_own_1x_file_is_the_original() -> void:
 	var small := _blocks(Vector2i(131, 36), PALETTE)
 	_write("button_normal", small)

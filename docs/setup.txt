@@ -261,22 +261,22 @@ only; no release carries one.
     python3 tools/mtg_assets.py --install /path/to/manalink --manalink
 
 A hi-res skin for big screens: tools/upscale_skin.py makes a second
-skin out of your 1997 one, original_skin_realesrgan-anime_2x.zip —
-every 1997 file, and beside each picture the same picture at twice the
-size, <name>@2x.png. It uses Real-ESRGAN's anime model, and takes the
-colours back from the 1997 picture. On Linux it fetches the upscaler
-once; it needs Pillow (python3-pil) and a Vulkan GPU driver. It is a
-skin like the 1997 one: choose it in Options > Skin or drop it onto the
-window, and it is worn from the next start; choose the 1997 skin again
-to go back. The game draws each 2x picture at the 1997 size, so nothing
-moves and every picture is sharper on a big screen. One skin zip is
-worn at a time, and a skin folder only when no zip is (or with "Use the
-skin folder instead of the zip"). The skin's catalogue.txt says which
-file the game wears in each place: change a line to mix, e.g.
-"duelist_face_red.png = duelist_face_red.png" puts the 1997 picture
-back there (SKIN.txt, THE CATALOGUE and SIZES AND SCALES). With --out
-the skin goes into a folder instead; --reuse takes the 2x copies from a
-zip made by 0.50.28 instead of upscaling again.
+skin out of your 1997 one, original_skin_realesrgan-anime_2x.zip — the
+same files under the same names, with every picture at twice the size
+and the music, sounds, fonts and coin toss as they are. It uses
+Real-ESRGAN's anime model, and takes the colours back from the 1997
+picture. On Linux it fetches the upscaler once; it needs Pillow
+(python3-pil) and a Vulkan GPU driver. It is a skin like the 1997 one:
+choose it in Options > Skin or drop it onto the window, and it is worn
+from the next start; choose the 1997 skin again to go back. The game
+draws each 2x picture at the 1997 size, so nothing moves and every
+picture is sharper on a big screen. One skin zip is worn at a time, and
+a skin folder only when no zip is (or with "Use the skin folder instead
+of the zip"). To mix, put a 1997 picture back into the hi-res zip under
+its own name (or give a skin a catalogue.txt — SKIN.txt, THE CATALOGUE
+and SIZES AND SCALES). With --out the skin goes into a folder instead;
+--reuse takes the 2x copies from a zip made by 0.50.28 instead of
+upscaling again.
 
     python3 tools/upscale_skin.py --skin original_skin.zip
     python3 tools/upscale_skin.py --skin original_skin.zip --reuse old_2x.zip

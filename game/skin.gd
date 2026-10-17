@@ -224,7 +224,7 @@ static var _catalogue_cache: Dictionary = {}
 ## (`tools/skin_catalogue.py` reads a catalogue the same way for --check).
 static func parse_catalogue(text: String) -> Dictionary:
 	var out := {}
-	for raw in text.trim_prefix("﻿").split("\n"):
+	for raw in text.trim_prefix("\ufeff").split("\n"):
 		var line := raw.strip_edges()
 		if line == "" or line.begins_with("#"):
 			continue
@@ -257,8 +257,8 @@ static func catalogue_at(dir: String) -> Dictionary:
 ## reader ;)"*. So a picture slot the catalogue does not name wears its
 ## `@2x` file when the place has one — an unwritten line `x.png =
 ## x@2x.png` — and a written `x.png = x.png` picks the 1x file over it.
-## The 2x skin tools/upscale_skin.py writes uses these names too, and
-## lists them all.
+## The hi-res skin tools/upscale_skin.py writes since 0.50.31 needs
+## neither: its pictures are under their own names, at twice the size.
 const SCALED_SUFFIX := "@2x"
 
 
@@ -343,10 +343,13 @@ static func worn(path: String) -> Dictionary:
 ## skin zip is hires, low res skin zip is low res oroginal - simple"*.
 ## The switch was read as each picture first loaded, so turning it off
 ## changed nothing on screen until a restart. Now a big picture is simply
-## what the worn skin holds: the 2x skin `tools/upscale_skin.py` writes is
-## a whole skin, chosen like the 1997 one — every 1997 file, each
-## picture's `<key>@2x.png` beside it, and a catalogue naming them — and
-## mixing is a catalogue line.
+## what the worn skin holds. The hi-res skin `tools/upscale_skin.py`
+## writes is the 1997 skin's own files, the same names and the same
+## count, with its pictures at twice the size (the owner: *"Each skin
+## pack zip should contain all required assets. Just in the upscaled the
+## relevant assets are upscaled!"*), chosen in Options > Skin like the
+## 1997 one; mixing is a 1997 picture put back under its own name, or a
+## catalogue line.
 
 ## THE 1997 SIZE OF EVERY PICTURE SLOT, by key — what a picture's size is
 ## measured against ([method scale_for]). The sizes `docs/skin-catalogue.csv`
@@ -535,11 +538,15 @@ static func cut(tex: Texture2D, rect: Rect2i) -> Image:
 
 ## [param tex]'s pixels at its drawn size, for code that MEASURES a
 ## picture or keys a colour out of it. A 1x texture's own image. A big
-## one's: the slot's own 1x file when the skin holds one at that size —
-## the 2x skin keeps every 1997 picture beside its `@2x` one, so an exact
-## key (pure black, near white) answers on the 1997 palette, never on an
-## upscaler's blend of it — else the big picture shrunk back ([method
-## shrunk]), whose every pixel is the average of the block it stands for.
+## one's: the slot's own 1x file when the place holds one at that size
+## (a 1997 picture beside its `@2x` one), so an exact key (pure black,
+## near white) answers on the 1997 palette, never on an upscaler's blend
+## of it — else the big picture shrunk back ([method shrunk]), whose every
+## pixel is the average of the block it stands for. The hi-res skin keeps
+## no 1x files, so tools/upscale_skin.py makes the pictures whose keys or
+## measures an upscaler's blend would move (the mana stripes, the set
+## symbol strip, the target cursor, the grave plates, the territories'
+## edge) average back to their 1997 pixels exactly, block by block.
 static var _original_cache: Dictionary = {}
 
 static func original(tex: Texture2D) -> Image:

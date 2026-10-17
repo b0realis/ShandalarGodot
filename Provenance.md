@@ -604,8 +604,8 @@ everywhere the clean fallback skin would otherwise show. Nothing in that
 pipeline puts an original asset into version control, and the game is
 complete and playable without it.
 
-The 2x skin is made the same way, from it: `tools/upscale_skin.py`
-writes each picture again as `<key>@2x.png`, beside the 1997 files, with Real-ESRGAN
+The hi-res skin is made the same way, from it: `tools/upscale_skin.py`
+writes the same files with each picture at twice the size, with Real-ESRGAN
 ncnn-vulkan (MIT) and its `realesrgan-x4plus-anime` model (BSD-3, Xintao
 Wang et al.). The tool fetches the program and the model from that
 project's GitHub release at run time and checks them against a pinned

@@ -173,13 +173,15 @@ or their own named project; changing XDG alone does not protect player data.
   2026-10-17: *"A skin is a skin and gets applied after game reset. No
   switches."*): `tools/upscale_skin.py` (Real-ESRGAN's anime model, its
   colours taken back from 1997 — the owner's pick of 2026-10-17) writes a
-  whole skin, `original_skin_realesrgan-anime_2x.zip` — every 1997 file,
-  each picture's `<key>@2x.png` beside it, and a `catalogue.txt` naming
-  them — chosen like any skin; a Manalink label rides into it and is
-  refused the same way. No switch, no second zip worn beside the skin:
-  ONE skin zip is worn (`SkinPack`, ONE SKIN), and the loose folders only
-  when none is (`GameSkin.zip_worn`). A slot's file is the catalogue's
-  line, else its `@2x` sibling, else its own name (`GameSkin._in_place`);
+  whole skin, `original_skin_realesrgan-anime_2x.zip` — the 1997 skin's
+  own files and names, every picture at twice the size (the owner: *"Each
+  skin pack zip should contain all required assets. Just in the upscaled
+  the relevant assets are upscaled!"*) — chosen like any skin; a Manalink
+  label rides into it and is refused the same way. No switch, no second
+  zip worn beside the skin: ONE skin zip is worn (`SkinPack`, ONE SKIN),
+  and the loose folders only when none is (`GameSkin.zip_worn`). A slot's
+  file is the catalogue's line, else its `@2x` sibling, else its own name
+  (`GameSkin._in_place`);
   a picture at 2-4x its slot's size (`GameSkin.SIZES`, held to
   `docs/skin-catalogue.csv` by `tools/test_skin_catalogue.py`) is a
   texture whose size is overridden to the slot's (`GameSkin.picture`), so
@@ -187,7 +189,11 @@ or their own named project; changing XDG alone does not protect player data.
   picture's PIXELS goes through `GameSkin.cut`, `texture_of`, `scale_of`,
   and decides a colour key or a measurement on `GameSkin.original` (the
   slot's 1x file, else the picture shrunk back), carried up by
-  `lift_alpha` — never `get_image().get_region()` at 1997 coordinates. `docs/` carries a `.gdignore`:
+  `lift_alpha` — never `get_image().get_region()` at 1997 coordinates. The
+  hi-res skin has no 1x files, so the tool makes the pictures whose keys or
+  measures an upscaler's blend would move average back to their 1997
+  pixels exactly, block by block; a new keyed cutter adds its place there.
+  `docs/` carries a `.gdignore`:
   Godot imports any `.csv` as a translation table, and
   `docs/skin-catalogue.csv` is a catalogue, not one.
   The build is the LOCAL step and the GitHub release is a separate one:
