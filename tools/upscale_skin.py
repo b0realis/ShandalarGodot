@@ -119,6 +119,13 @@ wanted: give those fifteen keys another method — exact pixel doubling
 CUNet (dots kept, 18.7%; stripes 0.34) — rather than a finer blur, which
 would bring the dither dots back on every picture.
 
+ONE PICTURE DOUBLED, NOT UPSCALED (the owner's playtest of 0.50.31):
+the sandstone, `panel_stone`, which the game stretches over its stone
+windows and squeezes into every main-menu button. The model smoothed its
+one-pixel grain and streaked its edge rows, so the buttons wore streaked
+strips round a smeared middle; doubled pixel for pixel (DOUBLED) it is
+the 1997 stone, crisp at twice the pixels.
+
 LEFT AS THEY ARE, under their own names: the coin-toss movie sheets
 (2240x2160 already; twice that is past the 4096-pixel texture limit of
 older GPUs), the sounds, the fonts, the sheet layouts and the movies.
@@ -255,6 +262,20 @@ KEY_EXACT = (
     ("duel_picture_", "ring"),
     ("duel_mana_", "ring"),
 )
+
+## DOUBLED, NOT UPSCALED: every pixel made a 2x2 block, the 1997 grain
+## kept exactly. The owner's playtest of 0.50.31: *"sandstone window
+## backs look a bit blurry - are they stretched?, sandstone colored
+## buttons look strange with top and botton stripes and blurry middle"*.
+## `panel_stone` is the 400x350 sandstone the game STRETCHES over every
+## stone window and SQUEEZES into every main-menu button
+## (`UiChrome.stone_panel`: a 260x46 button holds 334 of its rows in
+## 30). Its 1997 grain is a one-pixel dither, which a squeeze or a
+## stretch leaves reading as stone; the model smooths that dither away
+## and draws streaks along the edge rows it is padded from, so a button
+## wore two crisp streaked strips in its 8px frame around a smeared
+## middle. Doubled, it is the 1997 stone at twice the pixels.
+DOUBLED = ("panel_stone",)
 
 ENGINE_EXE = "realesrgan-ncnn-vulkan"
 ENGINE_BUILD = "20220424"
@@ -523,6 +544,15 @@ def reusable(source: Path, skin: Path, keys: list[str]) -> tuple[dict[str, Path]
     return taken, refused
 
 
+def doubled(picture: "Image.Image") -> "Image.Image":
+    """[param picture] at twice the size, each pixel a 2x2 block of itself
+    (DOUBLED); its mode and transparency kept."""
+    big = picture.resize((picture.width * SCALE, picture.height * SCALE), Image.NEAREST)
+    if "transparency" in picture.info:
+        big.info["transparency"] = picture.info["transparency"]
+    return big
+
+
 def exactness(key: str) -> str | None:
     """"whole", "ring" or None — how much of [param key]'s 2x picture is
     made key-exact (KEY_EXACT)."""
@@ -650,11 +680,15 @@ def run_engine(exe: Path, src: Path, dst: Path, gpu: str | None) -> None:
 
 # ---------------------------------------------------------------- the output
 
-def provenance(count: int, reused: int = 0, source: str = "", exact: int = 0) -> str:
+def provenance(count: int, reused: int = 0, source: str = "", exact: int = 0,
+               plain: int = 0) -> str:
     """How the hi-res skin was made — the zip's comment, never a file of
     it, so it holds the same files as the skin it was made from."""
     again = ("\n  reused   %d of them taken as they were from %s\n" % (reused, source)
              if reused else "\n")
+    if plain:
+        again += ("  doubled  %d pixel for pixel, the 1997 grain kept (%s)\n"
+                  % (plain, ", ".join(DOUBLED)))
     return (
         "A 1997 skin with its pictures at twice the size, made by upscale_skin.py\n"
         "(Shandalar %s).\n\n"
@@ -699,8 +733,10 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
         if (folder / import_manalink.LABEL).exists():
             print("note: this skin holds files from a Manalink install; the hi-res skin "
                   "keeps the label (%s) and a release refuses it" % import_manalink.LABEL)
-        taken, refused = reusable(earlier, folder, keys) if earlier is not None else ({}, {})
-        fresh = [key for key in keys if key not in taken]
+        plain = [key for key in keys if key in DOUBLED]
+        modelled = [key for key in keys if key not in DOUBLED]
+        taken, refused = reusable(earlier, folder, modelled) if earlier is not None else ({}, {})
+        fresh = [key for key in modelled if key not in taken]
         if reuse is not None:
             print("%d of %d pictures reused from %s" % (len(taken), len(keys), reuse))
             for key in sorted(refused):
@@ -714,6 +750,13 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
             done = work / "done"
             done.mkdir()
             big: dict[str, Path] = dict(taken)
+            for key in plain:
+                with Image.open(folder / (key + ".png")) as picture:
+                    picture.load()
+                    target = done / (key + ".png")
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    doubled(picture).save(target)
+                big[key] = target
             if fresh:
                 # Only now: a run that reuses every picture never needs it.
                 exe = find_engine(engine)
@@ -744,7 +787,7 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
             for key, path in big.items():
                 files[key + ".png"] = path
             note = provenance(len(keys), len(taken), reuse.name if reuse is not None else "",
-                              exact)
+                              exact, len(plain))
             if folder_out is not None:
                 for name, path in sorted(files.items()):
                     target = folder_out / name

@@ -502,6 +502,33 @@ class RunTest(unittest.TestCase):
         log = self.engine.parent / "seen.txt"
         return log.read_text().split() if log.exists() else []
 
+    def test_the_sandstone_is_doubled_pixel_for_pixel(self):
+        # The owner's playtest of 0.50.31: "sandstone colored buttons look
+        # strange with top and botton stripes and blurry middle".
+        stone = Image.new("RGB", (40, 30))
+        stone.putdata([(247, 240, 208) if (x + y) % 2 else (176, 171, 145)
+                       for y in range(30) for x in range(40)])
+        stone.save(self.skin / "panel_stone.png")
+        out = self.tmp / up.ZIP_NAME
+        self.assertEqual(self.run_tool(zip_out=out), 0)
+        self.assertNotIn("panel_stone.png", self.seen(), "the model never sees it")
+        with zipfile.ZipFile(out) as archive:
+            big = self.picture(archive, "panel_stone.png")
+            note = archive.comment.decode()
+        self.assertEqual(big.tobytes(), stone.resize((80, 60), Image.NEAREST).tobytes(),
+                         "every 1997 pixel a 2x2 block of itself: the dither kept")
+        self.assertIn("doubled  1 pixel for pixel", note)
+        # And an old copy of it is not reused: it was the model's.
+        old = self.tmp / "old_2x.zip"
+        with zipfile.ZipFile(old, "w") as archive:
+            data = io.BytesIO()
+            stone.resize((80, 60), Image.BILINEAR).save(data, "PNG")
+            archive.writestr("skin/panel_stone@2x.png", data.getvalue())
+        again = self.tmp / "again.zip"
+        self.assertEqual(self.run_tool(zip_out=again, reuse=old), 0)
+        with zipfile.ZipFile(again) as archive:
+            self.assertEqual(self.picture(archive, "panel_stone.png").tobytes(), big.tobytes())
+
     def test_reuse_with_every_copy_never_runs_the_engine(self):
         old = self.old_2x_zip(self.PICTURES)
         self.engine.write_text(BROKEN_ENGINE)   # it would fail if it were run

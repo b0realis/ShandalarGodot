@@ -6224,6 +6224,22 @@ func _auto_pass_applies() -> bool:
 ## 2026-10-12 campaign the engine's own announcements re-entered
 ## [method _refresh] from inside `pass_priority`; they now ask for one
 ## redraw at the end of the frame, which this one makes unnecessary.)
+##
+## ...EXCEPT AT THE TURN'S DOOR (2026-10-17). The owner on 0.50.31: *"why
+## does my gameplay stop at my upkeep phase at the beginning even if I
+## dont have the red dot on that phase? Please check and fix!"* The pass
+## that closes the opponent's end step carries the duel through the
+## cleanup and the untap into the human's OWN upkeep, where the human,
+## now the active player, holds priority again — two of the human's
+## windows back to back, with no move of the computer's between them to
+## redraw and resume. The redraw above runs under [member _advancing], so
+## its drive returned at once; the end-of-frame redraw the computer's move
+## had asked for found the table already drawn; and the unmarked upkeep
+## waited for a click at the start of every turn whose end step the
+## computer had closed (`tests/ui/test_upkeep_after_their_turn_2026_10_17.gd`).
+## So when the pass leaves the human holding priority, the drive is asked
+## for once more at the end of the frame — one window at a time still, and
+## a Stop, a required action or a response still holds it.
 func _auto_pass_priority() -> bool:
 	if _advancing or not _auto_pass_applies():
 		return false
@@ -6231,6 +6247,8 @@ func _auto_pass_priority() -> bool:
 	var refused := game.pass_priority(game.priority_player)
 	_refresh()
 	_advancing = false
+	if refused == "" and not game.game_over and _is_human(game.priority_player):
+		_drive_advance.call_deferred()
 	return refused == ""
 
 

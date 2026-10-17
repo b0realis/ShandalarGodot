@@ -76,6 +76,17 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The playtest of 0.50.31: the sandstone and the upkeep (2026-10-17)
+
+- `tools/upscale_skin.py`: `DOUBLED` (`panel_stone`) is doubled pixel for
+  pixel (`doubled`), never upscaled or reused — the sandstone every stone
+  window stretches and every main-menu button squeezes keeps its 1997
+  grain; the provenance says so. `tools/test_upscale_skin.py` (+1).
+- `game/duel/duel_screen.gd`: `_auto_pass_priority` asks for the drive
+  once more when its pass leaves the human holding priority — the turn's
+  door, the computer's end step into the human's unmarked upkeep.
+  `tests/ui/test_upkeep_after_their_turn_2026_10_17.gd` (new).
+
 ## The hi-res skin is the 1997 skin's own files (2026-10-17)
 
 - `tools/upscale_skin.py`: the hi-res skin is the SAME file set as the
@@ -2721,6 +2732,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.32.md`: the upkeep that passes itself, carrying
+  the 0.50.31 … 0.50.20 notes below.
 - `docs/releases/0.50.31.md`: the hi-res skin as the 1997 skin's own
   files at twice the size, mixing, one skin at a time, carrying the
   0.50.27 … 0.50.20 notes below them (0.50.28-0.50.30 folded into it).
@@ -7304,6 +7317,10 @@ shandalar/
 │    an order came to rest in — plus your own turn's safety cases pinned
 │    on an entirely unmarked bar (combat, discard, a held question, the
 │    damage windows) and the one scope left: never a hotseat duel;
+│    tests/ui/test_upkeep_after_their_turn_2026_10_17.gd — the pass that
+│    closes the computer's end step lands in YOUR upkeep, which then
+│    passes itself unless it carries a Stop (the owner's playtest of
+│    0.50.31: the unmarked upkeep waited at every turn's start);
 │    tests/ui/test_duel_pause.gd — THE PAUSE WINDOW (2026-09-03, [QoL]):
 │    the title and the five entries, the buttons fitting the marble, the
 │    Esc precedence in all three states (open -> close, something to

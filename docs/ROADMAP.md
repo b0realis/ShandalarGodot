@@ -18811,6 +18811,49 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — The playtest of 0.50.31: the sandstone and the upkeep (0.50.32)
+
+The owner: *"Two playtesting reports : sandstone wondow backs look a bit
+blurry - are they stretched?, sandstone colored buttons look strange
+with top and botton stripes and blurry middle?; whay does my gameplay
+stop at my upkeep phase at the beginning wven if o dont have the red dot
+ob that phase? Please check and fix!"* — and, of the first two, *"the
+problems are in the main menu"*.
+
+- **The sandstone.** Every main-menu button, the set and pack plaques
+  under the title, and every stone window wear `panel_stone`, the 1997
+  400x350 window ground, through `UiChrome.stone_panel`: an 8 px frame
+  and a STRETCHED middle, so a 260x46 button squeezes 334 of its rows
+  into 30 and the Options window stretches it past twice its size. With
+  the 1997 grain, a one-pixel dither, either still reads as stone. The
+  anime model smoothed that dither and, padded from its own edge rows,
+  drew streaks along its top and bottom: the frame's 8 px showed those
+  streaks at full size round a squeezed, smooth middle — the stripes and
+  the blur. `tools/upscale_skin.py` now DOUBLES `panel_stone` pixel for
+  pixel (`DOUBLED`): the 1997 stone at twice the pixels, compared by eye
+  on the title screen at 2560x1600 against the 1997 skin — the same.
+  The windows are stretched as they always were (the 1997 windows were
+  fixed-size, ours are not); tiling the stone at its own scale would
+  need a seamless tile and is not done here.
+- **The upkeep.** Not a Stop and not a trigger: the pass the screen
+  makes for the human in the computer's end step carries the duel
+  through the cleanup and the untap into the human's own upkeep, where
+  the human holds priority again — and the drive that would pass that
+  too had already returned under `_advancing`, with no move of the
+  computer's left to redraw. So the unmarked upkeep waited for a click
+  at the start of every turn whose end step the computer closed (turns
+  3, 5 and 7 of a real duel against the computer with the default
+  Stops). `DuelScreen._auto_pass_priority` asks for the drive once more
+  when its pass leaves the human holding priority; a Stop, a required
+  action or a possible response still holds it. Ruled out with
+  evidence: the Stop mapping (upkeep is slot 1, the defaults 3-5), an
+  upkeep trigger or choice, a fast-effect window, the coin toss and the
+  opening hand, a stale `phase_stoppers` row.
+- Tests: `tests/ui/test_upkeep_after_their_turn_2026_10_17.gd` (new: the
+  unmarked upkeep passes itself, fails without the fix; a Stop there
+  still holds), `tools/test_upscale_skin.py` (+1: the sandstone doubled,
+  never sent to the model, never reused). `./duel_soak.sh` green.
+
 ## 2026-10-17 — The hi-res skin is the 1997 skin's own files (0.50.31)
 
 0.50.30's hi-res zip held every 1997 file AND each picture's `@2x` copy
