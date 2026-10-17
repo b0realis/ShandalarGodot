@@ -271,6 +271,36 @@ class TestCheckingASkin(unittest.TestCase):
         self.assertNotIn("title_background.png", report,
                          "card art is not held to the skin's list")
 
+    def test_a_2x_zip_is_counted_as_copies_not_as_a_skin(self):
+        # tools/upscale_skin.py's zip: pictures at twice the size, named
+        # <key>@2x.png, and the tool's note. Not "every file missing".
+        path = self._zip("twice.zip", {"skin/card_back@2x.png": png_bytes(4, 4),
+                                       "skin/portraits/x@2x.png": png_bytes(4, 4),
+                                       "skin/no_such_key@2x.png": png_bytes(4, 4),
+                                       "skin/UPSCALE.txt": b"note"})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(cat.check(path), 0)
+        text = out.getvalue()
+        self.assertIn("2x pictures, 3 copies", text)
+        self.assertIn("still needed", text)
+        self.assertIn("no_such_key@2x.png", text, "a copy of nothing is named")
+        self.assertNotIn("card_back@2x.png", text)
+        self.assertNotIn("missing", text)
+
+    def test_copies_in_a_skin_are_neither_portraits_nor_unknown(self):
+        path = self._zip("both.zip", {"skin/card_back.png": png_bytes(2, 2),
+                                      "skin/card_back@2x.png": png_bytes(4, 4),
+                                      "skin/portraits/x.png": png_bytes(2, 2),
+                                      "skin/portraits/x@2x.png": png_bytes(4, 4)})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(cat.check(path), 0)
+        text = out.getvalue()
+        self.assertIn(", 1 portraits,", text)
+        self.assertIn("2 2x copies beside them", text)
+        self.assertNotIn("card_back@2x.png", text)
+
     def test_check_refuses_what_is_not_a_skin(self):
         path = self.dir / "page.zip"
         path.write_bytes(b"<html>")

@@ -61,13 +61,16 @@ static func symbol(sym: String) -> Texture2D:
 	var sheet := GameSkin.texture("mana_symbols")
 	if sheet != null and CELL.has(sym):
 		var size := sheet.get_height()   # cells are height-sized squares
-		var cell := sheet.get_image().get_region(
-			Rect2i(CELL[sym] * size, 0, size, size))
+		# Cut at the sheet's own resolution: a 2x sheet gives a 2x cell, its
+		# circle and its one-pixel feather measured in ITS pixels
+		# (GameSkin, THE 2x PICTURES).
+		var cell := GameSkin.cut(sheet, Rect2i(CELL[sym] * size, 0, size, size))
 		cell.convert(Image.FORMAT_RGBA8)
-		var centre := (size - 1) / 2.0
-		var radius := size / 2.0
-		for y in size:
-			for x in size:
+		var pixels := cell.get_width()
+		var centre := (pixels - 1) / 2.0
+		var radius := pixels / 2.0
+		for y in pixels:
+			for x in pixels:
 				var dist := Vector2(x - centre, y - centre).length()
 				if dist <= radius - 1.0:
 					continue
@@ -75,7 +78,7 @@ static func symbol(sym: String) -> Texture2D:
 				# Feather the last pixel of the rim, cut everything beyond.
 				px.a = maxf(0.0, radius - dist) if dist < radius else 0.0
 				cell.set_pixel(x, y, px)
-		result = ImageTexture.create_from_image(cell)
+		result = GameSkin.texture_of(cell, Vector2i(size, size))
 	_atlas_cache[sym] = result
 	return result
 

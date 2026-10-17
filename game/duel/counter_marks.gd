@@ -268,7 +268,9 @@ static func tile(row: int) -> Texture2D:
 	if sheet != null and row >= 0 and row < STONE_COUNT \
 			and sheet.get_height() >= CELL_H * (MASK_ROW + 1) \
 			and sheet.get_width() >= CELL_W:
-		var full := sheet.get_image()
+		# The mask row is read at 1997 size and its alpha carried up to a
+		# 2x sheet (GameSkin, THE 2x PICTURES).
+		var full := GameSkin.original(sheet)
 		var img := full.get_region(Rect2i(0, row * CELL_H, CELL_W, CELL_H))
 		var mask := full.get_region(Rect2i(0, MASK_ROW * CELL_H, CELL_W, CELL_H))
 		img.convert(Image.FORMAT_RGBA8)
@@ -287,7 +289,24 @@ static func tile(row: int) -> Texture2D:
 				else:
 					px.a = (1.0 - m.r) if clear_is_bright else m.r
 				img.set_pixel(x, y, px)
-		result = ImageTexture.create_from_image(img.get_region(STONE))
+		if GameSkin.scale_of(sheet) > 1:
+			var big := GameSkin.cut(sheet, Rect2i(0, row * CELL_H, CELL_W, CELL_H))
+			big.convert(Image.FORMAT_RGBA8)
+			# The ink a 1997 tRNS hid is painted back black at 1997 size;
+			# at 2x it is wherever the cut-out keeps a pixel the 1997 image
+			# had transparent — the stone's own colour there is the
+			# upscaler's guess at nothing.
+			var ink := full.get_region(Rect2i(0, row * CELL_H, CELL_W, CELL_H))
+			img = GameSkin.lift_alpha(img, big)
+			var scale := GameSkin.scale_of(sheet)
+			for y in img.get_height():
+				for x in img.get_width():
+					if ink.get_pixel(x / scale, y / scale).a < 0.5 and img.get_pixel(x, y).a > 0.0:
+						img.set_pixel(x, y, Color.BLACK)
+			result = GameSkin.texture_of(img.get_region(GameSkin.image_rect(sheet, STONE)),
+				STONE.size)
+		else:
+			result = ImageTexture.create_from_image(img.get_region(STONE))
 	_tile_cache[row] = result
 	return result
 

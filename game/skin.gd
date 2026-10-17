@@ -110,6 +110,7 @@ static func clear_caches() -> void:
 	_art_missing.clear()
 	_set_icon_cache.clear()
 	_region_cache.clear()
+	_original_cache.clear()
 
 static var _texture_cache: Dictionary = {}
 static var _font_cache: Dictionary = {}
@@ -167,6 +168,143 @@ static func season() -> String:
 	return season_for(int(date.get("month", 0)), int(date.get("day", 0)))
 
 
+## THE 2x PICTURES (2026-10-17). `tools/upscale_skin.py` writes a copy of
+## each skin picture at twice the size, `<key>@2x.png`, to sit BESIDE
+## `<key>.png` — loose in the same folder, or in its own zip
+## (`original_skin_realesrgan-anime_2x.zip`) mounted into the same
+## `res://skin/` ([SkinPack]). The game is laid out for 1280x800 and
+## drawn at the screen's real resolution, so on a big screen the 1997
+## pictures are stretched; the copy gives that stretch real pixels.
+##
+## A 2x picture is worn as an ImageTexture of the big image whose SIZE is
+## overridden to the 1997 one ([method picture]). Everything that DRAWS
+## it therefore keeps working in 1997 coordinates — measured under Xvfb
+## on 2026-10-17: AtlasTexture regions, NinePatchRect and StyleBoxTexture
+## margins, `region_rect`, tiling and `draw_texture_rect_region` all read
+## the overridden size — and only code that reads the PIXELS
+## (`get_image()`) sees the big picture. That code asks [method scale_of],
+## cuts with [method cut], wraps what it made in [method texture_of], and
+## decides colour keys on [method original]'s 1997 pixels, which [method
+## lift_alpha] carries up to the big ones.
+##
+## The copy is read only from the folder its 1997 picture came from — a 2x
+## copy of the 1997 skin never dresses a skin somebody drew themselves —
+## and only when it is exactly twice that picture's size. The `skin_2x`
+## key ([method GamePaths.use_skin_2x]) switches the copies off.
+const SCALED_SUFFIX := "@2x"
+const PICTURE_SCALE := 2
+## Where a 2x texture keeps its scale and its 1997 file.
+const SCALE_META := &"skin_scale"
+const ORIGINAL_META := &"skin_original"
+
+
+## The 2x copy's file name for a picture's: `title_background.png` ->
+## `title_background@2x.png`.
+static func scaled_path(path: String) -> String:
+	return path.get_basename() + SCALED_SUFFIX + "." + path.get_extension()
+
+
+## Whether [param file] is a 2x copy rather than a picture of its own —
+## a folder listing (the portraits) skips them.
+static func is_scaled_name(file: String) -> bool:
+	return file.get_basename().ends_with(SCALED_SUFFIX)
+
+
+## A skin picture's texture: its 2x copy beside it when there is one and
+## the copies are on, the 1997 file otherwise. Null when unreadable.
+static func picture(path: String) -> Texture2D:
+	var img := Image.load_from_file(path)
+	if img == null:
+		return null
+	if GamePaths.use_skin_2x():
+		var big_path := scaled_path(path)
+		if FileAccess.file_exists(big_path):
+			var big := Image.load_from_file(big_path)
+			if big != null and big.get_size() == img.get_size() * PICTURE_SCALE:
+				var tex := texture_of(big, img.get_size())
+				# Only the path: [method original] reads the 1997 pixels for
+				# the few cutters that key or measure, and keeping every 1x
+				# image beside its 2x texture would hold the skin twice.
+				tex.set_meta(ORIGINAL_META, path)
+				return tex
+	return ImageTexture.create_from_image(img)
+
+
+## How many image pixels [param tex] holds per drawn pixel: 2 for a 2x
+## picture (and for what [method texture_of] made from one), 1 otherwise.
+static func scale_of(tex: Texture2D) -> int:
+	if tex == null:
+		return 1
+	return int(tex.get_meta(SCALE_META, 1))
+
+
+## A texture of [param img] that is drawn at [param logical] — the size
+## the 1997 picture had. Same size: a plain texture.
+static func texture_of(img: Image, logical: Vector2i) -> ImageTexture:
+	var tex := ImageTexture.create_from_image(img)
+	if logical.x > 0 and img.get_size() != logical:
+		tex.set_size_override(logical)
+		tex.set_meta(SCALE_META, img.get_width() / logical.x)
+	return tex
+
+
+## [param rect], in drawn (1997) pixels, as [param tex]'s image pixels.
+static func image_rect(tex: Texture2D, rect: Rect2i) -> Rect2i:
+	var scale := scale_of(tex)
+	return Rect2i(rect.position * scale, rect.size * scale)
+
+
+## [param rect] (1997 pixels) cut out of [param tex] at its own
+## resolution — twice the size from a 2x picture.
+static func cut(tex: Texture2D, rect: Rect2i) -> Image:
+	return tex.get_image().get_region(image_rect(tex, rect))
+
+
+## [param tex]'s 1997 pixels, at its drawn size: the file the 2x copy was
+## made from, or the texture's own image. For code that MEASURES a picture
+## or keys a colour out of it — an exact key (pure black, near white)
+## answers on the 1997 palette, never on an upscaler's blend of it.
+static var _original_cache: Dictionary = {}
+
+static func original(tex: Texture2D) -> Image:
+	if tex == null:
+		return null
+	if not tex.has_meta(ORIGINAL_META):
+		return tex.get_image()
+	var path := String(tex.get_meta(ORIGINAL_META))
+	if not _original_cache.has(path):
+		_original_cache[path] = Image.load_from_file(path)
+	var img: Image = _original_cache[path]
+	return (img.duplicate() as Image) if img != null else tex.get_image()
+
+
+## [param big] with the transparency [param small] decided at 1997 size:
+## smoothed up to big's size and cut at half, so an edge stays on or off
+## the way the 1997 key left it, without the 1997 staircase — the same
+## step tools/upscale_skin.py takes for a cut-out. A [param small] of
+## big's own size is used as it is. Both are RGBA8; big is changed and
+## returned.
+static func lift_alpha(small: Image, big: Image) -> Image:
+	if small.get_size() == big.get_size():
+		for y in big.get_height():
+			for x in big.get_width():
+				var px := big.get_pixel(x, y)
+				px.a = small.get_pixel(x, y).a
+				big.set_pixel(x, y, px)
+		return big
+	var alpha := Image.create_empty(small.get_width(), small.get_height(), false, Image.FORMAT_L8)
+	for y in small.get_height():
+		for x in small.get_width():
+			alpha.set_pixel(x, y, Color(small.get_pixel(x, y).a, 0, 0))
+	alpha.resize(big.get_width(), big.get_height(), Image.INTERPOLATE_CUBIC)
+	for y in big.get_height():
+		for x in big.get_width():
+			var px := big.get_pixel(x, y)
+			px.a = 1.0 if alpha.get_pixel(x, y).r >= 0.5 else 0.0
+			big.set_pixel(x, y, px)
+	return big
+
+
 ## Texture for a manifest key ("card_frame_red", "duel_pattern_green"...)
 ## or null when the skin doesn't provide it.
 static func texture(key: String) -> Texture2D:
@@ -181,9 +319,7 @@ static func texture(key: String) -> Texture2D:
 	var result: Texture2D = null
 	var path := _find(key + ".png")
 	if path != "":
-		var img := Image.load_from_file(path)
-		if img != null:
-			result = ImageTexture.create_from_image(img)
+		result = picture(path)
 	_texture_cache[key] = result
 	return result
 
@@ -741,7 +877,7 @@ static func region(key: String, rect: Rect2i) -> Texture2D:
 			and rect.position.x >= 0 and rect.position.y >= 0 \
 			and rect.end.x <= sheet.get_width() \
 			and rect.end.y <= sheet.get_height():
-		result = ImageTexture.create_from_image(sheet.get_image().get_region(rect))
+		result = texture_of(cut(sheet, rect), rect.size)
 	_region_cache[cache_key] = result
 	return result
 

@@ -18811,6 +18811,50 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-17 — The game wears the 2x pictures (0.50.29)
+
+The owner, after 0.50.28 left the game unable to read the copies:
+*"Yes. Do it and push and commit"*.
+
+- **One texture, two sizes.** `GameSkin.picture` loads `<key>@2x.png` from
+  beside `<key>.png` — only there, so a copy of the 1997 skin never
+  dresses a skin somebody drew, and only when it is exactly twice the
+  size — as an ImageTexture of the big image with its SIZE overridden to
+  the 1997 one. Measured under Xvfb before any code was changed: an
+  AtlasTexture region, NinePatchRect and StyleBoxTexture margins,
+  `region_rect`, tiling and `draw_texture_rect_region` all read the
+  overridden size, so everything that DRAWS a skin picture kept its 1997
+  coordinates and needed no change.
+- **What reads pixels.** Seventeen cutters in twelve files called
+  `get_image()` on a skin picture. Those that cut or mask geometrically
+  now cut at the picture's own resolution (`GameSkin.cut`, `texture_of`):
+  the mana symbols, ability badges, filter cells, deck plaques, the hand
+  window's mirrored border, the ruled grounds' two-pixel rule, and
+  `GameSkin.region`. Those that KEY a colour (the stripes' near-black,
+  the set strip's pure black, the combat bar's near-white, the
+  image+mask sprites and counter stones) decide it on the 1997 pixels
+  (`GameSkin.original`) and carry the on/off up (`lift_alpha`): an
+  upscaler's black is not 0. Those that MEASURE (a territory's black
+  edge, the exile plate's palette) and the system cursor stay on the
+  1997 pixels.
+- **The 2x zip** is its own kind of pack, "skin2x" (every picture an
+  `@2x` one): mounted beside the skin zips at boot from the skins folder
+  and from beside the game, kept and mounted when chosen or dropped, and
+  never worn as the skin. The portrait chooser lists a face once and
+  wears its copy. Options → Skin: a `2x pictures:` row and **Wear the 2x
+  pictures** (`skin_2x`, on by default, from the next start).
+  `skin_catalogue.py --check` counts copies apart.
+- **Checked by eye.** The screenshot tour at 2560x1600 on a scratch
+  profile with the 1997 skin and the 0.50.28 copies, on and off: every
+  screen lays out the same, and the phase bar, mana symbols, buttons,
+  faces and frames are sharp where they were stretched.
+- Tests: `tests/ui/test_skin_2x_2026_10_17.gd` (24): each cutter on a
+  sheet and its doubled copy must give the 1x result doubled; the keyed
+  ones again with the copy's black or white moved off its 1997 value (a
+  cutter keyed on the copy fails it — checked by breaking the stripes);
+  the loader, the switch, the portraits, the zip kind, the Options row.
+  `tools/test_skin_catalogue.py` (+2).
+
 ## 2026-10-17 — The 2x skin (0.50.28)
 
 The owner: *"can the game use upscaled assets on modern screens if we

@@ -60,7 +60,9 @@ static func plate(seat_color: String) -> Texture2D:
 	var result: Texture2D = null
 	var grave := GameSkin.texture("grave_panel_" + seat_color)
 	if grave != null:
-		result = ImageTexture.create_from_image(_paint(grave.get_image()))
+		# The 1997 palette: a 2x picture's colours are an upscaler's blend,
+		# never three percent of anything (GameSkin, THE 2x PICTURES).
+		result = ImageTexture.create_from_image(_paint(GameSkin.original(grave)))
 	_cache[seat_color] = result
 	return result
 

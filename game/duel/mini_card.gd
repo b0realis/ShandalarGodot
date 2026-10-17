@@ -214,7 +214,7 @@ static func pending_dagger() -> Texture2D:
 			var lum := 0.25 + 0.75 * px.get_luminance()
 			img.set_pixel(x, y, Color(PENDING_COLOR.r * lum,
 				PENDING_COLOR.g * lum, PENDING_COLOR.b * lum, px.a))
-	_pending_dagger = ImageTexture.create_from_image(img)
+	_pending_dagger = GameSkin.texture_of(img, Vector2i(plain.get_size()))
 	return _pending_dagger
 
 var _highlight: int = Highlight.NONE
@@ -2474,9 +2474,11 @@ static func stripe_texture(color: int) -> Texture2D:
 	var slot: int = STRIPE_SLOT.get(color, 5)
 	if sheet != null:
 		var cell_h := sheet.get_height() / 6
-		var full := sheet.get_image()
-		var img := full.get_region(Rect2i(4, slot * cell_h + 2,
-			int(STRIPE_W), int(STRIPE_H)))
+		var rect := Rect2i(4, slot * cell_h + 2, int(STRIPE_W), int(STRIPE_H))
+		# The key is decided on the 1997 pixels and carried up to a 2x
+		# sheet's (GameSkin, THE 2x PICTURES): an upscaler's blend at the
+		# band's edge is neither backdrop nor band.
+		var img := GameSkin.original(sheet).get_region(rect)
 		img.convert(Image.FORMAT_RGBA8)
 		for y in img.get_height():
 			for x in img.get_width():
@@ -2484,7 +2486,11 @@ static func stripe_texture(color: int) -> Texture2D:
 				if px.r < 0.10 and px.g < 0.10 and px.b < 0.10:
 					px.a = 0.0
 					img.set_pixel(x, y, px)
-		result = ImageTexture.create_from_image(img)
+		if GameSkin.scale_of(sheet) > 1:
+			var big := GameSkin.cut(sheet, rect)
+			big.convert(Image.FORMAT_RGBA8)
+			img = GameSkin.lift_alpha(img, big)
+		result = GameSkin.texture_of(img, rect.size)
 	_stripe_cache[color] = result
 	return result
 
@@ -2537,7 +2543,10 @@ static func masked_sprite(key: String, vertical := false) -> Texture2D:
 	var result: Texture2D = null
 	var sheet: Texture2D = null if key in ALWAYS_OURS else GameSkin.texture(key)
 	if sheet != null:
-		var full := sheet.get_image()
+		# The mask half is read at 1997 size, where it is two-tone, and the
+		# alpha it gives is carried up to a 2x picture (GameSkin, THE 2x
+		# PICTURES); the colour comes from the picture itself.
+		var full := GameSkin.original(sheet)
 		var w: int = full.get_width()
 		var h: int = full.get_height()
 		var img: Image
@@ -2572,7 +2581,14 @@ static func masked_sprite(key: String, vertical := false) -> Texture2D:
 				else:
 					px.a = (1.0 - m.r) if clear_is_bright else m.r
 				img.set_pixel(x, y, px)
-		result = ImageTexture.create_from_image(img)
+		if GameSkin.scale_of(sheet) > 1:
+			var picture := Rect2i(Vector2i.ZERO, img.get_size())
+			var big := GameSkin.cut(sheet, picture)
+			big.convert(Image.FORMAT_RGBA8)
+			img = GameSkin.lift_alpha(img, big)
+			result = GameSkin.texture_of(img, picture.size)
+		else:
+			result = ImageTexture.create_from_image(img)
 	else:
 		# NO SKIN SUPPLIES THIS SPRITE, or it is one of [constant
 		# ALWAYS_OURS] — so ours does, if we drew one. `GameSkin.our_art`
@@ -2677,20 +2693,22 @@ static func badge_from_slot(slot: int) -> Texture2D:
 	if sheet != null and slot >= 0:
 		var cell := sheet.get_width()   # the sheet is one column wide
 		if (slot + 1) * cell <= sheet.get_height():
-			var img := sheet.get_image().get_region(
-				Rect2i(0, slot * cell, cell, cell))
+			# At the sheet's own resolution (GameSkin, THE 2x PICTURES): the
+			# cut at 0.51 of the cell and the feather in its pixels.
+			var img := GameSkin.cut(sheet, Rect2i(0, slot * cell, cell, cell))
 			img.convert(Image.FORMAT_RGBA8)
-			var centre := (cell - 1) / 2.0
-			var radius := cell * 0.51
-			for y in cell:
-				for x in cell:
+			var pixels := img.get_width()
+			var centre := (pixels - 1) / 2.0
+			var radius := pixels * 0.51
+			for y in pixels:
+				for x in pixels:
 					var dist := Vector2(x - centre, y - centre).length()
 					if dist <= radius - 1.0:
 						continue
 					var px := img.get_pixel(x, y)
 					px.a = maxf(0.0, radius - dist) if dist < radius else 0.0
 					img.set_pixel(x, y, px)
-			result = ImageTexture.create_from_image(img)
+			result = GameSkin.texture_of(img, Vector2i(cell, cell))
 	_badge_cache[slot] = result
 	return result
 

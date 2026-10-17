@@ -1147,14 +1147,15 @@ static func _plaque(index: int) -> Texture2D:
 		var sheet := GameSkin.texture("deck_slot_plaques")
 		if sheet == null:
 			return null
-		var image := sheet.get_image()
-		if image.get_height() < 2 * PLAQUE.y:
+		if sheet.get_height() < 2 * PLAQUE.y:
 			return null
 		for i in PLAQUE_COLUMNS:
-			if image.get_width() < (i + 1) * PLAQUE.x:
+			if sheet.get_width() < (i + 1) * PLAQUE.x:
 				break
-			_plaque_cache[i] = ImageTexture.create_from_image(
-				image.get_region(Rect2i(i * PLAQUE.x, PLAQUE.y, PLAQUE.x, PLAQUE.y)))
+			# Drawn size for the bounds, the sheet's own pixels for the cut
+			# (GameSkin, THE 2x PICTURES).
+			var rect := Rect2i(i * PLAQUE.x, PLAQUE.y, PLAQUE.x, PLAQUE.y)
+			_plaque_cache[i] = GameSkin.texture_of(GameSkin.cut(sheet, rect), rect.size)
 	return _plaque_cache[index] if index < _plaque_cache.size() else null
 
 

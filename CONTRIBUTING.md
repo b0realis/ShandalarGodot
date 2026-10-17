@@ -175,7 +175,13 @@ or their own named project; changing XDG alone does not protect player data.
   `<key>@2x.png` beside the 1997 key, into
   `original_skin_realesrgan-anime_2x.zip`, and leaves the coin-toss
   sheets, sounds and fonts to the 1997 skin; a Manalink label rides into
-  the copy and is refused the same way. `docs/` carries a `.gdignore`:
+  the copy and is refused the same way. The game wears a copy only beside
+  its own picture, as a texture whose size is overridden to the 1997 one
+  (`GameSkin.picture`), so whatever DRAWS it stays in 1997 coordinates;
+  code that reads a skin picture's PIXELS goes through `GameSkin.cut`,
+  `texture_of`, `scale_of`, and decides a colour key or a measurement on
+  `GameSkin.original` (the 1997 pixels), carried up by `lift_alpha` —
+  never `get_image().get_region()` at 1997 coordinates. `docs/` carries a `.gdignore`:
   Godot imports any `.csv` as a translation table, and
   `docs/skin-catalogue.csv` is a catalogue, not one.
   The build is the LOCAL step and the GitHub release is a separate one:

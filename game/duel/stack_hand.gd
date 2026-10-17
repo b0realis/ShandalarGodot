@@ -237,7 +237,10 @@ static func window_texture(color_name: String) -> Texture2D:
 	if source != null:
 		var src := source.get_image()
 		src.convert(Image.FORMAT_RGBA8)
-		var edge := int(BORDER)
+		# BORDER is in drawn pixels; a 2x picture mirrors twice as many of
+		# its own (GameSkin, THE 2x PICTURES).
+		var scale := GameSkin.scale_of(source)
+		var edge := int(BORDER) * scale
 		var w := src.get_width()
 		var h := src.get_height()
 		var mirror := src.get_region(Rect2i(w - edge, 0, edge, h))
@@ -245,7 +248,7 @@ static func window_texture(color_name: String) -> Texture2D:
 		var whole := Image.create_empty(w + edge, h, false, Image.FORMAT_RGBA8)
 		whole.blit_rect(mirror, Rect2i(0, 0, edge, h), Vector2i.ZERO)
 		whole.blit_rect(src, Rect2i(0, 0, w, h), Vector2i(edge, 0))
-		result = ImageTexture.create_from_image(whole)
+		result = GameSkin.texture_of(whole, Vector2i(whole.get_size() / scale))
 	_window_cache[color_name] = result
 	return result
 

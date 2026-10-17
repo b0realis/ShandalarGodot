@@ -347,7 +347,10 @@ static func symbol(code: String) -> Texture2D:
 	var result: Texture2D = null
 	var sheet := GameSkin.texture(SHEET_KEY)
 	if sheet != null:
-		result = symbol_from_sheet(sheet.get_image(), code)
+		# The key and the crop are decided on the 1997 strip; a 2x strip
+		# only lends its pixels (GameSkin, THE 2x PICTURES).
+		result = symbol_from_sheet(GameSkin.original(sheet), code,
+			sheet.get_image() if GameSkin.scale_of(sheet) > 1 else null)
 	if result == null:
 		result = ink_tight(GameSkin.set_icon(code))
 	_symbol_cache[code] = result
@@ -376,7 +379,8 @@ static func ink_tight(art: Texture2D) -> Texture2D:
 		return art
 	if ink.position == Vector2i.ZERO and ink.size == image.get_size():
 		return art
-	return ImageTexture.create_from_image(image.get_region(ink))
+	var scale := GameSkin.scale_of(art)
+	return GameSkin.texture_of(image.get_region(ink), ink.size / scale)
 
 
 ## Cut one symbol out of the strip: the IMAGE half of the set's slot, with
@@ -391,7 +395,7 @@ static func ink_tight(art: Texture2D) -> Texture2D:
 ##
 ## Returns null for a set with no slot, or for a sheet that is not the
 ## strip. Never guesses at a sheet of the wrong size.
-static func symbol_from_sheet(sheet: Image, code: String) -> Texture2D:
+static func symbol_from_sheet(sheet: Image, code: String, big: Image = null) -> Texture2D:
 	if not SYMBOL_SLOT.has(code):
 		return null
 	if sheet == null or sheet.get_width() != SHEET_SIZE.x \
@@ -412,7 +416,17 @@ static func symbol_from_sheet(sheet: Image, code: String) -> Texture2D:
 	var ink := cell.get_used_rect()
 	if ink.size.x <= 0 or ink.size.y <= 0:
 		return null
-	return ImageTexture.create_from_image(cell.get_region(ink))
+	if big == null or big.get_size() == sheet.get_size():
+		return ImageTexture.create_from_image(cell.get_region(ink))
+	# [param big]: the same strip at twice the size — the cell cut from it,
+	# the 1997 key carried up, the same ink rectangle at its scale.
+	var scale := big.get_width() / sheet.get_width()
+	var cell_rect := Rect2i(slot * SLOT_PITCH, 0, CELL.x, CELL.y)
+	var big_cell := big.get_region(Rect2i(cell_rect.position * scale, cell_rect.size * scale))
+	big_cell.convert(Image.FORMAT_RGBA8)
+	big_cell = GameSkin.lift_alpha(cell, big_cell)
+	return GameSkin.texture_of(big_cell.get_region(Rect2i(ink.position * scale, ink.size * scale)),
+		ink.size)
 
 
 # ---------------------------------------------------------- the drawing --

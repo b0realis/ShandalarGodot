@@ -219,7 +219,8 @@ static func _inner(key: String, tex: Texture2D) -> Rect2i:
 	var edge: int = _edge_cache.get(key, -1)
 	if edge < 0:
 		edge = 0
-		var img := tex.get_image()
+		# Measured on the 1997 pixels: an upscaler's black is not always 0.
+		var img := GameSkin.original(tex)
 		if img != null and img.get_width() > 4 and img.get_height() > 4:
 			edge = 1
 			for x in range(0, img.get_width(), 8):

@@ -3281,7 +3281,9 @@ func _set_target_cursor(active: bool) -> void:
 		var sheet := GameSkin.texture("target_cursor")
 		if sheet == null:
 			return
-		var frame := sheet.get_image().get_region(
+		# The 1997 frame: the system draws a cursor in screen pixels, so a
+		# 2x one would be twice the size (GameSkin, THE 2x PICTURES).
+		var frame := GameSkin.original(sheet).get_region(
 			Rect2i(0, 0, sheet.get_height(), sheet.get_height()))
 		_target_cursor = ImageTexture.create_from_image(frame)
 	Input.set_custom_mouse_cursor(_target_cursor, Input.CURSOR_ARROW,

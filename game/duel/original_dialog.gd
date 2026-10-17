@@ -194,7 +194,7 @@ static func ruled_texture(key: String, raised := true) -> ImageTexture:
 		return null
 	var img := art.get_image().duplicate()
 	img.convert(Image.FORMAT_RGBA8)
-	return _rule(img, raised)
+	return _rule(img, raised, GameSkin.scale_of(art))
 
 
 ## A ruled ground as a StyleBox. Patch margin 4 keeps the outline and the
@@ -252,7 +252,7 @@ static func bar_button_texture(pressed := false, gain := 1.55) -> ImageTexture:
 			var c: Color = img.get_pixel(x, y)
 			img.set_pixel(x, y, Color(minf(c.r * gain, 1.0),
 				minf(c.g * gain, 1.0), minf(c.b * gain, 1.0), c.a))
-	return _rule(img, not pressed)
+	return _rule(img, not pressed, GameSkin.scale_of(art))
 
 
 ## Paint the era's frame onto [param img]: the dark outline at the very
@@ -266,7 +266,10 @@ static func bar_button_texture(pressed := false, gain := 1.55) -> ImageTexture:
 const RULE_WIDTH := 2
 
 
-static func _rule(img: Image, raised: bool) -> ImageTexture:
+## [param scale]: image pixels per drawn pixel — a 2x picture's rule is
+## twice as many of its own pixels, and it is drawn at the 1997 size
+## (GameSkin, THE 2x PICTURES).
+static func _rule(img: Image, raised: bool, scale := 1) -> ImageTexture:
 	# THE RULE IS THE ART'S OWN, remeasured 2026-09-03 after the owner's
 	# playtest note on the Situation Bar — *"in the central message I am
 	# missing the lighter border"*. It was: a 1px INK outline at the very
@@ -289,11 +292,11 @@ static func _rule(img: Image, raised: bool) -> ImageTexture:
 		for x in w:
 			var near_tl: int = mini(y, x)
 			var near_br: int = mini(h - 1 - y, w - 1 - x)
-			if near_br < RULE_WIDTH and near_br <= near_tl:
+			if near_br < RULE_WIDTH * scale and near_br <= near_tl:
 				img.set_pixel(x, y, bottom)
-			elif near_tl < RULE_WIDTH:
+			elif near_tl < RULE_WIDTH * scale:
 				img.set_pixel(x, y, top)
-	return ImageTexture.create_from_image(img)
+	return GameSkin.texture_of(img, img.get_size() / scale)
 
 
 ## The Done button as it sits on the Situation Bar (see

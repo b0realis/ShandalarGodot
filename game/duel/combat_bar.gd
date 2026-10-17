@@ -283,25 +283,35 @@ static func keyed_texture(region: Rect2, fill := Fill.BLACK) -> Texture2D:
 	var sheet := GameSkin.texture("combat_bar")
 	if sheet == null:
 		return null
-	var src := sheet.get_image()
-	var img := src.get_region(Rect2i(region))
+	# The near-white key is decided on the 1997 pixels; the picture and the
+	# stone it is filled with are cut at the sheet's own resolution, the
+	# key carried up to it (GameSkin, THE 2x PICTURES).
+	var scale := GameSkin.scale_of(sheet)
+	var keyed := GameSkin.original(sheet).get_region(Rect2i(region))
+	keyed.convert(Image.FORMAT_RGBA8)
+	for y in keyed.get_height():
+		for x in keyed.get_width():
+			var c: Color = keyed.get_pixel(x, y)
+			keyed.set_pixel(x, y, Color(c, 0.0 if c.r >= WHITE_KEY and c.g >= WHITE_KEY
+				and c.b >= WHITE_KEY else 1.0))
+	var img := GameSkin.cut(sheet, Rect2i(region))
 	img.convert(Image.FORMAT_RGBA8)
+	var white := GameSkin.lift_alpha(keyed, img.duplicate() as Image) if scale > 1 else keyed
 	var band: Image = null
 	if fill == Fill.STONE:
-		band = src.get_region(Rect2i(int(region.position.x), STONE_BAND_Y,
+		band = GameSkin.cut(sheet, Rect2i(int(region.position.x), STONE_BAND_Y,
 			int(region.size.x), STONE_BAND_H))
 		band.convert(Image.FORMAT_RGBA8)
 	for y in img.get_height():
 		for x in img.get_width():
-			var c: Color = img.get_pixel(x, y)
-			if c.r >= WHITE_KEY and c.g >= WHITE_KEY and c.b >= WHITE_KEY:
+			if white.get_pixel(x, y).a < 0.5:
 				if band == null:
 					img.set_pixel(x, y, Color.BLACK)
 				else:
 					img.set_pixel(x, y,
 						band.get_pixel(x % band.get_width(),
 							y % band.get_height()))
-	var tex := ImageTexture.create_from_image(img)
+	var tex := GameSkin.texture_of(img, Vector2i(region.size))
 	_keyed[cache_key] = tex
 	return tex
 

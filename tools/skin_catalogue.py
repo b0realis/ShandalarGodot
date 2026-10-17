@@ -952,11 +952,33 @@ def kind_of(names: list[str]) -> str:
     return "skin"
 
 
+## THE 2x COPIES (tools/upscale_skin.py, 2026-10-17): `<key>@2x.png`, a
+## picture again at twice the size, to sit beside `<key>.png`. A zip of
+## nothing else is a 2x zip; in a skin they are counted apart, never as
+## portraits of their own or as files the catalogue does not know.
+SCALED_SUFFIX = "@2x"
+SCALED_COMPANIONS = ("UPSCALE.txt", manalink.LABEL)
+
+
+def is_scaled(name: str) -> bool:
+    return Path(name).stem.endswith(SCALED_SUFFIX)
+
+
+def scaled_source(name: str) -> str:
+    """`portraits/agnosia@2x.png` -> `portraits/agnosia.png`."""
+    path = Path(name)
+    return str(path.with_name(path.stem[:-len(SCALED_SUFFIX)] + path.suffix))
+
+
 def check(target: Path) -> int:
     names = names_in(target)
     if names is None:
         print("!! %s is not a skin zip or folder" % target)
         return 1
+    scaled = [n for n in names if is_scaled(n)]
+    if scaled and all(is_scaled(n) or n in SCALED_COMPANIONS for n in names):
+        return check_scaled(target, scaled)
+    names = [n for n in names if not is_scaled(n)]
     have = set(names)
     portraits = [n for n in names if n.startswith("portraits/") and n.endswith(".png")]
     art = [n for n in names if n.startswith("cardart/")]
@@ -974,6 +996,8 @@ def check(target: Path) -> int:
     print("  %d of %d named files present, %d portraits, %d card pictures"
           % (len(expected_files()) - len(missing), len(expected_files()),
              len(portraits), len(art)))
+    if scaled:
+        print("  and %d 2x copies beside them (<name>@2x.png)" % len(scaled))
     stood_in = [f for f in missing if f in SHIPPED_BY_THE_GAME]
     drawn = [f for f in missing if f not in SHIPPED_BY_THE_GAME]
     if stood_in:
@@ -989,6 +1013,21 @@ def check(target: Path) -> int:
     if unknown:
         print("  not in the catalogue (ignored by the game):")
         for name in unknown:
+            print("    " + name)
+    return 0
+
+
+def check_scaled(target: Path, scaled: list[str]) -> int:
+    """A 2x zip or folder: how many copies, and any that copy no picture
+    the catalogue knows (a portrait may be any face)."""
+    expected = set(expected_files())
+    stray = [n for n in scaled if not n.startswith("portraits/")
+             and scaled_source(n) not in expected]
+    print("%s: 2x pictures, %d copies — they sit beside a 1997 skin, "
+          "which is still needed" % (target, len(scaled)))
+    if stray:
+        print("  copies of no picture in the catalogue (ignored by the game):")
+        for name in stray:
             print("    " + name)
     return 0
 

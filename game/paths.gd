@@ -13,7 +13,7 @@ extends RefCounted
 ## and portraits by the user are added to originals and displayed on
 ## portrait selection."*
 ##
-## EIGHT KEYS, under `[options]` like every other setting, and NONE IS
+## NINE KEYS, under `[options]` like every other setting, and NONE IS
 ## WRITTEN until the player changes it — a default materialised into
 ## the file is a default that can never change (see
 ## [method Settings.clear_value] for the "fan" hand that shipped once):
@@ -23,6 +23,9 @@ extends RefCounted
 ##                     one that shipped beside the executable
 ##   use_skin_folder   true: the zip stays closed and the skin folder
 ##                     alone dresses the game
+##   skin_2x           false: the 2x copies of the skin's pictures
+##                     (`<key>@2x.png`, tools/upscale_skin.py) are not
+##                     worn; on by default wherever there are some
 ##   skin_folder       loose files the way `import_original.py` lays
 ##                     them out;                     user://original_skin
 ##   cardpacks_folder  every zip in it is mounted at boot; user://cardpacks
@@ -48,6 +51,7 @@ extends RefCounted
 
 const KEY_SKIN_ZIP := "skin_zip"
 const KEY_USE_SKIN_FOLDER := "use_skin_folder"
+const KEY_SKIN_2X := "skin_2x"
 const KEY_SKIN_FOLDER := "skin_folder"
 const KEY_CARDPACKS := "cardpacks_folder"
 const KEY_PORTRAITS := "portraits_folder"
@@ -115,6 +119,30 @@ static func use_skin_folder() -> bool:
 
 static func set_use_skin_folder(on: bool) -> void:
 	Settings.set_value(KEY_USE_SKIN_FOLDER, on)
+
+
+## Options > Skin > "Wear the 2x pictures": whether a picture's
+## `<key>@2x.png` copy is worn when it is there ([method GameSkin.picture]).
+## On unless the player switched it off; read the way [method
+## use_skin_folder] is, so a hand-typed `no` or `0` is meant.
+static func use_skin_2x() -> bool:
+	var value: Variant = Settings.get_value(KEY_SKIN_2X, true)
+	if value is bool:
+		return value
+	if value is int or value is float:
+		return value != 0
+	if value is String:
+		return not (String(value).strip_edges().to_lower() in ["false", "no", "off", "0"])
+	return true
+
+
+## Off writes the key; on clears it again — the default is never
+## materialised into the file.
+static func set_use_skin_2x(on: bool) -> void:
+	if on:
+		Settings.clear_value(KEY_SKIN_2X)
+	else:
+		Settings.set_value(KEY_SKIN_2X, false)
 
 
 ## Loose skin files, the way `tools/import_original.py` lays them out.

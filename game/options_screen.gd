@@ -466,6 +466,10 @@ func _add_card_packs_section(content: VBoxContainer) -> void:
 ##     the zip stays closed from the next start; the loose folder
 ##     `import_original.py` fills is the skin (the owner: *"the user
 ##     wants to use this and not zip!"*).
+##   * `2x pictures:` — the 2x copies of the skin's pictures the game
+##     found (a 2x zip, or `@2x` files loose beside the 1997 ones —
+##     tools/upscale_skin.py), and `Wear the 2x pictures`, the `skin_2x`
+##     key: on unless switched off, from the next start (2026-10-17).
 ##   * `Card folder:` — the folder every card pack is mounted from, and
 ##     the packs found; `Choose...` copies a zip in.
 ##   * `Additional portraits folder:` and `Additional music folder:` —
@@ -520,6 +524,7 @@ func _add_skin_section(content: VBoxContainer) -> void:
 		hint.name = "SkinHint"
 		hint.visible = false
 		content.add_child(hint)
+	_add_scaled_rows(content)
 	content.add_child(_zip_row("cardart", "Pick a card art zip: "
 		+ "skin/cardart/<card_name>.jpg inside it. It is copied into the card "
 		+ "folder, where every zip is worn."))
@@ -559,6 +564,41 @@ func _add_skin_section(content: VBoxContainer) -> void:
 	# freed label.
 	SkinPack.changed.connect(_on_skin_changed)
 	SkinPack.fetch_progressed.connect(_on_skin_transfer)
+
+
+## The 2x pictures: what was found, and the switch. A 2x zip arrives
+## through the skin row's `Choose...` or a drop like any zip; the game
+## tells it by what it holds and keeps it beside the skin.
+func _add_scaled_rows(content: VBoxContainer) -> void:
+	var status := UiChrome.body_label("", 13)
+	status.name = "SkinStatus_skin2x"
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.tooltip_text = "Copies of the skin's pictures at twice the size, " \
+		+ "made by tools/upscale_skin.py beside the game: sharper on a big " \
+		+ "screen. A 2x zip goes in by Choose... above or a drop; loose " \
+		+ "<name>@2x.png files sit beside the 1997 ones."
+	status.mouse_filter = Control.MOUSE_FILTER_PASS
+	content.add_child(status)
+	var wear := CheckButton.new()
+	wear.name = "UseSkin2x"
+	wear.text = "Wear the 2x pictures"
+	wear.tooltip_text = "On: where the skin has a 2x copy of a picture, the " \
+		+ "game wears it at the same size, with twice the pixels. Off: the 1997 " \
+		+ "pictures alone. Takes effect at the next start."
+	wear.button_pressed = GamePaths.use_skin_2x()
+	wear.toggled.connect(func(on: bool) -> void:
+		GamePaths.set_use_skin_2x(on)
+		var hint := find_child("Skin2xHint", true, false) as Label
+		if hint != null:
+			hint.text = ("The 2x pictures are worn from the next start." if on
+				else "The 1997 pictures alone, from the next start.")
+			hint.visible = true)
+	UiChrome.shadowed_button(wear)
+	content.add_child(wear)
+	var hint := UiChrome.body_label("", 12)
+	hint.name = "Skin2xHint"
+	hint.visible = false
+	content.add_child(hint)
 
 
 ## One zip row: what dresses the game for [param kind], and `Choose...`.
@@ -633,7 +673,7 @@ static func places_note(web: bool) -> String:
 ## A pack arrived, the player's zips were forgotten, or the folder switch
 ## moved: every row re-reads its place.
 func _on_skin_changed(_kind: String) -> void:
-	for kind in SkinPack.KINDS:
+	for kind in SkinPack.KINDS + ["skin2x"]:
 		var status := find_child("SkinStatus_" + kind, true, false) as Label
 		if status != null:
 			status.text = SkinPack.status_line(kind, SkinPack.describe(kind))

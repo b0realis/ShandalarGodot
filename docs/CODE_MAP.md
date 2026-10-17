@@ -76,6 +76,39 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The game wears the 2x pictures (2026-10-17)
+
+- `game/skin.gd`: THE 2x PICTURES — `picture(path)` wears `<key>@2x.png`
+  from beside `<key>.png` (exactly twice its size, `skin_2x` on) as a
+  texture whose size is overridden to the 1997 one; `scale_of`,
+  `texture_of`, `image_rect`, `cut`, `original` (the 1997 pixels),
+  `lift_alpha` (a 1997 key's on/off carried up), `scaled_path`,
+  `is_scaled_name`; `region` cuts at the sheet's resolution.
+- `game/paths.gd`: the `skin_2x` key (`use_skin_2x`, `set_use_skin_2x`).
+- `game/skin_pack.gd`: THE 2x ZIP — the "skin2x" kind (`inspect`,
+  `SCALED_COMPANIONS`), `_mount_scaled` at boot, `_holds`, `home_for`,
+  `_describe_scaled`, `scaled_at`, `status_line`, `_arrived`.
+- `game/options_screen.gd`: `_add_scaled_rows` — the `2x pictures:` row
+  and `Wear the 2x pictures`.
+- `game/portrait_library.gd`: a copy is not a face of its own; a face is
+  read through `GameSkin.picture`.
+- The cutters, each at its picture's resolution: `game/duel/mana_icons.gd`
+  (`symbol`), `game/duel/mini_card.gd` (`badge_from_slot`,
+  `stripe_texture`, `masked_sprite`, `pending_dagger`),
+  `game/duel/counter_marks.gd` (`tile`), `game/set_badges.gd`
+  (`symbol_from_sheet`, `ink_tight`), `game/deck_builder/filter_bar.gd`
+  (`sheet_cell`, `_blank_disc`), `game/deck_builder/card_area.gd`
+  (`_plaque`), `game/duel/combat_bar.gd` (`keyed_texture`),
+  `game/duel/stack_hand.gd` (`window_texture`),
+  `game/duel/original_dialog.gd` (`_rule`'s `scale`); on the 1997 pixels:
+  `game/duel/territory_ground.gd` (`_inner`), `game/duel/exile_plate.gd`
+  (`plate`), `game/duel/duel_screen.gd` (the target cursor).
+- `tools/skin_catalogue.py`: `--check` counts 2x copies apart
+  (`is_scaled`, `scaled_source`, `check_scaled`).
+- Tests: `tests/ui/test_skin_2x_2026_10_17.gd` (new: every cutter on a
+  doubled sheet, off-palette copies for the keys, the switch, the
+  portraits, the zip kind, the Options row); `tools/test_skin_catalogue.py`.
+
 ## The 2x skin (2026-10-17)
 
 - `tools/upscale_skin.py` (new): a player's 1997 skin (a folder or a skin
@@ -2627,6 +2660,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.29.md`: the game wears the 2x skin, carrying the
+  0.50.28 … 0.50.20 notes below it.
 - `docs/releases/0.50.28.md`: the 2x skin tool, carrying the 0.50.27 …
   0.50.20 notes below it.
 - `docs/releases/0.50.27.md`: the asset checklist, the Manalink backup

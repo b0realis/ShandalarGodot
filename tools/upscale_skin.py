@@ -11,7 +11,10 @@ and look soft. This writes a copy of each picture at twice the size, as
 `<key>@2x.png`, into one zip (`original_skin_realesrgan-anime_2x.zip`) or
 a folder. The 1997 skin is not changed and still needed: the sounds, the
 fonts and the coin-toss movie sheets are only in it, and so is every
-picture's 1997 original.
+picture's 1997 original. The game wears each copy at its picture's size
+(game/skin.gd, THE 2x PICTURES): the zip beside the game as
+`skin/original_skin_realesrgan-anime_2x.zip`, chosen in Options > Skin or
+dropped on the window, or the copies loose beside the pictures (--out).
 
 THE METHOD (the owner, 2026-10-17, after comparing eleven upscalers on
 the skin: *"lets keep this default"*). Real-ESRGAN's anime model
@@ -462,6 +465,9 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
                 write_zip(files, zip_out)
                 print("wrote %s (%d pictures, %.0f MB)"
                       % (zip_out, len(keys), zip_out.stat().st_size / 1e6))
+                print("Put it beside the game as skin/%s, choose it in Options > Skin,"
+                      % ZIP_NAME)
+                print("or drop it on the window: the game wears it beside your 1997 skin.")
     return 0
 
 

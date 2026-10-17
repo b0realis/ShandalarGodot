@@ -187,6 +187,8 @@ the file), under [options]:
     portraits_folder   your portraits            (portraits/)
     music_folder       your music                (music/)
     use_skin_folder    true: the folder instead of the zip (the tick box)
+    skin_2x            false: the 2x pictures are not worn (the other
+                       tick box); on by default
 
 A value is an absolute path, or `user://...` for the folder above; a
 leading `~` is your home. The game reads them when it starts; none is
@@ -266,8 +268,14 @@ original_skin_realesrgan-anime_2x.zip. It uses Real-ESRGAN's anime
 model, and takes the colours back from the 1997 picture. On Linux it
 fetches the upscaler once; it needs Pillow (python3-pil) and a Vulkan
 GPU driver. Keep the 1997 skin beside it: the copy leaves out the
-sounds, fonts and coin-toss movie. The game does not read the 2x
-copies yet.
+sounds, fonts and coin-toss movie. The game wears the copies at the
+same size, so nothing moves and every picture is sharper on a big
+screen. Put the zip beside the game as
+skin/original_skin_realesrgan-anime_2x.zip, choose it in Options >
+Skin, or drop it onto the window (it is kept beside your skin zip, not
+in its place). With --out the copies go loose into a skin folder,
+beside the pictures they copy. Options > Skin > "Wear the 2x pictures"
+switches them off.
 
     python3 tools/upscale_skin.py --skin original_skin.zip
 

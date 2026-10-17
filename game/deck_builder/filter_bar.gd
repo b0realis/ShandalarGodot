@@ -1269,10 +1269,11 @@ static func sheet_cell(key: String, row: int, col: int) -> Texture2D:
 	else:
 		var sheet := GameSkin.texture(key)
 		if sheet != null:
-			var image := sheet.get_image()
-			if image.get_width() >= (col + 1) * CELL and image.get_height() >= (row + 1) * CELL:
-				result = ImageTexture.create_from_image(
-					image.get_region(Rect2i(col * CELL, row * CELL, CELL, CELL)))
+			# Drawn size for the bounds, the sheet's own pixels for the cut
+			# (GameSkin, THE 2x PICTURES).
+			if sheet.get_width() >= (col + 1) * CELL and sheet.get_height() >= (row + 1) * CELL:
+				var rect := Rect2i(col * CELL, row * CELL, CELL, CELL)
+				result = GameSkin.texture_of(GameSkin.cut(sheet, rect), rect.size)
 	_cell_cache[id] = result
 	return result
 
@@ -1392,7 +1393,9 @@ static func _blank_disc(key: String, size: int) -> Dictionary:
 	var img: Image = base.get_image().duplicate()
 	img.convert(Image.FORMAT_RGBA8)
 	var scale := float(size) / CELL
-	if size != CELL:
+	# A 2x cell is brought to [param size] too: the medallions drawn on
+	# the disc are drawn in [param size] pixels.
+	if img.get_width() != size or img.get_height() != size:
 		img.resize(size, size, Image.INTERPOLATE_CUBIC)
 	var centre := FUNNEL_CENTRE * scale
 	var radius := FUNNEL_RADIUS * scale
