@@ -2613,6 +2613,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.27.md`: the asset checklist, the Manalink backup
+  and the skin catalogue as a table, carrying the 0.50.26 … 0.50.20 notes
+  below them.
 - `docs/releases/0.50.26.md`: one text face for every player (Spectral),
   the game's own dagger, the skin from the 1997 game alone and the card
   reader on by default, carrying the 0.50.25 … 0.50.20 notes below them.

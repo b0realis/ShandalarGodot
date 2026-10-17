@@ -18811,7 +18811,7 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
-## 2026-10-17 — The asset checklist and the Manalink door
+## 2026-10-17 — The asset checklist and the Manalink door (0.50.27)
 
 The owner: *"lets have a list of needed assets and check what is missing.
 Lets have an option for the tool to use later manalink install for all
