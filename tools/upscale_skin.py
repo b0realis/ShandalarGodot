@@ -120,11 +120,12 @@ CUNet (dots kept, 18.7%; stripes 0.34) — rather than a finer blur, which
 would bring the dither dots back on every picture.
 
 ONE PICTURE DOUBLED, NOT UPSCALED (the owner's playtest of 0.50.31):
-the sandstone, `panel_stone`, which the game stretches over its stone
-windows and squeezes into every main-menu button. The model smoothed its
-one-pixel grain and streaked its edge rows, so the buttons wore streaked
-strips round a smeared middle; doubled pixel for pixel (DOUBLED) it is
-the 1997 stone, crisp at twice the pixels.
+the sandstone, `panel_stone`, which every stone window and main-menu
+button wears. The model smoothed its one-pixel grain and streaked its
+edge rows, so the buttons wore streaked strips round a smeared middle;
+doubled pixel for pixel (DOUBLED) it is the 1997 stone, crisp at twice
+the pixels. Since 0.50.33 the game makes a seamless tile of it and lays
+that at its own size, so its grain is seen as it is drawn.
 
 LEFT AS THEY ARE, under their own names: the coin-toss movie sheets
 (2240x2160 already; twice that is past the 4096-pixel texture limit of
@@ -267,14 +268,16 @@ KEY_EXACT = (
 ## kept exactly. The owner's playtest of 0.50.31: *"sandstone window
 ## backs look a bit blurry - are they stretched?, sandstone colored
 ## buttons look strange with top and botton stripes and blurry middle"*.
-## `panel_stone` is the 400x350 sandstone the game STRETCHES over every
-## stone window and SQUEEZES into every main-menu button
-## (`UiChrome.stone_panel`: a 260x46 button holds 334 of its rows in
-## 30). Its 1997 grain is a one-pixel dither, which a squeeze or a
-## stretch leaves reading as stone; the model smooths that dither away
-## and draws streaks along the edge rows it is padded from, so a button
-## wore two crisp streaked strips in its 8px frame around a smeared
-## middle. Doubled, it is the 1997 stone at twice the pixels.
+## `panel_stone` is the 400x350 sandstone every stone window and every
+## main-menu button wears (`UiChrome.stone_panel`). In 0.50.31 the game
+## STRETCHED it over the windows and SQUEEZED it into the buttons (a
+## 260x46 button held 334 of its rows in 30). Its 1997 grain is a
+## one-pixel dither; the model smooths that dither away and draws streaks
+## along the edge rows it is padded from, so a button wore two crisp
+## streaked strips in its 8px frame around a smeared middle. Doubled, it
+## is the 1997 stone at twice the pixels — and since 0.50.33 the game
+## lays it as a seamless tile at its own size (`OriginalDialog.ground`,
+## THE SANDSTONE TILES), where the grain is seen as drawn.
 DOUBLED = ("panel_stone",)
 
 ENGINE_EXE = "realesrgan-ncnn-vulkan"

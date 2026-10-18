@@ -94,12 +94,15 @@ func test_only_a_ground_wider_than_its_window_may_tile() -> void:
 		pass_test("no original skin imported")
 		return
 	# A dialog ground can be smaller than the dialog, and a second tile
-	# would show its join — no 1997 window has a seam. Only the Situation
-	# Bar, which is never as wide as its own 600px stone, lays one tile.
+	# would show its join — no 1997 window has a seam. The Situation Bar,
+	# which is never as wide as its own 600px stone, lays one tile; the
+	# sandstone tiles because the game makes it a tile with no join first
+	# (THE SANDSTONE TILES, 2026-10-18).
 	for key in OriginalDialog.PANELS:
 		var patch := OriginalDialog.frame(key)
 		var want := NinePatchRect.AXIS_STRETCH_MODE_TILE \
-			if key == "message_panel" else NinePatchRect.AXIS_STRETCH_MODE_STRETCH
+			if key in ["message_panel", "panel_stone"] \
+			else NinePatchRect.AXIS_STRETCH_MODE_STRETCH
 		assert_eq(patch.axis_stretch_horizontal, want, key)
 		patch.free()
 

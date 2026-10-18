@@ -76,6 +76,29 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The sandstone tiles (2026-10-18)
+
+- `game/duel/original_dialog.gd`: THE SANDSTONE TILES — `ground(key)`
+  is the ground `frame` and `panel_style` wear: the skin's picture, or
+  for a `PANELS` row marked `seamless` (`panel_stone`, now `tile: true`)
+  the tile `seamless(image, scale)` makes of it, once per picture: the
+  3 px bevel set aside, the light flattened (`_flatten_light`: the stone
+  over its own light, the stone shrunk to ~16 blocks and smoothed back
+  up), the edges made to meet (`_meet_edges`, both ways: the tile 40 px
+  smaller, its first band fading from the stone that followed its last
+  column, the grain's contrast kept), the bevel put back round it
+  (`_bevel_round`) with a pixel of the tile's own wrap inside it. A 2x
+  picture gives a 2x tile drawn at the same size.
+- `game/ui_chrome.gd`: `stone_panel` is `OriginalDialog.panel_style(
+  "panel_stone")` — every stone window and shell button lays that tile
+  at its own size instead of stretching the 400x350 stone over windows
+  twice its size and squeezing it into buttons.
+- `tools/skin_catalogue.py`: the `panel_stone` note says so (catalogue
+  regenerated); `tools/upscale_skin.py`'s DOUBLED note brought up to date.
+- Tests: `tests/ui/test_sandstone_tiles_2026_10_18.gd` (new);
+  `tests/ui/test_original_dialog.gd`, `tests/ui/test_deck_menu.gd`
+  (the sandstone tiles; the deck menu wears the tile).
+
 ## The playtest of 0.50.31: the sandstone and the upkeep (2026-10-17)
 
 - `tools/upscale_skin.py`: `DOUBLED` (`panel_stone`) is doubled pixel for
@@ -2732,6 +2755,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.33.md`: the sandstone at its own grain, carrying
+  the 0.50.32 … 0.50.20 notes below.
 - `docs/releases/0.50.32.md`: the upkeep that passes itself, carrying
   the 0.50.31 … 0.50.20 notes below.
 - `docs/releases/0.50.31.md`: the hi-res skin as the 1997 skin's own
@@ -7300,6 +7325,11 @@ shandalar/
 │    tests/ui/test_original_dialog.gd — the 1997 popup chrome, including
 │    the MEASURED bevel pixels of the original button art, so a re-import
 │    from a different copy of the game cannot change the look silently;
+│    tests/ui/test_sandstone_tiles_2026_10_18.gd — the sandstone made a
+│    seamless tile (a drawn stone: its edges meet both ways, its light is
+│    flat, the join keeps the grain, the ring is the tile's own wrap, the
+│    bevel goes back round it) and worn tiled by every stone window and
+│    button, 2x picture included (the owner's playtest of 0.50.32);
 │    tests/ui/test_combat_bar.gd — the Combat Bar's seven icons, their
 │    1997 cue cards, the sheet geometry measured off Winbk_Phasecombat,
 │    the per-seat gold/blue halves, the black-keyed grounds, the
@@ -10030,7 +10060,9 @@ shandalar/
 │   │                            inert = the focus is not even watched.
 │   │                            No class_name
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
-│   │                          (Winbk_Options 9-patch) + era buttons/labels;
+│   │                          (Winbk_Options, TILED at its own size as the
+│   │                          seamless tile OriginalDialog.ground makes of
+│   │                          it) + era buttons/labels;
 │   │                          ONE place for the game's window look
 │   │                          (player-facing summary of every path:
 │   │                          docs/player-files.md). gold_when_chosen
@@ -11993,6 +12025,9 @@ shandalar/
 │       │                      chrome cannot drift popup by popup. PANELS
 │       │                      carries each 1997 ground's own MEASURED
 │       │                      bevel width as a 9-patch margin;
+│       │                      ground() wears a `seamless` row (the
+│       │                      sandstone) as the tile seamless() makes
+│       │                      of it, so it tiles at any size;
 │       │                      bar_style() rules the Situation Bar's
 │       │                      borderless Telluser stone; button() is the
 │       │                      era's three-state art (Winbk_Startduel-

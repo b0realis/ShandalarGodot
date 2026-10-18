@@ -18811,6 +18811,50 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-18 — The sandstone tiles (0.50.33)
+
+The owner, checking 0.50.32: *"Check the buttons when you click options
+or magic battle if they look ok?"* and *"Also check the background of
+options and magic battle! - it looks like a blur too much"*.
+
+- **Why.** Every stone window and shell button wore `panel_stone`, the
+  1997 400x350 sandstone, STRETCHED: Magic Battle and Options stand
+  about 820x600, so at 2560x1600 the stone was drawn about four times
+  its size with either skin (the hi-res one, doubled, about twice its
+  pixels) — soft blobs where the stone has a one-pixel grain. The
+  buttons squeezed 334 of its rows into 30 and wore vertical streaks.
+  The stone was never drawn to tile: it is lit about twenty levels
+  darker at its left than at its right, and its edges do not meet, so a
+  plain tile would band and seam.
+- **What.** `OriginalDialog.ground` makes a seamless tile of whatever
+  picture the worn skin has in the slot, once per picture
+  (`seamless`): the 3 px bevel set aside; the light flattened (the
+  stone divided by its own light — shrunk to ~16 blocks, smoothed back
+  up — done as a black shade and a brightening, so the engine works the
+  pixels); the edges made to meet both ways (the tile 40 px smaller,
+  its first band fading from the stone that followed its last column,
+  mixed around the band's mean and scaled back so the fade is as
+  grainy as the stone); the bevel back round it with one pixel of the
+  tile's own wrap inside, so a tile edge drawn smooth reads the stone
+  that follows it, never the bevel. `PANELS["panel_stone"]` tiles;
+  `UiChrome.stone_panel` is `panel_style("panel_stone")`. 30 ms for
+  the 1997 stone, 129 ms for the 2x one, at the first window.
+- **Seen.** Magic Battle, Options and the title at 2560x1600 with both
+  skins, before and after, by eye at 1:1: the grain at its own size,
+  no seam found, buttons an even stone. A Python prototype first
+  showed the light fall needed flattening (tiled raw, it banded).
+  The hi-res zip needs no rebuild: its `panel_stone` stays doubled.
+- Tests: `tests/ui/test_sandstone_tiles_2026_10_18.gd` (new, on a drawn
+  stone with the 1997 one's light fall: edges meet both ways, light
+  flat, the join as grainy as the stone, the ring is the wrap, the
+  bevel kept, too small a picture left as it is, worn by stone_panel
+  and frame, 2x drawn at the same size; mutation-checked — without the
+  flattening, the meeting or the contrast scale each fails);
+  `tests/ui/test_original_dialog.gd`, `tests/ui/test_deck_menu.gd`.
+
+Gate: 872 scripts, **13,490/13,490 tests, 583,437 asserts**, exit 0 in
+931 s over 6 shards; Python 775 (15 skipped), exit 0.
+
 ## 2026-10-17 — The playtest of 0.50.31: the sandstone and the upkeep (0.50.32)
 
 The owner: *"Two playtesting reports : sandstone wondow backs look a bit

@@ -299,8 +299,10 @@ THE LIFE PANELS
 WINDOWS AND PANELS
 ------------------
 
-  The stone slab most windows sit on (Options, the Deck Builder's menus,
-  prompts); tiled, with a 5 px margin.
+  The stone slab most windows and the main menu's buttons sit on (Options,
+  Magic Battle, the Deck Builder's menus, prompts). The game makes it a
+  seamless tile (its light evened out, its edges run into each other, its 3 px
+  bevel kept) and lays it at its own size.
     panel_stone.png                    400 x 350 px, RGBA
 
   The opening window (the two duelists face to face) — a picture, so its

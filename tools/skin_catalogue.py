@@ -166,8 +166,10 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The portrait's frame beside the life plaque, one per colour."),
 
     ("Windows and panels", "panel_stone",
-     "The stone slab most windows sit on (Options, the Deck Builder's "
-     "menus, prompts); tiled, with a 5 px margin."),
+     "The stone slab most windows and the main menu's buttons sit on "
+     "(Options, Magic Battle, the Deck Builder's menus, prompts). The "
+     "game makes it a seamless tile (its light evened out, its edges run "
+     "into each other, its 3 px bevel kept) and lays it at its own size."),
     ("Windows and panels", "panel_dark_stone",
      "The darker slab: the match and gauntlet screens between duels."),
     ("Windows and panels", "panel_knot",

@@ -52,15 +52,19 @@ const PLACEHOLDER := Color(0.72, 0.68, 0.60, 0.7)  ## an empty field saying what
 ## its native scale with no seam. A window WIDER than its ground would
 ## lay a second tile and show the join, which no 1997 window does; those
 ## grounds stretch instead, and a stone speckle stretched by a third is
-## invisible where a seam is not.
+## invisible where a seam is not. The exception is a ground marked
+## `seamless`: the game makes it a tile with no join first ([method
+## ground], THE SANDSTONE TILES), so it tiles at any window size.
 ## The keys whose ART is LIGHT, and whose skinless fallback must be light
 ## too — see [method panel_style]. Everything not named here falls back
 ## dark, which is right for the dark stone, the knot and the end-duel ring.
 const LIGHT_PANELS := {"panel_stone": true, "versus_background": true}
 
 const PANELS := {
-	# Winbk_Options 400x350 — sandstone, 2px bevel. The general dialog.
-	"panel_stone": {"margin": 4, "tile": false},
+	# Winbk_Options 400x350 — sandstone, 3px bevel. The general dialog,
+	# and every stone window and button of the shell (UiChrome). Worn as
+	# the seamless tile made of it: its bevel, then a pixel of the tile.
+	"panel_stone": {"margin": 4, "tile": true, "seamless": true},
 	# Winbk_Questmana 289x274 — dark grey stone, 3px bevel. Questions.
 	"panel_dark_stone": {"margin": 5, "tile": false},
 	# Winbk_Changetext 481x323 — blue celtic knot, 3px bevel. Lists.
@@ -111,7 +115,7 @@ var _scroll: ScrollContainer = null
 ## A NinePatchRect wearing [param key]'s ground, its patch margins set to
 ## that ground's own measured bevel width. Null when the skin is absent.
 static func frame(key: String) -> NinePatchRect:
-	var art := GameSkin.texture(key)
+	var art := ground(key)
 	if art == null:
 		return null
 	var spec: Dictionary = PANELS.get(key, {"margin": 4, "tile": true})
@@ -134,7 +138,7 @@ static func frame(key: String) -> NinePatchRect:
 ## The same ground as a StyleBox, for Panel/PanelContainer/Button slots
 ## that take a stylebox rather than a child node.
 static func panel_style(key: String, content_margin := 10.0) -> StyleBox:
-	var art := GameSkin.texture(key)
+	var art := ground(key)
 	if art != null:
 		var spec: Dictionary = PANELS.get(key, {"margin": 4, "tile": true})
 		var box := StyleBoxTexture.new()
@@ -168,6 +172,180 @@ static func panel_style(key: String, content_margin := 10.0) -> StyleBox:
 	flat.set_border_width_all(2)
 	flat.set_content_margin_all(content_margin)
 	return flat
+
+
+# ------------------------------------------------- the sandstone tiles --
+
+## THE SANDSTONE TILES (2026-10-18). `Winbk_Options` is 400x350 and the
+## shell's stone windows are not: Magic Battle and Options stand about
+## 820x600, so the stone stretched to fill them was blown up two to four
+## times on a big screen — the owner's playtest: *"the background of
+## options and magic battle ... looks like a blur too much"*. Tiled at its
+## own size instead, the stone keeps its one-pixel grain — but the 1997
+## picture was never meant to tile: it is lit, about twenty levels darker
+## at its left than at its right, so tiles laid side by side band, and its
+## edges do not meet.
+##
+## So the game makes the tile ([method seamless]), once per picture, from
+## whatever picture the worn skin has in the slot:
+##  - the bevel is set aside (the outer [constant SEAMLESS_BEVEL] pixels);
+##  - the light is flattened: the stone divided by its own light, which is
+##    the stone shrunk to a few blocks and smoothed back up, so the grain
+##    stays and the left-to-right fall goes;
+##  - the edges are made to meet: the tile is [constant SEAMLESS_BAND]
+##    pixels narrower and shorter than the stone, and its first band
+##    fades from the stone that follows its last column into its own, so
+##    each edge runs on into the other. The fade keeps the grain's
+##    contrast (two speckles mixed half and half would be flatter than
+##    either);
+##  - the bevel goes back round it, its edges cut to the new length (a
+##    bevel is one line all along), with one pixel of the tile's own wrap
+##    between bevel and tile, so a tile's edge drawn smooth reads the
+##    stone that follows it and never the bevel.
+## A 2x picture gives a 2x tile, drawn at the same size.
+const SEAMLESS_BEVEL := 3
+const SEAMLESS_BAND := 40
+
+## key -> [the skin's picture, the tile made of it].
+static var _grounds: Dictionary = {}
+
+
+## [param key]'s ground as [method frame] and [method panel_style] wear
+## it: the worn skin's picture, or for a ground [constant PANELS] marks
+## `seamless`, the tile made of that picture. Null without a skin.
+static func ground(key: String) -> Texture2D:
+	var art := GameSkin.texture(key)
+	var spec: Dictionary = PANELS.get(key, {})
+	if art == null or not spec.get("seamless", false):
+		return art
+	var made: Array = _grounds.get(key, [])
+	if made.size() == 2 and made[0] == art:
+		return made[1]
+	var scale := GameSkin.scale_of(art)
+	var img := seamless(art.get_image(), scale)
+	var tex := GameSkin.texture_of(img, img.get_size() / scale)
+	_grounds[key] = [art, tex]
+	return tex
+
+
+## The seamless tile made of the ground [param source], a picture at
+## [param scale] times its drawn size (THE SANDSTONE TILES). Too small a
+## picture to make one comes back as it is.
+static func seamless(source: Image, scale := 1) -> Image:
+	var img := source.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var bevel := SEAMLESS_BEVEL * scale
+	var band := SEAMLESS_BAND * scale
+	var size := img.get_size()
+	if size.x <= 2 * (bevel + band) or size.y <= 2 * (bevel + band):
+		return img
+	var tile := img.get_region(Rect2i(Vector2i(bevel, bevel),
+		size - Vector2i(bevel, bevel) * 2))
+	_flatten_light(tile)
+	tile = _meet_edges(tile, band)
+	tile.rotate_90(CLOCKWISE)
+	tile = _meet_edges(tile, band)
+	tile.rotate_90(COUNTERCLOCKWISE)
+	var ring := bevel + scale
+	var out := Image.create_empty(tile.get_width() + 2 * ring,
+		tile.get_height() + 2 * ring, false, Image.FORMAT_RGBA8)
+	var whole := Rect2i(Vector2i.ZERO, tile.get_size())
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			out.blit_rect(tile, whole, Vector2i(ring + dx * tile.get_width(),
+				ring + dy * tile.get_height()))
+	_bevel_round(img, out, bevel)
+	return out
+
+
+## Divides [param img] by its own light: each pixel times the stone's
+## mean over the light where it stands. The light is the stone shrunk to
+## about sixteen blocks across and smoothed back up. Done as a shade of
+## black laid over the bright parts (down to the darkest light) and the
+## whole then brightened back, so the pixels are worked by the engine,
+## not one by one here.
+static func _flatten_light(img: Image) -> void:
+	var light := img.duplicate() as Image
+	while light.get_width() > 16 and light.get_height() > 2:
+		light.shrink_x2()
+	var lums := PackedFloat32Array()
+	var mean := 0.0
+	var least := INF
+	for y in light.get_height():
+		for x in light.get_width():
+			var c := light.get_pixel(x, y)
+			var lum := (c.r + c.g + c.b) / 3.0
+			lums.append(lum)
+			mean += lum
+			least = minf(least, lum)
+	mean /= lums.size()
+	if least <= 0.0:
+		return
+	var shade := Image.create_empty(light.get_width(), light.get_height(),
+		false, Image.FORMAT_RGBA8)
+	for y in light.get_height():
+		for x in light.get_width():
+			shade.set_pixel(x, y, Color(0, 0, 0,
+				1.0 - least / lums[y * light.get_width() + x]))
+	shade.resize(img.get_width(), img.get_height(), Image.INTERPOLATE_BILINEAR)
+	img.blend_rect(shade, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i.ZERO)
+	img.adjust_bcs(mean / least, 1.0, 1.0)
+
+
+## [param img] made [param band] columns narrower, its right edge running
+## on into its left: column x of the first band is the column that
+## followed the new last one ([code]x + width[/code]) fading into column x
+## itself. Mixed around the band's own mean and scaled back by the mix's
+## length, so the fade is as grainy as the stone.
+static func _meet_edges(img: Image, band: int) -> Image:
+	var full := img.get_width()
+	var w := full - band
+	var h := img.get_height()
+	var out := img.get_region(Rect2i(0, 0, w, h))
+	var src := img.get_data()
+	var dst := out.get_data()
+	var mean := PackedFloat64Array([0.0, 0.0, 0.0])
+	for y in h:
+		for x in band:
+			var own := (y * full + x) * 4
+			for c in 3:
+				mean[c] += src[own + c] + src[own + w * 4 + c]
+	for c in 3:
+		mean[c] /= 2.0 * band * h
+	for x in band:
+		var t := (x + 0.5) / band
+		var length := sqrt(t * t + (1.0 - t) * (1.0 - t))
+		for y in h:
+			var own := (y * full + x) * 4
+			var follows := own + w * 4
+			for c in 3:
+				var mixed := mean[c] + ((1.0 - t) * (src[follows + c] - mean[c])
+					+ t * (src[own + c] - mean[c])) / length
+				dst[(y * w + x) * 4 + c] = clampi(roundi(mixed), 0, 255)
+	return Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, dst)
+
+
+## Puts [param src]'s bevel round [param out]: the four corners as they
+## are, the four edges cut to [param out]'s length.
+static func _bevel_round(src: Image, out: Image, bevel: int) -> void:
+	var s := src.get_size()
+	var o := out.get_size()
+	for corner in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
+		out.blit_rect(src, Rect2i((s - Vector2i(bevel, bevel)) * corner,
+			Vector2i(bevel, bevel)), (o - Vector2i(bevel, bevel)) * corner)
+	var across := Vector2i(o.x - 2 * bevel, bevel)
+	var down := Vector2i(bevel, o.y - 2 * bevel)
+	for edge in [[Rect2i(bevel, 0, s.x - 2 * bevel, bevel), Vector2i(bevel, 0), across],
+			[Rect2i(bevel, s.y - bevel, s.x - 2 * bevel, bevel),
+				Vector2i(bevel, o.y - bevel), across],
+			[Rect2i(0, bevel, bevel, s.y - 2 * bevel), Vector2i(0, bevel), down],
+			[Rect2i(s.x - bevel, bevel, bevel, s.y - 2 * bevel),
+				Vector2i(o.x - bevel, bevel), down]]:
+		var strip := src.get_region(edge[0])
+		strip.resize(edge[2].x, edge[2].y, Image.INTERPOLATE_NEAREST)
+		out.blit_rect(strip, Rect2i(Vector2i.ZERO, strip.get_size()), edge[1])
 
 
 # ------------------------------------------------- the Situation Bar rule --
