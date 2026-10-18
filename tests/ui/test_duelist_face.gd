@@ -88,6 +88,88 @@ func test_both_grounds_exist_for_every_colour_and_are_different() -> void:
 			"%s: the register's wallpaper is not the duelist" % color)
 
 
+# ================================================ the picture's shape ==
+# THE PICTURE KEEPS ITS SHAPE (2026-10-18): a 120x88 picture on a panel of
+# another shape meets the panel halfway — the part shown has proportions
+# between the picture's and the panel's, so it is widened a little and
+# trimmed a little, never stretched to the panel nor cropped to it. The
+# owner's photo of the green register stretched behind a 15; then, of the
+# even cover, *"the images are too cropped now!"*; then *"Yes!"* to this
+# ([method DuelistFace.shown_region]).
+
+const INSIDE := Vector2(118, 86)   # a 120x88 picture inside its frame line
+
+
+## The proportions halfway between the picture's and [param panel]'s.
+static func _halfway(panel: Vector2) -> float:
+	return sqrt(panel.x / panel.y * INSIDE.x / INSIDE.y)
+
+
+func test_a_wide_panel_shows_a_centred_band_the_whole_width() -> void:
+	var panel := Vector2(184, 76)
+	var shown := DuelistFace.shown_region(Vector2(120, 88), panel)
+	assert_almost_eq(shown.size.x / shown.size.y, _halfway(panel), 0.0001,
+		"halfway between the picture's shape and the panel's")
+	assert_eq(shown.size.x, 118.0, "the whole width inside the frame line")
+	assert_eq(shown.position.x, 1.0)
+	assert_almost_eq(shown.get_center().y, 44.0, 0.0001, "centred")
+	# On the duel's own panel: three quarters of the height, widened by a
+	# third, where the even cover showed 56% and the stretch widened 77%.
+	assert_almost_eq(shown.size.y / INSIDE.y, 0.75, 0.01)
+	var widened: float = (panel.x / panel.y) / (shown.size.x / shown.size.y)
+	assert_almost_eq(widened, 1.33, 0.01)
+
+
+func test_a_tall_panel_shows_the_whole_height() -> void:
+	var panel := Vector2(60, 100)
+	var shown := DuelistFace.shown_region(Vector2(120, 88), panel)
+	assert_almost_eq(shown.size.x / shown.size.y, _halfway(panel), 0.0001)
+	assert_eq(shown.size.y, 86.0)
+	assert_eq(shown.position.y, 1.0)
+	assert_almost_eq(shown.get_center().x, 60.0, 0.0001, "centred")
+
+
+func test_the_frame_line_never_shows_and_a_panel_without_a_size_gets_the_inside() -> void:
+	var inside := Rect2(Vector2.ONE, INSIDE)
+	assert_eq(DuelistFace.shown_region(Vector2(120, 88), INSIDE), inside,
+		"a panel of the picture's own shape: all of it inside the line")
+	assert_eq(DuelistFace.shown_region(Vector2(120, 88), INSIDE * 2.5), inside,
+		"at any size")
+	assert_eq(DuelistFace.shown_region(Vector2(120, 88), Vector2.ZERO), inside,
+		"no size yet")
+	assert_eq(DuelistFace.shown_region(Vector2(2, 2), Vector2(10, 10)),
+		Rect2(0, 0, 2, 2), "too small to have a line: as it is")
+
+
+func test_both_sides_of_the_register_meet_its_shape_and_follow_its_size() -> void:
+	if not GameSkin.is_present():
+		pass_test("no 1997 skin imported — the flat panel is the fallback")
+		return
+	await get_tree().process_frame
+	for pid in 2:
+		var life: Button = screen._life_buttons[pid]
+		for side in ["the register", "the face"]:
+			if side == "the face":
+				screen._life_menu_pid = pid
+				screen._on_life_menu_chosen(DuelistFace.FLIP)
+			for state in ["normal", "hover"]:
+				var box := life.get_theme_stylebox(state) as StyleBoxTexture
+				assert_not_null(box, "%s, %s" % [side, state])
+				if box == null:
+					continue
+				var shown := box.region_rect
+				assert_almost_eq(shown.size.x / shown.size.y, _halfway(life.size), 0.001,
+					"seat %d, %s, %s: halfway to the panel's shape" % [pid, side, state])
+		# A panel of another shape (above its minimum size, so it takes
+		# it): the shown part follows at once.
+		var before := life.size
+		life.size = Vector2(300, 100)
+		assert_ne(life.size, before)
+		var after := (life.get_theme_stylebox("normal") as StyleBoxTexture).region_rect
+		assert_almost_eq(after.size.x / after.size.y, _halfway(Vector2(300, 100)), 0.001,
+			"seat %d follows" % pid)
+
+
 # ======================================================== the flipping ==
 
 func test_a_fresh_register_shows_lifepoints() -> void:

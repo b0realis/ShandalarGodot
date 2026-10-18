@@ -76,6 +76,24 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The life register keeps its picture's shape (2026-10-18)
+
+- `game/duel/duelist_face.gd`: THE PICTURE KEEPS ITS SHAPE —
+  `shown_region(picture, panel)`: the largest centred rectangle inside the
+  120x88 picture's one-pixel frame line (`FRAME_LINE`) whose proportions
+  are halfway (the geometric mean) between the picture's and the panel's,
+  drawn over the whole ~184x76 life button: a third wider and 75% of the
+  height shown, where the stretch widened it 77% and an even cover showed
+  56%.
+- `game/duel/duel_screen.gd`: `_dress_life_panel` sets each side's
+  `StyleBoxTexture.region_rect` to it; `_fit_life_panel` (on the life
+  button's `resized`) keeps it fitted to the panel's size.
+- `docs/release-builds.md`: the hi-res skin is a separate release download
+  since v0.50.34, built from the release's own `original_skin.zip`.
+- Tests: `tests/ui/test_duelist_face.gd` (+4: a wide panel, a tall one,
+  the frame line and no size, both sides of both registers halfway to the
+  panel's shape and following its size; mutation-checked).
+
 ## The seamless grounds (2026-10-18)
 
 - `game/duel/original_dialog.gd`: THE SEAMLESS GROUNDS (was THE
@@ -2776,6 +2794,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.35.md`: the life register in its picture's shape,
+  on top of the published 0.50.34.
 - `docs/releases/0.50.34.md`: every window ground at its own grain,
   carrying the 0.50.33 … 0.50.20 notes below.
 - `docs/releases/0.50.33.md`: the sandstone at its own grain, carrying
@@ -12102,7 +12122,10 @@ shandalar/
 │       │                      wallpaper the life total is written on) and
 │       │                      `duelist_face_<colour>` (the portrait).
 │       │                      `Duel.hlp`'s "Duelist's Face" topic is the
-│       │                      whole spec and is quoted in the file
+│       │                      whole spec and is quoted in the file;
+│       │                      shown_region() meets a panel of another
+│       │                      shape halfway (widened a little, trimmed
+│       │                      a little, never stretched to it)
 │       ├── match_state.gd   class MatchState — `&Best of:` arithmetic and
 │       │                      the 1997 record sentences
 │       │                      (@DIALOG_ENDEXP1DUEL_MATCHPROGRESS). 0 =

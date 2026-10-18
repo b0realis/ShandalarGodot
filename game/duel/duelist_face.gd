@@ -60,6 +60,48 @@ const MENU_FACE: Array[String] = [
 ## Index of the entry that turns the panel over, in both tables above.
 const FLIP := 2
 
+## THE PICTURE KEEPS ITS SHAPE (2026-10-18). Both grounds are 120x88, the
+## 1997 register's own shape, and ours is not: the sidebar gives the life
+## button about 184x76, so a picture stretched to fill it was drawn half as
+## wide again and squeezed — the skull, the crystal ball and the green
+## frame nearly twice as wide as drawn. The owner's playtest photo: *"Check
+## the art behind life ... It is stretched! How could we fix this
+## elegantly?"* — and of the three ways shown him, *"Build B, superb."*
+## B scaled the picture evenly to cover the panel, and the panel then
+## showed only the middle 56% of its height: *"the images are too cropped
+## now!"* So the picture MEETS THE PANEL HALFWAY: the part shown
+## ([method shown_region]) has the proportions halfway between the
+## picture's and the panel's (their geometric mean), and is drawn over the
+## whole panel. The mismatch is split evenly — about a third wider and an
+## eighth off the top and the bottom on the 184x76 panel, 75% of the
+## height shown — of the three middle ways shown him, *"Yes!"*. The same
+## rule serves both sides, any skin and any panel shape, and a panel of
+## the picture's own shape shows all of it. The shown part sits inside the
+## one-pixel frame line all ten 1997 pictures carry (measured: one flat
+## colour all round), so no side keeps a line the others have lost.
+const FRAME_LINE := 1
+
+
+## The part of a picture of [param picture] size that a panel of
+## [param panel] size shows, drawn over the whole panel: the largest
+## centred rectangle inside the picture's frame line whose proportions are
+## halfway between the picture's and the panel's (THE PICTURE KEEPS ITS
+## SHAPE). The whole inside for a panel with no size yet.
+static func shown_region(picture: Vector2, panel: Vector2) -> Rect2:
+	var line := Vector2(FRAME_LINE, FRAME_LINE)
+	var inside := Rect2(line, picture - line * 2)
+	if inside.size.x <= 0.0 or inside.size.y <= 0.0:
+		return Rect2(Vector2.ZERO, picture)
+	if panel.x <= 0.0 or panel.y <= 0.0:
+		return inside
+	var aspect := sqrt(panel.x / panel.y * inside.size.x / inside.size.y)
+	var shown := inside.size
+	if shown.x / shown.y > aspect:
+		shown.x = shown.y * aspect
+	else:
+		shown.y = shown.x / aspect
+	return Rect2(inside.position + (inside.size - shown) / 2.0, shown)
+
 
 ## The colour's duelist, or null without the 1997 skin.
 static func portrait(color_key: String) -> Texture2D:

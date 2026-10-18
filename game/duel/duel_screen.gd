@@ -1685,6 +1685,10 @@ func _dress_life_panel(pid: int, face_up: bool) -> void:
 	var box := StyleBoxTexture.new()
 	box.texture = art
 	box.set_content_margin_all(6)
+	# The picture meets the panel's shape halfway ([method
+	# DuelistFace.shown_region]); [method _fit_life_panel] follows the
+	# panel's size from here on.
+	box.region_rect = DuelistFace.shown_region(art.get_size(), life.size)
 	life.add_theme_stylebox_override("normal", box)
 	var hover: StyleBoxTexture = box.duplicate()
 	hover.modulate_color = Color(1.15, 1.15, 1.15)
@@ -1692,6 +1696,20 @@ func _dress_life_panel(pid: int, face_up: bool) -> void:
 	life.add_theme_stylebox_override("pressed", hover)
 	life.add_theme_stylebox_override("focus", hover)
 	_face_dressed[pid] = want
+
+
+## Fits [param pid]'s register picture to the panel's new size (THE
+## PICTURE KEEPS ITS SHAPE, [DuelistFace]).
+func _fit_life_panel(pid: int) -> void:
+	var life: Button = _life_buttons[pid]
+	if life == null:
+		return
+	for state in ["normal", "hover", "pressed", "focus"]:
+		if not life.has_theme_stylebox_override(state):
+			continue
+		var box := life.get_theme_stylebox(state) as StyleBoxTexture
+		if box != null and box.texture != null:
+			box.region_rect = DuelistFace.shown_region(box.texture.get_size(), life.size)
 
 
 func _on_life_input(event: InputEvent, pid: int) -> void:
@@ -11421,6 +11439,7 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	life.gui_input.connect(_on_life_input.bind(pid))
 	_life_buttons.resize(2)
 	_life_buttons[pid] = life
+	life.resized.connect(_fit_life_panel.bind(pid))
 	_dress_life_panel(pid, false)
 	# The pile-side space belongs to the deck name. A challenge identifies
 	# its own pilot in the life panel instead, without adding a sidebar row.

@@ -18811,6 +18811,57 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-18 — The life register keeps its picture's shape (0.50.35)
+
+After v0.50.34 was published, the owner sent a photo of a duel: *"Check
+the art behind life (in the photo number 15). It is stretched! How could
+we fix this elegantly?"*
+
+- **Why.** Both sides of the life register are 120x88 pictures, the 1997
+  register's shape: `life_panel_<colour>` (`Life_<colour>patt`, the
+  ground the number is written on) and `duelist_face_<colour>`. The
+  sidebar gives the life button about 184x76, and the `StyleBoxTexture`
+  stretched the picture to it: 1.53x wide and 0.86x tall, so the skull,
+  the crystal ball and the green leaf frame were nearly twice as wide as
+  drawn. Measured: only the red and green patterns (and nearly the skull)
+  wrap at their edges; the winged face and the crystal ball are centred
+  emblems, so tiling was no answer.
+- **Shown before built.** Three ways, mocked up at the panel's real size
+  with the hi-res art and a "15" on top, for all five colours and both
+  sides: the picture in its own shape with black bars; scaled evenly to
+  COVER the panel, centred; its own shape with the field mirrored out
+  (mirror lines on the face and the ball). The owner: *"Build B,
+  superb."* Built and seen in a duel, the cover showed only the middle 56%
+  of each picture's height: *"Yes but the images are too cropped now!
+  Check."* Three middle ways followed — widened a third (75% of the
+  height), widened half (85%), the whole picture with a soft copy of
+  itself at the sides — and to the first, *"Yes!"*.
+- **What.** `DuelistFace.shown_region(picture, panel)`: the largest
+  centred rectangle inside the picture's one-pixel frame line (all ten
+  1997 pictures carry one, a flat colour all round, so no side keeps a
+  line the others lose) whose proportions are the geometric mean of the
+  picture's and the panel's, drawn over the whole panel — the mismatch
+  split evenly between widening and trimming. `_dress_life_panel` sets it
+  as each side's `region_rect`; `_fit_life_panel`, on the life button's
+  `resized`, keeps it fitted. One rule for both sides and any skin; a
+  panel of the picture's own shape shows all of it.
+- **Seen.** A duel at 2560x1600 with the hi-res skin, all five colours,
+  life side and face side: stretched (0.50.34), the even cover, and the
+  halfway rule side by side.
+- Also: `docs/release-builds.md` says the hi-res skin is a release
+  download since v0.50.34, built from the release's own skin zip.
+- Tests: `tests/ui/test_duelist_face.gd` (+4; without the resize hook the
+  register keeps the shape it had before layout and the test fails).
+
+Gate: 872 scripts, **13,499/13,499 tests, 585,581 asserts**, exit 0 in
+987 s over 6 shards; Python 775 (15 skipped), exit 0. The run before it
+had one failure, in code this change does not touch:
+`tests/ui/test_c2_f_net_sockets.gd`'s oversized-TLS-headers test counted
+211 "WebSocket response headers are too big" lines on the LAN host
+before it shed the peer, where alone it sheds at once. The script passed
+alone three times and the next full run was green — a timing-sensitive
+test under the six shards' load, left as it is.
+
 ## 2026-10-18 — The seamless grounds (0.50.34)
 
 The owner, told the dark stone and the knot were still stretched: *"Ok

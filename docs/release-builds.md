@@ -73,12 +73,15 @@ helper, so they also carry the full construction toolkit and README instructions
 Only `-with-skin` includes `skin/original_skin.zip`; no package carries card
 pictures. Validate the supplied skin with `tools/skin_catalogue.py --check`.
 The hi-res skin — the same files as `original_skin.zip`, every picture at
-twice the size under its own name — is built from that zip, apart from
-the packages: `python3 tools/upscale_skin.py --skin
-../shandalar-build/pkg/original_skin.zip --zip
-../shandalar-build/pkg/original_skin_realesrgan-anime_2x.zip` (with
-`--reuse <a 0.50.28 2x zip>`, its copies are taken instead of upscaling
-again). It is not a release file yet.
+twice the size under its own name — is a separate release download since
+v0.50.34 (the owner, 2026-10-18), never inside a package. Build it from the
+release's OWN `original_skin.zip`, after that zip is made, so the two skins
+hold the same files: `python3 tools/upscale_skin.py --skin
+DOWNLOADS/original_skin.zip --zip
+DOWNLOADS/original_skin_realesrgan-anime_2x.zip --reuse <the last hi-res
+zip>` (`--reuse` takes each 2x picture that still matches instead of
+upscaling it again). Check it with `tools/skin_catalogue.py --check`, add
+its line to `SHA256SUMS`, and upload it from the machine that made the skin.
 
 The seven-target local matrix consists of fourteen game ZIPs, the same
 `original_skin.zip` as a separate download, and `SHA256SUMS` covering those
