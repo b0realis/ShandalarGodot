@@ -76,6 +76,25 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The LAN host sheds headers that land late (2026-10-18)
+
+- `game/sgmanalink/local_server.gd`: `_handshake_fair` — THE BYTES THAT
+  LAND LATE: a TLS peer still in its WebSocket handshake whose stream holds
+  decrypted bytes its socket left untaken at the last poll has stopped
+  reading (its 4 KB of headers is full) and goes before the next poll. The
+  byte count is taken before each poll, so bytes the loopback delivered
+  after it (late, on a host under load) were read uncounted and the socket
+  printed every poll until the 1.5 s handshake time — 211 lines in one gate
+  run. TLS decrypts only when the socket reads, so the rule does not
+  depend on timing; an honest guest never leaves bytes untaken.
+- `tests/ui/test_c2_f_net_sockets.gd`: the two oversized-headers tests poll
+  the host themselves, after every byte has landed (`_until_landed`,
+  `_tls_guests`), so they test the host and not the loopback's timing; new
+  `test_tls_headers_left_untaken_are_shed_before_the_socket_reads` stages
+  the late landing every run (the test takes a byte from the host's TLS
+  stream as the socket would) — without the rule, the host kept the peer
+  and printed on every poll.
+
 ## The life register keeps its picture's shape (2026-10-18)
 
 - `game/duel/duelist_face.gd`: THE PICTURE KEEPS ITS SHAPE —
@@ -486,7 +505,8 @@ The tests each fixer added, by owner:
     door's malformed answers.
   - `tests/ui/test_c2_f_net_sockets.gd`: a closing host tells its guests (plain
     and TLS); the restarted-host message; the handshake budget, time and
-    per-address cap; the discovery flood.
+    per-address cap; TLS headers left untaken shed before the socket reads
+    (2026-10-18); the discovery flood.
   - `tests/tools/test_c2_f_net_referee.gd`: the referee pipe read byte by byte
     (blank lines, an over-long line), `--join env:NAME`, a hosted table's end
     (`_close_table`).
@@ -2794,6 +2814,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.36.md`: the LAN host's late headers, carrying the
+  0.50.35 note.
 - `docs/releases/0.50.35.md`: the life register in its picture's shape,
   on top of the published 0.50.34.
 - `docs/releases/0.50.34.md`: every window ground at its own grain,

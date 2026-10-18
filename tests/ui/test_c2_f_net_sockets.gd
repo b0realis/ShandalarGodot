@@ -214,62 +214,131 @@ func _engine_errors(label: String) -> int:
 	return count
 
 
+## 4 KB of upgrade headers and more, never finished: the junk a hostile
+## process sends.
+static func _junk() -> PackedByteArray:
+	return ("GET / HTTP/1.1\r\nX-Pad: " + "a".repeat(4200)).to_ascii_buffer()
+
+
+## Waits until each of the host's connections holds at least [param bytes]
+## on its side. THE TESTS POLL THE HOST THEMSELVES, and only then: a host
+## left to its own `_process` could poll in the instant the loopback has
+## delivered part of the junk — on a machine under load it delivers late —
+## and the test would be timing that, not the host (the gate's six shards
+## did, 2026-10-18). What the host does about bytes that DO land late is
+## its own test below.
+func _until_landed(bytes: int) -> bool:
+	return await _until(func() -> bool:
+		for peer: Dictionary in server._peers.values():
+			var tcp: StreamPeerTCP = peer.tcp
+			tcp.poll()
+			if tcp.get_available_bytes() < bytes:
+				return false
+		return true, 5.0)
+
+
+## [param count] TLS guests of a host the test polls itself, their TLS
+## up on both ends and nothing sent yet: rows of [StreamPeerTCP,
+## StreamPeerTLS]. A guest's stream is polled only while it is still
+## shaking hands — a client polling a stream the host has already shed
+## makes Godot print "status != STATUS_CONNECTED", the CLIENT's line, which
+## would be counted against the host (2026-10-12).
+func _tls_guests(count: int) -> Array:
+	var rows: Array = []
+	for i in count:
+		var tls := StreamPeerTLS.new()
+		extra.append(tls)
+		rows.append([_tcp(server.port), tls, false])
+	var up := await _until(func() -> bool:
+		for row in rows:
+			var tcp: StreamPeerTCP = row[0]
+			var tls: StreamPeerTLS = row[1]
+			tcp.poll()
+			if not row[2] and tcp.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+				tls.connect_to_stream(tcp, SgLanInvite.COMMON_NAME,
+					TLSOptions.client(server.lan_certificate, SgLanInvite.COMMON_NAME))
+				row[2] = true
+			elif row[2] and tls.get_status() == StreamPeerTLS.STATUS_HANDSHAKING:
+				tls.poll()
+		server.poll()
+		return server._peers.size() == count \
+			and rows.all(func(row: Array) -> bool:
+				return (row[1] as StreamPeerTLS).get_status() == StreamPeerTLS.STATUS_CONNECTED) \
+			and server._peers.values().all(func(peer: Dictionary) -> bool:
+				return (peer.tls as StreamPeerTLS).get_status() == StreamPeerTLS.STATUS_CONNECTED), 5.0)
+	assert_true(up, "TLS up on both ends")
+	return rows
+
+
 func test_oversized_upgrade_headers_are_shed_quietly() -> void:
 	assert_eq(server.start_local(0), OK)
-	var junk := ("GET / HTTP/1.1\r\nX-Pad: " + "a".repeat(4200)).to_ascii_buffer()
-	var rows: Array = []
-	for i in 3: rows.append([_tcp(server.port), false])
-	var started := Time.get_ticks_msec()
-	var shed := {"at": -1}
-	await _until(func() -> bool:
-		for row in rows:
-			var socket: StreamPeerTCP = row[0]
-			socket.poll()
-			if not row[1] and socket.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-				socket.put_data(junk)
-				row[1] = true
-		if int(shed.at) < 0 and rows.all(func(row: Array) -> bool: return row[1]) and server._peers.is_empty():
-			shed.at = Time.get_ticks_msec() - started
-		return int(shed.at) >= 0, 5.0)
-	assert_between(int(shed.at), 0, 1000, "shed at once (%d ms)" % int(shed.at))
+	server.set_process(false)
+	var sockets: Array = []
+	for i in 3: sockets.append(_tcp(server.port))
+	assert_true(await _until(func() -> bool:
+		for socket: StreamPeerTCP in sockets: socket.poll()
+		server.poll()
+		return server._peers.size() == 3 and sockets.all(func(socket: StreamPeerTCP) -> bool:
+			return socket.get_status() == StreamPeerTCP.STATUS_CONNECTED)), "all three accepted")
+	for socket: StreamPeerTCP in sockets: socket.put_data(_junk())
+	assert_true(await _until_landed(_junk().size()), "the headers are all on the host's side")
+	server.poll()
+	assert_eq(server._peers.size(), 0, "shed in the one poll that saw them")
+	for i in 5: server.poll()
 	assert_eq(_engine_errors("plain oversized"), 0, "nothing printed on the host")
+	server.set_process(true)
 	assert_eq(a.connect_local(server.port, server.access_code, "Ann"), OK)
 	assert_true(await _until(func() -> bool: return a.online), "a guest still joins")
 
 
 func test_tls_then_oversized_upgrade_headers_are_shed_quietly() -> void:
 	assert_eq(server.start_lan("127.0.0.1", 0, false), OK)
-	var junk := ("GET / HTTP/1.1\r\nX-Pad: " + "a".repeat(4200)).to_ascii_buffer()
-	var rows: Array = []
-	for i in 2:
-		var tls := StreamPeerTLS.new()
-		extra.append(tls)
-		rows.append([_tcp(server.port), tls, 0])
-	await _until(func() -> bool:
-		for row in rows:
-			var tcp: StreamPeerTCP = row[0]
-			var tls: StreamPeerTLS = row[1]
-			tcp.poll()
-			if row[2] == 0 and tcp.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-				tls.connect_to_stream(tcp, SgLanInvite.COMMON_NAME, TLSOptions.client(server.lan_certificate, SgLanInvite.COMMON_NAME))
-				row[2] = 1
-			elif row[2] == 1:
-				# Polled only while it is still ours to talk on: a client
-				# polling a stream the host has already shed makes Godot
-				# print "status != STATUS_CONNECTED" — the CLIENT's line,
-				# which this test would then count against the host (the
-				# gate's four shards made that ordering happen, 2026-10-12).
-				var status := tls.get_status()
-				if status == StreamPeerTLS.STATUS_HANDSHAKING or status == StreamPeerTLS.STATUS_CONNECTED:
-					tls.poll()
-				if tls.get_status() == StreamPeerTLS.STATUS_CONNECTED:
-					tls.put_data(junk)
-					row[2] = 2
-		return rows.all(func(row: Array) -> bool: return row[2] == 2) and server._peers.is_empty(), 5.0)
-	assert_true(rows.all(func(row: Array) -> bool: return row[2] == 2), "both sent their headers")
-	assert_eq(server._peers.size(), 0, "both shed")
-	await _frames(10)
+	server.set_process(false)
+	var rows: Array = await _tls_guests(2)
+	for row in rows: (row[1] as StreamPeerTLS).put_data(_junk())
+	assert_true(await _until_landed(_junk().size()), "the headers are all on the host's side")
+	server.poll()
+	assert_eq(server._peers.size(), 0, "both shed in the one poll that saw them")
+	for i in 5: server.poll()
 	assert_eq(_engine_errors("TLS oversized"), 0, "nothing printed on the host")
+	server.set_process(true)
+	assert_eq(b.connect_invitation(server.invitation(), "Bo"), OK)
+	assert_true(await _until(func() -> bool: return b.online), "an invited guest still joins")
+
+
+## THE BYTES THAT LAND LATE (2026-10-18): headers that land after the host
+## counted them are read uncounted by the poll that follows — on a host
+## under load the gate saw one such TLS connection fill its socket and
+## print on every poll for 1.5 s, 211 lines. What gives such a socket away
+## is what it leaves behind: decrypted bytes it did not take, which an
+## honest guest never leaves (it sends its request and waits). Staged here
+## every run, without the socket's own line (a gate run fails on any
+## ERROR line): the test takes one byte from the host's TLS stream itself,
+## as the socket would, and leaves the rest decrypted and untaken. The
+## host's next poll must let that connection go BEFORE its socket reads
+## ([method SgLocalServer._handshake_fair]).
+func test_tls_headers_left_untaken_are_shed_before_the_socket_reads() -> void:
+	assert_eq(server.start_lan("127.0.0.1", 0, false), OK)
+	server.set_process(false)
+	var rows: Array = await _tls_guests(1)
+	(rows[0][1] as StreamPeerTLS).put_data(_junk())
+	assert_true(await _until_landed(_junk().size()), "the headers are all on the host's side")
+	var peer: Dictionary = server._peers.values()[0]
+	var tls: StreamPeerTLS = peer.tls
+	var took: Array = tls.get_partial_data(1)
+	assert_eq(int(took[0]), OK)
+	assert_eq((took[1] as PackedByteArray).size(), 1, "one byte taken, as the socket takes them")
+	assert_gt(tls.get_available_bytes(), 0, "the rest decrypted and left untaken")
+	(peer.tcp as StreamPeerTCP).poll()
+	assert_lt((peer.tcp as StreamPeerTCP).get_available_bytes(), SgLocalServer.HANDSHAKE_BYTES,
+		"and too few still on the wire for the byte count to catch it")
+	server.poll()
+	assert_eq(server._peers.size(), 0, "let go before its socket read")
+	for i in 5: server.poll()
+	await _frames(3)
+	assert_eq(_engine_errors("left untaken"), 0, "nothing printed on the host")
+	# An honest guest, TLS and all, still joins: it leaves nothing untaken.
+	server.set_process(true)
 	assert_eq(b.connect_invitation(server.invitation(), "Bo"), OK)
 	assert_true(await _until(func() -> bool: return b.online), "an invited guest still joins")
 

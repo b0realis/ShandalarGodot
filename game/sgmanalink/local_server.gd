@@ -414,14 +414,31 @@ func poll() -> void:
 ## five seconds (robustness campaign 2026-10-12). Such a peer is let go
 ## before that poll, quietly. An honest handshake — TLS included — is a
 ## fraction of the bytes and of the time.
+##
+## THE BYTES THAT LAND LATE (2026-10-18). The count is taken just before
+## the poll, so bytes that land between the two are read uncounted — on a
+## host under load the loopback delivers late, and the gate's six shards
+## caught a TLS connection whose whole 4 KB of headers landed so: its socket
+## filled, printed on every poll, and only the handshake time let it go,
+## 211 lines later. A TLS socket gives itself away: TLS decrypts only when
+## the socket reads, so decrypted bytes the socket left untaken at its last
+## poll mean it had stopped reading — its 4 KB was full. An honest guest
+## sends its request and waits for the answer, so it never leaves any.
+## Such a peer goes before the poll that would print, whatever the timing.
+## (On a plain connection the untaken bytes wait on the socket itself and
+## are counted again each poll, so the count passes the limit in a few.)
 func _handshake_fair(peer: Dictionary) -> bool:
 	var tcp: StreamPeerTCP = peer.tcp
 	tcp.poll()
 	if tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 		return false
 	var tls: Variant = peer.tls
-	if tls is StreamPeerTLS and not tls.get_status() in [StreamPeerTLS.STATUS_HANDSHAKING, StreamPeerTLS.STATUS_CONNECTED]:
-		return false
+	if tls is StreamPeerTLS:
+		var status: int = tls.get_status()
+		if not status in [StreamPeerTLS.STATUS_HANDSHAKING, StreamPeerTLS.STATUS_CONNECTED]:
+			return false
+		if status == StreamPeerTLS.STATUS_CONNECTED and tls.get_available_bytes() > 0:
+			return false
 	peer.handshake_bytes = int(peer.handshake_bytes) + tcp.get_available_bytes()
 	return int(peer.handshake_bytes) < HANDSHAKE_BYTES and int(peer.waited) <= HANDSHAKE_MS
 

@@ -18811,6 +18811,45 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-18 — The LAN host sheds headers that land late (0.50.36)
+
+0.50.35's first gate run had one failure: `tests/ui/test_c2_f_net_sockets.gd`'s
+TLS oversized-headers test counted 211 "WebSocket response headers are too
+big" lines on the host, where alone it counts none. It was recorded as a
+timing-sensitive test and left. The owner: *"No repair that test to be
+more robust."*
+
+- **Why it flaked — the host, not only the test.** `_handshake_fair`
+  counts the bytes waiting on a handshaking connection just BEFORE each
+  poll and lets the connection go once they pass 4 KB, the size of
+  Godot's handshake buffer. Bytes that land between the count and the
+  poll are read uncounted. On a loaded machine the loopback delivers late,
+  and with TLS the socket's read decrypts the whole record at once, so
+  nothing was left on the wire to count at the next poll: the socket
+  filled, printed every poll, and only the 1.5 s handshake time let it
+  go. (A plain connection's untaken bytes stay on the wire and are counted
+  again each poll, so the count passes 4 KB in a few.)
+- **The host.** A TLS socket that has stopped reading gives itself away:
+  TLS decrypts only when the socket reads, so decrypted bytes left untaken
+  after a poll mean the socket stopped — its 4 KB was full. An honest
+  guest sends its request and waits for the answer and never leaves any.
+  `_handshake_fair` now lets such a peer go before the next poll, whatever
+  the timing: under the race, at most the one line Godot prints as the
+  buffer fills, never a line a frame.
+- **The tests.** The two oversized-headers tests poll the host themselves
+  and only after every byte has landed (`_until_landed`, `_tls_guests`),
+  so they test the host's rules, not the loopback's timing, and each
+  asserts the peers went in the one poll that saw them. A new test stages
+  the late landing every run without Godot's line (a gate run fails on any
+  ERROR line): it takes one byte from the host's TLS stream itself, as the
+  socket would, and the host must shed the connection before its socket
+  reads — without the new rule the host kept it and printed on every poll
+  (mutation-checked: 6 lines in 6 polls). The script passed 3/3 again alone.
+
+Gate: 872 scripts, **13,500/13,500 tests, 586,553 asserts**, exit 0 in
+953 s over 6 shards — the load that broke the old test; Python 775 (15
+skipped), exit 0.
+
 ## 2026-10-18 — The life register keeps its picture's shape (0.50.35)
 
 After v0.50.34 was published, the owner sent a photo of a duel: *"Check
@@ -18860,7 +18899,7 @@ had one failure, in code this change does not touch:
 211 "WebSocket response headers are too big" lines on the LAN host
 before it shed the peer, where alone it sheds at once. The script passed
 alone three times and the next full run was green — a timing-sensitive
-test under the six shards' load, left as it is.
+test under the six shards' load. (Repaired in 0.50.36, the next entry up.)
 
 ## 2026-10-18 — The seamless grounds (0.50.34)
 
