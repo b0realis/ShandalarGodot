@@ -50,11 +50,12 @@ const PLACEHOLDER := Color(0.72, 0.68, 0.60, 0.7)  ## an empty field saying what
 ## TILE only where the window is always SMALLER than its ground, so
 ## exactly one tile is laid and clipped — that keeps the stone's grain at
 ## its native scale with no seam. A window WIDER than its ground would
-## lay a second tile and show the join, which no 1997 window does; those
-## grounds stretch instead, and a stone speckle stretched by a third is
-## invisible where a seam is not. The exception is a ground marked
-## `seamless`: the game makes it a tile with no join first ([method
-## ground], THE SANDSTONE TILES), so it tiles at any window size.
+## lay a second tile and show the join, which no 1997 window does — unless
+## the ground is marked `seamless`: the game makes it a tile with no join
+## first ([method ground], THE SEAMLESS GROUNDS), so it tiles at any
+## window size. Every stone and pattern ground is; only the two PICTURES
+## (a painting, the line-art mourners) stretch, since a picture cut into
+## tiles is no longer the picture.
 ## The keys whose ART is LIGHT, and whose skinless fallback must be light
 ## too — see [method panel_style]. Everything not named here falls back
 ## dark, which is right for the dark stone, the knot and the end-duel ring.
@@ -62,16 +63,21 @@ const LIGHT_PANELS := {"panel_stone": true, "versus_background": true}
 
 const PANELS := {
 	# Winbk_Options 400x350 — sandstone, 3px bevel. The general dialog,
-	# and every stone window and button of the shell (UiChrome). Worn as
-	# the seamless tile made of it: its bevel, then a pixel of the tile.
+	# and every stone window and button of the shell (UiChrome).
+	# A seamless ground's margin is its 3px bevel and a pixel of the tile.
 	"panel_stone": {"margin": 4, "tile": true, "seamless": true},
 	# Winbk_Questmana 289x274 — dark grey stone, 3px bevel. Questions.
-	"panel_dark_stone": {"margin": 5, "tile": false},
-	# Winbk_Changetext 481x323 — blue celtic knot, 3px bevel. Lists.
-	"panel_knot": {"margin": 5, "tile": false},
+	"panel_dark_stone": {"margin": 4, "tile": true, "seamless": true},
+	# Winbk_Changetext 481x323 — blue celtic knot, 3px bevel. Lists. A
+	# pattern drawn to repeat every 94x52 (measured: shifted by that, it
+	# differs by under 1 level in 255), so its tile is whole repeats and
+	# its light is left as drawn.
+	"panel_knot": {"margin": 4, "tile": true, "seamless": true,
+		"period": Vector2i(94, 52), "flatten": false},
 	# Winbk_Endduel 272x422 — blue/gold rings, 3px INSET bevel. The last
-	# word of a duel is carved in, not raised.
-	"panel_end_duel": {"margin": 5, "tile": false},
+	# word of a duel is carved in, not raised. Stretched, the 430x200
+	# windows of the match and the gauntlet drew its rings as ovals.
+	"panel_end_duel": {"margin": 4, "tile": true, "seamless": true},
 	# Winbk_Bigcard 552x402 — a painting (a skeleton rider); never tile.
 	"big_card_panel": {"margin": 5, "tile": false},
 	# Winbk_Startduel 659x394 — the classical line-art mourners, the
@@ -131,8 +137,24 @@ static func frame(key: String) -> NinePatchRect:
 		# rather than built.
 		patch.axis_stretch_horizontal = NinePatchRect.AXIS_STRETCH_MODE_TILE
 		patch.axis_stretch_vertical = NinePatchRect.AXIS_STRETCH_MODE_TILE
+	var picture := GameSkin.texture(key)
+	if art != picture:
+		# A WINDOW THAT FITS WEARS THE GROUND ITSELF: no bigger than the
+		# 1997 picture, it is one tile of it, clipped — the 1997 look, with
+		# no join and the light as drawn (the duel's own 272x300 verdict on
+		# the 272x422 rings). Only a bigger window needs the seamless tile.
+		patch.resized.connect(func() -> void: _wear_fitting(patch, picture, art))
 	patch.set_anchors_preset(Control.PRESET_FULL_RECT)
 	return patch
+
+
+## [param patch] in [param picture] while it is no bigger than the
+## picture, else in [param tile] (THE SEAMLESS GROUNDS).
+static func _wear_fitting(patch: NinePatchRect, picture: Texture2D,
+		tile: Texture2D) -> void:
+	var fits := patch.size.x <= picture.get_width() \
+		and patch.size.y <= picture.get_height()
+	patch.texture = picture if fits else tile
 
 
 ## The same ground as a StyleBox, for Panel/PanelContainer/Button slots
@@ -174,37 +196,48 @@ static func panel_style(key: String, content_margin := 10.0) -> StyleBox:
 	return flat
 
 
-# ------------------------------------------------- the sandstone tiles --
+# ------------------------------------------------- the seamless grounds --
 
-## THE SANDSTONE TILES (2026-10-18). `Winbk_Options` is 400x350 and the
-## shell's stone windows are not: Magic Battle and Options stand about
-## 820x600, so the stone stretched to fill them was blown up two to four
-## times on a big screen — the owner's playtest: *"the background of
-## options and magic battle ... looks like a blur too much"*. Tiled at its
-## own size instead, the stone keeps its one-pixel grain — but the 1997
-## picture was never meant to tile: it is lit, about twenty levels darker
-## at its left than at its right, so tiles laid side by side band, and its
-## edges do not meet.
+## THE SEAMLESS GROUNDS (2026-10-18). The 1997 window grounds are small —
+## `Winbk_Options` 400x350, `Winbk_Questmana` 289x274, `Winbk_Changetext`
+## 481x323, `Winbk_Endduel` 272x422 — and our windows are not: Magic
+## Battle and Options stand about 820x600, so a ground stretched to fill
+## them was blown up two to four times on a big screen. The owner's
+## playtest: *"the background of options and magic battle ... looks like
+## a blur too much"*, then *"fix all the rest!"*. Squeezed into a button
+## or a field it streaked, and the match's 430x200 window drew the
+## end-of-duel rings as ovals. Tiled at its own size instead, a ground
+## keeps its grain — but none was drawn to tile: each stone is lit (the
+## sandstone some twenty levels darker at its left than at its right, the
+## dark stone darker at its top left), so tiles side by side band, and
+## their edges do not meet.
 ##
 ## So the game makes the tile ([method seamless]), once per picture, from
 ## whatever picture the worn skin has in the slot:
 ##  - the bevel is set aside (the outer [constant SEAMLESS_BEVEL] pixels);
 ##  - the light is flattened: the stone divided by its own light, which is
-##    the stone shrunk to a few blocks and smoothed back up, so the grain
-##    stays and the left-to-right fall goes;
-##  - the edges are made to meet: the tile is [constant SEAMLESS_BAND]
-##    pixels narrower and shorter than the stone, and its first band
-##    fades from the stone that follows its last column into its own, so
-##    each edge runs on into the other. The fade keeps the grain's
-##    contrast (two speckles mixed half and half would be flatter than
-##    either);
+##    the stone shrunk to a handful of blocks and smoothed back up, so the
+##    grain stays and the fall of the light goes. Not for a pattern drawn
+##    flat (`flatten: false` in [constant PANELS]);
+##  - the edges are made to meet, across and then down: the tile is a
+##    band narrower than the stone ([constant SEAMLESS_BAND] pixels, or
+##    what makes the tile whole repeats of a ground's `period`), and in
+##    its first band each row switches from the stone that follows its
+##    last column to its own — at the CUT, the one path down the band
+##    where the two are most alike, mixed over a few pixels
+##    ([constant SEAMLESS_FEATHER]). The way texture quilting joins two
+##    pieces: no stone is laid over another, so a ring or a crack is
+##    never doubled and the grain keeps its contrast;
 ##  - the bevel goes back round it, its edges cut to the new length (a
 ##    bevel is one line all along), with one pixel of the tile's own wrap
 ##    between bevel and tile, so a tile's edge drawn smooth reads the
 ##    stone that follows it and never the bevel.
-## A 2x picture gives a 2x tile, drawn at the same size.
+## A 2x picture gives a 2x tile, drawn at the same size. A [method frame]
+## no bigger than its ground wears the 1997 picture itself, clipped; a
+## [method panel_style] cannot know its size and always wears the tile.
 const SEAMLESS_BEVEL := 3
 const SEAMLESS_BAND := 40
+const SEAMLESS_FEATHER := 6
 
 ## key -> [the skin's picture, the tile made of it].
 static var _grounds: Dictionary = {}
@@ -222,32 +255,39 @@ static func ground(key: String) -> Texture2D:
 	if made.size() == 2 and made[0] == art:
 		return made[1]
 	var scale := GameSkin.scale_of(art)
-	var img := seamless(art.get_image(), scale)
+	var img := seamless(art.get_image(), scale, spec.get("period", Vector2i.ZERO),
+		spec.get("flatten", true))
 	var tex := GameSkin.texture_of(img, img.get_size() / scale)
 	_grounds[key] = [art, tex]
 	return tex
 
 
 ## The seamless tile made of the ground [param source], a picture at
-## [param scale] times its drawn size (THE SANDSTONE TILES). Too small a
-## picture to make one comes back as it is.
-static func seamless(source: Image, scale := 1) -> Image:
+## [param scale] times its drawn size (THE SEAMLESS GROUNDS). A
+## [param period] (drawn pixels, 0 for none) makes the tile whole
+## repeats of a pattern along that axis; [param flatten] false leaves the
+## light as drawn. Too small a picture to make one comes back as it is.
+static func seamless(source: Image, scale := 1, period := Vector2i.ZERO,
+		flatten := true) -> Image:
 	var img := source.duplicate() as Image
 	if img.is_compressed():
 		img.decompress()
 	img.convert(Image.FORMAT_RGBA8)
 	var bevel := SEAMLESS_BEVEL * scale
-	var band := SEAMLESS_BAND * scale
-	var size := img.get_size()
-	if size.x <= 2 * (bevel + band) or size.y <= 2 * (bevel + band):
+	var least := SEAMLESS_BAND * scale
+	var inner := img.get_size() - Vector2i(bevel, bevel) * 2
+	var band := Vector2i(_band(inner.x, period.x * scale, least),
+		_band(inner.y, period.y * scale, least))
+	if inner.x <= band.x + least or inner.y <= band.y + least:
 		return img
-	var tile := img.get_region(Rect2i(Vector2i(bevel, bevel),
-		size - Vector2i(bevel, bevel) * 2))
-	_flatten_light(tile)
-	tile = _meet_edges(tile, band)
-	tile.rotate_90(CLOCKWISE)
-	tile = _meet_edges(tile, band)
+	var tile := img.get_region(Rect2i(Vector2i(bevel, bevel), inner))
+	if flatten:
+		_flatten_light(tile)
+	tile = _meet_edges(tile, band.x, SEAMLESS_FEATHER * scale)
+	# Down as across: turned so its top row is the left column.
 	tile.rotate_90(COUNTERCLOCKWISE)
+	tile = _meet_edges(tile, band.y, SEAMLESS_FEATHER * scale)
+	tile.rotate_90(CLOCKWISE)
 	var ring := bevel + scale
 	var out := Image.create_empty(tile.get_width() + 2 * ring,
 		tile.get_height() + 2 * ring, false, Image.FORMAT_RGBA8)
@@ -260,15 +300,26 @@ static func seamless(source: Image, scale := 1) -> Image:
 	return out
 
 
+## The band a [param length] of stone gives up to make its edges meet:
+## [param least] pixels, or for a pattern repeating every [param period]
+## the length less as many whole repeats as leave at least that.
+static func _band(length: int, period: int, least: int) -> int:
+	if period <= 0 or length - least < period:
+		return least
+	return length - (length - least) / period * period
+
+
 ## Divides [param img] by its own light: each pixel times the stone's
 ## mean over the light where it stands. The light is the stone shrunk to
-## about sixteen blocks across and smoothed back up. Done as a shade of
-## black laid over the bright parts (down to the darkest light) and the
-## whole then brightened back, so the pixels are worked by the engine,
-## not one by one here.
+## a handful of blocks across (no more than eight, so a pattern's own
+## figures — the end-of-duel rings stand ~31 pixels apart — are averaged
+## away and only the light is left) and smoothed back up. Done as a shade
+## of black laid over the bright parts (down to the darkest light) and
+## the whole then brightened back, so the pixels are worked by the
+## engine, not one by one here.
 static func _flatten_light(img: Image) -> void:
 	var light := img.duplicate() as Image
-	while light.get_width() > 16 and light.get_height() > 2:
+	while light.get_width() > 8 and light.get_height() > 2:
 		light.shrink_x2()
 	var lums := PackedFloat32Array()
 	var mean := 0.0
@@ -295,35 +346,65 @@ static func _flatten_light(img: Image) -> void:
 
 
 ## [param img] made [param band] columns narrower, its right edge running
-## on into its left: column x of the first band is the column that
-## followed the new last one ([code]x + width[/code]) fading into column x
-## itself. Mixed around the band's own mean and scaled back by the mix's
-## length, so the fade is as grainy as the stone.
-static func _meet_edges(img: Image, band: int) -> Image:
+## on into its left. In the first band each row takes, left of the cut,
+## the column that followed the new last one ([code]x + width[/code]) and,
+## right of it, its own — mixed across [param feather] pixels each side.
+## The cut is the cheapest path down the band, a column at most aside per
+## row, where the two differ least (squared, summed over the channels),
+## kept a feather clear of the band's ends.
+static func _meet_edges(img: Image, band: int, feather: int) -> Image:
 	var full := img.get_width()
 	var w := full - band
 	var h := img.get_height()
 	var out := img.get_region(Rect2i(0, 0, w, h))
+	if band <= 0:
+		return out
 	var src := img.get_data()
 	var dst := out.get_data()
-	var mean := PackedFloat64Array([0.0, 0.0, 0.0])
+	var lo := mini(feather, (band - 1) / 2)
+	var hi := band - lo
+	# How unlike the two stones are at each pixel the cut may cross...
+	var cost := PackedFloat32Array()
+	cost.resize(band * h)
+	for y in h:
+		for x in range(lo, hi):
+			var own := (y * full + x) * 4
+			var unlike := 0.0
+			for c in 3:
+				var d := float(src[own + c]) - float(src[own + w * 4 + c])
+				unlike += d * d
+			cost[y * band + x] = unlike
+	# ...summed down the cheapest way to each from the top row...
+	for y in range(1, h):
+		for x in range(lo, hi):
+			var above := (y - 1) * band + x
+			var cheapest := cost[above]
+			if x > lo:
+				cheapest = minf(cheapest, cost[above - 1])
+			if x < hi - 1:
+				cheapest = minf(cheapest, cost[above + 1])
+			cost[y * band + x] += cheapest
+	# ...and the cut followed back up from the cheapest foot.
+	var cut := PackedInt32Array()
+	cut.resize(h)
+	var at := lo
+	for x in range(lo, hi):
+		if cost[(h - 1) * band + x] < cost[(h - 1) * band + at]:
+			at = x
+	cut[h - 1] = at
+	for y in range(h - 2, -1, -1):
+		var below := at
+		for x in range(maxi(lo, below - 1), mini(hi, below + 2)):
+			if cost[y * band + x] < cost[y * band + at]:
+				at = x
+		cut[y] = at
 	for y in h:
 		for x in band:
+			var t := clampf((x - cut[y] + 0.5) / (2.0 * feather) + 0.5, 0.0, 1.0)
 			var own := (y * full + x) * 4
 			for c in 3:
-				mean[c] += src[own + c] + src[own + w * 4 + c]
-	for c in 3:
-		mean[c] /= 2.0 * band * h
-	for x in band:
-		var t := (x + 0.5) / band
-		var length := sqrt(t * t + (1.0 - t) * (1.0 - t))
-		for y in h:
-			var own := (y * full + x) * 4
-			var follows := own + w * 4
-			for c in 3:
-				var mixed := mean[c] + ((1.0 - t) * (src[follows + c] - mean[c])
-					+ t * (src[own + c] - mean[c])) / length
-				dst[(y * w + x) * 4 + c] = clampi(roundi(mixed), 0, 255)
+				dst[(y * w + x) * 4 + c] = roundi(lerpf(src[own + w * 4 + c],
+					src[own + c], t))
 	return Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, dst)
 
 

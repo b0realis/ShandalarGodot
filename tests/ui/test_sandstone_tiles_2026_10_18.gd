@@ -1,18 +1,23 @@
 extends GutTest
-## THE SANDSTONE TILES (2026-10-18) — the owner's playtest of 0.50.32:
+## THE SEAMLESS GROUNDS (2026-10-18) — the owner's playtest of 0.50.32:
 ## *"Also check the background of options and magic battle! - it looks
-## like a blur too much"*. The 400x350 `panel_stone` was stretched over
-## windows twice its size and squeezed into every shell button; it is
-## now the seamless tile the game makes of it ([method
-## OriginalDialog.ground]), laid at its own size.
+## like a blur too much"*, and then of the dark stone, the knot and the
+## end-of-duel rings, *"fix all the rest!"*. The 1997 window grounds were
+## stretched over windows up to twice their size and squeezed into
+## buttons and fields; each stone and pattern ground is now the seamless
+## tile the game makes of it ([method OriginalDialog.ground]), laid at
+## its own size. Only the two pictures stretch.
 ##
-## The fixture is a stone drawn here, so no 1997 file is needed: a grain
-## that changes from pixel to pixel the way sandstone does (noise drawn
-## small and smoothed up, so a column is like the next and unlike one far
-## away), lit twenty levels darker at the left than at the right as the
-## 1997 picture is, inside a three-pixel bevel. Raw, its edges do not
-## meet and its tiles would band; the tile made of it must do neither,
-## keep its grain, and keep its bevel.
+## The fixtures are drawn here, so no 1997 file is needed. A STONE: a
+## grain that changes from pixel to pixel the way sandstone does (noise
+## drawn small and smoothed up, so a column is like the next and unlike
+## one far away), lit twenty levels darker at the left than at the right
+## as the 1997 picture is, inside a three-pixel bevel. Raw, its edges do
+## not meet and its tiles would band; the tile made of it must do
+## neither, keep its grain — every pixel of the join from one stone or
+## the other, never both but at the cut — and keep its bevel. A PATTERN:
+## figures repeating exactly every few pixels, as the knot does; its tile
+## must be whole repeats and every pixel of it the pattern's own.
 
 const SCRATCH := "user://sandstone_tiles_test"
 const SKIN := SCRATCH + "/skin"
@@ -54,34 +59,54 @@ func after_each() -> void:
 
 # ------------------------------------------------------------- fixtures --
 
-## The 1997 stone's shape: 400x350, a 3px bevel (two light rows and a
-## mid one along top+left, two dark and a mid one along bottom+right),
-## and inside it a smooth grain lit [param fall] levels brighter at the
-## right than at the left.
-static func _stone(fall := 20.0) -> Image:
+## The 1997 stone's shape: 400x350 (or [param size]), a 3px bevel (two
+## light rows and a mid one along top+left, two dark and a mid one along
+## bottom+right), and inside it a smooth grain lit [param fall] levels
+## brighter at the right than at the left.
+static func _stone(fall := 20.0, size := Vector2i(400, 350)) -> Image:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1997
-	var grain := Image.create_empty(100, 88, false, Image.FORMAT_RGBA8)
+	var grain := Image.create_empty(size.x / 4, size.y / 4, false, Image.FORMAT_RGBA8)
 	for y in grain.get_height():
 		for x in grain.get_width():
 			var v := rng.randf_range(-0.12, 0.12)
 			grain.set_pixel(x, y, Color(0.5 + v, 0.5 + v * 0.9, 0.5 + v * 0.7))
-	grain.resize(400, 350, Image.INTERPOLATE_BILINEAR)
-	var img := Image.create_empty(400, 350, false, Image.FORMAT_RGBA8)
-	for y in 350:
-		for x in 400:
+	grain.resize(size.x, size.y, Image.INTERPOLATE_BILINEAR)
+	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
+	for y in size.y:
+		for x in size.x:
 			var g := grain.get_pixel(x, y)
-			var lit := (x / 399.0 - 0.5) * fall / 255.0
+			var lit := (float(x) / (size.x - 1) - 0.5) * fall / 255.0
 			img.set_pixel(x, y, Color(g.r + 0.27 + lit, g.g + 0.21 + lit, g.b + 0.08 + lit))
-	for i in 400:
+	_bevel(img)
+	return img
+
+
+## A pattern of [param size] repeating exactly every [param period]: a
+## smooth figure (a ring round each repeat's middle) on a dark ground.
+static func _pattern(size: Vector2i, period: Vector2i) -> Image:
+	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
+	for y in size.y:
+		for x in size.x:
+			var at := Vector2(x % period.x, y % period.y) - Vector2(period) / 2.0
+			var ring := clampf(1.0 - absf(at.length() - period.y * 0.3) / 4.0, 0.0, 1.0)
+			img.set_pixel(x, y, Color(0.15 + 0.5 * ring, 0.2 + 0.4 * ring,
+				0.35 + 0.1 * ring + 0.002 * (x % period.x)))
+	_bevel(img)
+	return img
+
+
+static func _bevel(img: Image) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	for i in w:
 		for d in 3:
 			img.set_pixel(i, d, MID if d == 2 else LIGHT)
-			img.set_pixel(i, 349 - d, MID if d == 2 else DARK)
-	for i in 350:
+			img.set_pixel(i, h - 1 - d, MID if d == 2 else DARK)
+	for i in h:
 		for d in 3:
 			img.set_pixel(d, i, MID if d == 2 else LIGHT)
-			img.set_pixel(399 - d, i, MID if d == 2 else DARK)
-	return img
+			img.set_pixel(w - 1 - d, i, MID if d == 2 else DARK)
 
 
 ## Mean |difference| of two columns of [param img] (0..255), over
@@ -187,6 +212,59 @@ func test_the_join_keeps_the_grain() -> void:
 		"the fade across the join is as grainy as the stone, not a smooth stripe")
 
 
+func test_the_join_takes_each_pixel_from_one_stone_or_the_other() -> void:
+	# THE CUT, NOT A FADE. Laid over each other, two stones double every
+	# figure — a ring beside its own ghost. So in the band each pixel is
+	# the stone that follows the tile's end or the tile's own, and only
+	# the few pixels either side of the cut are mixed. Light left as drawn
+	# here, so the pixels can be read against the stone's own.
+	var stone := _stone()
+	var out := OriginalDialog.seamless(stone, 1, Vector2i.ZERO, false)
+	var t := _tile_rect(out)
+	var band := OriginalDialog.SEAMLESS_BAND
+	var feather := OriginalDialog.SEAMLESS_FEATHER
+	var mixed_most := 0
+	# Rows below the band the second (downward) join made.
+	for y in range(band, t.size.y, 5):
+		var mixed := 0
+		for x in band:
+			var got := out.get_pixel(t.position.x + x, t.position.y + y)
+			var own := stone.get_pixel(3 + x, 3 + y)
+			var follows := stone.get_pixel(3 + x + t.size.x, 3 + y)
+			if not (_alike(got, own) or _alike(got, follows)):
+				mixed += 1
+		mixed_most = maxi(mixed_most, mixed)
+		assert_eq(out.get_pixel(t.position.x + band + 7, t.position.y + y),
+			stone.get_pixel(3 + band + 7, 3 + y), "past the band, the stone itself")
+	assert_lte(mixed_most, 2 * feather + 1,
+		"no more pixels of a row mixed than the feather either side of the cut")
+
+
+static func _alike(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) * 255.0 < 1.5 and absf(a.g - b.g) * 255.0 < 1.5 \
+		and absf(a.b - b.b) * 255.0 < 1.5
+
+
+func test_a_pattern_tiles_as_whole_repeats_untouched() -> void:
+	# The knot repeats every 94x52: its tile is as many whole repeats as
+	# leave a band to cut in, and since the two sides of every cut are the
+	# same figure, every pixel of the tile is the pattern's own.
+	var period := Vector2i(94, 52)
+	var knot := _pattern(Vector2i(481, 323), period)
+	var out := OriginalDialog.seamless(knot, 1, period, false)
+	var t := _tile_rect(out)
+	assert_eq(t.size, Vector2i(4 * 94, 5 * 52), "whole repeats")
+	assert_eq(t.size.x % period.x, 0)
+	for y in range(0, t.size.y, 7):
+		for x in range(0, t.size.x, 5):
+			assert_true(_alike(out.get_pixel(t.position.x + x, t.position.y + y),
+				knot.get_pixel(3 + x, 3 + y)), "the pattern untouched at %d,%d" % [x, y])
+	# The repeats of a band: none for a stone, whole ones for a pattern.
+	assert_eq(OriginalDialog._band(394, 0, 40), 40)
+	assert_eq(OriginalDialog._band(475, 94, 40), 475 - 4 * 94)
+	assert_eq(OriginalDialog._band(100, 94, 40), 40, "a repeat longer than the stone allows")
+
+
 func test_the_ring_round_the_tile_is_the_tiles_own_wrap() -> void:
 	# A tile's edge drawn smooth reads the pixel beyond it. That pixel is
 	# the ring's, so it must be the stone that follows — never the bevel.
@@ -232,6 +310,72 @@ func test_too_small_a_picture_comes_back_as_it_is() -> void:
 
 # -------------------------------------------------------- worn by the game --
 
+func test_every_stone_and_pattern_ground_tiles_and_the_pictures_stretch() -> void:
+	for key in OriginalDialog.PANELS:
+		var spec: Dictionary = OriginalDialog.PANELS[key]
+		if key in ["big_card_panel", "versus_background"]:
+			assert_false(spec["tile"], key + ": a picture stretches")
+			assert_false(spec.get("seamless", false), key)
+		elif key != "message_panel":
+			assert_true(spec["tile"], key)
+			assert_true(spec.get("seamless", false), key + ": made a seamless tile")
+			assert_eq(spec["margin"], OriginalDialog.SEAMLESS_BEVEL + 1,
+				key + ": its margin is the bevel and the pixel of wrap")
+
+
+func test_each_ground_is_worn_as_its_tile() -> void:
+	var made := {
+		"panel_stone": [_stone(20.0, GameSkin.SIZES["panel_stone"]), Vector2i(362, 312)],
+		"panel_dark_stone": [_stone(20.0, GameSkin.SIZES["panel_dark_stone"]),
+			Vector2i(289 - 6 - 40 + 8, 274 - 6 - 40 + 8)],
+		"panel_end_duel": [_stone(20.0, GameSkin.SIZES["panel_end_duel"]),
+			Vector2i(272 - 6 - 40 + 8, 422 - 6 - 40 + 8)],
+		"panel_knot": [_pattern(GameSkin.SIZES["panel_knot"], Vector2i(94, 52)),
+			Vector2i(4 * 94 + 8, 5 * 52 + 8)],
+	}
+	for key in made:
+		(made[key][0] as Image).save_png(
+			ProjectSettings.globalize_path(SKIN.path_join(key + ".png")))
+	GameSkin.clear_caches()
+	for key in made:
+		var tile := OriginalDialog.ground(key)
+		assert_not_null(tile, key)
+		if tile == null:
+			continue
+		assert_ne(tile, GameSkin.texture(key), key + ": not the picture itself")
+		assert_eq(Vector2i(tile.get_size()), made[key][1], key)
+		var patch := OriginalDialog.frame(key)
+		assert_same(patch.texture, tile, key)
+		assert_eq(patch.axis_stretch_vertical, NinePatchRect.AXIS_STRETCH_MODE_TILE, key)
+		patch.free()
+		var box := OriginalDialog.panel_style(key, 5.0) as StyleBoxTexture
+		assert_same(box.texture, tile, key)
+
+
+func test_a_window_that_fits_wears_the_picture_itself() -> void:
+	# The duel's verdict, 272x300, fits inside the 272x422 rings: it wears
+	# the 1997 picture, clipped, with no join. The match's 430x200 does not.
+	_stone(20.0, Vector2i(272, 422)).save_png(
+		ProjectSettings.globalize_path(SKIN.path_join("panel_end_duel.png")))
+	GameSkin.clear_caches()
+	var tile := OriginalDialog.ground("panel_end_duel")
+	var picture := GameSkin.texture("panel_end_duel")
+	assert_ne(tile, picture)
+	var holder := Control.new()
+	add_child_autofree(holder)
+	holder.size = Vector2(272, 300)
+	var patch := OriginalDialog.frame("panel_end_duel")
+	holder.add_child(patch)
+	await get_tree().process_frame
+	assert_same(patch.texture, picture, "272x300 fits the rings")
+	holder.size = Vector2(430, 200)
+	await get_tree().process_frame
+	assert_same(patch.texture, tile, "430 wide does not")
+	holder.size = Vector2(200, 150)
+	await get_tree().process_frame
+	assert_same(patch.texture, picture, "and back")
+
+
 func test_the_skin_s_stone_is_worn_as_the_tile() -> void:
 	_stone().save_png(ProjectSettings.globalize_path(SKIN.path_join("panel_stone.png")))
 	GameSkin.clear_caches()
@@ -241,8 +385,8 @@ func test_the_skin_s_stone_is_worn_as_the_tile() -> void:
 		return
 	assert_eq(Vector2i(tile.get_size()), Vector2i(362, 312))
 	assert_same(OriginalDialog.ground("panel_stone"), tile, "made once")
-	assert_eq(OriginalDialog.ground("panel_dark_stone"), GameSkin.texture("panel_dark_stone"),
-		"a ground not marked seamless is worn as it is")
+	assert_eq(OriginalDialog.ground("big_card_panel"), GameSkin.texture("big_card_panel"),
+		"a picture is worn as it is")
 	# Every sandstone surface wears it, tiled, inside its ring.
 	var box := UiChrome.stone_panel(6.0)
 	assert_true(box is StyleBoxTexture)

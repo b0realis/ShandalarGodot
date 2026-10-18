@@ -18811,6 +18811,56 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-18 — The seamless grounds (0.50.34)
+
+The owner, told the dark stone and the knot were still stretched: *"Ok
+fix all the rest!"*
+
+- **What was left.** `panel_dark_stone` (289x274: the match and gauntlet
+  windows, questions, fields, the lobby), `panel_knot` (481x323: the
+  duel log, library searches — 392x452 stretches it 1.4x tall) and
+  `panel_end_duel` (272x422: the match's 430x200 window stretched it
+  1.6x wide and squeezed it to half its height, so its rings were
+  ovals). The two PICTURES — `big_card_panel`, a painting worn at its own
+  552x402, and `versus_background`, whose window is sized to its
+  aspect — stay pictures: cut into tiles they would not be the picture.
+- **Measured first.** The knot repeats exactly every 94x52 (shifted by
+  that, under 1 level of 255 apart; by anything else, ~19). The dark
+  stone has no repeat and a light fall like the sandstone's (60 to 78
+  across, 65 to 75 down). The rings have none either (their best shift,
+  31, is barely below chance): they stand in perspective and fade.
+- **The join became a cut.** A Python prototype of the 0.50.33 fade on
+  the rings doubled them — each ring beside its ghost across the band.
+  The tile's band is now joined the way texture quilting joins two
+  patches: per row, the stone that follows the tile's end left of the
+  cut and its own right of it, the cut being the cheapest connected path
+  down the band where the two differ least, mixed 6 px each side. No
+  figure is doubled and the grain keeps its contrast without the fade's
+  correction. The light map went from ~16 blocks across to at most 8, so
+  the rings' own lattice is not flattened as if it were light.
+- **Patterns in whole repeats.** `PANELS["panel_knot"]` carries
+  `period: (94, 52)` and `flatten: false`: its tile is 4x5 whole repeats
+  (376x260), and the cut runs between identical pixels — the tile is
+  the knot's own pixels, untouched.
+- **A window that fits wears the picture.** The duel's verdict window,
+  272x300, fits inside the 272x422 rings: `frame` wears the 1997
+  picture itself, clipped, while the window is no bigger than it, and
+  the seamless tile beyond (`_wear_fitting`, on `resized`). A
+  `panel_style` cannot know its size and always wears the tile.
+- **Seen.** Each ground stretched beside tiled at 2560x1600 with both
+  skins (430x200 and 272x300 rings, 430x180 and 600x300 dark stone,
+  392x300 knot), the match window, a library search, Magic Battle and
+  Options: round, sharp rings with a soft join (softer with the 1997
+  skin than with the upscaled one), the knot whole, the dark stone sharp
+  — its big cracks repeat in a wide window, but no seam shows.
+- Tests: `tests/ui/test_sandstone_tiles_2026_10_18.gd` (+5;
+  mutation-checked: a fade instead of the cut fails the grain and the
+  one-side tests); `tests/ui/test_original_dialog.gd` (only the pictures
+  stretch), `tests/ui/test_deck_menu.gd` (the picture or its tile).
+
+Gate: 872 scripts, **13,495/13,495 tests, 586,943 asserts**, exit 0
+over 6 shards; Python 775 (15 skipped), exit 0.
+
 ## 2026-10-18 — The sandstone tiles (0.50.33)
 
 The owner, checking 0.50.32: *"Check the buttons when you click options

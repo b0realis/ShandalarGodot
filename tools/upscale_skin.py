@@ -277,7 +277,7 @@ KEY_EXACT = (
 ## streaked strips in its 8px frame around a smeared middle. Doubled, it
 ## is the 1997 stone at twice the pixels — and since 0.50.33 the game
 ## lays it as a seamless tile at its own size (`OriginalDialog.ground`,
-## THE SANDSTONE TILES), where the grain is seen as drawn.
+## THE SEAMLESS GROUNDS), where the grain is seen as drawn.
 DOUBLED = ("panel_stone",)
 
 ENGINE_EXE = "realesrgan-ncnn-vulkan"

@@ -152,11 +152,12 @@ func test_it_is_the_main_menus_sandstone_and_not_the_blue_knot() -> void:
 					"and it is UiChrome's sandstone, not the dark box")
 		assert_eq(faces, 1)
 		return
-	# Worn as the seamless tile made of it (THE SANDSTONE TILES).
+	# Worn as the picture, or the seamless tile made of it when the window
+	# is bigger than the picture (THE SEAMLESS GROUNDS).
 	var tile := OriginalDialog.ground(DeckBuilderScreen.MENU_PANEL)
 	var grounds := 0
 	for node in screen._menu.get_children():
-		if node is NinePatchRect and (node as NinePatchRect).texture == tile:
+		if node is NinePatchRect and (node as NinePatchRect).texture in [art, tile]:
 			grounds += 1
 	assert_eq(grounds, 1, "the window wears the main menu's sandstone itself")
 	assert_ne(art, GameSkin.texture("panel_knot"),

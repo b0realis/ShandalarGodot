@@ -65,8 +65,8 @@ const FACE_EDGE := Color8(120, 100, 70)
 
 ## The universal stone panel StyleBox: the sandstone TILED at its own
 ## size, never stretched or squeezed — the seamless tile the game makes of
-## the skin's `panel_stone` ([method OriginalDialog.ground], THE SANDSTONE
-## TILES), so a window shows the stone's own grain and a button a piece
+## the skin's `panel_stone` ([method OriginalDialog.ground], THE SEAMLESS
+## GROUNDS), so a window shows the stone's own grain and a button a piece
 ## of it.
 static func stone_panel(content_margin := 10.0) -> StyleBox:
 	if OriginalDialog.ground("panel_stone") != null:

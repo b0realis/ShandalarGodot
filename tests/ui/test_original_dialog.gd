@@ -95,14 +95,15 @@ func test_only_a_ground_wider_than_its_window_may_tile() -> void:
 		return
 	# A dialog ground can be smaller than the dialog, and a second tile
 	# would show its join — no 1997 window has a seam. The Situation Bar,
-	# which is never as wide as its own 600px stone, lays one tile; the
-	# sandstone tiles because the game makes it a tile with no join first
-	# (THE SANDSTONE TILES, 2026-10-18).
+	# which is never as wide as its own 600px stone, lays one tile; every
+	# stone and pattern ground tiles because the game makes it a tile with
+	# no join first (THE SEAMLESS GROUNDS, 2026-10-18). Only the two
+	# pictures stretch.
 	for key in OriginalDialog.PANELS:
 		var patch := OriginalDialog.frame(key)
-		var want := NinePatchRect.AXIS_STRETCH_MODE_TILE \
-			if key in ["message_panel", "panel_stone"] \
-			else NinePatchRect.AXIS_STRETCH_MODE_STRETCH
+		var want := NinePatchRect.AXIS_STRETCH_MODE_STRETCH \
+			if key in ["big_card_panel", "versus_background"] \
+			else NinePatchRect.AXIS_STRETCH_MODE_TILE
 		assert_eq(patch.axis_stretch_horizontal, want, key)
 		patch.free()
 

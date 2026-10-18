@@ -76,6 +76,27 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The seamless grounds (2026-10-18)
+
+- `game/duel/original_dialog.gd`: THE SEAMLESS GROUNDS (was THE
+  SANDSTONE TILES) — `PANELS` marks `panel_dark_stone`, `panel_knot` and
+  `panel_end_duel` seamless too (margin 4, tiled); only the two pictures
+  stretch. The tile's join is now a CUT (`_meet_edges`: the cheapest
+  connected path down the band where the two sides differ least,
+  mixed `SEAMLESS_FEATHER` 6 px each side — texture quilting), not a
+  fade, so no figure is doubled; the light map is at most 8 blocks
+  across (`_flatten_light`), so a pattern's own figures are not taken
+  for light; a `period` (the knot's 94x52) makes the tile whole repeats
+  (`_band`) and `flatten: false` leaves a flat-drawn pattern's light
+  alone. `frame` wears the 1997 picture itself while the window fits
+  inside it (`_wear_fitting`, on `resized`) and the tile beyond.
+- `tools/skin_catalogue.py`: the notes of the three grounds (catalogue
+  regenerated).
+- Tests: `tests/ui/test_sandstone_tiles_2026_10_18.gd` (+5: the join
+  takes each pixel from one side, a pattern in whole repeats untouched,
+  every stone and pattern ground tiles, each ground worn as its tile, a
+  window that fits wears the picture); `tests/ui/test_original_dialog.gd`.
+
 ## The sandstone tiles (2026-10-18)
 
 - `game/duel/original_dialog.gd`: THE SANDSTONE TILES — `ground(key)`
@@ -2755,6 +2776,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.34.md`: every window ground at its own grain,
+  carrying the 0.50.33 … 0.50.20 notes below.
 - `docs/releases/0.50.33.md`: the sandstone at its own grain, carrying
   the 0.50.32 … 0.50.20 notes below.
 - `docs/releases/0.50.32.md`: the upkeep that passes itself, carrying
@@ -7325,11 +7348,14 @@ shandalar/
 │    tests/ui/test_original_dialog.gd — the 1997 popup chrome, including
 │    the MEASURED bevel pixels of the original button art, so a re-import
 │    from a different copy of the game cannot change the look silently;
-│    tests/ui/test_sandstone_tiles_2026_10_18.gd — the sandstone made a
-│    seamless tile (a drawn stone: its edges meet both ways, its light is
-│    flat, the join keeps the grain, the ring is the tile's own wrap, the
-│    bevel goes back round it) and worn tiled by every stone window and
-│    button, 2x picture included (the owner's playtest of 0.50.32);
+│    tests/ui/test_sandstone_tiles_2026_10_18.gd — the window grounds
+│    made seamless tiles (a drawn stone: its edges meet both ways, its
+│    light is flat, the join keeps the grain and takes each pixel from
+│    one side, the ring is the tile's own wrap, the bevel goes back
+│    round it; a drawn pattern in whole repeats untouched) and worn
+│    tiled by every stone window and button, 2x picture included, a
+│    window that fits in the picture itself (the owner's playtest of
+│    0.50.32);
 │    tests/ui/test_combat_bar.gd — the Combat Bar's seven icons, their
 │    1997 cue cards, the sheet geometry measured off Winbk_Phasecombat,
 │    the per-seat gold/blue halves, the black-keyed grounds, the
@@ -12025,9 +12051,11 @@ shandalar/
 │       │                      chrome cannot drift popup by popup. PANELS
 │       │                      carries each 1997 ground's own MEASURED
 │       │                      bevel width as a 9-patch margin;
-│       │                      ground() wears a `seamless` row (the
-│       │                      sandstone) as the tile seamless() makes
-│       │                      of it, so it tiles at any size;
+│       │                      ground() wears a `seamless` row (every
+│       │                      stone and pattern ground) as the tile
+│       │                      seamless() makes of it, so it tiles at
+│       │                      any size; a frame that fits wears the
+│       │                      picture itself;
 │       │                      bar_style() rules the Situation Bar's
 │       │                      borderless Telluser stone; button() is the
 │       │                      era's three-state art (Winbk_Startduel-

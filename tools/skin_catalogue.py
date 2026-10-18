@@ -169,13 +169,21 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The stone slab most windows and the main menu's buttons sit on "
      "(Options, Magic Battle, the Deck Builder's menus, prompts). The "
      "game makes it a seamless tile (its light evened out, its edges run "
-     "into each other, its 3 px bevel kept) and lays it at its own size."),
+     "into each other, its 3 px bevel kept) and lays it at its own size; "
+     "a window that fits inside it wears it as drawn."),
     ("Windows and panels", "panel_dark_stone",
-     "The darker slab: the match and gauntlet screens between duels."),
+     "The darker slab: the match and gauntlet screens between duels, "
+     "questions, fields and lists. Tiled like the sandstone: made "
+     "seamless (light evened out, edges run into each other, 3 px bevel "
+     "kept) and laid at its own size; a window that fits inside it wears "
+     "it as drawn."),
     ("Windows and panels", "panel_knot",
-     "The knotwork slab behind text-change prompts."),
+     "The knotwork slab behind text-change prompts, the duel log and "
+     "library searches. A pattern repeating every 94 x 52 px: the game "
+     "tiles it in whole repeats inside its 3 px bevel, its light as drawn."),
     ("Windows and panels", "panel_end_duel",
-     "The end-of-duel window's ground."),
+     "The end-of-duel window's ground. Tiled like the sandstone; the "
+     "duel's own verdict window fits inside it and wears it as drawn."),
     ("Windows and panels", "versus_background",
      "The opening window (the two duelists face to face) — a picture, "
      "so its middle is stretched, not tiled."),
