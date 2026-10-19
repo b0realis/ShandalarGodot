@@ -76,6 +76,32 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The getting-started page (2026-10-19)
+
+A player asked on Reddit for an installation video: adding the card packs
+and getting the art was hard without knowing Python. The README and
+`docs/card-art-and-packs.md` list the commands; neither says how to install
+Python or open a command window in the game folder.
+
+- `pages/index.html`: one self-contained page, the guide from download to
+  first duel in eight steps. A Windows/Mac/Linux switch (guessed from the
+  browser, `#windows`/`#mac`/`#linux` pick one) shows each computer its own
+  steps; drawn pictures of each window to expect; the twenty commands for
+  the base art and the nine packs in a terminal, copied by one button
+  joined with `&&`; a troubleshooting list of the real messages. The ticks
+  and the chosen computer stay in the reader's browser (`localStorage`). No
+  web fonts or outside scripts. `pages/img/`: the main menu, the Options
+  row and the Card Packs page, from the game with the 1997 skin, no card
+  art. `pages/.gdignore` keeps the folder out of the Godot project.
+- `.github/workflows/pages.yml`: deploys `pages/` alone to GitHub Pages
+  (source: GitHub Actions); `docs/` is not published.
+- `docs/card-art-and-packs.md`: the Mac's own `python3` is too old (the
+  tools stop with `TypeError: unsupported operand type(s) for |`), and
+  python.org's Python needs **Install Certificates.command** once before
+  any download.
+- Checked by running every command on a fresh copy of the 0.50.34 Linux
+  release (89 minutes, 2.2 GB, all nine packs accepted by the game).
+
 ## A moved card reaches the table's edge (2026-10-18)
 
 - `game/duel/duel_screen.gd`: THE PLAYFIELD BOUNDARY — EDGE TO EDGE.
@@ -4094,7 +4120,7 @@ shandalar/
 │                              is `LC_ALL=C sort`ed (2026-10-01) so the
 │                              deal is the runner's on every desk
 ├── .github/workflows/
-│   └── gate.yml             The gate on GitHub's runners (2026-09-17): on
+│   ├── gate.yml             The gate on GitHub's runners (2026-09-17): on
 │                              every push to main and every pull request, the
 │                              official 4.7.2 Linux binary pinned by its
 │                              zip's SHA-256 and cached, four `SHARD=i of 4`
@@ -4105,6 +4131,15 @@ shandalar/
 │                              shard step has its own 40-minute clock
 │                              under the job's 45 (2026-10-01), so a hung
 │                              shard fails the step and still uploads
+│   └── pages.yml            The getting-started page on GitHub Pages
+│                              (2026-10-19): publishes pages/ and nothing
+│                              else, when it changes on main or by hand
+├── pages/                   THE PUBLIC SITE (2026-10-19), the one folder
+│                              GitHub Pages serves: index.html is the
+│                              getting-started guide (download to first
+│                              duel, card art and every pack, Windows/Mac/
+│                              Linux); img/ its three screenshots;
+│                              .gdignore keeps it out of the Godot project
 ├── .gitignore               Ignores .godot/ cache, *.import, assets/cardart/,
 │                              packs/ (build_card_packs.py --out packs)
 ├── DEVELOPMENT.md           The front door for a fresh clone (2026-09-12):

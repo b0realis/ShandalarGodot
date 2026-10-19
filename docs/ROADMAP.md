@@ -18811,6 +18811,37 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-19 — The getting-started page
+
+A player asked on Reddit for an installation video: adding the card packs
+and getting the art was hard without knowing Python. The owner asked for a
+step-by-step guide from the download to play, then for it as a page,
+"more engaging and visual", with the terminal steps emphasised; and for
+only that page to be public.
+
+- **The page.** `pages/index.html`, at
+  https://b0realis.github.io/ShandalarGodot/: eight steps (download,
+  unzip, first start, Python, a command window in the game folder, the
+  commands, the packs switched on, play), each with a picture of what to
+  expect, for the computer chosen at the top. The two steps people stop
+  at are marked as key steps: opening the command window is drawn frame
+  by frame for each system, and the twenty commands sit in a terminal
+  with one Copy button. The real messages of the usual mistakes are
+  listed with their fixes.
+- **Only that folder is public.** `.github/workflows/pages.yml` publishes
+  `pages/` and nothing else. The page loads nothing from other sites: no
+  web fonts (Google Fonts would see every reader), no outside scripts.
+  Its screenshots are the game's own screens, without card art, portraits
+  or personal paths, and carry no metadata.
+- **Two Mac traps, in `docs/card-art-and-packs.md` too.** The `python3`
+  macOS brings is too old (the tools stop with `TypeError: unsupported
+  operand type(s) for |`, reproduced with Python 3.9), and python.org's
+  Python downloads nothing until **Install Certificates.command** has
+  run once.
+- **Checked end to end.** Every command, in order, on a fresh copy of the
+  0.50.34 Linux release: all exit 0 in 89 minutes, 2.2 GB on disk, and
+  the released game accepts all nine packs from `cardpacks/`.
+
 ## 2026-10-18 — A moved card reaches the table's edge (0.50.37)
 
 The owner: *"I cant drag mini cards on the whole playfield. They stop some

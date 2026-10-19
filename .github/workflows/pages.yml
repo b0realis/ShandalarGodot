@@ -1,0 +1,45 @@
+# The getting-started page on GitHub Pages: https://b0realis.github.io/ShandalarGodot/
+#
+# ONLY pages/ IS PUBLISHED (the owner, 2026-10-19: "make another folder and
+# juuuust share publicly this file!"). The site is that folder as it is:
+# pages/index.html and its pictures in pages/img/. Nothing else in the
+# repository becomes a web page; docs/ stays the repository's own.
+#
+# The page asks no other site for anything (no web fonts, no scripts from
+# elsewhere); its links open other sites only when clicked. Its pictures are
+# the game's own screens with no card art, and its one stored value (the
+# reader's computer and ticked steps) stays in the reader's browser.
+#
+# The Pages source is "GitHub Actions" (repository Settings > Pages). It
+# runs when pages/ or this file changes on main, or by hand.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["pages/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: pages
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Getting Started with Shandalar</title>
+<meta name="description" content="Step by step from download to your first duel: the game, card pictures and every card set up to Tempest.">
+<style>
+/* Layout: a dark hero, a sticky bar (your computer + progress), then one column of numbered steps on a rail; every step pairs plain text with a drawn picture of what you will see. */
+:root {
+  --bg: #f5f4f8;
+  --surface: #ffffff;
+  --sunk: #ecebf2;
+  --fg: #1d1b26;
+  --muted: #5d5970;
+  --line: #d9d5e4;
+  --accent: #5a3d9e;
+  --accent-soft: #ece6f9;
+  --gold: #c8963c;
+  --gold-ink: #2b1d06;
+  --ok: #2c7a4b;
+  --warn-bg: #fff3dd;
+  --warn-fg: #6e4308;
+  --hero-bg: #1b1727;
+  --hero-fg: #f2eefa;
+  --hero-muted: #c3bad8;
+  --term-bg: #16141c;
+  --term-bar: #2a2734;
+  --term-fg: #e9e6f1;
+  --term-dim: #9690ab;
+  --term-prompt: #f2b950;
+  --term-ok: #85d6a0;
+  --win-blue: #1259a8;
+  --win-blue-fg: #ffffff;
+  --shadow: 0 1px 2px rgb(20 16 32 / 0.08), 0 6px 18px rgb(20 16 32 / 0.08);
+  /* The computer's own faces: the page asks no other site for anything. */
+  --font-display: Georgia, "Times New Roman", "DejaVu Serif", serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121018; --surface: #1b1823; --sunk: #232030; --fg: #ece9f4; --muted: #a8a2bb;
+    --line: #332e43; --accent: #b9a3f2; --accent-soft: #2a2340; --gold: #dcab52; --gold-ink: #241703;
+    --ok: #7bcb97; --warn-bg: #2f2513; --warn-fg: #f0c47e;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121018; --surface: #1b1823; --sunk: #232030; --fg: #ece9f4; --muted: #a8a2bb;
+  --line: #332e43; --accent: #b9a3f2; --accent-soft: #2a2340; --gold: #dcab52; --gold-ink: #241703;
+  --ok: #7bcb97; --warn-bg: #2f2513; --warn-fg: #f0c47e;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 5.5rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 var(--font-body);
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; z-index: 10;
+  height: env(safe-area-inset-top, 0px); background: var(--surface);
+}
+.gutter {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.col { max-width: 52rem; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible + .tick {
+  outline: 3px solid var(--accent); outline-offset: 2px;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; }
+code, kbd, .mono { font-family: var(--font-mono); }
+p code, li code, dd code {
+  font-size: 0.86em; background: var(--sunk); padding: 0.08em 0.35em; border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+img { max-width: 100%; height: auto; display: block; }
+
+/* ---------- hero ---------- */
+.hero { background: var(--hero-bg); color: var(--hero-fg); }
+.hero .col {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 2rem; align-items: center; padding-block: 2.75rem 2.5rem;
+}
+.hero h1 { font-size: clamp(2rem, 5vw, 2.9rem); margin: 0 0 0.75rem; letter-spacing: 0.005em; }
+.hero p { margin: 0 0 1.25rem; color: var(--hero-muted); max-width: 34rem; }
+.facts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.facts li {
+  border: 1px solid rgb(255 255 255 / 0.18); border-radius: 999px;
+  padding: 0.3rem 0.8rem; font-size: 0.875rem; color: var(--hero-fg);
+}
+.facts b { color: var(--gold); font-weight: 700; }
+.hero figure { margin: 0; }
+.hero figure img {
+  border-radius: 8px; border: 1px solid rgb(255 255 255 / 0.15);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.45);
+}
+.hero figcaption { font-size: 0.8rem; color: var(--hero-muted); margin-top: 0.5rem; }
+
+/* ---------- sticky bar ---------- */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.bar .col {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 0.6rem 1.5rem; padding-block: 0.65rem;
+}
+.os-pick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.os-pick > span { font-weight: 700; font-size: 0.95rem; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: 700 0.95rem/1 var(--font-body); color: var(--fg); background: var(--surface);
+  border: 0; border-right: 1px solid var(--line); padding: 0.6rem 1rem; cursor: pointer;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.progress { display: flex; align-items: center; gap: 0.6rem; font-size: 0.875rem; color: var(--muted); }
+.progress .track { width: 8rem; height: 6px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.progress .fill { height: 100%; width: 0; background: var(--ok); transition: width 0.3s; }
+.progress output { font-variant-numeric: tabular-nums; }
+
+/* ---------- OS switching ---------- */
+#app[data-os="win"] [data-os]:not([data-os~="win"]),
+#app[data-os="mac"] [data-os]:not([data-os~="mac"]),
+#app[data-os="linux"] [data-os]:not([data-os~="linux"]) { display: none !important; }
+
+/* ---------- steps ---------- */
+main .col { padding-block: 2rem 1rem; }
+.intro { max-width: 42rem; margin: 0 0 2rem; color: var(--muted); }
+.steps { list-style: none; margin: 0; padding: 0; position: relative; }
+.steps::before {
+  content: ""; position: absolute; left: 1.25rem; top: 0.5rem; bottom: 0.5rem;
+  width: 2px; background: var(--line);
+}
+.step {
+  position: relative; display: grid; grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 0 1.25rem; padding-bottom: 3rem;
+}
+.badge {
+  width: 2.5rem; height: 2.5rem; border-radius: 50%; display: grid; place-items: center;
+  background: var(--gold); color: var(--gold-ink); font: 700 1.15rem/1 var(--font-display);
+  position: relative; z-index: 1; box-shadow: 0 0 0 5px var(--bg);
+}
+.step.done .badge { background: var(--ok); color: var(--surface); }
+.step.done .badge span { display: none; }
+.step.done .badge::after { content: "✓"; font: 700 1.2rem/1 var(--font-body); }
+.step > div { min-width: 0; }
+.step h2 { font-size: 1.6rem; margin: 0.15rem 0 0.6rem; }
+.step > div > p, .step > div > ul > li, .step > div > div > p { max-width: 42rem; }
+.step p { margin: 0 0 0.9rem; }
+.step ul { padding-left: 1.2rem; margin: 0 0 1rem; display: grid; gap: 0.35rem; }
+.lead { font-size: 1.05rem; }
+.emph-step .badge { width: 2.5rem; height: 2.5rem; box-shadow: 0 0 0 5px var(--bg), 0 0 0 8px var(--gold); }
+.tag {
+  display: inline-block; font: 700 0.72rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--gold); color: var(--gold-ink); border-radius: 4px; padding: 0.3rem 0.45rem;
+  vertical-align: 0.25em; margin-left: 0.4rem;
+}
+.note {
+  background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px;
+  padding: 0.75rem 1rem; margin: 0 0 1rem; max-width: 42rem;
+}
+.note b { color: inherit; }
+.check {
+  display: inline-flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none;
+  margin-top: 0.5rem; font-weight: 700; font-size: 0.95rem; color: var(--muted);
+}
+.check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.tick {
+  width: 1.4rem; height: 1.4rem; border: 2px solid var(--line); border-radius: 5px;
+  display: grid; place-items: center; background: var(--surface);
+}
+.check input:checked + .tick { background: var(--ok); border-color: var(--ok); }
+.check input:checked + .tick::after { content: "✓"; color: var(--surface); font-weight: 700; font-size: 0.9rem; }
+.step.done .check { color: var(--ok); }
+.btn {
+  display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none;
+  font: 700 1rem/1 var(--font-body); padding: 0.75rem 1.1rem; border-radius: 8px; cursor: pointer;
+  background: var(--accent); color: var(--surface); border: 1px solid var(--accent);
+}
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:hover { filter: brightness(1.07); }
+
+/* ---------- drawn pictures ---------- */
+.fig { margin: 0.25rem 0 1.25rem; }
+.fig > figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; max-width: 42rem; }
+.win {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); overflow: hidden; min-width: 0;
+}
+.win-bar {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem;
+  background: var(--sunk); border-bottom: 1px solid var(--line);
+  font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dots { display: inline-flex; gap: 0.3rem; flex: none; }
+.dots i { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: var(--line); }
+.win-body { padding: 0.75rem; }
+
+/* release assets list */
+.assets ul { list-style: none; margin: 0; padding: 0; }
+.assets li {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.85rem;
+  border-top: 1px solid var(--line); font: 0.85rem/1.3 var(--font-mono); min-width: 0;
+}
+.assets li span.n { overflow-wrap: anywhere; min-width: 0; }
+.assets li:first-child { border-top: 0; }
+.assets svg { flex: none; color: var(--muted); }
+.assets .this { display: none; margin-left: auto; flex: none; }
+#app[data-os="win"] .assets li[data-for="win"],
+#app[data-os="mac"] .assets li[data-for="mac"],
+#app[data-os="linux"] .assets li[data-for="linux"] {
+  background: var(--accent-soft); box-shadow: inset 4px 0 0 var(--gold); font-weight: 600;
+}
+#app[data-os="win"] .assets li[data-for="win"] .this,
+#app[data-os="mac"] .assets li[data-for="mac"] .this,
+#app[data-os="linux"] .assets li[data-for="linux"] .this { display: inline-block; }
+
+/* folder listing */
+.files { list-style: none; margin: 0; padding: 0.35rem 0; columns: 2 12rem; column-gap: 1rem; }
+.files li {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.75rem; font-size: 0.9rem;
+  break-inside: avoid; border-radius: 6px;
+}
+.files li::before {
+  content: ""; width: 1.05rem; height: 0.85rem; flex: none; border-radius: 2px;
+  background: var(--line);
+}
+.files li.dir::before { background: var(--gold); border-radius: 1px 4px 2px 2px; opacity: 0.85; }
+.files li.hl { outline: 2px solid var(--gold); outline-offset: -2px; background: var(--accent-soft); font-weight: 700; }
+
+/* storyboard frames */
+.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; counter-reset: frame; }
+.frame { min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.frame > p { margin: 0; font-size: 0.9rem; }
+.frame > p::before {
+  counter-increment: frame; content: counter(frame, lower-alpha);
+  display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; margin-right: 0.45rem;
+  border-radius: 50%; background: var(--accent); color: var(--surface); font: 700 0.8rem/1 var(--font-body);
+}
+.frame .win { flex: 1; }
+.frames.stack { grid-template-columns: minmax(0, 1fr); }
+.frame .term pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* explorer address bar mock */
+.addr {
+  display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0.75rem;
+  border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.6rem;
+  font-size: 0.85rem; background: var(--surface); min-width: 0;
+}
+.addr .crumbs { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.addr.typing { outline: 2px solid var(--gold); outline-offset: 1px; }
+.addr.typing .typed { font: 600 0.95rem var(--font-mono); }
+.ghost-rows { padding: 0 0.75rem 0.75rem; display: grid; gap: 0.35rem; }
+.ghost-rows i { height: 0.55rem; border-radius: 3px; background: var(--sunk); }
+.ghost-rows i:nth-child(2) { width: 80%; } .ghost-rows i:nth-child(3) { width: 60%; }
+
+/* context menu mock */
+.menu-mock { list-style: none; margin: 0.6rem; padding: 0.3rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); font-size: 0.88rem; }
+.menu-mock li { padding: 0.35rem 0.6rem; border-radius: 5px; color: var(--muted); }
+.menu-mock li.hl { background: var(--accent); color: var(--surface); font-weight: 700; }
+
+/* keycaps */
+kbd {
+  display: inline-block; min-width: 1.6em; text-align: center; font-size: 0.82em; font-weight: 600;
+  padding: 0.15em 0.45em; border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 6px;
+  background: var(--surface); color: var(--fg); white-space: nowrap;
+}
+
+/* terminal */
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 10px; overflow: hidden;
+  box-shadow: var(--shadow); border: 1px solid var(--term-bar); min-width: 0;
+}
+.term .win-bar { background: var(--term-bar); color: var(--term-dim); border-bottom: 0; }
+.term .dots i { background: #4a4657; }
+.term pre {
+  margin: 0; padding: 0.9rem 1rem; overflow-x: auto; font: 0.84rem/1.65 var(--font-mono);
+  color: var(--term-fg); background: none;
+}
+.term .p { color: var(--term-prompt); }
+.term .d { color: var(--term-dim); }
+.term .g { color: var(--term-ok); }
+.term .you { color: var(--term-fg); font-weight: 600; }
+.cursor {
+  display: inline-block; width: 0.55em; height: 1.05em; vertical-align: -0.15em; background: var(--term-fg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cursor { animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+}
+.term.big pre { font-size: 0.86rem; line-height: 1.75; }
+.term .ln { display: block; }
+.term-tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin: 0 0 0.75rem;
+}
+.copied { font-weight: 700; color: var(--ok); min-height: 1.4em; font-size: 0.95rem; }
+.paste-keys { font-size: 0.95rem; }
+
+/* windows smartscreen + mac dialogs */
+.smart { background: var(--win-blue); color: var(--win-blue-fg); padding: 1rem 1.1rem; font-size: 0.85rem; min-height: 100%; }
+.smart b.t { display: block; font-size: 1.15rem; font-weight: 400; margin-bottom: 0.5rem; }
+.smart .link { text-decoration: underline; }
+.smart .row { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+.smart .wbtn { border: 1px solid var(--win-blue-fg); padding: 0.3rem 0.9rem; font-size: 0.8rem; }
+.hl-ring { outline: 3px solid var(--gold); outline-offset: 3px; border-radius: 3px; }
+.alert { text-align: center; padding: 1rem; font-size: 0.85rem; }
+.alert .icon { width: 2.6rem; height: 2.6rem; margin: 0 auto 0.6rem; border-radius: 10px; background: var(--hero-bg); }
+.alert b { display: block; margin-bottom: 0.35rem; }
+.alert .row { display: grid; gap: 0.4rem; margin-top: 0.8rem; }
+.alert .mbtn { border-radius: 6px; background: var(--sunk); padding: 0.35rem; font-weight: 600; }
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.8rem 0.9rem; font-size: 0.85rem;
+}
+.settings-row .mbtn { border-radius: 6px; background: var(--sunk); padding: 0.35rem 0.75rem; font-weight: 700; }
+
+/* python.org mock */
+.pyorg { padding: 1.25rem; display: grid; gap: 0.6rem; justify-items: start; }
+.pyorg .yellow {
+  background: #ffd343; color: #1d1b26; font-weight: 700; padding: 0.7rem 1.1rem; border-radius: 6px;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.15);
+}
+
+/* screenshots with drawn highlights */
+.shot { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.shot .box {
+  position: absolute; border: 3px solid var(--gold); border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgb(10 8 16 / 0.35);
+}
+.shot .box.many { box-shadow: none; }
+.shot .pin {
+  position: absolute; transform: translate(0, -50%); margin-left: 0.5rem;
+  background: var(--gold); color: var(--gold-ink); font: 700 0.8rem/1 var(--font-body);
+  padding: 0.35rem 0.55rem; border-radius: 5px; white-space: nowrap;
+}
+
+/* flow chips */
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+.flow li {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0.35rem 0.65rem;
+  font-weight: 700; font-size: 0.9rem;
+}
+.flow li.sep { background: none; border: 0; padding: 0; color: var(--muted); font-weight: 400; }
+
+/* what each line does */
+details.lines, .faq details {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin: 0 0 0.75rem;
+}
+details.lines > summary, .faq summary {
+  cursor: pointer; padding: 0.75rem 1rem; font-weight: 700; list-style-position: inside;
+}
+details.lines dl { margin: 0; padding: 0 1rem 0.9rem; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.45rem 1rem; font-size: 0.92rem; }
+details.lines dt { font: 600 0.82rem/1.6 var(--font-mono); color: var(--muted); }
+details.lines dd { margin: 0; }
+
+/* troubleshooting */
+.faq { padding-block: 0.5rem 2rem; }
+.faq h2 { font-size: 1.6rem; margin: 0 0 0.4rem; }
+.faq > .col > p { color: var(--muted); margin: 0 0 1.25rem; }
+.faq summary code { font-size: 0.85em; background: var(--sunk); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; font-weight: 600; }
+.faq details > div { padding: 0 1rem 0.9rem; }
+.faq details p { margin: 0 0 0.6rem; max-width: 42rem; }
+
+footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+footer .col { padding-block: 1.5rem 2.5rem; display: grid; gap: 0.4rem; }
+footer p { margin: 0; }
+
+@media (max-width: 720px) {
+  .hero .col { grid-template-columns: minmax(0, 1fr); padding-block: 2rem; }
+  .step { grid-template-columns: minmax(0, 1fr); }
+  .steps::before { display: none; }
+  .badge { margin-bottom: 0.5rem; }
+  .progress .track { width: 5rem; }
+  details.lines dl { grid-template-columns: minmax(0, 1fr); }
+  details.lines dd { margin-bottom: 0.4rem; }
+}
+</style>
+</head>
+<body>
+<div id="app" data-os="win">
+
+<header class="hero gutter">
+  <div class="col">
+    <div>
+      <h1>Getting Started with Shandalar</h1>
+      <p>From download to your first duel: the game with its original 1997 look, a picture on every card, and every card set up to Tempest. You won't write any code. You copy one line into a command window and wait.</p>
+      <ul class="facts">
+        <li>About <b>1½ hours</b>, mostly waiting</li>
+        <li>About <b>2.5 GB</b> of free space</li>
+        <li>An Internet connection</li>
+      </ul>
+    </div>
+    <figure>
+      <img src="img/menu.jpg" width="1280" height="800" alt="The Shandalar main menu: a castle under a stormy sky, with the Magic Battle, Gauntlet, Deck Builder, Options, Help and Exit buttons.">
+      <figcaption>Where you'll be at the end: the main menu.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<nav class="bar gutter" aria-label="Your computer and your progress">
+  <div class="col">
+    <div class="os-pick">
+      <span id="os-label">My computer:</span>
+      <div class="seg" role="group" aria-labelledby="os-label">
+        <button type="button" data-pick="win" aria-pressed="true">Windows</button>
+        <button type="button" data-pick="mac" aria-pressed="false">Mac</button>
+        <button type="button" data-pick="linux" aria-pressed="false">Linux</button>
+      </div>
+    </div>
+    <div class="progress">
+      <div class="track" aria-hidden="true"><div class="fill" id="fill"></div></div>
+      <output id="count" aria-live="polite">0 of 8 steps done</output>
+    </div>
+  </div>
+</nav>
+
+<main class="gutter">
+  <div class="col">
+    <p class="intro">Card pictures can't come with the game, because they aren't ours to hand out. So the game brings a small tool that downloads them from Scryfall onto your own computer. The packs that add the later sets are made the same way, because they carry those sets' pictures. Pick your computer in the bar above and this page shows only your steps.</p>
+
+    <ol class="steps">
+
+      <!-- 1 -->
+      <li class="step" id="step-1">
+        <div class="badge"><span>1</span></div>
+        <div>
+          <h2>Download the game</h2>
+          <p class="lead">Open the downloads page. Under <b>Assets</b>, click the file for your computer that ends in <b>-with-skin.zip</b>. That one has the original look and sounds.</p>
+          <p><a class="btn" href="https://github.com/b0realis/ShandalarGodot/releases/latest" target="_blank" rel="noopener">Open the downloads page</a></p>
+          <figure class="fig">
+            <div class="win assets">
+              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Assets</div>
+              <ul>
+                <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-linux64.zip</span></li>
+                <li data-for="linux"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-linux64-with-skin.zip</span><span class="tag this">This one</span></li>
+                <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-macos.zip</span></li>
+                <li data-for="mac"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-macos-with-skin.zip</span><span class="tag this">This one</span></li>
+                <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-windows64.zip</span></li>
+                <li data-for="win"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-windows64-with-skin.zip</span><span class="tag this">This one</span></li>
+              </ul>
+            </div>
+            <figcaption>The … is the version number, which goes up with every release. <span data-os="mac">The macos download runs on both Apple Silicon and Intel Macs.</span></figcaption>
+          </figure>
+          <label class="check"><input type="checkbox" data-step="1"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 2 -->
+      <li class="step" id="step-2">
+        <div class="badge"><span>2</span></div>
+        <div>
+          <h2>Unzip it and find the game folder</h2>
+          <p class="lead" data-os="win">Right-click the zip and choose <b>Extract All…</b>, then <b>Extract</b>. The game won't run from inside the zip.</p>
+          <p class="lead" data-os="mac">Double-click the zip. A folder appears next to it.</p>
+          <p class="lead" data-os="linux">Right-click the zip and choose <b>Extract Here</b>.</p>
+          <p>Move the folder somewhere easy to find, such as Documents. The <b>game folder</b> is the one with <b data-os="win">Shandalar.exe</b><b data-os="mac">Shandalar.app</b><b data-os="linux">run.sh</b> and a folder called <b>tools</b> in it. You'll come back to it in step 5.</p>
+          <p data-os="win">Windows makes a folder named after the zip and puts the game folder inside it. Go one folder deeper.</p>
+          <figure class="fig">
+            <div class="win">
+              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><span data-os="win">Shandalar-…-windows64</span><span data-os="mac">Shandalar-…-macos</span><span data-os="linux">Shandalar-…-linux64</span></div>
+              <ul class="files">
+                <li class="dir">cards</li>
+                <li class="dir">decks</li>
+                <li class="dir">packaging</li>
+                <li class="dir">skin</li>
+                <li class="dir hl">tools</li>
+                <li>README.txt</li>
+                <li data-os="mac linux">run.sh</li>
+                <li class="hl" data-os="win">Shandalar.exe</li>
+                <li class="hl" data-os="mac">Shandalar.app</li>
+                <li data-os="win linux">Shandalar.pck</li>
+                <li data-os="linux">Shandalar.x86_64</li>
+              </ul>
+            </div>
+            <figcaption>The game folder (a few more files are in it too).</figcaption>
+          </figure>
+          <label class="check"><input type="checkbox" data-step="2"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 3 -->
+      <li class="step" id="step-3">
+        <div class="badge"><span>3</span></div>
+        <div>
+          <h2>Start it once</h2>
+          <div data-os="win">
+            <p class="lead">Double-click <b>Shandalar.exe</b>. The first time, Windows may warn you, because the game isn't signed by a company. Click <b>More info</b>, then <b>Run anyway</b>.</p>
+            <figure class="fig frames">
+              <div class="frame">
+                <p>Click <b>More info</b></p>
+                <div class="win"><div class="smart"><b class="t">Windows protected your PC</b>Microsoft Defender SmartScreen prevented an unrecognized app from starting.<br><br><span class="link hl-ring">More info</span><div class="row"><span class="wbtn">Don't run</span></div></div></div>
+              </div>
+              <div class="frame">
+                <p>Click <b>Run anyway</b></p>
+                <div class="win"><div class="smart"><b class="t">Windows protected your PC</b>App: Shandalar.exe<br>Publisher: Unknown publisher<div class="row"><span class="wbtn hl-ring">Run anyway</span><span class="wbtn">Don't run</span></div></div></div>
+              </div>
+            </figure>
+          </div>
+          <div data-os="mac">
+            <p class="lead">Double-click <b>Shandalar.app</b>. The first time, macOS stops it because the game isn't from the App Store. Close the message, then let it through once in System Settings.</p>
+            <figure class="fig frames">
+              <div class="frame">
+                <p>Close the message</p>
+                <div class="win"><div class="alert"><div class="icon"></div><b>“Shandalar” Not Opened</b>Apple could not verify “Shandalar”…<div class="row"><span class="mbtn hl-ring">Done</span><span class="mbtn">Move to Trash</span></div></div></div>
+              </div>
+              <div class="frame">
+                <p>Open <b>System Settings → Privacy &amp; Security</b>, scroll down, click <b>Open Anyway</b></p>
+                <div class="win"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Privacy &amp; Security</div><div class="settings-row"><span>“Shandalar” was blocked to protect your Mac.</span><span class="mbtn hl-ring">Open Anyway</span></div></div>
+              </div>
+            </figure>
+            <p>Older macOS versions word these a little differently, but the <b>Open Anyway</b> button is in the same place.</p>
+          </div>
+          <div data-os="linux">
+            <p class="lead">Double-click <b>run.sh</b> (if your file manager asks, choose <b>Run</b>), or start it from a terminal with <code>./run.sh</code>.</p>
+          </div>
+          <p>You'll see the main menu. You can already play the 897 original cards; they just have no pictures yet. <b>Close the game for now.</b></p>
+          <label class="check"><input type="checkbox" data-step="3"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 4 -->
+      <li class="step" id="step-4">
+        <div class="badge"><span>4</span></div>
+        <div>
+          <h2>Install Python</h2>
+          <p class="lead">Python is free, and the download tool is written in it. You install it once and never have to open it.</p>
+          <div data-os="win mac">
+            <p>Go to <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a>, click the yellow button, open the file it downloads and keep the default choices.</p>
+            <figure class="fig">
+              <div class="win" style="max-width: 26rem">
+                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>python.org/downloads</div>
+                <div class="pyorg"><span>Download the latest version<span data-os="win"> for Windows</span><span data-os="mac"> for macOS</span></span><span class="yellow hl-ring">Download Python 3.x</span></div>
+              </div>
+            </figure>
+          </div>
+          <div data-os="mac">
+            <div class="note"><b>One more click on a Mac.</b> When it has installed, open <b>Applications → Python 3.x</b> and double-click <b>Install Certificates.command</b>. Without this, the downloads stop with a “certificate” error.</div>
+            <figure class="fig">
+              <div class="win" style="max-width: 30rem">
+                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Applications › Python 3.x</div>
+                <ul class="files">
+                  <li>IDLE.app</li>
+                  <li class="hl">Install Certificates.command</li>
+                  <li>Python Launcher.app</li>
+                  <li>ReadMe.rtf</li>
+                  <li>Update Shell Profile.command</li>
+                </ul>
+              </div>
+            </figure>
+          </div>
+          <div data-os="linux">
+            <p>You very likely have it already. In a terminal, type <code>python3 --version</code>: it should say 3.10 or newer. If it isn't there, install the <code>python3</code> package from your software centre.</p>
+            <figure class="fig"><div class="term" style="max-width: 26rem"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">$</span> <span class="you">python3 --version</span>
+Python 3.12.3</pre></div></figure>
+          </div>
+          <label class="check"><input type="checkbox" data-step="4"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 5 -->
+      <li class="step emph-step" id="step-5">
+        <div class="badge"><span>5</span></div>
+        <div>
+          <h2>Open a command window in the game folder <span class="tag">Key step</span></h2>
+          <p class="lead">A command window is a plain text window where you paste instructions for your computer. It has to be opened <b>in the game folder</b>, so the tool finds its files.</p>
+
+          <div data-os="win">
+            <figure class="fig frames">
+              <div class="frame">
+                <p>Open the game folder and click the <b>address bar</b> at the top</p>
+                <div class="win">
+                  <div class="addr"><span class="crumbs">This PC › Documents › Shandalar-…-windows64</span></div>
+                  <ul class="files"><li class="dir">cards</li><li class="dir">tools</li><li>Shandalar.exe</li></ul>
+                </div>
+              </div>
+              <div class="frame">
+                <p>Type <b>cmd</b> over the path and press <kbd>Enter</kbd></p>
+                <div class="win">
+                  <div class="addr typing"><span class="typed">cmd</span><span class="cursor" style="background: var(--fg)"></span></div>
+                  <div class="ghost-rows"><i></i><i></i><i></i></div>
+                </div>
+              </div>
+              <div class="frame">
+                <p>A black window opens, already in the game folder</p>
+                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Command Prompt</div><pre><span class="d">C:\Users\you\Documents\</span><span class="p">Shandalar-…-windows64&gt;</span><span class="cursor"></span></pre></div>
+              </div>
+            </figure>
+          </div>
+
+          <div data-os="mac">
+            <p>Open <b>Terminal</b>: it's in <b>Applications → Utilities</b>, or press <kbd>⌘</kbd> <kbd>Space</kbd>, type <b>Terminal</b> and press <kbd>Enter</kbd>. Open it after Python is installed.</p>
+            <figure class="fig frames">
+              <div class="frame">
+                <p>Type <b>cd</b> and a space. Don't press Enter yet</p>
+                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">~ %</span> <span class="you">cd </span><span class="cursor"></span></pre></div>
+              </div>
+              <div class="frame">
+                <p>Drag the game folder from Finder onto the window</p>
+                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">~ %</span> <span class="you">cd /Users/you/Documents/Shandalar-…-macos</span><span class="cursor"></span></pre></div>
+              </div>
+              <div class="frame">
+                <p>Press <kbd>Enter</kbd>. The prompt now shows the folder's name</p>
+                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">Shandalar-…-macos %</span> <span class="cursor"></span></pre></div>
+              </div>
+            </figure>
+          </div>
+
+          <div data-os="linux">
+            <figure class="fig frames">
+              <div class="frame">
+                <p>Right-click an empty spot inside the game folder</p>
+                <div class="win"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Shandalar-…-linux64</div>
+                  <ul class="menu-mock"><li>New Folder</li><li>Paste</li><li class="hl">Open in Terminal</li><li>Properties</li></ul></div>
+              </div>
+              <div class="frame">
+                <p>A terminal opens, already in the game folder</p>
+                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">~/Documents/Shandalar-…-linux64$</span> <span class="cursor"></span></pre></div>
+              </div>
+            </figure>
+          </div>
+
+          <p><b>How to tell it worked:</b> the line with the blinking cursor ends with the game folder's name.</p>
+          <label class="check"><input type="checkbox" data-step="5"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 6 -->
+      <li class="step emph-step" id="step-6">
+        <div class="badge"><span>6</span></div>
+        <div>
+          <h2>Paste the commands and let them run <span class="tag">Key step</span></h2>
+          <p class="lead">Click <b>Copy the commands</b>. Click in the command window, paste, and press <kbd>Enter</kbd>.</p>
+          <div class="term-tools">
+            <button class="btn" type="button" id="copy-cmds">Copy the commands</button>
+            <span class="paste-keys">Paste with
+              <span data-os="win"><kbd>Ctrl</kbd> <kbd>V</kbd> or a right-click</span>
+              <span data-os="mac"><kbd>⌘</kbd> <kbd>V</kbd></span>
+              <span data-os="linux"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>V</kbd></span>
+            </span>
+            <span class="copied" id="copied" role="status" aria-live="polite"></span>
+          </div>
+
+          <figure class="fig">
+            <div class="term big">
+              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><span data-os="win">Command Prompt</span><span data-os="mac linux">Terminal</span></div>
+<pre data-os="win" class="cmds"><span class="ln">py -3 tools/fetch_card_art.py --out cache/cardart</span><span class="ln">py -3 tools/mtg_assets.py --from-cardart cache/cardart --out skin/cardart.zip</span><span class="ln">py -3 tools/pack_1_dotp_complete.py fetch-art</span><span class="ln">py -3 tools/pack_1_dotp_complete.py build cardpacks/Pack-1-DotP-complete.zip</span><span class="ln">py -3 tools/pack_2_fallen_empires.py fetch-art</span><span class="ln">py -3 tools/pack_2_fallen_empires.py build cardpacks/Pack-2-Fallen-Empires.zip</span><span class="ln">py -3 tools/pack_3_ice_age.py fetch-art</span><span class="ln">py -3 tools/pack_3_ice_age.py build cardpacks/Pack-3-Ice_Age.zip</span><span class="ln">py -3 tools/pack_4_homelands.py fetch-art</span><span class="ln">py -3 tools/pack_4_homelands.py build cardpacks/Pack-4-Homelands.zip</span><span class="ln">py -3 tools/pack_5_alliances.py fetch-art</span><span class="ln">py -3 tools/pack_5_alliances.py build cardpacks/Pack-5-Alliances.zip</span><span class="ln">py -3 tools/pack_6_portal.py fetch-art</span><span class="ln">py -3 tools/pack_6_portal.py build cardpacks/Pack-6-Portal.zip</span><span class="ln">py -3 tools/pack_7_fifth_edition.py fetch-art</span><span class="ln">py -3 tools/pack_7_fifth_edition.py build cardpacks/Pack-7-Fifth-Edition.zip</span><span class="ln">py -3 tools/pack_8_mirage_block.py fetch-art</span><span class="ln">py -3 tools/pack_8_mirage_block.py build cardpacks/Pack-8-Mirage-Block.zip</span><span class="ln">py -3 tools/pack_9_tempest_block.py fetch-art</span><span class="ln">py -3 tools/pack_9_tempest_block.py build cardpacks/Pack-9-Tempest-Block.zip</span></pre>
+<pre data-os="mac linux" class="cmds"><span class="ln">python3 tools/fetch_card_art.py --out cache/cardart</span><span class="ln">python3 tools/mtg_assets.py --from-cardart cache/cardart --out skin/cardart.zip</span><span class="ln">python3 tools/pack_1_dotp_complete.py fetch-art</span><span class="ln">python3 tools/pack_1_dotp_complete.py build cardpacks/Pack-1-DotP-complete.zip</span><span class="ln">python3 tools/pack_2_fallen_empires.py fetch-art</span><span class="ln">python3 tools/pack_2_fallen_empires.py build cardpacks/Pack-2-Fallen-Empires.zip</span><span class="ln">python3 tools/pack_3_ice_age.py fetch-art</span><span class="ln">python3 tools/pack_3_ice_age.py build cardpacks/Pack-3-Ice_Age.zip</span><span class="ln">python3 tools/pack_4_homelands.py fetch-art</span><span class="ln">python3 tools/pack_4_homelands.py build cardpacks/Pack-4-Homelands.zip</span><span class="ln">python3 tools/pack_5_alliances.py fetch-art</span><span class="ln">python3 tools/pack_5_alliances.py build cardpacks/Pack-5-Alliances.zip</span><span class="ln">python3 tools/pack_6_portal.py fetch-art</span><span class="ln">python3 tools/pack_6_portal.py build cardpacks/Pack-6-Portal.zip</span><span class="ln">python3 tools/pack_7_fifth_edition.py fetch-art</span><span class="ln">python3 tools/pack_7_fifth_edition.py build cardpacks/Pack-7-Fifth-Edition.zip</span><span class="ln">python3 tools/pack_8_mirage_block.py fetch-art</span><span class="ln">python3 tools/pack_8_mirage_block.py build cardpacks/Pack-8-Mirage-Block.zip</span><span class="ln">python3 tools/pack_9_tempest_block.py fetch-art</span><span class="ln">python3 tools/pack_9_tempest_block.py build cardpacks/Pack-9-Tempest-Block.zip</span></pre>
+            </div>
+            <figcaption>The button copies all twenty lines joined into one, so they run in order and stop at the first problem.</figcaption>
+          </figure>
+
+          <details class="lines">
+            <summary>What these lines do</summary>
+            <dl>
+              <dt>lines 1–2</dt><dd>Download the pictures of the 897 original cards and pack them into <code>skin/cardart.zip</code>.</dd>
+              <dt>lines 3–4</dt><dd>Pack 1: completes the original sets' checklists.</dd>
+              <dt>lines 5–6</dt><dd>Pack 2: Fallen Empires.</dd>
+              <dt>lines 7–8</dt><dd>Pack 3: Ice Age.</dd>
+              <dt>lines 9–10</dt><dd>Pack 4: Homelands.</dd>
+              <dt>lines 11–12</dt><dd>Pack 5: Alliances.</dd>
+              <dt>lines 13–14</dt><dd>Pack 6: Portal and Portal Second Age.</dd>
+              <dt>lines 15–16</dt><dd>Pack 7: Fifth Edition.</dd>
+              <dt>lines 17–18</dt><dd>Pack 8: Mirage, Visions and Weatherlight.</dd>
+              <dt>lines 19–20</dt><dd>Pack 9: Tempest, Stronghold and Exodus.</dd>
+            </dl>
+          </details>
+
+          <p><b>Now wait.</b> It takes about an hour and a half: the pictures come from Scryfall at the steady pace Scryfall asks for. You can use your computer meanwhile; just leave the window open. Lines like these scroll by:</p>
+          <figure class="fig">
+            <div class="term">
+              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>while it works</div>
+<pre><span class="d">  50/897 processed...
+  100/897 processed...
+  …</span>
+card art: 1794 fetched, 0 already present, <span class="g">0 failed</span> -&gt; cache/cardart
+<span class="d">…</span>
+<span class="d">Fallen Empires artwork: 10/102 names
+Fallen Empires artwork: 20/102 names
+…</span>
+Pack 2: 102 unique cards · 187 printings -&gt; cardpacks/Pack-2-Fallen-Empires.zip
+<span class="d">…</span>
+Pack 9: 621 unique cards · 636 printings -&gt; cardpacks/Pack-9-Tempest-Block.zip</pre>
+            </div>
+            <figcaption>When the cursor is back on a new empty line, it's done.</figcaption>
+          </figure>
+          <p><b>Saw an error, or did it stop early?</b> Usually the connection dropped for a moment. Paste the same thing again and press <kbd>Enter</kbd>: pictures that already downloaded are kept, so it carries on where it stopped.</p>
+          <p>When it's done, the game folder has the card pictures in <code>skin/cardart.zip</code> and the nine packs in a new <code>cardpacks</code> folder. Leave those zip files as they are: don't unzip or rename them.</p>
+          <label class="check"><input type="checkbox" data-step="6"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 7 -->
+      <li class="step" id="step-7">
+        <div class="badge"><span>7</span></div>
+        <div>
+          <h2>Switch the packs on</h2>
+          <p class="lead">Start the game. In the main menu click <b>Options</b>, then <b>Card Packs…</b>, and click <b>Enable</b> under each pack.</p>
+          <p>The first start after adding the packs takes a little longer, because the game checks their pictures once.</p>
+          <figure class="fig frames stack">
+            <div class="frame">
+              <p>In <b>Options</b>, scroll to the bottom and click <b>Card Packs…</b></p>
+              <div class="shot" style="max-width: 462px">
+                <img src="img/options-card-packs.jpg" width="462" height="80" alt="The bottom of the Options screen: the words Card packs and a Card Packs button.">
+                <span class="box" style="left: 2.8%; top: 41%; width: 94%; height: 48%"></span>
+              </div>
+            </div>
+            <div class="frame">
+              <p>Click <b>Enable</b> under each pack, and scroll down for the rest</p>
+              <div class="shot" style="max-width: 620px">
+                <img src="img/card-packs.jpg" width="620" height="650" alt="The Card Packs page: an Open Folder and a Rescan button at the top, then each pack with its status and an Enable and a Disable button.">
+                <span class="box many" style="left: 26.8%; top: 13.7%; width: 19%; height: 6.2%"></span>
+                <span class="pin" style="left: 46.8%; top: 16.8%">Rescan finds new zips</span>
+                <span class="box many" style="left: 2.6%; top: 41.8%; width: 20.6%; height: 6.5%"></span>
+                <span class="box many" style="left: 2.6%; top: 64.5%; width: 20.6%; height: 6.5%"></span>
+              </div>
+            </div>
+          </figure>
+          <p>The card pictures need nothing more: they show by themselves. If a pack is missing from the list, click <b>Rescan</b>.</p>
+          <label class="check"><input type="checkbox" data-step="7"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+
+      <!-- 8 -->
+      <li class="step" id="step-8">
+        <div class="badge"><span>8</span></div>
+        <div>
+          <h2>Play</h2>
+          <p class="lead"><b>Magic Battle</b> starts a duel against the computer: pick a deck for each seat and click <b>Go!</b></p>
+          <p>To play with the new sets, make a deck that uses them:</p>
+          <ol class="flow" aria-label="Making a deck with the new sets">
+            <li>Deck Builder</li><li class="sep" aria-hidden="true">→</li>
+            <li>Extras</li><li class="sep" aria-hidden="true">→</li>
+            <li>switch on the sets</li><li class="sep" aria-hidden="true">→</li>
+            <li>Deck → AutoDeck</li><li class="sep" aria-hidden="true">→</li>
+            <li>Deck → Save deck</li><li class="sep" aria-hidden="true">→</li>
+            <li>Done</li>
+          </ol>
+          <p><b>Extras</b> picks which sets the Deck Builder shows. <b>AutoDeck</b>, the gold line at the top of the <b>Deck</b> menu, builds a deck for you from the sets and colours you choose; you can also build one card by card. Then pick your deck in Magic Battle.</p>
+          <label class="check"><input type="checkbox" data-step="8"><span class="tick"></span>Done</label>
+        </div>
+      </li>
+    </ol>
+  </div>
+</main>
+
+<section class="faq gutter" aria-labelledby="faq-title">
+  <div class="col">
+    <h2 id="faq-title">If something goes wrong</h2>
+    <p>Find the message your window showed. Most problems take one step to fix.</p>
+
+    <details data-os="win">
+      <summary><code>'py' is not recognized as an internal or external command</code></summary>
+      <div><p>Python isn't installed yet, or the command window was opened before it was. Install Python (step 4), close the command window, and open a new one (step 5).</p></div>
+    </details>
+    <details data-os="win">
+      <summary><code>The token '&amp;&amp;' is not a valid statement separator</code></summary>
+      <div><p>That window is PowerShell, not the Command Prompt. Type <code>cmd</code>, press <kbd>Enter</kbd>, and paste again.</p></div>
+    </details>
+    <details data-os="mac linux">
+      <summary><code>python3: command not found</code></summary>
+      <div><p data-os="mac">Python isn't installed yet. Install it (step 4), then open a new Terminal window.</p><p data-os="linux">Install the <code>python3</code> package from your software centre, or with your distribution's package manager.</p></div>
+    </details>
+    <details>
+      <summary><code>can't open file … tools/fetch_card_art.py … No such file or directory</code></summary>
+      <div><p>The command window isn't in the game folder. Close it and open it again from the folder that has <b>tools</b> in it (step 5).</p></div>
+    </details>
+    <details data-os="mac">
+      <summary><code>CERTIFICATE_VERIFY_FAILED</code></summary>
+      <div><p>Open <b>Applications → Python 3.x</b>, double-click <b>Install Certificates.command</b>, and paste the commands again.</p></div>
+    </details>
+    <details data-os="mac linux">
+      <summary><code>TypeError: unsupported operand type(s) for |</code></summary>
+      <div><p>The window is using an older Python. Type <code>python3 --version</code>: it must say 3.10 or newer. <span data-os="mac">Macs come with an older Python of their own: install the one from python.org (step 4), then open a new Terminal window, so it uses the new one.</span></p></div>
+    </details>
+    <details>
+      <summary><code>WARN: download failed</code>, or it stopped partway</summary>
+      <div><p>The connection dropped for a moment. Paste the same thing again: finished downloads are kept, and it carries on where it stopped.</p></div>
+    </details>
+    <details>
+      <summary>A pack is missing on the Card Packs page</summary>
+      <div><p>Click <b>Rescan</b>. The <code>cardpacks</code> folder must be inside the game folder, next to <span data-os="win">Shandalar.exe</span><span data-os="mac">Shandalar.app (never inside it)</span><span data-os="linux">run.sh</span>, and the zips must keep their names.</p></div>
+    </details>
+    <details>
+      <summary>The cards still have no pictures</summary>
+      <div><p>Check that <code>cardart.zip</code> is in the game folder's <code>skin</code> folder, then start the game again.</p></div>
+    </details>
+    <details data-os="linux">
+      <summary><code>Permission denied</code> when starting run.sh</summary>
+      <div><p>Your unzip tool dropped the “executable” mark. In the game folder, run <code>chmod +x run.sh Shandalar.x86_64</code>.</p></div>
+    </details>
+    <details>
+      <summary>A new version is out</summary>
+      <div><p>Download and unzip it as in steps 1 and 2, then copy <code>skin/cardart.zip</code> and the <code>cardpacks</code> folder from your old game folder into the new one. If the Card Packs page says a pack needs rebuilding, run that pack's two lines again in the new folder.</p></div>
+    </details>
+  </div>
+</section>
+
+<footer class="gutter">
+  <div class="col">
+    <p>Shandalar is a free, open-source remake of MicroProse's 1997 <i>Magic: The Gathering</i>: <a href="https://github.com/b0realis/ShandalarGodot" target="_blank" rel="noopener">github.com/b0realis/ShandalarGodot</a>.</p>
+    <p>Every option of the download tools, and where else the files can go: <a href="https://github.com/b0realis/ShandalarGodot/blob/main/docs/card-art-and-packs.md" target="_blank" rel="noopener">the card art and packs guide</a>.</p>
+    <p>The card pictures come from Scryfall and stay on your computer. Please don't share or upload them.</p>
+  </div>
+</footer>
+
+</div>
+<script>
+(function () {
+  var app = document.getElementById("app");
+  var STORE = "shandalar-getting-started";
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; }
+  }
+  function save(state) {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* the page works without it */ }
+  }
+  var state = load();
+
+  function guessOs() {
+    var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "").toLowerCase();
+    if (p.indexOf("mac") >= 0) return "mac";
+    if (p.indexOf("linux") >= 0 || p.indexOf("x11") >= 0 || p.indexOf("cros") >= 0) return "linux";
+    return "win";
+  }
+  function setOs(os) {
+    app.setAttribute("data-os", os);
+    document.querySelectorAll(".seg button").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-pick") === os ? "true" : "false");
+    });
+    state.os = os; save(state);
+  }
+  document.querySelectorAll(".seg button").forEach(function (b) {
+    b.addEventListener("click", function () { setOs(b.getAttribute("data-pick")); });
+  });
+  var HASH_OS = { "#windows": "win", "#mac": "mac", "#linux": "linux" };
+  setOs(HASH_OS[location.hash] || state.os || guessOs());
+  window.addEventListener("hashchange", function () {
+    if (HASH_OS[location.hash]) setOs(HASH_OS[location.hash]);
+  });
+
+  var boxes = document.querySelectorAll(".check input");
+  var total = boxes.length;
+  state.done = state.done || {};
+  function refresh() {
+    var n = 0;
+    boxes.forEach(function (box) {
+      var step = box.closest(".step");
+      step.classList.toggle("done", box.checked);
+      if (box.checked) n++;
+    });
+    document.getElementById("count").textContent = n + " of " + total + " steps done";
+    document.getElementById("fill").style.width = (100 * n / total) + "%";
+  }
+  boxes.forEach(function (box) {
+    box.checked = !!state.done[box.getAttribute("data-step")];
+    box.addEventListener("change", function () {
+      state.done[box.getAttribute("data-step")] = box.checked; save(state); refresh();
+    });
+  });
+  refresh();
+
+  var copied = document.getElementById("copied");
+  document.getElementById("copy-cmds").addEventListener("click", function () {
+    var os = app.getAttribute("data-os");
+    var pre = document.querySelector("pre.cmds[data-os~='" + os + "']");
+    var lines = Array.prototype.map.call(pre.querySelectorAll(".ln"), function (l) { return l.textContent.trim(); });
+    var text = lines.join(" && ");
+    function fallback() {
+      var range = document.createRange();
+      range.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      copied.textContent = "Selected. Press " + (os === "mac" ? "⌘ C" : "Ctrl C") + " to copy.";
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        copied.textContent = "Copied. Now paste it into the command window.";
+      }, fallback);
+    } else {
+      fallback();
+    }
+  });
+})();
+</script>
+</body>
+</html>

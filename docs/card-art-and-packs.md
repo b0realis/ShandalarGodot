@@ -13,6 +13,15 @@ The Python tools included with the web package run on your computer, not
 inside the browser. Keep `tools/`, `cards/data/` and `packaging/card_packs/`
 together: the builders need all three directories.
 
+On a Mac, install Python from python.org and open a new Terminal window
+afterwards: the `python3` macOS brings with it is older than 3.10, and the
+tools stop at once with `TypeError: unsupported operand type(s) for |`.
+Then run **Install Certificates.command** from Applications → Python 3.x
+once; without it every download fails with `CERTIFICATE_VERIFY_FAILED`.
+
+New to command windows? [Getting Started](https://b0realis.github.io/ShandalarGodot/)
+walks from the download to the first duel, every set up to Tempest included.
+
 ## Base card pictures: cardart.zip
 
 ```sh

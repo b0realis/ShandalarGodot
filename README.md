@@ -44,6 +44,9 @@ engine, and the freedom to keep the game alive.
 
 Download the **[latest Shandalar release](https://github.com/b0realis/ShandalarGodot/releases/latest)**
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
+New to it? **[Getting Started](https://b0realis.github.io/ShandalarGodot/)**
+goes step by step from the download to your first duel, with card pictures
+and every set up to Tempest.
 Handheld test packages — Steam Deck, ArkOS, and the Meta Quest as a
 sideloaded flat panel app — are built locally; see [docs/handhelds.md](docs/handhelds.md).
 Choose a standalone or original-skin package; the release includes launch
