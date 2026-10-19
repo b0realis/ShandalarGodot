@@ -211,19 +211,56 @@ static func land_value(game: MtgGame, inst: CardInstance, lands_in_hand := 0) ->
 
 
 ## Worth of a card as a thing to have/keep (hand, tutor, discard picks).
+## A creature is sized as it ARRIVES ([method arrival_power]), not as it
+## prints.
 static func card_value(data: CardData) -> float:
 	if data.is_land():
 		return 1.5
 	if data.is_creature():
-		var v := float(data.power + data.toughness)
+		var v := float(arrival_power(data) + arrival_toughness(data))
 		for k in data.keywords:
 			v += KEYWORD_VALUE.get(k, 0.0)
 		if data.keywords.has(Mtg.Keyword.SHADOW):
-			v -= SHADOW_DEFENCE * float(maxi(data.toughness, 0))
+			v -= SHADOW_DEFENCE * float(maxi(arrival_toughness(data), 0))
 		return v
 	# Spells: cost approximates power in this pool; free Power Nine
 	# artifacts are worth plenty despite {0}.
 	return maxf(data.cost.mana_value() + 1.0, 2.5)
+
+
+## THE BODY A CARD ARRIVES AS (2026-10-19). The owner, on Corpse Dance
+## passing over a Workhorse in the graveyard: *"yes ai should also be
+## aware of this"*. A creature CARD that is not on the battlefield yet — in
+## a hand, a graveyard, a library a tutor reads, on the stack — is sized by
+## its printed numbers PLUS the +1/+1 counters it enters with ([member
+## CardData.enters_with_counters], CR 122.6): Workhorse prints 0/0 and
+## arrives as a 4/4, a Spike Feeder 0/0 as a 2/2, a Triskelion 1/1 as a 4/4.
+## Read as printed, the Workhorse scored nothing and was never danced.
+##
+## FIXED COUNTS ONLY, and that is deliberate. A body whose counters are
+## decided as it arrives is not guessed here: X counters paid with the
+## spell (Krakilin, Shifting Wall — the X is the caster's, priced where it
+## is chosen), "a +1/+1 counter for each creature card in your graveyard"
+## (read with the graveyard in hand by `MirageTactics.dies_on_arrival`),
+## an entry choice (Minion of the Wastes, `TempestSpells.body_made_on_entry`).
+## For those this answers the printed number, as before.
+##
+## On the battlefield ask the instance (`cur_power`/`cur_toughness`): the
+## counters are on it by then, and statics have had their say.
+static func arrival_power(data: CardData) -> int:
+	return data.power + _arrival_counters(data)
+
+
+## The toughness half of [method arrival_power].
+static func arrival_toughness(data: CardData) -> int:
+	return data.toughness + _arrival_counters(data)
+
+
+## +1/+1 counters a card enters with, less any -1/-1 ones (CR 704.5q would
+## take the pairs off together at once).
+static func _arrival_counters(data: CardData) -> int:
+	return int(data.enters_with_counters.get("+1/+1", 0)) \
+		- int(data.enters_with_counters.get("-1/-1", 0))
 
 
 ## Overall position from [param pid]'s perspective; positive = ahead.

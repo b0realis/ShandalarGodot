@@ -14,6 +14,8 @@ const OBJECT_COSTS := preload("res://engine/additional_object_costs.gd")
 ## How a UI, an AI, or a test drives a game — the public API:
 ##   setup(...)              build players and decks
 ##   start()                 begin turn 1
+##   begin_from_position(p)  or begin turn 1 from a hand-built position
+##                           (Magic Battle's Test hands, [DuelPosition])
 ##   play_land / tap_for_mana / cast_spell / activate_ability
 ##   declare_attackers / declare_blockers
 ##   pass_priority           advances resolution and, eventually, the turn
@@ -598,6 +600,51 @@ var awaiting_choice: PlayerChoice = null
 var _probing := false
 ## Presentation-only scratch during preflight, not rules state or an AI input.
 var _probe_information: Array = []
+## THE SEARCH'S OWN TARGET FOR A TRIGGER (2026-10-19, the AI's loop finder,
+## `engine/ai/card_combos.gd`). A probe answers a trigger's target with the
+## ranked first ([method _probe_target]) — the answer of a seat that is not
+## asked. A loop search needs the other answer as well: a Man-o'-War cast
+## free under Aluren returning ITSELF to its owner's hand is the whole loop,
+## and the ranking puts the opponent's creature, or our cheapest one, first.
+## A search sets this to `func(game, item: StackItem, refs: Array[TargetRef])
+## -> TargetRef` for the length of its walk and clears it after; null, or an
+## answer that is not one of the refs, keeps the ranked first. Read ONLY in
+## probe mode, so a real duel never sees it, and never journaled: it is the
+## walk's setting, not game state.
+var probe_target_pick: Callable = Callable()
+
+## THE LOOP LIMIT (2026-10-19, [QoL]). The owner: *"Yes all infinity loops
+## should be accompanied by a message - You created and infinity loop -
+## stopping at 1000 steps. And lets stop these loops at 1000 steps so no
+## freeze can happen!"*
+##
+## Every spell cast, every ability activated (mana abilities too) and every
+## triggered ability put on the stack is a STEP of [member loop_steps],
+## counted afresh in each step of the turn ([method _enter_step]). The
+## [constant LOOP_LIMIT]th stops the loop for the rest of that step: a cast
+## or an activation is refused with [constant LOOP_REFUSAL], and no new
+## triggered ability goes on the stack — which is what ends a MANDATORY
+## loop, one that needs nobody's input. What is already on the stack
+## resolves or is passed as usual, the game moves on, and the next step
+## starts clean. The line "<Name> created an infinite loop — stopping at
+## 1000 steps." goes into the log (kind `loop_limit`, the looping seat's
+## pid), and the duel screen shows it — "You created ..." to the player who
+## did it.
+##
+## A DELIBERATE DEPARTURE from the comprehensive rules: a mandatory loop no
+## player can stop is a draw (CR 104.4b), and an optional one is taken as a
+## number of iterations named in advance (CR 732). Here neither: the loop
+## is cut, and the game goes on. Nothing legitimate comes near it — a busy
+## turn of this pool is a few dozen steps — and below it the computer has
+## its own, quieter guards (`AiPlayer._guard_seen`, the loop runner's caps).
+const LOOP_LIMIT := 1000
+## Why a cast or activation is refused once [constant LOOP_LIMIT] is reached.
+const LOOP_REFUSAL := "an infinite loop was stopped at 1000 steps: nothing more is cast or activated this step"
+## Casts, activations and triggered abilities put on the stack in this step.
+var loop_steps := 0
+## The seat whose action or trigger was the [constant LOOP_LIMIT]th step,
+## for the rest of the step; -1 while no loop has been stopped.
+var loop_stopped_by := -1
 ## The two above as [method make_mark] found them when it allocated the
 ## journal, so [method end_search] can hand an outer probe back untouched.
 var _search_outer_probing := false
@@ -808,6 +855,8 @@ const TURN_FIELDS: Array[StringName] = [
 	&"_turn_source", &"_cost_answers", &"_cost_asked", &"_cost_values",
 	&"_replaying_cost", &"_cost_source", &"_announced_tops",
 	&"_defer_state_based_actions", &"_defer_depth",
+	# the loop limit's count, reset at every step (2026-10-19)
+	&"loop_steps", &"loop_stopped_by",
 ]
 
 ## The [MtgPlayer] fields the turn machinery writes on top of
@@ -1282,6 +1331,187 @@ func start_duel(first_player := 0) -> void:
 	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
 		null, "turn", active_player)
 	_enter_step(0)
+
+
+# ------------------------------------------------------ the test position --
+#
+# MAGIC BATTLE'S `Test hands` (2026-10-19, `[QoL]`). The owner: *"design a
+# tool to start a duel with two predefined hands besides decks so a player
+# can instantly test a combo … upon "go test" button you are instant in the
+# turn"*. [DuelPosition] is what the player built; this is the one door it
+# goes through, so every card it moves is moved HERE (CONTRIBUTING rule 2)
+# and the screen never touches a zone.
+#
+# THE POSITION IS A TABLE THAT ALREADY STANDS, not a sequence of plays.
+# Nothing named onto the battlefield ENTERS it: no ENTERS_BATTLEFIELD event
+# (Soul Warden gains nothing for the creatures beside it, an
+# enters-the-battlefield trigger does not fire), no entry payment (a Mox
+# Diamond on the table discards nothing), no copy choice and no "as this
+# enters" choice — the arrival happened before the test began. What a
+# permanent carries from its arrival IS kept: the counters its card says it
+# enters with (Workhorse's four +1/+1, a Triskelion's three). A card whose
+# body is decided as it enters (Clone, Wood Elemental) should be put in the
+# hand and cast; an Aura put on the table has nothing to enchant and goes
+# to the graveyard at the first state-based check. A card put into a
+# graveyard is put there, not milled: no "put into a graveyard from your
+# library" trigger (Gaea's Blessing) hears it.
+
+## Begin turn 1 from [param position] instead of an opening deal: called
+## after [method setup] — the libraries built and shuffled on the duel's
+## seed — and INSTEAD of [method deal_opening_hands] / [method start_duel].
+## "" on success, else a refusal and nothing moved (rule 3).
+##
+## Each card the position names is TAKEN out of its seat's library (any
+## copy of that name; the library is shuffled, so which one is the seed's),
+## or MADE when the deck has no copy left — an EXTRA, registered like any
+## card and written into the seat's decklist the way a card from outside
+## the game is ([method take_from_outside_the_game]): from now on it is a
+## card that seat plays with. Then, per seat: the random cards off the top
+## of what is left, the named library tops back on top (next draw first),
+## the hand, the graveyard (the last name on top), the table, the life
+## total. Then turn 1 of [member DuelPosition.active_player] begins in
+## [member DuelPosition.step] — straight into it, no untap step before it:
+## a tapped permanent stays tapped, and the turn's first draw is NOT
+## skipped (a test that begins in the upkeep draws in its draw step).
+##
+## The same seed and the same position give the same game, random cards
+## and library order included — which is what `Restart test` is.
+func begin_from_position(position: DuelPosition) -> String:
+	if position == null:
+		return "there is no position to begin from"
+	if players.size() != 2:
+		return "the duel has not been set up"
+	if turn_number != 0 or mulligan_open or not players[0].hand.is_empty() \
+			or not players[1].hand.is_empty():
+		return "a test position is set before the opening hands, not after"
+	var refused := position.refusal()
+	if refused != "":
+		return refused
+	var extras: Array[int] = [0, 0]
+	for pid in 2:
+		var p := players[pid]
+		# Every named card out of the library FIRST, so the random cards
+		# below come from what is left and the library tops go back on top
+		# of it.
+		var taken := {}
+		for zone in DuelPosition.ZONES:
+			var cards: Array[CardInstance] = []
+			for card_name in position.names_in(pid, zone):
+				cards.append(_position_card(pid, card_name, extras))
+			taken[zone] = cards
+		# The random cards: the top of the rest, the seed's shuffle.
+		var random_hand: Array[CardInstance] = []
+		for i in mini(position.random_cards[pid], p.library.size()):
+			random_hand.append(p.library.pop_back())
+		# Library tops: pushed in reverse, so the FIRST named is drawn first
+		# (the library's top is its back, as [method draw_cards] reads it).
+		var tops: Array[CardInstance] = taken[DuelPosition.LIBRARY_TOP]
+		for i in range(tops.size() - 1, -1, -1):
+			tops[i].zone = Mtg.Zone.LIBRARY
+			p.library.append(tops[i])
+		var in_hand: Array[CardInstance] = taken[DuelPosition.HAND]
+		for inst in in_hand + random_hand:
+			inst.zone = Mtg.Zone.HAND
+			p.hand.append(inst)
+		var buried: Array[CardInstance] = taken[DuelPosition.GRAVEYARD]
+		for inst in buried:
+			inst.zone = Mtg.Zone.GRAVEYARD
+			p.graveyard.append(inst)
+		var on_table: Array[CardInstance] = taken[DuelPosition.TABLE]
+		for i in on_table.size():
+			var entry := position.table_entry(pid, i)
+			_place_from_position(on_table[i], pid, bool(entry.get("tapped", false)),
+				bool(entry.get("sick", false)))
+		p.life = position.lives[pid]
+	recalculate()
+	# A seat whose decklist grew by an extra tells its agent so: an AI
+	# studies its own registered deck as it is seated ([method
+	# AiPlayer.prepare]), and the extra is part of that deck now.
+	for pid in 2:
+		if extras[pid] > 0 and agents.size() > pid and agents[pid] != null:
+			agents[pid].prepare(self, pid)
+	# The turn. No untap step ran, so the one piece of its bookkeeping that
+	# reads the board as the turn begins is done here: Power Surge's census
+	# of the untapped lands.
+	mulligan_open = false
+	turn_number = 1
+	active_player = position.active_player
+	_skip_first_draw = false
+	_take_untap_census(active_player)
+	for pid in 2:
+		log_line(_position_line(pid, position, extras[pid]), null, "", pid)
+	log_line("Test hands: %s's turn, %s" % [players[active_player].player_name,
+		Mtg.step_name(position.step)])
+	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
+		null, "turn", active_player)
+	_enter_step(_turn_steps.find(position.step))
+	return ""
+
+
+## A card of [param card_name] for [param pid]: a copy out of the library
+## (taken out of it), or a new one when the deck has none left — an EXTRA,
+## counted in [param extras] and written into the seat's decklist. The name
+## has been checked by [method DuelPosition.refusal]. The card's zone is
+## still LIBRARY; the caller puts it where it goes.
+func _position_card(pid: int, card_name: String, extras: Array[int]) -> CardInstance:
+	var library := players[pid].library
+	for i in range(library.size() - 1, -1, -1):
+		if library[i].data.card_name == card_name:
+			var found := library[i]
+			library.remove_at(i)
+			return found
+	var inst := CardInstance.new(CardRegistry.get_card(card_name), _next_instance_id, pid)
+	_next_instance_id += 1
+	_instances[inst.id] = inst
+	players[pid].deck_names.append(inst.data.card_name)
+	extras[pid] += 1
+	return inst
+
+
+## [param inst] on [param pid]'s table as a permanent that was already
+## there (see the block above): what [method _put_on_battlefield] does to
+## an arrival, less everything that belongs to ARRIVING — the entry
+## refusal, payment, copy, "as this enters" and the ENTERS_BATTLEFIELD
+## event. Its printed "enters with counters" are kept. Not summoning sick
+## unless [param sick]: it has been under its controller's control since
+## before the turn began (CR 302.6) unless the player says otherwise.
+func _place_from_position(inst: CardInstance, pid: int, tapped: bool, sick: bool) -> void:
+	inst.zone = Mtg.Zone.BATTLEFIELD
+	inst.controller_id = pid
+	inst.layer_timestamp = continuous.next_timestamp()
+	inst.tapped = tapped
+	inst.summoning_sick = sick
+	for kind in inst.data.enters_with_counters:
+		inst.counters[kind] = int(inst.data.enters_with_counters[kind])
+	players[pid].battlefield.append(inst)
+	_battlefield_order.append(inst.id)
+	_battlefield_changed()
+
+
+## The log's line for one seat of a test position. The table and the
+## graveyard are public and are named; the hand and the library tops are
+## not, and are COUNTED — the line reaches the duel log the other seat
+## reads, and an AI seat's hand is that seat's secret (rule 8 is about the
+## AI; this is the same courtesy to the player).
+func _position_line(pid: int, position: DuelPosition, extra_count: int) -> String:
+	var table_names := PackedStringArray()
+	for i in position.table[pid].size():
+		var entry := position.table_entry(pid, i)
+		table_names.append(String(entry["name"]) + (" (tapped)" if bool(entry.get("tapped", false)) else ""))
+	var parts := PackedStringArray()
+	parts.append("%d cards in hand" % players[pid].hand.size())
+	if not table_names.is_empty():
+		parts.append("on the table: " + ", ".join(table_names))
+	var buried := position.names_in(pid, DuelPosition.GRAVEYARD)
+	if not buried.is_empty():
+		parts.append("in the graveyard: " + ", ".join(PackedStringArray(buried)))
+	var tops := position.names_in(pid, DuelPosition.LIBRARY_TOP).size()
+	if tops > 0:
+		parts.append("%d chosen on top of the library" % tops)
+	if extra_count > 0:
+		parts.append("%d not from the deck" % extra_count)
+	parts.append("%d life" % players[pid].life)
+	return "Test hands: %s — %s" % [players[pid].player_name, "; ".join(parts)]
 
 
 func _build_library(pid: int, names: Array) -> void:
@@ -1856,6 +2086,8 @@ func mana_ability_refusal(pid: int, inst: CardInstance, ability_index := 0) -> S
 	# 2026-10-03).
 	if awaiting_damage_assignment:
 		return "waiting for combat damage to be assigned"
+	if loop_stopped_by >= 0:
+		return LOOP_REFUSAL
 	# LIVE mana abilities: a land turned into a Swamp taps for {B}.
 	if inst.cur_mana_abilities.is_empty():
 		return "%s has no mana ability" % inst.data.card_name
@@ -2043,6 +2275,7 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	OBJECT_COSTS.pay(self, pid, object_picks)
 	if ability.life_cost > 0:
 		adjust_life(pid, -ability.life_cost)
+	_count_loop_step(pid)
 	if ability.max_per_turn > 0:
 		_rec(inst, &"ability_uses")
 		var use_key := "mana:%d" % ability_index
@@ -2778,6 +3011,9 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 	if priority_player != pid:
 		out["error"] = "you don't have priority"
 		return out
+	if loop_stopped_by >= 0:
+		out["error"] = LOOP_REFUSAL
+		return out
 	var announce_why := _cast_announce_checks(pid, inst)
 	if announce_why != "":
 		out["error"] = announce_why
@@ -3087,6 +3323,7 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	_next_stack_id += 1
 	stack.append(item)
 	spells_cast_this_turn[pid].append(inst.data)
+	_count_loop_step(pid)
 	# "Target creature you cast this turn" (Cycle of Life): the PERMANENT
 	# spell, by instance — its battlefield stamp is filled in as it resolves.
 	if inst.data.is_permanent_type():
@@ -3381,6 +3618,8 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		return err
 	if priority_player != pid:
 		return "you don't have priority"
+	if loop_stopped_by >= 0:
+		return LOOP_REFUSAL
 	# LIVE abilities: statics may have granted extras (Zombie Master).
 	if index < 0 or index >= inst.cur_activated_abilities.size():
 		return "no such ability"
@@ -3610,6 +3849,7 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 			inst.data.card_name, ability.counter_cost_count, ability.counter_cost_kind])
 		_counter_removal_event(inst, ability.counter_cost_kind, ability.counter_cost_count)
 		recalculate()
+	_count_loop_step(pid)
 	# EVERY activation is counted (campaign 2026-10-12 b4-1), not only one
 	# with a fixed max_per_turn: a limit that varies — Withering Wisps' "no
 	# more times each turn than the number of snow Swamps you control" —
@@ -12589,6 +12829,13 @@ func queue_reflexive_trigger(trig: TriggeredAbility, controller: int,
 	_push_trigger(item)
 
 func _push_trigger(item: StackItem) -> void:
+	# THE LOOP LIMIT ([constant LOOP_LIMIT]): once a loop has been stopped
+	# this step, no new triggered ability goes on the stack — the end of a
+	# loop that needs nobody's input.
+	if loop_stopped_by >= 0:
+		log_line("Trigger: %s — not put on the stack: the loop was stopped this step"
+			% item.description, item.card, "trigger", item.controller)
+		return
 	if item.trigger.capture_context.is_valid() and not item.cost_paid.has("_trigger_context"):
 		item.cost_paid["_trigger_context"] = item.trigger.capture_context.call(self, item.card, item.event)
 	if _stack_frozen:
@@ -12607,9 +12854,24 @@ func _push_trigger(item: StackItem) -> void:
 	_next_stack_id += 1
 	stack.append(item)
 	log_line("Trigger: %s" % item.description, item.card, "trigger", item.controller)
+	_count_loop_step(item.controller)
 	# Its targets become the targets at the next priority moment, once a
 	# human seat has named them (see _flush_target_announcements).
 	_queue_target_announcement(item)
+
+
+## One STEP of a possible loop ([constant LOOP_LIMIT]) by [param seat]:
+## the [constant LOOP_LIMIT]th stops the loop for the rest of this step and
+## says whose it was, once.
+func _count_loop_step(seat: int) -> void:
+	_rec(self, &"loop_steps")
+	loop_steps += 1
+	if loop_steps < LOOP_LIMIT or loop_stopped_by >= 0:
+		return
+	_rec(self, &"loop_stopped_by")
+	loop_stopped_by = maxi(seat, 0)
+	log_line("%s created an infinite loop — stopping at %d steps." % [
+		players[loop_stopped_by].player_name, LOOP_LIMIT], null, "loop_limit", loop_stopped_by)
 
 
 # ------------------------------------------------- targeted TRIGGERS --
@@ -12690,10 +12952,20 @@ func _arm_trigger_targets(item: StackItem) -> bool:
 		item.target_held = true
 		_set_trigger_target(item, refs[0])   # provisional; replaced at priority
 		return true
-	var ref: TargetRef = refs[0] if _probing \
+	var ref: TargetRef = _probe_target(item, refs) if _probing \
 		else _ask_trigger_target(item, refs, question)
 	_set_trigger_target(item, ref)
 	return true
+
+
+## A probe's answer to a trigger's target: the ranked first, unless a
+## search has asked for its own pick ([member probe_target_pick]).
+func _probe_target(item: StackItem, refs: Array[TargetRef]) -> TargetRef:
+	if probe_target_pick.is_valid():
+		var picked: Variant = probe_target_pick.call(self, item, refs)
+		if picked is TargetRef and refs.has(picked):
+			return picked
+	return refs[0]
 
 
 ## The mode question of a modal trigger: an OPTION list of its labels,
@@ -12780,7 +13052,7 @@ func _pick_trigger_slots(item: StackItem, slot_refs: Array, replay := {}) -> boo
 		var question := _trigger_question(item, refs, slot)
 		if not replay.is_empty() and _hold_cost_choice(question, replay):
 			return true
-		picks.append(refs[0] if _probing else _ask_trigger_target(item, refs, question))
+		picks.append(_probe_target(item, refs) if _probing else _ask_trigger_target(item, refs, question))
 	_set_trigger_targets(item, picks)
 	return false
 
@@ -14210,6 +14482,9 @@ func _enter_step(index: int) -> void:
 	_rec_turn()   # the search journal, if one is running (see TURN_FIELDS)
 	_step_index = index
 	var step := current_step()
+	# THE LOOP LIMIT counts per step: a new step starts clean.
+	loop_steps = 0
+	loop_stopped_by = -1
 	# "The first card they draw in each of their draw steps" counts per
 	# STEP, so the counter resets on every boundary (CR 614 context).
 	for seat in players:

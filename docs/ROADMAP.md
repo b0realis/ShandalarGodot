@@ -18811,6 +18811,167 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-19 — The loop limit (0.50.39) [QoL]
+
+The owner: *"Yes all infinity loops should be accompanied by a message -
+You created and infinity loop - stopping at 1000 steps. And lets stop these
+loops at 1000 steps so no freeze can happen!"*
+
+- **`MtgGame.LOOP_LIMIT` = 1000, per step of a turn.** Every spell cast,
+  every ability activated (mana abilities included) and every triggered
+  ability put on the stack is a step (`loop_steps`, `_count_loop_step`;
+  reset by `_enter_step`, journaled with the turn fields so a search
+  unwinds it). The thousandth stops the loop for the rest of the step: a
+  cast or activation is refused with `LOOP_REFUSAL`, and no new triggered
+  ability goes on the stack (`_push_trigger`), which is what ends a
+  mandatory loop nobody can stop. What is already on the stack resolves,
+  the game moves on, and the next step starts clean.
+- **The message**, logged with kind `loop_limit` and the seat:
+  "<Name> created an infinite loop — stopping at 1000 steps."; the duel
+  screen holds it on the Situation Bar in the refusal's ink — red,
+  outlined in white since the owner found it hard to read on the pink
+  bar (every refusal wears the outline) — and says
+  "You created an infinite loop — stopping at 1000 steps." to the player
+  who did it (`DuelScreen.loop_limit_message`). Headless runs log it.
+- **A deliberate departure** from CR 104.4b (a mandatory loop no player
+  can stop is a draw) and CR 732 (an optional loop is shortcut to a number
+  of iterations): the loop is cut and the game goes on. A busy turn of this
+  pool is a few dozen steps.
+- **Under it, the computer's own guards stay** (`AiPlayer._guard_seen`,
+  the casting and activation counts, the loop runner's rounds). The counts
+  stay at eight casts and thirty activations: at the duel screen's pace a
+  thousand steps of a Soul Warden life loop would be a quarter of an hour
+  of watching before this limit cut it.
+- Help: "Which rules this game plays by", **Endless loops**.
+- Tests: `tests/unit/test_loop_limit.gd` (a mandatory two-card trigger
+  loop stops at the thousandth trigger and the next step is clean; a
+  player's Sliver Queen + Heartstone + Altar loop is refused at its 1001st
+  step and works again in the next; the computer's Aluren + Shrieking
+  Drake loop with its own guard off ends the turn at the limit; a search
+  never trips it for real), `tests/ui/test_loop_limit_message.gd` (the
+  message, "You" and the computer's name). Broken on purpose — the limit
+  never stopping a loop — six of the seven fail.
+
+## 2026-10-19 — The runaway guard (0.50.39)
+
+The Deck Lab's baseline for the combo work found it on 0.50.38, and so in
+the published 0.50.34: Combo Aluren against Black-Red Raiders, 90 of 200
+games stalled. With Aluren on the table and a Shrieking Drake in hand the
+pilot cast the Drake for nothing, its arrival returned the only creature
+it had — itself — and it cast it again, for ever; on the duel screen, a
+computer turn that never ends. Aluren lets any player cast free, so a
+human's Aluren did it to the computer too, and a Man-o'-War has the same
+shape. Under the 1997 rules it also kept a lethal loop from ending the
+game: a player at 0 life loses when the phase ends, and the phase never
+did.
+
+- **The position** (`AiPlayer._guard_seen`, `_public_signature`): the
+  public position a seat acts from — both tables, the stack, the pools,
+  the life totals, the zone sizes, the floating effects — is written down
+  for the step; met again, the seat passes. Every profile, every reading.
+- **The count** (`GUARD_CAST_CAP` 8 casts of one card name a turn in
+  `_cast_gate`, `GUARD_ABILITY_CAP` 30 activations of one ability a turn
+  in `_ability_available`): the backstop for a cycle that moves something
+  each time (the Drake under a Pandemonium, a damage a round). The loop
+  runner (`card_combos.gd`) has its own funnel and its own cap.
+- Tests: `tests/ai/test_ai_runaway_guard.gd` — our Aluren and theirs, the
+  Drake and the Man-o'-War alone, `plays_combos` on and off, Apprentice
+  and Wizard, both presets: cast once a step, every turn ends, every game
+  plays out; the moving cycle stops at the count; the runner runs past it;
+  a line that moves is never stopped. Each of the three rules was broken
+  in turn and the file failed.
+
+## 2026-10-19 — CARD-COMBOS: the computer plays the loops (0.50.39)
+
+The owner, after the classic Tempest-era loops were checked against the
+engine: *"lets teach the combos but also strengthen the AI engine to
+discover such things. Lets have a dedicated CARD-COMBOS in AI source code
+that is dedicated to potential card combos and their effective play!"*
+
+- **What was checked first, by hand under both rules presets.** Sliver
+  Queen + Heartstone + Ashnod's Altar nets {C} a round; Aluren + a
+  Man-o'-War that returns itself + Soul Warden nets a life a round. Corpse
+  Dance + Workhorse + Ashnod's Altar is no loop (Corpse Dance with buyback
+  is {4}{B}, the pieces make colourless, and the Workhorse dies to its last
+  counter before the Altar can have it); Wall of Blossoms with one
+  Man-o'-War draws two and stops; Mind Over Matter with a Tome or a Basalt
+  Monolith spends a card a round. The pilot had run none of the real ones:
+  the mana planner never pays with a sacrifice, and nothing cast the loop.
+- **The catalogue** (`engine/ai/card_combos.gd`, `RECIPES`): the Queen
+  engine, Queen and Pandemonium, Earthcraft Slivers, Free Man-o'-War (or
+  Shrieking Drake; Soul Warden or Pandemonium), Renewed Thopter (Enduring
+  Renewal, a {0} artifact creature, Ashnod's Altar or Goblin Bombardment),
+  Powered Monolith. The completing piece is cast first, the card a loop
+  casts each round is held for it, pieces in reach are kept from discards
+  and costs, and the opponent's public pieces are priced as removal and
+  counter targets.
+- **The search** finds loops nobody catalogued: a depth-3 walk on the
+  search journal over the pilot's own table and hand, kept only when the
+  board comes back with a gain and nothing lost twice, in a node budget
+  (`combo_search_nodes`: Sorcerer 32, Wizard 64, about 0.46 ms a node; never a clock) and only
+  with a recycler on the table. It never reads the opponent's hand or a
+  library's order.
+- **The run**: our main phase, one action per beat like any other, with a
+  purpose — damage to lethal, the mana for a lethal X, a swarm of twelve,
+  twenty life, the hand's mana — capped at forty rounds, once a turn, the
+  mana made the mana spent.
+- **The same day's second ruling**, *"yes ai should also be aware of
+  this"*: a creature card is sized by the +1/+1 counters it enters with
+  (`Evaluator.arrival_power`) wherever the AI prices one off the
+  battlefield — the hand, a graveyard, a tutor, the counter bar. A
+  Workhorse is a 4/4 to it now, not a 0/0.
+- `plays_combos`: Magician (the catalogue only), Sorcerer and Wizard.
+- Engine: `MtgGame.probe_target_pick`, a search's own answer to a
+  trigger's target in probe mode (a Man-o'-War aimed at itself).
+- Limits, written down in the module: a loop whose first round needs
+  coloured mana from outside is not found by the open search (the walk
+  lends itself colourless only); our own main phase only; costs that spend
+  a card, life or the library are not walked; one target slot.
+- Tests: `tests/ai/test_card_combos.gd`.
+
+## 2026-10-19 — Test hands (0.50.39)
+
+The owner: *"design a tool to start a duel with two predefined hands
+besides decks so a player can instantly test a combo"*. Magic Battle has a
+`Test hands` button as the last row of its settings, under the match
+parameters, with its purpose written to its right; it takes the
+seats, decks, pilots and names the screen chose (through the same gates as
+`Go!`) to a bench (`game/test_hands_screen.gd`) where each seat's hand
+(chosen cards plus any number of random ones), table (tapped or not, sick
+or not), graveyard (top last), library top (next draw first) and life are
+set, with whose turn and the step it begins in. `Go test!` starts the duel
+in that turn — no splash, coin toss, opening hand or mulligan — through one
+engine door, `MtgGame.begin_from_position` ([DuelPosition]). The picker
+lists the seat's deck with the copies left; `Any card in the pool` adds a
+card from any enabled pack as an extra. In the duel: `Restart test` (the
+same position on the same seed) on the table and in the Pause window,
+`Edit test` back to the bench, and the End of Duel window offers the
+restart. The bench remembers the last test; tests can be saved by name.
+
+A test records nothing: always one free-play duel (no match record, no
+`AiMatchMemory`, no sideboarding), never for ante, never in the running
+`duel_log.txt` (the log window keeps it). Local only: nothing on the
+SGManalink path reads a position.
+
+Deliberately NOT built, and why:
+
+- Table permanents do not ENTER: no enters-the-battlefield trigger, entry
+  payment, copy choice or "as this enters" choice; printed "enters with
+  counters" are kept. A Clone, a Wood Elemental or an Aura belongs in the
+  hand, to be cast. (Attaching an Aura to a chosen host is the natural
+  next step if the owner wants it.)
+- No other counters, poison, floating mana, exile, face-down or phased
+  permanents, control of the other seat's card, or a turn number past 1.
+- Starting steps are the upkeep, draw, first main (default), beginning of
+  combat, second main and end step; not the untap step (it would untap
+  the tapped permanents) nor the combat steps past the beginning.
+- `Go test!` rolls a fresh seed each press; Magic Battle's typed seed is
+  not carried into a test (`Restart test` is the replay).
+
+Tests written, not yet run (owner's ruling of 2026-10-19: verification
+after the merge): `tests/unit/test_duel_position.gd`,
+`tests/ui/test_test_hands_screen.gd`.
+
 ## 2026-10-19 — Your own card back (0.50.38)
 
 The owner: *"lets implement also an option in settings so user can use his

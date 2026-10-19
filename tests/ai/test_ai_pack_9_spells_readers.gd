@@ -288,6 +288,28 @@ func test_corpse_dance_raises_the_wurm_to_attack() -> void:
 	assert_eq(wurm.controller_id, 0)
 
 
+## A printed 0/0 is sized by the counters it enters with: the Workhorse is
+## a 4/4 attacker, and an Elf is still too small to dance.
+func test_corpse_dance_counts_the_counters_a_body_enters_with() -> void:
+	var ai := _ai()
+	_lands(0, "Swamp", 3)
+	var horse := _in_graveyard(0, "Workhorse")
+	var dance := give_hand(0, "Corpse Dance")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_string_contains(ai.act(g), "Corpse Dance")
+	resolve_stack()
+	assert_eq(horse.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(horse.cur_power, 4)
+	before_each()
+	ai = _ai()
+	_lands(0, "Swamp", 3)
+	_in_graveyard(0, "Llanowar Elves")
+	dance = give_hand(0, "Corpse Dance")
+	advance_to_step(Mtg.Step.MAIN1)
+	ai.act(g)
+	assert_eq(dance.zone, Mtg.Zone.HAND, "a 1/1 is no attack")
+
+
 func test_verdant_touch_animates_our_own_spare_land() -> void:
 	var ai := _ai()
 	_lands(0, "Forest", 5)

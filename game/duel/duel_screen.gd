@@ -647,9 +647,15 @@ func _new_game() -> void:
 		duel_seed = randi() | 1     # never 0: that means "roll one"
 	# THE RUNNING FILE opens its banner BEFORE setup, so the engine's
 	# own first line ("Game set up: ...") is the first line under it.
-	_log_file = DuelLogFile.new()
-	_log_file.begin(PackedStringArray([config.seat_name(0),
-		config.seat_name(1)]), duel_seed)
+	# NOT FOR A TEST (Test hands, 2026-10-19): a position tried twenty
+	# times would be twenty games in the player's running log, between
+	# the duels they actually played. The log window (`L`) still holds a
+	# test's whole log, and its Save keeps one on request.
+	_log_file = null
+	if not config.is_test():
+		_log_file = DuelLogFile.new()
+		_log_file.begin(PackedStringArray([config.seat_name(0),
+			config.seat_name(1)]), duel_seed)
 	game.setup(config.decks[0], config.decks[1],
 		config.seat_name(0), config.seat_name(1),
 		config.lives[0], config.lives[1], duel_seed)
@@ -705,7 +711,12 @@ func _new_game() -> void:
 	_hotseat_response_turn = []
 	_hotseat_passing = false
 	hidden_hands.assign([0, 1] if config.private_hotseat() else config.hidden_seats())
+	if config.is_test() and config.open_hands:
+		hidden_hands.clear()   # `Show both hands` (DuelConfig.open_hands)
 	_reset_pacing()
+	if config.is_test():
+		_begin_test()
+		return
 	# The coin toss (the original's Toss.wav moment): who plays first.
 	# Rolled on game.rng, not the global RNG, so a seeded game replays
 	# its opening exactly — the leader is part of the game's stream.
@@ -729,6 +740,25 @@ func _new_game() -> void:
 	_refresh()
 
 
+## A TEST BEGINS IN ITS TURN (Magic Battle's `Test hands`, 2026-10-19).
+## The owner: *"upon "go test" button you are instant in the turn"*. So no
+## splash, no coin toss, no opening hand and no mulligan: the engine builds
+## the table the position describes and enters the chosen step of the
+## chosen player's turn
+## ([method MtgGame.begin_from_position]); the AI's clock starts with the
+## first refresh, as it does when an opening hand is settled. (No ante
+## either — [method DuelConfig.for_test] never stakes one.) A refusal —
+## the screen that built the position has already asked every one of them
+## — is said on the bar, and the Pause window's `Edit test` leads back.
+func _begin_test() -> void:
+	_set_prompt("")
+	_play_music()
+	var refused := game.begin_from_position(config.position)
+	_refresh()
+	if refused != "":
+		_report(refused)
+
+
 ## Strict on purpose: a seat that does not exist (`-1`, the engine's "no
 ## winner" / "no assigner") is NOT human, or a drawn duel would greet the
 ## player with the win sting and an unanswered damage request would open
@@ -749,6 +779,22 @@ func _on_log_line(line: String, meta: Dictionary) -> void:
 		_log_file.write(shown[0], shown[1])
 	if _duel_log != null and is_instance_valid(_duel_log):
 		_duel_log.append_line(shown[0], shown[1])
+	# THE LOOP LIMIT (2026-10-19, [constant MtgGame.LOOP_LIMIT]): the
+	# owner's message, held on the Situation Bar as a refusal is — "You"
+	# to the player whose loop it was.
+	if String(meta.get("kind", "")) == "loop_limit" and game != null:
+		var seat := int(meta.get("pid", -1))
+		var seat_name := game.players[seat].player_name if seat >= 0 and seat < game.players.size() else ""
+		_report(loop_limit_message(seat_name, _is_human(seat) and seat == _viewing_seat()))
+
+
+## THE LOOP LIMIT's message (2026-10-19). The owner: *"You created and
+## infinity loop - stopping at 1000 steps"* — spelled out, to the player at
+## this screen; the seat's name for the computer or the other hot-seat
+## player.
+static func loop_limit_message(seat_name: String, yours: bool) -> String:
+	return "%s created an infinite loop — stopping at %d steps." % [
+		"You" if yours else seat_name, MtgGame.LOOP_LIMIT]
 
 
 ## THE PRIVATE LINE (2026-10-03). Some engine lines are one seat's secret
@@ -867,6 +913,11 @@ func _show_result_window(verdict: String) -> void:
 	_over_dialog = OriginalDialog.create(verdict, Vector2(272, 300),
 		"panel_end_duel")
 	# "OK" is one of the three buttons the 1997 game owns (@DIALOGBUTTONS).
+	# A TEST'S END offers the try again beside it (Test hands, 2026-10-19):
+	# the combo went off or it did not, and the next thing a tester does is
+	# run it once more — OK goes back to the Test hands screen.
+	if config.is_test():
+		_over_dialog.add_button(RESTART_TEST).pressed.connect(restart_test)
 	_over_dialog.add_button("OK").pressed.connect(_on_game_over_dismissed)
 	add_child(_over_dialog)
 	# EVERY LINE FOLDS AT THE WINDOW'S EDGE and the window grows to hold
@@ -1022,6 +1073,11 @@ func _on_game_over_dismissed() -> void:
 	# whose only exit was Exit. A duel an OWNER holds — [MatchScreen], the
 	# soak, a test — is not the scene, and is the owner's to drop
 	# (MatchScreen._leave does the same for the match).
+	if config.is_test():
+		# A TEST ENDS AT ITS BENCH, not at the title: the position is the
+		# thing being worked on (Test hands, 2026-10-19).
+		edit_test()
+		return
 	if get_tree().current_scene == self:
 		get_tree().change_scene_to_file("res://game/main.tscn")
 
@@ -1224,6 +1280,8 @@ func _report(err: String) -> void:
 		return
 	_prompt_label.text = _hotseat_prompt(err)
 	_prompt_label.add_theme_color_override("font_color", WARNING)
+	_prompt_label.add_theme_color_override("font_outline_color", WARNING_OUTLINE)
+	_prompt_label.add_theme_constant_override("outline_size", WARNING_OUTLINE_SIZE)
 	_flash_until_ms = Time.get_ticks_msec() + FLASH_MS
 	if _flash_timer != null:
 		_flash_timer.start(FLASH_MS / 1000.0)
@@ -1284,6 +1342,7 @@ func _status_message() -> String:
 func _clear_warning_ink() -> void:
 	_prompt_label.add_theme_color_override("font_color",
 		OriginalDialog.HIGHLIGHT)
+	_prompt_label.remove_theme_constant_override("outline_size")
 
 
 ## The flash ran out with nothing else having moved: hand the bar back.
@@ -1297,6 +1356,16 @@ func _on_flash_expired() -> void:
 ## `color.RGBA{255, 100, 100, 255}` (`duel.go:3151`), the only non-white
 ## the bar ever wears.
 const WARNING := Color8(255, 100, 100)
+
+## THE RED IS OUTLINED IN WHITE (2026-10-19). On the bar's pink stone the
+## red letters sank into the ground — the loop limit's message was hard to
+## read; the owner: *"can we make it white border around red? To emphasize
+## text a bit more?"*. Every red line on the bar wears it, and
+## [method _clear_warning_ink] takes it off with the red. Width 3 of the
+## 0/2/3/4/6 tried in the running duel: the red still leads, 4 and up
+## turn the letters white-edged blobs at 16px.
+const WARNING_OUTLINE := Color.WHITE
+const WARNING_OUTLINE_SIZE := 3
 
 ## How long a refusal holds the bar before the status line takes it back.
 ## Ours, not s30's: s30 redraws every frame and clears `warningMsg` on the
@@ -8416,14 +8485,127 @@ func _on_pause_chosen(action: int) -> void:
 				return
 			_territory_menu_pid = -1     # this concede is the HUMAN's
 			_ask_to_concede()
+		DuelPause.Action.RESTART_TEST:
+			_close_pause()
+			restart_test()
 		DuelPause.Action.EXIT_DUEL:
 			_close_pause()
+			# A test's "duel config" is its Test hands screen, the
+			# position as it was (DuelPause.TEST_ENTRIES: `Edit test`).
+			if config.is_test():
+				edit_test()
+				return
 			get_tree().change_scene_to_file("res://game/setup_screen.tscn")
 		DuelPause.Action.MAIN_MENU:
 			_close_pause()
 			get_tree().change_scene_to_file("res://game/main.tscn")
 		DuelPause.Action.QUIT:
 			get_tree().quit()
+
+
+# --- Test hands (2026-10-19): the test's two ways on ---
+
+## The words on the test's own buttons: the Pause window's, the End of
+## Duel window's and the strip's.
+const RESTART_TEST := "Restart test"
+## The strip's caption over a test — the table says what it is.
+const TEST_CAPTION := "Test hands"
+
+## A handover is under way: the next screen is built, this one is going.
+## A second press in the same frame (a double click on `Restart test`)
+## must not build a second one — the setup screen's `_leaving` rule.
+var _handing_over := false
+
+## The screen that took over from this one, the moment it is in the tree.
+## Emitted either way; it matters to a host that is not the scene tree (a
+## test), which owns the new screen from then on — the scene tree's own
+## current scene is simply swapped.
+signal handed_over(next: Control)
+
+
+## `Restart test`: THE SAME TEST AGAIN, at once — a new duel screen with
+## this one's config, so the same position on the same seed: the same
+## random cards, the same library under them, the same coin flips. A
+## different shuffle is one `Edit test` and `Go test!` away, which rolls a
+## fresh seed. Nothing for a duel that is not a test.
+func restart_test() -> void:
+	if not config.is_test():
+		return
+	var again: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	again.config = config
+	_hand_over_to(again)
+
+
+## `Edit test`, and the end of a test: back to the Test hands screen with
+## this test's decks, seats and position ([member DuelConfig.position]).
+## Loaded by path and untyped: the Test hands screen loads this one, and a
+## typed name here would make the two scripts each other's dependency.
+func edit_test() -> void:
+	if not config.is_test():
+		return
+	var bench = load("res://game/test_hands_screen.tscn").instantiate()
+	bench.config = config
+	_hand_over_to(bench)
+
+
+## Swap [param next] in for this screen: the scene tree's current scene
+## when this is it (the setup screen's own `_start_battle` move), else
+## [param next] goes beside this screen under its host, which hears of it
+## through [signal handed_over].
+func _hand_over_to(next: Control) -> void:
+	if _handing_over or not is_inside_tree():
+		next.free()
+		return
+	_handing_over = true
+	if _over_dialog != null and is_instance_valid(_over_dialog):
+		_over_dialog.queue_free()
+	_over_dialog = null
+	_result_pending = false
+	var tree := get_tree()
+	if tree.current_scene == self:
+		tree.root.add_child(next)
+		tree.current_scene = next
+	else:
+		get_parent().add_child(next)
+	handed_over.emit(next)
+	queue_free()
+
+
+## The strip's test controls under the large card: the caption that says
+## this table is a test and the `Restart test` button, at the strip's LEFT
+## — Arrange, Expand and the log run across its right. Built only over a
+## test.
+##
+## ONE ROW, ACROSS THE STRIP (2026-10-19, the verification screenshots):
+## stacked, the caption over the button, the button's lower half covered
+## the player's deck name at the top of the block below — the strip has
+## width to spare and no height, as Expand found before it. And the
+## button is the era's stone button with its dark ink, the Done beside the
+## Situation Bar's (the owner's *"the correct button"*, 2026-09-03): on
+## the bar's pink stone its pale letters could hardly be read.
+func _build_test_strip() -> void:
+	var row := HBoxContainer.new()
+	row.name = "TestStrip"
+	row.add_theme_constant_override("separation", 4)
+	row.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	row.offset_left = 4.0
+	row.offset_top = 4.0
+	var caption := Label.new()
+	caption.text = TEST_CAPTION
+	caption.add_theme_color_override("font_color", UiChrome.CHOSEN)
+	caption.add_theme_font_size_override("font_size", 12)
+	caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	caption.tooltip_text = "This duel is a test: it began from the position on the Test hands screen, and nothing about it is recorded."
+	caption.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_child(caption)
+	var again := OriginalDialog.button(RESTART_TEST, Vector2(88, ArrangeButton.FACE.y))
+	again.name = "RestartTest"
+	again.focus_mode = Control.FOCUS_NONE
+	again.tooltip_text = "The same test again from its start: the same position and the same shuffle."
+	again.pressed.connect(restart_test)
+	row.add_child(again)
+	_qol_reserve.add_child(row)
+# --- end Test hands ---
 
 
 ## `Concede` → `Yes, I'm sure` — `@MENU_TERRITORY` entries 24 and 25.
@@ -10925,6 +11107,9 @@ func _build_ui() -> void:
 	_log_button.offset_right = -ArrangeButton.FACE.x * 2.0 - 16.0
 	_log_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
 	_qol_reserve.add_child(_log_button)
+	# A TEST says so, and offers its restart, at the strip's left.
+	if config != null and config.is_test():
+		_build_test_strip()
 	# Last child of the column, so the player's life numeral finishes
 	# flush with the bottom edge of the screen.
 	sidebar.add_child(_player_panel(0, false))

@@ -109,6 +109,7 @@ static func pages() -> Array:
 		_page_combat(),
 		_page_damage(),
 		_page_start_finish(),
+		_page_test_hands(),
 		_page_ruleset(),
 		_page_formats(),
 		_page_format_lists(),
@@ -401,6 +402,30 @@ static func _page_start_finish() -> Dictionary:
 	]}
 
 
+## Magic Battle's `Test hands` (2026-10-19): the bench for trying a combo.
+static func _page_test_hands() -> Dictionary:
+	# The Pause window's key as bound NOW (the bug campaign of 2026-10-12).
+	var key := Controls.key_text("duel_pause")
+	var pause := "the Pause window" if key == Controls.UNBOUND \
+		else "the Pause window (%s)" % key
+	return {"title": "Test hands — try a combo at once", "blocks": [
+		_text("Test hands starts a duel from a position you build, straight into the turn you choose: no coin toss, no opening hand, no mulligan. Use it to try a combo, a trick or a hard board without playing up to it."),
+		_heading("Opening it"),
+		_text("In Magic Battle, choose who plays (Duel the AI, Hotseat or AI Demo), the two decks, the names and the AI difficulty as for any duel, then press Test hands: the last row of the settings, under Ante and the match settings (scroll down to it). A deck Go! would refuse is refused here too."),
+		_heading("Building the position"),
+		_text("Each seat has four places, each with + Add, Clear and a × on every card. Hand: the cards you choose, plus Random cards in hand dealt from the rest of the deck. On the table: permanents already in play, each Tapped or not, and a creature Sick (it came in this turn) or not; not sick by default, so it can attack and tap at once. Graveyard: the last card added is on top, which is the card Corpse Dance returns. Top of the library: the first card is the next draw. Set each life total too."),
+		_cards([["Llanowar Elves", "On the table, ready", "A creature you put on the table can tap for mana or attack at once. Tick Sick if it should have come in this turn."],
+			["Grizzly Bears", "Top of the graveyard", "The last card you add to a graveyard is its top card: the creature Corpse Dance returns."]]),
+		_text("+ Add opens a list of the seat's deck with the copies left; type part of a name to narrow it, and Enter or a double click adds the card. Tick Any card in the pool to choose from every card your enabled packs hold: a card the deck has no copy of left is added to it for the test and marked (not in deck). The rest of the library is the rest of the deck, shuffled."),
+		_text("Cards on the table are already there when the test begins: nothing enters, so no enters-the-battlefield ability triggers and no entry cost or choice is made. A card that enters with counters has them. Cast a Clone or an Aura from the hand rather than putting it on the table."),
+		_heading("The turn"),
+		_text("Choose whose turn it is and the step it begins in: the upkeep, the draw step, the first main phase (the default), the beginning of combat, the second main phase or the end step. Nothing before that step happens: tapped permanents stay tapped. Show both hands lays both hands open on the table."),
+		_heading("Go test! and after"),
+		_text("Go test! starts the duel. A test is one duel, never for ante, and nothing about it is recorded: no match, no duel log file. Restart test, on the table under the large card and in %s, starts the same test again with the same shuffle; Edit test goes back to the bench. When a test ends, its window offers Restart test, and OK goes back to the bench. Each Go test! deals a fresh shuffle." % pause),
+		_text("The bench opens on your last test. Type a name and press Save to keep a test; choose a saved one and press Load or Delete. Test hands is for this computer only: it is not offered at a SGManalink table."),
+	]}
+
+
 static func _page_ruleset() -> Dictionary:
 	var blocks: Array = [
 		_heading("Choose the rules before the duel"),
@@ -411,6 +436,9 @@ static func _page_ruleset() -> Dictionary:
 		blocks.append(_heading(String(fork["label"])))
 		blocks.append(_text("1997: " + String(fork["fifth"])))
 		blocks.append(_text("Modern: " + String(fork["modern"])))
+	# THE LOOP LIMIT (2026-10-19, MtgGame.LOOP_LIMIT), under every rule set.
+	blocks.append(_heading("Endless loops"))
+	blocks.append(_text("A loop that would never end is stopped at %d steps. Once %d spells, abilities and triggered abilities have been played in one step, nothing more can be cast or activated and nothing more triggers until the next step; what is already on the Spell Chain resolves, and the duel goes on. The Situation Bar says who created the loop: You created an infinite loop — stopping at %d steps." % [MtgGame.LOOP_LIMIT, MtgGame.LOOP_LIMIT, MtgGame.LOOP_LIMIT]))
 	return {"title": "Which rules this game plays by", "blocks": blocks}
 
 

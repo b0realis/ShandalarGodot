@@ -1695,6 +1695,40 @@ var prices_offers := false
 var runs_loops := false
 
 
+## CARD-COMBOS (2026-10-19, `engine/ai/card_combos.gd`). The owner, after
+## the classic Tempest-era loops were checked against the engine: *"lets
+## teach the combos but also strengthen the AI engine to discover such
+## things. Lets have a dedicated CARD-COMBOS in AI source code that is
+## dedicated to potential card combos and their effective play!"*
+##
+## Reproduced before it existed, all at one seam: with Sliver Queen,
+## Heartstone and Ashnod's Altar on its own table the pilot made one Sliver
+## per land a turn and never touched the Altar — [ManaPlanner] skips every
+## mana ability whose cost is a sacrifice, so the loop that nets {C} a
+## round could not be seen, let alone run; with Aluren, Soul Warden and a
+## Man-o'-War in hand it cast the Wall beside it and never the loop; with
+## Mind Over Matter it drew with the Tome and took twelve from a Craw Wurm
+## it could have tapped (the last is the discard-cost limit the Pack 9
+## guide already lists, and it stays one).
+##
+## On: the pilot KNOWS the proven loops of this pool (the catalogue), FINDS
+## loops nobody wrote down with a budgeted search over the actions on its
+## own table and in its own hand, RUNS one with a purpose and a cap in its
+## own main phase, plays the pieces in an order that assembles one and does
+## not throw them away, and reads the opponent's public table for the same
+## pieces as threats. Never a look at a hidden card: our own hand, both
+## tables, nothing else (docs/fair-play.md).
+var plays_combos := false
+
+## The loop search's NODE budget per board — one node is one action tried
+## on the search journal ([UndoLog]) with the stack settled behind it. A
+## count, never a clock, so a seeded duel replays exactly. 0 with
+## [member plays_combos] on leaves the catalogue's own loops (whose pieces
+## are known) at `card_combos.gd`'s FOCUS_NODES and searches nothing
+## else.
+var combo_search_nodes := 0
+
+
 ## THE CLOSER HELD UNTIL THE BOARD IS LOCKED — the finisher rule of
 ## docs/ROADMAP.md's "THE DECK, THIRD PASS" §6, built whole and shipping
 ## at its null on every preset (2026-09-10).
@@ -1990,6 +2024,7 @@ static func magician() -> AiProfile:
 	profile.uses_tactical_effects = true
 	profile.forecasts_tactics = true
 	profile.ranks_counters = true
+	profile.plays_combos = true   # the catalogue's loops; it searches for none
 	return profile
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
@@ -2026,6 +2061,8 @@ static func sorcerer() -> AiProfile:
 	profile.values_context = true
 	profile.plans_modes = true
 	profile.forecasts_aftermath = true
+	profile.plays_combos = true
+	profile.combo_search_nodes = 32
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -2061,6 +2098,8 @@ static func wizard() -> AiProfile:
 	profile.values_context = true
 	profile.plans_modes = true
 	profile.forecasts_aftermath = true
+	profile.plays_combos = true
+	profile.combo_search_nodes = 64
 	return profile
 
 

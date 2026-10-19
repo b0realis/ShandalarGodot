@@ -74,6 +74,58 @@ var deck_format := DeckFormat.UNRESTRICTED
 ## replayed from a bug report by setting it here.
 var rng_seed := 0
 
+## MAGIC BATTLE'S `Test hands` (2026-10-19): the hand-built position this
+## duel begins from ([DuelPosition]), or null — every other duel. A config
+## that carries one is a TEST, and the duel screen reads that one fact to
+## skip everything a test is not: the ante, the splash, the coin toss, the
+## opening hand and its mulligans, and the running `duel_log.txt`; its
+## Pause window offers `Restart test` and its `Exit duel` goes back to the
+## Test hands screen. Made by [method for_test] and nowhere else.
+var position: DuelPosition = null
+## A test's table shows BOTH hands, the computer's too, when the player
+## ticked `Show both hands` on the Test hands screen: whoever built the
+## position already knows them, and a test is about seeing why a play was
+## or was not made. Display only — what an AI seat may READ is not this
+## screen's to widen (rule 8).
+var open_hands := false
+
+
+## Is this duel a `Test hands` duel ([member position])?
+func is_test() -> bool:
+	return position != null
+
+
+## THE TEST DUEL this config's seats, decks and pilots play: the same
+## everything, beginning from [param test_position] on [param seed_value].
+## Always ONE free-play duel — no match, so no match record and no
+## [AiMatchMemory]; never for ante; never a private hotseat (one person sat
+## down at both seats to build it, so there is nothing to hide between
+## them). The life totals are the position's. The position is COPIED, so
+## the screen that built it may go on editing its own.
+func for_test(test_position: DuelPosition, seed_value: int, show_hands := false) -> DuelConfig:
+	var out := DuelConfig.new()
+	for pid in 2:
+		out.decks[pid] = (decks[pid] as Array).duplicate()
+		out.printings[pid] = (printings[pid] as Dictionary).duplicate()
+		out.sideboards[pid] = (sideboards[pid] as Array).duplicate()
+	out.player_names = player_names.duplicate()
+	out.deck_names = deck_names.duplicate()
+	out.portraits = portraits.duplicate()
+	out.pilots = pilots.duplicate()
+	out.unfair = unfair.duplicate()
+	out.pace = pace
+	out.panel_colors = panel_colors.duplicate()
+	out.deck_format = deck_format
+	out.hotseat_privacy = false
+	out.ante = 0
+	out.best_of = MatchState.FREE_PLAY
+	out.sideboard_between_duels = false
+	out.rng_seed = seed_value
+	out.position = test_position.duplicate_position()
+	out.lives.assign(out.position.lives)
+	out.open_hands = show_hands
+	return out
+
 
 func private_hotseat() -> bool:
 	return hotseat_privacy and not is_ai(0) and not is_ai(1)

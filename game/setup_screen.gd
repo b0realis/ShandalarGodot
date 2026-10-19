@@ -66,6 +66,8 @@ var _portrait_captions: Array[Label] = []
 var _portrait_arrows: Array = []
 ## `Back` / `Go!`, pinned under the scroller rather than in it.
 var _action_row: Control
+## The `Test hands` button, last in the scroller ([method _build_test_hands_row]).
+var _test_hands_button: Button
 var _pace_slider: HSlider
 var _pace_row: HBoxContainer
 ## `&Ante` — the original's match parameter, ticked by default.
@@ -738,6 +740,8 @@ func _build_ui() -> void:
 	_pace_slider.custom_minimum_size.x = 220
 	_pace_row.add_child(_pace_slider)
 	content.add_child(_pace_row)
+
+	content.add_child(_build_test_hands_row())
 
 	# (`Back` and `Go!` are built by _build_action_row and live OUTSIDE
 	#  the scroller — see the panel above.)
@@ -1596,7 +1600,9 @@ func _apply_mode(mode: int) -> void:
 ## choices every run.
 ##
 ## WRITTEN AT `Go!` AND NOWHERE ELSE — one write, one gesture, once every
-## gate in [method _start_battle] has passed. Not on every click, and not
+## gate in [method _start_battle] has passed. (`Test hands` is the same
+## gesture through the same gates, and writes the same: see [method
+## _open_test_hands].) Not on every click, and not
 ## on the way out: a scripted tour that opens this screen and pokes at
 ## its pickers (`tools/screenshot_tour.gd`) must not rewrite the player's
 ## file, and a choice the player made and then walked away from with
@@ -1720,6 +1726,88 @@ static func _row_of_metadata(option: OptionButton, meta: String) -> int:
 		if str(option.get_item_metadata(i)) == meta:
 			return i
 	return -1
+
+
+## `Test hands` — the button's word, the owner's own ("test hand(s)
+## button"), and what it does in one line for its tooltip.
+const TEST_HANDS := "Test hands"
+const TEST_HANDS_TOOLTIP := "Set up both hands, the cards on the table and in the graveyards, and whose turn it is, then start straight in that turn: no coin toss, no mulligan. For trying a combo."
+## What the button is for, written beside it.
+const TEST_HANDS_PURPOSE := "For testing a specific hand or card combo: set up both hands and the table, then start straight in that turn."
+
+
+## `Test hands` AT THE BOTTOM OF THE SETTINGS, its purpose beside it
+## (2026-10-19). It first sat between `Back` and `Go!`; the owner: *"test
+## hands button is a bit niche and not often clicked! Should we move it to
+## the botom of menu under all ante settings - we can also write there to
+## the right the purpose!"*. So the pinned row is the two ways out again,
+## and this is the last row of the scroller, under the match parameters.
+func _build_test_hands_row() -> Control:
+	var row := HBoxContainer.new()
+	row.name = "TestHandsRow"
+	row.add_theme_constant_override("separation", 12)
+	var test := UiChrome.menu_button(TEST_HANDS, Vector2(160, 38), 20)
+	test.name = "TestHands"
+	test.tooltip_text = TEST_HANDS_TOOLTIP
+	test.pressed.connect(_open_test_hands)
+	row.add_child(test)
+	_test_hands_button = test
+	var purpose := UiChrome.body_label(TEST_HANDS_PURPOSE, 14)
+	purpose.name = "TestHandsPurpose"
+	purpose.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	purpose.custom_minimum_size.x = 600
+	purpose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	purpose.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(purpose)
+	return row
+
+## The Test hands screen is up: this screen handed it the tree. Emitted
+## once, with the screen, for a host that is not the scene tree (a test).
+signal test_hands_opened(bench: Control)
+
+
+## `Test hands` (2026-10-19). The owner: *"design a tool to start a duel
+## with two predefined hands besides decks so a player can instantly test
+## a combo. Maybe add to the bottom of the duel menu - test hand(s) button
+## ? - where you select the cards (from selected decks) in hand for you
+## and opponent (it can be random hand), select cards on table (tapped or
+## not for each) and then selects whose turn it is and upon "go test"
+## button you are instant in the turn"*.
+##
+## THIS SCREEN STILL CHOOSES THE DUEL: the mode (who pilots each seat),
+## the decks, the names, the AI difficulty, the starting life and the
+## format are all read from here, through [method _build_config] — so a
+## deck this screen would refuse on `Go!` (proxies, a pack that is off, a
+## file that will not read, a format it fails) is refused here too, with
+## the same sentence, and `<random deck>` is resolved by the seed before
+## the Test hands screen ever lists its cards. What the Test hands screen
+## adds is the position ([DuelPosition]); the duel is still these seats'.
+##
+## REMEMBERED LIKE `Go!` ([method _remember_choices]): every gate has
+## passed, and the Test hands screen's `Back` reopens this one — which
+## must open on the decks the test was made with, not the ones before.
+##
+## Loaded by path and untyped, like [method DuelScreen.edit_test]: the two
+## screens lead to each other, and the Deck Lab's `-s` scripts compile
+## this file (CONTRIBUTING, the autoload gotcha).
+func _open_test_hands() -> void:
+	if _leaving:
+		return
+	var config := _build_config()
+	if config == null:
+		return          # refused, and the refusal is on screen
+	_remember_choices()
+	var bench = load("res://game/test_hands_screen.tscn").instantiate()
+	bench.config = config
+	_leaving = true
+	var tree := get_tree()
+	if tree.current_scene == self:
+		tree.root.add_child(bench)
+		tree.current_scene = bench
+	else:
+		get_parent().add_child(bench)
+	test_hands_opened.emit(bench)
+	queue_free()
 
 
 func _start_battle() -> void:

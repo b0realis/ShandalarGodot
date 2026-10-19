@@ -377,6 +377,20 @@ func test_the_sentence_is_the_pale_blue_grey_voice() -> void:
 		"and nothing thickening it into white")
 
 
+func test_a_red_line_is_outlined_in_white_and_the_outline_goes_with_it() -> void:
+	# The owner (2026-10-19), of the loop limit's red on the pink bar: "can
+	# we make it white border around red? To emphasize text a bit more?"
+	screen._report(DuelScreen.loop_limit_message("", true))
+	assert_eq(screen._prompt_label.get_theme_color("font_outline_color"),
+		DuelScreen.WARNING_OUTLINE, "a white border")
+	assert_eq(screen._prompt_label.get_theme_constant("outline_size"),
+		DuelScreen.WARNING_OUTLINE_SIZE)
+	assert_gt(DuelScreen.WARNING_OUTLINE_SIZE, 0, "a border that shows")
+	screen._on_flash_expired()
+	assert_eq(screen._prompt_label.get_theme_constant("outline_size"), 0,
+		"the calm line has none again")
+
+
 func test_a_refusal_is_still_the_only_non_pale_line() -> void:
 	screen._report("not enough mana for Grizzly Bears ({1}{G})")
 	assert_eq(screen._prompt_label.get_theme_color("font_color"),

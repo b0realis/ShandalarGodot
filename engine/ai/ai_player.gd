@@ -78,6 +78,13 @@ func prepare(game: MtgGame, seat: int) -> void:
 	_pump_plan_turn = -1
 	_refused.clear()
 	_refused_stamp = ""
+	# ...nor a loop half run, a board remembered or a loop spent (CARD-COMBOS,
+	# 2026-10-19): all three are keyed by turn number.
+	_combo_run.clear()
+	_combo_memo.clear()
+	_combo_spent.clear()
+	_guard_stamp = ""
+	_guard_seen.clear()
 
 
 func _study_cast_bonus(game: MtgGame, inst: CardInstance, value: float) -> float:
@@ -135,6 +142,52 @@ var _refused_stamp: String = ""
 var _pump_plan: Dictionary = {}
 var _pump_plan_turn := -1
 
+## CARD-COMBOS (2026-10-19, [member AiProfile.plays_combos],
+## `engine/ai/card_combos.gd`): the loop being RUN — its line, the round
+## it is on, how many rounds its purpose asked for, and the names its
+## costs eat and its cards choose themselves by ([method
+## CARD_COMBOS.steer]); `{}` when none is. Dictionaries, like
+## [member _refused], so a snapshot that unwinds the seat cannot see them
+## stale.
+var _combo_run: Dictionary = {}
+## The loop each board of this turn holds (or `{}`), by the board's
+## signature — the search runs once per board, not once per action.
+var _combo_memo: Dictionary = {}
+## `{"turn": n}` — the turn a loop last ran on: one run a turn.
+var _combo_spent: Dictionary = {}
+
+## THE RUNAWAY GUARD (2026-10-19). The Deck Lab found it on 0.50.38 and in
+## the published 0.50.34 alike: with Aluren on the table and a Shrieking
+## Drake in hand the pilot cast the Drake for nothing, its arrival
+## returned the only creature it had — itself — and the pilot cast it
+## again, for ever: 90 of 200 games stalled, and on the duel screen an AI
+## turn that never ends. Aluren lets ANY player cast free, so a human's
+## Aluren does it to the computer too, and a Man-o'-War has the same shape.
+## Two rules, on every profile and outside every reading:
+##  * THE POSITION ([member _guard_seen]): the public position — both
+##    tables, the stack, the pools, the life totals, the zone sizes, the
+##    floating effects ([method _public_signature]) — this seat has acted
+##    FROM is written down for the step; met again, the seat passes. An
+##    action that changes nothing, or a cycle that comes back where it
+##    started, is never made twice. A legitimate line never comes back:
+##    every cast, tap, payment or pump moves something in the signature.
+##  * THE COUNT ([constant GUARD_CAST_CAP], [constant GUARD_ABILITY_CAP]):
+##    the backstop for a cycle that DOES move something each time — the
+##    same Drake under a Soul Warden is a life a round. A card name cast
+##    eight times in a turn, or one ability activated thirty times, is
+##    left alone for the rest of the turn ([method _cast_gate], [method
+##    _ability_available]). Eight buyback casts or thirty breaths of
+##    firebreathing are more mana than any table in this pool makes. The
+##    loop runner (`card_combos.gd`) casts and activates through its own
+##    funnel and has its own cap.
+const GUARD_CAST_CAP := 8
+const GUARD_ABILITY_CAP := 30
+## The guard's own switch — ON for every pilot. A test turns it off to show
+## the engine's loop limit ([constant MtgGame.LOOP_LIMIT]) under it.
+var runaway_guard := true
+var _guard_stamp := ""
+var _guard_seen: Dictionary = {}
+
 
 func _init(p_pid: int, p_profile: AiProfile = null) -> void:
 	pid = p_pid
@@ -174,20 +227,86 @@ func act(game: MtgGame) -> String:
 		# for leaving the step.
 		game.end_damage_prevention(pid)
 		return "ends damage prevention"
+	# A LOOP OF OURS ON THE CHAIN (2026-10-19, CARD-COMBOS): the round's
+	# item resolves before anything else is weighed — the response reading
+	# would otherwise price our own Sliver ability as something to answer.
+	if profile.plays_combos and CARD_COMBOS.holds_the_chain(game, self):
+		game.pass_priority(pid)
+		return "pass"
+	# THE RUNAWAY GUARD (2026-10-19, [member _guard_seen]): a position this
+	# seat has already acted from this step is passed from.
+	if stamp != _guard_stamp:   # the step's stamp, as the refusal memo reads it
+		_guard_stamp = stamp
+		_guard_seen.clear()
+	var position := _public_signature(game)
+	if runaway_guard and _guard_seen.has(position):
+		if not bool(_guard_seen.get("said", false)):
+			_guard_seen["said"] = true
+			game.log_line("(AI: the same position again — it moves on)")
+		game.pass_priority(pid)
+		return "pass"
 	# Sorcery-speed development in our own main with an empty stack...
 	if game.active_player == pid and Mtg.is_main_step(game.current_step()) \
 			and game.stack.is_empty():
 		var did := _main_phase_action(game)
 		if did != "":
+			_guard_seen[position] = true
 			return did
 	# ...and PHASE 2: instant-speed responses everywhere else — counters,
 	# Fog, removal on attackers, combat tricks, firebreathing.
 	elif profile.holds_instants:
 		var response := _respond_action(game)
 		if response != "":
+			_guard_seen[position] = true
 			return response
 	game.pass_priority(pid)
 	return "pass"
+
+
+## The PUBLIC position, as one string, for the runaway guard: the turn,
+## the step and the stack; per player life, pool, the sizes of hand,
+## library, graveyard and exile; per permanent its id, tapped state,
+## damage, live power and toughness, counters, attachment, shields; how
+## many floating effects stand; and the engine's damage shields, delayed
+## triggers and the counters that move when one (or a token) is made. Nothing hidden is read (a hand is a
+## size), and nothing here decides a play — it only says "been here".
+func _public_signature(game: MtgGame) -> String:
+	var parts := PackedStringArray()
+	parts.append("%d|%d|%d" % [game.turn_number, game.current_step(), game.stack.size()])
+	for item in game.stack:
+		parts.append("s%d:%d" % [item.card.id if item.card != null else -1, item.targets.size()])
+	for p in game.players:
+		parts.append("p%d|%d|%d|%d|%d|%d|%d" % [p.life, p.hand.size(), p.library.size(),
+			p.graveyard.size(), p.exile.size(), p.mana_pool.total(), p.damage_prevention])
+		for color in p.mana_pool._mana:
+			parts.append("m%d:%d" % [int(color), int(p.mana_pool._mana[color])])
+		for inst in p.battlefield:
+			parts.append("%d|%d|%d|%d|%d|%d|%d|%d|%d|%d" % [inst.id, int(inst.tapped), inst.damage,
+				inst.cur_power, inst.cur_toughness, inst.counters.hash(), inst.attached_to,
+				inst.regeneration_shields, inst.prevention, inst.memory.size()])
+	var floating := 0
+	for list_name in [&"_floating", &"_animations", &"_base_pt", &"_keyword_grants",
+			&"_protection_grants", &"_ability_grants", &"_floating_statics", &"_losses",
+			&"_damage_immunities", &"_combat_prevention", &"_color_changes", &"_switches",
+			&"_landwalk_grants", &"_rampage_grants", &"_block_restrictions", &"_silence_strips"]:
+		var list: Variant = game.continuous.get(list_name)
+		if list is Array:
+			floating += (list as Array).size()
+	parts.append("f%d" % floating)
+	# The engine's own shields and promises: an en-Kor's redirected point,
+	# a metered prevention, a delayed trigger, damage waiting in the 1997
+	# window — and the counters that only ever move when one is made (or a
+	# token is), so a line that MAKES something is never a position come
+	# back. The layer timestamp is left out: a card that enters takes a new
+	# one, and the Drake that returns itself must look the same each time.
+	var points := 0
+	for e in game.damage_effects:
+		points += int(e.get("points", 0))
+	parts.append("d%d:%d:%d:%d:%d|%d:%d|i%d" % [game.damage_effects.size(), points,
+		game.static_damage_effects.size(), game.damage_pending.size(),
+		game._next_damage_effect_id, game.delayed_triggers.size(), game._next_delayed_id,
+		game._next_instance_id])
+	return "/".join(parts)
 
 
 ## Test/soak convenience: alternate both AIs until the game ends.
@@ -210,6 +329,12 @@ static func play_out(game: MtgGame, ai0: AiPlayer, ai1: AiPlayer,
 func _main_phase_action(game: MtgGame) -> String:
 	if _try_play_land(game):
 		return "played a land"
+	# A LOOP, run with a purpose (2026-10-19, CARD-COMBOS): before the cast
+	# ranking, which then spends whatever mana the loop made for it.
+	if profile.plays_combos:
+		var looped := CARD_COMBOS.main_action(game, self)
+		if looped != "":
+			return looped
 	# Mistake injection: a fumbled turn just stops developing (the classic
 	# weak-AI look) — rolled once per potential cast. Never into mana
 	# already tapped, never over the burn that wins ([method
@@ -1981,7 +2106,10 @@ func _answered_on_arrival(game: MtgGame, data: CardData) -> bool:
 				continue
 			if intent.removes:
 				return true
-			if intent.damage > 0 and intent.damage >= data.toughness:
+			# The body as it ARRIVES (2026-10-19, [method
+			# Evaluator.arrival_toughness]): a pinger is no answer to the
+			# Workhorse its four counters make a 4/4.
+			if intent.damage > 0 and intent.damage >= Evaluator.arrival_toughness(data):
 				return true
 	return false
 
@@ -1996,6 +2124,13 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 	var why := game.hand_lock_reason(inst)
 	if why != "":
 		return why
+	# THE RUNAWAY GUARD's count ([constant GUARD_CAST_CAP]).
+	var cast := 0
+	for data in game.spells_cast_this_turn[pid]:
+		if (data as CardData).card_name == inst.data.card_name:
+			cast += 1
+	if runaway_guard and cast >= GUARD_CAST_CAP:
+		return "cast %d times this turn" % cast
 	why = game.play_banned(pid, inst.data)
 	if why != "":
 		return why
@@ -2608,6 +2743,7 @@ const ALLIANCES_TACTICS := preload("res://engine/ai/alliances_tactics.gd")
 const PORTAL_TACTICS := preload("res://engine/ai/portal_tactics.gd")
 const MIRAGE_TACTICS := preload("res://engine/ai/mirage_tactics.gd")
 const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
+const CARD_COMBOS := preload("res://engine/ai/card_combos.gd")
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
@@ -2779,6 +2915,8 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 		return false
 	if _refused.has("%d:%d" % [inst.id, index]):
 		return false   # refused this step already — do not pay for it twice
+	if runaway_guard and int(inst.ability_uses.get(index, 0)) >= GUARD_ABILITY_CAP:
+		return false   # THE RUNAWAY GUARD's count (2026-10-19)
 	if ability.cost.has_x and (not priced_sacrifice or (inst.data.card_name not in ["Ice Cauldron", "Chromatic Armor", "Runed Arch"] and not HOMELANDS_TACTICS.sizes_x(self, ability) and not ALLIANCES_TACTICS.sizes_x(self, ability))):
 		return false   # Only explicitly sized X policies may spend mana.
 	if ability.library_exile_cost > game.players[pid].library.size(): return false
@@ -3797,14 +3935,17 @@ func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 ## mill is an artifact, the reading is what taking it AWAY is worth, and
 ## with no mill on the table it is 0.0. See [method _mill_relief].
 func _victim_value(game: MtgGame, inst: CardInstance) -> float:
+	# THEIR LOOP'S PIECES (2026-10-19, CARD-COMBOS): an Ashnod's Altar
+	# beside their Sliver Queen and Heartstone is the card to take.
+	var loop_threat := CARD_COMBOS.threat_value(game, self, inst)
 	if inst.is_creature():
-		return AiContextValue.of(game, inst, profile)
+		return AiContextValue.of(game, inst, profile) + loop_threat
 	if inst.is_land():
-		return Evaluator.land_value(game, inst)
+		return Evaluator.land_value(game, inst) + loop_threat
 	var value := Evaluator.permanent_value(inst, profile)
 	if not inst.cur_activated_abilities.is_empty():
 		value += 1.0
-	return value + _prison_relief(game, inst) + _mill_relief(game, inst)
+	return value + _prison_relief(game, inst) + _mill_relief(game, inst) + loop_threat
 
 
 ## THE SQUEEZE, READ OFF THEIR TABLE (2026-09-10, [member
@@ -4063,7 +4204,10 @@ func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
 	if not inst.is_land():
 		if priced and _dead_weight(game, inst):
 			return 0.0 - toll   # nothing it does is ours until it untaps
-		return AiContextValue.of(game, inst, profile) - toll
+		# A PIECE OF A LOOP IN REACH (2026-10-19, CARD-COMBOS) is not the
+		# body a cost eats while anything else can pay.
+		return AiContextValue.of(game, inst, profile) - toll \
+			+ CARD_COMBOS.keep_value(game, self, inst)
 	var me := game.players[pid]
 	var in_hand := 0
 	var biggest := 0
@@ -5435,6 +5579,13 @@ const SWEEP_BAR := 3.0
 func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		max_x: int, mode: int) -> Dictionary:
 	var data := inst.data
+	# A PIECE OF A LOOP (2026-10-19, CARD-COMBOS) is read first: the card
+	# that completes one is cast ahead of the rest, and the card a loop
+	# casts each round is held for it — above the Tempest reading that
+	# holds an Aluren serving both sides.
+	if profile.plays_combos:
+		var combo: Variant = CARD_COMBOS.spell_choice(game, self, inst)
+		if combo != null: return combo
 	var portal: Variant = PORTAL_TACTICS.spell_choice(game, self, inst, max_x)
 	if portal != null: return portal
 	var alliances: Variant = ALLIANCES_TACTICS.spell_choice(game, self, inst)
@@ -9406,6 +9557,9 @@ func _try_counter(game: MtgGame) -> String:
 ## Magician (bar 7.0) Forced a Llanowar Elves.
 func _counter_clears_bar(game: MtgGame, top: StackItem) -> bool:
 	var threat := Evaluator.card_value(top.card.data)
+	# THE LAST PIECE OF THEIR LOOP (2026-10-19, CARD-COMBOS) is countered
+	# at any bar; one that leaves the loop a piece short at most bars.
+	threat = maxf(threat, CARD_COMBOS.counter_threat(game, self, top.card, top.controller))
 	# An opposing counterspell aimed at OUR spell threatens that spell's
 	# whole value — counter-wars are judged by the contested prize.
 	for t in top.targets:
@@ -15152,12 +15306,15 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 	# Campaign fix-ai-a (w2-8, forecasts_tactics): our own card is kept by
 	# how soon it can be cast ([method _discard_worth]).
 	var reach := _next_turn_reach(game) if profile.forecasts_tactics and p_pid == pid else -1
+	# A PIECE OF A LOOP IN REACH (2026-10-19, CARD-COMBOS) is the last to go.
+	var keeps := p_pid == pid and profile.plays_combos
 	var worth := func(inst: CardInstance) -> float:
+		var piece := CARD_COMBOS.keep_value(game, self, inst) if keeps else 0.0
 		if keep_lands and inst.is_land():
 			return 5.0   # above any bear, below any angel
 		if reach >= 0:
-			return _discard_worth(inst, reach)
-		return Evaluator.card_value(inst.data)
+			return _discard_worth(inst, reach) + piece
+		return Evaluator.card_value(inst.data) + piece
 	hand.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		return worth.call(a) < worth.call(b))
 	var out: Array[CardInstance] = []
@@ -15183,6 +15340,13 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 		prompt: String) -> CardInstance:
 	var asked := current_choice()
+	# A LOOP'S OWN QUESTIONS (2026-10-19, CARD-COMBOS): the Sliver token the
+	# Altar eats, the Man-o'-War that returns itself — answered as the
+	# search that found the loop answered them.
+	if profile.plays_combos and p_pid == pid:
+		var steered := CARD_COMBOS.steer(game, self, candidates, asked)
+		if steered != null:
+			return steered
 	if prompt == "Choose a Plains to save":
 		for land in candidates:
 			if land.controller_id == p_pid: return land

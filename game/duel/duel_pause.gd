@@ -32,7 +32,7 @@ extends VersusPanel
 
 ## What the window was answered with. `RESUME` first, because it is the
 ## harmless one and it is what the focused button does.
-enum Action { RESUME, CONCEDE, EXIT_DUEL, MAIN_MENU, QUIT }
+enum Action { RESUME, CONCEDE, EXIT_DUEL, MAIN_MENU, QUIT, RESTART_TEST }
 
 ## The title, in the owner's own word, in the 59px band above the wells.
 const TITLE := "Pause"
@@ -45,6 +45,29 @@ const ENTRIES: Array[String] = [
 	"Return to main menu",
 	"Exit game",
 ]
+
+## THE SAME WINDOW OVER A TEST (Magic Battle's `Test hands`, 2026-10-19):
+## a test is not conceded, it is tried again or taken back to the bench, so
+## Concede's place holds `Restart test` — the same position, the same seed,
+## at once — and `Exit duel` goes back to the Test hands screen with the
+## position as it was, which is what "exit to the duel's config" means for
+## a test. Same five places, same rects; [constant TEST_ACTIONS] is what
+## each one answers.
+const TEST_ENTRIES: Array[String] = [
+	"Return to game",
+	"Restart test",
+	"Edit test",
+	"Return to main menu",
+	"Exit game",
+]
+const TEST_ACTIONS: Array[int] = [Action.RESUME, Action.RESTART_TEST,
+	Action.EXIT_DUEL, Action.MAIN_MENU, Action.QUIT]
+
+## The labels this window was built with ([constant ENTRIES], or
+## [constant TEST_ENTRIES] over a test) and the action each answers.
+var _labels: Array[String] = ENTRIES
+var _actions: Array[int] = [Action.RESUME, Action.CONCEDE, Action.EXIT_DUEL,
+	Action.MAIN_MENU, Action.QUIT]
 
 ## Where each entry sits on the 500x400 board, in the art's own
 ## coordinates. The wells end at y=251 and the seat names run to y=285, so
@@ -71,10 +94,13 @@ func build(config: DuelConfig) -> void:
 	# No deck lines: the *"playing with <deck>"* band is where the buttons
 	# go, and five of them need all of it.
 	var board := build_panel(config, TITLE, false)
+	if config != null and config.is_test():
+		_labels = TEST_ENTRIES
+		_actions = TEST_ACTIONS
 	var first: Button = null
-	for i in ENTRIES.size():
+	for i in _labels.size():
 		var rect: Rect2 = BUTTON_RECTS[i]
-		var button := UiChrome.menu_button(ENTRIES[i], rect.size, 14)
+		var button := UiChrome.menu_button(_labels[i], rect.size, 14)
 		button.position = rect.position
 		button.size = rect.size
 		button.pressed.connect(_press.bind(i))
@@ -90,14 +116,16 @@ func build(config: DuelConfig) -> void:
 		first.grab_focus()
 
 
-func _press(action: int) -> void:
-	chosen.emit(action)
+## The entry in place [param index] was pressed: its action, by the table
+## this window was built with.
+func _press(index: int) -> void:
+	chosen.emit(_actions[index])
 
 
 ## For tests and the screenshot tour: the button labels, in order.
 func button_labels() -> PackedStringArray:
 	var out := PackedStringArray()
-	for entry in ENTRIES:
+	for entry in _labels:
 		out.append(entry)
 	return out
 
@@ -105,7 +133,7 @@ func button_labels() -> PackedStringArray:
 ## Press one entry by its label. Returns false when this window has no such
 ## button, so a caller can tell a miss from a no-op.
 func press(label: String) -> bool:
-	var index := ENTRIES.find(label)
+	var index := _labels.find(label)
 	if index < 0:
 		return false
 	_press(index)

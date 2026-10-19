@@ -90,8 +90,10 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance, _max_x: int, mod
 	if keep > 0:
 		return lands_kept_choice(g, pilot, keep)
 	# A BODY MADE AS IT ENTERS (Minion of the Wastes' life, Dracoplasm's
-	# creatures): a printed 0/0 that the entry choice sizes.
-	if data.is_creature() and data.toughness <= 0:
+	# creatures): a printed 0/0 that the entry choice sizes. A 0/0 whose
+	# counters are FIXED (Workhorse, the Spikes) is not one of them: it
+	# arrives sized ([method Evaluator.arrival_toughness], 2026-10-19).
+	if data.is_creature() and Evaluator.arrival_toughness(data) <= 0:
 		var made: Variant = body_made_on_entry(g, pilot, inst)
 		if made != null:
 			return made
@@ -1131,12 +1133,18 @@ static func corpse_dance(g: MtgGame, pilot) -> Dictionary:
 		if grave[i].data.is_creature():
 			top = grave[i]
 			break
-	if top == null or top.data.power < 2:
+	if top == null:
+		return {}
+	# The body it ARRIVES as ([method Evaluator.arrival_power], 2026-10-19):
+	# a Workhorse is a printed 0/0 that comes back a 4/4, and read as
+	# printed it was never danced.
+	var power := Evaluator.arrival_power(top.data)
+	if power < 2:
 		return {}
 	var foe := g.opponent_of(pid)
-	if top.data.power >= g.players[foe].life and pilot._untapped_creatures(g, foe).is_empty():
+	if power >= g.players[foe].life and pilot._untapped_creatures(g, foe).is_empty():
 		return {"x": 0, "targets": [], "value": LETHAL_WORTH}
-	return {"x": 0, "targets": [], "value": float(top.data.power)}
+	return {"x": 0, "targets": [], "value": float(power)}
 
 
 ## VERDANT TOUCH (`animate_land`, `power`/`toughness`): one of OUR lands, the

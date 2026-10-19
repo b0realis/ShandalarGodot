@@ -76,6 +76,147 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## CARD-COMBOS: the loops the AI knows, finds and plays (2026-10-19)
+
+The owner, after the classic Tempest-era loops were checked against the
+engine: *"lets teach the combos but also strengthen the AI engine to
+discover such things. Lets have a dedicated CARD-COMBOS in AI source code
+that is dedicated to potential card combos and their effective play!"* —
+and, the same day, *"yes ai should also be aware of this"* of the +1/+1
+counters a creature enters with.
+
+- `engine/ai/card_combos.gd` (new; preloaded by `AiPlayer` as
+  `CARD_COMBOS`, no class_name, like the other tactics modules):
+  - the CATALOGUE, `RECIPES`: Sliver Queen engine (+ Heartstone + Ashnod's
+    Altar), Sliver Queen and Pandemonium, Earthcraft Slivers, Free
+    Man-o'-War (Aluren + Man-o'-War or Shrieking Drake + Soul Warden or
+    Pandemonium), Renewed Thopter (Enduring Renewal + a {0} artifact
+    creature + Altar or Goblin Bombardment), Powered Monolith. `standing`,
+    `assembled_focus`; the cast reading `spell_choice` (the completing
+    piece at `COMPLETE_WORTH`, a joining one at `ADVANCE_WORTH`, the card a
+    loop casts each round held); `keep_value` (pieces in reach are kept
+    from discards and costs); `threat_value` and `counter_threat` (their
+    public pieces, `THREAT_NEAR`/`THREAT_LIVE`, `COUNTER_NEAR`/`COUNTER_LIVE`).
+  - the SEARCH, `find_loop`: a depth-limited walk (`DEPTH` 3) on the search
+    journal over our own table's abilities and mana abilities and the
+    payment rows of the hand it began with (`_actions`, `_aims`), with
+    `LoopSeat` answering the walk's questions (a cost eats a token, then a
+    card the walk cast; a card the walk cast chooses itself) and
+    `MtgGame.probe_target_pick` aiming a trigger at its own card. A line
+    is a loop when `cycle_gains` sees the board come back with a gain and
+    nothing lost, TWICE (`_confirm`: the walk lends itself `LOAN` {C} and
+    the second round pays its own way). Budget in nodes, never a clock
+    (`AiProfile.combo_search_nodes`, `FOCUS_NODES`, `last_nodes`); run
+    only with a recycler on the table (`_motors`), once per board
+    (`_loop_here`, `AiPlayer._combo_memo`).
+  - the PLAY: `main_action` (our main phase, before the cast ranking),
+    `_purpose` (damage to lethal, the mana for a lethal X with its lands
+    spared, a swarm of `TOKEN_TARGET`, a token sink, `LIFE_STEP` life to
+    `LIFE_CEILING`, the hand's mana, cards to `CARD_FLOOR`; `MAX_ROUNDS`),
+    `_advance` (one engine action per `act()`; a round that gains nothing
+    or a step refused ends the run), `holds_the_chain`, `steer` (the run's
+    own cost and target questions). One run a turn (`AiPlayer._combo_spent`).
+- THE LOOP LIMIT [QoL], in `engine/mtg_game.gd`: `LOOP_LIMIT` (1000),
+  `LOOP_REFUSAL`, `loop_steps`, `loop_stopped_by`, `_count_loop_step`
+  (casts, activations, mana abilities, triggers put on the stack, per
+  step; reset in `_enter_step`; in `TURN_FIELDS`), the refusals in
+  `_cast_checks`, `activate_ability` and `mana_ability_refusal`, and no new
+  trigger in `_push_trigger` once stopped. `game/duel/duel_screen.gd`:
+  `loop_limit_message`, held on the Situation Bar from `_on_log_line`;
+  every red line on the bar is outlined in white (`WARNING_OUTLINE`,
+  `WARNING_OUTLINE_SIZE` 3, set in `_report`, taken off in
+  `_clear_warning_ink`).
+  `game/help/help_pages.gd`: Endless loops. Tests:
+  `tests/unit/test_loop_limit.gd`, `tests/ui/test_loop_limit_message.gd`.
+- THE RUNAWAY GUARD, in `engine/ai/ai_player.gd` on every profile:
+  `_guard_seen`/`_public_signature` (a public position this seat acted
+  from is passed from for the rest of the step) and `GUARD_CAST_CAP` /
+  `GUARD_ABILITY_CAP` (eight casts of one name, thirty activations of one
+  ability a turn, in `_cast_gate` and `_ability_available`). The Aluren +
+  Shrieking Drake turn that never ended (0.50.34). Tests:
+  `tests/ai/test_ai_runaway_guard.gd`.
+- `engine/ai/ai_player.gd`: `_combo_run`/`_combo_memo`/`_combo_spent`
+  (cleared by `prepare`), and the hooks — `act` (the chain),
+  `_main_phase_action`, `_size_and_aim` (first), `answer_card` (first),
+  `_own_value`, `answer_discard`, `_victim_value`, `_counter_clears_bar`;
+  `_answered_on_arrival` sizes the body as it arrives.
+- `engine/ai/ai_profile.gd`: `plays_combos` (Magician, Sorcerer, Wizard)
+  and `combo_search_nodes` (0 / 32 / 64).
+- `engine/ai/evaluator.gd`: `arrival_power`, `arrival_toughness`;
+  `card_value` sizes a creature card by the counters it enters with
+  (Workhorse 8, not 0). `tempest_spells.gd` (Corpse Dance, the 0/0 entry
+  branch) and `deck_study.gd` (`big_creature`) read the same.
+- `engine/mtg_game.gd`: `probe_target_pick` and `_probe_target` — a
+  search's own answer to a trigger's target in probe mode.
+- `tests/ai/test_card_combos.gd`: every loop by hand under both presets,
+  the open search finding each with no catalogue and one nobody wrote down
+  (synthetic cards), the refusals (Corpse Dance + Workhorse + Altar, Wall
+  of Blossoms with one Man-o'-War, a lone Basalt Monolith, the Queen and
+  the Altar without Heartstone, Mind Over Matter), budget, rewind, fair
+  play, the runs for each purpose and their caps, assembly, defence, the
+  arrival size. `tests/ai/test_ai_pack_9_spells_readers.gd`: Corpse Dance
+  raises a Workhorse.
+- `docs/ai-difficulty.md` (`plays_combos`, `combo_search_nodes`).
+
+## Test hands (2026-10-19)
+
+The owner: *"design a tool to start a duel with two predefined hands besides
+decks so a player can instantly test a combo. Maybe add to the bottom of the
+duel menu - test hand(s) button ? - where you select the cards (from
+selected decks) in hand for you and opponent (it can be random hand),
+select cards on table (tapped or not for each) and then selects whose turn
+it is and upon "go test" button you are instant in the turn"*.
+
+- `engine/duel_position.gd` (new, `class DuelPosition`): the hand-built
+  position, names only — per seat the chosen hand plus `random_cards`, the
+  table (`{"name", "tapped", "sick"}`), the graveyard (top last), the
+  library's top (next draw first) and the life; `active_player` and `step`
+  (one of `STEPS`: upkeep, draw, first main, beginning of combat, second
+  main, end). `refusal()`, `to_dict()` / defensive `from_dict()` (a
+  hand-edited settings.cfg), `duplicate_position()`, `count_of()`.
+- `engine/mtg_game.gd`: `begin_from_position(position)` — after `setup()`,
+  instead of the deal: each named card TAKEN from the shuffled library or
+  MADE (an extra, joins `deck_names`, the agents re-`prepare`d), the random
+  cards off the rest, the library tops back on top, the table placed as
+  permanents that were already there (`_place_from_position`: printed
+  enters-with counters kept; no ENTERS event, entry payment, copy or "as
+  enters"), lives, then turn 1 of the chosen player entered at the chosen
+  step (no untap step, the first draw not skipped). The log names the
+  table and graveyard and counts the hands (`_position_line`).
+- `game/test_hands_screen.gd/.tscn` (new, `class TestHandsScreen`): the
+  bench — two seat columns (life; Hand with `Random cards in hand`; On the
+  table with Tapped / Sick per row; Graveyard; Top of the library; `+ Add`
+  / `Clear` / × each), `Whose turn`, `Begins in`, `Show both hands`,
+  `Saved tests` (Load / Delete / Save under a name), `Back` / `Clear all` /
+  `Go test!`. The card picker (`open_picker`) is an [OriginalDialog] with a
+  search line, the seat's deck with the copies left or (`Any card in the
+  pool`) every enabled card, and the [CardPreview] at 0.8; extras are
+  marked `(not in deck)`. Remembered at `Go test!` under the settings key
+  `test_hands_last`; saved tests under `test_hands_saved`.
+- `game/setup_screen.gd`: `Test hands` as the last row of the scrolled
+  settings, under the match parameters, its purpose written to its right
+  (`_build_test_hands_row`; `_open_test_hands`: the same `_build_config` gates as
+  `Go!`, the choices remembered, the bench handed the config).
+- `game/duel/duel_config.gd`: `position`, `open_hands`, `is_test()`,
+  `for_test()` — one free-play duel, never for ante, never a private
+  hotseat, the position's lives, a copy of the position.
+- `game/duel/duel_screen.gd`: `_begin_test` (no ante, splash, toss,
+  opening hand, mulligan or running `duel_log.txt`), `restart_test` (same
+  config, same seed), `edit_test` (back to the bench), `_hand_over_to` /
+  `handed_over`, the strip's `Test hands` caption and `Restart test`
+  button (`_build_test_strip`), `Restart test` beside OK on the End of
+  Duel window, OK back to the bench.
+- `game/duel/duel_pause.gd`: `TEST_ENTRIES` / `TEST_ACTIONS` — `Restart
+  test` in Concede's place, `Edit test` in Exit duel's; `Action.RESTART_TEST`.
+- `game/help/help_pages.gd`: the page "Test hands — try a combo at once".
+- `tests/unit/test_duel_position.gd`: the engine half (placement, turn and
+  step, no arrival, counters, extras, the seed, refusals, sickness, the
+  plain values, the log, Corpse Dance + Workhorse and Sliver Queen +
+  Heartstone + Ashnod's Altar under Pack 9). `tests/ui/test_test_hands_screen.gd`:
+  the button's place, the carried seats, the picker, the rows, Go test!
+  into the turn, remembering, saved tests, the Pause window, Restart,
+  Edit, the refusal, Escape, Show both hands.
+
 ## Your own card back (2026-10-19)
 
 The owner: *"lets implement also an option in settings so user can use his
@@ -5248,6 +5389,12 @@ shandalar/
 │   │                          every card click. PROXIES are counted like
 │   │                          any other card — a proxy Black Lotus is
 │   │                          restricted — but never made playable
+│   ├── duel_position.gd     class DuelPosition — Magic Battle's `Test
+│   │                          hands` position: hands (+ random cards),
+│   │                          table (tapped/sick), graveyards, library
+│   │                          tops, lives, whose turn and the step;
+│   │                          MtgGame.begin_from_position builds it
+│   │                          (2026-10-19)
 │   ├── decision_agent.gd    class DecisionAgent — per-seat interface for
 │   │                          mid-resolution choices (discard picks,
 │   │                          yes/no costs, library searches, colour
@@ -5890,9 +6037,18 @@ shandalar/
 │   │   │                      mana cannot cast. Three invariants: deck
 │   │   │                      size fixed, copy limit counted across BOTH
 │   │   │                      piles, format still legal
+│   │   ├── card_combos.gd   CARD-COMBOS (2026-10-19, AiProfile.plays_combos):
+│   │   │                      the loops of the pool (RECIPES), a budgeted
+│   │   │                      loop search on the search journal
+│   │   │                      (find_loop), the run with a purpose and a cap
+│   │   │                      (main_action), the pieces kept and theirs
+│   │   │                      priced. tests/ai/test_card_combos.gd
 │   │   ├── evaluator.gd     class Evaluator — permanent/card values,
 │   │   │                      keyword worth, weighted position score
 │   │   │                      (mage-go's eval package, GDScript scale).
+│   │   │                      A creature card is sized as it ARRIVES
+│   │   │                      (arrival_power/arrival_toughness: the +1/+1
+│   │   │                      counters it enters with, 2026-10-19).
 │   │   │                      position_score takes an optional AiProfile
 │   │   │                      since 2026-09-10 and reads w_hand from it —
 │   │   │                      the one weight a pilot may carry its own
@@ -9857,6 +10013,13 @@ shandalar/
 │   │                          wears UiChrome.gold_when_chosen's ring and
 │   │                          the chosen one starts the focus ring
 │   │                          (2026-09-27, the pad walks from it).
+│   ├── test_hands_screen.gd/.tscn  class TestHandsScreen — `Test hands`,
+│   │                          the bench the setup screen's button opens:
+│   │                          per seat the hand, table, graveyard,
+│   │                          library top and life; whose turn and the
+│   │                          step; saved tests; `Go test!` starts the
+│   │                          duel in that turn (DuelConfig.for_test,
+│   │                          2026-10-19)
 │   ├── deck_groups.gd       class DeckGroups — WHERE A DECK CAME FROM,
 │   │                          the heading it appears under in the deck
 │   │                          list. `User-created` is DERIVED from the

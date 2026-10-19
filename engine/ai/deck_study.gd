@@ -95,7 +95,7 @@ static func classify(data: CardData) -> Array[String]:
 		out.append("creature")
 		if data.cost.mana_value() <= 2 and not data.keywords.has(Mtg.Keyword.DEFENDER):
 			out.append("cheap_creature")
-		if data.cost.mana_value() >= 5 or data.power >= 5:
+		if data.cost.mana_value() >= 5 or Evaluator.arrival_power(data) >= 5:
 			out.append("big_creature")
 		# Shadow (CR 702.28, Pack 9) is evasion as good as flying's: almost
 		# nothing in the pool blocks a shade. No older card has it.
