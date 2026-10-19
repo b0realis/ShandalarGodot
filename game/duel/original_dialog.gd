@@ -641,8 +641,109 @@ static func _stone_box(tex: ImageTexture) -> StyleBoxTexture:
 
 ## The ruled Situation Bar as a StyleBox. Patch margin 4 keeps the outline
 ## and the inset rule crisp while the stone between them tiles.
+##
+## IN THE FRAME THE PLAYER CHOSE ([method DuelOptions.bar_frame], the
+## Options screen, 2026-10-19): ShandalarGodot is the rule above, the three
+## Classic frames are [method ridged_texture]'s ridge. A ridge is wider
+## than the rule, so its sides keep at least a pixel of stone between the
+## frame and what the bar holds; the top and bottom keep the margin asked
+## for, because the title bars that pass 2 have a fixed height.
 static func bar_style(content_margin := 6.0) -> StyleBox:
-	return ruled_style("message_panel", content_margin)
+	var frame := DuelOptions.bar_frame()
+	var tex := ridged_texture("message_panel", frame) \
+		if frame != DuelOptions.BAR_FRAME_SHANDALARGODOT else null
+	if tex == null:
+		return ruled_style("message_panel", content_margin)
+	var band := 2 * ridge_width(frame)
+	var box := StyleBoxTexture.new()
+	box.texture = tex
+	box.texture_margin_left = band + 2
+	box.texture_margin_top = band + 2
+	box.texture_margin_right = band + 2
+	box.texture_margin_bottom = band + 2
+	box.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	box.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	box.set_content_margin_all(content_margin)
+	box.content_margin_left = maxf(content_margin, band + 1.0)
+	box.content_margin_right = maxf(content_margin, band + 1.0)
+	return box
+
+
+# ------------------------------------------------------ the 1997 ridge --
+
+## How much lighter and darker than the stone's own average colour the
+## Classic pale and Classic thin lines are — a gain, like
+## [method bar_button_texture]'s, so they keep the stone's warm cast. Read
+## off the owner's photo: its pale line and its dark one sit either side of
+## the stone, the pale one about as far up as the Done button's face.
+const RIDGE_LIGHT := 1.6
+const RIDGE_DARK := 0.45
+
+
+## Each line of a Classic frame, in 1997 pixels: the rule's two, and one
+## for Classic thin.
+static func ridge_width(frame: String) -> int:
+	return 1 if frame == DuelOptions.BAR_FRAME_CLASSIC_THIN else RULE_WIDTH
+
+
+## [param key]'s ground with the 1997 bar's ridge painted round it, in
+## [param frame]'s colours, or null when the skin has no such ground.
+static func ridged_texture(key: String, frame: String) -> ImageTexture:
+	var art := GameSkin.texture(key)
+	if art == null:
+		return null
+	var img: Image = art.get_image().duplicate()
+	img.convert(Image.FORMAT_RGBA8)
+	var pale := HIGHLIGHT
+	var dark := INK
+	if frame != DuelOptions.BAR_FRAME_CLASSIC:
+		var mean := _mean_colour(img)
+		pale = Color(minf(mean.r * RIDGE_LIGHT, 1.0), minf(mean.g * RIDGE_LIGHT, 1.0),
+			minf(mean.b * RIDGE_LIGHT, 1.0))
+		dark = Color(mean.r * RIDGE_DARK, mean.g * RIDGE_DARK, mean.b * RIDGE_DARK)
+	return _ridge(img, pale, dark, ridge_width(frame), GameSkin.scale_of(art))
+
+
+## THE RIDGE, measured on the owner's photo of the 1997 bar (2026-10-19):
+## two lines all the way round, an outer one [param pale] along the top and
+## left and [param dark] along the bottom and right, and an inner one the
+## other way round — so a pale line runs on all four sides, with a dark one
+## inside it at the top and left and outside it at the bottom and right.
+## The corners are mitred as [method _rule]'s are: the nearer edge wins,
+## the bottom and right taking a tie.
+static func _ridge(img: Image, pale: Color, dark: Color, line: int,
+		scale := 1) -> ImageTexture:
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	var band: int = line * scale
+	for y in h:
+		for x in w:
+			var near_tl: int = mini(y, x)
+			var near_br: int = mini(h - 1 - y, w - 1 - x)
+			var near: int = mini(near_tl, near_br)
+			if near >= 2 * band:
+				continue
+			var outer := near < band
+			if near_br <= near_tl:
+				img.set_pixel(x, y, dark if outer else pale)
+			else:
+				img.set_pixel(x, y, pale if outer else dark)
+	return GameSkin.texture_of(img, img.get_size() / scale)
+
+
+## The average colour of [param img], from every other pixel each way.
+static func _mean_colour(img: Image) -> Color:
+	var sum := Vector3.ZERO
+	var n := 0
+	for y in range(0, img.get_height(), 2):
+		for x in range(0, img.get_width(), 2):
+			var c := img.get_pixel(x, y)
+			sum += Vector3(c.r, c.g, c.b)
+			n += 1
+	if n == 0:
+		return Color.BLACK
+	sum /= float(n)
+	return Color(sum.x, sum.y, sum.z)
 
 
 # ------------------------------------------------------------ the button --

@@ -382,6 +382,75 @@ static func _coin_flip_style_or_default(style: String) -> String:
 		else COIN_FLIP_DEFAULT
 
 
+# --------------------------------------------- THE SITUATION BAR'S FRAME --
+#
+# `[QoL]`, chosen on the Options screen (2026-10-19). The owner, over a
+# photo of the 1997 bar: *"Original 1997 shandalar has this border around
+# central messages"* — a pale ridge running all the way round the bar. He
+# asked to keep the frame the bar wears today as well, and to offer the
+# ridge three ways: *"Today we name ShandalarGodot, option B we name
+# Classic, option A we name Classic pale and option C we name Classic thin.
+# (Default is ShandalarGodot)"*. Drawn by [method OriginalDialog.bar_style]
+# — on the Situation Bar and on the combat window's and the duel log's
+# title bars, which are the same stone ("one set of furniture") — from
+# the next duel.
+
+## The [Settings] key. Ours, so ours in spelling too.
+const BAR_FRAME_KEY := "bar_frame"
+
+## Pale along the top and left, slate along the bottom and right — the
+## frame the bar has worn since 2026-09-03 ([method OriginalDialog._rule]).
+const BAR_FRAME_SHANDALARGODOT := "shandalargodot"
+## The 1997 ridge in the dialogs' own pale blue-grey and dark ink.
+const BAR_FRAME_CLASSIC := "classic"
+## The 1997 ridge in the bar stone's own light and dark — the nearest to
+## the photo.
+const BAR_FRAME_CLASSIC_PALE := "classic_pale"
+## Classic pale with its lines half as wide.
+const BAR_FRAME_CLASSIC_THIN := "classic_thin"
+
+const BAR_FRAME_DEFAULT := BAR_FRAME_SHANDALARGODOT
+
+## The four, in the owner's order, ours first.
+const BAR_FRAMES: Array[Dictionary] = [
+	{"key": BAR_FRAME_SHANDALARGODOT, "label": "ShandalarGodot",
+		"blurb": "This game's own frame: pale along the top and left, "
+			+ "slate along the bottom and right."},
+	{"key": BAR_FRAME_CLASSIC, "label": "Classic",
+		"blurb": "The 1997 bar's ridge all the way round, in pale "
+			+ "blue-grey and dark ink."},
+	{"key": BAR_FRAME_CLASSIC_PALE, "label": "Classic pale",
+		"blurb": "The 1997 bar's ridge all the way round, in the light "
+			+ "and dark of the bar's own stone."},
+	{"key": BAR_FRAME_CLASSIC_THIN, "label": "Classic thin",
+		"blurb": "Classic pale with lines half as wide."},
+]
+
+
+## The frame the bars wear: a key of [constant BAR_FRAMES]. Anything
+## else stored reads as the default.
+static func bar_frame() -> String:
+	var raw: Variant = Settings.get_value(BAR_FRAME_KEY, BAR_FRAME_DEFAULT)
+	return _bar_frame_or_default(raw if raw is String else "")
+
+
+## Choose the frame. An unknown key is refused into the default.
+static func set_bar_frame(frame: String) -> void:
+	Settings.set_value(BAR_FRAME_KEY, _bar_frame_or_default(frame))
+
+
+## One row of [constant BAR_FRAMES] by its key, or `{}`.
+static func bar_frame_row(frame: String) -> Dictionary:
+	for row in BAR_FRAMES:
+		if row["key"] == frame:
+			return row
+	return {}
+
+
+static func _bar_frame_or_default(frame: String) -> String:
+	return frame if not bar_frame_row(frame).is_empty() else BAR_FRAME_DEFAULT
+
+
 ## The layout: `Standard` or `Advanced`.
 ##
 ## SIMPLIFIED: only Standard is built. Advanced removes the permanent

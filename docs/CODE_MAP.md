@@ -76,6 +76,26 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## The Situation Bar's frame (2026-10-19)
+
+- `game/duel/duel_options.gd`: `BAR_FRAME_KEY` (`bar_frame`), the four
+  frames `BAR_FRAMES` (ShandalarGodot, the default; Classic; Classic pale;
+  Classic thin), `bar_frame()` (an unknown or wrong-kind value reads as
+  the default), `set_bar_frame()`, `bar_frame_row()`.
+- `game/duel/original_dialog.gd`: `bar_style` draws the chosen frame —
+  ShandalarGodot is `ruled_style` as before; the Classic frames are
+  `ridged_texture` / `_ridge`: a pale line all round with a dark one
+  inside it along the top and left and outside it along the bottom and
+  right, 2 px lines (`ridge_width`: 1 for Classic thin), Classic in
+  `HIGHLIGHT` + `INK`, Classic pale and thin in the stone's mean colour
+  times `RIDGE_LIGHT` / `RIDGE_DARK`; a ridge's sides keep a pixel of
+  stone beside the content. The Situation Bar and the combat window's and
+  duel log's title bars all wear it, from the next duel.
+- `game/options_screen.gd`: `_add_bar_frame_section` under Hand display —
+  the `BarFrame` list and the `BarFramePreview` piece of bar wearing the
+  choice.
+- `tests/ui/test_bar_frame.gd`.
+
 ## CARD-COMBOS: the loops the AI knows, finds and plays (2026-10-19)
 
 The owner, after the classic Tempest-era loops were checked against the

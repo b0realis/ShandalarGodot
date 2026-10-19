@@ -149,6 +149,8 @@ func _ready() -> void:
 	UiChrome.shadowed_button(hand_style)
 	content.add_child(hand_style)
 
+	_add_bar_frame_section(content)
+
 	_add_coin_toss_section(content)
 
 	_add_rules_section(content)
@@ -1033,6 +1035,36 @@ func _add_music_choice(content: VBoxContainer) -> void:
 ## animation instead — [method CoinToss.effective_style] does the
 ## substitution, and it falls back to the RECREATION rather than to
 ## instant: someone who asked to watch the toss should still watch it.
+## THE SITUATION BAR'S FRAME (2026-10-19, `[QoL]`) — the four frames of
+## [constant DuelOptions.BAR_FRAMES], ShandalarGodot first and the default,
+## with a piece of the bar under the list wearing the one chosen, so the
+## choice is seen rather than described (under, not beside: the panel is
+## [constant PANEL_WIDTH] wide). The duel reads it as it builds its bars,
+## so it holds from the next duel.
+func _add_bar_frame_section(content: VBoxContainer) -> void:
+	content.add_child(UiChrome.body_label("Situation Bar frame:"))
+	var picker := OptionButton.new()
+	picker.name = "BarFrame"
+	var chosen := DuelOptions.bar_frame()
+	for i in DuelOptions.BAR_FRAMES.size():
+		var frame: Dictionary = DuelOptions.BAR_FRAMES[i]
+		picker.add_item(String(frame["label"]), i)
+		picker.set_item_tooltip(i, String(frame["blurb"]))
+		if frame["key"] == chosen:
+			picker.selected = i
+	UiChrome.shadowed_button(picker)
+	content.add_child(picker)
+	var preview := PanelContainer.new()
+	preview.name = "BarFramePreview"
+	preview.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	preview.add_theme_stylebox_override("panel", OriginalDialog.bar_style(5.0))
+	preview.add_child(OriginalDialog.label("Main phase: cast spells, play land", 16))
+	content.add_child(preview)
+	picker.item_selected.connect(func(index: int) -> void:
+		DuelOptions.set_bar_frame(String(DuelOptions.BAR_FRAMES[index]["key"]))
+		preview.add_theme_stylebox_override("panel", OriginalDialog.bar_style(5.0)))
+
+
 func _add_coin_toss_section(content: VBoxContainer) -> void:
 	content.add_child(UiChrome.body_label("Opening coin toss:"))
 

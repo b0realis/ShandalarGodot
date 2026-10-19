@@ -18811,6 +18811,29 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-19 — The Situation Bar's frame (0.50.40) [QoL]
+
+The owner, over a photo of the 1997 bar: *"Original 1997 shandalar has
+this border around central messages"* — the frame round the whole bar.
+Measured on the photo: a pale line all the way round, with a dark line
+inside it along the top and left and outside it along the bottom and
+right, each about 2 pixels; ours had only the 2-pixel rule of 2026-09-03
+(pale top and left, slate bottom and right), which hardly reads as a
+frame on the dark board. Three ridges were rendered in the running duel
+and the owner kept all of them beside today's, as an Options choice:
+*"Today we name ShandalarGodot, option B we name Classic, option A we
+name Classic pale and option C we name Classic thin. (Default is
+ShandalarGodot)"*.
+
+- `Options → Situation Bar frame:` with a piece of the bar under the list
+  wearing the choice; settings key `bar_frame`.
+- Classic: the ridge in the dialogs' pale blue-grey and dark ink. Classic
+  pale: in the stone's own light and dark (its mean colour × 1.6 and
+  × 0.45). Classic thin: Classic pale with 1-pixel lines.
+- The combat window's and the duel log's title bars are the same stone
+  and wear the same frame.
+- Tests: `tests/ui/test_bar_frame.gd`.
+
 ## 2026-10-19 — The loop limit (0.50.39) [QoL]
 
 The owner: *"Yes all infinity loops should be accompanied by a message -
