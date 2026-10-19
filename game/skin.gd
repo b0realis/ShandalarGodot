@@ -170,7 +170,9 @@ static var _art_missing: Dictionary = {}
 
 ## THE SEASONS' CARD BACKS: two pictures of this project's own
 ## (`game/art/`) that every card back in the game wears for a while each
-## year, over the skin's back or the plain one alike.
+## year, over the skin's back or the plain one alike — not over a picture
+## of the player's own ([CardBack]), and not at all with the Options
+## switch off ([method seasons_on]).
 const SEASON_BACKS := {"halloween": "card_back_moon", "christmas": "card_back_holly"}
 ## The date [method season] reads, as `{"month": m, "day": d}`; empty
 ## means the player's own calendar, today. The test runner pins it
@@ -193,6 +195,25 @@ static func season() -> String:
 	var date := season_date if not season_date.is_empty() \
 		else Time.get_date_dict_from_system()
 	return season_for(int(date.get("month", 0)), int(date.get("day", 0)))
+
+
+## Options → Card back → `Seasonal card backs`. The owner, 2026-10-19:
+## *"for seasonal card backs lets implement an on/off in options (as some
+## users may not like this)"*. On unless the player switched it off; the
+## key is written only then.
+const KEY_SEASONS := "seasonal_card_backs"
+
+
+static func seasons_on() -> bool:
+	return bool(Settings.get_value(KEY_SEASONS, true))
+
+
+## The season's back when today is in one and the switch is on, else null.
+static func season_back() -> Texture2D:
+	var seasonal := season()
+	if seasonal == "" or not seasons_on():
+		return null
+	return our_art(String(SEASON_BACKS[seasonal]))
 
 
 ## THE CATALOGUE (2026-10-17). A skin may carry `catalogue.txt` at its
@@ -610,13 +631,25 @@ static func lift_alpha(small: Image, big: Image) -> Image:
 
 ## Texture for a manifest key ("card_frame_red", "duel_pattern_green"...)
 ## or null when the skin doesn't provide it.
+##
+## THE CARD BACK HAS TWO PLACES ABOVE THE SKIN: the player's own picture
+## ([CardBack], Options → Card back) first, whatever the day — they chose
+## it — then the season's ([method season_back]); the skin's back, or
+## null for the plain one, after both.
 static func texture(key: String) -> Texture2D:
 	if key == "card_back":
-		var seasonal := season()
-		if seasonal != "":
-			var back := our_art(String(SEASON_BACKS[seasonal]))
-			if back != null:
-				return back
+		var own := CardBack.texture()
+		if own != null:
+			return own
+		var seasonal := season_back()
+		if seasonal != null:
+			return seasonal
+	return skin_texture(key)
+
+
+## The skin's own picture for [param key], or null — [method texture]
+## without the player's card back or the season's.
+static func skin_texture(key: String) -> Texture2D:
 	if _texture_cache.has(key):
 		return _texture_cache[key]
 	var result: Texture2D = null

@@ -76,6 +76,46 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## Your own card back (2026-10-19)
+
+The owner: *"lets implement also an option in settings so user can use his
+own photo as card back (lets also document and tell the user what format
+and pixel*pixel the game expects the file to be!)"*.
+
+- `game/card_back.gd` (new, `class CardBack`): the player's picture,
+  `card_back.png` in the game's folder (`GamePaths.card_back()`; on
+  Android the files folder). `adopt(path)` / `adopt_bytes` read a PNG, JPG
+  or WEBP by its bytes (`kind_of`, checked before Godot's loader so a
+  stray file is a refusal and not an error line), turn it by its EXIF
+  orientation (`exif_orientation`, `oriented`: all eight cases, matched
+  against Pillow's `exif_transpose`), fit it (`fitted`: the middle in a
+  card's shape, `trim_rect`, whole within `SHAPE_SLACK` 2%; halved by
+  `shrink_x2`, then Lanczos to `SIZE` 456x646, twice the 1997 back) and
+  save it as PNG; "" or why not (`NOT_A_PICTURE`, `TOO_BIG`, `NOT_SAVED`,
+  `NOT_READ`). `forget()` deletes every name `candidates()` reads.
+  `texture()` reads once a run, drawn at the 1997 back's 228x323
+  (`GameSkin.texture_of`). `web_open`/`web_poll`: the browser's file box,
+  `CHOOSE_JS`, the skin picker's way for a picture.
+- `game/skin.gd`: `texture("card_back")` is the player's picture first,
+  then as before; `skin_texture(key)` is the skin's own.
+- `game/duel/mini_card.gd`: `face_down_key(back)` puts the back's id in
+  the shared face-down box's key, so a newly chosen back is not handed
+  the old one's box.
+- `game/options_screen.gd`: `_add_card_back_section` under Skin: the back
+  worn, small (`CardBackThumb`, `card_back_box`), whose it is
+  (`card_back_line`), `Choose...` (`_choose_card_back`: the platform's
+  file box, `*.png`/`*.jpg`/`*.jpeg`/`*.webp` in both cases, opening in
+  the Pictures folder; `_poll_card_back` in a browser), `Remove`, a
+  refusal line, and `CARD_BACK_NOTE`: the kind and size of picture.
+- `game/paths.gd`: `DEFAULT_CARD_BACK`, `card_back()` — a place with no key.
+- `docs/player-files.md` ("Your card back"), `docs/setup.txt`,
+  `docs/handhelds.md` (the Quest's `adb` copy): what to give it.
+- `tests/ui/test_card_back.gd`: the shapes, the kinds, both EXIF byte
+  orders and a cut-short block, the kept copy and its size, worn over
+  everything, removed, put there by hand, the refusals, a face-down card
+  taking the new back (mutation-checked against the old shared key), the
+  Options rows.
+
 ## The getting-started page (2026-10-19)
 
 A player asked on Reddit for an installation video: adding the card packs
@@ -10225,6 +10265,20 @@ shandalar/
 │   │                          manage the separate private organiser-save
 │   │                          location (user://tournaments), validated and
 │   │                          remembered only on explicit GUI choice.
+│   │                          card_back() (2026-10-19): the player's own
+│   │                          card back, user://card_back.png — a place
+│   │                          with no key (CardBack writes it).
+│   ├── card_back.gd         class CardBack — YOUR OWN CARD BACK ([QoL],
+│   │                          2026-10-19): Options > Card back > Choose...
+│   │                          reads a PNG/JPG/WEBP by its bytes, turns it
+│   │                          by its EXIF orientation, trims the middle to
+│   │                          a card's shape and keeps it as a 456x646 PNG
+│   │                          at GamePaths.card_back(); a picture put there
+│   │                          by hand is fitted as it is read. texture() is
+│   │                          read once a run and worn by every card back
+│   │                          (GameSkin.texture), over the skin's; forget()
+│   │                          is Remove. web_open/web_poll: the browser's
+│   │                          file box
 │   ├── portrait_library.gd  class PortraitLibrary — THE PLAYER'S OWN FACE
 │   │                          (the duelist above it is DERIVED from the
 │   │                          deck's colour; this one is CHOSEN). Scans

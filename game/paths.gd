@@ -62,6 +62,13 @@ const DEFAULT_MUSIC := "user://music"
 const DEFAULT_TOURNAMENTS := "user://tournaments"
 const DEFAULT_DRAFTS := "user://decks"
 
+## ONE PLACE HAS NO KEY: `card_back.png`, the player's own card back
+## ([CardBack], 2026-10-19). It is one file the game writes itself from
+## Options → Card back → `Choose...`, a copy fitted to a card, so there
+## is nothing to point elsewhere; a picture put there by hand is worn
+## too. On Android it sits in the files folder beside the three above.
+const DEFAULT_CARD_BACK := "user://card_back.png"
+
 ## The keys a player may set by hand, in the order the Options note
 ## names them.
 const PLACE_KEYS: Array[String] = [KEY_SKIN_ZIP, KEY_SKIN_FOLDER,
@@ -135,6 +142,11 @@ static func portraits_folder() -> String:
 ## The player's own music ([MusicLibrary]).
 static func music_folder() -> String:
 	return _place(KEY_MUSIC, player_place(DEFAULT_MUSIC, android_files_dir()))
+
+
+## The player's own card back ([CardBack]) — see [constant DEFAULT_CARD_BACK].
+static func card_back() -> String:
+	return player_place(DEFAULT_CARD_BACK, android_files_dir())
 
 
 ## Private LAN organiser checkpoints; no transport keys or live hidden zones.

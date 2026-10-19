@@ -4,17 +4,27 @@ extends GutTest
 ## card back is one of the two pictures in `game/art/`; on any other day
 ## it is what it always was. The suite itself runs on a day in no season
 ## (`tests/support/pin_calendar.gd`); each test here sets its own day and
-## puts that one back.
+## puts that one back. Options → Card back → `Seasonal card backs`
+## ([method GameSkin.seasons_on]) switches them off, and the player's own
+## picture ([CardBack], `test_card_back.gd`) is worn over them.
 
 var _pinned: Dictionary
+var _seasons: Variant = null
 
 
 func before_each() -> void:
 	_pinned = GameSkin.season_date.duplicate()
+	_seasons = Settings.get_value(GameSkin.KEY_SEASONS, null) \
+		if Settings.has_value(GameSkin.KEY_SEASONS) else null
+	Settings.clear_value(GameSkin.KEY_SEASONS)
 
 
 func after_each() -> void:
 	GameSkin.season_date = _pinned
+	if _seasons == null:
+		Settings.clear_value(GameSkin.KEY_SEASONS)
+	else:
+		Settings.set_value(GameSkin.KEY_SEASONS, _seasons)
 
 
 func test_the_seasons_by_the_calendar() -> void:
@@ -80,3 +90,18 @@ func test_the_two_backs_are_card_shaped() -> void:
 		var aspect := float(tex.get_width()) / tex.get_height()
 		var card := CardPreview.SIZE.x / CardPreview.SIZE.y
 		assert_almost_eq(aspect, card, card * 0.02, "%s is a card's shape" % key)
+
+
+func test_switched_off_the_back_is_the_year_round_one() -> void:
+	GameSkin.season_date = {"month": 10, "day": 31}
+	var moon := GameSkin.our_art("card_back_moon")
+	assert_true(GameSkin.seasons_on(), "on by default")
+	assert_eq(GameSkin.season_back(), moon)
+	Settings.set_value(GameSkin.KEY_SEASONS, false)
+	assert_null(GameSkin.season_back())
+	assert_eq(GameSkin.texture("card_back"), GameSkin.skin_texture("card_back"))
+	assert_ne(GameSkin.texture("card_back"), moon)
+	Settings.set_value(GameSkin.KEY_SEASONS, "off")
+	assert_false(GameSkin.seasons_on(), "a hand-typed off reads as meant")
+	Settings.clear_value(GameSkin.KEY_SEASONS)
+	assert_eq(GameSkin.texture("card_back"), moon)

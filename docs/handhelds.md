@@ -420,6 +420,15 @@ told to trust this computer — put it on and answer the prompt.
    adb shell cp /sdcard/Download/my_face.png /sdcard/Android/data/com.b0realis.shandalar/files/portraits/
    ```
 
+   A card back of your own goes the same way into the files folder
+   itself, named `card_back.png` (a PNG, JPG or WEBP, upright, 456 x 646
+   pixels is best; `docs/player-files.md`, "Your card back"):
+
+   ```sh
+   adb push my_back.png /sdcard/Download/
+   adb shell cp /sdcard/Download/my_back.png /sdcard/Android/data/com.b0realis.shandalar/files/card_back.png
+   ```
+
    The sixteen faces the game ships are in the APK already and need no
    copy.
 4. In the headset, the game is under **Library > Unknown Sources**. The

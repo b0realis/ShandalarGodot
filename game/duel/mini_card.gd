@@ -2170,6 +2170,14 @@ var _style_key := ""
 const FACE_DOWN_KEY := "down"
 
 
+## The face-down look's key for [param back]: [constant FACE_DOWN_KEY],
+## and the picture's id with it — a card back chosen in Options
+## ([CardBack]) is a new picture, and the shared box built for the old
+## one must not be handed out for it.
+static func face_down_key(back: Texture2D) -> String:
+	return FACE_DOWN_KEY if back == null else "%s#%d" % [FACE_DOWN_KEY, back.get_instance_id()]
+
+
 func _apply_face_down_style() -> void:
 	var back := GameSkin.texture("card_back")
 	# THE RING STILL GOES ON. It is a question about the PROMPT — "you may
@@ -2177,10 +2185,11 @@ func _apply_face_down_style() -> void:
 	# masked creature that is a legal target is ringed like any other and
 	# says nothing about what it is.
 	_refresh_highlight_ring(back != null)
-	if _style_key == FACE_DOWN_KEY:
+	var key := face_down_key(back)
+	if _style_key == key:
 		return
-	_style_key = FACE_DOWN_KEY
-	var pair := _boxes_for(FACE_DOWN_KEY, back != null)
+	_style_key = key
+	var pair := _boxes_for(key, back != null)
 	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
 		add_theme_stylebox_override(state, pair[0])
 
@@ -2228,7 +2237,7 @@ func _boxes_for(key: String, skinned: bool) -> Array:
 	if _box_cache.has(key):
 		return _box_cache[key]
 	var pair: Array = []
-	if key == "down":
+	if key.begins_with(FACE_DOWN_KEY):
 		if skinned:
 			var tex := StyleBoxTexture.new()
 			tex.texture = GameSkin.texture("card_back")

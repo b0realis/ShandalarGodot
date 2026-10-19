@@ -18811,6 +18811,32 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-19 — Your own card back (0.50.38)
+
+The owner: *"lets implement also an option in settings so user can use his
+own photo as card back (lets also document and tell the user what format
+and pixel*pixel the game expects the file to be!)"*.
+
+- **Options → Card back.** A row under Skin shows the back the cards wear,
+  small, and whose it is; **Choose...** opens the platform's file box (the
+  page's own in a browser) for a PNG, JPG or WEBP, and **Remove** goes back
+  to the skin's back. Under it, one line says what the game wants: upright,
+  456 x 646 pixels, a card's shape.
+- **The game keeps a fitted copy**, `card_back.png` in its own folder,
+  so the photo can move or go: the middle of the picture in a card's
+  shape (a landscape photo loses its sides; within 2% of the shape, like a
+  63x88 mm scan, it is used whole), at 456 x 646, twice the 1997 back's
+  228 x 323 and the 2x skin's own. A phone photo is turned by its EXIF
+  orientation, which Godot's loader does not read: all eight cases were
+  checked against Pillow's. A picture put there by hand is read and fitted
+  the same way at the start.
+- **Every card back wears it**: the library, a face-down card, a hot-seat
+  hand, the big card's empty slot. The face-down card's shared style box
+  is keyed by the picture now, or a back chosen during a run would have
+  kept the old one's box.
+- Documented for players in `docs/player-files.md`, `docs/setup.txt` and,
+  for the Quest's `adb` copy, `docs/handhelds.md`.
+
 ## 2026-10-19 — The getting-started page
 
 A player asked on Reddit for an installation video: adding the card packs

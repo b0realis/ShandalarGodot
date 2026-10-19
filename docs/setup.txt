@@ -99,6 +99,8 @@ and inside it:
     decks/                    decks you save        (*.deck)
     decks/export/             decks exported for the 1997 program (*.dck)
     portraits/                your own portraits    (*.png, *.jpg, *.webp)
+    card_back.png             your own card back, once you choose one
+                              in Options > Card back
     music/                    your own music        (*.wav, *.ogg, *.mp3)
     original_skin/            the skin folder: a 1997 skin as loose files
     skins/                    skin zips you chose or dropped on the game
@@ -163,6 +165,18 @@ alone dresses the game and the zip stays closed: a file missing from
 the folder is drawn by the game, not taken from the zip. Unticked, the
 zip alone is worn — one skin at a time — and the folder only when there
 is no skin zip.
+
+YOUR OWN CARD BACK: Options > Card back > Choose... puts a picture of
+yours on the back of every card. Give it a PNG, JPG or WEBP, upright;
+456 x 646 pixels is best: the shape of a card, twice the 1997 back's
+228 x 323. A picture of another shape is trimmed from the middle to fit
+(a landscape photo loses its sides), a bigger one is shrunk and a
+smaller one stretched, and a phone photo is turned the way it was held.
+An iPhone's HEIC photo is not read; save it as a JPG first. The game
+keeps its own copy, card_back.png in the folder above, and leaves your
+picture alone; Remove deletes the copy and the skin's back comes back.
+You can also put a card_back.png (or .jpg, .webp) there yourself; it is
+fitted the same way when the game starts.
 
 CARD PACKS live in the card folder, cardpacks/: every zip there is
 mounted when the game starts, in name order, the first to hold a

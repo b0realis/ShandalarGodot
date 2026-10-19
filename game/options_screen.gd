@@ -29,12 +29,21 @@ const TOUCH_MODES: Array[String] = ["auto", "on", "off"]
 const PAD_MODES: Array[String] = ["auto", "on", "off"]
 ## The `On-screen keyboard` row's items, the same way.
 const KEYBOARD_MODES: Array[String] = ["auto", "on", "off"]
+## The `Card back:` row's picture: a fifth of the 1997 back, 228x323.
+const CARD_BACK_THUMB := Vector2(46, 65)
+## What the game wants of a card back picture — the row's greyed line
+## and its `Choose...` tooltip ([CardBack]).
+const CARD_BACK_NOTE := "A PNG, JPG or WEBP, upright: 456 x 646 pixels is best, " \
+	+ "a card's shape. Another shape is trimmed from the middle to fit; the " \
+	+ "game keeps its own copy."
 ## The `Controls:` rows' two slots, by action: `action -> [key button,
 ## pad button]`, so a rebind can redraw every row (a key that moved off
 ## another action changes two of them).
 var _control_slots: Dictionary = {}
 ## The `Press a key` popup while one is up, and the listener under it.
 var _listening: Control = null
+## The browser's file box being watched ([method _choose_card_back]).
+var _card_back_poll: Timer = null
 
 
 func _ready() -> void:
@@ -107,6 +116,8 @@ func _ready() -> void:
 	_add_controls_section(content)
 
 	_add_skin_section(content)
+
+	_add_card_back_section(content)
 
 	_add_card_packs_section(content)
 
@@ -670,6 +681,191 @@ func _on_skin_transfer(fraction: float) -> void:
 		return
 	line.text = SkinPack.transfer_line(fraction)
 	line.visible = SkinPack.busy()
+
+
+## THE CARD BACK — `[QoL]`, the owner's two asks of 2026-10-19: *"for
+## seasonal card backs lets implement an on/off in options (as some users
+## may not like this)"* and *"an option in settings so user can use his
+## own photo as card back (lets also document and tell the user what
+## format and pixel*pixel the game expects the file to be!)"*.
+##
+## The rows, top to bottom:
+##   * the back the cards wear now, small, beside whose it is — your
+##     picture by its path, the season's, the skin's or the game's plain
+##     one ([method card_back_line]) — with `Choose...`, a file box for a
+##     picture ([method _choose_card_back], [CardBack]), and `Remove`
+##     while you have one;
+##   * a line saying why a picture was not taken, while one was not;
+##   * `Seasonal card backs`, the [constant GameSkin.KEY_SEASONS] key —
+##     written `false` when switched off and cleared when switched back
+##     on, so the default is never written;
+##   * one greyed line, [constant CARD_BACK_NOTE]: the kind and the size
+##     of picture the game wants.
+## Both act at once: the next card back drawn is the new one.
+func _add_card_back_section(content: VBoxContainer) -> void:
+	content.add_child(UiChrome.body_label("Card back:"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var thumb := Panel.new()
+	thumb.name = "CardBackThumb"
+	thumb.custom_minimum_size = CARD_BACK_THUMB
+	thumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(thumb)
+	var status := UiChrome.body_label("", 13)
+	status.name = "CardBackStatus"
+	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(status)
+	var buttons := VBoxContainer.new()
+	buttons.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var choose := UiChrome.menu_button("Choose...", Vector2(84, 26), 13)
+	choose.name = "ChooseCardBack"
+	choose.tooltip_text = "Pick a picture for the back of every card. " + CARD_BACK_NOTE
+	choose.pressed.connect(_choose_card_back)
+	buttons.add_child(choose)
+	var remove := UiChrome.menu_button("Remove", Vector2(84, 26), 13)
+	remove.name = "RemoveCardBack"
+	remove.tooltip_text = "Delete the game's copy of your picture; the cards " \
+		+ "wear the skin's back again. The picture you chose is not touched."
+	remove.pressed.connect(func() -> void:
+		CardBack.forget()
+		_show_card_back_problem("")
+		_refresh_card_back())
+	buttons.add_child(remove)
+	row.add_child(buttons)
+	content.add_child(row)
+	var problem := UiChrome.body_label("", 12)
+	problem.name = "CardBackProblem"
+	problem.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# The skin's refusal line's amber ([method _c2_fpacks_refused_line]).
+	problem.add_theme_color_override("font_color", Color8(232, 176, 96))
+	problem.visible = false
+	content.add_child(problem)
+	var seasons := CheckButton.new()
+	seasons.name = "SeasonalBacks"
+	seasons.text = "Seasonal card backs"
+	seasons.tooltip_text = "On a few days of the year every card wears a back " \
+		+ "of its own. Off: never. A picture of your own is worn whatever this says."
+	seasons.button_pressed = GameSkin.seasons_on()
+	seasons.toggled.connect(func(on: bool) -> void:
+		if on:
+			Settings.clear_value(GameSkin.KEY_SEASONS)
+		else:
+			Settings.set_value(GameSkin.KEY_SEASONS, false)
+		_refresh_card_back())
+	UiChrome.shadowed_button(seasons)
+	content.add_child(seasons)
+	var note := UiChrome.body_label(CARD_BACK_NOTE, 12)
+	note.name = "CardBackNote"
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.modulate.a = 0.65
+	content.add_child(note)
+	_refresh_card_back()
+
+
+## The `Card back:` row's words: whose back the cards wear. [param own]
+## is the player's picture as shown, or "".
+static func card_back_line(own: String, seasonal: bool, skinned: bool) -> String:
+	if own != "":
+		return "Your picture: %s" % own
+	if seasonal:
+		return "The season's back"
+	return "The skin's back" if skinned else "The game's plain back"
+
+
+## The row's small card: [param back], or the plain back a face-down
+## card wears without one ([MiniCard]).
+static func card_back_box(back: Texture2D) -> StyleBox:
+	if back != null:
+		var tex := StyleBoxTexture.new()
+		tex.texture = back
+		return tex
+	var flat := StyleBoxFlat.new()
+	flat.bg_color = Color(0.16, 0.10, 0.22)
+	flat.border_color = Color(0.35, 0.28, 0.15)
+	flat.set_border_width_all(2)
+	flat.set_corner_radius_all(4)
+	return flat
+
+
+## Every card back row re-read: after a pick, a removal or the switch.
+func _refresh_card_back() -> void:
+	var own := CardBack.texture() != null
+	var status := find_child("CardBackStatus", true, false) as Label
+	if status != null:
+		status.text = card_back_line(GamePaths.shown(CardBack.found()) if own else "",
+			GameSkin.season_back() != null, GameSkin.skin_texture("card_back") != null)
+	var thumb := find_child("CardBackThumb", true, false) as Panel
+	if thumb != null:
+		thumb.add_theme_stylebox_override("panel", card_back_box(GameSkin.texture("card_back")))
+	var remove := find_child("RemoveCardBack", true, false) as Control
+	if remove != null:
+		remove.visible = CardBack.has_own()
+
+
+func _show_card_back_problem(text: String) -> void:
+	var line := find_child("CardBackProblem", true, false) as Label
+	if line != null:
+		line.text = text
+		line.visible = text != ""
+
+
+## `Choose...`: the platform's file box for a picture, as the skin's
+## `Choose...` opens one for a zip ([method SkinPack.pick]); in a browser
+## the page's own ([method CardBack.web_open]), watched a tenth of a
+## second at a time until the player is done with it.
+func _choose_card_back() -> void:
+	_show_card_back_problem("")
+	if OS.has_feature("web"):
+		if _card_back_poll != null:
+			return
+		CardBack.web_open()
+		_card_back_poll = Timer.new()
+		_card_back_poll.wait_time = 0.1
+		_card_back_poll.timeout.connect(_poll_card_back)
+		add_child(_card_back_poll)
+		_card_back_poll.start()
+		return
+	var box := FileDialog.new()
+	box.name = "CardBackChooser"
+	box.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	# After the mode: setting the mode retitles the box ("Open a File").
+	box.title = "Choose a picture for the card back"
+	box.access = FileDialog.ACCESS_FILESYSTEM
+	# Both cases: a camera names its files IMG_0001.JPG, and a desktop's
+	# box may match the pattern as written.
+	box.filters = PackedStringArray(["*.png, *.PNG, *.jpg, *.JPG, *.jpeg, *.JPEG, "
+		+ "*.webp, *.WEBP ; Pictures"])
+	box.use_native_dialog = true
+	box.size = Vector2i(760, 520)
+	box.current_dir = card_back_start_dir()
+	box.file_selected.connect(func(path: String) -> void:
+		_show_card_back_problem(CardBack.adopt(path))
+		_refresh_card_back()
+		box.queue_free())
+	box.canceled.connect(box.queue_free)
+	add_child(box)
+	box.popup_centered()
+
+
+func _poll_card_back() -> void:
+	if not CardBack.web_poll():
+		return
+	_card_back_poll.queue_free()
+	_card_back_poll = null
+	_show_card_back_problem(CardBack.web_refusal)
+	_refresh_card_back()
+
+
+## Where the desktop's box opens: the player's pictures, else where the
+## skin's box opens ([method SkinPack.pick_start_dir]).
+static func card_back_start_dir() -> String:
+	var pictures := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
+	if pictures != "" and DirAccess.dir_exists_absolute(pictures):
+		return pictures
+	return SkinPack.pick_start_dir()
 
 
 ## SOUND — TWO SWITCHES AND TWO SLIDERS, and only the switches are 1997's.
