@@ -837,9 +837,21 @@ class Guest:
 		client.command(pilot.choose(game, 1))
 
 
+## The host on a FIXED deal. A real table deals from a seed the host picks
+## at random (`SgLocalServer._create_match`), and a random deal can end in
+## a DRAW — both seats at 0 or less on the same phase boundary (manual
+## p.168; `MtgGame.draw_game`, the only finish with no winner). One did in
+## the 2026-10-18 gate, failing "a seat won" below. This test is about the
+## table, not the deal, so it plays the same duel every run.
+class SeededServer extends SgLocalServer:
+	var duel_seed := 4242
+	func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
+		return SgPracticeMatch.new(duel_seed, decks, names, rules)
+
+
 func test_a_hosted_table_is_played_by_a_guest_to_a_result() -> void:
 	var ref = _referee()
-	var server := SgLocalServer.new()
+	var server := SeededServer.new()
 	autofree(server)
 	assert_eq(server.start_lan("127.0.0.1", 0, true, "Agent", 0, true), OK)
 	assert_eq(server.discovery_error, OK)
@@ -863,7 +875,8 @@ func test_a_hosted_table_is_played_by_a_guest_to_a_result() -> void:
 	var outcome: Dictionary = ref._referee_table(host, deck, {"wait": 60, "turns": 200}, null, hosting, company)
 	assert_false(outcome.has("error"), str(outcome))
 	assert_eq(outcome.reason, "concluded")
-	assert_true(int(outcome.winner) in [0, 1])
+	assert_true(int(outcome.winner) in [0, 1], "a seat won (winner %s, draw %s, life %s)"
+		% [outcome.get("winner"), outcome.get("draw"), outcome.get("life")])
 	assert_eq(int(outcome.seat), 0, "the host holds seat 0")
 	assert_eq(outcome.table, {"id": "r1", "name": "Kitchen"})
 	assert_true(String(outcome.names[0]).begins_with("Agent"), outcome.names[0])

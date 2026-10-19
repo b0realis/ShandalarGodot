@@ -63,7 +63,9 @@ func test_a_card_cannot_be_dropped_off_the_table() -> void:
 	var bounds: Rect2 = screen._placement_bounds(0)
 	screen._place_card(0, bear, layer.global_position + Vector2(-500, -500))
 	assert_eq(screen._placements[bear.id], bounds.position,
-		"clamped to the inset the rows keep too, not to the raw half")
+		"clamped to the half's own corner")
+	assert_eq(bounds.position, Vector2.ZERO,
+		"which is the table's edge, not the inset the rows keep")
 	screen._place_card(0, bear, layer.global_position + Vector2(99999, 99999))
 	var placed: Vector2 = screen._placements[bear.id]
 	assert_lt(placed.x, layer.size.x, "still inside its own territory")
@@ -258,13 +260,13 @@ func test_a_press_on_a_piled_card_that_never_travels_is_still_a_click() -> void:
 func test_a_dropped_card_is_clamped_by_the_CARD_not_by_the_node() -> void:
 	# The clamp is measured from the INSTANCE, never from the widget that
 	# happens to be under the pointer — a pile row has been a 17px title
-	# strip and is now a whole card box, and neither is the room the card
-	# will need once it is placed and can tap.
+	# strip and is now a whole card box, and only the second happens to be
+	# the card's shape.
 	var lands := _lands(4)
 	var holder := _pile_row(lands[0])
 	var layer: Control = screen._free_layers[0]
-	assert_ne(holder.size, screen._placement_span(lands[0]).size,
-		"the row's own box is not the footprint being reserved")
+	assert_eq(screen._placement_span(lands[0]), Rect2(Vector2.ZERO, MiniCard.SIZE),
+		"the footprint is the upright card's own, read off the instance")
 	screen._on_piled_card_input(_click(true), holder, lands[0])
 	screen._dragging = true
 	holder.global_position = layer.global_position + Vector2(0, 99999)
@@ -272,10 +274,10 @@ func test_a_dropped_card_is_clamped_by_the_CARD_not_by_the_node() -> void:
 	var placed: Vector2 = screen._placements[lands[0].id]
 	var bounds: Rect2 = screen._placement_bounds(0)
 	assert_almost_eq(placed.y,
-		bounds.end.y - screen._placement_span(lands[0]).size.y, 1.0,
+		bounds.end.y - screen._placement_span(lands[0]).end.y, 1.0,
 		"the whole card fits inside the half")
-	assert_lt(placed.y, layer.size.y - MiniCard.SIZE.y,
-		"and it is INSIDE the old bound, which only fitted an upright card")
+	assert_almost_eq(placed.y + MiniCard.SIZE.y, layer.size.y, 1.0,
+		"and an upright card reaches the very bottom of the table")
 
 
 func test_the_creature_path_is_unchanged() -> void:
@@ -368,27 +370,104 @@ func _draws(node: Node, inst: CardInstance) -> bool:
 	return false
 
 
+## The rectangle the CARD ITSELF covers, in [param pid]'s free-layer
+## coordinates — read off the card's own transform, so a turned card is
+## its turned 106x132 and not its holder's slack, and nothing here asks
+## the code under test where the card is.
+func _seen_rect(inst: CardInstance, pid := 0) -> Rect2:
+	var layer: Control = screen._free_layers[pid]
+	var card := _card_in(layer, inst)
+	if card == null:
+		return Rect2()
+	var box: Rect2 = card.get_global_transform() * Rect2(Vector2.ZERO, card.size)
+	box.position -= layer.global_position
+	return box
+
+
+## [param inner] lies inside [param outer], give or take the rounding a
+## 90° turn leaves in a transform.
+func _inside(outer: Rect2, inner: Rect2) -> bool:
+	return outer.grow(0.01).encloses(inner)
+
+
 func test_a_drag_past_any_edge_leaves_the_WHOLE_card_inside() -> void:
 	# Not "its top-left is inside" — the corner test is what let a card be
-	# shoved until only its left edge showed.
+	# shoved until only its left edge showed. Upright and turned, because
+	# the two are different shapes.
 	var bear := _bear()
 	var layer: Control = screen._free_layers[0]
 	var bounds: Rect2 = screen._placement_bounds(0)
-	var span: Rect2 = screen._placement_span(bear)
-	screen.game.tap_permanent(bear)   # the bigger of the two footprints
-	for shove in [Vector2(-9000, 0), Vector2(9000, 0), Vector2(0, -9000),
-			Vector2(0, 9000), Vector2(9000, 9000), Vector2(-9000, -9000)]:
-		screen._place_card(0, bear, layer.global_position + shove)
-		var at: Vector2 = screen._placements[bear.id]
-		var box := Rect2(at + span.position, span.size)
-		assert_true(bounds.encloses(box),
-			"shoved %s: %s must sit inside %s" % [shove, box, bounds])
-		# ...and independently of the code under test: the widget the half
-		# actually DRAWS, measured against the half's own rect.
-		screen._refresh()
-		assert_true(Rect2(Vector2.ZERO, layer.size).encloses(_placed_rect(bear)),
-			"shoved %s: drawn at %s, half is %s"
-			% [shove, _placed_rect(bear), layer.size])
+	for turned in [false, true]:
+		if turned:
+			screen.game.tap_permanent(bear)
+		var span: Rect2 = screen._placement_span(bear)
+		for shove in [Vector2(-9000, 0), Vector2(9000, 0), Vector2(0, -9000),
+				Vector2(0, 9000), Vector2(9000, 9000), Vector2(-9000, -9000)]:
+			screen._place_card(0, bear, layer.global_position + shove)
+			var at: Vector2 = screen._placements[bear.id]
+			var box := Rect2(at + span.position, span.size)
+			assert_true(bounds.encloses(box),
+				"shoved %s: %s must sit inside %s" % [shove, box, bounds])
+			# ...and independently of the code under test: the card the
+			# half actually DRAWS, measured against the half's own rect.
+			screen._refresh()
+			await get_tree().process_frame
+			assert_true(_inside(Rect2(Vector2.ZERO, layer.size), _seen_rect(bear)),
+				"shoved %s: drawn at %s, half is %s"
+				% [shove, _seen_rect(bear), layer.size])
+
+
+# ------------------------------------ EDGE TO EDGE (§2.3b, 2026-10-18) --
+#
+# The owner: *"I cant drag mini cards on the whole playfield. They stop
+# some space below bottom edge. I should be able to put them so their
+# bottom edge of the mini card touches the bottom of playmat. And same for
+# all edges and same for top playmat!"* The bound was the half inset as
+# its rows are (8px at the sides, 6px top and bottom), and the span
+# reserved the turned card's 140px height for every card, so an upright
+# card stopped 40px above the bottom of its table.
+
+
+## Shove [param inst] past each edge of [param pid]'s half in turn and
+## check the drawn card TOUCHES that edge — not merely stays inside it.
+func _touches_every_edge(inst: CardInstance, pid: int, what: String) -> void:
+	var layer: Control = screen._free_layers[pid]
+	var table := Rect2(Vector2.ZERO, layer.size)
+	screen._place_card(pid, inst, layer.global_position + Vector2(-9000, -9000))
+	screen._refresh()
+	await get_tree().process_frame
+	var seen := _seen_rect(inst, pid)
+	assert_almost_eq(seen.position.x, table.position.x, 0.5,
+		"%s: its left edge touches the table's" % what)
+	assert_almost_eq(seen.position.y, table.position.y, 0.5,
+		"%s: its top edge touches the table's" % what)
+	screen._place_card(pid, inst, layer.global_position + Vector2(9000, 9000))
+	screen._refresh()
+	await get_tree().process_frame
+	seen = _seen_rect(inst, pid)
+	assert_almost_eq(seen.end.x, table.end.x, 0.5,
+		"%s: its right edge touches the table's" % what)
+	assert_almost_eq(seen.end.y, table.end.y, 0.5,
+		"%s: its bottom edge touches the table's" % what)
+
+
+func test_an_upright_card_reaches_every_edge_of_my_table() -> void:
+	await _touches_every_edge(_bear(0, 94040), 0, "my upright card")
+
+
+func test_an_upright_card_reaches_every_edge_of_the_top_table() -> void:
+	await _touches_every_edge(_bear(1, 94041), 1, "the opponent's upright card")
+
+
+func test_a_turned_card_reaches_every_edge_too() -> void:
+	# The turned card sits in 4px of holder slack; the CARD reaches the
+	# edge and the slack hangs over it, under the half's clip.
+	var mine := _bear(0, 94042)
+	var theirs := _bear(1, 94043)
+	screen.game.tap_permanent(mine)
+	screen.game.tap_permanent(theirs)
+	await _touches_every_edge(mine, 0, "my turned card")
+	await _touches_every_edge(theirs, 1, "the opponent's turned card")
 
 
 func test_a_shoved_card_never_smuggles_itself_into_the_other_half() -> void:
@@ -420,22 +499,33 @@ func test_a_card_tapped_after_being_parked_at_an_edge_is_still_whole() -> void:
 	var g: MtgGame = screen.game
 	var bear := _bear()
 	var layer: Control = screen._free_layers[0]
+	var table := Rect2(Vector2.ZERO, layer.size)
 	screen._place_card(0, bear, layer.global_position + Vector2(9000, 9000))
+	var put: Vector2 = screen._placements[bear.id]
 	screen._refresh()
-	var upright := _placed_rect(bear)
-	assert_true(Rect2(Vector2.ZERO, layer.size).encloses(upright),
-		"upright and inside")
+	await get_tree().process_frame
+	var upright := _seen_rect(bear)
+	assert_almost_eq(upright.end.y, table.end.y, 0.5,
+		"upright, flush with the bottom of the table")
 	g.tap_permanent(bear)
 	screen._refresh()
 	await get_tree().process_frame
-	var turned := _placed_rect(bear)
-	assert_eq(turned.size, MiniCard.TURN_HOLDER_SIZE,
+	assert_eq(_placed_rect(bear).size, MiniCard.TURN_HOLDER_SIZE,
 		"the widget really is the taller rotation holder now")
-	assert_true(Rect2(Vector2.ZERO, layer.size).encloses(turned),
+	var turned := _seen_rect(bear)
+	assert_true(_inside(table, turned),
 		"and %s is STILL wholly inside the half %s" % [turned, layer.size])
-	assert_eq(screen._placements[bear.id], upright.position,
-		"and the card did not shuffle itself when it turned — the span "
-		+ "reserves the turn's footprint whether or not it is tapped yet")
+	assert_almost_eq(turned.end.y, table.end.y, 0.5,
+		"lifted just enough: still flush with the bottom")
+	assert_eq(screen._placements[bear.id], put,
+		"and the placement is what the player put down — the lift is drawn")
+	g.untap_permanent(bear)
+	screen._refresh()
+	await get_tree().process_frame
+	assert_almost_eq(_seen_rect(bear).end.y, table.end.y, 0.5,
+		"untapped, it lands flush again rather than staying lifted")
+	assert_eq(_seen_rect(bear).position, upright.position,
+		"exactly where it was before it turned")
 
 
 func test_an_enchanted_cards_aura_fan_stays_on_the_table() -> void:
@@ -452,8 +542,8 @@ func test_an_enchanted_cards_aura_fan_stays_on_the_table() -> void:
 	var layer: Control = screen._free_layers[0]
 	screen._place_card(0, bear, layer.global_position + Vector2(-9000, -9000))
 	var at: Vector2 = screen._placements[bear.id]
-	assert_gte(at.y + fanned.position.y, 0.0,
-		"so the topmost aura still lands on the table")
+	assert_almost_eq(at.y + fanned.position.y, 0.0, 0.5,
+		"so the topmost aura lands on the table, touching its top edge")
 
 
 func test_the_zone_column_and_the_phase_bar_need_no_bound() -> void:
@@ -539,13 +629,13 @@ func test_the_hand_window_is_not_subtracted_from_the_playfield() -> void:
 	stack.position = Vector2(screen.size.x - stack.size.x, 420)
 	await get_tree().process_frame
 	var bounds := screen._placement_bounds(0)
-	assert_almost_eq(bounds.end.x, layer.size.x - DuelScreen.BOARD_INSET, 0.5,
-		"the playfield runs to the half's own inset edge, window or no window")
+	assert_almost_eq(bounds.end.x, layer.size.x, 0.5,
+		"the playfield runs to the half's own edge, window or no window")
 	# ...and a card really can be parked under the window.
 	var bear := _bear(0, 94001)
 	screen._place_card(0, bear, layer.global_position + Vector2(9000, 40))
 	var right: float = screen._placements[bear.id].x \
-		+ screen._placement_span(bear).size.x
+		+ screen._placement_span(bear).end.x
 	assert_almost_eq(right, bounds.end.x, 0.5,
 		"it reaches the edge of the table rather than stopping at the window")
 
@@ -592,20 +682,28 @@ func test_a_placement_made_wide_is_pulled_in_when_the_window_narrows() -> void:
 	var bear := _bear()
 	var layer: Control = screen._free_layers[0]
 	screen._place_card(0, bear, layer.global_position + Vector2(9000, 9000))
-	var wide: Vector2 = screen._placements[bear.id]
+	screen._refresh()
+	var put: Vector2 = screen._placements[bear.id]
+	var wide := _seen_rect(bear)
 	screen.size = Vector2(1024, 640)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var narrow: Vector2 = screen._placements[bear.id]
-	assert_lt(narrow.x, wide.x, "the card came back in with the right edge")
-	assert_lt(narrow.y, wide.y, "and up with the bottom one")
-	var bounds: Rect2 = screen._placement_bounds(0)
-	var span: Rect2 = screen._placement_span(bear)
-	assert_true(bounds.encloses(Rect2(narrow + span.position, span.size)),
-		"%s is inside the narrow window's %s" % [narrow, bounds])
-	screen._refresh()
-	assert_true(Rect2(Vector2.ZERO, layer.size).encloses(_placed_rect(bear)),
-		"and the widget really is drawn inside the half")
+	# No `_refresh` here: the half's own `resized` is what redraws it.
+	var narrow := _seen_rect(bear)
+	assert_lt(narrow.position.x, wide.position.x,
+		"the card came back in with the right edge")
+	assert_lt(narrow.position.y, wide.position.y, "and up with the bottom one")
+	assert_true(_inside(Rect2(Vector2.ZERO, layer.size), narrow),
+		"%s is drawn inside the narrow window's half %s" % [narrow, layer.size])
+	assert_almost_eq(narrow.end, layer.size, Vector2(0.5, 0.5),
+		"still touching the corner it was parked against")
+	assert_eq(screen._placements[bear.id], put,
+		"the placement is what the player put down — the pull is drawn")
+	screen.size = Vector2(1920, 900)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(_seen_rect(bear), wide,
+		"so when the window grows again the card is back where it was put")
 
 
 func test_the_half_asks_for_the_re_clamp_itself() -> void:

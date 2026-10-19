@@ -505,6 +505,8 @@ var _no_auto_tap: Dictionary = {}
 var _placements: Dictionary = {}
 ## The absolute layer each half draws its placed cards in, over the rows.
 var _free_layers: Array = [null, null]
+## The meta each placed widget carries: the instance id it was drawn for.
+const PLACED_ID := &"placed_id"
 ## How far the pointer must travel before a press becomes a drag.
 const DRAG_SLOP := 5.0
 ## z_index of the card being dragged: over its neighbours and over a
@@ -9364,14 +9366,16 @@ func _rebuild_placed(pid: int) -> void:
 			continue
 		if inst.attached_to != -1 or _windowed_ids.has(id):
 			continue
-		# NORMALISE ON THE WAY OUT as well as on the way in: an aura that
-		# attached, a half that shrank or a placement written before the
-		# first layout pass all reach the boundary here, so the dictionary
-		# and what the player can see never drift apart.
-		var at: Vector2 = _clamp_in_half(pid, _placements[id], inst)
-		_placements[id] = at
+		# DRAWN INSIDE, KEPT AS PUT (2026-10-18). A card that turned, an
+		# aura that attached, a half that shrank or a placement written
+		# before the first layout pass all reach the boundary here, and the
+		# card is drawn wholly on the table in the shape it has NOW. The
+		# clamp is not written back: it used to be, and that made every
+		# turn a move — parked flush with the bottom, a card was lifted
+		# 30px when it tapped and stayed there when it untapped.
 		var w := _make_widget(inst)
-		w.position = at
+		w.position = _clamp_in_half(pid, _placements[id], inst)
+		w.set_meta(PLACED_ID, id)
 		layer.add_child(w)
 
 
@@ -10040,10 +10044,15 @@ func _place_card(pid: int, inst: CardInstance, at_global: Vector2) -> void:
 #      [constant MiniCard.TURN_HOLDER_SIZE] = 114x140 against a card's
 #      132x106: a card parked flush with the bottom of its half untapped
 #      grew 34px DOWNWARD the moment it tapped, straight through the
-#      half's `clip_contents`. The span below is therefore the UNION of
-#      the two footprints, reserved whether or not the card is tapped
-#      right now — a placement is a promise, and a card must not shuffle
-#      itself upward just because it turned.
+#      half's `clip_contents`. The first answer reserved the UNION of the
+#      two footprints whether or not the card was tapped, and that is
+#      what held an upright card 34px off the bottom of the table (EDGE
+#      TO EDGE, below). The turn is answered where the card is DRAWN
+#      instead ([method _rebuild_placed]): it is shown wholly inside the
+#      half in the shape it has now, and the placement keeps what the
+#      player put down — so a card parked flush with the bottom is lifted
+#      while it is turned and lands flush again when it untaps, rather
+#      than creeping upward one tap at a time.
 #   2. AN ENCHANTED CARD. The aura fan is drawn at `-AURA_PEEK.y` per
 #      attachment ABOVE the host's own box (see [method _make_widget],
 #      which says why it overflows rather than reserves), so a host at
@@ -10056,10 +10065,19 @@ func _place_card(pid: int, inst: CardInstance, at_global: Vector2) -> void:
 #
 # WHAT THE BOUNDS ARE, AND WHY. The visible table, not merely the half:
 #
-#   * THE HALF, INSET exactly as its rows are ([constant BOARD_INSET] /
-#     [constant BOARD_INSET_V]) — the reference leaves a clear margin all
-#     round, and a card flush with the seam reads as being in neither
-#     territory.
+#   * THE WHOLE HALF, EDGE TO EDGE. The owner, 2026-10-18: *"I should be
+#     able to put them so their bottom edge of the mini card touches the
+#     bottom of playmat. And same for all edges and same for top
+#     playmat!"* Until then the bound was the half inset as its rows are
+#     ([constant BOARD_INSET] / [constant BOARD_INSET_V]) and the span the
+#     union in 1. above, which together held an upright card 8px off the
+#     sides, 6px off the top and 40px off the bottom. The ROWS keep their
+#     inset — that is the layout's margin — but a card the player moves
+#     goes where they put it, and the span is the CARD THEY SEE: not the
+#     turn holder's 4px of slack, and not a shape it may take later. A
+#     card flush with the seam is still plainly in its own half: each
+#     half is its own ground and clips its own cards, so none can lean
+#     across.
 #
 # ...AND NOTHING SUBTRACTED FOR CHROME — not even the floating hand
 # window, which for one day it was. The owner settled it on 2026-09-04:
@@ -10087,37 +10105,48 @@ func _place_card(pid: int, inst: CardInstance, at_global: Vector2) -> void:
 
 
 ## The rectangle a placed card must lie WHOLLY inside, in [param pid]'s
-## free-layer coordinates. Empty when the half has not been laid out yet,
-## which is the caller's signal to leave the placement alone.
+## free-layer coordinates: the whole half, edge to edge. Empty when the
+## half has not been laid out yet, which is the caller's signal to leave
+## the placement alone.
 func _placement_bounds(pid: int) -> Rect2:
 	var layer: Control = _free_layers[pid]
 	if layer == null or layer.size.x <= 0.0 or layer.size.y <= 0.0:
 		return Rect2()
-	var inset := Vector2(BOARD_INSET, BOARD_INSET_V)
-	return Rect2(inset, layer.size - inset * 2.0)
+	return Rect2(Vector2.ZERO, layer.size)
 
 
-## The box the widget for [param inst] sweeps out, RELATIVE to the
-## top-left a placement records — see the block comment above for the
-## three things it has to cover. `position` is normally zero and negative
-## only for the upward overflow of an aura fan.
+## The box the cards the player SEES for [param inst] fill, in the shape
+## it has right now, RELATIVE to the top-left a placement records — see
+## the block comment above for what it has to cover. `position` is the
+## turned card's corner inside its holder's slack, raised by the upward
+## overflow of an aura fan.
 func _placement_span(inst: CardInstance) -> Rect2:
-	# The union of a card and the footprint its 90° turn needs, so tapping
-	# never pushes a parked card out of its own territory.
-	var span := Vector2(
-		maxf(MiniCard.SIZE.x, MiniCard.TURN_HOLDER_SIZE.x),
-		maxf(MiniCard.SIZE.y, MiniCard.TURN_HOLDER_SIZE.y))
+	# Upright, the widget IS the card. Turned, it is the holder
+	# (`MiniCard.turn_holder`) with the card centred in 4px of slack, and
+	# only the card has to stay on the table.
+	var seen := MiniCard.SIZE
+	var corner := Vector2.ZERO
+	if _turned_on_table(inst):
+		seen = Vector2(MiniCard.SIZE.y, MiniCard.SIZE.x)
+		corner = (MiniCard.TURN_HOLDER_SIZE - seen) / 2.0
 	var auras := _fan_steps(inst)
 	if auras == 0:
-		return Rect2(Vector2.ZERO, span)
-	# The fan: a whole card wide per step to the RIGHT, off the turned
-	# host's own corner (`_make_widget`), and AURA_PEEK.y per step ABOVE
-	# the host's box, which is the part that falls outside it.
-	var corner := (MiniCard.TURN_HOLDER_SIZE.x - MiniCard.SIZE.y) / 2.0
-	span.x = maxf(span.x,
-		corner + MiniCard.SIZE.x + AURA_PEEK.x * float(auras))
+		return Rect2(corner, seen)
+	# The fan: a whole card wide, one step to the RIGHT per attachment off
+	# the host's own corner (`_make_widget`), and AURA_PEEK.y per step
+	# ABOVE the host's box, which is the part that falls outside it.
 	var up := AURA_PEEK.y * float(auras)
-	return Rect2(Vector2(0.0, -up), Vector2(span.x, span.y + up))
+	return Rect2(corner - Vector2(0.0, up), Vector2(
+		maxf(seen.x, MiniCard.SIZE.x + AURA_PEEK.x * float(auras)),
+		seen.y + up))
+
+
+## Is [param inst] drawn TURNED — [method MiniCard.wants_rotation]'s test,
+## read off the instance because the span is wanted before any widget
+## exists.
+func _turned_on_table(inst: CardInstance) -> bool:
+	return inst != null and inst.zone == Mtg.Zone.BATTLEFIELD \
+		and inst.tapped and not inst.face_down
 
 
 ## [param local] pulled back until the whole of [param inst]'s widget sits
@@ -10135,8 +10164,8 @@ func _clamp_in_half(pid: int, local: Vector2, inst: CardInstance) -> Vector2:
 		clampf(local.y, lo.y, maxf(lo.y, hi.y)))
 
 
-## RE-CLAMP EVERY PLACEMENT the board already holds, and rebuild the halves
-## whose cards actually moved.
+## RE-CLAMP EVERY PLACED CARD the board already draws, and rebuild the
+## halves whose cards actually moved.
 ##
 ## A placement lives for the whole duel and is stored in HALF coordinates,
 ## so it survives a resize as an absolute offset would not — but surviving
@@ -10146,6 +10175,12 @@ func _clamp_in_half(pid: int, local: Vector2, inst: CardInstance) -> Vector2:
 ## reopening in the second leaves it 142px out in the dark behind the
 ## half's `clip_contents` (measured). A RESIZE IS THE ONLY CALLER, wired
 ## from each half's own `resized` ([method _board_half]).
+##
+## THE CLAMP IS DRAWN, NOT WRITTEN (2026-10-18). [method _rebuild_placed]
+## draws each card inside the half it has now, so all a resize needs is a
+## redraw of the halves whose cards it moved — and the placement keeps
+## what the player put down, so a card parked at the right edge of a wide
+## window is back at that edge when the window grows again.
 ##
 ## AND IT IS THE ONLY ONE IT MAY EVER HAVE. For one day the floating hand
 ## window called this too: the playfield boundary subtracted the window's
@@ -10174,23 +10209,30 @@ func _reclamp_placements() -> void:
 		# same hazard [method _rebuild_field] answers with its
 		# `_commit_drag(false)`.
 		return
-	var dirty := {}
-	for id in _placements.keys():
-		var inst: CardInstance = game.find_instance(id)
-		if inst == null:
-			continue
-		var pid := _half_of(inst)
-		if pid == -1:
-			continue
-		var at: Vector2 = _clamp_in_half(pid, _placements[id], inst)
-		if not at.is_equal_approx(_placements[id]):
-			_placements[id] = at
-			dirty[pid] = true
 	# DEFERRED: this arrives from a `resized` notification, and freeing and
 	# rebuilding the layer's children in the middle of a layout pass is how
 	# a duel screen gets a "Condition ... is true" at teardown.
-	for pid in dirty:
-		_rebuild_placed.call_deferred(pid)
+	_redraw_moved_placements.call_deferred()
+
+
+## Rebuild each free layer holding a card that is no longer drawn where
+## [method _clamp_in_half] now puts it. Measured after the layout pass,
+## so the half's new size is the one compared against.
+func _redraw_moved_placements() -> void:
+	if game == null or _dragging:
+		return
+	for pid in 2:
+		var layer: Control = _free_layers[pid]
+		if layer == null:
+			continue
+		for w in layer.get_children():
+			var id: int = w.get_meta(PLACED_ID, -1)
+			var inst: CardInstance = game.find_instance(id) \
+				if _placements.has(id) else null
+			if inst != null and not (w as Control).position.is_equal_approx(
+					_clamp_in_half(pid, _placements[id], inst)):
+				_rebuild_placed(pid)
+				break
 
 
 ## Forget a gesture in progress, putting a lifted widget back down.
@@ -11394,9 +11436,9 @@ func _board_half(pid: int) -> Array:
 	_half_rows[pid] = rows
 	# THE FREE LAYER, over the rows: the cards the player has moved by hand
 	# (§2.3b). Mouse-transparent itself — only its children take clicks —
-	# and inset exactly like the rows, so a placement reads in the same
-	# coordinates whichever way a card got there. One row step above the
-	# creatures, so a placed card lies over every row's cards.
+	# and the WHOLE half, not inset like the rows: a card the player moves
+	# may touch the table's edge (`_placement_bounds`). One row step above
+	# the creatures, so a placed card lies over every row's cards.
 	var free := Control.new()
 	free.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	free.mouse_filter = Control.MOUSE_FILTER_IGNORE

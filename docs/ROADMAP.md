@@ -18811,6 +18811,67 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-18 — A moved card reaches the table's edge (0.50.37)
+
+The owner: *"I cant drag mini cards on the whole playfield. They stop some
+space below bottom edge. I should be able to put them so their bottom edge
+of the mini card touches the bottom of playmat. And same for all edges and
+same for top playmat!"*
+
+- **Why they stopped short.** Two reserves stacked up. `_placement_bounds`
+  was the half inset as its rows are (`BOARD_INSET` 8px at the sides,
+  `BOARD_INSET_V` 6px top and bottom), and `_placement_span` was the UNION
+  of the upright card (132x106) and the turn holder (114x140) for every
+  card, tapped or not — reserved in 2026-09 so a card parked at the bottom
+  could not tap through the half's clip. Together they held an upright
+  card 8px off the sides, 6px off the top and 40px off the bottom, in both
+  halves.
+- **Edge to edge.** The bound is now the whole half, and the span is the
+  card the player SEES in the shape it has now: upright, the card's own
+  box; turned, the 106x132 card inside the holder's 4px of slack (so the
+  card, not the slack, meets the edge); plus the aura fan as before. The
+  rows keep their inset — that is the layout's margin — and only a card
+  the player moved goes edge to edge.
+- **The turn is answered where the card is drawn.** A card parked flush
+  with the bottom upright would grow 30px past it when it taps. Instead of
+  reserving that room, `_rebuild_placed` draws each placed card wholly
+  inside its half in its current shape and no longer writes the clamp
+  back: the placement keeps what the player put down. So the turned card
+  is lifted just enough to stay whole, and lands flush again when it
+  untaps — writing it back made every tap a move. A resize is the same
+  rule: each half's `resized` now redraws the placed cards it moved
+  (`_redraw_moved_placements`, deferred until the layout has settled,
+  found by a `PLACED_ID` meta on each placed widget) and leaves the
+  placements alone, so a card parked at the right edge of a wide window is
+  back at that edge when the window grows again.
+- **The tests.** `tests/ui/test_card_placement.gd` (+3, 40 tests) measures
+  the drawn card through its own transform (`_seen_rect`, so a turned card
+  is its turned rectangle, not its holder): an upright card touches all
+  four edges of my table and of the top one, a turned card does too in
+  both halves, a card parked flush at the bottom stays flush while
+  turned and is back at its exact spot when it untaps with its placement
+  unchanged, and a resize pulls the drawn card in and puts it back when
+  the window grows. Mutation-checked: the old inset failed 9 tests; writing
+  the clamp back failed the untap and the resize tests. The two ghost
+  tests' fan width is the upright card's now.
+- **Seen in the running game** (Xvfb at 2560x1600, a scratch profile):
+  six creatures pushed into the corners of both tables, upright and
+  turned, sat 6-40px in on 0.50.36 and touch every edge on 0.50.37.
+- **And a test that dealt at random.** The first gate run had one failure,
+  unrelated: `tests/tools/test_referee_2026_09_27.gd`'s hosted table ended
+  with no seat winning. The host deals from a random seed
+  (`SgLocalServer._create_match`), and a finished game has only two
+  shapes — `_lose` names a winner, `draw_game` names none — so that deal
+  was a DRAW: both seats at 0 or less on the same phase boundary, which
+  the 1997 rules make a draw (manual p.168). The test is about the table,
+  not the deal, so it now hosts on a fixed one (`SeededServer`, as the
+  network suites already do): six replays played the same duel to the
+  same result, and the random deal replayed twenty times never drew — the
+  draw is rare, but it is real.
+
+Gate: 872 scripts, **13,503/13,503 tests, 586,059 asserts**, exit 0 in
+943 s over 6 shards; Python 775 (15 skipped), exit 0.
+
 ## 2026-10-18 — The LAN host sheds headers that land late (0.50.36)
 
 0.50.35's first gate run had one failure: `tests/ui/test_c2_f_net_sockets.gd`'s

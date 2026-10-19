@@ -285,8 +285,7 @@ func test_the_free_layer_counts_the_choice_as_a_step() -> void:
 	assert_eq(chosen.position.y, -DuelScreen.AURA_PEEK.y,
 		"one step of overflow above the host")
 	assert_eq(chosen.size.x, maxf(plain.size.x,
-		(MiniCard.TURN_HOLDER_SIZE.x - MiniCard.SIZE.y) / 2.0
-			+ MiniCard.SIZE.x + DuelScreen.AURA_PEEK.x),
+		MiniCard.SIZE.x + DuelScreen.AURA_PEEK.x),
 		"one step of width to the right")
 	assert_eq(screen._fan_steps(jaguar), 1)
 	_enchant("Regeneration", jaguar, 0)

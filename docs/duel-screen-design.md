@@ -3648,16 +3648,18 @@ instead of in its row, on top of everything placed before it. A press that
 never travels is still a click. `Arrange your cards` clears the placements
 of the territory it straightens, which is what the command means.
 
-The card must end WHOLLY inside the visible table of its own half
-(`_placement_bounds`: the half, inset exactly as its rows are, and
-NOTHING subtracted for chrome), measured against the box the card ever
-sweeps (`_placement_span`: the union of upright 132x106 and turned
-114x140, so a tap cannot push a parked card out, plus the aura fan's
-upward overflow). `_half_of` keeps every drop in its owner's territory.
-The clamp runs DURING the drag as well as at the drop, so the edge is
-visible rather than a snap-back, and every placement is re-measured when
-A HALF CHANGES SIZE and at no other time (`_reclamp_placements`, off the
-half's own `resized`). The zone column and the phase/combat bar are
+The card must end WHOLLY inside the visible table of its own half, and
+may touch its edges (`_placement_bounds`: the whole half, NOTHING
+subtracted for chrome — the owner, 2026-10-18), measured against the card
+as it is drawn now (`_placement_span`: upright 132x106, or turned 106x132
+inside the turn holder's 4px of slack, plus the aura fan's upward
+overflow). `_half_of` keeps every drop in its owner's territory. The
+clamp runs DURING the drag as well as at the drop, so the edge is visible
+rather than a snap-back; `_rebuild_placed` DRAWS each placed card inside
+its half without writing the clamp back, so a card that taps at an edge
+is lifted while turned and lands where it was put when it untaps; and the
+placed cards are redrawn when A HALF CHANGES SIZE and at no other time
+(`_reclamp_placements`, off the half's own `resized`). The zone column and the phase/combat bar are
 siblings of the board and never over it; the Situation Bar is 36px
 against a 106px card and cannot hide one; the fan hand is under the free
 layer, so a card over it stays visible; and the floating hand window is

@@ -76,6 +76,29 @@ needed); card files have NO class_name (they register by name instead);
   title menu's eight bullets with Shandalar and Save / Load dimmed and
   none lit at open, and Magic Battle lit only once the keys are used.
 
+## A moved card reaches the table's edge (2026-10-18)
+
+- `game/duel/duel_screen.gd`: THE PLAYFIELD BOUNDARY — EDGE TO EDGE.
+  `_placement_bounds` is the whole half (it was the rows' 8/6px inset)
+  and `_placement_span` is the card as drawn now, through
+  `_turned_on_table` (it was the union of upright and turned for every
+  card), so an upright card no longer stops 40px above the bottom.
+  `_rebuild_placed` draws each placed card wholly inside its half and no
+  longer writes the clamp back — a tapped card at an edge is lifted while
+  turned and lands where it was put when it untaps. A resize redraws the
+  layers whose cards it moved (`_redraw_moved_placements`, deferred, by
+  each widget's `PLACED_ID` meta) and leaves the placements alone.
+- `tests/ui/test_card_placement.gd`: `_seen_rect` measures the drawn card
+  through its own transform; an upright and a turned card touch every
+  edge of both tables; a card parked flush stays flush while turned and
+  comes back to its spot; a resize pulls the drawn card in and puts it
+  back. `tests/ui/test_chosen_type_ghost_2026_09_08.gd` and
+  `tests/ui/test_shield_ghost_2026_09_07.gd`: the fan width of an upright
+  host.
+- `tests/tools/test_referee_2026_09_27.gd`: the hosted table plays on a
+  fixed deal (`SeededServer`) — a random one can end in a draw, which
+  failed "a seat won" once in the gate.
+
 ## The LAN host sheds headers that land late (2026-10-18)
 
 - `game/sgmanalink/local_server.gd`: `_handshake_fair` — THE BYTES THAT
@@ -2814,6 +2837,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.37.md`: a moved card reaches the table's edge,
+  carrying the 0.50.36 and 0.50.35 notes.
 - `docs/releases/0.50.36.md`: the LAN host's late headers, carrying the
   0.50.35 note.
 - `docs/releases/0.50.35.md`: the life register in its picture's shape,
@@ -11220,18 +11245,23 @@ shandalar/
 │       │                      tests/ui/test_zone_column.gd
 │       │                      THE PLAYFIELD BOUNDARY (owner, 2026-09-04):
 │       │                      a card moved by hand must end WHOLLY inside
-│       │                      the visible table of its OWN half.
-│       │                      _placement_bounds (the half inset as its
-│       │                      rows are, and NOTHING subtracted for
-│       │                      chrome) x _placement_span (the union of
-│       │                      upright 132x106 and turned 114x140, plus
-│       │                      the aura fan's upward overflow) ->
-│       │                      _clamp_in_half, applied while the drag
-│       │                      moves, at the drop, on every
-│       │                      _rebuild_placed and from each half's OWN
-│       │                      `resized` (_reclamp_placements) — and from
-│       │                      nothing else: the hand window used to fire
-│       │                      it as it was dragged and shoved every
+│       │                      the visible table of its OWN half — and
+│       │                      may touch its edges (2026-10-18).
+│       │                      _placement_bounds (the whole half, NOTHING
+│       │                      subtracted for chrome) x _placement_span
+│       │                      (the card as drawn now: upright 132x106,
+│       │                      or turned 106x132 inside the holder's 4px
+│       │                      slack, plus the aura fan's upward
+│       │                      overflow) -> _clamp_in_half, applied while
+│       │                      the drag moves and at the drop; DRAWN, not
+│       │                      written back, by _rebuild_placed, so a
+│       │                      tapped card at an edge is lifted while
+│       │                      turned and lands where it was put; each
+│       │                      half's OWN `resized` (_reclamp_placements
+│       │                      -> _redraw_moved_placements, by the
+│       │                      PLACED_ID meta) redraws what it moved —
+│       │                      and nothing else fires it: the hand window
+│       │                      used to as it was dragged and shoved every
 │       │                      placement it crossed (2026-09-04).
 │       │                      tests/ui/test_card_placement.gd
 │       │                      THE AUTO-CAST ON THE STACK HAND (owner,
