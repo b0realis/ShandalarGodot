@@ -13,7 +13,7 @@ extends RefCounted
 ## and portraits by the user are added to originals and displayed on
 ## portrait selection."*
 ##
-## EIGHT KEYS, under `[options]` like every other setting, and NONE IS
+## FOLDER KEYS, under `[options]` like every other setting, and NONE IS
 ## WRITTEN until the player changes it — a default materialised into
 ## the file is a default that can never change (see
 ## [method Settings.clear_value] for the "fan" hand that shipped once):
@@ -34,6 +34,7 @@ extends RefCounted
 ##                     user://tournaments
 ##   drafts_folder     where a Booster Draft's decks are saved; the
 ##                     ordinary deck collection,     user://decks
+##   records_folder    public MPN history;           user://records
 ##
 ## On Android those three defaults sit in the app's shared-storage
 ## corner instead ([method android_files_dir]): `user://` is private
@@ -54,6 +55,7 @@ const KEY_PORTRAITS := "portraits_folder"
 const KEY_MUSIC := "music_folder"
 const KEY_TOURNAMENTS := "tournaments_folder"
 const KEY_DRAFTS := "drafts_folder"
+const KEY_RECORDS := "records_folder"
 
 const DEFAULT_SKIN_FOLDER := "user://original_skin"
 const DEFAULT_CARDPACKS := "user://cardpacks"
@@ -61,6 +63,7 @@ const DEFAULT_PORTRAITS := "user://portraits"
 const DEFAULT_MUSIC := "user://music"
 const DEFAULT_TOURNAMENTS := "user://tournaments"
 const DEFAULT_DRAFTS := "user://decks"
+const DEFAULT_RECORDS := "user://records"
 
 ## ONE PLACE HAS NO KEY: `card_back.png`, the player's own card back
 ## ([CardBack], 2026-10-19). It is one file the game writes itself from
@@ -157,6 +160,11 @@ static func tournaments_folder() -> String:
 ## Draft decks default to the ordinary deck collection. Explicit choices only.
 static func drafts_folder() -> String:
 	return _place(KEY_DRAFTS, DEFAULT_DRAFTS)
+
+
+## Public MPN archives, independent of the rolling diagnostic log.
+static func records_folder() -> String:
+	return _place(KEY_RECORDS, DEFAULT_RECORDS)
 
 
 static func draft_folder_refusal(value: String) -> String:

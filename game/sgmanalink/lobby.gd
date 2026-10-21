@@ -96,6 +96,10 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(client)
 	client.changed.connect(_queue_refresh)
+	client.mpn.completed.connect(func(bytes: PackedByteArray) -> void:
+		MpnFiles.export_bytes(self, bytes, "online-" + MpnArchive.utc_now().replace(":", "") + ".mpn"))
+	client.mpn.failed.connect(func(message: String) -> void:
+		UiChrome.explain_popup(self, "Export MPN", message))
 	client.refused.connect(func(reason: String) -> void:
 		_host_pending = false
 		_notice.text = reason
@@ -914,6 +918,11 @@ func _refresh() -> void:
 			_duel = SgDuelView.new()
 			add_child(_duel)
 			_duel.action_requested.connect(_send)
+			_duel.mpn_requested.connect(func() -> void:
+				if client.mpn.active: return
+				if not client.online or client.busy():
+					UiChrome.explain_popup(self, "Export MPN", "Wait for the connection, then try again.")
+				else: client.mpn.start(String(client.state.room.get("id", "")), String(client.state.room.get("mpn", ""))))
 			_duel.reconnect_requested.connect(client.reconnect)
 			_duel.exit_requested.connect(func() -> void: queue_free())
 			_duel.leave_requested.connect(func() -> void:

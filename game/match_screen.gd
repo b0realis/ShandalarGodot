@@ -184,6 +184,11 @@ func _start_duel() -> void:
 ## now (the sideboard step edits them) and a seed of its own.
 func _config_for_this_duel() -> DuelConfig:
 	var out := DuelConfig.new()
+	if config.record_match == "": config.record_match = MpnArchive.new_id()
+	if config.record_started == "": config.record_started = MpnArchive.utc_now()
+	out.record_match = config.record_match
+	out.record_started = config.record_started
+	out.record_game = state.duels_played() + 1
 	out.decks = [config.decks[0].duplicate(), config.decks[1].duplicate()]
 	out.printings = config.printings.duplicate(true)
 	out.sideboards = [config.sideboards[0].duplicate(),

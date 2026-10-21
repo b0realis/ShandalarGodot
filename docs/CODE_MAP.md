@@ -68,6 +68,50 @@ Each fix in full: `docs/whole-project-review-2026-10-21.md`.
   `test_review_2026_10_21_wrong_kinds.gd`,
   `test_review_2026_10_21_table_picker.gd`.
 
+## Public game history — MPN prototype (2026-10-21)
+
+- `engine/records/mpn_codec.gd`: bounded UTF-8/JSON notation parser and
+  public-state patch application; no executable replay commands.
+- `engine/records/mpn_recorder.gd`: neutral observer of typed events and
+  public state; hidden-zone retirement, public reveals and probe exclusion.
+- `game/records/mpn_archive.gd`: metadata, independent match identifiers,
+  append/flush storage and archive listing under `records_folder`.
+- `game/records/mpn_download.gd`: bounded, checked LAN chunk assembly.
+- `game/records/mpn_files.gd`: View/Cancel and export dialogs, local Web
+  import/download, shared by Options, results and the viewer.
+- `game/records/past_games.gd/.tscn`: read-only table/history viewer with
+  stepping, seeking, playback, recorded card details and metadata.
+- `game/records/mpn_projection.gd`: detached public display values for duel
+  widgets, with bounded visible objects and no rules simulation.
+- `game/records/mpn_duel_table.gd`: the duel's graphical furniture in a
+  read-only mode; unknown effects and detailed combat choices are omitted.
+- `game/records/mpn_player.gd`: graphical MPN playback, speed/turn/step
+  navigation, bounded seek checkpoints and return to the history viewer.
+- `tests/unit/test_mpn_records.gd`: hidden-state substitution, real combat
+  and casts, public handles, quoting, parser rejection, reconstruction and
+  importable specification examples (including CRLF and unterminated EOF).
+- `tests/ui/test_mpn_viewer.gd`: archive, Options and result-screen paths.
+- `tests/ui/test_mpn_player.gd`: graphical playback, detached state,
+  unknown/masked cards, non-actionable controls, seek privacy and navigation.
+- `tests/ui/test_mpn_network.gd`: both seats' identical downloads over
+  actual WebSockets, chunk bounds and table/record authorization.
+- `docs/mpn-v0.1.md`: proposed notation, player instructions, privacy
+  boundary, actual coverage, transfer contract and future work.
+- `docs/mpn-specification.md`: engine-independent MPN 0.1 implementer's
+  specification: grammar, schemas, privacy, patch algorithms, validation,
+  versioning and explicit prototype conformance gaps.
+- `docs/mpn-examples/finished-game.mpn`: importable public spell/damage
+  timeline ending in a recorded result; recording starts mid-game.
+- `docs/mpn-examples/stopped-game.mpn`: importable incomplete history with
+  a private draw represented only by counts and no invented outcome.
+
+Local duels attach the archive in `game/duel/duel_screen.gd`; local best-of
+games share grouping metadata from `game/match_screen.gd`. The LAN referee
+attaches it in `game/sgmanalink/local_server.gd` and exposes only a finished
+table's neutral file to its current seats. Protocol 30 adds this read-only
+channel independently of commands. `game/options_screen.gd` opens the file
+picker; the main menu remains unchanged.
+
 ## Experimental Android target (2026-10-21)
 
 - `packaging/android/export-preset.cfg`: standalone ARM64 phone/tablet preset,

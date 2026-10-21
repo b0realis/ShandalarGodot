@@ -1492,7 +1492,12 @@ func active_states() -> Array[int]:
 	return out
 
 
+## A partial, read-only observation can withhold cues it cannot establish.
+## Empty for live duels: their existing state derivation is unchanged.
+var omitted_states: Array[int] = []
+
 func _state_active(state: int) -> bool:
+	if state in omitted_states: return false
 	if face_down or instance == null:
 		return false
 	var on_table: bool = instance.zone == Mtg.Zone.BATTLEFIELD

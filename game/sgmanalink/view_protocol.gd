@@ -32,6 +32,7 @@ static func valid(message: Dictionary) -> bool:
 	if not message.get("type") is String:
 		return false
 	match message.type:
+		"mpn": return MpnDownload.valid_message(message)
 		"welcome":
 			return SgProtocol.exact(message, ["type", "v", "resume", "seq", "guest", "build"]) \
 				and SgProtocol.integer(message.v, SgProtocol.VERSION, SgProtocol.VERSION) and SgProtocol.token(message.resume) \
@@ -79,6 +80,9 @@ static func room(value: Variant) -> bool:
 	if value.is_empty():
 		return true
 	var fields := ["id", "name", "seat", "names", "revision", "ready", "connected", "game", "deck_names", "deck"]
+	if value.has("mpn"):
+		fields.append("mpn")
+		if not SgProtocol.short_text(value.mpn, 24): return false
 	# THE OPEN TABLE (2026-09-18): the table's deck rule and the assigned
 	# deck's name. Optional in the DTO so a seat view built by hand stays valid.
 	if value.has("decks") or value.has("fixed_deck"):

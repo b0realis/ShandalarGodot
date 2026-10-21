@@ -11,6 +11,7 @@ signal exit_requested
 signal leave_requested
 signal hall_requested
 signal tournament_requested
+signal mpn_requested
 
 var projection := SgDuelProjection.new()
 var _room: Dictionary = {}
@@ -44,6 +45,14 @@ var _tournament_panel_open := false
 func _ready() -> void:
 	# Never run the parent's local _new_game/setup. Wait for the filtered view.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func mpn_available() -> bool:
+	return game != null and game.game_over
+
+
+func export_mpn() -> void:
+	mpn_requested.emit()
 
 
 func present(room: Dictionary, online: bool, busy: bool, hosting := false) -> void:

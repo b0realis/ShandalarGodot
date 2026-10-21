@@ -26,6 +26,7 @@ var actions: SgDuelActions
 var deck_names: Array = ["Forest practice", "Forest practice"]
 var panel_colors: Array[String] = ["green", "green"]
 var journal: SgJournal
+var public_archive: MpnArchive
 var state_generation := 0
 var bot_options: Array = [{}, {}]
 var bots: Dictionary = {}
@@ -38,6 +39,19 @@ func set_bot(pid: int, options: Dictionary) -> bool:
 	bots[pid] = pilot
 	game.set_agent(pid, pilot)
 	return true
+
+
+## Called only by the actual LAN host, never by a seat projection or lab.
+func record_public() -> void:
+	if public_archive != null or not MpnArchive.allowed(): return
+	public_archive = MpnArchive.new()
+	public_archive.failed.connect(func(message: String) -> void: push_warning(message))
+	public_archive.start(game, MpnArchive.metadata(game, "lan-host"))
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and public_archive != null:
+		public_archive.close()
 
 
 func _init(seed_value := -1, decks: Array = [{}, {}], names: Array = ["Player 1", "Player 2"], rules: Dictionary = {}) -> void:

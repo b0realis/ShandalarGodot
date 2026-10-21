@@ -19,8 +19,9 @@ extends RefCounted
 ## 29 (whole-game campaign, 2026-10-07): a choice's lines name the board
 ## card each stands for (`choice.cards`, a handle or "" per line), so two
 ## same-named permanents can be told apart at a network table.
-const VERSION := 29
-const SUBPROTOCOL := "sgmanalink-local-v29"
+## 30: read-only, bounded public MPN download for either finished seat.
+const VERSION := 30
+const SUBPROTOCOL := "sgmanalink-local-v30"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]
@@ -207,6 +208,11 @@ static func valid(message: Dictionary) -> bool:
 			and token(message.access) and (literal(message.resume, "") or token(message.resume)) \
 			and nickname(message.nickname) and token(message.build) and SgCompatibility.valid_stamp(message.stamp)
 	if literal(message.get("type"), "abandon"): return exact(message, ["v", "type"])
+	if literal(message.get("type"), "mpn"):
+		return exact(message, ["v", "type", "room", "record", "offset"]) \
+			and short_text(message.room, 16) and message.record is String \
+			and (message.record == "" or short_text(message.record, 24)) \
+			and integer(message.offset, 0, MpnCodec.MAX_BYTES)
 	if not exact(message, ["v", "type", "seq", "room", "revision", "action"]):
 		return false
 	if not message.room is String or (message.room != "" and not short_text(message.room, 16)):

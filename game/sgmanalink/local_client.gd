@@ -5,6 +5,7 @@ extends Node
 
 signal changed
 signal refused(reason: String)
+var mpn := MpnDownload.new()
 const COMMAND_TIMEOUT_MS := 15000
 ## Connections a host may close on the hello, without a welcome or a reason,
 ## before this client stops retrying it (2026-10-03).
@@ -107,6 +108,7 @@ func _connect() -> Error:
 
 
 func forget() -> void:
+	mpn.reset()
 	CardPacks.unlock_catalogue(self)
 	_wanted = false
 	_welcomed = false
@@ -215,6 +217,12 @@ func _process(_delta: float) -> void:
 
 
 func poll() -> void:
+	if mpn.active:
+		if not online or _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
+			mpn.abort("MPN download interrupted. Reconnect and try Export MPN again before leaving the table.")
+		else:
+			var request := mpn.next(Time.get_ticks_msec())
+			if not request.is_empty(): _socket.send_text(SgProtocol.encode(request))
 	for closing in _closing.duplicate():
 		closing.socket.poll()
 		if closing.socket.get_ready_state() == WebSocketPeer.STATE_CLOSED or Time.get_ticks_msec() >= int(closing.until):
@@ -304,6 +312,9 @@ func poll() -> void:
 			changed.emit()
 			return
 		match message.get("type", ""):
+			"mpn":
+				mpn.receive(message)
+				continue
 			"welcome":
 				if message.build != build_fingerprint:
 					_wanted = false

@@ -1,0 +1,18 @@
+[Notation "MPN/0.1"]
+[Visibility "public"]
+[Coverage "public-observations"]
+[Started "2026-10-21T18:30:00Z"]
+[MatchStarted "2026-10-21T18:30:00Z"]
+[Match "example-stopped-match"]
+[Game 1]
+[Player.P1 "Green Wizard"]
+[Player.P2 "Red Wizard"]
+[RulesProfile "Modern rules"]
+[CardPool ["2ed"]]
+[Recorder "ExampleEngine/1.0"]
+[Comments ["Illustrative recording: one opening draw, then recording stops."]]
+
+1 state {"turn":0,"step":"pregame","active":0,"players":[{"life":20,"poison":0,"hand":0,"library":60,"mana":{}},{"life":20,"poison":0,"hand":0,"library":60,"mana":{}}],"objects":[],"stack":[],"combat":{"attackers":[],"blocks":[]}}
+2 state {"players":[{"life":20,"poison":0,"hand":1,"library":59,"mana":{}},{"life":20,"poison":0,"hand":0,"library":60,"mana":{}}]}
+3 draw {"player":"P1","count":1}
+4 close {"reason":"recording-stopped"}

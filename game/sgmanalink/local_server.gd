@@ -614,6 +614,9 @@ func _receive(id: int, message: Dictionary) -> void:
 	if message.type == "abandon":
 		_abandon(sid)
 		return
+	if message.type == "mpn":
+		_send(id, _mpn_reply(sid, message))
+		return
 	if message.type != "command":
 		_drop(id)
 		return
@@ -654,6 +657,33 @@ func _receive(id: int, message: Dictionary) -> void:
 
 func action_changes_listings(op: String) -> bool:
 	return op in ["host", "join", "leave", "ready", "remove_guest", "concede", "add_bot", "remove_bot"]
+
+
+## Only a current participant may read their finished table's public file.
+## The client never supplies a path, session token, deck or engine object.
+func _mpn_reply(sid: int, request: Dictionary) -> Dictionary:
+	var reply := {"type": "mpn", "record": "", "offset": int(request.offset), "total": 0,
+		"data": "", "error": "The public record is unavailable. Export before leaving the finished table."}
+	var session: Dictionary = _sessions.get(sid, {})
+	var room: Dictionary = _rooms.get(session.get("room", ""), {})
+	if room.is_empty() or room.id != request.room or not room.seats.has(sid) \
+		or room.match == null or not room.match.game.game_over: return reply
+	var archive: MpnArchive = room.match.public_archive
+	if archive == null or (request.record != "" and request.record != archive.record_id): return reply
+	var file := FileAccess.open(archive.path, FileAccess.READ)
+	if file == null: return reply
+	var size := file.get_length()
+	if size > MpnCodec.MAX_BYTES or int(request.offset) >= size:
+		file.close()
+		return reply
+	file.seek(int(request.offset))
+	var chunk := file.get_buffer(mini(MpnDownload.CHUNK, size - int(request.offset)))
+	file.close()
+	reply.record = archive.record_id
+	reply.total = size
+	reply.data = Marshalls.raw_to_base64(chunk)
+	reply.error = ""
+	return reply
 
 
 func _bump_room(room_id: String) -> void:
@@ -882,7 +912,9 @@ func _start_if_both_ready(room: Dictionary) -> void:
 func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
 	# The referee chooses its seed. Tests may override this factory on their
 	# own server; no wire command can choose or retrieve a live game's seed.
-	return SgPracticeMatch.new(-1, decks, names, rules)
+	var match_value := SgPracticeMatch.new(-1, decks, names, rules)
+	match_value.record_public()
+	return match_value
 
 
 func _guest_name(sid: int) -> String:
@@ -936,6 +968,8 @@ func _state(sid: int) -> Dictionary:
 			"deck": own.decks[seat].duplicate(true),
 			"decks": _deck_rule(own), "fixed_deck": String(own.get("fixed", {}).get("name", "")),
 			"rules": _table_rules(own), "game": _room_game(own, seat)}
+		if own.match != null and own.match.public_archive != null:
+			view.mpn = own.match.public_archive.record_id
 		if _is_bot(own.seats[0]) or _is_bot(own.seats[1]):
 			view.bots = []
 			for sid_value: int in own.seats:

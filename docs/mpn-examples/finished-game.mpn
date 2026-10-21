@@ -1,0 +1,25 @@
+[Notation "MPN/0.1"]
+[Visibility "public"]
+[Coverage "public-observations"]
+[Started "2026-10-21T18:31:00Z"]
+[MatchStarted "2026-10-21T18:30:00Z"]
+[Match "example-finished-match"]
+[Game 1]
+[Player.P1 "Red Wizard"]
+[Player.P2 "Green Wizard"]
+[RulesProfile "Modern rules"]
+[CardPool ["2ed"]]
+[Recorder "ExampleEngine/1.0"]
+[Comments ["Illustrative history attached in the first main phase, after P1 played a Mountain. Earlier play is not recorded."]]
+
+1 state {"turn":1,"step":"main1","active":0,"players":[{"life":20,"poison":0,"hand":6,"library":53,"mana":{}},{"life":20,"poison":0,"hand":7,"library":53,"mana":{}}],"objects":[{"id":"o1","name":"Mountain","zone":"battlefield","owner":0,"controller":0,"power":0,"toughness":0,"damage":0,"tapped":false,"face_down":false,"creature":false,"counters":{},"types":["land"],"subtypes":["Mountain"]}],"stack":[],"combat":{"attackers":[],"blocks":[]}}
+2 state {"players":[{"life":20,"poison":0,"hand":6,"library":53,"mana":{"R":1}},{"life":20,"poison":0,"hand":7,"library":53,"mana":{}}],"objects":[{"id":"o1","name":"Mountain","zone":"battlefield","owner":0,"controller":0,"power":0,"toughness":0,"damage":0,"tapped":true,"face_down":false,"creature":false,"counters":{},"types":["land"],"subtypes":["Mountain"]}]}
+3 tap {"player":"P1","object":"o1"}
+4 mana {"player":"P1","object":"o1"}
+5 state {"players":[{"life":20,"poison":0,"hand":5,"library":53,"mana":{}},{"life":20,"poison":0,"hand":7,"library":53,"mana":{}}],"objects":[{"id":"o2","name":"Lightning Bolt","zone":"stack","owner":0,"controller":0,"power":0,"toughness":0,"damage":0,"tapped":false,"face_down":false,"creature":false,"counters":{},"types":["instant"],"rules_text":"Lightning Bolt deals 3 damage to any target."}],"stack":[{"id":"s1","kind":"spell","controller":0,"source":"o2","name":"Lightning Bolt","targets":[{"player":"P2","amount":1}]}]}
+6 cast {"player":"P1","object":"o2"}
+7 state {"players":[{"life":20,"poison":0,"hand":5,"library":53,"mana":{}},{"life":17,"poison":0,"hand":7,"library":53,"mana":{}}]}
+8 damage {"amount":3,"source":"o2","target":"P2"}
+9 state {"removed":["o2"],"objects":[{"id":"o3","name":"Lightning Bolt","zone":"graveyard","owner":0,"controller":0,"power":0,"toughness":0,"damage":0,"tapped":false,"face_down":false,"creature":false,"counters":{},"types":["instant"],"rules_text":"Lightning Bolt deals 3 damage to any target."}],"stack":[]}
+10 comment {"text":"Green Wizard concedes. This annotation explains the outcome; it is not an executable action."}
+11 result {"result":"1-0","ended":"2026-10-21T18:31:30Z"}

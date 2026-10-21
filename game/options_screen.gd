@@ -134,6 +134,15 @@ func _ready() -> void:
 	demo.pressed.connect(func() -> void: DemoSetup.open_on(self))
 	content.add_child(demo)
 
+	var past := UiChrome.menu_button("View past-played games", Vector2(320, 36))
+	past.name = "ViewPastGames"
+	past.pressed.connect(func() -> void: MpnFiles.choose(self, func(path: String) -> void:
+		var viewer := PastGamesScreen.new()
+		viewer.overlay = true
+		add_child(viewer)
+		viewer.open_record(path)))
+	content.add_child(past)
+
 	var draw := UiChrome.menu_button(DrawSetup.DRAW_TITLE, Vector2(320, 36))
 	draw.name = "DrawCards"
 	draw.pressed.connect(func() -> void: DrawSetup.draw_on(self))

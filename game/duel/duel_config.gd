@@ -55,6 +55,10 @@ var ante := 0
 ## that has not asked for a match (the Deck Lab, the tests, a standalone
 ## scene run) is exactly the single duel it was before matches existed.
 var best_of := MatchState.FREE_PLAY
+## Public archive grouping only; never a shuffle seed or identity token.
+var record_match := ""
+var record_started := ""
+var record_game := 1
 var sideboard_between_duels := false
 ## Per-seat sideboards — the `SB:` lines [DeckList] has always parsed and
 ## round-tripped. Until matches landed nothing read this field, which is

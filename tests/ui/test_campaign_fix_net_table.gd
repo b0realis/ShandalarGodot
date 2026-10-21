@@ -268,8 +268,8 @@ func test_the_special_discard_is_an_option_outside_the_window() -> void:
 # ===================================================== the version stamp --
 
 func test_protocol_29_and_the_campaign_rules_revision() -> void:
-	assert_eq(SgProtocol.VERSION, 29)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v29")
+	assert_eq(SgProtocol.VERSION, 30)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v30")
 	assert_eq(SgCompatibility.RULES_REVISION, "sgmanalink-campaign-2026-10-07")
 	assert_true(SgCompatibility.valid_stamp(SgCompatibility.stamp()), "the stamp's rules text fits the wire")
 	assert_true(SgProtocol.subprotocols().has("sgmanalink-local-v28"),

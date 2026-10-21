@@ -214,6 +214,7 @@ var _result_pending := false
 var _options_dialog: OriginalDialog = null    # `Duel Options...` (§6.4)
 var _duel_log: DuelLog = null                # the log window, `L` [QoL]
 var _log_file: DuelLogFile = null            # the running `duel_log.txt` [QoL]
+var _public_archive: MpnArchive = null      # public-only, permanent MPN record
 var _log_button: Button = null                # its switch on the reserve strip
 ## THE LOOK (2026-10-03): the window naming the cards an effect showed
 ## the viewer (Glasses of Urza, Rag Man, Nebuchadnezzar...), whether a
@@ -756,6 +757,13 @@ func _new_game() -> void:
 	if config.is_test():
 		_begin_test()
 		return
+	if MpnArchive.allowed():
+		_public_archive = MpnArchive.new()
+		_public_archive.failed.connect(_report)
+		var metadata := MpnArchive.metadata(game, "local", config.record_match, config.record_game)
+		metadata.Format = config.deck_format
+		if config.record_started != "": metadata.MatchStarted = config.record_started
+		_public_archive.start(game, metadata)
 	# The coin toss (the original's Toss.wav moment): who plays first.
 	# Rolled on game.rng, not the global RNG, so a seeded game replays
 	# its opening exactly — the leader is part of the game's stream.
@@ -958,10 +966,30 @@ func _show_result_window(verdict: String) -> void:
 	# A TEST'S END offers the try again beside it (Test hands, 2026-10-19):
 	# the combo went off or it did not, and the next thing a tester does is
 	# run it once more — OK goes back to the Test hands screen.
+	var export_button: Button
 	if config.is_test():
 		_over_dialog.add_button(RESTART_TEST).pressed.connect(restart_test)
-	_over_dialog.add_button("OK").pressed.connect(_on_game_over_dismissed)
+	elif mpn_available():
+		# One footer: matching buttons, export left and confirmation right.
+		# The expanding gap keeps the two actions clearly separated.
+		export_button = OriginalDialog.button("Export MPN")
+		export_button.name = "ExportMPN"
+		export_button.focus_mode = Control.FOCUS_ALL
+		export_button.tooltip_text = "Save this duel's public game record (.mpn)."
+		export_button.pressed.connect(export_mpn)
+		_over_dialog._buttons.add_child(export_button)
+		var gap := Control.new()
+		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_over_dialog._buttons.add_child(gap)
+	var ok_button := _over_dialog.add_button("OK")
+	ok_button.pressed.connect(_on_game_over_dismissed)
+	if export_button != null:
+		var button_size := export_button.get_combined_minimum_size().max(ok_button.get_combined_minimum_size())
+		export_button.custom_minimum_size = button_size
+		ok_button.custom_minimum_size = button_size
 	add_child(_over_dialog)
+	if not config.is_test(): ok_button.grab_focus()
 	# EVERY LINE FOLDS AT THE WINDOW'S EDGE and the window grows to hold
 	# the rows. A gauntlet opponent is named after its deck, and a deck
 	# title can run to seventy characters; the 2026-09-27 playtest: *"in
@@ -975,6 +1003,15 @@ func _show_result_window(verdict: String) -> void:
 	for line in next_draw_lines():
 		_over_dialog.body().add_child(OriginalDialog.wrapped(line, 14))
 	_over_dialog.fit_height()
+
+
+func mpn_available() -> bool:
+	return _public_archive != null and FileAccess.file_exists(_public_archive.path)
+
+
+func export_mpn() -> void:
+	if mpn_available():
+		MpnFiles.export_bytes(self, FileAccess.get_file_as_bytes(_public_archive.path), _public_archive.path.get_file())
 
 
 ## How long the losing numeral takes to fall, and how long it is held at
@@ -3408,6 +3445,9 @@ func _clear_pending(cast := false) -> void:
 ## freed screen for the rest of the session (2026-09-02). The screen puts
 ## the system cursor back on its way out, whichever way it leaves.
 func _exit_tree() -> void:
+	if _public_archive != null:
+		_public_archive.close()
+		_public_archive = null
 	if _target_cursor_active:
 		_set_target_cursor(false)
 
