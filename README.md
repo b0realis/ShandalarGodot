@@ -100,6 +100,30 @@ The game also includes an in-game [Booster Draft](docs/booster-draft.md): choose
 sets/cards, open random packs, and build against a countdown with automatic saves.
 Find it under Options; no command-line launcher is needed.
 
+## Magic Public Notation (MPN) — a proposal to the community
+
+Every duel you play, on your own or on the LAN, can be saved as an `.mpn`
+file: a plain-text public history of the game — everything both players could see, never a hidden hand or a
+library's order. **Magic Public Notation** is our proposal for an open,
+shared format for such records, independent of any one engine: reading one
+takes a JSON parser and the specification's patch rules — not Godot, a
+card database or a rules engine. Export
+one at the end of a duel, open it under **Options → View past-played
+games**, and **Watch duel** plays it back on the familiar table.
+
+- [The MPN 0.1 specification](docs/mpn-specification.md) — the grammar, the
+  public-information boundary, how to rebuild each state, and a
+  conformance checklist for writers and readers.
+- [The player guide](docs/mpn-v0.1.md) — recording, exporting and watching
+  in ShandalarGodot, locally and on the LAN.
+- [Two example files](docs/mpn-examples/) to import and test against.
+
+MPN 0.1 is a draft, not an official Magic standard. If you build a Magic
+engine, a replay viewer, a tournament tool or an archive, please read it,
+try it, and tell us what it needs — open an
+[issue](https://github.com/b0realis/ShandalarGodot/issues) with "MPN" in
+the title. A second implementation is the best test a format can have.
+
 ## Philosophy
 
 **The limitation is the feature.** Preserve the finite early-Magic pool

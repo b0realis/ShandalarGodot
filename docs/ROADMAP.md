@@ -18810,6 +18810,14 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-21 — MPN, proposed to the community (0.50.47)
+
+Magic Public Notation (0.50.44: `docs/mpn-specification.md`,
+`docs/mpn-v0.1.md`, `docs/mpn-examples/`) is put forward as an open format
+for other engines, viewers, tournament tools and archives: a README
+section, the release notes' opening paragraph, and the specification's own
+line on where comments go (an issue with "MPN" in the title).
+
 ## 2026-10-21 — The game history's two CI failures (0.50.46)
 
 CI of 0.50.45 failed on two things 0.50.44 (the MPN game history) brought
