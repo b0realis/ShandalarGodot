@@ -18810,6 +18810,20 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-21 — The game history's two CI failures (0.50.46)
+
+CI of 0.50.45 failed on two things 0.50.44 (the MPN game history) brought
+and the desk's targeted runs did not select:
+
+- **The end-of-duel window's Export MPN and OK** were sized to match before
+  the window joined the tree, in the fallback font: where the theme's font
+  measures wider (CI), Export MPN grew to 104 beside a 100-wide OK. They
+  are matched in the tree now.
+- **`tests/ui/test_card_printings.gd`** made a `MatchScreen` without the
+  match state `_ready` makes, which a duel's config reads its record number
+  from since 0.50.44; it gives it one, as the hunt did for
+  `test_hotseat_privacy.gd`.
+
 ## 2026-10-21 — Three rulings and the second hunt (0.50.45)
 
 The owner ruled on the review's three open questions, then: *"go bug hunt
@@ -18834,9 +18848,11 @@ record, every fix with its test and what is still open:
   the game history and the tools 24, handovers 13. Each fixed defect was
   proven by a probe that failed first and is kept as a regression test
   (`test_ruling_2026_10_21_*`, `test_hunt_2026_10_21_*`).
-- Two clocks in the tests (`test_c2_f_net_wire`,
-  `test_campaign_fix_ai_b_licid_budget`) now keep the best of several
-  readings; a machine busy with another project's work failed them.
+- Four timing tests (`test_c2_f_net_wire`,
+  `test_campaign_fix_ai_b_licid_budget`, `test_c2_f_net_sockets`'s UDP
+  flood, `test_shandalar_mcp`'s kept transcript) read the machine now —
+  best of several readings, a percentile, a wait for the line — where a
+  machine busy with another project's work failed them.
 - The Android preset's `version/code` follows the version again (0.50.44
   left it at 50043).
 

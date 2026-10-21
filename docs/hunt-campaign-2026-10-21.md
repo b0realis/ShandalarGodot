@@ -391,3 +391,10 @@ Four tests that measured the machine more than the game, repaired:
   before the file has the line. The test now waits for it (a fake referee
   slowed half a second between the two fails the old read and passes the
   new one).
+
+CI of 0.50.45 (all four GUT shards, the tools, the offline Web) failed in
+two shards, on two things the MPN game history (0.50.44) brought that no
+targeted group above selected: the end-of-duel window's Export MPN button
+sized before the window was in the tree (104 beside a 100-wide OK in CI's
+font), and `test_card_printings` making a match screen without its state.
+Both fixed in 0.50.46 (`docs/ROADMAP.md`).

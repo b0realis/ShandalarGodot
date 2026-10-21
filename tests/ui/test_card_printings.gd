@@ -189,6 +189,9 @@ func test_variant_medallion_floats_over_information_without_changing_layout() ->
 func test_match_configuration_and_tournament_checkpoint_keep_preferences() -> void:
 	var match_screen := MatchScreen.new()
 	match_screen.config = DuelConfig.hotseat_default()
+	# The match's state, as `_ready` makes it: a duel's config reads its
+	# record number off it since the MPN history (0.50.44).
+	match_screen.state = MatchState.new()
 	match_screen.config.printings[0] = {"Forest": "por:215"}
 	var config := match_screen._config_for_this_duel()
 	assert_eq(config.printings[0], {"Forest": "por:215"})

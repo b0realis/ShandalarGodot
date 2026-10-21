@@ -994,11 +994,14 @@ func _show_result_window(verdict: String) -> void:
 		_over_dialog._buttons.add_child(gap)
 	var ok_button := _over_dialog.add_button("OK")
 	ok_button.pressed.connect(_on_game_over_dismissed)
+	add_child(_over_dialog)
+	# Measured in the tree, in the font the window wears there: measured
+	# before, "Export MPN" came out 100 wide and grew to 104 beside a
+	# 100-wide OK where the fallback font is not the theme's (CI, 0.50.44).
 	if export_button != null:
 		var button_size := export_button.get_combined_minimum_size().max(ok_button.get_combined_minimum_size())
 		export_button.custom_minimum_size = button_size
 		ok_button.custom_minimum_size = button_size
-	add_child(_over_dialog)
 	if not config.is_test(): ok_button.grab_focus()
 	# EVERY LINE FOLDS AT THE WINDOW'S EDGE and the window grows to hold
 	# the rows. A gauntlet opponent is named after its deck, and a deck
