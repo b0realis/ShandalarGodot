@@ -392,6 +392,9 @@ disabled now. (b) `MiniCard.wants_rotation()` still refuses to turn a
 face-down card, so a masked attacker tapped in combat does not draw its
 90° turn. Tappedness is PUBLIC information, so that is an omission in the
 safe direction, and it is the one piece of §5.1 deliberately left open.
+Moot since 0.50.45: a masked creature turns face up as it becomes tapped,
+attacking included, as Illusionary Mask says, so no face-down card is
+tapped on the table.
 
 ### 5.2 The skinned frame threw away `HIGHLIGHT_WIDTH` — **fixed**
 

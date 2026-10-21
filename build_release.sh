@@ -574,6 +574,15 @@ if [ "$QUEST" = 1 ]; then
 	AAPT="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/aapt 2>/dev/null | sort -V | tail -1)" || AAPT=""
 	if [ -n "$AAPT" ]; then
 		perms="$("$AAPT" dump permissions "$BIN" 2>&1)" || { echo "BUILD FAILED: aapt could not read the APK's manifest:" >&2; echo "$perms" >&2; exit 1; }
+		# THE PACKAGE NAME the comment above promised and nothing read
+		# (hunt 2026-10-21): a machine's own preset under another name — the
+		# plain Android one — built "ok", and both Quest scripts, wired to
+		# this name, then found no game folders on the headset.
+		package="$(printf '%s\n' "$perms" | sed -n 's/^package: //p' | head -1)"
+		if [ "$package" != "com.b0realis.shandalar" ]; then
+			echo "BUILD FAILED: the APK's package is '${package:-unknown}', not com.b0realis.shandalar — push_to_quest.sh and quest_fresh_install.sh look for that one. Export with the Android Quest preset of export_presets.cfg.example" >&2
+			exit 1
+		fi
 		for need in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_MULTICAST_STATE; do
 			case "$perms" in
 				*"android.permission.$need'"*) ;;
@@ -610,14 +619,18 @@ if [ "$MACOS" = 1 ]; then
 	trap 'rm -f "$SMOKE_OVERRIDE"' EXIT
 	printf '%s\n' '[application]' 'config/name="Shandalar Build Smoke"' > "$SMOKE_OVERRIDE"
 	SMOKE="$OUT/smoke.log"
+	# Said as the Linux branch says it (hunt 2026-10-21): an app that died
+	# without a word ended the build with exit 1 and nothing on the screen.
 	if ! "$SHANDALAR_TIMEOUT" -k 5 120 "$BIN" --headless \
 		--quit-after 120 --log-file "$OUT/smoke-engine.log" > "$SMOKE" 2>&1 </dev/null; then
+		echo "BUILD FAILED: the exported macOS app did not boot (log: $SMOKE)" >&2
 		tail -20 "$SMOKE" >&2
 		exit 1
 	fi
 	# "1 ObjectDB instance WAS leaked" for one object, "N instances WERE"
 	# for more — the gate read only the plural until 2026-10-03.
 	if grep -qE '^(ERROR|SCRIPT ERROR)|ObjectDB instances? (was|were) leaked at exit' "$SMOKE"; then
+		echo "BUILD FAILED: the exported macOS app booted with errors (log: $SMOKE)" >&2
 		tail -20 "$SMOKE" >&2
 		exit 1
 	fi

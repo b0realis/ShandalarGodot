@@ -12,11 +12,17 @@ extends CardScript
 ## The shield is the REPLACEMENT's effect, not a static of the enchantment
 ## (2026-10-03): skipping the draw registers a floating static
 ## (ContinuousEffects.add_floating_static) that lasts until the skipping
-## player's next untap step — "until your next turn" (Duration.
-## UNTIL_UNTAP_OF) — whatever becomes of the Sanctuary, and however many
+## player's next upkeep begins — "until your next turn" (Duration.
+## UNTIL_UPKEEP_OF) — whatever becomes of the Sanctuary, and however many
 ## turns (Time Walk, Stolen Time) come in between. It used to be a static
 ## reading the turn number off the Sanctuary's memory, so destroying the
 ## Sanctuary dropped the shield and an opponent's extra turn outlasted it.
+##
+## The UPKEEP, not the untap step (bug hunt 2026-10-21): a turn whose untap
+## step is skipped (Stasis, Sands of Time, Avizoa) still begins, but its
+## untap step never comes, and a shield tied to it stayed up for good.
+## Nobody attacks in an untap step, so ending at the upkeep is the same
+## "until your next turn" for everything the shield does.
 ##
 ## The ban itself is Moat's mechanism (CardInstance.cur_cant_attack) narrowed
 ## to the opponent's ground creatures, so LIVE keywords decide: a creature
@@ -60,7 +66,7 @@ static func _offer(game: MtgGame, source: CardInstance, pid: int,
 	game.continuous.add_floating_static(source, StaticAbility.new(
 			_shield.bind(pid), "Until your next turn, you can't be attacked "
 			+ "except by creatures with flying and/or islandwalk."),
-		ContinuousEffects.Duration.UNTIL_UNTAP_OF, pid)
+		ContinuousEffects.Duration.UNTIL_UPKEEP_OF, pid)
 	game.log_line("%s skips their draw — the Island Sanctuary closes"
 		% game.players[pid].player_name)
 	# Nothing else in this path recalculates.

@@ -124,7 +124,10 @@ static func _targets_source(g: MtgGame, s: CardInstance, spell: CardInstance) ->
 # member (CR 702.22h), so "it's blocking" / "blocking it" read the whole band
 # — opposing_attackers() on the blocking side, blockers_of_band(band_of())
 # on the attacking side — not just the attacker the block was declared on.
-static func _blocking_it(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.opposing_attackers(s.id).has(i.id)
+# An attacker that left combat (regenerated, Reconnaissance) is no longer
+# blocked by anything (CR 506.4), though the blocker's entry still names it
+# (CombatState.forget) — bug hunt 2026-10-21, cardsB.
+static func _blocking_it(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.opposing_attackers(s.id).has(i.id) and g.combat.attackers.has(i.id)
 static func _band_blockers(g: MtgGame, s: CardInstance) -> Array[int]: return g.combat.blockers_of_band(g.combat.band_of(s.id))
 ## "Whenever this creature blocks": once per block, though a blocker of a
 ## band hears a BLOCKED event per member — only the first answers (bug pass

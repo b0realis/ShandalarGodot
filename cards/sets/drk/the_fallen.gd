@@ -68,7 +68,13 @@ static func _haunt(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 	var bitten: Array = source.memory.get("bitten", []) \
 		if source.zone == Mtg.Zone.BATTLEFIELD \
 		else game.trigger_context(source).get("bitten", [])
+	# "Each OPPONENT … it has dealt damage to": a player it bit who has since
+	# taken control of it is no opponent of its controller now (bug hunt
+	# 2026-10-21 — it used to haunt its own new controller).
+	var me := game.current_resolution_controller()
+	if me < 0:
+		me = source.controller_id
 	for victim in bitten:
 		var pid := int(victim)
-		if not game.players[pid].has_lost:
+		if pid != me and not game.players[pid].has_lost:
 			game.deal_damage(source, TargetRef.player(pid), 1)

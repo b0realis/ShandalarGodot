@@ -1179,8 +1179,11 @@ def read_files(target: Path, names: set[str], limit: int | None = None) -> dict[
 # at its own resolution; any other size is drawn at its own size, as a
 # skin always could be. `--check` reads them against the catalogue's own
 # table: docs/skin-catalogue.csv in a checkout, SKIN.csv in the skin/
-# folder beside a packaged game, where this tool ships flat.
-SIZE_TABLES = (ROOT / "docs" / "skin-catalogue.csv", HERE / "skin" / "SKIN.csv")
+# folder beside a packaged game — whose tools/ folder holds this tool, one
+# level down (hunt 2026-10-21: only the flat copy found it), or beside it
+# where it ships flat.
+SIZE_TABLES = (ROOT / "docs" / "skin-catalogue.csv", ROOT / "skin" / "SKIN.csv",
+               HERE / "skin" / "SKIN.csv")
 MAX_SCALE = 4
 
 ## THE KEYED PLACES: the pictures a game cutter takes a colour out of,

@@ -22,6 +22,19 @@ static func header_text(headers: Dictionary) -> String:
 static func record_text(serial: int, kind: String, data: Dictionary) -> String:
 	return "%d %s %s\n" % [serial, kind, JSON.stringify(data)]
 
+## A file's or a download's BYTES, decoded strictly (hunt 2026-10-21): the
+## specification makes invalid UTF-8 an error (§2, §9), and Godot's decoder
+## replaces it with U+FFFD instead — a damaged record opened as if whole.
+## A decode that does not encode back to the same bytes replaced something.
+## A leading byte-order mark is passed over, as the decoder always did.
+static func parse_bytes(bytes: PackedByteArray) -> Dictionary:
+	if bytes.size() > MAX_BYTES: return _error("Record exceeds the 32 MiB prototype limit.")
+	var body := bytes
+	if bytes.size() >= 3 and bytes[0] == 0xEF and bytes[1] == 0xBB and bytes[2] == 0xBF: body = bytes.slice(3)
+	var text := body.get_string_from_utf8()
+	if text.to_utf8_buffer() != body: return _error("This file is not valid UTF-8 text.")
+	return parse(text)
+
 static func parse(text: String) -> Dictionary:
 	if text.to_utf8_buffer().size() > MAX_BYTES: return _error("Record exceeds the 32 MiB prototype limit.")
 	var headers := {}

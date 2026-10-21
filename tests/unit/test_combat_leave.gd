@@ -37,6 +37,10 @@ func test_a_bounced_attacker_is_out_of_combat() -> void:
 
 
 func test_an_anted_attacker_is_out_of_combat() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var bear := _attacking_bear()
 	g.move_to_ante(bear)
 	assert_eq(bear.zone, Mtg.Zone.ANTE, "it was staked")

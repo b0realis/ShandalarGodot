@@ -406,6 +406,13 @@ func _scroll(pos: Vector2, relative: Vector2) -> void:
 func _scroll_container_under() -> ScrollContainer:
 	var node: Control = get_tree().root.gui_get_hovered_control()
 	while node != null:
+		# A CONTROL THAT IS DRAGGED ITSELF is no list to scroll (hunt of
+		# 2026-10-21): the Options screen's volume and pace sliders sit in
+		# its scrolling page, so a finger on one scrolled the page and the
+		# handle never moved; a finger on a scroll bar's thumb (the
+		# container's own) moved the page against the thumb.
+		if node is Slider or node is ScrollBar:
+			return null
 		if node is ScrollContainer:
 			return node as ScrollContainer
 		node = node.get_parent_control()

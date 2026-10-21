@@ -8,6 +8,9 @@ extends CardScript
 ## cosmetic in this combat (they stay blocking) but real for the rest of
 ## the turn; the prevention is the floating combat-damage shield the engine
 ## already uses for Lady Evangela, applied to both sides of the block.
+## "Each creature blocking it" is BAND-WIDE (CR 702.22h): a creature
+## blocking any member of the target's band is blocking the target (bug
+## hunt 2026-10-21 — only the blocks declared at the target were read).
 
 
 static func _is_attacking(game: MtgGame, inst: CardInstance) -> bool:
@@ -32,7 +35,7 @@ class FeintEffect extends EffectBase:
 		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		game.continuous.add_until_eot_combat_prevention(attacker.id, true, false)
-		for blocker_id in game.combat.blockers_of(attacker.id):
+		for blocker_id in game.combat.blockers_of_band(game.combat.band_of(attacker.id)):
 			var blocker := game.find_instance(blocker_id)
 			if blocker == null or blocker.zone != Mtg.Zone.BATTLEFIELD:
 				continue

@@ -201,9 +201,12 @@ func test_the_legend_rule_sees_the_new_name() -> void:
 	_synthetic_to_graveyard(0, _legend())
 	assert_eq(shifter.data.card_name, "Test Legend")
 	g.check_state_based_actions()
-	assert_true(shifter.zone == Mtg.Zone.BATTLEFIELD \
-		and legend.zone == Mtg.Zone.GRAVEYARD,
-		"two legends share a name: the newer one is buried (the Shapeshifter is older)")
+	# The owner's ruling of 2026-10-21: the legend rule buries whichever
+	# permanent BECAME that legend last. The Shapeshifter entered first but
+	# took the legend's text only now (MtgGame.legend_since), so it goes.
+	assert_true(shifter.zone == Mtg.Zone.GRAVEYARD \
+		and legend.zone == Mtg.Zone.BATTLEFIELD,
+		"two legends share a name: the one that became it last is buried (the Shapeshifter)")
 
 
 # ----------------------------------------------------------------- copies --

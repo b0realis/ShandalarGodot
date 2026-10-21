@@ -48,7 +48,8 @@ extends RefCounted
 ##     autoload says so with `scrollable`) is a SCROLL intent, not a
 ##     drag: no button is pressed, and the autoload moves the
 ##     [ScrollContainer] under it with the finger, the way every phone
-##     list moves. Nothing in a scrolling list of this game is dragged.
+##     list moves. In a scrolling list only a slider and a scroll bar are
+##     dragged, and the autoload does not call them scrollable (2026-10-21).
 ##   - **two-finger drag** is WHEEL NOTCHES at the midpoint, one per
 ##     [constant WHEEL_STEP] of travel — the deck builder's card grid, the
 ##     duel log, any list. The finger moving DOWN scrolls UP (the content

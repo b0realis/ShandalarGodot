@@ -14,6 +14,111 @@
   LAN lock; `AddPackNote`, the line saying what the last try came to.
 - `tests/ui/test_card_packs_add_pack.gd`.
 
+## The second hunt (2026-10-21)
+
+The owner's three rulings and the hunt in what the review had not read;
+each fix in full: `docs/hunt-campaign-2026-10-21.md`.
+
+- `engine/mtg_game.gd`: the ante ruling — `NOT_FOR_ANTE_LINE`,
+  `is_ante_card`, `not_for_ante_refusal` (in `_cast_announce_checks` and
+  first in `ability_timing_refusal`); `ante_top_of_library` and
+  `move_to_ante` (a bool now) refuse when `ante_enabled` is false. Divided
+  damage — `chosen_target_count` (`_resolving_chosen`, set in
+  `_run_effects_impl`), read by `cards/sets/2ed/fireball.gd`. The legend
+  rule — `legend_since`, `note_identity_change` (`_identity_since`; from
+  `become_copy`, `turn_face_up` and `continuous.gd`
+  `_graveyard_top_copies`), read by `_newest_duplicate_legend`.
+  Illusionary Mask — `_turn_face_up_quietly` (attacking, a regeneration
+  tap, a {T} cost, a mana tap), `_assigns_combat_damage`. Auras —
+  `aura_barred_by_another` (from `aura_can_enchant` and the state-based
+  Aura check). Combat — `_blocked_by_another_this_combat` (in
+  `remove_from_combat`); `_move_to_graveyard` exiles a token too.
+- `engine/core/card_instance.gd`: `cur_other_auras_barred_by` (Consecrate
+  Land, Anti-Magic Aura).
+- `engine/core/combat_declaration.gd`: `_pairs_weight`,
+  `_blocked_through_bands` — "must block" through a band.
+- `engine/core/mana_cost.gd`: `minus_generic` spells the new cost
+  (`_spelled`, `_PIPS`).
+- `engine/deck_list.gd`: `MAX_TOTAL`, `_has_room`.
+- `engine/decision_agent.gd`: `choose_color(..., several)` asks with
+  `count` 5 (`engine/player_choice.gd`); `game/duel/duel_screen.gd`
+  `COLORS_DONE`, `choice_takes_colors`; `game/sgmanalink/duel_actions.gd`
+  `several_colors`, `duel_view.gd` `_several_colors`.
+- The computer: `ai_mulligan.gd` `_live`; `ai_player.gd` `_blocker_cap`,
+  `_landwalk_finds_land`; `combat_search.gd` `gang_bounds`
+  (`a_min_blockers` … `d_max_blockers`); `effect_intent.gd`
+  `divided_shares`, `damage_on`; `alliances_tactics.gd` `trample_gain`,
+  `could_be_blocked`; `mirage_tactics.gd` `trample_spill`, `_tariff_mv`;
+  `tempest_tactics.gd` `_top_sweep_kills`; `DeckLab/simulate.gd`
+  `KNOB_RANGES`, `knob_range_error`.
+- The screens: `duel_config.gd` `setup_lives`, `starting_lives`;
+  `deck_model.gd` `note_lines`, `_note_body`; `draft_setup.gd`
+  `_unhandled_input`; `card_pile.gd` `game`; `graveyard_view.gd`
+  `_has_point`; `opening_hand.gd` `_left`; `duel_screen.gd` `_seat_word`.
+- The game history: `engine/records/mpn_codec.gd` `parse_bytes`;
+  `game/records/past_games.gd` `_checkpoints`, `_fold_to`.
+- Tools: `build_card_packs.py`, `decision_menu.py`, `import_manalink.py`,
+  `import_original.py`, `mtg_assets.py`, `pack_1_dotp_complete.py`,
+  `package_release.py`, `shandalar_decide.py`, `shandalar_mcp.py`,
+  `skin_catalogue.py`, `upscale_skin.py`, with their `tools/test_*.py`;
+  `build_release.sh`, `packaging/handhelds/quest_fresh_install.sh` and
+  `arkos.sh`.
+- `tests/unit/`: `test_hunt_2026_10_21_handover_combat.gd`,
+  `test_hunt_2026_10_21_handover_masked.gd`,
+  `test_hunt_2026_10_21_handover_vesuvan_colour.gd`,
+  `test_hunt_2026_10_21_net_mpn.gd`,
+  `test_hunt_2026_10_21_rules_deck_list_total.gd`,
+  `test_hunt_2026_10_21_rules_discounted_cost_text.gd`,
+  `test_ruling_2026_10_21_ante_off.gd`,
+  `test_ruling_2026_10_21_divided_damage.gd`,
+  `test_ruling_2026_10_21_legend_copy.gd`.
+- `tests/cards/`: `test_hunt_2026_10_21_cardsA_clockwork.gd`,
+  `test_hunt_2026_10_21_cardsA_host_regeneration.gd`,
+  `test_hunt_2026_10_21_cardsA_rules_text.gd`,
+  `test_hunt_2026_10_21_cardsA_stasis.gd`,
+  `test_hunt_2026_10_21_cardsA_titanias_song.gd`,
+  `test_hunt_2026_10_21_cardsB_combat.gd`,
+  `test_hunt_2026_10_21_cardsB_mirage.gd`,
+  `test_hunt_2026_10_21_handover_aura_bans.gd`,
+  `test_hunt_2026_10_21_handover_band_cards.gd`,
+  `test_hunt_2026_10_21_handover_face_down_choosers.gd`.
+- `tests/ai/`: `test_hunt_2026_10_21_ai_block_count.gd`,
+  `test_hunt_2026_10_21_ai_chime_masked.gd`,
+  `test_hunt_2026_10_21_ai_chump_at_twenty.gd`,
+  `test_hunt_2026_10_21_ai_cold_storage.gd`,
+  `test_hunt_2026_10_21_ai_combo_masked.gd`,
+  `test_hunt_2026_10_21_ai_dead_ante_cards.gd`,
+  `test_hunt_2026_10_21_ai_divided_damage.gd`,
+  `test_hunt_2026_10_21_ai_echo_chamber_masked.gd`,
+  `test_hunt_2026_10_21_ai_final_fortune.gd`,
+  `test_hunt_2026_10_21_ai_keyword_gift.gd`,
+  `test_hunt_2026_10_21_ai_lab_knob_range.gd`,
+  `test_hunt_2026_10_21_ai_masked_mana_value.gd`,
+  `test_hunt_2026_10_21_ai_memory_owner.gd`,
+  `test_hunt_2026_10_21_ai_mox_diamond_mulligan.gd`,
+  `test_hunt_2026_10_21_ai_part_water.gd`,
+  `test_hunt_2026_10_21_ai_phase_trample.gd`,
+  `test_hunt_2026_10_21_ai_reins_corpse_dance.gd`,
+  `test_hunt_2026_10_21_ai_surplus_draw.gd`.
+- `tests/ui/`: `test_hunt_2026_10_21_handover_colours.gd`,
+  `test_hunt_2026_10_21_net_history.gd`,
+  `test_hunt_2026_10_21_screens_auto_deck_words.gd`,
+  `test_hunt_2026_10_21_screens_colors_of_your_choice.gd`,
+  `test_hunt_2026_10_21_screens_deck_notes.gd`,
+  `test_hunt_2026_10_21_screens_draft_escape.gd`,
+  `test_hunt_2026_10_21_screens_duel_end_leftovers.gd`,
+  `test_hunt_2026_10_21_screens_duel_log_trim.gd`,
+  `test_hunt_2026_10_21_screens_held_duel_splash.gd`,
+  `test_hunt_2026_10_21_screens_hotseat_words.gd`,
+  `test_hunt_2026_10_21_screens_input_layers.gd`,
+  `test_hunt_2026_10_21_screens_leaving_the_opening.gd`,
+  `test_hunt_2026_10_21_screens_panel_width.gd`,
+  `test_hunt_2026_10_21_screens_phased_face_down.gd`,
+  `test_hunt_2026_10_21_screens_rarity_order.gd`,
+  `test_hunt_2026_10_21_screens_showcase_over_pile.gd`,
+  `test_hunt_2026_10_21_screens_table_cards.gd`,
+  `test_hunt_2026_10_21_screens_test_hands_lives.gd`.
+
 ## The whole-project review (2026-10-21)
 
 Each fix in full: `docs/whole-project-review-2026-10-21.md`.

@@ -701,7 +701,10 @@ static func _purgatory_return(g: MtgGame, s: CardInstance, _e: GameEvent) -> voi
 	if not g.try_pay(pid, cost): return
 	g.adjust_life(pid, -2)
 	var card := pick(g, pid, candidates, "Return a card exiled with Purgatory to the battlefield")
-	g.return_from_exile_to_play(card, card.owner_id)
+	# No "under its owner's control": it enters under the control of this
+	# ability's controller (CR 110.2a) — not its owner, who differs once
+	# Purgatory has changed hands (bug hunt 2026-10-21, cardsB).
+	g.return_from_exile_to_play(card, pid)
 	if F._same_trigger_source(g, s):
 		g._rec(s, &"memory")
 		var linked: Array = s.memory.get("purgatory_exiled", [])

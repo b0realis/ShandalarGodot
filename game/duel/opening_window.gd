@@ -348,6 +348,17 @@ func set_status(text: String) -> void:
 ## the original's window always shows both of its buttons.
 func ask(answers: Array) -> int:
 	set_answers(answers)
+	# THE KEYS ANSWER TOO (hunt of 2026-10-21). The splash's `Go!` held the
+	# focus and went with the splash, and nothing here took it, so Return
+	# and Space answered no question and a player at a keyboard had to
+	# reach for the mouse. The last button holds it — `Play first`, `Start
+	# the duel`: what the computer would choose — as the online window's
+	# `Continue` does.
+	if is_inside_tree():
+		for i in range(_buttons.size() - 1, -1, -1):
+			if not _buttons[i].disabled:
+				_buttons[i].grab_focus()
+				break
 	while _pressed < 0 and is_inside_tree():
 		await get_tree().process_frame
 	return _pressed

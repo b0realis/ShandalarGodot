@@ -7,6 +7,12 @@ extends CardScript
 ## assignments still stand — leashing every surviving blocker to The
 ## Wretched. A 2/5 body that turns every chump block into a permanent
 ## trade in its controller's favour.
+##
+## "Blocking this creature" is BAND-WIDE (CR 702.22h): banded with a
+## Benalish Hero, The Wretched is blocked by whatever blocks the Hero. And
+## a Wretched that has LEFT combat (regenerated, removed) is blocked by
+## nothing (CR 506.4), though its blockers' entries still name it. Until
+## the bug hunt of 2026-10-21 it read only the blocks declared at it.
 
 
 func build() -> CardData:
@@ -23,13 +29,22 @@ func build() -> CardData:
 
 
 static func _was_blocked(game: MtgGame, source: CardInstance, _event: GameEvent) -> bool:
-	return not game.combat.blockers_of(source.id).is_empty()
+	return not _blockers(game, source).is_empty()
+
+
+## Every creature blocking The Wretched now: the blockers of its band, while
+## it is still in combat.
+static func _blockers(game: MtgGame, source: CardInstance) -> Array[int]:
+	var none: Array[int] = []
+	if not game.combat.attackers.has(source.id):
+		return none
+	return game.combat.blockers_of_band(game.combat.band_of(source.id))
 
 
 static func _collect(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	if source.zone != Mtg.Zone.BATTLEFIELD:
 		return
-	var prizes := game.combat.blockers_of(source.id)
+	var prizes := _blockers(game, source)
 	for id in prizes:
 		var blocker := game.find_instance(id)
 		if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:

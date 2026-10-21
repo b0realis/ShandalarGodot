@@ -221,6 +221,22 @@ func _init() -> void:
 	add_child(_done)
 
 
+## THE SHOWCASE IS NOT UNDER THE DIM (hunt of 2026-10-21). The duel screen
+## lifts the docked big card over this view's dim so the pile can fill it
+## ([method DuelScreen._open_graveyard]), but a click is found by tree
+## order, not by z: this view, the later sibling, took every click on it —
+## a left click on the Showcase closed the pile instead of opening the
+## card reader, and a right click never reached the Showcase's menu. Where
+## the Showcase is drawn, this view is not there to be clicked.
+func _has_point(point: Vector2) -> bool:
+	if preview != null and is_instance_valid(preview) and preview.is_visible_in_tree() \
+			and preview.z_index > z_index:
+		var shown := preview.get_global_transform() * Rect2(Vector2.ZERO, preview.size)
+		if shown.has_point(get_global_transform() * point):
+			return false
+	return Rect2(Vector2.ZERO, size).has_point(point)
+
+
 ## Anywhere outside a card closes the view — s30's "click anywhere outside
 ## to close" (`duel.go:3715-3733`) — on the RELEASE of a press the dim
 ## took, unless that press is the one that opened the view arriving

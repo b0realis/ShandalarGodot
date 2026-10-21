@@ -75,6 +75,11 @@ func _add_colored(color: int) -> void:
 ## A COPY of this cost with [param n] less GENERIC mana (floored at zero).
 ## Coloured pips are never touched — a cost reduction can't eat them
 ## (CR 601.2f). Power Artifact's {2} discount uses it.
+##
+## The copy's TEXT is its own cost once the discount changed it (hunt
+## 2026-10-21): the refusal, the log and the ability badge all print
+## `text`, and a Power Artifact-ed Basalt Monolith's untap read "{3}"
+## while it cost {1}. An unchanged copy keeps the printed text.
 func minus_generic(n: int) -> ManaCost:
 	var out := ManaCost.new()
 	out.generic = maxi(generic - n, 0)
@@ -85,7 +90,25 @@ func minus_generic(n: int) -> ManaCost:
 	out.restricted_x_amount = restricted_x_amount
 	for c in colored:
 		out.colored[c] = colored[c]
+	if out.generic != generic:
+		out.text = out._spelled()
 	return out
+
+
+## This cost written out in brace notation — {X}s, the generic number, then
+## the pips in WUBRG order and {C} last; "{0}" when nothing is left.
+func _spelled() -> String:
+	var out := "{X}".repeat(x_count if has_x else 0)
+	if generic > 0:
+		out += "{%d}" % generic
+	for pair in _PIPS:
+		out += ("{%s}" % pair[1]).repeat(int(colored.get(pair[0], 0)))
+	return out if out != "" else "{0}"
+
+
+const _PIPS := [[Mtg.ManaColor.W, "W"], [Mtg.ManaColor.U, "U"],
+	[Mtg.ManaColor.B, "B"], [Mtg.ManaColor.R, "R"], [Mtg.ManaColor.G, "G"],
+	[Mtg.ManaColor.C, "C"]]
 
 
 ## A COPY of this cost with [param n] extra pips of [param color]

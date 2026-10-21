@@ -710,10 +710,13 @@ def interactive(env: Env, rich: bool, source=None, systemone: bool = False) -> i
                 env.close()
                 emit({"result": env.result, "summary": env.stats(), "note": "the input closed: the seat left"})
                 return 0
+            if not line.strip():
+                continue   # a blank line is no answer
             try:
+                # A JSON `null` names no item: it is answered like any
+                # other such line (hunt 2026-10-21: it was skipped like a
+                # blank one, and a client waiting for the answer hung).
                 pick = parse_pick(line)
-                if pick is None:
-                    continue
                 if isinstance(pick, dict) and "answers" in pick:      # a Laya/Jev answer object
                     pick = systemone_pick(pick, systemone_request(obs, menu))
                 obs, _reward, _done, info = env.step(pick)

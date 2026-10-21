@@ -263,6 +263,20 @@ class TestDecodePic(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "C0"):
             imp.decode_pic(data)
 
+    def test_a_palette_block_cut_short_is_refused_not_shrunk(self):
+        # HUNT 2026-10-21: an M0 block holding fewer bytes than its range
+        # declares shrank the 768-byte table (a short slice assignment),
+        # and the short palette crashed `_cut_masked_pic` — documented
+        # NEVER RAISES — with an IndexError, or painted a cut PNG.
+        body = bytes([0, 255]) + bytes(30)
+        data = b"M0" + struct.pack("<H", len(body)) + body + make_pic(2, 2, b"\1\2\3\4")
+        with self.assertRaisesRegex(ValueError, "palette"):
+            imp.decode_pic(data)
+        backwards = bytes([9, 3]) + bytes(30)
+        data = b"M0" + struct.pack("<H", len(backwards)) + backwards + make_pic(2, 2, b"\1\2\3\4")
+        with self.assertRaisesRegex(ValueError, "palette"):
+            imp.decode_pic(data)
+
     def test_a_silly_size_is_refused(self):
         body = struct.pack("<HHB", 0, 10, 11)
         with self.assertRaises(ValueError):
@@ -1689,6 +1703,34 @@ class TestTheCoinSheetIsCutAtTheSizeItWasDecodedAt(unittest.TestCase):
                 at = (row * h + y) * stride + (col * w + x) * channels
                 self.assertEqual(pixels[at:at + 3], self.colour(i),
                                  "frame %d at (%d, %d) of its cell" % (i, x, y))
+
+
+
+class TestABadMovieHeaderIsNeverFatal(unittest.TestCase):
+    """THE MOVIE STEP IS "NEVER FATAL" (hunt 2026-10-21) — `import_videos`
+    says so, and the importer runs it last for that reason. A header too
+    short to hold its `avih` fields was a `struct.error`, and a frame count
+    no sheet can hold a ValueError from the first plan, outside the try:
+    either ended the whole import with a traceback."""
+
+    def test_an_avih_tag_at_the_end_is_not_a_readable_avi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            avi = Path(tmp) / "cut.avi"
+            avi.write_bytes(b"RIFF\0\0\0\0AVI " + b"strf" + bytes(60) + b"avih")
+            self.assertIsNone(imp.read_avi_header(avi))
+
+    def test_a_frame_count_no_sheet_holds_skips_that_movie(self):
+        header = {"width": 320, "height": 240, "frames": 100000, "fps": 15.0, "codec": "CRAM"}
+        log = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(imp, "find_decoder", lambda: ("ffmpeg", "fake")), \
+                mock.patch.object(imp, "decode_frames", lambda *_a: b""), \
+                mock.patch.object(imp, "read_avi_header", lambda _p: dict(header)), \
+                redirect_stdout(log):
+            dest = Path(tmp)
+            imp.import_videos({"cointoss_heads.avi": dest / "COINTOSS_Heads.AVI"}, dest)
+            self.assertFalse((dest / "coin_toss_heads.png").exists())
+        self.assertIn("SKIPPED", log.getvalue())
 
 
 if __name__ == "__main__":

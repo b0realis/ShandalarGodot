@@ -326,9 +326,10 @@ def private_patterns(home: str | None = None) -> list[tuple[bytes, re.Pattern]]:
     are no home at all; a home of one component (/root) counts only with
     a separator after it, where it is a path into that folder; a deeper
     one (/home/ann) counts at any boundary but a longer name. Each is
-    looked for with forward slashes, backslashes and JSON's escaped `\\/`,
-    in UTF-8 and both UTF-16s. The literal is the cheap test a block must
-    pass before the pattern is run on it."""
+    looked for with forward slashes, backslashes, JSON's escaped `\\/` and
+    a JSON string's doubled backslash (hunt 2026-10-21: "C:\\\\Users\\\\ann"
+    went through), in UTF-8 and both UTF-16s. The literal is the cheap test
+    a block must pass before the pattern is run on it."""
     home = (str(Path.home()) if home is None else home).rstrip("/\\")
     login = home.replace("\\", "/").rsplit("/", 1)[-1]
     roots = [home] if home else []
@@ -340,7 +341,7 @@ def private_patterns(home: str | None = None) -> list[tuple[bytes, re.Pattern]]:
     out = []
     for root in dict.fromkeys(roots):
         deep = root.count("/") >= 2
-        for sep in ("/", "\\", "\\/"):
+        for sep in ("/", "\\", "\\/", "\\\\"):
             form = root.replace("/", sep)
             for codec, follow in follows.items():
                 if deep:

@@ -300,7 +300,7 @@ sys.exit(9)
 '''
 
 FAKE_APKSIGNER = "#!/bin/sh\necho 'Signer #1 certificate DN: CN=b0realis'\n"
-FAKE_AAPT = "#!/bin/sh\necho \"package: com.b0realis.shandalar\"\nfor p in $FAKE_PERMS; do echo \"uses-permission: name='android.permission.$p'\"; done\n"
+FAKE_AAPT = "#!/bin/sh\necho \"package: ${FAKE_PACKAGE:-com.b0realis.shandalar}\"\nfor p in $FAKE_PERMS; do echo \"uses-permission: name='android.permission.$p'\"; done\n"
 
 
 class QuestBuildTest(unittest.TestCase):
@@ -312,7 +312,7 @@ class QuestBuildTest(unittest.TestCase):
 
     ALL = "INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_MULTICAST_STATE"
 
-    def quest(self, apk="clean", perms=ALL):
+    def quest(self, apk="clean", perms=ALL, package="com.b0realis.shandalar"):
         with tempfile.TemporaryDirectory() as tmp:
             scratch = Path(tmp)
             stub = scratch / "godot"
@@ -325,6 +325,7 @@ class QuestBuildTest(unittest.TestCase):
                 (tools / name).chmod(0o755)
             env = dict(os.environ, GODOT=str(stub), TMPDIR=str(scratch), SHANDALAR_NO_BANNER="1",
                        ANDROID_HOME=str(scratch / "sdk"), FAKE_APK=apk, FAKE_PERMS=perms,
+                       FAKE_PACKAGE=package,
                        GODOT_ANDROID_KEYSTORE_RELEASE_PATH="/nonexistent.keystore",
                        JAVA_HOME=str(scratch))
             return subprocess.run(["bash", str(SCRIPT), "--quest", "--out", str(scratch / "quest")],
@@ -348,6 +349,17 @@ class QuestBuildTest(unittest.TestCase):
         self.assertIn("could not be read", done.stderr)
         self.assertNotIn("names this machine's home folder", done.stderr)
 
+    def test_an_apk_under_another_package_name_is_refused(self):
+        # HUNT 2026-10-21: the comment above the checks promised "the
+        # package name" and nothing read it. A machine's own preset under
+        # another name (the plain Android one) built "ok: Meta Quest APK",
+        # and both Quest scripts — wired to com.b0realis.shandalar — then
+        # stopped at "the game did not make its folders".
+        done = self.quest(package="com.b0realis.shandalar.android")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("com.b0realis.shandalar.android", done.stderr)
+        self.assertNotIn("Meta Quest APK", done.stdout)
+
     def test_an_apk_without_the_network_permissions_is_refused(self):
         for missing in ("INTERNET", "CHANGE_WIFI_MULTICAST_STATE"):
             with self.subTest(missing=missing):
@@ -355,6 +367,38 @@ class QuestBuildTest(unittest.TestCase):
                 self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
                 self.assertIn(missing, done.stderr)
                 self.assertIn("export_presets.cfg.example", done.stderr)
+
+
+STUB_MAC_GODOT = r'''#!/bin/bash
+for a; do last=$a; done
+case " $* " in *" --export-"*)
+  mkdir -p "$last/Contents/MacOS" "$last/Contents/Resources"
+  printf '#!/bin/bash\nexit 1\n' > "$last/Contents/MacOS/Shandalar"
+  chmod +x "$last/Contents/MacOS/Shandalar"
+  echo pck > "$last/Contents/Resources/Shandalar.pck";;
+esac
+exit 0
+'''
+
+
+class MacSmokeBootTest(unittest.TestCase):
+    """HUNT 2026-10-21: a macOS app that failed its smoke boot without a
+    word ended the build with exit 1 and nothing said — no "BUILD FAILED"
+    line and no log named, where the Linux branch says both."""
+
+    def test_a_failed_smoke_boot_says_so_and_names_its_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp)
+            stub = scratch / "godot"
+            stub.write_text(STUB_MAC_GODOT)
+            stub.chmod(0o755)
+            env = dict(os.environ, GODOT=str(stub), TMPDIR=str(scratch), SHANDALAR_NO_BANNER="1")
+            done = subprocess.run(["bash", str(SCRIPT), "--macos", "--out", str(scratch / "macos")],
+                                  cwd=str(ROOT), env=env, stdin=subprocess.DEVNULL,
+                                  capture_output=True, text=True, timeout=180)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("BUILD FAILED", done.stderr)
+        self.assertIn("smoke.log", done.stderr)
 
 
 STUB_GODOT = r'''

@@ -7,8 +7,12 @@ extends CardScript
 ##
 ## Implementation: three steps, in the printed order — the discard happens
 ## BEFORE the ante, so a Contract cast with a full hand really costs you
-## that hand. Shandalar always plays for ante, so the first line is a
-## deck-construction note rather than a rule the engine enforces.
+## that hand.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast: "Ante must be on for
+## Contract from Below: this duel is not played for ante".
 
 
 func build() -> CardData:

@@ -97,7 +97,7 @@ func _ordered_gangs(attacker: int, legal: Array[int]) -> Array:
 	var key := _exchange_key(attacker, legal)
 	if _orders.has(key): return _orders[key]
 	var choices: Array = [[]]
-	choices.append_array(model._gangs_of(legal))
+	choices.append_array(model._gangs_of(legal, model.gang_bounds(attacker, ours_attacks)))
 	var ranked: Array = []
 	for gang in choices: ranked.append({"gang": gang, "value": _exchange(attacker, gang)})
 	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -205,6 +205,15 @@ func _exchange_result(mask: int, assignments: Dictionary) -> Dictionary:
 	value += CombatSearch._fdv(damage, _defender_life())
 	if _defender_life() - damage - chump_damage > chump_threshold:
 		value += chump_value * 2.0
+		# ...AND THE LIFE IT SAVED IS NO SAVING up here (bug hunt
+		# 2026-10-21): the surcharge alone left a small body cheaper than
+		# a big hit — a Soul Warden (3 x 2.0) against a Craw Wurm's 6 at
+		# 20 life (7.8) — and the Sorcerer and the Wizard chump-blocked
+		# with it, "a way to cash every small body in for life" exactly.
+		# Above the panic line the face damage a throwaway block stops is
+		# counted as taken, so the block is never the better line.
+		value += CombatSearch._fdv(damage + chump_damage, _defender_life()) \
+			- CombatSearch._fdv(damage, _defender_life())
 	if damage >= _defender_life():
 		value = CombatSearch.LOSS
 	return {"value": value, "damage": damage, "blocks": assignments.duplicate(),

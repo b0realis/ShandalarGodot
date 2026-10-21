@@ -40,6 +40,13 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x := 0) -> Vari
 				return A.result(AiPlayer.LETHAL_WORTH, [TargetRef.player(1 - pid)])
 		&"extra_turn_then_lose":
 			if me.library.size() < 2 or not g.next_turn_statics.is_empty(): return {}
+			# AN EXTRA TURN IS EXTRA ONLY IN OUR OWN (bug hunt 2026-10-21):
+			# cast in theirs (Final Fortune is an instant), it is taken
+			# where our own next turn was coming anyway — no attack gained,
+			# their main phases still to come, and the loss at its end. The
+			# Wizard cast it in their upkeep with a lethal 2/2 it would
+			# have attacked with next turn regardless.
+			if g.active_player != pid: return {}
 			# Do not buy an ordinary value turn with a guaranteed loss rider.
 			if extra_turn_damage(g, pid) >= foe.life: return A.result(AiPlayer.LETHAL_WORTH * 0.5)
 		&"both_players_draw_x":

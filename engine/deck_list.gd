@@ -64,6 +64,18 @@ const REQUIRED_PACK_PREFIX := "# requires-pack:"
 ## the Deck Builder's import.
 const MAX_COUNT := 500
 
+## The most cards one list may hold, both piles together (hunt 2026-10-21).
+## [constant MAX_COUNT] bounds a LINE and left the FILE open: a 44 KB list
+## of 4,000 `500 Forest` lines expanded to two million names, and the
+## setup screen, the Load list and the Deck Builder's import parse every
+## file they show — a few megabytes of such lines would exhaust memory.
+## A hundred thousand is far past any list a player keeps (a collection
+## pasted as a card pool — 40,000 names, `test_c2_f_deck_deck_files` —
+## still reads whole, and a deck over 500 cards loads for the Deck Builder
+## to refuse and the player to trim) and parses in a blink. Past it the
+## list stops growing and says so once ([member _overflowed]).
+const MAX_TOTAL := 100000
+
 
 ## Load any supported format; .dck files route to the MicroProse parser.
 ## [param strict] = validate names against the card registry (gameplay
@@ -155,10 +167,12 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 			_note_proxy(card_name)
 		if in_sideboard:
 			sideboard_max[card_name] = maxi(int(sideboard_max.get(card_name, 0)), count)
-		else:
+		elif _has_room(count, line_number):
 			for _i in count:
 				cards.append(card_name)
 	for card_name in sideboard_max:
+		if not _has_room(int(sideboard_max[card_name]), line_number):
+			break
 		for _i in sideboard_max[card_name]:
 			sideboard.append(card_name)
 
@@ -273,6 +287,8 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 					line_number, card_name])
 				continue
 			_note_proxy(card_name)
+		if not _has_room(count, line_number):
+			continue
 		for _i in count:
 			if into_sideboard:
 				sideboard.append(card_name)
@@ -288,6 +304,23 @@ static func _read_count(token: String) -> int:
 	if token.trim_prefix("+").trim_prefix("-").lstrip("0").length() > 6:
 		return -1 if token.begins_with("-") else MAX_COUNT + 1
 	return token.to_int()
+
+
+## May [param count] more cards join the list without passing
+## [constant MAX_TOTAL]? The first line that would pass it is reported, and
+## no card line after it is taken — one reason, not thousands.
+func _has_room(count: int, line_number: int) -> bool:
+	if not _overflowed and cards.size() + sideboard.size() + count <= MAX_TOTAL:
+		return true
+	if not _overflowed:
+		_overflowed = true
+		errors.append("line %d: too many cards — a list holds at most %d, so the rest was not read" % [
+			line_number, MAX_TOTAL])
+	return false
+
+
+## Did a line already pass [constant MAX_TOTAL]? See [method _has_room].
+var _overflowed := false
 
 
 static func _too_large(line_number: int) -> String:

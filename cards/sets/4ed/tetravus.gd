@@ -48,10 +48,13 @@ extends CardScript
 ## same turn; we follow the oracle, and the round trip is a no-op anyway.
 
 
+## "1/1 colorless Tetravite artifact creature tokens" — the creature type
+## too (it had none until the bug hunt of 2026-10-21).
 static func _tetravite() -> CardData:
 	return CardData.new("Tetravite", "",
 			Mtg.CardType.ARTIFACT | Mtg.CardType.CREATURE) \
 		.pt(1, 1) \
+		.with_subtypes(["tetravite"]) \
 		.with_keywords([Mtg.Keyword.FLYING]) \
 		.with_no_aura_targeting() \
 		.oracle("Flying\nThis token can't be enchanted.")

@@ -42,7 +42,10 @@ func build() -> CardData:
 ## fires once even when the Slug blocks two attackers (a Blaze of Glory
 ## conscript). The engine dispatches BLOCKED once per declared PAIR, so
 ## each side counts only the FIRST pair it appears in — the first blocker
-## when the Slug attacks, the first attacker when it blocks.
+## when the Slug attacks, the first attacker when it blocks. The Slug's
+## blockers are its BAND'S (CR 702.22h): banded with a Benalish Hero, it
+## becomes blocked when the Hero does (bug hunt 2026-10-21 — it read only
+## the blocks declared at it, and never triggered).
 static func _in_the_pair(game: MtgGame, source: CardInstance, event: GameEvent) -> bool:
 	var blocker: CardInstance = event.data["blocker"]
 	var attacker: CardInstance = event.data["attacker"]
@@ -52,13 +55,16 @@ static func _in_the_pair(game: MtgGame, source: CardInstance, event: GameEvent) 
 			and attacked[0] == attacker.id
 	if attacker != source:
 		return false
-	var blockers := game.combat.blockers_of(source.id)
+	var blockers := game.combat.blockers_of_band(game.combat.band_of(source.id))
 	return not blockers.is_empty() and blocker != null \
 		and blockers[0] == blocker.id
 
 
 ## Every creature this one is currently blocking or being blocked by — the
 ## whole band when the Slug blocks a bander, every blocker when it attacks.
+## An attacker that has LEFT combat (regenerated, removed) is no longer
+## blocked by the Slug (CR 506.4), though the Slug's entry still names it
+## (bug hunt 2026-10-21).
 static func _engaged_with(game: MtgGame, source: CardInstance) -> Array[CardInstance]:
 	var out: Array[CardInstance] = []
 	if game.combat.attackers.has(source.id):
@@ -69,7 +75,8 @@ static func _engaged_with(game: MtgGame, source: CardInstance) -> Array[CardInst
 	elif game.combat.blocks.has(source.id):
 		for id in game.combat.opposing_attackers(source.id):
 			var inst := game.find_instance(int(id))
-			if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD:
+			if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD \
+					and game.combat.attackers.has(inst.id):
 				out.append(inst)
 	return out
 

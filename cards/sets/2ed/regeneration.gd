@@ -36,6 +36,12 @@ class RegenerateHostEffect extends EffectBase:
 		var host := game.find_instance(source.attached_to)
 		if not game.is_present(host):   # gone, or phased out (CR 702.26e)
 			return
+		# The HOST is neither this ability's source nor its target, so a
+		# search's whole-object record of the resolving item does not cover
+		# it: note the old value, as RegenerateEffect does (bug hunt
+		# 2026-10-21 — an unmade search move left the shield on the real
+		# creature).
+		game._rec(host, &"regeneration_shields")
 		host.regeneration_shields += 1
 		game.log_line("%s gains a regeneration shield (%d)" % [
 			host.data.card_name, host.regeneration_shields])

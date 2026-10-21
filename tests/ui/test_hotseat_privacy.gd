@@ -46,6 +46,10 @@ func _stand(pid: int) -> void:
 func test_match_keeps_private_hotseat_for_every_duel() -> void:
 	var match_screen := MatchScreen.new()
 	match_screen.config = screen.config
+	# The match's state, as `_ready` makes it: a duel's config reads its
+	# record number off it since the MPN history (0.50.44), and without one
+	# this test stopped on a script error (found by the hunt of 2026-10-21).
+	match_screen.state = MatchState.new()
 	for i in 3:
 		assert_true(match_screen._config_for_this_duel().private_hotseat())
 	match_screen.free()

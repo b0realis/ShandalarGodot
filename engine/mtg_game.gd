@@ -553,6 +553,12 @@ var _resolving_choices: Array[PlayerChoice] = []
 ## [method _run_item] (a targeted trigger's one target) alone.
 var _resolving_targets: Array = []
 
+## How many targets the targeting effect resolving right now was CHOSEN
+## with, the ones that have since become illegal included — read by cards
+## through [method chosen_target_count], set and restored around each
+## effect by [method _run_effects_impl] alone. 0 outside one.
+var _resolving_chosen := 0
+
 ## The MODE of the modal trigger being resolved right now
 ## (TriggeredAbility.modal; [member StackItem.mode]) — read by cards through
 ## [method current_mode], set and restored by the TRIGGER branch of
@@ -2320,6 +2326,9 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		# the time anyone could act, CR 605.3a).
 		add_counters(inst, ability.put_counter_kind, maxi(1, ability.put_counter_count))
 	if ability.taps_source:
+		# A masked creature tapped for mana it was given is turned face up
+		# as it taps (Illusionary Mask; bug hunt 2026-10-21).
+		_turn_face_up_quietly(inst)
 		if undo_log != null: _rec(inst, &"tapped")
 		inst.tapped = true
 	# What this activation actually made — Mana Flare's bonus must match the
@@ -2979,6 +2988,9 @@ func _cast_announce_checks(pid: int, inst: CardInstance) -> String:
 		return locked_why
 	if inst.is_land():
 		return "lands are played, not cast"
+	var ante_why := not_for_ante_refusal(inst)
+	if ante_why != "":
+		return ante_why
 	var banned_by := play_banned(pid, inst.data)
 	if banned_by != "":
 		return "%s can't be cast (%s)" % [inst.data.card_name, banned_by]
@@ -3488,6 +3500,12 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 ## records or asks a seat anything: the conditions are pure reads, so
 ## the AI and the screen may ask as often as they like.
 func ability_timing_refusal(pid: int, inst: CardInstance, ability: ActivatedAbility) -> String:
+	# An ante card in a duel not played for ante does nothing (the owner's
+	# ruling of 2026-10-21, [method not_for_ante_refusal]) — first, so its
+	# own first line is the reason every asker hears.
+	var ante_why := not_for_ante_refusal(inst)
+	if ante_why != "":
+		return ante_why
 	# The activation BANS ride along (Null Rod, Cursed Totem, City of
 	# Solitude, Abeyance — CR 602.5 via the card text): every asker of this
 	# one reading (activate_ability, the AI, the duel screen) hears them.
@@ -3962,6 +3980,9 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	_rec(inst, &"ability_uses")
 	inst.ability_uses[index] = int(inst.ability_uses.get(index, 0)) + 1
 	if ability.tap_cost:
+		# A masked creature paying {T} with an ability it was given is
+		# turned face up as it taps (Illusionary Mask; bug hunt 2026-10-21).
+		_turn_face_up_quietly(inst)
 		if undo_log != null: _rec(inst, &"tapped")
 		inst.tapped = true
 		# Campaign fix-engine (w4-4): the tap feeds the statics that read
@@ -4297,6 +4318,9 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 		inst.memory["attack_turn_" + str(pid)] = turn_number
 		if not inst.has_keyword(Mtg.Keyword.VIGILANCE) and not inst.tapped \
 				and not _attacks_without_tapping_now(pid):
+			# Illusionary Mask: "would become tapped" — turned face up
+			# instead, and tapped (bug hunt 2026-10-21, handover).
+			_turn_face_up_quietly(inst)
 			if undo_log != null: _rec(inst, &"tapped")
 			inst.tapped = true   # attacking taps (CR 508.1f)
 			newly_tapped.append(inst)
@@ -7190,6 +7214,11 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 		inst.damage = 0
 		_rec(inst, &"marked_damage_by_source")
 		inst.marked_damage_by_source.clear()
+		# "Instead tap it": a masked creature that becomes tapped is turned
+		# face up (Illusionary Mask; bug hunt 2026-10-21) — after its damage
+		# left with the same regeneration, so its own face never meets it.
+		if became_tapped:
+			_turn_face_up_quietly(inst)
 		# CR 701.15a removes the REGENERATED creature from combat — and only
 		# it. An attacker it was blocking stays blocked (CR 509.1h) and, with
 		# no trample, deals no damage at all.
@@ -8352,12 +8381,29 @@ func turn_face_down(inst: CardInstance) -> void:
 func turn_face_up(inst: CardInstance) -> void:
 	if inst == null or not inst.face_down:
 		return
-	_rec(inst, &"face_down")
-	inst.face_down = false
-	log_line("%s is turned face up" % inst.data.card_name)
-	recalculate()
+	_turn_face_up_quietly(inst)
 	check_state_based_actions()
 	_emit_state()
+
+
+## [method turn_face_up] without the state-based check — for a face-down
+## creature turned up AS IT BECOMES TAPPED in the middle of something the
+## check must wait for (bug hunt 2026-10-21, handover): attacking (CR
+## 508.1f), a regeneration shield's tap, a {T} cost and a mana ability's
+## tap — the Mask's "would become tapped" clause, which until then only
+## [method tap_permanent] honoured, so a masked Shivan Dragon attacked as a
+## nameless 2/2. Costs never run the check halfway through a payment (see
+## [method _counter_removal_event]); the enclosing action does.
+func _turn_face_up_quietly(inst: CardInstance) -> void:
+	if inst == null or not inst.face_down:
+		return
+	_rec(inst, &"face_down")
+	inst.face_down = false
+	# Nameless until now (CR 708.2): a legend from this moment on for the
+	# 1997 legend rule ([method legend_since]).
+	note_identity_change(inst)
+	log_line("%s is turned face up" % inst.data.card_name)
+	recalculate()
 
 
 # ---------------------------------------------------------------- copying --
@@ -8402,21 +8448,42 @@ static func face_down_copiable_data() -> CardData:
 ## (Vesuvan Doppelganger's "it doesn't copy that creature's color").
 ## A licid that is an Aura stays one, an Aura copy of [param source_data]
 ## (bug pass 2026-10-06, [method licid_rewrite]).
+##
+## "Its own colours" are its own COPIABLE colour, written into the values
+## it adopts (CR 707.9b: an exception of a copy effect becomes part of the
+## copiable values) — bug hunt 2026-10-21, handover. Until then they were
+## its CURRENT colours kept as a colour change of its own (layer 5): a
+## colour something else painted on it (Celestial Dawn) stayed for good
+## once that something was gone, and a Clone of the Doppelganger's shape
+## took the shape's colour rather than the Doppelganger's.
 func become_copy(inst: CardInstance, source_data: CardData,
 		extra_types: int = 0, keep_own_colors := false) -> void:
 	if inst == null or source_data == null or inst.phased_out:   # CR 702.26b
 		return
-	var own_colors := inst.cur_colors
+	var own_colors := copiable_data(inst).color_mask()
+	var was_name := inst.data.card_name
+	var was_legend := (inst.data.supertypes & Mtg.Supertype.LEGENDARY) != 0
 	if undo_log != null:
 		_rec(inst, &"data")
 		_rec(inst, &"added_types")
-		_rec(inst, &"color_override")
+	var values := source_data
+	if keep_own_colors and source_data.color_mask() != own_colors:
+		# A copy of the values, never the values themselves: the source's
+		# definition (a registry card) is shared by every object printed
+		# with it.
+		values = (source_data.licid_base if source_data.licid_base != null \
+			else source_data).shallow_copy().with_colors(own_colors)
 	# A licid that is an Aura keeps being one: the copy rewrites the values
 	# UNDER its effect (CR 613.1a before 613.1d/f; [method licid_rewrite]).
-	inst.data = licid_rewrite(inst, source_data)
+	inst.data = licid_rewrite(inst, values)
+	# A new name or a new legendariness is a new legend from NOW for the
+	# 1997 legend rule ([method _newest_duplicate_legend], the owner's ruling
+	# of 2026-10-21): a Doppelganger that becomes a copy of a legend already
+	# in play is the one buried.
+	if inst.data.card_name != was_name \
+			or ((inst.data.supertypes & Mtg.Supertype.LEGENDARY) != 0) != was_legend:
+		note_identity_change(inst)
 	inst.added_types |= extra_types
-	if keep_own_colors:
-		inst.color_override = own_colors
 	# A nameless definition is what copying a face-down creature adopts
 	# (see [method copiable_data]); the line says that and no more.
 	log_line("%s becomes a copy of %s" % [
@@ -8755,13 +8822,18 @@ func all_ante() -> Array[CardInstance]:
 
 
 ## Move [param inst] into the ante from wherever it is. Tokens can't be
-## anted (they would cease to exist, CR 704.5e).
-func move_to_ante(inst: CardInstance) -> void:
+## anted (they would cease to exist, CR 704.5e). True when it went — the
+## "if you do" of Jeweled Bird. False, moving nothing, in a duel NOT
+## played for ante (the owner's ruling of 2026-10-21; the backstop behind
+## [method not_for_ante_refusal], as for [method ante_top_of_library]).
+func move_to_ante(inst: CardInstance) -> bool:
+	if not ante_enabled:
+		return false
 	# A phased-out permanent can't be affected (CR 702.26b) — moved, it
 	# ended in the ante still listed in MtgPlayer.phased_out.
 	if inst == null or inst.is_token or inst.zone == Mtg.Zone.ANTE or inst.phased_out:
-		return
-	if _exile_departure_instead(inst): return
+		return false
+	if _exile_departure_instead(inst): return false
 	var was_battlefield := inst.zone == Mtg.Zone.BATTLEFIELD
 	if was_battlefield:
 		_rec_departure(inst, inst.owner_id, Mtg.Zone.ANTE)
@@ -8797,21 +8869,65 @@ func move_to_ante(inst: CardInstance) -> void:
 	log_line("%s is put into the ante" % inst.data.card_name)
 	recalculate()
 	_emit_state()
+	return true
 
 
 ## Whether this duel is played FOR ANTE — the original's `&Ante` match
 ## parameter (`Program/Text.res:2861`, `@SHELLPAGE_SINGLEDUEL`) and the
 ## manual's Gauntlet checkbox (p.138: *"ANTE is a checkbox that determines
 ## whether you play each duel for an ante card"*). Set by
-## [method stake_ante]; nothing in the rules reads it, but the duel screen
-## and the adventure layer do — a duel that was not played for ante has
-## nothing to settle when it ends.
+## [method stake_ante] and by nothing else; the duel screen and the
+## adventure layer read it — a duel that was not played for ante has
+## nothing to settle when it ends — and so do the rules, since the owner's
+## ruling of 2026-10-21: in a duel NOT played for ante the nine cards that
+## print [constant NOT_FOR_ANTE_LINE] do nothing
+## ([method not_for_ante_refusal]) and nothing reaches the ante
+## ([method ante_top_of_library], [method move_to_ante]).
 ##
 ## OFF unless something stakes. An ante is a card LIFTED OUT OF A LIBRARY
 ## and one RNG draw spent, so every caller that does not ask for one — the
-## Deck Lab, the AI benchmarks, `start()`, every headless test — keeps the
+## Deck Lab, the AI benchmarks, `start()`, every headless test, a `Test
+## hands` duel (`DuelConfig.for_test`), an SGManalink table — keeps the
 ## exact shuffle and the exact opening hand it had before ante existed.
 var ante_enabled := false
+
+
+## The first line of the nine ANTE CARDS' Oracle text (Contract from Below,
+## Darkpact, Demonic Attorney, Jeweled Bird, Bronze Tablet, Rebirth,
+## Tempest Efreet, Timmerian Fiends, Amulet of Quoz) — the line that makes
+## each of them an ante card, and the one the engine reads to know it.
+const NOT_FOR_ANTE_LINE := "Remove this card from your deck before playing if you're not playing for ante."
+
+
+## Is [param data] an ANTE CARD — does its Oracle text begin with
+## [constant NOT_FOR_ANTE_LINE]? Read off the text rather than a list of
+## names, so a copy of one (a Clone that entered as a Tempest Efreet) is
+## one too, as its copied text says.
+static func is_ante_card(data: CardData) -> bool:
+	return data != null and data.oracle_text.begins_with(NOT_FOR_ANTE_LINE)
+
+
+## THE ANTE CARDS IN A DUEL NOT PLAYED FOR ANTE (the owner's ruling of
+## 2026-10-21, verbatim: *"fix ante off (only back side of mtg cards shown
+## instead of ante, no ante used!)"*). Each of the nine prints *"Remove this
+## card from your deck before playing if you're not playing for ante."* —
+## a rule a paper player obeys before the game and a deck here may not
+## (a Deck Lab deck, a Test hands position, a free-play duel with Ante
+## unticked). So the line is enforced where it can be: with
+## [member ante_enabled] off such a card DOES NOTHING — its spell cannot be
+## cast and its abilities cannot be activated — and this is the one
+## reason every asker hears: [method _cast_announce_checks] (so
+## [method cast_timing_refusal], [method cast_refusal] and the cast
+## itself) and [method ability_timing_refusal] (so
+## [method activation_refusal], [method activate_ability], the AI's
+## legal-move reads and the duel screen's cues). Without it Contract from
+## Below was a {B} draw-seven and Amulet of Quoz a coin flip for the game
+## in a duel that had no ante at all. "" when the card may act.
+func not_for_ante_refusal(inst: CardInstance) -> String:
+	if ante_enabled or inst == null or not is_ante_card(inst.data):
+		return ""
+	# The owner, 2026-10-21: *"Message player - ante must be on for this card!"*
+	return "Ante must be on for %s: this duel is not played for ante" % inst.data.card_name
 
 
 ## STAKE THE OPENING ANTE: [param count] cards out of [param pid]'s deck,
@@ -8875,8 +8991,14 @@ func stake_ante(pid: int, count := 1, exclude_basic_lands := false) -> Array[Car
 
 
 ## Ante the top card of [param pid]'s library (Contract from Below,
-## Demonic Attorney, Rebirth). Returns the card, or null on an empty library.
+## Demonic Attorney, Rebirth). Returns the card, or null on an empty library
+## — and null, moving nothing, in a duel NOT played for ante (the owner's
+## ruling of 2026-10-21: there nothing ever reaches the ante; the cards
+## that would ask are refused first, [method not_for_ante_refusal], and
+## this is the backstop).
 func ante_top_of_library(pid: int) -> CardInstance:
+	if not ante_enabled:
+		return null
 	var p := players[pid]
 	if p.library.is_empty():
 		return null
@@ -10921,6 +11043,7 @@ func _run_effects_impl(item: StackItem) -> void:
 	var earlier: Array = []   # the slots before this one, for sibling specs
 	for effect in item.effects:
 		var group: Array = []
+		var chosen := 0   # the group's size as cast, for chosen_target_count
 		if effect.target_spec != null:
 			# Each targeting effect owns one GROUP of refs (one for the
 			# single-target majority, N for "X target creatures" and the
@@ -10930,6 +11053,7 @@ func _run_effects_impl(item: StackItem) -> void:
 			elif group_i < item.targets.size():
 				group = [item.targets[group_i]]   # triggers/legacy callers
 			group_i += 1
+			chosen = group.size()
 			# Targets that became illegal drop out individually; the rest of
 			# the effect still happens (CR 608.2c). A slot stated relative
 			# to an earlier one (TargetSpec.sibling_filter) is judged with
@@ -10952,7 +11076,12 @@ func _run_effects_impl(item: StackItem) -> void:
 				if not (effect.resolves_untargeted and group.is_empty()):
 					continue
 			group = still_legal
+		# Restored, not cleared: an effect may resolve another object
+		# inside itself (a copy), as for _resolving_targets above.
+		var outer_chosen := _resolving_chosen
+		_resolving_chosen = chosen
 		effect.resolve_multi(self, item.card, item.controller, group, item.x_value)
+		_resolving_chosen = outer_chosen
 
 
 ## Run [param inst]'s ENTRY PAYMENT ([member CardData.entry_payment]) for
@@ -11272,7 +11401,10 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 		return
 	# "If it would die this turn, exile it instead" (Disintegrate) — a
 	# replacement, so no dies-trigger fires and nothing hits a graveyard.
-	if died and inst.exile_instead_of_dying and not inst.is_token:
+	# A TOKEN too (bug hunt 2026-10-21, handover): it is exiled, then
+	# ceases to exist (CR 111.7, [method exile_permanent]); until then it
+	# was let die, and its dies-triggers fired.
+	if died and inst.exile_instead_of_dying:
 		log_line("%s is exiled instead of dying" % inst.data.card_name)
 		exile_permanent(inst)
 		return
@@ -11734,23 +11866,52 @@ func flip_coin(pid: int) -> bool:
 func remove_from_combat(inst: CardInstance, unblock_solo_attackers := false) -> void:
 	if undo_log != null:
 		undo_log.record_object(combat)   # every collection may lose it
-	var was_blocking: int = int(combat.blocks.get(inst.id, -1))
+	var was_blocking: Array[int] = combat.attackers_blocked_by(inst.id)
 	# CombatState.forget drops it as attacker, band member, blocked flag and
 	# blocker. Whatever it was blocking STAYS blocked (509.1h) unless the
 	# card below says otherwise.
 	combat.forget(inst.id)
 	# A BAND it was blocking (CR 702.22h) had become blocked by it as a
-	# whole, so the whole band goes free when no blocker of the band is
-	# left (campaign fix-engine w3-1: every member is marked blocked now).
-	var band: Array = combat.band_of(was_blocking) if was_blocking != -1 else []
-	if unblock_solo_attackers and was_blocking != -1 \
-			and combat.blockers_of_band(band).is_empty():
-		for member_id in band:
-			combat.blocked_attackers.erase(int(member_id))
-			var freed := find_instance(int(member_id))
-			if freed != null:
-				log_line("%s is unblocked" % freed.data.card_name)
+	# whole, so the whole band goes free only when nothing ELSE blocked the
+	# band this combat (campaign fix-engine w3-1: every member is marked
+	# blocked now). "Had become blocked by ONLY that creature THIS COMBAT"
+	# asks who blocked, not who is left (bug hunt 2026-10-21, handover):
+	# until then an attacker blocked by two, its first blocker dead or
+	# removed already, went free when False Orders took the second.
+	if unblock_solo_attackers:
+		var freed_bands: Array = []
+		for attacker_id in was_blocking:
+			var band: Array = combat.band_of(attacker_id)
+			if freed_bands.has(band) or not combat.attackers.has(attacker_id):
+				continue
+			if not combat.blockers_of_band(band).is_empty() \
+					or _blocked_by_another_this_combat(band, inst):
+				continue
+			freed_bands.append(band)
+			for member_id in band:
+				combat.blocked_attackers.erase(int(member_id))
+				var freed := find_instance(int(member_id))
+				if freed != null:
+					log_line("%s is unblocked" % freed.data.card_name)
 	recalculate()
+
+
+## Did a creature other than [param blocker] block any member of
+## [param band] THIS combat — still blocking, dead, bounced or removed
+## from combat since? Read off the turn's block pairs
+## ([member combat_pair_history]), each kept with the blocker's timestamp,
+## and held to this combat by the participants it recorded
+## ([member CombatState.participant_stamps]).
+func _blocked_by_another_this_combat(band: Array, blocker: CardInstance) -> bool:
+	for pair in combat_pair_history:
+		if int(pair.blocker) == blocker.id or not band.has(int(pair.attacker)):
+			continue
+		var member := find_instance(int(pair.attacker))
+		if member == null or member.layer_timestamp != int(pair.attacker_stamp):
+			continue
+		if int(combat.participant_stamps.get(int(pair.blocker), -1)) == int(pair.blocker_stamp):
+			return true
+	return false
 
 
 ## Re-assign an existing blocker to a different attacker mid-combat (False
@@ -11968,6 +12129,7 @@ func _exile_departure_instead(inst: CardInstance) -> bool:
 
 func aura_can_enchant(aura: CardInstance, host: CardInstance) -> bool:
 	if host == null: return false
+	if aura_barred_by_another(aura, host): return false
 	if aura.data.aura_graveyard_entry:
 		if not aura.memory.get("raised", false):
 			return host.zone == Mtg.Zone.GRAVEYARD and host.graveyard_entry == int(aura.memory.get("grave_entry", host.graveyard_entry))
@@ -11982,6 +12144,22 @@ func aura_can_enchant(aura: CardInstance, host: CardInstance) -> bool:
 	# is re-checked as a state-based action, so a control change of either
 	# object can make the Aura fall off.
 	return not spec.source_filter.is_valid() or spec.source_filter.call(self, aura, host)
+
+
+## Does an Aura on [param host] that says it "can't be enchanted by other
+## Auras" (Consecrate Land, Anti-Magic Aura —
+## [member CardInstance.cur_other_auras_barred_by]) bar [param aura]? Every
+## Aura but the one saying it; two such Auras bar each other. An attached
+## Aura so barred is illegal (CR 303.4d) and the state-based check puts it
+## into its owner's graveyard (CR 704.5m) — Animate Dead too, whose own
+## enchant restriction that check otherwise skips (bug hunt 2026-10-21).
+func aura_barred_by_another(aura: CardInstance, host: CardInstance) -> bool:
+	if host == null or aura == null or host.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	for id in host.cur_other_auras_barred_by:
+		if id != aura.id:
+			return true
+	return false
 
 
 ## Put [param count] counters of [param kind] on a permanent ("+1/+1",
@@ -12379,9 +12557,11 @@ func check_state_based_actions() -> void:
 				# Animate Dead's kind is exempt: the modern oracle has it
 				# swap "enchant creature card in a graveyard" for "enchant
 				# creature put onto the battlefield with this Aura" as it
-				# enters, so its host is legally on the battlefield.
-				if not inst.data.aura_reanimates \
-						and not aura_can_enchant(inst, host):
+				# enters, so its host is legally on the battlefield — but
+				# not past "can't be enchanted by other Auras" (Anti-Magic
+				# Aura; [method aura_barred_by_another]).
+				if (not inst.data.aura_reanimates and not aura_can_enchant(inst, host)) \
+						or aura_barred_by_another(inst, host):
 					log_line("%s can no longer enchant %s and is put into the graveyard" % [
 						inst.data.card_name, host.data.card_name])
 					# Journaled FIRST (campaign 2026-10-12 b3-1): an AI search
@@ -12606,11 +12786,46 @@ func is_doomed_at_end_step(inst: CardInstance) -> bool:
 		and int(_end_step_doom_stamps.get(inst.id, inst.layer_timestamp)) == inst.layer_timestamp
 
 
+## Instance id -> the moment that permanent last CHANGED IDENTITY on the
+## battlefield (its name or legendariness — a copy, a face-down permanent
+## turned up), on the layer-timestamp clock. Read by [method legend_since]
+## for the 1997 legend rule; written by [method note_identity_change] only.
+var _identity_since: Dictionary = {}
+
+
 ## Legend-rule helper: if 2+ battlefield permanents share [param legend_name],
-## return the NEWEST (latest in timestamp order); else null.
+## return the NEWEST — the one that has been a legendary permanent with
+## that name the SHORTEST time ([method legend_since]); else null.
+##
+## THE 1997 LEGEND RULE AND A COPY (the owner's ruling of 2026-10-21,
+## verbatim: *"the 1997 legend rule when a Vesuvan Doppelganger becomes a
+## copy of a newer legend (rule as per 1997 and document it)"*). The rule
+## of the era is "first in time, first in right": a second Legend of a name
+## already in play could be cast, but *"the newest one would immediately be
+## put into the graveyard"* (the Legend rule's history, mtg.fandom.com
+## "Legendary/Legend rule"). "Newest" is newest AS THAT LEGEND, not newest
+## on the table — the Comprehensive Rules that followed (rule 420.5e) ask
+## how long each has been a legend of that name, and a judge's column of
+## 2002 applied that to exactly this case (Pojo's Judge's Corner, 22 April
+## 2002, "Vesuvan Doppelganger - A Jack Of All Trades"): *"If a Vesuvan
+## Doppelganger already in play changes forms and copies a Legend ... The
+## Vesuvan Doppelganger will be put into the graveyard due to the legend
+## rule, as it will be the legend with the same name that has been a
+## legend a shorter time than the other legend."* — *"The game asks,
+## 'Which of you has been Reya Dawnbringer the longest?' The original card
+## Reya Dawnbringer claims that status"*. Until this ruling the order read
+## was battlefield ENTRY, so a Doppelganger that entered before a legend and
+## later became a copy of it buried the ORIGINAL. The 1997 game itself
+## never met the case: its card pool had no legends (they came with the
+## 1998 Duels of the Planeswalkers expansion), so the program cannot be
+## asked — docs/mechanics.md, "The legend rule".
+##
+## A tie (two that became that legend at the same moment) goes to the
+## later in battlefield order, as before; the engine never buries both.
 func _newest_duplicate_legend(legend_name: String) -> CardInstance:
 	var seen := 0
 	var newest: CardInstance = null
+	var newest_since := -1
 	for id in _battlefield_order:   # oldest → newest
 		var inst: CardInstance = _instances[id]
 		# A face-down permanent has no name and is no legend (CR 708.2).
@@ -12618,8 +12833,40 @@ func _newest_duplicate_legend(legend_name: String) -> CardInstance:
 				and (inst.cur_supertypes & Mtg.Supertype.LEGENDARY) != 0 \
 				and inst.data.card_name == legend_name:
 			seen += 1
-			newest = inst
+			var since := legend_since(inst)
+			if since >= newest_since:
+				newest = inst
+				newest_since = since
 	return newest if seen >= 2 else null
+
+
+## WHEN [param inst] BECAME WHAT IT IS NOW — the moment, on the clock every
+## layer timestamp is taken from ([method ContinuousEffects.next_timestamp]),
+## since which it has been a permanent of its current name and
+## legendariness: the moment it ENTERED ([member CardInstance.layer_timestamp])
+## unless it has changed identity on the battlefield since
+## ([method note_identity_change] — a copy, a face-down permanent turned up).
+## The 1997 legend rule's "newest" ([method _newest_duplicate_legend]).
+func legend_since(inst: CardInstance) -> int:
+	# A stale entry (an earlier life of this id, CR 400.7) is older than
+	# the timestamp it entered with this time, so max() discards it.
+	return maxi(inst.layer_timestamp, int(_identity_since.get(inst.id, 0)))
+
+
+## [param inst], ON THE BATTLEFIELD, has just become something with another
+## name or another legendariness without leaving it (CR 400.7 makes no new
+## object of it): note the moment, so the legend rule counts its time as
+## that legend from now ([method legend_since]). Called by
+## [method become_copy] (Vesuvan Doppelganger's upkeep shift, Unstable
+## Shapeshifter, a Clone's arrival) and [method turn_face_up]; any other
+## change of a permanent's name — Volrath's Shapeshifter's text swap in
+## [method ContinuousEffects._graveyard_top_copies] — calls it too.
+## Journaled.
+func note_identity_change(inst: CardInstance) -> void:
+	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return
+	_rec(self, &"_identity_since")
+	_identity_since[inst.id] = continuous.next_timestamp()
 
 
 ## End the game in a DRAW (CR 104.4 — Divine Intervention). Nobody wins:
@@ -13718,6 +13965,26 @@ func current_resolution_source() -> String:
 ## Erhnam Djinn's forestwalker.
 func current_targets() -> Array:
 	return _resolving_targets
+
+
+## How many targets the TARGETING EFFECT resolving right now was given as
+## its spell or ability was put on the stack — the ones still legal AND
+## the ones that have since gone (left, gained protection), which
+## [method _run_effects_impl] drops before the effect hears of them
+## (CR 608.2b). 0 outside an effect's resolution and for an untargeted one.
+##
+## A DIVISION FIXED AS THE SPELL IS CAST reads it. The owner's ruling of
+## 2026-10-21, verbatim: *"how Fireball divides its damage when one of its
+## targets is gone (it is ignored if target dissapears - the spell crushes
+## empty space :))"* — Fireball's "X damage divided evenly, rounded down,
+## among any number of targets" is X over the targets CHOSEN (CR 601.2d:
+## the division is announced as the spell is cast), and a target that is
+## gone on resolution simply loses its share instead of handing it to the
+## others. The "divided as you choose" family needs no reader: each ref
+## carries its own share ([member TargetRef.amount], fixed by TargetPlan
+## as the spell is cast), and a dropped ref takes its share with it.
+func chosen_target_count() -> int:
+	return _resolving_chosen
 
 
 ## The target chosen for SLOT [param slot] of the multi-target trigger
@@ -15023,11 +15290,41 @@ func _combat_damage_step(first_strike_wave: bool) -> void:
 	# deal is planned first, then each assigner answers for its own, then
 	# they all land together.
 	_damage_requests = _collect_damage_requests(first_strike_wave)
+	# ILLUSIONARY MASK: "If the creature would assign … damage … instead
+	# it's turned face up and assigns … damage" — so a masked creature
+	# that is about to assign combat damage is turned up FIRST and assigns
+	# as itself (bug hunt 2026-10-21, handover). Until then the requests
+	# were planned with the face-down 2/2's power and the creature turned
+	# up only as its packet landed: a masked Craw Wurm blocking a Hill
+	# Giant dealt it 2. Turning up can change what the step deals (its
+	# power, trample), so the requests are collected again. The
+	# state-based check waits until the damage is dealt (CR 704.3): what
+	# was turned up assigns its damage as it is.
+	var unmasked := false
+	for request in _damage_requests:
+		var source: CardInstance = request.source
+		if source.face_down and _assigns_combat_damage(request):
+			_turn_face_up_quietly(source)
+			unmasked = true
+	if unmasked:
+		_damage_requests = _collect_damage_requests(first_strike_wave)
 	_damage_splits = []
 	_damage_splits.resize(_damage_requests.size())
 	_damage_cursor = 0
 	_wave_assigned = {}
 	_resume_damage_assignment()
+
+
+## Will [param request] (one of [method _collect_damage_requests]') assign
+## any combat damage at all? A creature with no power assigns none (CR
+## 510.1a), and a BLOCKED one with nothing left to fight and no trample
+## assigns none either (CR 510.1c) — so neither turns an Illusionary Mask
+## creature face up.
+func _assigns_combat_damage(request: Dictionary) -> bool:
+	if int(request.amount) <= 0:
+		return false
+	return not bool(request.blocked) or not (request.targets as Array).is_empty() \
+		or bool(request.trample) or String(request.get("special", "")) == "bypass"
 
 
 ## Is there a first-strike damage step this combat? CR 510.5: only when at

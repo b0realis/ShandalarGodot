@@ -5,6 +5,11 @@ extends CardScript
 ## Trusted optional Pack 4 implementation; ZIPs never provide scripts.
 ## SIMPLIFIED: only nontoken cards participate in ownership exchanges.
 ## See docs/simplified-cards.md; the adaptation is shown in the rules text.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast and the activation:
+## "Ante must be on for Timmerian Fiends: this duel is not played for ante".
 
 func build() -> CardData:
 	var c := CardData.new("Timmerian Fiends", "{1}{B}{B}", Mtg.CardType.CREATURE)

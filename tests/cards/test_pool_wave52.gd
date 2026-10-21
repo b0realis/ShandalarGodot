@@ -237,6 +237,10 @@ func test_city_in_a_bottle_sweeps_arabia() -> void:
 
 
 func test_city_in_a_bottle_bans_arabian_spells() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	put_battlefield(0, "City in a Bottle")
 	var arabian := give_hand(1, "Jeweled Bird")
 	advance_to_next_turn()

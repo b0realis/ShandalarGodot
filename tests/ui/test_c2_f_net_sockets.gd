@@ -389,6 +389,11 @@ func test_one_address_holds_a_bounded_number_of_unfinished_connections() -> void
 	assert_eq(_engine_errors("pending cap"), 0)
 
 
+## A pump's cost is judged on its 95th percentile: every pump follows the
+## same burst of 41 packets, so a pump that decodes what it should skip is
+## slow every time, while a machine busy with other work (2026-10-21, a load
+## of 56 on the desk) stalls one pump in hundreds for 10 ms whose mean is
+## under one. The worst is printed.
 func test_a_udp_flood_at_discovery_costs_little() -> void:
 	var discovery_port := 47891
 	assert_eq(server.start_lan("127.0.0.1", 0, true, "Probe", discovery_port, false), OK)
@@ -400,22 +405,24 @@ func test_a_udp_flood_at_discovery_costs_little() -> void:
 	var junk := ("{\"v\":1,\"type\":\"" + "a".repeat(16000) + "\"}").to_ascii_buffer()
 	var binary := PackedByteArray()
 	binary.resize(8000)
-	var worst := 0.0
-	var total := 0.0
-	var pumps := 0
+	var spents: Array[float] = []
 	var until := Time.get_ticks_msec() + 2000
 	while Time.get_ticks_msec() < until:
 		for i in 40: flood.put_packet(junk)
 		flood.put_packet(binary)
 		var began := Time.get_ticks_usec()
 		server.discovery.pump()
-		var spent := (Time.get_ticks_usec() - began) / 1000.0
-		worst = maxf(worst, spent)
-		total += spent
-		pumps += 1
+		spents.append((Time.get_ticks_usec() - began) / 1000.0)
 		await get_tree().process_frame
-	gut.p("discovery flood: %d pumps, worst %.2f ms, mean %.2f ms" % [pumps, worst, total / maxi(1, pumps)])
-	assert_lt(worst, 8.0, "one pump under a flood stays well inside a frame")
+	assert_gt(spents.size(), 20, "control: the flood was pumped")
+	if spents.is_empty():
+		return
+	spents.sort()
+	var total := 0.0
+	for spent in spents: total += spent
+	var p95: float = spents[int(spents.size() * 0.95)]
+	gut.p("discovery flood: %d pumps, worst %.2f ms, 95th percentile %.2f ms, mean %.2f ms" % [spents.size(), spents.back(), p95, total / spents.size()])
+	assert_lt(p95, 8.0, "one pump under a flood stays well inside a frame")
 	var dropped := 0
 	for e in get_errors():
 		if String(e.rationale + " " + e.code).contains("Buffer full"): dropped += 1

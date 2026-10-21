@@ -48,7 +48,9 @@ ok()    { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 warn()  { printf '  \033[33m!!\033[0m   %s\n' "$*"; }
 fail()  { printf '\n  \033[31mSTOPPED:\033[0m %s\n\n' "$*"; exit 1; }
 pause() { printf '\n'; read -r -p "  ${1:-Press Enter to go on (Ctrl+C stops here)} " _; }
-ask()   { local a; read -r -p "  $1 [y/n] " a; [ "${a:-}" = y ] || [ "${a:-}" = Y ]; }
+# y or yes, in any case: step 1 asks for the whole word, and a player types
+# it again here — where only `y` counted, "yes" was a no (hunt 2026-10-21).
+ask()   { local a; read -r -p "  $1 [y/n] " a; case "${a:-}" in [yY]|[yY][eE][sS]) return 0 ;; *) return 1 ;; esac; }
 # A command on the headset, its output without Android's carriage returns.
 # Every path in one is in single quotes: the headset's shell splits the line.
 dev()   { adb shell "$1" 2>/dev/null | tr -d '\r'; }
@@ -288,6 +290,7 @@ if adb pull "$F/start_report.txt" "$REPORT" > /dev/null 2>&1; then
 	tail -n 12 "$REPORT" | sed 's/^/    /'
 else
 	warn "no start report on the headset"
+	REPORT=""   # nothing to keep: the closing lines name the log alone
 fi
 
 # ----------------------------------------------------------------- summary --
@@ -296,8 +299,13 @@ if [ "$RESULT" = y ]; then
 	ok "Shandalar ${VERSION:-} is installed with $COPIED files of skin, card art and packs."
 	note "Its folders on the headset: $F"
 else
-	warn "it did not reach the title screen. Keep these two files for the report:"
-	note "  $PWD/$LOG"
-	note "  $PWD/$REPORT"
+	if [ -n "$REPORT" ]; then
+		warn "it did not reach the title screen. Keep these two files for the report:"
+		note "  $PWD/$LOG"
+		note "  $PWD/$REPORT"
+	else
+		warn "it did not reach the title screen. Keep this file for the report:"
+		note "  $PWD/$LOG"
+	fi
 fi
 printf '\n'

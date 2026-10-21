@@ -264,8 +264,12 @@ static func _theirs(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: retur
 ## on resolution (the Tinder Wall shape, cards/sets/ice/_creatures.gd).
 static func _blocking_source(g: MtgGame, s: CardInstance, i: CardInstance) -> bool:
 	return g.combat.blockers_of_band(g.combat.band_of(s.id)).has(i.id)
+## "This creature is blocking": only an attacker still in combat — one that
+## left (regenerated, Reconnaissance) is no longer blocked by anything (CR
+## 506.4), though the blocker's entry still names it (CombatState.forget;
+## bug hunt 2026-10-21, cardsB).
 static func _blocked_by_source(g: MtgGame, s: CardInstance, i: CardInstance) -> bool:
-	return g.combat.opposing_attackers(s.id).has(i.id)
+	return g.combat.opposing_attackers(s.id).has(i.id) and g.combat.attackers.has(i.id)
 static func _source_in_combat(g: MtgGame, s: CardInstance) -> String:
 	return "" if _in_combat(g, s) else "activate only if this creature is attacking or blocking"
 static func _sorcery_speed(g: MtgGame, s: CardInstance) -> String:

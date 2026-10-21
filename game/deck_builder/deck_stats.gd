@@ -387,12 +387,27 @@ static func rarity_of(card_name: String) -> String:
 ## First printing wins, which matches how the rest of this project treats
 ## a card that appears in several sets ([method DeckStats.rarity_counts]
 ## is about the deck, not about a particular printing).
+##
+## FIRST IN PRINTING ORDER, NOT IN FILE ORDER (hunt of 2026-10-21): the
+## folder lists `4ed.json` before `arn`, `atq`, `drk` and `leg`, so for
+## the 47 cards Fourth Edition reprinted at another rarity its rarity won
+## — Hurr Jackal a rare, Apprentice Wizard a common — on the Rarity
+## filter, the Stats bars and the Sealed and Draft sheets, while the
+## Showcase ([method CardRegistry.rarity_of]) said otherwise. The files
+## are read in [constant CardRegistry.SET_ORDER], then any other.
 static func _load_rarity() -> void:
 	var dir := DirAccess.open("res://cards/data")
 	if dir == null:
 		return
+	var files: Array[String] = []
+	for code in CardRegistry.SET_ORDER:
+		files.append("%s.json" % code)
 	for file_name in dir.get_files():
-		if not file_name.ends_with(".json"):
+		if not files.has(file_name):
+			files.append(file_name)
+	for file_name in files:
+		if not file_name.ends_with(".json") \
+				or not FileAccess.file_exists("res://cards/data/" + file_name):
 			continue
 		var text := FileAccess.get_file_as_string("res://cards/data/" + file_name)
 		if text == "":

@@ -397,8 +397,12 @@ static func _apocalypse(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _
 
 ## A combat damage step still ahead this turn — Berserk's reading
 ## (2ed/berserk.gd): an extra combat makes the second main phase "before".
+## The FIRST-STRIKE damage step is a combat damage step too (CR 510.4), so
+## it is closed there though the regular one is still ahead (bug hunt
+## 2026-10-21, cardsB — Berserk's fix, cardsA).
 static func _before_combat_damage(g: MtgGame, _pid: int) -> String:
-	if not g.step_is_ahead(Mtg.Step.COMBAT_DAMAGE):
+	if g.current_step() == Mtg.Step.FIRST_STRIKE_DAMAGE \
+			or not g.step_is_ahead(Mtg.Step.COMBAT_DAMAGE):
 		return "Cast this spell only before the combat damage step"
 	return ""
 

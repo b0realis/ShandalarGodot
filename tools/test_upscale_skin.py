@@ -25,6 +25,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stderr
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -460,6 +461,33 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.run_tool(folder_out=self.skin), 2)
         self.assertEqual({p: p.read_bytes() for p in self.skin.rglob("*") if p.is_file()},
                          before)
+
+    def test_zip_never_writes_over_the_skin_zip_it_reads(self):
+        # HUNT 2026-10-21: `--out` had this guard and `--zip` had none —
+        # `--skin original_skin.zip --zip original_skin.zip` replaced the
+        # 1997 skin with the hi-res one, exit 0.
+        packed = self.tmp / "original_skin.zip"
+        with zipfile.ZipFile(packed, "w") as archive:
+            for path in sorted(self.skin.rglob("*")):
+                if path.is_file() and not path.name.endswith(".import"):
+                    archive.write(path, "skin/" + path.relative_to(self.skin).as_posix())
+        before = packed.read_bytes()
+        with redirect_stderr(io.StringIO()):
+            self.assertEqual(self.run_tool(skin=packed, zip_out=packed), 2)
+        self.assertEqual(packed.read_bytes(), before)
+
+    def test_a_member_naming_a_drive_is_not_unpacked(self):
+        # HUNT 2026-10-21: "skin/D:/Games/x.dll" passed the filter
+        # (no "..", no backslash), and on Windows joining "D:" onto the
+        # temporary folder leaves it — a skin zip wrote outside its folder.
+        packed = self.tmp / "drive.zip"
+        with zipfile.ZipFile(packed, "w") as archive:
+            archive.writestr("skin/D:/Games/x.dll", b"MZ")
+            archive.writestr("skin/C:x.png", b"x")
+            archive.writestr("skin/title_background.png", (self.skin / "title_background.png").read_bytes())
+        with up.opened(packed) as folder:
+            found = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
+        self.assertEqual(found, ["title_background.png"])
 
     def test_what_an_earlier_tool_left_is_not_carried(self):
         # 0.50.28's copies beside the pictures, 0.50.30's catalogue and the

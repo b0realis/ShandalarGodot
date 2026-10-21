@@ -420,13 +420,16 @@ func run(config: DuelConfig, winner: int, winner_is_you: bool,
 		hold = INSTANT_HOLD
 	else:
 		await _spin_coin(panel, config, winner)
-	if not is_instance_valid(panel):
+	# Out of the tree as well (hunt of 2026-10-21): Pause → `Exit duel`
+	# during the movie takes the screen away before the panel is freed,
+	# and there is no tree to ask for the verdict's timer.
+	if not is_instance_valid(panel) or not is_inside_tree():
 		return
 	caption.visible = true
 	verdict.text = verdict_for(config, winner, winner_is_you)
 
 	await get_tree().create_timer(hold).timeout
-	if not is_instance_valid(panel):
+	if not is_instance_valid(panel) or not is_inside_tree():
 		return
 	var fade := panel.create_tween()
 	fade.tween_property(panel, "modulate:a", 0.0, FADE)

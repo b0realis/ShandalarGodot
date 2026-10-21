@@ -700,6 +700,14 @@ static func save_by_phasing(g: MtgGame, pilot) -> String:
 ## the attacker it blocked stays BLOCKED (CR 509.1h) and deals nothing to
 ## us, and an attacker of ours that would only have traded is kept unless
 ## the trade was worth more than it.
+##
+## EXCEPT A TRAMPLER (bug hunt 2026-10-21): an attacker with trample whose
+## blockers are all removed from combat assigns all its damage to the
+## player (CR 702.19e), and one with others still blocking it puts through
+## what our blocker would have absorbed ([method trample_spill]). The
+## Wizard at 8 life phased its Rainbow Efreet out of a chump block on a
+## Crash of Rhinos and took all eight. The spill is paid in life now, and
+## a spill that kills us is never taken.
 static func save_from_combat(g: MtgGame, pilot) -> String:
 	if g.combat.attackers.is_empty() or g.current_step() != Mtg.Step.DECLARE_BLOCKERS \
 			or g.awaiting_blockers or not g.stack.is_empty():
@@ -724,6 +732,14 @@ static func save_from_combat(g: MtgGame, pilot) -> String:
 					takes += pilot._victim_value(g, blocker)
 			if takes >= worth:
 				continue   # the trade stands
+		else:
+			var spill := trample_spill(g, inst)
+			if spill > 0:
+				# Our life after this combat as it stands, less the spill.
+				var life: int = int((g.forecast_damage(true)["life"] as Array)[pilot.pid]) - spill
+				if life <= 0:
+					continue   # out of the block, into the grave ourselves
+				worth -= float(spill) * pilot._life_price(life)
 		var tools := phase_tools(g, pilot, inst)
 		if tools.is_empty() or worth < float(tools[0]["price"]) + 1.0:
 			continue
@@ -734,6 +750,28 @@ static func save_from_combat(g: MtgGame, pilot) -> String:
 	if best.is_empty():
 		return ""
 	return use_tool(g, pilot, best, "phases out %s" % best_victim.data.card_name)
+
+
+## The damage MORE that reaches us when our [param blocker] leaves the
+## combat: each TRAMPLE attacker it blocks assigns lethal damage to the
+## blockers still in its way and the rest to us (CR 702.19c, 702.19e) —
+## all of it once none is left. 0 for a blocker of attackers without
+## trample, which stay blocked and deal nothing (CR 509.1h).
+static func trample_spill(g: MtgGame, blocker: CardInstance) -> int:
+	var spill := 0
+	for attacker_id in g.combat.attackers_blocked_by(blocker.id):
+		var attacker := g.find_instance(attacker_id)
+		if attacker == null or not attacker.has_keyword(Mtg.Keyword.TRAMPLE):
+			continue
+		var power := maxi(attacker.cur_power, 0)
+		var others := 0
+		for other_id in g.combat.blockers_of(attacker_id):
+			var other := g.find_instance(other_id)
+			if other != null and other != blocker:
+				others += maxi(other.cur_toughness - other.damage, 0)
+		var held := maxi(blocker.cur_toughness - blocker.damage, 0)
+		spill += maxi(power - others, 0) - maxi(power - others - held, 0)
+	return spill
 
 
 ## THEIR ATTACKER, PHASED OUT BEFORE BLOCKS: it deals nothing this combat
@@ -2378,12 +2416,12 @@ static func role_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 		&"tariff":
 			var value := 0.0
 			var their_best := _highest_mv_creature(g, foe)
-			if their_best != null and pilot._their_open_mana(g, foe) < their_best.data.cost.mana_value():
+			if their_best != null and pilot._their_open_mana(g, foe) < _tariff_mv(g, their_best):
 				value += pilot._victim_value(g, their_best)
 			var our_best := _highest_mv_creature(g, pid)
 			if our_best != null:
 				var after: int = pilot._mana_sources(g).size() - inst.data.cost.mana_value()
-				if after < our_best.data.cost.mana_value():
+				if after < _tariff_mv(g, our_best):
 					value -= pilot._own_value(g, our_best)
 			return {} if value < 2.0 else {"x": 0, "targets": [], "value": value}
 		&"life_bid_steal":
@@ -2420,9 +2458,19 @@ static func _plan_spends(g: MtgGame, pilot, inst: CardInstance) -> Dictionary:
 static func _highest_mv_creature(g: MtgGame, seat: int) -> CardInstance:
 	var best: CardInstance = null
 	for c in g.players[seat].battlefield:
-		if c.is_creature() and (best == null or c.data.cost.mana_value() > best.data.cost.mana_value()):
+		if c.is_creature() and (best == null or _tariff_mv(g, c) > _tariff_mv(g, best)):
 			best = c
 	return best
+
+
+## The mana value Tariff reads off [param c] — its COPIABLE values, as the
+## card's own resolution reads them (`cards/sets/wth/_choices.gd`): a
+## face-down creature's is 0 (CR 708.2). Until the bug hunt of 2026-10-21
+## the printed cost under the mask was read here, so whether the Wizard
+## cast Tariff moved with a card nobody had shown (CONTRIBUTING.md rule 8)
+## — and it priced the masked 2/2 as the victim the spell never takes.
+static func _tariff_mv(g: MtgGame, c: CardInstance) -> int:
+	return g.copiable_data(c).cost.mana_value()
 
 
 ## Could [param inst] deal damage at all this turn — the question a

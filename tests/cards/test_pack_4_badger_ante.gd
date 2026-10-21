@@ -6,6 +6,10 @@ class Decline extends DecisionAgent:
 func before_each() -> void:
 	CardPacks.set_enabled("pack-4", true)
 	super()
+	# Played FOR ANTE: in a duel that is not, the ante cards do nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	advance_to_step(Mtg.Step.MAIN1)
 
 func after_each() -> void:

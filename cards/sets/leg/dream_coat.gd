@@ -6,9 +6,11 @@ extends CardScript
 ##
 ## Implementation: a free, once-per-turn indefinite repaint of the host.
 ## "The color OR COLORS" is why the colour hook returns a bitmask rather
-## than one colour — the agent may answer with several bits set. The hint
-## the card computes is the single colour the opponent's board shows least
-## of (see alchor_s_tomb.gd for the same reasoning).
+## than one colour — the agent may answer with several bits set, and the
+## question says so (`several`, so the duel screen ticks colours; until
+## the bug hunt of 2026-10-21 a player could pick only one). The hint the
+## card computes is the single colour the opponent's board shows least of
+## (see alchor_s_tomb.gd for the same reasoning).
 
 
 func build() -> CardData:
@@ -29,8 +31,9 @@ class RecolorHostEffect extends EffectBase:
 			return
 		var hint := RecolorHostEffect._rarest_enemy_color(game, controller)
 		var chosen: int = game.agents[controller].choose_color(
-			game, controller, "Choose a color for %s" % host.data.card_name, hint)
-		game.set_color(host, chosen)
+			game, controller, "Choose the color or colors %s becomes" % host.data.card_name,
+			hint, true) & 31
+		game.set_color(host, chosen if chosen != 0 else hint)
 
 	static func _rarest_enemy_color(game: MtgGame, controller: int) -> int:
 		var enemy := game.opponent_of(controller)

@@ -436,9 +436,32 @@ static func lure_binds(attacker: CardInstance, blocker: CardInstance) -> bool:
 static func obeyed_by(g: MtgGame, blocker: CardInstance, against: Array) -> int:
 	if blocker == null or against.is_empty(): return 0
 	var total := (1 if blocker.cur_must_block else 0) + (1 if blocker.must_block_this_turn_any else 0)
-	for id in against:
-		total += _pair_weight(blocker, g.find_instance(int(id)))
+	return total + _pairs_weight(g, blocker, against)
+
+
+## The per-attacker requirements on [param blocker] that a block on the
+## attacker ids [param against] obeys — counted over every attacker it then
+## BLOCKS: one declared against a member of a BAND blocks every member (CR
+## 702.22h), so a Lure, or Crashing Boars' "blocks this creature if able",
+## on another member is obeyed too. Each attacker counts once. (Bug hunt
+## 2026-10-21, handover: the declared attacker alone was counted, and
+## "Grizzly Bears blocks Benalish Infantry" was refused with "Grizzly Bears
+## must block Crashing Boars if able" while the two attacked as one band.)
+static func _pairs_weight(g: MtgGame, blocker: CardInstance, against: Array) -> int:
+	var total := 0
+	for id in _blocked_through_bands(g, against):
+		total += _pair_weight(blocker, g.find_instance(id))
 	return total
+
+
+## The attacker ids a block on [param against] blocks: each of them and the
+## rest of its band (CR 702.22h), once each, in that order.
+static func _blocked_through_bands(g: MtgGame, against: Array) -> Array[int]:
+	var out: Array[int] = []
+	for id in against:
+		for member in g.combat.band_of(int(id)):
+			if not out.has(int(member)): out.append(int(member))
+	return out
 
 
 ## The requirements a whole declaration ([param declared]: {blocker id:
@@ -511,9 +534,10 @@ static func _requirement_message(g: MtgGame, declared: Dictionary, better: Dicti
 		var theirs: Variant = declared.get(id, [])
 		var had: Array = theirs if theirs is Array else [theirs]
 		if obeyed_by(g, c, mine) <= obeyed_by(g, c, had): continue
-		for t in mine:
-			if had.has(int(t)): continue
-			var a := g.find_instance(int(t))
+		var reached := _blocked_through_bands(g, had)
+		for t in _blocked_through_bands(g, mine):
+			if reached.has(t): continue
+			var a := g.find_instance(t)
 			if lure_binds(a, c) or c.must_block_this_turn:
 				return "%s must block %s if able" % [c.data.card_name,
 					"a face-down creature" if a.face_down else a.data.card_name]
@@ -586,8 +610,8 @@ static func _block_options(g: MtgGame, c: CardInstance, can: Array, planned: Var
 	var allowed := g.blocks_allowed(c)
 	var ranked := can.duplicate()
 	ranked.sort_custom(func(x: CardInstance, y: CardInstance) -> bool:
-		var wx := _pair_weight(c, x)
-		var wy := _pair_weight(c, y)
+		var wx := _pairs_weight(g, c, [x.id])
+		var wy := _pairs_weight(g, c, [y.id])
 		if wx != wy: return wx > wy
 		if by_preference:
 			var px := _forced_score(c, x, attacker_side)
@@ -617,8 +641,7 @@ static func _block_options(g: MtgGame, c: CardInstance, can: Array, planned: Var
 		key.sort()
 		if seen.has(str(key)): continue
 		seen[str(key)] = true
-		var score := order
-		for id in ids: score += _pair_weight(c, g.find_instance(int(id)))
+		var score := order + _pairs_weight(g, c, ids)
 		out.append([score, ids, out.size()])
 	var first := 1 if not mine.is_empty() else 0
 	var rest := out.slice(first)

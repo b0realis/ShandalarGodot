@@ -189,6 +189,10 @@ func test_a_pump_does_not_follow_a_bounced_creature_back() -> void:
 
 
 func test_anteing_a_permanent_takes_it_off_the_battlefield_view() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var bird := put_battlefield(0, "Jeweled Bird")
 	advance_to_step(Mtg.Step.MAIN1)
 	assert_ok(g.activate_ability(0, bird, 0, []))

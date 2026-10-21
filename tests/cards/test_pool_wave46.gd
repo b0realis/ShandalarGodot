@@ -5,6 +5,14 @@ extends GameTest
 ## and drives Shandalar's whole card economy.
 
 
+func before_each() -> void:
+	super()
+	# Played FOR ANTE: in a duel that is not, the ante cards do nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
+
+
 func test_registry_loaded_wave46() -> void:
 	for name in ["Contract from Below", "Darkpact", "Demonic Attorney",
 			"Jeweled Bird", "Bronze Tablet", "Rebirth", "Tempest Efreet"]:

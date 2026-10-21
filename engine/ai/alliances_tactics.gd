@@ -108,7 +108,11 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		&"land_search": return result(5.5) if window != "RESPONSE" and me.library.size() > 1 else {}
 		&"exact_mv_removal":
 			for i in g.players[1 - pid].battlefield:
-				var x := i.data.cost.mana_value()
+				# The COPIABLE mana value (bug hunt 2026-10-21): a face-down
+				# creature's is 0 (CR 708.2); the printed cost under the mask
+				# is hidden (CONTRIBUTING.md rule 8), and Plaguebearer's X
+				# was sized to it — the one X that kills what nobody showed.
+				var x := g.copiable_data(i).cost.mana_value()
 				var ref := TargetRef.card(i)
 				if not g.target_legal_at(e.target_spec, ref, s, x): continue
 				var pay := g.ability_payment(pid, s, index, x)
@@ -153,7 +157,11 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			# paid (Phyrexian Dreadnought's power 12) is a one-turn token
 			# nobody pays that price for — it is gone as it arrives — and a
 			# body the state-based check kills is gone too.
-			if keeps_only_for_a_price(pick) or preload("res://engine/ai/mirage_tactics.gd").dies_on_arrival(g, pilot, pick): return {}
+			# A FACE-DOWN pick's copy is the plain 2/2 it shows (CR 707.2,
+			# 708.2) and its printed card is hidden (rule 8): the arrival
+			# reading below reads the printed card, so a masked
+			# Dreadnought priced the Chamber at nothing (bug hunt 2026-10-21).
+			if not pick.face_down and (keeps_only_for_a_price(pick) or preload("res://engine/ai/mirage_tactics.gd").dies_on_arrival(g, pilot, pick)): return {}
 			return result(Evaluator.permanent_value(pick, pilot.profile))
 		&"fight":
 			for ref in refs:
@@ -206,6 +214,24 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			if keyword == Mtg.Keyword.SHADOW:
 				var gain := shadow_gain(g, pilot, s)
 				return result(gain, [TargetRef.player(1 - pid)] if e.target_spec != null else []) if gain > 0.0 else {}
+			# WHAT THE KEYWORD BUYS (bug hunt 2026-10-21): a flat 3.5 was
+			# paid for any keyword the attacker lacked, so Phelddagrif
+			# attacking into an empty board bought trample — their Hippo
+			# token arriving BEFORE blocks, a chump blocker for it — and
+			# flying, 2 life for them, and dealt its 4 as before. Evasion
+			# is worth something only while a creature of theirs could
+			# block it; trample only once it is blocked by less toughness
+			# than its power ([method trample_gain]).
+			if keyword == Mtg.Keyword.TRAMPLE:
+				if not blocks_declared(g) or trample_gain(g, s) <= 0: return {}
+			elif keyword == Mtg.Keyword.BANDING:
+				# A band is formed as attackers are DECLARED (CR 702.22c):
+				# banding bought by an attacker already declared joins it to
+				# nothing — Urza's Engine paid {3} for it, alone.
+				return {}
+			elif keyword in [Mtg.Keyword.FLYING, Mtg.Keyword.FEAR, Mtg.Keyword.UNBLOCKABLE] \
+					and not could_be_blocked(g, pilot, s):
+				return {}
 			return result(3.5, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
 		&"match_combat_stats":
 			for ref in refs:
@@ -325,6 +351,32 @@ static func shadow_gain(g: MtgGame, pilot, s: CardInstance) -> float:
 
 ## Have this combat's blockers been declared (CR 509) — the moment after
 ## which no evasion changes a block?
+## The damage trample would add for our blocked attacker [param s]: its
+## power past the lethal damage its blockers need (CR 702.19c). 0 when it
+## is unblocked — all of it reaches them anyway — or blocked by enough.
+static func trample_gain(g: MtgGame, s: CardInstance) -> int:
+	var blockers := g.combat.blockers_of(s.id)
+	if blockers.is_empty():
+		return 0
+	var held := 0
+	for id in blockers:
+		var b := g.find_instance(id)
+		if b != null:
+			held += maxi(b.cur_toughness - b.damage, 0)
+	return maxi(maxi(s.cur_power, 0) - held, 0)
+
+
+## Could an untapped creature of theirs block our attacker [param s] as it
+## stands — is there anything for an evasion keyword to escape?
+static func could_be_blocked(g: MtgGame, pilot, s: CardInstance) -> bool:
+	var foe := g.opponent_of(pilot.pid)
+	for b in g.players[foe].battlefield:
+		if b.is_creature() and not b.tapped \
+				and CombatState.block_illegality(g, b, s, foe, true, pilot.pid) == "":
+			return true
+	return false
+
+
 static func blocks_declared(g: MtgGame) -> bool:
 	var step := g.current_step()
 	if step == Mtg.Step.DECLARE_BLOCKERS: return not g.awaiting_blockers

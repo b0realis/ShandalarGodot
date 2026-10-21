@@ -168,7 +168,9 @@ static func _apathy(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 
 ## "Destroy all non-Wall creatures blocking enchanted creature" — the
 ## creature the Aura enchanted when it was sacrificed; its blockers as the
-## ability resolves.
+## ability resolves. A creature blocking any member of its band blocks it
+## too (CR 702.22h; bug hunt 2026-10-21, cardsB — `blockers_of` missed a
+## blocker declared on the other member).
 class DestroyHostBlockers extends EffectBase:
 	func _init() -> void:
 		ai_helpful = true
@@ -177,7 +179,7 @@ class DestroyHostBlockers extends EffectBase:
 		if not g.is_present(i) or i.layer_timestamp != int(g.cost_paid("_source_attached_timestamp", -2)):
 			return
 		var doomed: Array[CardInstance] = []
-		for id in g.combat.blockers_of(i.id):
+		for id in g.combat.blockers_of_band(g.combat.band_of(i.id)):
 			var b := g.find_instance(int(id))
 			if g.is_present(b) and b.is_creature() and not b.has_subtype("wall"):
 				doomed.append(b)

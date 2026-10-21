@@ -638,6 +638,19 @@ class GuardPrivateTest(unittest.TestCase):
             with self.subTest(label):
                 self.assertTrue(self._refused(payload, "/home/builder"), label)
 
+    def test_a_json_escaped_windows_home_is_caught(self):
+        # HUNT 2026-10-21: a JSON string spells "C:\Users\builder" with
+        # every backslash doubled, and only "/", "\" and "\/" were looked
+        # for — tools/test_tracked_tree.py already refused it in the tree,
+        # the release guard let it into a staged package.
+        for home in ("/home/builder", "C:\\Users\\builder"):
+            for payload in (b'{"p": "C:\\\\Users\\\\builder\\\\x"}',
+                            '"C:\\\\Users\\\\builder"'.encode("utf-16-le")):
+                with self.subTest(home=home, payload=payload):
+                    self.assertTrue(self._refused(payload, home))
+        self.assertFalse(self._refused(b'"C:\\\\Users\\\\builders\\\\x"', "/home/builder"),
+                         "a longer name is still not the home")
+
     def test_a_longer_name_is_not_the_home(self):
         self.assertFalse(self._refused(
             b"/home/builders/x and /home/builder_old/y", "/home/builder"))

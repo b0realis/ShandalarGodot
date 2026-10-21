@@ -17,6 +17,11 @@ extends CardScript
 ## more than a Tablet). Both cards are exiled first — that is the printed
 ## order — and the settlement then either buries the Tablet or swaps the
 ## two cards' OWNERS, the permanent kind of change that outlives the duel.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast and the activation:
+## "Ante must be on for Bronze Tablet: this duel is not played for ante".
 
 
 static func _theirs_and_nontoken(_game: MtgGame, source: CardInstance,

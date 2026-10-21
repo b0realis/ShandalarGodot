@@ -94,8 +94,17 @@ static func _cohort(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 # "Blocking or blocked by this creature" includes the band (2026-10-03): a
 # creature blocking one band member blocks every member (CR 702.22h), on
 # either side of the block. Greater Werewolf asks this too.
+# Only attackers STILL in combat (bug hunt 2026-10-21, cardsB): a blocker's
+# entry keeps naming an attacker that left combat — regenerated (CR 701.15b),
+# Reconnaissance — on purpose (CombatState.forget), but that attacker is no
+# longer blocked by anything (CR 506.4).
 static func _opponents(g: MtgGame, s: CardInstance) -> Array[int]:
-	return g.combat.blockers_of_band(g.combat.band_of(s.id)) if g.combat.attackers.has(s.id) else g.combat.opposing_attackers(s.id)
+	if g.combat.attackers.has(s.id):
+		return g.combat.blockers_of_band(g.combat.band_of(s.id))
+	var out: Array[int] = []
+	for id in g.combat.opposing_attackers(s.id):
+		if g.combat.attackers.has(id): out.append(id)
+	return out
 static func _in_combat(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return not _opponents(g, s).is_empty()
 static func _combat_context(g: MtgGame, s: CardInstance, _e: GameEvent) -> Dictionary:
 	var pairs: Array = []
@@ -138,23 +147,21 @@ static func _black_cast(_g: MtgGame, _s: CardInstance, e: GameEvent, pid: int) -
 static func _titan_grow(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 	var i := g.find_instance(id)
 	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == stamp: g.add_counters(i, "+1/+1")
+# "You MAY have this creature become the color or colors of your choice":
+# whether, then which — one colour question that takes several
+# (DecisionAgent.choose_color's `several`; bug hunt 2026-10-21 — it was one
+# list of all 32 combinations). The hint keeps its colours.
 static func _shyft(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.26e
-	var options: Array[String] = ["Keep current colors"]
-	var colors := [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B, Mtg.ManaColor.R, Mtg.ManaColor.G]
-	var masks: Array[int] = [0]
-	for bits in range(1, 32):
-		var mask := 0
-		var labels: Array[String] = []
-		for n in 5:
-			if (bits & (1 << n)) != 0:
-				mask |= colors[n]
-				labels.append(Mtg.COLOR_NAMES[colors[n]])
-		options.append(" + ".join(labels))
-		masks.append(mask)
-	var choice := g.agents[s.controller_id].choose_option(g, s.controller_id, options, "Shyft: choose colors", 0)
-	if choice > 0:
-		g.continuous.add_until_eot_color(s.id, masks[choice], false, ContinuousEffects.Duration.INDEFINITE)
+	var pid := s.controller_id
+	if not g.agents[pid].choose_yes_no(g, pid,
+			"Have Shyft become the color or colors of your choice?", false):
+		return
+	var keep: int = s.cur_colors if s.cur_colors != 0 else Mtg.ManaColor.U
+	var mask: int = g.agents[pid].choose_color(g, pid,
+		"Shyft: choose the color or colors it becomes", keep, true) & 31
+	if mask != 0:
+		g.continuous.add_until_eot_color(s.id, mask, false, ContinuousEffects.Duration.INDEFINITE)
 		g.recalculate()
 static func _any_attack(_g: MtgGame, _s: CardInstance, e: GameEvent) -> bool: return not e.data.attackers.is_empty()
 static func _war_context(g: MtgGame, _s: CardInstance, _e: GameEvent) -> Dictionary: return {"who": g.active_player}

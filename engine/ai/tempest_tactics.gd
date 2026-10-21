@@ -2341,7 +2341,15 @@ static func guerrilla_redirect(g: MtgGame, pilot) -> String:
 
 ## Is our [param inst] about to be removed by THEIR object on top of the
 ## stack — a targeted removal, bounce or killing damage, or a sweeper that
-## reaches it?
+## KILLS it?
+##
+## A SWEEPER THAT REACHES OUR SIDE IS NOT ONE THAT KILLS (bug hunt
+## 2026-10-21): every board-wide destroy or damage reaching us read as the
+## end of every creature we had, so Cold Storage stored a Serra Angel in
+## response to a Pyroclasm it would have lived through and to a
+## Shatterstorm that spared it — and destroyed the Storage, the Angel in
+## exile for good. The pilot's own death rule decides now ([method
+## AiPlayer._sweep_kills]), as [method _top_sweep_kills] reads it.
 static func _removal_aimed_at(g: MtgGame, pilot, inst: CardInstance) -> bool:
 	if g.stack.is_empty():
 		return false
@@ -2349,10 +2357,8 @@ static func _removal_aimed_at(g: MtgGame, pilot, inst: CardInstance) -> bool:
 	if top.controller == pilot.pid:
 		return false
 	var intent := EffectIntent.read(top.effects, top.card.data.card_name if top.card != null else "")
-	if intent.sweeper != null:
-		var scope := preload("res://engine/ai/mirage_tactics.gd").sweep_scope(g, intent.sweeper, top.controller)
-		if scope < 0 or scope == pilot.pid:
-			return true
+	if intent.sweeper != null and _top_sweep_kills(g, pilot, inst):
+		return true
 	for t in top.targets:
 		if t == null or t.is_player or t.is_damage or t.is_ability or t.instance_id != inst.id:
 			continue
@@ -2363,14 +2369,38 @@ static func _removal_aimed_at(g: MtgGame, pilot, inst: CardInstance) -> bool:
 	return false
 
 
+## Would THEIR sweeper on top of the stack kill [param inst] — at its X,
+## within its scope (a Simoon reaches one seat), by the pilot's own death
+## rule? False when the top is no sweeper of theirs.
+static func _top_sweep_kills(g: MtgGame, pilot, inst: CardInstance) -> bool:
+	if g.stack.is_empty():
+		return false
+	var top: StackItem = g.stack.back()
+	if top.controller == pilot.pid:
+		return false
+	var sweep: EffectBase = EffectIntent.read(top.effects,
+		top.card.data.card_name if top.card != null else "").sweeper
+	if sweep == null:
+		return false
+	var n := 0
+	if sweep is DamageAllEffect:
+		n = top.x_value if sweep.use_x else sweep.amount
+	var scope := preload("res://engine/ai/mirage_tactics.gd").sweep_scope(g, sweep, top.controller)
+	return pilot._sweep_kills(sweep, inst, n, scope)
+
+
 ## COLD STORAGE: "{3}: Exile target creature you control" — our creature
 ## their removal is aimed at, worth the mana, goes into storage in
-## response ([method stash_release] brings it back).
+## response ([method stash_release] brings it back). Never into a Storage
+## the same sweep destroys (a Nevinyrral's Disk): the creature would stay
+## in exile, where dying it would at least reach the graveyard.
 static func stash_save(g: MtgGame, pilot) -> String:
 	var pid: int = pilot.pid
 	for box in g.players[pid].battlefield:
 		var index := _role_index(g, pilot, box, &"stash_own_creature")
 		if index < 0:
+			continue
+		if _top_sweep_kills(g, pilot, box):
 			continue
 		var spec: TargetSpec = box.cur_activated_abilities[index].effects[0].target_spec
 		var best: CardInstance = null

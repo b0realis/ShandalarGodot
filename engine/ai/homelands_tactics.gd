@@ -96,6 +96,12 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		&"set_sweep":
 			var gain := 0.0
 			for body in g.all_battlefield():
+				# A FACE-DOWN PERMANENT HAS NO NAME (CR 708.2), so it was
+				# printed in no set; the card under THEIR mask is hidden
+				# (CONTRIBUTING.md rule 8) — a masked Ihsan's Shade made
+				# the Chime worth sacrificing and a masked Craw Wurm did not
+				# (bug hunt 2026-10-21).
+				if body.face_down: continue
 				if body == s or body.is_token or body.cur_indestructible or not CardRegistry.originally_printed_in(body.data.card_name, e.ai_parameters.set): continue
 				gain += pilot._victim_value(g, body) if body.controller_id != pid else -pilot._own_value(g, body)
 			return result(gain) if gain > 0 else {}

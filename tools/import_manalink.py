@@ -120,6 +120,15 @@ def decode_bmp(data: bytes) -> tuple[int, int, bytes]:
     return width, height, bytes(out)
 
 
+## The bit depths each PNG colour type allows (the PNG specification's
+## table): grey, RGB, palette, grey+alpha, RGBA.
+PNG_DEPTHS = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
+
+## What a decoder raises on a file it cannot read: each is a refusal of
+## that one file, never the end of the import.
+DECODE_ERRORS = (ValueError, struct.error, zlib.error, KeyError, IndexError)
+
+
 def decode_png(data: bytes) -> tuple[int, int, bytes]:
     """`(width, height, rgba)` of any non-interlaced PNG — grey, RGB,
     palette (with `tRNS`), grey+alpha or RGBA, 1 to 16 bits a sample.
@@ -144,6 +153,12 @@ def decode_png(data: bytes) -> tuple[int, int, bytes]:
                 ">IIBBBBB", payload[:13])
             if interlace:
                 raise ValueError("an interlaced PNG is not supported")
+            # A depth the colour type does not allow (0 among them) is not
+            # a PNG: refused here, not a ZeroDivisionError further down
+            # (hunt 2026-10-21).
+            if depth not in PNG_DEPTHS.get(colour, ()):
+                raise ValueError("bit depth %d is not one a PNG of colour type %d has"
+                                 % (depth, colour))
         elif tag == b"PLTE":
             palette = payload
         elif tag == b"tRNS":
@@ -533,8 +548,16 @@ def compose_frame(index: dict[str, Path], key: str
              for name in (stone, plate)]
     if None in paths:
         return None
-    bw, bh, bottom = decode_png(paths[0].read_bytes())
-    tw, th, top = decode_png(paths[1].read_bytes())
+    # A layer that will not decode is a REFUSAL of this frame, said with the
+    # file's name (hunt 2026-10-21): it escaped `fill` as a traceback, after
+    # earlier keys were written and before the Manalink label was.
+    layers = []
+    for path in paths:
+        try:
+            layers.append(decode_png(path.read_bytes()))
+        except DECODE_ERRORS as exc:
+            raise ValueError("%s would not decode (%s)" % (path.name, exc)) from exc
+    (bw, bh, bottom), (tw, th, top) = layers
     if (bw, bh) != (tw, th):
         return None
     window = bytes(FRAME_WINDOW) * (bw * bh)
@@ -556,7 +579,11 @@ def fill(index: dict[str, Path], dest: Path, missing: list[str],
             refused[key] = NOT_USED[key]
             continue
         if key in FRAMES:
-            framed = compose_frame(index, key)
+            try:
+                framed = compose_frame(index, key)
+            except ValueError as exc:
+                refused[key] = str(exc)
+                continue
             if framed is not None:
                 (width, height, rgba), path = framed
                 write_png(dest / (key + ".png"), width, height, rgba,
@@ -579,8 +606,7 @@ def fill(index: dict[str, Path], dest: Path, missing: list[str],
                 break
             try:
                 decoded = decode_any(path)
-            except (ValueError, struct.error, zlib.error, KeyError,
-                    IndexError) as exc:
+            except DECODE_ERRORS as exc:
                 refused[key] = "%s would not decode (%s)" % (path.name, exc)
                 continue
             if decoded is None:

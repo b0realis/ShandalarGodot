@@ -1309,7 +1309,10 @@ def read_avi_header(path: Path) -> dict | None:
         return None
     main = head.find(b"avih")
     fmt = head.find(b"strf")
-    if main < 0 or fmt < 0 or len(head) < fmt + 48:
+    # Both blocks whole, or not a readable AVI: an `avih` tag cut off at
+    # the end of the header was a struct.error out of the movie step,
+    # which is never fatal (hunt 2026-10-21).
+    if main < 0 or fmt < 0 or len(head) < fmt + 48 or len(head) < main + 28:
         return None
     micros, _rate, _pad, _flags, frames = struct.unpack(
         "<IIIII", head[main + 8:main + 28])
@@ -1540,9 +1543,11 @@ def import_videos(index: dict[str, Path], dest: Path) -> None:
         # need shrinking to fit a sheet, and the decoder has to be told
         # before it starts. The grid itself is re-planned below, against
         # the frame count the decoder actually produced.
-        _, _, w, h = plan_sheet(header["width"], header["height"],
-                                max(1, header["frames"]))
         try:
+            # Inside the try: a frame count no sheet can hold is this
+            # movie skipped, not the import ended (hunt 2026-10-21).
+            _, _, w, h = plan_sheet(header["width"], header["height"],
+                                    max(1, header["frames"]))
             rgb, frames, cols, rows, w, h = _decode_to_fit(program, path, w, h)
         except (OSError, subprocess.SubprocessError, ValueError) as err:
             print("  %-18s SKIPPED — %s could not decode %s (%s): %s"
@@ -2093,9 +2098,18 @@ def decode_pic(data: bytes) -> tuple[int, int, bytes, bytes | None]:
     palette = None
     for tag, payload in iter_pic_blocks(data):
         if tag in (b"M0", b"M1"):
+            if len(payload) < 2:
+                raise ValueError("palette block cut short")
             first, last = payload[0], payload[1]
             table = bytearray(768)
             count = (last - first + 1) * 3
+            # A block holding less than its range declares SHRANK the
+            # table (a short slice assignment), and the short palette was
+            # an IndexError where every caller expects a ValueError
+            # (hunt 2026-10-21).
+            if last < first or len(payload) < 2 + count:
+                raise ValueError("palette block cut short (%d-%d in %d bytes)"
+                                 % (first, last, len(payload) - 2))
             table[first * 3:first * 3 + count] = payload[2:2 + count]
             palette = bytes(table)
         elif tag in (b"X0", b"X1"):

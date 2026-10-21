@@ -8,6 +8,13 @@ extends CardScript
 ## pipeline rebuilds — cur_indestructible (new in this wave: destruction
 ## and lethal damage simply do nothing, CR 700.4) and the
 ## cur_cant_be_aura_target ban Anti-Magic Aura already uses.
+##
+## "Can't be enchanted by other Auras" also makes an Aura ALREADY on the
+## land illegal (CR 303.4d), so the state-based check puts it into its
+## owner's graveyard (CR 704.5m): the Consecrate Land names itself in
+## cur_other_auras_barred_by, which MtgGame.aura_can_enchant reads. Until
+## the bug hunt of 2026-10-21 only a new Aura was kept off — an Evil
+## Presence already there went on making the Forest a Swamp.
 
 
 static func _is_land(inst: CardInstance) -> bool:
@@ -30,3 +37,4 @@ static func _bless(game: MtgGame, source: CardInstance) -> void:
 		return
 	host.cur_indestructible = true
 	host.cur_cant_be_aura_target = true
+	host.cur_other_auras_barred_by.append(source.id)

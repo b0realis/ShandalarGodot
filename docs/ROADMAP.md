@@ -14536,17 +14536,16 @@ one bump at integration).
 - Base set, real and unfixed: Lesser Werewolf's resolution-time "if" as an
   activation gate; Johan's "until end of combat" as a whole turn; All
   Hallow's Eve and Eureka without the `begin_simultaneous()` bracket;
-  Equinox's "would destroy" as "is a legal target"; Chain Lightning's
-  second "may" never asked; Cocoon's "your untap step" on a stolen host;
-  Puppet Master and Takklemaggot reading "you" as the owner; Living Plane
-  and Camouflage shortcuts without a SIMPLIFIED row; Backdraft "cast" as
-  "owns"; Indestructible Aura assigning over an existing shield; The
-  Fallen biting its own controller after a control change; Illusionary
-  Mask ignoring the {X} colour; five cards mutating `counters` directly
-  (unjournaled for a probe's rewind); Tetravus's token without the
-  `tetravite` subtype; Mind Bomb and Rebirth resolving "each player may"
-  in sequence; Sengir Vampire's `add_counters` without a battlefield
-  guard; Verduran Enchantress and Zombie Master reading printed types.
+  Chain Lightning's second "may" never asked; Cocoon's "your untap step"
+  on a stolen host; Puppet Master and Takklemaggot reading "you" as the
+  owner; Living Plane and Camouflage shortcuts without a SIMPLIFIED row;
+  Backdraft "cast" as "owns"; Indestructible Aura assigning over an
+  existing shield; Illusionary Mask ignoring the {X} colour; five cards
+  mutating `counters` directly (unjournaled for a probe's rewind); Mind
+  Bomb and Rebirth resolving "each player may" in sequence; Sengir
+  Vampire's `add_counters` without a battlefield guard; Verduran
+  Enchantress and Zombie Master reading printed types. (Equinox, The
+  Fallen and Tetravus: fixed in 0.50.45.)
 - Engine: `engine/combat.gd`'s banding header documents an approximation
   of CR 702.22j (the attacking side's assignment) without the word
   SIMPLIFIED; `check_state_based_actions` reads printed supertypes for
@@ -18811,6 +18810,36 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-21 — Three rulings and the second hunt (0.50.45)
+
+The owner ruled on the review's three open questions, then: *"go bug hunt
+and bug fix in code segment the last reviewers didn't get! Go baby"*. The
+record, every fix with its test and what is still open:
+`docs/hunt-campaign-2026-10-21.md`.
+
+- **Ante off — no ante used** (*"Message player - ante must be on for this
+  card!"*): the nine "remove before playing if not for ante" cards are
+  refused in a duel not played for ante (`MtgGame.not_for_ante_refusal`),
+  and nothing reaches the ante zone. The decks that hold them stay as they
+  are.
+- **Fireball** divides X among all the targets chosen at casting; a target
+  gone on resolution loses its share (*"the spell crushes empty space"*,
+  `MtgGame.chosen_target_count`).
+- **The 1997 legend rule** counts from when a permanent became that legend:
+  a Vesuvan Doppelganger that turns into a copy of a legend in play is the
+  one buried (`MtgGame.legend_since`, `note_identity_change`).
+- **The second hunt** — seven agents on disjoint files, then the
+  cross-file handovers: rules engine 3 fixes, original-set cards 19,
+  Pack 2–9 cards 13 in 5 problems, the computer 21, the screens 22, LAN,
+  the game history and the tools 24, handovers 13. Each fixed defect was
+  proven by a probe that failed first and is kept as a regression test
+  (`test_ruling_2026_10_21_*`, `test_hunt_2026_10_21_*`).
+- Two clocks in the tests (`test_c2_f_net_wire`,
+  `test_campaign_fix_ai_b_licid_budget`) now keep the best of several
+  readings; a machine busy with another project's work failed them.
+- The Android preset's `version/code` follows the version again (0.50.44
+  left it at 50043).
+
 ## 2026-10-21 — Add pack..., and every door out of a held duel asks (0.50.43)
 
 On the whole-project review's open questions (see
@@ -18832,6 +18861,12 @@ On the whole-project review's open questions (see
 - `tools/test_tracked_tree.py` no longer spells the CI runner's home whole:
   on CI that is the machine's home, and the release guard refused the file
   itself (0.50.42's one red CI job).
+- **What was still open** — three rulings for the owner (ante cards with
+  Ante off, Fireball's X, the 1997 legend rule and a copied legend; ruled
+  the same day, 0.50.45), what has not been tried (Add pack... on a phone,
+  the Windows paths), the limits of each fix, the reviewers' unchecked
+  sightings and what they did not read:
+  `docs/whole-project-review-2026-10-21.md`, "Left open".
 
 ## 2026-10-21 — The whole-project review (0.50.42)
 

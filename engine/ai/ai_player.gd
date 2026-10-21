@@ -5642,6 +5642,10 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	if tempest != null: return tempest
 	if data.card_name == "Dwarven Catapult":
 		return FALLEN_EMPIRES_TACTICS.catapult_choice(game, self, inst, max_x)
+	# ...and worth nothing while they control no land to walk past (bug
+	# hunt 2026-10-21): Part Water is cast at our own creatures only then.
+	if not _landwalk_finds_land(game, data.spell_effects):
+		return {}
 	if profile.uses_tactical_effects and not _choice_modal(data):
 		var tactical := EffectIntent.tactical_effect(data.spell_effects)
 		if tactical != null:
@@ -7628,6 +7632,12 @@ func _save_from_the_stack(game: MtgGame) -> String:
 		if victim == null or victim.controller_id != pid \
 				or victim.zone != Mtg.Zone.BATTLEFIELD or not victim.is_creature():
 			continue
+		# A DIVIDED spell lands its announced share here (bug hunt
+		# 2026-10-21, [method EffectIntent.damage_on]), not its total.
+		var dealt := intent.damage_on(t, top.x_value)
+		if not intent.removes and not intent.bounces \
+				and dealt < victim.cur_toughness - victim.damage:
+			continue
 		if not intent.kills(victim, top.x_value):
 			continue
 		if intent.bounces:
@@ -7639,15 +7649,14 @@ func _save_from_the_stack(game: MtgGame) -> String:
 				return shielded
 		# Burn: a breath of the creature's own, or a Giant Growth that
 		# lifts toughness past the damage.
-		if intent.damage_at(top.x_value) > 0 and not intent.removes:
+		if dealt > 0 and not intent.removes:
 			# ITS OWN BREATH FIRST (2026-09-09) — the mana untaps and the
 			# card does not come back, so the Shade that can grow out of
 			# the Bolt is asked before the Giant Growth in hand is, and
 			# no worth bar stands in front of it: there is no card to
 			# lose, and a body whose own ability makes it bigger is one
 			# the evaluator's snapshot under-reads by construction.
-			var grown := _pump_out_of_reach(game, victim,
-				intent.damage_at(top.x_value))
+			var grown := _pump_out_of_reach(game, victim, dealt)
 			if grown != "":
 				return grown
 			# ...and then the card, which is only worth a creature worth
@@ -7656,8 +7665,7 @@ func _save_from_the_stack(game: MtgGame) -> String:
 				var pump := _find_pump_instant(game)
 				if pump != null:
 					var lift: int = pump.data.spell_effects[0].toughness
-					if victim.cur_toughness - victim.damage + lift \
-							> intent.damage_at(top.x_value):
+					if victim.cur_toughness - victim.damage + lift > dealt:
 						return _cast_response(game, pump, [TargetRef.card(victim)])
 		# Unsummon our own Djinn out from under the Terror: the card is
 		# kept, the tempo is lost — worth it for a creature worth two.
@@ -9379,15 +9387,21 @@ func _damage_at_us(game: MtgGame, top: StackItem, intent: EffectIntent) -> int:
 		return 0
 	var at_us := false
 	var others := 0
+	var share := 0
 	for t in top.targets:
 		if t == null:
 			continue
 		if t.is_player and t.player_id == pid:
 			at_us = true
+			share = t.amount
 		else:
 			others += 1
 	if not at_us:
 		return 0
+	# "Divided AS YOU CHOOSE" announces each share as it is cast (CR
+	# 601.2d): ours is on our target (bug hunt 2026-10-21).
+	if intent.divided_shares and share > 0:
+		return share
 	if intent.damage_divided and others > 0:
 		return maxi(total - others, 0)
 	return total
@@ -12025,6 +12039,8 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		# with the gate off and for every body not declared as an attacker.
 		search.a_growth.append(_blocked_growth(game, inst))
 		search.a_tough.append(inst.cur_toughness)
+		search.a_min_blockers.append(inst.cur_min_blockers)
+		search.a_max_blockers.append(_blocker_cap(game, inst))
 	search.d_pow.resize(m)
 	search.d_val.resize(m)
 	search.d_free.resize(m)
@@ -12056,6 +12072,8 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_flanking[j] = Flanking.instances(inst) if profile.reads_gaze else 0
 		search.d_growth.append(_blocked_growth(game, inst))
 		search.d_tough.append(inst.cur_toughness)
+		search.d_min_blockers.append(inst.cur_min_blockers)
+		search.d_max_blockers.append(_blocker_cap(game, inst))
 	var cells := n * m
 	search.block_ours.resize(cells)
 	search.block_theirs.resize(cells)
@@ -12079,6 +12097,16 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 			search.hit_theirs[cell] = _damage_after_prevention(mine[i], theirs[j])
 	search.seal()
 	return search
+
+
+## The most creatures that may block [param inst], 0 for no bound: its own
+## "can't be blocked by more than N" and the table's cap (Caverns of
+## Despair), the smaller of the two ([member CombatSearch.a_max_blockers]).
+static func _blocker_cap(game: MtgGame, inst: CardInstance) -> int:
+	var cap := inst.cur_max_blockers
+	if game.max_blockers > 0 and (cap <= 0 or game.max_blockers < cap):
+		cap = game.max_blockers
+	return cap
 
 
 ## The durable half of [method CombatState.attack_illegality]: could
@@ -14020,6 +14048,16 @@ func _extra_targets(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			if found != null and owner_pid == pid and profile.forecasts_tactics \
 					and MIRAGE_TACTICS.dies_when_targeted(found, game):
 				continue
+			# HELP IS NOT PADDED WITH THEIRS (bug hunt 2026-10-21) — the
+			# mirror of the rule above: a helpful slot ran out of our
+			# permanents and was filled from theirs, so Part Water for X=2
+			# beside our one Hill Giant gave their Grizzly Bears islandwalk
+			# too ([method _cast_value] even credited the Bears as a victim).
+			# The slot stays empty instead, and the X is sized down to what
+			# our side fills.
+			if not harmful and not tap_only and found != null and owner_pid != pid \
+					and found.zone == Mtg.Zone.BATTLEFIELD:
+				continue
 		if owner_pid == wanted_pid:
 			preferred.append(ref)
 		else:
@@ -14368,6 +14406,27 @@ static func _already_chosen(ref: TargetRef, earlier: Array) -> bool:
 	return false
 
 
+## False when [param effects] are landwalk grants and nothing else (Part
+## Water's "X target creatures gain islandwalk") and the opponent controls
+## no land of any type they grant — the walk walks past nothing. True for
+## every other spell.
+func _landwalk_finds_land(game: MtgGame, effects: Array) -> bool:
+	var types: Array[String] = []
+	for e in effects:
+		if not e is GrantLandwalkEffect:
+			return true
+		types.append_array((e as GrantLandwalkEffect).land_types)
+	if types.is_empty():
+		return true
+	for land in game.players[game.opponent_of(pid)].battlefield:
+		if not land.is_land():
+			continue
+		for kind in types:
+			if land.has_subtype(kind):
+				return true
+	return false
+
+
 func _is_harmful(source: CardInstance, effect: EffectBase) -> bool:
 	if effect != null and effect.ai_helpful:
 		return false   # the card said so (EffectBase.helpful)
@@ -14395,6 +14454,12 @@ func _is_harmful(source: CardInstance, effect: EffectBase) -> bool:
 			and effect.amount < 0 and not effect.use_x and effect.target_spec != null:
 		return true
 	if effect is DrawEffect or effect is GainLifeEffect or effect is UntapEffect:
+		return false
+	# A LANDWALK IS A GIFT to the creature that gets it (bug hunt 2026-10-21):
+	# the reader below has no arm for it and calls it removal-shaped, so
+	# Part Water gave THEIR two Grizzly Bears islandwalk while we
+	# controlled the Islands they walked past.
+	if effect is GrantLandwalkEffect:
 		return false
 	# Card-local custom effects: ask the READER, which knows the ones the
 	# CARD_LOCAL table names (a Twiddle taps, so it points across the
@@ -15441,6 +15506,13 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 	# A PIECE OF A LOOP IN REACH (2026-10-19, CARD-COMBOS) is the last to go.
 	var keeps := p_pid == pid and profile.plays_combos
 	var worth := func(inst: CardInstance) -> float:
+		# A DEAD CARD GOES FIRST (bug hunt 2026-10-21): an ante card in a
+		# duel not played for ante does nothing ([method
+		# MtgGame.not_for_ante_refusal], the owner's ruling of that day),
+		# and the cleanup kept Contract from Below over a Bog Wraith one
+		# land from the table.
+		if game.not_for_ante_refusal(inst) != "":
+			return -1.0
 		var piece := CARD_COMBOS.keep_value(game, self, inst) if keeps else 0.0
 		if keep_lands and inst.is_land():
 			return 5.0   # above any bear, below any angel
@@ -16220,9 +16292,16 @@ func _volley_choice(game: MtgGame, inst: CardInstance, volley: Dictionary) -> Di
 ## cards than the hand may keep, an instant the discard would throw away
 ## ([method answer_discard]'s own pick) is cast first when it has any use
 ## at all — removal at their best victim, or burn at their face. A Bolt
-## that goes to the graveyard unused is a card thrown away twice. A draw
-## is not fired (it only grows the hand) and neither is a pump. "" when
-## nothing qualifies.
+## that goes to the graveyard unused is a card thrown away twice. A pump is
+## not fired. "" when nothing qualifies.
+##
+## A DRAW IS FIRED TOO (bug hunt 2026-10-21): "it only grows the hand" was
+## the reason it was not, and the hand it grows is the one the cleanup
+## cuts anyway — an Ancestral Recall cast here is the best seven of ten
+## cards kept, where discarded it is the same seven and the Recall gone.
+## The Wizard threw it away with two Islands open. Aimed at our own seat,
+## so a draw that also harms its target is left alone, and never into the
+## end of a library ([method _library_slack]).
 func _fire_surplus_instants(game: MtgGame) -> String:
 	if not profile.forecasts_tactics:
 		return ""
@@ -16239,10 +16318,27 @@ func _fire_surplus_instants(game: MtgGame) -> String:
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue
 		var intent := _intent_of(inst)
-		if intent.target_spec == null or intent.pumps or intent.draws > 0 \
-				or intent.draws_use_x or intent.self_damage >= me.life:
+		if intent.pumps or intent.draws_use_x or intent.self_damage >= me.life:
 			continue
 		var surcharge := game.spell_surcharge(pid, inst.data)
+		if intent.draws > 0:
+			if me.library.size() <= intent.draws or intent.draws > _library_slack(game) \
+					or intent.damage > 0 or intent.life_loss > 0 or intent.removes \
+					or intent.bounces or intent.discards > 0 or intent.mills > 0 \
+					or not _volley_payable(game, sources, inst.data.cost, surcharge):
+				continue
+			var aimed: Array = []
+			if intent.target_spec != null:
+				if not intent.target_spec.is_legal(game, TargetRef.player(pid), inst):
+					continue
+				aimed = [TargetRef.player(pid)]
+			var drawn := _cast_response(game, inst, aimed, 0,
+				"cast %s rather than discard it" % inst.data.card_name)
+			if drawn != "":
+				return drawn
+			continue
+		if intent.target_spec == null:
+			continue
 		if not _volley_payable(game, sources, inst.data.cost, surcharge):
 			continue
 		var targets: Array = []

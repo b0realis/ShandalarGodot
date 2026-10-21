@@ -80,7 +80,7 @@ func receive(message: Dictionary) -> void:
 	_waiting = false
 	_due = Time.get_ticks_msec() + 40 # below the host's flood limit
 	if bytes.size() == total:
-		var parsed := MpnCodec.parse(bytes.get_string_from_utf8())
+		var parsed := MpnCodec.parse_bytes(bytes)
 		if parsed.error != "":
 			abort("The downloaded MPN is invalid: " + parsed.error)
 			return

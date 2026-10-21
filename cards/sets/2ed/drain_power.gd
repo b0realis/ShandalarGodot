@@ -44,15 +44,23 @@ class DrainEffect extends EffectBase:
 			if land.is_land() and not land.cur_mana_abilities.is_empty() \
 					and game.is_present(land) and land.controller_id == victim:
 				DrainEffect._activate_one(game, victim, land)
+		# "That player LOSES all unspent mana and you add the mana lost":
+		# count it, empty their pool, THEN fill yours. Adding first and
+		# clearing after emptied the caster's own pool when they named
+		# themselves — every land tapped and nothing kept (bug hunt
+		# 2026-10-21).
 		var pool := game.players[victim].mana_pool
+		var lost := {}
 		var moved := 0
 		for color in [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B,
 				Mtg.ManaColor.R, Mtg.ManaColor.G, Mtg.ManaColor.C]:
 			var n := pool.total_of(color)
 			if n > 0:
-				game.players[controller].mana_pool.add(color, n)
+				lost[color] = n
 				moved += n
 		pool.clear()
+		for color in lost:
+			game.players[controller].mana_pool.add(color, int(lost[color]))
 		game.log_line("%s drains %d mana from %s" % [
 			game.players[controller].player_name, moved,
 			game.players[victim].player_name])

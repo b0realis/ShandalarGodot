@@ -424,18 +424,26 @@ def write_zip(skin: Path, out: Path,
     for path, name in (extras or []):
         entries.append((path, Path("skin") / name))
     names = [name for _, name in entries]
-    if is_tar_name(out.name):
-        with tarfile.open(out, "w:gz", compresslevel=6) as tf:
-            for path, name in entries:
-                tf.add(path, str(name), recursive=False)
-                total += path.stat().st_size
-    else:
-        # ZIP_DEFLATED on art that is already PNG/JPG buys a few percent,
-        # but it costs nothing to ask and some of these are raw sheets.
-        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-            for path, name in entries:
-                zf.write(path, name)
-                total += path.stat().st_size
+    # BESIDE IT FIRST, THEN IN ITS PLACE (hunt 2026-10-21): written straight
+    # onto [param out], a file that could not be read halfway left a valid
+    # archive of half the skin where the good one had been.
+    part = out.with_name(out.name + ".part")
+    try:
+        if is_tar_name(out.name):
+            with tarfile.open(part, "w:gz", compresslevel=6) as tf:
+                for path, name in entries:
+                    tf.add(path, str(name), recursive=False)
+                    total += path.stat().st_size
+        else:
+            # ZIP_DEFLATED on art that is already PNG/JPG buys a few percent,
+            # but it costs nothing to ask and some of these are raw sheets.
+            with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+                for path, name in entries:
+                    zf.write(path, name)
+                    total += path.stat().st_size
+        part.replace(out)
+    finally:
+        part.unlink(missing_ok=True)
     count = len(entries)
     size = out.stat().st_size
     # What the game will take it for: card art when every entry is a card

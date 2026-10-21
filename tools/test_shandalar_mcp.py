@@ -646,6 +646,20 @@ refuse("shandalar", "unknown verb '%s'" % verb, kind="verb")
 '''
 
 
+def transcript_with_result(path: Path, seconds: float = 10.0) -> str:
+    """A kept game's transcript once its result line is in. The referee
+    sends each line to its client before it writes it to the transcript
+    (`_emit`), so `referee_stop` can answer with the result a moment
+    before the line lands in the file (a test failed so on a busy machine,
+    2026-10-21)."""
+    deadline = time.monotonic() + seconds
+    while True:
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if '"type":"result"' in text.replace(" ", "") or time.monotonic() > deadline:
+            return text
+        time.sleep(0.05)
+
+
 class Client:
     """One server process on a pipe; `ask` sends a request and reads
     its answer, `notify` sends a notification and expects silence."""
@@ -1328,7 +1342,7 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(stopped["result"]["reason"], "concede")
         self.assertTrue(stopped["kept"])
         self.assertFalse((self.workspace / "games" / (game + ".json")).is_file())
-        transcript = (self.workspace / "games" / (game + ".lines")).read_text(encoding="utf-8")
+        transcript = transcript_with_result(self.workspace / "games" / (game + ".lines"))
         self.assertIn('"type": "result"', transcript)
 
     def test_join_by_table_name_with_a_log(self):
@@ -2834,7 +2848,7 @@ class LiveTest(unittest.TestCase):
         self.assertIn("result", stopped, stopped)
         self.assertTrue(stopped["kept"])
         self.assertFalse((self.workspace / "games" / (game + ".json")).is_file())
-        transcript = (self.workspace / "games" / (game + ".lines")).read_text(encoding="utf-8")
+        transcript = transcript_with_result(self.workspace / "games" / (game + ".lines"))
         self.assertIn('"type":"result"', transcript.replace(" ", ""))
         self.assertEqual(self.client.payload("referee_resume", {})["kept"], [])
 
@@ -3039,6 +3053,186 @@ class LiveTest(unittest.TestCase):
         for game in (host, other):
             self.assertFalse([g for g in status["games"] if g["game"] == game][0]["running"])
         self.assertEqual(self.client.payload("referee_resume", {})["kept"], [])
+
+
+# ---------------------------------------------------- second hunt, 2026-10-21 --
+# THE ONE-CALL CAST, HUNTED (second bug hunt, 2026-10-21). `referee_cast`
+# against a SCRIPTED referee — a fake door that answers each line it reads with the next entry
+# of a script (optionally after a pause, as a table holding an action while
+# a seat reconnects does) — where the wire's own announcement shapes are
+# laid out by hand.
+#
+# - `referee_cast` again after a payment's question (AGENTS.md: "answer it
+#   with `referee_act`, then `referee_cast` the same card again (it resumes
+#   at the submission)") laid NO targets on the slots — the first call's
+#   were forgotten — and withdrew the paid cast; the mana floated and burned.
+# - A submission whose answer the read gave up on was reported `cast`.
+# - An ability whose cost holds {X} was activated at X=0 without the `x`
+#   the contract requires.
+# - `referee_act {"op":"cast", "exclude": 5}` (fields the tool schema never
+#   sees) was a JSON-RPC internal error, not the refusal envelope.
+
+HUNT_SCRIPTED_DOOR = r'''#!/usr/bin/env python3
+import json, os, sys, time
+scen = json.load(open(os.environ["HUNT_SCENARIO"]))
+log = open(os.environ["HUNT_SCENARIO_LOG"], "a")
+def emit(r):
+    sys.stdout.write(json.dumps(r) + "\n"); sys.stdout.flush()
+if sys.argv[1:2] != ["referee"]:
+    emit({"error": {"tool": "x", "exit": 2, "kind": "verb", "message": "fake"}}); sys.exit(2)
+for r in scen["start"]:
+    emit(r)
+replies = list(scen["replies"])
+for line in sys.stdin:
+    if not line.strip():
+        continue
+    log.write(line); log.flush()
+    if not replies:
+        emit({"type": "result", "winner": -1, "draw": True, "turns": 1, "reason": "script-end"})
+        sys.exit(0)
+    entry = replies.pop(0)
+    if isinstance(entry, dict):
+        time.sleep(entry.get("sleep", 0)); entry = entry.get("records", [])
+    for r in entry:
+        emit(r)
+'''
+
+HUNT_HELLO = {"type": "hello", "tool": "referee", "protocol": 1, "seed": 1,
+              "seats": [{"seat": 0, "player": "agent"}, {"seat": 1, "player": "wizard"}], "ops": []}
+HUNT_BOLT = {"id": "c5", "name": "Lightning Bolt", "rules": "Lightning Bolt deals 3 damage to any target."}
+HUNT_STONE = {"id": "c7", "name": "Fellwar Stone"}
+HUNT_BOLT_ROW = {"casts": [{"card": "c5", "name": "Lightning Bolt", "index": 0, "x": False, "modes": [],
+                           "budget": 0}], "abilities": []}
+HUNT_BOLT_SLOTS = {"name": "Lightning Bolt", "kind": "spell", "x": 0,
+                   "slots": [{"label": "any target", "kind": 0, "min": 1, "max": 1, "divided": 0,
+                              "targets": [{"id": "t0", "label": "Opponent"}, {"id": "t1", "label": "You"}],
+                              "counts": []}]}
+HUNT_TOKENS = [{"token": "t0", "ref": {"kind": "player", "id": "1"}},
+               {"token": "t1", "ref": {"kind": "player", "id": "0"}}]
+
+
+def hunt_player(seat, battlefield=(), mana=0):
+    return {"seat": seat, "life": 20, "hand_count": 1, "library_count": 30, "battlefield": list(battlefield),
+            "graveyard": [], "exile": [], "mana": mana}
+
+
+def hunt_decision(n, mode="priority", options=None, hand=(), bf0=(), pres=None, announcement=None, mana0=0):
+    view = {"turn": 1, "step": "MAIN1", "active": 0, "actor": 0, "mode": mode,
+            "players": [hunt_player(0, bf0, mana0), hunt_player(1)], "hand": list(hand), "stack": [],
+            "presentation": pres or {"cards": []}, "journal": []}
+    if announcement:
+        view["announcement"] = announcement
+    return {"type": "decision", "n": n, "seat": 0, "mode": mode, "turn": 1, "step": "MAIN1",
+            "options": options if options is not None else {"mode": mode, "concede": True, "pass": {"op": "pass"}},
+            "view": view}
+
+
+def hunt_priority(n, mana0=0, prepare=None, bf0=(HUNT_STONE,)):
+    pres = {"cards": [{"id": "c5", "castable": True, "abilities": [{"kind": "spell", "cost": "{R}"}]}]}
+    return hunt_decision(n, options={"mode": "priority", "concede": True, "pass": {"op": "pass"}, "respond": True,
+                                "prepare": prepare or HUNT_BOLT_ROW}, hand=[HUNT_BOLT], bf0=bf0, pres=pres, mana0=mana0)
+
+
+def hunt_announced(n, mana0=0):
+    draft = {"card": "c5", "kind": "spell", "index": 0, "x": 0, "mode": 0, "reachable": True}
+    pres = {"cards": [], "targets": HUNT_TOKENS, "draft": draft}
+    return hunt_decision(n, options={"mode": "priority", "concede": True, "announcement": HUNT_BOLT_SLOTS, "draft": draft,
+                                "autopay": {"op": "autopay"}, "submit": {"op": "submit"},
+                                "cancel": {"op": "cancel"}},
+                    hand=[HUNT_BOLT], bf0=[HUNT_STONE], pres=pres, announcement=HUNT_BOLT_SLOTS, mana0=mana0)
+
+
+class ScriptedRefereeTest(unittest.TestCase):
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.dir = Path(self.temp.name)
+        self.door = self.dir / "shandalar.sh"
+        self.door.write_text(HUNT_SCRIPTED_DOOR, encoding="utf-8")
+        self.door.chmod(0o755)
+        self.log = self.dir / "sent.log"
+        self.saved = {k: os.environ.get(k) for k in ("HUNT_SCENARIO", "HUNT_SCENARIO_LOG")}
+        self.addCleanup(self.restore)
+        self.server = None
+
+    def restore(self):
+        if self.server is not None:
+            self.server.shutdown()
+        for key, value in self.saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def start(self, start, replies):
+        scenario = self.dir / "scenario.json"
+        scenario.write_text(json.dumps({"start": [HUNT_HELLO] + start, "replies": replies}), encoding="utf-8")
+        os.environ["HUNT_SCENARIO"] = str(scenario)
+        os.environ["HUNT_SCENARIO_LOG"] = str(self.log)
+        self.server = mcp.Server(self.door, self.dir / "ws")
+        started = self.call("referee_start", {"deck_a": "a", "deck_b": "b"})
+        self.assertFalse(started.get("isError"), started)
+
+    def call(self, name, args):
+        answer = self.server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                     "params": {"name": name, "arguments": args}})
+        self.assertNotIn("error", answer, "a refusal envelope, never a protocol error: %s" % answer)
+        return answer["result"]
+
+    def sent(self):
+        if not self.log.exists():
+            return []
+        return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
+
+    def test_a_resumed_cast_keeps_the_targets_it_was_given(self):
+        question = hunt_decision(3, mode="choice", options={
+            "mode": "choice", "concede": True, "cancel": {"op": "cancel"},
+            "choice": {"prompt": "Which colour?", "options": ["R", "G"], "count": 1, "cards": []}},
+            hand=[HUNT_BOLT], bf0=[HUNT_STONE])
+        self.start([hunt_priority(1)], [[hunt_announced(2)], [question], [hunt_announced(4, mana0=1)],
+                                   [hunt_priority(5, prepare={"casts": [], "abilities": []})]])
+        first = self.call("referee_cast", {"game": "g1", "card": "c5", "targets": ["opponent"]})
+        self.assertEqual(first["structuredContent"]["cast"]["result"], "open")
+        self.call("referee_act", {"game": "g1", "action": {"op": "choice", "picks": [0]}})
+        again = self.call("referee_cast", {"game": "g1", "card": "c5"})
+        self.assertFalse(again.get("isError"), again["structuredContent"])
+        self.assertEqual(again["structuredContent"]["cast"]["result"], "cast")
+        ops = [line["op"] for line in self.sent()]
+        self.assertEqual(ops, ["prepare", "autopay", "choice", "submit"])
+        self.assertEqual([t[0] for t in self.sent()[-1]["targets"]], ["t0"], "laid on the opponent, as first asked")
+
+    def test_a_submission_not_answered_yet_is_not_reported_cast(self):
+        refused = {"type": "refused", "n": 3, "seat": 0, "reason": "That target is no longer legal.",
+                   "action": {"op": "submit"}, "left": 19}
+        self.start([hunt_priority(1)], [[hunt_announced(2)], [hunt_announced(3, mana0=1)],
+                                   {"sleep": 3, "records": [refused, hunt_announced(4, mana0=1)]}])
+        answer = self.call("referee_cast", {"game": "g1", "card": "c5", "targets": ["opponent"], "timeout": 1})
+        cast = answer["structuredContent"]["cast"]
+        self.assertNotEqual(cast["result"], "cast", "the referee has not answered the submission")
+        self.assertIn("referee_wait", cast.get("note", ""))
+
+    def test_an_x_ability_needs_its_x(self):
+        rats = {"id": "c8", "name": "Crypt Rats", "creature": True, "power": 1, "toughness": 1}
+        row = {"casts": [], "abilities": [{"card": "c8", "name": "Crypt Rats", "index": 0,
+                                            "label": "{X}: Crypt Rats deals X damage to each creature and each player.",
+                                            "cost": "{X}", "budget": 3}]}
+        self.start([hunt_priority(1, prepare=row, bf0=[rats])], [])
+        answer = self.call("referee_cast", {"game": "g1", "card": "Crypt Rats", "kind": "ability"})
+        self.assertTrue(answer["isError"])
+        self.assertEqual(answer["structuredContent"]["error"]["flag"], "x")
+        self.assertEqual(self.sent(), [], "refused before anything is sent")
+
+    def test_a_cast_op_with_a_malformed_exclude_is_a_refusal(self):
+        self.start([hunt_priority(1)], [])
+        for bad in (5, {"c1": 1}, True):
+            with self.subTest(exclude=bad):
+                answer = self.call("referee_act", {"game": "g1", "action": {"op": "cast", "card": "c5",
+                                                                           "targets": ["opponent"],
+                                                                           "exclude": bad}})
+                self.assertTrue(answer["isError"])
+                self.assertEqual(answer["structuredContent"]["error"]["flag"], "exclude")
+        self.assertEqual(self.sent(), [])
 
 
 if __name__ == "__main__":

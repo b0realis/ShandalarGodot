@@ -62,6 +62,13 @@ const STRIPE_W := MiniCard.STRIPE_W
 ## The shared enlarged-card preview (owned by the DuelScreen, docked).
 var preview: CardPreview = null
 
+## The duel, for the faces' states that ask it (hunt of 2026-10-21). A
+## battlefield pile's faces were built without one, so a tapped land in a
+## pile promised "This card will untap" under Winter Orb, which a land
+## standing alone does not, and a piled permanent named by a spell on the
+## chain never wore `Is a target`. Null for a hand's pile.
+var game: MtgGame = null
+
 ## When true only name bands render — no full last card (collapsed hand).
 var collapsed := false
 
@@ -301,7 +308,7 @@ func _make_card(inst: CardInstance, hidden: bool, click_cb: Callable,
 	# duel screen (`_highlight_for` -> `_can_act_on`, a legality question)
 	# and a pile asks it once per card per rebuild.
 	var highlight: int = highlight_cb.call(inst)
-	var face := MiniCard.new(inst)
+	var face := MiniCard.new(inst, game)
 	# A card that is face down IN THE GAME is face down in the pile too —
 	# the same one line `DuelScreen._make_card` carries, for the same
 	# reason (`docs/card-states.md` §5.1). A pile is where lands and

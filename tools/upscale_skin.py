@@ -343,8 +343,10 @@ def opened(skin: Path):
         folder = Path(tmp)
         for entry in archive.infolist():
             parts = PurePosixPath(entry.filename).parts
+            # A drive ("skin/D:/x", "skin/C:x") leaves the folder on Windows,
+            # where joining "D:" starts a new path (hunt 2026-10-21).
             if (len(parts) < 2 or parts[0] != "skin" or ".." in parts
-                    or "\\" in entry.filename or entry.is_dir()
+                    or "\\" in entry.filename or ":" in entry.filename or entry.is_dir()
                     or parts[1] == "cardart"):
                 continue
             inner = PurePosixPath(*parts[1:])
@@ -729,6 +731,12 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
             print("!! --out is the skin itself: that would write over its 1997 "
                   "pictures; name another folder", file=sys.stderr)
             return 2
+        # The same for a skin ZIP named as the output (hunt 2026-10-21): the
+        # finished zip replaced the 1997 one it was made from, exit 0.
+        if zip_out is not None and zip_out.resolve() == skin.resolve():
+            print("!! --zip is the skin itself: that would write over its 1997 "
+                  "pictures; name another file", file=sys.stderr)
+            return 2
         keys = pictures(folder)
         if not keys:
             print("!! no pictures to upscale in %s" % skin, file=sys.stderr)
@@ -819,7 +827,8 @@ def main() -> int:
                              "(default: this checkout's assets/original)")
     parser.add_argument("--zip", type=Path, default=None,
                         help="write the hi-res skin zip here (default: %s in "
-                             "this folder, unless --out is given)" % ZIP_NAME)
+                             "this folder, unless --out is given; never the "
+                             "skin read)" % ZIP_NAME)
     parser.add_argument("--out", type=Path, default=None,
                         help="write the hi-res skin into this folder instead "
                              "(never the skin read)")

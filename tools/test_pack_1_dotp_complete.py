@@ -150,6 +150,30 @@ class PackOneTests(unittest.TestCase):
                 pack.build(wrong, include_art=False)
             self.assertEqual(list(Path(tmp).iterdir()), [])
 
+    def test_verify_rejects_metadata_forged_with_fresh_checksums(self):
+        # HUNT 2026-10-21: Pack 1 compared cards.json only with the
+        # checksums in the zip's own manifest, so a changed card whose
+        # checksums were recomputed passed `verify` — Packs 2-9 compare
+        # with the trusted source and refuse it.
+        with tempfile.TemporaryDirectory() as tmp:
+            good = Path(tmp) / pack.FILE_NAME
+            pack.build(good, include_art=False)
+            with zipfile.ZipFile(good) as source:
+                entries = {info.filename: source.read(info.filename) for info in source.infolist()}
+            cards = json.loads(entries[pack.PREFIX + "cards.json"])
+            for row in cards:
+                if row.get("name") == "Chaos Orb":
+                    row["oracle_text"] = "You win the game."
+            entries[pack.PREFIX + "cards.json"] = pack.json_bytes(cards)
+            manifest = json.loads(entries[pack.PREFIX + "manifest.json"])
+            manifest["checksums"]["metadata"]["cards.json"] = pack.sha256(entries[pack.PREFIX + "cards.json"])
+            entries[pack.PREFIX + "manifest.json"] = pack.json_bytes(manifest)
+            with zipfile.ZipFile(good, "w") as out:
+                for name, payload in entries.items():
+                    out.writestr(name, payload)
+            with self.assertRaisesRegex(ValueError, "trusted source"):
+                pack.verify(good, require_art=False)
+
     def test_verify_rejects_tampered_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             good = Path(tmp) / pack.FILE_NAME

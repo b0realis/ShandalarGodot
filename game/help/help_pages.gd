@@ -259,6 +259,7 @@ static func _page_table() -> Dictionary:
 		]},
 		_heading("The prompt tells you what to do next"),
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
+		_text("A question that takes a color or colors (Dream Coat, Prismatic Lace, Shyft) ticks each color you click; Done. answers with all you ticked."),
 		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect, a licid's cost to end its effect, and the permanent sacrificed to ignore Volrath's Curse. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
 		_heading("Keep these keys handy"),
 		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again; a click on the card does the same unless Options, Display turns that off. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
@@ -330,6 +331,8 @@ static func _page_card_kinds() -> Dictionary:
 			["Lightning Bolt", "Instant", "Cast on either player's turn whenever you have priority, including the fast-effects windows in combat."]]),
 		_heading("Where a finished card goes"),
 		_text("Used spells, discarded cards and destroyed permanents normally go to their owner's graveyard. Exile is a separate zone; moving a creature there is not destroying it."),
+		_heading("One legend of a name"),
+		_text("When two legends of the same name are in play, whoever controls them, the one that became that legend last goes to the graveyard — the 1997 rule, first in time, first in right. A Clone or a Vesuvan Doppelganger that turns into a legend already in play is the one that goes."),
 	]}
 
 
@@ -355,6 +358,7 @@ static func _page_casting() -> Dictionary:
 		_text("When the prompt asks for mana, click your mana sources to pay. A tap ability cannot use an already-tapped permanent. Cancel before submitting if you want to abandon the spell."),
 		_heading("Targets are checked again"),
 		_text("A spell or ability with no legal targets left does not resolve. A creature with protection can make a matching colored target illegal. Not all effects target: an effect that affects all creatures can still affect protected ones."),
+		_text("A spell that divides its damage, such as Fireball, splits it among all the targets chosen when it is cast. A target gone when it resolves loses its share; the others take no more."),
 	]}
 
 
@@ -398,7 +402,7 @@ static func _page_start_finish() -> Dictionary:
 		_heading("Winning, losing and drawing"),
 		_text("A player loses through life, poison, or an impossible required draw. If both players lose at the same time, the duel is a draw. Concede ends your duel after confirmation."),
 		_heading("Ante and matches"),
-		_text("Ante puts the chosen cards at stake for the duel. Review the ante setting before starting. In a match, the sideboard lets you change your deck between games while keeping the selected format legal. Inside a match or a Gauntlet, Exit duel, Return to main menu and the button on the duel's opening screen (Reconfigure duel, or Quit Gauntlet) ask first, because leaving ends the match or the run; leaving a Gauntlet goes to the main menu."),
+		_text("Ante puts the chosen cards at stake for the duel. Review the ante setting before starting. Nine cards are made for ante games only — Contract from Below, Darkpact, Demonic Attorney, Jeweled Bird, Bronze Tablet, Rebirth, Tempest Efreet, Timmerian Fiends and Amulet of Quoz: with Ante off they can't be cast or used, and the duel says \"Ante must be on\" for them. In a match, the sideboard lets you change your deck between games while keeping the selected format legal. Inside a match or a Gauntlet, Exit duel, Return to main menu and the button on the duel's opening screen (Reconfigure duel, or Quit Gauntlet) ask first, because leaving ends the match or the run; leaving a Gauntlet goes to the main menu."),
 	]}
 
 
@@ -1012,8 +1016,9 @@ static func _page_icons_phase_bar() -> Dictionary:
 			+ "and after it.",
 		"The first part of your main phase: play your land, cast what "
 			+ "you like, and decide whether to attack.",
-		"Combat. Clicking here announces that you intend to attack; the "
-			+ "Combat Bar then replaces this bar until the attack is over.",
+		"Combat. Clicking here runs the duel on to the start of combat; "
+			+ "the Combat Bar replaces this bar once attackers are being "
+			+ "declared, and stays until the attack is over.",
 		"The rest of your main phase, after combat. If you have not "
 			+ "played a land yet, you still can.",
 		"If you hold more than seven cards you discard down to seven. "
@@ -1170,8 +1175,8 @@ static func _page_icons_table() -> Dictionary:
 				+ "target that player. " + cancels,
 				{"src": SRC_CURSOR}, "✛", 48.0),
 			_icon("The window icon",
-				"Cue card: \"Minimized attack window\". It appears in the "
-				+ "blank band in the middle of the Phase Bar once you have "
+				"Cue card: \"Minimized attack window\". It appears on the "
+				+ "bar just under the Combat Bar's icons once you have "
 				+ "minimised the Combat window from its top-right corner. "
 				+ "Click it to bring the window back.",
 				{"src": SRC_TEXTURE, "key": "attack_min"}, "▭", 28.0),
@@ -1236,7 +1241,8 @@ static func _page_builder() -> Dictionary:
 			+ "Stats, Music, Sound Effects, Exit deck builder, Extra "
 			+ "Cards, Move by color out of deck, Undo, Big cards, Filters, Add basic land, Add proxy card, "
 			+ "Copy deck to, Deck notes, Sideboard, Import deck and Export "
-			+ "deck, plus Booster Draft."),
+			+ "deck, plus Booster Draft. Deck notes keep what you type as "
+			+ "you typed it, blank lines and indents included."),
 		_text("AutoDeck builds a deck for you from a card pool: "
 			+ "the cards of the sets you tick, the cards dealt to you by "
 			+ "the Sealed Deck window, or a list of cards from a file or "
@@ -1274,7 +1280,9 @@ static func _page_builder() -> Dictionary:
 			+ "be added. On web, use the results screen's download buttons for "
 			+ "external copies. Verify saved deck compares main deck and sideboard "
 			+ "with a saved pool. For fair play, the organiser should keep the original "
-			+ "pool before building; local files can be edited."),
+			+ "pool before building; local files can be edited. Escape, or a "
+			+ "controller's back button, closes the open window, then leaves "
+			+ "Booster Draft."),
 		_text("New draft decks also save a seed, pack counts and a complete replay "
 			+ "recipe as comments. In Verify saved deck, choose the deck and Reconstruct "
 			+ "deck to recreate every pack. A judge can paste the fingerprint retained "
@@ -1445,8 +1453,10 @@ static func _page_icons_builder_sets() -> Dictionary:
 			+ "of cards available. These are based on the various basic and "
 			+ "expansion card sets released by Wizards of the Coast over "
 			+ "time.", "Duel.hlp, topic \"Set Filters\""),
-		_text("One button per set in the card pool, each wearing the gold "
-			+ "ring that marks a set medallion. The cards themselves carry "
+		_text("Eight buttons, one per set of the original card pool. Six "
+			+ "wear the gold ring that marks a set medallion; Unlimited and "
+			+ "the promotional cards, which have no set symbol, are plain "
+			+ "stones lettered 2 and PR. The cards themselves carry "
 			+ "a plainer drawing of the same symbol at the end of their "
 			+ "type line — those are on the 'around the table' page."),
 		_heading("Set-symbol colors on cards"),
@@ -1463,7 +1473,7 @@ static func _page_icons_builder_sets() -> Dictionary:
 		_text("Legendary is a supertype, not a rarity. Reprints use the rarity "
 			+ "of the displayed set; set-filter medallions keep their usual colors."),
 		{"kind": ICONS, "entries": set_entries},
-		_text("Unlimited and the promotional cards use the labels 2nd and PR."),
+		_text("On the cards, Unlimited and the promotional cards use the labels 2nd and PR."),
 		_quote("Astral, a card set created specifically for the MicroProse "
 			+ "version of Magic: The Gathering, reflects the unusual nature "
 			+ "of the plane of Shandalar.",
@@ -1539,8 +1549,9 @@ static func _page_icons_builder_types() -> Dictionary:
 			{"src": SRC_FILTER, "row": FilterBar.FUNNEL_CELL[0],
 				"col": FilterBar.FUNNEL_CELL[1]}, "F"),
 		_icon("Sealed Deck — a pair of dice",
-			"Not a filter and not on the strip: it sits at the left of "
-			+ "the command bar above, beside STATS. Up, the whole library "
+			"Not a filter and not on the strip: it sits at the left end "
+			+ "of the command bar above, before the card pool medallion "
+			+ "and EXTRAS. Up, the whole library "
 			+ "is in the Inventory; press it to open the Sealed Deck "
 			+ "Tournament Simulation window and be dealt packs. Down, the "
 			+ "Inventory is only what was dealt, and pressing it again "
@@ -1883,7 +1894,8 @@ static func mini(subject: String) -> Dictionary:
 				+ "Right-click a card for its own menu, or hold the right "
 				+ "button to lift it to the front."
 				+ ("" if fold == Controls.UNBOUND else
-					" %s folds your hand window away and back." % fold),
+					" %s folds a stacked hand window away and back; in a "
+					% fold + "private hotseat duel it shows or hides the hand."),
 				"Casting spells and the Spell Chain")
 		MINI_MANA_POOL:
 			return _mini("Mana pool", "Mana you have made but not spent waits "
@@ -1907,8 +1919,8 @@ static func mini(subject: String) -> Dictionary:
 		MINI_COMBAT_WINDOW:
 			return _mini("Combat window", "During combat the attacking "
 				+ "creatures, and the creatures blocking them, line up in this "
-				+ "window. Minimize shrinks it to an icon in the middle of the "
-				+ "Phase Bar so you can see the board underneath; Restore, or a "
+				+ "window. Minimize shrinks it to an icon just under the "
+				+ "Combat Bar so you can see the board underneath; Restore, or a "
 				+ "click on that icon, brings it back.", "Icons — around the table")
 		MINI_SPELL_CHAIN:
 			# The casting page's own three sentences, read rather than copied.

@@ -92,6 +92,13 @@ var position: DuelPosition = null
 ## or was not made. Display only — what an AI seat may READ is not this
 ## screen's to widen (rule 8).
 var open_hands := false
+## THE MAGIC BATTLE SCREEN'S starting lives a test was built under. A
+## test's own [member lives] are its position's, so before this the bench
+## that `Edit test` reopened took the last test's lives for its `Clear
+## all` to go back to, where its tooltip promises the starting lives
+## (fixed 2026-10-21). Empty on a config [method for_test] did not make:
+## read it through [method starting_lives].
+var setup_lives: Array[int] = []
 
 
 ## Is this duel a `Test hands` duel ([member position])?
@@ -126,9 +133,16 @@ func for_test(test_position: DuelPosition, seed_value: int, show_hands := false)
 	out.sideboard_between_duels = false
 	out.rng_seed = seed_value
 	out.position = test_position.duplicate_position()
+	out.setup_lives.assign(starting_lives())
 	out.lives.assign(out.position.lives)
 	out.open_hands = show_hands
 	return out
+
+
+## The lives a fresh test begins with: the Magic Battle screen's, however
+## many tests ago this config came from it ([member setup_lives]).
+func starting_lives() -> Array[int]:
+	return lives if setup_lives.is_empty() else setup_lives
 
 
 func private_hotseat() -> bool:

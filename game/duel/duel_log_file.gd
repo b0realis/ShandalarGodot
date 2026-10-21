@@ -27,7 +27,9 @@ extends RefCounted
 ## and the cut lands on the next game banner where there is one — so
 ## the file's first line is a `GAME at` banner, not the middle of a
 ## turn. Trimming rewrites the file, which is why it trims a slab and
-## not a line: once a duel per hour, not once a sentence.
+## not a line: once a duel per hour, not once a sentence — and writes
+## the kept part beside it and renames it over, so no moment of the trim
+## leaves a cut log on disk ([method _trim]).
 ##
 ## THE SHAPE is [DuelLogText]'s — the same step markers, seat labels and
 ## indents the window prints — so a line found in the file is the line
@@ -138,8 +140,19 @@ func _trim(file_path: String) -> void:
 		if lines[i] == RULE and lines[i + 1].begins_with("**********  " + BANNER_WORD):
 			cut = i
 			break
+	# WHOLE OR NOT AT ALL (2026-10-21): this opened the log for WRITE —
+	# emptied it — and wrote the kept part back, so a crash in between
+	# left an empty or cut log, and a reader saw one. A pending file,
+	# checked, then renamed over it.
+	var kept := "\n".join(lines.slice(cut)).to_utf8_buffer()
+	if Settings.write_atomically(file_path, kept) == OK:
+		return
+	# A folder that takes no new file (the log alone writable in it) or a
+	# disk with no room for a second copy: the rewrite in place, as before,
+	# rather than a log that outgrows its cap and is read whole again at
+	# every line it is given.
 	file = FileAccess.open(file_path, FileAccess.WRITE)
 	if file == null:
 		return
-	file.store_string("\n".join(lines.slice(cut)))
+	file.store_buffer(kept)
 	file.close()

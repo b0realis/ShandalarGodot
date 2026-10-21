@@ -30,9 +30,12 @@ func build() -> CardData:
 		.oracle("Flying\nThis creature enters with four +1/+0 counters on it.\nAt end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.\n{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.")
 
 
-static func _fought(_game: MtgGame, source: CardInstance, _event: GameEvent) -> bool:
+## "If this creature attacked or blocked THIS COMBAT" — Clockwork Beast's
+## reading (clockwork_beast.gd, bug hunt 2026-10-21): the combat's record
+## of who took part, not the per-turn flags a second combat outlives.
+static func _fought(game: MtgGame, source: CardInstance, _event: GameEvent) -> bool:
 	return source.zone == Mtg.Zone.BATTLEFIELD \
-		and (source.attacked_this_turn or source.blocked_this_turn) \
+		and int(game.combat.participant_stamps.get(source.id, -1)) == source.layer_timestamp \
 		and int(source.counters.get("+1/+0", 0)) > 0
 
 

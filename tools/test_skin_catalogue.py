@@ -461,6 +461,27 @@ class TestTheSkinsOwnCatalogue(unittest.TestCase):
         self.assertFalse(any(name.startswith("portraits/") for name in sizes))
         self.assertEqual(cat.sizes_1997((ROOT / "no_such.csv",)), {})
 
+    def test_a_packaged_game_finds_its_size_table(self):
+        # HUNT 2026-10-21: a release puts this tool in tools/ and the table
+        # in skin/SKIN.csv (package_release.package); SIZE_TABLES looked in
+        # docs/ and in tools/skin/, so `--check` beside a packaged game
+        # silently lost its "pictures at another size" report.
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "Shandalar"
+            (pkg / "tools").mkdir(parents=True)
+            (pkg / "skin").mkdir()
+            for path in (ROOT / "tools").glob("*.py"):
+                if not path.name.startswith("test_"):
+                    (pkg / "tools" / path.name).write_bytes(path.read_bytes())
+            (pkg / "skin" / "SKIN.csv").write_bytes((ROOT / "docs" / "skin-catalogue.csv").read_bytes())
+            done = subprocess.run(
+                [sys.executable, "-I", "-c",
+                 "import sys; sys.path.insert(0, sys.argv[1]); import skin_catalogue as c; "
+                 "print(len(c.sizes_1997()))", str(pkg / "tools")],
+                capture_output=True, text=True, timeout=60)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(int(done.stdout.split()[-1]), len(cat.sizes_1997()))
+
     def test_whole_multiples_up_to_four_are_scales(self):
         self.assertEqual(cat.scale_of(640, 480, (640, 480)), 1)
         self.assertEqual(cat.scale_of(1280, 960, (640, 480)), 2)

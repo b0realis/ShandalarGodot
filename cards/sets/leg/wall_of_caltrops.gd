@@ -13,6 +13,10 @@ extends CardScript
 ## the stack and again as it resolves (CR 603.4), so killing the other
 ## Wall in response takes the banding away. A blocker that has left the
 ## battlefield is no longer blocking (CR 506.4) and no longer counts.
+## "Blocking that creature" is BAND-WIDE (CR 702.22h): a creature blocking
+## any member of the attacker's band is blocking it, a non-Wall too (bug
+## hunt 2026-10-21 — only the blocks declared at that one creature were
+## read); and an attacker that has left combat is blocked by nothing.
 ##
 ## The grant does the printed work: a blocking band with banding in it puts
 ## the attacker's damage division in the DEFENDING player's hands
@@ -37,10 +41,10 @@ static func _wall_only_gang(game: MtgGame, source: CardInstance, event: GameEven
 	if event.data.get("blocker") != source:
 		return false
 	var attacker: CardInstance = event.data.get("attacker")
-	if attacker == null:
+	if attacker == null or not game.combat.attackers.has(attacker.id):
 		return false
 	var other_walls := 0
-	for blocker_id in game.combat.blockers_of(attacker.id):
+	for blocker_id in game.combat.blockers_of_band(game.combat.band_of(attacker.id)):
 		var blocker := game.find_instance(blocker_id)
 		if blocker == null or blocker.zone != Mtg.Zone.BATTLEFIELD:
 			continue   # it left combat when it left the battlefield (506.4)

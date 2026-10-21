@@ -806,7 +806,11 @@ def _prompt_lines(view: dict, options: dict, cards: dict, rows: dict) -> list[st
     choice = view.get("choice") or {}
     if choice:
         source = f" ({choice['source']})" if choice.get("source") else ""
-        lines.append(f"CHOICE{source}: {choice.get('prompt', '')} — pick {choice.get('count', 1)}"
+        # "The color or colors" (2026-10-21): one to `count` colour lines;
+        # the last line only closes the local screen's list.
+        picks = (f"1 to {choice.get('count')} of the colours (not the last line)"
+                 if decision_menu.several_colors(choice) else str(choice.get("count", 1)))
+        lines.append(f"CHOICE{source}: {choice.get('prompt', '')} — pick {picks}"
                      + (" (cancel allowed)" if choice.get("cancel") else ""))
         cards = choice.get("cards") or []
         for i, label in enumerate(choice.get("options", []) or []):
@@ -1304,6 +1308,8 @@ def default_answer(decision: dict, memory: dict) -> dict:
                 left -= amount
         return {"op": "damage", "points": points}
     if mode == "choice":
+        if decision_menu.several_colors(options.get("choice") or {}):
+            return {"op": "choice", "picks": [0]}   # one colour, the first
         return {"op": "choice", "picks": list(range(int(options.get("choice", {}).get("count", 1))))}
     if mode == "priority":
         if "announcement" in options:
@@ -3886,7 +3892,17 @@ class Server:
         wanted = spec.get("targets") or []
         if not isinstance(wanted, list):
             wanted = [wanted]
-        excluded = [str(x) for x in (spec.get("exclude") or [])]
+        # `exclude` reaches here unchecked from `referee_act`'s cast op (the
+        # tool schema never sees those fields): a number was a TypeError,
+        # a protocol error instead of the refusal (hunt 2026-10-21).
+        raw_exclude = spec.get("exclude")
+        if raw_exclude is None or raw_exclude == "":
+            raw_exclude = []
+        elif isinstance(raw_exclude, str):
+            raw_exclude = [raw_exclude]
+        if not isinstance(raw_exclude, list) or not all(isinstance(x, str) for x in raw_exclude):
+            raise refusal(tool, "option", "`exclude` is a list of card handles or names", flag="exclude")
+        excluded = [str(x) for x in raw_exclude]
         options = decision.get("options") or {}
         view = decision.get("view") or {}
         seat = int(decision.get("seat", 0))
@@ -3903,7 +3919,13 @@ class Server:
                               "finish it (referee_cast with that card resumes it) or withdraw it with "
                               "referee_act {\"op\":\"cancel\"}", game=game.ident)
             # A cast left open by its payment's question, taken up again:
-            # the payment resumed when the question was answered.
+            # the payment resumed when the question was answered. Its
+            # targets are the first call's unless this one names others
+            # (hunt 2026-10-21: "referee_cast the same card again" laid
+            # none, and the paid cast was withdrawn).
+            kept = game.memory.get("open_cast") or {}
+            if not wanted and kept.get("card") == open_card:
+                wanted = list(kept.get("targets") or [])
             cast.update({"card": open_card, "name": (cards.get(open_card) or {}).get("name", ""),
                          "kind": draft.get("kind", kind), "index": draft.get("index", 0),
                          "x": draft.get("x", 0), "mode": draft.get("mode", 0), "resumed": True})
@@ -3914,7 +3936,12 @@ class Server:
         entry = self.cast_entry(options, cards, word, kind, spec.get("index"), tool)
         x = spec.get("x")
         if kind == "ability":
-            pass   # (an ability row carries no `x` flag: a given X is the referee's to judge)
+            # An ability row carries its cost, not an `x` flag: an {X} in it
+            # needs `x` as a spell's does (hunt 2026-10-21: it was activated
+            # at X=0). A given X is the referee's to judge.
+            if x is None and "{X}" in str(entry.get("cost", "")).upper():
+                raise refusal(tool, "option", f"{entry.get('name')}'s ability has an X: give `x` (you can pay "
+                              f"X up to {entry.get('budget', 0)})", flag="x", budget=entry.get("budget", 0))
         elif entry.get("x"):
             if x is None:
                 raise refusal(tool, "option", f"{entry.get('name')} has an X: give `x` (you can pay X up to "
@@ -3976,6 +4003,7 @@ class Server:
             self.cast_withdraw(game, timeout, steps, refused)
             self.cast_refused(game, cast, "targets", exc.message + " (nothing was tapped)", steps, refused,
                               kind=exc.kind, **exc.more)
+        game.memory["open_cast"] = {"card": cast["card"], "targets": list(wanted)}
         count = max(1, len(planned))
         state = self.cast_step(game, {"op": "autopay", "excluded": excluded, "count": count, "seat": seat},
                                timeout, steps, refused)
@@ -4013,6 +4041,16 @@ class Server:
         cast["targets"] = planned
         submit = {"op": "submit", "targets": [[p["token"], p["amount"]] for p in planned], "seat": seat}
         state = self.cast_step(game, submit, timeout, steps, refused)
+        game.memory.pop("open_cast", None)
+        if state.get("pending") and not refused:
+            # SENT, NOT ANSWERED (hunt 2026-10-21): the read gave up on the
+            # submission (a table holding it while a seat reconnects), and
+            # this said "cast" — a refusal that came later left the paid
+            # announcement open behind that word.
+            return self.cast_answer(game, state, cast, "open", steps, refused,
+                                    note="the submission was sent and the referee has not answered it yet — "
+                                    "referee_wait reads on; a refusal then leaves the announcement open "
+                                    "(referee_act {\"op\":\"cancel\"} withdraws it)")
         if refused and str(refused[-1].get("reason", "")).startswith("not enough mana") and paid \
                 and game.pending is not None and (game.pending.get("options") or {}).get("announcement"):
             # The named targets priced it higher (a spell aimed at Kaervek's

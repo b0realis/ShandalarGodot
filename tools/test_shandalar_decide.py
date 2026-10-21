@@ -46,7 +46,9 @@ WHAT THIS HOLDS:
     copy answers --version beside the modules it imports.
 """
 
+import contextlib
 import copy
+import io
 import json
 import os
 import random
@@ -344,6 +346,29 @@ class SubMenuTest(unittest.TestCase):
         menu = dm.build_menu(d, menu[3]["plan"]["sub"])
         self.assertEqual(menu[0]["ops"], [{"op": "choice", "picks": [3, 0]}])
 
+    def test_the_color_or_colors_takes_one_or_several(self):
+        # Bug hunt 2026-10-21: Dream Coat, Prismatic Lace and Shyft ask for
+        # "the color or colors" — the colour lines, then the local screen's
+        # "Done.", `count` the colour lines. One colour is a whole answer;
+        # "+" picks it and offers another; "Done." is never a pick.
+        d = decision("choice_count")
+        colors = ["White", "Blue", "Black", "Red", "Green"]
+        for place in (d["options"]["choice"], d["view"]["choice"]):
+            place["options"] = colors + ["Done."]
+            place["count"] = 5
+        self.assertTrue(dm.several_colors(d["options"]["choice"]))
+        menu = dm.build_menu(d)
+        self.assertEqual(menu[0]["id"], "choice:0")
+        self.assertEqual(menu[0]["ops"], [{"op": "choice", "picks": [0]}])
+        self.assertNotIn("choice:5", ids(menu))
+        menu = dm.build_menu(d, menu[ids(menu).index("choice:3+")]["plan"]["sub"])
+        red_and_green = menu[ids(menu).index("choice:4")]
+        self.assertEqual(red_and_green["ops"], [{"op": "choice", "picks": [3, 4]}])
+        self.assertEqual(red_and_green["label"], "Red and Green")
+        self.assertEqual(dm.fallback_action(d), {"op": "choice", "picks": [0]})
+        d["options"]["choice"]["count"] = 1   # a one-colour question has no closing line
+        self.assertFalse(dm.several_colors(d["options"]["choice"]))
+
     def test_a_choice_that_takes_no_pick_answers_nothing(self):
         d = decision("choice_count")
         d["options"]["choice"]["count"] = 0
@@ -551,6 +576,58 @@ class DriverTest(unittest.TestCase):
         left = ids(driver.menu())
         self.assertFalse([i for i in left if i == "cast:c1" or i.startswith("cast:c1->")])
         self.assertIn("cast:c10", left)
+
+    def test_a_probe_whose_answer_comes_late_is_cancelled_not_offered(self):
+        # HUNT 2026-10-21: at a table the referee may hold an action while a
+        # seat reconnects, and the link's read gives up first ("pending").
+        # The probe's prepare was out and its cancel never sent: when the
+        # answer came, the next menu was the probed spell's TARGETS — item
+        # 0 cast a spell the model never chose ("a prepare and a cancel,
+        # nothing paid").
+        main, announce = self.main, self.announce
+
+        def answer(action, ref):
+            if action["op"] == "prepare":
+                late = [{"type": "pending"}] if ref.n == 100 else []   # the first answer only
+                return late + [ref.renumber(announce)]
+            if action["op"] == "cancel":
+                return [ref.renumber(main)]
+            return [RESULT]
+
+        ref = FakeReferee([HELLO, main], answer)
+        driver = dm.Driver(ref.send, ref.receive)
+        driver.advance()
+        self.assertEqual(driver.menu(), [], "the probe's read gave up: no menu yet")
+        self.assertTrue(driver.waiting)
+        driver.advance()                                # the referee answers at last
+        menu = driver.menu()
+        self.assertEqual([a["op"] for a in ref.sent], ["prepare", "cancel", "prepare", "cancel"],
+                         "the late answer cancelled, then the menu's own probe")
+        self.assertFalse(driver.decision["options"].get("announcement"), "never left half-announced")
+        self.assertIn("pass", ids(menu))
+        self.assertFalse([i for i in ids(menu) if i.startswith("target")])
+
+    def test_a_late_answer_taken_up_by_another_tool_is_cancelled_too(self):
+        # The same, when `referee_wait` read the late answer for the Driver.
+        main, announce = self.main, self.announce
+
+        def answer(action, ref):
+            if action["op"] == "prepare":
+                late = [{"type": "pending"}] if ref.n == 100 else []   # the first answer only
+                return late + [ref.renumber(announce)]
+            if action["op"] == "cancel":
+                return [ref.renumber(main)]
+            return [RESULT]
+
+        ref = FakeReferee([HELLO, main], answer)
+        driver = dm.Driver(ref.send, ref.receive)
+        driver.advance()
+        self.assertEqual(driver.menu(), [])
+        late = ref.receive()
+        driver.resync(late)
+        driver.menu()
+        self.assertEqual([a["op"] for a in ref.sent[:2]], ["prepare", "cancel"])
+        self.assertFalse(driver.decision["options"].get("announcement"))
 
     def test_a_payment_question_goes_to_the_model_and_the_submit_follows(self):
         ref = self.script(ask_on_autopay=True)
@@ -1124,6 +1201,51 @@ class LiveTest(unittest.TestCase):
             self.assertEqual(seats, {0, 1})
             self.assertEqual(env.stats()["refusals"], 0)
             self.assertIn(env.result["reason"], ("concluded", "limit"))
+
+
+class DecisionLineNullTest(unittest.TestCase):
+    """HUNT 2026-10-21: a `null` line on the decision line's stdin names no
+    item — AGENTS.md: such a line is answered `{"n", "error"}` and the same
+    decision again — and it was skipped like a blank line: a client
+    waiting for the answer hung."""
+
+
+    class Env:
+        def __init__(self):
+            self.done = False
+            self.driver = type("D", (), {"stats": {"decisions": 0}})()
+            self.result = {"winner": 0}
+            self.picks = []
+
+        def reset(self):
+            return {"mode": "priority"}
+
+        def menu(self, rich=False):
+            return [{"id": "pass", "label": "Pass priority"}]
+
+        def step(self, pick):
+            from decision_menu import resolve_pick
+            resolve_pick(self.menu(), pick)
+            self.picks.append(pick)
+            self.done = True
+            return {}, 0, True, {}
+
+        def stats(self):
+            return {}
+
+        def close(self):
+            pass
+
+    def test_a_null_line_is_answered_with_an_error_and_the_same_decision(self):
+        env = self.Env()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            sd.interactive(env, False, source=io.StringIO("\nnull\n\"pass\"\n"))
+        lines = [json.loads(line) for line in out.getvalue().splitlines()]
+        self.assertIn("error", lines[1], "null names no item: answered, not ignored")
+        self.assertEqual(lines[2]["menu"], lines[0]["menu"], "the same decision again")
+        self.assertEqual(env.picks, ["pass"])
+        self.assertEqual(len([line for line in lines if "error" in line]), 1, "a blank line is no answer")
 
 
 if __name__ == "__main__":

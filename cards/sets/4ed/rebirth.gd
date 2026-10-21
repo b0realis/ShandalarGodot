@@ -13,6 +13,11 @@ extends CardScript
 ## with the hint being "yes if it would actually gain me life" — the only
 ## reason to pay a card for the reset. The life total is SET to 20, so a
 ## player above 20 who accepts really loses life.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast: "Ante must be on for
+## Rebirth: this duel is not played for ante".
 
 
 func build() -> CardData:
@@ -32,7 +37,10 @@ class RebirthEffect extends EffectBase:
 			if not game.agents[pid].choose_yes_no(game, pid,
 					"Ante the top card of your library to set your life to 20?", hint):
 				continue
-			game.ante_top_of_library(pid)
+			# "If a player DOES": only a card that really went to the ante
+			# (MtgGame.ante_top_of_library moves none without ante).
+			if game.ante_top_of_library(pid) == null:
+				continue
 			game.adjust_life(pid, 20 - p.life)
 
 	func describe() -> String:

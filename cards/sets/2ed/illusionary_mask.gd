@@ -12,8 +12,14 @@ extends CardScript
 ## Implementation: real FACE-DOWN permanents (CardInstance.face_down) — a
 ## 2/2 colourless creature with no name, no other types and no abilities
 ## until something turns it up. MtgGame turns it face up the moment it
-## would deal damage, be dealt damage or become tapped, which is exactly
-## the printed replacement.
+## would assign or deal damage, be dealt damage or become tapped, which is
+## exactly the printed replacement: in combat before the step's damage is
+## divided (`_combat_damage_step`), so it assigns as itself; and on EVERY
+## tap — an effect's (`tap_permanent`), attacking, a {T} cost, a mana
+## ability, a regeneration shield (`_turn_face_up_quietly`). Until the bug
+## hunt of 2026-10-21 only an effect's tap and a landing packet did: a
+## masked Shivan Dragon attacked as the 2/2, and a masked blocker
+## assigned 2.
 ##
 ## "Activate only as a sorcery" is the full sorcery-timing test (CR 307.1,
 ## via CR 117.1a): the source controller's own turn, a MAIN phase, and an
@@ -67,9 +73,15 @@ class MaskEffect extends EffectBase:
 			game.log_line("Illusionary Mask finds nothing to hide")
 			return
 		candidates.sort_custom(MaskEffect._pricier_first)
+		# "You MAY choose": an OPTIONAL ask, and nothing chosen masks nothing.
+		# It was a forced pick until the bug hunt of 2026-10-21 — a seat that
+		# answered nothing had the dearest creature masked for it.
 		var chosen := game.agents[controller].choose_card(game, controller,
-			candidates, "Put a creature onto the battlefield face down")
-		if chosen == null or not candidates.has(chosen):
+			candidates, "Put a creature onto the battlefield face down", true)
+		if chosen == null:
+			game.log_line("Illusionary Mask: nothing is masked")
+			return
+		if not candidates.has(chosen):
 			chosen = candidates[0]
 		game.put_from_hand_face_down(chosen, controller)
 

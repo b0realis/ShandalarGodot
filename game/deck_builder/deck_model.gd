@@ -1004,9 +1004,7 @@ func to_text() -> String:
 		lines.append("%s %s" % [DeckList.REQUIRED_PACK_PREFIX, pack_id])
 	lines.append("name: %s" % deck_name)
 	lines.append_array(DeckPrintings.comments(printings, names() + side_names()))
-	for line in notes.strip_edges().split("\n"):
-		if line.strip_edges() != "":
-			lines.append("# note: %s" % line.strip_edges())
+	lines.append_array(note_lines("# note:"))
 	for card_name in names():
 		lines.append("%d %s" % [int(counts[card_name]), card_name])
 	if not sideboard.is_empty():
@@ -1050,11 +1048,30 @@ static func notes_from_text(text: String) -> String:
 	for raw_line in text.split("\n"):
 		var line := raw_line.strip_edges()
 		if line.begins_with("# note:"):
-			found.append(line.substr(7).strip_edges())
+			found.append(_note_body(line.substr(7)))
 		elif line.begins_with(DEC_NOTE_PREFIX):
 			# The exported `.dec`'s form ([method to_dec_text]).
-			found.append(line.substr(DEC_NOTE_PREFIX.length()).strip_edges())
+			found.append(_note_body(line.substr(DEC_NOTE_PREFIX.length())))
 	return "\n".join(found)
+
+
+## [member notes] as comment lines behind [param prefix], one per line
+## AS TYPED (2026-10-21): the blank line between two paragraphs and the
+## spaces that indent a list are kept. Both were stripped, so notes saved
+## and opened again came back as one flush block.
+func note_lines(prefix: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	if notes.strip_edges() == "":
+		return out
+	for line in notes.strip_edges().split("\n"):
+		out.append(("%s %s" % [prefix, line]).strip_edges(false, true))
+	return out
+
+
+## A note line's text after its prefix: the one space [method note_lines]
+## puts after the prefix goes, the note's own indent stays.
+static func _note_body(after_prefix: String) -> String:
+	return after_prefix.substr(1) if after_prefix.begins_with(" ") else after_prefix
 
 
 ## How a `.dec` export carries a Deck notes line (campaign 2026-10-12).
@@ -1100,9 +1117,7 @@ func to_dec_text() -> String:
 	# plan`, which every `.dec` reader — ours included — takes as the
 	# deck's title, and the notes themselves never came back on import.
 	# A field named `note` is still a plain comment to other programs.
-	for line in notes.strip_edges().split("\n"):
-		if line.strip_edges() != "":
-			lines.append("%s %s" % [DEC_NOTE_PREFIX, line.strip_edges()])
+	lines.append_array(note_lines(DEC_NOTE_PREFIX))
 	for card_name in names():
 		lines.append("%d %s" % [int(counts[card_name]), card_name])
 	# `SB:` is Apprentice's own sideboard line and the reason [DeckList]

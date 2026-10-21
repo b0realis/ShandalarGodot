@@ -52,6 +52,29 @@ func close_setup() -> void:
 	queue_free()
 
 
+## ESCAPE PEELS ONE WINDOW (hunt of 2026-10-21). The screen this covers is
+## hidden and DISABLED ([method open_on]), so its own Escape — the one
+## "every other room of the shell answers" — never ran, and nothing here
+## had one: Escape, a pad's B and the Quest's back gesture did nothing on
+## Booster Draft. Now the verifier goes first, then `Card pool…`, then
+## the setup itself, as `Back` would.
+func _unhandled_input(event: InputEvent) -> void:
+	if launching or _returning or not event.is_action_pressed("ui_cancel"):
+		return
+	get_viewport().set_input_as_handled()
+	for i in range(get_child_count() - 1, -1, -1):
+		var child := get_child(i)
+		if child.is_queued_for_deletion():
+			continue
+		if child is DraftVerifier:
+			child.queue_free()
+			return
+		if child is DraftPoolDialog:
+			(child as DraftPoolDialog).dismiss()
+			return
+	close_setup()
+
+
 # --- campaign 2026-10 fix-persist (wave 2): the window's close button ---
 ## THE X OVER A DECK BUILDER ASKS FIRST (whole-game campaign 2026-10).
 ## `Booster Draft` hides the builder under this screen, and a hidden

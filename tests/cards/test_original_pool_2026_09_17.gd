@@ -185,6 +185,10 @@ func test_wand_of_ith_lets_a_player_pay_their_whole_life_total() -> void:
 # player, which is not the Bird's owner once it has been stolen.
 
 func test_jeweled_bird_dumps_the_activating_players_ante() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var bird := put_battlefield(1, "Jeweled Bird")
 	g.change_control(bird, 0)
 	assert_eq(bird.controller_id, 0, "stolen")

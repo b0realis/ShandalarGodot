@@ -159,6 +159,12 @@ static func pieces_of(card_name: String) -> Array:
 ## fills it is on that player's TABLE and — with [param with_hand], for our
 ## own seat only — in the HAND. [param leave_out] is a card not counted (the
 ## one whose cast is being priced).
+##
+## A FACE-DOWN PERMANENT FILLS NO SLOT (bug hunt 2026-10-21): it has no name
+## and no abilities (CR 708.2), and on THEIR table the card under it is
+## hidden information (CONTRIBUTING.md rule 8). Its printed name was read
+## here, so a masked Sliver Queen beside their Heartstone and Altar priced
+## the Altar as a live loop's piece and the masked 2/2 as the loop itself.
 static func standing(g: MtgGame, pid: int, recipe: Dictionary, with_hand: bool,
 		leave_out: CardInstance = null) -> Dictionary:
 	var slots: Array = recipe["slots"]
@@ -168,7 +174,7 @@ static func standing(g: MtgGame, pid: int, recipe: Dictionary, with_hand: bool,
 		var names: Array = slot
 		var table := false
 		for inst in g.players[pid].battlefield:
-			if inst != leave_out and names.has(inst.data.card_name):
+			if inst != leave_out and not inst.face_down and names.has(inst.data.card_name):
 				table = true
 				break
 		var held := false
@@ -338,7 +344,8 @@ static func keep_value(g: MtgGame, pilot, inst: CardInstance) -> float:
 ## not read, so a loop that needs one is never more than near: [constant
 ## THREAT_LIVE] only when every slot is on their table.
 static func threat_value(g: MtgGame, pilot, inst: CardInstance) -> float:
-	if not pilot.profile.plays_combos or inst.controller_id == pilot.pid:
+	# A masked permanent is no piece ([method standing]): its name is secret.
+	if not pilot.profile.plays_combos or inst.controller_id == pilot.pid or inst.face_down:
 		return 0.0
 	var worth := 0.0
 	for piece in pieces_of(inst.data.card_name):

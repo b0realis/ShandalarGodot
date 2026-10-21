@@ -697,20 +697,43 @@ func _can_act_on(inst: CardInstance) -> bool:
 
 
 func _open_choice_overlay() -> void:
+	# Never over a finished duel, as the local screen (bug hunt 2026-10-21):
+	# a question the host still names then is about a duel nobody plays on.
+	if game.game_over: return
 	if _choice_overlay == null and game.awaiting_choice != null and game.awaiting_choice.pid == 0:
 		_build_choice_overlay(game.awaiting_choice)
 
 
 func _on_choice_option(index: int) -> void:
-	if projection.locked or projection.view.choice.is_empty(): return
+	if projection.locked or projection.view.choice.is_empty() or game.game_over: return
 	var choice: Dictionary = projection.view.choice
 	if index < 0 or index >= choice.options.size(): return
+	if _several_colors(choice):
+		# "The color or colors": a colour line ticks or unticks, the last
+		# line answers with every one ticked (bug hunt 2026-10-21).
+		if index == choice.options.size() - 1:
+			if not _choice_picks.is_empty(): _report(game.answer_choice(Array(_choice_picks)))
+			return
+		if _choice_picks.has(index): _choice_picks.remove_at(_choice_picks.find(index))
+		elif _choice_picks.size() < int(choice.count): _choice_picks.append(index)
+		_close_choice_overlay()
+		_build_choice_overlay(game.awaiting_choice)
+		return
 	if _choice_picks.has(index): _choice_picks.remove_at(_choice_picks.find(index))
 	else: _choice_picks.append(index)
 	if _choice_picks.size() == int(choice.count): _report(game.answer_choice(Array(_choice_picks)))
 	else:
 		_close_choice_overlay()
 		_build_choice_overlay(game.awaiting_choice)
+
+
+## Is the host's question "the color or colors of your choice"
+## (SgDuelActions.several_colors)? Its lines are the colours and then the
+## local screen's `Done.`, and its count the colour lines.
+static func _several_colors(choice: Dictionary) -> bool:
+	var lines: Array = choice.get("options", [])
+	return lines.size() > 1 and String(lines.back()) == DuelScreen.COLORS_DONE \
+		and int(choice.get("count", 1)) == lines.size() - 1
 
 
 func _run_coin_toss(first: int) -> void:

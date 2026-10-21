@@ -759,6 +759,16 @@ var cur_shroud_ignored_by: Array[int] = []
 ## granting the ban.
 var cur_cant_be_aura_target: bool = false
 
+## The Auras that say this host "can't be enchanted by OTHER Auras"
+## (Consecrate Land, Anti-Magic Aura), by instance id. Set by their
+## statics each recalculation beside [member cur_cant_be_aura_target]; the
+## state-based Aura check reads it (MtgGame.aura_can_enchant), so an Aura
+## already attached that is not one of these becomes illegal and is put
+## into its owner's graveyard (CR 303.4d, 704.5m; bug hunt 2026-10-21).
+## Guardian Beast sets only the targeting ban: "This effect doesn't remove
+## Auras already attached".
+var cur_other_auras_barred_by: Array[int] = []
+
 ## "Prevent all damage that would be dealt BY this creature this turn"
 ## (Kry Shield) — unlike cur_prevent_combat_damage_dealt this covers
 ## non-combat damage too.
@@ -908,6 +918,7 @@ func reset_characteristics() -> void:
 	cur_shroud = false
 	cur_shroud_ignored_by.clear()
 	cur_cant_be_aura_target = false
+	cur_other_auras_barred_by.clear()
 	cur_prevent_all_damage_dealt = false
 	cur_must_be_blocked = false
 	cur_must_be_blocked_filter = Callable()

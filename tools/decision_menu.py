@@ -51,7 +51,10 @@ states (`cast:c12->c18` is the card handle `c12` aimed at `c18`):
             rules let damage be assigned freely).
   choice    choice:<i> per option (a multi-pick question one pick at a
             time), choice:cancel when the question is a cost that may be
-            withdrawn.
+            withdrawn. "The color or colors of your choice" (its lines the
+            colours and then "Done.", `count` the colour lines —
+            `several_colors`): choice:<i> answers with the colours picked
+            so far and that one, choice:<i>+ picks it and offers another.
 
 A sub-menu step (attack:add, block pairs, discard and choice picks, the
 target picks) changes nothing on the wire until the last pick; then the
@@ -1148,6 +1151,40 @@ def damage_items(decision: dict, blocked) -> list[dict]:
     return unique
 
 
+COLORS_DONE = "Done."   # the local screen's closing line (DuelScreen.COLORS_DONE)
+
+
+def several_colors(choice: dict) -> bool:
+    """Is this "the color or colors of your choice" (Dream Coat, Prismatic
+    Lace, Shyft; 2026-10-21)? The referee sends the colour lines, then the
+    local screen's "Done.", with `count` the colour lines: the answer is
+    one to `count` colour lines, never the last line."""
+    labels = list(choice.get("options") or [])
+    raw = choice.get("count", 1)
+    return len(labels) > 2 and labels[-1] == COLORS_DONE and isinstance(raw, int) \
+        and not isinstance(raw, bool) and raw == len(labels) - 1
+
+
+def _color_items(decision: dict, labels: list, picked: list) -> list[dict]:
+    """The several-colours question's items: each colour line answers with
+    the colours picked so far plus itself, or picks itself and offers
+    another (`choice:<i>+`)."""
+    items = []
+    colors = labels[:-1]
+    for i, label in enumerate(colors):
+        if i in picked:
+            continue
+        chosen = picked + [i]
+        named = " and ".join(str(colors[p]) for p in chosen)
+        items.append(_item(f"choice:{i}", named, "choice", {"send": [{"op": "choice", "picks": chosen}]},
+                           {"index": i}))
+        if len(chosen) < len(colors):
+            items.append(_item(f"choice:{i}+", f"{named}, and another colour", "choice",
+                               {"sub": {"kind": "choice", "n": decision.get("n"), "picked": chosen}},
+                               {"index": i}))
+    return items
+
+
 def choice_items(decision: dict, sub: dict | None, blocked) -> list[dict]:
     options = _options(decision)
     choice = options.get("choice") or {}
@@ -1157,6 +1194,11 @@ def choice_items(decision: dict, sub: dict | None, blocked) -> list[dict]:
     raw = choice.get("count", 1)
     count = int(raw) if isinstance(raw, int) and not isinstance(raw, bool) else 1
     picked = list((sub or {}).get("picked") or [])
+    if several_colors(choice):
+        items = _color_items(decision, labels, picked)
+        if "cancel" in options:
+            items.append(_item("choice:cancel", "Withdraw (cancel the cost)", "cancel", {"send": [{"op": "cancel"}]}))
+        return items
     items = []
     if count <= 0 or not labels:
         # A question that takes no pick (a discard of nothing): the answer is [].
@@ -1292,6 +1334,8 @@ def fallback_action(decision: dict) -> dict:
         return {"op": "block", "pairs": []}
     if mode == "choice":
         choice = options.get("choice") or {}
+        if several_colors(choice):
+            return {"op": "choice", "picks": [0]}   # one colour, the first
         count = choice.get("count", 1) if isinstance(choice.get("count", 1), int) else 1
         return {"op": "choice", "picks": list(range(min(count, len(choice.get("options") or []))))}
     if mode == "discard":
@@ -1348,6 +1392,11 @@ class Driver:
         self.refused: list = []
         self._menu: list | None = None
         self._probes: dict = {}
+        # A probe's `prepare` whose answer the read gave up on (a table
+        # holding the action while a seat reconnects): the card it named,
+        # so the announcement it opens when the answer comes is cancelled,
+        # never offered to the model (hunt 2026-10-21).
+        self._late_probe: str | None = None
         self.stats = {"decisions": 0, "forced": 0, "wire_decisions": 0, "refusals": 0,
                       "probes": 0, "probe_hits": 0, "sent": 0}
 
@@ -1441,6 +1490,13 @@ class Driver:
         `probe` is on); [] once the game is over."""
         if self.decision is None or self.done:
             return []
+        if self._late_probe is not None:
+            card, self._late_probe = self._late_probe, None
+            draft = _options(self.decision).get("draft") or {}
+            if _options(self.decision).get("announcement") and draft.get("card") == card:
+                self._send_one({"op": "cancel"})
+                if self.decision is None or self.done:
+                    return []
         if self._menu is not None:
             return self._menu
         probes = None
@@ -1483,6 +1539,8 @@ class Driver:
             self.stats["probes"] += 1
             refusals = self._send_one(request["action"])
             if self.decision is None:
+                if self.waiting:
+                    self._late_probe = request["action"].get("card")
                 return out
             if refusals or not _options(self.decision).get("announcement"):
                 reason = refusals[-1].get("reason", "refused") if refusals else "no announcement opened"

@@ -37,8 +37,14 @@ func build() -> CardData:
 			+ "on this creature to be greater than seven. Activate only during your upkeep.")
 
 
-static func _fought(_game: MtgGame, source: CardInstance, _event: GameEvent) -> bool:
-	return source.attacked_this_turn or source.blocked_this_turn
+## "If this creature attacked or blocked THIS COMBAT": the combat's own
+## record of who took part (CombatState.participant_stamps — kept after a
+## creature is removed from combat, cleared as the combat phase ends, keyed
+## to this object's battlefield timestamp). It read the per-TURN flags
+## until the bug hunt of 2026-10-21, so a second combat (Relentless
+## Assault) the Beast sat out cost it a counter as well.
+static func _fought(game: MtgGame, source: CardInstance, _event: GameEvent) -> bool:
+	return int(game.combat.participant_stamps.get(source.id, -1)) == source.layer_timestamp
 
 
 static func _wind_down(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:

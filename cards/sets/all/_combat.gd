@@ -98,7 +98,11 @@ static func _home_guard(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	g.create_token(int(g.trigger_context(s).controller), CardData.new("Deserter", "", Mtg.CardType.CREATURE).pt(0, 1).with_colors(Mtg.ManaColor.W).with_subtypes(["deserter"]))
 # Band-wide on both sides (2026-10-03): a creature blocking one band member
 # blocks every member (CR 702.22h).
-static func _partner(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.blockers_of_band(g.combat.band_of(s.id)).has(i.id) or g.combat.opposing_attackers(s.id).has(i.id)
+# An attacker that left combat is no longer blocked by anything (CR 506.4),
+# though the blocker's entry still names it (CombatState.forget) — bug hunt
+# 2026-10-21, cardsB.
+static func _still_attacking(g: MtgGame, i: CardInstance) -> bool: return g.combat.attackers.has(i.id)
+static func _partner(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.blockers_of_band(g.combat.band_of(s.id)).has(i.id) or (g.combat.opposing_attackers(s.id).has(i.id) and _still_attacking(g, i))
 static func _defender(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
 	if not B.live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var other := g.find_instance(t.instance_id)
@@ -120,7 +124,7 @@ static func _crusader(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: 
 static func _sac_later(g: MtgGame, s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 	var i := O._live(g, id, stamp)
 	if i != null and i.controller_id == g.current_resolution_controller(): g.sacrifice_permanent(i)
-static func _vine_target(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return i.has_keyword(Mtg.Keyword.FLYING) and g.combat.opposing_attackers(s.id).has(i.id)
+static func _vine_target(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return i.has_keyword(Mtg.Keyword.FLYING) and g.combat.opposing_attackers(s.id).has(i.id) and _still_attacking(g, i)
 static func _vine(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
 	var i := g.find_instance(t.instance_id)
 	g.tap_permanent(i)

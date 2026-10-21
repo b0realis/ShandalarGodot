@@ -18,6 +18,11 @@ extends CardScript
 ## the printed card wants it — it only has to change owner. The ransom goes
 ## through the victim's DecisionAgent; refusing costs them a RANDOM card
 ## from hand, chosen with game.rng.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast and the activation:
+## "Ante must be on for Tempest Efreet: this duel is not played for ante".
 
 
 func build() -> CardData:

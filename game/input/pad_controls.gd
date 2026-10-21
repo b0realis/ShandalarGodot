@@ -320,8 +320,12 @@ func _on_pads_changed(device: int, connected: bool) -> void:
 	# shows the game says which of its layouts is in force.
 	print("pad %d %s: %s" % [device, "connected" if connected else "gone",
 		Input.get_joy_name(device) if connected else "-"])
-	_pad_down.clear()           # a pad gone mid-press owes no release
+	# A PAD GONE mid-press owes no release — but only one that went (hunt
+	# of 2026-10-21): this ran on a pad ARRIVING too (a second pad, Steam
+	# Input making its virtual one), and a held A's release was then read
+	# as "a release owed nothing", so the left button stayed down.
 	if not connected:
+		_pad_down.clear()
 		_forget_the_pad()
 	apply_settings()
 

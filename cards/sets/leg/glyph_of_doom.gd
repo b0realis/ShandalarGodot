@@ -13,6 +13,16 @@ extends CardScript
 ## order (CR 603.3b) — players may respond to it — and it outlives the
 ## Glyph and the Wall alike (CR 603.7a). "This turn's next end of combat":
 ## it expires with the turn, so a Glyph cast after combat does nothing.
+##
+## THE HISTORY OUTLIVES THE WALL (bug hunt 2026-10-21). A Wall that dies
+## loses its block history with the rest of its battlefield state, so the
+## card's main use — a 0/3 Wall trading with the Hill Giant it blocked —
+## used to kill nothing: the trigger found an empty list. The Glyph now
+## keeps the history the Wall had AS IT RESOLVED and the trigger counts it
+## together with the Wall's live history while that same Wall is still on
+## the battlefield. Left as it was: a Glyph cast BEFORE the blocks on a
+## Wall that then dies — the blocks it made after the Glyph resolved are
+## lost with it (the engine keeps no last-known block history to read).
 
 
 static func _is_wall(inst: CardInstance) -> bool:
@@ -29,16 +39,23 @@ func build() -> CardData:
 ## The delayed trigger's resolution: bury everything the Wall stopped this
 ## turn.
 static func _doom(game: MtgGame, _source: CardInstance, _event: GameEvent,
-		wall_id: int) -> void:
+		wall_id: int, wall_stamp: int, blocked_then: Array) -> void:
 	var wall := game.find_instance(wall_id)
-	if wall == null:
-		return
+	var stopped: Array = blocked_then.duplicate()
+	# The SAME Wall, still here: its live history also holds what it
+	# blocked after the Glyph resolved (CR 400.7 — a Wall that left and
+	# came back is a new object with a history of its own).
+	if wall != null and wall.zone == Mtg.Zone.BATTLEFIELD \
+			and wall.layer_timestamp == wall_stamp:
+		for attacker_id in wall.blocked_ids_this_turn:
+			if not stopped.has(int(attacker_id)):
+				stopped.append(int(attacker_id))
 	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): the delayed action
 	# buries everything the Wall stopped in one go. Nothing may return
 	# between the two calls — a deferral left open freezes state-based
 	# actions for the rest of the game.
 	game.begin_simultaneous()
-	for attacker_id in wall.blocked_ids_this_turn:
+	for attacker_id in stopped:
 		var victim := game.find_instance(attacker_id)
 		if victim != null and victim.zone == Mtg.Zone.BATTLEFIELD:
 			game.destroy(victim)
@@ -57,8 +74,11 @@ class GlyphOfDoomEffect extends EffectBase:
 		var wall := game.find_instance(target.instance_id)
 		if wall == null or wall.zone != Mtg.Zone.BATTLEFIELD:
 			return
+		var blocked_now: Array = []
+		for attacker_id in wall.blocked_ids_this_turn:
+			blocked_now.append(int(attacker_id))
 		var trigger := TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT,
-			doom_action.bind(wall.id),
+			doom_action.bind(wall.id, wall.layer_timestamp, blocked_now),
 			"At this turn's next end of combat, destroy all creatures that were blocked by that Wall this turn.")
 		var entry := game.schedule_delayed_trigger(trigger, controller, source)
 		entry["expires_turn"] = game.turn_number

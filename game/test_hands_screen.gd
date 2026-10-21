@@ -178,11 +178,14 @@ func _open_on() -> void:
 	test_position = _fresh()
 
 
-## A fresh position for these seats ([method _open_on]).
+## A fresh position for these seats ([method _open_on]) — the Magic
+## Battle screen's lives even back from a test, whose own lives are its
+## position's ([method DuelConfig.starting_lives]).
 func _fresh() -> DuelPosition:
 	var out := DuelPosition.new()
+	var lives := config.starting_lives()
 	for pid in 2:
-		out.lives[pid] = clampi(config.lives[pid], 1, DuelPosition.MAX_LIFE)
+		out.lives[pid] = clampi(lives[pid], 1, DuelPosition.MAX_LIFE)
 	out.random_cards[1] = 7
 	return out
 
@@ -426,6 +429,12 @@ func _fit_panel() -> void:
 	if _action_row != null:
 		wanted.y += _action_row.get_combined_minimum_size().y + 10.0
 	var room := size - Vector2(2.0 * PANEL_MARGIN, 2.0 * PANEL_MARGIN)
+	# Room for the vertical bar when there will be one: it takes its width
+	# from the page's ([method SetupScreen._fit_panel], 2026-10-21).
+	if wanted.y > room.y:
+		var scroll := _panel_content.get_parent() as ScrollContainer
+		if scroll != null:
+			wanted.x += scroll.get_v_scroll_bar().get_combined_minimum_size().x
 	var width: float = clampf(wanted.x, minf(PANEL_WIDTH, room.x), room.x)
 	var height: float = minf(wanted.y, room.y)
 	_panel.offset_left = -width * 0.5

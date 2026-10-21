@@ -105,9 +105,9 @@ static func read(path_value: String) -> Dictionary:
 	if file.get_length() > MpnCodec.MAX_BYTES:
 		file.close()
 		return {"error": "Record exceeds the 32 MiB prototype limit."}
-	var text := file.get_as_text()
+	var bytes := file.get_buffer(file.get_length())
 	file.close()
-	return MpnCodec.parse(text)
+	return MpnCodec.parse_bytes(bytes)
 
 static func files(directory := "") -> Array[String]:
 	var out: Array[String] = []

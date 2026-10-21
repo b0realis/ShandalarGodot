@@ -18,10 +18,13 @@ func build() -> CardData:
 		.oracle("Plague Rats' power and toughness are each equal to the number of creatures named Plague Rats on the battlefield.")
 
 
+## A FACE-DOWN permanent has no name (CR 708.2) — an Illusionary Mask'd
+## Plague Rats is no rat until it is turned up; it counted as one until the
+## bug hunt of 2026-10-21.
 static func _apply(game: MtgGame, source: CardInstance) -> void:
 	var rats := 0
 	for inst in game.all_battlefield():
-		if inst.data.card_name == "Plague Rats":
+		if inst.data.card_name == "Plague Rats" and not inst.face_down:
 			rats += 1
 	source.cur_power = rats
 	source.cur_toughness = rats

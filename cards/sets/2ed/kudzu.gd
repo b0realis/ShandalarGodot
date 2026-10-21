@@ -70,9 +70,13 @@ static func _strangle(game: MtgGame, source: CardInstance, event: GameEvent) -> 
 	# Kudzu player's own land is the defence the printed card offers, and
 	# the 1997 prompt (`@KUDZU`, "Kudzu triggering...Select target land.")
 	# carries no ownership qualifier either.
+	# Only a land the vine COULD enchant (CR 701.3b): not one that "can't be
+	# enchanted by other Auras" (Consecrate Land) nor one with protection
+	# from green. It hopped onto those too until the bug hunt of 2026-10-21.
 	var candidates: Array[CardInstance] = []
 	for inst in game.all_battlefield():
-		if inst.is_land() and inst != host:
+		if inst.is_land() and inst != host and not inst.cur_cant_be_aura_target \
+				and (inst.protection_apart_from(source.id) & source.cur_colors) == 0:
 			candidates.append(inst)
 	candidates.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		return _hop_order(game, pid, a, b))

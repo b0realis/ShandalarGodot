@@ -297,6 +297,30 @@ class TestTheImporterSwitches(unittest.TestCase):
         self.run_main("--dest", str(plain))
         self.assertFalse((plain / ml.LABEL).exists())
 
+    def test_a_frame_layer_that_will_not_decode_is_named_and_the_label_still_written(self):
+        # HUNT 2026-10-21: a Classic frame layer the decoder refuses (an
+        # interlaced PNG) or cannot even divide (bit depth 0) escaped
+        # `fill` as a traceback — after it had written the button, and
+        # before the label that tells a release build the folder holds
+        # Manalink's files.
+        stone = bytearray(solid_png(8, 8))
+        stone[28] = 1                                   # IHDR's interlace byte
+        plate = bytearray(solid_png(8, 8, (0, 0, 0, 0)))
+        plate[24] = 0                                   # IHDR's bit depth
+        write(self.root, "Program/CardArt/Classic/CardBk_White.png", bytes(stone))
+        write(self.root, "Program/CardArt/Classic/CardOv_W.png", bytes(plate))
+        write(self.root, "Program/CardArt/Classic/CardBk_Blue.png", solid_png(8, 8))
+        write(self.root, "Program/CardArt/Classic/CardOv_U.png", bytes(plate))
+        dest = self.base / "door"
+        self.run_main("--dest", str(dest), "--manalink")
+        label = (dest / ml.LABEL).read_text().splitlines()
+        self.assertIn("button_normal", label)
+        self.assertFalse((dest / "card_frame_white.png").exists())
+        self.assertFalse((dest / "card_frame_blue.png").exists())
+        checked = self.run_main("--dest", str(self.base / "never"), "--check", "--manalink")
+        self.assertIn("CardBk_White.png would not decode", checked)
+        self.assertIn("CardOv_U.png would not decode", checked)
+
     def test_the_label_keeps_only_what_no_later_run_wrote_over(self):
         dest = self.base / "label"
         dest.mkdir()

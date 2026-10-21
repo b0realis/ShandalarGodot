@@ -87,10 +87,14 @@ static func _falls_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var pick := g.agents[who].choose_card(g, who, choices, "Koskun Falls: tap a creature to keep this enchantment", true, true)
 	if pick != null and choices.has(pick): g.tap_permanent(pick)
 	elif s.controller_id == who: g.sacrifice_permanent(s)
+# A face-down permanent has no name (CR 708.2), so no name printed in
+# Homelands: the Chime spares it (bug hunt 2026-10-21 — it destroyed a
+# masked Homelands card by the name under the mask).
 static func _chime(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	var victims: Array[CardInstance] = []
 	for i in g.all_battlefield():
-		if not i.is_token and CardRegistry.originally_printed_in(i.data.card_name, "hml"): victims.append(i)
+		if not i.is_token and not i.face_down \
+				and CardRegistry.originally_printed_in(i.data.card_name, "hml"): victims.append(i)
 	g.begin_simultaneous()
 	for i in victims: g.destroy(i, false)
 	g.end_simultaneous()

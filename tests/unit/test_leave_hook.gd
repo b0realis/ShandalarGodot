@@ -53,6 +53,10 @@ func test_the_hook_fires_when_the_permanent_is_bounced() -> void:
 
 
 func test_the_hook_fires_when_the_permanent_is_anted() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	# The fourth exit.
 	var diary: Array = []
 	var it := put_synthetic(0, _diarist(diary))

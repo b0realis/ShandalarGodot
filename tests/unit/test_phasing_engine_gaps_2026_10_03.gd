@@ -66,6 +66,10 @@ func test_a_point_redirect_is_not_booked_on_a_phased_out_permanent() -> void:
 # ------------------------------------------------------------------- (b) --
 
 func test_a_phased_out_permanent_cannot_be_anted() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var bear := _bear(0)
 	assert_true(g.phase_out(bear))
 	g.move_to_ante(bear)
@@ -242,6 +246,10 @@ func test_a_mired_land_stays_a_swamp_while_the_tomb_is_phased_out() -> void:
 
 
 func test_bronze_tablet_phased_out_in_response_is_left_alone() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var tablet := put_battlefield(0, "Bronze Tablet")
 	g.untap_permanent(tablet)
 	var hostage := _bear(1, "Test Hostage")

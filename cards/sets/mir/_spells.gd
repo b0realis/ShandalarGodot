@@ -639,7 +639,8 @@ class PrismaticLace extends ChangeColorEffect:
 		if i == null or i.zone != Mtg.Zone.BATTLEFIELD: return
 		var hint := P.enemy_main_color(g, pid)
 		var chosen := g.agents[pid].choose_color(g, pid,
-			"Prismatic Lace: choose the color or colors %s becomes" % i.data.card_name, hint) & 31
+			"Prismatic Lace: choose the color or colors %s becomes" % i.data.card_name, hint,
+			true) & 31   # several (bug hunt 2026-10-21)
 		g.set_color(i, chosen if chosen != 0 else hint)
 	func describe() -> String:
 		return "target permanent becomes the color or colors of your choice"
@@ -1041,18 +1042,22 @@ class SeedsOfInnocence extends DestroyAllEffect:
 			if P.artifact(i): victims.append(i)
 		var owner := {}
 		var value := {}
-		var entry := {}
+		var stamp := {}
 		for i in victims:
 			owner[i.id] = i.controller_id
 			value[i.id] = i.data.cost.mana_value()
-			entry[i.id] = i.graveyard_entry
+			stamp[i.id] = i.layer_timestamp
 		g.begin_simultaneous()
 		for i in victims: g.destroy(i, false)
 		# "The controller of each of those artifacts" — the ones destroyed,
-		# by their last known controller.
+		# by their last known controller: every artifact the destruction
+		# took off the battlefield, wherever it went. (Bug hunt 2026-10-21,
+		# cardsB: it asked whether the card REACHED a graveyard, so one that
+		# Forbidden Crypt exiled instead paid nothing — CR 614.6, the
+		# artifact was destroyed all the same.)
 		var gains := {}
 		for i in victims:
-			if i.graveyard_entry != int(entry[i.id]):
+			if i.zone != Mtg.Zone.BATTLEFIELD or i.layer_timestamp != int(stamp[i.id]):
 				gains[owner[i.id]] = int(gains.get(owner[i.id], 0)) + int(value[i.id])
 		for who in [g.active_player, g.opponent_of(g.active_player)]:
 			if int(gains.get(who, 0)) > 0: g.adjust_life(who, int(gains[who]))

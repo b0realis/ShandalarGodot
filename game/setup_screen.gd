@@ -1075,6 +1075,16 @@ func _fit_panel() -> void:
 	if _action_row != null:
 		wanted.y += _action_row.get_combined_minimum_size().y + 10.0
 	var room := size - Vector2(2.0 * PANEL_MARGIN, 2.0 * PANEL_MARGIN)
+	# THE SCROLLBAR TAKES ITS WIDTH FROM THE PAGE (2026-10-21). Settings
+	# taller than the room grow a vertical bar, and the bar's 8 px came
+	# out of the scroller's width: the page was 8 px wider than what
+	# showed, at the shipped 1280x800 too, so focusing a row that spans it
+	# slid the whole page sideways — its left edge cut, and no sideways
+	# bar to slide it back. Room for the bar when there will be one.
+	if wanted.y > room.y:
+		var scroll := _panel_content.get_parent() as ScrollContainer
+		if scroll != null:
+			wanted.x += scroll.get_v_scroll_bar().get_combined_minimum_size().x
 	var width: float = clampf(wanted.x, minf(PANEL_WIDTH, room.x), room.x)
 	var height: float = minf(wanted.y, room.y)
 	_panel.offset_left = -width * 0.5

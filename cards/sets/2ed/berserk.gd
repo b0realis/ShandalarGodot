@@ -44,8 +44,15 @@ func build() -> CardData:
 ## A combat damage step still ahead this turn (MtgGame.step_is_ahead): in
 ## a turn with an extra combat (Relentless Assault) the second main phase
 ## is before the next one, and Berserk is legal there again.
+##
+## The FIRST-STRIKE damage step is a combat damage step too (CR 510.4: "the
+## phase gets a second combat damage step"), so it is closed there even
+## though the regular one is still ahead — it was open until the bug hunt
+## of 2026-10-21, a doubled trampler cast after the first strikers had
+## already traded.
 static func _before_combat_damage(game: MtgGame, _pid: int) -> String:
-	if not game.step_is_ahead(Mtg.Step.COMBAT_DAMAGE):
+	if game.current_step() == Mtg.Step.FIRST_STRIKE_DAMAGE \
+			or not game.step_is_ahead(Mtg.Step.COMBAT_DAMAGE):
 		return "cast Berserk only before the combat damage step"
 	return ""
 

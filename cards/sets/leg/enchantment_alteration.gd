@@ -66,6 +66,8 @@ class AlterEffect extends EffectBase:
 				continue
 			if not game.aura_can_enchant(aura, inst):
 				continue
+			if not AlterEffect._may_be_enchanted_by(inst, aura):
+				continue
 			candidates.append(inst)
 		if candidates.is_empty():
 			return
@@ -88,6 +90,19 @@ class AlterEffect extends EffectBase:
 		var pick := game.agents[controller].choose_card(game, controller, candidates,
 			"Attach %s to" % aura.data.card_name, false, false, true)
 		game.move_aura(aura, pick if pick != null and candidates.has(pick) else candidates[0])
+
+	## An Aura can't be attached to what it couldn't enchant (CR 701.3b):
+	## protection from its colour (CR 702.16c) or "can't be enchanted"
+	## (Consecrate Land, Anti-Magic Aura, Guardian Beast) rules a permanent
+	## out, so with nothing legal left the Aura stays where it is.
+	## `MtgGame.aura_can_enchant` asks only what the permanent IS; until
+	## the bug hunt of 2026-10-21 the move went through onto a Black Knight
+	## and the state-based check then binned the Aura — a one-mana removal
+	## spell for the opponent's white Auras.
+	static func _may_be_enchanted_by(inst: CardInstance, aura: CardInstance) -> bool:
+		if (inst.protection_apart_from(aura.id) & aura.cur_colors) != 0:
+			return false
+		return not inst.cur_cant_be_aura_target
 
 	func describe() -> String:
 		return "moves target Aura to another permanent of its host's type"

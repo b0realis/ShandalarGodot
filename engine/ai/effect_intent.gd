@@ -24,6 +24,12 @@ var damage_uses_x: bool = false
 
 ## Damage SPLIT among the targets (Fireball) rather than dealt to each.
 var damage_divided: bool = false
+## The division is AS YOU CHOOSE — each target carries its announced share
+## in [member TargetRef.amount] (an effect with [member
+## EffectBase.divided_total] or [member EffectBase.divided_uses_x];
+## Pyrotechnics, Rolling Thunder). Not Fireball's even split, whose
+## targets carry no share ([method damage_on]).
+var divided_shares: bool = false
 
 ## Damage the CASTER takes as a side effect (Orcish Artillery 3, Psionic
 ## Blast 2). The price mage-go's `lifeCost*15/life` term charges.
@@ -671,6 +677,21 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 		elif e is DamageEffect:
 			if e.controller_mode:
 				intent.self_damage += e.amount
+			elif e.divided_total > 0 or e.divided_uses_x:
+				# DIVIDED DAMAGE (bug hunt 2026-10-21): "N damage divided as
+				# you choose among any number of targets" carries its N in
+				# the division, not in `amount` (0), so Pyrotechnics read as
+				# no damage at all and the pilot let 4 of it kill its Serra
+				# Angel with Giant Growth in hand. Read as the whole N (what
+				# a single target takes), flagged divided: a reader that
+				# knows the target reads its announced share
+				# ([member TargetRef.amount], CR 601.2d).
+				intent.damage_divided = true
+				intent.divided_shares = true
+				if e.divided_uses_x:
+					intent.damage_uses_x = true
+				else:
+					intent.damage += e.divided_total
 			elif e.use_x:
 				intent.damage_uses_x = true
 				intent.damage += e.x_bonus
@@ -915,6 +936,15 @@ func damage_at(x_value: int) -> int:
 	if damage_uses_x:
 		return x_value + damage
 	return damage
+
+
+## The damage [param ref] takes at X = [param x_value]: its announced
+## share of a DIVIDED total ([member TargetRef.amount], fixed as the spell
+## was cast — CR 601.2d, public), else [method damage_at].
+func damage_on(ref: TargetRef, x_value: int) -> int:
+	if divided_shares and ref != null and ref.amount > 0:
+		return ref.amount
+	return damage_at(x_value)
 
 
 ## Would the damage at X = [param x_value] finish [param victim] as it

@@ -26,6 +26,9 @@ var _library: VBoxContainer
 var _detail_scroll: ScrollContainer
 var _changing := false
 var _state := {}
+## Record index -> the folded public state there, taken while the event
+## list is labelled (hunt 2026-10-21): a seek folds from the nearest one.
+var _checkpoints := {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -193,9 +196,15 @@ func open_record(path: String) -> bool:
 		_text_or(headers.get("RulesProfile"), "Rules not specified"),
 		"Finished." if document.finished else "Incomplete / stopped: no final result recorded."]
 	_events.clear()
+	_checkpoints.clear()
+	# About 64 checkpoints whatever the length, never closer than 256
+	# records: a seek folds at most one interval. apply_patch returns a new
+	# state each time, so a kept one is never changed afterwards.
+	var every := maxi(256, document.records.size() / 64)
 	var label_state := {}
 	for i in document.records.size():
 		if document.records[i].kind == "state": label_state = MpnCodec.apply_patch(label_state, document.records[i].data)
+		if i % every == 0: _checkpoints[i] = label_state
 		_events.add_item("%d  %s" % [i + 1, event_label(document.records[i], label_state, headers, document.finished)])
 	_changing = true
 	_slider.max_value = maxi(0, _record_count() - 1)
@@ -262,10 +271,13 @@ func _show_info() -> void:
 func seek(index: int) -> void:
 	if document.is_empty(): return
 	index = clampi(index, 0, _record_count() - 1)
-	# Adjacent playback is incremental; an arbitrary seek starts from the
-	# initial observation. No simulated actions or card catalogue needed.
+	# Adjacent playback is incremental; an arbitrary seek folds from the
+	# nearest checkpoint at or before it. It folded from the initial
+	# observation, and a 20,000-record history took 1-2 s for each step of
+	# a drag of the seek bar (hunt 2026-10-21). No simulated actions or
+	# card catalogue needed.
 	if index != cursor + 1:
-		_state = MpnCodec.state_at(document.records, index)
+		_state = _fold_to(index)
 	elif document.records[index].kind == "state":
 		_state = MpnCodec.apply_patch(_state, document.records[index].data)
 	cursor = index
@@ -277,6 +289,16 @@ func seek(index: int) -> void:
 	_position.text = "%d / %d · Turn %d · %s" % [cursor + 1, _record_count(), int(_state.get("turn", 0)), String(_state.get("step", "pregame")).replace("_", " ")]
 	_draw_table()
 	_details.text = event_label(document.records[cursor], _state, document.headers, document.finished).left(600)
+
+func _fold_to(index: int) -> Dictionary:
+	var start := -1
+	for at: int in _checkpoints:
+		if at <= index and at > start: start = at
+	var state: Dictionary = {} if start < 0 else _checkpoints[start].duplicate(true)
+	for i in range(start + 1, index + 1):
+		if document.records[i].kind == "state": state = MpnCodec.apply_patch(state, document.records[i].data)
+	return state
+
 
 func _draw_table() -> void:
 	for child in _table.get_children():

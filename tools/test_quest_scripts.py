@@ -42,6 +42,7 @@ FAKE_ADB = r"""#!/bin/bash
 #  FAKE_DOWN_ON  an adb verb (uninstall, push…): from that call on the headset
 #                stops answering, as one that went to sleep does
 #  FAKE_NO_DF    1: the headset's df prints nothing
+#  FAKE_NO_REPORT 1: the game writes no start report
 # Like real adb (2026-10-12 hunt, r5): EVERY transport counts when choosing
 # the one target — a second device, unauthorized or offline, makes every
 # command without -s / ANDROID_SERIAL fail "more than one device/emulator".
@@ -99,7 +100,7 @@ case "$1" in
       monkey\ *)
         F=$ROOT/sdcard/Android/data/com.b0realis.shandalar/files
         mkdir -p "$F/skin" "$F/cardpacks" "$F/portraits" "$F/music"
-        printf 'android: started\n' > "$F/start_report.txt" ;;
+        [ -n "${FAKE_NO_REPORT:-}" ] || printf 'android: started\n' > "$F/start_report.txt" ;;
       *) # the headset's df and cp keep to the quota; its cp leaves what it wrote
         FAKE_ROOT="$ROOT" bash -c '
           df() {
@@ -237,6 +238,28 @@ class QuestScriptsTest(unittest.TestCase):
         self.assertLess(calls.index("uninstall"), calls.index("install Shandalar.apk"))
         self.assertTrue(list(self.folder.glob("start_report-*.txt")), "the game's start report is fetched")
         self.assertTrue(list(self.folder.glob("quest-*.log")), "the log is kept")
+
+    def test_the_word_yes_is_a_yes_at_every_question(self):
+        # HUNT 2026-10-21: step 1 asks for the whole word "yes", and a player
+        # types it again at the [y/n] questions — where only `y` counted:
+        # "yes" to "Did it reach the title screen?" ended the run with "it
+        # did not reach the title screen. Keep these two files".
+        result = self.run_script("quest_fresh_install.sh", "yes\n\n\nyes\n\n\n\nYes\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("did not reach the title screen", result.stdout)
+        self.assertNotIn("black screen", result.stdout)
+        self.assertIn("is installed", result.stdout)
+
+    def test_a_missing_start_report_is_not_named_as_a_file_to_keep(self):
+        # HUNT 2026-10-21: after "no start report on the headset" the
+        # closing lines still named start_report-<stamp>.txt to keep.
+        result = self.run_script("quest_fresh_install.sh", "yes\n\n\ny\n\n\n\nn\n",
+                                 FAKE_NO_REPORT="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no start report on the headset", result.stdout)
+        self.assertFalse(list(self.folder.glob("start_report-*.txt")))
+        closing = result.stdout[result.stdout.index("did not reach the title screen"):]
+        self.assertNotIn("start_report-", closing)
 
     def test_fresh_install_deletes_nothing_without_yes(self):
         old = self.device / GAME / "files/cardpacks/Pack-0-old.zip"

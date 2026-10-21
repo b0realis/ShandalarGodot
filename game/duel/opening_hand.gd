@@ -218,6 +218,8 @@ func run(game: MtgGame, winner: int, is_human: Callable,
 	var plays_first := true
 	if _human(winner):
 		plays_first = await _ask_order(winner)
+		if _left():
+			return
 		if _window != null:
 			pressed_serial = _window.status_serial
 	var first_player := winner if plays_first else game.opponent_of(winner)
@@ -241,6 +243,8 @@ func run(game: MtgGame, winner: int, is_human: Callable,
 					_window.set_lead(lead_line(game, first_player, _viewer, _private_hotseat))
 					_show_hand()
 				took = await _ask_mulligan(pid)
+				if _left():
+					return
 			else:
 				took = game.agents[pid].choose_mulligan(game, pid)
 			# NAME THE HAND BEFORE IT IS GONE. `%s has no land…` describes
@@ -269,6 +273,8 @@ func run(game: MtgGame, winner: int, is_human: Callable,
 	if _window != null and _window.status_serial != pressed_serial:
 		await _window.ask([{"answer": OpeningWindow.Answer.START,
 			"label": MULLIGAN["start"]}])
+		if _left():
+			return
 	if _window != null and _private_hotseat:
 		_window.conceal_hand()
 	game.start_duel(first_player)
@@ -288,6 +294,16 @@ static func lead_line(game: MtgGame, first_player: int, viewer: int, private := 
 	if first_player == viewer:
 		return MULLIGAN["you_start"]
 	return MULLIGAN["starts"] % game.players[first_player].player_name
+
+
+## THE SCREEN WENT WHILE THE WINDOW ASKED (hunt of 2026-10-21): Pause →
+## `Exit duel` or `Return to main menu` takes the duel screen, and this
+## with it, out of the tree at once. [method OpeningWindow.ask] then comes
+## back with no button pressed, which read as `Play first` and a keep at
+## every question — and the abandoned duel was started under a screen on
+## its way out. A run whose window has gone stops where it is.
+func _left() -> bool:
+	return _window != null and not is_inside_tree()
 
 
 func _human(pid: int) -> bool:

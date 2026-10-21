@@ -100,10 +100,15 @@ func _on_event(event: GameEvent) -> void:
 		# the cast tally rather than added to it.
 		Mtg.EventType.SPELL_CAST, Mtg.EventType.LAND_PLAYED, \
 		Mtg.EventType.ENTERS_BATTLEFIELD:
-			if int(event.data.get("controller", -1)) == pid:
-				return
 			var inst: CardInstance = event.data.get("instance")
-			if inst == null or inst.is_token:
+			# A CARD OF THEIR DECK IS ONE THEY OWN (bug hunt 2026-10-21),
+			# whoever controls it as it arrives: our own Serra Angel
+			# raised by their Animate Dead was tallied as theirs (the
+			# CONTROLLER was read), and their Craw Wurm raised by ours was
+			# missed. The owner is public; the deck is the owner's.
+			if inst == null or inst.owner_id == pid:
+				return
+			if inst.is_token:
 				# A token is not a card in anybody's deck, so boarding
 				# against one would be boarding against a spell we already
 				# counted when it was cast.

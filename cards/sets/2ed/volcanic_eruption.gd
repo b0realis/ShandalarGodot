@@ -53,6 +53,11 @@ func build() -> CardData:
 
 
 class EruptEffect extends EffectBase:
+	## Read by Equinox ("counter target spell if it would destroy a land you
+	## control"): this effect destroys the Mountains it targets, though it
+	## is no DestroyEffect (bug hunt 2026-10-21).
+	var destroys_its_targets := true
+
 	func _init(spec: TargetSpec) -> void:
 		target_spec = spec
 		x_targets()

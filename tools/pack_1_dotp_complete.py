@@ -370,6 +370,16 @@ def verify(path: Path, require_art: bool = True) -> dict:
                     name: sha256(payload)
                     for name, payload in sorted(metadata.items())}:
             raise ValueError("Pack 1 metadata checksum failed")
+        # THE TRUSTED SOURCE, as Packs 2-9 read it (hunt 2026-10-21): the
+        # checksums above are the zip's own, so a forged cards.json with
+        # its checksum recomputed passed every one of them.
+        _manifest, trusted_catalog, trusted_cards, trusted_readme = assembled()
+        trusted = {"catalog.json": json_bytes(trusted_catalog),
+                   "cards.json": json_bytes(trusted_cards),
+                   "README.txt": trusted_readme.encode("utf-8")}
+        for name, payload in trusted.items():
+            if metadata[name] != payload:
+                raise ValueError("Pack 1 metadata differs from the trusted source: " + name)
         art_entries = [(name, zf.read(name)) for name in sorted(art_files & names)]
         artwork = checksums.get("artwork", {})
         if artwork.get("files") != len(art_entries) \

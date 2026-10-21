@@ -421,6 +421,10 @@ func test_demonic_hordes_land_is_the_opponents_choice() -> void:
 # ---------------------------------------------------------- ante ransoms --
 
 func test_the_bronze_tablet_ransom_is_the_victims_call() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	# "That player may pay 10 life." A seat that would rather keep the life
 	# and lose the creature can.
 	var tablet := put_battlefield(0, "Bronze Tablet")

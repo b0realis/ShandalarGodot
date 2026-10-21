@@ -362,6 +362,14 @@ func _on_key(button: Button) -> void:
 	if field == null or not field.has_focus():
 		_release()
 		return
+	# A FIELD THE ARROWS WALKED TO IS NOT YET EDITING (hunt of 2026-10-21).
+	# A [LineEdit] starts editing as it takes the focus only when no arrow
+	# action is held, and until it does it drops typed letters and reads
+	# Enter as "start editing" — so on a field the keys or the D-pad
+	# reached, the board's letters, Space and Backspace did nothing and its
+	# Enter closed it. A key pressed here is the player saying they type.
+	if field.has_method("is_editing") and not bool(field.call("is_editing")):
+		field.call("edit")
 	var key: Variant = button.get_meta("key")
 	if key is String:
 		match key:

@@ -114,6 +114,10 @@ func test_game_of_chaos_single_flip_moves_exactly_one_life_each_way() -> void:
 	assert_eq(absi(g.players[0].life - 20), 1)
 
 func test_amulet_of_quoz_can_be_avoided_by_ante_without_coin_flip() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var amulet := put_battlefield(0, "Amulet of Quoz")
 	g._step_index = Mtg.STEP_ORDER.find(Mtg.Step.UPKEEP)
 	assert_ok(g.activate_ability(0, amulet, 0, [TargetRef.player(1)]))
@@ -123,6 +127,10 @@ func test_amulet_of_quoz_can_be_avoided_by_ante_without_coin_flip() -> void:
 	assert_false(g.game_over)
 
 func test_amulet_coin_flip_ends_the_game_if_opponent_declines_ante() -> void:
+	# Played FOR ANTE: in a duel that is not, an ante card does nothing and
+	# nothing reaches the ante (the owner's ruling of 2026-10-21,
+	# tests/unit/test_ruling_2026_10_21_ante_off.gd).
+	g.ante_enabled = true
 	var amulet := put_battlefield(0, "Amulet of Quoz")
 	g.agents[1] = Decline.new()
 	g._step_index = Mtg.STEP_ORDER.find(Mtg.Step.UPKEEP)

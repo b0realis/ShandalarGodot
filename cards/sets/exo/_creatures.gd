@@ -170,9 +170,12 @@ static func _nonbasic_land(i: CardInstance) -> bool:
 	return i.is_land() and (i.cur_supertypes & Mtg.Supertype.BASIC) == 0
 
 ## "With mana value X": the X being proposed while the target is chosen,
-## the paid X on resolution ([method MtgGame.casting_x]).
+## the paid X on resolution ([method MtgGame.casting_x]). A face-down
+## creature has no mana cost — mana value 0 (CR 708.2) — and the card under
+## the mask is hidden (bug hunt 2026-10-21: X = 6 killed a masked Shivan
+## Dragon, X = 0 could not).
 static func _mana_value_x(g: MtgGame, s: CardInstance, i: CardInstance) -> bool:
-	return i.data.cost.mana_value() == g.casting_x(s)
+	return (0 if i.face_down else i.data.cost.mana_value()) == g.casting_x(s)
 
 ## Keeper of the Dead's creature: controlled by the player the first slot
 ## named — judged again on resolution (CR 608.2b).

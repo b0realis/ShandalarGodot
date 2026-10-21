@@ -411,15 +411,194 @@ deletes the kept zip before its rename; `CardBack.adopt_bytes` goes through
   the runner's and to the desk's. The new `web-offline` job passed on its
   first run.
 
-## Left open
+## Left open (as of 0.50.43)
 
-- Seen by the reviewers but not taken up: a pasted deck list has no limit on
-  its total size; the MCP server's read-deck tools read any path (the write
-  tools are fenced); ante cards still work with Ante off; Fireball divides X
-  among the targets still legal on resolution; Test hands' Clear all resets
-  lives to the last test's, not the starting ones; deck notes lose blank
-  lines; the duel log is trimmed in place; the mana planner floats one extra
-  mana with Plateau + Volcanic Island + Black Lotus for {W}{R}{R}.
+Everything this review knows of and did not fix, in one place. "Unchecked"
+means a reviewer saw it while working on something else and nobody has
+reproduced it yet; each needs a probe before it is fixed.
+
+0.50.45 (`docs/hunt-campaign-2026-10-21.md`) settled the three rulings and
+fixed the items marked *fixed in 0.50.45* below; what is still open is
+carried forward in that record's "Still open".
+
+### Waiting on the owner's ruling
+
+All three ruled on 2026-10-21 and carried out in 0.50.45.
+
+- **Ante cards with Ante off.** Contract from Below, Jeweled Bird, Darkpact
+  and Demonic Attorney still use the ante zone in a duel played without
+  ante (`MtgGame.ante_enabled` false). Should they do nothing, be refused
+  from such decks, or stay as they are?
+- **Fireball's X when a target is gone.** Fireball (`cards/sets/2ed/
+  fireball.gd`) divides X among the targets still legal on resolution, so
+  one target dropping out doubles the damage to the other. Which reading,
+  the 1997 one or the modern one?
+- **The 1997 legend rule and a Vesuvan Doppelganger** that becomes a copy of
+  a newer legend: the newer-entered one goes, which would bury the original.
+  The 1997 ruling for this was not found.
+
+### Not yet tried
+
+- **Add pack... on a real Android phone** — in particular whether the
+  phone's file box can open Downloads and hand the game a path it can read.
+  The adb route stays in `docs/android-experimental.md` as the fallback.
+  Nothing else of the Android build has been tried on a device either.
+- **Windows:** the fallback in `SkinPack.copy_whole` (a refused rename over
+  a mounted zip copies in place) and `Settings.write_atomically`'s rename
+  there (suspected: if Windows' rename removes the target first, a failed
+  move could take the pending file with it). The read-only-folder case of
+  `test_review_2026_10_21_atomic_adopt.gd` skips itself when run as root.
+
+### Limits of the fixes
+
+- **engine-1:** a card script that reads `current_targets()` by hand for an
+  untargeted rider still sees the raw list; a card countered and recast
+  while targeted on the stack counts as the same object.
+- **engine-2:** under the 1997 damage-prevention window, a stolen spell's
+  damage waits until after the card has gone home, so Reflect Damage used in
+  that window still names the owner (Fifth Edition rules, a human seat and
+  Grinning Totem together). Fixing it means changing how waiting damage
+  remembers its source.
+- **engine-4:** each side-effect mana tap inside a search now records about
+  170 journal rows (roughly 20 µs); not measured in a deck run.
+- **ai-1:** `AiPlayer._ranking_gates_refuse` repeats the gate list of
+  `_try_cast_best` and can drift from it; X spells are not counted; under
+  mana burn only the first 8 eligible cards are weighed.
+- **ai-3:** Shrieking Drake's trigger is recognised by its printed text;
+  only arrivals that harm an opponent's target count as worth repeating
+  (a draw or life-gain arrival does not).
+- **ai-4:** next turn's spending is guessed from the hand alone (no draw, no
+  ability sinks such as Jayemdae Tome). Some Drains in the Lab still burned;
+  they were judged real threats and were not traced one by one.
+- **cards-1:** the private `_version_less` functions in Packs 2–5 and 7 are
+  unused now.
+- **ui-1:** the leave question does not pause the computer, as the Concede
+  question does not.
+- **nettools-5:** `tools/test_tracked_tree.py` now catches a JSON-escaped
+  Windows home in the tree, but the release guard on a staged package
+  (`package_release.private_patterns`) still does not; it matters only for
+  a Windows builder. *Fixed in 0.50.45.*
+
+### Seen by the reviewers, unchecked
+
+Rules engine:
+- The mana planner floats one extra mana for {W}{R}{R} from Plateau +
+  Volcanic Island + Black Lotus (1 burn under mana burn); the other 599 of
+  600 random boards were exact.
+- `draw_cards` returns as soon as the library runs out, skipping the "draws
+  N cards" line and the screen update for the cards already drawn in that
+  call (the player loses anyway).
+- `_cleanup_triggers` sees a state-based action only by zone counts, so one
+  that moves no card (the modern +1/+1 and -1/-1 counters cancelling) gives
+  no priority in that cleanup (CR 514.3a).
+- `declare_attackers` ignores `try_pay`'s answer for the combined attack tax
+  after paying the non-mana attack costs first; the board ends the same.
+- A discounted cost keeps its printed text (`ManaCost.minus_generic`): a
+  refusal, the log and the mini card's badge show "{3}" for a Power
+  Artifact-ed Basalt Monolith untap that costs {1}. *Fixed in 0.50.45.*
+- `DeckList.parse` caps each line at 500 copies but not the total, so a
+  pasted list of many such lines grows into millions of entries. *Fixed in
+  0.50.45.*
+- After the loop limit stops a step, a state trigger that keeps triggering
+  logs "not put on the stack" at every state-based check for the rest of
+  the step (log noise).
+
+Cards and packs:
+- `game/card_packs.gd` runs `String()` on a pack catalogue's JSON entries
+  (around its lines 423 and 437): a crafted pack with a number there is a
+  script error, not a clean refusal.
+- Packs 8 and 9's README say "the 43 / 42 cards the game already has";
+  the manifests count 48 / 47 (the five basic lands). Wording only.
+
+The computer opponent:
+- It discarded Ancestral Recall at cleanup instead of casting it
+  (`_fire_surplus_instants` skips draw instants; it is priced 2.5). *Fixed
+  in 0.50.45.*
+- It paid 4 life to Sylvan Library to keep a card, then cast Wheel of
+  Fortune in the same main phase and discarded it.
+- The combo runner's casts count toward the runaway guard's cast cap: after
+  a 20-round Man-o'-War loop, Man-o'-War cannot be cast again that turn to
+  bounce a real threat.
+- With combos off, the Wizard casts a second, useless Ashnod's Altar ahead
+  of a Hill Giant (0.50.42 fixed the combo pilot's side only).
+- It chump-blocked a Craw Wurm with Soul Warden at 20 life. *Fixed in
+  0.50.45.*
+- Mana Flare boards: both pilots burn 1–2 life most turns.
+- Possible hidden information: CARD-COMBOS reads the names of the
+  opponent's permanents, which would identify a face-down (Illusionary
+  Mask) combo piece. *Fixed in 0.50.45.*
+- Deck Lab accepts profile knobs out of range (`wizard:mistake_chance=2`).
+  *Fixed in 0.50.45.*
+- The unfair player assumes two seats (`1 - pid`); not probed for
+  SGManalink. Not a defect: `1 - pid` is the engine's own `opponent_of` for
+  the two seats every duel has (0.50.45).
+
+The screens:
+- Test hands' **Clear all**, after **Edit test**, resets each life to the
+  last test's lives, not to Magic Battle's starting lives as its tooltip
+  says. *Fixed in 0.50.45.*
+- Magic Battle's page is 8 pixels wider than its scroll area, so bringing
+  the Test hands row into view clips its left edge by about 8 pixels.
+  *Fixed in 0.50.45.*
+- Deck notes lose blank lines and leading spaces on save and load
+  (`DeckModel.to_text`). *Fixed in 0.50.45.*
+- `DuelLogFile._trim` rewrites `duel_log.txt` in place: a crash or a full
+  disk mid-trim loses the running log. *Fixed in 0.50.45.*
+- A card back's size limit is 64 MB of file, not pixels: a small,
+  highly compressed picture of huge size is decoded whole at every start.
+- In the browser, Options › Card back and Options › Skin wait for the file
+  box's "cancel" event; a browser that never sends it leaves the button
+  dead for the session.
+
+LAN, saves and tools:
+- The MCP server's `read_deck` / `find_deck` read any path, absolute or
+  `../`, where the write tools are fenced inside the deck folders.
+- An open LAN host: any peer on the network can read the advertised code
+  and hold up to `MAX_SESSIONS` roomless sessions, so "Host is full" turns
+  real players away.
+- Replacing a mounted zip under the same name (`SkinPack.adopt`, `_take`)
+  may leave stale entries until a restart (suspected).
+- Options › Card Packs offers **Open Folder** on Android and the Quest,
+  where it cannot open the game's folder (**Add pack...** is the way in
+  there now).
+- `SgTournamentStore.available()` asks the modified time of a primary file
+  that may be gone (only its `.bak` left), which prints an engine error on
+  some Godot versions; recovery still works. Not reproduced on 4.7.2
+  (0.50.45).
+- A tournament's revision is capped at 1,000,000 on the wire; not reachable
+  in play.
+- The offline Web package's sizes in its setup text (50 MiB, 131 MiB with
+  the skin) were not measured.
+
+### Not reviewed
+
+What the reviewers named as outside what they read. The second hunt of
+0.50.45 read all of it but what its record lists as not reached:
+- Rules: the inside of `continuous.gd`'s layers, most of `damage_replacements.gd`
+  and `effects/*.gd`, banding and flanking, phasing, copy and face-down
+  objects, ante, the draw replacements, `proxy_card.gd`, `deck_printings.gd`.
+- Cards: an exhaustive read of the card scripts; the fuzzers check for
+  crashes and effects that linger, not that each card does what it says.
+- AI: most per-set tactics modules, `combat_search.gd` and
+  `combat_study.gd` (only timed), `effect_intent.gd`, the match memory, most
+  of the sideboarding, `auto_deck_cli.gd`, the referee and the Elo ledger.
+- Screens: most of the duel screen's 12,000 lines beyond the parts named
+  above, the deck builder's filter, stats and auto-deck, draft, the touch
+  keyboard and gestures, music.
+- LAN and tools: the lobby and LAN duel views, the client-side protocol
+  checks, tournaments beyond their commands, the MCP referee, the original
+  and Manalink importers, the pack builders, and the Quest, macOS, ArkOS
+  and Steam Deck scripts.
+
+### Tests that fail under load
+
+`tools/test_lan_smoke_launcher.py` (two Ctrl-C tests) and
+`tools/test_c3_fx_scripts_shell.py` (two soak Ctrl-C tests) wait 20–30
+seconds for a Godot to stop. Run beside two Godot test chains on the desk
+they timed out; alone they pass (24 of 24), and on CI they pass. They want
+a wait that does not depend on how busy the machine is. Still open after
+0.50.45, which repaired four timing tests of its own (listed in
+`docs/hunt-campaign-2026-10-21.md`, Verification).
 
 ## Verification
 

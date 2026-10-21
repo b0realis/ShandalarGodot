@@ -11,6 +11,9 @@ extends GutTest
 ## late-game state checked well inside a frame.
 
 const Pilot := preload("res://tests/support/sg_network_pilot.gd")
+## The byte loop and parse below over the 79 KB state of this duel on the
+## quiet desk, 2026-10-21 (5.4-5.9 ms).
+const QUIET_OLD_DECODE_US := 5700.0
 
 
 func _bytes(text: String) -> PackedByteArray:
@@ -89,6 +92,12 @@ func test_short_text_and_token_answer_as_before() -> void:
 ## budget is generous (a loaded desk runs four Godots at once); what pins
 ## the native checks is relative: each against the GDScript loop it
 ## replaced, run on the same bytes and text in the same process.
+##
+## A machine busy with other work (2026-10-21, a load of 57-71 on the desk)
+## read 25-53 ms for checks that take 5: each state is timed best of three,
+## against the scheduler's spikes, and the frame is stretched by how much
+## slower the old decode of the biggest state runs right now than it ran on
+## the quiet desk ([constant QUIET_OLD_DECODE_US]) — never shrunk.
 func test_a_late_game_state_is_checked_inside_a_frame() -> void:
 	var decks := SgDeckCatalog.available()
 	var found := {}
@@ -110,15 +119,18 @@ func test_a_late_game_state_is_checked_inside_a_frame() -> void:
 		if step % 10 == 0:
 			for seat in 2:
 				var view := m.view(seat)
-				var began := Time.get_ticks_usec()
-				assert_true(SgViewProtocol.game(view), "the host's own check passes")
-				var host_ms := (Time.get_ticks_usec() - began) / 1000.0
 				var wire := SgProtocol.encode({"type": "state", "rooms": [], "room": {}, "game": view}).to_ascii_buffer()
-				began = Time.get_ticks_usec()
-				var decoded := SgProtocol.decode_payload(wire)
-				var valid := SgViewProtocol.game(decoded.get("game", {}))
-				var guest_ms := (Time.get_ticks_usec() - began) / 1000.0
-				assert_true(valid, "the guest's check passes")
+				var host_ms := INF
+				var guest_ms := INF
+				for i in 3:
+					var began := Time.get_ticks_usec()
+					assert_true(SgViewProtocol.game(view), "the host's own check passes")
+					host_ms = minf(host_ms, (Time.get_ticks_usec() - began) / 1000.0)
+					began = Time.get_ticks_usec()
+					var decoded := SgProtocol.decode_payload(wire)
+					var valid := SgViewProtocol.game(decoded.get("game", {}))
+					guest_ms = minf(guest_ms, (Time.get_ticks_usec() - began) / 1000.0)
+					assert_true(valid, "the guest's check passes")
 				worst_guest = maxf(worst_guest, guest_ms)
 				worst_host = maxf(worst_host, host_ms)
 				if wire.size() > biggest:
@@ -130,8 +142,6 @@ func test_a_late_game_state_is_checked_inside_a_frame() -> void:
 			if refused > 50: m.act(actor, {"op": "pass"})
 	gut.p("wire: biggest state %d bytes; worst guest decode+check %.2f ms; worst host check %.2f ms" % [biggest, worst_guest, worst_host])
 	assert_gt(biggest, 20000, "a state of some size was measured")
-	assert_lt(worst_guest, 16.0, "the guest's decode and check of one state")
-	assert_lt(worst_host, 16.0, "the host's own check of one view")
 	# The decode against the one it replaced (the byte loop, then the
 	# parse), best of three each.
 	var native := INF
@@ -147,6 +157,9 @@ func test_a_late_game_state_is_checked_inside_a_frame() -> void:
 		looped = minf(looped, Time.get_ticks_usec() - began)
 	gut.p("wire: decode of %d bytes %.0f us; the old decode %.0f us" % [biggest_wire.size(), native, looped])
 	assert_lt(native, looped * 0.75, "the native checks beat the byte loop")
+	var frame := 16.0 * maxf(1.0, looped / QUIET_OLD_DECODE_US)
+	assert_lt(worst_guest, frame, "the guest's decode and check of one state")
+	assert_lt(worst_host, frame, "the host's own check of one view")
 	# A 4 KB rules text against the character loop it replaced.
 	var rules := "Flying. When this enters, draw a card.\n".repeat(100).left(4096)
 	native = INF

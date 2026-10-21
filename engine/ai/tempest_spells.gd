@@ -1069,6 +1069,14 @@ static func body_made_on_entry(g: MtgGame, pilot, inst: CardInstance) -> Variant
 ## change sides until end of turn, untapped and hasty. Cast in our first
 ## main phase only when their creatures, attacking past our own as their
 ## blockers, deal them lethal damage — the one use that cannot backfire.
+##
+## UNTAPPED, BOTH SIDES (bug hunt 2026-10-21): "untap all creatures you
+## control and all creatures target opponent controls" comes first, and
+## the blocks were read off the table as it stands — where a tapped
+## creature blocks nothing. Our Serra Angel tapped by their Icy was no
+## blocker, their Craw Wurm read 6 through at 5 life, and the Wizard cast
+## Reins into the Angel that would block it. The reading untaps both sides
+## under the search journal now.
 static func reins(g: MtgGame, pilot, inst: CardInstance, e: EffectBase) -> Dictionary:
 	var pid: int = pilot.pid
 	var foe := g.opponent_of(pid)
@@ -1087,7 +1095,16 @@ static func reins(g: MtgGame, pilot, inst: CardInstance, e: EffectBase) -> Dicti
 	var blockers: Array[CardInstance] = []
 	for body in g.players[pid].creatures():
 		blockers.append(body)
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	for body in attackers + blockers:
+		if body.tapped:
+			g._rec(body, &"tapped")
+			body.tapped = false
 	var through: int = pilot._damage_through_blocks(g, attackers, blockers, foe)
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
 	if through < g.players[foe].life:
 		return {}
 	return {"x": 0, "targets": [ref], "value": LETHAL_WORTH}
@@ -1122,7 +1139,10 @@ static func stun(g: MtgGame, pilot, inst: CardInstance, e: EffectBase) -> Dictio
 
 ## CORPSE DANCE (`reanimate_top_hasty`): the top creature card of our
 ## graveyard, hasty, for one attack in our first main phase (exiled at the
-## end step). Worth its power when it is a real attacker.
+## end step). Worth its power when it is a real attacker — never a
+## DEFENDER, nor one whose attack needs a land they do not control (bug
+## hunt 2026-10-21: a Wall of Spears on top, 2 power at 2 life, read as
+## the game and was danced into exile without attacking).
 static func corpse_dance(g: MtgGame, pilot) -> Dictionary:
 	var pid: int = pilot.pid
 	if g.active_player != pid or g.current_step() != Mtg.Step.MAIN1:
@@ -1142,6 +1162,11 @@ static func corpse_dance(g: MtgGame, pilot) -> Dictionary:
 	if power < 2:
 		return {}
 	var foe := g.opponent_of(pid)
+	if top.data.keywords.has(Mtg.Keyword.DEFENDER):
+		return {}
+	var needs := top.data.attack_needs_defender_land
+	if needs != "" and not CombatState._controls_land_of_type(g, foe, needs):
+		return {}
 	if power >= g.players[foe].life and pilot._untapped_creatures(g, foe).is_empty():
 		return {"x": 0, "targets": [], "value": LETHAL_WORTH}
 	return {"x": 0, "targets": [], "value": float(power)}

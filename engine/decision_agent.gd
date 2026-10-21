@@ -386,8 +386,18 @@ func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 	return picked
 
 
-func choose_color(game: MtgGame, pid: int, prompt: String, hint: int) -> int:
+## [param several]: "the color OR COLORS of your choice" (Dream Coat,
+## Prismatic Lace, Shyft) — the question's [member PlayerChoice.count] is
+## then 5, and a front end may answer with several colours as one mask (the
+## duel screen ticks them, `DuelScreen.COLORS_DONE`). Every other colour
+## question names one colour. A seat answering for itself keeps its one
+## hint colour, a legal answer to either (bug hunt 2026-10-21: the three
+## cards asked for one colour, so no player could make a creature two).
+func choose_color(game: MtgGame, pid: int, prompt: String, hint: int,
+		several := false) -> int:
 	var choice := PlayerChoice.new(PlayerChoice.Kind.COLOR, pid, prompt, hint)
+	if several:
+		choice.count = Mtg.WUBRG.size()
 	choice.source = game.current_resolution_source()
 	choice.step = game.current_step()
 	choice.is_cost = game.is_paying_cost()

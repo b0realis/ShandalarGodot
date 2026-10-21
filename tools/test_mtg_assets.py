@@ -135,6 +135,35 @@ class TestWriteZip(unittest.TestCase):
         self.assertEqual(struct.unpack(">II", inside[16:24]),
                          (COUNTER_WIDTH, COUNTER_HEIGHT))
 
+    def test_a_failed_rewrite_leaves_the_earlier_archive_whole(self):
+        # HUNT 2026-10-21: the archive was written straight onto `--out`; a
+        # file that could not be read halfway left a VALID zip of half the
+        # skin where the good one had been.
+        skin = self._folder("skin", {"a.png": b"png-a", "b.png": b"png-b"})
+        for out in (self.dir / "good.zip", self.dir / "good.tar.gz"):
+            with self.subTest(out=out.name):
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(mtg_assets.write_zip(skin, out), 0)
+                before = out.read_bytes()
+                real_zip, real_tar = zipfile.ZipFile.write, tarfile.TarFile.add
+
+                def refuse_b(original):
+                    def wrapped(self_, path, *args, **kwargs):
+                        if Path(path).name == "b.png":
+                            raise PermissionError("b.png")
+                        return original(self_, path, *args, **kwargs)
+                    return wrapped
+                with mock.patch.object(zipfile.ZipFile, "write", refuse_b(real_zip)), \
+                        mock.patch.object(tarfile.TarFile, "add", refuse_b(real_tar)), \
+                        redirect_stdout(io.StringIO()):
+                    with self.assertRaises(PermissionError):
+                        mtg_assets.write_zip(skin, out)
+                self.assertEqual(out.read_bytes(), before)
+                self.assertEqual(sorted(p.name for p in self.dir.iterdir() if p.is_file()),
+                                 sorted(p.name for p in self.dir.iterdir()
+                                        if p.is_file() and not p.name.endswith(".part")),
+                                 "no half-written file is left beside it")
+
     def test_an_empty_folder_is_refused(self):
         empty = self.dir / "empty"
         empty.mkdir()

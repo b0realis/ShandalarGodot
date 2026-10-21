@@ -141,7 +141,9 @@ func _card(row: Dictionary) -> CardInstance:
 	card.tapped = row.tapped
 	card.face_down = row.face_down
 	card.damage = maxi(0, int(row.damage))
-	card.is_token = row.get("token", false) == true
+	# `token` is an optional boolean another writer may send as anything:
+	# `1 == true` is a script error, not false (hunt 2026-10-21).
+	card.is_token = row.get("token") is bool and row.token
 	card.summoning_sick = false # unspecified, not inferred from arrival time
 	card.cur_keywords.clear()
 	if not row.face_down and row.get("keywords") is Array:

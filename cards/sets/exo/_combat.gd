@@ -143,9 +143,12 @@ static func _boars_lure(g: MtgGame, s: CardInstance, stamp: int, id: int, chosen
 
 # -------------------------------------------------------- Elvish Berserker --
 
+## "Each creature blocking it": a creature blocking any member of its band
+## blocks it too (CR 702.22h; bug hunt 2026-10-21, cardsB — `blockers_of`
+## counted only the blockers declared straight at the Berserker).
 static func _berserker(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if not F._same_trigger_source(g, s): return
-	var n := g.combat.blockers_of(s.id).size()
+	var n := g.combat.blockers_of_band(g.combat.band_of(s.id)).size()
 	if n <= 0: return
 	g.continuous.add_until_eot_pump(s.id, n, n)
 	g.recalculate()
@@ -242,16 +245,27 @@ static func _salamander(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 # ------------------------------------------------------------- Wall of Nets --
 
 static func _nets_blocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool:
-	return g.is_present(s) and not g.combat.attackers_blocked_by(s.id).is_empty()
+	return g.is_present(s) and not _netted_attackers(g, s).is_empty()
+
+## The creatures the Wall blocks right now (bug hunt 2026-10-21, cardsB):
+## every member of each band it blocks (CR 702.22h), and only attackers
+## still in combat — the Wall's entry in `blocks` keeps naming an attacker
+## that left combat (regenerated, Reconnaissance; CombatState.forget), but
+## that attacker is no longer blocked by it (CR 506.4).
+static func _netted_attackers(g: MtgGame, s: CardInstance) -> Array[int]:
+	var out: Array[int] = []
+	for id in g.combat.opposing_attackers(s.id):
+		if g.combat.attackers.has(id): out.append(id)
+	return out
 
 ## "Exile all creatures blocked by this creature": what the Wall blocks as
-## the ability resolves (an attacker removed from combat is no longer
-## blocked by it). The cards are linked to the Wall only while it is still
-## the object that triggered; a Wall gone by then already had its
-## leaves-the-battlefield trigger, so nothing will bring them back.
+## the ability resolves ([method _netted_attackers]). The cards are linked
+## to the Wall only while it is still the object that triggered; a Wall
+## gone by then already had its leaves-the-battlefield trigger, so nothing
+## will bring them back.
 static func _nets_exile(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var victims: Array[CardInstance] = []
-	for id in g.combat.attackers_blocked_by(s.id):
+	for id in _netted_attackers(g, s):
 		var i := g.find_instance(id)
 		if g.is_present(i) and i.is_creature(): victims.append(i)
 	if victims.is_empty(): return

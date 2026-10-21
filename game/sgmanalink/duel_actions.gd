@@ -599,6 +599,9 @@ func _choice_entries() -> Array:
 			var colors: Array = Array(question.colors) if not question.colors.is_empty() \
 				else [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B, Mtg.ManaColor.R, Mtg.ManaColor.G]
 			for color in colors: entries.append({"label": Mtg.COLOR_NAMES[color], "answer": color})
+			# "THE COLOR OR COLORS" ([method several_colors]): the local
+			# screen's last line, which only closes the ticking.
+			if several_colors(question): entries.append({"label": DuelScreen.COLORS_DONE, "answer": 0})
 		PlayerChoice.Kind.OPTION:
 			for i in question.options.size(): entries.append({"label": question.options[i], "answer": i})
 		PlayerChoice.Kind.CARD, PlayerChoice.Kind.DISCARD:
@@ -703,17 +706,37 @@ func choice_view(pid: int, handle: Callable = Callable()) -> Dictionary:
 	var shown: Array = []
 	for info in question.information:
 		if info.viewer in [-1, pid]: shown.append({"title": info.title, "cards": info.cards.duplicate()})
+	var count := 1
+	if question.kind == PlayerChoice.Kind.DISCARD: count = mini(question.count, labels.size())
+	elif several_colors(question): count = labels.size() - 1
 	return {"prompt": question.prompt, "source": question.source, "options": labels, "information": shown,
-		"count": mini(question.count, labels.size()) if question.kind == PlayerChoice.Kind.DISCARD else 1,
-		"cancel": question.is_cost and not question.adverse, "cards": cards}
+		"count": count, "cancel": question.is_cost and not question.adverse, "cards": cards}
+
+
+## "THE COLOR OR COLORS OF YOUR CHOICE" at a network table (Dream Coat,
+## Prismatic Lace, Shyft — [member PlayerChoice.count] above 1; bug hunt
+## 2026-10-21): the colour lines and the local screen's
+## `DuelScreen.COLORS_DONE` after them, with `count` the colour lines — as
+## many as may be ticked. The seat ticks one to that many colour lines and
+## sends them ([method SgDuelView._on_choice_option]); the answer is their
+## mask. The wire is unchanged: the lines and `count` say it.
+static func several_colors(question: PlayerChoice) -> bool:
+	return question != null and question.kind == PlayerChoice.Kind.COLOR and question.count > 1
 
 
 func answer(pid: int, picks: Array) -> String:
 	var question := game.awaiting_choice
 	if question == null or question.pid != pid: return "No question is waiting for you."
 	var entries := _choice_entries()
-	var count := mini(question.count, entries.size()) if question.kind == PlayerChoice.Kind.DISCARD else 1
-	if picks.size() != count: return "Choose exactly %d option(s)." % count
+	var several := several_colors(question)
+	if several:
+		# One to every colour line; the closing line is no colour.
+		entries = entries.slice(0, entries.size() - 1)
+		if picks.is_empty() or picks.size() > entries.size():
+			return "Choose one or more colours."
+	else:
+		var count := mini(question.count, entries.size()) if question.kind == PlayerChoice.Kind.DISCARD else 1
+		if picks.size() != count: return "Choose exactly %d option(s)." % count
 	var answers: Array = []
 	var seen := {}
 	for index in picks:
@@ -721,7 +744,11 @@ func answer(pid: int, picks: Array) -> String:
 		seen[int(index)] = true
 		answers.append(entries[int(index)].answer)
 	var error := ""
-	if question.kind == PlayerChoice.Kind.CARD and answers[0] is Dictionary:
+	if several:
+		var mask := 0
+		for color in answers: mask |= int(color)
+		error = game.answer_choice(mask)
+	elif question.kind == PlayerChoice.Kind.CARD and answers[0] is Dictionary:
 		error = _keep_order(pid, question)
 	else:
 		error = game.answer_choice(answers if question.kind == PlayerChoice.Kind.DISCARD else answers[0])

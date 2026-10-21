@@ -10,6 +10,11 @@ extends CardScript
 ## duel), then it swaps places with your library's top card: the ante card
 ## goes on top of your library, and that card goes into the ante. Casting
 ## it with an empty library does nothing but the ownership grab.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast: "Ante must be on for
+## Darkpact: this duel is not played for ante".
 
 
 func build() -> CardData:

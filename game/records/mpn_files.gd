@@ -25,7 +25,7 @@ static func choose(owner: Node, selected: Callable) -> void:
 	picker.popup_centered(Vector2i(700, 480))
 
 static func export_bytes(owner: Node, bytes: PackedByteArray, filename := "game.mpn") -> void:
-	var parsed := MpnCodec.parse(bytes.get_string_from_utf8())
+	var parsed := MpnCodec.parse_bytes(bytes)
 	if parsed.error != "":
 		UiChrome.explain_popup(owner, "Cannot export MPN", parsed.error)
 		return

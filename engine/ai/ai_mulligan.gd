@@ -106,9 +106,21 @@ static func reason(game: MtgGame, pid: int) -> String:
 		return "no land" if lands == 0 else "%d land in %d" % [lands, n]
 	if lands > int(range[1]):
 		return "all land" if lands == n else "%d lands in %d" % [lands, n]
-	if n >= 6 and not casts_a_spell(hand):
+	if n >= 6 and not casts_a_spell(_live(game, hand)):
 		return "the lands cast none of the spells"
 	return ""
+
+
+## [param hand] less the cards that do nothing in this duel — an ante card
+## when it is not played for ante ([method MtgGame.not_for_ante_refusal],
+## the owner's ruling of 2026-10-21). Three Swamps and Contract from Below
+## read as a hand that casts its spell (bug hunt 2026-10-21).
+static func _live(game: MtgGame, hand: Array[CardInstance]) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	for inst in hand:
+		if game.not_for_ante_refusal(inst) == "":
+			out.append(inst)
+	return out
 
 
 static func land_count(hand: Array[CardInstance]) -> int:
@@ -133,9 +145,16 @@ static func land_count(hand: Array[CardInstance]) -> int:
 ## speed (Pack 8's Lion's Eye Diamond: "Discard your hand, Sacrifice this
 ## artifact: ... Activate only as an instant") is no such land drop — the
 ## hand it is counted for is the price of the mana.
+##
+## Nor is one whose ARRIVAL has a price (bug hunt 2026-10-21, [member
+## CardData.entry_payment]): Mox Diamond enters only by discarding a land
+## card and is put into the graveyard otherwise, so it is no source in a
+## hand without a land and costs the land in a hand with one. Two of them
+## and five spells read as two sources, and the pilot kept a seven with no
+## mana in it.
 static func is_free_source(inst: CardInstance) -> bool:
 	if inst.is_land() or inst.data.cost.mana_value() != 0 \
-			or inst.data.mana_abilities.is_empty():
+			or inst.data.mana_abilities.is_empty() or inst.data.entry_payment.is_valid():
 		return false
 	for ability in inst.data.mana_abilities:
 		if ability.object_costs.is_empty() and not ability.instant_only:

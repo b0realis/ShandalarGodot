@@ -62,7 +62,11 @@ var answer: Variant = null
 ## player chose (a parked answer), false when a heuristic stood in.
 var answered_by_player := false
 
-## DISCARD only: how many cards were wanted.
+## DISCARD: how many cards were wanted. COLOR: how many colours the answer
+## may name — 0 for "a color" (one), 5 for "the color or colors of your
+## choice" (Dream Coat, Prismatic Lace, Shyft:
+## [method DecisionAgent.choose_color]'s `several`), answered as one
+## Mtg.ManaColor mask.
 var count := 0
 
 ## CARD and DISCARD: what there was to choose from — the searched library's

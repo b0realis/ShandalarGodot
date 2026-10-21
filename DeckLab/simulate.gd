@@ -3808,6 +3808,9 @@ static func parse_sweep(value: String) -> Dictionary:
 		if normalised == "":
 			return {"error": "--sweep %s: '%s' is not a %s" % [knob,
 				raw.strip_edges(), knob_type_name(knob_type)]}
+		var outside := knob_range_error(knob, normalised)
+		if outside != "":
+			return {"error": "--sweep %s" % outside}
 		if values.has(normalised):
 			return {"error": "--sweep %s: '%s' is listed twice" % [knob, normalised]}
 		values.append(normalised)
@@ -3834,10 +3837,36 @@ static func profile_overrides_error(preset: String, tail: String, spec: String) 
 		if knob == "profile_name" or knob.is_empty() or probe.get(knob) == null:
 			return "unknown knob '%s' in profile '%s'" % [knob, spec]
 		var knob_type := typeof(probe.get(knob))
-		if knob_value(knob_type, raw) == "":
+		var normalised := knob_value(knob_type, raw)
+		if normalised == "":
 			return "profile '%s': '%s' is not a %s (the knob %s takes one)" \
 				% [spec, raw, knob_type_name(knob_type), knob]
+		var outside := knob_range_error(knob, normalised)
+		if outside != "":
+			return "profile '%s': %s" % [spec, outside]
 	return probe.apply_overrides(tail)
+
+
+## THE KNOBS WITH A RANGE (bug hunt 2026-10-21): the two probabilities
+## [AiProfile] documents as "in [0, 1]". The name and the type were checked
+## (2026-09-26) and the range was not, so `wizard:mistake_chance=2` played a
+## pilot that fumbles every action and the settings line printed the 2 as
+## a setting.
+const KNOB_RANGES := {"mistake_chance": [0.0, 1.0], "aggression": [0.0, 1.0]}
+
+
+## What is wrong with [param normalised] (a [method knob_value]) as a value
+## of [param knob] — "" when it is in [constant KNOB_RANGES]' range or the
+## knob has none.
+static func knob_range_error(knob: String, normalised: String) -> String:
+	if not KNOB_RANGES.has(knob):
+		return ""
+	var bounds: Array = KNOB_RANGES[knob]
+	var value := normalised.to_float()
+	if value < float(bounds[0]) or value > float(bounds[1]):
+		return "%s takes a value from %s to %s, not %s" % [knob,
+			str(bounds[0]), str(bounds[1]), normalised]
+	return ""
 
 
 ## [param raw] as a value of a knob of [param knob_type], normalised —
@@ -3918,6 +3947,9 @@ static func sweep_options_error(opts: Dictionary) -> String:
 		if normalised == "":
 			return "--null: '%s' is not a %s" % [opts.sweep_null,
 				knob_type_name(int(sweep.type))]
+		var outside := knob_range_error(knob, normalised)
+		if outside != "":
+			return "--null: %s" % outside
 		opts.sweep_null = normalised
 	# AN EXPERIMENT NEVER RATES. `--no-elo` is accepted as well because it
 	# agrees; it is set here so the rest of the run needs no second rule.

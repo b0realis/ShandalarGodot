@@ -196,9 +196,13 @@ static func _crown(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int
 	choices.sort_custom(func(a: CardInstance, b: CardInstance) -> bool: return crown_value(g, aura, a, pid) > crown_value(g, aura, b, pid))
 	var pick := g.agents[pid].choose_card(g, pid, choices, "Crown of the Ages: attach the Aura to another creature")
 	if pick != null and choices.has(pick): g.move_aura(aura, pick)
+# Public facts only (the AI ranks hosts with it): a face-down host weighs
+# its mana value 0 (CR 708.2), never the card under the mask (bug hunt
+# 2026-10-21).
 static func crown_value(_g: MtgGame, aura: CardInstance, host: CardInstance, pid: int) -> float:
 	if host == null: return 0.0
-	var worth := float(maxi(1, host.cur_power) + maxi(1, host.cur_toughness) + host.data.cost.mana_value())
+	var worth := float(maxi(1, host.cur_power) + maxi(1, host.cur_toughness)
+		+ (0 if host.face_down else host.data.cost.mana_value()))
 	if aura.data.aura_steals: return worth if aura.controller_id == pid else -worth
 	var helpful := EffectIntent.aura_aim(aura.data) != EffectIntent.Aim.HOSTILE
 	return worth if (host.controller_id == pid) == helpful else -worth

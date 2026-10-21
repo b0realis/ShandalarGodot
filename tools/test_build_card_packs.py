@@ -553,5 +553,32 @@ class CacheOfflineBeatsForceTest(unittest.TestCase):
             self.assertEqual(cache.missing, [])
 
 
+
+class CacheCutFileTest(unittest.TestCase):
+    """A CUT CACHE FILE IS A MISS, NOT A CRASH (hunt 2026-10-21). The cache
+    was written in place, so a run killed mid-write left half a JSON file;
+    every later run then ended in a JSONDecodeError traceback (`--offline`
+    could never recover; only `--force` refetched)."""
+
+    def test_a_cut_cached_file_is_fetched_again_online_and_missing_offline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            online = bcp.Cache(out, offline=False, force=False)
+            online.dir.mkdir()
+            cut = online.dir / "tst.set.json"
+            cut.write_text('{"name": "Te', encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                got = online._get(cut, lambda: {"name": "Test Set"}, "set object tst")
+            self.assertEqual(got, {"name": "Test Set"})
+            self.assertEqual(json.loads(cut.read_text(encoding="utf-8")), {"name": "Test Set"})
+            self.assertEqual([p.name for p in online.dir.iterdir()], ["tst.set.json"],
+                             "no staging file is left beside it")
+            cut.write_text('{"name": "Te', encoding="utf-8")
+            offline = bcp.Cache(out, offline=True, force=False)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertIsNone(offline._get(cut, lambda: {}, "set object tst"))
+            self.assertEqual(offline.missing, ["set object tst"])
+
+
 if __name__ == "__main__":
     unittest.main()

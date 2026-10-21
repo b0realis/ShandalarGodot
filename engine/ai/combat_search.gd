@@ -252,6 +252,21 @@ var we_kill: PackedByteArray = PackedByteArray()
 ## their d kills our a in combat (row a, column d).
 var they_kill: PackedByteArray = PackedByteArray()
 
+## THE BLOCK COUNT (bug hunt 2026-10-21): the fewest and the most creatures
+## that may block each attacker, 0 for no bound — its
+## [member CardInstance.cur_min_blockers] ("can't be blocked except by two
+## or more"), its [member CardInstance.cur_max_blockers] (Stalking Tiger's
+## "by more than one") and the table's [member MtgGame.max_blockers]
+## (Caverns of Despair). A gang was drawn from per-pair legality alone, so
+## two Grizzly Bears were planned onto a Stalking Tiger and the
+## declaration's repair ([method CombatDeclaration.repair_blocks]) trimmed
+## it to the lone chump block the plan had priced worst. Empty arrays (a
+## model built by hand) bound nothing: [method gang_bounds].
+var a_min_blockers: PackedInt32Array = PackedInt32Array()
+var a_max_blockers: PackedInt32Array = PackedInt32Array()
+var d_min_blockers: PackedInt32Array = PackedInt32Array()
+var d_max_blockers: PackedInt32Array = PackedInt32Array()
+
 var my_life := 20
 var their_life := 20
 
@@ -268,6 +283,16 @@ var _m := 0   # theirs
 
 func size_ours() -> int:
 	return _n
+
+
+## `(fewest, most)` creatures that may block [param attacker] — ours when
+## [param ours_attacks], theirs otherwise; 0 for no bound (see
+## [member a_min_blockers]).
+func gang_bounds(attacker: int, ours_attacks: bool) -> Vector2i:
+	var lows := a_min_blockers if ours_attacks else d_min_blockers
+	var highs := a_max_blockers if ours_attacks else d_max_blockers
+	return Vector2i(lows[attacker] if attacker < lows.size() else 0,
+		highs[attacker] if attacker < highs.size() else 0)
 
 
 func size_theirs() -> int:
@@ -831,7 +856,7 @@ func _assign(swing: Array, index: int, free: Array, used: int,
 		if block_theirs[a * _m + d] == 0:
 			continue
 		legal.append(a)
-	for gang in _gangs_of(legal):
+	for gang in _gangs_of(legal, gang_bounds(d, false)):
 		var mask := 0
 		for a in gang:
 			mask |= 1 << a
@@ -856,16 +881,21 @@ func _assign(swing: Array, index: int, free: Array, used: int,
 ## [param legal] that could legally take it: each ONE of them first (which
 ## is the whole of the pre-2026-09-05 move list), then the gangs, smallest
 ## first. Deterministic — the pool is already in a fixed order and the
-## masks are walked ascending.
-func _gangs_of(legal: Array[int]) -> Array:
+## masks are walked ascending. [param bounds] is the attacker's [method
+## gang_bounds]: no block of fewer than `x` or more than `y` creatures.
+func _gangs_of(legal: Array[int], bounds := Vector2i.ZERO) -> Array:
 	var out: Array = []
-	for a in legal:
-		var one: Array[int] = [a]
-		out.append(one)
+	if bounds.x <= 1:
+		for a in legal:
+			var one: Array[int] = [a]
+			out.append(one)
 	if not gang_defence or legal.size() < 2:
 		return out
 	var pool: Array[int] = legal.slice(0, mini(legal.size(), GANG_POOL))
-	for size in range(2, mini(GANG_LIMIT, pool.size()) + 1):
+	var most := mini(GANG_LIMIT, pool.size())
+	if bounds.y > 0:
+		most = mini(most, bounds.y)
+	for size in range(maxi(2, bounds.x), most + 1):
 		for combo in 1 << pool.size():
 			var members: Array[int] = []
 			for i in pool.size():

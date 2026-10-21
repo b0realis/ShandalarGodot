@@ -8,8 +8,10 @@ extends CardScript
 ##
 ## Implementation: Clone's enters-as-a-copy replacement plus two riders.
 ## "Doesn't copy that creature's color" keeps the Doppelganger blue
-## (become_copy's keep_own_colors writes the old colours as an indefinite
-## colour override). "And it has this ability" is handled by adopting a
+## (become_copy's keep_own_colors writes its own copiable colour into the
+## values it adopts, CR 707.9b — so a colour painted on it ends with the
+## paint, and a Clone of its shape is blue too; bug hunt 2026-10-21).
+## "And it has this ability" is handled by adopting a
 ## SHALLOW COPY of the target's definition with the upkeep trigger appended
 ## — so every shape the Doppelganger takes can shift again next upkeep.
 ##
@@ -37,6 +39,15 @@ extends CardScript
 ## on resolution. The Doppelganger itself is no candidate: becoming a copy
 ## of itself changes nothing (and would stack a second copy of this
 ## ability onto the copied definition).
+##
+## A LEGEND IS A SHAPE THAT KILLS IT. Under the 1997 legend rule the
+## permanent that has been a legend of that name the SHORTEST time is
+## buried (MtgGame._newest_duplicate_legend, the owner's ruling of
+## 2026-10-21) — and a Doppelganger that becomes a copy of a legend in play
+## has been it for no time at all, so it is the one that goes, the original
+## stays. (Until that ruling the ORIGINAL was buried, by entry order.) So
+## the heuristic never shifts into a legend: such a shape sorts last and
+## the hint says no. The seat may still choose it.
 
 
 static func _any_creature(inst: CardInstance) -> bool:
@@ -64,11 +75,23 @@ static func _biggest_first(game: MtgGame, _source: CardInstance,
 		a: TargetRef, b: TargetRef) -> bool:
 	var ia := game.find_instance(a.instance_id)
 	var ib := game.find_instance(b.instance_id)
+	var la := _buries_the_copy(ia)
+	if la != _buries_the_copy(ib):
+		return not la   # a legend is the Doppelganger's grave, last
 	var va := ia.cur_power + ia.cur_toughness
 	var vb := ib.cur_power + ib.cur_toughness
 	if va != vb:
 		return va > vb
 	return ia.id < ib.id
+
+
+## Would becoming a copy of [param shape] bury the Doppelganger at once? A
+## legend in play is still there when the copy is made, so the copy is the
+## newer of two of that name (MtgGame._newest_duplicate_legend). A
+## face-down creature has no name and is no legend (CR 708.2).
+static func _buries_the_copy(shape: CardInstance) -> bool:
+	return shape != null and not shape.face_down \
+		and (shape.cur_supertypes & Mtg.Supertype.LEGENDARY) != 0
 
 
 ## "…and it has this ability": adopt the target's definition PLUS the
@@ -111,7 +134,7 @@ static func _shift(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 	# take (it was unreachable until 2026-09-17). The prompt names the shape
 	# as the stack line does (a face-down one stays nameless, CR 708.2).
 	var worth_it: bool = shape.cur_power + shape.cur_toughness \
-		> source.cur_power + source.cur_toughness
+		> source.cur_power + source.cur_toughness and not _buries_the_copy(shape)
 	if not game.agents[pid].choose_yes_no(game, pid,
 			"Have Vesuvan Doppelganger become a copy of %s?" % game.target_label(refs[0]),
 			worth_it):

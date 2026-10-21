@@ -797,7 +797,8 @@ index, x, mode, targets, exclude, until, view}` casts a spell (`kind:
 "spell"`, the default) or activates an ability (`"ability"`; `index`
 only when the card has several usable now) in one call: `prepare`,
 `autopay`, `submit`. `card` is the handle or the name (among several of
-one name, the untapped one first); `x` is required for an X cost and
+one name, the untapped one first); `x` is required for an X cost — a
+spell's, or an {X} in an ability's cost — and
 `mode` (index or label) for a modal spell — unset, the first mode the
 referee lists as castable now (`usable_modes`; 0 from a referee that
 does not say), and a mode not castable now is refused with the usable
@@ -818,8 +819,14 @@ half-announced cast. The refusal is `isError: true` with `cast`
 `refused` lines and the `decision` now pending. A question the payment
 asks (a colour) comes back `cast.result: "open"` with that decision:
 answer it with `referee_act`, then `referee_cast` the same card again
-(it resumes at the submission). A successful cast answers `cast.result:
-"cast"` with the targets as laid, and `until` passes on from there.
+(it resumes at the submission, with the first call's `targets` unless
+this one names others). A submission the referee has not answered yet
+(a table holding it while a seat reconnects) also comes back
+`cast.result: "open"`, with a note: `referee_wait` reads on, and a
+refusal that comes later leaves the announcement open
+(`referee_act {"op":"cancel"}` withdraws it). A successful cast answers
+`cast.result: "cast"` with the targets as laid, and `until` passes on
+from there.
 `referee_play_land {game, card, until, view}` plays a land by handle or
 name (unset: the first offered). `referee_act` takes the same as
 `{"op":"cast",...}` / `{"op":"activate",...}`, fills an op's missing
@@ -1030,7 +1037,7 @@ that would not write — the reason on stderr). No JSON envelope here yet.
 tool inside the game binary (what a release's `deck_lab.sh`,
 `auto_deck.sh`, `lab_query.sh` and `referee.sh` are), and
 `--verify-pack-1` … `--verify-pack-5`, `--verify-pack-8` and
-`--verify-pack-9`; the LAN protocol is 29 at 0.50.37 (`SgProtocol.VERSION`;
+`--verify-pack-9`; the LAN protocol is 30 at 0.50.44 (`SgProtocol.VERSION`;
 `docs/sgmanalink-*.md`). Headless soaks and audits live under `tools/*.gd`
 (`./duel_soak.sh --help`). `./run_tests.sh` is the gate:
 trust its exit code, not the printed tally.

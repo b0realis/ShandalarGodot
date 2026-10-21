@@ -6,6 +6,11 @@ extends CardScript
 ##
 ## Implementation: symmetric — the caster antes too. Turn order (caster
 ## first) only matters when a library is nearly empty.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21).
+## `MtgGame.not_for_ante_refusal` refuses the cast: "Ante must be on for
+## Demonic Attorney: this duel is not played for ante".
 
 
 func build() -> CardData:

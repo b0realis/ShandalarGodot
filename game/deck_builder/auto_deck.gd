@@ -495,6 +495,14 @@ func build() -> DeckModel:
 		rarity = RARITY_ANY
 	if not LAND_KINDS.has(land_kind):
 		land_kind = LANDS_CLASSIC
+	# The other two words too (hunt of 2026-10-21): a saved `lean` or
+	# `speed` of the right kind and the wrong word (a hand-edited
+	# settings.cfg) reached the tables keyed by them, and `Build me a deck`
+	# stopped on a script error with the window already gone.
+	if not LEANS.has(lean):
+		lean = LEAN_BALANCED
+	if not SPEEDS.has(speed):
+		speed = SPEED_MEDIUM
 	var out := DeckModel.new()
 	var limit := DeckModel.duplicates_allowed(size)
 	if limit <= 0:

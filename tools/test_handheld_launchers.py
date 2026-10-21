@@ -127,6 +127,23 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
         self.assertIn('unmount', self.events())
         self.assertEqual(self.events()[-1], 'finish')
 
+    def test_the_handheld_name_survives_a_sudo_that_resets_the_environment(self):
+        # HUNT 2026-10-21: the name was only EXPORTED, and the game is
+        # started through PortMaster's ESUDO — sudo's default env_reset
+        # drops what is merely exported, as the launcher already knows for
+        # XDG_DATA_HOME and the SDL setting, which it passes as arguments.
+        control = (self.pm / "control.txt").read_text().replace('ESUDO=""', 'ESUDO="sudo"')
+        (self.pm / "control.txt").write_text(control)
+        self.script(self.bin / "sudo", '''
+keep=(PATH="$PATH" HOME="$HOME")
+for v in $(compgen -e); do case "$v" in SG_TEST_*) keep+=("$v=${!v}");; esac; done
+exec env -i "${keep[@]}" "$@"
+''')
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, (self.game / "portmaster.log").read_text())
+        call = json.loads((self.root / "game-call.json").read_text())
+        self.assertEqual(call['handheld'], 'arkos', 'the handheld defaults (game/settings.gd)')
+
     def test_temporary_files_live_beside_the_game_not_on_the_system_drive(self):
         # An R36 Ultra with a full system partition: bash could not create the
         # temp file behind a here-string, control.txt came up half-read and the

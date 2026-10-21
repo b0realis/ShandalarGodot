@@ -7,6 +7,15 @@ extends CardScript
 ## creature paired with Abu Ja'far and destroying them with
 ## can_regenerate = false. A one-mana 0/1 that eats anything that touches
 ## it — the reason nobody ever attacked into it.
+##
+## A dead creature's combat entry stands until its own dies-trigger has
+## resolved (CombatState.forget), which is what this reads. "Blocking or
+## blocked by it" is BAND-WIDE (CR 702.22h): banded with a Benalish Hero,
+## Abu Ja'far is blocked by whatever blocks the Hero, and blocking one
+## member of a band it blocks them all. An attacker that has LEFT combat
+## (regenerated, removed) is no longer blocked by it (CR 506.4), though
+## the declaration still names it. Until the bug hunt of 2026-10-21 both
+## were read off the one creature each block was declared against.
 
 
 func build() -> CardData:
@@ -30,12 +39,15 @@ static func _curse(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 	var doomed: Array[int] = []
 	# Both directions, and every one of them: a creature may block more
 	# than one attacker (CR 509.1b), so "blocking or blocked by" is two
-	# lists rather than two comparisons.
-	for id in game.combat.attackers_blocked_by(source.id):
-		doomed.append(int(id))
-	for id in game.combat.blockers_of(source.id):
-		if not doomed.has(int(id)):
+	# lists rather than two comparisons — each band-wide, and only
+	# attackers still in combat.
+	for id in game.combat.opposing_attackers(source.id):
+		if game.combat.attackers.has(id):
 			doomed.append(int(id))
+	if game.combat.attackers.has(source.id):
+		for id in game.combat.blockers_of_band(game.combat.band_of(source.id)):
+			if not doomed.has(int(id)):
+				doomed.append(int(id))
 	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): "destroy all
 	# creatures blocking or blocked by it" is one triggered ability
 	# resolving, however many creatures it names. Nothing may return

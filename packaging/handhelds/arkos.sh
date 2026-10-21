@@ -146,10 +146,13 @@ sg_started=1
 # The unlikely VID/PID allowlist suppresses physical-pad input in Godot ONLY.
 # Otherwise A could both click (gptokeyb) and pass priority (native joypad).
 # Leave gptokeyb and Crusty's SDL input untouched; keyboard/mouse still work.
+# The handheld's name is an argument too, like XDG_DATA_HOME: ESUDO's sudo
+# resets the environment, and an export alone never reached the game
+# (hunt 2026-10-21).
 "${sg_privilege[@]}" env CRUSTY_SHOW_CURSOR=1 "$sg_weston/westonwrap.sh" \
     headless noop kiosk crusty_x11egl \
     XDG_DATA_HOME="$CONFDIR" XDG_CACHE_HOME="$CONFDIR/cache" \
-    SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0xffff/0xffff \
+    SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0xffff/0xffff SHANDALAR_HANDHELD=arkos \
     "$GAMEDIR/Shandalar.arm64" --display-driver x11 \
     --rendering-method gl_compatibility --rendering-driver opengl3_es \
     --audio-driver ALSA --resolution "${sg_width}x${sg_height}" --fullscreen --max-fps 30 "$@"

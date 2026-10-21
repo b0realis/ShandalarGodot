@@ -10,6 +10,11 @@ extends CardScript
 ## graveyard, so the opponent's stake is untouched. Because the Bird taps
 ## as a cost and antes as an effect, an opponent can respond to the
 ## activation, exactly as printed.
+##
+## Not played for ante, it does nothing: the first line is enforced by the
+## engine (the owner's ruling of 2026-10-21, `MtgGame.not_for_ante_refusal`
+## refuses the activation), and `MtgGame.move_to_ante` moves nothing in
+## such a duel — so "if you do" fails there and nothing is dumped or drawn.
 
 
 func build() -> CardData:
@@ -26,7 +31,10 @@ class BirdEffect extends EffectBase:
 		# and move_to_ante would lift it out of its phased-out state.
 		if not game.is_present(source):
 			return
-		game.move_to_ante(source)
+		# "If you do": the Bird must really have gone (not exiled instead,
+		# not in a duel without ante — MtgGame.move_to_ante says).
+		if not game.move_to_ante(source):
+			return
 		# "all other cards YOU OWN" — you is the ACTIVATOR, not the Bird's
 		# owner, and a card sits in the ante array of the player who owns
 		# it. A Bird an opponent has stolen dumps THEIR stake, not yours.

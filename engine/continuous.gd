@@ -1841,9 +1841,18 @@ func _graveyard_top_copies(game: MtgGame) -> void:
 		if wanted == values:
 			continue
 		wanted = game.licid_rewrite(inst, wanted)
+		# A new name or a new legendariness is a new legend from NOW for the
+		# 1997 legend rule (the owner's ruling of 2026-10-21, [method
+		# MtgGame.legend_since]): a Shapeshifter that takes the text of a
+		# legend already in play has been that legend the shorter time.
+		var renamed: bool = wanted.card_name != inst.data.card_name \
+			or (wanted.supertypes & Mtg.Supertype.LEGENDARY) \
+				!= (inst.data.supertypes & Mtg.Supertype.LEGENDARY)
 		if journal != null:
 			journal.record(inst, &"data", inst.data)
 		inst.data = wanted
+		if renamed:
+			game.note_identity_change(inst)
 		swapped = true
 		game.log_line("%s now has the text of %s" % [
 			inst.printed_data.card_name, wanted.card_name], inst)

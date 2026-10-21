@@ -898,6 +898,16 @@ func _on_game_over(winner_id: int) -> void:
 	# A held duel's `Quit ...?` is a question about a duel still running:
 	# the verdict answers it (review 2026-10-21, ui-1).
 	_cancel_leave()
+	# AND SO IS EVERYTHING ELSE IN HAND WHEN THE DUEL ENDED (hunt of
+	# 2026-10-21). A question held for this seat (Pause → Concede under
+	# it) stayed up and live — drawn over the End of Duel window, its keys
+	# taking Return and Esc from it, a click on a line resolving the held
+	# spell on a finished duel; an aim in progress kept its crosshair over
+	# the verdict; the Concede question waited for a Yes the engine refuses.
+	_close_choice_overlay()
+	if mode != Mode.NORMAL or _pending_card != null:
+		_clear_pending()
+	_cancel_concede()
 	# `@DIALOG_SHANDALARENDDUEL` has THREE lines, and the third one is the
 	# draw — which this used to fall through to `game.players[-1]` and
 	# announce as a win for seat 2 (found 2026-09-01 while building the
@@ -1113,8 +1123,10 @@ func next_draw_lines() -> PackedStringArray:
 		var library: Array = game.players[pid].library
 		if library.is_empty():
 			continue
-		var head := "Your next draw:" if _is_human(pid) \
-			else "%s next draw:" % game.players[pid].player_name
+		# Two seats at the one screen are both "you" (hunt of 2026-10-21):
+		# the hotseat window read "Your next draw:" twice over two cards.
+		var head := "Your next draw:" if _is_human(pid) and not _is_human(1 - pid) \
+			else "%s next draw:" % _seat_word(pid)
 		lines.append("%s\n%s" % [head, library[-1].data.card_name])
 	return lines
 
@@ -1264,9 +1276,18 @@ func _run_coin_toss(first: int) -> void:
 	if is_instance_valid(toss):
 		toss.queue_free()
 	_toss_overlay = null
+	# LEFT ON THE WAY (hunt of 2026-10-21): Pause → `Exit duel` or `Return
+	# to main menu` over the toss or the opening window changes the scene,
+	# which takes this screen out of the tree at once and frees it at the
+	# frame's end. The opening went on to start the duel, and the refresh
+	# below asked a tree that was no longer there for the AI's timer.
+	if not is_inside_tree():
+		return
 	# THE OPENING HAND (§1.5): play or draw, then the mulligans, and only
 	# then turn 1. The AI scheduler stays blocked until it is over.
 	await _run_opening_hand(first)
+	if not is_inside_tree():
+		return
 	_toss_active = false
 	_refresh()   # releases the AI scheduler
 
@@ -1316,7 +1337,9 @@ func _first_of(a: Signal, b: Signal) -> void:
 	var finish := func() -> void: done[0] = true
 	a.connect(finish, CONNECT_ONE_SHOT)
 	b.connect(finish, CONNECT_ONE_SHOT)
-	while not done[0]:
+	# Out of the tree there is no frame to wait on (Pause → `Exit duel`
+	# over the splash; hunt of 2026-10-21): the wait ends with the screen.
+	while not done[0] and is_inside_tree():
 		await get_tree().process_frame
 
 
@@ -1659,9 +1682,18 @@ func _on_card_clicked(inst: CardInstance) -> void:
 	# with when it comes back — instead of being refused deeper down in
 	# words about targets or abilities that would only puzzle.
 	if inst.zone == Mtg.Zone.BATTLEFIELD and inst.phased_out:
+		# FACE DOWN, IT STAYS A SECRET (hunt of 2026-10-21): this branch
+		# comes before every other, so a click on a phased-out Illusionary
+		# Mask creature filled the Showcase with the card and named it on
+		# the bar — what the hover, the card menu and the piles all keep.
 		if _card_preview != null:
-			_card_preview.show_card(inst)
-		_report("%s is phased out. %s." % [inst.data.card_name,
+			if inst.face_down:
+				_card_preview.show_back()
+			else:
+				_card_preview.show_card(inst)
+		_report("%s is phased out. %s." % [
+			MtgGame.FACE_DOWN_NAME.left(1).to_upper() + MtgGame.FACE_DOWN_NAME.substr(1) \
+				if inst.face_down else inst.data.card_name,
 			MiniCard.phase_note(game, inst)])
 		return
 	match mode:
@@ -4699,7 +4731,8 @@ func _maybe_schedule_ai() -> void:
 	# window is up, and [method _ai_step] refuses an already-armed one, so
 	# a player who walks away does not come back to three lost turns.
 	if _ai_pending or _toss_active or is_paused() or _fullscreen_card_open() \
-			or mini_help_open() or _ai_seat_to_act() == -1:   # f-minihelp
+			or mini_help_open() or _ai_seat_to_act() == -1 \
+			or not is_inside_tree():   # f-minihelp; a screen on its way out ([method _refresh])
 		return
 	_ai_pending = true
 	var mine := _humans.has(game.active_player)
@@ -4826,6 +4859,21 @@ const COLOR_CHOICES := [
 	Mtg.ManaColor.R, Mtg.ManaColor.G,
 ]
 
+## "THE COLOR OR COLORS OF YOUR CHOICE" (Dream Coat, Prismatic Lace,
+## Shyft; hunt of 2026-10-21). A colour question whose [member
+## PlayerChoice.count] is above 1 may be answered with several colours:
+## each line ticks or unticks one, the discard window's way, and this last
+## line answers with every colour ticked — a colour MASK, which
+## [method MtgGame.set_color] takes and [method HumanAgent.answer_color]
+## passes on as it is. A question for one colour is answered by its click.
+const COLORS_DONE := "Done."
+
+
+## May [param choice] be answered with several colours ([constant
+## COLORS_DONE])?
+static func choice_takes_colors(choice: PlayerChoice) -> bool:
+	return choice.kind == PlayerChoice.Kind.COLOR and choice.count > 1
+
 
 ## The colours [param choice] actually offers, in the order the lines list
 ## them. Every question asked inside a resolution offers all five; a mana
@@ -4849,6 +4897,8 @@ static func choice_options(choice: PlayerChoice, decline := "Cancel.") -> Array:
 			var colors: Array = []
 			for flag in choice_colors(choice):
 				colors.append(Mtg.COLOR_NAMES[flag])
+			if choice_takes_colors(choice):
+				colors.append(COLORS_DONE)
 			return colors
 		PlayerChoice.Kind.CARD:
 			var names: Array = []
@@ -4996,7 +5046,9 @@ static func choice_line_for_digit(choice: PlayerChoice, digit: int) -> int:
 ## Open the overlay for whatever the engine is holding open. Idempotent —
 ## _refresh calls it on every state change.
 func _open_choice_overlay() -> void:
-	if _choice_overlay != null or game.awaiting_choice == null:
+	# Never over a finished duel ([method _on_game_over]): a question the
+	# engine still holds then is about a duel nobody plays on.
+	if _choice_overlay != null or game.awaiting_choice == null or game.game_over:
 		return
 	if config.private_hotseat() and not _hotseat_revealed:
 		return
@@ -5024,6 +5076,13 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 	_choice_overlay = scrim
 
 	var dialog := OriginalDialog.create("", Vector2(552, 402), "big_card_panel")
+	# THE SCRIM CARRIES THE QUESTION'S Z (hunt of 2026-10-21). A z is
+	# relative to the parent's, so the dialog's own 200 put the question
+	# at 390: drawn over the Pause window (270), the leave question and the
+	# End of Duel window, while those — later in the tree — took the
+	# clicks. The player saw the question and clicked its lines; the hidden
+	# Pause window's buttons under them answered (Exit game among them).
+	dialog.z_index = 0
 	scrim.add_child(dialog)
 	# The REASON'S CARD, left — s30 draws `req.Reason`'s image and so do we.
 	var asking := _choice_source_card(choice)
@@ -5190,7 +5249,7 @@ func _close_choice_overlay() -> void:
 
 ## One option clicked (or its number key pressed).
 func _on_choice_option(index: int) -> void:
-	if game.awaiting_choice == null:
+	if game.awaiting_choice == null or game.game_over:
 		return
 	var choice: PlayerChoice = game.awaiting_choice
 	var labels := choice_options(choice)
@@ -5202,7 +5261,22 @@ func _on_choice_option(index: int) -> void:
 		PlayerChoice.Kind.OPTION:
 			_answer_choice(index)   # the answer IS the index
 		PlayerChoice.Kind.COLOR:
-			_answer_choice(choice_colors(choice)[index])
+			if not choice_takes_colors(choice):
+				_answer_choice(choice_colors(choice)[index])
+			elif index < labels.size() - 1:
+				# A colour line ticks or unticks ([constant COLORS_DONE]).
+				if _choice_picks.has(index):
+					_choice_picks.remove_at(_choice_picks.find(index))
+				elif _choice_picks.size() < choice.count:
+					_choice_picks.append(index)
+				_close_choice_overlay()
+				_build_choice_overlay(choice)
+			elif not _choice_picks.is_empty():
+				var mask := 0
+				var flags := choice_colors(choice)
+				for i in _choice_picks:
+					mask |= int(flags[i])
+				_answer_choice(mask)
 		PlayerChoice.Kind.CARD:
 			var lines := choice_card_lines(choice)
 			# The trailing `Cancel.` is the legal "fail to find".
@@ -7065,7 +7139,12 @@ func _drop_cast_for_declaration() -> void:
 
 
 func _refresh() -> void:
-	if game == null or _hotseat_passing:
+	# OUT OF THE TREE, NOTHING TO DRAW AND NO CLOCK (hunt of 2026-10-21): a
+	# scene change takes this screen out at once and frees it at the end
+	# of the frame, and a refresh deferred to that frame's end (the Done
+	# driver's, the AI's last act) ran in between — its widgets asked for
+	# a viewport they no longer had and the AI's dwell for a missing tree.
+	if game == null or _hotseat_passing or not is_inside_tree():
 		return
 	# campaign 2026-10-12 f-duel (r1-1): this redraw reads the engine as it
 	# stands now, so an end-of-frame redraw already asked for is not needed
@@ -8760,6 +8839,12 @@ func _ask_to_leave(to_menu := false) -> void:
 			return
 		_cancel_leave()
 	_leave_to_menu = to_menu
+	# THE SPLASH'S FIVE SECONDS STOP whichever door asked (hunt of
+	# 2026-10-21): only the splash's own button stopped them, so Pause →
+	# `Exit duel` or `Return to main menu` over the splash asked, and at
+	# zero its `Go!` answered the question no and tossed the coin.
+	if _intro_overlay != null and is_instance_valid(_intro_overlay):
+		_intro_overlay.set_process(false)
 	var dialog := OriginalDialog.create(leave_title, Vector2(400, 180),
 		"panel_dark_stone")
 	dialog.z_index = LEAVE_Z
@@ -9011,9 +9096,20 @@ func _on_library_menu_chosen(id: int) -> void:
 	var pid := int(_library_menu.get_meta("pid", _human_seat()))
 	# `@CUECARD_OTHER` (`UIStrings.txt:673`) is where the two libraries get
 	# their names: `Your library` and `%s library`.
-	var whose := "Your library" if pid == _human_seat() \
-		else "%s library" % game.players[pid].player_name
+	# NOT "Your" AT A PRIVATE HOTSEAT (hunt of 2026-10-21), where
+	# [method _human_seat] is seat 0 whoever holds the screen: Player 2
+	# was told Player 1's library was theirs. The graveyard plate's rule.
+	var whose := "Your library" if pid == _human_seat() and not config.private_hotseat() \
+		else "%s library" % _seat_word(pid)
 	_note("%s: %d cards" % [whose, game.players[pid].library.size()])   # held (b6-9)
+
+
+## A seat by name where "you" will not do: its seat label at a private
+## hotseat (the End of Duel verdict's), its player's name anywhere else.
+func _seat_word(pid: int) -> String:
+	if config != null and config.private_hotseat():
+		return DuelConfig.seat_label(pid)
+	return game.players[pid].player_name
 
 
 ## A right-click on a hand WINDOW (not on a card in it — a card has its
@@ -9573,6 +9669,17 @@ func _rebuild_field(pid: int) -> void:
 		for inst in cards_in_row:
 			if not _text_change_ghost_data(inst).is_empty():
 				headroom = maxf(headroom, AURA_PEEK.y * _fan_steps(inst))
+	# ...AND SO CAN A REAL AURA'S (hunt of 2026-10-21): Wild Growth or
+	# Psychic Venom on a land lost 12 of its band's 18 px to the clip, in
+	# either half, and the Aura's name with them. The first row holding
+	# anything is the one at the top edge; the creatures' row below the
+	# spacer overflows into empty board and needs nothing.
+	for row in [Row.LANDS, Row.OTHER]:
+		if (by_row[row] as Array).is_empty():
+			continue
+		for inst in by_row[row]:
+			headroom = maxf(headroom, AURA_PEEK.y * _fan_steps(inst))
+		break
 	_half_rows[pid].offset_top = BOARD_INSET_V + headroom
 	for row in by_row:
 		var container: Container = _field_rows[pid][row]
@@ -9682,6 +9789,7 @@ func _flush_pile(container: Container, cards: Array) -> void:
 		return
 	var pile := CardPile.new()
 	pile.preview = _card_preview
+	pile.game = game     # the faces' Winter Orb and `Is a target` (hunt of 2026-10-21)
 	pile.framed = true   # the original's tan window border
 	# A permanent in a pile carries the same "you may act on this" ring an
 	# unpiled one does — and while a cast waits for its mana that ring IS
@@ -10270,6 +10378,14 @@ func _on_piled_card_input(event: InputEvent, holder: Control,
 		accept_event()
 
 
+## The node a drag of [param w] carries: the child of the row or the free
+## layer that [param w] sits in — the card itself, its tap holder, or its
+## Aura fan's wrap. NULL for a card that is not on the table at all (hunt
+## of 2026-10-21): an ability's card on the chain stands for its source
+## permanent, a card in the Combat window for its creature, and handing
+## back [param w] there let a 5 px slip of a click on one write a table
+## placement for that permanent — the Sorcerer whose ping was being
+## clicked jumped to where the chain card was let go.
 func _layout_root(w: Control) -> Control:
 	var node: Control = w
 	while node.get_parent() is Control:
@@ -10277,7 +10393,7 @@ func _layout_root(w: Control) -> Control:
 		if parent is SqueezeRow or _free_layers.has(parent):
 			return node
 		node = parent
-	return w
+	return null
 
 
 ## Which board half [param inst] is drawn in, or -1.
@@ -10295,7 +10411,19 @@ func _half_of(inst: CardInstance) -> int:
 ## pointer travels [constant DRAG_SLOP] this is still an ordinary click.
 ## [param at] is where the press landed, from the press's own event.
 func _begin_drag(w: MiniCard, inst: CardInstance, at: Vector2) -> void:
-	_begin_drag_node(_layout_root(w), inst, at)
+	# AN ATTACHMENT MOVES ITS HOST (hunt of 2026-10-21). An Aura's band is
+	# drawn in its host's fan, so the root is the host's wrap and the host
+	# is what the player carries — but the drop was written for the Aura,
+	# which the free layer never draws, and the stack snapped back.
+	var host := inst
+	for _guard in 8:
+		if game == null or host.attached_to == -1:
+			break
+		var under: CardInstance = game.find_instance(host.attached_to)
+		if under == null:
+			break
+		host = under
+	_begin_drag_node(_layout_root(w), host, at)
 
 
 ## The same gesture, armed on a node the caller has already chosen. A card

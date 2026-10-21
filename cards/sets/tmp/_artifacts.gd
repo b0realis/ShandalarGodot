@@ -366,12 +366,14 @@ class Scroll extends DamageEffect:
 # ------------------------------------------------------------- Echo Chamber --
 
 ## The CHOOSER's order (the opponent's point of view): the body they would
-## miss least first.
+## miss least first. Public facts only — the caster's computer reads this
+## order to foresee the pick — so a face-down body weighs its mana value 0
+## (CR 708.2), never the card under the mask (bug hunt 2026-10-21).
 static func _weakest_first(g: MtgGame, _s: CardInstance, a: TargetRef, b: TargetRef) -> bool:
 	var ia := g.find_instance(a.instance_id)
 	var ib := g.find_instance(b.instance_id)
-	var va := ia.cur_power + ia.cur_toughness + ia.data.cost.mana_value()
-	var vb := ib.cur_power + ib.cur_toughness + ib.data.cost.mana_value()
+	var va := ia.cur_power + ia.cur_toughness + (0 if ia.face_down else ia.data.cost.mana_value())
+	var vb := ib.cur_power + ib.cur_toughness + (0 if ib.face_down else ib.data.cost.mana_value())
 	if va != vb: return va < vb
 	return ia.id < ib.id
 

@@ -474,7 +474,13 @@ class Cache:
         # offline line below then refused — reported missing, packed
         # without.
         if path.exists() and (self.offline or not self.force):
-            return path.read_bytes() if binary else json.loads(path.read_text(encoding="utf-8"))
+            # A CUT FILE IS A MISS (hunt 2026-10-21): half a JSON file from
+            # a killed run was a traceback on every later run, `--offline`
+            # included. Online it is fetched again, offline reported.
+            try:
+                return path.read_bytes() if binary else json.loads(path.read_text(encoding="utf-8"))
+            except (ValueError, UnicodeDecodeError) as e:
+                print(f"WARN: {label}: the cached copy is unreadable ({e})")
         if self.offline:
             self.missing.append(label)
             return None
@@ -485,11 +491,15 @@ class Cache:
             self.missing.append(label)
             return None
         self.dir.mkdir(parents=True, exist_ok=True)
+        # Beside it first, then in its place: a run killed mid-write leaves
+        # the earlier copy (or none), never half of one.
+        part = path.with_name(path.name + ".part")
         if binary:
-            path.write_bytes(data)
+            part.write_bytes(data)
         else:
-            path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n",
+            part.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n",
                             encoding="utf-8")
+        part.replace(path)
         self.fetched.append(label)
         return data
 
