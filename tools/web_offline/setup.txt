@@ -1,0 +1,101 @@
+SHANDALAR — OFFLINE WEB / DEVICE OS
+=====================================================================
+
+The original game opens directly. There is no extra start screen, update
+button or change to gameplay. A small service worker saves the game in the
+background so this address can be opened again without a connection.
+
+This is the SINGLE-THREADED Web release. Its engine JavaScript, Wasm,
+game pack and optional original skin are unchanged. Your device OS needs
+a browser with WebAssembly, WebGL 2.0 and service-worker storage support.
+No special COOP/COEP headers, app-store or developer account is required.
+Performance, storage and installation behaviour need testing on your device.
+
+FIRST SETUP
+
+1. Open the host's HTTPS address in your browser. A GitHub release ZIP is
+   a download, not a playable website. Opening index.html from Files does
+   not work. HTTP on another computer's LAN IP cannot install offline
+   support; localhost is an exception only on the device running the server.
+2. Choose Install app or Add to Home Screen if your browser offers it;
+   enable Open as Web App if shown. Open that icon while still connected.
+   Otherwise bookmark the address and keep using that same browser.
+3. The game opens as usual. Leave it open and connected for the background
+   download to finish: about 50 MiB plain, or 131 MiB with the original
+   skin, plus your own imported artwork. Allow a few minutes on a slow
+   connection. THE TITLE SCREEN APPEARING DOES NOT MEAN CACHING IS FINISHED.
+4. Import your own card artwork in Options > Skin > Choose. Wait for the
+   import and any requested restart to finish. Card pictures are NOT
+   supplied. This version's Web picker imports skins and card artwork,
+   not numbered expansion packs: this package plays the 897-card core.
+5. Close all game windows, disconnect (or use airplane mode), and reopen
+   from the icon/bookmark. Confirm the title, your skin/art and a new duel
+   load. This cold-start check is the reliable proof that YOUR device OS
+   kept everything. If it fails, reconnect, reopen and allow more time.
+
+There are no additional on-screen indicators. A host using developer tools
+can inspect window.shandalarOffline.state: "ready" means all expected game
+files are cached; "waiting" means a new version is downloaded but an old
+window still holds the previous version. The console also reports these.
+
+Tap clicks; hold then release is right-click. Touch controls are in
+Options > Display. Play in landscape. Tap the large card for a full-screen
+view. After complete setup, no other computer or server must stay on.
+An in-progress duel is not saved when the app closes. The Web version
+cannot host or join SGManalink LAN games or run the Deck Lab CLI.
+
+STORAGE AND UPDATES
+
+Your device OS/browser keeps this data for this site's address and app
+context. Import art in the installed app you intend to use, not only in
+a separate browser tab. Avoid Private Browsing. Export important decks
+and keep the original art ZIPs. Clearing website data removes them; low
+storage can also cause eviction. A Home Screen icon is not a backup.
+
+Updates come from THE WEBSITE HOSTING THIS COPY, not from GitHub. When
+you open the game connected, the browser checks that host in the
+background. If the host has deployed a changed offline package, its files
+are downloaded and checked separately. An incomplete or corrupt download
+does not replace a working version. Close ALL game windows after your
+duel, then reopen to activate a downloaded update. Nothing forces a reload
+or interrupts play. It does not install an update just because a new
+GitHub release exists, and it cannot fetch updates while disconnected.
+
+Missing cached files are repaired from the same host when possible. If
+that host now has a different version, reconnect, leave the page open for
+its download, close every game window and reopen. Updates/repairs never
+delete the game's stored decks, settings or imported art. If the device OS
+removed those separate saved files, restore them from your own copies.
+
+FOR THE HOST
+
+Serve the entire extracted folder at one stable HTTPS address, preferably
+in its own subfolder. This is a static site: no database, login or ranking
+server is needed. Downloading this ZIP does not create a public website.
+Use application/wasm for .wasm, application/javascript for .js, and
+application/manifest+json for .webmanifest. Do not rewrite missing files
+to index.html. Serve offline-sw.js with Cache-Control: no-cache. Keep all
+files on one origin, with no cross-origin redirects or threaded engine.
+For testing on the SAME computer only:
+
+    python3 -m http.server 8000
+    visit http://localhost:8000/
+
+If you change hosted files, refresh their metadata before deploying:
+
+    python3 tools/package_web_offline.py --refresh .
+
+This adds only manifest/registration tags to the game's existing HTML,
+then updates the worker and checksums. The cache version is derived from
+runtime content, never a private machine path or timestamp. Deploy every
+file together. Keep the same website address to retain player storage.
+Use a separate folder from ordinary Web/threaded Web deployments.
+
+A changed skin/original_skin.zip is included in the refreshed offline
+cache. On a PRIVATE host only, skin/cardart.zip can also be added and
+refreshed; never distribute personal card art or numbered-pack ZIPs.
+Numbered packs are not scanned from server folders; their Web import needs
+separate game support. Imported skins/art persist in the game's own storage.
+
+The packager and background support source ship in tools/ (GPL-3.0).
+README.txt identifies the original game source commit and input ZIP hash.

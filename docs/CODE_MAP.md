@@ -1,5 +1,16 @@
 # Code Map
 
+## Experimental Android target (2026-10-21)
+
+- `packaging/android/export-preset.cfg`: standalone ARM64 phone/tablet preset,
+  separate package identity from Quest; also bundled with Android downloads.
+- `tools/build_android.py`: bounded signed release export and APK identity,
+  permissions, ABI, 16 KiB alignment, signature and private-path gates.
+- `tools/test_build_android.py`: offline regressions for the target gate.
+- `docs/android-experimental.md`: installation, support limits and build recipe.
+- `tools/package_release.py`: `android-arm64-experimental` plain/skin ZIPs.
+- `docs/releases/0.50.41.md`: Android and offline-Web packaging changes.
+
 Portal starter regression: `tests/ui/test_portal_starters.gd` pins the two
 35-card lists, exact 40-card additions, pack/printing metadata, selectors,
 small-library engine behavior and Help fallback with Portal disabled.
@@ -4196,6 +4207,20 @@ Registry membership/printing APIs include enabled extras without changing the
 base `SET_ORDER`. Saved decks remain name-based and record required pack ids.
 
 ## Release packaging (0.20.0)
+
+- `tools/package_web_offline.py`: wraps an already verified single-threaded
+  release ZIP without changing the engine, scripts or game pack; verifies
+  the input checksums, creates offline cache metadata and new package sums.
+  `tools/web_offline/background.js`, `service-worker.js` and `setup.txt`
+  supply quiet registration, a scoped/versioned offline cache, HEAD support
+  for skins, repair and non-interrupting updates. The original game opens
+  directly; installation instructions stay in a text file, not an extra menu.
+  `tools/web_offline/sha256.js` validates streamed files without buffering
+  entire skin archives in JavaScript memory.
+- `tools/test_package_web_offline.py`: offline package provenance, checksum,
+  safe-input and cache-version regressions.
+- `tools/test_web_offline.cjs`: browser regressions for offline launches,
+  interrupted installations, updates, repair and cache isolation.
 
 Web startup and dual exports (0.50.14): `CardRegistry.load_in_background`
 falls back to a complete foreground pool without thread support or on Web;

@@ -61,6 +61,7 @@ class PackageReleaseTest(unittest.TestCase):
         family = {"steam-deck": "linux64", "arkos-rk3326-experimental":
                   "raspberry-pi5-arm64"}.get(family, family)
         names = {
+            "android-arm64-experimental": ("Shandalar.apk",),
             "meta-quest": ("Shandalar.apk",),
             "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
             "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),
@@ -186,8 +187,15 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn("--rendering-driver opengl3_es", launcher)
                             self.assertIn("--max-fps 60", launcher)
                         if platform in pack.HANDHELD_FILES:
-                            self.assertIn(prefix + "HANDHELD.md", entries)
-                            self.assertIn("hardware", readme)
+                            guide = "ANDROID.md" if platform == "android-arm64-experimental" else "HANDHELD.md"
+                            self.assertIn(prefix + guide, entries)
+                            self.assertTrue("hardware" in readme or "Physical-device" in readme)
+                        if platform == "android-arm64-experimental":
+                            self.assertIn("EXPERIMENTAL Android ARM64", readme)
+                            self.assertIn("APK alone does not install", readme)
+                            self.assertIn(prefix + "android-export-preset.cfg", entries)
+                            self.assertNotIn(prefix + "push_to_quest.sh", entries)
+                            self.assertNotIn(prefix + "run.sh", entries)
                         if platform == "steam-deck":
                             launcher = archive.read(prefix + "run.sh").decode()
                             self.assertIn("--resolution 1280x800", launcher)

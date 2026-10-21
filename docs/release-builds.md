@@ -1,5 +1,16 @@
 # Cross-platform release packages
 
+## Experimental Android ARM64
+
+The separate phone/tablet target uses the `Android Experimental` preset,
+`tools/build_android.py` and packager platform `android-arm64-experimental`.
+See [android-experimental.md](android-experimental.md) for the complete
+recipe and support boundary. It does not replace or modify Meta Quest.
+The preset is also kept in `packaging/android/export-preset.cfg` for release
+archives. No Play Store upload is part of this workflow.
+
+## Existing targets
+
 Release packaging does not change the duel layout or rules. Godot 4.7.2
 can cross-export the eight local test targets (Android Quest the eighth); verify the official template archive's
 checksum and extract only the needed templates. Set local custom-template

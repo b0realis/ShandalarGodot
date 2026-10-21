@@ -28,13 +28,16 @@ import pack_1_dotp_complete as pack_one
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
              "raspberry-pi5-arm64", "steam-deck", "arkos-rk3326-experimental", "web",
-             "meta-quest", "web-threaded")
+             "meta-quest", "web-threaded", "android-arm64-experimental")
 WEB_PLATFORMS = ("web", "web-threaded")
 MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64",
                   "steam-deck": "Shandalar.x86_64",
                   "arkos-rk3326-experimental": "Shandalar.arm64"}
 HANDHELD_FILES = {
+    "android-arm64-experimental": {
+        "ANDROID.md": "docs/android-experimental.md",
+        "android-export-preset.cfg": "packaging/android/export-preset.cfg"},
     "steam-deck": {"run.sh": "packaging/handhelds/steam-deck.sh",
                    "HANDHELD.md": "docs/handhelds.md"},
     "arkos-rk3326-experimental": {
@@ -137,9 +140,11 @@ START = {
              "macOS may require explicit approval to open a downloaded app.\n"
              "Only approve software you trust; do not disable system-wide security.\n"
              "Keep skin/ BESIDE Shandalar.app, never inside its signed Contents.",
-    "web": "Web: serve this folder over HTTP(S), not file://. For a local server:\n"
+    "web": "Web: serve this folder over HTTPS (or localhost), not file://.\n"
+           "For a local server on the SAME device:\n"
            "    python3 -m http.server 8000\n"
            "Then open http://localhost:8000/. No COOP/COEP headers are required.\n"
+           "Other devices need HTTPS, including over a local network.\n"
            "Browser storage belongs to this site's address. Export important decks\n"
            "before clearing it. The web build has no command-line Deck Lab.",
 }
@@ -204,6 +209,15 @@ START["meta-quest"] = (
     "The controller's pointer is the mouse and the trigger clicks. See HANDHELD.md.\n"
     "Local test package, not hardware-validated or store-reviewed.")
 
+START["android-arm64-experimental"] = (
+    "EXPERIMENTAL Android ARM64: Android 10+ recommended, 64-bit OS, OpenGL ES 3.\n"
+    "Extract this ZIP and install Shandalar.apk; open Shandalar (Experimental).\n"
+    "Separate from Quest; no Play Store. Physical-device compatibility is unproven.\n"
+    "See ANDROID.md for installation, controls, updates and the build recipe.\n"
+    "The skin ZIP is imported separately through Options > Skin; installing the\n"
+    "APK alone does not install it. Card pictures/packs are not included.\n"
+    "Back up decks before updating. Do not uninstall first: that can erase saves.")
+
 def digest(path: Path) -> str:
     result = hashlib.sha256()
     with path.open("rb") as source:
@@ -241,6 +255,7 @@ def payload(folder: Path, platform: str) -> dict[str, Path]:
     elif platform == "arkos-rk3326-experimental":
         family = "raspberry-pi5-arm64"
     required = {
+        "android-arm64-experimental": ("Shandalar.apk",),
         "meta-quest": ("Shandalar.apk",),
         "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
         "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),

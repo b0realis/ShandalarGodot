@@ -6,16 +6,27 @@ beside it. A browser plays it FROM A WEB SERVER, not from the folder —
 a .wasm opened as a file is refused by every browser. Choose the variant
 that fits your host:
 
-  - web: single-threaded, no special headers; any static HTTP(S) server.
+  - web: single-threaded, no special headers; HTTPS (or localhost).
   - web-threaded: threaded engine, HTTPS and isolation headers required.
+  - web-offline: the original single-threaded game with background caching;
+    Your device OS/browser needs HTTPS (except localhost).
+    Follow OFFLINE-SETUP.txt in that package.
+    Leave the first load connected to finish caching, then test a cold
+    start disconnected. No extra start screen or update button is added.
+    An ordinary web ZIP does not install an offline app.
 
-Both variants load startup card/screen resources on the browser's main
+Both engine variants load startup card/screen resources on the browser's main
 thread for reliable packed-file access.
 
-For the ordinary web package, Python's standard server is enough:
+For the ordinary web package on the SAME device, Python's standard server
+is enough:
 
     python3 -m http.server 8000        (in this folder; then open
                                         http://localhost:8000/)
+
+To play from another device, use HTTPS. An ordinary HTTP address on your
+local network is not localhost for that other device. Both engine variants
+need a secure browser context; only web-threaded also needs isolation headers.
 
 For web-threaded, send these HTTP response headers on the page and assets:
 
