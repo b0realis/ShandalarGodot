@@ -222,7 +222,10 @@ func test_the_options_row_flips_the_readout_to_custom_and_back() -> void:
 		var node: Node = stack.pop_back()
 		if node is CheckButton and node.text == "Forced sacrifices wait on the chain":
 			row = node
-		elif node is OptionButton and node.item_count == RulesOptions.PRESETS.size() + 1:
+		elif node is OptionButton and node.item_count == RulesOptions.PRESETS.size() + 1 \
+				and node.get_item_text(node.item_count - 1) == RulesOptions.CUSTOM_LABEL:
+			# Not by its size alone: the Situation Bar frame list
+			# (0.50.40) has four rows too.
 			preset = node
 		stack.append_array(node.get_children())
 	assert_not_null(row, "the Options row")

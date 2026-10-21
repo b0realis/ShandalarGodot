@@ -94,6 +94,38 @@ zip>` (`--reuse` takes each 2x picture that still matches instead of
 upscaling it again). Check it with `tools/skin_catalogue.py --check`, add
 its line to `SHA256SUMS`, and upload it from the machine that made the skin.
 
+## The offline Web package
+
+The optional offline Web ZIPs are made from the two single-threaded Web
+packages above — never from an export, and never from `web-threaded`
+(the packager refuses a threaded page or engine):
+
+```sh
+python3 tools/package_web_offline.py --input DOWNLOADS/Shandalar-X.Y.Z-web.zip --out DOWNLOADS
+python3 tools/package_web_offline.py --input DOWNLOADS/Shandalar-X.Y.Z-web-with-skin.zip --out DOWNLOADS
+```
+
+They are `Shandalar-X.Y.Z-web-offline.zip` and
+`Shandalar-X.Y.Z-web-offline-with-skin.zip`: the game's files byte for byte,
+plus the background service worker, its manifest and `OFFLINE-SETUP.txt`.
+Before they are published, run the service worker's browser regressions —
+update, repair, an interrupted install — and a cold offline start of the
+real package. They need Node, the `playwright` npm package and Chrome
+(`--channel chromium` uses the Chromium that `npx playwright install
+chromium` fetches instead); the gate's `web-offline` job runs the first line
+on every push with the Node and Playwright versions pinned there:
+
+```sh
+node tools/test_web_offline.cjs
+node tools/test_web_offline.cjs --game-dir EXTRACTED_WEB_OFFLINE_FOLDER --output SCRATCH_FOLDER
+```
+
+Both must end `ALL OFFLINE WEB CHECKS PASSED`; the second leaves its
+title and duel screenshots in the scratch folder (outside the tree) to be
+looked at. Add the two ZIPs to `SHA256SUMS`, the upload list and the
+release notes' download list like any other package; they are published
+only with the rest of the release, on the owner's word.
+
 The seven-target local matrix consists of fourteen game ZIPs, the same
 `original_skin.zip` as a separate download, and `SHA256SUMS` covering those
 fifteen assets. Each handheld target below adds two more game ZIPs (plain

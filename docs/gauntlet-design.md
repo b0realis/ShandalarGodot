@@ -1163,3 +1163,35 @@ roster handed in explicitly is taken as given, so the per-round check
 still runs and its four messages are still reachable. The `Your deck`
 picker on the options window carries a heading per provenance group, as
 the setup screen's does. Pinned in `tests/unit/test_decks_1997.gd`.
+
+---
+
+## 13. Leaving from inside a duel (2026-10-21, the review)
+
+The duel screen did not know who held it. Its pre-duel splash always
+offered `Reconfigure duel`, and that button and Pause → `Exit duel` both
+changed the scene to the battle-setup screen — so one click on a round's
+five-second splash ended the run (there is no save, §1.8) without a
+question and opened Magic Battle, a screen a gauntlet player never came
+from. The same doors dropped a best-of match's record unasked.
+
+Now the screen that holds a duel says so, the way `reports_to_owner`
+already let a match hand its result upward: `GauntletScreen._play_match`
+gives each round's `MatchScreen` its words, and the match hands them to
+every `DuelScreen` it builds (`leave_title`, `leave_label`,
+`leave_question`). In a round the splash's left button reads `Quit
+Gauntlet` — `@DIALOG_GAUNTLETENDDUEL`'s own button — and both doors ask
+*"Quit the gauntlet? Your run ends here, in round N, and you go back to
+Gauntlet Options."* in the Concede question's window (`Yes, I'm sure` /
+`Cancel`; the five seconds stop while it is up). A yes ends the run and
+puts the **Gauntlet Options window back with the run's parameters still
+set** (`_quit_from_duel`): the original's own shape for every way a run
+ends (§1.7, *"the Gauntlet Startup screen again"*) and the one a refused
+deck already takes (§11). `Run the gauntlet` then starts a new run on a
+seed of its own, logged as the first; `Exit` goes to the title.
+
+Two things are deliberately as they were. The round window's own `Quit
+Gauntlet` still goes to the title (`GauntletScreen._quit_run`), and Pause
+→ `Return to main menu` still leaves without a question, as it does in
+every duel: it names where it goes. Pinned in
+`tests/ui/test_review_2026_10_21_leaving_a_held_duel.gd`.

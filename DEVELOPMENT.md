@@ -138,7 +138,8 @@ time, so the second sharded run is the fast one (979 s in one process,
 ~210 s over six on a twelve-core desk). Both commands also run on GitHub
 Actions for every push to `main` and every pull request
 (`.github/workflows/gate.yml`: the official 4.7.2 Linux binary, pinned by
-checksum, four shards plus the Python tests and the boot smoke) — the
+checksum, four shards plus the Python tests, the boot smoke and the
+offline Web test below) — the
 runners hold no card art and upload only logs. Without the imported 1997
 skin (`assets/original`, see `tools/import_original.py`) the scripts that
 pin that look are left out by name and counted as such — the log's first
@@ -147,6 +148,16 @@ skin)" on 2026-10-13, when 850 of the 867 scripts ran without it). A fresh
 clone is therefore green without them; the whole suite needs the skin, and
 a script that needs it must say so on its first doc line (`## Needs the
 imported 1997 skin`) or it goes red where there is none.
+
+One test is neither GUT nor Python: `node tools/test_web_offline.cjs` runs
+the offline Web package's service worker (`tools/web_offline/`) in a real
+browser — an update that waits for the open game, a corrupt download
+refused, an evicted cache repaired, an interrupted first install. It needs
+Node, the `playwright` npm package and Chrome (`--channel chromium` takes
+Playwright's own Chromium instead). The gate's `web-offline` job runs it
+with the rest, and `docs/release-builds.md` runs it before an offline Web
+package is published; run it yourself after touching `tools/web_offline/`
+or `tools/package_web_offline.py`.
 
 Measured counts and timings live in the dated verification records rather
 than another counter here: `docs/decklab-audit-2026-09-13.md` for the latest

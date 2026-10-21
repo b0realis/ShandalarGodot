@@ -136,7 +136,8 @@ class PackageReleaseTest(unittest.TestCase):
                         self.assertIn('build cardpacks/Pack-8-Mirage-Block.zip', readme)
                         self.assertIn('build cardpacks/Pack-9-Tempest-Block.zip', readme)
                         self.assertIn('browser import/auto-fetch path', readme)
-                        self.assertIn("LAN SGManalink", readme)
+                        if platform not in pack.WEB_PLATFORMS:
+                            self.assertIn("LAN SGManalink are included", readme)
                         self.assertNotIn("Manalink multiplayer are future features", readme)
                         if platform in pack.LINUX_BINARIES or platform in pack.MAC_PLATFORMS:
                             self.assertEqual(archive.getinfo(prefix + "run.sh").external_attr >> 16 & 0o777, 0o755)
@@ -309,6 +310,28 @@ class PackageReleaseTest(unittest.TestCase):
         (self.root / pack.DECK_MANIFEST).write_text("decks/link.deck\n", encoding="utf-8")
         with self.assertRaises(ValueError):
             pack.bundled_deck_files(self.root)
+
+    def test_the_web_readmes_say_the_browser_has_no_lan_play(self):
+        # Review of 2026-10-21 (nettools-2): every README said "LAN SGManalink
+        # are included" and "Use matching builds and enabled packs for LAN
+        # play", the two Web ones too -- where Start local service, Host on
+        # LAN and Find LAN games are disabled: a browser opens no LAN socket.
+        for platform in (*pack.WEB_PLATFORMS, "linux64"):
+            with self.subTest(platform=platform):
+                self.make_export(platform)
+                plain, _ = self.build(platform)
+                with zipfile.ZipFile(plain) as archive:
+                    readme = archive.read(f"Shandalar-1.2.3-{platform}/README.txt").decode()
+                head = readme.split("\n\n# ", 1)[0]      # before the embedded asset guide
+                if platform in pack.WEB_PLATFORMS:
+                    self.assertNotIn("LAN SGManalink are included", head)
+                    self.assertNotIn("for LAN play", head)
+                    self.assertIn("no LAN play", head)
+                    self.assertIn("Duels, Deck Builder and Booster Draft are included", head)
+                else:
+                    self.assertIn("LAN SGManalink are included", head)
+                    self.assertIn("Use matching builds and enabled packs for LAN play", head)
+                    self.assertNotIn("no LAN play", head)
 
     def test_architecture_specific_launch_instructions(self):
         self.assertIn("arm64", pack.START["macos-arm64"])

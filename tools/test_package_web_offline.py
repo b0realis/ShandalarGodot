@@ -2,6 +2,7 @@
 import hashlib
 import json
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -122,10 +123,65 @@ class OfflinePackageTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Unsafe|duplicate"):
                     offline.package(source, self.root / "a")
 
+    def test_an_older_web_readme_loses_its_lan_promise(self):
+        # Review of 2026-10-21 (nettools-2): a Web release of 0.50.41 or older
+        # says "LAN SGManalink are included" and "Use matching builds and
+        # enabled packs for LAN play"; the offline package says neither.
+        self.files["README.txt"] = (
+            b"Duels, Deck Builder, Booster Draft and LAN SGManalink are included.\n"
+            b"Adventure and public Internet play are not included.\n"
+            b"Use matching builds and enabled packs for LAN play. See RELEASE_NOTES.md.\n")
+        readme = self.unpack(offline.package(self.source(), self.root / "out"))["README.txt"]
+        self.assertNotIn(b"LAN SGManalink are included", readme)
+        self.assertNotIn(b"for LAN play", readme)
+        self.assertIn(b"Web has no LAN play", readme)
+        self.assertIn(b"See RELEASE_NOTES.md.", readme)
+
+    # The page a Godot 4.7 web export writes from its shell (godot.html in
+    # both web templates): the engine's thread switch is a JS constant, and
+    # the getMissingFeatures call names it under an unquoted key. The
+    # exporter puts true or false in place of $GODOT_THREADS_ENABLED.
+    SHELL_47 = ('<html><head><title>Game</title></head><body>\n<script src="index.js"></script>\n'
+                '<script>\nconst GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,'
+                '"executable":"index","focusCanvas":true};\n'
+                'const GODOT_THREADS_ENABLED = %s;\nconst engine = new Engine(GODOT_CONFIG);\n'
+                '\tconst missing = Engine.getMissingFeatures({\n\t\tthreads: GODOT_THREADS_ENABLED,\n\t});\n'
+                '</script></body></html>')
+
     def test_threaded_input_refused(self):
-        self.files["index.worker.js"] = b"thread worker"
-        with self.assertRaisesRegex(ValueError, "threaded"):
-            offline.package(self.source(), self.root / "a")
+        # Review of 2026-10-21 (nettools-3): the guard knew only a quoted
+        # "threads": true and an index.worker.js, neither of which a Godot
+        # 4.7 threaded export has, so `--refresh` on an extracted
+        # web-threaded release was accepted. Its page, and its engine's
+        # pthread runtime, are what is refused now; the old markers still are.
+        threaded = {
+            "4.7 shell": {"index.html": (self.SHELL_47 % "true").encode()},
+            "4.7 threaded engine": {"index.html": (self.SHELL_47 % "false").encode(),
+                                    "index.js": b"var PThread = { unusedWorkers: [] };"},
+            "quoted key": {"index.html": b'<html><head></head><body>{"threads": true}</body></html>'},
+            "worker file": {"index.worker.js": b"thread worker"},
+        }
+        original = dict(self.files)
+        for n, (label, files) in enumerate(threaded.items()):
+            with self.subTest(label):
+                self.files = {**original, **files}
+                with self.assertRaisesRegex(ValueError, "threaded|single-threaded"):
+                    offline.package(self.source(), self.root / f"out-{n}")
+                # The --refresh route reads the extracted folder itself.
+                folder = self.root / "refresh"
+                shutil.rmtree(folder, ignore_errors=True)
+                for name, data in self.files.items():
+                    (folder / name).parent.mkdir(parents=True, exist_ok=True)
+                    (folder / name).write_bytes(data)
+                with self.assertRaisesRegex(ValueError, "threaded|single-threaded"):
+                    offline.prepare(folder)
+        self.files = original
+
+    def test_the_single_threaded_47_page_is_accepted(self):
+        self.files["index.html"] = (self.SHELL_47 % "false").encode()
+        data = self.unpack(offline.package(self.source(), self.root / "out"))
+        self.assertIn(b"GODOT_THREADS_ENABLED = false", data["index.html"])
+        self.assertIn(b"offline.js", data["index.html"])
 
     def test_refresh_only_runtime_changes_change_cache_version(self):
         output = offline.package(self.source(), self.root / "out")

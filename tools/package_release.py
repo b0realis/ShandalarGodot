@@ -218,6 +218,20 @@ START["android-arm64-experimental"] = (
     "APK alone does not install it. Card pictures/packs are not included.\n"
     "Back up decks before updating. Do not uninstall first: that can erase saves.")
 
+# What the package plays, under the start lines. A browser cannot open a
+# LAN socket — the Web build's lobby disables Start local service, Host on
+# LAN and Find LAN games — so the two Web READMEs say so instead of
+# promising LAN play (review of 2026-10-21; until then only the offline
+# Web package's README was corrected, by tools/package_web_offline.py).
+PLAY = ("Duels, Deck Builder, Booster Draft and LAN SGManalink are included.\n"
+        "Adventure and public Internet play are not included.\n"
+        "Use matching builds and enabled packs for LAN play. See RELEASE_NOTES.md.\n\n")
+WEB_PLAY = ("Duels, Deck Builder and Booster Draft are included. The Web build has\n"
+            "no LAN play: hosting or joining an SGManalink table needs an installed\n"
+            "(non-Web) build. Adventure and public Internet play are not included.\n"
+            "See RELEASE_NOTES.md.\n\n")
+
+
 def digest(path: Path) -> str:
     result = hashlib.sha256()
     with path.open("rb") as source:
@@ -553,9 +567,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
     for output, included in zip(outputs, (False, True)):
         extra = {BASE_ASSIGNMENTS: base_assignments, "VERSION.txt": (version + "\n").encode()}
         readme = (f"SHANDALAR {version}\nGame source commit: {revision}\n\n{START[platform]}\n\n"
-                  "Duels, Deck Builder, Booster Draft and LAN SGManalink are included.\n"
-                  "Adventure and public Internet play are not included.\n"
-                  "Use matching builds and enabled packs for LAN play. See RELEASE_NOTES.md.\n\n"
+                  + (WEB_PLAY if platform in WEB_PLATFORMS else PLAY)
                   + ("Original skin included in skin/original_skin.zip. Leave it zipped.\n"
                      if included else "Original skin not included. The fallback appearance is fully playable.\n")
                   + "Card pictures are NOT included. Import your own cardart.zip in Options > Skin.\n"

@@ -409,6 +409,12 @@ func _play_match(round_config: DuelConfig) -> void:
 	# not its own before it can possibly reach it.
 	_match.reports_to_owner = true
 	_match.match_finished.connect(_on_match_finished)
+	# ...and the words its duels ask before they let the player go, and
+	# where a yes goes: here (review 2026-10-21, ui-1; [method _quit_from_duel]).
+	_match.leave_title = GauntletState.TITLE
+	_match.leave_label = GauntletState.QUIT
+	_match.leave_question = LEAVE_QUESTION % state.round_number
+	_match.leave_confirmed.connect(_quit_from_duel)
 	add_child(_match)
 
 
@@ -604,6 +610,33 @@ func _quit_run() -> void:
 	state.quit()
 	_close_window()
 	_leave()
+
+
+# --- review 2026-10-21 ui-1: leaving the run from inside a duel ---
+## What a round's duel asks before it lets the player go — its splash's
+## `Quit Gauntlet`, and Pause → `Exit duel` — with the round in it.
+const LEAVE_QUESTION := "Quit the gauntlet? Your run ends here, in round %d, and you go back to Gauntlet Options."
+
+
+## THE PLAYER SAID YES from inside a duel. Both doors went to the
+## battle-setup screen and took the run with them, unasked, on a screen
+## the player never came from. Now the run ends and the Gauntlet Options
+## window comes back, the run's parameters still set — the original's own
+## shape for every way a run ends (`docs/gauntlet-design.md` §1.7, *"the
+## Gauntlet Startup screen again"*) and the one a refused deck already
+## takes here. `Run the gauntlet` starts a new run on a seed of its own,
+## logged as the first was; the window's `Exit` is the way to the title.
+func _quit_from_duel() -> void:
+	state.quit()
+	_close_window()
+	_drop_match()
+	_running = false
+	config.rng_seed = randi() | 1      # never 0: that means "roll one"
+	_rng.seed = config.rng_seed
+	print("Gauntlet seed: %d" % config.rng_seed)
+	_resume_bed()
+	_show_options()
+# --- end review 2026-10-21 ui-1 ---
 
 
 func _close_window() -> void:

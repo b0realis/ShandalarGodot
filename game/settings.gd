@@ -645,7 +645,12 @@ static func enabled_card_packs() -> Array[String]:
 	var out: Array[String] = []
 	if raw is Array or raw is PackedStringArray:
 		for value in raw:
-			var id := String(value).strip_edges()
+			# AN ENTRY IS TEXT OR NOTHING (review 2026-10-21, ui-2). A pack
+			# id is `pack-N`; `String(8)` is a script error in this engine,
+			# and a hand-typed `8` aborted this reader at every start and
+			# turned the VALID ids beside it off as well. [method coerce]
+			# reads text as text and anything else as "", which is skipped.
+			var id := String(coerce(value, "")).strip_edges()
 			if id != "" and not out.has(id):
 				out.append(id)
 	return out

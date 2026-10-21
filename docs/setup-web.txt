@@ -18,6 +18,10 @@ that fits your host:
 Both engine variants load startup card/screen resources on the browser's main
 thread for reliable packed-file access.
 
+No web variant has LAN play: a browser cannot open the local-network
+connections SGManalink uses, so Host on LAN and Find LAN games stay off.
+Hosting or joining a table needs an installed (non-web) build.
+
 For the ordinary web package on the SAME device, Python's standard server
 is enough:
 

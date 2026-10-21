@@ -216,6 +216,16 @@ static func assembled_focus(g: MtgGame, pid: int) -> Dictionary:
 ##    reach, [constant ADVANCE_WORTH].
 ## An Aura piece (Power Artifact) is aimed at the piece it needs; with no
 ## such piece of ours on the table it is no piece yet.
+##
+## A SECOND COPY IS NO PROGRESS (review of 2026-10-21, finding ai-5). The
+## other slots were measured and the priced card's own never was: a second
+## Ashnod's Altar beside the first was priced as advancing the loop, and a
+## second Power Artifact as COMPLETING it — aimed at the Monolith the first
+## already enchants, where a second reduction does nothing (an untap cost
+## of {1} stays {1}), even with a bare Monolith beside it. A piece whose
+## slot is already on our table is no piece of that loop; an Aura goes on a
+## host that does not wear its name yet ([method _aura_host]) — the start
+## of a second loop — or is no piece either.
 static func spell_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	if not pilot.profile.plays_combos:
 		return null
@@ -247,6 +257,8 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 			if host == null:
 				continue
 			targets = [TargetRef.card(host)]
+		elif (st["table"] as Array)[slot]:
+			continue   # its slot is filled already: a second copy adds nothing
 		# On the table after this cast: every slot but the loop's own cast
 		# card, which may wait in hand.
 		var needed := size - 1
@@ -272,7 +284,9 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 
 
 ## The permanent of ours an Aura piece of [param recipe] goes on: another
-## piece of the same loop on our table that the Aura may legally enchant.
+## piece of the same loop on our table that the Aura may legally enchant,
+## and that does not wear an Aura of this name already (ai-5: that loop is
+## whole, and a second copy on it does nothing).
 static func _aura_host(g: MtgGame, pid: int, aura: CardInstance, recipe: Dictionary) -> CardInstance:
 	var spec: TargetSpec = aura.data.aura_target
 	var names: Dictionary = {}
@@ -284,8 +298,20 @@ static func _aura_host(g: MtgGame, pid: int, aura: CardInstance, recipe: Diction
 			continue
 		if spec != null and not spec.is_legal(g, TargetRef.card(inst), aura):
 			continue
+		if _wears(g, inst, aura.data.card_name):
+			continue
 		return inst
 	return null
+
+
+## Does [param host] wear an Aura named [param aura_name]?
+static func _wears(g: MtgGame, host: CardInstance, aura_name: String) -> bool:
+	for id in host.attachments:
+		var worn := g.find_instance(int(id))
+		if worn != null and worn.zone == Mtg.Zone.BATTLEFIELD and worn.attached_to == host.id \
+				and worn.data.card_name == aura_name:
+			return true
+	return false
 
 
 ## WHAT A PIECE OF OURS IS WORTH KEEPING beyond its own worth — added to
@@ -1086,8 +1112,9 @@ static func _loop_key(loop: Dictionary) -> String:
 ##  4. MANA, and a token-making ability with no {T} of ours: the mana for
 ##     [constant TOKEN_TARGET] bodies, then the run makes them.
 ##  5. LIFE: [constant LIFE_STEP] more, never past [constant LIFE_CEILING].
-##  6. MANA: what the rest of the hand costs beyond the mana already in
-##     reach, for the ordinary ranking to spend.
+##  6. MANA: what the cards in hand the ranking would cast cost beyond the
+##     mana already in reach, for the ordinary ranking to spend ([method
+##     _mana_for_the_hand]).
 ##  7. CARDS: to a hand of seven, never under [constant CARD_FLOOR] in the
 ##     library.
 ## Every count is capped at [constant MAX_ROUNDS]. Under the 1997 rules the
@@ -1132,18 +1159,161 @@ static func _purpose(g: MtgGame, pilot, loop: Dictionary) -> Dictionary:
 		return {"rounds": mini(_ceil_div(target - me.life, int(per["life"])), MAX_ROUNDS),
 			"why": "life"}
 	if mana > 0:
-		var need := 0
-		for card in me.hand:
-			if not card.is_land() and pieces_of(card.data.card_name).is_empty():
-				need += card.data.cost.mana_value()
-		need -= in_reach
-		if need > 0:
-			return {"rounds": mini(_ceil_div(need, mana), MAX_ROUNDS), "why": "mana for the hand"}
+		var hand := _mana_for_the_hand(g, pilot, loop, in_reach)
+		if int(hand["rounds"]) > 0:
+			return {"rounds": int(hand["rounds"]), "why": "mana for the hand",
+				"spare": hand["spare"]}
 	if int(per.get("cards", 0)) > 0:
 		var room := mini(7 - me.hand.size(), me.library.size() - CARD_FLOOR)
 		if room > 0:
 			return {"rounds": mini(_ceil_div(room, int(per["cards"])), MAX_ROUNDS), "why": "cards"}
 	return {"rounds": 0, "why": ""}
+
+
+## THE HAND THE MANA IS FOR (review of 2026-10-21, finding ai-1) —
+## `{"rounds", "spare"}`, no rounds when nothing in hand is worth one.
+##
+## Purpose 6 summed the mana value of every card in hand that is no loop
+## piece and asked nothing else of it: three Counterspells held for a
+## response, a Serra Angel with no white source, a card a cast gate
+## refuses. The loop made the mana, nothing spent it, and it burned — a
+## Wizard with Enduring Renewal, Ashnod's Altar and an Ornithopter cast
+## the Ornithopter four times for three Counterspells and lost 6 life, and
+## a Power Artifact deck in the Deck Lab burned 3, twice. The doc above
+## [method _purpose] already said the mana made is the mana spent; now the
+## code does. The cards counted are the ones the main-phase ranking would
+## cast with the loop's {C} added to our sources ([method _hand_casts]).
+##
+## UNDER MANA BURN the loop's {C} pays only generic costs, so a run makes
+## no more {C} — its opening included ("float", the mana a round spends
+## before it pays any back, which a land paid) — than the generic of the
+## cards it is for. Two {C} a round and a three-mana card with no land is
+## no run at all: two rounds leave one {C} to burn and one round is short.
+## Of the cards in hand, the set that spends the most with nothing left
+## over is what the run is sized for (fewer rounds on a tie); without mana
+## burn the whole hand is, as before.
+static func _mana_for_the_hand(g: MtgGame, pilot, loop: Dictionary, in_reach: int) -> Dictionary:
+	var pid: int = pilot.pid
+	var mana := int((loop["gains"] as Dictionary).get("mana", 0))
+	var none := {"rounds": 0, "spare": {}}
+	var cards := _hand_casts(g, pilot)
+	if mana <= 0 or cards.is_empty():
+		return none
+	var chosen: Array = []
+	var rounds := 0
+	if not g.rules.mana_burn:
+		var total := 0
+		for row in cards:
+			total += int(row["total"])
+		rounds = mini(_ceil_div(maxi(0, total - in_reach), mana), MAX_ROUNDS)
+		chosen = cards
+	else:
+		var opening := int(loop.get("float", 0))
+		var n := mini(cards.size(), HAND_PLAN_CARDS)
+		var best_total := 0
+		var best_mask := 0
+		for mask in range(1, 1 << n):
+			var total := 0
+			var generic := 0
+			for i in n:
+				if mask & (1 << i):
+					total += int(cards[i]["total"])
+					generic += int(cards[i]["generic"])
+			var need := _ceil_div(maxi(0, total - in_reach), mana)
+			if need <= 0 or need > MAX_ROUNDS or need * mana + opening > generic:
+				continue
+			if total > best_total or (total == best_total and need < rounds):
+				best_total = total
+				best_mask = mask
+				rounds = need
+		for i in n:
+			if best_mask & (1 << i):
+				chosen.append(cards[i])
+	if rounds <= 0:
+		return none
+	# The lands the chosen cards' coloured pips need are never tapped for
+	# the loop's opening mana (the lethal X's own rule, [method _spare_for]).
+	var spared: Dictionary = {}
+	for row in chosen:
+		_spare_into(g, pid, row["card"], spared)
+	return {"rounds": rounds, "spare": spared}
+
+
+## The most cards of the hand [method _mana_for_the_hand] weighs together
+## under mana burn — every subset of them, 255 at most.
+const HAND_PLAN_CARDS := 8
+## The unit numbers of the loop's {C} lent to the ranking's own question in
+## [method _hand_casts] — clear of the pool's own rows.
+const LOOP_UNIT_BASE := 7000
+
+
+## The cards in our hand the main-phase ranking would CAST with the loop's
+## {C} beside our own sources, as `{"card", "total", "generic"}` — total
+## mana and the part of it colourless mana pays. The question is the
+## ranking's own, asked the way [method AiPlayer._ritual_has_a_use] asks it
+## of a Dark Ritual's mana: past every gate the ranking keeps ([method
+## AiPlayer._ranking_gates_refuse] — a Counterspell held for a response,
+## a hand lock, a second legend), aimed at something worth it ([method
+## AiPlayer._size_and_aim], [method MtgGame.cast_refusal]), not one it
+## would wait on ([method AiPlayer._ranking_would_wait]) — and with the
+## coloured pips of every card counted so far paid by our own sources, all
+## of them together: the loop makes no colour. A loop piece is the run's
+## own business, a free card needs no mana and an X spell's X is not
+## guessed at (the lethal one is purpose 2).
+static func _hand_casts(g: MtgGame, pilot) -> Array:
+	var pid: int = pilot.pid
+	var rows: Array = pilot._mana_sources(g)
+	var lent: Array = rows.duplicate()
+	var room := 0
+	for card in g.players[pid].hand:
+		room += card.data.cost.mana_value() + maxi(g.spell_surcharge(pid, card.data), 0)
+	for unit in room:
+		lent.append([null, LOOP_UNIT_BASE + unit, Mtg.ManaColor.C, 1, 0, "", 0, 0])
+	var pips := ManaCost.new()
+	var out: Array = []
+	for card in g.players[pid].hand:
+		if card.is_land() or card.data.cost.has_x or not pieces_of(card.data.card_name).is_empty():
+			continue
+		if pilot._ranking_gates_refuse(g, card):
+			continue
+		var extra: int = g.spell_surcharge(pid, card.data)
+		var total: int = card.data.cost.mana_value() + extra
+		if total <= 0:
+			continue
+		var keys: Array = g.mana_usage_keys(card.data, card)
+		if (pilot._plan_taps_from(lent, card.data.cost, extra, keys) as Array).is_empty():
+			continue
+		var mode: int = pilot._pick_mode(g, card.data)
+		var choice: Dictionary = pilot._size_and_aim(g, card, pilot._mode_intent(card.data, mode), 0, mode)
+		if choice.is_empty() or float(choice.get("value", 0.0)) <= 0.0:
+			continue
+		if g.cast_refusal(pid, card, choice.get("targets", []), 0, mode) != "":
+			continue
+		if pilot._ranking_would_wait(g, card, choice, mode, lent):
+			continue
+		var with_it := _pips_with(pips, card.data.cost)
+		if not with_it.colored.is_empty() \
+				and (pilot._plan_taps_from(rows, with_it, 0) as Array).is_empty():
+			continue   # no source of its colour left over for it
+		pips = with_it
+		var coloured := 0
+		for color in card.data.cost.colored:
+			if int(color) != Mtg.ManaColor.C:
+				coloured += int(card.data.cost.colored[color])
+		out.append({"card": card, "total": total, "generic": maxi(total - coloured, 0)})
+	return out
+
+
+## [param pips] with [param cost]'s coloured pips added — {C} left out, the
+## loop's own mana pays it — and no generic: what our sources must pay.
+static func _pips_with(pips: ManaCost, cost: ManaCost) -> ManaCost:
+	var out := ManaCost.new()
+	out.colored = pips.colored.duplicate()
+	out.text = pips.text + cost.text
+	for color in cost.colored:
+		if int(color) != Mtg.ManaColor.C:
+			out.colored[color] = int(out.colored.get(color, 0)) + int(cost.colored[color])
+	return out
 
 
 static func _ceil_div(a: int, b: int) -> int:
@@ -1191,7 +1361,12 @@ static func _lethal_x(g: MtgGame, pid: int, their_life: int) -> Dictionary:
 ## Our untapped sources that make [param card]'s coloured pips, one per
 ## pip, as the `spared` set [method AiPlayer._plan_and_pay] leaves alone.
 static func _spare_for(g: MtgGame, pid: int, card: CardInstance) -> Dictionary:
-	var spared: Dictionary = {}
+	return _spare_into(g, pid, card, {})
+
+
+## [method _spare_for] added to [param spared] — a source already spared
+## for an earlier card is not counted twice.
+static func _spare_into(g: MtgGame, pid: int, card: CardInstance, spared: Dictionary) -> Dictionary:
 	for color in card.data.cost.colored:
 		var wanted := int(card.data.cost.colored[color])
 		for inst in g.players[pid].battlefield:

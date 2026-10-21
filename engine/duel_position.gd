@@ -162,7 +162,29 @@ func refusal() -> String:
 		if not unknown.is_empty():
 			return "Seat %d names %s, which the card pool does not hold. Is its card pack on? (Options, Card packs)" \
 				% [pid + 1, ", ".join(unknown)]
+		# An instant or a sorcery is never a permanent (CR 304.4, 307.4):
+		# put on the table it sat there for the whole duel, where "destroy
+		# target permanent" could see it (whole-project review 2026-10-21,
+		# engine-5). The Test hands picker offers only what [method
+		# fits_on_table] says for the table; this catches the rest — a
+		# hand-edited settings file, a test saved before the picker knew.
+		var spells: Array[String] = []
+		for card_name in names_in(pid, TABLE):
+			if not fits_on_table(card_name) and card_name not in spells:
+				spells.append(card_name)
+		if not spells.is_empty():
+			return "Seat %d puts %s on the table, but an instant or a sorcery is never a permanent. Put %s in the hand, the graveyard or on top of the library." \
+				% [pid + 1, ", ".join(spells), "it" if spells.size() == 1 else "them"]
 	return ""
+
+
+## May [param card_name] be put ON THE TABLE of a test position — is it a
+## card of the pool, and a permanent card (not an instant or a sorcery,
+## CR 304.4, 307.4)? What the Test hands picker asks for that place, and
+## what [method refusal] holds a position to.
+static func fits_on_table(card_name: String) -> bool:
+	return CardRegistry.has_card(card_name) \
+		and CardRegistry.get_card(card_name).is_permanent_type()
 
 
 ## The position as plain values — what [Settings] keeps (the last test and

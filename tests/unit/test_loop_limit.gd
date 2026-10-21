@@ -12,8 +12,11 @@ extends GameTest
 ##  * a player's Sliver Queen + Heartstone + Ashnod's Altar loop through
 ##    the engine API is refused at its 1001st step with the reason, and
 ##    works again in the next step;
-##  * the computer's Aluren + Shrieking Drake loop, with the AI's own
-##    guard turned off, still ends the turn at the limit with the message;
+##  * the computer's Aluren + Shrieking Drake + Soul Warden loop, with the
+##    AI's own guard turned off, still ends the turn at the limit with the
+##    message (the Warden since the review of 2026-10-21, ai-3: the AI no
+##    longer casts a Drake only to return the Drake itself, so the loop
+##    needs a payout to be worth running);
 ##  * searches and probes never trip it for real.
 
 const PACKS := ["pack-8", "pack-9"]
@@ -151,6 +154,7 @@ func test_the_computers_loop_ends_at_the_limit_without_its_own_guard() -> void:
 	var them := AiPlayer.new(1, AiProfile.wizard())
 	g.set_agent(1, them)
 	put_battlefield(0, "Aluren")
+	put_battlefield(0, "Soul Warden")   # each arrival pays: the loop is worth running (ai-3)
 	give_hand(0, "Shrieking Drake")
 	var turn := g.turn_number
 	var rounds := 0

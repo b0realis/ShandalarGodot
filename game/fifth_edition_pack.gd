@@ -169,12 +169,14 @@ static func _inspect(reader: ZIPReader, art_trusted := false, path := "") -> Dic
 	if not (manifest is Dictionary and catalog is Dictionary and cards is Array):
 		return {"ok": false, "why": "invalid Pack 7 JSON"}
 	var trusted: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SOURCE + "manifest.json"))
-	for key in trusted:
-		if manifest.get(key) != trusted[key]:
-			return {"ok": false, "why": "Pack 7 manifest mismatch: " + String(key)}
-	var current := String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
-	if _version_less(current, String(manifest.minimum_game_version)):
-		return {"ok": false, "why": "requires game version " + String(manifest.minimum_game_version)}
+	# The versions first, as Pack 1 checks them (review 2026-10-21,
+	# cards-1): see [method PortalPack.version_refusal].
+	var refusal := PortalPack.version_refusal(manifest, trusted, 7, FILE_NAME, PREFIX)
+	if refusal != "":
+		return {"ok": false, "why": refusal}
+	var differs := PortalPack.manifest_mismatch(manifest, trusted)
+	if differs != "":
+		return {"ok": false, "why": "Pack 7 manifest mismatch: " + differs}
 	if not _same(manifest.get("counts"), COUNTS) or not _same(manifest.get("new_rules_identities"), new_names()):
 		return {"ok": false, "why": "Pack 7 counts or names do not match Fifth Edition"}
 	var wanted_catalog := {"pack_format": 1, "pack_id": ID, "counts": COUNTS,

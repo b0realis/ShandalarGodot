@@ -1,5 +1,58 @@
 # Code Map
 
+## The whole-project review (2026-10-21)
+
+Each fix in full: `docs/whole-project-review-2026-10-21.md`.
+
+- `engine/stack_item.gd`: `target_incarnations` — the zone incarnation of
+  every card a spell or ability targets (CR 400.7).
+- `engine/mtg_game.gd`: `_pin_target_incarnations`, `_pin_new_target`,
+  `_target_still_chosen` (read in `_all_targets_illegal`, the
+  `_resolve_spell` fizzle loop and `_run_effects_impl`); a spell's caster
+  as its controller — `_propose_caster`, `_withdraw_caster`,
+  `_propose_prospective_caster`, `_spell_goes_home`;
+  `_rec_mana_side_effect` (from `tap_for_mana`, search only);
+  `_phase_ends_now` reads `Mtg.phase_of_1997`; `_place_from_position`
+  never places a non-permanent.
+- `engine/core/mtg.gd`: `Phase1997`, `phase_of_1997` — the manual's phases
+  the 1997 forks mean.
+- `engine/duel_position.gd`: `fits_on_table()`, and `refusal()` naming a
+  non-permanent on the table.
+- `engine/ai/card_combos.gd`: `_mana_for_the_hand`, `_hand_casts`, `_wears`;
+  `spell_choice` passes over a filled slot.
+- `engine/ai/ai_player.gd`: `_ranking_gates_refuse`, `_returns_itself`,
+  `_rebuy_pick`, `_arrival_paid_out`, `_payout_burns`, `_payout_spend`;
+  `_answered_on_arrival` passes over non-mana costs; `_counter_clears_bar`
+  takes an optional payout price.
+- `game/duel/duel_screen.gd`: `leave_title`, `leave_question`,
+  `leave_label`, `leave_confirmed`, `_ask_to_leave` — a duel held by a
+  match or Gauntlet asks before leaving. `game/match_screen.gd` holds every
+  duel it builds; `game/duel/gauntlet_screen.gd` `_quit_from_duel`.
+- `game/portal_pack.gd`: `version_refusal`, `manifest_mismatch`, called by
+  all eight pack contracts (Packs 2–9).
+- `game/skin_pack.gd`: `copy_whole`, `_copy_bytes`; `game/card_back.gd`
+  `adopt_bytes` through `Settings.write_atomically`.
+- `game/settings.gd` `enabled_card_packs`, `game/test_hands_screen.gd`
+  `saved_tests` / `_fill_picker`, `game/deck_builder/deck_builder_screen.gd`
+  `_restore_extras` / `_sealed_sets`: wrong-kind entries read through
+  `Settings.coerce`.
+- `tools/package_release.py` `PLAY` / `WEB_PLAY`;
+  `tools/package_web_offline.py` `THREADED_PAGE` / `THREADED_ENGINE`;
+  `tools/test_web_offline.cjs --channel`; the `web-offline` job in
+  `.github/workflows/gate.yml`; `tools/test_tracked_tree.py` reads every
+  tracked file for any user's home (`AnyonesHomeTest`).
+- Tests: `tests/unit/test_review_2026_10_21_engine_stale_targets.gd`,
+  `test_review_2026_10_21_engine_spell_controller.gd`,
+  `test_review_2026_10_21_engine_fifth_phases.gd`,
+  `test_review_2026_10_21_engine_mana_side_effects.gd`,
+  `test_review_2026_10_21_engine_test_position.gd`,
+  `test_review_2026_10_21_pack_versions.gd`,
+  `test_review_2026_10_21_atomic_adopt.gd`;
+  `tests/ai/test_review_2026_10_21_ai_pilot.gd`;
+  `tests/ui/test_review_2026_10_21_leaving_a_held_duel.gd`,
+  `test_review_2026_10_21_wrong_kinds.gd`,
+  `test_review_2026_10_21_table_picker.gd`.
+
 ## Experimental Android target (2026-10-21)
 
 - `packaging/android/export-preset.cfg`: standalone ARM64 phone/tablet preset,

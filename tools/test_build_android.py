@@ -11,6 +11,11 @@ import build_android as build
 import package_release as pack
 
 
+def guide_text(path: Path) -> str:
+    """The guide with its line breaks folded, so a sentence reads whole."""
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
 class AndroidBuildTest(unittest.TestCase):
     def test_version_code(self):
         self.assertEqual(build.version_code("0.50.34"), 50034)
@@ -47,6 +52,25 @@ class AndroidBuildTest(unittest.TestCase):
         cfg.read_string(recipe)
         self.assertEqual(cfg['preset.9.options']['permissions/internet'], 'true')
         self.assertNotIn("push_to_quest.sh", pack.HANDHELD_FILES['android-arm64-experimental'])
+
+    def test_the_guide_sends_numbered_packs_to_the_card_folder(self):
+        # Review of 2026-10-21 (nettools-1): ANDROID.md told players to import
+        # "completed optional card packs" through the game's chooser, which
+        # takes only skin and card-picture ZIPs (SkinPack.inspect refuses an
+        # entry outside skin/, and every numbered pack is card_packs/<pack>/).
+        # The packs are read from the app's own cardpacks folder, which only
+        # adb reaches; the guide now says so, with the folder the game reads.
+        guide = guide_text(build.ROOT / "docs/android-experimental.md")
+        self.check_pack_route(guide)
+
+    def check_pack_route(self, guide: str):
+        paths = (build.ROOT / "game/paths.gd").read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_CARDPACKS := "user://cardpacks"', paths)
+        folder = f"/sdcard/Android/data/{build.PACKAGE}/files/cardpacks/"
+        self.assertIn("adb push Pack-1-DotP-complete.zip /sdcard/Download/", guide)
+        self.assertIn(f"adb shell cp /sdcard/Download/Pack-1-DotP-complete.zip {folder}", guide)
+        self.assertIn("That chooser takes only skin and card-picture ZIPs", guide)
+        self.assertNotIn("import them through the game's chooser", guide)
 
     def test_isolated_help_and_version(self):
         with tempfile.TemporaryDirectory() as tmp:

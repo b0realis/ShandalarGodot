@@ -27,6 +27,17 @@ REQUIRED = ("index.js", "index.wasm", "index.pck", "index.icon.png",
             "index.apple-touch-icon.png")
 OPTIONAL = ("index.png", "index.audio.worklet.js", "index.audio.position.worklet.js")
 GENERATED = ("index.html", "offline.js", "offline-sw.js", "manifest.webmanifest")
+# A THREADED EXPORT, refused (review of 2026-10-21): the Godot 4.7 page
+# (godot.html in both web templates) says `const GODOT_THREADS_ENABLED =
+# true;` and passes it as `threads: GODOT_THREADS_ENABLED`; an older or
+# hand-made page may say `"threads": true` or `threads: true`. Only
+# `true` counts: the single-threaded page carries the same constant set to
+# false. The threaded engine's JavaScript carries Emscripten's pthread
+# runtime (`PThread`), which the single-threaded template's has none of;
+# 4.7 writes no index.worker.js, which only older exports had.
+THREADED_PAGE = re.compile(r'\bGODOT_THREADS_ENABLED\s*=\s*true\b'
+                           r'|["\']?\b(?:threads|threadsEnabled)\b["\']?\s*:\s*true\b')
+THREADED_ENGINE = re.compile(r'\bPThread\b')
 HTML_ADDON = '\n<!-- SHANDALAR OFFLINE BEGIN -->\n<link rel="manifest" href="manifest.webmanifest">\n<meta name="theme-color" content="#000000">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<script src="offline.js" defer></script>\n<!-- SHANDALAR OFFLINE END -->\n'
 
 
@@ -59,10 +70,10 @@ def prepare(folder: Path) -> dict:
     for name in ("index.html", *REQUIRED):
         if not (folder / name).is_file() or (folder / name).is_symlink():
             raise ValueError(f"Missing or unsafe runtime file: {name}")
-    if re.search(r'"(?:threads|threadsEnabled)"\s*:\s*true',
-                 (folder / "index.html").read_text(encoding="utf-8")):
+    if THREADED_PAGE.search((folder / "index.html").read_text(encoding="utf-8")):
         raise ValueError("Use the single-threaded Web release")
-    if (folder / "index.worker.js").exists():
+    if ((folder / "index.worker.js").exists()
+            or THREADED_ENGINE.search((folder / "index.js").read_text(encoding="utf-8", errors="replace"))):
         raise ValueError("A threaded export cannot become this offline package")
     icon = (folder / "index.icon.png").read_bytes()
     if icon[:8] != b"\x89PNG\r\n\x1a\n" or len(icon) < 24:
@@ -157,8 +168,12 @@ def package(source: Path, out: Path) -> Path:
         if (folder / "skin/original_skin.zip").exists() != bool(skin):
             raise ValueError("Archive name and included skin disagree")
         readme = (folder / "README.txt").read_text(encoding="utf-8")
+        # A Web README of 0.50.41 or older promises LAN play; since then
+        # package_release.WEB_PLAY says there is none, and these are no-ops.
         readme = readme.replace("Duels, Deck Builder, Booster Draft and LAN SGManalink are included.",
                                 "Duels, Deck Builder and Booster Draft are included; Web has no LAN play.")
+        readme = readme.replace("Use matching builds and enabled packs for LAN play. See RELEASE_NOTES.md.",
+                                "See RELEASE_NOTES.md.")
         (folder / "README.txt").write_text(
             "OFFLINE WEB EDITION — read OFFLINE-SETUP.txt first.\n"
             "The original game opens directly; offline caching runs in the background.\n"

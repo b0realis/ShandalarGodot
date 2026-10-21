@@ -1175,15 +1175,22 @@ func _extras_state() -> Dictionary:
 ## Put the remembered Extras switches back on [member filter], before the
 ## strip and the Inventory are built from it. Nothing saved, or a value
 ## of the wrong shape, leaves the opening state alone — everything on.
+##
+## EACH SWITCH THROUGH [method Settings.coerce] (review 2026-10-21, ui-4):
+## `bool("yes")` is a script error in this engine, so a hand-edited
+## `"original": "yes"` stopped this before [member _saved_extras] was set,
+## and the next refresh wrote the all-on state over the player's file. A
+## word reads as meant (yes/no/on/off/true/false/1/0) and anything else as
+## on, the opening state.
 func _restore_extras() -> void:
 	var saved: Variant = Settings.get_value(EXTRAS_SETTING, {})
 	if saved is Dictionary and not saved.is_empty():
-		filter.original_cards_on = bool(saved.get("original", true))
-		filter.completion_pack_on = bool(saved.get("pack1", true))
+		filter.original_cards_on = Settings.coerce(saved.get("original", true), true)
+		filter.completion_pack_on = Settings.coerce(saved.get("pack1", true), true)
 		var sets: Variant = saved.get("sets", {})
 		if sets is Dictionary:
 			for code in CardRegistry.extra_set_order():
-				if sets.has(code) and filter.set_on(code) != bool(sets[code]):
+				if sets.has(code) and filter.set_on(code) != Settings.coerce(sets[code], true):
 					filter.toggle_set(code)
 	_saved_extras = _extras_state()
 
@@ -2620,9 +2627,14 @@ func _sealed_sets() -> Array[String]:
 	var out: Array[String] = []
 	var saved: Variant = Settings.get_value(SEALED_SETS_SETTING, [])
 	if saved is Array or saved is PackedStringArray:
-		for code in saved:
-			if active.has(String(code)) and not out.has(String(code)):
-				out.append(String(code))
+		for value in saved:
+			# A set code is text (review 2026-10-21, ui-4): `String(4)` is
+			# a script error that stopped the Sealed Deck window reading
+			# its sets. [method Settings.coerce] reads anything else as "",
+			# which no set is.
+			var code := String(Settings.coerce(value, ""))
+			if active.has(code) and not out.has(code):
+				out.append(code)
 	return out
 
 

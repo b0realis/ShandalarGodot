@@ -50,6 +50,16 @@ var targets: Array[TargetRef] = []
 var target_groups: Array = []
 ## Targeted triggers remember the chosen zone incarnation (CR 400.7).
 var trigger_target_incarnations: Dictionary = {}
+## SPELL and ABILITY kinds: the zone incarnation (CR 400.7) of every CARD
+## this object targets, by instance id — `[zone, stamp]` as
+## MtgGame._trigger_incarnation reads it — taken as it went on the stack,
+## or as a redirection named a new target. A card keeps its instance id
+## when it leaves the battlefield and returns, so without this a Terror
+## whose Shrieking Drake was bounced and recast in response destroyed the
+## NEW Drake (whole-project review 2026-10-21, engine-1). A ref with no
+## entry here is not checked (an item a test built by hand). Read through
+## MtgGame._target_still_chosen.
+var target_incarnations: Dictionary = {}
 
 ## TRIGGER kind: the triggered ability and the event that fired it. The
 ## event is carried, not re-derived, so "that land's controller" (Ankh of

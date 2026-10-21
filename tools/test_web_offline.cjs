@@ -10,19 +10,25 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
-const playwright = require('playwright');
 const root = path.resolve(__dirname, '..');
 const arg = name => { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; };
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  console.log('node tools/test_web_offline.cjs [--browser chromium|webkit] [--game-dir EXTRACTED_OFFLINE_PACKAGE] [--output FOLDER]');
+  console.log('node tools/test_web_offline.cjs [--browser chromium|webkit] [--channel chrome|chromium] [--game-dir EXTRACTED_OFFLINE_PACKAGE] [--output FOLDER]');
   process.exit(0);
 }
 if (process.argv.includes('--version')) {
   console.log(fs.readFileSync(path.join(root, 'project.godot'), 'utf8').match(/config\/version="([^"]+)"/)[1]);
   process.exit(0);
 }
+// Read after --help/--version, so those two answer on a machine without it.
+const playwright = require('playwright');
 const kind = arg('--browser') || 'chromium';
 assert.ok(['chromium', 'webkit'].includes(kind));
+// Which Chromium: the desk's installed Chrome ('chrome', the default), or
+// the one Playwright pins and installs itself ('chromium'), as the CI job in
+// .github/workflows/gate.yml does (review of 2026-10-21).
+const channel = arg('--channel') || 'chrome';
+assert.ok(['chrome', 'chromium'].includes(channel));
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'shandalar-web-offline-test-'));
 const output = arg('--output') || scratch;
 fs.mkdirSync(output, { recursive: true });
@@ -87,7 +93,7 @@ function hashes() {
   console.log('PASS streamed SHA-256 boundary/chunk vectors');
 }
 const launch = kind === 'chromium'
-  ? { headless: true, channel: 'chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
+  ? { headless: true, channel, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
   : { headless: true };
 async function install(page, url) {
   console.log('Installing ' + new URL(url).pathname);

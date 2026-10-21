@@ -1139,6 +1139,8 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # a 2/0 with nothing to count, a Dreadnought with nothing to feed it (Pack 8)
 		if _forced_arrival_harm(game, inst):
 			continue   # campaign fix-ai-a (w6-4): its forced "target" arrival can only hit ours
+		if _returns_itself(game, inst):
+			continue   # review 2026-10-21 (ai-3): a Shrieking Drake cast to return itself
 		if profile.holds_repeats and EffectIntent.permanent_repeats(inst.data, game, pid):
 			continue   # a second Kismet, a second Winter Orb: the same card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
@@ -1799,6 +1801,32 @@ func _ritual_has_a_use(game: MtgGame, ritual: CardInstance, sources: Array) -> b
 	return false
 
 
+## THE RANKING'S OWN GATES, asked of [param inst] in hand before any
+## payment (review of 2026-10-21, finding ai-1): the cards [method
+## _try_cast_best] passes over before it asks what they cost, in its own
+## order. For a reader that makes mana for the hand (CARD-COMBOS' "mana
+## for the hand", `card_combos.gd` `_hand_casts`) and must not make it for
+## a card the ranking will never cast — a Counterspell held for a response
+## burned the loop's mana.
+func _ranking_gates_refuse(game: MtgGame, inst: CardInstance) -> bool:
+	if inst.is_land():
+		return true
+	if _is_reactive(inst.data) and not (profile.plans_modes and inst.data.is_modal()):
+		return true
+	if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+		return true
+	if _arrival_wasted(game, inst.data) or _arrival_refused(game, inst) \
+			or MIRAGE_TACTICS.dies_on_arrival(game, self, inst) \
+			or _forced_arrival_harm(game, inst) or _returns_itself(game, inst):
+		return true
+	if profile.holds_repeats and EffectIntent.permanent_repeats(inst.data, game, pid):
+		return true
+	if not _sacrifice_fodder_ok(game, inst):
+		return true
+	return MIRAGE_TACTICS.flash_creature_waits(game, self, inst) \
+		or MIRAGE_TACTICS.trick_aura_waits(game, self, inst)
+
+
 ## w1-6: would [param aura], hung on [param host], animate a non-creature
 ## into a body of no size — a static that sets the host's power and
 ## toughness "equal to its mana value" (Animate Artifact), on a host whose
@@ -2077,6 +2105,16 @@ func _cast_projection(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 ## creature* is no answer to a creature that has not arrived — so it is
 ## passed over. And only a CREATURE is asked about: nothing in this pool
 ## answers an artifact or an enchantment at will.
+##
+## EVERY COST THAT IS NOT MANA (review of 2026-10-21, finding ai-2). The
+## list was read as "sacrifice THIS": a Goblin Bombardment's "Sacrifice a
+## creature:" and an Orcish Mechanics' "{T}, Sacrifice an artifact:" (a
+## sacrifice FILTER) were counted as removal their owner could fire with
+## nothing on the table to feed them, and a Deck Lab Wizard held its Soul
+## Warden from turn 5 to turn 21 against a Bombardment with no creature
+## beside it. Every non-mana cost [method _cheapest_pump_of] passes over
+## is passed over here too: the sacrifice filter, the exile filter, a
+## discard, a counter removed, an object cost.
 func _answered_on_arrival(game: MtgGame, data: CardData) -> bool:
 	if not data.is_creature():
 		return false
@@ -2090,6 +2128,10 @@ func _answered_on_arrival(game: MtgGame, data: CardData) -> bool:
 				continue
 			if ability.sacrifice_cost or ability.exile_cost \
 					or ability.life_cost > 0 or ability.random_discard_cost > 0:
+				continue
+			if ability.sacrifice_filter.is_valid() or ability.exile_filter.is_valid() \
+					or ability.discard_cost > 0 or ability.counter_cost_kind != "" \
+					or not ability.object_costs.is_empty():
 				continue
 			if ability.tap_cost and (source.tapped
 					or (source.is_creature() and source.summoning_sick)):
@@ -9479,6 +9521,8 @@ func _try_counter(game: MtgGame) -> String:
 	# THE ORDER (2026-09-10, [member AiProfile.ranks_counters]): the hand's
 	# own, until this landed — and still, with the knob off.
 	for inst in _counter_order(game, top, top_ref):
+		if _payout_burns(game, inst, top):
+			continue   # review 2026-10-21 (ai-4): a Mana Drain whose payout would only burn
 		# Plain counterspells — but only when the spell CAN be countered by
 		# this card (Remove Soul only stops creature spells).
 		for effect in inst.data.spell_effects:
@@ -9554,8 +9598,11 @@ func _try_counter(game: MtgGame) -> String:
 ## Lifted out of [method _try_counter] on 2026-10-03 so the tactics
 ## readers ask the SAME question: Force of Will's branch in
 ## `alliances_tactics.gd` countered anything over a flat 2.0, so a
-## Magician (bar 7.0) Forced a Llanowar Elves.
-func _counter_clears_bar(game: MtgGame, top: StackItem) -> bool:
+## Magician (bar 7.0) Forced a Llanowar Elves. [param raise] lifts the bar
+## by what the counter itself costs beyond its mana (review of 2026-10-21,
+## ai-4: the burn a Mana Drain's payout leaves, [method _payout_burns]);
+## a spell whose shape is countered at any bar is countered still.
+func _counter_clears_bar(game: MtgGame, top: StackItem, raise := 0.0) -> bool:
 	var threat := Evaluator.card_value(top.card.data)
 	# THE LAST PIECE OF THEIR LOOP (2026-10-19, CARD-COMBOS) is countered
 	# at any bar; one that leaves the loop a piece short at most bars.
@@ -9585,7 +9632,7 @@ func _counter_clears_bar(game: MtgGame, top: StackItem) -> bool:
 		shape = _counter_shape(game, top)
 	if shape == SHAPE_NEVER:
 		return false
-	if shape != SHAPE_ALWAYS and threat < profile.counter_threshold:
+	if shape != SHAPE_ALWAYS and threat < profile.counter_threshold + raise:
 		return false
 	# THE ABYSS AS AN ANSWER (2026-09-08, AiProfile.trusts_abyss): a
 	# creature that will be the next meal of a feeder on the table dies
@@ -9598,6 +9645,91 @@ func _counter_clears_bar(game: MtgGame, top: StackItem) -> bool:
 			and shape != SHAPE_ALWAYS \
 			and _is_next_meal(game, top.card, top.controller):
 		return false
+	return true
+
+
+## THE PAYOUT THAT BURNS (review of 2026-10-21, finding ai-4; [member
+## AiProfile.forecasts_tactics]). Mana Drain counters a spell and adds {C}
+## equal to its mana value at the beginning of our next main phase, and
+## neither the bar nor the order ([method _counter_clears_bar], [method
+## _counter_order]) priced that mana. Under a mana-burn rule — the
+## player's default preset — a six-mana Book of Rass drained into a hand
+## that could spend none of it cost 6 life at that main phase; in the
+## Deck Lab The Deck went from 18 to 12 that way.
+##
+## So the payout is priced as the burn it leaves: the {C} the cards in
+## hand cannot spend ([method _payout_spend]), at the rate [method
+## _burn_price] charges a point of burn, and the counter must clear its
+## bar by that much more — or the next counter in the order answers, or
+## the spell resolves. A spell countered at any bar (its shape, the last
+## piece of their loop) is drained still; a burn that is our last life is
+## never paid. Read off the card's own printed line ([constant
+## PAYOUT_WORDS]), as [method _unless_price] reads a soft counter's.
+func _payout_burns(game: MtgGame, inst: CardInstance, top: StackItem) -> bool:
+	if not profile.forecasts_tactics or not game.rules.mana_burn:
+		return false
+	if not inst.data.oracle_text.contains(PAYOUT_WORDS):
+		return false
+	var payout := top.card.data.cost.mana_value()
+	if top.card.data.cost.has_x:
+		payout += top.x_value * top.card.data.cost.x_count
+	var burn := payout - _payout_spend(game, inst)
+	if burn <= 0:
+		return false
+	var life := game.players[pid].life
+	if burn >= life:
+		return true
+	return not _counter_clears_bar(game, top,
+		float(burn) * minf(_life_price(life), Evaluator.W_LIFE))
+
+
+## The printed words of a counter that pays the countered spell's mana
+## value back as {C} (Mana Drain).
+const PAYOUT_WORDS := "add an amount of {C} equal to that spell's mana value"
+
+
+## The {C} of a payout the cards in our hand could spend at our next main
+## phase: the generic part of each card the ranking casts in a main phase
+## — not a land, not one held for a response, not [param spent] itself,
+## past the gates that hold whatever the turn ([method _cast_gate]) — whose
+## coloured pips our own permanents make, tapped or not (they untap
+## first). An X spell spends whatever is left. Their turn's draw and our
+## next one are not guessed at.
+func _payout_spend(game: MtgGame, spent: CardInstance) -> int:
+	var spend := 0
+	for card in game.players[pid].hand:
+		if card == spent or card.is_land() or _is_reactive(card.data):
+			continue
+		if _cast_gate(game, card) != "" or not _pips_made(game, card.data.cost):
+			continue
+		if card.data.cost.has_x:
+			return LETHAL_SPEND
+		var coloured := 0
+		for color in card.data.cost.colored:
+			if int(color) != Mtg.ManaColor.C:
+				coloured += int(card.data.cost.colored[color])
+		spend += maxi(card.data.cost.mana_value() + game.spell_surcharge(pid, card.data) - coloured, 0)
+	return spend
+
+
+## "Any amount" to [method _payout_spend]: an X spell in hand.
+const LETHAL_SPEND := 1 << 20
+
+
+## Do our permanents make every coloured pip of [param cost] — as many
+## sources of each colour as it has pips of it, tapped or not?
+func _pips_made(game: MtgGame, cost: ManaCost) -> bool:
+	for color in cost.colored:
+		if int(color) == Mtg.ManaColor.C:
+			continue
+		var makers := 0
+		for perm in game.players[pid].battlefield:
+			for m in perm.cur_mana_abilities:
+				if m.produces.any(func(pair: Array) -> bool: return int(pair[0]) == int(color)):
+					makers += 1
+					break
+		if makers < int(cost.colored[color]):
+			return false
 	return true
 
 
@@ -15362,6 +15494,15 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 	if profile.forecasts_tactics and p_pid == pid and asked != null and asked.ordered \
 			and prompt.contains(": Select ") and prompt.contains("source"):
 		return MIRAGE_TACTICS.pick_damage_source(game, candidates)
+	# THE BODY WORTH RETURNING (review of 2026-10-21, ai-3): a "return a
+	# creature you control" arrival sends back the creature whose own
+	# arrival is worth having again ([method _rebuy_pick]) before the
+	# arriving body the heuristic's order puts first.
+	if profile.forecasts_tactics and p_pid == pid and asked != null and asked.ordered \
+			and not asked.is_cost and prompt.to_lower().contains(SELF_RETURN_WORDS):
+		var rebuy := _rebuy_pick(game, candidates, null)
+		if rebuy != null:
+			return rebuy
 	if asked != null and (asked.adverse or asked.ordered) \
 			and not candidates.is_empty():
 		return candidates[0]
@@ -16200,6 +16341,105 @@ func _forced_arrival_harm(game: MtgGame, inst: CardInstance) -> bool:
 			if card is CardInstance and card != inst and _own_value(game, card) < 0.0:
 				relief = true   # a liability of ours is worth naming
 		if not relief:
+			return true
+	return false
+
+
+## THE ARRIVAL THAT RETURNS ITSELF (review of 2026-10-21, finding ai-3;
+## [member AiProfile.forecasts_tactics], which every shipped rung carries).
+## Shrieking Drake's "when this enters, return a creature you control to
+## its owner's hand" is not targeted — the creature is chosen as it
+## resolves, from a list its script orders with the Drake itself first —
+## so [method _forced_arrival_harm], which reads target specs, never saw
+## it, and [method answer_card] took the first of an ordered list. Every
+## Drake the pilot cast came straight back: three Islands, three casts in
+## one main phase, the Drake in hand at the end and the Islands tapped,
+## on every rung with the loop runner on or off.
+##
+## So the cast is passed over when that arrival would return the arriving
+## body and nothing better — unless the table pays for each arrival (a
+## Soul Warden's life, a Pandemonium's damage: [method _arrival_paid_out]),
+## which is the reason the Aluren loops cast it. A body of ours worth
+## returning instead ([method _rebuy_pick]) makes the cast a good one: that
+## body goes back and the Drake stays. The loop runner's own casts
+## (CARD-COMBOS) never come through this ranking and are untouched. Read
+## off the trigger's printed line ([constant SELF_RETURN_WORDS]).
+func _returns_itself(game: MtgGame, inst: CardInstance) -> bool:
+	if not profile.forecasts_tactics or not inst.data.is_creature():
+		return false
+	var entry := GameEvent.new(Mtg.EventType.ENTERS_BATTLEFIELD,
+		{"instance": inst, "controller": pid})
+	for trig in inst.data.triggered_abilities:
+		if not trig.listens(Mtg.EventType.ENTERS_BATTLEFIELD) or trig.target_spec != null:
+			continue
+		if not trig.text.to_lower().contains(SELF_RETURN_WORDS):
+			continue
+		if trig.condition.is_valid() and not bool(trig.condition.call(game, inst, entry)):
+			continue
+		if _rebuy_pick(game, game.players[pid].battlefield, inst) != null:
+			return false
+		return not _arrival_paid_out(game, inst)
+	return false
+
+
+## The printed words of an untargeted arrival that returns one of its
+## controller's own creatures (Shrieking Drake) — and the prompt its
+## resolution asks with.
+const SELF_RETURN_WORDS := "return a creature you control to its owner's hand"
+
+
+## The creature of [param candidates] a "return a creature you control"
+## arrival is better spent on than [param arriving] (the body that
+## arrives; null when it is among the candidates as one more card): a
+## creature of ours that is a liability ([method _own_value] below
+## nothing), or one whose own arrival is worth having again — a "when this
+## enters" that harms a target and has one of theirs to name (a Man-o'-War
+## with a creature of theirs on the table). The cheapest to cast again
+## first; null when there is none, and the arriving body goes back.
+func _rebuy_pick(game: MtgGame, candidates: Array, arriving: CardInstance) -> CardInstance:
+	var best: CardInstance = null
+	for card in candidates:
+		if not (card is CardInstance) or card == arriving or card.controller_id != pid \
+				or card.zone != Mtg.Zone.BATTLEFIELD or not card.is_creature() or card.is_token:
+			continue
+		if _own_value(game, card) >= 0.0 and not _arrival_worth_repeating(game, card):
+			continue
+		if best == null or card.data.cost.mana_value() < best.data.cost.mana_value():
+			best = card
+	return best
+
+
+## Does [param card] (ours, on the battlefield) carry a "when this enters"
+## that would harm a target of THEIRS were it to arrive again?
+func _arrival_worth_repeating(game: MtgGame, card: CardInstance) -> bool:
+	for trig in card.data.triggered_abilities:
+		if not trig.listens(Mtg.EventType.ENTERS_BATTLEFIELD) or trig.target_spec == null:
+			continue
+		if not _arrival_trigger_harms(trig):
+			continue
+		for ref in trig.target_spec.legal_targets(game, card):
+			if ref.is_player:
+				if ref.player_id != pid:
+					return true
+				continue
+			var target := game.find_instance(ref.instance_id)
+			if target != null and target != card and target.controller_id != pid:
+				return true
+	return false
+
+
+## Does a permanent of ours trigger on [param inst] arriving — a Soul
+## Warden's life, a Pandemonium's damage — so that the arrival is paid
+## for whatever it returns?
+func _arrival_paid_out(game: MtgGame, inst: CardInstance) -> bool:
+	var entry := GameEvent.new(Mtg.EventType.ENTERS_BATTLEFIELD,
+		{"instance": inst, "controller": pid})
+	for perm in game.players[pid].battlefield:
+		for trig in perm.cur_triggered_abilities:
+			if trig.is_mana_trigger or not trig.listens(Mtg.EventType.ENTERS_BATTLEFIELD):
+				continue
+			if trig.condition.is_valid() and not bool(trig.condition.call(game, perm, entry)):
+				continue
 			return true
 	return false
 

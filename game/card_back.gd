@@ -179,7 +179,11 @@ static func adopt_bytes(bytes: PackedByteArray) -> String:
 	img = fitted(oriented(img, exif_orientation(bytes)))
 	var target := file()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target.get_base_dir()))
-	if img.save_png(target) != OK:
+	# Whole or not at all (review of 2026-10-21, nettools-6): `save_png`
+	# truncated the worn back in place, so a full disk or a crash part way
+	# left no back at all. A pending file, checked, then renamed over it.
+	var png := img.save_png_to_buffer()
+	if png.is_empty() or Settings.write_atomically(target, png) != OK:
 		return NOT_SAVED
 	forget_cache()
 	return ""

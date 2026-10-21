@@ -21,10 +21,12 @@ Keep commit subjects short and descriptive. Use a pseudonymous author and
 committer with a GitHub noreply address. Keep personal home paths, private
 email addresses and local tooling metadata out of tracked files. Ignore
 machine-local tooling through `.git/info/exclude`, not the shared ignore file.
-`tools/test_tracked_tree.py` holds the tree to that rule — the release
-tooling's own home-path guard (`package_release.guard_private`) run over
-every tracked text file rather than over a staged package, so a leak fails
-at the commit rather than at the upload — and to the CODE_MAP rule below.
+`tools/test_tracked_tree.py` holds the tree to that rule — every tracked
+file, binaries included (a font's names, a picture's text chunks), is read
+for ANY user's home folder in any spelling (`/home/<name>`, `/Users/<name>`,
+`C:\Users\<name>`), an email address or a tool vendor's name, with a short
+allow-list of the placeholders the docs use (2026-10-21), so a leak fails at
+the commit rather than at the upload — and to the CODE_MAP rule below.
 
 ## Commands
 

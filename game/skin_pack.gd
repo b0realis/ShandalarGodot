@@ -790,7 +790,7 @@ func adopt(source: String) -> bool:
 	var dest := home_for(kind, source)
 	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
 	if ProjectSettings.globalize_path(source) != ProjectSettings.globalize_path(dest) \
-			and DirAccess.copy_absolute(source, dest) != OK:
+			and copy_whole(source, dest) != OK:
 		_complain(source.get_file(), "could not be copied into the game's folder")
 		return false
 	var replaced := kind == "skin" and GameSkin.zip_worn
@@ -799,6 +799,73 @@ func adopt(source: String) -> bool:
 	_wear(kind, dest)
 	_arrived(kind, replaced)
 	return true
+
+
+## COPY [param source] OVER [param dest] WHOLE OR NOT AT ALL (review of
+## 2026-10-21, nettools-6). The chosen zip used to go straight onto the
+## kept one (`DirAccess.copy_absolute`), which truncates the old file the
+## moment it opens it: a full disk or a crash part way through left half
+## a zip where a working one had been, and the next start wore the plain
+## look. Now the copy goes to the pending name
+## [method Settings.write_atomically] writes beside a file
+## ([method Settings.pending_path] — a link is followed, as there), every
+## write and the length that reached the disk are checked, and only then
+## is it renamed over the kept zip. Anything else leaves the kept zip as
+## it was and no pending file behind. A zip is too big to hold in memory,
+## so this is the copy's half of that pattern rather than a call to it.
+##
+## Windows will not rename over a file that is open, and a mounted zip
+## stays open for the run: choosing a newer zip under the name of the one
+## worn (the skin's own `original_skin.zip`) would be refused there. Only
+## then, with the whole copy already on the disk, is it copied over the
+## kept zip in place, as before.
+static func copy_whole(source: String, dest: String) -> Error:
+	var pending := Settings.pending_path(dest)
+	# The file the rename replaces: [param dest], or the file it links to.
+	var target := pending.substr(0, pending.rfind(Settings.PENDING_TAIL))
+	var err := _copy_bytes(source, pending)
+	if err == OK:
+		err = DirAccess.rename_absolute(pending, target)
+		if err != OK and OS.get_name() == "Windows":
+			err = _copy_bytes(pending, target)
+	if FileAccess.file_exists(pending):
+		DirAccess.remove_absolute(pending)
+	return err
+
+
+## [param source]'s bytes into [param to], [const CHUNK] at a time, each
+## write checked and the length that reached the disk compared with the
+## source's. Quiet when it fails — the caller says what that means to the
+## player — where `DirAccess.copy_absolute` prints an engine error.
+static func _copy_bytes(source: String, to: String) -> Error:
+	var from := FileAccess.open(source, FileAccess.READ)
+	if from == null:
+		return ERR_FILE_CANT_OPEN
+	var into := FileAccess.open(to, FileAccess.WRITE)
+	if into == null:
+		from.close()
+		return ERR_FILE_CANT_WRITE
+	var length := from.get_length()
+	var err := OK
+	while err == OK and from.get_position() < length:
+		var want := mini(CHUNK, length - from.get_position())
+		var block := from.get_buffer(want)
+		if block.size() != want:
+			err = ERR_FILE_CANT_READ
+		elif not into.store_buffer(block):
+			err = ERR_FILE_CANT_WRITE
+	into.flush()
+	if err == OK and into.get_error() != OK:
+		err = ERR_FILE_CANT_WRITE
+	into.close()
+	from.close()
+	if err == OK:
+		var check := FileAccess.open(to, FileAccess.READ)
+		if check == null or check.get_length() != length:
+			err = ERR_FILE_CANT_WRITE
+		if check != null:
+			check.close()   # closed before the rename: Windows will not move an open file
+	return err
 
 
 ## A skin zip that arrived is the one worn from now on: the `skin_zip`
@@ -839,8 +906,9 @@ func _take(landed: String, shown: String, named := "") -> bool:
 	var kind := String(report["kind"])
 	var dest := home_for(kind, named)
 	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
-	if FileAccess.file_exists(dest):
-		DirAccess.remove_absolute(dest)
+	# The kept zip is NOT deleted first (review of 2026-10-21): a rename
+	# replaces the file at its target on every platform the game runs on,
+	# and one that was refused after the delete left neither zip.
 	var replaced := kind == "skin" and GameSkin.zip_worn
 	if DirAccess.rename_absolute(landed, dest) != OK or not mount(dest, true):
 		DirAccess.remove_absolute(landed)

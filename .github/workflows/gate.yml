@@ -7,6 +7,8 @@
 #                               so a shard on a runner is a shard on a desk)
 #   python3 -m unittest ...     the tool tests, from the project root
 #   godot --headless --quit-after 3   the boot smoke, with no ERROR line
+#   node tools/test_web_offline.cjs   the offline Web package's service
+#                               worker in a real browser (its own job)
 #
 # The Godot binary is the official 4.7.2 Linux release, pinned by the
 # SHA-256 of its zip: byte-identical to the ../tools/godot every local
@@ -150,3 +152,40 @@ jobs:
           if grep -qE '^(SCRIPT ERROR|ERROR|USER ERROR|USER SCRIPT ERROR):' boot.log; then
             echo "the boot printed an error"; exit 1
           fi
+
+  # THE OFFLINE WEB PACKAGE'S SERVICE WORKER (review of 2026-10-21): its
+  # update, repair and interrupted-install rules (tools/web_offline/) are
+  # tested only by tools/test_web_offline.cjs, which loads the worker in a
+  # browser through Playwright — and until then ran nowhere, so a change
+  # that let a failed update replace a working cache passed every job.
+  # A job of its own, beside the others: no Godot, no shard waits on it.
+  # Node and Playwright are pinned; the browser is the Chromium that this
+  # Playwright installs (`--channel chromium`), where a desk uses Chrome.
+  web-offline:
+    name: Offline Web service worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NODE_VERSION: 24.21.0
+      PLAYWRIGHT_VERSION: 1.63.0
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Outside the checkout: no package.json, no lock file and no
+      # node_modules in the tree; the test finds it through NODE_PATH.
+      - name: Playwright ${{ env.PLAYWRIGHT_VERSION }} and its Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/playwright"
+          npm install --prefix "$RUNNER_TEMP/playwright" --no-save --no-package-lock \
+            --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}"
+          "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Service-worker regressions
+        env:
+          NODE_PATH: ${{ runner.temp }}/playwright/node_modules
+        run: node tools/test_web_offline.cjs --channel chromium

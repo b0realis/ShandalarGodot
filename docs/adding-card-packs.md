@@ -156,6 +156,12 @@ on Rescan without retaining stale data, cached textures or enabled state.
 Set `minimum_game_version` to the first build that actually ships this pack's
 trusted rules. A version string alone does not establish support: the build
 must also contain the loader/provider and dormant scripts. Test both gates.
+Ask about versions BEFORE comparing the zip's manifest with the trusted one:
+call `PortalPack.version_refusal` and then `PortalPack.manifest_mismatch`,
+as Packs 2–9 do (the review of 2026-10-21, cards-1). The other order makes
+the "requires game version" refusal unreachable — a manifest that passes the
+comparison already carries the trusted minimum — and a player with a pack
+from another release reads "manifest mismatch: version" instead.
 
 ## 4. Implement and audit every card
 

@@ -288,7 +288,7 @@ static func _page_mana() -> Dictionary:
 		]},
 		_text("{X} is an amount you choose while casting. {T} is a tap cost: turn that permanent sideways to pay it."),
 		_heading("Spend it before it empties"),
-		_text("Mana does not carry into the next step under modern pool timing. The 1997 timing option empties pools at phase boundaries instead. Mana burn is on by default: lose 1 life for each unspent mana when the pool empties. You can change either option in Options, under Rules."),
+		_text("Mana does not carry into the next step under modern pool timing. The 1997 timing option empties pools at phase boundaries instead: the upkeep and the draw are a phase each, and combat is one. Mana burn is on by default: lose 1 life for each unspent mana when the pool empties. You can change either option in Options, under Rules."),
 	]}
 
 
@@ -398,7 +398,7 @@ static func _page_start_finish() -> Dictionary:
 		_heading("Winning, losing and drawing"),
 		_text("A player loses through life, poison, or an impossible required draw. If both players lose at the same time, the duel is a draw. Concede ends your duel after confirmation."),
 		_heading("Ante and matches"),
-		_text("Ante puts the chosen cards at stake for the duel. Review the ante setting before starting. In a match, the sideboard lets you change your deck between games while keeping the selected format legal."),
+		_text("Ante puts the chosen cards at stake for the duel. Review the ante setting before starting. In a match, the sideboard lets you change your deck between games while keeping the selected format legal. Inside a match or a Gauntlet, Exit duel and the button on the duel's opening screen (Reconfigure duel, or Quit Gauntlet) ask first, because leaving ends the match or the run; a Gauntlet then goes back to Gauntlet Options."),
 	]}
 
 
@@ -413,7 +413,7 @@ static func _page_test_hands() -> Dictionary:
 		_heading("Opening it"),
 		_text("In Magic Battle, choose who plays (Duel the AI, Hotseat or AI Demo), the two decks, the names and the AI difficulty as for any duel, then press Test hands: the last row of the settings, under Ante and the match settings (scroll down to it). A deck Go! would refuse is refused here too."),
 		_heading("Building the position"),
-		_text("Each seat has four places, each with + Add, Clear and a × on every card. Hand: the cards you choose, plus Random cards in hand dealt from the rest of the deck. On the table: permanents already in play, each Tapped or not, and a creature Sick (it came in this turn) or not; not sick by default, so it can attack and tap at once. Graveyard: the last card added is on top, which is the card Corpse Dance returns. Top of the library: the first card is the next draw. Set each life total too."),
+		_text("Each seat has four places, each with + Add, Clear and a × on every card. Hand: the cards you choose, plus Random cards in hand dealt from the rest of the deck. On the table: permanents already in play (never an instant or a sorcery), each Tapped or not, and a creature Sick (it came in this turn) or not; not sick by default, so it can attack and tap at once. Graveyard: the last card added is on top, which is the card Corpse Dance returns. Top of the library: the first card is the next draw. Set each life total too."),
 		_cards([["Llanowar Elves", "On the table, ready", "A creature you put on the table can tap for mana or attack at once. Tick Sick if it should have come in this turn."],
 			["Grizzly Bears", "Top of the graveyard", "The last card you add to a graveyard is its top card: the creature Corpse Dance returns."]]),
 		_text("+ Add opens a list of the seat's deck with the copies left; type part of a name to narrow it, and Enter or a double click adds the card. Tick Any card in the pool to choose from every card your enabled packs hold: a card the deck has no copy of left is added to it for the test and marked (not in deck). The rest of the library is the rest of the deck, shuffled."),

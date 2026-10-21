@@ -87,21 +87,26 @@ func test_life_gained_inside_the_phase_still_saves_a_player() -> void:
 
 # ------------------------------------- the pool that outlives a step, burnt --
 
-func test_the_1997_pool_survives_a_step_and_burns_at_the_phase() -> void:
+func test_the_1997_upkeep_is_a_phase_and_burns_as_it_ends() -> void:
 	# `pool_empties_on_attack` and `mana_burn` are one mechanism under the
-	# preset: mana floated in the upkeep is still there in the draw step,
-	# and is charged for exactly once, when the phase ends.
+	# preset: mana floated in a phase is charged for exactly once, when the
+	# phase ends. The upkeep and the draw are TWO phases (manual p.60:
+	# "1) Untap 2) Upkeep 3) Draw 4) Main 5) Discard 6) Cleanup"). Until
+	# the review of 2026-10-21 this test pinned the modern grouping — "a
+	# step boundary inside the beginning phase does not empty it" — and the
+	# owner ruled it: "as separate phases!" (engine-3). A step boundary
+	# inside ONE phase still empties nothing: combat's, pinned by
+	# test_the_pool_survives_first_strike_and_is_charged_once below.
 	_fifth()
 	g.players[0].life = 20
 	advance_to_step(Mtg.Step.UPKEEP)
 	add_mana(0, Mtg.ManaColor.R, 2)
 	advance_to_step(Mtg.Step.DRAW)
-	assert_eq(g.players[0].mana_pool.total(), 2,
-		"a step boundary inside the beginning phase does not empty it")
-	assert_eq(g.players[0].life, 20, "and nothing has been burned yet")
+	assert_eq(g.players[0].mana_pool.total(), 0,
+		"the upkeep phase ended: the pool emptied")
+	assert_eq(g.players[0].life, 18, "and burned, once, there")
 	advance_to_step(Mtg.Step.MAIN1)
-	assert_eq(g.players[0].mana_pool.total(), 0)
-	assert_eq(g.players[0].life, 18, "burned once, at the phase boundary")
+	assert_eq(g.players[0].life, 18, "and never again")
 
 
 # --------------------------------- the damage window under the whole preset --

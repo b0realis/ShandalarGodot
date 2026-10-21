@@ -109,7 +109,7 @@ const FORKS := [
 		"key": "pool_empties_on_attack",
 		"fifth_value": true,
 		"label": "1997 mana-pool timing",
-		"fifth": "The pool empties at the end of each PHASE — combat counts as one, emptying when it is over.",
+		"fifth": "The pool empties at the end of each PHASE — the upkeep and the draw are one each, and combat counts as one, emptying when it is over.",
 		"modern": "The pool empties at the end of every step.",
 		"source": "manual p.176",
 	},
@@ -215,7 +215,10 @@ var life_checked_at_phase_end := false
 ## every-step clear, not merely a different frequency. LIVE, per the
 ## owner's ruling (2026-08-31): pools empty at each PHASE end, with
 ## combat counting as ONE phase that empties only when it is over. Pairs
-## with mana_burn, which is then charged on those boundaries.
+## with mana_burn, which is then charged on those boundaries. The phases
+## are the manual's six (p.60, `Mtg.phase_of_1997`): the upkeep and the
+## draw are a phase EACH — the owner's ruling of 2026-10-21, "as separate
+## phases!" — where the modern map lumps them into one beginning phase.
 var pool_empties_on_attack := false
 
 ## The attacking player divides combat damage among the blockers with no

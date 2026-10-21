@@ -17,7 +17,10 @@ extends VersusPanel
 ##
 ## HOW IT LEAVES, three ways: `Go!`, `Reconfigure duel` (back to the
 ## battle-setup screen), or five seconds of nobody touching anything,
-## which is what keeps an AI demo — and the soak — moving.
+## which is what keeps an AI demo — and the soak — moving. Inside a
+## best-of match or a Gauntlet the second button asks first, and in a
+## Gauntlet it reads `Quit Gauntlet` (review 2026-10-21, ui-1: [member
+## DuelScreen.leave_question]); this window only says it was pressed.
 
 ## Seconds before it goes on by itself (the owner's number). THE ONLY
 ## CLOCK: it lives here and not in [VersusPanel], because the Pause window

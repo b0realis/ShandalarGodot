@@ -175,12 +175,14 @@ static func _inspect(reader: ZIPReader, art_trusted := false, path := "") -> Dic
 	if not (manifest is Dictionary and catalog is Dictionary and cards is Array):
 		return {"ok": false, "why": "invalid Pack 6 JSON"}
 	var trusted: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SOURCE + "manifest.json"))
-	for key in trusted:
-		if manifest.get(key) != trusted[key]:
-			return {"ok": false, "why": "Pack 6 manifest mismatch: " + String(key)}
-	var current := String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
-	if _version_less(current, String(manifest.minimum_game_version)):
-		return {"ok": false, "why": "requires game version " + String(manifest.minimum_game_version)}
+	# The versions first, as Pack 1 checks them (review 2026-10-21,
+	# cards-1): see [method PortalPack.version_refusal].
+	var refusal := version_refusal(manifest, trusted, 6, FILE_NAME, PREFIX)
+	if refusal != "":
+		return {"ok": false, "why": refusal}
+	var differs := manifest_mismatch(manifest, trusted)
+	if differs != "":
+		return {"ok": false, "why": "Pack 6 manifest mismatch: " + differs}
 	if not _same(manifest.get("counts"), COUNTS) or not _same(manifest.get("new_rules_identities"), new_names()):
 		return {"ok": false, "why": "Pack 6 counts or names do not match Portal"}
 	var wanted_catalog := {"pack_format": 1, "pack_id": ID, "counts": COUNTS,
@@ -237,3 +239,42 @@ static func _version_less(left: String, right: String) -> bool:
 		if av != bv:
 			return av < bv
 	return false
+
+
+# --- review 2026-10-21 cards-1: the versions before the rest ---
+## THE VERSIONS BEFORE THE REST OF THE MANIFEST, for Packs 2-9, as
+## [method CardPacks.inspect] has always checked them for Pack 1. Every
+## contract compared the zip's manifest with its trusted copy key by key
+## FIRST, and a manifest that passes that carries the trusted minimum, which
+## the build always meets — so `requires game version` was dead code in all
+## eight, and a pack built for a newer game, or an older build of the same
+## pack, was refused as `Pack N manifest mismatch: version` (Packs 2-5) or
+## `… : minimum_game_version` (Packs 6-9, whose keys are alphabetical).
+## "" when both versions pass and [method manifest_mismatch] decides the
+## rest; else the reason Options → Card Packs shows. A version that is not
+## text is the manifest's fault, not a version, and is left to that
+## comparison.
+static func version_refusal(manifest: Dictionary, trusted: Dictionary,
+		number: int, file_name: String, prefix: String) -> String:
+	var current := String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+	var minimum: Variant = manifest.get("minimum_game_version")
+	if minimum is String and _version_less(current, minimum):
+		return "requires game version %s or newer (this is %s)" % [minimum, current]
+	var version: Variant = manifest.get("version")
+	var wanted := str(trusted.get("version", ""))
+	if version is String and version != wanted:
+		return "this is Pack %d version %s, and this game needs version %s: rebuild %s with this release's tools/%s.py" % [
+			number, version, wanted, file_name, prefix.get_slice("/", 1)]
+	return ""
+
+
+## The first key of [param trusted] the zip's [param manifest] differs in,
+## or "". Kinds first: `!=` between a number and text is a script error in
+## this engine, and a hand-edited manifest reached it in every contract.
+static func manifest_mismatch(manifest: Dictionary, trusted: Dictionary) -> String:
+	for key in trusted:
+		var have: Variant = manifest.get(key)
+		if typeof(have) != typeof(trusted[key]) or have != trusted[key]:
+			return String(key)
+	return ""
+# --- end review 2026-10-21 cards-1 ---

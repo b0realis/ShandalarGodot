@@ -79,6 +79,29 @@ var state: MatchState
 ## gauntlet exists.
 var reports_to_owner := false
 
+# --- review 2026-10-21 ui-1: leaving from inside one of this match's duels ---
+## EVERY DUEL OF A MATCH IS HELD ([member DuelScreen.leave_question]): its
+## splash's left button and Pause → `Exit duel` ask first, and only a yes
+## leaves. Until this they went straight to the battle-setup screen and the
+## record went with them, without a word — and inside a Gauntlet the whole
+## run did. A match from the battle-setup screen goes back THERE on a yes:
+## where the player came from, and the ROADMAP's own reading of Exit duel,
+## *"exit duel (return to duel config)"*. An owner's match
+## ([member reports_to_owner]) goes nowhere itself: it passes the yes up as
+## [signal leave_confirmed], and the owner sets the words below before the
+## match enters the tree, as it sets [member reports_to_owner].
+const LEAVE_QUESTION := "Quit this match? Its record so far is lost, and you go back to Magic Battle."
+## Where a yes goes for a match nobody owns.
+const SETUP_SCREEN := "res://game/setup_screen.tscn"
+var leave_title := TITLE
+var leave_question := LEAVE_QUESTION
+## The splash's left button; "" keeps `Reconfigure duel`, which is exactly
+## what a yes does for a match from the battle-setup screen.
+var leave_label := ""
+## A yes, for an owner's match.
+signal leave_confirmed
+# --- end review 2026-10-21 ui-1 ---
+
 var _duel: DuelScreen = null
 var _window: Control = null
 ## Has the duel that is up been advanced past? Two ears hear the End of
@@ -135,6 +158,10 @@ func _start_duel() -> void:
 	_duel_advanced = false
 	_duel.duel_finished.connect(_on_duel_finished)
 	_duel.result_closed.connect(_on_result_closed.bind(_duel))
+	_duel.leave_title = leave_title          # review 2026-10-21 ui-1
+	_duel.leave_question = leave_question
+	_duel.leave_label = leave_label
+	_duel.leave_confirmed.connect(_on_leave_confirmed)
 	# `add_child` runs the duel screen's `_ready`, which builds its
 	# [MtgGame] — so the memories can start watching on the very next
 	# line, before a single card is played.
@@ -338,6 +365,18 @@ func _next_duel() -> void:
 
 func _leave() -> void:
 	get_tree().change_scene_to_file("res://game/main.tscn")
+
+
+## The player said yes to leaving from inside a duel (review 2026-10-21,
+## ui-1; [member leave_question]). Only while this match is the scene — the
+## guard [method DuelScreen._on_game_over_dismissed] keeps for the same
+## reason: a match a test holds is not the tree's to swap.
+func _on_leave_confirmed() -> void:
+	if reports_to_owner:
+		leave_confirmed.emit()
+		return
+	if is_inside_tree() and get_tree().current_scene == self:
+		get_tree().change_scene_to_file(SETUP_SCREEN)
 
 
 # ----------------------------------------------------------- Sideboard... --

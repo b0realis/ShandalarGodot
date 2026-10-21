@@ -191,6 +191,9 @@ var _mini_help: DuelMiniHelp = null
 var _card_menu_inst: CardInstance = null
 ## `Concede` → `Yes, I'm sure` (§6.3).
 var _concede_dialog: OriginalDialog = null
+## The held duel's `Quit ...?` question while it is up (review 2026-10-21,
+## ui-1; [member leave_question]).
+var _leave_dialog: OriginalDialog = null
 ## THE LIFE REGISTER'S OWN mini-menu — `@MENU_LIFE` / `@MENU_FACE`, the
 ## pair whose only difference is `Flip over to face` / `Flip back to
 ## lifepoints` (§6.5, and [DuelistFace] for the whole specification).
@@ -595,6 +598,32 @@ signal duel_finished(winner_id: int)
 ## _on_game_over]).
 signal result_closed
 
+# --- review 2026-10-21 ui-1: a duel somebody else holds ---
+## A DUEL INSIDE A LONGER RUN ASKS BEFORE IT LETS THE PLAYER GO. The
+## splash's `Reconfigure duel` and Pause → `Exit duel` went straight to the
+## battle-setup screen whoever held the duel: in a Gauntlet one click on
+## the five-second splash ended a run of up to twenty opponents without a
+## word and opened Magic Battle, a screen the player never came from, and
+## in a best-of match it dropped the record. "" is a duel that IS the
+## session — Magic Battle's free play — and both doors still go straight
+## back, as they always have (a test's `Exit duel` is its `Edit test`).
+## The screen that holds this duel sets these before it enters the tree
+## ([MatchScreen], and through it [GauntletScreen]): both doors then ask
+## [member leave_question] under [member leave_title], in the Concede
+## question's own window and words (`Yes, I'm sure` / `Cancel`), and a yes
+## is [signal leave_confirmed]. Where it goes is the holder's to say; this
+## screen never changes scene under a holder.
+var leave_question := ""
+var leave_title := ""
+## The splash's left button under a holder; "" keeps `Reconfigure duel`.
+var leave_label := ""
+## Above the splash (260) and the coin (250), under the Pause window (270),
+## which can open over the question and keeps the keys while it is up.
+const LEAVE_Z := 265
+## The player said yes to [member leave_question].
+signal leave_confirmed
+# --- end review 2026-10-21 ui-1 ---
+
 ## Battlefield display rows, in the order the OWNER'S REFERENCE SCREENSHOT
 ## was measured to have them (the thirteenth pass of
 ## `docs/duel-screen-design.md`): lands, then the other permanents, then
@@ -848,6 +877,9 @@ func _on_game_over(winner_id: int) -> void:
 	# still up (the other seat conceded at an SGManalink table) closes.
 	if mini_help_open():
 		_mini_help.dismiss()
+	# A held duel's `Quit ...?` is a question about a duel still running:
+	# the verdict answers it (review 2026-10-21, ui-1).
+	_cancel_leave()
 	# `@DIALOG_SHANDALARENDDUEL` has THREE lines, and the third one is the
 	# draw — which this used to fall through to `game.players[-1]` and
 	# announce as a win for seat 2 (found 2026-09-01 while building the
@@ -1195,6 +1227,12 @@ func _run_coin_toss(first: int) -> void:
 ## THE PRE-DUEL SPLASH. Returns when the player has seen it: `Go!`, five
 ## seconds, or `Reconfigure duel`, which leaves for the setup screen and
 ## never comes back (the caller checks `is_inside_tree`).
+##
+## A HELD DUEL'S SPLASH (review 2026-10-21, ui-1; [member leave_question])
+## names its left button by the holder's word and only ASKS: the five
+## seconds stop — the player has touched it — and the splash waits for
+## `Go!` under the question; a `Cancel` leaves it waiting, a yes is the
+## holder's ([signal leave_confirmed]), which takes this screen away.
 func _run_intro() -> void:
 	var intro := DuelIntro.new()
 	intro.z_index = 260
@@ -1202,12 +1240,22 @@ func _run_intro() -> void:
 	# node outside the tree cannot take focus — every soak duel printed
 	# `Condition "!is_inside_tree()" is true` until this order was fixed.
 	add_child(intro)
-	intro.build(config)
+	if leave_label != "":
+		intro.build(config, leave_label)
+	else:
+		intro.build(config)
 	_intro_overlay = intro
 	var leaving := [false]
-	intro.reconfigure_pressed.connect(func() -> void:
-		leaving[0] = true)
-	await _first_of(intro.go_pressed, intro.reconfigure_pressed)
+	if leave_question != "":
+		intro.reconfigure_pressed.connect(func() -> void:
+			intro.set_process(false)
+			_ask_to_leave())
+		await intro.go_pressed
+		_cancel_leave()    # `Go!` with the question still up answers it no
+	else:
+		intro.reconfigure_pressed.connect(func() -> void:
+			leaving[0] = true)
+		await _first_of(intro.go_pressed, intro.reconfigure_pressed)
 	if is_instance_valid(intro):
 		intro.queue_free()
 	_intro_overlay = null
@@ -4436,6 +4484,9 @@ func _on_escape() -> void:
 	# means here.
 	if _concede_dialog != null and is_instance_valid(_concede_dialog):
 		_concede_dialog.dismiss()
+		return
+	if leave_question_open():      # review 2026-10-21 ui-1: the same rung
+		_cancel_leave()
 		return
 	if _options_dialog != null and is_instance_valid(_options_dialog):
 		_options_dialog.dismiss()
@@ -8495,6 +8546,11 @@ func _on_pause_chosen(action: int) -> void:
 			if config.is_test():
 				edit_test()
 				return
+			# A held duel asks, and its holder says where a yes goes
+			# (review 2026-10-21, ui-1; [member leave_question]).
+			if leave_question != "":
+				_ask_to_leave()
+				return
 			get_tree().change_scene_to_file("res://game/setup_screen.tscn")
 		DuelPause.Action.MAIN_MENU:
 			_close_pause()
@@ -8634,6 +8690,54 @@ func _confirm_concede() -> void:
 		_concede_dialog.dismiss()
 	_report(game.concede(seat))
 	_refresh()
+
+
+# --- review 2026-10-21 ui-1: leaving a held duel asks first ---
+## The question a held duel's two doors open ([member leave_question]):
+## the Concede question's own window — the dark stone, one line, `Yes, I'm
+## sure` and `Cancel` — under the holder's title. `Cancel` holds the focus,
+## so the reflex Return is the harmless answer, as on the Pause window.
+func _ask_to_leave() -> void:
+	if leave_question_open():
+		return
+	var dialog := OriginalDialog.create(leave_title, Vector2(400, 180),
+		"panel_dark_stone")
+	dialog.z_index = LEAVE_Z
+	var ask := OriginalDialog.label(leave_question, 15)
+	ask.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dialog.body().add_child(ask)
+	dialog.add_button(TerritoryMenu.CONCEDE_CONFIRM).pressed.connect(_confirm_leave)
+	var cancel := dialog.add_button("Cancel")
+	cancel.pressed.connect(_cancel_leave)
+	dialog.closed.connect(func() -> void: _leave_dialog = null)
+	_leave_dialog = dialog
+	add_child(dialog)
+	if is_inside_tree():
+		cancel.grab_focus()
+
+
+## Is the held duel's question up (and not on its way out)?
+func leave_question_open() -> bool:
+	return _leave_dialog != null and is_instance_valid(_leave_dialog) \
+		and not _leave_dialog.is_queued_for_deletion()
+
+
+## `Cancel`, Esc, or the duel moving on under it: the question goes, and
+## the player is where they were. A second press in the same frame finds it
+## already gone (the Concede question's r2-6 rule).
+func _cancel_leave() -> void:
+	if _leave_dialog != null and is_instance_valid(_leave_dialog):
+		_leave_dialog.dismiss()
+	_leave_dialog = null
+
+
+## `Yes, I'm sure`: the holder's to act on.
+func _confirm_leave() -> void:
+	if not leave_question_open():
+		return
+	_cancel_leave()
+	leave_confirmed.emit()
+# --- end review 2026-10-21 ui-1 ---
 
 
 # --------------------------------------- the rest of the mini-menus (§6.12) --
@@ -12323,6 +12427,12 @@ func _on_control(event: InputEvent) -> void:
 	# opening hand too — its Concede is not ([method _on_pause_chosen]) —
 	# and the same key, or Esc, closes it again.
 	if _toss_active:
+		# ...and Esc is the held duel's question's Cancel over the splash
+		# (review 2026-10-21, ui-1), as it is over the table.
+		if leave_question_open() and not is_paused() \
+				and Controls.pressed(event, "duel_cancel"):
+			_cancel_leave()
+			return
 		if Controls.pressed(event, "duel_pause") \
 				or (is_paused() and Controls.pressed(event, "duel_cancel")):
 			_toggle_pause()

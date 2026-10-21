@@ -685,6 +685,13 @@ func _fill_picker() -> void:
 		var card_name := String(value)
 		if wanted != "" and not card_name.to_lower().contains(wanted):
 			continue
+		# ONLY A PERMANENT GOES ON THE TABLE (review 2026-10-21, engine-5):
+		# a Lightning Bolt put there stayed on the battlefield as a
+		# permanent for the whole duel, a state no game can reach. The
+		# hand, the graveyard and the library still take any card.
+		if _picker_zone == DuelPosition.TABLE and CardRegistry.has_card(card_name) \
+				and not CardRegistry.get_card(card_name).is_permanent_type():
+			continue
 		if shown >= POOL_ROWS:
 			_picker_list.add_item("… more: type more of the name")
 			_picker_list.set_item_disabled(_picker_list.item_count - 1, true)
@@ -763,9 +770,26 @@ func _on_search_input(event: InputEvent) -> void:
 # =========================================================== saved tests --
 
 ## The saved tests, by name — read defensively: the file is the player's.
+##
+## EVERY NAME IS TEXT (review 2026-10-21, ui-3). A hand edit can give a
+## saved test a number for a name (`{1: {...}}`), and `String(1)` is a
+## script error in this engine: the Saved tests list stopped at it and
+## every test after it could not be reached. A number reads as its digits —
+## the name the player meant — and a name of any other kind is left out; a
+## text name wins over a number that reads the same. The next `Save` or
+## `Delete` writes the names back as text.
 static func saved_tests() -> Dictionary:
 	var saved: Variant = Settings.get_value(SAVED_KEY, {})
-	return saved if saved is Dictionary else {}
+	if not (saved is Dictionary):
+		return {}
+	var out := {}
+	for key in saved:
+		var text := key is String or key is StringName
+		if text or key is int or key is float:
+			var test_name := String(key) if text else str(key)
+			if text or not out.has(test_name):
+				out[test_name] = saved[key]
+	return out
 
 
 func _refresh_saved() -> void:

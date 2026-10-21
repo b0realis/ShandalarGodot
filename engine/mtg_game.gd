@@ -768,6 +768,29 @@ func _rec_resolution(item: StackItem) -> void:
 			undo_log.record(p, field, p.get(field))
 
 
+## A MANA ABILITY'S SIDE EFFECT is about to run ("then choose a random
+## color" — Gem Bazaar; a pain land's damage; a depletion counter; a
+## delayed draw or sacrifice). A mana ability never uses the stack (CR
+## 605.3a), so it never reaches [method _rec_resolution], and a card
+## script's side effect may write its own card by hand just as a
+## resolving effect may: Gem Bazaar's reroll wrote `memory` with nothing
+## recorded, and a search that tapped it (the combo walk does) handed the
+## real game back a Bazaar of another colour (whole-project review
+## 2026-10-21, engine-4). So the same things a resolution's are recorded:
+## the source whole, and the per-turn tables a card script fills by hand.
+## Only while a search runs, and only for the few mana abilities that have
+## a side effect at all.
+func _rec_mana_side_effect(source: CardInstance) -> void:
+	if undo_log == null:
+		return
+	undo_log.record_object(source)
+	for field in RESOLUTION_TABLES:
+		undo_log.record(self, field, get(field))
+	for p in players:
+		for field in PLAYER_RESOLUTION_FIELDS:
+			undo_log.record(p, field, p.get(field))
+
+
 ## The per-turn state a RESOLUTION may write outside the zone/damage/stack
 ## helpers — the delayed-action pools ([method doom_at_next_end_step],
 ## [method schedule_end_step_action], [method watch_death] ...) and the
@@ -1476,6 +1499,16 @@ func _position_card(pid: int, card_name: String, extras: Array[int]) -> CardInst
 ## unless [param sick]: it has been under its controller's control since
 ## before the turn began (CR 302.6) unless the player says otherwise.
 func _place_from_position(inst: CardInstance, pid: int, tapped: bool, sick: bool) -> void:
+	# An instant or a sorcery is never a permanent, and "if it would enter
+	# the battlefield, it remains in its previous zone instead" (CR 304.4,
+	# 307.4) — here the library it was taken out of. DuelPosition.refusal()
+	# turns such a position down first; this is for a caller that did not
+	# ask it (whole-project review 2026-10-21, engine-5).
+	if not inst.data.is_permanent_type():
+		inst.zone = Mtg.Zone.LIBRARY
+		players[inst.owner_id].library.insert(0, inst)
+		log_line("Test hands: %s is not a permanent and stays in the library" % inst.data.card_name)
+		return
 	inst.zone = Mtg.Zone.BATTLEFIELD
 	inst.controller_id = pid
 	inst.layer_timestamp = continuous.next_timestamp()
@@ -2342,6 +2375,7 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	if mana_sacrifice != null:
 		sacrifice_permanent(mana_sacrifice)
 	if ability.side_effect.is_valid():
+		_rec_mana_side_effect(inst)
 		ability.side_effect.call(self, inst, pid)
 	# Mana triggers (Mana Flare, Wild Growth) fire off-stack right now.
 	#
@@ -2719,13 +2753,51 @@ func _pop_proposed_x(inst: CardInstance, was: int) -> void:
 		_proposed_x[inst.id] = was
 
 
+## THE CASTER, PROPOSED AS THE SPELL'S CONTROLLER (whole-project review
+## 2026-10-21, engine-2). A spell is controlled by the player who casts it
+## (CR 110.2), and the card is on the stack before its targets are chosen
+## (CR 601.2a, 601.2c), so "target opponent", "your graveyard" and a
+## shroud's exemption are judged from the CASTER's seat. The engine checks
+## the targets before it moves the card, while its controller_id is still
+## its owner's — the same seat for every card but one cast out of an
+## opponent's library (Grinning Totem). So the caster is proposed for the
+## checks and withdrawn right after them, as [method _push_proposed_x]
+## does for X; [method cast_spell] makes it real as the card goes on the
+## stack. Returns the seat to give back.
+func _propose_caster(inst: CardInstance, pid: int) -> int:
+	if inst == null:
+		return -1
+	var was := inst.controller_id
+	inst.controller_id = pid
+	return was
+
+
+func _withdraw_caster(inst: CardInstance, was: int) -> void:
+	if inst != null and was >= 0:
+		inst.controller_id = was
+
+
+## A card leaving the stack other than onto the battlefield is its OWNER's
+## again: off the battlefield and the stack a card has no controller of
+## its own (CR 110.2), and the engine reads its owner there. A spell cast
+## out of an opponent's library (Grinning Totem) goes home this way —
+## countered, fizzled, resolved, exiled (review 2026-10-21, engine-2).
+## Journaled; a no-op for every card its owner cast.
+func _spell_goes_home(inst: CardInstance) -> void:
+	if inst != null and inst.controller_id != inst.owner_id:
+		_rec(inst, &"controller_id")
+		inst.controller_id = inst.owner_id
+
+
 ## Is [param ref] a legal target for [param spec] if [param source] were
 ## cast for X = [param x_value]? The prospective twin of
 ## [method TargetSpec.is_legal] — see the block comment above.
 func target_legal_at(spec: TargetSpec, ref: TargetRef, source: CardInstance,
 		x_value: int, earlier: Array = []) -> bool:
 	var was := _push_proposed_x(source, x_value)
+	var owner_seat := _propose_prospective_caster(source)
 	var ok := spec.is_legal(self, ref, source, earlier)
+	_withdraw_caster(source, owner_seat)
 	_pop_proposed_x(source, was)
 	return ok
 
@@ -2736,9 +2808,26 @@ func target_legal_at(spec: TargetSpec, ref: TargetRef, source: CardInstance,
 func legal_targets_at(spec: TargetSpec, source: CardInstance, x_value: int,
 		earlier: Array = []) -> Array[TargetRef]:
 	var was := _push_proposed_x(source, x_value)
+	var owner_seat := _propose_prospective_caster(source)
 	var out := spec.legal_targets(self, source, earlier)
+	_withdraw_caster(source, owner_seat)
 	_pop_proposed_x(source, was)
 	return out
+
+
+## The three prospective target readers above and [method
+## target_refusal_at] judge a card about to be cast from its CASTER's
+## seat (CR 110.2, see [method _propose_caster]): for a card a permission
+## lets another seat play out of exile (Grinning Totem's thief), that
+## seat — so the duel screen, SGManalink and the AI offer the stolen
+## "target opponent" spell the thief's opponent (review 2026-10-21,
+## engine-2). Every other source's controller_id already answers. Returns
+## what to hand [method _withdraw_caster] (-1: nothing was proposed).
+func _propose_prospective_caster(source: CardInstance) -> int:
+	if source == null or source.zone != Mtg.Zone.EXILE or source.exile_playable_by < 0 \
+			or source.exile_playable_by == source.controller_id:
+		return -1
+	return _propose_caster(source, source.exile_playable_by)
 
 
 ## Would [param inst]'s "Cast this spell only ..." rider admit a cast in
@@ -3066,12 +3155,14 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 		out.error = cost_why
 		return out
 	var was := _push_proposed_x(inst, x_value)
+	var owner_seat := _propose_caster(inst, pid)
 	var plan := TargetPlan.for_spell(self, inst.data, effects_mode, targets, x_value, inst)
 	var target_why := plan.error
 	if target_why == "":
 		target_why = _adverse_targets_refusal(plan, inst)
 	if target_why == "":
 		target_why = _random_targets_refusal(plan, inst)
+	_withdraw_caster(inst, owner_seat)
 	_pop_proposed_x(inst, was)
 	if target_why != "":
 		out["error"] = target_why
@@ -3175,8 +3266,11 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	# filed a PlayerChoice (and a "(decided for …)" log line) for a cast the
 	# engine then turned down. An opponent's own target comes first (CR
 	# 601.2c) — no spell in the pool has one, but the plan carries the slot.
-	if not _fill_adverse_targets(plan, pid, inst, {"kind": "cast", "pid": pid,
-			"inst": inst, "targets": targets, "x": x_value, "mode": mode}):
+	var owner_seat := _propose_caster(inst, pid)   # CR 110.2 (see the helper)
+	var adverse_filled := _fill_adverse_targets(plan, pid, inst, {"kind": "cast", "pid": pid,
+			"inst": inst, "targets": targets, "x": x_value, "mode": mode})
+	_withdraw_caster(inst, owner_seat)
+	if not adverse_filled:
 		return ""
 	var drought_groups: Array = []
 	if not extra_bodies.is_empty(): drought_groups.append({"bodies": extra_bodies, "count": 1})
@@ -3216,7 +3310,9 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	# Every question is answered and nothing can refuse: the game rolls
 	# the targets that are its to roll (CR 601.2c, before the cost of
 	# 601.2h) — once, since a held cast reaches here only on its replay.
+	owner_seat = _propose_caster(inst, pid)
 	_fill_random_targets(plan, inst)
+	_withdraw_caster(inst, owner_seat)
 	# THE STACK FREEZES HERE (CR 603.3, 601.2h). Nothing below refuses, so
 	# the cost is about to be paid and nobody receives priority again until
 	# the spell is on the stack — every trigger the payment raises waits and
@@ -3269,6 +3365,13 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		players[inst.owner_id].exile.erase(inst)
 	else: players[pid].hand.erase(inst)
 	inst.zone = Mtg.Zone.STACK
+	# A spell's controller is the player who cast it (CR 110.2), owner or
+	# not: Grinning Totem's thief, whose stolen spell reads "opponent",
+	# "you" and "its controller" from the thief's seat until it leaves the
+	# stack ([method _spell_goes_home]). Review 2026-10-21, engine-2.
+	if inst.controller_id != pid:
+		_rec(inst, &"controller_id")
+		inst.controller_id = pid
 	var item := StackItem.new()
 	item.kind = Mtg.StackKind.SPELL
 	item.card = inst
@@ -3295,6 +3398,8 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	for t in plan.flat():
 		item.targets.append(t)
 	item.target_groups = plan.groups
+	# Which OBJECTS those are (CR 400.7, review 2026-10-21 engine-1).
+	_pin_target_incarnations(item)
 	item.x_value = x_value
 	# (memory["x_value"] was stamped above, once the cost was known to be
 	# payable — the permanent this becomes reads it for "enters with X
@@ -3983,6 +4088,8 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	for t in plan.flat():
 		item.targets.append(t)
 	item.target_groups = plan.groups
+	# Which OBJECTS those are (CR 400.7, review 2026-10-21 engine-1).
+	_pin_target_incarnations(item)
 	item.description = "%s activates %s: %s" % [
 		players[pid].player_name, inst.data.card_name, ability.text]
 	if undo_log != null:
@@ -7161,6 +7268,7 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 			break
 	log_line("%s is countered" % inst.data.card_name, inst)
 	_forget_x(inst)
+	_spell_goes_home(inst)   # Desertion's battlefield sets its own controller
 	if inst.is_copy:
 		# A copy of a spell is not a card: countering it makes it cease to
 		# exist rather than putting a phantom card in a graveyard where
@@ -8361,6 +8469,7 @@ func retarget_spell(spell: CardInstance, index: int, ref: TargetRef) -> bool:
 	_rec(item, &"target_groups")
 	item.targets = plan.flat()
 	item.target_groups = plan.groups
+	_pin_new_target(item, ref)   # the object named NOW (CR 400.7)
 	log_line("%s is redirected to %s" % [spell.data.card_name, str(ref)])
 	# CR 115.7: the NEW target becomes the target of the spell.
 	if not ref.same_object(old_ref):
@@ -8495,6 +8604,13 @@ func copy_spell_on_stack(spell: CardInstance, controller: int,
 		for t in refs:
 			groups.append([t])
 		made.target_groups = groups
+	# A copy that keeps the original's targets keeps the OBJECTS the
+	# original was cast at (CR 707.10 copies the choices; CR 400.7) — a
+	# target that has blinked since is no target of the copy either. New
+	# targets are pinned to what stands there now.
+	if new_targets.is_empty() and original != null:
+		made.target_incarnations = original.target_incarnations.duplicate()
+	_pin_target_incarnations(made)
 	made.description = "%s copies %s" % [
 		players[controller].player_name, spell.data.card_name]
 	# A stack id of its own, as every other stack object gets (bug pass
@@ -8567,6 +8683,7 @@ func offer_new_targets(copy: CardInstance, pid: int, prefer_player := -1) -> voi
 				_rec(item, &"target_groups")
 				item.targets[flat_at + j] = replaced
 				group[j] = replaced
+				_pin_new_target(item, replaced)   # chosen now (CR 707.10c, 400.7)
 				log_line("%s's copy is aimed at %s" % [
 					copy.data.card_name, target_label(replaced)])
 				chosen = replaced
@@ -9005,6 +9122,7 @@ func card_to_graveyard_from_anywhere(inst: CardInstance) -> void:
 		for index in range(stack.size() - 1, -1, -1):
 			if stack[index].kind == Mtg.StackKind.SPELL and stack[index].card == inst: stack.remove_at(index)
 		_forget_x(inst)
+		_spell_goes_home(inst)
 	_remove_from_zone(inst)
 	put_into_graveyard(inst)
 
@@ -10680,7 +10798,9 @@ func _all_targets_illegal(item: StackItem) -> bool:
 		for ref in group:
 			# Judged from the ABILITY's controller, not its source's
 			# current one (CR 113.7a): a sacrificed source has gone home.
-			if effect.target_spec.is_legal(self, ref, item.card, earlier, item.controller):
+			# And still the object chosen (CR 400.7, review 2026-10-21).
+			if effect.target_spec.is_legal(self, ref, item.card, earlier, item.controller) \
+					and _target_still_chosen(item, ref):
 				return false
 		earlier.append_array(group)
 	return targeting
@@ -10704,7 +10824,11 @@ func _resolve_spell(item: StackItem) -> void:
 			if not group.is_empty():
 				targeting = true
 			for ref in group:
-				if specs[i].is_legal(self, ref, inst, earlier):
+				# Judged from the SPELL's controller (CR 110.2) and only for
+				# the object it was cast at (CR 400.7) — both whole-project
+				# review 2026-10-21 (engine-2, engine-1).
+				if specs[i].is_legal(self, ref, inst, earlier, item.controller) \
+						and _target_still_chosen(item, ref):
 					any_legal = true
 			earlier.append_array(group)
 		if targeting and not any_legal:
@@ -10747,6 +10871,7 @@ func _resolve_spell(item: StackItem) -> void:
 ## Pack 9 E2) — never passed for a fizzle, which does not resolve.
 func _spell_to_graveyard(inst: CardInstance, buyback := false) -> void:
 	_forget_x(inst)
+	_spell_goes_home(inst)
 	# "Exile Recall" — a spell that removes itself on resolution.
 	if inst.exile_after_resolution and not inst.is_copy:
 		_rec_move(inst, inst.owner_id, Mtg.Zone.EXILE)
@@ -10812,7 +10937,10 @@ func _run_effects_impl(item: StackItem) -> void:
 			# about the object that was named.
 			var still_legal: Array = []
 			for ref in group:
-				if effect.target_spec.is_legal(self, ref, item.card, earlier, item.controller):
+				# A card that left its zone and came back is a new object
+				# and no target of this one (CR 400.7, review 2026-10-21).
+				if effect.target_spec.is_legal(self, ref, item.card, earlier, item.controller) \
+						and _target_still_chosen(item, ref):
 					still_legal.append(ref)
 			earlier.append_array(group)
 			if still_legal.size() < group.size():
@@ -11034,6 +11162,7 @@ func _arrival_refused(inst: CardInstance, why: String) -> void:
 				home.graveyard.append(inst)
 		_:
 			if not home.graveyard.has(inst):
+				_spell_goes_home(inst)
 				_land_in_graveyard(inst)   # a refused permanent SPELL (Forbidden Crypt applies)
 	_emit_state()
 
@@ -13304,6 +13433,64 @@ func _trigger_ref_legal(item: StackItem, index: int) -> bool:
 	return true
 
 
+# ------------------------------------- CR 400.7 for spells and abilities --
+#
+# Whole-project review 2026-10-21, engine-1. A card keeps its instance id
+# when it leaves a zone and comes back, and a TargetRef names nothing else,
+# so a spell or an activated ability whose target was bounced and recast
+# in response (Aluren), or let out of a Tawnos's Coffin, found "its" target
+# on the battlefield again and hit the NEW object. Triggers already pinned
+# the incarnation they aimed at (above); a spell or an ability now pins it
+# too as it goes on the stack ([member StackItem.target_incarnations]),
+# and every place that judges its targets on resolution — the ability's
+# fizzle test [method _all_targets_illegal], the spell's in
+# [method _resolve_spell], and the per-ref filter of
+# [method _run_effects_impl] (CR 608.2c) — asks [method _target_still_chosen]
+# beside the spec's own legality.
+
+## Pin the zone incarnation of every card target of [param item] that has
+## none pinned yet — as it goes on the stack, or after its targets were
+## rebuilt with a pin already in place for the old ones. A fresh StackItem
+## needs no journal record; a change to one already on the stack is
+## recorded by the caller.
+func _pin_target_incarnations(item: StackItem) -> void:
+	for ref in item.targets:
+		if ref == null or ref.is_player or ref.is_damage or ref.is_ability:
+			continue
+		if item.target_incarnations.has(ref.instance_id):
+			continue
+		var target := find_instance(ref.instance_id)
+		if target != null:
+			item.target_incarnations[ref.instance_id] = _trigger_incarnation(target)
+
+
+## A target NAMED NOW for [param item], already on the stack (a
+## redirection, CR 115.7; a copy's new target, CR 707.10c): pinned to the
+## object that is there now, whatever was pinned under that id before.
+## Journaled.
+func _pin_new_target(item: StackItem, ref: TargetRef) -> void:
+	if ref == null or ref.is_player or ref.is_damage or ref.is_ability:
+		return
+	var target := find_instance(ref.instance_id)
+	if target == null:
+		return
+	_rec(item, &"target_incarnations")
+	item.target_incarnations[ref.instance_id] = _trigger_incarnation(target)
+
+
+## Is the card [param ref] names still the OBJECT [param item] chose — has
+## it not left its zone since (CR 400.7)? Players, damage and abilities
+## always are; so is a card [param item] has no pin for.
+func _target_still_chosen(item: StackItem, ref: TargetRef) -> bool:
+	if ref == null or ref.is_player or ref.is_damage or ref.is_ability:
+		return true
+	if not item.target_incarnations.has(ref.instance_id):
+		return true
+	var target := find_instance(ref.instance_id)
+	return target != null \
+		and _trigger_incarnation(target) == item.target_incarnations[ref.instance_id]
+
+
 ## Recalculate after a permanent's TAPPED state changed.
 ##
 ## PERFORMANCE: tapping is by far the most frequent state change in a game
@@ -13905,13 +14092,17 @@ func _pool_empties_now() -> bool:
 
 ## Is the step we are LEAVING the last one of its phase? (The end of the
 ## turn counts.) Shared by the two 1997 rules that key off phases rather
-## than steps: the mana-pool emptying and the lethal-life check.
+## than steps: the mana-pool emptying and the lethal-life check. The
+## phases are the 1997 ones ([method Mtg.phase_of_1997]): the upkeep and
+## the draw are a phase each (the owner's ruling of 2026-10-21, "as
+## separate phases!"); until then the modern map lumped them into one, so
+## mana floated in the upkeep was still there, unburned, in the draw step.
 func _phase_ends_now() -> bool:
 	var next_index := _step_index + 1
 	if next_index >= _turn_steps.size():
 		return true        # the turn is ending
-	return Mtg.phase_of(_turn_steps[_step_index]) \
-		!= Mtg.phase_of(_turn_steps[next_index])
+	return Mtg.phase_of_1997(_turn_steps[_step_index]) \
+		!= Mtg.phase_of_1997(_turn_steps[next_index])
 
 
 ## The untap step's turn-based actions (CR 502.2–502.3). True when done;
@@ -16479,6 +16670,7 @@ func retarget_stack_item(item_id: int, index: int, ref: TargetRef) -> bool:
 		_rec(item, &"target_groups")
 		item.targets = plan.flat()
 		item.target_groups = plan.groups
+		_pin_new_target(item, replacement)   # the object named NOW (CR 400.7)
 	else:
 		if not _trigger_retarget_legal(item, index, replacement):
 			return false
@@ -16702,6 +16894,7 @@ func exile_spell_from_stack(spell: CardInstance, counter_kind := "",
 		_emit_state()
 		return {}
 	_forget_x(spell)   # CR 107.3b off the stack; the snapshot keeps it
+	_spell_goes_home(spell)   # the snapshot keeps the controller too
 	if spell.graveyard_exile_spell:
 		# Bösium Strip's "if it would be put into a graveyard, exile it
 		# instead" ends as the spell stops being one (CR 400.7).
@@ -16742,12 +16935,16 @@ func put_exiled_spell_on_stack(card: CardInstance, snapshot: Dictionary) -> Stac
 		return null
 	var item := StackItem.from_snapshot(snapshot, card)
 	_p9e6_drop_moved_targets(item, snapshot.get("incarnations", {}))
+	_pin_target_incarnations(item)   # what is left has not moved (CR 400.7)
 	_rec_move(card, card.owner_id, Mtg.Zone.STACK)
 	_rec(card, &"counters")
 	_rec(card, &"memory")
 	players[card.owner_id].exile.erase(card)
 	_turn_face_up_leaving_exile(card)
 	card.zone = Mtg.Zone.STACK
+	if card.controller_id != item.controller:   # CR 110.2 (review 2026-10-21)
+		_rec(card, &"controller_id")
+		card.controller_id = item.controller
 	card.counters = {}
 	card.memory = (snapshot.get("memory", {}) as Dictionary).duplicate(true)
 	card.memory.erase("flash_cast")   # not cast: no flash rider follows it
@@ -16840,11 +17037,17 @@ static func _p9e6_delay_tick(game: MtgGame, _source: CardInstance, _event: GameE
 
 
 ## The zone incarnation (CR 400.7) of every card [param item] targets, by
-## instance id — [method _trigger_incarnation]'s reading.
+## instance id — [method _trigger_incarnation]'s reading. The one pinned
+## as the spell was cast wins ([member StackItem.target_incarnations],
+## review 2026-10-21): a target that had already left and come back
+## before the spell was exiled is not its target when it returns either.
 func _p9e6_target_incarnations(item: StackItem) -> Dictionary:
 	var out := {}
 	for ref in item.targets:
 		if ref.is_player or ref.is_damage or ref.is_ability:
+			continue
+		if item.target_incarnations.has(ref.instance_id):
+			out[ref.instance_id] = item.target_incarnations[ref.instance_id]
 			continue
 		var target := find_instance(ref.instance_id)
 		if target != null:
@@ -17207,7 +17410,9 @@ func activation_refusal(pid: int, inst: CardInstance, index: int,
 func target_refusal_at(spec: TargetSpec, ref: TargetRef, source: CardInstance,
 		x_value: int, earlier: Array = []) -> String:
 	var was := _push_proposed_x(source, x_value)
+	var owner_seat := _propose_prospective_caster(source)   # CR 110.2
 	var why := spec.refusal_reason(self, ref, source, earlier)
+	_withdraw_caster(source, owner_seat)
 	_pop_proposed_x(source, was)
 	return why
 

@@ -146,6 +146,17 @@ your opponent's turn, while the lower half represents your turn"*
 (`Duel.hlp`) — with the **window icon** in the blank band between them.
 That is exactly what we already render.
 
+The same phases are what the 1997 rules forks mean by *"at the end of each
+phase"* — the pool emptying and burning (p.176,
+`RulesOptions.pool_empties_on_attack`) and the lethal-life check (p.174,
+`life_checked_at_phase_end`): **Untap, Upkeep and Draw are a phase each**,
+so mana floated in the upkeep burns as the upkeep ends and a player below
+1 life at the end of the upkeep loses there (the owner's ruling of
+2026-10-21: *"as separate phases!"* — until then the engine lumped the
+three into the modern beginning phase); Main counts as its three parts,
+with combat **one** of them (the ruling of 2026-08-31); `END` and
+`CLEANUP` together are the broom's phase. `Mtg.phase_of_1997` is the map.
+
 Inside slot 4, the **Combat Bar** shows **seven** icons — one per tooltip,
 per `Duel.hlp`'s own topic **Combat Bar**: *"This bar has seven icons,
 representing the sub-phases of combat"*, followed by the list below. (The

@@ -338,11 +338,13 @@ static func is_main_step(step: int) -> bool:
 	return step == Step.MAIN1 or step == Step.MAIN2
 
 
-## The five PHASES a turn is made of. Our Step enum is flat and phases are
-## implicit (see its comment); this names them, because the 1997 ruleset
-## does several things per PHASE where modern rules do them per STEP —
-## emptying the mana pool and checking for a dead player, both of which
-## RulesOptions can switch to the 1997 shape.
+## The five PHASES a turn is made of under the modern rules (CR 500.1).
+## Our Step enum is flat and phases are implicit (see its comment); this
+## names them. The 1997 ruleset does several things per PHASE where modern
+## rules do them per STEP — emptying the mana pool and checking for a dead
+## player, both of which RulesOptions can switch to the 1997 shape — but
+## its phases are not these: see [enum Phase1997] below, which is what
+## those two forks read (review 2026-10-21).
 enum Phase { BEGINNING, PRECOMBAT_MAIN, COMBAT, POSTCOMBAT_MAIN, ENDING }
 
 
@@ -357,3 +359,35 @@ static func phase_of(step: int) -> int:
 	if step == Step.MAIN2:
 		return Phase.POSTCOMBAT_MAIN
 	return Phase.ENDING
+
+
+## THE 1997 PHASES, which is what the 1997 forks mean by "the end of each
+## phase" (RulesOptions.pool_empties_on_attack, .life_checked_at_phase_end).
+## The manual names six (p.60, docs/glossary-1997.md §3): *"1) Untap
+## 2) Upkeep 3) Draw 4) Main 5) Discard 6) Cleanup"* — so Untap, Upkeep and
+## Draw are a phase EACH, where the modern map above lumps them into one
+## beginning phase. The owner's ruling of 2026-10-21 on the whole-project
+## review (engine-3): *"as separate phases!"*. Main stays the three parts
+## the Phase Bar draws, with combat ONE of them (the ruling of 2026-08-31:
+## the pool empties "at the beginning and end of an attack", p.176), and
+## our END and CLEANUP are the one phase the Phase Bar's broom stands for.
+enum Phase1997 { UNTAP, UPKEEP, DRAW, MAIN_PRECOMBAT, MAIN_COMBAT,
+	MAIN_POSTCOMBAT, CLEANUP }
+
+
+## Which 1997 phase [param step] belongs to ([enum Phase1997]).
+static func phase_of_1997(step: int) -> int:
+	match step:
+		Step.UNTAP:
+			return Phase1997.UNTAP
+		Step.UPKEEP:
+			return Phase1997.UPKEEP
+		Step.DRAW:
+			return Phase1997.DRAW
+		Step.MAIN1:
+			return Phase1997.MAIN_PRECOMBAT
+		Step.MAIN2:
+			return Phase1997.MAIN_POSTCOMBAT
+	if is_combat_step(step):
+		return Phase1997.MAIN_COMBAT
+	return Phase1997.CLEANUP

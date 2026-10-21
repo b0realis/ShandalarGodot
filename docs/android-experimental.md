@@ -21,9 +21,24 @@ provisional recommendation, not a measured minimum. There is no x86 APK.
    its APK alone does **not** install the skin.
 4. Card pictures and completed optional card packs are not distributed.
    Prepare them on a desktop with the included tools (see
-   `CARD-ART-AND-PACKS.md`), copy the ZIPs to Downloads and import them through
-   the game's chooser. Do not try to write into Android/data with a file
-   manager: modern Android restricts that location.
+   `CARD-ART-AND-PACKS.md`). The card-picture ZIP (`cardart.zip`) goes in
+   like the skin: copy it to Downloads and choose it in **Options → Skin**.
+   That chooser takes only skin and card-picture ZIPs; it refuses the
+   numbered packs (`Pack-1-DotP-complete.zip` … `Pack-9-Tempest-Block.zip`).
+5. A numbered pack goes in the game's own folder,
+   `Android/data/com.b0realis.shandalar.android/files/cardpacks/`, which a
+   file manager on modern Android cannot write. Start the game once so it
+   makes that folder, then copy each pack from a computer with `adb` (USB
+   debugging on), through Downloads, under its exact name:
+
+   ```sh
+   adb push Pack-1-DotP-complete.zip /sdcard/Download/
+   adb shell cp /sdcard/Download/Pack-1-DotP-complete.zip /sdcard/Android/data/com.b0realis.shandalar.android/files/cardpacks/
+   ```
+
+   Restart the game (or **Options → Card Packs → Rescan**) and enable the
+   pack there. Never make that folder yourself with `adb shell mkdir`: the
+   game cannot open a folder the shell made.
 
 Touch plays the game. Enable the fullscreen large-card reader in Options
 for a small display; the Android Back button/gesture acts as Escape. The

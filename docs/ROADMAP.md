@@ -18811,6 +18811,36 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-21 — The whole-project review (0.50.42)
+
+The owner, on 0.50.41, asked for a review of the whole project as it
+stands; on the ranked list: *"All! engine-3:as separate phases! Document
+each fix"*. Five read-only reviewers by area, a skeptic per area, then four
+fixers on disjoint files: 27 findings, 25 real (5 medium), 2 refuted. Each
+fix, its test and what was left are in
+`docs/whole-project-review-2026-10-21.md`.
+
+- Rules: a spell or ability whose target left play and came back fizzles
+  (CR 400.7, `StackItem.target_incarnations`); a spell cast from another
+  player's library is the caster's while on the stack (Grinning Totem);
+  **the 1997 forks read the manual's six phases** — the upkeep and the draw
+  a phase each (`Mtg.phase_of_1997`, the owner's ruling); a mana ability's
+  side effect is journaled (Gem Bazaar); Test hands never puts a
+  non-permanent on the table (`DuelPosition.fits_on_table`).
+- AI: CARD-COMBOS' mana for the hand counts only what will be cast and
+  never burns; the Wizard's cast veto passes over abilities with non-mana
+  costs; no Shrieking Drake cast to return itself; Mana Drain's payout is
+  priced under mana burn; a second copy of a filled combo slot is no
+  progress.
+- Screens: a duel held by a Gauntlet or a match asks before leaving and
+  goes back to its holder (`DuelScreen.leave_*`); three settings readers
+  survive wrong-kind entries; Packs 2–9 ask about versions before the
+  manifest comparison (`PortalPack.version_refusal`).
+- Tools: the Android guide's card-pack route, the Web README's LAN line,
+  the offline packer's threaded-export guard, the service-worker test in CI
+  and the release recipe, `test_tracked_tree.py` reading every file for any
+  home folder, and skin / card-back choices written whole.
+
 ## 2026-10-19 — The Situation Bar's frame (0.50.40) [QoL]
 
 The owner, over a photo of the 1997 bar: *"Original 1997 shandalar has
