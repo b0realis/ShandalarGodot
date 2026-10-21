@@ -253,11 +253,15 @@ words (`_ask_to_leave`, Cancel focused), and never changes scene itself.
   question closes if the duel ends. Plain duels and Test hands are as they
   were. `docs/gauntlet-design.md` §13, Help's matches page.
 
-**Tests.** `tests/ui/test_review_2026_10_21_leaving_a_held_duel.gd` (10).
+**Tests.** `tests/ui/test_review_2026_10_21_leaving_a_held_duel.gd` (10; 12 with the rulings below).
 
-**Left, the owner's call.** Pause › Return to main menu still leaves a
-Gauntlet or match without asking (it says where it goes, as in every duel),
-and the Gauntlet round window's own "Quit Gauntlet" still goes to the title.
+**The owner's rulings, the same day (0.50.43).** Pause › Return to main
+menu asks too — *"Yes."* (`DuelScreen.menu_question`, `menu_confirmed`; a
+match's own words: *"Quit this match? Its record so far is lost, and you go
+back to the main menu."*) — and *"Quit gauntlet goes to title, quit duel
+goes to title."*: every door out of a Gauntlet duel now ends the run at the
+title, as the round window's own Quit Gauntlet always did, not at Gauntlet
+Options.
 
 ### ui-2, ui-3, ui-4 — hand-edited settings of the wrong kind
 
@@ -312,6 +316,12 @@ to add a pack would be a new button — the owner's pick, from mockups.
 
 **Tests.** `tools/test_build_android.py`,
 `test_the_guide_sends_numbered_packs_to_the_card_folder`.
+
+**Then (0.50.43).** The owner picked the in-game way from three mockups —
+*"Yes A is the leanest"*: **Options › Card Packs › Add pack...**, beside Open
+Folder and Rescan (`CardPacks.add_pack`; `tests/ui/test_card_packs_add_pack.gd`).
+The guide now gives it first and keeps adb for a device whose file box
+cannot reach Downloads (not yet tried on a real device).
 
 ### nettools-2 — the Web README promised LAN play
 
@@ -393,13 +403,16 @@ deletes the kept zip before its rename; `CardBack.adopt_bytes` goes through
   four rows too. It now also checks the Custom row, as
   `test_options_rules.gd` already did.
 
+- **The privacy check refused itself on CI (0.50.43).** The first CI run of
+  0.50.42 failed one test: `tools/test_tracked_tree.py` wrote the CI
+  runner's home out whole (two comments and an allow-list case), and on CI
+  that path IS the machine's home, which the release guard refuses in every
+  file. The file now never spells it whole; the test passes with HOME set to
+  the runner's and to the desk's. The new `web-offline` job passed on its
+  first run.
+
 ## Left open
 
-- In-game adding of a numbered card pack on Android (a new button: mockups
-  first).
-- Whether Pause › Return to main menu should ask inside a Gauntlet or match,
-  and whether the round window's "Quit Gauntlet" should go to Gauntlet
-  Options too.
 - Seen by the reviewers but not taken up: a pasted deck list has no limit on
   its total size; the MCP server's read-deck tools read any path (the write
   tools are fenced); ante cards still work with Ante off; Fireball divides X

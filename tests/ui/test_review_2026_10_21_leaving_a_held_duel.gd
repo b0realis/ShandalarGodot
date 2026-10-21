@@ -14,10 +14,11 @@ extends GutTest
 ## [GauntletScreen]). Both doors ask first, in the Concede question's own
 ## window and words, and a yes goes where the player came from: a match
 ## started on Magic Battle back to Magic Battle (the ROADMAP's own *"exit
-## duel (return to duel config)"*), a Gauntlet to its own Gauntlet Options
-## window with the run's parameters still set — the original's shape for
-## every way a run ends. A plain Magic Battle duel and a Test hands duel
-## are exactly as they were.
+## duel (return to duel config)"*), a Gauntlet to the title, as its round
+## window's own `Quit Gauntlet` does — the owner, the same day: *"Quit
+## gauntlet goes to title, quit duel goes to title."* Pause → `Return to
+## main menu` asks too (the owner: *"Yes."*), in its own words for a match.
+## A plain Magic Battle duel and a Test hands duel are exactly as they were.
 ##
 ## Nothing here presses a door that changes the scene: that would replace
 ## the test runner's own scene.
@@ -80,6 +81,7 @@ func test_a_plain_duel_is_held_by_nobody_and_keeps_its_splash() -> void:
 	add_child_autofree(duel)
 	await get_tree().process_frame
 	assert_eq(duel.leave_question, "", "Magic Battle's free play asks nothing, as before")
+	assert_eq(duel.menu_question, "", "and its Return to main menu neither")
 	duel._run_intro()
 	assert_true(_buttons(duel._intro_overlay).has("Reconfigure duel"))
 	duel._intro_overlay.go_pressed.emit()
@@ -91,6 +93,7 @@ func test_a_matchs_duel_is_held_and_its_splash_still_reconfigures() -> void:
 	await get_tree().process_frame
 	var duel := runner._duel
 	assert_eq(duel.leave_question, MatchScreen.LEAVE_QUESTION)
+	assert_eq(duel.menu_question, MatchScreen.MENU_QUESTION)
 	assert_eq(duel.leave_title, MatchScreen.TITLE)
 	duel._run_intro()
 	assert_true(_buttons(duel._intro_overlay).has("Reconfigure duel"),
@@ -106,6 +109,8 @@ func test_a_gauntlets_duel_is_held_in_the_gauntlets_words() -> void:
 	assert_eq(duel.leave_title, GauntletState.TITLE)
 	assert_eq(duel.leave_label, GauntletState.QUIT)
 	assert_string_contains(duel.leave_question, "round 1")
+	assert_eq(duel.menu_question, duel.leave_question,
+		"every door out of a Gauntlet duel ends at the title, so one question")
 	duel._run_intro()
 	var labels := _buttons(duel._intro_overlay)
 	assert_true(labels.has(GauntletState.QUIT), "the splash's way out is the run's own")
@@ -153,28 +158,21 @@ func test_exit_duel_asks_before_it_ends_the_run() -> void:
 	assert_false(screen.state.over)
 
 
-func test_yes_ends_the_run_and_puts_gauntlet_options_back() -> void:
+func test_yes_ends_the_run_and_goes_to_the_title() -> void:
 	var screen := _gauntlet()
 	await get_tree().process_frame
 	var duel := screen._match._duel
 	var scene := get_tree().current_scene
 	duel._on_pause_chosen(DuelPause.Action.EXIT_DUEL)
+	assert_string_contains(_text_of(duel._leave_dialog), "main menu")
 	_press(duel._leave_dialog, "Yes, I'm sure")
 	await get_tree().process_frame
-	assert_eq(get_tree().current_scene, scene, "never the battle-setup screen")
 	assert_true(screen.state.over, "the run is over")
 	assert_null(screen._match, "its match is gone")
-	assert_not_null(screen._window, "and a window of the gauntlet's own is up")
-	assert_string_contains(_text_of(screen._window), GauntletOptions.TITLE)
-	assert_true(_buttons(screen._window).has(GauntletOptions.RUN))
-	assert_eq(screen.options.best_of, 3, "the run's parameters still set")
-	# `Run the gauntlet` again: a new run from round 1.
-	screen.begin_run()
-	await get_tree().process_frame
-	assert_not_null(screen._match, "a new run is on")
-	assert_false(screen.state.over)
-	assert_eq(screen.state.round_number, 1)
-	assert_string_contains(screen._match._duel.leave_question, "round 1")
+	assert_null(screen._window, "no Gauntlet Options: the title, as Quit Gauntlet goes")
+	# The title itself is a scene change, which only the scene's own
+	# Gauntlet makes ([method GauntletScreen._leave]); this one is the test's.
+	assert_eq(get_tree().current_scene, scene, "never the battle-setup screen")
 
 
 func test_yes_on_the_splash_does_the_same() -> void:
@@ -187,7 +185,27 @@ func test_yes_on_the_splash_does_the_same() -> void:
 	await get_tree().process_frame
 	assert_true(screen.state.over)
 	assert_null(screen._match)
-	assert_string_contains(_text_of(screen._window), GauntletOptions.TITLE)
+	assert_null(screen._window)
+
+
+func test_main_menu_asks_in_a_gauntlet_and_its_yes_ends_the_run() -> void:
+	var screen := _gauntlet()
+	await get_tree().process_frame
+	var round_match := screen._match
+	var duel := round_match._duel
+	var scene := get_tree().current_scene
+	duel._on_pause_chosen(DuelPause.Action.MAIN_MENU)
+	assert_true(duel.leave_question_open(), "Return to main menu asks first")
+	assert_eq(get_tree().current_scene, scene, "and goes nowhere yet")
+	assert_eq(screen._match, round_match)
+	_press(duel._leave_dialog, "Cancel")
+	await get_tree().process_frame
+	assert_false(screen.state.over, "Cancel keeps the run")
+	duel._on_pause_chosen(DuelPause.Action.MAIN_MENU)
+	_press(duel._leave_dialog, "Yes, I'm sure")
+	await get_tree().process_frame
+	assert_true(screen.state.over, "a yes ends it")
+	assert_null(screen._match)
 
 
 # ============================================ a match from Magic Battle ==
@@ -206,6 +224,25 @@ func test_a_matchs_exit_duel_asks_and_its_yes_is_not_passed_up() -> void:
 	assert_signal_not_emitted(runner, "leave_confirmed",
 		"nobody owns this match: it goes back to Magic Battle itself")
 	assert_true(ResourceLoader.exists(MatchScreen.SETUP_SCREEN), "which exists")
+
+
+func test_a_matchs_main_menu_asks_in_its_own_words() -> void:
+	var runner := _match()
+	await get_tree().process_frame
+	var duel := runner._duel
+	watch_signals(runner)
+	duel._on_pause_chosen(DuelPause.Action.MAIN_MENU)
+	assert_true(duel.leave_question_open(), "the record is not dropped unasked here either")
+	assert_string_contains(_text_of(duel._leave_dialog), "main menu")
+	duel._on_pause_chosen(DuelPause.Action.EXIT_DUEL)
+	assert_string_contains(_text_of(duel._leave_dialog), "Magic Battle",
+		"the other door's question takes its place")
+	_press(duel._leave_dialog, "Cancel")
+	duel._on_pause_chosen(DuelPause.Action.MAIN_MENU)
+	_press(duel._leave_dialog, "Yes, I'm sure")
+	assert_signal_not_emitted(runner, "menu_confirmed",
+		"nobody owns this match: it goes to the title itself")
+	assert_true(ResourceLoader.exists(MatchScreen.MAIN_MENU), "which exists")
 
 
 # ============================================================ the keys ==

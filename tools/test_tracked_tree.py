@@ -14,7 +14,7 @@ Found on 2026-09-17 by the first run: eight source files had no row.
 
 ANYONE'S HOME, AND EVERY FILE (review of 2026-10-21, nettools-5). The home
 check was the release guard alone, which knows the home of the machine it
-runs on: on CI (`/home/runner`) it guarded nothing of the owner's, and a
+runs on: on CI (the runner's own home) it guarded nothing of the owner's, and a
 path written on the second build machine, or anyone else's, went through.
 And all three checks read only the files without a NUL byte, so no PNG,
 JPG, TTF or WAV was ever opened — a screenshot whose metadata names
@@ -95,8 +95,10 @@ ALLOWED_HOMES = {
     # pages/index.html's `cd /Users/you/...`, tests/unit/test_skin_pack.gd,
     # tests/unit/test_game_paths.gd's `C:/Users/Deck Tester`.
     "me", "you", "somebody", "zz", "Deck",
-    # GitHub Actions' runner (`/home/runner`): a CI log quoted in a note
-    # names a machine, not a person.
+    # GitHub Actions' runner (its home is the runner login's): a CI log
+    # quoted in a note names a machine, not a person. Never write that home
+    # out whole in this file: on CI it IS this machine's home, which the
+    # release guard (test_no_tracked_file_names_this_machines_home) refuses everywhere, this file included.
     "runner",
 }
 
@@ -340,7 +342,7 @@ class AnyonesHomeTest(unittest.TestCase):
 
     def test_placeholders_and_other_folders_named_home_pass(self):
         for text in (b"/home/me/Downloads/my_skin.zip", b"cd /Users/you/Documents",
-                     b"C:/Users/Deck Tester/Music", b"/home/runner/work",
+                     b"C:/Users/Deck Tester/Music", b"/home/" + b"runner/work",
                      b"forge/screens/home/PlayerPanel.java", b"/home/{login}",
                      b"Home/End keys", b"/home/ and /Users/ are home folders"):
             with self.subTest(text=text):

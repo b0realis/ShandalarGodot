@@ -25,10 +25,17 @@ provisional recommendation, not a measured minimum. There is no x86 APK.
    like the skin: copy it to Downloads and choose it in **Options → Skin**.
    That chooser takes only skin and card-picture ZIPs; it refuses the
    numbered packs (`Pack-1-DotP-complete.zip` … `Pack-9-Tempest-Block.zip`).
-5. A numbered pack goes in the game's own folder,
-   `Android/data/com.b0realis.shandalar.android/files/cardpacks/`, which a
-   file manager on modern Android cannot write. Start the game once so it
-   makes that folder, then copy each pack from a computer with `adb` (USB
+5. A numbered pack goes in through **Options → Card Packs → Add pack...**:
+   copy the pack to Downloads, press **Add pack...** and choose it. The game
+   checks it and copies it into its own folder,
+   `Android/data/com.b0realis.shandalar.android/files/cardpacks/`, under its
+   exact name (a download saved as `… (1).zip` is fine); then press the
+   pack's **Enable**. A zip the game refuses is not copied, and the line
+   under the buttons says why.
+
+   That folder is one a file manager on modern Android cannot write. If the
+   file box cannot open your Downloads on your device, start the game once so
+   it makes that folder, then copy each pack from a computer with `adb` (USB
    debugging on), through Downloads, under its exact name:
 
    ```sh

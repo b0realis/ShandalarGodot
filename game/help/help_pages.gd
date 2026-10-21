@@ -398,7 +398,7 @@ static func _page_start_finish() -> Dictionary:
 		_heading("Winning, losing and drawing"),
 		_text("A player loses through life, poison, or an impossible required draw. If both players lose at the same time, the duel is a draw. Concede ends your duel after confirmation."),
 		_heading("Ante and matches"),
-		_text("Ante puts the chosen cards at stake for the duel. Review the ante setting before starting. In a match, the sideboard lets you change your deck between games while keeping the selected format legal. Inside a match or a Gauntlet, Exit duel and the button on the duel's opening screen (Reconfigure duel, or Quit Gauntlet) ask first, because leaving ends the match or the run; a Gauntlet then goes back to Gauntlet Options."),
+		_text("Ante puts the chosen cards at stake for the duel. Review the ante setting before starting. In a match, the sideboard lets you change your deck between games while keeping the selected format legal. Inside a match or a Gauntlet, Exit duel, Return to main menu and the button on the duel's opening screen (Reconfigure duel, or Quit Gauntlet) ask first, because leaving ends the match or the run; leaving a Gauntlet goes to the main menu."),
 	]}
 
 

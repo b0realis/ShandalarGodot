@@ -34,6 +34,10 @@ var _eighth_disable: Button
 var _ninth_status: Label
 var _ninth_enable: Button
 var _ninth_disable: Button
+## `Add pack...` (2026-10-21) and the line saying what it last came to.
+const ADD_PACK := "Add pack..."
+const ADD_PACK_TOOLTIP := "Choose a Pack-N zip (from your Downloads, say): the game checks it and copies it into this folder under its proper name."
+var _add_note: Label
 
 
 func _ready() -> void:
@@ -72,7 +76,23 @@ func _ready() -> void:
 	rescan.name = "Rescan"
 	rescan.pressed.connect(CardPacks.rescan)
 	tools.add_child(rescan)
+	# `Add pack...` (the owner, 2026-10-21: option A of three mockups, *"the
+	# leanest"*): a chosen zip is checked and copied in ([method
+	# CardPacks.add_pack]) — the one way a phone, whose folder Open Folder
+	# cannot open, adds a pack without adb. The browser has no pack folder.
+	var add := UiChrome.menu_button(ADD_PACK, Vector2(140, 32), 13)
+	add.name = "AddPack"
+	add.tooltip_text = ADD_PACK_TOOLTIP
+	add.disabled = OS.has_feature("web")
+	add.pressed.connect(CardPacks.pick_pack)
+	tools.add_child(add)
 	content.add_child(tools)
+	# What the last `Add pack...` came to; empty and hidden until then.
+	_add_note = UiChrome.body_label("", 13)
+	_add_note.name = "AddPackNote"
+	_add_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_add_note.visible = false
+	content.add_child(_add_note)
 
 	var heading := UiChrome.body_label("1-tDotP — Pack 1: DotP Complete", 18)
 	heading.name = "Pack1Heading"
@@ -262,6 +282,7 @@ func _ready() -> void:
 	add_child(panel)
 
 	CardPacks.changed.connect(_on_pack_changed)
+	CardPacks.pack_added.connect(_on_pack_added)
 	CardPacks.rescanned.connect(_refresh)
 	CardPacks.locks_changed.connect(_refresh)
 	_refresh()
@@ -385,6 +406,9 @@ func _refresh() -> void:
 	var rescan := find_child("Rescan", true, false) as Button
 	rescan.disabled = not refusal.is_empty()
 	rescan.tooltip_text = refusal
+	var add := find_child("AddPack", true, false) as Button
+	add.disabled = OS.has_feature("web") or not refusal.is_empty()
+	add.tooltip_text = refusal if not refusal.is_empty() else ADD_PACK_TOOLTIP
 	# EVERY pack's pair — Pack 7's was missing until the bug pass of
 	# 2026-10-03, so it stayed live under an SGManalink session's lock;
 	# Pack 8's and Pack 9's joined the list with their packs.
@@ -398,6 +422,12 @@ func _refresh() -> void:
 
 func _on_pack_changed(_id: String, _enabled: bool) -> void:
 	_refresh()
+
+
+## The line under the buttons says what the last `Add pack...` came to.
+func _on_pack_added(result: Dictionary) -> void:
+	_add_note.text = String(result.get("message", ""))
+	_add_note.visible = _add_note.text != ""
 
 
 func _request_disable(id := CardPacks.ID) -> void:

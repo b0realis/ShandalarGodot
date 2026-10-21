@@ -1,5 +1,19 @@
 # Code Map
 
+## Add pack... (2026-10-21)
+
+- `game/card_packs.gd`: `pick_pack` (the platform's file box, as
+  `SkinPack.pick`), `add_pack` (not under `change_refusal`; a Rescan after;
+  `pack_added`), `install_pack` (copy whole to `INCOMING`, the pack's own
+  `inspect` with the manifest's picture digest, then `SkinPack.copy_whole`
+  into the folder under `file_name_for`), `pack_in` (which pack a zip is, by
+  its `card_packs/<pack>/` entries, the directory bounded by
+  `ADD_MAX_ENTRIES` / `ADD_MAX_BYTES`).
+- `game/card_packs_screen.gd`: `AddPack` (`ADD_PACK`, `ADD_PACK_TOOLTIP`) in
+  the top row after Open Folder and Rescan, off in the browser and under a
+  LAN lock; `AddPackNote`, the line saying what the last try came to.
+- `tests/ui/test_card_packs_add_pack.gd`.
+
 ## The whole-project review (2026-10-21)
 
 Each fix in full: `docs/whole-project-review-2026-10-21.md`.
@@ -25,8 +39,9 @@ Each fix in full: `docs/whole-project-review-2026-10-21.md`.
   `_answered_on_arrival` passes over non-mana costs; `_counter_clears_bar`
   takes an optional payout price.
 - `game/duel/duel_screen.gd`: `leave_title`, `leave_question`,
-  `leave_label`, `leave_confirmed`, `_ask_to_leave` — a duel held by a
-  match or Gauntlet asks before leaving. `game/match_screen.gd` holds every
+  `leave_label`, `leave_confirmed`, `menu_question`, `menu_confirmed`,
+  `_ask_to_leave` — a duel held by a match or Gauntlet asks before leaving
+  by any door (Return to main menu since 0.50.43). `game/match_screen.gd` holds every
   duel it builds; `game/duel/gauntlet_screen.gd` `_quit_from_duel`.
 - `game/portal_pack.gd`: `version_refusal`, `manifest_mismatch`, called by
   all eight pack contracts (Packs 2–9).

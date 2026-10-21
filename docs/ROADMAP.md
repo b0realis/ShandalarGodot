@@ -18811,6 +18811,28 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-21 — Add pack..., and every door out of a held duel asks (0.50.43)
+
+On the whole-project review's open questions (see
+`docs/whole-project-review-2026-10-21.md`):
+
+- **Add pack...** on Options › Card Packs, beside Open Folder and Rescan —
+  the owner, from three mockups: *"Yes A is the leanest"*. A numbered pack
+  ZIP chosen anywhere is recognised by what it holds
+  (`CardPacks.pack_in`), copied whole into `user://cardpack_incoming/`,
+  judged there by its pack's own contract, and only then copied into the
+  pack folder under its exact name (`CardPacks.install_pack`), followed by a
+  Rescan; a line under the buttons says what came of it. Not in the
+  browser. It is the way in on Android, whose pack folder no file manager
+  writes. Tests: `tests/ui/test_card_packs_add_pack.gd`.
+- Pause › **Return to main menu** asks in a Gauntlet or match duel (*"1.
+  Yes."*, `DuelScreen.menu_question`), and every door out of a Gauntlet duel
+  goes to the title (*"Quit gauntlet goes to title, quit duel goes to
+  title."*) instead of Gauntlet Options.
+- `tools/test_tracked_tree.py` no longer spells the CI runner's home whole:
+  on CI that is the machine's home, and the release guard refused the file
+  itself (0.50.42's one red CI job).
+
 ## 2026-10-21 — The whole-project review (0.50.42)
 
 The owner, on 0.50.41, asked for a review of the whole project as it

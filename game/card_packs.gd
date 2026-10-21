@@ -626,6 +626,119 @@ func open_folder() -> void:
 		OS.shell_open(ensure_folder())
 
 
+# --------------------------------------------------------- Add pack... --
+
+## Options > Card Packs > `Add pack...` answered: `{"ok", "id", "message"}`,
+## the line the page shows under its buttons.
+signal pack_added(result: Dictionary)
+
+## Where a chosen zip is checked before it may replace anything.
+const INCOMING := "user://cardpack_incoming"
+## No numbered pack is bigger, nor holds more entries (Packs 8 and 9).
+const ADD_MAX_BYTES := 384 * 1024 * 1024
+const ADD_MAX_ENTRIES := 2676
+
+
+## THE WAY TO ADD A PACK WITHOUT A FOLDER (the owner, 2026-10-21, on the
+## mockups: *"Yes A is the leanest"*). A phone's game folder lies under
+## Android/data, which its own file manager will not open and Open Folder
+## cannot either; until this a numbered pack reached it only over adb
+## (`docs/android-experimental.md`). The button is on every platform but
+## the browser, which has no pack folder: the platform's own file box
+## where the engine has one, as Options › Skin's `Choose...` opens
+## ([method SkinPack.pick]), then [method add_pack].
+func pick_pack() -> void:
+	if OS.has_feature("web"):
+		return
+	var box := FileDialog.new()
+	box.name = "CardPackChooser"
+	box.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	# After the mode: setting the mode retitles the box ("Open a File").
+	box.title = "Choose a card pack zip"
+	box.access = FileDialog.ACCESS_FILESYSTEM
+	box.filters = PackedStringArray(["*.zip ; Card packs"])
+	box.use_native_dialog = true
+	box.size = Vector2i(760, 520)
+	box.current_dir = SkinPack.pick_start_dir()
+	box.file_selected.connect(func(path: String) -> void:
+		box.queue_free()
+		add_pack(path))
+	box.canceled.connect(box.queue_free)
+	add_child(box)
+	box.popup_centered()
+
+
+## [method install_pack] into the pack folder, then a Rescan so the page
+## shows the pack, and [signal pack_added] with the outcome. Not while a
+## LAN table has the catalogue locked ([method change_refusal]).
+func add_pack(source: String) -> Dictionary:
+	var refusal := change_refusal()
+	var result := {"ok": false, "id": "", "message": refusal} if refusal != "" \
+		else install_pack(source, ensure_folder())
+	if result.ok:
+		rescan()
+	pack_added.emit(result)
+	return result
+
+
+## WHICH PACK [param source] IS, by what it holds — "" when it is none.
+## Not by its name: a browser saves a second download as `… (1).zip`, and
+## the pack's own contract then refuses the name ("must be named
+## exactly"). Each pack keeps everything under its own `card_packs/<pack>/`
+## folder, so the first entry under one says which; the zip's directory is
+## bounded first, as every contract bounds it, before one name is read.
+static func pack_in(source: String) -> String:
+	if not PortalPack.bounded_zip(source, ADD_MAX_ENTRIES, ADD_MAX_BYTES):
+		return ""
+	var reader := ZIPReader.new()
+	if reader.open(source) != OK:
+		return ""
+	var names := reader.get_files()
+	reader.close()
+	var prefixes := {PREFIX: ID}
+	for contract in expansions():
+		prefixes[contract.PREFIX] = contract.ID
+	for name in names:
+		for prefix in prefixes:
+			if name.begins_with(prefix):
+				return prefixes[prefix]
+	return ""
+
+
+## Copy [param source] into [param folder] under its pack's exact name, but
+## only once the copy has passed that pack's own checks: it is copied whole
+## to [const INCOMING] first and judged there ([method inspect], the
+## pictures' digest taken from the manifest as for a sealed pack — the
+## Rescan after reads them), so a wrong version, a half download or a zip
+## of something else never replaces a pack that works. The copy into the
+## folder is whole or nothing ([method SkinPack.copy_whole]).
+static func install_pack(source: String, folder: String) -> Dictionary:
+	var shown := source.get_file()
+	var id := pack_in(source)
+	if id == "":
+		return {"ok": false, "id": "",
+			"message": "%s is not a numbered card pack (Pack-1 to Pack-9)." % shown}
+	var file_name := file_name_for(id)
+	var staging := ProjectSettings.globalize_path(INCOMING)
+	DirAccess.make_dir_recursive_absolute(staging)
+	var staged := staging.path_join(file_name)
+	if SkinPack.copy_whole(source, staged) != OK:
+		return {"ok": false, "id": id, "message": "%s could not be copied." % shown}
+	var report := inspect(staged, true)
+	if not bool(report.get("ok", false)):
+		DirAccess.remove_absolute(staged)
+		return {"ok": false, "id": id, "message": "%s was not added: %s" % [
+			shown, String(report.get("why", "refused"))]}
+	var dest := folder.path_join(file_name)
+	var copied := SkinPack.copy_whole(staged, dest)
+	DirAccess.remove_absolute(staged)
+	if copied != OK:
+		return {"ok": false, "id": id, "message": "%s could not be copied into %s." % [
+			shown, GamePaths.shown(folder)]}
+	return {"ok": true, "id": id,
+		"message": "%s is added as %s. Press its Enable to use it." % [label_for(id), file_name]}
+
+
 ## Available installed printings. Earlier packs expose their supplied
 ## printing per name/set; the Portal sets, Fifth Edition and the Mirage
 ## and Tempest blocks carry every numbered version.

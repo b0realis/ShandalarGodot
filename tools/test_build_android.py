@@ -71,6 +71,12 @@ class AndroidBuildTest(unittest.TestCase):
         self.assertIn(f"adb shell cp /sdcard/Download/Pack-1-DotP-complete.zip {folder}", guide)
         self.assertIn("That chooser takes only skin and card-picture ZIPs", guide)
         self.assertNotIn("import them through the game's chooser", guide)
+        # 2026-10-21, the owner's option A: the pack page's own Add pack...
+        # comes first; adb stays for a device whose file box cannot reach
+        # Downloads (tests/ui/test_card_packs_add_pack.gd).
+        self.assertIn("Options → Card Packs → Add pack...", guide)
+        screen = (build.ROOT / "game/card_packs_screen.gd").read_text(encoding="utf-8")
+        self.assertIn('const ADD_PACK := "Add pack..."', screen)
 
     def test_isolated_help_and_version(self):
         with tempfile.TemporaryDirectory() as tmp:

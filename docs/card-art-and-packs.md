@@ -42,6 +42,12 @@ art, builds the exact-name ZIP directly into `cardpacks/`, then verifies
 its contents and checksums. Building a pack does not enable it in the game.
 Folders are created automatically. Do not rename the generated ZIPs.
 
+A pack built on another computer (or copied to a phone's Downloads) goes in
+through **Options → Card Packs → Add pack...**: choose the ZIP and the game
+checks it and copies it into its own pack folder under its exact name, even
+if the copy was renamed on the way (`… (1).zip`). A ZIP it refuses is not
+copied, and the page says why. Then press the pack's **Enable**.
+
 Pack 1 — 1-tDotP, completes the original set checklists:
 
 ```sh

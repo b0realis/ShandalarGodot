@@ -622,6 +622,16 @@ var leave_label := ""
 const LEAVE_Z := 265
 ## The player said yes to [member leave_question].
 signal leave_confirmed
+## Pause → `Return to main menu` under a holder asks too — the owner,
+## 2026-10-21, on whether it should: *"Yes."* — in these words, and its yes
+## is [signal menu_confirmed]: the holder ends what it holds and goes to
+## the title. "" keeps that door going straight to the title, as in a duel
+## that is the session.
+var menu_question := ""
+signal menu_confirmed
+## Which door the open question is for: Pause → `Return to main menu`
+## (true) or `Exit duel` and the splash's button (false).
+var _leave_to_menu := false
 # --- end review 2026-10-21 ui-1 ---
 
 ## Battlefield display rows, in the order the OWNER'S REFERENCE SCREENSHOT
@@ -8554,6 +8564,11 @@ func _on_pause_chosen(action: int) -> void:
 			get_tree().change_scene_to_file("res://game/setup_screen.tscn")
 		DuelPause.Action.MAIN_MENU:
 			_close_pause()
+			# A held duel asks here too (the owner, 2026-10-21; [member
+			# menu_question]), and its holder ends the run or the match.
+			if menu_question != "":
+				_ask_to_leave(true)
+				return
 			get_tree().change_scene_to_file("res://game/main.tscn")
 		DuelPause.Action.QUIT:
 			get_tree().quit()
@@ -8697,13 +8712,18 @@ func _confirm_concede() -> void:
 ## the Concede question's own window — the dark stone, one line, `Yes, I'm
 ## sure` and `Cancel` — under the holder's title. `Cancel` holds the focus,
 ## so the reflex Return is the harmless answer, as on the Pause window.
-func _ask_to_leave() -> void:
+## [param to_menu] asks [member menu_question] for Pause → `Return to main
+## menu` instead; a question already up for the other door gives way to it.
+func _ask_to_leave(to_menu := false) -> void:
 	if leave_question_open():
-		return
+		if _leave_to_menu == to_menu:
+			return
+		_cancel_leave()
+	_leave_to_menu = to_menu
 	var dialog := OriginalDialog.create(leave_title, Vector2(400, 180),
 		"panel_dark_stone")
 	dialog.z_index = LEAVE_Z
-	var ask := OriginalDialog.label(leave_question, 15)
+	var ask := OriginalDialog.label(menu_question if to_menu else leave_question, 15)
 	ask.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialog.body().add_child(ask)
 	dialog.add_button(TerritoryMenu.CONCEDE_CONFIRM).pressed.connect(_confirm_leave)
@@ -8736,7 +8756,10 @@ func _confirm_leave() -> void:
 	if not leave_question_open():
 		return
 	_cancel_leave()
-	leave_confirmed.emit()
+	if _leave_to_menu:
+		menu_confirmed.emit()
+	else:
+		leave_confirmed.emit()
 # --- end review 2026-10-21 ui-1 ---
 
 

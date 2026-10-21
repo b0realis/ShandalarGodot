@@ -93,13 +93,20 @@ var reports_to_owner := false
 const LEAVE_QUESTION := "Quit this match? Its record so far is lost, and you go back to Magic Battle."
 ## Where a yes goes for a match nobody owns.
 const SETUP_SCREEN := "res://game/setup_screen.tscn"
+## What Pause → `Return to main menu` asks in one of its duels (the owner,
+## 2026-10-21: it asks too), and where a yes goes for a match nobody owns.
+const MENU_QUESTION := "Quit this match? Its record so far is lost, and you go back to the main menu."
+const MAIN_MENU := "res://game/main.tscn"
 var leave_title := TITLE
 var leave_question := LEAVE_QUESTION
+var menu_question := MENU_QUESTION
 ## The splash's left button; "" keeps `Reconfigure duel`, which is exactly
 ## what a yes does for a match from the battle-setup screen.
 var leave_label := ""
 ## A yes, for an owner's match.
 signal leave_confirmed
+## A yes to [member menu_question], for an owner's match.
+signal menu_confirmed
 # --- end review 2026-10-21 ui-1 ---
 
 var _duel: DuelScreen = null
@@ -162,6 +169,8 @@ func _start_duel() -> void:
 	_duel.leave_question = leave_question
 	_duel.leave_label = leave_label
 	_duel.leave_confirmed.connect(_on_leave_confirmed)
+	_duel.menu_question = menu_question
+	_duel.menu_confirmed.connect(_on_menu_confirmed)
 	# `add_child` runs the duel screen's `_ready`, which builds its
 	# [MtgGame] — so the memories can start watching on the very next
 	# line, before a single card is played.
@@ -377,6 +386,16 @@ func _on_leave_confirmed() -> void:
 		return
 	if is_inside_tree() and get_tree().current_scene == self:
 		get_tree().change_scene_to_file(SETUP_SCREEN)
+
+
+## The player said yes to [member menu_question]: the title, or the owner's
+## to act on, under the same guard.
+func _on_menu_confirmed() -> void:
+	if reports_to_owner:
+		menu_confirmed.emit()
+		return
+	if is_inside_tree() and get_tree().current_scene == self:
+		get_tree().change_scene_to_file(MAIN_MENU)
 
 
 # ----------------------------------------------------------- Sideboard... --
