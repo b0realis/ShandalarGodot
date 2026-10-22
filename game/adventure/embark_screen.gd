@@ -404,7 +404,23 @@ func _build_journey() -> Control:
 	box.add_child(_difficulty_note)
 
 	box.add_child(HSeparator.new())
-	box.add_child(_heading("Card packs", 22))
+	var installed := AdventureSetup.offered_packs(_installed_packs())
+	# The heading with All and None beside it, a row saved for the list: it
+	# keeps the column within the screen's height without the skin's
+	# smaller lettering too (eight packs, 1280 × 800).
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 6)
+	var heading := _heading("Card packs", 22)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(heading)
+	if not installed.is_empty():
+		for label in ["All", "None"]:
+			var button := UiChrome.menu_button(label, Vector2(72, 28), 14)
+			button.name = "Packs" + label
+			button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			button.pressed.connect(choose_all_packs.bind(label == "All"))
+			header.add_child(button)
+	box.add_child(header)
 	# The owner's words, 2026-10-22, first and in gold.
 	var challenge := _text("These are additional challenges. The base cards are always present.", 14)
 	challenge.name = "PacksChallenge"
@@ -415,7 +431,6 @@ func _build_journey() -> Control:
 	about.add_theme_color_override("font_color", DIM)
 	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(about)
-	var installed := AdventureSetup.offered_packs(_installed_packs())
 	if installed.is_empty():
 		var none := _text("No card packs are installed. Options › Card Packs... adds them.", 14)
 		none.name = "NoPacks"
@@ -445,14 +460,6 @@ func _build_journey() -> Control:
 			list.add_child(check)
 			_pack_checks[id] = check
 		box.add_child(list)
-		var both := HBoxContainer.new()
-		both.add_theme_constant_override("separation", 6)
-		for label in ["All", "None"]:
-			var button := UiChrome.menu_button(label, Vector2(80, 28), 14)
-			button.name = "Packs" + label
-			button.pressed.connect(choose_all_packs.bind(label == "All"))
-			both.add_child(button)
-		box.add_child(both)
 	return box
 
 

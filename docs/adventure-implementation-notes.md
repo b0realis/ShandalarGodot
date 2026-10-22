@@ -422,3 +422,8 @@ said otherwise):
   too much now": of four shown, the owner chose fog over unseen land, a 2×
   default zoom and an explored-only map
   (`world-builder-adventure-notes.md`, "Drawing the world").
+- **2026-10-22** — 0.50.49: CI (no skin, eight packs, 1280 × 800) found
+  the Journey window taller than the screen allows, so the columns
+  scrolled and the scrollbar broke the line-up with the buttons. All and
+  None moved beside the Card packs heading: a row saved, the three windows
+  one size again.
