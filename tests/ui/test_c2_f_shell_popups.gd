@@ -133,12 +133,14 @@ func test_the_title_gets_the_ring_back_after_the_placeholder() -> void:
 	var menu: Control = load("res://game/main.tscn").instantiate()
 	add_child_autofree(menu)
 	await get_tree().process_frame
-	var shandalar: Button = null
+	# Save / Load: the title's one placeholder since Shandalar opened its
+	# Embark screen (2026-10-22).
+	var placeholder: Button = null
 	for n in menu.find_children("*", "Button", true, false):
-		if (n as Button).text == "Shandalar":
-			shandalar = n
-	assert_not_null(shandalar)
-	shandalar.grab_focus()
+		if (n as Button).text == "Save / Load":
+			placeholder = n
+	assert_not_null(placeholder)
+	placeholder.grab_focus()
 	_key(KEY_ENTER)
 	await get_tree().process_frame
 	assert_true(_focus() is Button and (_focus() as Button).name == "OK", "the popup's OK holds the ring")
@@ -148,7 +150,7 @@ func test_the_title_gets_the_ring_back_after_the_placeholder() -> void:
 	_key(KEY_ENTER)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_eq(_focus(), shandalar, "after the popup closes the ring is back on the button")
+	assert_eq(_focus(), placeholder, "after the popup closes the ring is back on the button")
 
 
 func test_rebinding_a_key_leaves_the_ring_on_its_slot() -> void:

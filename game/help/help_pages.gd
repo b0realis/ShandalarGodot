@@ -135,6 +135,7 @@ static func pages() -> Array:
 		_page_icons_builder_sets(),
 		_page_icons_builder_types(),
 	]],
+	["The adventure", [_page_embark()]],
 	["Abilities and card effects", preload("res://game/help/ability_glossary.gd").pages()],
 	]
 	var contents := {"title": "Help · Contents", "blocks": [
@@ -427,6 +428,26 @@ static func _page_test_hands() -> Dictionary:
 		_heading("Go test! and after"),
 		_text("Go test! starts the duel. A test is one duel, never for ante, and nothing about it is recorded: no match, no duel log file. Restart test, on the table under the large card and in %s, starts the same test again with the same shuffle; Edit test goes back to the bench. When a test ends, its window offers Restart test, and OK goes back to the bench. Each Go test! deals a fresh shuffle." % pause),
 		_text("The bench opens on your last test. Type a name and press Save to keep a test; choose a saved one and press Load or Delete. Test hands is for this computer only: it is not offered at a SGManalink table."),
+	]}
+
+
+## THE EMBARK SCREEN (2026-10-22): `game/adventure/embark_screen.gd`,
+## [AdventureSetup] for every number on it.
+static func _page_embark() -> Dictionary:
+	return {"title": "Shandalar — a new adventure", "blocks": [
+		_text("Shandalar on the main menu opens Embark to the world of Shandalar, where your hero is made. Every choice is on the one screen."),
+		_heading("Your hero"),
+		_text("The red arrows walk the faces: the fourteen heroes of the 1997 game first, then every other face the game has. A hero comes with their own name; type yours over it, up to 25 characters. On the map chooses the figure that walks the world map: Male, Female, or Other, one of the two drawn when the world is made. Until you choose, a 1997 hero walks as themselves."),
+		_heading("Your magic"),
+		_text("The color of your magic. You begin with an amulet of it and its world magic: Sword of Resistance for white, Leap of Fate for blue, Conjurer's Will for black, Staff of Thunder for red, Quickening for green. Your playmat is your half of the table in adventure duels: your color or any other, in any of its three styles, or Random for one of the three."),
+		_heading("Difficulty"),
+		_text("Apprentice is a training game, Magician an easy one, Sorcerer a normal one and Wizard a hard one. The easier the level, the more you start with: 250, 200, 150 or 100 gold, 50 food, four amulets down to one, and a first deck of 36 to 45 cards in one, two, three or all five colors."),
+		_heading("Card packs"),
+		_text("The base cards are always present; the packs are additional challenges. Tick the ones that join the adventure, from Pack 2 on. Each pack opens its own world on the map, ruled by a World Lord; defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards."),
+		_heading("Randomize, Adventure and Leave"),
+		_text("Randomize draws every choice on the screen at random: a face, a name made of a magical first name and surname, the figure on the map, the color, the playmat, the card packs, the difficulty and a seed. Change any of them before you set out. Every world is made at random from a seed, as in 1997, when the game seeded its dice from the clock: World seed comes filled in with the time each time the screen opens, hours, minutes and seconds (14:35:07 makes 143507). Keep it for a new world, or type a number or a word (capitals make no difference) to make the same world again. Adventure checks your hero, keeps every choice for your next visit, makes the world and sets you down in it; while the world is conjured, an hourglass runs in the bottom strip. Leave, or Escape, goes back to the main menu."),
+		_heading("The world"),
+		_text("The world of Shandalar fills the screen, drawn as the 1997 game drew it: its colors of land, the towns, villages and cities, the roads between them and the five wizards' castles. Only the land your hero has seen is shown; the rest stays dark, as in 1997. The view starts at twice the 1997 size. Look around with the arrow keys or by dragging, zoom with the mouse wheel or + and -, and press Space to come back to your hero. M opens the map of the land you have seen. Escape leaves. Walking, the towns and the encounters come next."),
 	]}
 
 

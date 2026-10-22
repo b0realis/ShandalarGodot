@@ -1098,6 +1098,58 @@ class TestSprSheet(RawStepCase):
             self.assertEqual(pixels[7], 255)
 
 
+class TestTheWorldSheets(TestSprSheet):
+    """THE ADVENTURE'S WORLD (2026-10-22): the world screen's `.spr` sheets
+    from `SPR/`, laid out WORLD_SHEETS' way, painted with the adventure
+    screen's own palette (`Advfac64.pic`'s `M0` block, not `Todpal.tr`,
+    which leaves out the indices the towns use), each beside a `.json` of
+    its grid and every frame's anchor."""
+
+    def _anchored(self, frames: list[tuple[int, int, bytes, int]]) -> bytes:
+        out = bytearray()
+        for width, height, pixels, top in frames:
+            body = bytearray()
+            for y in range(height):
+                row = pixels[y * width:(y + 1) * width]
+                body += bytes([0, 0xFE, len(row)]) + row
+            out += struct.pack("<IHHhhhh", len(body) + 16, width, height, 0, top, 0, 0) + body
+        return bytes(out) + struct.pack("<I", 0xFFFFFFFF)
+
+    def test_a_world_sheet_comes_with_its_grid_and_anchors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            (root / "SPR").mkdir(parents=True)
+            tops = [1, -1, 61, -1, 7, -1]
+            frames = [(128, 64, bytes([10 + i] * (128 * 64)), tops[i]) for i in range(6)]
+            frames.append((3, 1, bytes(3), -1))   # the format's end marker
+            (root / "SPR" / "LANDTILE.SPR").write_bytes(self._anchored(frames))
+            world = ramp_palette()
+            (root / "ADVFAC64.pic").write_bytes(make_pic(2, 2, bytes([1, 2, 3, 4]), world))
+            (root / "Todpal.tr").write_text(tr_palette(bytes(255 - b for b in world)))
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertIn("palette: ADVFAC64.pic", log)
+            width, height, channels, pixels = read_png((dest / "world_landtile.png").read_bytes())
+            self.assertEqual((width, height, channels), (768, 64, 4), "six to a row")
+            at = (5 * 768 + 5) * 4
+            self.assertEqual(bytes(pixels[at:at + 3]), world[10 * 3:10 * 3 + 3])
+            side = json.loads((dest / "world_landtile.json").read_text())
+            self.assertEqual((side["cols"], side["rows"], side["frames"]), (6, 1, 6))
+            self.assertEqual((side["frame_width"], side["frame_height"]), (128, 64))
+            self.assertEqual(side["tops"], tops, "every frame's anchor, -1 kept")
+
+    def test_the_anchors_are_read_from_the_frame_headers(self):
+        data = self._anchored([(4, 2, bytes(8), 56), (4, 2, bytes(8), -1)])
+        self.assertEqual(imp.spr_frame_tops(data), [56, -1])
+
+    def test_every_world_sheet_is_wired(self):
+        for key, (cells, width, height, columns) in imp.WORLD_SHEETS.items():
+            self.assertTrue(imp.MANIFEST[key][0].startswith("spr/"), key)
+            self.assertEqual(imp.SPR_SHEETS[key], (imp.MANIFEST[key], cells, width, height))
+            self.assertEqual(imp.SPR_COLUMNS[key], columns)
+            self.assertEqual(imp.SPR_PALETTES[key][0], "Advfac64.pic")
+
+
 class TestTheTitleMenuSprite(TestSprSheet):
     """`begin_menu` <- `Begin.spr` (2026-10-08): the 1997 title menu's
     sprite, EVERY frame — the owner: *"Lets import every frame there but

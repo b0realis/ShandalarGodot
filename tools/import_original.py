@@ -501,6 +501,34 @@ MANIFEST: dict[str, list[str]] = {
     # adventure layer. Its dark-on-light lettering IS our evidence for
     # how the original letters a button face.
     "stat_buttons":          ["Statbutt.spr"],
+    # THE ADVENTURE'S WORLD (2026-10-22): every sheet the 1997 world screen
+    # draws from — the ground, the coast and edge pieces, the trees and
+    # rocks with their ground halves, the roads, the villages, towns and
+    # cities, the wizards' domes and castles, the dungeons and lairs, and
+    # the hero walking in eight directions with the shadow. The 640 x 480
+    # set in `Program/SPR/` (1.3 loads `spr\`, `spr800\` or `spr1024\`
+    # by resolution; the larger two are 1.25x and 1.6x). Laid out and
+    # painted by SPR_SHEETS / SPR_PALETTES below, each with a `.json`
+    # sidecar of its grid and every frame's anchor (WORLD_SHEETS).
+    "world_landtile":        ["spr/landtile.spr", "landtile.spr"],
+    "world_cstline1":        ["spr/cstline1.spr", "cstline1.spr"],
+    "world_land":            ["spr/land.spr", "land.spr"],
+    "world_land2":           ["spr/land2.spr", "land2.spr"],
+    "world_sland":           ["spr/sland.spr", "sland.spr"],
+    "world_sland2":          ["spr/sland2.spr", "sland2.spr"],
+    "world_roads":           ["spr/roads.spr", "roads.spr"],
+    "world_locatn01":        ["spr/locatn01.spr", "locatn01.spr"],
+    "world_locatn02":        ["spr/locatn02.spr", "locatn02.spr"],
+    "world_locatn03":        ["spr/locatn03.spr", "locatn03.spr"],
+    "world_locatn04":        ["spr/locatn04.spr", "locatn04.spr"],
+    "world_locatn05":        ["spr/locatn05.spr", "locatn05.spr"],
+    "world_locatn06":        ["spr/locatn06.spr", "locatn06.spr"],
+    "world_locatn07":        ["spr/locatn07.spr", "locatn07.spr"],
+    "world_castles1":        ["spr/castles1.spr", "castles1.spr"],
+    "world_castles2":        ["spr/castles2.spr", "castles2.spr"],
+    "world_ego_m":           ["spr/ego_m.spr", "ego_m.spr"],
+    "world_ego_f":           ["spr/ego_f.spr", "ego_f.spr"],
+    "world_sego_f":          ["spr/sego_f.spr", "sego_f.spr"],
     # THE TITLE MENU'S SPRITE, `Begin.spr` (2026-10-08, the owner: *"Lets
     # import every frame there but we will use only icon for now"*): ALL
     # EIGHTEEN frames, one column of 265x24 cells, top to bottom —
@@ -762,14 +790,16 @@ MANIFEST: dict[str, list[str]] = {
     "deck_tile_slate":       ["Dektile4.pic"],
     # SURVEYED, NOT IMPORTED (2026-08-31):
     #   Program/seedeck.pic       640x480  THE genuine 1997 full-screen deck
-    #                                      screen, and the one thing here we
-    #                                      cannot have: raw X0 container
-    #                                      (magic + u16 len + u16 w + u16 h,
-    #                                      payload at 8), never converted by
-    #                                      s30, and the payload codec is
-    #                                      undecoded — raw deflate, byte
-    #                                      LZSS and 9-bit LZW are all ruled
-    #                                      out. docs/ROADMAP.md carries it
+    #                                      screen: an X0 container (magic +
+    #                                      u16 len + u16 w + u16 h, payload
+    #                                      at 8), never converted by s30.
+    #                                      Surveyed as undecodable; decode_pic
+    #                                      reads it since the RpBits codec
+    #                                      (runs, then LSB-first LZW from 9
+    #                                      bits) went in — the same codec as
+    #                                      the adventure's magicN.map saves.
+    #                                      Still not imported. docs/ROADMAP.md
+    #                                      carries it
     #   Program/statbak.pic       640x480  same story, M1 container with a
     #                                      768-byte palette at offset 6
     #   ui/Infobar.pic.png        640x480  the era's SCROLLBAR atlas (track,
@@ -2411,16 +2441,24 @@ def import_portraits(index: dict[str, Path], dest: Path) -> None:
 # This table is the first row of the other kind: a raw `.pic` DECODED
 # into the skin.
 #
-# `Advfac64.pic` (640x480, 1996-10-21) is the character-select backdrop —
-# a stone floor and a framed MAGIC: The Gathering panel with the face
-# tools ranged down the left edge. It carries its own `M0` palette, so it
-# needs nothing beside it, and it is the screen `Pedstls.pic` and
-# `16faces.spr` belong to.
+# `Advfac64.pic` (640x480, 1996-10-21) is, despite the key it was given
+# here, NOT the character screen: it is the ADVENTURE'S WORLD-MAP FRAME —
+# the gargoyle, the book, the map scroll, the door and the crystal ball
+# down the left edge, gold, food, the ankh and the deck along the bottom,
+# a framed MAGIC: The Gathering panel where the map goes (1.3 loads it
+# under every overworld screen, `RunAdventureSession`). It carries its own
+# `M0` palette. The key keeps its name because skins already carry it;
+# **nothing reads it yet** — the overworld will.
 #
-# **NOTHING READS THIS KEY YET.** It is written so the art is there and
-# proven decodable; wiring a screen to it is somebody else's change.
+# `Menu4.pic` (640x480) IS the character screen's ground: the dark
+# scratched field with dark red veins that the fourteen faces of
+# `16faces.spr` stood on (`Pedstls.pic` is the same field with the
+# pedestals drawn in, and 1.3's name window `Namepick.pic` sits over it).
+# Its own `M0` palette. The Embark screen wears it
+# (`game/adventure/embark_screen.gd`).
 PIC_SCREENS: dict[str, list[str]] = {
     "character_select_background": ["Advfac64.pic"],
+    "adventure_hero_background": ["Menu4.pic"],
 }
 
 
@@ -2588,14 +2626,63 @@ SPR_SHEETS: dict[str, tuple[list[str], int, int, int]] = {
     "stat_buttons": (["Statbutt.spr"], 16, 48, 48),
     "begin_menu": (["Begin.spr"], 18, 265, 24),
 }
+## THE WORLD'S SHEETS: frames (each file's last 3 x 1 frame is the format's
+## end marker and is left out), the one frame size each file has, and how
+## many to a row. CSTLINE1's seven to a row and LAND's five are the
+## original's own rows (an edge row per quarter; a colour per column).
+WORLD_SHEETS: dict[str, tuple[int, int, int, int]] = {
+    "world_landtile": (6, 128, 64, 6),
+    "world_cstline1": (84, 64, 32, 7),
+    "world_land": (55, 128, 83, 5),
+    "world_land2": (55, 128, 83, 5),
+    "world_sland": (55, 128, 83, 5),
+    "world_sland2": (55, 128, 83, 5),
+    "world_roads": (12, 128, 64, 6),
+    "world_locatn01": (24, 128, 128, 6),
+    "world_locatn02": (12, 192, 192, 6),
+    "world_locatn03": (24, 128, 128, 6),
+    "world_locatn04": (12, 192, 192, 6),
+    "world_locatn05": (24, 128, 128, 6),
+    "world_locatn06": (12, 192, 192, 6),
+    "world_locatn07": (24, 128, 128, 6),
+    "world_castles1": (12, 192, 192, 6),
+    "world_castles2": (12, 192, 192, 6),
+    "world_ego_m": (40, 154, 108, 5),
+    "world_ego_f": (40, 154, 108, 5),
+    "world_sego_f": (40, 154, 108, 5),
+}
+for _key, (_cells, _w, _h, _columns) in WORLD_SHEETS.items():
+    SPR_SHEETS[_key] = (MANIFEST[_key], _cells, _w, _h)
 ## How many cells a sheet puts on one row; a sheet not named here is one
 ## row of every cell. `begin_menu` is one COLUMN, so frame N is row N.
 SPR_COLUMNS: dict[str, int] = {"begin_menu": 1}
+SPR_COLUMNS.update({key: row[3] for key, row in WORLD_SHEETS.items()})
 ## A sheet whose sprite belongs to a screen with its own palette, not the
 ## adventure's `Todpal.tr` (SPR_PALETTE): the title menu's `Begin.spr`
 ## stands on `Menubak.pic` and is painted with that picture's `M0` block
 ## — gold words and a grey knot with a pink gem, the 1997 title menu.
 SPR_PALETTES: dict[str, list[str]] = {"begin_menu": ["Menubak.pic"]}
+## THE WORLD'S PALETTE is the one the adventure screen loads,
+## `Advfac64.pic`'s `M0` block (`Advinter.pic` carries the same).
+## `Todpal.tr` is it within six steps but leaves out indices 250-254, and
+## the lairs, towns and castles use 250: painted with it, 133 of their
+## pixels came out black (the world-screen survey, 2026-10-22).
+SPR_PALETTES.update({key: ["Advfac64.pic", "Advinter.pic"] for key in WORLD_SHEETS})
+
+
+def spr_frame_tops(data: bytes) -> list[int]:
+    """Every frame's anchor (its header's top clip) in a `.spr` — the
+    height above a sprite's foot at which the 1997 world draws it; -1
+    where the frame has none, which the game reads as 0."""
+    tops: list[int] = []
+    offset = 0
+    while offset + 12 <= len(data):
+        size = struct.unpack_from("<I", data, offset)[0]
+        if size == 0xFFFFFFFF or size < 12:
+            break
+        tops.append(struct.unpack_from("<h", data, offset + 10)[0])
+        offset += size
+    return tops
 
 
 def _raw_spr_sheet(key: str, path: Path,
@@ -2642,6 +2729,17 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
             return False
         width, height, pixels = sheet
         write_png(dest / (key + ".png"), width, height, pixels, alpha=True)
+        if key in WORLD_SHEETS:
+            cells, cell_w, cell_h, columns = WORLD_SHEETS[key]
+            try:
+                tops = spr_frame_tops(source.read_bytes())[:cells]
+            except OSError:
+                tops = []
+            (dest / (key + ".json")).write_text(json.dumps({
+                "cols": columns, "rows": (cells + columns - 1) // columns,
+                "frames": cells, "frame_width": cell_w, "frame_height": cell_h,
+                "tops": tops, "source": source.name,
+            }) + "\n")
         print("  %-24s <- %s (decoded %dx%d, palette: %s)"
               % (key, source, width, height, origin))
         return True
@@ -3203,11 +3301,13 @@ PORTRAITS_WANTED = 70
 ## Keys this writes that the game does NOT read, so a gap there costs
 ## nothing: the six set symbols and the dagger are always the game's own
 ## (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and 2026-10-15),
-## and two grounds no screen draws yet (a read of every consumer,
-## 2026-10-17).
+## two grounds no screen draws yet (a read of every consumer,
+## 2026-10-17), and the adventure's world-map frame, which waits for the
+## overworld (PIC_SCREENS).
 NOT_READ = {"set_icon_atq", "set_icon_arn", "set_icon_past", "set_icon_drk",
             "set_icon_4ed", "set_icon_leg", "damage_marker",
-            "deck_tile_olive", "spell_chain_panel"}
+            "deck_tile_olive", "spell_chain_panel",
+            "character_select_background"}
 
 
 def check(args: argparse.Namespace, index: dict[str, Path]) -> int:

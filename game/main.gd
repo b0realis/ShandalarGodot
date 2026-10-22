@@ -185,22 +185,21 @@ func _ready() -> void:
 		_open.bind("res://game/duel/gauntlet_screen.tscn", gauntlet))
 	box.add_child(gauntlet)
 
-	# THE TWO THAT ARE NOT BUILT YET, in the order the 1997 shell would
-	# have them: the adventure this project is named after (M5,
-	# `docs/ROADMAP.md`) and the save/load the shell keeps beside it.
-	# Placeholders on the owner's instruction (2026-09-03) — they are
-	# ENABLED rather than greyed, because a disabled button in Godot
-	# swallows its own tooltip and a player deserves to be told WHY a
-	# front door is shut. Each opens one sentence.
-	var shandalar := _menu_button("Shandalar", true)
-	shandalar.pressed.connect(func() -> void:
-		UiChrome.explain_popup(self, "Shandalar",
-			"The adventure — the world map, its cities and dungeons, the "
-			+ "wizards who hold the five castles, and the ante you play "
-			+ "them for. Not built yet: this is milestone M5, and the "
-			+ "duel it will be played through is what exists today."))
+	# THE ADVENTURE'S FRONT DOOR (M5, `docs/ROADMAP.md`): the Embark
+	# screen, where a new adventure's hero is made
+	# (`game/adventure/embark_screen.gd`). The world it sets out into is
+	# the next piece of M5, and the screen says so when the hero embarks.
+	var shandalar := _menu_button("Shandalar")
+	shandalar.tooltip_text = "Embark on an adventure in the world of Shandalar."
+	shandalar.pressed.connect(
+		_open.bind("res://game/adventure/embark_screen.tscn", shandalar))
 	box.add_child(shandalar)
 
+	# NOT BUILT YET: the save/load the 1997 shell kept beside the
+	# adventure. A placeholder on the owner's instruction (2026-09-03) —
+	# ENABLED rather than greyed, because a disabled button in Godot
+	# swallows its own tooltip and a player deserves to be told WHY a
+	# front door is shut. It opens one sentence.
 	var save_load := _menu_button("Save / Load", true)
 	save_load.pressed.connect(func() -> void:
 		UiChrome.explain_popup(self, "Save / Load",

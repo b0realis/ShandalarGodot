@@ -137,8 +137,22 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Backdrops", "menu_background",
      "Behind the Options, Deck Builder and Gauntlet screens."),
     ("Backdrops", "character_select_background",
-     "Imported from the 1997 game (Advfac64.pic) for the day the "
-     "character screen is built. NOT READ by the game yet."),
+     "Imported from the 1997 game (Advfac64.pic): despite the name, the "
+     "adventure's world-map frame, for the day the overworld is built. "
+     "NOT READ by the game yet."),
+    ("The adventure world", "world_",
+     "The world screen of the adventure, drawn as the 1997 game drew it: "
+     "sheets of sprites from Program/SPR/ (640 x 480 set), painted with "
+     "Advfac64.pic's palette, each beside a .json sidecar of its grid and "
+     "every frame's anchor. landtile: the ground diamonds; cstline1: the "
+     "coast and edge pieces, a row per quarter; land, land2: trees and "
+     "rocks, a colour per column, sland, sland2 their ground halves; roads; "
+     "locatn01-07: villages, towns, cities, domes, dungeons and lairs; "
+     "castles1-2: the wizards' castles; ego_m, ego_f: the hero in eight "
+     "directions, sego_f the shadow."),
+    ("Backdrops", "adventure_hero_background",
+     "Behind the Embark screen of a new adventure: the 1997 character "
+     "screen's dark scratched field (Menu4.pic), stretched to the window."),
 
     ("The duel table", "duel_pattern_",
      "The table under each player's cards, one per deck colour: a "
@@ -360,7 +374,7 @@ FAMILIES: list[tuple[str, str, str]] = [
 ]
 
 SECTION_ORDER = [
-    "Backdrops", "The duel table", "Cards", "The life panels",
+    "Backdrops", "The adventure world", "The duel table", "Cards", "The life panels",
     "Windows and panels", "Buttons", "The phase bars",
     "The combat window's sprites", "The hand", "Graveyards",
     "Marks on a card", "Symbols", "The Deck Builder", "Fonts", "Sounds",
@@ -764,6 +778,8 @@ def expected_files() -> list[str]:
     files = [file_name(key) for key in all_keys()]
     for key in importer.VIDEOS:
         files.append(key + ".json")
+    for key in importer.WORLD_SHEETS:
+        files.append(key + ".json")
     return files
 
 
@@ -790,7 +806,7 @@ def render(skin: Path, cardart: Path) -> str:
             for key in family:
                 name = file_name(key)
                 lines.append("    %-34s %s" % (name, measure(skin / name)))
-                if key in importer.VIDEOS:
+                if key in importer.VIDEOS or key in importer.WORLD_SHEETS:
                     side = key + ".json"
                     lines.append("    %-34s %s" % (side, measure(skin / side)))
     # The open-ended folders.
@@ -872,7 +888,7 @@ KINDS = {".png": "picture", ".json": "sheet layout", ".ttf": "font",
 def read_by_game(key: str) -> str:
     if file_name(key) in SHIPPED_BY_THE_GAME:
         return "no: the game always uses its own"
-    if key in importer.NOT_READ or key in importer.PIC_SCREENS:
+    if key in importer.NOT_READ:
         return "no: nothing reads it yet"
     return "yes"
 
@@ -925,7 +941,7 @@ def table_rows(skin: Path) -> list[dict[str, str]]:
         for note, family in families_of(grouped[section]):
             for key in family:
                 names = [file_name(key)]
-                if key in importer.VIDEOS:
+                if key in importer.VIDEOS or key in importer.WORLD_SHEETS:
                     names.append(key + ".json")
                 for name in names:
                     rows.append({

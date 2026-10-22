@@ -1,5 +1,69 @@
 # Code Map
 
+## The world of Shandalar: the 1997 generator and the world screen (2026-10-22)
+
+- `game/adventure/world/msvc_random.gd`: `MsvcRandom`, the C runtime's
+  `rand()` (`reseed`, `rand`, `below` = the original's `internal_rand`).
+- `game/adventure/world/shandalar_world.gd`: `ShandalarWorld`, one world on
+  the original's 320 × 200 work page — `terrain`, `tile_flags`
+  (`SITE`, `ROAD`, `DUNGEON`, `EXPLORED`), `road_bits`, `sites`,
+  `world_magic_sites`, `encounters` (castles and dungeons), `start`,
+  `DX`/`DY`, `DUNGEON_CARDS`, `magic_mask`, `explore_around`, `fingerprint`.
+- `game/adventure/world/world_generator.gd`: `WorldGenerator.generate`, the
+  1.3 generator step for step — the lattice, heights and bands, ponds, one
+  landmass, the 128 sites with World Magics and trade, the roads, the
+  castles and dungeons, the start; `distance`, `terrain_for`.
+- `game/adventure/world/world_art.gd`: `WorldArt`, the `world_*` sheets
+  and their anchors from the skin.
+- `game/adventure/world/world_view.gd`: `WorldView`, the world drawn as 1.3
+  drew it (`project`, `unproject`, `draw_order`, the ground, edges, roads,
+  trees and rocks, sites and the hero, depth-sorted), or plain without the
+  sheets.
+- `game/adventure/world/world_screen.gd` and
+  `game/adventure/world/world_screen.tscn`: `WorldScreen`, the world full
+  screen — `look`, `set_zoom`, `back_to_hero`, `toggle_map`, `leave`, the
+  arrival note.
+- `game/adventure/world/world_map.gd`: `WorldMap`, the map of the world,
+  explored land only (`shows`, `explored_only`). `WorldView.fog` and
+  `DEFAULT_ZOOM` (2): unseen land dark, twice the 1997 pixels.
+- `game/adventure/adventure_setup.gd`: `slot_start_for`, `color_number`,
+  `make_world`; `game/adventure/embark_screen.gd`: `open_world`,
+  `show_generating` (the bottom strip while the world is made: the
+  hourglass, "Conjuration of Shandalar World", `stars`), `randomize_all`
+  (Randomize: every choice drawn, the name by `AdventureSetup.random_name`
+  from `FIRST_NAMES` and `SURNAMES`), `_make_world_aside` (the world made on a
+  thread, waited for in `_exit_tree`).
+- `tools/import_original.py`: `WORLD_SHEETS`, `spr_frame_tops`, the
+  `world_*` rows; `tools/skin_catalogue.py`: "The adventure world".
+- `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`.
+
+## The Embark screen: a new adventure's hero (2026-10-22)
+
+- `game/adventure/adventure_setup.gd`: `AdventureSetup`, every choice of a
+  new adventure, headless — `DIFFICULTIES`, `COLORS` (the 1997 colour
+  number, the world magic a hero of it starts with, the colour menu's line,
+  the `stat_buttons` cell), `HEROES` (the fourteen `16faces.spr` faces, their
+  `@PLAYERNAMES` names and walkers), `WALKERS`, `RANDOM_TYPE`, `NAME_MAX`;
+  `starting_resources`, `clean_name`, `name_refusal`, `walker_shown`,
+  `parse_seed` / `clean_seed` / `text_seed` (a number or any word as the
+  world's seed), `time_seed_text` (the clock's time of day, HHMMSS, the
+  field's first seed), `resolve` (the record a world is made from, one
+  seeded stream), `remember` / `restore` / `forget` (the `adventure_*`
+  settings).
+- `game/adventure/embark_screen.gd` and `game/adventure/embark_screen.tscn`:
+  `EmbarkScreen`, the one screen — the face (`faces`: the heroes first), name, walker, colour,
+  playmat, packs, difficulty and world seed, `embark` (the `embarked`
+  signal, the record, the summary window) and `leave`.
+- `game/adventure/red_arrow.gd`: `RedArrow`, the drawn red arrow button.
+- `game/adventure/hourglass.gd`: `Hourglass`, the drawn hourglass that runs
+  and turns over while a world is made (`phase`).
+- `game/main.gd`: the title's `Shandalar` opens the Embark screen.
+- `game/skin.gd` `SIZES`, `tools/import_original.py` `PIC_SCREENS` /
+  `NOT_READ`, `tools/skin_catalogue.py`: the skin picture
+  `adventure_hero_background` (`Menu4.pic`); `character_select_background`
+  is the world-map frame and waits unread.
+- `tests/unit/test_adventure_setup.gd`, `tests/ui/test_embark_screen.gd`.
+
 ## Add pack... (2026-10-21)
 
 - `game/card_packs.gd`: `pick_pack` (the platform's file box, as

@@ -149,15 +149,16 @@ func _rows(title: Node) -> Dictionary:
 	return rows
 
 
-func test_the_title_menu_wears_eight_bullets_two_dimmed() -> void:
+## Shandalar is lit since its Embark screen (2026-10-22); Save / Load is
+## still the one placeholder.
+func test_the_title_menu_wears_eight_bullets_one_dimmed() -> void:
 	var title: Node = load("res://game/main.tscn").instantiate()
 	add_child_autofree(title)
 	await get_tree().process_frame
 	var rows := _rows(title)
 	assert_eq(rows.size(), 8, str(rows))
-	assert_eq(rows.get("Shandalar"), MenuBullet.DIMMED)
 	assert_eq(rows.get("Save / Load"), MenuBullet.DIMMED)
-	for label in ["Magic Battle", "Gauntlet", "Deck Builder", "Options", "Help", "Exit"]:
+	for label in ["Magic Battle", "Shandalar", "Gauntlet", "Deck Builder", "Options", "Help", "Exit"]:
 		assert_eq(rows.get(label), MenuBullet.AT_REST, label)
 
 

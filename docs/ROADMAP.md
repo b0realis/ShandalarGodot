@@ -3329,6 +3329,14 @@ own QoL. This milestone gets its own design doc before code.
 Notes so far (2026-10-04): `docs/adventure-implementation-notes.md` (ground
 rules, what to build on, a source map per system, open decisions) and
 `docs/world-builder-adventure-notes.md` (how the 1997 game generated its world).
+**Built 2026-10-22: the world** — the 1997 generator, exact, and the world
+screen, full screen (`docs/adventure-implementation-notes.md`, "Built: the
+world"). Walking comes next.
+**Built 2026-10-22: the Embark screen** — the title's `Shandalar` opens it;
+a new adventure's hero, colour, playmat, packs, difficulty and world seed
+on one screen, and the record the world will be made from
+(`docs/adventure-implementation-notes.md`, "Built: the Embark screen").
+Next: the starting deck (it needs the 1997 rarities), then the world.
 
 ## The Gauntlet — the fourth 1997 mode (BUILT 2026-09-02)
 
@@ -18809,6 +18817,47 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-22 — Embark: a new adventure's hero (0.50.48)
+
+The first built piece of M5, on the owner's design of the same day: one
+screen, "Embark to the world of Shandalar…", over the 1997 portrait
+screen's dark ground (`Menu4.pic`, the new skin picture
+`adventure_hero_background`), with red arrows for the faces.
+
+- **The choices**: the face (the fourteen 1997 heroes first, then every
+  other face; a hero brings their own name and walker), the name (25
+  characters, as 1.3), the walker (Male, Female, Other), the colour with
+  its 1997 symbol, line, amulet and world magic, the playmat (any colour,
+  any style, or Random), the card packs, the difficulty with the starting
+  gold, food, amulets and first deck, and the world's seed (1997 seeded
+  every world from the clock and never showed it; here it shows and can
+  be typed). The three windows are one size and lined up.
+- **Adventure** refuses a nameless hero, remembers every choice but the
+  seed, and makes the world's record (`AdventureSetup.resolve`); the world
+  is next. **Leave** and Escape go to the title.
+- Character creation was first cross-referenced with the 1.3
+  decompilation: the menus' order, 1.3's face designer and typed name, the
+  starting resources, and a world magic of the hero's colour from the
+  start, which neither our notes nor the 1997 FAQ had
+  (`docs/adventure-implementation-notes.md`).
+- The pack ruling of 2026-10-22 is in the same notes: the base cards are
+  always present and the first deck is base cards; Pack 1 is never offered;
+  each other pack is an additional challenge, a world of its own whose
+  World Lord unlocks its cards everywhere.
+- `character_select_background` (`Advfac64.pic`) is the world-map frame, not
+  the character screen; it keeps its name and waits for the overworld.
+- **The world of Shandalar**: the 1997 world generator ported step for
+  step (`game/adventure/world/`), quirks and all, and proven exact against
+  the matching decompilation of 1.3 — a scratch harness built from the
+  decompiled C agreed on every tile, road, site, World Magic, castle,
+  dungeon, start and the dice after, over 40 worlds; four are golden tests.
+  Adventure now makes the world (an hourglass runs, "Conjuration of
+  Shandalar World") and opens
+  the world screen, drawn as 1.3 drew it, full screen without the frame:
+  look around, zoom, the map of the world. The world sheets (`world_*`)
+  join the skin, painted with the adventure screen's own palette.
+  (`docs/world-builder-adventure-notes.md`.)
 
 ## 2026-10-21 — MPN, proposed to the community (0.50.47)
 
