@@ -110,10 +110,11 @@ const KEYS := [["Click", "walk there; the way is found"],
 ## The options' entries: name and words; the switches say how they stand
 ## ([method _option_words]).
 const OPTIONS := [["Save", "Save"], ["Load", "Load"], ["Bar", ""], ["Minimap", ""],
-	["Quest", ""], ["Guides", ""], ["Places", ""], ["Big", ""], ["Pace", ""], ["Music", ""], ["Sound", ""],
+	["Quest", ""], ["Guides", ""], ["Places", ""], ["Reader", ""], ["Big", ""], ["Pace", ""], ["Music", ""],
+	["Sound", ""],
 	["Menu", "Return to main menu"], ["Exit", "Exit game"]]
 ## The switches that leave the options open, so the new setting shows.
-const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Pace", "Music", "Sound"]
+const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Reader", "Pace", "Music", "Sound"]
 ## BIG BUTTONS, for a finger (the owner, 2026-10-23: *"touch-pad support?
 ## Maybe we can have bigger buttons on the pane with left and right arrows
 ## at the distal ends for touch"*) [QoL]: the panel and its options made
@@ -135,6 +136,11 @@ const GUIDES_SETTING := "world_guides"
 ## text with place category and name are displayed … turned on/off in
 ## menu drop down pane"*).
 const PLACES_SETTING := "world_place_names"
+## Whether a right click on a card in the shop, the card trader or a lair
+## opens it full screen, as the duel's reader does (the owner, 2026-10-23:
+## *"Right click on card should have large card render as in the duel! …
+## And add to on/off to options dropdown"*).
+const READER_SETTING := "world_card_reader"
 ## Where a pane was dragged to, by its name: `[x, y]` on the screen.
 const PANE_SETTING := "world_pane_"
 ## A press that moves no further than this is a click on a pane.
@@ -672,6 +678,11 @@ static func places_wanted() -> bool:
 	return bool(Settings.get_value(PLACES_SETTING, true))
 
 
+## Whether a right click on a card opens it full screen (on until switched).
+static func reader_wanted() -> bool:
+	return bool(Settings.get_value(READER_SETTING, true))
+
+
 ## THE GUIDE ARROWS shown or hidden (the options), remembered.
 static func guides_wanted() -> bool:
 	return bool(Settings.get_value(GUIDES_SETTING, true))
@@ -1094,6 +1105,8 @@ func _choose(entry_name: String) -> void:
 		"Places":
 			Settings.set_value(PLACES_SETTING, not places_wanted())
 			hide_place()
+		"Reader":
+			Settings.set_value(READER_SETTING, not reader_wanted())
 		"Big":
 			Settings.set_value(BIG_SETTING, not big)
 			big_switched.emit()
@@ -1127,6 +1140,8 @@ func _option_words(entry_name: String) -> String:
 			return "Guide arrows: " + ("on" if guides_wanted() else "off")
 		"Places":
 			return "Place names: " + ("on" if places_wanted() else "off")
+		"Reader":
+			return "Large card on right-click: " + ("on" if reader_wanted() else "off")
 		"Big":
 			return "Big buttons: " + ("on" if big else "off")
 		"Pace":

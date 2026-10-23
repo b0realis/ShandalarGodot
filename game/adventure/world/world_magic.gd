@@ -132,13 +132,16 @@ static func cast(player: AdventurePlayer, key: int) -> Dictionary:
 
 ## The roaming creature (slots 0–5) nearest the hero, as an index into
 ## [member AdventurePlayer.monsters], or -1 (1.3's `ApproximateDistance`,
-## [method WorldGenerator.distance]).
+## [method WorldGenerator.distance]): never a lair, as in 1997, nor a
+## creature still waiting for the duels unseen ([WorldLairs]).
 static func nearest_roaming(player: AdventurePlayer) -> int:
 	var best := -1
 	var best_distance := 0x7fff
 	for i in player.monsters.size():
 		var creature: Dictionary = player.monsters[i]
 		if int(creature.get("slot", -1)) < 0 or int(creature.get("slot", -1)) >= ROAMING_SLOTS:
+			continue
+		if String(creature.get("kind", "")) == "lair" or bool(creature.get("waiting", false)):
 			continue
 		var d := WorldGenerator.distance(player.position.x - int(creature.get("x", 0)),
 			player.position.y - int(creature.get("y", 0)))

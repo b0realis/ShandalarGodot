@@ -81,6 +81,45 @@
   (`tools/import_original.py` `VISIT_PICTURES`, `PIC_PALETTES`,
   `PIC_OPAQUE`). The pointers: `WorldCursors.Kind`, `FOR_PLACE`,
   `_layers`; `WorldScreen.pointer_for`.
+- `game/adventure/card_value.gd`: `CardValue`, a card's worth by the 1997
+  `CalculateCardShopPrice` — `facts` (the program's own from
+  `adventure_cards.json`, else `derive` from the card: `strength_step`
+  over `AutoDeck.score`, `STRENGTH_MIDDLE`), `price_of`, `base_price`,
+  `buy_price`, `sell_price`, `goes_with`, `rarity`, `is_base`,
+  `engine_name` / `SPELLED_1997` (the 1997 lists' names to the engine's).
+- `game/adventure/card_shop.gd`: `CardShop`, a town's shop by the 1997
+  rules — `offers` (drawn, kept, restocked: `AdventurePlayer.shops`),
+  `buy`, `price_at`, `sell_price_at`, `colors_sold`, `stock`,
+  `copies_allowed`. `game/adventure/world/card_shop_pane.gd`:
+  `CardShopPane`, its pane (`choose`, `buy_chosen`); `WorldScreen.open_shop`
+  / `shopping`; `AdventureBuilder.sell` / `sell_site`. The importer's
+  `import_card_values` (`find_card_table`, `read_card_table`,
+  `card_values`) reads the program's card table, `import_card_hints`
+  (`card_hints`) its `Hints.txt`.
+- `game/adventure/card_trade.gd`: `CardTrade`, `BuyAnyCardFromTown` — a
+  town's trade for amulets (`arrive`, `town_offer`, `traded`, `wares`,
+  `wanted`), the Nomad's Bazaar (`bazaar_price`) and the Diamond Mine;
+  `catalogue`, `in_adventure`, `amulets_for`, `offer`, `pay`.
+  `game/adventure/world/card_trade_pane.gd`: `CardTradePane`, the card
+  trader (`cards`, `choose`, `trade_chosen`); `WorldScreen.open_trade` /
+  `trading`.
+- `game/adventure/card_hints.gd`: `CardHints`, the card seller's hints —
+  `arrive` (drawn on a town visit), `current`, `bought`; shown by
+  `CardShopPane.hint_text`.
+- `game/adventure/world/world_lairs.gd`: `WorldLairs`,
+  `UpdateWorldLairAndMonsterSlots` for the six roaming slots — `tick`
+  (fill, lair or unseen creature, the lair reached), `seen`, `held_in`,
+  `explored`; drawn by `WorldView.lairs` (`LAIR_FRAMES`).
+- `game/adventure/lair_event.gd`: `LairEvent`, `RunLairExplorationEvent` —
+  `begin` (the treasure or one of fourteen, the waiting rare), `thieves`,
+  `lost_city`, `buy_amulet`, `oasis_trade`, `ruined_tower`,
+  `riddle_answered`, `finish`. `game/adventure/card_riddle.gd`:
+  `CardRiddle`, `RunCardRiddleChallenge` (`make`, `correct`, `verdict`,
+  `abilities`). `game/adventure/world/lair_pane.gd`: `LairPane` (a
+  `VisitPane`: `say`, `offer`, `show_card`); `WorldScreen.enter_lair`.
+  A card right-clicked in these panes (`card_read`) opens
+  `WorldScreen.read_card` → `FullscreenCard.open_instance`, switched by
+  `WorldHud.READER_SETTING`.
 - `game/adventure/world/hero_stats.gd`: `HeroStats`, the hero's stats in
   the hero pane (tabs Hero, Wizards, Journal; `record` counts the journal
   as 1.3's `RebuildStatsJournalCounts`, `record_ink`, `journal_lines`).

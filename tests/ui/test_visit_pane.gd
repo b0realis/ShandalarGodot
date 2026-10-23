@@ -76,11 +76,13 @@ func test_a_ruled_town_a_castle_a_lair_and_a_dungeon() -> void:
 	assert_eq(castle["lines"][0], "Who dares to challenge the Mighty %s?" % WorldNames.WIZARDS[index])
 	player.defeated_wizards.append(AdventurePlayer.COLORS[index])
 	assert_eq(VisitPane.describe(player, _tile(castle_slot))["kind"], "fallen", "a beaten wizard's castle")
-	player.monsters = [{"kind": "lair", "slot": 0, "name": "Hidden Lagoon", "color": 2,
-		"x": 3 * 32 + 16, "y": 4 * 32 + 16}]
+	player.monsters = [{"kind": "lair", "slot": 0, "color": 2, "x": 3 * 32 + 16, "y": 4 * 32 + 16}]
+	player.position = Vector2i(10, 10) * 32 + Vector2i(16, 16)
+	assert_eq(VisitPane.describe(player, Vector2i(3, 4)), {}, "a lair is seen only from beside it")
+	player.position = Vector2i(4, 4) * 32 + Vector2i(16, 16)
 	var lair := VisitPane.describe(player, Vector2i(3, 4))
 	assert_eq(lair["picture"], "visit_lair_blue", "the blue lair: the sunken ship")
-	assert_eq(lair["lines"], ["You happen upon a Hidden Lagoon!"])
+	assert_eq([lair["name"], lair["subtitle"]], ["Lair", "Blue lair"], "its tip")
 	var dungeon: Dictionary = screen.world.encounters[5]
 	var at := Vector2i(int(dungeon["x"]), int(dungeon["y"]))
 	assert_eq(VisitPane.describe(player, at), {}, "a dungeon unknown is not entered")
@@ -99,6 +101,10 @@ func test_the_walk_ends_in_a_town_and_its_pane_opens() -> void:
 			beside = near
 			break
 	player.position = beside * 32 + Vector2i(16, 16)
+	# No amulet: the town's trade is not offered, the wise man stands there.
+	for hue in AdventurePlayer.COLORS:
+		player.amulets[hue] = 0
+	player.monsters = [] as Array
 	screen.show_player(player)
 	assert_true(screen.walk_to_tile(town))
 	for i in 20:
@@ -120,7 +126,8 @@ func test_the_walk_ends_in_a_town_and_its_pane_opens() -> void:
 	(pane.find_child("Choice_food", true, false) as Button).pressed.emit()
 	assert_eq([player.gold, player.food], [gold - 20, food + 10], "10 food for (2 + 2) × 5 gold in a town")
 	assert_string_contains(pane.note(), "You buy 10 food")
-	assert_true((pane.find_child("Choice_buy", true, false) as Button).disabled, "the card shop waits")
+	assert_false((pane.find_child("Choice_buy", true, false) as Button).disabled, "the card shop is open")
+	assert_true((pane.find_child("Choice_wiseman", true, false) as Button).disabled, "the wise man waits")
 	# Escape leaves; a click on the town the hero stands on comes back.
 	var escape := InputEventAction.new()
 	escape.action = "ui_cancel"

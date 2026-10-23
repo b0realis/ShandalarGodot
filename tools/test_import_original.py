@@ -1825,3 +1825,85 @@ class TestVisitPictures(unittest.TestCase):
             self.assertIsNone(imp._raw_pic_rgba("visit_city", path, palette, True),
                               "a file it cannot read is skipped, not raised")
 
+
+class TestCardValues(unittest.TestCase):
+    """The 1997 program's card table (2026-10-23), found by its basic lands
+    and named from `Info.csv`, for the adventure's card prices."""
+
+    @staticmethod
+    def _row(name: bytes, card_id: int, kind: int, color: int, cc0: int, cc1: int,
+             power: int, tough: int, code: int, extra: int, ai: int) -> bytes:
+        row = bytearray(imp.CARD_ROW)
+        row[1:1 + len(name)] = name
+        struct.pack_into("<H", row, 0x24, card_id)
+        row[0x28] = kind
+        struct.pack_into("<bbb", row, 0x2a, color, cc0, cc1)
+        struct.pack_into("<hh", row, 0x2e, power, tough)
+        struct.pack_into("<III", row, 0x34, code, 0, extra)
+        row[0x40] = 255
+        row[0x42] = 1
+        struct.pack_into("<i", row, 0x44, ai)
+        return bytes(row)
+
+    def test_the_table_is_found_read_and_named(self):
+        lands = [b"Swamp", b"Island", b"Forest", b"Mountain", b"Plains"]
+        # Each land its own code, as the program's (`card_swamp` …).
+        blob = b"junk" * 9 + b"".join(self._row(n, 239 + i, 1, 2, 0, 0, 0, 0, 20 + i, 0x1000, 0)
+                                      for i, n in enumerate(lands))
+        blob += self._row(b"GrizzlyBear", 106, 2, 8, 1, 1, 2, 2, 9, 0, 1)
+        blob += self._row(b"OtherBear", 107, 2, 8, 1, 1, 2, 2, 9, 0, 1)
+        blob += b"\0" * imp.CARD_ROW
+        at = imp.find_card_table(blob)
+        self.assertEqual(at, 36)
+        rows = imp.read_card_table(blob, at)
+        self.assertEqual(len(rows), 7, "until a row without a name")
+        values = imp.card_values(rows, {106: "Grizzly Bears", 239: "Swamp"}, {},
+                                 {106: "Common"})
+        self.assertEqual(sorted(values), ["Grizzly Bears", "Swamp"], "only what Info.csv names")
+        bears = values["Grizzly Bears"]
+        self.assertEqual((bears["type"], bears["color"], bears["cc0"], bears["cc1"],
+                          bears["power"], bears["tough"], bears["ai"], bears["rarity"]),
+                         (2, 8, 1, 1, 2, 2, 1, 1))
+        self.assertTrue(bears["vanilla"], "the code most rows share is the plain creature's")
+        self.assertFalse(values["Swamp"]["vanilla"])
+
+    def test_no_table_no_file(self):
+        self.assertEqual(imp.find_card_table(b"Swamp\0" + b"x" * 400), -1)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(imp.import_card_values({}, Path(tmp)), "no program: nothing written")
+
+
+class TestCardHints(unittest.TestCase):
+    """The card seller's hints (2026-10-23): `Hints.txt` read with its
+    cards named by `Info.csv`, for the town shop."""
+
+    TEXT = (".51     -1\tA    \t(Crusade) ... Singles\r\n\r\n"
+            "give all your white creatures extra power.\r\n\r\n"
+            ".94     193\tAB    (Fungusaur/Prodigal) ... Combos\r\n\r\n"
+            "damage your own Fungusaur to make it grow each turn!\r\n\r\n"
+            ".500    193\tCD    (unnamed)\r\n\r\nnever read\r\n")
+
+    def test_the_hints_are_read_and_named(self):
+        names = {51: "Crusade", 94: "Fungusaur", 193: "Prodigal Sorcerer"}
+        hints = imp.card_hints(self.TEXT, names)
+        self.assertEqual(hints, [
+            {"first": "Crusade", "second": "", "levels": 1,
+             "text": "give all your white creatures extra power."},
+            {"first": "Fungusaur", "second": "Prodigal Sorcerer", "levels": 3,
+             "text": "damage your own Fungusaur to make it grow each turn!"}],
+            "a single card, a pair by difficulty letters; a card unnamed left out")
+
+    def test_written_beside_the_skin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Hints.txt").write_text(self.TEXT, encoding="cp1252")
+            (root / "Info.csv").write_text("51,Crusade\n94,Fungusaur\n193,Prodigal Sorcerer\n",
+                                           encoding="latin-1")
+            out = root / "skin"
+            out.mkdir()
+            index = {"hints.txt": root / "Hints.txt", "info.csv": root / "Info.csv"}
+            self.assertTrue(imp.import_card_hints(index, out))
+            data = json.loads((out / "adventure_hints.json").read_text())
+            self.assertEqual(len(data["hints"]), 2)
+            self.assertFalse(imp.import_card_hints({}, out), "no Hints.txt: nothing")
+

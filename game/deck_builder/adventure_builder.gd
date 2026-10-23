@@ -24,6 +24,12 @@ extends DeckBuilderScreen
 ##  - the duplicate limit counts Tome of Enlightenment.
 ## Done, or Escape's Return to the world, writes the decks back to the
 ## hero ([method write_back]) and closes it ([signal closed]).
+##
+## OPENED IN A TOWN ("Edit deck/Sell cards", [member sell_site]) it also
+## sells, as the 1997 builder did there (`DeckBuilderMain` with selling,
+## `SellPrice` 004f1bcc): Sell takes one copy of the card on show — one in
+## no deck first, never the deck's own — for the town's price
+## ([method CardShop.sell_price_at]), the gold on the title slab at once.
 
 ## The builder is done: the decks are written back to the hero.
 signal closed
@@ -40,8 +46,11 @@ const NOT_HERE := "The adventure's decks are built from your own cards."
 const GOLD_TITLE := "GOLD: %d"
 
 var player: AdventurePlayer
+## The town the builder was opened in, which buys cards; -1 for none.
+var sell_site := -1
 var _gold: Label
 var _written := false
+var _sell_button: Button
 
 
 func _ready() -> void:
@@ -72,6 +81,14 @@ func _ready() -> void:
 	_dice_button.hide()
 	_pool_button.hide()
 	_build_gold()
+	if sell_site >= 0:
+		_sell_button = OriginalDialog.button("Sell", Vector2(150, COMMAND_BAR_H))
+		_sell_button.name = "SellButton"
+		_sell_button.pressed.connect(func() -> void:
+			if _showcase._shown != null:
+				sell(_showcase._shown.data.card_name))
+		_command_row.add_child(_sell_button)
+		_command_row.move_child(_sell_button, _command_row.get_node("DoneButton").get_index())
 	refresh()
 	_say("Your cards: %d · in this deck %d" % [player.cards.size(), deck.total()])
 
@@ -167,6 +184,75 @@ func refresh() -> void:
 
 func gold_text() -> String:
 	return _gold.text if _gold != null else ""
+
+
+# ------------------------------------------------------------ selling --
+
+## The card on show, and what the town pays for it, on the Sell button.
+func _show_in_showcase(data: CardData) -> void:
+	super._show_in_showcase(data)
+	_price_sell(data.card_name)
+
+
+func _price_sell(card_name: String) -> void:
+	if _sell_button == null:
+		return
+	var spare := _spare_copy(card_name) >= 0
+	_sell_button.text = "Sell for %d" % CardShop.sell_price_at(player, sell_site, card_name) if spare else "Sell"
+	_sell_button.disabled = not spare
+
+
+## SELL one copy of [param card_name] to the town: one in no deck first,
+## else one in another deck (it leaves that deck), never one the deck on
+## the surface holds. The gold it brings, 0 when nothing was sold.
+func sell(card_name: String) -> int:
+	if sell_site < 0:
+		return 0
+	var at := _spare_copy(card_name)
+	if at < 0:
+		_say("Every %s you own is in this deck: take one out to sell it." % card_name, true)
+		return 0
+	var price := CardShop.sell_price_at(player, sell_site, card_name)
+	player.cards.remove_at(at)
+	player.gold += price
+	var left := 0
+	for card in player.cards:
+		if String((card as Dictionary).get("card", "")) == card_name:
+			left += 1
+	if left > 0:
+		sealed.counts[card_name] = left
+	else:
+		sealed.counts.erase(card_name)
+	for slot in SLOTS:
+		var model: DeckModel = deck if slot == _slot else _slots[slot]
+		while model.count_of(card_name) > left:
+			model.remove(card_name)
+	_drawn_revision = -1
+	refresh()
+	_refresh_inventory()
+	_price_sell(card_name)
+	_say("Sold %s for %d gold." % [card_name, price])
+	return price
+
+
+## The index in the hero's cards of a copy of [param card_name] that may be
+## sold: in no deck first, else in a deck other than the one on show, so
+## the surface keeps every copy it holds; -1 for none.
+func _spare_copy(card_name: String) -> int:
+	var held := deck.count_of(card_name)
+	var owned: Array[int] = []
+	for i in player.cards.size():
+		if String((player.cards[i] as Dictionary).get("card", "")) == card_name:
+			owned.append(i)
+	if owned.size() <= held:
+		return -1
+	for i in owned:
+		if ((player.cards[i] as Dictionary).get("decks", []) as Array).is_empty():
+			return i
+	for i in owned:
+		if not ((player.cards[i] as Dictionary).get("decks", []) as Array).has(_slot):
+			return i
+	return owned[owned.size() - 1]
 
 
 # -------------------------------------------- what the adventure keeps --

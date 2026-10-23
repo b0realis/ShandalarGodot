@@ -165,6 +165,11 @@ var made_fingerprint := ""
 ## The adventure's dice: they go on from where the world left them
 ## ([member ShandalarWorld.rand_state]).
 var dice := 0
+## The towns' card shops, by site slot (`"<slot>"`): `{cards, restock}` —
+## the cards on offer ("" for a place sold), and when each sold place may
+## be filled again on the quest clock ([CardShop]; 1997 kept them per
+## town, `card_slots`, `card_restock_timers`).
+var shops := {}
 ## The roaming creatures and lairs (0x1EA2C: six slots and a siege), none
 ## until they are made: `{slot, name, x, y, …}`, slots 0–5 roaming, 7 the
 ## creature besieging a city (`town`, its site slot) ([WorldMagic]).
@@ -336,6 +341,7 @@ func to_dict() -> Dictionary:
 			"encounters": world.encounters,
 			"lair_respawn": world.lair_respawn,
 			"monsters": monsters,
+			"shops": shops,
 		},
 	}
 
@@ -412,6 +418,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	player.made_fingerprint = String(saved_world.get("made_fingerprint", ""))
 	player.dice = int(saved_world.get("dice", made.rand_state))
 	player.monsters = _whole(saved_world.get("monsters", []))
+	player.shops = _whole(saved_world.get("shops", {}))
 	return player
 
 

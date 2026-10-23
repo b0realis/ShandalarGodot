@@ -20,7 +20,9 @@ extends Control
 ## load (over the world), return to the title and exit the game. A small
 ## map, the quest pane and the clues float in panes the player may move;
 ## guide arrows point to the places that call the hero ([WorldGuides]).
-## The towns, the encounters and the rest come next
+## A place walked to opens its pane ([VisitPane]) — a town's shop, trade and
+## deck builder — and a lair walked onto opens its own ([LairPane],
+## [WorldLairs]). The duels, the quests and the dungeons come next
 ## (`docs/adventure-implementation-notes.md`).
 
 const LOOK_SPEED := 600.0   # screen pixels a second, at zoom 1
@@ -66,8 +68,16 @@ var _pointer := -1
 var _load_screen: LoadAdventureScreen
 ## The deck builder, open over the world ([AdventureBuilder]).
 var _builder: AdventureBuilder
-## The place visited, its pane over the world ([VisitPane]).
+## The place visited, its pane over the world ([VisitPane], a lair's
+## [LairPane]), its tile, its card shop ([CardShopPane]) and the card trader
+## ([CardTradePane]: a town's trade, the Nomad's Bazaar, the Diamond Mine).
 var _visit: VisitPane
+var _visit_tile := Vector2i(-1, -1)
+var _shop: CardShopPane
+var _trade: CardTradePane
+## The duel's full-screen card reader, for a card right-clicked in a pane
+## ([method read_card]).
+var reader: FullscreenCard
 
 
 func _ready() -> void:
@@ -89,6 +99,9 @@ func _ready() -> void:
 	_map.visible = false
 	add_child(_map)
 	_make_hud()
+	reader = FullscreenCard.new()
+	reader.name = "CardReader"
+	add_child(reader)
 	_arrival = Label.new()
 	_arrival.name = "Arrival"
 	_arrival.text = arrival
@@ -172,6 +185,7 @@ func show_world(shown: ShandalarWorld) -> void:
 
 func _show_hero() -> void:
 	view.hero = Vector2(player.position)
+	view.lairs = WorldLairs.seen(player)
 	view.hero_facing = player.facing
 	view.hero_step = player.step
 	_map.hero_tile = player.tile()
@@ -253,11 +267,20 @@ func _end_process() -> void:
 ## A PLACE VISITED: the pane of what stands at [param tile] — a town, a
 ## castle, a lair, a dungeon whose clues are known — over the world, which
 ## waits under it ([VisitPane]); null when nothing there is visited.
-func visit(tile: Vector2i) -> VisitPane:
+func visit(tile: Vector2i, write := true) -> VisitPane:
 	if visiting():
 		return _visit
+	var town := VisitPane.site_slot(world, tile)
+	if write and town >= 0 and int(world.sites[town]["type"]) >= ShandalarWorld.VILLAGE \
+			and int(world.sites[town]["type"]) < ShandalarWorld.CASTLE:
+		# ARRIVING in a town: its cards drawn, the amulet its trade wants,
+		# the seller's hint (`RunTownServicesMenu`).
+		CardShop.offers(player, town)
+		CardTrade.arrive(player, town)
+		CardHints.arrive(player, town)
 	var place := VisitPane.describe(player, tile)
-	if place.is_empty():
+	# A lair is entered by walking onto it ([method enter_lair]).
+	if place.is_empty() or String(place["kind"]) == "lair":
 		return null
 	_wear(WorldCursors.Kind.ARROW)
 	_dragging = false
@@ -272,22 +295,172 @@ func visit(tile: Vector2i) -> VisitPane:
 	_visit.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_visit.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_visit.left.connect(_left_place, CONNECT_DEFERRED)
-	if String(place["kind"]) in VisitPane.KINDS:
+	_visit.card_read.connect(read_card)
+	_visit_tile = tile
+	if write and String(place["kind"]) in VisitPane.KINDS:
 		player.log_event("visit", "Visited %s" % String(place["name"]))
 	return _visit
 
 
 func visiting() -> bool:
-	return _visit != null and is_instance_valid(_visit) and not _visit.is_queued_for_deletion()
+	return (_visit != null and is_instance_valid(_visit) and not _visit.is_queued_for_deletion()) \
+		or shopping() or trading()
 
 
 func _left_place(then: String) -> void:
-	if visiting():
+	var place := _visit.place if _visit != null and is_instance_valid(_visit) else {}
+	if _visit != null and is_instance_valid(_visit):
 		_visit.queue_free()
 	_visit = null
 	_show_hero()
 	if then == "deck":
-		show_deck()
+		# From a town: its deck builder buys cards too.
+		show_deck(int(place["slot"]) if String(place.get("kind", "")) in VisitPane.KINDS else -1)
+	elif then == "shop" and not place.is_empty():
+		open_shop(int(place["slot"]))
+	elif then == "trade" and not place.is_empty():
+		var offer := CardTrade.town_offer(player, int(place["slot"]))
+		if not offer.is_empty():
+			open_trade(CardTrade.TOWN, int(place["slot"]), offer)
+
+
+## THE TOWN'S CARD SHOP over the world ([CardShopPane]); Done goes back to
+## the town's pane.
+func open_shop(slot: int) -> CardShopPane:
+	if shopping():
+		return _shop
+	_shop = CardShopPane.new()
+	_shop.player = player
+	_shop.slot = slot
+	_shop.k = WorldHud.BIG if hud.big else 1.0
+	add_child(_shop)
+	_shop.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_shop.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_shop.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_shop.done.connect(_left_shop, CONNECT_DEFERRED)
+	_shop.card_read.connect(read_card)
+	return _shop
+
+
+func shopping() -> bool:
+	return _shop != null and is_instance_valid(_shop) and not _shop.is_queued_for_deletion()
+
+
+func _left_shop() -> void:
+	if shopping():
+		_shop.queue_free()
+	_shop = null
+	_show_hero()
+	if _visit_tile.x >= 0:
+		visit(_visit_tile, false)
+
+
+## THE CARD TRADER over the world ([CardTradePane]): [param way] a town's
+## trade at site [param slot] ([param offer] its [method
+## CardTrade.town_offer]), or a lair's — the lair's pane waits under it.
+func open_trade(way: String, slot := -1, offer := {}) -> CardTradePane:
+	if trading():
+		return _trade
+	_trade = CardTradePane.new()
+	_trade.player = player
+	_trade.way = way
+	_trade.slot = slot
+	_trade.k = WorldHud.BIG if hud.big else 1.0
+	match way:
+		CardTrade.TOWN:
+			_trade.trade = int(offer.get("trade", 0))
+			_trade.color = String(offer.get("color", ""))
+			_trade.who = "%s trades %s for %s amulets." % [WorldNames.site_name(world, slot),
+				CardTrade.wares(_trade.trade), _trade.color]
+		CardTrade.BAZAAR:
+			_trade.who = "The Nomad's Bazaar: any card, for gold."
+		_:
+			_trade.who = "The Diamond Mine: any card, for amulets of any color."
+	if _visit != null and is_instance_valid(_visit):
+		_visit.visible = false
+	add_child(_trade)
+	_trade.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_trade.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_trade.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_trade.done.connect(_left_trade, CONNECT_DEFERRED)
+	_trade.card_read.connect(read_card)
+	return _trade
+
+
+## A CARD READ FULL SCREEN (a right click on it in a pane; the options
+## switch it, [method WorldHud.reader_wanted]): true when it opened.
+func read_card(card_name: String) -> bool:
+	if not WorldHud.reader_wanted() or not CardRegistry.has_card(card_name):
+		return false
+	return reader.open_instance(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
+
+
+func trading() -> bool:
+	return _trade != null and is_instance_valid(_trade) and not _trade.is_queued_for_deletion()
+
+
+func _left_trade() -> void:
+	var way := _trade.way if trading() else ""
+	var slot := _trade.slot if trading() else -1
+	if trading():
+		_trade.queue_free()
+	_trade = null
+	_show_hero()
+	if way == CardTrade.TOWN:
+		# The town's trade is done for a while, a card traded or not.
+		CardTrade.traded(player, slot)
+		if _visit_tile.x >= 0:
+			visit(_visit_tile, false)
+	elif _visit != null and is_instance_valid(_visit):
+		_visit.visible = true
+		if _visit is LairPane:
+			(_visit as LairPane).traded()
+
+
+## A LAIR ENTERED: the lair in roaming slot [param slot] ([WorldLairs]);
+## the game saved first, as 1997 saved it; its pane over the world
+## ([LairPane]); null when the slot holds no lair.
+func enter_lair(slot: int) -> LairPane:
+	if visiting():
+		return null
+	var held := WorldLairs.held_in(player, slot)
+	if String(held.get("kind", "")) != "lair":
+		return null
+	walk.stop()
+	if player.adventure_id != "":
+		player.autosave()
+	var event := LairEvent.begin(player, held)
+	_wear(WorldCursors.Kind.ARROW)
+	_dragging = false
+	hud.close_panels()
+	hud.hide_place()
+	var pane := LairPane.new()
+	pane.player = player
+	pane.event = event
+	pane.place = LairPane.place_of(event)
+	pane.k = WorldHud.BIG if hud.big else 1.0
+	_visit = pane
+	_visit_tile = Vector2i(-1, -1)
+	add_child(pane)
+	pane.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	pane.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	pane.grow_vertical = Control.GROW_DIRECTION_BOTH
+	pane.left.connect(_left_lair.bind(slot), CONNECT_DEFERRED)
+	pane.trading.connect(func(way: String) -> void: open_trade(way))
+	pane.card_read.connect(read_card)
+	return pane
+
+
+## The lair is left: gone from the map, the game saved again.
+func _left_lair(_then: String, slot: int) -> void:
+	if _visit != null and is_instance_valid(_visit):
+		_visit.queue_free()
+	_visit = null
+	WorldLairs.explored(player, slot)
+	if player.adventure_id != "":
+		player.autosave()
+	_show_hero()
+	view.queue_redraw()
 
 
 ## THE CLUES (the frame's gate, F4): what the hero has learned of the
@@ -321,7 +494,7 @@ func cast(key: int) -> Dictionary:
 ## THE DECK (the frame's spellbook, F1, and Conjurer's Will): the
 ## adventure's deck builder over the world, which waits under it
 ## ([AdventureBuilder]); Done writes the decks back to the hero.
-func show_deck() -> AdventureBuilder:
+func show_deck(sell_site := -1) -> AdventureBuilder:
 	if building():
 		return _builder
 	if player.cards.is_empty():
@@ -334,6 +507,7 @@ func show_deck() -> AdventureBuilder:
 	_builder = AdventureBuilder.new()
 	_builder.name = "DeckBuilder"
 	_builder.player = player
+	_builder.sell_site = sell_site
 	_builder.closed.connect(_deck_closed)
 	_builder.exit_requested.connect(exit_game)
 	add_child(_builder)
@@ -383,6 +557,12 @@ func advance(seconds: float) -> void:
 		var walking := walk.is_walking()
 		if walk.tick():
 			world.explore_around(player.tile())
+		# The lairs and the roaming slots (`UpdateWorldLairAndMonsterSlots`).
+		var lair := WorldLairs.tick(player)
+		if lair >= 0:
+			view.camera = Vector2(player.position)
+			enter_lair(lair)
+			break
 		if walking:
 			view.camera = Vector2(player.position)
 			# THE WALK ENDS AT A PLACE: it is visited [QoL: only the place

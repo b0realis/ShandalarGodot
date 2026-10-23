@@ -75,7 +75,9 @@ tiler drops frames — see SPR_SHEETS.
 """
 
 import argparse
+import collections
 import contextlib
+import csv
 import io
 import os
 import datetime
@@ -2486,7 +2488,8 @@ PIC_SCREENS: dict[str, list[str]] = {
 #     (`0246`, `0364`, `0335`, `0737`, `0028` — card illustrations);
 #   - a lair by its colour (`lair_backdrop_paths`: `0333`, `0873` — the
 #     sunken ship —, `0281`, `0329`, `0569`);
-#   - the siege's news flash (`Newsback.pic`);
+#   - the siege's news flash (`Newsback.pic`), the card shop's ground
+#     (`Buycards.pic`, its own palette);
 # and the dungeon board's ground (`CaveBkgd.pic`, 640 x 480, its own
 # palette), which 1997 opened straight onto. The visit pane wears them
 # ([VisitPane]).
@@ -2505,6 +2508,7 @@ VISIT_PICTURES: dict[str, list[str]] = {
     "visit_lair_red": ["0329.pic"],
     "visit_lair_white": ["0569.pic"],
     "visit_news": ["Newsback.pic"],
+    "visit_buycards": ["Buycards.pic"],
     "visit_dungeon": ["CaveBkgd.pic"],
 }
 PIC_SCREENS.update(VISIT_PICTURES)
@@ -2514,6 +2518,199 @@ PIC_SCREENS.update(VISIT_PICTURES)
 ## clear of a face.
 PIC_PALETTES: dict[str, list[str]] = {key: ["Advfac64.pic", "Advinter.pic"] for key in VISIT_PICTURES}
 PIC_OPAQUE: set[str] = set(VISIT_PICTURES)
+
+
+# THE ADVENTURE'S CARD VALUES (2026-10-23, the owner: *"study how, which
+# cards are available where and how the price of the cards is determined"*).
+# The 1997 town shop prices a card with `CalculateCardShopPrice` (1.3
+# 004f1cce) from the program's own card table — its type, colour, cost,
+# power and toughness, keyword and ability bits, a hand-tuned value
+# (`ai_base_value`, -2 to 3) and a hand-picked list of staples
+# (`extra_ability` 0x200, priced double) — and offers only cards of the base
+# set (`expansion`) not barred (0x900, 0x180). Those numbers live nowhere
+# but in the program, so they are read out of the player's own
+# `Shandalar.exe` (or `Magic.exe`): the table is found by its first five
+# rows, the basic lands, 72 bytes apart, in whichever build the player has;
+# each row's full name is `Info.csv`'s for its card id, and its shop rarity
+# `Concise.csv`'s (`LoadCardRaritiesAndCsvOffsets`). Written beside the
+# skin's pictures as `adventure_cards.json`; [CardValue] prices with it, and
+# from the card's own stats without it.
+CARD_TABLE_PROGRAMS = ["Shandalar.exe", "Magic.exe"]
+CARD_ROW = 72
+CARD_VALUES_KEY = "adventure_cards"
+
+
+def find_card_table(data: bytes) -> int:
+    """The offset of the 1997 card table in a program, or -1: the row whose
+    name is Swamp with Island, Forest, Mountain and Plains following."""
+    names = [b"Swamp\0", b"Island\0", b"Forest\0", b"Mountain\0", b"Plains\0"]
+    at = data.find(names[0])
+    while at >= 1:
+        row = at - 1
+        if all(data[row + CARD_ROW * i + 1:row + CARD_ROW * i + 1 + len(n)] == n
+               for i, n in enumerate(names)):
+            return row
+        at = data.find(names[0], at + 1)
+    return -1
+
+
+def read_card_table(data: bytes, row: int) -> list[dict]:
+    """The table's rows from [param row] until one has no name: the fields
+    the shop's price and offer read (`card_data_t`, 72 bytes)."""
+    rows = []
+    while row + CARD_ROW <= len(data):
+        record = data[row:row + CARD_ROW]
+        name = record[1:20].split(b"\0")[0]
+        if not name or not all(32 <= ch < 127 for ch in name):
+            break
+        cc0, cc1 = struct.unpack_from("<bb", record, 0x2b)
+        power, tough = struct.unpack_from("<hh", record, 0x2e)
+        code, static, extra = struct.unpack_from("<III", record, 0x34)
+        rows.append({"short": name.decode("latin-1"),
+                     "id": struct.unpack_from("<H", record, 0x24)[0],
+                     "type": record[0x28], "color": struct.unpack_from("<b", record, 0x2a)[0],
+                     "cc0": cc0, "cc1": cc1, "power": power, "tough": tough,
+                     "code": code, "static": static, "extra": extra,
+                     "rarity": record[0x40], "exp": record[0x42],
+                     "ai": struct.unpack_from("<i", record, 0x44)[0]})
+        row += CARD_ROW
+    return rows
+
+
+def _csv_by_id(path: Path, column: int) -> dict[int, str]:
+    out: dict[int, str] = {}
+    try:
+        for fields in csv.reader(path.read_text(encoding="latin-1").splitlines()):
+            if len(fields) > column and fields[0].strip().isdigit():
+                out[int(fields[0])] = fields[column].strip()
+    except OSError:
+        pass
+    return out
+
+
+## `Info.csv`'s "Occuran." words as the shop's rarity (`GetCardRarity`).
+OCCURRENCE = {"common": 1, "uncommon": 2, "rare": 3, "special": 3}
+
+
+def card_values(rows: list[dict], names: dict[int, str],
+                rarities: dict[int, int], occurrences: dict[int, str] | None = None
+                ) -> dict[str, dict]:
+    """The table keyed by each card's full name: `vanilla` where its code
+    is the plain creature's (`card_dummy`, the pointer most rows share),
+    `rarity` the shop's (`Concise.csv`, else `Info.csv`'s "Occuran.")."""
+    occurrences = occurrences or {}
+    common = collections.Counter(r["code"] for r in rows).most_common(1)
+    dummy = common[0][0] if common else 0
+    out: dict[str, dict] = {}
+    for r in rows:
+        name = names.get(r["id"], "")
+        if not name or name in out:
+            continue
+        entry = {k: r[k] for k in ("id", "type", "color", "cc0", "cc1", "power",
+                                   "tough", "static", "extra", "exp", "ai")}
+        entry["vanilla"] = r["code"] == dummy
+        entry["rarity"] = rarities.get(r["id"], OCCURRENCE.get(
+            occurrences.get(r["id"], "").strip().lower(), 1))
+        out[name] = entry
+    return out
+
+
+def import_card_values(index: dict[str, Path], dest: Path) -> bool:
+    """Write `<dest>/adventure_cards.json` from the player's program and
+    its card lists; True when it was written. Reports and returns."""
+    program = _first_of(index, CARD_TABLE_PROGRAMS)
+    if program is None:
+        return False
+    try:
+        data = program.read_bytes()
+    except OSError as err:
+        print("  %-24s SKIPPED %s (%s)" % (CARD_VALUES_KEY, program.name, err))
+        return False
+    row = find_card_table(data)
+    if row < 0:
+        print("  %-24s SKIPPED %s (no card table in it)" % (CARD_VALUES_KEY, program.name))
+        return False
+    rows = read_card_table(data, row)
+    info = index.get("info.csv")
+    names = _csv_by_id(info, 1) if info is not None else {}
+    occurrences = _csv_by_id(info, 8) if info is not None else {}
+    rarities: dict[int, int] = {}
+    concise = index.get("concise.csv")
+    if concise is not None:
+        try:
+            for line in concise.read_text(encoding="latin-1").splitlines():
+                bits = line.split()
+                if len(bits) == 3 and bits[0].isdigit() and bits[1].isdigit():
+                    rarities[int(bits[0])] = int(bits[1])
+        except OSError:
+            pass
+    values = card_values(rows, names, rarities, occurrences)
+    if not values:
+        print("  %-24s SKIPPED %s (no card named in Info.csv)" % (CARD_VALUES_KEY, program.name))
+        return False
+    (dest / (CARD_VALUES_KEY + ".json")).write_text(json.dumps(
+        {"source": program.name, "cards": values}, sort_keys=True) + "\n")
+    print("  %-24s <- %s (%d cards)" % (CARD_VALUES_KEY, program.name, len(values)))
+    return True
+
+
+# THE CARD SELLER'S HINTS (2026-10-23, the owner: *"Build all trade
+# features"*). The 1997 town shop's seller suggests what a card on offer
+# does with one the hero owns (`LoadTownHintMetadata`, 1.3 004184d2): the
+# player's `Hints.txt` holds 245 of them — a line `.<id> <id or -1>
+# <difficulty letters A-D> (comment)`, then one line of what the two do.
+# Read with the cards named by `Info.csv`, as `adventure_hints.json`.
+HINTS_KEY = "adventure_hints"
+HINT_LEVELS = {"A": 1, "B": 2, "C": 4, "D": 8}
+
+
+def card_hints(text: str, names: dict[int, str]) -> list[dict]:
+    """The hints of a `Hints.txt`: `{first, second, levels, text}`, the
+    cards by name (`second` "" for a single card), `levels` a bit for each
+    difficulty letter. An entry whose card is not named is left out."""
+    out: list[dict] = []
+    head: list[str] | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("."):
+            head = line[1:].split()
+            continue
+        if not line or head is None:
+            continue
+        bits, head = head, None
+        if len(bits) < 3 or not bits[0].lstrip("-").isdigit() or not bits[1].lstrip("-").isdigit():
+            continue
+        first = names.get(int(bits[0]), "")
+        second = names.get(int(bits[1]), "") if int(bits[1]) >= 0 else ""
+        if not first or (int(bits[1]) >= 0 and not second):
+            continue
+        levels = 0
+        for letter in bits[2]:
+            levels |= HINT_LEVELS.get(letter.upper(), 0)
+        out.append({"first": first, "second": second, "levels": levels, "text": line[:256]})
+    return out
+
+
+def import_card_hints(index: dict[str, Path], dest: Path) -> bool:
+    """Write `<dest>/adventure_hints.json` from the player's `Hints.txt`;
+    True when it was written. Reports and returns."""
+    source = index.get("hints.txt")
+    info = index.get("info.csv")
+    if source is None or info is None:
+        return False
+    try:
+        text = source.read_text(encoding="cp1252", errors="replace")
+    except OSError as err:
+        print("  %-24s SKIPPED %s (%s)" % (HINTS_KEY, source.name, err))
+        return False
+    hints = card_hints(text, _csv_by_id(info, 1))
+    if not hints:
+        print("  %-24s SKIPPED %s (no hint read)" % (HINTS_KEY, source.name))
+        return False
+    (dest / (HINTS_KEY + ".json")).write_text(json.dumps(
+        {"source": source.name, "hints": hints}, sort_keys=True) + "\n")
+    print("  %-24s <- %s (%d hints)" % (HINTS_KEY, source.name, len(hints)))
+    return True
 
 
 def import_pic_screens(index: dict[str, Path], dest: Path) -> None:
@@ -2813,7 +3010,7 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
     write_png(dest / (key + ".png"), width, height, pixels, alpha=alpha)
     print("  %-24s <- %s (decoded %dx%d, palette: %s)"
           % (key, source, width, height,
-             origin if alpha or key in PIC_OPAQUE else "its own"))
+             origin if alpha else ("its own, else " + origin if key in PIC_OPAQUE else "its own")))
     return True
 
 
@@ -3345,6 +3542,10 @@ def run_import(args: argparse.Namespace, index: dict[str, Path],
     import_portraits(index, dest)
     # Raw `.pic` screens, decoded rather than copied — see PIC_SCREENS.
     import_pic_screens(index, dest)
+    # The adventure's card values, read out of the game's own program.
+    import_card_values(index, dest)
+    # The card seller's hints, from the game's own `Hints.txt`.
+    import_card_hints(index, dest)
     return origin, notes
 
 

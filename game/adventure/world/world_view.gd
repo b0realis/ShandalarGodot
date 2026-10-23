@@ -40,6 +40,9 @@ var hero_step := 0
 ## The figure's sheet dressed in the hero's colours ([HeroColors]), or null
 ## for the 1997 one.
 var hero_sheet: Texture2D
+## The lairs the hero sees ([method WorldLairs.seen]): `{x, y, color}`, in
+## world units.
+var lairs: Array[Dictionary] = []
 ## Twice the 1997 pixels by default (the owner's choice, 2026-10-22): crisp,
 ## and about the original window's view scaled up; the wheel zooms.
 var zoom := DEFAULT_ZOOM
@@ -80,6 +83,11 @@ const CASTLE_FRAMES: Array[Array] = [[8, 9, 10, 11], [2, 6, 3, 7], [12, 16, 13, 
 ## its ground half always LOCATN04 frame 6.
 const DOMES: Array[Array] = [["world_locatn04", 10], ["world_locatn04", 2],
 	["world_locatn04", 8], ["world_locatn06", 0], ["world_locatn04", 3]]
+
+## `g_lair_sprite_index_by_color`: a lair's LOCATN07 frame by its colour
+## (colourless, black … white), its ground half six frames on; drawn 64
+## left of and 96 above its point, at that point's height.
+const LAIR_FRAMES: Array[int] = [0, 4, 0, 3, 2, 1]
 
 ## Plain colours by terrain (the overview map's tiles, averaged).
 const PLAIN := {0: Color("#387faf"), 1: Color("#3aa19c"), 2: Color("#798d58"),
@@ -167,6 +175,11 @@ func _draw_1997(visible: Array[Vector2i]) -> void:
 	for tile in visible:
 		if not fog or world.is_explored(tile.x, tile.y):
 			_draw_ground_halves(tile, queue)
+	for lair in lairs:
+		var point := project(Vector2(int(lair["x"]), int(lair["y"])))
+		var frame := LAIR_FRAMES[clampi(int(lair.get("color", 0)), 0, 5)]
+		_sprite("world_locatn07", frame + 6, point - Vector2(64, 96))
+		queue.append([point.y, queue.size(), "world_locatn07", frame, point - Vector2(64, 96)])
 	var at := project(hero)
 	var frame := ((hero_facing + 2) & 7) * 5 + clampi(hero_step, 0, 4)
 	_sprite("world_sego_f", frame, at - Vector2(77, 61))
@@ -395,6 +408,11 @@ func _draw_plain(visible: Array[Vector2i]) -> void:
 		var radius: float = [0, 7, 11, 14, 18, 18][clampi(kind, 0, 5)]
 		draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
 		draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
+	for lair in lairs:
+		var mouth := project(Vector2(int(lair["x"]), int(lair["y"])))
+		draw_circle(mouth, 12, Color(0, 0, 0, 0.6))
+		draw_circle(mouth, 9, Color8(40, 26, 20))
+		draw_arc(mouth, 10, 0, TAU, 20, Color8(232, 190, 110), 2.0)
 	var at := project(hero)
 	draw_circle(at + Vector2(0, -14), 9, Color8(150, 22, 18))
 	draw_rect(Rect2(at + Vector2(-5, -8), Vector2(10, 8)), Color8(150, 22, 18))

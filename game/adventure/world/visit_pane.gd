@@ -26,14 +26,24 @@ extends PanelContainer
 ##    the sunken ship): "You happen upon a %s!"
 ##  - A DUNGEON whose clues are known: 1997 opened straight onto the
 ##    dungeon board (`CaveBkgd.pic`); here its ground shows under the name.
-## What is not made yet — the card shop, the wise man and his quests, the
-## duels for a ruled town and a castle, the lairs' events, the dungeon
-## board — is shown and waits, said in one line. Without the 1997
-## pictures the place is a plain dark field under its name.
+## Buy Cards opens the town's card shop ([CardShopPane]) — "Buy Cards/Card
+## Hints" when the seller has a hint ([CardHints]); a town's trade, "Trade
+## red amulet for Any creatures", stands where the wise man is while it is
+## offered ([CardTrade]), and opens the card trader ([CardTradePane]). A
+## lair's own pane ([LairPane]) changes its words, choices and the card
+## shown as its event goes ([method say], [method offer], [method
+## show_card]). What is not made yet — the wise man and his quests, the
+## duels for a ruled town and a castle, the dungeon board — is shown and
+## waits, said in one line. Without the 1997 pictures the place is a plain
+## dark field under its name.
 
 ## The hero leaves the place; [param then] what they chose to do next
-## (`""`, or `deck` for Edit deck).
+## (`""`, `deck` for Edit deck, `shop` for Buy Cards, `trade` for the
+## town's trade).
 signal left(then: String)
+## The card shown over the picture right-clicked, to be read full screen
+## ([method WorldScreen.read_card]).
+signal card_read(card_name: String)
 
 const GOLD := Color8(232, 190, 110)
 const INK := Color8(236, 222, 196)
@@ -44,7 +54,7 @@ const EDGE := Color8(20, 10, 8)
 const PICTURE := Vector2(512, 280)
 const MOST := 1.5
 const KINDS := ["village", "town", "city"]
-const COMING := "The card shop, the wise man and his quests, the duels and the dungeons come next."
+const COMING := "The wise man and his quests, the duels and the dungeons come next."
 
 var player: AdventurePlayer
 ## What is visited ([method describe]).
@@ -52,7 +62,10 @@ var place := {}
 ## The size factor of the choices: 1, or [constant WorldHud.BIG].
 var k := 1.0
 var _note: Label
-var _choices: HBoxContainer
+var _choices: HFlowContainer
+var _said: Label
+var _card: CardPreview
+var _card_name := ""
 ## The picture's width on the screen: the words wrap to it.
 var _width := PICTURE.x
 
@@ -68,10 +81,8 @@ static func describe(hero: AdventurePlayer, tile: Vector2i) -> Dictionary:
 	var world := hero.world
 	if world == null:
 		return {}
-	for creature in hero.monsters:
-		var lair := creature as Dictionary
-		if String(lair.get("kind", "")) == "lair" \
-				and Vector2i(int(lair.get("x", -99)) / 32, int(lair.get("y", -99)) / 32) == tile:
+	for lair in WorldLairs.seen(hero):
+		if Vector2i(int(lair["x"]) / 32, int(lair["y"]) / 32) == tile:
 			return _lair(lair)
 	var slot := site_slot(world, tile)
 	if slot >= 0:
@@ -122,11 +133,14 @@ static func _town(hero: AdventurePlayer, slot: int, kind: int) -> Dictionary:
 				"To free the city you must duel this %s's creature." % wizard],
 			"actions": [["leave", "Never mind.", true], ["duel", "Duel the creature.", false]]}
 	var price := food_price(kind)
+	var buy := "Buy Cards/Card Hints" if not CardHints.current(hero, slot).is_empty() else "Buy Cards"
+	var trade := CardTrade.town_offer(hero, slot)
+	var fourth: Array = ["trade", String(trade["words"]), true] if not trade.is_empty() \
+		else ["wiseman", "Speak to Wise Man", false]
 	return {"kind": KINDS[clampi(kind - 1, 0, 2)], "slot": slot, "name": name,
 		"subtitle": KINDS[clampi(kind - 1, 0, 2)].capitalize(), "picture": picture,
 		"lines": [] as Array[String],
-		"actions": [["buy", "Buy Cards", false], ["deck", "Edit deck/Sell cards", true],
-			["wiseman", "Speak to Wise Man", false],
+		"actions": [["buy", buy, true], ["deck", "Edit deck/Sell cards", true], fourth,
 			["food", "Buy 10 food for %d gold" % price, hero.gold >= price],
 			["leave", "Leave the village", true]]}
 
@@ -150,13 +164,13 @@ static func _castle(hero: AdventurePlayer, slot: int, kind: int) -> Dictionary:
 		"actions": [["leave", "Well... No.", true], ["enter", "Yes, enter the castle.", false]]}
 
 
+## A lair seen: walked onto, it is entered ([LairPane]); this names it for
+## the pointer's tip.
 static func _lair(lair: Dictionary) -> Dictionary:
 	var color: String = AdventurePlayer.COLORS[clampi(int(lair.get("color", 1)) - 1, 0, 4)]
-	var called := String(lair.get("name", "Lair"))
-	return {"kind": "lair", "slot": int(lair.get("slot", -1)), "name": called,
-		"subtitle": "Lair", "picture": "visit_lair_" + color,
-		"lines": ["You happen upon a %s!" % called],
-		"actions": [["leave", "Leave", true]]}
+	return {"kind": "lair", "slot": int(lair.get("slot", -1)), "name": "Lair",
+		"subtitle": "%s lair" % color.capitalize(), "picture": "visit_lair_" + color,
+		"lines": [], "actions": [["leave", "Leave", true]]}
 
 
 # --------------------------------------------------------------- the pane --
@@ -187,19 +201,22 @@ func _ready() -> void:
 	column.add_child(subtitle)
 	column.add_child(_picture())
 	var words: Array = place.get("lines", [])
-	if not words.is_empty():
-		var said := _label("\n".join(words), 17, INK)
-		said.name = "PlaceWords"
-		said.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		# A wrapping label has no width of its own: the picture's, or it
-		# breaks at every word and the pane grows past the screen.
-		said.custom_minimum_size = Vector2(_width, 0)
-		column.add_child(said)
-	_choices = HBoxContainer.new()
+	_said = _label("\n".join(words), 17, INK)
+	_said.name = "PlaceWords"
+	_said.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# A wrapping label has no width of its own: the picture's, or it
+	# breaks at every word and the pane grows past the screen.
+	_said.custom_minimum_size = Vector2(_width, 0)
+	_said.visible = not words.is_empty()
+	column.add_child(_said)
+	# The choices wrap: a riddle's ten answers, five cards' names.
+	_choices = HFlowContainer.new()
 	_choices.name = "Choices"
-	_choices.alignment = BoxContainer.ALIGNMENT_CENTER
-	_choices.add_theme_constant_override("separation", int(8 * k))
+	_choices.alignment = FlowContainer.ALIGNMENT_CENTER
+	_choices.custom_minimum_size = Vector2(_width, 0)
+	_choices.add_theme_constant_override("h_separation", int(8 * k))
+	_choices.add_theme_constant_override("v_separation", int(6 * k))
 	_choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_choices)
 	_note = _label("", 14, DIM)
@@ -239,6 +256,26 @@ func _picture() -> Control:
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(art)
+	# A card shown over the picture's right side (a lair's find, a riddle's
+	# answer), as 1997 showed it over the place.
+	var holder := Control.new()
+	holder.name = "CardHolder"
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.add_child(holder)
+	_card = CardPreview.new()
+	_card.name = "ShownCard"
+	_card.docked = true
+	_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	_card.gui_input.connect(func(input: InputEvent) -> void:
+		if CardShopPane._right_click(input) and _card_name != "":
+			card_read.emit(_card_name))
+	var fit := PICTURE.y * grow * 0.88 / CardPreview.SIZE.y
+	_card.scale = Vector2(fit, fit)
+	_card.position = Vector2(PICTURE.x * grow - CardPreview.SIZE.x * fit - 16.0 * grow,
+		(PICTURE.y * grow - CardPreview.SIZE.y * fit) / 2.0)
+	_card.visible = false
+	holder.add_child(_card)
 	return frame
 
 
@@ -252,16 +289,53 @@ func has_picture() -> bool:
 
 
 func _fill_choices() -> void:
+	# Out now, freed after: the button pressed may be the one replaced.
 	for child in _choices.get_children():
-		child.free()
+		_choices.remove_child(child)
+		child.queue_free()
 	var waiting := false
 	for action in place.get("actions", []):
 		var choice := _button(String(action[1]), String(action[0]))
 		choice.disabled = not bool(action[2])
-		if String(action[0]) in ["buy", "wiseman", "duel", "enter"]:
+		if String(action[0]) in ["wiseman", "duel", "enter"]:
 			waiting = true
 		_choices.add_child(choice)
 	_note.text = COMING if waiting else ""
+
+
+## The place's words now: [param lines], a line each (none hides them).
+func say(lines: Array) -> void:
+	place["lines"] = lines
+	_said.text = "\n".join(lines)
+	_said.visible = not lines.is_empty()
+
+
+## The choices now: [param actions], each `[id, words, ready]`; [param
+## note] under them.
+func offer(actions: Array, note_text := "") -> void:
+	place["actions"] = actions
+	_fill_choices()
+	_note.text = note_text
+
+
+## Card [param card_name] shown over the picture ("" hides it).
+func show_card(card_name: String) -> void:
+	if card_name == "" or not CardRegistry.has_card(card_name):
+		_card.visible = false
+		_card_name = ""
+		return
+	_card.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
+	_card.visible = true
+	_card_name = card_name
+
+
+## The card shown over the picture, "" for none.
+func shown_card() -> String:
+	return _card_name
+
+
+func words() -> String:
+	return _said.text if _said != null and _said.visible else ""
 
 
 ## What a choice does.
@@ -271,6 +345,10 @@ func choose(action: String) -> void:
 			left.emit("")
 		"deck":
 			left.emit("deck")
+		"buy":
+			left.emit("shop")
+		"trade":
+			left.emit("trade")
 		"food":
 			var kind := int(player.world.sites[int(place["slot"])]["type"])
 			var price := food_price(kind)

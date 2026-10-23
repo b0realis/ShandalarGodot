@@ -419,6 +419,7 @@ const SIZES := {
 	"visit_lair_red": Vector2i(512, 280),
 	"visit_lair_white": Vector2i(512, 280),
 	"visit_news": Vector2i(512, 280),
+	"visit_buycards": Vector2i(512, 280),
 	"visit_dungeon": Vector2i(640, 480),
 	"duel_pattern_white": Vector2i(721, 381),
 	"duel_pattern_blue": Vector2i(721, 381),

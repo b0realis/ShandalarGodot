@@ -482,6 +482,137 @@ pointers over a place it can see and visit are the place (`WorldCursors`),
 a gold arrow over the panel; the owner kept the system's hand and four
 arrows over what is clicked and dragged.
 
+## Built: the card shop and the prices (2026-10-23)
+
+The owner: *"lets build the card shop … study how, which cards are
+available where and how the price of the cards is determined (we will
+need this card value formula for future packs). If no formula is
+available try to devise a formula based on card stats that mimics the
+prices in the original"*, then *"check also if card ruling/abilities can
+be incorporated into pricing … a general formula (not a lookup table)"*,
+and *"use uv … to install numpy and other libraries needed to derive a
+good formula"*.
+
+- **The offers** (`RunTownServicesMenu` 004ef1ea): `type + 3` cards (+1
+  Haggler's Coin), drawn on the first visit and kept (`card_slots`); a
+  bought place empty until the quest clock passes `(difficulty + 3) · 5`
+  steps after `now + rand(5) · (difficulty + 2)`; one random place a basic
+  land (`rand(5)`); the town tile's colours (`GetWorldTileMagicMask`) with
+  `is_card_color_compatible_with_mask` at level 1 for black, green, white
+  (own colour) and 3 for blue (+black, +white) and red (+green, +black),
+  colourless always, a gold card by its first colour; places `i % 3` cap
+  the rarity (common, uncommon, rare), odd places no artifact; only
+  `expansion & 0xC1` (the core set, 438 cards), never `extra & 0x900`
+  (dungeon, picker-barred) or `0x180` (power, restricted);
+  `GetRemainingAllowedCardCopies` ≥ 1 counting the active deck. Bought:
+  `deck[]` with 0x4000 (no deck). 1.3 drew 649–664 too (tokens, effect
+  pseudo-cards): ours never. The `trade` byte and the Trade button
+  (`BuyTownSpecialCardOffer`), the card hints (`Hints.txt`,
+  `FindHintPairIndexForOfferCard`) and the bazaars' `BuyAnyCardFromTown`
+  are read and not built.
+- **The price** (`CalculateCardShopPrice` 004f1cce): see `CardValue`'s doc;
+  town `× (type + 2)`, off-colour ×1.5 when compatible (colourless
+  always), else ×2, then `⌊/50⌋ · 5` within 5–1000; sold (`SellPrice`
+  004f1bcc) ×4/3 compatible, ×3/2 otherwise, unless exactly the tile's
+  colours, `⌊/50⌋ · 5`. Rarity from `Concise.csv` (else `Info.csv`'s
+  "Occuran."), special for 0x180 and Astral (`GetCardRarity`).
+- **The program's own numbers**: `tools/import_original.py`
+  `import_card_values` finds the card table in the player's
+  `Shandalar.exe` (or `Magic.exe`) by its five basic lands 72 bytes apart
+  (1.3 at file offset 0x192608, the Manalink `Magic.exe` too), names rows
+  from `Info.csv` by card id → `adventure_cards.json` in the skin (654
+  cards). With it 653 of 654 prices equal the decompilation's formula on
+  the decompilation's data; the one apart, Mana Crypt, is the row whose
+  hand-tuned value the decompilation reads −2 and the program holds 1.
+- **The formula for cards the program never had** (studied with numpy,
+  pandas and scikit-learn in a scratch uv environment, ten-fold
+  cross-validation, the 339 cards a 1997 shop can sell): the 1997
+  structure on the card's own inputs, the hand-tuned value at its type's
+  usual: median 20% off, 59 in 100 within a quarter, 79 within a half
+  (with the 1997 rarity and no staple: 14%, 71, 89). Rarity agreement:
+  first printing 86%, Fourth Edition 76%. The hand-tuned values follow
+  nothing read off a card: rank correlation with the engine's rating
+  (`AutoDeck.score`) −0.15 to 0.21 by type; ridge on all features of
+  the price 40 in 100 within a quarter, the structure times a fitted
+  correction 51, gradient boosting (an upper bound, no formula) 47, a
+  compact formula 33 — none beat the structure. Ours adds half a step of
+  the hand-tuned value per two median deviations of the engine's rating
+  from its type's middle (`STRENGTH_MIDDLE`): 56 in 100 within a quarter,
+  79 within a half — abilities count for pack cards, at three in a
+  hundred of the match.
+
+## Built: trades, the seller's hints, lairs (2026-10-23)
+
+The owner: *"Build all trade features and lets iterate on card formula
+more! Maybe we can design a better option?"*
+
+- **A town's trade** (`BuyTownSpecialCardOffer` 004f18c0,
+  `BuyAnyCardFromTown` 00530b90, `RunCardBrowser` 00532aeb): the colour
+  wanted is rolled once per visit (199 draws of `rand(5) + 1`, the last of
+  the land's colours winning — after draw 80 any of them: one draw among
+  the land's colours); the button (towns and cities only) needs an amulet
+  of it, `trade != 0` and `now − special_card_restock_timer > (d + 3) ·
+  18` on the quest clock (−1000 at first); it stands before "Begin a
+  Quest" and the wise man; closing the browser restarts the wait, traded
+  or not. Cards: below `g_card_count − 57`, not `extra & 0x900`,
+  available; a colour town by colour bit, a type town by type bit
+  (instants with interrupts); no copy limit (at the limit drawn grey).
+  Price `GetCardRarity` amulets, +1 for a 0x400 common, basic lands four
+  for one; only the town's colour spent. Our browser: chips for 1997's two
+  columns (its colourless rarity column replaced by an Artifact chip) and
+  a name search.
+- **The hints** (`LoadTownHintMetadata` 004184d2,
+  `FindHintPairIndexForOfferCard` 0041879d, `ShowTownHintTextPopup`
+  0041905e): `Hints.txt` 245 entries (243 pairs, 2 singles), A–D bits for
+  the difficulties; per offered card a random candidate (the offer one of
+  a pair whose other card is owned, not both owned); one random offer with
+  a hint; "Buy Cards/Card Hints". Mended 1.3 slips: singles never shown
+  (`result_hint_pair_index` lost), the hint not cleared on purchase (the
+  pair index stored as the offer slot), no hint on re-entering the same
+  town. Imported as `adventure_hints.json`.
+- **Lairs** (`UpdateWorldLairAndMonsterSlots` 0055fd27): see
+  `WorldLairs`' doc. A lair is drawn within a tile of the hero
+  (LOCATN07 `{0,4,0,3,2,1}[colour]`, ground half +6, at −(64, 96)),
+  entered under 26 in `ApproximateDistance`; slot emptied, its respawn
+  stamp now, `g_monster_timer |= 0x1F`, saved before and after.
+  Creatures: until the duels a creature's draw holds its slot unseen (no
+  type picked, never met), so lairs come as often as in 1997; Staff of
+  Thunder passes them by.
+- **The events** (`RunLairExplorationEvent` 0052fae0): see `LairEvent`'s
+  doc; the riddle `RunCardRiddleChallenge` 00534530 in `CardRiddle`'s.
+  Pre-rolled each lair: the lair's rare (`reward_cards[3]`, rarity exactly
+  3: 2/3 a non-artifact of the colour, 1/3 an artifact; its common and
+  uncommon pre-rolls unused) and the Oasis card (a collection card of
+  rarity ≥ 2 — 1.3 tested availability on the slot index and looped
+  forever without one: ours offers none). The 25% `PickRandomRareAvailableCard`
+  (rarity ≥ 3, special too, even a dungeon card) is set as the fourteen
+  begin and given at the end unless replaced: Thieves/Lost City luck clear
+  it, their thieves replace it, a right riddle replaces it (Loremaster's
+  and the Ruined Tower's fallback: the lair's rare; the Pyramids: any
+  rare). Ours names the five treasure lairs by the five unshown names, each
+  to the colour it names (graveyard black, lagoon blue, glade green,
+  volcano red, hallowed ground white — 1997's order is B, W, R, G, U).
+  The four duels (9 Shrine `RunRandomCreatureAnteDuel(8,2)` or `(13,3)`
+  past siege 256, 10 Dragon `(18,4)`, 11 Sultan King Suleiman + `(13,2)`,
+  13 Arena a copied creature `(16,3)`) and 16 the Ghost's deck view wait
+  for the duels.
+- **Names**: 51 rows of the 1997 card table are not the engine's names —
+  case, marks and accents (bridged by a key) and 19 misspellings
+  (`CardValue.SPELLED_1997`); ten are tokens or empty rows. Without the
+  bridge those cards lost their exact price and their hints.
+- **The formula, again** (scratch uv study, ten-fold CV): type defaults
+  tuned on the 1997 prices (creature 1, enchantment 0, sorcery 0, instant
+  −1, artifact 1; the type's commonest value had priced creatures and
+  sorceries a fifth too dear, the rest a fifth too cheap): 60 in 100 within
+  a quarter, 82 within a half (held out 59/82), staples at the 53rd
+  percentile of their type and rarity. Tried and left: a larger ability
+  step (49–45), a continuous step (57/76), a multiplier on strong cards
+  (≤ 58, staples no higher), a multiplier above a threshold (56–59, staples
+  at ≤ 45th), re-tuning all eighteen constants of the structure (held out
+  58/77 — and the fit came back to 1997's own: ×1.5 per keyword class,
+  ×3.3 per pump, 253 for artifacts, ×2 uncommon). The structure's
+  constants are right; only the type defaults moved.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -771,3 +902,23 @@ said otherwise):
   the Stats window's tournament words, `current_deck` unchecked, and the
   window's close saving nothing. Then visiting the places ("Built:
   visiting the places") and a pointer for each.
+- **2026-10-23** — 0.50.51 committed and pushed (554bf54). Owner: the card
+  shop, which cards are where and how prices are set, a general formula
+  for packs. Built (0.50.52): `CardValue`, `CardShop`, `CardShopPane`,
+  selling in the town's deck builder, the program's card table imported.
+  "Built: the card shop and the prices".
+- **2026-10-23** — Owner: "Build all trade features and lets iterate on
+  card formula more!" Built: the town trade (`CardTrade`,
+  `CardTradePane`), the seller's hints (`CardHints`, imported
+  `Hints.txt`), lairs on the map (`WorldLairs`) and their events
+  (`LairEvent`, `CardRiddle`, `LairPane`); the formula's type defaults
+  tuned; the 1997 card names bridged. "Built: trades, the seller's hints,
+  lairs".
+- **2026-10-23** — Owner: "Right click on card should have large card
+  render as in the duel! If right click is free on card? And add to on/off
+  to options dropdown. And add to help if enabled." Right-click was free
+  on the shop's, the trader's and a lair's cards (the deck builder's is its
+  bulk move and keeps it); they open the duel's `FullscreenCard`
+  (`open_instance`); "Large card on right-click: on/off" in the options;
+  the help says so.
+

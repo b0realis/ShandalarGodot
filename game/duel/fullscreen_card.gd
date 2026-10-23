@@ -146,6 +146,23 @@ func open_card(by_key: bool = false) -> bool:
 		return false
 	if _may_open.is_valid() and not _may_open.call():
 		return false
+	_present(_source._shown, _source._shown_printing_set)
+	return true
+
+
+## [QoL] THE READER ON A CARD OF ITS OWN (2026-10-23, the owner: *"Right
+## click on card should have large card render as in the duel!"*): the
+## adventure's panes — a shop's cards, the card trader's, a lair's — open
+## it on [param inst] with a right click, no showcase behind it; it closes
+## as ever. False when it is open already.
+func open_instance(inst: CardInstance) -> bool:
+	if is_open() or inst == null:
+		return false
+	_present(inst, "")
+	return true
+
+
+func _present(inst: CardInstance, printing_set: String) -> void:
 	_hint.text = _hint_line()
 	var focus := get_viewport().gui_get_focus_owner()
 	_previous_focus = weakref(focus) if focus != null else null
@@ -153,12 +170,11 @@ func open_card(by_key: bool = false) -> bool:
 	# this sets the box without laying a face out twice.
 	_card.set_text_expanded(full_text_wanted())
 	_dress_toggle()
-	_card.show_card(_source._shown, _source._shown_printing_set)
+	_card.show_card(inst, printing_set)
 	_shade.show()
 	_fit()
 	_shade.grab_focus()
 	set_process_input(true)
-	return true
 
 
 func dismiss() -> void:

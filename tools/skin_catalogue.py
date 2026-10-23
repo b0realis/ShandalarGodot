@@ -158,8 +158,20 @@ FAMILIES: list[tuple[str, str, str]] = [
      "castle_blue 0364, castle_green 0335, castle_red 0737, castle_white "
      "0028), the lairs by colour (lair_black 0333, lair_blue 0873 — the "
      "sunken ship —, lair_green 0281, lair_red 0329, lair_white 0569), the "
-     "siege's news flash (Newsback.pic); dungeon is the dungeon board's "
-     "ground (CaveBkgd.pic, 640 x 480)."),
+     "siege's news flash (Newsback.pic), the card shop's ground "
+     "(buycards, Buycards.pic, its own palette); dungeon is the dungeon "
+     "board's ground (CaveBkgd.pic, 640 x 480)."),
+    ("The adventure world", "adventure_cards",
+     "Not a picture: the 1997 program's card values (adventure_cards.json), "
+     "read out of the player's Shandalar.exe and named from Info.csv and "
+     "Concise.csv — each card's type, colour, cost, power, toughness, "
+     "ability bits, hand-tuned value and shop rarity — for the adventure's "
+     "card prices; without it the prices come from the cards' own stats."),
+    ("The adventure world", "adventure_hints",
+     "Not a picture: the card seller's hints (adventure_hints.json), read "
+     "from the player's Hints.txt and named from Info.csv — pairs of cards "
+     "that work together, by difficulty, with what they do; without it the "
+     "seller gives no hints."),
     ("Backdrops", "adventure_hero_background",
      "Behind the Embark screen of a new adventure: the 1997 character "
      "screen's dark scratched field (Menu4.pic), stretched to the window."),

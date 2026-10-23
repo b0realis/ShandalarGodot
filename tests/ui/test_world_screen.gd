@@ -483,7 +483,7 @@ func test_the_options() -> void:
 		words.append(option.call(entry[0]).text)
 	var on_off := func(on: bool) -> String: return "on" if on else "off"
 	assert_eq(words, ["Save", "Load", "Panel at the bottom", "Small map: on", "Quest pane: on",
-		"Guide arrows: on", "Place names: on", "Big buttons: off", "Pace: as in 1997", "Music: " + on_off.call(_music),
+		"Guide arrows: on", "Place names: on", "Large card on right-click: on", "Big buttons: off", "Pace: as in 1997", "Music: " + on_off.call(_music),
 		"Sound: " + on_off.call(_sound), "Return to main menu", "Exit game"] as Array[String])
 	# Save.
 	AdventurePlayer.saves_folder = "user://adventure_tests_options"
