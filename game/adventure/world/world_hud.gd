@@ -29,6 +29,9 @@ extends Control
 ## panel is at the bottom) in the hero's colour of magic. Rest the pointer
 ## on a part and its name and what it does float beside the panel. Without
 ## the 1997 pictures each part is its word.
+## While a pane holds the world screen the panel RESTS ([method rest]): it
+## shows what the hero carries, its numbers kept current, but answers
+## nothing.
 
 signal deck_pressed
 signal map_pressed
@@ -40,6 +43,10 @@ signal exit_pressed
 signal menu_pressed
 ## The dungeon clues (the frame's gate, F4).
 signal clues_pressed
+## The options' City list (F3).
+signal city_list_pressed
+## The journal, to be walked on the map.
+signal journal_map_pressed
 ## The small map was clicked: walk to [param tile].
 signal walk_requested(tile: Vector2i)
 ## A World Magic's icon was clicked: cast key [param key] (1–5).
@@ -109,7 +116,7 @@ const KEYS := [["Click", "walk there; the way is found"],
 	["Escape", "close what is open, or leave the world"]]
 ## The options' entries: name and words; the switches say how they stand
 ## ([method _option_words]).
-const OPTIONS := [["Save", "Save"], ["Load", "Load"], ["Bar", ""], ["Minimap", ""],
+const OPTIONS := [["Save", "Save"], ["Load", "Load"], ["Cities", "City list (F3)"], ["Bar", ""], ["Minimap", ""],
 	["Quest", ""], ["Guides", ""], ["Places", ""], ["Reader", ""], ["Big", ""], ["Pace", ""], ["Music", ""],
 	["Sound", ""],
 	["Menu", "Return to main menu"], ["Exit", "Exit game"]]
@@ -190,6 +197,9 @@ var _inked := ""
 var _hero_seen := ""
 var _quest_pane: PanelContainer
 var _quest_lines: Label
+## The quest's clock and the next duel's gifts beside its lines ([QuestClock]).
+var _quest_clock: QuestClock
+var _gift_icons: HBoxContainer
 var _clues_panel: PanelContainer
 var _clues_list: VBoxContainer
 var _clues_text: Label
@@ -221,6 +231,8 @@ var _place_kind: Label
 ## The part under the pointer, and how long it has rested there.
 var _hover: Control
 var _rested := 0.0
+## True while the panel rests under a pane ([method rest]).
+var resting := false
 
 
 func _ready() -> void:
@@ -327,9 +339,13 @@ func _ready() -> void:
 			icon.gui_input.connect(func(event: InputEvent) -> void:
 				var click := event as InputEventMouseButton
 				if click != null and click.button_index == MOUSE_BUTTON_LEFT and not click.pressed \
-						and _active(magic_index) \
+						and not resting and _active(magic_index) \
 						and Rect2(Vector2.ZERO, _magic_icons[magic_index].size).has_point(click.position):
 					_hide_tip()
+					# 1997 played the colour's sting as the icon was clicked,
+					# when the magic is owned and an amulet of it is held.
+					if WorldMagic.ready_to_cast(player, magic_index / 2):
+						WorldSoundscape.play_from(self, "sfx_world_magic_" + AdventurePlayer.COLORS[magic_index / 2 - 1])
 					cast_pressed.emit(magic_index / 2))
 			magics.add_child(icon)
 			_magic_icons.append(icon)
@@ -352,6 +368,9 @@ func _ready() -> void:
 	buttons["Map"].pressed.connect(func() -> void: map_pressed.emit())
 	buttons["Clues"].pressed.connect(func() -> void: clues_pressed.emit())
 	buttons["Hero"].pressed.connect(func() -> void: hero_pressed.emit())
+	# The panel's buttons click as 1997's frame buttons did (`Button2.wav`).
+	for key in ["Deck", "Map", "Clues", "Hero"]:
+		(buttons[key] as BaseButton).pressed.connect(func() -> void: WorldSoundscape.play_from(self, "sfx_click"))
 	buttons["Options"].pressed.connect(toggle_options)
 	buttons["Help"].pressed.connect(toggle_help)
 	for key in buttons:
@@ -366,15 +385,31 @@ func _ready() -> void:
 	minimap.land().mouse_default_cursor_shape = Control.CURSOR_MOVE
 	minimap.land().gui_input.connect(func(event: InputEvent) -> void:
 		_pane_input(minimap, event, func(at: Vector2) -> void:
+			if resting:
+				return
 			close_panels()
 			walk_requested.emit(minimap.tile_at(at))))
 	_quest_pane = _panel("QuestPane")
 	_quest_pane.add_theme_stylebox_override("panel", _glass(0.8, 0.45, 8))
+	var quest_row := HBoxContainer.new()
+	quest_row.add_theme_constant_override("separation", 8)
+	quest_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_quest_clock = QuestClock.new()
+	quest_row.add_child(_quest_clock)
+	var quest_column := VBoxContainer.new()
+	quest_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_quest_lines = _label("", 15)
 	_quest_lines.name = "QuestLines"
-	_quest_pane.add_child(_quest_lines)
+	quest_column.add_child(_quest_lines)
+	_gift_icons = HBoxContainer.new()
+	_gift_icons.name = "DuelGifts"
+	_gift_icons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quest_column.add_child(_gift_icons)
+	quest_row.add_child(quest_column)
+	_quest_pane.add_child(quest_row)
 	_hero_panel = _panel("HeroPanel")
 	hero_stats = HeroStats.new()
+	hero_stats.journal_map_pressed.connect(func() -> void: journal_map_pressed.emit())
 	_hero_panel.add_child(hero_stats)
 	_help_panel = _panel("HelpPanel")
 	_help_panel.add_child(_keys_grid())
@@ -467,17 +502,8 @@ func refresh() -> void:
 		var inks: Array = NAME_INKS.get(player.color, [INK, EDGE])
 		_name.add_theme_color_override("font_color", inks[0])
 		_name.add_theme_color_override("font_outline_color", inks[1])
-	_numbers["gold"].text = str(player.gold)
-	_numbers["food"].text = str(player.food)
-	_numbers["ankh"].text = str(player.mana_links.size())
-	_numbers["book"].text = "%d/%d" % [cards_in_deck(), player.cards.size()]
-	for gem in AMULETS:
-		_amulet_numbers[gem[0]].text = str(int(player.amulets.get(gem[0], 0)))
-	for i in _magic_icons.size():
-		_show_magic(i)
+	refresh_numbers()
 	refresh_quest()
-	if _magic_names != null:
-		_magic_names.text = "World Magics: " + (", ".join(player.world_magics) if not player.world_magics.is_empty() else "none")
 	# The hero's pane, open, follows what it shows — rebuilt only when that
 	# changes, not every tick.
 	if hero_shown():
@@ -487,6 +513,24 @@ func refresh() -> void:
 		if seen != _hero_seen:
 			_hero_seen = seen
 			hero_stats.refresh()
+
+
+## THE PURSE, THE AMULETS AND THE WORLD MAGICS as the hero now stands —
+## cheap enough for every frame, so what a place's pane changes under the
+## resting panel (food bought, a card sold, an amulet paid) shows at once.
+func refresh_numbers() -> void:
+	if player == null or _name == null:
+		return
+	_numbers["gold"].text = str(player.gold)
+	_numbers["food"].text = str(player.food)
+	_numbers["ankh"].text = str(player.mana_links())
+	_numbers["book"].text = "%d/%d" % [cards_in_deck(), player.cards.size()]
+	for gem in AMULETS:
+		_amulet_numbers[gem[0]].text = str(int(player.amulets.get(gem[0], 0)))
+	for i in _magic_icons.size():
+		_show_magic(i)
+	if _magic_names != null:
+		_magic_names.text = "World Magics: " + (", ".join(player.world_magics) if not player.world_magics.is_empty() else "none")
 
 
 func cards_in_deck() -> int:
@@ -630,8 +674,25 @@ func refresh_quest() -> void:
 		return
 	var lines := WorldStatus.lines(player)
 	var text := "\n".join(lines)
-	if _quest_lines.text != text:
+	_quest_clock.player = player
+	_quest_clock.visible = _quest_clock.wanted()
+	_quest_clock.queue_redraw()
+	var gifts := QuestClock.gifts(player)
+	var marks := ",".join(gifts.map(func(gift: Array) -> String: return str(gift[0])))
+	if _quest_lines.text != text or String(_gift_icons.get_meta("marks", "")) != marks:
 		_quest_lines.text = text
+		_gift_icons.set_meta("marks", marks)
+		for child in _gift_icons.get_children():
+			child.queue_free()
+		if art.texture("world_magics") != null:
+			for gift in gifts:
+				var icon := TextureRect.new()
+				var cut := _cell("world_magics", int(gift[0]))
+				cut.region = Rect2(cut.region.position, Vector2(28, 37))
+				icon.texture = cut
+				icon.tooltip_text = String(gift[1])
+				icon.mouse_filter = Control.MOUSE_FILTER_PASS
+				_gift_icons.add_child(icon)
 		_quest_pane.reset_size()
 	var shown := quest_pane_wanted() and not lines.is_empty()
 	_quest_pane.visible = shown
@@ -816,9 +877,28 @@ static func pace_index() -> int:
 
 # ------------------------------------------------------- the panels --
 
+## THE PANEL AT REST (the lead's ruling A, 2026-10-23, after 1997's modal
+## town menu): while a place's pane, the deck builder or the saves hold the
+## world screen ([method WorldScreen.modal]) the panel still shows what the
+## hero carries, but its panes close, its tips and the place's name go, and
+## its buttons, icons, options and small map answer nothing — the screen's
+## shield takes the pointer over it. [param on] false wakes it.
+func rest(on: bool) -> void:
+	if on == resting:
+		return
+	resting = on
+	if on:
+		close_panels()
+		_hide_tip()
+		hide_place()
+		_drag = {}
+
+
 ## THE HERO (the frame's faces, F5): the journal and the stats, floating
-## beside the panel; again to close it.
+## beside the panel; again to close it. Not while the panel rests.
 func toggle_hero() -> void:
+	if resting:
+		return
 	hero_stats.player = player
 	hero_stats.refresh()
 	_open(_hero_panel, not _hero_panel.visible, buttons["Hero"])
@@ -828,8 +908,11 @@ func hero_shown() -> bool:
 	return _hero_panel != null and _hero_panel.visible
 
 
-## THE KEYS (?, H): what the line under the world once said.
+## THE KEYS (?, H): what the line under the world once said. Not while the
+## panel rests.
 func toggle_help() -> void:
+	if resting:
+		return
 	_open(_help_panel, not _help_panel.visible, buttons["Help"])
 
 
@@ -838,8 +921,10 @@ func help_shown() -> bool:
 
 
 ## THE OPTIONS (the painted book): save, load, the panel to the other
-## edge, exit.
+## edge, exit. Not while the panel rests.
 func toggle_options() -> void:
+	if resting:
+		return
 	_open(_options_menu, not _options_menu.visible, buttons["Options"])
 
 
@@ -866,8 +951,10 @@ func close_panels() -> bool:
 
 
 ## THE CLUES (the frame's gate, F4): the castles and dungeons the hero has
-## learned of ([WorldClues]); again to close it.
+## learned of ([WorldClues]); again to close it. Not while the panel rests.
 func toggle_clues() -> void:
+	if resting:
+		return
 	show_clue(clue_shown)
 	_open(_clues_panel, not _clues_panel.visible, buttons["Clues"])
 
@@ -911,8 +998,9 @@ func hero_lines() -> Array[String]:
 	lines.append("%s, a %s mage" % [player.name, String(color.get("name", player.color)).to_lower()])
 	lines.append("%s: %s" % [player.difficulty_name(), AdventureSetup.difficulty_phrase(player.difficulty)])
 	lines.append("")
-	lines.append("%d gold · %d food · %d mana %s" % [player.gold, player.food, player.mana_links.size(),
-		"link" if player.mana_links.size() == 1 else "links"])
+	var links := player.mana_links()
+	lines.append("%d gold · %d food · %d mana %s" % [player.gold, player.food, links,
+		"link" if links == 1 else "links"])
 	var gems: Array[String] = []
 	for gem in AMULETS:
 		gems.append("%s %d" % [gem[0], int(player.amulets.get(gem[0], 0))])
@@ -1085,8 +1173,11 @@ func _menu_entry(entry_name: String, words: String) -> Button:
 
 
 ## What an option does when chosen. A switch leaves the options open, so
-## the new setting shows.
+## the new setting shows. Nothing while the panel rests.
 func _choose(entry_name: String) -> void:
+	if resting:
+		close_options()
+		return
 	if not entry_name in SWITCHES:
 		close_options()
 	match entry_name:
@@ -1094,6 +1185,8 @@ func _choose(entry_name: String) -> void:
 			save_pressed.emit()
 		"Load":
 			load_pressed.emit()
+		"Cities":
+			city_list_pressed.emit()
 		"Bar":
 			place_bar(not bar_at_bottom)
 		"Minimap":
@@ -1193,8 +1286,9 @@ func _process(delta: float) -> void:
 		show_tip(_hover)
 
 
-## The name of [param part] and what it does, floating beside the panel by
-## it.
+## The name of [param part] and what it does, floating by it: beside the
+## panel for a part of its row, beside the part itself for one away from
+## it (the small map).
 func show_tip(part: Control) -> void:
 	var lines := tip_for(String(part.get_meta("tip", "")))
 	if lines.is_empty():
@@ -1204,7 +1298,20 @@ func show_tip(part: Control) -> void:
 	_tip_text.visible = lines[1] != ""
 	_tip.visible = true
 	_tip.reset_size()
-	_float(_tip, _rect_of(part).get_center().x - _tip.size.x * 0.5, 4.0)
+	if _bar.is_ancestor_of(part):
+		_float(_tip, _rect_of(part).get_center().x - _tip.size.x * 0.5, 4.0)
+	else:
+		_float_by(_tip, part, 6.0)
+
+
+## [param pane] floating by [param part], a part away from the panel: over
+## it when it stands in the screen's lower half, under it otherwise, its
+## middle over the part's, kept on the screen.
+func _float_by(pane: Control, part: Control, gap: float) -> void:
+	var at := _rect_of(part)
+	var y := at.position.y - gap - pane.size.y if at.get_center().y > size.y * 0.5 else at.end.y + gap
+	pane.position = Vector2(_fit_x(at.get_center().x - pane.size.x * 0.5, pane.size.x),
+		clampf(y, 4.0, maxf(4.0, size.y - pane.size.y - 4.0)))
 
 
 func tip_shown() -> String:
@@ -1347,12 +1454,10 @@ func _frame_icon(key: String, tall: float) -> TextureRect:
 func _amulet_icon(color: String, frame: int) -> Control:
 	var sheet := art.texture("world_amulets")
 	if sheet == null:
-		var disc := ColorRect.new()
-		disc.custom_minimum_size = Vector2(12, 12) * _k()
+		# Without the sheet, the stone's colour on a small disc ([method
+		# WorldArt.amulet_disc], as the map and the city list draw it).
+		var disc := WorldArt.amulet_disc(AdventurePlayer.COLORS.find(color), 12.0 * _k())
 		disc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		disc.color = {"black": Color8(60, 50, 60), "blue": Color8(60, 120, 220), "green": Color8(50, 160, 70),
-			"red": Color8(210, 50, 40), "white": Color8(240, 236, 220)}[color]
-		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		return disc
 	var icon := TextureRect.new()
 	icon.texture = _cell("world_amulets", frame)

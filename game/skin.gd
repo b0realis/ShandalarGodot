@@ -404,6 +404,16 @@ const SIZES := {
 	"world_sego_f": Vector2i(770, 864),
 	"world_magics": Vector2i(624, 270),
 	"world_amulets": Vector2i(60, 17),
+	"world_map_tiles": Vector2i(208, 80),
+	"quest_scroll": Vector2i(474, 115),
+	"quest_clock": Vector2i(536, 88),
+	"quest_sunmoon": Vector2i(938, 88),
+	"quest_days": Vector2i(402, 88),
+	"map_ground": Vector2i(640, 480),
+	"map_buttons": Vector2i(640, 480),
+	"city_list_buttons": Vector2i(640, 480),
+	"city_list": Vector2i(640, 480),
+	"world_magic_seller": Vector2i(640, 480),
 	"world_frame": Vector2i(1024, 768),
 	"visit_village": Vector2i(512, 280),
 	"visit_city": Vector2i(512, 280),
@@ -929,8 +939,19 @@ static func card_art(card_name: String) -> Texture2D:
 		return hit
 	if _art_missing.has(key):
 		return null
-	var result: Texture2D = null
-	var path := ""
+	var path := card_art_path(card_name)
+	var image := decode_card_art(path) if path != "" else null
+	if image == null:
+		_art_missing[key] = true
+		return null
+	return keep_card_art(card_name, image)
+
+
+## Where [method card_art] finds [param card_name]'s picture; "" when no
+## skin or art folder has one. Read on the main thread: it walks the
+## skin's folders through their caches ([method _find]).
+static func card_art_path(card_name: String) -> String:
+	var key := "cardart/" + _snake(card_name)
 	# tools/fetch_card_art.py downloads Scryfall art_crop JPGs (the s30
 	# approach, pre-fetched) into assets/cardart/; skin dirs may override
 	# with PNGs (community art packs).
@@ -938,40 +959,60 @@ static func card_art(card_name: String) -> Texture2D:
 			ProjectSettings.globalize_path("res://assets/cardart/%s.jpg" % _snake(card_name)),
 			ProjectSettings.globalize_path("res://assets/cardart/%s.png" % _snake(card_name))]:
 		if candidate != "" and FileAccess.file_exists(candidate):
-			path = candidate
-			break
-	if path != "":
-		var img := Image.load_from_file(path)
-		if img != null:
-			# MIPMAPS, and only on the CARD ART. A Scryfall art crop is
-			# ~582x467 and the small card draws it at ~110px wide, so
-			# every card on the table is a 5:1 MINIFICATION — and a
-			# minification with no mipmap chain samples one source pixel
-			# per screen pixel and lays a regular diamond lattice over any
-			# finely detailed region (`docs/card-states.md` §5.6: the
-			# moire on the lion's fur, reproduced exactly by a
-			# nearest-neighbour downscale in PIL). One `generate_mipmaps`
-			# here plus `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` on the small
-			# card's art rect (`MiniCard._build_face`) is the whole fix.
-			#
-			# It costs a THIRD more texture memory for each art actually
-			# drawn (~0.36 MB on a 582x467 RGBA8 crop) and nothing at all
-			# for one that is never asked for, because this cache is lazy.
-			# `GameSkin.texture` deliberately does NOT do this: the 1997
-			# sheets are sliced by pixel coordinates and several of them
-			# (the ability sheet, the mana stripes) are drawn at or near
-			# their native size.
-			img.generate_mipmaps()
-			result = ImageTexture.create_from_image(img)
-	if result == null:
-		_art_missing[key] = true
+			return candidate
+	return ""
+
+
+## The picture at [param path] decoded, with its mipmaps; null when it does
+## not decode. It touches nothing shared, so a worker thread may call it
+## ([CardArtWarmer]) and hand the image to [method keep_card_art].
+##
+## MIPMAPS, and only on the CARD ART. A Scryfall art crop is ~582x467 and
+## the small card draws it at ~110px wide, so every card on the table is a
+## 5:1 MINIFICATION — and a minification with no mipmap chain samples one
+## source pixel per screen pixel and lays a regular diamond lattice over
+## any finely detailed region (`docs/card-states.md` §5.6: the moire on
+## the lion's fur, reproduced exactly by a nearest-neighbour downscale in
+## PIL). One `generate_mipmaps` here plus
+## `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` on the small card's art rect
+## (`MiniCard._build_face`) is the whole fix.
+##
+## It costs a THIRD more texture memory for each art actually drawn
+## (~0.36 MB on a 582x467 RGBA8 crop) and nothing at all for one that is
+## never asked for, because the cache is lazy. `GameSkin.texture`
+## deliberately does NOT do this: the 1997 sheets are sliced by pixel
+## coordinates and several of them (the ability sheet, the mana stripes)
+## are drawn at or near their native size.
+static func decode_card_art(path: String) -> Image:
+	var image := Image.load_from_file(path)
+	if image == null:
 		return null
+	image.generate_mipmaps()
+	return image
+
+
+## [param card_name]'s picture kept from [param image] (decoded by
+## [method decode_card_art]) and returned; a picture already kept wins.
+## Main thread only: it makes the texture and bounds the cache.
+static func keep_card_art(card_name: String, image: Image) -> Texture2D:
+	var key := "cardart/" + _snake(card_name)
+	if _art_cache.has(key):
+		return _art_cache[key]
+	var result := ImageTexture.create_from_image(image)
 	_art_cache[key] = result
+	_art_missing.erase(key)
 	while _art_cache.size() > ART_CACHE_CAP:
 		for oldest in _art_cache:
 			_art_cache.erase(oldest)
 			break
 	return result
+
+
+## True when [method card_art] would answer [param card_name] without
+## reading a file: its picture kept, or known to be missing.
+static func card_art_known(card_name: String) -> bool:
+	var key := "cardart/" + _snake(card_name)
+	return _art_cache.has(key) or _art_missing.has(key)
 
 
 ## Short label for a set that has NO symbol to show. Every card still

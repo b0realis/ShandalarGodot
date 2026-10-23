@@ -23,8 +23,12 @@ extends RefCounted
 ##    one on a town's tile, or on another slot's place, is gone.
 ##  - A lair is seen only within a tile of the hero, never moves, and is
 ##    entered when the hero comes within 26 of its middle (1997's distance:
-##    twice the larger axis and the smaller); after, it is gone, its slot's
-##    meeting is now, the clock goes on to the next 32 and the game is saved.
+##    twice the larger axis and the smaller). Entered, it is SPENT AT ONCE
+##    ([method explored]) — gone, its slot's meeting now, the clock on to
+##    the next 32, one more lair explored — and only then is the game saved
+##    ([method WorldScreen.enter_lair]; the lead's ruling C, 2026-10-23: no
+##    save may hold a lair the hero is inside, or loading it would give the
+##    lair's gold again).
 ## THE CREATURES come with the duels: until then a creature's draw holds its
 ## slot unseen and is never met — so lairs come as often as in 1997.
 
@@ -84,8 +88,10 @@ static func seen(player: AdventurePlayer) -> Array[Dictionary]:
 	return out
 
 
-## THE LAIR IN SLOT [param slot] IS EXPLORED: gone, its slot's meeting now,
-## the clock on to the next 32 ticks, one more lair explored.
+## THE LAIR IN SLOT [param slot] IS EXPLORED — as it is entered, once its
+## event is drawn ([method LairEvent.begin] reads the clock first): gone,
+## its slot's meeting now, the clock on to the next 32 ticks, one more lair
+## explored.
 static func explored(player: AdventurePlayer, slot: int) -> void:
 	_empty(player, slot)
 	if slot < player.world.lair_respawn.size():

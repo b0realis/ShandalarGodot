@@ -11,8 +11,8 @@ extends Control
 ## the way there is found and walked at the 1997 pace ([HeroWalk]), the
 ## world's clock ticking every 60 ms as the original's did, the land the
 ## hero passes explored. The pointer is a small walking man, an open door
-## over a site. The arrows or a drag look around, the wheel zooms, Space
-## comes back to the hero, M is the map of the land seen, Escape leaves.
+## over a site, the place's name by it. The arrows or a drag look around,
+## the wheel zooms, Space comes back to the hero, Escape leaves.
 ## A pinch zooms and a touchpad's two-finger slide looks, and a finger
 ## does what the mouse does ([TouchControls]).
 ## The floating panel ([WorldHud]) shows what the hero carries; its World
@@ -20,10 +20,23 @@ extends Control
 ## load (over the world), return to the title and exit the game. A small
 ## map, the quest pane and the clues float in panes the player may move;
 ## guide arrows point to the places that call the hero ([WorldGuides]).
-## A place walked to opens its pane ([VisitPane]) — a town's shop, trade and
-## deck builder — and a lair walked onto opens its own ([LairPane],
-## [WorldLairs]). The duels, the quests and the dungeons come next
-## (`docs/adventure-implementation-notes.md`).
+## A place walked to opens its pane ([VisitPane]) — a town's card shop, its
+## trade, its wise man and its quest ([WiseManPane]), its deck builder, and
+## the World Magic seller as it is left ([WorldMagicPane]) — and a lair
+## walked onto opens its own ([LairPane], [WorldLairs]). F3 lists the towns
+## visited ([CityListPane]); M is the map, the journal walked on it
+## ([WorldMap]); Ctrl+S saves into ten slots ([SaveSlotsPane]).
+##
+## A PANE HOLDS THE SCREEN (the lead's rulings of 2026-10-23, after 1997's
+## modal town menu): while a place's pane, one over it, the deck builder or
+## the saved adventures are up ([method modal]), the world's clock waits,
+## the panel shows what the hero carries but does nothing ([method
+## WorldHud.rest]), and a clear shield under the panes takes every click
+## meant for the panel or the world — for a moment after the last pane
+## closes too, so the second click of a double click on its Done walks no
+## one. The map is a whole screen of its own, as 1997's was: while it is
+## up only its keys, Escape and Ctrl+S act ([method _map_key]).
+## The duels and the dungeons come next (`docs/adventure-implementation-notes.md`).
 
 const LOOK_SPEED := 600.0   # screen pixels a second, at zoom 1
 const ZOOM_STEP := 1.25
@@ -33,6 +46,22 @@ const CLICK_SLOP := 6.0
 const PAN_STEP := 24.0
 ## At most this many ticks in one frame, after a long one.
 const MOST_TICKS := 20
+## How long the shield stays after the last pane closes [ours]: the longest
+## double click the desktops allow by default (Windows' 500 ms), so its
+## second click, landing where the pane's Done was, never walks the hero.
+const AFTER_PANE_MS := 500
+## How long after the world opens its deck's pictures start decoding in
+## the background ([method _warm_the_builder]): past the first frames, and
+## the arrival's own work.
+const WARM_AFTER := 1.0
+## Said beside the panel when the adventure could not be written (the
+## robustness pass, 2026-10-23: a whole adventure was played and lost on
+## exit with no word of it).
+const UNSAVED := "The adventure could not be saved."
+## A pane's closing signal is heard once, after the frame's input: a second
+## Leave or Escape in the same frame finds nothing left to close, and no
+## pane is freed under its own click.
+const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
 
 ## The adventure: the hero and their world. Set before the screen enters
 ## the tree; when it is not, one is begun from [member record] and
@@ -57,6 +86,11 @@ var _map: WorldMap
 ## The floating icons ([WorldHud]): the purse, the amulets, the World
 ## Magics and the round buttons.
 var hud: WorldHud
+## The clear sheet over the world, the map and the panel, under every pane
+## ([method _sync_rest]); and until when it stays after the last pane
+## closed (`Time.get_ticks_msec`).
+var _shield: Control
+var _shield_until := 0
 var _arrival: Label
 var _dragging := false
 var _pressed_at := Vector2.ZERO
@@ -64,10 +98,17 @@ var _dragged := false
 var _leaving := false
 var _tick_left := 0.0
 var _pointer := -1
+## The view the place under the pointer was last looked for in: camera and
+## zoom ([method _point_again]).
+var _pointed := Vector3.INF
 ## The saved adventures, open over the world from the options.
 var _load_screen: LoadAdventureScreen
-## The deck builder, open over the world ([AdventureBuilder]).
+## The deck builder, open over the world ([AdventureBuilder]); and whether
+## a town's Edit deck/Sell cards opened it, so Done comes back to the town.
 var _builder: AdventureBuilder
+var _deck_from_town := false
+## The world's sounds ([WorldSoundscape]).
+var soundscape: WorldSoundscape
 ## The place visited, its pane over the world ([VisitPane], a lair's
 ## [LairPane]), its tile, its card shop ([CardShopPane]) and the card trader
 ## ([CardTradePane]: a town's trade, the Nomad's Bazaar, the Diamond Mine).
@@ -75,9 +116,58 @@ var _visit: VisitPane
 var _visit_tile := Vector2i(-1, -1)
 var _shop: CardShopPane
 var _trade: CardTradePane
+## A list of cards over a pane — a creature's deck, the copy's pick
+## ([CardListPane]) — and the World Magic seller as a town is left
+## ([WorldMagicPane]).
+var _card_list: CardListPane
+var _magic_seller: WorldMagicPane
+var _city_list: CityListPane
+var _save_slots: SaveSlotsPane
+## The question asked when the adventure could not be saved as the hero
+## leaves the world ([UnsavedAsk]).
+var _unsaved: UnsavedAsk
 ## The duel's full-screen card reader, for a card right-clicked in a pane
 ## ([method read_card]).
 var reader: FullscreenCard
+
+
+## THE ADVENTURE NOT SAVED: asked before the hero leaves the world when its
+## save could not be written — Stay, or Leave without saving; Escape stays.
+class UnsavedAsk extends PanelContainer:
+	## [param leave] true for Leave without saving, false for Stay.
+	signal answered(leave: bool)
+
+	## The words over the choices.
+	var words := ""
+	## The size factor (the panel's big buttons, [constant WorldHud.BIG]).
+	var k := 1.0
+
+	func _ready() -> void:
+		name = "UnsavedAsk"
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		add_theme_stylebox_override("panel", PaneStyle.glass(16.0))
+		var column := VBoxContainer.new()
+		column.add_theme_constant_override("separation", int(10 * k))
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(column)
+		column.add_child(PaneStyle.title("Not saved", int(24 * k)))
+		column.add_child(PaneStyle.wrapped(words, int(16 * k), 400.0 * k))
+		var choices := HBoxContainer.new()
+		choices.alignment = BoxContainer.ALIGNMENT_CENTER
+		choices.add_theme_constant_override("separation", int(10 * k))
+		choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var stay := PaneStyle.button("Stay", "Stay", k)
+		stay.pressed.connect(func() -> void: answered.emit(false))
+		choices.add_child(stay)
+		var go := PaneStyle.button("Leave without saving", "LeaveUnsaved", k)
+		go.pressed.connect(func() -> void: answered.emit(true))
+		choices.add_child(go)
+		column.add_child(choices)
+
+	func _unhandled_input(input: InputEvent) -> void:
+		if input.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			answered.emit(false)
 
 
 func _ready() -> void:
@@ -97,8 +187,16 @@ func _ready() -> void:
 	_map.name = "Map"
 	_map.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_map.visible = false
+	_map.closed.connect(func() -> void:
+		if _map.visible:
+			toggle_map())
+	_map.city_info_pressed.connect(func() -> void:
+		var list := show_city_list()
+		if list != null:
+			list.done.connect(func() -> void: _map.show_mode(WorldMap.Mode.MAIN)))
 	add_child(_map)
 	_make_hud()
+	_make_shield()
 	reader = FullscreenCard.new()
 	reader.name = "CardReader"
 	add_child(reader)
@@ -124,16 +222,55 @@ func _ready() -> void:
 		player = AdventurePlayer.begin(record, world)
 	if player != null:
 		show_player(player)
+		# A new adventure's world comes into view block by block, as 1997's
+		# did ([RevealDissolve]).
+		if player.monster_timer == 0 and is_inside_tree():
+			_reveal(null)
+	if is_inside_tree():
+		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_builder)
 
 
-## The floating panel ([WorldHud]) and what its parts do.
+## THE DECK BUILDER'S PICTURES WARMED [QoL] (the owner, 2026-10-23: the
+## first F1 of a session, "can we do something in the background before
+## user even comes to f1 - in parallel?"). A second after the world opens,
+## the hero's cards — the deck in use first — are decoded on a worker
+## thread ([CardArtWarmer]), so the first spellbook or Edit deck of a
+## session opens as quickly as the later ones.
+func _warm_the_builder() -> void:
+	if not is_inside_tree() or player == null:
+		return
+	CardArtWarmer.warm(self, _cards_to_warm())
+
+
+## The hero's cards as the builder first shows them: the deck in use, then
+## the others by name, the order of the cards along its bottom (the bug
+## pass after the campaign, r1-2: in the order they were won, a long
+## adventure warmed cards the first page never shows).
+func _cards_to_warm() -> Array[String]:
+	var in_use: Array[String] = []
+	var others: Array[String] = []
+	for entry in player.cards:
+		var card_name := String(entry.get("card", ""))
+		if (entry.get("decks", []) as Array).has(player.current_deck):
+			in_use.append(card_name)
+		elif not others.has(card_name):
+			others.append(card_name)
+	others.sort_custom(func(a: String, b: String) -> bool: return a.naturalnocasecmp_to(b) < 0)
+	in_use.append_array(others)
+	return in_use
+
+
+## The floating panel ([WorldHud]) and what its parts do. Each part's
+## handler refuses while a pane holds the screen (ruling A).
 func _make_hud() -> void:
 	hud = WorldHud.new()
 	hud.name = "Hud"
 	add_child(hud)
 	hud.map_pressed.connect(toggle_map)
-	hud.hero_pressed.connect(hud.toggle_hero)
-	hud.deck_pressed.connect(show_deck)
+	hud.city_list_pressed.connect(func() -> void: show_city_list())
+	hud.journal_map_pressed.connect(walk_journal)
+	hud.hero_pressed.connect(toggle_hero)
+	hud.deck_pressed.connect(func() -> void: open_spellbook())
 	hud.save_pressed.connect(save_now)
 	hud.load_pressed.connect(open_load)
 	hud.exit_pressed.connect(exit_game)
@@ -145,6 +282,21 @@ func _make_hud() -> void:
 		_wear(WorldCursors.Kind.ARROW)
 		hud.hide_place())
 	hud.big_switched.connect(rebuild_hud, CONNECT_DEFERRED)
+
+
+## THE SHIELD (ruling A): a clear sheet over the world, the map and the
+## panel — just above the panel, so under every pane, the card reader and
+## the arrival's words — that takes each click and hover meant for what
+## lies beneath while it is up ([method _sync_rest]). Under it the pointer
+## is the gold arrow.
+func _make_shield() -> void:
+	_shield = Control.new()
+	_shield.name = "PaneShield"
+	_shield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_shield.mouse_filter = Control.MOUSE_FILTER_STOP
+	_shield.visible = false
+	_shield.mouse_entered.connect(func() -> void: _wear(WorldCursors.Kind.ARROW))
+	add_child(_shield)
 
 
 ## THE PANEL MADE AGAIN, at the size the options now ask (big buttons),
@@ -159,6 +311,7 @@ func rebuild_hud() -> void:
 	if player != null:
 		hud.show_player(player)
 		_show_hero()
+	_sync_rest()
 
 
 ## Show [param adventure]: its world, the hero where they stand.
@@ -171,6 +324,10 @@ func show_player(adventure: AdventurePlayer) -> void:
 	view.hero_sheet = HeroColors.dressed(view.art, player.walker, player.figure_colors)
 	world.explore_around(player.tile())
 	_map.world = world
+	if soundscape == null:
+		soundscape = WorldSoundscape.new()
+		add_child(soundscape)
+	soundscape.player = player
 	hud.show_player(player)
 	_show_hero()
 	view.camera = view.hero
@@ -189,6 +346,7 @@ func _show_hero() -> void:
 	view.hero_facing = player.facing
 	view.hero_step = player.step
 	_map.hero_tile = player.tile()
+	_map.player = player
 	var calling := WorldStatus.targets(player)
 	hud.minimap.world = world
 	hud.minimap.hero = Vector2(player.position)
@@ -207,22 +365,109 @@ func _show_hero() -> void:
 	hud.refresh()
 
 
-## SAVE (the HUD's book, Ctrl+S): the adventure as it now stands, beside
-## its autosave; the path written, or "".
-func save_now() -> String:
-	if player == null:
-		return ""
-	var path := player.save(player.save_path("save"))
-	hud.say("Saved." if path != "" else "The adventure could not be saved.")
+# ------------------------------------------------------- the panes' hold --
+
+## Whether a pane holds the screen (ruling A): a place's pane or one over
+## it ([method visiting]), the deck builder, the saved adventures.
+func modal() -> bool:
+	return visiting() or building() or loading()
+
+
+## Whether the world waits: a pane holds the screen, or the map is up
+## (ruling B).
+func _world_waits() -> bool:
+	return modal() or _map.visible
+
+
+## THE PANEL AND THE SHIELD AS THE PANES STAND: the panel rests while a pane
+## holds the screen ([method WorldHud.rest]); the shield is up as long, and
+## [constant AFTER_PANE_MS] after the last one closed. Run before every
+## input event ([method _input]), every frame, and as a pane opens or
+## closes — so a click never meets the panel or the world in between.
+func _sync_rest() -> void:
+	if hud == null or _shield == null:
+		return
+	var held := modal()
+	if hud.resting and not held:
+		_shield_until = Time.get_ticks_msec() + AFTER_PANE_MS
+	hud.rest(held)
+	var up := held or Time.get_ticks_msec() < _shield_until
+	if _shield.visible != up:
+		_shield.visible = up
+
+
+## A PANE NOW HOLDS THE SCREEN: the gold arrow worn, no drag left armed, and
+## the panel at rest — its panes closed, its tips and the place's name gone
+## — under the shield.
+func _hold() -> void:
+	_wear(WorldCursors.Kind.ARROW)
+	_dragging = false
+	_sync_rest()
+
+
+## Every input event is met by the panes' hold as it now stands, before any
+## control hears it.
+func _input(_event: InputEvent) -> void:
+	_sync_rest()
+
+
+# ------------------------------------------------------------ the saves --
+
+## SAVE (the options' Save, Ctrl+S): the ten named slots over the world
+## ([SaveSlotsPane]); a slot clicked and named is saved into. Not while a
+## pane holds the screen (ruling A).
+func save_now() -> SaveSlotsPane:
+	if _alive(_save_slots):
+		return _save_slots
+	if player == null or modal():
+		return null
+	var slots := SaveSlotsPane.new()
+	slots.player = player
+	slots.k = WorldHud.BIG if hud.big else 1.0
+	_save_slots = slots
+	add_child(slots)
+	PaneStyle.centre(slots)
+	slots.saved.connect(func(_path: String) -> void: hud.say("Saved."))
+	slots.done.connect(_close_pane.bind(slots), CLOSING)
+	_hold()
+	return slots
+
+
+## The adventure saved into slot [param slot] (1–10) by [param slot_name]:
+## the path written, or "".
+func save_into_slot(slot: int, slot_name: String) -> String:
+	var path := SaveSlots.save_into(player, slot, slot_name) if player != null else ""
+	hud.say("Saved." if path != "" else UNSAVED)
 	return path
+
+
+## THE AUTOSAVE as the hero leaves a place or the world (Exit game, Return
+## to main menu, the window closed; 1997 wrote its slot 3 so): the path
+## written, or "" — "" too for an adventure that is not saved (no id). A
+## save that could not be written is said beside the panel.
+func autosave() -> String:
+	if player == null or player.adventure_id == "":
+		return ""
+	var path := _write_autosave()
+	if path == "":
+		hud.say(UNSAVED)
+	return path
+
+
+## The autosave written ([method AdventurePlayer.autosave]); a seam, so a
+## test can make it fail.
+func _write_autosave() -> String:
+	return player.autosave()
 
 
 ## LOAD (the options): the saved adventures over the world, which waits
 ## under them; Back comes back to it, Continue takes the one chosen up
-## instead.
+## instead. Not while a pane holds the screen (ruling A).
 func open_load() -> LoadAdventureScreen:
 	if loading():
 		return _load_screen
+	if modal():
+		return null
 	_wear(-1)
 	_dragging = false
 	_load_screen = load("res://game/adventure/load_adventure_screen.tscn").instantiate()
@@ -230,32 +475,47 @@ func open_load() -> LoadAdventureScreen:
 	_cover_world(true)
 	_load_screen.tree_exited.connect(func() -> void:
 		if is_inside_tree():
-			_cover_world(false))
+			_cover_world(false)
+			_sync_rest())
+	_sync_rest()
 	return _load_screen
 
 
 ## A screen over the whole world (the deck builder, the saves): the panel,
-## its panes and the arrows rest under it, drawing nothing.
+## its panes and the arrows rest under it, drawing nothing. Gone, they come
+## back as the map allows: under the map they stay hidden (ruling B).
 func _cover_world(covered: bool) -> void:
-	hud.visible = not covered
-	guides.visible = not covered and not guides.targets.is_empty()
+	hud.visible = not covered and not _map.visible
+	guides.visible = not covered and not _map.visible and not guides.targets.is_empty()
 	view.visible = not covered
 
 
 func loading() -> bool:
-	return _load_screen != null and is_instance_valid(_load_screen) and not _load_screen.is_queued_for_deletion()
+	return _alive(_load_screen)
 
+
+# --------------------------------------------------- leaving the world --
 
 ## EXIT GAME (the options): the adventure saved as it stands, then the
-## game ends — as `Exit game` ends it from a duel.
+## game ends — as `Exit game` ends it from a duel. Not while a pane holds
+## the screen (ruling A).
 func exit_game() -> void:
-	save_now()
-	_end_process()
+	if modal():
+		return
+	_save_and_end()
+
+
+## The adventure saved, then the game ended (the options' Exit game, the
+## deck builder's own).
+func _save_and_end() -> void:
+	_saved_or_ask(_end_process)
 
 
 ## RETURN TO MAIN MENU (the options): the adventure saved as it stands,
-## then the title screen.
+## then the title screen. Not while a pane holds the screen (ruling A).
 func return_to_menu() -> void:
+	if modal():
+		return
 	leave()
 
 
@@ -264,28 +524,72 @@ func _end_process() -> void:
 	get_tree().quit()
 
 
+## LEAVE THE WORLD for the title (Escape, Return to main menu): saved
+## first, as Exit game does.
+func leave() -> void:
+	if _leaving:
+		return
+	_saved_or_ask(_go_to_title)
+
+
+func _go_to_title() -> void:
+	_leaving = true
+	if is_inside_tree() and get_tree().current_scene == self:
+		get_tree().change_scene_to_file("res://game/main.tscn")
+
+
+## THE ADVENTURE SAVED BEFORE THE HERO LEAVES THE WORLD by [param go]: gone
+## at once when it was written (or is not one that is saved); when it could
+## not be, the player is told and asked first [ours] — Stay keeps them in
+## the world, Leave without saving goes all the same ([UnsavedAsk]).
+func _saved_or_ask(go: Callable) -> void:
+	if player == null or player.adventure_id == "" or autosave() != "":
+		go.call()
+		return
+	if _alive(_unsaved):
+		return
+	_unsaved = UnsavedAsk.new()
+	_unsaved.words = UNSAVED + " Leave all the same, and lose what was done since it was last saved?"
+	_unsaved.k = WorldHud.BIG if hud.big else 1.0
+	add_child(_unsaved)
+	PaneStyle.centre(_unsaved)
+	var asked := _unsaved
+	asked.answered.connect(func(leave_anyway: bool) -> void:
+		if _alive(asked):
+			asked.queue_free()
+		_sync_rest()
+		if leave_anyway:
+			go.call(), CLOSING)
+	_hold()
+
+
+## The window's close button on the world: the adventure is saved before
+## the game ends (the deck builder, open, answers it itself); a save that
+## could not be written is said, for as long as the window stays.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building():
+		autosave()
+
+
+# ------------------------------------------------------- a place visited --
+
 ## A PLACE VISITED: the pane of what stands at [param tile] — a town, a
 ## castle, a lair, a dungeon whose clues are known — over the world, which
 ## waits under it ([VisitPane]); null when nothing there is visited.
+## [param write] false comes back to a town after one of its services:
+## nothing of the arrival is written again.
 func visit(tile: Vector2i, write := true) -> VisitPane:
 	if visiting():
 		return _visit
 	var town := VisitPane.site_slot(world, tile)
+	var arrived := {}
 	if write and town >= 0 and int(world.sites[town]["type"]) >= ShandalarWorld.VILLAGE \
-			and int(world.sites[town]["type"]) < ShandalarWorld.CASTLE:
-		# ARRIVING in a town: its cards drawn, the amulet its trade wants,
-		# the seller's hint (`RunTownServicesMenu`).
-		CardShop.offers(player, town)
-		CardTrade.arrive(player, town)
-		CardHints.arrive(player, town)
+			and int(world.sites[town]["type"]) < ShandalarWorld.CASTLE and not TownStatus.ruled(world, town):
+		arrived = _arrive_in_town(town)
 	var place := VisitPane.describe(player, tile)
 	# A lair is entered by walking onto it ([method enter_lair]).
 	if place.is_empty() or String(place["kind"]) == "lair":
 		return null
-	_wear(WorldCursors.Kind.ARROW)
-	_dragging = false
-	hud.close_panels()
-	hud.hide_place()
 	_visit = VisitPane.new()
 	_visit.player = player
 	_visit.place = place
@@ -294,34 +598,256 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 	_visit.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_visit.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_visit.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_visit.left.connect(_left_place, CONNECT_DEFERRED)
+	_visit.left.connect(_left_place, CLOSING)
 	_visit.card_read.connect(read_card)
+	_visit.deck_wanted.connect(show_creature_deck)
 	_visit_tile = tile
+	_hold()
 	if write and String(place["kind"]) in VisitPane.KINDS:
-		player.log_event("visit", "Visited %s" % String(place["name"]))
+		soundscape.swell()
+	if not arrived.is_empty():
+		# The quest done here: the keeper's words over the town.
+		_visit.say(Array(arrived["lines"]))
+		play_sound(String(arrived["sound"]))
 	return _visit
 
 
+## THE HERO ARRIVES IN TOWN [param slot] (`VisitTownSlot`, and
+## `RunTownServicesMenu` before its menu): the quest whose destination it is
+## completed, the journal ("Completed quest at %s" or "Visited %s"), the
+## town marked visited (the city list, F3); then what the town is this
+## visit — the colour it favours, a new quest when it is not the last town
+## visited, its cards, the seller's hint. What the quest's completion said,
+## `{lines, sound}`, or `{}`.
+func _arrive_in_town(slot: int) -> Dictionary:
+	var arrived := Quests.complete_at(player, slot)
+	var name := WorldNames.site_name(world, slot)
+	if arrived.is_empty():
+		player.log_event("visit", "Visited %s" % name)
+	else:
+		player.log_event("quest", "Completed quest at %s" % name, {"done": true})
+	TownStatus.put(world, slot, TownStatus.VISITED)
+	CardTrade.arrive(player, slot)
+	if player.last_town != slot:
+		Quests.arrive(player, slot)
+	CardShop.offers(player, slot)
+	CardHints.arrive(player, slot)
+	return arrived
+
+
+## Whether a place's pane, or a pane over the world (the shop, the trade, a
+## list of cards, the seller, the city list, the saves, the question of a
+## save not written), is up.
 func visiting() -> bool:
-	return (_visit != null and is_instance_valid(_visit) and not _visit.is_queued_for_deletion()) \
-		or shopping() or trading()
+	return _alive(_visit) or shopping() or trading() or _alive(_card_list) or _alive(_magic_seller) \
+		or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved)
 
 
+## Whether [param node] stands on the screen still: there, and not on its
+## way out. Untyped, so a pane already freed may be asked about.
+static func _alive(node: Variant) -> bool:
+	return is_instance_valid(node) and not (node as Node).is_queued_for_deletion()
+
+
+## [param pane] closed (its Done, Escape): freed — once — and the world
+## again.
+func _close_pane(pane: Variant) -> void:
+	if _alive(pane):
+		(pane as Node).queue_free()
+	_show_hero()
+	_sync_rest()
+
+
+## THE TOWN'S PANE CLOSED, [param then] what the hero chose ([signal
+## VisitPane.left]): a service of the town over the world — the deck
+## builder, the shop, the trade, the wise man — or the place left.
 func _left_place(then: String) -> void:
-	var place := _visit.place if _visit != null and is_instance_valid(_visit) else {}
-	if _visit != null and is_instance_valid(_visit):
+	var place: Dictionary = _visit.place if _alive(_visit) else {}
+	if _alive(_visit):
 		_visit.queue_free()
 	_visit = null
 	_show_hero()
-	if then == "deck":
-		# From a town: its deck builder buys cards too.
-		show_deck(int(place["slot"]) if String(place.get("kind", "")) in VisitPane.KINDS else -1)
-	elif then == "shop" and not place.is_empty():
-		open_shop(int(place["slot"]))
-	elif then == "trade" and not place.is_empty():
-		var offer := CardTrade.town_offer(player, int(place["slot"]))
+	if not place.is_empty():
+		var slot := int(place["slot"])
+		match then:
+			"deck":
+				_open_town_deck(place)
+			"shop":
+				open_shop(slot)
+			"trade":
+				_open_town_trade(slot)
+			"quest", "wiseman":
+				open_wise_man(slot, "quest" if then == "quest" else "talk")
+			_:
+				_leave_site(place)
+	_sync_rest()
+
+
+## EDIT DECK/SELL CARDS: the town's deck builder, which buys cards too; its
+## Done comes back to the town, as 1997's `OpenTownDeckBuilder` returned to
+## the town's menu — and with no cards yet, the town at once.
+func _open_town_deck(place: Dictionary) -> void:
+	var town := int(place["slot"]) if String(place.get("kind", "")) in VisitPane.KINDS else -1
+	if show_deck(town) != null:
+		_deck_from_town = true
+	else:
+		_back_to_town()
+
+
+## THE TOWN'S TRADE ([CardTrade]) at site [param slot]; nothing on offer
+## after all, the town again.
+func _open_town_trade(slot: int) -> void:
+	var offer := CardTrade.town_offer(player, slot)
+	if offer.is_empty():
+		_back_to_town()
+	else:
+		open_trade(CardTrade.TOWN, slot, offer)
+
+
+## BACK IN THE TOWN after one of its services (the shop, the trade, the wise
+## man, the deck builder): its pane again, nothing of the arrival written
+## twice — no new quest, trade colour or journal line — as 1997's
+## `RunTownServicesMenu` looped back to its menu.
+func _back_to_town() -> void:
+	if _visit_tile.x >= 0:
+		visit(_visit_tile, false)
+
+
+## THE HERO LEAVES A PLACE (after 1.3's `VisitTownSlot`): a town is the last
+## one visited; leaving a town or city brings the World Magic seller's offer
+## ([WorldMagicShop]); then the game is saved and the clock goes on to the
+## next 32 ticks, as 1997 did on leaving any place.
+func _leave_site(place: Dictionary) -> void:
+	_visit_tile = Vector2i(-1, -1)
+	var slot := int(place.get("slot", -1))
+	if String(place.get("kind", "")) in VisitPane.KINDS:
+		player.last_town = slot
+		var offer := WorldMagicShop.offer(player, slot)
 		if not offer.is_empty():
-			open_trade(CardTrade.TOWN, int(place["slot"]), offer)
+			open_magic_seller(offer)
+			return
+	_after_leaving()
+
+
+func _after_leaving() -> void:
+	player.monster_timer |= 0x1F
+	autosave()
+	_show_hero()
+
+
+## THE WORLD MAGIC SELLER over the world ([WorldMagicPane]) for
+## [param offer]; closed, the hero is on their way.
+func open_magic_seller(offer: Dictionary) -> WorldMagicPane:
+	var seller := WorldMagicPane.new()
+	seller.player = player
+	seller.offer = offer
+	seller.k = WorldHud.BIG if hud.big else 1.0
+	_magic_seller = seller
+	add_child(seller)
+	PaneStyle.centre(seller)
+	seller.done.connect(_left_magic_seller.bind(seller), CLOSING)
+	_hold()
+	return seller
+
+
+func _left_magic_seller(seller: Variant) -> void:
+	if _alive(seller):
+		(seller as Node).queue_free()
+	hud.refresh()
+	_after_leaving()
+	_sync_rest()
+
+
+## THE WISE MAN of town [param slot] ([WiseManPane]): [param mode] `talk`
+## for his words, `quest` for the town's quest; left, the town again.
+func open_wise_man(slot: int, mode: String) -> WiseManPane:
+	var pane := WiseManPane.new()
+	pane.player = player
+	pane.mode = mode
+	pane.place = WiseManPane.place_of(player, slot)
+	pane.k = WorldHud.BIG if hud.big else 1.0
+	_visit = pane
+	add_child(pane)
+	PaneStyle.centre(pane)
+	pane.left.connect(_left_wise_man.bind(pane, slot), CLOSING)
+	pane.deck_wanted.connect(show_creature_deck)
+	pane.card_read.connect(read_card)
+	pane.copying.connect(func(color: int) -> void:
+		var list := open_card_list("Pick a spell",
+			"A copy of it for three %s amulets." % WiseMan.COLOR_WORDS[clampi(color, 1, 5) - 1],
+			CardListPane.counted(player.cards.map(func(c: Dictionary) -> String: return String(c["card"]))), true)
+		list.picked.connect(func(card_name: String) -> void:
+			_close_card_list()
+			pane.copied(card_name)))
+	_hold()
+	return pane
+
+
+## THE WISE MAN LEFT ([param pane], of town [param slot]): the town has
+## heard its wise man this visit — 1997 set `g_last_town_services_town_index`
+## at the end of `VisitTownWiseman` for his talk and the town's quest alike
+## (visitLocation.c ~996), so the next "Speak to Wise Man" here is no fresh
+## talk with a gift — and the town's pane again.
+func _left_wise_man(_then: String, pane: Variant, slot: int) -> void:
+	if _alive(pane):
+		(pane as Node).queue_free()
+	if _visit == pane:
+		_visit = null
+	player.last_town = slot
+	hud.refresh()
+	_show_hero()
+	_back_to_town()
+	_sync_rest()
+
+
+## A CREATURE'S DECK SEEN ([CreatureBook] row [param index]) — a wise man's
+## gift or the Guardian's Ghost: its cards listed over the pane, which goes
+## on once it is closed.
+func show_creature_deck(index: int) -> CardListPane:
+	var deck := CreatureBook.deck(index)
+	var cards := CardListPane.counted(deck.cards if deck != null else [])
+	var list := open_card_list("The deck of %s" % CreatureBook.called(index), "Opponent library", cards, false)
+	var under := _visit
+	list.done.connect(func() -> void:
+		if _alive(under) and under.has_method("deck_seen"):
+			under.call("deck_seen"), CLOSING)
+	return list
+
+
+## A LIST OF CARDS over the pane under it ([CardListPane]): [param cards]
+## by name with their counts; [param picking] for a pick. Closed, the pane
+## under it is shown again.
+func open_card_list(title: String, subtitle: String, cards: Dictionary, picking: bool) -> CardListPane:
+	_close_card_list()
+	_card_list = CardListPane.new()
+	_card_list.title = title
+	_card_list.subtitle = subtitle
+	_card_list.cards = cards
+	_card_list.picking = picking
+	_card_list.k = WorldHud.BIG if hud.big else 1.0
+	if _alive(_visit):
+		_visit.visible = false
+	add_child(_card_list)
+	PaneStyle.centre(_card_list)
+	_card_list.card_read.connect(read_card)
+	_card_list.done.connect(_close_card_list, CLOSING)
+	_hold()
+	return _card_list
+
+
+func _close_card_list() -> void:
+	if _alive(_card_list):
+		_card_list.queue_free()
+	_card_list = null
+	if _alive(_visit):
+		_visit.visible = true
+	_sync_rest()
+
+
+## A ONE-SHOT SOUND by its skin key ("" none) ([method WorldSoundscape.play]).
+func play_sound(key: String) -> void:
+	if soundscape != null:
+		soundscape.play(key)
 
 
 ## THE TOWN'S CARD SHOP over the world ([CardShopPane]); Done goes back to
@@ -337,13 +863,14 @@ func open_shop(slot: int) -> CardShopPane:
 	_shop.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_shop.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_shop.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_shop.done.connect(_left_shop, CONNECT_DEFERRED)
+	_shop.done.connect(_left_shop, CLOSING)
 	_shop.card_read.connect(read_card)
+	_hold()
 	return _shop
 
 
 func shopping() -> bool:
-	return _shop != null and is_instance_valid(_shop) and not _shop.is_queued_for_deletion()
+	return _alive(_shop)
 
 
 func _left_shop() -> void:
@@ -351,8 +878,8 @@ func _left_shop() -> void:
 		_shop.queue_free()
 	_shop = null
 	_show_hero()
-	if _visit_tile.x >= 0:
-		visit(_visit_tile, false)
+	_back_to_town()
+	_sync_rest()
 
 
 ## THE CARD TRADER over the world ([CardTradePane]): [param way] a town's
@@ -376,14 +903,15 @@ func open_trade(way: String, slot := -1, offer := {}) -> CardTradePane:
 			_trade.who = "The Nomad's Bazaar: any card, for gold."
 		_:
 			_trade.who = "The Diamond Mine: any card, for amulets of any color."
-	if _visit != null and is_instance_valid(_visit):
+	if _alive(_visit):
 		_visit.visible = false
 	add_child(_trade)
 	_trade.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_trade.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_trade.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_trade.done.connect(_left_trade, CONNECT_DEFERRED)
+	_trade.done.connect(_left_trade, CLOSING)
 	_trade.card_read.connect(read_card)
+	_hold()
 	return _trade
 
 
@@ -396,7 +924,7 @@ func read_card(card_name: String) -> bool:
 
 
 func trading() -> bool:
-	return _trade != null and is_instance_valid(_trade) and not _trade.is_queued_for_deletion()
+	return _alive(_trade)
 
 
 func _left_trade() -> void:
@@ -409,31 +937,33 @@ func _left_trade() -> void:
 	if way == CardTrade.TOWN:
 		# The town's trade is done for a while, a card traded or not.
 		CardTrade.traded(player, slot)
-		if _visit_tile.x >= 0:
-			visit(_visit_tile, false)
-	elif _visit != null and is_instance_valid(_visit):
+		_back_to_town()
+	elif _alive(_visit):
 		_visit.visible = true
 		if _visit is LairPane:
 			(_visit as LairPane).traded()
+	_sync_rest()
 
 
-## A LAIR ENTERED: the lair in roaming slot [param slot] ([WorldLairs]);
-## the game saved first, as 1997 saved it; its pane over the world
-## ([LairPane]); null when the slot holds no lair.
+## A LAIR ENTERED: the lair in roaming slot [param slot] ([WorldLairs]) —
+## what it holds drawn ([LairEvent]), and the lair SPENT AT ONCE: gone from
+## the map and counted explored before the game is saved, as 1997 saved it
+## on entering (the lead's ruling C, 2026-10-23: no save may hold a lair the
+## hero is inside, so a window closed mid-riddle forfeits the card still
+## waiting, as quitting 1997 mid-event lost it). Its pane over the world
+## ([LairPane]), the nearby place's tune silent under it (1997's
+## `StopWorldLocationMusic`); null when the slot holds no lair.
 func enter_lair(slot: int) -> LairPane:
-	if visiting():
+	if modal():
 		return null
 	var held := WorldLairs.held_in(player, slot)
 	if String(held.get("kind", "")) != "lair":
 		return null
 	walk.stop()
-	if player.adventure_id != "":
-		player.autosave()
 	var event := LairEvent.begin(player, held)
-	_wear(WorldCursors.Kind.ARROW)
-	_dragging = false
-	hud.close_panels()
-	hud.hide_place()
+	WorldLairs.explored(player, slot)
+	autosave()
+	soundscape.rest(true)
 	var pane := LairPane.new()
 	pane.player = player
 	pane.event = event
@@ -445,41 +975,99 @@ func enter_lair(slot: int) -> LairPane:
 	pane.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	pane.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	pane.grow_vertical = Control.GROW_DIRECTION_BOTH
-	pane.left.connect(_left_lair.bind(slot), CONNECT_DEFERRED)
+	pane.left.connect(_left_lair.bind(slot), CLOSING)
 	pane.trading.connect(func(way: String) -> void: open_trade(way))
 	pane.card_read.connect(read_card)
+	pane.deck_wanted.connect(show_creature_deck)
+	_hold()
 	return pane
 
 
-## The lair is left: gone from the map, the game saved again.
-func _left_lair(_then: String, slot: int) -> void:
-	if _visit != null and is_instance_valid(_visit):
+## THE LAIR LEFT ([param _slot] its roaming slot, spent as it was entered):
+## the world again, the nearby place's tune heard again, the game saved
+## with what the lair gave.
+func _left_lair(_then: String, _slot: int) -> void:
+	if _alive(_visit):
 		_visit.queue_free()
 	_visit = null
-	WorldLairs.explored(player, slot)
-	if player.adventure_id != "":
-		player.autosave()
+	soundscape.rest(false)
+	autosave()
 	_show_hero()
 	view.queue_redraw()
+	_sync_rest()
 
+
+## THE CITY LIST (F3, the options, the map's City Info): every town and
+## city the hero has visited ([CityListPane]) over the world; closed, the
+## world again. Not while a pane holds the screen (ruling A).
+func show_city_list() -> CityListPane:
+	if modal():
+		return null
+	var list := CityListPane.new()
+	list.player = player
+	list.k = WorldHud.BIG if hud.big else 1.0
+	_city_list = list
+	add_child(list)
+	PaneStyle.centre(list)
+	list.done.connect(_close_pane.bind(list), CLOSING)
+	_hold()
+	return list
+
+
+func city_list_shown() -> bool:
+	return _alive(_city_list)
+
+
+# ----------------------------------------------------- the panel's parts --
 
 ## THE CLUES (the frame's gate, F4): what the hero has learned of the
-## castles and the dungeons ([WorldClues]).
+## castles and the dungeons ([WorldClues]). Not while the world waits.
 func show_clues() -> void:
+	if _world_waits():
+		return
 	hud.toggle_clues()
+
+
+## THE HERO (the frame's faces, F5): the journal and the stats. Not while
+## the world waits.
+func toggle_hero() -> void:
+	if _world_waits():
+		return
+	hud.toggle_hero()
+
+
+## THE KEYS (?, H). Not while the world waits.
+func toggle_help() -> void:
+	if _world_waits():
+		return
+	hud.toggle_help()
+
+
+## THE SPELLBOOK (the frame's book, F1): the deck builder that only looks,
+## as 1997's did outdoors ([method show_deck]). Not while the world waits.
+func open_spellbook() -> AdventureBuilder:
+	if _world_waits():
+		return null
+	return show_deck(-1, true)
 
 
 ## CAST the World Magic of key [param key] (1–5, or a click on its icon)
 ## ([WorldMagic]): the hero set down elsewhere when it moves them, its
-## words beside the panel. What [method WorldMagic.cast] answered.
+## words beside the panel. What [method WorldMagic.cast] answered; `{}`
+## while the world waits (a pane holds the screen, or the map is up).
 func cast(key: int) -> Dictionary:
-	if player == null:
+	if player == null or _world_waits():
 		return {}
+	# Leap of Fate and Sword of Resistance show the new place block by
+	# block over the old ([RevealDissolve]) — the screen read back only for
+	# a cast that will move the hero.
+	var before := _picture_for_reveal() if _cast_moves(key) else null
 	var result := WorldMagic.cast(player, key)
 	if result["moved"]:
 		walk.stop()
 		world.explore_around(player.tile())
 		view.camera = Vector2(player.position)
+		_reveal(before)
 	_show_hero()
 	view.queue_redraw()
 	if result["deck"]:
@@ -491,10 +1079,35 @@ func cast(key: int) -> Dictionary:
 	return result
 
 
+## Whether casting key [param key] will set the hero down elsewhere, by
+## [WorldMagic]'s own rules: Leap of Fate whenever it can be cast, Sword of
+## Resistance when a town is besieged.
+func _cast_moves(key: int) -> bool:
+	if not WorldMagic.ready_to_cast(player, key):
+		return false
+	return key == 2 or (key == 5 and not WorldMagic.siege_creature(player).is_empty())
+
+
+## The screen as it stands, for the reveal ([method RevealDissolve.picture_of]);
+## a seam, so a test can count the pictures taken.
+func _picture_for_reveal() -> Texture2D:
+	return RevealDissolve.picture_of(self)
+
+
+## The world view shown block by block over [param before] (black for
+## null), the panel live above it.
+func _reveal(before: Texture2D) -> void:
+	var cover := RevealDissolve.over(self, before)
+	move_child(cover, view.get_index() + 1)
+
+
 ## THE DECK (the frame's spellbook, F1, and Conjurer's Will): the
 ## adventure's deck builder over the world, which waits under it
-## ([AdventureBuilder]); Done writes the decks back to the hero.
-func show_deck(sell_site := -1) -> AdventureBuilder:
+## ([AdventureBuilder]); Done writes the decks back to the hero. As in 1997
+## the spellbook only looks ([param looking]); a town's Edit deck/Sell
+## cards ([param sell_site]) and Conjurer's Will change the decks. Null,
+## and said so, with no cards yet.
+func show_deck(sell_site := -1, looking := false) -> AdventureBuilder:
 	if building():
 		return _builder
 	if player.cards.is_empty():
@@ -502,23 +1115,26 @@ func show_deck(sell_site := -1) -> AdventureBuilder:
 		return null
 	_wear(-1)
 	_dragging = false
-	hud.close_panels()
 	_cover_world(true)
 	_builder = AdventureBuilder.new()
 	_builder.name = "DeckBuilder"
 	_builder.player = player
 	_builder.sell_site = sell_site
-	_builder.closed.connect(_deck_closed)
-	_builder.exit_requested.connect(exit_game)
+	_builder.looking = looking
+	_builder.closed.connect(_deck_closed, CONNECT_ONE_SHOT)
+	_builder.exit_requested.connect(_save_and_end)
 	add_child(_builder)
+	soundscape.rest(true)
+	_sync_rest()
 	return _builder
 
 
 func building() -> bool:
-	return _builder != null and is_instance_valid(_builder) and not _builder.is_queued_for_deletion()
+	return _alive(_builder)
 
 
-## The builder is done: the world again, its music, the deck's count.
+## The builder is done: the world again, its music, the deck's count — and
+## the town again when the town's Edit deck/Sell cards opened it.
 func _deck_closed() -> void:
 	if building():
 		_builder.queue_free()
@@ -527,14 +1143,22 @@ func _deck_closed() -> void:
 	var music := get_node_or_null(^"/root/ShellMusic")
 	if music != null:
 		music.call(&"play")
+	soundscape.rest(false)
 	_show_hero()
 	hud.say("Deck %d: %d cards" % [player.current_deck + 1, hud.cards_in_deck()])
+	if _deck_from_town:
+		_deck_from_town = false
+		_back_to_town()
+	_sync_rest()
 
+
+# ------------------------------------------------------------- the walk --
 
 ## Walk to [param tile] (the way is found); true when there is a way. The
-## place the hero stands on is visited again.
+## place the hero stands on is visited again. Not while a pane holds the
+## screen (ruling A: the small map's click under a pane walks no one).
 func walk_to_tile(tile: Vector2i) -> bool:
-	if walk == null:
+	if walk == null or modal():
 		return false
 	if tile == player.tile() and not walk.is_walking():
 		return visit(tile) != null
@@ -557,6 +1181,8 @@ func advance(seconds: float) -> void:
 		var walking := walk.is_walking()
 		if walk.tick():
 			world.explore_around(player.tile())
+			Quests.note_heading(player)
+		soundscape.tick(walk)
 		# The lairs and the roaming slots (`UpdateWorldLairAndMonsterSlots`).
 		var lair := WorldLairs.tick(player)
 		if lair >= 0:
@@ -585,7 +1211,8 @@ func advance(seconds: float) -> void:
 
 ## The tile under [param point] on the view.
 func tile_at(point: Vector2) -> Vector2i:
-	var at := view.unproject(point)
+	# Where the land is DRAWN under the point, the glide included.
+	var at := view.unproject_drawn(point)
 	return Vector2i(floori(at.x / 32.0), floori(at.y / 32.0))
 
 
@@ -620,11 +1247,30 @@ func _exit_tree() -> void:
 	_wear(-1)
 
 
-## The window's close button on the world: the adventure is saved before
-## the game ends (the deck builder, open, answers it itself).
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building():
-		player.save(player.save_path("save"))
+## THE PLACE UNDER THE POINTER at [param point]: its pointer worn, its kind
+## and name floating by it — none while a drag looks around.
+func _hover_world(point: Vector2) -> void:
+	var place := place_at(tile_at(point))
+	_wear(WorldCursors.FOR_PLACE.get(String(place.get("kind", "")), WorldCursors.Kind.WALK))
+	if place.is_empty() or _dragged:
+		hud.hide_place()
+	else:
+		hud.show_place(String(place["name"]), String(place["subtitle"]), point)
+
+
+## THE POINTER LOOKED AT AGAIN when the land moved under it — a walk, a
+## look, a zoom, a leap: the place now under a still pointer named and its
+## pointer worn, as a motion would, while the pointer rests on the world.
+func _point_again() -> void:
+	if _world_waits():
+		return
+	var looked := Vector3(view.camera.x, view.camera.y, view.zoom)
+	if looked == _pointed:
+		return
+	_pointed = looked
+	var under := get_viewport().gui_get_hovered_control()
+	if under == view or under == self:
+		_hover_world(get_local_mouse_position())
 
 
 ## Look by [param pixels] on the screen.
@@ -646,8 +1292,28 @@ func back_to_hero() -> void:
 	view.queue_redraw()
 
 
+## THE JOURNAL WALKED ON THE MAP ([method WorldMap.walk_journal]). Not while
+## a pane holds the screen.
+func walk_journal() -> void:
+	if modal():
+		return
+	hud.close_panels()
+	if not _map.visible:
+		toggle_map()
+	_map.walk_journal()
+
+
+## THE MAP (the frame's scroll, M, F2) opened or closed. Not while a pane
+## holds the screen (ruling A).
 func toggle_map() -> void:
+	if modal():
+		return
 	_map.visible = not _map.visible
+	# The map is a whole screen, as 1997's was: the panel and its panes
+	# rest under it.
+	hud.visible = not _map.visible
+	if _map.visible and _map.mode == WorldMap.Mode.JOURNAL:
+		_map.show_mode(WorldMap.Mode.MAIN)
 	_dragging = false
 	hud.hide_place()
 	guides.visible = not _map.visible and not guides.targets.is_empty()
@@ -658,10 +1324,35 @@ func toggle_map() -> void:
 
 
 func _process(delta: float) -> void:
-	if world == null or _map.visible or loading() or building() or visiting():
+	_sync_rest()
+	if world == null:
+		return
+	if _map.visible or modal():
+		# The world waits under it; what a place's pane changes — food
+		# bought, a card sold, an amulet paid — shows on the panel at once.
+		if visiting():
+			hud.refresh_numbers()
+		# The hero stands where the last tick left them, not a step short.
+		view.frame(1.0)
 		return
 	advance(delta * WorldHud.pace())
-	# Ctrl+S saves; it never looks down too.
+	# A walk's last step opened a place's pane this tick: the world waits
+	# from now, as above, and the pointer is not read again under the pane
+	# (the bug pass after the campaign, r3-1: the place's name and its
+	# pointer came back beside the pane).
+	if _world_waits():
+		view.frame(1.0)
+		return
+	# THE GLIDE [QoL]: the clock ticks every [constant HeroWalk.TICK], the
+	# hero and the view slide between its ticks ([method WorldView.frame]).
+	view.frame(_tick_left / HeroWalk.TICK)
+	_look_with_keys(delta)
+	_point_again()
+
+
+## The arrows (W A S D too) look around; Ctrl+S saves, so with Ctrl held
+## they never look down.
+func _look_with_keys(delta: float) -> void:
 	if Input.is_key_pressed(KEY_CTRL):
 		return
 	var direction := Vector2.ZERO
@@ -678,7 +1369,7 @@ func _process(delta: float) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	if _map.visible or building() or visiting():
+	if _map.visible or modal():
 		return
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
@@ -712,18 +1403,13 @@ func _gui_input(event: InputEvent) -> void:
 				_dragged = true
 			if _dragged:
 				look(-motion.relative)
-		# The place under the pointer: its pointer, and its kind and name
-		# floating by it.
-		var place := place_at(tile_at(motion.position))
-		_wear(WorldCursors.FOR_PLACE.get(String(place.get("kind", "")), WorldCursors.Kind.WALK))
-		if place.is_empty() or _dragged:
-			hud.hide_place()
-		else:
-			hud.show_place(String(place["name"]), String(place["subtitle"]), motion.position)
+		_hover_world(motion.position)
 
 
+## The world's keys. A pane that holds the screen hears its own keys
+## (ruling A); the map takes its own ([method _map_key], ruling B).
 func _unhandled_input(event: InputEvent) -> void:
-	if _leaving or loading() or building() or visiting():
+	if _leaving or modal():
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
@@ -734,46 +1420,53 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			leave()
 		return
-	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
-		match (event as InputEventKey).keycode:
-			KEY_M, KEY_F2:
-				toggle_map()
-			KEY_F1:
-				show_deck()
-			KEY_F4:
-				show_clues()
-			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-				cast((event as InputEventKey).keycode - KEY_0)
-			KEY_KP_1, KEY_KP_2, KEY_KP_3, KEY_KP_4, KEY_KP_5:
-				cast((event as InputEventKey).keycode - KEY_KP_0)
-			KEY_N:
-				hud.show_minimap(not hud.minimap_shown())
-			KEY_F5:
-				hud.toggle_hero()
-			KEY_H:
-				hud.toggle_help()
-			KEY_S:
-				if (event as InputEventKey).ctrl_pressed:
-					save_now()
-				else:
-					return
-			KEY_SPACE, KEY_HOME:
-				back_to_hero()
-			KEY_PLUS, KEY_KP_ADD, KEY_EQUAL:
-				set_zoom(view.zoom * ZOOM_STEP)
-			KEY_MINUS, KEY_KP_SUBTRACT:
-				set_zoom(view.zoom / ZOOM_STEP)
-			_:
-				return
-		get_viewport().set_input_as_handled()
-
-
-## LEAVE THE WORLD for the title (Escape, Return to main menu): saved
-## first, as Exit game does.
-func leave() -> void:
-	if _leaving:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
 		return
-	save_now()
-	_leaving = true
-	if is_inside_tree() and get_tree().current_scene == self:
-		get_tree().change_scene_to_file("res://game/main.tscn")
+	if _map.visible:
+		_map_key(key)
+		return
+	match key.keycode:
+		KEY_M, KEY_F2:
+			toggle_map()
+		KEY_F1:
+			open_spellbook()
+		KEY_F3:
+			show_city_list()
+		KEY_F4:
+			show_clues()
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
+			cast(key.keycode - KEY_0)
+		KEY_KP_1, KEY_KP_2, KEY_KP_3, KEY_KP_4, KEY_KP_5:
+			cast(key.keycode - KEY_KP_0)
+		KEY_N:
+			hud.show_minimap(not hud.minimap_shown())
+		KEY_F5:
+			toggle_hero()
+		KEY_H:
+			toggle_help()
+		KEY_S:
+			if key.ctrl_pressed:
+				save_now()
+			else:
+				return
+		KEY_SPACE, KEY_HOME:
+			back_to_hero()
+		KEY_PLUS, KEY_KP_ADD, KEY_EQUAL:
+			set_zoom(view.zoom * ZOOM_STEP)
+		KEY_MINUS, KEY_KP_SUBTRACT:
+			set_zoom(view.zoom / ZOOM_STEP)
+		_:
+			return
+	get_viewport().set_input_as_handled()
+
+
+## THE KEYS WHILE THE MAP IS UP (ruling B: the map is a whole screen, as
+## 1997's was): its own ([method WorldMap.key] — its maps, City Info, Done)
+## and Ctrl+S act; no other key reaches the world under it.
+func _map_key(key: InputEventKey) -> void:
+	if _map.key(key.keycode):
+		get_viewport().set_input_as_handled()
+	elif key.keycode == KEY_S and key.ctrl_pressed:
+		save_now()
+		get_viewport().set_input_as_handled()

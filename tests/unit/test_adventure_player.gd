@@ -64,7 +64,8 @@ func test_a_new_hero_starts_as_in_1997() -> void:
 	assert_eq(player.cards.size(), 39, "a Magician's first deck")
 	assert_eq(player.cards.map(func(card: Dictionary) -> String: return card["card"]), Array(dealt))
 	assert_eq(player.duel_record(), {"won": 0, "lost": 0})
-	assert_eq(player.mana_links, [] as Array[int], "no mana linked yet")
+	assert_eq(player.mana_links(), 10, "the world's first ten towns and cities: ten mana links, ten lives")
+	assert_eq(TownStatus.linked_towns(player.world).size(), 10)
 
 
 func test_an_adventure_is_named_by_its_hero_and_a_hash_of_the_moment() -> void:
@@ -82,7 +83,10 @@ func test_the_autosave_round_trips_everything() -> void:
 	player.figure_colors = {"hair": "blond", "pants": "navy"}
 	player.gold = 123
 	player.journal.append({"event": "duel", "won": true, "x": 3, "y": 4, "time": 77})
-	player.quest = {"kind": "letter", "town": 12}
+	# A quest as Quests.accept writes one: numbers only (a save's quest of
+	# any other kind is read as none — the bug pass after the campaign, r3-4).
+	player.quest = {"type": Quests.LETTER_LINK, "destination": 12, "giver": 3, "color": 4,
+		"data": 1, "deadline": 400}
 	player.position += Vector2i(5, -3)
 	player.facing = 4
 	player.monster_timer = 999

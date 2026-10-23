@@ -1176,6 +1176,10 @@ class Cell extends Control:
 	## and [method CardArea._bind_cell] are the two places that care.
 	var face: MiniCard = null
 	var proxy: ProxyFace = null
+	## The card [member face] was built for and has not been bound to
+	## since — a [MiniCard] draws itself as it is built, so
+	## [method CardArea._bind_cell] need not draw it again (h5-10 round 2).
+	var fresh_for: CardData = null
 	var badge: Control = null
 	var badge_label: Label = null
 	## [QoL] The pile marker — see [member CardArea.corner_tag].
@@ -1319,7 +1323,8 @@ func _make_cell(first: CardData) -> Cell:
 ## The old face is freed. That is the one place this surface still pays
 ## the ~0.3 ms a face costs to build, and it is paid per KIND CHANGE
 ## rather than per scroll — the paging optimisation the second audit pass
-## measured is untouched for every other rebind.
+## measured is untouched for every other rebind. A [MiniCard] built here
+## already shows [param data] ([member Cell.fresh_for]).
 func _dress_face(cell: Cell, data: CardData) -> void:
 	var wanted_proxy := ProxyCard.is_proxy_data(data)
 	if wanted_proxy and cell.proxy != null:
@@ -1340,6 +1345,7 @@ func _dress_face(cell: Cell, data: CardData) -> void:
 	else:
 		var card := MiniCard.new(CardInstance.new(data, -1, 0))
 		cell.face = card
+		cell.fresh_for = data
 		face = card
 	face.size = MiniCard.SIZE
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1367,14 +1373,24 @@ func _bind_cell(cell: Cell, data: CardData, count: int) -> void:
 			# A proxy says what it is where a card says what it does.
 			cell.tooltip_text = cell.proxy.tooltip_text
 		else:
-			cell.face.instance = CardInstance.new(data, -1, 0)
-			cell.face.hovered = false
-			cell.face.art_override = CardPrintings.texture(data.card_name, printing_set)
-			cell.face.refresh()
+			# A FACE BUILT FOR THIS CARD A MOMENT AGO ALREADY SHOWS IT
+			# (h5-10 round 2): [method _make_cell] built it from this card,
+			# unlit, without a chosen printing, and drew it. Giving it a
+			# second instance and drawing it again cost every new page twice
+			# its faces' drawing; only a chosen printing redraws it now.
+			var fresh := cell.fresh_for == data
+			var art := CardPrintings.texture(data.card_name, printing_set)
+			if not fresh:
+				cell.face.instance = CardInstance.new(data, -1, 0)
+				cell.face.hovered = false
+			if not fresh or art != null:
+				cell.face.art_override = art
+				cell.face.refresh()
 			cell.tooltip_text = "%s\n%s" % [data.card_name, data.oracle_text]
 	elif cell.face != null and cell.printing_set != printing_set:
 		cell.face.art_override = CardPrintings.texture(data.card_name, printing_set)
 		cell.face.refresh()
+	cell.fresh_for = null
 	cell.printing_set = printing_set
 	cell.source = source_name
 	_bind_badge(cell, count)

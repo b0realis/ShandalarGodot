@@ -1144,8 +1144,12 @@ class TestTheWorldSheets(TestSprSheet):
 
     def test_every_world_sheet_is_wired(self):
         # The world's own sprites are in Program/SPR/ (by resolution); the
-        # world screen's icons, Worlds.spr and Amsprite.spr, in Program/.
-        icons = {"world_magics": "worlds.spr", "world_amulets": "amsprite.spr"}
+        # world screen's icons, Worlds.spr and Amsprite.spr, the map's
+        # Ttsprite.spr and the quest panel's sheets, in Program/.
+        icons = {"world_magics": "worlds.spr", "world_amulets": "amsprite.spr",
+                 "world_map_tiles": "ttsprite.spr", "quest_scroll": "questnew.spr",
+                 "quest_clock": "clocknew.spr", "quest_sunmoon": "sunmoon.spr",
+                 "quest_days": "daysnew.spr"}
         for key, (cells, width, height, columns) in imp.WORLD_SHEETS.items():
             if key in icons:
                 self.assertEqual(imp.MANIFEST[key], [icons[key]], key)
@@ -1392,9 +1396,12 @@ class TestTheSkinIsBuiltOffTheDiscAlone(unittest.TestCase):
     from quietly bringing one back."""
 
     ## Names that only ever came from a Manalink tree.
+    # `Manalink.wav` is NOT here (2026-10-23): the 1997 game plays it as a
+    # letter quest makes a mana link — the retail `Magic.exe` names
+    # `x:sound\manalink.wav` in its town reward (the retail decompilation,
+    # `town.c`), and `Shandalar.exe` carries the same string.
     MANALINK_ONLY = {"mplantin-regular.ttf", "garamond.ttf",
-                     "magicmedieval.ttf", "goudymedieval-pre8th.ttf",
-                     "manalink.wav"}
+                     "magicmedieval.ttf", "goudymedieval-pre8th.ttf"}
 
     def every_candidate(self) -> list[tuple[str, str]]:
         out = [(k, n) for k, row in imp.MANIFEST.items() for n in row]
@@ -1871,6 +1878,37 @@ class TestCardValues(unittest.TestCase):
         self.assertEqual(imp.find_card_table(b"Swamp\0" + b"x" * 400), -1)
         with tempfile.TemporaryDirectory() as tmp:
             self.assertFalse(imp.import_card_values({}, Path(tmp)), "no program: nothing written")
+
+
+class TestWiseWords(unittest.TestCase):
+    """The wise man's tales and news (2026-10-23): `Advblocks.txt`'s blocks,
+    four of news and then the tales, their pages parted by three blank
+    lines."""
+
+    TEXT = (" _qQuote[0] male\r\nSTARTBLOCK\r\nI see you have not yet defeated the\r\n"
+            "%1 in his Castle.\r\n\r\n\r\n\r\nENDBLOCK\r\n"
+            "STARTBLOCK\r\nLinks: %s and %s.\r\n\r\n\r\n\r\nENDBLOCK\r\n"
+            "STARTBLOCK\r\nMagic %1 in %2.\r\n\r\n\r\n\r\nENDBLOCK\r\n"
+            "STARTBLOCK\r\nShe has %2!d! life.\r\n\r\n\r\n\r\nENDBLOCK\r\n"
+            " a tale\r\nSTARTBLOCK\r\nPage one.\r\nStill one.\r\n\r\n\r\n\r\n"
+            "Page two.\r\n\r\n\r\n\r\nENDBLOCK\r\n")
+
+    def test_the_blocks_are_read(self):
+        words = imp.wise_words(self.TEXT)
+        self.assertEqual(words["city"][0], "I see you have not yet defeated the\n%1 in his Castle.")
+        self.assertEqual(words["city"][3], "She has %2!d! life.")
+        self.assertEqual(words["tales"], [["Page one.\nStill one.", "Page two."]], "a tale in its pages")
+
+    def test_written_beside_the_skin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Advblocks.txt").write_text(self.TEXT, encoding="cp1252")
+            out = root / "skin"
+            out.mkdir()
+            self.assertTrue(imp.import_wise_words({"advblocks.txt": root / "Advblocks.txt"}, out))
+            data = json.loads((out / "adventure_wise_words.json").read_text())
+            self.assertEqual(len(data["tales"]), 1)
+            self.assertFalse(imp.import_wise_words({}, out), "no Advblocks.txt: nothing")
 
 
 class TestCardHints(unittest.TestCase):

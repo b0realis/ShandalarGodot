@@ -60,8 +60,10 @@ func test_the_saved_adventure_is_listed_and_taken_up_again() -> void:
 	add_child_autofree(screen)
 	await get_tree().process_frame
 	var list := screen.find_child("Saves", true, false) as ItemList
-	assert_eq(list.item_count, 1)
-	assert_string_contains(list.get_item_text(0), "Xenia Quibble — Blue, Sorcerer · World seed 7 · autosaved")
+	assert_eq(list.item_count, 2, "the adventure's line, and its autosave")
+	assert_eq(list.get_item_text(0), "Xenia Quibble — Blue, Sorcerer · World seed 7")
+	assert_string_contains(list.get_item_text(1), "Resume · autosaved")
+	assert_false(screen.resume_button.disabled, "Resume: the newest autosave")
 	assert_false(screen.continue_button.disabled, "chosen and ready")
 	var world_screen := LoadAdventureScreen.open_save(String(screen.saves[0]["path"]))
 	assert_not_null(world_screen)

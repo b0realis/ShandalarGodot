@@ -27,6 +27,9 @@ const DUNGEON := 0x40
 ## Terrain codes (`GetWorldTileType`). The generator makes 0, 1, 2, 3, 5,
 ## 6 and the in-betweens 8, 10, 13 and 15; the colour mask names the rest.
 const OCEAN := 0
+## The land codes the generator makes ([method WorldGenerator.terrain_for]),
+## so the lands a place can stand on.
+const LANDS_MADE: Array[int] = [1, 2, 3, 5, 6, 8, 10, 13, 15]
 
 ## Site types (`WorldNode.location_type`): 1 village, 2 town, 3 city,
 ## 4 a wizard's castle, 5 a castle in its other state.

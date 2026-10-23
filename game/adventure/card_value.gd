@@ -124,11 +124,41 @@ static var _imported: Dictionary = {}
 static var _imported_read := false
 static var _keys: Dictionary = {}
 static var _scorer: AutoDeck
+## THE FACTS READ ([method facts]), by card name, read-only: the shop's
+## stock, the trades, the riddles and the lairs each ask for the same ~900
+## base cards, and reading a card the program never had is not cheap
+## ([method derive]: the engine's rating, the rules' words). Names only,
+## never a [CardData].
+static var _facts_read: Dictionary = {}
+## The card pool's revision the tables above were read against — the
+## imported table's names, the name keys, the facts (−1: none read yet).
+## They are read again when the pool changes ([method pool_moved]).
+static var _read_at := -1
+
+
+## WHETHER A TABLE READ FROM THE CARD POOL IS STALE: [param read_at] the
+## pool's [member CardRegistry.revision] when the table was read, −1 for
+## not read yet. The pool is rebuilt when a pack is turned on or off, and
+## its revision moves on; every adventure table built from it — these
+## facts, the shops' stock ([CardShop]), the trades' cards ([CardTrade]),
+## the riddles' ([CardRiddle]), the seller's hints ([CardHints]) — is read
+## again then.
+static func pool_moved(read_at: int) -> bool:
+	return read_at != -1 and read_at != CardRegistry.revision
+
+
+## The tables read again if the pool has moved on, and marked as read
+## against the pool as it stands.
+static func _follow_pool() -> void:
+	if pool_moved(_read_at):
+		forget()
+	_read_at = CardRegistry.revision
 
 
 ## The 1997 program's entry for [param card_name] (`adventure_cards.json`,
 ## its names the engine's: [method engine_name]), or `{}`.
 static func original(card_name: String) -> Dictionary:
+	_follow_pool()
 	if not _imported_read:
 		_imported_read = true
 		_imported = {}
@@ -143,6 +173,7 @@ static func original(card_name: String) -> Dictionary:
 ## The engine's name for a card the 1997 card lists name [param name_1997]
 ## (`Info.csv`), or "" for none (a token, an empty row).
 static func engine_name(name_1997: String) -> String:
+	_follow_pool()
 	if CardRegistry.has_card(name_1997):
 		return name_1997
 	var spelled := String(SPELLED_1997.get(name_1997, ""))
@@ -164,16 +195,35 @@ static func name_key(card_name: String) -> String:
 	return out
 
 
-## Forget the imported table (a skin imported again, packs changed, a test).
+## Forget the imported table and the facts read from it (a skin imported
+## again, the card pool changed, a test).
 static func forget() -> void:
 	_imported = {}
 	_imported_read = false
 	_keys = {}
+	_facts_read = {}
+	_read_at = -1
 
 
 ## THE FORMULA'S INPUTS for [param data]: the 1997 program's own when it was
-## imported, else read off the card (`derived` true).
+## imported, else read off the card (`derived` true). Read once for a card
+## of the registry and kept ([member _facts_read]) while the pool stands —
+## the dictionary is read-only, shared by every caller; a card made apart
+## from the registry (a test's) is read each time and never kept under its
+## name.
 static func facts(data: CardData) -> Dictionary:
+	_follow_pool()
+	var key := data.card_name
+	if not (CardRegistry.has_card(key) and CardRegistry.get_card(key) == data):
+		return _read_facts(data)
+	if not _facts_read.has(key):
+		var out := _read_facts(data)
+		out.make_read_only()
+		_facts_read[key] = out
+	return _facts_read[key]
+
+
+static func _read_facts(data: CardData) -> Dictionary:
 	var own := original(data.card_name)
 	if not own.is_empty():
 		var out := own.duplicate()
@@ -196,6 +246,10 @@ static func derive(data: CardData) -> Dictionary:
 	elif data.is_type(Mtg.CardType.INSTANT):
 		kind = INSTANT
 	var color := color_bits(data.color_mask())
+	# A land wears the colours of its land types, as the 1997 card table
+	# gave them (a Mountain red, Badlands black and red).
+	if kind == LAND:
+		color = land_colors(data)
 	var pips := 0
 	for hue in data.cost.colored:
 		if hue != Mtg.ManaColor.C:
@@ -236,6 +290,16 @@ static func strength_step(data: CardData, kind: int) -> int:
 	if _scorer == null:
 		_scorer = AutoDeck.new()
 	return roundi(0.5 * (_scorer.score(data) - float(middle[0])) / float(middle[1]))
+
+
+## A land's 1997 colour bits by its land types (swamp black, island blue,
+## forest green, mountain red, plains white), colourless without one.
+static func land_colors(data: CardData) -> int:
+	var bits := 0
+	for pair in [["swamp", 2], ["island", 4], ["forest", 8], ["mountain", 16], ["plains", 32]]:
+		if String(pair[0]) in data.subtypes:
+			bits |= int(pair[1])
+	return bits if bits != 0 else COLORLESS
 
 
 ## The 1997 colour bits of a card of colour mask [param mask]
@@ -383,13 +447,23 @@ static func goes_with(card_bits: int, tile_bits: int, level: int) -> bool:
 static func buy_price(data: CardData, site_type: int, tile_bits: int) -> int:
 	var f := facts(data)
 	var value := price_of(f) * (site_type + 2)
-	var color := int(f.get("color", COLORLESS))
-	if tile_bits & color == 0:
-		if color != 0 and goes_with(tile_bits, color, 3):
-			value = value * 3 / 2
-		else:
-			value *= 2
+	value = land_markup(value, int(f.get("color", COLORLESS)), tile_bits)
 	return clampi(_div(value, 50) * 5, 5, 1000)
+
+
+## THE LAND'S COLOUR ON A PRICE — a town's (`RunTownBuyCardsScreen`) and
+## the Nomad's (`BuyAnyCardFromTown`, visitLocation.c 4054–4065): [param
+## value] for a card of colour [param card_bits] on land of colours
+## [param tile_bits] — as it is when the card is of a colour of the land;
+## else half again when its colour goes with the land's (a colourless card
+## always does), twice otherwise (a card of no colour at all too: the
+## program's Oasis, Bazaar of Baghdad).
+static func land_markup(value: int, card_bits: int, tile_bits: int) -> int:
+	if tile_bits & card_bits != 0:
+		return value
+	if card_bits != 0 and goes_with(tile_bits, card_bits, 3):
+		return value * 3 / 2
+	return value * 2
 
 
 ## WHAT A TOWN PAYS for [param data] (`SellPrice`).

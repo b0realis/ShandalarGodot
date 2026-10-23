@@ -613,6 +613,134 @@ more! Maybe we can design a better option?"*
   ×3.3 per pump, 253 for artifacts, ×2 uncommon). The structure's
   constants are right; only the type defaults moved.
 
+## Built: part A — the towns' life (2026-10-23)
+
+The owner: *"Yes do the A and do it with quality and meticulously —
+implement features in code modularly so they can easy be reused and
+accessed and that are commented and structured to be humanly readable!"*
+Rulings: the world's sound *"Soundscape + title music"*, the saves *"Add 10
+named slots"*, the wise man's two dead gifts *"Enable them"*.
+
+- **Status bits** (`status_and_ruling_wizard`): 0x01 the mana link, 0x02
+  visited, 0x04 a failed quest (the wise man refuses for good), 0x08
+  1997's shop stocked, 0xFF00 the ruler; 0x10–0x80 unused in 1.3. All read
+  and written through `TownStatus`. The generator's "unread" bit on the
+  first ten towns and cities is the hero's ten starting links; the duel's
+  life is the count of linked, unruled towns and cities
+  (`CountDuelPoolEligibleTowns`). `AdventurePlayer.mana_links` the array
+  is gone (old saves' sites already carry the bit).
+- **Quests** (`Quests`'s doc): deliveries built — letters for a link or an
+  amulet, cards of a colour and class; generation only on a visit to a town
+  other than the last; `(d + 3) · 16` steps between a town's quests. The
+  creature branch (towns and cities always, a third of villages) waits for
+  creatures: no offer there yet. Ours: the giver, the offer, the last
+  town, each town's quest time and the wise man's stage are saved (1997
+  kept them in memory); a card quest takes a card no deck holds first;
+  white's blank spell word mended; the failure keeps 1997's text and bit.
+- **The wise man** (`WiseMan`'s doc): the stages and odds of
+  `RunWisemanAdviceSequence`; tales and news from the player's
+  `Advblocks.txt` (`adventure_wise_words.json`); the six gifts by
+  `GIFTS[x % 2][y % 3]` (1997's four where it gave them, the companion and
+  the copy on the two places that gave lives and a clue again); the copy
+  only with three amulets, taken once a card is picked; the news fixed
+  (fair picks, the real castle life `max(20 + 5d + 10 − wins + towns · d,
+  5d + 20)`, the towns the wizard holds).
+- **World Magics** (`WorldMagicShop`): on leaving any town or city, the
+  nearest unowned World Magic (2·max + min, ties to the lower index): an
+  advert ("Travel West to …") or, in its town, the offer at half the table
+  (400, 500, 350, 100, 400, 750, 200, 250, 300, 150, 300, 600); bought, its
+  seller cleared and "Bought WM: %s" journaled. On `Worlbak1.pic`.
+- **The city list** (F3, `CityListPane`) and **the map** (F2, `WorldMap`):
+  on their own 1997 screens (`Cityinfo.pic`, `Infobar.pic`, `Mapback.pic`,
+  `Mapbttns.pic`, `Ttsprite.spr`), the layouts and inks as specified;
+  ours: the wheel, Escape closing the map, a black wizard's towns dark grey
+  (1997 drew them black on black), the map hides the panel while open,
+  and the journal walked on the map (1997's stats journal, map mode 4)
+  from the Hero pane's Journal tab.
+- **Town entry and leaving**: on arrival the quest completed, "Completed
+  quest at %s" or "Visited %s", the visited bit, the favoured colour, a
+  new quest if another town, the shop and the hint; on leaving, the last
+  town, the World Magic offer, `monster_timer |= 0x1F` and the autosave.
+- **Saves** (`SaveSlots`): `<id>.slot01`–`slot10.json` with their names
+  inside, the autosave as 1997's slot 3 (Resume); an older `.save.json`
+  becomes slot 1. Leaving, Exit and the window's close write the autosave.
+- **Sound** (`WorldSoundscape`): footsteps, calls, the places' tunes by
+  `clamp(128 − d, 0, 100)` (0.4 dB a step), clicks and stings, the title's
+  tune 12 dB under the world and 12 more under a place's tune at full
+  voice; the sounds' own dice (not the world's); calls let ring.
+- **Polish**: the quest clock (`Clocknew`, `Sunmoon`, `Daysnew`) and the
+  next duel's icons (`Worlds.spr` 56–59) on the quest pane; the reveal
+  dissolve (16-pixel squares, 0.6 s) on a new adventure, Leap of Fate and
+  Sword of Resistance; 1997's palette fades (8-bit modes only) left out.
+- **Also**: the Guardian's Ghost shows a creature's deck (`CreatureBook`,
+  `CardListPane`); every pane's look in one place (`PaneStyle`); the card
+  shop's price tags lit by rarity (black on white, silver, gold, purple —
+  the owner's).
+
+## Campaign: bugs, smoothness, robustness (2026-10-23)
+
+Owner: *"Implement the same 1997 here … it could only be edited in towns, or
+outdoors with Conjurer's Will ! And after do one bug-hunt and bug fix and
+smoothness of gameplay and robustness campaigns!"*
+
+- **The spellbook only looks** (`AdventureBuilder.looking`): 1997 opened
+  the builder three ways (`DeckBuilderMain(…, 1, flags)`): F1 with no card
+  moves (`adventure_input.c` 368), Conjurer's Will with moves (444), a
+  town's Edit deck/Sell cards with moves and selling (visitLocation.c
+  1030). [Ours: 1997's F1 cast Conjurer's Will itself when owned; here F1
+  only looks and the cast is the World Magic's own.]
+- **Six read-only hunters, seven fixers on disjoint files**; 62 findings
+  (5 HIGH: the shop's click freed its own card mid-signal; a trade paid
+  with amulets spent meanwhile; the hero stuck for good on a sea corner a
+  diagonal step had grazed; a failed save write destroyed the autosave;
+  saving inside a lair let it be entered again).
+- **Rulings** (the lead's, from 1997's modal town menu): a place's pane
+  is modal — the panel shows but waits (`WorldScreen.modal`, the
+  PaneShield, `WorldHud.rest`); the map is modal (its keys, Escape,
+  Ctrl+S); a lair is spent the moment it is entered (`WorldLairs.explored`
+  in `enter_lair`, before the autosave); M on the Main Map closes the map;
+  shops restock and the seller hints only in a town other than the last
+  (visitLocation.c 1685/1689); non-basic lands sold as 1997's flags allow
+  (Mishra's Factory, Strip Mine), basics only in the land place [ours]; the
+  journal stops at 10,000 lines [ours, owner "extend that"; 1997's
+  `AddJournalEntry` stopped at 2,000] — the record is counted from it, so
+  the oldest never go; the limit bounds a save's cost (~4 ms to save and
+  ~8 ms to load per thousand lines, measured).
+- **Saves**: written aside and renamed over, read back byte for byte, the
+  previous file kept as `.bak` and taken up when the save is damaged;
+  `from_dict` reads every field through typed readers; the lists cache by
+  path, size and hash; slot files read by name; the autosave carries no
+  slot name; a failed save is told, and Exit asks.
+- **Smoothness** (measured): towns 33 → 1.4 ms at 600 cards (deck counted
+  once), the first shop 131 → 30 ms (facts cached, pack cards skipped),
+  save/load lists 86 → 4 ms, the hero pane's food step 448 → 0.3 ms at
+  2,000 journal lines, the open map 0 paints a second when still (the
+  blinking hero is its own node), the adventure builder's later openings
+  83 → 55 ms (no whole-library first fill).
+
+- **After the campaign (owner, 2026-10-23)**: the journal's limit raised
+  to 10,000 lines; the first deck builder of a session warmed — its card
+  pictures decoded on a worker thread a second after the world opens
+  ([CardArtWarmer]; measured: the first F1 210 → 89 ms to open, its first
+  five frames 290 → 172 ms; later openings ~27 ms; the filter bar (22 ms)
+  and the builder's tune (20 ms) are still read on the first opening);
+  the adventure builder's sideboard strip became the worth strip (what
+  the card under the mouse sells for here, or the range out in the wilds;
+  the best price among places visited; copies owned, in the deck, to
+  sell). Then a bug pass (four read-only reviewers, r1-r4): 14 findings,
+  1 MED (look-only's side doors: the complaint line's Remove Extra Cards
+  and the artwork picker), 13 LOW — the warm's printing table off the main
+  thread and its cards in the builder's order; Undo/Restore after a sale;
+  the Sell button following the deck; Consolidate a view; the pointer read
+  where the land is drawn (`WorldView.unproject_drawn`); no pointer read
+  under a pane a walk's last step opened; a second Escape on the Load list
+  taken; the slot name box focused only while there; quests, offers, the
+  wise man and victories read by kind; the small map's culling box a slide
+  wider; the worth range over the lands the generator makes
+  (`ShandalarWorld.LANDS_MADE`). Each fix has a test that fails without
+  it. Found faithful, left: a starter deck may hold three of a spell
+  (1997 checks copies for creatures only), which the builder then flags.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -921,4 +1049,10 @@ said otherwise):
   bulk move and keeps it); they open the duel's `FullscreenCard`
   (`open_instance`); "Large card on right-click: on/off" in the options;
   the help says so.
+- **2026-10-23** — 0.50.52 committed and pushed (d75d43d), CI green. Owner:
+  "Yes do the A … quality and meticulously … modularly". Built (0.50.53):
+  "Built: part A — the towns' life".
+- **2026-10-23** — Owner: F1 as in 1997, then "one bug-hunt and bug fix and
+  smoothness of gameplay and robustness campaigns". Done in 0.50.53:
+  "Campaign: bugs, smoothness, robustness".
 

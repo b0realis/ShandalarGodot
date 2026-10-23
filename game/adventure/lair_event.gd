@@ -30,8 +30,8 @@ extends RefCounted
 ##    something else — a riddle answered gives its own rare instead; the
 ##    Hideout's and the Lost City's luck take it, their thieves leave
 ##    another.
-## The duels and the Ghost's decks come with the duels: their lairs say so,
-## and the waiting rare is given. [Ours: 1997 hung on any lair while the
+## The duels come with the duels: their lairs say so, and the waiting rare
+## is given. The Guardian's Ghost shows a deck ([CreatureBook]). [Ours: 1997 hung on any lair while the
 ## hero held no uncommon or rare card, looking for one to offer at the
 ## Oasis; here the Oasis offers none.]
 
@@ -65,7 +65,11 @@ const FOUND := "Found this card"
 ## The siege clock before thieves may win (`g_siege_timer < 0x80`).
 const SAFE_SIEGE := 128
 
+## Every card of the adventure ([method _cards]), and the card pool's
+## revision it was read against (−1: not yet) — read again when a pack is
+## turned on or off ([method CardValue.pool_moved]).
 static var _treasures: Array[Dictionary] = []
+static var _read_at := -1
 
 
 ## A LAIR BEGUN: what lair [param lair] (`{slot, color, …}`) holds, drawn
@@ -126,7 +130,7 @@ static func with_article(name: String) -> String:
 
 
 static func _gift_waiting(player: AdventurePlayer) -> bool:
-	return player.next_duel_card != "" or player.next_duel_life != 0 or player.next_duel_first_move
+	return player.duel_gift_waiting()
 
 
 # ------------------------------------------------------------ the events --
@@ -201,35 +205,11 @@ static func oasis_trade(player: AdventurePlayer, event: Dictionary) -> String:
 	return "Your %s is traded for five extra life in the next duel." % card_name
 
 
-## THE RUINED TOWER: a clue told — the castle or dungeon's slot whose clue
-## is now known, or −1 when none is left to tell of (a riddle then).
+## THE RUINED TOWER: a clue told ([method WorldClues.reveal_for_hint]) —
+## the castle or dungeon's slot whose clue is now known, or −1 when none is
+## left to tell of (a riddle then).
 static func ruined_tower(player: AdventurePlayer) -> int:
-	var dice := MsvcRandom.new(player.dice)
-	var world := player.world
-	var best := -1
-	var best_score := 0x7FFF
-	var hero := player.tile()
-	for i in mini(world.encounters.size(), 15):
-		var slot: Dictionary = world.encounters[i]
-		if (slot.get("cards", []) as Array).is_empty() or int(slot.get("clues", 0)) == 7:
-			continue
-		var far := WorldGenerator.distance(hero.x - int(slot.get("x", 0)), hero.y - int(slot.get("y", 0)))
-		var score := dice.below(far) + far / 2
-		if int(slot.get("rules", 0)) & 0x200 != 0:
-			score *= 3
-		if best_score > score:
-			best = i
-			best_score = score
-	if best >= 0:
-		var slot: Dictionary = world.encounters[best]
-		var clue := 0
-		while true:
-			clue = dice.below(3)
-			if int(slot.get("clues", 0)) & (1 << clue) == 0:
-				break
-		slot["clues"] = int(slot.get("clues", 0)) | (1 << clue)
-	player.dice = dice.state
-	return best
+	return WorldClues.reveal_for_hint(player)
 
 
 ## A riddle answered at event [param event]: a right answer at
@@ -301,10 +281,15 @@ static func _treasure(dice: MsvcRandom, color: int) -> String:
 	return found[dice.below(found.size())] if not found.is_empty() else ""
 
 
-## Every card of the adventure, once: `{name, facts, treasure}`.
+## Every card of the adventure, once for the card pool as it stands:
+## `{name, facts, treasure}`.
 static func _cards() -> Array[Dictionary]:
+	if CardValue.pool_moved(_read_at):
+		forget()
+	_read_at = CardRegistry.revision
 	if not _treasures.is_empty():
 		return _treasures
+	CardRegistry.ensure_loaded()
 	var held: Array[String] = []
 	for row in ShandalarWorld.DUNGEON_CARDS:
 		held.append(String(row[1]))
@@ -316,5 +301,7 @@ static func _cards() -> Array[Dictionary]:
 	return _treasures
 
 
+## Forget the cards (the card pool changed, a test).
 static func forget() -> void:
 	_treasures.clear()
+	_read_at = -1

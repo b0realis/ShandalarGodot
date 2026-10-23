@@ -8,28 +8,41 @@ extends RefCounted
 ## imported into the skin (`adventure_hints.json`,
 ## `tools/import_original.py`) — without it the seller says nothing.
 ##
-## On a visit to a town, once its cards are drawn, each card on offer is
-## matched to the hints of the difficulty played: the card is one of a
+## On a visit to a town other than the last one ([member
+## AdventurePlayer.last_town]), once its cards are drawn, each card on offer
+## is matched to the hints of the difficulty played: the card is one of a
 ## pair whose other card the hero owns, the two not both owned already. One
 ## card with a hint is drawn, and one of its hints: the button reads "Buy
 ## Cards/Card Hints" and the shop shows "The card seller suggests: “If you
 ## combine this Fungusaur with the Prodigal Sorcerer you already have, you
-## can: …”". [Ours, three 1.3 slips mended: its two hints for a single card
-## (the seller "notes" what the card does, when the hero owns a land of its
-## colour) were found and then lost, never shown; the hint stayed after its
-## card was bought; and a second visit to the same town in a row gave none.]
+## can: …”". A hero who steps straight back into the town last visited
+## hears none: 1997 cleared the hint on every visit (visitLocation.c 1685)
+## and drew one only in another town than the last (1689, 1870), with the
+## shop's cards. [Ours, two 1.3 slips mended: its two hints for a single
+## card (the seller "notes" what the card does, when the hero owns a land
+## of its colour) were found and then lost, never shown; and the hint
+## stayed after its card was bought.]
+##
+## The hints name cards by the card pool's names ([method
+## CardValue.engine_name]): they are read again when the pool changes (a
+## pack turned on or off, [method CardValue.pool_moved]).
 
 const SUGGESTS := "The card seller suggests: “If you combine this %s with the %s you already have, you can: %s”"
 const NOTES := "The card seller notes: “If you buy this %s, you can: %s”"
 
 static var _hints: Array = []
 static var _read := false
+## The card pool's revision the hints were read against (−1: not yet).
+static var _read_at := -1
 
 
 ## The hints imported: `{first, second, levels, text}` (`second` "" for a
 ## single card; `levels` the difficulties, bit 0 Apprentice … bit 3
 ## Wizard).
 static func hints() -> Array:
+	if CardValue.pool_moved(_read_at):
+		forget()
+	_read_at = CardRegistry.revision
 	if not _read:
 		_read = true
 		_hints = []
@@ -46,19 +59,21 @@ static func hints() -> Array:
 	return _hints
 
 
-## Forget the hints (a skin imported again, a test).
+## Forget the hints (a skin imported again, the card pool changed, a test).
 static func forget() -> void:
 	_hints = []
 	_read = false
+	_read_at = -1
 
 
 ## THE HINT FOR THIS VISIT to town [param slot], drawn from its cards on
 ## offer ([method CardShop.offers]) and kept with the shop (`hint`: `{card,
-## text}`), or none.
+## text}`), or none — none at all, and no dice drawn, back in the town
+## last visited.
 static func arrive(player: AdventurePlayer, slot: int) -> void:
 	var shop: Dictionary = player.shops.get(str(slot), {})
 	shop.erase("hint")
-	if hints().is_empty():
+	if player.last_town == slot or hints().is_empty():
 		return
 	var offers := CardShop.offers(player, slot)
 	shop = player.shops[str(slot)]

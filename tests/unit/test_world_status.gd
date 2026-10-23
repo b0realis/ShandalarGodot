@@ -38,14 +38,17 @@ func test_the_quest_s_days_and_words() -> void:
 	assert_eq(WorldStatus.lines(player), [] as Array[String], "nothing calls")
 	player.quest_timer = 40
 	player.quest = {"type": 1, "destination": 0, "color": 4, "data": 2, "deadline": 40 + 40 * 2 - 1,
-		"giver": 1, "card_class": "Creature"}
+		"giver": 1}
 	assert_eq(WorldStatus.days_left(player), 5, "a card quest's 79 steps: 5 days, 16 steps a day")
 	var called := WorldNames.site_name(player.world, 0)
-	assert_eq(WorldStatus.quest_lines(player), ["Go South to " + called, "Find a red creature spell",
-		"Reward: Mana Link and an amulet", "5 days left"] as Array[String])
-	player.quest["turned"] = true
-	player.quest["card_found"] = true
-	assert_eq(WorldStatus.quest_lines(player)[0], "Take card to " + called)
+	player.cards.clear()
+	assert_eq(WorldStatus.quest_lines(player), ["Find a red Land spell",
+		"Reward: Mana Link and an amulet", "5 days left"] as Array[String],
+		"slot 0 asks a land (slot & 3); not held yet: what to find, as 1997 said it")
+	player.cards.append({"card": "Mountain", "decks": []})
+	assert_eq(WorldStatus.quest_lines(player)[0], "Go South to " + called, "held: the way")
+	player.quest["data"] = -1
+	assert_eq(WorldStatus.quest_lines(player)[0], "Take card to " + called, "turned off it: what to do")
 	player.quest_timer = 40 + 64
 	assert_eq(WorldStatus.days_left(player), 1, "the last day")
 	assert_eq(WorldStatus.check_quest(player), "", "still running")
@@ -55,8 +58,8 @@ func test_the_quest_s_days_and_words() -> void:
 	assert_true(player.quest.is_empty())
 	assert_eq(String(player.journal[-1]["event"]), "quest")
 	# A creature to defeat; beaten, back to the giver.
-	player.quest = {"type": -12, "destination": 0, "giver": 1, "creature": "Ogre", "deadline": 999}
-	assert_eq(WorldStatus.quest_lines(player)[0], "Defeat Ogre")
+	player.quest = {"type": -1, "destination": 0, "giver": 1, "deadline": 999}
+	assert_eq(WorldStatus.quest_lines(player)[0], "Defeat a Witch", "the creature with its article")
 	player.quest["type"] = -112
 	assert_eq(WorldStatus.quest_target(player), 1)
 	assert_eq(WorldStatus.quest_lines(player)[0], "Return to Amanaxis Village")

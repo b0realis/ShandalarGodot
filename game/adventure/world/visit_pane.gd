@@ -11,8 +11,8 @@ extends PanelContainer
 ##  - A VILLAGE, TOWN OR CITY (`VisitTownSlot` 004eda50,
 ##    `RunTownServicesMenu` 004ef1ea): `Village.pic` or `City.pic`, the
 ##    name on it, and the five choices of `@CITYSCREEN_BUTTONS` — Buy
-##    Cards, Edit deck/Sell cards, Speak to Wise Man (towns and cities
-##    "Begin a Quest" when one is offered), Buy 10 food for (type + 2) × 5
+##    Cards, Edit deck/Sell cards, Speak to Wise Man (or the town's trade,
+##    or "Begin a Quest" — see below), Buy 10 food for (type + 2) × 5
 ##    gold, Leave the village.
 ##  - A TOWN A WIZARD RULES (its status's high byte): the same picture and
 ##    "This place is ruled by the %s." — "To free the city you must duel
@@ -27,34 +27,42 @@ extends PanelContainer
 ##  - A DUNGEON whose clues are known: 1997 opened straight onto the
 ##    dungeon board (`CaveBkgd.pic`); here its ground shows under the name.
 ## Buy Cards opens the town's card shop ([CardShopPane]) — "Buy Cards/Card
-## Hints" when the seller has a hint ([CardHints]); a town's trade, "Trade
-## red amulet for Any creatures", stands where the wise man is while it is
-## offered ([CardTrade]), and opens the card trader ([CardTradePane]). A
-## lair's own pane ([LairPane]) changes its words, choices and the card
-## shown as its event goes ([method say], [method offer], [method
-## show_card]). What is not made yet — the wise man and his quests, the
-## duels for a ruled town and a castle, the dungeon board — is shown and
-## waits, said in one line. Without the 1997 pictures the place is a plain
-## dark field under its name.
+## Hints" when the seller has a hint ([CardHints]). The fifth choice is, as
+## 1997 ordered it: a town's trade, "Trade red amulet for Any creatures",
+## while it is offered ([CardTrade], the card trader [CardTradePane]); else
+## "Begin a Quest" while the town has one to give ([Quests] — for now only a
+## village draws one: the creature quests of towns and cities come with the
+## duels); else "Speak to Wise Man" ([WiseMan], [WiseManPane]). A lair's own pane ([LairPane]) and
+## the wise man's change their words, choices and the card shown as they go
+## ([method say], [method offer], [method show_card]; "Whose deck would you
+## like to see?", [method ask_whose_deck]). What is not made yet — the duels
+## for a ruled town and a castle, the dungeon board — is shown and waits,
+## said in one line. Without the 1997 pictures the place is a plain dark
+## field under its name.
+##
+## [QoL] The pane stays on the screen: the picture gives way when the
+## choices need the room ("Whose deck would you like to see?" adds a dozen
+## creatures) and grows back as they go ([method _fit]).
 
 ## The hero leaves the place; [param then] what they chose to do next
 ## (`""`, `deck` for Edit deck, `shop` for Buy Cards, `trade` for the
-## town's trade).
+## town's trade, `quest` for Begin a Quest, `wiseman` for the wise man).
 signal left(then: String)
+## A creature's deck is to be seen ([CreatureBook] row [param index]).
+signal deck_wanted(index: int)
 ## The card shown over the picture right-clicked, to be read full screen
 ## ([method WorldScreen.read_card]).
 signal card_read(card_name: String)
 
-const GOLD := Color8(232, 190, 110)
-const INK := Color8(236, 222, 196)
-const DIM := Color8(160, 146, 128)
-const LIT := Color8(255, 236, 170)
-const EDGE := Color8(20, 10, 8)
-## The 1997 picture's size, and the most it is grown to.
+## The 1997 picture's size, the most it is grown to and the least it is
+## shrunk to.
 const PICTURE := Vector2(512, 280)
 const MOST := 1.5
+const LEAST := 0.6
 const KINDS := ["village", "town", "city"]
-const COMING := "The wise man and his quests, the duels and the dungeons come next."
+const COMING := "The duels and the dungeons come next."
+## The room kept free above and below a pane on the screen, in all.
+const ROOM_MARGIN := 32.0
 
 var player: AdventurePlayer
 ## What is visited ([method describe]).
@@ -68,6 +76,11 @@ var _card: CardPreview
 var _card_name := ""
 ## The picture's width on the screen: the words wrap to it.
 var _width := PICTURE.x
+## The picture's size now, times the 1997 size ([method _set_grow]), and the
+## most it may be: what the screen allowed beside the place's own words.
+var _grow := 1.0
+var _most := 1.0
+var _art: TextureRect
 
 
 # ------------------------------------------------------------ the place --
@@ -121,11 +134,10 @@ static func food_price(kind: int) -> int:
 
 
 static func _town(hero: AdventurePlayer, slot: int, kind: int) -> Dictionary:
-	var site: Dictionary = hero.world.sites[slot]
 	var name := WorldNames.site_name(hero.world, slot)
 	var picture := "visit_village" if kind == ShandalarWorld.VILLAGE else "visit_city"
-	var ruler := (int(site["status"]) >> 8) & 0xFF
-	if ruler >= 1 and ruler <= 5:
+	var ruler := TownStatus.ruler(hero.world, slot)
+	if ruler != 0:
 		var wizard: String = WorldNames.WIZARDS[ruler - 1]
 		return {"kind": "ruled", "slot": slot, "name": name, "subtitle": "Ruled by the " + wizard,
 			"picture": picture,
@@ -135,8 +147,11 @@ static func _town(hero: AdventurePlayer, slot: int, kind: int) -> Dictionary:
 	var price := food_price(kind)
 	var buy := "Buy Cards/Card Hints" if not CardHints.current(hero, slot).is_empty() else "Buy Cards"
 	var trade := CardTrade.town_offer(hero, slot)
-	var fourth: Array = ["trade", String(trade["words"]), true] if not trade.is_empty() \
-		else ["wiseman", "Speak to Wise Man", false]
+	var fourth: Array = ["wiseman", "Speak to Wise Man", true]
+	if not trade.is_empty():
+		fourth = ["trade", String(trade["words"]), true]
+	elif Quests.offered(hero, slot):
+		fourth = ["quest", "Begin a Quest", true]
 	return {"kind": KINDS[clampi(kind - 1, 0, 2)], "slot": slot, "name": name,
 		"subtitle": KINDS[clampi(kind - 1, 0, 2)].capitalize(), "picture": picture,
 		"lines": [] as Array[String],
@@ -178,30 +193,22 @@ static func _lair(lair: Dictionary) -> Dictionary:
 func _ready() -> void:
 	name = "VisitPane"
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var face := StyleBoxFlat.new()
-	face.bg_color = Color(0.05, 0.03, 0.03, 0.92)
-	face.border_color = Color(GOLD, 0.6)
-	face.set_border_width_all(1)
-	face.set_corner_radius_all(10)
-	face.set_content_margin_all(14)
-	add_theme_stylebox_override("panel", face)
+	add_theme_stylebox_override("panel", PaneStyle.glass())
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(column)
-	var title := _label(String(place.get("name", "")), 26, GOLD)
+	var title := PaneStyle.title(String(place.get("name", "")))
 	title.name = "PlaceName"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_outline_color", EDGE)
-	title.add_theme_constant_override("outline_size", 4)
 	column.add_child(title)
-	var subtitle := _label(String(place.get("subtitle", "")), 15, DIM)
+	var subtitle := PaneStyle.label(String(place.get("subtitle", "")), 15, PaneStyle.DIM)
 	subtitle.name = "PlaceKind"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(subtitle)
 	column.add_child(_picture())
 	var words: Array = place.get("lines", [])
-	_said = _label("\n".join(words), 17, INK)
+	_said = PaneStyle.label("\n".join(words), 17, PaneStyle.INK)
 	_said.name = "PlaceWords"
 	_said.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -219,13 +226,15 @@ func _ready() -> void:
 	_choices.add_theme_constant_override("v_separation", int(6 * k))
 	_choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_choices)
-	_note = _label("", 14, DIM)
+	_note = PaneStyle.label("", 14, PaneStyle.DIM)
 	_note.name = "Note"
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_note.custom_minimum_size = Vector2(_width, 0)
 	column.add_child(_note)
 	_fill_choices()
+	# Each time the pane's parts are laid out anew, the picture is fitted.
+	minimum_size_changed.connect(_fit)
 
 
 ## The picture, as large as the screen allows up to [constant MOST] times
@@ -235,7 +244,7 @@ func _picture() -> Control:
 	frame.name = "Picture"
 	var rim := StyleBoxFlat.new()
 	rim.bg_color = Color(0.02, 0.015, 0.015, 1.0)
-	rim.border_color = Color(GOLD, 0.7)
+	rim.border_color = Color(PaneStyle.GOLD, 0.7)
 	rim.set_border_width_all(2)
 	rim.set_corner_radius_all(4)
 	rim.set_content_margin_all(2)
@@ -246,37 +255,62 @@ func _picture() -> Control:
 	# The rest of the pane: the name, the choices, a line of note and the
 	# place's own lines.
 	var rest := (250.0 + 24.0 * (place.get("lines", []) as Array).size()) * k
-	var grow := clampf(minf((room.x - 120.0) / PICTURE.x, (room.y - rest) / PICTURE.y), 0.6, MOST)
-	var art := TextureRect.new()
-	art.name = "Art"
-	art.texture = GameSkin.texture(String(place.get("picture", "")))
-	art.custom_minimum_size = PICTURE * grow
-	_width = PICTURE.x * grow
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	frame.add_child(art)
+	_most = clampf(minf((room.x - 120.0) / PICTURE.x, (room.y - rest) / PICTURE.y), LEAST, MOST)
+	_art = TextureRect.new()
+	_art.name = "Art"
+	_art.texture = GameSkin.texture(String(place.get("picture", "")))
+	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(_art)
 	# A card shown over the picture's right side (a lair's find, a riddle's
 	# answer), as 1997 showed it over the place.
 	var holder := Control.new()
 	holder.name = "CardHolder"
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	art.add_child(holder)
+	_art.add_child(holder)
 	_card = CardPreview.new()
 	_card.name = "ShownCard"
 	_card.docked = true
 	_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	_card.gui_input.connect(func(input: InputEvent) -> void:
-		if CardShopPane._right_click(input) and _card_name != "":
+		if PaneStyle.right_click(input) and _card_name != "":
 			card_read.emit(_card_name))
+	_card.visible = false
+	holder.add_child(_card)
+	_set_grow(_most)
+	return frame
+
+
+## The picture at [param grow] times the 1997 size: the words, the choices
+## and the note wrap to its width, the card over it is fitted to it.
+func _set_grow(grow: float) -> void:
+	_grow = grow
+	_width = PICTURE.x * grow
+	_art.custom_minimum_size = PICTURE * grow
+	for part: Control in [_said, _choices, _note]:
+		if part != null:
+			part.custom_minimum_size.x = _width
 	var fit := PICTURE.y * grow * 0.88 / CardPreview.SIZE.y
 	_card.scale = Vector2(fit, fit)
 	_card.position = Vector2(PICTURE.x * grow - CardPreview.SIZE.x * fit - 16.0 * grow,
 		(PICTURE.y * grow - CardPreview.SIZE.y * fit) / 2.0)
-	_card.visible = false
-	holder.add_child(_card)
-	return frame
+
+
+## THE PANE KEPT ON THE SCREEN, each time its parts are laid out anew: the
+## picture gives way when the pane would be taller than the screen less
+## [constant ROOM_MARGIN], and grows back, up to what the place's own words
+## allowed, as the choices go. A new width wraps the words and the choices
+## anew, so the pane is laid out again and looked at again until it holds.
+func _fit() -> void:
+	if not is_inside_tree() or _art == null:
+		return
+	var room := get_viewport_rect().size.y - ROOM_MARGIN
+	var rest := get_combined_minimum_size().y - _art.custom_minimum_size.y
+	var grow := clampf((room - rest) / PICTURE.y, LEAST, _most)
+	if absf(grow - _grow) * PICTURE.y >= 1.0:
+		_set_grow(grow)
 
 
 func picture_key() -> String:
@@ -290,14 +324,12 @@ func has_picture() -> bool:
 
 func _fill_choices() -> void:
 	# Out now, freed after: the button pressed may be the one replaced.
-	for child in _choices.get_children():
-		_choices.remove_child(child)
-		child.queue_free()
+	PaneStyle.drop_children(_choices)
 	var waiting := false
 	for action in place.get("actions", []):
 		var choice := _button(String(action[1]), String(action[0]))
 		choice.disabled = not bool(action[2])
-		if String(action[0]) in ["wiseman", "duel", "enter"]:
+		if String(action[0]) in ["duel", "enter"]:
 			waiting = true
 		_choices.add_child(choice)
 	_note.text = COMING if waiting else ""
@@ -334,6 +366,20 @@ func shown_card() -> String:
 	return _card_name
 
 
+## "Whose deck would you like to see?" (`@LAIR` 17): a choice for each
+## creature of [param color] (1 black … 5 white, [method
+## CreatureBook.of_color]) and Never mind.
+func ask_whose_deck(color: int) -> void:
+	var lines: Array = (place.get("lines", []) as Array).duplicate()
+	lines.append("Whose deck would you like to see?")
+	say(lines)
+	var actions: Array = []
+	for index in CreatureBook.of_color(color):
+		actions.append(["deck_%d" % index, CreatureBook.name_of(index), true])
+	actions.append(["leave", "Never mind.", true])
+	offer(actions)
+
+
 func words() -> String:
 	return _said.text if _said != null and _said.visible else ""
 
@@ -349,6 +395,10 @@ func choose(action: String) -> void:
 			left.emit("shop")
 		"trade":
 			left.emit("trade")
+		"quest":
+			left.emit("quest")
+		"wiseman":
+			left.emit("wiseman")
 		"food":
 			var kind := int(player.world.sites[int(place["slot"])]["type"])
 			var price := food_price(kind)
@@ -361,6 +411,9 @@ func choose(action: String) -> void:
 			# purse can buy no more.
 			(_choices.get_node("Choice_food") as Button).disabled = player.gold < price
 			_note.text = "You buy 10 food: %d food, %d gold left." % [player.food, player.gold]
+		_:
+			if action.begins_with("deck_"):
+				deck_wanted.emit(int(action.trim_prefix("deck_")))
 
 
 func note() -> String:
@@ -374,50 +427,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _button(words: String, action: String) -> Button:
-	var choice := Button.new()
-	choice.name = "Choice_" + action
-	choice.text = words
-	choice.focus_mode = Control.FOCUS_NONE
-	var face := GameSkin.font("font_title")
-	if face != null:
-		choice.add_theme_font_override("font", face)
-	choice.add_theme_font_size_override("font_size", int(16 * k))
-	choice.add_theme_color_override("font_color", INK)
-	choice.add_theme_color_override("font_hover_color", LIT)
-	choice.add_theme_color_override("font_pressed_color", LIT)
-	choice.add_theme_color_override("font_disabled_color", Color(DIM, 0.6))
-	var rest := StyleBoxFlat.new()
-	rest.bg_color = Color(0, 0, 0, 0.35)
-	rest.border_color = Color(GOLD, 0.45)
-	rest.set_border_width_all(1)
-	rest.set_corner_radius_all(6)
-	rest.content_margin_left = 12 * k
-	rest.content_margin_right = 12 * k
-	rest.content_margin_top = 4 * k
-	rest.content_margin_bottom = 4 * k
-	var lit := rest.duplicate() as StyleBoxFlat
-	lit.bg_color = Color(GOLD, 0.22)
-	var off := rest.duplicate() as StyleBoxFlat
-	off.border_color = Color(GOLD, 0.15)
-	choice.add_theme_stylebox_override("normal", rest)
-	choice.add_theme_stylebox_override("hover", lit)
-	choice.add_theme_stylebox_override("pressed", lit)
-	choice.add_theme_stylebox_override("disabled", off)
-	choice.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var choice := PaneStyle.button(words, "Choice_" + action, k)
+	# A town's choices click as 1997's town icons did (`Button.wav`).
+	choice.pressed.connect(func() -> void: WorldSoundscape.play_from(self, "sfx_button"))
 	choice.pressed.connect(choose.bind(action))
 	return choice
-
-
-func _label(text: String, size: int, color := INK) -> Label:
-	var label := Label.new()
-	label.text = text
-	var face := GameSkin.font("font_title")
-	if face != null and size >= 15:
-		label.add_theme_font_override("font", face)
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return label

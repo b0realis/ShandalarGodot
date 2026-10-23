@@ -22,6 +22,16 @@ extends VBoxContainer
 ##    (`@LOGSTRINGS`); 1997 walked it on the map.
 ## The counts are read from the journal as 1997 rebuilt them
 ## (`RebuildStatsJournalCounts`, [method record]).
+##
+## The floating panel asks for the page again whenever what it shows
+## changes ([method WorldHud.refresh]) — food drops every few steps. The page
+## is built anew only when what it is built from has changed ([method
+## _shape]); otherwise the Hero page's numbers are written again where they
+## stand and the journal takes only its new lines, on top. The journal's
+## lines are made a hundred at a time, older ones as the reader scrolls down
+## to them; a scroll outlives a rebuild ([method _scroll]): what is being
+## read stays where it is. (Built whole at every food step, a journal of
+## 2,000 lines took near half a second each time, and jumped to its top.)
 
 const TABS: Array[String] = ["Hero", "Wizards", "Journal"]
 const GOLD := Color8(232, 190, 110)
@@ -32,6 +42,15 @@ const DIM := Color8(160, 146, 128)
 const RECORD_INKS := [Color8(232, 70, 50), Color8(236, 150, 90), INK, Color8(150, 220, 120), Color8(110, 236, 140)]
 const PORTRAIT := Vector2(96, 118)
 const ICON := 26.0
+## The creature record's rows shown before it scrolls.
+const CREATURE_ROWS := 4
+## The journal's lines made at a time, and how near the end of those made,
+## in pixels, the reader comes before the next older ones are made.
+const JOURNAL_STEP := 100
+const JOURNAL_NEAR := 400.0
+
+## The journal is to be walked on the map ([method WorldMap.walk_journal]).
+signal journal_map_pressed
 
 var player: AdventurePlayer
 var art := WorldArt.new()
@@ -42,6 +61,22 @@ var tab := "Hero"
 var page_size := Vector2.ZERO
 var _tabs := {}
 var _page: VBoxContainer
+## The page's scrolls set aside during a rebuild, by name, for the new page
+## to take again ([method _scroll]).
+var _kept_scrolls := {}
+## What the page shown was built from ([method _shape]).
+var _built := ""
+## The Hero page's numbers by what they count (`gold`, `food`, `ankh`,
+## `book`, each amulet's colour, `road`), written again in place ([method
+## _fill_numbers]).
+var _numbers := {}
+## The journal's lines on the page, newest first; how many entries, counted
+## from the newest, they have gone through; the newest entry among them
+## (the journal's own Dictionary); the width they wrap at.
+var _journal: VBoxContainer
+var _journal_depth := 0
+var _journal_newest := {}
+var _journal_width := 0.0
 
 
 func _ready() -> void:
@@ -77,15 +112,47 @@ func show_tab(key: String) -> void:
 	refresh()
 
 
-## Build the page shown, as the hero now stands.
+## The page shown, as the hero now stands: built anew when what it is
+## built from has changed ([method _shape]); else the Hero page's numbers
+## written again in place, the journal's new lines put on top.
 func refresh() -> void:
 	if _page == null:
 		return
 	for key in _tabs:
 		(_tabs[key] as Button).set_pressed_no_signal(key == tab)
-	_clear_page()
 	if player == null:
+		_clear_page()
+		_drop_kept_scrolls()
+		_built = ""
 		return
+	if _shape() != _built:
+		_rebuild()
+	elif tab == "Hero":
+		_fill_numbers()
+	elif tab == "Journal" and not _journal_news():
+		_rebuild()
+
+
+## WHAT THE PAGE SHOWN IS BUILT FROM, beyond the numbers written in place
+## and the journal's new lines: the tab and the hero; on the Hero page the
+## journal (the record), the World Magics, the castles, the face and the
+## name; on the Wizards' page the taps toward Dominion.
+func _shape() -> String:
+	var parts: Array = [tab, player.get_instance_id()]
+	match tab:
+		"Hero":
+			parts.append_array([player.journal.size(), player.journal.back() if not player.journal.is_empty() else {},
+				player.world_magics, player.defeated_wizards, player.portrait, player.name, player.color,
+				player.difficulty, _castle_tries()])
+		"Wizards":
+			parts.append_array([WorldStatus.taps(player), WorldStatus.dominion(player), player.defeated_wizards,
+				player.owns("Ring of the Guardian")])
+	return str(parts)
+
+
+## The page built anew.
+func _rebuild() -> void:
+	_clear_page()
 	# EVERY TAB THE HERO TAB'S SIZE (the owner, 2026-10-23: *"Hero, wizards,
 	# journal should have the same size as hero pane so it does not switch
 	# size under the eyes"*): the Hero page is laid out first and measured,
@@ -101,11 +168,43 @@ func refresh() -> void:
 		"Journal":
 			_clear_page()
 			_journal_page()
+	_drop_kept_scrolls()
+	_built = _shape()
 
 
+## The page emptied: its parts taken away safely ([method PaneStyle.drop] —
+## the On the map button may be the one being pressed), its scrolls set
+## aside for the page built next ([method _scroll]).
 func _clear_page() -> void:
 	for child in _page.get_children():
-		child.free()
+		if child is ScrollContainer:
+			_page.remove_child(child)
+			_kept_scrolls[String(child.name)] = child
+		else:
+			PaneStyle.drop(child)
+
+
+## A SCROLL NAMED [param scroll_name] for the page being built: the one the
+## last page had by that name, emptied — so it is still scrolled where the
+## reader left it — or a new one. Not yet on the page.
+func _scroll(scroll_name: String) -> ScrollContainer:
+	var scroll := _kept_scrolls.get(scroll_name) as ScrollContainer
+	if scroll != null:
+		_kept_scrolls.erase(scroll_name)
+		PaneStyle.drop_children(scroll)
+		return scroll
+	scroll = ScrollContainer.new()
+	scroll.name = scroll_name
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	return scroll
+
+
+## The scrolls set aside that the new page did not take: gone, so a tab
+## opened again starts at its top.
+func _drop_kept_scrolls() -> void:
+	for scroll_name in _kept_scrolls:
+		PaneStyle.drop(_kept_scrolls[scroll_name])
+	_kept_scrolls.clear()
 
 
 # ------------------------------------------------------------- the record --
@@ -159,6 +258,7 @@ static func record_ink(won: int, lost: int) -> Color:
 # --------------------------------------------------------------- the hero --
 
 func _hero_page() -> void:
+	_numbers.clear()
 	var inks: Array = WorldHud.NAME_INKS.get(player.color, [INK, Color.BLACK])
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
@@ -194,8 +294,8 @@ func _hero_page() -> void:
 		player.difficulty_name(), AdventureSetup.difficulty_phrase(player.difficulty)], 14))
 	who.add_child(_carried())
 	who.add_child(_amulets())
-	who.add_child(_label("Days on the road %d · lairs explored %d · World seed %s" % [
-		WorldStatus.days_on_road(player), player.lairs_explored, player.world_seed_text], 13, DIM))
+	who.add_child(_number("road", 13, DIM))
+	_fill_numbers()
 	head.add_child(who)
 	_page.add_child(head)
 	_page.add_child(_caption("World Magics"))
@@ -227,22 +327,28 @@ func _hero_page() -> void:
 		list.name = "Creatures"
 		list.columns = 3
 		list.add_theme_constant_override("h_separation", 16)
+		list.add_theme_constant_override("v_separation", 4)
 		for creature in creatures:
 			var tally: Array = creatures[creature]
 			list.add_child(_label("%d/%d %s" % [tally[0], tally[1], creature], 14,
 				record_ink(int(tally[0]), int(tally[1]))))
 		# Many creatures fought: four rows show, the rest scroll, so the
 		# pane stays on the screen.
-		var rows := ceili(creatures.size() / 3.0)
-		if rows > 4:
-			var scroll := ScrollContainer.new()
-			scroll.name = "CreatureScroll"
-			scroll.custom_minimum_size = Vector2(0, 4 * 21)
-			scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		if ceili(creatures.size() / 3.0) > CREATURE_ROWS:
+			var scroll := _scroll("CreatureScroll")
 			scroll.add_child(list)
 			_page.add_child(scroll)
+			# Measured once on the page, where the rows have their letters.
+			scroll.custom_minimum_size = Vector2(0, _rows_height(list, CREATURE_ROWS))
 		else:
 			_page.add_child(list)
+
+
+## The height of the first [param rows] rows of [param grid], the gaps
+## between them counted: a row as tall as its first cell asks.
+func _rows_height(grid: GridContainer, rows: int) -> float:
+	var row := (grid.get_child(0) as Control).get_combined_minimum_size().y
+	return rows * row + (rows - 1) * grid.get_theme_constant("v_separation")
 
 
 ## Gold, food, mana links and the deck, on the frame's own painted tiles.
@@ -251,12 +357,6 @@ func _carried() -> HBoxContainer:
 	row.name = "Carried"
 	row.add_theme_constant_override("separation", 10)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var deck := 0
-	for card in player.cards:
-		if ((card as Dictionary).get("decks", []) as Array).has(player.current_deck):
-			deck += 1
-	var values := {"gold": str(player.gold), "food": str(player.food),
-		"ankh": str(player.mana_links.size()), "book": "%d/%d" % [deck, player.cards.size()]}
 	for key in WorldHud.STRIP:
 		var frame := GameSkin.texture("world_frame")
 		if frame != null:
@@ -266,7 +366,7 @@ func _carried() -> HBoxContainer:
 			row.add_child(_icon(cut, Vector2(WorldHud.FRAME_ICONS[key].size) * (ICON / WorldHud.FRAME_ICONS[key].size.y)))
 		else:
 			row.add_child(_label(WorldHud.STRIP_NAMES[key], 13, GOLD))
-		row.add_child(_label(values[key], 16))
+		row.add_child(_number(key, 16))
 	return row
 
 
@@ -285,8 +385,56 @@ func _amulets() -> HBoxContainer:
 			row.add_child(icon)
 		else:
 			row.add_child(_label(String(gem[0]).capitalize(), 13, GOLD))
-		row.add_child(_label(str(int(player.amulets.get(gem[0], 0))), 16))
+		row.add_child(_number(String(gem[0]), 16))
 	return row
+
+
+# ------------------------------------------------------------ the numbers --
+
+## The Hero page's numbers as the hero now stands, by what they count.
+func _number_values() -> Dictionary:
+	var deck := 0
+	for card in player.cards:
+		if ((card as Dictionary).get("decks", []) as Array).has(player.current_deck):
+			deck += 1
+	var values := {"gold": str(player.gold), "food": str(player.food),
+		"ankh": str(player.mana_links()), "book": "%d/%d" % [deck, player.cards.size()],
+		"road": "Days on the road %d · lairs explored %d · World seed %s" % [
+			WorldStatus.days_on_road(player), player.lairs_explored, player.world_seed_text]}
+	for gem in WorldHud.AMULETS:
+		values[String(gem[0])] = str(int(player.amulets.get(gem[0], 0)))
+	return values
+
+
+## A number of the Hero page, [param key] of [method _number_values]: a
+## label kept to be written in place ([method _fill_numbers]).
+func _number(key: String, size: int, color := INK) -> Label:
+	var number := _label("", size, color)
+	number.name = "Number_" + key
+	_numbers[key] = number
+	return number
+
+
+## THE NUMBERS WRITTEN AGAIN where they stand: the purse, the food, the
+## links, the deck, the amulets, the road — nothing else on the page is
+## touched.
+func _fill_numbers() -> void:
+	var values := _number_values()
+	for key in _numbers:
+		var number := _numbers[key] as Label
+		if is_instance_valid(number) and number.text != String(values[key]):
+			number.text = String(values[key])
+
+
+## How often each wizard's castle was entered, black to white.
+func _castle_tries() -> Array[int]:
+	var tries: Array[int] = []
+	for i in 5:
+		var entered := 0
+		if player.world != null and i < player.world.encounters.size():
+			entered = int(player.world.encounters[i].get("times_entered", 0))
+		tries.append(entered)
+	return tries
 
 
 ## The twelve World Magics: the five cast with an amulet on the top row,
@@ -343,10 +491,7 @@ func _castles() -> HBoxContainer:
 			cell.add_child(icon)
 		else:
 			cell.add_child(_label(WorldNames.CASTLES[i], 12, GOLD if beaten else DIM))
-		var tries := 0
-		if player.world != null and i < player.world.encounters.size():
-			tries = int(player.world.encounters[i].get("times_entered", 0))
-		var count := _label(str(tries), 13, INK)
+		var count := _label(str(_castle_tries()[i]), 13, INK)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(count)
 		row.add_child(cell)
@@ -392,24 +537,49 @@ func _wizards_page() -> void:
 func journal_lines() -> Array[String]:
 	var lines: Array[String] = []
 	for i in range(player.journal.size() - 1, -1, -1):
-		var entry := player.journal[i] as Dictionary
-		var text := String(entry.get("text", ""))
-		if text == "":
-			continue
-		var day := int(entry.get("day", -1))
-		lines.append(("Day %d: " % day if day >= 0 else "") + text.replace("\n", " "))
+		var line := journal_line(player.journal[i])
+		if line != "":
+			lines.append(line)
 	return lines
 
 
+## A journal entry as its line reads ("Day 3: …"); "" for one with no words.
+static func journal_line(entry: Dictionary) -> String:
+	var text := String(entry.get("text", ""))
+	if text == "":
+		return ""
+	var day := int(entry.get("day", -1))
+	return ("Day %d: " % day if day >= 0 else "") + text.replace("\n", " ")
+
+
+## Whether the journal holds a line to show.
+func _journal_written() -> bool:
+	for i in range(player.journal.size() - 1, -1, -1):
+		if String((player.journal[i] as Dictionary).get("text", "")) != "":
+			return true
+	return false
+
+
 func _journal_page() -> void:
-	var lines := journal_lines()
-	if lines.is_empty():
+	_journal = null
+	_journal_depth = 0
+	_journal_newest = {}
+	if not _journal_written():
 		_page.add_child(_label("Nothing written yet: what you do in Shandalar is kept here.", 14, DIM))
 		return
-	var scroll := ScrollContainer.new()
-	scroll.name = "Journal"
-	scroll.custom_minimum_size = Vector2(0, maxf(page_size.y, 120.0))
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# [Ours] 1997's journal was walked on the map, line by line: so it is.
+	var walk := Button.new()
+	walk.name = "JournalOnMap"
+	walk.text = "On the map"
+	walk.focus_mode = Control.FOCUS_NONE
+	_dress(walk)
+	walk.pressed.connect(func() -> void: journal_map_pressed.emit())
+	_page.add_child(walk)
+	var scroll := _scroll("Journal")
+	# The button above takes its height from the scroll: the pane keeps its
+	# size from tab to tab.
+	var taken := walk.get_combined_minimum_size().y + float(_page.get_theme_constant("separation"))
+	scroll.custom_minimum_size = Vector2(0, maxf(page_size.y - taken, 120.0))
 	# A long journal scrolls: the wheel, a finger, or this bar in gold.
 	var bar := scroll.get_v_scroll_bar()
 	bar.name = "JournalBar"
@@ -427,15 +597,76 @@ func _journal_page() -> void:
 	bar.add_theme_stylebox_override("grabber", grab)
 	bar.add_theme_stylebox_override("grabber_highlight", lit)
 	bar.add_theme_stylebox_override("grabber_pressed", lit)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 1)
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for line in lines:
-		var said := _label(line, 14)
-		said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		column.add_child(said)
-	scroll.add_child(column)
+	if not bar.value_changed.is_connected(_journal_scrolled):
+		bar.value_changed.connect(_journal_scrolled)
+	_journal = VBoxContainer.new()
+	_journal.name = "JournalLines"
+	_journal.add_theme_constant_override("separation", 1)
+	_journal.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_journal)
 	_page.add_child(scroll)
+	_journal_width = maxf(page_size.x - bar.custom_minimum_size.x - 4.0, 200.0)
+	_journal_newest = player.journal.back()
+	_journal_more()
+
+
+## A line of the journal, wrapped at the page's width — given its width at
+## once, it is wrapped once, not first at every word.
+func _journal_label(text: String) -> Label:
+	var said := _label(text, 14)
+	said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	said.custom_minimum_size = Vector2(_journal_width, 0)
+	return said
+
+
+## The next [constant JOURNAL_STEP] older lines, under those made.
+func _journal_more() -> void:
+	# New lines first, so the count from the newest still holds.
+	if not _journal_news():
+		return
+	var journal := player.journal
+	var made := 0
+	while made < JOURNAL_STEP and _journal_depth < journal.size():
+		_journal_depth += 1
+		var line := journal_line(journal[journal.size() - _journal_depth])
+		if line != "":
+			_journal.add_child(_journal_label(line))
+			made += 1
+
+
+## THE LINES WRITTEN SINCE, on top, newest first; the reader's place is
+## left as it is. False when the page is to be made anew: the newest line
+## made is no longer in the journal (another journal), or a first line has
+## been written.
+func _journal_news() -> bool:
+	if _journal == null or not is_instance_valid(_journal):
+		# Nothing written when the page was made: still nothing, or a first
+		# line to make the page for.
+		return not _journal_written()
+	var journal := player.journal
+	var since := journal.size() - 1
+	while since >= 0 and not is_same(journal[since], _journal_newest):
+		since -= 1
+	if since < 0:
+		return false
+	for i in range(since + 1, journal.size()):
+		var line := journal_line(journal[i])
+		if line != "":
+			var said := _journal_label(line)
+			_journal.add_child(said)
+			_journal.move_child(said, 0)
+	_journal_depth += journal.size() - 1 - since
+	_journal_newest = journal.back()
+	return true
+
+
+## The reader near the end of the lines made: the next older ones.
+func _journal_scrolled(value: float) -> void:
+	if _journal == null or not is_instance_valid(_journal) or _journal.get_parent() == null:
+		return
+	var bar := (_journal.get_parent() as ScrollContainer).get_v_scroll_bar()
+	if value + bar.page >= bar.max_value - JOURNAL_NEAR:
+		_journal_more()
 
 
 # --------------------------------------------------------------- the parts --

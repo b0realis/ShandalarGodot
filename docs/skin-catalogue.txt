@@ -288,6 +288,24 @@ THE ADVENTURE WORLD
     world_amulets.json                 cols 5, rows 1, frames 5, frame_width 12, frame_height 17
     world_frame.png                    1024 x 768 px, RGB
 
+  The F2 map's sheet (Ttsprite.spr): the terrain's 13-pixel diamonds in three
+  looks (frame look x 16 + terrain), then the places' icons (48 village, 49
+  town and city, 50 castle; 13 x 20).
+    world_map_tiles.png                208 x 80 px, RGBA
+    world_map_tiles.json               cols 16, rows 4, frames 54, frame_width 13, frame_height 20
+
+  The quest panel's sheets: the scroll (Questnew.spr), the pendulum clock
+  (Clocknew.spr, 8 frames), the sun and the moon (Sunmoon.spr, 14) and the
+  days left (Daysnew.spr, the numerals 0-5), 67 x 88.
+    quest_scroll.png                   474 x 115 px, RGBA
+    quest_scroll.json                  cols 2, rows 1, frames 2, frame_width 237, frame_height 115
+    quest_clock.png                    536 x 88 px, RGBA
+    quest_clock.json                   cols 8, rows 1, frames 8, frame_width 67, frame_height 88
+    quest_sunmoon.png                  938 x 88 px, RGBA
+    quest_sunmoon.json                 cols 14, rows 1, frames 14, frame_width 67, frame_height 88
+    quest_days.png                     402 x 88 px, RGBA
+    quest_days.json                    cols 6, rows 1, frames 6, frame_width 67, frame_height 88
+
   The places' pictures, shown in the world's visit pane as the hero arrives
   (512 x 280, painted whole with Advfac64.pic's palette): village
   (Village.pic) and city (City.pic), the wise man (Wiseman3.pic), the wizards'
@@ -313,6 +331,20 @@ THE ADVENTURE WORLD
     visit_news.png                     512 x 280 px, RGB
     visit_buycards.png                 512 x 280 px, RGB
     visit_dungeon.png                  640 x 480 px, RGB
+
+  The F2 map's own screen: its stone ground (map_ground, Mapback.pic) and its
+  buttons and amulet panel (map_buttons, Mapbttns.pic).
+    map_ground.png                     640 x 480 px, RGB
+    map_buttons.png                    640 x 480 px, RGB
+
+  The F3 city list's screen (Cityinfo.pic) and its Done and arrow buttons
+  (city_list_buttons, Infobar.pic).
+    city_list.png                      640 x 480 px, RGB
+    city_list_buttons.png              640 x 480 px, RGB
+
+  The World Magic seller's table as a town is left (Worlbak1.pic): the skull,
+  the candle and the crystal ball.
+    world_magic_seller.png             640 x 480 px, RGB
 
 THE DUEL TABLE
 --------------
@@ -661,6 +693,55 @@ SOUNDS
     sfx_land_blue_red.wav              22050 Hz 16-bit mono, 2.7 s
     sfx_land_red_white.wav             22050 Hz 16-bit mono, 2.6 s
 
+  The world's footsteps by the colour of the land, left and right
+  (Sound/Kwalkl.wav ... Wwalkr.wav).
+    sfx_step_black_left.wav            22050 Hz 16-bit mono, 0.4 s
+    sfx_step_black_right.wav           22050 Hz 16-bit mono, 0.3 s
+    sfx_step_blue_left.wav             22050 Hz 16-bit mono, 0.3 s
+    sfx_step_blue_right.wav            22050 Hz 16-bit mono, 0.3 s
+    sfx_step_green_left.wav            22050 Hz 16-bit mono, 0.3 s
+    sfx_step_green_right.wav           22050 Hz 16-bit mono, 0.3 s
+    sfx_step_red_left.wav              22050 Hz 16-bit mono, 0.2 s
+    sfx_step_red_right.wav             22050 Hz 16-bit mono, 0.2 s
+    sfx_step_white_left.wav            22050 Hz 16-bit mono, 0.2 s
+    sfx_step_white_right.wav           22050 Hz 16-bit mono, 0.2 s
+
+  The world's calls by the colour of the land: each colour's bird and its land
+  calls (Sound/Kbird1.wav, Kland1.wav, ...).
+    sfx_call_black_bird.wav            22050 Hz 16-bit mono, 1.2 s
+    sfx_call_black_land_1.wav          22050 Hz 16-bit mono, 2.1 s
+    sfx_call_black_land_2.wav          22050 Hz 16-bit mono, 0.7 s
+    sfx_call_blue_bird.wav             22050 Hz 16-bit mono, 2.3 s
+    sfx_call_blue_land_1.wav           22050 Hz 16-bit mono, 3.8 s
+    sfx_call_blue_land_2.wav           22050 Hz 16-bit mono, 3.1 s
+    sfx_call_green_bird.wav            22050 Hz 16-bit mono, 1.9 s
+    sfx_call_green_land_1.wav          22050 Hz 16-bit mono, 2.5 s
+    sfx_call_red_bird.wav              22050 Hz 16-bit mono, 1.3 s
+    sfx_call_red_land_1.wav            22050 Hz 16-bit mono, 10.4 s
+    sfx_call_white_bird.wav            22050 Hz 16-bit mono, 1.9 s
+    sfx_call_white_land_1.wav          22050 Hz 16-bit mono, 1.9 s
+
+  The world panel's click (Sound/Button2.wav).
+    sfx_click.wav                      22050 Hz 16-bit mono, 0.4 s
+
+  The World Magics' stings, by colour, played as an icon is clicked
+  (Sound/Blackwm.wav ... Whitewm.wav).
+    sfx_world_magic_black.wav          22050 Hz 16-bit stereo, 3.4 s
+    sfx_world_magic_blue.wav           22050 Hz 16-bit stereo, 2.3 s
+    sfx_world_magic_green.wav          22050 Hz 16-bit stereo, 2.0 s
+    sfx_world_magic_red.wav            22050 Hz 16-bit stereo, 3.3 s
+    sfx_world_magic_white.wav          22050 Hz 16-bit stereo, 2.9 s
+
+  A mana link made by a letter quest (Sound/Manalink.wav).
+    sfx_mana_link.wav                  22050 Hz 16-bit mono, 3.6 s
+
+  A letter quest's amulet reward (Sound/Reward.wav).
+    sfx_reward.wav                     22050 Hz 16-bit mono, 2.8 s
+
+  A lair's treasure, the thieves' gold, the Gemcutter's Guild
+  (Sound/Treasure.wav).
+    sfx_treasure.wav                   22050 Hz 16-bit stereo, 3.8 s
+
 MUSIC
 -----
 
@@ -757,5 +838,5 @@ MOVIES — movies/*.avi (optional)
 
 ------------------------------------------------------------------------------
 Generated by tools/skin_catalogue.py from the importer's manifest;
-229 named files, plus portraits/ and movies/ in original_skin.zip,
+275 named files, plus portraits/ and movies/ in original_skin.zip,
 and cardart/ in cardart.zip.

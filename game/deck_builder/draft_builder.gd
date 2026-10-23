@@ -16,9 +16,22 @@ func _ready() -> void:
 	# full-rect .tscn. Set offsets too or the editing surface remains 0×0.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	super._ready()
+	# The pool's own line, the last word of the opening, as
+	# [method DeckBuilderScreen._enter_sealed] says it.
+	_say("Sealed Deck — %s" % sealed.summary())
+
+
+## THE DEALT POOL GOES IN BEFORE THE FIRST FILL (adventure campaign fix
+## pass 2026-10-23, h5-10). Put in after `super._ready()`, as it was, it
+## came after the builder had filtered, sorted and drawn the whole library
+## (120 ms with every card pack on) and was then walked twice more. Here
+## the Inventory is filled once, by the screen's own first refresh, from
+## the pool. A fresh builder's deck is empty, so there is nothing for
+## `_enter_sealed`'s fresh start to clear.
+func _before_first_fill() -> void:
 	var pool := SealedPool.new()
 	pool.counts = draft_counts.duplicate()
-	_enter_sealed(pool, true)
+	_put_pool_in_force(pool)
 	deck.deck_name = "Booster Draft"
 	for button in _slot_buttons:
 		button.hide()
@@ -27,7 +40,6 @@ func _ready() -> void:
 	_dice_button.tooltip_text = "Your dealt pool is locked for this session."
 	_pool_button.disabled = true
 	_pool_button.tooltip_text = _dice_button.tooltip_text
-	refresh()
 
 
 # --- campaign 2026-10-12 f-deck: the dealt shelf and the draft's title ---

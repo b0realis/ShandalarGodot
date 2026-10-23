@@ -984,9 +984,8 @@ func matches_set(d: CardData) -> bool:
 	# retain the original set-code fallback for those callers.
 	if not CardRegistry.has_card(d.card_name):
 		return original_cards_on and set_on(d.set_code)
-	for code in CardRegistry.active_set_order():
-		if set_on(code) and CardRegistry.card_in_set(d.card_name, code,
-				completion_pack_on, original_cards_on):
+	for code in _sets_holding(d.card_name, completion_pack_on, original_cards_on):
+		if set_on(code):
 			return true
 	return false
 
@@ -1000,15 +999,104 @@ func preferred_printing(d: CardData) -> String:
 	if not CardRegistry.has_card(d.card_name):
 		return d.set_code
 	var first := ""
-	for code in CardRegistry.active_set_order():
-		if not set_on(code) or not CardRegistry.card_in_set(d.card_name, code,
-				completion_pack_on, original_cards_on):
+	for code in _sets_holding(d.card_name, completion_pack_on, original_cards_on):
+		if not set_on(code):
 			continue
 		if code == d.set_code:
 			return code
 		if first == "":
 			first = code
 	return first if first != "" else d.set_code
+
+
+# ------------------------------------- the tables kept for one registry load --
+# ADVENTURE CAMPAIGN FIX PASS 2026-10-23 (h5-10, round 2). With every card
+# pack on, one walk of the library through [method matches] cost 70 ms, 59
+# of it in [method matches_set] asking the registry, set by set, whether
+# each card is in it ([method CardRegistry.card_in_set] reads an expansion's
+# names as a list, so each ask is a search of hundreds of names) — and
+# every new builder sorted the library again ([method _pool_in_order]).
+# Both answers belong to the REGISTRY, not to the filter: they change only
+# when the registry is rebuilt (a pack switched on or off, a rescan), and
+# that moves [member CardRegistry.revision]. So both are kept at class
+# level, by card NAME and instance id — never a [CardData], the exit-time
+# rule [method CardRegistry.unload] states — and let go together when the
+# revision moves (the adventure's tables test the same thing with
+# [method CardValue.pool_moved]; the deck builder reads the registry itself
+# and leans on no adventure code).
+
+## [member CardRegistry.revision] the tables below were read against; −1
+## for none read yet.
+static var _tables_read_at := -1
+
+## THE SETS EACH NAME IS IN, one table per pair of source switches
+## (index `2 * completion + original`, null until first asked): name ->
+## the set codes [method CardRegistry.card_in_set] admits it to, in
+## [method CardRegistry.active_set_order]. [method matches_set] and
+## [method preferred_printing] walk a card's two or three sets instead of
+## asking about all twenty.
+static var _set_tables: Array = [null, null, null, null]
+
+## THE LIBRARY IN EACH SORT ORDER: [enum Sort] -> the order as indices
+## into the library array [member _library_ids] fingerprints, by the
+## instance ids of its cards in its own order. A builder's whole-library
+## Inventory sorts the same three thousand cards each opening; the next
+## builder's array of the same cards reads the order from here.
+static var _library_ids := PackedInt64Array()
+static var _library_orders: Dictionary = {}
+
+
+## Drop the tables when the registry has been rebuilt since they were read.
+static func _follow_registry() -> void:
+	if _tables_read_at != -1 and _tables_read_at != CardRegistry.revision:
+		_set_tables = [null, null, null, null]
+		_library_ids = PackedInt64Array()
+		_library_orders.clear()
+	_tables_read_at = CardRegistry.revision
+
+
+## The set codes, in display order, that hold [param card_name] under the
+## two source switches — exactly the codes for which [method
+## CardRegistry.card_in_set] answers true.
+static func _sets_holding(card_name: String, completion: bool, original: bool) -> PackedStringArray:
+	_follow_registry()
+	var index := (2 if completion else 0) + (1 if original else 0)
+	if _set_tables[index] == null:
+		_set_tables[index] = _read_set_table(completion, original)
+	return (_set_tables[index] as Dictionary).get(card_name, PackedStringArray())
+
+
+## ONE PASS PER SET, NOT ONE ASK PER CARD PER SET. [method
+## CardRegistry.card_in_set] can only admit a name to a set it is listed
+## in — an expansion's names, Pack 1's completed set lists
+## ([method CardRegistry.names_in_set] reads both) — or to the set it was
+## printed in ([member CardData.set_code]). So each set asks only about
+## those names, and the registry's own answer is what goes in the table:
+## the same codes, in the same order, as asking about every set
+## (`tests/ui/test_c3_f7_deck_filter_tables.gd` proves it on the whole
+## library under every switch).
+static func _read_set_table(completion: bool, original: bool) -> Dictionary:
+	var printed_in := {}
+	for card_name in CardRegistry.all_names():
+		var code := CardRegistry.get_card(card_name).set_code
+		if not printed_in.has(code):
+			printed_in[code] = []
+		(printed_in[code] as Array).append(card_name)
+	var table := {}
+	for code in CardRegistry.active_set_order():
+		var asked := {}
+		var candidates: Array = []
+		candidates.append_array(CardRegistry.names_in_set(code))
+		candidates.append_array(printed_in.get(code, []))
+		for card_name in candidates:
+			if asked.has(card_name):
+				continue
+			asked[card_name] = true
+			if CardRegistry.card_in_set(card_name, code, completion, original):
+				var codes: PackedStringArray = table.get(card_name, PackedStringArray())
+				codes.append(code)
+				table[card_name] = codes
+	return table
 
 
 ## Restore the shipped 897-name pool. Colour/type/search filters stay as
@@ -1205,6 +1293,11 @@ func apply(pool: Array) -> Array[CardData]:
 ## its pool array IN PLACE when the card packs change, and a reload that
 ## leaves the count alone (Pack 7, a pure reprint set, with Packs 2-4 on)
 ## kept serving the pre-reload [CardData] objects for good.
+##
+## A NEW FILTER over THE LIBRARY reads the order the last one sorted
+## ([member _library_orders], kept at class level for one registry load):
+## the same cards in the same array order sort to the same order, so the
+## next builder's Inventory is not sorted again (h5-10 round 2).
 var _order: Array[CardData] = []
 var _order_pool: Array = []
 var _order_mode := -1
@@ -1216,6 +1309,30 @@ func _pool_in_order(pool: Array) -> Array[CardData]:
 			and is_same(_order_pool, pool) \
 			and _order_registry == CardRegistry.revision:
 		return _order
+	# AND THE WHOLE LIBRARY'S ORDER IS KEPT ACROSS FILTERS (h5-10 round 2):
+	# a new builder's array of the same cards reads it from the table.
+	var library := _is_the_library(pool)
+	var indices: PackedInt32Array = _library_orders.get(sort_mode, PackedInt32Array()) \
+		if library else PackedInt32Array()
+	if indices.size() != pool.size():
+		indices = _sorted_indices(pool)
+		if library:
+			_library_orders[sort_mode] = indices
+	var out: Array[CardData] = []
+	out.resize(indices.size())
+	for i in indices.size():
+		out[i] = pool[indices[i]]
+	_order = out
+	_order_pool = pool
+	_order_mode = sort_mode
+	_order_registry = CardRegistry.revision
+	return out
+
+
+## [param pool] in [member sort_mode] order, as indices into it. The keys
+## are worked out once per card and compared as integers, the name
+## deciding a tie (see [method apply]).
+func _sorted_indices(pool: Array) -> PackedInt32Array:
 	var column: int = SORT_COLUMN.get(sort_mode, FACT_NAME)
 	var keyed: Array = []
 	keyed.resize(pool.size())
@@ -1223,20 +1340,39 @@ func _pool_in_order(pool: Array) -> Array[CardData]:
 		var facts := _facts_for(pool[i])
 		# Sort.NAME has no rank of its own; the name below decides it.
 		keyed[i] = [0 if column == FACT_NAME else int(facts[column]),
-			facts[FACT_NAME], pool[i]]
+			facts[FACT_NAME], i]
 	keyed.sort_custom(func(a: Array, b: Array) -> bool:
 		if a[0] != b[0]:
 			return a[0] < b[0]
 		return a[1] < b[1])
-	var out: Array[CardData] = []
-	out.resize(keyed.size())
+	var indices := PackedInt32Array()
+	indices.resize(keyed.size())
 	for i in keyed.size():
-		out[i] = keyed[i][2]
-	_order = out
-	_order_pool = pool
-	_order_mode = sort_mode
-	_order_registry = CardRegistry.revision
-	return out
+		indices[i] = keyed[i][2]
+	return indices
+
+
+## Is [param pool] THE LIBRARY — every registered card, in the same array
+## order as the one the kept orders index? A library-sized array in any
+## other order (or of other cards) becomes the library the table indexes
+## from now on, its orders sorted afresh. A smaller list — a sealed pool, a
+## test's two cards — is never the library and never touches the table.
+static func _is_the_library(pool: Array) -> bool:
+	_follow_registry()
+	if pool.size() != CardRegistry.size():
+		return false
+	var same := _library_ids.size() == pool.size()
+	if same:
+		for i in pool.size():
+			if (pool[i] as CardData).get_instance_id() != _library_ids[i]:
+				same = false
+				break
+	if not same:
+		_library_ids.resize(pool.size())
+		for i in pool.size():
+			_library_ids[i] = (pool[i] as CardData).get_instance_id()
+		_library_orders.clear()
+	return true
 
 
 ## Creatures first, lands last — how a decklist is written.

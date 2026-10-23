@@ -383,7 +383,7 @@ func test_the_floating_icons_show_what_the_hero_carries() -> void:
 		return ((hud.find_child(slot, true, false) as Node).find_child("Number", true, false) as Label).text
 	assert_eq(number.call("Strip_gold"), str(screen.player.gold))
 	assert_eq(number.call("Strip_food"), str(screen.player.food))
-	assert_eq(number.call("Strip_ankh"), "0", "no mana linked yet")
+	assert_eq(number.call("Strip_ankh"), "10", "the world's first ten towns and cities: ten mana links")
 	assert_eq(number.call("Strip_book"), "39/39", "a Magician's first deck, all of it in Deck 1")
 	for color in ["black", "blue", "green", "red", "white"]:
 		assert_eq(number.call("Amulet_" + color), str(int(screen.player.amulets[color])), color)
@@ -461,10 +461,11 @@ func test_the_round_buttons() -> void:
 	assert_false(screen.building(), "Done: the world again")
 	assert_eq(hud.notice(), "Deck 1: 39 cards")
 	AdventurePlayer.saves_folder = "user://adventure_tests_hud"
-	var path := screen.save_now()
-	assert_true(FileAccess.file_exists(path), "Save writes the adventure")
-	assert_true(path.ends_with(".save.json"), "beside its autosave")
+	var path := screen.save_into_slot(1, "Before the duel")
+	assert_true(FileAccess.file_exists(path), "a slot written")
+	assert_true(path.ends_with(".slot01.json"), "beside its autosave, slot 1")
 	assert_eq(hud.notice(), "Saved.")
+	assert_eq(String(SaveSlots.slots_of(screen.player.adventure_id)[0]["name"]), "Before the duel", "by its name")
 	DirAccess.remove_absolute(path)
 	AdventurePlayer.saves_folder = SAVES
 
@@ -482,15 +483,21 @@ func test_the_options() -> void:
 	for entry in WorldHud.OPTIONS:
 		words.append(option.call(entry[0]).text)
 	var on_off := func(on: bool) -> String: return "on" if on else "off"
-	assert_eq(words, ["Save", "Load", "Panel at the bottom", "Small map: on", "Quest pane: on",
+	assert_eq(words, ["Save", "Load", "City list (F3)", "Panel at the bottom", "Small map: on", "Quest pane: on",
 		"Guide arrows: on", "Place names: on", "Large card on right-click: on", "Big buttons: off", "Pace: as in 1997", "Music: " + on_off.call(_music),
 		"Sound: " + on_off.call(_sound), "Return to main menu", "Exit game"] as Array[String])
 	# Save.
 	AdventurePlayer.saves_folder = "user://adventure_tests_options"
 	(option.call("Save") as Button).pressed.emit()
 	assert_false(hud.options_shown(), "a choice closes the options")
-	var path := screen.player.save_path("save")
+	var slots := screen.find_child("SaveSlots", true, false) as SaveSlotsPane
+	assert_not_null(slots, "the ten slots")
+	assert_eq(slots.find_child("Slots", true, false).get_child_count(), 10)
+	var path := slots.save_into(2, "")
 	assert_true(FileAccess.file_exists(path), "Save writes the adventure")
+	assert_string_contains(slots.note(), "Saved to slot 2: Day 0 near", "a blank name: the day and the place")
+	slots.done.emit()
+	await get_tree().process_frame
 	DirAccess.remove_absolute(path)
 	AdventurePlayer.saves_folder = SAVES
 	# Load: the saves over the world; Back comes back to it.
@@ -560,7 +567,7 @@ func test_the_options() -> void:
 	(hud.buttons["Options"] as BaseButton).pressed.emit()
 	(option.call("Menu") as Button).pressed.emit()
 	assert_true(screen._leaving, "on the way to the title")
-	assert_true(FileAccess.file_exists(screen.player.save_path("save")), "saved as it left")
+	assert_true(FileAccess.file_exists(screen.player.save_path()), "autosaved as it left")
 	screen._leaving = false
 	# Exit game: saved, then the game ends.
 	hud.exit_pressed.disconnect(screen.exit_game)
@@ -782,13 +789,15 @@ func test_the_quest_pane_and_the_guides() -> void:
 	var town := towns[0]
 	var giver := towns[1]
 	var called := WorldNames.site_name(player.world, town)
-	player.quest = {"type": 0, "destination": town, "color": 2, "data": 1,
+	var there := Vector2i(int(player.world.sites[town]["x"]), int(player.world.sites[town]["y"]))
+	var way := WorldNames.quadrant(there.x - player.tile().x, there.y - player.tile().y)
+	player.quest = {"type": 0, "destination": town, "color": 2, "data": way,
 		"deadline": player.quest_timer + 32, "giver": giver}
 	screen.advance(HeroWalk.TICK)
 	assert_true(hud.quest_pane_shown(), "a quest: the pane")
 	var lines := func() -> String: return (hud.find_child("QuestLines", true, false) as Label).text
-	assert_eq(lines.call(), "Go East to %s\nReward: Mana Link\n3 days left" % called)
-	player.quest["turned"] = true
+	assert_eq(lines.call(), "Go %s to %s\nReward: Mana Link\n3 days left" % [WorldNames.DIRECTIONS[way], called])
+	player.quest["data"] = -1
 	hud.refresh()
 	assert_string_contains(lines.call(), "Take letter to " + called)
 	# The arrows: a ring on the place on the screen, an arrow when it is not.
@@ -848,7 +857,7 @@ func test_the_quest_pane_and_the_guides() -> void:
 	assert_eq(hud.notice(), "The people of %s are sorry their quest was not completed."
 		% WorldNames.site_name(player.world, giver))
 	assert_true(player.quest.is_empty(), "the quest is lost")
-	assert_ne(int(player.world.sites[giver]["status"]) & 0x10, 0, "the town gives no other")
+	assert_true(TownStatus.refuses_quests(player.world, giver), "the town gives no other (0x04)")
 
 
 ## F4, the frame's gate: what is known of the castles and the dungeons.

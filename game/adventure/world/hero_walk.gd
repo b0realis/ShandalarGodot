@@ -15,13 +15,27 @@ extends RefCounted
 ##  - with no food every pace is slower (the divisor two more, at most 4);
 ##  - every 32nd tick a walking hero eats one food (Fruit of Sustenance
 ##    gives two back in a forest) and the quest and siege clocks move on;
-##  - a step into the sea near a tile's middle is taken back.
+##  - a step into the sea near a tile's middle is taken back — [ours] only
+##    a step from land: a step out of the sea stands ([method _shore]).
 ##
 ## THE WAY IS OURS [QoL]: the original walked where a key or a click
 ## pointed, one of eight ways from the hero, and stopped at water. Here a
 ## click is a destination and the way there is found around the water,
 ## costed by the same pace (Godot's [AStarGrid2D]); the hero walks it tile
 ## middle to tile middle, which are always one of the eight ways apart.
+##
+## THE SEA'S CORNERS [ours]. A diagonal step north-east or south-west
+## between two land tiles stands for one tick on the corner of a third:
+## from (x, y) to (x + 1, y − 1) the hero passes (32 (x + 1), 32 y), which
+## is tile (x + 1, y) — often the sea, the way-finder cutting across the
+## coast's corners, and 16 units from that tile's middle, so the shore
+## rule lets it stand. A way planned on that tick (a click, or a game
+## taken up again from a save made then) once started on the sea tile and
+## its first step was taken back, every click again: the hero stood stuck
+## for good (found 2026-10-23). Now a way starts on the land the hero
+## stands by ([method _standing_tile]), only a step from land into the sea
+## is taken back, and a walker made for a hero off the land sets them back
+## on it ([method settle]) — which heals a save written before.
 ##
 ## NOT YET: the original draws dice each step for the footstep's sound and
 ## moves the roaming creatures and sieges on the same ticks; neither is
@@ -42,12 +56,41 @@ var player: AdventurePlayer
 var path: Array[Vector2i] = []
 ## The way walked this tick, 0–8 (`g_world_move_dir_index`).
 var heading := 0
+## Whether the last tick ran the move block (the pace's divisor allowed a
+## step this tick, walking or standing) — when 1997 played a footstep and
+## drew its colours' calls ([WorldSoundscape]).
+var stepped := false
 ## Where the walk goes: the last tile of its way, (-1, -1) for none.
 var destination := Vector2i(-1, -1)
+## THE WAY-FINDER'S GRID of the world's land and its costs, kept between
+## clicks (building it reads all 4,096 tiles: about 3 ms on a desk, 10 on
+## a handheld) and built again when what shapes it changes — the world,
+## Amulet of Swampwalk, Dwarven Pick ([method _grid_for]). A world's land
+## never changes once made, so the world itself is the key to it.
+var _grid: AStarGrid2D
+var _grid_key: Array = []
 
 
+## A walker for [param walker], set back on land if a save left them on
+## the sea ([method settle]).
 func _init(walker: AdventurePlayer = null) -> void:
 	player = walker
+	settle()
+
+
+## A HERO OFF THE LAND is set on the middle of the land tile nearest them
+## ([method _standing_tile]); true when they were moved. A save made while
+## the hero crossed a sea tile's corner, or one written while a hero stood
+## stuck on the sea (before the fix of 2026-10-23), is taken up again on
+## land. [ours]
+func settle() -> bool:
+	if player == null or player.world == null:
+		return false
+	var here := player.tile()
+	if player.world.is_land(here.x, here.y):
+		return false
+	player.position = _standing_tile() * 32 + Vector2i(16, 16)
+	return true
 
 
 func is_walking() -> bool:
@@ -74,8 +117,67 @@ func walk_to(target: Vector2i) -> bool:
 
 ## THE WAY from the hero's tile to [param target], the hero's tile first;
 ## [] when the hero cannot move at all. Sea and the map's edge are walls;
-## slow land costs [constant SLOW_COST], a road [constant ROAD_COST].
+## slow land costs [constant SLOW_COST], a road [constant ROAD_COST]. A
+## hero on a sea tile's corner starts from the land beside them
+## ([method _standing_tile]).
 func plan(target: Vector2i) -> Array[Vector2i]:
+	var grid := _grid_for()
+	var from := _standing_tile()
+	if not grid.is_in_boundsv(from):
+		return []
+	var goal := target.clamp(Vector2i.ZERO, Vector2i(ShandalarWorld.TILES - 1, ShandalarWorld.TILES - 1))
+	if grid.is_point_solid(goal):
+		goal = _nearest_land(goal)
+	# Only a world without land leaves the start in the sea; the grid is
+	# kept, so it is given back as it was.
+	var was_solid := grid.is_point_solid(from)
+	grid.set_point_solid(from, false)
+	var way := grid.get_id_path(from, goal, true)
+	grid.set_point_solid(from, was_solid)
+	var tiles: Array[Vector2i] = []
+	for point in way:
+		tiles.append(Vector2i(point))
+	return tiles
+
+
+## The tile a way starts from: the hero's own, or — when it is the sea (a
+## diagonal step crossing its corner, or a hero once stuck there) — the
+## land tile beside them whose middle is nearest, the one they walk to
+## first on a tie; the nearest land of the map when none is beside them.
+func _standing_tile() -> Vector2i:
+	var world := player.world
+	var here := player.tile()
+	if world.is_land(here.x, here.y):
+		return here
+	var beside: Array[Vector2i] = []
+	if not path.is_empty():
+		beside.append(path[0])
+	for d in range(1, 9):
+		beside.append(here + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d]))
+	var best := Vector2i(-1, -1)
+	var best_distance := INF
+	for tile in beside:
+		if maxi(absi(tile.x - here.x), absi(tile.y - here.y)) > 1 or not world.is_land(tile.x, tile.y):
+			continue
+		var distance := Vector2(player.position).distance_squared_to(Vector2(tile * 32 + Vector2i(16, 16)))
+		if distance < best_distance:
+			best = tile
+			best_distance = distance
+	return best if best.x >= 0 else _nearest_land(here)
+
+
+## The way-finder's grid for the hero as they are now: the kept one, or a
+## new one when the world or what is slow for the hero changed.
+func _grid_for() -> AStarGrid2D:
+	var key := [player.world.get_instance_id(), _slow(3), _slow(4)]
+	if _grid == null or key != _grid_key:
+		_grid = _build_grid()
+		_grid_key = key
+	return _grid
+
+
+## The world's land as a grid: the sea solid, a road cheap, slow land dear.
+func _build_grid() -> AStarGrid2D:
 	var world := player.world
 	var grid := AStarGrid2D.new()
 	grid.region = Rect2i(0, 0, ShandalarWorld.TILES, ShandalarWorld.TILES)
@@ -93,20 +195,7 @@ func plan(target: Vector2i) -> Array[Vector2i]:
 				grid.set_point_weight_scale(at, ROAD_COST)
 			elif _slow(world.terrain(x, y)):
 				grid.set_point_weight_scale(at, SLOW_COST)
-	var from := player.tile()
-	if not grid.is_in_boundsv(from):
-		return []
-	var goal := target.clamp(Vector2i.ZERO, Vector2i(ShandalarWorld.TILES - 1, ShandalarWorld.TILES - 1))
-	if grid.is_point_solid(goal):
-		goal = _nearest_land(goal)
-	var was_solid := grid.is_point_solid(from)
-	grid.set_point_solid(from, false)
-	var way := grid.get_id_path(from, goal, true)
-	grid.set_point_solid(from, was_solid)
-	var tiles: Array[Vector2i] = []
-	for point in way:
-		tiles.append(Vector2i(point))
-	return tiles
+	return grid
 
 
 func _nearest_land(target: Vector2i) -> Vector2i:
@@ -166,7 +255,8 @@ func tick() -> bool:
 		divisor = 1
 	if player.food == 0:
 		divisor = clampi(divisor + 2, 0, 4)
-	if player.monster_timer % divisor == 0:
+	stepped = player.monster_timer % divisor == 0
+	if stepped:
 		var before := player.position
 		var stride := 2 if divisor == SLOW else 1
 		player.position += Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d]) * stride
@@ -185,9 +275,7 @@ func tick() -> bool:
 			player.position = Vector2i(_not_past(before.x, player.position.x, target.x),
 				_not_past(before.y, player.position.y, target.y))
 		var now := player.tile()
-		var middle := now * 32 + Vector2i(16, 16)
-		if world.terrain(now.x, now.y) == ShandalarWorld.OCEAN and (
-				absi(player.position.x - middle.x) < SHORE or absi(player.position.y - middle.y) < SHORE):
+		if _shore(before):
 			player.position = before
 			stop()
 		if player.monster_timer & 0x1F == 0 and d != 0:
@@ -204,6 +292,20 @@ func tick() -> bool:
 		player.quickening -= 1
 	_arrive()
 	return entered
+
+
+## THE SHORE: whether the step from [param before] to where the hero now
+## stands goes into the sea near a tile's middle — 1.3 takes such a step
+## back. [ours] Only a step from land: a hero on the sea (a tile's corner)
+## walks back onto land rather than being held there.
+func _shore(before: Vector2i) -> bool:
+	var world := player.world
+	var now := player.tile()
+	var was := Vector2i(before.x / 32, before.y / 32)
+	if world.terrain(now.x, now.y) != ShandalarWorld.OCEAN or not world.is_land(was.x, was.y):
+		return false
+	var middle := now * 32 + Vector2i(16, 16)
+	return absi(player.position.x - middle.x) < SHORE or absi(player.position.y - middle.y) < SHORE
 
 
 ## [param now] on one axis, held at [param target] if the step from

@@ -12,6 +12,9 @@ extends PanelContainer
 ## Angel for 3 white amulets." — "Do you wish to trade?", "Yes, I'll
 ## trade." / "No Thanks", or "Hmmm... you can't afford this card yet."
 ## Trades go on until Done. The purse and the five amulets show below.
+## Escape closes the trader; in the name box with a name typed, it first
+## clears the name and leaves the box, as Escape in a save's name puts the
+## old name back first ([SaveSlotsPane]) [QoL].
 
 ## Done: back to the town or the lair.
 signal done
@@ -19,12 +22,6 @@ signal done
 ## WorldScreen.read_card]).
 signal card_read(card_name: String)
 
-const GOLD := Color8(232, 190, 110)
-const INK := Color8(236, 222, 196)
-const DIM := Color8(160, 146, 128)
-const FAINT := Color8(120, 108, 96)
-const LIT := Color8(255, 236, 170)
-const EDGE := Color8(20, 10, 8)
 const LARGE := 0.78
 ## The colour chips (1997 colour bits) and the type chips (1997 type bits).
 const COLOR_CHIPS: Array[Array] = [["Colorless", 1], ["Black", 2], ["Blue", 4], ["Green", 8],
@@ -61,6 +58,9 @@ var _note: Label
 var _search: LineEdit
 var _shown: Array[String] = []
 var _chips := {}
+## The row last under the pointer, -1 for none: the pointer moving within
+## it asks nothing more of the large card.
+var _hovered := -1
 
 
 func _ready() -> void:
@@ -70,13 +70,7 @@ func _ready() -> void:
 		color_filter = trade & 0xFF
 	elif way == CardTrade.TOWN and trade >> 8 > 0 and trade >> 8 < CardTrade.CLASS_TYPES.size():
 		type_filter = CardTrade.CLASS_TYPES[trade >> 8]
-	var face := StyleBoxFlat.new()
-	face.bg_color = Color(0.05, 0.03, 0.03, 0.95)
-	face.border_color = Color(GOLD, 0.6)
-	face.set_border_width_all(1)
-	face.set_corner_radius_all(10)
-	face.set_content_margin_all(14)
-	add_theme_stylebox_override("panel", face)
+	add_theme_stylebox_override("panel", PaneStyle.glass())
 	var across := HBoxContainer.new()
 	across.add_theme_constant_override("separation", 14)
 	across.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -91,7 +85,7 @@ func _ready() -> void:
 	_large.scale = Vector2(LARGE, LARGE)
 	_large.mouse_filter = Control.MOUSE_FILTER_STOP
 	_large.gui_input.connect(func(input: InputEvent) -> void:
-		if CardShopPane._right_click(input) and _large._shown != null:
+		if PaneStyle.right_click(input) and _large._shown != null:
 			card_read.emit(_large._shown.data.card_name))
 	_large.visible = false
 	holder.add_child(_large)
@@ -103,20 +97,18 @@ func _ready() -> void:
 	across.add_child(column)
 	var head := HBoxContainer.new()
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var title := _label("Which card do you seek?", 24, GOLD)
+	var title := PaneStyle.title("Which card do you seek?", 24)
 	title.name = "TradeTitle"
-	title.add_theme_color_override("font_outline_color", EDGE)
-	title.add_theme_constant_override("outline_size", 4)
 	head.add_child(title)
 	var room := Control.new()
 	room.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(room)
-	_gold = _label("", 18, GOLD)
+	_gold = PaneStyle.label("", 18, PaneStyle.GOLD)
 	_gold.name = "TradeGold"
 	head.add_child(_gold)
 	column.add_child(head)
-	var under := _label(who, 15, DIM)
+	var under := PaneStyle.label(who, 15, PaneStyle.DIM)
 	under.name = "TradeWho"
 	column.add_child(under)
 	column.add_child(_chip_row("Colors", COLOR_CHIPS, true))
@@ -139,26 +131,21 @@ func _ready() -> void:
 	if face_font != null:
 		_list.add_theme_font_override("font", face_font)
 	_list.add_theme_font_size_override("font_size", 15)
-	_list.add_theme_color_override("font_color", INK)
-	_list.add_theme_color_override("font_hovered_color", LIT)
-	_list.add_theme_color_override("font_selected_color", LIT)
-	var well := StyleBoxFlat.new()
-	well.bg_color = Color(0, 0, 0, 0.4)
-	well.border_color = Color(GOLD, 0.35)
-	well.set_border_width_all(1)
-	well.set_corner_radius_all(6)
-	well.set_content_margin_all(6)
-	_list.add_theme_stylebox_override("panel", well)
+	_list.add_theme_color_override("font_color", PaneStyle.INK)
+	_list.add_theme_color_override("font_hovered_color", PaneStyle.LIT)
+	_list.add_theme_color_override("font_selected_color", PaneStyle.LIT)
+	_list.add_theme_stylebox_override("panel", PaneStyle.well())
 	var pick := StyleBoxFlat.new()
-	pick.bg_color = Color(GOLD, 0.22)
+	pick.bg_color = Color(PaneStyle.GOLD, 0.22)
 	pick.set_corner_radius_all(4)
 	_list.add_theme_stylebox_override("selected", pick)
 	_list.add_theme_stylebox_override("selected_focus", pick)
 	_list.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_list.item_selected.connect(func(index: int) -> void: choose(_shown[index]))
 	_list.gui_input.connect(_hover_list)
+	_list.mouse_exited.connect(func() -> void: _hovered = -1)
 	column.add_child(_list)
-	_ask = _label("", 17, INK)
+	_ask = PaneStyle.label("", 17, PaneStyle.INK)
 	_ask.name = "TradeAsk"
 	_ask.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_ask.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -168,21 +155,21 @@ func _ready() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", int(10 * k))
 	buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_yes = _button("Yes, I'll trade.", "TradeYes")
+	_yes = _trade_button("Yes, I'll trade.", "TradeYes")
 	_yes.pressed.connect(trade_chosen)
 	buttons.add_child(_yes)
-	_no = _button("No Thanks", "TradeNo")
+	_no = _trade_button("No Thanks", "TradeNo")
 	_no.pressed.connect(func() -> void: choose(""))
 	buttons.add_child(_no)
-	var leave := _button("Done", "TradeDone")
+	var leave := _trade_button("Done", "TradeDone")
 	leave.pressed.connect(func() -> void: done.emit())
 	buttons.add_child(leave)
 	column.add_child(buttons)
-	_purse = _label("", 14, DIM)
+	_purse = PaneStyle.label("", 14, PaneStyle.DIM)
 	_purse.name = "TradePurse"
 	_purse.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_purse)
-	_note = _label("", 14, DIM)
+	_note = PaneStyle.label("", 14, PaneStyle.DIM)
 	_note.name = "TradeNote"
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_note)
@@ -197,7 +184,7 @@ func _chip_row(row_name: String, chips: Array[Array], colors: bool) -> Control:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var fixed := way == CardTrade.TOWN and ((colors and trade & 0xFF != 0) or (not colors and trade >> 8 > 0))
 	for chip in chips:
-		var button := _button(String(chip[0]), "Chip_" + String(chip[0]))
+		var button := _trade_button(String(chip[0]), "Chip_" + String(chip[0]))
 		button.toggle_mode = true
 		button.custom_minimum_size = Vector2(0, 0)
 		var bit := int(chip[1])
@@ -247,19 +234,16 @@ func cards() -> Array[String]:
 func refresh() -> void:
 	_shown = cards()
 	_list.clear()
-	var owned := {}
-	var in_deck := {}
-	for card in player.cards:
-		var entry := card as Dictionary
-		var card_name := String(entry.get("card", ""))
-		owned[card_name] = int(owned.get(card_name, 0)) + 1
-		if (entry.get("decks", []) as Array).has(player.current_deck):
-			in_deck[card_name] = int(in_deck.get(card_name, 0)) + 1
+	_hovered = -1
+	var owned := AdventureBuilder.owned_counts(player)
+	# Dimmed: the deck in use may hold no more ([method CardShop.copies_allowed],
+	# the shop's own rule), its copies counted once for the whole list.
+	var in_deck := CardShop.deck_counts(player)
 	var limit := CardShop.copies_allowed(player)
 	for card_name in _shown:
 		var index := _list.add_item("%s-%d" % [card_name, int(owned.get(card_name, 0))])
 		if int(in_deck.get(card_name, 0)) >= limit:
-			_list.set_item_custom_fg_color(index, FAINT)
+			_list.set_item_custom_fg_color(index, PaneStyle.FAINT)
 		if card_name == chosen:
 			_list.select(index)
 			_list.ensure_current_is_visible()
@@ -325,14 +309,17 @@ func trade_chosen() -> void:
 		_show_ask()
 
 
+## Card [param card_name] large beside the list ([method PaneStyle.show_card]:
+## not drawn again when it is already the one shown).
 func show_large(card_name: String) -> void:
-	if CardRegistry.has_card(card_name):
-		_large.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
+	if PaneStyle.show_card(_large, card_name):
 		_large.visible = true
 
 
+## The pointer over the list: the row under it shown large — once, not at
+## every move within the row; a right click reads it full screen.
 func _hover_list(input: InputEvent) -> void:
-	if CardShopPane._right_click(input):
+	if PaneStyle.right_click(input):
 		var at := _list.get_item_at_position((input as InputEventMouseButton).position, true)
 		if at >= 0 and at < _shown.size():
 			show_large(_shown[at])
@@ -343,6 +330,9 @@ func _hover_list(input: InputEvent) -> void:
 	if motion == null:
 		return
 	var index := _list.get_item_at_position(motion.position, true)
+	if index == _hovered:
+		return
+	_hovered = index
 	if index >= 0 and index < _shown.size():
 		show_large(_shown[index])
 
@@ -361,56 +351,26 @@ func _unhandled_input(input: InputEvent) -> void:
 		done.emit()
 
 
-func _button(words: String, button_name: String) -> Button:
-	var choice := Button.new()
-	choice.name = button_name
-	choice.text = words
-	choice.focus_mode = Control.FOCUS_NONE
+## ESCAPE IN THE NAME BOX, met before the box hears it (it would keep the
+## Escape for itself, and the trader stay open): a name typed is cleared —
+## the whole list again — and the box left, as Escape in a save's name puts
+## the old name back ([SaveSlotsPane]); the next Escape, or one in an empty
+## box, closes the trader.
+func _input(input: InputEvent) -> void:
+	if _search == null or not _search.has_focus() or not input.is_action_pressed("ui_cancel"):
+		return
+	get_viewport().set_input_as_handled()
+	if _search.text == "":
+		done.emit()
+		return
+	_search.text = ""
+	_search.release_focus()
+	refresh()
+
+
+## A button of the trader: the panes' own, a little smaller, at least 110
+## wide.
+func _trade_button(words: String, button_name: String) -> Button:
+	var choice := PaneStyle.button(words, button_name, k, 15)
 	choice.custom_minimum_size = Vector2(110, 0) * k
-	var face := GameSkin.font("font_title")
-	if face != null:
-		choice.add_theme_font_override("font", face)
-	choice.add_theme_font_size_override("font_size", int(15 * k))
-	choice.add_theme_color_override("font_color", INK)
-	choice.add_theme_color_override("font_hover_color", LIT)
-	choice.add_theme_color_override("font_pressed_color", LIT)
-	choice.add_theme_color_override("font_hover_pressed_color", LIT)
-	choice.add_theme_color_override("font_disabled_color", Color(DIM, 0.5))
-	var rest := StyleBoxFlat.new()
-	rest.bg_color = Color(0, 0, 0, 0.35)
-	rest.border_color = Color(GOLD, 0.45)
-	rest.set_border_width_all(1)
-	rest.set_corner_radius_all(6)
-	rest.content_margin_left = 10 * k
-	rest.content_margin_right = 10 * k
-	rest.content_margin_top = 3 * k
-	rest.content_margin_bottom = 3 * k
-	var lit := rest.duplicate() as StyleBoxFlat
-	lit.bg_color = Color(GOLD, 0.22)
-	var on := rest.duplicate() as StyleBoxFlat
-	on.bg_color = Color(GOLD, 0.32)
-	on.border_color = Color(GOLD, 0.9)
-	var off := rest.duplicate() as StyleBoxFlat
-	off.border_color = Color(GOLD, 0.15)
-	choice.add_theme_stylebox_override("normal", rest)
-	choice.add_theme_stylebox_override("hover", lit)
-	choice.add_theme_stylebox_override("pressed", on)
-	choice.add_theme_stylebox_override("hover_pressed", on)
-	choice.add_theme_stylebox_override("disabled", off)
-	choice.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	return choice
-
-
-func _label(text: String, size: int, color_ink := INK) -> Label:
-	var label := Label.new()
-	label.text = text
-	var face := GameSkin.font("font_title")
-	if face != null and size >= 15:
-		label.add_theme_font_override("font", face)
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color_ink)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return label

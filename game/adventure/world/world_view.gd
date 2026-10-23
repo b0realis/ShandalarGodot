@@ -25,32 +25,96 @@ extends Control
 ##
 ## Without the 1997 sheets ([WorldArt]) the same world is drawn plain: a
 ## diamond of its colour per tile, the roads, a mark per site.
+##
+## HOW IT IS KEPT ON THE SCREEN [ours]. The original drew its window anew
+## every tick; drawn so on a whole screen it cost 4 to 27 ms a time (the
+## more the further out the zoom), every tick even standing still. Now the
+## world is four pictures laid one over another, in the order above:
+##  - the ground ([member _ground]): the tiles, the edges, the roads, the
+##    dark over unseen land, the ground halves;
+##  - the hero's shadow ([member _shadow]);
+##  - everything upright ([member _uprights]), by the height of its foot;
+##  - the hero ([member _figure]), with the parts of what stands in front
+##    of them drawn again over them — the same picture as the hero drawn
+##    in their place among the uprights, the sheets' pixels being either
+##    solid or clear (held to the old drawing pixel for pixel; at half size
+##    a few pixels of those parts may show their sheet's neighbouring
+##    pixel, as half size picks one of two).
+## The ground and the uprights are drawn round one world point
+## ([member _anchor]) for the screen and a margin round it, and only moved
+## as the camera goes and scaled as it zooms; they are drawn again only
+## when the camera leaves the margin, the zoom goes out past it, or what
+## they show changes (land seen, a town taken, a lair found, another
+## world). The tiles drawn are worked out from the screen's corners
+## ([method _tiles_over]) rather than every tile of the map being tried;
+## what each tile shows is worked out once a world ([method _recipe]).
+## The hero's two pictures are drawn again only when the hero moves or
+## turns. Standing still nothing is drawn at all.
+##
+## BETWEEN TICKS [QoL]: the hero and the camera following them moved only
+## on the 60 ms tick, steps of 4 to 11 pixels sixteen times a second;
+## [method frame] slides them between the last tick's place and this one's
+## every frame. What the game reads — [member hero], [member camera],
+## [method project], [method unproject] — stays the tick's.
 
 ## The world drawn, and the world point at the screen's [member feet].
-var world: ShandalarWorld
-var camera := Vector2(0, 0)
+var world: ShandalarWorld:
+	set(value):
+		world = value
+		_changed()
+var camera := Vector2(0, 0):
+	set(value):
+		camera = value
+		_changed()
 ## The hero, in world units, and how they look: `male` or `female`, and
-## facing (0–7, the original's directions; 0 at the start).
-var hero := Vector2(0, 0)
-var hero_walker := "male"
-var hero_facing := 0
+## facing (0–7, the original's directions; 0 at the start). The place the
+## hero had before is kept, to slide from ([method frame]); a leap (a World
+## Magic, another hero) is not slid over.
+var hero := Vector2(0, 0):
+	set(value):
+		_hero_before = hero if hero.distance_to(value) <= LEAP else value
+		hero = value
+		_changed()
+var hero_walker := "male":
+	set(value):
+		hero_walker = value
+		_changed()
+var hero_facing := 0:
+	set(value):
+		hero_facing = value
+		_changed()
 ## The walking figure's step, 0 standing, 1–4 walking (`g_world_player_
 ## animation_frame`): the frame is the facing's fifth plus the step.
-var hero_step := 0
+var hero_step := 0:
+	set(value):
+		hero_step = value
+		_changed()
 ## The figure's sheet dressed in the hero's colours ([HeroColors]), or null
 ## for the 1997 one.
-var hero_sheet: Texture2D
+var hero_sheet: Texture2D:
+	set(value):
+		hero_sheet = value
+		_changed()
 ## The lairs the hero sees ([method WorldLairs.seen]): `{x, y, color}`, in
 ## world units.
-var lairs: Array[Dictionary] = []
+var lairs: Array[Dictionary] = []:
+	set(value):
+		lairs = value
+		_changed()
 ## Twice the 1997 pixels by default (the owner's choice, 2026-10-22): crisp,
 ## and about the original window's view scaled up; the wheel zooms.
-var zoom := DEFAULT_ZOOM
+var zoom := DEFAULT_ZOOM:
+	set(value):
+		zoom = value
+		_changed()
 const DEFAULT_ZOOM := 2.0
 ## LAND THE HERO HAS NOT SEEN is drawn dark and nothing standing on it is
 ## shown (the owner's choice, 2026-10-22): the 1997 window showed only
 ## what it marked explored, and the whole screen would show far more.
-var fog := true
+var fog := true:
+	set(value):
+		fog = value
+		_changed()
 const FOG := Color(0.035, 0.026, 0.024, 0.97)
 const FOG_EDGE := Color(0.035, 0.026, 0.024, 0.72)
 
@@ -104,11 +168,83 @@ var art := WorldArt.new()
 static var _order: Array[Vector2i] = []
 const MARGIN := 12
 
+## A step longer than this (world units) since the last tick is a leap,
+## shown at once: a tick walks at most three units, a frame that waited
+## runs at most twenty ticks.
+const LEAP := 32.0
+## How far past the screen's edges the ground and the uprights are drawn
+## (screen pixels), so the camera can go that far before they are drawn
+## again — at the default zoom about a second and a half of walking.
+const SPARE := 96.0
+## The pictures are drawn again for a closer zoom once they hold this many
+## times the screen's area.
+const SHED := 4.0
+## What stands on a tile reaches this far round its left corner, unzoomed:
+## 96 left, 224 right, 232 up, 72 down (a castle's or a city's tower).
+const REACH := Rect2(-96, -232, 320, 304)
+## How far below the hero's feet something standing in front of them can
+## stand and still reach up over them.
+const IN_FRONT := 224
+
+## THE PICTURES (see the class's notes): the ground, the hero's shadow,
+## the uprights and the hero, children of the view that move and scale as
+## one.
+var _ground: Node2D
+var _shadow: Node2D
+var _uprights: Node2D
+var _figure: Node2D
+## How far the frame is between the last tick and this one ([method
+## frame]), and where the hero stood the tick before.
+var _blend := 1.0
+var _hero_before := Vector2(0, 0)
+## The world point (whole units) the ground and the uprights are drawn
+## round — their pictures' origin is where it projects — the part of their
+## picture they hold (unzoomed), and what they show: the world, the sheets,
+## the dark, the page (land seen), the sites, the lairs.
+var _anchor := Vector2i.ZERO
+var _covered := Rect2()
+var _shown: Array = []
+## The pictures' tiles in the original's order, their left corners round
+## the anchor, whether each is seen (or the dark is off), and what each
+## shows ([method _recipe]).
+var _tiles: Array[Vector2i] = []
+var _lefts := PackedVector2Array()
+var _seen := PackedByteArray()
+var _tile_recipes: Array = []
+## Every upright of the pictures in the order drawn — `[sheet, where,
+## frame]` — and the height of each one's foot, rising, for finding those
+## in front of the hero.
+var _upright_ops: Array = []
+var _upright_feet := PackedInt32Array()
+## What a tile shows, kept for the world and its sites as they were
+## ([member _recipe_for]).
+var _recipes := {}
+var _recipe_for: Array = []
+## Whether the world is drawn plain (no 1997 sheets), and what the hero's
+## pictures were drawn for: where they stood and how they looked, and
+## which drawing of the ground.
+var _plain := false
+var _figure_drawn: Array = []
+var _drawing := 0
+
 
 func _init() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	_ground = _picture("Ground", _paint_ground)
+	_shadow = _picture("Shadow", _paint_shadow)
+	_uprights = _picture("Uprights", _paint_uprights)
+	_figure = _picture("Figure", _paint_figure)
+
+
+## One of the view's pictures, drawn by [param paint].
+func _picture(called: String, paint: Callable) -> Node2D:
+	var picture := Node2D.new()
+	picture.name = called
+	picture.draw.connect(paint)
+	add_child(picture, false, Node.INTERNAL_MODE_FRONT)
+	return picture
 
 
 ## The screen point the camera is drawn at: the middle across, a little
@@ -121,14 +257,37 @@ func feet() -> Vector2:
 ## A world point on screen, before the zoom: 2 pixels across and 1 down per
 ## world unit, relative to the camera.
 func project(point: Vector2) -> Vector2:
-	var d := point - camera
-	return Vector2(2.0 * (d.x + d.y), d.y - d.x)
+	return _lay(point - camera)
 
 
-## A screen point (after the zoom) back to the world.
+## A screen point (after the zoom) back to the world, at the clock's camera.
 func unproject(screen: Vector2) -> Vector2:
-	var p := (screen - feet()) / zoom
-	return camera + Vector2(p.x / 4.0 - p.y / 2.0, p.x / 4.0 + p.y / 2.0)
+	return camera + _unlay((screen - feet()) / zoom)
+
+
+## A screen point back to the world AS THIS FRAME DRAWS IT ([method
+## drawn_at]'s inverse): what the pointer is over while the view glides
+## between ticks (the bug pass after the campaign, r4-3: read at the
+## clock's camera, a click on a town's edge walked a step beside it).
+func unproject_drawn(screen: Vector2) -> Vector2:
+	return _shown_camera() + _unlay((screen - feet()) / zoom)
+
+
+## The inverse of [method _lay].
+static func _unlay(offset: Vector2) -> Vector2:
+	return Vector2(offset.x / 4.0 - offset.y / 2.0, offset.x / 4.0 + offset.y / 2.0)
+
+
+## Where world point [param point] is drawn on the screen this frame —
+## with the camera slid between ticks ([method frame]), for what is drawn
+## over the world and must stay on it.
+func drawn_at(point: Vector2) -> Vector2:
+	return feet() + _lay(point - _shown_camera()) * zoom
+
+
+## The projection of a world offset: 2 pixels across and 1 down per unit.
+static func _lay(offset: Vector2) -> Vector2:
+	return Vector2(2.0 * (offset.x + offset.y), offset.y - offset.x)
 
 
 static func draw_order() -> Array[Vector2i]:
@@ -145,98 +304,332 @@ static func draw_order() -> Array[Vector2i]:
 	return _order
 
 
+## THE FRAME BETWEEN TICKS [QoL]: the hero drawn [param blend] of the way
+## (0–1: the time since the last tick over [constant HeroWalk.TICK]) from
+## where the tick before left them to where this one did, and the camera
+## with them when it follows them. Called every frame; draws only what
+## moved. Safe at any time — paused, with no world, at 0 or 1.
+func frame(blend: float) -> void:
+	_blend = clampf(blend, 0.0, 1.0)
+	_refresh(false)
+
+
+## Something shown changed: [method _draw] looks again.
+func _changed() -> void:
+	queue_redraw()
+
+
+## The view itself draws only the sea under the pictures, and looks
+## whether they must be drawn again.
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), PLAIN[0])
+	_refresh(true)
+
+
+## Where the hero is drawn this frame: slid between the two ticks.
+func _shown_hero() -> Vector2:
+	return _hero_before.lerp(hero, _blend)
+
+
+## Where the camera is this frame: with the hero, slid, when it follows
+## them; else where it was put.
+func _shown_camera() -> Vector2:
+	return _shown_hero() if camera == hero else camera
+
+
+## THE PICTURES KEPT UP: moved and scaled to the camera and the zoom, and
+## drawn again when they no longer cover the screen or — when [param
+## look_again] (a redraw was asked) — what they show changed.
+func _refresh(look_again: bool) -> void:
 	if world == null:
+		if not _shown.is_empty():
+			_shown = []
+			_tiles.clear()
+			_upright_ops.clear()
+			_upright_feet.clear()
+			for picture in [_ground, _shadow, _uprights, _figure]:
+				picture.queue_redraw()
 		return
-	draw_set_transform(feet(), 0.0, Vector2(zoom, zoom))
-	var view := Rect2(-feet() / zoom, size / zoom)
-	var visible: Array[Vector2i] = []
-	for tile in draw_order():
-		var left := project(Vector2(tile.x * 32, tile.y * 32))
-		# The tile's box, grown upward and outward for what stands on it.
-		if Rect2(left.x - 96, left.y - 32 - 200, TILE_W + 192, TILE_H + 240).intersects(view):
-			visible.append(tile)
-	if art.ready():
-		_draw_1997(visible)
-	else:
-		_draw_plain(visible)
-	draw_set_transform(Vector2.ZERO)
+	if look_again or _shown.is_empty():
+		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), world.sites.hash(),
+			lairs.hash()]
+		if shown != _shown:
+			_shown = shown
+			_covered = Rect2()
+	if not get_rect().has_area():
+		return
+	var camera_now := _shown_camera()
+	var needed := _screen_round(_anchor, camera_now)
+	if not _covered.encloses(needed) or _covered.get_area() > needed.get_area() * SHED:
+		_draw_pictures(camera_now)
+	var at := feet() + _lay(Vector2(_anchor) - camera_now) * zoom
+	for picture in [_ground, _shadow, _uprights, _figure]:
+		if picture.position != at:
+			picture.position = at
+		if picture.scale.x != zoom:
+			picture.scale = Vector2(zoom, zoom)
+	var figure := [_shown_hero(), hero_facing, hero_step, hero_sheet, hero_walker, _drawing]
+	if figure != _figure_drawn:
+		_figure_drawn = figure
+		_shadow.queue_redraw()
+		_figure.queue_redraw()
+
+
+## The screen, in the pictures' own units when drawn round [param anchor]
+## with the camera at [param camera_now].
+func _screen_round(anchor: Vector2i, camera_now: Vector2) -> Rect2:
+	var at := feet() + _lay(Vector2(anchor) - camera_now) * zoom
+	return Rect2(-at / zoom, size / zoom)
+
+
+## THE GROUND AND THE UPRIGHTS DRAWN AGAIN, round the camera: the tiles
+## over the screen and its margin, what each shows, and the uprights in
+## the order of their feet.
+func _draw_pictures(camera_now: Vector2) -> void:
+	_anchor = Vector2i(roundi(camera_now.x), roundi(camera_now.y))
+	_covered = _screen_round(_anchor, camera_now).grow(SPARE / zoom)
+	var origin := _lay(Vector2(_anchor))
+	_tiles = _tiles_over(_covered, origin)
+	_plain = not art.ready()
+	_lefts.resize(_tiles.size())
+	_seen.resize(_tiles.size())
+	_tile_recipes.resize(_tiles.size())
+	_upright_ops.clear()
+	_upright_feet.clear()
+	var recipe_for := [world.get_instance_id(), world.sites.hash(), _plain]
+	if recipe_for != _recipe_for:
+		_recipes.clear()
+		_recipe_for = recipe_for
+	for i in _tiles.size():
+		var tile := _tiles[i]
+		_lefts[i] = Vector2(64 * (tile.x + tile.y), 32 * (tile.y - tile.x)) - origin
+		_seen[i] = 1 if not fog or world.is_explored(tile.x, tile.y) else 0
+		if not _plain:
+			_tile_recipes[i] = _recipe(tile)
+	if not _plain:
+		_order_uprights(origin)
+	_drawing += 1
+	_ground.queue_redraw()
+	_uprights.queue_redraw()
+
+
+## The tiles whose pictures can reach [param area] (the pictures' units;
+## the map's corner (0, 0) projects to −[param origin]), in the original's
+## order: the window of [method draw_order] the screen sees, worked out
+## from its corners — a tile's left corner stands at (64 (tx + ty),
+## 32 (ty − tx)) less the origin, and what stands on it reaches [constant
+## REACH] round that.
+static func _tiles_over(area: Rect2, origin: Vector2) -> Array[Vector2i]:
+	var first_row := floori((area.position.y - REACH.end.y + origin.y) / 32.0)
+	var last_row := ceili((area.end.y - REACH.position.y + origin.y) / 32.0)
+	var first_across := floori((area.position.x - REACH.end.x + origin.x) / 64.0)
+	var last_across := ceili((area.end.x - REACH.position.x + origin.x) / 64.0)
+	var tiles: Array[Vector2i] = []
+	for row in range(first_row, last_row + 1):
+		# tx + ty and ty − tx are both even or both odd.
+		for across in range(first_across + ((first_across + row) & 1), last_across + 1, 2):
+			var tile := Vector2i((across - row) / 2, (across + row) / 2)
+			if tile.x >= -MARGIN and tile.y >= -MARGIN and tile.x < ShandalarWorld.TILES + MARGIN \
+					and tile.y < ShandalarWorld.TILES + MARGIN:
+				tiles.append(tile)
+	return tiles
+
+
+## The uprights of the seen tiles and of the lairs in the order drawn: up
+## by the height of the foot, the later of two at one height behind (the
+## queue of `RenderAdventureWorldScene`, sorted on whole numbers).
+func _order_uprights(origin: Vector2) -> void:
+	var standing: Array = []
+	var keys := PackedInt64Array()
+	for i in _tiles.size():
+		if _seen[i] == 0:
+			continue
+		var left := _lefts[i]
+		for upright in _tile_recipes[i][2]:
+			keys.append(_upright_key(int(left.y) + int(upright[0]), standing.size()))
+			standing.append([upright[1], Rect2(left + upright[2].position, upright[2].size), upright[3]])
+	for lair in lairs:
+		var point := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
+		var op := _op("world_locatn07", LAIR_FRAMES[clampi(int(lair.get("color", 0)), 0, 5)], point - Vector2(64, 96))
+		if not op.is_empty():
+			keys.append(_upright_key(int(point.y), standing.size()))
+			standing.append(op)
+	keys.sort()
+	for key in keys:
+		_upright_ops.append(standing[UPRIGHT_COUNT - 1 - (key & (UPRIGHT_COUNT - 1))])
+		_upright_feet.append((key >> UPRIGHT_BITS) - UPRIGHT_LOW)
+
+
+## An upright's place in the order as one number: its foot's height, then
+## the later first.
+const UPRIGHT_BITS := 21
+const UPRIGHT_COUNT := 1 << UPRIGHT_BITS
+const UPRIGHT_LOW := 1 << 30
+
+
+static func _upright_key(foot: int, index: int) -> int:
+	return ((foot + UPRIGHT_LOW) << UPRIGHT_BITS) | (UPRIGHT_COUNT - 1 - index)
 
 
 # ------------------------------------------------------------ the 1997 --
 
-func _draw_1997(visible: Array[Vector2i]) -> void:
-	for tile in visible:
-		_draw_ground(tile)
+## THE GROUND: the tiles, the dark over the unseen, the ground halves of
+## what stands on the seen and of the lairs.
+func _paint_ground() -> void:
+	if world == null or _tiles.is_empty():
+		return
+	if _plain:
+		_paint_plain()
+		return
+	for i in _tiles.size():
+		_blit_all(_ground, _tile_recipes[i][0], _lefts[i])
 	if fog:
-		_draw_fog(visible)
-	var queue: Array[Array] = []
-	for tile in visible:
-		if not fog or world.is_explored(tile.x, tile.y):
-			_draw_ground_halves(tile, queue)
+		_paint_fog(_ground)
+	for i in _tiles.size():
+		if _seen[i] != 0:
+			_blit_all(_ground, _tile_recipes[i][1], _lefts[i])
+	var origin := _lay(Vector2(_anchor))
 	for lair in lairs:
-		var point := project(Vector2(int(lair["x"]), int(lair["y"])))
+		var point := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
 		var frame := LAIR_FRAMES[clampi(int(lair.get("color", 0)), 0, 5)]
-		_sprite("world_locatn07", frame + 6, point - Vector2(64, 96))
-		queue.append([point.y, queue.size(), "world_locatn07", frame, point - Vector2(64, 96)])
-	var at := project(hero)
-	var frame := ((hero_facing + 2) & 7) * 5 + clampi(hero_step, 0, 4)
-	_sprite("world_sego_f", frame, at - Vector2(77, 61))
-	queue.append([at.y, queue.size(), HERO, frame, at - Vector2(77, 61)])
-	# Up by the foot's height; the later of two at one height behind.
-	queue.sort_custom(func(a: Array, b: Array) -> bool:
-		if a[0] != b[0]:
-			return a[0] < b[0]
-		return a[1] > b[1])
-	for entry in queue:
-		_sprite(entry[2], entry[3], entry[4])
+		_blit(_ground, _op("world_locatn07", frame + 6, point - Vector2(64, 96)), Vector2.ZERO)
+
+
+## THE UPRIGHTS, in their order.
+func _paint_uprights() -> void:
+	for op in _upright_ops:
+		_blit(_uprights, op, Vector2.ZERO)
+
+
+## THE HERO'S SHADOW, under everything upright.
+func _paint_shadow() -> void:
+	if world == null or _plain or _tiles.is_empty():
+		return
+	_blit(_shadow, _op("world_sego_f", _hero_frame(), _hero_at() - Vector2(77, 61)), Vector2.ZERO)
+
+
+## THE HERO — and over them again the parts of what stands in front of
+## them ([method _in_front_of]), so they stand among the uprights as in the
+## original's one queue.
+func _paint_figure() -> void:
+	if world == null or _tiles.is_empty():
+		return
+	var at := _hero_at()
+	if _plain:
+		draw_hero_plain(_figure, at)
+		return
+	var key := "world_ego_f" if hero_walker == "female" else "world_ego_m"
+	var sheet := hero_sheet if hero_sheet != null else art.texture(key)
+	if sheet == null:
+		return
+	var frame_rect := art.frame_rect(key, _hero_frame())
+	var figure := Rect2(at - Vector2(77, 61), frame_rect.size)
+	_figure.draw_texture_rect_region(sheet, figure, frame_rect)
+	for part in _in_front_of(at.y, figure):
+		_figure.draw_texture_rect_region(part[0], part[1], part[2])
+
+
+## The parts of the uprights in front of a hero whose feet stand at height
+## [param feet_y] — their foot as low or lower: the hero came last in the
+## original's queue, so behind anything at their own height — that fall on
+## the hero's frame [param figure]: `[sheet, where, frame]`, cut on whole
+## pixels of the sheet so they fall on the ones drawn below (only at half
+## size and the like can a cut part pick the neighbouring pixel of its
+## sheet), in the uprights' order.
+func _in_front_of(feet_y: float, figure: Rect2) -> Array:
+	var parts: Array = []
+	var first := _upright_feet.bsearch(ceili(feet_y), true)
+	for i in range(first, _upright_feet.size()):
+		if _upright_feet[i] > feet_y + IN_FRONT:
+			break
+		var op: Array = _upright_ops[i]
+		var where: Rect2 = op[1]
+		var over := where.intersection(figure)
+		if not over.has_area():
+			continue
+		var from := (over.position - where.position).floor()
+		var to := (over.end - where.position).ceil().min(where.size)
+		parts.append([op[0], Rect2(where.position + from, to - from), Rect2(op[2].position + from, to - from)])
+	return parts
+
+
+## Where the hero's feet are on the pictures, and their frame.
+func _hero_at() -> Vector2:
+	return _lay(_shown_hero() - Vector2(_anchor))
+
+
+func _hero_frame() -> int:
+	return ((hero_facing + 2) & 7) * 5 + clampi(hero_step, 0, 4)
 
 
 ## The dark over unseen land, lighter where it meets the seen.
-func _draw_fog(visible: Array[Vector2i]) -> void:
-	for tile in visible:
-		if world.is_explored(tile.x, tile.y):
+func _paint_fog(canvas: CanvasItem) -> void:
+	for i in _tiles.size():
+		if _seen[i] != 0:
 			continue
+		var tile := _tiles[i]
 		var edge := false
 		for d in range(1, 9):
 			if world.is_explored(tile.x + ShandalarWorld.DX[d], tile.y + ShandalarWorld.DY[d]):
 				edge = true
 				break
-		var left := project(Vector2(tile.x * 32, tile.y * 32))
-		draw_colored_polygon(PackedVector2Array([left, left + Vector2(64, -32),
+		var left := _lefts[i]
+		canvas.draw_colored_polygon(PackedVector2Array([left, left + Vector2(64, -32),
 			left + Vector2(128, 0), left + Vector2(64, 32)]), FOG_EDGE if edge else FOG)
 
 
-## The hero's place in the draw queue: their sheet, dressed or 1997.
-const HERO := "hero"
+## Draw [param ops] (`[sheet, where, frame]`, round a tile's left corner)
+## at [param left] on [param canvas].
+static func _blit_all(canvas: CanvasItem, ops: Array, left: Vector2) -> void:
+	for op in ops:
+		canvas.draw_texture_rect_region(op[0], Rect2(left + op[1].position, op[1].size), op[2])
 
 
-func _sprite(key: String, frame: int, at: Vector2) -> void:
-	var sheet: Texture2D
-	if key == HERO:
-		key = "world_ego_f" if hero_walker == "female" else "world_ego_m"
-		sheet = hero_sheet
+static func _blit(canvas: CanvasItem, op: Array, left: Vector2) -> void:
+	if not op.is_empty():
+		canvas.draw_texture_rect_region(op[0], Rect2(left + op[1].position, op[1].size), op[2])
+
+
+## Frame [param frame] of sheet [param key] with its corner at [param at]:
+## `[sheet, where, frame]`, or [] when the skin lacks the sheet.
+func _op(key: String, frame: int, at: Vector2) -> Array:
+	var sheet := art.texture(key)
 	if sheet == null:
-		sheet = art.texture(key)
-	if sheet == null:
-		return
+		return []
 	var rect := art.frame_rect(key, frame)
-	draw_texture_rect_region(sheet, Rect2(at, rect.size), rect)
+	return [sheet, Rect2(at, rect.size), rect]
 
 
-func _draw_ground(tile: Vector2i) -> void:
-	var left := project(Vector2(tile.x * 32, tile.y * 32))
-	var box := Vector2(left.x, left.y - 32)
+## WHAT A TILE SHOWS, round its left corner, worked out once a world:
+## `[ground, ground halves, uprights]` — the ground and the ground halves
+## as `[sheet, where, frame]`, the uprights as `[foot, sheet, where,
+## frame]` (the foot's height below the corner).
+func _recipe(tile: Vector2i) -> Array:
+	if _recipes.has(tile):
+		return _recipes[tile]
+	var ground: Array = []
+	_ground_of(tile, ground)
+	var halves: Array = []
+	var uprights: Array = []
+	_standing_on(tile, halves, uprights)
+	var recipe := [ground, halves, uprights]
+	_recipes[tile] = recipe
+	return recipe
+
+
+## The ground of [param tile]: its land, the black terrain's and the
+## coast's edge pieces, its roads.
+func _ground_of(tile: Vector2i, ops: Array) -> void:
+	var box := Vector2(0, -32)
 	var code := world.terrain(tile.x, tile.y)
 	var colors := ShandalarWorld.magic_mask(code)
 	if code == 0 or code == 8:
-		_sprite("world_landtile", 1, box)
+		_add(ops, _op("world_landtile", 1, box))
 	else:
 		if code == 1:
-			_sprite("world_landtile", 2, box)
+			_add(ops, _op("world_landtile", 2, box))
 		else:
-			_sprite("world_landtile", 4 if colors == 2 else 0, box)
+			_add(ops, _op("world_landtile", 4 if colors == 2 else 0, box))
 		var coast := 0
 		var black := 0
 		for d in range(1, 9):
@@ -248,18 +641,23 @@ func _draw_ground(tile: Vector2i) -> void:
 				coast |= 0x80
 			if colors != 2 and next_colors == 2:
 				black |= 0x80
-		_draw_edges(black, 4, box)
-		_draw_edges(coast, 0, box)
+		_edges(black, 4, box, ops)
+		_edges(coast, 0, box, ops)
 	var roads := world.road_bits(tile.x, tile.y)
 	for i in 8:
 		if roads & (1 << i) != 0:
-			_sprite("world_roads", ((i - 2) & 7) + 1, box)
+			_add(ops, _op("world_roads", ((i - 2) & 7) + 1, box))
+
+
+static func _add(ops: Array, op: Array) -> void:
+	if not op.is_empty():
+		ops.append(op)
 
 
 ## The four quarters of a diamond, each reading its two edge neighbours
 ## and the corner between (bits of the eight directions, wrapped): top
 ## N NE E, bottom S SW W, left W NW N, right E SE S.
-func _draw_edges(bits: int, first_row: int, box: Vector2) -> void:
+func _edges(bits: int, first_row: int, box: Vector2, ops: Array) -> void:
 	if bits == 0:
 		return
 	bits |= bits << 8
@@ -273,12 +671,12 @@ func _draw_edges(bits: int, first_row: int, box: Vector2) -> void:
 		if three == 0:
 			continue
 		var at := box + (Vector2(32, (i & 1) * 32) if i < 2 else Vector2((i & 1) * 64, 16))
-		_sprite("world_cstline1", (first_row + i) * 7 + three - 1, at)
+		_add(ops, _op("world_cstline1", (first_row + i) * 7 + three - 1, at))
 
 
-func _draw_ground_halves(tile: Vector2i, queue: Array[Array]) -> void:
-	var left := project(Vector2(tile.x * 32, tile.y * 32))
-	var base := left.y
+## What stands on [param tile]: its two trees or rocks, or its site — the
+## ground halves into [param halves], the uprights into [param uprights].
+func _standing_on(tile: Vector2i, halves: Array, uprights: Array) -> void:
 	var flags := world.tile_flags(tile.x, tile.y)
 	var code := world.terrain(tile.x, tile.y)
 	if flags & ShandalarWorld.SITE == 0 and OBJECT_COLUMN.has(code):
@@ -293,25 +691,31 @@ func _draw_ground_halves(tile: Vector2i, queue: Array[Array]) -> void:
 		if column >= 5:
 			column %= 5
 			row += 11
-		_object(row, column, Vector2(left.x + ox, base - oy), base - oy, queue)
+		_object(row, column, Vector2(ox, -oy), halves, uprights)
 		row = (pattern + tile.x) % 11 + (11 if row >= 11 else 0)
-		_object(row, column, Vector2(left.x - ox, base + oy), base + oy, queue)
+		_object(row, column, Vector2(-ox, oy), halves, uprights)
 	if flags & ShandalarWorld.SITE != 0:
-		_site(tile, left, base, queue)
+		_site(tile, halves, uprights)
 
 
-## One tree or rock: its ground half now, the upright into the queue,
-## both standing at [param foot] less the frame's anchor.
-func _object(row: int, column: int, foot: Vector2, depth: float, queue: Array[Array]) -> void:
+## One tree or rock standing at [param foot]: its ground half and its
+## upright, both at the foot less the frame's anchor.
+func _object(row: int, column: int, foot: Vector2, halves: Array, uprights: Array) -> void:
 	var upright := "world_land2" if row >= 11 else "world_land"
 	var ground := "world_sland2" if row >= 11 else "world_sland"
 	var frame := (row % 11) * 5 + column
 	var at := foot - Vector2(0, art.top(upright, frame))
-	_sprite(ground, frame, at)
-	queue.append([depth, queue.size(), upright, frame, at])
+	_add(halves, _op(ground, frame, at))
+	_stand(uprights, int(foot.y), _op(upright, frame, at))
 
 
-func _site(tile: Vector2i, left: Vector2, base: float, queue: Array[Array]) -> void:
+## [param op] standing with its foot [param foot] below the tile's corner.
+static func _stand(uprights: Array, foot: int, op: Array) -> void:
+	if not op.is_empty():
+		uprights.append([foot, op[0], op[1], op[2]])
+
+
+func _site(tile: Vector2i, halves: Array, uprights: Array) -> void:
 	var index := _site_index(tile)
 	if index < 0:
 		return
@@ -321,23 +725,26 @@ func _site(tile: Vector2i, left: Vector2, base: float, queue: Array[Array]) -> v
 		var color := _color_index(world.terrain(tile.x, tile.y))
 		var frames: Array = CASTLE_FRAMES[color]
 		var pick := 0 if kind == ShandalarWorld.CASTLE else 2
-		var at := Vector2(left.x, base - 160)
-		_castle_sprite(frames[pick + 1], at)
-		queue.append([base, queue.size()] + _castle_ref(frames[pick]) + [at])
+		var at := Vector2(0, -160)
+		var half := _castle_ref(frames[pick + 1])
+		_add(halves, _op(half[0], half[1], at))
+		var whole := _castle_ref(frames[pick])
+		_stand(uprights, 0, _op(whole[0], whole[1], at))
 		return
-	if int(site["status"]) & 0xFF00 != 0:
-		var dome: Array = DOMES[clampi((int(site["status"]) >> 8) - 1, 0, 4)]
-		var at := Vector2(left.x, base - 166)
-		_sprite("world_locatn04", 6, at)
-		queue.append([base, queue.size(), dome[0], dome[1], at])
+	var ruler := TownStatus.ruler(world, index)
+	if ruler != 0:
+		var dome: Array = DOMES[ruler - 1]
+		var at := Vector2(0, -166)
+		_add(halves, _op("world_locatn04", 6, at))
+		_stand(uprights, 0, _op(dome[0], dome[1], at))
 		return
 	var look := ((tile.x & 1) + 16) * 2 if kind == ShandalarWorld.VILLAGE else (index % 16) * 2
 	var upright := _location(TOWN_LOOKS[look])
 	var ground := _location(TOWN_LOOKS[look + 1])
 	var height := art.frame_size(upright[0]).y
-	var at := Vector2(left.x, 24 + base - height)
-	_sprite(ground[0], ground[1], at)
-	queue.append([base, queue.size(), upright[0], upright[1], at])
+	var at := Vector2(0, 24 - height)
+	_add(halves, _op(ground[0], ground[1], at))
+	_stand(uprights, 0, _op(upright[0], upright[1], at))
 
 
 ## `FindTownAtWorldCoordinates`: the first slot standing on the tile.
@@ -370,49 +777,52 @@ static func _castle_ref(index: int) -> Array:
 	return ["world_castles1", index] if index < 12 else ["world_castles2", index - 12]
 
 
-func _castle_sprite(index: int, at: Vector2) -> void:
-	var ref := _castle_ref(index)
-	_sprite(ref[0], ref[1], at)
-
-
 # ----------------------------------------------------------- the plain --
 
-func _draw_plain(visible: Array[Vector2i]) -> void:
-	for tile in visible:
-		var left := project(Vector2(tile.x * 32, tile.y * 32))
+## The world plain, on the ground's picture: a diamond of its colour per
+## tile, the dark, the roads, a mark per site and per lair.
+func _paint_plain() -> void:
+	var canvas := _ground
+	for i in _tiles.size():
+		var tile := _tiles[i]
+		var left := _lefts[i]
 		var points := PackedVector2Array([left, left + Vector2(64, -32),
 			left + Vector2(128, 0), left + Vector2(64, 32)])
-		draw_colored_polygon(points, PLAIN.get(world.terrain(tile.x, tile.y), PLAIN[0]))
+		canvas.draw_colored_polygon(points, PLAIN.get(world.terrain(tile.x, tile.y), PLAIN[0]))
 	if fog:
-		_draw_fog(visible)
-	for tile in visible:
-		if fog and not world.is_explored(tile.x, tile.y):
+		_paint_fog(canvas)
+	var origin := _lay(Vector2(_anchor))
+	for i in _tiles.size():
+		if _seen[i] == 0:
 			continue
-		var middle := project(Vector2(tile.x * 32 + 16, tile.y * 32 + 16))
+		var tile := _tiles[i]
+		var middle := _lefts[i] + Vector2(64, 0)
 		var roads := world.road_bits(tile.x, tile.y)
 		for d in range(1, 9):
 			if roads & (1 << (d - 1)) != 0:
-				var to := project(Vector2((tile.x + ShandalarWorld.DX[d]) * 32 + 16,
-					(tile.y + ShandalarWorld.DY[d]) * 32 + 16))
-				draw_line(middle, middle.lerp(to, 0.5), Color8(123, 63, 7), 3.0)
-	for tile in visible:
-		if world.tile_flags(tile.x, tile.y) & ShandalarWorld.SITE == 0:
-			continue
-		if fog and not world.is_explored(tile.x, tile.y):
+				var to := _lay(Vector2((tile.x + ShandalarWorld.DX[d]) * 32 + 16,
+					(tile.y + ShandalarWorld.DY[d]) * 32 + 16)) - origin
+				canvas.draw_line(middle, middle.lerp(to, 0.5), Color8(123, 63, 7), 3.0)
+	for i in _tiles.size():
+		var tile := _tiles[i]
+		if world.tile_flags(tile.x, tile.y) & ShandalarWorld.SITE == 0 or _seen[i] == 0:
 			continue
 		var index := _site_index(tile)
 		if index < 0:
 			continue
 		var kind: int = world.sites[index]["type"]
-		var middle := project(Vector2(tile.x * 32 + 16, tile.y * 32 + 16))
+		var middle := _lefts[i] + Vector2(64, 0)
 		var radius: float = [0, 7, 11, 14, 18, 18][clampi(kind, 0, 5)]
-		draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
-		draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
+		canvas.draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
+		canvas.draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
 	for lair in lairs:
-		var mouth := project(Vector2(int(lair["x"]), int(lair["y"])))
-		draw_circle(mouth, 12, Color(0, 0, 0, 0.6))
-		draw_circle(mouth, 9, Color8(40, 26, 20))
-		draw_arc(mouth, 10, 0, TAU, 20, Color8(232, 190, 110), 2.0)
-	var at := project(hero)
-	draw_circle(at + Vector2(0, -14), 9, Color8(150, 22, 18))
-	draw_rect(Rect2(at + Vector2(-5, -8), Vector2(10, 8)), Color8(150, 22, 18))
+		var mouth := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
+		canvas.draw_circle(mouth, 12, Color(0, 0, 0, 0.6))
+		canvas.draw_circle(mouth, 9, Color8(40, 26, 20))
+		canvas.draw_arc(mouth, 10, 0, TAU, 20, Color8(232, 190, 110), 2.0)
+
+
+## The hero plain, standing at [param at] on [param canvas].
+static func draw_hero_plain(canvas: CanvasItem, at: Vector2) -> void:
+	canvas.draw_circle(at + Vector2(0, -14), 9, Color8(150, 22, 18))
+	canvas.draw_rect(Rect2(at + Vector2(-5, -8), Vector2(10, 8)), Color8(150, 22, 18))

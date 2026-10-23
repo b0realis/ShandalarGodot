@@ -8,16 +8,25 @@ extends RefCounted
 ## place the hero can see and visit ([VisitPane]) the pointer is the place
 ## — a village's little house, a town's two houses, a city's towered gate,
 ## a wizard's castle, a beaten wizard's broken tower, a wizard's dome over
-## a town a wizard rules, a dungeon's skull, a lair's cave mouth; elsewhere the
-## walking man; over the panel and the panes a gold arrow (the owner:
+## a town a wizard rules, a dungeon's skull, a lair's cave mouth; elsewhere
+## the walking man; over the panel and the panes a gold arrow (the owner:
 ## *"over panes the cursor is normal gold mouse"*), and the hand over what
 ## is clicked and the four arrows over a pane to drag in the same gold
 ## (*"system hand and move pointers have to also be in this style"*). The
-## 1997 world screen
-## kept Windows' own arrow (its window
-## class loads `IDC_ARROW`), so these are drawn [QoL], in the Embark
-## screen's gold on a dark outline: drawn large, edges smoothed, then made
-## cursor-sized.
+## 1997 world screen kept Windows' own arrow (its window class loads
+## `IDC_ARROW`), so these are drawn [QoL], in the Embark screen's gold on a
+## dark outline: drawn large, edges smoothed, then made cursor-sized.
+##
+## HOW THEY ARE PAINTED. Each pointer is a few shapes ([method shapes]),
+## laid at four times the size and outlined together in ink: a pixel takes
+## the colour of the last shape it lies in, else ink within the outline's
+## width of any shape, else nothing. The first painter asked that of every
+## pixel and every shape one by one (16,384 pixels a pointer: 20 to 70 ms
+## each, half a second for the twelve, all on the first pointer worn); now
+## each shape is painted a row at a time ([method _paint_rows]) — the run
+## of a row it covers worked out from the shape and its two ends checked
+## pixel by pixel against the same distances — so the pictures are the
+## same to the pixel at a fraction of the cost.
 
 const SIZE := 32
 const DRAWN := 128
@@ -46,37 +55,61 @@ static var _made := {}
 static var _shapes_on := false
 
 
-## The pointer picture for [param kind], made once.
+## The pointer picture for [param kind], made once: its drawing made
+## pointer-sized, edges smoothed.
 static func image(kind: Kind) -> Image:
 	if not _made.has(kind):
-		match kind:
-			Kind.WALK:
-				_made[kind] = _walker()
-			Kind.VILLAGE:
-				_made[kind] = _layers(_house(Vector2(64, 70), 1.0, THATCH))
-			Kind.TOWN:
-				_made[kind] = _layers(_house(Vector2(44, 66), 0.75, ROOF) + _house(Vector2(78, 76), 0.9, THATCH))
-			Kind.CITY:
-				_made[kind] = _layers(_city())
-			Kind.CASTLE:
-				_made[kind] = _layers(_castle(false))
-			Kind.FALLEN:
-				_made[kind] = _layers(_castle(true))
-			Kind.RULED:
-				_made[kind] = _layers(_dome())
-			Kind.DUNGEON:
-				_made[kind] = _layers(_skull())
-			Kind.LAIR:
-				_made[kind] = _layers(_cave())
-			Kind.HAND:
-				_made[kind] = _layers(_hand())
-			Kind.MOVE:
-				_made[kind] = _layers(_move())
-			Kind.ARROW:
-				_made[kind] = _layers([["poly", PackedVector2Array([Vector2(10, 6), Vector2(10, 104),
-					Vector2(36, 80), Vector2(54, 120), Vector2(72, 112), Vector2(54, 74),
-					Vector2(88, 74)]), GOLD]])
+		var picture := drawing(kind)
+		picture.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
+		_made[kind] = picture
 	return _made[kind]
+
+
+## [param kind]'s pointer drawn large ([constant DRAWN] pixels across),
+## before it is made pointer-sized.
+static func drawing(kind: Kind) -> Image:
+	return _layers(shapes(kind), outline(kind))
+
+
+## THE SHAPES of [param kind]'s pointer, the later over the earlier —
+## `[kind, what, colour]`, the kind `rect` (a Rect2), `circle` (`[centre,
+## radius]`), `capsule` (`[from, to, radius]`: a stroke with round ends)
+## or `poly` (its points) — on the 128-pixel drawing.
+static func shapes(kind: Kind) -> Array:
+	match kind:
+		Kind.WALK:
+			return _walker()
+		Kind.VILLAGE:
+			return _house(Vector2(64, 70), 1.0, THATCH)
+		Kind.TOWN:
+			return _house(Vector2(44, 66), 0.75, ROOF) + _house(Vector2(78, 76), 0.9, THATCH)
+		Kind.CITY:
+			return _city()
+		Kind.CASTLE:
+			return _castle(false)
+		Kind.FALLEN:
+			return _castle(true)
+		Kind.RULED:
+			return _dome()
+		Kind.DUNGEON:
+			return _skull()
+		Kind.LAIR:
+			return _cave()
+		Kind.HAND:
+			return _hand()
+		Kind.MOVE:
+			return _move()
+		Kind.ARROW:
+			return [["poly", PackedVector2Array([Vector2(10, 6), Vector2(10, 104),
+				Vector2(36, 80), Vector2(54, 120), Vector2(72, 112), Vector2(54, 74),
+				Vector2(88, 74)]), GOLD]]
+	return []
+
+
+## How wide the ink round [param kind]'s shapes is, in drawing pixels: the
+## walker's a little wider, his limbs being thin.
+static func outline(kind: Kind) -> float:
+	return 6.0 if kind == Kind.WALK else 5.0
 
 
 ## Where the pointer points: the walker's feet, the arrow's tip, a place's
@@ -113,8 +146,9 @@ static func take_off() -> void:
 
 # ------------------------------------------------------------ the shapes --
 
-## A small walking man in mid-stride, facing right.
-static func _walker() -> Image:
+## A small walking man in mid-stride, facing right: a head and seven
+## strokes of their widths.
+static func _walker() -> Array:
 	var limbs: Array = [
 		[Vector2(64, 40), Vector2(58, 76), 10.0],     # the body
 		[Vector2(58, 76), Vector2(46, 98), 8.0],      # the back thigh
@@ -124,13 +158,10 @@ static func _walker() -> Image:
 		[Vector2(64, 46), Vector2(48, 64), 6.0],      # the back arm
 		[Vector2(64, 46), Vector2(82, 60), 6.0],      # the front arm
 	]
-	var head := Vector2(70, 24)
-	var shape := func(at: Vector2) -> float:
-		var d := at.distance_to(head) - 13.0
-		for limb in limbs:
-			d = minf(d, _capsule(at, limb[0], limb[1]) - float(limb[2]))
-		return d
-	return _paint(shape, GOLD, 6.0)
+	var parts: Array = [["circle", [Vector2(70, 24), 13.0], GOLD]]
+	for limb in limbs:
+		parts.append(["capsule", limb, GOLD])
+	return parts
 
 
 ## A house: walls, a door, a window and a roof of [param roof], [param
@@ -244,27 +275,196 @@ static func _cave() -> Array:
 	]
 
 
-## Shapes laid one over another — `[kind, what, colour]`, the kind
-## `rect` (a Rect2), `circle` (`[centre, radius]`) or `poly` — the later
-## over the earlier, all outlined together in ink.
-static func _layers(parts: Array) -> Image:
+## Shapes laid one over another — the later over the earlier, all
+## outlined together in ink [param ink_width] wide. Ink goes first on every
+## pixel near any shape, then each shape's own colour over it in turn: the
+## same picture as asking each pixel which shape it lies in last, else
+## whether it lies near one.
+static func _layers(parts: Array, ink_width: float) -> Image:
 	var image := Image.create_empty(DRAWN, DRAWN, false, Image.FORMAT_RGBA8)
-	for y in DRAWN:
-		for x in DRAWN:
-			var at := Vector2(x + 0.5, y + 0.5)
-			var color := Color(0, 0, 0, 0)
-			var outline := false
-			for part in parts:
-				var d := _distance(part, at)
-				if d < 0.0:
-					color = part[2]
-				elif d < 5.0:
-					outline = true
-			if color.a == 0.0 and outline:
-				color = INK
-			image.set_pixel(x, y, color)
-	image.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
+	for part in parts:
+		_paint_rows(image, part, ink_width, INK)
+	for part in parts:
+		_paint_rows(image, part, 0.0, part[2])
 	return image
+
+
+## Paint [param color] on every pixel whose middle lies less than [param
+## within] from [param part] (inside it when 0). An outline's ink is its
+## inside and a stroke along each of its sides, each painted on its own —
+## together the pixels near the outline, each piece quick to ask.
+static func _paint_rows(image: Image, part: Array, within: float, color: Color) -> void:
+	_paint_runs(image, part, 0.0 if String(part[0]) == "poly" else within, color)
+	if String(part[0]) == "poly" and within > 0.0:
+		var points: PackedVector2Array = part[1]
+		for i in points.size():
+			_paint_runs(image, ["capsule", [points[i], points[(i + 1) % points.size()], 0.0]], within, color)
+
+
+## Paint one shape's rows: the runs its geometry gives for each row
+## ([method _row_runs]) with their two ends settled pixel by pixel
+## ([method _settled]) by [method _distance] — the one rule the picture is
+## held to.
+static func _paint_runs(image: Image, part: Array, within: float, color: Color) -> void:
+	var rows := _row_range(part, within)
+	for y in range(maxi(rows.x, 0), mini(rows.y, DRAWN - 1) + 1):
+		var runs := _row_runs(part, y + 0.5, within)
+		for i in range(0, runs.size(), 2):
+			var run := _settled(part, y, within, runs[i], runs[i + 1])
+			if run.x <= run.y:
+				image.fill_rect(Rect2i(run.x, y, run.y - run.x + 1, 1), color)
+
+
+## Whether pixel ([param x], [param y])'s middle lies less than [param
+## within] from [param part] (inside it when 0) — for an outline's inside,
+## the point-in-polygon test alone, as [method _distance] begins.
+static func _covers(part: Array, x: int, y: int, within: float) -> bool:
+	var at := Vector2(x + 0.5, y + 0.5)
+	if within <= 0.0 and String(part[0]) == "poly":
+		return Geometry2D.is_point_in_polygon(at, part[1])
+	return _distance(part, at) < within
+
+
+## The first and last pixel of a row's run, from the run the geometry gives
+## (between [param from] and [param to], pixel middles strictly inside):
+## each end moved a pixel at a time until [method _covers] agrees, so a
+## rounding in the geometry never changes a pixel. Empty when x > y.
+static func _settled(part: Array, y: int, within: float, from: float, to: float) -> Vector2i:
+	var first := clampi(ceili(from - 0.5), 0, DRAWN - 1)
+	var last := clampi(ceili(to - 0.5) - 1, 0, DRAWN - 1)
+	if first > last:
+		# A row the shape barely touches: its one pixel, if any.
+		first = clampi(floori((from + to) * 0.5), 0, DRAWN - 1)
+		last = first
+	if _covers(part, first, y, within):
+		while first > 0 and _covers(part, first - 1, y, within):
+			first -= 1
+	else:
+		while first <= last and not _covers(part, first, y, within):
+			first += 1
+		if first > last:
+			return Vector2i(1, 0)
+	if _covers(part, last, y, within):
+		while last < DRAWN - 1 and _covers(part, last + 1, y, within):
+			last += 1
+	else:
+		while last > first and not _covers(part, last, y, within):
+			last -= 1
+	return Vector2i(first, last)
+
+
+## The rows [param part] can reach within [param within], first and last
+## (unclamped).
+static func _row_range(part: Array, within: float) -> Vector2i:
+	var top := 0.0
+	var bottom := 0.0
+	match String(part[0]):
+		"rect":
+			var box: Rect2 = part[1]
+			top = box.position.y
+			bottom = box.end.y
+		"circle":
+			top = part[1][0].y - part[1][1]
+			bottom = part[1][0].y + part[1][1]
+		"capsule":
+			top = minf(part[1][0].y, part[1][1].y) - part[1][2]
+			bottom = maxf(part[1][0].y, part[1][1].y) + part[1][2]
+		_:
+			var points: PackedVector2Array = part[1]
+			top = INF
+			bottom = -INF
+			for point in points:
+				top = minf(top, point.y)
+				bottom = maxf(bottom, point.y)
+	return Vector2i(floori(top - within) - 1, ceili(bottom + within) + 1)
+
+
+## The runs of the row whose middles stand at height [param middle] that lie
+## less than [param within] from [param part] (inside it when 0; an
+## outline's inside only), by the shape's geometry: from, to, from, to …
+## (each run whole).
+static func _row_runs(part: Array, middle: float, within: float) -> PackedFloat64Array:
+	match String(part[0]):
+		"rect":
+			var box: Rect2 = part[1]
+			if within <= 0.0:
+				if middle < box.position.y or middle >= box.end.y:
+					return PackedFloat64Array()
+				return PackedFloat64Array([box.position.x, box.end.x])
+			var gap := maxf(maxf(box.position.y - middle, middle - box.end.y), 0.0)
+			return _widened(box.position.x, box.end.x, gap, within)
+		"circle":
+			var centre: Vector2 = part[1][0]
+			return _widened(centre.x, centre.x, absf(middle - centre.y), float(part[1][1]) + within)
+		"capsule":
+			return _stroke(part[1][0], part[1][1], middle, float(part[1][2]) + within)
+		_:
+			# An outline's inside ([method _paint_rows] strokes its sides).
+			return _crossings(part[1], middle)
+
+
+## The run [param left] … [param right] widened by what of [param reach] is
+## left at [param gap] above or below it (none when the gap is as wide).
+static func _widened(left: float, right: float, gap: float, reach: float) -> PackedFloat64Array:
+	if gap >= reach:
+		return PackedFloat64Array()
+	var side := sqrt(reach * reach - gap * gap)
+	return PackedFloat64Array([left - side, right + side])
+
+
+## The run of a row (at [param middle]) within [param reach] of the stroke
+## from [param a] to [param b]: its two round ends and the band between, one
+## run as the stroke is convex.
+static func _stroke(a: Vector2, b: Vector2, middle: float, reach: float) -> PackedFloat64Array:
+	var runs := _widened(a.x, a.x, absf(middle - a.y), reach)
+	runs.append_array(_widened(b.x, b.x, absf(middle - b.y), reach))
+	var along := b - a
+	var length := along.length()
+	if length > 0.0:
+		# The band beside the stroke: a point p of the row with
+		# 0 ≤ (p − a)·u ≤ length and |(p − a)·n| < reach — each a limit on
+		# x − a.x, the row's height already in the offset.
+		var u := along / length
+		var n := Vector2(-u.y, u.x)
+		var band := Vector2(-INF, INF)
+		band = _limit(band, u.x, (middle - a.y) * u.y, 0.0, length)
+		band = _limit(band, n.x, (middle - a.y) * n.y, -reach, reach)
+		if band.x < band.y:
+			runs.append_array(PackedFloat64Array([a.x + band.x, a.x + band.y]))
+	if runs.is_empty():
+		return runs
+	var from := INF
+	var to := -INF
+	for i in range(0, runs.size(), 2):
+		from = minf(from, runs[i])
+		to = maxf(to, runs[i + 1])
+	return PackedFloat64Array([from, to])
+
+
+## [param band] (a run of x) narrowed to where [param low] ≤ [param
+## slope] · x + [param offset] ≤ [param high]; empty (from past to) when
+## nowhere.
+static func _limit(band: Vector2, slope: float, offset: float, low: float, high: float) -> Vector2:
+	if absf(slope) < 1e-9:
+		return band if offset >= low and offset <= high else Vector2(INF, -INF)
+	var one := (low - offset) / slope
+	var two := (high - offset) / slope
+	return Vector2(maxf(band.x, minf(one, two)), minf(band.y, maxf(one, two)))
+
+
+## Where the row at [param middle] crosses the outline of [param points],
+## paired into the runs inside (even and odd).
+static func _crossings(points: PackedVector2Array, middle: float) -> PackedFloat64Array:
+	var xs := PackedFloat64Array()
+	for i in points.size():
+		var a := points[i]
+		var b := points[(i + 1) % points.size()]
+		if (a.y <= middle) != (b.y <= middle):
+			xs.append(a.x + (middle - a.y) * (b.x - a.x) / (b.y - a.y))
+	xs.sort()
+	if xs.size() % 2 != 0:
+		xs.resize(xs.size() - 1)
+	return xs
 
 
 ## How far [param at] lies outside [param part] (below 0 inside).
@@ -277,6 +477,8 @@ static func _distance(part: Array, at: Vector2) -> float:
 			return at.distance_to(at.clamp(box.position, box.end))
 		"circle":
 			return at.distance_to(part[1][0]) - float(part[1][1])
+		"capsule":
+			return _capsule(at, part[1][0], part[1][1]) - float(part[1][2])
 		_:
 			var points: PackedVector2Array = part[1]
 			if Geometry2D.is_point_in_polygon(at, points):
@@ -285,23 +487,6 @@ static func _distance(part: Array, at: Vector2) -> float:
 			for i in points.size():
 				near = minf(near, _capsule(at, points[i], points[(i + 1) % points.size()]))
 			return near
-
-
-## A shape given by a distance (inside below 0), filled with [param fill]
-## and outlined [param outline] wide in ink.
-static func _paint(distance: Callable, fill: Color, outline: float) -> Image:
-	var image := Image.create_empty(DRAWN, DRAWN, false, Image.FORMAT_RGBA8)
-	for y in DRAWN:
-		for x in DRAWN:
-			var d: float = distance.call(Vector2(x + 0.5, y + 0.5))
-			var color := Color(0, 0, 0, 0)
-			if d < outline:
-				color = INK
-			if d < 0.0:
-				color = fill
-			image.set_pixel(x, y, color)
-	image.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
-	return image
 
 
 static func _capsule(at: Vector2, a: Vector2, b: Vector2) -> float:

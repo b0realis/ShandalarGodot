@@ -63,3 +63,32 @@ static func castle_of_site(world: ShandalarWorld, slot: int) -> int:
 ## The name of castle or dungeon slot [param index].
 static func dungeon_name(index: int) -> String:
 	return DUNGEONS[index] if index >= 0 and index < DUNGEONS.size() else ""
+
+
+## THE WAY FROM ONE TILE TO ANOTHER, 0 North … 3 West (`@DIRECTIONS`;
+## 1.3 `GetRelativeWorldQuadrant`): the tiles' difference [param dx],
+## [param dy] read on the screen's diagonals — the world's east and south
+## both run down the screen — so North is up the screen.
+static func quadrant(dx: int, dy: int) -> int:
+	if dy > 0:
+		return 1 if dx > 0 else 2
+	return 0 if dx > 0 else 3
+
+
+## "North", "East", … from tile [param from] to tile [param to].
+static func direction(from: Vector2i, to: Vector2i) -> String:
+	return DIRECTIONS[quadrant(to.x - from.x, to.y - from.y)]
+
+
+## A name in two lines, split at the space nearest its middle (a later
+## space wins a tie), as the 1997 map and city list print them: "Amanaxis
+## Tower" → ["Amanaxis", "Tower"]. One line when there is no space.
+static func two_lines(name: String) -> PackedStringArray:
+	var middle := name.length() / 2.0
+	var best := -1
+	for i in name.length():
+		if name[i] == " " and (best < 0 or absf(i - middle) <= absf(best - middle)):
+			best = i
+	if best < 0:
+		return PackedStringArray([name])
+	return PackedStringArray([name.left(best), name.substr(best + 1)])

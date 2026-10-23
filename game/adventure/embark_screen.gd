@@ -959,17 +959,26 @@ func _exit_tree() -> void:
 	_worker = null
 
 
+## Told on arrival when the adventure's first save could not be written
+## (campaign of 2026-10-23: it was only printed to the log).
+const NOT_SAVED := "The adventure could not be saved: its folder cannot be written. Play goes on, and every later save tries again."
+
+
 ## THE ADVENTURE BEGINS (the owner, 2026-10-22: *"when game starts lets
 ## make an autosave with initial AdventurePlayer stats (by player name and
 ## time hash)"*): the hero ([AdventurePlayer]) made from [param record] in
 ## [param world], saved at once, and the world screen that shows them —
-## not yet in the tree.
+## not yet in the tree. A first save that fails is told with the arrival
+## ([constant NOT_SAVED]).
 func set_out(record: Dictionary, world: ShandalarWorld) -> WorldScreen:
 	var adventure := AdventurePlayer.begin(record, world)
 	var path := adventure.autosave()
-	print("Adventure saved: %s" % path)
 	var screen := open_world(record, world)
 	screen.player = adventure
+	if path != "":
+		print("Adventure saved: %s" % path)
+	else:
+		screen.arrival += "\n\n" + NOT_SAVED
 	return screen
 
 

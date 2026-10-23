@@ -46,11 +46,18 @@ const CHOICES := 5
 const NUMBERS: Array[String] = ["0", "1", "2", "3", "4", "5", "6", "7", "8+"]
 
 static var _pool: Array[Dictionary] = []
+## The card pool's revision the riddles' cards were read against (−1: not
+## yet).
+static var _read_at := -1
 
 
-## THE BASE SET'S CARDS as the riddles read them, once: `{name, creature,
-## power, tough, cc0, cc1, color, bits}`.
+## THE BASE SET'S CARDS as the riddles read them, once for the card pool as
+## it stands (again when it changes, [method CardValue.pool_moved]):
+## `{name, creature, power, tough, cc0, cc1, color, bits}`.
 static func pool() -> Array[Dictionary]:
+	if CardValue.pool_moved(_read_at):
+		forget()
+	_read_at = CardRegistry.revision
 	if not _pool.is_empty():
 		return _pool
 	CardRegistry.ensure_loaded()
@@ -71,8 +78,10 @@ static func pool() -> Array[Dictionary]:
 	return _pool
 
 
+## Forget the cards (a skin imported again, the card pool changed, a test).
 static func forget() -> void:
 	_pool.clear()
+	_read_at = -1
 
 
 ## A card's 1997 ability bits: the program's own when imported, else read

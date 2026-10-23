@@ -432,12 +432,32 @@ func _ready() -> void:
 	_apply_rarity_marks(bool(Settings.get_value(RARITY_SETTING, false)))
 	_apply_cost_marks(bool(Settings.get_value(COST_SETTING, false)))
 	_layout()
+	_before_first_fill()
 	refresh()
 	_refresh_inventory()
 	_start_music()
 	CardPacks.changed.connect(_on_card_packs_changed)
 	CardPacks.rescanned.connect(_on_card_packs_changed.bind("", false))
 	set_process(true)
+
+
+## THE SEAM BEFORE THE FIRST FILL (adventure campaign fix pass 2026-10-23,
+## h5-10). Called once by [method _ready], with every region built and
+## laid out, just before the first [method refresh] and
+## [method _refresh_inventory] draw the deck and the Inventory. The
+## ordinary builder opens on an empty deck over the whole library and has
+## nothing to do here.
+##
+## A builder that opens on decks and cards of its own ([AdventureBuilder])
+## puts them in place HERE, not after `super._ready()`. Done after, the
+## first fill had already filtered and sorted the whole library and drawn
+## its first page — 20 ms an opening over the 897 cards of 1997, 120 ms
+## with every card pack on, plus the art of nine cards nobody would see on
+## the session's first opening — only for the builder to throw that page
+## away for its own cards. Done here, each surface is filled once, from
+## what the builder really opens on.
+func _before_first_fill() -> void:
+	pass
 
 
 ## THE DECK BUILDER HAS MUSIC, AND IT IS ONE BED, LOOPING.
@@ -2031,19 +2051,63 @@ func _refresh_inventory(keep_scroll := false) -> void:
 			var left: int = sealed.copies_of(data.card_name) - deck.copies_of(data.card_name)
 			if left > 0:
 				entries.append([data, left])
-	_printing_count = 0
-	if sealed == null:
-		for entry in entries:
-			var count := 0
-			for printing in CardPrintings.choices(entry[0].card_name):
-				if filter.set_on(printing.set) and CardRegistry.card_in_set(entry[0].card_name,
-						printing.set, filter.completion_pack_on, filter.original_cards_on): count += 1
-			_printing_count += maxi(1, count)
+	_printing_count = _count_printings(entries) if sealed == null else 0
 	_inventory.set_entries(entries)
 	if not keep_scroll:
 		_inventory.reset_scroll()
 	_update_count_line()
 	_filter_bar.refresh()
+
+
+## THE PRINTINGS ON THE LIST, for the count line's `N cards / M printings`:
+## each listed card counts its printings in a set the filter shows, and
+## never less than one — so a card printed once counts one whatever the
+## filter says, and only the cards with several printings are asked about
+## the filter at all.
+func _count_printings(entries: Array) -> int:
+	var total := 0
+	for entry in entries:
+		var card_name: String = (entry[0] as CardData).card_name
+		var sets := _printing_sets_of(card_name)
+		if sets.size() <= 1:
+			total += 1
+			continue
+		var count := 0
+		for code in sets:
+			if filter.set_on(code) and CardRegistry.card_in_set(card_name, code,
+					filter.completion_pack_on, filter.original_cards_on):
+				count += 1
+		total += maxi(1, count)
+	return total
+
+
+## EVERY CARD'S PRINTINGS, KEPT BY NAME FOR ONE REGISTRY LOAD (adventure
+## campaign fix pass 2026-10-23, h5-10): `name -> PackedStringArray` of the
+## set of each of [method CardPrintings.choices]' rows, in its order. Asking
+## the card packs afresh for all 3,093 names with every pack on cost 30 ms
+## on every Inventory fill — each opening of the builder, each filter
+## click — for an answer that only a registry reload can change: the
+## catalogue of printings is rebuilt in exactly one place
+## (`CardPacks._configure_registry`, on a pack switched on or off or a
+## rescan), and that reloads the registry, which moves
+## [member CardRegistry.revision]. So the table is kept across builders
+## and let go when the revision moves. By NAME, never a [CardData] — the
+## exit-time rule [method CardRegistry.unload] states for every static.
+static var _printing_sets: Dictionary = {}
+## The [member CardRegistry.revision] [member _printing_sets] answers for.
+static var _printing_sets_revision := -1
+
+
+static func _printing_sets_of(card_name: String) -> PackedStringArray:
+	if _printing_sets_revision != CardRegistry.revision:
+		_printing_sets.clear()
+		_printing_sets_revision = CardRegistry.revision
+	if not _printing_sets.has(card_name):
+		var sets := PackedStringArray()
+		for printing in CardPrintings.choices(card_name):
+			sets.append(String(printing.set))
+		_printing_sets[card_name] = sets
+	return _printing_sets[card_name]
 
 
 ## `X cards are in the list` is the 1997 cue card. The range after it is
@@ -2141,7 +2205,15 @@ func _process(delta: float) -> void:
 	if _status_timer > 0.0:
 		_status_timer -= delta
 		if _status_timer <= 0.0:
-			_status_label.text = ""
+			_status_label.text = _resting_line()
+			_status_label.add_theme_color_override("font_color", WELL_INK)
+
+
+## The well's line once a message has had its few seconds: nothing here; a
+## builder with something to keep saying ([AdventureBuilder] looking only)
+## names it.
+func _resting_line() -> String:
+	return ""
 
 
 # -------------------------------------------------------- the mini-menu --
@@ -2559,12 +2631,7 @@ func _copies_listed() -> int:
 ## the entry's own count, copies IN HAND, from the second copy on, the
 ## manual's *"tiny number on the single representative card"*.
 func _enter_sealed(pool: SealedPool, fresh := false) -> void:
-	sealed = pool
-	# One medallion down at a time: the dice for a dealt pool, the pool
-	# disc for AutoDeck's.
-	_dice_button.set_pressed_no_signal(pool != _auto_pool)
-	if _pool_button != null:
-		_pool_button.set_pressed_no_signal(pool == _auto_pool)
+	_put_pool_in_force(pool)
 	if fresh and deck.total() + deck.side_total() > 0:
 		# `Clear deck`'s own route, so `Restore deck` can undo it — and,
 		# like it, no older `Undo` step that would jump past the clear.
@@ -2573,11 +2640,26 @@ func _enter_sealed(pool: SealedPool, fresh := false) -> void:
 		_undo = null
 		_clear_button.text = "Restore deck"
 		refresh()
-	_inventory.count_source = Callable()
-	_inventory.badge_min = 2
 	_drawn_revision = -1
 	_refresh_inventory()
 	_say(("Card pool — %s" if pool == _auto_pool else "Sealed Deck — %s") % pool.summary())
+
+
+## [param pool] in force WITHOUT DRAWING IT: [member sealed], the
+## medallions and the Inventory's badge. [method _enter_sealed] draws the
+## Inventory straight after; a builder that opens on a pool of its own
+## calls this alone from [method _before_first_fill], and the first fill
+## draws it — once, where calling [method _enter_sealed] there walked the
+## pool a second time for the same page.
+func _put_pool_in_force(pool: SealedPool) -> void:
+	sealed = pool
+	# One medallion down at a time: the dice for a dealt pool, the pool
+	# disc for AutoDeck's.
+	_dice_button.set_pressed_no_signal(pool != _auto_pool)
+	if _pool_button != null:
+		_pool_button.set_pressed_no_signal(pool == _auto_pool)
+	_inventory.count_source = Callable()
+	_inventory.badge_min = 2
 
 
 ## The whole library back, the badge back to copies in the deck. The deck

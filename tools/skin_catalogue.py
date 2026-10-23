@@ -161,6 +161,26 @@ FAMILIES: list[tuple[str, str, str]] = [
      "siege's news flash (Newsback.pic), the card shop's ground "
      "(buycards, Buycards.pic, its own palette); dungeon is the dungeon "
      "board's ground (CaveBkgd.pic, 640 x 480)."),
+    ("The adventure world", "world_map_tiles",
+     "The F2 map's sheet (Ttsprite.spr): the terrain's 13-pixel diamonds in "
+     "three looks (frame look x 16 + terrain), then the places' icons "
+     "(48 village, 49 town and city, 50 castle; 13 x 20)."),
+    ("The adventure world", "quest_",
+     "The quest panel's sheets: the scroll (Questnew.spr), the pendulum "
+     "clock (Clocknew.spr, 8 frames), the sun and the moon (Sunmoon.spr, "
+     "14) and the days left (Daysnew.spr, the numerals 0-5), 67 x 88."),
+    ("The adventure world", "map_",
+     "The F2 map's own screen: its stone ground (map_ground, Mapback.pic) "
+     "and its buttons and amulet panel (map_buttons, Mapbttns.pic)."),
+    ("The adventure world", "city_list",
+     "The F3 city list's screen (Cityinfo.pic) and its Done and arrow "
+     "buttons (city_list_buttons, Infobar.pic)."),
+    ("The adventure world", "world_magic_seller",
+     "The World Magic seller's table as a town is left (Worlbak1.pic): the "
+     "skull, the candle and the crystal ball."),
+    ("The adventure world", "adventure_wise_words",
+     "Not a picture: the wise man's twelve tales and four kinds of news "
+     "(adventure_wise_words.json), read from the player's Advblocks.txt."),
     ("The adventure world", "adventure_cards",
      "Not a picture: the 1997 program's card values (adventure_cards.json), "
      "read out of the player's Shandalar.exe and named from Info.csv and "
@@ -366,6 +386,24 @@ FAMILIES: list[tuple[str, str, str]] = [
     # the game) for every player; a skin's body font is not read
     # (2026-10-15).
 
+    ("Sounds", "sfx_step_",
+     "The world's footsteps by the colour of the land, left and right "
+     "(Sound/Kwalkl.wav ... Wwalkr.wav)."),
+    ("Sounds", "sfx_call_",
+     "The world's calls by the colour of the land: each colour's bird and "
+     "its land calls (Sound/Kbird1.wav, Kland1.wav, ...)."),
+    ("Sounds", "sfx_world_magic_",
+     "The World Magics' stings, by colour, played as an icon is clicked "
+     "(Sound/Blackwm.wav ... Whitewm.wav)."),
+    ("Sounds", "sfx_click",
+     "The world panel's click (Sound/Button2.wav)."),
+    ("Sounds", "sfx_mana_link",
+     "A mana link made by a letter quest (Sound/Manalink.wav)."),
+    ("Sounds", "sfx_reward",
+     "A letter quest's amulet reward (Sound/Reward.wav)."),
+    ("Sounds", "sfx_treasure",
+     "A lair's treasure, the thieves' gold, the Gemcutter's Guild "
+     "(Sound/Treasure.wav)."),
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "
      "sfx_draw, sfx_shuffle, sfx_summon, sfx_attack, sfx_block, "

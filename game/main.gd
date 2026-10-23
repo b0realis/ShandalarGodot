@@ -198,11 +198,13 @@ func _ready() -> void:
 	# THE ADVENTURES SAVED (2026-10-22): an adventure is saved the moment
 	# its world is made ([AdventurePlayer]); this opens the list to take one
 	# up again ([LoadAdventureScreen]). With none saved yet it says how one
-	# comes to be.
+	# comes to be — but saves that could not be read open the list, which
+	# says how many there are, rather than "none saved".
 	var save_load := _menu_button("Save / Load")
 	save_load.tooltip_text = "Take up a saved adventure again."
 	save_load.pressed.connect(func() -> void:
-		if AdventurePlayer.list_saves().is_empty():
+		var scanned := AdventurePlayer.scan_saves()
+		if (scanned["saves"] as Array).is_empty() and int(scanned["unreadable"]) == 0:
 			UiChrome.explain_popup(self, "Save / Load",
 				"No adventure has been saved yet. Shandalar on this menu "
 				+ "begins one, and it is saved the moment its world is "

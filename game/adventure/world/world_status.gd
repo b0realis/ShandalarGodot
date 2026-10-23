@@ -6,22 +6,14 @@ extends RefCounted
 ## 0054baaa in 1.3) and the wizards' window (F6, `Statwin.dll`) showed,
 ## in the 1997 words (`Advstrings.txt` `@QUESTSTATUS`, `@NEWSFLASH`).
 ##
-## THE QUEST (`AdventurePlayer.quest`, the save's five numbers at 0x21CF8
-## and ours beside them): `type` — 0 a letter whose reward is a mana link,
-## 2 a letter for an amulet, 1 a card of a colour and class, below 0 a
-## creature to defeat (below −100 defeated, the reward waiting) —,
-## `destination` (a site slot), `color` (1 black … 5 white), `data` (the
-## quarter the destination lies in, 0 north … 3 west), `deadline` (on the
-## quest clock), and ours: `giver` (the town that gave it; 1997 did not
-## keep it in the save), `turned` (the hero has left the quarter they set
-## out in: the line says where to go no more, but what to do), `card_class`
-## and `creature` (for the words).
-##  - A DAY is 16 steps of the quest clock (`VisitTownWiseman`: a letter's
-##    32 steps are "4 days"); the panel's days left are
-##    `(deadline − timer) / 16 + 1`.
-##  - When the clock reaches the deadline the quest is lost: "The people of
-##    %s are sorry their quest was not completed." (1.3 `adventureWorldUi.c`
-##    at 1642), and the town that gave it has no new quest for the hero.
+## THE QUEST ([member AdventurePlayer.quest], its fields and rules in
+## [Quests]): the panel says what to do and where — "Go East to Kraag
+## Temple" while the hero has not turned off the way they set out, then
+## "Take letter to …", "Take card to …" or, for a card quest whose card the
+## hero does not yet hold, "Find a black Creature spell" — and ours beside
+## it, the reward and the days left.
+##  - A DAY is 16 steps of the quest clock (a letter's 32 time units are
+##    "4 days"); the panel's days left are `(deadline − timer) / 16 + 1`.
 ##
 ## THE SIEGE: the creature a wizard sends to a city stands in roaming slot
 ## 7 (`StartWizardTownSiege`, 005616f9); the panel says "%1 attacking %2!".
@@ -39,7 +31,6 @@ const DOMINION_WITH_RING := 5
 ## `@QUESTSTATUS`'s "Go North to"… by the destination's quarter: the
 ## original's four directions are the screen's diagonals.
 const GO: Array[String] = ["Go North to %s", "Go East to %s", "Go South to %s", "Go West to %s"]
-const COLOR_WORDS: Array[String] = ["black", "blue", "green", "red", "white"]
 
 
 ## Days on the road: the quest clock, which steps on every 32 ticks the
@@ -50,7 +41,7 @@ static func days_on_road(player: AdventurePlayer) -> int:
 
 ## Whether a quest is under way.
 static func has_quest(player: AdventurePlayer) -> bool:
-	return not player.quest.is_empty()
+	return Quests.has_quest(player)
 
 
 ## The quest's days left: `(deadline − timer) / 16 + 1`, at least 0.
@@ -73,59 +64,43 @@ static func quest_target(player: AdventurePlayer) -> int:
 
 
 ## The quest's lines, as the 1997 panel words them: what to do and where,
-## the days left.
+## then ours — the reward and the days left.
 static func quest_lines(player: AdventurePlayer) -> Array[String]:
 	var lines: Array[String] = []
 	if not has_quest(player):
 		return lines
 	var quest := player.quest
 	var kind := int(quest.get("type", 0))
+	var color := clampi(int(quest.get("color", 1)), 1, 5)
 	var town := WorldNames.site_name(player.world, quest_target(player))
-	if kind < -100:
+	if kind < Quests.DEFEATED:
 		lines.append("Return to %s" % town)
 	elif kind < 0:
-		lines.append("Defeat %s" % String(quest.get("creature", "the creature")))
-		lines.append("then return to %s" % town)
-	elif not bool(quest.get("turned", false)):
-		lines.append(GO[clampi(int(quest.get("data", 0)), 0, 3)] % town)
-	elif kind == 1:
+		lines.append("Defeat %s" % CreatureBook.called(-kind))
+	elif kind == Quests.CARD and Quests.card_for_quest(player) < 0:
+		lines.append("Find a %s" % Quests.spell_name(color, int(quest["destination"])))
+	elif int(quest.get("data", -1)) >= 0:
+		lines.append(GO[clampi(int(quest["data"]), 0, 3)] % town)
+	elif kind == Quests.CARD:
 		lines.append("Take card to %s" % town)
 	else:
 		lines.append("Take letter to %s" % town)
-	if kind == 1 and not bool(quest.get("card_found", false)):
-		lines.append("Find a %s %s spell" % [COLOR_WORDS[clampi(int(quest.get("color", 1)) - 1, 0, 4)],
-			String(quest.get("card_class", "")).to_lower()])
-	var reward := ""
 	match kind:
-		0:
-			reward = "Mana Link"
-		2:
-			reward = "%s amulet" % COLOR_WORDS[clampi(int(quest.get("color", 1)) - 1, 0, 4)].capitalize()
-		1:
-			reward = "Mana Link and an amulet"
-	if reward != "":
-		lines.append("Reward: " + reward)
+		Quests.LETTER_LINK:
+			lines.append("Reward: Mana Link")
+		Quests.LETTER_AMULET:
+			lines.append("Reward: %s" % Quests.amulet_name(color).capitalize())
+		Quests.CARD:
+			lines.append("Reward: Mana Link and an amulet")
 	var days := days_left(player)
 	lines.append("%d %s left" % [days, "day" if days == 1 else "days"])
 	return lines
 
 
-## THE QUEST'S TIME RUNS OUT: when its clock has reached the deadline the
-## quest is lost, the giver will give no other, the journal says so; the
-## 1997 words for the screen, or "" while it still runs.
+## THE QUEST'S TIME RUNS OUT ([method Quests.check_deadline]): the words
+## for the screen, or "" while it still runs.
 static func check_quest(player: AdventurePlayer) -> String:
-	if not has_quest(player) or int(player.quest.get("type", 0)) < -100:
-		return ""
-	if int(player.quest.get("deadline", 0)) > player.quest_timer:
-		return ""
-	var giver := int(player.quest.get("giver", -1))
-	var town := WorldNames.site_name(player.world, giver)
-	if giver >= 0 and giver < player.world.sites.size():
-		player.world.sites[giver]["status"] = int(player.world.sites[giver]["status"]) | 0x10
-	player.log_event("quest", "Quest failed for %s" % town, {"done": false})
-	player.quest = {}
-	return "The people of %s are sorry their quest was not completed." % town if town != "" \
-		else "Your quest was not completed in time."
+	return Quests.check_deadline(player)
 
 
 ## The creature besieging a city ([method WorldMagic.siege_creature]), or `{}`.
@@ -152,9 +127,9 @@ static func siege_line(player: AdventurePlayer) -> String:
 ## byte holds the wizard's colour.
 static func taps(player: AdventurePlayer) -> Array[int]:
 	var counts: Array[int] = [0, 0, 0, 0, 0]
-	for site in player.world.sites:
-		var ruler := (int(site["status"]) >> 8) & 0xFF
-		if ruler >= 1 and ruler <= 5:
+	for slot in player.world.sites.size():
+		var ruler := TownStatus.ruler(player.world, slot)
+		if ruler != 0:
 			counts[ruler - 1] += 1
 	return counts
 

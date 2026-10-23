@@ -541,6 +541,18 @@ MANIFEST: dict[str, list[str]] = {
     # black, red, green). The frame itself is `world_frame` (PIC_SCREENS).
     "world_magics":          ["worlds.spr"],
     "world_amulets":         ["amsprite.spr"],
+    # THE MAP'S AND THE QUEST PANEL'S SHEETS (2026-10-23): `Ttsprite.spr`,
+    # the F2 map's terrain diamonds in three looks (frames 0–47: look ·
+    # 16 + terrain) and its place icons (48 village, 49 town and city, 50
+    # castle; 13 x 20); the quest panel's scroll (`Questnew.spr`), its
+    # pendulum clock (`Clocknew.spr`, 8 frames), the sun and the moon
+    # (`Sunmoon.spr`, 14) and the days left (`Daysnew.spr`, the numerals
+    # 0–5), 67 x 88 each.
+    "world_map_tiles":       ["ttsprite.spr"],
+    "quest_scroll":          ["questnew.spr"],
+    "quest_clock":           ["clocknew.spr"],
+    "quest_sunmoon":         ["sunmoon.spr"],
+    "quest_days":            ["daysnew.spr"],
     # THE TITLE MENU'S SPRITE, `Begin.spr` (2026-10-08, the owner: *"Lets
     # import every frame there but we will use only icon for now"*): ALL
     # EIGHTEEN frames, one column of 265x24 cells, top to bottom —
@@ -1070,15 +1082,19 @@ MANIFEST: dict[str, list[str]] = {
     # every sound call site there passes a bare integer — so defs.h below
     # remains the only NAMED table anyone has.
     #
-    # and the adventure's effects, all [M5, not imported]: five world-map
-    # ambiences (*wm), per-region
-    # land and bird loops (*land*, *bird*), footsteps (*walkl/*walkr),
-    # Dice, Treasure, Reward, Scroll, Findcard, Newsflash, Death, Horse,
-    # Knight, Lord, Wolf, Troll, Dragon, Wyrm, Djinn, Archmage, Malewiz,
-    # Fewiz, Flying, Dsummon, Damb1-5+Dambloop, Manaball, Button2.
-    # `Manalink.wav` is Manalink's own sting — never 1997.
+    # and the adventure's effects: the five World Magic stings a click on
+    # a World Magic's icon plays (*wm), the colours' bird and land CALLS
+    # (*land*, *bird* — one-shots, not loops), the footsteps
+    # (*walkl/*walkr), the click (Button2), the mana link and reward
+    # stings (`Manalink.wav` IS 1997: both decompilations play it when a
+    # letter quest makes a mana link) and Treasure — imported below as the
+    # world's sounds (2026-10-23) — and, for later, Dice, Scroll,
+    # Findcard, Newsflash, Death, Horse, Knight, Lord, Wolf, Troll,
+    # Dragon, Wyrm, Djinn, Archmage, Malewiz, Fewiz, Flying, Dsummon,
+    # Damb1-5+Dambloop and Manaball.
     #
-    # `Program/statscrn.wav` exists too; nothing in the sources plays it.
+    # `statscrn.wav` (in the install's root) is the wizards' window's
+    # loop, played by `statwin.dll`.
     #
     # THE KEYS ARE THE ORIGINAL'S OWN EVENTS, not our guesses at them.
     # `shandalar-src/src/defs.h:2179-2265` is the 1997 sound enum, with a
@@ -1206,7 +1222,11 @@ MANIFEST: dict[str, list[str]] = {
     # stings, already imported as sfx_win/sfx_lose).
     #
     # WHAT EACH BED IS, from `MAGIC.EXE` (Tier 2, cited by entry address
-    # because the decompilation's function names are machine guesses):
+    # because the decompilation's function names are machine guesses; the
+    # world's choice of tune read again in 1.3 `adventure_input.c` 660–832,
+    # 2026-10-23: a village plays LocMus0, a town or city LocMus(k + 1) for
+    # its site slot k = slot % 20, k 19 Tmplmus1 — not a temple, the
+    # twentieth town tune — and a castle its colour's):
     #   Dueltune       the duel bed; one of a three-entry pointer table
     #                  with Winduel and Loseduel behind entry `004ebfef`,
     #                  called with 0 on entering a duel.
@@ -1245,6 +1265,45 @@ MANIFEST: dict[str, list[str]] = {
     "music_castle_black.wav":   shell_sound("BCastle.wav"),
     "music_castle_red.wav":     shell_sound("RCastle.wav"),
     "music_castle_green.wav":   shell_sound("GCastle.wav"),
+    # THE WORLD'S SOUNDS (2026-10-23, the owner: *"Soundscape + title
+    # music"*), read in 1.3 `adventure_input.c` and `adventure_sound.c`
+    # (the soundscape, [WorldSoundscape]): each colour's footsteps, left
+    # and right (k black, b blue, g green, r red, w white); each colour's
+    # calls — a bird and one or two land calls; the click of the panel's
+    # buttons; the five World Magic stings a click on a World Magic's icon
+    # plays; the mana link and reward stings of a letter quest; the
+    # treasure's.
+    "sfx_step_black_left.wav":   shell_sound("Kwalkl.wav"),
+    "sfx_step_black_right.wav":  shell_sound("Kwalkr.wav"),
+    "sfx_step_blue_left.wav":    shell_sound("Bwalkl.wav"),
+    "sfx_step_blue_right.wav":   shell_sound("Bwalkr.wav"),
+    "sfx_step_green_left.wav":   shell_sound("Gwalkl.wav"),
+    "sfx_step_green_right.wav":  shell_sound("Gwalkr.wav"),
+    "sfx_step_red_left.wav":     shell_sound("Rwalkl.wav"),
+    "sfx_step_red_right.wav":    shell_sound("Rwalkr.wav"),
+    "sfx_step_white_left.wav":   shell_sound("Wwalkl.wav"),
+    "sfx_step_white_right.wav":  shell_sound("Wwalkr.wav"),
+    "sfx_call_black_bird.wav":   shell_sound("Kbird1.wav"),
+    "sfx_call_black_land_1.wav": shell_sound("Kland1.wav"),
+    "sfx_call_black_land_2.wav": shell_sound("Kland2.wav"),
+    "sfx_call_blue_bird.wav":    shell_sound("Bbird1.wav"),
+    "sfx_call_blue_land_1.wav":  shell_sound("Bland1.wav"),
+    "sfx_call_blue_land_2.wav":  shell_sound("Bland2.wav"),
+    "sfx_call_green_bird.wav":   shell_sound("Gbird1.wav"),
+    "sfx_call_green_land_1.wav": shell_sound("Gland1.wav"),
+    "sfx_call_red_bird.wav":     shell_sound("Rbird1.wav"),
+    "sfx_call_red_land_1.wav":   shell_sound("Rland1.wav"),
+    "sfx_call_white_bird.wav":   shell_sound("Wbird1.wav"),
+    "sfx_call_white_land_1.wav": shell_sound("Wland1.wav"),
+    "sfx_click.wav":             shell_sound("Button2.wav"),
+    "sfx_world_magic_black.wav": shell_sound("Blackwm.wav"),
+    "sfx_world_magic_blue.wav":  shell_sound("Bluewm.wav"),
+    "sfx_world_magic_green.wav": shell_sound("Greenwm.wav"),
+    "sfx_world_magic_red.wav":   shell_sound("Redwm.wav"),
+    "sfx_world_magic_white.wav": shell_sound("Whitewm.wav"),
+    "sfx_mana_link.wav":         shell_sound("Manalink.wav"),
+    "sfx_reward.wav":            shell_sound("Reward.wav"),
+    "sfx_treasure.wav":          shell_sound("Treasure.wav"),
 }
 
 
@@ -2512,12 +2571,26 @@ VISIT_PICTURES: dict[str, list[str]] = {
     "visit_dungeon": ["CaveBkgd.pic"],
 }
 PIC_SCREENS.update(VISIT_PICTURES)
+# THE WORLD'S OWN SCREENS (2026-10-23), 640 x 480 or button sheets, with the
+# world frame's palette: the F2 map's stone ground (`Mapback.pic`) and its
+# buttons, amulet panel and ornament (`Mapbttns.pic`); the F3 city list's
+# ground (`Cityinfo.pic`) and its Done and arrow buttons (`Infobar.pic`);
+# the World Magic seller's skull, candle and crystal ball (`Worlbak1.pic`).
+WORLD_SCREENS: dict[str, list[str]] = {
+    "map_ground": ["Mapback.pic"],
+    "map_buttons": ["Mapbttns.pic"],
+    "city_list": ["Cityinfo.pic"],
+    "city_list_buttons": ["Infobar.pic"],
+    "world_magic_seller": ["Worlbak1.pic"],
+}
+PIC_SCREENS.update(WORLD_SCREENS)
 ## The palette a bare picture is painted with, by key, where it is not the
 ## duel's ([constant PIC_PALETTE]): the places' pictures take the world
 ## frame's, and are drawn whole — index 255 is a colour in them, not the
 ## clear of a face.
-PIC_PALETTES: dict[str, list[str]] = {key: ["Advfac64.pic", "Advinter.pic"] for key in VISIT_PICTURES}
-PIC_OPAQUE: set[str] = set(VISIT_PICTURES)
+PIC_PALETTES: dict[str, list[str]] = {key: ["Advfac64.pic", "Advinter.pic"]
+                                      for key in list(VISIT_PICTURES) + list(WORLD_SCREENS)}
+PIC_OPAQUE: set[str] = set(VISIT_PICTURES) | set(WORLD_SCREENS)
 
 
 # THE ADVENTURE'S CARD VALUES (2026-10-23, the owner: *"study how, which
@@ -2710,6 +2783,56 @@ def import_card_hints(index: dict[str, Path], dest: Path) -> bool:
     (dest / (HINTS_KEY + ".json")).write_text(json.dumps(
         {"source": source.name, "hints": hints}, sort_keys=True) + "\n")
     print("  %-24s <- %s (%d hints)" % (HINTS_KEY, source.name, len(hints)))
+    return True
+
+
+# THE WISE MAN'S WORDS (2026-10-23). `Advblocks.txt` holds sixteen blocks
+# between `STARTBLOCK` and `ENDBLOCK` lines (comments between them): four
+# "city blocks" — the news of a wizard (a male one's, then the linked
+# towns', then a World Magic's, then a female wizard's) — and twelve tales
+# of long ago, each in pages parted by three blank lines (1.3
+# `RunWisemanAdviceSequence`). Read as `adventure_wise_words.json`:
+# `{city: [4 texts], tales: [12 lists of pages]}`; [WiseMan] speaks them.
+WISE_WORDS_KEY = "adventure_wise_words"
+
+
+def wise_words(text: str) -> dict:
+    """The blocks of an `Advblocks.txt`: `{city, tales}` (see above), the
+    pages without their trailing line breaks."""
+    blocks: list[list[str]] = []
+    plain = text.replace("\r", "")
+    at = 0
+    while True:
+        start = plain.find("STARTBLOCK\n", at)
+        if start < 0:
+            break
+        end = plain.find("ENDBLOCK", start)
+        if end < 0:
+            break
+        body = plain[start + len("STARTBLOCK\n"):end]
+        pages = body.split("\n\n\n\n")[:-1] if "\n\n\n\n" in body else [body]
+        blocks.append([page.rstrip("\n") for page in pages if page.strip()])
+        at = end + len("ENDBLOCK")
+    city = ["\n\n".join(block) for block in blocks[:4]]
+    return {"city": city, "tales": blocks[4:]}
+
+
+def import_wise_words(index: dict[str, Path], dest: Path) -> bool:
+    """Write `<dest>/adventure_wise_words.json` from the player's
+    `Advblocks.txt`; True when it was written."""
+    source = index.get("advblocks.txt")
+    if source is None:
+        return False
+    try:
+        words = wise_words(source.read_text(encoding="cp1252", errors="replace"))
+    except OSError as err:
+        print("  %-24s SKIPPED %s (%s)" % (WISE_WORDS_KEY, source.name, err))
+        return False
+    if len(words["city"]) < 4 or not words["tales"]:
+        print("  %-24s SKIPPED %s (no blocks read)" % (WISE_WORDS_KEY, source.name))
+        return False
+    (dest / (WISE_WORDS_KEY + ".json")).write_text(json.dumps(words, sort_keys=True) + "\n")
+    print("  %-24s <- %s (%d tales)" % (WISE_WORDS_KEY, source.name, len(words["tales"])))
     return True
 
 
@@ -2909,6 +3032,11 @@ WORLD_SHEETS: dict[str, tuple[int, int, int, int]] = {
     "world_sego_f": (40, 154, 108, 5),
     "world_magics": (60, 52, 54, 12),
     "world_amulets": (5, 12, 17, 5),
+    "world_map_tiles": (54, 13, 20, 16),
+    "quest_scroll": (2, 237, 115, 2),
+    "quest_clock": (8, 67, 88, 8),
+    "quest_sunmoon": (14, 67, 88, 14),
+    "quest_days": (6, 67, 88, 6),
 }
 for _key, (_cells, _w, _h, _columns) in WORLD_SHEETS.items():
     SPR_SHEETS[_key] = (MANIFEST[_key], _cells, _w, _h)
@@ -3546,6 +3674,8 @@ def run_import(args: argparse.Namespace, index: dict[str, Path],
     import_card_values(index, dest)
     # The card seller's hints, from the game's own `Hints.txt`.
     import_card_hints(index, dest)
+    # The wise man's tales and news, from the game's own `Advblocks.txt`.
+    import_wise_words(index, dest)
     return origin, notes
 
 

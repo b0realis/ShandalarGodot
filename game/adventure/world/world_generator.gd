@@ -451,8 +451,10 @@ func _try_sites() -> bool:
 					draws += 1
 				if draws >= 99:
 					_magic[_rng.below(2)] = slot
+				# The first ten towns and cities placed are the hero's first
+				# mana links ([TownStatus.LINKED]).
 				if magic_towns < 10:
-					_site_status[slot] |= 1
+					_site_status[slot] |= TownStatus.LINKED
 					magic_towns += 1
 			_set_flags(ShandalarWorld.SITE, cx, cy)
 			town_room.erase(Vector2i(cx / 4, cy / 4))

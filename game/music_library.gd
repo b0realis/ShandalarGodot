@@ -35,14 +35,20 @@ extends RefCounted
 ## a file dropped in after the game shipped still plays, same "the game
 ## reads the folder when it starts".
 ##
-## **NOTHING IS CACHED HERE, and that is deliberate.** These are whole
-## songs: one imported `LocMus` is ~2.8 MB of 22 kHz PCM, and the
-## twenty-seven together are 76 MB. [GameSkin]'s sound cache is
+## **A FEW TUNES ARE KEPT, AND ONLY A FEW — that is deliberate.** These
+## are whole songs: one imported `LocMus` is ~2.8 MB of 22 kHz PCM, and
+## the twenty-seven together are 76 MB. [GameSkin]'s sound cache is
 ## process-long and would hold every one of them for the rest of the
-## session, so music does NOT go through it — [method stream] reads the
-## file each time it is asked, and the only thing holding a tune in memory
-## is the [AudioStreamPlaylist] currently playing. [MusicPlayer.MAX_TRACKS]
-## is what bounds that.
+## session, so music does NOT go through it. [method stream] reads the
+## file when it is asked, and keeps the last [constant KEPT_TUNES] tunes it
+## read — by path and the file's modified time — to hand out again while
+## the file is unchanged (adventure campaign fix pass 2026-10-23, h5-10).
+## A deck builder opens on the same bed every time, the adventure's F1
+## among its doors, and reading that bed off the disk again was 19-22 ms of
+## every opening; closing it read the shell's bed and the place's tune
+## again. Beyond those few, the only thing holding music in memory is the
+## [AudioStreamPlaylist] currently playing, and [MusicPlayer.MAX_TRACKS] is
+## what bounds that.
 
 ## The player's own folder — `user://music` unless the `music_folder`
 ## key moved it ([method GamePaths.music_folder]); its tunes play AMONG
@@ -339,11 +345,13 @@ static func name_of(id: String) -> String:
 	return title_of(id)
 
 
-## Forget what was found, so the next [method all] looks again. The
+## Forget what was found, so the next [method all] looks again — and the
+## tunes [method stream] kept, so the next ask reads the file again. The
 ## Options screen calls this after creating the folder, and tests after
 ## writing into it.
 static func refresh() -> void:
 	_cache = []
+	_forget_kept()
 
 
 ## One tune, loaded. Null for an id that is not there, a file that has
@@ -357,20 +365,71 @@ static func refresh() -> void:
 ## the bytes directly, which is what makes "drop a track in and restart"
 ## work in an exported build.
 ##
-## NOT CACHED — see the class doc. The caller holds what it is playing.
+## THE LAST FEW TUNES READ ARE KEPT — see the class doc. A kept tune is
+## handed out again while its file has the same path and modified time; a
+## file rewritten since is read afresh. The caller holds what it is
+## playing.
 static func stream(id: String) -> AudioStream:
 	for entry in all():
 		if entry["id"] != id:
 			continue
 		var path := String(entry["path"])
-		match path.get_extension().to_lower():
-			"wav":
-				return AudioStreamWAV.load_from_file(path)
-			"ogg":
-				return AudioStreamOggVorbis.load_from_file(path)
-			"mp3":
-				return AudioStreamMP3.load_from_file(path)
+		var stamp := FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+		var kept := _take_kept(path, stamp)
+		if kept != null:
+			return kept
+		var read := _read(path)
+		if read != null and stamp >= 0:
+			_kept.append([path, stamp, read])
+			while _kept.size() > KEPT_TUNES:
+				_kept.pop_front()
+		return read
+	return null
+
+
+## How many tunes [method stream] keeps: the three an adventure's F1 goes
+## back and forth between — the deck builder's bed, and on the way back
+## the shell's bed and the tune of the place the hero stands by. About
+## 8 MB of the original's PCM.
+const KEPT_TUNES := 3
+
+## The tunes [method stream] read last, the oldest first: `[path, the
+## file's modified time then, the stream]`.
+static var _kept: Array = []
+
+
+## The kept tune read from [param path] at [param stamp], made the
+## youngest; null when there is none, or the file has changed since (that
+## one is let go).
+static func _take_kept(path: String, stamp: int) -> AudioStream:
+	if stamp < 0:
 		return null
+	for i in _kept.size():
+		var row: Array = _kept[i]
+		if row[0] != path:
+			continue
+		_kept.remove_at(i)
+		if int(row[1]) != stamp:
+			return null
+		_kept.append(row)
+		return row[2]
+	return null
+
+
+static func _forget_kept() -> void:
+	_kept.clear()
+
+
+## One file off the disk, by its extension; null for a format the engine
+## refuses.
+static func _read(path: String) -> AudioStream:
+	match path.get_extension().to_lower():
+		"wav":
+			return AudioStreamWAV.load_from_file(path)
+		"ogg":
+			return AudioStreamOggVorbis.load_from_file(path)
+		"mp3":
+			return AudioStreamMP3.load_from_file(path)
 	return null
 
 

@@ -96,6 +96,48 @@
   `import_card_values` (`find_card_table`, `read_card_table`,
   `card_values`) reads the program's card table, `import_card_hints`
   (`card_hints`) its `Hints.txt`.
+- `game/adventure/town_status.gd`: `TownStatus`, a site's status word
+  (`LINKED` 0x01, `VISITED` 0x02, `NO_QUESTS` 0x04, the ruler's high
+  byte) and the hero's mana links (`mana_links`, `linked_towns`; the
+  duel's life). `AdventurePlayer.mana_links()` reads it.
+- `game/adventure/quests.gd`: `Quests`, the towns' quests — `arrive`
+  (drawn on a visit to another town), `offered`, `offer_words`, `accept`,
+  `complete_at`, `card_for_quest`, `check_deadline`, `note_heading`;
+  shown by `WorldStatus.quest_lines`.
+- `game/adventure/wise_man.gd`: `WiseMan`, `RunWisemanAdviceSequence` —
+  `speak` (stages, tales, news, reminder, gifts), `give` (the six gifts,
+  `GIFTS` by the town's tile), `copy`, `castle_life`, `fill`.
+  `game/adventure/world/wise_man_pane.gd`: `WiseManPane` (a `VisitPane`;
+  the quest offer, the pages, the gift's choice); `WorldScreen.open_wise_man`.
+- `game/adventure/world_magic_shop.gd`: `WorldMagicShop`, buying a World
+  Magic as a town is left (`offer`, `words`, `buy`, `PRICES`);
+  `game/adventure/world/world_magic_pane.gd`: `WorldMagicPane`
+  (`Worlbak1.pic`); `WorldScreen._leave_site` / `open_magic_seller`.
+- `game/adventure/creature_book.gd`: `CreatureBook`, the 57 creatures of
+  1997 (`ROWS`, `called`, `of_color`, `deck`); their decks are
+  `decks/1997/originals/`. `game/adventure/world/card_list_pane.gd`:
+  `CardListPane`, a list of cards to see or pick (`counted`, `picked`);
+  `WorldScreen.show_creature_deck`, `open_card_list`.
+- `game/adventure/save_slots.gd`: `SaveSlots`, the ten named slots per
+  adventure (`slots_of`, `save_into`, `default_name`, `migrate`);
+  `game/adventure/world/save_slots_pane.gd`: `SaveSlotsPane`;
+  `WorldScreen.save_now` / `save_into_slot` / `autosave`;
+  `LoadAdventureScreen` lists them by adventure (`rows`, `resume`).
+- `game/adventure/world/city_list_pane.gd`: `CityListPane`, the F3 city
+  list (`towns`, `scroll`, `shown`); `WorldScreen.show_city_list`.
+  `game/adventure/world/world_map.gd`: `WorldMap`, the F2 map's three maps
+  and the journal walk (`Mode`, `show_mode`, `walk_journal`,
+  `step_journal`, `tile_point`, `tile_look`, `key`).
+- `game/adventure/world/world_soundscape.gd`: `WorldSoundscape`, the
+  world's sounds (`tick`, `hear_places`, `swell`, `play`, `play_from`,
+  `tune_key`, `nearest`, `step_key`, `call_key`, `card_key`, `db`).
+- `game/adventure/world/quest_clock.gd`: `QuestClock` (the quest pane's
+  clock, `gifts`); `game/adventure/world/reveal_dissolve.gd`:
+  `RevealDissolve` (`over`, `picture_of`); `game/adventure/world/
+  pane_style.gd`: `PaneStyle`, every pane's glass, lettering, buttons,
+  rarity chips (`dress_chip`) and `right_click`.
+- `WorldNames.quadrant` / `direction` / `two_lines`; `WorldClues.
+  reveal_for_hint`; the importer's `import_wise_words` (`wise_words`).
 - `game/adventure/card_trade.gd`: `CardTrade`, `BuyAnyCardFromTown` — a
   town's trade for amulets (`arrive`, `town_offer`, `traded`, `wares`,
   `wanted`), the Nomad's Bazaar (`bazaar_price`) and the Diamond Mine;
@@ -131,8 +173,62 @@
   the three decks, `write_back`, the gold on the title slab, `ALLOWED`;
   signals `closed`, `exit_requested`); the base builder's seams for it:
   `_menu_entries`, `_with_tome`, `_format_offences`, `_size_advice`,
-  `_pool_caption`. `WorldScreen.show_deck` / `building` open it over the
-  world.
+  `_pool_caption`, `_before_first_fill` (a subclass's decks and pool put
+  in before the first fill; `_put_pool_in_force` sets a pool without
+  drawing; `_printing_sets_of` is the class-level printing memo).
+  `WorldScreen.show_deck(sell_site, looking)` / `building` open it over the
+  world; `looking` (the spellbook, F1) only looks — `LOOK_ONLY` (kept in
+  the well through `DeckBuilderScreen._resting_line`, the whole reason in
+  `LOOK_WHY` on its tooltip), `LOOK_ALLOWED`, `_refuse_change`, no
+  `write_back`. The sideboard strip is the WORTH STRIP there
+  (`_build_sideboard_area` hides the sideboard; `worth_lines`,
+  `_show_worth` on hover; `CardShop.sell_range` / `best_known_sale`).
+- `game/card_art_warmer.gd` — `CardArtWarmer.warm(parent, names)`: card
+  pictures decoded on a worker thread (`GameSkin.card_art_path` /
+  `decode_card_art` / `keep_card_art`, `CardPacks.decode_art` /
+  `keep_art`) and kept a few a frame;
+  `WorldScreen._warm_the_builder` starts it `WARM_AFTER` the world opens.
+- The world's guards and shared seams (2026-10-23 campaign):
+  `WorldScreen.modal` (a place's pane, the map, the builder or the load
+  screen holds the world; the "PaneShield" control, `WorldHud.rest` /
+  `resting`, `AFTER_PANE_MS`), `_map_key`, `_back_to_town`, `_point_again`,
+  `_hold`, `_cast_moves`, the `UnsavedAsk` inner class (Exit asks when the
+  save failed), `WorldHud.refresh_numbers`; `PaneStyle.drop` /
+  `drop_children` / `swap` / `show_card` (never free a node from its own
+  signal); `VisitPane._fit` / `ROOM_MARGIN`; `WiseManPane.refused`;
+  `LairPane.GHOST_SHORT`; `WorldMagicPane.close`; `CardTrade.affords`
+  (the purse read again at pay time); `CardShop.town_record`,
+  `deck_counts`, `allowed_for`; `CardValue.land_markup`, `pool_moved`
+  (caches follow `CardRegistry.revision`); `Quests.is_site`, `site_tile`;
+  `CreatureBook.is_row`; `WorldMagicShop.sold_at` (slot 0 sells nothing);
+  `WorldMap.cell` (clipped cells), `info_words`, `amulet_discs`, the
+  `HeroMark` node; `WorldArt.AMULET_INKS`, `amulet_disc`, `LAYOUT` (kept in
+  step with the importer's `WORLD_SHEETS` by a test);
+  `RevealDissolve.source_rect`; `HeroStats.JOURNAL_STEP`, `journal_line`.
+  Walking and drawing: `HeroWalk.settle` (a hero loaded off the land is put
+  on it), `_standing_tile`, `_shore` (only a land-to-sea step is refused),
+  the kept way-finding grid (`_grid_for`); `WorldView` as four pictures
+  (ground, shadow, uprights, figure) redrawn only when they no longer cover
+  the screen or what they show changed, tiles from the screen's corners
+  (`_tiles_over`), per-tile recipes (`_recipe`), `frame(blend)` (the glide
+  between ticks, called by `WorldScreen._process`) and `drawn_at`
+  (`WorldGuides.on_screen` uses it) with its inverse `unproject_drawn`
+  (`WorldScreen.tile_at`: the pointer reads the land as drawn);
+  `WorldMinimap`'s Ground and Marks layers (`ground_box`: the room a
+  tile's left point may stand in); `ShandalarWorld.LANDS_MADE` (the land
+  codes the generator makes); `WorldCursors.shapes` / `outline` / `drawing` (painted a row at
+  a time). The builders' opening: `DraftBuilder` also fills in
+  `_before_first_fill`; `MusicLibrary` keeps its last `KEPT_TUNES` (3)
+  tunes by path and modified time; `DeckFilter` keeps the set-membership
+  tables (`_sets_holding`) and the library's sort orders for one registry
+  load (`CardRegistry.revision`); `CardArea.Cell.fresh_for` (a face just
+  built needs no redraw).
+  Saves: `AdventurePlayer.save` (backup `BACKUP_TAIL`, atomic write,
+  read-back), `scan_saves`, `save_at`, `readable`, `backup_path`,
+  `kind_of`, `local_time`, `time_at`, `forget_saves`, `JOURNAL_MOST`,
+  `MAIN_PARTS`; `SaveSlots.DAMAGED`, `path_of`, `first_free`;
+  `EmbarkScreen.NOT_SAVED`; `LoadAdventureScreen.unreadable_note`;
+  `SkinPack._forget_adventure_tables`.
 - `game/adventure/world/hero_colors.gd`: `HeroColors`, the walking figure's
   colours — `PARTS`, the choices (`HAIR`, `SKIN`, `CLOTH`), `part_of` (a
   1997 pixel's part by colour and height), `find_parts`, `ramp`, `dress`,

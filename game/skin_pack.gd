@@ -999,6 +999,7 @@ func _arrived(kind: String, replaced := false) -> void:
 	GameSkin.clear_caches()
 	PortraitLibrary.refresh()
 	MusicLibrary.refresh()
+	_forget_adventure_tables()
 	_arrived_at = Time.get_ticks_msec() / 1000.0
 	changed.emit(kind)
 	if plan_after_arrival(_current_scene_path(), replaced) == "reload":
@@ -1009,6 +1010,21 @@ func _arrived(kind: String, replaced := false) -> void:
 	else:
 		_show_notice("The skin is in.",
 			"It dresses the game from the next start.", true)
+
+
+## THE ADVENTURE'S OWN TABLES read from the skin forgotten, so the next
+## look reads them from the pack just come (campaign of 2026-10-23: they
+## kept what they had read with no skin — no wise words, hints, 1997 card
+## values, shop stock, riddles, lair cards or trade catalogue — until the
+## game restarted).
+static func _forget_adventure_tables() -> void:
+	WiseMan.forget()
+	CardHints.forget()
+	CardValue.forget()
+	CardShop.forget()
+	CardRiddle.forget()
+	CardTrade.forget()
+	LairEvent.forget()
 
 
 ## "reload" when the pack arrived on the title screen, "restart"

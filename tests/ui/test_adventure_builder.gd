@@ -167,3 +167,65 @@ func test_remove_extra_cards_counts_tome_of_enlightenment() -> void:
 	assert_eq(again.deck.count_of("Giant Growth"), DeckModel.duplicates_allowed(again.deck.total(), true),
 		"trimmed to the limit the Tome allows")
 
+
+
+## The owner: "Implement the same 1997 here … it could only be edited in
+## towns, or outdoors with Conjurer's Will" — the spellbook's builder only
+## looks (1997's `DeckBuilderMain(…, 1, 0)`).
+func test_outdoors_the_builder_only_looks() -> void:
+	var looker := AdventureBuilder.new()
+	looker.player = player
+	looker.looking = true
+	add_child_autofree(looker)
+	await get_tree().process_frame
+	var held := looker.deck.total()
+	assert_false(looker._add_one("Shivan Dragon"), "no card goes in")
+	looker._remove_one("Grizzly Bears")
+	assert_eq(looker.deck.total(), held, "nor out")
+	assert_eq(looker._status_label.text, AdventureBuilder.LOOK_ONLY, "it says where the deck is changed")
+	assert_eq(looker._status_label.tooltip_text, AdventureBuilder.LOOK_WHY, "the whole reason on the tooltip")
+	# Another message has its few seconds; then the well says so again.
+	looker._say("Sorted.")
+	looker._process(5.0)
+	assert_eq(looker._status_label.text, AdventureBuilder.LOOK_ONLY, "kept while it only looks")
+	assert_eq(looker._command_labels(), AdventureBuilder.LOOK_ALLOWED, "only the views")
+	looker._run_command("Clear deck")
+	assert_eq(looker.deck.total(), held, "Clear refused")
+	looker._switch_slot(1)
+	looker._exit()
+	assert_eq(player.current_deck, 0, "Done writes nothing back: the deck in use stays")
+	assert_eq(player.cards[0]["decks"], [0])
+	# A builder that may change the deck lets its message go.
+	builder._say("Sorted.")
+	builder._process(5.0)
+	assert_eq(builder._status_label.text, "", "the well empties after its few seconds")
+
+
+## The bug pass after the campaign (r2-1, r2-2, r2-5): the complaint line's
+## Remove Extra Cards and the artwork picker were ways round looking only;
+## Consolidate only shows duplicates differently and is a view.
+func test_looking_refuses_the_side_doors_and_lets_the_views_be() -> void:
+	player.cards.append({"card": "Giant Growth", "decks": [0]})
+	player.cards.append({"card": "Giant Growth", "decks": [0]})
+	player.cards.append({"card": "Giant Growth", "decks": [0]})
+	var looker := AdventureBuilder.new()
+	looker.player = player
+	looker.looking = true
+	add_child_autofree(looker)
+	await get_tree().process_frame
+	var held := looker.deck.count_of("Giant Growth")
+	assert_eq(held, 4, "control: over the limit for a small deck")
+	looker._trim_duplicates()
+	assert_eq(looker.deck.count_of("Giant Growth"), held, "Remove Extra Cards refused")
+	assert_eq(looker._status_label.text, AdventureBuilder.LOOK_ONLY)
+	looker._choose_printing("Forest", "4ed")
+	assert_false(looker.deck.printings.has("Forest"), "no artwork chosen")
+	var grouped: bool = looker._deck_area.consolidated
+	looker._run_command("Consolidate duplicate cards")
+	assert_ne(looker._deck_area.consolidated, grouped, "Consolidate is a view: allowed")
+	looker._show_in_showcase(CardRegistry.get_card("Forest"))
+	assert_false(looker._variant_button.visible, "no artwork picker in the adventure")
+	# A builder that may change the deck still keeps no artwork.
+	builder._choose_printing("Forest", "4ed")
+	assert_false(builder.deck.printings.has("Forest"), "the hero's decks keep no printing")
+	assert_eq(builder._status_label.text, AdventureBuilder.NO_ARTWORK)

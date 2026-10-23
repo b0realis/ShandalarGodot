@@ -127,13 +127,21 @@ func test_the_walk_ends_in_a_town_and_its_pane_opens() -> void:
 	assert_eq([player.gold, player.food], [gold - 20, food + 10], "10 food for (2 + 2) × 5 gold in a town")
 	assert_string_contains(pane.note(), "You buy 10 food")
 	assert_false((pane.find_child("Choice_buy", true, false) as Button).disabled, "the card shop is open")
-	assert_true((pane.find_child("Choice_wiseman", true, false) as Button).disabled, "the wise man waits")
-	# Escape leaves; a click on the town the hero stands on comes back.
+	var fifth := pane.find_child("Choice_wiseman", true, false) as Button
+	if fifth == null:
+		fifth = pane.find_child("Choice_quest", true, false) as Button
+	assert_false(fifth.disabled, "the wise man, or the town's quest")
+	# Escape leaves — the World Magic seller first, as a town is left; a
+	# click on the town the hero stands on comes back.
 	var escape := InputEventAction.new()
 	escape.action = "ui_cancel"
 	escape.pressed = true
 	pane._unhandled_input(escape)
 	await get_tree().process_frame
+	var seller := screen.find_child("WorldMagicPane", true, false) as WorldMagicPane
+	if seller != null:
+		seller.done.emit()
+		await get_tree().process_frame
 	assert_false(screen.visiting(), "left")
 	assert_true(screen.walk_to_tile(town), "a click on it")
 	assert_true(screen.visiting(), "visits again")

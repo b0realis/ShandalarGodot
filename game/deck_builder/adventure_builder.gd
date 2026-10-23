@@ -25,6 +25,20 @@ extends DeckBuilderScreen
 ## Done, or Escape's Return to the world, writes the decks back to the
 ## hero ([method write_back]) and closes it ([signal closed]).
 ##
+## OUTDOORS IT ONLY LOOKS (the owner, 2026-10-23: *"Implement the same
+## 1997 here … it could only be edited in towns, or outdoors with
+## Conjurer's Will"*). 1997 opened the builder three ways
+## (`DeckBuilderMain(…, 1, flags)`, flag 1 letting cards move, flag 2
+## selling): the spellbook, F1, with neither (`adventure_input.c` 368) —
+## the decks to look at, nothing to change; Conjurer's Will with cards
+## moving (444); a town's Edit deck/Sell cards with both (visitLocation.c
+## 1030). [member looking] is the first: every change — a card in or out,
+## a drag, Clear, Restore, Copy deck to, the name and the notes — says where
+## the deck is changed instead, and Done writes nothing back. [Ours: 1997's
+## F1 cast Conjurer's Will itself when the hero owned it, risking an amulet
+## unasked; here the spellbook only looks, and the cast is the World
+## Magic's own (its key, 1, or its icon).]
+##
 ## OPENED IN A TOWN ("Edit deck/Sell cards", [member sell_site]) it also
 ## sells, as the 1997 builder did there (`DeckBuilderMain` with selling,
 ## `SellPrice` 004f1bcc): Sell takes one copy of the card on show — one in
@@ -40,17 +54,43 @@ signal exit_requested
 const ALLOWED: Array[String] = ["Consolidate duplicate cards", "Clear deck", "Restore deck",
 	"Sort deck", "Stats", "Music", "Sound Effects", "Extra Cards", "Move by color out of deck",
 	"Filters", "Undo", "Big cards", "Copy deck to", "Deck notes", "Save deck", "Exit deck builder"]
+## What the builder offers when it only looks: the views, nothing that
+## changes a deck.
+const LOOK_ALLOWED: Array[String] = ["Consolidate duplicate cards", "Sort deck", "Stats", "Music",
+	"Sound Effects", "Filters", "Big cards", "Exit deck builder"]
+## Said when a change is asked of a builder that only looks, and kept in
+## the well while it does ([method _resting_line]). One line at the shipping
+## 1280 × 800: 283 of the well's 292 px, measured in the running game — the
+## whole sentence ran off the well's edge.
+const LOOK_ONLY := "Look only: edit in a town or with Conjurer's Will."
+## The whole reason, on the well's tooltip (and in the Help's "Your deck").
+const LOOK_WHY := "Out here you may only look at your decks: change them in a town's Edit deck/Sell cards, or with Conjurer's Will."
 const BACK_TO_WORLD := "Return to the world"
 const NOT_HERE := "The adventure's decks are built from your own cards."
+## Said when an artwork is chosen: the hero's decks keep no printing.
+const NO_ARTWORK := "The adventure's decks keep no choice of artwork."
 ## The 1997 adventure builder's title field (`@GOLDTITLE`).
 const GOLD_TITLE := "GOLD: %d"
+## The worth strip before a card is pointed at.
+const WORTH_HEADING := "What a card is worth"
+const WORTH_PROMPT := "Point at a card to see what the places pay for it."
+## The strip's lettering in from its field's edges.
+const WORTH_INSET := 10.0
 
 var player: AdventurePlayer
 ## The town the builder was opened in, which buys cards; -1 for none.
 var sell_site := -1
+## Opened outdoors with the spellbook (F1): the decks to look at only.
+var looking := false
 var _gold: Label
 var _written := false
 var _sell_button: Button
+## The worth strip ([method _build_sideboard_area]): its card's name and
+## its lines, and the card it tells of ("" for none yet).
+var _worth: VBoxContainer
+var _worth_title: Label
+var _worth_lines: Array[Label] = []
+var _worth_card := ""
 
 
 func _ready() -> void:
@@ -58,6 +98,23 @@ func _ready() -> void:
 	# the surface stays 0 × 0.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	super._ready()
+	if looking:
+		_say(LOOK_ONLY)
+		_status_label.tooltip_text = LOOK_WHY
+		_status_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	else:
+		_say("Your cards: %d · in this deck %d" % [player.cards.size(), deck.total()])
+
+
+## THE HERO'S DECKS AND CARDS GO IN BEFORE THE FIRST FILL (the fix pass of
+## 2026-10-23, h5-10: each F1 froze the world for 0.2-0.5 s). Put in place
+## after `super._ready()`, as they were, they came after the builder had
+## filtered, sorted and drawn the WHOLE LIBRARY — every card the game has,
+## 120 ms with every card pack on — and the hero's cards were then walked
+## twice more. Here the deck area and the Inventory are each filled once,
+## by the screen's own first [method refresh], from the hero's decks and
+## the hero's cards.
+func _before_first_fill() -> void:
 	var pool := SealedPool.new()
 	pool.counts = owned_counts(player)
 	for i in SLOTS:
@@ -73,13 +130,15 @@ func _ready() -> void:
 	_slot = clampi(player.current_deck, 0, SLOTS - 1)
 	deck = _slots[_slot]
 	_dirty = false
-	_enter_sealed(pool, false)
+	# In force, not drawn: the first fill draws it.
+	_put_pool_in_force(pool)
 	for door in ["LoadButton", "ExtrasButton"]:
 		var button := _command_row.get_node_or_null(door) as Control
 		if button != null:
 			button.hide()
 	_dice_button.hide()
 	_pool_button.hide()
+	_variant_button.hide()
 	_build_gold()
 	if sell_site >= 0:
 		_sell_button = OriginalDialog.button("Sell", Vector2(150, COMMAND_BAR_H))
@@ -89,8 +148,6 @@ func _ready() -> void:
 				sell(_showcase._shown.data.card_name))
 		_command_row.add_child(_sell_button)
 		_command_row.move_child(_sell_button, _command_row.get_node("DoneButton").get_index())
-	refresh()
-	_say("Your cards: %d · in this deck %d" % [player.cards.size(), deck.total()])
 
 
 # --------------------------------------------------- the hero's cards --
@@ -126,6 +183,8 @@ static func deck_title(hero: AdventurePlayer, slot: int) -> String:
 ## hold it (the first copies of a card go to the decks first), the deck on
 ## the surface the deck in use, the names kept.
 func write_back() -> void:
+	if looking:
+		return
 	_slots[_slot] = deck
 	var copies := {}
 	for i in player.cards.size():
@@ -180,6 +239,11 @@ func refresh() -> void:
 	if _gold != null and player != null:
 		_gold.text = GOLD_TITLE % player.gold
 		_header_slab.tooltip_text = "%s\nGold: %d\n\nDeck Info — name this deck" % [deck.deck_name, player.gold]
+	# After every change to the decks the worth strip's counts, and the Sell
+	# button beside them, are read again (a card taken out may be sold now).
+	if _worth_card != "":
+		_show_worth(_worth_card)
+		_price_sell(_worth_card)
 
 
 func gold_text() -> String:
@@ -188,10 +252,15 @@ func gold_text() -> String:
 
 # ------------------------------------------------------------ selling --
 
-## The card on show, and what the town pays for it, on the Sell button.
+## The card on show — the one under the mouse — and what it is worth: on
+## the Sell button in a town, and on the worth strip.
 func _show_in_showcase(data: CardData) -> void:
 	super._show_in_showcase(data)
+	# The hero's decks keep no printing ([method _choose_printing]): the
+	# artwork picker the Showcase offers elsewhere stays away.
+	_variant_button.visible = false
 	_price_sell(data.card_name)
+	_show_worth(data.card_name)
 
 
 func _price_sell(card_name: String) -> void:
@@ -223,14 +292,23 @@ func sell(card_name: String) -> int:
 		sealed.counts[card_name] = left
 	else:
 		sealed.counts.erase(card_name)
+	# Every deck that holds more than the copies left gives one up — the
+	# decks in the slots, and the deck Undo or Restore deck would put back
+	# (else a sold card came back on the surface until Done).
+	var models: Array[DeckModel] = []
 	for slot in SLOTS:
-		var model: DeckModel = deck if slot == _slot else _slots[slot]
+		models.append(deck if slot == _slot else _slots[slot])
+	for kept in [_undo, _cleared]:
+		if kept != null:
+			models.append(kept)
+	for model in models:
 		while model.count_of(card_name) > left:
 			model.remove(card_name)
 	_drawn_revision = -1
 	refresh()
 	_refresh_inventory()
 	_price_sell(card_name)
+	_show_worth(card_name)
 	_say("Sold %s for %d gold." % [card_name, price])
 	return price
 
@@ -260,6 +338,8 @@ func _spare_copy(card_name: String) -> int:
 ## `Clear deck` empties the deck and keeps its name ([method
 ## DeckModel.clear] would call it `New Deck`).
 func _clear_deck() -> void:
+	if _refuse_change():
+		return
 	var title := deck.deck_name
 	super._clear_deck()
 	if deck.deck_name != title:
@@ -296,14 +376,172 @@ func _pool_caption() -> String:
 
 
 func _command_labels() -> Array[String]:
-	return ALLOWED.duplicate()
+	return LOOK_ALLOWED.duplicate() if looking else ALLOWED.duplicate()
 
 
 func _run_command(label: String) -> void:
+	if looking and not LOOK_ALLOWED.has(label) and ALLOWED.has(label):
+		_say(LOOK_ONLY, true)
+		return
 	if not ALLOWED.has(label):
 		_say(NOT_HERE, true)
 		return
 	super._run_command(label)
+
+
+# ------------------------------------------------------- the worth strip --
+
+## THE WORTH STRIP (the owner, 2026-10-23: *"leave the sideboard empty -
+## maybe we can use it to display card under the mouse value for selling?
+## (In adventure)"*). The adventure's decks have no sideboard, so the
+## sideboard's strip, on its own teal field, tells what the card under the
+## mouse is worth [ours]:
+##  - in a town (Edit deck/Sell cards) what this place pays for one
+##    ([method CardShop.sell_price_at]); out in the wilds (the spellbook,
+##    Conjurer's Will) the least and the most the places pay
+##    ([method CardShop.sell_range], which reads no world);
+##  - the best price among the places the hero has been to, when it is
+##    better than here ([method CardShop.best_known_sale]);
+##  - how many the hero owns, how many are in this deck, and in a town how
+##    many may be sold (all but the deck's own, as [method sell] sells).
+## The sideboard's own area stays built, hidden, so the screen's common
+## code finds it.
+func _build_sideboard_area() -> void:
+	super._build_sideboard_area()
+	_sideboard_area.hide()
+	_worth = VBoxContainer.new()
+	_worth.name = "WorthStrip"
+	_worth.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_worth.add_theme_constant_override("separation", 2)
+	_worth_title = _well_label(17, true)
+	_worth_title.clip_text = true
+	_worth.add_child(_worth_title)
+	for i in 3:
+		var line := _well_label(15, false)
+		line.clip_text = true
+		_worth.add_child(line)
+		_worth_lines.append(line)
+	add_child(_worth)
+	_show_worth("")
+
+
+func _layout() -> void:
+	super._layout()
+	if _worth != null:
+		var strip := _sideboard_rect()
+		_worth.position = strip.position + Vector2(WORTH_INSET, WORTH_INSET / 2.0)
+		_worth.size = Vector2(maxf(0.0, strip.size.x - 2.0 * WORTH_INSET),
+			maxf(0.0, strip.size.y - WORTH_INSET))
+
+
+## The strip told of [param card_name]; "" (or a card the registry lacks)
+## puts the prompt back.
+func _show_worth(card_name: String) -> void:
+	if _worth == null:
+		return
+	var lines := worth_lines(card_name)
+	_worth_card = card_name if not lines.is_empty() else ""
+	_worth_title.text = card_name if not lines.is_empty() else WORTH_HEADING
+	if lines.is_empty():
+		lines = [WORTH_PROMPT]
+	for i in _worth_lines.size():
+		_worth_lines[i].text = lines[i] if i < lines.size() else ""
+
+
+## What the strip says of [param card_name], a line each; empty for a card
+## the registry lacks.
+func worth_lines(card_name: String) -> Array[String]:
+	var lines: Array[String] = []
+	if card_name == "" or not CardRegistry.has_card(card_name):
+		return lines
+	var here := -1
+	if sell_site >= 0 and player.world != null:
+		here = CardShop.sell_price_at(player, sell_site, card_name)
+		lines.append("%s pays %d gold for one." % [WorldNames.site_name(player.world, sell_site), here])
+	else:
+		var paid := CardShop.sell_range(card_name)
+		lines.append("The places pay %d gold for one." % paid.x if paid.x == paid.y
+			else "The places pay %d to %d gold for one." % [paid.x, paid.y])
+	var best := CardShop.best_known_sale(player, card_name)
+	if not best.is_empty() and int(best["price"]) > here and int(best["slot"]) != sell_site:
+		lines.append("The best you know of: %d gold at %s." % [int(best["price"]), String(best["name"])])
+	var owned := int(owned_counts(player).get(card_name, 0))
+	var held := deck.count_of(card_name)
+	var words := "You own %d · in this deck %d" % [owned, held]
+	if sell_site >= 0:
+		words += " · to sell %d" % maxi(owned - held, 0)
+	lines.append(words)
+	return lines
+
+
+# ------------------------------------------------- looking only (F1) --
+
+## A builder that only looks keeps saying so after any other message.
+func _resting_line() -> String:
+	return LOOK_ONLY if looking else ""
+
+
+## True — and the reason said — when the builder only looks.
+func _refuse_change() -> bool:
+	if looking:
+		_say(LOOK_ONLY, true)
+	return looking
+
+
+## Remove Extra Cards (the complaint line's Extra Cards list): a change.
+func _trim_duplicates() -> void:
+	if _refuse_change():
+		return
+	super._trim_duplicates()
+
+
+## No artwork is chosen here: the hero's decks have nowhere to keep it, so
+## a choice would be confirmed and then forgotten.
+func _choose_printing(_card_name: String, _id: String) -> void:
+	if _refuse_change():
+		return
+	_say(NO_ARTWORK, true)
+
+
+func _add_one(card_name: String) -> bool:
+	if _refuse_change():
+		return false
+	return super._add_one(card_name)
+
+
+func _add_playset(card_name: String) -> void:
+	if not _refuse_change():
+		super._add_playset(card_name)
+
+
+func _remove_one(card_name: String) -> void:
+	if not _refuse_change():
+		super._remove_one(card_name)
+
+
+func _remove_all(card_name: String) -> void:
+	if not _refuse_change():
+		super._remove_all(card_name)
+
+
+func _move_out_by_color(colors: Array) -> void:
+	if not _refuse_change():
+		super._move_out_by_color(colors)
+
+
+func _copy_deck_to(index: int) -> void:
+	if not _refuse_change():
+		super._copy_deck_to(index)
+
+
+func _open_deck_info(then := Callable(), reason := "", suggested := "") -> void:
+	if not _refuse_change():
+		super._open_deck_info(then, reason, suggested)
+
+
+func _open_notes_dialog() -> void:
+	if not _refuse_change():
+		super._open_notes_dialog()
 
 
 func _menu_entries() -> Array[String]:

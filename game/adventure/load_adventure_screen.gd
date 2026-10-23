@@ -9,11 +9,28 @@ extends Control
 ## dark ground, in its lettering. The world screen's options open it over
 ## the world ([method WorldScreen.open_load]): Back comes back to that
 ## world, Continue takes the place of it.
+##
+## THE SAVES BY ADVENTURE (2026-10-23, the owner: *"Add 10 named slots"*):
+## each adventure under its hero's line — the autosave first ("Resume", as
+## 1997's Resume Game took its slot 3), then the named slots it has
+## ([SaveSlots]); the newest adventure at the top. Resume, beside Continue,
+## takes up the newest autosave of all.
+##
+## A SAVE THAT CANNOT BE READ (campaign of 2026-10-23) hides no other: the
+## list shows every save it can read, on the player's clock, and the note
+## below it says how many could not be ([method AdventurePlayer.scan_saves];
+## one odd file used to empty the list and grey Resume).
 
 const TITLE := "Continue an adventure"
 
-## The saves shown, as [method AdventurePlayer.list_saves] gives them.
+## The saves shown, as [method AdventurePlayer.list_saves] gives them, in the
+## list's order.
 var saves: Array[Dictionary] = []
+## The save each row of the list takes up (`{}` for an adventure's line).
+var rows: Array[Dictionary] = []
+## How many save files could not be read, as the note says.
+var unreadable := 0
+var resume_button: Button
 var _list: ItemList
 var _say_line: Label
 var continue_button: Button
@@ -61,7 +78,8 @@ func _ready() -> void:
 	well.set_corner_radius_all(6)
 	well.set_content_margin_all(10)
 	_list.add_theme_stylebox_override("panel", well)
-	_list.item_selected.connect(func(_index: int) -> void: continue_button.disabled = false)
+	_list.item_selected.connect(func(index: int) -> void:
+		continue_button.disabled = index < 0 or index >= rows.size() or rows[index].is_empty())
 	_list.item_activated.connect(func(index: int) -> void: continue_adventure(index))
 	page.add_child(_list)
 	_say_line = _lettering("", 15, EmbarkScreen.DIM, "font_body")
@@ -77,6 +95,10 @@ func _ready() -> void:
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
+	resume_button = UiChrome.menu_button("Resume", Vector2(200, 46), 24, 0.6)
+	resume_button.name = "Resume"
+	resume_button.pressed.connect(resume)
+	row.add_child(resume_button)
 	continue_button = UiChrome.menu_button("Continue", Vector2(220, 46), 24, 0.6)
 	continue_button.name = "Continue"
 	continue_button.disabled = true
@@ -89,32 +111,87 @@ func _ready() -> void:
 	refresh()
 
 
-## Read the saves again and list them.
+## Read the saves again and list them, adventure by adventure.
 func refresh() -> void:
-	saves = AdventurePlayer.list_saves()
+	SaveSlots.migrate(AdventurePlayer.saves_folder)
+	var scanned := AdventurePlayer.scan_saves()
+	var found: Array[Dictionary] = scanned["saves"]
+	unreadable = int(scanned["unreadable"])
+	# The adventures in the order of their newest save; each one's autosave,
+	# then its slots by number.
+	var order: Array[String] = []
+	var by_id := {}
+	for save in found:
+		var id := String(save["id"])
+		if not by_id.has(id):
+			order.append(id)
+			by_id[id] = []
+		(by_id[id] as Array).append(save)
+	saves.clear()
+	rows.clear()
 	_list.clear()
-	for save in saves:
-		var color := AdventureSetup.color_row(String(save["color"]))
-		var when := String(save["saved"]).replace("T", " ").trim_suffix("Z")
-		_list.add_item("%s — %s, %s · World seed %s · %s %s" % [String(save["name"]),
-			String(color.get("name", save["color"])),
-			AdventureSetup.DIFFICULTIES[clampi(int(save["difficulty"]), 0, 3)],
-			String(save["seed_text"]),
-			"autosaved" if String(save.get("kind", "")) == "autosave" else "saved", when])
+	for id in order:
+		var group: Array = by_id[id]
+		group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["slot"]) < int(b["slot"]))
+		var hero: Dictionary = group[0]
+		var color := AdventureSetup.color_row(String(hero["color"]))
+		var heading := _list.add_item("%s — %s, %s · World seed %s" % [String(hero["name"]),
+			String(color.get("name", hero["color"])),
+			AdventureSetup.DIFFICULTIES[clampi(int(hero["difficulty"]), 0, 3)], String(hero["seed_text"])])
+		_list.set_item_selectable(heading, false)
+		_list.set_item_custom_fg_color(heading, EmbarkScreen.GOLD)
+		rows.append({})
+		for save in group:
+			var when := AdventurePlayer.local_time(String(save["saved"]))
+			var words := ""
+			if int(save["slot"]) == 0:
+				words = "      Resume · autosaved %s · day %d · %d gold" % [when, int(save["days"]), int(save["gold"])]
+			else:
+				words = "      %d. %s · saved %s · day %d" % [int(save["slot"]), String(save["slot_name"]),
+					when, int(save["days"])]
+			_list.add_item(words)
+			rows.append(save)
+			saves.append(save)
+	resume_button.disabled = newest_autosave().is_empty()
 	if saves.is_empty():
-		_say_line.text = "No adventure has been saved yet. Shandalar on the main menu begins one, and saves it the moment its world is made."
+		_say_line.text = unreadable_note() if unreadable > 0 \
+			else "No adventure has been saved yet. Shandalar on the main menu begins one, and saves it the moment its world is made."
+		continue_button.disabled = true
 	else:
-		_say_line.text = "Choose an adventure and Continue, or double-click it."
-		_list.select(0)
+		_say_line.text = "Choose a save and Continue, or double-click it; Resume takes up the newest autosave."
+		if unreadable > 0:
+			_say_line.text += " " + unreadable_note()
+		_list.select(1)
 		continue_button.disabled = false
+
+
+## "2 saves could not be read …": the saves the list leaves out.
+func unreadable_note() -> String:
+	return "%d %s could not be read (damaged, or saved by a newer version of the game)." % [
+		unreadable, "save" if unreadable == 1 else "saves"]
+
+
+## The newest autosave of all, or `{}`.
+func newest_autosave() -> Dictionary:
+	var best := {}
+	for save in saves:
+		if int(save["slot"]) == 0 and (best.is_empty() or String(save["saved"]) > String(best["saved"])):
+			best = save
+	return best
+
+
+## RESUME: the newest autosave taken up (1997's Resume Game).
+func resume() -> bool:
+	var newest := newest_autosave()
+	return not newest.is_empty() and continue_adventure(rows.find(newest))
 
 
 ## TAKE THE ADVENTURE UP AGAIN: the save in row [param index] read, and its
 ## world screen made the current scene. False when it cannot be read.
 func continue_adventure(index: int) -> bool:
-	if _leaving or index < 0 or index >= saves.size():
+	if _leaving or index < 0 or index >= rows.size() or rows[index].is_empty():
 		return false
-	var screen := open_save(String(saves[index]["path"]))
+	var screen := open_save(String(rows[index]["path"]))
 	if screen == null:
 		_say_line.text = "That save could not be read."
 		return false
@@ -160,7 +237,10 @@ func _world_under() -> WorldScreen:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _leaving and event.is_action_pressed("ui_cancel"):
+	if event.is_action_pressed("ui_cancel"):
+		# Taken even while leaving: a second Escape in the same frame finds
+		# nothing left to close, not the world under the list (the bug pass
+		# after the campaign, r3-2 — it left the world for the title).
 		get_viewport().set_input_as_handled()
 		leave()
 

@@ -9,20 +9,28 @@ extends RefCounted
 ##    visit the town wants amulets of one colour of its land, drawn at
 ##    random (1997 drew 199 times and the last draw of a colour of the land
 ##    won: one draw among the land's colours). While the hero holds such an
-##    amulet, and the town has not traded for (difficulty + 3) · 18 steps of
-##    the quest clock (from the first visit on), "Trade red amulet for Any
-##    creatures" stands where the wise man is. The screen closed, the wait
-##    begins again, a card traded or not. Only the town's colour is taken.
+##    amulet, and the town has not traded for more than (difficulty + 3) · 18
+##    steps of the quest clock — counted from its last trade, long ago before
+##    the first (`special_card_restock_timer` −1000) —, "Trade red amulet for
+##    Any creatures" stands where the wise man is. The screen closed, the
+##    wait begins again, a card traded or not. Only the town's colour is
+##    taken.
 ##  - THE NOMAD'S BAZAAR, a lair ([LairEvent]): any card for gold — the 1997
 ##    price ([CardValue]) four times, half again or twice for a card of no
-##    colour of the land the hero stands on (as in a town), times 1250 over
-##    750 and up to 96 more (a tenth of the hero's place within the tile,
-##    one coordinate times the other), down to a multiple of 5 between 5 and
-##    1000, times the copies, and never under 50 gold an amulet's worth.
-##    [Ours: 1997 read the land's colour wrongly here, so that on black land
-##    every coloured card counted as of a colour that goes with it.]
+##    colour of the land the hero stands on, as in a town (half again for a
+##    colourless card; a card of no colour at all, unchanged) ([method
+##    CardValue.land_markup]), times 1250 over 750 and up to 96 more (a tenth
+##    of the hero's place within the tile, one coordinate times the other),
+##    down to a multiple of 5 between 5 and 1000, times the copies, and never
+##    under 50 gold an amulet's worth. [Ours: 1997 read the land's colour
+##    wrongly here, as a colour's number, so that on black land every
+##    coloured card counted as of a colour that goes with it, and a
+##    colourless card cost half again on blue and red land only.]
 ##  - THE DIAMOND MINE, a lair: any card for amulets of any colours, each
 ##    amulet taken from a colour drawn at random among those the hero holds.
+## The price is asked as the card is chosen ([method offer]) and the purse
+## read again as the trade is made ([method pay]), as 1997 did: what was
+## held then may be gone.
 ## A card costs its rarity in amulets — 1 common (2 for a common the program
 ## favoured, `extra_ability` 0x400), 2 uncommon, 3 rare, 4 special — and a
 ## basic land comes four at a time for one. The cards: every card of the
@@ -55,12 +63,19 @@ const AFFORD := "Hmmm... you can't afford this card yet."
 const ASK := "Do you wish to trade?"
 
 static var _catalogue: Array[Dictionary] = []
+## The card pool's revision the catalogue was read against (−1: not yet).
+static var _read_at := -1
 
 
 # ------------------------------------------------------------ the cards --
 
-## EVERY CARD A TRADE MAY OFFER, read once: `{name, facts}` by name.
+## EVERY CARD A TRADE MAY OFFER, read once for the card pool as it stands
+## (again when it changes, [method CardValue.pool_moved]): `{name, facts}`
+## by name.
 static func catalogue() -> Array[Dictionary]:
+	if CardValue.pool_moved(_read_at):
+		forget()
+	_read_at = CardRegistry.revision
 	if not _catalogue.is_empty():
 		return _catalogue
 	CardRegistry.ensure_loaded()
@@ -90,9 +105,10 @@ static func in_adventure(card_name: String) -> bool:
 		and not CardRegistry.is_completion_card(card_name)
 
 
-## Forget the cards (a skin imported again, a test).
+## Forget the cards (a skin imported again, the card pool changed, a test).
 static func forget() -> void:
 	_catalogue.clear()
+	_read_at = -1
 
 
 ## What a town of trade [param trade] takes (`GetTownCardDescription`):
@@ -139,11 +155,10 @@ static func bazaar_price(player: AdventurePlayer, data: CardData, draw: int) -> 
 	var color := int(f.get("color", CardValue.COLORLESS))
 	var here := player.tile()
 	var tile_bits := ShandalarWorld.magic_mask(player.world.terrain(here.x, here.y))
-	if color != CardValue.COLORLESS and tile_bits & color == 0:
-		if CardValue.goes_with(tile_bits, color, 3):
-			value = value * 3 / 2
-		else:
-			value *= 2
+	# The town's rule, but for a card of no colour at all, which the Nomad
+	# leaves as it is (`… && color != 0`, visitLocation.c 4054).
+	if color != 0:
+		value = CardValue.land_markup(value, color, tile_bits)
 	value = value * 1250 / (750 + draw)
 	value = clampi(value / 50 * 5, 5, 1000) * copies(data.card_name)
 	return maxi(value, amulets_for(f) * 50)
@@ -160,7 +175,7 @@ static func bazaar_reach(player: AdventurePlayer) -> int:
 ## THE HERO ARRIVES at town [param slot]: which colour of amulet it wants
 ## this visit, drawn among its land's colours ([method town_offer]).
 static func arrive(player: AdventurePlayer, slot: int) -> void:
-	var shop := _shop(player, slot)
+	var shop := CardShop.town_record(player, slot)
 	var mask := CardShop.town_colors(player.world, slot)
 	var hues: Array[String] = []
 	for i in CardShop.COLOR_BITS.size():
@@ -174,6 +189,14 @@ static func arrive(player: AdventurePlayer, slot: int) -> void:
 	player.dice = dice.state
 
 
+## The colour town [param slot] favours this visit — 1997's
+## `g_town_preferred_magic_color`, which its trade, its quest and its wise
+## man all read: 1 black … 5 white, 0 when none was drawn.
+static func favoured(player: AdventurePlayer, slot: int) -> int:
+	var color := String((player.shops.get(str(slot), {}) as Dictionary).get("want", ""))
+	return AdventurePlayer.COLORS.find(color) + 1
+
+
 ## WHAT TOWN [param slot] OFFERS TO TRADE this visit: `{color, trade,
 ## words}` — the amulet's colour, the town's trade and the button's words —
 ## or `{}` when it does not (a village, no such amulet, too soon).
@@ -182,7 +205,7 @@ static func town_offer(player: AdventurePlayer, slot: int) -> Dictionary:
 	if int(site["type"]) < 2 or int(site["type"]) > 3:
 		return {}
 	var trade := int(site.get("trade", 0))
-	var shop := _shop(player, slot)
+	var shop := CardShop.town_record(player, slot)
 	var color := String(shop.get("want", ""))
 	if trade == 0 or color == "" or int(player.amulets.get(color, 0)) <= 0:
 		return {}
@@ -195,14 +218,7 @@ static func town_offer(player: AdventurePlayer, slot: int) -> Dictionary:
 
 ## The town's trade screen is closed: the wait begins again.
 static func traded(player: AdventurePlayer, slot: int) -> void:
-	_shop(player, slot)["traded"] = player.quest_timer
-
-
-static func _shop(player: AdventurePlayer, slot: int) -> Dictionary:
-	var key := str(slot)
-	if not player.shops.has(key):
-		player.shops[key] = {"cards": [], "restock": []}
-	return player.shops[key]
+	CardShop.town_record(player, slot)["traded"] = player.quest_timer
 
 
 # ------------------------------------------------------------ the trade --
@@ -221,22 +237,46 @@ static func offer(player: AdventurePlayer, card_name: String, way: String, color
 	if way == BAZAAR:
 		out["gold"] = price
 		paid = "%d gold pieces" % price
-		out["afford"] = player.gold >= price
 	else:
 		var need := amulets_for(f)
 		out["amulets"] = need
 		var word := (color + " amulet") if way == TOWN else "amulet"
 		paid = "%d %s%s" % [need, word, "" if need == 1 else "s"]
-		out["afford"] = (int(player.amulets.get(color, 0)) if way == TOWN else player.amulet_count()) >= need
+	out["afford"] = affords(player, out, way, color)
 	out["words"] = "I'll trade you %d %s for %s." % [count, card_name, paid]
 	return out
 
 
+## Whether the hero holds now what [param asked] ([method offer]) wants by
+## [param way]: its gold, that many amulets of the town's [param color], or
+## that many amulets of any colours.
+static func affords(player: AdventurePlayer, asked: Dictionary, way: String, color := "") -> bool:
+	match way:
+		BAZAAR:
+			return player.gold >= int(asked.get("gold", 0))
+		TOWN:
+			return int(player.amulets.get(color, 0)) >= int(asked.get("amulets", 0))
+	return _amulets_held(player) >= int(asked.get("amulets", 0))
+
+
+## The amulets the hero holds, of the five colours.
+static func _amulets_held(player: AdventurePlayer) -> int:
+	var count := 0
+	for hue in AdventurePlayer.COLORS:
+		count += maxi(int(player.amulets.get(hue, 0)), 0)
+	return count
+
+
 ## THE TRADE MADE: what [param asked] ([method offer]) is paid — the town's
 ## colour of amulets, any amulets drawn at random, or the gold — and the
-## card is the hero's, in no deck. `{traded, said}`.
+## card is the hero's, in no deck. `{traded, said}`. The purse is read
+## again here, not taken from [param asked]'s `afford`, as 1997 read it
+## again before taking (`BuyAnyCardFromTown`, visitLocation.c 4123–4145):
+## what the hero held as the card was chosen may be gone (a World Magic
+## cast while the trader waited) — then no trade, never a purse below
+## nothing nor a card underpaid.
 static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color := "") -> Dictionary:
-	if not bool(asked.get("afford", false)):
+	if not affords(player, asked, way, color):
 		return {"traded": false, "said": AFFORD}
 	match way:
 		BAZAAR:
@@ -244,14 +284,14 @@ static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color :
 		TOWN:
 			player.amulets[color] = int(player.amulets.get(color, 0)) - int(asked["amulets"])
 		_:
+			# Each amulet from a colour drawn among those held: enough are
+			# held ([method affords]), so there is always one to draw.
 			var dice := MsvcRandom.new(player.dice)
 			for i in int(asked["amulets"]):
 				var held: Array[String] = []
 				for hue in AdventurePlayer.COLORS:
 					if int(player.amulets.get(hue, 0)) > 0:
 						held.append(hue)
-				if held.is_empty():
-					break
 				var hue := held[dice.below(held.size())]
 				player.amulets[hue] = int(player.amulets[hue]) - 1
 			player.dice = dice.state

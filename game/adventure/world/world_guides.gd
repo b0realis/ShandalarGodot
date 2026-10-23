@@ -40,7 +40,9 @@ func _process(delta: float) -> void:
 
 ## Where tile [param tile]'s middle is on the screen.
 func on_screen(tile: Vector2i) -> Vector2:
-	return view.feet() + view.project(Vector2(tile.x * 32 + 16, tile.y * 32 + 16)) * view.zoom
+	# Where the view draws it this frame — slid between the clock's ticks
+	# with the hero ([method WorldView.drawn_at]).
+	return view.drawn_at(Vector2(tile.x * 32 + 16, tile.y * 32 + 16))
 
 
 ## The rectangle the arrows stand on: the screen, in from its edges and

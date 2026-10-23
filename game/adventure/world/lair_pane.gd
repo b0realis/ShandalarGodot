@@ -14,6 +14,11 @@ extends VisitPane
 ## [constant CardTrade.MINE]).
 signal trading(way: String)
 
+## [Ours] The Guardian's Ghost's amulet no longer held when it is to be paid
+## (spent since it was named — a World Magic cast from the panel): said, and
+## no deck is shown.
+const GHOST_SHORT := "You hold no %s amulet to give."
+
 ## What the lair holds ([method LairEvent.begin]).
 var event := {}
 ## The riddle asked, `{}` for none.
@@ -58,9 +63,13 @@ func _start() -> void:
 			_ask_riddle(lines)
 		LairEvent.THIEVES:
 			lines.append(LairEvent.thieves(player, event))
+			if String(event.get("reward", "")) == "":
+				WorldSoundscape.play_from(self, "sfx_treasure")
 			_settle(lines)
 		LairEvent.LOST_CITY:
 			lines.append(LairEvent.lost_city(player, event))
+			if String(event.get("reward", "")) == "":
+				WorldSoundscape.play_from(self, "sfx_treasure")
 			_settle(lines)
 		LairEvent.BAZAAR:
 			lines.append("Nomads trade any card for gold.")
@@ -71,6 +80,7 @@ func _start() -> void:
 			say(lines)
 			offer([["mine", "Trade with the miners", player.amulet_count() > 0], ["leave", "Leave", true]])
 		LairEvent.GEMCUTTER:
+			WorldSoundscape.play_from(self, "sfx_treasure")
 			lines.append("You may buy amulets for %d gold pieces." % LairEvent.AMULET_PRICE)
 			say(lines)
 			_gem_choices("")
@@ -99,8 +109,7 @@ func _start() -> void:
 			lines.append("For one %s amulet I will reveal the deck of any %s creature." % [
 				_ghost_amulet, AdventurePlayer.COLORS[color - 1]])
 			say(lines)
-			offer([["leave", "Never mind.", true], ["ghost", "See a deck.", false]],
-				"The creatures and their decks come with the duels.")
+			offer([["leave", "Never mind.", true], ["ghost", "See a deck.", true]])
 		_:
 			lines.append("A creature waits here to duel you.")
 			say(lines)
@@ -155,8 +164,14 @@ func _gem_choices(note_text: String) -> void:
 func _found() -> void:
 	_found_shown = true
 	var card := String(event.get("reward", ""))
+	WorldSoundscape.play_from(self, WorldSoundscape.card_key(card))
 	say([LairEvent.FOUND])
 	show_card(card)
+	offer([["leave", "Leave", true]])
+
+
+## A creature's deck has been seen (the Guardian's Ghost): on.
+func deck_seen() -> void:
 	offer([["leave", "Leave", true]])
 
 
@@ -182,8 +197,27 @@ func choose(action: String) -> void:
 			var said := LairEvent.oasis_trade(player, event)
 			show_card("")
 			_settle([LairEvent.arrival(event), said])
+		"ghost":
+			_pay_the_ghost()
 		"leave":
 			leave_lair()
+		_:
+			super.choose(action)
+
+
+## THE GUARDIAN'S GHOST PAID: the amulet it named, looked for again — it
+## may have been spent since it was named — then any creature of the lair's
+## colour to choose ([method VisitPane.ask_whose_deck]). Short of it, the
+## Ghost says so ([constant GHOST_SHORT]) and the lair is done.
+func _pay_the_ghost() -> void:
+	var held := int(player.amulets.get(_ghost_amulet, 0))
+	if _ghost_amulet == "" or held < 1:
+		var lines: Array = (place.get("lines", []) as Array).duplicate()
+		lines.append(GHOST_SHORT % _ghost_amulet)
+		_settle(lines)
+		return
+	player.amulets[_ghost_amulet] = held - 1
+	ask_whose_deck(clampi(int(event.get("color", 1)), 1, 5))
 
 
 ## LEAVING: a card still to be found is shown first; then it is the

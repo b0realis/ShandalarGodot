@@ -8,13 +8,20 @@ extends RefCounted
 ## WHAT IS KEPT is what the 1997 game keeps in its save (`magicN.SVE`; the
 ## layout is in the 1.3 decompilation's `docs/shandalar_save_files.txt`,
 ## and each field below names its offset there), held our own way and
-## saved as JSON a person can read. The parts no system uses yet — cards
-## and decks, quests, the journal, roaming monsters, sieges — are here,
-## empty, with their shape, so that each system fills its own part.
+## saved as JSON a person can read. The parts no system fills yet — the
+## sieges, and the duels' own record (the victories, the last duel's
+## colours), which come with the duels — are here, empty, with their
+## shape, so that each system fills its own part.
 ##
 ## ONE GAME, ONE FILE NAME: an adventure is named by its hero and a hash of
 ## the moment it began ([member adventure_id]), and its first save is
 ## written the moment its world is made ([method autosave]).
+##
+## SAVED WHOLE, READ SAFELY (campaign of 2026-10-23): a save is written
+## whole or not at all, with the last good one kept beside it ([method
+## save]); a save is read field by field, so one wrong field costs that
+## field and not the adventure ([method from_dict]); and the lists read a
+## file only when its bytes changed ([method scan_saves]).
 
 ## The save's own name and version, first in every file.
 const FORMAT := "shandalar-adventure"
@@ -23,6 +30,24 @@ const FORMAT_VERSION := 1
 const SAVES_FOLDER := "user://adventures"
 static var saves_folder := SAVES_FOLDER
 const AUTOSAVE := "autosave"
+## The tail of the copy kept of a save's last good version ([method save]).
+const BACKUP_TAIL := ".bak"
+## The five parts every save must hold as records to be read at all
+## ([method readable]); the others may be missing.
+const MAIN_PARTS: Array[String] = ["adventure", "hero", "carried", "clocks", "world"]
+## The largest count a save is read with (gold, food, the clocks): the
+## 1997 game kept them in 32-bit numbers.
+const MOST := 0x7FFFFFFF
+## THE JOURNAL'S LIMIT: 1997's `AddJournalEntry` (adventure_new_game.c,
+## 0x004290e2) writes a line only while fewer than 2,000 are kept. [Ours,
+## the owner 2026-10-23: "extend that".] Five times that here: every
+## autosave writes the whole journal, measured at about 4 ms a thousand
+## lines to save and 8 ms to load, so 10,000 lines cost ~42 ms on leaving a
+## place, ~83 ms to load and a ~2 MB file; with no limit at all the saves
+## would only ever grow. A full journal keeps its lines and writes no more —
+## the record is counted from them ([method duel_record],
+## [method HeroStats.record]), so dropping the oldest would take wins away.
+const JOURNAL_MOST := 10000
 
 ## The five colours in the 1997 game's order (1 black … 5 white, as the
 ## amulets are kept, `g_amulet_inventory`).
@@ -49,6 +74,11 @@ var adventure_id := ""
 ## When the adventure began and when it was last saved (ISO, UTC).
 var created := ""
 var saved := ""
+## The name of the save slot this was last saved into or taken up from
+## ([SaveSlots]). Only a slot's own file carries it: the autosave is
+## written with none ([method save]), as the load screen shows it as the
+## autosave.
+var slot_name := ""
 ## The game version that saved it.
 var game_version := ""
 
@@ -105,11 +135,6 @@ var deck_notes: Array[String] = ["", "", ""]
 
 # ------------------------------------------------------------ the duels --
 
-## The towns and cities whose mana the hero has linked, by site slot: each
-## adds a life in duels. (The 1997 save marks a link in the site's status,
-## bit 1; but the world is made with that bit already set on ten towns,
-## whose meaning there is not yet read, so the hero's links are kept here.)
-var mana_links: Array[int] = []
 ## Lives added to (or taken from) the next duel (0x224BC, and the extra
 ## lives 1–5 the 1997 game kept in 0x224C0).
 var next_duel_life := 0
@@ -134,8 +159,21 @@ var defeated_wizards: Array[String] = []
 ## Lairs explored (0x224AC): the more, the fewer and the stronger the
 ## creatures met.
 var lairs_explored := 0
-## The quest under way, `{}` for none (0x21CF8; its fields in [WorldStatus]).
+## The quest under way, `{}` for none (0x21CF8; its fields in [Quests]).
 var quest := {}
+## The quest the last town visited offers, `{type, destination, color,
+## at}` or `{}` (1997's pending offer, unsaved there) ([Quests]).
+var quest_offer := {}
+## The last town whose services the hero used: a town's quest and its wise
+## man's first words are drawn only on a visit to another (1997's
+## `g_last_town_services_town_index`, unsaved there).
+var last_town := -1
+## When each town last gave a quest, on the quest clock, by site slot
+## (`"<slot>"`; the town's `quest_restock_timer`).
+var town_quests := {}
+## What the wise men last said: `{stage, tale, block, …}` ([WiseMan];
+## 1997's globals, unsaved there).
+var wise_man := {}
 
 
 # ------------------------------------------------------------ the clocks --
@@ -256,6 +294,20 @@ func owns(magic_name: String) -> bool:
 	return magic_name in world_magics
 
 
+## Whether a gift for the next duel already waits — extra lives, the
+## first move or a card in play (1997's one `g_next_duel_card_id`): a new
+## gift of that kind is not given while one waits.
+func duel_gift_waiting() -> bool:
+	return next_duel_life != 0 or next_duel_first_move or next_duel_card != ""
+
+
+## THE HERO'S MANA LINKS: the linked towns and cities no wizard holds, each
+## a life in a duel ([method TownStatus.mana_links]; the sites keep them —
+## a save's `mana_links` is that count, for a reader of the file).
+func mana_links() -> int:
+	return TownStatus.mana_links(world)
+
+
 ## Wins and losses, read from the journal (event 2, `won` true or false).
 func duel_record() -> Dictionary:
 	var won := 0
@@ -272,9 +324,12 @@ func duel_record() -> Dictionary:
 ## A line for the journal: [param event] (`duel`, `magic`, `quest`,
 ## `saved`, `freed`, `treasure`, …), what happened in the 1997 game's
 ## words ([param text], `@LOGSTRINGS`), where and when (the world's clock
-## and the day on the road), and [param more] ([HeroStats.record]).
+## and the day on the road), and [param more] ([HeroStats.record]). Not
+## written when the journal is full ([constant JOURNAL_MOST]).
 func log_event(event: String, text: String, more := {}) -> void:
-	var entry := {"event": event, "text": text, "x": position.x, "y": position.y, "time": monster_timer,
+	if journal.size() >= JOURNAL_MOST:
+		return
+	var entry :={"event": event, "text": text, "x": position.x, "y": position.y, "time": monster_timer,
 		"day": quest_timer / WorldStatus.DAY}
 	entry.merge(more)
 	journal.append(entry)
@@ -311,7 +366,8 @@ func to_dict() -> Dictionary:
 		"format": FORMAT,
 		"version": FORMAT_VERSION,
 		"about": "One adventure in the world of Shandalar: the hero, what they carry, their record, the clocks, and the world as it now stands. The world's grid is 128 rows of 64 tile bytes in hex: rows 0-63 the tiles (terrain in the low four bits; 0x10 a site, 0x20 a road, 0x40 a dungeon, 0x80 explored), rows 64-127 the roads leaving each tile, a bit per direction.",
-		"adventure": {"id": adventure_id, "created": created, "saved": saved, "game_version": game_version},
+		"adventure": {"id": adventure_id, "created": created, "saved": saved, "game_version": game_version,
+			"slot_name": slot_name},
 		"hero": {"name": name, "portrait": portrait, "figure": walker,
 			"figure_colors": figure_colors, "color": color,
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
@@ -324,9 +380,10 @@ func to_dict() -> Dictionary:
 		"duels": {"next_duel_life": next_duel_life, "next_duel_card": next_duel_card,
 			"next_duel_first_move": next_duel_first_move,
 			"victories": duel_victories, "last_duel_colors": last_duel_colors,
-			"mana_links": mana_links, "record": duel_record()},
+			"mana_links": mana_links(), "record": duel_record()},
 		"record": {"journal": journal, "defeated_wizards": defeated_wizards,
-			"lairs_explored": lairs_explored, "quest": quest},
+			"lairs_explored": lairs_explored, "quest": quest, "quest_offer": quest_offer,
+			"last_town": last_town, "town_quests": town_quests, "wise_man": wise_man},
 		"clocks": {"monster_timer": monster_timer, "quest_timer": quest_timer,
 			"siege_timer": siege_timer, "siege_active": siege_active,
 			"quickening": quickening},
@@ -347,79 +404,438 @@ func to_dict() -> Dictionary:
 
 
 ## THE ADVENTURE FROM A SAVE, or null when [param data] is not one this
-## game can read (its [constant FORMAT] or a newer [constant FORMAT_VERSION]).
+## game can read ([method readable]).
+##
+## READ FIELD BY FIELD (campaign of 2026-10-23): one wrongly typed field —
+## a deck's names written as a word, the amulets as a list — made the
+## whole save unreadable, while broken records (a creature that is not a
+## record, a card without its name) loaded and then flooded the world with
+## errors. Now each field is taken only when it is of its kind, its
+## default otherwise; a record the world reads is kept only when it is
+## whole; places and indices are held to the world; and the rest of the
+## save is kept. A save from before a newer field reads that field's
+## default, as it always did. [ours]
 static func from_dict(data: Dictionary) -> AdventurePlayer:
-	if String(data.get("format", "")) != FORMAT or int(data.get("version", 0)) < 1 \
-			or int(data.get("version", 0)) > FORMAT_VERSION:
+	if not readable(data):
 		return null
+	var where := _object(data.get("where"))
+	var saved_world: Dictionary = data["world"]
+	var made := _world_from(saved_world, Vector2i(_number(where.get("x")), _number(where.get("y"))))
 	var player := AdventurePlayer.new()
-	var game: Dictionary = data.get("adventure", {})
-	player.adventure_id = String(game.get("id", ""))
-	player.created = String(game.get("created", ""))
-	player.saved = String(game.get("saved", ""))
-	player.game_version = String(game.get("game_version", ""))
-	var hero: Dictionary = data.get("hero", {})
-	player.name = String(hero.get("name", ""))
-	player.portrait = String(hero.get("portrait", ""))
-	player.walker = String(hero.get("figure", "male"))
-	player.figure_colors = HeroColors.cleaned(hero.get("figure_colors", {}))
-	player.color = String(hero.get("color", "white"))
-	player.difficulty = int(hero.get("difficulty", 0))
-	player.playmat = _whole(hero.get("playmat", {}))
-	player.packs = _whole(hero.get("packs", []))
-	var where: Dictionary = data.get("where", {})
-	player.position = Vector2i(int(where.get("x", 0)), int(where.get("y", 0)))
-	player.facing = int(where.get("facing", 0))
-	var carried: Dictionary = data.get("carried", {})
-	player.gold = int(carried.get("gold", 0))
-	player.food = int(carried.get("food", 0))
-	var amulets_saved: Dictionary = carried.get("amulets", {})
-	for key in COLORS:
-		player.amulets[key] = int(amulets_saved.get(key, 0))
-	for magic in carried.get("world_magics", []):
-		if String(magic) in WORLD_MAGICS:
-			player.world_magics.append(String(magic))
-	player.cards = _whole(carried.get("cards", []))
-	player.current_deck = clampi(int(carried.get("current_deck", 0)), 0, 2)
-	var titles: Array = carried.get("deck_names", [])
-	for slot in mini(titles.size(), 3):
-		player.deck_names[slot] = String(titles[slot])
-	var notes: Array = carried.get("deck_notes", [])
-	for slot in mini(notes.size(), 3):
-		player.deck_notes[slot] = String(notes[slot])
-	for key in carried.get("deck_colors", []):
-		player.deck_colors.append(String(key))
-	var duels: Dictionary = data.get("duels", {})
-	for slot in duels.get("mana_links", []):
-		player.mana_links.append(int(slot))
-	player.next_duel_life = int(duels.get("next_duel_life", 0))
-	player.next_duel_card = String(duels.get("next_duel_card", ""))
-	player.next_duel_first_move = bool(duels.get("next_duel_first_move", false))
-	player.duel_victories = _whole(duels.get("victories", []))
-	player.last_duel_colors = _whole(duels.get("last_duel_colors", {}))
-	var kept: Dictionary = data.get("record", {})
-	player.journal = _whole(kept.get("journal", []))
-	for key in kept.get("defeated_wizards", []):
-		player.defeated_wizards.append(String(key))
-	player.lairs_explored = int(kept.get("lairs_explored", 0))
-	player.quest = _whole(kept.get("quest", {}))
-	var clocks: Dictionary = data.get("clocks", {})
-	player.monster_timer = int(clocks.get("monster_timer", 0))
-	player.quest_timer = int(clocks.get("quest_timer", 0))
-	player.siege_timer = int(clocks.get("siege_timer", 0))
-	player.siege_active = bool(clocks.get("siege_active", false))
-	player.quickening = int(clocks.get("quickening", 0))
-	var saved_world: Dictionary = data.get("world", {})
-	var made := _world_from(saved_world)
-	if made == null:
-		return null
 	player.world = made
-	player.world_seed_text = String(saved_world.get("seed_text", str(made.seed)))
-	player.made_fingerprint = String(saved_world.get("made_fingerprint", ""))
-	player.dice = int(saved_world.get("dice", made.rand_state))
-	player.monsters = _whole(saved_world.get("monsters", []))
-	player.shops = _whole(saved_world.get("shops", {}))
+	_read_game(player, data["adventure"])
+	_read_hero(player, data["hero"])
+	_read_where(player, where)
+	_read_carried(player, data["carried"])
+	_read_duels(player, _object(data.get("duels")))
+	_read_record(player, _object(data.get("record")))
+	_read_clocks(player, data["clocks"])
+	player.world_seed_text = _text(saved_world.get("seed_text"), str(made.seed))
+	player.made_fingerprint = _text(saved_world.get("made_fingerprint"))
+	player.dice = _number(saved_world.get("dice"), made.rand_state)
+	player.monsters = _cleaned_monsters(saved_world.get("monsters"), made)
+	player.shops = _cleaned_shops(saved_world.get("shops"), made)
 	return player
+
+
+## Whether [param data] is a save this game reads: its [constant FORMAT],
+## a version from 1 to [constant FORMAT_VERSION], its [constant
+## MAIN_PARTS] each a record, and its world's grid whole — 128 rows of 64
+## bytes in hex. Anything else a save lacks or holds wrongly is read with
+## its default ([method from_dict]).
+static func readable(data: Variant) -> bool:
+	if not data is Dictionary or _text(data.get("format")) != FORMAT:
+		return false
+	var version := _number(data.get("version"))
+	if version < 1 or version > FORMAT_VERSION:
+		return false
+	for part in MAIN_PARTS:
+		if not data.get(part) is Dictionary:
+			return false
+	return _grid_whole((data["world"] as Dictionary).get("grid"))
+
+
+## Whether [param grid] is the world's grid: 128 rows of 128 hex digits.
+static func _grid_whole(grid: Variant) -> bool:
+	if not grid is Array or (grid as Array).size() != ShandalarWorld.TILES * 2:
+		return false
+	for row in grid:
+		if not row is String or (row as String).length() != ShandalarWorld.TILES * 2 \
+				or not (row as String).is_valid_hex_number() or (row as String)[0] in ["+", "-"]:
+			return false
+	return true
+
+
+static func _read_game(player: AdventurePlayer, game: Dictionary) -> void:
+	player.adventure_id = _text(game.get("id"))
+	player.created = _text(game.get("created"))
+	player.saved = _text(game.get("saved"))
+	player.game_version = _text(game.get("game_version"))
+	player.slot_name = _text(game.get("slot_name"))
+
+
+static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
+	player.name = _text(hero.get("name"))
+	player.portrait = _text(hero.get("portrait"))
+	player.walker = _text(hero.get("figure"), "male")
+	player.figure_colors = HeroColors.cleaned(_object(hero.get("figure_colors")))
+	var color := _text(hero.get("color"), "white")
+	player.color = color if color in COLORS else "white"
+	player.difficulty = clampi(_number(hero.get("difficulty")), 0, 3)
+	player.playmat = _whole(_object(hero.get("playmat")))
+	player.packs = _whole(_list(hero.get("packs")))
+
+
+## The hero's place, on the map: where the world starts them when the save
+## has none.
+static func _read_where(player: AdventurePlayer, where: Dictionary) -> void:
+	var start := player.world.start
+	player.position = Vector2i(_on_map(_number(where.get("x"), start.x)), _on_map(_number(where.get("y"), start.y)))
+	player.facing = clampi(_number(where.get("facing")), 0, 8)
+
+
+static func _read_carried(player: AdventurePlayer, carried: Dictionary) -> void:
+	player.gold = _count(carried.get("gold"))
+	player.food = _count(carried.get("food"))
+	var amulets_saved := _object(carried.get("amulets"))
+	for key in COLORS:
+		player.amulets[key] = _count(amulets_saved.get(key))
+	player.world_magics = _texts(carried.get("world_magics"), WORLD_MAGICS)
+	player.cards = _cleaned_cards(carried.get("cards"))
+	player.current_deck = clampi(_number(carried.get("current_deck")), 0, 2)
+	_read_three(player.deck_names, carried.get("deck_names"))
+	_read_three(player.deck_notes, carried.get("deck_notes"))
+	player.deck_colors = _texts(carried.get("deck_colors"))
+
+
+static func _read_duels(player: AdventurePlayer, duels: Dictionary) -> void:
+	player.next_duel_life = _number(duels.get("next_duel_life"))
+	player.next_duel_card = _text(duels.get("next_duel_card"))
+	player.next_duel_first_move = _flag(duels.get("next_duel_first_move"))
+	player.duel_victories = _victories(duels.get("victories"))
+	player.last_duel_colors = _whole(_object(duels.get("last_duel_colors")))
+
+
+static func _read_record(player: AdventurePlayer, kept: Dictionary) -> void:
+	player.journal = _cleaned_journal(kept.get("journal"))
+	for key in _texts(kept.get("defeated_wizards"), COLORS):
+		if not key in player.defeated_wizards:
+			player.defeated_wizards.append(key)
+	player.lairs_explored = _count(kept.get("lairs_explored"))
+	player.quest = _numbers_record(kept.get("quest"))
+	player.quest_offer = _numbers_record(kept.get("quest_offer"))
+	var town := _number(kept.get("last_town"), -1)
+	player.last_town = town if _is_site(town, player.world) else -1
+	player.town_quests = {}
+	var given := _object(kept.get("town_quests"))
+	for key in given:
+		if _is_number(given[key]):
+			player.town_quests[String(key)] = _number(given[key])
+	player.wise_man = _wise_man_record(kept.get("wise_man"))
+
+
+static func _read_clocks(player: AdventurePlayer, clocks: Dictionary) -> void:
+	player.monster_timer = _count(clocks.get("monster_timer"))
+	player.quest_timer = _count(clocks.get("quest_timer"))
+	player.siege_timer = _count(clocks.get("siege_timer"))
+	player.siege_active = _flag(clocks.get("siege_active"))
+	player.quickening = _count(clocks.get("quickening"))
+
+
+## THE WORLD FROM ITS SAVE (whose grid [method readable] has checked):
+## the sites and dungeons by slot — a misshapen one an empty one, so no
+## other moves — and the World Magics' towns sites of this world, or none.
+## [param fallback_start] is where the hero starts when the save does not
+## say.
+static func _world_from(saved_world: Dictionary, fallback_start: Vector2i) -> ShandalarWorld:
+	var made := ShandalarWorld.new()
+	made.seed = _number(saved_world.get("seed"))
+	made.slot_start = _number(saved_world.get("slot_start"))
+	made.color = clampi(_number(saved_world.get("color"), 1), 1, 5)
+	made.difficulty = clampi(_number(saved_world.get("difficulty")), 0, 3)
+	made.page.resize(ShandalarWorld.PAGE_WIDTH * ShandalarWorld.PAGE_HEIGHT)
+	var grid: Array = saved_world["grid"]
+	for y in grid.size():
+		var row := String(grid[y]).hex_decode()
+		for x in ShandalarWorld.TILES:
+			made.page[y * ShandalarWorld.PAGE_WIDTH + x] = row[x]
+	for site in _list(saved_world.get("sites")):
+		made.sites.append(_cleaned_site(site))
+	for slot in _list(saved_world.get("world_magic_sites")):
+		var town := _number(slot)
+		made.world_magic_sites.append(town if _is_site(town, made) else 0)
+	for slot in _list(saved_world.get("encounters")):
+		made.encounters.append(_cleaned_encounter(slot, made))
+	for when in _list(saved_world.get("lair_respawn")):
+		made.lair_respawn.append(_number(when))
+	var start := _list(saved_world.get("start"))
+	made.start = Vector2i(_on_map(_number(start[0])), _on_map(_number(start[1]))) \
+		if start.size() == 2 and _is_number(start[0]) and _is_number(start[1]) \
+		else Vector2i(_on_map(fallback_start.x), _on_map(fallback_start.y))
+	made.rand_state = _number(saved_world.get("dice"))
+	return made
+
+
+## A site as the world keeps it, `{x, y, type, trade, status}`: a tile of
+## the map and a type of [constant SITE_KINDS]; anything not a record an
+## empty place (type 0, which nothing visits).
+static func _cleaned_site(value: Variant) -> Dictionary:
+	var site := _object(value)
+	return {"x": clampi(_number(site.get("x")), 0, ShandalarWorld.TILES - 1),
+		"y": clampi(_number(site.get("y")), 0, ShandalarWorld.TILES - 1),
+		"type": clampi(_number(site.get("type")), 0, SITE_KINDS.size() - 1),
+		"trade": _number(site.get("trade")), "status": _number(site.get("status"))}
+
+
+## An encounter slot ([member ShandalarWorld.encounters]): its numbers
+## numbers, its place a tile of the map, its town a site of the world, its
+## cards dungeon cards of the table ([constant ShandalarWorld.DUNGEON_CARDS]).
+static func _cleaned_encounter(value: Variant, made: ShandalarWorld) -> Dictionary:
+	var encounter: Dictionary = _whole(_object(value))
+	for key in ["town", "color", "monster_flags", "rules", "card_in_effect", "clues"]:
+		if encounter.has(key):
+			encounter[key] = _number(encounter[key])
+	for key in ["x", "y"]:
+		encounter[key] = clampi(_number(encounter.get(key)), 0, ShandalarWorld.TILES - 1)
+	if encounter.has("town") and not _is_site(int(encounter["town"]), made):
+		encounter["town"] = 0
+	var held: Array[int] = []
+	for card in _list(encounter.get("cards")):
+		var index := _number(card, -1)
+		if index >= 0 and index < ShandalarWorld.DUNGEON_CARDS.size():
+			held.append(index)
+	encounter["cards"] = held
+	return encounter
+
+
+## The roaming creatures and lairs worth keeping: records with a slot (0–5
+## roaming, [constant WorldMagic.SIEGE_SLOT] the besieger), one to a slot;
+## a roaming one with its place in the world (x and y in world units), the
+## besieger with a town of the world. Any other is dropped — the world
+## fills its slot again ([WorldLairs]).
+static func _cleaned_monsters(value: Variant, made: ShandalarWorld) -> Array:
+	var kept: Array = []
+	var taken := {}
+	for entry in _list(value):
+		if not entry is Dictionary:
+			continue
+		var creature: Dictionary = _whole(entry)
+		var slot := _number(creature.get("slot"), -1)
+		var roaming := slot >= 0 and slot < WorldLairs.SLOTS
+		if taken.has(slot) or not (roaming or slot == WorldMagic.SIEGE_SLOT):
+			continue
+		if roaming and not (_is_number(creature.get("x")) and _is_number(creature.get("y"))
+				and _on_map(_number(creature["x"])) == _number(creature["x"])
+				and _on_map(_number(creature["y"])) == _number(creature["y"])):
+			continue
+		if creature.has("town") and not _is_site(_number(creature["town"], -1), made):
+			continue
+		if not roaming and not creature.has("town"):
+			continue
+		for key in ["slot", "x", "y", "town", "color"]:
+			if creature.has(key):
+				creature[key] = _number(creature[key])
+		if creature.has("kind"):
+			creature["kind"] = _text(creature["kind"])
+		taken[slot] = true
+		kept.append(creature)
+	return kept
+
+
+## The towns' shops worth keeping ([CardShop]): by a site slot of the
+## world, each a record whose `cards` are names ("" a place sold) with a
+## `restock` time for each; a hint that is not `{card, text}` and a trade
+## time that is not a number are let go (a new visit draws them again).
+static func _cleaned_shops(value: Variant, made: ShandalarWorld) -> Dictionary:
+	var kept := {}
+	var saved := _object(value)
+	for key in saved:
+		var slot := String(key).to_int() if String(key).is_valid_int() else -1
+		if not _is_site(slot, made) or not saved[key] is Dictionary:
+			continue
+		var shop: Dictionary = _whole(saved[key])
+		var cards: Array = []
+		for card in _list(shop.get("cards")):
+			cards.append(_text(card))
+		var restock: Array = []
+		for at in _list(shop.get("restock")):
+			restock.append(_number(at, CardShop.NEVER_FILLED))
+		while restock.size() < cards.size():
+			restock.append(CardShop.NEVER_FILLED)
+		restock.resize(cards.size())
+		shop["cards"] = cards
+		shop["restock"] = restock
+		if shop.has("hint"):
+			var hint := _object(shop["hint"])
+			if _text(hint.get("card")) == "":
+				shop.erase("hint")
+			else:
+				hint["card"] = _text(hint["card"])
+				hint["text"] = _text(hint.get("text"))
+				shop["hint"] = hint
+		if shop.has("traded"):
+			if _is_number(shop["traded"]):
+				shop["traded"] = _number(shop["traded"])
+			else:
+				shop.erase("traded")
+		kept[str(slot)] = shop
+	return kept
+
+
+## The cards owned worth keeping: records with a card's name (one not in
+## the packs worn is still the hero's), each in the decks 0–2 it names.
+static func _cleaned_cards(value: Variant) -> Array:
+	var kept: Array = []
+	for entry in _list(value):
+		if not entry is Dictionary or _text((entry as Dictionary).get("card")) == "":
+			continue
+		var card: Dictionary = _whole(entry)
+		var decks: Array = []
+		for deck in _list(card.get("decks")):
+			var at := _number(deck, -1)
+			if at >= 0 and at <= 2 and not at in decks:
+				decks.append(at)
+		card["decks"] = decks
+		kept.append(card)
+	return kept
+
+
+## The journal's lines worth keeping: records, their words words, their
+## place and times numbers, a duel's `won` and a quest's `done` yes or no.
+static func _cleaned_journal(value: Variant) -> Array:
+	var kept: Array = []
+	for entry in _list(value):
+		if not entry is Dictionary:
+			continue
+		var line: Dictionary = _whole(entry)
+		for key in ["event", "text"]:
+			if line.has(key):
+				line[key] = _text(line[key])
+		for key in ["x", "y", "time", "day"]:
+			if line.has(key):
+				line[key] = _number(line[key])
+		for key in ["won", "done"]:
+			if line.has(key):
+				line[key] = _flag(line[key])
+		kept.append(line)
+	return kept
+
+
+# ------------------------------------------------- a field of its kind --
+# What [method from_dict] reads a field with: the field when it is of its
+# kind, the default otherwise.
+
+static func _object(value: Variant) -> Dictionary:
+	return value if value is Dictionary else {}
+
+
+static func _list(value: Variant) -> Array:
+	return value if value is Array else []
+
+
+static func _is_number(value: Variant) -> bool:
+	return value is int or (value is float and is_finite(value))
+
+
+## A whole number, or [param fallback]; one too large for a number of the
+## game is held at the largest.
+static func _number(value: Variant, fallback := 0) -> int:
+	if value is int:
+		return value
+	if value is float and is_finite(value):
+		return int(clampf(roundf(value), -9.0e15, 9.0e15))
+	return fallback
+
+
+## A count: a whole number from 0 to [constant MOST].
+static func _count(value: Variant) -> int:
+	return clampi(_number(value), 0, MOST)
+
+
+static func _text(value: Variant, fallback := "") -> String:
+	return value if value is String else fallback
+
+
+static func _flag(value: Variant) -> bool:
+	if value is bool:
+		return value
+	return _is_number(value) and _number(value) != 0
+
+
+## The words of [param value], those of [param allowed] only when it is
+## given.
+static func _texts(value: Variant, allowed: Array[String] = []) -> Array[String]:
+	var out: Array[String] = []
+	for item in _list(value):
+		if item is String and (allowed.is_empty() or item in allowed):
+			out.append(item)
+	return out
+
+
+## The records of [param value], whole.
+## A record of numbers alone — a quest, a quest offered —, or empty when
+## any field is not a number (the bug pass after the campaign, r3-4: a
+## quest's colour saved as a word or a list made every tick's deadline
+## check an error).
+static func _numbers_record(value: Variant) -> Dictionary:
+	var record := _object(value)
+	for key in record:
+		if not _is_number(record[key]):
+			return {}
+	return _whole(record)
+
+
+## The wise man's word ([WiseMan]): its stage and tale as numbers, its
+## news as words, its reminder as a yes or no — each kept only when it is
+## of its kind (r3-4).
+static func _wise_man_record(value: Variant) -> Dictionary:
+	var saved := _object(value)
+	var out := {}
+	for key in ["stage", "tale"]:
+		if _is_number(saved.get(key)):
+			out[key] = _whole(saved[key])
+	if saved.get("news") is String:
+		out["news"] = saved["news"]
+	if saved.get("remind") is bool:
+		out["remind"] = saved["remind"]
+	return out
+
+
+## The duels won, each kept only when its colour is a number or a word, as
+## the lairs and the wise man read it (an unknown word counts for no
+## colour); one with nothing, a list or a record there is dropped (r3-4).
+static func _victories(value: Variant) -> Array:
+	var out: Array = []
+	for win in _records(value):
+		var hue: Variant = (win as Dictionary).get("color", -1)
+		if _is_number(hue) or hue is String:
+			out.append(win)
+	return out
+
+
+static func _records(value: Variant) -> Array:
+	var out: Array = []
+	for item in _list(value):
+		if item is Dictionary:
+			out.append(_whole(item))
+	return out
+
+
+## The first three words of [param value] into [param into] (a deck's
+## names or notes), the rest left as they are.
+static func _read_three(into: Array[String], value: Variant) -> void:
+	var saved := _list(value)
+	for slot in mini(saved.size(), 3):
+		into[slot] = _text(saved[slot])
+
+
+## [param units] (world units, 32 to a tile) held to the map.
+static func _on_map(units: int) -> int:
+	return clampi(units, 0, ShandalarWorld.TILES * 32 - 1)
+
+
+static func _is_site(slot: int, made: ShandalarWorld) -> bool:
+	return slot >= 0 and slot < made.sites.size()
 
 
 ## [param value] with every whole number JSON read back as a float made an
@@ -440,46 +856,6 @@ static func _whole(value: Variant) -> Variant:
 	return value
 
 
-static func _world_from(saved_world: Dictionary) -> ShandalarWorld:
-	var grid: Array = saved_world.get("grid", [])
-	if grid.size() != ShandalarWorld.TILES * 2:
-		return null
-	var made := ShandalarWorld.new()
-	made.seed = int(saved_world.get("seed", 0))
-	made.slot_start = int(saved_world.get("slot_start", 0))
-	made.color = int(saved_world.get("color", 1))
-	made.difficulty = int(saved_world.get("difficulty", 0))
-	made.page.resize(ShandalarWorld.PAGE_WIDTH * ShandalarWorld.PAGE_HEIGHT)
-	for y in grid.size():
-		var row := String(grid[y]).hex_decode()
-		if row.size() != ShandalarWorld.TILES:
-			return null
-		for x in ShandalarWorld.TILES:
-			made.page[y * ShandalarWorld.PAGE_WIDTH + x] = row[x]
-	for site in saved_world.get("sites", []):
-		made.sites.append({"x": int(site.get("x", 0)), "y": int(site.get("y", 0)),
-			"type": int(site.get("type", 0)), "trade": int(site.get("trade", 0)),
-			"status": int(site.get("status", 0))})
-	for slot in saved_world.get("world_magic_sites", []):
-		made.world_magic_sites.append(int(slot))
-	for slot in saved_world.get("encounters", []):
-		var encounter: Dictionary = (slot as Dictionary).duplicate(true)
-		for key in ["x", "y", "town", "color", "monster_flags", "rules", "card_in_effect", "clues"]:
-			if encounter.has(key):
-				encounter[key] = int(encounter[key])
-		var held: Array[int] = []
-		for card in encounter.get("cards", []):
-			held.append(int(card))
-		encounter["cards"] = held
-		made.encounters.append(encounter)
-	for when in saved_world.get("lair_respawn", []):
-		made.lair_respawn.append(int(when))
-	var start: Array = saved_world.get("start", [0, 0])
-	made.start = Vector2i(int(start[0]), int(start[1]))
-	made.rand_state = int(saved_world.get("dice", 0))
-	return made
-
-
 ## Whether the world still answers to its recipe: its fingerprint, with the
 ## explored marks taken off, is the one it was made with.
 func world_intact() -> bool:
@@ -492,24 +868,63 @@ func world_intact() -> bool:
 	return plain.fingerprint() == made_fingerprint
 
 
+# ----------------------------------------------------- the save's file --
+
 ## The file [param kind] of this adventure is saved in.
 func save_path(kind := AUTOSAVE) -> String:
 	return saves_folder.path_join("%s.%s.json" % [adventure_id, kind])
 
 
-## Write the adventure to [param path] (the autosave by default); the path
-## written, or "" when it could not be.
+## The kind of save the file at [param path] is, from its name:
+## `autosave`, `slot01` … `slot10` ([SaveSlots]).
+static func kind_of(path: String) -> String:
+	return path.get_file().get_basename().get_extension()
+
+
+## The copy of the save at [param path] kept from before it was last
+## written ([method save]).
+static func backup_path(path: String) -> String:
+	return path + BACKUP_TAIL
+
+
+## WRITE THE ADVENTURE to [param path] (the autosave by default): the path
+## written, or "" when it could not be — and then the last good save is
+## still there, whole (the file itself, or its `.bak`).
+##
+## WHOLE OR NOT AT ALL (campaign of 2026-10-23): the save was written over
+## in place and the write never checked, so a disk that filled, or a limit
+## on a file's size, left a cut-off file that no longer loaded — and the
+## game said it had saved. Now
+## - the save there now, when it is one this game reads, is first kept as
+##   `<path>.bak` ([method _keep_backup]) — a damaged one is not, so it
+##   never takes the place of an older good copy;
+## - the new save goes through [method Settings.write_atomically]: written
+##   aside, checked, and only then renamed over the old one (where a
+##   platform will not rename over a file, it takes the old one away first
+##   — the `.bak` is the good copy in that moment);
+## - and it is read back: unless the file holds exactly what was written,
+##   the save failed.
+## Loading and the lists fall back to the `.bak` when the file itself
+## cannot be read ([method load_from], [method save_at]). Only a slot's
+## own file carries the slot's name ([member slot_name]).
 func save(path := "") -> String:
 	if path == "":
 		path = save_path()
-	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	if not _folder_ready(path.get_base_dir()):
+		push_warning("AdventurePlayer: cannot make the folder of %s" % path)
+		return ""
+	var before := saved
 	saved = Time.get_datetime_string_from_system(true) + "Z"
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
+	var data := to_dict()
+	if SaveSlots.slot_of(kind_of(path)) == 0:
+		(data["adventure"] as Dictionary)["slot_name"] = ""
+	var bytes := JSON.stringify(data, "\t").to_utf8_buffer()
+	_keep_backup(path)
+	if Settings.write_atomically(path, bytes) != OK or _bytes_at(path) != bytes:
+		saved = before
 		push_warning("AdventurePlayer: cannot write %s" % path)
 		return ""
-	file.store_string(JSON.stringify(to_dict(), "\t"))
-	file.close()
+	_remember(path, bytes, data)
 	return path
 
 
@@ -518,41 +933,229 @@ func autosave() -> String:
 	return save(save_path(AUTOSAVE))
 
 
-## The adventure saved at [param path], or null.
+## Whether [param folder] is there, or is made now. A file standing where
+## a folder of the way should be fails it quietly (the engine prints an
+## error for a folder it cannot make).
+static func _folder_ready(folder: String) -> bool:
+	var at := folder
+	while not DirAccess.dir_exists_absolute(at):
+		if FileAccess.file_exists(at):
+			return false
+		var up := at.get_base_dir()
+		if up == at or up == "":
+			break
+		at = up
+	return DirAccess.dir_exists_absolute(folder) or DirAccess.make_dir_recursive_absolute(folder) == OK
+
+
+## The save at [param path] copied whole to its `.bak` ([method
+## backup_path]) — when it is a save this game reads.
+static func _keep_backup(path: String) -> void:
+	var bytes := _bytes_at(path)
+	if not _entry_of(path, bytes).is_empty():
+		Settings.write_atomically(backup_path(path), bytes)
+
+
+# ------------------------------------------------------ reading saves --
+
+## How many save files have been parsed this session — for the tests that
+## hold the lists to reading a file once ([method scan_saves]).
+static var files_parsed := 0
+## WHAT EACH SAVE FILE HOLDS, by path, with the bytes it was read from:
+## `{stamp: [size, hash of the bytes], entry}` — its line in the lists
+## ([method _summary]), `{}` when it could not be read. A file is parsed
+## again only when its bytes changed (campaign of 2026-10-23: the lists
+## parsed every save in full each time — the save list on opening, on
+## picking a slot and on saving; 34 long saves, a tenth of a second a
+## click). Reading and hashing a file costs a hundredth of parsing it.
+static var _read := {}
+
+
+## Forget what the save files held (a test; they are read again).
+static func forget_saves() -> void:
+	_read.clear()
+
+
+## The adventure saved at [param path] — or, when that file cannot be read,
+## at its `.bak` ([method save]) — or null.
 static func load_from(path: String) -> AdventurePlayer:
-	if not FileAccess.file_exists(path):
-		return null
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if not parsed is Dictionary:
-		return null
-	return from_dict(parsed)
+	for candidate in [path, backup_path(path)]:
+		var bytes := _bytes_at(candidate)
+		var data := _data_of(bytes)
+		if not data.is_empty():
+			_remember(candidate, bytes, data)
+			return from_dict(data)
+	return null
 
 
-## The saved adventures, newest first: `{path, kind, id, name, color,
-## difficulty, saved, seed_text}` read from each file's own fields; the
-## kind (`autosave` or `save`) from its name.
-static func list_saves(folder := "") -> Array[Dictionary]:
+## THE SAVE AT [param path] as the lists show it: `{path, kind, slot,
+## slot_name, days, gold, id, name, color, difficulty, saved, seed_text}`
+## — from its `.bak` when the file itself cannot be read; `{path,
+## unreadable: true}` when neither can; `{}` when there is no save there.
+static func save_at(path: String) -> Dictionary:
+	var entry := _entry_of(path, _bytes_at(path))
+	if entry.is_empty():
+		entry = _entry_of(backup_path(path), _bytes_at(backup_path(path)))
+	if entry.is_empty():
+		if FileAccess.file_exists(path) or FileAccess.file_exists(backup_path(path)):
+			return {"path": path, "unreadable": true}
+		return {}
+	var out := entry.duplicate()
+	out.merge({"path": path, "kind": kind_of(path), "slot": SaveSlots.slot_of(kind_of(path))}, true)
+	return out
+
+
+## THE SAVES IN [param folder] ([member saves_folder] by default):
+## `{saves, unreadable}` — the saves this game reads, newest first, as
+## [method save_at] gives them, and how many save files could not be read
+## (damaged, or from a newer version of the game).
+##
+## ONE ODD FILE HIDES NOTHING ELSE (campaign of 2026-10-23: a save whose
+## hero was a word stopped the list with a script error, and every
+## adventure vanished from the load screen). A save is `<id>.autosave.json`
+## or `<id>.slot01.json` … `<id>.slot10.json` (with its `.bak`); any other
+## file is not looked at. When two files claim one adventure's slot (a
+## copy kept in the folder), the one by the adventure's own name is shown.
+static func scan_saves(folder := "") -> Dictionary:
 	if folder == "":
 		folder = saves_folder
-	var found: Array[Dictionary] = []
+	var saves: Array[Dictionary] = []
+	var unreadable := 0
 	var dir := DirAccess.open(folder)
 	if dir == null:
-		return found
+		return {"saves": saves, "unreadable": 0}
+	var files := {}
 	for file_name in dir.get_files():
-		if not file_name.ends_with(".json"):
-			continue
-		var path := folder.path_join(file_name)
-		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-		if not parsed is Dictionary or String((parsed as Dictionary).get("format", "")) != FORMAT:
-			continue
-		var data: Dictionary = parsed
-		var hero: Dictionary = data.get("hero", {})
-		var game: Dictionary = data.get("adventure", {})
-		var saved_world: Dictionary = data.get("world", {})
-		found.append({"path": path, "kind": file_name.get_basename().get_extension(),
-			"id": String(game.get("id", "")),
-			"name": String(hero.get("name", "")), "color": String(hero.get("color", "")),
-			"difficulty": int(hero.get("difficulty", 0)), "saved": String(game.get("saved", "")),
-			"seed_text": String(saved_world.get("seed_text", ""))})
-	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a["saved"]) > String(b["saved"]))
-	return found
+		var main := file_name.trim_suffix(BACKUP_TAIL)
+		if main.ends_with(".json") and (_kept_kind(kind_of(main)) or kind_of(main) == SaveSlots.LEGACY):
+			files[main] = true
+	var by_slot := {}
+	for main: String in files:
+		var save := save_at(folder.path_join(main))
+		if save.get("unreadable", false):
+			unreadable += 1
+		elif not save.is_empty() and _kept_kind(String(save["kind"])):
+			var key := "%s|%s" % [save["id"], save["kind"]]
+			if not by_slot.has(key) or _shown_before(save, by_slot[key]):
+				by_slot[key] = save
+	for key in by_slot:
+		saves.append(by_slot[key])
+	saves.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a["saved"]) > String(b["saved"]))
+	return {"saves": saves, "unreadable": unreadable}
+
+
+## The saved adventures, newest first ([method scan_saves]).
+static func list_saves(folder := "") -> Array[Dictionary]:
+	return scan_saves(folder)["saves"]
+
+
+## Whether a file of kind [param file_kind] is a save the lists show: the
+## autosave and the ten slots. (An older `save` waits for [method
+## SaveSlots.migrate]; it is counted when it cannot be read.)
+static func _kept_kind(file_kind: String) -> bool:
+	return file_kind == AUTOSAVE or (file_kind.begins_with("slot")
+		and SaveSlots.kind(SaveSlots.slot_of(file_kind)) == file_kind)
+
+
+## Whether [param save] is shown rather than [param other], which claims
+## the same adventure's slot: the file by the adventure's own name first,
+## then the newer.
+static func _shown_before(save: Dictionary, other: Dictionary) -> bool:
+	var own := func(s: Dictionary) -> bool:
+		return String(s["path"]).get_file() == "%s.%s.json" % [s["id"], s["kind"]]
+	if own.call(save) != own.call(other):
+		return own.call(save)
+	return String(save["saved"]) > String(other["saved"])
+
+
+## The line in the lists for [param bytes], the file at [param path] —
+## known when its bytes are those last read, else parsed and kept.
+static func _entry_of(path: String, bytes: PackedByteArray) -> Dictionary:
+	if bytes.is_empty():
+		_read.erase(path)
+		return {}
+	var known: Dictionary = _read.get(path, {})
+	if known.get("stamp", []) == [bytes.size(), hash(bytes)]:
+		return known["entry"]
+	return _remember(path, bytes, _data_of(bytes))
+
+
+## Keep what the file at [param path] holds — [param data], read from
+## [param bytes] — and give its line in the lists.
+static func _remember(path: String, bytes: PackedByteArray, data: Dictionary) -> Dictionary:
+	var entry := _summary(data) if not data.is_empty() else {}
+	_read[path] = {"stamp": [bytes.size(), hash(bytes)], "entry": entry}
+	return entry
+
+
+## A save's line in the lists, from [param data] (a [method readable]
+## save): `{slot_name, days, gold, id, name, color, difficulty, saved,
+## seed_text}`.
+static func _summary(data: Dictionary) -> Dictionary:
+	var game: Dictionary = data["adventure"]
+	var hero: Dictionary = data["hero"]
+	return {"slot_name": _text(game.get("slot_name")),
+		"days": _count((data["clocks"] as Dictionary).get("quest_timer")) / WorldStatus.DAY,
+		"gold": _count((data["carried"] as Dictionary).get("gold")),
+		"id": _text(game.get("id")), "name": _text(hero.get("name")),
+		"color": _text(hero.get("color")), "difficulty": clampi(_number(hero.get("difficulty")), 0, 3),
+		"saved": _text(game.get("saved")),
+		"seed_text": _text((data["world"] as Dictionary).get("seed_text"))}
+
+
+## The bytes of the file at [param path], empty when there is none.
+static func _bytes_at(path: String) -> PackedByteArray:
+	if not FileAccess.file_exists(path):
+		return PackedByteArray()
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return PackedByteArray()
+	var bytes := file.get_buffer(file.get_length())
+	file.close()
+	return bytes
+
+
+## The save [param bytes] hold, `{}` when they are not one this game reads
+## ([method readable]). Quietly: a damaged file is an answer here, not an
+## error line.
+static func _data_of(bytes: PackedByteArray) -> Dictionary:
+	if bytes.is_empty():
+		return {}
+	files_parsed += 1
+	var json := JSON.new()
+	if json.parse(bytes.get_string_from_utf8()) != OK:
+		return {}
+	return json.data if readable(json.data) else {}
+
+
+# ------------------------------------------------------- the save's time --
+
+## [param utc] — a save's time as it is kept, `2026-10-23T09:07:00Z` — as
+## the player's clock shows it, `2026-10-23 11:07` (campaign of
+## 2026-10-23: the lists showed the UTC time as if it were the local one).
+## Godot reads the zone's offset only as it stands now, so a save from the
+## other side of a summer-time change shows an hour off.
+static func local_time(utc: String) -> String:
+	return time_at(utc, int(Time.get_time_zone_from_system().get("bias", 0)))
+
+
+## [param utc] on a clock [param bias_minutes] ahead of UTC; a time not in
+## the save's form as it is written, "" for "".
+static func time_at(utc: String, bias_minutes: int) -> String:
+	var plain := utc.trim_suffix("Z")
+	if not _iso_time(plain):
+		return plain.replace("T", " ").left(16)
+	var unix := Time.get_unix_time_from_datetime_string(plain)
+	return Time.get_datetime_string_from_unix_time(unix + bias_minutes * 60, true).left(16)
+
+
+## Whether [param text] is `YYYY-MM-DDTHH:MM:SS`.
+static func _iso_time(text: String) -> bool:
+	if text.length() != 19 or text[4] != "-" or text[7] != "-" or text[10] != "T" \
+			or text[13] != ":" or text[16] != ":":
+		return false
+	for at in [0, 5, 8, 11, 14, 17]:
+		var digits := text.substr(at, 4 if at == 0 else 2)
+		if not digits.is_valid_int() or digits.begins_with("-") or digits.begins_with("+"):
+			return false
+	return true

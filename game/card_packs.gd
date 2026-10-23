@@ -822,12 +822,32 @@ func art_texture(card_name: String, set_code: String, full_card := false, number
 		_art_cache.erase(path)
 		_art_cache[path] = hit
 		return hit
+	var image := decode_art(path, full_card)
+	if image == null:
+		return null
+	return keep_art(path, image)
+
+
+## The pack picture at [param path] (from [method art_path]) decoded, with
+## mipmaps unless it is a [param full_card] scan; null when it does not
+## decode. It touches nothing shared, so a worker thread may call it
+## ([CardArtWarmer]) and hand the image to [method keep_art].
+static func decode_art(path: String, full_card := false) -> Image:
 	var bytes := FileAccess.get_file_as_bytes(path)
 	var image := Image.new()
 	if bytes.is_empty() or image.load_jpg_from_buffer(bytes) != OK:
 		return null
 	if not full_card:
 		image.generate_mipmaps()
+	return image
+
+
+## The picture at [param path] kept from [param image] (decoded by
+## [method decode_art]) and returned; a picture already kept wins. Main
+## thread only: it makes the texture and bounds the cache.
+func keep_art(path: String, image: Image) -> Texture2D:
+	if _art_cache.has(path):
+		return _art_cache[path]
 	var texture := ImageTexture.create_from_image(image)
 	_art_cache[path] = texture
 	# THE SAME BOUND AS THE SKIN'S CARD ART (robustness campaign of
@@ -842,6 +862,11 @@ func art_texture(card_name: String, set_code: String, full_card := false, number
 			_art_cache.erase(oldest)
 			break
 	return texture
+
+
+## True when the picture at [param path] is kept already.
+func art_kept(path: String) -> bool:
+	return _art_cache.has(path)
 
 
 func set_current_deck_names(names: Array[String]) -> void:
