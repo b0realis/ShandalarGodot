@@ -1793,3 +1793,35 @@ class TestABadMovieHeaderIsNeverFatal(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVisitPictures(unittest.TestCase):
+    """The places' pictures (2026-10-23): what 1.3 showed as the hero
+    arrived, read in `visitLocation.c` and `world_lair_monster_encounter.c`
+    — decoded whole in the world frame's palette."""
+
+    def test_every_place_has_its_1997_file(self):
+        self.assertEqual(imp.VISIT_PICTURES["visit_village"], ["Village.pic"])
+        self.assertEqual(imp.VISIT_PICTURES["visit_city"], ["City.pic"])
+        self.assertEqual([imp.VISIT_PICTURES["visit_castle_" + c][0] for c in
+                          ("black", "blue", "green", "red", "white")],
+                         ["0246.pic", "0364.pic", "0335.pic", "0737.pic", "0028.pic"])
+        self.assertEqual([imp.VISIT_PICTURES["visit_lair_" + c][0] for c in
+                          ("black", "blue", "green", "red", "white")],
+                         ["0333.pic", "0873.pic", "0281.pic", "0329.pic", "0569.pic"])
+        for key in imp.VISIT_PICTURES:
+            self.assertIn(key, imp.PIC_SCREENS, key + " is decoded with the screens")
+
+    def test_they_take_the_world_frame_s_palette_whole(self):
+        for key in imp.VISIT_PICTURES:
+            self.assertEqual(imp.PIC_PALETTES[key][0], "Advfac64.pic")
+            self.assertIn(key, imp.PIC_OPAQUE)
+
+    def test_a_bare_picture_is_painted_whole_when_asked(self):
+        palette = bytes(range(256)) * 3
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "plain.pic"
+            path.write_bytes(b"not a picture")
+            self.assertIsNone(imp._raw_pic_rgba("visit_city", path, palette, True),
+                              "a file it cannot read is skipped, not raised")
+

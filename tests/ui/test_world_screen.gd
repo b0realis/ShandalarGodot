@@ -18,11 +18,42 @@ func _record(seed_text := "12345") -> Dictionary:
 	return setup.resolve({})
 
 
+## The settings the world screen's options and panes write, put back
+## after each test.
+const WORLD_SETTINGS: Array[String] = [WorldHud.BAR_SETTING, WorldHud.MINIMAP_SETTING,
+	WorldHud.QUEST_SETTING, WorldHud.GUIDES_SETTING, WorldHud.PACE_SETTING, WorldHud.BIG_SETTING,
+	WorldHud.PLACES_SETTING,
+	"world_pane_HeroPanel", "world_pane_HelpPanel", "world_pane_CluesPanel",
+	"world_pane_QuestPane", "world_pane_Minimap"]
+const SAVES := "user://adventure_tests_world"
+var _music := true
+var _sound := true
+
+
 func before_each() -> void:
+	_music = Settings.music_enabled()
+	_sound = Settings.sound_enabled()
+	for key in WORLD_SETTINGS:
+		Settings.clear_value(key)
+	# Leaving the world saves it: into a folder of the tests' own.
+	AdventurePlayer.saves_folder = SAVES
 	screen = load("res://game/adventure/world/world_screen.tscn").instantiate()
 	screen.record = _record()
 	add_child_autofree(screen)
 	await get_tree().process_frame
+
+
+func after_each() -> void:
+	for key in WORLD_SETTINGS:
+		Settings.clear_value(key)
+	Settings.set_value("music_enabled", _music)
+	Settings.set_value("sound_enabled", _sound)
+	var dir := DirAccess.open(SAVES)
+	if dir != null:
+		for file_name in dir.get_files():
+			dir.remove(file_name)
+		DirAccess.remove_absolute(SAVES)
+	AdventurePlayer.saves_folder = AdventurePlayer.SAVES_FOLDER
 
 
 func test_the_record_s_world_is_shown_from_the_hero_s_place() -> void:
@@ -242,6 +273,7 @@ func test_a_drag_looks_and_does_not_walk() -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = from + Vector2(80, 0)
 	motion.relative = Vector2(80, 0)
+	motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 	screen._gui_input(motion)
 	screen._gui_input(_mouse(from + Vector2(80, 0), false))
 	assert_false(screen.walk.is_walking(), "a drag is no click")
@@ -249,22 +281,66 @@ func test_a_drag_looks_and_does_not_walk() -> void:
 
 
 ## The owner, 2026-10-22: "for walking normally a cursor of the mouse
-## displays a small walking man. For entering town it changes to an open
-## door when hovering over a town".
-func test_the_pointer_is_a_walker_and_a_door_over_a_site_seen() -> void:
-	var start := screen.player.tile()
+## displays a small walking man"; and 2026-10-23: "for each unique place
+## that can be visited design a mouse cursor that changes to that place …
+## for the town a little house cursor, for dungeon a skull", and "over
+## panes the cursor is normal gold mouse".
+func test_the_pointer_is_the_walker_the_place_or_the_gold_arrow() -> void:
+	var player := screen.player
+	var start := player.tile()
 	assert_eq(screen.pointer_for(start), WorldCursors.Kind.WALK, "walking on")
-	var site: Dictionary = screen.world.sites[0]
-	var at := Vector2i(int(site["x"]), int(site["y"]))
-	if not screen.world.is_explored(at.x, at.y):
-		assert_eq(screen.pointer_for(at), WorldCursors.Kind.WALK, "a site unseen gives nothing away")
+	var first := {}
+	for slot in screen.world.sites.size():
+		var kind := int(screen.world.sites[slot]["type"])
+		if kind > 0 and not first.has(kind):
+			first[kind] = Vector2i(int(screen.world.sites[slot]["x"]), int(screen.world.sites[slot]["y"]))
+	var village: Vector2i = first[ShandalarWorld.VILLAGE]
+	if not screen.world.is_explored(village.x, village.y):
+		assert_eq(screen.pointer_for(village), WorldCursors.Kind.WALK, "a place unseen gives nothing away")
+	for at in first.values():
 		screen.world.explore_around(at)
-	assert_eq(screen.pointer_for(at), WorldCursors.Kind.DOOR, "a door on a site seen")
-	for kind in [WorldCursors.Kind.WALK, WorldCursors.Kind.DOOR]:
+	assert_eq(screen.pointer_for(village), WorldCursors.Kind.VILLAGE, "a little house")
+	assert_eq(screen.pointer_for(first[ShandalarWorld.TOWN]), WorldCursors.Kind.TOWN)
+	assert_eq(screen.pointer_for(first[ShandalarWorld.CITY]), WorldCursors.Kind.CITY)
+	assert_eq(screen.pointer_for(first[ShandalarWorld.CASTLE]), WorldCursors.Kind.CASTLE)
+	var dungeon: Dictionary = screen.world.encounters[5]
+	var cave := Vector2i(int(dungeon["x"]), int(dungeon["y"]))
+	screen.world.explore_around(cave)
+	assert_eq(screen.pointer_for(cave), WorldCursors.Kind.WALK, "a dungeon not known: nothing")
+	dungeon["clues"] = WorldClues.LOCATION
+	assert_eq(screen.pointer_for(cave), WorldCursors.Kind.DUNGEON, "known: a skull")
+	var seen: Array = []
+	for kind in WorldCursors.Kind.values():
 		var picture := WorldCursors.image(kind)
 		assert_eq(picture.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE))
 		assert_gt(picture.get_pixelv(Vector2i(WorldCursors.hotspot(kind))).a + picture.get_pixel(16, 16).a, 0.0,
 			"something is drawn")
+		assert_false(picture.get_data() in seen, "each its own")
+		seen.append(picture.get_data())
+	(screen.hud.find_child("Bar", true, false) as Control).mouse_entered.emit()
+	assert_eq(screen._pointer, WorldCursors.Kind.ARROW, "over the panel: the gold arrow")
+	# The owner: "when you hover over a place … a floating helper text with
+	# place category and name … turned on/off in menu drop down pane".
+	screen.size = Vector2(1280, 800)
+	await get_tree().process_frame
+	screen.view.camera = Vector2(village * 32 + Vector2i(16, 16))
+	var over := InputEventMouseMotion.new()
+	over.position = screen.view.feet() + screen.view.project(Vector2(village * 32 + Vector2i(16, 16))) * screen.view.zoom
+	screen._gui_input(over)
+	assert_eq(screen._pointer, WorldCursors.Kind.VILLAGE)
+	assert_eq(screen.hud.place_shown(), WorldNames.site_name(screen.world, VisitPane.site_slot(screen.world, village)),
+		"the village's name by the pointer")
+	assert_eq((screen.hud.find_child("PlaceTipKind", true, false) as Label).text, "Village")
+	var away := InputEventMouseMotion.new()
+	away.position = screen.view.feet() + screen.view.project(Vector2(start * 32 + Vector2i(16, 16))) * screen.view.zoom
+	screen.view.camera = Vector2(start * 32 + Vector2i(16, 16))
+	away.position = screen.view.feet()
+	screen._gui_input(away)
+	assert_eq(screen.hud.place_shown(), "", "gone off the place")
+	screen.hud._choose("Places")
+	screen.view.camera = Vector2(village * 32 + Vector2i(16, 16))
+	screen._gui_input(over)
+	assert_eq(screen.hud.place_shown(), "", "switched off in the options")
 
 
 ## The owner, 2026-10-22: floating icons "based on old 1997 frame icons" —
@@ -299,6 +375,7 @@ func test_the_floating_icons_show_what_the_hero_carries() -> void:
 	assert_almost_eq(magics_to_buttons, carried_to_magics, 1.5, "the same room before the buttons")
 	assert_almost_eq(bar.end.x - edge.call("Buttons").end.x, 10.0, 1.0, "the buttons at its right end")
 	assert_null(screen.find_child("Hint", true, false), "no line of keys under the world")
+	assert_false((hud.find_child("ArrowLeft", true, false) as Control).visible, "no arrows with a mouse")
 	assert_eq((hud.find_child("HeroLine", true, false) as Label).text, "Goya · Magician")
 	assert_eq((hud.find_child("HeroLine", true, false) as Label).get_theme_color("font_color"),
 		WorldHud.NAME_INKS["red"][0], "in the hero's colour of magic")
@@ -307,7 +384,7 @@ func test_the_floating_icons_show_what_the_hero_carries() -> void:
 	assert_eq(number.call("Strip_gold"), str(screen.player.gold))
 	assert_eq(number.call("Strip_food"), str(screen.player.food))
 	assert_eq(number.call("Strip_ankh"), "0", "no mana linked yet")
-	assert_eq(number.call("Strip_book"), "0/0", "no cards yet")
+	assert_eq(number.call("Strip_book"), "39/39", "a Magician's first deck, all of it in Deck 1")
 	for color in ["black", "blue", "green", "red", "white"]:
 		assert_eq(number.call("Amulet_" + color), str(int(screen.player.amulets[color])), color)
 	# Red: Staff of Thunder (bit 8) is the hero's, lit while a red amulet is left.
@@ -322,7 +399,7 @@ func test_the_floating_icons_show_what_the_hero_carries() -> void:
 
 func test_the_round_buttons() -> void:
 	var hud := screen.hud
-	for name in ["Deck", "Map", "Hero", "Options", "Help"]:
+	for name in ["Deck", "Map", "Clues", "Hero", "Options", "Help"]:
 		assert_not_null(hud.buttons.get(name), name)
 	assert_null(hud.buttons.get("Save"), "saving is among the options now")
 	(hud.buttons["Map"] as BaseButton).pressed.emit()
@@ -330,6 +407,30 @@ func test_the_round_buttons() -> void:
 	screen.toggle_map()
 	(hud.buttons["Hero"] as BaseButton).pressed.emit()
 	assert_true(hud.hero_shown(), "the hero's faces open the journal and stats")
+	var stats := hud.hero_stats
+	for caption in ["World_Magics", "Wizards_Castles_Conquered", "Record_vs_the_Creatures_of_Shandalar"]:
+		assert_not_null(stats.find_child("Caption_" + caption, true, false), caption + ", the 1997 caption")
+	assert_eq((stats.find_child("HeroName", true, false) as Label).text, "Goya")
+	assert_eq((stats.find_child("Value_Overall_Won_Loss", true, false) as Label).text, "0/0")
+	await get_tree().process_frame
+	var pane := hud.find_child("HeroPanel", true, false) as Control
+	var hero_size := pane.size
+	screen.player.log_event("magic", "JUMP!")
+	(stats.find_child("Tab_Journal", true, false) as Button).pressed.emit()
+	assert_eq(stats.journal_lines(), ["Day 0: JUMP!"] as Array[String], "the journal tab")
+	await get_tree().process_frame
+	assert_eq(pane.size, hero_size, "the journal keeps the Hero tab's size")
+	(stats.find_child("Tab_Wizards", true, false) as Button).pressed.emit()
+	assert_not_null(stats.find_child("Wizards", true, false), "the wizards' tab")
+	await get_tree().process_frame
+	assert_eq(pane.size, hero_size, "and the wizards' tab")
+	for i in 40:
+		screen.player.log_event("magic", "A long line for the journal, the day the hero went far and wide %d" % i)
+	stats.show_tab("Journal")
+	await get_tree().process_frame
+	assert_eq(pane.size, hero_size, "however long the journal grows")
+	assert_true((stats.find_child("JournalBar", true, false) as Control).visible, "a scroll bar for a long one")
+	stats.show_tab("Hero")
 	var said := "\n".join(hud.hero_lines())
 	assert_string_contains(said, "Goya, a red mage")
 	assert_string_contains(said, "%d gold" % screen.player.gold)
@@ -348,14 +449,24 @@ func test_the_round_buttons() -> void:
 	assert_false(hud.help_shown(), "Escape closes it first")
 	assert_false(screen._leaving, "and stays in the world")
 	(hud.buttons["Deck"] as BaseButton).pressed.emit()
-	assert_string_contains(hud.notice(), "starting deck", "the deck says why it is empty")
+	assert_true(screen.building(), "the spellbook opens the deck builder over the world")
+	var builder := screen.find_child("DeckBuilder", true, false) as AdventureBuilder
+	assert_not_null(builder)
+	assert_eq(builder.gold_text(), "GOLD: %d" % screen.player.gold, "the hero's gold on its title")
+	var ticked := screen.player.monster_timer
+	screen._process(1.0)
+	assert_eq(screen.player.monster_timer, ticked, "the world waits under it")
+	builder._exit()
+	await get_tree().process_frame
+	assert_false(screen.building(), "Done: the world again")
+	assert_eq(hud.notice(), "Deck 1: 39 cards")
 	AdventurePlayer.saves_folder = "user://adventure_tests_hud"
 	var path := screen.save_now()
 	assert_true(FileAccess.file_exists(path), "Save writes the adventure")
 	assert_true(path.ends_with(".save.json"), "beside its autosave")
 	assert_eq(hud.notice(), "Saved.")
 	DirAccess.remove_absolute(path)
-	AdventurePlayer.saves_folder = AdventurePlayer.SAVES_FOLDER
+	AdventurePlayer.saves_folder = SAVES
 
 
 ## The owner: "an options icon besides help. When you click it you get a
@@ -367,8 +478,13 @@ func test_the_options() -> void:
 		return hud.find_child("Option_" + entry, true, false) as Button
 	(hud.buttons["Options"] as BaseButton).pressed.emit()
 	assert_true(hud.options_shown(), "the book opens the options")
-	assert_eq([option.call("Save").text, option.call("Load").text, option.call("Bar").text, option.call("Exit").text],
-		["Save", "Load", "Panel at the bottom", "Exit game"])
+	var words: Array[String] = []
+	for entry in WorldHud.OPTIONS:
+		words.append(option.call(entry[0]).text)
+	var on_off := func(on: bool) -> String: return "on" if on else "off"
+	assert_eq(words, ["Save", "Load", "Panel at the bottom", "Small map: on", "Quest pane: on",
+		"Guide arrows: on", "Place names: on", "Big buttons: off", "Pace: as in 1997", "Music: " + on_off.call(_music),
+		"Sound: " + on_off.call(_sound), "Return to main menu", "Exit game"] as Array[String])
 	# Save.
 	AdventurePlayer.saves_folder = "user://adventure_tests_options"
 	(option.call("Save") as Button).pressed.emit()
@@ -376,7 +492,7 @@ func test_the_options() -> void:
 	var path := screen.player.save_path("save")
 	assert_true(FileAccess.file_exists(path), "Save writes the adventure")
 	DirAccess.remove_absolute(path)
-	AdventurePlayer.saves_folder = AdventurePlayer.SAVES_FOLDER
+	AdventurePlayer.saves_folder = SAVES
 	# Load: the saves over the world; Back comes back to it.
 	(hud.buttons["Options"] as BaseButton).pressed.emit()
 	(option.call("Load") as Button).pressed.emit()
@@ -412,6 +528,40 @@ func test_the_options() -> void:
 	assert_lte(panel.end.y, bar.position.y, "the hero's panel opens over it")
 	hud.place_bar(false)
 	assert_false(bool(Settings.get_value(WorldHud.BAR_SETTING, true)))
+	# The switches leave the options open and say how they now stand.
+	(hud.buttons["Options"] as BaseButton).pressed.emit()
+	(option.call("Minimap") as Button).pressed.emit()
+	assert_true(hud.options_shown(), "a switch leaves the options open")
+	assert_false(hud.minimap_shown(), "the small map hides")
+	assert_eq(option.call("Minimap").text, "Small map: off")
+	assert_false(bool(Settings.get_value(WorldHud.MINIMAP_SETTING, true)), "remembered")
+	(option.call("Minimap") as Button).pressed.emit()
+	assert_true(hud.minimap_shown())
+	for step in ["brisk", "swift", "as in 1997"]:
+		(option.call("Pace") as Button).pressed.emit()
+		assert_eq(option.call("Pace").text, "Pace: " + step)
+	(option.call("Pace") as Button).pressed.emit()
+	assert_eq(WorldHud.pace(), 1.5, "brisk: the world's clock half as fast again")
+	var ticked := screen.player.monster_timer
+	screen._tick_left = 0.0
+	screen._process(HeroWalk.TICK * 2.1)
+	assert_eq(screen.player.monster_timer, ticked + 3, "three ticks where 1997 ran two")
+	(option.call("Music") as Button).pressed.emit()
+	assert_eq(Settings.music_enabled(), not _music, "music switched")
+	assert_eq(option.call("Music").text, "Music: " + on_off.call(not _music))
+	(option.call("Sound") as Button).pressed.emit()
+	assert_eq(Settings.sound_enabled(), not _sound, "sound switched")
+	(option.call("Guides") as Button).pressed.emit()
+	assert_false(WorldHud.guides_wanted())
+	(option.call("Quest") as Button).pressed.emit()
+	assert_false(hud.quest_pane_wanted())
+	hud.close_options()
+	# Return to main menu: saved first, then the title.
+	(hud.buttons["Options"] as BaseButton).pressed.emit()
+	(option.call("Menu") as Button).pressed.emit()
+	assert_true(screen._leaving, "on the way to the title")
+	assert_true(FileAccess.file_exists(screen.player.save_path("save")), "saved as it left")
+	screen._leaving = false
 	# Exit game: saved, then the game ends.
 	hud.exit_pressed.disconnect(screen.exit_game)
 	var exits := [0]
@@ -438,9 +588,346 @@ func test_a_resting_pointer_floats_the_name_under_the_row() -> void:
 	assert_eq(hud.tip_shown(), "", "gone when the pointer leaves")
 	assert_eq(hud.tip_for("magic:8")[0], "Staff of Thunder")
 	assert_string_contains(hud.tip_for("magic:4")[1], "Not yours yet")
-	assert_eq(hud.tip_for("amulet:red"), ["Red amulet", "Each one powers Staff of Thunder once."] as Array[String])
+	assert_eq(hud.tip_for("amulet:red"), ["Red amulet", "Casting Staff of Thunder risks one."] as Array[String])
+	assert_eq(hud.tip_for("magic:8")[1], "Risk one red amulet to destroy the nearest creature. Click, or press 4.",
+		"the 1997 words, and how to cast it")
 	assert_eq(hud.tip_for("button:Map")[0], "Map (M)")
 	assert_eq(hud.tip_for("button:Help")[0], "Keys (H)")
 	for key in hud.buttons:
 		assert_eq(String((hud.buttons[key] as Control).tooltip_text), "", key + ": no tooltip at the pointer")
 
+
+
+func _key(code: Key) -> void:
+	var press := InputEventKey.new()
+	press.keycode = code
+	press.pressed = true
+	screen._unhandled_input(press)
+
+
+## The owner: "implement all items you suggest" — the five World Magics
+## that risk an amulet are cast with 1–5 or a click on their icon, as 1.3
+## cast them (`UpdateAdventureWorldInputAndMovement`).
+func test_the_world_magics_are_cast() -> void:
+	var player := screen.player
+	var hud := screen.hud
+	player.amulets["blue"] = 2
+	_key(KEY_2)
+	assert_string_contains(hud.notice(), "Leap of Fate is not yours yet")
+	assert_eq(int(player.amulets["blue"]), 2, "nothing risked")
+	# Leap of Fate: the dice draw a tile, x then y, until it is land.
+	player.world_magics.append("Leap of Fate")
+	var dice := MsvcRandom.new(player.dice)
+	var risked := dice.below(4 - player.difficulty) == 0
+	var x := 0
+	var y := 0
+	while true:
+		x = dice.below(64)
+		y = dice.below(64)
+		if player.world.is_land(x, y):
+			break
+	_key(KEY_2)
+	assert_eq(player.position, Vector2i(x * 32 + 16, y * 32 + 16), "a land tile drawn by the dice, its middle")
+	assert_eq(player.dice, dice.state, "the adventure's dice went on")
+	assert_eq(int(player.amulets["blue"]), 1 if risked else 2, "the amulet risked: one time in three for a Magician")
+	assert_eq(String(player.journal[-1]["text"]), "JUMP!", "the 1997 journal line")
+	assert_true(player.world.is_explored(x, y), "the land round them seen")
+	assert_eq(screen.view.camera, Vector2(player.position), "the view goes with them")
+	assert_string_contains(hud.notice(), "Leap of Fate")
+	# Quickening.
+	player.world_magics.append("Quickening")
+	player.amulets["green"] = 1
+	_key(KEY_3)
+	assert_eq(player.quickening, WorldMagic.QUICKENING_TICKS, "a burst of speed")
+	if hud.find_child("Magic_6", true, false) != null:
+		assert_true(hud.magic_working(6), "its icon lit while it runs")
+	# Staff of Thunder (the red hero's own): nothing to strike, nothing risked.
+	var red := int(player.amulets["red"])
+	_key(KEY_4)
+	assert_eq(hud.notice(), "No creature roams near enough to strike.")
+	assert_eq(int(player.amulets["red"]), red)
+	player.monsters = [{"slot": 0, "name": "Ogre", "x": player.position.x + 600, "y": player.position.y},
+		{"slot": 1, "name": "Goblin", "x": player.position.x + 40, "y": player.position.y + 40},
+		{"slot": 7, "name": "Shade", "x": player.position.x, "y": player.position.y, "town": 0}]
+	screen.cast(4)
+	assert_eq(player.monsters.size(), 2, "one struck")
+	assert_eq(String(player.journal[-1]["text"]), "THUNDERED on: Goblin!", "the nearest roaming one")
+	assert_eq(String(player.monsters[1]["name"]), "Shade", "never the siege's creature")
+	# Sword of Resistance: to the creature besieging a city.
+	player.world_magics.append("Sword of Resistance")
+	player.amulets["white"] = 1
+	player.monsters = []
+	_key(KEY_5)
+	assert_eq(hud.notice(), "No town is under siege.")
+	player.monsters = [{"slot": 7, "name": "Shade", "x": 500, "y": 700, "town": 9}]
+	player.amulets["white"] = 1
+	_key(KEY_5)
+	assert_eq(player.position, Vector2i(480 + 16, 672 + 31), "by its tile, as 1.3 sets the hero down")
+	assert_eq(String(player.journal[-1]["text"]), "Went to aid of " + WorldNames.site_name(player.world, 9))
+	# Conjurer's Will: the deck builder, out here.
+	player.world_magics.append("Conjurer's Will")
+	player.amulets["black"] = 1
+	_key(KEY_1)
+	assert_true(screen.building(), "the deck to change out in the wilds")
+	(screen.find_child("DeckBuilder", true, false) as AdventureBuilder)._exit()
+	await get_tree().process_frame
+	# A click on a lit icon casts it (with the 1997 sheets).
+	var icon := hud.find_child("Magic_8", true, false) as Control
+	if icon != null:
+		player.amulets["red"] = 1
+		hud.refresh()
+		assert_true((icon.find_child("Key", true, false) as Control).visible, "its key over it, as 1997 drew it")
+		watch_signals(hud)
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = false
+		icon.gui_input.emit(click)
+		assert_signal_emitted_with_parameters(hud, "cast_pressed", [4])
+
+
+## The owner: "popup or hover panes with rounded corners that can be
+## moved at will … for example 6, and it should be togglable on/off in
+## options".
+func test_the_panes_move_where_they_are_dragged_and_stay() -> void:
+	var hud := screen.hud
+	screen.size = Vector2(1280, 800)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var drag := func(pane: Control, from: Vector2, to: Vector2, part: Control = null) -> void:
+		var press := InputEventMouseButton.new()
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.pressed = true
+		press.global_position = from
+		press.position = from - (part if part != null else pane).get_global_rect().position
+		var move := InputEventMouseMotion.new()
+		move.global_position = to
+		move.button_mask = MOUSE_BUTTON_MASK_LEFT
+		var let_go := press.duplicate() as InputEventMouseButton
+		let_go.pressed = false
+		let_go.global_position = to
+		for event in [press, move, let_go]:
+			hud._pane_input(pane, event)
+	hud.toggle_hero()
+	var panel := hud.find_child("HeroPanel", true, false) as Control
+	var face := panel.get_theme_stylebox("panel") as StyleBoxFlat
+	assert_gt(face.corner_radius_top_left, 0, "a pane with round corners")
+	var was := panel.position
+	drag.call(panel, was + Vector2(20, 20), was + Vector2(-280, 220))
+	assert_eq(panel.position, was + Vector2(-300, 200), "where it was dragged")
+	assert_eq(Settings.get_value("world_pane_HeroPanel", null), [panel.position.x, panel.position.y], "remembered")
+	hud.toggle_hero()
+	hud.toggle_hero()
+	assert_eq(panel.position, was + Vector2(-300, 200), "and there again next time")
+	drag.call(panel, panel.position + Vector2(10, 10), Vector2(5000, -5000))
+	assert_true(Rect2(Vector2.ZERO, hud.size).encloses(panel.get_rect()), "never off the screen")
+	# Hidden under the press (F5 again), it does not follow a pointer that
+	# merely moves when it shows again.
+	var press_only := InputEventMouseButton.new()
+	press_only.button_index = MOUSE_BUTTON_LEFT
+	press_only.pressed = true
+	press_only.global_position = panel.position + Vector2(10, 10)
+	hud._pane_input(panel, press_only)
+	hud.toggle_hero()
+	hud.toggle_hero()
+	var resting := panel.position
+	var hover := InputEventMouseMotion.new()
+	hover.global_position = resting + Vector2(200, 100)
+	hud._pane_input(panel, hover)
+	assert_eq(panel.position, resting, "no drag left armed")
+	hud.close_panels()
+	# The small map: a click walks there, a drag moves it.
+	var minimap := hud.minimap
+	assert_true(minimap.visible, "on at first")
+	var corner := minimap.get_global_rect()
+	assert_almost_eq(corner.end.x, 1268.0, 1.0, "in the corner away from the panel")
+	assert_almost_eq(corner.end.y, 788.0, 1.0)
+	watch_signals(hud)
+	var point := Vector2(180, 40)
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = point
+	press.global_position = corner.position + point
+	hud._pane_input(minimap, press)
+	var let_go := press.duplicate() as InputEventMouseButton
+	let_go.pressed = false
+	hud._pane_input(minimap, let_go, func(at: Vector2) -> void: hud.walk_requested.emit(minimap.tile_at(at)))
+	assert_signal_emitted_with_parameters(hud, "walk_requested", [minimap.tile_at(point)])
+	drag.call(minimap, corner.position + point, corner.position + point - Vector2(600, 400))
+	assert_eq(minimap.get_global_rect().position, corner.position - Vector2(600, 400), "dragged across")
+	assert_not_null(Settings.get_value("world_pane_Minimap", null), "and remembered")
+	var face_map := (minimap.find_child("Glass", true, false) as Control).get_theme_stylebox("panel") as StyleBoxFlat
+	assert_gt(face_map.corner_radius_top_left, 0, "round corners")
+	assert_eq((minimap.find_child("Glass", true, false) as CanvasItem).clip_children,
+		CanvasItem.CLIP_CHILDREN_AND_DRAW, "the land kept inside them")
+	_key(KEY_N)
+	assert_false(hud.minimap_shown(), "N hides it")
+	_key(KEY_N)
+	assert_true(hud.minimap_shown())
+
+
+## What calls the hero: the 1997 quest panel's lines in a pane, and the
+## guide arrows to the places.
+func test_the_quest_pane_and_the_guides() -> void:
+	var player := screen.player
+	var hud := screen.hud
+	screen.size = Vector2(1280, 800)
+	await get_tree().process_frame
+	assert_false(hud.quest_pane_shown(), "nothing calls: no pane")
+	assert_false(screen.guides.visible, "and no arrows")
+	var towns: Array[int] = []
+	for slot in player.world.sites.size():
+		if int(player.world.sites[slot]["type"]) in [ShandalarWorld.TOWN, ShandalarWorld.CITY]:
+			towns.append(slot)
+	var town := towns[0]
+	var giver := towns[1]
+	var called := WorldNames.site_name(player.world, town)
+	player.quest = {"type": 0, "destination": town, "color": 2, "data": 1,
+		"deadline": player.quest_timer + 32, "giver": giver}
+	screen.advance(HeroWalk.TICK)
+	assert_true(hud.quest_pane_shown(), "a quest: the pane")
+	var lines := func() -> String: return (hud.find_child("QuestLines", true, false) as Label).text
+	assert_eq(lines.call(), "Go East to %s\nReward: Mana Link\n3 days left" % called)
+	player.quest["turned"] = true
+	hud.refresh()
+	assert_string_contains(lines.call(), "Take letter to " + called)
+	# The arrows: a ring on the place on the screen, an arrow when it is not.
+	assert_true(screen.guides.visible)
+	var target: Dictionary = screen.guides.targets[0]
+	assert_eq(target["kind"], "quest")
+	assert_eq(target["name"], called)
+	var site: Dictionary = player.world.sites[town]
+	var tile := Vector2i(int(site["x"]), int(site["y"]))
+	screen.view.camera = Vector2(tile * 32 + Vector2i(16, 16))
+	assert_false(screen.guides.guide_for(tile)["arrow"], "on the screen: ringed where it stands")
+	screen.view.camera = Vector2(tile * 32) + Vector2(0, 40 * 32)
+	var guide: Dictionary = screen.guides.guide_for(tile)
+	assert_true(guide["arrow"], "off it: an arrow")
+	assert_true(screen.guides.room().grow(1.0).has_point(guide["at"]), "at the edge, clear of the panel")
+	assert_gt(Vector2(guide["way"]).dot(screen.guides.on_screen(tile) - screen.guides.room().get_center()), 0.0,
+		"pointing its way")
+	assert_eq(hud.minimap.marks.size(), 1, "the small map marks it")
+	# A siege, a bonus, a wizard's tap.
+	player.monsters = [{"slot": 7, "name": "Ogre", "x": tile.x * 32, "y": tile.y * 32, "town": town}]
+	player.next_duel_life = 2
+	player.next_duel_first_move = true
+	player.world.sites[giver]["status"] = int(player.world.sites[giver]["status"]) | (4 << 8)
+	hud.refresh()
+	screen._show_hero()
+	var said: String = lines.call()
+	assert_string_contains(said, "Ogre attacking %s!" % called)
+	assert_string_contains(said, "Next Duel: +2 lives, First Move")
+	assert_string_contains(said, "Red Wizardess: 1 of 3 mana taps")
+	assert_eq(screen.guides.targets[0]["kind"], "siege", "the siege first")
+	player.world_magics.append("Ring of the Guardian")
+	hud.refresh()
+	assert_string_contains(lines.call(), "1 of 5 mana taps", "the Ring: five")
+	# The panel to the bottom: the quest pane goes to the top, off it.
+	var quest_pane := hud.find_child("QuestPane", true, false) as Control
+	assert_gt(quest_pane.get_global_rect().position.y, 400.0, "at the bottom left, the panel at the top")
+	hud.place_bar(true)
+	await get_tree().process_frame
+	var panel := (hud.find_child("Bar", true, false) as Control).get_global_rect()
+	assert_false(quest_pane.get_global_rect().intersects(panel), "never over the panel")
+	assert_lt(quest_pane.get_global_rect().position.y, 100.0, "at the top left now")
+	hud.place_bar(false)
+	await get_tree().process_frame
+	assert_gt(quest_pane.get_global_rect().position.y, 400.0, "and back")
+	# Switched off, it stays away.
+	hud.show_quest_pane(false)
+	assert_false(hud.quest_pane_shown())
+	hud.show_quest_pane(true)
+	hud.show_guides(false)
+	screen._show_hero()
+	assert_false(screen.guides.visible, "the arrows switched off")
+	hud.show_guides(true)
+	# Time runs out.
+	player.monsters = []
+	player.quest_timer = int(player.quest["deadline"])
+	screen.advance(HeroWalk.TICK)
+	assert_eq(hud.notice(), "The people of %s are sorry their quest was not completed."
+		% WorldNames.site_name(player.world, giver))
+	assert_true(player.quest.is_empty(), "the quest is lost")
+	assert_ne(int(player.world.sites[giver]["status"]) & 0x10, 0, "the town gives no other")
+
+
+## F4, the frame's gate: what is known of the castles and the dungeons.
+func test_the_clues() -> void:
+	var hud := screen.hud
+	_key(KEY_F4)
+	assert_true(hud.clues_shown(), "F4 opens the clues")
+	assert_eq(hud.clue_text(), WorldClues.NONE_YET, "none known yet")
+	_key(KEY_F4)
+	assert_false(hud.clues_shown(), "and closes them")
+	var world := screen.world
+	world.encounters[0]["clues"] = WorldClues.CREATURES
+	world.encounters[5]["clues"] = WorldClues.CREATURES | WorldClues.RULES | WorldClues.LOCATION
+	(hud.buttons["Clues"] as BaseButton).pressed.emit()
+	var castle := hud.find_child("Clue_0", true, false) as Button
+	var dungeon := hud.find_child("Clue_5", true, false) as Button
+	assert_eq(castle.text, "Castle Necris (Black Castle)")
+	assert_eq(dungeon.text, "The Paths of Chronus")
+	assert_string_contains(hud.clue_text(), "-Contains large black creatures.")
+	dungeon.pressed.emit()
+	await get_tree().process_frame
+	var said := hud.clue_text()
+	var color: int = world.encounters[5]["color"]
+	assert_string_contains(said, "-Contains small %s creatures." % WorldClues.COLOR_WORDS[color])
+	assert_string_contains(said, "Dungeon Rules:")
+	assert_string_contains(said, "Location:")
+	assert_string_contains(said, " of %s." % WorldNames.site_name(world, int(world.encounters[5]["town"])))
+	assert_string_contains(said, "Treasure: ")
+
+
+
+## The owner: "touch-pad support? Maybe we can have bigger buttons on the
+## pane with left and right arrows at the distal ends for touch" — big
+## buttons, the row scrolling between two red arrows; a pinch zooms and a
+## touchpad's slide looks.
+func test_big_buttons_and_gestures_for_a_finger() -> void:
+	screen.size = Vector2(1280, 800)
+	var hud := screen.hud
+	assert_false(hud.big, "a desk with a mouse: the panel as it was")
+	(hud.buttons["Options"] as BaseButton).pressed.emit()
+	(hud.find_child("Option_Big", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	hud = screen.hud
+	assert_true(hud.big, "made again with big buttons")
+	assert_true(bool(Settings.get_value(WorldHud.BIG_SETTING, false)), "remembered")
+	assert_eq(screen.find_children("Hud*", "WorldHud", false, false).size(), 1, "one panel, the old one gone")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_gte((hud.buttons["Map"] as Control).size.y, 44.0, "a finger's target")
+	# A narrow screen, so the row overflows with the 1997 icons or without.
+	screen.size = Vector2(720, 800)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var right := hud.find_child("ArrowRight", true, false) as RedArrow
+	var left := hud.find_child("ArrowLeft", true, false) as RedArrow
+	assert_true(right.visible and left.visible, "the arrows at the panel's ends when the row overflows")
+	assert_true(left.disabled, "nothing to the left yet")
+	var bar := (hud.find_child("Bar", true, false) as Control).get_global_rect()
+	assert_almost_eq(right.get_global_rect().end.x, bar.end.x - 10.0, 1.0, "at the far end")
+	var scroll := hud.row_scroll()
+	right.pressed.emit()
+	assert_gt(scroll.scroll_horizontal, 0, "the row moves on")
+	assert_false(left.disabled)
+	left.pressed.emit()
+	assert_eq(scroll.scroll_horizontal, 0, "and back")
+	screen.size = Vector2(4000, 800)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_false(right.visible, "room for it all: no arrows")
+	screen.size = Vector2(1280, 800)
+	# The gestures.
+	var zoom := screen.view.zoom
+	var pinch := InputEventMagnifyGesture.new()
+	pinch.factor = 1.2
+	screen._gui_input(pinch)
+	assert_almost_eq(screen.view.zoom, minf(zoom * 1.2, WorldView.ZOOM_MAX), 0.001, "a pinch zooms")
+	var camera := screen.view.camera
+	var slide := InputEventPanGesture.new()
+	slide.delta = Vector2(3, 0)
+	screen._gui_input(slide)
+	assert_ne(screen.view.camera, camera, "a touchpad's slide looks")

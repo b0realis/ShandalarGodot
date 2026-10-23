@@ -41,7 +41,59 @@
   `toggle_help`, `toggle_options`, `close_panels`, the resting pointer's
   name (`tip_for`, `show_tip`, `HOVER_SECONDS`), `say` (a notice);
   `WorldScreen.save_now`, `open_load` (the saves over the world),
-  `exit_game`, `show_deck`.
+  `exit_game`, `return_to_menu`, `show_deck`, `show_clues`, `cast`.
+  Since 2026-10-23 also the gate (clues, `toggle_clues`, `show_clue`),
+  the panes the player moves (`_pane_input`, `place_pane`,
+  `remember_pane`, `PANE_SETTING`), the quest pane (`refresh_quest`,
+  `QUEST_SETTING`), the switches in the options (`SWITCHES`: the small
+  map, the quest pane, the guide arrows, `pace` / `PACES`, music, sound)
+  and the casting icons (`cast_pressed`, the key over each: `ROW_KEYS`,
+  `magic_working`). Big buttons for a finger: `big`, `BIG`, `BIG_SETTING`,
+  `big_wanted` (on where `TouchControls.should_be_active`), `scroll_row`,
+  the `RowScroll` between two `RedArrow`s; `WorldScreen.rebuild_hud` makes
+  the panel again on `big_switched`. Gestures: `WorldScreen._gui_input`
+  zooms on `InputEventMagnifyGesture` (a touchpad's pinch, and the touch
+  layer's: `TouchGestures` emits `magnify` for a pinch) and looks on
+  `InputEventPanGesture`.
+- `game/adventure/world/world_minimap.gd`: `WorldMinimap`, the small map
+  in the corner (`project`, `tile_at`, `marks`; its land masked by the
+  rounded glass, `clip_children`).
+- `game/adventure/world/world_magic.gd`: `WorldMagic`, the five World
+  Magics cast on the map as 1.3 cast them — `cast` (the amulet risked,
+  Leap of Fate, Quickening, Staff of Thunder, Sword of Resistance,
+  Conjurer's Will), `nearest_roaming`, `siege_creature`; Quickening's
+  ticks are `AdventurePlayer.quickening`, walked in `HeroWalk.tick`.
+- `game/adventure/world/world_status.gd`: `WorldStatus`, what calls the
+  hero in the 1997 words — `quest_lines`, `days_left`, `check_quest` (the
+  quest lost at its deadline), `siege_line`, `taps`, `dominion`,
+  `next_duel_line`, `days_on_road`, `targets`.
+- `game/adventure/world/world_clues.gd`: `WorldClues`, the dungeon and
+  castle clues (`known`, `title`, `lines`, `EFFECT_CARDS`).
+- `game/adventure/world/world_names.gd`: `WorldNames`, the places' 1997
+  names (`site_name`, `dungeon_name`, `CASTLES`, `WIZARDS`).
+- `game/adventure/world/world_guides.gd`: `WorldGuides`, the guide arrows
+  (`guide_for`, `room`, `on_screen`).
+- `game/adventure/world/visit_pane.gd`: `VisitPane`, a place visited —
+  `describe` (village, town, city, ruled, castle, fallen, lair, dungeon:
+  the 1997 picture, words and choices), `site_slot`, `food_price`,
+  `choose`; `WorldScreen.visit` / `visiting` (the walk's end on a place,
+  `HeroWalk.destination`). The pictures are the skin's `visit_*` keys
+  (`tools/import_original.py` `VISIT_PICTURES`, `PIC_PALETTES`,
+  `PIC_OPAQUE`). The pointers: `WorldCursors.Kind`, `FOR_PLACE`,
+  `_layers`; `WorldScreen.pointer_for`.
+- `game/adventure/world/hero_stats.gd`: `HeroStats`, the hero's stats in
+  the hero pane (tabs Hero, Wizards, Journal; `record` counts the journal
+  as 1.3's `RebuildStatsJournalCounts`, `record_ink`, `journal_lines`).
+- `game/adventure/starter_deck.gd`: `StarterDeck`, the first deck by the
+  1997 rules (`deal`, `QUOTAS`, `copies_left`, `cards` — the base set read
+  from the registry; `CardRegistry.printed_rarity`).
+- `game/deck_builder/adventure_builder.gd`: `AdventureBuilder`, the deck
+  builder over the hero's own cards (a `SealedPool` of `AdventurePlayer.cards`,
+  the three decks, `write_back`, the gold on the title slab, `ALLOWED`;
+  signals `closed`, `exit_requested`); the base builder's seams for it:
+  `_menu_entries`, `_with_tome`, `_format_offences`, `_size_advice`,
+  `_pool_caption`. `WorldScreen.show_deck` / `building` open it over the
+  world.
 - `game/adventure/world/hero_colors.gd`: `HeroColors`, the walking figure's
   colours — `PARTS`, the choices (`HAIR`, `SKIN`, `CLOTH`), `part_of` (a
   1997 pixel's part by colour and height), `find_parts`, `ramp`, `dress`,
@@ -64,7 +116,9 @@
 - `tools/import_original.py`: `WORLD_SHEETS`, `spr_frame_tops`, the
   `world_*` rows; `tools/skin_catalogue.py`: "The adventure world".
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
-  `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`.
+  `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
+  `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,
+  `tests/ui/test_adventure_builder.gd`.
 
 ## The adventurer and the saved adventures (2026-10-22)
 

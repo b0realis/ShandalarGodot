@@ -1,0 +1,223 @@
+class_name WorldStatus
+extends RefCounted
+## WHAT CALLS THE HERO, read from the adventure: the quest under way, a
+## town under siege, the wizards' mana taps and the next duel's bonus —
+## what the 1997 frame's quest panel (`DrawAdventureQuestStatusPanel`,
+## 0054baaa in 1.3) and the wizards' window (F6, `Statwin.dll`) showed,
+## in the 1997 words (`Advstrings.txt` `@QUESTSTATUS`, `@NEWSFLASH`).
+##
+## THE QUEST (`AdventurePlayer.quest`, the save's five numbers at 0x21CF8
+## and ours beside them): `type` — 0 a letter whose reward is a mana link,
+## 2 a letter for an amulet, 1 a card of a colour and class, below 0 a
+## creature to defeat (below −100 defeated, the reward waiting) —,
+## `destination` (a site slot), `color` (1 black … 5 white), `data` (the
+## quarter the destination lies in, 0 north … 3 west), `deadline` (on the
+## quest clock), and ours: `giver` (the town that gave it; 1997 did not
+## keep it in the save), `turned` (the hero has left the quarter they set
+## out in: the line says where to go no more, but what to do), `card_class`
+## and `creature` (for the words).
+##  - A DAY is 16 steps of the quest clock (`VisitTownWiseman`: a letter's
+##    32 steps are "4 days"); the panel's days left are
+##    `(deadline − timer) / 16 + 1`.
+##  - When the clock reaches the deadline the quest is lost: "The people of
+##    %s are sorry their quest was not completed." (1.3 `adventureWorldUi.c`
+##    at 1642), and the town that gave it has no new quest for the hero.
+##
+## THE SIEGE: the creature a wizard sends to a city stands in roaming slot
+## 7 (`StartWizardTownSiege`, 005616f9); the panel says "%1 attacking %2!".
+## A city the wizard takes is his: its status's high byte holds his colour
+## (`ResolveWizardTownSiege`, 00562169), a "mana tap". A wizard who taps
+## [constant DOMINION] cities — [constant DOMINION_WITH_RING] with Ring of
+## the Guardian — casts the Spell of Dominion and the adventure is lost.
+## Neither the sieges nor the duels that lift them are made yet; what is
+## here shows them once they are.
+
+## Steps of the quest clock in a day.
+const DAY := 16
+const DOMINION := 3
+const DOMINION_WITH_RING := 5
+## `@QUESTSTATUS`'s "Go North to"… by the destination's quarter: the
+## original's four directions are the screen's diagonals.
+const GO: Array[String] = ["Go North to %s", "Go East to %s", "Go South to %s", "Go West to %s"]
+const COLOR_WORDS: Array[String] = ["black", "blue", "green", "red", "white"]
+
+
+## Days on the road: the quest clock, which steps on every 32 ticks the
+## hero walks, in the quest's own days [QoL] (1997 counted no days).
+static func days_on_road(player: AdventurePlayer) -> int:
+	return player.quest_timer / DAY
+
+
+## Whether a quest is under way.
+static func has_quest(player: AdventurePlayer) -> bool:
+	return not player.quest.is_empty()
+
+
+## The quest's days left: `(deadline − timer) / 16 + 1`, at least 0.
+static func days_left(player: AdventurePlayer) -> int:
+	if not has_quest(player):
+		return 0
+	var left := int(player.quest.get("deadline", 0)) - player.quest_timer
+	return maxi(left / DAY + 1, 0) if left > 0 else 0
+
+
+## The site the quest sends the hero to, or -1: the giver when its
+## creature is beaten, the destination otherwise.
+static func quest_target(player: AdventurePlayer) -> int:
+	if not has_quest(player):
+		return -1
+	var kind := int(player.quest.get("type", 0))
+	if kind < -100:
+		return int(player.quest.get("giver", player.quest.get("destination", -1)))
+	return int(player.quest.get("destination", -1))
+
+
+## The quest's lines, as the 1997 panel words them: what to do and where,
+## the days left.
+static func quest_lines(player: AdventurePlayer) -> Array[String]:
+	var lines: Array[String] = []
+	if not has_quest(player):
+		return lines
+	var quest := player.quest
+	var kind := int(quest.get("type", 0))
+	var town := WorldNames.site_name(player.world, quest_target(player))
+	if kind < -100:
+		lines.append("Return to %s" % town)
+	elif kind < 0:
+		lines.append("Defeat %s" % String(quest.get("creature", "the creature")))
+		lines.append("then return to %s" % town)
+	elif not bool(quest.get("turned", false)):
+		lines.append(GO[clampi(int(quest.get("data", 0)), 0, 3)] % town)
+	elif kind == 1:
+		lines.append("Take card to %s" % town)
+	else:
+		lines.append("Take letter to %s" % town)
+	if kind == 1 and not bool(quest.get("card_found", false)):
+		lines.append("Find a %s %s spell" % [COLOR_WORDS[clampi(int(quest.get("color", 1)) - 1, 0, 4)],
+			String(quest.get("card_class", "")).to_lower()])
+	var reward := ""
+	match kind:
+		0:
+			reward = "Mana Link"
+		2:
+			reward = "%s amulet" % COLOR_WORDS[clampi(int(quest.get("color", 1)) - 1, 0, 4)].capitalize()
+		1:
+			reward = "Mana Link and an amulet"
+	if reward != "":
+		lines.append("Reward: " + reward)
+	var days := days_left(player)
+	lines.append("%d %s left" % [days, "day" if days == 1 else "days"])
+	return lines
+
+
+## THE QUEST'S TIME RUNS OUT: when its clock has reached the deadline the
+## quest is lost, the giver will give no other, the journal says so; the
+## 1997 words for the screen, or "" while it still runs.
+static func check_quest(player: AdventurePlayer) -> String:
+	if not has_quest(player) or int(player.quest.get("type", 0)) < -100:
+		return ""
+	if int(player.quest.get("deadline", 0)) > player.quest_timer:
+		return ""
+	var giver := int(player.quest.get("giver", -1))
+	var town := WorldNames.site_name(player.world, giver)
+	if giver >= 0 and giver < player.world.sites.size():
+		player.world.sites[giver]["status"] = int(player.world.sites[giver]["status"]) | 0x10
+	player.log_event("quest", "Quest failed for %s" % town, {"done": false})
+	player.quest = {}
+	return "The people of %s are sorry their quest was not completed." % town if town != "" \
+		else "Your quest was not completed in time."
+
+
+## The creature besieging a city ([method WorldMagic.siege_creature]), or `{}`.
+static func siege(player: AdventurePlayer) -> Dictionary:
+	return WorldMagic.siege_creature(player)
+
+
+## The city under siege, or -1.
+static func siege_town(player: AdventurePlayer) -> int:
+	var creature := siege(player)
+	return int(creature.get("town", -1)) if not creature.is_empty() else -1
+
+
+## `%1 attacking %2!`, or "".
+static func siege_line(player: AdventurePlayer) -> String:
+	var creature := siege(player)
+	if creature.is_empty():
+		return ""
+	return "%s attacking %s!" % [String(creature.get("name", "A creature")),
+		WorldNames.site_name(player.world, int(creature.get("town", -1)))]
+
+
+## The cities each wizard has tapped, black to white: their status's high
+## byte holds the wizard's colour.
+static func taps(player: AdventurePlayer) -> Array[int]:
+	var counts: Array[int] = [0, 0, 0, 0, 0]
+	for site in player.world.sites:
+		var ruler := (int(site["status"]) >> 8) & 0xFF
+		if ruler >= 1 and ruler <= 5:
+			counts[ruler - 1] += 1
+	return counts
+
+
+## How many taps cast the Spell of Dominion for this hero.
+static func dominion(player: AdventurePlayer) -> int:
+	return DOMINION_WITH_RING if player.owns("Ring of the Guardian") else DOMINION
+
+
+## The wizards who have tapped a city: "Red Wizardess 1 of 3", …
+static func tap_lines(player: AdventurePlayer) -> Array[String]:
+	var lines: Array[String] = []
+	var counts := taps(player)
+	for i in 5:
+		if counts[i] > 0:
+			lines.append("%s: %d of %d mana taps" % [WorldNames.WIZARDS[i], counts[i], dominion(player)])
+	return lines
+
+
+## "Next Duel: +2 lives, First Move, Lord of Atlantis", or "".
+static func next_duel_line(player: AdventurePlayer) -> String:
+	var parts: Array[String] = []
+	if player.next_duel_life > 0:
+		parts.append("+%d lives" % player.next_duel_life)
+	elif player.next_duel_life < 0:
+		parts.append("-%d lives" % -player.next_duel_life)
+	if player.next_duel_first_move:
+		parts.append("First Move")
+	if player.next_duel_card != "":
+		parts.append(player.next_duel_card)
+	return "Next Duel: " + ", ".join(parts) if not parts.is_empty() else ""
+
+
+## Everything the quest pane shows, a line each; empty when nothing calls.
+static func lines(player: AdventurePlayer) -> Array[String]:
+	var out: Array[String] = []
+	if player == null:
+		return out
+	var under_siege := siege_line(player)
+	if under_siege != "":
+		out.append(under_siege)
+	out.append_array(quest_lines(player))
+	var bonus := next_duel_line(player)
+	if bonus != "":
+		out.append(bonus)
+	out.append_array(tap_lines(player))
+	return out
+
+
+## The places to guide the hero to: `{tile, kind, name}` — the city under
+## siege, the quest's target.
+static func targets(player: AdventurePlayer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if player == null or player.world == null:
+		return out
+	var besieged := siege_town(player)
+	if besieged >= 0 and besieged < player.world.sites.size():
+		var site: Dictionary = player.world.sites[besieged]
+		out.append({"tile": Vector2i(int(site["x"]), int(site["y"])), "kind": "siege",
+			"name": WorldNames.site_name(player.world, besieged)})
+	var target := quest_target(player)
+	if target >= 0 and target < player.world.sites.size():
+		var site: Dictionary = player.world.sites[target]
+		out.append({"tile": Vector2i(int(site["x"]), int(site["y"])), "kind": "quest",
+			"name": WorldNames.site_name(player.world, target)})
+	return out

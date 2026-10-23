@@ -150,6 +150,16 @@ FAMILIES: list[tuple[str, str, str]] = [
      "locatn01-07: villages, towns, cities, domes, dungeons and lairs; "
      "castles1-2: the wizards' castles; ego_m, ego_f: the hero in eight "
      "directions, sego_f the shadow."),
+    ("The adventure world", "visit_",
+     "The places' pictures, shown in the world's visit pane as the hero "
+     "arrives (512 x 280, painted whole with Advfac64.pic's palette): "
+     "village (Village.pic) and city (City.pic), the wise man "
+     "(Wiseman3.pic), the wizards' castles by colour (castle_black 0246, "
+     "castle_blue 0364, castle_green 0335, castle_red 0737, castle_white "
+     "0028), the lairs by colour (lair_black 0333, lair_blue 0873 — the "
+     "sunken ship —, lair_green 0281, lair_red 0329, lair_white 0569), the "
+     "siege's news flash (Newsback.pic); dungeon is the dungeon board's "
+     "ground (CaveBkgd.pic, 640 x 480)."),
     ("Backdrops", "adventure_hero_background",
      "Behind the Embark screen of a new adventure: the 1997 character "
      "screen's dark scratched field (Menu4.pic), stretched to the window."),

@@ -74,7 +74,9 @@ var world_magic_sites: Array[int] = []
 ## green, red, white), 5–14 the dungeons. `{x, y, town, color,
 ## monster_flags, rules, card_in_effect, cards}`; `cards` are dungeon card
 ## indices ([constant DUNGEON_CARDS]), and `card_in_effect` the 1.3 card
-## id the encounter plays under, -1 for none.
+## id the encounter plays under, -1 for none. `clues` (absent for none) is
+## what the hero has learned of it (`clues_bitmap`): 1 where it lies, 2 its
+## creatures, 4 its rules ([WorldClues]).
 var encounters: Array[Dictionary] = []
 ## Where the hero starts, in the original's world units (32 to a tile).
 var start := Vector2i.ZERO

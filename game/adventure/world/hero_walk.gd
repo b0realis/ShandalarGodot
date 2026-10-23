@@ -10,7 +10,8 @@ extends RefCounted
 ##  - forest, and swamp without Amulet of Swampwalk, and mountains without
 ##    Dwarven Pick, are slow: two units every third tick;
 ##  - a road leaving the hero's tile the way they walk (or coming in from
-##    behind) is never slow, and every other tick adds a unit more;
+##    behind) is never slow, and every other tick adds a unit more — every
+##    tick while Quickening runs ([WorldMagic]), whose ticks count down;
 ##  - with no food every pace is slower (the divisor two more, at most 4);
 ##  - every 32nd tick a walking hero eats one food (Fruit of Sustenance
 ##    gives two back in a forest) and the quest and siege clocks move on;
@@ -41,6 +42,8 @@ var player: AdventurePlayer
 var path: Array[Vector2i] = []
 ## The way walked this tick, 0–8 (`g_world_move_dir_index`).
 var heading := 0
+## Where the walk goes: the last tile of its way, (-1, -1) for none.
+var destination := Vector2i(-1, -1)
 
 
 func _init(walker: AdventurePlayer = null) -> void:
@@ -65,6 +68,7 @@ func walk_to(target: Vector2i) -> bool:
 	if way.is_empty():
 		return false
 	path = way
+	destination = way[way.size() - 1]
 	return true
 
 
@@ -173,7 +177,8 @@ func tick() -> bool:
 			player.step = 0
 		else:
 			player.facing = d
-		if player.monster_timer & 1 != 0 and d != 0 and roads & (1 << (back(d) - 1)) != 0:
+		if d != 0 and (player.quickening > 0
+				or player.monster_timer & 1 != 0 and roads & (1 << (back(d) - 1)) != 0):
 			player.position += Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
 		# Ours: never past the tile middle being walked to, on either axis.
 		if d != 0:
@@ -194,6 +199,9 @@ func tick() -> bool:
 			player.quest_timer += 1
 		entered = player.tile() != here
 	player.monster_timer += 1
+	# `TickWorldMagicSlotTimers`, once a pass of the 1.3 loop.
+	if player.quickening > 0:
+		player.quickening -= 1
 	_arrive()
 	return entered
 

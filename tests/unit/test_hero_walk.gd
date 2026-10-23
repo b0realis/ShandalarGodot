@@ -127,3 +127,17 @@ func test_the_hero_faces_the_way_and_steps_then_stands() -> void:
 	_ticks(walk)
 	assert_eq(walk.player.step, 0, "standing at the end")
 	assert_eq(walk.player.facing, 3, "still facing the way walked")
+
+
+## Quickening (1.3: `worldmagic_duration` 150): every step goes a unit
+## further while it runs, and it runs down a tick at a time.
+func test_quickening_is_a_unit_more_every_step_while_it_runs() -> void:
+	var walk := _walker(6, Vector2i(10, 10))
+	walk.player.quickening = WorldMagic.QUICKENING_TICKS
+	walk.walk_to(Vector2i(12, 10))
+	assert_eq(_ticks(walk), 32, "two tiles east: 64 units, two a tick")
+	assert_eq(walk.player.quickening, WorldMagic.QUICKENING_TICKS - 32, "a tick less each tick")
+	walk.player.quickening = 1
+	walk.walk_to(Vector2i(10, 10))
+	assert_eq(_ticks(walk), 63, "the last tick of it, then the plain pace")
+	assert_eq(walk.player.quickening, 0)

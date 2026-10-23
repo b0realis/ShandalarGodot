@@ -55,6 +55,11 @@ extends RefCounted
 ##     duel log, any list. The finger moving DOWN scrolls UP (the content
 ##     follows the finger), which is what every touch surface since 2007
 ##     has taught the hand.
+##   - **a pinch** — the two fingers drawing apart or together by more
+##     than [constant PINCH_STEP] of their span, and by more than their
+##     midpoint has moved — is a MAGNIFY at the midpoint, the factor the
+##     span grew by: the world map zooms with it (2026-10-23); nothing
+##     else reads it.
 ##
 ## WHAT IT REFUSES. A release for a finger it never saw pressed is
 ## ignored — that is the normal shape of a touch that began on a popup,
@@ -84,6 +89,8 @@ const DOUBLE_TAP_SLOP := 30.0
 const TWO_FINGER_MS := 300
 ## Two fingers travelling this far together are one wheel notch.
 const WHEEL_STEP := 40.0
+## Two fingers' span changing by this share of itself is one magnify.
+const PINCH_STEP := 0.08
 
 enum Mode {
 	IDLE,       ## no finger down
@@ -105,6 +112,8 @@ var _last_tap_pos := Vector2.ZERO
 var _two_mid := Vector2.ZERO
 var _two_accum := Vector2.ZERO
 var _two_moved := false
+var _two_span := 0.0
+var _pinch_mid := Vector2.ZERO
 
 
 ## The current [enum Mode], for tests and for the autoload's own guard.
@@ -219,6 +228,8 @@ func _press(index: int, pos: Vector2, now_ms: int, scrollable: bool) -> void:
 			_two_mid = _midpoint()
 			_two_accum = Vector2.ZERO
 			_two_moved = false
+			_two_span = _span()
+			_pinch_mid = _two_mid
 		Mode.DRAGGING, Mode.SCROLLING:
 			pass                # a stray second finger mid-drag: ignored, the drag goes on
 		_:
@@ -275,8 +286,23 @@ func _midpoint() -> Vector2:
 	return sum / maxf(1.0, _fingers.size())
 
 
+## How far apart the two fingers are.
+func _span() -> float:
+	var at: Array = _fingers.values()
+	return (at[0].pos as Vector2).distance_to(at[1].pos) if at.size() == 2 else 0.0
+
+
 func _two_drag(out: Array[Dictionary]) -> void:
 	var mid := _midpoint()
+	# A pinch, not two fingers sliding together: the span changes by its
+	# step, and by more than the midpoint has moved (fingers report one at
+	# a time, so a slide makes the span wobble as well).
+	var span := _span()
+	var change := absf(span - _two_span)
+	if _two_span > 1.0 and change >= PINCH_STEP * _two_span and change > mid.distance_to(_pinch_mid):
+		out.append({"kind": "magnify", "pos": mid, "factor": span / _two_span})
+		_two_span = span
+		_pinch_mid = mid
 	_two_accum += mid - _two_mid
 	_two_mid = mid
 	if _two_accum.length() > SLOP:

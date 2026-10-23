@@ -312,6 +312,176 @@ pointer rests), from 1.3's `DrawAdventureInterfaceLayout`
 **Next:** towns (entering, buying, the quests), the encounters, the
 starting deck; a save made from the world screen.
 
+## Built: casting, the panes and what calls the hero (2026-10-23)
+
+The owner: *"implement all items you suggest"*, then *"follow the same
+unobtrusive style with popup or hover panes with rounded corners that can
+be moved at will … and it should be togglable on/off in options"*.
+
+- **Casting** (`WorldMagic`), read in `UpdateAdventureWorldInputAndMovement`
+  (keys `1`–`5`) and `HandleWorldMagicChoiceControlEvent` (004ff888, a
+  click on the frame's icon, which plays `…wm.wav` and queues the key):
+  key N casts the magic of bit 2N when it is owned and an amulet of its
+  colour is left; `internal_rand(4 − difficulty) == 0` takes the amulet,
+  drawn before the magic works and even when it finds nothing. Leap of
+  Fate draws x then y (`internal_rand(64)`) until land; Quickening sets
+  `worldmagic_duration` 150 and every step goes a unit further while it
+  runs (in place of the road's odd-tick unit), counted down once a loop
+  pass (`TickWorldMagicSlotTimers`); Staff of Thunder frees the nearest of
+  roaming slots 0–5 by `ApproximateDistance`, however far; Sword of
+  Resistance sets the hero by slot 7's tile, `(x & ~31) + 16`,
+  `(y & ~31) + 31`; Conjurer's Will opens the deck builder with the cards
+  free to move. Journal lines from `@LOGSTRINGS` ("JUMP!", "SPEED!",
+  "THUNDERED on: %s!", "Went to aid of %s"). The icons: an active one with
+  an amulet wears its key (row 3) over row 0, none left row 2. Ours
+  [QoL]: nothing to work on risks nothing, and Quickening's icon is lit
+  while it runs. Retail's F1 quirk (Amulet of Swampwalk's bit) is not
+  copied.
+- **The quest panel** (`DrawAdventureQuestStatusPanel`, 0054baaa): ours is
+  a pane (`WorldStatus`), only when something calls. The quest's five
+  saved numbers (type, destination, colour, data = quarter, deadline);
+  "Go North/East/South/West to %s" until the hero leaves the quarter, then
+  "Take letter/card to %s", "Find a %1 %2 spell", "Defeat %s", "Return to
+  %s"; days left `(deadline − timer) / 16 + 1` (a day = 16 quest-clock
+  steps: `VisitTownWiseman`'s letter is 32 steps, "4 days"); at the
+  deadline "The people of %s are sorry their quest was not completed." and
+  the giver's status bit 4. The giver is not in the 1.3 save; ours keeps
+  it. 1997 counted no days; "days on the road" is the quest clock in those
+  days [QoL]. No day and night: `todpal.tr` is one palette.
+- **Sieges and Dominion** (`StartWizardTownSiege` 005616f9,
+  `ResolveWizardTownSiege` 00562169): the attacker stands in slot 7; a
+  fallen city's status high byte is the wizard's colour, a "mana tap"; a
+  wizard with 3 taps (5 with Ring of the Guardian; difficulty only speeds
+  the clock) casts Dominion. NOT RUN YET: with no duels to lift a siege,
+  the clock would take cities the hero cannot save. The pane, the arrows,
+  the small map and Sword of Resistance read the state when it comes.
+- **Next duel** (`next_duel_card`: −1 none, 0 first move, 1–5 lives, a
+  card above 5; `next_duel_life` carried lives): ours as
+  `next_duel_life`, `next_duel_first_move`, `next_duel_card`;
+  "Next Duel: +%d lives / First Move / the card".
+- **The clues** (F4, `ShowDungeonCluesScreen` 00509244, the detail
+  0050caa0; `WorldClues`): slots with `clues_bitmap` (ours `clues`, 1
+  where, 2 creatures, 4 rules), dungeons only while they hold cards;
+  `@CAVE_SHOWCLUES` lines, the way from the slot's town by the signs of
+  dx and dy. 1997 showed an empty list with nothing known; ours says how
+  clues are found. Clues come from wise men, Ruined Tower, beaten
+  creatures (`RevealRandomCastleDungeonClue`), not made yet.
+- **The names** (`WorldNames`): `BuildTownDisplayName` (00550220) —
+  `@CITYNAMES_FIRSTHALF[(slot / 8) mod 16]` + `@CITYNAMES_SECONDHALF[slot
+  mod 16]`, a village "%1 Village"; castles `@CITYNAME_MANACASTLE`;
+  `@DUNGEON_NAMES` by slot.
+- **1.3 had no small map** (the decompilation's `minimap` variables are
+  tile sizes); `WorldMinimap` and the guide arrows (`WorldGuides`) are
+  ours [QoL]. The F3 city list and F6 wizards' window are not built.
+- **The panes** move where they are dragged and are found there again
+  (`world_pane_<name>`); the options switch the small map, the quest pane
+  and the arrows, set the pace (the world's clock ×1, 1.5 or 2 [QoL]),
+  the music and the sound, and return to the main menu; leaving saves.
+
+## Built: the first deck, the deck builder and the hero's stats (2026-10-23)
+
+The owner: *"a player stats panel (modern but reuse some elements from
+1997) and deckbuilder for the player — the deck builder should be adapted
+to adventure mode where cards on the bottom are player stack accumulated
+during play! (Extras button absent, and any other conflicting buttons)
+… the top left deck name pane … with GOLD and amount of player gold"*.
+
+- **The rarities.** 1.3 reads `Rarity.csv` at startup
+  (`LoadRarityCsvCardData`, 005231ec): column 8's first letter C/U/R
+  (common, uncommon, rare), kept as 1/4/2 and mapped to 1/2/3, 4 special
+  (Astral, promos: `GetCardRarity` 0056c5ea); `Info.csv`'s "Occuran." only
+  as a fallback. Its rarity is the card's ORIGINAL set's — what our card
+  data gives as the first printing's (`CardRegistry.rarity_of`), so ours
+  needs no file of the player's. The base set (`expansion & 0x01`) is ours
+  as printed in Unlimited or Fourth Edition.
+- **The first deck** (`StarterDeck`, `AddRandomStarterDeckCards` 004be0bf):
+  the quotas by difficulty (retail's: Apprentice 13/12/10 + rare;
+  Magician 11/4/12 + rare and one colour 4/3/4; Sorcerer 9/3/9 + rare,
+  5/3/4, 4/3/3; Wizard 6/3/5 + rare and any colour 11/5/14); lands the
+  basic land; spells a coin toss between an artifact (`0x40`) and a spell
+  of the colour; even slots up to uncommon, odd common; creatures never
+  swamp- or islandwalk (`static_ability & 3`), one copy under 40 cards
+  (`GetRemainingAllowedCardCopies`) until 1000 draws found none new; the
+  rare a creature, enchantment or sorcery (`0xe`) of the colour or
+  colourless, rarity ≥ 3; Apprentice's spells and rare skip the walkers;
+  no `extra_ability & 0x900` (the dungeon cards and the card picker's
+  barred — ours: the dungeon treasures and the ante cards). Every card in
+  Deck 1 (`deck[i] |= 0x10000`). Ours: the dice draw among the cards that
+  fit (1997 drew any card and threw back), after the amulets (1997 dealt
+  first). OPEN against the binary: 1.3's coloured spell mask reads 0x04
+  (enchantments only) where the retail spec says instants, sorceries and
+  enchantments — ours follows the retail spec.
+- **The deck builder in the adventure** (`DeckBuilderMain` with
+  `DBFLAGS_SHANDALAR`; `db_flags_2` bit 0 moves, bit 1 sells): F1 opens it
+  look-only (`(1,0)`), Conjurer's Will and the final castle with moves
+  (`(1,1)`), a town with moves and selling (`(1,3)`). Its menus are
+  `@MAINMENU_ADVENTURE` / `@DECKSURFACE_ADVENTURE` (no New, Load, Save,
+  Clear); Deck1–3 with "* DeckN *"; the title field "GOLD: %d"
+  (`@GOLDTITLE`); no minimum size; `check_card_count` on close; selling
+  `SellPrice` (004f1bcc) from `CalculateCardShopPrice`. Ours
+  (`AdventureBuilder`): the sealed pool's machinery over the hero's cards,
+  the three decks written back per copy, the doors to outside cards
+  closed, "GOLD: %d" on the title slab. [QoL until the towns]: F1 moves
+  cards too. Selling comes with the towns.
+- **The stats** (`RunAdventureStatsMenu` 00549002, `Statbak.pic`,
+  `statbut1.pic`, the creature sheets): the face 137 × 169 in a frame of
+  the colour, the difficulty and name, gold, food, mana links, deck
+  active/total, the amulets; World Magics (the five cast on the top row);
+  "Wizard's Castles Conquered" (castle icons) with "Attempts at Each
+  Castle"; "Cities Saved" (journal 13), "Cities Recovered" (7), "Quest
+  Record" (16/17), "Overall Won/Loss" (2 with arg & 0x80), "Dungeon
+  Treasures" (19); "Record vs the Creatures of Shandalar" (W/L, coloured
+  by how it goes); tabs "Wiz Stats" (`Statwin.dll`), "Journal" (walked on
+  the map), "Done". Ours (`HeroStats`): one movable pane, tabs Hero /
+  Wizards / Journal, the frame's icons and the world's castle sprites
+  (`Statbak.pic`, `statbut1.pic` and the creature sheets are not imported).
+  Our journal events: `duel` (won, creature), `saved`, `freed`, `quest`
+  (done), `treasure`, `magic`.
+
+## Built: visiting the places (2026-10-23)
+
+The owner: *"analyze every possible map location that can be visited and
+what screen the original game used in visiting (i remember one screen was
+sunken ship also) … upon visiting that location an original graphic is
+displayed in a central pane in modern gui with original assets and
+feel"*, and *"for each unique place … a mouse cursor that changes to that
+place"*.
+
+**What 1.3 showed on arrival** — every picture 512 × 280 without a palette
+of its own (the world frame's, `Advfac64.pic`), blitted into the map
+window at (64, 48)–(576, 328) of 640 × 480 (`LoadVisitBackdropAndCopyToPage0`
+004ed44b), zoomed in (`AnimateVisitBackdropZoomIn` 004ed525), revealed in
+staggered tiles for a castle (`ShowWizardVisitBackdrop` 004ed6b9) or random
+5 × 5 tiles for a lair (`ShowLairBackdropTransition` 004ed7c8), words in
+`Dbox.spr` boxes over it:
+
+| Place | 1.3 | Picture | Words |
+|---|---|---|---|
+| village | `VisitTownSlot` 004eda50, `RunTownServicesMenu` 004ef1ea | `Village.pic` (`GET_TOWN_PIC`) | the name; five icon buttons (`Icons.spr` in `Iconb.spr`), `@CITYSCREEN_BUTTONS` |
+| town, city | the same | `City.pic` | Buy Cards (`Buycards.pic`), Edit deck/Sell cards, Speak to Wise Man (`Wiseman3.pic`) / Begin a Quest / Trade, Buy 10 food for (type + 2) × 5 gold, Leave the village; World Magic offers on `Worlbak1.pic` |
+| a town a wizard rules | status >> 8 | the town's, the ante cards and the guardian's face (`Prdfrmc.pic`) | "This place is ruled by the %s." … win `Celeb.pic`, loss `Losedul2.pic` |
+| wizard's castle (4), beaten (5) | visitLocation.c:4364 | by colour: `0246`, `0364`, `0335`, `0737`, `0028` | "Who dares to challenge the Mighty %s? …" / "The Mighty %s was crushed …" |
+| dungeon (clues known, a card inside) | `RunCastleDungeonBoard` 00443940 | none: the board on `CaveBkgd.pic`, `Dungeon1-3.spr` / `DungeonB/U/G/R/W.spr` | "Exploring the Dungeon… you encounter %s!" |
+| lair | `RunLairExplorationEvent` 0052fae0 | by colour (`lair_backdrop_paths`): `0333`, **`0873` the sunken ship**, `0281`, `0329`, `0569` | two times in three a colour's treasure; otherwise "You happen upon a %s!" and one of the 14 named events (Ruined Tower … Diamond Mine) |
+| roaming creature | `RunWorldLairMonsterEncounter` | full screen `Prdblk/blu/grn/rd/wt.pic`, `Prdfrma/b.pic`, the face | `@ENCOUNTER_PREDUEL` |
+
+Siege news flashes ride `Newsback.pic`; the end, `5thwiz.pic`, `Wingame.pic`
+and `Uth-Arz.pic`.
+
+**Ours**: `VisitPane`, a rounded pane in the middle of the screen over the
+waiting world: the place's name, its 1997 picture up to 1.5 × and its
+words and choices as buttons. Live now: Edit deck/Sell cards (the deck
+builder), Buy 10 food (the 1997 price), Leave; waiting, shown dim: Buy
+Cards, the wise man, the duels, entering a castle or a dungeon. The
+pictures are imported as `visit_*` (`VISIT_PICTURES`, painted whole in the
+world frame's palette). [QoL] a place is visited at the end of the walk to
+it (1997 entered every town stepped on; the way found for the hero would
+wander into towns not chosen), and a click on the place the hero stands on
+visits again. Lairs are not placed in our world yet, so none is met. The
+pointers over a place it can see and visit are the place (`WorldCursors`),
+a gold arrow over the panel; the owner kept the system's hand and four
+arrows over what is clicked and dragged.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -563,3 +733,41 @@ said otherwise):
   held (the hero's purse, food, amulets, the World Magics, the map, the
   journal, the deck) comes as small floating elements over the full-screen
   world, minimal, as the HUD and hint do today.
+- **2026-10-23** — 0.50.50 committed and pushed. Owner: "implement all
+  items you suggest", then panes "with rounded corners that can be moved
+  at will … togglable on/off in options". Built (0.50.51): casting the
+  five World Magics (`WorldMagic`), the quest pane and what calls the hero
+  (`WorldStatus`), the clues (`WorldClues`), the places' names
+  (`WorldNames`), the small map (`WorldMinimap`), the guide arrows
+  (`WorldGuides`), movable panes and the new options. "Built: casting, the
+  panes and what calls the hero".
+- **2026-10-23** — Owner: the hero's stats "modern but reuse some
+  elements from 1997", the adventure's deck builder over the hero's own
+  cards with no Extras and "GOLD" on the deck name pane. Built (0.50.51):
+  `StarterDeck` (the first deck by the 1997 rules), `AdventureBuilder`,
+  `HeroStats`. "Built: the first deck, the deck builder and the hero's
+  stats".
+- **2026-10-23** — Owner: the journal scrolls (gold bar); every tab of the
+  hero pane the Hero tab's size; "check how whole gui/map works on
+  different resolutions", "smaller (steam deck) resolutions" and touch,
+  "bigger buttons on the pane with left and right arrows at the distal
+  ends". Checked from the running game at 640 × 400, 800 × 600,
+  1024 × 600, 1024 × 640, 1280 × 800 (Steam Deck), 1280 × 1024,
+  1920 × 1080, 2400 × 1080, 800 × 1280 and 3440 × 1440 (the stretch keeps
+  the logical screen at least 1280 × 800: wider or taller, never smaller);
+  one fault: the quest pane stayed by the panel when it moved to the
+  bottom (fixed). Big buttons (`WorldHud.big`, ×1.6, the row scrolling
+  between red arrows, on where the touch layer is), a pinch (touch layer's
+  `magnify`) and a touchpad's pinch and slide zoom and look.
+- **2026-10-23** — Bug hunt over the new features (two readers): 22
+  findings fixed — panes dragged after being hidden, notices cut short or
+  off the screen, panes growing off the screen and stranded by a resize,
+  the 2x skin's castle trims, a long creature record, a cast on a release
+  off the icon, arrows under the panes, a remembered pane over the moved
+  panel, a look stuck after the map, the hero pane stale, needless
+  re-layout, the world drawn under the deck builder; and in the deck
+  builder Remove Extra Cards without the Tome, deck notes lost, a card of
+  a switched-off pack thrown out of its decks, Clear deck renaming, Ctrl+S,
+  the Stats window's tournament words, `current_deck` unchecked, and the
+  window's close saving nothing. Then visiting the places ("Built:
+  visiting the places") and a pointer for each.

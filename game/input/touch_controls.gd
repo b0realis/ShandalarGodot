@@ -297,6 +297,11 @@ func _spend(intents: Array[Dictionary]) -> void:
 				_scroll(intent.pos, intent.relative)
 			"wheel":
 				_wheel(intent.button, intent.pos)
+			"magnify":
+				var pinch := InputEventMagnifyGesture.new()
+				pinch.position = intent.pos
+				pinch.factor = intent.factor
+				_push(pinch)
 			"long_press":
 				pass            # armed; the menu comes on the lift (see TouchGestures)
 

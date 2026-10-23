@@ -54,12 +54,15 @@ func test_a_new_hero_starts_as_in_1997() -> void:
 	assert_eq(player.position, world.start, "where the world puts the hero")
 	assert_eq(player.made_fingerprint, fresh, "the world as it was made")
 	assert_true(world.is_explored(world.start_tile().x, world.start_tile().y), "the hero sees around them")
-	# The two extra amulets were drawn on the adventure's dice, after the world's.
+	# The two extra amulets were drawn on the adventure's dice, after the
+	# world's; then the first deck.
 	var dice := MsvcRandom.new(world.rand_state)
 	dice.below(5)
 	dice.below(5)
+	var dealt := StarterDeck.deal("red", 1, dice)
 	assert_eq(player.dice, dice.state)
-	assert_eq(player.cards, [], "the starting deck waits for the 1997 rarities")
+	assert_eq(player.cards.size(), 39, "a Magician's first deck")
+	assert_eq(player.cards.map(func(card: Dictionary) -> String: return card["card"]), Array(dealt))
 	assert_eq(player.duel_record(), {"won": 0, "lost": 0})
 	assert_eq(player.mana_links, [] as Array[int], "no mana linked yet")
 
@@ -83,12 +86,19 @@ func test_the_autosave_round_trips_everything() -> void:
 	player.position += Vector2i(5, -3)
 	player.facing = 4
 	player.monster_timer = 999
+	player.deck_names[0] = "Goya's Fliers"
+	player.current_deck = 2
+	player.next_duel_first_move = true
+	player.quickening = 40
+	player.world.encounters[3]["clues"] = 5
 	var path := player.autosave()
 	assert_eq(path, FOLDER.path_join(player.adventure_id + ".autosave.json"), "by name and hash")
 	assert_true(FileAccess.file_exists(path))
 	var back := AdventurePlayer.load_from(path)
 	assert_not_null(back, "the save reads back")
 	assert_eq(back.to_dict(), player.to_dict(), "every part as it was saved")
+	assert_eq(back.deck_names, ["Goya's Fliers", "", ""] as Array[String], "a deck's name kept")
+	assert_eq(int(back.world.encounters[3]["clues"]), 5, "what is known of a dungeon kept")
 	assert_eq(back.world.fingerprint(), player.world.fingerprint(), "the world, explored land and all")
 	assert_true(back.world_intact(), "and still the world its recipe makes")
 	assert_eq(back.duel_record(), {"won": 1, "lost": 0})

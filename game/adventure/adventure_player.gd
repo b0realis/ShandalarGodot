@@ -92,13 +92,15 @@ var amulets := {"black": 0, "blue": 0, "green": 0, "red": 0, "white": 0}
 ## The World Magics owned, by name ([constant WORLD_MAGICS]).
 var world_magics: Array[String] = []
 ## Every card owned, `{card, decks}` — the card's name and which of the
-## three decks it is in (0x1420). Empty until the starting deck is dealt:
-## that waits for the 1997 rarity table.
+## three decks it is in (0x1420); the first deck dealt by [StarterDeck].
 var cards: Array = []
 ## The deck in use, 0–2 (0x224C4), and the colours it was last played in
 ## (0x1EA20).
 var current_deck := 0
 var deck_colors: Array[String] = []
+## The three decks' names, "" for `Deck N`, and their notes — ours.
+var deck_names: Array[String] = ["", "", ""]
+var deck_notes: Array[String] = ["", "", ""]
 
 
 # ------------------------------------------------------------ the duels --
@@ -108,10 +110,13 @@ var deck_colors: Array[String] = []
 ## bit 1; but the world is made with that bit already set on ten towns,
 ## whose meaning there is not yet read, so the hero's links are kept here.)
 var mana_links: Array[int] = []
-## Life added to (or taken from) the next duel (0x224BC).
+## Lives added to (or taken from) the next duel (0x224BC, and the extra
+## lives 1–5 the 1997 game kept in 0x224C0).
 var next_duel_life := 0
-## A card the next duel starts with in play, "" for none (0x224C0).
+## A card the next duel starts with in play, "" for none (0x224C0 above 5).
 var next_duel_card := ""
+## The first move in the next duel (0x224C0 = 0).
+var next_duel_first_move := false
 ## Each duel won against a roaming creature: `{color, creature}`
 ## (0x21D28) — enough wins and they flee or pay tribute.
 var duel_victories: Array = []
@@ -129,7 +134,7 @@ var defeated_wizards: Array[String] = []
 ## Lairs explored (0x224AC): the more, the fewer and the stronger the
 ## creatures met.
 var lairs_explored := 0
-## The quest under way, `{}` for none (0x21CF8).
+## The quest under way, `{}` for none (0x21CF8; its fields in [WorldStatus]).
 var quest := {}
 
 
@@ -142,6 +147,9 @@ var monster_timer := 0
 var quest_timer := 0
 var siege_timer := 0
 var siege_active := false                       # 0x2A220
+## Quickening's ticks left (`Scards[6].worldmagic_duration`): while it
+## runs, every step goes a unit further ([WorldMagic]).
+var quickening := 0
 
 
 # ------------------------------------------------------------- the world --
@@ -158,7 +166,8 @@ var made_fingerprint := ""
 ## ([member ShandalarWorld.rand_state]).
 var dice := 0
 ## The roaming creatures and lairs (0x1EA2C: six slots and a siege), none
-## until they are made.
+## until they are made: `{slot, name, x, y, …}`, slots 0–5 roaming, 7 the
+## creature besieging a city (`town`, its site slot) ([WorldMagic]).
 var monsters: Array = []
 
 
@@ -168,9 +177,8 @@ var monsters: Array = []
 ## ([method AdventureSetup.resolve]) and the [param world] made from it:
 ## what the 1997 game gives a new hero (`InitializeNewGameState`, 1.3) —
 ## gold, food, an amulet of their colour and (3 − difficulty) more of
-## colours drawn by the dice, and their colour's first World Magic —
-## standing where the world puts them. The starting deck waits for the
-## 1997 rarity table.
+## colours drawn by the dice, their first deck ([StarterDeck]) and their
+## colour's first World Magic — standing where the world puts them.
 static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	var player := AdventurePlayer.new()
 	var hero: Dictionary = record.get("hero", {})
@@ -200,6 +208,10 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	for extra in maxi(int(start.get("amulets", 1)) - 1, 0):
 		var drawn: String = COLORS[rolls.below(5)]
 		player.amulets[drawn] = int(player.amulets[drawn]) + 1
+	# The first deck (ours after the amulets; 1997 dealt it first), every
+	# card in Deck 1 as `InitializeNewGameState` marks them.
+	for card_name in StarterDeck.deal(player.color, player.difficulty, rolls):
+		player.cards.append({"card": card_name, "decks": [0]})
 	player.dice = rolls.state
 	var own := AdventureSetup.color_number(player.color)
 	player.world_magics.append(WORLD_MAGICS[own * 2])
@@ -252,6 +264,17 @@ func duel_record() -> Dictionary:
 	return {"won": won, "lost": lost}
 
 
+## A line for the journal: [param event] (`duel`, `magic`, `quest`,
+## `saved`, `freed`, `treasure`, …), what happened in the 1997 game's
+## words ([param text], `@LOGSTRINGS`), where and when (the world's clock
+## and the day on the road), and [param more] ([HeroStats.record]).
+func log_event(event: String, text: String, more := {}) -> void:
+	var entry := {"event": event, "text": text, "x": position.x, "y": position.y, "time": monster_timer,
+		"day": quest_timer / WorldStatus.DAY}
+	entry.merge(more)
+	journal.append(entry)
+
+
 ## The amulets in all.
 func amulet_count() -> int:
 	var count := 0
@@ -292,14 +315,16 @@ func to_dict() -> Dictionary:
 			"facing": facing},
 		"carried": {"gold": gold, "food": food, "amulets": amulets,
 			"world_magics": world_magics, "cards": cards, "current_deck": current_deck,
-			"deck_colors": deck_colors},
+			"deck_names": deck_names, "deck_notes": deck_notes, "deck_colors": deck_colors},
 		"duels": {"next_duel_life": next_duel_life, "next_duel_card": next_duel_card,
+			"next_duel_first_move": next_duel_first_move,
 			"victories": duel_victories, "last_duel_colors": last_duel_colors,
 			"mana_links": mana_links, "record": duel_record()},
 		"record": {"journal": journal, "defeated_wizards": defeated_wizards,
 			"lairs_explored": lairs_explored, "quest": quest},
 		"clocks": {"monster_timer": monster_timer, "quest_timer": quest_timer,
-			"siege_timer": siege_timer, "siege_active": siege_active},
+			"siege_timer": siege_timer, "siege_active": siege_active,
+			"quickening": quickening},
 		"world": {
 			"seed": world.seed, "seed_text": world_seed_text, "slot_start": world.slot_start,
 			"color": world.color, "difficulty": world.difficulty, "generator": "1997 (1.3)",
@@ -349,7 +374,13 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 		if String(magic) in WORLD_MAGICS:
 			player.world_magics.append(String(magic))
 	player.cards = _whole(carried.get("cards", []))
-	player.current_deck = int(carried.get("current_deck", 0))
+	player.current_deck = clampi(int(carried.get("current_deck", 0)), 0, 2)
+	var titles: Array = carried.get("deck_names", [])
+	for slot in mini(titles.size(), 3):
+		player.deck_names[slot] = String(titles[slot])
+	var notes: Array = carried.get("deck_notes", [])
+	for slot in mini(notes.size(), 3):
+		player.deck_notes[slot] = String(notes[slot])
 	for key in carried.get("deck_colors", []):
 		player.deck_colors.append(String(key))
 	var duels: Dictionary = data.get("duels", {})
@@ -357,6 +388,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 		player.mana_links.append(int(slot))
 	player.next_duel_life = int(duels.get("next_duel_life", 0))
 	player.next_duel_card = String(duels.get("next_duel_card", ""))
+	player.next_duel_first_move = bool(duels.get("next_duel_first_move", false))
 	player.duel_victories = _whole(duels.get("victories", []))
 	player.last_duel_colors = _whole(duels.get("last_duel_colors", {}))
 	var kept: Dictionary = data.get("record", {})
@@ -370,6 +402,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	player.quest_timer = int(clocks.get("quest_timer", 0))
 	player.siege_timer = int(clocks.get("siege_timer", 0))
 	player.siege_active = bool(clocks.get("siege_active", false))
+	player.quickening = int(clocks.get("quickening", 0))
 	var saved_world: Dictionary = data.get("world", {})
 	var made := _world_from(saved_world)
 	if made == null:
@@ -424,7 +457,7 @@ static func _world_from(saved_world: Dictionary) -> ShandalarWorld:
 		made.world_magic_sites.append(int(slot))
 	for slot in saved_world.get("encounters", []):
 		var encounter: Dictionary = (slot as Dictionary).duplicate(true)
-		for key in ["x", "y", "town", "color", "monster_flags", "rules", "card_in_effect"]:
+		for key in ["x", "y", "town", "color", "monster_flags", "rules", "card_in_effect", "clues"]:
 			if encounter.has(key):
 				encounter[key] = int(encounter[key])
 		var held: Array[int] = []

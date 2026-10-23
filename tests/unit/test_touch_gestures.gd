@@ -290,3 +290,17 @@ func test_reset_forgets_every_finger() -> void:
 	assert_eq(g.mode(), TouchGestures.Mode.IDLE)
 	assert_eq(g.finger_count(), 0)
 	assert_eq(g.touch(0, Vector2(100, 100), false, 1100), [], "a lift after a reset is a stranger")
+
+
+## A pinch is a magnify at the midpoint (2026-10-23: the world map zooms
+## with it); two fingers sliding together are not one.
+func test_a_pinch_is_a_magnify_at_the_midpoint() -> void:
+	g.touch(0, Vector2(100, 100), true, 1000)
+	g.touch(1, Vector2(160, 100), true, 1010)
+	var out := g.drag(1, Vector2(200, 100), 1020)
+	assert_eq(_kinds(out), ["magnify"], "apart by 40 of 60, the midpoint 20 along")
+	assert_almost_eq(float(out[0].factor), 100.0 / 60.0, 0.001, "the span's growth")
+	assert_eq(out[0].pos, Vector2(150, 100))
+	out = g.drag(0, Vector2(120, 100), 1030)
+	assert_eq(_kinds(out), ["magnify"], "together again")
+	assert_almost_eq(float(out[0].factor), 80.0 / 100.0, 0.001)

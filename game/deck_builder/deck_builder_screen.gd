@@ -1944,7 +1944,7 @@ func _refresh_legality() -> void:
 		full = " ".join(problems)
 		color = Color8(232, 176, 96)
 	else:
-		var advice := deck.over_duplicate_limit()
+		var advice := deck.over_duplicate_limit(_with_tome())
 		if not advice.is_empty():
 			full = "There are too many of the following Cards in your deck: " \
 				+ ", ".join(advice)
@@ -1960,7 +1960,7 @@ func _refresh_legality() -> void:
 			#
 			# Asked only HERE, in the branch that can use the answer: this
 			# method runs on every card click.
-			var offences := deck.format_offences()
+			var offences := _format_offences()
 			if not offences.is_empty():
 				full = _format_warning(offences.size()) \
 					+ " " + " ".join(offences)
@@ -1969,7 +1969,7 @@ func _refresh_legality() -> void:
 	# states its main-deck rule. It rides after whatever else the line
 	# says, because it is the least of the three and never a refusal — see
 	# [method DeckModel.sideboard_advice] for why fifteen is fifteen.
-	var size_warning := DeckModel.size_advice(deck.total())
+	var size_warning := _size_advice(deck.total())
 	if not size_warning.is_empty():
 		full = size_warning if full == "This deck can be used in the duel." else full + "  " + size_warning
 		if problems.is_empty(): color = OriginalDialog.CHOICE
@@ -1997,7 +1997,7 @@ func _refresh_legality() -> void:
 ## and `Stats` otherwise, which writes the whole problem list out instead
 ## of clipping it to the strip.
 func _open_the_complaint() -> void:
-	if deck.problems().is_empty() and not deck.over_duplicate_limit().is_empty():
+	if deck.problems().is_empty() and not deck.over_duplicate_limit(_with_tome()).is_empty():
 		_open_extra_cards()
 		return
 	_open_stats()
@@ -2083,7 +2083,7 @@ func _update_count_line() -> void:
 		# [QoL] Under a sealed pool the number is COPIES IN HAND, not names
 		# — the question the pool poses — and the line says whose they are.
 		total = _copies_listed()
-		_count_label.text = "%d pool cards" % total
+		_count_label.text = "%d %s" % [total, _pool_caption()]
 	if _inventory.entry_count() > _inventory.page_size():
 		_count_label.text += " — showing %d-%d" % [first, last]
 	_inventory.tally = "%d card%s" % [total, "" if total == 1 else "s"]
@@ -2970,7 +2970,7 @@ func _fill_pack_cards(cards_list: GridContainer, pack: Dictionary) -> void:
 func _open_extra_cards() -> void:
 	if _dialog_busy():
 		return
-	var over := deck.over_duplicate_limit()
+	var over := deck.over_duplicate_limit(_with_tome())
 	var dialog := OriginalDialog.create("Extra Cards",
 		Vector2(520, 200.0 + 24.0 * mini(over.size(), 8)))
 	if over.is_empty():
@@ -2998,7 +2998,7 @@ func _open_extra_cards() -> void:
 
 func _trim_duplicates() -> void:
 	var before := deck.duplicate_model()
-	var removed := deck.trim_duplicates()
+	var removed := deck.trim_duplicates(_with_tome())
 	if removed == 0:
 		_say("There are no extra cards", true)
 		return
@@ -4893,7 +4893,7 @@ func _stats_page_deck(page: VBoxContainer) -> void:
 	# has never said WHY, and "Unrestricted" is the catch-all a deck lands
 	# in when it has broken something, so the one word most in need of an
 	# explanation was the one with none.
-	var offences := deck.format_offences()
+	var offences := _format_offences()
 	if not offences.is_empty():
 		var head := OriginalDialog.label(_format_warning(offences.size()), 13)
 		head.add_theme_color_override("font_color", Color8(232, 176, 96))
@@ -4995,8 +4995,8 @@ func _stats_page_deck(page: VBoxContainer) -> void:
 	if deck.proxy_problem() != "":
 		complaints.append(deck.proxy_problem())
 	complaints.append_array(deck.problems())
-	if not DeckModel.size_advice(deck.total()).is_empty():
-		complaints.append(DeckModel.size_advice(deck.total()))
+	if not _size_advice(deck.total()).is_empty():
+		complaints.append(_size_advice(deck.total()))
 	complaints.append_array(deck.sideboard_advice())
 	for problem in complaints:
 		var warn := OriginalDialog.label(problem, 13)
@@ -5808,7 +5808,7 @@ func _open_deck_menu() -> void:
 	dialog.z_index = 210
 	dialog.body().add_child(_menu_heading())
 	var first: Button = null
-	for label in MENU_ENTRIES:
+	for label in _menu_entries():
 		var line := _slab_button(label)
 		line.pressed.connect(_run_menu_entry.bind(label))
 		dialog.body().add_child(line)
@@ -5837,6 +5837,35 @@ func _open_deck_menu() -> void:
 	# the same order [DuelPause] needs for its own `Return to game`.
 	if first != null:
 		first.grab_focus()
+
+
+## The menu's entries ([constant MENU_ENTRIES]); the adventure's builder
+## words its own ([AdventureBuilder]).
+func _menu_entries() -> Array[String]:
+	return MENU_ENTRIES
+
+
+## Whether Tome of Enlightenment eases the duplicate limit: never here, the
+## adventure's builder when the hero owns it ([AdventureBuilder]).
+func _with_tome() -> bool:
+	return false
+
+
+## The tournament rules' complaints for the legality line, and its word on
+## a small deck — neither of which the adventure's decks answer to
+## ([AdventureBuilder]).
+func _format_offences() -> Array[String]:
+	return deck.format_offences()
+
+
+func _size_advice(count: int) -> String:
+	return DeckModel.size_advice(count)
+
+
+## What the Inventory's copies are called under a pool: the dealt pool's
+## here, the hero's own cards in the adventure ([AdventureBuilder]).
+func _pool_caption() -> String:
+	return "pool cards"
 
 
 func _close_deck_menu() -> void:

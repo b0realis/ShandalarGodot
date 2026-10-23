@@ -2475,6 +2475,46 @@ PIC_SCREENS: dict[str, list[str]] = {
     "world_frame": ["Advinter1024.pic"],
 }
 
+# THE PLACES' PICTURES (2026-10-23, the owner: *"upon visiting that
+# location an original graphic is displayed in a central pane"*): what the
+# 1.3 game showed in its map window as the hero arrived (512 x 280, no
+# palette of their own — the world frame's, `Advfac64.pic`), read in
+# `visitLocation.c` and `world_lair_monster_encounter.c`:
+#   - a village (`GET_TOWN_PIC`: `Village.pic`), a town or a city
+#     (`City.pic`), the wise man (`Wiseman3.pic`);
+#   - a wizard's castle by its colour, black, blue, green, red, white
+#     (`0246`, `0364`, `0335`, `0737`, `0028` — card illustrations);
+#   - a lair by its colour (`lair_backdrop_paths`: `0333`, `0873` — the
+#     sunken ship —, `0281`, `0329`, `0569`);
+#   - the siege's news flash (`Newsback.pic`);
+# and the dungeon board's ground (`CaveBkgd.pic`, 640 x 480, its own
+# palette), which 1997 opened straight onto. The visit pane wears them
+# ([VisitPane]).
+VISIT_PICTURES: dict[str, list[str]] = {
+    "visit_village": ["Village.pic"],
+    "visit_city": ["City.pic"],
+    "visit_wiseman": ["Wiseman3.pic"],
+    "visit_castle_black": ["0246.pic"],
+    "visit_castle_blue": ["0364.pic"],
+    "visit_castle_green": ["0335.pic"],
+    "visit_castle_red": ["0737.pic"],
+    "visit_castle_white": ["0028.pic"],
+    "visit_lair_black": ["0333.pic"],
+    "visit_lair_blue": ["0873.pic"],
+    "visit_lair_green": ["0281.pic"],
+    "visit_lair_red": ["0329.pic"],
+    "visit_lair_white": ["0569.pic"],
+    "visit_news": ["Newsback.pic"],
+    "visit_dungeon": ["CaveBkgd.pic"],
+}
+PIC_SCREENS.update(VISIT_PICTURES)
+## The palette a bare picture is painted with, by key, where it is not the
+## duel's ([constant PIC_PALETTE]): the places' pictures take the world
+## frame's, and are drawn whole — index 255 is a colour in them, not the
+## clear of a face.
+PIC_PALETTES: dict[str, list[str]] = {key: ["Advfac64.pic", "Advinter.pic"] for key in VISIT_PICTURES}
+PIC_OPAQUE: set[str] = set(VISIT_PICTURES)
+
 
 def import_pic_screens(index: dict[str, Path], dest: Path) -> None:
     """Decode each raw `.pic` screen into `<dest>/<key>.png`.
@@ -2590,11 +2630,12 @@ PicRgba = tuple[int, int, bytes, bool]
 
 
 def _raw_pic_rgba(key: str, path: Path,
-                  palette: bytes | None) -> PicRgba | None:
+                  palette: bytes | None, opaque: bool = False) -> PicRgba | None:
     """One raw `.pic` -> `(width, height, pixels, alpha)`, or None.
 
     `alpha` says whether `pixels` is RGBA (bare-index file, 255 clear) or
-    RGB (the file brought its own palette). NEVER RAISES: a player's copy
+    RGB (the file brought its own palette, or [param opaque] asks for the
+    whole picture in the palette given). NEVER RAISES: a player's copy
     can hold a file this cannot read and one of those must not end the
     import — the same guard `_cut_masked_pic` has carried since a real CD
     was first handed to this importer.
@@ -2613,6 +2654,11 @@ def _raw_pic_rgba(key: str, path: Path,
         print("  %-24s SKIPPED %s (no palette in it and none beside it)"
               % (key, path.name))
         return None
+    if opaque:
+        rgb = bytearray(len(indices) * 3)
+        for i, value in enumerate(indices):
+            rgb[i * 3:i * 3 + 3] = palette[value * 3:value * 3 + 3]
+        return width, height, bytes(rgb), False
     alpha = bytes(0 if value == PIC_CLEAR else 255 for value in indices)
     return width, height, paint(indices, palette, alpha), True
 
@@ -2759,15 +2805,15 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
         print("  %-24s <- %s (decoded %dx%d, palette: %s)"
               % (key, source, width, height, origin))
         return True
-    palette, origin = _resolve_palette(index, PIC_PALETTE)
-    decoded = _raw_pic_rgba(key, source, palette)
+    palette, origin = _resolve_palette(index, PIC_PALETTES.get(key, PIC_PALETTE))
+    decoded = _raw_pic_rgba(key, source, palette, key in PIC_OPAQUE)
     if decoded is None:
         return False
     width, height, pixels, alpha = decoded
     write_png(dest / (key + ".png"), width, height, pixels, alpha=alpha)
     print("  %-24s <- %s (decoded %dx%d, palette: %s)"
           % (key, source, width, height,
-             "its own" if not alpha else origin))
+             origin if alpha or key in PIC_OPAQUE else "its own"))
     return True
 
 

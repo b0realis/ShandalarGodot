@@ -36,6 +36,17 @@ signal hero_pressed
 signal save_pressed
 signal load_pressed
 signal exit_pressed
+## Return to main menu (the options).
+signal menu_pressed
+## The dungeon clues (the frame's gate, F4).
+signal clues_pressed
+## The small map was clicked: walk to [param tile].
+signal walk_requested(tile: Vector2i)
+## A World Magic's icon was clicked: cast key [param key] (1–5).
+signal cast_pressed(key: int)
+## Big buttons were switched (the options): the panel is to be made again
+## at the other size.
+signal big_switched
 ## The pointer came over a part of the HUD: the world's pointers step aside.
 signal hovered
 
@@ -56,42 +67,83 @@ const AMULETS := [["black", 2], ["blue", 1], ["green", 4], ["red", 3], ["white",
 ## active ones), their keys; then the menu buttons normal and lit.
 const MAGIC_CELL := Vector2(52, 54)
 const ROW_NORMAL := 0
+const ROW_LIT := 1
 const ROW_PRESSED := 2
+const ROW_KEYS := 3
 ## The round buttons: name, `Worlds.spr` frame (the lit one follows it),
 ## key, what it does.
 const BUTTONS := [["Deck", 48, "F1", "Your cards and your deck."],
 	["Map", 50, "M", "The map of the land you have seen."],
+	["Clues", 52, "F4", "What you have learned of the dungeons."],
 	["Hero", 54, "F5", "Your hero's journal and stats."]]
-## What each World Magic does, for its tip.
+## What each World Magic does, for its tip: the 1997 words
+## (`@WORLDMAGIC_EXPLAINS`).
 const MAGIC_TIPS := {
-	"Sleight of Hand": "Before a duel, you may draw a new hand once.",
-	"Haggler's Coin": "Cards sell for more in the towns.",
-	"Conjurer's Will": "Change your deck out in the wilds (spends a black amulet).",
-	"Amulet of Swampwalk": "Swamps no longer slow you.",
-	"Leap of Fate": "Leap to a place on the map at random (spends a blue amulet).",
-	"Tome of Enlightenment": "One more copy of a card allowed in your deck.",
-	"Quickening": "Walk at double pace for a while (spends a green amulet).",
-	"Fruit of Sustenance": "Forests feed you as you walk.",
-	"Staff of Thunder": "Strike the nearest roaming creature from the map (spends a red amulet).",
-	"Dwarven Pick": "Mountains no longer slow you.",
-	"Sword of Resistance": "Go at once to a town under siege (spends a white amulet).",
-	"Ring of the Guardian": "The wizards need more towns before they can win.",
+	"Sleight of Hand": "A clever duelist can switch antes. An ethical one won't.",
+	"Haggler's Coin": "Each village and city offers more cards for sale.",
+	"Conjurer's Will": "Risk one black amulet to adjust your deck outdoors.",
+	"Amulet of Swampwalk": "The Dragonfly provides a way to fly through swamps unslowed.",
+	"Leap of Fate": "Risk one blue amulet to instantly cross any distance.",
+	"Tome of Enlightenment": "The limit on duplicate spells in your deck is eased by one.",
+	"Quickening": "Risk one green amulet for a temporary burst of speed.",
+	"Fruit of Sustenance": "In the forests, you gain more food than you can eat.",
+	"Staff of Thunder": "Risk one red amulet to destroy the nearest creature.",
+	"Dwarven Pick": "Ancient power in this pick hastens mountain travels.",
+	"Sword of Resistance": "Risk one white amulet to reach a city under siege.",
+	"Ring of the Guardian": "The wizards now need 5 mana taps to cast Dominion.",
 }
 ## The keys, for the help (?): what the line under the world once said.
 const KEYS := [["Click", "walk there; the way is found"],
 	["Drag or arrows", "look around (W A S D too)"],
 	["Wheel", "zoom (+ and - too)"],
 	["Space", "back to your hero"],
+	["1 to 5", "cast a World Magic (or click its icon)"],
 	["M", "the map (M or Escape closes it)"],
+	["N", "the small map"],
 	["F1", "your deck"],
+	["F4", "the dungeon and castle clues"],
 	["F5", "your hero's journal and stats"],
 	["Ctrl+S", "save the adventure"],
 	["H", "these keys"],
+	["Drag a pane", "move it; it stays there"],
 	["Escape", "close what is open, or leave the world"]]
-## The options' entries: name and words. `Bar` says where the panel goes.
-const OPTIONS := [["Save", "Save"], ["Load", "Load"], ["Bar", ""], ["Exit", "Exit game"]]
+## The options' entries: name and words; the switches say how they stand
+## ([method _option_words]).
+const OPTIONS := [["Save", "Save"], ["Load", "Load"], ["Bar", ""], ["Minimap", ""],
+	["Quest", ""], ["Guides", ""], ["Places", ""], ["Big", ""], ["Pace", ""], ["Music", ""], ["Sound", ""],
+	["Menu", "Return to main menu"], ["Exit", "Exit game"]]
+## The switches that leave the options open, so the new setting shows.
+const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Pace", "Music", "Sound"]
+## BIG BUTTONS, for a finger (the owner, 2026-10-23: *"touch-pad support?
+## Maybe we can have bigger buttons on the pane with left and right arrows
+## at the distal ends for touch"*) [QoL]: the panel and its options made
+## [constant BIG] times the size, the panel's row scrolling under the
+## finger between two red arrows at its ends. On by itself where the
+## game's touch layer is ([TouchControls]); the options switch it,
+## remembered.
+const BIG_SETTING := "world_big_buttons"
+const BIG := 1.6
 ## Where the panel stands, remembered for the next adventure.
 const BAR_SETTING := "world_bar_at_bottom"
+## Whether the small map, the quest pane and the guide arrows show,
+## remembered.
+const MINIMAP_SETTING := "world_minimap"
+const QUEST_SETTING := "world_quest_pane"
+const GUIDES_SETTING := "world_guides"
+## Whether a place's kind and name float by the pointer over it (the owner,
+## 2026-10-23: *"when you hover over a place with mouse a floating helper
+## text with place category and name are displayed … turned on/off in
+## menu drop down pane"*).
+const PLACES_SETTING := "world_place_names"
+## Where a pane was dragged to, by its name: `[x, y]` on the screen.
+const PANE_SETTING := "world_pane_"
+## A press that moves no further than this is a click on a pane.
+const PANE_SLOP := 4.0
+## How fast the world's clock runs against the 1997 game's 60 ms tick
+## [QoL]: the hero walks faster, and everything else in the world keeps
+## pace with them, so a day's march costs the same food.
+const PACE_SETTING := "world_pace"
+const PACES := [[1.0, "as in 1997"], [1.5, "brisk"], [2.0, "swift"]]
 ## The hero's name in their colour of magic, each with the edge it reads
 ## on over the land.
 const NAME_INKS := {"white": [Color8(250, 246, 232), Color8(20, 10, 8)],
@@ -106,6 +158,8 @@ const HEIGHT := 28.0
 const HOVER_SECONDS := 0.6
 ## How long a notice stays.
 const NOTICE_SECONDS := 3.5
+## The clues pane with nothing known ([WorldClues]).
+const NONE_KNOWN := WorldClues.NONE_YET
 const INK := Color8(236, 222, 196)
 const GOLD := Color8(232, 190, 110)
 const LIT := Color8(255, 236, 170)
@@ -114,6 +168,28 @@ const EDGE := Color8(20, 10, 8)
 var player: AdventurePlayer
 var art := WorldArt.new()
 var buttons := {}
+## The small map in the corner away from the panel ([WorldMinimap]).
+var minimap: WorldMinimap
+## Whether the panel is made for a finger ([constant BIG]); read as the
+## panel is made, from [method big_wanted].
+var big := false
+var _row_scroll: ScrollContainer
+var _arrows := {}
+## The pane being dragged: `{pane, grip, from, moved}`.
+var _drag := {}
+## The notice's fade, stopped when a new notice comes.
+var _notice_fade: Tween
+## The hero line's colour, set when it changes; the hero pane's last look.
+var _inked := ""
+var _hero_seen := ""
+var _quest_pane: PanelContainer
+var _quest_lines: Label
+var _clues_panel: PanelContainer
+var _clues_list: VBoxContainer
+var _clues_text: Label
+## The clue slot shown in the clues pane.
+var clue_shown := -1
+var _key_marks: Array[TextureRect] = []
 ## True while the panel stands at the bottom of the screen.
 var bar_at_bottom := false
 var _top: VBoxContainer
@@ -125,13 +201,17 @@ var _amulet_numbers := {}
 var _magic_icons: Array[TextureRect] = []
 var _magic_names: Label
 var _hero_panel: PanelContainer
-var _hero_text: Label
+## The hero's stats in their pane ([HeroStats]).
+var hero_stats: HeroStats
 var _help_panel: PanelContainer
 var _options_menu: PanelContainer
 var _notice: Label
 var _tip: PanelContainer
 var _tip_name: Label
 var _tip_text: Label
+var _place_tip: PanelContainer
+var _place_name: Label
+var _place_kind: Label
 ## The part under the pointer, and how long it has rested there.
 var _hover: Control
 var _rested := 0.0
@@ -140,6 +220,7 @@ var _rested := 0.0
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	big = big_wanted()
 	_top = VBoxContainer.new()
 	_top.name = "Top"
 	_top.add_theme_constant_override("separation", 3)
@@ -157,11 +238,37 @@ func _ready() -> void:
 	_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	_bar.mouse_entered.connect(func() -> void: hovered.emit())
 	_top.add_child(_bar)
+	# The row between its two arrows; it scrolls only with big buttons.
+	var ends := HBoxContainer.new()
+	ends.name = "Ends"
+	ends.add_theme_constant_override("separation", 4)
+	ends.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bar.add_child(ends)
+	_row_scroll = ScrollContainer.new()
+	_row_scroll.name = "RowScroll"
+	_row_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_row_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_row_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER if big \
+		else ScrollContainer.SCROLL_MODE_DISABLED
+	_row_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	var row := HBoxContainer.new()
 	row.name = "Row"
-	row.add_theme_constant_override("separation", 10)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", int(10 * _k()))
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bar.add_child(row)
+	_row_scroll.add_child(row)
+	for side in [-1, 1]:
+		var arrow := RedArrow.new(side, _tall())
+		arrow.name = "ArrowLeft" if side < 0 else "ArrowRight"
+		arrow.focus_mode = Control.FOCUS_NONE
+		arrow.visible = false
+		arrow.pressed.connect(scroll_row.bind(side))
+		_arrows[side] = arrow
+	ends.add_child(_arrows[-1])
+	ends.add_child(_row_scroll)
+	ends.add_child(_arrows[1])
+	_row_scroll.get_h_scroll_bar().changed.connect(_show_arrows)
+	_row_scroll.get_h_scroll_bar().value_changed.connect(func(_value: float) -> void: _show_arrows())
 	_name = _label("", 16)
 	_name.name = "HeroLine"
 	_name.add_theme_constant_override("outline_size", 4)
@@ -174,8 +281,8 @@ func _ready() -> void:
 	_top.add_child(_under)
 	for key in STRIP:
 		var slot := _slot("Strip_" + key, "strip:" + key)
-		var icon := _frame_icon(key, HEIGHT)
-		slot.add_child(icon if icon != null else _label(STRIP_NAMES[key], 13, GOLD))
+		var icon := _frame_icon(key, _tall())
+		slot.add_child(icon if icon != null else _label(STRIP_NAMES[key], int(13 * _k()), GOLD))
 		_numbers[key] = _number(slot)
 		row.add_child(slot)
 	row.add_child(_divider())
@@ -193,14 +300,35 @@ func _ready() -> void:
 		for i in AdventurePlayer.WORLD_MAGICS.size():
 			var icon := TextureRect.new()
 			icon.name = "Magic_%d" % i
-			icon.custom_minimum_size = MAGIC_CELL * (HEIGHT / MAGIC_CELL.y)
+			icon.custom_minimum_size = MAGIC_CELL * (_tall() / MAGIC_CELL.y)
 			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			_rests_the_pointer(icon, "magic:%d" % i)
+			# The key that casts it, over it while it can be cast (1.3 draws
+			# the fourth row's number over the first row's icon).
+			var mark := TextureRect.new()
+			mark.name = "Key"
+			mark.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			mark.visible = false
+			if _active(i):
+				mark.texture = _cell("world_magics", ROW_KEYS * 12 + i)
+			icon.add_child(mark)
+			_key_marks.append(mark)
+			var magic_index := i
+			icon.gui_input.connect(func(event: InputEvent) -> void:
+				var click := event as InputEventMouseButton
+				if click != null and click.button_index == MOUSE_BUTTON_LEFT and not click.pressed \
+						and _active(magic_index) \
+						and Rect2(Vector2.ZERO, _magic_icons[magic_index].size).has_point(click.position):
+					_hide_tip()
+					cast_pressed.emit(magic_index / 2))
 			magics.add_child(icon)
 			_magic_icons.append(icon)
 	else:
-		_magic_names = _label("", 13, GOLD)
+		_magic_names = _label("", int(13 * _k()), GOLD)
 		_magic_names.name = "MagicNames"
 		magics.add_child(_magic_names)
 	row.add_child(magics)
@@ -216,6 +344,7 @@ func _ready() -> void:
 	row.add_child(round_buttons)
 	buttons["Deck"].pressed.connect(func() -> void: deck_pressed.emit())
 	buttons["Map"].pressed.connect(func() -> void: map_pressed.emit())
+	buttons["Clues"].pressed.connect(func() -> void: clues_pressed.emit())
 	buttons["Hero"].pressed.connect(func() -> void: hero_pressed.emit())
 	buttons["Options"].pressed.connect(toggle_options)
 	buttons["Help"].pressed.connect(toggle_help)
@@ -223,13 +352,44 @@ func _ready() -> void:
 		var button: BaseButton = buttons[key]
 		_rests_the_pointer(button, "button:" + key)
 		button.pressed.connect(_hide_tip)
+	minimap = WorldMinimap.new()
+	minimap.name = "Minimap"
+	add_child(minimap)
+	minimap.visible = bool(Settings.get_value(MINIMAP_SETTING, true))
+	_rests_the_pointer(minimap.land(), "minimap")
+	minimap.land().mouse_default_cursor_shape = Control.CURSOR_MOVE
+	minimap.land().gui_input.connect(func(event: InputEvent) -> void:
+		_pane_input(minimap, event, func(at: Vector2) -> void:
+			close_panels()
+			walk_requested.emit(minimap.tile_at(at))))
+	_quest_pane = _panel("QuestPane")
+	_quest_pane.add_theme_stylebox_override("panel", _glass(0.8, 0.45, 8))
+	_quest_lines = _label("", 15)
+	_quest_lines.name = "QuestLines"
+	_quest_pane.add_child(_quest_lines)
 	_hero_panel = _panel("HeroPanel")
-	_hero_text = _label("", 15)
-	_hero_text.name = "HeroText"
-	_hero_text.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	_hero_panel.add_child(_hero_text)
+	hero_stats = HeroStats.new()
+	_hero_panel.add_child(hero_stats)
 	_help_panel = _panel("HelpPanel")
 	_help_panel.add_child(_keys_grid())
+	_clues_panel = _panel("CluesPanel")
+	var clues := VBoxContainer.new()
+	clues.add_theme_constant_override("separation", 6)
+	clues.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var heading := _label("Dungeon & Castle Clues", 18, GOLD)
+	heading.name = "CluesTitle"
+	clues.add_child(heading)
+	_clues_list = VBoxContainer.new()
+	_clues_list.name = "CluesList"
+	_clues_list.add_theme_constant_override("separation", 0)
+	_clues_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clues.add_child(_clues_list)
+	_clues_text = _label("", 15)
+	_clues_text.name = "CluesText"
+	_clues_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_clues_text.custom_minimum_size = Vector2(380, 0)
+	clues.add_child(_clues_text)
+	_clues_panel.add_child(clues)
 	_options_menu = _panel("OptionsMenu")
 	var face_menu := _glass(0.9, 0.6, 8)
 	face_menu.set_content_margin_all(6)
@@ -260,6 +420,22 @@ func _ready() -> void:
 	_tip_text.name = "TipText"
 	lines.add_child(_tip_text)
 	add_child(_tip)
+	_place_tip = PanelContainer.new()
+	_place_tip.name = "PlaceTip"
+	_place_tip.add_theme_stylebox_override("panel", _glass(0.86, 0.5, 6))
+	_place_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place_tip.visible = false
+	var place_lines := VBoxContainer.new()
+	place_lines.add_theme_constant_override("separation", 0)
+	place_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place_tip.add_child(place_lines)
+	_place_name = _label("", 15, GOLD)
+	_place_name.name = "PlaceTipName"
+	place_lines.add_child(_place_name)
+	_place_kind = _label("", 13)
+	_place_kind.name = "PlaceTipKind"
+	place_lines.add_child(_place_kind)
+	add_child(_place_tip)
 	set_process(false)
 	place_bar(bool(Settings.get_value(BAR_SETTING, false)), false)
 	if player != null:
@@ -277,10 +453,14 @@ func show_player(adventure: AdventurePlayer) -> void:
 func refresh() -> void:
 	if player == null or _name == null:
 		return
-	_name.text = "%s · %s" % [player.name, player.difficulty_name()] if player.name != "" else ""
-	var inks: Array = NAME_INKS.get(player.color, [INK, EDGE])
-	_name.add_theme_color_override("font_color", inks[0])
-	_name.add_theme_color_override("font_outline_color", inks[1])
+	var line := "%s · %s" % [player.name, player.difficulty_name()] if player.name != "" else ""
+	if _name.text != line:
+		_name.text = line
+	if _inked != player.color:
+		_inked = player.color
+		var inks: Array = NAME_INKS.get(player.color, [INK, EDGE])
+		_name.add_theme_color_override("font_color", inks[0])
+		_name.add_theme_color_override("font_outline_color", inks[1])
 	_numbers["gold"].text = str(player.gold)
 	_numbers["food"].text = str(player.food)
 	_numbers["ankh"].text = str(player.mana_links.size())
@@ -289,8 +469,18 @@ func refresh() -> void:
 		_amulet_numbers[gem[0]].text = str(int(player.amulets.get(gem[0], 0)))
 	for i in _magic_icons.size():
 		_show_magic(i)
+	refresh_quest()
 	if _magic_names != null:
 		_magic_names.text = "World Magics: " + (", ".join(player.world_magics) if not player.world_magics.is_empty() else "none")
+	# The hero's pane, open, follows what it shows — rebuilt only when that
+	# changes, not every tick.
+	if hero_shown():
+		var seen := "%d|%d|%s|%d|%d|%s|%d" % [player.gold, player.food, str(player.amulets),
+			WorldStatus.days_on_road(player), player.journal.size(), str(player.world_magics),
+			player.cards.size()]
+		if seen != _hero_seen:
+			_hero_seen = seen
+			hero_stats.refresh()
 
 
 func cards_in_deck() -> int:
@@ -322,12 +512,29 @@ static func _amulet_of(i: int) -> String:
 	return AdventurePlayer.COLORS[i / 2 - 1]
 
 
+## Whether World Magic [param i] is working now: Quickening's burst of
+## speed while it runs [QoL] (1997 showed no sign of it).
+func magic_working(i: int) -> bool:
+	return AdventurePlayer.WORLD_MAGICS[i] == "Quickening" and player.quickening > 0
+
+
 func _show_magic(i: int) -> void:
 	var icon := _magic_icons[i]
 	var owned := player.owns(AdventurePlayer.WORLD_MAGICS[i])
-	var row := ROW_PRESSED if owned and _active(i) and not magic_lit(i) else ROW_NORMAL
-	icon.texture = _cell("world_magics", row * 12 + i)
+	var row := ROW_NORMAL
+	if magic_working(i):
+		row = ROW_LIT
+	elif owned and _active(i) and not magic_lit(i):
+		row = ROW_PRESSED
+	var shown := row * 12 + i
+	if int(icon.get_meta("cell", -1)) != shown:
+		icon.texture = _cell("world_magics", shown)
+		icon.set_meta("cell", shown)
 	icon.modulate = Color.WHITE if owned else Color(0.5, 0.47, 0.45, 0.72)
+	_key_marks[i].visible = _active(i) and magic_lit(i) and not magic_working(i)
+	icon.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if _active(i) and magic_lit(i) \
+		else Control.CURSOR_ARROW
+
 
 
 # ------------------------------------------------------ where it stands --
@@ -353,10 +560,247 @@ func place_bar(at_bottom: bool, remember := true) -> void:
 		_top.move_child(_under, 1)
 	_top.offset_left = 12
 	_top.offset_right = -12
-	var entry := _options_menu.find_child("Option_Bar", true, false) as Button
-	entry.text = "Panel at the top" if at_bottom else "Panel at the bottom"
+	# The small map in the corner away from the panel, the quest pane in
+	# the other — unless the player has put them elsewhere.
+	if not _place_remembered(minimap):
+		var corner := WorldMinimap.SIZE
+		minimap.anchor_left = 1.0
+		minimap.anchor_right = 1.0
+		minimap.anchor_top = 0.0 if at_bottom else 1.0
+		minimap.anchor_bottom = minimap.anchor_top
+		minimap.offset_left = -12.0 - corner.x
+		minimap.offset_right = -12.0
+		minimap.offset_top = 12.0 if at_bottom else -12.0 - corner.y
+		minimap.offset_bottom = minimap.offset_top + corner.y
+	# A pane put where the panel now stands is put back in its corner.
+	var band := _bar.size.y + _under.size.y + 20.0
+	for pane in [minimap, _quest_pane]:
+		var at: Variant = remembered(pane)
+		if at != null:
+			var top: float = (at as Vector2).y
+			if (at_bottom and top + (pane as Control).size.y > size.y - band) or (not at_bottom and top < band):
+				Settings.clear_value(PANE_SETTING + (pane as Control).name)
+				if pane == minimap:
+					place_bar(at_bottom, remember)
+					return
+	refresh_quest()
+	_refresh_options()
 	if remember:
 		Settings.set_value(BAR_SETTING, at_bottom)
+
+
+## THE SMALL MAP shown or hidden (the options, N), remembered.
+func show_minimap(shown: bool) -> void:
+	minimap.visible = shown
+	_drag = {}
+	Settings.set_value(MINIMAP_SETTING, shown)
+	_refresh_options()
+
+
+func minimap_shown() -> bool:
+	return minimap != null and minimap.visible
+
+
+## THE QUEST PANE shown or hidden (the options), remembered: it shows when
+## something calls the hero — a quest, a siege, a bonus for the next duel,
+## a wizard's mana taps — as the 1997 frame's quest panel did.
+func show_quest_pane(shown: bool) -> void:
+	Settings.set_value(QUEST_SETTING, shown)
+	refresh_quest()
+	_refresh_options()
+
+
+func quest_pane_wanted() -> bool:
+	return bool(Settings.get_value(QUEST_SETTING, true))
+
+
+func quest_pane_shown() -> bool:
+	return _quest_pane != null and _quest_pane.visible
+
+
+## The quest pane's lines, as the hero now stands ([WorldStatus]).
+func refresh_quest() -> void:
+	if _quest_pane == null:
+		return
+	var lines := WorldStatus.lines(player)
+	var text := "\n".join(lines)
+	if _quest_lines.text != text:
+		_quest_lines.text = text
+		_quest_pane.reset_size()
+	var shown := quest_pane_wanted() and not lines.is_empty()
+	_quest_pane.visible = shown
+	if not shown:
+		if _drag.get("pane") == _quest_pane:
+			_drag = {}
+		return
+	# In its corner away from the panel, its foot or head kept there as it
+	# grows; or where it was put, kept on the screen — never while dragged.
+	if _drag.get("pane") == _quest_pane:
+		return
+	if not _place_remembered(_quest_pane):
+		var y := size.y - 12.0 - _quest_pane.size.y if not bar_at_bottom else 12.0
+		_quest_pane.position = Vector2(12.0, maxf(y, 8.0))
+
+
+## THE PLACE'S NAME by the pointer over it: [param called] and its kind
+## ([param kind]) floating at [param at], kept on the screen; with the
+## place names switched off, nothing.
+func show_place(called: String, kind: String, at: Vector2) -> void:
+	if not places_wanted():
+		hide_place()
+		return
+	if _place_name.text != called or _place_kind.text != kind:
+		_place_name.text = called
+		_place_kind.text = kind
+		_place_tip.reset_size()
+	_place_tip.visible = true
+	var spot := at + Vector2(22, 20)
+	_place_tip.position = Vector2(clampf(spot.x, 4.0, maxf(4.0, size.x - _place_tip.size.x - 4.0)),
+		clampf(spot.y, 4.0, maxf(4.0, size.y - _place_tip.size.y - 4.0)))
+
+
+func hide_place() -> void:
+	if _place_tip != null:
+		_place_tip.visible = false
+
+
+func place_shown() -> String:
+	return _place_name.text if _place_tip != null and _place_tip.visible else ""
+
+
+static func places_wanted() -> bool:
+	return bool(Settings.get_value(PLACES_SETTING, true))
+
+
+## THE GUIDE ARROWS shown or hidden (the options), remembered.
+static func guides_wanted() -> bool:
+	return bool(Settings.get_value(GUIDES_SETTING, true))
+
+
+func show_guides(shown: bool) -> void:
+	Settings.set_value(GUIDES_SETTING, shown)
+	_refresh_options()
+
+
+# ------------------------------------------------------- moving panes --
+
+## A press, a drag or a let-go on [param pane] (the owner, 2026-10-23:
+## panes *"with rounded corners that can be moved at will"*): dragged
+## further than [constant PANE_SLOP] it moves, and is found there next
+## time; a press let go where it was made is a click, given to
+## [param on_click] with the point on the part pressed.
+func _pane_input(pane: Control, event: InputEvent, on_click := Callable()) -> void:
+	var mouse := event as InputEventMouse
+	if mouse == null:
+		return
+	var at := mouse.global_position - get_global_rect().position
+	var button := event as InputEventMouseButton
+	if button != null and button.button_index == MOUSE_BUTTON_LEFT:
+		if button.pressed:
+			_drag = {"pane": pane, "grip": at - _rect_of(pane).position, "from": at, "moved": false}
+		elif _drag.get("pane") == pane:
+			var moved: bool = _drag["moved"]
+			_drag = {}
+			if moved:
+				remember_pane(pane)
+			elif on_click.is_valid():
+				on_click.call(button.position)
+		return
+	if event is InputEventMouseMotion and _drag.get("pane") == pane:
+		# The button let go where this pane did not hear it (it was hidden
+		# under the press): the drag is over.
+		if (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT == 0:
+			_drag = {}
+			return
+		if not _drag["moved"] and at.distance_to(_drag["from"]) > PANE_SLOP:
+			_drag["moved"] = true
+			_hide_tip()
+		if _drag["moved"]:
+			place_pane(pane, at - _drag["grip"])
+
+
+## [param pane] at [param at] on the screen, kept on it.
+func place_pane(pane: Control, at: Vector2) -> void:
+	var held := pane.size
+	pane.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	pane.size = held
+	pane.position = Vector2(clampf(at.x, 4.0, maxf(4.0, size.x - held.x - 4.0)),
+		clampf(at.y, 4.0, maxf(4.0, size.y - held.y - 4.0)))
+
+
+## Remember where [param pane] stands.
+func remember_pane(pane: Control) -> void:
+	Settings.set_value(PANE_SETTING + pane.name, [pane.position.x, pane.position.y])
+
+
+## Where [param pane] was dragged to last, or null.
+func remembered(pane: Control) -> Variant:
+	var at: Variant = Settings.get_value(PANE_SETTING + pane.name, null)
+	if at is Array and (at as Array).size() == 2:
+		return Vector2(float(at[0]), float(at[1]))
+	return null
+
+
+func _place_remembered(pane: Control) -> bool:
+	var at: Variant = remembered(pane)
+	if at == null:
+		return false
+	place_pane(pane, at)
+	return true
+
+
+## Whether the panel should be made with big buttons: as the options
+## last set it, or else wherever the game's touch layer is on.
+static func big_wanted() -> bool:
+	var chosen: Variant = Settings.get_value(BIG_SETTING, null)
+	if chosen is bool:
+		return chosen
+	return TouchControls.should_be_active()
+
+
+## The size factor of the panel's parts: 1, or [constant BIG].
+func _k() -> float:
+	return BIG if big else 1.0
+
+
+## The icons' height in the row, at this panel's size.
+func _tall() -> float:
+	return HEIGHT * _k()
+
+
+## SCROLL THE ROW toward [param side] (-1 left, 1 right) by most of what
+## shows — the red arrows at the panel's ends, with big buttons.
+func scroll_row(side: int) -> void:
+	var step := int(_row_scroll.size.x * 0.7)
+	_row_scroll.scroll_horizontal = clampi(_row_scroll.scroll_horizontal + side * step, 0,
+		maxi(0, int(_row_scroll.get_h_scroll_bar().max_value - _row_scroll.size.x)))
+	_show_arrows()
+
+
+## The arrows show while the row is wider than the panel, each dimmed at
+## its end.
+func _show_arrows() -> void:
+	if _arrows.is_empty():
+		return
+	var bar := _row_scroll.get_h_scroll_bar()
+	var overflow := big and bar.max_value - bar.page > 1.0
+	for side in _arrows:
+		var arrow: RedArrow = _arrows[side]
+		arrow.visible = overflow
+		arrow.disabled = (side < 0 and bar.value <= 0.5) or (side > 0 and bar.value >= bar.max_value - bar.page - 0.5)
+
+
+func row_scroll() -> ScrollContainer:
+	return _row_scroll
+
+
+## How many times the 1997 pace the world's clock runs (the options).
+static func pace() -> float:
+	return float(PACES[pace_index()][0])
+
+
+static func pace_index() -> int:
+	return clampi(int(Settings.get_value(PACE_SETTING, 0)), 0, PACES.size() - 1)
 
 
 # ------------------------------------------------------- the panels --
@@ -364,7 +808,8 @@ func place_bar(at_bottom: bool, remember := true) -> void:
 ## THE HERO (the frame's faces, F5): the journal and the stats, floating
 ## beside the panel; again to close it.
 func toggle_hero() -> void:
-	_hero_text.text = "\n".join(hero_lines())
+	hero_stats.player = player
+	hero_stats.refresh()
 	_open(_hero_panel, not _hero_panel.visible, buttons["Hero"])
 
 
@@ -401,10 +846,48 @@ func close_options() -> bool:
 ## Close the hero's panel, the keys and the options; true when one was
 ## open.
 func close_panels() -> bool:
-	var was := hero_shown() or help_shown() or options_shown()
-	for panel in [_hero_panel, _help_panel, _options_menu]:
+	var was := hero_shown() or help_shown() or options_shown() or clues_shown()
+	for panel in [_hero_panel, _help_panel, _options_menu, _clues_panel]:
 		(panel as Control).visible = false
+	if _drag.get("pane") != minimap and _drag.get("pane") != _quest_pane:
+		_drag = {}
 	return was
+
+
+## THE CLUES (the frame's gate, F4): the castles and dungeons the hero has
+## learned of ([WorldClues]); again to close it.
+func toggle_clues() -> void:
+	show_clue(clue_shown)
+	_open(_clues_panel, not _clues_panel.visible, buttons["Clues"])
+
+
+func clues_shown() -> bool:
+	return _clues_panel != null and _clues_panel.visible
+
+
+## The clues pane listing what is known, slot [param index]'s clues under
+## the list (the first known when it is not known).
+func show_clue(index: int) -> void:
+	for child in _clues_list.get_children():
+		child.free()
+	var known := WorldClues.known(player.world) if player != null else [] as Array[int]
+	if not index in known:
+		index = known[0] if not known.is_empty() else -1
+	clue_shown = index
+	for slot in known:
+		var entry := _menu_entry("Clue_%d" % slot, WorldClues.title(slot))
+		entry.add_theme_color_override("font_color", LIT if slot == index else INK)
+		var picked := slot
+		entry.pressed.connect(func() -> void:
+			show_clue(picked)
+			_clues_panel.reset_size()
+			_keep_on_screen(_clues_panel), CONNECT_DEFERRED)
+		_clues_list.add_child(entry)
+	_clues_text.text = NONE_KNOWN if index < 0 else "\n".join(WorldClues.lines(player.world, index))
+
+
+func clue_text() -> String:
+	return _clues_text.text if _clues_text != null else ""
 
 
 ## What the hero's panel says: who they are, what they carry, their record
@@ -424,12 +907,20 @@ func hero_lines() -> Array[String]:
 		gems.append("%s %d" % [gem[0], int(player.amulets.get(gem[0], 0))])
 	lines.append("Amulets: " + ", ".join(gems))
 	lines.append("World Magics: " + (", ".join(player.world_magics) if not player.world_magics.is_empty() else "none"))
-	lines.append("Cards: %d" % player.cards.size() + ("" if not player.cards.is_empty() else " (the starting deck is yet to come)"))
+	lines.append("Cards: %d, %d in the deck" % [player.cards.size(), cards_in_deck()])
 	lines.append("")
 	var record := player.duel_record()
 	lines.append("Duels: %d won, %d lost · lairs explored: %d" % [record["won"], record["lost"], player.lairs_explored])
-	var seconds := int(player.monster_timer * HeroWalk.TICK)
-	lines.append("In the world: %d min %02d s" % [seconds / 60, seconds % 60])
+	var days := WorldStatus.days_on_road(player)
+	lines.append("Days on the road: %d" % days)
+	var bonus := WorldStatus.next_duel_line(player)
+	if bonus != "":
+		lines.append(bonus)
+	var quest := WorldStatus.quest_lines(player)
+	lines.append("Quest: " + (", ".join(quest) if not quest.is_empty() else "none"))
+	var taps := WorldStatus.tap_lines(player)
+	lines.append("The wizards: " + (", ".join(taps) if not taps.is_empty()
+		else "no city tapped yet (%d taps cast Dominion)" % WorldStatus.dominion(player)))
 	lines.append("World seed %s" % player.world_seed_text)
 	lines.append("")
 	if player.journal.is_empty():
@@ -437,7 +928,7 @@ func hero_lines() -> Array[String]:
 	else:
 		lines.append("Journal:")
 		for entry in player.journal.slice(maxi(player.journal.size() - 6, 0)):
-			lines.append("  " + str(entry))
+			lines.append("  " + String((entry as Dictionary).get("text", str(entry))))
 	return lines
 
 
@@ -461,11 +952,14 @@ func say(text: String) -> void:
 			if (panel as Control).visible:
 				under = maxf(under, (panel as Control).position.y + (panel as Control).size.y)
 		_notice.position = Vector2(x, under + 6)
+	_notice.position.y = clampf(_notice.position.y, 4.0, maxf(4.0, size.y - _notice.size.y - 4.0))
 	if is_inside_tree():
-		var fade := create_tween()
-		fade.tween_interval(NOTICE_SECONDS)
-		fade.tween_property(_notice, "modulate:a", 0.0, 0.8)
-		fade.tween_callback(func() -> void: _notice.visible = false)
+		if _notice_fade != null and _notice_fade.is_valid():
+			_notice_fade.kill()
+		_notice_fade = create_tween()
+		_notice_fade.tween_interval(NOTICE_SECONDS)
+		_notice_fade.tween_property(_notice, "modulate:a", 0.0, 0.8)
+		_notice_fade.tween_callback(func() -> void: _notice.visible = false)
 
 
 func notice() -> String:
@@ -477,7 +971,8 @@ func _open(panel: PanelContainer, shown: bool, beside: Control) -> void:
 	panel.visible = shown
 	if shown:
 		panel.reset_size()
-		_float(panel, _rect_of(beside).end.x - panel.size.x, 6.0)
+		if not _place_remembered(panel):
+			_float(panel, _rect_of(beside).end.x - panel.size.x, 6.0)
 
 
 ## [param part] floating beside the panel — under it, or over it when the
@@ -485,7 +980,29 @@ func _open(panel: PanelContainer, shown: bool, beside: Control) -> void:
 func _float(part: Control, x: float, gap: float) -> void:
 	var bar := _bar_rect()
 	var y := bar.position.y - gap - part.size.y if bar_at_bottom else bar.end.y + gap
-	part.position = Vector2(_fit_x(x, part.size.x), y)
+	part.position = Vector2(_fit_x(x, part.size.x), clampf(y, 4.0, maxf(4.0, size.y - part.size.y - 4.0)))
+
+
+## [param pane] kept whole on the screen after it changed its size or the
+## screen did: by the panel where it floats, or where it was put.
+func _keep_on_screen(pane: Control) -> void:
+	if not pane.visible or _drag.get("pane") == pane:
+		return
+	if remembered(pane) == null and pane != minimap:
+		_float(pane, pane.position.x, 6.0)
+	else:
+		place_pane(pane, pane.position)
+
+
+func _notification(what: int) -> void:
+	# The screen changed its size (a window, a turned device): the panes
+	# that were placed by hand stay on it.
+	if what == NOTIFICATION_RESIZED and _bar != null:
+		for pane in [_hero_panel, _help_panel, _clues_panel]:
+			_keep_on_screen(pane)
+		if minimap != null and remembered(minimap) != null:
+			_keep_on_screen(minimap)
+		refresh_quest()
 
 
 func _panel(panel_name: String) -> PanelContainer:
@@ -496,7 +1013,9 @@ func _panel(panel_name: String) -> PanelContainer:
 	panel.add_theme_stylebox_override("panel", face)
 	panel.visible = false
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.mouse_default_cursor_shape = Control.CURSOR_MOVE
 	panel.mouse_entered.connect(func() -> void: hovered.emit())
+	panel.gui_input.connect(func(event: InputEvent) -> void: _pane_input(panel, event))
 	add_child(panel)
 	return panel
 
@@ -524,15 +1043,15 @@ func key_lines() -> Array[String]:
 ## One of the options: lettered like the panels, lit under the pointer.
 func _menu_entry(entry_name: String, words: String) -> Button:
 	var entry := Button.new()
-	entry.name = "Option_" + entry_name
+	entry.name = entry_name if entry_name.begins_with("Clue_") else "Option_" + entry_name
 	entry.text = words
 	entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	entry.focus_mode = Control.FOCUS_NONE
-	entry.custom_minimum_size = Vector2(170, 0)
+	entry.custom_minimum_size = Vector2(170, 0) * _k()
 	var face := GameSkin.font("font_title")
 	if face != null:
 		entry.add_theme_font_override("font", face)
-	entry.add_theme_font_size_override("font_size", 16)
+	entry.add_theme_font_size_override("font_size", int(16 * _k()))
 	entry.add_theme_color_override("font_color", INK)
 	entry.add_theme_color_override("font_hover_color", LIT)
 	entry.add_theme_color_override("font_pressed_color", LIT)
@@ -549,13 +1068,16 @@ func _menu_entry(entry_name: String, words: String) -> Button:
 	entry.add_theme_stylebox_override("hover", lit)
 	entry.add_theme_stylebox_override("pressed", lit)
 	entry.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	entry.pressed.connect(func() -> void: _choose(entry_name))
+	if not entry_name.begins_with("Clue_"):
+		entry.pressed.connect(func() -> void: _choose(entry_name))
 	return entry
 
 
-## What an option does when chosen.
+## What an option does when chosen. A switch leaves the options open, so
+## the new setting shows.
 func _choose(entry_name: String) -> void:
-	close_options()
+	if not entry_name in SWITCHES:
+		close_options()
 	match entry_name:
 		"Save":
 			save_pressed.emit()
@@ -563,8 +1085,69 @@ func _choose(entry_name: String) -> void:
 			load_pressed.emit()
 		"Bar":
 			place_bar(not bar_at_bottom)
+		"Minimap":
+			show_minimap(not minimap_shown())
+		"Quest":
+			show_quest_pane(not quest_pane_wanted())
+		"Guides":
+			show_guides(not guides_wanted())
+		"Places":
+			Settings.set_value(PLACES_SETTING, not places_wanted())
+			hide_place()
+		"Big":
+			Settings.set_value(BIG_SETTING, not big)
+			big_switched.emit()
+		"Pace":
+			Settings.set_value(PACE_SETTING, (pace_index() + 1) % PACES.size())
+		"Music":
+			Settings.set_value("music_enabled", not Settings.music_enabled())
+			var music := get_node_or_null(^"/root/ShellMusic")
+			if music != null:
+				music.call(&"play")
+		"Sound":
+			Settings.set_value("sound_enabled", not Settings.sound_enabled())
+			GameAudio.apply_settings()
+		"Menu":
+			menu_pressed.emit()
 		"Exit":
 			exit_pressed.emit()
+	_refresh_options()
+
+
+## The words of option [param entry_name], a switch saying how it stands.
+func _option_words(entry_name: String) -> String:
+	match entry_name:
+		"Bar":
+			return "Panel at the top" if bar_at_bottom else "Panel at the bottom"
+		"Minimap":
+			return "Small map: " + ("on" if minimap_shown() else "off")
+		"Quest":
+			return "Quest pane: " + ("on" if quest_pane_wanted() else "off")
+		"Guides":
+			return "Guide arrows: " + ("on" if guides_wanted() else "off")
+		"Places":
+			return "Place names: " + ("on" if places_wanted() else "off")
+		"Big":
+			return "Big buttons: " + ("on" if big else "off")
+		"Pace":
+			return "Pace: " + String(PACES[pace_index()][1])
+		"Music":
+			return "Music: " + ("on" if Settings.music_enabled() else "off")
+		"Sound":
+			return "Sound: " + ("on" if Settings.sound_enabled() else "off")
+	for entry in OPTIONS:
+		if entry[0] == entry_name:
+			return entry[1]
+	return entry_name
+
+
+func _refresh_options() -> void:
+	if _options_menu == null:
+		return
+	for entry in OPTIONS:
+		var button := _options_menu.find_child("Option_" + entry[0], true, false) as Button
+		if button != null:
+			button.text = _option_words(entry[0])
 
 
 # ---------------------------------------------------------- the tips --
@@ -578,7 +1161,8 @@ func _rests_the_pointer(part: Control, tip: String) -> void:
 		hovered.emit()
 		_hover = part
 		_rested = 0.0
-		_tip.visible = false
+		if _tip != null:
+			_tip.visible = false
 		set_process(true))
 	part.mouse_exited.connect(func() -> void:
 		if _hover == part:
@@ -627,25 +1211,31 @@ func tip_for(tip: String) -> Array[String]:
 	match kind:
 		"strip":
 			return [STRIP_NAMES[key], STRIP_TIPS[key]]
+		"minimap":
+			return ["Small map (N)", "The land round your hero. Click on it to walk there."]
 		"amulet":
 			var spends := ""
 			for i in AdventurePlayer.WORLD_MAGICS.size():
 				if _active(i) and _amulet_of(i) == key:
 					spends = AdventurePlayer.WORLD_MAGICS[i]
-			return ["%s amulet" % key.capitalize(), "Each one powers %s once." % spends]
+			return ["%s amulet" % key.capitalize(), "Casting %s risks one." % spends]
 		"magic":
 			var i := int(key)
 			var magic: String = AdventurePlayer.WORLD_MAGICS[i]
 			var state := ""
 			if player != null and not player.owns(magic):
 				state = " Not yours yet."
+			elif player != null and magic_working(i):
+				state = " Working now."
 			elif player != null and _active(i) and not magic_lit(i):
 				state = " No %s amulet left to power it." % _amulet_of(i)
+			elif player != null and _active(i):
+				state = " Click, or press %d." % (i / 2)
 			return [magic, MAGIC_TIPS[magic] + state]
 		"button":
 			match key:
 				"Options":
-					return ["Options", "Save, load, the panel at the top or the bottom, exit the game."]
+					return ["Options", "Save, load, the panel, the panes and the guide arrows, the pace, music and sound, the main menu, exit."]
 				"Help":
 					return ["Keys (H)", "How to walk, look and the keys."]
 			for button_row in BUTTONS:
@@ -696,7 +1286,7 @@ func _slot(slot_name: String, tip: String) -> HBoxContainer:
 
 
 func _number(slot: HBoxContainer) -> Label:
-	var number := _label("0", 16)
+	var number := _label("0", int(16 * _k()))
 	number.name = "Number"
 	slot.add_child(number)
 	return number
@@ -715,7 +1305,7 @@ func _room(room_name: String) -> Control:
 ## A thin gold line between the purse and the amulets.
 func _divider() -> Control:
 	var line := ColorRect.new()
-	line.custom_minimum_size = Vector2(1, HEIGHT - 6)
+	line.custom_minimum_size = Vector2(1, _tall() - 6)
 	line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.color = Color(GOLD, 0.3)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -743,7 +1333,7 @@ func _amulet_icon(color: String, frame: int) -> Control:
 	var sheet := art.texture("world_amulets")
 	if sheet == null:
 		var disc := ColorRect.new()
-		disc.custom_minimum_size = Vector2(12, 12)
+		disc.custom_minimum_size = Vector2(12, 12) * _k()
 		disc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		disc.color = {"black": Color8(60, 50, 60), "blue": Color8(60, 120, 220), "green": Color8(50, 160, 70),
 			"red": Color8(210, 50, 40), "white": Color8(240, 236, 220)}[color]
@@ -751,7 +1341,7 @@ func _amulet_icon(color: String, frame: int) -> Control:
 		return disc
 	var icon := TextureRect.new()
 	icon.texture = _cell("world_amulets", frame)
-	icon.custom_minimum_size = Vector2(12, 17) * (HEIGHT - 4.0) / 17.0
+	icon.custom_minimum_size = Vector2(12, 17) * (_tall() - 4.0) / 17.0
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -776,10 +1366,10 @@ func _round_button(button_name: String, frame: int) -> BaseButton:
 		round.texture_pressed = _cell("world_magics", frame + 1)
 		round.ignore_texture_size = true
 		round.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-		round.custom_minimum_size = MAGIC_CELL * ((HEIGHT + 2.0) / MAGIC_CELL.y)
+		round.custom_minimum_size = MAGIC_CELL * ((_tall() + 2.0) / MAGIC_CELL.y)
 		button = round
 	else:
-		button = UiChrome.menu_button(button_name, Vector2(54, HEIGHT), 12)
+		button = UiChrome.menu_button(button_name, Vector2(54, _tall()), int(12 * _k()))
 	button.name = button_name
 	button.focus_mode = Control.FOCUS_NONE
 	buttons[button_name] = button
@@ -790,7 +1380,7 @@ func _round_button(button_name: String, frame: int) -> BaseButton:
 ## the save icon … but the icon now means options"*).
 func _options_button() -> BaseButton:
 	var button: BaseButton
-	var icon := _frame_icon("book", HEIGHT)
+	var icon := _frame_icon("book", _tall())
 	if icon != null:
 		var book := TextureButton.new()
 		book.texture_normal = icon.texture
@@ -802,7 +1392,7 @@ func _options_button() -> BaseButton:
 		button = book
 		icon.free()
 	else:
-		button = UiChrome.menu_button("Options", Vector2(64, HEIGHT), 12)
+		button = UiChrome.menu_button("Options", Vector2(64, _tall()), int(12 * _k()))
 	button.name = "Options"
 	button.focus_mode = Control.FOCUS_NONE
 	buttons["Options"] = button
@@ -815,11 +1405,11 @@ func _help_button() -> Button:
 	button.name = "Help"
 	button.text = "?"
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(22, HEIGHT)
+	button.custom_minimum_size = Vector2(22, _tall()) * Vector2(_k(), 1.0)
 	var face := GameSkin.font("font_title")
 	if face != null:
 		button.add_theme_font_override("font", face)
-	button.add_theme_font_size_override("font_size", 24)
+	button.add_theme_font_size_override("font_size", int(24 * _k()))
 	button.add_theme_color_override("font_color", GOLD)
 	button.add_theme_color_override("font_hover_color", LIT)
 	button.add_theme_color_override("font_pressed_color", LIT)

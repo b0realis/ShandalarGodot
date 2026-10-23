@@ -600,6 +600,13 @@ static var _artists: Dictionary = {}
 static var _rarities: Dictionary = {}
 
 
+## The rarity [param card_name] was printed at in [param set_code], "" when
+## that set did not print it (the adventure's base set, [StarterDeck]).
+static func printed_rarity(card_name: String, set_code: String) -> String:
+	_ensure_printings()
+	return String(_rarities.get("%s|%s" % [set_code, card_name], ""))
+
+
 ## Rarity of the displayed printing, falling back to the first known printing.
 ## Built eagerly with artist credits; cleared whenever enabled packs change.
 static func rarity_of(card_name: String, set_code := "") -> String:
