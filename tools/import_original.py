@@ -529,6 +529,16 @@ MANIFEST: dict[str, list[str]] = {
     "world_ego_m":           ["spr/ego_m.spr", "ego_m.spr"],
     "world_ego_f":           ["spr/ego_f.spr", "ego_f.spr"],
     "world_sego_f":          ["spr/sego_f.spr", "sego_f.spr"],
+    # THE WORLD SCREEN'S ICONS (2026-10-22, the owner: floating icons
+    # "based on old 1997 frame icons"): `Worlds.spr`, which 1.3 loads into
+    # its World Magic button bank — twelve icons in four rows (normal, lit,
+    # the five active ones pressed, their keys 1-5), then the frame's four
+    # menu buttons normal and lit (the deck's spellbook, the map's scroll,
+    # the dungeon clues' gate, the hero's faces) and a card, a dagger, an
+    # ankh and a skull; and `Amsprite.spr`, the five amulets (white, blue,
+    # black, red, green). The frame itself is `world_frame` (PIC_SCREENS).
+    "world_magics":          ["worlds.spr"],
+    "world_amulets":         ["amsprite.spr"],
     # THE TITLE MENU'S SPRITE, `Begin.spr` (2026-10-08, the owner: *"Lets
     # import every frame there but we will use only icon for now"*): ALL
     # EIGHTEEN frames, one column of 265x24 cells, top to bottom —
@@ -2459,6 +2469,10 @@ def import_portraits(index: dict[str, Path], dest: Path) -> None:
 PIC_SCREENS: dict[str, list[str]] = {
     "character_select_background": ["Advfac64.pic"],
     "adventure_hero_background": ["Menu4.pic"],
+    # The adventure screen's frame at 1024 x 768 (`Advinter1024.pic`, every
+    # install has it): its painted gold, food, ankh and book, cut by the
+    # world screen's floating icons ([WorldHud]).
+    "world_frame": ["Advinter1024.pic"],
 }
 
 
@@ -2650,6 +2664,8 @@ WORLD_SHEETS: dict[str, tuple[int, int, int, int]] = {
     "world_ego_m": (40, 154, 108, 5),
     "world_ego_f": (40, 154, 108, 5),
     "world_sego_f": (40, 154, 108, 5),
+    "world_magics": (60, 52, 54, 12),
+    "world_amulets": (5, 12, 17, 5),
 }
 for _key, (_cells, _w, _h, _columns) in WORLD_SHEETS.items():
     SPR_SHEETS[_key] = (MANIFEST[_key], _cells, _w, _h)

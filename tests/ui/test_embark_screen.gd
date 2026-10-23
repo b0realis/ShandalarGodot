@@ -228,7 +228,7 @@ func test_randomize_draws_every_choice() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	var seen := {"portrait": {}, "player_name": {}, "walker": {}, "color": {}, "playmat_color": {},
-		"playmat_type": {}, "difficulty": {}, "seed_text": {}, "packs": {}}
+		"playmat_type": {}, "difficulty": {}, "seed_text": {}, "packs": {}, "figure_colors": {}}
 	for draw in 24:
 		screen.randomize_all(rng)
 		var setup := screen.setup
@@ -251,6 +251,84 @@ func test_randomize_draws_every_choice() -> void:
 		if key == "packs" and screen._pack_checks.is_empty():
 			continue
 		assert_gt((seen[key] as Dictionary).size(), 1, "%s is drawn" % key)
+
+
+## The owner, 2026-10-22: "when game starts lets make an autosave with
+## initial AdventurePlayer stats (by player name and time hash)".
+func test_setting_out_saves_the_adventure() -> void:
+	AdventurePlayer.saves_folder = "user://adventure_tests_embark"
+	_clear_saves()
+	screen.setup.player_name = "Ann Inkpot"
+	screen.setup.seed_text = "4242"
+	var record := screen.setup.resolve({})
+	var opened := screen.set_out(record, AdventureSetup.make_world(record))
+	var saves := AdventurePlayer.list_saves()
+	assert_eq(saves.size(), 1, "saved as it sets out")
+	assert_eq(saves[0]["name"], "Ann Inkpot")
+	assert_true(String(saves[0]["path"]).get_file().begins_with("Ann-Inkpot-"), "by name and a hash")
+	assert_eq(opened.player.name, "Ann Inkpot", "the world screen shows that adventure")
+	assert_eq(AdventurePlayer.load_from(String(saves[0]["path"])).gold, opened.player.gold)
+	opened.free()
+	_clear_saves()
+	AdventurePlayer.saves_folder = AdventurePlayer.SAVES_FOLDER
+
+
+func _clear_saves() -> void:
+	var dir := DirAccess.open(AdventurePlayer.saves_folder)
+	if dir != null:
+		for file_name in dir.get_files():
+			dir.remove(file_name)
+
+
+## The owner, 2026-10-22: the walking figure "colored — boots, pants,
+## body, arms, hair, skin", chosen here, randomized, and "a default button
+## that reuses the OG old game figures".
+func test_the_figure_is_dressed_here_and_1997_undresses_it() -> void:
+	var row := _find("FigureColors") as Control
+	assert_not_null(row)
+	for name in ["Hair", "Skin", "Body", "Arms", "Pants", "Boots"]:
+		assert_not_null(_find("Figure" + name), name + " has a swatch")
+	assert_not_null(_find("FigureOriginal"), "and 1997 its button")
+	assert_not_null(_find("FigurePreview"), "the figure shown under its colours")
+	screen.choose_figure_color("hair", "blond")
+	screen.choose_figure_color("boots", "brown")
+	assert_eq(screen.setup.figure_colors, {"hair": "blond", "boots": "brown"})
+	assert_string_contains((_find("FigureHair") as Button).tooltip_text, "Blond")
+	screen.setup.player_name = "Ann"
+	assert_eq(screen.setup.resolve({})["hero"]["figure_colors"], {"hair": "blond", "boots": "brown"},
+		"the record carries them")
+	screen.open_figure_colors(0)
+	var popup := _find("FigureColorsPopup") as PopupPanel
+	assert_not_null(popup, "a swatch opens its colours")
+	assert_eq(popup.find_children("Pick_*", "Button", true, false).size(), 1 + HeroColors.HAIR.size(),
+		"1997 and the hair colours")
+	popup.hide()
+	(_find("FigureOriginal") as Button).pressed.emit()
+	assert_eq(screen.setup.figure_colors, {}, "1997: the old game's own figure")
+	assert_string_contains((_find("FigureHair") as Button).tooltip_text, "As in 1997")
+
+
+## The owner, 2026-10-22: "move the red arrows to each side of portrait …
+## move mini figurine preview below the color choices".
+func test_the_arrows_flank_the_face_and_the_figure_walks_under_its_colours() -> void:
+	await get_tree().process_frame
+	var face := (_find("Portrait") as Control).get_global_rect()
+	var back := (_find("PreviousFace") as Control).get_global_rect()
+	var forward := (_find("NextFace") as Control).get_global_rect()
+	assert_lte(back.end.x, face.position.x, "the arrow before on the left of the face")
+	assert_gte(forward.position.x, face.end.x, "the arrow after on its right")
+	assert_almost_eq(back.get_center().y, face.get_center().y, 8.0, "level with the face's middle")
+	var name_band := (_find("FaceName") as Control).get_global_rect()
+	assert_true(face.encloses(name_band), "the face's name on the face")
+	var row := _find("FigureColors") as Control
+	var figure := _find("FigurePreview") as Control
+	assert_eq(figure.get_parent(), row.get_parent())
+	assert_eq(figure.get_index(), row.get_index() + 1, "next under the colours")
+	if figure.visible:
+		# Without the 1997 sheets (CI) there is no figure to show.
+		assert_gte(figure.get_global_rect().position.y, row.get_global_rect().end.y, "under the colours")
+		assert_almost_eq(figure.get_global_rect().get_center().x, row.get_global_rect().get_center().x, 2.0,
+			"in the middle")
 
 
 func test_the_stars_go_one_to_five_and_back() -> void:

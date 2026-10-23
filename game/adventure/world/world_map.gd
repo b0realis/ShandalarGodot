@@ -72,6 +72,3 @@ func _draw() -> void:
 	if fmod(_blink, 0.66) < 0.33:
 		var hero := origin + Vector2((hero_tile.x + hero_tile.y + 1) * step, (hero_tile.y - hero_tile.x) * step)
 		draw_rect(Rect2(hero - Vector2(step, step) * 0.6, Vector2(step, step) * 1.2), Color.WHITE)
-	var font := get_theme_default_font()
-	draw_string(font, Vector2(16, size.y - 16), "The map of the world · M or Escape: back",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color8(236, 222, 196))

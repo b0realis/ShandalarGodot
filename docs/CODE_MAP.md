@@ -20,9 +20,35 @@
   trees and rocks, sites and the hero, depth-sorted), or plain without the
   sheets.
 - `game/adventure/world/world_screen.gd` and
-  `game/adventure/world/world_screen.tscn`: `WorldScreen`, the world full
-  screen — `look`, `set_zoom`, `back_to_hero`, `toggle_map`, `leave`, the
-  arrival note.
+  `game/adventure/world/world_screen.tscn`: `WorldScreen`, the adventure
+  full screen — `show_player`, `walk_to_tile` (a click walks), `advance`
+  (the world's 60 ms ticks), `tile_at`, `pointer_for` (the walking man or
+  the door), `look`, `set_zoom`, `back_to_hero`, `toggle_map`, `leave`, the
+  arrival note and the HUD (gold, food, amulets).
+- `game/adventure/world/hero_walk.gd`: `HeroWalk`, walking at the 1.3 pace
+  tick for tick (`tick`: terrain, roads, hunger, food and the clocks) on a
+  way found around the sea (`plan`, `walk_to`; Godot's `AStarGrid2D`).
+- `game/adventure/world/world_cursors.gd`: `WorldCursors`, the drawn
+  pointers — the walking man and the open door (`image`, `wear`,
+  `take_off`).
+- `game/adventure/world/world_hud.gd`: `WorldHud`, the floating panel of
+  1997 frame icons, as wide as the screen — the strip (`world_frame`'s
+  painted gold, food, ankh and book: `FRAME_ICONS`), the amulets
+  (`world_amulets`), the World Magics (`world_magics`, `magic_lit`), the
+  round buttons (deck, map, hero, the book for the options: `OPTIONS`, ?
+  for the keys: `KEYS`), the name in the hero's colour (`NAME_INKS`);
+  `place_bar` (top or bottom, `BAR_SETTING`), `toggle_hero` / `hero_lines`,
+  `toggle_help`, `toggle_options`, `close_panels`, the resting pointer's
+  name (`tip_for`, `show_tip`, `HOVER_SECONDS`), `say` (a notice);
+  `WorldScreen.save_now`, `open_load` (the saves over the world),
+  `exit_game`, `show_deck`.
+- `game/adventure/world/hero_colors.gd`: `HeroColors`, the walking figure's
+  colours — `PARTS`, the choices (`HAIR`, `SKIN`, `CLOTH`), `part_of` (a
+  1997 pixel's part by colour and height), `find_parts`, `ramp`, `dress`,
+  `dressed` (the hero's sheet in their colours), `random`, `to_text` /
+  `from_text`; `WorldView.hero_sheet` draws it.
+- `game/adventure/figure_preview.gd`: `FigurePreview`, the dressed figure
+  walking under the Embark screen's colour swatches.
 - `game/adventure/world/world_map.gd`: `WorldMap`, the map of the world,
   explored land only (`shows`, `explored_only`). `WorldView.fog` and
   `DEFAULT_ZOOM` (2): unseen land dark, twice the 1997 pixels.
@@ -31,11 +57,34 @@
   `show_generating` (the bottom strip while the world is made: the
   hourglass, "Conjuration of Shandalar World", `stars`), `randomize_all`
   (Randomize: every choice drawn, the name by `AdventureSetup.random_name`
-  from `FIRST_NAMES` and `SURNAMES`), `_make_world_aside` (the world made on a
+  from `FIRST_NAMES` and `SURNAMES`, the figure's colours by
+  `HeroColors.random`), `choose_figure_color`, `reset_figure_colors`
+  (1997), `open_figure_colors` (a part's popup), `_make_world_aside` (the world made on a
   thread, waited for in `_exit_tree`).
 - `tools/import_original.py`: `WORLD_SHEETS`, `spr_frame_tops`, the
   `world_*` rows; `tools/skin_catalogue.py`: "The adventure world".
-- `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`.
+- `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
+  `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`.
+
+## The adventurer and the saved adventures (2026-10-22)
+
+- `game/adventure/adventure_player.gd`: `AdventurePlayer`, everything one
+  game keeps, by the 1997 save's parts — the hero, where they stand, what
+  they carry (gold, food, `amulets`, `world_magics`, `cards`), the duels
+  (`mana_links`, `next_duel_life`, `duel_victories`), the record
+  (`journal`, `quest`, `defeated_wizards`), the clocks, the world as it
+  stands; `begin` (a new hero as 1.3 starts one), `make_id` (name and a
+  hash of the moment), `to_dict` / `from_dict` (readable JSON),
+  `autosave`, `save`, `load_from`, `list_saves`, `world_intact`.
+- `game/adventure/load_adventure_screen.gd` and
+  `game/adventure/load_adventure_screen.tscn`: `LoadAdventureScreen`, the
+  saved adventures newest first — `refresh`, `continue_adventure`,
+  `open_save`, `leave`.
+- `game/adventure/embark_screen.gd`: `set_out` (the adventure begun,
+  autosaved, its world screen); `game/main.gd`: Save / Load opens the
+  saved adventures, or says how one comes to be.
+- `tests/unit/test_adventure_player.gd`,
+  `tests/ui/test_load_adventure_screen.gd`.
 
 ## The Embark screen: a new adventure's hero (2026-10-22)
 

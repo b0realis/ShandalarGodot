@@ -34,6 +34,12 @@ var camera := Vector2(0, 0)
 var hero := Vector2(0, 0)
 var hero_walker := "male"
 var hero_facing := 0
+## The walking figure's step, 0 standing, 1–4 walking (`g_world_player_
+## animation_frame`): the frame is the facing's fifth plus the step.
+var hero_step := 0
+## The figure's sheet dressed in the hero's colours ([HeroColors]), or null
+## for the 1997 one.
+var hero_sheet: Texture2D
 ## Twice the 1997 pixels by default (the owner's choice, 2026-10-22): crisp,
 ## and about the original window's view scaled up; the wheel zooms.
 var zoom := DEFAULT_ZOOM
@@ -162,10 +168,9 @@ func _draw_1997(visible: Array[Vector2i]) -> void:
 		if not fog or world.is_explored(tile.x, tile.y):
 			_draw_ground_halves(tile, queue)
 	var at := project(hero)
-	var frame := ((hero_facing + 2) & 7) * 5
+	var frame := ((hero_facing + 2) & 7) * 5 + clampi(hero_step, 0, 4)
 	_sprite("world_sego_f", frame, at - Vector2(77, 61))
-	queue.append([at.y, queue.size(), "world_ego_f" if hero_walker == "female" else "world_ego_m",
-		frame, at - Vector2(77, 61)])
+	queue.append([at.y, queue.size(), HERO, frame, at - Vector2(77, 61)])
 	# Up by the foot's height; the later of two at one height behind.
 	queue.sort_custom(func(a: Array, b: Array) -> bool:
 		if a[0] != b[0]:
@@ -190,8 +195,17 @@ func _draw_fog(visible: Array[Vector2i]) -> void:
 			left + Vector2(128, 0), left + Vector2(64, 32)]), FOG_EDGE if edge else FOG)
 
 
+## The hero's place in the draw queue: their sheet, dressed or 1997.
+const HERO := "hero"
+
+
 func _sprite(key: String, frame: int, at: Vector2) -> void:
-	var sheet := art.texture(key)
+	var sheet: Texture2D
+	if key == HERO:
+		key = "world_ego_f" if hero_walker == "female" else "world_ego_m"
+		sheet = hero_sheet
+	if sheet == null:
+		sheet = art.texture(key)
 	if sheet == null:
 		return
 	var rect := art.frame_rect(key, frame)

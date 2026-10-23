@@ -3,8 +3,8 @@ extends GutTest
 ## Celtic-knot square with its pink gem at the left of each title-menu
 ## button: at rest, hovered (the pointer, the focus, and the press — the
 ## owner's three states: the 1997 press frame is a smaller 22x22 bullet,
-## which read as the icon shrinking), and dimmed for the two placeholders,
-## Shandalar and Save / Load, which stay clickable. The art is the
+## which read as the icon shrinking), and dimmed for a placeholder, which
+## stays clickable (Shandalar and Save / Load were, until 2026-10-22). The art is the
 ## imported skin's `begin_menu` sheet; a stand-in sheet is put in the skin's cache here, one colour per 24px
 ## row, so a cell is known by its colour and no player's art is needed.
 ##
@@ -149,16 +149,15 @@ func _rows(title: Node) -> Dictionary:
 	return rows
 
 
-## Shandalar is lit since its Embark screen (2026-10-22); Save / Load is
-## still the one placeholder.
-func test_the_title_menu_wears_eight_bullets_one_dimmed() -> void:
+## Shandalar is lit since its Embark screen, and Save / Load since the
+## adventures are saved (both 2026-10-22): no placeholder is left.
+func test_the_title_menu_wears_eight_bullets_all_lit() -> void:
 	var title: Node = load("res://game/main.tscn").instantiate()
 	add_child_autofree(title)
 	await get_tree().process_frame
 	var rows := _rows(title)
 	assert_eq(rows.size(), 8, str(rows))
-	assert_eq(rows.get("Save / Load"), MenuBullet.DIMMED)
-	for label in ["Magic Battle", "Shandalar", "Gauntlet", "Deck Builder", "Options", "Help", "Exit"]:
+	for label in ["Magic Battle", "Shandalar", "Save / Load", "Gauntlet", "Deck Builder", "Options", "Help", "Exit"]:
 		assert_eq(rows.get(label), MenuBullet.AT_REST, label)
 
 

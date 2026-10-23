@@ -133,8 +133,9 @@ func test_the_title_gets_the_ring_back_after_the_placeholder() -> void:
 	var menu: Control = load("res://game/main.tscn").instantiate()
 	add_child_autofree(menu)
 	await get_tree().process_frame
-	# Save / Load: the title's one placeholder since Shandalar opened its
-	# Embark screen (2026-10-22).
+	# Save / Load with no adventure saved yet explains itself in a popup
+	# (2026-10-22; until then it was the title's placeholder).
+	assert_true(AdventurePlayer.list_saves().is_empty(), "no adventure saved in the test's folder")
 	var placeholder: Button = null
 	for n in menu.find_children("*", "Button", true, false):
 		if (n as Button).text == "Save / Load":

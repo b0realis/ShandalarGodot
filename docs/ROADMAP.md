@@ -3331,7 +3331,12 @@ rules, what to build on, a source map per system, open decisions) and
 `docs/world-builder-adventure-notes.md` (how the 1997 game generated its world).
 **Built 2026-10-22: the world** — the 1997 generator, exact, and the world
 screen, full screen (`docs/adventure-implementation-notes.md`, "Built: the
-world"). Walking comes next.
+world").
+**Built 2026-10-22: the adventurer, walking and the saves** — every part of
+the 1997 save in `AdventurePlayer`, autosaved as the world is made and
+taken up again from Save / Load; the hero walks where a click points at
+the 1997 pace (`docs/adventure-implementation-notes.md`, "Built: the
+adventurer, walking and the saves"). Towns and encounters come next.
 **Built 2026-10-22: the Embark screen** — the title's `Shandalar` opens it;
 a new adventure's hero, colour, playmat, packs, difficulty and world seed
 on one screen, and the record the world will be made from

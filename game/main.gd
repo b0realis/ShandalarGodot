@@ -187,26 +187,29 @@ func _ready() -> void:
 
 	# THE ADVENTURE'S FRONT DOOR (M5, `docs/ROADMAP.md`): the Embark
 	# screen, where a new adventure's hero is made
-	# (`game/adventure/embark_screen.gd`). The world it sets out into is
-	# the next piece of M5, and the screen says so when the hero embarks.
+	# (`game/adventure/embark_screen.gd`); Adventure there makes the world
+	# and sets the hero walking in it.
 	var shandalar := _menu_button("Shandalar")
 	shandalar.tooltip_text = "Embark on an adventure in the world of Shandalar."
 	shandalar.pressed.connect(
 		_open.bind("res://game/adventure/embark_screen.tscn", shandalar))
 	box.add_child(shandalar)
 
-	# NOT BUILT YET: the save/load the 1997 shell kept beside the
-	# adventure. A placeholder on the owner's instruction (2026-09-03) —
-	# ENABLED rather than greyed, because a disabled button in Godot
-	# swallows its own tooltip and a player deserves to be told WHY a
-	# front door is shut. It opens one sentence.
-	var save_load := _menu_button("Save / Load", true)
+	# THE ADVENTURES SAVED (2026-10-22): an adventure is saved the moment
+	# its world is made ([AdventurePlayer]); this opens the list to take one
+	# up again ([LoadAdventureScreen]). With none saved yet it says how one
+	# comes to be.
+	var save_load := _menu_button("Save / Load")
+	save_load.tooltip_text = "Take up a saved adventure again."
 	save_load.pressed.connect(func() -> void:
-		UiChrome.explain_popup(self, "Save / Load",
-			"Nothing to save yet. A duel is one sitting, and the "
-			+ "adventure that would need a saved game is not built. "
-			+ "Decks you build ARE kept — the Deck Builder writes them "
-			+ "into your own folder and they are there next time."))
+		if AdventurePlayer.list_saves().is_empty():
+			UiChrome.explain_popup(self, "Save / Load",
+				"No adventure has been saved yet. Shandalar on this menu "
+				+ "begins one, and it is saved the moment its world is "
+				+ "made. Decks you build are kept too — the Deck Builder "
+				+ "writes them into your own folder.")
+		else:
+			_open("res://game/adventure/load_adventure_screen.tscn", save_load))
 	box.add_child(save_load)
 
 	# `@SHELLSCREEN_TOOLS` (shandalar-src/Program/UIStrings.txt) lists the

@@ -197,6 +197,121 @@ map of the world (M; it shows the whole world until walking exists).
 **Next:** walking (the original's pace and terrain costs, read), towns,
 the encounters; the starting deck (the 1997 rarities).
 
+## Built: the adventurer, walking and the saves (2026-10-22)
+
+The owner: *"a structured commented and human readable AdventurePlayer
+class where all current player data is recorded along with all items and
+stats and current world state"*, an autosave when the game starts *"by
+player name and time hash"*, a walking figure *"we will guide … with
+pathfinding by clicking on a map"* with a walking-man pointer and an open
+door over a town, and a load.
+
+**What a game keeps** (`AdventurePlayer`): the parts of the 1.3 save
+(`magicN.SVE`; the decompilation's `docs/shandalar_save_files.txt`, after
+"Per" on slightlymagic.net), each field naming its offset — the hero
+(name, gender as the map figure, colour, difficulty), where they stand
+(world units, facing, step), what they carry (gold 0x21D20, food 0x21D24,
+the five amulets 0x21D0C, the World Magics 0x22110, the cards with their
+three decks 0x1420), the duels (life added to the next, a card in play in
+the next, victories over roaming creatures 0x21D28, the last colours), the
+record (the journal 0x224C8, from which wins and losses are read, the
+wizards beaten 0x221D4, lairs explored 0x224AC, the quest 0x21CF8), the
+clocks (monster 0x1EAF4, quest and restock 0x224B0, siege 0x224A8) and the
+world (its recipe, the page's tiles, flags and roads, the 128 sites, the
+World Magics' towns, the castles and dungeons, the lairs and roaming
+creatures 0x1EA2C). The parts nothing uses yet are there, empty.
+- A new hero gets what `InitializeNewGameState` gives: (5 − difficulty) ×
+  50 gold, 50 food, an amulet of their colour and (3 − difficulty) more,
+  whose colours are drawn with the original's `internal_rand(5) + 1` on the
+  adventure's dice where the world left them, and the colour's first World
+  Magic. The starting deck waits for the 1997 rarity table.
+- **Mana links** are kept on the hero, not read from a site's status bit 1
+  as the save's notes would have it: the generator sets that bit on the
+  first ten towns and cities with World Magic as it makes the world, so
+  there it means something else, not yet read.
+- **The saves** are JSON in `user://adventures`, `<Name>-<hash>.autosave.json`,
+  the hash the 32-bit FNV-1a of the name and the moment the adventure
+  began; the world's page is kept as 128 rows of 64 hex bytes (the tiles
+  with their flags, then the roads), so a load needs no generator, and
+  `world_intact` checks it against the fingerprint it was made with. The
+  autosave is written as the world screen opens (`EmbarkScreen.set_out`);
+  Save / Load on the title lists the saves, `LoadAdventureScreen`.
+
+**Walking** (`HeroWalk`), read in `UpdateAdventureWorldInputAndMovement`
+(0055e808) and the loop in `shandalar.c` that runs it:
+- **The tick** is 60 ms (`while (clock() - last_tick < 0x3c)`); the 1997
+  loop reset `last_tick` every pass, so the retail game ran as fast as it
+  could draw, which the decompilation's `MODERN_FIXES` mends. The monster
+  timer counts the ticks.
+- A step is a unit (32 to a tile) in one of eight ways, a diagonal no
+  longer than a straight. The tile ahead decides the pace: forest (2),
+  swamp (3) without Amulet of Swampwalk, mountains (4, 5) without Dwarven
+  Pick take a stride of two every third tick; a road leaving the hero's
+  tile the way they go, or coming in from behind, is never slow, and on
+  odd ticks adds a unit. No food: the divisor two more, at most 4.
+- Every 32nd tick a walking hero eats a food (Fruit of Sustenance gives two
+  back on forest) and the quest and siege clocks step on (the sieges
+  themselves are not made yet). A step into the sea within 12 units of a
+  tile's middle is taken back.
+- The figure is `EGO_M`/`EGO_F` frame `((direction + 2) & 7) * 5 + step`,
+  the step 1–4 while walking, 0 standing; the shadow the same.
+- **Ours [QoL]**: the original walked one of eight ways from a click
+  (`MapWorldClickToMovementKey`, keys for the eight) or the arrows; a
+  click is a destination here and the way round the water is found
+  (`AStarGrid2D`, costed by the same pace), walked tile middle to tile
+  middle, never past one. The arrows still look around.
+- **Not yet**: the dice the original draws each step for the footstep's
+  sound and the roaming creatures, so the adventure's dice stand still.
+- **The pointers** are ours: the 1997 window class loads `IDC_ARROW`; the
+  walking man and the open door are drawn (`WorldCursors`), the door shown
+  over a site the hero can see.
+
+**The walking figure's colours** (`HeroColors`, the owner: *"boots, pants,
+body, arms, hair, skin … one of the choices in the adventure menu starting
+screen … randomized also"*, and *"a default button that reuses the OG old
+game figures"*) [QoL]. `EGO_M` and `EGO_F` are single painted sprites of
+some 140 colours, the figure about 20 × 36 pixels in a 154 × 108 frame:
+the man black-haired in a red vest, white sleeves with green cuffs, a
+green belt, blue trousers and black boots; the woman long black hair, a
+blue bodice with purple, white sleeves, a red sash, a green skirt, black
+boots. The parts are found by colour and by height in each frame's figure
+(black high is hair, low is boots), on the player's own sheets as the game
+reads them; the cuffs, belt and sash are trim and stay. A part is dressed
+by laying its shades along the chosen colour's ramp, its usual shade on the
+colour itself. The Embark screen has a swatch a part (each opening its
+colours), `1997` and a walking preview under them; the choice is
+remembered, carried in the record and the save, and worn on the map.
+
+**The floating icons** (`WorldHud`; the owner: floating icons *"based on old
+1997 frame icons for old feel"*, then one row, then *"a floating rectangle
+panel with round corners … but the panel occupies whole horizontal
+space"*, the room shared between its three groups; ? holds the keys that
+were a line under the world; the painted book that was Save opens the
+options — save, load (over the world), the panel to the bottom or back,
+exit the game, saving first; the name and difficulty by the panel in the
+hero's colour of magic; an icon's name floats beside the panel when the
+pointer rests), from 1.3's `DrawAdventureInterfaceLayout`
+(adventureWorldUi.c) and the frame's controls (`g_main_menu_controls`,
+`QueuePendingMenuActionInput`):
+- **The strip** under the window (`Advinter.pic`, its 1024 × 768 version
+  imported as `world_frame`): painted gold, food, an ankh and a book, the
+  numbers drawn beside them — gold, food, `CountDuelPoolEligibleTowns` (the
+  mana links) and the deck as cards in use / cards owned. They sit on the
+  frame's glass, sharing its colours, so they are cut as small glass tiles.
+- **The amulets** (`Amsprite.spr`: white, blue, black, red, green) drawn
+  with their counts in the order black, blue, green, red, white.
+- **The World Magics** (`Worlds.spr`: four rows of twelve — normal, lit,
+  the active five pressed, their keys 1–5) at fixed places: an owned active
+  one whose colour has no amulet shows pressed.
+- **The four round buttons** on the frame's left (`Worlds.spr` frames
+  48–55, normal and lit): the spellbook = the deck builder (F1), the
+  scroll = the map (F2), the gate = the dungeon clues (F4), the faces = the
+  hero's menu (F5). Ours: deck, map, hero, and Save on the frame's painted
+  book (1997 saved from its menus); the clues come with the dungeons.
+
+**Next:** towns (entering, buying, the quests), the encounters, the
+starting deck; a save made from the world screen.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -427,3 +542,24 @@ said otherwise):
   scrolled and the scrollbar broke the line-up with the buttons. All and
   None moved beside the Card packs heading: a row saved, the three windows
   one size again.
+- **2026-10-22** — Owner: AdventurePlayer, the autosave by name and time
+  hash, a walking figure guided by clicks with a walking-man and an
+  open-door pointer, and a load. Built (0.50.50): `AdventurePlayer` (the
+  1.3 save's parts, readable JSON), `HeroWalk` (the 1.3 pace, tick for
+  tick, on a way found round the sea), `WorldCursors`,
+  `LoadAdventureScreen`; Save / Load on the title is live. "Built: the
+  adventurer, walking and the saves".
+- **2026-10-22** — Owner: the walking figure colored part by part on the
+  Embark screen, randomized, with a 1997 default. Built: `HeroColors`
+  (parts found by colour and height, dressed along each colour's ramp),
+  `FigurePreview`, the swatches and their popups, `1997`; the colours in
+  the record, the save and on the map.
+- **2026-10-22** — Owner: the red arrows either side of the portrait, the
+  room gained for the figure's preview under the colour swatches. The
+  face's name now sits on a band across the portrait's foot.
+- **2026-10-22** — Owner ruling on the world screen's interface: *"it is
+  the modern way to have floating icons as a gui and lets keep this design
+  for world building"* — no 1997 frame round the world; what the frame
+  held (the hero's purse, food, amulets, the World Magics, the map, the
+  journal, the deck) comes as small floating elements over the full-screen
+  world, minimal, as the HUD and hint do today.

@@ -1143,8 +1143,14 @@ class TestTheWorldSheets(TestSprSheet):
         self.assertEqual(imp.spr_frame_tops(data), [56, -1])
 
     def test_every_world_sheet_is_wired(self):
+        # The world's own sprites are in Program/SPR/ (by resolution); the
+        # world screen's icons, Worlds.spr and Amsprite.spr, in Program/.
+        icons = {"world_magics": "worlds.spr", "world_amulets": "amsprite.spr"}
         for key, (cells, width, height, columns) in imp.WORLD_SHEETS.items():
-            self.assertTrue(imp.MANIFEST[key][0].startswith("spr/"), key)
+            if key in icons:
+                self.assertEqual(imp.MANIFEST[key], [icons[key]], key)
+            else:
+                self.assertTrue(imp.MANIFEST[key][0].startswith("spr/"), key)
             self.assertEqual(imp.SPR_SHEETS[key], (imp.MANIFEST[key], cells, width, height))
             self.assertEqual(imp.SPR_COLUMNS[key], columns)
             self.assertEqual(imp.SPR_PALETTES[key][0], "Advfac64.pic")

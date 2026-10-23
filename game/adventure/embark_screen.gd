@@ -87,6 +87,11 @@ var _difficulty_word: Label
 var _difficulty_note: Label
 var _pack_checks: Dictionary = {}
 var _seed_edit: LineEdit
+## The walking figure: its preview on the portrait, the six part swatches
+## and the popup a swatch opens ([HeroColors]).
+var _figure_preview: FigurePreview
+var _figure_swatches: Array[Button] = []
+var _figure_popup: PopupPanel
 var _seed_row: Control
 ## The bottom strip: `Leave`, the seed and `Adventure`.
 var _bar: HBoxContainer
@@ -240,25 +245,36 @@ func _build_hero() -> Control:
 	_portrait.tooltip_text = "Your face in every adventure duel. Your own pictures go in %s" \
 		% PortraitLibrary.ensure_folder()
 	frame.add_child(_portrait)
-	box.add_child(frame)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	var back := RedArrow.new(-1)
-	back.name = "PreviousFace"
-	back.tooltip_text = "The face before."
-	back.pressed.connect(step_face.bind(-1))
-	row.add_child(back)
+	# The face's name on a band across its foot.
 	_portrait_caption = _text("", 15)
 	_portrait_caption.name = "FaceName"
 	_portrait_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_portrait_caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_portrait_caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_portrait_caption.clip_text = true
-	row.add_child(_portrait_caption)
-	var forward := RedArrow.new(1)
+	var band := StyleBoxFlat.new()
+	band.bg_color = Color(0.04, 0.02, 0.02, 0.72)
+	band.set_content_margin_all(2)
+	_portrait_caption.add_theme_stylebox_override("normal", band)
+	_portrait.add_child(_portrait_caption)
+	_portrait_caption.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_portrait_caption.offset_top = -24
+
+	# THE RED ARROWS BESIDE THE FACE (the owner, 2026-10-22: *"move the red
+	# arrows to each side of portrait. And you gain vertical space"*).
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	var back := RedArrow.new(-1, 38.0)
+	back.name = "PreviousFace"
+	back.tooltip_text = "The face before."
+	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	back.pressed.connect(step_face.bind(-1))
+	row.add_child(back)
+	row.add_child(frame)
+	var forward := RedArrow.new(1, 38.0)
 	forward.name = "NextFace"
 	forward.tooltip_text = "The face after."
+	forward.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	forward.pressed.connect(step_face.bind(1))
 	row.add_child(forward)
 	_arrows = [back, forward]
@@ -297,6 +313,35 @@ func _build_hero() -> Control:
 		walkers.add_child(button)
 		_walker_buttons.append(button)
 	box.add_child(walkers)
+	# THE FIGURE'S COLOURS (the owner, 2026-10-22): a swatch a part, each
+	# opening the part's colours, and 1997 for the old game's own figure.
+	var dress := HBoxContainer.new()
+	dress.name = "FigureColors"
+	dress.alignment = BoxContainer.ALIGNMENT_CENTER
+	dress.add_theme_constant_override("separation", 4)
+	for i in HeroColors.PARTS.size():
+		var swatch := Button.new()
+		swatch.name = "Figure" + HeroColors.PART_NAMES[i]
+		swatch.text = HeroColors.PART_NAMES[i]
+		swatch.custom_minimum_size = Vector2(46, 28)
+		swatch.add_theme_font_size_override("font_size", 11)
+		swatch.focus_mode = Control.FOCUS_ALL
+		swatch.pressed.connect(open_figure_colors.bind(i))
+		dress.add_child(swatch)
+		_figure_swatches.append(swatch)
+	var original := UiChrome.menu_button("1997", Vector2(62, 28), 13)
+	original.name = "FigureOriginal"
+	original.tooltip_text = "The figure in the 1997 game's own colours."
+	original.pressed.connect(reset_figure_colors)
+	dress.add_child(original)
+	box.add_child(dress)
+	# The hero as they will walk the map, under their colours (the owner,
+	# 2026-10-22: *"move mini figurine preview below the color choices"*).
+	_figure_preview = FigurePreview.new()
+	_figure_preview.name = "FigurePreview"
+	_figure_preview.custom_minimum_size = Vector2(96, 74)
+	_figure_preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(_figure_preview)
 	return box
 
 
@@ -530,6 +575,66 @@ func step_face(step: int) -> void:
 func choose_walker(figure: String) -> void:
 	setup.walker = figure
 	_show_walker()
+	_show_figure()
+
+
+## Dress the figure's [param part] in [param key] ([HeroColors]); the 1997
+## colour for [constant HeroColors.ORIGINAL] or a key not offered.
+func choose_figure_color(part: String, key: String) -> void:
+	if HeroColors.choice(part, key).is_empty():
+		setup.figure_colors.erase(part)
+	else:
+		setup.figure_colors[part] = key
+	_show_figure()
+
+
+## Every part back in the 1997 colours (the owner, 2026-10-22: *"a default
+## button that reuses the OG old game figures"*).
+func reset_figure_colors() -> void:
+	setup.figure_colors.clear()
+	_show_figure()
+
+
+## The colours of the part behind swatch [param index], in a popup by it:
+## the 1997 colour first, then the part's own.
+func open_figure_colors(index: int) -> void:
+	var part := HeroColors.PARTS[index]
+	if _figure_popup != null:
+		_figure_popup.queue_free()
+	_figure_popup = PopupPanel.new()
+	_figure_popup.name = "FigureColorsPopup"
+	var face := StyleBoxFlat.new()
+	face.bg_color = Color(0.08, 0.04, 0.035, 0.97)
+	face.border_color = GOLD.darkened(0.25)
+	face.set_border_width_all(2)
+	face.set_corner_radius_all(6)
+	face.set_content_margin_all(8)
+	_figure_popup.add_theme_stylebox_override("panel", face)
+	var column := VBoxContainer.new()
+	column.add_child(_label(HeroColors.PART_NAMES[index]))
+	var grid := GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
+	var female := setup.walker_shown() == "female"
+	var keys: Array[String] = [HeroColors.ORIGINAL]
+	for row in HeroColors.choices(part):
+		keys.append(String(row[0]))
+	for key in keys:
+		var pick := Button.new()
+		pick.name = "Pick_" + key
+		pick.custom_minimum_size = Vector2(34, 26)
+		pick.tooltip_text = HeroColors.choice_name(part, key)
+		_paint_swatch(pick, HeroColors.swatch(part, key, female), "97" if key == HeroColors.ORIGINAL else "")
+		pick.pressed.connect(func() -> void:
+			choose_figure_color(part, key)
+			_figure_popup.hide())
+		grid.add_child(pick)
+	column.add_child(grid)
+	_figure_popup.add_child(column)
+	add_child(_figure_popup)
+	var swatch := _figure_swatches[index]
+	_figure_popup.popup(Rect2i(Vector2i(swatch.get_screen_position() + Vector2(0, swatch.size.y + 4)), Vector2i.ZERO))
 
 
 func choose_color(key: String) -> void:
@@ -565,7 +670,7 @@ func _on_name_changed(text: String) -> void:
 ## RANDOMIZE (the owner, 2026-10-22): every choice on the screen drawn at
 ## random — the face, a name ([method AdventureSetup.random_name]: a first
 ## name and a surname of our own, magical and sometimes funny), the figure
-## on the map, the colour,
+## on the map and its colours, the colour,
 ## the playmat's colour and style, the card packs, the difficulty and a new
 ## seed (a time of day, as the clock gives) — for the player to enjoy and
 ## change before setting out. [param rng] is for tests.
@@ -585,6 +690,7 @@ func randomize_all(rng: RandomNumberGenerator = null) -> void:
 		rng.randi_range(0, _playmat_color.item_count - 1)))
 	setup.playmat_type = _playmat_type.get_item_text(rng.randi_range(0, _playmat_type.item_count - 1))
 	setup.difficulty = rng.randi_range(0, AdventureSetup.DIFFICULTIES.size() - 1)
+	setup.figure_colors = HeroColors.random(rng)
 	var time := "%02d%02d%02d" % [rng.randi_range(0, 23), rng.randi_range(0, 59), rng.randi_range(0, 59)]
 	setup.seed_text = "240000" if time == "000000" else time
 	for id in _pack_checks:
@@ -611,6 +717,7 @@ func _show_all() -> void:
 			_playmat_type.select(i)
 	_show_face()
 	_show_walker()
+	_show_figure()
 	_show_color()
 	_show_playmat()
 	_show_difficulty()
@@ -629,6 +736,33 @@ func _show_face() -> void:
 	_portrait_caption.text = String(row["name"]) if not row.is_empty() \
 		else PortraitLibrary.title_of(setup.portrait)
 	_portrait_caption.tooltip_text = _portrait_caption.text
+
+
+func _show_figure() -> void:
+	var female := setup.walker_shown() == "female"
+	for i in _figure_swatches.size():
+		var part := HeroColors.PARTS[i]
+		var key := String(setup.figure_colors.get(part, HeroColors.ORIGINAL))
+		_paint_swatch(_figure_swatches[i], HeroColors.swatch(part, key, female), HeroColors.PART_NAMES[i])
+		_figure_swatches[i].tooltip_text = "%s on the map: %s. Click for its colors." \
+			% [HeroColors.PART_NAMES[i], HeroColors.choice_name(part, key)]
+	if _figure_preview != null:
+		_figure_preview.show_figure(setup.walker_shown(), setup.figure_colors)
+
+
+## A colour square with [param text] on it in ink or chalk, whichever reads.
+func _paint_swatch(button: Button, color: Color, text: String) -> void:
+	button.text = text
+	var ink := Color(0.05, 0.03, 0.02) if color.get_luminance() > 0.5 else Color(0.96, 0.93, 0.86)
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		button.add_theme_color_override(state, ink)
+	for state in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		var face := StyleBoxFlat.new()
+		face.bg_color = color.lightened(0.12) if state == "hover" else color
+		face.border_color = GOLD if state in ["hover", "focus"] else Color(0, 0, 0, 0.8)
+		face.set_border_width_all(2)
+		face.set_corner_radius_all(3)
+		button.add_theme_stylebox_override(state, face)
 
 
 func _show_walker() -> void:
@@ -720,9 +854,9 @@ func _materialize(record: Dictionary) -> void:
 	show_generating()
 	await get_tree().process_frame
 	var world := await _make_world_aside(record)
-	if not is_inside_tree():
+	if not is_inside_tree() or world == null:
 		return
-	var screen := open_world(record, world)
+	var screen := set_out(record, world)
 	var tree := get_tree()
 	tree.root.add_child(screen)
 	tree.current_scene = screen
@@ -823,6 +957,20 @@ func _exit_tree() -> void:
 	if _worker != null and _worker.is_started():
 		_worker.wait_to_finish()
 	_worker = null
+
+
+## THE ADVENTURE BEGINS (the owner, 2026-10-22: *"when game starts lets
+## make an autosave with initial AdventurePlayer stats (by player name and
+## time hash)"*): the hero ([AdventurePlayer]) made from [param record] in
+## [param world], saved at once, and the world screen that shows them —
+## not yet in the tree.
+func set_out(record: Dictionary, world: ShandalarWorld) -> WorldScreen:
+	var adventure := AdventurePlayer.begin(record, world)
+	var path := adventure.autosave()
+	print("Adventure saved: %s" % path)
+	var screen := open_world(record, world)
+	screen.player = adventure
+	return screen
 
 
 ## The world screen for [param record], its arrival note set — not yet in

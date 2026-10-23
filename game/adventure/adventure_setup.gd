@@ -196,6 +196,9 @@ var playmat_type := RANDOM_TYPE
 var packs: Array[String] = []
 var difficulty := 0
 var seed_text := ""
+## The walking figure's colours, `{part: key}` ([HeroColors]); a part not
+## named keeps its 1997 colour.
+var figure_colors := {}
 
 
 ## The hero row for portrait id [param id], or `{}` for any other face.
@@ -366,7 +369,8 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"seed_text": shown_seed,
 		"slot_start": slot_start_for(world_seed),
 		"hero": {"portrait": portrait, "name": clean_name(player_name),
-			"walker": figure, "walker_choice": walker_shown()},
+			"walker": figure, "walker_choice": walker_shown(),
+			"figure_colors": HeroColors.cleaned(figure_colors)},
 		"color": color,
 		"difficulty": clampi(difficulty, 0, DIFFICULTIES.size() - 1),
 		"playmat": {"color": playmat_color_shown(), "type": style},
@@ -406,6 +410,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "playmat_color", playmat_color, false)
 	Settings.set_value(KEY_PREFIX + "playmat_type", playmat_type, false)
 	Settings.set_value(KEY_PREFIX + "packs", ",".join(packs), false)
+	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
 	Settings.set_value(KEY_PREFIX + "difficulty", difficulty)
 
 
@@ -429,12 +434,13 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 			setup.packs.append(id)
 	setup.difficulty = clampi(int(Settings.get_value(KEY_PREFIX + "difficulty", 0)),
 		0, DIFFICULTIES.size() - 1)
+	setup.figure_colors = HeroColors.from_text(String(Settings.get_value(KEY_PREFIX + "figure_colors", "")))
 	return setup
 
 
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
-	"playmat_color", "playmat_type", "packs", "difficulty"]
+	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors"]
 
 
 ## Forget the remembered hero, so the screen opens on the defaults.
