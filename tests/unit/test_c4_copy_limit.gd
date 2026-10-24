@@ -40,6 +40,7 @@ func test_the_choice_is_saved_and_an_old_save_keeps_the_limit() -> void:
 	var data := JSON.parse_string(JSON.stringify(player.to_dict())) as Dictionary
 	assert_false(AdventurePlayer.from_dict(data).copy_limit, "saved and read back")
 	(data["hero"] as Dictionary).erase("copy_limit")
+	(data["hero"] as Dictionary).erase("card_rule")
 	assert_true(AdventurePlayer.from_dict(data).copy_limit,
 		"a save from before the choice: the limit on, as those adventures played")
 	var record := {"seed": 1, "color": "red", "difficulty": 1}

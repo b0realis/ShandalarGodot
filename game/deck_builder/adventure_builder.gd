@@ -364,8 +364,13 @@ func _with_tome() -> bool:
 ## from 59, Tome of Enlightenment one more (no limit from 59), basic lands
 ## aside — not the manual's table, which the deck builder never applied. A
 ## first deck dealt with three copies of a spell is a fair deck (the owner,
-## 2026-10-24: the 1997 code is the rule).
+## 2026-10-24: the 1997 code is the rule). An adventure begun under the
+## Classic MTG rules is judged by them instead ([constant DeckModel.CLASSIC]:
+## four of a card, one restricted — four with the Tome —, no banned card),
+## asked about as it is left just the same.
 func _copy_rule() -> String:
+	if player != null and player.card_rule == AdventurePlayer.RULE_CLASSIC:
+		return DeckModel.CLASSIC
 	return DeckModel.DECK_BUILDER_1997
 
 

@@ -53,9 +53,17 @@ static var _cards: Array[Dictionary] = []
 
 
 ## THE FIRST DECK of a hero of [param color] at [param difficulty]: card
-## names, drawn with [param dice].
-static func deal(color: String, difficulty: int, dice: MsvcRandom) -> Array[String]:
+## names, drawn with [param dice]. Under the Classic MTG rules ([param
+## classic]) no card comes once the deck holds as many copies as they allow
+## ([method DeckModel.classic_allowance]: four, one of a restricted card;
+## the banned ones are never dealt, by the rule above) [ours].
+static func deal(color: String, difficulty: int, dice: MsvcRandom, classic := false) -> Array[String]:
 	var dealt: Array[String] = []
+	_keeps = Callable()
+	if classic:
+		_keeps = func(card: Dictionary) -> bool:
+			var most := DeckModel.classic_allowance(String(card["name"]))
+			return most < 0 or dealt.count(String(card["name"])) < most
 	var used: Array[String] = [color]
 	for share in QUOTAS[clampi(difficulty, 0, 3)]:
 		var hue := color
@@ -70,6 +78,7 @@ static func deal(color: String, difficulty: int, dice: MsvcRandom) -> Array[Stri
 			"any":
 				hue = ""
 		_share(dealt, hue, int(share[1]), int(share[2]), int(share[3]), bool(share[4]), difficulty, dice)
+	_keeps = Callable()
 	return dealt
 
 
@@ -137,10 +146,15 @@ static func _of(card: Dictionary, hue: String) -> bool:
 	return String(card["color"]) == hue or String(card["color"]) == ""
 
 
+## What the deal under way keeps out besides [param fits] ([method deal]'s
+## classic rules), invalid for none.
+static var _keeps := Callable()
+
+
 static func _pick(dice: MsvcRandom, fits: Callable) -> String:
 	var fitting: Array[String] = []
 	for card in cards():
-		if fits.call(card):
+		if fits.call(card) and (not _keeps.is_valid() or _keeps.call(card)):
 			fitting.append(String(card["name"]))
 	if fitting.is_empty():
 		return ""

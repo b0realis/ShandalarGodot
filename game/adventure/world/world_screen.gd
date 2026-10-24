@@ -911,12 +911,26 @@ func open_wise_man(slot: int, mode: String) -> WiseManPane:
 	pane.copying.connect(func(color: int) -> void:
 		var list := open_card_list("Pick a spell",
 			"A copy of it for three %s amulets." % WiseMan.COLOR_WORDS[clampi(color, 1, 5) - 1],
-			CardListPane.counted(player.cards.map(func(c: Dictionary) -> String: return String(c["card"]))), true)
+			_copyable(CardListPane.counted(player.cards.map(func(c: Dictionary) -> String: return String(c["card"])))), true)
 		list.picked.connect(func(card_name: String) -> void:
 			_close_card_list()
 			pane.copied(card_name)))
 	_hold()
 	return pane
+
+
+## The hero's cards [param counted] the wise man may copy: under the Classic
+## MTG rules none the hero holds every copy of they allow ([method
+## CardShop.classic_rule]).
+func _copyable(counted: Dictionary) -> Dictionary:
+	var rule := CardShop.classic_rule(player)
+	if rule.is_empty():
+		return counted
+	var out := {}
+	for card_name in counted:
+		if CardShop.classic_allows(rule, String(card_name)):
+			out[card_name] = counted[card_name]
+	return out
 
 
 ## THE WISE MAN LEFT ([param pane], of town [param slot]): the town has

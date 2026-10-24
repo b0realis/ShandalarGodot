@@ -81,6 +81,8 @@ func copied(card_name: String) -> void:
 		say(["Another %s joins your cards." % card_name])
 	elif player.bag_room() < 1:
 		say([AdventurePlayer.BAG_FULL])
+	elif not CardShop.may_offer(player, card_name):
+		say([CardShop.classic_refusal(card_name)])
 	offer([["leave", "Leave", true]])
 
 

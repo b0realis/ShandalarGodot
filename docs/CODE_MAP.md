@@ -175,6 +175,17 @@
   record's `reward_lost`); `EncounterStage.hue` and its plain page's purse,
   face and amulet; `EncounterPane` / `RuledTownPane` `_ceiling` (the page
   steady from step to step); `LairEvent`'s rare by the copy limit.
+  The card rule (2026-10-24): `AdventurePlayer.card_rule` (`RULE_MEANT`,
+  `RULE_SHIPPED`, `RULE_CLASSIC`, `CARD_RULES`, `card_rule_of`; the old
+  `copy_limit` a property over it), `AdventureSetup.card_rule`,
+  `EmbarkScreen.RULE_NAMES` / `RULE_TIPS` / `choose_card_rule` (the
+  "CardRule" choice); the Classic MTG rules: `DeckModel.CLASSIC`,
+  `classic_allowance`; `CardShop.classic_rule`, `classic_allows`,
+  `may_offer`, `classic_refusal` — read by the shop's draw and sale, the
+  trader's lists, `DuelSpoils.reward_cards` / `pick_any` /
+  `pick_duplicate` / the reward card, `EncounterPane._offered`,
+  `LairEvent._lair_rare` / `_treasure`, `WiseMan.copy` and
+  `WorldScreen._copyable`, and `StarterDeck.deal(…, classic)`.
 - `game/adventure/save_slots.gd`: `SaveSlots`, the ten named slots per
   adventure (`slots_of`, `save_into`, `default_name`, `migrate`);
   `game/adventure/world/save_slots_pane.gd`: `SaveSlotsPane`;

@@ -424,10 +424,25 @@ func _choose_tribute(action: String) -> void:
 func _pick_spell() -> void:
 	var row := int(meeting["row"])
 	_open_list(CreatureMeeting.PICK_SPELL, "From the deck of %s." % CreatureBook.called(row),
-		CreatureMeeting.spell_choices(meeting), func(card_name: String) -> void:
+		_offered(CreatureMeeting.spell_choices(meeting)), func(card_name: String) -> void:
 			var kept := CreatureMeeting.take_spell(player, card_name)
 			_told([("%s is yours." % card_name) if kept else BAG_FULL] as Array[String], LEAVE),
 		func() -> void: _end())
+
+
+## [param counted] (`name -> count`, a list to pick from) without the cards
+## the Classic MTG rules let no one offer the hero any more ([method
+## CardShop.classic_rule]; under the 1997 rules the whole list). A basic
+## land is always allowed, so a list of every card is never empty.
+func _offered(counted: Dictionary) -> Dictionary:
+	var rule := CardShop.classic_rule(player)
+	if rule.is_empty():
+		return counted
+	var out := {}
+	for card_name in counted:
+		if CardShop.classic_allows(rule, String(card_name)):
+			out[card_name] = counted[card_name]
+	return out
 
 
 ## Lines said, and one way on ([param go] its words): the meeting then ends.
@@ -661,7 +676,7 @@ func _pick_any() -> void:
 	var every := {}
 	for row in CardTrade.catalogue():
 		every[String(row["name"])] = 1
-	_open_list(DuelSpoils.PICK_CARD, MUST_PICK, every, func(card_name: String) -> void:
+	_open_list(DuelSpoils.PICK_CARD, MUST_PICK, _offered(every), func(card_name: String) -> void:
 			DuelSpoils.pick_any(player, spoils, card_name)
 			_next_result(),
 		func() -> void: _pick_any())
@@ -684,7 +699,7 @@ func _pick_duplicate() -> void:
 	var owned: Array = []
 	for entry in player.cards:
 		owned.append(String((entry as Dictionary).get("card", "")))
-	_open_list(DuelSpoils.PICK_CARD, "A copy of one of your own cards.", CardListPane.counted(owned),
+	_open_list(DuelSpoils.PICK_CARD, "A copy of one of your own cards.", _offered(CardListPane.counted(owned)),
 		func(card_name: String) -> void:
 			DuelSpoils.pick_duplicate(player, spoils, card_name)
 			_next_result(),

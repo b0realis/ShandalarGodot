@@ -227,8 +227,13 @@ func _sync_chips() -> void:
 func cards() -> Array[String]:
 	var out: Array[String] = []
 	var look := _search.text.strip_edges().to_lower() if _search != null else ""
+	# Under the Classic MTG rules no card the hero holds every copy of the
+	# rules allow is offered ([method CardShop.classic_rule]).
+	var rule := CardShop.classic_rule(player)
 	for row in CardTrade.catalogue():
 		var f: Dictionary = row["facts"]
+		if not CardShop.classic_allows(rule, String(row["name"])):
+			continue
 		if _town_wares() and not CardTrade.wanted(trade, f):
 			continue
 		if color_filter != 0 and int(f.get("color", CardValue.COLORLESS)) & color_filter == 0:
@@ -257,10 +262,12 @@ func refresh() -> void:
 	# card the hero owns (visitLocation.c 3804–3808).
 	var in_deck := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player)
+	# The classic rules list only what they allow: nothing to dim.
+	var dims := player.card_rule != AdventurePlayer.RULE_CLASSIC
 	for card_name in _shown:
 		var count := int(owned.get(card_name, 0))
 		var index := _list.add_item("%s-%d" % [card_name, count] if count > 0 else card_name)
-		if DuelSpoils.copies_left(player, card_name, _facts.get(card_name, {}), in_deck, limit) <= 0:
+		if dims and DuelSpoils.copies_left(player, card_name, _facts.get(card_name, {}), in_deck, limit) <= 0:
 			_list.set_item_custom_fg_color(index, PaneStyle.FAINT)
 		if card_name == chosen:
 			_list.select(index)

@@ -111,15 +111,35 @@ var figure_colors := {}
 var color := "white"
 ## 0 Apprentice … 3 Wizard (0x1EA24).
 var difficulty := 0
-## THE COPY LIMIT ON WHAT THE HERO IS GIVEN, chosen at the Embark (the owner,
-## 2026-10-24: "an on off setting during shandalar embark construction"):
-## true as 1997 MEANT it — the shops and the duel rewards offer no card the
-## deck in use already holds as many copies of as its size allows (1997's
-## `GetRemainingAllowedCardCopies`, [method CardShop.counted_copies]); false
-## as 1997 SHIPPED it — that rule's count of copies matched no card the hero
-## owned, so it refused none for its copies (only its special and
-## outside-the-base-sets cases stayed).
-var copy_limit := true
+## The three card rules ([member card_rule]).
+const RULE_MEANT := "as intended"
+const RULE_SHIPPED := "as shipped"
+const RULE_CLASSIC := "classic"
+const CARD_RULES: Array[String] = [RULE_MEANT, RULE_SHIPPED, RULE_CLASSIC]
+## THE CARD RULE, chosen at the Embark (the owner, 2026-10-24: "an on off
+## setting during shandalar embark construction", then "one more rule …
+## classic MTG rules"; the names are the owner's):
+##  - [constant RULE_MEANT] "Adventure limit of cards (as intended in 1997)":
+##    the shops and the duel rewards offer no card the deck in use already
+##    holds as many copies of as its size allows (1997's
+##    `GetRemainingAllowedCardCopies`, [method CardShop.counted_copies]);
+##  - [constant RULE_SHIPPED] "No limit (as shipped in 1997)": that rule's
+##    count of copies matched no card the hero owned, so it refused none for
+##    its copies (only its special and outside-the-base-sets cases stayed);
+##  - [constant RULE_CLASSIC] "Classic MTG rules" [ours]: a deck holds four
+##    of a card, one of a restricted card (four with Tome of Enlightenment),
+##    none of a banned one, basic lands without end ([method
+##    DeckModel.classic_allowance]); no one offers a card the hero already
+##    owns as many copies of as that allows ([method CardShop.classic_allows]).
+## The 1997 deck builder's rule judges the decks under the first two.
+var card_rule := RULE_MEANT
+## The card rule as the on/off copy limit it began as: on for "as intended",
+## off for "as shipped" (setting it chooses one of those two).
+var copy_limit: bool:
+	get:
+		return card_rule == RULE_MEANT
+	set(on):
+		card_rule = RULE_MEANT if on else RULE_SHIPPED
 ## The playmat of the hero's duels, `{color, type}` — ours.
 var playmat := {}
 ## The card packs that join this adventure, `[{id, version}]` — ours.
@@ -285,7 +305,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.figure_colors = HeroColors.cleaned(hero.get("figure_colors", {}))
 	player.color = String(record.get("color", "white"))
 	player.difficulty = int(record.get("difficulty", 0))
-	player.copy_limit = _flag(record.get("copy_limit", true))
+	player.card_rule = card_rule_of(record.get("card_rule"), record.get("copy_limit", true))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
@@ -307,7 +327,8 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 		player.amulets[drawn] = int(player.amulets[drawn]) + 1
 	# The first deck (ours after the amulets; 1997 dealt it first), every
 	# card in Deck 1 as `InitializeNewGameState` marks them.
-	for card_name in StarterDeck.deal(player.color, player.difficulty, rolls):
+	for card_name in StarterDeck.deal(player.color, player.difficulty, rolls,
+			player.card_rule == RULE_CLASSIC):
 		player.cards.append({"card": card_name, "decks": [0]})
 	player.dice = rolls.state
 	var own := AdventureSetup.color_number(player.color)
@@ -536,7 +557,7 @@ func to_dict() -> Dictionary:
 		"hero": {"name": name, "portrait": portrait, "figure": walker,
 			"figure_colors": figure_colors, "color": color,
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
-			"copy_limit": copy_limit, "playmat": playmat, "packs": packs},
+			"card_rule": card_rule, "copy_limit": card_rule != RULE_SHIPPED, "playmat": playmat, "packs": packs},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing},
 		"carried": {"gold": gold, "food": food, "amulets": amulets,
@@ -650,8 +671,9 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	player.color = color if color in COLORS else "white"
 	player.difficulty = clampi(_number(hero.get("difficulty")), 0, 3)
 	# A save from before the choice was made at the Embark: the limit as
-	# 1997 meant it, which those adventures played by.
-	player.copy_limit = _flag(hero.get("copy_limit", true))
+	# 1997 meant it, which those adventures played by; one from before the
+	# third rule: the on/off copy limit it kept.
+	player.card_rule = card_rule_of(hero.get("card_rule"), hero.get("copy_limit", true))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
 
@@ -948,6 +970,17 @@ static func _count(value: Variant) -> int:
 
 static func _text(value: Variant, fallback := "") -> String:
 	return value if value is String else fallback
+
+
+## The card rule [param value] names ([constant CARD_RULES]), else the one
+## the on/off [param copy_limit] of a record or a save from before the third
+## rule meant (on, or missing: "as intended"; off: "as shipped"). The copy
+## limit a save writes beside the rule keeps an older game's reading close:
+## on for the classic rules too.
+static func card_rule_of(value: Variant, copy_limit: Variant) -> String:
+	if value is String and String(value) in CARD_RULES:
+		return String(value)
+	return RULE_MEANT if copy_limit == null or _flag(copy_limit) else RULE_SHIPPED
 
 
 static func _flag(value: Variant) -> bool:

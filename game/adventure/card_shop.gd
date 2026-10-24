@@ -136,6 +136,10 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	# took the gold and lost the card.]
 	if player.bag_room() < 1:
 		return {"bought": false, "said": AdventurePlayer.BAG_FULL, "price": price}
+	# Under the Classic MTG rules a card drawn for sale before the hero held
+	# all the copies they allow is not sold to them now [ours].
+	if not may_offer(player, card_name):
+		return {"bought": false, "said": classic_refusal(card_name), "price": price}
 	player.gold -= price
 	player.add_card(card_name)
 	var shop := town_record(player, slot)
@@ -229,7 +233,7 @@ static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
 	for card_name in in_use:
 		size += int(in_use[card_name])
 	return {"sold": colors_sold(player.world, slot), "held": counted_copies(player),
-		"limit": allowed_for(player, size)}
+		"limit": allowed_for(player, size), "classic": classic_rule(player)}
 
 
 ## One card for place [param place]: a basic land of a colour the town
@@ -259,6 +263,8 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 		if shop_rarity(f) > most:
 			continue
 		if int(held.get(String(row["name"]), 0)) >= limit:
+			continue
+		if not classic_allows(rules.get("classic", {}), String(row["name"])):
 			continue
 		fitting.append(String(row["name"]))
 	return fitting[dice.below(fitting.size())] if not fitting.is_empty() else ""
@@ -316,15 +322,61 @@ static func deck_counts(player: AdventurePlayer) -> Dictionary:
 	return counts
 
 
-## THE COPIES THE COPY LIMIT COUNTS ([member AdventurePlayer.copy_limit]):
-## the deck in use's copies of each card ([method deck_counts]) when the
-## limit is on, as 1997 meant it; none when it is off — as 1997 shipped it,
-## its count matched no owned card (every entry carried a deck or a no-deck
-## flag, adventure_new_game.c 459), so the limit's own cases stayed and
-## no card was refused for its copies. The shop's draw, the duel's rewards
-## and the trader's dimmed names all count through here.
+## THE COPIES THE COPY LIMIT COUNTS ([member AdventurePlayer.card_rule]):
+## the deck in use's copies of each card ([method deck_counts]) under the
+## limit as 1997 meant it; none as 1997 shipped it — its count matched no
+## owned card (every entry carried a deck or a no-deck flag,
+## adventure_new_game.c 459), so the limit's own cases stayed and no card
+## was refused for its copies —, and none under the Classic MTG rules, which
+## count every copy owned instead ([method classic_rule]). The shop's draw,
+## the duel's rewards and the trader's dimmed names all count through here.
 static func counted_copies(player: AdventurePlayer) -> Dictionary:
-	return deck_counts(player) if player.copy_limit else {}
+	return deck_counts(player) if player.card_rule == AdventurePlayer.RULE_MEANT else {}
+
+
+## THE CLASSIC MTG RULES ON WHAT IS OFFERED ([member AdventurePlayer.card_rule];
+## the owner, 2026-10-24: "Traders stop offering the cards if you have 4
+## copies all-ready in your possession", every source alike): `{owned: name
+## -> copies the hero owns, in any deck or none, tome: Tome of
+## Enlightenment owned}`, or `{}` under the two 1997 rules — each place then
+## keeps its own 1997 count. Read once for a whole draw or list ([method
+## classic_allows]). A creature's stake won is not offered and never limited.
+static func classic_rule(player: AdventurePlayer) -> Dictionary:
+	if player == null or player.card_rule != AdventurePlayer.RULE_CLASSIC:
+		return {}
+	var owned := {}
+	for card in player.cards:
+		var card_name := String((card as Dictionary).get("card", ""))
+		owned[card_name] = int(owned.get(card_name, 0)) + 1
+	return {"owned": owned, "tome": player.owns("Tome of Enlightenment")}
+
+
+## Whether [param card_name] may be offered under [param rule] ([method
+## classic_rule]): always under the 1997 rules; under the classic ones while
+## the hero owns fewer copies than a deck may hold ([method
+## DeckModel.classic_allowance]: four, one restricted — four with the Tome —,
+## a banned card never, a basic land always).
+static func classic_allows(rule: Dictionary, card_name: String) -> bool:
+	if rule.is_empty():
+		return true
+	var most := DeckModel.classic_allowance(card_name, bool(rule.get("tome", false)))
+	return most < 0 or int((rule["owned"] as Dictionary).get(card_name, 0)) < most
+
+
+## The same for the hero [param player] at once (one card asked).
+static func may_offer(player: AdventurePlayer, card_name: String) -> bool:
+	return classic_allows(classic_rule(player), card_name)
+
+
+## Why the Classic MTG rules refuse [param card_name] ([method may_offer]).
+static func classic_refusal(card_name: String) -> String:
+	if DeckFormat.BANNED.has(card_name):
+		return CLASSIC_BANNED % card_name
+	return CLASSIC_HELD % card_name
+
+
+const CLASSIC_HELD := "The Classic MTG rules allow you no more copies of %s."
+const CLASSIC_BANNED := "%s is banned by the Classic MTG rules."
 
 
 ## Whether the hero's card [param entry] is in the deck in use.

@@ -316,6 +316,10 @@ static func copy(player: AdventurePlayer, card_name: String, color: int) -> bool
 	var hue := COLOR_WORDS[clampi(color, 1, 5) - 1]
 	if int(player.amulets.get(hue, 0)) < COPY_COST or not CardRegistry.has_card(card_name):
 		return false
+	# Nor, under the Classic MTG rules, one the hero holds every copy of they
+	# allow ([method CardShop.may_offer]).
+	if not CardShop.may_offer(player, card_name):
+		return false
 	# Through the bag ([method AdventurePlayer.add_card]; the bug pass of
 	# part B). [Ours: a full bag refuses the copy before the amulets go.]
 	if player.bag_room() < 1:

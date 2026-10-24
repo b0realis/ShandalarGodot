@@ -195,9 +195,16 @@ var playmat_color := ""
 var playmat_type := RANDOM_TYPE
 var packs: Array[String] = []
 var difficulty := 0
-## The copy limit on what the hero is given ([member AdventurePlayer.copy_limit]):
-## on as 1997 meant it, off as 1997 shipped it.
-var copy_limit := true
+## The card rule of the adventure ([member AdventurePlayer.card_rule]): as
+## 1997 meant it, as 1997 shipped it, or the classic MTG rules.
+var card_rule := AdventurePlayer.RULE_MEANT
+## The card rule as the on/off copy limit it began as (on "as intended", off
+## "as shipped").
+var copy_limit: bool:
+	get:
+		return card_rule == AdventurePlayer.RULE_MEANT
+	set(on):
+		card_rule = AdventurePlayer.RULE_MEANT if on else AdventurePlayer.RULE_SHIPPED
 var seed_text := ""
 ## The walking figure's colours, `{part: key}` ([HeroColors]); a part not
 ## named keeps its 1997 colour.
@@ -376,7 +383,8 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 			"figure_colors": HeroColors.cleaned(figure_colors)},
 		"color": color,
 		"difficulty": clampi(difficulty, 0, DIFFICULTIES.size() - 1),
-		"copy_limit": copy_limit,
+		"card_rule": card_rule,
+		"copy_limit": card_rule != AdventurePlayer.RULE_SHIPPED,
 		"playmat": {"color": playmat_color_shown(), "type": style},
 		"packs": chosen_packs,
 		"start": start,
@@ -415,7 +423,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "playmat_type", playmat_type, false)
 	Settings.set_value(KEY_PREFIX + "packs", ",".join(packs), false)
 	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
-	Settings.set_value(KEY_PREFIX + "copy_limit", copy_limit, false)
+	Settings.set_value(KEY_PREFIX + "card_rule", card_rule, false)
 	Settings.set_value(KEY_PREFIX + "difficulty", difficulty)
 
 
@@ -439,14 +447,17 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 			setup.packs.append(id)
 	setup.difficulty = clampi(int(Settings.get_value(KEY_PREFIX + "difficulty", 0)),
 		0, DIFFICULTIES.size() - 1)
-	setup.copy_limit = Settings.get_value(KEY_PREFIX + "copy_limit", true) != false
+	# The rule remembered, else the on/off copy limit remembered before the
+	# third rule.
+	setup.card_rule = AdventurePlayer.card_rule_of(Settings.get_value(KEY_PREFIX + "card_rule", null),
+		Settings.get_value(KEY_PREFIX + "copy_limit", true))
 	setup.figure_colors = HeroColors.from_text(String(Settings.get_value(KEY_PREFIX + "figure_colors", "")))
 	return setup
 
 
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
-	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "copy_limit"]
+	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "card_rule", "copy_limit"]
 
 
 ## Forget the remembered hero, so the screen opens on the defaults.

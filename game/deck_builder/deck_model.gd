@@ -39,7 +39,11 @@ extends RefCounted
 ##
 ## There is therefore NO four-of rule here. Saying "4 copies maximum" would
 ## be importing a tournament rule the 1997 game did not apply to this
-## screen.
+## screen — unless the adventure was begun under the owner's third card rule,
+## the Classic MTG rules ([constant CLASSIC], [method classic_allowance]:
+## four of a card, one of a restricted card or four with Tome of
+## Enlightenment, none of a banned one), judged and asked about as the 1997
+## rule is.
 ##
 ## ================================= THE SIDEBOARD =========================
 ##
@@ -438,10 +442,13 @@ func clear() -> void:
 
 # ------------------------------------------------------------ legality --
 
-## The two copy rules ([method extra_copies]): the manual's table, and the
-## 1997 adventure deck builder's own ([method copies_allowed_1997]).
+## The copy rules ([method extra_copies]): the manual's table, the 1997
+## adventure deck builder's own ([method copies_allowed_1997]), and the
+## Classic MTG rules an adventure may be begun under ([method
+## classic_allowance]).
 const MANUAL := "manual"
 const DECK_BUILDER_1997 := "1997"
+const CLASSIC := "classic"
 ## The 1997 deck builder's line between three copies and four.
 const DECK_BUILDER_LINE := 59
 
@@ -593,11 +600,38 @@ static func copies_allowed_1997(deck_size: int, with_tome := false) -> int:
 	return 0 if with_tome else 4
 
 
-## The allowance under [param rule] for this deck's size.
+## THE CLASSIC MTG RULES' ALLOWANCE of [param card_name] (the owner's third
+## card rule of the adventure, 2026-10-24: "max 4 same cards in deck, limited
+## cards as per rules only one per deck"; "Restricted to 4 copies!" with Tome
+## of Enlightenment; the banned ones banned too): four copies ([constant
+## DeckFormat.COPY_LIMIT]), one of a restricted card ([constant
+## DeckFormat.RESTRICTED]) — four with the Tome —, none of a banned one
+## ([constant DeckFormat.BANNED], the Tome or not); −1, no limit, for a
+## basic land.
+static func classic_allowance(card_name: String, with_tome := false) -> int:
+	if DeckFormat.is_basic(card_name):
+		return -1
+	if DeckFormat.BANNED.has(card_name):
+		return 0
+	if DeckFormat.RESTRICTED.has(card_name):
+		return DeckFormat.COPY_LIMIT if with_tome else 1
+	return DeckFormat.COPY_LIMIT
+
+
+## The allowance under [param rule] for this deck's size (the classic rules'
+## four for a card on neither list).
 func _allowance(with_tome: bool, rule: String) -> int:
 	if rule == DECK_BUILDER_1997:
 		return copies_allowed_1997(total(), with_tome)
+	if rule == CLASSIC:
+		return DeckFormat.COPY_LIMIT
 	return duplicates_allowed(total(), with_tome)
+
+
+## The copies of [param card_name] [param rule] allows: the deck's
+## [param limit], or the card's own under [constant CLASSIC] (−1 none).
+func _most_of(card_name: String, limit: int, with_tome: bool, rule: String) -> int:
+	return classic_allowance(card_name, with_tome) if rule == CLASSIC else limit
 
 
 ## Every card SHANDALAR would call an extra copy, as `name -> how many are
@@ -624,15 +658,22 @@ func extra_copies(with_tome := false, rule := MANUAL) -> Dictionary:
 		return over
 	for card_name in counts:
 		var have := copies_of(card_name)
-		if have > limit and not exempt_from_duplicates(card_name):
-			over[card_name] = have - limit
+		var most := _most_of(card_name, limit, with_tome, rule)
+		if most >= 0 and have > most and not exempt_from_duplicates(card_name):
+			over[card_name] = have - most
 	for card_name in sideboard:
 		if counts.has(card_name):
 			continue        # already counted, both piles, above
 		var have := side_count_of(card_name)
-		if have > limit and not exempt_from_duplicates(card_name):
-			over[card_name] = have - limit
+		var most := _most_of(card_name, limit, with_tome, rule)
+		if most >= 0 and have > most and not exempt_from_duplicates(card_name):
+			over[card_name] = have - most
 	return over
+
+
+## The Classic MTG rules' words in [method over_duplicate_limit].
+const CLASSIC_ALLOWS := "the Classic MTG rules allow %d"
+const CLASSIC_BANS := "banned by the Classic MTG rules"
 
 
 ## What SHANDALAR (not the Deck Builder) would say about this deck's
@@ -645,8 +686,11 @@ func over_duplicate_limit(with_tome := false, rule := MANUAL) -> Array[String]:
 	var found: Array[String] = []
 	for card_name in over:
 		var in_side := side_count_of(card_name)
-		found.append("%d %s (Shandalar allows %d)%s" % [
-			copies_of(card_name), card_name, limit,
+		var most := _most_of(card_name, limit, with_tome, rule)
+		var allows := "Shandalar allows %d" % most
+		if rule == CLASSIC:
+			allows = CLASSIC_BANS if most == 0 else CLASSIC_ALLOWS % most
+		found.append("%d %s (%s)%s" % [copies_of(card_name), card_name, allows,
 			"" if in_side == 0 else " — %d in the sideboard" % in_side])
 	found.sort()
 	return found

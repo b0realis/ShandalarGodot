@@ -309,7 +309,9 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 		lines.append(TELEPORTED)
 	if left & CreatureBook.REWARD_WON_CARD != 0:
 		var card := CreatureBook.reward_card(row)
-		if CardRegistry.has_card(card):
+		# Not given under the Classic MTG rules once the hero holds every
+		# copy they allow ([method CardShop.may_offer]) [ours].
+		if CardRegistry.has_card(card) and CardShop.may_offer(player, card):
 			var kept := player.add_card(card)
 			if kept:
 				(spoils["kept"] as Array[String]).append(card)
@@ -371,7 +373,8 @@ static func _random_artifact(dice: MsvcRandom) -> String:
 ## card ([method CardTrade.catalogue]) joins the collection. 1997 asked
 ## again until a card was picked (E:2604–2612): the pane does.
 static func pick_any(player: AdventurePlayer, spoils: Dictionary, card_name: String) -> bool:
-	if not bool(spoils.get("pick_any", false)) or not CardRegistry.has_card(card_name):
+	if not bool(spoils.get("pick_any", false)) or not CardRegistry.has_card(card_name) \
+			or not CardShop.may_offer(player, card_name):
 		return false
 	spoils["pick_any"] = false
 	spoils["picked"] = card_name
@@ -390,7 +393,7 @@ static func pick_duplicate(player: AdventurePlayer, spoils: Dictionary, card_nam
 		if String((entry as Dictionary).get("card", "")) == card_name:
 			owned = true
 			break
-	if not owned:
+	if not owned or not CardShop.may_offer(player, card_name):
 		return false
 	spoils["picked"] = card_name
 	return player.add_card(card_name)
@@ -406,9 +409,12 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 	var pool := CardTrade.catalogue()
 	var color := clampi(int(meeting["color"]), 1, 5)
 	var stakes: Array = meeting.get("creature_ante", [])
-	# The copy limit as the Embark chose it ([method CardShop.counted_copies]).
+	# The copy limit as the Embark chose it ([method CardShop.counted_copies]),
+	# or the Classic MTG rules' count of every copy owned, the cards drawn
+	# here among them ([method CardShop.classic_rule]).
 	var counts := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player)
+	var classic := CardShop.classic_rule(player)
 	var budget := int(meeting.get("strength", CreatureBook.strength(int(meeting["row"]))))
 	var present := _types_in(pool)
 	while budget > 0:
@@ -440,7 +446,10 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 				# pass of part B, c5, P3-1).
 				if not CardValue.goes_with(1 << color, int(f.get("color", CardValue.COLORLESS)), level):
 					continue
-				if copies_left(player, String(drawn["name"]), f, counts, limit) <= 0:
+				if classic.is_empty():
+					if copies_left(player, String(drawn["name"]), f, counts, limit) <= 0:
+						continue
+				elif not CardShop.classic_allows(classic, String(drawn["name"])):
 					continue
 				picked = String(drawn["name"])
 				break
@@ -449,6 +458,9 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 		if picked == "":
 			break
 		out.append(picked)
+		if not classic.is_empty():
+			var owned: Dictionary = classic["owned"]
+			owned[picked] = int(owned.get(picked, 0)) + 1
 		budget -= maxi(_rarity(picked) + _favoured(picked), 1)
 	return out
 

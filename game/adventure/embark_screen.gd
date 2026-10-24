@@ -79,11 +79,20 @@ var _color_name: Label
 var _color_flavor: Label
 var _color_gifts: Label
 var _playmat_color: OptionButton
-var _copy_limit: CheckBox
+var _card_rule: OptionButton
 ## The copy limit's words, on and off, and its tooltip.
-const COPY_LIMIT_ON := "Copy limit (1997 as meant)"
-const COPY_LIMIT_OFF := "No copy limit (1997 as shipped)"
-const COPY_LIMIT_TIP := "On, the shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant. Off, they offer any number of copies, as the 1997 game really did."
+## THE CARD RULES, named as the owner named them (2026-10-24), by
+## [constant AdventurePlayer.CARD_RULES]; what each does is its tooltip.
+const RULE_NAMES := {
+	AdventurePlayer.RULE_MEANT: "Adventure limit of cards (as intended in 1997)",
+	AdventurePlayer.RULE_SHIPPED: "No limit (as shipped in 1997)",
+	AdventurePlayer.RULE_CLASSIC: "Classic MTG rules",
+}
+const RULE_TIPS := {
+	AdventurePlayer.RULE_MEANT: "The shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant.",
+	AdventurePlayer.RULE_SHIPPED: "The shops and the duels' rewards offer any number of copies, as the 1997 game really did.",
+	AdventurePlayer.RULE_CLASSIC: "A deck holds at most four copies of a card, basic lands aside; one of a restricted card, four with Tome of Enlightenment; none of a banned one. No shop, trader, reward or lair offers you a card you already own as many copies of as a deck may hold.",
+}
 var _playmat_type: OptionButton
 var _playmat_preview: Control
 var _playmat_note: Label
@@ -430,7 +439,7 @@ func _build_magic() -> Control:
 	# Lettered a size down and with no rule above it: without the 1997 skin
 	# the fallback faces are taller, and the screen had no pixels to spare.
 	box.add_child(_heading("Your rules", 18))
-	box.add_child(_build_copy_limit())
+	box.add_child(_build_card_rule())
 	return box
 
 
@@ -519,39 +528,45 @@ func _build_journey() -> Control:
 	return box
 
 
-## THE COPY LIMIT ON WHAT YOU ARE GIVEN (the owner, 2026-10-24: "This
-## should be an on off setting during shandalar embark construction!"): on,
-## the shops and the duels' rewards offer no more copies of a card than the
-## deck may hold, as 1997 meant ([member AdventureSetup.copy_limit],
-## [method CardShop.counted_copies]); off, any number, as 1997 shipped.
-func _build_copy_limit() -> Control:
-	_copy_limit = CheckBox.new()
-	_copy_limit.name = "CopyLimit"
-	_copy_limit.tooltip_text = COPY_LIMIT_TIP
-	_copy_limit.add_theme_color_override("font_color", PARCHMENT)
-	_copy_limit.add_theme_color_override("font_hover_color", GOLD)
-	_copy_limit.add_theme_color_override("font_pressed_color", PARCHMENT)
-	_copy_limit.add_theme_color_override("font_hover_pressed_color", GOLD)
-	_copy_limit.add_theme_font_size_override("font_size", 15)
-	_copy_limit.add_theme_icon_override("checked", UiChrome.check_icon(true))
-	_copy_limit.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
-	_copy_limit.button_pressed = setup.copy_limit
-	_copy_limit.toggled.connect(choose_copy_limit)
-	_show_copy_limit()
-	return _copy_limit
+## THE CARD RULE OF THE ADVENTURE (the owner, 2026-10-24: "This should be an
+## on off setting during shandalar embark construction!", then "one more
+## rule … also classic MTG rules", "name the rules as i named them!"): one
+## choice of three ([constant RULE_NAMES], [member AdventureSetup.card_rule],
+## [member AdventurePlayer.card_rule]) — one line, as the box it replaced
+## (the column holds eight card packs at 1280 × 800); the tooltip says what
+## the one chosen does.
+func _build_card_rule() -> Control:
+	_card_rule = OptionButton.new()
+	_card_rule.name = "CardRule"
+	for rule in AdventurePlayer.CARD_RULES:
+		_card_rule.add_item(String(RULE_NAMES[rule]))
+		_card_rule.set_item_metadata(_card_rule.item_count - 1, rule)
+	_card_rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# As wide as the column, not as its longest name: fitted to that, it
+	# widened the column and the screen scrolled sideways.
+	_card_rule.fit_to_longest_item = false
+	_card_rule.clip_text = true
+	# Lettered a size down, as the box it replaced: the longest name whole.
+	_card_rule.add_theme_font_size_override("font_size", 15)
+	_card_rule.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_card_rule.item_selected.connect(func(index: int) -> void:
+		choose_card_rule(String(_card_rule.get_item_metadata(index))))
+	_show_card_rule()
+	return _card_rule
 
 
-## The copy limit chosen: on as 1997 meant it, off as 1997 shipped it.
-func choose_copy_limit(on: bool) -> void:
-	setup.copy_limit = on
-	_show_copy_limit()
+## The card rule [param rule] chosen ([constant AdventurePlayer.CARD_RULES]).
+func choose_card_rule(rule: String) -> void:
+	if rule in AdventurePlayer.CARD_RULES:
+		setup.card_rule = rule
+	_show_card_rule()
 
 
-## The box says which it is, on one line (the column holds eight card packs
-## at 1280 × 800); the tooltip says what it does.
-func _show_copy_limit() -> void:
-	if _copy_limit != null:
-		_copy_limit.text = COPY_LIMIT_ON if setup.copy_limit else COPY_LIMIT_OFF
+func _show_card_rule() -> void:
+	if _card_rule == null:
+		return
+	_card_rule.select(AdventurePlayer.CARD_RULES.find(setup.card_rule))
+	_card_rule.tooltip_text = String(RULE_TIPS.get(setup.card_rule, ""))
 
 
 func _build_buttons() -> Control:
@@ -719,7 +734,7 @@ func _on_name_changed(text: String) -> void:
 ## on the map and its colours, the colour,
 ## the playmat's colour and style, the card packs, the difficulty and a new
 ## seed (a time of day, as the clock gives) — for the player to enjoy and
-## change before setting out. Your rules (the copy limit) are not drawn:
+## change before setting out. Your rules (the card rule) are not drawn:
 ## they stay as the player set them. [param rng] is for tests.
 func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	if _leaving:

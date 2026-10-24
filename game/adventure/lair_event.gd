@@ -98,7 +98,7 @@ static func begin(player: AdventurePlayer, lair: Dictionary) -> Dictionary:
 		if color >= 1 and dice.below(2) != 0:
 			out["reward"] = CardShop.LANDS[color - 1]
 		else:
-			out["reward"] = _treasure(dice, color)
+			out["reward"] = _treasure(dice, color, CardShop.classic_rule(player))
 		player.dice = dice.state
 		return out
 	var event := 0
@@ -261,10 +261,12 @@ static func rare_of_any_kind(dice: MsvcRandom) -> String:
 ## < 0`, world_lair_monster_encounter.c 997–1001; [method
 ## DuelSpoils.copies_left]; the playtest of part B, P3-4): one it may take no
 ## more of still comes. Off, as 1997 shipped it, no copy is counted and none
-## is thrown back.
+## is thrown back. Under the Classic MTG rules none the hero holds every
+## copy of they allow ([method CardShop.classic_allows]).
 static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) -> String:
 	var counts := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player) if not counts.is_empty() else 0
+	var classic := CardShop.classic_rule(player)
 	var spells: Array[String] = []
 	var artifacts: Array[String] = []
 	for row in CardTrade.catalogue():
@@ -272,6 +274,8 @@ static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) ->
 		if CardShop.shop_rarity(f) != 3:
 			continue
 		if not counts.is_empty() and DuelSpoils.copies_left(player, String(row["name"]), f, counts, limit) < 0:
+			continue
+		if not CardShop.classic_allows(classic, String(row["name"])):
 			continue
 		var kind := int(f.get("type", 0))
 		if kind & CardValue.ARTIFACT != 0:
@@ -283,12 +287,15 @@ static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) ->
 
 
 ## The treasure's card: any of the lair's colour [param color] or none,
-## never a dungeon's.
-static func _treasure(dice: MsvcRandom, color: int) -> String:
+## never a dungeon's — nor, under the Classic MTG rules, one they let no one
+## offer the hero ([param classic]: [method CardShop.classic_rule]).
+static func _treasure(dice: MsvcRandom, color: int, classic := {}) -> String:
 	var found: Array[String] = []
 	for row in _cards():
 		var f: Dictionary = row["facts"]
 		if int(f.get("extra", 0)) & 0x100 != 0 or bool(row["treasure"]):
+			continue
+		if not CardShop.classic_allows(classic, String(row["name"])):
 			continue
 		var bits := int(f.get("color", CardValue.COLORLESS))
 		if color == 0 or bits == CardValue.COLORLESS or CardValue.first_color(bits) == 1 << color:

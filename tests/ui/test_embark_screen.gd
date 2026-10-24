@@ -463,23 +463,33 @@ func test_the_three_windows_are_one_size_and_lined_up() -> void:
 	assert_lt(panels[0].get_global_rect().end.y, leave.global_position.y, "above the buttons")
 
 
-## THE COPY LIMIT, an Embark choice (the owner, 2026-10-24): on by default
-## (as 1997 meant it); clicked off, the record and the next visit carry it,
-## and the box says which it is.
-func test_the_copy_limit_is_chosen_at_the_embark() -> void:
-	var box := _find("CopyLimit") as CheckBox
-	assert_not_null(box, "the copy limit's check box, beside the difficulty")
-	assert_true(box.button_pressed, "on: as 1997 meant it")
-	assert_eq(box.text, EmbarkScreen.COPY_LIMIT_ON)
-	assert_string_contains(box.tooltip_text, "one under 40 cards")
-	box.button_pressed = false
-	assert_false(screen.setup.copy_limit)
-	assert_eq(box.text, EmbarkScreen.COPY_LIMIT_OFF)
+## THE CARD RULE, an Embark choice (the owner, 2026-10-24): three, named as
+## the owner named them, "as intended in 1997" by default; another chosen,
+## the record, the next visit and the adventure carry it, and the tooltip
+## says what it does.
+func test_the_card_rule_is_chosen_at_the_embark() -> void:
+	var rules := _find("CardRule") as OptionButton
+	assert_not_null(rules, "the card rule's choice, under the playmat")
+	var names: Array[String] = []
+	for i in rules.item_count:
+		names.append(rules.get_item_text(i))
+	assert_eq(names, ["Adventure limit of cards (as intended in 1997)", "No limit (as shipped in 1997)",
+		"Classic MTG rules"] as Array[String], "the owner's names, in order")
+	assert_eq(rules.selected, 0, "as intended in 1997 by default")
+	assert_string_contains(rules.tooltip_text, "one under 40 cards")
+	rules.select(1)
+	rules.item_selected.emit(1)
+	assert_false(screen.setup.copy_limit, "as shipped: the old limit off")
+	rules.select(2)
+	rules.item_selected.emit(2)
+	assert_eq(screen.setup.card_rule, AdventurePlayer.RULE_CLASSIC)
+	assert_string_contains(rules.tooltip_text, "four copies")
 	watch_signals(screen)
 	(_find("HeroName") as LineEdit).text = "Free Trader"
 	screen.embark()
 	var record: Dictionary = get_signal_parameters(screen, "embarked")[0]
-	assert_false(bool(record["copy_limit"]), "the record carries it")
-	assert_false(AdventureSetup.restore([] as Array[String]).copy_limit, "and the next visit")
+	assert_eq(String(record["card_rule"]), AdventurePlayer.RULE_CLASSIC, "the record carries it")
+	assert_eq(AdventureSetup.restore([] as Array[String]).card_rule, AdventurePlayer.RULE_CLASSIC,
+		"and the next visit")
 	var hero := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
-	assert_false(hero.copy_limit, "the adventure plays by it")
+	assert_eq(hero.card_rule, AdventurePlayer.RULE_CLASSIC, "the adventure plays by it")

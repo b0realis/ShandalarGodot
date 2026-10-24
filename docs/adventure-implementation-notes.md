@@ -946,6 +946,38 @@ opt-in engine. What was found and fixed:
 - Marked, not changed: [ours] the creatures' turn ends at a meeting
   ([WorldCreatures]; 1997 went on through the later slots).
 
+## Built: the Classic MTG rules, a third card rule (2026-10-24)
+
+The owner: *"I want to add one more rule as an alternative to Adventure
+limit o cards (as intended in 1997) and No limit (as shipped in 1997) to the
+depart menu - also classic MTG rules (max 4 same cards in deck, limited
+cards as per rules only one per deck). Traders stop offering the cards if
+you have 4 copies all-ready in your possession"*, *"Also name the rules as
+i named them!"*. The Embark's copy limit became one choice of three, named
+as the owner named them ("CardRule", [member AdventurePlayer.card_rule]):
+"Adventure limit of cards (as intended in 1997)" (the copy limit on, the
+default), "No limit (as shipped in 1997)" (off) and "Classic MTG rules"
+[ours]. Saves keep the rule; a save or a remembered choice from before it
+keeps its on/off limit, and a save writes that limit beside the rule (on for
+the classic rules) for an older game to read.
+
+The classic rules, by the owner's rulings: a deck holds four copies of a
+card, basic lands aside, one of a restricted card and none of a banned one
+(`DeckFormat`'s lists, the ones the duel setup's Restricted (Type 1)
+format reads); with Tome of Enlightenment a restricted card four times, a
+banned one still never (*"No my mistake, banned are not allowed.
+Restricted to 4 copies!"*). The adventure's deck builder judges by them
+([constant DeckModel.CLASSIC]) and asks as it is left, as under the 1997
+rule — adding is never refused. EVERY source stops offering a card once the
+hero owns, in any deck or none, as many copies as a deck may hold: the
+shops' draws (and a card already on a shelf is not sold then), the
+traders' lists (the Bazaar, a town's trade, a quest's reward pick — listed
+only what the rules allow, so nothing is dimmed), the cards a creature
+gives (counting the copies the same reward draws), its reward card, the
+any-card and duplicate picks, the tribute's spell, a lair's rare and its
+treasure, the wise man's copy, and the first deck dealt. A creature's stake
+won — the lairs' hoards, a freed town's prize — is never limited.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
