@@ -1306,22 +1306,83 @@ func has_mulliganed(pid: int) -> bool:
 ## May [param pid] still redraw? While the opening is open, until they
 ## keep, and while there is a hand left to throw back — the seventh
 ## mulligan draws nothing, and nothing cannot be shuffled away again.
+## Under [constant MULLIGAN_1997] the 1997 adventure's narrower door
+## ([method _may_mulligan_1997]).
 func may_mulligan(pid: int) -> bool:
 	if not mulligan_open or game_over:
 		return false
 	if pid < 0 or pid >= players.size() or mulligan_kept[pid]:
 		return false
-	return not players[pid].hand.is_empty()
+	if players[pid].hand.is_empty():
+		return false
+	if mulligan_rule == MULLIGAN_1997:
+		return _may_mulligan_1997(pid)
+	return true
+
+
+# --- part B (W2): the 1997 adventure mulligan ---
+## THE 1997 ADVENTURE MULLIGAN — [member mulligan_rule]'s other value,
+## asked for by `DuelConfig.mulligan_rule` (the PLAN's lead default: *"1997's
+## mulligan in adventure duels (free redraw only at 0 or 7 lands; the
+## creature's own rule)"*). What `play_duel` did after the deal
+## (`duel.c:2399-2470`, the land counts in `evaluate_opening_hand_land_counts`
+## `duel.c:2077-2124`, the offer in `dlgproc_duel_redraw_ante`,
+## `duel_engine_coin_flip.c`):
+##  - THE ADVENTURER (seat [constant MULLIGAN_1997_HERO]) is offered ONE
+##    redraw, and only of a hand of no land or nothing but land;
+##  - THE CREATURE (the other seat) redraws AUTOMATICALLY — a hand of no
+##    land or all land always, and one of fewer than two lands or more
+##    than five when the adventurer redrew;
+##  - each redraw is FREE: the hand goes back and as many cards come out
+##    (seven for seven — `play_duel` dealt `opening_hand_count` again), and
+##    there is never a second one.
+## Which seat answers how is the opening's business (`OpeningHand`): the
+## engine keeps the door. Seat roles are fixed because they were in 1997 —
+## `play_duel` always seats the adventurer at 0.
+const MULLIGAN_1997 := "1997"
+## The adventurer's seat under [constant MULLIGAN_1997]; the creature is
+## the other one.
+const MULLIGAN_1997_HERO := 0
+
+## THE MULLIGAN RULE of this opening: "" is ours — the Paris mulligan the
+## owner ruled on 2026-09-08, any hand, one card fewer each time — and
+## [constant MULLIGAN_1997] the adventure's. Set before
+## [method deal_opening_hands]; nothing but an adventure duel sets it, so
+## every other duel keeps exactly the opening it had.
+var mulligan_rule := ""
+
+
+## The 1997 door for [param pid] (see [constant MULLIGAN_1997]): once, and
+## only for the hand the rule names — the adventurer's no land / all land,
+## the creature's the same or, after the adventurer's redraw, fewer than
+## two lands or more than five (`evaluate_opening_hand_land_counts`; the
+## creature's hand is still the one it was dealt, as in 1997, because it
+## has not redrawn).
+func _may_mulligan_1997(pid: int) -> bool:
+	if mulligans_taken[pid] > 0:
+		return false
+	if hand_is_a_mulligan_hand(pid):
+		return true
+	if pid == MULLIGAN_1997_HERO or not has_mulliganed(opponent_of(pid)):
+		return false
+	var lands := 0
+	for inst in players[pid].hand:
+		if inst.is_land():
+			lands += 1
+	return lands < 2 or lands > 5
+# --- end part B (W2) ---
 
 
 ## Take the mulligan: the whole hand is shuffled back and ONE CARD FEWER
-## drawn in its place. "" on success, else a refusal string.
+## drawn in its place. "" on success, else a refusal string. Under
+## [constant MULLIGAN_1997] as many cards come back as went in (1997's free
+## redraw of seven).
 func take_mulligan(pid: int) -> String:
 	if not may_mulligan(pid):
 		return "no mulligan is available to %s" % players[pid].player_name \
 			if pid >= 0 and pid < players.size() else "no such player"
 	var p := players[pid]
-	var count := p.hand.size() - 1
+	var count := p.hand.size() - (0 if mulligan_rule == MULLIGAN_1997 else 1)
 	for inst in p.hand:
 		inst.zone = Mtg.Zone.LIBRARY
 		p.library.append(inst)
@@ -1351,15 +1412,157 @@ func decline_mulligan(pid: int) -> String:
 
 ## Close the opening hand and begin turn 1. [param first_player] plays
 ## first and therefore skips their first draw (`Duel.hlp`, "Play or Draw
-## Rule" — the toss winner picks which of the two they want).
+## Rule" — the toss winner picks which of the two they want). What
+## [method arrange_opening] asked for happens first, between the settled
+## hands and the turn, where 1997 put it.
 func start_duel(first_player := 0) -> void:
 	mulligan_open = false
+	_run_opening_arrangements()
 	turn_number = 1
 	active_player = clampi(first_player, 0, 1)
 	_skip_first_draw = true
 	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
 		null, "turn", active_player)
 	_enter_step(0)
+
+
+# --- part B (W2): between the opening hands and turn 1 ---
+#
+# THE ADVENTURE'S OPENING ARRANGEMENTS. After both hands were settled and
+# before the first turn, 1997's `play_duel` (`duel.c:2483-2526`) did two
+# things a creature's meeting could ask for:
+#  - MIND CONTROL (`preduel_flags & 2`, `duel.c:2483-2499`): the creature's
+#    library became a copy of the adventurer's, shuffled, and its hand a
+#    copy of the adventurer's hand — the hand as it stood after the
+#    mulligans;
+#  - CARDS IN PLAY (`duel.c:2502-2526`): the creature's card(s) and the
+#    adventurer's next-duel card were each made and put into play under
+#    that side's control, `process_card_enters_play` running their
+#    entering — so a card's own "as this enters" and its static abilities
+#    apply at once, and an "enters the battlefield" trigger waits, as every
+#    trigger of the untap step does, for turn 1's upkeep.
+# [method arrange_opening] notes them after setup; [method start_duel] runs
+# them ([method _run_opening_arrangements]), so every way into turn 1 —
+# the opening window, the headless deal, a tool — gets them, and a duel
+# that arranged nothing is the duel it always was.
+
+## Mind Control: [method mirror_opening] from seat 0 to seat 1 at the
+## start. See [method arrange_opening].
+var _opening_mirror := false
+## Per seat, the card names to put into play at the start.
+var _opening_in_play: Array = [[], []]
+
+
+## Note what happens between the settled opening hands and turn 1:
+## [param mirror_seat0] copies seat 0's library and final hand to seat 1
+## ([method mirror_opening]); [param in_play] is `[[names], [names]]`, each
+## seat's cards put into play under its control ([method create_into_play]),
+## seat 0's first. Called after [method setup], before [method start_duel].
+func arrange_opening(mirror_seat0: bool, in_play: Array = [[], []]) -> void:
+	_opening_mirror = mirror_seat0
+	_opening_in_play = [[], []]
+	for pid in mini(2, in_play.size()):
+		if in_play[pid] is Array:
+			(_opening_in_play[pid] as Array).assign(in_play[pid])
+
+
+## Run what [method arrange_opening] noted, once: the mirror first (it
+## copies hands, and a card in play is not in a hand), then the cards in
+## play — the order of `duel.c:2483-2526`.
+func _run_opening_arrangements() -> void:
+	var mirror := _opening_mirror
+	var in_play := _opening_in_play
+	_opening_mirror = false
+	_opening_in_play = [[], []]
+	if mirror:
+		mirror_opening(0, 1)
+	for pid in mini(2, in_play.size()):
+		for card_name in in_play[pid]:
+			create_into_play(pid, String(card_name))
+	# No turn has begun: putting a permanent into play on "your turn"
+	# (Arboria's "during their last turn") is not something either seat did.
+	for p in players:
+		p.acted_this_turn = false
+
+
+## MIND CONTROL (`duel.c:2483-2499`): [param target]'s library becomes a
+## SHUFFLED copy of [param source]'s library and its hand a copy of
+## [param source]'s hand, card for card. Called after the opening hands are
+## settled — 1997 copied the adventurer's hand after the mulligans. The
+## target's own library and hand are gone from the game; its ante and
+## anything else stay its own. Its decklist becomes the source's (the deck
+## it now plays is the one a card may be named from), and its agent studies
+## it again, as a seat whose list changed does ([method begin_from_position]).
+## The copies are new cards OWNED by [param target]. Each keeps its card's
+## look (the printing chosen for the original).
+func mirror_opening(source := 0, target := 1) -> void:
+	if source == target or players.size() != 2:
+		return
+	var src := players[source]
+	var dst := players[target]
+	for inst in dst.library + dst.hand:
+		_instances.erase(inst.id)
+	dst.library.clear()
+	dst.hand.clear()
+	for inst in src.library:
+		dst.library.append(_copy_card_for(target, inst))
+	_shuffle(dst.library)
+	for inst in src.hand:
+		var copy := _copy_card_for(target, inst)
+		copy.zone = Mtg.Zone.HAND
+		dst.hand.append(copy)
+	dst.deck_names.assign(src.deck_names)
+	log_line("%s's library and hand are a copy of %s's" % [dst.player_name, src.player_name])
+	if agents.size() > target and agents[target] != null:
+		agents[target].prepare(self, target)
+	_emit_state()
+
+
+## The card called [param card_name], or null — quietly: a name the
+## registry does not know is the caller's to report (the adventure names
+## its cards; [method CardRegistry.get_card] would raise an error).
+func _known_card(card_name: String) -> CardData:
+	return CardRegistry.get_card(card_name) if CardRegistry.has_card(card_name) else null
+
+
+## A new card of [param original]'s printed name, owned by [param pid], in
+## no zone array yet (its zone reads LIBRARY), registered with the game,
+## wearing [param original]'s metadata (its printing).
+func _copy_card_for(pid: int, original: CardInstance) -> CardInstance:
+	var copy := CardInstance.new(original.printed_data, _next_instance_id, pid)
+	_next_instance_id += 1
+	_instances[copy.id] = copy
+	for key in original.get_meta_list():
+		copy.set_meta(key, original.get_meta(key))
+	return copy
+
+
+## A CARD IN PLAY AT THE START (`duel.c:2502-2526`): a new card of
+## [param card_name], owned and controlled by [param pid], put onto the
+## battlefield through the ordinary arrival — replacement effects, "as this
+## enters", static abilities and the ENTERS_BATTLEFIELD event all run
+## (1997's `process_card_enters_play`). It comes from outside the deck: it is
+## not added to the seat's decklist. Meant for before turn 1 (see
+## [method arrange_opening]); a question its arrival asks there is answered
+## by the seat's agent as any ask outside a resolution is. Returns the card,
+## or null — an unknown name, or a card that is not a permanent (an instant
+## or a sorcery is never in play, CR 304.4 / 307.4) — with a log line.
+func create_into_play(pid: int, card_name: String) -> CardInstance:
+	var data := _known_card(card_name)
+	if data == null or pid < 0 or pid >= players.size():
+		log_line("No card %s can start the duel in play" % card_name)
+		return null
+	if not data.is_permanent_type():
+		log_line("%s is not a permanent and cannot start the duel in play" % data.card_name)
+		return null
+	var inst := CardInstance.new(data, _next_instance_id, pid)
+	_next_instance_id += 1
+	_instances[inst.id] = inst
+	log_line("%s starts the duel with %s in play" % [players[pid].player_name, data.card_name],
+		inst, "", pid)
+	put_into_play(inst, pid)
+	return inst
+# --- end part B (W2) ---
 
 
 # ------------------------------------------------------ the test position --
@@ -8990,6 +9193,93 @@ func stake_ante(pid: int, count := 1, exclude_basic_lands := false) -> Array[Car
 	return staked
 
 
+# --- part B (W2): the adventure's named stakes ---
+#
+# THE ADVENTURE CHOOSES THE STAKES ITSELF. A creature's meeting draws both
+# antes before the duel (`world_lair_monster_encounter.c:1576-1611`), a
+# ruled town picks the adventurer's by its seed walk (`visitLocation.c`),
+# and a lair puts up a hoard of rares the creature never had in its deck
+# (`RunRandomCreatureAnteDuel`, `:517-601`). So two doors besides the
+# random [method stake_ante], both called between [method setup] and the
+# deal, and both PLAYING THE DUEL FOR ANTE even when they name nothing (the
+# adventurer at a lair stakes nothing, and the duel is still for the
+# hoard):
+#  - [method stake_named_ante]: the named cards are LIFTED OUT OF THE
+#    LIBRARY — 1997 marked them `0x8000` in the deck so no draw could reach
+#    them (`duel.c:2360-2370`);
+#  - [method stake_extra_ante]: the named cards are MADE straight into the
+#    ante — a lair's hoard; the adventurer's own card when it plays a
+#    creature's deck ("Why don't you try this deck!").
+# Neither SETTLES anything when the duel ends: the adventure moves its own
+# cards (docs/duel-todo.md §7), reading the piles by owner.
+#
+# A stake stays in the ante whatever the hand does. [ours: 1997 slip —
+# after the adventurer's mulligan `play_duel` cleared every deck mark and
+# marked only the FIRST stake out again (`duel.c:2419-2430`), so a ruled
+# town's second and third stakes went back into the deck the redraw and
+# the library were drawn from.]
+
+## Lift each of [param names] out of [param pid]'s library into its ante,
+## one copy per name (a name twice stakes two copies). A name the library
+## does not hold is logged and skipped. Returns what was staked. Sets
+## [member ante_enabled] whatever it finds.
+func stake_named_ante(pid: int, names: Array) -> Array[CardInstance]:
+	var staked: Array[CardInstance] = []
+	if pid < 0 or pid >= players.size():
+		return staked
+	var p := players[pid]
+	for card_name in names:
+		var data := _known_card(String(card_name))
+		var wanted := data.card_name if data != null else String(card_name)
+		var picked: CardInstance = null
+		for i in range(p.library.size() - 1, -1, -1):
+			if p.library[i].data.card_name == wanted:
+				picked = p.library[i]
+				break
+		if picked == null:
+			log_line("%s has no %s in the library to ante" % [p.player_name, wanted])
+			continue
+		_rec_move(picked, pid, Mtg.Zone.ANTE)
+		p.library.erase(picked)
+		picked.zone = Mtg.Zone.ANTE
+		p.ante.append(picked)
+		staked.append(picked)
+		log_line("%s antes %s" % [p.player_name, picked.data.card_name])
+	_rec(self, &"ante_enabled")
+	ante_enabled = true
+	_emit_state()
+	return staked
+
+
+## Make each of [param names] as a new card OWNED by [param pid] straight in
+## its ante — a card from outside the deck, so not added to the decklist
+## (it is not a card the deck holds; the ante is public all the same).
+## An unknown name is logged and skipped. Returns what was staked. Sets
+## [member ante_enabled] whatever it finds.
+func stake_extra_ante(pid: int, names: Array) -> Array[CardInstance]:
+	var staked: Array[CardInstance] = []
+	if pid < 0 or pid >= players.size():
+		return staked
+	var p := players[pid]
+	for card_name in names:
+		var data := _known_card(String(card_name))
+		if data == null:
+			log_line("No card %s can be anted" % String(card_name))
+			continue
+		var inst := CardInstance.new(data, _next_instance_id, pid)
+		_next_instance_id += 1
+		_instances[inst.id] = inst
+		inst.zone = Mtg.Zone.ANTE
+		p.ante.append(inst)
+		staked.append(inst)
+		log_line("%s antes %s" % [p.player_name, data.card_name])
+	_rec(self, &"ante_enabled")
+	ante_enabled = true
+	_emit_state()
+	return staked
+# --- end part B (W2) ---
+
+
 ## Ante the top card of [param pid]'s library (Contract from Below,
 ## Demonic Attorney, Rebirth). Returns the card, or null on an empty library
 ## — and null, moving nothing, in a duel NOT played for ante (the owner's
@@ -9034,15 +9324,30 @@ func remove_from_ante(inst: CardInstance, to_zone: int) -> void:
 	_emit_state()
 
 
+## EVERY PERMANENT CHANGE OF OWNER this duel, in order (part B, W2): one
+## `{"id", "card", "from", "to"}` per [method change_owner] — the instance
+## id, its printed name (the physical card, whatever it is a copy of now),
+## the old owner and the new. An owner change is the one thing that
+## outlives the duel, and the adventure settles it after the duel from this
+## list (`DuelReport.owner_changes`). Journaled, so a search that explored
+## a Tempest Efreet leaves no line behind.
+var owner_changes: Array[Dictionary] = []
+
+
 ## PERMANENT change of ownership (Bronze Tablet, Tempest Efreet, Darkpact).
 ## The card physically moves to the new owner's copy of its current zone —
-## an owner change is the one thing that outlives the duel.
+## an owner change is the one thing that outlives the duel, and it is noted
+## in [member owner_changes].
 func change_owner(inst: CardInstance, new_owner: int) -> void:
 	# A phased-out permanent can't be affected (CR 702.26b) — moved, it was
 	# appended to a battlefield list while still parked (Bronze Tablet).
 	if inst == null or inst.owner_id == new_owner or inst.is_token or inst.phased_out:
 		return
 	var zone := inst.zone
+	_rec(self, &"owner_changes")
+	owner_changes = owner_changes.duplicate()
+	owner_changes.append({"id": inst.id, "card": inst.printed_data.card_name,
+		"from": inst.owner_id, "to": new_owner})
 	if undo_log != null:
 		_rec(inst, &"owner_id")
 		_rec(inst, &"controller_id")

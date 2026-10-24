@@ -20,6 +20,7 @@ import datetime
 import io
 import json
 import os
+import re
 import struct
 import sys
 import tempfile
@@ -1595,11 +1596,14 @@ class TestSoundManifest(unittest.TestCase):
                 self.assertNotIn("endphase", name.lower())
 
     def test_the_music_is_the_twenty_seven_beds(self):
+        # And, since part B (2026-10-23), the two beds 1.3 loops after an
+        # adventure duel, won or lost — kept out of the playlist below.
         music = [k for k in imp.MANIFEST if k.startswith("music_")]
-        self.assertEqual(len(music), 27)
+        self.assertEqual(len(music), 29)
         for key in ("music_duel.wav", "music_location_0.wav",
                     "music_location_19.wav", "music_temple.wav",
-                    "music_castle_white.wav", "music_castle_green.wav"):
+                    "music_castle_white.wav", "music_castle_green.wav",
+                    "music_win_duel.wav", "music_lose_duel.wav"):
             self.assertIn(key, music)
         # Stingers stay out: a one-shot inside a shuffle is a jump-scare.
         for name in ("music_wingame.wav", "music_dungeon.wav"):
@@ -1945,3 +1949,246 @@ class TestCardHints(unittest.TestCase):
             self.assertEqual(len(data["hints"]), 2)
             self.assertFalse(imp.import_card_hints({}, out), "no Hints.txt: nothing")
 
+
+
+# ------------------------------------------------------------ part B ------
+
+REPO = Path(__file__).resolve().parent.parent
+
+## THE CREATURES' SHEETS BY TABLE ROW, as 1.3 `LoadCreatureEncounterSprites`
+## (world_lair_monster_slots.c:38-279) loads them — the part B creature
+## spec's table, row: (body, shadow). Rows 0, 7, 14, 21, 28 (the lair and
+## four castle wizards), 55 and 56 (Arzakon) have none; the War Mage and
+## the Dragon Lord share R_AMG; the centaurs' shadows are crossed, as in
+## 1997.
+CREATURE_SPRITES_BY_ROW = {
+    1: ("BK_FWZ", "SFWZ"), 2: ("BK_KHT", "SB_KHT"), 3: ("BK_MWZ", "SMWZ"),
+    4: ("BK_LRD", "SB_LRD"), 5: ("BK_WG", "SBK_WG"), 6: ("BK_AMG", "SB_AMG"),
+    8: ("W_MWZ", "SW_MWZ"), 9: ("W_FWZ", "SFWZ"), 10: ("W_KHT", "SKHT"),
+    11: ("W_LRD", "SW_LRD"), 12: ("W_WG", "SW_WG"), 13: ("W_AMG", "SW_AMG"),
+    15: ("BU_FWZ", "SFWZ"), 16: ("BU_LRD", "SU_LRD"), 17: ("BU_MWZ", "SMWZ"),
+    18: ("BU_WRM", "SWRM"), 19: ("B_SFR", "SB_SFT"), 20: ("BU_AMG", "SU_AMG"),
+    22: ("G_MWZ", "SMWZ"), 23: ("G_KHT", "SKHT"), 24: ("G_FWZ", "SFWZ"),
+    25: ("G_WRM", "SWRM"), 26: ("G_LRD", "SG_LRD"), 27: ("G_AMG", "SG_AMG"),
+    29: ("R_FWZ", "SR_FWZ"), 30: ("R_MWZ", "SMWZ"), 31: ("TROLL", "STRL"),
+    32: ("R_LRD", "SR_LRD"), 33: ("R_WRM", "SR_WRM"), 34: ("R_AMG", "SR_AMG"),
+    35: ("R_AMG", "SR_AMG"),
+    36: ("M_TSK", "SM_TSK"), 37: ("M_TRL", "SM_TRL"), 38: ("M_APE", "SM_APE"),
+    39: ("M_CEN2", "SM_CEN"), 40: ("M_WG", "SM_WG"), 41: ("M_FNG", "SM_FNG"),
+    42: ("M_CEN", "SM_CEN2"), 43: ("M_LRD", "SM_LRD"), 44: ("M_KHT", "SKHT"),
+    45: ("M_FWZ", "SFWZ"),
+    46: ("BK_DJN", "SDJN"), 47: ("G_DJN", "SDJN"), 48: ("R_DJN", "SDJN"),
+    49: ("BU_DJN", "SDJN"),
+    50: ("DG_BRU", "S_DG"), 51: ("DG_UWB", "S_DG"), 52: ("DG_GWR", "S_DG"),
+    53: ("DG_RBG", "S_DG"), 54: ("DG_WUG", "S_DG"),
+}
+
+
+class TestTheCreatureSheets(RawStepCase):
+    """THE CREATURES WALKING THE WORLD (2026-10-23, part B): 49 bodies and
+    32 shadows from `SPR/`, each the hero's grid (40 frames of 154 x 108,
+    five to a row) in the world frame's palette, keyed `world_creature_` +
+    the file's name in lower case."""
+
+    def test_every_creature_of_the_table_has_its_sheets(self):
+        bodies = {body for body, _shadow in CREATURE_SPRITES_BY_ROW.values()}
+        shadows = {shadow for _body, shadow in CREATURE_SPRITES_BY_ROW.values()}
+        self.assertEqual((len(bodies), len(shadows)), (49, 32))
+        self.assertEqual(set(imp.CREATURE_BODIES), bodies)
+        self.assertEqual(set(imp.CREATURE_SHADOWS), shadows)
+        self.assertEqual(len(imp.CREATURE_BODIES), 49, "each body once")
+        self.assertEqual(len(imp.CREATURE_SHADOWS), 32, "each shadow once")
+        self.assertEqual(len(imp.CREATURE_SHEETS), 81)
+
+    def test_the_key_is_the_file_s_name_in_lower_case(self):
+        self.assertEqual(imp.creature_sheet_key("BK_FWZ"), "world_creature_bk_fwz")
+        self.assertEqual(imp.creature_sheet_key("SFWZ"), "world_creature_sfwz")
+        self.assertEqual(imp.creature_sheet_key("M_CEN2"), "world_creature_m_cen2")
+        for stem in imp.CREATURE_BODIES + imp.CREATURE_SHADOWS:
+            key = "world_creature_" + stem.lower()
+            self.assertEqual(imp.CREATURE_SHEETS[key], stem + ".SPR")
+            self.assertEqual(imp.MANIFEST[key], ["spr/%s.spr" % stem.lower(), "%s.spr" % stem.lower()])
+            self.assertEqual(imp.WORLD_SHEETS[key], (40, 154, 108, 5), "the hero's grid")
+            self.assertEqual(imp.WORLD_SHEETS[key], imp.WORLD_SHEETS["world_ego_m"])
+            self.assertEqual(imp.SPR_PALETTES[key][0], "Advfac64.pic")
+
+    def test_a_creature_sheet_is_cut_on_the_hero_s_grid_with_its_anchor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            (root / "Spr").mkdir(parents=True)
+            frames = [(4, 2, bytes([20 + i] * 8), 73 if i == 0 else -1) for i in range(40)]
+            frames.append((3, 1, bytes(3), -1))   # the format's end marker
+            (root / "Spr" / "Bk_Kht.spr").write_bytes(TestTheWorldSheets._anchored(self, frames))
+            world = ramp_palette()
+            (root / "Advfac64.pic").write_bytes(make_pic(2, 2, bytes([1, 2, 3, 4]), world))
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertIn("world_creature_bk_kht", log)
+            width, height, channels, pixels = read_png((dest / "world_creature_bk_kht.png").read_bytes())
+            self.assertEqual((width, height, channels), (770, 864, 4), "5 x 8 cells of 154 x 108")
+            at = ((108 * 7) * 770 + 154 * 4) * 4   # frame 39: row 7, column 4
+            self.assertEqual(bytes(pixels[at:at + 4]), world[59 * 3:59 * 3 + 3] + b"\xff")
+            self.assertEqual(pixels[(5 * 770 + 5) * 4 + 3], 0, "index 0 around the figure is clear")
+            side = json.loads((dest / "world_creature_bk_kht.json").read_text())
+            self.assertEqual((side["cols"], side["rows"], side["frames"]), (5, 8, 40))
+            self.assertEqual(side["tops"], [73] + [-1] * 39, "frame 0's anchor, the rest none")
+
+    def test_the_world_art_layout_has_every_sheet_row_for_row(self):
+        """game/adventure/world/world_art.gd's LAYOUT is the importer's
+        WORLD_SHEETS, creatures included, for a skin whose sidecars are
+        missing; the wizards' window's creature pictures ride beside."""
+        text = (REPO / "game" / "adventure" / "world" / "world_art.gd").read_text(encoding="utf-8")
+        start = text.index("const LAYOUT := {")
+        block = text[start:text.index("\n}\n", start)]
+        rows = {m.group(1): (int(m.group(2)), int(m.group(3)), int(m.group(4))) for m in
+                re.finditer(r'"(\w+)": \[(\d+), (\d+), (\d+)\]', block)}
+        for key, (_cells, width, height, columns) in imp.WORLD_SHEETS.items():
+            self.assertEqual(rows.get(key), (width, height, columns), key)
+        self.assertEqual(rows["creature_thumbs"], (80, 64, 8))
+        self.assertEqual(set(rows) - set(imp.WORLD_SHEETS), {"creature_thumbs"})
+        self.assertIn('const CREATURE_PREFIX := "%s"' % imp.CREATURE_PREFIX, text)
+
+
+class TestTheEncounterPictures(RawStepCase):
+    """THE MEETINGS' AND THE ADVENTURE DUELS' PICTURES (2026-10-23, part B),
+    each in the palette 1.3 shows it in: the grounds and the spoils their
+    own, the bare ones the palette set before them, the meeting's parts
+    cut with index 0 clear as the 1997 sprite cut left it."""
+
+    def test_every_picture_names_its_1997_file(self):
+        self.assertEqual(imp.ENCOUNTER_PICTURES, {
+            "preduel_black": ["Prdblk.pic"], "preduel_blue": ["Prdblu.pic"],
+            "preduel_green": ["Prdgrn.pic"], "preduel_red": ["Prdrd.pic"],
+            "preduel_white": ["Prdwt.pic"],
+            "preduel_panels": ["Prdfrma.pic"], "preduel_frame": ["Prdfrmb.pic"],
+            "preduel_frame_tinted": ["Prdfrmc.pic"],
+            "win_back_cards": ["Winbak01.pic"], "win_back_reward": ["Winbak02.pic"],
+            "end_plaque": ["Endplak.pic"], "lose_card": ["Losedul2.pic"],
+            "town_freed": ["Celeb.pic"], "game_over": ["Uth-Arz.pic"],
+            "creature_thumbs": ["Creatures640.pic"]})
+        for key in imp.ENCOUNTER_PICTURES:
+            self.assertIn(key, imp.PIC_SCREENS, key + " is decoded with the screens")
+            self.assertNotIn(key, imp.MANIFEST)
+
+    def test_each_takes_the_palette_1997_showed_it_in(self):
+        self.assertEqual(imp.PIC_CUT, {"preduel_panels", "preduel_frame", "preduel_frame_tinted"})
+        for key in imp.ENCOUNTER_PICTURES:
+            if key.startswith("preduel_"):
+                self.assertEqual(imp.PIC_PALETTES[key][0], "Prdblk.pic", key)
+            self.assertEqual(key in imp.PIC_OPAQUE, key not in imp.PIC_CUT, key)
+        for key in ("win_back_reward", "end_plaque"):
+            self.assertEqual(imp.PIC_PALETTES[key][:2], ["Winbak01.pic", "Advfac64.pic"])
+        self.assertEqual(imp.PIC_PALETTES["creature_thumbs"][0], "Advfac64.pic")
+
+    def _install(self, tmp: str) -> tuple[Path, Path, bytes, bytes]:
+        root = Path(tmp) / "MagicTG"
+        root.mkdir(parents=True)
+        meeting = ramp_palette()
+        spoils = bytes(255 - b for b in meeting)
+        (root / "Prdblk.pic").write_bytes(make_pic(2, 2, bytes([1, 2, 3, 4]), meeting))
+        (root / "Winbak01.pic").write_bytes(make_pic(2, 2, bytes([1, 2, 3, 4]), spoils))
+        return root, Path(tmp) / "skin", meeting, spoils
+
+    def test_the_tinted_frame_is_cut_in_the_meeting_s_palette(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest, meeting, _spoils = self._install(tmp)
+            (root / "Prdfrmc.pic").write_bytes(make_pic(4, 1, bytes([0, 9, 255, 0])))
+            log = self._run(root, dest)
+            self.assertIn("preduel_frame_tinted", log)
+            width, height, channels, pixels = read_png((dest / "preduel_frame_tinted.png").read_bytes())
+            self.assertEqual((width, height, channels), (4, 1, 4))
+            self.assertEqual(pixels[3], 0, "index 0 is the sprite cut's clear")
+            self.assertEqual(bytes(pixels[4:8]), meeting[27:30] + b"\xff")
+            self.assertEqual(bytes(pixels[8:12]), meeting[765:768] + b"\xff",
+                             "index 255 is a colour here, not the faces' clear")
+
+    def test_a_frame_with_its_own_palette_keeps_it_and_clears_index_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest, _meeting, spoils = self._install(tmp)
+            (root / "Prdfrmb.pic").write_bytes(make_pic(2, 1, bytes([0, 9]), spoils))
+            self._run(root, dest)
+            _w, _h, channels, pixels = read_png((dest / "preduel_frame.png").read_bytes())
+            self.assertEqual(channels, 4)
+            self.assertEqual(pixels[3], 0)
+            self.assertEqual(bytes(pixels[4:8]), spoils[27:30] + b"\xff")
+
+    def test_the_reward_ground_is_painted_whole_in_the_cards_won_palette(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest, _meeting, spoils = self._install(tmp)
+            (root / "Winbak02.pic").write_bytes(make_pic(3, 1, bytes([0, 8, 255])))
+            (root / "Endplak.pic").write_bytes(make_pic(1, 1, bytes([8])))
+            self._run(root, dest)
+            width, height, channels, pixels = read_png((dest / "win_back_reward.png").read_bytes())
+            self.assertEqual((width, height, channels), (3, 1, 3), "opaque, whole")
+            self.assertEqual(pixels, spoils[0:3] + spoils[24:27] + spoils[765:768])
+            _w, _h, channels, pixels = read_png((dest / "end_plaque.png").read_bytes())
+            self.assertEqual((channels, pixels), (3, spoils[24:27]))
+
+    def test_a_ground_with_its_own_palette_is_opaque_in_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest, meeting, spoils = self._install(tmp)
+            (root / "Uth-Arz.pic").write_bytes(make_pic(2, 1, bytes([0, 255]), meeting))
+            self._run(root, dest)
+            _w, _h, channels, pixels = read_png((dest / "game_over.png").read_bytes())
+            self.assertEqual((channels, pixels), (3, meeting[0:3] + meeting[765:768]))
+
+
+class TestThePartBSounds(unittest.TestCase):
+    """THE CREATURES' CRIES AND THE ADVENTURE DUELS' SOUNDS (2026-10-23,
+    part B), each from the folder 1.3 reads it in."""
+
+    CRIES = ["malewiz", "fewiz", "knight", "lord", "djinn", "troll", "wyrm",
+             "dragon", "flying", "archmage"]
+
+    def test_a_cry_per_kind_from_the_sound_folder(self):
+        names = {"malewiz": "Malewiz", "fewiz": "Fewiz", "knight": "Knight",
+                 "lord": "Lord", "djinn": "Djinn", "troll": "Troll", "wyrm": "Wyrm",
+                 "dragon": "Dragon", "flying": "Flying", "archmage": "Archmage"}
+        cries = [k for k in imp.MANIFEST if k.startswith("sfx_cry_")]
+        self.assertEqual(cries, ["sfx_cry_%s.wav" % c for c in self.CRIES], "kinds 1 to 10")
+        for cry, name in names.items():
+            self.assertEqual(imp.MANIFEST["sfx_cry_%s.wav" % cry][0], "Sound/%s.wav" % name)
+
+    def test_the_flyers_cry_is_the_file_that_shipped(self):
+        # [ours: 1997 slip] 1.3 asks for `flyer.wav`, which no install has.
+        for row in imp.MANIFEST.values():
+            self.assertNotIn("flyer.wav", [name.lower().split("/")[-1] for name in row])
+        self.assertEqual(imp.MANIFEST["sfx_cry_flying.wav"], ["Sound/Flying.wav", "Flying.wav"])
+
+    def test_the_meetings_and_duels_sounds_come_from_their_folders(self):
+        self.assertEqual(imp.MANIFEST["sfx_dsummon.wav"][0], "Sound/Dsummon.wav")
+        self.assertEqual(imp.MANIFEST["sfx_newsflash.wav"][0], "Sound/Newsflash.wav")
+        self.assertEqual(imp.MANIFEST["sfx_lair_duel.wav"][0], "DuelSounds/Aswanjag.wav",
+                         "1.3 plays it from x:Duelsounds\\")
+        self.assertEqual(imp.MANIFEST["sfx_dungeon_duel.wav"][0], "Sound/Dngnduel.wav")
+        self.assertIn("sfx_dungeon_duel.wav", imp.NOT_READ, "the dungeons are part C")
+
+    def test_the_duels_two_beds_are_the_adventure_s_not_the_duel_s_stings(self):
+        self.assertEqual(imp.MANIFEST["music_win_duel.wav"][0], "Sound/Winduel.wav")
+        self.assertEqual(imp.MANIFEST["music_lose_duel.wav"][0], "Sound/Loseduel.wav")
+        self.assertEqual(imp.MANIFEST["sfx_win.wav"][0], "DuelSounds/Shell_WinDuel.wav",
+                         "the duel's own sting is unchanged")
+
+    def test_the_two_beds_stay_out_of_the_playlist(self):
+        """[MusicLibrary] names its tracks one by one; a bed that belongs
+        to the spoils' screens must not join the shuffle."""
+        text = (REPO / "game" / "music_library.gd").read_text(encoding="utf-8")
+        for key in ("music_win_duel", "music_lose_duel"):
+            self.assertNotIn('"%s"' % key, text)
+
+    def test_a_1997_install_supplies_them_all(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            files = ["Sound/%s.wav" % n for n in ("Malewiz", "Fewiz", "Knight", "Lord", "Djinn",
+                                                 "Troll", "Wyrm", "Dragon", "Flying", "Archmage",
+                                                 "Dsummon", "Newsflash", "Dngnduel", "Winduel",
+                                                 "Loseduel")]
+            files.append("Duelsounds/Aswanjag.wav")
+            for name in files:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(b"RIFF " + name.encode())
+            index = imp.build_index([root])
+            for key in [k for k in imp.MANIFEST if k.startswith("sfx_cry_")] + [
+                    "sfx_dsummon.wav", "sfx_newsflash.wav", "sfx_lair_duel.wav",
+                    "sfx_dungeon_duel.wav", "music_win_duel.wav", "music_lose_duel.wav"]:
+                self.assertIsNotNone(imp._first_of(index, imp.MANIFEST[key]), key)

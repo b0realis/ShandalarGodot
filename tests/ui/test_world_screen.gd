@@ -653,13 +653,14 @@ func test_the_world_magics_are_cast() -> void:
 	_key(KEY_4)
 	assert_eq(hud.notice(), "No creature roams near enough to strike.")
 	assert_eq(int(player.amulets["red"]), red)
-	player.monsters = [{"slot": 0, "name": "Ogre", "x": player.position.x + 600, "y": player.position.y},
-		{"slot": 1, "name": "Goblin", "x": player.position.x + 40, "y": player.position.y + 40},
-		{"slot": 7, "name": "Shade", "x": player.position.x, "y": player.position.y, "town": 0}]
+	player.monsters = [
+		{"slot": 0, "kind": "creature", "creature": 31, "x": player.position.x + 600, "y": player.position.y},
+		{"slot": 1, "kind": "creature", "creature": 32, "x": player.position.x + 40, "y": player.position.y + 40},
+		{"slot": 7, "kind": "creature", "creature": 5, "x": player.position.x, "y": player.position.y, "town": 0}]
 	screen.cast(4)
 	assert_eq(player.monsters.size(), 2, "one struck")
-	assert_eq(String(player.journal[-1]["text"]), "THUNDERED on: Goblin!", "the nearest roaming one")
-	assert_eq(String(player.monsters[1]["name"]), "Shade", "never the siege's creature")
+	assert_eq(String(player.journal[-1]["text"]), "THUNDERED on: Goblin Lord!", "the nearest roaming one")
+	assert_eq(int(player.monsters[1]["creature"]), 5, "never the siege's creature")
 	# Sword of Resistance: to the creature besieging a city.
 	player.world_magics.append("Sword of Resistance")
 	player.amulets["white"] = 1
@@ -817,14 +818,15 @@ func test_the_quest_pane_and_the_guides() -> void:
 		"pointing its way")
 	assert_eq(hud.minimap.marks.size(), 1, "the small map marks it")
 	# A siege, a bonus, a wizard's tap.
-	player.monsters = [{"slot": 7, "name": "Ogre", "x": tile.x * 32, "y": tile.y * 32, "town": town}]
+	player.monsters = [{"slot": 7, "kind": "creature", "creature": 31, "x": tile.x * 32, "y": tile.y * 32,
+		"color": 4, "town": town}]
 	player.next_duel_life = 2
 	player.next_duel_first_move = true
 	player.world.sites[giver]["status"] = int(player.world.sites[giver]["status"]) | (4 << 8)
 	hud.refresh()
 	screen._show_hero()
 	var said: String = lines.call()
-	assert_string_contains(said, "Ogre attacking %s!" % called)
+	assert_string_contains(said, "Troll Shaman attacking %s!" % called, "its name, no article (part B)")
 	assert_string_contains(said, "Next Duel: +2 lives, First Move")
 	assert_string_contains(said, "Red Wizardess: 1 of 3 mana taps")
 	assert_eq(screen.guides.targets[0]["kind"], "siege", "the siege first")

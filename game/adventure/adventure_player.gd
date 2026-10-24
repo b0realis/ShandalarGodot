@@ -8,10 +8,12 @@ extends RefCounted
 ## WHAT IS KEPT is what the 1997 game keeps in its save (`magicN.SVE`; the
 ## layout is in the 1.3 decompilation's `docs/shandalar_save_files.txt`,
 ## and each field below names its offset there), held our own way and
-## saved as JSON a person can read. The parts no system fills yet — the
-## sieges, and the duels' own record (the victories, the last duel's
-## colours), which come with the duels — are here, empty, with their
-## shape, so that each system fills its own part.
+## saved as JSON a person can read. The duels' own record (the victories,
+## what each colour's creatures have learned of the hero's deck, the
+## carried lives) is filled by the meetings and their spoils
+## ([CreatureMeeting], [DuelSpoils]) through its helpers ([method
+## log_victory], [method wins_against], [method learn_deck_colors],
+## [method add_card]); the sieges' by [Sieges].
 ##
 ## ONE GAME, ONE FILE NAME: an adventure is named by its hero and a hash of
 ## the moment it began ([member adventure_id]), and its first save is
@@ -52,6 +54,19 @@ const JOURNAL_MOST := 10000
 ## The five colours in the 1997 game's order (1 black … 5 white, as the
 ## amulets are kept, `g_amulet_inventory`).
 const COLORS: Array[String] = ["black", "blue", "green", "red", "white"]
+
+## THE VICTORY LOG'S LIMIT: 1997 keeps a win only while fewer than 1,000 are
+## logged (`AppendDuelVictoryLogEntry`, world_lair_monster_encounter.c
+## 326–338) — [method log_victory].
+const VICTORIES_MOST := 1000
+## THE MAGIC BAG: 1997 keeps at most 500 cards (`deck[500]`); a card won
+## with the bag full is lost (`AddCardToDeckSorted`, duel.c 1859–1867) —
+## [method add_card]. From 450 the spoils warn ("Your magic bag only holds
+## 500 spells…", `@ENCOUNTER_POSTDUEL` 31; the pane's).
+const BAG_MOST := 500
+## Said when a card is refused for a full bag.
+const BAG_FULL := "Your magic bag holds no more spells."
+const BAG_WARN := 450
 
 ## THE TWELVE WORLD MAGICS, by their bit in the original's bitmap
 ## (0x22110–0x22111). Each colour's pair is bits 2c and 2c + 1 for colour c
@@ -96,6 +111,15 @@ var figure_colors := {}
 var color := "white"
 ## 0 Apprentice … 3 Wizard (0x1EA24).
 var difficulty := 0
+## THE COPY LIMIT ON WHAT THE HERO IS GIVEN, chosen at the Embark (the owner,
+## 2026-10-24: "an on off setting during shandalar embark construction"):
+## true as 1997 MEANT it — the shops and the duel rewards offer no card the
+## deck in use already holds as many copies of as its size allows (1997's
+## `GetRemainingAllowedCardCopies`, [method CardShop.counted_copies]); false
+## as 1997 SHIPPED it — that rule's count of copies matched no card the hero
+## owned, so it refused none for its copies (only its special and
+## outside-the-base-sets cases stayed).
+var copy_limit := true
 ## The playmat of the hero's duels, `{color, type}` — ours.
 var playmat := {}
 ## The card packs that join this adventure, `[{id, version}]` — ours.
@@ -135,16 +159,34 @@ var deck_notes: Array[String] = ["", "", ""]
 
 # ------------------------------------------------------------ the duels --
 
-## Lives added to (or taken from) the next duel (0x224BC, and the extra
-## lives 1–5 the 1997 game kept in 0x224C0).
+## THE NEXT DUEL'S LIVES, kept as 1997 keeps them, in two fields that add
+## up ([method next_duel_lives]): the extra lives a gift gives — 1997's 1–5
+## in `g_next_duel_card_id` (0x224C0): a creature's reward 0x800, the wise
+## man's, the Oasis's — …
 var next_duel_life := 0
+## … and the lives CARRIED from the last duel won with reward 0x1, the life
+## the hero ended it with less what they began with — negative when they
+## lost life (`g_next_duel_life_delta`, 0x224BC; `@ENCOUNTER_POSTDUEL` 16).
+var next_duel_life_carried := 0
 ## A card the next duel starts with in play, "" for none (0x224C0 above 5).
 var next_duel_card := ""
 ## The first move in the next duel (0x224C0 = 0).
 var next_duel_first_move := false
-## Each duel won against a roaming creature: `{color, creature}`
-## (0x21D28) — enough wins and they flee or pay tribute.
+## THE VICTORY LOG (0x21D28): each duel won against a roaming creature,
+## `{color, kind, creature}` — the slot's colour (1 black … 5 white, 0 for
+## none), the creature's kind ([method CreatureBook.kind]: −1 for an old
+## record that named no creature) and its name. 1997 logs a byte `colour·16
+## + kind`; the wins against a kind and colour make its creatures flee, stop
+## coming, offer riddles and tribute ([method wins_against]), the wins
+## against a colour weaken its castle wizard ([method wins_over_color]), and
+## all of them the meeting's hand modifier ([method total_wins]).
 var duel_victories: Array = []
+## WHAT EACH COLOUR'S CREATURES HAVE LEARNED of the hero's deck: by colour
+## (index colour − 1, 1 black … 5 white), the colour bits (0x02 black …
+## 0x20 white) of the colour sections its creatures add to their decks
+## ([CreatureDeck]); 0 until they learn, after a win, the hero's deck
+## colours (`g_opponent_deck_color_filter_by_color`, saved, 0 at a new game).
+var creature_deck_colors: Array[int] = [0, 0, 0, 0, 0]
 ## The main colours of the last duel, the hero's and the enemy's (0x2A1D4).
 var last_duel_colors := {}
 
@@ -185,6 +227,10 @@ var monster_timer := 0
 var quest_timer := 0
 var siege_timer := 0
 var siege_active := false                       # 0x2A220
+## Sieges begun and towns fallen, one each (`g_siege_count`): the end's
+## score takes it off (dungeonEncounter.c 1856). [Ours: 1997 never saved
+## it, so a game loaded counted from 0 again.]
+var siege_count := 0
 ## Quickening's ticks left (`Scards[6].worldmagic_duration`): while it
 ## runs, every step goes a unit further ([WorldMagic]).
 var quickening := 0
@@ -208,9 +254,16 @@ var dice := 0
 ## be filled again on the quest clock ([CardShop]; 1997 kept them per
 ## town, `card_slots`, `card_restock_timers`).
 var shops := {}
-## The roaming creatures and lairs (0x1EA2C: six slots and a siege), none
-## until they are made: `{slot, name, x, y, …}`, slots 0–5 roaming, 7 the
-## creature besieging a city (`town`, its site slot) ([WorldMagic]).
+## The roaming creatures and lairs (0x1EA2C, `ShandalarMonsterSlot`: six
+## roaming slots and the besieger's), none until they are made — slots 0–5
+## roaming ([WorldLairs], [WorldCreatures]), 7 the creature besieging a city
+## ([WorldMagic]):
+##  - a lair `{slot, kind: "lair", x, y, color}`;
+##  - a creature `{slot, kind: "creature", creature, x, y, color, heading,
+##    frame}` — its row of the creature book (1–54), its place in world
+##    units, its slot's colour (1 black … 5 white), the way it last went
+##    (0–8, 0 just come) and its walk's frame (0 standing, 1–4); the
+##    besieger also `town`, the site it besieges.
 var monsters: Array = []
 
 
@@ -232,6 +285,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.figure_colors = HeroColors.cleaned(hero.get("figure_colors", {}))
 	player.color = String(record.get("color", "white"))
 	player.difficulty = int(record.get("difficulty", 0))
+	player.copy_limit = _flag(record.get("copy_limit", true))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
@@ -296,9 +350,120 @@ func owns(magic_name: String) -> bool:
 
 ## Whether a gift for the next duel already waits — extra lives, the
 ## first move or a card in play (1997's one `g_next_duel_card_id`): a new
-## gift of that kind is not given while one waits.
+## gift of that kind is not given while one waits. (The lives carried are
+## another field of 1997's, and no gift.)
 func duel_gift_waiting() -> bool:
 	return next_duel_life != 0 or next_duel_first_move or next_duel_card != ""
+
+
+## THE LIVES THE NEXT DUEL ADDS to the hero's (or takes): the gift's and the
+## ones carried (`play_duel`, duel.c 2213–2221, adds both).
+func next_duel_lives() -> int:
+	return next_duel_life + next_duel_life_carried
+
+
+## EVERY NEXT-DUEL BONUS SPENT, as 1997 clears them after any duel, won,
+## lost or drawn (visitLocation.c 2196–2231; the carried lives already as
+## the duel begins, duel.c 2223).
+func clear_duel_gifts() -> void:
+	next_duel_life = 0
+	next_duel_life_carried = 0
+	next_duel_card = ""
+	next_duel_first_move = false
+
+
+# ------------------------------------------------------- the duels' record --
+
+## A WIN LOGGED over creature [param row] met as colour [param hue] (the
+## slot's: 1 black … 5 white): its kind and name with it. False when the
+## log is full ([constant VICTORIES_MOST]) — 1997 then logs no more.
+func log_victory(row: int, hue: int) -> bool:
+	if duel_victories.size() >= VICTORIES_MOST:
+		return false
+	duel_victories.append({"color": hue, "kind": CreatureBook.kind(row), "creature": CreatureBook.name_of(row)})
+	return true
+
+
+## The wins logged against creatures of kind [param creature_kind] met as
+## colour [param hue] — 1997's count of the log's `colour·16 + kind`
+## (world_lair_monster_encounter.c 1742–1752): kinds are shared across rows
+## (beating Centaur Shamans on black land counts against black Mandurangs).
+func wins_against(creature_kind: int, hue: int) -> int:
+	var count := 0
+	for win in duel_victories:
+		if int(win.get("kind", -1)) == creature_kind and int(win.get("color", 0)) == hue:
+			count += 1
+	return count
+
+
+## The wins logged against creatures met as colour [param hue], of any kind
+## (a castle wizard's life, duel.c 2245–2256).
+func wins_over_color(hue: int) -> int:
+	var count := 0
+	for win in duel_victories:
+		if int(win.get("color", 0)) == hue:
+			count += 1
+	return count
+
+
+## Every win logged (the meeting's hand modifier,
+## world_lair_monster_encounter.c 2114–2121).
+func total_wins() -> int:
+	return duel_victories.size()
+
+
+## The colour bits colour [param hue]'s creatures have learned of the hero's
+## deck ([member creature_deck_colors]), 0 for none or no colour.
+func learned_deck_colors(hue: int) -> int:
+	return creature_deck_colors[hue - 1] if hue >= 1 and hue <= 5 else 0
+
+
+## Colour [param hue]'s creatures learn [param bits], the hero's deck colours
+## (0x02 black … 0x20 white; `.vNone`'s 0x01 is never learned).
+func learn_deck_colors(hue: int, bits: int) -> void:
+	if hue >= 1 and hue <= 5:
+		creature_deck_colors[hue - 1] = bits & CreatureDeck.PLAYED_BITS
+
+
+# --------------------------------------------------------------- the cards --
+
+## The cards of the deck in use ([member current_deck]), by name.
+func deck_cards() -> Array[String]:
+	var out: Array[String] = []
+	for card in cards:
+		if (card.get("decks", []) as Array).has(current_deck):
+			out.append(String(card["card"]))
+	return out
+
+
+## A CARD WON OR FOUND joins the hero's cards, in no deck, as 1997's
+## `AddCardToDeckSorted` (duel.c 1837–1867) adds it: false, and the card
+## lost, when the bag already holds [constant BAG_MOST]. A rare or special
+## card (rarity 3 or more, `GetCardRarity`) is written in the journal,
+## "Acquired spell: %s" (`@LOGSTRINGS` 11). [Ours: 1997 slip — it wrote the
+## line before it found the bag full, for a card then lost; written here
+## only for a card kept.]
+## The cards the bag still holds room for ([constant BAG_MOST]).
+func bag_room() -> int:
+	return maxi(BAG_MOST - cards.size(), 0)
+
+
+func add_card(card_name: String) -> bool:
+	if card_name == "" or cards.size() >= BAG_MOST:
+		return false
+	cards.append({"card": card_name, "decks": []})
+	if _rarity(card_name) >= 3:
+		log_event("card", "Acquired spell: %s" % card_name, {"card": card_name})
+	return true
+
+
+## A card's 1997 rarity (`GetCardRarity`: special 4 for the Astral cards and
+## those made for ante, else the program's own; [method
+## CardShop.shop_rarity]), 0 for a card the game does not know.
+static func _rarity(card_name: String) -> int:
+	if not CardRegistry.has_card(card_name):
+		return 0
+	return CardShop.shop_rarity(CardValue.facts(CardRegistry.get_card(card_name)))
 
 
 ## THE HERO'S MANA LINKS: the linked towns and cities no wizard holds, each
@@ -371,22 +536,24 @@ func to_dict() -> Dictionary:
 		"hero": {"name": name, "portrait": portrait, "figure": walker,
 			"figure_colors": figure_colors, "color": color,
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
-			"playmat": playmat, "packs": packs},
+			"copy_limit": copy_limit, "playmat": playmat, "packs": packs},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing},
 		"carried": {"gold": gold, "food": food, "amulets": amulets,
 			"world_magics": world_magics, "cards": cards, "current_deck": current_deck,
 			"deck_names": deck_names, "deck_notes": deck_notes, "deck_colors": deck_colors},
-		"duels": {"next_duel_life": next_duel_life, "next_duel_card": next_duel_card,
+		"duels": {"next_duel_life": next_duel_life, "next_duel_life_carried": next_duel_life_carried,
+			"next_duel_card": next_duel_card,
 			"next_duel_first_move": next_duel_first_move,
-			"victories": duel_victories, "last_duel_colors": last_duel_colors,
+			"victories": duel_victories, "creature_deck_colors": _by_color(creature_deck_colors),
+			"last_duel_colors": last_duel_colors,
 			"mana_links": mana_links(), "record": duel_record()},
 		"record": {"journal": journal, "defeated_wizards": defeated_wizards,
 			"lairs_explored": lairs_explored, "quest": quest, "quest_offer": quest_offer,
 			"last_town": last_town, "town_quests": town_quests, "wise_man": wise_man},
 		"clocks": {"monster_timer": monster_timer, "quest_timer": quest_timer,
 			"siege_timer": siege_timer, "siege_active": siege_active,
-			"quickening": quickening},
+			"siege_count": siege_count, "quickening": quickening},
 		"world": {
 			"seed": world.seed, "seed_text": world_seed_text, "slot_start": world.slot_start,
 			"color": world.color, "difficulty": world.difficulty, "generator": "1997 (1.3)",
@@ -482,6 +649,9 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	var color := _text(hero.get("color"), "white")
 	player.color = color if color in COLORS else "white"
 	player.difficulty = clampi(_number(hero.get("difficulty")), 0, 3)
+	# A save from before the choice was made at the Embark: the limit as
+	# 1997 meant it, which those adventures played by.
+	player.copy_limit = _flag(hero.get("copy_limit", true))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
 
@@ -510,9 +680,13 @@ static func _read_carried(player: AdventurePlayer, carried: Dictionary) -> void:
 
 static func _read_duels(player: AdventurePlayer, duels: Dictionary) -> void:
 	player.next_duel_life = _number(duels.get("next_duel_life"))
+	player.next_duel_life_carried = _number(duels.get("next_duel_life_carried"))
 	player.next_duel_card = _text(duels.get("next_duel_card"))
 	player.next_duel_first_move = _flag(duels.get("next_duel_first_move"))
 	player.duel_victories = _victories(duels.get("victories"))
+	var learned := _object(duels.get("creature_deck_colors"))
+	for i in COLORS.size():
+		player.creature_deck_colors[i] = _number(learned.get(COLORS[i])) & CreatureDeck.PLAYED_BITS
 	player.last_duel_colors = _whole(_object(duels.get("last_duel_colors")))
 
 
@@ -539,6 +713,7 @@ static func _read_clocks(player: AdventurePlayer, clocks: Dictionary) -> void:
 	player.quest_timer = _count(clocks.get("quest_timer"))
 	player.siege_timer = _count(clocks.get("siege_timer"))
 	player.siege_active = _flag(clocks.get("siege_active"))
+	player.siege_count = _count(clocks.get("siege_count"))
 	player.quickening = _count(clocks.get("quickening"))
 
 
@@ -608,11 +783,16 @@ static func _cleaned_encounter(value: Variant, made: ShandalarWorld) -> Dictiona
 	return encounter
 
 
-## The roaming creatures and lairs worth keeping: records with a slot (0–5
-## roaming, [constant WorldMagic.SIEGE_SLOT] the besieger), one to a slot;
-## a roaming one with its place in the world (x and y in world units), the
-## besieger with a town of the world. Any other is dropped — the world
-## fills its slot again ([WorldLairs]).
+## The roaming creatures and lairs worth keeping ([member monsters]):
+## records with a slot (0–5 roaming, [constant WorldMagic.SIEGE_SLOT] the
+## besieger), one to a slot, with their place in the world (x and y in world
+## units, on the map); the besieger with a town of the world. A lair keeps
+## its colour; a creature its row (1–54), colour, heading (0–8) and frame
+## (0–4) as numbers. Any other is dropped and the world fills its slot again
+## ([WorldLairs]) — so is a creature with no row of the map, which drops an
+## older save's unseen "waiting" creature (part B: until the duels came, a
+## creature's draw held its slot unpicked) — and a besieger with no row
+## whose save names one (part B, the besieger is a creature like the rest).
 static func _cleaned_monsters(value: Variant, made: ShandalarWorld) -> Array:
 	var kept: Array = []
 	var taken := {}
@@ -624,7 +804,7 @@ static func _cleaned_monsters(value: Variant, made: ShandalarWorld) -> Array:
 		var roaming := slot >= 0 and slot < WorldLairs.SLOTS
 		if taken.has(slot) or not (roaming or slot == WorldMagic.SIEGE_SLOT):
 			continue
-		if roaming and not (_is_number(creature.get("x")) and _is_number(creature.get("y"))
+		if not (_is_number(creature.get("x")) and _is_number(creature.get("y"))
 				and _on_map(_number(creature["x"])) == _number(creature["x"])
 				and _on_map(_number(creature["y"])) == _number(creature["y"])):
 			continue
@@ -632,11 +812,25 @@ static func _cleaned_monsters(value: Variant, made: ShandalarWorld) -> Array:
 			continue
 		if not roaming and not creature.has("town"):
 			continue
+		var kind := _text(creature.get("kind"))
+		if kind == "lair" and not roaming:
+			continue
+		if kind == "creature" or creature.has("creature"):
+			var row := _number(creature.get("creature"), -1)
+			if row < WorldCreatures.FIRST_ROW or row > WorldCreatures.LAST_ROW:
+				continue
+			creature["kind"] = "creature"
+			creature["creature"] = row
+			creature["heading"] = clampi(_number(creature.get("heading")), 0, 8)
+			creature["frame"] = clampi(_number(creature.get("frame")), 0, 4)
+			creature.erase("waiting")
+			creature.erase("tier")
+		elif kind != "lair":
+			continue
 		for key in ["slot", "x", "y", "town", "color"]:
 			if creature.has(key):
 				creature[key] = _number(creature[key])
-		if creature.has("kind"):
-			creature["kind"] = _text(creature["kind"])
+		creature["color"] = clampi(_number(creature.get("color")), 0, 5)
 		taken[slot] = true
 		kept.append(creature)
 	return kept
@@ -801,15 +995,42 @@ static func _wise_man_record(value: Variant) -> Dictionary:
 	return out
 
 
-## The duels won, each kept only when its colour is a number or a word, as
-## the lairs and the wise man read it (an unknown word counts for no
-## colour); one with nothing, a list or a record there is dropped (r3-4).
+## THE DUELS WON, each read as `{color, kind, creature}` ([member
+## duel_victories]) — kept only when its colour is a number or a word (one
+## with none, nothing, a list or a record there is dropped, r3-4). A
+## colour as a word ("red", an older shape) is its number, an unknown word
+## or a number outside 0–5 no colour (0); the creature a name (or a row, as
+## a number); the kind a number, or — in a save from before part B,
+## `{color, creature}` — the named creature's kind, −1 when it names none.
 static func _victories(value: Variant) -> Array:
 	var out: Array = []
 	for win in _records(value):
-		var hue: Variant = (win as Dictionary).get("color", -1)
-		if _is_number(hue) or hue is String:
-			out.append(win)
+		var hue: Variant = (win as Dictionary).get("color")
+		if not (_is_number(hue) or hue is String):
+			continue
+		var hue_number := _number(hue) if _is_number(hue) else COLORS.find(String(hue)) + 1
+		var named: Variant = (win as Dictionary).get("creature", "")
+		var row := -1
+		var creature := ""
+		if _is_number(named) and CreatureBook.is_row(_number(named)):
+			row = _number(named)
+			creature = CreatureBook.name_of(row)
+		elif named is String:
+			creature = named
+			row = CreatureBook.row_named(creature)
+		var kind_saved: Variant = (win as Dictionary).get("kind")
+		out.append({"color": hue_number if hue_number >= 0 and hue_number <= 5 else 0,
+			"kind": _number(kind_saved) if _is_number(kind_saved) else CreatureBook.kind(row),
+			"creature": creature})
+	return out
+
+
+## Five numbers by colour (index colour − 1) as a record by the colours'
+## words, `{black, blue, green, red, white}`, for the save.
+static func _by_color(values: Array[int]) -> Dictionary:
+	var out := {}
+	for i in COLORS.size():
+		out[COLORS[i]] = values[i]
 	return out
 
 

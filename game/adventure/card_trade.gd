@@ -28,6 +28,13 @@ extends RefCounted
 ##    colourless card cost half again on blue and red land only.]
 ##  - THE DIAMOND MINE, a lair: any card for amulets of any colours, each
 ##    amulet taken from a colour drawn at random among those the hero holds.
+##  - A CREATURE QUEST'S REWARD (part B, [constant REWARD]; `VisitTownSlot`,
+##    visitLocation.c 4512–4545): back at the town or city that asked for
+##    the creature, a card of what the town trades, FREE — "Which card do
+##    you seek?", then "Will you take this card... Yes / No" — and one must
+##    be taken (No goes back to the cards). One copy, a basic land too (1997
+##    added the one card chosen), in no deck ([method
+##    AdventurePlayer.add_card]: lost when the bag is full, as in 1997).
 ## The price is asked as the card is chosen ([method offer]) and the purse
 ## read again as the trade is made ([method pay]), as 1997 did: what was
 ## held then may be gone.
@@ -43,6 +50,9 @@ extends RefCounted
 const TOWN := "town"
 const BAZAAR := "bazaar"
 const MINE := "mine"
+const REWARD := "reward"
+## `@VISIT` 25: the free pick's question.
+const TAKE := "Will you take this card..."
 ## `@CITYCARDTEXT`: what a town trades, by colour (0 colourless … 5 white)
 ## and by type (1 land … 5 fast effects; 6 artifacts is never made).
 const COLOR_WORDS: Array[String] = ["Colorless", "Black", "Blue", "Green", "Red", "White"]
@@ -233,6 +243,11 @@ static func offer(player: AdventurePlayer, card_name: String, way: String, color
 	var f := CardValue.facts(data)
 	var count := copies(card_name)
 	var out := {"copies": count, "amulets": 0, "gold": 0, "card": card_name}
+	if way == REWARD:
+		out["copies"] = 1
+		out["afford"] = true
+		out["words"] = "%s. %s" % [card_name, TAKE]
+		return out
 	var paid := ""
 	if way == BAZAAR:
 		out["gold"] = price
@@ -256,6 +271,8 @@ static func affords(player: AdventurePlayer, asked: Dictionary, way: String, col
 			return player.gold >= int(asked.get("gold", 0))
 		TOWN:
 			return int(player.amulets.get(color, 0)) >= int(asked.get("amulets", 0))
+		REWARD:
+			return true
 	return _amulets_held(player) >= int(asked.get("amulets", 0))
 
 
@@ -276,8 +293,14 @@ static func _amulets_held(player: AdventurePlayer) -> int:
 ## cast while the trader waited) — then no trade, never a purse below
 ## nothing nor a card underpaid.
 static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color := "") -> Dictionary:
+	if way == REWARD:
+		return _take_reward(player, String(asked.get("card", "")))
 	if not affords(player, asked, way, color):
 		return {"traded": false, "said": AFFORD}
+	# Through the bag ([method AdventurePlayer.add_card]; the bug pass of
+	# part B, q4-3). [Ours: a full bag refuses the trade before it is paid.]
+	if player.bag_room() < int(asked["copies"]):
+		return {"traded": false, "said": AdventurePlayer.BAG_FULL}
 	match way:
 		BAZAAR:
 			player.gold -= int(asked["gold"])
@@ -297,7 +320,19 @@ static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color :
 			player.dice = dice.state
 	var card_name := String(asked["card"])
 	for i in int(asked["copies"]):
-		player.cards.append({"card": card_name, "decks": []})
+		player.add_card(card_name)
 	var count := int(asked["copies"])
 	return {"traded": true, "said": "%s: %d more for your cards." % [card_name, count] if count > 1
 		else "%s joins your cards." % card_name}
+
+
+## THE QUEST'S REWARD TAKEN: card [param card_name], free, joins the hero's
+## cards in no deck ([method AdventurePlayer.add_card]) — lost when the bag
+## is full, as 1997's `AddCardToDeckSorted` lost it. `{traded, said}`:
+## traded true either way (the reward is spent).
+static func _take_reward(player: AdventurePlayer, card_name: String) -> Dictionary:
+	if card_name == "":
+		return {"traded": false, "said": ""}
+	if player.add_card(card_name):
+		return {"traded": true, "said": "%s joins your cards." % card_name}
+	return {"traded": true, "said": "Your cards are too many: %s is lost." % card_name}

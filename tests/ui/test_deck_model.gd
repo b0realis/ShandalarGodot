@@ -59,6 +59,24 @@ func test_the_deck_builder_does_not_impose_a_four_of_rule() -> void:
 	assert_eq(deck.count_of("Lightning Bolt"), 9)
 
 
+## The 1997 adventure deck builder's own rule (deckdll `check_card_count`):
+## three under 59 cards, four from 59; the Tome one more, and no limit from
+## 59. The adventure's builder judges by it; the manual's table below is the
+## ordinary builder's advice.
+func test_the_1997_deck_builder_rule() -> void:
+	assert_eq(DeckModel.copies_allowed_1997(39), 3, "a first deck may hold three of a spell")
+	assert_eq(DeckModel.copies_allowed_1997(58), 3)
+	assert_eq(DeckModel.copies_allowed_1997(59), 4, "four from 59 cards")
+	assert_eq(DeckModel.copies_allowed_1997(39, true), 4, "the Tome: one more")
+	assert_eq(DeckModel.copies_allowed_1997(59, true), 0, "the Tome: no limit from 59")
+	_add("Lightning Bolt", 3)
+	_add("Mountain", 36)
+	assert_true(deck.over_duplicate_limit(false, DeckModel.DECK_BUILDER_1997).is_empty(),
+		"three Bolts in 39 cards: a fair deck by 1997's builder")
+	assert_false(deck.over_duplicate_limit(false, DeckModel.MANUAL).is_empty(),
+		"the manual's table would call it over (two at 20-39)")
+
+
 func test_shandalar_duplicate_allowance_follows_the_manuals_table() -> void:
 	assert_eq(DeckModel.duplicates_allowed(10), 1, "1-19 cards: one copy")
 	assert_eq(DeckModel.duplicates_allowed(30), 2, "20-39: two")

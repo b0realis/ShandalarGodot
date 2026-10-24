@@ -150,7 +150,10 @@ func test_misshapen_shops_and_journal_lines_are_mended() -> void:
 	assert_eq(back.duel_record(), {"won": 0, "lost": 1})
 	assert_eq(back.town_quests, {"3": 40})
 	assert_eq(back.defeated_wizards, ["red"] as Array[String])
-	assert_eq(back.duel_victories, [{"color": "purple"}])
+	# A word that names no colour reads as no colour (part B: the victories
+	# are {color, kind, creature} numbers, kind -1 when the creature is not
+	# known).
+	assert_eq(back.duel_victories, [{"color": 0, "kind": -1, "creature": ""}])
 	CardShop.offers(back, town)
 	assert_eq(HeroStats.record(back)["lost"], 1, "the record reads the mended lines")
 
@@ -188,7 +191,8 @@ func test_the_quest_the_wise_man_and_the_victories_are_read_by_kind() -> void:
 	assert_eq(back.quest, fine, "a quest of numbers is kept whole")
 	assert_eq(back.quest_offer, {}, "an offer with a word for a colour is dropped")
 	assert_eq(back.wise_man, {"stage": 2, "news": "The roads are safe."}, "each part of the word by its kind")
-	assert_eq(back.duel_victories, [{"color": 2}, {"color": "red"}], "the victories with a colour")
+	assert_eq(back.duel_victories, [{"color": 2, "kind": -1, "creature": ""},
+		{"color": 4, "kind": -1, "creature": ""}], "the victories with a colour, a word read as its number")
 	back = _read(func(d: Dictionary) -> void:
 		d["record"]["quest"] = {"type": 0, "destination": town, "giver": null, "color": 2, "data": 1, "deadline": 900})
 	assert_eq(back.quest, {}, "a quest with a field of no number is dropped")

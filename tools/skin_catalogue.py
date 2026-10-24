@@ -150,6 +150,52 @@ FAMILIES: list[tuple[str, str, str]] = [
      "locatn01-07: villages, towns, cities, domes, dungeons and lairs; "
      "castles1-2: the wizards' castles; ego_m, ego_f: the hero in eight "
      "directions, sego_f the shadow."),
+    ("The adventure world", "world_creature_",
+     "The creatures walking the world: the sheets the 1997 game loads for "
+     "its creatures from Spr/ (the 640 x 480 set), a BODY per creature "
+     "(BK_FWZ.SPR ... DG_WUG.SPR, 49 of them) and a SHADOW (SFWZ.SPR ... "
+     "S_DG.SPR, 32, some shared), each keyed world_creature_ and the file's "
+     "name in lower case. The hero's grid exactly: 40 frames of 154 x 108, "
+     "five to a row (frame ((heading + 2) & 7) x 5 + step), painted with "
+     "Advfac64.pic's palette, each beside a .json sidecar whose first top "
+     "clip (60-73) is the height above the creature's feet the frame's top "
+     "stands at; a shadow is drawn where its body is."),
+    ("The adventure world", "creature_thumbs",
+     "The wizards' window's creature pictures (Creatures640.pic, painted "
+     "whole with Advfac64.pic's palette): 8 x 7 cells of 80 x 64, the cell "
+     "the creature's table row - 1, the Witch first, Arzakon last."),
+    ("The adventure's duels", "preduel_",
+     "The meeting with a creature, its ground by the creature's colour: "
+     "preduel_black ... preduel_white (Prdblk, Prdblu, Prdgrn, Prdrd, "
+     "Prdwt.pic, 640 x 480, each its own palette)."),
+    ("The adventure's duels", "preduel_panels",
+     "The meeting's panels (Prdfrma.pic, the meeting's palette, index 0 "
+     "clear), as x, y, width x height: gold 1, 1, 104 x 44; food 1, 46, "
+     "103 x 49; ankh 1, 96, 102 x 44; book 1, 141, 121 x 44; the quest "
+     "scroll 1, 186, 145 x 114."),
+    ("The adventure's duels", "preduel_frame",
+     "The meeting's frames (Prdfrmb.pic, index 0 clear): the creature's "
+     "plaque 1, 382, 152 x 35; the wizard's 1, 418, 128 x 35; the banner "
+     "under a portrait 1, 346, 179 x 35; the portrait frame 1, 165, "
+     "180 x 180, which the 1997 game copied whole, so laid on black."),
+    ("The adventure's duels", "preduel_frame_tinted",
+     "The same frames in a ruled town's tint (Prdfrmc.pic, which has no "
+     "palette of its own: painted with Prdblk.pic's, index 0 clear)."),
+    ("The adventure's duels", "win_back_cards",
+     "Behind the cards won from a creature or a lair (Winbak01.pic)."),
+    ("The adventure's duels", "win_back_reward",
+     "Behind a creature's amulet or reward (Winbak02.pic, painted with "
+     "Winbak01.pic's palette)."),
+    ("The adventure's duels", "end_plaque",
+     "The plaque naming a dungeon under the cards won, for its clue "
+     "(Endplak.pic, 296 x 54, Winbak01.pic's palette)."),
+    ("The adventure's duels", "lose_card",
+     "Behind \"Lost this card\": a duel or a riddle lost (Losedul2.pic)."),
+    ("The adventure's duels", "town_freed",
+     "A town freed from a creature's rule (Celeb.pic)."),
+    ("The adventure's duels", "game_over",
+     "The adventure lost: Dominion cast, or no card left to ante "
+     "(Uth-Arz.pic)."),
     ("The adventure world", "visit_",
      "The places' pictures, shown in the world's visit pane as the hero "
      "arrives (512 x 280, painted whole with Advfac64.pic's palette): "
@@ -404,6 +450,23 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Sounds", "sfx_treasure",
      "A lair's treasure, the thieves' gold, the Gemcutter's Guild "
      "(Sound/Treasure.wav)."),
+    ("Sounds", "sfx_cry_",
+     "The creatures' cries on the world map, by the creature's kind: "
+     "malewiz (a warlock, a cleric, a druid ...), fewiz (a witch, a seer, a "
+     "priestess ...), knight, "
+     "lord, djinn, troll, wyrm, dragon, flying (the flyers: the 1997 game "
+     "asked for a flyer.wav no install had), archmage (Sound/Malewiz.wav "
+     "... Archmage.wav)."),
+    ("Sounds", "sfx_dsummon",
+     "A meeting whose pre-duel powers may fire, and two of a dungeon's "
+     "events (Sound/Dsummon.wav)."),
+    ("Sounds", "sfx_newsflash",
+     "Every news flash: a siege begins, a town falls (Sound/Newsflash.wav)."),
+    ("Sounds", "sfx_lair_duel",
+     "A lair's duel begins (Duelsounds/Aswanjag.wav)."),
+    ("Sounds", "sfx_dungeon_duel",
+     "A creature met in a dungeon (Sound/Dngnduel.wav). NOT READ by the "
+     "game yet: the dungeons are still to come."),
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "
      "sfx_draw, sfx_shuffle, sfx_summon, sfx_attack, sfx_block, "
@@ -420,6 +483,12 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The shell's tune for a temple."),
     ("Music", "music_castle_",
      "One shell tune per castle colour."),
+    ("Music", "music_win_duel",
+     "Looped under the cards won after an adventure duel (Sound/Winduel.wav); "
+     "not one of the playlist's tunes."),
+    ("Music", "music_lose_duel",
+     "Looped under a card lost after an adventure duel (Sound/Loseduel.wav); "
+     "not one of the playlist's tunes."),
     ("Music", "music_location_",
      "The twenty overworld location tunes, 0 to 19. The title screen and "
      "the shell pick from these; Options > Music lists every tune the "
@@ -434,7 +503,8 @@ FAMILIES: list[tuple[str, str, str]] = [
 ]
 
 SECTION_ORDER = [
-    "Backdrops", "The adventure world", "The duel table", "Cards", "The life panels",
+    "Backdrops", "The adventure world", "The adventure's duels", "The duel table", "Cards",
+    "The life panels",
     "Windows and panels", "Buttons", "The phase bars",
     "The combat window's sprites", "The hand", "Graveyards",
     "Marks on a card", "Symbols", "The Deck Builder", "Fonts", "Sounds",

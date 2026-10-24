@@ -635,6 +635,67 @@ signal menu_confirmed
 var _leave_to_menu := false
 # --- end review 2026-10-21 ui-1 ---
 
+# --- part B (W2, 2026-10-23): a duel held over another screen ---
+## THE HOLDER TAKES THE DUEL AWAY NOW. Emitted once, when the duel's last
+## word is said — the End of Duel window dismissed (right after
+## [signal result_closed]), or at once headless, where no window opens and
+## [signal result_closed] never comes — with the duel's [DuelReport]. The
+## holder `queue_free`s this screen (never `free()` from inside the
+## signal) and settles what the report says. One signal for both, so an
+## adventure that hosts a duel needs no headless branch of its own.
+##
+## THE HOSTING CONTRACT (the adventure's world, `world_duels.gd`):
+## [codeblock]
+## var duel := DuelScreen.held(config, "Duel", "Flee from the duel? ...",
+##         "Quit the adventure? ...", "Flee")
+## duel.duel_closed.connect(_after_duel)       # report → spoils; queue_free
+## duel.leave_confirmed.connect(_fled)         # Pause → Exit duel / splash: Yes
+## duel.menu_confirmed.connect(_to_title)      # Pause → Return to main menu: Yes
+## holder.add_child(duel)                      # _ready deals the duel
+## [/codeblock]
+## [signal duel_finished] still comes first (the verdict, before the End of
+## Duel window) for a holder that wants it, and [method report] can be read
+## from then on. A yes to either question leaves the duel UNFINISHED: this
+## screen changes no scene under a holder, and the holder drops it.
+## Pause → `Quit` quits the program as in every duel.
+signal duel_closed(report: DuelReport)
+## [signal duel_closed] has been emitted (it is emitted once).
+var _closed_reported := false
+
+
+## A DuelScreen for a holder: the duel screen's scene with [param config],
+## its two doors asking [param leave_question] / [param menu_question]
+## under [param leave_title] (`""` keeps a door going straight out, as in a
+## duel that is the session — see [member leave_question]), and the
+## splash's left button named [param leave_label] (`""` keeps `Reconfigure
+## duel`). Not yet in the tree: connect its signals, then `add_child` it.
+static func held(duel_config: DuelConfig, title: String, leave: String,
+		menu: String, button := "") -> DuelScreen:
+	var duel: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	duel.config = duel_config
+	duel.leave_title = title
+	duel.leave_question = leave
+	duel.menu_question = menu
+	duel.leave_label = button
+	return duel
+
+
+## THE DUEL'S [DuelReport] as it stands — final from [signal duel_finished]
+## on: the result from seat 0's side, the lives, the ante by owner, every
+## change of owner. Nothing in this screen settles the ante (§7); the
+## holder does, from this.
+func report() -> DuelReport:
+	return DuelReport.of(game, config)
+
+
+## Emit [signal duel_closed], once.
+func _report_closed() -> void:
+	if _closed_reported:
+		return
+	_closed_reported = true
+	duel_closed.emit(report())
+# --- end part B (W2) ---
+
 ## Battlefield display rows, in the order the OWNER'S REFERENCE SCREENSHOT
 ## was measured to have them (the thirteenth pass of
 ## `docs/duel-screen-design.md`): lands, then the other permanents, then
@@ -696,34 +757,11 @@ func _new_game() -> void:
 		_log_file = DuelLogFile.new()
 		_log_file.begin(PackedStringArray([config.seat_name(0),
 			config.seat_name(1)]), duel_seed)
-	game.setup(config.decks[0], config.decks[1],
-		config.seat_name(0), config.seat_name(1),
-		config.lives[0], config.lives[1], duel_seed)
-	CardPrintings.apply_game(game, config.printings)
-	game.log_line("Duel seed: %d" % duel_seed)
-	if config.challenge_label() != "": game.log_line(config.challenge_label())
-	# THE ANTE (§6.19) — the original's `&Ante` match parameter. Staked
-	# HERE, between the shuffle and the deal, because that is the manual's
-	# own order: p.60 *"Before the duel begins, both players put up one or
-	# more cards from their decks as ante"*, and p.118 pins it precisely by
-	# describing the minimum-deck padding as lands added *"(after the ante
-	# but before the shuffle)"*.
-	#
-	# The player's stake spares BASIC lands and the opponent's does not —
-	# Shandalar's own asymmetry (FAQ 1.9, *"Basic lands are too weak a card
-	# to ante"*), and exactly what the owner's 1997 screenshot shows: your
-	# Animate Dead against Cromer's Mountain.
-	if config.ante > 0:
-		for pid in 2:
-			game.stake_ante(pid, config.ante, not config.is_ai(pid))
-	# The RULES FORKS, per Options (see RulesOptions / Settings.rule).
-	# Logged by preset name when any of them leaves plain modern, so a
-	# bug report says which ruleset the duel was actually played under.
-	for fork in RulesOptions.FORKS:
-		game.rules.set_fork(fork["key"], Settings.rule(fork["key"]))
-	var preset: String = game.rules.preset()
-	if preset != "modern":
-		game.log_line("Rules: %s" % RulesOptions.preset_label(preset))
+	# The libraries on the seed, the printings, THE ANTE (§6.19, and the
+	# adventure's named stakes), the opening's arrangements and the RULES
+	# FORKS — in the order this screen always had them, now in the one
+	# function the headless duel shares (part B, W2; [DuelOpening]).
+	DuelOpening.prepare(game, config, duel_seed)
 	# A placement and a `Don't auto tap` mark are both about THIS table
 	# (§2.3b, `@MENU_SMALLCARD`): a new duel starts with neither.
 	_placements.clear()
@@ -766,8 +804,10 @@ func _new_game() -> void:
 		_public_archive.start(game, metadata)
 	# The coin toss (the original's Toss.wav moment): who plays first.
 	# Rolled on game.rng, not the global RNG, so a seeded game replays
-	# its opening exactly — the leader is part of the game's stream.
-	var winner := game.rng.randi() % 2
+	# its opening exactly — the leader is part of the game's stream. A
+	# duel whose first player is forced (`DuelConfig.first_player`, part
+	# B) tosses nothing: the seat starts.
+	var winner := DuelOpening.first_seat(game, config)
 	# THE OPENING HAND (docs/duel-todo.md §1.5, §6.2). Both hands are dealt
 	# FIRST, then the toss winner says play or draw, then the mulligans are
 	# offered — `Duel.hlp`'s own order, and why the deal is now split from
@@ -778,7 +818,7 @@ func _new_game() -> void:
 	if DisplayServer.get_name() == "headless":
 		# Tests/CI: no animation and no dialogs — the duel just begins,
 		# exactly as it did before the opening sequence existed.
-		game.start_duel(winner)
+		game.start_duel(DuelOpening.first_without_windows(game, config, winner))
 	else:
 		# HOW the toss is presented is [CoinToss]'s question, and the
 		# player's — three modes behind one `ShowCoinFlips` value (§6.4).
@@ -941,6 +981,7 @@ func _on_game_over(winner_id: int) -> void:
 		_play_sfx("sfx_win" if _is_human(winner_id) else "sfx_lose")
 	if DisplayServer.get_name() == "headless":
 		_result_pending = false
+		_report_closed()   # part B: no window to wait on, the holder may go
 		return          # tests/CI: the prompt line is the whole result
 	# THE DYING TOTAL COUNTS DOWN (§2.7), and the End of Duel window waits
 	# for it. Nothing else about the verdict is deferred — the bar already
@@ -1161,6 +1202,7 @@ func _on_game_over_dismissed() -> void:
 	_over_dialog = null
 	_result_pending = false
 	result_closed.emit()
+	_report_closed()   # part B: the holder's cue to take the duel away
 	# FREE PLAY ENDS AT THE TITLE. The setup screen hands the tree straight
 	# to this scene for a free-play duel, and until 2026-09-02 nothing
 	# ever handed it back: OK dismissed the window and left a dead table
@@ -1268,17 +1310,22 @@ func _run_coin_toss(first: int) -> void:
 	await _run_intro()
 	if not is_inside_tree():
 		return           # `Reconfigure duel` took us back to the setup
-	_play_sfx("sfx_toss")
-	var toss := CoinToss.new()
-	toss.z_index = 250
-	if _audio != null:
-		toss.video_skipped.connect(_audio.stop.bind("sfx_toss"))
-	add_child(toss)
-	_toss_overlay = toss
-	await toss.run(config, first, _is_human(first), _human_seat())
-	if is_instance_valid(toss):
-		toss.queue_free()
-	_toss_overlay = null
+	# NO COIN WHEN THE START IS FORCED (part B, W2; `DuelConfig.first_player`):
+	# 1997 tossed only for a random start (`run_duel_coin_flip_dialogs`), so
+	# a creature's First Strike or the adventurer's first-move gift goes
+	# straight from the splash to the opening window.
+	if config.first_player not in [0, 1]:
+		_play_sfx("sfx_toss")
+		var toss := CoinToss.new()
+		toss.z_index = 250
+		if _audio != null:
+			toss.video_skipped.connect(_audio.stop.bind("sfx_toss"))
+		add_child(toss)
+		_toss_overlay = toss
+		await toss.run(config, first, _is_human(first), _human_seat())
+		if is_instance_valid(toss):
+			toss.queue_free()
+		_toss_overlay = null
 	# LEFT ON THE WAY (hunt of 2026-10-21): Pause → `Exit duel` or `Return
 	# to main menu` over the toss or the opening window changes the scene,
 	# which takes this screen out of the tree at once and frees it at the
@@ -1361,6 +1408,7 @@ func _first_of(a: Signal, b: Signal) -> void:
 ## the pointer with a preview. `[QoL]`.
 func _run_opening_hand(winner: int) -> void:
 	var opening := OpeningHand.new()
+	DuelOpening.configure(opening, config)   # part B: a forced start, 1997's coin
 	opening.announced.connect(_set_prompt)
 	add_child(opening)
 	var hidden: Array[Control] = []

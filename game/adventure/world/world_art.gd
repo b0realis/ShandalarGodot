@@ -27,7 +27,65 @@ const LAYOUT := {
 	"world_magics": [52, 54, 12], "world_amulets": [12, 17, 5], "world_map_tiles": [13, 20, 16],
 	"quest_scroll": [237, 115, 2], "quest_clock": [67, 88, 8], "quest_sunmoon": [67, 88, 14],
 	"quest_days": [67, 88, 6],
+	# The creatures walking the world (part B; the importer's
+	# CREATURE_SHEETS), every one the hero's grid — [method creature_rect].
+	"world_creature_bk_fwz": [154, 108, 5], "world_creature_bk_kht": [154, 108, 5],
+	"world_creature_bk_mwz": [154, 108, 5], "world_creature_bk_lrd": [154, 108, 5],
+	"world_creature_bk_wg": [154, 108, 5], "world_creature_bk_amg": [154, 108, 5],
+	"world_creature_w_mwz": [154, 108, 5], "world_creature_w_fwz": [154, 108, 5],
+	"world_creature_w_kht": [154, 108, 5], "world_creature_w_lrd": [154, 108, 5],
+	"world_creature_w_wg": [154, 108, 5], "world_creature_w_amg": [154, 108, 5],
+	"world_creature_bu_fwz": [154, 108, 5], "world_creature_bu_lrd": [154, 108, 5],
+	"world_creature_bu_mwz": [154, 108, 5], "world_creature_bu_wrm": [154, 108, 5],
+	"world_creature_b_sfr": [154, 108, 5], "world_creature_bu_amg": [154, 108, 5],
+	"world_creature_g_mwz": [154, 108, 5], "world_creature_g_kht": [154, 108, 5],
+	"world_creature_g_fwz": [154, 108, 5], "world_creature_g_wrm": [154, 108, 5],
+	"world_creature_g_lrd": [154, 108, 5], "world_creature_g_amg": [154, 108, 5],
+	"world_creature_r_fwz": [154, 108, 5], "world_creature_r_mwz": [154, 108, 5],
+	"world_creature_troll": [154, 108, 5], "world_creature_r_lrd": [154, 108, 5],
+	"world_creature_r_wrm": [154, 108, 5], "world_creature_r_amg": [154, 108, 5],
+	"world_creature_m_tsk": [154, 108, 5], "world_creature_m_trl": [154, 108, 5],
+	"world_creature_m_ape": [154, 108, 5], "world_creature_m_cen2": [154, 108, 5],
+	"world_creature_m_wg": [154, 108, 5], "world_creature_m_fng": [154, 108, 5],
+	"world_creature_m_cen": [154, 108, 5], "world_creature_m_lrd": [154, 108, 5],
+	"world_creature_m_kht": [154, 108, 5], "world_creature_m_fwz": [154, 108, 5],
+	"world_creature_bk_djn": [154, 108, 5], "world_creature_g_djn": [154, 108, 5],
+	"world_creature_r_djn": [154, 108, 5], "world_creature_bu_djn": [154, 108, 5],
+	"world_creature_dg_bru": [154, 108, 5], "world_creature_dg_uwb": [154, 108, 5],
+	"world_creature_dg_gwr": [154, 108, 5], "world_creature_dg_rbg": [154, 108, 5],
+	"world_creature_dg_wug": [154, 108, 5], "world_creature_sfwz": [154, 108, 5],
+	"world_creature_sb_kht": [154, 108, 5], "world_creature_smwz": [154, 108, 5],
+	"world_creature_sb_lrd": [154, 108, 5], "world_creature_sbk_wg": [154, 108, 5],
+	"world_creature_sb_amg": [154, 108, 5], "world_creature_sw_mwz": [154, 108, 5],
+	"world_creature_skht": [154, 108, 5], "world_creature_sw_lrd": [154, 108, 5],
+	"world_creature_sw_wg": [154, 108, 5], "world_creature_sw_amg": [154, 108, 5],
+	"world_creature_su_lrd": [154, 108, 5], "world_creature_swrm": [154, 108, 5],
+	"world_creature_sb_sft": [154, 108, 5], "world_creature_su_amg": [154, 108, 5],
+	"world_creature_sg_lrd": [154, 108, 5], "world_creature_sg_amg": [154, 108, 5],
+	"world_creature_sr_fwz": [154, 108, 5], "world_creature_strl": [154, 108, 5],
+	"world_creature_sr_lrd": [154, 108, 5], "world_creature_sr_wrm": [154, 108, 5],
+	"world_creature_sr_amg": [154, 108, 5], "world_creature_sm_tsk": [154, 108, 5],
+	"world_creature_sm_trl": [154, 108, 5], "world_creature_sm_ape": [154, 108, 5],
+	"world_creature_sm_cen": [154, 108, 5], "world_creature_sm_wg": [154, 108, 5],
+	"world_creature_sm_fng": [154, 108, 5], "world_creature_sm_cen2": [154, 108, 5],
+	"world_creature_sm_lrd": [154, 108, 5], "world_creature_sdjn": [154, 108, 5],
+	"world_creature_s_dg": [154, 108, 5],
+	# The wizards' window's creature pictures (`Creatures640.pic`, not a
+	# sheet the importer writes a sidecar for): 8 cells of 80 x 64 a row.
+	"creature_thumbs": [80, 64, 8],
 }
+
+## THE CREATURES' SHEETS (part B, 2026-10-23): `world_creature_` + the 1997
+## file's name in lower case, bodies and shadows alike (`BK_FWZ.SPR` ->
+## world_creature_bk_fwz, `SFWZ.SPR` -> world_creature_sfwz), which file a
+## creature wears being the creature book's (1.3
+## `LoadCreatureEncounterSprites`, world_lair_monster_slots.c:38-279).
+const CREATURE_PREFIX := "world_creature_"
+## Frames on a creature's sheet: eight headings of five steps.
+const CREATURE_FRAMES := 40
+## [ours] A creature sheet's anchor when its sidecar is missing: the
+## hero's, 61 (the 1997 sheets run 60-73).
+const CREATURE_TOP := 61
 
 ## [ours] THE AMULETS' COLOURS WITHOUT THEIR SHEET (`Amsprite.spr`, or a
 ## screen's painted stones): a square of each colour, black, blue, green,
@@ -82,13 +140,61 @@ func frame_size(key: String) -> Vector2:
 	return Vector2(row[0], row[1])
 
 
-## A frame's anchor, the height above its foot the original drew it at;
+## A frame's anchor, the height above its foot the original drew it at
+## (a creature's: [method creature_top]);
 ## the format's -1 (no anchor) is 0, as the 1997 retail release reads it.
 func top(key: String, frame: int) -> int:
 	var tops: Array = _metadata(key).get("tops", [])
 	if frame < 0 or frame >= tops.size():
 		return 0
 	return maxi(0, int(tops[frame]))
+
+
+## Creature sheet [param stem]'s key: `"BK_FWZ"` -> `world_creature_bk_fwz`.
+static func creature_key(stem: String) -> String:
+	return CREATURE_PREFIX + stem.to_lower()
+
+
+## The frame a creature shows facing 1997 heading [param heading] (0-7) on
+## walk step [param step] (0-4): the hero's formula (1.3
+## adventureWorldUi.c:2255-2280), so heading 0, a creature just come,
+## draws like north-west.
+static func creature_frame(heading: int, step: int) -> int:
+	return ((heading + 2) & 7) * 5 + clampi(step, 0, 4)
+
+
+## Frame [param frame] (0-39, clamped) of creature sheet [param key], in
+## the sheet's own drawn size.
+func creature_rect(key: String, frame: int) -> Rect2:
+	return frame_rect(key, clampi(frame, 0, CREATURE_FRAMES - 1))
+
+
+## Creature sheet [param key]'s anchor: frame 0's top clip, the height
+## above the creature's feet every frame's top stands at (the other 39
+## carry -1, 1997's "none"), or two thirds of the frame's height where
+## the clip is taller than the frame (1.3 world_lair_monster_slots.c
+## :262-267); [constant CREATURE_TOP] without a sidecar. A shadow is
+## drawn at its BODY's anchor (the same lines copy it), so ask with the
+## body's key for both.
+func creature_top(key: String) -> int:
+	var tops: Array = _metadata(key).get("tops", [])
+	if tops.is_empty() or int(tops[0]) <= 0:
+		return CREATURE_TOP
+	var height := int(frame_size(key).y)
+	return int(tops[0]) if int(tops[0]) <= height else height * 2 / 3
+
+
+## Where a creature's frame stands from its feet: the frame is drawn at
+## `feet - creature_anchor(body_key)` — half its width across, its anchor
+## up ([method creature_top]; 1.3 adventureWorldUi.c:2262-2263).
+func creature_anchor(key: String) -> Vector2:
+	return Vector2(int(frame_size(key).x) / 2, creature_top(key))
+
+
+## Creature table row [param row]'s cell (1 the Witch ... 56) in the
+## wizards' window's pictures, `creature_thumbs` (cell = row - 1).
+func thumb_rect(row: int) -> Rect2:
+	return frame_rect("creature_thumbs", maxi(0, row - 1))
 
 
 ## Whether sheet [param key]'s grid is known: its sidecar, or a

@@ -113,7 +113,7 @@ static func cast(player: AdventurePlayer, key: int) -> Dictionary:
 			out["said"] = "Quickening: a burst of speed."
 		4:
 			var creature: Dictionary = player.monsters[target]
-			var called := String(creature.get("name", "creature"))
+			var called := CreatureBook.name_of(int(creature.get("creature", 0)))
 			player.monsters.remove_at(target)
 			player.log_event("magic", "THUNDERED on: %s!" % called)
 			out["said"] = "Staff of Thunder: the %s is struck from the land." % called
@@ -130,10 +130,11 @@ static func cast(player: AdventurePlayer, key: int) -> Dictionary:
 	return out
 
 
-## The roaming creature (slots 0–5) nearest the hero, as an index into
-## [member AdventurePlayer.monsters], or -1 (1.3's `ApproximateDistance`,
-## [method WorldGenerator.distance]): never a lair, as in 1997, nor a
-## creature still waiting for the duels unseen ([WorldLairs]).
+## The roaming creature (slots 0–5) nearest the hero, however far, as an
+## index into [member AdventurePlayer.monsters], or -1 (adventure_input.c
+## 465–489; 1.3's `ApproximateDistance`, [method WorldGenerator.distance]):
+## never a lair, as in 1997, nor the besieger. Its name is the creature
+## book's ([method CreatureBook.name_of]), the journal's "THUNDERED on: %s!".
 static func nearest_roaming(player: AdventurePlayer) -> int:
 	var best := -1
 	var best_distance := 0x7fff
@@ -141,7 +142,7 @@ static func nearest_roaming(player: AdventurePlayer) -> int:
 		var creature: Dictionary = player.monsters[i]
 		if int(creature.get("slot", -1)) < 0 or int(creature.get("slot", -1)) >= ROAMING_SLOTS:
 			continue
-		if String(creature.get("kind", "")) == "lair" or bool(creature.get("waiting", false)):
+		if not WorldCreatures.is_creature(creature):
 			continue
 		var d := WorldGenerator.distance(player.position.x - int(creature.get("x", 0)),
 			player.position.y - int(creature.get("y", 0)))

@@ -172,6 +172,25 @@ func _on_screen(pane: Control, what: String) -> void:
 		"%s: on the screen with room round it (%s in %s)" % [what, rect, room])
 
 
+## [param pane] given up to [constant SETTLE_FRAMES] frames to lay itself
+## out on the screen; it must fit once laid out, which is what this asks.
+## (This test caught a real fault, 2026-10-23: under load one run in four
+## held the wise man's "whose deck" at 843 px of the 800 — the choices'
+## rows grew after the pane had last fitted itself, and nothing looked
+## again; [VisitPane] now fits itself again as it is resized.)
+const SETTLE_FRAMES := 30
+
+
+func _settled(pane: Control) -> void:
+	var room := float(viewport.size.y)
+	for i in SETTLE_FRAMES:
+		var rect := pane.get_global_rect()
+		if rect.position.y >= VisitPane.ROOM_MARGIN / 2.0 - 0.5 \
+				and rect.end.y <= room - VisitPane.ROOM_MARGIN / 2.0 + 0.5:
+			return
+		await _frames(1)
+
+
 func test_whose_deck_fits_the_screen_with_big_buttons() -> void:
 	for color in range(1, 6):
 		var pane := await _ghost(color, {"white": 1}, WorldHud.BIG)
@@ -201,4 +220,5 @@ func test_whose_deck_fits_the_screen_with_big_buttons() -> void:
 		"then": "deck", "color": 4}
 	wise._show_page(0)
 	await _frames(3)
+	await _settled(wise)
 	_on_screen(wise, "the wise man's whose deck")

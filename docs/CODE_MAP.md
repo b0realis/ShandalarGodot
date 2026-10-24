@@ -115,7 +115,57 @@
   (`Worlbak1.pic`); `WorldScreen._leave_site` / `open_magic_seller`.
 - `game/adventure/creature_book.gd`: `CreatureBook`, the 57 creatures of
   1997 (`ROWS`, `called`, `of_color`, `deck`); their decks are
-  `decks/1997/originals/`. `game/adventure/world/card_list_pane.gd`:
+  `decks/1997/originals/`. Part B (2026-10-23): the flags by name
+  (`MOVE_*`, `PRE_*`, `REWARD_*`, the dead bits documented), `kind`,
+  `tier`, `strength`, `bribe`, `duel_life`, `pick` (1997's 999 draws),
+  `stride`, `shown_row`, `reward_card`, `face_id`, `cry_key`,
+  `sprite_keys`, `MINIONS`, `CASTLE_ROWS`, `CARDS_1997`.
+  `game/adventure/creature_deck.gd`: `CreatureDeck`, a creature deck as
+  1997 played it — `maindeck`, the colour `sections`, `for_meeting(row,
+  filter)` (never `.vNone`), `library`, `ante_draw`, the 0179 fallback.
+  `game/adventure/world/world_encounters.gd`: `WorldEncounters.open`, the
+  door from a creature met on the map to its meeting.
+  `game/adventure/world/world_creatures.gd`: `WorldCreatures`, the roaming
+  creatures by 1997's slot rules — `tick` (fill, move, contact, cries),
+  `met`, `clear_crowd`, `push_back`, `seen` (the whole 4-tile range
+  [QoL]), `creature_in`, `quest_row`; `WorldLairs.fill`;
+  `HeroWalk.step` / `end_tick`; `WorldSoundscape.cry`;
+  `WorldView.creatures` / `movers`; `WorldScreen.meet_creature`,
+  `meeting`, `hold_for_duel`, `_after_meeting`, `_after_siege_meeting`
+  (the siege's hook).
+  The meeting: `game/adventure/creature_meeting.gd`: `CreatureMeeting`
+  (`begin`, `meet` — the entry for lair, town and siege duels too —,
+  `options`, `pay`, `riddle`, `change_ante`, `tribute`, `prepare_duel`,
+  `hero_life`, `creature_life`, `duel_config`, `padded_deck`);
+  `game/adventure/duel_spoils.gd`: `DuelSpoils` (`settle`, `choose`,
+  `pick_any`, `pick_duplicate`, `reward_cards`, `deck_color_bits`);
+  `game/adventure/world/world_duels.gd`: `WorldDuels.host` (a duel held
+  over the world: `ended(report)`, `abandoned`, `concede`);
+  `game/adventure/world/encounter_pane.gd`: `EncounterPane` (the 1997
+  meeting and its results; `finished(result)`, GAME_OVER 3);
+  `game/adventure/world/encounter_stage.gd`: `EncounterStage` (the 1997
+  640 × 480 page drawn in a pane); `WorldClues.pick_for_hint`, `reveal`,
+  `mark_cards_taken`, `forget_marks`; `Quests.creature_beaten`.
+  Lair duels and ruled towns: `game/adventure/lair_duels.gd`: `LairDuels`
+  (`begin`, `setup_of`, `words`, `duel_config`, `settle`; the Shrine,
+  the Dragon's Lair, the Hall of the Sultan, the Spectral Arena);
+  `game/adventure/ruled_towns.gd`: `RuledTowns` (`open` — the world
+  screen's `_open_ruled_duel` —, `enter`, `stake`, `creature`,
+  `creature_stake`, `minion`, `duel_config`, `settle`);
+  `game/adventure/world/ruled_town_pane.gd`: `RuledTownPane` (the duel and
+  its end: freed, lost, the game over); `VisitPane.show_cards`,
+  `show_face`, `show_picture`; `LairPane.duel_host`.
+  Sieges, creature quests and the end: `game/adventure/sieges.gd`:
+  `Sieges` (`on_step` — called where `HeroWalk` raises the siege clock —,
+  `start(player, retaliating_wizard)`, `resolve`, `lifted`, `tier_for`,
+  `candidates`, `free_all` for part C); `HeroWalk.news` / `take_news`;
+  `game/adventure/world/news_flash_pane.gd`: `NewsFlashPane`;
+  `game/adventure/world/adventure_end_screen.gd`: `AdventureEndScreen`
+  (Dominion, no card to stake); `WorldScreen.show_news`, `show_end`,
+  `leave_unsaved`, `_after_siege_meeting`; `Quests` creature quests
+  (`_creature_offer`, `reward_amulets`, `reward_line`; `complete_at`'s
+  `pick`); `CardTrade.REWARD` / `TAKE` and `CardTradePane.must_take` (a
+  town's quest reward picked from its wares). `game/adventure/world/card_list_pane.gd`:
   `CardListPane`, a list of cards to see or pick (`counted`, `picked`);
   `WorldScreen.show_creature_deck`, `open_card_list`.
 - `game/adventure/save_slots.gd`: `SaveSlots`, the ten named slots per
@@ -445,6 +495,17 @@ Each fix in full: `docs/whole-project-review-2026-10-21.md`.
   `_rebuy_pick`, `_arrival_paid_out`, `_payout_burns`, `_payout_spend`;
   `_answered_on_arrival` passes over non-mana costs; `_counter_clears_bar`
   takes an optional payout price.
+- Adventure duels (part B, 2026-10-23): `game/duel/duel_config.gd`
+  `ante_cards`, `ante_extras`, `first_player`, `start_in_play`,
+  `mirror_seat0`, `mulligan_rule`, `ai_random_play_or_draw`;
+  `game/duel/duel_opening.gd`: `DuelOpening.prepare` (the one set-up the
+  screen and the headless runner share); `game/duel/duel_report.gd`:
+  `DuelReport` (result, lives, antes, owner changes, read after
+  `duel_finished`); `game/duel/headless_duel.gd`: `HeadlessDuel.play` /
+  `begin` (a duel run to its end without a screen, for tests);
+  `MtgGame.stake_named_ante`, `stake_extra_ante`, `arrange_opening`,
+  `mirror_opening`, `create_into_play`, `owner_changes`;
+  `DuelScreen.held` and its `duel_closed(report)`.
 - `game/duel/duel_screen.gd`: `leave_title`, `leave_question`,
   `leave_label`, `leave_confirmed`, `menu_question`, `menu_confirmed`,
   `_ask_to_leave` — a duel held by a match or Gauntlet asks before leaving

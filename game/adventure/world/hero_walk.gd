@@ -14,7 +14,10 @@ extends RefCounted
 ##    tick while Quickening runs ([WorldMagic]), whose ticks count down;
 ##  - with no food every pace is slower (the divisor two more, at most 4);
 ##  - every 32nd tick a walking hero eats one food (Fruit of Sustenance
-##    gives two back in a forest) and the quest and siege clocks move on;
+##    gives two back in a forest) and the quest and siege clocks move on —
+##    the siege clock's step begins or resolves a wizard's siege when it
+##    says ([method Sieges.on_step], as 1997 did right there), whose news
+##    waits in [member news] for the world screen to show;
 ##  - a step into the sea near a tile's middle is taken back — [ours] only
 ##    a step from land: a step out of the sea stands ([method _shore]).
 ##
@@ -37,9 +40,13 @@ extends RefCounted
 ## is taken back, and a walker made for a hero off the land sets them back
 ## on it ([method settle]) — which heals a save written before.
 ##
-## NOT YET: the original draws dice each step for the footstep's sound and
-## moves the roaming creatures and sieges on the same ticks; neither is
-## made, so the adventure's dice stand still while the hero walks.
+## A TICK IN 1997'S ORDER (shandalar.c 625–655): the hero's step ([method
+## step]), then the roaming creatures ([WorldCreatures], which read the clock
+## as it stands), then [method end_tick] — Quickening's tick spent, the
+## clock on by one. [method tick] runs the hero's part of a whole tick, for
+## a walk without the creatures. The footsteps' sounds draw their own dice
+## ([WorldSoundscape]): a walk moves the adventure's dice only through the
+## creatures' refills and jumps, and the sieges begun ([Sieges]).
 
 ## Seconds a tick (the 1.3 loop waits `clock() - last_tick < 0x3c`).
 const TICK := 0.06
@@ -62,6 +69,9 @@ var heading := 0
 var stepped := false
 ## Where the walk goes: the last tile of its way, (-1, -1) for none.
 var destination := Vector2i(-1, -1)
+## THE SIEGES' NEWS the walk's steps brought ([method Sieges.on_step]), the
+## oldest first, until the world screen takes it ([method take_news]).
+var news: Array[Dictionary] = []
 ## THE WAY-FINDER'S GRID of the world's land and its costs, kept between
 ## clicks (building it reads all 4,096 tiles: about 3 ms on a desk, 10 on
 ## a handheld) and built again when what shapes it changes — the world,
@@ -233,9 +243,19 @@ static func back(d: int) -> int:
 	return ((d + 3) & 7) + 1
 
 
-## ONE TICK of the world: the clock goes on and the hero takes their step.
-## True when the step brought the hero onto another tile.
+## ONE TICK of the world without the creatures: the hero's step, then the
+## clock on ([method step], [method end_tick]). True when the step brought
+## the hero onto another tile.
 func tick() -> bool:
+	var entered := step()
+	end_tick()
+	return entered
+
+
+## THE HERO'S STEP this tick (`UpdateAdventureWorldInputAndMovement`), the
+## clock read as it stands — the creatures move after it, before [method
+## end_tick]. True when the step brought the hero onto another tile.
+func step() -> bool:
 	var world := player.world
 	_arrive()
 	var target := Vector2i(-1, -1)
@@ -285,13 +305,26 @@ func tick() -> bool:
 				player.food += 2
 			player.siege_timer += 1
 			player.quest_timer += 1
+			news.append_array(Sieges.on_step(player))
 		entered = player.tile() != here
-	player.monster_timer += 1
-	# `TickWorldMagicSlotTimers`, once a pass of the 1.3 loop.
-	if player.quickening > 0:
-		player.quickening -= 1
 	_arrive()
 	return entered
+
+
+## The sieges' news brought so far ([member news]), taken: none is left.
+func take_news() -> Array[Dictionary]:
+	var taken := news
+	news = [] as Array[Dictionary]
+	return taken
+
+
+## THE TICK'S END, after the creatures: Quickening's tick spent
+## (`TickWorldMagicSlotTimers`, once a pass of the 1.3 loop), then the
+## world's clock on by one (`g_monster_timer += 1`).
+func end_tick() -> void:
+	if player.quickening > 0:
+		player.quickening -= 1
+	player.monster_timer += 1
 
 
 ## THE SHORE: whether the step from [param before] to where the hero now

@@ -3,7 +3,11 @@ extends VisitPane
 ## THE WISE MAN'S ROOM — `Wiseman3.pic` in the visit pane's glass, what he
 ## says page by page ([WiseMan]), or the town's quest offered ([Quests]):
 ## "Take this message North to my brother, the keeper of Kraag Temple. He
-## will reward you with a mana link." — "Accept the Quest." / "Never mind."
+## will reward you with a mana link." — or a creature's (part B): "Defeat
+## the Witch which has been menacing our village. Return here and I will
+## reward you with 1 black amulet." ([method Quests.offer_words]) —
+## "Accept the Quest." / "Never mind." (Never mind keeps the offer, as
+## 1997's did.)
 ## A gift that asks a choice asks it here: whose deck to see (then shown by
 ## the world screen, [CardListPane]), or the card to copy. A town that turns
 ## the hero away ([TownStatus.NO_QUESTS]) says so and offers no quest,

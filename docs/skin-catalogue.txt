@@ -306,6 +306,178 @@ THE ADVENTURE WORLD
     quest_days.png                     402 x 88 px, RGBA
     quest_days.json                    cols 6, rows 1, frames 6, frame_width 67, frame_height 88
 
+  The creatures walking the world: the sheets the 1997 game loads for its
+  creatures from Spr/ (the 640 x 480 set), a BODY per creature (BK_FWZ.SPR ...
+  DG_WUG.SPR, 49 of them) and a SHADOW (SFWZ.SPR ... S_DG.SPR, 32, some
+  shared), each keyed world_creature_ and the file's name in lower case. The
+  hero's grid exactly: 40 frames of 154 x 108, five to a row (frame ((heading
+  + 2) & 7) x 5 + step), painted with Advfac64.pic's palette, each beside a
+  .json sidecar whose first top clip (60-73) is the height above the
+  creature's feet the frame's top stands at; a shadow is drawn where its body
+  is.
+    world_creature_bk_fwz.png          770 x 864 px, RGBA
+    world_creature_bk_fwz.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bk_kht.png          770 x 864 px, RGBA
+    world_creature_bk_kht.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bk_mwz.png          770 x 864 px, RGBA
+    world_creature_bk_mwz.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bk_lrd.png          770 x 864 px, RGBA
+    world_creature_bk_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bk_wg.png           770 x 864 px, RGBA
+    world_creature_bk_wg.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bk_amg.png          770 x 864 px, RGBA
+    world_creature_bk_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_w_mwz.png           770 x 864 px, RGBA
+    world_creature_w_mwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_w_fwz.png           770 x 864 px, RGBA
+    world_creature_w_fwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_w_kht.png           770 x 864 px, RGBA
+    world_creature_w_kht.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_w_lrd.png           770 x 864 px, RGBA
+    world_creature_w_lrd.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_w_wg.png            770 x 864 px, RGBA
+    world_creature_w_wg.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_w_amg.png           770 x 864 px, RGBA
+    world_creature_w_amg.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bu_fwz.png          770 x 864 px, RGBA
+    world_creature_bu_fwz.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bu_lrd.png          770 x 864 px, RGBA
+    world_creature_bu_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bu_mwz.png          770 x 864 px, RGBA
+    world_creature_bu_mwz.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bu_wrm.png          770 x 864 px, RGBA
+    world_creature_bu_wrm.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_b_sfr.png           770 x 864 px, RGBA
+    world_creature_b_sfr.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bu_amg.png          770 x 864 px, RGBA
+    world_creature_bu_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_mwz.png           770 x 864 px, RGBA
+    world_creature_g_mwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_kht.png           770 x 864 px, RGBA
+    world_creature_g_kht.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_fwz.png           770 x 864 px, RGBA
+    world_creature_g_fwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_wrm.png           770 x 864 px, RGBA
+    world_creature_g_wrm.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_lrd.png           770 x 864 px, RGBA
+    world_creature_g_lrd.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_amg.png           770 x 864 px, RGBA
+    world_creature_g_amg.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_r_fwz.png           770 x 864 px, RGBA
+    world_creature_r_fwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_r_mwz.png           770 x 864 px, RGBA
+    world_creature_r_mwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_troll.png           770 x 864 px, RGBA
+    world_creature_troll.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_r_lrd.png           770 x 864 px, RGBA
+    world_creature_r_lrd.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_r_wrm.png           770 x 864 px, RGBA
+    world_creature_r_wrm.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_r_amg.png           770 x 864 px, RGBA
+    world_creature_r_amg.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_tsk.png           770 x 864 px, RGBA
+    world_creature_m_tsk.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_trl.png           770 x 864 px, RGBA
+    world_creature_m_trl.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_ape.png           770 x 864 px, RGBA
+    world_creature_m_ape.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_cen2.png          770 x 864 px, RGBA
+    world_creature_m_cen2.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_wg.png            770 x 864 px, RGBA
+    world_creature_m_wg.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_fng.png           770 x 864 px, RGBA
+    world_creature_m_fng.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_cen.png           770 x 864 px, RGBA
+    world_creature_m_cen.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_lrd.png           770 x 864 px, RGBA
+    world_creature_m_lrd.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_kht.png           770 x 864 px, RGBA
+    world_creature_m_kht.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_m_fwz.png           770 x 864 px, RGBA
+    world_creature_m_fwz.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bk_djn.png          770 x 864 px, RGBA
+    world_creature_bk_djn.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_g_djn.png           770 x 864 px, RGBA
+    world_creature_g_djn.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_r_djn.png           770 x 864 px, RGBA
+    world_creature_r_djn.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_bu_djn.png          770 x 864 px, RGBA
+    world_creature_bu_djn.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_dg_bru.png          770 x 864 px, RGBA
+    world_creature_dg_bru.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_dg_uwb.png          770 x 864 px, RGBA
+    world_creature_dg_uwb.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_dg_gwr.png          770 x 864 px, RGBA
+    world_creature_dg_gwr.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_dg_rbg.png          770 x 864 px, RGBA
+    world_creature_dg_rbg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_dg_wug.png          770 x 864 px, RGBA
+    world_creature_dg_wug.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sfwz.png            770 x 864 px, RGBA
+    world_creature_sfwz.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sb_kht.png          770 x 864 px, RGBA
+    world_creature_sb_kht.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_smwz.png            770 x 864 px, RGBA
+    world_creature_smwz.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sb_lrd.png          770 x 864 px, RGBA
+    world_creature_sb_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sbk_wg.png          770 x 864 px, RGBA
+    world_creature_sbk_wg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sb_amg.png          770 x 864 px, RGBA
+    world_creature_sb_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sw_mwz.png          770 x 864 px, RGBA
+    world_creature_sw_mwz.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_skht.png            770 x 864 px, RGBA
+    world_creature_skht.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sw_lrd.png          770 x 864 px, RGBA
+    world_creature_sw_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sw_wg.png           770 x 864 px, RGBA
+    world_creature_sw_wg.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sw_amg.png          770 x 864 px, RGBA
+    world_creature_sw_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_su_lrd.png          770 x 864 px, RGBA
+    world_creature_su_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_swrm.png            770 x 864 px, RGBA
+    world_creature_swrm.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sb_sft.png          770 x 864 px, RGBA
+    world_creature_sb_sft.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_su_amg.png          770 x 864 px, RGBA
+    world_creature_su_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sg_lrd.png          770 x 864 px, RGBA
+    world_creature_sg_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sg_amg.png          770 x 864 px, RGBA
+    world_creature_sg_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sr_fwz.png          770 x 864 px, RGBA
+    world_creature_sr_fwz.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_strl.png            770 x 864 px, RGBA
+    world_creature_strl.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sr_lrd.png          770 x 864 px, RGBA
+    world_creature_sr_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sr_wrm.png          770 x 864 px, RGBA
+    world_creature_sr_wrm.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sr_amg.png          770 x 864 px, RGBA
+    world_creature_sr_amg.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_tsk.png          770 x 864 px, RGBA
+    world_creature_sm_tsk.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_trl.png          770 x 864 px, RGBA
+    world_creature_sm_trl.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_ape.png          770 x 864 px, RGBA
+    world_creature_sm_ape.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_cen.png          770 x 864 px, RGBA
+    world_creature_sm_cen.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_wg.png           770 x 864 px, RGBA
+    world_creature_sm_wg.json          cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_fng.png          770 x 864 px, RGBA
+    world_creature_sm_fng.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_cen2.png         770 x 864 px, RGBA
+    world_creature_sm_cen2.json        cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sm_lrd.png          770 x 864 px, RGBA
+    world_creature_sm_lrd.json         cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_sdjn.png            770 x 864 px, RGBA
+    world_creature_sdjn.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+    world_creature_s_dg.png            770 x 864 px, RGBA
+    world_creature_s_dg.json           cols 5, rows 8, frames 40, frame_width 154, frame_height 108
+
   The places' pictures, shown in the world's visit pane as the hero arrives
   (512 x 280, painted whole with Advfac64.pic's palette): village
   (Village.pic) and city (City.pic), the wise man (Wiseman3.pic), the wizards'
@@ -345,6 +517,58 @@ THE ADVENTURE WORLD
   The World Magic seller's table as a town is left (Worlbak1.pic): the skull,
   the candle and the crystal ball.
     world_magic_seller.png             640 x 480 px, RGB
+
+  The wizards' window's creature pictures (Creatures640.pic, painted whole
+  with Advfac64.pic's palette): 8 x 7 cells of 80 x 64, the cell the
+  creature's table row - 1, the Witch first, Arzakon last.
+    creature_thumbs.png                640 x 480 px, RGB
+
+THE ADVENTURE'S DUELS
+---------------------
+
+  The meeting with a creature, its ground by the creature's colour:
+  preduel_black ... preduel_white (Prdblk, Prdblu, Prdgrn, Prdrd, Prdwt.pic,
+  640 x 480, each its own palette).
+    preduel_black.png                  640 x 480 px, RGB
+    preduel_blue.png                   640 x 480 px, RGB
+    preduel_green.png                  640 x 480 px, RGB
+    preduel_red.png                    640 x 480 px, RGB
+    preduel_white.png                  640 x 480 px, RGB
+
+  The meeting's panels (Prdfrma.pic, the meeting's palette, index 0 clear), as
+  x, y, width x height: gold 1, 1, 104 x 44; food 1, 46, 103 x 49; ankh 1, 96,
+  102 x 44; book 1, 141, 121 x 44; the quest scroll 1, 186, 145 x 114.
+    preduel_panels.png                 640 x 480 px, RGBA
+
+  The meeting's frames (Prdfrmb.pic, index 0 clear): the creature's plaque 1,
+  382, 152 x 35; the wizard's 1, 418, 128 x 35; the banner under a portrait 1,
+  346, 179 x 35; the portrait frame 1, 165, 180 x 180, which the 1997 game
+  copied whole, so laid on black.
+    preduel_frame.png                  640 x 480 px, RGBA
+
+  The same frames in a ruled town's tint (Prdfrmc.pic, which has no palette of
+  its own: painted with Prdblk.pic's, index 0 clear).
+    preduel_frame_tinted.png           640 x 480 px, RGBA
+
+  Behind the cards won from a creature or a lair (Winbak01.pic).
+    win_back_cards.png                 640 x 480 px, RGB
+
+  Behind a creature's amulet or reward (Winbak02.pic, painted with
+  Winbak01.pic's palette).
+    win_back_reward.png                640 x 480 px, RGB
+
+  The plaque naming a dungeon under the cards won, for its clue (Endplak.pic,
+  296 x 54, Winbak01.pic's palette).
+    end_plaque.png                     296 x 54 px, RGB
+
+  Behind "Lost this card": a duel or a riddle lost (Losedul2.pic).
+    lose_card.png                      640 x 480 px, RGB
+
+  A town freed from a creature's rule (Celeb.pic).
+    town_freed.png                     640 x 480 px, RGB
+
+  The adventure lost: Dominion cast, or no card left to ante (Uth-Arz.pic).
+    game_over.png                      640 x 480 px, RGB
 
 THE DUEL TABLE
 --------------
@@ -742,6 +966,36 @@ SOUNDS
   (Sound/Treasure.wav).
     sfx_treasure.wav                   22050 Hz 16-bit stereo, 3.8 s
 
+  The creatures' cries on the world map, by the creature's kind: malewiz (a
+  warlock, a cleric, a druid ...), fewiz (a witch, a seer, a priestess ...),
+  knight, lord, djinn, troll, wyrm, dragon, flying (the flyers: the 1997 game
+  asked for a flyer.wav no install had), archmage (Sound/Malewiz.wav ...
+  Archmage.wav).
+    sfx_cry_malewiz.wav                22050 Hz 16-bit mono, 2.6 s
+    sfx_cry_fewiz.wav                  22050 Hz 16-bit mono, 2.3 s
+    sfx_cry_knight.wav                 22050 Hz 16-bit mono, 0.5 s
+    sfx_cry_lord.wav                   22050 Hz 16-bit mono, 0.9 s
+    sfx_cry_djinn.wav                  22050 Hz 16-bit mono, 1.4 s
+    sfx_cry_troll.wav                  22050 Hz 16-bit mono, 1.2 s
+    sfx_cry_wyrm.wav                   22050 Hz 16-bit mono, 2.2 s
+    sfx_cry_dragon.wav                 22050 Hz 16-bit mono, 4.5 s
+    sfx_cry_flying.wav                 22050 Hz 16-bit mono, 1.1 s
+    sfx_cry_archmage.wav               22050 Hz 16-bit mono, 1.0 s
+
+  A meeting whose pre-duel powers may fire, and two of a dungeon's events
+  (Sound/Dsummon.wav).
+    sfx_dsummon.wav                    22050 Hz 16-bit stereo, 3.9 s
+
+  Every news flash: a siege begins, a town falls (Sound/Newsflash.wav).
+    sfx_newsflash.wav                  22050 Hz 16-bit stereo, 2.9 s
+
+  A lair's duel begins (Duelsounds/Aswanjag.wav).
+    sfx_lair_duel.wav                  22050 Hz 16-bit stereo, 5.8 s
+
+  A creature met in a dungeon (Sound/Dngnduel.wav). NOT READ by the game yet:
+  the dungeons are still to come.
+    sfx_dungeon_duel.wav               22050 Hz 16-bit mono, 4.4 s
+
 MUSIC
 -----
 
@@ -781,6 +1035,14 @@ MUSIC
     music_castle_black.wav             22050 Hz 16-bit stereo, 31.5 s
     music_castle_red.wav               22050 Hz 16-bit stereo, 33.0 s
     music_castle_green.wav             22050 Hz 16-bit stereo, 32.4 s
+
+  Looped under the cards won after an adventure duel (Sound/Winduel.wav); not
+  one of the playlist's tunes.
+    music_win_duel.wav                 22050 Hz 16-bit stereo, 12.0 s
+
+  Looped under a card lost after an adventure duel (Sound/Loseduel.wav); not
+  one of the playlist's tunes.
+    music_lose_duel.wav                22050 Hz 16-bit stereo, 10.3 s
 
 MOVIES
 ------
@@ -838,5 +1100,5 @@ MOVIES — movies/*.avi (optional)
 
 ------------------------------------------------------------------------------
 Generated by tools/skin_catalogue.py from the importer's manifest;
-275 named files, plus portraits/ and movies/ in original_skin.zip,
+468 named files, plus portraits/ and movies/ in original_skin.zip,
 and cardart/ in cardart.zip.

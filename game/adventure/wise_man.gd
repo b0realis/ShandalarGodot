@@ -217,9 +217,12 @@ static func castle_life(player: AdventurePlayer, wizard: int) -> int:
 	return maxi(20 + 5 * d + 10 - wins + towns * d, 5 * d + 20)
 
 
-## A REMINDER of the quest under way (`@WISEMAN` 0–2), and the panel's way
+## A REMINDER of the quest under way (`@WISEMAN` 0–4), and the panel's way
 ## to it shown again; "" when the quest names no site of the world (a save's
-## — then the wise man gives his gift instead).
+## — then the wise man gives his gift instead). A creature's quest (part B,
+## visitLocation.c 3274–3297): "I see that the people of %s have asked you
+## to defeat a Witch." while it lives; beaten, "You should travel %s to %s
+## to claim your reward!"
 static func reminder(player: AdventurePlayer) -> String:
 	var quest := player.quest
 	var destination := int(quest.get("destination", -1))
@@ -229,7 +232,13 @@ static func reminder(player: AdventurePlayer) -> String:
 	var there := Quests.site_tile(player.world, destination)
 	var way := WorldNames.quadrant(there.x - player.tile().x, there.y - player.tile().y)
 	var color := int(quest.get("color", 1))
-	match int(quest.get("type", 0)):
+	var kind := int(quest.get("type", 0))
+	if kind < 0:
+		if kind <= Quests.DEFEATED:
+			quest["data"] = way
+			return "You should travel %s to %s to claim your reward!" % [WorldNames.DIRECTIONS[way], town]
+		return "I see that the people of %s have asked you to defeat %s." % [town, CreatureBook.called(-kind)]
+	match kind:
 		Quests.LETTER_LINK:
 			quest["data"] = way
 			return "If you seek the mana link, travel %s to %s." % [WorldNames.DIRECTIONS[way], town]
@@ -302,8 +311,12 @@ static func copy(player: AdventurePlayer, card_name: String, color: int) -> bool
 	var hue := COLOR_WORDS[clampi(color, 1, 5) - 1]
 	if int(player.amulets.get(hue, 0)) < COPY_COST or not CardRegistry.has_card(card_name):
 		return false
+	# Through the bag ([method AdventurePlayer.add_card]; the bug pass of
+	# part B). [Ours: a full bag refuses the copy before the amulets go.]
+	if player.bag_room() < 1:
+		return false
 	player.amulets[hue] = int(player.amulets[hue]) - COPY_COST
-	player.cards.append({"card": card_name, "decks": []})
+	player.add_card(card_name)
 	return true
 
 

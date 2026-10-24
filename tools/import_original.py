@@ -531,6 +531,8 @@ MANIFEST: dict[str, list[str]] = {
     "world_ego_m":           ["spr/ego_m.spr", "ego_m.spr"],
     "world_ego_f":           ["spr/ego_f.spr", "ego_f.spr"],
     "world_sego_f":          ["spr/sego_f.spr", "sego_f.spr"],
+    # (The creatures walking the world, `world_creature_*`, the same grid
+    # as the hero's, are added with WORLD_SHEETS below: CREATURE_SHEETS.)
     # THE WORLD SCREEN'S ICONS (2026-10-22, the owner: floating icons
     # "based on old 1997 frame icons"): `Worlds.spr`, which 1.3 loads into
     # its World Magic button bank — twelve icons in four rows (normal, lit,
@@ -1045,14 +1047,20 @@ MANIFEST: dict[str, list[str]] = {
     #                                                music_castle_<colour>
     #   Dngnduel.wav          NOT dungeon-duel music: a ONE-SHOT stinger
     #                         on the "Exploring the Dungeon...you
-    #                         encounter" text            [M5, not imported]
+    #                         encounter" text (1.3 `dungeonEncounter.c`
+    #                         :809)                    sfx_dungeon_duel
     #   Wingame.wav           winning the whole game   [M5, not imported]
     #                         — a fanfare, not a bed, so it stays out of
     #                         the playlist as well
-    #   Winduel.wav /         the shell's own copies of the duel stings;
-    #   Loseduel.wav          the DUEL plays the Duelsounds/Shell_* pair
-    #                         instead, which is why those are first below.
-    #                         Same length, DIFFERENT audio (md5 + cmp).
+    #   Winduel.wav /         the ADVENTURE's beds after a duel won or
+    #   Loseduel.wav          lost: 1.3 `PlayDuelMusic` (visitLocation.c
+    #                         :2635) LOOPS one of Dueltune, Winduel and
+    #                         Loseduel, 1 beside `winbak01.pic`, 2 beside
+    #                         `losedul2.pic`. music_win_duel and
+    #                         music_lose_duel (2026-10-23, part B), and
+    #                         the fallback of the DUEL's own stings, the
+    #                         Duelsounds/Shell_* pair, first below. Same
+    #                         length, DIFFERENT audio (md5 + cmp).
     #
     # WHAT DATE THESE FILES CARRY, and why the importer says so out loud.
     # The owner's own 1997 install (`../shandalar-xp/MagicTG/`, surveyed
@@ -1088,10 +1096,11 @@ MANIFEST: dict[str, list[str]] = {
     # (*walkl/*walkr), the click (Button2), the mana link and reward
     # stings (`Manalink.wav` IS 1997: both decompilations play it when a
     # letter quest makes a mana link) and Treasure — imported below as the
-    # world's sounds (2026-10-23) — and, for later, Dice, Scroll,
-    # Findcard, Newsflash, Death, Horse, Knight, Lord, Wolf, Troll,
-    # Dragon, Wyrm, Djinn, Archmage, Malewiz, Fewiz, Flying, Dsummon,
-    # Damb1-5+Dambloop and Manaball.
+    # world's sounds (2026-10-23) — the creatures' cries (Malewiz, Fewiz,
+    # Knight, Lord, Djinn, Troll, Wyrm, Dragon, Flying, Archmage),
+    # Dsummon and Newsflash, imported with part B (2026-10-23) — and, for
+    # later, Dice, Scroll, Findcard, Death, Horse, Wolf, Damb1-5+Dambloop
+    # and Manaball.
     #
     # `statscrn.wav` (in the install's root) is the wizards' window's
     # loop, played by `statwin.dll`.
@@ -1216,10 +1225,12 @@ MANIFEST: dict[str, list[str]] = {
     #
     # So every LOOPABLE BED in `Sound/` is imported now, and
     # [MusicLibrary] plays them as a playlist. The one-shots are still
-    # left out, because a stinger in a shuffle is a jump-scare:
-    # `Dngnduel.wav` (the "you encounter" text), `Wingame.wav` (winning
-    # the whole adventure), `Winduel.wav`/`Loseduel.wav` (the duel
-    # stings, already imported as sfx_win/sfx_lose).
+    # left out of it, because a stinger in a shuffle is a jump-scare:
+    # `Dngnduel.wav` (the "you encounter" text, sfx_dungeon_duel),
+    # `Wingame.wav` (winning the whole adventure). So are the two beds
+    # of an adventure duel's end, `Winduel.wav`/`Loseduel.wav`
+    # (music_win_duel, music_lose_duel): [MusicLibrary]'s list names its
+    # tracks one by one, and these two belong to their screens alone.
     #
     # WHAT EACH BED IS, from `MAGIC.EXE` (Tier 2, cited by entry address
     # because the decompilation's function names are machine guesses; the
@@ -1304,6 +1315,47 @@ MANIFEST: dict[str, list[str]] = {
     "sfx_mana_link.wav":         shell_sound("Manalink.wav"),
     "sfx_reward.wav":            shell_sound("Reward.wav"),
     "sfx_treasure.wav":          shell_sound("Treasure.wav"),
+    # THE CREATURES' CRIES (2026-10-23, part B): 1.3
+    # `PlayCreatureEncounterSound` (world_lair_monster_slots.c:281-325)
+    # loads one file by the creature's kind (the table's `encounter_type`):
+    # 1 Malewiz, 2 Fewiz, 3 Knight, 4 Lord, 5 Djinn, 6 Troll, 7 Wyrm,
+    # 8 Dragon, 9 the flyers, 10 Archmage; 11 (the henchmen) is silent. The
+    # key is `sfx_cry_` + the file's own name in lower case.
+    # [ours: 1997 slip — kind 9 asks for `flyer.wav`, which no install
+    # here carries, so the flyers (Nether Fiend, Winged Stallion) were
+    # silent; the shipped `Flying.wav` is plainly the one meant.]
+    "sfx_cry_malewiz.wav":       shell_sound("Malewiz.wav"),
+    "sfx_cry_fewiz.wav":         shell_sound("Fewiz.wav"),
+    "sfx_cry_knight.wav":        shell_sound("Knight.wav"),
+    "sfx_cry_lord.wav":          shell_sound("Lord.wav"),
+    "sfx_cry_djinn.wav":         shell_sound("Djinn.wav"),
+    "sfx_cry_troll.wav":         shell_sound("Troll.wav"),
+    "sfx_cry_wyrm.wav":          shell_sound("Wyrm.wav"),
+    "sfx_cry_dragon.wav":        shell_sound("Dragon.wav"),
+    "sfx_cry_flying.wav":        shell_sound("Flying.wav"),
+    "sfx_cry_archmage.wav":      shell_sound("Archmage.wav"),
+    # THE MEETINGS' AND THE ADVENTURE DUELS' SOUNDS (2026-10-23, part B),
+    # each where 1.3 plays it:
+    #   Dsummon    a "special" meeting, the one in three whose pre-duel
+    #              powers may fire (world_lair_monster_encounter.c:2148),
+    #              and two of the dungeon's events (dungeonEncounter.c
+    #              :542, :710);
+    #   Newsflash  every news flash: a siege begins, a town falls
+    #              (world_lair_monster_slots.c:1105, :1171;
+    #              visitLocation.c:634);
+    #   Aswanjag   the four lair duels (world_lair_monster_encounter.c
+    #              :1131-1184) — the DUEL's own folder, `x:Duelsounds\`,
+    #              the Aswan Jaguar's sound (WAV_ASWANJAG = 46);
+    #   Dngnduel   a dungeon's "you encounter" (dungeonEncounter.c:809);
+    #   Winduel /  the beds of an adventure duel won or lost, LOOPED by
+    #   Loseduel   `PlayDuelMusic` (visitLocation.c:2635) beside
+    #              `winbak01.pic` and `losedul2.pic` — see the music note.
+    "sfx_dsummon.wav":           shell_sound("Dsummon.wav"),
+    "sfx_newsflash.wav":         shell_sound("Newsflash.wav"),
+    "sfx_lair_duel.wav":         duel_sound("Aswanjag.wav"),
+    "sfx_dungeon_duel.wav":      shell_sound("Dngnduel.wav"),
+    "music_win_duel.wav":        shell_sound("Winduel.wav"),
+    "music_lose_duel.wav":       shell_sound("Loseduel.wav"),
 }
 
 
@@ -2584,13 +2636,81 @@ WORLD_SCREENS: dict[str, list[str]] = {
     "world_magic_seller": ["Worlbak1.pic"],
 }
 PIC_SCREENS.update(WORLD_SCREENS)
+# THE MEETINGS' AND THE ADVENTURE DUELS' PICTURES (2026-10-23, part B),
+# 640 x 480 unless said, each read where 1.3 loads it (cited by file:line
+# of the 1.3 decompilation, `world_lair_monster_encounter.c` unless named):
+#   - the meeting's ground by the creature's colour (`Prdblk`, `Prdblu`,
+#     `Prdgrn`, `Prdrd`, `Prdwt.pic`, :1613-1621), each its own palette;
+#   - the meeting's parts, which 1.3 cuts out as sprites
+#     (`EncodeSpriteFromPage`, which leaves index 0 out — so do these
+#     three, RGBA with index 0 clear), painted in the ground's palette;
+#     the five grounds agree on every index the three sheets use:
+#       `Prdfrma.pic` (:1625): the gold panel (x 1, y 1, 104 x 44), the
+#         food's (1, 46, 103 x 49), the ankh's (1, 96, 102 x 44), the
+#         book's (1, 141, 121 x 44) and the quest scroll (1, 186,
+#         145 x 114);
+#       `Prdfrmb.pic` (:1686, and `DrawCreaturePortrait`, visitLocation.c
+#         :2553): the creature's plaque (1, 382, 152 x 35), the wizard's
+#         (1, 418, 128 x 35), the banner under a portrait (1, 346,
+#         179 x 35) and the portrait frame (1, 165, 180 x 180) — that one
+#         copied whole, not cut, so its index 0 is drawn black: lay it on
+#         black;
+#       `Prdfrmc.pic`: the same pieces in their ruled-town tint, with no
+#         palette of their own — 1.3 reads them in `Prdblk.pic`'s
+#         (`ApplyPortraitPaletteMap`, openingMenu.c:1120);
+#   - the spoils: the cards won (`Winbak01.pic`, :2297, its own palette);
+#     an amulet or a reward (`Winbak02.pic`, :2429, :2458) and the dungeon
+#     clue's plaque under the cards (`Endplak.pic`, 296 x 54, :2312), both
+#     with none of their own and drawn under the one `Winbak01.pic` set
+#     (it differs from the world frame's by 3 steps at most on their
+#     indices); a card lost (`Losedul2.pic`, :2055, visitLocation.c
+#     :4347, its own);
+#   - a ruled town freed (`Celeb.pic`, visitLocation.c:4328); the game
+#     lost, to Dominion or with no card left to ante (`Uth-Arz.pic`,
+#     world_lair_monster_slots.c:1231, visitLocation.c:2270);
+#   - the wizards' window's creature pictures (`Creatures640.pic`,
+#     adventureStats.c:1593): 8 x 7 cells of 80 x 64 (a 1-pixel line at
+#     each cell's left and top), the cell the creature's table row - 1
+#     (Witch ... Arzakon), in the world frame's palette.
+# All looked at, rendered, 2026-10-23.
+ENCOUNTER_PICTURES: dict[str, list[str]] = {
+    "preduel_black": ["Prdblk.pic"],
+    "preduel_blue": ["Prdblu.pic"],
+    "preduel_green": ["Prdgrn.pic"],
+    "preduel_red": ["Prdrd.pic"],
+    "preduel_white": ["Prdwt.pic"],
+    "preduel_panels": ["Prdfrma.pic"],
+    "preduel_frame": ["Prdfrmb.pic"],
+    "preduel_frame_tinted": ["Prdfrmc.pic"],
+    "win_back_cards": ["Winbak01.pic"],
+    "win_back_reward": ["Winbak02.pic"],
+    "end_plaque": ["Endplak.pic"],
+    "lose_card": ["Losedul2.pic"],
+    "town_freed": ["Celeb.pic"],
+    "game_over": ["Uth-Arz.pic"],
+    "creature_thumbs": ["Creatures640.pic"],
+}
+PIC_SCREENS.update(ENCOUNTER_PICTURES)
+## The meeting's parts: sprites, index 0 clear (see above).
+PIC_CUT: set[str] = {"preduel_panels", "preduel_frame", "preduel_frame_tinted"}
 ## The palette a bare picture is painted with, by key, where it is not the
 ## duel's ([constant PIC_PALETTE]): the places' pictures take the world
 ## frame's, and are drawn whole — index 255 is a colour in them, not the
 ## clear of a face.
 PIC_PALETTES: dict[str, list[str]] = {key: ["Advfac64.pic", "Advinter.pic"]
                                       for key in list(VISIT_PICTURES) + list(WORLD_SCREENS)}
-PIC_OPAQUE: set[str] = set(VISIT_PICTURES) | set(WORLD_SCREENS)
+# Part B's: the meeting's grounds and parts carry the meeting's palette
+# (the tinted sheet has none of its own and takes it); the spoils' bare
+# pictures the cards-won screen's; the creature pictures the world
+# frame's.
+PIC_PALETTES.update({key: ["Prdblk.pic", "Prdfrmb.pic", "Prdfrma.pic"]
+                     for key in ENCOUNTER_PICTURES if key.startswith("preduel_")})
+PIC_PALETTES.update({key: ["Winbak01.pic", "Advfac64.pic", "Advinter.pic"]
+                     for key in ("win_back_cards", "win_back_reward", "end_plaque",
+                                 "lose_card", "town_freed", "game_over")})
+PIC_PALETTES["creature_thumbs"] = ["Advfac64.pic", "Advinter.pic"]
+PIC_OPAQUE: set[str] = (set(VISIT_PICTURES) | set(WORLD_SCREENS)
+                        | (set(ENCOUNTER_PICTURES) - PIC_CUT))
 
 
 # THE ADVENTURE'S CARD VALUES (2026-10-23, the owner: *"study how, which
@@ -2949,22 +3069,26 @@ PIC_CLEAR = 255
 PicRgba = tuple[int, int, bytes, bool]
 
 
-def _raw_pic_rgba(key: str, path: Path,
-                  palette: bytes | None, opaque: bool = False) -> PicRgba | None:
+def _raw_pic_rgba(key: str, path: Path, palette: bytes | None,
+                  opaque: bool = False, cut: bool = False) -> PicRgba | None:
     """One raw `.pic` -> `(width, height, pixels, alpha)`, or None.
 
     `alpha` says whether `pixels` is RGBA (bare-index file, 255 clear) or
     RGB (the file brought its own palette, or [param opaque] asks for the
-    whole picture in the palette given). NEVER RAISES: a player's copy
-    can hold a file this cannot read and one of those must not end the
-    import — the same guard `_cut_masked_pic` has carried since a real CD
-    was first handed to this importer.
+    whole picture in the palette given). [param cut] is a sheet the 1997
+    game cut sprites out of: RGBA with index 0 clear, the sprite's own
+    transparency, in the file's palette, else the one given. NEVER
+    RAISES: a player's copy can hold a file this cannot read and one of
+    those must not end the import — the same guard `_cut_masked_pic` has
+    carried since a real CD was first handed to this importer.
     """
     try:
         width, height, indices, own = decode_pic(path.read_bytes())
     except (ValueError, IndexError, OSError, struct.error) as err:
         print("  %-24s SKIPPED %s (%s)" % (key, path.name, err))
         return None
+    if cut and (own is not None or palette is not None):
+        return width, height, paint(indices, own if own is not None else palette), True
     if own is not None:
         rgb = bytearray(len(indices) * 3)
         for i, value in enumerate(indices):
@@ -3038,6 +3162,57 @@ WORLD_SHEETS: dict[str, tuple[int, int, int, int]] = {
     "quest_sunmoon": (14, 67, 88, 14),
     "quest_days": (6, 67, 88, 6),
 }
+## THE CREATURES WALKING THE WORLD (2026-10-23, part B): the sheets 1.3
+## `LoadCreatureEncounterSprites` (world_lair_monster_slots.c:38-279)
+## loads for the creatures' table, a BODY and a SHADOW per creature, by
+## the table's row (the part B creature spec, §9). Every one is the hero's
+## grid exactly — 40 frames of 154 x 108, five to a row (eight headings
+## of five steps; frame ((heading + 2) & 7) * 5 + step), then the format's
+## 3 x 1 end marker, left out — and every frame but the first carries -1
+## as its top clip: the first's (60-73) is the sheet's anchor, the
+## height above the creature's feet its frame's top stands (the shadow
+## is drawn at its body's). In the install's `Spr/` (a source tree's
+## `Program/SPR/`; the 640 x 480 set, the Spr800/Spr1024 copies being
+## 1.25x and 1.6x), painted with the world frame's palette like the hero. The key is `world_creature_` + the
+## file's name in lower case, bodies and shadows alike (`BK_FWZ.SPR` ->
+## world_creature_bk_fwz, `SFWZ.SPR` -> world_creature_sfwz). The lair,
+## four of the five castle wizards (rows 7, 14, 21, 28) and Arzakon have
+## none; the fifth, the Dragon Lord, wears the War Mage's R_AMG; the
+## dungeons reuse these (dungeonEncounter.c:337).
+CREATURE_BODIES: tuple[str, ...] = (
+    "BK_FWZ", "BK_KHT", "BK_MWZ", "BK_LRD", "BK_WG", "BK_AMG",
+    "W_MWZ", "W_FWZ", "W_KHT", "W_LRD", "W_WG", "W_AMG",
+    "BU_FWZ", "BU_LRD", "BU_MWZ", "BU_WRM", "B_SFR", "BU_AMG",
+    "G_MWZ", "G_KHT", "G_FWZ", "G_WRM", "G_LRD", "G_AMG",
+    "R_FWZ", "R_MWZ", "TROLL", "R_LRD", "R_WRM", "R_AMG",
+    "M_TSK", "M_TRL", "M_APE", "M_CEN2", "M_WG", "M_FNG", "M_CEN", "M_LRD", "M_KHT",
+    "M_FWZ",
+    "BK_DJN", "G_DJN", "R_DJN", "BU_DJN",
+    "DG_BRU", "DG_UWB", "DG_GWR", "DG_RBG", "DG_WUG",
+)
+CREATURE_SHADOWS: tuple[str, ...] = (
+    "SFWZ", "SB_KHT", "SMWZ", "SB_LRD", "SBK_WG", "SB_AMG",
+    "SW_MWZ", "SKHT", "SW_LRD", "SW_WG", "SW_AMG",
+    "SU_LRD", "SWRM", "SB_SFT", "SU_AMG",
+    "SG_LRD", "SG_AMG",
+    "SR_FWZ", "STRL", "SR_LRD", "SR_WRM", "SR_AMG",
+    "SM_TSK", "SM_TRL", "SM_APE", "SM_CEN", "SM_WG", "SM_FNG", "SM_CEN2", "SM_LRD",
+    "SDJN", "S_DG",
+)
+CREATURE_PREFIX = "world_creature_"
+
+
+def creature_sheet_key(stem: str) -> str:
+    """A creature sheet's skin key: `BK_FWZ` -> `world_creature_bk_fwz`."""
+    return CREATURE_PREFIX + stem.lower()
+
+
+## key -> its `.SPR` file, bodies then shadows.
+CREATURE_SHEETS: dict[str, str] = {creature_sheet_key(stem): stem + ".SPR"
+                                   for stem in CREATURE_BODIES + CREATURE_SHADOWS}
+for _key, _file in CREATURE_SHEETS.items():
+    MANIFEST[_key] = ["spr/" + _file.lower(), _file.lower()]
+    WORLD_SHEETS[_key] = (40, 154, 108, 5)
 for _key, (_cells, _w, _h, _columns) in WORLD_SHEETS.items():
     SPR_SHEETS[_key] = (MANIFEST[_key], _cells, _w, _h)
 ## How many cells a sheet puts on one row; a sheet not named here is one
@@ -3131,14 +3306,17 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
               % (key, source, width, height, origin))
         return True
     palette, origin = _resolve_palette(index, PIC_PALETTES.get(key, PIC_PALETTE))
-    decoded = _raw_pic_rgba(key, source, palette, key in PIC_OPAQUE)
+    decoded = _raw_pic_rgba(key, source, palette, key in PIC_OPAQUE, key in PIC_CUT)
     if decoded is None:
         return False
     width, height, pixels, alpha = decoded
     write_png(dest / (key + ".png"), width, height, pixels, alpha=alpha)
+    if key in PIC_CUT or (not alpha and key in PIC_OPAQUE):
+        how = "its own, else " + origin
+    else:
+        how = origin if alpha else "its own"
     print("  %-24s <- %s (decoded %dx%d, palette: %s)"
-          % (key, source, width, height,
-             origin if alpha else ("its own, else " + origin if key in PIC_OPAQUE else "its own")))
+          % (key, source, width, height, how))
     return True
 
 
@@ -3695,12 +3873,16 @@ PORTRAITS_WANTED = 70
 ## nothing: the six set symbols and the dagger are always the game's own
 ## (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and 2026-10-15),
 ## two grounds no screen draws yet (a read of every consumer,
-## 2026-10-17), and the adventure's world-map frame, which waits for the
-## overworld (PIC_SCREENS).
+## 2026-10-17), the adventure's world-map frame, which waits for the
+## overworld (PIC_SCREENS), the dungeon's "you encounter" sting, which
+## waits for the dungeons (part C; imported with part B, 2026-10-23), and
+## the creatures' thumbnails, which wait for the wizards' window of the
+## stats (part B laid them out; nothing draws them yet).
 NOT_READ = {"set_icon_atq", "set_icon_arn", "set_icon_past", "set_icon_drk",
             "set_icon_4ed", "set_icon_leg", "damage_marker",
             "deck_tile_olive", "spell_chain_panel",
-            "character_select_background"}
+            "character_select_background", "sfx_dungeon_duel.wav",
+            "creature_thumbs"}
 
 
 def check(args: argparse.Namespace, index: dict[str, Path]) -> int:

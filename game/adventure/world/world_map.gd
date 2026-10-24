@@ -15,8 +15,8 @@ extends Control
 ##    ([method WorldStatus.siege_town]); 1997 redded the town NEAREST that
 ##    creature, the one in roaming slot 7 (`FindNearestTownIndex`,
 ##    mapScreen.c 605–610 and 676) — the same town while the creature
-##    stands at it. No siege is set up yet (they come with the duels), so
-##    neither shows today; INFO MAP: each one's land
+##    stands at it — and the town that falls is that same town ([Sieges],
+##    part B); INFO MAP: each one's land
 ##    colours as the amulets' stones, what it trades and the World Magic it
 ##    sells ([method info_words]); PLAIN MAP: the icons alone;
 ##  - the hero's square blinking (a small node of its own, so the blink

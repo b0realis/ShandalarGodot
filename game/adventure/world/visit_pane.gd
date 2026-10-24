@@ -14,9 +14,17 @@ extends PanelContainer
 ##    Cards, Edit deck/Sell cards, Speak to Wise Man (or the town's trade,
 ##    or "Begin a Quest" — see below), Buy 10 food for (type + 2) × 5
 ##    gold, Leave the village.
-##  - A TOWN A WIZARD RULES (its status's high byte): the same picture and
+##  - A TOWN A WIZARD RULES (its status's high byte; [RuledTowns]): the same
+##    picture, and — drawn AS THE PANE OPENS, every entry, never in
+##    [method describe] (the pointer's tip reads it too) — the hero's stake
+##    ("Your ANTE"), the creature's face in its tinted frame and its stake
+##    ("Wizard's ANTE") over it ([method show_cards], [method show_face]);
 ##    "This place is ruled by the %s." — "To free the city you must duel
-##    this %s", " Never mind. / Duel the creature."
+##    this %s" (the creature), " Never mind. / Duel the creature." — the
+##    duel the world screen opens ([method RuledTowns.open]). With no card
+##    of the deck in use to stake, the game is over as the town is entered
+##    (1997's `ExitIfNoUsableDeckCards`): the pane shows nothing and takes
+##    its duel's door at once, where the end is shown.
 ##  - A WIZARD'S CASTLE (`0246`, `0364`, `0335`, `0737`, `0028` by its
 ##    colour): "Who dares to challenge the Mighty %s? Are you brave enough
 ##    to enter my castle?" — " Well... No. / Yes, enter the castle."; a
@@ -30,15 +38,15 @@ extends PanelContainer
 ## Hints" when the seller has a hint ([CardHints]). The fifth choice is, as
 ## 1997 ordered it: a town's trade, "Trade red amulet for Any creatures",
 ## while it is offered ([CardTrade], the card trader [CardTradePane]); else
-## "Begin a Quest" while the town has one to give ([Quests] — for now only a
-## village draws one: the creature quests of towns and cities come with the
-## duels); else "Speak to Wise Man" ([WiseMan], [WiseManPane]). A lair's own pane ([LairPane]) and
+## "Begin a Quest" while the town has one to give ([Quests]: a village's
+## deliveries, and every place's creature quests); else "Speak to Wise Man" ([WiseMan], [WiseManPane]). A lair's own pane ([LairPane]) and
 ## the wise man's change their words, choices and the card shown as they go
 ## ([method say], [method offer], [method show_card]; "Whose deck would you
-## like to see?", [method ask_whose_deck]). What is not made yet — the duels
-## for a ruled town and a castle, the dungeon board — is shown and waits,
-## said in one line. Without the 1997 pictures the place is a plain dark
-## field under its name.
+## like to see?", [method ask_whose_deck]); a row of cards over the
+## picture shows stakes and spoils ([method show_cards]), the picture itself
+## may change ([method show_picture]). What is not made yet — a castle's
+## duels, the dungeon board — is shown and waits, said in one line. Without
+## the 1997 pictures the place is a plain dark field under its name.
 ##
 ## [QoL] The pane stays on the screen: the picture gives way when the
 ## choices need the room ("Whose deck would you like to see?" adds a dozen
@@ -46,7 +54,8 @@ extends PanelContainer
 
 ## The hero leaves the place; [param then] what they chose to do next
 ## (`""`, `deck` for Edit deck, `shop` for Buy Cards, `trade` for the
-## town's trade, `quest` for Begin a Quest, `wiseman` for the wise man).
+## town's trade, `quest` for Begin a Quest, `wiseman` for the wise man,
+## `duel` for a ruled town's Duel the creature).
 signal left(then: String)
 ## A creature's deck is to be seen ([CreatureBook] row [param index]).
 signal deck_wanted(index: int)
@@ -60,9 +69,26 @@ const PICTURE := Vector2(512, 280)
 const MOST := 1.5
 const LEAST := 0.6
 const KINDS := ["village", "town", "city"]
-const COMING := "The duels and the dungeons come next."
+const COMING := "The castles and the dungeons come next."
 ## The room kept free above and below a pane on the screen, in all.
 const ROOM_MARGIN := 32.0
+## A card of a row over the picture ([method show_cards]): its width in the
+## picture's own pixels (1997's 80-unit card on its 320-unit page, the
+## picture 512 wide), and the row's gap and margin.
+const ROW_CARD := 128.0
+const ROW_GAP := 12.0
+const ROW_MARGIN := 16.0
+## The caption under a card of the row, its height in picture pixels.
+const CAPTION := 18.0
+## 1997's page units to the picture's pixels: its 320-unit page across the
+## 512-pixel picture ([method page_point]).
+const PAGE_SCALE := 1.6
+## The creature's face over a ruled town ([method show_face]): its frame
+## and the name banner under it, in picture pixels; the tinted frame's
+## pieces (`Prdfrmc.pic`, as `Prdfrmb.pic`'s, [EncounterStage]).
+const FACE_AT := Rect2(196, 18, 120, 120)
+const FACE_BANNER_AT := Rect2(186, 140, 140, 26)
+const FACE_INSET := 8.0
 
 var player: AdventurePlayer
 ## What is visited ([method describe]).
@@ -81,6 +107,18 @@ var _width := PICTURE.x
 var _grow := 1.0
 var _most := 1.0
 var _art: TextureRect
+## What is laid over the picture besides the one card: the row's cards and
+## captions, the face — each `{node, at}` in picture pixels, placed again as
+## the picture grows ([method _place_over]).
+var _over: Control
+var _over_parts: Array = []
+var _row_names: Array[String] = []
+## A ruled town's entry ([method RuledTowns.enter]), drawn as the pane opens.
+var ruled := {}
+## The place opened again where the hero stands, not entered anew
+## ([method WorldScreen.walk_to_tile]'s entry latch): a ruled town keeps
+## the entry it drew ([method RuledTowns.enter]).
+var again := false
 
 
 # ------------------------------------------------------------ the place --
@@ -138,12 +176,12 @@ static func _town(hero: AdventurePlayer, slot: int, kind: int) -> Dictionary:
 	var picture := "visit_village" if kind == ShandalarWorld.VILLAGE else "visit_city"
 	var ruler := TownStatus.ruler(hero.world, slot)
 	if ruler != 0:
+		# The creature and the stakes are drawn as the pane opens ([method
+		# _enter_ruled]), not here: this names the town for the pointer too.
 		var wizard: String = WorldNames.WIZARDS[ruler - 1]
 		return {"kind": "ruled", "slot": slot, "name": name, "subtitle": "Ruled by the " + wizard,
-			"picture": picture,
-			"lines": ["This place is ruled by the %s." % wizard,
-				"To free the city you must duel this %s's creature." % wizard],
-			"actions": [["leave", "Never mind.", true], ["duel", "Duel the creature.", false]]}
+			"picture": picture, "lines": [RuledTowns.RULED_WORDS % wizard],
+			"actions": [["leave", RuledTowns.NEVER_MIND, true], ["duel", RuledTowns.DUEL, true]]}
 	var price := food_price(kind)
 	var buy := "Buy Cards/Card Hints" if not CardHints.current(hero, slot).is_empty() else "Buy Cards"
 	var trade := CardTrade.town_offer(hero, slot)
@@ -235,6 +273,48 @@ func _ready() -> void:
 	_fill_choices()
 	# Each time the pane's parts are laid out anew, the picture is fitted.
 	minimum_size_changed.connect(_fit)
+	# AND AS THE PANE IS LAID OUT (the bug pass of part B): the choices wrap
+	# in rows of their own width, and their rows can grow after the minimum
+	# size was last told — the wise man's "whose deck" with big buttons held
+	# at 843 px of the 800 (one run in four under load), the picture at its
+	# widest and never looked at again. A new size looks again.
+	resized.connect(_fit)
+	if String(place.get("kind", "")) == "ruled" and player != null:
+		_enter_ruled()
+
+
+## A RULED TOWN ENTERED ([RuledTowns]): what it holds this time drawn —
+## the stakes and the creature shown over the picture, the town's words and
+## choices; with nothing to stake, the game's end: the pane hidden and its
+## duel's door taken at once ([method RuledTowns.open] shows the end).
+func _enter_ruled() -> void:
+	ruled = RuledTowns.enter(player, int(place.get("slot", -1)), again)
+	if ruled.is_empty():
+		return
+	if bool(ruled.get("no_ante", false)):
+		visible = false
+		_take_door.call_deferred("duel")
+		return
+	say(RuledTowns.words(player, ruled))
+	offer(RuledTowns.choices(ruled))
+	var row := int(ruled.get("row", 0))
+	if row > 0:
+		show_face(row)
+	var hero: Array = ruled.get("hero_ante", [])
+	var names: Array = hero.duplicate()
+	var captions: Array = []
+	var places: Array = []
+	# The hero's stake fanned at the left, its caption under the last card;
+	# the creature's at the right ([ours]: side by side in the picture, the
+	# face between them — 1997 drew them over one another).
+	for i in hero.size():
+		captions.append(RuledTowns.YOUR_ANTE if i == hero.size() - 1 else "")
+		places.append(Vector2(18 + 34 * i, 34 + 8 * i))
+	for card_name in ruled.get("creature_ante", []):
+		names.append(String(card_name))
+		captions.append(RuledTowns.WIZARD_ANTE)
+		places.append(Vector2(PICTURE.x - 18 - 100, 34))
+	show_cards(names, captions, places, 100.0)
 
 
 ## The picture, as large as the screen allows up to [constant MOST] times
@@ -279,6 +359,11 @@ func _picture() -> Control:
 			card_read.emit(_card_name))
 	_card.visible = false
 	holder.add_child(_card)
+	_over = Control.new()
+	_over.name = "Over"
+	_over.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_over.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_art.add_child(_over)
 	_set_grow(_most)
 	return frame
 
@@ -296,6 +381,8 @@ func _set_grow(grow: float) -> void:
 	_card.scale = Vector2(fit, fit)
 	_card.position = Vector2(PICTURE.x * grow - CardPreview.SIZE.x * fit - 16.0 * grow,
 		(PICTURE.y * grow - CardPreview.SIZE.y * fit) / 2.0)
+	for part in _over_parts:
+		_place_over(part)
 
 
 ## THE PANE KEPT ON THE SCREEN, each time its parts are laid out anew: the
@@ -329,7 +416,10 @@ func _fill_choices() -> void:
 	for action in place.get("actions", []):
 		var choice := _button(String(action[1]), String(action[0]))
 		choice.disabled = not bool(action[2])
-		if String(action[0]) in ["duel", "enter"]:
+		# What is not made yet waits, said under it (a castle's duels, a
+		# dungeon); a ruled town's duel is made (part B).
+		if String(action[0]) in ["duel", "enter"] and not bool(action[2]) \
+				and String(place.get("kind", "")) != "ruled":
 			waiting = true
 		_choices.add_child(choice)
 	_note.text = COMING if waiting else ""
@@ -366,6 +456,188 @@ func shown_card() -> String:
 	return _card_name
 
 
+## THE PICTURE NOW skin picture [param key] (a lair's spoils on
+## `win_back_cards`; "" the place's own again).
+func show_picture(key: String) -> void:
+	var shown := key if key != "" else String(place.get("picture", ""))
+	_art.texture = GameSkin.texture(shown)
+	_art.set_meta("key", shown)
+
+
+## The skin key of the picture shown now.
+func shown_picture() -> String:
+	return String(_art.get_meta("key", place.get("picture", ""))) if _art != null else ""
+
+
+## A ROW OF CARDS OVER THE PICTURE — a lair's hoard, a ruled town's stakes,
+## the cards won — each [param width] picture pixels wide (the card's
+## height to match), [param captions]' line under each ("" none), at
+## [param places] (each card's top left in the picture's own pixels, kept
+## inside it; [method page_point] turns 1997's page into them), else in a
+## row about the middle, fanned when it does not fit. Right click reads a
+## card. The one card ([method show_card]) gives way to it; [param names]
+## empty takes the row away (the face stays: [method show_face]).
+func show_cards(names: Array, captions: Array = [], places: Array = [], width := ROW_CARD) -> void:
+	_drop_over("card")
+	_row_names.clear()
+	if names.is_empty():
+		return
+	show_card("")
+	var high := width * CardPreview.SIZE.y / CardPreview.SIZE.x
+	var count := names.size()
+	var step := width + ROW_GAP
+	if count > 1 and step * (count - 1) + width > PICTURE.x - 2.0 * ROW_MARGIN:
+		step = (PICTURE.x - 2.0 * ROW_MARGIN - width) / (count - 1)
+	var left := (PICTURE.x - (step * (count - 1) + width)) / 2.0
+	var top := (PICTURE.y - high - CAPTION) / 2.0
+	for i in count:
+		var card_name := String(names[i])
+		if not CardRegistry.has_card(card_name):
+			continue
+		var at: Vector2 = Vector2(places[i]) if i < places.size() else Vector2(left + step * i, top)
+		var caption := String(captions[i]) if i < captions.size() else ""
+		at.x = clampf(at.x, 0.0, PICTURE.x - width)
+		at.y = clampf(at.y, 0.0, maxf(PICTURE.y - high - (CAPTION if caption != "" else 0.0), 0.0))
+		var shown := CardPreview.new()
+		shown.name = "RowCard%d" % i
+		shown.docked = true
+		shown.mouse_filter = Control.MOUSE_FILTER_STOP
+		shown.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
+		shown.set_meta("card", card_name)
+		shown.gui_input.connect(func(input: InputEvent) -> void:
+			if PaneStyle.right_click(input):
+				card_read.emit(card_name))
+		_add_over(shown, Rect2(at, Vector2(width, high)), "card")
+		_row_names.append(card_name)
+		if caption != "":
+			var line := PaneStyle.label(caption, 13, PaneStyle.GOLD)
+			line.name = "RowCaption%d" % i
+			line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			line.add_theme_color_override("font_outline_color", PaneStyle.EDGE)
+			line.add_theme_constant_override("outline_size", 4)
+			line.set_meta("points", 13)
+			_add_over(line, Rect2(at + Vector2(-16, high + 1), Vector2(width + 32, CAPTION)), "card")
+
+
+## The pane left by [param then] after the frame (whoever opened it has
+## connected [signal left] by then).
+func _take_door(then: String) -> void:
+	if is_inside_tree():
+		left.emit(then)
+
+
+## The names of the row's cards, in order ([method show_cards]).
+func cards_shown() -> Array[String]:
+	return _row_names.duplicate()
+
+
+## 1997's page point [param at] (its 320-unit page) in the picture's pixels.
+static func page_point(at: Vector2) -> Vector2:
+	return at * PAGE_SCALE
+
+
+## THE CREATURE'S FACE over the picture (1997's `DrawCreaturePortrait` with
+## the tinted frame, `Prdfrmc.pic` — `preduel_frame_tinted`): its portrait
+## in the frame at [param at], its name on the banner under it; row 0 takes
+## the face away.
+func show_face(row: int, at := FACE_AT, banner_at := FACE_BANNER_AT) -> void:
+	_drop_over("face")
+	if row <= 0:
+		return
+	var back := ColorRect.new()
+	back.name = "FaceBack"
+	back.color = Color.BLACK
+	_add_over(back, at, "face")
+	_add_over(_frame_piece(EncounterStage.FACE_FRAME, "FaceFrame"), at, "face")
+	var portrait := TextureRect.new()
+	portrait.name = "Face"
+	portrait.texture = PortraitLibrary.texture(CreatureBook.face_id(row))
+	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_add_over(portrait, at.grow(-FACE_INSET), "face")
+	_add_over(_frame_piece(EncounterStage.NAME_BANNER, "FaceBanner"), banner_at, "face")
+	var named := PaneStyle.label(CreatureBook.name_of(row), 15, PaneStyle.GOLD)
+	named.name = "FaceName"
+	named.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	named.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	named.clip_text = true
+	named.set_meta("points", 15)
+	_add_over(named, banner_at, "face")
+
+
+## Whether the creature's face shows ([method show_face]), and whose.
+func face_name() -> String:
+	for part in _over_parts:
+		var node: Node = part["node"]
+		if is_instance_valid(node) and node.name == "FaceName":
+			return (node as Label).text
+	return ""
+
+
+## A piece of the tinted frame's sheet (a dim box without the skin).
+func _frame_piece(region: Rect2, part_name: String) -> Control:
+	var sheet := GameSkin.texture("preduel_frame_tinted")
+	if sheet == null:
+		var box := Panel.new()
+		box.name = part_name
+		var face := StyleBoxFlat.new()
+		face.bg_color = Color(0.06, 0.06, 0.14, 0.9)
+		face.border_color = Color(PaneStyle.GOLD, 0.5)
+		face.set_border_width_all(1)
+		box.add_theme_stylebox_override("panel", face)
+		return box
+	var cut := AtlasTexture.new()
+	cut.atlas = sheet
+	cut.region = region
+	var shown := TextureRect.new()
+	shown.name = part_name
+	shown.texture = cut
+	shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shown.stretch_mode = TextureRect.STRETCH_SCALE
+	return shown
+
+
+## [param node] laid over the picture at [param at] (picture pixels), of
+## [param group] (`card`, `face`): only a card takes the mouse (its right
+## click reads it).
+func _add_over(node: Control, at: Rect2, group: String) -> void:
+	if not node is CardPreview:
+		node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_over.add_child(node)
+	var part := {"node": node, "at": at, "group": group}
+	_over_parts.append(part)
+	_place_over(part)
+
+
+func _drop_over(group: String) -> void:
+	var kept: Array = []
+	for part in _over_parts:
+		if String(part["group"]) == group:
+			var node: Node = part["node"]
+			if is_instance_valid(node):
+				PaneStyle.drop(node)
+		else:
+			kept.append(part)
+	_over_parts = kept
+
+
+## A part over the picture placed at the picture's size now.
+func _place_over(part: Dictionary) -> void:
+	var node: Control = part["node"]
+	if not is_instance_valid(node):
+		return
+	var at: Rect2 = part["at"]
+	node.position = at.position * _grow
+	if node is CardPreview:
+		var fit := at.size.x * _grow / CardPreview.SIZE.x
+		node.scale = Vector2(fit, fit)
+		return
+	node.size = at.size * _grow
+	if node is Label and node.has_meta("points"):
+		(node as Label).add_theme_font_size_override("font_size",
+			maxi(int(round(int(node.get_meta("points")) * _grow)), 8))
+
+
 ## "Whose deck would you like to see?" (`@LAIR` 17): a choice for each
 ## creature of [param color] (1 black … 5 white, [method
 ## CreatureBook.of_color]) and Never mind.
@@ -399,6 +671,11 @@ func choose(action: String) -> void:
 			left.emit("quest")
 		"wiseman":
 			left.emit("wiseman")
+		"duel":
+			# A ruled town's creature: its duel, over the world
+			# ([method RuledTowns.open]).
+			if String(place.get("kind", "")) == "ruled":
+				left.emit("duel")
 		"food":
 			var kind := int(player.world.sites[int(place["slot"])]["type"])
 			var price := food_price(kind)
@@ -421,7 +698,8 @@ func note() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
+	# Hidden (a pane over it, the game's end taken), it is not the one left.
+	if visible and event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		left.emit("")
 

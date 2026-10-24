@@ -30,10 +30,12 @@ extends RefCounted
 ##    something else — a riddle answered gives its own rare instead; the
 ##    Hideout's and the Lost City's luck take it, their thieves leave
 ##    another.
-## The duels come with the duels: their lairs say so, and the waiting rare
-## is given. The Guardian's Ghost shows a deck ([CreatureBook]). [Ours: 1997 hung on any lair while the
-## hero held no uncommon or rare card, looking for one to offer at the
-## Oasis; here the Oasis offers none.]
+## The four duels ([constant DUELS]) are [LairDuels]': a creature of the
+## lair's tier and its hoard of rares, Leave quietly or Duel the creature —
+## the waiting rare is given after, whatever came of it, as at every lair.
+## The Guardian's Ghost shows a deck ([CreatureBook]). [Ours: 1997 hung on
+## any lair while the hero held no uncommon or rare card, looking for one to
+## offer at the Oasis; here the Oasis offers none.]
 
 ## `@LAIR_NAMES`, by event (0–4 the treasures of black … white, unshown).
 const NAMES: Array[String] = ["Restless Graveyard", "Hallowed Ground", "Active Volcano",
@@ -232,7 +234,10 @@ static func finish(player: AdventurePlayer, event: Dictionary) -> String:
 	event["reward"] = ""
 	if card_name == "" or not CardRegistry.has_card(card_name):
 		return ""
-	player.cards.append({"card": card_name, "decks": []})
+	# Through the bag ([method AdventurePlayer.add_card], as 1997's adder):
+	# lost when it is full, a rare written in the journal.
+	if not player.add_card(card_name):
+		return ""
 	return card_name
 
 

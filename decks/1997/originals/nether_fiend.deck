@@ -28,8 +28,8 @@ name: Nether Fiend
 2 Kormus Bell
 3 Xenic Poltergeist
 3 Terror
-# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
-# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# The 1997 file's colour-keyed sideboard sections. The adventure played the maindeck
+# alone, adding the sections of the player's colours once learned (.vNone: the demo only);
 # .vNone is folded into the maindeck above, and SB: holds, per name, the largest
 # colour-section count minus the .vNone count — the smallest sideboard from which
 # every 1997 configuration can be rebuilt by swapping.

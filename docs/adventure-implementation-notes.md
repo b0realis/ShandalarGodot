@@ -741,6 +741,143 @@ smoothness of gameplay and robustness campaigns!"*
   it. Found faithful, left: a starter deck may hold three of a spell
   (1997 checks copies for creatures only), which the builder then flags.
 
+## Built: part B — the creatures and their duels (2026-10-23)
+
+The owner: *"lets crack on to work package B!"* — the gap audit's B (the
+creatures, the meetings and the duels with them, and what the duels
+unlock). Specs from four read-only researchers on the 1.3 and retail
+decompilations; built in three stages by seven builders on disjoint files.
+Rulings (2026-10-23):
+- *"1997 as played but fix clear slips to what was obviously meant. Each
+  fix marked. But document abundantly all designed features … so they can
+  be implemented later. Comment also how each of these features can change
+  the game!"* — dead 1997 code stays dead; each such feature is in
+  `docs/adventure-unused-1997-features.md` (what 1997 computed, why it never
+  took effect, what it would change, how to switch it on) and in its
+  module's doc; each slip fix is marked `[ours: 1997 slip — …]`.
+- The creatures are drawn over their whole 4-tile range [QoL] (1997:
+  within 1 tile of the hero).
+- The creature decks are exact 1997: the maindeck, plus the hero's
+  colours' sections once a colour of creature has learned the hero's deck;
+  `.vNone` never (only the title demo read it).
+- Quitting mid-duel is as 1997: the autosave made as the creature is met
+  keeps it on the map; reloading meets it again.
+
+- **The table and the decks**: `CreatureBook` (the 57 rows with their flags
+  by name, strength, bribe, the duel's lives, `pick` — 1997's 999 draws on
+  the adventure's dice —, the sprite and cry keys), `CreatureDeck` (the
+  maindeck and the colour sections read from the deck files' tables, the
+  creature's ante draw, the 0179 fallback). Our 55 lists match the
+  1996-09-27 `.dck` files in the owner's install card for card.
+- **The map**: `WorldCreatures` — 1997's eight slots (six roaming, the
+  siege's seventh), the refill on the ring four tiles out (tiers by the
+  hero's experience, the respawn wait, the gates), the movement (always at
+  the hero, led by difficulty, fleeing at d + 3 wins, the 8-way quantiser
+  and its 4-tick cadence, the colour stop), contact at 16 (lairs 26), the
+  cries, the push-back on entering a place; drawn by `WorldView` with the
+  hero ("movers") from the player's imported sheets (81).
+- **The meeting** (`CreatureMeeting`, `EncounterPane` on `EncounterStage`):
+  the antes, the words by relation and wins, Duel / Pay / Riddle / Change
+  ante / Tribute, the special meetings (Summons, First Strike, a card in
+  play, Try this deck, Mind Control); the duel set-up (the hero's life =
+  links + next-duel lives; the creature's by `duel_life`; the deck padded
+  to 30/35/40/40 — the code's numbers, not the manual's —; the coin toss;
+  1997's mulligan; the player's own rules options); the duel held over the
+  world (`WorldDuels`, `DuelScreen.held`); the spoils (`DuelSpoils`: the
+  victory log, the journal, the quest, the reward cards by strength, the
+  dungeon-clue plaque, the amulet, the reward bits, the colour learning,
+  the lost ante, the draw).
+- **The engine** (opt-in, every other duel as before): `DuelConfig`
+  `ante_cards`, `ante_extras`, `first_player`, `start_in_play`,
+  `mirror_seat0`, `mulligan_rule = "1997"`, `ai_random_play_or_draw`;
+  `DuelReport`; `HeadlessDuel` for tests.
+- **What the duels unlock**: the four lair duels (`LairDuels`), ruled towns
+  and freeing them (`RuledTowns`, `RuledTownPane`), creature quests
+  (`Quests`), the sieges (`Sieges`: the clock, the news flash, the town
+  falling, the lost link, the taps, Dominion), the end
+  (`AdventureEndScreen`: Dominion, or no card to stake — back to the title,
+  the saves untouched, as played).
+
+Slips fixed (each marked in the code): the flyer's cry plays `Flying.wav`
+(1997 asked for a `flyer.wav` never shipped); a cry pans by where the
+creature stands; only live creatures block one another; the spawn tick's
+distance is read at the new place; a slot emptied by the colour stop is not
+met; the lurk test is centred on the hero's feet; slot 0 is held for the
+quest creature only while its quest runs, and that creature neither flees
+nor stops spawning (1997 could make the quest impossible); the bribe is
+not hidden for the bag's first card; tribute jewels are of the colour the
+words name; the quest creature's tribute reads "Duel this %s"; the
+henchmen's hand modifier is 0; Mind Control only when announced; the deck
+filter survives Summons and Try this deck; Escape at the cards/clue choice
+takes the cards; Escape at a riddle waits for an answer; the reward may
+exceed ten cards; the copy staked is the copy lost; a castle wizard's three
+stakes are three cards; the besieger's words name its town; the hero's
+deck colours are counted fresh at each meeting; a draw changes no cards
+anywhere (a lair draw won the hoard, a ruled-town draw lost the stake); the
+Spectral Arena fights a random creature as a Spectre (its own deck and
+face, 16 + 2d life; 1997 copied it into row 56 and never picked it); the
+ruled town's words name the creature; a ruled town's stake is capped at
+the cards there; every ruled-town stake stays out of the deck after the
+mulligan; the besieged town is the one that falls (1997: the site nearest
+the creature); a wizard past the taps casts Dominion; a retaliation with
+no castle and a siege with no town start nothing; a quest creature the
+pick cannot find gives no quest; "Acquired spell" is written only for a
+card kept; an unknown card drawn for the creature's ante is drawn again.
+
+Ours: the entry latch (the place stood on opens again at a click, our QoL,
+but is no new arrival: no push-back, the ruled town's creature and stakes
+kept); the news flash stops the walk; the Hall of the Sultan says "(King
+Suleiman starts in play!)" with 1997's own `@DUNGEON` string; the save as
+a ruled town's duel begins; a reward line in the quest pane; a tribute's
+payment shown with a Leave; a henchman's defeat shown; the ruled town's
+pane laid out side by side; siege_count saved (1997 never saved it); the
+wizards' window after a win or a fall is not shown (1997's
+`ShowStatsWindow`; the hero pane's Wizards tab holds the same). A place's
+pane fits itself again as it is resized: a test caught the wise man's
+"whose deck" with big buttons held at 843 px of 800 under load.
+
+The bug pass of part B (four read-only reviewers, q1–q4): 6 MED, 13 LOW,
+all fixed with tests that fail without the fix — the entry latch now holds
+only the place the hero ARRIVED at while still on its tile (a town stood on
+but never entered — a walk stopped on it, a teleport, a town just freed —
+is arrived at by the click; leaving and coming back is no reroll), and a
+ruled town opened again reads the hero's stake anew; a duel already won is
+not turned into a loss by Exit duel; a double click answers no riddle
+unseen; the quest's deadline waits for a step's news and the place it
+reached; the reward pick's result is said on the town's pane; every card
+the hero gets goes through the bag (the shop, the lairs, the trades and the
+wise man's copy too; a full bag refuses a paid card [ours]); without the
+player's card table a reward type no card has is drawn again (no interrupt
+is typed then); the spawn ring draws its side's sign before the offset, as
+1997; two part B suites no longer need the skin; the unused-features page
+corrected against the decompilation (and a seventh creature on the hard
+levels added).
+
+The copies in a deck (the owner, 2026-10-24, on a first deck dealt with
+three of a spell): the adventure's builder judges as the 1997 deck builder's
+code did (deckdll `check_card_count`; `DeckModel.copies_allowed_1997`) —
+three copies under 59 cards, four from 59, Tome of Enlightenment one more
+and no limit from 59, basic lands aside — not the manual's table (two at
+20–39), which the 1997 builder never applied; checked as the builder is
+left (Done, Return to the world, Exit game), with the 1997 Extra Cards box
+(Remove Extra Cards / Edit Deck); nothing before a duel checks copies. The
+first deal checks copies for creatures and the rare only, as 1997's. The
+acquisition cap (`GetRemainingAllowedCardCopies`: 1 under 40, 2 from 40, 3
+from 60, the Tome +1) is the player's choice at the Embark (the owner,
+2026-10-24: "This should be an on off setting during shandalar embark
+construction!"): Your rules › Copy limit — on, as 1997 meant it (the shop,
+the rewards and the trader's dimming count the deck in use's copies); off,
+as 1997 shipped it (its count matched no owned card — every entry carries
+a deck or no-deck flag — so none is counted and only its special and
+outside-the-base-sets cases stay); `AdventurePlayer.copy_limit` (saved;
+older saves on), `CardShop.counted_copies`. The starter's creatures are
+checked as 1997 did either way (the count worked during the deal).
+
+Open for part C: the castles' and dungeons' insides, the castle wizards'
+duels, a beaten wizard (`Sieges.free_all` ready), the retaliation siege
+(`Sieges.start(player, wizard)` ready), Arzakon, the end score. The 2×
+skin needs the new sheets and pictures upscaled when it is next built.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -1055,4 +1192,9 @@ said otherwise):
 - **2026-10-23** — Owner: F1 as in 1997, then "one bug-hunt and bug fix and
   smoothness of gameplay and robustness campaigns". Done in 0.50.53:
   "Campaign: bugs, smoothness, robustness".
-
+- **2026-10-23** — 0.50.53 committed and pushed (c486eca), CI green. Owner:
+  "lets crack on to work package B!" Rulings: 1997 as played with the
+  slips fixed and the designed-but-unused features documented; creatures
+  drawn over their 4-tile range; creature decks exact 1997; quitting
+  mid-duel as 1997. Built (0.50.54): "Built: part B — the creatures and
+  their duels", and `docs/adventure-unused-1997-features.md`.

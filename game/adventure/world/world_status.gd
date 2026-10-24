@@ -21,8 +21,12 @@ extends RefCounted
 ## (`ResolveWizardTownSiege`, 00562169), a "mana tap". A wizard who taps
 ## [constant DOMINION] cities — [constant DOMINION_WITH_RING] with Ring of
 ## the Guardian — casts the Spell of Dominion and the adventure is lost.
-## Neither the sieges nor the duels that lift them are made yet; what is
-## here shows them once they are.
+## The sieges themselves are [Sieges]'; the besieger is met and dueled as
+## any creature ([WorldCreatures]).
+##
+## THE GUIDES ([method targets]): the town under siege, and the quest's
+## target — none for a creature's quest until its creature is beaten (as
+## 1997: the creature comes to the hero, where it will), then its giver.
 
 ## Steps of the quest clock in a day.
 const DAY := 16
@@ -53,13 +57,17 @@ static func days_left(player: AdventurePlayer) -> int:
 
 
 ## The site the quest sends the hero to, or -1: the giver when its
-## creature is beaten, the destination otherwise.
+## creature is beaten; none while a creature's quest waits for its
+## creature (the lead's default, as 1997: no way to it is shown — it comes
+## to the hero); the destination otherwise.
 static func quest_target(player: AdventurePlayer) -> int:
 	if not has_quest(player):
 		return -1
 	var kind := int(player.quest.get("type", 0))
-	if kind < -100:
+	if kind < Quests.DEFEATED:
 		return int(player.quest.get("giver", player.quest.get("destination", -1)))
+	if kind < 0:
+		return -1
 	return int(player.quest.get("destination", -1))
 
 
@@ -92,6 +100,9 @@ static func quest_lines(player: AdventurePlayer) -> Array[String]:
 			lines.append("Reward: %s" % Quests.amulet_name(color).capitalize())
 		Quests.CARD:
 			lines.append("Reward: Mana Link and an amulet")
+		_:
+			if kind < 0:
+				lines.append(Quests.reward_line(player))
 	var days := days_left(player)
 	lines.append("%d %s left" % [days, "day" if days == 1 else "days"])
 	return lines
@@ -114,12 +125,15 @@ static func siege_town(player: AdventurePlayer) -> int:
 	return int(creature.get("town", -1)) if not creature.is_empty() else -1
 
 
-## `%1 attacking %2!`, or "".
+## `%1 attacking %2!` (`@QUESTSTATUS` 0: the creature's name without its
+## article, the town it besieges — 1997 named the site nearest it), or "".
 static func siege_line(player: AdventurePlayer) -> String:
 	var creature := siege(player)
 	if creature.is_empty():
 		return ""
-	return "%s attacking %s!" % [String(creature.get("name", "A creature")),
+	var row := int(creature.get("creature", 0))
+	var called := CreatureBook.name_of(row) if row > 0 else ""
+	return "%s attacking %s!" % [called if called != "" else "A creature",
 		WorldNames.site_name(player.world, int(creature.get("town", -1)))]
 
 
@@ -152,10 +166,10 @@ static func tap_lines(player: AdventurePlayer) -> Array[String]:
 ## "Next Duel: +2 lives, First Move, Lord of Atlantis", or "".
 static func next_duel_line(player: AdventurePlayer) -> String:
 	var parts: Array[String] = []
-	if player.next_duel_life > 0:
-		parts.append("+%d lives" % player.next_duel_life)
-	elif player.next_duel_life < 0:
-		parts.append("-%d lives" % -player.next_duel_life)
+	if player.next_duel_lives() > 0:
+		parts.append("+%d lives" % player.next_duel_lives())
+	elif player.next_duel_lives() < 0:
+		parts.append("-%d lives" % -player.next_duel_lives())
 	if player.next_duel_first_move:
 		parts.append("First Move")
 	if player.next_duel_card != "":

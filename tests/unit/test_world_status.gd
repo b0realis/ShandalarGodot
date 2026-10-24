@@ -126,12 +126,13 @@ func test_staff_of_thunder_strikes_the_nearest_roaming_creature() -> void:
 	player.world_magics.append("Staff of Thunder")
 	player.amulets["red"] = 1
 	player.difficulty = 3
-	player.monsters = [{"slot": 2, "name": "Far", "x": player.position.x + 300, "y": player.position.y},
-		{"slot": 4, "name": "Near", "x": player.position.x + 100, "y": player.position.y + 100},
-		{"slot": 7, "name": "Besieger", "x": player.position.x, "y": player.position.y, "town": 0}]
+	player.monsters = [
+		{"slot": 2, "kind": "creature", "creature": 1, "x": player.position.x + 300, "y": player.position.y},
+		{"slot": 4, "kind": "creature", "creature": 15, "x": player.position.x + 100, "y": player.position.y + 100},
+		{"slot": 7, "kind": "creature", "creature": 5, "x": player.position.x, "y": player.position.y, "town": 0}]
 	assert_eq(WorldMagic.nearest_roaming(player), 1, "600 against 300: twice the longer side and the shorter (1.3's measure)")
 	var result := WorldMagic.cast(player, 4)
-	assert_eq(String(result["said"]), "Staff of Thunder: the Near is struck from the land. The red amulet is spent.")
+	assert_eq(String(result["said"]), "Staff of Thunder: the Seer is struck from the land. The red amulet is spent.")
 	assert_eq(player.monsters.size(), 2)
 	assert_false(WorldMagic.ready_to_cast(player, 4), "no red amulet left")
 

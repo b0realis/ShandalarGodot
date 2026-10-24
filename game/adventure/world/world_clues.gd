@@ -14,8 +14,28 @@ extends RefCounted
 ## The 1997 list showed nothing when nothing was known; ours says how
 ## clues are found [QoL]. Clues come from the wise men and the ruined
 ## towers ([method reveal_for_hint]: [WiseMan]'s clue gift, [LairEvent]'s
-## Ruined Tower) and, by the same rule, from beaten creatures, whose duels
-## are not made yet.
+## Ruined Tower) and, by the same pick, from beaten creatures — the
+## creature's spoils offer the clue INSTEAD of the cards won ([DuelSpoils]:
+## [method pick_for_hint] before the cards are drawn, [method forget_marks]
+## and the choice after, [method reveal] or [method mark_cards_taken]) — and
+## from a tribute's "Secrets from the castle" ([CreatureMeeting]).
+##
+## THE CARDS-TAKEN MARK, rules bit 0x200 ([constant CARDS_TAKEN]; 1997's
+## `rules_bitmap` of the slot): set on the slot whose clue the hero passed
+## over for a creature's cards; it triples the slot's score in the next
+## picks (the dice favour the lowest), so the wise men and the towers tell
+## of other places for a while; after every such offer each slot forgets it
+## one time in three (`RandomlyClearDungeonRuleFlag`,
+## world_lair_monster_encounter.c 310–322). As played in 1997 the mark is
+## also a rule bit: a slot holding it and no other rule lists no "No special
+## rules." line ([method lines] reads the whole word, as 1997's detail
+## screen did).
+
+## Rules bit 0x200: the cards were taken over this slot's clue.
+const CARDS_TAKEN := 0x200
+## The castle and dungeon slots the pick and the forgetting walk (1997's
+## fifteen, `g_castle_dungeon_slots`).
+const SLOTS := 15
 
 const LOCATION := 1
 const CREATURES := 2
@@ -39,41 +59,121 @@ const EFFECT_CARDS := {8: "Bad Moon", 867: "Power Struggle", 939: "Marsh Viper",
 const NONE_YET := "No clues yet. The wise men in the villages, ruined towers and the creatures you beat tell of the castles and the dungeons, and of the cards they hold."
 
 
-## A CLUE TOLD (a Ruined Tower, a wise man's gift — 1.3
-## `PickWisemanCastleDungeonSlotForHint` 004f2232 and
-## `RevealRandomCastleDungeonClue` 00508970): among the castles and
-## dungeons still holding cards whose three clues are not all known, the one
-## the dice favour — `rand(d) + d / 2` for its distance d from the hero, three
-## times that where its rules have 0x200 (the hero lately chose cards over
-## its clue), the lowest winning — learns one more clue (where it lies, its
-## creatures, its rules). The slot, or −1 when none is left to tell of.
+## A CLUE TOLD (a Ruined Tower, a wise man's gift): the slot the dice
+## favour ([method pick_for_hint]) learns one more clue ([method reveal]).
+## The slot, or −1 when none is left to tell of.
 static func reveal_for_hint(player: AdventurePlayer) -> int:
+	var best := pick_for_hint(player)
+	if best >= 0:
+		reveal(player, best)
+	return best
+
+
+## THE SLOT A HINT TELLS OF (1.3 `PickWisemanCastleDungeonSlotForHint`,
+## 004f2232, visitLocation.c 3009): among the castles and dungeons still
+## holding cards whose three clues are not all known, the one the dice
+## favour — `rand(d) + d / 2` for its distance d from the hero, three times
+## that where its rules hold [constant CARDS_TAKEN] (the hero lately chose
+## cards over its clue), the lowest winning. Nothing is learned yet: a
+## creature's spoils pick the slot before the cards are drawn and reveal
+## only when the clue is chosen. −1 when none is left to tell of.
+static func pick_for_hint(player: AdventurePlayer) -> int:
 	var dice := MsvcRandom.new(player.dice)
 	var world := player.world
 	var best := -1
 	var best_score := 0x7FFF
 	var hero := player.tile()
-	for i in mini(world.encounters.size(), 15):
+	for i in mini(world.encounters.size(), SLOTS):
 		var slot: Dictionary = world.encounters[i]
-		if (slot.get("cards", []) as Array).is_empty() or int(slot.get("clues", 0)) == 7:
+		if (slot.get("cards", []) as Array).is_empty() or int(slot.get("clues", 0)) & 7 == 7:
 			continue
 		var far := WorldGenerator.distance(hero.x - int(slot.get("x", 0)), hero.y - int(slot.get("y", 0)))
 		var score := dice.below(far) + far / 2
-		if int(slot.get("rules", 0)) & 0x200 != 0:
+		if int(slot.get("rules", 0)) & CARDS_TAKEN != 0:
 			score *= 3
 		if best_score > score:
 			best = i
 			best_score = score
-	if best >= 0:
-		var slot: Dictionary = world.encounters[best]
-		var clue := 0
-		while true:
-			clue = dice.below(3)
-			if int(slot.get("clues", 0)) & (1 << clue) == 0:
-				break
-		slot["clues"] = int(slot.get("clues", 0)) | (1 << clue)
 	player.dice = dice.state
 	return best
+
+
+## ONE MORE CLUE OF SLOT [param index] LEARNED (1.3
+## `RevealRandomCastleDungeonClue`, 00508970): a clue drawn — `rand(3)`
+## again until one not yet known — where it lies, its creatures or its
+## rules. The clue's bit ([constant LOCATION], [constant CREATURES],
+## [constant RULES]), or 0 when all three were known already (1997 drew
+## forever there; every caller tests it first).
+static func reveal(player: AdventurePlayer, index: int) -> int:
+	var world := player.world
+	if world == null or index < 0 or index >= world.encounters.size():
+		return 0
+	var slot: Dictionary = world.encounters[index]
+	if int(slot.get("clues", 0)) & 7 == 7:
+		return 0
+	var dice := MsvcRandom.new(player.dice)
+	var clue := 0
+	while true:
+		clue = dice.below(3)
+		if int(slot.get("clues", 0)) & (1 << clue) == 0:
+			break
+	slot["clues"] = int(slot.get("clues", 0)) | (1 << clue)
+	player.dice = dice.state
+	return 1 << clue
+
+
+## THE CARDS TAKEN OVER SLOT [param index]'s CLUE (the creature's spoils,
+## "Take the cards.", world_lair_monster_encounter.c 2373–2378): its rules
+## get [constant CARDS_TAKEN].
+static func mark_cards_taken(world: ShandalarWorld, index: int) -> void:
+	if world == null or index < 0 or index >= world.encounters.size():
+		return
+	var slot: Dictionary = world.encounters[index]
+	slot["rules"] = int(slot.get("rules", 0)) | CARDS_TAKEN
+
+
+## THE MARKS FADE (`RandomlyClearDungeonRuleFlag`,
+## world_lair_monster_encounter.c 310–322, before the spoils' question):
+## each of the fifteen slots, in order, forgets [constant CARDS_TAKEN] one
+## time in three — fifteen dice, whether or not a slot holds the mark.
+static func forget_marks(player: AdventurePlayer) -> void:
+	var dice := MsvcRandom.new(player.dice)
+	var world := player.world
+	for i in SLOTS:
+		if dice.below(3) == 0 and world != null and i < world.encounters.size():
+			var slot: Dictionary = world.encounters[i]
+			if slot.has("rules"):
+				slot["rules"] = int(slot["rules"]) & ~CARDS_TAKEN
+	player.dice = dice.state
+
+
+## Which clue the hint's plaque names: "(first clue)", "(second clue)",
+## "(third clue)" by the clues of slot [param index] already known, "" from
+## three (`@ENCOUNTER_POSTDUEL` 0–2, world_lair_monster_encounter.c
+## 2330–2354).
+static func clue_word(world: ShandalarWorld, index: int) -> String:
+	if world == null or index < 0 or index >= world.encounters.size():
+		return ""
+	var clues := int((world.encounters[index] as Dictionary).get("clues", 0))
+	var known := 0
+	for bit in 4:
+		if clues & (1 << bit) != 0:
+			known += 1
+	return CLUE_WORDS[known] if known < CLUE_WORDS.size() else ""
+
+
+## `@ENCOUNTER_POSTDUEL` 0–2.
+const CLUE_WORDS: Array[String] = ["(first clue)", "(second clue)", "(third clue)"]
+
+
+## The treasure cards slot [param index] still holds, by name.
+static func treasures(world: ShandalarWorld, index: int) -> Array[String]:
+	var out: Array[String] = []
+	if world == null or index < 0 or index >= world.encounters.size():
+		return out
+	for card in (world.encounters[index] as Dictionary).get("cards", []):
+		out.append(String(ShandalarWorld.DUNGEON_CARDS[int(card)][1]))
+	return out
 
 
 ## The slots (0–4 castles, 5–14 dungeons) the hero knows something of.

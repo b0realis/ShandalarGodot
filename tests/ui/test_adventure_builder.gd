@@ -164,8 +164,8 @@ func test_remove_extra_cards_counts_tome_of_enlightenment() -> void:
 	await get_tree().process_frame
 	assert_eq(again.deck.count_of("Giant Growth"), 5)
 	again._trim_duplicates()
-	assert_eq(again.deck.count_of("Giant Growth"), DeckModel.duplicates_allowed(again.deck.total(), true),
-		"trimmed to the limit the Tome allows")
+	assert_eq(again.deck.count_of("Giant Growth"), DeckModel.copies_allowed_1997(12, true),
+		"trimmed to the limit the Tome allows by 1997's builder: four under 59 cards")
 
 
 
@@ -229,3 +229,67 @@ func test_looking_refuses_the_side_doors_and_lets_the_views_be() -> void:
 	builder._choose_printing("Forest", "4ed")
 	assert_false(builder.deck.printings.has("Forest"), "the hero's decks keep no printing")
 	assert_eq(builder._status_label.text, AdventureBuilder.NO_ARTWORK)
+
+
+## The 1997 adventure deck builder's copy rule (the owner, 2026-10-24): a
+## first deck with three copies of a spell is fair — nothing said; a fourth
+## is asked about as the builder is left, as 1997 asked (the Extra Cards
+## box): Remove Extra Cards takes it out and leaves, Edit Deck stays.
+func test_the_deck_is_judged_and_asked_about_as_1997_left_it() -> void:
+	for i in 2:
+		player.cards.append({"card": "Giant Growth", "decks": [0]})
+	var three := AdventureBuilder.new()
+	three.player = player
+	add_child_autofree(three)
+	await get_tree().process_frame
+	assert_eq(three.deck.count_of("Giant Growth"), 3)
+	assert_true(three.deck.over_duplicate_limit(false, three._copy_rule()).is_empty(),
+		"three in a small deck: a fair deck")
+	var closed: Array[int] = [0]
+	three.closed.connect(func() -> void: closed[0] += 1)
+	three._exit()
+	assert_eq(closed[0], 1, "Done: nothing asked")
+	player.cards.append({"card": "Giant Growth", "decks": [0]})
+	var four := AdventureBuilder.new()
+	four.player = player
+	add_child_autofree(four)
+	await get_tree().process_frame
+	var left: Array[int] = [0]
+	four.closed.connect(func() -> void: left[0] += 1)
+	four._exit()
+	assert_eq(left[0], 0, "a fourth copy: asked first")
+	var buttons := four.find_children("*", "Button", true, false).filter(
+		func(b: Node) -> bool: return (b as Button).text in ["Remove Extra Cards", "Edit Deck"])
+	assert_eq(buttons.size(), 2, "the Extra Cards box: Remove Extra Cards, Edit Deck")
+	for b in buttons:
+		if (b as Button).text == "Edit Deck":
+			(b as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_eq(left[0], 0, "Edit Deck: the builder stays")
+	four._exit()
+	await get_tree().process_frame
+	for b in four.find_children("*", "Button", true, false):
+		if (b as Button).text == "Remove Extra Cards":
+			(b as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_eq(left[0], 1, "Remove Extra Cards: the extra out, the builder left")
+	var in_deck := 0
+	for entry in player.cards:
+		if entry["card"] == "Giant Growth" and (entry["decks"] as Array).has(0):
+			in_deck += 1
+	assert_eq(in_deck, 3, "three Giant Growth in the deck written back")
+
+
+## A builder that only looks has nothing to change: never asked.
+func test_a_builder_that_only_looks_is_never_asked() -> void:
+	for i in 3:
+		player.cards.append({"card": "Giant Growth", "decks": [0]})
+	var looker := AdventureBuilder.new()
+	looker.player = player
+	looker.looking = true
+	add_child_autofree(looker)
+	await get_tree().process_frame
+	var left: Array[int] = [0]
+	looker.closed.connect(func() -> void: left[0] += 1)
+	looker._exit()
+	assert_eq(left[0], 1, "left at once")

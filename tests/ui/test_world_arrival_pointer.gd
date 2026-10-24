@@ -61,6 +61,8 @@ func test_a_walk_s_arrival_names_no_place_beside_the_pane() -> void:
 	for i in 4000:
 		if screen.visiting():
 			break
+		# No creature meets the hero on the way (part B: they roam now).
+		screen.player.monsters = [] as Array
 		screen._process(HeroWalk.TICK)
 	assert_true(screen.visiting(), "control: the walk arrived and the pane opened")
 	assert_false(screen.hud._place_tip.visible, "no place name beside the pane")

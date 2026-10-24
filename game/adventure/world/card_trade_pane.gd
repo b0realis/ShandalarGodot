@@ -15,6 +15,11 @@ extends PanelContainer
 ## Escape closes the trader; in the name box with a name typed, it first
 ## clears the name and leaves the box, as Escape in a save's name puts the
 ## old name back first ([SaveSlotsPane]) [QoL].
+## THE QUEST'S REWARD ([constant CardTrade.REWARD], part B): the same
+## browser over the town's wares, free — "Will you take this card...",
+## "Yes" / "No" — with no Done: a card must be taken (1997 looped its
+## browser until one was), Escape only puts the card chosen back; taken,
+## the pane is done.
 
 ## Done: back to the town or the lair.
 signal done
@@ -47,6 +52,8 @@ var asked := {}
 ## The chips on: a colour bit and a type bit, 0 for all.
 var color_filter := 0
 var type_filter := 0
+## The reward taken ([constant CardTrade.REWARD]): the pane is done.
+var taken := false
 var _list: ItemList
 var _large: CardPreview
 var _gold: Label
@@ -66,9 +73,9 @@ var _hovered := -1
 func _ready() -> void:
 	name = "CardTrade"
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	if way == CardTrade.TOWN and trade & 0xFF != 0:
+	if _town_wares() and trade & 0xFF != 0:
 		color_filter = trade & 0xFF
-	elif way == CardTrade.TOWN and trade >> 8 > 0 and trade >> 8 < CardTrade.CLASS_TYPES.size():
+	elif _town_wares() and trade >> 8 > 0 and trade >> 8 < CardTrade.CLASS_TYPES.size():
 		type_filter = CardTrade.CLASS_TYPES[trade >> 8]
 	add_theme_stylebox_override("panel", PaneStyle.glass())
 	var across := HBoxContainer.new()
@@ -155,14 +162,16 @@ func _ready() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", int(10 * k))
 	buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_yes = _trade_button("Yes, I'll trade.", "TradeYes")
+	_yes = _trade_button("Yes" if must_take() else "Yes, I'll trade.", "TradeYes")
 	_yes.pressed.connect(trade_chosen)
 	buttons.add_child(_yes)
-	_no = _trade_button("No Thanks", "TradeNo")
+	_no = _trade_button("No" if must_take() else "No Thanks", "TradeNo")
 	_no.pressed.connect(func() -> void: choose(""))
 	buttons.add_child(_no)
 	var leave := _trade_button("Done", "TradeDone")
 	leave.pressed.connect(func() -> void: done.emit())
+	# The reward has no Done: a card must be taken.
+	leave.visible = not must_take()
 	buttons.add_child(leave)
 	column.add_child(buttons)
 	_purse = PaneStyle.label("", 14, PaneStyle.DIM)
@@ -182,7 +191,7 @@ func _chip_row(row_name: String, chips: Array[Array], colors: bool) -> Control:
 	row.name = row_name
 	row.add_theme_constant_override("h_separation", 6)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var fixed := way == CardTrade.TOWN and ((colors and trade & 0xFF != 0) or (not colors and trade >> 8 > 0))
+	var fixed := _town_wares() and ((colors and trade & 0xFF != 0) or (not colors and trade >> 8 > 0))
 	for chip in chips:
 		var button := _trade_button(String(chip[0]), "Chip_" + String(chip[0]))
 		button.toggle_mode = true
@@ -218,7 +227,7 @@ func cards() -> Array[String]:
 	var look := _search.text.strip_edges().to_lower() if _search != null else ""
 	for row in CardTrade.catalogue():
 		var f: Dictionary = row["facts"]
-		if way == CardTrade.TOWN and not CardTrade.wanted(trade, f):
+		if _town_wares() and not CardTrade.wanted(trade, f):
 			continue
 		if color_filter != 0 and int(f.get("color", CardValue.COLORLESS)) & color_filter == 0:
 			continue
@@ -238,7 +247,7 @@ func refresh() -> void:
 	var owned := AdventureBuilder.owned_counts(player)
 	# Dimmed: the deck in use may hold no more ([method CardShop.copies_allowed],
 	# the shop's own rule), its copies counted once for the whole list.
-	var in_deck := CardShop.deck_counts(player)
+	var in_deck := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player)
 	for card_name in _shown:
 		var index := _list.add_item("%s-%d" % [card_name, int(owned.get(card_name, 0))])
@@ -262,7 +271,9 @@ func _show_ask() -> void:
 		_no.disabled = true
 		return
 	asked = CardTrade.offer(player, chosen, way, color, int(asked.get("gold", 0)) if String(asked.get("card", "")) == chosen else 0)
-	if bool(asked["afford"]):
+	if must_take():
+		_ask.text = String(asked["words"])
+	elif bool(asked["afford"]):
 		_ask.text = "%s %s" % [asked["words"], CardTrade.ASK]
 	else:
 		_ask.text = "%s %s" % [asked["words"], CardTrade.AFFORD]
@@ -293,12 +304,26 @@ func choose(card_name: String) -> void:
 	_show_ask()
 
 
-## TRADE for the card chosen ([method CardTrade.pay]).
+## TRADE for the card chosen ([method CardTrade.pay]); the reward's card
+## taken, the pane is done.
+## What the reward's pick came to, for the pane under it to say
+## ([method trade_chosen]); "" until taken.
+var said := ""
+
+
 func trade_chosen() -> void:
-	if chosen == "":
+	if chosen == "" or taken:
 		return
 	var result := CardTrade.pay(player, asked, way, color)
 	_note.text = String(result["said"])
+	if must_take() and bool(result["traded"]):
+		taken = true
+		# The pane goes at once: what came of it ("… joins your cards", or
+		# lost to a full bag) is said by the town's pane after it (the bug
+		# pass of part B, q3-4: said here, it was never seen).
+		said = String(result["said"])
+		done.emit()
+		return
 	if bool(result["traded"]):
 		var keep := chosen
 		chosen = ""
@@ -348,7 +373,20 @@ func note() -> String:
 func _unhandled_input(input: InputEvent) -> void:
 	if input.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		done.emit()
+		if must_take():
+			choose("")
+		else:
+			done.emit()
+
+
+## Whether a card must be taken before the pane is done (the quest's reward).
+func must_take() -> bool:
+	return way == CardTrade.REWARD and not taken
+
+
+## Whether the cards are a town's own kind (its trade, or its reward).
+func _town_wares() -> bool:
+	return way == CardTrade.TOWN or way == CardTrade.REWARD
 
 
 ## ESCAPE IN THE NAME BOX, met before the box hears it (it would keep the
@@ -361,7 +399,10 @@ func _input(input: InputEvent) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	if _search.text == "":
-		done.emit()
+		if must_take():
+			_search.release_focus()
+		else:
+			done.emit()
 		return
 	_search.text = ""
 	_search.release_focus()

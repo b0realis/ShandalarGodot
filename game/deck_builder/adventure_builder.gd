@@ -359,6 +359,16 @@ func _with_tome() -> bool:
 	return player != null and player.owns("Tome of Enlightenment")
 
 
+## THE 1997 ADVENTURE DECK BUILDER'S COPY RULE (deckdll `check_card_count`,
+## [method DeckModel.copies_allowed_1997]): three copies under 59 cards, four
+## from 59, Tome of Enlightenment one more (no limit from 59), basic lands
+## aside — not the manual's table, which the deck builder never applied. A
+## first deck dealt with three copies of a spell is a fair deck (the owner,
+## 2026-10-24: the 1997 code is the rule).
+func _copy_rule() -> String:
+	return DeckModel.DECK_BUILDER_1997
+
+
 ## The adventure's decks answer to Shandalar's duplicate limit only: no
 ## tournament lists, no word on Gauntlets (1997's adventure builder asked
 ## no minimum either).
@@ -598,14 +608,42 @@ func _save_deck(then := Callable()) -> void:
 		then.call()
 
 
+## DONE, or Return to the world: as 1997's builder was left (`WM_CLOSE`,
+## deckdll.c 5695–5728), a deck with too many copies of a card is asked
+## about first — the Extra Cards box: Remove Extra Cards takes the extras
+## out and goes on, Edit Deck stays ([method _ask_extra_cards]).
 func _exit() -> void:
+	if _ask_extra_cards(_exit_now):
+		return
+	_exit_now()
+
+
+func _exit_now() -> void:
 	write_back()
 	closed.emit()
 
 
 func _quit_game() -> void:
+	if _ask_extra_cards(_quit_now):
+		return
+	_quit_now()
+
+
+func _quit_now() -> void:
 	write_back()
 	exit_requested.emit()
+
+
+## True when the deck on show has too many copies of a card and the Extra
+## Cards box was put up ([param then] runs once they are removed); a builder
+## that only looks has nothing to change and is never asked. The window's
+## own close is not asked ([method _end_process]): the deck goes back as it
+## is — no duel checks copies (1997 neither) — and the next visit asks.
+func _ask_extra_cards(then: Callable) -> bool:
+	if looking or deck.over_duplicate_limit(_with_tome(), _copy_rule()).is_empty():
+		return false
+	_open_extra_cards(then)
+	return true
 
 
 func _end_process() -> void:

@@ -461,3 +461,25 @@ func test_the_three_windows_are_one_size_and_lined_up() -> void:
 	assert_almost_eq(panels[0].global_position.x, leave.global_position.x, 1.0, "left edges")
 	assert_almost_eq(panels[2].get_global_rect().end.x, go.get_global_rect().end.x, 1.0, "right edges")
 	assert_lt(panels[0].get_global_rect().end.y, leave.global_position.y, "above the buttons")
+
+
+## THE COPY LIMIT, an Embark choice (the owner, 2026-10-24): on by default
+## (as 1997 meant it); clicked off, the record and the next visit carry it,
+## and the box says which it is.
+func test_the_copy_limit_is_chosen_at_the_embark() -> void:
+	var box := _find("CopyLimit") as CheckBox
+	assert_not_null(box, "the copy limit's check box, beside the difficulty")
+	assert_true(box.button_pressed, "on: as 1997 meant it")
+	assert_eq(box.text, EmbarkScreen.COPY_LIMIT_ON)
+	assert_string_contains(box.tooltip_text, "one under 40 cards")
+	box.button_pressed = false
+	assert_false(screen.setup.copy_limit)
+	assert_eq(box.text, EmbarkScreen.COPY_LIMIT_OFF)
+	watch_signals(screen)
+	(_find("HeroName") as LineEdit).text = "Free Trader"
+	screen.embark()
+	var record: Dictionary = get_signal_parameters(screen, "embarked")[0]
+	assert_false(bool(record["copy_limit"]), "the record carries it")
+	assert_false(AdventureSetup.restore([] as Array[String]).copy_limit, "and the next visit")
+	var hero := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
+	assert_false(hero.copy_limit, "the adventure plays by it")

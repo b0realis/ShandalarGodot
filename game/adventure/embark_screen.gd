@@ -79,6 +79,11 @@ var _color_name: Label
 var _color_flavor: Label
 var _color_gifts: Label
 var _playmat_color: OptionButton
+var _copy_limit: CheckBox
+## The copy limit's words, on and off, and its tooltip.
+const COPY_LIMIT_ON := "Copy limit (1997 as meant)"
+const COPY_LIMIT_OFF := "No copy limit (1997 as shipped)"
+const COPY_LIMIT_TIP := "On, the shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant. Off, they offer any number of copies, as the 1997 game really did."
 var _playmat_type: OptionButton
 var _playmat_preview: Control
 var _playmat_note: Label
@@ -420,6 +425,12 @@ func _build_magic() -> Control:
 	_playmat_note.add_theme_color_override("font_color", DIM)
 	_playmat_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_playmat_note)
+	# YOUR RULES, under the playmat: the one column with room to spare at
+	# 1280 × 800 (the difficulty's holds the eight card packs).
+	# Lettered a size down and with no rule above it: without the 1997 skin
+	# the fallback faces are taller, and the screen had no pixels to spare.
+	box.add_child(_heading("Your rules", 18))
+	box.add_child(_build_copy_limit())
 	return box
 
 
@@ -506,6 +517,41 @@ func _build_journey() -> Control:
 			_pack_checks[id] = check
 		box.add_child(list)
 	return box
+
+
+## THE COPY LIMIT ON WHAT YOU ARE GIVEN (the owner, 2026-10-24: "This
+## should be an on off setting during shandalar embark construction!"): on,
+## the shops and the duels' rewards offer no more copies of a card than the
+## deck may hold, as 1997 meant ([member AdventureSetup.copy_limit],
+## [method CardShop.counted_copies]); off, any number, as 1997 shipped.
+func _build_copy_limit() -> Control:
+	_copy_limit = CheckBox.new()
+	_copy_limit.name = "CopyLimit"
+	_copy_limit.tooltip_text = COPY_LIMIT_TIP
+	_copy_limit.add_theme_color_override("font_color", PARCHMENT)
+	_copy_limit.add_theme_color_override("font_hover_color", GOLD)
+	_copy_limit.add_theme_color_override("font_pressed_color", PARCHMENT)
+	_copy_limit.add_theme_color_override("font_hover_pressed_color", GOLD)
+	_copy_limit.add_theme_font_size_override("font_size", 15)
+	_copy_limit.add_theme_icon_override("checked", UiChrome.check_icon(true))
+	_copy_limit.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+	_copy_limit.button_pressed = setup.copy_limit
+	_copy_limit.toggled.connect(choose_copy_limit)
+	_show_copy_limit()
+	return _copy_limit
+
+
+## The copy limit chosen: on as 1997 meant it, off as 1997 shipped it.
+func choose_copy_limit(on: bool) -> void:
+	setup.copy_limit = on
+	_show_copy_limit()
+
+
+## The box says which it is, on one line (the column holds eight card packs
+## at 1280 × 800); the tooltip says what it does.
+func _show_copy_limit() -> void:
+	if _copy_limit != null:
+		_copy_limit.text = COPY_LIMIT_ON if setup.copy_limit else COPY_LIMIT_OFF
 
 
 func _build_buttons() -> Control:

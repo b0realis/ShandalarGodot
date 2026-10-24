@@ -26,6 +26,23 @@ extends Control
 ## walked onto opens its own ([LairPane], [WorldLairs]). F3 lists the towns
 ## visited ([CityListPane]); M is the map, the journal walked on it
 ## ([WorldMap]); Ctrl+S saves into ten slots ([SaveSlotsPane]).
+## THE CREATURES roam the land round the hero and come for them
+## ([WorldCreatures], part B): one that reaches the hero is MET ([method
+## meet_creature]) — the game saved with it still there, its meeting's pane
+## over the world ([WorldEncounters]), the slot spent once it is over.
+## THE SIEGES ([Sieges], part B): the siege clock's step as the hero walks
+## begins a wizard's siege or resolves it; its NEWS FLASH ([NewsFlashPane])
+## stops the walk and holds the tick — the hero's step taken, the
+## creatures' not yet, as 1997 showed it inside the step — until it is
+## read ([method show_news]). The besieger met and beaten lifts the siege,
+## met and not beaten lets the town fall at once ([method
+## _after_siege_meeting]). THE END ([AdventureEndScreen]): the Spell of
+## Dominion cast, or no card left to stake at a meeting or a ruled town —
+## nothing saved from that moment, the end's words, then the title ([method
+## show_end]; the saves as they were, so Resume takes the adventure up from
+## before the fall, as 1997's did).
+## A town's creature quest done there opens its reward, a card of the
+## town's wares picked free ([CardTradePane], [constant CardTrade.REWARD]).
 ##
 ## A PANE HOLDS THE SCREEN (the lead's rulings of 2026-10-23, after 1997's
 ## modal town menu): while a place's pane, one over it, the deck builder or
@@ -36,7 +53,7 @@ extends Control
 ## closes too, so the second click of a double click on its Done walks no
 ## one. The map is a whole screen of its own, as 1997's was: while it is
 ## up only its keys, Escape and Ctrl+S act ([method _map_key]).
-## The duels and the dungeons come next (`docs/adventure-implementation-notes.md`).
+## The dungeons come next (`docs/adventure-implementation-notes.md`).
 
 const LOOK_SPEED := 600.0   # screen pixels a second, at zoom 1
 const ZOOM_STEP := 1.25
@@ -62,6 +79,10 @@ const UNSAVED := "The adventure could not be saved."
 ## Leave or Escape in the same frame finds nothing left to close, and no
 ## pane is freed under its own click.
 const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
+## The places whose entering pushes the creatures back (1997's sites, flag
+## 0x10: a village, a town, a city, a castle, as a wizard holds them or
+## not; a dungeon never).
+const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen"]
 
 ## The adventure: the hero and their world. Set before the screen enters
 ## the tree; when it is not, one is begun from [member record] and
@@ -114,6 +135,13 @@ var soundscape: WorldSoundscape
 ## ([CardTradePane]: a town's trade, the Nomad's Bazaar, the Diamond Mine).
 var _visit: VisitPane
 var _visit_tile := Vector2i(-1, -1)
+## The place stood on opened again, not walked into ([method walk_to_tile]).
+var _again := false
+## THE PLACE ARRIVED AT, while the hero still stands on its tile (the entry
+## latch, [method walk_to_tile]): set by an arrival ([method visit]),
+## forgotten the moment the hero stands anywhere else ([method _process]) or
+## the town is freed. (−1, −1) for none.
+var _entered_tile := Vector2i(-1, -1)
 var _shop: CardShopPane
 var _trade: CardTradePane
 ## A list of cards over a pane — a creature's deck, the copy's pick
@@ -129,6 +157,23 @@ var _unsaved: UnsavedAsk
 ## The duel's full-screen card reader, for a card right-clicked in a pane
 ## ([method read_card]).
 var reader: FullscreenCard
+## A creature's meeting, its pane over the world ([method meet_creature]);
+## whether the tick that met it waits for its end (the clock moves on as the
+## meeting ends, as 1997's did after its modal meeting); whether a duel's
+## screen covers the world ([method hold_for_duel]).
+var _meeting: Control
+var _tick_held := false
+var _duel_held := false
+## The news flash shown ([NewsFlashPane]), the news still to show after it,
+## and whether the step that brought the news reached the walk's place (the
+## place is visited once the news is read).
+var _news: NewsFlashPane
+var _news_queue: Array[Dictionary] = []
+var _news_reached := false
+## The adventure's end shown ([AdventureEndScreen]); and whether it is lost
+## — from the moment it is, nothing is saved and the world never runs again.
+var _end: AdventureEndScreen
+var _lost := false
 
 
 ## THE ADVENTURE NOT SAVED: asked before the hero leaves the world when its
@@ -343,6 +388,7 @@ func show_world(shown: ShandalarWorld) -> void:
 func _show_hero() -> void:
 	view.hero = Vector2(player.position)
 	view.lairs = WorldLairs.seen(player)
+	view.creatures = WorldCreatures.seen(player)
 	view.hero_facing = player.facing
 	view.hero_step = player.step
 	_map.hero_tile = player.tile()
@@ -368,9 +414,11 @@ func _show_hero() -> void:
 # ------------------------------------------------------- the panes' hold --
 
 ## Whether a pane holds the screen (ruling A): a place's pane or one over
-## it ([method visiting]), the deck builder, the saved adventures.
+## it ([method visiting]), the deck builder, the saved adventures, a
+## creature's meeting and its duel, a news flash — and, for good, the
+## adventure lost ([method show_end]).
 func modal() -> bool:
-	return visiting() or building() or loading()
+	return visiting() or building() or loading() or meeting() or _duel_held or news_shown() or _lost
 
 
 ## Whether the world waits: a pane holds the screen, or the map is up
@@ -443,10 +491,11 @@ func save_into_slot(slot: int, slot_name: String) -> String:
 
 ## THE AUTOSAVE as the hero leaves a place or the world (Exit game, Return
 ## to main menu, the window closed; 1997 wrote its slot 3 so): the path
-## written, or "" — "" too for an adventure that is not saved (no id). A
-## save that could not be written is said beside the panel.
+## written, or "" — "" too for an adventure that is not saved (no id), and
+## for one lost ([method show_end]: the saves stay as they were). A save
+## that could not be written is said beside the panel.
 func autosave() -> String:
-	if player == null or player.adventure_id == "":
+	if player == null or player.adventure_id == "" or _lost:
 		return ""
 	var path := _write_autosave()
 	if path == "":
@@ -532,6 +581,15 @@ func leave() -> void:
 	_saved_or_ask(_go_to_title)
 
 
+## THE WORLD LEFT WITHOUT A SAVE, for the title: a duel's "Return to main
+## menu" ([WorldDuels], the owner's ruling 4) and the adventure's end
+## ([method show_end]).
+func leave_unsaved() -> void:
+	_go_to_title()
+
+
+## The title screen, the world left as it is; a seam, so a test can count
+## the leaving instead.
 func _go_to_title() -> void:
 	_leaving = true
 	if is_inside_tree() and get_tree().current_scene == self:
@@ -567,7 +625,13 @@ func _saved_or_ask(go: Callable) -> void:
 ## the game ends (the deck builder, open, answers it itself); a save that
 ## could not be written is said, for as long as the window stays.
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building():
+	# Mid-meeting the save made as it began stands (the owner's ruling 4: as
+	# 1997, quitting meets the creature again, nothing lost or won); so it
+	# does mid-reward (a quest's card not yet picked: the quest is reported
+	# again, as quitting 1997's browser left it), and a lost adventure saves
+	# nothing ([method show_end]).
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building() \
+			and not meeting() and not _duel_held and not _lost and not rewarding():
 		autosave()
 
 
@@ -583,16 +647,25 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 		return _visit
 	var town := VisitPane.site_slot(world, tile)
 	var arrived := {}
-	if write and town >= 0 and int(world.sites[town]["type"]) >= ShandalarWorld.VILLAGE \
+	# A new arrival, not the place stood on opened again (the entry latch).
+	var fresh := write and not _again
+	if fresh and town >= 0 and int(world.sites[town]["type"]) >= ShandalarWorld.VILLAGE \
 			and int(world.sites[town]["type"]) < ShandalarWorld.CASTLE and not TownStatus.ruled(world, town):
 		arrived = _arrive_in_town(town)
 	var place := VisitPane.describe(player, tile)
 	# A lair is entered by walking onto it ([method enter_lair]).
 	if place.is_empty() or String(place["kind"]) == "lair":
 		return null
+	if fresh and String(place["kind"]) in PUSHING_PLACES:
+		# The creatures near the hero fall back as they enter
+		# (adventure_input.c 838–883).
+		WorldCreatures.push_back(player)
 	_visit = VisitPane.new()
 	_visit.player = player
 	_visit.place = place
+	_visit.again = not fresh
+	if fresh:
+		_entered_tile = tile
 	_visit.k = WorldHud.BIG if hud.big else 1.0
 	add_child(_visit)
 	_visit.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -606,9 +679,16 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 	if write and String(place["kind"]) in VisitPane.KINDS:
 		soundscape.swell()
 	if not arrived.is_empty():
-		# The quest done here: the keeper's words over the town.
+		# The quest done here: the keeper's words over the town, the quest
+		# pane at once without it.
 		_visit.say(Array(arrived["lines"]))
 		play_sound(String(arrived["sound"]))
+		hud.refresh()
+		if arrived.has("pick"):
+			# A creature's quest done at a town or a city: its card picked
+			# over the town's pane, free, one to be taken.
+			open_trade(CardTrade.REWARD, town, {"trade": int(arrived["pick"]),
+				"words": " ".join(Array(arrived["lines"]))})
 	return _visit
 
 
@@ -678,9 +758,43 @@ func _left_place(then: String) -> void:
 				_open_town_trade(slot)
 			"quest", "wiseman":
 				open_wise_man(slot, "quest" if then == "quest" else "talk")
+			"duel":
+				_open_ruled_duel(place)
 			_:
 				_leave_site(place)
 	_sync_rest()
+
+
+## A RULED TOWN'S CREATURE DUELED ([RuledTowns]): the town's duel over the
+## world, held as a meeting is ([method meeting]); done — freed or not —
+## the hero is back on the map, as 1997 returned there with no services;
+## with no card left to stake ([constant WorldEncounters.GAME_OVER]), the
+## adventure's end instead, nothing saved ([method show_end]).
+func _open_ruled_duel(place: Dictionary) -> void:
+	var pane := _open_ruled_pane(int(place["slot"]))
+	if pane == null:
+		_leave_site(place)
+		return
+	_meeting = pane
+	pane.connect(&"finished", func(result: int) -> void:
+		_meeting = null
+		if result == WorldEncounters.GAME_OVER:
+			show_end(Array(CreatureMeeting.NO_ANTE))
+		else:
+			if result == WorldEncounters.WON:
+				# Freed: the town is a town again, and a click on it now
+				# arrives in it (its quest, its shop) — no longer the ruled
+				# town the hero arrived at (the entry latch).
+				_entered_tile = Vector2i(-1, -1)
+			_leave_site(place)
+		_sync_rest(), CONNECT_ONE_SHOT)
+	_hold()
+
+
+## The ruled town's duel for site [param slot] ([method RuledTowns.open]);
+## a seam, so a test can stand its own pane in.
+func _open_ruled_pane(slot: int) -> Control:
+	return RuledTowns.open(self, slot)
 
 
 ## EDIT DECK/SELL CARDS: the town's deck builder, which buys cards too; its
@@ -884,7 +998,10 @@ func _left_shop() -> void:
 
 ## THE CARD TRADER over the world ([CardTradePane]): [param way] a town's
 ## trade at site [param slot] ([param offer] its [method
-## CardTrade.town_offer]), or a lair's — the lair's pane waits under it.
+## CardTrade.town_offer]), a creature quest's reward there ([constant
+## CardTrade.REWARD]: [param offer] `{trade, words}` — a card of the town's
+## wares, free, one to be taken), or a lair's — the pane of the place waits
+## under it.
 func open_trade(way: String, slot := -1, offer := {}) -> CardTradePane:
 	if trading():
 		return _trade
@@ -899,6 +1016,9 @@ func open_trade(way: String, slot := -1, offer := {}) -> CardTradePane:
 			_trade.color = String(offer.get("color", ""))
 			_trade.who = "%s trades %s for %s amulets." % [WorldNames.site_name(world, slot),
 				CardTrade.wares(_trade.trade), _trade.color]
+		CardTrade.REWARD:
+			_trade.trade = int(offer.get("trade", 0))
+			_trade.who = String(offer.get("words", ""))
 		CardTrade.BAZAAR:
 			_trade.who = "The Nomad's Bazaar: any card, for gold."
 		_:
@@ -927,9 +1047,16 @@ func trading() -> bool:
 	return _alive(_trade)
 
 
+## Whether a creature quest's reward is being picked ([constant
+## CardTrade.REWARD]).
+func rewarding() -> bool:
+	return trading() and _trade.way == CardTrade.REWARD
+
+
 func _left_trade() -> void:
 	var way := _trade.way if trading() else ""
 	var slot := _trade.slot if trading() else -1
+	var said := _trade.said if trading() else ""
 	if trading():
 		_trade.queue_free()
 	_trade = null
@@ -942,6 +1069,12 @@ func _left_trade() -> void:
 		_visit.visible = true
 		if _visit is LairPane:
 			(_visit as LairPane).traded()
+		elif way == CardTrade.REWARD and said != "":
+			# The quest's reward taken: what came of it, under the keeper's
+			# words.
+			var lines: Array = Array(_visit.place.get("lines", []))
+			lines.append(said)
+			_visit.say(lines)
 	_sync_rest()
 
 
@@ -994,6 +1127,103 @@ func _left_lair(_then: String, _slot: int) -> void:
 	autosave()
 	_show_hero()
 	view.queue_redraw()
+	_sync_rest()
+
+
+## A CREATURE MET: the creature in roaming slot [param slot] ([WorldCreatures])
+## reached the hero — the walk stopped, the nearby place's tune resting, THE
+## GAME SAVED WITH THE CREATURE STILL THERE (the owner's ruling 4, as 1997
+## saved before every meeting: quitting mid-meeting or mid-duel meets it
+## again, nothing lost or won), then its meeting over the world
+## ([WorldEncounters]), which holds the world while it lasts. Its end spends
+## the slot ([method _after_meeting]); null when no meeting could be held —
+## the slot is spent at once, as met with no duel.
+func meet_creature(slot: int) -> Control:
+	if modal() or player == null:
+		return null
+	if not WorldCreatures.is_creature(WorldLairs.held_in(player, slot)):
+		return null
+	walk.stop()
+	soundscape.rest(true)
+	autosave()
+	var pane := _open_meeting(slot)
+	if pane == null:
+		_after_meeting(WorldCreatures.NO_DUEL, slot)
+		return null
+	_meeting = pane
+	pane.connect(&"finished", _after_meeting.bind(slot), CLOSING)
+	_hold()
+	return pane
+
+
+## The meeting's pane for slot [param slot] ([method WorldEncounters.open]);
+## a seam, so a test can stand its own pane in.
+func _open_meeting(slot: int) -> Control:
+	return WorldEncounters.open(self, slot)
+
+
+## Whether a creature's meeting holds the world.
+func meeting() -> bool:
+	return _alive(_meeting)
+
+
+## THE MEETING OVER with [param result] ([constant WorldCreatures.WON],
+## LOST, DRAWN or NO_DUEL) for the creature of slot [param slot]: the slot
+## spent — stamped, emptied, the clock on to the next 32 ([method
+## WorldCreatures.met]) —, the tick that met it ended, the besieger's end
+## handed on ([method _after_siege_meeting]), the place's tune again and
+## the game saved, as 1997 saved after. [constant WorldEncounters.GAME_OVER]
+## — no card left to stake — is the adventure's end instead: nothing spent,
+## nothing saved ([method show_end]).
+func _after_meeting(result: int, slot: int) -> void:
+	if _alive(_meeting):
+		_meeting.queue_free()
+	_meeting = null
+	if result == WorldEncounters.GAME_OVER:
+		_tick_held = false
+		show_end(Array(CreatureMeeting.NO_ANTE))
+		_sync_rest()
+		return
+	var outcome := WorldCreatures.met(player, slot, result)
+	if _tick_held:
+		_tick_held = false
+		walk.end_tick()
+	if String(outcome["siege"]) != "":
+		_after_siege_meeting(outcome)
+	soundscape.rest(false)
+	autosave()
+	_show_hero()
+	view.queue_redraw()
+	_sync_rest()
+
+
+## THE BESIEGER'S MEETING OVER ([method WorldCreatures.met]'s [param
+## outcome]: `siege` "lifted" on a win, "falls" otherwise, with its
+## `creature`, `color` and `town`; the slot already spent) — THE SIEGES'
+## HOOK (world_lair_monster_slots.c 941–950): a win lifts the siege, "Saved
+## %s" in the journal ([method Sieges.lifted]); a loss, a draw or no duel
+## lets the town fall at once ([method Sieges.resolve]), its news shown —
+## and the end after it, when the Spell of Dominion is cast.
+func _after_siege_meeting(outcome: Dictionary) -> void:
+	match String(outcome.get("siege", "")):
+		"lifted":
+			Sieges.lifted(player, outcome)
+		"falls":
+			var news := Sieges.resolve(player, outcome)
+			if not news.is_empty():
+				show_news(news)
+
+
+## A DUEL'S SCREEN OVER THE WORLD ([param on]; the meeting's duel host calls
+## it as the duel opens and closes): the world, the panel and the arrows
+## hidden under it and the world held; gone, they come back.
+func hold_for_duel(on: bool) -> void:
+	_duel_held = on
+	if on:
+		_wear(-1)
+		_dragging = false
+		hud.hide_place()
+	_cover_world(on)
 	_sync_rest()
 
 
@@ -1161,7 +1391,17 @@ func walk_to_tile(tile: Vector2i) -> bool:
 	if walk == null or modal():
 		return false
 	if tile == player.tile() and not walk.is_walking():
-		return visit(tile) != null
+		# THE ENTRY LATCH [ours] (the bug pass of part B): the place the hero
+		# arrived at and still stands on opens again — our QoL; 1997 entered a
+		# place only as the hero stepped onto it — but not as a new arrival: no
+		# creature is pushed back again, the town's arrival is not run again, a
+		# ruled town keeps the creature it drew. A place the hero stands on
+		# but never arrived at (a walk stopped on it by a meeting or the news,
+		# a teleport onto it, a town just freed) is arrived at now.
+		_again = tile == _entered_tile
+		var pane := visit(tile)
+		_again = false
+		return pane != null
 	var going := walk.walk_to(tile)
 	if going:
 		view.camera = view.hero
@@ -1169,7 +1409,14 @@ func walk_to_tile(tile: Vector2i) -> bool:
 
 
 ## The world's clock run for [param seconds]: a tick every
-## [constant HeroWalk.TICK], the hero walking, the land they pass explored.
+## [constant HeroWalk.TICK] in 1997's order (shandalar.c 625–655) — the
+## hero's step and the land they pass explored, the footsteps, the place
+## walked to visited (1997 entered a town within the step), the roaming
+## slots ([WorldCreatures]: refilled, walked, met, crying), then the clock
+## on ([method HeroWalk.end_tick]). A lair reached is entered, a creature
+## met: the tick stops there. A siege's news brought by the step
+## ([method HeroWalk.take_news]) stops it before the creatures: the rest
+## of the tick waits for the news to be read ([method show_news]).
 func advance(seconds: float) -> void:
 	if walk == null:
 		return
@@ -1179,34 +1426,189 @@ func advance(seconds: float) -> void:
 		_tick_left -= HeroWalk.TICK
 		ticks += 1
 		var walking := walk.is_walking()
-		if walk.tick():
+		if walk.step():
 			world.explore_around(player.tile())
 			Quests.note_heading(player)
 		soundscape.tick(walk)
-		# The lairs and the roaming slots (`UpdateWorldLairAndMonsterSlots`).
-		var lair := WorldLairs.tick(player)
-		if lair >= 0:
-			view.camera = Vector2(player.position)
-			enter_lair(lair)
-			break
 		if walking:
 			view.camera = Vector2(player.position)
-			# THE WALK ENDS AT A PLACE: it is visited [QoL: only the place
-			# walked to — 1997 entered every town stepped on, and a way
-			# found for the hero would wander into towns not chosen].
-			if not walk.is_walking() and player.tile() == walk.destination \
-					and visit(player.tile()) != null:
-				break
+		var reached := walking and not walk.is_walking() and player.tile() == walk.destination
+		var news := walk.take_news()
+		if not news.is_empty():
+			# 1997 showed the news inside the hero's step, the creatures
+			# not yet moved: the tick waits for it.
+			_tick_held = true
+			show_news(news, reached)
+			break
+		if _rest_of_tick(reached):
+			break
 	if ticks == MOST_TICKS:
 		_tick_left = 0.0
 	if ticks > 0:
-		var lost := WorldStatus.check_quest(player)
-		if lost != "":
-			hud.say(lost)
+		# Not while the tick waits for the news: the place that step reached
+		# is entered first ([method _after_news]) — a letter delivered on its
+		# last day, not failed for the news read before it (the bug pass of
+		# part B, q3-3; 1997 entered the town inside the step).
+		if not _tick_held:
+			_check_quest()
 		_show_hero()
 		view.queue_redraw()
 		if _map.visible:
 			_map.queue_redraw()
+
+
+## THE TICK'S SECOND HALF, after the hero's step: the place walked to
+## visited ([param reached] the step reached it) — [QoL: only the place
+## walked to; 1997 entered every town stepped on, and a way found for the
+## hero would wander into towns not chosen], the creatures resting that
+## tick [ours: 1997 walked them after the town, already pushed back] — or
+## the roaming slots ([WorldCreatures]: refilled, walked, met, crying); a
+## lair reached entered, a creature met; then the clock on. True when the
+## clock's run stops here (a place opened, a lair, a meeting).
+func _rest_of_tick(reached: bool) -> bool:
+	var opened := reached and visit(player.tile()) != null
+	var slots := {} if opened else WorldCreatures.tick(player)
+	_cry(slots.get("cries", []))
+	var met := int(slots.get("met", -1))
+	if met >= 0:
+		view.camera = Vector2(player.position)
+		if String(slots["kind"]) == "lair":
+			enter_lair(met)
+		else:
+			# The clock moves on as the meeting ends ([method
+			# _after_meeting]): 1997's meeting held the tick, its stamp is
+			# this tick's.
+			_tick_held = true
+			meet_creature(met)
+			if _tick_held and not meeting():
+				_tick_held = false
+				walk.end_tick()
+			return true
+	walk.end_tick()
+	return opened or met >= 0
+
+
+# ---------------------------------------------------------- the sieges --
+
+## THE NEWS FLASH ([NewsFlashPane]) of [param news] ([method
+## Sieges.on_step], [method Sieges.resolve]), one pane after another over
+## the world, which waits under them; the walk stopped [QoL]. News that ends
+## the adventure (the Spell of Dominion) loses it at once — nothing is saved
+## from then — and its end follows the news ([method show_end]). Read, the
+## held tick goes on ([param reached]: the step had reached the walk's
+## place, visited then). The pane shown, or null.
+func show_news(news: Array, reached := false) -> NewsFlashPane:
+	if walk != null:
+		walk.stop()
+	for one in news:
+		_news_queue.append(one)
+	_news_reached = _news_reached or reached
+	if Sieges.ends(news):
+		_lost = true
+	return _next_news()
+
+
+## Whether a news flash holds the screen.
+func news_shown() -> bool:
+	return _alive(_news)
+
+
+## The next news shown; none left, the end when the adventure is lost, else
+## the tick that waited goes on.
+func _next_news() -> NewsFlashPane:
+	if news_shown():
+		return _news
+	while not _news_queue.is_empty():
+		var one: Dictionary = _news_queue.pop_front()
+		if String(one.get("kind", "")) == "dominion":
+			_news_queue.clear()
+			show_end(Array(one.get("lines", [])))
+			return null
+		var pane := NewsFlashPane.new()
+		pane.player = player
+		pane.news = one
+		pane.k = WorldHud.BIG if hud.big else 1.0
+		_news = pane
+		add_child(pane)
+		pane.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		pane.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		pane.grow_vertical = Control.GROW_DIRECTION_BOTH
+		pane.left.connect(_news_read.bind(pane), CLOSING)
+		_hold()
+		return pane
+	_after_news()
+	return null
+
+
+## A news flash read ([param pane]): the next, or the world again.
+func _news_read(_then: String, pane: Variant) -> void:
+	if _alive(pane):
+		(pane as Node).queue_free()
+	if _news == pane:
+		_news = null
+	_next_news()
+	_sync_rest()
+
+
+## Every news read: the tick that waited for it goes on — the place walked
+## to visited, the creatures' turn, the clock on — and the world again.
+func _after_news() -> void:
+	var reached := _news_reached
+	_news_reached = false
+	if _tick_held and not _lost:
+		_tick_held = false
+		_rest_of_tick(reached)
+		_check_quest()
+	_show_hero()
+	view.queue_redraw()
+	_sync_rest()
+
+
+## The quest's deadline looked at ([method WorldStatus.check_quest]): a
+## quest run out of time failed, and said beside the panel.
+func _check_quest() -> void:
+	var lost := WorldStatus.check_quest(player)
+	if lost != "":
+		hud.say(lost)
+
+
+## THE ADVENTURE'S END ([AdventureEndScreen]) with [param lines], the
+## 1997 words: the adventure lost — no save from now on, the world never
+## runs again —, the end over everything; read, the title, the saves as
+## they were ([method leave_unsaved]).
+func show_end(lines: Array) -> AdventureEndScreen:
+	_lost = true
+	if walk != null:
+		walk.stop()
+	if _alive(_end):
+		return _end
+	_end = AdventureEndScreen.new()
+	_end.lines = lines
+	add_child(_end)
+	_end.closed.connect(leave_unsaved, CLOSING)
+	if soundscape != null:
+		soundscape.rest(true)
+	_hold()
+	return _end
+
+
+## Whether the adventure's end is shown.
+func ended() -> bool:
+	return _alive(_end)
+
+
+## Whether the adventure is lost ([method show_end]).
+func lost() -> bool:
+	return _lost
+
+
+## The creatures that may cry this tick ([method WorldCreatures.tick]'s
+## `cries`): each heard, maybe, from where it stands on the screen
+## ([method WorldSoundscape.cry], on its own dice).
+func _cry(cries: Array) -> void:
+	for one in cries:
+		var at := view.drawn_at(Vector2(int(one["x"]), int(one["y"])))
+		soundscape.cry(int(one["creature"]), int(one["distance"]), at)
 
 
 ## The tile under [param point] on the view.
@@ -1327,6 +1729,8 @@ func _process(delta: float) -> void:
 	_sync_rest()
 	if world == null:
 		return
+	if _entered_tile.x >= 0 and player != null and player.tile() != _entered_tile:
+		_entered_tile = Vector2i(-1, -1)
 	if _map.visible or modal():
 		# The world waits under it; what a place's pane changes — food
 		# bought, a card sold, an amulet paid — shows on the panel at once.

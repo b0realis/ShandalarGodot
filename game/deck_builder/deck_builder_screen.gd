@@ -1964,7 +1964,7 @@ func _refresh_legality() -> void:
 		full = " ".join(problems)
 		color = Color8(232, 176, 96)
 	else:
-		var advice := deck.over_duplicate_limit(_with_tome())
+		var advice := deck.over_duplicate_limit(_with_tome(), _copy_rule())
 		if not advice.is_empty():
 			full = "There are too many of the following Cards in your deck: " \
 				+ ", ".join(advice)
@@ -2017,7 +2017,7 @@ func _refresh_legality() -> void:
 ## and `Stats` otherwise, which writes the whole problem list out instead
 ## of clipping it to the strip.
 func _open_the_complaint() -> void:
-	if deck.problems().is_empty() and not deck.over_duplicate_limit(_with_tome()).is_empty():
+	if deck.problems().is_empty() and not deck.over_duplicate_limit(_with_tome(), _copy_rule()).is_empty():
 		_open_extra_cards()
 		return
 	_open_stats()
@@ -3048,11 +3048,13 @@ func _fill_pack_cards(cards_list: GridContainer, pack: Dictionary) -> void:
 ##
 ## The limit is SHANDALAR's, scaled by deck size (DeckModel.DUPLICATE_TABLE),
 ## so this is advice the player asked for and never a refusal: the Deck
-## Builder itself allows any number.
-func _open_extra_cards() -> void:
+## Builder itself allows any number. The adventure's builder judges by the
+## 1997 deck builder's own rule ([method _copy_rule]) and asks as it is left
+## ([AdventureBuilder]): [param then] runs once the extras are removed.
+func _open_extra_cards(then := Callable()) -> void:
 	if _dialog_busy():
 		return
-	var over := deck.over_duplicate_limit(_with_tome())
+	var over := deck.over_duplicate_limit(_with_tome(), _copy_rule())
 	var dialog := OriginalDialog.create("Extra Cards",
 		Vector2(520, 200.0 + 24.0 * mini(over.size(), 8)))
 	if over.is_empty():
@@ -3073,14 +3075,16 @@ func _open_extra_cards() -> void:
 	dialog.body().add_child(scroll)
 	dialog.add_button("Remove Extra Cards").pressed.connect(func() -> void:
 		dialog.dismiss()
-		_trim_duplicates())
+		_trim_duplicates()
+		if then.is_valid():
+			then.call())
 	dialog.add_button("Edit Deck").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 
 
 func _trim_duplicates() -> void:
 	var before := deck.duplicate_model()
-	var removed := deck.trim_duplicates(_with_tome())
+	var removed := deck.trim_duplicates(_with_tome(), _copy_rule())
 	if removed == 0:
 		_say("There are no extra cards", true)
 		return
@@ -5931,6 +5935,12 @@ func _menu_entries() -> Array[String]:
 ## adventure's builder when the hero owns it ([AdventureBuilder]).
 func _with_tome() -> bool:
 	return false
+
+
+## The copy rule this screen judges by ([constant DeckModel.MANUAL] here;
+## the 1997 adventure deck builder's own in [AdventureBuilder]).
+func _copy_rule() -> String:
+	return DeckModel.MANUAL
 
 
 ## The tournament rules' complaints for the legality line, and its word on

@@ -53,8 +53,8 @@ static func gifts(hero: AdventurePlayer) -> Array[Array]:
 		out.append([56, "Next duel: %s in play" % hero.next_duel_card])
 	if hero.next_duel_first_move:
 		out.append([57, "Next duel: the first move"])
-	if hero.next_duel_life > 0:
-		out.append([58, "Next duel: %d more lives" % hero.next_duel_life])
-	elif hero.next_duel_life < 0:
-		out.append([59, "Next duel: %d fewer lives" % -hero.next_duel_life])
+	if hero.next_duel_lives() > 0:
+		out.append([58, "Next duel: %d more lives" % hero.next_duel_lives()])
+	elif hero.next_duel_lives() < 0:
+		out.append([59, "Next duel: %d fewer lives" % -hero.next_duel_lives()])
 	return out

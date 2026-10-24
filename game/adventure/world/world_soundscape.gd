@@ -25,6 +25,17 @@ extends Node
 ##    made, a reward, a treasure have theirs ([method play]).
 ##  - THE TITLE'S TUNE stays under the world, [constant BED_DB] lower, and
 ##    gives way [constant DUCK_DB] more as a place's tune rises.
+##  - A CREATURE'S CRY (`PlayCreatureEncounterSound`, world_lair_monster_
+##    slots.c 281–325, 960–967): a creature that stepped this tick, within
+##    80 of the hero, cries one time in `d0 / 4` ([method cry]) — its kind's
+##    sound (male and female wizards, knight, lord, djinn, troll, wyrm,
+##    dragon, flyer, archmage; the henchmen are silent), at `104 − d0 / 2`
+##    (of 100) and `100 − d0 / 3` percent of its pitch, on one voice: a new
+##    cry cuts the last, as 1997's one channel did. [Ours: 1997 slips — the
+##    flyer's cry plays `Flying.wav` (1997 asked for `flyer.wav`, which no
+##    install has: flyers were silent, [method CreatureBook.cry_key]); a cry
+##    sounds from where the creature stands on the screen (1997 panned it by
+##    its heading); and the chance is drawn on the soundscape's own dice.]
 ## [Ours: the sounds draw their own dice, so a sound never changes what the
 ## world's dice give; a call is let ring (1997 cut one in three as it
 ## changed the sample, and on colourless land played the white right
@@ -51,6 +62,8 @@ var _tune: MusicPlayer
 var _steps: AudioStreamPlayer
 var _one_shot: AudioStreamPlayer
 var _calls: Array[AudioStreamPlayer2D] = []
+## The creatures' one voice ([method cry]).
+var _cry: AudioStreamPlayer2D
 ## Each colour's call for next time (an index into [constant CALLS]).
 var _next_call: Array[int] = [0, 0, 0, 0, 0]
 
@@ -82,6 +95,12 @@ func _ready() -> void:
 		call.max_distance = 100000.0
 		add_child(call)
 		_calls.append(call)
+	_cry = AudioStreamPlayer2D.new()
+	_cry.name = "Cry"
+	_cry.bus = GameAudio.SFX_BUS
+	_cry.attenuation = 0.0
+	_cry.max_distance = 100000.0
+	add_child(_cry)
 	_bed(BED_DB)
 
 
@@ -146,8 +165,9 @@ static func nearest(world: ShandalarWorld, point: Vector2i) -> Dictionary:
 
 # ------------------------------------------------------------- the walk --
 
-## A TICK OF THE WORLD'S CLOCK ([param walk] just walked it): a footstep, a
-## call, the place's tune, as 1997 played them on a step of its walk.
+## A TICK OF THE WORLD'S CLOCK ([param walk] just stepped it, the clock not
+## yet moved on): a footstep, a call, the place's tune, as 1997 played them
+## on a step of its walk.
 func tick(walk: HeroWalk) -> void:
 	if player == null or walk == null or not walk.stepped:
 		return
@@ -160,7 +180,7 @@ func tick(walk: HeroWalk) -> void:
 			(80 + rng.randi_range(0, 39)) / 100.0)
 	if rng.randi_range(0, 39) == 0 and color > 0:
 		_call(color)
-	if (player.monster_timer - 1) % 2 == 0:
+	if player.monster_timer % 2 == 0:
 		hear_places()
 
 
@@ -203,6 +223,31 @@ func _call(color: int) -> void:
 	voice.pitch_scale = pitch
 	voice.volume_db = 0.0
 	voice.play()
+
+
+## A CREATURE'S CRY, maybe: creature row [param row], [param distance]
+## (1997's `d0`) from the hero, standing at [param at] on the screen. It
+## cries when this soundscape's dice (never the world's) give under 4 of
+## `distance` — always within 4 —; true when it did (silent without a
+## sound device, or for a kind with no voice, all the same).
+func cry(row: int, distance: int, at: Vector2) -> bool:
+	if distance > 1 and rng.randi_range(0, distance - 1) >= 4:
+		return false
+	var key := CreatureBook.cry_key(row)
+	if key == "":
+		return false
+	if _quiet or _cry == null:
+		return true
+	var stream := GameSkin.sound(key)
+	if stream == null:
+		return true
+	_cry.stop()
+	_cry.stream = stream
+	_cry.position = at
+	_cry.volume_db = db(104 - distance / 2)
+	_cry.pitch_scale = maxf(0.05, (100 - distance / 3) / 100.0)
+	_cry.play()
+	return true
 
 
 ## THE PLACE'S TUNE as the hero now stands: started, carried on louder or

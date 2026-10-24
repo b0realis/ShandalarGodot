@@ -129,8 +129,15 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	var price := price_at(player, slot, card_name)
 	if player.gold < price:
 		return {"bought": false, "said": POOR, "price": price}
+	# EVERY CARD THROUGH THE BAG (the bug pass of part B, q4-3): 1997's shop
+	# added its card through `AddCardToDeckSorted` (visitLocation.c 1286) —
+	# the 500-card bag, "Acquired spell" for a rare ([method
+	# AdventurePlayer.add_card]). [Ours: a full bag refuses the buy; 1997
+	# took the gold and lost the card.]
+	if player.bag_room() < 1:
+		return {"bought": false, "said": AdventurePlayer.BAG_FULL, "price": price}
 	player.gold -= price
-	player.cards.append({"card": card_name, "decks": []})
+	player.add_card(card_name)
 	var shop := town_record(player, slot)
 	shop["cards"][index] = ""
 	var dice := MsvcRandom.new(player.dice)
@@ -217,11 +224,12 @@ static func town_record(player: AdventurePlayer, slot: int) -> Dictionary:
 ## colours sold, the deck in use counted by card ([method deck_counts]) and
 ## how many copies of a card it may hold.
 static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
-	var held := deck_counts(player)
+	var in_use := deck_counts(player)
 	var size := 0
-	for card_name in held:
-		size += int(held[card_name])
-	return {"sold": colors_sold(player.world, slot), "held": held, "limit": allowed_for(player, size)}
+	for card_name in in_use:
+		size += int(in_use[card_name])
+	return {"sold": colors_sold(player.world, slot), "held": counted_copies(player),
+		"limit": allowed_for(player, size)}
 
 
 ## One card for place [param place]: a basic land of a colour the town
@@ -306,6 +314,17 @@ static func deck_counts(player: AdventurePlayer) -> Dictionary:
 			var card_name := String(entry.get("card", ""))
 			counts[card_name] = int(counts.get(card_name, 0)) + 1
 	return counts
+
+
+## THE COPIES THE COPY LIMIT COUNTS ([member AdventurePlayer.copy_limit]):
+## the deck in use's copies of each card ([method deck_counts]) when the
+## limit is on, as 1997 meant it; none when it is off — as 1997 shipped it,
+## its count matched no owned card (every entry carried a deck or a no-deck
+## flag, adventure_new_game.c 459), so the limit's own cases stayed and
+## no card was refused for its copies. The shop's draw, the duel's rewards
+## and the trader's dimmed names all count through here.
+static func counted_copies(player: AdventurePlayer) -> Dictionary:
+	return deck_counts(player) if player.copy_limit else {}
 
 
 ## Whether the hero's card [param entry] is in the deck in use.

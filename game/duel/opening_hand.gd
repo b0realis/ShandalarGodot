@@ -76,6 +76,15 @@ extends Control
 ##
 ## The engine half is MtgGame.stake_ante / deal_opening_hands / may_mulligan
 ## / take_mulligan / decline_mulligan / start_duel; this only asks.
+##
+## AN ADVENTURE DUEL'S OPENING (part B, W2, 2026-10-23) asks three things
+## of this, each opt-in from its [DuelConfig] through
+## [method DuelOpening.configure] and the game's own `mulligan_rule`:
+## a FORCED START ([member forced_first]: no order question, only the lead
+## line), 1997'S COMPUTER CHOOSING PLAY OR DRAW AT RANDOM
+## ([member ai_random_order]), and 1997'S ADVENTURE MULLIGAN in 1997's own
+## order ([method _run_1997_mulligans]). Without them the sequence above is
+## untouched.
 
 ## `@DIALOG_PLAYORDRAW`, Program/UIStrings.txt:487 — 9 entries, verbatim.
 const PLAY_OR_DRAW := {
@@ -128,6 +137,27 @@ var _viewer := -1
 ## Each seat's deck colour, for the hand window's chrome (see `run`).
 var _colors: Array = []
 var _private_hotseat := false
+
+# --- part B (W2): the adventure's opening ---
+## THE FIRST PLAYER WAS DECIDED BEFORE THE OPENING (`DuelConfig.first_player`:
+## a creature's First Strike, the adventurer's first-move gift): the seat
+## [method run] is given STARTS — nobody won a toss, so nobody is asked play
+## or draw, and the window says only who starts, `@DIALOG_MULLIGAN`'s first
+## two lines. 1997 skipped its play-or-draw dialog the same way
+## (`run_duel_coin_flip_dialogs`: no dialog 0xf4 unless the start was random).
+var forced_first := false
+## 1997'S COMPUTER CHOOSES AT RANDOM (`DuelConfig.ai_random_play_or_draw`):
+## a toss winner that is not a human seat plays or draws on a coin of its
+## own, [method ai_chooses_play]. False keeps ours: it takes the play.
+var ai_random_order := false
+
+
+## 1997's toss winner at the computer's seat (`dlgproc_duel_coin_flip`,
+## `duel_engine_coin_flip.c`): `internal_rand(2)`, 1 to play, 0 to draw —
+## here on the duel's own rng, so a seeded duel replays it.
+static func ai_chooses_play(game: MtgGame) -> bool:
+	return game.rng.randi_range(0, 1) == 1
+# --- end part B (W2) ---
 
 
 func _init() -> void:
@@ -216,57 +246,71 @@ func run(game: MtgGame, winner: int, is_human: Callable,
 	# and what the 1997 opponent does: the tempo is worth more than the
 	# extra card.
 	var plays_first := true
-	if _human(winner):
+	if forced_first:
+		pass   # part B (W2): nobody won a toss, so nobody chooses
+	elif _human(winner):
 		plays_first = await _ask_order(winner)
 		if _left():
 			return
 		if _window != null:
 			pressed_serial = _window.status_serial
+	elif ai_random_order:
+		plays_first = ai_chooses_play(game)   # part B (W2): 1997's coin
 	var first_player := winner if plays_first else game.opponent_of(winner)
-	announced.emit(play_or_draw_line(game, winner, plays_first, _private_hotseat))
+	if forced_first:
+		# `@DIALOG_MULLIGAN` entry 1, in the third person for the bar.
+		announced.emit(lead_line(game, first_player, -1, _private_hotseat))
+	else:
+		announced.emit(play_or_draw_line(game, winner, plays_first, _private_hotseat))
 	if _window != null:
 		_window.set_lead(lead_line(game, first_player, _viewer, _private_hotseat))
 
 	# 2-3. THE HANDS, the toss winner's first. Each seat looks at its own
 	# hand and keeps or redraws until it keeps; a redraw deals one fewer
 	# and asks again (the owner: "after each mulligan you draw one card
-	# less"), down to the empty hand that nobody is asked about.
-	for step in 2:
-		var pid := winner if step == 0 else game.opponent_of(winner)
-		while game.may_mulligan(pid):
-			var courtesy := game.has_mulliganed(game.opponent_of(pid))
-			var took := false
-			if _human(pid):
-				if _window != null and pid != _viewer:
-					_viewer = pid          # hotseat: turn the window round
-					_window.show_antes(game, _viewer, _private_hotseat)
-					_window.set_lead(lead_line(game, first_player, _viewer, _private_hotseat))
-					_show_hand()
-				took = await _ask_mulligan(pid)
-				if _left():
-					return
-			else:
-				took = game.agents[pid].choose_mulligan(game, pid)
-			# NAME THE HAND BEFORE IT IS GONE. `%s has no land…` describes
-			# the hand that was thrown away, and take_mulligan has already
-			# replaced it by the time the line would otherwise be built.
-			var line := announcement(game, pid, took, courtesy,
-				game.players[pid].hand.size() - 1)
-			if took:
-				game.take_mulligan(pid)
-				if pid == _viewer:
-					_show_hand()      # the stack is a picture of the hand
-			else:
-				game.decline_mulligan(pid)
-			announced.emit(line)
-			if _window != null:
-				if pid == _viewer:
-					pressed_serial = _window.status_serial
-				elif took:
-					# The head band's right half — "Cromer has no land and
-					# chose to take a mulligan", as the 1997 screenshot has
-					# it. A keep is not news and does not land there.
-					_window.set_status(line)
+	# less"), down to the empty hand that nobody is asked about. Under
+	# 1997's adventure rule, its own order instead (part B, W2).
+	if game.mulligan_rule == MtgGame.MULLIGAN_1997:
+		pressed_serial = await _run_1997_mulligans(game, pressed_serial)
+		if pressed_serial == -2:
+			return
+	else:
+		for step in 2:
+			var pid := winner if step == 0 else game.opponent_of(winner)
+			while game.may_mulligan(pid):
+				var courtesy := game.has_mulliganed(game.opponent_of(pid))
+				var took := false
+				if _human(pid):
+					if _window != null and pid != _viewer:
+						_viewer = pid          # hotseat: turn the window round
+						_window.show_antes(game, _viewer, _private_hotseat)
+						_window.set_lead(lead_line(game, first_player, _viewer, _private_hotseat))
+						_show_hand()
+					took = await _ask_mulligan(pid)
+					if _left():
+						return
+				else:
+					took = game.agents[pid].choose_mulligan(game, pid)
+				# NAME THE HAND BEFORE IT IS GONE. `%s has no land…` describes
+				# the hand that was thrown away, and take_mulligan has already
+				# replaced it by the time the line would otherwise be built.
+				var line := announcement(game, pid, took, courtesy,
+					game.players[pid].hand.size() - 1)
+				if took:
+					game.take_mulligan(pid)
+					if pid == _viewer:
+						_show_hand()      # the stack is a picture of the hand
+				else:
+					game.decline_mulligan(pid)
+				announced.emit(line)
+				if _window != null:
+					if pid == _viewer:
+						pressed_serial = _window.status_serial
+					elif took:
+						# The head band's right half — "Cromer has no land and
+						# chose to take a mulligan", as the 1997 screenshot has
+						# it. A keep is not news and does not land there.
+						_window.set_status(line)
 	# 4. The last word is always the player's: if anything happened after
 	# their last press (or they were never asked anything), the window
 	# waits on one more `Start the duel` so they actually see it.
@@ -362,6 +406,68 @@ func _ask_mulligan(_pid: int) -> bool:
 		{"answer": OpeningWindow.Answer.START, "label": MULLIGAN["start"]},
 	])
 	return answer == OpeningWindow.Answer.TAKE_MULLIGAN
+
+
+## THE 1997 ADVENTURE MULLIGAN ([constant MtgGame.MULLIGAN_1997]), in 1997's
+## own order (`play_duel`, `duel.c:2399-2470`; `dlgproc_duel_redraw_ante`):
+##   1. the creature's hand of no land or nothing but land goes back at
+##      once, and the window says so before the adventurer is asked — the
+##      1997 dialog opened on that line;
+##   2. the adventurer is offered ONE free redraw of seven, and only for a
+##      hand of no land or all land; any other hand is not offered one and
+##      the window has `Start the duel` alone;
+##   3. when the adventurer redrew, the creature redraws too if its hand
+##      holds fewer than two lands or more than five ("%s will also take a
+##      mulligan"), and otherwise says it will not ("%s decided not to take
+##      a mulligan").
+## The creature's rule is automatic whoever sits there; the adventurer's
+## offer is the player's to answer, or the seat's agent's. The lines carry
+## no count — 1997's redraw was always seven. Returns the window's serial
+## at the player's last press ([param pressed_serial] when they were not
+## asked), or -2 when the screen went while asking ([method _left]).
+func _run_1997_mulligans(game: MtgGame, pressed_serial: int) -> int:
+	var hero := MtgGame.MULLIGAN_1997_HERO
+	var creature := game.opponent_of(hero)
+	# 1. The creature's own no-land / all-land redraw.
+	if game.may_mulligan(creature):
+		_redraw_1997(game, creature, true, false)
+	# 2. The adventurer's offer.
+	if game.may_mulligan(hero):
+		var took := false
+		if _human(hero):
+			if _window != null and hero != _viewer:
+				_viewer = hero
+				_window.show_antes(game, _viewer, _private_hotseat)
+				_show_hand()
+			took = await _ask_mulligan(hero)
+			if _left():
+				return -2
+		else:
+			took = game.agents[hero].choose_mulligan(game, hero)
+		_redraw_1997(game, hero, took, false)
+		if _window != null and hero == _viewer:
+			pressed_serial = _window.status_serial
+	# 3. The creature's answer to the adventurer's redraw.
+	if game.has_mulliganed(hero) and not game.has_mulliganed(creature):
+		_redraw_1997(game, creature, game.may_mulligan(creature), true)
+	return pressed_serial
+
+
+## One 1997 decision for [param pid]: the redraw ([param took]) or the keep,
+## announced in the table's words — [param courtesy] for the creature's
+## answer to the adventurer's redraw — and, when it is news to the player
+## at this screen, put in the window's head band.
+func _redraw_1997(game: MtgGame, pid: int, took: bool, courtesy: bool) -> void:
+	var line := announcement(game, pid, took, courtesy)
+	if took:
+		game.take_mulligan(pid)
+		if pid == _viewer:
+			_show_hand()
+	else:
+		game.decline_mulligan(pid)
+	announced.emit(line)
+	if _window != null and pid != _viewer and (took or courtesy):
+		_window.set_status(line)
 
 
 ## The window this run is asking through — null when no seat is human

@@ -24,10 +24,18 @@ extends RefCounted
 ##    *"you can construct as many decks as you care to, with few limits."*
 ##    The only hard limits are the ones the DUEL enforces on load, and the
 ##    string table spells both out: `@TOOFEWCARDS` and `@TOOMANYCARDS`.
-## 2. SHANDALAR itself (the adventure, which we do not have yet) scales the
-##    duplicate allowance by deck size — the manual's own table, kept here
-##    as [method duplicates_allowed] and reported as an ADVISORY, never as
-##    a refusal, because the Deck Builder never refused it.
+## 2. SHANDALAR itself scales the duplicate allowance by deck size — the
+##    manual's own table (ch.10) and the 1998 Readme's FAQ, kept here as
+##    [method duplicates_allowed] and reported as an ADVISORY by this screen
+##    ([constant MANUAL]). THE 1997 ADVENTURE'S DECK BUILDER JUDGED BY ANOTHER
+##    RULE than the manual printed (read in its code for part B, 2026-10-24:
+##    deckdll `check_card_count`, deckdll.c 5442–5470; retail
+##    deckdll_unified.c 14493–14516): three copies under 59 cards, four from
+##    59; Tome of Enlightenment one more, and no limit from 59; basic lands
+##    aside — checked as the builder was left (`WM_CLOSE`, 5695–5728), with
+##    the Extra Cards box: Remove Extra Cards, or Edit Deck. The adventure's
+##    builder judges by it ([constant DECK_BUILDER_1997],
+##    [method copies_allowed_1997]); nothing before a duel checks copies.
 ##
 ## There is therefore NO four-of rule here. Saying "4 copies maximum" would
 ## be importing a tournament rule the 1997 game did not apply to this
@@ -101,6 +109,9 @@ extends RefCounted
 ## Commission temporarily adds random basic lands"* below the line).
 ## Casual duels now advise this size rather than enforcing it. Gauntlets
 ## and LAN tournaments retain the Wizard number as their required floor.
+## (The 1997 code pads to 30/35/40/40 — duel.c 2327–2349, not the manual's
+## numbers; the adventure's duels follow the code,
+## [method CreatureMeeting.padded_deck].)
 const MIN_CARDS := 40
 ## Casual play needs a seven-card opening hand plus one possible ante.
 ## The usual 40-card floor remains a requirement for Gauntlets/tournaments.
@@ -427,6 +438,14 @@ func clear() -> void:
 
 # ------------------------------------------------------------ legality --
 
+## The two copy rules ([method extra_copies]): the manual's table, and the
+## 1997 adventure deck builder's own ([method copies_allowed_1997]).
+const MANUAL := "manual"
+const DECK_BUILDER_1997 := "1997"
+## The 1997 deck builder's line between three copies and four.
+const DECK_BUILDER_LINE := 59
+
+
 ## How many copies of one non-basic card SHANDALAR allows in a deck of
 ## [param deck_size] cards (manual ch.10). 0 = no limit.
 static func duplicates_allowed(deck_size: int, with_tome := false) -> int:
@@ -564,8 +583,26 @@ func sideboard_advice() -> Array[String]:
 	return found
 
 
+## How many copies of one non-basic card the 1997 adventure's deck builder
+## allowed in a deck of [param deck_size] cards (`check_card_count`): three
+## under 59, four from 59; with Tome of Enlightenment one more under 59 and
+## no limit from 59. 0 = no limit.
+static func copies_allowed_1997(deck_size: int, with_tome := false) -> int:
+	if deck_size < DECK_BUILDER_LINE:
+		return 4 if with_tome else 3
+	return 0 if with_tome else 4
+
+
+## The allowance under [param rule] for this deck's size.
+func _allowance(with_tome: bool, rule: String) -> int:
+	if rule == DECK_BUILDER_1997:
+		return copies_allowed_1997(total(), with_tome)
+	return duplicates_allowed(total(), with_tome)
+
+
 ## Every card SHANDALAR would call an extra copy, as `name -> how many are
-## over the limit`. `@EXTRACARDSDIALOG` is the 1997 dialog that acts on
+## over the limit` ([param rule]: [constant MANUAL] or
+## [constant DECK_BUILDER_1997]). `@EXTRACARDSDIALOG` is the 1997 dialog that acts on
 ## this list, and [method trim_duplicates] is its `Remove Extra Cards`.
 ##
 ## Walks [member counts] DIRECTLY. It used to walk [method names], which
@@ -580,9 +617,9 @@ func sideboard_advice() -> Array[String]:
 ## you brought. A card the sideboard alone pushes over the line is
 ## reported, and only its sideboard copies are cut ([method
 ## trim_duplicates]).
-func extra_copies(with_tome := false) -> Dictionary:
+func extra_copies(with_tome := false, rule := MANUAL) -> Dictionary:
 	var over := {}
-	var limit := duplicates_allowed(total(), with_tome)
+	var limit := _allowance(with_tome, rule)
 	if limit <= 0:
 		return over
 	for card_name in counts:
@@ -602,9 +639,9 @@ func extra_copies(with_tome := false) -> Dictionary:
 ## duplicates — advice, never a refusal. `@EXTRACARDSDIALOG`'s own line
 ## heads the list: *"There are too many of the following Cards in your
 ## deck."*
-func over_duplicate_limit(with_tome := false) -> Array[String]:
-	var limit := duplicates_allowed(total(), with_tome)
-	var over := extra_copies(with_tome)
+func over_duplicate_limit(with_tome := false, rule := MANUAL) -> Array[String]:
+	var limit := _allowance(with_tome, rule)
+	var over := extra_copies(with_tome, rule)
 	var found: Array[String] = []
 	for card_name in over:
 		var in_side := side_count_of(card_name)
@@ -629,8 +666,8 @@ func over_duplicate_limit(with_tome := false) -> Array[String]:
 ## because the player decided it does not belong in the deck yet — taking
 ## the deck's copies while spares sit beside them would answer a question
 ## nobody asked. Only when the sideboard runs out does the deck lose any.
-func trim_duplicates(with_tome := false) -> int:
-	var over := extra_copies(with_tome)
+func trim_duplicates(with_tome := false, rule := MANUAL) -> int:
+	var over := extra_copies(with_tome, rule)
 	var removed := 0
 	for card_name in over:
 		var excess: int = int(over[card_name])

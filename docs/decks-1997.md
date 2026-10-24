@@ -95,9 +95,15 @@ Knight, War Mage, Warlock.
 ## How the 1997 sideboards were folded
 
 A 1997 enemy `.dck` has a maindeck and then colour-keyed sections —
-`.vNone` (always in), `.vBlack` / `.vBlue` / `.vGreen` / `.vRed` /
-`.vWhite` (swapped in against a player of that colour). Our format has one
-sideboard. The fold: **main = the 1997 maindeck + `.vNone`**; **`SB:` = per
+`.vNone`, `.vBlack` / `.vBlue` / `.vGreen` / `.vRed` / `.vWhite`. HOW 1997
+PLAYED THEM (read in the decompilation for part B, 2026-10-23; the deck
+loader, visitLocation.c 2320–2526): the adventure's creatures play the
+maindeck alone, and add the sections of the hero's colours once that colour
+of creature has learned the hero's deck; `.vNone` is read only by the title
+screen's demo duels. The adventure plays them so (the owner's ruling:
+exact 1997 — `CreatureDeck.for_meeting`). Our format has one sideboard;
+the fold below is how the files carry the sections for the deck builder
+and the duels outside the adventure. The fold: **main = the 1997 maindeck + `.vNone`**; **`SB:` = per
 card name, the largest count it has in any of the five colour sections,
 less its `.vNone` count**. The file's tail comment reproduces the section
 table so the original swap logic is not lost. This differs from the wiki's
@@ -180,8 +186,10 @@ carry **no decklist**: Erhnamgeddon (as an archetype page — two PTCS
 Erhnamgeddon decks ARE shipped), Prison, Zoo, Land Tax, Millstone,
 Counterpost. Fetched, read, nothing usable, nothing invented. The Reddit
 thread on the precon decks was a pointer only; nothing was taken from it.
-No true 1997 enemy `.dck` file exists anywhere locally — what exists is
-the 1997 lists carried inside Manalink's, s30's and mage-go's files.
+The true 1997 enemy `.dck` files are on the desk too, in the owner's own
+1997 install (`shandalar-xp/MagicTG/Decks/`, dated 1996-09-27): checked for
+part B (2026-10-23), our 55 lists match them card for card apart from 1997
+spellings, and the sections in each file's tail comment match theirs.
 
 When the non-MicroProse groups were widened (2026-09-02, the owner's
 follow-up: "13 decks is thin"), these were looked for and NOT shipped,

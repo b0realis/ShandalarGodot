@@ -66,7 +66,8 @@ func test_a_village_gives_letters_and_cards() -> void:
 		player.amulets = {"black": 3, "blue": 3, "green": 3, "red": 3, "white": 3}
 		CardTrade.arrive(player, village)
 		Quests.arrive(player, village)
-		if player.quest_offer.is_empty():
+		# A third of the unlinked villages ask for a creature (part B).
+		if player.quest_offer.is_empty() or int(player.quest_offer["type"]) < 0:
 			continue
 		offers += 1
 		var offer := player.quest_offer
@@ -82,7 +83,7 @@ func test_a_village_gives_letters_and_cards() -> void:
 	assert_gt(offers, 0, "two villages in three give one")
 	for town in _sites(ShandalarWorld.TOWN):
 		Quests.arrive(player, town)
-		assert_true(player.quest_offer.is_empty(), "a town's quests are the creatures', with the duels")
+		assert_lt(int(player.quest_offer.get("type", 0)), 0, "a town's quests are the creatures' (part B)")
 
 
 func test_a_letter_quest_from_offer_to_link() -> void:

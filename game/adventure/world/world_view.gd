@@ -56,6 +56,20 @@ extends Control
 ## [method frame] slides them between the last tick's place and this one's
 ## every frame. What the game reads — [member hero], [member camera],
 ## [method project], [method unproject] — stays the tick's.
+##
+## THE CREATURES ([member creatures], part B, 2026-10-23; ui.c 2213–2288)
+## walk among the uprights as the hero does: their shadows on the shadow
+## picture under everything upright (the hero's first, then by slot), their
+## bodies with the hero's on the movers' picture ([member _figure]), back to
+## front by the height of the foot — at one height the hero in front of a
+## creature and a lower slot in front of a higher, as 1997's queue put a
+## newcomer before its equals — each followed by the parts of the uprights
+## that stand in front of it. They glide between ticks as the hero does. A
+## frame is the hero's formula, `((heading + 2) & 7) · 5 + step`, drawn at
+## the feet less the body's anchor ([method WorldArt.creature_anchor]; its
+## shadow at the body's anchor too). Without its sheet — the plain world, or
+## a skin that lacks it — a creature is a disc of its slot's colour. On land
+## the hero has not seen nothing is drawn, a creature neither.
 
 ## The world drawn, and the world point at the screen's [member feet].
 var world: ShandalarWorld:
@@ -100,6 +114,28 @@ var hero_sheet: Texture2D:
 var lairs: Array[Dictionary] = []:
 	set(value):
 		lairs = value
+		_changed()
+## The creatures the hero sees ([method WorldCreatures.seen]): `{slot,
+## creature, x, y, heading, frame, color}`, in world units. Each slides from
+## where the tick before left it (a creature come anew, or one that leapt,
+## shows at once).
+var creatures: Array[Dictionary] = []:
+	set(value):
+		var before := {}
+		for creature in creatures:
+			before[int(creature["slot"])] = creature
+		_creatures_before.clear()
+		for creature in value:
+			var slot := int(creature["slot"])
+			var now := Vector2(int(creature["x"]), int(creature["y"]))
+			var was: Dictionary = before.get(slot, {})
+			var from := now
+			if not was.is_empty() and int(was["creature"]) == int(creature["creature"]):
+				from = Vector2(int(was["x"]), int(was["y"]))
+				if from.distance_to(now) > LEAP:
+					from = now
+			_creatures_before[slot] = from
+		creatures = value
 		_changed()
 ## Twice the 1997 pixels by default (the owner's choice, 2026-10-22): crisp,
 ## and about the original window's view scaled up; the wheel zooms.
@@ -197,6 +233,8 @@ var _figure: Node2D
 ## frame]), and where the hero stood the tick before.
 var _blend := 1.0
 var _hero_before := Vector2(0, 0)
+## Where each creature stood the tick before, by slot ([member creatures]).
+var _creatures_before := {}
 ## The world point (whole units) the ground and the uprights are drawn
 ## round — their pictures' origin is where it projects — the part of their
 ## picture they hold (unzoomed), and what they show: the world, the sheets,
@@ -331,6 +369,13 @@ func _shown_hero() -> Vector2:
 	return _hero_before.lerp(hero, _blend)
 
 
+## Where creature [param creature] is drawn this frame: slid between the
+## two ticks as the hero is.
+func _shown_creature(creature: Dictionary) -> Vector2:
+	var now := Vector2(int(creature["x"]), int(creature["y"]))
+	return (_creatures_before.get(int(creature["slot"]), now) as Vector2).lerp(now, _blend)
+
+
 ## Where the camera is this frame: with the hero, slid, when it follows
 ## them; else where it was put.
 func _shown_camera() -> Vector2:
@@ -369,6 +414,9 @@ func _refresh(look_again: bool) -> void:
 		if picture.scale.x != zoom:
 			picture.scale = Vector2(zoom, zoom)
 	var figure := [_shown_hero(), hero_facing, hero_step, hero_sheet, hero_walker, _drawing]
+	for creature in creatures:
+		figure.append([_shown_creature(creature), creature["creature"], creature["heading"],
+			creature["frame"], creature.get("color", 0)])
 	if figure != _figure_drawn:
 		_figure_drawn = figure
 		_shadow.queue_redraw()
@@ -501,19 +549,75 @@ func _paint_uprights() -> void:
 		_blit(_uprights, op, Vector2.ZERO)
 
 
-## THE HERO'S SHADOW, under everything upright.
+## THE SHADOWS, under everything upright: the hero's, then the creatures'
+## by slot (ui.c 2203, 2272), each at its body's anchor.
 func _paint_shadow() -> void:
 	if world == null or _plain or _tiles.is_empty():
 		return
 	_blit(_shadow, _op("world_sego_f", _hero_frame(), _hero_at() - Vector2(77, 61)), Vector2.ZERO)
+	for creature in _creatures_drawn():
+		var keys := CreatureBook.sprite_keys(int(creature["creature"]))
+		var sheet := art.texture(String(keys["shadow"]))
+		if sheet == null or art.texture(String(keys["body"])) == null:
+			continue
+		var frame := WorldArt.creature_frame(int(creature["heading"]), int(creature["frame"]))
+		var rect := art.creature_rect(String(keys["shadow"]), frame)
+		var at := _creature_at(creature) - art.creature_anchor(String(keys["body"]))
+		_shadow.draw_texture_rect_region(sheet, Rect2(at, rect.size), rect)
 
 
-## THE HERO — and over them again the parts of what stands in front of
-## them ([method _in_front_of]), so they stand among the uprights as in the
-## original's one queue.
+## THE MOVERS — the hero and the creatures, back to front by their feet
+## ([method movers]) — each with the parts of what stands in front of it
+## drawn again over it ([method _in_front_of]), so they stand among the
+## uprights as in the original's one queue.
 func _paint_figure() -> void:
 	if world == null or _tiles.is_empty():
 		return
+	for mover in movers():
+		if mover.is_empty():
+			_paint_hero()
+		else:
+			_paint_creature(mover)
+
+
+## THE ORDER THE MOVERS ARE DRAWN IN: back to front by the height of the
+## foot; at one height a higher slot first, the hero last (in front) — the
+## original queued the hero before the creatures, slots up, and put each
+## newcomer before its equals. The hero is `{}`, a creature its record.
+func movers() -> Array[Dictionary]:
+	var order: Array[Dictionary] = [{}]
+	order.append_array(_creatures_drawn())
+	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var fa := _mover_foot(a)
+		var fb := _mover_foot(b)
+		if fa != fb:
+			return fa < fb
+		return _mover_rank(a) > _mover_rank(b))
+	return order
+
+
+## A mover's foot on the pictures: the height its feet are drawn at.
+func _mover_foot(mover: Dictionary) -> float:
+	return _hero_at().y if mover.is_empty() else _creature_at(mover).y
+
+
+## A mover's rank at one height: the hero −1, a creature its slot — the
+## higher drawn first, behind.
+static func _mover_rank(mover: Dictionary) -> int:
+	return -1 if mover.is_empty() else int(mover["slot"])
+
+
+## The creatures drawn: on land the hero has seen (or the dark off).
+func _creatures_drawn() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for creature in creatures:
+		if not fog or world.is_explored(int(creature["x"]) / 32, int(creature["y"]) / 32):
+			out.append(creature)
+	return out
+
+
+## THE HERO, standing among the uprights.
+func _paint_hero() -> void:
 	var at := _hero_at()
 	if _plain:
 		draw_hero_plain(_figure, at)
@@ -527,6 +631,27 @@ func _paint_figure() -> void:
 	_figure.draw_texture_rect_region(sheet, figure, frame_rect)
 	for part in _in_front_of(at.y, figure):
 		_figure.draw_texture_rect_region(part[0], part[1], part[2])
+
+
+## CREATURE [param creature], standing among the uprights — its sheet's
+## frame at its feet less its anchor, or a disc of its colour without it.
+func _paint_creature(creature: Dictionary) -> void:
+	var at := _creature_at(creature)
+	var key := String(CreatureBook.sprite_keys(int(creature["creature"]))["body"])
+	var sheet := art.texture(key) if not _plain else null
+	if sheet == null:
+		draw_creature_plain(_figure, at, int(creature.get("color", 0)))
+		return
+	var rect := art.creature_rect(key, WorldArt.creature_frame(int(creature["heading"]), int(creature["frame"])))
+	var body := Rect2(at - art.creature_anchor(key), rect.size)
+	_figure.draw_texture_rect_region(sheet, body, rect)
+	for part in _in_front_of(at.y, body):
+		_figure.draw_texture_rect_region(part[0], part[1], part[2])
+
+
+## Where creature [param creature]'s feet are on the pictures.
+func _creature_at(creature: Dictionary) -> Vector2:
+	return _lay(_shown_creature(creature) - Vector2(_anchor))
 
 
 ## The parts of the uprights in front of a hero whose feet stand at height
@@ -820,6 +945,16 @@ func _paint_plain() -> void:
 		canvas.draw_circle(mouth, 12, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(mouth, 9, Color8(40, 26, 20))
 		canvas.draw_arc(mouth, 10, 0, TAU, 20, Color8(232, 190, 110), 2.0)
+
+
+## A creature plain, standing at [param at] on [param canvas]: a disc of
+## its slot's colour [param color] (1 black … 5 white; [constant
+## WorldArt.AMULET_INKS]), outlined.
+static func draw_creature_plain(canvas: CanvasItem, at: Vector2, color: int) -> void:
+	var ink: Color = WorldArt.AMULET_INKS[clampi(color, 1, 5) - 1]
+	canvas.draw_circle(at + Vector2(0, -12), 11, Color(0, 0, 0, 0.6))
+	canvas.draw_circle(at + Vector2(0, -12), 9, ink)
+	canvas.draw_arc(at + Vector2(0, -12), 10, 0, TAU, 20, Color8(232, 190, 110), 1.5)
 
 
 ## The hero plain, standing at [param at] on [param canvas].

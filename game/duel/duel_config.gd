@@ -44,6 +44,59 @@ var panel_colors: Array[String] = ["white", "black"]
 ## (manual p.165: *"Most duels are played 'for keeps'"*).
 var ante := 0
 
+# --- part B (W2): what an adventure duel asks of the duel ---
+#
+# A MEETING WITH A CREATURE SETS THE DUEL UP ITSELF (`play_duel`'s Shandalar
+# branch, `duel.c:2205-2526`; b3/b4 specs): the stakes it drew, who moves
+# first, the cards in play, a mirrored deck, and 1997's own opening rules.
+# Every field below is OPT-IN — its default is exactly the duel every other
+# screen plays — and seat 0 is always the adventurer, seat 1 the creature,
+# as `play_duel` seats them. [method plays_named_ante] /
+# [method adventure_opening] say whether a config asks for any of it.
+
+## THE NAMED STAKES, per seat: `[[names], [names]]`, each card LIFTED OUT OF
+## THAT SEAT'S LIBRARY into its ante before the deal (1997 marked them out
+## of the deck, `duel.c:2360-2370`) — the creature's ante card drawn at the
+## meeting, the adventurer's stake. The decks must hold them.
+## [method MtgGame.stake_named_ante].
+var ante_cards: Array = [[], []]
+## STAKES FROM OUTSIDE THE DECK, per seat: `[[names], [names]]`, MADE
+## straight into that seat's ante, owned by it — a lair's hoard of rares,
+## or the adventurer's own card when it plays a creature's deck ("Why
+## don't you try this deck!"). [method MtgGame.stake_extra_ante].
+## Either list, even both empty for one seat, plays the duel FOR ANTE, and
+## then [member ante]'s random count is not used. Nothing settles these
+## stakes when the duel ends: the adventure reads [DuelReport] and moves
+## its own cards.
+var ante_extras: Array = [[], []]
+## WHO MOVES FIRST: -1 is the coin toss and the toss winner's choice (every
+## duel until now); 0 or 1 makes that seat start — NO toss and NO play or
+## draw question, the opening window saying only `@DIALOG_MULLIGAN`'s first
+## two lines, "%s will start first" / "You will take the first turn"
+## (`duel.c:2315-2325`: First Strike, the adventurer's first-move gift).
+var first_player := -1
+## CARDS IN PLAY AT THE START, per seat: `[[names], [names]]`, each made
+## and put onto the battlefield under that seat's control after the
+## opening hands and before turn 1, its entering running
+## (`duel.c:2502-2526`: the creature's card, the adventurer's next-duel
+## card). [method MtgGame.arrange_opening].
+var start_in_play: Array = [[], []]
+## MIND CONTROL (`duel.c:2483-2499`): seat 1's library becomes a shuffled
+## copy of seat 0's and its opening hand a copy of seat 0's hand as it
+## stands after the mulligans. [method MtgGame.mirror_opening].
+var mirror_seat0 := false
+## THE MULLIGAN: "" is ours (the Paris rule, any hand, one card fewer each
+## time — the owner's ruling of 2026-09-08); [constant MtgGame.MULLIGAN_1997]
+## is the adventure's — seat 0 may redraw seven for free only with no land
+## or all land, seat 1 redraws by the creature's own rule.
+var mulligan_rule := ""
+## 1997'S TOSS WINNER AT THE COMPUTER'S SEAT chooses play or draw at random,
+## 50/50 (`dlgproc_duel_coin_flip`, `internal_rand(2)`): "and will play
+## first." / "and has chosen to draw first." False keeps ours — the
+## computer always takes the play.
+var ai_random_play_or_draw := false
+# --- end part B (W2) ---
+
 ## THE MATCH PARAMETERS the original's screen sets beside `&Ante`
 ## (`@SHELLPAGE_SINGLEDUEL`, `Program/UIStrings.txt:47-50`). `best_of` is
 ## 0 for `&Free play` — one
@@ -104,6 +157,36 @@ var setup_lives: Array[int] = []
 ## Is this duel a `Test hands` duel ([member position])?
 func is_test() -> bool:
 	return position != null
+
+
+# --- part B (W2) ---
+## Does this duel name its stakes ([member ante_cards] /
+## [member ante_extras])? Then it is played for ante whatever they hold,
+## and the random [member ante] count is not used.
+func plays_named_ante() -> bool:
+	for list in [ante_cards, ante_extras]:
+		if seat_names(list, 0).size() + seat_names(list, 1).size() > 0:
+			return true
+	return false
+
+
+## Seat [param pid]'s names in a per-seat list (`[[names], [names]]`) —
+## empty for a list too short or not a list, so a config built by hand
+## cannot break the deal.
+static func seat_names(list: Array, pid: int) -> Array:
+	if pid < 0 or pid >= list.size() or not list[pid] is Array:
+		return []
+	return list[pid]
+
+
+## Does this config ask for anything of the adventure's opening — a forced
+## first move, cards in play, Mind Control, 1997's mulligan or toss choice,
+## or named stakes?
+func adventure_opening() -> bool:
+	return plays_named_ante() or first_player >= 0 or mirror_seat0 \
+		or mulligan_rule != "" or ai_random_play_or_draw \
+		or seat_names(start_in_play, 0).size() + seat_names(start_in_play, 1).size() > 0
+# --- end part B (W2) ---
 
 
 ## THE TEST DUEL this config's seats, decks and pilots play: the same
