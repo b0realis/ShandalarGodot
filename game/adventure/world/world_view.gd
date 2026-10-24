@@ -20,8 +20,10 @@ extends Control
 ## the height of its foot, the later of two at one height behind. The two
 ## trees or rocks a tile carries, and where they stand, follow from the
 ## tile's place alone, so a world looks the same every time it is drawn.
-## Dungeons show only once the hero holds a clue to them (none at the
-## start), as in the original.
+## NOT YET DRAWN: the dungeons. 1997 showed one once the hero held a clue to
+## it and a card was still inside (adventureWorldUi.c 1209–1236); here only
+## the SITE tiles stand ([method _standing_on]), and the small map has none
+## either — to come beside part C (corrected 2026-10-24).
 ##
 ## Without the 1997 sheets ([WorldArt]) the same world is drawn plain: a
 ## diamond of its colour per tile, the roads, a mark per site.

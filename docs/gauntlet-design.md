@@ -850,9 +850,12 @@ a screen we do not have would be fidelity to nothing. **`[QoL]`, and small.**
 ### 5.5 Saving
 
 `MTG Gauntlet Save Game` is a real 1997 artefact and a real feature, and
-we have no save/load anywhere in this project — not for a duel, not for a
-match, not for Shandalar. **Out of scope for the gauntlet**, and it should
-land as one design across all three when M5 needs it. What the gauntlet
+we have no save/load for a duel or a match. (Shandalar has had its own since
+2026-10-22 — ten named slots per adventure and an autosave, `SaveSlots`,
+`AdventurePlayer.to_dict` — and no save inside a duel, by the owner's
+ruling: quitting a creature's duel meets the creature again.) **Out of
+scope for the gauntlet**, and the gauntlet's and the match's should land as
+one design, between duels first. What the gauntlet
 should do now is what the duel already does: **log its seed**, so a run is
 reproducible from a bug report even without a save file. `&Load
 gauntlet...` is listed and greyed if the setup screen has room, on §6.1's

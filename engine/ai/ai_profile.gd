@@ -8,8 +8,13 @@ extends RefCounted
 ## approach and the original's difficulty behavior documented in the lore
 ## doc): difficulty is primarily MISTAKE RATE, not different rules — weak
 ## AIs know how to play and sometimes don't; strong AIs simply stop
-## fumbling. That matches how the 1997 game scaled ("the AI makes less
-## mistakes" — Dana Huyler FAQ 1.1) and keeps every difficulty honest.
+## fumbling. That is what a player saw of the 1997 game's levels ("the AI
+## makes less mistakes" — Dana Huyler FAQ 1.1), not how it made them: 1997
+## gave every level the same reading of the game and scaled its SEARCH —
+## thinking time (level + 1)/4 of a base, at most (5·level + 5)·5 = 25, 50,
+## 75 or 100 tries a decision (retail duel `FUN_0048b5c9`, the try cap
+## beside it) — with no mistake roll at all (read 2026-10-24). Ours models
+## the effect, and keeps every difficulty honest.
 ##
 ## Knobs:
 ## - mistake_chance: probability an intended action degrades (a cast is

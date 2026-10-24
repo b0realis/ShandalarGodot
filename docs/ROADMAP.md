@@ -2978,8 +2978,9 @@ targeting, favorable-trade attack analysis with lethal-push override,
 kill/absorb/trade/gang/chump block logic, DecisionAgent answers (tutors,
 discards, Paralyze ransoms) — plus AiProfile difficulty presets under the
 ORIGINAL's names (Apprentice/Magician/Sorcerer/Wizard), where difficulty =
-seeded mistake injection + aggression tilt, exactly the original's scaling
-model. AI-vs-AI soaks run in CI as the engine's broadest regression net;
+seeded mistake injection + aggression tilt — the original's EFFECT (its
+levels scaled the search, thinking time and 25–100 tries a decision, with
+no mistake roll; `docs/ai-difficulty.md`, re-read 2026-10-24). AI-vs-AI soaks run in CI as the engine's broadest regression net;
 seeded games replay line-for-line.
 
 Phase 2 (SHIPPED 2026-08-30): instant-speed responses through a guarded
@@ -3336,12 +3337,29 @@ world").
 the 1997 save in `AdventurePlayer`, autosaved as the world is made and
 taken up again from Save / Load; the hero walks where a click points at
 the 1997 pace (`docs/adventure-implementation-notes.md`, "Built: the
-adventurer, walking and the saves"). Towns and encounters come next.
+adventurer, walking and the saves").
 **Built 2026-10-22: the Embark screen** — the title's `Shandalar` opens it;
 a new adventure's hero, colour, playmat, packs, difficulty and world seed
 on one screen, and the record the world will be made from
 (`docs/adventure-implementation-notes.md`, "Built: the Embark screen").
-Next: the starting deck (it needs the 1997 rarities), then the world.
+**Built 2026-10-23: the towns and the world's life** (0.50.51–0.50.53) — the
+first deck, the deck builder in towns and the hero's stats; casting the
+World Magics, the movable panes, the quest pane, the clues, the small map and
+the guide arrows; visiting the places, the card shop and its prices, the
+trades, the seller's hints and the lairs; part A, the towns' life (the mana
+links, the quests, the wise men, the World Magic seller, the ten save slots)
+— each its own "Built: …" section of the implementation notes.
+**Built 2026-10-24: part B, the creatures and their duels** (0.50.54–0.50.55)
+— the roaming creatures, the meetings and their choices, the duels held
+over the world and their spoils, the lair duels, ruled towns, sieges and
+the Spell of Dominion, creature quests ("Built: part B", "Built: part B
+played and fixed"); **the card rules** (0.50.57) — the Embark's three, the
+Classic MTG rules among them ("Built: the Classic MTG rules").
+Next — part C: entering a dungeon or a castle, the board and its rooms, the
+dungeon duels and their rules, the castle wizards' duels and a beaten
+wizard's towns freed, the retaliation siege, Arzakon, the win and the end
+score; beside it, a known dungeon drawn on the world, the wizards' window
+(F6), and the pack worlds. ("Open for part C" in the implementation notes.)
 
 ## The Gauntlet — the fourth 1997 mode (BUILT 2026-09-02)
 
@@ -6600,7 +6618,7 @@ engine errors**, on top of the ~24,000 games of the measurements above.
 
 ### What 1997 had
 
-The shell OFFERED the format and never built it. `Uistrings.txt` carries
+The shell OFFERED the format; no code for it is in any program we hold. `Uistrings.txt` carries
 `@SHELLSCREEN_DUEL` — *"Sealed Deck: Compete in the most popular form of
 Magic Tournament."* — and a whole screen roughed in as strings:
 `@SHELLPAGE_SEALEDDECK` (*"Each player gets %d cards"*, *"Free lands:"*,
@@ -6609,8 +6627,11 @@ Magic Tournament."* — and a whole screen roughed in as strings:
 Booster Packs"*, *"Your Starters and Boosters"*, *"Selected Pack"*,
 *"Cards In Pack"*, *"DONE"*), `@SEALEDDECK_PICKFREELANDS` and
 `@SEALEDDECK_LADDERSCREEN`; `defs.h` reserves `GAMETYPE_SEALED_DECK =
-3`; a `WinSealedTournament.avi` was cut for the ladder's end. Not a line
-of code sits behind any of it, so the screen is the owner's brief built
+3`; a `WinSealedTournament.avi` was cut for the ladder's end. None of the
+seven decompiled programs has a line of sealed or tournament code (the
+shell program that offered the mode is not among them), so whether 1997
+ever finished it cannot be told — the strings, the save type and the movie
+say it was at least begun (re-read 2026-10-24). So the screen is the owner's brief built
 on those strings, marked `[QoL]` at every site and quoting the strings
 it uses. The 1998 strategy guide's one sentence on the format —
 *"You take a Sealed Deck and a booster, and are supposed to make a forty

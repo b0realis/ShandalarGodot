@@ -51,8 +51,8 @@ extends Control
 ## `s30/shandalar-faq.txt:458-465`).
 ##
 ## WHAT IS NOT HERE, deliberately: `&Save gauntlet` / `&Load gauntlet...`.
-## We have no save/load anywhere — not for a duel, not for a match — and
-## it should land as one design when M5 needs it
+## We have no save/load for a duel or a match (the adventure has its own
+## slots), and the gauntlet's and the match's should land as one design
 ## (`docs/gauntlet-design.md` §5.5). The run logs its seed instead.
 
 ## Over [MatchScreen]'s own between-duels window (400), which is over the

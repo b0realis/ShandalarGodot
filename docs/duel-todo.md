@@ -3024,9 +3024,10 @@ DRAW and announced it as a win for seat 2; it now says
 `@DIALOG_SHANDALARENDDUEL`'s third line.
 
 Still open in this item: the **Lich Register** (`Life_Liched.pic` is
-surveyed but not imported — Lich is not in our card pool, so the substitute
-register has nothing to substitute for), the Spell Chain's own title bar and
-minimise, and `Opp Hand (N)` → `Opponent`.
+surveyed but not imported; Lich IS in our card pool — `cards/sets/2ed/lich.gd`
+— so a Lich'd player's register has something to show: corrected
+2026-10-24), the Spell Chain's own title bar and minimise, and
+`Opp Hand (N)` → `Opponent`.
 
 **CORRECTION, recorded because this file said otherwise.** The Combat Bar
 has **SEVEN** icons, not five. The printed manual (p.117) says five and is

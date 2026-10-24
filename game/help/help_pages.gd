@@ -535,8 +535,8 @@ static func _page_format_lists() -> Dictionary:
 		_text(", ".join(banned)),
 		_heading("Limits count both piles"),
 		_text("Four Lightning Bolts in the main deck plus one in the sideboard is five copies. Unrestricted has no copy or list limits. Highlander permits one of each non-basic card without applying these lists."),
-		_heading("The Restricted set filter is different"),
-		_text("In the Deck Builder's set filters, Restricted names a group of treasure cards. It is not the tournament restricted list."),
+		_heading("Finding them in the Deck Builder"),
+		_text("The Deck Builder's rarity filter shows them: Restricted lists the restricted cards above, Banned the banned ones."),
 	]}
 
 static func _page_icons_mana() -> Dictionary:

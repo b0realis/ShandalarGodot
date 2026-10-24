@@ -5,10 +5,11 @@ extends RefCounted
 ##
 ## The duelist beside a deck is DERIVED (`DuelistFace.portrait`, keyed by
 ## the deck's dominant colour, the way the original chose it). This is the
-## other half: a face the player CHOOSES for themselves. Nothing in a duel
-## reads it yet — it is the avatar the adventure (`docs/ROADMAP.md`, M5)
-## will need, and the battle-setup screen offers it now so the choice
-## exists and is remembered.
+## other half: a face the player CHOOSES for themselves — each seat's in a
+## duel ([member DuelConfig] portraits, drawn by [VersusPanel]), the hero's
+## in the adventure (the Embark's face, [member AdventurePlayer] portrait)
+## and the creatures' faces met there ([CreatureMeeting]); the battle-setup
+## screen offers it and remembers the choice.
 ##
 ## FOUR PLACES, IN THIS ORDER, first one wins on a name clash:
 ##

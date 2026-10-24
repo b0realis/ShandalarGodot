@@ -304,6 +304,132 @@ would change** · **How to switch it on**.
 - **How to switch it on.** `WorldCreatures`' refill over slots 0–6 on
   Sorcerer and Wizard, slot 6 gated off below (and §17's scratch moved).
 
+## 21. The idle demo duel
+
+- **What 1997 laid out.** After 500 idle ticks on the world the session would
+  play a computer-against-computer duel (`RunRandomAiDuelDemo`,
+  adventure_new_game.c; called at adventure_input.c 509).
+- **Why it never took effect.** Its switch (`g_adventure_demo_enabled`) is
+  never set.
+- **What it would change.** A world left alone would put on a duel by itself
+  — a shop-window demo, of no use to a player.
+- **How to switch it on.** Not wanted; the title screen's own demo (Battle
+  mode Demo) already shows the duels.
+
+## 22. The hall backdrop and "Set Options"
+
+- **What 1997 laid out.** The opening menu's session has a case for "Set
+  Options" that shows the hall backdrop (`ShowHallBackgroundScreen`,
+  openingMenu.c 497, 1904).
+- **Why it never took effect.** No control of the opening menu ever returns
+  that choice: the menu offers New, Load, Resume and Exit only.
+- **What it would change.** An options screen before the adventure, over the
+  hall picture.
+- **How to switch it on.** Our options already live in the world's panel;
+  the hall picture could back a settings pane on the title if wanted.
+
+## 23. A town's visit count and last visit
+
+- **What 1997 computed.** Every visit counted itself and stamped the clock on
+  the town (`visit_count`, `last_visit_timer`, visitLocation.c 4597, 4604).
+- **Why it never took effect.** Nothing reads either.
+- **What it would change.** A town could know a regular (better prices, a
+  greeting) or how long since the hero came (restocks, news).
+- **How to switch it on.** Two fields on the town's record (`CardShop.town_record`),
+  written on arrival, and whichever rule reads them.
+
+## 24. The Bazaar's free card
+
+- **What 1997 laid out.** `BuyAnyCardFromTown` has a payment path for a card
+  given free (payment −2, visitLocation.c 3961).
+- **Why it never took effect.** No caller passes it: the town passes its
+  colour, the Bazaar −1.
+- **What it would change.** A card of the hero's choice from the whole
+  browser, free — a reward the game could hand out.
+- **How to switch it on.** `CardTradePane` with a free way, as the quest's
+  reward pick already is (`CardTrade.REWARD`).
+
+## 25. The shop's land when it has nothing to sell
+
+- **What 1997 laid out.** A shop with no places would sell one basic land of
+  its colour for 40 (visitLocation.c 1125, 1866).
+- **Why it never took effect.** A shop always has `site type + 3` places (one
+  more with the Haggler's Coin), never none.
+- **What it would change.** Nothing a player could meet.
+- **How to switch it on.** Not needed.
+
+## 26. A dungeon rule "one deck for all duels" (0x20)
+
+- **What 1997 laid out.** The dungeons' rules word has a bit for "One deck for
+  all duels" among the rules the clues describe.
+- **Why it never took effect.** No code reads the bit.
+- **What it would change.** A dungeon would hold the hero to the deck they
+  entered with, room after room — no deck builder between the rooms.
+- **How to switch it on.** With part C's board: lock the deck in use while
+  inside a dungeon that carries the bit.
+
+## 27. The castle wizards' wins in the end score
+
+- **What 1997 computed.** The end score adds 25 for each castle wizard beaten
+  (`CalculateDungeonEndgameScore`, dungeonEncounter.c 1856).
+- **Why it never took effect.** The score counts the wins the journal logs,
+  and only world meetings log wins (world_lair_monster_encounter.c 2264);
+  a castle wizard is never met on the world.
+- **What it would change.** Every castle beaten would raise the score by 25 —
+  the castles counted in the end, as the formula means.
+- **How to switch it on.** With part C: log the castle wizard's win as the
+  score reads it.
+
+## 28. Three stakes for a castle wizard met on the world
+
+- **What 1997 laid out.** A world meeting with a castle wizard stakes three
+  different cards (world_lair_monster_encounter.c 1591–1610).
+- **Why it never took effect.** No castle wizard ever roams: the roaming
+  tiers stop at 18, the quests' at 18, a castle wizard is tier 20.
+- **What it would change.** Only meetings that cannot happen.
+- **How to switch it on.** Already in `CreatureMeeting` (part B builds it as
+  1997 laid it out); it waits for a castle wizard on the world.
+
+## 29. The dungeon's card in effect at the cleanup
+
+- **What 1997 laid out.** A hook at the turn's cleanup for the dungeon's
+  card "permanently in effect" (duel.c 1530).
+- **Why it never took effect.** The card's id is reset when the duel is dealt
+  (duel.c 2516), so the hook never finds it: "permanently in effect" means
+  only "in play from the start".
+- **What it would change.** A card the dungeon keeps working every turn, even
+  if destroyed — a much harder dungeon.
+- **How to switch it on.** With part C's dungeon duel: a duel rule that puts
+  the card back in play at each cleanup.
+
+## 30. A castle clue's creature flags
+
+- **What 1997 computed.** Looking at a castle's creature clue rewrote that
+  castle's creature flags (dungeonCluesScreen.c 1089).
+- **Why it never took effect.** Nothing reads them afterwards for a castle.
+- **What it would change.** Nothing a player could meet.
+- **How to switch it on.** Not needed.
+
+## 31. "Defeated %1 (%2)" in the journal
+
+- **What 1997 laid out.** A journal line for a castle or dungeon creature
+  beaten (@LOGSTRINGS).
+- **Why it never took effect.** No code writes it.
+- **What it would change.** The journal would tell each room's victory.
+- **How to switch it on.** With part C: `AdventurePlayer.log_event` at a room
+  won.
+
+## 32. Two dungeon names more than the dungeons
+
+- **What 1997 laid out.** @DUNGEON_NAMES has 17 names, "Vault of the Maker"
+  and "Lost Mines of Suret" among them.
+- **Why it never took effect.** There are 15 dungeon slots: names 15 and 16
+  are never given.
+- **What it would change.** Two more names in the draw, if the dungeons were
+  ever named at random.
+- **How to switch it on.** Draw the names, not take them in order, when part
+  C names the dungeons.
+
 ---
 
 *This page grows as the creatures, their duels, the castles and the dungeons

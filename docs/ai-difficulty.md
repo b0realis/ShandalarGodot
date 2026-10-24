@@ -98,8 +98,14 @@ that code reads. Difficulty is made of two things, in this order:
 1. **The mistake rate.** `mistake_chance` is the probability that an
    intended action degrades — a cast skipped, an attacker left home, a
    block dropped. It is rolled on the game's own RNG, so a seeded duel
-   replays the same fumbles. This is the 1997 model exactly: weak AIs
-   know how to play and sometimes don't; strong AIs stop fumbling.
+   replays the same fumbles. This is the 1997 game's EFFECT, not its
+   mechanism: weak AIs know how to play and sometimes don't; strong AIs
+   stop fumbling. 1997 itself had no mistake roll — every level read the
+   game alike and the level scaled the search: thinking time (level + 1)/4
+   of a base, at most (5·level + 5)·5 = 25, 50, 75 or 100 tries a decision
+   (retail duel `FUN_0048b5c9` and its try cap; read 2026-10-24). A weaker
+   search simply found the better line less often — what the FAQ calls
+   fewer mistakes.
 
    **What a fumble never is** (whole-game campaign, 2026-10-07,
    `forecasts_tactics`). The roll is made where it always was, so a seeded
