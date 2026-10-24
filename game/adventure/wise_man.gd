@@ -43,8 +43,10 @@ const COMPANION := 4
 const COPY := 5
 const GIFTS: Array[Array] = [[TALE, CLUE, LIVES], [COMPANION, COPY, DECK]]
 ## The companion cards, two by the town's colour, black … white
-## (`g_wiseman_duel_reward_card_csvids`).
-const COMPANIONS: Array[Array] = [["Carrion Ants", "Khabal Ghoul"],
+## (`g_wiseman_duel_reward_card_csvids`), spelled as the card registry
+## spells them — "Khabál Ghoul" with its accent, or the duel starts
+## without it (the c5 campaign, H1-1).
+const COMPANIONS: Array[Array] = [["Carrion Ants", "Khabál Ghoul"],
 	["Prodigal Sorcerer", "Merchant Ship"], ["Verduran Enchantress", "Wyluli Wolf"],
 	["Keldon Warlord", "Atog"], ["Samite Healer", "Benalish Hero"]]
 const COPY_COST := 3
@@ -298,7 +300,10 @@ static func give(player: AdventurePlayer, gift: int, color: int) -> Dictionary:
 			player.next_duel_card = companion
 			talk["pages"].append(APPLAUSE + String(GIFT_WORDS[COMPANION]) % companion)
 		COPY:
-			if int(player.amulets.get(hue, 0)) < COPY_COST:
+			# [Ours: a full bag, like too few amulets, turns the copy into
+			# the lives — the gift is not spent on a copy the bag would
+			# refuse (the c5 campaign, H3-1).]
+			if int(player.amulets.get(hue, 0)) < COPY_COST or player.bag_room() < 1:
 				return give(player, LIVES, color)
 			talk["pages"].append(APPLAUSE + String(GIFT_WORDS[COPY]) % ("%s amulets" % hue))
 			talk["then"] = "copy"

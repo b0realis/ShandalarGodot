@@ -719,7 +719,8 @@ func _on_name_changed(text: String) -> void:
 ## on the map and its colours, the colour,
 ## the playmat's colour and style, the card packs, the difficulty and a new
 ## seed (a time of day, as the clock gives) — for the player to enjoy and
-## change before setting out. [param rng] is for tests.
+## change before setting out. Your rules (the copy limit) are not drawn:
+## they stay as the player set them. [param rng] is for tests.
 func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	if _leaving:
 		return

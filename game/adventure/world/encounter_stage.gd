@@ -10,8 +10,11 @@ extends Control
 ## (`preduel_<colour>`, `preduel_panels`, `preduel_frame`, `win_back_cards`,
 ## `win_back_reward`, `end_plaque`, `lose_card`, `game_over`; the faces
 ## `rogue_<name>`); without them each part is a plain dark field under its
-## words. Pane-agnostic: a lair's or a town's duel shows its spoils on one
-## too ([EncounterPane]).
+## words — [ours: the fix pass of part B, c5, P4-2/P4-3] the purse's boxes
+## apart, each saying what it counts, the scroll lettered in the panes' ink,
+## a disc of the creature's colour for its face, a stone of the amulet's.
+## Pane-agnostic: a lair's or a town's duel shows its spoils on one too
+## ([EncounterPane]).
 ##
 ## Cards on it are read full screen with a right click ([signal
 ## card_read]); nothing else on it takes the mouse — a press on the stage
@@ -49,6 +52,18 @@ const FOOD_AT := Rect2(116, 365, 103, 49)
 const DECK_AT := Rect2(12, 415, 121, 44)
 const LIFE_AT := Rect2(125, 415, 102, 44)
 const SCROLL_AT := Rect2(468, 350, 145, 114)
+## [Ours] The purse without the skin: four boxes in 1997's corner, apart
+## (the pictures' places overlap by 8 points — their edges are clear in the
+## skin, not in a plain box).
+const PLAIN_GOLD_AT := Rect2(12, 365, 106, 44)
+const PLAIN_FOOD_AT := Rect2(122, 365, 106, 44)
+const PLAIN_DECK_AT := Rect2(12, 413, 106, 44)
+const PLAIN_LIFE_AT := Rect2(122, 413, 106, 44)
+## The quest scroll's ink on the 1997 scroll.
+const SCROLL_INK := Color8(40, 24, 12)
+## [Ours] The face's disc without the skin a shade under the amulets' ink,
+## so the page's words stay the brightest thing on it.
+const FACE_DIM := 0.25
 ## The cards on the page: an ante card is 120 wide (1997's `DrawAdventureCard`
 ## at the plaques), the creature's under its plaque, the hero's under theirs
 ## a step apart for each more stake.
@@ -65,6 +80,9 @@ const DARK := Color(0.02, 0.015, 0.015, 1.0)
 
 ## The page's size on the screen, times 1997's.
 var factor := 1.0
+## The colour the creature is met as (1 black … 5 white), for its face
+## without the skin; 0 for the first of its own ([method CreatureBook.is_of]).
+var hue := 0
 var _ground: TextureRect
 var _plain: ColorRect
 var _parts: Array = []
@@ -170,12 +188,7 @@ func words(text: String, at: Rect2, size_points: int, color := PaneStyle.INK, pa
 ## CreatureBook.face_id]) in the 1997 frame at [param at], its name on the
 ## banner under it; [param tinted] the reward's and the draw's dimmed face.
 func creature_face(row: int, at := FACE_AT, banner_at := BANNER_AT, tinted := false) -> void:
-	var portrait := TextureRect.new()
-	portrait.texture = PortraitLibrary.texture(CreatureBook.face_id(row))
-	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	if tinted:
-		portrait.modulate = Color(0.75, 0.62, 0.55)
+	var shown := PortraitLibrary.texture(CreatureBook.face_id(row))
 	# The frame's own outline was drawn on black in 1997 (W3: index 0 clear);
 	# the face goes over the frame's middle, as `DrawCreaturePortrait` laid
 	# the face into it.
@@ -183,9 +196,47 @@ func creature_face(row: int, at := FACE_AT, banner_at := BANNER_AT, tinted := fa
 	back.color = Color.BLACK
 	_add(back, at, "FaceBack")
 	piece("preduel_frame", FACE_FRAME, at, "FaceFrame")
-	_add(portrait, at.grow(-FACE_INSET), "Face")
+	var face: Control
+	if shown != null:
+		var portrait := TextureRect.new()
+		portrait.texture = shown
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		face = _add(portrait, at.grow(-FACE_INSET), "Face")
+	else:
+		# [Ours] No face to show: a disc of the creature's colour, its name on
+		# the banner under it (the fix pass of part B, c5, P4-3).
+		var ink := WorldArt.AMULET_INKS[_face_color(row) - 1].darkened(FACE_DIM)
+		face = _add(_stone(ink), at.grow(-FACE_INSET * 2.0), "FaceDisc")
+	if tinted:
+		face.modulate = Color(0.75, 0.62, 0.55)
 	piece("preduel_frame", NAME_BANNER, banner_at, "NameBanner")
 	words(CreatureBook.name_of(row), banner_at, 16, PaneStyle.GOLD, "CreatureName")
+
+
+## The colour of creature [param row]'s face without the skin: [member hue],
+## else the first of its own (1 black … 5 white), else black.
+func _face_color(row: int) -> int:
+	if hue >= 1 and hue <= 5:
+		return hue
+	for color in range(1, 6):
+		if CreatureBook.is_of(row, color):
+			return color
+	return 1
+
+
+## A round stone of [param ink], rimmed in gold (a face's or an amulet's
+## stand-in without the skin).
+func _stone(ink: Color) -> Panel:
+	var stone := Panel.new()
+	var face := StyleBoxFlat.new()
+	face.bg_color = ink
+	face.border_color = Color(PaneStyle.GOLD, 0.8)
+	face.set_border_width_all(2)
+	# Rounded as far as the stone's size allows: a disc, or an oval.
+	face.set_corner_radius_all(4096)
+	stone.add_theme_stylebox_override("panel", face)
+	return stone
 
 
 ## The ante plaques: "Your Ante" over the hero's stake, "Opponent Ante" over
@@ -230,26 +281,39 @@ func stakes(hero: Array, creature: Array) -> void:
 
 
 ## THE PURSE'S PANELS (E:1627–1683): gold, food, the deck in use's cards of
-## all owned ("%d/%d") and the life the links give.
+## all owned ("%d/%d") and the life the links give. [Ours] Without the skin
+## (no picture says which is which) four boxes apart, each its word: "Gold
+## 1000", "Food 50", "Deck 39/39", "Life 10".
 func purse(player: AdventurePlayer) -> void:
+	var deck := "%d/%d" % [player.deck_cards().size(), player.cards.size()]
+	if GameSkin.texture("preduel_panels") == null:
+		var counts := [["Gold", PLAIN_GOLD_AT, str(player.gold)], ["Food", PLAIN_FOOD_AT, str(player.food)],
+			["Deck", PLAIN_DECK_AT, deck], ["Life", PLAIN_LIFE_AT, str(player.mana_links())]]
+		for count in counts:
+			var at: Rect2 = count[1]
+			piece("preduel_panels", Rect2(), at, String(count[0]) + "Panel")
+			words("%s %s" % [count[0], count[2]], at.grow_individual(-4, -6, -4, -6), 14, PaneStyle.LIT,
+				String(count[0]))
+		return
 	piece("preduel_panels", PANEL_GOLD, GOLD_AT, "GoldPanel")
 	piece("preduel_panels", PANEL_FOOD, FOOD_AT, "FoodPanel")
 	piece("preduel_panels", PANEL_DECK, DECK_AT, "DeckPanel")
 	piece("preduel_panels", PANEL_LIFE, LIFE_AT, "LifePanel")
 	words(str(player.gold), Rect2(GOLD_AT.position + Vector2(44, 6), Vector2(58, 32)), 15, PaneStyle.LIT, "Gold")
 	words(str(player.food), Rect2(FOOD_AT.position + Vector2(44, 8), Vector2(58, 32)), 15, PaneStyle.LIT, "Food")
-	words("%d/%d" % [player.deck_cards().size(), player.cards.size()],
-		Rect2(DECK_AT.position + Vector2(44, 6), Vector2(76, 32)), 15, PaneStyle.LIT, "Deck")
+	words(deck, Rect2(DECK_AT.position + Vector2(44, 6), Vector2(76, 32)), 15, PaneStyle.LIT, "Deck")
 	words(str(player.mana_links()), Rect2(LIFE_AT.position + Vector2(44, 6), Vector2(56, 32)), 15,
 		PaneStyle.LIT, "Life")
 
 
 ## THE QUEST SCROLL (E:1684–1688, `BuildQuestStatusMessage`): what calls the
-## hero — [method WorldStatus.lines] — small on the scroll.
+## hero — [method WorldStatus.lines] — small on the scroll; [ours] in the
+## panes' ink on the plain box without the skin (the scroll's dark ink was
+## unreadable there, P4-2).
 func scroll(lines: Array[String]) -> void:
 	piece("preduel_panels", PANEL_SCROLL, SCROLL_AT, "Scroll")
-	words("\n".join(lines), SCROLL_AT.grow_individual(-12, -14, -12, -10), 12, Color8(40, 24, 12),
-		"ScrollWords", true)
+	var ink := SCROLL_INK if GameSkin.texture("preduel_panels") != null else PaneStyle.INK
+	words("\n".join(lines), SCROLL_AT.grow_individual(-12, -14, -12, -10), 12, ink, "ScrollWords", true)
 
 
 ## THE CARDS WON fanned across the page (E:2296–2308): each over its
@@ -282,18 +346,20 @@ func end_plaque(plaque: Dictionary) -> void:
 		PaneStyle.GOLD, "PlaqueClue")
 
 
-## AN AMULET of colour [param hue] (a word of [constant
-## AdventurePlayer.COLORS]) in the middle of the page, large.
-func amulet(hue: String) -> Control:
+## AN AMULET of colour [param stone_hue] (a word of [constant
+## AdventurePlayer.COLORS]) in the middle of the page, large; [ours] without
+## the skin a rimmed stone of its colour ([constant WorldArt.AMULET_INKS]),
+## not a bare square (P4-3).
+func amulet(stone_hue: String) -> Control:
 	var at := Rect2(PAGE.x / 2.0 - AMULET.x * 3, 200, AMULET.x * 6, AMULET.y * 6)
 	var frame := -1
 	for gem in WorldHud.AMULETS:
-		if String(gem[0]) == hue:
+		if String(gem[0]) == stone_hue:
 			frame = int(gem[1])
 	var sheet := _art.texture("world_amulets")
 	if sheet == null or frame < 0:
-		var disc := WorldArt.amulet_disc(maxi(AdventurePlayer.COLORS.find(hue), 0), AMULET.x * 6)
-		return _add(disc, at, "Amulet")
+		var ink := WorldArt.AMULET_INKS[clampi(AdventurePlayer.COLORS.find(stone_hue), 0, 4)]
+		return _add(_stone(ink), at, "Amulet")
 	var cut := AtlasTexture.new()
 	cut.atlas = sheet
 	cut.region = _art.frame_rect("world_amulets", frame)

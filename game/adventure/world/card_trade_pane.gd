@@ -64,6 +64,8 @@ var _no: Button
 var _note: Label
 var _search: LineEdit
 var _shown: Array[String] = []
+## The facts of each card shown, by name ([method cards]).
+var _facts := {}
 var _chips := {}
 ## The row last under the pointer, -1 for none: the pointer moving within
 ## it asks nothing more of the large card.
@@ -236,6 +238,7 @@ func cards() -> Array[String]:
 		if look != "" and not String(row["name"]).to_lower().contains(look):
 			continue
 		out.append(String(row["name"]))
+		_facts[String(row["name"])] = f
 	return out
 
 
@@ -245,13 +248,19 @@ func refresh() -> void:
 	_list.clear()
 	_hovered = -1
 	var owned := AdventureBuilder.owned_counts(player)
-	# Dimmed: the deck in use may hold no more ([method CardShop.copies_allowed],
-	# the shop's own rule), its copies counted once for the whole list.
+	# Dimmed: no copy left to the deck in use by 1997's own allowance
+	# (`GetRemainingAllowedCardCopies(card) <= 0`, visitLocation.c 3822;
+	# [method DuelSpoils.copies_left]: basic lands always lit, the cards
+	# outside the base sets halved, the 0x100 ones by the difficulty), its
+	# copies counted once for the whole list — none with the copy limit off
+	# ([method CardShop.counted_copies]). The name carries "-N" only for a
+	# card the hero owns (visitLocation.c 3804–3808).
 	var in_deck := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player)
 	for card_name in _shown:
-		var index := _list.add_item("%s-%d" % [card_name, int(owned.get(card_name, 0))])
-		if int(in_deck.get(card_name, 0)) >= limit:
+		var count := int(owned.get(card_name, 0))
+		var index := _list.add_item("%s-%d" % [card_name, count] if count > 0 else card_name)
+		if DuelSpoils.copies_left(player, card_name, _facts.get(card_name, {}), in_deck, limit) <= 0:
 			_list.set_item_custom_fg_color(index, PaneStyle.FAINT)
 		if card_name == chosen:
 			_list.select(index)

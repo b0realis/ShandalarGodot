@@ -88,7 +88,7 @@ func _ready() -> void:
 	column.add_child(_words)
 	var back := PaneStyle.button(RETURN, "ReturnToTitle", 1.0)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	back.pressed.connect(close)
+	back.pressed.connect(_back_pressed)
 	column.add_child(back)
 	var foot := Control.new()
 	foot.custom_minimum_size = Vector2(0, 24)
@@ -126,6 +126,15 @@ func close() -> void:
 ## Whether the end may be read past yet (a moment after it came).
 func ready_to_close() -> bool:
 	return Time.get_ticks_msec() - _shown_at >= GUARD_MS
+
+
+## "Return to the title" pressed: the end read — after its moment, as a
+## click or a key (the playtest of part B, H2-5, P2-3: the button closed at
+## once, so a double click on the news or the town that brought the end
+## skipped its 1997 words).
+func _back_pressed() -> void:
+	if ready_to_close():
+		close()
 
 
 func _gui_input(event: InputEvent) -> void:

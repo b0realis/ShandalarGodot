@@ -71,6 +71,10 @@ var _done := false
 var _drag := {}
 var _most := 1.0
 var _factor := 1.0
+## The page's size on the step the player last answered: a later step's
+## page may be smaller (more words under it), never larger — the page does
+## not swell and shrink from click to click [ours].
+var _ceiling := INF
 var _relayout_queued := false
 
 
@@ -128,8 +132,13 @@ func _ready() -> void:
 			_music.play())
 	add_child(_music)
 	var room := get_viewport_rect().size if is_inside_tree() else Vector2(1280, 800)
-	_most = clampf(minf((room.x - 120.0) / EncounterStage.PAGE.x,
-		(room.y - 260.0 * k) / EncounterStage.PAGE.y), LEAST, MOST)
+	# The page as wide as the screen allows; how tall is what the words and
+	# the choices leave of it, measured as they come ([method _fit]) — not a
+	# guess of 260 · k, which with big buttons (k 1.6, a finger's) held the
+	# page at 0.8 on an 800-high screen, its stakes unreadably small under
+	# huge buttons, the room left empty above and below (the playtest of
+	# part B, P4-1; the words and choices take about 200 there).
+	_most = clampf((room.x - 120.0) / EncounterStage.PAGE.x, LEAST, MOST)
 	_set_factor(_most)
 	minimum_size_changed.connect(_fit)
 	# Hidden until there is something to show: the duel comes first. Begun
@@ -236,6 +245,9 @@ func _game_over() -> void:
 func choose(_action: String) -> void:
 	if _done:
 		return
+	# The step the player saw stood laid out: its page is the most the
+	# next one may take ([member _ceiling]).
+	_ceiling = _factor
 	match step:
 		"lost":
 			_next_lost()
@@ -275,6 +287,13 @@ func offer(actions: Array) -> void:
 		choice.disabled = not bool(action[2])
 		choice.pressed.connect(func() -> void: WorldSoundscape.play_from(self, "sfx_button"))
 		choice.pressed.connect(choose.bind(String(action[0])))
+		# A DOUBLE CLICK'S SECOND PRESS IS NO CHOICE (the playtest of part B,
+		# P2-2; the meeting's q2-2 guard): the next lost card's Continue stands
+		# where the last one's was, so a double click skipped a card's picture.
+		choice.gui_input.connect(func(input: InputEvent) -> void:
+			var press := input as InputEventMouseButton
+			if press != null and press.double_click:
+				choice.accept_event())
 		_choices.add_child(choice)
 	_queue_relayout()
 
@@ -328,13 +347,16 @@ func _set_factor(value: float) -> void:
 		part.custom_minimum_size.x = width
 
 
-## The pane kept on the screen (as [method EncounterPane._fit]).
+## The pane kept on the screen (as [method EncounterPane._fit]), the page as
+## large as the room left: the screen's height less what the words and the
+## choices under it take (measured), up to what the width allows ([member
+## _most]).
 func _fit() -> void:
 	if not is_inside_tree() or stage == null:
 		return
 	var room := get_viewport_rect().size.y - ROOM_MARGIN
 	var rest := get_combined_minimum_size().y - stage.custom_minimum_size.y
-	var grow := clampf((room - rest) / EncounterStage.PAGE.y, LEAST, _most)
+	var grow := clampf((room - rest) / EncounterStage.PAGE.y, LEAST, minf(_most, _ceiling))
 	if absf(grow - _factor) * EncounterStage.PAGE.y >= 1.0:
 		_set_factor(grow)
 	_queue_relayout()

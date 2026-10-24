@@ -174,6 +174,9 @@ var _news_reached := false
 ## — from the moment it is, nothing is saved and the world never runs again.
 var _end: AdventureEndScreen
 var _lost := false
+## Whether the world leaves for the title once no pane holds it ([method
+## leave_after_panes]).
+var _leave_after := false
 
 
 ## THE ADVENTURE NOT SAVED: asked before the hero leaves the world when its
@@ -588,6 +591,16 @@ func leave_unsaved() -> void:
 	_go_to_title()
 
 
+## THE WORLD LEFT ONCE ITS PANES ARE DONE (a held duel's "Return to main
+## menu" taken after the duel was over, [WorldDuels]): what the duel
+## brought is shown first — its spoils, the town freed, a lair's end — then
+## the adventure is saved and left for the title ([method leave]), as the
+## world's own Return to main menu leaves; an adventure lost meanwhile ends
+## at its own end screen instead.
+func leave_after_panes() -> void:
+	_leave_after = true
+
+
 ## The title screen, the world left as it is; a seam, so a test can count
 ## the leaving instead.
 func _go_to_title() -> void:
@@ -629,9 +642,12 @@ func _notification(what: int) -> void:
 	# 1997, quitting meets the creature again, nothing lost or won); so it
 	# does mid-reward (a quest's card not yet picked: the quest is reported
 	# again, as quitting 1997's browser left it), and a lost adventure saves
-	# nothing ([method show_end]).
+	# nothing ([method show_end]). Under a news flash too (the playtest of
+	# part B, H2-4): the tick it holds is half taken — the hero's step, not
+	# the creatures' — and a save then lost the news and skipped the rest of
+	# the tick; the last save stands, and its dice bring the news again.
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building() \
-			and not meeting() and not _duel_held and not _lost and not rewarding():
+			and not meeting() and not _duel_held and not _lost and not rewarding() and not news_shown():
 		autosave()
 
 
@@ -776,6 +792,11 @@ func _open_ruled_duel(place: Dictionary) -> void:
 		_leave_site(place)
 		return
 	_meeting = pane
+	# The town's tune rests under its duel and its pictures, as under a
+	# meeting's [ours: 1997 slip — its ruled town ran the duel with the
+	# town's tune still on (`RunDuelEngine` stops the duel's channel, not
+	# the place's), two tunes over each other; the playtest of part B, H2-2].
+	soundscape.rest(true)
 	pane.connect(&"finished", func(result: int) -> void:
 		_meeting = null
 		if result == WorldEncounters.GAME_OVER:
@@ -786,6 +807,7 @@ func _open_ruled_duel(place: Dictionary) -> void:
 				# arrives in it (its quest, its shop) — no longer the ruled
 				# town the hero arrived at (the entry latch).
 				_entered_tile = Vector2i(-1, -1)
+			soundscape.rest(false)
 			_leave_site(place)
 		_sync_rest(), CONNECT_ONE_SHOT)
 	_hold()
@@ -1729,12 +1751,22 @@ func _process(delta: float) -> void:
 	_sync_rest()
 	if world == null:
 		return
+	if _leave_after and not modal():
+		# A held duel's Return to main menu taken once it was over ([method
+		# leave_after_panes]): what it brought seen, saved and left.
+		_leave_after = false
+		if not _lost:
+			leave()
+		return
 	if _entered_tile.x >= 0 and player != null and player.tile() != _entered_tile:
 		_entered_tile = Vector2i(-1, -1)
 	if _map.visible or modal():
-		# The world waits under it; what a place's pane changes — food
-		# bought, a card sold, an amulet paid — shows on the panel at once.
-		if visiting():
+		# The world waits under it; what a pane changes — food bought, a card
+		# sold, an amulet paid, a meeting's tribute, a link lost to the news —
+		# shows on the panel at once (the playtest of part B, P4-5: under a
+		# meeting it lagged until the meeting was over). Not under a duel's
+		# screen, which hides the panel.
+		if (visiting() or meeting() or news_shown()) and not _duel_held:
 			hud.refresh_numbers()
 		# The hero stands where the last tick left them, not a step short.
 		view.frame(1.0)
@@ -1811,9 +1843,16 @@ func _gui_input(event: InputEvent) -> void:
 
 
 ## The world's keys. A pane that holds the screen hears its own keys
-## (ruling A); the map takes its own ([method _map_key], ruling B).
+## (ruling A); the map takes its own ([method _map_key], ruling B). For a
+## moment after the last pane closed ([constant AFTER_PANE_MS], the
+## shield's) the world hears none of them: the playtest of part B (H2-1,
+## P1-1) — Escape reads a news flash and goes on at every spoils' picture,
+## so one press too many saved and left for the title unasked, and a digit
+## cast a World Magic. Under the map its keys act as ever (none leaves).
 func _unhandled_input(event: InputEvent) -> void:
 	if _leaving or modal():
+		return
+	if not _map.visible and Time.get_ticks_msec() < _shield_until:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()

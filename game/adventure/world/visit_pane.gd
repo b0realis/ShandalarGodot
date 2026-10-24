@@ -709,4 +709,16 @@ func _button(words: String, action: String) -> Button:
 	# A town's choices click as 1997's town icons did (`Button.wav`).
 	choice.pressed.connect(func() -> void: WorldSoundscape.play_from(self, "sfx_button"))
 	choice.pressed.connect(choose.bind(action))
+	# A DOUBLE CLICK'S SECOND PRESS IS NO CHOICE (the playtest of part B,
+	# P2-1; the meeting's q2-2 guard): a pane opens where the last one's
+	# button stood — a news flash read on the step that reaches a ruled town
+	# opens the town under the click — so a double click on Continue began a
+	# duel never chosen. Every place's pane: a town, a ruled town, the news,
+	# a lair, the wise man — but a town's food, whose button stays where it
+	# was pressed (bought again on purpose, each click ten more).
+	if action != "food":
+		choice.gui_input.connect(func(input: InputEvent) -> void:
+			var press := input as InputEventMouseButton
+			if press != null and press.double_click:
+				choice.accept_event())
 	return choice

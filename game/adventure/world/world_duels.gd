@@ -23,6 +23,17 @@ extends Control
 ##    save made as the meeting began stands — the owner's ruling 4, as 1997:
 ##    reloading meets the creature again, nothing lost or won (a lair's duel:
 ##    the lair was spent as it was entered, the lead's ruling C).
+##  - THE DUEL ALREADY OVER (its End of Duel window up, the pause key still
+##    offering both doors): its result stands whichever door is taken —
+##    Exit duel goes on to what it brought, and Return to main menu too, the
+##    world then saved and left for the title once its panes are done
+##    ([method WorldScreen.leave_after_panes]); the questions say so.
+##  - THE QUESTIONS FIT THE DUEL [ours] (the playtest of part B, H1-4,
+##    H2-6): "your ante is lost" only when the hero stakes a card (a lair's
+##    duel stakes none of theirs), and the menu's words the holder's own
+##    when it has them (a lair's, [constant MENU_LAIR]).
+##  - A DUEL OVER AS IT IS DEALT (headless, the hero at life 0) is heard
+##    after the frame, once the holder has connected [signal ended].
 ##  - Pause → Quit ends the program, as from every duel; the world screen
 ##    does not save then either (its window-close guard).
 ##
@@ -42,6 +53,17 @@ const LEAVE_TITLE := "Concede"
 const LEAVE_LABEL := "Concede"
 const LEAVE := "Concede the duel to the %s? It counts as a loss: your ante is lost."
 const MENU := "Return to the main menu? The duel is left unfinished and nothing is saved: the adventure goes back to where it was saved as you met the %s."
+## [Ours] The Concede question when the hero stakes nothing (a lair's duel:
+## the hoard is the creature's stake alone, `global_ante_cards[0][0] = −1`).
+const LEAVE_UNSTAKED := "Concede the duel to the %s? It counts as a loss: you stake nothing, and win nothing."
+## [Ours] A lair's menu question (the lead's ruling C: saved and spent as it
+## was entered, [method WorldScreen.enter_lair]).
+const MENU_LAIR := "Return to the main menu? The duel is left unfinished and nothing is saved: the adventure goes back to where it was saved as you entered the lair, and the lair is spent."
+## [Ours] The doors' title and questions once the duel is over (its result
+## stands, [method concede], [method _to_menu]).
+const OVER_TITLE := "The duel is over"
+const LEAVE_OVER := "Leave the duel? It is over: its result stands."
+const MENU_OVER := "Return to the main menu? The duel is over and its result stands: what it brought comes first, then the adventure is saved and left."
 
 ## The world screen holding the duel (any Node: a test's host too).
 var screen: Node
@@ -51,20 +73,28 @@ var config: DuelConfig
 var foe := "creature"
 ## The duel screen while it is up.
 var duel: DuelScreen
+## The menu question's words when the holder has its own ("" the
+## meeting's, [constant MENU]).
+var menu_words := ""
 ## Whether the duel was conceded.
 var conceded := false
 var _over := false
+## The duel being dealt (its `_ready`, inside [method _ready]'s add_child).
+var _dealing := false
 
 
 ## THE DUEL OF [param config] OVER [param screen] against [param foe_name]:
-## the host, in the tree, the duel dealt. Connect [signal ended] (and
-## [signal abandoned]) right after.
-static func host(on: Node, duel_config: DuelConfig, foe_name := "creature") -> WorldDuels:
+## the host, in the tree, the duel dealt; [param menu_text] the menu
+## question's words when the holder has its own (a lair's, [constant
+## MENU_LAIR]). Connect [signal ended] (and [signal abandoned]) right after:
+## a duel over as it is dealt is heard after the frame ([method _closed]).
+static func host(on: Node, duel_config: DuelConfig, foe_name := "creature", menu_text := "") -> WorldDuels:
 	var out := WorldDuels.new()
 	out.name = "WorldDuel"
 	out.screen = on
 	out.config = duel_config
 	out.foe = foe_name
+	out.menu_words = menu_text
 	on.add_child(out)
 	return out
 
@@ -72,12 +102,40 @@ static func host(on: Node, duel_config: DuelConfig, foe_name := "creature") -> W
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	duel = DuelScreen.held(config, LEAVE_TITLE, LEAVE % foe, MENU % foe, LEAVE_LABEL)
+	var leave_text := (LEAVE if hero_stakes() else LEAVE_UNSTAKED) % foe
+	duel = DuelScreen.held(config, LEAVE_TITLE, leave_text, menu_words if menu_words != "" else MENU % foe,
+		LEAVE_LABEL)
 	duel.duel_closed.connect(_closed)
+	duel.duel_finished.connect(_questions_over)
 	duel.leave_confirmed.connect(concede)
 	duel.menu_confirmed.connect(_to_menu)
 	_hold(true)
+	_dealing = true
 	add_child(duel)
+	_dealing = false
+
+
+## Whether the hero stakes a card in this duel ([member DuelConfig.ante_cards]
+## or [member DuelConfig.ante_extras] of seat 0): a meeting's, a ruled
+## town's; a lair's none.
+func hero_stakes() -> bool:
+	if config == null:
+		return true
+	for stakes in [config.ante_cards, config.ante_extras]:
+		if (stakes as Array).size() > 0 and not ((stakes as Array)[0] as Array).is_empty():
+			return true
+	return false
+
+
+## THE DUEL OVER, its End of Duel window to come: both doors' words say its
+## result stands ([constant LEAVE_OVER], [constant MENU_OVER]) — read as
+## each question is asked.
+func _questions_over(_winner: int) -> void:
+	if not is_instance_valid(duel):
+		return
+	duel.leave_title = OVER_TITLE
+	duel.leave_question = LEAVE_OVER
+	duel.menu_question = MENU_OVER
 
 
 ## Whether the duel is still up.
@@ -107,12 +165,21 @@ func concede() -> void:
 func _closed(report: DuelReport) -> void:
 	if _over:
 		return
+	if _dealing:
+		# OVER AS IT IS DEALT (the playtest of part B, H1-3): headless, a hero
+		# at life 0 has lost by the duel's start, inside [method host] — so
+		# [signal ended] came before the holder had connected it, the pane
+		# hidden and the world held for good. Heard after the frame instead.
+		_finish.call_deferred(report)
+		return
 	_finish(report)
 
 
 ## The duel taken away (hidden at once, freed after the frame: never from
-## inside its own signal), the world shown again, [signal ended].
+## inside its own signal), the world shown again, [signal ended] — once.
 func _finish(report: DuelReport) -> void:
+	if _over:
+		return
 	_over = true
 	_drop_duel()
 	_hold(false)
@@ -120,9 +187,20 @@ func _finish(report: DuelReport) -> void:
 	queue_free()
 
 
-## RETURN TO MAIN MENU: the duel left unfinished, nothing saved, the title.
+## RETURN TO MAIN MENU: the duel left unfinished, nothing saved, the title
+## — unless it is already over (the playtest of part B, H1-2: its End of
+## Duel window up, this door's Yes went to the title and threw the result
+## away — a win's cards gone, a loss undone by the reload, past ruling 4,
+## which is about quitting mid-duel). Its result stands, as Exit duel's does
+## ([method concede], q2-1): the duel finished with its report, and the
+## world leaves for the title — saved — once what it brought is shown.
 func _to_menu() -> void:
 	if _over:
+		return
+	if duel != null and duel.game != null and duel.game.game_over:
+		if screen != null and screen.has_method("leave_after_panes"):
+			screen.call("leave_after_panes")
+		_finish(duel.report())
 		return
 	_over = true
 	abandoned.emit()

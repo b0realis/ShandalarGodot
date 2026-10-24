@@ -176,14 +176,18 @@ func _gem_choices(note_text: String) -> void:
 	offer(actions, note_text)
 
 
-## "Found this card": the card shown, Leave takes it.
+## "Found this card": the card shown, Leave takes it — the treasure, the
+## waiting rare, a riddle's or the thieves' card. [Ours] With the bag full
+## the card is lost, as 1997's adder lost it without a word (duel.c
+## 1859–1867), and said under it ([constant AdventurePlayer.BAG_FULL]), as
+## the lair duel's hoard says it (the playtest of part B, H3-2, P3-6).
 func _found() -> void:
 	_found_shown = true
 	var card := String(event.get("reward", ""))
 	WorldSoundscape.play_from(self, WorldSoundscape.card_key(card))
 	say([LairEvent.FOUND])
 	show_card(card)
-	offer([["leave", "Leave", true]])
+	offer([["leave", "Leave", true]], AdventurePlayer.BAG_FULL if player.bag_room() < 1 else "")
 
 
 # ------------------------------------------------------------ the duels --
@@ -214,7 +218,9 @@ func _start_duel() -> void:
 	var config := LairDuels.duel_config(player, duel_setup)
 	visible = false
 	var host_on: Node = get_parent()
-	_duel = WorldDuels.host(host_on, config, LairDuels.foe(duel_setup))
+	# The lair's own menu question: saved as it was entered, and spent (the
+	# playtest of part B, H2-6; the meeting's spoke of meeting the creature).
+	_duel = WorldDuels.host(host_on, config, LairDuels.foe(duel_setup), WorldDuels.MENU_LAIR)
 	_duel.ended.connect(_after_duel, CONNECT_ONE_SHOT)
 	_duel.abandoned.connect(func() -> void:
 		duel_step = "over"

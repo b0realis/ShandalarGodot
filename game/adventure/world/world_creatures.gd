@@ -39,7 +39,11 @@ extends RefCounted
 ##  - CONTACT: within 16 of the hero (1997's distance, twice the longer axis
 ##    and the shorter; a lair within 26) the creature is MET — the tick ends
 ##    there and the world opens the meeting ([method WorldScreen.meet_creature],
-##    a lair [method WorldScreen.enter_lair]).
+##    a lair [method WorldScreen.enter_lair]). [Ours: 1997 went on through
+##    the slots after the one met in the same pass, the clock already at
+##    `T | 0x1F` (world_lair_monster_slots.c 382, 936–958, no break) — their
+##    refill dice, their cries, even a second meeting; ours ends the tick at
+##    the meeting, so the world's dice after a meeting are not 1997's.]
 ##  - CRY: a creature that stepped, within 80, cries one time in `d0 / 4`
 ##    ([method WorldSoundscape.cry]).
 ## (`d0` is the creature's distance from the hero as the tick begins, `T`

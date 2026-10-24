@@ -178,6 +178,28 @@ func test_the_six_gifts_by_the_town_s_place() -> void:
 	assert_string_contains(talk["pages"][0], "dungeons which hold valuable spells")
 
 
+
+## The c5 campaign (H1-1): every companion is a card the duel can put in
+## play — "Khabál Ghoul" was spelled without its accent and never came.
+func test_every_companion_is_a_card_of_the_registry() -> void:
+	for pair in WiseMan.COMPANIONS:
+		for card_name in pair:
+			assert_true(CardRegistry.has_card(String(card_name)), "%s is a card" % card_name)
+
+
+## The c5 campaign (H3-1): with the bag full the copy gift turns into the
+## lives, as with too few amulets [ours] — it was offered, its pick then
+## copied nothing and the gift was spent.
+func test_a_full_bag_turns_the_copy_into_the_lives() -> void:
+	player.next_duel_life = 0
+	player.amulets["red"] = 3
+	while player.bag_room() > 0:
+		player.cards.append({"card": "Mountain", "decks": []})
+	var talk := WiseMan.give(player, WiseMan.COPY, 4)
+	assert_eq(talk["then"], "", "no copy to pick")
+	assert_eq(player.next_duel_life, 2, "the lives instead")
+	assert_eq(int(player.amulets["red"]), 3, "no amulets taken")
+
 func test_the_wise_man_s_talk_and_his_reminder() -> void:
 	var town := _sites(ShandalarWorld.TOWN)[0]
 	var talk := WiseMan.speak(player, town)

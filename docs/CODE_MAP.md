@@ -168,6 +168,13 @@
   town's quest reward picked from its wares). `game/adventure/world/card_list_pane.gd`:
   `CardListPane`, a list of cards to see or pick (`counted`, `picked`);
   `WorldScreen.show_creature_deck`, `open_card_list`.
+  Part B played and fixed (2026-10-24): `WorldDuels.host(on, config, foe,
+  menu_text)` (`MENU_LAIR`, `hero_stakes`; once the duel is over
+  `OVER_TITLE`, `LEAVE_OVER`, `MENU_OVER`); `WorldScreen.leave_after_panes`
+  (the main menu after a duel already over); `DuelSpoils.REWARD_LOST` (the
+  record's `reward_lost`); `EncounterStage.hue` and its plain page's purse,
+  face and amulet; `EncounterPane` / `RuledTownPane` `_ceiling` (the page
+  steady from step to step); `LairEvent`'s rare by the copy limit.
 - `game/adventure/save_slots.gd`: `SaveSlots`, the ten named slots per
   adventure (`slots_of`, `save_into`, `default_name`, `migrate`);
   `game/adventure/world/save_slots_pane.gd`: `SaveSlotsPane`;

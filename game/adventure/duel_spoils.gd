@@ -27,8 +27,9 @@ extends RefCounted
 ##     - THE CARDS ([method reward_cards]): a budget of the creature's
 ##       strength S; each card a type drawn of six (land, creature,
 ##       enchantment, sorcery, instant, interrupt — a plain artifact never),
-##       of a colour that goes with the creature's (level 3 for the 1st,
-##       3rd … picks, 1 for the others), with a copy left for the deck in
+##       of a colour that goes with the creature's (the creature's colour
+##       found in the card's row, E:2282–2284; level 3 for the 1st, 3rd …
+##       picks, 1 for the others), with a copy left for the deck in
 ##       use, not a treasure; the first picks the creature's own stake; each
 ##       costs its rarity (1–4, +1 for 1997's 0x400 cards). [Ours: 1997 slip
 ##       — eleven picks overflowed its ten-place array (S 11, all commons):
@@ -104,6 +105,9 @@ const LIVES_CARRIED := "You get your lives (%d)\ncarried over to the next duel."
 const MORE_LIVES := "You get +%d lives in next duel."
 const TELEPORTED := "TELEPORTED!"
 const WON_CARD := "You won card: %s"
+## [Ours] Said under it when the full bag cannot hold the card (1997 lost it
+## without a word, `AddCardToDeckSorted`, duel.c 1859–1867).
+const REWARD_LOST := "Your magic bag holds no more spells: it is lost."
 const FIRST_MOVE := "You get first move\nin the next duel."
 const CARD_NEXT := "You get %s in the next duel."
 const EXTRA_FOOD := "You get Extra FOOD!"
@@ -133,9 +137,11 @@ const PICK_GUARD := 2000
 ## doc): the adventure changed, and the record the panes show —
 ## `{result, row, color, name, journal, quest, conceded, cards, rarities,
 ## heights, hint, plaque, asks, took, clue, kept, bag_lost, bag, amulet,
-## bits, title, rewards, reward_card, pick_any, pick_duplicate, picked,
-## teleported, learned, lost, words}`. With a clue to offer (`asks`) the
-## cards wait for [method choose]; the rest of the spoils come with it.
+## bits, title, rewards, reward_card, reward_lost, pick_any, pick_duplicate,
+## picked, teleported, learned, lost, words}` — `bag_lost` the cards won the
+## full bag could not hold, then the reward's card when it could not
+## (`reward_lost`). With a clue to offer (`asks`) the cards wait for [method
+## choose]; the rest of the spoils come with it.
 static func settle(player: AdventurePlayer, meeting: Dictionary, report: DuelReport) -> Dictionary:
 	var row := int(meeting["row"])
 	var result := LOST if report == null or bool(meeting.get("conceded", false)) else report.result
@@ -147,7 +153,7 @@ static func settle(player: AdventurePlayer, meeting: Dictionary, report: DuelRep
 		"cards": [] as Array[String], "rarities": [] as Array[int], "heights": [] as Array[int],
 		"hint": -1, "plaque": {}, "asks": false, "took": "", "clue": [] as Array[String],
 		"kept": [] as Array[String], "bag_lost": [] as Array[String], "bag": 0, "amulet": "",
-		"bits": 0, "title": "", "rewards": [] as Array[String], "reward_card": "",
+		"bits": 0, "title": "", "rewards": [] as Array[String], "reward_card": "", "reward_lost": false,
 		"pick_any": false, "pick_duplicate": false, "picked": "", "teleported": false,
 		"learned": false, "lost": [] as Array[String], "words": [] as Array[String],
 		"lives_start": report.lives_start[0] if report != null else 0,
@@ -304,12 +310,16 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 	if left & CreatureBook.REWARD_WON_CARD != 0:
 		var card := CreatureBook.reward_card(row)
 		if CardRegistry.has_card(card):
-			if player.add_card(card):
+			var kept := player.add_card(card)
+			if kept:
 				(spoils["kept"] as Array[String]).append(card)
 			else:
 				(spoils["bag_lost"] as Array[String]).append(card)
+				spoils["reward_lost"] = true
 			spoils["reward_card"] = card
 			lines.append(WON_CARD % card)
+			if not kept:
+				lines.append(REWARD_LOST)
 	if left & CreatureBook.REWARD_FIRST_MOVE != 0:
 		player.next_duel_first_move = true
 		lines.append_array(lines_of(FIRST_MOVE))
@@ -423,7 +433,12 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 						break
 				var f: Dictionary = drawn["facts"]
 				var level := 1 if out.size() & 1 != 0 else 3
-				if not CardValue.goes_with(int(f.get("color", CardValue.COLORLESS)), 1 << color, level):
+				# 1997's order (E:2282–2284, `is_card_color_compatible_with_mask(1 <<
+				# monster_color, card.color, level)`): the creature's colour looked
+				# for in the card's row. The rows are lopsided — the other way round
+				# gave green creatures white cards and white ones no green (the fix
+				# pass of part B, c5, P3-1).
+				if not CardValue.goes_with(1 << color, int(f.get("color", CardValue.COLORLESS)), level):
 					continue
 				if copies_left(player, String(drawn["name"]), f, counts, limit) <= 0:
 					continue

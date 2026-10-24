@@ -83,7 +83,7 @@ static func begin(player: AdventurePlayer, lair: Dictionary) -> Dictionary:
 	var dice := MsvcRandom.new(player.dice)
 	var color := clampi(int(lair.get("color", 1)), 0, 5)
 	var out := {"slot": int(lair.get("slot", -1)), "color": color, "reward": "", "oasis": -1}
-	out["lair_rare"] = _lair_rare(dice, color)
+	out["lair_rare"] = _lair_rare(player, dice, color)
 	var dear: Array[int] = []
 	for i in player.cards.size():
 		var card_name := String((player.cards[i] as Dictionary).get("card", ""))
@@ -255,13 +255,23 @@ static func rare_of_any_kind(dice: MsvcRandom) -> String:
 
 ## The lair's rare (`reward_cards[3]`): two times in three a rare of its
 ## colour, not an artifact; else a rare artifact. Never one 1997 kept from
-## trades (0x900).
-static func _lair_rare(dice: MsvcRandom, color: int) -> String:
+## trades (0x900); and, with the copy limit on ([method
+## CardShop.counted_copies]), never one the deck in use holds more of than
+## it may — 1997 threw such a card back (`GetRemainingAllowedCardCopies(card)
+## < 0`, world_lair_monster_encounter.c 997–1001; [method
+## DuelSpoils.copies_left]; the playtest of part B, P3-4): one it may take no
+## more of still comes. Off, as 1997 shipped it, no copy is counted and none
+## is thrown back.
+static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) -> String:
+	var counts := CardShop.counted_copies(player)
+	var limit := CardShop.copies_allowed(player) if not counts.is_empty() else 0
 	var spells: Array[String] = []
 	var artifacts: Array[String] = []
 	for row in CardTrade.catalogue():
 		var f: Dictionary = row["facts"]
 		if CardShop.shop_rarity(f) != 3:
+			continue
+		if not counts.is_empty() and DuelSpoils.copies_left(player, String(row["name"]), f, counts, limit) < 0:
 			continue
 		var kind := int(f.get("type", 0))
 		if kind & CardValue.ARTIFACT != 0:

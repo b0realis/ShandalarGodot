@@ -876,7 +876,75 @@ checked as 1997 did either way (the count worked during the deal).
 Open for part C: the castles' and dungeons' insides, the castle wizards'
 duels, a beaten wizard (`Sieges.free_all` ready), the retaliation siege
 (`Sieges.start(player, wizard)` ready), Arzakon, the end score. The 2×
-skin needs the new sheets and pictures upscaled when it is next built.
+skin built on 2026-10-24 holds the part B sheets and pictures, worn and
+looked at in the running game; the upscaler invents marks on two kinds
+of picture (the frame studs and the plain red field of `preduel_frame`,
+the dithered world ground), which pixel doubling as for `panel_stone`
+would keep at the 1997 grain.
+
+## Built: part B played and fixed (2026-10-24)
+
+The owner, after 0.50.54: *"do a playtesting campaign and a bug find bug
+fix campaign over B workpack features"*. Four played the running game
+(about 1,000 meetings over 26 adventures, some duels played out computer
+against computer; six long siege runs, about 90 sieges, 55 falls and two
+Dominions; every lair event; every part B screen at four sizes in the
+1997, the 2× and no skin, with the big buttons, the keys, the mouse and
+touch) and three read the code (the duel engine's opt-in changes, saves and
+races, the rest of the 0.50.54 diff). Nothing was lost or doubled, no save
+failed to come back, and the game itself printed no error; the ordinary
+duels, gauntlets, Deck Lab, Test hands and LAN duels were untouched by the
+opt-in engine. What was found and fixed:
+
+- **Fidelity.** The cards won took the colour test the other way round
+  from 1997 (`is_card_color_compatible_with_mask(1 << monster_color,
+  card.color, level)`, E:2282–2284; the table is lopsided): a green
+  creature gave white cards, a white one never green
+  ([method DuelSpoils.reward_cards]). The black wise man's companion was
+  spelled "Khabal Ghoul" and never came to the duel (the registry's
+  "Khabál Ghoul"). A lair's rare ignored the copy limit; with it on, a
+  candidate with fewer than no copies left is thrown back as 1997 did
+  (E:997–1001, [method LairEvent]). The trader dims by 1997's own
+  allowance (`GetRemainingAllowedCardCopies(card) <= 0`, visitLocation.c
+  3822: basic lands always lit, the cards outside the base sets halved) and
+  writes "-N" only after a card the hero owns (3804–3808). The plaque of
+  the clue told keeps the word it was asked with (E:2336–2356).
+- **Keys and clicks.** A key pressed in the half second after a pane
+  closed reached the world (one Escape too many left for the title, a digit
+  cast a World Magic): the world hears no key while the pane's shield is
+  up, the map's own keys aside. A double click's second press no longer
+  answers a place's pane (a town, a ruled town — a duel never chosen —, the
+  news flash, a lair, the wise man) or skips a lost card's picture, as the
+  meeting's pane already refused it (q2-2). The end screen's button waits
+  its moment as a click or a key does.
+- **The held duel.** Return to main menu (or Exit duel) on a duel already
+  over keeps its result: the spoils are shown, then the adventure is saved
+  and left ([method WorldScreen.leave_after_panes]); the two doors say so
+  once the duel is over. A lair's duel asks a lair's questions: nothing is
+  staked, so Concede loses no ante, and the menu does not promise the
+  creature again (the lair is spent as it is entered). A duel over as it is
+  dealt (a hero at no life) reaches its pane (its end deferred while it is
+  dealt). [Ours: 1997 slip] a ruled town's duel rests the town's tune, as a
+  meeting's and a lair's do — 1997 played both tunes at once.
+- **Saves.** Closing the window under a news flash saves nothing (it held
+  half a tick; the last save stands and its dice bring the news again).
+  The autosave made as a creature is met with no card to stake is kept, as
+  1997 kept its slot 3: that adventure has ended, and opening it ends it
+  again.
+- **What is said.** [Ours] what a full bag loses is said: the cards won
+  (named), the reward card, a lair's find, the wise man's copy — whose gift
+  turns into the lives when the bag is full, as with too few amulets — and
+  no "any card" list is forced on a full bag. The panel follows what a
+  meeting pays at once.
+- **The look.** With the big buttons the meeting's and the ruled town's
+  page was held at two thirds by a guess of the words' room (300·k, 260·k):
+  it now takes what the words and choices really leave, and [ours] keeps
+  its size from step to step, giving way to more words, never swelling
+  back. Without the skin the quest scroll is lettered in the panes' ink,
+  the purse's four boxes stand apart and say what they count, the creature
+  is a disc of its colour and the amulet a rimmed stone.
+- Marked, not changed: [ours] the creatures' turn ends at a meeting
+  ([WorldCreatures]; 1997 went on through the later slots).
 
 ## New game in the sources (cross-reference, 2026-10-22)
 

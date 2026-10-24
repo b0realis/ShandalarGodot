@@ -21,7 +21,8 @@ extends PanelContainer
 ## `win_back_cards` with their rarities and "Won these cards." — or the
 ## dungeon's plaque and "Take the cards. / Take the dungeon clue." —, the
 ## bag's note, the amulet on `win_back_reward`, the reward screen with its
-## title, the card picks; a loss "Lost this card" on `lose_card`, a card at
+## title, the card picks [ours: a full bag's losses named, its pick not
+## offered]; a loss "Lost this card" on `lose_card`, a card at
 ## a time; a draw "Better Luck Next Time!". `music_win_duel` and
 ## `music_lose_duel` loop under them, as 1997's `winduel.wav` and
 ## `loseduel.wav` did. The world's bed comes back as the pane closes.
@@ -63,7 +64,13 @@ const GO_ON := "Continue"
 const LEAVE := "Leave"
 const FIGHT := "To the duel!"
 const MUST_PICK := "Pick a card: the reward is yours to choose."
-const BAG_FULL := "Your magic bag holds no more spells."
+const BAG_FULL := AdventurePlayer.BAG_FULL
+## [Ours] A FULL BAG'S LOSSES SAID (the fix pass of part B, c5, P4-6; 1997
+## lost them without a word, `AddCardToDeckSorted`, duel.c 1859–1867): the
+## cards won it could not hold, named under them; the reward's pick, not
+## offered.
+const BAG_LOST := "Lost: %s."
+const PICK_LOST := "The card of your choice is lost."
 
 ## The adventure.
 var player: AdventurePlayer
@@ -77,7 +84,8 @@ var spoils := {}
 var k := 1.0
 ## Where the pane stands: `meeting`, `riddle`, `verdict`, `stake_lost`,
 ## `tribute`, `magics`, `told`, `special`, `duel`, `cards`, `bag`,
-## `amulet`, `reward`, `pick`, `lost`, `draw`, `won`, `game_over`, `done`.
+## `amulet`, `reward`, `pick`, `bag_full`, `lost`, `draw`, `won`,
+## `game_over`, `done`.
 var step := ""
 ## The meeting's result so far.
 var result := NO_DUEL
@@ -93,6 +101,10 @@ var _duel: WorldDuels
 var _list: CardListPane
 var _most := 1.0
 var _factor := 1.0
+## The page's size on the step the player last answered: a later step's
+## page may be smaller (more words under it), never larger — the page does
+## not swell and shrink from click to click [ours].
+var _ceiling := INF
 var _done := false
 var _map_after := false
 var _riddle_right := false
@@ -158,9 +170,13 @@ func _ready() -> void:
 		if _music_key != "" and is_inside_tree():
 			_music.play())
 	add_child(_music)
+	# The page as wide as the screen allows; how tall the words and choices
+	# under it let it be is measured once they are there ([method _fit]) —
+	# not a guess of 300 · k, which with the big buttons (k 1.6) drew the page
+	# at two thirds, its stakes and cards unreadable under huge buttons (the
+	# fix pass of part B, c5, P4-1).
 	var room := get_viewport_rect().size if is_inside_tree() else Vector2(1280, 800)
-	_most = clampf(minf((room.x - 120.0) / EncounterStage.PAGE.x,
-		(room.y - 300.0 * k) / EncounterStage.PAGE.y), LEAST, MOST)
+	_most = clampf((room.x - 120.0) / EncounterStage.PAGE.x, LEAST, MOST)
 	_set_factor(_most)
 	minimum_size_changed.connect(_fit)
 	_begin()
@@ -191,15 +207,17 @@ func _set_factor(value: float) -> void:
 		part.custom_minimum_size.x = width
 
 
-## THE PANE KEPT ON THE SCREEN (as [method VisitPane._fit]): the stage gives
-## way when the pane would be taller than the screen, and grows back up to
-## what it was first allowed.
+## THE PANE KEPT ON THE SCREEN (as [method VisitPane._fit]), THE PAGE AS
+## LARGE AS THE ROOM LEFT: the screen's height less what the words and
+## choices under the page really take (measured), up to what the width
+## allows ([member _most]) — the page gives way to more words, and does not
+## grow back with fewer ([member _ceiling]).
 func _fit() -> void:
 	if not is_inside_tree() or stage == null:
 		return
 	var room := get_viewport_rect().size.y - ROOM_MARGIN
 	var rest := get_combined_minimum_size().y - stage.custom_minimum_size.y
-	var grow := clampf((room - rest) / EncounterStage.PAGE.y, LEAST, _most)
+	var grow := clampf((room - rest) / EncounterStage.PAGE.y, LEAST, minf(_most, _ceiling))
 	if absf(grow - _factor) * EncounterStage.PAGE.y >= 1.0:
 		_set_factor(grow)
 	_queue_relayout()
@@ -233,6 +251,7 @@ func _relayout() -> void:
 func _meeting_stage() -> void:
 	stage.clear()
 	var color := clampi(int(meeting["color"]), 1, 5)
+	stage.hue = color
 	stage.ground("preduel_" + AdventurePlayer.COLORS[color - 1])
 	stage.creature_face(int(meeting["row"]))
 	stage.ante_plaques()
@@ -254,6 +273,9 @@ func _show_meeting() -> void:
 func choose(action: String) -> void:
 	if _done:
 		return
+	# The step the player saw stood laid out: its page is the most the
+	# next one may take ([member _ceiling]).
+	_ceiling = _factor
 	match step:
 		"meeting":
 			_choose_at_meeting(action)
@@ -491,7 +513,9 @@ func _next_result() -> void:
 				_seen["bag"] = true
 				step = "bag"
 				say(CreatureMeeting.lines_of(DuelSpoils.BAG_NOTE % int(spoils["bag"])))
-				offer([["go", GO_ON, true]])
+				# The cards taken over the clue, lost to the full bag: said here,
+				# the cards' step being past (P4-6).
+				offer([["go", GO_ON, true]], _bag_lost_note())
 				return
 			if String(spoils.get("amulet", "")) != "" and not _seen.has("amulet"):
 				_seen["amulet"] = true
@@ -501,11 +525,13 @@ func _next_result() -> void:
 				_seen["reward"] = true
 				_reward()
 				return
-			if bool(spoils.get("pick_any", false)):
-				_pick_any()
-				return
-			if bool(spoils.get("pick_duplicate", false)):
-				_pick_duplicate()
+			if bool(spoils.get("pick_any", false)) or bool(spoils.get("pick_duplicate", false)):
+				if player.bag_room() < 1:
+					_pick_lost()
+				elif bool(spoils.get("pick_any", false)):
+					_pick_any()
+				else:
+					_pick_duplicate()
 				return
 			_end()
 		LOST:
@@ -553,18 +579,35 @@ func _cards_won() -> void:
 		offer([["cards", DuelSpoils.TAKE_CARDS, true], ["clue", DuelSpoils.TAKE_CLUE, true]])
 	else:
 		say(spoils["words"])
-		offer([["go", GO_ON, true]])
+		offer([["go", GO_ON, true]], _bag_lost_note())
 
 
-## The clue taken instead of the cards: what is now known of the place.
+## [Ours] The cards won the full bag could not hold, named — once: on the
+## cards' step, or on the bag's note after the clue's question (P4-6). ""
+## for none. The reward's card is said on the reward's own screen.
+func _bag_lost_note() -> String:
+	if _seen.has("bag_lost") or String(spoils.get("took", "")) != "cards":
+		return ""
+	var lost: Array = (spoils.get("bag_lost", []) as Array).duplicate()
+	if bool(spoils.get("reward_lost", false)) and not lost.is_empty():
+		lost.pop_back()
+	if lost.is_empty():
+		return ""
+	_seen["bag_lost"] = true
+	return "%s\n%s" % [BAG_FULL, BAG_LOST % ", ".join(PackedStringArray(lost))]
+
+
+## The clue taken instead of the cards: what is now known of the place. The
+## plaque keeps the word it was asked with — the clues known before this one
+## (E:2336–2356, counted before `RevealRandomCastleDungeonClue`; counted again
+## after the reveal it said "(second clue)" over the first, the fix pass of
+## part B, c5, P4-4).
 func _clue_told() -> void:
 	step = "clue"
 	stage.clear()
 	stage.ground("win_back_cards")
 	if not (spoils["plaque"] as Dictionary).is_empty():
-		var plaque: Dictionary = (spoils["plaque"] as Dictionary).duplicate()
-		plaque["clue"] = WorldClues.clue_word(player.world, int(spoils["hint"]))
-		stage.end_plaque(plaque)
+		stage.end_plaque(spoils["plaque"])
 	say(spoils.get("clue", [] as Array[String]))
 	offer([["go", GO_ON, true]])
 
@@ -617,6 +660,16 @@ func _pick_any() -> void:
 			DuelSpoils.pick_any(player, spoils, card_name)
 			_next_result(),
 		func() -> void: _pick_any())
+
+
+## [Ours] The reward's pick with the bag full (P4-6): no list whose pick
+## would vanish — the full bag said, the pick spent, the meeting on.
+func _pick_lost() -> void:
+	step = "bag_full"
+	spoils["pick_any"] = false
+	spoils["pick_duplicate"] = false
+	say([BAG_FULL, PICK_LOST] as Array[String])
+	offer([["go", GO_ON, true]])
 
 
 ## "You get a duplicate card of your choice!": the hero's own cards; Never

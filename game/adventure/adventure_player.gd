@@ -436,6 +436,11 @@ func deck_cards() -> Array[String]:
 	return out
 
 
+## The cards the bag still holds room for ([constant BAG_MOST]).
+func bag_room() -> int:
+	return maxi(BAG_MOST - cards.size(), 0)
+
+
 ## A CARD WON OR FOUND joins the hero's cards, in no deck, as 1997's
 ## `AddCardToDeckSorted` (duel.c 1837–1867) adds it: false, and the card
 ## lost, when the bag already holds [constant BAG_MOST]. A rare or special
@@ -443,11 +448,6 @@ func deck_cards() -> Array[String]:
 ## "Acquired spell: %s" (`@LOGSTRINGS` 11). [Ours: 1997 slip — it wrote the
 ## line before it found the bag full, for a card then lost; written here
 ## only for a card kept.]
-## The cards the bag still holds room for ([constant BAG_MOST]).
-func bag_room() -> int:
-	return maxi(BAG_MOST - cards.size(), 0)
-
-
 func add_card(card_name: String) -> bool:
 	if card_name == "" or cards.size() >= BAG_MOST:
 		return false

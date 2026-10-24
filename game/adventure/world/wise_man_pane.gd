@@ -78,7 +78,9 @@ func _show_page(index: int) -> void:
 func copied(card_name: String) -> void:
 	var color := int(talk.get("color", 1))
 	if WiseMan.copy(player, card_name, color):
-		say(["A second %s joins your cards." % card_name])
+		say(["Another %s joins your cards." % card_name])
+	elif player.bag_room() < 1:
+		say([AdventurePlayer.BAG_FULL])
 	offer([["leave", "Leave", true]])
 
 

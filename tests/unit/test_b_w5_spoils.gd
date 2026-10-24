@@ -158,7 +158,40 @@ func test_no_reward_card_breaks_the_decks_copy_limit() -> void:
 			assert_gt(DuelSpoils.copies_left(player, card_name, f, counts, limit), 0, card_name)
 			assert_eq(int(f.get("type", 0)) & CardValue.ARTIFACT != 0 and int(f.get("type", 0)) & 0x3F == 0,
 				false, "a plain artifact is never drawn: %s" % card_name)
-			assert_true(CardValue.goes_with(int(f.get("color", 1)), 1 << 3, 3), "%s goes with green" % card_name)
+			# 1997's order (E:2282–2284): the creature's colour first, the card's
+			# second (the fix pass of part B, c5, P3-1).
+			assert_true(CardValue.goes_with(1 << 3, int(f.get("color", 1)), 3), "%s goes with green" % card_name)
+
+
+## THE CARDS WON GO WITH THE CREATURE'S COLOUR AS 1997 ASKED (the fix pass
+## of part B, c5, P3-1): `is_card_color_compatible_with_mask(1 <<
+## monster_color, card.color, level)` (E:2282–2284) — the creature's colour
+## looked for in the card's row. The rows are lopsided (white's is white,
+## blue, white), so at level 3 a green creature gives green and red cards
+## and never white, a white one blue, green and white; the other way round
+## gave green creatures white cards and white creatures no green.
+func test_the_cards_won_go_with_the_creatures_colour_as_1997_asked() -> void:
+	_deck(_green_deck())
+	_no_hints()
+	# [creature's colour, colours it gives, colours it never gives]
+	var cases := [[3, ["green", "red"], ["black", "blue", "white"]],
+		[5, ["blue", "green", "white"], ["black", "red"]]]
+	for entry in cases:
+		var seen := {}
+		for seed in range(1, 40):
+			var meeting := _meeting(22, int(entry[0]))
+			meeting["creature_ante"] = [] as Array[String]
+			meeting["strength"] = 20
+			for card_name in DuelSpoils.reward_cards(player, meeting, MsvcRandom.new(seed)):
+				var hues := DuelSpoils.color_names(CardValue.first_color(int(CardValue.facts(
+					CardRegistry.get_card(card_name)).get("color", CardValue.COLORLESS))))
+				for hue in hues:
+					seen[hue] = int(seen.get(hue, 0)) + 1
+		var creature: String = AdventurePlayer.COLORS[int(entry[0]) - 1]
+		for hue in entry[1]:
+			assert_true(seen.has(hue), "a %s creature gives %s cards: %s" % [creature, hue, seen])
+		for hue in entry[2]:
+			assert_false(seen.has(hue), "a %s creature never gives %s cards: %s" % [creature, hue, seen])
 
 
 func test_the_pick_may_exceed_ten_cards() -> void:
@@ -449,6 +482,51 @@ func test_the_bag_warns_and_then_loses_cards() -> void:
 	spoils = DuelSpoils.settle(player, _meeting(25, 3), _report(DuelSpoils.WON))
 	assert_eq(player.cards.size(), AdventurePlayer.BAG_MOST, "the full bag holds no more")
 	assert_eq((spoils["bag_lost"] as Array).size(), (spoils["cards"] as Array).size())
+
+
+## [Ours] (the fix pass of part B, c5, P4-6): the reward's card a full bag
+## cannot hold is said to be lost under "You won card: %s" — 1997 dropped
+## it without a word (`AddCardToDeckSorted`, duel.c 1859–1867).
+func test_a_reward_card_lost_to_a_full_bag_is_said_so() -> void:
+	var spoils := {}
+	for seed in range(1, 400):
+		before_each()
+		_deck(_green_deck())
+		_no_hints()
+		while player.cards.size() < AdventurePlayer.BAG_MOST:
+			player.cards.append({"card": "Forest", "decks": []})
+		player.monster_timer = 0
+		player.dice = seed
+		var meeting := _meeting(3, 3)   # a Warlock: "You won card: Dark Ritual"
+		CreatureMeeting.prepare_duel(player, meeting)
+		spoils = DuelSpoils.settle(player, meeting, _report(DuelSpoils.WON))
+		if String(spoils["reward_card"]) == "Dark Ritual":
+			break
+	assert_ne(int(spoils.get("bits", 0)) & CreatureBook.REWARD_WON_CARD, 0, "a special meeting's reward")
+	var said: Array = spoils.get("rewards", [])
+	var at := said.find("You won card: Dark Ritual")
+	assert_gte(at, 0, "%s" % [said])
+	assert_eq(String(said[at + 1]) if at >= 0 and at + 1 < said.size() else "",
+		"Your magic bag holds no more spells: it is lost.", "%s" % [said])
+	assert_true("Dark Ritual" in (spoils["bag_lost"] as Array))
+	assert_true(bool(spoils.get("reward_lost", false)))
+	assert_eq(player.cards.size(), AdventurePlayer.BAG_MOST)
+	# With room in the bag the card is kept and nothing more is said.
+	var kept := {}
+	for seed in range(1, 400):
+		before_each()
+		_deck(_green_deck())
+		_no_hints()
+		player.monster_timer = 0
+		player.dice = seed
+		var meeting := _meeting(3, 3)
+		CreatureMeeting.prepare_duel(player, meeting)
+		kept = DuelSpoils.settle(player, meeting, _report(DuelSpoils.WON))
+		if String(kept["reward_card"]) == "Dark Ritual":
+			break
+	assert_eq(player.cards[-1], {"card": "Dark Ritual", "decks": []}, "kept")
+	assert_false("Your magic bag holds no more spells: it is lost." in (kept["rewards"] as Array))
+	assert_false(bool(kept.get("reward_lost", false)))
 
 
 # ----------------------------------------------- duels played headless --

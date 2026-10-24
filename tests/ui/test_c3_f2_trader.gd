@@ -155,8 +155,11 @@ func test_a_card_the_deck_may_hold_no_more_of_is_dimmed() -> void:
 	var limit := CardShop.copies_allowed(player)
 	var full := ""
 	var spare := ""
+	# Cards of the base sets, not basic lands: the deck's own limit is theirs
+	# (the c5 campaign: the others go by 1997's allowance, pinned below).
 	for card_name in trader.cards():
-		if AdventureBuilder.owned_counts(player).has(card_name):
+		if AdventureBuilder.owned_counts(player).has(card_name) or not CardValue.is_base(card_name) \
+				or card_name in CreatureDeck.BASICS:
 			continue
 		if full == "":
 			full = card_name
@@ -179,3 +182,33 @@ func test_a_card_the_deck_may_hold_no_more_of_is_dimmed() -> void:
 	assert_eq(list.get_item_custom_fg_color(at_full), PaneStyle.FAINT, "all in the deck: dimmed")
 	assert_eq(list.get_item_text(at_spare), "%s-%d" % [spare, limit])
 	assert_ne(list.get_item_custom_fg_color(at_spare), PaneStyle.FAINT, "none in the deck: not dimmed")
+
+
+## The c5 campaign (P3-2, P3-3): the dimmed names follow 1997's own
+## allowance (`GetRemainingAllowedCardCopies(card) <= 0`, visitLocation.c
+## 3822, [method DuelSpoils.copies_left]): a basic land is never dimmed,
+## however many the deck holds; a card outside the base sets has half the
+## deck's limit — none under 40 cards — and is dimmed with none in the deck.
+## "-N" follows a name only for a card the hero owns (visitLocation.c
+## 3804–3808).
+func test_the_dimming_is_1997_s_allowance_and_only_owned_cards_carry_a_count() -> void:
+	var player := screen.player
+	var trader := await _trader()
+	var owned := AdventureBuilder.owned_counts(player)
+	var outside := ""
+	for card_name in trader.cards():
+		if not owned.has(card_name) and not CardValue.is_base(card_name) and not card_name in CreatureDeck.BASICS:
+			outside = card_name
+			break
+	assert_ne(outside, "", "control: a card outside the base sets in the Bazaar's list")
+	assert_eq(CardShop.copies_allowed(player), 1, "control: the starting deck is under 40 cards, no Tome")
+	assert_gt(CardShop.in_deck(player, "Mountain"), 1, "control: more Mountains in the deck than its limit")
+	var list := trader.find_child("TradeCards", true, false) as ItemList
+	var shown := trader.cards()
+	var at_basic := shown.find("Mountain")
+	var at_outside := shown.find(outside)
+	assert_gt(at_basic, -1, "control: Mountain in the list")
+	assert_ne(list.get_item_custom_fg_color(at_basic), PaneStyle.FAINT, "a basic land: never dimmed")
+	assert_eq(list.get_item_text(at_basic), "Mountain-%d" % int(owned["Mountain"]), "owned: its count")
+	assert_eq(list.get_item_custom_fg_color(at_outside), PaneStyle.FAINT, "outside the base sets, under 40: none allowed")
+	assert_eq(list.get_item_text(at_outside), outside, "none owned: no count")
