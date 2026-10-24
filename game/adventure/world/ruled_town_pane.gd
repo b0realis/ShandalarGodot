@@ -378,6 +378,11 @@ func _relayout() -> void:
 	size = get_combined_minimum_size()
 	position = middle - size / 2.0
 	var room := get_viewport_rect().size
+	# A pane that fits keeps its foot on the screen as it grows about its
+	# middle (the c5 fix pass: 586 high in a 600-high window, grown from
+	# where it was centred, it stood 5 below the edge).
+	if size.y <= room.y:
+		position.y = minf(position.y, room.y - size.y)
 	position.x = clampf(position.x, 40.0 - size.x, room.x - 40.0)
 	position.y = clampf(position.y, 0.0, maxf(room.y - 40.0, 0.0))
 
