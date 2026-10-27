@@ -360,7 +360,11 @@ func test_each_reward() -> void:
 			37:
 				assert_eq(player.gold - int(base["carried"]["gold"]), 100)
 			4:
-				assert_eq(player.next_duel_life_carried, 4, "9 − 5 carried")
+				# The life ended with carried over the links (the owner's
+				# ruling of 2026-10-27, the bug campaign c12 h2-2): the
+				# next duel starts at the 9 the words name.
+				assert_eq(player.next_duel_life_carried, 9 - player.mana_links(), "9 − the links carried")
+				assert_eq(CreatureMeeting.hero_life(player), 9)
 			44:
 				assert_true(bool(spoils["pick_any"]))
 				assert_true(DuelSpoils.pick_any(player, spoils, "Shivan Dragon"))

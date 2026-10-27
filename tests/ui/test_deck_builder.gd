@@ -961,11 +961,29 @@ func test_export_writes_the_1997_file_the_original_game_opens() -> void:
 	for _i in 2:
 		screen._add_one("Mountain")
 	screen._export_deck(".dck")
-	var path := "%s/%s.dck" % [DeckStore.EXPORT_DIR,
-		DeckStore.file_stem("Dck Test")]
+	# Named by its title, as the 1997 Load list opens it (the bug campaign
+	# c12, h5-2).
+	var path := "%s/Dck Test.dck" % DeckStore.EXPORT_DIR
 	assert_true(FileAccess.file_exists(path))
 	var back := DeckList.load_file(path, true)
 	assert_eq(back.errors, [], "the MicroProse parser reads it back")
+	assert_eq(back.cards.count("Mountain"), 2)
+	assert_eq(back.deck_name, "Dck Test")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## A card the original game has no number for is left out of the .dck, and
+## the line under the deck says so (the bug campaign c12, F7).
+func test_a_dck_export_says_what_the_original_game_cannot_hold() -> void:
+	screen.deck.deck_name = "Dck Gaps"
+	for _i in 2:
+		screen._add_one("Mountain")
+	screen._add_one("Kird Ape")
+	screen._export_deck(".dck")
+	assert_string_contains(screen._status_label.text, "Left out of the .dck: 1")
+	var path := "%s/Dck Gaps.dck" % DeckStore.EXPORT_DIR
+	var back := DeckList.load_file(path, true)
+	assert_eq(back.cards.count("Kird Ape"), 0, "left out")
 	assert_eq(back.cards.count("Mountain"), 2)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 

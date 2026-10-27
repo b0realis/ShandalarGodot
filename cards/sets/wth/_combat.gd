@@ -269,9 +269,8 @@ static func _heat_stroke(g: MtgGame, _s: CardInstance, _e: GameEvent) -> void:
 		if i.blocked_this_turn or (i.attacked_this_turn and was_blocked.has(i.id)):
 			doomed.append(i)
 	if doomed.is_empty(): return
-	g.begin_simultaneous()
-	for i in doomed: g.destroy(i)
-	g.end_simultaneous()
+	# "Destroy each creature ...": one departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i))
 
 
 # --------------------------------------------------------------- Lava Storm

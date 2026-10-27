@@ -133,11 +133,9 @@ static func _eye_newcomer(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 static func _destroy_all(g: MtgGame, doomed: Array[CardInstance]) -> void:
 	if doomed.is_empty():
 		return
-	g.begin_simultaneous()
-	for perm in doomed:
-		if perm.zone == Mtg.Zone.BATTLEFIELD:
-			g.destroy(perm, false)
-	g.end_simultaneous()
+	# One departure (the bug campaign c12, h3-3); depart_together skips one
+	# that has already left.
+	g.depart_together(doomed, func(perm: CardInstance) -> void: g.destroy(perm, false))
 
 
 # ------------------------------------------------------ Honorable Passage --
@@ -148,7 +146,7 @@ static func _destroy_all(g: MtgGame, doomed: Array[CardInstance]) -> void:
 static func _red_rider(g: MtgGame, packet: DamagePacket, amount: int,
 		passage: CardInstance, _pid: int) -> void:
 	if (g.damage_source_colors(packet.source) & Mtg.ManaColor.R) != 0 and amount > 0:
-		g.deal_damage(passage, TargetRef.player(g.source_controller(packet.source)), amount)
+		g.deal_damage(passage, TargetRef.player(g.packet_source_controller(packet)), amount)
 
 
 # ------------------------------------------------------------ Peace Talks --

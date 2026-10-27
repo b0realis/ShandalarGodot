@@ -496,6 +496,14 @@ var text_changes: Array[Dictionary] = []
 ## permanent — exactly as printed. It ends when the object changes zones
 ## off the battlefield (clear_battlefield_state).
 var color_override: int = -1
+## WHEN [member color_override] was set, on the layer clock every permanent
+## and floating effect is stamped from (CR 613.7, [member layer_timestamp]):
+## the override is the base colour every recalculation starts from, and
+## ContinuousEffects._layer_five applies it again in timestamp order, so a
+## Chaoslace cast after a Touch of Darkness or a Celestial Dawn wins and
+## one cast before them loses (the bug campaign c12, h3-5). 0 while there
+## is no override.
+var color_override_ts: int = 0
 
 ## An Aura that returned to the battlefield "as a non-Aura enchantment"
 ## and "loses 'enchant creature'" (Takklemaggot, MtgGame.
@@ -1266,6 +1274,7 @@ func clear_battlefield_state() -> void:
 	exile_instead_of_dying = false
 	text_changes.clear()
 	color_override = -1   # colour changes end with the zone change (CR 400.7)
+	color_override_ts = 0
 	cant_attack_next_turn = false
 	cant_attack_this_turn = false
 	ability_uses.clear()

@@ -2516,8 +2516,11 @@ const SEALED_ROWS: Array = [
 const SEALED_PACKS_HEAD := "Your Starters and Boosters"
 const SEALED_CARDS_HEAD := "Cards In Pack"
 const SEALED_COUNT_LINE := "Each player gets %d cards"
-## The letters the card lines wear: the rarity tier's initial, a legend
-## its own L since the rare slot deals both, a dot for a land.
+## The letters the card lines wear: the slot's initial, a dot for a land,
+## and L for a legend in the rare slot. The slots deal by PRINTED rarity
+## ([SealedPool]'s sheets), so the rare slot deals rares, a rare legend
+## among them, and a legend printed uncommon comes in an uncommon slot
+## and wears U ([method _sealed_letter_key]).
 const SEALED_SLOT_LETTERS := {"legendary": "L", "rare": "R", "uncommon": "U",
 	"common": "C", "land": "•"}
 ## Under the brief, the line that asks whether to start from nothing.
@@ -3294,7 +3297,14 @@ func _export_deck(extension: String) -> void:
 	if refusal != "":
 		_say(refusal, true)
 		return
-	_say(DeckStore.EXPORTED % String(written[0]).get_file())
+	var said := DeckStore.EXPORTED % String(written[0]).get_file()
+	# A MicroProse .dck leaves out the cards the original game has no number
+	# for, and says how many (the bug campaign c12, F7).
+	if extension == ".dck":
+		var left_out := deck.dck_left_out_note(DeckStore.dck_ids())
+		if left_out != "":
+			said += " " + left_out
+	_say(said)
 
 
 # ------------------------------------------------------- [QoL] import --

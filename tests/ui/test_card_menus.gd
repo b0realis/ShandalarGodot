@@ -346,7 +346,9 @@ func test_concede_asks_before_it_gives_up() -> void:
 
 
 func test_confirming_concede_loses_the_duel() -> void:
-	var seat := screen._human_seat()
+	# The seat the menu speaks for: on this bare two-human table, the one
+	# deciding (the bug campaign c12, h4-4) — whoever the coin made first.
+	var seat := screen._concede_seat()
 	screen._on_territory_menu_chosen(DuelScreen.REST_BASE + 8)
 	screen._confirm_concede()
 	assert_true(screen.game.game_over)

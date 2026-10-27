@@ -18,11 +18,11 @@ illustrations for each basic land; use Card variant in the Deck Builder
 to choose and save artwork. Foreign printings are not part of the pack.
 Current Oracle rules apply.
 
-The 42 cards the game already has keep their existing scripts. Fifteen are
-in the original 1997 pool; the other 27 use the rules script of an Ice
-Age, Portal, Portal Second Age or Mirage card, and a deck that uses one of
-them can be played with any pack that provides it installed, Pack 9
-included.
+The 47 cards the game already has keep their existing scripts. The five
+basic lands and fifteen more are in the original 1997 pool; the other 27
+use the rules script of an Ice Age, Portal, Portal Second Age or Mirage
+card, and a deck that uses one of them can be played with any pack that
+provides it installed, Pack 9 included.
 
 Pack revision 1.0.0 requires Shandalar 0.50.15 or later. Each of the
 three sets has its own Extras filter in the Deck Builder.

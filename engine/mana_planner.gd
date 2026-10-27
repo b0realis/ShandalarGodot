@@ -551,6 +551,16 @@ static func _plan_restricted(src: Array, base: ManaCost, palette: Array[int],
 
 static func _plan_free_sources(src: Array, cost: ManaCost, x_value: int,
 		usage_keys: Array) -> Array:
+	var planned := _plan_rows(src, cost, x_value, usage_keys, true)
+	return [] if planned.is_empty() else planned[0]
+
+
+## [method _plan_free_sources]' work: `[plan, used rows by source key]`, or
+## `[]` when nothing covers [param cost]. [param replan] lets the surplus
+## pass plan again over fewer sources ([method _replan_smaller]); the plan
+## it makes there does not, so it never recurses.
+static func _plan_rows(src: Array, cost: ManaCost, x_value: int,
+		usage_keys: Array, replan: bool) -> Array:
 	var out: Array = []
 	var used_instances: Dictionary = {}   # source key -> true (O(1) probes)
 	var pool_check := ManaPool.new()
@@ -569,8 +579,8 @@ static func _plan_free_sources(src: Array, cost: ManaCost, x_value: int,
 	generic -= maxi(floating, 0)
 	if not _cover_generic(src, generic, usage_keys, out, used_instances, cost.colored):
 		return []
-	_drop_surplus(out, used_instances, cost, x_value, usage_keys)
-	return out
+	_drop_surplus(out, used_instances, cost, x_value, usage_keys, src if replan else [])
+	return [out, used_instances]
 
 
 ## THE GENERIC MANA, PAID WITH THE LEAST LEFT OVER (2026-10-07, w6-1).
@@ -750,8 +760,11 @@ static func _least_surplus(groups: Array, need: int, top: int) -> Array:
 ## asks, drop the step whose mana the rest can do without — the worst tier
 ## first, then the biggest — checked against [method ManaPool.can_pay], the
 ## payment's own rule. Floating mana is never dropped: it is in the pool.
+## When no step can go as the rows stand, the cost is planned again with
+## one source fewer ([method _replan_smaller], over [param src], the
+## planner's source list; `[]` turns that off).
 static func _drop_surplus(out: Array, used: Dictionary, cost: ManaCost,
-		x_value: int, usage_keys: Array) -> void:
+		x_value: int, usage_keys: Array, src: Array = []) -> void:
 	var due := cost.mana_value() - cost.generic + maxi(0, cost.generic + x_value)
 	while true:
 		var made := 0
@@ -776,7 +789,62 @@ static func _drop_surplus(out: Array, used: Dictionary, cost: ManaCost,
 				dropped = true
 				break
 		if not dropped:
+			dropped = _replan_smaller(src, out, used, cost, x_value, usage_keys)
+		if not dropped:
 			return
+
+
+## THE PLAN MADE AGAIN WITH ONE SOURCE FEWER (the bug campaign c12,
+## h3-12). The pips are placed before the generic, and a source that makes
+## several mana of a colour it CHOOSES (Black Lotus) can be left making the
+## wrong one: Plateau, Volcanic Island and a Lotus on {W}{R}{R} came out as
+## the two duals' {R}{R} and the Lotus's {W}{W}{W}, no single step could go,
+## and two mana floated where the Plateau's {W} and the Lotus's red float
+## one. Getting there changes the colour of two sources at once, which no
+## one-step drop can see. So, when nothing can be dropped as the rows
+## stand: leave one tapped source out (the worst first, as
+## [method _drop_surplus] orders them) and plan the cost again from the
+## OTHERS alone — each offering only its rows
+## no worse a [method _tier] than the one it was paying with, so mana is
+## never saved by a painful or a costlier tap — and keep the first plan
+## that makes less. False when none does. (Found on 8 boards in 4,000, each
+## with a Lotus; a payable cost was never left unpaid.)
+static func _replan_smaller(src: Array, out: Array, used: Dictionary,
+		cost: ManaCost, x_value: int, usage_keys: Array) -> bool:
+	if src.is_empty():
+		return false
+	var made := _made_by(used)
+	var order: Array = []   # [tier, amount, position, key]
+	for key in used:
+		var row: Array = used[key]
+		if row[0] != null:
+			order.append([_tier(row), int(row[3]), out.find(step_of(row)), key])
+	order.sort_custom(_worst_first)
+	for entry in order:
+		var gone: String = entry[3]
+		var rest: Array = []
+		for s in src:
+			var key := source_key(s)
+			if s[0] == null:
+				rest.append(s)   # floating mana is in the pool either way
+			elif key != gone and used.has(key) and _tier(s) <= _tier(used[key]):
+				rest.append(s)
+		var planned := _plan_rows(rest, cost, x_value, usage_keys, false)
+		if planned.is_empty() or _made_by(planned[1]) >= made:
+			continue
+		out.assign(planned[0])
+		used.clear()
+		used.merge(planned[1])
+		return true
+	return false
+
+
+## The mana the rows of [param used] make.
+static func _made_by(used: Dictionary) -> int:
+	var made := 0
+	for key in used:
+		made += int(used[key][3])
+	return made
 
 
 ## [method _drop_surplus]'s order: the worse tier, then the bigger source,

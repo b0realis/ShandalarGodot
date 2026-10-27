@@ -259,8 +259,11 @@ static func _infestation(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, 
 	if victims.is_empty(): return
 	var before := g.deaths_this_turn.size()
 	g.begin_simultaneous()
+	# One departure (the bug campaign c12, h3-3); is_present as before.
+	var present: Array[CardInstance] = []
 	for i in victims:
-		if g.is_present(i): g.destroy(i)
+		if g.is_present(i): present.append(i)
+	g.depart_together(present, func(i: CardInstance) -> void: g.destroy(i))
 	# Read inside the bracket: only this destruction's deaths, before any
 	# state-based action the sweep sets off (CR 704.3).
 	var died := 0

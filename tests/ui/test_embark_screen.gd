@@ -18,6 +18,17 @@ func before_each() -> void:
 
 func after_each() -> void:
 	AdventureSetup.forget()
+	EmbarkScreen.packs_ready = false
+
+
+## The screen made again with the card packs' choice open (the World Lords
+## built), for the tests of that choice.
+func _with_packs_ready() -> void:
+	EmbarkScreen.packs_ready = true
+	screen.queue_free()
+	screen = load("res://game/adventure/embark_screen.tscn").instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
 
 
 func _find(node_name: String) -> Node:
@@ -154,6 +165,7 @@ func test_the_packs_all_and_none() -> void:
 	if offered.is_empty():
 		pass_test("no packs here")
 		return
+	await _with_packs_ready()
 	screen.choose_all_packs(true)
 	assert_eq(screen.setup.packs, offered, "every pack but Pack 1")
 	screen.choose_all_packs(false)
@@ -248,7 +260,8 @@ func test_randomize_draws_every_choice() -> void:
 	for key in seen:
 		if key == "portrait" and screen._faces.size() < 2:
 			continue
-		if key == "packs" and screen._pack_checks.is_empty():
+		if key == "packs" and (screen._pack_checks.is_empty() or not EmbarkScreen.packs_ready):
+			assert_eq(screen.setup.packs, [] as Array[String], "the packs wait: never drawn")
 			continue
 		assert_gt((seen[key] as Dictionary).size(), 1, "%s is drawn" % key)
 
@@ -406,6 +419,10 @@ func test_escape_and_leave_go_back_only_from_the_scene() -> void:
 	assert_true(screen.is_inside_tree(), "a second Leave is a no-op")
 
 
+## The owner (2026-10-27): "when you click Shandalar in the main menu make
+## a popup that this is still in development and ask the player to report
+## observations and issues on the projects repository! Then offer button go
+## test and back!"
 func test_the_title_menu_opens_it() -> void:
 	var title: Node = load("res://game/main.tscn").instantiate()
 	add_child_autofree(title)
@@ -415,10 +432,66 @@ func test_the_title_menu_opens_it() -> void:
 		if (n as Button).text == "Shandalar":
 			door = n
 	assert_not_null(door)
+	door.pressed.emit()
+	await get_tree().process_frame
+	var notice: Control = title.get("_shandalar_notice")
+	assert_not_null(notice, "first a notice")
+	var words := ""
+	for label in notice.find_children("*", "Label", true, false):
+		words += (label as Label).text + "\n"
+	assert_string_contains(words, "still in development")
+	assert_string_contains(words, "github.com/b0realis/ShandalarGodot/issues", "where to report")
+	var go := notice.find_child("GoTest", true, false) as Button
+	var back := notice.find_child("Back", true, false) as Button
+	assert_eq([go.text, back.text], ["Go test", "Back"])
 	var targets := []
-	for connection in door.pressed.get_connections():
-		targets.append_array((connection["callable"] as Callable).get_bound_arguments())
-	assert_has(targets, "res://game/adventure/embark_screen.tscn")
+	for connection in go.pressed.get_connections():
+		for bound in (connection["callable"] as Callable).get_bound_arguments():
+			if bound is Callable:
+				targets.append_array((bound as Callable).get_bound_arguments())
+	assert_has(targets, "res://game/adventure/embark_screen.tscn", "Go test: the Embark screen")
+	back.pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_false(is_instance_valid(title.get("_shandalar_notice")) and not (title.get("_shandalar_notice") as Node).is_queued_for_deletion(),
+		"Back: the menu again")
+	# ESCAPE IS BACK (the bug campaign c12, h1-3): Escape, a pad's B and the
+	# Quest's back gesture all arrive as `ui_cancel`, and the notice says
+	# Escape stays on the menu.
+	door.pressed.emit()
+	await get_tree().process_frame
+	var again: Control = title.get("_shandalar_notice")
+	assert_true(is_instance_valid(again) and not again.is_queued_for_deletion(), "the notice again")
+	for pressed in [true, false]:
+		var escape := InputEventAction.new()
+		escape.action = "ui_cancel"
+		escape.pressed = pressed
+		Input.parse_input_event(escape)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_false(is_instance_valid(again) and not again.is_queued_for_deletion(),
+		"Escape: the menu again")
+	assert_true(title.is_inside_tree(), "and still the menu: Escape is Back, not Go test")
+
+
+## The owner (2026-10-27): "on the embark Menu gray out lack options as they
+## are not implemented!" — the card packs' worlds (the World Lords) are not
+## built: the packs show greyed and unticked, and nothing chooses them.
+func test_the_card_packs_wait_greyed() -> void:
+	assert_false(EmbarkScreen.packs_ready)
+	assert_string_contains((_find("PacksAbout") as Label).text, "Coming in a later version")
+	for id in screen._pack_checks:
+		var check := screen._pack_checks[id] as CheckBox
+		assert_true(check.disabled, "%s greyed" % id)
+		assert_false(check.button_pressed, "%s unticked" % id)
+	for name in ["PacksAll", "PacksNone"]:
+		var button := _find(name) as Button
+		if button != null:
+			assert_true(button.disabled, name)
+	screen.choose_all_packs(true)
+	if not screen._pack_checks.is_empty():
+		screen.choose_pack(true, String(screen._pack_checks.keys()[0]))
+	assert_eq(screen.setup.packs, [] as Array[String], "nothing chooses a pack")
 
 
 ## WITHOUT THE 1997 ART — the ground and the five symbols are the skin's;

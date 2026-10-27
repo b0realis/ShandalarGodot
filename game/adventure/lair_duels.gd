@@ -190,6 +190,8 @@ static func begin(player: AdventurePlayer, event: Dictionary) -> Dictionary:
 	if kind == LairEvent.ARENA:
 		arena_row = dice.below(ARENA_ROWS) + 1
 	for n in int(setup["count"]):
+		# The hoard is the creature's stake: never limited, under the
+		# Classic MTG rules too (the owner's ruling; c12, h2-1).
 		var rare := LairEvent.rare_of_any_kind(dice)
 		if rare != "":
 			(setup["rares"] as Array[String]).append(rare)
@@ -315,7 +317,8 @@ static func life(player: AdventurePlayer, setup: Dictionary) -> int:
 ## into the creature's ante, never lifted from its deck (a rare its deck
 ## holds is staked as a card of its own); the lives ([method life]); the
 ## hero's next-duel gifts (the Hall's King Suleiman in play); the
-## Spectre's name.
+## Spectre's name; the hero's playmat on their half ([method
+## CreatureMeeting.hero_playmat]).
 static func duel_config(player: AdventurePlayer, setup: Dictionary) -> DuelConfig:
 	var config := CreatureMeeting.duel_config(player, meeting_of(player, setup))
 	config.ante_cards = [[], []]

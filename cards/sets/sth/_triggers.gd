@@ -110,7 +110,8 @@ static func configure(c: CardData) -> bool:
 				_dealt_combat_damage_me).capturing(_amount_context).targeting(TargetSpec.opponent()).public_aftermath())
 		"Warrior Angel":
 			# The scaffold prints flying.
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DAMAGE_DEALT, _gain_that_much,
+			# Once per damage event, for the total (the bug campaign c12, h3-8).
+			c.triggered(TriggeredAbility.new(Mtg.EventType.SOURCE_DEALT_DAMAGE, _gain_that_much,
 				"Whenever this creature deals damage, you gain that much life.",
 				M.deals_damage).capturing(_amount_context).public_aftermath())
 		_: return false

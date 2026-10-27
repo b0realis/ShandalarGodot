@@ -40,10 +40,11 @@ is the comparison, in the table's own order:
 | 7 | `Is a target, can't target again` | **Yes** | The same crosshair (`target_cursor`); only the cue card differs. `19_state_target_again.png` — **pixel-identical to `17`**, deliberately: one file, two meanings, exactly as the original imported it. |
 | 8 | `Dying` | **Yes** | `Dying.pic` -> `state_dying`, silver cracks across the whole art. `14b_state_dying_alone.png` (and `14_state_dying.png` with the damage that caused it) |
 | 9 | `Summoning sickness` | **Yes** | `Summon.pic` -> `summon_sick`, the grey spiral over the art. `12_state_summoning_sick.png` |
-| 10 | `Phased` | **No — and it cannot be drawn today** | `MtgGame.phase_out` moves the instance out of `players[pid].battlefield` into `phased_out` while leaving `zone == BATTLEFIELD`; there is no `Mtg.Zone.PHASED_OUT` and no widget is ever built for a phased permanent, so nothing can ask the question. It becomes answerable the day the board draws phased-out cards. |
+| 10 | `Phased` | **No — and it cannot be drawn today** (2026-10-27: **Yes** since 2026-10-03, Pack 8 — the board draws phased-out permanents ghosted, `MiniCard.State.PHASED`, `MiniCard._refresh_phased`, `DuelScreen._table_cards`; no art ships for it) | `MtgGame.phase_out` moves the instance out of `players[pid].battlefield` into `phased_out` while leaving `zone == BATTLEFIELD`; there is no `Mtg.Zone.PHASED_OUT` and no widget is ever built for a phased permanent, so nothing can ask the question. It becomes answerable the day the board draws phased-out cards. |
 
 **Nine of the original's ten are drawn. One — `Phased` — is not, and the
-reason is structural rather than cosmetic.**
+reason is structural rather than cosmetic.** (2026-10-27: all ten are drawn
+now — `Phased` joined on 2026-10-03, row 10.)
 
 Everything else in this catalogue is an ADDITION of ours (or of s30's),
 and section 3 says which is which for each one.
@@ -122,7 +123,8 @@ and they do different work at different distances.
 ### 3.3 The eight 1997 states a card can be in
 
 These are `MiniCard.State` — eight of the ten in §1 (`Damage to player`
-belongs to the damage marker, `Phased` cannot be asked). Each carries its
+belongs to the damage marker, `Phased` cannot be asked). (2026-10-27: nine
+now — `PHASED` was added on 2026-10-03.) Each carries its
 `@CUECARD_SMALLCARD` string **verbatim** as its tooltip, gated by
 `Show cue cards` (`Duel.hlp`, **Dueling Options**: *"...the tiny hints that
 pop up when you position the mouse cursor over an active location. If you

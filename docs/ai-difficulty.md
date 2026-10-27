@@ -341,7 +341,10 @@ owner's ruling keeps as it is — the visible step between "reacts" and
 panics at 5, counters a tier smaller (5.5), sideboards three. Reads your
 crack-back before committing an attacker — 1 500 leaf evaluations, half
 the Wizard's, so its search truncates on the wide boards the Wizard still
-resolves. Every capability is on: it activates engines and knows what
+resolves. Every capability is on (2026-10-27: every one of the original
+table's — three later layers are the Wizard's alone, `checks_before_casting`,
+`holds_tricks` and `runs_loops`, and its deck study, action planner and
+combo search run on smaller budgets than the Wizard's, §2's table): it activates engines and knows what
 they are worth over time — including the five that pay in BODIES, so a
 Hive buys a Wasp, a Boris Devilboon a Minor Demon and a Necropolis of
 Azar its Spawn, each at the opponent's end step where the mana would be
@@ -413,7 +416,12 @@ hand. The pilot has always sent one extra attacker on the strength of a
 Giant Growth and always spent the Growth to win that body's block; the
 Wizard is the rung that stops the first main phase spending the {G} on a
 two-drop first — but only on its own turn, only before your blocks are
-in, and only when there is a body the trick is actually FOR.
+in, and only when there is a body the trick is actually FOR. (2026-10-27:
+and a THIRD layer of its own, also since 2026-09-10 — `runs_loops`: an
+extra turn priced as a turn, its draw, its land drop and the attack the
+board makes again (`AiPlayer._extra_turn_value`), and the Time Walk and
+Regrowth loop. The other differences are numbers: the action planner's
+96 nodes against the Sorcerer's 64, the loop search's 64 against 32.)
 
 ## 4. What the ladder measures as
 
@@ -3548,7 +3556,10 @@ work.
   as a Hill Giant — once the pace allows it; the turn's own value (the
   untap, the attack, the land drop) is not priced, so a Walk goes off
   on an empty board when holding it for a Factory attack would have
-  been the play. Open (`docs/ROADMAP.md`, the third pass).
+  been the play. Open (`docs/ROADMAP.md`, the third pass). (2026-10-27:
+  closed at the Wizard since 2026-09-10 — `runs_loops` prices the turn,
+  `AiPlayer._extra_turn_value`: the draw, the land drop and the attack
+  again; the Sorcerer and below still cast it for its printed worth.)
 - ~~`trusts_abyss` reads the table as it stands: a creature it lets
   through because it is the next meal can be sheltered before their
   upkeep by a cheaper creature cast after it (Blue Skies' one-drop
@@ -3717,25 +3728,6 @@ work.
     keeps Rainbow Knights out of `CARD_LOCAL_PUMPS`: what a card
     guarantees is the only number a decision can be made on. Here the
     sign is flipped, so the ruling is conservative rather than safe —
-    a Mana Crypt keeps its printed worth.
-  * A SYMMETRIC toll ("deals 1 damage to that player" — Copper Tablet,
-    Manabarbs, Storm World, Power Surge) is not read: our half of it is
-    not the whole of it, and a reading that saw only our half would call
-    a Copper Tablet a liability while it beats the opponent down beside
-    us. The two-sided race those cards are is a `counts_the_race`
-    question (wave 4).
-  * THE UNTAP PRICE PRINTED ON THE AURA rather than on the host is not
-    read, so a creature under a Paralyze reads as dead weight even on a
-    turn we could pay the {4} to free it. It understates what we could
-    get back, which leaves the worth at zero rather than below it, so it
-    cannot give the creature away.
-  * `EffectIntent.damage_to_target_controller` exists now and Detonate
-    has its row, but only the OWN-side half is priced (the sting we pay
-    to relieve ourselves). An enemy Detonate's X is still an unpriced
-    bonus — pricing it would move the shipped pilot on both arms, so it
-    stays the wave-5 row it was named as.
-- ~~`pumps_to_attack`'s burn reading answers DAMAGE and nothing else. A
-
     a Mana Crypt keeps its printed worth. Still open, still ruled.
   * ~~A SYMMETRIC toll ("deals 1 damage to that player" — Copper Tablet,
     Manabarbs, Storm World, Power Surge) is not read.~~ **Closed
@@ -3791,7 +3783,7 @@ work.
     knobless, which is what keeps the null the null — the objection that
     deferred it ("pricing it moves the shipped pilot on both arms") was
     an objection to a reader change, and this is a knob's.
-- `pumps_to_attack`'s burn reading answers DAMAGE and nothing else. A
+- ~~`pumps_to_attack`'s burn reading answers DAMAGE and nothing else. A
   spell that kills by shrinking — "target creature gets -2/-2" — has no
   `EffectIntent.damage_at` for the arm to read, so a Frozen Shade with
   Swamps open still dies to one although the toughness it can buy would
@@ -4047,6 +4039,11 @@ work.
   predates this ruling and runs in the safe direction (it makes their
   Ghoul look harder to kill than it is).
 - The Magician has no crack-back search and no capabilities — by ruling.
+  (2026-10-27: still no crack-back search and none of the Sorcerer's
+  capabilities, but it now carries `ranks_counters` (2026-09-10), the
+  tactical reads every rung has (`uses_tactical_effects`,
+  `forecasts_tactics`) and the combo catalogue, `plays_combos`, with no
+  loop search of its own (2026-10-19).)
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `holds_repeats`, `mulligans`, `feeds_worst`,
   `spares_own`, `prices_liabilities` and `prices_fallout` did)
@@ -4189,7 +4186,10 @@ work.
   Monolith under a Power Artifact, a Channel into a Fireball — where the
   second card's whole worth is the first card's, and `Evaluator.card_value`
   prices each half by its printing. `runs_loops` knows the one three-card
-  loop `docs/arzakon.strategy` §3C names and no other; a general *what
+  loop `docs/arzakon.strategy` §3C names and no other (2026-10-27: no
+  longer the only loop — CARD-COMBOS, 2026-10-19, `plays_combos`, knows a
+  catalogue of loops from the Magician up and searches for new ones at the
+  Sorcerer and the Wizard, §2's table); a general *what
   does this card make the OTHER card worth* reading is an evaluator
   change and not a knob, and it is left open here on purpose. What the
   pass does change about the measurement is the instrument: Turbo Stasis,

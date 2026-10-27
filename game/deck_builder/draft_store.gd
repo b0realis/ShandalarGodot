@@ -27,7 +27,7 @@ func prepare(folder: String, pool: SealedPool, options: Dictionary) -> String:
 	var stem := "draft-%s-%s" % [stamp, bytes.hex_encode().left(12)]
 	deck_path = folder.path_join(stem + ".deck")
 	pool_path = folder.path_join(stem + ".pool.json")
-	for path in [deck_path, pool_path, deck_path + ".pending", pool_path + ".pending"]:
+	for path in [deck_path, pool_path]:
 		if FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(path):
 			return "The new draft filename is already in use. Try launching again."
 	receipt = {"schema": 1, "created": Time.get_datetime_string_from_system(true),
@@ -76,16 +76,14 @@ func deck_text(deck: DeckModel) -> String:
 	return copy.to_text()
 
 
+## WHOLE OR NOT AT ALL, through [method Settings.write_atomically] (the
+## bug campaign c12, h6-3). The side file was written and renamed into
+## place unchecked — on a full disk the buffered store and its flush
+## reported no error, so a checkpoint cut short replaced the good one
+## and the draft said it was saved. Now the length that reached the disk
+## is checked before the rename; anything less leaves the earlier
+## checkpoint exactly as it was and no side file behind.
 static func _write(path: String, text: String) -> String:
-	var pending := path + ".pending"
-	var file := FileAccess.open(pending, FileAccess.WRITE)
-	if file == null: return "Cannot save the draft: " + error_string(FileAccess.get_open_error())
-	file.store_string(text)
-	file.flush()
-	var error := file.get_error()
-	file.close()
-	if error != OK: return "Cannot finish writing the draft: " + error_string(error)
-	error = DirAccess.rename_absolute(pending, path)
-	if error != OK:
-		return "Cannot replace the draft file (%s). The recovery copy is at %s." % [error_string(error), pending]
+	var error := Settings.write_atomically(path, text.to_utf8_buffer())
+	if error != OK: return "Cannot save the draft: " + error_string(error)
 	return ""

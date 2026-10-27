@@ -4,8 +4,8 @@ extends CardScript
 ##         without, can attack in a band. Bands are blocked as a group.)
 ##
 ## Implementation: FLYING + BANDING keywords. Band declaration and the
-## band-blocking/damage rules live in combat.gd (see its header for the
-## documented simplifications, incl. no defensive banding). The classic
+## band-blocking/damage rules — defensive banding included — live in
+## combat.gd and MtgGame's damage step (see combat.gd's header). The classic
 ## use — banding a big dumb creature with the pegasus so a blocker must
 ## fight both and the damage lands where the attacker likes — works.
 

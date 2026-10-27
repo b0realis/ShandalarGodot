@@ -27,6 +27,7 @@ class BanRegenerationEffect extends EffectBase:
 		var inst := game.find_instance(target.instance_id)
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 			return
+		game._rec(inst, &"regeneration_banned_this_turn")   # c12, h3-9
 		inst.regeneration_banned_this_turn = true
 		game.log_line("%s can't be regenerated this turn" % inst.data.card_name)
 

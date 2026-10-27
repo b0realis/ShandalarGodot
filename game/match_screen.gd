@@ -130,6 +130,10 @@ var _sb_done: Button = null
 var _sb_pid := -1
 ## The size the deck must go back into the next duel at.
 var _sb_size := 0
+## Each seat's `Sideboard...` button on the between-duels window (null for
+## an AI seat), so the keyboard goes back to the one that opened the
+## window when it closes (the bug campaign c12, h4-5).
+var _sb_buttons: Array = [null, null]
 
 
 func _ready() -> void:
@@ -203,6 +207,11 @@ func _config_for_this_duel() -> DuelConfig:
 	out.panel_colors = config.panel_colors.duplicate()
 	out.pace = config.pace
 	out.ante = config.ante
+	# THE FORMAT TRAVELS (the bug campaign c12, h5-4): the duel writes its
+	# record's `Format` header from its own config, and every duel of a
+	# match or a gauntlet round was filed as Unrestricted whatever the
+	# battle-setup screen had chosen — Past Games → Info said so.
+	out.deck_format = config.deck_format
 	# The match's parameters do NOT travel into the duel: a duel inside a
 	# match is still one duel, and telling it otherwise would give it a
 	# match of its own.
@@ -299,9 +308,12 @@ func _show_window() -> void:
 		_duel.set_process_unhandled_key_input(false)
 		_duel.set_process_unhandled_input(false)   # and the pad's buttons
 	dialog.body().add_child(_centred(state.progress_line(), 14))
+	_sb_buttons = [null, null]
+	var go_on: Button
 	if over:
 		dialog.body().add_child(_centred(state.verdict(), 16, true))
-		dialog.add_button("OK").pressed.connect(_leave)
+		go_on = dialog.add_button("OK")
+		go_on.pressed.connect(_leave)
 	else:
 		dialog.body().add_child(_centred(state.duel_heading(), 14))
 		if state.sideboard_between_duels:
@@ -315,12 +327,24 @@ func _show_window() -> void:
 				button.tooltip_text = "%s: swap cards with the sideboard" \
 					% config.player_names[pid]
 				button.pressed.connect(_open_sideboard.bind(pid))
+				_sb_buttons[pid] = button
 		# Listed and greyed: there is no route from a match into the Deck
 		# Builder and back.
 		dialog.add_button(EDIT_DECK).disabled = true
-		dialog.add_button(CONTINUE).pressed.connect(_next_duel)
+		go_on = dialog.add_button(CONTINUE)
+		go_on.pressed.connect(_next_duel)
 		dialog.add_button(QUIT).pressed.connect(_leave)
 	add_child(dialog)
+	# THE WINDOW HOLDS ITS ROW AND TAKES THE KEYBOARD (the bug campaign
+	# c12, h4-5). Made 430 wide for two buttons, it held four or five:
+	# `Quit match` ran past its right edge against the computer with
+	# sideboarding, and in hotseat the last two sat wholly outside it. And
+	# nothing on it had the focus, so after End of Duel's OK the keyboard
+	# and a pad's D-pad had nothing to press — Enter did nothing. The
+	# window now grows to its row, and `Continue match` (or the last
+	# window's OK) holds the keyboard, as the duel's own windows do.
+	fit_to_buttons(dialog)
+	go_on.grab_focus()
 
 
 ## THE AI'S HALF OF `Side&board between duels`, taken here rather than in
@@ -348,6 +372,42 @@ func _ai_sideboards() -> void:
 		var line := AiSideboard.summary(plan)
 		if line != "":
 			print("%s %s" % [config.player_names[pid], line])
+
+
+## GROW A WINDOW TO ITS BUTTON ROW (the bug campaign c12, h4-5) — this
+## screen's window and the gauntlet's two ([GauntletScreen]). Each foot
+## button first widens to its own label, by the measure
+## [method GauntletOptions.fit] uses (the 1997 button art is a double rule
+## 8px deep a side, and `Continue match` sat on the inner one); then the
+## window widens to the row, never narrows, stays centred, grows to its
+## lines ([method OriginalDialog.fit_height]) and stays on the screen.
+## Measured off the buttons' own font, so the 1997 lettering and the
+## fallback face both fit. Call it once the window is in the tree.
+static func fit_to_buttons(dialog: OriginalDialog) -> void:
+	if not dialog.is_inside_tree():
+		return
+	var row: HBoxContainer = dialog._buttons
+	for child in row.get_children():
+		var button := child as Button
+		if button == null:
+			continue
+		var font := button.get_theme_font("font")
+		if font != null:
+			var wide := font.get_string_size(button.text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1,
+				button.get_theme_font_size("font_size")).x \
+				+ 2.0 * OriginalDialog.BUTTON_MARGIN + 8.0
+			button.custom_minimum_size.x = maxf(button.custom_minimum_size.x, wide)
+	var wanted := row.get_combined_minimum_size().x + 2.0 * OriginalDialog.MARGIN
+	if wanted > dialog.size.x:
+		dialog.size.x = wanted
+	dialog.fit_height()
+	# Even sides, so the centred window lands on whole pixels (a grown
+	# window can come out an odd number wide or tall).
+	dialog.size = (dialog.size * 0.5).ceil() * 2.0
+	dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER,
+		Control.PRESET_MODE_KEEP_SIZE)
+	dialog.keep_on_screen()
 
 
 ## A dialog line, centred — the between-duels window is two short
@@ -453,11 +513,18 @@ func _open_sideboard(pid: int) -> void:
 
 
 func _close_sideboard() -> void:
+	var pid := _sb_pid
 	if is_instance_valid(_sb_dialog):
 		_sb_dialog.dismiss()
 	_sb_dialog = null
 	_sb_pid = -1
 	_set_window_focusable(true)
+	# ...and the keyboard back to the button that opened it (the bug
+	# campaign c12, h4-5): `Done` goes with its window, and the focus went
+	# with it — Enter and the D-pad had nothing to press until a click.
+	if pid >= 0 and pid < _sb_buttons.size() and is_instance_valid(_sb_buttons[pid]) \
+			and (_sb_buttons[pid] as Control).is_inside_tree():
+		(_sb_buttons[pid] as Control).grab_focus()
 
 
 ## Is the Sideboard window up (and not on its way out)?

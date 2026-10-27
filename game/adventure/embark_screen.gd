@@ -100,6 +100,13 @@ var _difficulty_buttons: Array[Button] = []
 var _difficulty_word: Label
 var _difficulty_note: Label
 var _pack_checks: Dictionary = {}
+## THE CARD PACKS WAIT (the owner, 2026-10-27: "on the embark Menu gray out
+## lack options as they are not implemented!"): a pack's world, ruled by
+## its World Lord, is not built yet, so the packs are shown greyed and
+## unticked, and nothing chooses them — no tick, All or None, Randomize, nor
+## the choice remembered from before. True once the World Lords are built
+## (the tests set it to try the choice).
+static var packs_ready := false
 var _seed_edit: LineEdit
 ## The walking figure: its preview on the portrait, the six part swatches
 ## and the popup a swatch opens ([HeroColors]).
@@ -123,6 +130,8 @@ var randomize_button: Button
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	setup = AdventureSetup.restore(_installed_packs())
+	if not packs_ready:
+		setup.packs.clear()
 	_faces = faces()
 	if PortraitLibrary.texture(setup.portrait) == null:
 		setup.portrait = String(_faces[0]["id"]) if not _faces.is_empty() else ""
@@ -484,6 +493,7 @@ func _build_journey() -> Control:
 			button.name = "Packs" + label
 			button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			button.pressed.connect(choose_all_packs.bind(label == "All"))
+			button.disabled = not packs_ready
 			header.add_child(button)
 	box.add_child(header)
 	# The owner's words, 2026-10-22, first and in gold.
@@ -492,7 +502,9 @@ func _build_journey() -> Control:
 	challenge.add_theme_color_override("font_color", GOLD)
 	challenge.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(challenge)
-	var about := _text("Each pack opens its own world on the map, ruled by a World Lord. Defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards.", 13)
+	var about := _text("Each pack opens its own world on the map, ruled by a World Lord. Defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards."
+		if packs_ready else "Coming in a later version: each pack will open its own world on the map, ruled by a World Lord; defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards.", 13)
+	about.name = "PacksAbout"
 	about.add_theme_color_override("font_color", DIM)
 	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(about)
@@ -521,6 +533,9 @@ func _build_journey() -> Control:
 			check.add_theme_icon_override("checked", UiChrome.check_icon(true))
 			check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
 			check.button_pressed = id in setup.packs
+			check.disabled = not packs_ready
+			if not packs_ready:
+				check.tooltip_text += "\nComing in a later version."
 			check.toggled.connect(choose_pack.bind(id))
 			list.add_child(check)
 			_pack_checks[id] = check
@@ -710,6 +725,8 @@ func choose_difficulty(level: int) -> void:
 
 
 func choose_pack(on: bool, id: String) -> void:
+	if not packs_ready:
+		return
 	if on and not id in setup.packs:
 		setup.packs.append(id)
 	elif not on:
@@ -717,6 +734,8 @@ func choose_pack(on: bool, id: String) -> void:
 
 
 func choose_all_packs(on: bool) -> void:
+	if not packs_ready:
+		return
 	for id in _pack_checks:
 		(_pack_checks[id] as CheckBox).button_pressed = on
 
@@ -755,8 +774,9 @@ func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	setup.figure_colors = HeroColors.random(rng)
 	var time := "%02d%02d%02d" % [rng.randi_range(0, 23), rng.randi_range(0, 59), rng.randi_range(0, 59)]
 	setup.seed_text = "240000" if time == "000000" else time
-	for id in _pack_checks:
-		(_pack_checks[id] as CheckBox).button_pressed = rng.randi_range(0, 1) == 1
+	if packs_ready:
+		for id in _pack_checks:
+			(_pack_checks[id] as CheckBox).button_pressed = rng.randi_range(0, 1) == 1
 	_show_all()
 	_say("")
 

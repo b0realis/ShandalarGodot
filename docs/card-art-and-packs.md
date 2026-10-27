@@ -189,6 +189,10 @@ The `-with-skin` game ZIP already supplies `skin/original_skin.zip`; a plain
 package does not. Add the separate original-skin ZIP there if desired.
 You can also import the original skin or base cardart ZIP via Options > Skin.
 An already-installed skin can still appear when running a plain package.
+(2026-10-27: since v0.50.34 each release also offers a hi-res skin as a
+separate download, `original_skin_realesrgan-anime_2x.zip` — the same
+files as `original_skin.zip` with every picture at twice the size. It is
+a whole skin, chosen the same way; one skin is worn at a time.)
 
 ## Web differs from desktop
 

@@ -38,6 +38,13 @@ var _ninth_disable: Button
 const ADD_PACK := "Add pack..."
 const ADD_PACK_TOOLTIP := "Choose a Pack-N zip (from your Downloads, say): the game checks it and copies it into this folder under its proper name."
 var _add_note: Label
+## THE FOLDER A HEADSET CANNOT OPEN (the bug campaign c12, h6-6). On
+## Android — the Meta Quest — the card folder is the app's own corner of
+## the shared storage, and no app there opens it: Open Folder did nothing
+## at all. There it is disabled and says what to use instead. A test
+## stands in for the platform through [member on_android].
+static var on_android := OS.has_feature("android")
+const OPEN_FOLDER_ANDROID := "This device has no file manager that can open the card folder. Use Add pack... to bring a pack in."
 
 
 func _ready() -> void:
@@ -69,7 +76,9 @@ func _ready() -> void:
 	tools.add_theme_constant_override("separation", 10)
 	var open := UiChrome.menu_button("Open Folder", Vector2(140, 32), 13)
 	open.name = "OpenFolder"
-	open.disabled = OS.has_feature("web")
+	open.disabled = OS.has_feature("web") or on_android
+	if on_android:
+		open.tooltip_text = OPEN_FOLDER_ANDROID
 	open.pressed.connect(CardPacks.open_folder)
 	tools.add_child(open)
 	var rescan := UiChrome.menu_button("Rescan", Vector2(110, 32), 13)

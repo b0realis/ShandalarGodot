@@ -890,8 +890,10 @@ static func _runs_in(ability: StaticAbility, which: int) -> bool:
 ## CR 613 LAYER 5, in TIMESTAMP order (CR 613.7): every static flagged
 ## [member StaticAbility.changes_colors] — on the battlefield (its source's
 ## [member CardInstance.layer_timestamp]), floating, or functioning from the
-## stack — and every floating until-end-of-turn colour change ([member
-## _color_changes], stamped as it was created). Celestial Dawn's "nonland
+## stack — every floating until-end-of-turn colour change ([member
+## _color_changes], stamped as it was created) and, beside any of those,
+## every indefinite one (a Lace's [member CardInstance.color_override], at
+## [member CardInstance.color_override_ts]). Celestial Dawn's "nonland
 ## permanents you control are white" and a Dwarven Song cast afterwards:
 ## the later one wins, whichever it is.
 func _layer_five(game: MtgGame) -> void:
@@ -911,6 +913,17 @@ func _layer_five(game: MtgGame) -> void:
 		for ability in spell.data.stack_static_abilities:
 			if ability.changes_colors:
 				entries.append({"ts": _timestamp + 1, "static": ability, "source": spell})
+	# THE INDEFINITE CHANGES TAKE THEIR TURN TOO (the bug campaign c12,
+	# h3-5). A Lace's colour ([member CardInstance.color_override]) is the
+	# base every recalculation starts from, so on its own it needs nothing
+	# here — but beside another colour effect it is applied again at its
+	# own timestamp ([member CardInstance.color_override_ts]). Until then
+	# it only ever came first: a Chaoslace cast after a Touch of Darkness
+	# left the creature black, and after a Celestial Dawn white.
+	if not entries.is_empty() or not _color_changes.is_empty():
+		for inst in game.all_battlefield():
+			if inst.color_override >= 0:
+				entries.append({"ts": inst.color_override_ts, "override": inst})
 	if entries.is_empty():
 		# The common board: the floating changes alone, in creation order.
 		for change in _color_changes:
@@ -923,6 +936,10 @@ func _layer_five(game: MtgGame) -> void:
 	for entry in entries:
 		if entry.has("static"):
 			entry["static"].apply.call(game, entry["source"])
+		elif entry.has("override"):
+			var laced: CardInstance = entry["override"]
+			if not laced.phased_out:
+				laced.cur_colors = laced.color_override
 		else:
 			_paint(game, entry["change"])
 
@@ -1359,7 +1376,9 @@ func recalculate(game: MtgGame) -> void:
 	# CardInstance.color_override and were already restored in pass 1; these
 	# are the floating until-end-of-turn ones, applied in creation order so
 	# the last spell cast wins — and, since Pack 8, the layer-5 STATICS
-	# (Celestial Dawn) among them in timestamp order ([method _layer_five]).
+	# (Celestial Dawn) among them in timestamp order ([method _layer_five]),
+	# with the indefinite ones applied again at their own stamps beside them
+	# (the bug campaign c12, h3-5).
 	_layer_five(game)
 
 	# Pass 2b4: LAYER 6 WHOLE, IN TIMESTAMP ORDER (CR 613.6, 613.7) — the

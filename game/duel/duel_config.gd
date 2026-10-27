@@ -33,6 +33,13 @@ var unfair: Array[bool] = [false, false]
 var pace := 0.35
 ## Sidebar wizard-panel color keys per seat.
 var panel_colors: Array[String] = ["white", "black"]
+## THE TERRITORY A SEAT'S HALF WEARS, set by the caller — `{color, type}`,
+## the color a key ("red") and the type one of
+## [constant DuelOptions.TERRITORY_TYPES]' labels ("Pattern"); `{}` for the
+## Duel Options' own answer (the player's choice, the opponent's deck
+## color). The adventure's duels pass the hero's playmat, chosen on the
+## Embark screen (2026-10-27).
+var territories: Array = [{}, {}]
 ## THE `&Ante` MATCH PARAMETER (`@SHELLPAGE_SINGLEDUEL`,
 ## `Program/UIStrings.txt:48`; the same checkbox on `@SHELLPAGE_GAUNTLET`
 ## `:70` and `@SHELLPAGE_SEALEDDECK` `:90`) — how many cards

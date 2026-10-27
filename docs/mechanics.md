@@ -170,7 +170,9 @@ and a mana battery with charge counters on it — are left out of the plan
 rather than half-paid, which under-reports six cards in the safe
 direction — ROADMAP. Power Artifact's
 floor is "generic can't go below zero" rather than "not less than one
-mana" — simplified-cards.
+mana" — simplified-cards. (2026-10-27: no longer — the printed floor is
+real, `discounted(2, 1)` in `cards/sets/atq/power_artifact.gd`, and the
+card has no ledger row.)
 
 ---
 
@@ -313,7 +315,9 @@ division (2026-10-03). Earlier liftings:
 defensive banding divides freely for the defender (2026-09-01), one blocker
 may be assigned to several attackers (`CombatState.extra_blocks`, 2026-09-02
 — what is still missing is the HUMAN half, `duel_screen.gd`'s block picker,
-see ROADMAP), and "bands with other [quality]" is a real per-quality
+see ROADMAP; 2026-10-27: built the same day — the picker keeps such a
+creature in hand after its first block, so the next attacker clicked is
+its second), and "bands with other [quality]" is a real per-quality
 restriction rather than plain banding (2026-09-02).
 
 ---
@@ -528,7 +532,8 @@ ability-reading static goes last, and a silenced permanent's own
 abilities do nothing — CR 613.8a), and a P/T-defining ability that
 counts an ability, applied after layer 6; beyond those there is no
 dependency analysis, and
-there is no "indefinite" duration for base-P/T sets. A layer-4 static
+there is no "indefinite" duration for base-P/T sets (2026-10-27: there is
+— `ContinuousEffects.Duration.INDEFINITE`, Brine Hag's curse). A layer-4 static
 that also writes P/T in the same callback (Kormus Bell, Living Lands,
 Titania's Song) writes it before every 7b entry, so Humility's 1/1
 always wins over it; split in two statics, as Animate Artifact and
@@ -655,7 +660,7 @@ ANTE. Two more piles live on `MtgPlayer` without being zone values:
 | Lone trigger target | A held trigger whose every slot has exactly one legal target is not asked: the target is set as the trigger goes on (Mogg Maniac's opponent). | 603.3d | `MtgGame._hold_trigger_targets` | Mogg Maniac |
 | A trigger whose target ANOTHER player chooses | "Whenever a creature enters, that creature's controller may have it deal damage equal to its power to any target of their choice": the trigger names the seat that picks (`func(game, source, event) -> int`; `ENTERS_BATTLEFIELD` carries the `controller`). The trigger stays its CONTROLLER's — legality ("can't be the target of abilities your opponents control"), "you" and the fizzle check are judged from that seat — and only the target questions go to the chooser, a human chooser held like any seat. Works for one-slot and multi-slot triggers; an "up to N" trigger's how-many question stays the controller's. The card's "may" is the card's, asked of the same seat. A ranking order reads `ranking_chooser` (and `ranking_event`, the trigger's own event) to rank for the chooser. | 603.3d | `TriggeredAbility.chosen_by(fn)` / `target_chooser`, `MtgGame.trigger_chooser` / `ranking_chooser` / `ranking_event`, `_trigger_question`, `_ask_trigger_target` | Pandemonium (Pack 9) |
 | Ability-activated event | `ABILITY_ACTIVATED` names the permanent, its controller, the ACTIVATOR, the ability and whether {T} was in the cost. Dispatched after the ability is on the stack, so the trigger sits above it; mana abilities announce it too (they are activated abilities), gated on `has_trigger_listener` because that path runs for every land every turn. | 602.2b, 603.3b, 605.1a | `MtgGame.activate_ability`, `MtgGame.tap_for_mana`, `MtgGame.has_trigger_listener` | Artifact Possession (`atq/artifact_possession.gd`), Powerleech, Haunting Wind |
-| "Whenever ~ is dealt damage" — one event per victim | `WAS_DEALT_DAMAGE` is the VICTIM's side of a damage event: one per creature or player per event, `amount` the total, `sources` / `packets` every contributor. Inside a simultaneous bracket (a combat damage step, a sweeper, the 1997 window's landing) the packets are summed and announced as the bracket's damage has landed, before any state-based action; outside one each packet is its own event. First strike and regular damage are two steps, so two events. `DAMAGE_DEALT` stays per source and per packet ("whenever ~ deals damage"). The journal, the duel audio and the AI memory match event types by name, so they ignore it; the AI's aftermath forecast is event-agnostic. | 510.2, 120.3 | `Mtg.EventType.WAS_DEALT_DAMAGE`, `MtgGame._note_damage_received` / `_flush_damage_received` / `_damage_received_batch` (journaled) | Binding Agony, Mortal Wound (Pack 8), Fungusaur (`2ed/fungusaur.gd`), Living Artifact, Lich |
+| "Whenever ~ is dealt damage" — one event per victim | `WAS_DEALT_DAMAGE` is the VICTIM's side of a damage event: one per creature or player per event, `amount` the total, `sources` / `packets` every contributor. Inside a simultaneous bracket (a combat damage step, a sweeper, the 1997 window's landing) the packets are summed and announced as the bracket's damage has landed, before any state-based action; outside one each packet is its own event. First strike and regular damage are two steps, so two events. `DAMAGE_DEALT` stays per source and per packet (the bookkeeping event). Its source side, `SOURCE_DEALT_DAMAGE`, is the one "whenever ~ deals damage" listens for since 2026-10-27 (the bug campaign c12, h3-8): one per source per event, `amount` the total, batched like the victim's side (`_note_damage_dealt` / `_flush_damage_dealt` / `_damage_dealt_batch`) — El-Hajjâj, Spirit Link, Zebra Unicorn, Emberwilde Caliph, Warrior Angel. The journal, the duel audio and the AI memory match event types by name, so they ignore it; the AI's aftermath forecast is event-agnostic. | 510.2, 120.3 | `Mtg.EventType.WAS_DEALT_DAMAGE`, `MtgGame._note_damage_received` / `_flush_damage_received` / `_damage_received_batch` (journaled) | Binding Agony, Mortal Wound (Pack 8), Fungusaur (`2ed/fungusaur.gd`), Living Artifact, Lich |
 
 The event catalogue (`Mtg.EventType`, with its data keys documented on the
 enum): `ENTERS_BATTLEFIELD`, `LEAVES_BATTLEFIELD`, `DIES`, `SPELL_CAST`,
@@ -667,7 +672,8 @@ VICTIM's side of a damage event, one per creature or player per event for
 the total however many sources dealt it (CR 510.2: a combat damage step is
 one event), which is what "whenever ~ is dealt damage" hears (Binding
 Agony, Mortal Wound, Fungusaur, Living Artifact, Lich); `DAMAGE_DEALT`
-stays per source and per packet.
+stays per source and per packet, and `SOURCE_DEALT_DAMAGE` is its source
+side, one per source per event ("whenever ~ deals damage", 2026-10-27).
 
 Delayed and floating effects — all independent of the source that made them
 (CR 603.7a), all cleared at the moment their window closes:
@@ -930,19 +936,27 @@ Nothing in this list is half-built; each is an explicit gap. Engine-wide items
 are tracked in `docs/ROADMAP.md`, card-visible consequences in
 `docs/simplified-cards.md`.
 
-- **Mana burn.** Pools empty silently at each step boundary; no life is lost.
+- ~~**Mana burn.** Pools empty silently at each step boundary; no life is lost.~~
+  (2026-10-27: built — the `mana_burn` rules fork, on by default: a fresh
+  install plays "Modern rules, mana burn on", `RulesOptions.DEFAULT_PRESET`.)
 - **Damage on the stack.** Damage is dealt immediately by `deal_damage`; there
   is no damage-on-the-stack era rule and no way to respond to it.
+  (2026-10-27: there is a way now — under the 1997 `damage_prevention_window`
+  fork damage is a `DamagePacket` that waits in a prevention window and can
+  be responded to and targeted; damage on the stack itself is still not
+  built.)
 - **A general replacement-effect system.** The replacements that exist are
   hardcoded shapes: enters-as-copy, dies-to-hand, exile-instead-of-dying,
   life-gain-becomes-draw, reverse-damage, the two damage redirections. A real
   "if you would draw" hook is what the remaining draw-step cards wait on
-  (ROADMAP).
-- **A blocker declared against several attackers by a HUMAN.** The engine
+  (ROADMAP). (2026-10-27: the draw hook is built — §1's "Draw replacements"
+  row, `MtgGame._replace_draw`.)
+- ~~**A blocker declared against several attackers by a HUMAN.** The engine
   takes the block (`CombatState.extra_blocks`, CR 509.1b — Two-Headed Giant
   of Foriys, Blaze of Glory), but `duel_screen.gd`'s block picker still
   points one blocker at one attacker, so only an AI seat can make it
-  (ROADMAP).
+  (ROADMAP).~~ (2026-10-27: done — the block picker keeps such a creature in
+  hand after its first block, `DuelScreen`, "WHAT ONE-TO-MANY BLOCKS ADDED".)
 - **The full CR 613 layer system.** No cross-layer timestamps, no dependency
   analysis beyond the two-round type pass and the layer-6 ones (ability
   readers, a silencer, an ability-counting P/T — §7), no indefinite
@@ -954,9 +968,15 @@ are tracked in `docs/ROADMAP.md`, card-visible consequences in
   first (CR 603.3c). The one spec is shared by every mode.
 - **Await-based human prompts.** Every mid-resolution choice is synchronous;
   a human seat gets the `DecisionAgent` heuristic for anything the UI could
-  not pre-select.
+  not pre-select. (2026-10-27: still synchronous, but the human is asked —
+  the pre-flight holds a resolution's or a cost's question open
+  (`MtgGame.awaiting_choice`, `docs/duel-todo.md` §1.3); only the questions
+  asked from the draw step and during combat damage still fall to the
+  heuristic, logged.)
 - **Planeswalkers, sideboarding, double strike, hybrid/Phyrexian/snow mana,
   more than two players.** None of these exist in the 1997 pool or the engine.
+  (2026-10-27: sideboarding does — between the duels of a match, the
+  player's in `game/match_screen.gd`, the AI's `AiSideboard`.)
 - ~~**Priority during cleanup**, and a second cleanup step when something
   happened during the first.~~ Done by Pack 8 (E3): see *Cleanup priority*
   in §1.

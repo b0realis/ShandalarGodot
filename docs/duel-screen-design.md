@@ -12,9 +12,12 @@ that follow from that goal, and the wishlist that guides later milestones.
 |---|---|---|
 | Linux / Windows / macOS | Primary | Godot 4.7 export presets, keyboard+mouse first |
 | Raspberry Pi (4/5) | Primary | The reason we ship the **Compatibility (OpenGL) renderer** — set in project.godot. A 2D card game needs nothing Vulkan offers, and GL runs on every Pi, old laptop, and thin client |
-| Steam Deck / handhelds | Free ride | Linux build + full gamepad support (below) |
+| Steam Deck / handhelds | Free ride (2026-10-27: released — a Steam Deck package, and an experimental ArkOS RK3326 one for the small handhelds, `docs/handhelds.md`) | Linux build + full gamepad support (below) |
+| Meta Quest / Android | (2026-10-27: released — Meta Quest, and an experimental Android ARM64 phone/tablet package, `docs/android-experimental.md`) | Android exports of the same game (`Android Quest`, `Android Experimental` presets) |
 | Consoles | Aspirational | Godot has no built-in console export; ports go through W4 Games / Lone Wolf-style porting partners. Our obligations TODAY: full gamepad navigation, no OS-specific code outside `game/`, 16:9-and-16:10-safe layout, no mouse-only interactions |
-| Web (WASM) | Later | Godot 4 web export works with Compatibility renderer; s30 proves the genre fits the browser |
+| Web (WASM) | ~~Later~~ (2026-10-27: released — `Web`, `Web Threaded` and an offline web package in every release, `docs/release-builds.md`) | Godot 4 web export works with Compatibility renderer; s30 proves the genre fits the browser |
+
+(2026-10-27: the latest release, v0.50.34, ships 13 packaged targets — Windows, Linux, three macOS, Raspberry Pi 5, Steam Deck, ArkOS, Meta Quest, Android and three web packages — each with and without the imported skin.)
 
 A note on a quirk that was NOT engine-side. Until 2026-09-01 every run
 that had touched `CardRegistry` — headless and windowed alike — aborted
@@ -107,6 +110,15 @@ policy as card art — see cards/data). Faithfulness is achieved in layers:
   RIGHTMOST item resolves next. Every stack item shows its name and target.
 - Life totals are buttons — they ARE the click-targets for "any target"
   spells, like the original's wizard portraits.
+
+(2026-10-27: the v1 sketch above is history; the screen has moved to the
+1997 composition of §3b. The sidebar now holds the two players' panels
+and the docked card preview, with the Arrange, Expand and Log buttons —
+the game log is its own window (`DuelLog`, `L`), not a sidebar list; the
+stack is the Spell Chain, a column of small cards at the board's left,
+not a horizontal strip; and the bar's button is the 1997 Done (Begin at
+the combat offer), not Pass / Confirm. `game/duel/duel_screen.gd` is the
+current layout.)
 
 ### 3b. Reference: how the ORIGINAL duel screen composes (owner's screenshots)
 
@@ -3539,7 +3551,14 @@ Shipped 2026-09-07 (the v0.18.0-dev playtest, all `[QoL]`):
   last only one turn … "prevent 3" red letter in center of the card so
   player knows."*
 
-Wishlist (ordered; each is a self-contained follow-up):
+Wishlist (ordered; each is a self-contained follow-up). (2026-10-27:
+several are built since — the phase stops (`game/duel/phase_stops.gd`, on
+the phase bar), the auto-tap (the double-click auto-cast and `Don't auto
+tap`), the hover zoom (the docked preview), the original sound cues
+(`DuelAudio`, from the imported 1997 files), the 1997 targeting cursor,
+and a public game record of every duel (`MpnArchive`, MPN; a record, not
+a full rules replay). Undo, a UI scale slider and a colorblind palette
+are still not built.)
 - **Phase stops config** (the original's duel options panel): choose which
   steps pause for you; per-seat.
 - **Auto-tap mana**: click a card with an empty pool → the engine suggests
@@ -3870,11 +3889,17 @@ Tests: `tests/ui/test_counter_marks.gd` (12) and
 
 ## 7. File map (game/duel/)
 
+(2026-10-27: this map is partial — `game/duel/` holds 57 scripts now and
+about 40 of them are not listed here (`mini_card.gd`, `duel_options.gd`,
+`duel_audio.gd`, `phase_stops.gd`, `damage_marker_layer.gd`,
+`match_state.gd` and `duel_report.gd` among them); `docs/CODE_MAP.md` is
+the complete map.)
+
 | File | Role |
 |---|---|
 | duel_screen.tscn | Root scene (thin — layout is built in code for themeability) |
 | duel_screen.gd | The controller: mode machine (incl. `Mode.PAYING` — a cast held open for its mana), engine wiring, refresh, the opponent's-turn auto-pass, the auto-cast (on the fan hand's cards AND on the stack hand's rows), and the free layer cards can be dragged into, inside the playfield boundary `_placement_bounds` keeps them |
-| card_widget.gd | One card's visual: name/cost/stats, tap & highlight states |
+| ~~card_widget.gd~~ | ~~One card's visual: name/cost/stats, tap & highlight states~~ (2026-10-27: gone — the card on the table is `mini_card.gd`, `MiniCard`) |
 | opening_window.gd | THE START-OF-DUEL WINDOW: one panel on `Winbk_Startduel.pic` carrying `@DIALOG_MULLIGAN`'s twelve entries — who leads, the opponent's mulligan status, BOTH ANTES as full `CardPreview`s, and `Take mulligan` / `Start the duel`. Sized to the cards and to the ground's aspect (977x584) — the forty-third pass |
 | graveyard_view.gd | The graveyard, exile and ante laid out and CLICKABLE (`@MENU_GRAVEYARD`'s three views) — the thirtieth pass, `duel-todo.md §1.2`; **[QoL]** a shelf of five full-size MiniCards with ◀ ▶ and the centre card's position, the thirty-third pass |
 | coin_toss.gd | THE OPENING TOSS, three ways (`duel-todo.md §6.4`): the original's own movie, our turning coin, or the instant result. **The 1997 coin was a pre-rendered AVI** played through `MCIWndCreateA` (`DUEL.EXE` at `004492ad`, corroborated by `Magic.exe`'s own string table and by `@DIALOG_COINFLIP`'s two captions), which is why there is no coin art to import and why `import_original.py` has to transcode. One stored value (`ShowCoinFlips`) with a 1997 boolean view and a `[QoL]` three-way view; reports the engine's toss, never decides it — the fiftieth pass |

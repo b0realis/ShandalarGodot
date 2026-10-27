@@ -593,11 +593,14 @@ func test_gravebane_zombie_stolen_goes_to_its_owners_library() -> void:
 	assert_eq(g.players[0].library.size(), mine)
 
 
-func test_gravebane_zombie_token_copy_simply_dies() -> void:
+## A token copy follows the text too (the bug campaign c12, h3-11): it goes
+## to the top of the library, then ceases to exist there — no card added,
+## and it never died.
+func test_gravebane_zombie_token_copy_goes_and_ceases_to_exist() -> void:
 	var made := g.create_token(0, CardRegistry.get_card("Gravebane Zombie"))
 	assert_eq(made.size(), 1)
 	if made.is_empty(): return
 	var size := g.players[0].library.size()
 	g.destroy(made[0])
-	assert_eq(g.players[0].library.size(), size, "a token is not a card: no replacement")
+	assert_eq(g.players[0].library.size(), size, "a token ceases to exist off the battlefield: no card added")
 	assert_false(g.players[0].battlefield.has(made[0]))

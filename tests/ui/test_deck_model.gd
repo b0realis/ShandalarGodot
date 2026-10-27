@@ -326,13 +326,16 @@ func test_the_1997_export_round_trips_through_the_microprose_parser() -> void:
 	assert_eq(back.cards.count("Mountain"), 3)
 
 
-func test_a_card_with_no_known_microprose_id_still_exports() -> void:
+func test_a_card_with_no_known_microprose_id_is_left_out() -> void:
+	# Not written `.0` (the bug campaign c12): the 1997 loader reads only
+	# the id, and id 0 is Air Elemental. The export says how many it left.
 	_add("Mountain", 1)
 	var text := deck.to_dck_text({})
-	assert_string_contains(text, ".0\t1\tMountain")
+	assert_false(text.contains("Mountain"), "no id, no line")
+	assert_eq(deck.dck_left_out({}), 1)
 	var back := DeckList.new()
-	back.parse_dck(text, "fallback", true)
-	assert_eq(back.errors, [], "id 0 is tolerated; names are authoritative")
+	back.parse_dck(text, "fallback", false)
+	assert_eq(back.cards.size(), 0, "the file holds what it can name: nothing")
 
 
 func test_the_average_casting_cost_ignores_land() -> void:
@@ -939,30 +942,30 @@ func test_a_proxy_round_trips_through_the_decklist_export() -> void:
 	assert_eq(back.sideboard.count(ALSO_NOT), 1)
 
 
-func test_a_proxy_round_trips_through_the_1997_dck_export() -> void:
+func test_a_proxy_is_left_out_of_the_1997_dck_export() -> void:
 	# THE `.dck` ID QUESTION. `to_dck_text` wants a numeric MicroProse id
-	# per card and a proxy has none — so it takes `.0`, which is not a new
-	# rule but the one already there for any card the 371-entry table does
-	# not name (`tools/deck_convert.gd` emits the same). The original's own
-	# loader tolerates it because NAMES ARE AUTHORITATIVE in that format
-	# and the ids are ignored on read, which is also why a proxy survives
-	# the trip intact.
+	# per card and a proxy has none. It took `.0` — but the original's
+	# loader reads ONLY the id, and id 0 is Air Elemental, so a proxy came
+	# back in the 1997 game as one. Since the bug campaign c12 a card with
+	# no known id is left out, as any card the table does not name, and
+	# the export says how many ([method DeckModel.dck_left_out_note]). The
+	# `.deck` and `.dec` exports carry a proxy whole.
 	deck.deck_name = "Proxied Dck"
 	_add("Mountain", 2)
 	for _i in 3:
 		deck.add_proxy(NOT_A_CARD)
 	deck.add_proxy_side(ALSO_NOT)
 	var text := deck.to_dck_text(DeckStore.dck_ids())
-	assert_string_contains(text, ".0\t3\t%s" % NOT_A_CARD,
-		"no id, so id 0 — exactly as an unknown real card is written")
+	assert_false(text.contains(NOT_A_CARD), "no id, no line")
+	assert_false(text.contains(ALSO_NOT), "in the sideboard either")
+	assert_eq(deck.dck_left_out(DeckStore.dck_ids()), 4, "three proxies and one in the sideboard")
 	var back := DeckList.new()
 	back.parse_dck(text, "fallback", false)
 	assert_eq(back.errors, [], "the MicroProse parser reads it back")
 	assert_eq(back.deck_name, "Proxied Dck")
-	assert_eq(back.cards.count(NOT_A_CARD), 3)
 	assert_eq(back.cards.count("Mountain"), 2)
-	assert_eq(back.sideboard.count(ALSO_NOT), 1,
-		"the `.vNone` section carries it")
+	assert_eq(back.cards.count(NOT_A_CARD), 0)
+	assert_eq(back.sideboard.size(), 0, "no `.vNone` section of nothing")
 
 
 func test_a_deck_with_proxies_survives_the_builder_field_by_field() -> void:

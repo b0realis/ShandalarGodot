@@ -302,6 +302,17 @@ enum EventType {
 	                     ## (MtgGame.begin_simultaneous) it is dispatched as the
 	                     ## bracket's damage has all landed, before any
 	                     ## state-based action; otherwise right after the packet.
+	SOURCE_DEALT_DAMAGE, ## data: {source, amount, packets, to_instances,
+	                     ## to_players, is_combat} — the SOURCE's side of one
+	                     ## damage event, WAS_DEALT_DAMAGE's mirror: ONE event
+	                     ## per source per event, `amount` the total it dealt to
+	                     ## everything it hit (CR 510.2, 603.2c). What "whenever
+	                     ## ~ deals damage, you gain that much life" listens for
+	                     ## (El-Hajjâj, Spirit Link, Zebra Unicorn, Emberwilde
+	                     ## Caliph, Warrior Angel): a Craw Wurm double-blocked
+	                     ## by two bears triggers once, for 6 — not twice, once
+	                     ## per packet (the bug campaign c12, h3-8). Dispatched
+	                     ## with WAS_DEALT_DAMAGE, inside a bracket or out.
 }
 
 ## What kind of object a StackItem is.

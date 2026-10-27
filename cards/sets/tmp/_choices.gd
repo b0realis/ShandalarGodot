@@ -189,10 +189,9 @@ class Extinction extends DestroyAllEffect:
 		for i in g.all_battlefield():
 			if i.is_creature() and g.is_present(i) and i.has_subtype(kind):
 				victims.append(i)
-		g.begin_simultaneous()
-		for i in victims:
-			g.destroy(i)
-		g.end_simultaneous()
+		# ONE departure, as Wrath of God's (the bug campaign c12, h3-3): a
+		# Goblin King's goblins go as the 2/2s they were when it resolved.
+		g.depart_together(victims, func(i: CardInstance) -> void: g.destroy(i))
 	static func hint(g: MtgGame, pid: int) -> int:
 		var score := {}
 		for i in g.all_battlefield():
@@ -409,10 +408,8 @@ static func _oracle_doom(g: MtgGame, _s: CardInstance, _e: GameEvent) -> void:
 		var i := g.find_instance(int(row[0]))
 		if g.is_present(i) and i.layer_timestamp == int(row[1]) and not i.attacked_this_turn:
 			doomed.append(i)
-	g.begin_simultaneous()
-	for i in doomed:
-		g.destroy(i)
-	g.end_simultaneous()
+	# "Destroy each of those creatures": one departure (c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i))
 
 
 # ======================================================= Phyrexian Grimoire

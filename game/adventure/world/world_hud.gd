@@ -127,7 +127,7 @@ const KEYS := [["Click", "walk there; the way is found"],
 	["L", "load an adventure"],
 	["H", "these keys"],
 	["Drag a pane", "move it; it stays there"],
-	["Escape or Q", "close what is open, or ask to leave the world"]]
+	["Escape or Q", "close what is open, or ask to leave the world (save and load there too)"]]
 ## The options' entries: name and words; the switches say how they stand
 ## ([method _option_words]). Save to Wizards are 1997's right-click menu's
 ## ("Will you ...", `@STARTUP` 1).

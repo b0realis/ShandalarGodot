@@ -437,7 +437,7 @@ const AURA_PEEK := Vector2(6, 18)
 ## dragged card is given its z against THIS ladder — see [method _z_under].
 const ROW_Z_STEP := 7
 const FREE_LAYER_Z := ROW_Z_STEP * 3
-var _chain_box: VBoxContainer = null   # the original's floating spell chain
+var _chain_box: ChainColumn = null   # the original's floating spell chain (c12 h4-2)
 var _mode_overlay: Control = null      # modal-choice dialog (Winbk_Bigcard)
 var _preview_dock: Control = null      # sidebar slot for the big card
 var _qol_reserve: Control = null       # black strip under it, for future QoL
@@ -1310,6 +1310,9 @@ func _run_coin_toss(first: int) -> void:
 	await _run_intro()
 	if not is_inside_tree():
 		return           # `Reconfigure duel` took us back to the setup
+	await _await_unpaused()   # c12 h4-8: no coin under the Pause window
+	if not is_inside_tree():
+		return
 	# NO COIN WHEN THE START IS FORCED (part B, W2; `DuelConfig.first_player`):
 	# 1997 tossed only for a random start (`run_duel_coin_flip_dialogs`), so
 	# a creature's First Strike or the adventurer's first-move gift goes
@@ -1331,6 +1334,9 @@ func _run_coin_toss(first: int) -> void:
 	# which takes this screen out of the tree at once and frees it at the
 	# frame's end. The opening went on to start the duel, and the refresh
 	# below asked a tree that was no longer there for the AI's timer.
+	if not is_inside_tree():
+		return
+	await _await_unpaused()   # c12 h4-8: nor the opening window
 	if not is_inside_tree():
 		return
 	# THE OPENING HAND (§1.5): play or draw, then the mulligans, and only
@@ -1864,7 +1870,7 @@ func _ability_highlight(item: StackItem) -> int:
 func _on_life_clicked(pid: int) -> void:
 	if mode == Mode.TARGETING:
 		_try_take_target(TargetRef.player(pid))
-	elif mode == Mode.DAMAGE and pid != (_private_decision_seat() if config.private_hotseat() else _human_seat()):
+	elif mode == Mode.DAMAGE and pid != _viewing_seat():   # c12 h4-4: either human's
 		# Trample's spill: the life register IS the player-target click
 		# (`@MENU_LIFE` = "Target %s" / "Target yourself").
 		_assign_one_point(MtgGame.DAMAGE_TO_PLAYER)
@@ -1979,7 +1985,7 @@ func _open_life_menu(pid: int, at: Vector2) -> void:
 	if _life_menu == null:
 		return
 	_life_menu_pid = pid
-	var mine := _private_decision_seat() if config.private_hotseat() else _human_seat()
+	var mine := _viewing_seat()   # c12 h4-4: either human's
 	var theirs := 1 - mine
 	_life_menu.clear()
 	var labels := DuelistFace.menu_labels(_face_shown(pid),
@@ -1999,7 +2005,7 @@ func _open_life_menu(pid: int, at: Vector2) -> void:
 func _on_life_menu_chosen(id: int) -> void:
 	if _life_menu_pid < 0:
 		return
-	var mine := _private_decision_seat() if config.private_hotseat() else _human_seat()
+	var mine := _viewing_seat()   # c12 h4-4: either human's
 	match id:
 		0: _on_life_clicked(1 - mine)
 		1: _on_life_clicked(mine)
@@ -2223,6 +2229,7 @@ func _on_grave_pile_clicked(pid: int) -> void:
 func _open_graveyard(pid: int) -> void:
 	if _grave_view == null:
 		_grave_view = GraveyardView.new()
+		_grave_view.face_shown = _may_show_face
 		_grave_view.card_picked.connect(_on_graveyard_card)
 		_grave_view.dismissed.connect(_close_graveyard)
 		add_child(_grave_view)
@@ -2297,7 +2304,11 @@ func _repopulate_graveyard() -> void:
 	# BOARD only: the sidebar holds the big card they fill, and a pile
 	# sitting on top of it would hide the very thing hovering is for.
 	_grave_view.board_area = _board_area()
-	var seat := _private_decision_seat() if config.private_hotseat() else _human_seat()
+	# The seat at the screen, at an open hotseat too (the bug campaign c12,
+	# h4-4). What it may READ face down is [method _looking_seat]'s (h4-6):
+	# nobody's before Show hand at a private hotseat, so the view shows
+	# every face-down card's back until the hand is shown.
+	var seat := _viewing_seat()
 	# OUTSIDE targeting, the cards the seat may PLAY from these piles wear
 	# the "you may act on this" ring (Pack 8: Bösium Strip's top card, a
 	# Three Wishes card; and the Bottle and Bazaar plays before them).
@@ -2310,7 +2321,7 @@ func _repopulate_graveyard() -> void:
 					or game.can_cast_from_graveyard(seat, inst)):
 				return false
 			return _pile_card_playable(seat, inst)
-	_grave_view.populate(game, seat, legal, playable)
+	_grave_view.populate(game, seat, legal, playable, _looking_seat())
 
 
 ## THE SAME PROMISE THE HAND'S YELLOW MAKES ([method _highlight_for]) for a
@@ -2354,8 +2365,9 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 	# CR 406.3). The view already draws it face up for that seat
 	# (GraveyardView._may_look); the click used to show the back to the
 	# viewer as well, and never reached the play below.
-	if inst.face_down and not (inst.zone == Mtg.Zone.EXILE
-			and inst.exile_visible_to == _viewing_seat()):
+	# ...and not before Show hand at a private hotseat either (the bug
+	# campaign c12, h4-6): [method _may_show_face].
+	if not _may_show_face(inst):
 		if _card_preview != null: _card_preview.show_back()
 		return
 	if mode != Mode.TARGETING:
@@ -4783,7 +4795,8 @@ func _maybe_schedule_ai() -> void:
 	# a player who walks away does not come back to three lost turns.
 	if _ai_pending or _toss_active or is_paused() or _fullscreen_card_open() \
 			or mini_help_open() or _ai_seat_to_act() == -1 \
-			or not is_inside_tree():   # f-minihelp; a screen on its way out ([method _refresh])
+			or _question_holds_duel() \
+			or not is_inside_tree():   # f-minihelp; c12 h4-1; a screen on its way out ([method _refresh])
 		return
 	_ai_pending = true
 	var mine := _humans.has(game.active_player)
@@ -4805,7 +4818,11 @@ func _ai_step() -> void:
 	# under the splash and the coin and had a seat act on a duel that had
 	# not begun (turn 0, the mulligans still open). The toss's last line
 	# refreshes, and that arms a fresh one.
-	if is_paused() or _fullscreen_card_open() or _toss_active or mini_help_open():   # f-minihelp
+	# ...AND THE SAME UNDER THE CONCEDE AND LEAVE QUESTIONS (the bug
+	# campaign c12, h4-1): [method _close_pause] armed this dwell on its
+	# way to opening one, and it played a turn under it.
+	if is_paused() or _fullscreen_card_open() or _toss_active or mini_help_open() \
+			or _question_holds_duel():   # f-minihelp; c12 h4-1
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
@@ -5451,6 +5468,14 @@ var _run_to: Array = []
 ## again, including a second visit to that same phase next turn.
 var _advance_from: Array = []
 var _advance_moved := false
+## THE ORDER NOBODY GAVE (the bug campaign c12, h4-3): the Stop-off skip
+## [method _drive_advance] arms by itself ([method _auto_skip_applies]).
+## It walks like the Skip button's order, but where it comes to rest is
+## no phase the player named, so it leaves no [member _rested_at] behind:
+## the second main phase it arrives in, unstopped, passes itself as any
+## unstopped phase does. It used to wait there for a click every turn the
+## player had only Walls (or nothing able to attack).
+var _advance_automatic := false
 ## Stack items already on the chain when the order was given: only something
 ## NEW from the opponent is *"something that requires or permits a
 ## response"*.
@@ -6137,7 +6162,7 @@ func _advance_stop_reason() -> String:
 		return "the duel is over"
 	if config.private_hotseat() and not _hotseat_revealed:
 		return "the other player must reveal their hand"
-	var viewer := _private_decision_seat() if config.private_hotseat() else _human_seat()
+	var viewer := _viewing_seat()   # c12 h4-4: either human's
 	# (1) "any required actions to perform during a specific phase… until
 	# you do what is necessary" — every moment the engine HOLDS open.
 	var held := _required_action_reason()
@@ -6336,6 +6361,7 @@ func _arm_advance(kind: int) -> void:
 	_advance_mode = kind
 	_advance_from = _phase_key()
 	_advance_moved = false
+	_advance_automatic = false   # c12 h4-3: the caller says when it is
 	_advance_seen = game.stack.duplicate()
 	if kind == Advance.SKIP_COMBAT:
 		# The destination is the second main phase's icon on your half.
@@ -6350,6 +6376,7 @@ func _cancel_advance() -> void:
 	_run_to = []
 	_advance_from = []
 	_advance_moved = false
+	_advance_automatic = false   # c12 h4-3
 	_advance_seen = []
 
 
@@ -6571,8 +6598,9 @@ func _auto_pass_priority() -> bool:
 ## [method _refresh], so an AI seat's pacing timer resumes it for free.
 func _drive_advance() -> void:
 	# f-minihelp: a standing order holds under the mini help; closing it
-	# redraws, and the redraw comes back here.
-	if _advancing or game == null or mini_help_open():
+	# redraws, and the redraw comes back here. So does the automatic pass
+	# under the Concede and leave questions (the bug campaign c12, h4-1).
+	if _advancing or game == null or mini_help_open() or _question_holds_duel():
 		return
 	if config.private_hotseat() and not _hotseat_revealed:
 		return
@@ -6588,6 +6616,7 @@ func _drive_advance() -> void:
 			# whole (2026-09-08, [constant SKIP_OFFER]): the Skip button's
 			# own order, armed here and walked below in this same call.
 			_arm_advance(Advance.SKIP_COMBAT)
+			_advance_automatic = true   # nobody's order (c12 h4-3)
 		else:
 			_auto_pass_priority()
 			return
@@ -6601,8 +6630,18 @@ func _drive_advance() -> void:
 			_advance_moved = true
 		if (_advance_mode == Advance.RUN_TO or _advance_mode == Advance.SKIP_COMBAT) \
 				and _advance_moved and _phase_key() == _run_to:
-			_rested_at = _phase_key()
+			# ...unless nobody gave the order (the bug campaign c12,
+			# h4-3): the skip this drive armed by itself arrives in a
+			# phase nobody named, which passes itself if nothing stops
+			# it — asked for once more at the end of the frame, the way
+			# a pass that leaves the human holding priority asks
+			# ([method _auto_pass_priority]).
+			var automatic := _advance_automatic
+			if not automatic:
+				_rested_at = _phase_key()
 			_cancel_advance()      # arrived: "then stops"
+			if automatic and not game.game_over:
+				_drive_advance.call_deferred()
 			break
 		# `Go to: next phase` has arrived the moment the phase changed —
 		# it is a run whose destination is "not here" (§6.3).
@@ -6636,7 +6675,9 @@ func _drive_advance() -> void:
 			# order refused on the spot took the player nowhere, so
 			# there is no arrival to respect and the phase goes back to
 			# passing itself once whatever refused it is gone.
-			if _advance_moved:
+			# Nor when nobody gave it (c12 h4-3): the automatic pass
+			# reads that phase as it reads any other.
+			if _advance_moved and not _advance_automatic:
 				_rested_at = _phase_key()
 			# The original has its own word for a run that halted, and it
 			# is not "stopped": @PROMPT_STOPANYWAY (UIStrings.txt:1078).
@@ -7049,11 +7090,17 @@ func _on_ability_chosen(id: int) -> void:
 	if not _effects_aimable(ability.effects, inst, ability.cost.has_x):
 		_report(NO_TARGET_PROMPT % inst.data.card_name)
 		return
+	# WHO PAYS an "any player may" ability: the seat at the screen, either
+	# human's at a hotseat (the bug campaign c12, h4-4) — read BEFORE the
+	# activation is pending, because a pending card is what [method
+	# _private_decision_seat] answers first, and it would answer with the
+	# card's controller (the enemy's Mercenaries paid for by the enemy).
+	var payer := _viewing_seat()
 	_pending_card = inst
 	_pending_ability_index = ability_index
 	_pending_pid = inst.owner_id if inst.zone == Mtg.Zone.GRAVEYARD else inst.controller_id
 	if ability.any_player_may_activate or ability.only_opponents_may_activate:
-		_pending_pid = _private_decision_seat() if config.private_hotseat() else _human_seat()
+		_pending_pid = payer
 	elif ability.only_owner_may_activate: _pending_pid = inst.owner_id
 	_pending_specs = ability.target_specs()
 	_build_ability_slots(ability)
@@ -7354,7 +7401,7 @@ func _refresh() -> void:
 				var top_gone: CardInstance = gone[-1]
 				# A card exiled FACE DOWN (Knowledge Vault) shows nothing:
 				# nobody may look at it, so the pile keeps its plate.
-				if not top_gone.face_down or top_gone.exile_visible_to == _viewing_seat():
+				if _may_show_face(top_gone):   # c12 h4-6: and only after Show hand
 					exile_face = GameSkin.card_scan(top_gone.data.card_name)
 					if exile_face == null:
 						exile_face = GameSkin.card_art(top_gone.data.card_name)
@@ -7473,9 +7520,9 @@ func _exile_tooltip(pid: int) -> String:
 	if gone.is_empty():
 		return "%s exiled cards (out of play) — empty" % whose
 	var names := PackedStringArray()
-	var seat := _viewing_seat()
 	for card in gone:
-		names.append("(face down)" if card.face_down and card.exile_visible_to != seat else card.data.card_name)
+		# c12 h4-6: [method _may_show_face], so not before Show hand.
+		names.append(card.data.card_name if _may_show_face(card) else "(face down)")
 	return "%s exiled cards (out of play)\n%s" % [whose, "\n".join(names)]
 
 
@@ -7673,8 +7720,18 @@ func _human_seat() -> int:
 ## owner may activate (Ashen Ghoul), a card exile gave one player leave to
 ## play (Ice Cauldron). Reading `_human_seat()` there named the top seat's
 ## secret to the bottom seat and refused the top seat its own ability.
+##
+## WHENEVER BOTH SEATS ARE HUMAN, not only at a private hotseat (the bug
+## campaign c12, h4-4): a Test hands duel with two humans is an OPEN
+## hotseat ([method DuelConfig.for_test] never makes a private one), and
+## there every `private_hotseat() ? decision seat : human seat` read seat
+## 1 as seat 0 — on seat 1's turn the trample spill went to seat 1's own
+## life, the life menu's two `Target` entries swapped, and Done, the
+## graveyard view and an "any player may" ability all served seat 0. This
+## is the one read all of them make now. Against the computer, at an
+## SGManalink table and in a demo it is [method _human_seat] as before.
 func _viewing_seat() -> int:
-	if game != null and config != null and config.private_hotseat():
+	if game != null and config != null and _is_human(0) and _is_human(1):
 		return _private_decision_seat()
 	return _human_seat()
 
@@ -8013,8 +8070,9 @@ func _menu_seat() -> int:
 	# is ALWAYS seat 0 at a private hotseat — so Player 2 pressing
 	# Q → Concede duel → Yes, I'm sure gave up PLAYER 1's seat and won the
 	# duel by conceding. [method _viewing_seat] is the read the 2026-09-16
-	# hunt added for exactly this, and it is [method _human_seat] again
-	# wherever the hotseat is not private.
+	# hunt added for exactly this. It is [method _human_seat] again against
+	# the computer and at an SGManalink table; at an OPEN hotseat it is the
+	# seat deciding too (the bug campaign c12, h4-4).
 	return _viewing_seat()
 
 
@@ -8527,6 +8585,43 @@ func _on_information_revealed(viewer: int, title: String, names: Array) -> void:
 			"names": names.duplicate()})
 
 
+# --- the bug campaign c12, h4-6: a secret waits for Show hand ---
+## THE SEAT WHOSE SECRETS THE SCREEN MAY SHOW RIGHT NOW: [method
+## _viewing_seat] once that seat may look ([method _may_see_information]),
+## else -1 — nobody. At a private hotseat the screen serves a seat from the
+## moment the decision is that seat's, but nobody is known to be sitting
+## at it until its player presses Show hand; a card exiled face down for
+## that seat (Gustha's Scepter, the Scroll Rack and Three Wishes shape)
+## was named in the exile plate's tooltip, worn on its face, drawn face up
+## in the graveyard view and enlarged by a click while the other player
+## could still be looking.
+func _looking_seat() -> int:
+	var seat := _viewing_seat()
+	return seat if _may_see_information(seat) else -1
+
+
+## May the screen show [param inst]'s face? A card face down only to the
+## seat a rule lets look at it ([member CardInstance.exile_visible_to],
+## CR 406.3), and only while that seat is the one looking ([method
+## _looking_seat]) — never to nobody, whose -1 is also the card's own
+## "nobody may look" (Knowledge Vault).
+func _may_show_face(inst: CardInstance) -> bool:
+	if not inst.face_down:
+		return true
+	if inst.zone != Mtg.Zone.EXILE or inst.exile_visible_to < 0:
+		return false
+	# An OPEN table of two humans (no hotseat privacy): both people are at
+	# the screen, so a card either human seat may look at shows, whichever
+	# seat is deciding (the bug campaign c12: the deciding seat is the coin
+	# toss's, and a Gustha's Scepter card stayed shut when it was the other).
+	if config != null and not config.private_hotseat() and game != null \
+			and _is_human(inst.exile_visible_to):
+		return true
+	var seat := _looking_seat()
+	return seat >= 0 and inst.exile_visible_to == seat
+# --- end the bug campaign c12, h4-6 ---
+
+
 ## Is [param viewer]'s look the local viewer's to read right now?
 func _may_see_information(viewer: int) -> bool:
 	if viewer < 0:
@@ -8642,6 +8737,7 @@ func _open_pause() -> void:
 	menu.build(config)
 	menu.chosen.connect(_on_pause_chosen)
 	_pause_menu = menu
+	_hold_opening(true)   # the bug campaign c12, h4-8
 	# repository check 2026-10-13 fx-code: it stays on top while it is open.
 	if not child_order_changed.is_connected(_keep_pause_on_top):
 		child_order_changed.connect(_keep_pause_on_top)
@@ -8658,7 +8754,46 @@ func _close_pause() -> void:
 	# true on this line or the refresh below would run as if still paused
 	# and leave every clock stopped.
 	_pause_menu = null
+	_hold_opening(false)   # the bug campaign c12, h4-8
 	_refresh()
+
+
+# --- the bug campaign c12, h4-8: Pause holds the splash and the coin ---
+## Was the splash's countdown running when the Pause window opened? Only
+## then does closing it start the countdown again: one the held duel's
+## question stopped ([method _ask_to_leave]) stays stopped.
+var _intro_counting := false
+
+
+## PAUSE HOLDS THE OPENING TOO. The splash's five seconds ran on under the
+## Pause window, and at zero its `Go!` tossed the coin under it: paused
+## with 4.1 s left, six seconds later the splash was gone and the toss was
+## playing behind the window (the bug campaign c12, h4-8). The countdown
+## stops while the window is up — as it does under the held duel's
+## question — and the toss stands still with it: its spin and its fade are
+## tweens on its own nodes, which do not run while the toss is disabled.
+## Neither the coin nor the opening window starts while the window is up
+## ([method _await_unpaused]). [method _close_pause] lets them all go on.
+func _hold_opening(hold: bool) -> void:
+	if _intro_overlay != null and is_instance_valid(_intro_overlay):
+		if hold:
+			_intro_counting = _intro_overlay.is_processing()
+			_intro_overlay.set_process(false)
+		elif _intro_counting:
+			_intro_overlay.set_process(true)
+	if not hold:
+		_intro_counting = false
+	if _toss_overlay != null and is_instance_valid(_toss_overlay):
+		_toss_overlay.process_mode = Node.PROCESS_MODE_DISABLED if hold \
+			else Node.PROCESS_MODE_INHERIT
+
+
+## Wait out an open Pause window (or the screen leaving the tree) before
+## the opening's next stage begins.
+func _await_unpaused() -> void:
+	while is_paused() and is_inside_tree():
+		await get_tree().process_frame
+# --- end the bug campaign c12, h4-8 ---
 
 
 # --- repo check 2026-10-13 fx-code: the Pause window stays on top ---
@@ -8858,7 +8993,9 @@ func _ask_to_concede() -> void:
 	_concede_dialog.add_button(TerritoryMenu.CONCEDE_CONFIRM) \
 		.pressed.connect(_confirm_concede)
 	_concede_dialog.add_button("Cancel").pressed.connect(_cancel_concede)
-	_concede_dialog.closed.connect(func() -> void: _concede_dialog = null)
+	_concede_dialog.closed.connect(func() -> void:
+		_concede_dialog = null
+		_resume_after_question())   # the bug campaign c12, h4-1
 	add_child(_concede_dialog)
 
 
@@ -8905,7 +9042,9 @@ func _ask_to_leave(to_menu := false) -> void:
 	dialog.add_button(TerritoryMenu.CONCEDE_CONFIRM).pressed.connect(_confirm_leave)
 	var cancel := dialog.add_button("Cancel")
 	cancel.pressed.connect(_cancel_leave)
-	dialog.closed.connect(func() -> void: _leave_dialog = null)
+	dialog.closed.connect(func() -> void:
+		_leave_dialog = null
+		_resume_after_question())   # the bug campaign c12, h4-1
 	_leave_dialog = dialog
 	add_child(dialog)
 	if is_inside_tree():
@@ -8916,6 +9055,39 @@ func _ask_to_leave(to_menu := false) -> void:
 func leave_question_open() -> bool:
 	return _leave_dialog != null and is_instance_valid(_leave_dialog) \
 		and not _leave_dialog.is_queued_for_deletion()
+
+
+# --- the bug campaign c12, h4-1: the duel stands still while it asks ---
+## IS THE PLAYER BEING ASKED whether to give the duel up — the Concede
+## question, or a held duel's `Quit ...?`? Then the duel stands still.
+## Neither is a centre popup of the cast chain, so neither is in [method
+## _modal_open] (no rung of the cancel ladder, no Cancel on the bar), and
+## the Pause window that opens both closes first — so the computer's
+## dwell, armed by the pause's own closing refresh, fired under the
+## question and played on: a turn went by (the log 6 → 11 lines, turn
+## 1 → 2) in the two seconds the player spent reading it. [method
+## _maybe_schedule_ai], [method _ai_step] and the standing orders and the
+## automatic pass ([method _drive_advance]) all ask this now.
+func _question_holds_duel() -> bool:
+	if leave_question_open():
+		return true
+	return _concede_dialog != null and is_instance_valid(_concede_dialog) \
+		and not _concede_dialog.is_queued_for_deletion()
+
+
+## The question went — Cancel, Esc, a yes, or the duel's end answering
+## it: the duel goes on from where it stood. One redraw at the end of the
+## frame arms the computer's dwell and the standing orders again; at the
+## end of the frame, not at once, because the duel's end closes both
+## questions from inside the engine's own announcement ([method
+## _on_game_over]).
+func _resume_after_question() -> void:
+	_state_dirty = true
+	if _refresh_pending:
+		return
+	_refresh_pending = true
+	_refresh_after_engine.call_deferred()
+# --- end the bug campaign c12, h4-1 ---
 
 
 ## `Cancel`, Esc, or the duel moving on under it: the question goes, and
@@ -8979,6 +9151,8 @@ func _popup_menu_at(menu: PopupMenu, at: Vector2) -> void:
 ## apart — see [method _on_card_look].
 ## `Don't auto tap this card` is entry 4 of `@MENU_SMALLCARD`.
 const CARD_MENU_NO_AUTO_TAP := 3
+## `Original type` is entry 1 (the bug campaign c12, h4-7).
+const CARD_MENU_ORIGINAL_TYPE := 0
 const CARD_MENU_HAND_MANA := 100
 ## Circling Vultures' special action, on the card's own mini-menu too.
 const CARD_MENU_DISCARD_SPECIAL := 101
@@ -9026,7 +9200,30 @@ func _open_card_menu(inst: CardInstance, at: Vector2) -> void:
 			and not inst.cur_mana_abilities.is_empty()
 		_card_menu.set_item_disabled(at_lock, not lockable)
 		_card_menu.set_item_checked(at_lock, _no_auto_tap.has(inst.id))
+	# `Original type` HAS SOMETHING TO SHOW ONLY ON A COPY (the bug campaign
+	# c12, h4-7): anywhere else the card is what is printed on it, which is
+	# what the Showcase already shows. Greyed, not dropped, as every entry
+	# this table cannot offer is.
+	var at_original := _card_menu.get_item_index(CARD_MENU_ORIGINAL_TYPE)
+	if at_original >= 0:
+		var copy := _shows_a_copy(inst)
+		_card_menu.set_item_disabled(at_original, not copy)
+		_card_menu.set_item_tooltip(at_original, "" if copy else ORIGINAL_TYPE_NOT_A_COPY)
 	_popup_menu_at(_card_menu, at)
+
+
+# --- the bug campaign c12, h4-7: Original type ---
+## Why `Original type` is greyed on a card that is no copy.
+const ORIGINAL_TYPE_NOT_A_COPY := "Not a copy: the Showcase already shows this card as printed."
+
+
+## Is [param inst] wearing another card's definition — a Clone, a Copy
+## Artifact, a Vesuvan Doppelganger, a licid turned Aura — with its own
+## printed card under it? A face-down card shows its back whatever it is.
+func _shows_a_copy(inst: CardInstance) -> bool:
+	return inst != null and not inst.face_down and inst.printed_data != null \
+		and inst.data != inst.printed_data
+# --- end the bug campaign c12, h4-7 ---
 
 
 func _on_card_menu_chosen(id: int) -> void:
@@ -9056,11 +9253,15 @@ func _on_card_menu_chosen(id: int) -> void:
 		_flip_display_toggle(String(row["toggle"]))
 		return
 	match id:
-		# `Original type` and `Show full card` are the same view for us and
-		# that is the ORIGINAL's doing, not a shortcut: *"the Showcase
-		# always displays the original card, except for the text"*
-		# (`Duel.hlp`, **Showcase**), so the Showcase IS the original type.
-		# §2.12's stamp reads the entry the same way.
+		# `Original type` and `Show full card` are the same view for a card
+		# that is no copy, and that is the ORIGINAL's doing, not a
+		# shortcut: *"the Showcase always displays the original card,
+		# except for the text"* (`Duel.hlp`, **Showcase**), so the
+		# Showcase IS the original type. §2.12's stamp reads the entry the
+		# same way. ON A COPY they part (the bug campaign c12, h4-7): the
+		# Showcase shows the card it copies, and `Original type` — *"what
+		# this card was when it was cast, before any spells and effects
+		# changed it"* — the card itself, a Clone as a Clone.
 		0, 1:
 			if _card_preview != null:
 				# A CARD THAT IS FACE DOWN IN THE GAME IS FACE DOWN HERE
@@ -9073,7 +9274,8 @@ func _on_card_menu_chosen(id: int) -> void:
 				if _card_menu_inst.face_down:
 					_card_preview.show_back()
 				else:
-					_card_preview.show_card(_card_menu_inst)
+					_card_preview.show_card(_card_menu_inst, "",
+						id == CARD_MENU_ORIGINAL_TYPE)   # c12 h4-7
 		CARD_MENU_NO_AUTO_TAP:
 			# *"marks a land to be ignored — not tapped for mana — when you
 			# auto-cast any spell or effect. The only way to tap a locked
@@ -9452,13 +9654,26 @@ func _on_duel_options_closed() -> void:
 ## pattern nine-patches, a wallpaper of mana symbols tiles, a line drawing
 ## covers — and paints one itself when the 1997 art is absent, so this
 ## always gets a node back.
+##
+## A SEAT THE CALLER DRESSED wears its own ([member DuelConfig.territories],
+## the bug campaign c12): the adventure's duels put the hero's playmat on
+## seat 0, and the Duel Options answer only for what an entry leaves out
+## ([method DuelOptions.ground_for]).
 func _ground_node(pid: int) -> Control:
-	var ground := TerritoryGround.node(
-		DuelOptions.ground_color_for(pid, _human_seat(),
-			config.panel_colors[pid]),
-		DuelOptions.territory_type())
+	var choice := _ground_choice(pid)
+	var ground := TerritoryGround.node(String(choice["color"]),
+		String(choice["type"]))
 	ground.modulate = GROUND_DIM
 	return ground
+
+
+## The `{color, type}` seat [param pid]'s half wears (the bug campaign
+## c12: [member DuelConfig.territories]).
+func _ground_choice(pid: int) -> Dictionary:
+	var entry: Variant = config.territories[pid] \
+		if pid < config.territories.size() else {}
+	return DuelOptions.ground_for(pid, _human_seat(), config.panel_colors[pid],
+		entry if entry is Dictionary else {})
 
 
 ## Repaint one half's ground from the current Duel Options (§6.4). The
@@ -9594,6 +9809,126 @@ func _chain_caption(item: StackItem) -> String:
 	if item.x_value > 0:
 		line += "\nX is %d." % item.x_value
 	return line
+
+
+# --- the bug campaign c12, h4-2: the Spell Chain fits the screen ---
+## THE SPELL CHAIN'S COLUMN. It was a plain [VBoxContainer] at a fixed
+## (362, 150), and a VBox only grows: six objects on the chain (X spells
+## and Bolts in turn) ended at 310, 442, 608, 740, 906 and 1038 on a screen
+## 800 tall — the fifth showed its caption, the sixth nothing, and the
+## Situation Bar (z 90, at the seam) sat over the second one's card.
+##
+## So it is a column from y 150 to the screen's foot that lays its entries
+## out itself, the way [SqueezeColumn] lays out a territory's rows. While
+## they fit they stand as the VBox stood them, 6 px apart. Once they do
+## not, each entry slides UNDER the next by the same amount — the least
+## that fits — so every one keeps its caption in sight (six objects keep
+## their cards' titles too; the band carries the targets as its tooltip)
+## and the LAST one, the top of the chain, the object that resolves next,
+## always shows whole. And no entry is ever laid over [member
+## keep_clear], the Situation Bar: one that would cross it starts below it
+## instead. **[QoL]** — the 1997 chain was a window of its own
+## (`Winbk_Spellchain`), a different shape from ours.
+##
+## The column itself takes no pointer (MOUSE_FILTER_IGNORE): it runs the
+## height of the screen, and its empty part is the board's.
+class ChainColumn:
+	extends Container
+
+	## Gap between entries while they fit — the VBox's old `separation`.
+	const SEPARATION := 6.0
+	## The least of an entry that still shows once it has slid under the
+	## next one: its caption band's first line.
+	const MIN_SHOWN := 18.0
+	## The gap the column leaves at the screen's foot.
+	const FOOT := 4.0
+
+	## The Control whose band the entries keep off — the Situation Bar.
+	var keep_clear: Control = null
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_SORT_CHILDREN:
+			_lay_out()
+
+	## One entry wide, and NO taller than nothing — a column that reported
+	## its entries' height as its minimum would be given it.
+	func _get_minimum_size() -> Vector2:
+		var want := Vector2.ZERO
+		for child in _entries():
+			want.x = maxf(want.x, child.get_combined_minimum_size().x)
+		return want
+
+	func _entries() -> Array[Control]:
+		var out: Array[Control] = []
+		for child in get_children():
+			if child is Control and child.visible and not child.top_level:
+				out.append(child)
+		return out
+
+	## The stretch of the column's own height, top and bottom, that
+	## [member keep_clear] covers, with a gap either side; an empty
+	## stretch when it covers none of it.
+	func clear_band() -> Vector2:
+		if keep_clear == null or not is_instance_valid(keep_clear) \
+				or not keep_clear.is_visible_in_tree() \
+				or keep_clear.get_parent() != get_parent():
+			return Vector2.ZERO
+		var bar := keep_clear.get_rect()
+		if bar.position.x >= position.x + size.x or bar.end.x <= position.x:
+			return Vector2.ZERO
+		return Vector2(bar.position.y - position.y - SEPARATION,
+			bar.end.y - position.y + SEPARATION)
+
+	## Where each entry starts, given its height, with every entry but the
+	## last sliding [param under] px further up under the next; an entry
+	## that would cross [param band] starts below it. Returns the bottom
+	## of the last entry. The bottom only rises as [param under] grows,
+	## which is what lets [method _lay_out] halve its way to the least.
+	static func place(heights: Array[float], band: Vector2, under: float,
+			tops: Array[float]) -> float:
+		tops.clear()
+		var y := 0.0
+		var bottom := 0.0
+		for h in heights:
+			if band.y > band.x and y < band.y and y + h > band.x:
+				y = band.y
+			tops.append(y)
+			bottom = y + h
+			y += h + SEPARATION - under
+		return bottom
+
+	func _lay_out() -> void:
+		var kids := _entries()
+		if kids.is_empty():
+			return
+		var heights: Array[float] = []
+		for child in kids:
+			heights.append(child.get_combined_minimum_size().y)
+		var band := clear_band()
+		var tops: Array[float] = []
+		var under := 0.0
+		if place(heights, band, 0.0, tops) > size.y:
+			# The most any entry may slide: every one but the last keeps
+			# [constant MIN_SHOWN] of itself in sight.
+			var most := INF
+			for i in heights.size() - 1:
+				most = minf(most, heights[i] + SEPARATION - MIN_SHOWN)
+			var lo := 0.0
+			var hi := maxf(0.0, most) if most != INF else 0.0
+			for _i in 20:
+				var mid := (lo + hi) * 0.5
+				if place(heights, band, mid, tops) > size.y:
+					lo = mid
+				else:
+					hi = mid
+			under = hi
+		place(heights, band, under, tops)
+		for i in kids.size():
+			fit_child_in_rect(kids[i], Rect2(0.0, tops[i], size.x, heights[i]))
+# --- end the bug campaign c12, h4-2 ---
 
 
 func _rebuild_stack() -> void:
@@ -11735,9 +12070,18 @@ func _build_ui() -> void:
 	# The chain items float DIRECTLY on the battlefield (the reference has
 	# no panel behind them — each item carries its own tan caption box),
 	# just inside the board's left edge, above the seam.
-	_chain_box = VBoxContainer.new()
-	_chain_box.position = Vector2(CardPreview.SIZE.x + 62, 150)
-	_chain_box.add_theme_constant_override("separation", 6)
+	# A COLUMN DOWN TO THE SCREEN'S FOOT, no further (the bug campaign c12,
+	# h4-2): [ChainColumn] slides the entries under one another once they
+	# do not fit, and keeps them off the Situation Bar (given it below).
+	_chain_box = ChainColumn.new()
+	_chain_box.anchor_left = 0.0
+	_chain_box.anchor_right = 0.0
+	_chain_box.anchor_top = 0.0
+	_chain_box.anchor_bottom = 1.0
+	_chain_box.offset_left = CardPreview.SIZE.x + 62
+	_chain_box.offset_right = _chain_box.offset_left + MiniCard.SIZE.x
+	_chain_box.offset_top = 150
+	_chain_box.offset_bottom = -ChainColumn.FOOT
 	_chain_box.z_index = 80
 	add_child(_chain_box)
 
@@ -11821,6 +12165,11 @@ func _build_ui() -> void:
 	msg_row.add_child(_prompt_label)
 	add_child(msg_panel)
 	_situation_bar = msg_panel
+	# The chain's entries keep off the bar, wherever its sentence takes it
+	# (the bug campaign c12, h4-2).
+	_chain_box.keep_clear = msg_panel
+	msg_panel.item_rect_changed.connect(_chain_box.queue_sort)
+	msg_panel.visibility_changed.connect(_chain_box.queue_sort)
 	# A refusal is red and TEMPORARY (§3.10): this one-shot puts the bar
 	# back in its own voice when the flash runs out, so the red line is not
 	# left standing by a duel in which nothing else happens to move.

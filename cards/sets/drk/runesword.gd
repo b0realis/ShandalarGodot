@@ -79,6 +79,12 @@ class ArmEffect extends EffectBase:
 	## Everything the Runesword's edge does to what it cuts.
 	static func _curse(game: MtgGame, _source: CardInstance,
 			victim: CardInstance, _amount: int) -> void:
+		# Journaled (the bug campaign c12, h3-9): the watch fires from the
+		# damage itself, outside any resolution's record, and the AI's
+		# damage forecast runs it — unrecorded, a forecast left a blocked
+		# Drudge Skeletons unable to regenerate in the real game.
+		game._rec(victim, &"regeneration_banned_this_turn")
+		game._rec(victim, &"exile_instead_of_dying")
 		victim.regeneration_banned_this_turn = true
 		victim.exile_instead_of_dying = true
 		game.log_line("%s is cut by the Runesword" % victim.data.card_name)

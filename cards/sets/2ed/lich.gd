@@ -76,9 +76,17 @@ static func _the_bargain(game: MtgGame, source: CardInstance) -> void:
 ## THE PRICE (CR 614.1c), paid as the enchantment arrives: the bargain
 ## above is already published by then, so 0 life is survivable, and nothing
 ## has held priority over a Lich that had not paid.
+##
+## AT ZERO OR LESS IT COSTS NOTHING (the bug campaign c12, h3-13): a second
+## Lich arriving while the first holds its controller at -3 loses "-3
+## life", which adjust_life read as a GAIN of 3 — and the bargain turned
+## the gain into three cards. A negative amount of life lost is 0 (CR
+## 107.1b), so the price is the life total only while it is above 0.
 static func _pay_your_life(game: MtgGame, _source: CardInstance,
 		controller: int) -> void:
-	game.adjust_life(controller, -game.players[controller].life)
+	var life := game.players[controller].life
+	if life > 0:
+		game.adjust_life(controller, -life)
 
 
 static func _damage_to_my_controller(_game: MtgGame, source: CardInstance,

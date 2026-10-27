@@ -358,6 +358,8 @@ var _illus_size: int
 var _shown: CardInstance = null
 ## Presentation-only reprint choice must survive the same live redraw.
 var _shown_printing_set := ""
+## The card on show is its PRINTED card ([method show_card]'s `printed`).
+var _shown_printed := false
 
 
 ## The x-height of [param f] as a share of its em, read off the outline of
@@ -794,7 +796,7 @@ func set_text_expanded(on: bool) -> void:
 	# Showcase's own right-click menu while looking at a card, so the card
 	# in front of them has to answer.
 	if _shown != null:
-		show_card(_shown, _shown_printing_set)
+		show_card(_shown, _shown_printing_set, _shown_printed)
 	else:
 		_lay_out_text_box(TEXT_TOP)
 
@@ -873,6 +875,7 @@ func show_back() -> void:
 	_portal_land_scan.texture = null
 	_shown = null
 	_shown_printing_set = ""
+	_shown_printed = false
 	_text_plate.visible = false
 	_dual_land_plate.visible = false
 	_dual_land_plate.texture = null
@@ -883,11 +886,20 @@ func show_back() -> void:
 ## Fill and show the preview for one card instance. [param printing_set]
 ## is presentation-only: the Deck Builder uses it to show the artwork,
 ## symbol, and credit of the reprint selected by its set filter.
-func show_card(inst: CardInstance, printing_set := "") -> void:
+##
+## [param printed] shows what is PRINTED on the card ([member
+## CardInstance.printed_data]) rather than what it is now ([member
+## CardInstance.data]) — the two differ only while it is a copy (a Clone of
+## a Serra Angel is a Serra Angel until it leaves play). It is the small
+## card menu's `Original type`: *"shows you what this card was when it was
+## cast, before any spells and effects changed it"* (`Duel.hlp`,
+## **Territory**); it used to show the copy (the bug campaign c12, h4-7).
+func show_card(inst: CardInstance, printing_set := "", printed := false) -> void:
 	_back.visible = false
 	_shown = inst
 	_shown_printing_set = printing_set
-	var d := inst.data
+	_shown_printed = printed
+	var d := inst.printed_data if printed and inst.printed_data != null else inst.data
 	var choice_id := printing_set if printing_set != "" else CardPrintings.of(inst)
 	var printing := CardPrintings.resolve(d.card_name, choice_id)
 	# The catalogue answers for a pack's printings; a bare set code it has
@@ -950,7 +962,7 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	_oracle.add_theme_constant_override("line_spacing",
 		_rules_leading(_body_font, rules))
 	_oracle.add_theme_font_size_override("font_size", rules)
-	_pt_label.text = _power_toughness(inst)
+	_pt_label.text = _printed_power_toughness(d)   # c12 h4-7: of the card shown
 	# NO CREDIT AT ALL when we do not know the artist — never `Illus. ` with
 	# nothing after it. `CardData.artist` comes from the `cards/data/`
 	# snapshot, and an older snapshot (or a printing Scryfall does not
@@ -1144,7 +1156,12 @@ static func _type_line(d: CardData) -> String:
 ## `data` is repointed by `become_copy` (CR 707), so a copy or a token
 ## prints ITS card's values, which is correct.
 static func _power_toughness(inst: CardInstance) -> String:
-	var d := inst.data
+	return _printed_power_toughness(inst.data)
+
+
+## [method _power_toughness] for one definition — the copy's or, for
+## `Original type`, the card's own (the bug campaign c12, h4-7).
+static func _printed_power_toughness(d: CardData) -> String:
 	if not d.is_creature():
 		return ""
 	if d.power == 0 and d.toughness == 0 and not d.static_abilities.is_empty():

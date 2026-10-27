@@ -1180,9 +1180,12 @@ static func draft_comments_from_text(text: String) -> String:
 #         back in.
 #   .dck  the ORIGINAL MicroProse 1997 format — `.id TAB count TAB name`.
 #         It is the one format the 1997 game itself can open, so a deck
-#         built here can be dropped into a real Shandalar install's Decks
-#         folder. `tools/deck_convert.gd` already reads and writes it from
-#         the command line; this is the same emitter behind a button.
+#         built here can be dropped into a real Shandalar install's
+#         Playdeck folder, where its deck builder lists the player's decks
+#         (its Decks folder holds the opponents'). It is written as that
+#         builder writes one ([method to_dck_text], the bug campaign c12);
+#         `tools/deck_convert.gd` reads it and writes the opponents' shape
+#         from the command line.
 #
 # `.deck` is not on the list because Save already writes it — an "export"
 # that produced the file you just saved would be a menu entry that does
@@ -1210,29 +1213,157 @@ func to_dec_text() -> String:
 	return "\n".join(lines) + "\n"
 
 
-## The deck in the 1997 file format. [param ids] is card name -> the
-## original's numeric id (`cards/data/dck_ids.txt`); a card with no known
-## id is emitted as `.0`, exactly as tools/deck_convert.gd emits it, which
-## the original's own loader tolerates because names are authoritative.
+## The deck in the 1997 file format, AS THE 1997 DECK BUILDER WRITES IT.
+## [param ids] is card name -> the original's numeric id
+## (`cards/data/dck_ids.txt`). Our own reader takes the NAME column; the
+## 1997 loader reads only the id (deckdll.c `load_deck`,
+## `sscanf(".%d %d")`).
+##
+## A CARD WITH NO KNOWN ID IS LEFT OUT (the bug campaign c12, F4's note on
+## h5-2). It was written `.0`, as tools/deck_convert.gd still writes it —
+## and id 0 is Air Elemental, so the original game loaded an Air Elemental
+## for every card it was not given a number for. The file holds the cards
+## it can name; [method dck_left_out] counts the rest, and the export says
+## how many ([method dck_left_out_note]). A proxy has no id either.
+##
+## THE EIGHT `;` LINES (the bug campaign c12, h5-2). The deck builder's
+## save (deckdll.c `save_deck`, 5249-5268 in the decompilation) writes the
+## Deck Info fields one to a line behind a `;` — name, description,
+## author, e-mail, date, deck face, edition, comments — then a blank line,
+## then the cards. Its load (5306-5370) gives up on a file whose first
+## eight lines do not each begin with `;`, and its Load list (2244-2262)
+## leaves out a file whose first byte is not one. We wrote the bare name
+## and a blank line — the shape of the game's numbered opponent decks,
+## which no list of the player's shows — so "for the original game" was
+## not true. Now the header is the builder's, field by field:
+## - each field is cut to what the Deck Info dialog lets a player type
+##   ([constant DCK_TITLE_MAX] and the rest, its `EM_LIMITTEXT`s at
+##   1601-1621): the load reads each line into a buffer that size, and a
+##   longer line runs on into the next read, which does not begin with
+##   `;`, and the file is refused;
+## - in plain ASCII, as the 1997 game reads bytes in the Windows code page
+##   and one UTF-8 letter is two of them;
+## - the author and e-mail empty [ours]: the 1997 builder filled them from
+##   the player's own settings, and an address is the player's to give;
+## - the date today's, in the dialog's own `MMMM dd, yyyy` (6068); the
+##   deck face the first (`1`, as a new deck's, 6064); the edition the
+##   `4th Edition` the dialog itself puts in (1619); the comments the
+##   deck's [member notes], one line.
 func to_dck_text(ids: Dictionary) -> String:
 	var lines := PackedStringArray()
-	lines.append(deck_name)
+	lines.append(";" + dck_title())
+	lines.append(";")                                          # description
+	lines.append(";")                                          # author [ours]
+	lines.append(";")                                          # e-mail [ours]
+	lines.append(";" + _dck_field(dck_date(), DCK_DATE_MAX))
+	lines.append(";1")                                         # deck face
+	lines.append(";" + DCK_EDITION)
+	lines.append(";" + _dck_field(notes, DCK_COMMENTS_MAX))
 	lines.append("")
 	for card_name in names():
-		lines.append(".%d\t%d\t%s" % [
-			int(ids.get(card_name, 0)), int(counts[card_name]), card_name])
+		if ids.has(card_name):
+			lines.append(".%d\t%d\t%s" % [
+				int(ids[card_name]), int(counts[card_name]), card_name])
 	# The 1997 file's sideboard is FIVE per-opponent-colour sections plus
 	# `.vNone` ([method DeckList.parse_dck]), which the original's AI used
 	# to swap against the colour it was facing. We hold ONE sideboard, so
 	# it goes under `.vNone` — the section that names no opponent colour —
 	# and `parse_dck` folds the sections by max-per-name, so reading our
-	# file back gives the pile we wrote.
-	if not sideboard.is_empty():
+	# file back gives the pile we wrote — of the cards it can name.
+	var side_known := side_names().filter(func(card_name: String) -> bool: return ids.has(card_name))
+	if not side_known.is_empty():
 		lines.append(".vNone")
-		for card_name in side_names():
+		for card_name in side_known:
 			lines.append(".%d\t%d\t%s" % [
-				int(ids.get(card_name, 0)), int(sideboard[card_name]), card_name])
+				int(ids[card_name]), int(sideboard[card_name]), card_name])
+	# The closing newline is load-bearing: the 1997 loader's line reader
+	# drops a last line that ends at the end of the file (deckdll.c
+	# `read_deck_line`).
 	return "\n".join(lines) + "\n"
+
+
+## How many cards, deck and sideboard, [method to_dck_text] leaves out for
+## want of an id in [param ids] — the copies, not the names.
+func dck_left_out(ids: Dictionary) -> int:
+	var left := 0
+	for pile in [counts, sideboard]:
+		for card_name in pile:
+			if not ids.has(card_name):
+				left += int(pile[card_name])
+	return left
+
+
+## What the `.dck` export says of the cards it left out
+## ([method dck_left_out]), "" when it left none.
+const DCK_LEFT_OUT := "Left out of the .dck: %d card%s with no known 1997 card number."
+
+
+func dck_left_out_note(ids: Dictionary) -> String:
+	var left := dck_left_out(ids)
+	return "" if left == 0 else DCK_LEFT_OUT % [left, "" if left == 1 else "s"]
+
+
+## The longest Deck Info fields the 1997 dialog takes (deckdll.c
+## 1601-1621, `EM_LIMITTEXT`): the deck's title, the date. See
+## [method to_dck_text] for why a longer one is not merely cut short.
+const DCK_TITLE_MAX := 28
+const DCK_DATE_MAX := 19
+## The Comments box's limit.
+const DCK_COMMENTS_MAX := 398
+## The edition line every deck the 1997 builder saves carries — its dialog
+## sets the field to this (deckdll.c 1619), and all 77 decks of the game's
+## Playdeck folder say it.
+const DCK_EDITION := "4th Edition"
+## Characters a Windows file name cannot hold. The title is also the
+## exported file's name ([method dck_title]), so it holds none of them.
+const DCK_NOT_IN_A_FILE_NAME := "\\/:*?\"<>|"
+
+
+## THE DECK'S NAME AS THE 1997 GAME HOLDS IT — the first `;` line of
+## [method to_dck_text], and the exported file's name too
+## ([method DeckStore.export_deck]): the 1997 deck builder's Load list
+## reads that line and opens `playdeck\<name>.dck` by it (deckdll.c
+## 2244-2262), so a deck whose file is named otherwise is not listed.
+## Printable ASCII without a character a Windows file name refuses, runs
+## of spaces made one, at most [constant DCK_TITLE_MAX] characters. A
+## name with nothing of that left gets one from its digest; a name a
+## Windows device has (`CON`, `LPT1`, …) gets ` deck` after it, as
+## `CON.dck` opens the device.
+func dck_title() -> String:
+	var kept := ""
+	for ch in deck_name:
+		var code: int = String(ch).unicode_at(0)
+		if code >= 0x20 and code < 0x7F and not DCK_NOT_IN_A_FILE_NAME.contains(ch):
+			kept += ch
+	var title := " ".join(kept.split(" ", false)).left(DCK_TITLE_MAX).strip_edges()
+	if title.is_empty():
+		return "Deck " + deck_name.md5_text().left(8)
+	var lowered := title.to_lower()
+	if lowered in ["con", "prn", "aux", "nul"] or (lowered.length() == 4 \
+			and lowered.left(3) in ["com", "lpt"] and lowered[3] >= "1" and lowered[3] <= "9"):
+		return title + " deck"
+	return title
+
+
+## Today in the 1997 dialog's `MMMM dd, yyyy` — "October 27, 2026".
+static func dck_date() -> String:
+	var today := Time.get_date_dict_from_system()
+	const MONTHS := ["January", "February", "March", "April", "May", "June", "July",
+		"August", "September", "October", "November", "December"]
+	return "%s %02d, %d" % [MONTHS[int(today.month) - 1], int(today.day), int(today.year)]
+
+
+## [param text] as one header field: one line, printable ASCII, runs of
+## spaces made one, at most [param limit] characters.
+static func _dck_field(text: String, limit: int) -> String:
+	var kept := ""
+	for ch in text:
+		var code: int = String(ch).unicode_at(0)
+		if code >= 0x20 and code < 0x7F:
+			kept += ch
+		elif ch == "\n" or ch == "\t":
+			kept += " "
+	return " ".join(kept.split(" ", false)).left(limit).strip_edges()
 
 
 ## The deck expanded one entry per physical card — what DuelConfig wants.

@@ -548,7 +548,13 @@ func _next_result() -> void:
 				_seen["amulet"] = true
 				_amulet_won()
 				return
-			if int(spoils.get("bits", 0)) != 0 and not _seen.has("reward"):
+			# A reward that gave nothing to say — lives carried with none
+			# changed, the won card refused under the Classic MTG rules — has
+			# no screen: 1997 showed its title alone over an empty page, the
+			# treasure's sound with it [ours: 1997 slip; the bug campaign
+			# c12, h2-3].
+			if int(spoils.get("bits", 0)) != 0 and not _seen.has("reward") \
+					and not (spoils.get("rewards", []) as Array).is_empty():
 				_seen["reward"] = true
 				_reward()
 				return

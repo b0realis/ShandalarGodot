@@ -60,11 +60,11 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented in the default core, `cards/todo/` EMPTY** — M3 complete; nine optional numbered packs: Pack 1 alone raises the eight set checklists to **1,270 named entries / 901 unique rules identities**, all nine give **4,083 set entries / 3,093 unique cards** |
-| Test suite | **13,379 tests, 0 failing, 861 scripts** (580,913 asserts, the 0.50.21 gate); tools self-tests **676 OK** (15 skipped), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **13,379 tests, 0 failing, 861 scripts** (580,913 asserts, the 0.50.21 gate); tools self-tests **676 OK** (15 skipped), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below. (2026-10-27: those are the 0.50.21 gate's numbers; `tests/` now holds 1,049 `test_*.gd` scripts — take the counts from the latest gate's log, not from here.) |
 | Fidelity ledger | **12 live rows over 25 marked files** (19 card files and 6 shared helper files; 53 rows over 84 files on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
-| Duel to-do | **cleared** (`docs/duel-todo.md`) |
-| Rules forks | **9** in `engine/rules_options.gd`, all defaulting modern except `sacrifice_clauses_wait` (off under every preset, the owner's ruling of 2026-10-13) — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found. Plus one DERIVED rule, not a fork: CR 704.5q counter annihilation under the modern presets, following `damage_prevention_window` (`RulesOptions.counters_annihilate`, 0.50.11) |
-| Modes | Magic Battle, Deck Builder, **Gauntlet** (the fourth 1997 mode, built 2026-09-02) |
+| Duel to-do | **cleared** (`docs/duel-todo.md`) (2026-10-27: no longer — open items again, among them the draw-step and combat-damage questions that fall to the heuristic; see the list's own note) |
+| Rules forks | **9** in `engine/rules_options.gd`, all defaulting modern except `sacrifice_clauses_wait` (off under every preset, the owner's ruling of 2026-10-13) (2026-10-27: and mana burn — a fresh install plays "Modern rules, mana burn on", `RulesOptions.DEFAULT_PRESET`, the owner's ruling of 2026-09-13) — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found. Plus one DERIVED rule, not a fork: CR 704.5q counter annihilation under the modern presets, following `damage_prevention_window` (`RulesOptions.counters_annihilate`, 0.50.11) |
+| Modes | Magic Battle, Deck Builder, **Gauntlet** (the fourth 1997 mode, built 2026-09-02) (2026-10-27: and Shandalar, the adventure, in development; Booster Draft; SGManalink LAN duels and tournaments behind the globe) |
 
 **What moved on 2026-09-02.** A second day of concurrent passes; each has
 its own section below.
@@ -296,13 +296,13 @@ every machine. The rest of the map re-checked clean against
 
 | Item | What is uncertain | What would settle it |
 |---|---|---|
-| **The untap step sweeps `Untap.wav`** | `DuelAudio.cue_for` answers `BECAME_UNTAPPED` with `sfx_untap`, and the untap STEP fires that once per permanent (coalesced to one sound). Nobody did anything: this is a phase making a noise by itself, which the owner's ruling forbids. The same event also covers an effect-driven untap (Candelabra, Tawnos's Coffin), which IS an action, and the event carries no cause to tell them apart. | One line in `game/duel/duel_audio.gd` — return `""` for `BECAME_UNTAPPED` — plus the matching row in `tests/ui/test_duel_sound.gd`. Costs the (rare) effect-untap cue; `WAV_UNTAP` has no call site in Manalink's C anyway, so nothing is lost that was sourced. **A `game/duel/` file: the duel-screen agent applies it.** |
+| ~~**The untap step sweeps `Untap.wav`**~~ **CLOSED** (2026-10-27: `DuelAudio.cue_for` returns `""` for `BECAME_UNTAPPED`, "A PHASE MAKES NO NOISE BY ITSELF") — as it stood: | `DuelAudio.cue_for` answers `BECAME_UNTAPPED` with `sfx_untap`, and the untap STEP fires that once per permanent (coalesced to one sound). Nobody did anything: this is a phase making a noise by itself, which the owner's ruling forbids. The same event also covers an effect-driven untap (Candelabra, Tawnos's Coffin), which IS an action, and the event carries no cause to tell them apart. | One line in `game/duel/duel_audio.gd` — return `""` for `BECAME_UNTAPPED` — plus the matching row in `tests/ui/test_duel_sound.gd`. Costs the (rare) effect-untap cue; `WAV_UNTAP` has no call site in Manalink's C anyway, so nothing is lost that was sourced. **A `game/duel/` file: the duel-screen agent applies it.** |
 | **`EndTurn.wav` fired off the turn COUNTER** — *fixed the same day by the duel-screen pass* | `duel_screen.gd` played `sfx_end_turn` whenever `game.turn_number` changed: the clock, not an action, and the only cue in that file that was not something a player or a card DID. | Removed. `EndTurn.wav` is now imported and unplayed; the original's only known call site is `ai.c:588`, where the **AI ends its turn** — a seat performing the pass — so a future pass could re-hang it there, on the ACTION, and nowhere else. |
 | **`DIES` plays `Buried.wav`** | s30 uses **`Kill.wav`** for creature death — proved by decoding its `creature_death.ogg` to 75 776 bytes of PCM, which is `Kill.wav`'s data length exactly. Neither `WAV_BURIED = 1` nor `WAV_KILL = 25` has a call site in Manalink's C; both are the exe's. The 1997 glossary says **bury** = "to the graveyard, no regeneration" (p. 163), which fits a creature dying, but so does *kill*. The enum is alphabetical, so its order says nothing. | The Tier 2 decompilation, which is not in this tree: find `play_sound_effect(1)` vs `(25)` near the graveyard path. **Do not change it on s30's word alone** — that is Tier 3 against a plausible reading of the filenames. |
 | **`Cancel.wav` is never played** | `deckdll.cpp:2040-2056` loads `DuelSounds\cancel.wav` into slot 5 beside `button.wav` in slot 4, so the original has a distinct CANCEL click and we play the button one everywhere. | A call site in `game/duel/duel_screen.gd`'s cancel paths, plus a `sfx_cancel.wav` manifest row. Needs the duel screen, which was another agent's file on 2026-09-03. |
 | ~~**A forced discard is silent**~~ **CLOSED 2026-09-06** — `Mtg.EventType.CARD_DISCARDED`, one per card from every discard path, mapped by `DuelAudio.cue_for`; see THE 2026-09-06 PASS. As it stood: | `sfx_discard` fires only on the confirmed hand-size discard. Hymn to Tourach and Mind Twist make no sound; the original plays `WAV_DISCARD` from `functions.c:14861` and `unlimited.c:2722` too. | An engine `CARD_DISCARDED` event, or a `MtgGame` hook the screen can hear. |
 | ~~**`sfx_lose` in an AI-vs-AI demo**~~ **CLOSED 2026-09-06** — a duel with no human seat ends in silence. As it stood: | `_play_sfx("sfx_win" if _is_human(winner) else "sfx_lose")` — with no human seat every demo duel ends on the LOSE sting. | A third branch, or silence, in the duel screen. |
-| **Five imported-or-namable cues with no event** | `Destroy` (which `deck.c:1158` records is the *exile* sound "despite its name"), `Kill`, `Regen`, `Sacrfice`, `ManaBurn`, `Control`, `ChangeC`/`ChangeT`, `FastFX`, and `Counter` (imported, "a counter was ADDED to a card") | Engine events we do not dispatch. `ManaBurn` is the closest — mana burn is already a rules fork. |
+| **Five imported-or-namable cues with no event** | `Destroy` (which `deck.c:1158` records is the *exile* sound "despite its name"), `Kill`, `Regen`, `Sacrfice`, `ManaBurn`, `Control`, `ChangeC`/`ChangeT`, `FastFX`, and `Counter` (imported, "a counter was ADDED to a card") | Engine events we do not dispatch. `ManaBurn` is the closest — mana burn is already a rules fork. (2026-10-27: `ManaBurn` is done — `Mtg.EventType.MANA_BURN` plays `sfx_mana_burn` on an actual burn; the rest still have no event.) |
 | **Which mastering is 1997's** | Three gain stagings of the duel sounds exist locally and none is dated 1997 (`Provenance.md`, "The audio"). The importer takes the folder the player's own game reads and prints the date. | Nothing local. A sealed CD would. |
 
 ## The Showcase's mana symbols (2026-09-04) — the braces become glyphs
@@ -2850,7 +2850,11 @@ Full design record (platforms incl. Raspberry Pi via the Compatibility
 renderer, faithful-graphics strategy, QoL wishlist): docs/duel-screen-design.md.
 Remaining M2.x: auto-tap mana (`auto-cast` / `Don't Auto Tap`, blocked
 behind @MENU_MANAPOOL's per-mana spends — docs/duel-todo.md §9.8),
-hover zoom, gamepad focus ring. **Phase-stop options landed** with
+hover zoom, gamepad focus ring. (2026-10-27: all three since built — the
+double-click auto-cast and `Don't auto tap` (2026-09-03,
+`DuelScreen._auto_tap_for_pending`), the hovered card enlarged in the
+sidebar, and the cards as focusable buttons with a focus frame for a
+gamepad (`MiniCard`).) **Phase-stop options landed** with
 duel-todo §6.1/§6.3 (`game/duel/phase_stops.gd`), and the
 original-assets import pipeline and card-art fetching are shipped
 (`tools/import_original.py`, `tools/fetch_card_art.py`) — the line
@@ -2865,7 +2869,9 @@ cards** the 1997 game shipped = **897 unique cards** after dedupe AND after
 dropping the four physically unimplementable ones (Chaos Orb, Falling Star,
 Shahrazad, Word of Command — same exclusions as s30, and none of the four is
 in `cards/data/` at all). 897 is therefore the finished number, not a target
-with four still to subtract.
+with four still to subtract. (2026-10-27: the four are no longer outside the
+game — Pack 1, DotP Complete (2026-09-14), adds them as marked digital
+adaptations, `cards/optional/pack_1/`; the base pool stays 897.)
 
 **The target moved from 896 to 897 on 2026-09-01**, and it moved because the
 pool DEFINITION was one card short, not because anything was recounted. The
@@ -2892,7 +2898,7 @@ Current state: **897 implemented** (821 hand-written across waves 1-74 +
 76 generator-auto) and **cards/todo/ IS EMPTY** — every stub has graduated,
 and `tests/cards/test_pool_wave73.gd` pins that it stays empty. The only
 cards the pool does not contain are the four excluded on physical grounds
-above.
+above (2026-10-27: Pack 1 now carries those four, see above).
 
 Owed under M3 when the cards were done, and since built: deck validation
 (the copy limit and the restricted and banned lists — `engine/deck_format.gd`,
@@ -2912,10 +2918,10 @@ unblocked. The table is kept as the record of what each wave was for:
 |---|---|
 | ~~Multi/divided targeting~~ (landed wave 43) | cluster cleared |
 | ~~Copying~~ (landed wave 47) | cluster cleared |
-| ~~Ante~~ (landed wave 46) | cluster cleared except Ring of Ma'rûf, which waits on the outside-the-game zone instead |
+| ~~Ante~~ (landed wave 46) | cluster cleared except Ring of Ma'rûf, which waits on the outside-the-game zone instead (2026-10-27: built since — `MtgPlayer.outside_the_game`, `cards/sets/arn/ring_of_ma_ruf.gd`) |
 | ~~Poison counters~~ (landed wave 48) | cluster cleared |
 | ~~Text-changing effects~~ (landed wave 49) | cluster cleared |
-| ~~Combat re-arrangement~~ (landed wave 50) | cluster cleared; one blocker on TWO attackers is still owed |
+| ~~Combat re-arrangement~~ (landed wave 50) | cluster cleared; one blocker on TWO attackers is still owed (2026-10-27: built 2026-09-02 — `Combat.extra_blocks`, CR 509.1b: Two-Headed Giant of Foriys, Blaze of Glory) |
 | ~~"Blocked by that Wall this turn" history~~ (landed wave 48) | the whole Glyph cycle graduated |
 | ~~Phasing~~ (landed wave 51) | cluster cleared |
 | ~~A game-DRAW result~~ (landed wave 51) | cluster cleared |
@@ -3000,7 +3006,8 @@ Phase 3 (research): game cloning + full-turn minimax with transposition
 tables — mage-go's `interactive/ai/search/` is the working reference; it
 plugs in behind the same act() surface. **A design note is below** (M4
 phase 3): NOT started, and the note exists because the first thing phase 3
-needs is a measurement, not a search.
+needs is a measurement, not a search. (2026-10-27: started — the paragraph
+below, `engine/ai/combat_search.gd`, 2026-09-05.)
 
 **The first search LANDED 2026-09-05** — `engine/ai/combat_search.gd`,
 an alpha-beta minimax over the crack-back, kept on a −26% fall in the
@@ -3355,11 +3362,20 @@ over the world and their spoils, the lair duels, ruled towns, sieges and
 the Spell of Dominion, creature quests ("Built: part B", "Built: part B
 played and fixed"); **the card rules** (0.50.57) — the Embark's three, the
 Classic MTG rules among them ("Built: the Classic MTG rules").
+**Built 2026-10-27: the world's last pieces** (0.50.60) — a known dungeon
+drawn on the world and the small map, the doors of castles and dungeons
+(the board behind them still to come), the wizards' window (F6, the hero
+pane's Wizards tab), the keys and "Ready to Quit?" ("Decided: the world's
+last pieces and part C", "Built: the world's last pieces"); and the
+owner's follow-ups (0.50.61) — Save and Load on "Ready to Quit?", the card
+packs greyed on the Embark screen until their worlds exist, an
+in-development notice before Embark ("Built: the owner's follow-ups").
 Next — part C: entering a dungeon or a castle, the board and its rooms, the
 dungeon duels and their rules, the castle wizards' duels and a beaten
 wizard's towns freed, the retaliation siege, Arzakon, the win and the end
-score; beside it, a known dungeon drawn on the world, the wizards' window
-(F6), and the pack worlds. ("Open for part C" in the implementation notes.)
+score; beside it ~~a known dungeon drawn on the world, the wizards' window
+(F6),~~ (both built in 0.50.60) and the pack worlds. ("Open for part C" and
+"Decided: … part C" in the implementation notes.)
 
 ## The Gauntlet — the fourth 1997 mode (BUILT 2026-09-02)
 
@@ -3453,7 +3469,9 @@ spinner and a shell page; nothing else built here would move.
 **Deliberately out of scope:** `&Save gauntlet` / `&Load gauntlet...`.
 We have no save/load anywhere — not for a duel, not for a match, not for
 Shandalar — and it should land as one design across all three when M5
-needs it. The gauntlet logs its seed instead, so a run is reproducible
+needs it. (2026-10-27: Shandalar has it now — an autosave and ten named
+slots, `AdventurePlayer`, `SaveSlots`; the gauntlet still has none,
+`gauntlet_screen.gd`.) The gauntlet logs its seed instead, so a run is reproducible
 from a bug report.
 
 **Do not confuse this with the Deck Lab's `--gauntlet`**, which is a
@@ -3469,6 +3487,10 @@ SVG output, WorkerThreadPool parallelism with seed-stable determinism at
 any thread count. Manual: DeckLab/README.md. Owed next: a stall/bug
 auto-report bundle (seed + decks + log on any stalled game), matchup
 matrices (every deck vs every deck), and Elo-style gauntlet ladders.
+(2026-10-27: the games now fan out over separate worker PROCESSES,
+`--procs`, with WorkerThreadPool threads inside each; the matrices
+(`--matrix`) and the Elo ledger shipped; of the stall bundle, the engine's
+own log of every stalled game is kept with `--record stalls`.)
 
 ## Deck Builder (SHIPPED 2026-08-31; audited, restyled and audited again)
 
@@ -3628,7 +3650,9 @@ Recorded here rather than half-wired, per the pass's own brief.
   attributable to it.
 - **The `.dck` decks the 1997 game and its expansion shipped.** The two
   empty deck groups (`1997 originals`, `Duels of the Planeswalkers`) have
-  the mechanism but no content. Candidates exist on this machine
+  the mechanism but no content. (2026-10-27: filled since — `decks/1997/`
+  holds 157 decks in seven groups, `originals` and `duels` among them;
+  `docs/decks-1997.md`.) Candidates exist on this machine
   (`../mage-go/rogue_dck/*.dck`, `../s30/Cunning.dck`); importing them was
   not done in this pass because most will not load strictly against our
   837-card pool, and because adding files to `decks/` would change what
@@ -3736,7 +3760,9 @@ Measured, A/B in one process on a 200-unique / 500-total deck, warm cache:
   dialog that is worse than nothing.
 - **A suggested mana base.** "You are 3 short of the land this curve
   wants" is one line of arithmetic and the single most common deckbuilding
-  mistake. NOT built because every formula for it is an opinion, and an
+  mistake. (2026-10-27: the job is done another way — `ManaAnalysis`, the
+  Stats window's `[QoL]` "is every card castable on its own turn", which
+  names the color that is short and by how many sources.) NOT built because every formula for it is an opinion, and an
   opinionated number in 1997 chrome reads as the game telling you your
   deck is wrong. The land-ratio bar and the curve give a player the same
   facts without the verdict. **A written proposal for the owner to rule
@@ -3785,7 +3811,10 @@ Added by the second audit pass:
   Left out because there is no room on the command bar for it and
   shrinking the deck area to make some is the one thing the brief forbids.
 - **`@FULLCARD` ("Expand Text Box")** on the Showcase — still owed, still
-  `CardPreview`'s, which belongs to the duel.
+  `CardPreview`'s, which belongs to the duel. (2026-10-27: built — the
+  Expand toggle on the Deck Builder's filter strip, `filter_bar.gd`,
+  "THE EXPAND TOGGLE, GIVEN A DOOR YOU CAN SEE", and the duel's
+  `ExpandButton`.)
 
 ~~Owed, and each one is owed for a stated reason — `DeckFilter.OWED` is
 the live list~~ **ALL FIVE SHIPPED 2026-09-06** as the pages of the one
@@ -4277,7 +4306,7 @@ and the narratable pair is `{3, 5}`. `[3, 5]` is the intersection of the
 first and third and stays. **What is missing is the second surface's 1.**
 
 **Recommended, S, one line plus a test** (not built — this was a design
-pass): `LENGTHS = [1, 3, 5]`, with **nothing added to `PROGRESS`**.
+pass; 2026-10-27: built since, `MatchState.LENGTHS` is `[1, 3, 5]`): `LENGTHS = [1, 3, 5]`, with **nothing added to `PROGRESS`**.
 `MatchState` already does the rest: `wins_needed()` is `best_of / 2 + 1`
 = 1, `is_over()` is true after one duel, `progress_line()` already returns
 `""` for a `best_of` it has no sentence for, and `verdict()` already
@@ -4518,6 +4547,8 @@ untouched and still behaves like a permanent. Pinned by
 ### Two unmeasured performance candidates
 
 Recorded as candidates, **not** as regressions, and deliberately not claimed: the review declined to call them regressions without a measurement taken off a loaded machine. Anything timed while several agents are running is timed under load — re-measure against a control before acting.
+
+(2026-10-27: the two candidates' own lines were missing under this heading. They are the two **Not measured** rows of `docs/code-review-2026-09.md`: `ManaIcons.cost_row` compiling its `RegEx` on every call (`game/duel/mana_icons.gd`, still so), and the uncached per-pixel image walk in `game/duel/original_dialog.gd`. Neither has been measured since.)
 
 ### A gap in a guarantee we rely on — CLOSED 2026-09-02
 
@@ -6779,7 +6810,8 @@ work; each points at the section that owns it.
 - **The pack decisions**: which set packages ship in which zip and what
   the art archive carries. Along with the two owed Showcase items —
   `@FULLCARD` ("Expand Text Box") and the six remaining `@TITLEDIALOG`
-  fields on Deck Info.
+  fields on Deck Info. (2026-10-27: `@FULLCARD` is built, the Expand
+  toggle in `filter_bar.gd`.)
 
 ## THE COLORLESS NUMERAL, AND A WIZARD UNDER LAND (2026-09-07) — [1997]
 
@@ -8979,7 +9011,7 @@ was ported in the reading; a port, when one comes, is a `[forge]` marker
 at the site naming file, lines and commit, on top of the Provenance row.
 
 
-## THE NEXT WAVE OF THE AI (2026-09-08) — planned, not started
+## THE NEXT WAVE OF THE AI (2026-09-08) — ~~planned, not started~~ DONE 2026-09-09 to 2026-09-11
 
 Written down, on the owner's word ("document next wave of ai … we will
 do it later"), as `docs/AI-next-wave.md`: the Forge programme's five
@@ -8989,7 +9021,10 @@ block and the Abyss shelter with wave 1, Time Walk's worth with wave 2,
 the Disk deferral with wave 3, the planner's tie-break with wave 5, the
 Angel as its own item with the census that prices it. Every row names
 its knob, its rung, the paragraph that designed it and its Deck Lab
-pairs. Nothing built.
+pairs. Nothing built. (2026-10-27: every row is now closed — built,
+or built and refused by measurement — in the entries below, "Wave 4 is
+closed, and with it `docs/AI-next-wave.md`'s plan"; the plan's own
+header says so.)
 
 
 ## GODOT'S POPUP SPAM (2026-09-08) — the release template, not the game
@@ -9692,6 +9727,8 @@ get life when opponent taps this 'converted forest'."*
   inconsistent across the five `BECAME_TAPPED` dispatches — two send the
   activating player, three send `inst.controller_id`. No card reads that
   key today, so nothing is broken; the next one to read it will be.
+  (2026-10-27: fixed the same day — "THE LICH THAT HELD ITS PRICE ON THE
+  STACK" below: all five sites send `inst.controller_id`.)
 
 ## WHAT THE PROBE PROMISES, THE RECOVERY DELIVERS (2026-09-09) — the third pass at pumps_to_attack
 
@@ -11638,7 +11675,10 @@ to cite `engine/mtg_game.gd:1003`, `:1170` when the two sites are now `:2077`
 now name their sites by FUNCTION rather than by line, which is the only form
 that survives an engine pass. A third direction on the ledger test — every
 `SIMPLIFIED` marker under `engine/` naming a doc that carries its row — is the
-durable fix and is not built.
+durable fix and is not built. (2026-10-27: built since, the same day —
+direction 3 of `tests/test_simplified_ledger.gd`, "THE ENGINE HALF
+(2026-09-11)": every marker under `engine/` must name a doc that carries
+its row.)
 
 ### The row with the best ratio in the audit (2026-09-11)
 
@@ -11955,7 +11995,9 @@ another permanent or player"* gates the shields off but not Reverberation's
 redirect, Blood of the Martyr's "dealt to you instead", or Rock Hydra's "prevent
 that 1 damage" — all three are exactly what the line names, and all three were
 outside the guard before this pass too. A different rules question that changes
-what three cards do; a dated row in `docs/duel-todo.md`.
+what three cards do; a dated row in `docs/duel-todo.md`. (2026-10-27: fixed
+2026-09-13 — "Forge audit: damage forecasts and Whippoorwill" below, the
+per-recipient prevention closes all three.)
 
 And **Rock Hydra's own implementation note was FALSE**: it said the `{R}` shield
 is spent BEFORE the counters, the engine has always done the opposite, and the
@@ -12586,10 +12628,16 @@ Updated at the owner's request, 2026-09-15. Work completed or planned after
 the 0.20.0 duel and Deck Builder release:
 
 - [ ] **Adventure** — the Shandalar world, quests and campaign.
+  (2026-10-27: in development — the world, towns, quests, lairs, creatures
+  and sieges are built, 0.50.48–0.50.61; the castles, the dungeons and the
+  end are next, "M5 — Adventure mode" above.)
 - [ ] **SGManalink** — browse, host and join online duels; later booster
   drafting and complete tournaments. Develop on `sgmanalink`, preserving
   the classic interface and offline play. Experienced networking and
-  authentication developers are welcome.
+  authentication developers are welcome. (2026-10-27: LAN duels and LAN
+  knockout tournaments are built, protocol 30, and the `sgmanalink` branch
+  is merged into `main` and gone; Internet hosting and discovery are parked
+  since 2026-09-15, `docs/sgmanalink-design.md`.)
 - [ ] **MElo** — a community player ranking tied to protected personas and
   trusted, server-verified matches; separate from DeckLab's deck ratings.
 - [ ] **Commander mode** — dedicated rules and deck-building support.
@@ -12618,9 +12666,19 @@ the 0.20.0 duel and Deck Builder release:
   public-information AI and the seven archived Second Age decks.
   See [Portal](pack-6-portal.md), its [mechanics inventory](pack-6-mechanics-audit.md)
   and the [Second Age audit](pack-6-second-age-audit.md).
+- [x] **Pack 7 — Fifth Edition** — 434 distinct cards / 449 printings, every
+  one a reprint of the 1997 pool or of Packs 2 to 4.
+  See [Fifth Edition](pack-7-fifth-edition.md).
+- [x] **Pack 8 — the Mirage block** — Mirage, Visions and Weatherlight: 669
+  distinct cards / 684 printings, 621 new identities.
+  See [the Mirage block](pack-8-mirage-block.md).
+- [x] **Pack 9 — the Tempest block** — Tempest, Stronghold and Exodus: 621
+  distinct cards / 636 printings, 574 new identities.
+  See [the Tempest block](pack-9-tempest-block.md).
 
 With all six optional packs enabled: **2,359 named set entries / 1,898 unique
-cards**. The 897-card original pool remains the default. Numbered ZIPs and
+cards**. (2026-10-27: with all nine, **4,083 set entries / 3,093 unique
+cards**, pinned in `tests/unit/test_sgmanalink_packs.gd`.) The 897-card original pool remains the default. Numbered ZIPs and
 downloaded card artwork are local-only; construction tools and metadata are
 the distributable artifacts. Balduvian Shaman and Game of Chaos add two explicit
 Ice Age adaptations; Homelands adds Timmerian Fiends' explicit token-exchange

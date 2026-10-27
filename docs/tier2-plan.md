@@ -33,6 +33,13 @@ well, and the function name is the authoritative half.
 
 ## 0.1 Status — what is already done, part-done, or stale
 
+(2026-10-27: this table and the order in §0.3 are the 2026-08-31 reading,
+kept as written. By 2026-09-01 every item but 2.2 (dropped) was built —
+`docs/duel-todo.md` §2 stamps 2.3 to 2.15 DONE, 2.4 included, built after
+all as s30's flight to the Spell Chain (`spell_flight.gd`). What is left
+is 2.5's engine half, the payable X bound computed in the engine rather
+than the UI (`docs/duel-todo.md` §2.5, "STILL OPEN").)
+
 | # | Item | §2 says | **VERIFIED** | Tag |
 |---|---|---|---|---|
 | 2.1 | The arrows | DONE | **DONE** — `target_arrows.gd`, 16 tests | [1997] |
@@ -145,6 +152,8 @@ Listed here rather than edited in, because another agent owns that file.
 ---
 
 ## 0.3 The recommended order
+
+(2026-10-27: historical — every wave below landed, see the note on §0.1.)
 
 Grouped into waves. **A wave is a unit because its items rewrite the same
 function** — splitting one means writing that function twice and
@@ -593,6 +602,9 @@ redraw at the end of the frame — `DuelScreen._refresh_after_engine` — and
 only the screen's own clicks, keys and AI timer draw at once.) Do not build
 a queue. Instead:
 
+- (2026-10-27: never made — the dwell was built inside `DuelScreen`
+  instead, `DWELL_QUIET` / `DWELL_ENEMY` / `DWELL_EVENT` and
+  `dwell_multiplier`; `docs/duel-todo.md` §2.6.)
 - New file **`game/duel/duel_pacing.gd`** — `class_name DuelPacing`,
   `RefCounted`, pure: it holds the previous snapshot (life totals, an
   `id → damage` dictionary, `log_lines.size()`) and answers
@@ -617,6 +629,7 @@ a queue. Instead:
 
 ### Test plan
 
+(2026-10-27: not made either; the dwell is pinned by `tests/ui/test_pacing.gd`.)
 `tests/unit/test_duel_pacing.gd` — s30's own seven cases
 (`duel_pacing_test.go:22-90`), against our `MtgGame`:
 
@@ -1016,7 +1029,7 @@ Two independent halves. **Ship them as two commits.**
   | `Dying` | marked damage ≥ `cur_toughness`, or lethal already assigned — i.e. "this will die at the next SBA check" |
   | `This card will untap` | `not inst.skip_untaps` **and** it is tapped **and** the untap step is its controller's next — the inverse of a Meekstone lock |
   | `Card is not controlled by owner` | `inst.controller_id != inst.owner_id` (we have `controlled_via`) |
-  | `Phased` | `inst.zone == Mtg.Zone.PHASED_OUT` — we already have phasing |
+  | `Phased` | `inst.zone == Mtg.Zone.PHASED_OUT` — we already have phasing (2026-10-27: no such zone ever existed — a phased-out permanent keeps `zone == BATTLEFIELD` and carries `CardInstance.phased_out`; the cue is drawn since 2026-10-03, `MiniCard.State.PHASED`) |
   | `Is a target` | the instance appears in a `TargetRef` of any live `StackItem` |
   | `Is a target, can't target again` | it is in the *current* slot's chosen group — the state §3.1's duplicate refusal is groping for |
   | `Can't target this` | in TARGETING, a card the current spec refuses (shroud, protection, `cur_target_bans`) |
@@ -1677,7 +1690,7 @@ resolution, and **§6.12** (the full mini-menu) hangs off its emit site.
   `docs/CODE_MAP.md`** (`CONTRIBUTING.md` hard rule 6):
   `game/duel/board_order.gd`, `game/duel/duel_pacing.gd`,
   `game/duel/squeeze_row.gd` (+ `game/duel/spell_flight.gd` if 2.4 is
-  ever built).
+  ever built). (2026-10-27: `duel_pacing.gd` was never made, see 2.6.)
 - **Wording pins are the point.** Where an item shows 1997 text
   (2.10's cue cards, 2.15's `Show full card`), assert the *exact string*
   from the `Program/` table. Two passes have already drifted back to s30's

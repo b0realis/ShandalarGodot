@@ -7,7 +7,7 @@
   "name": "The Mirage Block",
   "number": 8,
   "pack_format": 1,
-  "rules_note": "Original Mirage, Visions and Weatherlight artwork with current Oracle rules. The 43 cards the game already has keep their existing scripts; the 31 of them that live only in Ice Age, Homelands, Portal or Portal Second Age are provided by this pack too when that pack is off.",
+  "rules_note": "Original Mirage, Visions and Weatherlight artwork with current Oracle rules. The 48 cards the game already has (the five basic lands among them) keep their existing scripts; the 31 of them that live only in Ice Age, Homelands, Portal or Portal Second Age are provided by this pack too when that pack is off.",
   "set_order": [
     "mir",
     "vis",

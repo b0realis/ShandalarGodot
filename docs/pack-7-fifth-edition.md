@@ -86,7 +86,9 @@ alike. The 287 core reprints keep their core scripts and need no pack.
 Draft pools group cards by the set that supplies their identity, so with
 the originals enabled Fifth Edition contributes no separate draft group;
 its printings are cosmetic. LAN compatibility fingerprints include `pack-7`
-like every other pack, and protocol 24 is unchanged.
+like every other pack, and protocol 24 is unchanged. (2026-10-27: the LAN
+protocol has moved on since for other reasons; it is version 30 now,
+`game/sgmanalink/protocol.gd`.)
 
 ## Archive contract
 

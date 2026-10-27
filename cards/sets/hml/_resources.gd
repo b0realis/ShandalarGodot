@@ -61,11 +61,10 @@ static func _clear_tokens(g: MtgGame, _s: CardInstance, _e: GameEvent, subtype: 
 	var victims: Array[CardInstance] = []
 	for i in g.all_battlefield():
 		if i.is_token and i.has_subtype(subtype): victims.append(i)
-	g.begin_simultaneous()
-	for i in victims:
+	# One departure (the bug campaign c12, h3-3).
+	g.depart_together(victims, func(i: CardInstance) -> void:
 		if exile: g.exile_permanent(i)
-		else: g.destroy(i, false)
-	g.end_simultaneous()
+		else: g.destroy(i, false))
 static func _polyp(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	if C.same_activation(g, s): g.add_counters(s, "polyp", 2)
 static func _put_tribe(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: int, type: String) -> void:

@@ -624,7 +624,10 @@ func test_manalink_has_a_square_placeholder_above_the_version() -> void:
 	assert_lte(online.get_global_rect().end.y, version.global_position.y - 6.0)
 	assert_false(online.disabled, "a placeholder still explains itself")
 	assert_string_contains(online.tooltip_text, "Manalink")
-	assert_string_contains(online.tooltip_text.to_lower(), "coming")
+	# It says what the lobby is now — local network play — and promises no
+	# Internet games (the bug campaign c12, h6-7).
+	assert_string_contains(online.tooltip_text.to_lower(), "local network")
+	assert_false(online.tooltip_text.to_lower().contains("coming"))
 	assert_not_null(online.get_node_or_null("Globe"), "the reference-inspired globe is drawn")
 
 

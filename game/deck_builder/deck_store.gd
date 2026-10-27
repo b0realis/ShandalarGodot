@@ -811,7 +811,11 @@ static func export_deck(deck: DeckModel, extension: String,
 		return "There is nothing to export."
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path(EXPORT_DIR))
-	var path := "%s/%s%s" % [EXPORT_DIR, file_stem(deck.deck_name), extension]
+	# A `.dck` is named by its title, not the stem (the bug campaign c12,
+	# h5-2): the 1997 deck builder lists a deck only when its file is
+	# `<the title on its first line>.dck` ([method DeckModel.dck_title]).
+	var stem := deck.dck_title() if extension == ".dck" else file_stem(deck.deck_name)
+	var path := "%s/%s%s" % [EXPORT_DIR, stem, extension]
 	# Whole or not at all, as [method save] writes.
 	var text := deck.to_dck_text(dck_ids()) if extension == ".dck" \
 		else deck.to_dec_text()

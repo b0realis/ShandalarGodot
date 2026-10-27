@@ -839,7 +839,10 @@ class ReignOfTerror extends DestroyAllEffect:
 				victims.append(i)
 				entries[i.id] = i.graveyard_entry
 		g.begin_simultaneous()
-		for i in victims: g.destroy(i, false)
+		# ONE departure, as Wrath of God's (the bug campaign c12, h3-3): every
+		# victim leaves as the board stood before any of them did. The outer
+		# bracket keeps the life loss inside the same resolution.
+		g.depart_together(victims, func(i: CardInstance) -> void: g.destroy(i, false))
 		# "Each creature that died this way" — a creature that reached a
 		# graveyard (a token too: it gets there before ceasing to exist).
 		var died := 0
@@ -1048,7 +1051,8 @@ class SeedsOfInnocence extends DestroyAllEffect:
 			value[i.id] = i.data.cost.mana_value()
 			stamp[i.id] = i.layer_timestamp
 		g.begin_simultaneous()
-		for i in victims: g.destroy(i, false)
+		# One departure (c12, h3-3), the life gain inside the same bracket.
+		g.depart_together(victims, func(i: CardInstance) -> void: g.destroy(i, false))
 		# "The controller of each of those artifacts" — the ones destroyed,
 		# by their last known controller: every artifact the destruction
 		# took off the battlefield, wherever it went. (Bug hunt 2026-10-21,

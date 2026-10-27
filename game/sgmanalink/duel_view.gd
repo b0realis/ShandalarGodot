@@ -47,8 +47,12 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
+## Export MPN on the result window: the duel is over AND the host has its
+## public record to send — the room names one only then (the bug campaign
+## c12, h5-5). A host that records nothing used to be asked anyway, and
+## its refusal was all the player got.
 func mpn_available() -> bool:
-	return game != null and game.game_over
+	return game != null and game.game_over and String(_room.get("mpn", "")) != ""
 
 
 func export_mpn() -> void:

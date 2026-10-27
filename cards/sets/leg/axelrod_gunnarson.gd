@@ -6,10 +6,11 @@ extends CardScript
 ##         target player or planeswalker.
 ##
 ## Implementation: the DIES event carries a snapshot of the dead creature's
-## `damaged_by_this_turn` list (taken before its battlefield state was
-## wiped, CR 608.2h), which is exactly the "dealt damage by Axelrod this
-## turn" test — and it works for a creature Axelrod merely wounded that
-## something else finished off, which is what the card says.
+## `damage_origins_this_turn` (each source as "id:timestamp", taken before
+## its battlefield state was wiped, CR 608.2h), which is exactly the
+## "dealt damage by Axelrod this turn" test — and it works for a creature
+## Axelrod merely wounded that something else finished off, which is what
+## the card says.
 ##
 ## The trigger fires for a creature Axelrod killed in combat too: the
 ## dies-check runs after the damage wave, so his own trample victims pay
@@ -48,7 +49,10 @@ static func _he_wounded_it(_game: MtgGame, source: CardInstance,
 	var dead: CardInstance = event.data["instance"]
 	if dead == null or (dead.last_types & Mtg.CardType.CREATURE) == 0:
 		return false
-	return (event.data.get("damaged_by", []) as Array).has(source.id)
+	# This Axelrod — id and timestamp (the bug campaign c12, h3-14): a
+	# bounced and replayed Axelrod is a new object (CR 400.7).
+	return (event.data.get("damage_origins", {}) as Dictionary).has(
+		"%d:%d" % [source.id, source.layer_timestamp])
 
 
 ## The opponent first — the TRIGGER CONTROLLER's opponent. Axelrod may

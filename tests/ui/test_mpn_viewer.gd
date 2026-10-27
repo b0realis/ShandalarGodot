@@ -114,6 +114,9 @@ func test_local_and_online_results_offer_export_without_next_draw_leak() -> void
 	var online := SgDuelView.new()
 	online.game = g
 	online.config = DuelConfig.new()
+	# The host names its record in the room: Export MPN is offered only then
+	# (the bug campaign c12, h5-5; tests/ui/test_c12_F6_lan_capacity.gd).
+	online._room = {"id": "r1", "mpn": archive.record_id}
 	add_child_autofree(online)
 	online._show_result_window("You lost")
 	assert_true(_has_button(online._over_dialog, "Export MPN"))

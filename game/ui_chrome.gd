@@ -363,11 +363,16 @@ static func open_popup(host: Node) -> Control:
 
 
 ## Escape on a popup: its `cancel` action (or its only one) as if pressed,
-## else it simply closes.
+## else it simply closes. A popup with no cancel holds no meta at all —
+## [method action_popup]'s `set_meta(…, null)` erases the key — and
+## `get_meta` with a null default raises an engine error for a missing
+## key, so the key is asked for first (the bug campaign c12, F3's Escape
+## on the pack notice's several buttons).
 static func dismiss_popup(veil: Control) -> void:
 	if not is_instance_valid(veil):
 		return
-	var cancel := veil.get_meta(&"cancel_button", null) as Button
+	var cancel: Button = veil.get_meta(&"cancel_button") as Button \
+		if veil.has_meta(&"cancel_button") else null
 	if cancel != null and is_instance_valid(cancel) and not cancel.disabled:
 		cancel.pressed.emit()
 	else:

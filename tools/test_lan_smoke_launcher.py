@@ -114,6 +114,17 @@ def alive(pid):
     return True
 
 
+def default_sigint():
+    """Run in the child before bash starts (the bug campaign c12, h6-4): a
+    runner started as a background job of a script (`( … ) &` in `bash -c`,
+    a CI step) inherits SIGINT IGNORED, a shell cannot trap a signal that
+    was ignored when it started, and the Ctrl-C below then did nothing —
+    the test waited out its timeout and read as flaky under load. A real
+    Ctrl-C reaches a script whose SIGINT is the default, so that is what
+    the script under test is given."""
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
 class LanSmokeInterruptTest(unittest.TestCase):
     """2026-10-03: `kill $!` signalled the backgrounded SUBSHELL, not the
     `timeout` (in a process group of its own) nor the Godot under it, and
@@ -138,7 +149,7 @@ class LanSmokeInterruptTest(unittest.TestCase):
             with open(folder / 'smoke.out', 'w') as out:
                 smoke = subprocess.Popen(['bash', str(ROOT / 'tools/lan_smoke.sh')], cwd=ROOT,
                                          env=env, stdin=subprocess.DEVNULL, stdout=out,
-                                         stderr=subprocess.STDOUT)
+                                         stderr=subprocess.STDOUT, preexec_fn=default_sigint)
             try:
                 deadline = time.monotonic() + 30
                 while not all((folder / (n + '.pid')).exists() for n in names):

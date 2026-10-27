@@ -95,9 +95,8 @@ static func _chime(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: i
 	for i in g.all_battlefield():
 		if not i.is_token and not i.face_down \
 				and CardRegistry.originally_printed_in(i.data.card_name, "hml"): victims.append(i)
-	g.begin_simultaneous()
-	for i in victims: g.destroy(i, false)
-	g.end_simultaneous()
+	# "Destroy all ...": one departure (the bug campaign c12, h3-3).
+	g.depart_together(victims, func(i: CardInstance) -> void: g.destroy(i, false))
 static func _torture(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	var i := A.paid_host(g, s)
 	if i != null: g.add_counters(i, "-1/-1")

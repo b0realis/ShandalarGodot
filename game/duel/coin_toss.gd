@@ -209,12 +209,78 @@ signal video_skipped
 var _video_playing := false
 var _video_skip_requested := false
 
+# --- the bug campaign c12, h4-8: Pause holds the video toss too ---
+## Whether the toss is held, since when (ms), and how long every earlier
+## hold lasted: [method clock_ms] leaves them all out.
+var _held := false
+var _held_since := 0
+var _held_total := 0
+
+
+## PAUSE HOLDS THE WHOLE TOSS. The duel screen's Pause window held the
+## splash and our recreation (`DuelScreen._hold_opening`: this node's
+## process mode off, so the coin's tweens stand still), but the movie
+## walked its sheet on the wall clock and the verdict waited on a tree
+## timer, so under the window the movie played to its end and the panel
+## faded (the bug campaign c12, h4-8). Both now run on the toss's own
+## [method clock_ms], which stands still while the toss is held — by this,
+## or by anything that stops the node processing (the duel screen's
+## process mode, a paused tree: [method _notification]). Holding sets the
+## process mode, so the tweens and the movie's skip press stop with it.
+func hold(on: bool) -> void:
+	process_mode = Node.PROCESS_MODE_DISABLED if on else Node.PROCESS_MODE_INHERIT
+	_hold_clock(on if not is_inside_tree() else not can_process())
+
+
+## Whether the toss stands still now.
+func is_held() -> bool:
+	return _held
+
+
+## The toss's own clock in milliseconds: the wall clock less every
+## stretch the toss was held.
+func clock_ms() -> int:
+	var now := Time.get_ticks_msec()
+	return now - _held_total - (now - _held_since if _held else 0)
+
+
+func _hold_clock(on: bool) -> void:
+	if on == _held:
+		return
+	_held = on
+	if on:
+		_held_since = Time.get_ticks_msec()
+	else:
+		_held_total += Time.get_ticks_msec() - _held_since
+
+
+## The node stops or starts processing — its own process mode, a parent's,
+## or the tree's pause — and the clock with it.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PAUSED:
+		_hold_clock(true)
+	elif what == NOTIFICATION_UNPAUSED:
+		_hold_clock(false)
+
+
+## [param seconds] on the toss's clock ([method clock_ms]): a held stretch
+## does not count. Returns early when the toss leaves the tree.
+func _wait(seconds: float) -> void:
+	var until := clock_ms() + int(seconds * 1000.0)
+	while clock_ms() < until:
+		if not is_inside_tree():
+			return
+		await get_tree().process_frame
+		if not is_instance_valid(self):
+			return
+# --- end the bug campaign c12, h4-8 ---
+
 
 ## [QoL] Skip only the movie, never the already chosen result or the
 ## following play/draw question. Handle the press before it reaches GUI
 ## controls; releases, wheel events and other presentation modes ignore it.
 func _input(event: InputEvent) -> void:
-	if not _video_playing:
+	if not _video_playing or _held:   # held: the click is the Pause window's (c12 h4-8)
 		return
 	var click: bool = event is InputEventMouseButton and event.pressed \
 		and event.button_index == MOUSE_BUTTON_LEFT
@@ -428,8 +494,10 @@ func run(config: DuelConfig, winner: int, winner_is_you: bool,
 	caption.visible = true
 	verdict.text = verdict_for(config, winner, winner_is_you)
 
-	await get_tree().create_timer(hold).timeout
-	if not is_instance_valid(panel) or not is_inside_tree():
+	# On the toss's own clock, so the Pause window holds the verdict too
+	# (the bug campaign c12, h4-8): a tree timer ran out under it.
+	await _wait(hold)
+	if not is_instance_valid(self) or not is_instance_valid(panel) or not is_inside_tree():
 		return
 	var fade := panel.create_tween()
 	fade.tween_property(panel, "modulate:a", 0.0, FADE)
@@ -533,11 +601,13 @@ func _play_video(panel: Control, face: int) -> void:
 	# from elapsed TIME, so a slow frame drops a frame instead of slowing
 	# the toss down.
 	var length := minf(video_length(meta), VIDEO_TIMEOUT)
-	var started := Time.get_ticks_msec()
+	# The toss's clock, not the wall's: a held toss stands on its frame
+	# ([method hold], the bug campaign c12, h4-8).
+	var started := clock_ms()
 	var last := -1
 	_video_playing = true
 	while true:
-		var elapsed := (Time.get_ticks_msec() - started) / 1000.0
+		var elapsed := (clock_ms() - started) / 1000.0
 		if _video_skip_requested or elapsed >= length:
 			break
 		var index := video_frame_at(meta, elapsed)

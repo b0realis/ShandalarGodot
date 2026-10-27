@@ -121,16 +121,32 @@ static var _derived_cache: Dictionary = {}
 ## Cache: skin key -> the file's 1px-black-edge width (0 or 1).
 static var _edge_cache: Dictionary = {}
 
+## The metadata name [method node] writes its ground's key under (the bug
+## campaign c12).
+const GROUND_META := &"territory_ground"
+
 
 ## THE GROUND FOR ONE TERRITORY, anchored to fill its parent. Never null:
 ## the original's art when the skin has it, a painted one when it does
 ## not. The caller adds it as the FIRST child of the half's holder and may
 ## modulate it (the duel dims its table so cards pop; the setup screen's
 ## preview shows it at full strength).
+##
+## The node carries the ground it wears as metadata, [constant GROUND_META]
+## = the ground's key (`duel_pattern_red`), so a caller can tell which of
+## the nine it was handed without asking how it was drawn (the bug
+## campaign c12: the adventure's playmat on the duel table).
 static func node(color_key: String, type_label: String) -> Control:
 	var row := DuelOptions.territory_type_row(type_label)
-	var wallpaper := bool(row["wallpaper"])
 	var key := DuelOptions.ground_key(color_key, String(row["label"]))
+	var out := _node(color_key, type_label, row, key)
+	out.set_meta(GROUND_META, key)
+	return out
+
+
+static func _node(color_key: String, type_label: String, row: Dictionary,
+		key: String) -> Control:
+	var wallpaper := bool(row["wallpaper"])
 	var skin := GameSkin.texture(key)
 	if skin == null:
 		return _fill(_texture_rect(derived(color_key, type_label), wallpaper))

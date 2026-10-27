@@ -238,6 +238,11 @@ not proven by a probe; each needs one before it is fixed.
 
 ### For the owner
 
+*(2026-10-27, the bug campaign c12: the MCP read fence, the open LAN host,
+the browser's file boxes, Export MPN without a record, `export_bytes`,
+the mounted zip and Open Folder on Android are fixed; see
+docs/adventure-implementation-notes.md, "Built: the bug campaign c12".)*
+
 - The MCP server's `read_deck` / `find_deck` read any path, where the write
   tools are fenced inside the deck folders; the tool's own description says
   "under decks/".
@@ -256,6 +261,14 @@ Add pack... on a real Android phone; the Windows rename paths
 (`SkinPack.copy_whole`, `Settings.write_atomically`).
 
 ### Suspected — rules and cards
+
+*(2026-10-27, the bug campaign c12 probed this list: real and fixed —
+Whimsy's protection and shroud (Faerie Dragon targets properly), the
+unjournaled regeneration/exile flags, Lich at negative life, Goblin Rock
+Sled, Sengir Vampire, Glyph of Doom cast before blockers, Winds of Rath and
+Extinction (and 21 more sweepers) at once, a stolen Reflect Damage (engine-2),
+`draw_cards`' log, a stopped loop's log; not bugs — Land Equilibrium, cleanup
+state checks by zone counts and the others the c12 h3 report lists.)*
 
 - Whimsy and Faerie Dragon's random targets ignore protection and shroud.
 - Word of Command's discard log says the hand is revealed but shows only the

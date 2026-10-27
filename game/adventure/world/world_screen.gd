@@ -159,8 +159,17 @@ var _again := false
 ## THE PLACE ARRIVED AT, while the hero still stands on its tile (the entry
 ## latch, [method walk_to_tile]): set by an arrival ([method visit]),
 ## forgotten the moment the hero stands anywhere else ([method _process]) or
-## the town is freed. (−1, −1) for none.
-var _entered_tile := Vector2i(-1, -1)
+## the town is freed. (−1, −1) for none. Kept on the adventure as it changes
+## ([member AdventurePlayer.entered_tile]), so it is saved, and taken back
+## from it as an adventure is shown ([method show_player]): a Resume, a
+## Load or the window closed inside a town made the next click on it a new
+## arrival — a second "Visited", the quest offer drawn again on the dice
+## the save had moved on (the bug campaign c12, h1-1, h1-2).
+var _entered_tile := Vector2i(-1, -1):
+	set(tile):
+		_entered_tile = tile
+		if player != null:
+			player.entered_tile = tile
 var _shop: CardShopPane
 var _trade: CardTradePane
 ## A list of cards over a pane — a creature's deck, the copy's pick
@@ -255,10 +264,15 @@ class UnsavedAsk extends PanelContainer:
 ## "No." stays, "Yes." leaves; Escape, or N, stays and Y leaves — the
 ## choices answer to their first letter, as 1997's text menus' did
 ## (`RunTextMenuAt`, adventure_ui.c 436–461, moved to the choice; ours
-## takes it, the owner's ruling C-5).
+## takes it, the owner's ruling C-5). [ours, the owner (2026-10-27): "upon
+## esc key not just question to quit but also offer save/load in the same
+## popup!"] Under the question Save (S) and Load (L), as 1997's right-click
+## "Will you ..." menu held them beside Quit.
 class QuitAsk extends PanelContainer:
 	## [param leave] true for "Yes.", false for "No.".
 	signal answered(leave: bool)
+	## Save or Load chosen instead: [param what] "save" or "load".
+	signal chose(what: String)
 
 	## `@SHUTDOWN`'s question.
 	const WORDS := "Ready to Quit?"
@@ -288,6 +302,28 @@ class QuitAsk extends PanelContainer:
 		go.pressed.connect(func() -> void: answered.emit(true))
 		choices.add_child(go)
 		column.add_child(choices)
+		var line := HSeparator.new()
+		line.add_theme_stylebox_override("separator", _rule())
+		column.add_child(line)
+		var saves := HBoxContainer.new()
+		saves.name = "QuitSaves"
+		saves.alignment = BoxContainer.ALIGNMENT_CENTER
+		saves.add_theme_constant_override("separation", int(10 * k))
+		saves.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var save := PaneStyle.button("Save", "QuitSave", k)
+		save.pressed.connect(func() -> void: chose.emit("save"))
+		saves.add_child(save)
+		var load_one := PaneStyle.button("Load", "QuitLoad", k)
+		load_one.pressed.connect(func() -> void: chose.emit("load"))
+		saves.add_child(load_one)
+		column.add_child(saves)
+
+	## A thin gold line between the question and the saves.
+	static func _rule() -> StyleBoxLine:
+		var rule := StyleBoxLine.new()
+		rule.color = Color(PaneStyle.GOLD, 0.35)
+		rule.thickness = 1
+		return rule
 
 	func _unhandled_input(input: InputEvent) -> void:
 		if input.is_action_pressed("ui_cancel"):
@@ -295,11 +331,14 @@ class QuitAsk extends PanelContainer:
 			answered.emit(false)
 			return
 		var key := input as InputEventKey
-		if key == null or not key.pressed or key.echo:
+		if key == null or not key.pressed or key.echo or key.ctrl_pressed:
 			return
 		if key.keycode == KEY_N or key.keycode == KEY_Y:
 			get_viewport().set_input_as_handled()
 			answered.emit(key.keycode == KEY_Y)
+		elif key.keycode == KEY_S or key.keycode == KEY_L:
+			get_viewport().set_input_as_handled()
+			chose.emit("save" if key.keycode == KEY_S else "load")
 
 
 func _ready() -> void:
@@ -450,6 +489,9 @@ func rebuild_hud() -> void:
 func show_player(adventure: AdventurePlayer) -> void:
 	player = adventure
 	world = player.world
+	# The entry latch as the adventure kept it (c12, h1-1): only for the tile
+	# the hero stands on.
+	_entered_tile = player.entered_tile if player.entered_tile == player.tile() else Vector2i(-1, -1)
 	walk = HeroWalk.new(player)
 	view.world = world
 	view.hero_walker = player.walker
@@ -2153,7 +2195,8 @@ func _close_or_ask() -> void:
 ## adventure_input.c 311–324 — the owner's ruling C-1 of 2026-10-27):
 ## "Yes." saves and leaves for the title ([method leave]); "No." or Escape
 ## stays — a walk under way goes on, as 1997's way held through its
-## question. [ours: 1997 wrote its slot 3 after the question whatever the
+## question; Save and Load put the question away and open the ten slots
+## ([method save_now]) or the saved adventures ([method open_load]) [ours]. [ours: 1997 wrote its slot 3 after the question whatever the
 ## answer; here staying saves nothing — the save made as the hero left the
 ## last place stands.] The world waits while it is asked. Not while a pane
 ## holds the screen. The question shown, or null.
@@ -2173,6 +2216,14 @@ func ask_quit() -> QuitAsk:
 		_sync_rest()
 		if leave_now:
 			leave(), CLOSING)
+	asked.chose.connect(func(what: String) -> void:
+		if _alive(asked):
+			asked.queue_free()
+		_sync_rest()
+		if what == "save":
+			save_now()
+		else:
+			open_load(), CLOSING)
 	_hold()
 	return asked
 

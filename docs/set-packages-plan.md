@@ -302,6 +302,15 @@ primary source, as for the pool.
 
 What the engine has (verified) and what the pack needs that it lacks.
 
+(2026-10-27: the "Today" column is the planning-day reading. Every gap
+in it was closed as Packs 2 to 9 were built — cumulative upkeep
+(`engine/abilities/cumulative_upkeep.gd`), `Supertype.SNOW`, pitch costs
+(`CardData.with_pitch_cost`), activation from another zone
+(`ActivatedAbility.activation_zone`, Elvish Spirit Guide), the
+tap-another-permanent cost (`tap_permanent_filter`), Kjeldoran Outpost and
+Lake of the Dead, Jester's Cap, and flanking (`engine/abilities/flanking.gd`)
+for Mirage and Visions.)
+
 | Mechanic | Cards | Today | Needed |
 |---|---|---|---|
 | Cumulative upkeep | 39 (ice 30, all 9) | Absent (`grep -ri cumulative engine cards` is empty). Pieces exist: `UPKEEP_START` triggers, `add_counters(inst, kind, n)` (`mtg_game.gd:6156`), `try_pay(pid, cost)` (:4609), sacrifice; Force of Nature is the "unless you pay" pattern (`cards/sets/2ed/force_of_nature.gd`) | One shared builder `with_cumulative_upkeep(cost)` in `engine/abilities/` (age counter, escalating pay-or-sacrifice; non-mana variants: Polar Kraken "sacrifice a land", Glacial Chasm); AI must decide pay/sacrifice per turn — today's "unless you pay" auto-pays if able, which is wrong for a Kraken on turn 6 |

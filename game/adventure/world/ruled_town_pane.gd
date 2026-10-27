@@ -6,7 +6,8 @@ extends PanelContainer
 ## 1997's full-screen pictures in one of the world's movable rounded panes,
 ## on the 640 × 480 page of the meetings ([EncounterStage]):
 ##  - THE TOWN FREED: `Celeb.pic` (`town_freed`), "%s is freed! The people
-##    rejoice.", the win music (`music_win_duel`) looping under it.
+##    rejoice.", the win music (`music_win_duel`) looping under it; the
+##    creature's stake won shown on it, or said lost to a full bag [ours].
 ##  - A LOSS: `Losedul2.pic` (`lose_card`) with each staked card and "Lost
 ##    this card", a card at a time, the lose music (`music_lose_duel`).
 ##  - A DRAW: nothing changes, nothing is shown [ours: 1997 slip — a draw
@@ -44,6 +45,9 @@ const GO_ON := "Continue"
 ## [EncounterPane]).
 const LOST_AT := Vector2(46, 120)
 const LOST_WIDTH := 150.0
+## [Ours] Where the creature's stake won lies on `Celeb.pic`: top right,
+## over the sky and the tentacled creature, clear of the faces (c12, h2-4).
+const PRIZE_AT := Vector2(470, 20)
 
 ## The adventure.
 var player: AdventurePlayer
@@ -203,7 +207,11 @@ func _abandoned() -> void:
 	step = "done"
 
 
-## THE TOWN FREED (`Celeb.pic`, `@VISIT` 8).
+## THE TOWN FREED (`Celeb.pic`, `@VISIT` 8) — and the creature's stake won
+## on it, "Won this card"; with the bag full the card is said lost
+## ([constant AdventurePlayer.BAG_FULL]), as every other source says it
+## [ours: 1997 showed the prize nowhere and lost it to a full bag without a
+## word; the bug campaign c12, h2-4].
 func _freed() -> void:
 	step = "freed"
 	visible = true
@@ -211,7 +219,15 @@ func _freed() -> void:
 	_subtitle.text = "Freed"
 	stage.clear()
 	stage.ground("town_freed")
-	say(outcome["words"])
+	var lines: Array = (outcome["words"] as Array).duplicate()
+	var prize := String(outcome.get("card", ""))
+	if prize != "":
+		var kept := bool(outcome.get("kept", false))
+		stage.card(prize, PRIZE_AT, LOST_WIDTH, "PrizeCard", RuledTowns.WON_CARD if kept else "")
+		if not kept:
+			lines.append(AdventurePlayer.BAG_FULL)
+			lines.append(EncounterPane.BAG_LOST % prize)
+	say(lines)
 	offer([["go", GO_ON, true]])
 
 

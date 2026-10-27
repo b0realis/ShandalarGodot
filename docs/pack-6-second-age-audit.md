@@ -14,7 +14,8 @@ Normal computer players use public information and their own hands. They
 inspect hidden cards only when resolving a legal look/search effect; the
 separate Unfair mode is unchanged. Combat and spell valuations are heuristics,
 not a claim of optimal play. Local and LAN duels share the authoritative
-rules; protocol 24 carries the new combat choices.
+rules; protocol 24 carries the new combat choices. (2026-10-27: the LAN
+protocol has moved on since; it is version 30 now, `game/sgmanalink/protocol.gd`.)
 
 Printed-art limitations and pack totals are in [the pack guide](pack-6-portal.md).
 Deck sources are in [the deck guide](portal-second-age-decks.md). Targeted

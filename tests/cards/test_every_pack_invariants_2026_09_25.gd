@@ -131,7 +131,9 @@ func test_no_pack_card_loses_a_character_to_the_mana_text_split() -> void:
 ## choice in it: a duel has one opponent, the forecast's probe takes the
 ## one legal ref without asking a seat (MtgGame._arm_trigger_targets), and
 ## with none legal the trigger is removed as it would be in play. Any
-## other target spec still refuses the opt-in.
+## other target spec still refuses the opt-in. SOURCE_DEALT_DAMAGE (the bug
+## campaign c12, h3-8) is DAMAGE_DEALT summed per damage event — Warrior
+## Angel's "whenever this creature deals damage" hears it now.
 func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 	var opted: Array[String] = []
 	for card_name in _pack_names:
@@ -140,7 +142,8 @@ func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 			if not trigger.forecast_safe: continue
 			opted.append(card_name)
 			assert_has([Mtg.EventType.DAMAGE_DEALT, Mtg.EventType.DIES,
-				Mtg.EventType.WAS_DEALT_DAMAGE], trigger.event_type, card_name)
+				Mtg.EventType.WAS_DEALT_DAMAGE, Mtg.EventType.SOURCE_DEALT_DAMAGE],
+				trigger.event_type, card_name)
 			assert_true(trigger.target_spec == null
 				or (trigger.target_spec.kind == TargetSpec.Kind.PLAYER
 					and trigger.target_spec.opponent_only), card_name + ": no choice of target")

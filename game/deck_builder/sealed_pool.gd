@@ -4,8 +4,8 @@ extends RefCounted
 ## you, and the only cards the Inventory then offers. Everything the Deck
 ## Builder's dice medallion knows that is not a pixel.
 ##
-## The 1997 shell offered the format by name and never shipped its
-## builder:
+## The 1997 shell offered the format by name; no program we hold
+## contains its builder:
 ##
 ## > *"Sealed Deck: Compete in the most popular form of Magic Tournament."*
 ## > — `@SHELLSCREEN_DUEL` (`MagicTG/Uistrings.txt`, the 1997 copy)
@@ -16,7 +16,8 @@ extends RefCounted
 ## *"Sealed Deck Tournament Information"*, *"%d Starter Packs"*, *"%d
 ## Booster Packs"*, *"Your Starters and Boosters"*, *"Selected Pack"*,
 ## *"Cards In Pack"*), with `GAMETYPE_SEALED_DECK = 3` in `defs.h` and a
-## `WinSealedTournament.avi` in the art — but no code behind any of it.
+## `WinSealedTournament.avi` in the art — but no program we hold has the
+## code behind any of it.
 ## The 1998 strategy guide says what the format is in one sentence:
 ##
 ## > *"You take a Sealed Deck and a booster, and are supposed to make a

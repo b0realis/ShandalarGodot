@@ -402,7 +402,8 @@ func test_export_is_the_one_write_a_shipped_deck_still_allows() -> void:
 	# so it can shadow nothing.
 	screen._load_deck(VICTIM)
 	screen._export_deck(".dck")
-	var exported := "%s/cleric.dck" % DeckStore.EXPORT_DIR
+	# Named by its 1997 title (the bug campaign c12, h5-2).
+	var exported := "%s/Cleric.dck" % DeckStore.EXPORT_DIR
 	assert_true(FileAccess.file_exists(exported), "the export was written")
 	assert_false(DeckStore.all_deck_paths().has(exported),
 		"and the deck list never offers it")
@@ -456,7 +457,7 @@ func test_the_shipped_files_are_byte_identical_after_every_door() -> void:
 	DeckStore.delete_deck(VICTIM)               # and the destructive door
 	screen._export_deck(".dck")                 # the one that is allowed
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(
-		"%s/cleric.dck" % DeckStore.EXPORT_DIR))
+		"%s/Cleric.dck" % DeckStore.EXPORT_DIR))
 	var after := _fingerprint()
 	assert_eq(after.size(), before.size(), "no shipped file appeared or left")
 	for path in before:

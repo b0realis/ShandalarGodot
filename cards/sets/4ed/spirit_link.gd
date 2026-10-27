@@ -4,16 +4,17 @@ extends CardScript
 ##         enters attached to that creature.)
 ##         Whenever enchanted creature deals damage, you gain that much life.
 ##
-## Implementation: El-Hajjâj as an aura — the DAMAGE_DEALT trigger
-## matches when the source is the HOST, and "you" is the AURA's
-## controller: linking the opponent's fattie feeds you its damage.
+## Implementation: El-Hajjâj as an aura — the SOURCE_DEALT_DAMAGE trigger
+## (one per simultaneous damage event, the bug campaign c12, h3-8) matches
+## when the source is the HOST, and "you" is the AURA's controller: linking
+## the opponent's fattie feeds you its damage.
 
 
 func build() -> CardData:
 	return CardData.new("Spirit Link", "{W}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
 		.triggered(TriggeredAbility.new(
-			Mtg.EventType.DAMAGE_DEALT, _drink,
+			Mtg.EventType.SOURCE_DEALT_DAMAGE, _drink,
 			"Whenever enchanted creature deals damage, you gain that much life.",
 			_dealt_by_host)) \
 		.oracle("Enchant creature\nWhenever enchanted creature deals damage, you gain that much life.")

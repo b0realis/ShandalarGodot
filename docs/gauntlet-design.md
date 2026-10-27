@@ -1,4 +1,4 @@
-# The Gauntlet — the 1997 mode we never built
+# The Gauntlet — the 1997 mode we ~~never built~~ built (2026-09-02)
 
 **Status: BUILT (2026-09-02).** The design below was written first and
 implemented from without re-deriving it; §9 at the foot records what
@@ -582,7 +582,8 @@ The honest headline: **we already have the inner two thirds of this mode.**
   `progress_line()`, `verdict()`, `duel_heading()`. `wins_needed()` is
   already `best_of / 2 + 1`, so `best_of = 1` gives 1 and `best_of = 3`
   gives 2 — the original's two Match Sizes, with no change.
-- **`MatchScreen` (`game/duel/match_screen.gd`, 332 lines) is the match
+- **`MatchScreen` (`game/duel/match_screen.gd`, 332 lines; 2026-10-27: the
+  file is `game/match_screen.gd`) is the match
   LOOP** — it owns a sequence of `DuelScreen`s, records each result, draws
   each duel's seed from the match's one seed so a whole match replays,
   puts up the between-duels window, and runs the `Side&board...` step. Its
@@ -836,7 +837,10 @@ as a `static func` with the five band names from `@SHELLPAGE_GAUNTLET`
 Unanswerable and already answered by us: `MatchScreen`'s class doc records
 that the AI does nothing between duels and that `docs/ROADMAP.md` carries
 the open half (M4 phase 2.x, "AI SIDEBOARDING — designed, NOT BUILT").
-The gauntlet inherits that unchanged. **No new decision.**
+The gauntlet inherits that unchanged. **No new decision.** (2026-10-27:
+built since — ROADMAP's "Phase 2.x — AI SIDEBOARDING (SHIPPED
+2026-09-02)"; `MatchScreen._ai_sideboards` boards the AI between duels
+when `Sideboard between duels` is on, the gauntlet's included.)
 
 ### 5.4 Where do `Num opponents` and `Sideboard between duels` live?
 

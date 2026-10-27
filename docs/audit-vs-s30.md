@@ -122,6 +122,24 @@ Every row is pinned by a test in `tests/cards/test_audit_vs_s30.gd`.
 
 ## 3. Findings — recorded, not fixed
 
+**Status (2026-10-27), re-checked against the code row by row:** nearly
+all of these were fixed after this audit, though the tables below were
+never updated. FIXED: the cost-payment records (2026-09-02,
+`StackItem.cost_paid`), Personal Incarnation (2026-09-02, a one-point
+redirect), Martyrs of Korlis / Reverse Polarity (2026-09-02, the live
+type), Whippoorwill (2026-09-13), Enchanted Being / Marble Priest
+(2026-09-02, combat-only), Lich (2026-09-02, the graveyard only), Gravity
+Sphere (2026-09-11), Anti-Magic Aura (2026-10-21, `move_aura` checks it
+too), Tangle Kelp (2026-10-03, a static), Visions (2026-09-17,
+`shuffle_library`); in 3b Takklemaggot, Nova Pentacle, Preacher, Primal
+Clay, Clone / Copy Artifact, Demonic Hordes, Mana Vault, Power Artifact,
+Urza's Miter, Glyph of Reincarnation, Frankenstein's Monster, Goblin
+Polka Band, Hazezon Tamar and Land Tax (each card's header says how).
+LEFT ON PURPOSE: Eater of the Dead (as this row says) and Aswan Jaguar
+(ruled 2026-09-07: the printed text, library only). STILL OPEN: Living
+Plane (an already-animated land is skipped), Sentinel (not band-aware),
+Runesword (one `bearer` slot) and Dingus Egg (the printed type, latent).
+
 ### 3a. Engine territory (`engine/mtg_game.gd` — owned elsewhere this session)
 
 | Area | Finding | Severity |

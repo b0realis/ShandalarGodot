@@ -145,6 +145,9 @@ const USER_ZIP := USER_DIR + "/" + FILE_NAME
 const OLD_USER_DIR := "user://skin"
 ## Names in the skins folder that are a transfer, never a skin.
 const IN_FLIGHT: Array[String] = ["fetching.zip", "arriving.zip", "repacking.zip"]
+## The tail of a zip kept beside one of its name that is mounted this run:
+## `original_skin.next-1.zip` (see [method _unmounted_home]).
+const SUCCESSOR := ".next-"
 ## Every entry inside a valid zip starts with this; every entry of a
 ## card art zip with the second.
 const PREFIX := "skin/"
@@ -176,15 +179,23 @@ const NOT_A_TAR := "is not a tar the game can read"
 ## as a Uint8Array, which [method _read_pick] then pulls across a slice
 ## at a time. The engine can neither open the browser's file box nor
 ## read a `File` itself; only a script on the page can, and this is it.
+## Run again while a box is still waiting ([method _pick_on_page]), it
+## takes the earlier input off the page first, and that input's late word,
+## if it ever comes, is not heard: only the newest box answers.
 const PICK_JS := """
 (function () {
+	var stale = window.shandalarPickInput;
+	if (stale && stale.parentNode) { stale.parentNode.removeChild(stale); }
 	window.shandalarPick = {state: "open"};
 	var input = document.createElement("input");
+	window.shandalarPickInput = input;
 	input.type = "file";
 	input.accept = ".zip,.tar.gz,.tgz,.tar,application/zip,application/gzip,application/x-tar";
 	input.style.display = "none";
 	document.body.appendChild(input);
 	var done = function (result) {
+		if (window.shandalarPickInput !== input) { return; }
+		window.shandalarPickInput = null;
 		window.shandalarPick = result;
 		if (input.parentNode) { input.parentNode.removeChild(input); }
 	};
@@ -249,6 +260,10 @@ var _arrived_at := 0.0
 
 func _ready() -> void:
 	_migrate()
+	# Before anything is mounted: a zip that replaced a worn one last run
+	# takes its own name now (h6-8; see [method settle_successors]).
+	settle_successors(USER_DIR)
+	settle_successors(GamePaths.cardpacks_folder())
 	# The skin folder instead of the zip: no skin zip is opened, the
 	# player's or the shipped one — [GameSkin] reads the folder.
 	var folder_instead := GamePaths.use_skin_folder()
@@ -788,11 +803,13 @@ func adopt(source: String) -> bool:
 		return false
 	var kind := String(report["kind"])
 	var dest := home_for(kind, source)
-	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
-	if ProjectSettings.globalize_path(source) != ProjectSettings.globalize_path(dest) \
-			and copy_whole(source, dest) != OK:
-		_complain(source.get_file(), "could not be copied into the game's folder")
-		return false
+	if ProjectSettings.globalize_path(source) != ProjectSettings.globalize_path(dest):
+		# Never over a zip mounted this run (h6-8).
+		dest = _unmounted_home(dest)
+		DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
+		if copy_whole(source, dest) != OK:
+			_complain(source.get_file(), "could not be copied into the game's folder")
+			return false
 	var replaced := kind == "skin" and GameSkin.zip_worn
 	if not mount(dest, true):
 		return false
@@ -818,7 +835,9 @@ func adopt(source: String) -> bool:
 ## stays open for the run: choosing a newer zip under the name of the one
 ## worn (the skin's own `original_skin.zip`) would be refused there. Only
 ## then, with the whole copy already on the disk, is it copied over the
-## kept zip in place, as before.
+## kept zip in place, as before. (Since the bug campaign c12, h6-8, a zip
+## never arrives over one mounted this run — [method _unmounted_home] —
+## so this is the fallback for a file some other program holds open.)
 static func copy_whole(source: String, dest: String) -> Error:
 	var pending := Settings.pending_path(dest)
 	# The file the rename replaces: [param dest], or the file it links to.
@@ -882,6 +901,94 @@ static func _wear(kind: String, dest: String) -> void:
 		Settings.set_value(GamePaths.KEY_SKIN_ZIP, dest)
 
 
+## A ZIP REPLACED WHILE IT IS WORN (the bug campaign c12, h6-8). The
+## engine reads a mounted zip by its path, at the places in the file its
+## directory named when it was mounted. A newer zip written under the
+## same name left every entry of the old mount pointing into the new
+## file: each read printed engine ERRORs and drew a blank picture, until
+## the remount fixed the entries both zips hold — and those only the old
+## one held stayed broken until the offered restart (a 242-file skin over
+## a 575-file one, say). So a zip that arrives for [param dest] while a
+## zip of that name is mounted and still there is kept beside it as the
+## first free `<name>.next-<n>.zip` ([const SUCCESSOR]), the old file
+## left untouched and readable until the restart, and the `skin_zip` key
+## names the newcomer ([method _wear]). At the next start
+## [method settle_successors] gives it its own name back. [param dest]
+## itself otherwise.
+func _unmounted_home(dest: String) -> String:
+	if not (_is_mounted(dest) and FileAccess.file_exists(dest)):
+		return dest
+	var proper := proper_name(dest)
+	var n := 1
+	var next := "%s%s%d.zip" % [proper.get_basename(), SUCCESSOR, n]
+	while _is_mounted(next):
+		n += 1
+		next = "%s%s%d.zip" % [proper.get_basename(), SUCCESSOR, n]
+	return next
+
+
+## Whether [param path] is mounted this run, however the path is spelt.
+func _is_mounted(path: String) -> bool:
+	var wanted := ProjectSettings.globalize_path(path)
+	for each in mounted:
+		if ProjectSettings.globalize_path(each) == wanted:
+			return true
+	return false
+
+
+## The zip [param path] stands in for: `x.next-2.zip` -> `x.zip` beside
+## it; any other path is its own.
+static func proper_name(path: String) -> String:
+	return path.get_base_dir().path_join(_successor_parts(path.get_file())[0])
+
+
+## `[proper file name, n]` for a successor's file name, `[name, 0]` for
+## any other.
+static func _successor_parts(file: String) -> Array:
+	var at := file.rfind(SUCCESSOR)
+	if at <= 0 or file.get_extension().to_lower() != "zip":
+		return [file, 0]
+	var digits := file.substr(at + SUCCESSOR.length()).get_basename()
+	if digits == "" or not digits.is_valid_int() or int(digits) < 1:
+		return [file, 0]
+	return [file.left(at) + ".zip", int(digits)]
+
+
+## AT THE NEXT START (h6-8), before [param folder]'s zips are mounted —
+## nothing holds them open then: for each zip that was replaced while it
+## was worn, the newest `.next-<n>` zip is renamed over the old one (a
+## rename replaces its target), the older ones go, and a `skin_zip` key
+## that named the newcomer names its own name again. A rename that fails
+## leaves the newcomer under its passing name, still named by the key.
+static func settle_successors(folder: String) -> void:
+	var newest := {}
+	var older: Array[String] = []
+	for path in _zips_in(folder):
+		var n := int(_successor_parts(path.get_file())[1])
+		if n == 0:
+			continue
+		var proper := proper_name(path)
+		if newest.has(proper):
+			var other: Array = newest[proper]
+			if int(other[0]) > n:
+				older.append(path)
+				continue
+			older.append(String(other[1]))
+		newest[proper] = [n, path]
+	for path in older:
+		DirAccess.remove_absolute(path)
+	var named := GamePaths.skin_zip()
+	var named_proper := ProjectSettings.globalize_path(proper_name(named)) \
+		if named != "" and int(_successor_parts(named.get_file())[1]) > 0 else ""
+	for proper: String in newest:
+		var path := String(newest[proper][1])
+		if DirAccess.rename_absolute(path, proper) != OK:
+			push_warning("skin pack: %s could not take the name %s" % [path, proper.get_file()])
+			continue
+		if named_proper == ProjectSettings.globalize_path(proper):
+			_wear("skin", proper)
+
+
 ## The same for a file that is already in `user://` under a passing name
 ## (a download, a chosen file read in): moved, not copied. [param shown]
 ## is the name the player knows it by, for the notice; [param named]
@@ -904,7 +1011,8 @@ func _take(landed: String, shown: String, named := "") -> bool:
 		DirAccess.remove_absolute(landed)
 		return false
 	var kind := String(report["kind"])
-	var dest := home_for(kind, named)
+	# Never over a zip mounted this run (h6-8).
+	var dest := _unmounted_home(home_for(kind, named))
 	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
 	# The kept zip is NOT deleted first (review of 2026-10-21): a rename
 	# replaces the file at its target on every platform the game runs on,
@@ -1079,14 +1187,7 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 ## from there like a download.
 func pick(kind: String) -> void:
 	if OS.has_feature("web"):
-		if picking or fetching:
-			return
-		picking = true
-		_pick_name = ""
-		_pick_size = 0
-		_pick_offset = 0
-		JavaScriptBridge.eval(PICK_JS, true)
-		set_process(true)
+		_pick_on_page()
 		return
 	var box := FileDialog.new()
 	box.name = "SkinChooser"
@@ -1107,6 +1208,42 @@ func pick(kind: String) -> void:
 	box.popup_centered()
 
 
+## THE BROWSER'S BOX, OPENED — OR OPENED AGAIN (the bug campaign c12,
+## h6-5). A press while a chosen file is being read in, or while the page
+## holds one the next frame takes, is not a new pick. A press while the
+## box is still waiting with no file read opens it afresh: until then it
+## was ignored, and a box that never answers kept the state "open" for
+## good — a browser that fires no `cancel` for a box closed with nothing
+## chosen (Chrome before 113, Safari before 16.4, Firefox before 91), or
+## one that never opened it because it did not count the press as the
+## player's (a pad's A). The Skin button was dead for the rest of the
+## session, and said nothing.
+func _pick_on_page() -> void:
+	if fetching or (picking and _pick_file != null):
+		return
+	if picking and _page_pick_state() == "ready":
+		return
+	picking = true
+	_pick_name = ""
+	_pick_size = 0
+	_pick_offset = 0
+	_page(PICK_JS)
+	set_process(true)
+
+
+## Where the browser's box stands: "open", "ready", "cancelled",
+## "failed", or "gone" when there is none.
+func _page_pick_state() -> String:
+	return String(_page("window.shandalarPick ? window.shandalarPick.state : 'gone'"))
+
+
+## [param script] run on the page, and what it came to. The one door to
+## the page for the chooser, so a test (no browser runs in one) can stand
+## in for it.
+func _page(script: String) -> Variant:
+	return JavaScriptBridge.eval(script, true)
+
+
 ## Where the desktop's file box opens: the player's downloads folder,
 ## where a zip they fetched is, else their home.
 static func pick_start_dir() -> String:
@@ -1121,15 +1258,14 @@ static func pick_start_dir() -> String:
 ## when the last slice is in, take it like a download.
 func _read_pick() -> void:
 	if _pick_file == null:
-		var state := String(JavaScriptBridge.eval(
-			"window.shandalarPick ? window.shandalarPick.state : 'gone'", true))
+		var state := _page_pick_state()
 		if state == "open":
 			return
 		if state != "ready":
 			_pick_over()
 			return
-		_pick_name = String(JavaScriptBridge.eval("window.shandalarPick.name", true))
-		_pick_size = int(JavaScriptBridge.eval("window.shandalarPick.data.length", true))
+		_pick_name = String(_page("window.shandalarPick.name"))
+		_pick_size = int(_page("window.shandalarPick.data.length"))
 		DirAccess.make_dir_recursive_absolute(USER_DIR)
 		_pick_file = FileAccess.open(ARRIVING, FileAccess.WRITE)
 		if _pick_file == null:
@@ -1138,8 +1274,8 @@ func _read_pick() -> void:
 			return
 	var stop := mini(_pick_offset + PICK_CHUNK, _pick_size)
 	if stop > _pick_offset:
-		var slice: Variant = JavaScriptBridge.eval(
-			"window.shandalarPick.data.subarray(%d, %d)" % [_pick_offset, stop], true)
+		var slice: Variant = _page(
+			"window.shandalarPick.data.subarray(%d, %d)" % [_pick_offset, stop])
 		if not (slice is PackedByteArray) or (slice as PackedByteArray).size() != stop - _pick_offset:
 			_pick_file.close()
 			_pick_file = null
@@ -1159,7 +1295,7 @@ func _read_pick() -> void:
 
 
 func _pick_over() -> void:
-	JavaScriptBridge.eval("window.shandalarPick = null", true)
+	_page("window.shandalarPick = null")
 	picking = false
 	_pick_name = ""
 	_pick_size = 0

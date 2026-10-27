@@ -66,9 +66,8 @@ static func _opponent_choice(g: MtgGame, s: CardInstance, pid: int, _t: TargetRe
 			if card == null or not candidates.has(card): break
 			selected.append(card)
 			candidates.erase(card)
-		g.begin_simultaneous()
-		for card in selected: g.destroy(card, false)
-		g.end_simultaneous()
+		# Both at once (the bug campaign c12, h3-3).
+		g.depart_together(selected, func(card: CardInstance) -> void: g.destroy(card, false))
 		S._draw_up_to(g, s, null, other, 3)
 
 static func _tutor(g: MtgGame, pid: int, cards: Array[CardInstance], prompt: String, optional := true) -> void:

@@ -17,25 +17,35 @@ static func save(event: SgTournament, folder: String) -> Error:
 	if result != OK: return result
 	var path := folder.path_join(event.id + ".json")
 	var text := SgProtocol.encode(event.checkpoint())
+	var bytes := text.to_utf8_buffer()
 	# What cannot be read back must not be written: _read_one refuses a
 	# file past MAX_BYTES, and a checkpoint saved past it would have been
-	# unrecoverable while reporting OK (2026-10-02).
-	if text.length() > SgProtocol.MAX_BYTES: return ERR_OUT_OF_MEMORY
-	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
-	if file == null: return FileAccess.get_open_error()
-	file.store_string(text)
-	file.flush()
-	result = file.get_error()
-	file.close()
+	# unrecoverable while reporting OK (2026-10-02). In BYTES, as _read_one
+	# measures it — an entrant's name past ASCII is more than one.
+	if bytes.size() > SgProtocol.MAX_BYTES: return ERR_OUT_OF_MEMORY
+	# THE NEW CHECKPOINT IS WHOLE BEFORE ANYTHING MOVES (the bug campaign
+	# c12, h6-2). It went to a shared `.tmp` with the store's result
+	# unread, and a buffered write's flush reports no full disk — so a cut
+	# checkpoint was renamed in, the save said OK, and the `.bak` stayed
+	# frozen at the last good one while every later save said OK too.
+	# [method Settings.write_atomically] checks the length that reached
+	# the disk, and the pending name is this process's own
+	# ([method Settings.pending_path]), so two instances restoring one
+	# event never write or move each other's.
+	var pending := Settings.pending_path(path)
+	result = Settings.write_atomically(pending, bytes)
 	if result != OK: return result
 	# A damaged primary must not replace an intact last-good backup during
 	# recovery. Rename-overwrite installs the new checked data in its place.
 	var intact: bool = _written.has(path) and FileAccess.get_sha256(path) == _written[path]
 	if intact or not _read_one(path).is_empty():
 		result = DirAccess.rename_absolute(path, path + ".bak")
-		if result != OK: return result
-	result = DirAccess.rename_absolute(path + ".tmp", path)
+		if result != OK:
+			DirAccess.remove_absolute(pending)
+			return result
+	result = DirAccess.rename_absolute(pending, path)
 	if result == OK: _written[path] = text.sha256_text()
+	else: DirAccess.remove_absolute(pending)
 	return result
 
 

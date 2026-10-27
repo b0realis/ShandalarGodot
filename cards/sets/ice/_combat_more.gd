@@ -170,6 +170,5 @@ static func _total_war(g: MtgGame, _s: CardInstance, e: GameEvent) -> void:
 	var doomed: Array[CardInstance] = []
 	for i in g.players[who].battlefield:
 		if i.is_creature() and not i.tapped and not i.has_subtype("wall") and not i.summoning_sick and not i.attacked_this_turn: doomed.append(i)
-	g.begin_simultaneous()
-	for i in doomed: g.destroy(i)
-	g.end_simultaneous()
+	# "Destroy each ...": one departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i))

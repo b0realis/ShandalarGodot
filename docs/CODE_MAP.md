@@ -364,7 +364,11 @@
   `PLAIN_SCROLL_AT`, `_words_high` (a wrapped label made to fit, its
   `most` place); `WorldMagicPane`'s heading centred as 1997's. The
   letters on `WorldMagicPane` and `WorldScreen.UnsavedAsk`;
-  `WorldScreen._pane_letters`. Tests:
+  `WorldScreen._pane_letters`. 0.50.61: `WorldScreen.QuitAsk.chose` (Save
+  and Load on "Ready to Quit?"), `EmbarkScreen.packs_ready` (the card
+  packs greyed until the World Lords are built), `game/main.gd`
+  `_open_shandalar_notice` / `SHANDALAR_NOTICE` (the in-development
+  notice before Embark). Tests:
   `tests/unit/test_q1_dungeon_doors.gd`, `tests/unit/test_q1_world_dungeons.gd`,
   `tests/ui/test_q1_world_doors.gd`, `tests/ui/test_q1_world_dungeons.gd`,
   `tests/ui/test_q1_world_dungeons_skin.gd`, `tests/ui/test_q1_world_keys.gd`,
@@ -372,6 +376,55 @@
   `tests/ui/test_q2_city_list.gd`, `tests/ui/test_q2_world_map.gd`,
   `tests/unit/test_q3_tile_reveal.gd`, `tests/unit/test_q3_favoured_colour.gd`,
   `tests/ui/test_q3_transitions.gd`, `tests/ui/test_q3_letters.gd`.
+- The bug campaign c12 (0.50.61, 2026-10-27). Adventure: `AdventurePlayer.
+  entered_tile` (the town latch saved as `where.entered`; `WorldScreen.
+  _entered_tile`'s setter keeps it), `LairEvent.rare_of_any_kind(dice,
+  classic)`, `CreatureMeeting.hero_playmat` (the hero's seat of
+  `DuelConfig.territories`), `RuledTowns.WON_CARD` and `RuledTownPane.
+  PRIZE_AT` (a freed town's prize), `EncounterPane` skipping an empty reward
+  step. The duel screen: `DuelConfig.territories`, `DuelOptions.ground_for`
+  / `is_ground_color`, `TerritoryGround.GROUND_META`, `DuelScreen.
+  _ground_choice`; `DuelScreen.ChainColumn` (the Spell Chain squeezed on
+  the screen), `_question_holds_duel` / `_resume_after_question` (the
+  computer waits under the quit and concede questions), `_advance_automatic`
+  (a skipped combat's Main 2 passes), `_viewing_seat` (both seats human),
+  `_looking_seat` / `_may_show_face` (face-down exile at a private hotseat),
+  `_hold_opening` / `_await_unpaused`, `CARD_MENU_ORIGINAL_TYPE` /
+  `_shows_a_copy`, `CardPreview.show_card(…, printed)`, `GraveyardView.
+  populate(…, looker)` and `face_shown` (the duel screen's own face rule:
+  at an open two-human table either human seat's look shows). Windows and shell: `MatchScreen.fit_to_buttons`
+  (the gauntlet's windows too), `CombatWindow.Lane`, `game/main.gd`
+  `_unhandled_input` (Escape closes the title's popups), the Gauntlet's
+  Escape, `DraftPoolDialog` saving "everything" as no setting. Files and
+  records: `DeckList` reading the 1997 `;` header, `DeckModel.to_dck_text`
+  writing it and `dck_title`, `MpnCodec`'s digit caps, `MpnFiles.
+  write_whole`, `MpnArchive`'s length check and cut back, `DraftStore` and
+  `TournamentStore` written atomically (`Settings.write_atomically`,
+  `Settings.pending_path`), `tools/shandalar_mcp.py` `within` / `readable`
+  (deck reads fenced). Network and platform: `SgLocalServer._counted`,
+  `_seats_from`, `_reclaim_idle`, `_record_of`, `own_addresses`,
+  `_entries_from`, `SEATS_PER_ADDRESS`, `SPARE_CONNECTIONS`,
+  `IDLE_RECLAIM_MS`; `SkinPack._unmounted_home`, `_is_mounted`,
+  `proper_name`, `settle_successors`, `_pick_on_page`, `_page`;
+  `CardBack.page`, `web_state`; `CardPacksScreen.on_android`,
+  `DraftSession.on_android`; `PackSeal._parsed`, `GameSkin._image` /
+  `_unreadable`, `MusicLibrary._unreadable`. The engine:
+  `Mtg.EventType.SOURCE_DEALT_DAMAGE` and `MtgGame._note_damage_dealt` /
+  `_flush_damage_dealt` / `_damage_dealt_batch` ("whenever ~ deals damage"
+  once per event: El-Hajjâj, Spirit Link, Zebra Unicorn, Emberwilde Caliph,
+  Warrior Angel), `MtgGame._forecasting` (a forecast never turns a masked
+  creature up), `packet_source_controller` and `DamagePacket.
+  source_controller`, `CardInstance.color_override_ts` (a Lace in layer 5's
+  order), `reanimate(…, counters)`, `ManaPlanner._plan_rows` /
+  `_replan_smaller` / `_made_by`, `DuelPosition._number`'s digit cap. Cards:
+  `g.depart_together` in every "destroy all" sweeper, `RandomEffects.
+  _whimsy_may_target` / `_rolled_permanent`, Glyph of Doom reading
+  `combat_pair_history`, the "id:timestamp" damage origins (Sengir Vampire,
+  Axelrod Gunnarson, Brine Hag). Leftovers: `DuelSpoils` carrying the life
+  ended with (the owner's ruling), `UiChrome.dismiss_popup`'s guard,
+  `CoinToss.hold` / `is_held` / `clock_ms` / `_wait`, `DeckModel.
+  dck_left_out` / `dck_left_out_note` (shown by `DeckBuilderScreen.
+  _export_deck`). Tests: `tests/*/test_c12_*.gd`.
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
   `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
   `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,
@@ -382,7 +435,8 @@
 - `game/adventure/adventure_player.gd`: `AdventurePlayer`, everything one
   game keeps, by the 1997 save's parts — the hero, where they stand, what
   they carry (gold, food, `amulets`, `world_magics`, `cards`), the duels
-  (`mana_links`, `next_duel_life`, `duel_victories`), the record
+  (`mana_links()` — a method since part A, the count `TownStatus` reads
+  off the sites — `next_duel_life`, `duel_victories`), the record
   (`journal`, `quest`, `defeated_wizards`), the clocks, the world as it
   stands; `begin` (a new hero as 1.3 starts one), `make_id` (name and a
   hash of the moment), `to_dict` / `from_dict` (readable JSON),
@@ -413,11 +467,14 @@
 - `game/adventure/embark_screen.gd` and `game/adventure/embark_screen.tscn`:
   `EmbarkScreen`, the one screen — the face (`faces`: the heroes first), name, walker, colour,
   playmat, packs, difficulty and world seed, `embark` (the `embarked`
-  signal, the record, the summary window) and `leave`.
+  signal, the record, the hourglass while the world is made, then the
+  world screen with its arrival note, `summary`) and `leave`.
 - `game/adventure/red_arrow.gd`: `RedArrow`, the drawn red arrow button.
 - `game/adventure/hourglass.gd`: `Hourglass`, the drawn hourglass that runs
   and turns over while a world is made (`phase`).
-- `game/main.gd`: the title's `Shandalar` opens the Embark screen.
+- `game/main.gd`: the title's `Shandalar` opens the in-development notice
+  first (`_open_shandalar_notice`, 0.50.61); its Go test opens the Embark
+  screen.
 - `game/skin.gd` `SIZES`, `tools/import_original.py` `PIC_SCREENS` /
   `NOT_READ`, `tools/skin_catalogue.py`: the skin picture
   `adventure_hero_background` (`Menu4.pic`); `character_select_background`

@@ -112,7 +112,8 @@ A green run on one target does not certify the others: Web needs browser
 verification as well as a successful export. The tracked
 `export_presets.cfg.example` holds a preset for every target
 `docs/release-builds.md` builds (Linux 64, Windows 64, the three macOS
-presets, Raspberry Pi 5 ARM64, Android Quest, Web and Web Threaded); native
+presets, Raspberry Pi 5 ARM64, Android Quest, Android Experimental, Web and
+Web Threaded — ten presets); native
 Windows runtime verification remains separate work, not something the macOS
 gate proves.
 
@@ -597,7 +598,10 @@ Stated plainly, because the README's roadmap is a summary and this is the
 working view.
 
 - **M5, adventure mode — the overworld, cities, quests, dungeons, world
-  magics, the ante economy — is not started.** It has a placeholder section in
+  magics, the ante economy — is not started.** (2026-10-27: started and
+  half built — the world, the towns, quests, lairs, the roaming creatures,
+  their duels and ante, and the sieges, 0.50.48–0.50.61; the castles, the
+  dungeons' insides and the end, part C, are not built yet.) It has a placeholder section in
   `docs/ROADMAP.md` and gets its own design document before any code; that
   document is growing in `docs/adventure-implementation-notes.md`, beside the
   research in `docs/world-builder-adventure-notes.md`. It is the largest

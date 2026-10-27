@@ -85,6 +85,7 @@ game rules remain name-based. Missing or disabled artwork falls back to
 the normal face without making an otherwise playable deck illegal; the
 saved preference survives. LAN protocol 24 sends printing IDs only with
 visible card faces; hidden hands and masked cards reveal no art preference.
+(2026-10-27: the protocol is version 30 now, `game/sgmanalink/protocol.gd`.)
 
 Six reprints reuse trusted earlier-pack definitions even when those packs
 are disabled: Dry Spell, Elvish Ranger, Mountain Goat, Nature's Lore,

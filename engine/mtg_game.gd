@@ -335,6 +335,12 @@ var _departure_batch: Array[Dictionary] = []
 ## dispatched as ONE [constant Mtg.EventType.WAS_DEALT_DAMAGE] each by
 ## [method _flush_damage_received]. Empty outside a bracket.
 var _damage_received_batch: Array[Dictionary] = []
+## THE SOURCE SIDE of the same event (the bug campaign c12, h3-8): one row
+## per source that dealt damage inside the open bracket, {source, stamp,
+## amount, packets, to_instances, to_players, is_combat}, dispatched as ONE
+## [constant Mtg.EventType.SOURCE_DEALT_DAMAGE] each by
+## [method _flush_damage_dealt]. Empty outside a bracket.
+var _damage_dealt_batch: Array[Dictionary] = []
 var _refreshing_control := false
 const CONTROL_LAYERS := preload("res://engine/core/control_layers.gd")
 
@@ -606,6 +612,14 @@ var awaiting_choice: PlayerChoice = null
 var _probing := false
 ## Presentation-only scratch during preflight, not rules state or an AI input.
 var _probe_information: Array = []
+## True while [method forecast_damage] runs (the bug campaign c12, h3-2).
+## The forecast reads the PUBLIC board, so a face-down Illusionary Mask
+## creature stays the nameless 2/2 everyone sees: [method turn_face_up]
+## and [method _turn_face_up_quietly] leave it face down, and the AI's
+## answer never depends on the card under the mask (docs/fair-play.md).
+## Until then the forecast's own damage turned it up and read it: a masked
+## Shivan Dragon blocking a Hill Giant was forecast to live, as a 5/5.
+var _forecasting := false
 ## THE SEARCH'S OWN TARGET FOR A TRIGGER (2026-10-19, the AI's loop finder,
 ## `engine/ai/card_combos.gd`). A probe answers a trigger's target with the
 ## ranked first ([method _probe_target]) — the answer of a seat that is not
@@ -874,7 +888,7 @@ const TURN_FIELDS: Array[StringName] = [
 	# at its own write site as well, but nothing else records the wipe
 	&"damage_dealt_this_turn", &"creatures_died_this_turn",
 	&"deaths_this_turn",
-	&"_departure_batch", &"_damage_received_batch",
+	&"_departure_batch", &"_damage_received_batch", &"_damage_dealt_batch",
 	&"spells_cast_this_turn",
 	# a turn-based action can end the duel (the 1997 phase-end life check)
 	&"game_over", &"winner", &"is_draw",
@@ -3276,7 +3290,12 @@ func _spell_cost_checks(pid: int, inst: CardInstance, x_value: int, mode: int) -
 		return object_why
 	if int(alternate.get("exile_color", 0)) != 0 and pitch_candidates(pid, inst, mode).is_empty():
 		return "no other eligible card in your hand to exile"
-	if players[pid].life < inst.data.life_payment(x_value) + int(alternate.get("life", 0)):
+	# Only when a life payment is DUE (the bug campaign c12, h3-1): with no
+	# life cost the test read "life < 0", so a player below 0 life (Lich;
+	# the 1997 rule that checks life at the end of the phase, manual p.174)
+	# could cast nothing — not even the Stream of Life that would save them.
+	var life_due := inst.data.life_payment(x_value) + int(alternate.get("life", 0))
+	if life_due > 0 and players[pid].life < life_due:
 		return "not enough life to pay the additional cost"
 	return ""
 
@@ -4470,10 +4489,17 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 		var picked := _ask_turn_card(pid, "Attack cost", land_candidates, q.prompt)
 		land_picks.append(picked)
 		land_candidates.erase(picked)
+	# THE MANA FIRST (the bug campaign c12, h3-10): the combined tax is paid
+	# before any non-mana cost, as CR 508.1g-h has it (mana abilities, then
+	# the costs), so the Islands a Leviathan sacrifices can still be tapped
+	# for a Propaganda's {2}; and a payment that fails refuses the attack
+	# before anything else is spent. Until then the Islands went first, the
+	# {2} then failed unread, and the Leviathan attacked untaxed.
+	if attack_mana > 0 and not try_pay(pid, ManaCost.parse("{%d}" % attack_mana)):
+		return "not enough mana to pay the combined attack cost {%d}" % attack_mana
 	for inst in declared:
 		for cost in inst.cur_attack_costs:
 			if not cost.has("generic_mana"): cost["pay"].call(self, pid)
-	if attack_mana > 0: try_pay(pid, ManaCost.parse("{%d}" % attack_mana))
 	begin_simultaneous()
 	for land in land_picks: sacrifice_permanent(land)
 	end_simultaneous()
@@ -5005,6 +5031,7 @@ func _plan_damage(source: CardInstance, target: TargetRef, amount: int,
 	_next_packet_id += 1
 	packet.source = source
 	packet.source_was_spell = source.zone == Mtg.Zone.STACK
+	packet.source_controller = source_controller(source)   # h3-6
 	packet.source_timestamp = source.layer_timestamp
 	if _resolving_item != null and _resolving_item.card == source:
 		packet.source_timestamp = int(cost_paid("_source_timestamp", source.layer_timestamp))
@@ -5186,6 +5213,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 			{"source": source, "amount": amount, "to_player": target.player_id,
 			"packet": packet})
 		_note_damage_received(packet, amount, null, target.player_id)
+		_note_damage_dealt(packet, amount, null, target.player_id)
 	else:
 		var inst := find_instance(target.instance_id)
 		if not is_present(inst):   # gone, or phased out (CR 702.26b)
@@ -5991,6 +6019,7 @@ func _mark_creature_damage(packet: DamagePacket, inst: CardInstance) -> int:
 		{"source": source, "amount": amount, "to_instance": inst,
 		"packet": packet})
 	_note_damage_received(packet, amount, inst, -1)
+	_note_damage_dealt(packet, amount, inst, -1)
 	check_state_based_actions()
 	return amount
 
@@ -6068,6 +6097,65 @@ func _flush_damage_received() -> void:
 		dispatch_event(Mtg.EventType.WAS_DEALT_DAMAGE, data)
 
 
+## The SOURCE side of the damage just marked — [method _note_damage_received]'s
+## mirror (the bug campaign c12, h3-8). "Whenever ~ deals damage" triggers
+## ONCE per damage event, for the total it dealt (CR 603.2c; a combat
+## damage step is one event, CR 510.2), and the 1997 El-Hajjâj gathers
+## every damage card and resolves one trigger (`creatures.c`,
+## `card_el_hajjaj`). Those cards heard DAMAGE_DEALT, one per packet: a
+## Spirit Link on a Craw Wurm blocked by two bears put two triggers on the
+## stack. Inside a [method begin_simultaneous] bracket the packet joins its
+## source's row of [member _damage_dealt_batch] and
+## [method _flush_damage_dealt] announces the sum; outside one the packet
+## is the whole event. DAMAGE_DEALT itself stays per packet.
+func _note_damage_dealt(packet: DamagePacket, amount: int,
+		to_instance: CardInstance, to_player: int) -> void:
+	if amount <= 0 or packet.source == null:
+		return
+	if _defer_depth <= 0:
+		dispatch_event(Mtg.EventType.SOURCE_DEALT_DAMAGE, {"source": packet.source,
+			"amount": amount, "packets": [packet],
+			"to_instances": [to_instance] if to_instance != null else [],
+			"to_players": [to_player] if to_instance == null else [],
+			"is_combat": packet.is_combat})
+		return
+	_rec(self, &"_damage_dealt_batch")
+	for row in _damage_dealt_batch:
+		if row["source"] != packet.source or int(row["stamp"]) != packet.source_timestamp:
+			continue
+		row["amount"] = int(row["amount"]) + amount
+		(row["packets"] as Array).append(packet)
+		if to_instance != null:
+			if not (row["to_instances"] as Array).has(to_instance):
+				(row["to_instances"] as Array).append(to_instance)
+		elif not (row["to_players"] as Array).has(to_player):
+			(row["to_players"] as Array).append(to_player)
+		row["is_combat"] = bool(row["is_combat"]) or packet.is_combat
+		return
+	_damage_dealt_batch.append({"source": packet.source, "stamp": packet.source_timestamp,
+		"amount": amount, "packets": [packet],
+		"to_instances": [to_instance] if to_instance != null else [],
+		"to_players": [to_player] if to_instance == null else [],
+		"is_combat": packet.is_combat})
+
+
+## Announce every source row the open bracket collected — one
+## SOURCE_DEALT_DAMAGE each, in the order the sources first dealt damage —
+## and empty the batch. Called beside [method _flush_damage_received]: as
+## the bracket's damage has all landed, before its state-based actions.
+func _flush_damage_dealt() -> void:
+	if _damage_dealt_batch.is_empty():
+		return
+	var rows := _damage_dealt_batch
+	_rec(self, &"_damage_dealt_batch")
+	_damage_dealt_batch = []
+	for row in rows:
+		dispatch_event(Mtg.EventType.SOURCE_DEALT_DAMAGE, {"source": row["source"],
+			"amount": int(row["amount"]), "packets": row["packets"],
+			"to_instances": row["to_instances"], "to_players": row["to_players"],
+			"is_combat": bool(row["is_combat"])})
+
+
 func book_tracked_prevention(inst: CardInstance, amount: int, desc: String) -> int:
 	_rec(self, &"_next_prevention_receipt")
 	_rec(inst, &"tracked_prevention")
@@ -6100,6 +6188,7 @@ func _divert_to_creature(packet: DamagePacket, inst: CardInstance, index: int) -
 	if split == null: return 0
 	split.source_was_spell = packet.source_was_spell
 	split.source_timestamp = packet.source_timestamp
+	split.source_controller = packet.source_controller   # h3-6: the same damage
 	split.local_prevention = packet.local_prevention
 	split.applied_creature_redirects = packet.applied_creature_redirects.duplicate()
 	log_line("%d damage to %s is dealt to %s instead" % [moved, inst.data.card_name, recipient.data.card_name])
@@ -6143,6 +6232,7 @@ func _split_damage(packet: DamagePacket, to: TargetRef, n: int) -> int:
 		return 0
 	split.source_was_spell = packet.source_was_spell
 	split.source_timestamp = packet.source_timestamp
+	split.source_controller = packet.source_controller   # h3-6: the same damage
 	split.local_prevention = packet.local_prevention
 	split.applied_creature_redirects = packet.applied_creature_redirects.duplicate()
 	if _damage_window_armed():
@@ -6503,6 +6593,7 @@ func _divert_damage_points(packet: DamagePacket, inst: CardInstance) -> int:
 		return 0
 	split.source_was_spell = packet.source_was_spell
 	split.source_timestamp = packet.source_timestamp
+	split.source_controller = packet.source_controller   # h3-6: the same damage
 	split.local_prevention = packet.local_prevention
 	split.applied_creature_redirects = packet.applied_creature_redirects.duplicate()
 	if _damage_window_armed():
@@ -6530,6 +6621,7 @@ func _redirect_damage(packet: DamagePacket, to: TargetRef) -> int:
 		return 0
 	moved.source_was_spell = packet.source_was_spell
 	moved.source_timestamp = packet.source_timestamp
+	moved.source_controller = packet.source_controller   # h3-6: the same damage
 	moved.local_prevention = packet.local_prevention
 	moved.applied_creature_redirects = packet.applied_creature_redirects.duplicate()
 	# The waiting caller follows the damage: it is the same damage.
@@ -6934,6 +7026,7 @@ func _land_pending_damage() -> void:
 	# The victims hear the damage now, as it lands — not after the
 	# regeneration window the bracket may stay open across (CR 510.2).
 	_flush_damage_received()
+	_flush_damage_dealt()   # and one "deals damage" event per source (h3-8)
 	# A REDIRECT during landing queues a fresh packet — `Duel.hlp`'s
 	# Veteran Bodyguard ruling calls that "a second damage-prevention step
 	# that follows the current one".
@@ -7134,6 +7227,7 @@ func take_from_outside_the_game(inst: CardInstance, pid: int) -> void:
 func draw_cards(pid: int, count: int) -> void:
 	var p := players[pid]
 	var drawn := 0
+	var ran_out := false
 	for _i in count:
 		# CR 614: a draw can be REPLACED before it happens (Island
 		# Sanctuary, Chains of Mephistopheles, Aladdin's Lamp). A replaced
@@ -7142,19 +7236,12 @@ func draw_cards(pid: int, count: int) -> void:
 		if _replace_draw(pid):
 			continue
 		if p.library.is_empty():
-			log_line("%s tries to draw from an empty library" % p.player_name)
-			# A STATE-BASED loss (CR 704.5b), not an immediate one: noted
-			# here and judged with life and poison in the same pass, so a
-			# Wheel of Fortune that empties BOTH libraries is a draw (CR
-			# 104.4a) rather than a win for whichever seat drew second (bug
-			# pass 2026-10-03). The check below acts at once outside a
-			# resolution (the draw step) and at its end inside one.
-			if not _empty_library_draws.has(pid):
-				_rec(self, &"_empty_library_draws")
-				_empty_library_draws = _empty_library_draws.duplicate()
-				_empty_library_draws.append(pid)
-			check_state_based_actions()
-			return
+			# The cards already drawn are still announced, and announced
+			# first (the bug campaign c12, h3-19): this returned here, so a
+			# draw of 2 from a library of 1 logged no "draws a card" and
+			# sent no state for the card that did move.
+			ran_out = true
+			break
 		if undo_log != null:
 			_rec(p, &"library")
 			_rec(p, &"hand")
@@ -7181,6 +7268,19 @@ func draw_cards(pid: int, count: int) -> void:
 		log_line("%s draws a card" % p.player_name, null, "draw", pid)
 	elif drawn > 1:
 		log_line("%s draws %d cards" % [p.player_name, drawn], null, "draw", pid)
+	if ran_out:
+		log_line("%s tries to draw from an empty library" % p.player_name)
+		# A STATE-BASED loss (CR 704.5b), not an immediate one: noted
+		# here and judged with life and poison in the same pass, so a
+		# Wheel of Fortune that empties BOTH libraries is a draw (CR
+		# 104.4a) rather than a win for whichever seat drew second (bug
+		# pass 2026-10-03). The check below acts at once outside a
+		# resolution (the draw step) and at its end inside one.
+		if not _empty_library_draws.has(pid):
+			_rec(self, &"_empty_library_draws")
+			_empty_library_draws = _empty_library_draws.duplicate()
+			_empty_library_draws.append(pid)
+		check_state_based_actions()
 	_emit_state()
 
 
@@ -8445,6 +8545,7 @@ func phase_simultaneously(outs: Array, ins: Array, hold_source: CardInstance = n
 		inst.untap_sequence += 1
 		inst.phase_sequence += 1
 		log_line("%s phases out" % inst.data.card_name, inst)
+	var unmasked: Array[CardInstance] = []
 	for i in coming.size():
 		var inst := coming[i]
 		_rec_phasing(inst)
@@ -8455,8 +8556,15 @@ func phase_simultaneously(outs: Array, ins: Array, hold_source: CardInstance = n
 		inst.phase_hold = -1
 		if tap_ins and i < direct_ins:
 			inst.tapped = true
+			# Illusionary Mask: a masked creature that would become tapped
+			# is turned face up and tapped — Oubliette's prisoner too (the
+			# bug campaign c12, h3-17), once the battlefield has it back.
+			if inst.face_down:
+				unmasked.append(inst)
 		log_line("%s phases in" % inst.data.card_name, inst)
 	_battlefield_changed()
+	for inst in unmasked:
+		_turn_face_up_quietly(inst)
 	recalculate()
 	check_state_based_actions()
 	# ---- 3. the events, on the finished board ---------------------------
@@ -8582,7 +8690,7 @@ func turn_face_down(inst: CardInstance) -> void:
 ## printed on it (CR 708.4). Damage, tapping and dealing damage all do this
 ## to an Illusionary Mask creature.
 func turn_face_up(inst: CardInstance) -> void:
-	if inst == null or not inst.face_down:
+	if inst == null or not inst.face_down or _forecasting:
 		return
 	_turn_face_up_quietly(inst)
 	check_state_based_actions()
@@ -8598,7 +8706,8 @@ func turn_face_up(inst: CardInstance) -> void:
 ## nameless 2/2. Costs never run the check halfway through a payment (see
 ## [method _counter_removal_event]); the enclosing action does.
 func _turn_face_up_quietly(inst: CardInstance) -> void:
-	if inst == null or not inst.face_down:
+	# A forecast keeps it face down: the public board ([member _forecasting]).
+	if inst == null or not inst.face_down or _forecasting:
 		return
 	_rec(inst, &"face_down")
 	inst.face_down = false
@@ -11412,8 +11521,16 @@ func _pay_entry(inst: CardInstance, controller: int) -> bool:
 ## before the ENTERS_BATTLEFIELD event — an Aura's own arrival trigger
 ## (Earthbind's "if enchanted creature has flying") and its static
 ## abilities see their host from the very first moment.
+##
+## [param extra_counters] ({kind: count}): counters an EFFECT puts on the
+## permanent as it enters — "return it to the battlefield with a +1/+1
+## counter on it" (Sand Golem). They are there before the first
+## recalculation and before any "enters" listener looks, as the permanent's
+## own [member CardData.enters_with_counters] are; and, being the effect's
+## and not the permanent's, they come whatever abilities it has (the bug
+## campaign c12, h3-16).
 func _put_on_battlefield(inst: CardInstance, controller: int,
-		host: CardInstance = null, tapped := false) -> bool:
+		host: CardInstance = null, tapped := false, extra_counters: Dictionary = {}) -> bool:
 	# "Lands can't enter the battlefield" (Worms of the Earth) and "put this
 	# creature into its owner's graveyard instead of onto the battlefield"
 	# (Frankenstein's Monster): a refusal, asked before anything about the
@@ -11504,6 +11621,8 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 	if not silenced:   # CR 614.12 (above)
 		for kind in inst.data.enters_with_counters:   # Triskelion, Clockwork Beast
 			inst.counters[kind] = int(inst.data.enters_with_counters[kind])
+	for kind in extra_counters:   # an effect's "with N counters on it" (h3-16)
+		inst.counters[kind] = int(inst.counters.get(kind, 0)) + int(extra_counters[kind])
 	players[controller].battlefield.append(inst)
 	_battlefield_order.append(inst.id)
 	_battlefield_changed()
@@ -11698,7 +11817,11 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	var own_replacements := not inst.face_down and not inst.cur_abilities_silenced
 	# "If this creature would die, return it to its owner's hand instead"
 	# (Firestorm Phoenix) — a replacement effect, so no dies-trigger fires.
-	if died and own_replacements and inst.data.dies_returns_to_hand and not inst.is_token:
+	# A TOKEN copy too (the bug campaign c12, h3-11): "this creature" is
+	# the token, so it goes to the hand and there ceases to exist (CR
+	# 111.7, [method _return_from_battlefield]) — it never dies. Until then
+	# tokens were left out, so a token Phoenix died and fed a Grim Feast.
+	if died and own_replacements and inst.data.dies_returns_to_hand:
 		log_line("%s returns to its owner's hand instead of dying" % inst.data.card_name)
 		return_to_hand(inst)
 		if inst.data.dies_to_hand_locks and inst.zone == Mtg.Zone.HAND:
@@ -11718,8 +11841,9 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	# SIMPLIFIED (docs/ROADMAP.md, "Two dying-card replacements"): with a
 	# Forbidden Crypt also applying, the card's own replacement is applied
 	# without asking (CR 616.1 lets its controller choose; this order keeps
-	# the card).
-	if died and own_replacements and inst.data.dies_to_library_top and not inst.is_token:
+	# the card). A token copy is replaced too and ceases to exist on the
+	# library (CR 111.7; h3-11, as the Phoenix above).
+	if died and own_replacements and inst.data.dies_to_library_top:
 		log_line("%s goes on top of its owner's library instead of dying" % inst.data.card_name)
 		return_permanent_to_library_top(inst)
 		return
@@ -12110,7 +12234,12 @@ func set_color(inst: CardInstance, color_mask: int) -> void:
 	if inst == null or inst.phased_out:
 		return
 	_rec(inst, &"color_override")
+	_rec(inst, &"color_override_ts")
 	inst.color_override = color_mask
+	# Stamped, so layer 5 orders it against the other colour effects
+	# (CR 613.7; the bug campaign c12, h3-5: a Chaoslace cast after a
+	# Touch of Darkness lost to it).
+	inst.color_override_ts = continuous.next_timestamp()
 	inst.cur_colors = color_mask
 	var names := PackedStringArray()
 	for c in Mtg.WUBRG:
@@ -12414,15 +12543,22 @@ func exchange_control(a: CardInstance, b: CardInstance) -> bool:
 
 
 ## Reanimate a creature card from a graveyard onto the battlefield under
-## [param controller] (Animate Dead's engine half).
-func reanimate(inst: CardInstance, controller: int, tapped := false) -> void:
+## [param controller] (Animate Dead's engine half). [param counters]
+## ({kind: count}) are put on it AS it enters (see [method
+## _put_on_battlefield]): Sand Golem's "with a +1/+1 counter on it".
+func reanimate(inst: CardInstance, controller: int, tapped := false,
+		counters: Dictionary = {}) -> void:
 	if inst.zone != Mtg.Zone.GRAVEYARD:
 		return
 	_rec_move(inst, controller, Mtg.Zone.BATTLEFIELD)
 	players[inst.owner_id].graveyard.erase(inst)
-	log_line("%s returns from the graveyard under %s's control" % [
-		inst.data.card_name, players[controller].player_name])
-	_put_on_battlefield(inst, controller, null, tapped)
+	var riders := PackedStringArray()
+	for kind in counters:
+		riders.append("%d %s counter(s)" % [int(counters[kind]), kind])
+	log_line("%s returns from the graveyard under %s's control%s" % [
+		inst.data.card_name, players[controller].player_name,
+		"" if riders.is_empty() else " with " + ", ".join(riders)])
+	_put_on_battlefield(inst, controller, null, tapped, counters)
 
 
 func _exile_departure_instead(inst: CardInstance) -> bool:
@@ -12619,6 +12755,7 @@ func end_simultaneous() -> void:
 	_defer_depth = maxi(_defer_depth - 1, 0)
 	if _defer_depth == 0:
 		_flush_damage_received()   # one "is dealt damage" event per victim
+		_flush_damage_dealt()   # one "deals damage" event per source (h3-8)
 		_defer_state_based_actions = false
 		_rec(self, &"_departure_batch")
 		_departure_batch = []
@@ -12908,6 +13045,12 @@ func _check_state_triggers() -> void:
 	# fork says so (campaign 2026-10-13 f-sac); off, nothing below changes.
 	var clauses := rules.sacrifice_clauses_wait and _c2s_any_clause()
 	if not clauses and not _trigger_index.has(Mtg.EventType.STATE_CHECK):
+		return
+	# Once the loop limit has stopped this step no trigger goes on the
+	# stack ([method _push_trigger]), so there is nothing to look for — and
+	# looking logged "not put on the stack" for a looping state trigger at
+	# EVERY state-based check (the bug campaign c12, h3-20).
+	if loop_stopped_by >= 0:
 		return
 	var event := GameEvent.new(Mtg.EventType.STATE_CHECK, {})
 	for pid in [active_player, opponent_of(active_player)]:
@@ -14416,9 +14559,12 @@ func record_choice(choice: PlayerChoice, seat_wanted_it := false) -> void:
 		_resolving_choices.append(choice)
 	if seat_wanted_it and not choice.answered_by_player:
 		unanswered_choices.append(choice)
-		# SIMPLIFIED: the engine cannot pause a resolution to ask, so it
-		# says out loud what it decided instead. Ledgered in
-		# docs/ROADMAP.md ("mid-resolution choices").
+		# SIMPLIFIED (docs/ROADMAP.md, "A draw replacement asks OUTSIDE a
+		# resolution"): a question the engine cannot hold open for a human
+		# seat — one asked from a turn-based action, the draw step's Island
+		# Sanctuary — is answered by the heuristic, so the engine says out
+		# loud what it decided instead. A question asked INSIDE a resolution
+		# is held open by the pre-flight (docs/duel-todo.md §1.3).
 		# A card picked out of a HIDDEN place (a library search, a hand,
 		# a face-down permanent) is the seat's own business: the line is
 		# private to it and the table hears only the question (bug pass
@@ -15467,6 +15613,9 @@ func forecast_damage(include_combat: bool, resolve_damage_top := false,
 	_rec_turn()
 	_rec(self, &"agents")
 	agents = [DecisionAgent.new(), DecisionAgent.new()]
+	# A masked creature stays face down for the whole forecast (h3-2).
+	var was_forecasting := _forecasting
+	_forecasting = true
 	var incoming := {}
 	var old_stack: Array = stack.map(func(item: StackItem) -> int: return item.id)
 	var aftermath := {"resolved": 0, "complete": true}
@@ -15493,6 +15642,7 @@ func forecast_damage(include_combat: bool, resolve_damage_top := false,
 	var result := {"alive": alive, "damage": marked, "incoming": incoming,
 		"life": [players[0].life, players[1].life], "stats": stats,
 		"aftermath": aftermath}
+	_forecasting = was_forecasting
 	unmake_to(mark)
 	if not nested:
 		end_search()
@@ -18310,6 +18460,24 @@ func source_controller(source: CardInstance) -> int:
 		if item != null:
 			return item.controller
 	return source.controller_id
+
+
+## "That source's controller" for the damage [param packet] carries: the
+## seat that controlled its source WHEN IT DEALT the damage
+## ([member DamagePacket.source_controller]) once the source has left the
+## battlefield and the stack, the live answer ([method source_controller])
+## while it is still there. Under the 1997 damage-prevention window a
+## stolen spell's damage waits while the card goes home to its owner, and
+## a Reflect Damage then sent it to the owner (the bug campaign c12, h3-6;
+## the whole-project review's "engine-2" limit).
+func packet_source_controller(packet: DamagePacket) -> int:
+	if packet == null or packet.source == null:
+		return -1
+	var source := packet.source
+	if packet.source_controller >= 0 and source.zone != Mtg.Zone.BATTLEFIELD \
+			and source.zone != Mtg.Zone.STACK:
+		return packet.source_controller
+	return source_controller(source)
 
 
 # --- campaign 2026-10-12 f-order: who orders the damage effects ---

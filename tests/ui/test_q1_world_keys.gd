@@ -244,6 +244,31 @@ func test_q_asks_and_no_stays() -> void:
 	assert_eq(screen.saves, 0, "nothing saved")
 
 
+## The owner (2026-10-27): "upon esc key not just question to quit but also
+## offer save/load in the same popup!"
+func test_the_question_offers_save_and_load() -> void:
+	await _key(KEY_ESCAPE)
+	var ask := _ask()
+	assert_not_null(ask)
+	assert_eq((ask.find_child("QuitSave", true, false) as Button).text, "Save")
+	assert_eq((ask.find_child("QuitLoad", true, false) as Button).text, "Load")
+	await _press(ask.find_child("QuitSave", true, false) as Control)
+	await _frames()
+	assert_null(_ask(), "Save: the question put away")
+	assert_not_null(screen.find_child("SaveSlots", true, false), "the ten slots instead")
+	assert_eq(screen.titles, 0, "still in the world")
+	await _key(KEY_ESCAPE)
+	await _frames()
+	await _after_pane()
+	await _key(KEY_Q)
+	assert_not_null(_ask(), "asked again")
+	await _key(KEY_L)
+	await _frames()
+	assert_null(_ask(), "L: the question put away")
+	assert_true(screen.loading(), "the saved adventures instead")
+	assert_eq(screen.titles, 0)
+
+
 func test_escape_asks_and_escape_on_the_question_stays() -> void:
 	await _key(KEY_ESCAPE)
 	assert_not_null(_ask(), "Escape with nothing open: Ready to Quit?")

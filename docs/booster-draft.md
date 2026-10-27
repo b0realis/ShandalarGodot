@@ -1,7 +1,8 @@
 # Booster Draft
 
-In the development build, open **Options → Booster Draft → Card pool / Launch
-draft**, or **Deck Builder → Deck → Booster Draft**. Everything runs in the
+Open **Options → Booster Draft → Card pool / Launch
+draft**, or **Deck Builder → Deck → Booster Draft** (2026-10-27: in every
+build — the Options entry is not limited to development builds). Everything runs in the
 game; no Python script or terminal is needed. An ordinary deck you were
 editing stays intact when you visit draft setup and return.
 

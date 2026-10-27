@@ -391,9 +391,8 @@ static func _legacy_sweep(g: MtgGame, _s: CardInstance, _e: GameEvent) -> void:
 	var doomed: Array[CardInstance] = []
 	for i in g.all_battlefield():
 		if _djinn_or_efreet(i): doomed.append(i)
-	g.begin_simultaneous()
-	for i in doomed: g.destroy(i, false)
-	g.end_simultaneous()
+	# One departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i, false))
 
 static func _djinn_enters(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 	var entrant: CardInstance = e.data.get("instance")

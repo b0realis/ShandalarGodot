@@ -5,9 +5,11 @@ extends CardScript
 ##
 ## Implementation: repeatable activated ability whose payload is a
 ## PreventDamageShieldEffect(black) — a one-shot, this-turn shield consumed
-## by MtgGame.deal_damage. Stacks with itself; see the effect class for the
-## documented source-choice simplification. The CoP cycle is the backbone
-## of Shandalar's white defensive decks (and its dungeon strategy).
+## by MtgGame.deal_damage. Stacks with itself. The source "of your choice"
+## is chosen as the ability resolves (or, under the 1997 damage-prevention
+## window, the damage itself is targeted) — see the effect class. The CoP
+## cycle is the backbone of Shandalar's white defensive decks (and its
+## dungeon strategy).
 ## One of five: see the other circle_of_protection_*.gd files.
 
 

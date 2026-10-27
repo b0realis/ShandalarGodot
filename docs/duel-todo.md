@@ -62,7 +62,7 @@ marked; the reasoning and the exact wording are in the sections cited.
 | 6 | **The arrows.** DONE 2026-08-31. | — | UI | 2.1 |
 | 7 | **Manual combat damage assignment.** DONE 2026-08-31, with the original's `%d points left` loop. | — | both | 1.4, 6.9 |
 | 8 | **The mulligan** — the Shandalar rule. DONE 2026-08-31. **REPLACED 2026-09-08 by the Paris rule on the owner's word** (any hand, one card fewer each time, down to empty; the hand in view; an AI that judges its lands) — `[QoL]`, §1.5, §6.2, `docs/ROADMAP.md`. | — | both | 1.5, 6.2 |
-| 9 | ~~**A damage-prevention window**, and damage as a targetable object.~~ **BUILT 2026-09-01**, all four slices of §6.8a, as the seventh `RulesOptions` fork (`damage_prevention_window`, default modern). What remains is the damage-MARKER widget, which is UI and is ledgered in `docs/ROADMAP.md`. | XL | both | 6.8, 6.20b |
+| 9 | ~~**A damage-prevention window**, and damage as a targetable object.~~ **BUILT 2026-09-01**, all four slices of §6.8a, as the seventh `RulesOptions` fork (`damage_prevention_window`, default modern). What remains is the damage-MARKER widget, which is UI and is ledgered in `docs/ROADMAP.md`. (2026-10-27: the marker is built too, the same day — `DamageMarkerLayer`, §6.20b.) | XL | both | 6.8, 6.20b |
 | 10 | **Stops and a real "run to phase"**, replacing the blind pass loop. DONE 2026-08-31, on BOTH bars. | — | UI | 6.1, 6.3 |
 
 Those next five are now **DONE (2026-08-31)**: §2.3 the arrange toggle,
@@ -78,7 +78,9 @@ damage is a `DamagePacket`, the prevention and regeneration steps are real
 priority windows with a restricted allow, and a packet is a legal target.
 It is the seventh `RulesOptions` fork and it is off by default, so an
 untouched duel plays modern Magic exactly as before. What is left of it is
-the damage-MARKER widget, which is UI (`docs/ROADMAP.md`).
+the damage-MARKER widget, which is UI (`docs/ROADMAP.md`). (2026-10-27:
+built — `DamageMarkerLayer` / `DamageMarker`, §6.20b, "the WIDGET
+2026-09-01".)
 
 Both "things to decide" are decided: the Fifth-Edition-vs-modern
 divergences (§6.20n) are **RULES FORKS** in `engine/rules_options.gd`,
@@ -163,7 +165,13 @@ been built**, and both were on the "what comes next" list below:
 **The Gauntlet** — the fourth 1997 mode, absent since the project began —
 was built the same day from `docs/gauntlet-design.md`.
 
-**The duel to-do is cleared.** §1 (all six), §2, §3, §4, §6 and §9's Tier 1
+**The duel to-do is cleared.** (2026-10-27: it is not any more — the
+headings below still marked NOT BUILT, PARTLY DONE or without a DONE
+stamp are open, §6.20's 1997 timing windows among them, and so are the
+questions asked from the draw step and during combat damage, which still
+fall to the heuristic (`docs/ROADMAP.md`, the rows "A draw replacement
+asks OUTSIDE a resolution" and "The damage-order question during combat
+damage"). Read the headings, not this line.) §1 (all six), §2, §3, §4, §6 and §9's Tier 1
 are stamped; §6.8 — the damage-prevention window, the largest 1997 rules
 structure the project lacked — was built the same day as a `RulesOptions`
 fork and measured at scale.
@@ -194,7 +202,7 @@ the game most:
    still holds is verified-and-left notes and two unmeasured performance
    candidates.
 2. **`docs/simplified-cards.md`** — the fidelity ledger, now 55 rows over
-   86 card files (was 88 over 128 on the morning of 2026-09-01; defensive
+   86 card files (2026-10-27: 12 rows now) (was 88 over 128 on the morning of 2026-09-01; defensive
    banding and the durations cluster both landed). This is where the
    remaining *rules* divergence lives now that the pool is complete. Its
    grep invariant is ONE-DIRECTIONAL — see the ROADMAP section above.
@@ -466,7 +474,11 @@ that says `wants_to_be_asked()`. The AI, the heuristic agent and every
 headless test resolve exactly as they always did.
 
 **THE FOUR THAT FELL THROUGH — CLOSED THE NEXT DAY, AND NOTHING FALLS
-THROUGH NOW.** This entry said SIX until an adversarial re-read on
+THROUGH NOW.** (2026-10-27: nothing inside a resolution or a cost; the
+questions asked from the DRAW STEP — Island Sanctuary, Fasting,
+Breathstealer's Crypt — and the damage-order question during combat
+damage still fall to the heuristic and are logged, `docs/ROADMAP.md`'s
+two "third hold" rows.) This entry said SIX until an adversarial re-read on
 2026-09-01 found that two of the rows were never fall-throughs at all; the
 remaining four were closed the same day by the SECOND hold described below.
 
@@ -1877,14 +1889,14 @@ already tracks an item, that is said so we do not double-count it.
 
 | # | Item | Reference | Status | Why the duel cares | Size |
 |---|---|---|---|---|---|
-| 5.1 | **Game-state deep clone** with copy-on-write battlefield | `pkg/mage/clone.go:20-198`; COW at `game.go:518-559` | none in `engine/`; ROADMAP names it under M4 phase 3 | Prerequisite for search AI, "would this kill me", undo, and §5.3 | L |
+| 5.1 | **Game-state deep clone** with copy-on-write battlefield | `pkg/mage/clone.go:20-198`; COW at `game.go:518-559` | none in `engine/`; ROADMAP names it under M4 phase 3 (2026-10-27: no clone, but both halves of what it was for exist — `GameSnapshot`, the rewind the §1.3 pre-flight runs on, and `UndoLog`, the make/unmake journal the AI's searches run on) | Prerequisite for search AI, "would this kill me", undo, and §5.3 | L |
 | 5.2 | **Cost payment as a validate-on-clone transaction** | `pkg/mage/payment_transaction.go:15-175`; `spell_payment.go:150-197` `lockPaymentCosts` | PARTIAL — riders are checked before paying, but per-site; the 2026-09 audit found `tap_for_mana` half-paying | Makes "half-paid then refused" impossible as a class | M |
 | 5.3 | **Exact mana solver / auto-tapper** (A\* with an admissible heuristic) | `pkg/mage/mana_solver.go:105-496`; pool-side `mana.go:180-264` | PARTIAL — ours is greedy one-pass. **THE "LANDS ONLY" HALF IS DONE 2026-09-11**: there is ONE greedy planner again, not two. `MtgGame._payment_plan` no longer walks the battlefield itself — it builds `ManaPlanner.sources` / `plan_from` like everything else, so `try_pay`/`can_afford_cost` reach every mana source the AI seat and the human auto-cast already reached (CR 605.3a), honour RESTRICTED mana (CR 106.6) and keep the planner's order. It keeps ONE rule of its own, [method MtgGame._mana_ability_asks]: a source whose activation would ASK (Fellwar Stone's colour, a battery's charge count) is left out, because a payment nested in a resolution has no way to hold the duel open for the answer. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. What is left of this row is the SOLVER: still greedy, still one pass | A greedy planner REFUSES casts that are payable, and it drives the duel's castable highlight through `can_afford`. **AND THE "LANDS ONLY" HALF IS THE SMALL ONE, surveyed 2026-09-11: 45 card files reach `try_pay`/`can_afford_cost` — every lucky charm, Paralyze, Mana Vault, Nether Void, Energy Flux, The Tabernacle at Pendrell Vale — and this pool is full of artifact mana (Sol Ring, the five Moxen, Black Lotus, Mana Crypt, Basalt Monolith, Celestial Prism), so a board whose untapped mana is artifacts CANNOT pay an upkeep it plainly could.** The two planners already emit the SAME shape, `[[instance, ability_index], …]`, which is what `try_pay` executes step by step, and `ManaPlanner.sources` already counts floating mana as a zero-cost source the way `_payment_plan` seeds its sim — so the lift is pointing `_payment_plan` at `ManaPlanner.plan` and keeping one ordering rule, not writing a solver. **BUILT 2026-09-11 and the drop-in was real, with three caveats the audit had not seen** — see the item below the table | M (the solver); the "lands only" half was **S and is DONE 2026-09-11** |
-| 5.4 | **Trigger batching** — accumulate since last priority, then stack APNAP | `pkg/mage/game.go:2006-2105`, `:2232-2248` `PutTriggersOnStack` | PARTIAL — `dispatch_event` stacks each trigger immediately | Decides which of two simultaneous triggers resolves first | M |
+| 5.4 | **Trigger batching** — accumulate since last priority, then stack APNAP | `pkg/mage/game.go:2006-2105`, `:2232-2248` `PutTriggersOnStack` | PARTIAL — `dispatch_event` stacks each trigger immediately (2026-10-27: batched since 2026-09-10 — triggers raised while a cost is paid wait, `_waiting_triggers`, and are flushed in one APNAP pass, CR 603.3b; delayed triggers fire in APNAP order with the battlefield's) | Decides which of two simultaneous triggers resolves first | M |
 | 5.5 | **Real delayed triggers** (stack objects with event matchers) | `pkg/mage/game.go:325-338`, `:2001-2005`, `:2108-2165` | ALREADY TRACKED (ROADMAP, audit-2026-09) | Nobody can respond to Berserk's destruction or Rukh Egg's bird | M |
 | 5.6 | **Generic replacement-effect pipeline** | `pkg/mage/action.go:11-41`; `effect_manager.go:768-811` | ALREADY TRACKED (`mechanics.md §14`) | Blocks ten stubbed damage cards (Forcefield, Eye for an Eye, Rock Hydra…) | L |
 | 5.7 | **"If you would draw a card…" replacement** with an `isNormalDraw` flag | `pkg/mage/game.go:3559-3601`; `replacement.go:621-767` | ALREADY TRACKED (ROADMAP) | Four `cards/todo/` files wait on exactly this: Sylvan Library, Aladdin's Lamp, Island Sanctuary, Chains of Mephistopheles | M |
-| 5.8 | **Reveal primitives** (top-of-library and hand) | `pkg/mage/reveal.go:28-203` | MISSING (`grep reveal engine/` is empty) | Sylvan Library, Nebuchadnezzar, Petra Sphinx; and a hidden-information UI needs a legal way to show a reveal | M |
+| 5.8 | **Reveal primitives** (top-of-library and hand) | `pkg/mage/reveal.go:28-203` | MISSING (`grep reveal engine/` is empty) (2026-10-27: built — `MtgGame.reveal_information`, `revealed_top_card`, and the library search's `reveal_title`) | Sylvan Library, Nebuchadnezzar, Petra Sphinx; and a hidden-information UI needs a legal way to show a reveal | M |
 | 5.9 | **Control layer as a fixed-point loop**, plus `cant_change_control` | `pkg/mage/effect_manager.go:624-679`; `effect_control.go:11-60` | PARTIAL — leashed control exists and the FLAG landed 2026-09-01 (`CardInstance.cur_cant_change_control`, gated in `MtgGame.change_control`, which lifted Guardian Beast's ledger row); no convergence loop | Chained control (Old Man of the Sea + Rubinia) still resolves by pipeline order | M |
 | 5.10 | **One blocker blocking several attackers**; **minimum-blocker restrictions**; **defensive banding** | `pkg/mage/game.go:3754-3763`; `combat_restrictions.go:50-66`; `combat.go:396-676` | ALREADY TRACKED (ROADMAP, simplified-cards). **DONE, all three:** defensive banding 2026-09-01 (ROADMAP's simplifications table, `free_order`); the one-to-many block map 2026-09-02 (`CombatState.extra_blocks`, `CardData.extra_blocks`, `CardInstance.extra_blocks_this_turn`); minimum blockers with the packs' menace cards (`CardInstance.cur_min_blockers`, enforced in `MtgGame.declare_blockers` — see §3.4) | Two-Headed Giant of Foriys, Blaze of Glory, Wall of Caltrops | M |
 | 5.11 | **Effect durations beyond EOT/EOC**, plus conditional durations | `pkg/mage/core/layer.go:19-27`; `effect_manager.go:60-90` | ALREADY TRACKED for the enum; the CONDITION slot is not | Xenic Poltergeist, Brine Hag, Wall of Tombstones | M |
@@ -1899,8 +1911,8 @@ already tracks an item, that is said so we do not double-count it.
 | 5.20 | ~~**Priority during cleanup + a repeated cleanup step** (CR 514.3a)~~ **DONE 2026-10-03, Pack 8 E3** (`MtgGame._cleanup_triggers`; the Mirage flash riders are its observers) | `pkg/mage/turn.go:144-152` | ALREADY TRACKED (`mechanics.md §14`); the marker is `MtgGame._cleanup_step`'s `SIMPLIFIED: cleanup grants no priority.` | One line of recursion; closes a documented hole. **AND THE POOL SURVEYED IT, 2026-09-11: nothing in 897 cards can see it.** CR 514.3a grants priority only when the cleanup step performs a state-based action or puts a trigger on the stack, and this pool can do neither there. NO CARD LISTENS ON `CARD_DISCARDED` (`grep` finds the dispatch in `MtgGame` and not one listener in `cards/`), so the hand-size discard raises nothing; and CR 514.2 removes damage and ends until-EOT effects SIMULTANEOUSLY, which is exactly what `_finish_cleanup` does — damage to 0 first, then `continuous.expire_until_eot()` — so a pumped creature with damage on it survives its pump wearing off, as printed. Anything a cleanup could still leave behind is swept at the very next `_open_priority` (upkeep, CR 704.3), one step late and never lost. So the row is a CORRECTNESS row with no observer: worth the one line of recursion for its own sake, not for any card | S |
 | 5.21 | **Optional additional costs** with an "if you do" latch, and either/or costs | `pkg/mage/cost_optional.go:16-81`; `cost.go:564-627` | PARTIAL — mandatory additional costs only | No kicker in this pool, but "discard a card or pay {5}" recurs | S |
 | 5.22 | **Alternative costs / casting from a non-hand zone** | `pkg/mage/alternate_cost.go:26-109`; `effect_cast_alt.go:122-299` | MISSING for cast-from-zone; PARTIAL for lands | Low era pressure; the clean home for `cards/todo/drk/gaea_s_touch.gd` | S |
-| 5.23 | **Attack costs** ("can't attack unless you pay", CR 508.1e) | `pkg/mage/combat_restrictions.go:67-206` | MISSING | No Propaganda in the pool; the right home for Hasran Ogress-style taxes we do as triggers | S |
-| 5.24 | **`DecisionAgent` breadth**: choose a number, name a card, choose a permanent, distribute damage at resolution, order blockers | `pkg/mage/player.go:82-146` (15 questions vs our 4) | PARTIAL — **order blockers and distribute COMBAT damage landed 2026-08-31** (`order_blockers` / `assign_combat_damage`, §1.4), as did `choose_mulligan` (§1.5) and the two "hold the turn open" switches (§1.1, §1.4). Our four primitives are now seven, all funnelled through `PlayerChoice` and, since the §1.3 pre-flight landed, all actually PUT TO THE PLAYER. Still missing as TYPES: choose a number, name a card, choose a permanent, distribute damage at RESOLUTION — each needs a new `PlayerChoice.Kind` and a row in `DuelScreen.choice_options`, which is now the one place a new kind has to be worded | Directly blocks the Balance / Eureka / Juxtapose / Nebuchadnezzar stub cluster — several need a HOOK, not just a UI | M |
+| 5.23 | **Attack costs** ("can't attack unless you pay", CR 508.1e) | `pkg/mage/combat_restrictions.go:67-206` | MISSING | No Propaganda in the pool; the right home for Hasran Ogress-style taxes we do as triggers (2026-10-27: built — `CardInstance.cur_attack_costs`, read by `CombatDeclaration`; Brainwash, Leviathan and the packs' attack taxes use it) | S |
+| 5.24 | **`DecisionAgent` breadth**: choose a number, name a card, choose a permanent, distribute damage at resolution, order blockers | `pkg/mage/player.go:82-146` (15 questions vs our 4) | PARTIAL — **order blockers and distribute COMBAT damage landed 2026-08-31** (`order_blockers` / `assign_combat_damage`, §1.4), as did `choose_mulligan` (§1.5) and the two "hold the turn open" switches (§1.1, §1.4). Our four primitives are now seven, all funnelled through `PlayerChoice` and, since the §1.3 pre-flight landed, all actually PUT TO THE PLAYER. Still missing as TYPES: choose a number, name a card, choose a permanent, distribute damage at RESOLUTION (2026-10-27: choose a number exists — `DecisionAgent.choose_number`, an OPTION question over the numbers, deliberately not a new kind) — each needs a new `PlayerChoice.Kind` and a row in `DuelScreen.choice_options`, which is now the one place a new kind has to be worded | Directly blocks the Balance / Eureka / Juxtapose / Nebuchadnezzar stub cluster — several need a HOOK, not just a UI | M |
 
 ### 5.3a THE "LANDS ONLY" HALF, BUILT (2026-09-11) — and the three things the audit had not seen
 
@@ -2514,6 +2526,7 @@ Items worth their own lines:
 - **The double-click gesture** the two `Arrange` entries advertise
   (`\tDblClk`) is not wired: the command is, the shortcut is not. Same
   for `Ctrl+T` / `Ctrl+I` / `Ctrl+U`, whose commands do not exist yet.
+  (2026-10-27: the three Ctrl keys are bound since 2026-09-02, §6.3a.)
 
 **THE REST OF THE TABLE WENT LIVE 2026-09-01.** What landed, and what one
 of them proved:
@@ -2564,9 +2577,12 @@ which is why the table lives with the settings rather than in either menu.
 Pinned by `tests/ui/test_territory_menu.gd` and
 `tests/ui/test_card_menus.gd`.
 
-#### 6.3a THE DESIGN (2026-09-02) — binding `Ctrl+T` / `Ctrl+I` / `Ctrl+U`, the three accelerators the table carries and we do not honour
+#### 6.3a THE DESIGN (2026-09-02) — binding `Ctrl+T` / `Ctrl+I` / `Ctrl+U`, the three accelerators the table carries and we do not honour — BUILT 2026-09-02
 
-**NOT BUILT. This is the spec.** §6.3 above records the state of play in
+**NOT BUILT. This is the spec.** (2026-10-27: built the same day —
+`DuelScreen._accelerate_toggle`, three arms in `_unhandled_key_input`,
+the keys shown on both menus through `DuelOptions.menu_toggle_accelerator`;
+`docs/ROADMAP.md`, "Small, real, and cheap — ALL FIXED 2026-09-02".) §6.3 above records the state of play in
 one line — *"The double-click gesture the two `Arrange` entries advertise
 (`\tDblClk`) is not wired: the command is, the shortcut is not. Same for
 `Ctrl+T` / `Ctrl+I` / `Ctrl+U`, whose commands do not exist yet."* — and
@@ -2750,7 +2766,10 @@ volume, hand display, AI pace, and — added 2026-09-01 — the `RulesOptions`
 forks with their `?` explanations. That last section is a DIFFERENT list:
 the forks are rules divergences (mana burn, damage assignment), not
 `@DIALOG_DUELOPTIONS`'s presentation switches. Not one of the nineteen
-entries below is settable.
+entries below is settable. (2026-10-27: that was the diagnosis; they are
+settable now — the panel was built the same day, as the heading says:
+`game/duel/duel_options.gd`, `DuelOptions`, every switch a `Settings` key
+under the original's own registry names.)
 
 Two of the fourteen registry values do have their BEHAVIOUR built, which
 is what makes this an S rather than an M — the panel mostly needs to
@@ -3115,7 +3134,9 @@ original's behaviour.
 **Still missing here:** the manual's *"there is no way to change your mind
 and remove"* an attacker or blocker — a rules fork we keep revocable by
 the owner's earlier call (`RulesOptions.attackers_revocable`); the
-**banding prompt** on adding a banding creature (see §6.9); and cards that
+**banding prompt** on adding a banding creature (see §6.9; 2026-10-27: offered
+since 2026-09-18 — "Band with which attacker?", `@PROMPT_BANDWITHWHOM`,
+`DuelScreen`'s band question); and cards that
 FORCE a creature into the window (*"those creatures are highlighted, and
 you must add them"*).
 
@@ -3780,6 +3801,9 @@ Related: `@PROMPT_BANDWITHWHOM` (`:987`) = `Band with which attacker?` /
 
 **Banding is decorative for us.** `Mtg.Keyword.BANDING` exists and
 `mini_card.gd:655` draws its badge, but the choice is never offered.
+(2026-10-27: offered since 2026-09-18 — the Situation Bar asks "Band with
+which attacker?" (`@PROMPT_BANDWITHWHOM`) as a banding creature is added
+to the attack, `DuelScreen`'s "THE BAND QUESTION".)
 `Duel.hlp`, **Combat**: *"If you select a banding creature for the attack,
 you can choose to have it band with another attacker, rather than attacking
 on its own. You're prompted to decide this… Otherwise, click the Done
@@ -4136,6 +4160,13 @@ answer. What is still OPEN here is the rest of the `@CUECARD_*` family:
 columns, `@CUECARD_OTHER`'s window names, and the per-card COUNTER names
 (we still show counters as bare numbers).
 
+(2026-10-27: all ten `@CUECARD_SMALLCARD` states are drawn now — nine on
+the small card (`MiniCard.State`, `Phased` the ninth since 2026-10-03) and
+`Damage to player` on the damage marker (`DamageMarker`); and the counters
+are no longer bare numbers — one stone per kind with its
+`@CUECARD_COUNTERS_*` line on the cue card since 2026-09-08,
+`CounterMarks`.)
+
 `UIStrings.txt:732` `@CUECARD_SMALLCARD`, the ten states a card on the
 table can be in:
 
@@ -4349,7 +4380,11 @@ Pinned in `tests/cards/test_pool_wave46.gd`.
 
 **SETTLING the ante when the duel ends — the winner takes it — is NOT
 built**, deliberately: it is the adventure layer's economy, and there is no
-adventure layer. See §7.
+adventure layer. See §7. (2026-10-27: there is one now, and it settles —
+an adventure duel's stakes are settled by `DuelSpoils.settle` from the
+meeting's own antes (part B, 0.50.54): a loss loses the hero's stake, a
+win's cards begin with the creature's, a draw loses nothing. A free-play
+duel still settles nothing, as designed here.)
 
 **Not changed:** `GraveyardView`'s ante section still titles itself
 `Your ante (N)` / `%s ante (N)`, the [QoL] convention it uses for all three
@@ -4780,6 +4815,12 @@ and `s30/assets/text/Uistrings.txt` is the cleaner 1997 copy.
 
 ## 7. Out of scope — the adventure layer
 
+(2026-10-27: the adventure layer exists now — parts A and B,
+0.50.48–0.50.61, `docs/adventure-implementation-notes.md`. The meeting
+before a creature's duel shows both antes and lets the hero change the
+staked card (`EncounterPane`), and the win, the loss and the draw are settled by
+`DuelSpoils`; the dungeon and castle duels are part C, still to come.)
+
 Listed once so nothing is silently dropped. All of these are s30 features
 that belong to the world map, not the duel:
 
@@ -4795,7 +4836,8 @@ that belong to the world map, not the duel:
 **What §6.19 built, and what it deliberately did not.** The duel now
 STAKES an ante (`MtgGame.stake_ante`) and SHOWS it (the opening window, the
 graveyard menu's `View both antes`). **SETTLING it is still owed, and it is
-owed HERE**, because settling is an economy and not a rule:
+owed HERE**, because settling is an economy and not a rule (2026-10-27:
+built here, for the adventure's duels — `DuelSpoils`, above):
 
 - **The winner takes the ante.** Manual p.165: *"The winning player keeps
   those cards after the duel is over"*; p.167, on conceding: *"If the duel

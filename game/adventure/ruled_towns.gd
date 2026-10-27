@@ -137,6 +137,9 @@ const NEVER_MIND := "Never mind."
 const DUEL := "Duel the creature."
 const FREED := "%s is freed! The people rejoice."
 const LOST_CARD := "Lost this card"
+## [Ours] The caption of the creature's stake won, shown on the freed
+## town's picture (1997 showed it nowhere; the bug campaign c12, h2-4).
+const WON_CARD := "Won this card"
 ## `@LOGSTRINGS` 2.
 const FREED_LOG := "Freed %s"
 
@@ -360,7 +363,8 @@ static func meeting(player: AdventurePlayer, entry: Dictionary) -> Dictionary:
 ## THE DUEL HANDED TO THE ENGINE ([method CreatureMeeting.duel_config] for
 ## the record of [method meeting]): the hero's deck in use, padded, the
 ## stake lifted out of it; the creature's maindeck, its stake lifted out of
-## it; the minion in play; the lives as in any duel.
+## it; the minion in play; the lives as in any duel; the hero's playmat on
+## their half ([method CreatureMeeting.hero_playmat]).
 static func duel_config(player: AdventurePlayer, met: Dictionary) -> DuelConfig:
 	return CreatureMeeting.duel_config(player, met)
 

@@ -146,9 +146,8 @@ static func _albatross(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		var owner := i.controller_id
 		if g.players[owner].life >= 2 and g.agents[owner].choose_yes_no(g, owner, "Pay 2 life to save %s from Giant Albatross?" % i.data.card_name, g.players[owner].life > 2): g.adjust_life(owner, -2)
 		else: destroy.append(i)
-	g.begin_simultaneous()
-	for i in destroy: g.destroy(i, false)
-	g.end_simultaneous()
+	# Every unpaid creature is destroyed at once (the bug campaign c12, h3-3).
+	g.depart_together(destroy, func(i: CardInstance) -> void: g.destroy(i, false))
 static func _dwarf_left(_g: MtgGame, _s: CardInstance, e: GameEvent, id: int, stamp: int) -> bool: return e.data.instance.id == id and e.data.instance.layer_timestamp == stamp
 static func _wolf_sacrifice(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 	var i := g.find_instance(id)

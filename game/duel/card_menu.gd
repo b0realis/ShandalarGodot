@@ -39,10 +39,14 @@ extends RefCounted
 ## own order. What each one is, from `Duel.hlp`'s **Territory** topic
 ## (which describes the card mini-menu at its end):
 ##  - **Original Type** — *"shows you what this card was when it was cast,
-##    before any spells and effects changed it."* Live: the Showcase
-##    already draws the PRINTED card — *"the Showcase always displays the
-##    original card, except for the text"* — so this is that view, asked
-##    for by name.
+##    before any spells and effects changed it."* Live ON A COPY only (the
+##    bug campaign c12, h4-7): a Clone, a Copy Artifact or a Vesuvan
+##    Doppelganger wears the copied card's definition, which is what the
+##    Showcase draws, and this entry draws the copy's own printed card
+##    (`DuelScreen._shows_a_copy`, [method CardPreview.show_card] with
+##    `printed`). On any other card it is greyed with a tooltip: the
+##    Showcase already draws that card as printed — *"the Showcase always
+##    displays the original card, except for the text"*.
 ##  - **Show full card** — *"displays the card in the Showcase… You can
 ##    also double-right-click to perform the same function."* Live; the
 ##    gesture landed with §2.15.

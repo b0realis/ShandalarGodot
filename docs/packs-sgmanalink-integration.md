@@ -10,7 +10,8 @@ updates the verification totals and advances the rules fingerprint to
 Dedicated branch `integration/packs-sgmanalink` combines `main` at
 `6a52c6a` (0.30.0) with `feature/pack-1-dotp-complete` at `30a348c`.
 The original checkouts remain untouched. This work is not a release and does
-not merge into `main`. Generated card packs and downloaded artwork stay local.
+not merge into `main`. (2026-10-27: it did merge later — the packs and
+SGManalink both live on `main`, the only branch now.) Generated card packs and downloaded artwork stay local.
 
 The main version commit arrived after the initial integration began. The
 unmodified trial merge was aborted and restarted from that commit. Version

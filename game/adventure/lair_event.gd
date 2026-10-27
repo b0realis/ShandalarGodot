@@ -109,7 +109,7 @@ static func begin(player: AdventurePlayer, lair: Dictionary) -> Dictionary:
 	out["event"] = event
 	out["name"] = NAMES[event]
 	if dice.below(4) == 0:
-		out["reward"] = rare_of_any_kind(dice)
+		out["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
 	player.dice = dice.state
 	player.log_event("lair", "Discovered %s" % with_article(NAMES[event]))
 	return out
@@ -149,7 +149,7 @@ static func thieves(player: AdventurePlayer, event: Dictionary) -> String:
 		said = "You get 500 gold!"
 	else:
 		player.gold /= 2
-		event["reward"] = rare_of_any_kind(dice)
+		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
 		said = "Thieves take half your gold!"
 	player.dice = dice.state
 	return said
@@ -167,7 +167,7 @@ static func lost_city(player: AdventurePlayer, event: Dictionary) -> String:
 		event["reward"] = ""
 		said = "You find an amulet of each color!"
 	else:
-		event["reward"] = rare_of_any_kind(dice)
+		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
 		said = "Thieves take half your amulets!"
 	player.dice = dice.state
 	return said
@@ -222,7 +222,7 @@ static func riddle_answered(player: AdventurePlayer, event: Dictionary, right: b
 		return
 	if int(event.get("event", 0)) == PYRAMIDS:
 		var dice := MsvcRandom.new(player.dice)
-		event["reward"] = rare_of_any_kind(dice)
+		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
 		player.dice = dice.state
 	else:
 		event["reward"] = String(event.get("lair_rare", ""))
@@ -244,11 +244,16 @@ static func finish(player: AdventurePlayer, event: Dictionary) -> String:
 # ------------------------------------------------------------ the cards --
 
 ## `PickRandomRareAvailableCard`: any card of the adventure, rare or
-## special.
-static func rare_of_any_kind(dice: MsvcRandom) -> String:
+## special — under the Classic MTG rules ([param classic]: [method
+## CardShop.classic_rule]) none the hero holds every copy of they allow, a
+## banned one never: the waiting rare, the thieves' and the Pyramids' riddle
+## gave such cards, the one source the rules had missed (the bug campaign
+## c12, h2-1). One die still cast, as before. A lair duel's hoard passes no
+## rule ([method LairDuels.begin]): a creature's stake is never limited.
+static func rare_of_any_kind(dice: MsvcRandom, classic := {}) -> String:
 	var rares: Array[String] = []
 	for row in _cards():
-		if CardShop.shop_rarity(row["facts"]) >= 3:
+		if CardShop.shop_rarity(row["facts"]) >= 3 and CardShop.classic_allows(classic, String(row["name"])):
 			rares.append(String(row["name"]))
 	return rares[dice.below(rares.size())] if not rares.is_empty() else ""
 

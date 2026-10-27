@@ -40,7 +40,8 @@ func after_each() -> void:
 func _store(pool: SealedPool) -> DraftStore:
 	var store := DraftStore.new()
 	assert_eq(store.prepare(FOLDER, pool, DraftPoolConfig.defaults()), "")
-	files.append_array([store.deck_path, store.pool_path, store.deck_path + ".pending", store.pool_path + ".pending"])
+	files.append_array([store.deck_path, store.pool_path,
+		Settings.pending_path(store.deck_path), Settings.pending_path(store.pool_path)])
 	return store
 
 
@@ -317,7 +318,7 @@ func test_store_saves_exact_deck_and_pool_and_replaces_checkpoint() -> void:
 	var receipt: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(store.pool_path))
 	assert_eq(receipt.state, "done")
 	for card_name in pool.counts: assert_eq(int(receipt.counts[card_name]), int(pool.counts[card_name]))
-	assert_false(FileAccess.file_exists(store.deck_path + ".pending"))
+	assert_false(FileAccess.file_exists(Settings.pending_path(store.deck_path)))
 
 
 func test_store_rejects_outside_cards_and_over_quantity_including_sideboard() -> void:
@@ -459,7 +460,9 @@ func test_save_failure_freezes_builder_and_keeps_last_good_deck() -> void:
 	assert_eq(session.store.checkpoint(session.builder.deck), "")
 	var kept := FileAccess.get_file_as_string(session.store.deck_path)
 	session.builder._add_one("Mountain")
-	assert_eq(DirAccess.make_dir_absolute(session.store.deck_path + ".pending"), OK)
+	# The checkpoint's side file is [method Settings.write_atomically]'s
+	# since the bug campaign c12 (h6-3); a folder there fails the write.
+	assert_eq(DirAccess.make_dir_absolute(Settings.pending_path(session.store.deck_path)), OK)
 	session.finish("done")
 	assert_true(session.finished)
 	assert_ne(session._save_warning, "")
@@ -469,7 +472,7 @@ func test_save_failure_freezes_builder_and_keeps_last_good_deck() -> void:
 	assert_false(words.contains("Saved as an unfinished deck"))
 	assert_string_contains(words, "held in memory")
 	assert_eq(FileAccess.get_file_as_string(session.store.deck_path), kept)
-	assert_eq(DirAccess.remove_absolute(session.store.deck_path + ".pending"), OK)
+	assert_eq(DirAccess.remove_absolute(Settings.pending_path(session.store.deck_path)), OK)
 	assert_eq(session.store.checkpoint(session.builder.deck, "done"), "")
 
 
@@ -626,7 +629,7 @@ func test_a_close_after_the_draft_finished_closes_the_window() -> void:
 ## only in memory — and a second request is the player insisting.
 func test_a_failed_save_keeps_the_window_once_for_the_retry() -> void:
 	var session := _spy_session()
-	assert_eq(DirAccess.make_dir_absolute(session.store.deck_path + ".pending"), OK)
+	assert_eq(DirAccess.make_dir_absolute(Settings.pending_path(session.store.deck_path)), OK)
 	session.builder._add_one("Mountain")
 	session._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	assert_true(session.finished)
@@ -634,4 +637,4 @@ func test_a_failed_save_keeps_the_window_once_for_the_retry() -> void:
 	assert_eq(session.quits, 0, "the unsaved deck is still on screen")
 	session._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	assert_eq(session.quits, 1, "and a second close is obeyed")
-	assert_eq(DirAccess.remove_absolute(session.store.deck_path + ".pending"), OK)
+	assert_eq(DirAccess.remove_absolute(Settings.pending_path(session.store.deck_path)), OK)

@@ -188,11 +188,12 @@ static func _venom_end(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, sta
 	# died; old blocker history also killed a blinked attacker. The turn
 	# ledger preserves both incarnations, even after either has departed.
 	var marked := g.combat_opponents_this_turn(id, stamp)
-	g.begin_simultaneous()
+	var doomed: Array[CardInstance] = []
 	for other in marked:
 		var i := g.find_instance(other)
-		if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(marked[other]): g.destroy(i)
-	g.end_simultaneous()
+		if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(marked[other]): doomed.append(i)
+	# One departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i))
 static func _pox(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	g.begin_simultaneous()
 	for who in [g.active_player, 1 - g.active_player]: g.adjust_life(who, -((maxi(0, g.players[who].life) + 2) / 3))
@@ -269,8 +270,11 @@ static func _stench(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: i
 		if i.is_land() and i.has_subtype("plains"): lands.append([i, i.controller_id])
 	g.begin_simultaneous()
 	var hit: Array[int] = []
+	var plains: Array[CardInstance] = []
+	for row in lands: plains.append(row[0])
+	# One departure (the bug campaign c12, h3-3).
+	g.depart_together(plains, func(i: CardInstance) -> void: g.destroy(i))
 	for row in lands:
-		g.destroy(row[0])
 		if row[0].zone != Mtg.Zone.BATTLEFIELD: hit.append(row[1])
 	g.end_simultaneous()
 	for who in hit:

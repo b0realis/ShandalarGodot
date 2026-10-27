@@ -61,16 +61,23 @@ const NOT_READ := "That file could not be read."
 ## The page's own file box, for the browser build: an `<input type=file>`
 ## that only a script on the page may open, inside the press that asked
 ## for it — [method SkinPack.pick]'s way, for a picture. What the player
-## chooses waits in `window.shandalarBack` for [method web_poll].
+## chooses waits in `window.shandalarBack` for [method web_poll]. Run
+## again while a box is still waiting (the bug campaign c12, h6-5), it
+## takes the earlier input off the page first and hears only the newest.
 const CHOOSE_JS := """
 (function () {
+	var stale = window.shandalarBackInput;
+	if (stale && stale.parentNode) { stale.parentNode.removeChild(stale); }
 	window.shandalarBack = {state: "open"};
 	var input = document.createElement("input");
+	window.shandalarBackInput = input;
 	input.type = "file";
 	input.accept = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 	input.style.display = "none";
 	document.body.appendChild(input);
 	var done = function (result) {
+		if (window.shandalarBackInput !== input) { return; }
+		window.shandalarBackInput = null;
 		window.shandalarBack = result;
 		if (input.parentNode) { input.parentNode.removeChild(input); }
 	};
@@ -367,31 +374,48 @@ static func trim_rect(size: Vector2i) -> Rect2i:
 
 
 ## The browser's file box ([const CHOOSE_JS]); [method web_poll] then
-## says when the player is done with it.
+## says when the player is done with it. Opened again over one still
+## waiting, it replaces it (h6-5; the Options screen's `_choose_card_back`).
 static func web_open() -> void:
 	web_refusal = ""
-	JavaScriptBridge.eval(CHOOSE_JS, true)
+	_page(CHOOSE_JS)
+
+
+## Where the browser's box stands: "open", "ready", "cancelled",
+## "failed", or "gone" when there is none.
+static func web_state() -> String:
+	return String(_page("window.shandalarBack ? window.shandalarBack.state : 'gone'"))
 
 
 ## One look at the browser's file box: false while it is open; true once
 ## it is over — the picture taken, or [member web_refusal] saying why not
 ## ("" for a box closed with nothing chosen).
 static func web_poll() -> bool:
-	var state := String(JavaScriptBridge.eval(
-		"window.shandalarBack ? window.shandalarBack.state : 'gone'", true))
+	var state := web_state()
 	if state == "open":
 		return false
 	if state == "ready":
-		var length := int(JavaScriptBridge.eval("window.shandalarBack.data.length", true))
+		var length := int(_page("window.shandalarBack.data.length"))
 		if length > MAX_BYTES:
 			web_refusal = TOO_BIG
 		else:
-			var data: Variant = JavaScriptBridge.eval("window.shandalarBack.data", true)
+			var data: Variant = _page("window.shandalarBack.data")
 			web_refusal = adopt_bytes(data) if data is PackedByteArray else NOT_READ
 	elif state == "failed":
 		web_refusal = NOT_READ
-	JavaScriptBridge.eval("window.shandalarBack = null", true)
+	_page("window.shandalarBack = null")
 	return true
+
+
+## A stand-in for the page, `(script) -> Variant`: a test's, since no
+## browser runs in one (h6-5). Not set, the page itself is asked.
+static var page := Callable()
+
+
+static func _page(script: String) -> Variant:
+	if page.is_valid():
+		return page.call(script)
+	return JavaScriptBridge.eval(script, true)
 
 
 static func _size_of(path: String) -> int:

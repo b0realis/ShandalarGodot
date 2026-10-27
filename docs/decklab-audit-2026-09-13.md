@@ -99,7 +99,11 @@ sideboard paths, and SkinPack's import/replacement paths. No speculative
 changes were made to match sequencing or skin replacement. Replacement
 failure recovery and worker result publication/validation remain candidates
 for dedicated fault-injection work; they are not claimed as reproduced bugs
-or fixed in this pass.
+or fixed in this pass. (2026-10-27: worker result publication was fixed in
+0.40.22 — a worker writes its slice under a working name (`.part`) and
+renames it whole, the parent lands a slice only under its final name, and
+a dead worker is replaced for the same slice; `DeckLab/simulate.gd`,
+`docs/releases/0.40.22.md`. No dedicated fault-injection suite was built.)
 
 ## Verification
 

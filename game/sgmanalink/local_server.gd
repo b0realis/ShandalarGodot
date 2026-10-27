@@ -8,12 +8,46 @@ extends Node
 ## network blip every client reconnects while its half-open socket still
 ## holds a slot until the kernel gives it up, and a +4 headroom let three of
 ## forty-one back in (2026-10-02). A resumed session closes its old socket.
-const MAX_CONNECTIONS := SgTournament.MAX_PLAYERS * 2 + 8
+##
+## THE SPARE SOCKETS (the bug campaign c12, h6-1): there are
+## [constant SPARE_CONNECTIONS] more sockets than sessions, so a player who
+## arrives at a full host still gets far enough in to read
+## [constant HOST_FULL] at the hello. Before, the two limits were equal, and
+## a full host dropped the connection at the door, before a word could
+## travel: the player read "Host unavailable… reconnecting" forever.
 const MAX_SESSIONS := SgTournament.MAX_PLAYERS * 2 + 8
+const SPARE_CONNECTIONS := 8
+const MAX_CONNECTIONS := MAX_SESSIONS + SPARE_CONNECTIONS
 const MAX_ROOMS := SgTournament.MAX_PLAYERS / 2
 const ACK_WINDOW := 128
 const RECONNECT_GRACE_MS := 300000
 const LOBBY_GRACE_MS := 30000
+## What a new guest reads when every session is taken and none can be
+## reclaimed.
+const HOST_FULL := "Host is full. Wait for a seat to become available, then reconnect."
+## ONE COMPUTER, A FEW SEATS (the bug campaign c12, h6-1). An open host
+## publishes its invitation to the whole LAN, and one machine holding it
+## could open session after session: 87 idle ones filled a host, and the
+## next real player was turned away. On a LAN host, one address may hold
+## [constant SEATS_PER_ADDRESS] sessions that hold anything (a live
+## connection, a table, a tournament entry) and may register as many
+## tournament entrants. The host's own machine ([member own_addresses]) is
+## not counted: its lobby and any second window are the organiser's.
+const SEATS_PER_ADDRESS := 4
+const ADDRESS_FULL := "This computer already holds as many seats at this host as one computer may (%d). Close another connection to this host, then reconnect."
+const ENTRIES_FULL := "This computer has already registered as many entrants as one computer may (%d)."
+## THE IDLE SEAT GIVES WAY (h6-1): when every session is taken, a newcomer
+## takes the place of the connected session that has sent no command for
+## longest, at least [constant IDLE_RECLAIM_MS], holding no table and no
+## tournament seat, and not on the host's own machine. That guest reads
+## why. A connected session used to be kept for as long as it stayed
+## connected, however idle.
+const IDLE_RECLAIM_MS := LOBBY_GRACE_MS
+const IDLE_RECLAIMED := "The host was full and this connection had been idle, so its place went to another player. Connect again when a seat is free."
+## What Export MPN reads when the host has no public record of the duel
+## to send (h5-5). It used to say "Export before leaving the finished
+## table" to a player still sitting at it.
+const MPN_UNAVAILABLE := "The host has no public record of this duel to send."
 ## What a seat reads when the referee's view of its duel fails the wire
 ## validator its own client runs (see [method _room_game]).
 const VIEW_REFUSED := "The host could not send this duel's table: it failed its own check (a host bug; the host's log names the room). Connection stopped."
@@ -80,6 +114,14 @@ var bot_pace_override := -1
 ## Encrypted connections told [constant HOST_CLOSED], kept open until the
 ## guest has read it: [{socket, until}] (see [method _tell_closing]).
 var _closing: Array = []
+## The host's own machine on a LAN host: loopback and the address it
+## listens on, never counted per address (h6-1). A test empties it to play
+## a LAN neighbour from loopback; no network command reaches it.
+var own_addresses := PackedStringArray()
+## Tournament entrants registered from each counted address, this event
+## (h6-1): an entry outlives its session, so a count of live sessions
+## alone would let one computer register again after every abandon.
+var _entries_from: Dictionary = {}
 
 
 ## Local organiser entry point, deliberately not a remote command. A visitor
@@ -106,6 +148,7 @@ func open_tournament(options: Dictionary, resume_code: String, folder: String, r
 	tournament.event = candidate
 	tournament.organiser = sid
 	tournament.folder = folder
+	_entries_from.clear()
 	add_child(tournament)
 	tournament.restore_bots()
 	_publish()
@@ -158,6 +201,7 @@ func start_lan(address: String, requested_port := 17897, visible := true, nickna
 	if result != OK:
 		return result
 	lan_address = address
+	own_addresses = PackedStringArray(["127.0.0.1", address])
 	lan_certificate = certificate
 	_lan_pem = pem
 	_tls_options = TLSOptions.server(key, certificate)
@@ -223,10 +267,12 @@ func stop() -> void:
 	_view_cache.clear()
 	_pending_publish.clear()
 	_bot_due.clear()
+	_entries_from.clear()
 	_flush_queued = false
 	access_code = ""
 	port = 0
 	lan_address = ""
+	own_addresses = PackedStringArray()
 	lan_certificate = null
 	_lan_pem = ""
 	_tls_options = null
@@ -452,6 +498,54 @@ func _pending_from(address: String) -> int:
 	return count
 
 
+## Whether [param address] is held to [constant SEATS_PER_ADDRESS]: a peer
+## of a LAN host that is not the host's own machine (h6-1).
+func _counted(address: String) -> bool:
+	return not lan_address.is_empty() and not own_addresses.has(address)
+
+
+## The sessions opened from [param address] that hold something: a live
+## connection, a table or a tournament seat (h6-1). A disconnected one in
+## the lobby is not counted: it is reclaimed under pressure, and expires.
+func _seats_from(address: String) -> int:
+	var count := 0
+	for sid: int in _sessions:
+		var session: Dictionary = _sessions[sid]
+		if _is_bot(sid) or String(session.get("address", "")) != address: continue
+		if int(session.peer) != 0 or not String(session.room).is_empty() \
+			or (tournament != null and tournament.holds(sid)):
+			count += 1
+	return count
+
+
+## THE IDLE SEAT GIVES WAY (h6-1; see [constant IDLE_RECLAIM_MS]): the
+## connected session idle longest, holding no table and no tournament
+## seat and not on the host's own machine, is told
+## [constant IDLE_RECLAIMED] and let go. Its connection is parted from the
+## session first, so it stays open long enough to carry the reason.
+## True when one was let go.
+func _reclaim_idle() -> bool:
+	var oldest := 0
+	var oldest_at := Time.get_ticks_msec() - IDLE_RECLAIM_MS
+	for sid: int in _sessions:
+		var session: Dictionary = _sessions[sid]
+		if _is_bot(sid) or int(session.peer) == 0 or not String(session.room).is_empty(): continue
+		if tournament != null and tournament.holds(sid): continue
+		if not _counted(String(session.get("address", ""))): continue
+		var at := int(session.get("last_command", 0))
+		if at <= oldest_at:
+			oldest = sid
+			oldest_at = at
+	if oldest == 0: return false
+	var peer := int(_sessions[oldest].peer)
+	_sessions[oldest].peer = 0
+	if _peers.has(peer):
+		_peers[peer].session = 0
+		_reject(peer, IDLE_RECLAIMED)
+	_abandon(oldest)
+	return true
+
+
 func _drop(id: int) -> void:
 	if not _peers.has(id):
 		return
@@ -569,6 +663,10 @@ func _receive(id: int, message: Dictionary) -> void:
 				_reject(id, "This temporary seat has expired. Disconnect and join with the current invitation.")
 				return
 		else:
+			var address := String(_peers[id].address)
+			if _counted(address) and _seats_from(address) >= SEATS_PER_ADDRESS:
+				_reject(id, ADDRESS_FULL % SEATS_PER_ADDRESS)
+				return
 			# Reclaim only disconnected, roomless guests under capacity pressure.
 			if _sessions.size() >= MAX_SESSIONS:
 				for candidate in _sessions.keys():
@@ -576,8 +674,11 @@ func _receive(id: int, message: Dictionary) -> void:
 					if not _connected(candidate) and _sessions[candidate].room.is_empty():
 						_abandon(candidate)
 						break
+			# Then the connected guest idle longest in the lobby (h6-1).
 			if _sessions.size() >= MAX_SESSIONS:
-				_reject(id, "Host is full. Wait for a seat to become available, then reconnect.")
+				_reclaim_idle()
+			if _sessions.size() >= MAX_SESSIONS:
+				_reject(id, HOST_FULL)
 				return
 			var secret := Crypto.new().generate_random_bytes(32)
 			if secret.size() != 32:
@@ -586,10 +687,13 @@ func _receive(id: int, message: Dictionary) -> void:
 			resume = secret.hex_encode()
 			sid = _next_session
 			_next_session += 1
+			# Where it came from and when it last asked for anything (h6-1).
 			_sessions[sid] = {"peer": 0, "room": "", "seq": 0, "acks": {},
-				"nickname": message.nickname, "disconnected_at": 0, "token_hash": resume.sha256_text()}
+				"nickname": message.nickname, "disconnected_at": 0, "token_hash": resume.sha256_text(),
+				"address": address, "last_command": Time.get_ticks_msec()}
 			_tokens[resume.sha256_text()] = sid
 		var session: Dictionary = _sessions[sid]
+		session.last_command = Time.get_ticks_msec()
 		var previous := int(session.peer)
 		# Assign replacement first; dropping the old socket cannot detach the new one.
 		session.peer = id
@@ -611,6 +715,7 @@ func _receive(id: int, message: Dictionary) -> void:
 			"resume": resume, "seq": session.seq, "guest": _guest_name(sid), "build": SgCompatibility.fingerprint()})
 		_publish(session.room, sid, true)
 		return
+	_sessions[sid].last_command = Time.get_ticks_msec()
 	if message.type == "abandon":
 		_abandon(sid)
 		return
@@ -663,12 +768,12 @@ func action_changes_listings(op: String) -> bool:
 ## The client never supplies a path, session token, deck or engine object.
 func _mpn_reply(sid: int, request: Dictionary) -> Dictionary:
 	var reply := {"type": "mpn", "record": "", "offset": int(request.offset), "total": 0,
-		"data": "", "error": "The public record is unavailable. Export before leaving the finished table."}
+		"data": "", "error": MPN_UNAVAILABLE}
 	var session: Dictionary = _sessions.get(sid, {})
 	var room: Dictionary = _rooms.get(session.get("room", ""), {})
 	if room.is_empty() or room.id != request.room or not room.seats.has(sid) \
 		or room.match == null or not room.match.game.game_over: return reply
-	var archive: MpnArchive = room.match.public_archive
+	var archive := _record_of(room)
 	if archive == null or (request.record != "" and request.record != archive.record_id): return reply
 	var file := FileAccess.open(archive.path, FileAccess.READ)
 	if file == null: return reply
@@ -684,6 +789,23 @@ func _mpn_reply(sid: int, request: Dictionary) -> Dictionary:
 	reply.data = Marshalls.raw_to_base64(chunk)
 	reply.error = ""
 	return reply
+
+
+## The public record of [param room]'s duel when the host really has one:
+## its recording started cleanly (its recorder is attached, which happens
+## only once the headers are written) and its file is there; null
+## otherwise (the bug campaign c12, h5-5). A recorder whose start failed
+## (a records folder that cannot be written) still had a record id, the
+## seats were told of a record, and Export MPN was offered for a file
+## that was never made. A recording stopped later keeps its prefix, and
+## that stays on offer, as the local result window offers it.
+func _record_of(room: Dictionary) -> MpnArchive:
+	if room.is_empty() or room.match == null: return null
+	var archive: MpnArchive = room.match.public_archive
+	if archive == null or archive.recorder == null or archive.path == "" \
+		or not FileAccess.file_exists(archive.path):
+		return null
+	return archive
 
 
 func _bump_room(room_id: String) -> void:
@@ -774,7 +896,16 @@ func _command(sid: int, action: Dictionary, revision: int) -> String:
 	var op := String(action.op)
 	var room: Dictionary = _rooms.get(session.room, {})
 	if op.begins_with("t_"):
-		return "No tournament is hosted here." if tournament == null else tournament.command(sid, action, revision)
+		if tournament == null: return "No tournament is hosted here."
+		# One computer registers a few entrants, however many sessions it
+		# opens one after another (h6-1; see [member _entries_from]).
+		var address := String(session.get("address", ""))
+		var joining := op == "t_join" and _counted(address)
+		if joining and int(_entries_from.get(address, 0)) >= SEATS_PER_ADDRESS:
+			return ENTRIES_FULL % SEATS_PER_ADDRESS
+		var outcome := tournament.command(sid, action, revision)
+		if joining and outcome.is_empty(): _entries_from[address] = int(_entries_from.get(address, 0)) + 1
+		return outcome
 	if tournament != null:
 		if op in ["host", "join", "deck", "ready", "remove_guest", "leave", "add_bot", "remove_bot"]:
 			return "Use the Tournament Hall while this host runs a tournament."
@@ -968,8 +1099,11 @@ func _state(sid: int) -> Dictionary:
 			"deck": own.decks[seat].duplicate(true),
 			"decks": _deck_rule(own), "fixed_deck": String(own.get("fixed", {}).get("name", "")),
 			"rules": _table_rules(own), "game": _room_game(own, seat)}
-		if own.match != null and own.match.public_archive != null:
-			view.mpn = own.match.public_archive.record_id
+		# Only a record the host really has (h5-5): the seat's Export MPN
+		# is offered by this field.
+		var record := _record_of(own)
+		if record != null:
+			view.mpn = record.record_id
 		if _is_bot(own.seats[0]) or _is_bot(own.seats[1]):
 			view.bots = []
 			for sid_value: int in own.seats:

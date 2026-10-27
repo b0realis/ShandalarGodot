@@ -39,6 +39,7 @@ class BanRegenerationEffect extends EffectBase:
 			_target: TargetRef, _x_value: int = 0) -> void:
 		if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 			return
+		game._rec(source, &"regeneration_banned_this_turn")   # c12, h3-9
 		source.regeneration_banned_this_turn = true
 		game.log_line("%s can't be regenerated this turn" % source.data.card_name)
 

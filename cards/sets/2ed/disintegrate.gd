@@ -26,6 +26,9 @@ class DisintegrateEffect extends EffectBase:
 		if not target.is_player:
 			var victim := game.find_instance(target.instance_id)
 			if victim != null and victim.zone == Mtg.Zone.BATTLEFIELD:
+				# Journaled for any search that resolves it (c12, h3-9).
+				game._rec(victim, &"regeneration_banned_this_turn")
+				game._rec(victim, &"exile_instead_of_dying")
 				victim.regeneration_banned_this_turn = true
 				victim.exile_instead_of_dying = true
 		game.deal_damage(source, target, x_value)

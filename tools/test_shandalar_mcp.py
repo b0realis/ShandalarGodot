@@ -1048,6 +1048,48 @@ class FakeDoorTest(unittest.TestCase):
             self.assertEqual(result["structuredContent"]["error"]["kind"], "path", (tool, args))
         self.assertFalse((Path("/etc") / "evil.deck").exists())
 
+    def test_a_deck_read_is_fenced_like_a_write(self):
+        """The bug campaign c12, h5-6: `read_deck` returned any file asked
+        for — `/etc/hostname`, a `../../` path to a file beside the checkout
+        — and `check_deck` / `convert_deck` handed any path to the door,
+        whose parse errors quote the lines. A deck that is read lies under
+        the checkout or the workspace and is a deck file; anything else is
+        refused before a byte of it is read or the door is called."""
+        with tempfile.TemporaryDirectory(prefix="shandalar-mcp-outside-") as outside:
+            secret = Path(outside) / "secret.txt"
+            secret.write_text("4 OWNER-SECRET-LINE\n", encoding="utf-8")
+            climbing = os.path.relpath(secret, self.home)
+            self.assertIn("..", Path(climbing).parts)
+            before = len(self.calls())
+            for tool, args in (("read_deck", {"deck": str(secret)}),
+                               ("read_deck", {"deck": climbing}),
+                               ("read_deck", {"deck": "/etc/hostname"}),
+                               ("read_deck", {"deck": "AGENTS.md"}),
+                               ("check_deck", {"decks": [str(secret)]}),
+                               ("check_deck", {"decks": [climbing]}),
+                               ("check_deck", {"decks": ["AGENTS.md"]}),
+                               ("convert_deck", {"input": str(secret), "output": "ws/stolen.deck"}),
+                               ("lab", {"deck_a": str(secret), "deck_b": "random", "dry_run": True}),
+                               ("referee_start", {"deck_a": climbing, "deck_b": "random"})):
+                with self.subTest(tool=tool, args=args):
+                    result = self.client.call(tool, args)
+                    self.assertTrue(result["isError"], result)
+                    error = result["structuredContent"]["error"]
+                    self.assertEqual(error["kind"], "path", error)
+                    self.assertNotIn("OWNER-SECRET-LINE", json.dumps(result),
+                                     "nothing of the file comes back")
+            self.assertEqual(len(self.calls()), before, "the door was never handed the file")
+            self.assertFalse((self.workspace / "stolen.deck").exists())
+        # A missing name outside is refused as outside, not as missing.
+        gone = self.client.call("read_deck", {"deck": "/nowhere/at/all.deck"})
+        self.assertEqual(gone["structuredContent"]["error"]["kind"], "path")
+        # A deck inside still reads — a plain-text list in the workspace too.
+        self.workspace.mkdir(exist_ok=True)
+        (self.workspace / "list.txt").write_text("4 Lightning Bolt\n20 Mountain\n", encoding="utf-8")
+        self.assertEqual(self.client.payload("read_deck", {"deck": "list.txt"})["cards"], 24)
+        self.assertEqual(self.client.payload("read_deck", {"deck": str(self.home / "decks/tournament/burn.deck")})["name"],
+                         "Burn")
+
     def test_convert_deck(self):
         (self.home / "old.dck").write_text("bytes", encoding="utf-8")
         out = self.client.payload("convert_deck", {"input": "old.dck", "output": "ws/old.deck"})

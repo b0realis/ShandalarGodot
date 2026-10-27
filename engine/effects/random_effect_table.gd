@@ -27,6 +27,17 @@ extends RefCounted
 ## only through MtgGame helpers and any question it asks (the Bottle's
 ## coin call, the Scepter's discard) goes through the DecisionAgent funnel.
 ## [Faerie Dragon] rolls on its own list: [RandomCreatureEffectTable].
+##
+## A ROLLED TARGET IS STILL A TARGET (the bug campaign c12, h3-4). Every
+## entry that takes a permanent rolls it only among the permanents Whimsy
+## could legally target ([method _whimsy_may_target]): never one with
+## protection from Whimsy's color, never one with shroud. The 1997 exe
+## built the same candidate list — its Whimsy candidate builder
+## (`whimsy_build_candidates`, promo.c in the shandalar-decomp
+## decompilation) skips every card whose protections include Whimsy's —
+## and until c12 a Fissure rolled onto a Blue Ward's Bears buried them. The
+## untargeted entries (Nevinyrral's Disk, Pandora's Box, Fog) are
+## untouched.
 
 ## How many effects the table holds; callers roll in [0, COUNT).
 const COUNT := 17
@@ -62,15 +73,15 @@ static func play(game: MtgGame, source: CardInstance, controller: int, which: in
 		return
 	game.log_line("%s %s" % [game.players[controller].player_name, MESSAGES[which]])
 	match which:
-		0:  _time_elemental(game)
-		1:  _twiddle_untap(game)
-		2:  _twiddle_tap(game)
-		3:  _aladdins_ring(game, source)
+		0:  _time_elemental(game, source, controller)
+		1:  _twiddle_untap(game, source, controller)
+		2:  _twiddle_tap(game, source, controller)
+		3:  _aladdins_ring(game, source, controller)
 		4:  _ancestral_recall(game)
-		5:  _crumble(game)
-		6:  _disenchant(game)
+		5:  _crumble(game, source, controller)
+		6:  _disenchant(game, source, controller)
 		7:  _healing_salve(game)
-		8:  _fissure(game)
+		8:  _fissure(game, source, controller)
 		9:  _millstone(game)
 		10: _the_hive(game, controller)
 		11: _nevinyrrals_disk(game, source, controller)
@@ -89,6 +100,29 @@ static func play_random(game: MtgGame, source: CardInstance, controller: int) ->
 ## The `Duel.hlp` outcome for an entry that found nothing to act on.
 static func _fizzle(game: MtgGame, what: String) -> void:
 	game.log_line("%s fizzles (no valid target)" % what)
+
+
+## May Whimsy, cast by [param controller], target [param inst]? The engine's
+## own targeting check for "target permanent" ([method
+## TargetSpec.refusal_reason_from]) with Whimsy as the source: protection
+## from its color (its last-known color once it has left the stack), shroud,
+## "can't be the target of spells", a phased-out permanent — the entries
+## are the spell's effects, so the spell is what aims them (the bug
+## campaign c12, h3-4). No source (a direct table call) checks nothing.
+static func _whimsy_may_target(game: MtgGame, source: CardInstance, controller: int,
+		inst: CardInstance) -> bool:
+	if source == null:
+		return true
+	return TargetSpec.new(TargetSpec.Kind.PERMANENT).refusal_reason_from(
+		game, TargetRef.card(inst), source, [], controller) == ""
+
+
+## A random permanent matching [param filter] that Whimsy may target, or
+## null (RandomEffects.permanent over the legal candidates only).
+static func _rolled_permanent(game: MtgGame, source: CardInstance, controller: int,
+		filter: Callable) -> CardInstance:
+	return RandomEffects.permanent(game, func(inst: CardInstance) -> bool:
+		return filter.call(inst) and _whimsy_may_target(game, source, controller, inst))
 
 
 # ------------------------------------------------------------ the entries --
@@ -131,8 +165,8 @@ static func _is_creature_card(inst: CardInstance) -> bool:
 
 ## Time Elemental: "Return target permanent that isn't enchanted to its
 ## owner's hand." Only a permanent with no Aura on it is a candidate.
-static func _time_elemental(game: MtgGame) -> void:
-	var target := RandomEffects.permanent(game,
+static func _time_elemental(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var target := _rolled_permanent(game, source, controller,
 		func(inst: CardInstance) -> bool:
 			for aura_id in inst.attachments:
 				var aura := game.find_instance(aura_id)
@@ -146,8 +180,8 @@ static func _time_elemental(game: MtgGame) -> void:
 
 
 ## Twiddle, untap half.
-static func _twiddle_untap(game: MtgGame) -> void:
-	var target := RandomEffects.permanent(game, RandomEffectTable._is_tapped_thing)
+static func _twiddle_untap(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var target := _rolled_permanent(game, source, controller, RandomEffectTable._is_tapped_thing)
 	if target == null:
 		_fizzle(game, "Twiddle")
 		return
@@ -155,17 +189,26 @@ static func _twiddle_untap(game: MtgGame) -> void:
 
 
 ## Twiddle, tap half.
-static func _twiddle_tap(game: MtgGame) -> void:
-	var target := RandomEffects.permanent(game, RandomEffectTable._is_untapped_thing)
+static func _twiddle_tap(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var target := _rolled_permanent(game, source, controller, RandomEffectTable._is_untapped_thing)
 	if target == null:
 		_fizzle(game, "Twiddle")
 		return
 	game.tap_permanent(target)
 
 
-## Aladdin's Ring: 4 damage to a random creature or player.
-static func _aladdins_ring(game: MtgGame, source: CardInstance) -> void:
-	var target := RandomEffects.damage_target(game)
+## Aladdin's Ring: 4 damage to a random creature or player — any creature
+## Whimsy may target, then the players still in the game, the pool
+## RandomEffects.damage_target rolls over (the bug campaign c12, h3-4).
+static func _aladdins_ring(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var pool: Array = []
+	for inst in game.all_battlefield():
+		if inst.is_creature() and _whimsy_may_target(game, source, controller, inst):
+			pool.append(TargetRef.card(inst))
+	for p in game.players:
+		if not p.has_lost:
+			pool.append(TargetRef.player(p.id))
+	var target: TargetRef = RandomEffects.pick(game, pool)
 	if target == null:
 		_fizzle(game, "Aladdin's Ring effect")
 		return
@@ -183,8 +226,8 @@ static func _ancestral_recall(game: MtgGame) -> void:
 
 ## Crumble: destroy a random artifact, no regeneration; its controller
 ## gains life equal to its mana value.
-static func _crumble(game: MtgGame) -> void:
-	var target := RandomEffects.permanent(game, RandomEffectTable._is_artifact)
+static func _crumble(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var target := _rolled_permanent(game, source, controller, RandomEffectTable._is_artifact)
 	if target == null:
 		_fizzle(game, "Crumble")
 		return
@@ -195,8 +238,8 @@ static func _crumble(game: MtgGame) -> void:
 
 
 ## Disenchant: destroy a random artifact or enchantment.
-static func _disenchant(game: MtgGame) -> void:
-	var target := RandomEffects.permanent(game,
+static func _disenchant(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var target := _rolled_permanent(game, source, controller,
 		RandomEffectTable._is_artifact_or_enchantment)
 	if target == null:
 		_fizzle(game, "Disenchant")
@@ -216,8 +259,8 @@ static func _healing_salve(game: MtgGame) -> void:
 
 
 ## Fissure: destroy a random creature or land, no regeneration.
-static func _fissure(game: MtgGame) -> void:
-	var target := RandomEffects.permanent(game, RandomEffectTable._is_creature_or_land)
+static func _fissure(game: MtgGame, source: CardInstance, controller: int) -> void:
+	var target := _rolled_permanent(game, source, controller, RandomEffectTable._is_creature_or_land)
 	if target == null:
 		_fizzle(game, "Fissure")
 		return

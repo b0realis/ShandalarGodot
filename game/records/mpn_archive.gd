@@ -12,6 +12,8 @@ var record_id := new_id()
 var _file: FileAccess
 var _serial := 0
 var _bytes := 0
+## The bytes known to be on disk: whole lines only ([method _write]).
+var _written := 0
 
 static func allowed() -> bool:
 	# Automated suites/soaks must not fill a player's archive. Tests use
@@ -71,16 +73,50 @@ func _record(kind: String, data: Dictionary) -> void:
 		_file.close()
 		_file = null
 
+## EVERY LINE IS CHECKED ON DISK (the bug campaign c12, h6-3). On a full
+## disk the buffered store and its flush both reported no error, so the
+## records after it were dropped while the recording carried on as if
+## whole. After each flush the file's size on disk must be what was
+## written; when it is not, the file is cut back to the last whole line
+## (or removed, when not even the headers landed), so the prefix stays a
+## readable record, and [signal failed] says so.
 func _write(text: String) -> void:
-	_bytes += text.to_utf8_buffer().size()
+	var size := text.to_utf8_buffer().size()
+	_bytes += size
 	if _bytes > MpnCodec.MAX_BYTES:
 		_fail("Past Games: recording stopped at 32 MiB; the saved prefix remains available.")
 		return
 	if not _file.store_string(text) or _file.get_error() != OK:
-		_fail("Past Games: the recording could not be written.")
+		_cut_back("Past Games: the recording could not be written.")
 		return
 	_file.flush()
-	if _file.get_error() != OK: _fail("Past Games: the recording could not be flushed to disk.")
+	if _file.get_error() != OK or _on_disk() != _written + size:
+		_cut_back("Past Games: the recording could not be written to disk.")
+		return
+	_written += size
+
+
+## The recording's size on disk; -1 when the file is gone (asked first, as
+## FileAccess.get_size prints an engine ERROR for a missing file).
+func _on_disk() -> int:
+	return FileAccess.get_size(path) if FileAccess.file_exists(path) else -1
+
+
+## A write that did not land: close the file (its buffer is not trusted),
+## put it back to the [member _written] bytes that did, and fail.
+func _cut_back(message: String) -> void:
+	if _file != null:
+		_file.close()
+		_file = null
+	if _written == 0:
+		DirAccess.remove_absolute(path)
+	else:
+		var cut := FileAccess.open(path, FileAccess.READ_WRITE)
+		if cut != null:
+			cut.resize(_written)
+			cut.close()
+		message = message.trim_suffix(".") + "; the saved prefix remains available."
+	_fail(message)
 
 func _fail(message: String) -> void:
 	error = message

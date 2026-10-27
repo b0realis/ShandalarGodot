@@ -3,6 +3,11 @@
 2026-09-16, development version 0.21.0. This is a source/UI repair, not a
 release or a change to the rules engine, AI policy or pack contents.
 
+(2026-10-27: a dated record — "five packs" and the 1,608-card inventory
+below are the 0.21.0 numbers. There are nine packs now, 3,093 unique cards
+with all of them enabled; the grid's five columns (`CardPackBadges.COLUMNS`)
+put Packs 6 to 9 on the second row this audit designed for.)
+
 ## Layout
 
 Numbered packs now occupy their own left-aligned grid beneath the original

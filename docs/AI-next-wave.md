@@ -1,11 +1,20 @@
-# The next wave of the AI — a plan, written 2026-09-08, to be done later
+# The next wave of the AI — a plan, written 2026-09-08, ~~to be done later~~ DONE 2026-09-09 to 09-11
+
+> **Status (2026-10-27): historical.** Every row of the five waves, the
+> Angel and the engine pass below is closed — built, built and refused
+> by measurement, or swept with no change, each marked where it stands
+> (2026-09-09 to 2026-09-11); the knobs are on `AiProfile`.
+> Only the two "if wanted" items at the end of the engine pass were
+> never built.
+> The plan is kept as the record of what was measured and why.
 
 The Deck's third pass is merged (ROADMAP: THE DECK, THIRD PASS,
 2026-09-08) and the Forge study is read (`docs/forge/`, a reference and
 not a port). What follows is the work that comes next, in the order it
 will be built, with each item's knob, rung and measurement pinned to the
 paragraph that designed it — so that starting is a matter of opening
-this file. Nothing here is built. The owner's word starts it.
+this file. Nothing here is built. The owner's word starts it. (2026-10-27:
+all of it is built now — see the status note above.)
 
 The rules of the ladder hold for every line (`docs/ai-difficulty.md` §1,
 `CONTRIBUTING.md`): a knob on `AiProfile`, off below the rung named and

@@ -38,6 +38,12 @@ THE RULES IT KEEPS:
     name that is a file or folder in the workspace (a deck `write_deck`
     wrote, an AutoDeck field) is handed over as its absolute path; any
     other word (`random`) passes through untouched.
+  * A DECK A TOOL READS LIES UNDER THE CHECKOUT OR THE WORKSPACE TOO, and
+    is a deck file (`.deck`, `.dec`, `.dck`, `.txt`) or a folder of them
+    — `read_deck`, and every deck argument above. `read_deck` returned
+    any file asked for (`/etc/hostname`), and the door's parse errors
+    quote the lines of whatever it is handed (the bug campaign c12,
+    h5-6).
   * A TOOL NEVER INVENTS A RESULT. A door that exits 0 is quoted; a
     door that refuses is quoted, `isError: true` with the envelope as
     the structured content; a door without its engine is quoted (exit
@@ -103,6 +109,8 @@ WINDOWS_DOOR = "Shandalar.console.exe"
 CONTRACT = "AGENTS.md"
 PLAY_GUIDE = "agentic-playgude-mtg.md"
 WORKSPACE = "workspace"
+# What a deck file is called — the suffixes the door reads a deck from.
+DECK_SUFFIXES = (".deck", ".dec", ".dck", ".txt")
 DEFAULT_TIMEOUT = 900
 DECISION_TIMEOUT = 120
 MANUALS = ("door", "lab", "autodeck", "query", "referee", "convert")
@@ -2470,6 +2478,25 @@ class Server:
         raise refusal(tool, "path", f"`{flag}` must lie under {self.root} or {self.workspace}: {text}",
                       flag=flag, path=text)
 
+    def within(self, path: Path) -> bool:
+        """Is `path` (resolved) the checkout, the workspace or under either?"""
+        return any(path == home or home in path.parents for home in (self.root, self.workspace))
+
+    def readable(self, path: Path, typed: str, tool: str, flag: str, folder: bool = True) -> Path:
+        """A deck a tool reads (the bug campaign c12, h5-6): fenced like a
+        write — under the checkout or the workspace — and a deck file by its
+        suffix, or (where `folder`) a folder of them. Returns it resolved."""
+        resolved = path.resolve()
+        if not self.within(resolved):
+            raise refusal(tool, "path", f"`{flag}` must lie under {self.root} or {self.workspace}: {typed}",
+                          flag=flag, path=typed)
+        if resolved.is_dir() and folder:
+            return resolved
+        if resolved.exists() and (not resolved.is_file() or resolved.suffix.lower() not in DECK_SUFFIXES):
+            raise refusal(tool, "path", f"`{flag}` must be a deck file ({', '.join(DECK_SUFFIXES)}): {typed}",
+                          flag=flag, path=typed)
+        return resolved
+
     def spoken(self, path: Path) -> str:
         try:
             return str(path.relative_to(self.root))
@@ -2502,27 +2529,36 @@ class Server:
             path = base.with_name(f"{base.name}-{n}")
         return path
 
-    def deck_arg(self, text) -> str:
+    def deck_arg(self, text, tool: str = "deck", flag: str = "deck") -> str:
         """A deck a tool names for the door. As typed when the door will find it
         itself (an absolute path, a path under the checkout or under `decks/`);
         a file or folder in the workspace — where `write_deck` and the AutoDeck
         put theirs — by its bare name, handed over as an absolute path; anything
         else as typed, so `random` and the door's own words pass through and the
-        door's refusal (with what it tried) is the answer."""
+        door's refusal (with what it tried) is the answer. A path is fenced
+        (`readable`): one outside the checkout and the workspace, or a file that
+        is not a deck, is refused before the door ever reads it."""
         text = str(text)
-        if not text.strip() or Path(text).is_absolute():
+        if not text.strip():
             return text
+        if Path(text).is_absolute():
+            self.readable(Path(text), text, tool, flag)
+            return text
+        if ".." in Path(text).parts:
+            # Climbing out is refused whether or not something is there.
+            self.readable(self.root / text, text, tool, flag)
         for candidate in (self.root / text, self.root / "decks" / text):
             if candidate.exists():
+                self.readable(candidate, text, tool, flag)
                 return text
         mine = self.workspace / text
         if mine.exists():
-            return str(mine.resolve())
+            return str(self.readable(mine, text, tool, flag))
         return text
 
-    def deck_list(self, text) -> str:
+    def deck_list(self, text, tool: str = "deck", flag: str = "deck") -> str:
         """A comma list of decks (or one folder), each item resolved like `deck_arg`."""
-        return ",".join(self.deck_arg(item.strip()) for item in str(text).split(","))
+        return ",".join(self.deck_arg(item.strip(), tool, flag) for item in str(text).split(","))
 
     # ----- the catalogue ----------------------------------------------------
 
@@ -3070,7 +3106,7 @@ class Server:
         return [v.strip() for v in value]
 
     def check_args(self, args: dict, decks: list[str]) -> list[str]:
-        argv = [self.deck_arg(deck) for deck in decks]
+        argv = [self.deck_arg(deck, "check_deck", "decks") for deck in decks]
         if args.get("packs"):
             argv += ["--packs", str(args["packs"])]
         if args.get("format"):
@@ -3082,7 +3118,7 @@ class Server:
         return self.quote("check", self.run("check", self.check_args(args, decks)), require_json=True)
 
     def tool_convert_deck(self, args: dict) -> dict:
-        source = self.deck_arg(args["input"])
+        source = self.deck_arg(args["input"], "convert", "input")
         target = self.inside(args["output"], "convert", "output")
         done = self.run("convert", [source, str(target)], timeout=300)
         if done.returncode != 0:
@@ -3158,9 +3194,16 @@ class Server:
         candidates = [Path(text)]
         if not Path(text).is_absolute():
             candidates = [self.root / text, self.root / "decks" / text, self.workspace / text]
-        for candidate in candidates:
+        # FENCED BEFORE IT IS LOOKED FOR (the bug campaign c12, h5-6): a name
+        # every reading of which lies outside the checkout and the workspace
+        # is refused whether or not a file is there, so the answer says
+        # nothing about the rest of the disk; a file found is a deck file.
+        inside = [c for c in candidates if self.within(c.resolve())]
+        if not inside or ".." in Path(text).parts:
+            self.readable(candidates[0], text, tool, "deck", folder=False)
+        for candidate in inside:
             if candidate.is_file():
-                return candidate.resolve()
+                return self.readable(candidate, text, tool, "deck", folder=False)
         pool = [self.spoken(p) for folder in (self.root / "decks", self.workspace) if folder.is_dir()
                 for p in folder.rglob("*.deck")]
         near = difflib.get_close_matches(Path(text).name, [Path(p).name for p in pool], n=3)
@@ -3261,7 +3304,7 @@ class Server:
         tool = "autodeck"
         out = self.inside(args["out"], tool, "out")
         argv = ["--out", str(out)]
-        args = {**args, "keep": self.deck_arg(args["keep"])} if args.get("keep") else args
+        args = {**args, "keep": self.deck_arg(args["keep"], tool, "keep")} if args.get("keep") else args
         for key in ("count", "seed", "colors", "max_colors", "sets", "source", "packs", "size",
                     "lean", "speed", "gold", "rarity", "variety", "distinct", "keep", "vary"):
             self.flag(argv, args, key, "--" + key.replace("_", "-"))
@@ -3312,10 +3355,10 @@ class Server:
         args = dict(args)
         for key in self.LAB_DECKS:
             if args.get(key):
-                args[key] = self.deck_arg(args[key])
+                args[key] = self.deck_arg(args[key], tool, key)
         for key in self.LAB_DECK_LISTS:
             if args.get(key):
-                args[key] = self.deck_list(args[key])
+                args[key] = self.deck_list(args[key], tool, key)
         for key in self.LAB_FLAGS:
             self.flag(argv, args, key, "--" + key.replace("_", "-"))
         out = None
@@ -3635,7 +3678,8 @@ class Server:
 
     def tool_referee_start(self, args: dict) -> dict:
         tool = "referee"
-        argv = ["--deck-a", self.deck_arg(args["deck_a"]), "--deck-b", self.deck_arg(args["deck_b"])]
+        argv = ["--deck-a", self.deck_arg(args["deck_a"], tool, "deck_a"),
+                "--deck-b", self.deck_arg(args["deck_b"], tool, "deck_b")]
         for key in ("seat_a", "seat_b"):
             if args.get(key):
                 if args[key] not in SEATS:
@@ -3667,7 +3711,7 @@ class Server:
         # reads it from its environment now (`--join env:NAME`).
         secrets = {INVITATION_ENV: str(invitation)} if invitation else None
         argv = (["--join", "env:" + INVITATION_ENV] if invitation else ["--table", str(table)]) \
-            + ["--deck", self.deck_arg(args["deck"])]
+            + ["--deck", self.deck_arg(args["deck"], tool)]
         for key in ("port", "name", "wait", "turns", "packs"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
@@ -3678,7 +3722,7 @@ class Server:
 
     def tool_referee_host(self, args: dict) -> dict:
         tool = "referee"
-        argv = ["--host", str(args["table"]), "--deck", self.deck_arg(args["deck"])]
+        argv = ["--host", str(args["table"]), "--deck", self.deck_arg(args["deck"], tool)]
         for key in ("access", "name", "port", "address", "wait", "turns", "packs", "rules"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):

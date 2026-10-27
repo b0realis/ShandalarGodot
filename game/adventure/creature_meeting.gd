@@ -769,7 +769,24 @@ static func duel_config(player: AdventurePlayer, meeting: Dictionary) -> DuelCon
 	config.pace = Settings.ai_pace()
 	config.rng_seed = randi() | 1
 	config.apply_deck_colors()
+	hero_playmat(config, player)
 	return config
+
+
+## THE HERO'S PLAYMAT on [param config]'s seat 0 ([member
+## DuelConfig.territories]): the ground chosen on the Embark screen
+## ([member AdventurePlayer.playmat], `{color, type}`), in every adventure
+## duel — a meeting's, a ruled town's ([method RuledTowns.duel_config]) and
+## a lair's ([method LairDuels.duel_config]) all come through [method
+## duel_config]. An adventure with none leaves the Duel Options' answer.
+## [Ours: it was saved and worn by no duel — the feature pass of the bug
+## campaign c12.]
+static func hero_playmat(config: DuelConfig, player: AdventurePlayer) -> void:
+	var mat: Dictionary = player.playmat if player != null else {}
+	var color: Variant = mat.get("color", "")
+	var style: Variant = mat.get("type", "")
+	if color is String and style is String and (color != "" or style != ""):
+		config.territories[0] = {"color": color, "type": style}
 
 
 ## THE DECK IN USE MADE UP TO THE DIFFICULTY'S LEAST ([constant DECK_LEAST],

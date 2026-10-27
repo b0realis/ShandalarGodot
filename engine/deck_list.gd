@@ -21,8 +21,9 @@ extends RefCounted
 ## No deck-size/copy-limit rules are enforced here; that is deck
 ## VALIDATION (docs/ROADMAP.md) and layers on top.
 
-## Deck name, from a "name:" / "// NAME:" header, the .dck first line, or
-## the filename as a fallback — never empty after a load.
+## Deck name, from a "name:" / "// NAME:" header, the .dck first line (its
+## `;` name line in a player's deck), or the filename as a fallback —
+## never empty after a load.
 var deck_name := ""
 ## Expanded maindeck ("4 X" contributes X four times), registry-validated.
 var cards: Array[String] = []
@@ -110,6 +111,16 @@ static func from_text(text: String, path: String, strict := true) -> DeckList:
 ## Decks folder; format decoded from the real files + s30's converter):
 ##   line 1: deck name, e.g. "Lord of Fate (Bl/Wh, 4th Edition)"
 ##   maindeck lines:  .<numeric id> TAB <count> TAB <card name>
+## A PLAYER'S deck — one the 1997 deck builder saved, as in its Playdeck
+## folder — opens instead with EIGHT `;` lines (deckdll.c `save_deck`,
+## 5249-5268 in the decompilation): the name, then description, author,
+## e-mail, date, deck face, edition and comments, and a blank line. Its
+## name is the first of them, whole; the other seven are not cards and are
+## passed over (the bug campaign c12, h5-2: `Fire And Ice.dck` was refused
+## with seven "not a .dck card line" errors, and our own export of
+## "Sligh (1997 tribute)" came back as "Sligh"). Only a name line WITHOUT
+## the `;` — the numbered opponent decks' — is cut at " (", where those
+## put the colours and edition.
 ##   .vNone / .vBlack / .vBlue / .vGreen / .vRed / .vWhite lines open the
 ##   PER-OPPONENT-COLOR sideboard sections (the original AI's color-keyed
 ##   swaps). We fold them like s30 does: max count per name across all
@@ -123,6 +134,8 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 	var in_sideboard := false
 	var sideboard_max := {}
 	var first_line := true
+	# Did the file open with the deck builder's `;` lines (see above)?
+	var player_deck := false
 	var line_number := 0
 	# A UTF-8 BOM from a Windows editor is not part of the deck's name (the
 	# first line); [method parse] has always stripped it (2026-10-03).
@@ -131,10 +144,17 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 		var line := raw_line.strip_edges(false, true)   # keep leading tabs intact
 		if first_line:
 			first_line = false
-			if not line.strip_edges().is_empty():
+			if line.strip_edges().begins_with(";"):
+				player_deck = true
+				var title := line.strip_edges().substr(1).strip_edges()
+				if not title.is_empty():
+					deck_name = title
+			elif not line.strip_edges().is_empty():
 				deck_name = line.split(" (")[0].strip_edges()
 			continue
 		if line.strip_edges().is_empty():
+			continue
+		if player_deck and line.strip_edges().begins_with(";"):
 			continue
 		if line.begins_with(".v"):
 			in_sideboard = true

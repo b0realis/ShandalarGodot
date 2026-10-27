@@ -247,11 +247,16 @@ class SoakInterruptTest(unittest.TestCase):
                 env["SOAK_HEADLESS"] = "1"
             # A session of its own, so the INT below goes to the script's
             # process group the way a terminal's Ctrl-C does — and to
-            # nothing else on this machine.
+            # nothing else on this machine. And SIGINT at its default in
+            # it (the bug campaign c12, h6-4): a runner started as a
+            # background job of a script inherits it IGNORED, the script
+            # cannot trap a signal ignored on entry, and this Ctrl-C did
+            # nothing — the test timed out and read as flaky under load.
             proc = subprocess.Popen(["bash", str(ROOT / "duel_soak.sh"), "--count", "1"],
                                     cwd=str(ROOT), env=env, stdin=subprocess.DEVNULL,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    start_new_session=True)
+                                    start_new_session=True,
+                                    preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))
             try:
                 deadline = time.time() + 30
                 while not (pidfile.is_file() and pidfile.read_text().strip()) and time.time() < deadline:

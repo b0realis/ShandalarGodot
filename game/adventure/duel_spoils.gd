@@ -58,7 +58,9 @@ extends RefCounted
 ##       ("You are a Mighty Sorceress / Sorceror says the %s:", 1997's
 ##       spelling; [ours: a walker neither male nor female gets the
 ##       masculine word, as 1997's two-way test gave]); the gifts: the
-##       lives carried (end life − start life), 1–4 more lives, teleported
+##       lives carried (end life − the links, the next duel starting at the
+##       end life; [ours: 1997 slip — end − start, which took a gift off
+##       again], [method _rewards]), 1–4 more lives, teleported
 ##       to a land tile, the creature's card won, the first move, its card
 ##       in play, a random artifact in play, 20–49 food, any card of the
 ##       hero's choice (must pick), a copy of one of the hero's own cards
@@ -290,8 +292,24 @@ static func _after_cards(player: AdventurePlayer, meeting: Dictionary, spoils: D
 static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dictionary, dice: MsvcRandom) -> void:
 	var lines: Array[String] = []
 	var left := bits
-	if left & CreatureBook.REWARD_LIFE_CARRIED != 0 and int(spoils["lives_end"]) != int(spoils["lives_start"]):
-		player.next_duel_life_carried = int(spoils["lives_end"]) - int(spoils["lives_start"])
+	# THE LIFE ENDED WITH IS THE NEXT DUEL'S. [Ours: 1997 slip — the
+	# carried lives counted from a start a gift had raised; the owner's
+	# ruling of 2026-10-27, "Carry the life you ended with" (the bug
+	# campaign c12, h2-2).] 1997 carried the end less the START, and the
+	# start held the gifts just spent and any earlier carry: 10 links and the
+	# wise man's +2 began at 12, ended at 15, said "(15)" and began the next
+	# duel at 13. The carry is the end less the hero's links, the life every
+	# duel starts from ([method CreatureMeeting.hero_life]), so the next
+	# duel starts at the life the words name; with no gift and no earlier
+	# carry the start is the links and the carry is 1997's own. The field
+	# keeps its meaning (lives added to the links), so a save of an old carry
+	# reads as it was written. A carry of nothing — the end at the links —
+	# says nothing, as 1997's (the end at the start) said nothing. A link won
+	# or lost before the next duel, or a new gift, still moves its start as
+	# it moves every duel's.
+	var carried := int(spoils["lives_end"]) - player.mana_links()
+	if left & CreatureBook.REWARD_LIFE_CARRIED != 0 and carried != 0:
+		player.next_duel_life_carried = carried
 		lines.append_array(lines_of(LIVES_CARRIED % int(spoils["lives_end"])))
 	if left & CreatureBook.REWARD_LIVES != 0:
 		player.next_duel_life = dice.below(4) + 1

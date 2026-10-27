@@ -41,12 +41,7 @@ static func export_text(owner: Node, text: String, filename := "game.txt") -> vo
 	owner.add_child(picker)
 	picker.canceled.connect(picker.queue_free)
 	picker.file_selected.connect(func(path: String) -> void:
-		var file := FileAccess.open(path, FileAccess.WRITE)
-		var ok := file != null and file.store_buffer(bytes)
-		if file != null:
-			file.flush()
-			ok = ok and file.get_error() == OK
-			file.close()
+		var ok := write_whole(path, bytes)
 		UiChrome.explain_popup(owner, "Save the move list", "Move list saved." if ok else "Could not save the move list.")
 		picker.queue_free())
 	picker.popup_centered(Vector2i(700, 480))
@@ -74,15 +69,22 @@ static func export_bytes(owner: Node, bytes: PackedByteArray, filename := "game.
 		if path.get_extension().to_lower() != "mpn":
 			UiChrome.explain_popup(owner, "Export MPN", "Please use a filename ending in .mpn.")
 		else:
-			var file := FileAccess.open(path, FileAccess.WRITE)
-			var ok := file != null and file.store_buffer(bytes)
-			if file != null:
-				file.flush()
-				ok = ok and file.get_error() == OK
-				file.close()
+			var ok := write_whole(path, bytes)
 			UiChrome.explain_popup(owner, "Export MPN", "Public game record saved." if ok else "Could not save the recording.")
 		picker.queue_free())
 	picker.popup_centered(Vector2i(700, 480))
+
+## WHOLE OR NOT AT ALL (the bug campaign c12, h5-7 / h6-3): Export MPN,
+## Save text… and a record brought in on the web wrote straight over the
+## chosen file, and a full disk after the player confirmed Replace left the
+## earlier file cut short — while the buffered write and its flush still
+## reported no error, so the popup said "saved". [method
+## Settings.write_atomically] writes beside the file, checks the length
+## that reached the disk and only then renames it into place; a file the
+## player made read-only is refused, a link stays a link. False = nothing
+## changed on disk, and the caller says so.
+static func write_whole(path: String, bytes: PackedByteArray) -> bool:
+	return Settings.write_atomically(path, bytes) == OK
 
 static func _choose_web(owner: Node, selected: Callable) -> void:
 	# No server/upload: the browser reads the chosen file locally. Polling
@@ -120,9 +122,7 @@ static func _choose_web(owner: Node, selected: Callable) -> void:
 			else:
 				DirAccess.make_dir_recursive_absolute(GamePaths.records_folder())
 				var path := GamePaths.records_folder().path_join("import-" + MpnArchive.new_id() + ".mpn")
-				var file := FileAccess.open(path, FileAccess.WRITE)
-				if file != null and file.store_string(data.text):
-					file.close()
+				if write_whole(path, String(data.text).to_utf8_buffer()):
 					selected.call(path)
 				else: UiChrome.explain_popup(owner, "Cannot view MPN", "Could not store the imported file.")
 		timer.queue_free())

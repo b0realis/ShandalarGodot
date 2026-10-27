@@ -23,6 +23,10 @@ class BlastEffect extends EffectBase:
 	func _init() -> void:
 		target_spec = TargetSpec.spell("target spell with mana value X")
 		target_spec.with_source_filter(BlastEffect._mana_value_is_x)
+		# [ours] A refusal names its real reason — the mana value, not the
+		# type (the bug campaign c12, h3-21); 1997's refusal words had none
+		# for it.
+		target_spec.because("mana value")
 
 	## CR 202.3b — while a spell is ON THE STACK, X in its mana cost is the
 	## value chosen for it, and ManaCost.mana_value() deliberately counts an

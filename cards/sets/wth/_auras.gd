@@ -183,8 +183,7 @@ class DestroyHostBlockers extends EffectBase:
 			var b := g.find_instance(int(id))
 			if g.is_present(b) and b.is_creature() and not b.has_subtype("wall"):
 				doomed.append(b)
-		g.begin_simultaneous()
-		for b in doomed: g.destroy(b)
-		g.end_simultaneous()
+		# One departure (the bug campaign c12, h3-3).
+		g.depart_together(doomed, func(b: CardInstance) -> void: g.destroy(b))
 	func describe() -> String:
 		return "destroy all non-Wall creatures blocking enchanted creature"

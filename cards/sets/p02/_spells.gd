@@ -75,8 +75,10 @@ class CountedDestruction extends EffectBase:
 		for body in g.all_battlefield():
 			if body.is_creature() and ((gain and body.tapped) or (not gain and body.controller_id == t.player_id)): bodies.append(body)
 		g.begin_simultaneous()
+		# One departure (the bug campaign c12, h3-3); the life inside the
+		# same bracket.
+		g.depart_together(bodies, func(i: CardInstance) -> void: g.destroy(i))
 		for i in bodies:
-			g.destroy(i)
 			if i.zone != Mtg.Zone.BATTLEFIELD: count += 1
 		g.adjust_life(pid, count * (2 if gain else -2))
 		g.end_simultaneous()

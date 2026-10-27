@@ -424,6 +424,9 @@ only for its palette).
   tile of the hero, and the click zones and the explore radius are the
   640 grid's. A full-screen view keeps the explore radius as the
   original's; the monster radius is to decide when monsters arrive.
+  (2026-10-27: decided in part B, the owner's ruling of 2026-10-23 — a
+  creature is drawn anywhere within the 4 tiles its slot lives in,
+  `WorldCreatures.seen` [QoL]; lairs keep 1997's one tile.)
 - **What the whole screen shows** (the owner's choice, 2026-10-22, of four
   shown from the running game): the 1997 window showed about 4 × 4 tiles,
   all of it marked explored; the whole screen at 1:1 showed some seven
@@ -461,11 +464,17 @@ codes, the site types, the 12-entry table, the per-site trade values, the
 direction table, and the step-1 "empty loop". Still open:
 
 - Whether type 5 is exactly "wizard defeated" (read the castle code).
+  (2026-10-27: read so — `Sieges.BEATEN_CASTLE`, a castle whose wizard is
+  beaten, drawn as his ruin; nothing sets it until part C beats one.)
 - What a trade type of (n + 1) × 256 offers, and what status bit 1 means
-  (`cityInfoScreen.c`, `visitLocation.c`).
+  (`cityInfoScreen.c`, `visitLocation.c`). (2026-10-27: status bit 1 is
+  the hero's mana link with the town, `TownStatus.LINKED` — the first ten
+  towns and cities are made linked; the trade value is still open.)
 - ~~Where dungeons and the starting position come from~~ — read
   2026-10-22 ("Castles, dungeons and the start"). Lairs and roaming
-  monsters (`world_lair_monster_slots.c`) are still to read.
+  monsters (`world_lair_monster_slots.c`) are still to read. (2026-10-27:
+  read and built — `WorldLairs`, `WorldCreatures`, from
+  `UpdateWorldLairAndMonsterSlots`, world_lair_monster_slots.c 384–621.)
 - ~~The `X0` map-file encoding~~ — decoded 2026-10-22: `magicN.map` is
   the whole 320 × 200 page through `EncodeRpBitsImage` (runs of more than
   three as `v, 0x90, k`, a literal 0x90 as `0x90, 0`, then LZW packed

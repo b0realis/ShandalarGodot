@@ -187,6 +187,11 @@ func test_the_arrange_entries_arrange_one_territory_each() -> void:
 	# play in the territory where you right-clicked".
 	var mine := screen._human_seat()
 	var theirs := 1 - mine
+	# Right-clicked on YOUR half: the bare screen is a two-human table, and
+	# a menu opened on no half speaks for the seat deciding (the bug
+	# campaign c12, h4-4), which need not be the lower one.
+	screen._open_territory_menu(mine, Vector2(200, 600))
+	screen._territory_menu.hide()
 	screen._on_territory_menu_chosen(DuelScreen.REST_BASE + 0)
 	assert_true(screen._arranged[mine], "your cards")
 	assert_false(screen._arranged[theirs], "and only yours")

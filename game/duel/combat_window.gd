@@ -88,8 +88,8 @@ var _panel: Panel
 var _title: Label
 var _minimize: Button
 var _bones: TextureRect
-var _top_lane: HFlowContainer
-var _bottom_lane: HFlowContainer
+var _top_lane: Lane
+var _bottom_lane: Lane
 var _top_marker: TextureRect
 var _bottom_marker: TextureRect
 ## Instance ids currently laid out, top lane then bottom (tests read this).
@@ -265,16 +265,77 @@ func restore_position() -> void:
 		_clamp_on_screen()
 
 
-func _make_lane(top: float) -> HFlowContainer:
-	var lane := HFlowContainer.new()
-	lane.alignment = FlowContainer.ALIGNMENT_CENTER
+func _make_lane(top: float) -> Lane:
+	var lane := Lane.new()
 	lane.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	lane.offset_top = top
 	lane.offset_bottom = top + LANE_H
 	lane.offset_left = EDGE + MARKER_W
 	lane.offset_right = -(EDGE + 4.0)
-	lane.add_theme_constant_override("h_separation", 6)
 	return lane
+
+
+## ONE LANE, ONE LINE, HOWEVER MANY CREATURES (the bug campaign c12,
+## h4-10). The lanes were [HFlowContainer]s, and the seventh creature of a
+## side wrapped to a second line: the lane grew to 216 and 284, wrapped
+## blockers sat hidden behind the attackers' lane and the Situation Bar,
+## and wrapped attackers fell out of the window onto the board. A lane is
+## exactly one tapped card tall (see the class docs), so it does what the
+## territory rows do ([SqueezeRow], s30's `duel.go:1424-1434`): an
+## under-full lane stands its cards side by side, centred as before, and a
+## full one shrinks the pitch — every card but the last slides under its
+## neighbour, and the last shows whole.
+##
+## NOT a [SqueezeRow] itself, on purpose: the duel screen reads a card
+## whose parent is one as a TABLE card it may drag and place
+## ([method DuelScreen._layout_root]), and a card in this window stands
+## for its creature and must not be (hunt of 2026-10-21).
+class Lane extends Container:
+	## The gap between cards in an under-full lane (the old flow's own 6).
+	const SEPARATION := 6.0
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_SORT_CHILDREN:
+			_lay_out()
+
+	## Nothing: the lane is placed by its anchors at the art's own size.
+	## Asking for its cards' width or height would grow it past the window
+	## — which is what the flow's wrapped lines did.
+	func _get_minimum_size() -> Vector2:
+		return Vector2.ZERO
+
+	func _cards() -> Array[Control]:
+		var out: Array[Control] = []
+		for child in get_children():
+			if child is Control and child.visible and not child.top_level:
+				out.append(child)
+		return out
+
+	func _lay_out() -> void:
+		var cards := _cards()
+		if cards.is_empty():
+			return
+		var widths: Array[float] = []
+		var natural := SEPARATION * (cards.size() - 1)
+		for card in cards:
+			widths.append(card.get_combined_minimum_size().x)
+			natural += widths[-1]
+		if natural > size.x and cards.size() > 1:
+			var pitch := maxf(size.x - widths[-1], 0.0) / float(cards.size() - 1)
+			for i in cards.size():
+				_place(cards[i], i * pitch, widths[i])
+			return
+		var x := floorf((size.x - natural) * 0.5)
+		for i in cards.size():
+			_place(cards[i], x, widths[i])
+			x += widths[i] + SEPARATION
+
+	## Vertically centred in the lane; a card taller than the lane keeps
+	## its height and hangs off the bottom, as in [SqueezeRow].
+	func _place(card: Control, x: float, width: float) -> void:
+		var height: float = card.get_combined_minimum_size().y
+		var y: float = maxf((size.y - height) * 0.5, 0.0)
+		fit_child_in_rect(card, Rect2(Vector2(x, y), Vector2(width, height)))
 
 
 func _make_marker(top: float) -> TextureRect:
@@ -338,7 +399,7 @@ func present(game: MtgGame, attacker_ids: Array, blocker_ids: Array,
 		_bones.texture = MiniCard.masked_sprite("attack_bones", true)
 
 
-func _fill(lane: HFlowContainer, game: MtgGame, ids: Array,
+func _fill(lane: Lane, game: MtgGame, ids: Array,
 		bands: Array = []) -> void:
 	for child in lane.get_children():
 		lane.remove_child(child)

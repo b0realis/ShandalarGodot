@@ -342,10 +342,16 @@ func _build_turn_row() -> Control:
 	for pid in 2:
 		var button := Button.new()
 		button.text = "Seat %d · %s" % [pid + 1, config.player_names[pid]]
+		button.tooltip_text = "Seat %d — %s: the test begins in this player's turn." \
+			% [pid + 1, config.player_names[pid]]
 		button.toggle_mode = true
 		button.button_group = group
+		# GROWS TO ITS NAME (the bug campaign c12, h4-11): it was a fixed
+		# 170 that clipped its text, and the chosen seat read "Seat 1 ·
+		# White Wizar" at every size, skin or none. 170 stays the floor; a
+		# seat's name is 32 letters at most (the Magic Battle screen's
+		# `SEAT_NAME_MAX`), and the panel widens to its row.
 		button.custom_minimum_size = Vector2(170, 34)
-		button.clip_text = true
 		UiChrome.gold_when_chosen(button)
 		button.toggled.connect(func(on: bool) -> void:
 			if on:

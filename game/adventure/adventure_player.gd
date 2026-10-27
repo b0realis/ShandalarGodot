@@ -155,6 +155,14 @@ var position := Vector2i.ZERO
 var facing := 0
 ## The walking figure's step, 0 standing, 1–4 walking.
 var step := 0
+## THE ENTRY LATCH KEPT (the world screen's, [method WorldScreen.walk_to_tile]):
+## the tile of the place the hero arrived at and still stands on, (−1, −1)
+## for none — saved, so after a Resume or a Load a click on the town just
+## left, or the one stood in as the window closed, opens it again and is no
+## new arrival: no second "Visited", no quest, trade, hint or shop drawn
+## again, no creature pushed back again (the bug campaign c12, h1-1, h1-2).
+## Read only for the tile the hero stands on. [ours]
+var entered_tile := Vector2i(-1, -1)
 
 
 # ------------------------------------------------- what the hero carries --
@@ -559,7 +567,7 @@ func to_dict() -> Dictionary:
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
 			"card_rule": card_rule, "copy_limit": card_rule != RULE_SHIPPED, "playmat": playmat, "packs": packs},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
-			"facing": facing},
+			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
 		"carried": {"gold": gold, "food": food, "amulets": amulets,
 			"world_magics": world_magics, "cards": cards, "current_deck": current_deck,
 			"deck_names": deck_names, "deck_notes": deck_notes, "deck_colors": deck_colors},
@@ -684,6 +692,12 @@ static func _read_where(player: AdventurePlayer, where: Dictionary) -> void:
 	var start := player.world.start
 	player.position = Vector2i(_on_map(_number(where.get("x"), start.x)), _on_map(_number(where.get("y"), start.y)))
 	player.facing = clampi(_number(where.get("facing")), 0, 8)
+	# The entry latch (c12, h1-1): kept only for the tile the hero stands
+	# on; a save from before it, or one naming another tile, has none.
+	var entered := _list(where.get("entered"))
+	if entered.size() == 2 and _is_number(entered[0]) and _is_number(entered[1]) \
+			and Vector2i(_number(entered[0]), _number(entered[1])) == player.tile():
+		player.entered_tile = player.tile()
 
 
 static func _read_carried(player: AdventurePlayer, carried: Dictionary) -> void:

@@ -128,6 +128,7 @@ static func search_dirs(every := false) -> Array:
 ## title screen is rebuilt on it ([method SkinPack._arrived]); the other
 ## screens keep their own derived caches and are told to restart.
 static func clear_caches() -> void:
+	_unreadable.clear()
 	_texture_cache.clear()
 	_font_cache.clear()
 	_sound_cache.clear()
@@ -682,7 +683,7 @@ static func scale_for(size: Vector2i, slot: Vector2i) -> int:
 ## place when the catalogue wears another one, "" when there is none.
 ## Null when unreadable.
 static func picture(path: String, key := "", own := "") -> Texture2D:
-	var img := Image.load_from_file(path)
+	var img := _image(path)
 	if img == null:
 		return null
 	if own == path:
@@ -691,7 +692,7 @@ static func picture(path: String, key := "", own := "") -> Texture2D:
 	var scale := scale_for(img.get_size(), slot)
 	if scale == 1 and own != "":
 		# No 1997 size it fits: the slot's own file says what 1x is here.
-		var one := Image.load_from_file(own)
+		var one := _image(own)
 		if one != null:
 			slot = one.get_size()
 			scale = scale_for(img.get_size(), slot)
@@ -704,6 +705,36 @@ static func picture(path: String, key := "", own := "") -> Texture2D:
 		# its big texture would hold the skin twice.
 		tex.set_meta(ORIGINAL_META, own)
 	return tex
+
+
+## A FILE THAT WOULD NOT READ IS NOT READ AGAIN (the bug campaign c12,
+## h6-9): the paths [method picture] could not read, with the file's
+## modified time then. A broken picture of the player's own (a portrait
+## saved half-way, a file that is no picture) printed the engine's
+## ERRORs every time it was asked for again; now it is skipped, quietly,
+## while it is unchanged, and read afresh once rewritten, or after
+## [method clear_caches] (a skin that arrives may bring a good file at
+## the same `res://skin/` path).
+static var _unreadable: Dictionary = {}
+
+
+## The picture at [param path], or null — not asked of the engine again
+## while it is a file that would not read and is unchanged.
+static func _image(path: String) -> Image:
+	if _unreadable.has(path) and int(_unreadable[path]) == _stamp(path):
+		return null
+	var img := Image.load_from_file(path)
+	if img == null:
+		_unreadable[path] = _stamp(path)
+	else:
+		_unreadable.erase(path)
+	return img
+
+
+## [param path]'s modified time; -1 when there is no such file (asked
+## first: the engine prints an ERROR for the time of a missing file).
+static func _stamp(path: String) -> int:
+	return FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 
 
 ## How many image pixels [param tex] holds per drawn pixel: 2 for a 2x

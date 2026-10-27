@@ -39,6 +39,13 @@ var source: CardInstance = null
 ## Storm still recognizes spell damage waiting in a classic window.
 var source_was_spell: bool = false
 var source_timestamp := 0
+## The seat that controlled [member source] when this damage was dealt
+## (MtgGame._plan_damage), -1 for a packet built by hand. Under the 1997
+## damage-prevention window the damage waits while a stolen spell goes home
+## to its owner, and "that source's controller" (Reflect Damage) is still
+## the thief (CR 113.7a; the bug campaign c12, h3-6) —
+## [method MtgGame.packet_source_controller] reads it.
+var source_controller := -1
 ## Lava Burst: applies only to this damage, not every source damaging the
 ## same creature later in the turn. Redirection into a creature also counts.
 var unpreventable_to_creatures: bool = false

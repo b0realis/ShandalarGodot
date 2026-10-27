@@ -520,6 +520,49 @@ static func ground_color_for(pid: int, human_seat: int, deck_color: String) -> S
 	return chosen.to_lower()
 
 
+# --- the bug campaign c12: the playmat, duel side ---
+## THE GROUND ONE SEAT'S HALF WEARS, as `{color, type}` — a colour key
+## (`red`) and one of [constant TERRITORY_TYPES]' labels (`Pattern`).
+## [param seat_entry] is the seat's [member DuelConfig.territories] entry:
+## the caller's say, which wins wherever it names a colour or a type this
+## table knows (the adventure's duels pass the hero's playmat, chosen on
+## the Embark screen). Whatever it leaves out, or names wrongly, is the
+## Duel Options' own answer — [method ground_color_for] and [method
+## territory_type], so a plain duel, whose entries are `{}`, is dressed
+## exactly as before. [Ours: the 1997 game had one ground per player's
+## settings and no adventure playmat.]
+static func ground_for(pid: int, human_seat: int, deck_color: String,
+		seat_entry: Dictionary) -> Dictionary:
+	var color := ""
+	var asked: Variant = seat_entry.get("color", "")
+	if asked is String and is_ground_color(asked):
+		color = (asked as String).to_lower()
+	else:
+		color = ground_color_for(pid, human_seat, deck_color)
+	var type_label := territory_type()
+	var style: Variant = seat_entry.get("type", "")
+	if style is String and _type_index_or_none(style) >= 0:
+		type_label = style
+	return {"color": color, "type": type_label}
+
+
+## Is [param color] one of the five territory colours ([constant
+## TERRITORY_COLORS] without `Deck color`), in any case?
+static func is_ground_color(color: String) -> bool:
+	for name in TERRITORY_COLORS:
+		if name != DECK_COLOR and name.to_lower() == color.to_lower():
+			return true
+	return false
+
+
+static func _type_index_or_none(label: String) -> int:
+	for i in TERRITORY_TYPES.size():
+		if TERRITORY_TYPES[i]["label"] == label:
+			return i
+	return -1
+# --- end the bug campaign c12 (playmat) ---
+
+
 ## BUILD THE WINDOW. Returns an [OriginalDialog] carrying the whole table,
 ## already wired: every control writes its [Settings] key the moment it is
 ## touched (*"These settings are retained for future duels"* — there is no

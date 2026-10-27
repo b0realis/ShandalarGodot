@@ -244,9 +244,8 @@ static func _terror_wave(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	for i in g.all_battlefield():
 		if i.is_creature() and (0 if i.face_down else i.data.cost.mana_value()) == ages: doomed.append(i)
 	if doomed.is_empty(): return
-	g.begin_simultaneous()
-	for i in doomed: g.destroy(i, false)
-	g.end_simultaneous()
+	# "Destroy each creature ...": one departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i, false))
 
 static func _own_upkeep_unpaid(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 	return e.data.get("instance") == s

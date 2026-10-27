@@ -207,6 +207,11 @@ func test_a_face_down_exile_is_hidden_from_the_seat_it_is_not_shown_to() -> void
 		"the seat the card was not shown to reads only (face down)")
 	assert_string_contains(screen._exile_tooltip(0), "(face down)")
 	_stand(0)
+	# ...once its player has pressed Show hand: until then nobody at the
+	# screen is known to be that seat (the bug campaign c12, h4-6).
+	assert_false(screen._exile_tooltip(0).contains("Lightning Bolt"),
+		"not before Show hand")
+	screen._toggle_hotseat_hand(0)
 	assert_string_contains(screen._exile_tooltip(0), "Lightning Bolt",
 		"the seat a rule did show it to still reads it")
 

@@ -306,11 +306,25 @@ static func _flag(value: Variant) -> bool:
 	return false
 
 
+## The longest number [method _number] reads as itself, and what a longer
+## one is read as (with its sign).
+const _MAX_DIGITS := 9
+const _HUGE := 1_000_000_000
+
+
+## Every caller clamps what this returns, so a number too long to be one
+## (a hand-edited setting) is read as a big one of its sign — its DIGITS
+## are counted first, as [method DeckList._read_count] does: twenty of them
+## made Godot print an engine ERROR (`Cannot represent … as a 64-bit
+## signed integer`) before any clamp could act (the bug campaign c12, h3-18).
 static func _number(value: Variant, fallback: int) -> int:
 	if value is int:
 		return value
 	if value is float and is_finite(value):
-		return int(value)
+		return int(clampf(value, -_HUGE, _HUGE))
 	if value is String and String(value).strip_edges().is_valid_int():
-		return String(value).strip_edges().to_int()
+		var text := String(value).strip_edges()
+		if text.trim_prefix("+").trim_prefix("-").lstrip("0").length() > _MAX_DIGITS:
+			return -_HUGE if text.begins_with("-") else _HUGE
+		return text.to_int()
 	return fallback

@@ -1,7 +1,9 @@
 # SGManalink authentication and hosting options
 
 Status: planning note, checked 2026-09-14. Development remains on
-`sgmanalink`. **Use temporary guest names while improving the game
+`sgmanalink`. (2026-10-27: no longer — that branch was merged into `main`
+and only `main` exists; LAN play is developed there, and the Internet
+hosting this note plans for is parked since 2026-09-15.) **Use temporary guest names while improving the game
 experience.** No official domain or authentication provider has been chosen;
 no external service, account, billing arrangement or public listener has
 been created. Provider details below are a dated shortlist, not a deployment

@@ -147,6 +147,7 @@ static func _bloodlust(game: MtgGame, target: CardInstance) -> void:
 
 ## Hurr Jackal: it can't be regenerated this turn.
 static func _hurr_jackal(game: MtgGame, target: CardInstance) -> void:
+	game._rec(target, &"regeneration_banned_this_turn")   # c12, h3-9
 	target.regeneration_banned_this_turn = true
 	game.log_line("%s can't be regenerated this turn" % target.data.card_name)
 

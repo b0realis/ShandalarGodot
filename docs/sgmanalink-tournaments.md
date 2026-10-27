@@ -1,10 +1,13 @@
 # LAN tournaments
 
-Development implementation on `main`, **0.50.37** (protocol **29**). Internet play, permanent accounts,
+Development implementation on `main`, **0.50.37** (protocol **29**; 2026-10-27: now
+0.50.61, protocol **30**). Internet play, permanent accounts,
 MElo and tournament-integrated drafting are parked. A separate
 [timed draft builder](booster-draft.md) is available for local practice.
 Windows, Linux and macOS use the existing LAN
-transport; this does not add web multiplayer.
+transport; this does not add web multiplayer. (2026-10-27: the Meta Quest
+and Android builds carry the same LAN transport and its network
+permissions; only the web build has none.)
 
 ## Format and deck policy
 
@@ -146,7 +149,8 @@ same table, same hands, same controls. Only a host restart goes through the
 checkpoint and the recovery codes below.
 Recovery requires a matching build and the same enabled gameplay packs. Earlier
 development checkpoints remain untouched but are not migrated across a changed
-build fingerprint. Use matching 0.50.37 builds and enabled packs for recovery.
+build fingerprint. Use matching 0.50.37 builds and enabled packs for recovery
+(2026-10-27: matching builds of one version, protocol 30 now).
 Computer entries retain their settings and are recreated without recovery codes.
 
 **Tournament setup → Save folder** offers a typed path, **Browse…** and
@@ -164,7 +168,7 @@ application cannot reclaim an entry by matching its nickname.
 
 ## Play on a LAN
 
-1. Use matching builds (0.50.37 uses protocol 29) and enabled card packs. Open the globe, choose a
+1. Use matching builds (0.50.37 uses protocol 29; 0.50.61 uses 30) and enabled card packs. Open the globe, choose a
    temporary name, and check the LAN address/port under **Host Game →
    Network settings…** if the computer has several adapters.
 2. Open **Tournament**. Name the event, choose 2–40 maximum entrants and a

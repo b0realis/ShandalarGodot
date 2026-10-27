@@ -15,10 +15,12 @@ extends RefCounted
 ##   card's toughness and graveyard entry) are captured as the ability
 ##   triggers, never read back later off a permanent that may have changed.
 ## - "Whenever this creature deals damage" (Zebra Unicorn, Emberwilde
-##   Caliph) hears DAMAGE_DEALT once per damage packet, the pool's
-##   convention for that wording (4ed/el_hajjaj.gd, 4ed/spirit_link.gd): a
-##   trampler's split damage resolves as one trigger per recipient whose
-##   amounts add up to what the event dealt.
+##   Caliph) hears SOURCE_DEALT_DAMAGE: ONE trigger per damage event, for
+##   everything the creature dealt in it (CR 510.2, 603.2c), as the 1997
+##   El-Hajjâj gathers its damage into one trigger. Until the bug campaign
+##   c12 (h3-8) it heard DAMAGE_DEALT, one trigger per packet — a creature
+##   blocked by two triggered twice — which this comment called the pool's
+##   convention; it was a slip, never a ledgered one.
 ## The Visions module (cards/sets/vis/_triggers.gd) reuses the shared
 ## helpers at the bottom of this file.
 const F := preload("res://cards/sets/fem/_rules.gd")
@@ -128,7 +130,7 @@ static func configure(c: CardData) -> bool:
 				"At the beginning of your end step, remove all +1/+1 counters from this creature.", F._your_upkeep))
 		"Emberwilde Caliph":
 			c.with_keywords([Mtg.Keyword.MUST_ATTACK])
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DAMAGE_DEALT, _caliph,
+			c.triggered(TriggeredAbility.new(Mtg.EventType.SOURCE_DEALT_DAMAGE, _caliph,
 				"Whenever this creature deals damage, you lose that much life.", deals_damage))
 		"Grim Feast":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, self_damage.bind(1),
@@ -148,7 +150,7 @@ static func configure(c: CardData) -> bool:
 				"Whenever an opponent casts a spell that targets you or a creature you control, you may draw a card.",
 				_targets_you_or_yours))
 		"Zebra Unicorn":
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DAMAGE_DEALT, _zebra,
+			c.triggered(TriggeredAbility.new(Mtg.EventType.SOURCE_DEALT_DAMAGE, _zebra,
 				"Whenever this creature deals damage, you gain that much life.", deals_damage))
 		"Phyrexian Dreadnought":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.ENTERS_BATTLEFIELD, _dreadnought,
@@ -179,6 +181,8 @@ static func spell_of(_g: MtgGame, _s: CardInstance, e: GameEvent, color: int) ->
 	var spell: CardInstance = e.data.get("instance")
 	return spell != null and (spell.cur_colors & color) != 0
 
+## "Whenever this creature deals damage": [param s] is the source of the
+## SOURCE_DEALT_DAMAGE event (one per damage event — h3-8, see the header).
 static func deals_damage(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 	return e.data.get("source") == s and int(e.data.get("amount", 0)) > 0
 
@@ -816,11 +820,11 @@ static func _golem_delay(g: MtgGame, s: CardInstance, _e: GameEvent, entry: int,
 	g.schedule_delayed_trigger(TriggeredAbility.new(Mtg.EventType.END_STEP_START, _golem_return.bind(entry, pid),
 		"Return Sand Golem from your graveyard to the battlefield with a +1/+1 counter on it."), pid, s)
 
+## The counter comes WITH it (the bug campaign c12, h3-16): it used to be
+## added after the arrival, so an "enters" listener saw a 3/3.
 static func _golem_return(g: MtgGame, s: CardInstance, _e: GameEvent, entry: int, pid: int) -> void:
 	if s.zone != Mtg.Zone.GRAVEYARD or s.graveyard_entry != entry: return
-	g.reanimate(s, pid)
-	if s.zone == Mtg.Zone.BATTLEFIELD:
-		g.add_counters(s, "+1/+1")
+	g.reanimate(s, pid, false, {"+1/+1": 1})
 
 
 # ------------------------------------------------------ Asmira, Holy Avenger --

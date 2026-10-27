@@ -2,7 +2,10 @@
 
 **Started 2026-10-04.** These are living notes for the future adventure mode:
 the Shandalar overworld, towns, enemies, dungeons, castles, world magics and
-Arzakon. Nothing is built yet. The ROADMAP's M5 entry says the milestone
+Arzakon. Nothing is built yet. (2026-10-27: no longer so — the Embark
+screen, the world, parts A and B and the world's last pieces are built,
+0.50.48–0.50.61, each in a "Built:" section below; part C, the wizards'
+castles and Arzakon, is still to come.) The ROADMAP's M5 entry says the milestone
 "gets its own design doc before code", and this is where that design doc
 grows. Add findings as they come, with sources, and log them at the bottom.
 
@@ -224,11 +227,16 @@ creatures 0x1EA2C). The parts nothing uses yet are there, empty.
   50 gold, 50 food, an amulet of their colour and (3 − difficulty) more,
   whose colours are drawn with the original's `internal_rand(5) + 1` on the
   adventure's dice where the world left them, and the colour's first World
-  Magic. The starting deck waits for the 1997 rarity table.
+  Magic. The starting deck waits for the 1997 rarity table. (2026-10-27:
+  dealt since 0.50.51, `StarterDeck`, "Built: the first deck…" below.)
 - **Mana links** are kept on the hero, not read from a site's status bit 1
   as the save's notes would have it: the generator sets that bit on the
   first ten towns and cities with World Magic as it makes the world, so
-  there it means something else, not yet read.
+  there it means something else, not yet read. (2026-10-27: superseded in
+  part A — the bit IS the mana link, `TownStatus.LINKED` (0x0001); the
+  hero keeps no list, and `AdventurePlayer.mana_links()` is a method that
+  counts the linked towns and cities no wizard holds, the hero's life in
+  a duel.)
 - **The saves** are JSON in `user://adventures`, `<Name>-<hash>.autosave.json`,
   the hash the 32-bit FNV-1a of the name and the moment the adventure
   began; the world's page is kept as 128 rows of 64 hex bytes (the tiles
@@ -251,7 +259,8 @@ creatures 0x1EA2C). The parts nothing uses yet are there, empty.
   odd ticks adds a unit. No food: the divisor two more, at most 4.
 - Every 32nd tick a walking hero eats a food (Fruit of Sustenance gives two
   back on forest) and the quest and siege clocks step on (the sieges
-  themselves are not made yet). A step into the sea within 12 units of a
+  themselves are not made yet; 2026-10-27: made in part B, `Sieges`, which
+  `HeroWalk` calls on each step of the clock). A step into the sea within 12 units of a
   tile's middle is taken back.
 - The figure is `EGO_M`/`EGO_F` frame `((direction + 2) & 7) * 5 + step`,
   the step 1–4 while walking, 0 standing; the shadow the same.
@@ -355,6 +364,8 @@ be moved at will … and it should be togglable on/off in options"*.
   the clock) casts Dominion. NOT RUN YET: with no duels to lift a siege,
   the clock would take cities the hero cannot save. The pane, the arrows,
   the small map and Sword of Resistance read the state when it comes.
+  (2026-10-27: run since part B, 0.50.54 — `Sieges`, with the duels that
+  lift them.)
 - **Next duel** (`next_duel_card`: −1 none, 0 first move, 1–5 lives, a
   card above 5; `next_duel_life` carried lives): ours as
   `next_duel_life`, `next_duel_first_move`, `next_duel_card`;
@@ -365,7 +376,9 @@ be moved at will … and it should be togglable on/off in options"*.
   `@CAVE_SHOWCLUES` lines, the way from the slot's town by the signs of
   dx and dy. 1997 showed an empty list with nothing known; ours says how
   clues are found. Clues come from wise men, Ruined Tower, beaten
-  creatures (`RevealRandomCastleDungeonClue`), not made yet.
+  creatures (`RevealRandomCastleDungeonClue`), not made yet. (2026-10-27:
+  made — `WorldClues.reveal` / `reveal_for_hint`, called by the wise man,
+  the Ruined Tower, a beaten creature's spoils and a creature's meeting.)
 - **The names** (`WorldNames`): `BuildTownDisplayName` (00550220) —
   `@CITYNAMES_FIRSTHALF[(slot / 8) mod 16]` + `@CITYNAMES_SECONDHALF[slot
   mod 16]`, a village "%1 Village"; castles `@CITYNAME_MANACASTLE`;
@@ -373,6 +386,8 @@ be moved at will … and it should be togglable on/off in options"*.
 - **1.3 had no small map** (the decompilation's `minimap` variables are
   tile sizes); `WorldMinimap` and the guide arrows (`WorldGuides`) are
   ours [QoL]. The F3 city list and F6 wizards' window are not built.
+  (2026-10-27: both built — F3 `CityListPane` in part A, F6
+  `WizardsPicture` on the hero pane's Wizards tab in 0.50.60.)
 - **The panes** move where they are dragged and are found there again
   (`world_pane_<name>`); the options switch the small map, the quest pane
   and the arrows, set the pace (the world's clock ×1, 1.5 or 2 [QoL]),
@@ -410,7 +425,9 @@ during play! (Extras button absent, and any other conflicting buttons)
   fit (1997 drew any card and threw back), after the amulets (1997 dealt
   first). OPEN against the binary: 1.3's coloured spell mask reads 0x04
   (enchantments only) where the retail spec says instants, sorceries and
-  enchantments — ours follows the retail spec.
+  enchantments — ours follows the retail spec. (2026-10-27: settled in the
+  machine code — both releases deal enchantments only; ours now does too,
+  0.50.60, "The two places once to check" below.)
 - **The deck builder in the adventure** (`DeckBuilderMain` with
   `DBFLAGS_SHANDALAR`; `db_flags_2` bit 0 moves, bit 1 sells): F1 opens it
   look-only (`(1,0)`), Conjurer's Will and the final castle with moves
@@ -1203,6 +1220,90 @@ parchment's middle — so they are centred on the parchment between the
 rolls, a size smaller each until they fit, and the purse's numbers sit on
 1997's own points (`EncounterStage.centred`).
 
+## Built: the owner's follow-ups (0.50.61, 2026-10-27)
+
+- *"upon esc key not just question to quit but also offer save/load in
+  the same popup!"* — "Ready to Quit?" holds Save and Load under No. /
+  Yes. (`WorldScreen.QuitAsk.chose`; S and L too), as 1997's right-click
+  "Will you …" menu held them beside Quit [ours].
+- *"on the embark Menu gray out lack options as they are not
+  implemented!"* — the one choice that did nothing yet was the card packs
+  (each pack's world and its World Lord are not built; the packs were
+  chosen and saved, never read): greyed, unticked, out of Randomize and
+  of the record (`EmbarkScreen.packs_ready`, false). The card rule and
+  the difficulty work; the playmat is saved with the hero but no adventure
+  duel reads it yet (the duel wears the Duel Options' territory) — found
+  by the feature-state pass of 2026-10-27, first on the bug campaign's
+  list.
+- *"when you click Shandalar in the main menu make a popup that this is
+  still in development and ask the player to report observations and
+  issues on the projects repository! Then offer button go test and
+  back!"* — the main menu's Shandalar opens that notice first
+  (`main.gd` `_open_shandalar_notice`, `SHANDALAR_NOTICE`, the GitHub
+  issues page); Go test opens the Embark screen, Back (or Escape) stays.
+
+## Built: the bug campaign c12 (0.50.61, 2026-10-27)
+
+The owner: *"Do one pass over all planned features and their state of
+implementation and a bug pass bug fix campaign when current work package is
+done!"* First the feature pass: four read-only reviewers checked every
+planned feature against the code (the owner's ledger page, by part: the
+adventure, the duel engine and cards, the deck builder and records, network
+and platforms) and listed the docs that said the wrong thing; a docs fixer
+corrected 28 of them. Then six hunters (the world and its panes, the
+adventure's duels and economy, the engine and cards — the 25 suspected card
+bugs of 2026-10-21 probed one by one, 18,000 fuzzed card runs —, the duel
+screen and shell, the builder and records, network and robustness) and
+eight fixers on disjoint files, each fix with a test that fails without it.
+
+For the adventure:
+- **The playmat** chosen on the Embark screen is worn in every adventure
+  duel (`DuelConfig.territories`, set by `CreatureMeeting.hero_playmat`;
+  the duel screen's ground reads it, `DuelOptions.ground_for`) — it was
+  saved and never read.
+- **The town latch is saved** (`AdventurePlayer.entered_tile`, the save's
+  `where.entered`): closing the window inside a town, or a Resume or Load
+  beside it, no longer makes the next click a new arrival — no second
+  "Visited", no quest, trade, hint or shop drawn again, no second push-back.
+  A ruled town's creature is still drawn again on a Resume, as a step off
+  and back draws it.
+- **The carried lives — the owner's ruling (2026-10-27): "Carry the life
+  you ended with"**: a creature's reward "You get your lives (N) carried
+  over to the next duel" starts the next duel at exactly N [ours: 1997 slip
+  — 1997 carried end − start, so a gift that had raised the start was taken
+  off again]; the carry is now the end life less the mana links. With no
+  gift and no earlier carry it is 1997's own.
+- Under the Classic MTG rules every lair rare obeys the rules too (the
+  waiting rare, the Thieves Hideout, the Lost City, the Pyramids); a lair
+  duel's hoard stays unlimited (a stake).
+- A freed town shows the card won ("Won this card") and says when a full
+  bag loses it [ours]; a reward step with no line is skipped [ours: 1997
+  slip — its title stood alone]; the news flash answers to C.
+- Help promises nothing a player cannot reach before part C (the castles'
+  attempts, a beaten wizard's room, the dungeon treasures "come with the
+  insides of the castles and the dungeons").
+
+Across the game (the release note lists them for the player): the engine's
+one HIGH — no spell with no life cost could be cast below 0 life (Lich, the
+1997 end-of-phase life check) —, "whenever ~ deals damage" once per damage
+event (`SOURCE_DEALT_DAMAGE`), every "destroy all" sweeper as one departure,
+Whimsy and protection, the Laces' timestamps, a stolen spell's reflected
+damage, the attack tax order, the AI's damage forecast never reading a
+masked creature; the duel screen (the computer waits under the quit and
+concede questions, the Spell Chain on the screen, a skipped combat not
+resting in Main 2, two-human Test hands, face-down exile at a private
+hotseat, Original type on a copy, Pause holding the opening and the coin
+toss); the windows between duels, Escape on the title's popups, the Combat
+window's lanes; the 1997 .dck read and written as the original game does;
+atomic writes for records, drafts and tournaments; the LAN host's seats per
+computer and idle reclaim; the web file boxes; Open Folder on Android; a skin
+replaced under its own name; quiet reads of a damaged seal list.
+
+Not done here, for the owner: the pack zips' notes (Pack 5's, Packs 8 and
+9's counts) are corrected in the repository but take effect only with a pack
+rebuild, which waits for the owner's word; the status line at an open
+hotseat still reads seat 0.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -1315,11 +1416,16 @@ said otherwise):
 | Dungeons | `dungeonEncounter.c`, `dungeonCluesScreen.c` | `Dungeon_Process_*` | `domain/dungeon*.go`, `screens/dungeon*.go`, `docs/dungeons.md` |
 | Wizards' castles | `InitializeCastleDungeonSlots` (`world_generation.c`) | `Castle_Process_*` | `domain/castle.go`, `world/castle_place.go` |
 | World magics (12) | `Scards[].worldmagic_city` (`world_generation.c`) | the 12-entry table in site placement (companion file, step 8) | `domain/worldmagic.go` |
-| Amulets and mana links | (to find) | (to find) | `domain/amulet.go` |
-| Card prices, collection | (to find) | (to find) | `domain/collection.go`, `card_tiers.go` |
+| Amulets and mana links | `status_and_ruling_wizard` bit 1 (`TownStatus`), `CountDuelPoolEligibleTowns` (`duel.c` 1893), the amulets in `InitializeNewGameState` | (to find) | `domain/amulet.go` |
+| Card prices, collection | `CalculateCardShopPrice` (004f1cce), `RunTownBuyCardsScreen` (004f0d09) (`CardValue`, `CardShop`) | (to find) | `domain/collection.go`, `card_tiers.go` |
 | Enemy AI in duels | `src/magic/` (the duel code `magic.exe` shares) | `docs/SHANDALAR_AI_FAQ.md` in the decompilation | — |
 | Save and load | `adventure_save.c`; `docs/shandalar_save_files.txt` | `SaveGame_SaveCampaignFile`, `Overworld_SaveMapFile`: slot 3 is the running game, slots 4–9 and a–d are saves | `game/save/` |
 | Arzakon and the ending | `dungeonEncounter.c` (`HandleDefeatedWizardCastle`, `CalculateDungeonEndgameScore`) | `src/magic/world/database.c` | (to find) |
+
+(2026-10-27: the 1.3 column's "(to find)" cells are filled from the
+functions the built code cites. The retail and s30 cells still marked
+"(to find)" were never traced: the adventure was ported from 1.3, and
+s30 is a guide only.)
 
 ## A possible order (a proposal; the owner decides)
 
@@ -1354,7 +1460,9 @@ said otherwise):
   screen" above): the face from every face the game has, on the 1997 portrait
   screen's ground with red arrows; the walker its own toggle, Male / Female / Other. Still
   to check in the 1.3 binary before the starting deck is built: the
-  Apprentice quota and the extra creature copy.
+  Apprentice quota and the extra creature copy. (2026-10-27: both settled
+  in the machine code and built in 0.50.60 — "The two places once to
+  check" above.)
 
 ## Log
 
@@ -1532,3 +1640,15 @@ said otherwise):
   drawn over their 4-tile range; creature decks exact 1997; quitting
   mid-duel as 1997. Built (0.50.54): "Built: part B — the creatures and
   their duels", and `docs/adventure-unused-1997-features.md`.
+- **2026-10-24** — 0.50.54 committed and pushed (aa38022). Owner: a
+  playtest and a bug campaign over part B. Done in 0.50.55 (3b867c7):
+  "Built: part B played and fixed"; 0.50.56 kept a pane that fits with
+  its foot on the screen.
+- **2026-10-24** — Owner: a third card rule, the Classic MTG rules.
+  Built (0.50.57): "Built: the Classic MTG rules, a third card rule".
+  0.50.58 brought the docs up to date against the 1997 code.
+- **2026-10-27** — Owner: every key decision taken together, in eight
+  rounds: "Decided: the world's last pieces and part C". Built (0.50.60,
+  267dab2): "Built: the world's last pieces"; then the owner's follow-ups
+  (0.50.61): "Built: the owner's follow-ups". Part C
+  — the wizards' castles, their duels and Arzakon — is next.

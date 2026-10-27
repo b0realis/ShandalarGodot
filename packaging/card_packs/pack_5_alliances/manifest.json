@@ -9,5 +9,5 @@
   "minimum_game_version": "0.21.0",
   "set_order": ["all"],
   "description": "Adds Alliances as an independently enabled expansion: 144 distinct cards across 199 published printings. Its banner medallion lives under Deck Builder Extras, leaving the original set strip unchanged.",
-  "rules_note": "No other numbered pack is required. The ZIP provides metadata and artwork, never executable scripts. SIMPLIFIED: Fatal Lore, Library of Lat-Nam and Misfortune choose their opponent-controlled mode on resolution; Fatal Lore also selects its creatures then. Bounty of the Hunt and Thawing Glaciers perform their cleanup actions without a response window. See Help and docs/simplified-cards.md."
+  "rules_note": "No other numbered pack is required. The ZIP provides metadata and artwork, never executable scripts. SIMPLIFIED: Fatal Lore, Library of Lat-Nam and Misfortune choose their opponent-controlled mode on resolution; Fatal Lore also selects its creatures then. See Help and docs/simplified-cards.md."
 }

@@ -174,7 +174,11 @@ class SereneOffering extends DestroyEffect:
 
 ## Winds of Rath: "creatures that aren't enchanted" — no Aura on the
 ## battlefield attached to it (MtgGame.is_enchanted), judged once, before
-## anything is destroyed; all of them in one event, no regeneration.
+## anything is destroyed; all of them in one event, no regeneration. ONE
+## departure (the bug campaign c12, h3-3): each victim leaves as the board
+## stood before any of them did, as Wrath of God's — a bracket alone let
+## the board recalculate after every victim, so a Mons's Goblin Raiders
+## destroyed after its Goblin King went to the graveyard as a 1/1.
 class WindsOfRath extends DestroyAllEffect:
 	func _init() -> void:
 		super("all creatures that aren't enchanted", P.bare_creature, false)
@@ -183,10 +187,7 @@ class WindsOfRath extends DestroyAllEffect:
 		for i in g.all_battlefield():
 			if i.is_creature() and g.is_present(i) and not g.is_enchanted(i):
 				victims.append(i)
-		g.begin_simultaneous()
-		for i in victims:
-			g.destroy(i, false)
-		g.end_simultaneous()
+		g.depart_together(victims, func(i: CardInstance) -> void: g.destroy(i, false))
 
 
 # ============================================================= blue classes

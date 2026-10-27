@@ -458,7 +458,10 @@ All three ruled on 2026-10-21 and carried out in 0.50.45.
   damage waits until after the card has gone home, so Reflect Damage used in
   that window still names the owner (Fifth Edition rules, a human seat and
   Grinning Totem together). Fixing it means changing how waiting damage
-  remembers its source.
+  remembers its source. *(2026-10-27: lifted by the bug campaign c12, h3-6
+  — the packet records its source's controller,
+  `MtgGame.packet_source_controller`; Reflect Damage, Eye for an Eye and the
+  Visions rider read it.)*
 - **engine-4:** each side-effect mana tap inside a search now records about
   170 journal rows (roughly 20 µs); not measured in a deck run.
 - **ai-1:** `AiPlayer._ranking_gates_refuse` repeats the gate list of
@@ -550,7 +553,9 @@ The screens:
   box's "cancel" event; a browser that never sends it leaves the button
   dead for the session.
 
-LAN, saves and tools:
+LAN, saves and tools *(2026-10-27: the read fence, the open host, the
+mounted zip, Open Folder on Android and the browser's file boxes are fixed
+by the bug campaign c12)*:
 - The MCP server's `read_deck` / `find_deck` read any path, absolute or
   `../`, where the write tools are fenced inside the deck folders.
 - An open LAN host: any peer on the network can read the advertised code

@@ -163,6 +163,15 @@ var _armed := false
 # Last populate() arguments, replayed when an arrow pages a shelf.
 var _game: MtgGame = null
 var _human := 0
+## The seat that may read a card exiled face down only to it ([method
+## _may_look]): [member _human], or -1 — nobody — at a private hotseat
+## before its player presses Show hand (the bug campaign c12, h4-6).
+var _looker := 0
+## The duel screen's own answer to [method _may_look], when it gives one
+## ([method DuelScreen._may_show_face]: at an open two-human table either
+## human seat's look shows) — so the shelf, the Showcase and the tooltip
+## answer alike. Unset (the MPN player), the looker rule below decides.
+var face_shown := Callable()
 ## When the DuelScreen last opened the view ([method opened]).
 var _opened_ms := -1000000
 var _legal := Callable()
@@ -279,11 +288,14 @@ func reset_paging() -> void:
 ## targeting and decides whether that card can be picked; pass an invalid
 ## Callable outside targeting, when every card is merely viewable.
 ## [param human] is the seat sitting at this screen — the one whose piles
-## say "Your".
+## say "Your". [param looker] is the seat that may read a card exiled face
+## down only to it, when that is not [param human] (-1: nobody — a private
+## hotseat before Show hand; the bug campaign c12, h4-6).
 func populate(game: MtgGame, human: int, legal := Callable(),
-		playable := Callable()) -> void:
+		playable := Callable(), looker := SAME_AS_HUMAN) -> void:
 	_game = game
 	_human = human
+	_looker = human if looker == SAME_AS_HUMAN else looker
 	_legal = legal
 	_playable = playable
 	_shelves.clear()
@@ -326,9 +338,22 @@ static func section_title(game: MtgGame, pid: int, human: int, zone: int,
 ## the shelf's card back and the enlarged card in the sidebar have to
 ## answer it the same way, which is why it is one method rather than two
 ## copies of the same expression.
+##
+## A VIEW WHERE NOBODY LOOKS (-1 — the MPN player's neutral observer, a
+## private hotseat before Show hand) reads no face-down card: -1 is also the
+## card's own "nobody may look", and the two used to match, so a Knowledge
+## Vault card was drawn face up for exactly the seat that may not see it
+## (the bug campaign c12, h4-6).
 func _may_look(inst: CardInstance) -> bool:
+	if face_shown.is_valid():
+		return bool(face_shown.call(inst))
 	return not inst.face_down \
-		or (inst.zone == Mtg.Zone.EXILE and inst.exile_visible_to == _human)
+		or (_looker >= 0 and inst.zone == Mtg.Zone.EXILE
+			and inst.exile_visible_to == _looker)
+
+
+## [method populate]'s `looker` when the seat served is the seat looking.
+const SAME_AS_HUMAN := -2
 
 
 static func _pile(game: MtgGame, pid: int, zone: int) -> Array[CardInstance]:
@@ -610,7 +635,7 @@ func step(zone: int, pid: int, delta: int) -> void:
 	var last_start: int = maxi(0, pile.size() - page)
 	_starts[_key(zone, pid)] = clampi(
 		page_start(zone, pid) + delta * page, 0, last_start)
-	populate(_game, _human, _legal, _playable)
+	populate(_game, _human, _legal, _playable, _looker)
 
 
 ## Index of the first card on screen for a shelf.

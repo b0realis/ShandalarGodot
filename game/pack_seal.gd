@@ -191,9 +191,7 @@ static func refusal(seal: String) -> String:
 
 
 static func _refused() -> Dictionary:
-	if not FileAccess.file_exists(FILE):
-		return {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(FILE))
+	var parsed: Variant = _parsed()
 	if not (parsed is Dictionary) or not (parsed.get("refused", null) is Dictionary):
 		return {}
 	var out := {}
@@ -218,9 +216,7 @@ static func clear() -> void:
 
 
 static func _seals() -> Array:
-	if not FileAccess.file_exists(FILE):
-		return []
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(FILE))
+	var parsed: Variant = _parsed()
 	if not (parsed is Dictionary) or not (parsed.get("seals", null) is Array):
 		return []
 	var out: Array = []
@@ -228,6 +224,34 @@ static func _seals() -> Array:
 		if value is String:
 			out.append(value)
 	return out
+
+
+## THE LIST READ ONCE, QUIETLY (the bug campaign c12, h6-9). Every
+## [method sealed], [method refusal], [method seal] and [method refuse]
+## parsed the file again through `JSON.parse_string`, which prints an
+## engine ERROR for text that is not JSON: a damaged `pack_seals.json`
+## printed 56 of them at one start (each pack is asked about several
+## times while it is found). Now the file's bytes are kept with what they
+## parsed to and parsed again only when they change, by a JSON instance,
+## which says nothing. A damaged list still reads as no seals, as before,
+## and the next [method _write] heals it.
+static var _read_known := false
+static var _read_bytes := PackedByteArray()
+static var _read_data: Variant = null
+
+
+## What [constant FILE] holds, parsed: null where it is not there or not JSON.
+static func _parsed() -> Variant:
+	if not FileAccess.file_exists(FILE):
+		return null
+	var bytes := FileAccess.get_file_as_bytes(FILE)
+	if _read_known and bytes == _read_bytes:
+		return _read_data
+	var json := JSON.new()
+	_read_data = json.data if json.parse(bytes.get_string_from_utf8()) == OK else null
+	_read_bytes = bytes
+	_read_known = true
+	return _read_data
 
 
 ## The manifest's word for the artwork digest, or "" where it has none.

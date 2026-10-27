@@ -30,7 +30,8 @@ extends RefCounted
 ## nothing.
 
 ## Which forks actually DO something today. The Options screen reads this
-## to disable the rest; docs/duel-todo.md §6.20 tracks the remainder.
+## to disable the rest. Every fork in [constant FORKS] is in it (2026-10-27);
+## a new fork joins once its flag is built, greyed out until then.
 const IMPLEMENTED := ["mana_burn", "attackers_revocable",
 	"tapped_artifacts_stop", "life_checked_at_phase_end",
 	"pool_empties_on_attack", "free_damage_assignment",

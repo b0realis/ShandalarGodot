@@ -117,7 +117,7 @@ class OtherEnchantments extends DestroyAllEffect:
 		for inst in game.all_battlefield():
 			if inst != source and inst.is_type(Mtg.CardType.ENCHANTMENT):
 				victims.append(inst)
-		game.begin_simultaneous()
-		for inst in victims:
-			game.destroy(inst, can_regenerate)
-		game.end_simultaneous()
+		# One departure, as Wrath of God's (the bug campaign c12, h3-3).
+		var regenerate := can_regenerate
+		game.depart_together(victims, func(inst: CardInstance) -> void:
+			game.destroy(inst, regenerate))

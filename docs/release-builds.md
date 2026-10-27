@@ -12,7 +12,9 @@ archives. No Play Store upload is part of this workflow.
 ## Existing targets
 
 Release packaging does not change the duel layout or rules. Godot 4.7.2
-can cross-export the eight local test targets (Android Quest the eighth); verify the official template archive's
+can cross-export the eight local test targets (Android Quest the eighth;
+2026-10-27: ten presets now in `export_presets.cfg.example`, Android
+Experimental among them); verify the official template archive's
 checksum and extract only the needed templates. Set local custom-template
 paths in the ignored `export_presets.cfg`, using the example as a guide.
 Separate Mac presets target Apple Silicon and Intel (the universal preset
@@ -129,7 +131,12 @@ only with the rest of the release, on the owner's word.
 The seven-target local matrix consists of fourteen game ZIPs, the same
 `original_skin.zip` as a separate download, and `SHA256SUMS` covering those
 fifteen assets. Each handheld target below adds two more game ZIPs (plain
-and skin). Keep a local verification report separate from the game
+and skin). (2026-10-27: v0.50.34, the latest release, carried 29 assets —
+26 game ZIPs for 13 packaged targets (Windows, Linux, three macOS,
+Raspberry Pi 5, Web, Web Threaded, the offline Web package, Steam Deck,
+ArkOS, Meta Quest and Android, each plain and with the skin), the two skin ZIPs
+(`original_skin.zip` and the hi-res `original_skin_realesrgan-anime_2x.zip`)
+and `SHA256SUMS`.) Keep a local verification report separate from the game
 archives, describing native versus cross-export checks. The web game fetches
 the bundled skin ZIP from its server on first load; manual import also works.
 The Pi launcher selects OpenGL ES 3 and caps rendering at 60 FPS; this is not

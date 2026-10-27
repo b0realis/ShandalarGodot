@@ -9,10 +9,22 @@ extends SceneTree
 ##                 sections (.vNone/.vBlack/...)
 ##
 ## Reading ignores .dck numeric ids (names are authoritative). Writing
-## .dck re-emits AUTHENTIC ids from cards/data/dck_ids.txt (369 ids
+## .dck re-emits AUTHENTIC ids from cards/data/dck_ids.txt (370 ids
 ## harvested from an original game copy's deck files); cards without a
 ## known id get '.0' plus a warning — fine for interchange and editing,
-## and re-harvestable as the id table grows.
+## and re-harvestable as the id table grows. The 1997 game itself reads
+## ONLY the id, and id 0 is Air Elemental, so it loads such a card as one
+## (the warning also names Air Elemental, whose real id is 0); the Deck
+## Builder's export leaves such cards out instead
+## ([method DeckModel.to_dck_text], the bug campaign c12).
+##
+## THE SHAPE WRITTEN is the game's numbered OPPONENT decks' (its Decks
+## folder): the bare name, a blank line, the cards — WITHOUT the eight
+## ';' header lines the 1997 deck builder writes for a player's deck (its
+## Playdeck folder). The 1997 deck builder refuses a file without them
+## and its Load list does not show one, so a deck converted here is not
+## one to load there: the Deck Builder's Export deck → MicroProse 1997
+## (.dck) writes that header (the bug campaign c12, h5-2).
 ##
 ## Conversion is LENIENT: historic decks full of cards this engine hasn't
 ## implemented yet convert fine (only the Deck Lab / gameplay demand

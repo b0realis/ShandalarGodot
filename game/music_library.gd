@@ -352,6 +352,7 @@ static func name_of(id: String) -> String:
 static func refresh() -> void:
 	_cache = []
 	_forget_kept()
+	_unreadable.clear()
 
 
 ## One tune, loaded. Null for an id that is not there, a file that has
@@ -378,13 +379,30 @@ static func stream(id: String) -> AudioStream:
 		var kept := _take_kept(path, stamp)
 		if kept != null:
 			return kept
+		# A file that would not read at this modified time is not asked of
+		# the engine again (h6-9; see [member _unreadable]).
+		if _unreadable.has(path) and int(_unreadable[path]) == stamp:
+			return null
 		var read := _read(path)
-		if read != null and stamp >= 0:
+		if read == null:
+			_unreadable[path] = stamp
+		elif stamp >= 0:
+			_unreadable.erase(path)
 			_kept.append([path, stamp, read])
 			while _kept.size() > KEPT_TUNES:
 				_kept.pop_front()
 		return read
 	return null
+
+
+## A TUNE THAT WOULD NOT READ IS NOT READ AGAIN (the bug campaign c12,
+## h6-9): the paths [method stream] could not read, with the file's
+## modified time then. A broken tune of the player's own printed the
+## engine's decoding ERRORs every time a playlist came round to it; now
+## it is silence, quietly, while the file is unchanged, read afresh once
+## it is rewritten, or after [method refresh] (which is also how a skin
+## that arrives with a good tune at the same path is heard).
+static var _unreadable: Dictionary = {}
 
 
 ## How many tunes [method stream] keeps: the three an adventure's F1 goes

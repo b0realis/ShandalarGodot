@@ -203,12 +203,34 @@ func _save() -> void:
 	var names := selected_cards.keys()
 	# Editing the visible pool must not erase choices temporarily hidden by
 	# a missing/disabled pack. Only retain known pack identities, not junk.
+	var carried := 0
 	var saved: Variant = Settings.get_value(DraftPoolConfig.SETTING, [])
 	if saved is Array or saved is PackedStringArray:
 		for card_name in saved:
 			if card_name is String and not rows.has(card_name) and not names.has(card_name) \
 					and not CardPacks.packs_required_by([card_name]).is_empty():
 				names.append(card_name)
+				carried += 1
+	# EVERY CARD CHECKED IS "EVERYTHING", NOT TODAY'S LIST (the bug campaign
+	# c12, h5-1). Written out, it fixed the pool for good: a pack switched
+	# on later dealt nothing, silently — `All`, `Save pool` with Pack 9 off
+	# left Mogg Fanatic out once Pack 9 came back. A pool with every card
+	# checked and no hidden choice carried over is saved as no setting at
+	# all, which is what an unsaved pool is ([method DraftPoolConfig.selected]:
+	# every card in play). A carried-over choice is a pack the player did
+	# narrow; that pool is kept as its list.
+	var everything := carried == 0 and not rows.is_empty()
+	for card_name in rows:
+		if not selected_cards.has(card_name):
+			everything = false
+			break
+	if everything:
+		Settings.clear_value(DraftPoolConfig.SETTING)
+		if Settings.is_dirty():
+			summary.text = "The pool could not be saved. Check the player settings folder and try again."
+			return
+		dismiss()
+		return
 	names.sort()
 	Settings.set_value(DraftPoolConfig.SETTING, names)
 	if Settings.is_dirty():

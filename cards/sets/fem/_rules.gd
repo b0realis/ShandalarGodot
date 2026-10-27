@@ -1016,11 +1016,11 @@ static func _raid(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: in
 				options.erase(land)
 				plains.erase(land)
 				saved.append(land.id)
-	g.begin_simultaneous()
+	var doomed: Array[CardInstance] = []
 	for land in plains:
-		if not saved.has(land.id):
-			g.destroy(land)
-	g.end_simultaneous()
+		if not saved.has(land.id): doomed.append(land)
+	# One departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(land: CardInstance) -> void: g.destroy(land))
 
 class SoulReturn extends ReturnFromGraveyardEffect:
 	func _init() -> void:

@@ -7,7 +7,7 @@
   "name": "The Tempest Block",
   "number": 9,
   "pack_format": 1,
-  "rules_note": "Original Tempest, Stronghold and Exodus artwork with current Oracle rules. The 42 cards the game already has keep their existing scripts; the 27 of them that live only in Ice Age, Portal, Portal Second Age or Mirage are provided by this pack too when that pack is off.",
+  "rules_note": "Original Tempest, Stronghold and Exodus artwork with current Oracle rules. The 47 cards the game already has (the five basic lands among them) keep their existing scripts; the 27 of them that live only in Ice Age, Portal, Portal Second Age or Mirage are provided by this pack too when that pack is off.",
   "set_order": [
     "tmp",
     "sth",

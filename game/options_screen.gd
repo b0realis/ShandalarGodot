@@ -848,14 +848,7 @@ func _show_card_back_problem(text: String) -> void:
 func _choose_card_back() -> void:
 	_show_card_back_problem("")
 	if OS.has_feature("web"):
-		if _card_back_poll != null:
-			return
-		CardBack.web_open()
-		_card_back_poll = Timer.new()
-		_card_back_poll.wait_time = 0.1
-		_card_back_poll.timeout.connect(_poll_card_back)
-		add_child(_card_back_poll)
-		_card_back_poll.start()
+		_choose_card_back_on_page()
 		return
 	var box := FileDialog.new()
 	box.name = "CardBackChooser"
@@ -877,6 +870,27 @@ func _choose_card_back() -> void:
 	box.canceled.connect(box.queue_free)
 	add_child(box)
 	box.popup_centered()
+
+
+## The browser's box, opened — or opened again (the bug campaign c12,
+## h6-5). A press while the page holds a chosen picture the next look
+## takes is not a new pick. A press while the box is still waiting opens
+## it afresh, the same watch going on: until then it was ignored, and a
+## box that never answers (a browser that fires no `cancel`, or one that
+## never opened it because it did not count the press as the player's —
+## a pad's A) left `Choose...` dead until Options was closed and opened
+## again, with no word.
+func _choose_card_back_on_page() -> void:
+	if _card_back_poll != null and CardBack.web_state() == "ready":
+		return
+	CardBack.web_open()
+	if _card_back_poll != null:
+		return
+	_card_back_poll = Timer.new()
+	_card_back_poll.wait_time = 0.1
+	_card_back_poll.timeout.connect(_poll_card_back)
+	add_child(_card_back_poll)
+	_card_back_poll.start()
 
 
 func _poll_card_back() -> void:

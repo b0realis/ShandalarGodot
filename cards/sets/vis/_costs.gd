@@ -165,9 +165,8 @@ static func _corrode(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		if i.is_type(Mtg.CardType.ARTIFACT) and _mana_value(i) <= int(i.counters.get("rust", 0)):
 			doomed.append(i)
 	if doomed.is_empty(): return
-	g.begin_simultaneous()
-	for i in doomed: g.destroy(i, false)
-	g.end_simultaneous()
+	# One departure (the bug campaign c12, h3-3).
+	g.depart_together(doomed, func(i: CardInstance) -> void: g.destroy(i, false))
 	g.log_line("%s corrodes %d artifact(s)" % [s.data.card_name, doomed.size()])
 
 static func _mana_value(i: CardInstance) -> int:

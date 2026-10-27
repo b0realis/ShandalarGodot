@@ -24,6 +24,13 @@ var _save_warning := ""
 var _old_auto_quit := true
 var _result: OriginalDialog
 var _return_button: Button
+## THE FOLDER A HEADSET CANNOT OPEN (the bug campaign c12, h6-6): on
+## Android the deck is saved in the app's private folder, which no file
+## manager there can open, and "Open save folder" did nothing. It is
+## disabled there and says why. A test stands in for the platform
+## through [member on_android].
+static var on_android := OS.has_feature("android")
+const OPEN_FOLDER_ANDROID := "This device has no file manager that can open the game's folders."
 
 
 class PackArt extends Control:
@@ -241,7 +248,11 @@ func _show_result() -> void:
 			_result.add_button("Download pool").pressed.connect(func() -> void:
 				JavaScriptBridge.download_buffer(JSON.stringify(store.receipt, "\t").to_utf8_buffer(), store.pool_path.get_file(), "application/json"))
 		else:
-			_result.add_button("Open save folder").pressed.connect(func() -> void: OS.shell_show_in_file_manager(store.deck_path))
+			var open := _result.add_button("Open save folder")
+			open.pressed.connect(func() -> void: OS.shell_show_in_file_manager(store.deck_path))
+			if on_android:
+				open.disabled = true
+				open.tooltip_text = OPEN_FOLDER_ANDROID
 		_return_button = _result.add_button("Back to draft setup")
 		_return_button.pressed.connect(return_to_setup)
 		_return_button.grab_focus()

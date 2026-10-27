@@ -447,7 +447,9 @@ and count in `tests/unit/test_decks_1997.gd` (`PROXY_FREE`, `PROXIED`):
 implement one of these cards and the test fails, which is the moment to
 strike it here and there, and to move any deck that just became
 proxy-free into the proxy-free list. The Old School lists proxy mostly
-one name, Chaos Orb, which the pool does not hold.
+one name, Chaos Orb, which the pool does not hold. (2026-10-27: the
+default pool still does not; optional Pack 1 holds it as a marked digital
+adaptation, `cards/optional/pack_1/chaos_orb.gd`.)
 
 ### Tournament decks: 198 distinct names, 749 deck-mentions, 71 of 76 decks affected
 
@@ -762,7 +764,11 @@ Proxy-free (the gauntlet deals these): `os_workshop_aggro_menendian.deck`.
   216: the five starters, the 157 MicroProse decks and the 54 proxy-free
   non-MicroProse decks (five tournament, 48 community — the 39 Sargent
   decks among them — one extended). An explicit roster is taken as
-  given. The Gauntlet Options `Your deck` picker is grouped like the
+  given. (2026-10-27: 216 was counted before `decks/portal`,
+  `decks/portal_second_age` and `decks/variants` (18 decks) were added;
+  `DeckStore.shipped_subfolder_paths` walks every subfolder, so they are
+  offered to the roster too, under the same strict-load test. Not
+  recounted here.) The Gauntlet Options `Your deck` picker is grouped like the
   setup screen's.
 - **Deck Builder** `Load Deck` list: a heading row per group. And, since
   2026-09-04, **the ported decks cannot be written over or shadowed**:

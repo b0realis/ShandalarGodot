@@ -1,6 +1,7 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.37**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.37** (2026-10-27: now 0.50.61,
+protocol 30). A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -10,7 +11,9 @@ with 2–40 entrants, a separate or participating organiser, first to 1/2/3 wins
 fixed/approved/own deck policies, a live Master Panel, an advancement diagram
 and final standings. [Computer opponents](sgmanalink-computer-players.md) can fill
 duel rooms and a chosen number of tournament seats. Protocol **29** (the whole-game
-campaign of 2026-10-07, 0.50.16; 28 was 0.50.15, Pack 9) and the
+campaign of 2026-10-07, 0.50.16; 28 was 0.50.15, Pack 9; 2026-10-27: now
+**30**, since 2026-10-21 — the public MPN game record a finished seat may
+download, `game/sgmanalink/protocol.gd`) and the
 current rules fingerprint require matching updated builds and enabled card
 catalogues on every computer; old LAN development builds cannot join.
 Internet play and MElo are parked.
@@ -27,7 +30,8 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.37 development builds** and enabled packs on both computers. The older
+Use matching **0.50.37 development builds** (2026-10-27: matching builds of
+the same version, protocol 30) and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -258,7 +262,10 @@ representative mechanic tests are not an exhaustive online playtest of every car
 The LAN implementation uses native Godot networking APIs for Windows,
 Linux and macOS. Its temporary TLS trust certificate cannot be installed
 into a browser through Godot, and browsers cannot send LAN UDP broadcasts
-or start this TCP listener. **This LAN milestone is desktop-only.** Web
+or start this TCP listener. **This LAN milestone is desktop-only.**
+(2026-10-27: no longer — the Meta Quest and Android builds declare the
+network permissions (`packaging/android/export-preset.cfg`) and keep the
+lobby's LAN controls; only the web build disables them, `lobby.gd`.) Web
 offline play remains unchanged; future web multiplayer needs a separately
 reviewed transport, such as WebRTC with signaling and relay support.
 
@@ -314,9 +321,14 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   leaving a running match. Host shutdown loses all room/session state;
   there is no durable live-duel journal. Tournament pairings and completed game
   scores have private checkpoints; interrupted games restart, not resume.
-- Limits: eighty-eight connections and eighty-eight guest sessions (forty
-  entrants, the organiser, and every one of them reconnecting while their old
-  socket is still closing), twenty rooms per host;
+- Limits: eighty-eight guest sessions (forty entrants, the organiser, and
+  every one of them reconnecting while their old socket is still closing),
+  with eight spare connections (96) so a player who finds the host full is
+  told "Host is full" at the hello; on a LAN host one computer holds at most
+  four seats (a live connection, a table or a tournament seat) and registers
+  at most four entrants per event, the host's own machine and 127.0.0.1 not
+  counted; when the sessions are full, a lobby guest idle for 30 seconds
+  gives way (the bug campaign c12, 2026-10-27); twenty rooms per host;
   bounded JSON nesting, arrays, bytes, command queues and acknowledgements;
   32 KiB commands, 2 MiB views and a 512-card limit per transmitted collection
   (legal-block adjacency is bounded separately by rows and columns);

@@ -57,7 +57,13 @@ static func parse(text: String) -> Dictionary:
 			headers[key] = json.data
 			continue
 		var parts := line.split(" ", false, 2)
-		if parts.size() != 3 or not parts[0].is_valid_int() or int(parts[0]) != records.size() + 1:
+		# The digits are counted BEFORE int() (the bug campaign c12, h5-3):
+		# a 20-digit serial made the engine print "Cannot represent … as a
+		# 64-bit signed integer" before the file was refused. No serial
+		# needs more digits than the last one a record may hold.
+		if parts.size() != 3 or not parts[0].is_valid_int() \
+				or _digits(parts[0]) > str(MAX_RECORDS + 1).length() \
+				or int(parts[0]) != records.size() + 1:
 			return _error("Broken event sequence at line %d." % number)
 		if parts[1] not in KINDS: return _error("Unsupported event: " + parts[1])
 		var json := JSON.new()
@@ -165,8 +171,14 @@ static func valid_patch(data: Dictionary) -> bool:
 static func _integer(value: Variant, low: int, high: int) -> bool:
 	return (value is int or value is float) and is_finite(value) and float(value) == floor(float(value)) and value >= low and value <= high
 
+## A handle's number has at most 18 digits — any more and int() prints an
+## engine ERROR on the way to refusing it (the bug campaign c12, h5-3).
 static func _id(value: Variant, prefix: String) -> bool:
-	return value is String and value.begins_with(prefix) and value.substr(1).is_valid_int() and int(value.substr(1)) > 0 and value.substr(1) == str(int(value.substr(1)))
+	return value is String and value.begins_with(prefix) and value.substr(1).is_valid_int() and _digits(value.substr(1)) <= 18 and int(value.substr(1)) > 0 and value.substr(1) == str(int(value.substr(1)))
+
+## The significant digits of an integer token is_valid_int() passed.
+static func _digits(token: String) -> int:
+	return token.trim_prefix("+").trim_prefix("-").lstrip("0").length()
 
 static func apply_patch(state: Dictionary, patch: Dictionary) -> Dictionary:
 	var out := state.duplicate(true)

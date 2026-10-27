@@ -69,7 +69,10 @@ Further optional packs
 add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age,
 Fifth Edition, the Mirage block** (Mirage, Visions, Weatherlight) **and the Tempest
 block** (Tempest, Stronghold, Exodus), with engine and AI support.
-Adventure and public Internet matchmaking remain future work.
+The **Shandalar adventure** is in development: its world, towns, quests,
+lairs, roaming creatures and sieges can already be played from the source,
+and the castles, the dungeons and the final battle come next. Public Internet
+matchmaking remains future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
 Every platform package includes the Python builders and
@@ -135,10 +138,12 @@ quality-of-life changes and rules simplifications are explicit. The
 keep those choices open to inspection.
 
 **Strong play. Fair information.** Apprentice, Magician, Sorcerer and Wizard
-are **non-cheating** opponents. They study their own deck, plan spells and
-mana, and analyse combat without reading your hidden hand, secret library
-order or future draws. Stronger difficulty means stronger analysis, never
-free resources or special rules. See the [fair-play contract](docs/fair-play.md).
+are **non-cheating** opponents: none of them reads your hidden hand, secret
+library order or future draws. Each level plays more carefully than the one
+below it, and Sorcerer and Wizard also study their own deck, plan their
+spells and mana, and search combat ahead. Stronger difficulty means stronger
+analysis, never free resources or special rules. See the
+[fair-play contract](docs/fair-play.md).
 
 ## Art and skins
 
@@ -273,7 +278,9 @@ On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 
 ## Post-0.50 roadmap
 
-1. [ ] **Adventure** — the Shandalar world, quests and campaign.
+1. [ ] **Adventure** — the Shandalar world, quests and campaign: in
+   development (the world, towns, quests, lairs, creatures and sieges are
+   built; the castles, the dungeons and the end are next).
 2. [ ] **Commander** — dedicated rules and deck-building support.
 3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
 4. [x] **Card packs** — nine optional, toggleable packs beside the core pool:

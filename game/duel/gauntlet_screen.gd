@@ -230,11 +230,40 @@ func _show_options() -> void:
 		_create_deck)
 	dialog.z_index = WINDOW_Z
 	_window = dialog
+	_options_window = dialog
 	add_child(dialog)
 	# `Run the gauntlet` holds the keyboard and the D-pad from the start
 	# (2026-09-27, the Steam Deck release), as the shell's first button
 	# does.
 	dialog.focus_first_button()
+
+
+# --- the bug campaign c12, h4-9: Escape is Exit on Gauntlet Options ---
+## Gauntlet Options while it is up, so Escape can find its `Exit`.
+var _options_window: OriginalDialog = null
+
+
+## ESCAPE IS `Exit` ON GAUNTLET OPTIONS (the bug campaign c12, h4-9):
+## Escape, a pad's B, the Quest's back gesture and the R36's Start all
+## arrive as `ui_cancel`, and every other room of the shell answers it as
+## its way back (`options_screen.gd`). This one let it
+## fall through. It presses the window's own `Exit`, so it does exactly
+## what that button does. The other windows here keep their buttons: the
+## round window's way out ends the run, and a key the player may press to
+## leave a window must not end a run unasked. A deck list open on the
+## window takes Escape itself first, as a popup does.
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("ui_cancel", false, true):
+		return
+	if not is_instance_valid(_options_window) \
+			or _options_window.is_queued_for_deletion():
+		return
+	for button in _options_window.find_children("*", "Button", true, false):
+		if (button as Button).text == GauntletOptions.EXIT:
+			get_viewport().set_input_as_handled()
+			(button as Button).pressed.emit()
+			return
+# --- end the bug campaign c12, h4-9 ---
 
 
 ## `&Create Deck...` — `@DIALOG_GAUNTLETSTARTUP` entry 13
@@ -372,6 +401,7 @@ func _refuse_your_deck(message: String) -> void:
 			_close_window()
 			_show_options())
 	add_child(dialog)
+	_hold_the_keyboard(dialog)
 
 
 # ------------------------------------------------------------ the rounds --
@@ -459,6 +489,7 @@ func _show_announcement(round_config: DuelConfig) -> void:
 			_close_window()
 			_play_match(round_config))
 	add_child(dialog)
+	_hold_the_keyboard(dialog)
 
 
 ## The round's own config: the run's, with the opponent's deck loaded into
@@ -589,6 +620,17 @@ func _show_round_window(lines: Array[String]) -> void:
 		GauntletOptions.fit(dialog.add_button(
 			GauntletState.QUIT)).pressed.connect(_quit_run)
 	add_child(dialog)
+	_hold_the_keyboard(dialog)
+
+
+## THE WINDOW HOLDS ITS ROW AND THE KEYBOARD (the bug campaign c12, h4-5):
+## grown to its buttons ([method MatchScreen.fit_to_buttons], the match
+## window's own rule), and its first button takes the focus, as Gauntlet
+## Options' does. The announcement and the round window opened with
+## nothing focused, so Enter and a pad's D-pad did nothing on them.
+func _hold_the_keyboard(dialog: OriginalDialog) -> void:
+	MatchScreen.fit_to_buttons(dialog)
+	dialog.focus_first_button()
 
 
 ## A dialog line, centred — the same treatment [MatchScreen] gives its

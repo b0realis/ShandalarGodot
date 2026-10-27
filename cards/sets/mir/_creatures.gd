@@ -86,8 +86,9 @@ static func configure(c: CardData) -> bool:
 		"Gravebane Zombie":
 			# A replacement (CR 614.1, engine package E7): destroy, sacrifice,
 			# lethal damage and 0 toughness all put it on top of its OWNER's
-			# library; it never dies (CR 700.4), so no dies trigger. Tokens
-			# are not cards and are not replaced.
+			# library; it never dies (CR 700.4), so no dies trigger. A token
+			# copy follows the same text: it moves, then ceases to exist (the
+			# bug campaign c12, h3-11).
 			c.with_dies_to_library_top()
 		"Mire Shade":
 			c.activated(_ab("{B}", false, SelfCounter.new("+1/+1"), "{B}, Sacrifice a Swamp: Put a +1/+1 counter on this creature. Activate only as a sorcery.")
@@ -435,9 +436,8 @@ class AuraPurge extends EffectBase:
 		for id in s.attachments:
 			var aura := g.find_instance(id)
 			if aura != null and aura.zone == Mtg.Zone.BATTLEFIELD and aura.is_aura(): victims.append(aura)
-		g.begin_simultaneous()
-		for aura in victims: g.destroy(aura)
-		g.end_simultaneous()
+		# One departure (the bug campaign c12, h3-3).
+		g.depart_together(victims, func(aura: CardInstance) -> void: g.destroy(aura))
 	func describe() -> String: return "destroy all Auras attached to Hakim"
 
 
