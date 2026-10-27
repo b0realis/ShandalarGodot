@@ -8,9 +8,14 @@ extends Control
 ## window (`Daysnew.spr`, the numeral `(deadline − now) / 16 + 1`). Nothing
 ## without a quest, or without the 1997 sheets.
 ##
-## Beside it, THE NEXT DUEL'S GIFTS (`Worlds.spr` 56–59): a card to start
-## with in play, the first move (the dagger), extra lives (the ankh), lives
-## carried over and lost (the skull).
+## Beside it, THE NEXT DUEL'S GIFTS (`Worlds.spr` 56–59), an icon for each
+## part of the next duel's line ([method WorldStatus.next_duel_line]), as
+## 1997 drew one per part (adventureWorldUi.c 1495–1548): the lives carried
+## from the last duel (the skull — 1997 drew it for any carried lives, more
+## or fewer), the gift's extra lives (the ankh), the first move (the
+## dagger), a card to start with in play. [Ours: side by side, where 1997
+## drew the three lives-and-move icons on one spot, the last over the
+## others.]
 
 const FRAME := Vector2(67, 88)
 const SHOWN := 0.7
@@ -43,18 +48,24 @@ func _draw() -> void:
 				Rect2(_art.frame_rect(String(layer[0]), int(layer[1])).position, FRAME))
 
 
-## THE NEXT DUEL'S GIFT ICONS for [param hero]: `[[frame, words]]` —
-## 56 a card in play, 57 the first move, 58 extra lives, 59 lives lost.
+## THE NEXT DUEL'S GIFT ICONS for [param hero]: `[[frame, words]]`, in the
+## line's order — 59 the lives carried (more or fewer), 58 the gift's extra
+## lives, 57 the first move, 56 a card in play.
 static func gifts(hero: AdventurePlayer) -> Array[Array]:
 	var out: Array[Array] = []
 	if hero == null:
 		return out
-	if hero.next_duel_card != "":
-		out.append([56, "Next duel: %s in play" % hero.next_duel_card])
+	var carried := hero.next_duel_life_carried
+	if carried > 0:
+		out.append([59, "Next duel: %d more lives, carried from the last" % carried])
+	elif carried < 0:
+		out.append([59, "Next duel: %d fewer lives, carried from the last" % -carried])
+	if hero.next_duel_life > 0:
+		out.append([58, "Next duel: %d more lives" % hero.next_duel_life])
+	elif hero.next_duel_life < 0:
+		out.append([58, "Next duel: %d fewer lives" % -hero.next_duel_life])
 	if hero.next_duel_first_move:
 		out.append([57, "Next duel: the first move"])
-	if hero.next_duel_lives() > 0:
-		out.append([58, "Next duel: %d more lives" % hero.next_duel_lives()])
-	elif hero.next_duel_lives() < 0:
-		out.append([59, "Next duel: %d fewer lives" % -hero.next_duel_lives()])
+	if hero.next_duel_card != "":
+		out.append([56, "Next duel: %s in play" % hero.next_duel_card])
 	return out

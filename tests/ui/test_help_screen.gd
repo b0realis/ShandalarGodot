@@ -928,3 +928,24 @@ func test_a_page_turn_leaves_only_the_new_pages_blocks() -> void:
 	for child in screen._body.get_children():
 		assert_false(child.is_queued_for_deletion(),
 			"no leftover from the page we just left")
+
+
+## The adventure's Help as a page per system (0.50.60): the Embark screen
+## first, then the world and each of its parts, with the world's last pieces
+## told — the keys, the wizards' window, the creature record, the castles'
+## attempts, the dungeons on the land, the transitions and the first deck.
+func test_the_adventure_has_a_page_per_system() -> void:
+	var titles: Array[String] = []
+	for page in HelpPages._adventure_pages():
+		titles.append(String(page["title"]))
+	assert_eq(titles, ["Shandalar — a new adventure", "The world, its panel and its keys",
+		"The map and the city list", "Your deck and your hero's record", "Towns, quests and trade",
+		"Casting the World Magics", "Lairs, creatures and sieges", "Castles and dungeons",
+		"Saved adventures"] as Array[String])
+	var text := HelpPages.all_text()
+	for words in ["Ready to Quit?", "F6", "All creatures", "your attempts there",
+			"even where you have not explored yet", "Transitions", "36, 40, 46 or 46 cards",
+			"answer to their first letter", "W turns it to the wizards"]:
+		assert_true(text.contains(words), words)
+	for entry in WorldHud.KEYS:
+		assert_true(text.contains("%s: %s" % [entry[0], entry[1]]), "the keys page lists " + String(entry[0]))

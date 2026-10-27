@@ -24,7 +24,10 @@ extends Control
 ##    the map's scroll (M) and the hero (F5, the journal and the stats) —
 ##    then ours: the frame's painted book for the options (save, load, the
 ##    panel to the top or the bottom, exit the game) and ? for the keys (H)
-##    — 1997 kept those in its menus and had no help on the map.
+##    — 1997 kept those in its menus and had no help on the map. A right
+##    click on the world opens the options at the pointer, as 1997's right
+##    button opened its "Will you ..." menu ([method toggle_options_at]);
+##    F6 opens the hero's pane on its Wizards tab ([method toggle_wizards]).
 ## The hero's name and difficulty stand under the panel (over it when the
 ## panel is at the bottom) in the hero's colour of magic. Rest the pointer
 ## on a part and its name and what it does float beside the panel. Without
@@ -99,29 +102,46 @@ const MAGIC_TIPS := {
 	"Sword of Resistance": "Risk one white amulet to reach a city under siege.",
 	"Ring of the Guardian": "The wizards now need 5 mana taps to cast Dominion.",
 }
-## The keys, for the help (?): what the line under the world once said.
+## The keys, for the help (?): what the line under the world once said —
+## the world's keys ([method WorldScreen._unhandled_input]), 1997's where
+## they were 1997's (adventure_input.c 304–503: F1–F6, L, Escape and Q,
+## Space; the stats screen's W, J and D), [QoL] where they are ours: a
+## click walks — the arrows look, where 1997's walked the hero — and the
+## wheel, N, H and the panes' drag are new. Save stays Ctrl+S (the owner's
+## ruling C-2: W A S D keep looking; 1997's S saved).
 const KEYS := [["Click", "walk there; the way is found"],
+	["Right click", "the options"],
 	["Drag or arrows", "look around (W A S D too)"],
 	["Wheel", "zoom (+ and - too)"],
-	["Space", "back to your hero"],
+	["Space", "back to your hero; stops the walk"],
 	["1 to 5", "cast a World Magic (or click its icon)"],
-	["M", "the map (M or Escape closes it)"],
+	["M or F2", "the map (M or Escape closes it)"],
 	["N", "the small map"],
 	["F1", "your deck"],
+	["F3", "the cities you have visited"],
 	["F4", "the dungeon and castle clues"],
 	["F5", "your hero's journal and stats"],
+	["F6", "the wizards"],
+	["W, J, D", "with your hero's pane open: the wizards, the journal; D closes it"],
 	["Ctrl+S", "save the adventure"],
+	["L", "load an adventure"],
 	["H", "these keys"],
 	["Drag a pane", "move it; it stays there"],
-	["Escape", "close what is open, or leave the world"]]
+	["Escape or Q", "close what is open, or ask to leave the world"]]
 ## The options' entries: name and words; the switches say how they stand
-## ([method _option_words]).
-const OPTIONS := [["Save", "Save"], ["Load", "Load"], ["Cities", "City list (F3)"], ["Bar", ""], ["Minimap", ""],
-	["Quest", ""], ["Guides", ""], ["Places", ""], ["Reader", ""], ["Big", ""], ["Pace", ""], ["Music", ""],
-	["Sound", ""],
+## ([method _option_words]). Save to Wizards are 1997's right-click menu's
+## ("Will you ...", `@STARTUP` 1).
+const OPTIONS := [["Save", "Save"], ["Load", "Load (L)"], ["Cities", "City list (F3)"],
+	["Wizards", "Wizards (F6)"], ["Bar", ""], ["Minimap", ""],
+	["Quest", ""], ["Guides", ""], ["Places", ""], ["Reader", ""], ["Big", ""], ["Pace", ""],
+	["Transitions", ""], ["Music", ""], ["Sound", ""],
 	["Menu", "Return to main menu"], ["Exit", "Exit game"]]
+## The hero pane's tab 1997's wizards' window became ([HeroStats]).
+const WIZARDS_TAB := "Wizards"
+const HERO_TAB := "Hero"
 ## The switches that leave the options open, so the new setting shows.
-const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Reader", "Pace", "Music", "Sound"]
+const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Reader", "Pace", "Transitions",
+	"Music", "Sound"]
 ## BIG BUTTONS, for a finger (the owner, 2026-10-23: *"touch-pad support?
 ## Maybe we can have bigger buttons on the pane with left and right arrows
 ## at the distal ends for touch"*) [QoL]: the panel and its options made
@@ -410,6 +430,8 @@ func _ready() -> void:
 	_hero_panel = _panel("HeroPanel")
 	hero_stats = HeroStats.new()
 	hero_stats.journal_map_pressed.connect(func() -> void: journal_map_pressed.emit())
+	# D or Space while the pane shows: done (1997's stats screen's Done).
+	hero_stats.done_pressed.connect(func() -> void: close_panels())
 	_hero_panel.add_child(hero_stats)
 	_help_panel = _panel("HelpPanel")
 	_help_panel.add_child(_keys_grid())
@@ -894,14 +916,45 @@ func rest(on: bool) -> void:
 		_drag = {}
 
 
-## THE HERO (the frame's faces, F5): the journal and the stats, floating
-## beside the panel; again to close it. Not while the panel rests.
+## THE HERO (the frame's faces, F5): the hero's pane on its Hero tab, the
+## stats, floating beside the panel (1997's F5, `RunAdventureStatsMenu`);
+## on another tab it turns to the Hero tab, on the Hero tab it closes. Not
+## while the panel rests.
 func toggle_hero() -> void:
 	if resting:
 		return
+	if hero_shown() and hero_stats.tab == HERO_TAB:
+		close_panels()
+		return
+	_show_hero_tab(HERO_TAB)
+
+
+## THE WIZARDS (F6, the options' "Wizards (F6)"): the hero's pane on its
+## Wizards tab — 1997's wizards' window (`ShowStatsWindow(0, −1)`, the
+## Statwin window, adventure_input.c 373–396), nobody ringed, heard once as
+## it opens ([method HeroStats.show_wizards] plays `Statscrn.wav`); on
+## another tab it turns to the Wizards, on the Wizards tab it closes. Not
+## while the panel rests.
+func toggle_wizards() -> void:
+	if resting:
+		return
+	if hero_shown() and hero_stats.tab == WIZARDS_TAB:
+		close_panels()
+		return
+	_show_hero_tab(WIZARDS_TAB)
+
+
+## The hero's pane open on [param tab] ([method HeroStats.show_tab], the
+## Wizards through [method HeroStats.show_wizards]), or turned to it when it
+## is open.
+func _show_hero_tab(tab: String) -> void:
 	hero_stats.player = player
-	hero_stats.refresh()
-	_open(_hero_panel, not _hero_panel.visible, buttons["Hero"])
+	if tab == WIZARDS_TAB:
+		hero_stats.show_wizards()
+	else:
+		hero_stats.show_tab(tab)
+	if not hero_shown():
+		_open(_hero_panel, true, buttons["Hero"])
 
 
 func hero_shown() -> bool:
@@ -926,6 +979,23 @@ func toggle_options() -> void:
 	if resting:
 		return
 	_open(_options_menu, not _options_menu.visible, buttons["Options"])
+
+
+## THE OPTIONS AT THE POINTER (a right click on the world, 1997's "Will
+## you ..." menu): opened with its corner at [param at], kept whole on the
+## screen — not remembered there; again to close it. Not while the panel
+## rests.
+func toggle_options_at(at: Vector2) -> void:
+	if resting:
+		return
+	if options_shown():
+		close_options()
+		return
+	close_panels()
+	_options_menu.visible = true
+	_options_menu.reset_size()
+	var room := size - _options_menu.size - Vector2(4, 4)
+	_options_menu.position = at.clamp(Vector2(4, 4), Vector2(maxf(4.0, room.x), maxf(4.0, room.y)))
 
 
 func options_shown() -> bool:
@@ -1072,6 +1142,25 @@ func _open(panel: PanelContainer, shown: bool, beside: Control) -> void:
 		panel.reset_size()
 		if not _place_remembered(panel):
 			_float(panel, _rect_of(beside).end.x - panel.size.x, 6.0)
+		_refit(panel, beside)
+
+
+## [param panel], opened beside [param beside], fitted again once its page
+## is laid out: a page built while the pane was closed — the hero's pane
+## opened straight on its Wizards tab (F6) — measures its wrapping lines
+## before they have their width, and the pane came out the screen's
+## height, over the panel.
+func _refit(panel: PanelContainer, beside: Control) -> void:
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	if not is_instance_valid(panel) or not panel.visible or _drag.get("pane") == panel:
+		return
+	panel.reset_size()
+	if not _place_remembered(panel):
+		_float(panel, _rect_of(beside).end.x - panel.size.x, 6.0)
+	else:
+		place_pane(panel, panel.position)
 
 
 ## [param part] floating beside the panel — under it, or over it when the
@@ -1187,6 +1276,8 @@ func _choose(entry_name: String) -> void:
 			load_pressed.emit()
 		"Cities":
 			city_list_pressed.emit()
+		"Wizards":
+			toggle_wizards()
 		"Bar":
 			place_bar(not bar_at_bottom)
 		"Minimap":
@@ -1205,6 +1296,9 @@ func _choose(entry_name: String) -> void:
 			big_switched.emit()
 		"Pace":
 			Settings.set_value(PACE_SETTING, (pace_index() + 1) % PACES.size())
+		"Transitions":
+			# The Options screen's switch too ([TileReveal]).
+			Settings.set_value(TileReveal.SETTING, not Settings.transitions())
 		"Music":
 			Settings.set_value("music_enabled", not Settings.music_enabled())
 			var music := get_node_or_null(^"/root/ShellMusic")
@@ -1239,6 +1333,8 @@ func _option_words(entry_name: String) -> String:
 			return "Big buttons: " + ("on" if big else "off")
 		"Pace":
 			return "Pace: " + String(PACES[pace_index()][1])
+		"Transitions":
+			return "Transitions: " + ("on" if Settings.transitions() else "off")
 		"Music":
 			return "Music: " + ("on" if Settings.music_enabled() else "off")
 		"Sound":

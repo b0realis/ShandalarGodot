@@ -22,7 +22,9 @@ extends Control
 ##  - the hero's square blinking (a small node of its own, so the blink
 ##    never paints the whole map again); the amulets counted down the left;
 ##    the buttons along the top — the two other maps, City Info (the city
-##    list, F3) and Done (`Mapbttns.pic`); M, P, I, C, and Space, Enter, D
+##    list, F3) and Done (`Mapbttns.pic`) — and under them, in every mode,
+##    the silver scrollwork that crowns the map, a wordless ornament cut
+##    from the same sheet ([constant ORNAMENT]); M, P, I, C, and Space, Enter, D
 ##    or Escape [ours: 1997's Escape did nothing here] for Done. M is 1997's
 ##    Main Map; on the Main Map itself it closes the map [ours], as the M
 ##    that opened it.
@@ -61,6 +63,15 @@ const BOX := Color(0.0, 0.0, 0.0, 0.55)
 ## The buttons (`[mapButtons]`) and their rows on `Mapbttns.pic`.
 const BUTTON_WORDS: Array[String] = ["Main Map", "Plain Map", "Info Map", "City Info", "Done"]
 const BUTTON_SIZE := Vector2(94, 28)
+## THE ORNAMENT, `[where on the map, where on Mapbttns.pic]`: 1997's
+## `g_map_summary_panel_sprite`, cut at (45, 141), 209 × 28
+## (`ShowWorldMapScreen`, mapScreen.c 477), drawn at (220, 54) in every
+## mode, the journal's too (791–792) — two curls of silver meeting, no
+## words on it. Nothing without the sheet.
+const ORNAMENT: Array[Rect2] = [Rect2(220, 54, 209, 28), Rect2(45, 141, 209, 28)]
+## The amulet panel, the same way: cut at (1, 141), 43 × 233, drawn at
+## (0, 133) (mapScreen.c 476, 794–796).
+const AMULET_PANEL: Array[Rect2] = [Rect2(0, 133, 43, 233), Rect2(1, 141, 43, 233)]
 ## The amulets' stones in `Amsprite.spr` (white, blue, black, red, green),
 ## black to white.
 const STONE_FRAMES: Array[int] = [2, 1, 4, 3, 0]
@@ -189,6 +200,46 @@ static func tile_look(tile: Vector2i) -> int:
 	return (a * b) % 3
 
 
+## The sprites cut from `Mapbttns.pic` so far, by sheet and place.
+static var _sprites := {}
+
+
+## A SPRITE OF `Mapbttns.pic` ([param sheet]): [param place] cut with its
+## index 0 clear, as 1997's `EncodeSpriteFromPage` cut the ornament and the
+## amulet panel (index 0 is left out of an encoded sprite) — index 0 is
+## `Advfac64.pic`'s one pure black, so pure black is keyed, on the 1997
+## pixels a 2x skin's picture stands for ([method GameSkin.original]).
+## [Ours: slip of our own fixed — the amulet panel was drawn whole, its
+## clear corners black over the stone.] Null without the sheet.
+static func sprite(sheet: Texture2D, place: Rect2) -> Texture2D:
+	if sheet == null:
+		return null
+	var memo := "%d:%s" % [sheet.get_instance_id(), place]
+	if _sprites.has(memo):
+		return _sprites[memo]
+	var cut := Rect2i(place)
+	var small := GameSkin.original(sheet)
+	if small == null:
+		return null
+	if small.is_compressed():
+		small.decompress()
+	small = small.get_region(cut)
+	small.convert(Image.FORMAT_RGBA8)
+	for y in small.get_height():
+		for x in small.get_width():
+			var px := small.get_pixel(x, y)
+			if px.r8 == 0 and px.g8 == 0 and px.b8 == 0:
+				small.set_pixel(x, y, Color(0, 0, 0, 0))
+	var big := small
+	if GameSkin.scale_of(sheet) > 1:
+		big = GameSkin.cut(sheet, cut)
+		big.convert(Image.FORMAT_RGBA8)
+		big = GameSkin.lift_alpha(small, big)
+	var out := GameSkin.texture_of(big, cut.size)
+	_sprites[memo] = out
+	return out
+
+
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.96))
 	if world == null:
@@ -201,6 +252,9 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, SCREEN), Color(0.12, 0.11, 0.1))
 	_draw_land()
 	_draw_places()
+	var ornament := sprite(GameSkin.texture("map_buttons"), ORNAMENT[1])
+	if ornament != null:
+		draw_texture_rect(ornament, ORNAMENT[0], false)
 	if mode == Mode.JOURNAL:
 		_draw_journal()
 	else:
@@ -338,9 +392,9 @@ func _boxed(text: String, at: Vector2, ink: Color, size_px: int) -> void:
 func _draw_amulets() -> void:
 	if player == null:
 		return
-	var sheet := GameSkin.texture("map_buttons")
-	if sheet != null:
-		draw_texture_rect_region(sheet, Rect2(Vector2(0, 133), Vector2(43, 233)), Rect2(1, 141, 43, 233))
+	var panel := sprite(GameSkin.texture("map_buttons"), AMULET_PANEL[1])
+	if panel != null:
+		draw_texture_rect(panel, AMULET_PANEL[0], false)
 	var discs := amulet_discs()
 	for i in discs.size():
 		draw_rect(discs[i], WorldArt.AMULET_INKS[i])

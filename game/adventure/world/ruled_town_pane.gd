@@ -19,8 +19,10 @@ extends PanelContainer
 ## [signal finished] once — [constant WON] (1), LOST (0), DRAWN (−1) or
 ## GAME_OVER (3) — and the pane frees itself. "Return to main menu" in the
 ## duel leaves the adventure unsaved and finishes nothing ([WorldDuels]).
-## Escape at a picture goes on; during the duel it is the duel's. A right
-## click on a card reads it; a drag on the glass moves the pane.
+## Escape at a picture goes on; during the duel it is the duel's. A choice
+## answers to its first letter, Enter or Space to take the one lit [1997]
+## ([method VisitPane.letter_choice]). A right click on a card reads it; a
+## drag on the glass moves the pane.
 
 ## The town's duel is over: [param result] (see the class doc).
 signal finished(result: int)
@@ -390,10 +392,20 @@ func _relayout() -> void:
 # ------------------------------------------------------- keys and mouse --
 
 func _unhandled_input(input: InputEvent) -> void:
-	if not visible or _done or not input.is_action_pressed("ui_cancel"):
+	if not visible or _done:
+		return
+	if VisitPane.letter_choice(self, _choices, input):
+		get_viewport().set_input_as_handled()
+		return
+	if not input.is_action_pressed("ui_cancel"):
 		return
 	get_viewport().set_input_as_handled()
 	escape()
+
+
+## A press of the mouse puts out the choice a letter lit.
+func _input(input: InputEvent) -> void:
+	VisitPane.drop_letter(_choices, input)
 
 
 ## ESCAPE: on, at a picture; nothing during the duel.

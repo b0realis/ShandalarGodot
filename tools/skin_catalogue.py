@@ -161,9 +161,25 @@ FAMILIES: list[tuple[str, str, str]] = [
      "clip (60-73) is the height above the creature's feet the frame's top "
      "stands at; a shadow is drawn where its body is."),
     ("The adventure world", "creature_thumbs",
-     "The wizards' window's creature pictures (Creatures640.pic, painted "
-     "whole with Advfac64.pic's palette): 8 x 7 cells of 80 x 64, the cell "
-     "the creature's table row - 1, the Witch first, Arzakon last."),
+     "The creature record's pictures, the hero pane's creature page "
+     "(Creatures640.pic, painted whole with Advfac64.pic's palette): 8 x 7 "
+     "cells of 80 x 64, the cell the creature's table row - 1, the Witch "
+     "first, Arzakon last; 78 x 59 of each is shown, from 1 across and 4 "
+     "down."),
+    ("The adventure world", "wizards_",
+     "The wizards' window (F6), the hero pane's Wizards tab, from the 1997 "
+     "Statwin/ bitmaps (24-bit .bmp, made RGBA): wizards_ground the throne "
+     "hall (Wizbg.bmp, 640 x 480); by colour (black, blue, green, red, "
+     "white) wizards_figure_ the wizard standing (Blk-Sprt.bmp ..., pure "
+     "green 00ff00 clear; drawn 124/160/104/136/104 x 300 from its top "
+     "left), wizards_staff_lit_ and wizards_staff_drained_ his staff's "
+     "column of lights, yellow and red (S-Bkwizy.bmp, S-Bkwizr.bmp ..., "
+     "black clear), wizards_gems_ his gem cluster (B-Mana.bmp ..., 48 x "
+     "48, five pieces lit a town each) and wizards_room_ his own room, "
+     "shown when he is beaten (Room-Blk.bmp ..., 640 x 480); "
+     "wizards_skulls_1 ... _12 the skulls of the hero's wins against a "
+     "colour (1skulls.bmp ... 12skulls.bmp, 640 x 240, black clear, each "
+     "colour's column drawn at the hall's foot)."),
     ("The adventure's duels", "preduel_",
      "The meeting with a creature, its ground by the creature's colour: "
      "preduel_black ... preduel_white (Prdblk, Prdblu, Prdgrn, Prdrd, "
@@ -217,10 +233,14 @@ FAMILIES: list[tuple[str, str, str]] = [
      "14) and the days left (Daysnew.spr, the numerals 0-5), 67 x 88."),
     ("The adventure world", "map_",
      "The F2 map's own screen: its stone ground (map_ground, Mapback.pic) "
-     "and its buttons and amulet panel (map_buttons, Mapbttns.pic)."),
+     "and its buttons, amulet panel and crowning ornament (map_buttons, "
+     "Mapbttns.pic; the panel 1, 141, 43 x 233 and the ornament 45, 141, "
+     "209 x 28 are drawn with pure black clear)."),
     ("The adventure world", "city_list",
-     "The F3 city list's screen (Cityinfo.pic) and its Done and arrow "
-     "buttons (city_list_buttons, Infobar.pic)."),
+     "The F3 city list's screen (Cityinfo.pic), its Done and arrow "
+     "buttons (city_list_buttons, Infobar.pic) and the panel under each "
+     "row (city_list_row, Cinfopce.pic: 562 x 68, the row 0, 26, "
+     "561 x 42)."),
     ("The adventure world", "world_magic_seller",
      "The World Magic seller's table as a town is left (Worlbak1.pic): the "
      "skull, the candle and the crystal ball."),
@@ -462,6 +482,9 @@ FAMILIES: list[tuple[str, str, str]] = [
      "events (Sound/Dsummon.wav)."),
     ("Sounds", "sfx_newsflash",
      "Every news flash: a siege begins, a town falls (Sound/Newsflash.wav)."),
+    ("Sounds", "sfx_wizards",
+     "The wizards' window opened, F6 or a beaten castle (Statscrn.wav, the "
+     "install's root)."),
     ("Sounds", "sfx_lair_duel",
      "A lair's duel begins (Duelsounds/Aswanjag.wav)."),
     ("Sounds", "sfx_dungeon_duel",
@@ -1363,6 +1386,7 @@ KEYED = (
     ("duel_picture_", "TerritoryGround._inner measures the 1px black edge"),
     ("duel_mana_", "TerritoryGround._inner measures the 1px black edge"),
     ("grave_panel_", "ExilePlate.plate counts the plate's colours"),
+    ("map_buttons", "WorldMap.sprite keys pure black out of the ornament and the amulet panel"),
 )
 
 

@@ -8,13 +8,17 @@ extends RefCounted
 ##    [WorldGenerator]: "Red cards", "Any creatures"), for amulets. On each
 ##    visit the town wants amulets of one colour of its land, drawn at
 ##    random (1997 drew 199 times and the last draw of a colour of the land
-##    won: one draw among the land's colours). While the hero holds such an
-##    amulet, and the town has not traded for more than (difficulty + 3) · 18
-##    steps of the quest clock — counted from its last trade, long ago before
-##    the first (`special_card_restock_timer` −1000) —, "Trade red amulet for
-##    Any creatures" stands where the wise man is. The screen closed, the
-##    wait begins again, a card traded or not. Only the town's colour is
-##    taken.
+##    won: one draw among the land's colours; `RunTownServicesMenu`,
+##    visitLocation.c 1672–1684). [1997 meant draws 0–80 to keep only
+##    colours the hero holds an amulet of; with no stop the 118 late draws
+##    always overwrite them, so the preference never took effect — kept as
+##    played, the owner's I-1, docs/adventure-unused-1997-features.md.]
+##    While the hero holds such an amulet, and the town has not traded for
+##    more than (difficulty + 3) · 18 steps of the quest clock — counted
+##    from its last trade, long ago before the first
+##    (`special_card_restock_timer` −1000) —, "Trade red amulet for Any
+##    creatures" stands where the wise man is. The screen closed, the wait
+##    begins again, a card traded or not. Only the town's colour is taken.
 ##  - THE NOMAD'S BAZAAR, a lair ([LairEvent]): any card for gold — the 1997
 ##    price ([CardValue]) four times, half again or twice for a card of no
 ##    colour of the land the hero stands on, as in a town (half again for a

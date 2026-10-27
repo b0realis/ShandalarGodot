@@ -505,23 +505,74 @@ THE ADVENTURE WORLD
     visit_dungeon.png                  640 x 480 px, RGB
 
   The F2 map's own screen: its stone ground (map_ground, Mapback.pic) and its
-  buttons and amulet panel (map_buttons, Mapbttns.pic).
+  buttons, amulet panel and crowning ornament (map_buttons, Mapbttns.pic; the
+  panel 1, 141, 43 x 233 and the ornament 45, 141, 209 x 28 are drawn with
+  pure black clear).
     map_ground.png                     640 x 480 px, RGB
     map_buttons.png                    640 x 480 px, RGB
 
-  The F3 city list's screen (Cityinfo.pic) and its Done and arrow buttons
-  (city_list_buttons, Infobar.pic).
+  The F3 city list's screen (Cityinfo.pic), its Done and arrow buttons
+  (city_list_buttons, Infobar.pic) and the panel under each row
+  (city_list_row, Cinfopce.pic: 562 x 68, the row 0, 26, 561 x 42).
     city_list.png                      640 x 480 px, RGB
     city_list_buttons.png              640 x 480 px, RGB
+    city_list_row.png                  562 x 68 px, RGB
 
   The World Magic seller's table as a town is left (Worlbak1.pic): the skull,
   the candle and the crystal ball.
     world_magic_seller.png             640 x 480 px, RGB
 
-  The wizards' window's creature pictures (Creatures640.pic, painted whole
-  with Advfac64.pic's palette): 8 x 7 cells of 80 x 64, the cell the
-  creature's table row - 1, the Witch first, Arzakon last.
+  The creature record's pictures, the hero pane's creature page
+  (Creatures640.pic, painted whole with Advfac64.pic's palette): 8 x 7 cells
+  of 80 x 64, the cell the creature's table row - 1, the Witch first, Arzakon
+  last; 78 x 59 of each is shown, from 1 across and 4 down.
     creature_thumbs.png                640 x 480 px, RGB
+
+  The wizards' window (F6), the hero pane's Wizards tab, from the 1997
+  Statwin/ bitmaps (24-bit .bmp, made RGBA): wizards_ground the throne hall
+  (Wizbg.bmp, 640 x 480); by colour (black, blue, green, red, white)
+  wizards_figure_ the wizard standing (Blk-Sprt.bmp ..., pure green 00ff00
+  clear; drawn 124/160/104/136/104 x 300 from its top left),
+  wizards_staff_lit_ and wizards_staff_drained_ his staff's column of lights,
+  yellow and red (S-Bkwizy.bmp, S-Bkwizr.bmp ..., black clear), wizards_gems_
+  his gem cluster (B-Mana.bmp ..., 48 x 48, five pieces lit a town each) and
+  wizards_room_ his own room, shown when he is beaten (Room-Blk.bmp ..., 640 x
+  480); wizards_skulls_1 ... _12 the skulls of the hero's wins against a
+  colour (1skulls.bmp ... 12skulls.bmp, 640 x 240, black clear, each colour's
+  column drawn at the hall's foot).
+    wizards_ground.png                 640 x 480 px, RGB
+    wizards_figure_black.png           124 x 300 px, RGBA
+    wizards_staff_lit_black.png        60 x 324 px, RGBA
+    wizards_staff_drained_black.png    60 x 324 px, RGBA
+    wizards_gems_black.png             48 x 48 px, RGB
+    wizards_room_black.png             640 x 480 px, RGB
+    wizards_figure_blue.png            160 x 320 px, RGBA
+    wizards_staff_lit_blue.png         80 x 300 px, RGBA
+    wizards_staff_drained_blue.png     80 x 300 px, RGBA
+    wizards_gems_blue.png              48 x 48 px, RGB
+    wizards_room_blue.png              640 x 480 px, RGB
+    wizards_figure_green.png           104 x 300 px, RGBA
+    wizards_staff_lit_green.png        60 x 300 px, RGBA
+    wizards_staff_drained_green.png    60 x 300 px, RGBA
+    wizards_gems_green.png             48 x 48 px, RGB
+    wizards_room_green.png             640 x 480 px, RGB
+    wizards_figure_red.png             136 x 300 px, RGBA
+    wizards_staff_lit_red.png          60 x 260 px, RGBA
+    wizards_staff_drained_red.png      60 x 260 px, RGBA
+    wizards_gems_red.png               48 x 48 px, RGB
+    wizards_room_red.png               640 x 480 px, RGB
+    wizards_figure_white.png           104 x 300 px, RGBA
+    wizards_staff_lit_white.png        60 x 252 px, RGBA
+    wizards_staff_drained_white.png    60 x 252 px, RGBA
+    wizards_gems_white.png             48 x 48 px, RGB
+    wizards_room_white.png             640 x 480 px, RGB
+    wizards_skulls_1.png               640 x 240 px, RGBA
+    wizards_skulls_2.png               640 x 240 px, RGBA
+    wizards_skulls_3.png               640 x 240 px, RGBA
+    wizards_skulls_4.png               640 x 240 px, RGBA
+    wizards_skulls_5.png               640 x 240 px, RGBA
+    wizards_skulls_8.png               640 x 240 px, RGBA
+    wizards_skulls_12.png              640 x 240 px, RGBA
 
 THE ADVENTURE'S DUELS
 ---------------------
@@ -996,6 +1047,10 @@ SOUNDS
   the dungeons are still to come.
     sfx_dungeon_duel.wav               22050 Hz 16-bit mono, 4.4 s
 
+  The wizards' window opened, F6 or a beaten castle (Statscrn.wav, the
+  install's root).
+    sfx_wizards.wav                    22050 Hz 16-bit stereo, 8.0 s
+
 MUSIC
 -----
 
@@ -1100,5 +1155,5 @@ MOVIES — movies/*.avi (optional)
 
 ------------------------------------------------------------------------------
 Generated by tools/skin_catalogue.py from the importer's manifest;
-468 named files, plus portraits/ and movies/ in original_skin.zip,
+503 named files, plus portraits/ and movies/ in original_skin.zip,
 and cardart/ in cardart.zip.

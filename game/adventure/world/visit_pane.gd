@@ -51,6 +51,27 @@ extends PanelContainer
 ## [QoL] The pane stays on the screen: the picture gives way when the
 ## choices need the room ("Whose deck would you like to see?" adds a dozen
 ## creatures) and grows back as they go ([method _fit]).
+##
+## THE PICTURE COMES IN as 1997 brought it ([TileReveal], the owner's H7 of
+## 2026-10-27; [method _transition_in]): a town's, the wise man's, the
+## news's and a dungeon's [ours] zoomed in, every time the pane opens —
+## 1997 zoomed again on coming back from a town's own screens
+## (visitLocation.c 998–1077); a castle's in staggered tiles; a lair's in
+## random 5 × 5 tiles, its card or hoard standing over it at once; a ruled
+## town's creature face, once the town has zoomed in, in 3 × 3 tiles over
+## the town (`DrawCreaturePortrait` mode 2, its banner at once). Short,
+## skipped by any click or key, the words and the choices live from the
+## first frame; off with the Options' "Transitions", and never headless.
+##
+## A QUESTION'S CHOICES ANSWER TO THEIR FIRST LETTER [1997] (the owner's
+## C-5): as 1.3's text menus did (`RunTextMenuAt`, adventure_ui.c 186–222,
+## its hotkeys 436–461), a letter moves to the next choice beginning with
+## it — "Y" to "Yes, enter the castle.", "B" from Buy Cards to Buy 10 food
+## and back — and Enter or Space takes the one lit; it never takes a choice
+## by itself. Only a plain letter (no Ctrl, Alt or Meta), only on the pane
+## on top, never while a text field has the keys, and a letter no choice
+## begins with goes on unheard ([method letter_choice]; the meeting's and
+## the ruled town's duel panes answer the same way).
 
 ## The hero leaves the place; [param then] what they chose to do next
 ## (`""`, `deck` for Edit deck, `shop` for Buy Cards, `trade` for the
@@ -89,6 +110,8 @@ const PAGE_SCALE := 1.6
 const FACE_AT := Rect2(196, 18, 120, 120)
 const FACE_BANNER_AT := Rect2(186, 140, 140, 26)
 const FACE_INSET := 8.0
+## The choice a letter lit ([method letter_choice]): its gold rim.
+const LETTER_RIM := 2
 
 var player: AdventurePlayer
 ## What is visited ([method describe]).
@@ -119,6 +142,8 @@ var ruled := {}
 ## ([method WorldScreen.walk_to_tile]'s entry latch): a ruled town keeps
 ## the entry it drew ([method RuledTowns.enter]).
 var again := false
+## Where the creature's face stands over the picture ([method show_face]).
+var _face_at := FACE_AT
 
 
 # ------------------------------------------------------------ the place --
@@ -152,7 +177,7 @@ static func describe(hero: AdventurePlayer, tile: Vector2i) -> Dictionary:
 					"subtitle": "Dungeon", "picture": "visit_dungeon",
 					"lines": ["The way down into %s." % WorldNames.dungeon_name(index)]
 						+ WorldClues.lines(world, index),
-					"actions": [["enter", "Enter the dungeon", false], ["leave", "Leave", true]]}
+					"actions": [["enter", "Enter the dungeon", DungeonDoors.BOARD_READY], ["leave", "Leave", true]]}
 	return {}
 
 
@@ -214,7 +239,7 @@ static func _castle(hero: AdventurePlayer, slot: int, kind: int) -> Dictionary:
 		"picture": picture,
 		"lines": ["Who dares to challenge the Mighty %s?" % wizard,
 			"Are you brave enough to enter my castle?"],
-		"actions": [["leave", "Well... No.", true], ["enter", "Yes, enter the castle.", false]]}
+		"actions": [["leave", "Well... No.", true], ["enter", "Yes, enter the castle.", DungeonDoors.BOARD_READY]]}
 
 
 ## A lair seen: walked onto, it is entered ([LairPane]); this names it for
@@ -281,6 +306,61 @@ func _ready() -> void:
 	resized.connect(_fit)
 	if String(place.get("kind", "")) == "ruled" and player != null:
 		_enter_ruled()
+	_transition_in()
+
+
+## THE PICTURE COMES IN as 1997 brought it (see the class doc): nothing
+## while the pane is hidden (a ruled town with nothing to stake) or with
+## the transitions off.
+func _transition_in() -> void:
+	if not visible or _art == null or not TileReveal.wanted():
+		return
+	match String(place.get("kind", "")):
+		"castle", "fallen":
+			# `ShowWizardVisitBackdrop` (visitLocation.c 4374, 4411).
+			_cover_picture(TileReveal.CASTLE_GRID, TileReveal.CASTLE_SECONDS, TileReveal.Order.STAGGERED)
+		"lair":
+			# `ShowLairBackdropTransition` (world_lair_monster_encounter.c 984).
+			_cover_picture(TileReveal.LAIR_GRID, TileReveal.LAIR_SECONDS, TileReveal.Order.RANDOM)
+		_:
+			# `AnimateVisitBackdropZoomIn` (visitLocation.c 4599, 4217, 877,
+			# 635 …); a dungeon's pane is ours, zoomed as a place.
+			TileReveal.zoom_in(_art)
+			_reveal_face(TileReveal.ZOOM_SECONDS)
+
+
+## The whole picture hidden under the frame's dark ground, its [param
+## tiles] coming in [param order] over [param length] seconds. Laid between
+## the picture and what is over it: a lair's card or hoard stands at once,
+## as its words do.
+func _cover_picture(tiles: Vector2i, length: float, order: TileReveal.Order) -> void:
+	var cover := TileReveal.make(tiles, length, order)
+	if cover == null:
+		return
+	cover.name = "PictureReveal"
+	_art.add_child(cover)
+	_art.move_child(cover, 0)
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+## THE CREATURE'S FACE COMES IN (`DrawCreaturePortrait` mode 2, a ruled
+## town's, visitLocation.c 4286): its framed face hidden under the town's
+## own picture, coming in 3 × 3 tiles after [param after] seconds (the
+## zoom); its banner and name stand at once.
+func _reveal_face(after: float) -> void:
+	if face_name() == "":
+		return
+	var face := TileReveal.make(TileReveal.FACE_GRID, TileReveal.FACE_SECONDS)
+	if face == null:
+		return
+	face.name = "FaceReveal"
+	face.delay = after
+	var town := _art.texture
+	if town != null:
+		var ratio := town.get_size() / PICTURE
+		face.before = town
+		face.source = Rect2(_face_at.position * ratio, _face_at.size * ratio)
+	_add_over(face, _face_at, "face")
 
 
 ## A RULED TOWN ENTERED ([RuledTowns]): what it holds this time drawn —
@@ -342,7 +422,15 @@ func _picture() -> Control:
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	frame.add_child(_art)
+	# The picture in a plain holder, not straight in the frame: a container
+	# sets its children's scale back to 1 each time it lays them out, and
+	# the zoom-in ([method _transition_in]) scales the picture.
+	var stand := Control.new()
+	stand.name = "ArtStand"
+	stand.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(stand)
+	stand.add_child(_art)
+	_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# A card shown over the picture's right side (a lair's find, a riddle's
 	# answer), as 1997 showed it over the place.
 	var holder := Control.new()
@@ -374,6 +462,7 @@ func _set_grow(grow: float) -> void:
 	_grow = grow
 	_width = PICTURE.x * grow
 	_art.custom_minimum_size = PICTURE * grow
+	(_art.get_parent() as Control).custom_minimum_size = PICTURE * grow
 	for part: Control in [_said, _choices, _note]:
 		if part != null:
 			part.custom_minimum_size.x = _width
@@ -544,6 +633,7 @@ func show_face(row: int, at := FACE_AT, banner_at := FACE_BANNER_AT) -> void:
 	_drop_over("face")
 	if row <= 0:
 		return
+	_face_at = at
 	var back := ColorRect.new()
 	back.name = "FaceBack"
 	back.color = Color.BLACK
@@ -676,6 +766,12 @@ func choose(action: String) -> void:
 			# ([method RuledTowns.open]).
 			if String(place.get("kind", "")) == "ruled":
 				left.emit("duel")
+		"enter":
+			# A castle's or a dungeon's door: its board, over the world
+			# ([method WorldScreen._enter_board]); waits, disabled, until
+			# the board is made ([constant DungeonDoors.BOARD_READY]).
+			if String(place.get("kind", "")) in ["castle", "dungeon"]:
+				left.emit("enter")
 		"food":
 			var kind := int(player.world.sites[int(place["slot"])]["type"])
 			var price := food_price(kind)
@@ -702,6 +798,104 @@ func _unhandled_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		left.emit("")
+	elif visible and letter_choice(self, _choices, event):
+		get_viewport().set_input_as_handled()
+
+
+## A press of the mouse puts out the choice a letter lit: the keys and the
+## mouse do not both hold a choice.
+func _input(event: InputEvent) -> void:
+	drop_letter(_choices, event)
+
+
+# ------------------------------------------------- a choice's first letter --
+
+## A QUESTION'S CHOICE BY ITS FIRST LETTER (see the class doc): [param
+## event] a plain letter on [param pane], the one on top, that one of
+## [param choices]' buttons begins with — the next such after the one lit
+## (round again from the first) is lit, Enter or Space to take it. True
+## when the letter was the pane's (the caller marks it handled); false
+## leaves it to the rest of the game.
+static func letter_choice(pane: Control, choices: Container, event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.ctrl_pressed or key.alt_pressed \
+			or key.meta_pressed or key.keycode < KEY_A or key.keycode > KEY_Z:
+		return false
+	if pane == null or choices == null or not pane.is_visible_in_tree() or not on_top(pane):
+		return false
+	var held := pane.get_viewport().gui_get_focus_owner()
+	if held is LineEdit or held is TextEdit:
+		return false
+	var letter := char(key.keycode)
+	var answering: Array[Button] = []
+	for child in choices.get_children():
+		var button := child as Button
+		if button != null and button.visible and not button.disabled \
+				and not button.is_queued_for_deletion() and first_letter(button.text) == letter:
+			answering.append(button)
+	if answering.is_empty():
+		return false
+	var lit := answering.find(held as Button)
+	_light(answering[(lit + 1) % answering.size()])
+	return true
+
+
+## The letter a choice's [param words] answer to, upper case: their first
+## letter or digit — 1997's hotkey, the character after the line's leading
+## space — "" for none.
+static func first_letter(words: String) -> String:
+	for i in words.length():
+		var c := words[i]
+		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9"):
+			return c.to_upper()
+		if c != " " and c != "_" and c != "\"" and c != "'":
+			return ""
+	return ""
+
+
+## Whether [param pane] is on top: no later pane over it (a shown control
+## of its parent's that stops the mouse — the card trader over a lair, the
+## list of a creature's deck over the wise man).
+static func on_top(pane: Control) -> bool:
+	var parent := pane.get_parent()
+	if parent == null:
+		return true
+	for i in range(pane.get_index() + 1, parent.get_child_count()):
+		var other := parent.get_child(i) as Control
+		if other != null and other.visible and other.mouse_filter == Control.MOUSE_FILTER_STOP:
+			return false
+	return true
+
+
+## [param button] lit as the choice Enter or Space takes: it takes the keys
+## and wears a gold rim, its words lit.
+static func _light(button: Button) -> void:
+	if button.focus_mode != Control.FOCUS_ALL:
+		button.focus_mode = Control.FOCUS_ALL
+		# Unlit as it loses the keys, so only a letter lights a choice (a
+		# click later on it never leaves it lit for an Enter or a Space).
+		if not button.has_meta("letter_lit"):
+			button.set_meta("letter_lit", true)
+			button.focus_exited.connect(func() -> void: button.focus_mode = Control.FOCUS_NONE)
+		var rim := StyleBoxFlat.new()
+		rim.draw_center = false
+		rim.border_color = PaneStyle.GOLD
+		rim.set_border_width_all(LETTER_RIM)
+		rim.set_corner_radius_all(6)
+		button.add_theme_stylebox_override("focus", rim)
+		button.add_theme_color_override("font_focus_color", PaneStyle.LIT)
+	button.grab_focus()
+
+
+## The choice a letter lit among [param choices] put out by a press of the
+## mouse ([param event]).
+static func drop_letter(choices: Container, event: InputEvent) -> void:
+	var press := event as InputEventMouseButton
+	if press == null or not press.pressed or choices == null or not choices.is_inside_tree():
+		return
+	var held := choices.get_viewport().gui_get_focus_owner()
+	if held != null and held.get_parent() == choices:
+		held.release_focus()
 
 
 func _button(words: String, action: String) -> Button:

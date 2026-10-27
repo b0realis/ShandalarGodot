@@ -1,5 +1,5 @@
 class_name RevealDissolve
-extends Control
+extends TileReveal
 ## THE WORLD SHOWN BLOCK BY BLOCK — 1.3's `BlitRectByRandomTileOrder`
 ## (opt57_shandalar_ui_fx.c 223): after a new adventure begins, Leap of
 ## Fate or Sword of Resistance, the new view replaced the old in small
@@ -7,15 +7,14 @@ extends Control
 ## taken before the move, or black for a new adventure) is drawn in
 ## [constant BLOCK]-pixel squares that vanish at random over
 ## [constant SECONDS]; then the overlay is gone. It takes no input.
+##
+## One of the transitions ([TileReveal], which draws it): a click or a key
+## ends it at once, and with the Options' "Transitions" off — or headless —
+## the new view is simply there (the overlay made, and gone at once, so the
+## world screen may still place it).
 
 const BLOCK := 16.0
 const SECONDS := 0.6
-
-## What was on the screen before, or null for black.
-var before: Texture2D
-var _order: PackedInt32Array
-var _columns := 0
-var _shown := 0.0
 
 
 ## Cover [param host] with the old view [param picture] (null for black)
@@ -24,6 +23,8 @@ static func over(host: Control, picture: Texture2D) -> RevealDissolve:
 	var cover := RevealDissolve.new()
 	cover.name = "RevealDissolve"
 	cover.before = picture
+	cover.ground = Color.BLACK
+	cover.seconds = SECONDS
 	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	host.add_child(cover)
 	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -35,35 +36,18 @@ static func over(host: Control, picture: Texture2D) -> RevealDissolve:
 ## canvas's units only in a 1280 × 800 window ([method source_rect] maps
 ## them).
 static func picture_of(host: Control) -> Texture2D:
-	if not host.is_inside_tree() or DisplayServer.get_name() == "headless":
-		return null
-	var image := host.get_viewport().get_texture().get_image()
-	return ImageTexture.create_from_image(image) if image != null else null
+	return TileReveal.picture_of(host)
 
 
 func _ready() -> void:
-	var area := get_viewport_rect().size
-	_columns = int(ceil(area.x / BLOCK))
-	var rows := int(ceil(area.y / BLOCK))
-	_order = PackedInt32Array()
-	_order.resize(_columns * rows)
-	for i in _order.size():
-		_order[i] = i
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	for i in range(_order.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var swap := _order[i]
-		_order[i] = _order[j]
-		_order[j] = swap
-
-
-func _process(delta: float) -> void:
-	_shown += delta
-	if _shown >= SECONDS:
-		queue_free()
+	if not TileReveal.wanted():
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		finish()
 		return
-	queue_redraw()
+	var area := get_viewport_rect().size
+	grid = Vector2i(maxi(int(ceil(area.x / BLOCK)), 1), maxi(int(ceil(area.y / BLOCK)), 1))
+	order = TileReveal.Order.RANDOM
+	super._ready()
 
 
 ## The part of the old picture under canvas square [param square]: the
@@ -79,13 +63,5 @@ func source_rect(square: Rect2) -> Rect2:
 	return Rect2(square.position * pixels, square.size * pixels)
 
 
-func _draw() -> void:
-	var left := int(_order.size() * (1.0 - clampf(_shown / SECONDS, 0.0, 1.0)))
-	for n in left:
-		var cell := _order[_order.size() - 1 - n]
-		var at := Vector2((cell % _columns) * BLOCK, (cell / _columns) * BLOCK)
-		var square := Rect2(at, Vector2(BLOCK, BLOCK))
-		if before != null:
-			draw_texture_rect_region(before, square, source_rect(square))
-		else:
-			draw_rect(square, Color.BLACK)
+func _source_now() -> Rect2:
+	return source_rect(Rect2(Vector2.ZERO, size))

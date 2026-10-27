@@ -278,15 +278,15 @@ func playmat_color_shown() -> String:
 ## (`docs/adventure-implementation-notes.md`, "New game in the sources"):
 ## gold `(5 − difficulty) × 50` and 50 food (`RunAdventureSession`,
 ## `g_food`), one amulet of the hero's colour and `3 − difficulty` of
-## random colours, and the starting deck's size and colours as the
-## retail game counts them.
+## random colours, and the starting deck's size and colours as 1997 dealt
+## them ([StarterDeck]: 36/40/46/46 cards, the extra creature copy in).
 static func starting_resources(level: int) -> Dictionary:
 	var d := clampi(level, 0, DIFFICULTIES.size() - 1)
 	return {
 		"gold": (5 - d) * 50,
 		"food": 50,
 		"amulets": 4 - d,
-		"deck_cards": [36, 39, 44, 45][d],
+		"deck_cards": [36, 40, 46, 46][d],
 		"deck_colors": [1, 2, 3, 5][d],
 	}
 

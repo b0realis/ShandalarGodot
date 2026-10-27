@@ -31,6 +31,9 @@ var k := 1.0
 var _stage: Control
 var _scale := 1.0
 var _note: Label
+## The choices, answering to their first letter ([method
+## VisitPane.letter_choice]).
+var _choices: HBoxContainer
 ## Whether [signal done] has been sent: the pane closes once, however many
 ## clicks and keys arrive before the world screen frees it (deferred) —
 ## leaving the town runs on that signal.
@@ -72,7 +75,10 @@ func _ready() -> void:
 	_icon()
 	var index := int(offer.get("index", 0))
 	var magic := String(offer.get("name", ""))
-	_line(WorldMagicShop.HEADING, 75, SAND, 18)
+	# 1997 centred the heading on its point (`DrawTextAt`, both ways); the
+	# lines under it hang from theirs (`DrawUiScaledCenteredText`, the top).
+	var heading := _line(WorldMagicShop.HEADING, 75, SAND, 18)
+	heading.position.y -= heading.get_line_height() / 2.0
 	_line(magic, 146, SKY, 18)
 	_line(WorldMagicShop.COSTS % int(offer.get("price", 0)), 162, SAND, 16)
 	_line("(%s)" % String(WorldHud.MAGIC_TIPS.get(magic, "")), 178, SAND, 15)
@@ -86,6 +92,7 @@ func _ready() -> void:
 	else:
 		_line(words[0], 226, SAND, 16)
 	var buttons := HBoxContainer.new()
+	_choices = buttons
 	buttons.name = "Choices"
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", int(10 * k))
@@ -162,7 +169,14 @@ func note() -> String:
 	return _note.text
 
 
+func _input(event: InputEvent) -> void:
+	VisitPane.drop_letter(_choices, event)
+
+
 func _unhandled_input(input: InputEvent) -> void:
 	if input.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		close()
+	elif VisitPane.letter_choice(self, _choices, input):
+		# A choice by its first letter (N, P, D), Enter takes it (C-5).
+		get_viewport().set_input_as_handled()

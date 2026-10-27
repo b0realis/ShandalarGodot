@@ -19,6 +19,10 @@ extends Control
 ## Cards on it are read full screen with a right click ([signal
 ## card_read]); nothing else on it takes the mouse — a press on the stage
 ## is the pane's (it moves the pane).
+##
+## A FACE COMES IN as 1997's summoned creature's did ([method reveal_face],
+## `DrawCreaturePortrait` mode 1): the new face over the old one in 3 × 3
+## tiles, its name banner's middle in 2 × 2 ([TileReveal]).
 
 ## A card on the stage right-clicked.
 signal card_read(card_name: String)
@@ -52,6 +56,21 @@ const FOOD_AT := Rect2(116, 365, 103, 49)
 const DECK_AT := Rect2(12, 415, 121, 44)
 const LIFE_AT := Rect2(125, 415, 102, 44)
 const SCROLL_AT := Rect2(468, 350, 145, 114)
+## THE WORDS ON THE PICTURES, CENTRED WHERE 1997 CENTRED THEM: 1997's
+## `DrawTextAt` centres its text on its point both ways (`DrawTextFormatted`
+## with centre x and centre y set), so each number sits on its panel's point
+## (E:1672–1675) and the quest's words on the scroll's (E:1682, (543, 409)).
+## The scroll's words fill its parchment between the two rolls — 33 to 86
+## points down the picture, 12 to 142 across — centred on that point
+## [ours: slip of our own fixed — the words hung from the top roll].
+const GOLD_POINT := Vector2(91, 392)
+const FOOD_POINT := Vector2(189, 392)
+const DECK_POINT := Vector2(91, 437)
+const LIFE_POINT := Vector2(195, 437)
+const SCROLL_WORDS := Rect2(482, 384, 126, 51)
+## [Ours] The scroll without the skin: a plain box, wider to its left, where
+## the page has room — its words in the panes' ink.
+const PLAIN_SCROLL_AT := Rect2(392, 350, 221, 114)
 ## [Ours] The purse without the skin: four boxes in 1997's corner, apart
 ## (the pictures' places overlap by 8 points — their edges are clear in the
 ## skin, not in a plain box).
@@ -172,16 +191,36 @@ func piece(key: String, region: Rect2, at: Rect2, part_name := "") -> Control:
 
 ## Words at [param at] on the page: [param size] page points, centred.
 func words(text: String, at: Rect2, size_points: int, color := PaneStyle.INK, part_name := "",
-		wrap := false) -> Label:
+		wrap := false, most := Rect2()) -> Label:
 	var line := PaneStyle.label(text, size_points, color)
 	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	line.clip_text = not wrap
 	if wrap:
+		# Wrapped words stay centred on their place, a size smaller each
+		# until they fit it ([method _place]).
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		line.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		line.set_meta("fit", true)
+		# Too many lines even at the smallest size: the larger place [param
+		# most] their part allows, still centred on theirs.
+		if most.has_area():
+			line.set_meta("most", most)
 	line.set_meta("points", size_points)
 	return _add(line, at, part_name) as Label
+
+
+## How tall [param label]'s words stand at [param points], wrapped at
+## [param width] — measured on its own font.
+static func _words_high(label: Label, width: float, points: int) -> float:
+	var font := label.get_theme_font("font")
+	return font.get_multiline_string_size(label.text, HORIZONTAL_ALIGNMENT_CENTER, width, points).y \
+		+ label.get_theme_constant("line_spacing") * label.text.count("\n")
+
+
+## Words [param box] in size, centred on 1997's point [param point]
+## (`DrawTextAt`).
+static func centred(point: Vector2, box: Vector2) -> Rect2:
+	return Rect2(point - box / 2.0, box)
 
 
 ## THE CREATURE'S FACE (`DrawCreaturePortrait`): its portrait ([method
@@ -212,6 +251,27 @@ func creature_face(row: int, at := FACE_AT, banner_at := BANNER_AT, tinted := fa
 		face.modulate = Color(0.75, 0.62, 0.55)
 	piece("preduel_frame", NAME_BANNER, banner_at, "NameBanner")
 	words(CreatureBook.name_of(row), banner_at, 16, PaneStyle.GOLD, "CreatureName")
+
+
+## THE NEW FACE COMES IN OVER THE OLD (`DrawCreaturePortrait` mode 1,
+## visitLocation.c 2540–2625; a summoned or substituted creature,
+## world_lair_monster_encounter.c 2183): [param was], the screen as it
+## stood before the face was drawn anew ([method TileReveal.picture_of]),
+## hides the face block at [param at] — coming in 3 × 3 tiles — and the
+## middle of the name banner at [param banner_at], its width less 22 —
+## coming in 2 × 2. Nothing without a picture or with the transitions off.
+func reveal_face(was: Texture2D, at := FACE_AT, banner_at := BANNER_AT) -> void:
+	if was == null:
+		return
+	var face := TileReveal.make(TileReveal.FACE_GRID, TileReveal.FACE_SECONDS)
+	if face == null:
+		return
+	_add(face, at, "FaceReveal")
+	face.take_screen(was)
+	var banner := TileReveal.make(TileReveal.BANNER_GRID, TileReveal.FACE_SECONDS)
+	_add(banner, banner_at.grow_individual(-TileReveal.BANNER_TRIM, 0, -TileReveal.BANNER_TRIM, 0),
+		"BannerReveal")
+	banner.take_screen(was)
 
 
 ## The colour of creature [param row]'s face without the skin: [member hue],
@@ -299,11 +359,10 @@ func purse(player: AdventurePlayer) -> void:
 	piece("preduel_panels", PANEL_FOOD, FOOD_AT, "FoodPanel")
 	piece("preduel_panels", PANEL_DECK, DECK_AT, "DeckPanel")
 	piece("preduel_panels", PANEL_LIFE, LIFE_AT, "LifePanel")
-	words(str(player.gold), Rect2(GOLD_AT.position + Vector2(44, 6), Vector2(58, 32)), 15, PaneStyle.LIT, "Gold")
-	words(str(player.food), Rect2(FOOD_AT.position + Vector2(44, 8), Vector2(58, 32)), 15, PaneStyle.LIT, "Food")
-	words(deck, Rect2(DECK_AT.position + Vector2(44, 6), Vector2(76, 32)), 15, PaneStyle.LIT, "Deck")
-	words(str(player.mana_links()), Rect2(LIFE_AT.position + Vector2(44, 6), Vector2(56, 32)), 15,
-		PaneStyle.LIT, "Life")
+	words(str(player.gold), centred(GOLD_POINT, Vector2(58, 32)), 15, PaneStyle.LIT, "Gold")
+	words(str(player.food), centred(FOOD_POINT, Vector2(58, 32)), 15, PaneStyle.LIT, "Food")
+	words(deck, centred(DECK_POINT, Vector2(76, 32)), 15, PaneStyle.LIT, "Deck")
+	words(str(player.mana_links()), centred(LIFE_POINT, Vector2(56, 32)), 15, PaneStyle.LIT, "Life")
 
 
 ## THE QUEST SCROLL (E:1684–1688, `BuildQuestStatusMessage`): what calls the
@@ -311,9 +370,10 @@ func purse(player: AdventurePlayer) -> void:
 ## panes' ink on the plain box without the skin (the scroll's dark ink was
 ## unreadable there, P4-2).
 func scroll(lines: Array[String]) -> void:
-	piece("preduel_panels", PANEL_SCROLL, SCROLL_AT, "Scroll")
-	var ink := SCROLL_INK if GameSkin.texture("preduel_panels") != null else PaneStyle.INK
-	words("\n".join(lines), SCROLL_AT.grow_individual(-12, -14, -12, -10), 12, ink, "ScrollWords", true)
+	var skin := GameSkin.texture("preduel_panels") != null
+	piece("preduel_panels", PANEL_SCROLL, SCROLL_AT if skin else PLAIN_SCROLL_AT, "Scroll")
+	words("\n".join(lines), SCROLL_WORDS if skin else PLAIN_SCROLL_AT.grow(-8), 12,
+		SCROLL_INK if skin else PaneStyle.INK, "ScrollWords", true, SCROLL_AT.grow(-4) if skin else Rect2())
 
 
 ## THE CARDS WON fanned across the page (E:2296–2308): each over its
@@ -416,4 +476,21 @@ func _place(entry: Dictionary) -> void:
 		return
 	node.size = at.size * factor
 	if node is Label and node.has_meta("points"):
-		(node as Label).add_theme_font_size_override("font_size", maxi(int(round(int(node.get_meta("points")) * factor)), 8))
+		var label := node as Label
+		var points := maxi(int(round(int(node.get_meta("points")) * factor)), 8)
+		label.add_theme_font_size_override("font_size", points)
+		if node.has_meta("fit"):
+			var room := at.size * factor
+			while points > 8 and _words_high(label, room.x, points) > room.y:
+				points -= 1
+			label.add_theme_font_size_override("font_size", points)
+			var place := at
+			var high := _words_high(label, room.x, points) / factor
+			if high > at.size.y and node.has_meta("most"):
+				var most: Rect2 = node.get_meta("most")
+				var tall := minf(high, most.size.y)
+				var top := clampf(at.get_center().y - tall / 2.0, most.position.y, most.end.y - tall)
+				place = Rect2(at.position.x, top, at.size.x, tall)
+			# A label grown by its words is put back to its place.
+			node.position = place.position * factor
+			label.size = place.size * factor

@@ -11,7 +11,8 @@ extends Control
 ## Full screen, the skin (which zips dress the game, and a file box to
 ## choose one), sound on/off (music and effects separately, as the
 ## original separated them), music & effects volume, hand display, the
-## rules forks, AI pace — persisted immediately through Settings
+## rules forks, AI pace, the adventure's transitions — persisted
+## immediately through Settings
 ## (user://settings.cfg), so every one of them is the default of the next
 ## run. The shell's bed plays on through this screen (`ShellMusic`), and
 ## the three music controls act on it as they are moved. Grows as options do (phase stops, UI scale and colorblind palette
@@ -257,6 +258,23 @@ func _add_display_section(content: VBoxContainer) -> void:
 		GameDisplay.set_power_saver(on))
 	UiChrome.shadowed_button(power)
 	content.add_child(power)
+
+	# `[QoL]` TRANSITIONS (the owner, 2026-10-27, H7: "Add, with a switch")
+	# — 1997's picture effects in the adventure ([TileReveal]): on by
+	# default, short, skipped by a click or a key. A view of the stored key
+	# like the switches above; the next picture shown reads it.
+	var transitions := CheckButton.new()
+	transitions.name = "Transitions"
+	transitions.text = "Transitions"
+	transitions.tooltip_text = "In the adventure, pictures come in as they " \
+		+ "did in 1997: a town's zooms in, a castle's and a lair's appear " \
+		+ "tile by tile. Short, and any click or key skips one. Off: every " \
+		+ "picture is simply there."
+	transitions.button_pressed = Settings.transitions()
+	transitions.toggled.connect(func(on: bool) -> void:
+		Settings.set_value(TileReveal.SETTING, on))
+	UiChrome.shadowed_button(transitions)
+	content.add_child(transitions)
 
 	# `[QoL]` TOUCH CONTROLS — the finger-as-mouse layer (`TouchControls`,
 	# `game/input/touch_controls.gd`) for the web export on a tablet or a

@@ -231,11 +231,12 @@
   `WorldScreen.read_card` → `FullscreenCard.open_instance`, switched by
   `WorldHud.READER_SETTING`.
 - `game/adventure/world/hero_stats.gd`: `HeroStats`, the hero's stats in
-  the hero pane (tabs Hero, Wizards, Journal; `record` counts the journal
-  as 1.3's `RebuildStatsJournalCounts`, `record_ink`, `journal_lines`).
+  the hero pane (tabs Hero, Wizards — 1997's wizards' window —, Journal;
+  `record` counts the journal as 1.3's `RebuildStatsJournalCounts`,
+  `record_ink`, `journal_lines`; the creature page's pictures).
 - `game/adventure/starter_deck.gd`: `StarterDeck`, the first deck by the
   1997 rules (`deal`, `QUOTAS`, `copies_left`, `cards` — the base set read
-  from the registry; `CardRegistry.printed_rarity`).
+  from the registry, `enchantment`; `CardRegistry.printed_rarity`).
 - `game/deck_builder/adventure_builder.gd`: `AdventureBuilder`, the deck
   builder over the hero's own cards (a `SealedPool` of `AdventurePlayer.cards`,
   the three decks, `write_back`, the gold on the title slab, `ALLOWED`;
@@ -318,6 +319,59 @@
   thread, waited for in `_exit_tree`).
 - `tools/import_original.py`: `WORLD_SHEETS`, `spr_frame_tops`, the
   `world_*` rows; `tools/skin_catalogue.py`: "The adventure world".
+- The world's last pieces (0.50.60, 2026-10-27). The doors of the castles
+  and the dungeons: `game/adventure/dungeon_doors.gd`: `DungeonDoors`
+  (`BOARD_READY` — false until part C's board —, `at`, `castle_of`,
+  `enter` — the journal, the slot's `entered` count, roaming slots 0–4
+  emptied —, `entered`, `leave` — the gifts kept, a dungeon moved
+  (`move`, `takes_dungeon`), the retaliation through `Sieges.start` on
+  Wizard); the world screen's seam: `WorldScreen._enter_board`,
+  `_board_done`, `on_board`, `_board_ready`, `_open_board`, the doors'
+  `VisitPane.choose("enter")`; `AdventurePlayer` saves `entered`.
+  Dungeons on the world: `WorldClues.on_world`; `WorldView.dungeons`,
+  `DUNGEON_LOOKS`, `dungeon_frames`, `draw_dungeon_plain`; the small map's
+  dots (`WorldMinimap`); `WorldScreen.place_at` names one on hover.
+  The keys: `WorldScreen.QuitAsk` ("Ready to Quit?", `_close_or_ask`,
+  `quit_asked`), `toggle_wizards` (F6), `stop_and_back` (Space), L loads,
+  a right click or a long press opens `WorldHud.toggle_options_at`;
+  `WorldHud.KEYS` / `OPTIONS` ("Wizards (F6)", "Load (L)", the
+  "Transitions" switch), `toggle_wizards`, `_refit`.
+  The wizards' window: `game/adventure/world/wizards_picture.gd`:
+  `WizardsPicture` (1997's Statwin hall — `available`, `has_room`,
+  `drained`, `gem_pieces`, `stage`, `wizard_at`, `room_closed`);
+  `WorldStatus.wizard_rows`, `staff`, `skull_step`; `HeroStats.show_tab`,
+  `show_wizards`, `highlight`, `key` (W / J / D), `done_pressed`,
+  `sounded`, `_wizards_page`; the creature page: `HeroStats.creature_cell`,
+  `creature_cells`, `show_all_creatures` (the page's "All creatures"
+  switch), `_castle_tries` (`DungeonDoors.entered`).
+  `CityListPane._castle_row` / `ATTEMPTS_WORDS` (the castles visited);
+  `WorldMap`'s `ORNAMENT`; `WorldStatus.next_duel_line` and
+  `QuestClock.gifts` (carried and gifted lives apart). The importer's
+  `STATWIN_PICTURES`, `read_bmp`, `clear_colour` and `sfx_wizards.wav`.
+  The transitions: `game/adventure/world/tile_reveal.gd`: `TileReveal`
+  (`wanted`, `SETTING`, `zoom_in`, `make`, `cover`, `take_screen`,
+  `picture_of`, `finish_all`, `moments`, `Order`, `done`);
+  `RevealDissolve` built on it; `VisitPane._transition_in`;
+  `EncounterStage.reveal_face`; `Settings.transitions` and the Options
+  screen's "Transitions" switch (`options_screen.gd`). A choice's first
+  letter: `VisitPane.letter_choice`, `first_letter`, `on_top`,
+  `drop_letter` (the lair, the meeting, the ruled town, the wise man, the
+  news). The first deck as 1997 dealt it: `StarterDeck.deal` (the extra
+  creature copy, coloured spells enchantments only),
+  `AdventureSetup.starting_resources` (36/40/46/46). The meeting page's
+  words on 1997's points: `EncounterStage.centred`, `GOLD_POINT` …
+  `LIFE_POINT`, `SCROLL_WORDS` (the parchment between the rolls),
+  `PLAIN_SCROLL_AT`, `_words_high` (a wrapped label made to fit, its
+  `most` place); `WorldMagicPane`'s heading centred as 1997's. The
+  letters on `WorldMagicPane` and `WorldScreen.UnsavedAsk`;
+  `WorldScreen._pane_letters`. Tests:
+  `tests/unit/test_q1_dungeon_doors.gd`, `tests/unit/test_q1_world_dungeons.gd`,
+  `tests/ui/test_q1_world_doors.gd`, `tests/ui/test_q1_world_dungeons.gd`,
+  `tests/ui/test_q1_world_dungeons_skin.gd`, `tests/ui/test_q1_world_keys.gd`,
+  `tests/unit/test_q2_wizards_record.gd`, `tests/ui/test_q2_hero_pane.gd`,
+  `tests/ui/test_q2_city_list.gd`, `tests/ui/test_q2_world_map.gd`,
+  `tests/unit/test_q3_tile_reveal.gd`, `tests/unit/test_q3_favoured_colour.gd`,
+  `tests/ui/test_q3_transitions.gd`, `tests/ui/test_q3_letters.gd`.
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
   `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
   `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,

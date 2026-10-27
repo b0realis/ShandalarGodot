@@ -205,7 +205,11 @@ func test_a_key_just_after_a_pane_closed_is_not_the_world_s() -> void:
 	assert_false(screen._leaving)
 	await _after_pane()
 	await _escape()
-	assert_eq(screen.titles, 1, "the moment over, Escape leaves as before")
+	assert_eq(screen.titles, 0, "the moment over, Escape asks first")
+	assert_not_null(screen.find_child("QuitAsk", true, false), "Ready to Quit?")
+	await _key(KEY_Y)
+	await _frames()
+	assert_eq(screen.titles, 1, "Yes leaves as before")
 
 
 func test_the_map_still_hears_its_keys_after_a_pane_over_it() -> void:

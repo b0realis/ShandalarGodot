@@ -20,10 +20,17 @@ extends Control
 ## the height of its foot, the later of two at one height behind. The two
 ## trees or rocks a tile carries, and where they stand, follow from the
 ## tile's place alone, so a world looks the same every time it is drawn.
-## NOT YET DRAWN: the dungeons. 1997 showed one once the hero held a clue to
-## it and a card was still inside (adventureWorldUi.c 1209–1236); here only
-## the SITE tiles stand ([method _standing_on]), and the small map has none
-## either — to come beside part C (corrected 2026-10-24).
+## THE DUNGEONS ([member dungeons], 2026-10-27): a dungeon the hero holds a
+## clue to, a card still inside ([method WorldClues.on_world]), stands on
+## its tile as 1997 drew it (adventureWorldUi.c 1230–1257): after the
+## tile's two trees or rocks — a dungeon tile keeps them — its marker of
+## 1997's twenty ([constant DUNGEON_LOOKS], [method dungeon_frames]), the
+## ground half drawn with the tile's and the upright among the uprights,
+## both 32 less the upright's height above the tile's left corner, foot at
+## the corner. [QoL, the owner's ruling A-1 of 2026-10-27: it shows on
+## land the hero has not seen too, over the dark — the clue told where it
+## stands — where the tile's trees stay hidden.] Plain, a dark mouth ringed
+## in gold.
 ##
 ## Without the 1997 sheets ([WorldArt]) the same world is drawn plain: a
 ## diamond of its colour per tile, the roads, a mark per site.
@@ -117,6 +124,15 @@ var lairs: Array[Dictionary] = []:
 	set(value):
 		lairs = value
 		_changed()
+## The dungeons drawn ([method WorldClues.on_world]): `{index, x, y}`, the
+## slot (5–14) and its tile.
+var dungeons: Array[Dictionary] = []:
+	set(value):
+		dungeons = value
+		_dungeon_at.clear()
+		for dungeon in value:
+			_dungeon_at[Vector2i(int(dungeon["x"]), int(dungeon["y"]))] = int(dungeon["index"])
+		_changed()
 ## The creatures the hero sees ([method WorldCreatures.seen]): `{slot,
 ## creature, x, y, heading, frame, color}`, in world units. Each slides from
 ## where the tick before left it (a creature come anew, or one that leapt,
@@ -191,6 +207,14 @@ const DOMES: Array[Array] = [["world_locatn04", 10], ["world_locatn04", 2],
 ## left of and 96 above its point, at that point's height.
 const LAIR_FRAMES: Array[int] = [0, 4, 0, 3, 2, 1]
 
+## `g_dungeon_marker_sprite_lookup` (adventureWorldUi.c 57–83): by dungeon
+## slot 5–14, its marker's upright and ground half, as indices into the six
+## location sheets read as one ([constant LOCATION_SHEETS]) — the first
+## twenty of 1997's twenty-four; the last two pairs (LOCATN05 1/7 and 0/6)
+## no slot reaches.
+const DUNGEON_LOOKS: Array[int] = [42, 48, 63, 67, 54, 60, 53, 59, 50, 56, 51, 57, 78, 84,
+	80, 86, 79, 85, 55, 61]
+
 ## Plain colours by terrain (the overview map's tiles, averaged).
 const PLAIN := {0: Color("#387faf"), 1: Color("#3aa19c"), 2: Color("#798d58"),
 	3: Color("#7c7574"), 4: Color("#ca7c72"), 5: Color("#c4705d"), 6: Color("#c4b289"),
@@ -260,6 +284,8 @@ var _upright_feet := PackedInt32Array()
 ## ([member _recipe_for]).
 var _recipes := {}
 var _recipe_for: Array = []
+## The dungeons drawn by their tile: tile → slot ([member dungeons]).
+var _dungeon_at := {}
 ## Whether the world is drawn plain (no 1997 sheets), and what the hero's
 ## pictures were drawn for: where they stood and how they looked, and
 ## which drawing of the ground.
@@ -399,7 +425,7 @@ func _refresh(look_again: bool) -> void:
 		return
 	if look_again or _shown.is_empty():
 		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), world.sites.hash(),
-			lairs.hash()]
+			lairs.hash(), dungeons.hash()]
 		if shown != _shown:
 			_shown = shown
 			_covered = Rect2()
@@ -485,19 +511,25 @@ static func _tiles_over(area: Rect2, origin: Vector2) -> Array[Vector2i]:
 	return tiles
 
 
-## The uprights of the seen tiles and of the lairs in the order drawn: up
-## by the height of the foot, the later of two at one height behind (the
-## queue of `RenderAdventureWorldScene`, sorted on whole numbers).
+## The uprights of the seen tiles, of the dungeons and of the lairs in the
+## order drawn: up by the height of the foot, the later of two at one
+## height behind (the queue of `RenderAdventureWorldScene`, sorted on whole
+## numbers). A dungeon is queued after its tile's trees or rocks, as 1997
+## queued it — seen or not ([member dungeons]).
 func _order_uprights(origin: Vector2) -> void:
 	var standing: Array = []
 	var keys := PackedInt64Array()
 	for i in _tiles.size():
-		if _seen[i] == 0:
-			continue
 		var left := _lefts[i]
-		for upright in _tile_recipes[i][2]:
-			keys.append(_upright_key(int(left.y) + int(upright[0]), standing.size()))
-			standing.append([upright[1], Rect2(left + upright[2].position, upright[2].size), upright[3]])
+		if _seen[i] != 0:
+			for upright in _tile_recipes[i][2]:
+				keys.append(_upright_key(int(left.y) + int(upright[0]), standing.size()))
+				standing.append([upright[1], Rect2(left + upright[2].position, upright[2].size), upright[3]])
+		if not _dungeon_at.is_empty():
+			var dungeon := _dungeon_op(_tiles[i], false)
+			if not dungeon.is_empty():
+				keys.append(_upright_key(int(left.y), standing.size()))
+				standing.append([dungeon[0], Rect2(left + dungeon[1].position, dungeon[1].size), dungeon[2]])
 	for lair in lairs:
 		var point := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
 		var op := _op("world_locatn07", LAIR_FRAMES[clampi(int(lair.get("color", 0)), 0, 5)], point - Vector2(64, 96))
@@ -524,7 +556,8 @@ static func _upright_key(foot: int, index: int) -> int:
 # ------------------------------------------------------------ the 1997 --
 
 ## THE GROUND: the tiles, the dark over the unseen, the ground halves of
-## what stands on the seen and of the lairs.
+## what stands on the seen, of the dungeons (seen or not, each after its
+## tile's) and of the lairs.
 func _paint_ground() -> void:
 	if world == null or _tiles.is_empty():
 		return
@@ -538,6 +571,8 @@ func _paint_ground() -> void:
 	for i in _tiles.size():
 		if _seen[i] != 0:
 			_blit_all(_ground, _tile_recipes[i][1], _lefts[i])
+		if not _dungeon_at.is_empty():
+			_blit(_ground, _dungeon_op(_tiles[i], true), _lefts[i])
 	var origin := _lay(Vector2(_anchor))
 	for lair in lairs:
 		var point := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
@@ -874,6 +909,31 @@ func _site(tile: Vector2i, halves: Array, uprights: Array) -> void:
 	_stand(uprights, 0, _op(upright[0], upright[1], at))
 
 
+## DUNGEON [param index] (5–14)'s marker: `[[sheet, frame] of the upright,
+## [sheet, frame] of its ground half]` — the pair `(index − 5) · 2` of
+## [constant DUNGEON_LOOKS]; `[]` for a slot that is no dungeon.
+static func dungeon_frames(index: int) -> Array:
+	var pair := (index - 5) * 2
+	if pair < 0 or pair + 1 >= DUNGEON_LOOKS.size():
+		return []
+	return [_location(DUNGEON_LOOKS[pair]), _location(DUNGEON_LOOKS[pair + 1])]
+
+
+## The marker of the dungeon drawn at [param tile] — its ground half when
+## [param ground], else its upright — round the tile's left corner, both
+## 32 less the upright's height above it (1997's `tile_base_screen_y −
+## height + g_world_camera_minimap_panel_y`, 0x20 at 640): `[sheet, where,
+## frame]`, or [] for none there (or a skin without the sheet).
+func _dungeon_op(tile: Vector2i, ground: bool) -> Array:
+	var frames := dungeon_frames(int(_dungeon_at.get(tile, -1)))
+	if frames.is_empty():
+		return []
+	var upright: Array = frames[0]
+	var look: Array = frames[1] if ground else upright
+	var height := art.frame_size(String(upright[0])).y
+	return _op(String(look[0]), int(look[1]), Vector2(0, 32 - height))
+
+
 ## `FindTownAtWorldCoordinates`: the first slot standing on the tile.
 func _site_index(tile: Vector2i) -> int:
 	for i in world.sites.size():
@@ -907,7 +967,8 @@ static func _castle_ref(index: int) -> Array:
 # ----------------------------------------------------------- the plain --
 
 ## The world plain, on the ground's picture: a diamond of its colour per
-## tile, the dark, the roads, a mark per site and per lair.
+## tile, the dark, the roads, a mark per site, per dungeon (seen or not)
+## and per lair.
 func _paint_plain() -> void:
 	var canvas := _ground
 	for i in _tiles.size():
@@ -942,11 +1003,23 @@ func _paint_plain() -> void:
 		var radius: float = [0, 7, 11, 14, 18, 18][clampi(kind, 0, 5)]
 		canvas.draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
+	for dungeon in dungeons:
+		draw_dungeon_plain(canvas, _lay(Vector2(int(dungeon["x"]) * 32 + 16, int(dungeon["y"]) * 32 + 16)) - origin)
 	for lair in lairs:
 		var mouth := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
 		canvas.draw_circle(mouth, 12, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(mouth, 9, Color8(40, 26, 20))
 		canvas.draw_arc(mouth, 10, 0, TAU, 20, Color8(232, 190, 110), 2.0)
+
+
+## A dungeon plain, its tile's middle at [param at] on [param canvas]: a
+## dark mouth ringed in gold, as a lair's, with the gold step of the way
+## down inside it.
+static func draw_dungeon_plain(canvas: CanvasItem, at: Vector2) -> void:
+	canvas.draw_circle(at, 14, Color(0, 0, 0, 0.6))
+	canvas.draw_circle(at, 11, Color8(14, 10, 12))
+	canvas.draw_arc(at, 12, 0, TAU, 24, Color8(232, 190, 110), 2.5)
+	canvas.draw_arc(at, 5, 0, TAU, 16, Color8(232, 190, 110), 1.5)
 
 
 ## A creature plain, standing at [param at] on [param canvas]: a disc of

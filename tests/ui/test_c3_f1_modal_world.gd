@@ -423,8 +423,19 @@ func test_the_screen_is_pictured_only_for_a_cast_that_moves_the_hero() -> void:
 	screen.cast(2)
 	assert_eq(screen.pictures, 0, "no blue amulet: no picture")
 	player.amulets["blue"] = 2
+	# The transitions on (headless they never play): the old view is read
+	# back for the reveal.
+	TileReveal.forced = 1
 	var at := player.position
 	var result := screen.cast(2)
+	TileReveal.forced = -1
 	assert_true(result["moved"])
 	assert_ne(player.position, at)
 	assert_eq(screen.pictures, 1, "a leap: the old view pictured for the reveal")
+	# The transitions off: no reveal, so nothing read back (the bug pass
+	# of 0.50.60).
+	TileReveal.forced = 0
+	player.amulets["blue"] = 2
+	screen.cast(2)
+	TileReveal.forced = -1
+	assert_eq(screen.pictures, 1, "transitions off: no picture")

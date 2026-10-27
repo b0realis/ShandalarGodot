@@ -22,7 +22,7 @@ func _record(seed_text := "12345") -> Dictionary:
 ## after each test.
 const WORLD_SETTINGS: Array[String] = [WorldHud.BAR_SETTING, WorldHud.MINIMAP_SETTING,
 	WorldHud.QUEST_SETTING, WorldHud.GUIDES_SETTING, WorldHud.PACE_SETTING, WorldHud.BIG_SETTING,
-	WorldHud.PLACES_SETTING,
+	WorldHud.PLACES_SETTING, TileReveal.SETTING,
 	"world_pane_HeroPanel", "world_pane_HelpPanel", "world_pane_CluesPanel",
 	"world_pane_QuestPane", "world_pane_Minimap"]
 const SAVES := "user://adventure_tests_world"
@@ -180,7 +180,11 @@ func test_the_map_and_leaving() -> void:
 	screen._unhandled_input(escape)
 	assert_false(map.visible, "Escape closes the map first")
 	screen._unhandled_input(escape)
-	assert_true(screen._leaving, "then leaves")
+	assert_false(screen._leaving, "not yet")
+	assert_true(screen.quit_asked(), "then asks Ready to Quit?")
+	screen._quit_ask.answered.emit(true)
+	await get_tree().process_frame
+	assert_true(screen._leaving, "Yes.: then leaves")
 	assert_true(screen.is_inside_tree(), "but not the test runner's tree")
 
 
@@ -384,7 +388,7 @@ func test_the_floating_icons_show_what_the_hero_carries() -> void:
 	assert_eq(number.call("Strip_gold"), str(screen.player.gold))
 	assert_eq(number.call("Strip_food"), str(screen.player.food))
 	assert_eq(number.call("Strip_ankh"), "10", "the world's first ten towns and cities: ten mana links")
-	assert_eq(number.call("Strip_book"), "39/39", "a Magician's first deck, all of it in Deck 1")
+	assert_eq(number.call("Strip_book"), "40/40", "a Magician's first deck, all of it in Deck 1")
 	for color in ["black", "blue", "green", "red", "white"]:
 		assert_eq(number.call("Amulet_" + color), str(int(screen.player.amulets[color])), color)
 	# Red: Staff of Thunder (bit 8) is the hero's, lit while a red amulet is left.
@@ -459,7 +463,7 @@ func test_the_round_buttons() -> void:
 	builder._exit()
 	await get_tree().process_frame
 	assert_false(screen.building(), "Done: the world again")
-	assert_eq(hud.notice(), "Deck 1: 39 cards")
+	assert_eq(hud.notice(), "Deck 1: 40 cards")
 	AdventurePlayer.saves_folder = "user://adventure_tests_hud"
 	var path := screen.save_into_slot(1, "Before the duel")
 	assert_true(FileAccess.file_exists(path), "a slot written")
@@ -483,8 +487,9 @@ func test_the_options() -> void:
 	for entry in WorldHud.OPTIONS:
 		words.append(option.call(entry[0]).text)
 	var on_off := func(on: bool) -> String: return "on" if on else "off"
-	assert_eq(words, ["Save", "Load", "City list (F3)", "Panel at the bottom", "Small map: on", "Quest pane: on",
-		"Guide arrows: on", "Place names: on", "Large card on right-click: on", "Big buttons: off", "Pace: as in 1997", "Music: " + on_off.call(_music),
+	assert_eq(words, ["Save", "Load (L)", "City list (F3)", "Wizards (F6)", "Panel at the bottom", "Small map: on",
+		"Quest pane: on", "Guide arrows: on", "Place names: on", "Large card on right-click: on", "Big buttons: off",
+		"Pace: as in 1997", "Transitions: " + on_off.call(Settings.transitions()), "Music: " + on_off.call(_music),
 		"Sound: " + on_off.call(_sound), "Return to main menu", "Exit game"] as Array[String])
 	# Save.
 	AdventurePlayer.saves_folder = "user://adventure_tests_options"
@@ -553,6 +558,10 @@ func test_the_options() -> void:
 	screen._tick_left = 0.0
 	screen._process(HeroWalk.TICK * 2.1)
 	assert_eq(screen.player.monster_timer, ticked + 3, "three ticks where 1997 ran two")
+	var transitions := Settings.transitions()
+	(option.call("Transitions") as Button).pressed.emit()
+	assert_eq(Settings.transitions(), not transitions, "the transitions switched, the Options screen's too")
+	assert_eq(option.call("Transitions").text, "Transitions: " + on_off.call(not transitions))
 	(option.call("Music") as Button).pressed.emit()
 	assert_eq(Settings.music_enabled(), not _music, "music switched")
 	assert_eq(option.call("Music").text, "Music: " + on_off.call(not _music))

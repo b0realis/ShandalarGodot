@@ -6,9 +6,12 @@ extends Control
 ## was a screen of its own (`ShowWorldMapScreen`), which M still opens.
 ## This one is the land round the hero as the world screen sees it, small:
 ## the same diamonds, two across for one down ([method WorldView.project]),
-## only the land seen, the roads, the towns and castles, the places a quest
-## or a siege calls the hero to, and the hero in the middle. A click on it
-## walks there, a drag moves it ([WorldHud]); N hides or shows it.
+## only the land seen, the roads, the towns and castles, the dungeons the
+## hero knows of (the owner's ruling A-2 of 2026-10-27: a dark mouth ringed
+## in gold, on land not yet seen too — [method WorldClues.on_world]), the
+## places a quest or a siege calls the hero to, and the hero in the middle.
+## A click on it walks there, a drag moves it ([WorldHud]); N hides or
+## shows it.
 ##
 ## TWO LAYERS, so a frame costs next to nothing: the land, its roads and
 ## towns ([member _ground]) are drawn round the middle of the hero's tile
@@ -26,6 +29,9 @@ const ROAD := Color8(123, 63, 7)
 const TOWN := Color8(236, 222, 196)
 const HERO := Color(1, 1, 1)
 const SIEGE := Color8(232, 60, 40)
+## A dungeon's mark: a dark mouth of this radius, ringed in [constant GOLD].
+const DUNGEON := 2.4
+const DUNGEON_MOUTH := Color8(14, 10, 12)
 
 var world: ShandalarWorld:
 	set(value):
@@ -39,6 +45,12 @@ var hero := Vector2.ZERO:
 ## The places called out ([method WorldStatus.targets]): `{tile, kind,
 ## name}`, the kind `quest` or `siege`.
 var marks: Array[Dictionary] = []
+## The dungeons the hero knows of ([method WorldClues.on_world]): `{index,
+## x, y}`, x and y their tile; drawn with the land.
+var dungeons: Array[Dictionary] = []:
+	set(value):
+		dungeons = value
+		_follow()
 ## What takes the pointer: the whole map, drawing nothing itself.
 var _land: Control
 ## The land, roads and towns, drawn round [member _anchor] and moved under
@@ -113,14 +125,15 @@ func _process(delta: float) -> void:
 
 ## The land moved under the hero, and drawn again when what it shows
 ## changed: another tile, new land seen (the page's explored marks), a
-## town taken or a castle beaten, another world or size.
+## town taken or a castle beaten, a dungeon learned of or moved, another
+## world or size.
 func _follow() -> void:
 	if _ground == null:
 		return
 	var tile := Vector2i(floori(hero.x / 32.0), floori(hero.y / 32.0))
 	var shown: Array = [null, tile, size]
 	if world != null:
-		shown = [world.get_instance_id(), tile, size, hash(world.page), world.sites.hash()]
+		shown = [world.get_instance_id(), tile, size, hash(world.page), world.sites.hash(), dungeons.hash()]
 	if shown != _drawn:
 		_drawn = shown
 		_anchor = Vector2(tile * 32 + Vector2i(16, 16))
@@ -202,6 +215,11 @@ func _draw_ground() -> void:
 		var radius: float = [0.0, 1.6, 2.2, 2.8, 3.2, 3.2][clampi(kind, 0, 5)]
 		_ground.draw_circle(middle, radius + 1.0, Color(0, 0, 0, 0.85))
 		_ground.draw_circle(middle, radius, TOWN if kind < ShandalarWorld.CASTLE else GOLD)
+	for dungeon in dungeons:
+		var mouth := _on_ground(Vector2(int(dungeon["x"]) * 32 + 16, int(dungeon["y"]) * 32 + 16))
+		if box.has_point(mouth):
+			_ground.draw_circle(mouth, DUNGEON + 1.2, GOLD)
+			_ground.draw_circle(mouth, DUNGEON, DUNGEON_MOUTH)
 
 
 ## The places called out and the hero's dot, pulsing.

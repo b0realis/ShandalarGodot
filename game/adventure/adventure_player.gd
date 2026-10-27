@@ -786,12 +786,16 @@ static func _cleaned_site(value: Variant) -> Dictionary:
 
 ## An encounter slot ([member ShandalarWorld.encounters]): its numbers
 ## numbers, its place a tile of the map, its town a site of the world, its
-## cards dungeon cards of the table ([constant ShandalarWorld.DUNGEON_CARDS]).
+## cards dungeon cards of the table ([constant ShandalarWorld.DUNGEON_CARDS]),
+## its attempts (`entered`, [DungeonDoors]; absent in a save from before
+## them, which reads 0) a count.
 static func _cleaned_encounter(value: Variant, made: ShandalarWorld) -> Dictionary:
 	var encounter: Dictionary = _whole(_object(value))
 	for key in ["town", "color", "monster_flags", "rules", "card_in_effect", "clues"]:
 		if encounter.has(key):
 			encounter[key] = _number(encounter[key])
+	if encounter.has("entered"):
+		encounter["entered"] = _count(encounter["entered"])
 	for key in ["x", "y"]:
 		encounter[key] = clampi(_number(encounter.get(key)), 0, ShandalarWorld.TILES - 1)
 	if encounter.has("town") and not _is_site(int(encounter["town"]), made):

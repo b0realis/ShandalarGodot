@@ -12,7 +12,9 @@ extends Control
 ## world's clock ticking every 60 ms as the original's did, the land the
 ## hero passes explored. The pointer is a small walking man, an open door
 ## over a site, the place's name by it. The arrows or a drag look around,
-## the wheel zooms, Space comes back to the hero, Escape leaves.
+## the wheel zooms, Space stops the walk and comes back to the hero, a
+## right click opens the options, Escape or Q asks "Ready to Quit?"
+## ([method ask_quit]; the keys in full at [method _unhandled_input]).
 ## A pinch zooms and a touchpad's two-finger slide looks, and a finger
 ## does what the mouse does ([TouchControls]).
 ## The floating panel ([WorldHud]) shows what the hero carries; its World
@@ -53,7 +55,16 @@ extends Control
 ## closes too, so the second click of a double click on its Done walks no
 ## one. The map is a whole screen of its own, as 1997's was: while it is
 ## up only its keys, Escape and Ctrl+S act ([method _map_key]).
-## The dungeons come next (`docs/adventure-implementation-notes.md`).
+## THE CASTLES' AND THE DUNGEONS' DOORS ([DungeonDoors], 2026-10-27): a
+## dungeon the hero knows of is drawn on the world and the small map; its
+## pane's "Enter the dungeon", like a castle's "Yes, enter the castle.",
+## goes in ([method _enter_board]) — the journal, the attempt counted, the
+## roaming slots 0–4 emptied —, the board over the world while the hero is
+## inside ([method on_board]: nothing saved), and out again ([method
+## _board_done]): a dungeon moved, a castle left unbeaten on Wizard
+## retaliated for, the game saved, the news. The board itself is part C's;
+## until it is made the doors wait, disabled ([constant
+## DungeonDoors.BOARD_READY]).
 
 const LOOK_SPEED := 600.0   # screen pixels a second, at zoom 1
 const ZOOM_STEP := 1.25
@@ -83,6 +94,11 @@ const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
 ## 0x10: a village, a town, a city, a castle, as a wizard holds them or
 ## not; a dungeon never).
 const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen"]
+## The places whose tune comes to full voice as they are entered: a
+## village, a town, a city — and a castle, standing or beaten [1997: every
+## site's arrival set the place's channel to full, adventure_input.c 703–722
+## and 835–840, a castle's own tune too].
+const SWELLING_PLACES := ["village", "town", "city", "castle", "fallen"]
 
 ## The adventure: the hero and their world. Set before the screen enters
 ## the tree; when it is not, one is begun from [member record] and
@@ -114,6 +130,9 @@ var _shield: Control
 var _shield_until := 0
 var _arrival: Label
 var _dragging := false
+## W and D pressed while the hero's pane was open: the pane's, not looked
+## with until let go ([method _look_with_keys]).
+var _pane_letters: Array[int] = []
 var _pressed_at := Vector2.ZERO
 var _dragged := false
 var _leaving := false
@@ -152,8 +171,13 @@ var _magic_seller: WorldMagicPane
 var _city_list: CityListPane
 var _save_slots: SaveSlotsPane
 ## The question asked when the adventure could not be saved as the hero
-## leaves the world ([UnsavedAsk]).
+## leaves the world ([UnsavedAsk]), and "Ready to Quit?" ([QuitAsk]).
 var _unsaved: UnsavedAsk
+var _quit_ask: QuitAsk
+## A CASTLE'S OR A DUNGEON'S BOARD over the world (part C's; [method
+## _enter_board]) while the hero is inside — it holds the world, and no
+## save is made while it is up, as 1997 saved nothing on the board.
+var _board: Control
 ## The duel's full-screen card reader, for a card right-clicked in a pane
 ## ([method read_card]).
 var reader: FullscreenCard
@@ -189,6 +213,7 @@ class UnsavedAsk extends PanelContainer:
 	var words := ""
 	## The size factor (the panel's big buttons, [constant WorldHud.BIG]).
 	var k := 1.0
+	var _choices: HBoxContainer
 
 	func _ready() -> void:
 		name = "UnsavedAsk"
@@ -201,6 +226,7 @@ class UnsavedAsk extends PanelContainer:
 		column.add_child(PaneStyle.title("Not saved", int(24 * k)))
 		column.add_child(PaneStyle.wrapped(words, int(16 * k), 400.0 * k))
 		var choices := HBoxContainer.new()
+		_choices = choices
 		choices.alignment = BoxContainer.ALIGNMENT_CENTER
 		choices.add_theme_constant_override("separation", int(10 * k))
 		choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -212,10 +238,68 @@ class UnsavedAsk extends PanelContainer:
 		choices.add_child(go)
 		column.add_child(choices)
 
+	func _input(event: InputEvent) -> void:
+		VisitPane.drop_letter(_choices, event)
+
 	func _unhandled_input(input: InputEvent) -> void:
 		if input.is_action_pressed("ui_cancel"):
 			get_viewport().set_input_as_handled()
 			answered.emit(false)
+		elif VisitPane.letter_choice(self, _choices, input):
+			# A choice by its first letter (S, L), Enter takes it (C-5).
+			get_viewport().set_input_as_handled()
+
+
+## READY TO QUIT? — 1997's `@SHUTDOWN` ("Ready to Quit?\n No.\n Yes.\n",
+## adventure_input.c 311–324), asked when Escape or Q finds nothing open:
+## "No." stays, "Yes." leaves; Escape, or N, stays and Y leaves — the
+## choices answer to their first letter, as 1997's text menus' did
+## (`RunTextMenuAt`, adventure_ui.c 436–461, moved to the choice; ours
+## takes it, the owner's ruling C-5).
+class QuitAsk extends PanelContainer:
+	## [param leave] true for "Yes.", false for "No.".
+	signal answered(leave: bool)
+
+	## `@SHUTDOWN`'s question.
+	const WORDS := "Ready to Quit?"
+
+	## The size factor (the panel's big buttons, [constant WorldHud.BIG]).
+	var k := 1.0
+
+	func _ready() -> void:
+		name = "QuitAsk"
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		add_theme_stylebox_override("panel", PaneStyle.glass(16.0))
+		var column := VBoxContainer.new()
+		column.add_theme_constant_override("separation", int(12 * k))
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(column)
+		var title := PaneStyle.title(WORDS, int(24 * k))
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		column.add_child(title)
+		var choices := HBoxContainer.new()
+		choices.alignment = BoxContainer.ALIGNMENT_CENTER
+		choices.add_theme_constant_override("separation", int(10 * k))
+		choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var stay := PaneStyle.button("No.", "QuitNo", k)
+		stay.pressed.connect(func() -> void: answered.emit(false))
+		choices.add_child(stay)
+		var go := PaneStyle.button("Yes.", "QuitYes", k)
+		go.pressed.connect(func() -> void: answered.emit(true))
+		choices.add_child(go)
+		column.add_child(choices)
+
+	func _unhandled_input(input: InputEvent) -> void:
+		if input.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			answered.emit(false)
+			return
+		var key := input as InputEventKey
+		if key == null or not key.pressed or key.echo:
+			return
+		if key.keycode == KEY_N or key.keycode == KEY_Y:
+			get_viewport().set_input_as_handled()
+			answered.emit(key.keycode == KEY_Y)
 
 
 func _ready() -> void:
@@ -391,6 +475,8 @@ func show_world(shown: ShandalarWorld) -> void:
 func _show_hero() -> void:
 	view.hero = Vector2(player.position)
 	view.lairs = WorldLairs.seen(player)
+	var known := WorldClues.on_world(world)
+	view.dungeons = known
 	view.creatures = WorldCreatures.seen(player)
 	view.hero_facing = player.facing
 	view.hero_step = player.step
@@ -400,6 +486,7 @@ func _show_hero() -> void:
 	hud.minimap.world = world
 	hud.minimap.hero = Vector2(player.position)
 	hud.minimap.marks = calling
+	hud.minimap.dungeons = known
 	var guided: Array[Dictionary] = []
 	if WorldHud.guides_wanted():
 		guided = calling
@@ -418,10 +505,11 @@ func _show_hero() -> void:
 
 ## Whether a pane holds the screen (ruling A): a place's pane or one over
 ## it ([method visiting]), the deck builder, the saved adventures, a
-## creature's meeting and its duel, a news flash — and, for good, the
-## adventure lost ([method show_end]).
+## creature's meeting and its duel, a news flash, a castle's or a dungeon's
+## board — and, for good, the adventure lost ([method show_end]).
 func modal() -> bool:
-	return visiting() or building() or loading() or meeting() or _duel_held or news_shown() or _lost
+	return visiting() or building() or loading() or meeting() or _duel_held or news_shown() or on_board() \
+		or _lost
 
 
 ## Whether the world waits: a pane holds the screen, or the map is up
@@ -457,9 +545,14 @@ func _hold() -> void:
 
 
 ## Every input event is met by the panes' hold as it now stands, before any
-## control hears it.
-func _input(_event: InputEvent) -> void:
+## control hears it; a W or D pressed while the hero's pane is open is the
+## pane's until it is let go ([method _look_with_keys]).
+func _input(event: InputEvent) -> void:
 	_sync_rest()
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and hud != null and hud.hero_shown() \
+			and key.keycode in [KEY_W, KEY_D] and not key.keycode in _pane_letters:
+		_pane_letters.append(key.keycode)
 
 
 # ------------------------------------------------------------ the saves --
@@ -646,8 +739,11 @@ func _notification(what: int) -> void:
 	# part B, H2-4): the tick it holds is half taken — the hero's step, not
 	# the creatures' — and a save then lost the news and skipped the rest of
 	# the tick; the last save stands, and its dice bring the news again.
+	# On a castle's or a dungeon's board neither: 1997 saved nothing there;
+	# the last save stands, from before the hero went in.
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building() \
-			and not meeting() and not _duel_held and not _lost and not rewarding() and not news_shown():
+			and not meeting() and not _duel_held and not _lost and not rewarding() and not news_shown() \
+			and not on_board():
 		autosave()
 
 
@@ -692,8 +788,15 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 	_visit.deck_wanted.connect(show_creature_deck)
 	_visit_tile = tile
 	_hold()
-	if write and String(place["kind"]) in VisitPane.KINDS:
+	if write and String(place["kind"]) in SWELLING_PLACES:
 		soundscape.swell()
+	if String(place["kind"]) in ["castle", "fallen"]:
+		# The castles the hero has stood before, for the city list (F3)
+		# [ours: 1997 never marked a castle visited — its castle branches of
+		# `VisitTownSlot` return before the town's mark (visitLocation.c
+		# 4399, 4425; 4596) — so its list's castle rows were never reached;
+		# the owner's ruling H5 of 2026-10-27].
+		TownStatus.put(world, int(place["slot"]), TownStatus.VISITED)
 	if not arrived.is_empty():
 		# The quest done here: the keeper's words over the town, the quest
 		# pane at once without it.
@@ -733,10 +836,10 @@ func _arrive_in_town(slot: int) -> Dictionary:
 
 ## Whether a place's pane, or a pane over the world (the shop, the trade, a
 ## list of cards, the seller, the city list, the saves, the question of a
-## save not written), is up.
+## save not written, "Ready to Quit?"), is up.
 func visiting() -> bool:
 	return _alive(_visit) or shopping() or trading() or _alive(_card_list) or _alive(_magic_seller) \
-		or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved)
+		or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved) or _alive(_quit_ask)
 
 
 ## Whether [param node] stands on the screen still: there, and not on its
@@ -756,7 +859,9 @@ func _close_pane(pane: Variant) -> void:
 
 ## THE TOWN'S PANE CLOSED, [param then] what the hero chose ([signal
 ## VisitPane.left]): a service of the town over the world — the deck
-## builder, the shop, the trade, the wise man — or the place left.
+## builder, the shop, the trade, the wise man —, a ruled town's duel, a
+## castle or a dungeon entered (`enter`, [method _enter_board]), or the
+## place left.
 func _left_place(then: String) -> void:
 	var place: Dictionary = _visit.place if _alive(_visit) else {}
 	if _alive(_visit):
@@ -776,6 +881,8 @@ func _left_place(then: String) -> void:
 				open_wise_man(slot, "quest" if then == "quest" else "talk")
 			"duel":
 				_open_ruled_duel(place)
+			"enter":
+				_enter_board(place)
 			_:
 				_leave_site(place)
 	_sync_rest()
@@ -817,6 +924,88 @@ func _open_ruled_duel(place: Dictionary) -> void:
 ## a seam, so a test can stand its own pane in.
 func _open_ruled_pane(slot: int) -> Control:
 	return RuledTowns.open(self, slot)
+
+
+# ------------------------------------------- the castles' and dungeons' doors --
+
+## A CASTLE OR A DUNGEON ENTERED — [param place] the castle's pane ("Yes,
+## enter the castle.") or the dungeon's ("Enter the dungeon"): the place's
+## tune at rest (1997's `sound_stop(0x10)` before the castle's board,
+## visitLocation.c 4390 [ours: 1997 slip D-s2 — a dungeon's walk-in left the
+## place's tune playing under the board's]); the world side of going in
+## ([method DungeonDoors.enter]: the journal, the attempt, roaming slots 0–4
+## emptied); then the board over the world ([method _open_board]), which
+## holds it ([method on_board]) until its `finished(result)` ([method
+## _board_done]). With no board yet ([method _board_ready], part C) the
+## place is only left — the doors wait, disabled, on the panes.
+func _enter_board(place: Dictionary) -> void:
+	var index := -1
+	match String(place.get("kind", "")):
+		"castle":
+			index = DungeonDoors.castle_of(world, int(place.get("slot", -1)))
+		"dungeon":
+			index = int(place.get("slot", -1))
+	if index < 0 or not _board_ready():
+		_leave_site(place)
+		return
+	soundscape.rest(true)
+	var setup := DungeonDoors.enter(player, index)
+	var board := _open_board(setup)
+	if board == null:
+		# No board after all: out at once, as by the board's own door.
+		_board_done({}, place, index)
+		return
+	_board = board
+	board.connect(&"finished", _board_done.bind(place, index), CLOSING)
+	_hold()
+
+
+## THE BOARD LEFT with [param result] (`{beaten, booted}`, part C's; `{}`
+## out by its door) for [param place], castle or dungeon [param index]: the
+## world side of coming out ([method DungeonDoors.leave]: a dungeon moved,
+## the gifts kept, a castle left unbeaten on Wizard retaliated for), the
+## place's tune again, then the place left as any is — the game saved, the
+## clock on to the next 32 ([method _leave_site]; 1997 saved after a
+## castle, [ours: after a dungeon too — 1997 saved nothing until the next
+## town or a quit; the owner's ruling D-3 of 2026-10-27]) — and the
+## retaliation's news after that save, as 1997 showed it before saving the
+## same state. `game_over` in the result — no card left to stake in a room's
+## duel — is the adventure's end instead, nothing saved ([method show_end]).
+func _board_done(result: Dictionary, place: Dictionary, index: int) -> void:
+	if _alive(_board):
+		_board.queue_free()
+	_board = null
+	if bool(result.get("game_over", false)):
+		show_end(Array(CreatureMeeting.NO_ANTE))
+		_sync_rest()
+		return
+	var news := DungeonDoors.leave(player, index, result)
+	soundscape.rest(false)
+	_leave_site(place)
+	if not news.is_empty():
+		show_news(news)
+	_show_hero()
+	view.queue_redraw()
+	_sync_rest()
+
+
+## Whether a castle's or a dungeon's board holds the world.
+func on_board() -> bool:
+	return _alive(_board)
+
+
+## Whether the board exists ([constant DungeonDoors.BOARD_READY]); a seam,
+## so a test can open the doors before part C.
+func _board_ready() -> bool:
+	return DungeonDoors.BOARD_READY
+
+
+## THE BOARD for [param setup] ([method DungeonDoors.enter]: `{index,
+## castle, color, tries}`), over the world: a pane with `finished(result:
+## Dictionary)`. Part C's; null until it is made. A seam, so a test can
+## stand its own board in.
+func _open_board(_setup: Dictionary) -> Control:
+	return null
 
 
 ## EDIT DECK/SELL CARDS: the town's deck builder, which buys cards too; its
@@ -1327,7 +1516,7 @@ func cast(key: int) -> Dictionary:
 	# Leap of Fate and Sword of Resistance show the new place block by
 	# block over the old ([RevealDissolve]) — the screen read back only for
 	# a cast that will move the hero.
-	var before := _picture_for_reveal() if _cast_moves(key) else null
+	var before := _picture_for_reveal() if _cast_moves(key) and TileReveal.wanted() else null
 	var result := WorldMagic.cast(player, key)
 	if result["moved"]:
 		walk.stop()
@@ -1655,9 +1844,13 @@ func tile_at(point: Vector2) -> Vector2i:
 
 
 ## The place the hero can see and visit at [param tile] ([method
-## VisitPane.describe]), or `{}`.
+## VisitPane.describe]), or `{}`: on land seen, or a known dungeon drawn on
+## land not yet seen [QoL: it is drawn there (the owner's ruling A-1 of
+## 2026-10-27, [method WorldClues.on_world]), so the pointer names it too].
 func place_at(tile: Vector2i) -> Dictionary:
-	if player == null or world == null or not world.is_explored(tile.x, tile.y):
+	if player == null or world == null:
+		return {}
+	if not world.is_explored(tile.x, tile.y) and DungeonDoors.at(world, tile) < 0:
 		return {}
 	return VisitPane.describe(player, tile)
 
@@ -1801,16 +1994,27 @@ func _process(delta: float) -> void:
 
 
 ## The arrows (W A S D too) look around; Ctrl+S saves, so with Ctrl held
-## they never look down.
+## they never look down. While the hero's pane is open W and D are the
+## pane's — W the Wizards, D closes it (J the Journal), as 1997's stats
+## screen took them (adventureStats.c 136–138; the owner's ruling C-3) — so
+## they look no more until it closes, nor while the key that closed it is
+## still held ([member _pane_letters]); A, S and the arrows still do.
+## [QoL: the arrows look where 1997's walked the hero — a click walks here.]
 func _look_with_keys(delta: float) -> void:
+	for code in _pane_letters.duplicate():
+		if not Input.is_key_pressed(code):
+			_pane_letters.erase(code)
 	if Input.is_key_pressed(KEY_CTRL):
 		return
+	var pane := hud.hero_shown()
+	var w := Input.is_key_pressed(KEY_W) and not pane and not KEY_W in _pane_letters
+	var d := Input.is_key_pressed(KEY_D) and not pane and not KEY_D in _pane_letters
 	var direction := Vector2.ZERO
 	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
 		direction.x -= 1
-	if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
+	if Input.is_key_pressed(KEY_RIGHT) or d:
 		direction.x += 1
-	if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
+	if Input.is_key_pressed(KEY_UP) or w:
 		direction.y -= 1
 	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
 		direction.y += 1
@@ -1834,6 +2038,15 @@ func _gui_input(event: InputEvent) -> void:
 				# unless it closes the options, as a click outside a menu does.
 				if not _dragged and not hud.close_options():
 					walk_to_tile(tile_at(button.position))
+		elif button.pressed and button.button_index == MOUSE_BUTTON_RIGHT:
+			# THE RIGHT CLICK: the options at the pointer — 1997's right
+			# button on the world opened its "Will you ..." menu (`@STARTUP`
+			# 1: Save, Load, Quit, the deck, the map, the city list, the
+			# clues, the stats, the wizards; adventure_input.c 31–94), whose
+			# entries the options hold (the owner's ruling C-4). Again closes.
+			_dragging = false
+			hud.hide_place()
+			hud.toggle_options_at(button.position)
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_UP:
 			set_zoom(view.zoom * ZOOM_STEP)
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -1856,7 +2069,12 @@ func _gui_input(event: InputEvent) -> void:
 		_hover_world(motion.position)
 
 
-## The world's keys. A pane that holds the screen hears its own keys
+## The world's keys ([constant WorldHud.KEYS] says them): M or F2 the map,
+## F1 the deck, F3 the cities, F4 the clues, F5 the hero, F6 the wizards,
+## 1–5 a World Magic, N the small map, H the keys, L the saved adventures,
+## Ctrl+S the slots, Space stops the walk and comes back to the hero, Home
+## comes back, + and − zoom; Escape or Q closes what is open, else asks
+## "Ready to Quit?". A pane that holds the screen hears its own keys
 ## (ruling A); the map takes its own ([method _map_key], ruling B). For a
 ## moment after the last pane closed ([constant AFTER_PANE_MS], the
 ## shield's) the world hears none of them: the playtest of part B (H2-1,
@@ -1872,10 +2090,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if _map.visible:
 			toggle_map()
-		elif hud.close_panels():
-			pass
 		else:
-			leave()
+			_close_or_ask()
 		return
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
@@ -1900,14 +2116,22 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.show_minimap(not hud.minimap_shown())
 		KEY_F5:
 			toggle_hero()
+		KEY_F6:
+			toggle_wizards()
 		KEY_H:
 			toggle_help()
+		KEY_L:
+			open_load()
+		KEY_Q:
+			_close_or_ask()
 		KEY_S:
 			if key.ctrl_pressed:
 				save_now()
 			else:
 				return
-		KEY_SPACE, KEY_HOME:
+		KEY_SPACE:
+			stop_and_back()
+		KEY_HOME:
 			back_to_hero()
 		KEY_PLUS, KEY_KP_ADD, KEY_EQUAL:
 			set_zoom(view.zoom * ZOOM_STEP)
@@ -1916,6 +2140,66 @@ func _unhandled_input(event: InputEvent) -> void:
 		_:
 			return
 	get_viewport().set_input_as_handled()
+
+
+## ESCAPE OR Q: what the panel has open closed (its panes, the options, the
+## keys), else "Ready to Quit?" ([method ask_quit]).
+func _close_or_ask() -> void:
+	if not hud.close_panels():
+		ask_quit()
+
+
+## READY TO QUIT? (Escape or Q with nothing open; 1997's `@SHUTDOWN`,
+## adventure_input.c 311–324 — the owner's ruling C-1 of 2026-10-27):
+## "Yes." saves and leaves for the title ([method leave]); "No." or Escape
+## stays — a walk under way goes on, as 1997's way held through its
+## question. [ours: 1997 wrote its slot 3 after the question whatever the
+## answer; here staying saves nothing — the save made as the hero left the
+## last place stands.] The world waits while it is asked. Not while a pane
+## holds the screen. The question shown, or null.
+func ask_quit() -> QuitAsk:
+	if _alive(_quit_ask):
+		return _quit_ask
+	if player == null or modal():
+		return null
+	var asked := QuitAsk.new()
+	asked.k = WorldHud.BIG if hud.big else 1.0
+	_quit_ask = asked
+	add_child(asked)
+	PaneStyle.centre(asked)
+	asked.answered.connect(func(leave_now: bool) -> void:
+		if _alive(asked):
+			asked.queue_free()
+		_sync_rest()
+		if leave_now:
+			leave(), CLOSING)
+	_hold()
+	return asked
+
+
+## Whether "Ready to Quit?" is asked.
+func quit_asked() -> bool:
+	return _alive(_quit_ask)
+
+
+## THE WIZARDS (F6, the options' "Wizards (F6)"): the hero's pane on its
+## Wizards tab ([method WorldHud.toggle_wizards]) — 1997's F6 opened the
+## wizards' window (`ShowStatsWindow(0, −1)`, adventure_input.c 373–396).
+## Not while the world waits.
+func toggle_wizards() -> void:
+	if _world_waits():
+		return
+	hud.toggle_wizards()
+
+
+## SPACE: the walk stopped — 1997's Space set the way to none and the hero
+## stood (adventure_input.c 328–353) — and the camera back on the hero, as
+## Space brought it back before [1997 + ours].
+func stop_and_back() -> void:
+	if walk != null and walk.is_walking():
+		walk.stop()
+		_show_hero()
+	back_to_hero()
 
 
 ## THE KEYS WHILE THE MAP IS UP (ruling B: the map is a whole screen, as

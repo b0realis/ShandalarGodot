@@ -79,8 +79,9 @@ extends RefCounted
 ## [Ours] A conceded duel ("Exit duel" in an adventure duel) is a loss.
 ## [Ours] A henchman beaten, or a win with nothing to give, still says so
 ## on a pane ([member Dictionary] `won_words`); 1997 went back to the map
-## after its wizards' window (`ShowStatsWindow(2, …)`, E:2266), which is not
-## ours yet (an open question of part B).
+## after its wizards' window (`ShowStatsWindow(2, …)`, E:2266), which never
+## opens by itself here (the owner's ruling B-3/B-4 of 2026-10-27): F6 and
+## the hero pane's Wizards tab show it ([method HeroStats.show_wizards]).
 
 const WON := 1
 const LOST := 0

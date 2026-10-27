@@ -122,7 +122,7 @@ func test_the_difficulty_shows_what_the_hero_starts_with() -> void:
 	var note := (_find("DifficultyNote") as Label).text
 	assert_string_contains(note, "100 gold")
 	assert_string_contains(note, "1 amulet")
-	assert_string_contains(note, "45-card")
+	assert_string_contains(note, "46-card")
 	assert_string_contains(note, "all five colors")
 	(_find("DifficultyApprentice") as Button).pressed.emit()
 	assert_string_contains((_find("DifficultyNote") as Label).text, "250 gold · 50 food · 4 amulets")

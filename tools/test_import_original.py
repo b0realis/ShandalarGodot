@@ -1428,7 +1428,11 @@ class TestTheSkinIsBuiltOffTheDiscAlone(unittest.TestCase):
                              "%s names a Manalink path: %s" % (key, name))
             self.assertNotIn(low, self.MANALINK_ONLY,
                              "%s names a Manalink file: %s" % (key, name))
-            self.assertFalse(low.endswith(".bmp"),
+            # A `.bmp` is never the 1997 DUEL's or SHELL's art — with one
+            # exception: `Statwin/`, the folder 1997's own `Statwin.dll`
+            # (1 May 1997) loads the wizards' window's bitmaps from (dated
+            # 1996 in the owner's install; THE WIZARDS' HALL).
+            self.assertFalse(low.endswith(".bmp") and not low.startswith("statwin/"),
                              "%s names a .bmp (never 1997): %s" % (key, name))
 
     def test_the_conversion_door_is_gone(self):
@@ -1555,11 +1559,16 @@ class TestSoundManifest(unittest.TestCase):
         self.assertIsNone(imp._first_of(index, imp.MANIFEST["sfx_button.wav"]))
 
     def test_every_sound_asks_for_a_directory_first(self):
+        # The one sound in the install's ROOT, beside the program: the
+        # wizards' window's `Statscrn.wav` (`.\\statscrn.wav`, Statwin), no
+        # folder to name and no other file of its name in a 1997 install.
+        at_the_root = {"sfx_wizards.wav"}
         for key, candidates in imp.MANIFEST.items():
-            if not imp.is_sound_key(key):
+            if not imp.is_sound_key(key) or key in at_the_root:
                 continue
             self.assertIn("/", candidates[0],
                           f"{key} must say which folder it means")
+        self.assertEqual([imp.MANIFEST[key] for key in sorted(at_the_root)], [["Statscrn.wav"]])
 
     def test_the_games_own_folder_beats_the_manalink_source_copy(self):
         root = self._tree({"Duelsounds/Grey.wav": b"installed",
@@ -2192,3 +2201,127 @@ class TestThePartBSounds(unittest.TestCase):
                     "sfx_dsummon.wav", "sfx_newsflash.wav", "sfx_lair_duel.wav",
                     "sfx_dungeon_duel.wav", "music_win_duel.wav", "music_lose_duel.wav"]:
                 self.assertIsNotNone(imp._first_of(index, imp.MANIFEST[key]), key)
+
+
+def make_bmp(width: int, height: int, rgb: bytes, top_down: bool = False) -> bytes:
+    """A 24-bit BI_RGB Windows bitmap of [rgb] (rows top to bottom) — the
+    exact inverse of `read_bmp`, built here so no 1997 byte travels."""
+    stride = (width * 3 + 3) & ~3
+    body = bytearray()
+    rows = range(height) if top_down else range(height - 1, -1, -1)
+    for y in rows:
+        line = bytearray()
+        for x in range(width):
+            r, g, b = rgb[(y * width + x) * 3:(y * width + x) * 3 + 3]
+            line += bytes([b, g, r])
+        body += line + b"\0" * (stride - width * 3)
+    header = struct.pack("<IiiHHIIiiII", 40, width, -height if top_down else height, 1, 24, 0,
+                         len(body), 2835, 2835, 0, 0)
+    return b"BM" + struct.pack("<IHHI", 14 + 40 + len(body), 0, 0, 54) + header + bytes(body)
+
+
+class TestTheWizardsHall(RawStepCase):
+    """THE WIZARDS' WINDOW'S STILLS (2026-10-27, the owner: "With 1997
+    stills", no movies): `Statwin/`'s 24-bit bitmaps, made RGBA with the
+    colour Statwin's blit skipped made clear — pure green for the figures,
+    black for the staffs and the skulls — and `Statscrn.wav`."""
+
+    def test_every_still_names_its_statwin_file(self):
+        self.assertEqual(len(imp.STATWIN_PICTURES), 1 + 5 * 5 + 7)
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_ground"], ["Statwin/Wizbg.bmp"])
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_figure_blue"], ["Statwin/Blu-Sprt.bmp"])
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_staff_lit_black"], ["Statwin/S-Bkwizy.bmp"])
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_staff_drained_green"], ["Statwin/S-Gwizr.bmp"])
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_gems_blue"], ["Statwin/U-Mana.bmp"],
+                         "Statwin's U is blue")
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_room_white"], ["Statwin/Room-Wht.bmp"])
+        self.assertEqual(imp.STATWIN_PICTURES["wizards_skulls_12"], ["Statwin/12skulls.bmp"])
+        for key in imp.STATWIN_PICTURES:
+            self.assertIn(key, imp.PIC_SCREENS, key + " is decoded with the screens")
+            self.assertNotIn(key, imp.MANIFEST)
+        self.assertNotIn("wizards_room_monster", imp.STATWIN_PICTURES, "Room-Mon.bmp is never shown")
+
+    def test_each_still_clears_the_colour_statwin_skipped(self):
+        for key in imp.STATWIN_PICTURES:
+            if key.startswith("wizards_figure_"):
+                self.assertEqual(imp.STATWIN_CLEAR[key], (0, 255, 0), key)
+            elif key.startswith(("wizards_staff_", "wizards_skulls_")):
+                self.assertEqual(imp.STATWIN_CLEAR[key], (0, 0, 0), key)
+            else:
+                self.assertNotIn(key, imp.STATWIN_CLEAR, key + " is opaque")
+
+    def test_a_bitmap_is_read_bottom_up_with_its_rows_padded(self):
+        rgb = bytes([255, 0, 0, 0, 255, 0, 0, 0, 255, 9, 8, 7, 1, 2, 3, 250, 251, 252])
+        for top_down in (False, True):
+            width, height, pixels = imp.read_bmp(make_bmp(3, 2, rgb, top_down))
+            self.assertEqual((width, height), (3, 2))
+            self.assertEqual(pixels, rgb, "top_down %s" % top_down)
+        with self.assertRaises(ValueError):
+            imp.read_bmp(b"\x89PNG\r\n\x1a\n" + b"\0" * 60)
+        eight = bytearray(make_bmp(3, 2, rgb))
+        struct.pack_into("<H", eight, 28, 8)
+        with self.assertRaises(ValueError):
+            imp.read_bmp(bytes(eight))
+        with self.assertRaises(ValueError):
+            imp.read_bmp(make_bmp(3, 2, rgb)[:-4])
+
+    def test_alpha_is_zero_exactly_on_the_key(self):
+        rgb = bytes([0, 255, 0, 0, 254, 0, 0, 0, 0, 1, 255, 1])
+        rgba = imp.clear_colour(rgb, (0, 255, 0))
+        self.assertEqual([rgba[i * 4 + 3] for i in range(4)], [0, 255, 255, 255],
+                         "pure green clear; a near green stays")
+        self.assertEqual(rgba[4:8], bytes([0, 254, 0, 255]), "the colour kept")
+        self.assertEqual([imp.clear_colour(rgb, (0, 0, 0))[i * 4 + 3] for i in range(4)], [255, 255, 0, 255])
+
+    def test_an_install_s_statwin_is_imported_keyed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            (root / "Statwin").mkdir(parents=True)
+            green, black, grey = bytes([0, 255, 0]), bytes([0, 0, 0]), bytes([90, 90, 90])
+            (root / "Statwin" / "Wizbg.bmp").write_bytes(make_bmp(2, 1, green + black))
+            (root / "Statwin" / "Red-Sprt.bmp").write_bytes(make_bmp(2, 1, green + grey))
+            (root / "Statwin" / "S-Rwizy.bmp").write_bytes(make_bmp(2, 1, black + green))
+            (root / "Statwin" / "8skulls.bmp").write_bytes(make_bmp(2, 1, grey + black))
+            (root / "Statscrn.wav").write_bytes(b"RIFF statscrn")
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertIn("wizards_ground", log)
+            _w, _h, channels, pixels = read_png((dest / "wizards_ground.png").read_bytes())
+            self.assertEqual((channels, pixels), (3, green + black), "the hall: opaque, green and all")
+            _w, _h, channels, pixels = read_png((dest / "wizards_figure_red.png").read_bytes())
+            self.assertEqual((channels, pixels), (4, green + b"\0" + grey + b"\xff"), "green clear")
+            _w, _h, channels, pixels = read_png((dest / "wizards_staff_lit_red.png").read_bytes())
+            self.assertEqual(pixels, black + b"\0" + green + b"\xff", "black clear, green kept")
+            _w, _h, channels, pixels = read_png((dest / "wizards_skulls_8.png").read_bytes())
+            self.assertEqual(pixels[7], 0, "the skulls' black clear")
+            self.assertEqual((dest / "sfx_wizards.wav").read_bytes(), b"RIFF statscrn")
+            self.assertFalse((dest / "wizards_room_red.png").exists(), "what is not there is not made")
+
+    def test_no_statwin_folder_is_no_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            root.mkdir(parents=True)
+            (root / "Statwin.bmp").write_bytes(b"not a folder")
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertFalse(list(dest.glob("wizards_*")), "nothing made, nothing raised")
+            self.assertIn("sfx_wizards.wav", log, "named among the missing")
+
+    def test_a_broken_bitmap_is_skipped_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            (root / "Statwin").mkdir(parents=True)
+            (root / "Statwin" / "Wizbg.bmp").write_bytes(b"BM broken")
+            log = self._run(root, Path(tmp) / "skin")
+            self.assertIn("SKIPPED Wizbg.bmp", log)
+
+    def test_the_sound_is_the_install_s_root_statscrn(self):
+        self.assertEqual(imp.MANIFEST["sfx_wizards.wav"], ["Statscrn.wav"])
+        self.assertNotIn("creature_thumbs", imp.NOT_READ, "the hero pane's creature page reads it")
+
+    def test_the_game_knows_each_still_s_1997_size(self):
+        source = (REPO / "game" / "skin.gd").read_text(encoding="utf-8")
+        for key, size in (("wizards_ground", (640, 480)), ("wizards_figure_blue", (160, 320)),
+                          ("wizards_staff_lit_black", (60, 324)), ("wizards_gems_red", (48, 48)),
+                          ("wizards_skulls_12", (640, 240)), ("wizards_room_green", (640, 480))):
+            self.assertIn('\t"%s": Vector2i(%d, %d),' % (key, size[0], size[1]), source, key)

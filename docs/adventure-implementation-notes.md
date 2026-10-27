@@ -832,7 +832,9 @@ a ruled town's duel begins; a reward line in the quest pane; a tribute's
 payment shown with a Leave; a henchman's defeat shown; the ruled town's
 pane laid out side by side; siege_count saved (1997 never saved it); the
 wizards' window after a win or a fall is not shown (1997's
-`ShowStatsWindow`; the hero pane's Wizards tab holds the same). A place's
+`ShowStatsWindow`; the hero pane's Wizards tab holds the same — the owner's
+ruling B-3/B-4 of 2026-10-27: it never opens by itself; F6 and the Wizards
+tab show it, with 1997's Statwin stills since 0.50.60). A place's
 pane fits itself again as it is resized: a test caught the wise man's
 "whose deck" with big buttons held at 843 px of 800 under load.
 
@@ -978,6 +980,229 @@ any-card and duplicate picks, the tribute's spell, a lair's rare and its
 treasure, the wise man's copy, and the first deck dealt. A creature's stake
 won — the lairs' hoards, a freed town's prize — is never limited.
 
+## Decided: the world's last pieces and part C (2026-10-27)
+
+The owner: *"We will make any key decision together - 1997 bugs, the shape
+of the end, the world…etc. we will improve the original game and make it
+robust, fun, bug-less and modern smooth feeling!"* The decisions below were
+taken with the owner in eight rounds of questions, on research specs read
+from the 1.3 decompilation and checked against retail. Each fix of a 1997
+slip is marked `[ours: 1997 slip — …]` where it is built; our additions are
+`[ours]`/`[QoL]`.
+
+**The world (built in 0.50.60).**
+- A dungeon is drawn on the world once the hero holds any clue to it, even
+  on land not yet seen [QoL] (1997 drew it only inside the explored window),
+  and marked on the small map [QoL]; a dungeon that moved after a visit keeps
+  showing, as in 1997. The F2 map shows none, as played.
+- Escape or Q with nothing open asks "Ready to Quit?" (1997): Yes saves and
+  leaves, No or Escape stays.
+- Entering a castle or a dungeon empties the roaming creature slots 0–4, as
+  1997 did; leaving never wipes the next-duel gifts the world gave
+  [ours: 1997 slip — the board's exit cleared them, duel or none].
+- Stepping onto a known dungeon opens its pane, "Enter the dungeon" /
+  "Leave" [QoL] (1997 entered at once); coming out autosaves [ours].
+- The first deck is exactly 1997's: the extra creature copy (36/40/46/46
+  cards from Apprentice to Wizard) and enchantments only as its coloured
+  spells, as both releases dealt.
+- The wizards' window: 1997's Statwin stills imported (each wizard, his
+  staff, his gems), no movies; it never opens by itself (after a win or a
+  fall); F6 and the hero pane's Wizards tab show it.
+- Keys: Save stays Ctrl+S (W A S D keeps looking); while the hero pane is
+  open W / J / D switch its tabs; a right click on the world opens the
+  options (1997's "Will you…" menu); a question's choices answer to their
+  first letter; F6 the wizards; L loads.
+- The record's creature page: 1997's creature pictures and inks for the
+  creatures met, with a switch on the page itself to show the whole grid,
+  never-fought creatures as blank cells.
+- The journal on the map opens on the newest line [ours]; the city list (F3)
+  lists the castles the hero has stood before [ours; 1997's rows were never
+  reached].
+- 1997's transitions (the backdrop's zoom-in, the castle's staggered tiles,
+  the visit overlays, the tile reveals) are back: short, skippable, on by
+  default, with an Options switch.
+- Kept as played: the 199 draws for the favoured colour (same odds); the
+  retaliation siege is wired behind the board and comes alive with it.
+
+**Inside castles and dungeons (part C).**
+- A castle's duels each start fresh, as 1997 played (the second castle rule
+  zeroes the life carried): the hero's life plus the dice's lives found
+  since the last duel. A dungeon carries its losses (rule 0x01).
+- A draw in a room is no result: the hero is pushed back, the creature
+  stays, the stake is kept, nothing is written [ours: 1997 slip — it counted
+  as a win] (as 1.3's draw with a castle wizard, and part B's "a draw changes
+  nothing").
+- A beaten castle wizard counts in the victory record and pays the end
+  score's designed +25 [ours: 1997 slip — never paid]; room wins stay out.
+- Fixed 1997 slips: a dungeon lasts while any of its cards remains; the
+  stake is drawn only from cards the dungeon allows; the deck's minimum is
+  counted after a ban, padded with allowed basic lands; the dice never give a
+  banned card; nothing hangs (the maze generator's endless case about 1 entry
+  in 2,500, the dice with no creature or artifact in the deck); a dungeon
+  moving away never lands on another; a large dungeon's clue says "large";
+  "No black cards" bars gold black cards too.
+- A dungeon card found with a full bag offers a swap in the deck builder.
+- The board: a rounded pane over the world, at most 1.25× the 1997 page.
+  Moving: 1997's Home/PgUp/PgDn/End plus the arrows and W A S D turned to the
+  diagonals, the keypad 7/9/3/1, a click on a neighbouring room, a click
+  along a seen straight corridor [QoL]. Helpers [ours]: a creature's name on
+  hover, "Leave?" asked first, the life carried shown, the rooms left shown.
+- Saving: an autosave at the door; quitting inside puts the hero back at the
+  door, a new maze next time.
+- Before a room duel a pane shows the creature, its minion, the card in
+  effect and the hero's stake [ours]. The clue screens become a rich pane:
+  1997's icons, the cards' pictures, the creatures' faces, "Show on map".
+- A castle wizard beaten: his room still, the castle-win words over the
+  trade backdrop, the three card picks, a news line for the freed towns.
+
+**The end (part C).**
+- When the fifth wizard falls Arzakon appears and asks: face him now, or
+  return to Shandalar first; returning, a portal stands on the world (a
+  guide arrow, a quest line) for the hero to enter when ready [ours].
+- A lost final battle ends the quest (1997's quest-failed end); the win
+  screens, the stats and the score only for a real win [ours: 1997 slip —
+  the result was never read]. A setting at Embark: "Reload allowed" (an
+  autosave at Arzakon's door) or "One life" (the loss closes the adventure).
+- The win: 1997's movie (converted by the importer where the machine can,
+  skippable), the win picture, the words, the stats, full screen; the win
+  tune plays once; the duel names him "Arzakon".
+- After the win the hero chooses to end, or to return and roam: the owner's
+  words, *"If you return to roam you can still explore only other cretures
+  do not hunt you always, some do not or are passive and do not cocer towns
+  etc - the game is passive just letting you battle creatires or explore the
+  unexplored. The Arzakon portal is shown as petrified monument!"* The
+  adventure is saved and marked won with its score.
+- A Hall of Fame of won adventures (name, face, colour, difficulty, score,
+  days, wins, date), best first, after the win and from a button inside
+  Save / Load, never on the main menu (the owner: *"Only hall of fame button
+  should be inside save/load as not to clutter the main menu!"*); the
+  score so far shown on the hero's record. The score counts the sieges over
+  the whole adventure and its small slips are fixed (the final years added
+  after the floor at zero, no stale stake in the final battle, the movie
+  centred).
+
+## Built: the world's last pieces (0.50.60, 2026-10-27)
+
+Built to the owner's decisions above ("The world"), by three builders on
+disjoint files, from a research spec read in the 1.3 decompilation and
+checked against retail.
+
+**Dungeons on the world** (`WorldClues.on_world`, `WorldView.dungeons`,
+`WorldMinimap`). 1997 drew a dungeon only where the hero's explored window
+reached; ours draws every dungeon the hero holds any clue to, with 1997's
+own sprite, over unexplored land too [QoL], and a dot on the small map
+[QoL]. A dungeon that moved after a visit (its clues `(c & ~1) | 6`: where
+it lies forgotten) still shows, as 1997's did. Hovering names it.
+
+**The doors** (`DungeonDoors`, the class header tells the whole story).
+Going in: the journal ("Explored %s", "Entered %s (%s)"), the slot's
+`entered` count raised (1997's `times_entered`, which started at −1 and was
+raised first thing on every board — ours counts the entries, 0 at the
+start, saved), roaming slots 0–4 emptied. Coming out: the next-duel gifts
+kept [ours: 1997 slip], a dungeon moved to a fresh tile — never onto
+another dungeon or under the hero [ours: 1997 slip], never forever (a
+guard) — and, on Wizard, a castle left unbeaten sends its retaliation
+siege at once (`Sieges.start`). The world screen's seam (`_enter_board`,
+`_board_done`, `_open_board`) holds the world under the board and autosaves
+as the hero comes out [ours, the owner's D-3]. The two Enter buttons stay
+disabled behind `DungeonDoors.BOARD_READY` until part C's board exists;
+the tests stand a stub board in. Castles are marked visited as their pane
+opens (the city list reads it).
+
+**The keys** (`WorldScreen`, `WorldHud.KEYS`). F6 the wizards; L loads;
+Escape or Q with nothing open asks "Ready to Quit?" (1997's words, "No." /
+"Yes."; Y and N answer, Yes saves and leaves); Space stops the walk and
+looks back at the hero; a right click (or a long press) opens the options
+at the pointer, 1997's "Will you…" menu; while the hero pane is open W, J
+and D turn it to the wizards, the journal, or close it. Save stays Ctrl+S
+(W A S D keep looking). The options list "Load (L)" and "Wizards (F6)".
+
+**The wizards' window** (`HeroStats` Wizards tab, `WizardsPicture`,
+`WorldStatus.wizard_rows`). 1997's Statwin stills, imported by the
+importer's 24-bit BMP reader (`STATWIN_PICTURES`, 35 keys): the throne hall
+with each wizard; his staff drained by `30 − min(wins, 10 + d · towns)`
+steps of 1997's bands as the hero beats his creatures; his mana gems; the
+skulls of the hero's wins (1997's steps 1–5, 8, 12); a ring round the
+wizard chosen; below, 1997's table — life in his stronghold, mana domes,
+won against, beaten. `Statscrn.wav` plays once as the window opens, never
+as it is only drawn again. A beaten wizard's castle clicked on the Hero
+page opens his room. It never opens by itself (B-3/B-4); without the skin
+the tab is the table alone. Not taken: the movies, the *-Mask erasers,
+`Room-Mon.bmp` (unused-features doc).
+
+**The record's creature page.** 1997's `Creatures640.pic` cells
+(`creature_thumbs`) for each creature met with its wins and losses in
+1997's own inks, on pale chips so they read on our glass [ours]; the page's
+own "All creatures" switch shows the whole 55-cell grid, the never-fought
+ones blank (the owner's G). The Hero page lists the castles with their
+attempts ("Attempts at Each Castle", `DungeonDoors.entered`).
+
+**Small pieces.** The next-duel line as 1997 wrote it, carried and gifted
+lives apart ("Next Duel: -2 lives, +3 lives, First Move"; `QuestClock.gifts`
+draws them); the map's silver ornament; the amulet panel's black corners
+gone; the journal on the map opens on the newest line [ours]; the city list
+glides and lists the castles stood before, their wizard, beaten or not, and
+the attempts [ours — 1997's castle rows were never reached].
+
+**The first deck, exactly 1997's** (`StarterDeck`). 36/40/46/46 cards; the
+extra creature copy where both releases put it; enchantments only as the
+coloured spells (see "New game in the sources"). The 199 draws for a
+town's favoured colour stay as played: one even draw among the land's
+colours (pinned by `test_q3_favoured_colour`; the amulet preference 1997
+meant never worked — unused-features doc).
+
+**The transitions** (`TileReveal`, H7). One small node for all of 1997's
+picture effects, drawn by a shader with a byte per tile: a town's, the
+wise man's, the news' and a dungeon's picture zooms in from a quarter size
+(0.2 s; 1997's `AnimateVisitBackdropZoomIn` grew it in seven steps); a castle comes in by 1997's
+staggered 32-pixel strips (three at a time, 0.5 s); a lair by random
+tiles (0.4 s) with its card or hoard above at once; a creature's face and
+a ruled town's face by 3×3 tiles (0.3 s). Any click, key, pad button or
+touch ends it, and the press still reaches what it was for; words and
+choices answer from the first frame [QoL: 1997 held 0.73 s after the
+tiles]. On by default; "Transitions" in the Options screen and in the
+world's options book turns them off; never headless, so no test waits on
+one. 1997's visit overlays have no place: our panes have no frame.
+
+**A choice's first letter** (`VisitPane.letter_choice`, C-5). On the pane
+on top, a letter lights the next choice beginning with it (a gold rim);
+Enter or Space takes it; a letter alone never chooses. A text field keeps
+its letters; a letter no choice begins with goes on to the world. Every
+place's pane, the lair, the meeting, the ruled town, the wise man and the
+news.
+
+**Tests.** `test_q1_*` (the doors, the dungeons on the world with and
+without the skin, the keys), `test_q2_*` (the wizards' record, the hero
+pane, the city list, the map), `test_q3_*` (the tile reveal, the favoured
+colour, the transitions, the letters), and the first deck's counts and
+order in `test_starter_deck`.
+
+**The bug pass** (three read-only reviewers, one per builder's files;
+no HIGH, four MED, the LOWs fixed too, each with a test where it can fail):
+D that closed the hero pane drifted the view right while still held (the
+letter is the pane's until let go, `WorldScreen._pane_letters`); Space with
+the pane open closed it instead of stopping the walk (Space is the
+world's again); A and S look while the pane is open (only W and D are its
+letters); F6 opened on the ring and the room a beaten castle's click had
+left, and the Wizards tab pressed again restarted `Statscrn.wav`; the
+wizards' keyed stills, drawn scaled and filtered, wore a green fringe (the
+clear pixels now take their opaque neighbours' colour, `WizardsPicture.
+picture`); the city list reads the attempts through `DungeonDoors.entered`;
+`WorldStatus.taps` with no world; under the Classic MTG rules an
+Apprentice's deck came out a card short one deal in nine (the base sets'
+one common artifact, Amulet of Kroog, refused a fifth time — the toss's
+other side is dealt then [ours]); a click on a choice a letter had lit left
+it lit for a later Enter (a lit choice is unlit as it loses the keys); a
+slow frame before a transition ate it (a frame counts a thirtieth at
+most); Leap of Fate read the screen back with the transitions off; the
+World Magic seller and "Not saved" answer to their first letters too.
+And from the owner's eye on the meeting:
+the quest's words hung from the scroll's top roll — 1997's `DrawTextAt`
+centres its words on its point both ways, the scroll's at (543, 409), the
+parchment's middle — so they are centred on the parchment between the
+rolls, a size smaller each until they fit, and the purse's numbers sit on
+1997's own points (`EncounterStage.centred`).
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked
@@ -1027,7 +1252,7 @@ said otherwise):
 | Amulets: one of the player's colour, then (3 − difficulty) of random colours | 4 | 3 | 2 | 1 |
 | Deck, own colour: lands, spells, creatures, + 1 rare | 13, 12, 10 | 11, 4, 12 | 9, 3, 9 | 6, 3, 5 |
 | Deck, more colours | — | one random colour: 4, 3, 4 | two random colours: 5, 3, 4 and 4, 3, 3 | any colour: 11, 5, 14 |
-| Cards (retail count) | 36 | 39 | 44 | 45 |
+| Cards (as both releases dealt them, the extra creature copy in) | 36 | 40 | 46 | 46 |
 
 - **One world magic of the player's colour** from the start: the first of
   that colour's pair — Black Conjurer's Will, Blue Leap of Fate, Green
@@ -1050,16 +1275,25 @@ said otherwise):
 - **Starting life is not part of the new game.** The retail spec's "life
   total 8" is the four AI combat weights that are set to 8 there. Life is
   worked out per duel; it belongs with the duel hand-off.
-- **Two places to check against the 1.3 binary before copying them:**
-  1. Apprentice has a second quota, 13, 7, 15, behind a test the
-     decompilation renders as `(mask < 1) & 0x20`. As written it is never
-     true; if it means "the colour is White" (bit `0x20`), white
-     apprentices start with fewer spells and more creatures. The retail
-     release has no such branch.
-  2. The 1.3 function adds a card after the rare block even when there is
-     no rare, which puts a second copy of the last creature into each
-     extra colour's cards. The retail release adds the rare only inside
-     the block.
+- **The two places once to check, settled in the machine code (2026-10-27,
+  built in 0.50.60):**
+  1. The Apprentice's second quota, 13, 7, 15, sits behind a test that can
+     never be true (1.3 at 0x4bde0e–0x4bde16 compares the mask with 1,
+     turns the result into 0 or 1, then tests it against 0x20); retail
+     carries the same dead block (Ghidra drops it as unreachable). Every
+     Apprentice gets 13 lands, 12 spells, 10 creatures and the rare, 36
+     cards. Listed in docs/adventure-unused-1997-features.md.
+  2. The card added after the rare block even when there is no rare is in
+     BOTH releases (1.3 at 0x4be3f8; retail's raw output adds it outside
+     the block too — a cleaned transcription had moved it inside): every
+     share without a rare ends on one more copy of its last creature, with
+     no copy limit checked. Built as 1997 dealt it (the owner's I-2); under
+     the Classic MTG rules the copy is skipped once the allowance is
+     reached [ours].
+  3. The coloured non-creature spells are ENCHANTMENTS only in both
+     releases (the type mask 0x04 for a coloured spell, 0x40 for an
+     artifact; 1.3 at 0x4be1b1–0x4be1ba, retail the same) — built (the
+     owner's I-3): no instant or sorcery in a first deck but the rare.
 - **The face designer's art is not in our copy of the game files.**
   `../shandalar-src/` has `Facemaker.exe`, `FaceData.txt`,
   `FaceButtons.txt`, `namepick.pic` and the pedestals, but no `FaceArt/`
@@ -1085,7 +1319,7 @@ said otherwise):
 | Card prices, collection | (to find) | (to find) | `domain/collection.go`, `card_tiers.go` |
 | Enemy AI in duels | `src/magic/` (the duel code `magic.exe` shares) | `docs/SHANDALAR_AI_FAQ.md` in the decompilation | — |
 | Save and load | `adventure_save.c`; `docs/shandalar_save_files.txt` | `SaveGame_SaveCampaignFile`, `Overworld_SaveMapFile`: slot 3 is the running game, slots 4–9 and a–d are saves | `game/save/` |
-| Arzakon and the ending | (to find) | (to find) | (to find) |
+| Arzakon and the ending | `dungeonEncounter.c` (`HandleDefeatedWizardCastle`, `CalculateDungeonEndgameScore`) | `src/magic/world/database.c` | (to find) |
 
 ## A possible order (a proposal; the owner decides)
 

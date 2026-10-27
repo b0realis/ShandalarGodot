@@ -193,6 +193,13 @@ func test_a_card_the_deck_may_hold_no_more_of_is_dimmed() -> void:
 ## 3804–3808).
 func test_the_dimming_is_1997_s_allowance_and_only_owned_cards_carry_a_count() -> void:
 	var player := screen.player
+	# A Magician's first deck is 40 cards since 1997's extra creature copy
+	# (the quick world package, I-2): one card out of the deck in use, so
+	# it is under 40 (still owned).
+	for entry in player.cards:
+		if String((entry as Dictionary)["card"]) != "Mountain":
+			(entry as Dictionary)["decks"] = []
+			break
 	var trader := await _trader()
 	var owned := AdventureBuilder.owned_counts(player)
 	var outside := ""

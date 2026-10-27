@@ -27,8 +27,10 @@ extends PanelContainer
 ## `music_lose_duel` loop under them, as 1997's `winduel.wav` and
 ## `loseduel.wav` did. The world's bed comes back as the pane closes.
 ##
-## THE KEYS AND THE MOUSE as the other panes: a click on a choice; a right
-## click on a card reads it; a drag on the pane's glass moves it. ESCAPE:
+## THE KEYS AND THE MOUSE as the other panes: a click on a choice — or its
+## first letter, Enter or Space to take the one lit [1997] ([method
+## VisitPane.letter_choice]); a right click on a card reads it; a drag on
+## the pane's glass moves it. ESCAPE:
 ## nothing at the meeting's choices (1997 asked again — there is no
 ## flight); at a riddle, nothing — it waits for an answer [ours: 1997 slip
 ## — Escape was a wrong answer and lost the stake]; at a tribute or its
@@ -467,7 +469,12 @@ func _to_duel() -> void:
 	step = "special"
 	if int(meeting.get("summoned", 0)) > 0:
 		_title.text = CreatureBook.name_of(int(meeting["row"]))
+		# The summoned creature's face comes in over the one met, tile by
+		# tile (`DrawCreaturePortrait` mode 1, E:2183; [method
+		# EncounterStage.reveal_face]): the screen read before it is drawn.
+		var was := TileReveal.picture_of(self) if TileReveal.wanted() else null
 		_meeting_stage()
+		stage.reveal_face(was)
 	say(events)
 	offer([["fight", FIGHT, true]])
 
@@ -867,10 +874,20 @@ func music_key() -> String:
 # ------------------------------------------------------- keys and mouse --
 
 func _unhandled_input(input: InputEvent) -> void:
-	if not visible or _done or not input.is_action_pressed("ui_cancel"):
+	if not visible or _done:
+		return
+	if VisitPane.letter_choice(self, _choices, input):
+		get_viewport().set_input_as_handled()
+		return
+	if not input.is_action_pressed("ui_cancel"):
 		return
 	get_viewport().set_input_as_handled()
 	escape()
+
+
+## A press of the mouse puts out the choice a letter lit.
+func _input(input: InputEvent) -> void:
+	VisitPane.drop_letter(_choices, input)
 
 
 ## ESCAPE, by the step (see the class doc).

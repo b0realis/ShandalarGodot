@@ -8,8 +8,10 @@ extends RefCounted
 ##    those not yet used (`PickRandomColorBitExcludingMask`), get theirs —
 ##    a Wizard's second share takes any colour ([constant QUOTAS]);
 ##  - lands are the colour's basic land;
-##  - each spell is, on a coin toss, an artifact or a spell of the colour;
-##    the first, third, fifth… may be uncommon, the others only common;
+##  - each spell is, on a coin toss, an artifact or an ENCHANTMENT of the
+##    colour (the type mask is 0x04 or 0x40: 1.3's code at 0x4be1b1–0x4be1ba,
+##    the retail game's alike — never an instant or a sorcery); the first,
+##    third, fifth… may be uncommon, the others only common;
 ##  - creatures are of the colour, never with swampwalk or islandwalk
 ##    (`static_ability & 3`), the same uncommon-common turns, and no more
 ##    copies than the collection allows (`GetRemainingAllowedCardCopies`:
@@ -17,6 +19,13 @@ extends RefCounted
 ##    found none new, when a second copy may come;
 ##  - the rare is a creature, an enchantment or a sorcery of the colour or
 ##    colourless, rarity rare or more;
+##  - A SHARE WITHOUT A RARE ENDS ON ONE MORE COPY OF ITS LAST CREATURE: the
+##    call's last add stands outside its rare block (1.3's machine code at
+##    0x4be3f8 jumps over the rare straight to it; the retail game's raw
+##    code has it outside too), and adds whatever card was picked last —
+##    the share's last creature — with no copy count asked. So a Magician
+##    starts with 40 cards, a Sorcerer and a Wizard with 46, as every 1997
+##    player did [1997, the owner's ruling of 2026-10-27];
 ##  - an Apprentice's spells and rare skip the landwalkers too; no card made
 ##    for ante, no dungeon's treasure (`extra_ability & 0x900`), only the
 ##    base set (`expansion & 0xc1`).
@@ -25,11 +34,17 @@ extends RefCounted
 ## each at its first printing's rarity — the rarity the 1997 game read from
 ## `Rarity.csv`'s original set. The dice are the adventure's, drawing among
 ## the cards that fit, where 1997 drew any card and threw back the ones that
-## did not: the same odds, not the same cards. 1997's coloured spell is an
-## instant, a sorcery or an enchantment (the retail reading; 1.3's mask
-## reads enchantments alone). Apprentice's second quota and 1.3's extra
-## creature copy are left out, as the retail game has them
-## (`docs/adventure-implementation-notes.md`, "New game in the sources").
+## did not: the same odds, not the same cards. Under the Classic MTG rules
+## the last creature's extra copy is not added past the rules' allowance
+## [ours].
+##
+## AS PLAYED, NOT CHANGED: 1.3's Apprentice has a second quota, 13 lands,
+## 7 spells, 15 creatures, behind a test that can never be true (`(mask <
+## 1) & 0x20`: a 0 or a 1 tested against 0x20 — the machine code at
+## 0x4bde0e–0x4bde16 always jumps on to 13/12/10, and the retail game's
+## Ghidra output drops the block as unreachable); every Apprentice, of any
+## colour, starts with 13, 12, 10 and a rare, 36 cards ([constant QUOTAS]
+## row 0).
 
 ## The shares by difficulty: `[colour, lands, spells, creatures, rare]`,
 ## the colour `own`, `other` (a colour not yet used) or `any`.
@@ -46,9 +61,11 @@ const MASKS := {"black": Mtg.ManaColor.B, "blue": Mtg.ManaColor.U, "green": Mtg.
 const RARITIES := {"common": 1, "uncommon": 2, "rare": 3, "special": 4, "mythic": 4}
 const BASE_SETS: Array[String] = ["2ed", "4ed"]
 
-## The base cards, read once: `{name, color, kind, rarity, walker}` — the
-## colour a key of [constant MASKS], "" colourless or "gold"; the kind
-## `creature`, `artifact`, `spell` or `other`.
+## The base cards, read once: `{name, color, kind, rarity, walker,
+## rare_type, enchantment}` — the colour a key of [constant MASKS], ""
+## colourless or "gold"; the kind `creature`, `artifact`, `spell` (an
+## instant, a sorcery or an enchantment — the coloured spell's
+## `enchantment`, the rare's `rare_type`) or `other`.
 static var _cards: Array[Dictionary] = []
 
 
@@ -90,16 +107,24 @@ static func _share(dealt: Array[String], hue: String, lands: int, spells: int, c
 	for i in spells:
 		var artifact := dice.below(2) == 1
 		var most := 2 if i % 2 == 0 else 1
-		var picked := _pick(dice, func(card: Dictionary) -> bool:
+		var spell := func(card: Dictionary, of_artifacts: bool) -> bool:
 			if difficulty == 0 and bool(card["walker"]):
 				return false
 			if int(card["rarity"]) > most:
 				return false
-			if artifact:
+			if of_artifacts:
 				return String(card["kind"]) == "artifact"
-			return String(card["kind"]) == "spell" and _of(card, hue))
+			return String(card["kind"]) == "spell" and bool(card["enchantment"]) and _of(card, hue)
+		var picked := _pick(dice, spell.bind(artifact))
+		if picked == "" and _keeps.is_valid():
+			# [ours] Under the Classic MTG rules a side the allowance has
+			# emptied (the one common artifact, Amulet of Kroog, a fifth
+			# time) deals from the other side of the coin, so the deck keeps
+			# its size.
+			picked = _pick(dice, spell.bind(not artifact))
 		if picked != "":
 			dealt.append(picked)
+	var last_creature := ""
 	for i in creatures:
 		var most := 2 if i % 2 == 0 else 1
 		var creature := func(card: Dictionary) -> bool:
@@ -113,6 +138,7 @@ static func _share(dealt: Array[String], hue: String, lands: int, spells: int, c
 			picked = _pick(dice, creature)
 		if picked != "":
 			dealt.append(picked)
+			last_creature = picked
 	if rare:
 		var picked := _pick(dice, func(card: Dictionary) -> bool:
 			return String(card["kind"]) in ["creature", "spell"] and bool(card["rare_type"]) \
@@ -121,6 +147,11 @@ static func _share(dealt: Array[String], hue: String, lands: int, spells: int, c
 				and copies_left(dealt, String(card["name"])) >= 1)
 		if picked != "":
 			dealt.append(picked)
+	elif last_creature != "" and (not _keeps.is_valid() or _keeps.call({"name": last_creature})):
+		# 1997's last add, outside the rare block: the last creature once
+		# more, no copy count asked (see the class doc) — under the Classic
+		# MTG rules only within their allowance [ours].
+		dealt.append(last_creature)
 
 
 ## How many more copies of [param card_name] the collection [param dealt]
@@ -205,5 +236,6 @@ static func cards() -> Array[Dictionary]:
 			"rarity": int(RARITIES.get(CardRegistry.rarity_of(name_text).to_lower(), 1)),
 			"walker": walks,
 			"rare_type": data.is_creature() or data.is_type(Mtg.CardType.ENCHANTMENT)
-				or data.is_type(Mtg.CardType.SORCERY)})
+				or data.is_type(Mtg.CardType.SORCERY),
+			"enchantment": data.is_type(Mtg.CardType.ENCHANTMENT)})
 	return _cards

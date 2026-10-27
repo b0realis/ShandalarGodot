@@ -27,11 +27,44 @@ extends RefCounted
 ## THE GUIDES ([method targets]): the town under siege, and the quest's
 ## target — none for a creature's quest until its creature is beaten (as
 ## 1997: the creature comes to the hero, where it will), then its giver.
+##
+## THE WIZARDS' RECORD ([method wizard_rows]) — what 1997's wizards' window
+## (F6, `Statwin.dll`) was handed: `ShowStatsWindow` (1.3
+## adventureStats.c 1683–1789) fills one block, `StatWinData`, per wizard
+## — his towns, the hero's wins against his colour and his STAFF, a column
+## of thirty lights that the wins drain — and Statwin drew it as a picture
+## with no words ([WizardsPicture]). The hero pane's Wizards tab reads it
+## ([HeroStats]): the picture, and under it the wizard's life in his
+## stronghold, the mana domes he controls and the wins against him, in the
+## wise man's own phrasing (`Advblocks.txt`, `_qQuote` 0 and 1).
+##  - THE FORMULA (aS:1736–1738), d the difficulty 0–3: `required = 30 +
+##    5d + d·towns`, `X = max(5d + 20, required − wins)`, `staff = 30 −
+##    (required − X)`. X is the wizard's duel life ([method
+##    WiseMan.castle_life], the same number); the staff is `30 − min(wins,
+##    10 + d·towns)` — full with no wins, whatever his towns, and no lower
+##    than the life's floor lets it fall.
+##  - A BEATEN WIZARD's staff is 0 and he is not drawn (aS:1717–1720:
+##    `progress = 0`). [Ours: 1997 slip — his wins were no longer sent, so
+##    his skulls stayed at the last count the window saw, and read 0 after a
+##    restart; here they are always his true wins.]
+##  - His GEMS are his towns, at most five pieces (`town_count & 0x1f`,
+##    five drawn, Statwin main.cpp 2321, 2871); his SKULLS the hero's wins
+##    in the steps of `duel_wins_to_skull_index` (main.cpp 2720): none,
+##    1–4, 5 for 5–7, 8 for 8–11, 12 for twelve or more.
+##  - The wins are those of the victory log against creatures met as his
+##    colour ([method AdventurePlayer.wins_over_color], 1997's log byte
+##    `colour·16 + kind`): a two-colour creature counts for the colour it
+##    was met as.
 
 ## Steps of the quest clock in a day.
 const DAY := 16
 const DOMINION := 3
 const DOMINION_WITH_RING := 5
+## The lights of a wizard's staff (1997's `progress` out of `0x1e`).
+const STAFF := 30
+## The skull pictures' steps (`1skulls` … `12skulls.bmp`), by the least wins
+## each stands for.
+const SKULL_STEPS: Array[int] = [1, 2, 3, 4, 5, 8, 12]
 ## `@QUESTSTATUS`'s "Go North to"… by the destination's quarter: the
 ## original's four directions are the screen's diagonals.
 const GO: Array[String] = ["Go North to %s", "Go East to %s", "Go South to %s", "Go West to %s"]
@@ -141,6 +174,8 @@ static func siege_line(player: AdventurePlayer) -> String:
 ## byte holds the wizard's colour.
 static func taps(player: AdventurePlayer) -> Array[int]:
 	var counts: Array[int] = [0, 0, 0, 0, 0]
+	if player.world == null:
+		return counts
 	for slot in player.world.sites.size():
 		var ruler := TownStatus.ruler(player.world, slot)
 		if ruler != 0:
@@ -163,13 +198,21 @@ static func tap_lines(player: AdventurePlayer) -> Array[String]:
 	return lines
 
 
-## "Next Duel: +2 lives, First Move, Lord of Atlantis", or "".
+## THE NEXT DUEL'S LINE, "Next Duel: -2 lives, +3 lives, First Move", or ""
+## — 1997's (`DrawAdventureQuestStatusPanel`, adventureWorldUi.c 1495–1548,
+## `@QUESTSTATUS` 1–4): the lives CARRIED from the last duel first
+## (`g_next_duel_life_delta`, signed), then the GIFT (`g_next_duel_card_id`):
+## its extra lives, the first move, or a card in play. The two figures
+## stand apart, never summed ([member AdventurePlayer.next_duel_life_carried]
+## and [member AdventurePlayer.next_duel_life]); [ours: commas between the
+## parts, where 1997 ran them on with spaces].
 static func next_duel_line(player: AdventurePlayer) -> String:
 	var parts: Array[String] = []
-	if player.next_duel_lives() > 0:
-		parts.append("+%d lives" % player.next_duel_lives())
-	elif player.next_duel_lives() < 0:
-		parts.append("-%d lives" % -player.next_duel_lives())
+	for lives in [player.next_duel_life_carried, player.next_duel_life]:
+		if lives > 0:
+			parts.append("+%d lives" % lives)
+		elif lives < 0:
+			parts.append("-%d lives" % -lives)
 	if player.next_duel_first_move:
 		parts.append("First Move")
 	if player.next_duel_card != "":
@@ -210,3 +253,46 @@ static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 		out.append({"tile": Vector2i(int(site["x"]), int(site["y"])), "kind": "quest",
 			"name": WorldNames.site_name(player.world, target)})
 	return out
+
+
+# ------------------------------------------------------- the wizards' record --
+
+## THE WIZARDS' RECORD, black to white: `{color, name, feminine, beaten,
+## taps, wins, life, staff, skulls, gems}` per wizard — his colour word and
+## name, his towns tapped, the hero's wins against his colour, his life in
+## his stronghold, his staff's lit lights (of [constant STAFF]), the skull
+## picture's step (0 none) and the gem pieces lit (see the class doc).
+static func wizard_rows(player: AdventurePlayer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var counts := taps(player)
+	var d := clampi(player.difficulty, 0, 3)
+	for i in 5:
+		var color: String = AdventurePlayer.COLORS[i]
+		var beaten := color in player.defeated_wizards
+		var wins := player.wins_over_color(i + 1)
+		out.append({"color": color, "name": WorldNames.WIZARDS[i],
+			"feminine": CreatureMeeting.wizard_feminine(i + 1), "beaten": beaten, "taps": counts[i],
+			"wins": wins, "life": WiseMan.castle_life(player, i + 1),
+			"staff": 0 if beaten else staff(wins, counts[i], d), "skulls": skull_step(wins),
+			"gems": 0 if beaten else mini(counts[i], 5)})
+	return out
+
+
+## A standing wizard's staff, its lit lights of [constant STAFF]: `30 −
+## min(wins, 10 + d·towns)` (aS:1736–1738, see the class doc).
+static func staff(wins: int, towns: int, difficulty: int) -> int:
+	var d := clampi(difficulty, 0, 3)
+	var required := STAFF + 5 * d + d * towns
+	var life := maxi(5 * d + 20, required - wins)
+	return STAFF - (required - life)
+
+
+## The skull picture for [param wins] (`duel_wins_to_skull_index`, Statwin
+## main.cpp 2720): 0 for none, else the step of [constant SKULL_STEPS] —
+## 1–4, 5 for 5–7, 8 for 8–11, 12 for twelve or more.
+static func skull_step(wins: int) -> int:
+	var step := 0
+	for least in SKULL_STEPS:
+		if wins >= least:
+			step = least
+	return step

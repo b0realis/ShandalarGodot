@@ -430,6 +430,113 @@ would change** · **How to switch it on**.
 - **How to switch it on.** Draw the names, not take them in order, when part
   C names the dungeons.
 
+## 33. The U key
+
+- **What 1997 laid out.** An upper-case U on the world toggles a developer
+  switch of the screen's blit (adventure_input.c 422–430).
+- **Why it never took effect.** The switch falls through into the World
+  Magic code with index 0x25 and reads the amulet count past the end of its
+  array; nothing a player meant.
+- **What it would change.** Nothing worth having: a debugging aid.
+- **How to switch it on.** Not to be built.
+
+## 34. The F2 map's dungeon dots
+
+- **What 1997 computed.** The F2 map draws a 2 × 2 dot on every dungeon tile
+  (mapScreen.c 784–787).
+- **Why it never took effect.** Only under the reveal-everything flag, which
+  only the decompilers' debugging menu sets (shandalar.c 862–882): the F2
+  map as played shows no dungeon.
+- **What it would change.** Every dungeon on the big map, known or not —
+  the clue hunt gone.
+- **How to switch it on.** `WorldMap` drawing `WorldClues.on_world` (the
+  known ones only would keep the hunt); ours draws the known dungeons on the
+  land and the small map since 0.50.60 [QoL].
+
+## 35. The journal marker's traced line and its blink
+
+- **What 1997 laid out.** On the F2 map's journal walk the marker was to
+  trace a dotted line from the last entry's place to the next, a pixel every
+  five ticks (`AnimateStatsJournalMarkerToTile`, adventureStats.c
+  1308–1404), and to blink.
+- **Why it never took effect.** Its one caller resets the last place right
+  before the call (adventureStats.c 1191–1192), so the marker always jumps;
+  the blink's test `(t % 10 == 0) & (t % 20)` is never true (1448–1455).
+  Retail is the same (town.c 269–270).
+- **What it would change.** A slower, drawn walk through the journal.
+- **How to switch it on.** In `WorldMap.step_journal`: a tween of the marker
+  along the line between the two tiles.
+
+## 36. The castle rows of the city list
+
+- **What 1997 laid out.** The F3 list takes every place but villages whose
+  status says visited, with a row for a castle ("Castle") and a beaten one
+  (cityInfoScreen.c 381–389, 663–666).
+- **Why it never took effect.** Nothing ever marks a castle visited: the
+  castle's visit returns before the town path sets the bit (visitLocation.c
+  4399, 4425, 4596; retail town.c 3344–3389, 3530).
+- **What it would change.** The castles the hero has seen in the list.
+- **Ours.** Built in 0.50.60 [ours, the owner's H5]: a castle is marked
+  visited as its pane opens, and the list shows it with its wizard, beaten
+  or not, and the attempts there (`CityListPane._castle_row`).
+
+## 37. The Apprentice's second first-deck quota
+
+- **What 1997 laid out.** An Apprentice's first deck dealt 13 lands, 7
+  spells and 15 creatures under a test (`InitializeNewGameState`,
+  adventure_new_game.c 178–186).
+- **Why it never took effect.** The test, as compiled, compares the colour
+  mask with 1, makes 0 or 1 of it and tests that against 0x20 (1.3 at
+  0x4bde0e–0x4bde16): never true. Retail carries the same dead block. What
+  it meant cannot be known — white (`mask & 0x20`) or red (`(mask << 1) &
+  0x20`).
+- **What it would change.** Those Apprentices would start with fewer spells
+  and more creatures (still 36 cards).
+- **How to switch it on.** A row in `StarterDeck.QUOTAS` for the colour
+  chosen.
+
+## 38. The favoured colour's amulet preference
+
+- **What 1997 computed.** A town's favoured colour (its trade's amulet, the
+  wise man's gifts, the quest creature's colour) is drawn 199 times; draws
+  0–80 keep only a colour of the land the hero holds an amulet of, the later
+  ones any colour of the land (`RunTownServicesMenu`, visitLocation.c
+  1672–1684; retail town.c 3813).
+- **Why it never took effect.** The loop never stops at a match, so the 118
+  late draws always overwrite the early ones: the result is one even draw
+  among the land's colours; the amulets matter only with odds near 10⁻¹².
+- **What it would change.** Towns would favour colours the hero can pay
+  with — more trades offered, and the wise man's amulet gifts in colours
+  already held.
+- **How to switch it on.** In `CardTrade.arrive`: draw first among the
+  land's colours the hero holds, else among all of them. Ours keeps the
+  played odds (the owner's I-1; `test_q3_favoured_colour` pins them).
+
+## 39. The wizards' window's unread pieces
+
+- **What 1997 shipped and laid out.** In Statwin: `Room-Mon.bmp` and
+  `monster.avi` (a sixth "room", display index 5); `Mana.bmp`, a whole
+  640 × 480 page; the `G_*X` / `G_*Z` movie variants; the taker of a town
+  (`highlighted_lair_color`, mode 3) and `field_30`; a `statLang` text file
+  to relabel its options dialog (the install has none).
+- **Why it never took effect.** No mode reaches the sixth room; the page,
+  the variants and the field are never read; mode 3 shows the plain window
+  without its taker (Statwin main.cpp 258–276, 1784, 3058).
+- **What it would change.** A room for a creature (or Arzakon), the taker's
+  wizard ringed as a town falls.
+- **How to switch it on.** `HeroStats.show_wizards(color)` with the taker's
+  colour after a siege's news; the pictures through the importer's
+  `STATWIN_PICTURES`.
+
+## 40. The creature page's one-row last page
+
+- **What 1997 laid out.** The record's creature page has a branch for a
+  nineteenth page holding one row (adventureStats.c 746).
+- **Why it never took effect.** The scroll bar makes pages 0–17 only
+  (637–662): page 17 already shows the last creatures.
+- **What it would change.** Nothing.
+- **How to switch it on.** Not needed: ours scrolls the whole grid.
+
 ---
 
 *This page grows as the creatures, their duels, the castles and the dungeons

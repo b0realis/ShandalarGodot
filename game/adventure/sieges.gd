@@ -55,8 +55,10 @@ extends RefCounted
 ## hero left a wizard's castle unbeaten (`TriggerWizardSiegeNewsflash`,
 ## visitLocation.c 502–655, called at 4394) — [method start] with that
 ## wizard: only his castle scored, so the town is drawn at random among
-## them, in `@NEWSFLASH` 2/3's words. Ready, not yet called. [method
-## free_all] is part C's too: a beaten wizard's towns freed and his
+## them, in `@NEWSFLASH` 2/3's words. Called by [method DungeonDoors.leave]
+## as the hero comes out of a castle unbeaten (2026-10-27) — live once part
+## C's board opens the castle's door ([constant DungeonDoors.BOARD_READY]).
+## [method free_all] is part C's too: a beaten wizard's towns freed and his
 ## creatures gone (`HandleDefeatedWizardCastle`, dungeonEncounter.c
 ## 918–970).
 ##

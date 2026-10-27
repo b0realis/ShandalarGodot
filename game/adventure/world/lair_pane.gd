@@ -15,7 +15,9 @@ extends VisitPane
 ## waits hidden; a win's cards laid on `win_back_cards` in 1997's places
 ## over their rarities, "Won These Cards", the win music under them; a loss
 ## or a draw straight on to the lair's end. A card left to find is shown
-## last; leaving (Escape too) gives it.
+## last; leaving (Escape too) gives it. The picture comes in as 1997's did,
+## in random 5 × 5 tiles (`ShowLairBackdropTransition`; [TileReveal]), the
+## card found with it; a choice answers to its first letter ([VisitPane]).
 
 ## The hero would trade: [param way] ([constant CardTrade.BAZAAR] or
 ## [constant CardTrade.MINE]).
@@ -390,3 +392,6 @@ func _unhandled_input(input: InputEvent) -> void:
 	if visible and input.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		leave_lair()
+	elif visible and VisitPane.letter_choice(self, _choices, input):
+		# A choice by its first letter, as every place's ([VisitPane]).
+		get_viewport().set_input_as_handled()

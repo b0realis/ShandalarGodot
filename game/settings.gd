@@ -696,6 +696,14 @@ static func music_volume_db() -> float:
 static func sfx_volume_db() -> float:
 	return get_value("sfx_volume_db", -6.0)
 
+## [QoL] `Transitions` on the Options screen (the owner, 2026-10-27, H7):
+## the adventure's 1997 picture effects — a town's picture zooming in, a
+## castle's and a lair's coming in tile by tile, a creature's face —
+## played ([TileReveal]), short and skipped by any click or key. On by
+## default; off, every picture is simply there.
+static func transitions() -> bool:
+	return get_value("transitions", true)
+
 ## Seconds between AI actions in vs-AI play (demo mode has its own knob
 ## on the battle-setup screen).
 static func ai_pace() -> float:

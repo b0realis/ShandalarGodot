@@ -49,15 +49,23 @@ func test_the_choice_is_saved_and_an_old_save_keeps_the_limit() -> void:
 
 
 func test_a_reward_may_be_a_card_the_deck_is_full_of_only_with_the_limit_off() -> void:
-	# The deck in use under 40 cards: one copy allowed with the limit on.
+	# The deck in use under 40 cards: one copy allowed with the limit on. A
+	# Magician's first deck is 40 since 1997's extra creature copy (the quick
+	# world package, I-2): one card goes out of the deck in use.
+	for entry in player.cards:
+		if String((entry as Dictionary)["card"]) != "Mountain":
+			(entry as Dictionary)["decks"] = []
+			break
+	assert_eq(CardShop.copies_allowed(player), 1, "control: under 40 cards")
 	var held := CardShop.deck_counts(player)
 	var meeting := {"row": 22, "color": 4, "strength": 40, "creature_ante": []}
-	var dice := MsvcRandom.new(7)
-	var on := DuelSpoils.reward_cards(player, meeting, dice)
-	for card_name in on:
-		if not card_name in CreatureDeck.BASICS:
-			assert_false(held.has(card_name), "on: no card the deck already holds (%s)" % card_name)
-	player.copy_limit = false
-	var again := DuelSpoils.reward_cards(player, meeting, MsvcRandom.new(7))
-	var repeats := again.filter(func(c: String) -> bool: return held.has(c) and not c in CreatureDeck.BASICS)
-	assert_gt(repeats.size(), 0, "off: cards the deck already holds may come again")
+	var repeats := 0
+	for seed_value in range(1, 41):
+		player.copy_limit = true
+		for card_name in DuelSpoils.reward_cards(player, meeting, MsvcRandom.new(seed_value)):
+			if not card_name in CreatureDeck.BASICS:
+				assert_false(held.has(card_name), "on: no card the deck already holds (%s)" % card_name)
+		player.copy_limit = false
+		var again := DuelSpoils.reward_cards(player, meeting, MsvcRandom.new(seed_value))
+		repeats += again.filter(func(c: String) -> bool: return held.has(c) and not c in CreatureDeck.BASICS).size()
+	assert_gt(repeats, 0, "off: cards the deck already holds may come again")

@@ -79,7 +79,9 @@ var world_magic_sites: Array[int] = []
 ## indices ([constant DUNGEON_CARDS]), and `card_in_effect` the 1.3 card
 ## id the encounter plays under, -1 for none. `clues` (absent for none) is
 ## what the hero has learned of it (`clues_bitmap`): 1 where it lies, 2 its
-## creatures, 4 its rules ([WorldClues]).
+## creatures, 4 its rules ([WorldClues]). `entered` (absent for never) is
+## how often the hero went in ([DungeonDoors]; 1997's `times_entered`, −1
+## at the start, is `entered − 1`).
 var encounters: Array[Dictionary] = []
 ## Where the hero starts, in the original's world units (32 to a tile).
 var start := Vector2i.ZERO

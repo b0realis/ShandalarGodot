@@ -350,6 +350,39 @@ func test_the_page_without_the_skin() -> void:
 		assert_gt(cut.corner_radius_top_left, 0, "rounded")
 
 
+## The owner (2026-10-27): the scroll's words belong in the middle of the
+## parchment — 1997 centred them on (543, 409), between the two rolls — and
+## many lines stay inside, a size smaller; without the skin, inside its box.
+## The purse's numbers stand on 1997's points too.
+func test_the_scroll_s_words_stand_in_the_middle_and_fit() -> void:
+	var many: Array[String] = ["Next Duel: +3 lives, First Move", "Black Wizard: 1 of 3 mana taps",
+		"Blue Wizardess: 1 of 3 mana taps", "Green Wizard: 1 of 3 mana taps",
+		"Red Wizardess: 1 of 3 mana taps", "White Wizard: 1 of 3 mana taps"]
+	for skin in [true, false]:
+		_skin(skin, 25)
+		for lines in [["Red Wizardess: 1 of 3 mana taps"] as Array[String], many]:
+			var stage := _stage()
+			stage.scroll(lines)
+			var words := stage.part("ScrollWords") as Label
+			var place := EncounterStage.SCROLL_WORDS if skin else EncounterStage.PLAIN_SCROLL_AT.grow(-8)
+			var shown := words.get_rect()
+			if lines.size() == 1:
+				assert_eq(shown, place, "one line: the parchment between the rolls, skin %s" % skin)
+			var picture := EncounterStage.SCROLL_AT if skin else EncounterStage.PLAIN_SCROLL_AT
+			assert_true(picture.encloses(shown), "%s inside the scroll %s" % [shown, picture])
+			assert_eq(words.vertical_alignment, VERTICAL_ALIGNMENT_CENTER, "centred in it")
+			var points := words.get_theme_font_size("font_size")
+			var high := EncounterStage._words_high(words, shown.size.x, points)
+			assert_lte(high, shown.size.y + 1.0, "%d lines inside (%d points), skin %s" % [lines.size(), points, skin])
+			if skin:
+				assert_almost_eq(shown.get_center().y, 409.0, 3.0, "about 1997's point")
+	_skin(true, 25)
+	var purse := _stage()
+	purse.purse(screen.player)
+	assert_eq((purse.part("Gold") as Control).get_rect().get_center(), EncounterStage.GOLD_POINT)
+	assert_eq((purse.part("Life") as Control).get_rect().get_center(), EncounterStage.LIFE_POINT)
+
+
 ## With the skin, the page is 1997's as before: the bare numbers at 1997's
 ## places, the scroll's dark ink, the face's own picture.
 func test_the_page_with_the_skin_is_unchanged() -> void:

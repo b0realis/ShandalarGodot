@@ -61,7 +61,7 @@ func test_a_new_hero_starts_as_in_1997() -> void:
 	dice.below(5)
 	var dealt := StarterDeck.deal("red", 1, dice)
 	assert_eq(player.dice, dice.state)
-	assert_eq(player.cards.size(), 39, "a Magician's first deck")
+	assert_eq(player.cards.size(), 40, "a Magician's first deck (1997's extra creature copy)")
 	assert_eq(player.cards.map(func(card: Dictionary) -> String: return card["card"]), Array(dealt))
 	assert_eq(player.duel_record(), {"won": 0, "lost": 0})
 	assert_eq(player.mana_links(), 10, "the world's first ten towns and cities: ten mana links, ten lives")

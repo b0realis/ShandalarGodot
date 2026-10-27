@@ -170,7 +170,7 @@ func test_a_save_from_before_part_b_loads() -> void:
 
 func test_the_deck_in_use() -> void:
 	var hero := _fresh()
-	assert_eq(hero.deck_cards().size(), 39, "a Magician's first deck, in deck 1")
+	assert_eq(hero.deck_cards().size(), 40, "a Magician's first deck, in deck 1")
 	var dealt: Array[String] = []
 	dealt.assign(hero.cards.map(func(c: Dictionary) -> String: return c["card"]))
 	assert_eq(hero.deck_cards(), dealt, "every card dealt")

@@ -420,7 +420,9 @@ MANIFEST: dict[str, list[str]] = {
     # is Manalink 3's own flat restyle — WinBk_TellUser.bmp is a plain grey gradient at 900x53
     # where the 1997 .pic is 600x35 of mottled red-brown stone, and
     # WinBk_EndDuel.bmp / WinBk_StartDuelButton*.bmp are likewise flat
-    # grey and flat olive. Filename candidates below never name a .bmp.
+    # grey and flat olive. Filename candidates below never name a .bmp —
+    # but for `Statwin/`'s own bitmaps, the 1997 wizards' window's (THE
+    # WIZARDS' HALL, the one 1997 module that drew from Windows bitmaps).
     #
     # Winbk_Questmana: the mana-question window's DARK GREY STONE, the
     # ground the original puts under a question that must not compete
@@ -1102,8 +1104,10 @@ MANIFEST: dict[str, list[str]] = {
     # later, Dice, Scroll, Findcard, Death, Horse, Wolf, Damb1-5+Dambloop
     # and Manaball.
     #
-    # `statscrn.wav` (in the install's root) is the wizards' window's
-    # loop, played by `statwin.dll`.
+    # `Statscrn.wav` (in the install's root, not `Sound/`) is the wizards'
+    # window's sound, played by `Statwin.dll` as the window opens and
+    # stopped as it closes (`show_status_window`, statwin main.cpp 1858):
+    # sfx_wizards, imported with the window's stills (2026-10-27).
     #
     # THE KEYS ARE THE ORIGINAL'S OWN EVENTS, not our guesses at them.
     # `shandalar-src/src/defs.h:2179-2265` is the 1997 sound enum, with a
@@ -1356,6 +1360,9 @@ MANIFEST: dict[str, list[str]] = {
     "sfx_dungeon_duel.wav":      shell_sound("Dngnduel.wav"),
     "music_win_duel.wav":        shell_sound("Winduel.wav"),
     "music_lose_duel.wav":       shell_sound("Loseduel.wav"),
+    # The wizards' window (F6): the install's root, beside the program
+    # that loads `Statwin.dll` (`.\statscrn.wav`).
+    "sfx_wizards.wav":           ["Statscrn.wav"],
 }
 
 
@@ -2628,11 +2635,16 @@ PIC_SCREENS.update(VISIT_PICTURES)
 # buttons, amulet panel and ornament (`Mapbttns.pic`); the F3 city list's
 # ground (`Cityinfo.pic`) and its Done and arrow buttons (`Infobar.pic`);
 # the World Magic seller's skull, candle and crystal ball (`Worlbak1.pic`).
+# And (2026-10-27) the city list's ROW PANEL, `Cinfopce.pic` (562 x 68: the
+# headings' strip, then the empty row 26 down, 561 x 42), which 1.3 drew
+# under every row and slid with it (`ShowCityInfoScreen`, cityInfoScreen.c
+# 357-372, 526-556).
 WORLD_SCREENS: dict[str, list[str]] = {
     "map_ground": ["Mapback.pic"],
     "map_buttons": ["Mapbttns.pic"],
     "city_list": ["Cityinfo.pic"],
     "city_list_buttons": ["Infobar.pic"],
+    "city_list_row": ["Cinfopce.pic"],
     "world_magic_seller": ["Worlbak1.pic"],
 }
 PIC_SCREENS.update(WORLD_SCREENS)
@@ -2668,10 +2680,11 @@ PIC_SCREENS.update(WORLD_SCREENS)
 #   - a ruled town freed (`Celeb.pic`, visitLocation.c:4328); the game
 #     lost, to Dominion or with no card left to ante (`Uth-Arz.pic`,
 #     world_lair_monster_slots.c:1231, visitLocation.c:2270);
-#   - the wizards' window's creature pictures (`Creatures640.pic`,
-#     adventureStats.c:1593): 8 x 7 cells of 80 x 64 (a 1-pixel line at
-#     each cell's left and top), the cell the creature's table row - 1
-#     (Witch ... Arzakon), in the world frame's palette.
+#   - the stats screen's creature record pictures (`Creatures640.pic`,
+#     adventureStats.c:1593, drawn by `RenderStatsCreatureGridPage`,
+#     731-824 — the hero pane's creature page): 8 x 7 cells of 80 x 64 (a
+#     1-pixel line at each cell's left and top), the cell the creature's
+#     table row - 1 (Witch ... Arzakon), in the world frame's palette.
 # All looked at, rendered, 2026-10-23.
 ENCOUNTER_PICTURES: dict[str, list[str]] = {
     "preduel_black": ["Prdblk.pic"],
@@ -2711,6 +2724,138 @@ PIC_PALETTES.update({key: ["Winbak01.pic", "Advfac64.pic", "Advinter.pic"]
 PIC_PALETTES["creature_thumbs"] = ["Advfac64.pic", "Advinter.pic"]
 PIC_OPAQUE: set[str] = (set(VISIT_PICTURES) | set(WORLD_SCREENS)
                         | (set(ENCOUNTER_PICTURES) - PIC_CUT))
+
+
+# ====================================================== THE WIZARDS' HALL ==
+#
+# THE WIZARDS' WINDOW'S STILLS (2026-10-27, the owner: *"With 1997 stills"*
+# — NO movies). 1997's F6 window was a DLL of its own, `Statwin.dll`
+# (1 May 1997; its 1.3 source is `statwin/src/main.cpp`), and its pictures
+# are the only art of the whole install that is not `.pic` or `.spr`:
+# plain WINDOWS BITMAPS, 24 bits a pixel, in `Statwin/` (dated 1996), which
+# the DLL loads by name (`g_statwin_asset_dir`, "statwin\\") and blits
+# with a colour of its own made clear (`set_transparent_color`):
+#   - the hall (`Wizbg.bmp`, 640 x 480): opaque;
+#   - each wizard's figure (`Blu/Grn/Wht/Red/Blk-Sprt.bmp`): pure green
+#     0x00FF00 clear (`set_transparent_color(0xff00)`, main.cpp 2364);
+#   - his staff, lit and drained (`S-*wizy.bmp`, `S-*wizr.bmp`): black
+#     clear (`set_transparent_color(0)`, 2398, 2408);
+#   - his gem cluster (`W/R/U/G/B-Mana.bmp`, 48 x 48): opaque, its pieces
+#     cut at fixed places (`g_town_mana_source_rects`; [WizardsPicture]);
+#   - the skulls of the hero's wins (`1/2/3/4/5/8/12skulls.bmp`, 640 x
+#     240): black clear (2643);
+#   - a beaten wizard's own room (`Room-Wht/Red/Blu/Grn/Blk.bmp`, 640 x
+#     480): opaque (`show_color_missing_message`, 2072).
+# They are made RGBA here, the clear colour's pixels — EXACTLY that colour,
+# as the DLL's blit tested it — given alpha 0, so the game draws them as
+# they are. Left out: the movies (100 MB of Indeo 4, the owner's ruling),
+# the erasing patches (`*-Mask.bmp`: the hall's own ground again, 59 pixels
+# apart; the game draws the hall afresh instead), the monster's room and
+# `Mana.bmp` (never shown — docs/adventure-unused-1997-features.md).
+# Read by [WizardsPicture], the hero pane's Wizards tab.
+## key -> the 1997 file, under its folder (Manalink 3 trees keep the same
+## bitmaps in `Program/statwin/`, byte for byte; the two-part name reaches
+## either).
+STATWIN_PICTURES: dict[str, list[str]] = {"wizards_ground": ["Statwin/Wizbg.bmp"]}
+## Our colour words to Statwin's file-name stems: figure, staff, cluster,
+## room.
+STATWIN_STEMS: dict[str, tuple[str, str, str, str]] = {
+    "black": ("Blk", "Bk", "B", "Blk"),
+    "blue": ("Blu", "Bu", "U", "Blu"),
+    "green": ("Grn", "G", "G", "Grn"),
+    "red": ("Red", "R", "R", "Red"),
+    "white": ("Wht", "W", "W", "Wht"),
+}
+for _color, (_figure, _staff, _cluster, _room) in STATWIN_STEMS.items():
+    STATWIN_PICTURES["wizards_figure_" + _color] = ["Statwin/%s-Sprt.bmp" % _figure]
+    STATWIN_PICTURES["wizards_staff_lit_" + _color] = ["Statwin/S-%swizy.bmp" % _staff]
+    STATWIN_PICTURES["wizards_staff_drained_" + _color] = ["Statwin/S-%swizr.bmp" % _staff]
+    STATWIN_PICTURES["wizards_gems_" + _color] = ["Statwin/%s-Mana.bmp" % _cluster]
+    STATWIN_PICTURES["wizards_room_" + _color] = ["Statwin/Room-%s.bmp" % _room]
+## The skull pictures by the least wins each stands for
+## (`duel_wins_to_skull_index`, main.cpp 2720).
+STATWIN_SKULLS: tuple[int, ...] = (1, 2, 3, 4, 5, 8, 12)
+for _step in STATWIN_SKULLS:
+    STATWIN_PICTURES["wizards_skulls_%d" % _step] = ["Statwin/%dskulls.bmp" % _step]
+## The colour each still is drawn with made clear, by key; absent: opaque.
+GREEN_CLEAR = (0, 255, 0)
+BLACK_CLEAR = (0, 0, 0)
+STATWIN_CLEAR: dict[str, tuple[int, int, int]] = {}
+for _key in STATWIN_PICTURES:
+    if _key.startswith("wizards_figure_"):
+        STATWIN_CLEAR[_key] = GREEN_CLEAR
+    elif _key.startswith(("wizards_staff_", "wizards_skulls_")):
+        STATWIN_CLEAR[_key] = BLACK_CLEAR
+PIC_SCREENS.update(STATWIN_PICTURES)
+
+
+def read_bmp(data: bytes) -> tuple[int, int, bytes]:
+    """A Windows bitmap -> `(width, height, rgb)`, rows top to bottom.
+
+    Only what `Statwin/` holds and the DLL read (`DibState::load_bitmap`,
+    main.cpp 892): a `BITMAPINFOHEADER` (or larger), 24 bits a pixel,
+    uncompressed (`BI_RGB`), stored bottom-up — or top-down when its height
+    is negative — each row padded to four bytes, blue-green-red. Raises
+    ValueError on anything else."""
+    if len(data) < 54 or data[:2] != b"BM":
+        raise ValueError("not a Windows bitmap")
+    offset = struct.unpack_from("<I", data, 10)[0]
+    header = struct.unpack_from("<I", data, 14)[0]
+    if header < 40:
+        raise ValueError("an OS/2 bitmap header (%d bytes)" % header)
+    width, height = struct.unpack_from("<ii", data, 18)
+    bits, compression = struct.unpack_from("<HI", data, 28)
+    if bits != 24 or compression != 0:
+        raise ValueError("%d bits a pixel, compression %d (only 24-bit BI_RGB)"
+                         % (bits, compression))
+    top_down = height < 0
+    height = abs(height)
+    if width <= 0 or height == 0 or width > PIC_MAX_SIDE or height > PIC_MAX_SIDE:
+        raise ValueError("a %d x %d bitmap" % (width, height))
+    stride = (width * 3 + 3) & ~3
+    if offset + stride * height > len(data):
+        raise ValueError("cut short: %d bytes of pixels, %d wanted"
+                         % (len(data) - offset, stride * height))
+    rgb = bytearray(width * height * 3)
+    for y in range(height):
+        row = offset + stride * (y if top_down else height - 1 - y)
+        line = data[row:row + width * 3]
+        out = y * width * 3
+        rgb[out + 0:out + width * 3:3] = line[2::3]
+        rgb[out + 1:out + width * 3:3] = line[1::3]
+        rgb[out + 2:out + width * 3:3] = line[0::3]
+    return width, height, bytes(rgb)
+
+
+def clear_colour(rgb: bytes, colour: tuple[int, int, int]) -> bytes:
+    """RGB -> RGBA, every pixel of exactly [param colour] clear (alpha 0,
+    its colour kept), every other one opaque — the DLL's blit, which skips
+    the pixels equal to its transparent colour."""
+    key = bytes(colour)
+    rgba = bytearray(len(rgb) // 3 * 4)
+    rgba[0::4] = rgb[0::3]
+    rgba[1::4] = rgb[1::3]
+    rgba[2::4] = rgb[2::3]
+    alpha = bytearray(b"\xff" * (len(rgb) // 3))
+    for i in range(len(rgb) // 3):
+        if rgb[i * 3:i * 3 + 3] == key:
+            alpha[i] = 0
+    rgba[3::4] = alpha
+    return bytes(rgba)
+
+
+def _raw_bmp_rgba(key: str, path: Path) -> tuple[int, int, bytes, bool] | None:
+    """One Statwin bitmap -> `(width, height, pixels, alpha)`, its clear
+    colour applied ([constant STATWIN_CLEAR]), or None. Never raises."""
+    try:
+        width, height, rgb = read_bmp(path.read_bytes())
+    except (ValueError, OSError, struct.error) as err:
+        print("  %-24s SKIPPED %s (%s)" % (key, path.name, err))
+        return None
+    colour = STATWIN_CLEAR.get(key)
+    if colour is None:
+        return width, height, rgb, False
+    return width, height, clear_colour(rgb, colour), True
 
 
 # THE ADVENTURE'S CARD VALUES (2026-10-23, the owner: *"study how, which
@@ -3305,6 +3450,17 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
         print("  %-24s <- %s (decoded %dx%d, palette: %s)"
               % (key, source, width, height, origin))
         return True
+    if source.suffix.lower() == ".bmp":
+        bitmap = _raw_bmp_rgba(key, source)
+        if bitmap is None:
+            return False
+        width, height, pixels, alpha = bitmap
+        write_png(dest / (key + ".png"), width, height, pixels, alpha=alpha)
+        clear = STATWIN_CLEAR.get(key)
+        print("  %-24s <- %s (decoded %dx%d, %s)"
+              % (key, source, width, height,
+                 "#%02x%02x%02x clear" % clear if clear else "opaque"))
+        return True
     palette, origin = _resolve_palette(index, PIC_PALETTES.get(key, PIC_PALETTE))
     decoded = _raw_pic_rgba(key, source, palette, key in PIC_OPAQUE, key in PIC_CUT)
     if decoded is None:
@@ -3874,15 +4030,14 @@ PORTRAITS_WANTED = 70
 ## (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and 2026-10-15),
 ## two grounds no screen draws yet (a read of every consumer,
 ## 2026-10-17), the adventure's world-map frame, which waits for the
-## overworld (PIC_SCREENS), the dungeon's "you encounter" sting, which
-## waits for the dungeons (part C; imported with part B, 2026-10-23), and
-## the creatures' thumbnails, which wait for the wizards' window of the
-## stats (part B laid them out; nothing draws them yet).
+## overworld (PIC_SCREENS), and the dungeon's "you encounter" sting, which
+## waits for the dungeons (part C; imported with part B, 2026-10-23). (The
+## creatures' thumbnails were here until 2026-10-27: the hero pane's
+## creature page draws them now.)
 NOT_READ = {"set_icon_atq", "set_icon_arn", "set_icon_past", "set_icon_drk",
             "set_icon_4ed", "set_icon_leg", "damage_marker",
             "deck_tile_olive", "spell_chain_panel",
-            "character_select_background", "sfx_dungeon_duel.wav",
-            "creature_thumbs"}
+            "character_select_background", "sfx_dungeon_duel.wav"}
 
 
 def check(args: argparse.Namespace, index: dict[str, Path]) -> int:

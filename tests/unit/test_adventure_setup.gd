@@ -15,8 +15,9 @@ func after_each() -> void:
 
 func test_starting_resources_follow_the_sources() -> void:
 	# Gold (5 − difficulty) × 50, 50 food, one amulet of the colour and
-	# 3 − difficulty more, the retail starting deck's size and colours.
-	var expected := [[250, 4, 36, 1], [200, 3, 39, 2], [150, 2, 44, 3], [100, 1, 45, 5]]
+	# 3 − difficulty more, the starting deck's size (1997's, its extra
+	# creature copy counted: 36, 40, 46, 46) and colours.
+	var expected := [[250, 4, 36, 1], [200, 3, 40, 2], [150, 2, 46, 3], [100, 1, 46, 5]]
 	for level in 4:
 		var start := AdventureSetup.starting_resources(level)
 		assert_eq([start["gold"], start["amulets"], start["deck_cards"], start["deck_colors"]],

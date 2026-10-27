@@ -551,6 +551,13 @@ spinner, not one half of a radio pair).
 **A `.bmp` inside a Manalink install is never a 1997 file.** The original
 shipped `.PIC` and `.SPR`. A bitmap is a later addition — `WinBk_StartDuel.bmp`
 is Manalink 3's own splash screen, not the original's.
+**The one exception is `Statwin/`.** The wizards' window was a separate
+program, `Statwin.dll`, and it read its stills as 24-bit Windows bitmaps:
+the 40 `Statwin/*.bmp` of a 1997 install (dated 1996-08-13 to 1996-12-12,
+beside its AVIs) are MicroProse's own — the hall, each wizard's figure,
+staff, gems and room, the skulls. The importer reads them from the
+player's copy of the 1997 game since 0.50.60 (`STATWIN_PICTURES`,
+`wizards_*`); a `.bmp` anywhere else is still not 1997's.
 
 **`Program/DBArt/*.pic` are PNGs wearing a `.pic` extension.** Check the
 magic bytes, not the name.

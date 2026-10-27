@@ -11,7 +11,11 @@ extends VisitPane
 ## A gift that asks a choice asks it here: whose deck to see (then shown by
 ## the world screen, [CardListPane]), or the card to copy. A town that turns
 ## the hero away ([TownStatus.NO_QUESTS]) says so and offers no quest,
-## however the pane was opened ([method refused]).
+## however the pane was opened ([method refused]). As every place's pane
+## ([VisitPane]): the room zooms in as 1997's did (`AnimateVisitBackdropZoomIn`
+## of `wiseman3.pic`, visitLocation.c 877, 893, 3094; [TileReveal]), and a
+## choice answers to its first letter — "G" Go on, "L" Leave, "A" Accept the
+## Quest — Enter or Space to take it.
 
 ## The copy gift wants a card picked, three amulets of [param color] its price.
 signal copying(color: int)

@@ -262,6 +262,9 @@ KEY_EXACT = (
     ("duel_pattern_", "ring"),
     ("duel_picture_", "ring"),
     ("duel_mana_", "ring"),
+    # WorldMap.sprite keys Mapbttns.pic's pure black (palette index 0) on
+    # the 1997 pixels to cut the map's ornament and the amulet panel.
+    ("map_buttons", "whole"),
 )
 
 ## DOUBLED, NOT UPSCALED: every pixel made a 2x2 block, the 1997 grain

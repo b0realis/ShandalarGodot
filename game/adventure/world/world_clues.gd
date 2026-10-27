@@ -12,7 +12,8 @@ extends RefCounted
 ##  - 1, where it lies: "-East of Kraag Forge.", the way from the town it
 ##    was placed by (`town`) — 1997's four ways are the screen's diagonals.
 ## The 1997 list showed nothing when nothing was known; ours says how
-## clues are found [QoL]. Clues come from the wise men and the ruined
+## clues are found [QoL]. A dungeon known is drawn on the world and on the
+## small map ([method on_world]). Clues come from the wise men and the ruined
 ## towers ([method reveal_for_hint]: [WiseMan]'s clue gift, [LairEvent]'s
 ## Ruined Tower) and, by the same pick, from beaten creatures — the
 ## creature's spoils offer the clue INSTEAD of the cards won ([DuelSpoils]:
@@ -188,6 +189,41 @@ static func known(world: ShandalarWorld) -> Array[int]:
 		if i >= 5 and (slot.get("cards", []) as Array).is_empty():
 			continue
 		out.append(i)
+	return out
+
+
+## THE DUNGEONS DRAWN ON THE WORLD (1.3 `DrawWorldTileRange`,
+## adventureWorldUi.c 1230–1257; retail glue_adventure.c 970–978 tests the
+## same): `{index, x, y}` (x, y its tile) for every dungeon, slots 5–14,
+## the hero knows anything of — ANY clue, where it lies, its creatures or
+## its rules, not only "where" — still holding a card, standing on a tile
+## that carries [constant ShandalarWorld.DUNGEON]. Castles never: their
+## slots stand on their castle sites, and the generator's stray DUNGEON
+## flag on the tile first drawn for each ([WorldGenerator]) has no slot on
+## it. A dungeon moved as it is left ([DungeonDoors]: its "where" clue
+## forgotten, the other two known) keeps being drawn at its new tile, as in
+## 1997. The owner's ruling of 2026-10-27 (A-1, A-2) [QoL]: drawn even on
+## land the hero has not seen — [WorldView] and [WorldMinimap] both show it
+## — where 1997's window, which marked explored every tile it drew, never
+## had unseen land to draw it on.
+## [ours: 1997 slip A-s1 — 1997 tested the FIRST of the slot's three card
+## places (`card_slot_1 != -1`), and the treasure takes one of the three at
+## random (dungeonEncounter.c 582–600): a dungeon whose first card went
+## first vanished from the world, the clues and the entry with cards still
+## inside. The slot's `cards` here is a list: any card left keeps it.]
+static func on_world(world: ShandalarWorld) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if world == null:
+		return out
+	for index in known(world):
+		if index < 5 or index >= SLOTS:
+			continue
+		var slot: Dictionary = world.encounters[index]
+		var x := int(slot.get("x", -1))
+		var y := int(slot.get("y", -1))
+		if world.tile_flags(x, y) & ShandalarWorld.DUNGEON == 0:
+			continue
+		out.append({"index": index, "x": x, "y": y})
 	return out
 
 
