@@ -24,6 +24,34 @@ static func choose(owner: Node, selected: Callable) -> void:
 		picker.queue_free())
 	picker.popup_centered(Vector2i(700, 480))
 
+## THE MOVE LIST SAVED as text ([MpnMoveList]): a .txt beside the records,
+## or a download on the web.
+static func export_text(owner: Node, text: String, filename := "game.txt") -> void:
+	var bytes := text.to_utf8_buffer()
+	if OS.has_feature("web"):
+		JavaScriptBridge.download_buffer(bytes, filename.get_file(), "text/plain")
+		return
+	var picker := FileDialog.new()
+	picker.title = "Save the move list"
+	picker.access = FileDialog.ACCESS_FILESYSTEM
+	picker.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	picker.add_filter("*.txt", "Text")
+	picker.current_dir = ProjectSettings.globalize_path(GamePaths.records_folder())
+	picker.current_file = filename.get_file()
+	owner.add_child(picker)
+	picker.canceled.connect(picker.queue_free)
+	picker.file_selected.connect(func(path: String) -> void:
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		var ok := file != null and file.store_buffer(bytes)
+		if file != null:
+			file.flush()
+			ok = ok and file.get_error() == OK
+			file.close()
+		UiChrome.explain_popup(owner, "Save the move list", "Move list saved." if ok else "Could not save the move list.")
+		picker.queue_free())
+	picker.popup_centered(Vector2i(700, 480))
+
+
 static func export_bytes(owner: Node, bytes: PackedByteArray, filename := "game.mpn") -> void:
 	var parsed := MpnCodec.parse_bytes(bytes)
 	if parsed.error != "":

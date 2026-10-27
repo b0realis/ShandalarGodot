@@ -32,6 +32,16 @@ There are previous/next-turn buttons, playback speed and a seek bar. Left/
 Right step, Space plays/pauses, Home/End jump, and **History** or Escape
 returns to the same point in the text view. Inspecting a pile pauses progress.
 
+Choose **Move list** to read the game as a move list, as chess games are
+read: each turn under its player, one action a line under its phase (untap,
+upkeep, draw, main 1, combat, main 2, end), the phases where nothing happened
+left out, and a table of every symbol it uses at the top — `⚔` attacks, `†`
+died, `✕` exiled, `→` a target or the life left after damage, `#` the life
+that ended the game, and the rest. **Copy** puts its text on the clipboard,
+**Save text…** writes it as a `.txt`; Escape or **Close** returns. The file
+stays MPN 0.1: the move list is read from it, word for word as
+[`mpn-move-list.md`](mpn-move-list.md) sets out.
+
 This is a read-only reconstruction, **not a playable resumed duel**. Detailed
 damage assignment, prevention shields, choices, effects and timing that were
 not recorded are omitted. Combat participants stay on the battlefield; the

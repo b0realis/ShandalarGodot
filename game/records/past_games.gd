@@ -21,6 +21,8 @@ var _play: Button
 var _timer: Timer
 var _export: Button
 var _watch: Button
+var _moves: Button
+var _move_list: Control
 var _player: MpnPlayer
 var _library: VBoxContainer
 var _detail_scroll: ScrollContainer
@@ -66,6 +68,9 @@ func _ready() -> void:
 	_watch = _button("Watch duel", watch_duel)
 	_watch.disabled = true
 	bar.add_child(_watch)
+	_moves = _button("Move list", show_move_list)
+	_moves.disabled = true
+	bar.add_child(_moves)
 	bar.add_child(_button("Back", func() -> void:
 		if overlay: queue_free()
 		else: get_tree().change_scene_to_file("res://game/main.tscn")))
@@ -190,6 +195,7 @@ func open_record(path: String) -> bool:
 	current_path = path
 	_export.disabled = false
 	_watch.disabled = false
+	_moves.disabled = false
 	var headers: Dictionary = document.headers
 	_title.text = "%s  vs  %s" % [String(headers["Player.P1"]).left(80), String(headers["Player.P2"]).left(80)]
 	_notice.text = "%s · %s\nPublic observations, not a complete rules replay. %s" % [headers.Started,
@@ -414,11 +420,143 @@ func watch_duel() -> void:
 		_player = null)
 	hide()
 
+## THE MOVE LIST (the owner, 2026-10-24: "try to make it human readable and
+## lapidary!"): the open record read as a person reads a game ([MpnMoveList])
+## — each turn under its player, one action a line under its phase — over
+## this screen, in a table so the phases line up in any font. Copy puts its
+## text on the clipboard; Save text… writes it (the record stays MPN 0.1).
+func show_move_list() -> Control:
+	if document.is_empty():
+		return null
+	_stop()
+	close_move_list()
+	# Read once, kept: Copy and Save text give the game shown, whatever the
+	# screen under the list does meanwhile.
+	var said := MpnMoveList.text(document)
+	var read := MpnMoveList.read_game(document)
+	var veil := ColorRect.new()
+	veil.name = "MoveList"
+	veil.color = Color(0, 0, 0, 0.65)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(veil)
+	_move_list = veil
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("1e2128")
+	style.border_color = Color("5a5f6b")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(10)
+	style.set_content_margin_all(18)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in [SIDE_LEFT, SIDE_TOP]:
+		panel.set_offset(side, 40)
+	for side in [SIDE_RIGHT, SIDE_BOTTOM]:
+		panel.set_offset(side, -40)
+	veil.add_child(panel)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	panel.add_child(column)
+	column.add_child(_light("Move list", 26))
+	var body := RichTextLabel.new()
+	body.name = "MoveListText"
+	body.bbcode_enabled = true
+	body.selection_enabled = true
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_font_size_override("normal_font_size", 17)
+	body.add_theme_font_size_override("bold_font_size", 17)
+	body.text = move_list_bbcode(read)
+	column.add_child(body)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	column.add_child(row)
+	var name_text := current_path.get_file().get_basename() + ".txt" if current_path != "" else "game.txt"
+	var copy := _button("Copy", func() -> void: DisplayServer.clipboard_set(said))
+	var save := _button("Save text…", func() -> void: MpnFiles.export_text(self, said, name_text))
+	var close := _button("Close", close_move_list)
+	var buttons: Array[Control] = [copy, save, close]
+	for button in buttons:
+		row.add_child(button)
+	# THE FOCUS STAYS ON THE LIST: its three buttons in a ring, the text
+	# above them — never a control under the veil, whose keys would change
+	# the record behind it.
+	body.focus_mode = Control.FOCUS_ALL
+	for i in buttons.size():
+		var here := buttons[i]
+		var left := buttons[(i + buttons.size() - 1) % buttons.size()]
+		var right := buttons[(i + 1) % buttons.size()]
+		here.focus_neighbor_left = here.get_path_to(left)
+		here.focus_neighbor_right = here.get_path_to(right)
+		here.focus_previous = here.get_path_to(left)
+		here.focus_next = here.get_path_to(right)
+		here.focus_neighbor_top = here.get_path_to(body)
+		here.focus_neighbor_bottom = here.get_path_to(here)
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT]:
+		body.set_focus_neighbor(side, body.get_path_to(body))
+	body.focus_neighbor_bottom = body.get_path_to(close)
+	body.focus_next = body.get_path_to(copy)
+	body.focus_previous = body.get_path_to(close)
+	close.grab_focus()
+	return veil
+
+
+func close_move_list() -> void:
+	if is_instance_valid(_move_list):
+		_move_list.queue_free()
+		if is_instance_valid(_moves) and _moves.is_visible_in_tree():
+			_moves.grab_focus()
+	_move_list = null
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# The list closes on the back button of a pad, a headset or a handheld
+	# too (ui_cancel), before the screen under it reads it.
+	if is_instance_valid(_move_list) and not event is InputEventKey and event.is_action_pressed("ui_cancel"):
+		close_move_list()
+		get_viewport().set_input_as_handled()
+
+
+## [param read] ([method MpnMoveList.read_game]) as the view's text: the tags,
+## the symbols, then one table — the turn or the phase on the left, its
+## player or the action on the right — then the result.
+static func move_list_bbcode(read: Dictionary) -> String:
+	var out := PackedStringArray()
+	for tag_line in read.get("tags", []):
+		out.append("[color=#9aa0aa]%s[/color]  %s\n" % [_bb(tag_line[0]), _bb(tag_line[1])])
+	out.append("\n[b]Symbols[/b]\n[table=2]")
+	for entry in MpnMoveList.LEGEND:
+		out.append("[cell padding=0,0,24,0][color=#c8b273]%s[/color][/cell][cell][color=#9aa0aa]%s[/color][/cell]"
+			% [_bb(entry[0]), _bb(entry[1])])
+	out.append("[/table]\n[color=#9aa0aa]%s[/color]\n\n[table=2]" % _bb(MpnMoveList.NOT_TOLD))
+	for turn in read.get("turns", []):
+		out.append("[cell padding=0,8,24,0][b]%s[/b][/cell][cell padding=0,8,0,0][b]%s[/b][/cell]"
+			% [_bb(turn["label"]), _bb(turn["player"])])
+		var lines: Array = turn["lines"]
+		if lines.is_empty():
+			out.append("[cell][/cell][cell]—[/cell]")
+		for line in lines:
+			out.append("[cell padding=0,0,24,0][color=#9aa0aa]%s[/color][/cell][cell]%s[/cell]"
+				% [_bb(line[0]), _bb(line[1])])
+	out.append("[/table]\n\n[b]%s[/b]" % _bb(read.get("result", "")))
+	return "".join(out)
+
+
+## [param text] with its brackets kept out of the markup.
+static func _bb(text: Variant) -> String:
+	return String(text).replace("[", "[lb]")
+
+
 func _exit_tree() -> void:
 	if is_instance_valid(_player): _player.queue_free()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not is_visible_in_tree(): return
+	if is_instance_valid(_move_list):
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			close_move_list()
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_LEFT: seek(cursor - 1)

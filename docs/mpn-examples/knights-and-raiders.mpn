@@ -1,0 +1,270 @@
+[Notation "MPN/0.1"]
+[Visibility "public"]
+[Coverage "public-observations"]
+[Started "2026-10-24T16:11:19Z"]
+[MatchStarted "2026-10-24T16:11:19Z"]
+[Match "85a89ffac9df4f8d4ed81d65"]
+[Game 1]
+[Player.P1 "White Wizard"]
+[Player.P2 "Black Wizard"]
+[RulesProfile "Modern rules, mana burn on"]
+[RulesOptions {"attackers_revocable":true,"damage_effects_fixed_order":false,"damage_prevention_window":false,"free_damage_assignment":true,"life_checked_at_phase_end":false,"mana_burn":true,"pool_empties_on_attack":false,"sacrifice_clauses_wait":false,"tapped_artifacts_stop":false}]
+[CardPool ["2ed","arn","atq","leg","drk","4ed","past","phpr"]]
+[Mode "local"]
+[Recorder "ShandalarGodot/0.50.59"]
+[Comments ["Two computer players with the 1997 starter decks White Knights and Black and Red Raiders. An example for docs/mpn-move-list.md."]]
+
+1 state {"active":0,"combat":{"attackers":[],"blocks":[]},"objects":[],"players":[{"hand":7,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[],"step":"upkeep","turn":1}
+2 state {"step":"draw"}
+3 state {"step":"main1"}
+4 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+5 enter {"object":"o1","player":"P1"}
+6 land {"object":"o1","player":"P1"}
+7 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":1},"poison":0},{"hand":7,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+8 mana {"object":"o1","player":"P1"}
+9 tap {"object":"o1","player":"P1"}
+10 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Savannah Lions","owner":0,"power":2,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"stack"}],"players":[{"hand":5,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s1","kind":"spell","mode":0,"name":"Savannah Lions","source":"o2","targets":[],"x":0}]}
+11 cast {"object":"o2","player":"P1"}
+12 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":2,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"battlefield"}],"removed":["o2"],"stack":[]}
+13 enter {"object":"o3","player":"P1"}
+14 state {"step":"combat_begin"}
+15 state {"step":"declare_attackers"}
+16 state {"step":"combat_end"}
+17 state {"step":"main2"}
+18 state {"step":"end"}
+19 state {"step":"cleanup"}
+20 state {"active":1,"step":"untap","turn":2}
+21 state {"step":"upkeep"}
+22 state {"players":[{"hand":5,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":8,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+23 draw {"count":1,"player":"P2"}
+24 state {"step":"main1"}
+25 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o4","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":5,"library":33,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+26 enter {"object":"o4","player":"P2"}
+27 land {"object":"o4","player":"P2"}
+28 state {"step":"combat_begin"}
+29 state {"step":"declare_attackers"}
+30 state {"step":"combat_end"}
+31 state {"step":"main2"}
+32 state {"step":"end"}
+33 state {"step":"cleanup"}
+34 state {"active":0,"step":"untap","turn":3}
+35 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+36 untap {"object":"o1","player":"P1"}
+37 state {"step":"upkeep"}
+38 state {"players":[{"hand":6,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+39 draw {"count":1,"player":"P1"}
+40 state {"step":"main1"}
+41 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":5,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+42 enter {"object":"o5","player":"P1"}
+43 land {"object":"o5","player":"P1"}
+44 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":5,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":1},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+45 mana {"object":"o1","player":"P1"}
+46 tap {"object":"o1","player":"P1"}
+47 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o6","keywords":[],"name":"Holy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +1/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":4,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s2","kind":"spell","mode":0,"name":"Holy Strength","source":"o6","targets":[{"amount":1,"object":"o3"}],"x":0}]}
+48 cast {"object":"o6","player":"P1"}
+49 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":3,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":3,"types":["creature"],"zone":"battlefield"},{"attached_to":"o3","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o7","keywords":[],"name":"Holy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +1/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o6"],"stack":[]}
+50 enter {"object":"o7","player":"P1"}
+51 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":1},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+52 mana {"object":"o5","player":"P1"}
+53 tap {"object":"o5","player":"P1"}
+54 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Holy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +1/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":3,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s3","kind":"spell","mode":0,"name":"Holy Strength","source":"o8","targets":[{"amount":1,"object":"o3"}],"x":0}]}
+55 cast {"object":"o8","player":"P1"}
+56 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"},{"attached_to":"o3","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Holy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +1/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o8"],"stack":[]}
+57 enter {"object":"o9","player":"P1"}
+58 state {"step":"combat_begin"}
+59 state {"step":"declare_attackers"}
+60 state {"combat":{"attackers":["o3"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+61 tap {"object":"o3","player":"P1"}
+62 attack {"objects":["o3"],"player":"P1"}
+63 state {"step":"declare_blockers"}
+64 state {"players":[{"hand":3,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":32,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+65 damage {"amount":4,"source":"o3","target":"P2"}
+66 state {"step":"combat_end"}
+67 state {"combat":{"attackers":[],"blocks":[]}}
+68 state {"step":"main2"}
+69 state {"step":"end"}
+70 state {"step":"cleanup"}
+71 state {"active":1,"step":"untap","turn":4}
+72 state {"step":"upkeep"}
+73 state {"players":[{"hand":3,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":8,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+74 draw {"count":1,"player":"P2"}
+75 state {"step":"main1"}
+76 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o10","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":32,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+77 enter {"object":"o10","player":"P2"}
+78 land {"object":"o10","player":"P2"}
+79 state {"step":"combat_begin"}
+80 state {"step":"declare_attackers"}
+81 state {"step":"combat_end"}
+82 state {"step":"main2"}
+83 state {"step":"end"}
+84 state {"step":"cleanup"}
+85 state {"active":0,"step":"untap","turn":5}
+86 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+87 untap {"object":"o1","player":"P1"}
+88 untap {"object":"o3","player":"P1"}
+89 untap {"object":"o5","player":"P1"}
+90 state {"step":"upkeep"}
+91 state {"players":[{"hand":4,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+92 draw {"count":1,"player":"P1"}
+93 state {"step":"main1"}
+94 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o11","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+95 enter {"object":"o11","player":"P1"}
+96 land {"object":"o11","player":"P1"}
+97 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":1},"poison":0},{"hand":7,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+98 mana {"object":"o1","player":"P1"}
+99 tap {"object":"o1","player":"P1"}
+100 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":2},"poison":0},{"hand":7,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+101 mana {"object":"o5","player":"P1"}
+102 tap {"object":"o5","player":"P1"}
+103 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o12","keywords":["first_strike"],"name":"White Knight","owner":0,"power":2,"printing":"","rules_text":"First strike\nProtection from black","subtypes":["human","knight"],"tapped":false,"token":false,"toughness":2,"types":["creature"],"zone":"stack"}],"players":[{"hand":2,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":31,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s4","kind":"spell","mode":0,"name":"White Knight","source":"o12","targets":[],"x":0}]}
+104 cast {"object":"o12","player":"P1"}
+105 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o13","keywords":["first_strike"],"name":"White Knight","owner":0,"power":2,"printing":"","rules_text":"First strike\nProtection from black","subtypes":["human","knight"],"tapped":false,"token":false,"toughness":2,"types":["creature"],"zone":"battlefield"}],"removed":["o12"],"stack":[]}
+106 enter {"object":"o13","player":"P1"}
+107 state {"step":"combat_begin"}
+108 state {"step":"declare_attackers"}
+109 state {"combat":{"attackers":["o3"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+110 tap {"object":"o3","player":"P1"}
+111 attack {"objects":["o3"],"player":"P1"}
+112 state {"step":"declare_blockers"}
+113 state {"players":[{"hand":2,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":31,"life":12,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+114 damage {"amount":4,"source":"o3","target":"P2"}
+115 state {"step":"combat_end"}
+116 state {"combat":{"attackers":[],"blocks":[]}}
+117 state {"step":"main2"}
+118 state {"step":"end"}
+119 state {"step":"cleanup"}
+120 state {"active":1,"step":"untap","turn":6}
+121 state {"step":"upkeep"}
+122 state {"players":[{"hand":2,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":8,"library":30,"life":12,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+123 draw {"count":1,"player":"P2"}
+124 state {"step":"main1"}
+125 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o14","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":31,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":30,"life":12,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+126 enter {"object":"o14","player":"P2"}
+127 land {"object":"o14","player":"P2"}
+128 state {"step":"combat_begin"}
+129 state {"step":"declare_attackers"}
+130 state {"step":"combat_end"}
+131 state {"step":"main2"}
+132 state {"step":"end"}
+133 state {"step":"cleanup"}
+134 state {"active":0,"step":"untap","turn":7}
+135 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+136 untap {"object":"o1","player":"P1"}
+137 untap {"object":"o3","player":"P1"}
+138 untap {"object":"o5","player":"P1"}
+139 state {"step":"upkeep"}
+140 state {"players":[{"hand":3,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":30,"life":12,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+141 draw {"count":1,"player":"P1"}
+142 state {"step":"main1"}
+143 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o15","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":30,"life":12,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+144 enter {"object":"o15","player":"P1"}
+145 land {"object":"o15","player":"P1"}
+146 state {"step":"combat_begin"}
+147 state {"step":"declare_attackers"}
+148 state {"combat":{"attackers":["o3","o13"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o13","keywords":["first_strike"],"name":"White Knight","owner":0,"power":2,"printing":"","rules_text":"First strike\nProtection from black","subtypes":["human","knight"],"tapped":true,"token":false,"toughness":2,"types":["creature"],"zone":"battlefield"}]}
+149 tap {"object":"o3","player":"P1"}
+150 tap {"object":"o13","player":"P1"}
+151 attack {"objects":["o3","o13"],"player":"P1"}
+152 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o4","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":30,"life":12,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+153 mana {"object":"o4","player":"P2"}
+154 tap {"object":"o4","player":"P2"}
+155 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Lightning Bolt","owner":1,"power":0,"printing":"","rules_text":"Lightning Bolt deals 3 damage to any target.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"stack"}],"players":[{"hand":2,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":30,"life":12,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s5","kind":"spell","mode":0,"name":"Lightning Bolt","source":"o16","targets":[{"amount":1,"object":"o13"}],"x":0}]}
+156 cast {"object":"o16","player":"P2"}
+157 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":3,"definition_set":"2ed","face_down":false,"id":"o13","keywords":["first_strike"],"name":"White Knight","owner":0,"power":2,"printing":"","rules_text":"First strike\nProtection from black","subtypes":["human","knight"],"tapped":true,"token":false,"toughness":2,"types":["creature"],"zone":"battlefield"}],"removed":["o16"],"stack":[]}
+158 damage {"amount":3,"source":"","target":"o13"}
+159 state {"combat":{"attackers":["o3","o17"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o17","keywords":["first_strike"],"name":"White Knight","owner":0,"power":2,"printing":"","rules_text":"First strike\nProtection from black","subtypes":["human","knight"],"tapped":false,"token":false,"toughness":2,"types":["creature"],"zone":"graveyard"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o18","keywords":[],"name":"Lightning Bolt","owner":1,"power":0,"printing":"","rules_text":"Lightning Bolt deals 3 damage to any target.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"graveyard"}],"removed":["o13"]}
+160 leave {"object":"o17"}
+161 die {"object":"o17","player":"P1"}
+162 state {"combat":{"attackers":["o3"],"blocks":[]},"step":"declare_blockers"}
+163 state {"players":[{"hand":2,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":30,"life":8,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+164 damage {"amount":4,"source":"o3","target":"P2"}
+165 state {"step":"combat_end"}
+166 state {"combat":{"attackers":[],"blocks":[]}}
+167 state {"step":"main2"}
+168 state {"step":"end"}
+169 state {"step":"cleanup"}
+170 state {"active":1,"step":"untap","turn":8}
+171 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o4","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+172 untap {"object":"o4","player":"P2"}
+173 state {"step":"upkeep"}
+174 state {"players":[{"hand":2,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":29,"life":8,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+175 draw {"count":1,"player":"P2"}
+176 state {"step":"main1"}
+177 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":30,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":29,"life":8,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+178 enter {"object":"o19","player":"P2"}
+179 land {"object":"o19","player":"P2"}
+180 state {"step":"combat_begin"}
+181 state {"step":"declare_attackers"}
+182 state {"step":"combat_end"}
+183 state {"step":"main2"}
+184 state {"step":"end"}
+185 state {"step":"cleanup"}
+186 state {"active":0,"step":"untap","turn":9}
+187 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+188 untap {"object":"o3","player":"P1"}
+189 state {"step":"upkeep"}
+190 state {"players":[{"hand":3,"library":29,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":29,"life":8,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+191 draw {"count":1,"player":"P1"}
+192 state {"step":"main1"}
+193 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o20","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":29,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":29,"life":8,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+194 enter {"object":"o20","player":"P1"}
+195 land {"object":"o20","player":"P1"}
+196 state {"step":"combat_begin"}
+197 state {"step":"declare_attackers"}
+198 state {"combat":{"attackers":["o3"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+199 tap {"object":"o3","player":"P1"}
+200 attack {"objects":["o3"],"player":"P1"}
+201 state {"step":"declare_blockers"}
+202 state {"players":[{"hand":2,"library":29,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":29,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+203 damage {"amount":4,"source":"o3","target":"P2"}
+204 state {"step":"combat_end"}
+205 state {"combat":{"attackers":[],"blocks":[]}}
+206 state {"step":"main2"}
+207 state {"step":"end"}
+208 state {"step":"cleanup"}
+209 state {"active":1,"step":"untap","turn":10}
+210 state {"step":"upkeep"}
+211 state {"players":[{"hand":2,"library":29,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+212 draw {"count":1,"player":"P2"}
+213 state {"step":"main1"}
+214 state {"step":"combat_begin"}
+215 state {"step":"declare_attackers"}
+216 state {"step":"combat_end"}
+217 state {"step":"main2"}
+218 state {"step":"end"}
+219 state {"step":"cleanup"}
+220 state {"active":0,"step":"untap","turn":11}
+221 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+222 untap {"object":"o3","player":"P1"}
+223 state {"step":"upkeep"}
+224 state {"players":[{"hand":3,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+225 draw {"count":1,"player":"P1"}
+226 state {"step":"main1"}
+227 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+228 enter {"object":"o21","player":"P1"}
+229 land {"object":"o21","player":"P1"}
+230 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":1},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+231 mana {"object":"o1","player":"P1"}
+232 tap {"object":"o1","player":"P1"}
+233 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":2},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+234 mana {"object":"o5","player":"P1"}
+235 tap {"object":"o5","player":"P1"}
+236 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o11","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":3},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+237 mana {"object":"o11","player":"P1"}
+238 tap {"object":"o11","player":"P1"}
+239 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o15","keywords":[],"name":"Plains","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {W}.)","subtypes":["plains"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":4},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+240 mana {"object":"o15","player":"P1"}
+241 tap {"object":"o15","player":"P1"}
+242 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Castle","owner":0,"power":0,"printing":"","rules_text":"Untapped creatures you control get +0/+2.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":1,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":28,"life":4,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s6","kind":"spell","mode":0,"name":"Castle","source":"o22","targets":[],"x":0}]}
+243 cast {"object":"o22","player":"P1"}
+244 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":false,"token":false,"toughness":7,"types":["creature"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o23","keywords":[],"name":"Castle","owner":0,"power":0,"printing":"","rules_text":"Untapped creatures you control get +0/+2.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o22"],"stack":[]}
+245 enter {"object":"o23","player":"P1"}
+246 state {"step":"combat_begin"}
+247 state {"step":"declare_attackers"}
+248 state {"combat":{"attackers":["o3"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Savannah Lions","owner":0,"power":4,"printing":"","rules_text":"","subtypes":["cat"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+249 tap {"object":"o3","player":"P1"}
+250 attack {"objects":["o3"],"player":"P1"}
+251 state {"step":"declare_blockers"}
+252 state {"players":[{"hand":1,"library":28,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":28,"life":0,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+253 damage {"amount":4,"source":"o3","target":"P2"}
+254 result {"ended":"2026-10-24T16:11:19Z","result":"1-0"}

@@ -1,0 +1,63 @@
+[W "White Wizard"]
+[B "Black Wizard"]
+[Date "2026-10-24"]
+[Result "1-0"]
+
+Symbols
+  Plains          a land played
+  Savannah Lions  a spell cast (it resolved unless told otherwise)
+  →               its targets; after damage, the life the player has left (→ B 12)
+  uses            an activated ability (uses Prodigal Sorcerer → B)
+  X=5             the X a spell was cast with
+  ⚔               attacks; "Wall blocks Knight" a block
+  Egg deals 2     damage from a permanent or a trigger, not a spell
+  †               died, or went to its owner's graveyard
+  ✕               exiled (removed from the game)
+  ↩               returned to its owner's hand
+  ↧               put into a library
+  ⇥               left play out of sight (to a hand or a library), or a token gone
+  +Serra Angel    put into play without being cast or played
+  W +4 → 24       a life change no damage tells (a gain, a loss)
+  burns 1 → W 19  mana burn: life lost for mana left unused
+  #               the life that ended the game, as chess's mate
+  ×2              two of one name (⚔ Goblin ×2), or the same line twice in a row
+  [B]             an action by the player whose turn it is not
+  {…}             a comment written in the record
+  —               a turn in which nothing public happened
+  Taps, untaps, mana and each turn's first draw are not told.
+
+Turn 1 · White Wizard
+  main 1   Plains
+           Savannah Lions
+Turn 2 · Black Wizard
+  main 1   Mountain
+Turn 3 · White Wizard
+  main 1   Plains
+           Holy Strength → Savannah Lions ×2
+  combat   ⚔ Savannah Lions → B 16
+Turn 4 · Black Wizard
+  main 1   Mountain
+Turn 5 · White Wizard
+  main 1   Plains
+           White Knight
+  combat   ⚔ Savannah Lions → B 12
+Turn 6 · Black Wizard
+  main 1   Mountain
+Turn 7 · White Wizard
+  main 1   Plains
+  combat   ⚔ Savannah Lions, White Knight
+           [B] Lightning Bolt → White Knight †
+           → B 8
+Turn 8 · Black Wizard
+  main 1   Mountain
+Turn 9 · White Wizard
+  main 1   Plains
+  combat   ⚔ Savannah Lions → B 4
+Turn 10 · Black Wizard
+  —
+Turn 11 · White Wizard
+  main 1   Plains
+           Castle
+  combat   ⚔ Savannah Lions → B 0#
+
+1-0

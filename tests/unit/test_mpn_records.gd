@@ -203,3 +203,22 @@ func test_portable_specification_examples_parse_and_reconstruct() -> void:
 			assert_eq(last.objects, {}, "draw does not disclose a hidden card")
 			assert_eq(parsed.records.back().kind, "close")
 		assert_eq(MpnCodec.state_at(parsed.records, 0), first, "seeking back leaves snapshots intact")
+
+## A card leaving play out of sight (returned to a hand) is named in its
+## leave by the handle it had in play, though the state before the event
+## has retired it (MPN 0.1 §4: historical records keep their handles;
+## 2026-10-24) — and the move list tells it gone.
+func test_a_card_gone_out_of_sight_keeps_its_name_in_its_leave() -> void:
+	var bears := put_battlefield(0, "Grizzly Bears")
+	_watch()
+	var handle := recorder._ref(bears)
+	assert_ne(handle, "", "control: a public handle in play")
+	g.return_to_hand(bears)
+	recorder.observe()
+	var leaves := _events("leave")
+	assert_eq(leaves.size(), 1, "control: one leave")
+	assert_eq(String(leaves[0].data.get("object", "")), handle, "named by its handle in play")
+	assert_eq(recorder._ref(bears), "", "its handle retired")
+	var parsed := MpnCodec.parse(_text())
+	assert_eq(String(parsed.get("error", "")), "", "the record still reads")
+	assert_string_contains(MpnMoveList.text(parsed), "⇥ Grizzly Bears", "told gone out of sight, by name")

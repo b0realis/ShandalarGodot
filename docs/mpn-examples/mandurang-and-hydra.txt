@@ -1,0 +1,106 @@
+[M "Mandurang"]
+[H "Hydra"]
+[Date "2026-10-24"]
+[Result "0-1"]
+
+Symbols
+  Plains          a land played
+  Savannah Lions  a spell cast (it resolved unless told otherwise)
+  →               its targets; after damage, the life the player has left (→ B 12)
+  uses            an activated ability (uses Prodigal Sorcerer → B)
+  X=5             the X a spell was cast with
+  ⚔               attacks; "Wall blocks Knight" a block
+  Egg deals 2     damage from a permanent or a trigger, not a spell
+  †               died, or went to its owner's graveyard
+  ✕               exiled (removed from the game)
+  ↩               returned to its owner's hand
+  ↧               put into a library
+  ⇥               left play out of sight (to a hand or a library), or a token gone
+  +Serra Angel    put into play without being cast or played
+  W +4 → 24       a life change no damage tells (a gain, a loss)
+  burns 1 → W 19  mana burn: life lost for mana left unused
+  #               the life that ended the game, as chess's mate
+  ×2              two of one name (⚔ Goblin ×2), or the same line twice in a row
+  [B]             an action by the player whose turn it is not
+  {…}             a comment written in the record
+  —               a turn in which nothing public happened
+  Taps, untaps, mana and each turn's first draw are not told.
+
+Turn 1 · Mandurang
+  main 1   Island
+Turn 2 · Hydra
+  main 1   Mountain
+           Soul Net
+Turn 3 · Mandurang
+  main 1   Swamp
+           Zephyr Falcon
+Turn 4 · Hydra
+  main 1   Mountain
+Turn 5 · Mandurang
+  main 1   Swamp
+           Unholy Strength → Zephyr Falcon
+  combat   ⚔ Zephyr Falcon
+           [H] Lightning Bolt → Zephyr Falcon †; † Unholy Strength
+           H +1 → 21
+Turn 6 · Hydra
+  main 1   Mountain
+           Wall of Fire
+Turn 7 · Mandurang
+  main 1   Mountain
+           Jayemdae Tome
+Turn 8 · Hydra
+  main 1   Mountain
+           Wall of Fire
+Turn 9 · Mandurang
+  main 1   Swamp
+           Blood Lust → Wall of Fire
+Turn 10 · Hydra
+  main 1   Mana Flare
+           Power Surge
+  end      [M] uses Jayemdae Tome
+           [M] draws 1
+Turn 11 · Mandurang
+  upkeep   [H] Power Surge deals 1 → M 19
+  main 1   Dancing Scimitar
+           Will-o'-the-Wisp
+           Giant Strength → Dancing Scimitar
+           burns 1 → M 18
+Turn 12 · Hydra
+  main 2   Disintegrate X=7 → Dancing Scimitar ✕; † Giant Strength
+Turn 13 · Mandurang
+  upkeep   [H] Power Surge deals 1 → M 17
+  main 1   Unstable Mutation → Will-o'-the-Wisp ×2
+           uses Jayemdae Tome
+           draws 1
+           Dancing Scimitar
+  combat   ⚔ Will-o'-the-Wisp → H 15
+Turn 14 · Hydra
+  main 1   Shivan Dragon
+Turn 15 · Mandurang
+  main 1   Swamp
+           uses Jayemdae Tome
+           draws 1
+  combat   ⚔ Will-o'-the-Wisp
+           Shivan Dragon blocks Will-o'-the-Wisp
+           uses Will-o'-the-Wisp
+           burns 1 → M 16
+           Will-o'-the-Wisp regenerates
+Turn 16 · Hydra
+  upkeep   Power Surge deals 1 → H 14
+  main 1   Mountain
+           Onulet
+           burns 1 → H 13
+  combat   ⚔ Shivan Dragon
+           uses Shivan Dragon ×6
+           → M 5
+Turn 17 · Mandurang
+  upkeep   [H] Power Surge deals 3 → M 2
+  main 1   Mountain
+           uses Jayemdae Tome
+           draws 1
+           Unholy Strength → Dancing Scimitar
+           burns 1 → M 1
+Turn 18 · Hydra
+  main 1   Inferno → M -5#, H 7
+
+0-1

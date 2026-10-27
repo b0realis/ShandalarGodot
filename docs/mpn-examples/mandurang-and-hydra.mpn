@@ -1,0 +1,730 @@
+[Notation "MPN/0.1"]
+[Visibility "public"]
+[Coverage "public-observations"]
+[Started "2026-10-24T16:11:46Z"]
+[MatchStarted "2026-10-24T16:11:46Z"]
+[Match "b46ff62fc2751892c8898d85"]
+[Game 1]
+[Player.P1 "Mandurang"]
+[Player.P2 "Hydra"]
+[RulesProfile "Modern rules, mana burn on"]
+[RulesOptions {"attackers_revocable":true,"damage_effects_fixed_order":false,"damage_prevention_window":false,"free_damage_assignment":true,"life_checked_at_phase_end":false,"mana_burn":true,"pool_empties_on_attack":false,"sacrifice_clauses_wait":false,"tapped_artifacts_stop":false}]
+[CardPool ["2ed","arn","atq","leg","drk","4ed","past","phpr"]]
+[Mode "local"]
+[Recorder "ShandalarGodot/0.50.59"]
+[Comments ["Two computer players with the 1997 decks of the Mandurang and the Hydra. An example for docs/mpn-move-list.md."]]
+
+1 state {"active":0,"combat":{"attackers":[],"blocks":[]},"objects":[],"players":[{"hand":7,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[],"step":"upkeep","turn":1}
+2 state {"step":"draw"}
+3 state {"step":"main1"}
+4 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+5 enter {"object":"o1","player":"P1"}
+6 land {"object":"o1","player":"P1"}
+7 state {"step":"combat_begin"}
+8 state {"step":"declare_attackers"}
+9 state {"step":"combat_end"}
+10 state {"step":"main2"}
+11 state {"step":"end"}
+12 state {"step":"cleanup"}
+13 state {"active":1,"step":"untap","turn":2}
+14 state {"step":"upkeep"}
+15 state {"players":[{"hand":6,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":8,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+16 draw {"count":1,"player":"P2"}
+17 state {"step":"main1"}
+18 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+19 enter {"object":"o2","player":"P2"}
+20 land {"object":"o2","player":"P2"}
+21 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+22 mana {"object":"o2","player":"P2"}
+23 tap {"object":"o2","player":"P2"}
+24 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o3","keywords":[],"name":"Soul Net","owner":1,"power":0,"printing":"","rules_text":"Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"stack"}],"players":[{"hand":6,"library":50,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s1","kind":"spell","mode":0,"name":"Soul Net","source":"o3","targets":[],"x":0}]}
+25 cast {"object":"o3","player":"P2"}
+26 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o4","keywords":[],"name":"Soul Net","owner":1,"power":0,"printing":"","rules_text":"Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}],"removed":["o3"],"stack":[]}
+27 enter {"object":"o4","player":"P2"}
+28 state {"step":"combat_begin"}
+29 state {"step":"declare_attackers"}
+30 state {"step":"combat_end"}
+31 state {"step":"main2"}
+32 state {"step":"end"}
+33 state {"step":"cleanup"}
+34 state {"active":0,"step":"untap","turn":3}
+35 state {"step":"upkeep"}
+36 state {"players":[{"hand":7,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+37 draw {"count":1,"player":"P1"}
+38 state {"step":"main1"}
+39 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+40 enter {"object":"o5","player":"P1"}
+41 land {"object":"o5","player":"P1"}
+42 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+43 mana {"object":"o1","player":"P1"}
+44 tap {"object":"o1","player":"P1"}
+45 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":6,"library":49,"life":20,"mana":{"B":1,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+46 mana {"object":"o5","player":"P1"}
+47 tap {"object":"o5","player":"P1"}
+48 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o6","keywords":["flying","vigilance"],"name":"Zephyr Falcon","owner":0,"power":1,"printing":"","rules_text":"Flying, vigilance","subtypes":["bird"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"stack"}],"players":[{"hand":5,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s2","kind":"spell","mode":0,"name":"Zephyr Falcon","source":"o6","targets":[],"x":0}]}
+49 cast {"object":"o6","player":"P1"}
+50 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o7","keywords":["flying","vigilance"],"name":"Zephyr Falcon","owner":0,"power":1,"printing":"","rules_text":"Flying, vigilance","subtypes":["bird"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"battlefield"}],"removed":["o6"],"stack":[]}
+51 enter {"object":"o7","player":"P1"}
+52 state {"step":"combat_begin"}
+53 state {"step":"declare_attackers"}
+54 state {"step":"combat_end"}
+55 state {"step":"main2"}
+56 state {"step":"end"}
+57 state {"step":"cleanup"}
+58 state {"active":1,"step":"untap","turn":4}
+59 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+60 untap {"object":"o2","player":"P2"}
+61 state {"step":"upkeep"}
+62 state {"players":[{"hand":5,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":7,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+63 draw {"count":1,"player":"P2"}
+64 state {"step":"main1"}
+65 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":5,"library":49,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+66 enter {"object":"o8","player":"P2"}
+67 land {"object":"o8","player":"P2"}
+68 state {"step":"combat_begin"}
+69 state {"step":"declare_attackers"}
+70 state {"step":"combat_end"}
+71 state {"step":"main2"}
+72 state {"step":"end"}
+73 state {"step":"cleanup"}
+74 state {"active":0,"step":"untap","turn":5}
+75 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+76 untap {"object":"o1","player":"P1"}
+77 untap {"object":"o5","player":"P1"}
+78 state {"step":"upkeep"}
+79 state {"players":[{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+80 draw {"count":1,"player":"P1"}
+81 state {"step":"main1"}
+82 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":5,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+83 enter {"object":"o9","player":"P1"}
+84 land {"object":"o9","player":"P1"}
+85 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":5,"library":48,"life":20,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+86 mana {"object":"o5","player":"P1"}
+87 tap {"object":"o5","player":"P1"}
+88 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o10","keywords":[],"name":"Unholy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +2/+1.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s3","kind":"spell","mode":0,"name":"Unholy Strength","source":"o10","targets":[{"amount":1,"object":"o7"}],"x":0}]}
+89 cast {"object":"o10","player":"P1"}
+90 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o7","keywords":["flying","vigilance"],"name":"Zephyr Falcon","owner":0,"power":3,"printing":"","rules_text":"Flying, vigilance","subtypes":["bird"],"tapped":false,"token":false,"toughness":2,"types":["creature"],"zone":"battlefield"},{"attached_to":"o7","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o11","keywords":[],"name":"Unholy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +2/+1.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o10"],"stack":[]}
+91 enter {"object":"o11","player":"P1"}
+92 state {"step":"combat_begin"}
+93 state {"step":"declare_attackers"}
+94 state {"combat":{"attackers":["o7"],"blocks":[]}}
+95 attack {"objects":["o7"],"player":"P1"}
+96 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+97 mana {"object":"o2","player":"P2"}
+98 tap {"object":"o2","player":"P2"}
+99 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o12","keywords":[],"name":"Lightning Bolt","owner":1,"power":0,"printing":"","rules_text":"Lightning Bolt deals 3 damage to any target.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"stack"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s4","kind":"spell","mode":0,"name":"Lightning Bolt","source":"o12","targets":[{"amount":1,"object":"o7"}],"x":0}]}
+100 cast {"object":"o12","player":"P2"}
+101 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":3,"definition_set":"4ed","face_down":false,"id":"o7","keywords":["flying","vigilance"],"name":"Zephyr Falcon","owner":0,"power":3,"printing":"","rules_text":"Flying, vigilance","subtypes":["bird"],"tapped":false,"token":false,"toughness":2,"types":["creature"],"zone":"battlefield"}],"removed":["o12"],"stack":[]}
+102 damage {"amount":3,"source":"","target":"o7"}
+103 state {"combat":{"attackers":["o13"],"blocks":[]},"objects":[{"attached_to":"o13","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o11","keywords":[],"name":"Unholy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +2/+1.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o13","keywords":["flying","vigilance"],"name":"Zephyr Falcon","owner":0,"power":1,"printing":"","rules_text":"Flying, vigilance","subtypes":["bird"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"graveyard"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o14","keywords":[],"name":"Lightning Bolt","owner":1,"power":0,"printing":"","rules_text":"Lightning Bolt deals 3 damage to any target.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"graveyard"}],"removed":["o7"]}
+104 leave {"object":"o13"}
+105 die {"object":"o13","player":"P1"}
+106 state {"stack":[{"controller":1,"id":"s5","kind":"trigger","mode":0,"name":"Soul Net","source":"o4","targets":[],"x":0}]}
+107 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o15","keywords":[],"name":"Unholy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +2/+1.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"graveyard"}],"removed":["o11"]}
+108 leave {"object":"o15"}
+109 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}],"stack":[]}
+110 mana {"object":"o8","player":"P2"}
+111 tap {"object":"o8","player":"P2"}
+112 state {"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+113 state {"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":48,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+114 state {"combat":{"attackers":[],"blocks":[]},"step":"declare_blockers"}
+115 state {"step":"combat_damage"}
+116 state {"step":"combat_end"}
+117 state {"step":"main2"}
+118 state {"step":"end"}
+119 state {"step":"cleanup"}
+120 state {"active":1,"step":"untap","turn":6}
+121 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+122 untap {"object":"o2","player":"P2"}
+123 untap {"object":"o8","player":"P2"}
+124 state {"step":"upkeep"}
+125 state {"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":6,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+126 draw {"count":1,"player":"P2"}
+127 state {"step":"main1"}
+128 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+129 enter {"object":"o16","player":"P2"}
+130 land {"object":"o16","player":"P2"}
+131 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+132 mana {"object":"o2","player":"P2"}
+133 tap {"object":"o2","player":"P2"}
+134 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+135 mana {"object":"o8","player":"P2"}
+136 tap {"object":"o8","player":"P2"}
+137 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+138 mana {"object":"o16","player":"P2"}
+139 tap {"object":"o16","player":"P2"}
+140 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o17","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"stack"}],"players":[{"hand":4,"library":48,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s6","kind":"spell","mode":0,"name":"Wall of Fire","source":"o17","targets":[],"x":0}]}
+141 cast {"object":"o17","player":"P2"}
+142 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o18","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"removed":["o17"],"stack":[]}
+143 enter {"object":"o18","player":"P2"}
+144 state {"step":"combat_begin"}
+145 state {"step":"declare_attackers"}
+146 state {"step":"combat_end"}
+147 state {"step":"main2"}
+148 state {"step":"end"}
+149 state {"step":"cleanup"}
+150 state {"active":0,"step":"untap","turn":7}
+151 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+152 untap {"object":"o5","player":"P1"}
+153 state {"step":"upkeep"}
+154 state {"players":[{"hand":5,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+155 draw {"count":1,"player":"P1"}
+156 state {"step":"main1"}
+157 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+158 enter {"object":"o19","player":"P1"}
+159 land {"object":"o19","player":"P1"}
+160 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+161 mana {"object":"o1","player":"P1"}
+162 tap {"object":"o1","player":"P1"}
+163 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":47,"life":20,"mana":{"B":1,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+164 mana {"object":"o5","player":"P1"}
+165 tap {"object":"o5","player":"P1"}
+166 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":47,"life":20,"mana":{"B":2,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+167 mana {"object":"o9","player":"P1"}
+168 tap {"object":"o9","player":"P1"}
+169 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":47,"life":20,"mana":{"B":2,"C":0,"G":0,"R":1,"U":1,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+170 mana {"object":"o19","player":"P1"}
+171 tap {"object":"o19","player":"P1"}
+172 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o20","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"stack"}],"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":47,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s7","kind":"spell","mode":0,"name":"Jayemdae Tome","source":"o20","targets":[],"x":0}]}
+173 cast {"object":"o20","player":"P1"}
+174 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}],"removed":["o20"],"stack":[]}
+175 enter {"object":"o21","player":"P1"}
+176 state {"step":"combat_begin"}
+177 state {"step":"declare_attackers"}
+178 state {"step":"combat_end"}
+179 state {"step":"main2"}
+180 state {"step":"end"}
+181 state {"step":"cleanup"}
+182 state {"active":1,"step":"untap","turn":8}
+183 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+184 untap {"object":"o2","player":"P2"}
+185 untap {"object":"o8","player":"P2"}
+186 untap {"object":"o16","player":"P2"}
+187 state {"step":"upkeep"}
+188 state {"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":5,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+189 draw {"count":1,"player":"P2"}
+190 state {"step":"main1"}
+191 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+192 enter {"object":"o22","player":"P2"}
+193 land {"object":"o22","player":"P2"}
+194 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+195 mana {"object":"o2","player":"P2"}
+196 tap {"object":"o2","player":"P2"}
+197 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+198 mana {"object":"o8","player":"P2"}
+199 tap {"object":"o8","player":"P2"}
+200 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+201 mana {"object":"o16","player":"P2"}
+202 tap {"object":"o16","player":"P2"}
+203 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o23","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"stack"}],"players":[{"hand":3,"library":47,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s8","kind":"spell","mode":0,"name":"Wall of Fire","source":"o23","targets":[],"x":0}]}
+204 cast {"object":"o23","player":"P2"}
+205 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o24","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"removed":["o23"],"stack":[]}
+206 enter {"object":"o24","player":"P2"}
+207 state {"step":"combat_begin"}
+208 state {"step":"declare_attackers"}
+209 state {"step":"combat_end"}
+210 state {"step":"main2"}
+211 state {"step":"end"}
+212 state {"step":"cleanup"}
+213 state {"active":0,"step":"untap","turn":9}
+214 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+215 untap {"object":"o1","player":"P1"}
+216 untap {"object":"o5","player":"P1"}
+217 untap {"object":"o9","player":"P1"}
+218 untap {"object":"o19","player":"P1"}
+219 state {"step":"upkeep"}
+220 state {"players":[{"hand":4,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+221 draw {"count":1,"player":"P1"}
+222 state {"step":"main1"}
+223 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o25","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+224 enter {"object":"o25","player":"P1"}
+225 land {"object":"o25","player":"P1"}
+226 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0},{"hand":3,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+227 mana {"object":"o19","player":"P1"}
+228 tap {"object":"o19","player":"P1"}
+229 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":1,"U":1,"W":0},"poison":0},{"hand":3,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+230 mana {"object":"o1","player":"P1"}
+231 tap {"object":"o1","player":"P1"}
+232 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o26","keywords":[],"name":"Blood Lust","owner":0,"power":0,"printing":"","rules_text":"If target creature has toughness 5 or greater, it gets +4/-4 until end of turn. Otherwise, it gets +4/-X until end of turn, where X is its toughness minus 1.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"stack"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":46,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s9","kind":"spell","mode":0,"name":"Blood Lust","source":"o26","targets":[{"amount":1,"object":"o18"}],"x":0}]}
+233 cast {"object":"o26","player":"P1"}
+234 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o18","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":4,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"battlefield"}],"removed":["o26"],"stack":[]}
+235 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o27","keywords":[],"name":"Blood Lust","owner":0,"power":0,"printing":"","rules_text":"If target creature has toughness 5 or greater, it gets +4/-4 until end of turn. Otherwise, it gets +4/-X until end of turn, where X is its toughness minus 1.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"graveyard"}]}
+236 state {"step":"combat_begin"}
+237 state {"step":"declare_attackers"}
+238 state {"step":"combat_end"}
+239 state {"step":"main2"}
+240 state {"step":"end"}
+241 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o18","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"step":"cleanup"}
+242 state {"active":1,"step":"untap","turn":10}
+243 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+244 untap {"object":"o2","player":"P2"}
+245 untap {"object":"o8","player":"P2"}
+246 untap {"object":"o16","player":"P2"}
+247 state {"step":"upkeep"}
+248 state {"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+249 draw {"count":1,"player":"P2"}
+250 state {"step":"main1"}
+251 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+252 mana {"object":"o2","player":"P2"}
+253 tap {"object":"o2","player":"P2"}
+254 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+255 mana {"object":"o8","player":"P2"}
+256 tap {"object":"o8","player":"P2"}
+257 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":4,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+258 mana {"object":"o16","player":"P2"}
+259 tap {"object":"o16","player":"P2"}
+260 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o28","keywords":[],"name":"Mana Flare","owner":1,"power":0,"printing":"","rules_text":"Whenever a player taps a land for mana, that player adds one mana of any type that land produced.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s10","kind":"spell","mode":0,"name":"Mana Flare","source":"o28","targets":[],"x":0}]}
+261 cast {"object":"o28","player":"P2"}
+262 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o29","keywords":[],"name":"Mana Flare","owner":1,"power":0,"printing":"","rules_text":"Whenever a player taps a land for mana, that player adds one mana of any type that land produced.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o28"],"stack":[]}
+263 enter {"object":"o29","player":"P2"}
+264 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+265 mana {"object":"o22","player":"P2"}
+266 state {"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+267 tap {"object":"o22","player":"P2"}
+268 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o30","keywords":[],"name":"Power Surge","owner":1,"power":0,"printing":"","rules_text":"At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s11","kind":"spell","mode":0,"name":"Power Surge","source":"o30","targets":[],"x":0}]}
+269 cast {"object":"o30","player":"P2"}
+270 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o31","keywords":[],"name":"Power Surge","owner":1,"power":0,"printing":"","rules_text":"At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o30"],"stack":[]}
+271 enter {"object":"o31","player":"P2"}
+272 state {"step":"combat_begin"}
+273 state {"step":"declare_attackers"}
+274 state {"step":"combat_end"}
+275 state {"step":"main2"}
+276 state {"step":"end"}
+277 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+278 mana {"object":"o5","player":"P1"}
+279 state {"players":[{"hand":2,"library":46,"life":20,"mana":{"B":2,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+280 tap {"object":"o5","player":"P1"}
+281 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":3,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+282 mana {"object":"o9","player":"P1"}
+283 state {"players":[{"hand":2,"library":46,"life":20,"mana":{"B":4,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+284 tap {"object":"o9","player":"P1"}
+285 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":true,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}],"players":[{"hand":2,"library":46,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+286 tap {"object":"o21","player":"P1"}
+287 state {"stack":[{"controller":0,"id":"s12","kind":"ability","mode":0,"name":"Jayemdae Tome","source":"o21","targets":[],"x":0}]}
+288 activate {"object":"o21","player":"P1"}
+289 state {"players":[{"hand":3,"library":45,"life":20,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+290 draw {"count":1,"player":"P1"}
+291 state {"step":"cleanup"}
+292 state {"active":0,"step":"untap","turn":11}
+293 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}]}
+294 untap {"object":"o1","player":"P1"}
+295 untap {"object":"o5","player":"P1"}
+296 untap {"object":"o9","player":"P1"}
+297 untap {"object":"o19","player":"P1"}
+298 untap {"object":"o21","player":"P1"}
+299 state {"step":"upkeep"}
+300 state {"stack":[{"controller":1,"id":"s13","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+301 state {"players":[{"hand":3,"library":45,"life":19,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+302 damage {"amount":1,"source":"o31","target":"P1"}
+303 state {"players":[{"hand":4,"library":44,"life":19,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+304 draw {"count":1,"player":"P1"}
+305 state {"step":"main1"}
+306 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":44,"life":19,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+307 mana {"object":"o1","player":"P1"}
+308 state {"players":[{"hand":4,"library":44,"life":19,"mana":{"B":0,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+309 tap {"object":"o1","player":"P1"}
+310 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":4,"library":44,"life":19,"mana":{"B":1,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+311 mana {"object":"o5","player":"P1"}
+312 state {"players":[{"hand":4,"library":44,"life":19,"mana":{"B":2,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+313 tap {"object":"o5","player":"P1"}
+314 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o32","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":1,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature","artifact"],"zone":"stack"}],"players":[{"hand":3,"library":44,"life":19,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s14","kind":"spell","mode":0,"name":"Dancing Scimitar","source":"o32","targets":[],"x":0}]}
+315 cast {"object":"o32","player":"P1"}
+316 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o33","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":1,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature","artifact"],"zone":"battlefield"}],"removed":["o32"],"stack":[]}
+317 enter {"object":"o33","player":"P1"}
+318 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":3,"library":44,"life":19,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+319 mana {"object":"o9","player":"P1"}
+320 state {"players":[{"hand":3,"library":44,"life":19,"mana":{"B":2,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+321 tap {"object":"o9","player":"P1"}
+322 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o34","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":0,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"stack"}],"players":[{"hand":2,"library":44,"life":19,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s15","kind":"spell","mode":0,"name":"Will-o'-the-Wisp","source":"o34","targets":[],"x":0}]}
+323 cast {"object":"o34","player":"P1"}
+324 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":0,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":1,"types":["creature"],"zone":"battlefield"}],"removed":["o34"],"stack":[]}
+325 enter {"object":"o35","player":"P1"}
+326 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":44,"life":19,"mana":{"B":1,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+327 mana {"object":"o19","player":"P1"}
+328 state {"players":[{"hand":2,"library":44,"life":19,"mana":{"B":1,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+329 tap {"object":"o19","player":"P1"}
+330 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o36","keywords":[],"name":"Giant Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature\nEnchanted creature gets +2/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":1,"library":44,"life":19,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s16","kind":"spell","mode":0,"name":"Giant Strength","source":"o36","targets":[{"amount":1,"object":"o33"}],"x":0}]}
+331 cast {"object":"o36","player":"P1"}
+332 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o33","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":3,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":7,"types":["creature","artifact"],"zone":"battlefield"},{"attached_to":"o33","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o37","keywords":[],"name":"Giant Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature\nEnchanted creature gets +2/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o36"],"stack":[]}
+333 enter {"object":"o37","player":"P1"}
+334 state {"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":45,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+335 mana_burn {"amount":1,"player":"P1"}
+336 state {"step":"combat_begin"}
+337 state {"step":"declare_attackers"}
+338 state {"step":"combat_end"}
+339 state {"step":"main2"}
+340 state {"step":"end"}
+341 state {"step":"cleanup"}
+342 state {"active":1,"step":"untap","turn":12}
+343 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+344 untap {"object":"o2","player":"P2"}
+345 untap {"object":"o8","player":"P2"}
+346 untap {"object":"o16","player":"P2"}
+347 untap {"object":"o22","player":"P2"}
+348 state {"step":"upkeep"}
+349 state {"stack":[{"controller":1,"id":"s17","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+350 state {"stack":[]}
+351 state {"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+352 draw {"count":1,"player":"P2"}
+353 state {"step":"main1"}
+354 state {"step":"combat_begin"}
+355 state {"step":"declare_attackers"}
+356 state {"step":"combat_end"}
+357 state {"step":"main2"}
+358 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+359 mana {"object":"o2","player":"P2"}
+360 state {"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+361 tap {"object":"o2","player":"P2"}
+362 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+363 mana {"object":"o8","player":"P2"}
+364 state {"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":4,"U":0,"W":0},"poison":0}]}
+365 tap {"object":"o8","player":"P2"}
+366 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":5,"U":0,"W":0},"poison":0}]}
+367 mana {"object":"o16","player":"P2"}
+368 state {"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":6,"U":0,"W":0},"poison":0}]}
+369 tap {"object":"o16","player":"P2"}
+370 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":7,"U":0,"W":0},"poison":0}]}
+371 mana {"object":"o22","player":"P2"}
+372 state {"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":8,"U":0,"W":0},"poison":0}]}
+373 tap {"object":"o22","player":"P2"}
+374 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o38","keywords":[],"name":"Disintegrate","owner":1,"power":0,"printing":"","rules_text":"Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["sorcery"],"zone":"stack"}],"players":[{"hand":1,"library":44,"life":18,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s18","kind":"spell","mode":0,"name":"Disintegrate","source":"o38","targets":[{"amount":1,"object":"o33"}],"x":7}]}
+375 cast {"object":"o38","player":"P2"}
+376 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":7,"definition_set":"4ed","face_down":false,"id":"o33","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":3,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":7,"types":["creature","artifact"],"zone":"battlefield"}],"removed":["o38"],"stack":[]}
+377 damage {"amount":7,"source":"","target":"o33"}
+378 state {"objects":[{"attached_to":"o39","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o37","keywords":[],"name":"Giant Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature\nEnchanted creature gets +2/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o39","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":1,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature","artifact"],"zone":"exile"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o40","keywords":[],"name":"Disintegrate","owner":1,"power":0,"printing":"","rules_text":"Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["sorcery"],"zone":"graveyard"}],"removed":["o33"]}
+379 leave {"object":"o39"}
+380 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o41","keywords":[],"name":"Giant Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature\nEnchanted creature gets +2/+2.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"graveyard"}],"removed":["o37"]}
+381 leave {"object":"o41"}
+382 state {"step":"end"}
+383 state {"step":"cleanup"}
+384 state {"active":0,"step":"untap","turn":13}
+385 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+386 untap {"object":"o1","player":"P1"}
+387 untap {"object":"o5","player":"P1"}
+388 untap {"object":"o9","player":"P1"}
+389 untap {"object":"o19","player":"P1"}
+390 state {"step":"upkeep"}
+391 state {"stack":[{"controller":1,"id":"s19","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+392 state {"players":[{"hand":1,"library":44,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+393 damage {"amount":1,"source":"o31","target":"P1"}
+394 state {"players":[{"hand":2,"library":43,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+395 draw {"count":1,"player":"P1"}
+396 state {"step":"main1"}
+397 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":43,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+398 mana {"object":"o1","player":"P1"}
+399 state {"players":[{"hand":2,"library":43,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+400 tap {"object":"o1","player":"P1"}
+401 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o42","keywords":[],"name":"Unstable Mutation","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +3/+3.\nAt the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":1,"library":43,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s20","kind":"spell","mode":0,"name":"Unstable Mutation","source":"o42","targets":[{"amount":1,"object":"o35"}],"x":0}]}
+402 cast {"object":"o42","player":"P1"}
+403 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":3,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":4,"types":["creature"],"zone":"battlefield"},{"attached_to":"o35","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o43","keywords":[],"name":"Unstable Mutation","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +3/+3.\nAt the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o42"],"stack":[]}
+404 enter {"object":"o43","player":"P1"}
+405 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o44","keywords":[],"name":"Unstable Mutation","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +3/+3.\nAt the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":0,"library":43,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s21","kind":"spell","mode":0,"name":"Unstable Mutation","source":"o44","targets":[{"amount":1,"object":"o35"}],"x":0}]}
+406 cast {"object":"o44","player":"P1"}
+407 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":6,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":7,"types":["creature"],"zone":"battlefield"},{"attached_to":"o35","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o45","keywords":[],"name":"Unstable Mutation","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +3/+3.\nAt the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o44"],"stack":[]}
+408 enter {"object":"o45","player":"P1"}
+409 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":43,"life":17,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+410 mana {"object":"o5","player":"P1"}
+411 state {"players":[{"hand":0,"library":43,"life":17,"mana":{"B":2,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+412 tap {"object":"o5","player":"P1"}
+413 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":43,"life":17,"mana":{"B":3,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+414 mana {"object":"o9","player":"P1"}
+415 state {"players":[{"hand":0,"library":43,"life":17,"mana":{"B":4,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+416 tap {"object":"o9","player":"P1"}
+417 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":true,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}],"players":[{"hand":0,"library":43,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+418 tap {"object":"o21","player":"P1"}
+419 state {"stack":[{"controller":0,"id":"s22","kind":"ability","mode":0,"name":"Jayemdae Tome","source":"o21","targets":[],"x":0}]}
+420 activate {"object":"o21","player":"P1"}
+421 state {"players":[{"hand":1,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+422 draw {"count":1,"player":"P1"}
+423 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+424 mana {"object":"o19","player":"P1"}
+425 state {"players":[{"hand":1,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+426 tap {"object":"o19","player":"P1"}
+427 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o25","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":42,"life":17,"mana":{"B":1,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+428 mana {"object":"o25","player":"P1"}
+429 state {"players":[{"hand":1,"library":42,"life":17,"mana":{"B":2,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+430 tap {"object":"o25","player":"P1"}
+431 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o46","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":1,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature","artifact"],"zone":"stack"}],"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":21,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s23","kind":"spell","mode":0,"name":"Dancing Scimitar","source":"o46","targets":[],"x":0}]}
+432 cast {"object":"o46","player":"P1"}
+433 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o47","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":1,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature","artifact"],"zone":"battlefield"}],"removed":["o46"],"stack":[]}
+434 enter {"object":"o47","player":"P1"}
+435 state {"step":"combat_begin"}
+436 state {"step":"declare_attackers"}
+437 state {"combat":{"attackers":["o35"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":6,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":true,"token":false,"toughness":7,"types":["creature"],"zone":"battlefield"}]}
+438 tap {"object":"o35","player":"P1"}
+439 attack {"objects":["o35"],"player":"P1"}
+440 state {"step":"declare_blockers"}
+441 state {"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":44,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+442 damage {"amount":6,"source":"o35","target":"P2"}
+443 state {"step":"combat_end"}
+444 state {"combat":{"attackers":[],"blocks":[]}}
+445 state {"step":"main2"}
+446 state {"step":"end"}
+447 state {"step":"cleanup"}
+448 state {"active":1,"step":"untap","turn":14}
+449 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+450 untap {"object":"o2","player":"P2"}
+451 untap {"object":"o8","player":"P2"}
+452 untap {"object":"o16","player":"P2"}
+453 untap {"object":"o22","player":"P2"}
+454 state {"step":"upkeep"}
+455 state {"stack":[{"controller":1,"id":"s24","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+456 state {"stack":[]}
+457 state {"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+458 draw {"count":1,"player":"P2"}
+459 state {"step":"main1"}
+460 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+461 mana {"object":"o2","player":"P2"}
+462 state {"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+463 tap {"object":"o2","player":"P2"}
+464 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+465 mana {"object":"o8","player":"P2"}
+466 state {"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":4,"U":0,"W":0},"poison":0}]}
+467 tap {"object":"o8","player":"P2"}
+468 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":5,"U":0,"W":0},"poison":0}]}
+469 mana {"object":"o16","player":"P2"}
+470 state {"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":6,"U":0,"W":0},"poison":0}]}
+471 tap {"object":"o16","player":"P2"}
+472 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o48","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"stack"}],"players":[{"hand":0,"library":42,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s25","kind":"spell","mode":0,"name":"Shivan Dragon","source":"o48","targets":[],"x":0}]}
+473 cast {"object":"o48","player":"P2"}
+474 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"removed":["o48"],"stack":[]}
+475 enter {"object":"o49","player":"P2"}
+476 state {"step":"combat_begin"}
+477 state {"step":"declare_attackers"}
+478 state {"step":"combat_end"}
+479 state {"step":"main2"}
+480 state {"step":"end"}
+481 state {"step":"cleanup"}
+482 state {"active":0,"step":"untap","turn":15}
+483 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o19","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o25","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":6,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":7,"types":["creature"],"zone":"battlefield"}]}
+484 untap {"object":"o1","player":"P1"}
+485 untap {"object":"o5","player":"P1"}
+486 untap {"object":"o9","player":"P1"}
+487 untap {"object":"o19","player":"P1"}
+488 untap {"object":"o21","player":"P1"}
+489 untap {"object":"o25","player":"P1"}
+490 untap {"object":"o35","player":"P1"}
+491 state {"step":"upkeep"}
+492 state {"stack":[{"controller":0,"id":"s26","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o43","targets":[],"x":0},{"controller":0,"id":"s27","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o45","targets":[],"x":0},{"controller":1,"id":"s28","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+493 state {"stack":[{"controller":0,"id":"s26","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o43","targets":[],"x":0},{"controller":0,"id":"s27","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o45","targets":[],"x":0}]}
+494 state {"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":1},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":5,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":6,"types":["creature"],"zone":"battlefield"}],"stack":[{"controller":0,"id":"s26","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o43","targets":[],"x":0}]}
+495 state {"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":2},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":4,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+496 state {"players":[{"hand":1,"library":41,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+497 draw {"count":1,"player":"P1"}
+498 state {"step":"main1"}
+499 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o50","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":41,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+500 enter {"object":"o50","player":"P1"}
+501 land {"object":"o50","player":"P1"}
+502 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":41,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+503 mana {"object":"o1","player":"P1"}
+504 state {"players":[{"hand":0,"library":41,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+505 tap {"object":"o1","player":"P1"}
+506 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":0,"library":41,"life":17,"mana":{"B":1,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+507 mana {"object":"o5","player":"P1"}
+508 state {"players":[{"hand":0,"library":41,"life":17,"mana":{"B":2,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+509 tap {"object":"o5","player":"P1"}
+510 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":true,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}],"players":[{"hand":0,"library":41,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+511 tap {"object":"o21","player":"P1"}
+512 state {"stack":[{"controller":0,"id":"s29","kind":"ability","mode":0,"name":"Jayemdae Tome","source":"o21","targets":[],"x":0}]}
+513 activate {"object":"o21","player":"P1"}
+514 state {"players":[{"hand":1,"library":40,"life":17,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+515 draw {"count":1,"player":"P1"}
+516 state {"step":"combat_begin"}
+517 state {"step":"declare_attackers"}
+518 state {"combat":{"attackers":["o35"],"blocks":[]},"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":2},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":4,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+519 tap {"object":"o35","player":"P1"}
+520 attack {"objects":["o35"],"player":"P1"}
+521 state {"step":"declare_blockers"}
+522 state {"combat":{"attackers":["o35"],"blocks":[["o49","o35"]]}}
+523 block {"attacker":"o35","blocker":"o49"}
+524 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":17,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+525 mana {"object":"o9","player":"P1"}
+526 state {"players":[{"hand":1,"library":40,"life":17,"mana":{"B":2,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+527 tap {"object":"o9","player":"P1"}
+528 state {"players":[{"hand":1,"library":40,"life":17,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s30","kind":"ability","mode":0,"name":"Will-o'-the-Wisp","source":"o35","targets":[],"x":0}]}
+529 activate {"object":"o35","player":"P1"}
+530 state {"stack":[]}
+531 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":15,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+532 mana_burn {"amount":1,"player":"P1"}
+533 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":4,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"step":"combat_damage"}
+534 damage {"amount":4,"source":"o35","target":"o49"}
+535 state {"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":2},"creature":true,"damage":5,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":4,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+536 damage {"amount":5,"source":"o49","target":"o35"}
+537 state {"combat":{"attackers":[],"blocks":[["o49","o35"]]},"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":2},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":4,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+538 regenerate {"object":"o35","player":"P1"}
+539 state {"step":"combat_end"}
+540 state {"combat":{"attackers":[],"blocks":[]}}
+541 state {"step":"main2"}
+542 state {"step":"end"}
+543 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"step":"cleanup"}
+544 state {"active":1,"step":"untap","turn":16}
+545 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+546 untap {"object":"o2","player":"P2"}
+547 untap {"object":"o8","player":"P2"}
+548 untap {"object":"o16","player":"P2"}
+549 state {"step":"upkeep"}
+550 state {"stack":[{"controller":1,"id":"s31","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+551 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":43,"life":14,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+552 damage {"amount":1,"source":"o31","target":"P2"}
+553 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":3,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+554 draw {"count":1,"player":"P2"}
+555 state {"step":"main1"}
+556 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o51","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+557 enter {"object":"o51","player":"P2"}
+558 land {"object":"o51","player":"P2"}
+559 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+560 mana {"object":"o2","player":"P2"}
+561 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+562 tap {"object":"o2","player":"P2"}
+563 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+564 mana {"object":"o8","player":"P2"}
+565 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":4,"U":0,"W":0},"poison":0}]}
+566 tap {"object":"o8","player":"P2"}
+567 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o52","keywords":[],"name":"Onulet","owner":1,"power":2,"printing":"","rules_text":"When this creature dies, you gain 2 life.","subtypes":["construct"],"tapped":false,"token":false,"toughness":2,"types":["creature","artifact"],"zone":"stack"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":14,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s32","kind":"spell","mode":0,"name":"Onulet","source":"o52","targets":[],"x":0}]}
+568 cast {"object":"o52","player":"P2"}
+569 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o53","keywords":[],"name":"Onulet","owner":1,"power":2,"printing":"","rules_text":"When this creature dies, you gain 2 life.","subtypes":["construct"],"tapped":false,"token":false,"toughness":2,"types":["creature","artifact"],"zone":"battlefield"}],"removed":["o52"],"stack":[]}
+570 enter {"object":"o53","player":"P2"}
+571 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+572 mana_burn {"amount":1,"player":"P2"}
+573 state {"step":"combat_begin"}
+574 state {"step":"declare_attackers"}
+575 state {"combat":{"attackers":["o49"],"blocks":[]},"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+576 tap {"object":"o49","player":"P2"}
+577 attack {"objects":["o49"],"player":"P2"}
+578 state {"step":"declare_blockers"}
+579 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+580 mana {"object":"o16","player":"P2"}
+581 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+582 tap {"object":"o16","player":"P2"}
+583 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s33","kind":"ability","mode":0,"name":"Shivan Dragon","source":"o49","targets":[],"x":0}]}
+584 activate {"object":"o49","player":"P2"}
+585 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":6,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+586 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s34","kind":"ability","mode":0,"name":"Shivan Dragon","source":"o49","targets":[],"x":0}]}
+587 activate {"object":"o49","player":"P2"}
+588 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":7,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+589 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+590 mana {"object":"o22","player":"P2"}
+591 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+592 tap {"object":"o22","player":"P2"}
+593 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s35","kind":"ability","mode":0,"name":"Shivan Dragon","source":"o49","targets":[],"x":0}]}
+594 activate {"object":"o49","player":"P2"}
+595 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":8,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+596 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s36","kind":"ability","mode":0,"name":"Shivan Dragon","source":"o49","targets":[],"x":0}]}
+597 activate {"object":"o49","player":"P2"}
+598 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":9,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+599 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o51","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+600 mana {"object":"o51","player":"P2"}
+601 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+602 tap {"object":"o51","player":"P2"}
+603 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s37","kind":"ability","mode":0,"name":"Shivan Dragon","source":"o49","targets":[],"x":0}]}
+604 activate {"object":"o49","player":"P2"}
+605 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":10,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+606 state {"players":[{"hand":1,"library":40,"life":16,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s38","kind":"ability","mode":0,"name":"Shivan Dragon","source":"o49","targets":[],"x":0}]}
+607 activate {"object":"o49","player":"P2"}
+608 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":11,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+609 state {"players":[{"hand":1,"library":40,"life":5,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"combat_damage"}
+610 damage {"amount":11,"source":"o49","target":"P1"}
+611 state {"step":"combat_end"}
+612 state {"combat":{"attackers":[],"blocks":[]}}
+613 state {"step":"main2"}
+614 state {"step":"end"}
+615 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":true,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"step":"cleanup"}
+616 state {"active":0,"step":"untap","turn":17}
+617 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":false,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"},{"attached_to":"","controller":0,"counters":{"-1/-1":2},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":4,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+618 untap {"object":"o1","player":"P1"}
+619 untap {"object":"o5","player":"P1"}
+620 untap {"object":"o9","player":"P1"}
+621 untap {"object":"o21","player":"P1"}
+622 untap {"object":"o35","player":"P1"}
+623 state {"step":"upkeep"}
+624 state {"stack":[{"controller":0,"id":"s39","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o43","targets":[],"x":0},{"controller":0,"id":"s40","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o45","targets":[],"x":0},{"controller":1,"id":"s41","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+625 state {"players":[{"hand":1,"library":40,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s39","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o43","targets":[],"x":0},{"controller":0,"id":"s40","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o45","targets":[],"x":0}]}
+626 damage {"amount":3,"source":"o31","target":"P1"}
+627 state {"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":3},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":3,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":4,"types":["creature"],"zone":"battlefield"}],"stack":[{"controller":0,"id":"s39","kind":"trigger","mode":0,"name":"Unstable Mutation","source":"o43","targets":[],"x":0}]}
+628 state {"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":4},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":2,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":3,"types":["creature"],"zone":"battlefield"}],"stack":[]}
+629 state {"players":[{"hand":2,"library":39,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+630 draw {"count":1,"player":"P1"}
+631 state {"step":"main1"}
+632 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o54","keywords":[],"name":"Mountain","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":39,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+633 enter {"object":"o54","player":"P1"}
+634 land {"object":"o54","player":"P1"}
+635 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o1","keywords":[],"name":"Island","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {U}.)","subtypes":["island"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":39,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":1,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+636 mana {"object":"o1","player":"P1"}
+637 state {"players":[{"hand":1,"library":39,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+638 tap {"object":"o1","player":"P1"}
+639 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o5","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":39,"life":2,"mana":{"B":1,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+640 mana {"object":"o5","player":"P1"}
+641 state {"players":[{"hand":1,"library":39,"life":2,"mana":{"B":2,"C":0,"G":0,"R":0,"U":2,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+642 tap {"object":"o5","player":"P1"}
+643 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o21","keywords":[],"name":"Jayemdae Tome","owner":0,"power":0,"printing":"","rules_text":"{4}, {T}: Draw a card.","subtypes":["book"],"tapped":true,"token":false,"toughness":0,"types":["artifact"],"zone":"battlefield"}],"players":[{"hand":1,"library":39,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+644 tap {"object":"o21","player":"P1"}
+645 state {"stack":[{"controller":0,"id":"s42","kind":"ability","mode":0,"name":"Jayemdae Tome","source":"o21","targets":[],"x":0}]}
+646 activate {"object":"o21","player":"P1"}
+647 state {"players":[{"hand":2,"library":38,"life":2,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[]}
+648 draw {"count":1,"player":"P1"}
+649 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o9","keywords":[],"name":"Swamp","owner":0,"power":0,"printing":"","rules_text":"({T}: Add {B}.)","subtypes":["swamp"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":2,"library":38,"life":2,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+650 mana {"object":"o9","player":"P1"}
+651 state {"players":[{"hand":2,"library":38,"life":2,"mana":{"B":2,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+652 tap {"object":"o9","player":"P1"}
+653 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o55","keywords":[],"name":"Unholy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +2/+1.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"stack"}],"players":[{"hand":1,"library":38,"life":2,"mana":{"B":1,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"stack":[{"controller":0,"id":"s43","kind":"spell","mode":0,"name":"Unholy Strength","source":"o55","targets":[{"amount":1,"object":"o47"}],"x":0}]}
+654 cast {"object":"o55","player":"P1"}
+655 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":0,"definition_set":"4ed","face_down":false,"id":"o47","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":3,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":6,"types":["creature","artifact"],"zone":"battlefield"},{"attached_to":"o47","controller":0,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o56","keywords":[],"name":"Unholy Strength","owner":0,"power":0,"printing":"","rules_text":"Enchant creature. Enchanted creature gets +2/+1.","subtypes":["aura"],"tapped":false,"token":false,"toughness":0,"types":["enchantment"],"zone":"battlefield"}],"removed":["o55"],"stack":[]}
+656 enter {"object":"o56","player":"P1"}
+657 state {"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":42,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}]}
+658 mana_burn {"amount":1,"player":"P1"}
+659 state {"step":"combat_begin"}
+660 state {"step":"declare_attackers"}
+661 state {"step":"combat_end"}
+662 state {"step":"main2"}
+663 state {"step":"end"}
+664 state {"step":"cleanup"}
+665 state {"active":1,"step":"untap","turn":18}
+666 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":0,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"},{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o51","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":false,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}]}
+667 untap {"object":"o2","player":"P2"}
+668 untap {"object":"o8","player":"P2"}
+669 untap {"object":"o16","player":"P2"}
+670 untap {"object":"o22","player":"P2"}
+671 untap {"object":"o49","player":"P2"}
+672 untap {"object":"o51","player":"P2"}
+673 state {"step":"upkeep"}
+674 state {"stack":[{"controller":1,"id":"s44","kind":"trigger","mode":0,"name":"Power Surge","source":"o31","targets":[],"x":0}]}
+675 state {"stack":[]}
+676 state {"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0}],"step":"draw"}
+677 draw {"count":1,"player":"P2"}
+678 state {"step":"main1"}
+679 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o2","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+680 mana {"object":"o2","player":"P2"}
+681 state {"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":2,"U":0,"W":0},"poison":0}]}
+682 tap {"object":"o2","player":"P2"}
+683 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o8","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":3,"U":0,"W":0},"poison":0}]}
+684 mana {"object":"o8","player":"P2"}
+685 state {"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":4,"U":0,"W":0},"poison":0}]}
+686 tap {"object":"o8","player":"P2"}
+687 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o16","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":5,"U":0,"W":0},"poison":0}]}
+688 mana {"object":"o16","player":"P2"}
+689 state {"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":6,"U":0,"W":0},"poison":0}]}
+690 tap {"object":"o16","player":"P2"}
+691 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"2ed","face_down":false,"id":"o22","keywords":[],"name":"Mountain","owner":1,"power":0,"printing":"","rules_text":"({T}: Add {R}.)","subtypes":["mountain"],"tapped":true,"token":false,"toughness":0,"types":["land"],"zone":"battlefield"}],"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":7,"U":0,"W":0},"poison":0}]}
+692 mana {"object":"o22","player":"P2"}
+693 state {"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":2,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":8,"U":0,"W":0},"poison":0}]}
+694 tap {"object":"o22","player":"P2"}
+695 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o57","keywords":[],"name":"Inferno","owner":1,"power":0,"printing":"","rules_text":"Inferno deals 6 damage to each creature and each player.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"stack"}],"players":[{"hand":1,"library":38,"life":1,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}],"stack":[{"controller":1,"id":"s45","kind":"spell","mode":0,"name":"Inferno","source":"o57","targets":[],"x":0}]}
+696 cast {"object":"o57","player":"P2"}
+697 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":6,"definition_set":"2ed","face_down":false,"id":"o18","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}],"removed":["o57"],"stack":[]}
+698 damage {"amount":6,"source":"","target":"o18"}
+699 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":6,"definition_set":"2ed","face_down":false,"id":"o24","keywords":["defender"],"name":"Wall of Fire","owner":1,"power":0,"printing":"","rules_text":"Defender\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["wall"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+700 damage {"amount":6,"source":"","target":"o24"}
+701 state {"objects":[{"attached_to":"","controller":0,"counters":{"-1/-1":4},"creature":true,"damage":6,"definition_set":"2ed","face_down":false,"id":"o35","keywords":["flying"],"name":"Will-o'-the-Wisp","owner":0,"power":2,"printing":"","rules_text":"Flying\n{B}: Regenerate this creature.","subtypes":["spirit"],"tapped":false,"token":false,"toughness":3,"types":["creature"],"zone":"battlefield"}]}
+702 damage {"amount":6,"source":"","target":"o35"}
+703 state {"objects":[{"attached_to":"","controller":0,"counters":{},"creature":true,"damage":6,"definition_set":"4ed","face_down":false,"id":"o47","keywords":["flying"],"name":"Dancing Scimitar","owner":0,"power":3,"printing":"","rules_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","subtypes":["spirit"],"tapped":false,"token":false,"toughness":6,"types":["creature","artifact"],"zone":"battlefield"}]}
+704 damage {"amount":6,"source":"","target":"o47"}
+705 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":6,"definition_set":"2ed","face_down":false,"id":"o49","keywords":["flying"],"name":"Shivan Dragon","owner":1,"power":5,"printing":"","rules_text":"Flying\n{R}: This creature gets +1/+0 until end of turn.","subtypes":["dragon"],"tapped":false,"token":false,"toughness":5,"types":["creature"],"zone":"battlefield"}]}
+706 damage {"amount":6,"source":"","target":"o49"}
+707 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":true,"damage":6,"definition_set":"4ed","face_down":false,"id":"o53","keywords":[],"name":"Onulet","owner":1,"power":2,"printing":"","rules_text":"When this creature dies, you gain 2 life.","subtypes":["construct"],"tapped":false,"token":false,"toughness":2,"types":["creature","artifact"],"zone":"battlefield"}]}
+708 damage {"amount":6,"source":"","target":"o53"}
+709 state {"players":[{"hand":1,"library":38,"life":-5,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":41,"life":13,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+710 damage {"amount":6,"source":"","target":"P1"}
+711 state {"players":[{"hand":1,"library":38,"life":-5,"mana":{"B":0,"C":0,"G":0,"R":0,"U":0,"W":0},"poison":0},{"hand":1,"library":41,"life":7,"mana":{"B":0,"C":0,"G":0,"R":1,"U":0,"W":0},"poison":0}]}
+712 damage {"amount":6,"source":"","target":"P2"}
+713 state {"objects":[{"attached_to":"","controller":1,"counters":{},"creature":false,"damage":0,"definition_set":"4ed","face_down":false,"id":"o58","keywords":[],"name":"Inferno","owner":1,"power":0,"printing":"","rules_text":"Inferno deals 6 damage to each creature and each player.","subtypes":[],"tapped":false,"token":false,"toughness":0,"types":["instant"],"zone":"graveyard"}]}
+714 result {"ended":"2026-10-24T16:11:47Z","result":"0-1"}

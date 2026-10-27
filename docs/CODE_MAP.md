@@ -573,6 +573,15 @@ Each fix in full: `docs/whole-project-review-2026-10-21.md`.
   read-only mode; unknown effects and detailed combat choices are omitted.
 - `game/records/mpn_player.gd`: graphical MPN playback, speed/turn/step
   navigation, bounded seek checkpoints and return to the history viewer.
+- `engine/records/mpn_move_list.gd` (2026-10-24): `MpnMoveList`, a record
+  read as a move list for people (`text`, `read_game`, `LEGEND`, `MARKS`,
+  `HIDDEN`, `tags_of`, `counted`) — each turn under its player, one action a
+  line under its phase, the symbols explained first; defined exactly by
+  `docs/mpn-move-list.md`, acceptance pairs in `docs/mpn-examples/`
+  (`knights-and-raiders`, `mandurang-and-hydra`), the hand-off brief
+  `docs/mpn-agent-brief.md`. `PastGamesScreen.show_move_list` /
+  `move_list_bbcode` (the Move list view), `MpnFiles.export_text`;
+  `MpnRecorder._retired` (a card gone out of sight named in its leave/die).
 - `tests/unit/test_mpn_records.gd`: hidden-state substitution, real combat
   and casts, public handles, quoting, parser rejection, reconstruction and
   importable specification examples (including CRLF and unterminated EOF).

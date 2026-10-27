@@ -604,7 +604,13 @@ conformance oracle. `engine/records/mpn_codec.gd` parses and applies patches;
 `engine/records/mpn_recorder.gd` produces neutral observations;
 `game/records/mpn_archive.gd` adds metadata and storage. Its reader uses the
 algorithms above without invoking the game engine. The examples alongside
-this document are checked against that parser.
+this document are checked against that parser. `engine/records/mpn_move_list.gd`
+renders a record as a move list for people, as
+[`mpn-move-list.md`](mpn-move-list.md) defines it; a brief for bringing MPN to
+another engine is [`mpn-agent-brief.md`](mpn-agent-brief.md). Since 24 October
+2026 its writer names a card that left play out of sight (a token ceasing, a
+card returned to a hand) in the `leave` and `die` events by the handle the
+card had (§4's historical handles); earlier records omit `object` there.
 
 Known differences from a full strict validator: its JSON parser does not
 explicitly reject duplicate object keys; serial parsing is permissive; it

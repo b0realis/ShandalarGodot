@@ -9,6 +9,9 @@ var game: MtgGame
 var finished := false
 var _last := {}
 var _handles := {}
+## Card id -> the handle its last public life ended with, for a leave or a
+## die told after the state that retired it ([method _event]).
+var _retired := {}
 var _stack_handles := {}
 var _next_object := 0
 var _next_stack := 0
@@ -57,7 +60,9 @@ func _sync_handles(cards: Array) -> void:
 			_next_object += 1
 			_handles[card.id] = {"id": "o%d" % _next_object, "stamp": stamp}
 	for id in _handles.keys():
-		if not live.has(id): _handles.erase(id)
+		if not live.has(id):
+			_retired[id] = String(_handles[id].id)
+			_handles.erase(id)
 	var stack_live := {}
 	for item in game.stack:
 		stack_live[item.id] = true
@@ -165,6 +170,12 @@ func _event(event: GameEvent) -> void:
 	if pid in [0, 1]: body["player"] = "P%d" % (pid + 1)
 	var card: CardInstance = data.get("instance")
 	if card != null and _ref(card) != "": body["object"] = _ref(card)
+	elif card != null and _retired.has(card.id) and event.type in [Mtg.EventType.LEAVES_BATTLEFIELD, Mtg.EventType.DIES]:
+		# Gone where no one sees it (a token ceased, a card to a hand or a
+		# library) as the state before this event retired its handle: the
+		# event names it by that historical handle (spec §4, "Historical
+		# records retain their old handles and names"), not by none.
+		body["object"] = _retired[card.id]
 	match event.type:
 		Mtg.EventType.LAND_PLAYED: kind = "land"
 		Mtg.EventType.SPELL_CAST: kind = "cast"
