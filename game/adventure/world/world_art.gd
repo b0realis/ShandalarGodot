@@ -73,6 +73,15 @@ const LAYOUT := {
 	# The wizards' window's creature pictures (`Creatures640.pic`, not a
 	# sheet the importer writes a sidecar for): 8 cells of 80 x 64 a row.
 	"creature_thumbs": [80, 64, 8],
+	# The boards of the castles and the dungeons (part C; the importer's
+	# DUNGEON_SHEETS, [DungeonView]): the three dungeons' tiles and the five
+	# castles', 64 x 64 frames twelve to a row; Dungbutt's plaque pieces,
+	# four cells of 201 x 281 (each frame its own size within its cell —
+	# the sidecar's `sizes`, else [constant DungeonView.PLAQUE_SIZES]).
+	"dungeon_tiles_1": [64, 64, 12], "dungeon_tiles_2": [64, 64, 12], "dungeon_tiles_3": [64, 64, 12],
+	"dungeon_tiles_black": [64, 64, 12], "dungeon_tiles_blue": [64, 64, 12],
+	"dungeon_tiles_green": [64, 64, 12], "dungeon_tiles_red": [64, 64, 12],
+	"dungeon_tiles_white": [64, 64, 12], "dungeon_plaques": [201, 281, 4],
 }
 
 ## THE CREATURES' SHEETS (part B, 2026-10-23): `world_creature_` + the 1997

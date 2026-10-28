@@ -20,8 +20,27 @@ extends Control
 ## list shows every save it can read, on the player's clock, and the note
 ## below it says how many could not be ([method AdventurePlayer.scan_saves];
 ## one odd file used to empty the list and grey Resume).
+##
+## THE END ON THE LIST (part C, 2026-10-28): a save of an adventure WON
+## says so with its score — "Won: Arzakon banished for 1130 years" — and a
+## save of one whose quest FAILED (a final battle lost under "One life")
+## says that ([method AdventurePlayer.save_at]'s `ended` and `score`); the
+## hero's line says "One life" when the adventure was begun under it. Taken
+## up again, a won adventure walks on in a world at peace, a failed one
+## opens on its end ([method AdventureFinale.after_load]).
+##
+## THE HALL OF FAME [ours] (the owner, 2026-10-27: *"Only hall of fame
+## button should be inside save/load as not to clutter the main menu!"*):
+## the button beside Back opens it over the list ([HallOfFamePane]); Done or
+## Escape closes it, the list as it was.
 
 const TITLE := "Continue an adventure"
+const HALL := "Hall of Fame"
+## A save's end on its row (part C): a won adventure with its years, a
+## failed quest; and the hero's line under "One life".
+const WON_ROW := " · Won: Arzakon banished for %d years"
+const FAILED_ROW := " · Quest failed"
+const ONE_LIFE := " · One life"
 
 ## The saves shown, as [method AdventurePlayer.list_saves] gives them, in the
 ## list's order.
@@ -35,6 +54,8 @@ var _list: ItemList
 var _say_line: Label
 var continue_button: Button
 var back_button: Button
+var hall_button: Button
+var _hall: HallOfFamePane
 var _leaving := false
 
 
@@ -92,6 +113,10 @@ func _ready() -> void:
 	back_button.name = "Back"
 	back_button.pressed.connect(leave)
 	row.add_child(back_button)
+	hall_button = UiChrome.menu_button(HALL, Vector2(200, 46))
+	hall_button.name = "HallButton"
+	hall_button.pressed.connect(func() -> void: open_hall())
+	row.add_child(hall_button)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
@@ -135,9 +160,10 @@ func refresh() -> void:
 		group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["slot"]) < int(b["slot"]))
 		var hero: Dictionary = group[0]
 		var color := AdventureSetup.color_row(String(hero["color"]))
-		var heading := _list.add_item("%s — %s, %s · World seed %s" % [String(hero["name"]),
+		var heading := _list.add_item("%s — %s, %s · World seed %s%s" % [String(hero["name"]),
 			String(color.get("name", hero["color"])),
-			AdventureSetup.DIFFICULTIES[clampi(int(hero["difficulty"]), 0, 3)], String(hero["seed_text"])])
+			AdventureSetup.DIFFICULTIES[clampi(int(hero["difficulty"]), 0, 3)], String(hero["seed_text"]),
+			ONE_LIFE if String(hero.get("life_rule", "")) == AdventurePlayer.LIFE_ONE else ""])
 		_list.set_item_selectable(heading, false)
 		_list.set_item_custom_fg_color(heading, EmbarkScreen.GOLD)
 		rows.append({})
@@ -149,7 +175,7 @@ func refresh() -> void:
 			else:
 				words = "      %d. %s · saved %s · day %d" % [int(save["slot"]), String(save["slot_name"]),
 					when, int(save["days"])]
-			_list.add_item(words)
+			_list.add_item(words + end_words(save))
 			rows.append(save)
 			saves.append(save)
 	resume_button.disabled = newest_autosave().is_empty()
@@ -163,6 +189,34 @@ func refresh() -> void:
 			_say_line.text += " " + unreadable_note()
 		_list.select(1)
 		continue_button.disabled = false
+
+
+## The end a save's row tells of (part C): " · Won: Arzakon banished for
+## 1130 years", " · Quest failed", or "" while the adventure goes on.
+static func end_words(save: Dictionary) -> String:
+	match String(save.get("ended", "")):
+		AdventurePlayer.ENDED_WON:
+			return WON_ROW % int(save.get("score", 0))
+		AdventurePlayer.ENDED_FAILED:
+			return FAILED_ROW
+	return ""
+
+
+## THE HALL OF FAME over the list ([HallOfFamePane]); Done or Escape closes
+## it. The pane, or the one already open.
+func open_hall() -> HallOfFamePane:
+	if is_instance_valid(_hall) and not _hall.is_queued_for_deletion():
+		return _hall
+	_hall = HallOfFamePane.open(self)
+	_hall.chosen.connect(func(_what: String) -> void:
+		if is_instance_valid(_hall):
+			_hall.queue_free(), CONNECT_DEFERRED)
+	return _hall
+
+
+## Whether the Hall of Fame is open over the list.
+func hall_shown() -> bool:
+	return is_instance_valid(_hall) and not _hall.is_queued_for_deletion()
 
 
 ## "2 saves could not be read …": the saves the list leaves out.
@@ -237,6 +291,9 @@ func _world_under() -> WorldScreen:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if hall_shown():
+		# The Hall over the list hears its own keys (its Escape is Done).
+		return
 	if event.is_action_pressed("ui_cancel"):
 		# Taken even while leaving: a second Escape in the same frame finds
 		# nothing left to close, not the world under the list (the bug pass

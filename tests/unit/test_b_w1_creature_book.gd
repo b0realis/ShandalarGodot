@@ -139,12 +139,26 @@ func test_faces_and_duel_names() -> void:
 	assert_eq(CreatureBook.face_id(56), "rogue_uber_villain", "row 56 wears row 55's face")
 	assert_eq(CreatureBook.face_id(0), "")
 	assert_eq(CreatureBook.face_id(57), "")
-	assert_eq(CreatureBook.duel_name(4), "Vampirelord", "@DECKFACES' own spelling")
+	assert_eq(CreatureBook.DUEL_NAMES[3], "Vampirelord", "@DECKFACES' own spelling, kept as 1997 wrote it")
+	assert_eq(CreatureBook.duel_name(4), "VampireLord",
+		"[ours: 1997 slip] the duel says the creature's own @CREATURENAMES spelling, as the journal does")
 	assert_eq(CreatureBook.duel_name(56), "Uber Villain")
 	assert_eq(CreatureBook.duel_name(0), "")
 	for i in CreatureBook.FACES.size():
 		assert_eq(CreatureBook.FACES[i], CreatureBook.DUEL_NAMES[i].to_lower().replace(" ", "_"),
 			"face %d is its @DECKFACES name" % (i + 1))
+
+
+## THE DUEL AND THE JOURNAL NAME A CREATURE ALIKE (2026-10-28): every row's
+## duel name is its book name — the creature's own `@CREATURENAMES` spelling,
+## the journal's "Defeated %s" — but Arzakon's, two different names (his
+## duel's is [FinalBattle]'s to give).
+func test_the_duel_and_the_journal_name_every_creature_alike() -> void:
+	for row in range(1, CreatureBook.ROWS.size()):
+		if CreatureBook.kind(row) == CreatureBook.ARZAKON:
+			continue
+		assert_eq(CreatureBook.duel_name(row), CreatureBook.name_of(row), "row %d" % row)
+		assert_string_contains(DuelSpoils.DEFEATED % CreatureBook.called(row), CreatureBook.duel_name(row))
 
 
 ## The faces are the importer's names for `Faces/NNN.pic`.

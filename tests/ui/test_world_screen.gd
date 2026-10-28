@@ -23,7 +23,7 @@ func _record(seed_text := "12345") -> Dictionary:
 const WORLD_SETTINGS: Array[String] = [WorldHud.BAR_SETTING, WorldHud.MINIMAP_SETTING,
 	WorldHud.QUEST_SETTING, WorldHud.GUIDES_SETTING, WorldHud.PACE_SETTING, WorldHud.BIG_SETTING,
 	WorldHud.PLACES_SETTING, TileReveal.SETTING,
-	"world_pane_HeroPanel", "world_pane_HelpPanel", "world_pane_CluesPanel",
+	"world_pane_HeroPanel", "world_pane_HelpPanel",
 	"world_pane_QuestPane", "world_pane_Minimap"]
 const SAVES := "user://adventure_tests_world"
 var _music := true
@@ -873,30 +873,36 @@ func test_the_quest_pane_and_the_guides() -> void:
 
 ## F4, the frame's gate: what is known of the castles and the dungeons.
 func test_the_clues() -> void:
-	var hud := screen.hud
 	_key(KEY_F4)
-	assert_true(hud.clues_shown(), "F4 opens the clues")
-	assert_eq(hud.clue_text(), WorldClues.NONE_YET, "none known yet")
-	_key(KEY_F4)
-	assert_false(hud.clues_shown(), "and closes them")
+	await get_tree().process_frame
+	assert_true(screen.clues_shown(), "F4 opens the clues")
+	assert_true(screen.modal(), "the clues' pane holds the world")
+	var pane := screen.find_child("CluesPane", false, false) as CluesPane
+	assert_eq(pane.words(), WorldClues.NONE_YET, "none known yet")
+	# F4 again is the pane's own key (it holds the world, the screen's keys
+	# rest under it); the screen's door closes it too.
+	assert_null(screen.show_clues(), "asked again: closed")
+	await get_tree().process_frame
+	assert_false(screen.clues_shown(), "and closes them")
 	var world := screen.world
 	world.encounters[0]["clues"] = WorldClues.CREATURES
 	world.encounters[5]["clues"] = WorldClues.CREATURES | WorldClues.RULES | WorldClues.LOCATION
-	(hud.buttons["Clues"] as BaseButton).pressed.emit()
-	var castle := hud.find_child("Clue_0", true, false) as Button
-	var dungeon := hud.find_child("Clue_5", true, false) as Button
-	assert_eq(castle.text, "Castle Necris (Black Castle)")
-	assert_eq(dungeon.text, "The Paths of Chronus")
-	assert_string_contains(hud.clue_text(), "-Contains large black creatures.")
-	dungeon.pressed.emit()
+	(screen.hud.buttons["Clues"] as BaseButton).pressed.emit()
 	await get_tree().process_frame
-	var said := hud.clue_text()
+	pane = screen.find_child("CluesPane", false, false) as CluesPane
+	assert_eq(pane.listed(), [0, 5] as Array[int], "the castle, then the dungeon")
+	pane.show_clue(5)
+	var said := "\n".join(pane.clue_lines(5))
 	var color: int = world.encounters[5]["color"]
 	assert_string_contains(said, "-Contains small %s creatures." % WorldClues.COLOR_WORDS[color])
 	assert_string_contains(said, "Dungeon Rules:")
 	assert_string_contains(said, "Location:")
 	assert_string_contains(said, " of %s." % WorldNames.site_name(world, int(world.encounters[5]["town"])))
-	assert_string_contains(said, "Treasure: ")
+	assert_eq(pane.stage.cards_shown(), WorldClues.treasures(world, 5), "the treasure as cards")
+	pane.close()
+	await get_tree().process_frame
+	assert_false(screen.clues_shown())
+	assert_false(screen.modal(), "the world again")
 
 
 

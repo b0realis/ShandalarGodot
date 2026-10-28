@@ -1826,10 +1826,9 @@ def import_videos(index: dict[str, Path], dest: Path) -> None:
 # Still to try on a device: the web build and the Quest.
 #
 # WHERE THE GAME FINDS IT: `win_movie.ogv` at the top of the skin, beside
-# the pictures — `GameSkin._find("win_movie.ogv")` gives its path in the
-# skin worn, and the end's screen (part C, stage C2) sets that path as a
-# `VideoStreamTheora`'s `file`. Nothing reads it until then
-# (SCREENS_NOT_READ).
+# the pictures — `GameSkin.movie("win_movie")` gives a `VideoStreamTheora`
+# of it in the skin worn, which the end's screen plays
+# (`AdventureFinale`, part C stage C2).
 ## skin file -> the 1997 movie it is converted from.
 THEORA_MOVIES: dict[str, list[str]] = {"win_movie.ogv": ["Mtgend.avi"]}
 ## ffmpeg's quality steps: Theora 0-10, Vorbis -1-10 (the spike's).
@@ -4356,29 +4355,25 @@ PORTRAITS_WANTED = 70
 ## MANIFEST keys this writes that the game does NOT read, so a gap there
 ## costs nothing: the six set symbols and the dagger are always the game's
 ## own (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and
-## 2026-10-15), two grounds no screen draws yet (a read of every consumer,
-## 2026-10-17), and part C's board — its sheets and its sounds, and the
-## dungeon's "you encounter" sting (imported with part B, 2026-10-23) —
-## and the win's tune, which wait for the board's and the end's screens
-## (stage C2; imported 2026-10-27). (The creatures' thumbnails were here
-## until 2026-10-27: the hero pane's creature page draws them now.) Only
-## MANIFEST keys: THE CHECKLIST counts the files the game reads as the
-## MANIFEST less these.
+## 2026-10-15), and three grounds no screen draws yet (a read of every
+## consumer, 2026-10-17). (The creatures' thumbnails were here until
+## 2026-10-27: the hero pane's creature page draws them now; part C's
+## board sheets, its sounds and the win's tune until 2026-10-28: the
+## board and the end's screens of stage C2 read them.) Only MANIFEST keys:
+## THE CHECKLIST counts the files the game reads as the MANIFEST less
+## these.
 NOT_READ = {"set_icon_atq", "set_icon_arn", "set_icon_past", "set_icon_drk",
             "set_icon_4ed", "set_icon_leg", "damage_marker",
-            "deck_tile_olive", "spell_chain_panel", "sfx_dungeon_duel.wav",
-            "sfx_dungeon_loop.wav", "sfx_dungeon_ambience_1.wav",
-            "sfx_dungeon_ambience_2.wav", "sfx_dungeon_ambience_3.wav",
-            "sfx_dungeon_ambience_4.wav", "sfx_dungeon_ambience_5.wav",
-            "sfx_dice.wav", "sfx_scroll.wav", "sfx_find_card.wav",
-            "music_win_game.wav"} | set(DUNGEON_SHEETS)
+            "deck_tile_olive", "spell_chain_panel"}
 ## The same for the other files this writes, the pictures of PIC_SCREENS and
 ## the movies: the adventure's world-map frame, which waits for the
 ## overworld (PIC_SCREENS — in NOT_READ until 2026-10-27, which made THE
-## CHECKLIST's count one short), and part C's pictures and the win's
-## movie, which wait for stage C2's screens.
-SCREENS_NOT_READ = ({"character_select_background"} | set(DUNGEON_PICTURES)
-                    | set(THEORA_MOVIES))
+## CHECKLIST's count one short), and the 1997 clue list's ground and
+## buttons — the game draws its own list (the owner, 2026-10-28). Part C's
+## other pictures and the win's movie were here until stage C2's screens
+## read them (2026-10-28).
+SCREENS_NOT_READ = {"character_select_background", "clues_list",
+                    "clues_list_buttons"}
 
 
 def check(args: argparse.Namespace, index: dict[str, Path]) -> int:

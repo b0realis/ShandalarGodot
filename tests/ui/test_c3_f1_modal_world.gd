@@ -42,7 +42,7 @@ const SAVES := "user://adventure_tests_c3_f1_modal"
 const WORLD_SETTINGS: Array[String] = [WorldHud.BAR_SETTING, WorldHud.MINIMAP_SETTING,
 	WorldHud.QUEST_SETTING, WorldHud.GUIDES_SETTING, WorldHud.PACE_SETTING, WorldHud.BIG_SETTING,
 	WorldHud.PLACES_SETTING, WorldHud.READER_SETTING,
-	"world_pane_HeroPanel", "world_pane_HelpPanel", "world_pane_CluesPanel",
+	"world_pane_HeroPanel", "world_pane_HelpPanel",
 	"world_pane_QuestPane", "world_pane_Minimap"]
 
 var viewport: SubViewport
@@ -178,7 +178,7 @@ func test_a_place_s_pane_holds_the_world() -> void:
 	await _click_node(hud.buttons["Hero"] as Control)
 	assert_false(hud.hero_shown(), "no hero's pane behind it")
 	await _click_node(hud.buttons["Clues"] as Control)
-	assert_false(hud.clues_shown(), "no clues behind it")
+	assert_false(screen.clues_shown(), "no clues behind it")
 	await _click_node(hud.buttons["Help"] as Control)
 	assert_false(hud.help_shown(), "no keys behind it")
 	await _click_node(hud.buttons["Options"] as Control)
@@ -200,7 +200,7 @@ func test_a_place_s_pane_holds_the_world() -> void:
 	assert_eq(player.position, at, "2 casts nothing")
 	assert_false(_map().visible)
 	assert_true(hud.minimap_shown(), "N does not flip the small map")
-	assert_false(hud.help_shown() or hud.hero_shown() or hud.clues_shown())
+	assert_false(hud.help_shown() or hud.hero_shown() or screen.clues_shown())
 	# The handlers themselves refuse, however they are reached.
 	assert_eq(screen.cast(2), {}, "no cast")
 	assert_eq([player.position, int(player.amulets["blue"])], [at, 3], "nothing moved, nothing risked")
@@ -213,11 +213,10 @@ func test_a_place_s_pane_holds_the_world() -> void:
 	assert_null(screen.open_spellbook(), "no spellbook")
 	screen.toggle_hero()
 	hud.toggle_hero()
-	screen.show_clues()
-	hud.toggle_clues()
+	assert_null(screen.show_clues(), "no clues")
 	hud.toggle_help()
 	hud.toggle_options()
-	assert_false(hud.hero_shown() or hud.clues_shown() or hud.help_shown() or hud.options_shown(),
+	assert_false(hud.hero_shown() or screen.clues_shown() or hud.help_shown() or hud.options_shown(),
 		"the panel's panes stay shut")
 	assert_false(screen.walk_to_tile(player.tile() + Vector2i(1, 0)), "no walk")
 	screen.return_to_menu()
@@ -273,7 +272,7 @@ func test_the_map_holds_the_world() -> void:
 	assert_eq(player.position, at, "2: no Leap of Fate under the map")
 	assert_eq(int(player.amulets["blue"]), 3, "nothing risked")
 	assert_false(screen.city_list_shown(), "F3: no city list (the map's own C has it)")
-	assert_false(hud.clues_shown() or hud.hero_shown() or hud.help_shown(), "no pane in the hidden panel")
+	assert_false(screen.clues_shown() or hud.hero_shown() or hud.help_shown(), "no pane under the map")
 	assert_true(hud.minimap_shown(), "N: the small map's setting untouched")
 	assert_true(bool(Settings.get_value(WorldHud.MINIMAP_SETTING, true)))
 	assert_true(_map().visible, "the map stays up")

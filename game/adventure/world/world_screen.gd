@@ -58,13 +58,25 @@ extends Control
 ## THE CASTLES' AND THE DUNGEONS' DOORS ([DungeonDoors], 2026-10-27): a
 ## dungeon the hero knows of is drawn on the world and the small map; its
 ## pane's "Enter the dungeon", like a castle's "Yes, enter the castle.",
-## goes in ([method _enter_board]) — the journal, the attempt counted, the
-## roaming slots 0–4 emptied —, the board over the world while the hero is
-## inside ([method on_board]: nothing saved), and out again ([method
-## _board_done]): a dungeon moved, a castle left unbeaten on Wizard
-## retaliated for, the game saved, the news. The board itself is part C's;
-## until it is made the doors wait, disabled ([constant
-## DungeonDoors.BOARD_READY]).
+## goes in ([method _enter_board]) — the adventure saved at the door, the
+## journal, the attempt counted, the roaming slots 0–4 emptied —, the
+## board over the world while the hero is inside ([DungeonPane], part C:
+## [method on_board], nothing saved), and out again ([method _board_done]):
+## a dungeon moved, a castle left unbeaten on Wizard retaliated for, the
+## game saved, the news — and after the fifth wizard's castle, the finale
+## ([method AdventureFinale.after_fifth_wizard]).
+## THE FINALE ([AdventureFinale], part C): the fifth wizard's fall hands
+## the world to it — Arzakon's question, the battle's way in, the battle,
+## the end or the win —, which holds the world while it lasts ([method
+## hold_for_duel]). ARZAKON'S PORTAL stands on the world from "Return to
+## Shandalar first" ([member WorldView.portal]); walked onto, its own pane
+## asks ([method AdventureFinale.at_portal]; petrified after the win, the
+## monument's), and the pointer names it ([method place_at]). An adventure
+## TAKEN UP AGAIN at its end, at Arzakon's door or at his question opens
+## there, not on the world ([method AdventureFinale.after_load], from
+## [method _ready]): "One life" and the battle begun or lost — the
+## quest-failed end; a failed adventure — its end; at the door — the way
+## to the battle again.
 
 const LOOK_SPEED := 600.0   # screen pixels a second, at zoom 1
 const ZOOM_STEP := 1.25
@@ -178,6 +190,8 @@ var _trade: CardTradePane
 var _card_list: CardListPane
 var _magic_seller: WorldMagicPane
 var _city_list: CityListPane
+## The dungeon and castle clues (F4), over the world ([CluesPane]).
+var _clues: CluesPane
 var _save_slots: SaveSlotsPane
 ## The question asked when the adventure could not be saved as the hero
 ## leaves the world ([UnsavedAsk]), and "Ready to Quit?" ([QuitAsk]).
@@ -393,9 +407,12 @@ func _ready() -> void:
 		player = AdventurePlayer.begin(record, world)
 	if player != null:
 		show_player(player)
-		# A new adventure's world comes into view block by block, as 1997's
-		# did ([RevealDissolve]).
-		if player.monster_timer == 0 and is_inside_tree():
+		# Part C: an adventure taken up again at its end, at Arzakon's door
+		# or at his question opens there ([method AdventureFinale.after_load]);
+		# else a new adventure's world comes into view block by block, as
+		# 1997's did ([RevealDissolve]).
+		var finale_took := is_inside_tree() and AdventureFinale.after_load(self, player)
+		if not finale_took and player.monster_timer == 0 and is_inside_tree():
 			_reveal(null)
 	if is_inside_tree():
 		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_builder)
@@ -519,6 +536,8 @@ func _show_hero() -> void:
 	view.lairs = WorldLairs.seen(player)
 	var known := WorldClues.on_world(world)
 	view.dungeons = known
+	# Arzakon's portal, open or petrified (part C, 2026-10-28) [ours].
+	view.portal = player.portal
 	view.creatures = WorldCreatures.seen(player)
 	view.hero_facing = player.facing
 	view.hero_step = player.step
@@ -799,6 +818,15 @@ func _notification(what: int) -> void:
 func visit(tile: Vector2i, write := true) -> VisitPane:
 	if visiting():
 		return _visit
+	if FinalBattle.portal_at(player, tile):
+		# ARZAKON'S PORTAL (part C) [ours]: its own pane over the world — the
+		# question, or the monument's words after the win; its way in is the
+		# finale's ([method AdventureFinale.at_portal]).
+		_visit = AdventureFinale.at_portal(self, player)
+		_visit_tile = Vector2i(-1, -1)
+		if _visit != null:
+			_hold()
+		return _visit
 	var town := VisitPane.site_slot(world, tile)
 	var arrived := {}
 	# A new arrival, not the place stood on opened again (the entry latch).
@@ -881,7 +909,7 @@ func _arrive_in_town(slot: int) -> Dictionary:
 ## save not written, "Ready to Quit?"), is up.
 func visiting() -> bool:
 	return _alive(_visit) or shopping() or trading() or _alive(_card_list) or _alive(_magic_seller) \
-		or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved) or _alive(_quit_ask)
+		or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved) or _alive(_quit_ask) or _alive(_clues)
 
 
 ## Whether [param node] stands on the screen still: there, and not on its
@@ -971,15 +999,19 @@ func _open_ruled_pane(slot: int) -> Control:
 # ------------------------------------------- the castles' and dungeons' doors --
 
 ## A CASTLE OR A DUNGEON ENTERED — [param place] the castle's pane ("Yes,
-## enter the castle.") or the dungeon's ("Enter the dungeon"): the place's
-## tune at rest (1997's `sound_stop(0x10)` before the castle's board,
-## visitLocation.c 4390 [ours: 1997 slip D-s2 — a dungeon's walk-in left the
-## place's tune playing under the board's]); the world side of going in
-## ([method DungeonDoors.enter]: the journal, the attempt, roaming slots 0–4
+## enter the castle.") or the dungeon's ("Enter the dungeon"): THE
+## ADVENTURE SAVED AT THE DOOR [ours, the owner's D2 of 2026-10-27:
+## "Autosave at the door — saved as the hero enters; quitting inside puts
+## the hero back at the door, the dungeon unchanged, a new maze next time";
+## 1997 saved nothing before its board], the place's tune at rest (1997's
+## `sound_stop(0x10)` before the castle's board, visitLocation.c 4390
+## [ours: 1997 slip D-s2 — a dungeon's walk-in left the place's tune
+## playing under the board's]); the world side of going in ([method
+## DungeonDoors.enter]: the journal, the attempt, roaming slots 0–4
 ## emptied); then the board over the world ([method _open_board]), which
 ## holds it ([method on_board]) until its `finished(result)` ([method
-## _board_done]). With no board yet ([method _board_ready], part C) the
-## place is only left — the doors wait, disabled, on the panes.
+## _board_done]). With no board ([method _board_ready] false) the place is
+## only left.
 func _enter_board(place: Dictionary) -> void:
 	var index := -1
 	match String(place.get("kind", "")):
@@ -990,6 +1022,9 @@ func _enter_board(place: Dictionary) -> void:
 	if index < 0 or not _board_ready():
 		_leave_site(place)
 		return
+	if walk != null:
+		walk.stop()
+	autosave()
 	soundscape.rest(true)
 	var setup := DungeonDoors.enter(player, index)
 	var board := _open_board(setup)
@@ -1002,17 +1037,21 @@ func _enter_board(place: Dictionary) -> void:
 	_hold()
 
 
-## THE BOARD LEFT with [param result] (`{beaten, booted}`, part C's; `{}`
-## out by its door) for [param place], castle or dungeon [param index]: the
-## world side of coming out ([method DungeonDoors.leave]: a dungeon moved,
-## the gifts kept, a castle left unbeaten on Wizard retaliated for), the
-## place's tune again, then the place left as any is — the game saved, the
-## clock on to the next 32 ([method _leave_site]; 1997 saved after a
-## castle, [ours: after a dungeon too — 1997 saved nothing until the next
-## town or a quit; the owner's ruling D-3 of 2026-10-27]) — and the
-## retaliation's news after that save, as 1997 showed it before saving the
-## same state. `game_over` in the result — no card left to stake in a room's
-## duel — is the adventure's end instead, nothing saved ([method show_end]).
+## THE BOARD LEFT with [param result] ([method DungeonBoard.close]'s
+## `{beaten, booted, game_over, …}`, the pane's; `{}` out by its door) for
+## [param place], castle or dungeon [param index]: the world side of coming
+## out ([method DungeonDoors.leave]: a dungeon moved, the gifts kept, a
+## castle left unbeaten on Wizard retaliated for), the place's tune again,
+## then the place left as any is — the game saved, the clock on to the
+## next 32 ([method _leave_site]; 1997 saved after a castle, [ours: after a
+## dungeon too — 1997 saved nothing until the next town or a quit; the
+## owner's ruling D-3 of 2026-10-27]) — and the retaliation's news after
+## that save, as 1997 showed it before saving the same state. `game_over`
+## in the result — no card left to stake in a room's duel — is the
+## adventure's end instead, nothing saved ([method show_end]). `all_five`
+## — the fifth castle's wizard beaten (his win already written by [method
+## CastleWin.beat] before this save) — hands the world to the finale,
+## after the save ([method AdventureFinale.after_fifth_wizard]).
 func _board_done(result: Dictionary, place: Dictionary, index: int) -> void:
 	if _alive(_board):
 		_board.queue_free()
@@ -1029,6 +1068,14 @@ func _board_done(result: Dictionary, place: Dictionary, index: int) -> void:
 	_show_hero()
 	view.queue_redraw()
 	_sync_rest()
+	if bool(result.get("all_five", false)):
+		_after_fifth_wizard()
+
+
+## THE FIFTH WIZARD FALLEN: the finale over the world ([AdventureFinale]); a
+## seam, so a test can count the hand-off instead.
+func _after_fifth_wizard() -> void:
+	AdventureFinale.after_fifth_wizard(self, player)
 
 
 ## Whether a castle's or a dungeon's board holds the world.
@@ -1037,17 +1084,35 @@ func on_board() -> bool:
 
 
 ## Whether the board exists ([constant DungeonDoors.BOARD_READY]); a seam,
-## so a test can open the doors before part C.
+## so a test can close the doors.
 func _board_ready() -> bool:
 	return DungeonDoors.BOARD_READY
 
 
 ## THE BOARD for [param setup] ([method DungeonDoors.enter]: `{index,
-## castle, color, tries}`), over the world: a pane with `finished(result:
-## Dictionary)`. Part C's; null until it is made. A seam, so a test can
-## stand its own board in.
-func _open_board(_setup: Dictionary) -> Control:
-	return null
+## castle, color, tries}`), over the world: [DungeonPane] on a board drawn
+## anew ([method DungeonBoard.enter] — a new maze every entry, the lead's
+## D3), with `finished(result: Dictionary)`; null when no board could be
+## made. A seam, so a test can stand its own board in.
+func _open_board(setup: Dictionary) -> Control:
+	var board := DungeonBoard.enter(player, setup, _board_seed())
+	if board == null:
+		return null
+	var pane := DungeonPane.new()
+	pane.player = player
+	pane.screen = self
+	pane.board = board
+	pane.k = WorldHud.BIG if hud.big else 1.0
+	add_child(pane)
+	PaneStyle.centre(pane)
+	pane.card_read.connect(read_card)
+	return pane
+
+
+## The board's dice's seed: −1, the clock's (a new maze every entry); a
+## seam, so a test can ask for a maze it knows.
+func _board_seed() -> int:
+	return -1
 
 
 ## EDIT DECK/SELL CARDS: the town's deck builder, which buys cards too; its
@@ -1518,11 +1583,30 @@ func city_list_shown() -> bool:
 # ----------------------------------------------------- the panel's parts --
 
 ## THE CLUES (the frame's gate, F4): what the hero has learned of the
-## castles and the dungeons ([WorldClues]). Not while the world waits.
-func show_clues() -> void:
-	if _world_waits():
-		return
-	hud.toggle_clues()
+## castles and the dungeons, in their rich pane over the world ([CluesPane]:
+## 1997's icons, the treasure cards, the creatures' faces, "Show on map" —
+## the owner's c4-3); F4 again, Done or Escape on its list close it. Not
+## while the world waits.
+func show_clues() -> CluesPane:
+	if _alive(_clues):
+		_clues.close()
+		return null
+	if _world_waits() or player == null:
+		return null
+	var pane := CluesPane.make(player)
+	pane.k = WorldHud.BIG if hud.big else 1.0
+	_clues = pane
+	add_child(pane)
+	PaneStyle.centre(pane)
+	pane.done.connect(_close_pane.bind(pane), CLOSING)
+	pane.card_read.connect(read_card)
+	_hold()
+	return pane
+
+
+## Whether the clues' pane is up ([method show_clues]).
+func clues_shown() -> bool:
+	return _alive(_clues)
 
 
 ## THE HERO (the frame's faces, F5): the journal and the stats. Not while
@@ -1888,10 +1972,15 @@ func tile_at(point: Vector2) -> Vector2i:
 ## The place the hero can see and visit at [param tile] ([method
 ## VisitPane.describe]), or `{}`: on land seen, or a known dungeon drawn on
 ## land not yet seen [QoL: it is drawn there (the owner's ruling A-1 of
-## 2026-10-27, [method WorldClues.on_world]), so the pointer names it too].
+## 2026-10-27, [method WorldClues.on_world]), so the pointer names it too];
+## Arzakon's portal wherever it stands ([method AdventureFinale.place_at]).
 func place_at(tile: Vector2i) -> Dictionary:
 	if player == null or world == null:
 		return {}
+	# Arzakon's portal, drawn on land not yet seen too (part C).
+	var portal := AdventureFinale.place_at(player, tile)
+	if not portal.is_empty():
+		return portal
 	if not world.is_explored(tile.x, tile.y) and DungeonDoors.at(world, tile) < 0:
 		return {}
 	return VisitPane.describe(player, tile)

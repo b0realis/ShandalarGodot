@@ -234,6 +234,39 @@ bar across the diagonal rather than two lobes either side of it — which
 is the whole of what keeps a crossguard legible at the eighteen pixels
 the small card draws it at.
 
+## Arzakon's portal on the world
+
+The owner's ruling of 2026-10-27: after the fifth wizard falls, Arzakon's
+portal opens on the world near its middle, and after the win, if the hero
+roams, *"the portal is a monument made of stone (make it as a new
+asset)"*. The 1997 game had no portal on its world map, so both pictures
+are this project's — the horned arch the owner picked from three pairs of
+mock-ups on 2026-10-28 — drawn by
+[`tools/draw_world_portal.gd`](../../tools/draw_world_portal.gd), run the
+way `draw_our_art.gd` is:
+
+    ../tools/godot --headless --path . -s res://tools/draw_world_portal.gd
+
+Each is a castle's 192x192 frame, an upright and its ground half, which
+`WorldView` stands on the portal's tile as it stands a castle; the `@2x`
+four are worn when the skin is the hi-res one. They are drawn in the 1997
+world's manner — lit from the left, the edge pixels darkened for an
+outline, the shadow a checker — and at 1x reduced to the 252 colours of
+the 1997 world sheets, which the generator carries as numbers; no 1997
+picture is read. Without a skin the portal is drawn in code
+(`WorldView.draw_portal_plain`), as the plain world's other marks are.
+
+| file | what it is | drawn by | licence | SHA-256 |
+|---|---|---|---|---|
+| `world_portal_open.png` | Arzakon's portal, open — a dark horned arch on a two-step plinth, a swirling violet void in it, violet runes and rim; the upright, 192x192 | `tools/draw_world_portal.gd` | GPL-3.0 | `d3f28c50e801b8cbf9d673ca904cce0d4c0dfc0cd4a5fb4855605ad7ec53bd90` |
+| `world_portal_open_ground.png` | its ground half — the arch's shadow as the 1997 checker and violet light spilled on the ground before it, 192x192 | `tools/draw_world_portal.gd` | GPL-3.0 | `cba3bd944bffeb1c0c46c563a36aa5cc735feecb0e301f22da7ef2099501d218` |
+| `world_portal_petrified.png` | Arzakon's portal petrified — the same arch in grey limestone, sealed by a carved stone plug, the right horn broken, cracks and moss; the upright, 192x192 | `tools/draw_world_portal.gd` | GPL-3.0 | `2153428c7fad57c76902b3cd1f5b13333eb37fbdf5c84a7c4ee1ae022873870f` |
+| `world_portal_petrified_ground.png` | its ground half — the shadow and fallen rubble, 192x192 | `tools/draw_world_portal.gd` | GPL-3.0 | `cc477e5b0d4b228a76faf23068a758f14b621684cd0df92f9f5ecaac8cae2a7c` |
+| `world_portal_open@2x.png` | the open upright at twice the size, for a 2x skin, 384x384 | `tools/draw_world_portal.gd` | GPL-3.0 | `9e65219ac68d1c61c0767777bc23ea9a6c62575923f63d3240d7f0e64d34ecb4` |
+| `world_portal_open_ground@2x.png` | its ground half at twice the size, 384x384 | `tools/draw_world_portal.gd` | GPL-3.0 | `c4802158293ffb900c6baa46b9e52d47ba6ae5cd22d43bd3cc8990ecfe4bbc3e` |
+| `world_portal_petrified@2x.png` | the petrified upright at twice the size, for a 2x skin, 384x384 | `tools/draw_world_portal.gd` | GPL-3.0 | `8a365bd8cf95bef78625815296c884ad5da3d69e120948c19a00ab3eaa66b74e` |
+| `world_portal_petrified_ground@2x.png` | its ground half at twice the size, 384x384 | `tools/draw_world_portal.gd` | GPL-3.0 | `ab2bfa4a0215b439a3ae3735bcffc98d4218adc770bf6b1abd39c5c3b9cc83bd` |
+
 ## The face
 
 The rules text, the duel log and every dialog are set in `font_body`,

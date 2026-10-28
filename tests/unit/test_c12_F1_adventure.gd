@@ -184,4 +184,8 @@ func test_the_help_tells_what_the_adventure_does_now() -> void:
 	assert_false(text.contains("your duels won and lost, the dungeon treasures"),
 		"no dungeon treasures promised before the dungeons open")
 	assert_false(text.contains("Your hero's stats count your attempts at each castle"))
-	assert_true(text.contains("come with the insides of the castles and the dungeons"))
+	# Part C stage C2 (2026-10-28): the castles and dungeons open, and the
+	# Help says what is there instead of what comes next.
+	assert_false(text.contains("come with the insides of the castles and the dungeons"))
+	assert_false(text.contains("come next"), "nothing left to come in the castles and dungeons")
+	assert_true(text.contains("a beaten wizard's room (click the castle), the dungeon treasures you have found"))

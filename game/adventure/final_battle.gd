@@ -61,7 +61,18 @@ extends RefCounted
 ##    pane ([method portal_line]), and the journal — a line as it opens and
 ##    one as the hero chooses to roam after the win ([method roam]), each
 ##    with its place in the world's words ([method portal_where]) and
-##    pinned to its tile on the journal's map.
+##    pinned to its tile on the journal's map. THE OPENING'S LINE ONLY WHEN
+##    THE HERO SEES IT (the owner's ruling of 2026-10-28): written as he
+##    chooses "Return to Shandalar first", or as he turns back from the door
+##    after a lost battle ([method leave_door]) — once ([method
+##    tell_portal]); never when he faces Arzakon at once (the portal then
+##    stands silently, for a reload at the door, [method door]).
+##  - BACK FROM THE DOOR (the owner's ruling of 2026-10-28, "Fight or
+##    return"): under "Reload allowed", taken up again at the door after a
+##    loss, the hero may face him again or return to Shandalar first — buy
+##    cards, rebuild the deck — and enter the portal again; it stays open,
+##    and the arrows, the panel and the journal go on pointing to it
+##    ([method leave_door]).
 ##
 ## "ONE LIFE" IS TRUE IRONMAN (the owner's ruling of 2026-10-27: *"True
 ## ironman: closing mid-battle ends the adventure as a lost final battle; no
@@ -436,7 +447,9 @@ static func door(player: AdventurePlayer, hall_path := "") -> bool:
 		return false
 	player.at_door = true
 	if player.portal.is_empty():
-		open_portal(player)
+		# Silently: the hero who faces him at once never saw it (the
+		# owner's ruling of 2026-10-28).
+		open_portal(player, false)
 	if player.life_rule == AdventurePlayer.LIFE_ONE:
 		HallOfFame.mark_one_life(player.adventure_id, HallOfFame.BEGUN, hall_path)
 	return true
@@ -444,11 +457,12 @@ static func door(player: AdventurePlayer, hall_path := "") -> bool:
 
 ## ARZAKON'S PORTAL STANDS on the world, open (the owner's Q-PORTAL,
 ## "Return to Shandalar first"), on [method portal_tile] — with no free land
-## at all, on the fifth castle's ruins, else the hero's tile — and the
-## journal says where ([constant OPENED_LOG]). A portal already standing is
-## kept as it is (a save from before the middle of the map keeps it on the
-## ruins). The portal ([member AdventurePlayer.portal], `{x, y, state}`).
-static func open_portal(player: AdventurePlayer) -> Dictionary:
+## at all, on the fifth castle's ruins, else the hero's tile — and, [param
+## told], the journal says where ([constant OPENED_LOG], [method
+## tell_portal]). A portal already standing is kept as it is (a save from
+## before the middle of the map keeps it on the ruins). The portal ([member
+## AdventurePlayer.portal], `{x, y, state}`).
+static func open_portal(player: AdventurePlayer, told := true) -> Dictionary:
 	if not player.portal.is_empty():
 		return player.portal
 	var at := portal_tile(player.world) if player.world != null else Vector2i(-1, -1)
@@ -459,8 +473,47 @@ static func open_portal(player: AdventurePlayer) -> Dictionary:
 			var slot: Dictionary = player.world.encounters[castle]
 			at = Vector2i(int(slot.get("x", at.x)), int(slot.get("y", at.y)))
 	player.portal = {"x": at.x, "y": at.y, "state": PORTAL_OPEN}
-	_log_at_portal(player, "portal", OPENED_LOG % portal_where(player))
+	if told:
+		tell_portal(player)
 	return player.portal
+
+
+## THE JOURNAL SAYS THE PORTAL OPENED — "Arzakon's Portal opened in the
+## middle of Shandalar, east of Kraag Temple", pinned to it — once: the
+## line, or "" when no open portal stands or the journal says so already.
+static func tell_portal(player: AdventurePlayer) -> String:
+	if player == null or String(player.portal.get("state", "")) != PORTAL_OPEN or portal_told(player):
+		return ""
+	var line := OPENED_LOG % portal_where(player)
+	_log_at_portal(player, "portal", line)
+	return line
+
+
+## Whether the journal already says the portal opened ([method tell_portal]).
+static func portal_told(player: AdventurePlayer) -> bool:
+	var opened := OPENED_LOG.get_slice("%", 0)
+	for entry in player.journal:
+		if entry is Dictionary and String((entry as Dictionary).get("event", "")) == "portal" \
+				and String((entry as Dictionary).get("text", "")).begins_with(opened):
+			return true
+	return false
+
+
+## THE HERO TURNS BACK FROM ARZAKON'S DOOR (the owner's ruling of
+## 2026-10-28, "Fight or return"; the class's notes): under "Reload
+## allowed", the adventure going on and the hero at the door — no longer
+## at it ([member AdventurePlayer.at_door]: a reload opens on the world),
+## the portal standing open (stood first when none stands) and the journal
+## told where, once. The journal's line when it is written now, else "";
+## nothing changes for a hero not at the door, an adventure ended or one of
+## "One life" (whose door means the battle has begun).
+static func leave_door(player: AdventurePlayer) -> String:
+	if player == null or not player.at_door or player.ended != "" \
+			or player.life_rule == AdventurePlayer.LIFE_ONE:
+		return ""
+	player.at_door = false
+	open_portal(player, false)
+	return tell_portal(player)
 
 
 ## WHERE THE PORTAL STANDS in [param world] (the class's notes): the free
@@ -605,7 +658,7 @@ static func roam(player: AdventurePlayer) -> String:
 	if player == null or player.ended != AdventurePlayer.ENDED_WON or bool(player.final.get("roamed", false)):
 		return ""
 	if player.portal.is_empty():
-		open_portal(player)
+		open_portal(player, false)
 		player.portal["state"] = PORTAL_PETRIFIED
 	var line := PETRIFIED_LOG % portal_where(player)
 	_log_at_portal(player, "portal", line)
@@ -730,8 +783,9 @@ static func settle(player: AdventurePlayer, report: DuelReport, conceded := fals
 		"years": 0, "score": 0, "journal": ""}
 	player.clear_duel_gifts()
 	if won:
-		# The portal he came through, stood first when none stands.
-		open_portal(player)
+		# The portal he came through, stood first (silently) when none
+		# stands.
+		open_portal(player, false)
 		out["journal"] = DuelSpoils.DEFEATED % CreatureBook.called(row)
 		player.log_event("duel", out["journal"], {"won": true, "creature": CreatureBook.name_of(row),
 			"row": row, "color": 0, "final": true})

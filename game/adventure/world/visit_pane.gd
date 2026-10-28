@@ -44,9 +44,10 @@ extends PanelContainer
 ## ([method say], [method offer], [method show_card]; "Whose deck would you
 ## like to see?", [method ask_whose_deck]); a row of cards over the
 ## picture shows stakes and spoils ([method show_cards]), the picture itself
-## may change ([method show_picture]). What is not made yet — a castle's
-## duels, the dungeon board — is shown and waits, said in one line. Without
-## the 1997 pictures the place is a plain dark field under its name.
+## may change ([method show_picture]). A castle's "Yes, enter the castle."
+## and a known dungeon's "Enter the dungeon" go down onto the board (part
+## C, [DungeonPane]). Without the 1997 pictures the place is a plain dark
+## field under its name.
 ##
 ## [QoL] The pane stays on the screen: the picture gives way when the
 ## choices need the room ("Whose deck would you like to see?" adds a dozen
@@ -90,7 +91,6 @@ const PICTURE := Vector2(512, 280)
 const MOST := 1.5
 const LEAST := 0.6
 const KINDS := ["village", "town", "city"]
-const COMING := "The castles and the dungeons come next."
 ## The room kept free above and below a pane on the screen, in all.
 const ROOM_MARGIN := 32.0
 ## A card of a row over the picture ([method show_cards]): its width in the
@@ -501,17 +501,11 @@ func has_picture() -> bool:
 func _fill_choices() -> void:
 	# Out now, freed after: the button pressed may be the one replaced.
 	PaneStyle.drop_children(_choices)
-	var waiting := false
 	for action in place.get("actions", []):
 		var choice := _button(String(action[1]), String(action[0]))
 		choice.disabled = not bool(action[2])
-		# What is not made yet waits, said under it (a castle's duels, a
-		# dungeon); a ruled town's duel is made (part B).
-		if String(action[0]) in ["duel", "enter"] and not bool(action[2]) \
-				and String(place.get("kind", "")) != "ruled":
-			waiting = true
 		_choices.add_child(choice)
-	_note.text = COMING if waiting else ""
+	_note.text = ""
 
 
 ## The place's words now: [param lines], a line each (none hides them).
@@ -768,8 +762,7 @@ func choose(action: String) -> void:
 				left.emit("duel")
 		"enter":
 			# A castle's or a dungeon's door: its board, over the world
-			# ([method WorldScreen._enter_board]); waits, disabled, until
-			# the board is made ([constant DungeonDoors.BOARD_READY]).
+			# ([method WorldScreen._enter_board], [DungeonPane]).
 			if String(place.get("kind", "")) in ["castle", "dungeon"]:
 				left.emit("enter")
 		"food":

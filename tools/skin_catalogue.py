@@ -227,53 +227,49 @@ FAMILIES: list[tuple[str, str, str]] = [
      "down-right, down-left, both), 16-19 the same for odd rows (the "
      "white castle's 16, like its 4 and 28, marks the floor); 20 the "
      "rock top of a solid cell; a castle's 48-52 its wizard standing, of "
-     "which 49 is the one drawn. The rest are copies or empty. NOT READ by "
-     "the game yet."),
+     "which 49 is the one drawn. The rest are copies or empty."),
     ("The dungeons and castles", "dungeon_plaques",
      "The board's plaques (Dungbutt.spr, Advfac64.pic's palette): four "
      "frames, each at the top left of a 201 x 281 cell, the .json's sizes "
      "giving each frame's own — 0 the green-marble frame behind the card "
      "in effect (201 x 281), 1-3 the title plaque's left end (40 x 62), "
-     "repeatable middle (24 x 62) and right end (39 x 62). NOT READ by the "
-     "game yet."),
+     "repeatable middle (24 x 62) and right end (39 x 62)."),
     ("The dungeons and castles", "clues_list",
      "The dungeon and castle clues' list (F4): its ground (Dung_Bd.pic, "
      "its own palette), two columns of six framed rows and a Done frame. "
-     "NOT READ by the game yet."),
+     "NOT READ: the game draws its own list (the owner, 2026-10-28)."),
     ("The dungeons and castles", "clues_list_buttons",
      "The clue list's buttons (Dun_Bar.pic, Dung_Bd.pic's palette, index 0 "
      "clear), as x, y, width x height: the Done button's frames at "
      "16 + 60i, 1, 59 x 26 (the game letters Done over them); the up "
      "arrow's four states at 16 + 32i, 28, "
      "31 x 36 and the down arrow's at 144 + 32i, 28. A scroll strip at 2, "
-     "1, 13 x 112 and a row of double arrows were never drawn. NOT READ by "
-     "the game yet."),
+     "1, 13 x 112 and a row of double arrows were never drawn. NOT READ: "
+     "the game draws its own list (the owner, 2026-10-28)."),
     ("The dungeons and castles", "clue_detail",
      "A clue's own page: the misty cave of stalagmites (Clueback.pic, its "
-     "own palette). NOT READ by the game yet."),
+     "own palette)."),
     ("The dungeons and castles", "clue_detail_buttons",
      "The clue page's Done button (Cluebutn.pic, 300 x 100, Clueback.pic's "
      "palette, index 0 clear): three states at 1 + 90i, 1, 89 x 35. Three "
-     "20 x 36 icons at 1 + 21i, 37 were never drawn. NOT READ by the game "
-     "yet."),
+     "20 x 36 icons at 1 + 21i, 37 were never drawn."),
     ("The dungeons and castles", "dungeon_treasure",
      "A card found in a dungeon: the cave with the open book (Staceybk.pic, "
      "painted whole with CaveBkgd.pic's palette); the card stands at 68, "
-     "166, 150 x 224. NOT READ by the game yet."),
+     "166, 150 x 224."),
     ("The dungeons and castles", "card_browser",
      "A castle won: the ground of the victory words and of the three cards "
-     "picked (Tradscrn.pic, painted whole with Advfac64.pic's palette). NOT "
-     "READ by the game yet."),
+     "picked (Tradscrn.pic, painted whole with Advfac64.pic's palette)."),
     ("The dungeons and castles", "card_banner",
      "The banner behind a card's caption, \"Lost this card\" in a dungeon "
      "(Endtop.pic, 152 x 19, Advfac64.pic's palette, index 0 clear; the "
-     "1997 game cut 149 x 19 of it at 0, 0). NOT READ by the game yet."),
+     "1997 game cut 149 x 19 of it at 0, 0)."),
     ("The end", "fifth_wizard",
      "The fifth wizard beaten: Arzakon's horned face in a fiery hall "
-     "(5thwiz.pic, its own palette). NOT READ by the game yet."),
+     "(5thwiz.pic, its own palette)."),
     ("The end", "win_game",
      "The adventure won: a far white castle over green fields under a "
-     "violet sky (Wingame.pic, its own palette). NOT READ by the game yet."),
+     "violet sky (Wingame.pic, its own palette)."),
     ("The adventure world", "visit_",
      "The places' pictures, shown in the world's visit pane as the hero "
      "arrives (512 x 280, painted whole with Advfac64.pic's palette): "
@@ -550,23 +546,21 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Sounds", "sfx_lair_duel",
      "A lair's duel begins (Duelsounds/Aswanjag.wav)."),
     ("Sounds", "sfx_dungeon_duel",
-     "A creature met in a dungeon (Sound/Dngnduel.wav). NOT READ by the "
-     "game yet: the dungeons are still to come."),
+     "A creature met in a dungeon or a castle, as its room's pane opens "
+     "(Sound/Dngnduel.wav)."),
     ("Sounds", "sfx_dungeon_loop",
      "The castle and dungeon board's bed, looped while the board is up "
-     "(Sound/Dambloop.wav). NOT READ by the game yet."),
+     "(Sound/Dambloop.wav)."),
     ("Sounds", "sfx_dungeon_ambience_",
      "The cave's noises over the board's bed, one at a time at random "
-     "(Sound/Damb1.wav ... Damb5.wav). NOT READ by the game yet."),
+     "(Sound/Damb1.wav ... Damb5.wav)."),
     ("Sounds", "sfx_dice",
-     "A dice room entered in a dungeon (Sound/Dice.wav). NOT READ by the "
-     "game yet."),
+     "A dice room entered in a dungeon (Sound/Dice.wav)."),
     ("Sounds", "sfx_scroll",
      "A scroll room entered in a dungeon, before its riddle "
-     "(Sound/Scroll.wav). NOT READ by the game yet."),
+     "(Sound/Scroll.wav)."),
     ("Sounds", "sfx_find_card",
-     "A card found in a dungeon's dead end (Sound/Findcard.wav). NOT READ "
-     "by the game yet."),
+     "A card found in a dungeon's dead end (Sound/Findcard.wav)."),
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "
      "sfx_draw, sfx_shuffle, sfx_summon, sfx_attack, sfx_block, "
@@ -591,8 +585,7 @@ FAMILIES: list[tuple[str, str, str]] = [
      "not one of the playlist's tunes."),
     ("Music", "music_win_game",
      "The adventure won, under the win's picture and its words "
-     "(Sound/Wingame.wav); not one of the playlist's tunes. NOT READ by the "
-     "game yet."),
+     "(Sound/Wingame.wav), played once; not one of the playlist's tunes."),
     ("Music", "music_location_",
      "The twenty overworld location tunes, 0 to 19. The title screen and "
      "the shell pick from these; Options > Music lists every tune the "
@@ -603,8 +596,7 @@ FAMILIES: list[tuple[str, str, str]] = [
      "(576 x 340, 15 fps, 18.5 s): converted from the 1997 game's "
      "Mtgend.avi at import by the player's own ffmpeg (with libtheora) or "
      "GStreamer (theoraenc), and absent without one — the win then goes on "
-     "without it. Any Theora .ogv plays in its place. NOT READ by the game "
-     "yet."),
+     "without it. Any Theora .ogv plays in its place."),
     ("Movies", "coin_toss_",
      "The coin toss, as a SPRITE SHEET the game plays frame by frame: "
      "the frames left to right, top to bottom, and a .json sidecar of "

@@ -8,7 +8,10 @@ extends RefCounted
 ## place the hero can see and visit ([VisitPane]) the pointer is the place
 ## — a village's little house, a town's two houses, a city's towered gate,
 ## a wizard's castle, a beaten wizard's broken tower, a wizard's dome over
-## a town a wizard rules, a dungeon's skull, a lair's cave mouth; elsewhere
+## a town a wizard rules, a dungeon's skull, a lair's cave mouth,
+## Arzakon's horned portal round its violet void and, after the win, the
+## same arch in grey stone, sealed (part C [ours]: no 1997 picture of it
+## was ever made); elsewhere
 ## the walking man; over the panel and the panes a gold arrow (the owner:
 ## *"over panes the cursor is normal gold mouse"*), and the hand over what
 ## is clicked and the four arrows over a pane to drag in the same gold
@@ -42,13 +45,20 @@ const STONE_DARK := Color8(112, 106, 100)
 const BONE := Color8(236, 226, 200)
 const DOME := Color8(92, 52, 128)
 const DARK := Color8(30, 18, 14)
+## Arzakon's portal (part C): its dark slate, its violet void and the void's
+## pale heart — the colours of `game/art/world_portal_open.png`.
+const SLATE := Color8(64, 56, 82)
+const VOID := Color8(124, 64, 200)
+const VOID_HEART := Color8(220, 196, 255)
 
 ## What a pointer shows: walking on, or the place under it.
-enum Kind { WALK, VILLAGE, TOWN, CITY, CASTLE, FALLEN, RULED, DUNGEON, LAIR, ARROW, HAND, MOVE }
-## The pointer for each kind of place [method VisitPane.describe] gives.
+enum Kind { WALK, VILLAGE, TOWN, CITY, CASTLE, FALLEN, RULED, DUNGEON, LAIR, ARROW, HAND, MOVE, PORTAL,
+	MONUMENT }
+## The pointer for each kind of place [method VisitPane.describe] gives —
+## and Arzakon's portal, open or petrified ([method AdventureFinale.place_at]).
 const FOR_PLACE := {"village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
 	"castle": Kind.CASTLE, "fallen": Kind.FALLEN, "ruled": Kind.RULED,
-	"dungeon": Kind.DUNGEON, "lair": Kind.LAIR}
+	"dungeon": Kind.DUNGEON, "lair": Kind.LAIR, "portal": Kind.PORTAL, "monument": Kind.MONUMENT}
 
 static var _made := {}
 ## Whether the hand and the four arrows are worn for their shapes.
@@ -95,6 +105,10 @@ static func shapes(kind: Kind) -> Array:
 			return _skull()
 		Kind.LAIR:
 			return _cave()
+		Kind.PORTAL:
+			return _portal(false)
+		Kind.MONUMENT:
+			return _portal(true)
 		Kind.HAND:
 			return _hand()
 		Kind.MOVE:
@@ -272,6 +286,26 @@ static func _cave() -> Array:
 		["poly", PackedVector2Array([Vector2(36, 120), Vector2(40, 84), Vector2(64, 60),
 			Vector2(88, 84), Vector2(92, 120)]), DARK],
 		["circle", [Vector2(56, 92), 5.0], LIGHT], ["circle", [Vector2(72, 92), 5.0], LIGHT],
+	]
+
+
+## Arzakon's portal [ours]: a horned arch on a plinth round a violet void
+## with a pale heart — or, [param stone], the monument it became after the
+## win: the arch in grey stone, the right horn broken, the void sealed by a
+## carved plug.
+static func _portal(stone: bool) -> Array:
+	var body := STONE if stone else SLATE
+	var right_tip := Vector2(100, 22) if stone else Vector2(112, 6)
+	return [
+		["rect", Rect2(18, 108, 92, 16), STONE_DARK],
+		["rect", Rect2(32, 52, 64, 58), body],
+		["circle", [Vector2(64, 52), 32.0], body],
+		["poly", PackedVector2Array([Vector2(40, 34), Vector2(16, 6), Vector2(52, 26)]), body],
+		["poly", PackedVector2Array([Vector2(88, 34), right_tip, Vector2(76, 26)]), body],
+		["rect", Rect2(46, 56, 36, 52), STONE_DARK if stone else VOID],
+		["circle", [Vector2(64, 56), 18.0], STONE_DARK if stone else VOID],
+		["circle", [Vector2(64, 76), 9.0], STONE if stone else VOID_HEART],
+		["circle", [Vector2(64, 76), 4.0], STONE_DARK if stone else Color.WHITE],
 	]
 
 

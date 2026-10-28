@@ -44,7 +44,8 @@ signal load_pressed
 signal exit_pressed
 ## Return to main menu (the options).
 signal menu_pressed
-## The dungeon clues (the frame's gate, F4).
+## The dungeon clues (the frame's gate, F4): the world screen opens their
+## pane ([method WorldScreen.show_clues], [CluesPane]).
 signal clues_pressed
 ## The options' City list (F3).
 signal city_list_pressed
@@ -191,8 +192,6 @@ const HEIGHT := 28.0
 const HOVER_SECONDS := 0.6
 ## How long a notice stays.
 const NOTICE_SECONDS := 3.5
-## The clues pane with nothing known ([WorldClues]).
-const NONE_KNOWN := WorldClues.NONE_YET
 const INK := Color8(236, 222, 196)
 const GOLD := Color8(232, 190, 110)
 const LIT := Color8(255, 236, 170)
@@ -220,11 +219,6 @@ var _quest_lines: Label
 ## The quest's clock and the next duel's gifts beside its lines ([QuestClock]).
 var _quest_clock: QuestClock
 var _gift_icons: HBoxContainer
-var _clues_panel: PanelContainer
-var _clues_list: VBoxContainer
-var _clues_text: Label
-## The clue slot shown in the clues pane.
-var clue_shown := -1
 var _key_marks: Array[TextureRect] = []
 ## True while the panel stands at the bottom of the screen.
 var bar_at_bottom := false
@@ -435,24 +429,6 @@ func _ready() -> void:
 	_hero_panel.add_child(hero_stats)
 	_help_panel = _panel("HelpPanel")
 	_help_panel.add_child(_keys_grid())
-	_clues_panel = _panel("CluesPanel")
-	var clues := VBoxContainer.new()
-	clues.add_theme_constant_override("separation", 6)
-	clues.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var heading := _label("Dungeon & Castle Clues", 18, GOLD)
-	heading.name = "CluesTitle"
-	clues.add_child(heading)
-	_clues_list = VBoxContainer.new()
-	_clues_list.name = "CluesList"
-	_clues_list.add_theme_constant_override("separation", 0)
-	_clues_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	clues.add_child(_clues_list)
-	_clues_text = _label("", 15)
-	_clues_text.name = "CluesText"
-	_clues_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_clues_text.custom_minimum_size = Vector2(380, 0)
-	clues.add_child(_clues_text)
-	_clues_panel.add_child(clues)
 	_options_menu = _panel("OptionsMenu")
 	var face_menu := _glass(0.9, 0.6, 8)
 	face_menu.set_content_margin_all(6)
@@ -1012,50 +988,12 @@ func close_options() -> bool:
 ## Close the hero's panel, the keys and the options; true when one was
 ## open.
 func close_panels() -> bool:
-	var was := hero_shown() or help_shown() or options_shown() or clues_shown()
-	for panel in [_hero_panel, _help_panel, _options_menu, _clues_panel]:
+	var was := hero_shown() or help_shown() or options_shown()
+	for panel in [_hero_panel, _help_panel, _options_menu]:
 		(panel as Control).visible = false
 	if _drag.get("pane") != minimap and _drag.get("pane") != _quest_pane:
 		_drag = {}
 	return was
-
-
-## THE CLUES (the frame's gate, F4): the castles and dungeons the hero has
-## learned of ([WorldClues]); again to close it. Not while the panel rests.
-func toggle_clues() -> void:
-	if resting:
-		return
-	show_clue(clue_shown)
-	_open(_clues_panel, not _clues_panel.visible, buttons["Clues"])
-
-
-func clues_shown() -> bool:
-	return _clues_panel != null and _clues_panel.visible
-
-
-## The clues pane listing what is known, slot [param index]'s clues under
-## the list (the first known when it is not known).
-func show_clue(index: int) -> void:
-	for child in _clues_list.get_children():
-		child.free()
-	var known := WorldClues.known(player.world) if player != null else [] as Array[int]
-	if not index in known:
-		index = known[0] if not known.is_empty() else -1
-	clue_shown = index
-	for slot in known:
-		var entry := _menu_entry("Clue_%d" % slot, WorldClues.title(slot))
-		entry.add_theme_color_override("font_color", LIT if slot == index else INK)
-		var picked := slot
-		entry.pressed.connect(func() -> void:
-			show_clue(picked)
-			_clues_panel.reset_size()
-			_keep_on_screen(_clues_panel), CONNECT_DEFERRED)
-		_clues_list.add_child(entry)
-	_clues_text.text = NONE_KNOWN if index < 0 else "\n".join(WorldClues.lines(player.world, index))
-
-
-func clue_text() -> String:
-	return _clues_text.text if _clues_text != null else ""
 
 
 ## What the hero's panel says: who they are, what they carry, their record
@@ -1186,7 +1124,7 @@ func _notification(what: int) -> void:
 	# The screen changed its size (a window, a turned device): the panes
 	# that were placed by hand stay on it.
 	if what == NOTIFICATION_RESIZED and _bar != null:
-		for pane in [_hero_panel, _help_panel, _clues_panel]:
+		for pane in [_hero_panel, _help_panel]:
 			_keep_on_screen(pane)
 		if minimap != null and remembered(minimap) != null:
 			_keep_on_screen(minimap)
@@ -1231,7 +1169,7 @@ func key_lines() -> Array[String]:
 ## One of the options: lettered like the panels, lit under the pointer.
 func _menu_entry(entry_name: String, words: String) -> Button:
 	var entry := Button.new()
-	entry.name = entry_name if entry_name.begins_with("Clue_") else "Option_" + entry_name
+	entry.name = "Option_" + entry_name
 	entry.text = words
 	entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	entry.focus_mode = Control.FOCUS_NONE
@@ -1256,8 +1194,7 @@ func _menu_entry(entry_name: String, words: String) -> Button:
 	entry.add_theme_stylebox_override("hover", lit)
 	entry.add_theme_stylebox_override("pressed", lit)
 	entry.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	if not entry_name.begins_with("Clue_"):
-		entry.pressed.connect(func() -> void: _choose(entry_name))
+	entry.pressed.connect(func() -> void: _choose(entry_name))
 	return entry
 
 

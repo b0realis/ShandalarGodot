@@ -162,8 +162,12 @@ class TestTheManifestIsCatalogued(unittest.TestCase):
         movie = rows["skin/win_movie.ogv"]
         self.assertEqual((movie["kind"], movie["section"]), ("movie", "Movies"))
         self.assertEqual(movie["from_the_1997_game"], "converted from Mtgend.avi (Theora + Vorbis)")
+        # Stage C2's screens read part C (2026-10-28), all but the 1997 clue
+        # list's ground and buttons: the game draws its own list (the owner).
         for name in ("skin/win_movie.ogv", "skin/fifth_wizard.png", "skin/dungeon_plaques.png",
                      "skin/sfx_dice.wav"):
+            self.assertEqual(rows[name]["read_by_game"], "yes", name)
+        for name in ("skin/clues_list.png", "skin/clues_list_buttons.png"):
             self.assertEqual(rows[name]["read_by_game"], "no: nothing reads it yet", name)
         sizes = cat.sizes_1997((ROOT / "docs" / "skin-catalogue.csv",))
         self.assertNotIn("win_movie.ogv", sizes)

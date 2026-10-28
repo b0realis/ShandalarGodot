@@ -160,14 +160,18 @@ func test_space_takes_the_choice_lit_too() -> void:
 
 
 func test_a_disabled_choice_is_never_lit() -> void:
-	# The castle's "Yes, enter the castle." waits for the board (part C).
-	var pane := screen.visit(_tile(_site(ShandalarWorld.CASTLE)))
+	# A town's food the purse cannot buy is disabled (the castle's "Yes,
+	# enter the castle." stood here until part C made the board, stage C2).
+	screen.player.gold = 0
+	var pane := screen.visit(_tile(_site(ShandalarWorld.VILLAGE)))
 	await _frames(2)
-	assert_eq(pane.find_child("Choice_enter", true, false).disabled, true)
-	_key(KEY_Y)
-	assert_eq(_lit(), "", "Y: nothing to take")
-	_key(KEY_W)
-	assert_eq(_lit(), "leave", "W: Well... No.")
+	assert_eq(pane.find_child("Choice_food", true, false).disabled, true)
+	var lit: Array[String] = []
+	for i in 4:
+		_key(KEY_B)
+		lit.append(_lit())
+	assert_eq(lit[0], "buy", "B: Buy Cards")
+	assert_false("food" in lit, "B again and again: never the food the purse cannot buy (%s)" % [lit])
 
 
 func test_what_is_not_a_choice_s_letter_is_left_alone() -> void:

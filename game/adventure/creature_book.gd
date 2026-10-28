@@ -382,7 +382,10 @@ const FACES: Array[String] = [
 	"whim", "prismat", "dracur", "kiska-ra", "uber_villain",
 ]
 ## The opponent's name in a duel: `Menus.txt` `@DECKFACES` by row − 1
-## (duel_engine.c 798–804) — "Vampirelord", and Arzakon is "Uber Villain".
+## (duel_engine.c 798–804) — "Vampirelord", and Arzakon is "Uber Villain";
+## 1997's words, kept: the faces are named after them ([constant FACES]).
+## [method duel_name] reads them — "Vampirelord" in the creature's own
+## spelling, "VampireLord".
 const DUEL_NAMES: Array[String] = [
 	"Witch", "Undead Knight", "Warlock", "Vampirelord", "Nether Fiend", "Necromancer",
 	"Greater Lich", "Cleric", "Priestess", "Crusader", "Paladin", "Arch Angel",
@@ -688,12 +691,22 @@ static func face_id(index: int) -> String:
 	return FACE_PREFIX + FACES[mini(index, FACES.size()) - 1]
 
 
-## The opponent's name in the duel ([constant DUEL_NAMES]): "Vampirelord",
-## "Uber Villain"; the lair none.
+## The opponent's name in the duel ([constant DUEL_NAMES]): "Uber Villain"
+## for Arzakon ([FinalBattle] names him by the owner's ruling); the lair
+## none. [ours: 1997 slip — the duel read `Menus.txt`'s `@DECKFACES`, the
+## adventure `Advstrings.txt`'s `@CREATURENAMES`, and the two spell one
+## creature two ways: the duel said "Vampirelord" where the map, the
+## meeting and the journal said "VampireLord" (the only such split — every
+## other row's names are the same, Arzakon's are two names). The lead's
+## ruling of 2026-10-28: the duel and the journal agree on
+## the creature's own spelling — where the face's name is the creature's
+## name in other letters' case, the creature's own ([method name_of]).]
 static func duel_name(index: int) -> String:
 	if not is_row(index) or index == LAIR:
 		return ""
-	return DUEL_NAMES[mini(index, DUEL_NAMES.size()) - 1]
+	var face_name := DUEL_NAMES[mini(index, DUEL_NAMES.size()) - 1]
+	var own := name_of(index)
+	return own if own.to_lower() == face_name.to_lower() else face_name
 
 
 ## THE CRY'S SOUND KEY in the skin for creature [param index]

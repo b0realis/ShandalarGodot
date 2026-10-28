@@ -31,6 +31,21 @@ extends Control
 ## land the hero has not seen too, over the dark — the clue told where it
 ## stands — where the tile's trees stay hidden.] Plain, a dark mouth ringed
 ## in gold.
+## ARZAKON'S PORTAL ([member portal], part C, 2026-10-28) [ours]: the
+## owner's ruling of 2026-10-27 — after the fifth wizard falls his portal
+## opens near the map's middle, and after the win, if the hero roams, "the
+## portal is a monument made of stone (make it as a new asset)". 1997 had no
+## portal on its world, so its pictures are this project's
+## (`game/art/world_portal_*`, drawn by `tools/draw_world_portal.gd`, read
+## through [method GameSkin.our_art]; the horned arch, the owner's pick of
+## the mock-ups): it stands on its tile as a castle stands — a 192 × 192
+## frame, its corner at (0, −160) from the tile's left corner, the ground
+## half drawn with the ground and the upright among the uprights, its foot
+## the tile's middle row — and the tile's trees or rocks make way for it,
+## as for a site. Worn with a 2x skin it is the `@2x` picture in the same
+## place ([method portal_key]). Like a dungeon it shows on land the hero
+## has not seen too: the guides and the journal point to it. Plain, an arch
+## drawn in code ([method draw_portal_plain]).
 ##
 ## Without the 1997 sheets ([WorldArt]) the same world is drawn plain: a
 ## diamond of its colour per tile, the roads, a mark per site.
@@ -133,6 +148,13 @@ var dungeons: Array[Dictionary] = []:
 		for dungeon in value:
 			_dungeon_at[Vector2i(int(dungeon["x"]), int(dungeon["y"]))] = int(dungeon["index"])
 		_changed()
+## Arzakon's portal ([member AdventurePlayer.portal]): `{x, y, state}`, its
+## tile and [constant FinalBattle.PORTAL_OPEN] or [constant
+## FinalBattle.PORTAL_PETRIFIED]; `{}` for none.
+var portal: Dictionary = {}:
+	set(value):
+		portal = value
+		_changed()
 ## The creatures the hero sees ([method WorldCreatures.seen]): `{slot,
 ## creature, x, y, heading, frame, color}`, in world units. Each slides from
 ## where the tick before left it (a creature come anew, or one that leapt,
@@ -214,6 +236,15 @@ const LAIR_FRAMES: Array[int] = [0, 4, 0, 3, 2, 1]
 ## no slot reaches.
 const DUNGEON_LOOKS: Array[int] = [42, 48, 63, 67, 54, 60, 53, 59, 50, 56, 51, 57, 78, 84,
 	80, 86, 79, 85, 55, 61]
+
+## [ours] Arzakon's portal's pictures by state ([member portal]): the
+## upright's key in `game/art/`; its ground half adds `_ground`, its 2x twin
+## `@2x` ([method portal_key]).
+const PORTAL_ART := {"open": "world_portal_open", "petrified": "world_portal_petrified"}
+## [ours] The portal's frame: where it stands from its tile's left corner,
+## and its size — a castle's ([method _site]).
+const PORTAL_AT := Vector2(0, -160)
+const PORTAL_FRAME := Vector2(192, 192)
 
 ## Plain colours by terrain (the overview map's tiles, averaged).
 const PLAIN := {0: Color("#387faf"), 1: Color("#3aa19c"), 2: Color("#798d58"),
@@ -425,7 +456,7 @@ func _refresh(look_again: bool) -> void:
 		return
 	if look_again or _shown.is_empty():
 		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), world.sites.hash(),
-			lairs.hash(), dungeons.hash()]
+			lairs.hash(), dungeons.hash(), portal.hash()]
 		if shown != _shown:
 			_shown = shown
 			_covered = Rect2()
@@ -472,7 +503,7 @@ func _draw_pictures(camera_now: Vector2) -> void:
 	_tile_recipes.resize(_tiles.size())
 	_upright_ops.clear()
 	_upright_feet.clear()
-	var recipe_for := [world.get_instance_id(), world.sites.hash(), _plain]
+	var recipe_for := [world.get_instance_id(), world.sites.hash(), _plain, portal_tile()]
 	if recipe_for != _recipe_for:
 		_recipes.clear()
 		_recipe_for = recipe_for
@@ -536,6 +567,10 @@ func _order_uprights(origin: Vector2) -> void:
 		if not op.is_empty():
 			keys.append(_upright_key(int(point.y), standing.size()))
 			standing.append(op)
+	var gate := _portal_op(origin, false, _skin_twice())
+	if not gate.is_empty():
+		keys.append(_upright_key(int((gate[1] as Rect2).position.y - PORTAL_AT.y), standing.size()))
+		standing.append(gate)
 	keys.sort()
 	for key in keys:
 		_upright_ops.append(standing[UPRIGHT_COUNT - 1 - (key & (UPRIGHT_COUNT - 1))])
@@ -578,6 +613,7 @@ func _paint_ground() -> void:
 		var point := _lay(Vector2(int(lair["x"]), int(lair["y"]))) - origin
 		var frame := LAIR_FRAMES[clampi(int(lair.get("color", 0)), 0, 5)]
 		_blit(_ground, _op("world_locatn07", frame + 6, point - Vector2(64, 96)), Vector2.ZERO)
+	_blit(_ground, _portal_op(origin, true, _skin_twice()), Vector2.ZERO)
 
 
 ## THE UPRIGHTS, in their order.
@@ -839,6 +875,8 @@ func _edges(bits: int, first_row: int, box: Vector2, ops: Array) -> void:
 ## What stands on [param tile]: its two trees or rocks, or its site — the
 ## ground halves into [param halves], the uprights into [param uprights].
 func _standing_on(tile: Vector2i, halves: Array, uprights: Array) -> void:
+	if tile == portal_tile():
+		return  # [ours] the portal stands alone on its tile, as a site does
 	var flags := world.tile_flags(tile.x, tile.y)
 	var code := world.terrain(tile.x, tile.y)
 	if flags & ShandalarWorld.SITE == 0 and OBJECT_COLUMN.has(code):
@@ -907,6 +945,49 @@ func _site(tile: Vector2i, halves: Array, uprights: Array) -> void:
 	var at := Vector2(0, 24 - height)
 	_add(halves, _op(ground[0], ground[1], at))
 	_stand(uprights, 0, _op(upright[0], upright[1], at))
+
+
+## ARZAKON'S PORTAL'S TILE ([member portal]), (−1, −1) when none stands (or
+## its state is none the pictures know).
+func portal_tile() -> Vector2i:
+	if portal.is_empty() or not PORTAL_ART.has(String(portal.get("state", ""))):
+		return Vector2i(-1, -1)
+	return Vector2i(int(portal.get("x", -1)), int(portal.get("y", -1)))
+
+
+## The portal's picture in `game/art/` for [param state]: the upright, or
+## with [param ground] its ground half; the `@2x` twin when [param twice];
+## "" for a state with no picture.
+static func portal_key(state: String, ground: bool, twice: bool) -> String:
+	var key := String(PORTAL_ART.get(state, ""))
+	if key == "":
+		return ""
+	return key + ("_ground" if ground else "") + (GameSkin.SCALED_SUFFIX if twice else "")
+
+
+## Whether the skin worn is a 2x one — its ground sheet's scale, the
+## hi-res skin's pictures being twice their slots ([method GameSkin.scale_of]).
+func _skin_twice() -> bool:
+	return GameSkin.scale_of(art.texture("world_landtile")) > 1
+
+
+## The portal's upright — or with [param ground] its ground half — as
+## `[sheet, where, frame]` on the pictures drawn round [param origin]: the
+## castle's frame at its tile's left corner, all of the picture's own
+## pixels drawn into it (twice as many with [param twice], and the 1x
+## picture should the `@2x` one be missing); [] for no portal.
+func _portal_op(origin: Vector2, ground: bool, twice: bool) -> Array:
+	var tile := portal_tile()
+	if tile.x < 0:
+		return []
+	var state := String(portal["state"])
+	var sheet := GameSkin.our_art(portal_key(state, ground, twice))
+	if sheet == null and twice:
+		sheet = GameSkin.our_art(portal_key(state, ground, false))
+	if sheet == null:
+		return []
+	var left := Vector2(64 * (tile.x + tile.y), 32 * (tile.y - tile.x)) - origin
+	return [sheet, Rect2(left + PORTAL_AT, PORTAL_FRAME), Rect2(Vector2.ZERO, sheet.get_size())]
 
 
 ## DUNGEON [param index] (5–14)'s marker: `[[sheet, frame] of the upright,
@@ -1010,6 +1091,10 @@ func _paint_plain() -> void:
 		canvas.draw_circle(mouth, 12, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(mouth, 9, Color8(40, 26, 20))
 		canvas.draw_arc(mouth, 10, 0, TAU, 20, Color8(232, 190, 110), 2.0)
+	var gate := portal_tile()
+	if gate.x >= 0:
+		draw_portal_plain(canvas, _lay(Vector2(gate.x * 32 + 16, gate.y * 32 + 16)) - origin,
+			String(portal["state"]))
 
 
 ## A dungeon plain, its tile's middle at [param at] on [param canvas]: a
@@ -1020,6 +1105,79 @@ static func draw_dungeon_plain(canvas: CanvasItem, at: Vector2) -> void:
 	canvas.draw_circle(at, 11, Color8(14, 10, 12))
 	canvas.draw_arc(at, 12, 0, TAU, 24, Color8(232, 190, 110), 2.5)
 	canvas.draw_arc(at, 5, 0, TAU, 16, Color8(232, 190, 110), 1.5)
+
+
+## [ours] ARZAKON'S PORTAL plain, its tile's middle at [param at] on [param
+## canvas]: a horned arch on a plinth, standing on the middle, with the
+## 0.6-black rim every plain mark wears — dark slate round a violet void
+## with a pale heart while open ([constant FinalBattle.PORTAL_OPEN]); grey
+## stone sealed with a carved ring and a crack, the right horn broken and
+## moss on it once petrified.
+static func draw_portal_plain(canvas: CanvasItem, at: Vector2, state: String) -> void:
+	var stone := state == FinalBattle.PORTAL_PETRIFIED
+	for rim in portal_plain_rim(at, stone):
+		canvas.draw_colored_polygon(rim, Color(0, 0, 0, 0.6))
+	var shapes := _portal_plain_shapes(at, stone)
+	canvas.draw_colored_polygon(shapes[0], Color8(104, 100, 96) if stone else Color8(52, 46, 66))
+	for i in range(1, shapes.size()):
+		canvas.draw_colored_polygon(shapes[i], Color8(150, 146, 140) if stone else Color8(72, 64, 90))
+	var hole := Color8(104, 100, 96) if stone else Color8(124, 64, 200)
+	canvas.draw_rect(Rect2(at + Vector2(-8, -30), Vector2(16, 28)), hole)
+	canvas.draw_circle(at + Vector2(0, -30), 8, hole)
+	if stone:
+		var groove := Color8(84, 80, 76)
+		canvas.draw_arc(at + Vector2(0, -20), 5, deg_to_rad(200), deg_to_rad(520), 20, groove, 1.4)
+		canvas.draw_polyline(PackedVector2Array([at + Vector2(-13, -24), at + Vector2(-10, -16),
+			at + Vector2(-13, -9)]), groove, 1.2)
+		canvas.draw_colored_polygon(_oval(at + Vector2(15, 1), Vector2(3, 2)), Color8(98, 136, 66))
+		canvas.draw_colored_polygon(_oval(at + Vector2(-6, -45), Vector2(2.5, 1.6)), Color8(98, 136, 66))
+	else:
+		canvas.draw_colored_polygon(_oval(at + Vector2(0, -18), Vector2(5, 9)), Color8(196, 160, 255))
+		canvas.draw_colored_polygon(_oval(at + Vector2(0, -16), Vector2(2, 4)), Color8(240, 228, 255))
+
+
+## The plain portal's rim: its shapes' one silhouette grown by 2, drawn once
+## so no two shapes darken it twice.
+static func portal_plain_rim(at: Vector2, petrified: bool) -> Array[PackedVector2Array]:
+	var pieces: Array[PackedVector2Array] = []
+	for shape in _portal_plain_shapes(at, petrified):
+		var joined := shape
+		var apart: Array[PackedVector2Array] = []
+		for piece in pieces:
+			var merged := Geometry2D.merge_polygons(piece, joined)
+			if merged.size() == 1:
+				joined = merged[0]
+			else:
+				apart.append(piece)
+		apart.append(joined)
+		pieces = apart
+	var out: Array[PackedVector2Array] = []
+	for piece in pieces:
+		out.append_array(Geometry2D.offset_polygon(piece, 2.0))
+	return out
+
+
+## The plain portal's shapes round its tile's middle [param at]: the plinth,
+## the body, its round top and the two horns (the right one broken when
+## [param petrified]).
+static func _portal_plain_shapes(at: Vector2, petrified: bool) -> Array[PackedVector2Array]:
+	var right_tip := Vector2(17, -42) if petrified else Vector2(21, -50)
+	return [_box(at + Vector2(-20, -2), Vector2(40, 7)), _box(at + Vector2(-16, -30), Vector2(32, 29)),
+		_oval(at + Vector2(0, -30), Vector2(16, 16)),
+		PackedVector2Array([at + Vector2(-13, -36), at + Vector2(-21, -50), at + Vector2(-9, -40)]),
+		PackedVector2Array([at + Vector2(13, -36), at + right_tip, at + Vector2(9, -40)])]
+
+
+static func _box(corner: Vector2, size: Vector2) -> PackedVector2Array:
+	return PackedVector2Array([corner, corner + Vector2(size.x, 0), corner + size, corner + Vector2(0, size.y)])
+
+
+static func _oval(middle: Vector2, radii: Vector2, steps := 32) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for i in steps:
+		var angle := TAU * i / steps
+		out.append(middle + Vector2(cos(angle) * radii.x, sin(angle) * radii.y))
+	return out
 
 
 ## A creature plain, standing at [param at] on [param canvas]: a disc of

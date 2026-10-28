@@ -1381,6 +1381,66 @@ Lead's defaults (listed to the owner): the dice's lives replace a waiting
 dice card (1997's one slot); a room draw spends the next-duel gifts, the
 pool kept; a world card gift a dungeon bans still goes into play (1997).
 
+## Built: part C, stage C2 — the screens (2026-10-28)
+
+The castles and the dungeons open (`DungeonDoors.BOARD_READY` true), and
+the adventure can be won. Every screen was looked at in the running game,
+with the 1997 skin, without it and with Big buttons, and the owner chose
+from the shots where a choice was his.
+
+- **The board** (`DungeonView`, `DungeonPane`, `DungeonSound`): the page as
+  1997 drew it — the cave ground, the title plaque, the green next-duel
+  line, the cells drawn back to front (the back frame, then the front with
+  the odd-row offset), the rock tops, the dice, scrolls and chests, a
+  castle's wizard, the creatures facing the way in, the hero's walk of
+  eight frames (ending on the cell, where 1997 stopped 4 pixels short) —
+  in a rounded pane at most 1.25× the 1997 page that never changes size.
+  The white castle's floor as 1997 showed it (the owner, after seeing all
+  its marks in play). Moves: 1997's keys, the arrows, W A S D, the keypad,
+  a held key walks on, a click on a neighbour or along a seen corridor.
+  [ours] The life in the next duel and the rooms left on the page's foot,
+  a creature's name on hover, newly seen corridors fading in (with
+  Transitions on). The cave's bed and its five noises on their own dice.
+  The events' pages: the dice, the riddle, the treasure on Staceybk coming
+  in tile by tile, the full-bag swap in the adventure's deck builder
+  (`TreasureSwapBuilder`, "Leave it here"), gold. The adventure is saved
+  at the door (D2).
+- **Before a room duel** (`RoomDuelPane`, on `StagePane` — the meeting
+  pane's layout once, shared by the new panes): the creature's face on
+  the place's ground, the stake or "No stake", the cards starting in play,
+  the minion and the card in effect in the board's marble frame, the
+  purse with the duel's own starting life (the owner), one choice: Duel.
+  Then `WorldDuels.host`, `DungeonDuels.settle` once, `room_done`.
+- **A castle won** (`CastleWinPane`): his room's still, the 1997 words on
+  Tradscrn with the news of the freed towns, the three picks (`CastleWin.
+  offered` / `take`), a full bag said; his tune throughout.
+- **The clues** (`CluesPane`, `ClueMap`; F4): our glass list of the places
+  (the owner) with 1997's icons; a place's page on Clueback with its clue
+  lines in 1997's inks, its treasure cards, its creatures' faces once known
+  (all of a castle's, the owner), and Show on map — the F2 map with the
+  place ringed. The old HUD clue panel is gone.
+- **The end** (`AdventureFinale`): the fifth wizard's page on 5thwiz with
+  "Face me now" / "Return to Shandalar first"; the portal near the map's
+  middle, our horned arch (the owner's pair 2, `tools/draw_world_portal.gd`,
+  `game/art/world_portal_*`), its own pointers and pane; the banish words
+  with the years so far; the deck builder; the save at the door; the
+  battle with each Embark rule's questions; the quest-failed end in 1997's
+  words — under Reload allowed back at the door, where the hero may face
+  him again or return to Shandalar first (the owner); the win: the movie
+  (`GameSkin.movie`, skippable, absent → straight on), Wingame revealed,
+  the words, the record with the years explained, the Hall of Fame with the
+  new line lit, then End or Return to Shandalar (`FinalBattle.roam`; the
+  monument). The journal says the portal opened only when the hero goes
+  back to the world (the owner). Loading a won adventure asks End or Return
+  again (the owner).
+- **The Hall of Fame** (`HallOfFamePane`): inside Save / Load and beside
+  the save slots, and after the win — never on the main menu (the owner);
+  the load list marks a won adventure with its years and a failed quest.
+- **The record page** (`HeroStats`): "Arzakon Banished" — the years so far,
+  then the final years — and "Final Battles Lost" [ours: 1997's page had
+  neither]; the castles' attempts, a beaten wizard's room and the dungeon
+  treasures, built before and now reachable.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked

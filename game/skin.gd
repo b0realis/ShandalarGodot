@@ -1075,6 +1075,24 @@ static func sound(key: String) -> AudioStream:
 	return result
 
 
+## A MOVIE for a skin key ("win_movie") — `<key>.ogv`, an Ogg Theora file
+## the importer converted from the player's own 1997 movie (part C, the
+## owner's Q-MOVIE "Convert it": `tools/import_original.py`'s
+## `THEORA_MOVIES`), in the same search order as everything else here, a
+## worn skin zip's `res://skin/` included (it plays from inside the pack,
+## the spike of 2026-10-27). A [VideoStreamTheora] set to the file — not
+## opened yet: a device that cannot play it shows no frame, which the
+## caller watches for — or null when the skin has none. Never cached: the
+## stream is a path and nothing more until a player opens it.
+static func movie(key: String) -> VideoStream:
+	var path := _find(key + ".ogv")
+	if path == "":
+		return null
+	var stream := VideoStreamTheora.new()
+	stream.file = path
+	return stream
+
+
 ## SIDECAR METADATA for a skin key — `<key>.json` beside `<key>.png`, in
 ## the same search order as everything else here. `{}` when there is none,
 ## when it does not parse, or when it is not an object; every caller wants

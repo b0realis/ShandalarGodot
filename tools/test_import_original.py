@@ -2179,7 +2179,7 @@ class TestThePartBSounds(unittest.TestCase):
         self.assertEqual(imp.MANIFEST["sfx_lair_duel.wav"][0], "DuelSounds/Aswanjag.wav",
                          "1.3 plays it from x:Duelsounds\\")
         self.assertEqual(imp.MANIFEST["sfx_dungeon_duel.wav"][0], "Sound/Dngnduel.wav")
-        self.assertIn("sfx_dungeon_duel.wav", imp.NOT_READ, "the dungeons are part C")
+        self.assertNotIn("sfx_dungeon_duel.wav", imp.NOT_READ, "a room's pane plays it (part C)")
 
     def test_the_duels_two_beds_are_the_adventure_s_not_the_duel_s_stings(self):
         self.assertEqual(imp.MANIFEST["music_win_duel.wav"][0], "Sound/Winduel.wav")
@@ -2581,19 +2581,22 @@ class TestThePartCSounds(unittest.TestCase):
 
     def test_what_no_screen_reads_yet_waits_in_not_read(self):
         """NOT_READ holds the MANIFEST keys no screen reads, SCREENS_NOT_READ
-        the pictures and movies: part C's wait there until stage C2's
-        screens read them — and a key the game names must leave them."""
-        part_c = set(self.SOUNDS) | set(imp.DUNGEON_SHEETS)
-        self.assertLessEqual(part_c, imp.NOT_READ)
-        self.assertLessEqual(set(imp.DUNGEON_PICTURES) | set(imp.THEORA_MOVIES),
-                             imp.SCREENS_NOT_READ)
+        the pictures and movies: part C's waited there until stage C2's
+        screens read them (2026-10-28), all but the 1997 clue list's ground
+        and buttons — the game draws its own list (the owner) — and a key
+        the game names must leave them."""
+        part_c = set(self.SOUNDS) | set(imp.DUNGEON_SHEETS) | {"music_win_game.wav"}
+        self.assertEqual(part_c & imp.NOT_READ, set(), "stage C2's screens read them")
+        own_list = {"clues_list", "clues_list_buttons"}
+        self.assertEqual((set(imp.DUNGEON_PICTURES) | set(imp.THEORA_MOVIES)) & imp.SCREENS_NOT_READ,
+                         own_list)
         self.assertLessEqual(imp.NOT_READ, set(imp.MANIFEST),
                              "THE CHECKLIST counts the MANIFEST less NOT_READ")
         self.assertLessEqual(imp.SCREENS_NOT_READ, set(imp.PIC_SCREENS) | set(imp.THEORA_MOVIES))
         # game/skin.gd's SIZES names every picture place, read or not.
         sources = {path: path.read_text(encoding="utf-8")
                    for path in (REPO / "game").rglob("*.gd") if path.name != "skin.gd"}
-        for key in part_c | imp.SCREENS_NOT_READ:
+        for key in imp.SCREENS_NOT_READ:
             stem = key.rsplit(".", 1)[0] if key.endswith(".wav") else key
             readers = [path.relative_to(REPO).as_posix()
                        for path, text in sources.items() if '"%s"' % stem in text]
@@ -2747,9 +2750,9 @@ class TestTheWinMovie(unittest.TestCase):
             finally:
                 sys.argv = argv
         out = log.getvalue()
-        self.assertIn("unused   win_movie.ogv", out)
-        self.assertIn("Mtgend.avi here, converted at import: fake ffmpeg", out)
-        self.assertIn("unused   fifth_wizard", out)
+        self.assertIn("ok       win_movie.ogv", out)
+        self.assertIn("<- Mtgend.avi (converted at import: fake ffmpeg)", out)
+        self.assertIn("MISSING  fifth_wizard", out)
         self.assertIn("of the %d skin files the game reads"
                       % len(set(imp.MANIFEST) - imp.NOT_READ), out)
 

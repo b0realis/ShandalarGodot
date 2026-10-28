@@ -78,15 +78,15 @@ extends RefCounted
 ## The world screen shows the news after the save that follows the board
 ## (1997 saved after the news, with the same state).
 ##
-## THE BOARD IS NOT MADE YET: [constant BOARD_READY] is false, so the two
-## doors — the castle's "Yes, enter the castle." and the dungeon's "Enter
-## the dungeon" — wait, disabled; the world screen's seam
-## ([method WorldScreen._open_board]) and the tests stand a board in.
-## The retaliation goes live with the board (the owner's ruling E-1: a
-## siege for a castle that cannot be played would only punish).
+## THE BOARD IS MADE (part C, stage C2): [constant BOARD_READY] is true,
+## so the two doors — the castle's "Yes, enter the castle." and the
+## dungeon's "Enter the dungeon" — open onto it ([DungeonPane], through the
+## world screen's seam, [method WorldScreen._open_board]). The retaliation
+## went live with it (the owner's ruling E-1: a siege for a castle that
+## could not be played would only have punished).
 
-## Whether part C's board exists: the doors open once it does.
-const BOARD_READY := false
+## Whether part C's board exists: the doors open (stage C2).
+const BOARD_READY := true
 ## Slots 0–4 are the wizards' castles (black, blue, green, red, white),
 ## 5–14 the dungeons ([member ShandalarWorld.encounters]).
 const CASTLES := 5

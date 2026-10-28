@@ -447,7 +447,9 @@
   `game/adventure/final_battle.gd`: `FinalBattle` (`score_parts`, `score`,
   `shown`, `years`, `final_score`, `hero_life`, `duel_config`, `door`,
   `open_portal`, `portal_at` / `portal_open` / `portal_name`, `settle`,
-  `on_load` — One life: a battle left mid-way is lost —, `portal_tile`
+  `on_load` — One life: a battle left mid-way is lost —, `leave_door`
+  (Reload allowed: back to the world from the door, the owner),
+  `portal_tile`
   (the walkable free tile nearest the map's middle, no dice), `roam`, the
   words,
   `RULES`); `game/adventure/hall_of_fame.gd`: `HallOfFame` (`entry_of`,
@@ -464,6 +466,41 @@
   field), the part C sounds, `import_theora_movies` (`win_movie.ogv`),
   `SCREENS_NOT_READ`; `game/skin.gd` `SIZES`; `tools/skin_catalogue.py`'s
   "The dungeons and castles" and "The end". Tests: `tests/*/test_pc_w*_*.gd`.
+- Part C, stage C2: the screens (2026-10-28; `DungeonDoors.BOARD_READY`
+  true). The board: `game/adventure/world/dungeon_view.gd`: `DungeonView`
+  (the 1997 page — back then front frames with the odd-row offset,
+  `facing`, `walk`, `cell_look`, `figure_rect` — the white castle's floor
+  as 1997 showed it, the owner); `CreatureBook.duel_name` (the duel and
+  the journal spell a creature alike: "VampireLord"); `game/adventure/world/
+  dungeon_pane.gd`: `DungeonPane` (`move`, `ask_leave`, `box`, `answer`,
+  `rooms_words`; the events, the room duels through `WorldDuels.host` and
+  `DungeonDuels.settle`, `CastleWin.beat` once); `game/adventure/world/
+  dungeon_sound.gd`: `DungeonSound` (`next`, `looped`, `start`,
+  `pause_for_duel`, `resume`); `game/adventure/world/
+  treasure_swap_builder.gd`: `TreasureSwapBuilder` (`leave`,
+  `give_up_index`); `WorldArt.LAYOUT`'s board rows; `WorldScreen.
+  _enter_board` (saved at the door), `_board_done`, `_after_fifth_wizard`,
+  `_open_board`, `_board_seed`. The panes: `game/adventure/world/
+  stage_pane.gd`: `StagePane` (the meeting pane's layout once: fit,
+  `show_body`, `fit_points`); `game/adventure/world/room_duel_pane.gd`:
+  `RoomDuelPane` (`make`, `chosen`); `game/adventure/world/
+  castle_win_pane.gd`: `CastleWinPane` (`make`, `finished`); `game/
+  adventure/world/clues_pane.gd`: `CluesPane` (`creatures_of`,
+  `icon_parts`; F4, `WorldScreen.show_clues` / `clues_shown`) and `game/
+  adventure/world/clue_map.gd`: `ClueMap` (the F2 map with a place
+  ringed). The end: `game/adventure/world/adventure_finale.gd`:
+  `AdventureFinale` (`after_fifth_wizard`, `at_portal`, `after_load`,
+  `place_at`, `portal_place`, `failed_parts`, `movie_path`; inner
+  `PortalPane`, `FinalBuilder`, `EndStats`); `game/adventure/world/
+  hall_of_fame_pane.gd`: `HallOfFamePane` (`open`, `show_entries`,
+  `lines`, `lit_place`, `chosen`); `LoadAdventureScreen.end_words` /
+  `open_hall`, `SaveSlotsPane.open_hall`; `GameSkin.movie`;
+  `WorldCursors.PORTAL` / `MONUMENT`; `HeroStats.journal_map`, the record
+  page's "Arzakon Banished" and "Final Battles Lost". The portal on the
+  world: `WorldView.portal`, `draw_portal_plain`; `tools/
+  draw_world_portal.gd` (our own art, the owner's pair 2, the horned arch:
+  `game/art/world_portal_{open,petrified}{,_ground}{,@2x}.png`). Tests:
+  `tests/*/test_pc_w5_*.gd`, `test_pc_w6_*`, `test_pc_w7_*`, `test_pc_w8_*`.
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
   `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
   `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,

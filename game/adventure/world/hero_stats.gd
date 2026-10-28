@@ -30,7 +30,19 @@ extends VBoxContainer
 ##    owner, 2026-10-27: "Never pop" — 1997 popped it after a world win and
 ##    a town's fall).
 ##  - THE JOURNAL: what has happened, newest first, in the 1997 words
-##    (`@LOGSTRINGS`); 1997 walked it on the map.
+##    (`@LOGSTRINGS`); 1997 walked it on the map — "On the map" does, where
+##    a map waits under the pane ([member journal_map]; the finale's record
+##    after the win has none).
+## THE END ON THE RECORD (part C) [ours: 1997's stats screen showed no
+## score — its `@STATS` captions have none (Advstrings.txt 853–863), and it
+## computed the score only after the fifth wizard fell]: under the 1997
+## captions, "Arzakon Banished" — the years the battles so far would
+## banish him for ([method AdventurePlayer.score_so_far], no lower than 0,
+## as @CASTLEWIN 7 shows it: "368 years so far"), the final score once the
+## adventure is won ("2368 years") — the owner's Q-RANK, *"the score so far
+## shown on the hero's record page"*; and "Final Battles Lost", the battles
+## lost at Arzakon's door under "Reload allowed" ([member
+## AdventurePlayer.final_attempts]), once there is one.
 ## The counts are read from the journal as 1997 rebuilt them
 ## (`RebuildStatsJournalCounts`, [method record]).
 ##
@@ -78,6 +90,12 @@ const RECORD_INKS := [Color8(15, 79, 71), Color8(191, 35, 15), Color8(91, 99, 15
 ## and the names' slate, lifted for the glass [ours].
 const RECORD_CHIP := Color8(226, 218, 200)
 const NAME_INK := Color8(160, 168, 220)
+## The end on the record (the class's notes) [ours]: its two captions and
+## the years' words.
+const BANISHED := "Arzakon Banished"
+const FINAL_LOST := "Final Battles Lost"
+const YEARS_SO_FAR := "%d years so far"
+const YEARS := "%d years"
 const PORTRAIT := Vector2(96, 118)
 const ICON := 26.0
 ## The creature record's rows shown before it scrolls: words, and pictures
@@ -113,6 +131,10 @@ var room_shown := ""
 var show_all_creatures := false
 ## How often the wizards' sound was asked for ([method show_wizards]).
 var sounded := 0
+## Whether the journal offers "On the map" ([signal journal_map_pressed]):
+## the world's pane, yes; a pane with no map under it (the finale's record
+## after the win), no. Set before the pane is shown.
+var journal_map := true
 var _sound: AudioStreamPlayer
 ## Each sprite's painted part, found once: `"key#frame"` → its region.
 static var _trims := {}
@@ -292,7 +314,8 @@ func _shape() -> String:
 		"Hero":
 			parts.append_array([player.journal.size(), player.journal.back() if not player.journal.is_empty() else {},
 				player.world_magics, player.defeated_wizards, player.portrait, player.name, player.color,
-				player.difficulty, _castle_tries(), show_all_creatures])
+				player.difficulty, _castle_tries(), show_all_creatures, banished_words(player),
+				player.final_attempts])
 		"Wizards":
 			parts.append_array([WorldStatus.wizard_rows(player), WorldStatus.dominion(player),
 				player.owns("Ring of the Guardian"), highlighted, room_shown])
@@ -486,16 +509,29 @@ func _hero_page() -> void:
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 2)
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for pair in [["Cities Saved", str(kept["saved"])], ["Cities Recovered", str(kept["recovered"])],
+	var pairs: Array = [["Cities Saved", str(kept["saved"])], ["Cities Recovered", str(kept["recovered"])],
 			["Quest Record", "%d/%d" % [kept["quests_done"], kept["quests_failed"]]],
 			["Overall Won/Loss", "%d/%d" % [kept["won"], kept["lost"]]],
-			["Dungeon Treasures", str(kept["treasures"])]]:
+			["Dungeon Treasures", str(kept["treasures"])], [BANISHED, banished_words(player)]]
+	if player.final_attempts > 0:
+		pairs.append([FINAL_LOST, str(player.final_attempts)])
+	for pair in pairs:
 		grid.add_child(_label(pair[0], 14, GOLD))
 		var value := _label(pair[1], 14)
-		value.name = "Value_" + String(pair[0]).replace(" ", "_").replace("/", "_")
+		value.name = "Value_" + String(pair[0]).replace(" ", "_").replace("/", "_").replace("'", "")
 		grid.add_child(value)
 	_page.add_child(grid)
 	_creature_page(kept)
+
+
+## "368 years so far" — the years the battles so far would banish Arzakon
+## for, no lower than 0 ([method AdventurePlayer.score_so_far], [method
+## FinalBattle.shown]) — or, the adventure won, its final score: "2368
+## years" (the class's notes).
+static func banished_words(hero: AdventurePlayer) -> String:
+	if hero.ended == AdventurePlayer.ENDED_WON:
+		return YEARS % int(hero.final.get("score", 0))
+	return YEARS_SO_FAR % FinalBattle.shown(hero.score_so_far())
 
 
 # ------------------------------------------------------- the creature page --
@@ -925,18 +961,21 @@ func _journal_page() -> void:
 	if not _journal_written():
 		_page.add_child(_label("Nothing written yet: what you do in Shandalar is kept here.", 14, DIM))
 		return
-	# [Ours] 1997's journal was walked on the map, line by line: so it is.
-	var walk := Button.new()
-	walk.name = "JournalOnMap"
-	walk.text = "On the map"
-	walk.focus_mode = Control.FOCUS_NONE
-	_dress(walk)
-	walk.pressed.connect(func() -> void: journal_map_pressed.emit())
-	_page.add_child(walk)
+	# [Ours] 1997's journal was walked on the map, line by line: so it is —
+	# where a map waits under the pane ([member journal_map]).
+	var taken := 0.0
+	if journal_map:
+		var walk := Button.new()
+		walk.name = "JournalOnMap"
+		walk.text = "On the map"
+		walk.focus_mode = Control.FOCUS_NONE
+		_dress(walk)
+		walk.pressed.connect(func() -> void: journal_map_pressed.emit())
+		_page.add_child(walk)
+		taken = walk.get_combined_minimum_size().y + float(_page.get_theme_constant("separation"))
 	var scroll := _scroll("Journal")
 	# The button above takes its height from the scroll: the pane keeps its
 	# size from tab to tab.
-	var taken := walk.get_combined_minimum_size().y + float(_page.get_theme_constant("separation"))
 	scroll.custom_minimum_size = Vector2(0, maxf(page_size.y - taken, 120.0))
 	# A long journal scrolls: the wheel, a finger, or this bar in gold.
 	var bar := scroll.get_v_scroll_bar()

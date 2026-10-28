@@ -2,14 +2,15 @@ extends GutTest
 ## THE DOORS ON THE WORLD SCREEN (the quick world package, 2026-10-27,
 ## step 3): the board's seam in [WorldScreen] — a castle's "Yes, enter the
 ## castle." and a dungeon's "Enter the dungeon" go in ([method
-## WorldScreen._enter_board]: [method DungeonDoors.enter], the board over
-## the world holding it, no save while it is up) and come out ([method
+## WorldScreen._enter_board]: the adventure saved at the door — the
+## owner's D2, part C —, [method DungeonDoors.enter], the board over the
+## world holding it, no save while it is up) and come out ([method
 ## WorldScreen._board_done]: [method DungeonDoors.leave], the game saved,
-## the retaliation's news after the save). Part C's board is not made
-## ([constant DungeonDoors.BOARD_READY] false): a stub board stands in
-## through the seam, and the doors' panes are answered as their buttons
-## will answer once it is. Also: a castle visited is marked so (the city
-## list's castles, ruling H5), and its tune comes to full voice (1997).
+## the retaliation's news after the save). A stub board stands in through
+## the seam ([DungeonPane]'s own flow: tests/ui/test_pc_w6_board_pane.gd),
+## and the doors' panes are answered as their buttons answer. Also: a
+## castle visited is marked so (the city list's castles, ruling H5), and
+## its tune comes to full voice (1997).
 
 const SAVES := "user://adventure_tests_q1_world_doors"
 
@@ -159,17 +160,17 @@ func test_yes_enter_the_castle_opens_the_board_and_out_again_saves() -> void:
 	assert_eq(screen.player.journal.size(), journal + 1)
 	assert_eq(String(screen.player.journal[journal]["text"]), "Entered Dragon Mount (Red Castle)")
 	assert_false(is_instance_valid(pane) and not pane.is_queued_for_deletion(), "the castle's pane gone")
-	assert_eq(screen.saves, 0, "nothing saved going in")
+	assert_eq(screen.saves, 1, "saved at the door going in (the owner's D2, part C)")
 	var ticked := screen.player.monster_timer
 	screen._process(1.0)
 	assert_eq(screen.player.monster_timer, ticked, "the world waits under the board")
 	screen._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
-	assert_eq(screen.saves, 0, "the window closed on the board saves nothing (1997)")
+	assert_eq(screen.saves, 1, "the window closed on the board saves nothing more: the door's save stands")
 	(screen.board as FakeBoard).finished.emit({"beaten": false, "booted": false})
 	await _frames(3)
 	assert_false(screen.on_board(), "out again")
 	assert_false(screen.modal(), "the world again")
-	assert_eq(screen.saves, 1, "saved coming out, as 1997's walk did")
+	assert_eq(screen.saves, 2, "saved coming out, as 1997's walk did")
 	assert_eq(screen.player.monster_timer & 0x1F, 0x1F, "the clock on to the next 32")
 	assert_false(screen.news_shown(), "no news on Magician")
 	assert_eq(DungeonDoors.entered(screen.world, 3), 1, "the attempt kept")
@@ -195,7 +196,7 @@ func test_the_doors_wait_without_the_board() -> void:
 	assert_eq(screen.player.journal.size(), journal, "nothing written")
 	assert_eq(DungeonDoors.entered(screen.world, 2), 0, "no attempt counted")
 	assert_eq(screen.saves, 1, "the castle only left")
-	assert_false(DungeonDoors.BOARD_READY, "part C's board is not made: the doors wait on the panes")
+	assert_true(DungeonDoors.BOARD_READY, "part C's board is made: the seam's own refusal is what waits here")
 
 
 func test_the_dungeon_s_enter_opens_the_board_and_it_moves() -> void:
@@ -211,7 +212,7 @@ func test_the_dungeon_s_enter_opens_the_board_and_it_moves() -> void:
 	(screen.board as FakeBoard).finished.emit({})
 	await _frames(3)
 	assert_false(screen.on_board())
-	assert_eq(screen.saves, 1, "coming out of a dungeon saves [ours, ruling D-3]")
+	assert_eq(screen.saves, 2, "the door, and coming out of a dungeon saves [ours, ruling D-3]")
 	var now := _dungeon_tile(8)
 	assert_ne(now, old, "the dungeon moved")
 	assert_eq(screen.view.dungeons.size(), 1, "still drawn")
@@ -229,7 +230,7 @@ func test_on_wizard_the_retaliation_is_shown_after_the_save() -> void:
 	assert_true(screen.on_board())
 	(screen.board as FakeBoard).finished.emit({"beaten": false})
 	await _frames(3)
-	assert_eq(screen.saves, 1, "saved coming out")
+	assert_eq(screen.saves, 2, "saved at the door and coming out")
 	assert_true(screen.siege_at_save, "the save holds the siege")
 	assert_true(screen.news_shown(), "the news flash over the world")
 	var said := " ".join(screen._news.news["lines"]) if screen.news_shown() else ""
@@ -242,7 +243,7 @@ func test_a_game_over_on_the_board_is_the_end() -> void:
 	(screen.board as FakeBoard).finished.emit({"game_over": true})
 	await _frames(3)
 	assert_true(screen.ended(), "the adventure's end")
-	assert_eq(screen.saves, 0, "nothing saved")
+	assert_eq(screen.saves, 1, "nothing saved after the door's")
 
 
 func test_a_castle_s_tune_comes_to_full_voice() -> void:

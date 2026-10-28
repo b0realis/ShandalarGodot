@@ -10,6 +10,11 @@ extends PanelContainer
 ## most [constant LONGEST] of them; a blank name becomes the day and the
 ## place ("Day 12 near Kraag Temple"); the list says where it was saved and
 ## shows when each slot was.]
+## [Ours, part C: THE HALL OF FAME — the owner, 2026-10-27: *"Only hall of
+## fame button should be inside save/load as not to clutter the main
+## menu!"* — "Hall of Fame" beside Done opens it over the world
+## ([HallOfFamePane]), the slots stepping aside meanwhile; its Done or
+## Escape closes it, the slots as they were.]
 
 signal done
 ## Saved into a slot: the file written.
@@ -28,6 +33,7 @@ var _slots: Array[Dictionary] = []
 var _rows: VBoxContainer
 var _note: Label
 var _edit: LineEdit
+var _hall: HallOfFamePane
 
 
 func _ready() -> void:
@@ -49,10 +55,18 @@ func _ready() -> void:
 	_note = PaneStyle.label("", 15, PaneStyle.GOLD)
 	_note.name = "Note"
 	column.add_child(_note)
+	var buttons := HBoxContainer.new()
+	buttons.name = "Buttons"
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", int(12 * k))
+	buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hall := PaneStyle.button("Hall of Fame", "SaveHall", k)
+	hall.pressed.connect(func() -> void: open_hall())
+	buttons.add_child(hall)
 	var close := PaneStyle.button("Done", "SaveDone", k)
 	close.pressed.connect(func() -> void: done.emit())
-	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	column.add_child(close)
+	buttons.add_child(close)
+	column.add_child(buttons)
 	refresh()
 
 
@@ -140,7 +154,43 @@ func note() -> String:
 	return _note.text
 
 
+## THE HALL OF FAME over the world, beside these slots ([HallOfFamePane]):
+## the pane, or the one already open; null while the slots are not in a
+## screen.
+func open_hall() -> HallOfFamePane:
+	if hall_shown():
+		return _hall
+	var host := get_parent()
+	if host == null:
+		return null
+	if editing != 0:
+		editing = 0
+		_show_rows()
+	_hall = HallOfFamePane.open(host, k)
+	# The slots step aside while the Hall is up, and come back with it gone.
+	visible = false
+	_hall.chosen.connect(func(_what: String) -> void:
+		if is_instance_valid(_hall):
+			_hall.queue_free()
+		visible = true, CONNECT_DEFERRED)
+	return _hall
+
+
+## Whether the Hall of Fame is open beside the slots.
+func hall_shown() -> bool:
+	return is_instance_valid(_hall) and not _hall.is_queued_for_deletion()
+
+
+func _exit_tree() -> void:
+	# Leaving with the slots (their Done, the world gone) takes the Hall too.
+	if is_instance_valid(_hall):
+		_hall.queue_free()
+
+
 func _unhandled_input(input: InputEvent) -> void:
+	if hall_shown():
+		# The Hall over the slots hears its own keys (its Escape is Done).
+		return
 	if input.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		if editing != 0:
@@ -153,7 +203,7 @@ func _unhandled_input(input: InputEvent) -> void:
 func _input(input: InputEvent) -> void:
 	# Escape inside the name being typed puts the old name back (the line
 	# edit would otherwise keep it).
-	if editing != 0 and _edit != null and _edit.has_focus() and input.is_action_pressed("ui_cancel"):
+	if not hall_shown() and editing != 0 and _edit != null and _edit.has_focus() and input.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		editing = 0
 		_show_rows()
