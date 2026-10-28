@@ -1304,6 +1304,83 @@ Not done here, for the owner: the pack zips' notes (Pack 5's, Packs 8 and
 rebuild, which waits for the owner's word; the status line at an open
 hotseat still reads seat 0.
 
+## Built: part C, stage C1 — the rules inside and the end (2026-10-27)
+
+The rules of the castles, the dungeons and the end, built headless and
+tested against 1997's own numbers; the screens that show them are stage C2,
+and `DungeonDoors.BOARD_READY` stays false until then, so a player meets
+none of it yet except one Embark choice. The specs and the owner's rulings
+are the part C plan's; every class header cites the 1.3 decompilation and
+marks what is ours.
+
+- **The board** (`DungeonBoard`): 1997's maze on its lattice of 38 rooms,
+  carved in 1997's dice order, with a guard that starts again from the
+  lattice when 1997's loop could never end — it changes no maze 1997
+  finishes (tested on 150 starts) and a fresh maze is made at every entry
+  on the board's own dice, never the adventure's. The creatures by tier (a
+  castle's wizard in slot 4), the line of sight down the corridors, the
+  keys (1997's, the arrows, W A S D, the keypad) and the mouse's quadrants.
+  The dice (lives, or a card of the deck in use by copies, never one the
+  rules bar), the riddle (a wrong answer wakes a creature at once), the
+  treasure (a card, or gold and jewels; with a full bag the hero may swap —
+  the owner: the card put back **stays as treasure** in that dungeon, found
+  again on a later visit), "rooms left" counting every room (the owner's
+  choice), a dungeon kept while any card remains in it, and "large" on a
+  large dungeon's clue (D11).
+- **The duels inside** (`DungeonDuels`): the minion table and the card in
+  effect as 1997; a dungeon's rule bars cards from the hero's deck by their
+  **real colors** (the owner: a dual land with the color barred; the Moxen,
+  Celestial Prism and Black Lotus colorless) and the deck is made up with
+  allowed basic lands, counted after the ban [ours: 1997 slip i]; the
+  stake drawn only from allowed cards [ours: slip f]; a dungeon's losses
+  carry room to room, a castle's duels start fresh (a1); a draw changes
+  nothing (g3b). One rule each for the ban and the next duel's life: the
+  board asks the duels.
+- **A castle won** (`CastleWin`): the journal and the victory log (a castle
+  wizard counts, and pays 25 more years at the end — SC2), his towns freed,
+  his creatures and besieger gone, his color beaten, the castle a ruin, the
+  1997 words and three cards of his color to pick.
+- **The end** (`FinalBattle`): Arzakon's duel (his 138-card deck, life
+  100 × (difficulty + 1), Black Lotus and Celestial Prism in play, named
+  "Arzakon", no stake), the score as 1997 counted it with its slips fixed
+  (every siege of the game, 25 years a castle wizard, 10 years a life
+  Arzakon loses — **overkill counts**, the owner —, the years added after
+  the floor), the world's next-duel gifts **reaching Arzakon** (the owner,
+  D-4), the portal near the map's middle (the owner: *"somewhere in the
+  middle of the map approximately"*; the guide arrows, the panel and the
+  journal point to it), 1997's empty world while it waits (the owner), and the result read at last [ours: 1997 slip C3-1 —
+  a loss played the win]. **Embark's "Final battle"**: *Reload allowed*
+  (saved at the door; a loss leaves the hero there, every attempt in the
+  record) or *One life* (a loss ends the quest; the owner: **quitting
+  mid-battle counts as a loss** — "True ironman … no way to retry": the save
+  at the door marks the battle begun and a map beside the Hall of Fame
+  keeps it, so no older save can try again — `FinalBattle.on_load`).
+- **The Hall of Fame** (`HallOfFame`, `user://hall_of_fame.json`): every
+  adventure won, best first (score, then harder difficulty, fewer days, the
+  earlier date), one line an adventure, 100 lines; written whole, a damaged
+  file kept aside. Its screen opens inside Save / Load and after the win
+  (the owner), in stage C2.
+- **After the win**: no sieges; creatures and lairs of every color come
+  back, each creature hunting the hero, wandering or standing still (1 / 2 /
+  1), the quest's creature always hunting; the portal stands as a stone
+  monument (the owner: *"a monument made of stone (make it as a new
+  asset)"* — our own picture, as 1997 had none on the map; from three
+  pairs of mockups the owner chose the horned arch: open, a dark arch with
+  a glowing violet swirl; after the win, grey limestone, one horn broken,
+  sealed — drawn on the world in stage C2), and the arrows and the journal
+  still point to it.
+- **The assets**: the importer brings the board's tile sheets (three
+  dungeon looks, five castles, the plaques), the clue screens, the
+  treasure cave, the castle-won ground, the banner, 5thwiz, Wingame, the
+  cave's sounds, the dice, scroll and card-found sounds and the win tune;
+  `Mtgend.avi` becomes `win_movie.ogv` when ffmpeg or GStreamer with Theora
+  is found. None is read until stage C2. The white castle's floor will show
+  **all its marks** (the owner) — 1997 painted two of them over.
+
+Lead's defaults (listed to the owner): the dice's lives replace a waiting
+dice card (1997's one slot); a room draw spends the next-duel gifts, the
+pool kept; a world card gift a dungeon bans still goes into play (1997).
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked

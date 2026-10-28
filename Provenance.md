@@ -86,6 +86,22 @@ fps, per face).
 **The rule it illustrates:** a measurement taken across a Tier-3 tree
 describes that tree, not the original. Say which tree it was measured on.
 
+### The ending movie — the one file converted to another format (2026-10-27)
+
+`Mtgend.avi` (1997-02-19, the install's root) is the movie the 1997 game
+plays as Arzakon falls: **`IV41`** (Indeo 4.1), 576 x 340, 278 frames at
+15 fps, with 8-bit stereo PCM at 22 050 Hz, 18.53 s (its own headers, read
+by `read_avi_header`). Godot plays only Ogg Theora, so — the owner's
+ruling for part C, *"Convert it"* — `tools/import_original.py` converts it
+on the player's machine with the player's own ffmpeg (`libtheora`,
+`libvorbis`) or GStreamer (`theoraenc`, `vorbisenc`), into
+`win_movie.ogv` in the gitignored skin like every other file: the same
+pictures and sound in another container, 1.07 MB at the qualities the
+spike chose. It is no one else's conversion, it is not in this
+repository, and it travels only where the skin it lands in does. Without
+a Theora encoder the movie is skipped and the win plays without it, as
+1997's did without its `Statwin.dll`.
+
 ### The `.PIC` format, and the three counts of enemy faces
 
 **The format**, ported into `tools/import_original.py` on 2026-09-03 from

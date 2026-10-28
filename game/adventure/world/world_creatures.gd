@@ -62,6 +62,22 @@ extends RefCounted
 ## ([method push_back]); A MEETING spends the slot ([method met]); A DUEL
 ## clears the creatures crowding the hero ([method clear_crowd]).
 ##
+## THE WORLD AT PEACE (part C, after Arzakon's fall, [method
+## AdventurePlayer.at_peace]; the owner, 2026-10-27: *"If you return to roam
+## you can still explore only other cretures do not hunt you always, some
+## do not or are passive"*) [ours — 1997 ended the program]:
+##  - THE CREATURES COME BACK: every colour's, as if no wizard had fallen
+##    ([method WorldLairs.fill] at peace; 1997's refill sends away the
+##    creatures and lairs of a beaten wizard's colour — with all five
+##    beaten, every one); none is made on Arzakon's petrified portal;
+##  - EACH HAS A TEMPER, drawn on the adventure's dice the tick it is made
+##    ([method give_temper], [constant TEMPER_ODDS]) and saved with it: it
+##    HUNTS the hero as 1997's creatures all did; it WANDERS its own way,
+##    turning now and then and whenever its way is stopped; or it STANDS
+##    where it was made. Any of them is met when the hero walks into it —
+##    the battles are the hero's to choose. The quest's creature always
+##    hunts (it is the quest's). No siege comes ([Sieges]).
+##
 ## FIXED [ours: 1997 slips, each marked where it is fixed; listed in
 ## docs/adventure-implementation-notes.md]:
 ##  - `d0` on the tick a slot is filled is read at the creature's new place
@@ -173,6 +189,21 @@ const NO_DUEL := 2
 ## and Arzakon never walk).
 const FIRST_ROW := 1
 const LAST_ROW := 54
+## A creature's temper in a world at peace (the class's notes): it hunts
+## the hero, wanders its own way, or stands where it was made.
+const HUNTS := "hunts"
+const WANDERS := "wanders"
+const STANDS := "stands"
+const TEMPERS: Array[String] = [HUNTS, WANDERS, STANDS]
+## How the tempers are drawn: one die of their sum, each its share — a
+## hunter in four, a wanderer in two, one standing in four [ours; the mix
+## is the owner's to set].
+const TEMPER_ODDS: Array[int] = [1, 2, 1]
+## A wanderer turns to a new way, on its turning ticks, one time in this
+## many — and whenever its last step was stopped.
+const WANDER_TURN := 8
+## How far ahead along its way a wanderer aims (before its inertia).
+const WANDER_AIM := 64
 
 
 # ------------------------------------------------------------ the tick --
@@ -201,6 +232,8 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 		var held := WorldLairs.held_in(player, slot)
 		if not is_live(held):
 			continue
+		if player.at_peace() and is_creature(held) and not String(held.get("temper", "")) in TEMPERS:
+			give_temper(held, dice)
 		var at := Vector2i(int(held["x"]), int(held["y"]))
 		if is_lair(held):
 			# A lair runs the walk too in 1997, with a stride of 0: only its
@@ -239,6 +272,18 @@ static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: Ms
 	# [ours: 1997 slip — on the tick a slot is filled 1997 measured from the
 	# slot's old place; here from where the creature stands.]
 	var d0 := _distance(hero, from)
+	match temper_of(player, held):
+		STANDS:
+			# At peace, standing where it was made: no step, no cry.
+			held["frame"] = 0
+			return {"d0": d0, "blocked": false, "gone": false}
+		WANDERS:
+			# A new way when it has none, when its last step was stopped, or
+			# now and then — on its turning ticks only.
+			var wander := clampi(int(held.get("wander", 0)), 0, 8)
+			if wander == 0 or ((now + slot) & 3 == 0
+					and (int(held.get("frame", 0)) == 0 or dice.below(WANDER_TURN) == 0)):
+				held["wander"] = dice.below(8) + 1
 	var aim := aim_of(player, slot, held, d0)
 	var heading := clampi(int(held.get("heading", 0)), 0, 8)
 	aim += _dir(heading) * INERTIA
@@ -281,9 +326,13 @@ static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: Ms
 ## where it stands, before its inertia ([param d0] its distance from the
 ## hero): the hero, led ahead of them by `clamp(d0 / 3, 0, 16 · difficulty)`
 ## while they walk; turned round when it flees ([method flees]); the
-## besieger's town while the hero is further than 24.
+## besieger's town while the hero is further than 24; in a world at peace a
+## wanderer's own way ([method temper_of]).
 static func aim_of(player: AdventurePlayer, slot: int, held: Dictionary, d0: int) -> Vector2i:
 	var from := Vector2i(int(held["x"]), int(held["y"]))
+	if temper_of(player, held) == WANDERS:
+		# At peace, a wanderer's aim is its own way, not the hero.
+		return _dir(clampi(int(held.get("wander", 0)), 0, 8)) * WANDER_AIM
 	var aim := player.position - from
 	if player.step != 0:
 		var lead := clampi(d0 / 3, 0, 16 * clampi(player.difficulty, 0, 3))
@@ -369,6 +418,35 @@ static func way_of(aim: Vector2i) -> int:
 	if aim.x > 0:
 		return 4 if aim.y > 0 else 2
 	return 6 if aim.y > 0 else 8
+
+
+# --------------------------------------------------- the world at peace --
+
+## A TEMPER FOR CREATURE [param held], drawn on [param dice]: one die of
+## [constant TEMPER_ODDS]' sum, each temper its share ([constant TEMPERS]).
+static func give_temper(held: Dictionary, dice: MsvcRandom) -> String:
+	var total := 0
+	for odds in TEMPER_ODDS:
+		total += odds
+	var roll := dice.below(total)
+	var temper := TEMPERS[TEMPERS.size() - 1]
+	for i in TEMPER_ODDS.size():
+		if roll < TEMPER_ODDS[i]:
+			temper = TEMPERS[i]
+			break
+		roll -= TEMPER_ODDS[i]
+	held["temper"] = temper
+	return temper
+
+
+## HOW CREATURE [param held] GOES: [constant HUNTS] — every creature while
+## the world is not at peace (1997's), the quest's creature, and one whose
+## temper is none of the three — else its own temper.
+static func temper_of(player: AdventurePlayer, held: Dictionary) -> String:
+	if not player.at_peace() or int(held.get("creature", 0)) == quest_row(player):
+		return HUNTS
+	var temper := String(held.get("temper", ""))
+	return temper if temper in TEMPERS else HUNTS
 
 
 # ---------------------------------------------------------- the meeting --

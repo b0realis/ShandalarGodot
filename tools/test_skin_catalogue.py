@@ -106,6 +106,19 @@ class TestMeasuring(unittest.TestCase):
     def test_a_missing_file_says_so(self):
         self.assertEqual(cat.measure(self.dir / "nothing.png"), "(not on this machine)")
 
+    def test_an_ogv_reports_its_picture_and_rate(self):
+        """The win's movie (part C): the Theora identification header in
+        the first Ogg page — the picture's size in 24 bits each and the
+        frame rate as a fraction."""
+        ident = (b"\x80theora" + bytes([3, 2, 1]) + struct.pack(">HH", 36, 22)
+                 + (576).to_bytes(3, "big") + (340).to_bytes(3, "big") + bytes([0, 0])
+                 + struct.pack(">II", 15, 1) + bytes(20))
+        path = self.dir / "win_movie.ogv"
+        path.write_bytes(b"OggS" + bytes(24) + ident + bytes(1_000_000))
+        self.assertEqual(cat.measure(path), "576 x 340, 15 fps, Ogg Theora, 1.00 MB")
+        path.write_bytes(b"OggS" + bytes(60))
+        self.assertEqual(cat.measure(path), "OGV?", "an Ogg file with no Theora in it")
+
 
 class TestTheManifestIsCatalogued(unittest.TestCase):
 
@@ -125,6 +138,38 @@ class TestTheManifestIsCatalogued(unittest.TestCase):
             self.assertIn(key + ".png", files)
             self.assertIn(key + ".json", files)
         self.assertEqual(len(files), len(set(files)), "no file named twice")
+
+    def test_part_c_is_catalogued_with_its_sidecars_and_its_movie(self):
+        """The dungeons', the castles' and the end's files (part C,
+        2026-10-27): the board's sheets with their layouts, the pictures,
+        the sounds, and the win's movie — a movie, never a picture with a
+        1997 size to be scaled against."""
+        files = cat.expected_files()
+        for key in imp.DUNGEON_SHEETS:
+            self.assertIn(key + ".png", files)
+            self.assertIn(key + ".json", files)
+        for key in imp.DUNGEON_PICTURES:
+            self.assertIn(key + ".png", files)
+        self.assertIn("win_movie.ogv", files)
+        self.assertEqual(cat.note_for("dungeon_tiles_red")[0], "The dungeons and castles")
+        self.assertEqual(cat.note_for("card_browser")[0], "The dungeons and castles")
+        self.assertEqual(cat.note_for("win_game")[0], "The end")
+        self.assertEqual(cat.note_for("win_movie.ogv")[0], "Movies")
+        self.assertEqual(cat.note_for("sfx_dungeon_ambience_4.wav")[0], "Sounds")
+        self.assertEqual(cat.note_for("music_win_game.wav")[0], "Music")
+        with tempfile.TemporaryDirectory() as tmp:
+            rows = {row["file"]: row for row in cat.table_rows(Path(tmp))}
+        movie = rows["skin/win_movie.ogv"]
+        self.assertEqual((movie["kind"], movie["section"]), ("movie", "Movies"))
+        self.assertEqual(movie["from_the_1997_game"], "converted from Mtgend.avi (Theora + Vorbis)")
+        for name in ("skin/win_movie.ogv", "skin/fifth_wizard.png", "skin/dungeon_plaques.png",
+                     "skin/sfx_dice.wav"):
+            self.assertEqual(rows[name]["read_by_game"], "no: nothing reads it yet", name)
+        sizes = cat.sizes_1997((ROOT / "docs" / "skin-catalogue.csv",))
+        self.assertNotIn("win_movie.ogv", sizes)
+        self.assertEqual(sizes["dungeon_tiles_white.png"], (768, 320))
+        self.assertEqual(sizes["dungeon_plaques.png"], (804, 281))
+        self.assertEqual(sizes["card_banner.png"], (152, 19))
 
     def test_families_keep_the_manifests_first_order_and_join_split_runs(self):
         grouped = cat.families_of(["set_icon_atq", "card_set_symbols", "set_icon_leg"])

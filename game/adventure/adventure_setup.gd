@@ -8,7 +8,8 @@ extends RefCounted
 ## THE CHOICES (owner design, 2026-10-04, put on one screen 2026-10-22):
 ## the hero's face, their name, the figure that walks the map, the colour
 ## of their magic, their playmat, the card packs that join, and the
-## difficulty. The 1997 game asked three of these on three screens
+## difficulty; and the rules: the card rule (2026-10-24) and the final
+## battle's rule (2026-10-27, part C). The 1997 game asked three of these on three screens
 ## (difficulty, colour, face); version 1.3 designed the face and typed the
 ## name; the rest is ours, and every row below says which it is.
 ##
@@ -205,6 +206,10 @@ var copy_limit: bool:
 		return card_rule == AdventurePlayer.RULE_MEANT
 	set(on):
 		card_rule = AdventurePlayer.RULE_MEANT if on else AdventurePlayer.RULE_SHIPPED
+## THE FINAL BATTLE'S RULE ([member AdventurePlayer.life_rule]): "Reload
+## allowed" (an autosave at Arzakon's door) or "One life" (the loss closes
+## the adventure) — the owner's setting of 2026-10-27.
+var life_rule := AdventurePlayer.LIFE_RELOAD
 var seed_text := ""
 ## The walking figure's colours, `{part: key}` ([HeroColors]); a part not
 ## named keeps its 1997 colour.
@@ -385,6 +390,7 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"difficulty": clampi(difficulty, 0, DIFFICULTIES.size() - 1),
 		"card_rule": card_rule,
 		"copy_limit": card_rule != AdventurePlayer.RULE_SHIPPED,
+		"life_rule": AdventurePlayer.life_rule_of(life_rule),
 		"playmat": {"color": playmat_color_shown(), "type": style},
 		"packs": chosen_packs,
 		"start": start,
@@ -424,6 +430,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "packs", ",".join(packs), false)
 	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
 	Settings.set_value(KEY_PREFIX + "card_rule", card_rule, false)
+	Settings.set_value(KEY_PREFIX + "life_rule", AdventurePlayer.life_rule_of(life_rule), false)
 	Settings.set_value(KEY_PREFIX + "difficulty", difficulty)
 
 
@@ -452,12 +459,14 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 	setup.card_rule = AdventurePlayer.card_rule_of(Settings.get_value(KEY_PREFIX + "card_rule", null),
 		Settings.get_value(KEY_PREFIX + "copy_limit", true))
 	setup.figure_colors = HeroColors.from_text(String(Settings.get_value(KEY_PREFIX + "figure_colors", "")))
+	setup.life_rule = AdventurePlayer.life_rule_of(Settings.get_value(KEY_PREFIX + "life_rule", null))
 	return setup
 
 
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
-	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "card_rule", "copy_limit"]
+	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "card_rule", "copy_limit",
+	"life_rule"]
 
 
 ## Forget the remembered hero, so the screen opens on the defaults.

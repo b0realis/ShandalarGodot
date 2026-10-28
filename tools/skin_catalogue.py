@@ -212,6 +212,68 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("The adventure's duels", "game_over",
      "The adventure lost: Dominion cast, or no card left to ante "
      "(Uth-Arz.pic)."),
+    ("The dungeons and castles", "dungeon_tiles_",
+     "The castle and dungeon board's tiles, from the 1997 game's "
+     "Dungeon1-3.spr and Dungeonb/u/g/r/w.spr: 64 x 64 frames twelve to a "
+     "row, painted with Advfac64.pic's palette, each beside a .json sidecar "
+     "of its grid. dungeon_tiles_1, _2 and _3 are a dungeon's three looks "
+     "(brown earth, grey cobbles, lava; one is drawn at random as the hero "
+     "enters), 48 frames; dungeon_tiles_black ... _white a castle's, by its "
+     "colour, 60 frames. Each frame's floor is the diamond in its bottom 32 "
+     "rows; the walls rise above it. Frame by frame: 0-3 the floor with no "
+     "wall, the up-right wall, the up-left wall, both; 4-7, 24-27 and 28-31 "
+     "the same four in three more looks (skeletons, torches, cobwebs); 8 "
+     "the chest, 9 the scroll, 10 the dice; 12-15 the front walls (none, "
+     "down-right, down-left, both), 16-19 the same for odd rows (the "
+     "white castle's 16, like its 4 and 28, marks the floor); 20 the "
+     "rock top of a solid cell; a castle's 48-52 its wizard standing, of "
+     "which 49 is the one drawn. The rest are copies or empty. NOT READ by "
+     "the game yet."),
+    ("The dungeons and castles", "dungeon_plaques",
+     "The board's plaques (Dungbutt.spr, Advfac64.pic's palette): four "
+     "frames, each at the top left of a 201 x 281 cell, the .json's sizes "
+     "giving each frame's own — 0 the green-marble frame behind the card "
+     "in effect (201 x 281), 1-3 the title plaque's left end (40 x 62), "
+     "repeatable middle (24 x 62) and right end (39 x 62). NOT READ by the "
+     "game yet."),
+    ("The dungeons and castles", "clues_list",
+     "The dungeon and castle clues' list (F4): its ground (Dung_Bd.pic, "
+     "its own palette), two columns of six framed rows and a Done frame. "
+     "NOT READ by the game yet."),
+    ("The dungeons and castles", "clues_list_buttons",
+     "The clue list's buttons (Dun_Bar.pic, Dung_Bd.pic's palette, index 0 "
+     "clear), as x, y, width x height: the Done button's frames at "
+     "16 + 60i, 1, 59 x 26 (the game letters Done over them); the up "
+     "arrow's four states at 16 + 32i, 28, "
+     "31 x 36 and the down arrow's at 144 + 32i, 28. A scroll strip at 2, "
+     "1, 13 x 112 and a row of double arrows were never drawn. NOT READ by "
+     "the game yet."),
+    ("The dungeons and castles", "clue_detail",
+     "A clue's own page: the misty cave of stalagmites (Clueback.pic, its "
+     "own palette). NOT READ by the game yet."),
+    ("The dungeons and castles", "clue_detail_buttons",
+     "The clue page's Done button (Cluebutn.pic, 300 x 100, Clueback.pic's "
+     "palette, index 0 clear): three states at 1 + 90i, 1, 89 x 35. Three "
+     "20 x 36 icons at 1 + 21i, 37 were never drawn. NOT READ by the game "
+     "yet."),
+    ("The dungeons and castles", "dungeon_treasure",
+     "A card found in a dungeon: the cave with the open book (Staceybk.pic, "
+     "painted whole with CaveBkgd.pic's palette); the card stands at 68, "
+     "166, 150 x 224. NOT READ by the game yet."),
+    ("The dungeons and castles", "card_browser",
+     "A castle won: the ground of the victory words and of the three cards "
+     "picked (Tradscrn.pic, painted whole with Advfac64.pic's palette). NOT "
+     "READ by the game yet."),
+    ("The dungeons and castles", "card_banner",
+     "The banner behind a card's caption, \"Lost this card\" in a dungeon "
+     "(Endtop.pic, 152 x 19, Advfac64.pic's palette, index 0 clear; the "
+     "1997 game cut 149 x 19 of it at 0, 0). NOT READ by the game yet."),
+    ("The end", "fifth_wizard",
+     "The fifth wizard beaten: Arzakon's horned face in a fiery hall "
+     "(5thwiz.pic, its own palette). NOT READ by the game yet."),
+    ("The end", "win_game",
+     "The adventure won: a far white castle over green fields under a "
+     "violet sky (Wingame.pic, its own palette). NOT READ by the game yet."),
     ("The adventure world", "visit_",
      "The places' pictures, shown in the world's visit pane as the hero "
      "arrives (512 x 280, painted whole with Advfac64.pic's palette): "
@@ -490,6 +552,21 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Sounds", "sfx_dungeon_duel",
      "A creature met in a dungeon (Sound/Dngnduel.wav). NOT READ by the "
      "game yet: the dungeons are still to come."),
+    ("Sounds", "sfx_dungeon_loop",
+     "The castle and dungeon board's bed, looped while the board is up "
+     "(Sound/Dambloop.wav). NOT READ by the game yet."),
+    ("Sounds", "sfx_dungeon_ambience_",
+     "The cave's noises over the board's bed, one at a time at random "
+     "(Sound/Damb1.wav ... Damb5.wav). NOT READ by the game yet."),
+    ("Sounds", "sfx_dice",
+     "A dice room entered in a dungeon (Sound/Dice.wav). NOT READ by the "
+     "game yet."),
+    ("Sounds", "sfx_scroll",
+     "A scroll room entered in a dungeon, before its riddle "
+     "(Sound/Scroll.wav). NOT READ by the game yet."),
+    ("Sounds", "sfx_find_card",
+     "A card found in a dungeon's dead end (Sound/Findcard.wav). NOT READ "
+     "by the game yet."),
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "
      "sfx_draw, sfx_shuffle, sfx_summon, sfx_attack, sfx_block, "
@@ -512,11 +589,22 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Music", "music_lose_duel",
      "Looped under a card lost after an adventure duel (Sound/Loseduel.wav); "
      "not one of the playlist's tunes."),
+    ("Music", "music_win_game",
+     "The adventure won, under the win's picture and its words "
+     "(Sound/Wingame.wav); not one of the playlist's tunes. NOT READ by the "
+     "game yet."),
     ("Music", "music_location_",
      "The twenty overworld location tunes, 0 to 19. The title screen and "
      "the shell pick from these; Options > Music lists every tune the "
      "skin and the player's own music/ folder provide."),
 
+    ("Movies", "win_movie",
+     "The movie of the adventure won, as Ogg Theora with Vorbis sound "
+     "(576 x 340, 15 fps, 18.5 s): converted from the 1997 game's "
+     "Mtgend.avi at import by the player's own ffmpeg (with libtheora) or "
+     "GStreamer (theoraenc), and absent without one — the win then goes on "
+     "without it. Any Theora .ogv plays in its place. NOT READ by the game "
+     "yet."),
     ("Movies", "coin_toss_",
      "The coin toss, as a SPRITE SHEET the game plays frame by frame: "
      "the frames left to right, top to bottom, and a .json sidecar of "
@@ -526,7 +614,8 @@ FAMILIES: list[tuple[str, str, str]] = [
 ]
 
 SECTION_ORDER = [
-    "Backdrops", "The adventure world", "The adventure's duels", "The duel table", "Cards",
+    "Backdrops", "The adventure world", "The adventure's duels",
+    "The dungeons and castles", "The end", "The duel table", "Cards",
     "The life panels",
     "Windows and panels", "Buttons", "The phase bars",
     "The combat window's sprites", "The hand", "Graveyards",
@@ -563,6 +652,7 @@ and nothing outside that folder:
         sfx_tap.wav
         music_duel.wav
         coin_toss_heads.png  +  coin_toss_heads.json
+        win_movie.ogv
         portraits/agnosia.png ...
         movies/cointoss_heads.avi ...        (optional)
 
@@ -633,7 +723,8 @@ NAMING. The names below are the PLACES the game looks for: exact,
 lower case, snake_case, with the extensions given here. The file of a
 place's own name is worn there, unless the skin's catalogue (below)
 puts another file there. A picture is a PNG (RGB, or RGBA where a mask
-is wanted); a font is TrueType; a sound is a WAV. The sizes below are
+is wanted); a font is TrueType; a sound is a WAV; the win's movie is an
+Ogg Theora .ogv. The sizes below are
 the 1997 originals'; SIZES AND SCALES says what else a picture may be.
 
 THE CATALOGUE. A skin may carry skin/catalogue.txt, which says which of
@@ -844,6 +935,27 @@ def sidecar_shape(path: Path) -> str | None:
     return ", ".join(parts) if parts else "json"
 
 
+def ogv_shape(path: Path) -> str | None:
+    """'576 x 340, 15 fps, Ogg Theora, 1.07 MB' from an `.ogv`'s first page
+    — the Theora identification header (`\\x80theora`, then the version,
+    the frame in macroblocks, the picture's width and height in 24 bits
+    each, its offset, and the frame rate as a fraction) — or None."""
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(4096)
+        size = path.stat().st_size
+    except OSError:
+        return None
+    at = head.find(b"\x80theora")
+    if head[:4] != b"OggS" or at < 0 or len(head) < at + 30:
+        return None
+    width = int.from_bytes(head[at + 14:at + 17], "big")
+    height = int.from_bytes(head[at + 17:at + 20], "big")
+    num, den = struct.unpack(">II", head[at + 22:at + 30])
+    fps = ("%.2f" % (num / den)).rstrip("0").rstrip(".") if den else "?"
+    return "%d x %d, %s fps, Ogg Theora, %.2f MB" % (width, height, fps, size / 1e6)
+
+
 def file_name(key: str) -> str:
     """The file a manifest key names: pictures get `.png`, the rest carry
     their extension in the key (`sfx_tap.wav`, `font_title.ttf`)."""
@@ -865,6 +977,8 @@ def measure(path: Path) -> str:
         return font_shape(path) or "font?"
     if ext == ".json":
         return sidecar_shape(path) or "json?"
+    if ext == ".ogv":
+        return ogv_shape(path) or "OGV?"
     if ext == ".avi":
         head = importer.read_avi_header(path)
         if head:
@@ -880,7 +994,7 @@ def measure(path: Path) -> str:
 def all_keys() -> list[str]:
     """Every name the importer writes, in the importer's order."""
     return (list(importer.MANIFEST) + list(importer.PIC_SCREENS)
-            + list(importer.VIDEOS))
+            + list(importer.VIDEOS) + list(importer.THEORA_MOVIES))
 
 
 def note_for(key: str) -> tuple[str, str] | None:
@@ -931,7 +1045,7 @@ def expected_files() -> list[str]:
     files = [file_name(key) for key in all_keys()]
     for key in importer.VIDEOS:
         files.append(key + ".json")
-    for key in importer.WORLD_SHEETS:
+    for key in importer.SIDECAR_SHEETS:
         files.append(key + ".json")
     return files
 
@@ -959,7 +1073,7 @@ def render(skin: Path, cardart: Path) -> str:
             for key in family:
                 name = file_name(key)
                 lines.append("    %-34s %s" % (name, measure(skin / name)))
-                if key in importer.VIDEOS or key in importer.WORLD_SHEETS:
+                if key in importer.VIDEOS or key in importer.SIDECAR_SHEETS:
                     side = key + ".json"
                     lines.append("    %-34s %s" % (side, measure(skin / side)))
     # The open-ended folders.
@@ -1035,13 +1149,13 @@ CSV_COLUMNS = ("file", "section", "kind", "read_by_game", "format",
                "from_the_1997_game", "manalink_backup", "description")
 
 KINDS = {".png": "picture", ".json": "sheet layout", ".ttf": "font",
-         ".wav": "sound", ".avi": "movie"}
+         ".wav": "sound", ".avi": "movie", ".ogv": "movie"}
 
 
 def read_by_game(key: str) -> str:
     if file_name(key) in SHIPPED_BY_THE_GAME:
         return "no: the game always uses its own"
-    if key in importer.NOT_READ:
+    if key in importer.NOT_READ or key in importer.SCREENS_NOT_READ:
         return "no: nothing reads it yet"
     return "yes"
 
@@ -1054,6 +1168,8 @@ def from_1997(key: str) -> str:
         return "ours, drawn from %s.png" % importer.DERIVED_SHEETS[key][0]
     if key in importer.VIDEOS:
         return "cut from " + " or ".join(importer.VIDEOS[key])
+    if key in importer.THEORA_MOVIES:
+        return "converted from %s (Theora + Vorbis)" % " or ".join(importer.THEORA_MOVIES[key])
     names = importer.MANIFEST.get(key) or importer.PIC_SCREENS.get(key) or []
     return " or ".join(names)
 
@@ -1094,7 +1210,7 @@ def table_rows(skin: Path) -> list[dict[str, str]]:
         for note, family in families_of(grouped[section]):
             for key in family:
                 names = [file_name(key)]
-                if key in importer.VIDEOS or key in importer.WORLD_SHEETS:
+                if key in importer.VIDEOS or key in importer.SIDECAR_SHEETS:
                     names.append(key + ".json")
                 for name in names:
                     rows.append({

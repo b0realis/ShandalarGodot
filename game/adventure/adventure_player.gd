@@ -13,7 +13,9 @@ extends RefCounted
 ## carried lives) is filled by the meetings and their spoils
 ## ([CreatureMeeting], [DuelSpoils]) through its helpers ([method
 ## log_victory], [method wins_against], [method learn_deck_colors],
-## [method add_card]); the sieges' by [Sieges].
+## [method add_card]); the sieges' by [Sieges]; the end's (part C: how the
+## adventure ended, the end's record, Arzakon's door and portal, the final
+## battle's rule chosen at the Embark) by [FinalBattle].
 ##
 ## ONE GAME, ONE FILE NAME: an adventure is named by its hero and a hash of
 ## the moment it began ([member adventure_id]), and its first save is
@@ -144,6 +146,25 @@ var copy_limit: bool:
 var playmat := {}
 ## The card packs that join this adventure, `[{id, version}]` — ours.
 var packs: Array = []
+## THE FINAL BATTLE'S RULE, chosen at the Embark (the owner, 2026-10-27,
+## round P3: "A setting at Embark"; the names are the owner's) — what a lost
+## battle against Arzakon leaves ([FinalBattle]):
+##  - [constant LIFE_RELOAD] "Reload allowed": the adventure is saved at
+##    Arzakon's door as the battle begins ([member at_door]); after the
+##    quest-failed end, loading it puts the hero back at the door, the
+##    attempt lost written in the record ([member final_attempts], the
+##    journal);
+##  - [constant LIFE_ONE] "One life": the loss closes the adventure for
+##    good, its save marked failed ([member ended]) — and so does leaving
+##    or closing the game during the battle (the owner's ruling of
+##    2026-10-27: *"True ironman: closing mid-battle ends the adventure as a
+##    lost final battle; no way to retry."*; [method FinalBattle.on_load]).
+## A win is the same under both. An adventure from before the choice:
+## reload allowed. [ours]
+const LIFE_RELOAD := "reload allowed"
+const LIFE_ONE := "one life"
+const LIFE_RULES: Array[String] = [LIFE_RELOAD, LIFE_ONE]
+var life_rule := LIFE_RELOAD
 
 
 # --------------------------------------------------------------- where --
@@ -246,6 +267,56 @@ var town_quests := {}
 var wise_man := {}
 
 
+# ------------------------------------------------------------- the end --
+# Part C (the owner's rulings of 2026-10-27, "The end"): 1997 saved nothing
+# from the fifth castle on and ended the program after the final battle,
+# whatever its result. Ours keeps the end in the save, written by
+# [FinalBattle].
+
+## HOW THE ADVENTURE ENDED: "" while it goes on; [constant ENDED_WON] once
+## Arzakon is beaten — the world is then at peace ([method at_peace]) and
+## the hero may walk on in it (the owner's Q-SAVE: "Saved as won + walk
+## on"); [constant ENDED_FAILED] once a final battle is lost under "One
+## life" — such a save opens on its end, never the world. The load list
+## shows it ([method save_at]).
+const ENDED_WON := "won"
+const ENDED_FAILED := "failed"
+const ENDINGS: Array[String] = [ENDED_WON, ENDED_FAILED]
+var ended := ""
+## THE END'S RECORD, `{}` until the adventure ends ([method
+## FinalBattle.settle]): `{result, score, base, years, lives_start,
+## lives_end, difficulty, days, wins, date, attempts, life_rule}` — `result`
+## "won" or "failed"; `score` the years Arzakon is banished, for a win
+## only; `base` the battles' share before the final one ([method
+## FinalBattle.score]); `years` the final battle's; the lives the battle
+## began and ended with, `[hero, Arzakon]` (as [DuelReport] keeps them);
+## the days on the road and the duels won; when (ISO, UTC); the final
+## battles lost before it; the final battle's rule; `left` true when the
+## battle was lost by leaving it under "One life" ([method
+## FinalBattle.on_load]); `roamed` true once the hero chose to walk on
+## after the win ([method FinalBattle.roam]).
+var final := {}
+## THE FINAL BATTLES LOST AND TAKEN UP AGAIN at Arzakon's door under
+## "Reload allowed" — each also a journal line, "Lost to an Arzakon".
+var final_attempts := 0
+## THE HERO STANDS AT ARZAKON'S DOOR: set as the final battle begins
+## ([method FinalBattle.door], the adventure saved then); cleared by a win
+## and by the loss under "One life". Under "Reload allowed" a save that
+## holds it opens at the door, the battle to fight again (part C's
+## finale); under "One life" it means THE BATTLE HAS BEGUN — a save that
+## holds it, taken up again, is a lost final battle ([method
+## FinalBattle.on_load]).
+var at_door := false
+## ARZAKON'S PORTAL on the world (the owner's Q-PORTAL: "Return to
+## Shandalar first" — "a portal stands on the world"; after the win "The
+## Arzakon portal is shown as petrified monument!"; near the map's middle,
+## [method FinalBattle.portal_tile]): `{x, y, state}` — the tile it stands
+## on, [constant FinalBattle.PORTAL_OPEN] or [constant
+## FinalBattle.PORTAL_PETRIFIED]; `{}` for none. Data only: the world
+## screen draws it. [ours]
+var portal := {}
+
+
 # ------------------------------------------------------------ the clocks --
 
 ## The world's clock: one tick per 60 ms of the world screen (0x1EAF4).
@@ -256,8 +327,9 @@ var quest_timer := 0
 var siege_timer := 0
 var siege_active := false                       # 0x2A220
 ## Sieges begun and towns fallen, one each (`g_siege_count`): the end's
-## score takes it off (dungeonEncounter.c 1856). [Ours: 1997 never saved
-## it, so a game loaded counted from 0 again.]
+## score takes it off (dungeonEncounter.c 1856; [method FinalBattle.score]).
+## [Ours: 1997 never saved it, so a game loaded counted from 0 again — the
+## owner's "sieges counted all game", 2026-10-27.]
 var siege_count := 0
 ## Quickening's ticks left (`Scards[6].worldmagic_duration`): while it
 ## runs, every step goes a unit further ([WorldMagic]).
@@ -314,6 +386,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.color = String(record.get("color", "white"))
 	player.difficulty = int(record.get("difficulty", 0))
 	player.card_rule = card_rule_of(record.get("card_rule"), record.get("copy_limit", true))
+	player.life_rule = life_rule_of(record.get("life_rule"))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
@@ -399,6 +472,35 @@ func clear_duel_gifts() -> void:
 	next_duel_life_carried = 0
 	next_duel_card = ""
 	next_duel_first_move = false
+
+
+# ------------------------------------------------------------- the end --
+
+## THE WORLD AT PEACE: Arzakon beaten and the hero walking on (the owner,
+## 2026-10-27: *"If you return to roam you can still explore only other
+## cretures do not hunt you always, some do not or are passive and do not
+## cocer towns etc - the game is passive just letting you battle creatires
+## or explore the unexplored."*): no siege begins or falls ([Sieges]), and
+## the creatures of every colour walk again, each of its own temper — some
+## hunt the hero, some wander, some stand ([WorldCreatures]). [ours]
+func at_peace() -> bool:
+	return ended == ENDED_WON
+
+
+## THE SCORE SO FAR — the years the battles fought so far would banish
+## Arzakon for, computed as the end computes it ([method FinalBattle.score];
+## 1997 computed it only after the fifth wizard): for the hero's record
+## page (the owner's Q-RANK, "the score so far shown on the hero's record
+## page"). It may be below zero; the end shows no less than 0 ([method
+## FinalBattle.shown]). [ours]
+func score_so_far() -> int:
+	return FinalBattle.score(self)
+
+
+## The final battle's rule [param value] names ([constant LIFE_RULES]), else
+## "Reload allowed" (an adventure from before the choice).
+static func life_rule_of(value: Variant) -> String:
+	return String(value) if value is String and String(value) in LIFE_RULES else LIFE_RELOAD
 
 
 # ------------------------------------------------------- the duels' record --
@@ -565,7 +667,8 @@ func to_dict() -> Dictionary:
 		"hero": {"name": name, "portrait": portrait, "figure": walker,
 			"figure_colors": figure_colors, "color": color,
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
-			"card_rule": card_rule, "copy_limit": card_rule != RULE_SHIPPED, "playmat": playmat, "packs": packs},
+			"card_rule": card_rule, "copy_limit": card_rule != RULE_SHIPPED, "life_rule": life_rule,
+			"playmat": playmat, "packs": packs},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
 		"carried": {"gold": gold, "food": food, "amulets": amulets,
@@ -583,6 +686,8 @@ func to_dict() -> Dictionary:
 		"clocks": {"monster_timer": monster_timer, "quest_timer": quest_timer,
 			"siege_timer": siege_timer, "siege_active": siege_active,
 			"siege_count": siege_count, "quickening": quickening},
+		"end": {"ended": ended, "final": final, "final_attempts": final_attempts,
+			"at_door": at_door, "portal": portal, "score_so_far": score_so_far()},
 		"world": {
 			"seed": world.seed, "seed_text": world_seed_text, "slot_start": world.slot_start,
 			"color": world.color, "difficulty": world.difficulty, "generator": "1997 (1.3)",
@@ -626,6 +731,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	_read_duels(player, _object(data.get("duels")))
 	_read_record(player, _object(data.get("record")))
 	_read_clocks(player, data["clocks"])
+	_read_end(player, _object(data.get("end")))
 	player.world_seed_text = _text(saved_world.get("seed_text"), str(made.seed))
 	player.made_fingerprint = _text(saved_world.get("made_fingerprint"))
 	player.dice = _number(saved_world.get("dice"), made.rand_state)
@@ -682,6 +788,7 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	# 1997 meant it, which those adventures played by; one from before the
 	# third rule: the on/off copy limit it kept.
 	player.card_rule = card_rule_of(hero.get("card_rule"), hero.get("copy_limit", true))
+	player.life_rule = life_rule_of(hero.get("life_rule"))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
 
@@ -753,6 +860,57 @@ static func _read_clocks(player: AdventurePlayer, clocks: Dictionary) -> void:
 	player.quickening = _count(clocks.get("quickening"))
 
 
+## THE END'S MARKS (part C): each kept only when it is of its kind — an
+## ending one of [constant ENDINGS], the end's record by its fields
+## ([method _final_record]), the portal a tile of the map in a state it
+## can be in ([method _portal_record]). A save from before part C has
+## none: the adventure goes on.
+static func _read_end(player: AdventurePlayer, end: Dictionary) -> void:
+	var how := _text(end.get("ended"))
+	player.ended = how if how in ENDINGS else ""
+	player.final = _final_record(end.get("final"))
+	player.final_attempts = _count(end.get("final_attempts"))
+	player.at_door = _flag(end.get("at_door")) and player.ended == ""
+	player.portal = _portal_record(end.get("portal"))
+
+
+## The end's record ([member final]): its numbers numbers, its words
+## words, its two pairs of lives two numbers each; anything else let go.
+static func _final_record(value: Variant) -> Dictionary:
+	var saved := _object(value)
+	var out := {}
+	for key in ["score", "base", "years", "difficulty", "days", "wins", "attempts"]:
+		if _is_number(saved.get(key)):
+			out[key] = _number(saved[key])
+	for key in ["result", "date", "life_rule"]:
+		if saved.get(key) is String:
+			out[key] = saved[key]
+	for key in ["left", "roamed"]:
+		if saved.get(key) is bool:
+			out[key] = saved[key]
+	for key in ["lives_start", "lives_end"]:
+		var pair := _list(saved.get(key))
+		if pair.size() == 2 and _is_number(pair[0]) and _is_number(pair[1]):
+			out[key] = [_number(pair[0]), _number(pair[1])]
+	return out
+
+
+## Arzakon's portal ([member portal]): a tile of the map and a state of
+## [constant FinalBattle.PORTAL_STATES]; `{}` otherwise. (A save from
+## before the map's middle — its portal on the fifth castle's ruins, a
+## `castle` beside — keeps its tile.)
+static func _portal_record(value: Variant) -> Dictionary:
+	var saved := _object(value)
+	if not (_is_number(saved.get("x")) and _is_number(saved.get("y"))) \
+			or not _text(saved.get("state")) in FinalBattle.PORTAL_STATES:
+		return {}
+	var x := _number(saved["x"])
+	var y := _number(saved["y"])
+	if x < 0 or y < 0 or x >= ShandalarWorld.TILES or y >= ShandalarWorld.TILES:
+		return {}
+	return {"x": x, "y": y, "state": String(saved["state"])}
+
+
 ## THE WORLD FROM ITS SAVE (whose grid [method readable] has checked):
 ## the sites and dungeons by slot — a misshapen one an empty one, so no
 ## other moves — and the World Magics' towns sites of this world, or none.
@@ -802,7 +960,8 @@ static func _cleaned_site(value: Variant) -> Dictionary:
 ## numbers, its place a tile of the map, its town a site of the world, its
 ## cards dungeon cards of the table ([constant ShandalarWorld.DUNGEON_CARDS]),
 ## its attempts (`entered`, [DungeonDoors]; absent in a save from before
-## them, which reads 0) a count.
+## them, which reads 0) a count, its cards put back in a full-bag swap
+## ([constant WorldClues.LEFT_CARDS]) names.
 static func _cleaned_encounter(value: Variant, made: ShandalarWorld) -> Dictionary:
 	var encounter: Dictionary = _whole(_object(value))
 	for key in ["town", "color", "monster_flags", "rules", "card_in_effect", "clues"]:
@@ -820,6 +979,8 @@ static func _cleaned_encounter(value: Variant, made: ShandalarWorld) -> Dictiona
 		if index >= 0 and index < ShandalarWorld.DUNGEON_CARDS.size():
 			held.append(index)
 	encounter["cards"] = held
+	if encounter.has(WorldClues.LEFT_CARDS):
+		encounter[WorldClues.LEFT_CARDS] = WorldClues.left_cards(encounter)
 	return encounter
 
 
@@ -865,6 +1026,13 @@ static func _cleaned_monsters(value: Variant, made: ShandalarWorld) -> Array:
 			creature["frame"] = clampi(_number(creature.get("frame")), 0, 4)
 			creature.erase("waiting")
 			creature.erase("tier")
+			# Its temper in a world at peace (part C, [WorldCreatures]): one of
+			# the three, else none (drawn again on the next tick); a
+			# wanderer's way 0–8.
+			if creature.has("temper") and not _text(creature["temper"]) in WorldCreatures.TEMPERS:
+				creature.erase("temper")
+			if creature.has("wander"):
+				creature["wander"] = clampi(_number(creature["wander"]), 0, 8)
 		elif kind != "lair":
 			continue
 		for key in ["slot", "x", "y", "town", "color"]:
@@ -1261,7 +1429,8 @@ static func load_from(path: String) -> AdventurePlayer:
 
 
 ## THE SAVE AT [param path] as the lists show it: `{path, kind, slot,
-## slot_name, days, gold, id, name, color, difficulty, saved, seed_text}`
+## slot_name, days, gold, id, name, color, difficulty, saved, seed_text,
+## ended, score, life_rule}`
 ## — from its `.bak` when the file itself cannot be read; `{path,
 ## unreadable: true}` when neither can; `{}` when there is no save there.
 static func save_at(path: String) -> Dictionary:
@@ -1362,17 +1531,26 @@ static func _remember(path: String, bytes: PackedByteArray, data: Dictionary) ->
 
 ## A save's line in the lists, from [param data] (a [method readable]
 ## save): `{slot_name, days, gold, id, name, color, difficulty, saved,
-## seed_text}`.
+## seed_text, ended, score, life_rule}` — `ended` "" while the adventure
+## goes on, "won" or "failed" ([member ended]); `score` a won adventure's
+## years, else 0 (part C: the load list shows a won adventure with its
+## score, a failed one as failed).
 static func _summary(data: Dictionary) -> Dictionary:
 	var game: Dictionary = data["adventure"]
 	var hero: Dictionary = data["hero"]
+	var end := _object(data.get("end"))
+	var how := _text(end.get("ended"))
+	how = how if how in ENDINGS else ""
+	var final_saved := _final_record(end.get("final"))
 	return {"slot_name": _text(game.get("slot_name")),
 		"days": _count((data["clocks"] as Dictionary).get("quest_timer")) / WorldStatus.DAY,
 		"gold": _count((data["carried"] as Dictionary).get("gold")),
 		"id": _text(game.get("id")), "name": _text(hero.get("name")),
 		"color": _text(hero.get("color")), "difficulty": clampi(_number(hero.get("difficulty")), 0, 3),
 		"saved": _text(game.get("saved")),
-		"seed_text": _text((data["world"] as Dictionary).get("seed_text"))}
+		"seed_text": _text((data["world"] as Dictionary).get("seed_text")),
+		"ended": how, "score": int(final_saved.get("score", 0)) if how == ENDED_WON else 0,
+		"life_rule": life_rule_of(hero.get("life_rule"))}
 
 
 ## The bytes of the file at [param path], empty when there is none.

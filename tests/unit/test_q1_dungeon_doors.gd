@@ -61,6 +61,13 @@ func test_the_door_is_a_known_dungeon_with_a_card() -> void:
 	assert_eq(DungeonDoors.at(world, tile), 7, "a clue and a card: slot 7's door")
 	_slot(7)["cards"] = [] as Array[int]
 	assert_eq(DungeonDoors.at(world, tile), -1, "no card left: no door")
+	# The owner's ruling of 2026-10-27: a card put back in a full-bag swap
+	# stays as treasure, so the dungeon's door stays too.
+	_slot(7)[WorldClues.LEFT_CARDS] = ["Kird Ape"]
+	assert_eq(DungeonDoors.at(world, tile), 7, "a card put back keeps the door")
+	_slot(7)[WorldClues.LEFT_CARDS] = [3, ""]
+	assert_eq(DungeonDoors.at(world, tile), -1, "a damaged list holds no card")
+	_slot(7).erase(WorldClues.LEFT_CARDS)
 	assert_eq(DungeonDoors.at(world, tile + Vector2i(40, 40)), -1, "elsewhere none")
 	assert_eq(DungeonDoors.at(null, tile), -1, "no world none")
 
@@ -257,3 +264,15 @@ func test_a_dungeon_is_never_retaliated_for() -> void:
 	player = _adventure(3)
 	assert_true(DungeonDoors.leave(player, 9, {}).is_empty())
 	assert_false(player.siege_active)
+
+
+func test_a_card_put_back_is_saved_and_a_damaged_list_reads_clean() -> void:
+	_slot(9)[WorldClues.LEFT_CARDS] = ["Kird Ape"]
+	_slot(10)[WorldClues.LEFT_CARDS] = ["Shivan Dragon", 4, "", {"x": 1}]
+	var data: Dictionary = JSON.parse_string(JSON.stringify(player.to_dict()))
+	var back := AdventurePlayer.from_dict(data)
+	assert_not_null(back, "control: the save reads")
+	assert_eq(back.world.encounters[9][WorldClues.LEFT_CARDS], ["Kird Ape"] as Array[String], "kept by name")
+	assert_eq(back.world.encounters[10][WorldClues.LEFT_CARDS], ["Shivan Dragon"] as Array[String],
+		"the junk dropped on load")
+	assert_false(back.world.encounters[11].has(WorldClues.LEFT_CARDS), "none put back: nothing written")

@@ -3,7 +3,8 @@ extends Control
 ## EMBARK TO THE WORLD OF SHANDALAR — the new adventure's one screen
 ## (owner design, 2026-10-22): the hero's face, their name, the figure
 ## that walks the map, the colour of their magic, their playmat, the card
-## packs that join and the difficulty, then `Adventure` or `Leave`.
+## packs that join, the difficulty and the rules (the card rule, the final
+## battle's), then `Adventure` or `Leave`.
 ##
 ## THE 1997 GAME ASKED ON THREE SCREENS and 1.3 on five (difficulty,
 ## colour, the face designer, the name; `RunAdventureSession`); here it is
@@ -92,6 +93,18 @@ const RULE_TIPS := {
 	AdventurePlayer.RULE_MEANT: "The shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant.",
 	AdventurePlayer.RULE_SHIPPED: "The shops and the duels' rewards offer any number of copies, as the 1997 game really did.",
 	AdventurePlayer.RULE_CLASSIC: "A deck holds at most four copies of a card, basic lands aside; one of a restricted card, four with Tome of Enlightenment; none of a banned one. No shop, trader, reward or lair offers you a card you already own as many copies of as a deck may hold.",
+}
+## THE FINAL BATTLE'S RULE (the owner, 2026-10-27: "A setting at Embark"),
+## by [constant AdventurePlayer.LIFE_RULES], named as the owner named them;
+## what each does is its tooltip.
+var _life_rule: OptionButton
+const LIFE_NAMES := {
+	AdventurePlayer.LIFE_RELOAD: "Reload allowed",
+	AdventurePlayer.LIFE_ONE: "One life",
+}
+const LIFE_TIPS := {
+	AdventurePlayer.LIFE_RELOAD: "Your adventure is saved at Arzakon's door as the final battle begins. Lose it, and loading the adventure puts you back at his door to face him again; every battle lost is written in your record.",
+	AdventurePlayer.LIFE_ONE: "One final battle: lose it, or leave or close the game during it, and the adventure is over for good, its save marked failed. No save of it can fight the battle again.",
 }
 var _playmat_type: OptionButton
 var _playmat_preview: Control
@@ -446,8 +459,18 @@ func _build_magic() -> Control:
 	# YOUR RULES, under the playmat: the one column with room to spare at
 	# 1280 × 800 (the difficulty's holds the eight card packs).
 	# Lettered a size down and with no rule above it: without the 1997 skin
-	# the fallback faces are taller, and the screen had no pixels to spare.
-	box.add_child(_heading("Your rules", 18))
+	# the fallback faces are taller, and the screen had no pixels to spare —
+	# so the final battle's rule stands on the heading's own line (a line
+	# of its own overflowed the column without the skin, 2026-10-27).
+	var rules := HBoxContainer.new()
+	rules.name = "RulesRow"
+	rules.add_theme_constant_override("separation", 8)
+	var heading := _heading("Your rules", 18)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rules.add_child(heading)
+	rules.add_child(_build_life_rule())
+	box.add_child(rules)
 	box.add_child(_build_card_rule())
 	return box
 
@@ -582,6 +605,51 @@ func _show_card_rule() -> void:
 		return
 	_card_rule.select(AdventurePlayer.CARD_RULES.find(setup.card_rule))
 	_card_rule.tooltip_text = String(RULE_TIPS.get(setup.card_rule, ""))
+
+
+## THE FINAL BATTLE'S RULE (the owner, 2026-10-27, round P3: "A setting at
+## Embark" — "Reload allowed" or "One life"; [constant LIFE_NAMES], [member
+## AdventureSetup.life_rule], [member AdventurePlayer.life_rule]): on the
+## line of "Your rules", above the card rule, its words beside it — a
+## choice of the same kind as the card rule's; the tooltip says what the
+## one chosen does. Not drawn by Randomize, as the card rule is not.
+func _build_life_rule() -> Control:
+	var row := HBoxContainer.new()
+	row.name = "LifeRuleRow"
+	row.size_flags_horizontal = Control.SIZE_SHRINK_END
+	row.add_theme_constant_override("separation", 6)
+	var words := _label("Final battle")
+	words.name = "LifeRuleWords"
+	words.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(words)
+	_life_rule = OptionButton.new()
+	_life_rule.name = "LifeRule"
+	for rule in AdventurePlayer.LIFE_RULES:
+		_life_rule.add_item(String(LIFE_NAMES[rule]))
+		_life_rule.set_item_metadata(_life_rule.item_count - 1, rule)
+	# As wide as its longer name, which is short: the heading takes the rest.
+	_life_rule.fit_to_longest_item = true
+	_life_rule.add_theme_font_size_override("font_size", 15)
+	_life_rule.item_selected.connect(func(index: int) -> void:
+		choose_life_rule(String(_life_rule.get_item_metadata(index))))
+	row.add_child(_life_rule)
+	_show_life_rule()
+	return row
+
+
+## The final battle's rule [param rule] chosen ([constant
+## AdventurePlayer.LIFE_RULES]).
+func choose_life_rule(rule: String) -> void:
+	if rule in AdventurePlayer.LIFE_RULES:
+		setup.life_rule = rule
+	_show_life_rule()
+
+
+func _show_life_rule() -> void:
+	if _life_rule == null:
+		return
+	_life_rule.select(maxi(AdventurePlayer.LIFE_RULES.find(setup.life_rule), 0))
+	_life_rule.tooltip_text = String(LIFE_TIPS.get(setup.life_rule, ""))
 
 
 func _build_buttons() -> Control:
@@ -753,8 +821,9 @@ func _on_name_changed(text: String) -> void:
 ## on the map and its colours, the colour,
 ## the playmat's colour and style, the card packs, the difficulty and a new
 ## seed (a time of day, as the clock gives) — for the player to enjoy and
-## change before setting out. Your rules (the card rule) are not drawn:
-## they stay as the player set them. [param rng] is for tests.
+## change before setting out. Your rules (the card rule, the final battle's
+## rule) are not drawn: they stay as the player set them. [param rng] is
+## for tests.
 func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	if _leaving:
 		return
@@ -1074,6 +1143,11 @@ func open_world(record: Dictionary, world: ShandalarWorld = null) -> WorldScreen
 	return screen
 
 
+## The arrival's line for an adventure of one life [ours]; "Reload allowed",
+## the default, needs none.
+const ONE_LIFE_SUMMARY := "One life: lose or leave the final battle, and the adventure is over."
+
+
 ## The record in a few sentences, for the window `Adventure` opens.
 func summary(record: Dictionary) -> String:
 	var hero: Dictionary = record["hero"]
@@ -1097,6 +1171,8 @@ func summary(record: Dictionary) -> String:
 			var info: Dictionary = catalogue.info(id) if catalogue != null else {}
 			names.append(String(info.get("name", id)))
 		lines.append("Pack worlds: %s." % ", ".join(names))
+	if AdventurePlayer.life_rule_of(record.get("life_rule")) == AdventurePlayer.LIFE_ONE:
+		lines.append(ONE_LIFE_SUMMARY)
 	lines.append("World seed %s." % String(record.get("seed_text", str(record["seed"]))))
 	return "\n".join(lines)
 

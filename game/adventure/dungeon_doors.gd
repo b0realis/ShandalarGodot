@@ -113,7 +113,8 @@ static func at(world: ShandalarWorld, tile: Vector2i) -> int:
 		if int(slot.get("x", -1)) != tile.x or int(slot.get("y", -1)) != tile.y:
 			continue
 		# The first slot standing there is the one (1997's search).
-		if index < CASTLES or int(slot.get("clues", 0)) == 0 or (slot.get("cards", []) as Array).is_empty():
+		# A card put back in a full-bag swap keeps the dungeon open too.
+		if index < CASTLES or int(slot.get("clues", 0)) == 0 or not WorldClues.holds_cards(slot):
 			return -1
 		return index
 	return -1
@@ -189,18 +190,19 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 	_put_flag(world, old, false)
 	slot["clues"] = (int(slot.get("clues", 0)) & ~WorldClues.LOCATION) | WorldClues.CREATURES | WorldClues.RULES
 	var hero := player.tile()
+	var portal := FinalBattle.portal_tile_of(player)
 	var dice := MsvcRandom.new(player.dice)
 	var to := old
 	var misses := 0
 	while true:
 		var x := dice.below(ShandalarWorld.TILES)
 		var y := dice.below(ShandalarWorld.TILES)
-		if takes_dungeon(world, Vector2i(x, y), hero):
+		if takes_dungeon(world, Vector2i(x, y), hero, portal):
 			to = Vector2i(x, y)
 			break
 		# GUARD: no tile left anywhere, and the original draws forever.
 		misses += 1
-		if misses == WorldGenerator.LOOK_EVERYWHERE_AFTER and not _place_left(world, hero):
+		if misses == WorldGenerator.LOOK_EVERYWHERE_AFTER and not _place_left(world, hero, portal):
 			break
 	player.dice = dice.state
 	slot["x"] = to.x
@@ -211,19 +213,22 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 
 ## Whether a moved dungeon may stand on [param tile]: land, no site, no
 ## road (1997's tests) — and [ours: 1997 slip D-s1] no other dungeon, not
-## the hero's tile [param hero].
-static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i) -> bool:
-	if tile == hero or not world.is_land(tile.x, tile.y):
+## the hero's tile [param hero]; nor [ours, part C] Arzakon's portal's
+## tile [param portal] ([method FinalBattle.portal_tile_of]; (−1, −1) for
+## none).
+static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i,
+		portal := Vector2i(-1, -1)) -> bool:
+	if tile == hero or tile == portal or not world.is_land(tile.x, tile.y):
 		return false
 	var taken := ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON
 	return world.tile_flags(tile.x, tile.y) & taken == 0
 
 
 ## Whether any tile could still take a moved dungeon.
-static func _place_left(world: ShandalarWorld, hero: Vector2i) -> bool:
+static func _place_left(world: ShandalarWorld, hero: Vector2i, portal := Vector2i(-1, -1)) -> bool:
 	for y in ShandalarWorld.TILES:
 		for x in ShandalarWorld.TILES:
-			if takes_dungeon(world, Vector2i(x, y), hero):
+			if takes_dungeon(world, Vector2i(x, y), hero, portal):
 				return true
 	return false
 

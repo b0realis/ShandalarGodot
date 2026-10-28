@@ -62,6 +62,15 @@ extends RefCounted
 ## creatures gone (`HandleDefeatedWizardCastle`, dungeonEncounter.c
 ## 918–970).
 ##
+## THE WORLD AT PEACE (part C, after Arzakon's fall — [method
+## AdventurePlayer.at_peace]; the owner, 2026-10-27: creatures *"do not
+## cocer towns etc - the game is passive"*): no siege begins, none falls —
+## [method on_step], [method start] and [method resolve] do nothing but
+## lower the flag. [ours: 1997 ended the program after the final battle.]
+## (With all five wizards beaten no castle is left to send one anyway,
+## [method castle_tiles]; the rule says so outright, whatever a save
+## holds.)
+##
 ## FIXED [ours: 1997 slips, each marked where it is fixed; listed in
 ## docs/adventure-implementation-notes.md]:
 ##  - THE BESIEGED TOWN falls — the one the news named and the map reds
@@ -139,6 +148,8 @@ const SUFFER := "The people will suffer\na thousand more years of their oppressi
 ## the state is changed already.
 static func on_step(player: AdventurePlayer) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
+	if player.at_peace():
+		return news
 	var d := clampi(player.difficulty, 0, 3)
 	if player.siege_timer & 63 == START_AT:
 		news.append_array(start(player))
@@ -167,10 +178,10 @@ static func tier_for(timer: int, town_y: int) -> int:
 ## creature put in slot 7 — the news `[{kind: "siege", …}]`, or `[]` when a
 ## siege is already under way (no die drawn), no wizard has a castle left,
 ## or no town is left to besiege (the dice drawn all the same, one for each
-## town, as 1997 drew them).
+## town, as 1997 drew them) — and never in a world at peace (no die drawn).
 static func start(player: AdventurePlayer, retaliating_wizard := 0) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
-	if player.siege_active or player.world == null:
+	if player.siege_active or player.world == null or player.at_peace():
 		return news
 	var world := player.world
 	var castles := castle_tiles(player)
@@ -290,6 +301,11 @@ static func siege_lines(player: AdventurePlayer, wizard: int, row: int, town: in
 static func resolve(player: AdventurePlayer, besieger := {}) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
 	player.siege_active = false
+	if player.at_peace():
+		# No town falls in a world at peace: a besieger an odd save still
+		# holds simply goes.
+		WorldCreatures.empty(player, SLOT)
+		return news
 	var held := besieger if not besieger.is_empty() else WorldLairs.held_in(player, SLOT)
 	var row := int(held.get("creature", 0))
 	if held.is_empty() or row <= 0 or player.world == null:

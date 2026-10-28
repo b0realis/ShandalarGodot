@@ -499,7 +499,7 @@ def main() -> int:
     parser.add_argument("--keep", metavar="DIR",
                         help="keep the imported files here as well as zipping")
     parser.add_argument("--no-videos", action="store_true",
-                        help="skip transcoding the coin-toss movies")
+                        help="skip transcoding the coin-toss movies and the ending movie")
     parser.add_argument("--no-bundle-movies", action="store_true",
                         help="do not carry the source AVIs in the archive")
     parser.add_argument("--movies-from", metavar="DIR",

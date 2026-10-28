@@ -81,7 +81,10 @@ var world_magic_sites: Array[int] = []
 ## what the hero has learned of it (`clues_bitmap`): 1 where it lies, 2 its
 ## creatures, 4 its rules ([WorldClues]). `entered` (absent for never) is
 ## how often the hero went in ([DungeonDoors]; 1997's `times_entered`, −1
-## at the start, is `entered − 1`).
+## at the start, is `entered − 1`). `left_cards` (absent for none) are the
+## names of the hero's cards put back in a full-bag swap, treasure found
+## again on a later visit ([constant WorldClues.LEFT_CARDS], the owner's
+## ruling of 2026-10-27).
 var encounters: Array[Dictionary] = []
 ## Where the hero starts, in the original's world units (32 to a tile).
 var start := Vector2i.ZERO

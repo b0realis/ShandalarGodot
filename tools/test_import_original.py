@@ -1606,17 +1606,19 @@ class TestSoundManifest(unittest.TestCase):
 
     def test_the_music_is_the_twenty_seven_beds(self):
         # And, since part B (2026-10-23), the two beds 1.3 loops after an
-        # adventure duel, won or lost — kept out of the playlist below.
+        # adventure duel, won or lost, and since part C (2026-10-27) the
+        # adventure won's — kept out of the playlist (TestThePartCSounds).
         music = [k for k in imp.MANIFEST if k.startswith("music_")]
-        self.assertEqual(len(music), 29)
+        self.assertEqual(len(music), 30)
         for key in ("music_duel.wav", "music_location_0.wav",
                     "music_location_19.wav", "music_temple.wav",
                     "music_castle_white.wav", "music_castle_green.wav",
-                    "music_win_duel.wav", "music_lose_duel.wav"):
+                    "music_win_duel.wav", "music_lose_duel.wav",
+                    "music_win_game.wav"):
             self.assertIn(key, music)
         # Stingers stay out: a one-shot inside a shuffle is a jump-scare.
-        for name in ("music_wingame.wav", "music_dungeon.wav"):
-            self.assertNotIn(name, music)
+        # (`Dngnduel.wav` is sfx_dungeon_duel; there is no dungeon tune.)
+        self.assertNotIn("music_dungeon.wav", music)
 
     def test_every_music_key_comes_from_the_sound_folder(self):
         for key, candidates in imp.MANIFEST.items():
@@ -2045,7 +2047,9 @@ class TestTheCreatureSheets(RawStepCase):
     def test_the_world_art_layout_has_every_sheet_row_for_row(self):
         """game/adventure/world/world_art.gd's LAYOUT is the importer's
         WORLD_SHEETS, creatures included, for a skin whose sidecars are
-        missing; the wizards' window's creature pictures ride beside."""
+        missing; the wizards' window's creature pictures ride beside. The
+        board's sheets (DUNGEON_SHEETS, part C) join it when the board's
+        screen is built, and must then match too."""
         text = (REPO / "game" / "adventure" / "world" / "world_art.gd").read_text(encoding="utf-8")
         start = text.index("const LAYOUT := {")
         block = text[start:text.index("\n}\n", start)]
@@ -2054,7 +2058,10 @@ class TestTheCreatureSheets(RawStepCase):
         for key, (_cells, width, height, columns) in imp.WORLD_SHEETS.items():
             self.assertEqual(rows.get(key), (width, height, columns), key)
         self.assertEqual(rows["creature_thumbs"], (80, 64, 8))
-        self.assertEqual(set(rows) - set(imp.WORLD_SHEETS), {"creature_thumbs"})
+        for key, (_cells, width, height, columns) in imp.DUNGEON_SHEETS.items():
+            if key in rows:
+                self.assertEqual(rows[key], (width, height, columns), key)
+        self.assertEqual(set(rows) - set(imp.SIDECAR_SHEETS), {"creature_thumbs"})
         self.assertIn('const CREATURE_PREFIX := "%s"' % imp.CREATURE_PREFIX, text)
 
 
@@ -2080,7 +2087,9 @@ class TestTheEncounterPictures(RawStepCase):
             self.assertNotIn(key, imp.MANIFEST)
 
     def test_each_takes_the_palette_1997_showed_it_in(self):
-        self.assertEqual(imp.PIC_CUT, {"preduel_panels", "preduel_frame", "preduel_frame_tinted"})
+        # (Part C's three cut sheets join them: TestThePartCPictures.)
+        self.assertEqual(imp.PIC_CUT, {"preduel_panels", "preduel_frame", "preduel_frame_tinted",
+                                       "clues_list_buttons", "clue_detail_buttons", "card_banner"})
         for key in imp.ENCOUNTER_PICTURES:
             if key.startswith("preduel_"):
                 self.assertEqual(imp.PIC_PALETTES[key][0], "Prdblk.pic", key)
@@ -2325,3 +2334,491 @@ class TestTheWizardsHall(RawStepCase):
                           ("wizards_staff_lit_black", (60, 324)), ("wizards_gems_red", (48, 48)),
                           ("wizards_skulls_12", (640, 240)), ("wizards_room_green", (640, 480))):
             self.assertIn('\t"%s": Vector2i(%d, %d),' % (key, size[0], size[1]), source, key)
+
+
+# ------------------------------------------------------------ part C ------
+
+## The owner's own 1997 install, beside the checkout; the tests that read it
+## are skipped where it is absent (a clone, CI).
+INSTALL = REPO.parent / "shandalar-xp" / "MagicTG"
+
+
+def make_avi(width: int = 576, height: int = 340, frames: int = 278,
+             micros: int = 66667, codec: bytes = b"IV41") -> bytes:
+    """A RIFF/AVI head with an `avih` and a video `strf` — what
+    `read_avi_header` reads — and no picture at all."""
+    avih = struct.pack("<IIIII", micros, 0, 0, 0x10, frames) + struct.pack(
+        "<IIIII", 0, 2, 0, width, height) + bytes(16)
+    strf = struct.pack("<IiiHH4sIiiII", 40, width, height, 1, 24, codec, 0, 0, 0, 0, 0)
+    hdrl = (b"hdrl" + b"avih" + struct.pack("<I", len(avih)) + avih
+            + b"strf" + struct.pack("<I", len(strf)) + strf)
+    body = b"AVI " + b"LIST" + struct.pack("<I", len(hdrl)) + hdrl
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+def theora_page(width: int = 576, height: int = 340, fps: int = 15) -> bytes:
+    """The first bytes of an Ogg Theora file: a page head, then the Theora
+    identification header (version, the frame in macroblocks, the
+    picture's size in 24 bits each, its offset, the rate as a fraction)."""
+    ident = (b"\x80theora" + bytes([3, 2, 1])
+             + struct.pack(">HH", (width + 15) // 16, (height + 15) // 16)
+             + width.to_bytes(3, "big") + height.to_bytes(3, "big") + bytes([0, 0])
+             + struct.pack(">II", fps, 1) + bytes(20))
+    return b"OggS" + bytes(24) + ident
+
+
+class TestThePartCPictures(RawStepCase):
+    """THE DUNGEONS', THE CASTLES' AND THE END'S PICTURES (2026-10-27, part
+    C): each 1997 file, the palette 1.3 shows it in, and whether it is a
+    ground painted whole or a sheet cut with index 0 clear."""
+
+    def test_every_picture_names_its_file_palette_and_mode(self):
+        self.assertEqual(imp.DUNGEON_PICTURES, {
+            "clues_list": ["Dung_Bd.pic"], "clues_list_buttons": ["Dun_Bar.pic"],
+            "clue_detail": ["Clueback.pic"], "clue_detail_buttons": ["Cluebutn.pic"],
+            "dungeon_treasure": ["Staceybk.pic"], "card_browser": ["Tradscrn.pic"],
+            "card_banner": ["Endtop.pic"], "fifth_wizard": ["5thwiz.pic"],
+            "win_game": ["Wingame.pic"]})
+        palettes = {"clues_list": "Dung_Bd.pic", "clues_list_buttons": "Dung_Bd.pic",
+                    "clue_detail": "Clueback.pic", "clue_detail_buttons": "Clueback.pic",
+                    "dungeon_treasure": "Cavebkgd.pic", "card_browser": "Advfac64.pic",
+                    "card_banner": "Advfac64.pic", "fifth_wizard": "5thwiz.pic",
+                    "win_game": "Wingame.pic"}
+        cut = {"clues_list_buttons", "clue_detail_buttons", "card_banner"}
+        for key, names in imp.DUNGEON_PICTURES.items():
+            self.assertEqual(imp.PIC_SCREENS[key], names, key + " is decoded with the screens")
+            self.assertNotIn(key, imp.MANIFEST)
+            self.assertEqual(imp.PIC_PALETTES[key][0], palettes[key], key)
+            self.assertEqual(key in imp.PIC_CUT, key in cut, key)
+            self.assertEqual(key in imp.PIC_OPAQUE, key not in cut, key)
+        for key in ("clues_list", "clue_detail", "fifth_wizard", "win_game"):
+            self.assertEqual(imp.PIC_PALETTES[key], imp.DUNGEON_PICTURES[key],
+                             key + ": its own palette or none, never another's")
+
+    def _install(self, tmp: str) -> tuple[Path, Path]:
+        root = Path(tmp) / "MagicTG"
+        root.mkdir(parents=True)
+        world = bytes(255 - b for b in ramp_palette())
+        (root / "Advfac64.pic").write_bytes(make_pic(2, 2, bytes([1, 2, 3, 4]), world))
+        return root, Path(tmp) / "skin"
+
+    def test_the_list_s_buttons_are_cut_in_the_list_s_palette(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest = self._install(tmp)
+            screen = ramp_palette()
+            (root / "Dung_Bd.pic").write_bytes(make_pic(2, 1, bytes([5, 6]), screen))
+            (root / "Dun_Bar.pic").write_bytes(make_pic(3, 1, bytes([0, 9, 251])))
+            self._run(root, dest)
+            width, height, channels, pixels = read_png((dest / "clues_list_buttons.png").read_bytes())
+            self.assertEqual((width, height, channels), (3, 1, 4))
+            self.assertEqual(pixels[3], 0, "index 0 is the sprite cut's clear")
+            self.assertEqual(bytes(pixels[4:8]), screen[27:30] + b"\xff")
+            self.assertEqual(bytes(pixels[8:12]), screen[753:756] + b"\xff",
+                             "251 in the list's palette, not the world frame's")
+            _w, _h, channels, pixels = read_png((dest / "clues_list.png").read_bytes())
+            self.assertEqual((channels, pixels), (3, screen[15:18] + screen[18:21]))
+
+    def test_the_treasure_cave_is_painted_whole_in_the_board_s_palette(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest = self._install(tmp)
+            board = ramp_palette()
+            (root / "CaveBkgd.pic").write_bytes(make_pic(1, 1, bytes([1]), board))
+            (root / "Staceybk.pic").write_bytes(make_pic(3, 1, bytes([0, 8, 255])))
+            self._run(root, dest)
+            width, height, channels, pixels = read_png((dest / "dungeon_treasure.png").read_bytes())
+            self.assertEqual((width, height, channels), (3, 1, 3), "opaque, whole")
+            self.assertEqual(pixels, board[0:3] + board[24:27] + board[765:768])
+
+    def test_the_banner_is_cut_in_the_world_frame_s_palette(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest = self._install(tmp)
+            (root / "Endtop.pic").write_bytes(make_pic(2, 1, bytes([0, 9])))
+            self._run(root, dest)
+            world = bytes(255 - b for b in ramp_palette())
+            _w, _h, channels, pixels = read_png((dest / "card_banner.png").read_bytes())
+            self.assertEqual((channels, pixels), (4, world[0:3] + b"\0" + world[27:30] + b"\xff"))
+
+    def test_the_end_s_pictures_keep_their_own_palettes_or_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, dest = self._install(tmp)
+            own = ramp_palette()
+            (root / "Wingame.pic").write_bytes(make_pic(2, 1, bytes([0, 255]), own))
+            (root / "5thwiz.pic").write_bytes(make_pic(2, 1, bytes([0, 255])))
+            log = self._run(root, dest)
+            _w, _h, channels, pixels = read_png((dest / "win_game.png").read_bytes())
+            self.assertEqual((channels, pixels), (3, own[0:3] + own[765:768]))
+            self.assertFalse((dest / "fifth_wizard.png").exists(),
+                             "a picture that lost its own palette is not painted in another's")
+            self.assertIn("5thwiz.pic (no palette in it and none beside it)", log)
+
+
+class TestTheBoardSheets(TestSprSheet):
+    """THE CASTLE AND DUNGEON BOARD'S SHEETS (2026-10-27, part C): from the
+    install's root, twelve 64 x 64 tiles to a row (a dungeon's 48, a
+    castle's 60) and `Dungbutt.spr`'s four frames of four sizes, each at
+    its cell's top left, in the world's palette, each with its sidecar."""
+
+    FILES = {"dungeon_tiles_1": "dungeon1.spr", "dungeon_tiles_2": "dungeon2.spr",
+             "dungeon_tiles_3": "dungeon3.spr", "dungeon_tiles_black": "dungeonb.spr",
+             "dungeon_tiles_blue": "dungeonu.spr", "dungeon_tiles_green": "dungeong.spr",
+             "dungeon_tiles_red": "dungeonr.spr", "dungeon_tiles_white": "dungeonw.spr",
+             "dungeon_plaques": "dungbutt.spr"}
+
+    def test_every_board_sheet_is_wired(self):
+        self.assertEqual(set(imp.DUNGEON_SHEETS), set(self.FILES))
+        for key, name in self.FILES.items():
+            cells, width, height, columns = imp.DUNGEON_SHEETS[key]
+            self.assertEqual(imp.MANIFEST[key], [name], key + ": the install's root, no Spr/ copy")
+            self.assertEqual(imp.SPR_SHEETS[key], ([name], cells, width, height))
+            self.assertEqual(imp.SPR_COLUMNS[key], columns)
+            self.assertEqual(imp.SPR_PALETTES[key][0], "Advfac64.pic", "the world's palette")
+            self.assertEqual(imp.SIDECAR_SHEETS[key], imp.DUNGEON_SHEETS[key])
+            self.assertNotIn(key, imp.WORLD_SHEETS, "WorldArt.LAYOUT mirrors that one")
+            if key == "dungeon_plaques":
+                self.assertEqual((cells, width, height, columns), (4, 201, 281, 4))
+            else:
+                self.assertEqual((cells, width, height, columns),
+                                 (60 if key[len("dungeon_tiles_"):].isalpha() else 48, 64, 64, 12))
+
+    def _sheet(self, tmp: str, name: str, frames: list) -> tuple[Path, Path, bytes]:
+        root = Path(tmp) / "MagicTG"
+        root.mkdir(parents=True)
+        world = ramp_palette()
+        (root / "Advfac64.pic").write_bytes(make_pic(2, 2, bytes([1, 2, 3, 4]), world))
+        (root / name).write_bytes(TestTheWorldSheets._anchored(self, frames))
+        return root, Path(tmp) / "skin", world
+
+    def test_a_dungeon_s_tiles_are_twelve_to_a_row_with_their_grid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            frames = [(64, 64, bytes([1 + i] * 4096), 1 if i == 0 else -1) for i in range(48)]
+            frames.append((3, 1, bytes(3), -1))   # the format's end marker
+            root, dest, world = self._sheet(tmp, "Dungeon2.spr", frames)
+            log = self._run(root, dest)
+            self.assertIn("dungeon_tiles_2", log)
+            width, height, channels, pixels = read_png((dest / "dungeon_tiles_2.png").read_bytes())
+            self.assertEqual((width, height, channels), (768, 256, 4), "4 rows of 12")
+            at = ((64 * 1 + 5) * 768 + 64 * 1 + 5) * 4   # frame 13: row 1, column 1
+            self.assertEqual(bytes(pixels[at:at + 4]), world[14 * 3:14 * 3 + 3] + b"\xff")
+            side = json.loads((dest / "dungeon_tiles_2.json").read_text())
+            self.assertEqual((side["cols"], side["rows"], side["frames"]), (12, 4, 48))
+            self.assertEqual((side["frame_width"], side["frame_height"]), (64, 64))
+            self.assertEqual(side["tops"], [1] + [-1] * 47)
+            self.assertNotIn("sizes", side, "every frame is its cell's size")
+
+    def test_a_castle_s_tiles_keep_the_wizard_on_the_fifth_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            frames = [(64, 64, bytes([1 + i] * 4096), -1) for i in range(60)]
+            frames.append((3, 1, bytes(3), -1))
+            root, dest, world = self._sheet(tmp, "Dungeonr.spr", frames)
+            self._run(root, dest)
+            width, height, _c, pixels = read_png((dest / "dungeon_tiles_red.png").read_bytes())
+            self.assertEqual((width, height), (768, 320))
+            at = ((64 * 4 + 30) * 768 + 64 * 1 + 30) * 4   # frame 49: row 4, column 1
+            self.assertEqual(bytes(pixels[at:at + 3]), world[50 * 3:50 * 3 + 3])
+
+    def test_frames_of_four_sizes_stand_at_their_cells_top_left(self):
+        """`Dungbutt.spr`: no end marker, four frames of four sizes; each at
+        its 201 x 281 cell's top left, the rest of the cell clear, and the
+        sidecar says each frame's own size."""
+        sizes = [(201, 281), (40, 62), (24, 62), (39, 62)]
+        with tempfile.TemporaryDirectory() as tmp:
+            frames = [(w, h, bytes([10 + i] * (w * h)), -1 if i == 0 else 63)
+                      for i, (w, h) in enumerate(sizes)]
+            root, dest, world = self._sheet(tmp, "Dungbutt.spr", frames)
+            self._run(root, dest)
+            width, height, _c, pixels = read_png((dest / "dungeon_plaques.png").read_bytes())
+            self.assertEqual((width, height), (804, 281))
+
+            def at(x, y):
+                i = (y * 804 + x) * 4
+                return bytes(pixels[i:i + 4])
+            self.assertEqual(at(200, 280), world[30:33] + b"\xff", "frame 0 fills its cell")
+            self.assertEqual(at(201, 0), world[33:36] + b"\xff", "frame 1 at cell 1's top left")
+            self.assertEqual(at(201 + 39, 61), world[33:36] + b"\xff")
+            self.assertEqual(at(201 + 40, 0)[3], 0, "past frame 1's width: clear")
+            self.assertEqual(at(201, 62)[3], 0, "below frame 1: clear")
+            self.assertEqual(at(402 + 23, 0), world[36:39] + b"\xff")
+            self.assertEqual(at(603 + 38, 61), world[39:42] + b"\xff")
+            side = json.loads((dest / "dungeon_plaques.json").read_text())
+            self.assertEqual((side["cols"], side["rows"], side["frames"]), (4, 1, 4))
+            self.assertEqual(side["sizes"], [list(size) for size in sizes])
+            self.assertEqual(side["tops"], [-1, 63, 63, 63])
+
+
+class TestThePartCSounds(unittest.TestCase):
+    """THE DUNGEONS' AND THE END'S SOUNDS (2026-10-27, part C), each from
+    `Sound/`, the folder 1.3 reads it in."""
+
+    SOUNDS = {"sfx_dungeon_loop.wav": "Dambloop.wav",
+              "sfx_dungeon_ambience_1.wav": "Damb1.wav", "sfx_dungeon_ambience_2.wav": "Damb2.wav",
+              "sfx_dungeon_ambience_3.wav": "Damb3.wav", "sfx_dungeon_ambience_4.wav": "Damb4.wav",
+              "sfx_dungeon_ambience_5.wav": "Damb5.wav", "sfx_dice.wav": "Dice.wav",
+              "sfx_scroll.wav": "Scroll.wav", "sfx_find_card.wav": "Findcard.wav",
+              "music_win_game.wav": "Wingame.wav"}
+
+    def test_every_sound_comes_from_the_sound_folder(self):
+        for key, name in self.SOUNDS.items():
+            self.assertEqual(imp.MANIFEST[key], ["Sound/" + name, name], key)
+        # The ones part C plays that were here before it.
+        for key in ("sfx_treasure.wav", "sfx_dsummon.wav", "sfx_dungeon_duel.wav",
+                    "sfx_click.wav", "sfx_wizards.wav"):
+            self.assertIn(key, imp.MANIFEST)
+
+    def test_the_win_tune_stays_out_of_the_playlist(self):
+        text = (REPO / "game" / "music_library.gd").read_text(encoding="utf-8")
+        self.assertNotIn('"music_win_game"', text)
+
+    def test_a_1997_install_supplies_them_all(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            (root / "Sound").mkdir(parents=True)
+            for name in self.SOUNDS.values():
+                (root / "Sound" / name).write_bytes(b"RIFF " + name.encode())
+            (root / "Scroll.spr").write_bytes(b"not the scroll's sound")
+            index = imp.build_index([root])
+            for key in self.SOUNDS:
+                self.assertEqual(imp._first_of(index, imp.MANIFEST[key]).parent.name, "Sound", key)
+
+    def test_what_no_screen_reads_yet_waits_in_not_read(self):
+        """NOT_READ holds the MANIFEST keys no screen reads, SCREENS_NOT_READ
+        the pictures and movies: part C's wait there until stage C2's
+        screens read them — and a key the game names must leave them."""
+        part_c = set(self.SOUNDS) | set(imp.DUNGEON_SHEETS)
+        self.assertLessEqual(part_c, imp.NOT_READ)
+        self.assertLessEqual(set(imp.DUNGEON_PICTURES) | set(imp.THEORA_MOVIES),
+                             imp.SCREENS_NOT_READ)
+        self.assertLessEqual(imp.NOT_READ, set(imp.MANIFEST),
+                             "THE CHECKLIST counts the MANIFEST less NOT_READ")
+        self.assertLessEqual(imp.SCREENS_NOT_READ, set(imp.PIC_SCREENS) | set(imp.THEORA_MOVIES))
+        # game/skin.gd's SIZES names every picture place, read or not.
+        sources = {path: path.read_text(encoding="utf-8")
+                   for path in (REPO / "game").rglob("*.gd") if path.name != "skin.gd"}
+        for key in part_c | imp.SCREENS_NOT_READ:
+            stem = key.rsplit(".", 1)[0] if key.endswith(".wav") else key
+            readers = [path.relative_to(REPO).as_posix()
+                       for path, text in sources.items() if '"%s"' % stem in text]
+            self.assertEqual(readers, [], "%s is read now: take it out of NOT_READ" % key)
+
+
+class TestTheWinMovie(unittest.TestCase):
+    """THE WIN'S MOVIE (2026-10-27, part C; the owner: *"Convert it"*):
+    `Mtgend.avi` converted to Ogg Theora with Vorbis sound by the player's
+    own encoder, detected and never assumed; skipped with a notice without
+    one. Never fatal."""
+
+    def test_the_movie_is_the_1997_ending(self):
+        self.assertEqual(imp.THEORA_MOVIES, {"win_movie.ogv": ["Mtgend.avi"]})
+        self.assertNotIn("win_movie.ogv", imp.MANIFEST)
+        self.assertNotIn("win_movie", imp.VIDEOS, "not a sheet: the coin toss's way")
+
+    def _which(self, *programs):
+        return lambda name: "/usr/bin/" + name if name in programs else None
+
+    def test_ffmpeg_is_taken_when_it_lists_libtheora(self):
+        listing = (" V..... = Video\n ------\n V....D libtheora   libtheora Theora\n"
+                   " A..X.D vorbis      Vorbis\n A....D libvorbis   libvorbis\n")
+        done = mock.Mock(stdout=listing, returncode=0)
+        with mock.patch.object(imp.shutil, "which", self._which("ffmpeg")), \
+                mock.patch.object(imp.subprocess, "run", return_value=done):
+            self.assertEqual(imp.find_theora_encoder()[:2], ("ffmpeg", "libvorbis"))
+        done.stdout = listing.replace(" A....D libvorbis   libvorbis\n", "")
+        with mock.patch.object(imp.shutil, "which", self._which("ffmpeg")), \
+                mock.patch.object(imp.subprocess, "run", return_value=done):
+            self.assertEqual(imp.find_theora_encoder()[:2], ("ffmpeg", "vorbis"),
+                             "ffmpeg's own Vorbis encoder when there is no libvorbis")
+        done.stdout = listing.replace(" V....D libtheora   libtheora Theora\n", "")
+        with mock.patch.object(imp.shutil, "which", self._which("ffmpeg")), \
+                mock.patch.object(imp.subprocess, "run", return_value=done):
+            self.assertIsNone(imp.find_theora_encoder(), "no libtheora, no GStreamer: none")
+
+    def test_gstreamer_is_the_second_choice(self):
+        def inspect(argv, **_kw):
+            return mock.Mock(returncode=0 if argv[1] in present else 1)
+        present = {"decodebin", "theoraenc", "vorbisenc", "oggmux"}
+        with mock.patch.object(imp.shutil, "which", self._which("gst-launch-1.0", "gst-inspect-1.0")), \
+                mock.patch.object(imp.subprocess, "run", side_effect=inspect):
+            self.assertEqual(imp.find_theora_encoder()[:2], ("gst-launch-1.0", "vorbisenc"))
+        present = {"decodebin", "vorbisenc", "oggmux"}
+        with mock.patch.object(imp.shutil, "which", self._which("gst-launch-1.0", "gst-inspect-1.0")), \
+                mock.patch.object(imp.subprocess, "run", side_effect=inspect):
+            self.assertIsNone(imp.find_theora_encoder(), "no theoraenc")
+
+    def test_the_commands_ask_for_theora_and_vorbis(self):
+        avi, out = Path("/in/Mtgend.avi"), Path("/out/win_movie.ogv.part")
+        argv = imp.theora_argv("ffmpeg", "libvorbis", avi, out)
+        joined = " ".join(argv)
+        self.assertIn("-c:v libtheora -q:v 7 -c:a libvorbis -q:a 4", joined, "the spike's")
+        self.assertIn("-nostdin", argv)
+        self.assertEqual(argv[-3:], ["-f", "ogg", str(out)])
+        self.assertNotIn("-strict", argv)
+        self.assertIn("-strict experimental", " ".join(imp.theora_argv("ffmpeg", "vorbis", avi, out)))
+        gst = imp.theora_argv("gst-launch-1.0", "vorbisenc", avi, out)
+        for token in ("decodebin", "theoraenc", "quality=44", "vorbisenc", "quality=0.4",
+                      "oggmux", "location=%s" % avi, "location=%s" % out):
+            self.assertIn(token, gst)
+
+    def _convert(self, writes: bytes | None, old: bytes | None = None,
+                 encoder=("ffmpeg", "libvorbis", "fake ffmpeg")) -> tuple[Path, str, list]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "MagicTG"
+        root.mkdir()
+        (root / "Mtgend.avi").write_bytes(make_avi())
+        dest = Path(tmp.name) / "skin"
+        dest.mkdir()
+        if old is not None:
+            (dest / "win_movie.ogv").write_bytes(old)
+        calls = []
+
+        def run(argv, **_kw):
+            calls.append(argv)
+            if writes is None:
+                raise imp.subprocess.CalledProcessError(1, argv[0])
+            Path(argv[-1]).write_bytes(writes)
+            return mock.Mock(returncode=0)
+        log = io.StringIO()
+        with mock.patch.object(imp, "find_theora_encoder", lambda: encoder), \
+                mock.patch.object(imp.subprocess, "run", side_effect=run), redirect_stdout(log):
+            imp.import_theora_movies(imp.build_index([root]), dest)
+        return dest, log.getvalue(), calls
+
+    def test_a_conversion_writes_the_ogv_and_nothing_beside_it(self):
+        dest, log, calls = self._convert(theora_page())
+        self.assertEqual((dest / "win_movie.ogv").read_bytes(), theora_page())
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ["win_movie.ogv"])
+        self.assertEqual(calls[0][calls[0].index("-i") + 1].rsplit("/", 1)[-1], "Mtgend.avi")
+        self.assertIn("win_movie.ogv", log)
+        self.assertIn("576x340, 278 frames", log)
+
+    def test_what_is_not_theora_is_skipped_and_an_older_movie_kept(self):
+        dest, log, _calls = self._convert(b"<html>404", old=b"the last good one")
+        self.assertIn("SKIPPED", log)
+        self.assertEqual((dest / "win_movie.ogv").read_bytes(), b"the last good one")
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ["win_movie.ogv"], "no .part left")
+
+    def test_an_encoder_that_fails_is_skipped_not_fatal(self):
+        dest, log, _calls = self._convert(None)
+        self.assertIn("SKIPPED", log)
+        self.assertEqual(list(dest.iterdir()), [])
+
+    def test_no_encoder_says_what_to_install(self):
+        dest, log, calls = self._convert(theora_page(), encoder=None)
+        self.assertEqual(calls, [])
+        self.assertIn("NO THEORA ENCODER", log)
+        self.assertIn("libtheora", log)
+        self.assertEqual(list(dest.iterdir()), [])
+
+    def test_no_movie_is_no_failure(self):
+        log = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(log), \
+                mock.patch.object(imp, "find_theora_encoder") as finder:
+            self.assertEqual(imp.import_theora_movies({}, Path(tmp)), [])
+        finder.assert_not_called()
+        self.assertIn("no ending movie found", log.getvalue())
+
+    def test_the_movie_is_converted_with_the_videos_and_skipped_without(self):
+        for flags, expected in (([], 1), (["--no-videos"], 0)):
+            with tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(imp, "import_videos"), \
+                    mock.patch.object(imp, "import_theora_movies") as convert, \
+                    redirect_stdout(io.StringIO()):
+                argv = sys.argv
+                sys.argv = ["import_original.py", "--source", tmp, "--dest",
+                            str(Path(tmp) / "skin")] + flags
+                try:
+                    self.assertEqual(imp.main(), 0)
+                finally:
+                    sys.argv = argv
+                self.assertEqual(convert.call_count, expected, flags)
+
+    def test_the_checklist_names_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MagicTG"
+            root.mkdir()
+            (root / "Mtgend.avi").write_bytes(make_avi())
+            argv = sys.argv
+            sys.argv = ["import_original.py", "--source", str(root), "--check"]
+            log = io.StringIO()
+            try:
+                with redirect_stdout(log), \
+                        mock.patch.object(imp, "find_theora_encoder",
+                                          lambda: ("ffmpeg", "libvorbis", "fake ffmpeg")):
+                    self.assertEqual(imp.main(), 0)
+            finally:
+                sys.argv = argv
+        out = log.getvalue()
+        self.assertIn("unused   win_movie.ogv", out)
+        self.assertIn("Mtgend.avi here, converted at import: fake ffmpeg", out)
+        self.assertIn("unused   fifth_wizard", out)
+        self.assertIn("of the %d skin files the game reads"
+                      % len(set(imp.MANIFEST) - imp.NOT_READ), out)
+
+    def test_the_upscaler_leaves_it_alone(self):
+        import upscale_skin
+        with tempfile.TemporaryDirectory() as tmp:
+            skin = Path(tmp)
+            (skin / "win_movie.ogv").write_bytes(theora_page())
+            imp.write_png(skin / "win_game.png", 1, 1, bytes(3))
+            self.assertEqual(upscale_skin.pictures(skin), ["win_game"])
+            self.assertIn("win_movie.ogv", upscale_skin.skin_files(skin),
+                          "carried into the hi-res skin as it is")
+
+    def test_a_readable_avi_head_is_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "Mtgend.avi"
+            path.write_bytes(make_avi())
+            head = imp.read_avi_header(path)
+        self.assertEqual((head["width"], head["height"], head["frames"], head["codec"]),
+                         (576, 340, 278, "IV41"))
+        self.assertAlmostEqual(head["fps"], 15.0, places=2)
+
+
+@unittest.skipUnless(INSTALL.is_dir(), "the owner's 1997 install is not beside the checkout")
+class TestAgainstTheOwnersInstall(unittest.TestCase):
+    """THE FACTS THE BOARD'S DRAWING RESTS ON (part C), measured on the
+    owner's own install (`../shandalar-xp/MagicTG/`); skipped where it is
+    absent. Nothing of it is copied: the files are read where they lie."""
+
+    SHEETS = ["Dungeon1.spr", "Dungeon2.spr", "Dungeon3.spr", "Dungeonb.spr",
+              "Dungeonu.spr", "Dungeong.spr", "Dungeonr.spr", "Dungeonw.spr"]
+
+    def frames(self, name: str) -> list:
+        return imp.decode_spr((INSTALL / name).read_bytes())
+
+    def test_the_sheets_hold_48_and_60_frames_and_the_plaques_four_sizes(self):
+        for name in self.SHEETS:
+            frames = self.frames(name)
+            self.assertEqual(len(frames) - 1, 48 if name[7].isdigit() else 60, name)
+            self.assertEqual(frames[-1][:2], (3, 1), name + ": the end marker")
+            self.assertEqual({f[:2] for f in frames[:-1]}, {(64, 64)}, name)
+        self.assertEqual([f[:2] for f in self.frames("Dungbutt.spr")],
+                         [(201, 281), (40, 62), (24, 62), (39, 62)], "no end marker")
+
+    def test_the_floors_and_the_odd_rows_are_the_same_pixels_but_in_white(self):
+        for name in self.SHEETS:
+            px = [f[2] for f in self.frames(name)]
+            for i in (13, 14, 15):
+                self.assertEqual(px[i], px[i + 4], "%s %d" % (name, i))
+            self.assertEqual(px[0], px[12], name)
+            self.assertEqual(px[0], px[24], name)
+            same = [px[0] == px[i] for i in (4, 16, 28)] + [px[12] == px[16]]
+            # The white castle's 4, 16 and 28 mark the floor; no other does.
+            self.assertEqual(same, [name != "Dungeonw.spr"] * 4, name)
+
+    def test_no_board_sheet_uses_the_indices_its_ground_s_palette_changes(self):
+        for name in self.SHEETS + ["Dungbutt.spr"]:
+            used = set()
+            for frame in self.frames(name):
+                used |= set(frame[2])
+            self.assertFalse(used & {251, 252, 253, 254}, name)
+
+    def test_the_end_s_pictures_bring_their_own_palettes(self):
+        for name in ("Wingame.pic", "5thwiz.pic", "Dung_Bd.pic", "Clueback.pic"):
+            self.assertIsNotNone(imp.decode_pic((INSTALL / name).read_bytes())[3], name)
+        for name in ("Dun_Bar.pic", "Cluebutn.pic", "Staceybk.pic", "Tradscrn.pic", "Endtop.pic"):
+            self.assertIsNone(imp.decode_pic((INSTALL / name).read_bytes())[3], name)
+
+    def test_the_movie_is_indeo_576_by_340(self):
+        head = imp.read_avi_header(INSTALL / "Mtgend.avi")
+        self.assertEqual((head["width"], head["height"], head["frames"], head["codec"]),
+                         (576, 340, 278, "IV41"))

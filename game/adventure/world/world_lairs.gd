@@ -29,10 +29,16 @@ extends RefCounted
 ##  - A BEATEN WIZARD'S COLOUR: a lair of it is black instead (blue when
 ##    black's wizard is the beaten one) — or gone when another wizard is
 ##    beaten too; a creature of it takes its other colour, or is gone when
-##    it has none or that one's wizard is beaten too.
-##  - Gone too: anything on a town's tile; in slot 0 anything but the
-##    quest's creature while its quest is under way; a lair on another
-##    slot's place.
+##    it has none or that one's wizard is beaten too. Not in a WORLD AT
+##    PEACE (part C, after Arzakon's fall, [method
+##    AdventurePlayer.at_peace]): there every colour's creatures and lairs
+##    come again, as if no wizard had fallen — with all five beaten 1997's
+##    rule would leave the world bare [ours, the owner's "you can still
+##    explore … battle creatures"; their tempers are [WorldCreatures]'].
+##  - Gone too: anything on a town's tile; anything on Arzakon's portal's
+##    tile ([method FinalBattle.portal_at]; part C [ours]); in slot 0
+##    anything but the quest's creature while its quest is under way; a
+##    lair on another slot's place.
 ##  - A lair is seen only within a tile of the hero ([method seen]; the
 ##    creatures over their whole 4 tiles, [method WorldCreatures.seen]),
 ##    never moves, and is entered when the hero comes within 26 of its
@@ -199,8 +205,9 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 		entry["creature"] = row
 		entry["heading"] = 0
 		entry["frame"] = 0
-	# (i) A beaten wizard's colour.
-	if color >= 1 and color <= 5 and AdventurePlayer.COLORS[color - 1] in player.defeated_wizards:
+	# (i) A beaten wizard's colour — never in a world at peace (part C).
+	if not player.at_peace() and color >= 1 and color <= 5 \
+			and AdventurePlayer.COLORS[color - 1] in player.defeated_wizards:
 		if row == CreatureBook.LAIR:
 			if player.defeated_wizards.size() > 1:
 				return true
@@ -213,8 +220,8 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 				if other & (1 << hue) != 0 and AdventurePlayer.COLORS[hue - 1] in player.defeated_wizards:
 					return true
 			entry["color"] = _single_color(other)
-	# (j) Never on a town's tile.
-	if world.tile_flags(at.x, at.y) & ShandalarWorld.SITE != 0:
+	# (j) Never on a town's tile — nor on Arzakon's portal's (part C).
+	if world.tile_flags(at.x, at.y) & ShandalarWorld.SITE != 0 or FinalBattle.portal_at(player, at):
 		return true
 	# (k) Slot 0 holds only the quest's creature while its quest runs.
 	if slot == 0 and wanted != 0 and row != wanted:

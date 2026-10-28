@@ -378,7 +378,8 @@ static func worn(path: String) -> Dictionary:
 ## lists, measured off a 1997 skin by `tools/skin_catalogue.py`;
 ## `tools/test_skin_catalogue.py` holds this table to that file. The
 ## coin-toss sheets are not here (their `.json` describes their own
-## pixels) and neither are the portraits (fitted to their frame, any size).
+## pixels), nor the win's movie (`win_movie.ogv`, not a picture), and
+## neither are the portraits (fitted to their frame, any size).
 const SIZES := {
 	"title_background": Vector2i(640, 480),
 	"menu_background": Vector2i(640, 480),
@@ -562,6 +563,24 @@ const SIZES := {
 	"wizards_skulls_5": Vector2i(640, 240),
 	"wizards_skulls_8": Vector2i(640, 240),
 	"wizards_skulls_12": Vector2i(640, 240),
+	"dungeon_tiles_1": Vector2i(768, 256),
+	"dungeon_tiles_2": Vector2i(768, 256),
+	"dungeon_tiles_3": Vector2i(768, 256),
+	"dungeon_tiles_black": Vector2i(768, 320),
+	"dungeon_tiles_blue": Vector2i(768, 320),
+	"dungeon_tiles_green": Vector2i(768, 320),
+	"dungeon_tiles_red": Vector2i(768, 320),
+	"dungeon_tiles_white": Vector2i(768, 320),
+	"dungeon_plaques": Vector2i(804, 281),
+	"clues_list": Vector2i(640, 480),
+	"clues_list_buttons": Vector2i(640, 480),
+	"clue_detail": Vector2i(640, 480),
+	"clue_detail_buttons": Vector2i(300, 100),
+	"dungeon_treasure": Vector2i(640, 480),
+	"card_browser": Vector2i(640, 480),
+	"card_banner": Vector2i(152, 19),
+	"fifth_wizard": Vector2i(640, 480),
+	"win_game": Vector2i(640, 480),
 	"duel_pattern_white": Vector2i(721, 381),
 	"duel_pattern_blue": Vector2i(721, 381),
 	"duel_pattern_black": Vector2i(888, 381),

@@ -425,6 +425,45 @@
   `CoinToss.hold` / `is_held` / `clock_ms` / `_wait`, `DeckModel.
   dck_left_out` / `dck_left_out_note` (shown by `DeckBuilderScreen.
   _export_deck`). Tests: `tests/*/test_c12_*.gd`.
+- Part C, stage C1: the rules inside castles and dungeons and the end
+  (2026-10-27; headless, read by stage C2's screens; `DungeonDoors.
+  BOARD_READY` stays false until then). The board: `game/adventure/
+  dungeon_board.gd`: `DungeonBoard` (`enter`, `generate` — 1997's maze with
+  its GUARD —, `creatures_for`, `step`, `reveal`, `direction_of_key`,
+  `direction_toward`, `cell_to_page` / `page_to_cell`, `walk_toward`,
+  `rooms_left`, `roll_dice`, `bars` (one rule: `DungeonDuels.bars`),
+  `riddle` / `riddle_answered`, `room_done`, `open_treasure` /
+  `treasure_swap` / `treasure_declined`, `next_duel_life` /
+  `life_in_next_duel` (one rule: `DungeonDuels.hero_life`), `next_duel_line`,
+  `close`, the run record `run`); `WorldClues.lines` saying "large" (D11);
+  `WorldClues.LEFT_CARDS`, `left_cards`, `holds_cards` (a card put back in
+  a full-bag swap stays as treasure; `DungeonDoors.at` and the save read it).
+  The duels inside: `game/adventure/dungeon_duels.gd`: `DungeonDuels`
+  (`read` / `write` / `monster_row`, `setup` / `setup_room`, `minion`,
+  `words`, `bars` / `colors_of` / `forbidden`, `hero_deck`, `draw_stake`,
+  `life_parts` / `hero_life`, `creature_life`, `pool_after`, `duel_config`,
+  `settle`). A castle won: `game/adventure/castle_win.gd`: `CastleWin`
+  (`beat`, `offered`, `take`, `pick_title`, `castle_site`). The end:
+  `game/adventure/final_battle.gd`: `FinalBattle` (`score_parts`, `score`,
+  `shown`, `years`, `final_score`, `hero_life`, `duel_config`, `door`,
+  `open_portal`, `portal_at` / `portal_open` / `portal_name`, `settle`,
+  `on_load` — One life: a battle left mid-way is lost —, `portal_tile`
+  (the walkable free tile nearest the map's middle, no dice), `roam`, the
+  words,
+  `RULES`); `game/adventure/hall_of_fame.gd`: `HallOfFame` (`entry_of`,
+  `add`, `entries`, `best_first`, `one_life_state` / `mark_one_life`); `AdventurePlayer.life_rule` / `LIFE_RELOAD` / `LIFE_ONE` /
+  `life_rule_of`, `ended`, `final`, `final_attempts`, `at_door`, `portal`,
+  `at_peace`, `score_so_far`, the save's `end` part (`_read_end`);
+  `AdventureSetup`'s final-battle rule; `EmbarkScreen.LifeRule` /
+  `RulesRow`; `Sieges` at peace; `WorldCreatures.TEMPERS`, `give_temper`,
+  `temper_of`, `_fill`; `WorldLairs.fill` (at peace; nothing made on the
+  portal's tile), `DungeonDoors.takes_dungeon(…, portal)`; the pointers:
+  `WorldStatus.targets` ("portal" / "monument"), `WorldStatus.lines`,
+  `WorldGuides.INKS` / `ink_for`. The assets: `tools/import_original.py`
+  `DUNGEON_PICTURES`, `DUNGEON_SHEETS` / `SIDECAR_SHEETS` (the `sizes`
+  field), the part C sounds, `import_theora_movies` (`win_movie.ogv`),
+  `SCREENS_NOT_READ`; `game/skin.gd` `SIZES`; `tools/skin_catalogue.py`'s
+  "The dungeons and castles" and "The end". Tests: `tests/*/test_pc_w*_*.gd`.
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
   `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
   `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,

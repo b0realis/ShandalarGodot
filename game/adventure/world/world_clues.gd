@@ -6,8 +6,9 @@ extends RefCounted
 ## `@CAVE_SHOWCLUES`, `@COLORCARDS`). A castle or dungeon is listed once
 ## the hero has learned anything of it (its slot's `clues`; a dungeon only
 ## while it holds cards), with what is known:
-##  - 2, its creatures: "-Contains large black creatures." for a castle,
-##    small for a dungeon, in the slot's colour;
+##  - 2, its creatures: "-Contains large black creatures." for a castle
+##    and a large dungeon, small for the others, in the slot's colour
+##    ([method lines]);
 ##  - 4, its rules, a line for each (`rules`) and the card in effect;
 ##  - 1, where it lies: "-East of Kraag Forge.", the way from the town it
 ##    was placed by (`town`) — 1997's four ways are the screen's diagonals.
@@ -31,12 +32,24 @@ extends RefCounted
 ## also a rule bit: a slot holding it and no other rule lists no "No special
 ## rules." line ([method lines] reads the whole word, as 1997's detail
 ## screen did).
+##
+## THE CARDS A DUNGEON HOLDS ([method holds_cards], [method treasures]):
+## its own treasures (`cards`, [constant ShandalarWorld.DUNGEON_CARDS]
+## indices) and the cards the hero left behind in it ([constant
+## LEFT_CARDS], names) — [ours, the owner's ruling of 2026-10-27 on D12: "the
+## card the hero puts back STAYS AS TREASURE in that dungeon, to be found
+## again on a later visit" ([method DungeonBoard.treasure_swap])]. A dungeon
+## lasts while it holds any ([method known], the owner's c2), and its clue
+## lists them all.
 
 ## Rules bit 0x200: the cards were taken over this slot's clue.
 const CARDS_TAKEN := 0x200
 ## The castle and dungeon slots the pick and the forgetting walk (1997's
 ## fifteen, `g_castle_dungeon_slots`).
 const SLOTS := 15
+## A slot's key for the cards the hero left behind in it (names, in the
+## order left; the class's notes).
+const LEFT_CARDS := "left_cards"
 
 const LOCATION := 1
 const CREATURES := 2
@@ -86,7 +99,7 @@ static func pick_for_hint(player: AdventurePlayer) -> int:
 	var hero := player.tile()
 	for i in mini(world.encounters.size(), SLOTS):
 		var slot: Dictionary = world.encounters[i]
-		if (slot.get("cards", []) as Array).is_empty() or int(slot.get("clues", 0)) & 7 == 7:
+		if not holds_cards(slot) or int(slot.get("clues", 0)) & 7 == 7:
 			continue
 		var far := WorldGenerator.distance(hero.x - int(slot.get("x", 0)), hero.y - int(slot.get("y", 0)))
 		var score := dice.below(far) + far / 2
@@ -167,14 +180,35 @@ static func clue_word(world: ShandalarWorld, index: int) -> String:
 const CLUE_WORDS: Array[String] = ["(first clue)", "(second clue)", "(third clue)"]
 
 
-## The treasure cards slot [param index] still holds, by name.
+## The treasure cards slot [param index] still holds, by name: its own,
+## then the ones the hero left behind in it.
 static func treasures(world: ShandalarWorld, index: int) -> Array[String]:
 	var out: Array[String] = []
 	if world == null or index < 0 or index >= world.encounters.size():
 		return out
-	for card in (world.encounters[index] as Dictionary).get("cards", []):
+	var slot: Dictionary = world.encounters[index]
+	for card in slot.get("cards", []):
 		out.append(String(ShandalarWorld.DUNGEON_CARDS[int(card)][1]))
+	out.append_array(left_cards(slot))
 	return out
+
+
+## The cards the hero left behind in [param slot] ([constant LEFT_CARDS]),
+## by name — anything else a damaged save put there read as none.
+static func left_cards(slot: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var kept: Variant = slot.get(LEFT_CARDS, [])
+	if kept is Array:
+		for card in kept:
+			if card is String and card != "":
+				out.append(card)
+	return out
+
+
+## Whether [param slot] holds any card — its own treasures or one the hero
+## left behind (the class's notes).
+static func holds_cards(slot: Dictionary) -> bool:
+	return not (slot.get("cards", []) as Array).is_empty() or not left_cards(slot).is_empty()
 
 
 ## The slots (0–4 castles, 5–14 dungeons) the hero knows something of.
@@ -186,7 +220,7 @@ static func known(world: ShandalarWorld) -> Array[int]:
 		var slot: Dictionary = world.encounters[i]
 		if int(slot.get("clues", 0)) == 0:
 			continue
-		if i >= 5 and (slot.get("cards", []) as Array).is_empty():
+		if i >= 5 and not holds_cards(slot):
 			continue
 		out.append(i)
 	return out
@@ -242,14 +276,18 @@ static func lines(world: ShandalarWorld, index: int) -> Array[String]:
 	var slot: Dictionary = world.encounters[index]
 	var clues := int(slot.get("clues", 0))
 	var color := clampi(int(slot.get("color", 0)), 0, 5)
-	var cards: Array[String] = []
-	for card in slot.get("cards", []):
-		cards.append(String(ShandalarWorld.DUNGEON_CARDS[int(card)][1]))
+	var cards := treasures(world, index)
 	if not cards.is_empty():
 		out.append("Treasure: " + ", ".join(cards))
 	if clues & CREATURES != 0:
 		out.append("Creatures:")
-		out.append("-Contains %s %s creatures." % ["large" if index < 5 else "small", COLOR_WORDS[color]])
+		# A castle's are large; a dungeon's by its size, `monster_flags &
+		# 0x80` — the tiers its rooms draw from ([method DungeonBoard.
+		# creatures_for]). [ours: 1997 slip N4, the owner's D11 — 1997's
+		# detail screen said "small" for every dungeon (dungeonCluesScreen.c
+		# 1086–1095), a large one's too.]
+		var large := index < 5 or int(slot.get("monster_flags", 0)) & DungeonBoard.LARGE != 0
+		out.append("-Contains %s %s creatures." % ["large" if large else "small", COLOR_WORDS[color]])
 	if clues & RULES != 0:
 		out.append("Dungeon Rules:")
 		var rules := int(slot.get("rules", 0))

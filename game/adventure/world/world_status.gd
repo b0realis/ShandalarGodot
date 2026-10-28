@@ -26,7 +26,10 @@ extends RefCounted
 ##
 ## THE GUIDES ([method targets]): the town under siege, and the quest's
 ## target — none for a creature's quest until its creature is beaten (as
-## 1997: the creature comes to the hero, where it will), then its giver.
+## 1997: the creature comes to the hero, where it will), then its giver;
+## and Arzakon's portal, open or petrified (part C, [method
+## FinalBattle.portal_target]), which the quest pane names too ([method
+## lines], [method FinalBattle.portal_line]).
 ##
 ## THE WIZARDS' RECORD ([method wizard_rows]) — what 1997's wizards' window
 ## (F6, `Statwin.dll`) was handed: `ShowStatsWindow` (1.3
@@ -229,6 +232,9 @@ static func lines(player: AdventurePlayer) -> Array[String]:
 	if under_siege != "":
 		out.append(under_siege)
 	out.append_array(quest_lines(player))
+	var portal := FinalBattle.portal_line(player)
+	if portal != "":
+		out.append(portal)
 	var bonus := next_duel_line(player)
 	if bonus != "":
 		out.append(bonus)
@@ -237,7 +243,8 @@ static func lines(player: AdventurePlayer) -> Array[String]:
 
 
 ## The places to guide the hero to: `{tile, kind, name}` — the city under
-## siege, the quest's target.
+## siege, the quest's target, Arzakon's portal ("portal", or "monument"
+## once petrified).
 static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if player == null or player.world == null:
@@ -252,6 +259,9 @@ static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 		var site: Dictionary = player.world.sites[target]
 		out.append({"tile": Vector2i(int(site["x"]), int(site["y"])), "kind": "quest",
 			"name": WorldNames.site_name(player.world, target)})
+	var portal := FinalBattle.portal_target(player)
+	if not portal.is_empty():
+		out.append(portal)
 	return out
 
 

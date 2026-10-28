@@ -44,12 +44,14 @@ The MANIFEST below is the single place that maps skin keys (what the game
 asks for) to original filenames (what the importer hunts for). Extending
 the skin = adding a row here + using the key in game code.
 
-One step is a CONVERSION rather than a copy: the two coin-toss movies are
-Indeo Video 4.1 AVIs, which nothing in Python or Godot can read, so they
-are transcoded into sprite sheets with whichever of ffmpeg /
-gst-launch-1.0 is installed. The decoder is DETECTED, never assumed, and
-its absence is reported and skipped rather than fatal. See the VIDEOS
-block for the whole argument.
+Two steps are CONVERSIONS rather than copies: the two coin-toss movies are
+AVIs, which nothing in Python or Godot can read, so they are transcoded
+into sprite sheets with whichever of ffmpeg / gst-launch-1.0 is
+installed; and the win's movie (`Mtgend.avi`, Indeo 4.1) is converted
+into an Ogg Theora `.ogv`, which Godot plays itself, by whichever of them
+can encode Theora. The program is DETECTED, never assumed, and its
+absence is reported and skipped rather than fatal; `--no-videos` skips
+both. See the VIDEOS block and THE WIN'S MOVIE for the whole argument.
 
 Note on raw .PIC/.SPR decoding: BOTH original formats are decoded here
 with nothing but the standard library, and since 2026-09-09 that is how
@@ -557,6 +559,39 @@ MANIFEST: dict[str, list[str]] = {
     "quest_clock":           ["clocknew.spr"],
     "quest_sunmoon":         ["sunmoon.spr"],
     "quest_days":            ["daysnew.spr"],
+    # THE CASTLE AND DUNGEON BOARD'S SHEETS (2026-10-27, part C): what
+    # 1.3's board (`DrawCastleDungeonBoard`, dungeonEncounter.c 1149-1401)
+    # draws its cells from — in the install's ROOT, not `Spr/`, and with no
+    # 800 or 1024 copies. A dungeon wears one of three, drawn at random per
+    # entry (`internal_rand(3)`, :176, :264): 1 brown earth, 2 grey
+    # cobbles, 3 lava. A castle wears its colour's (the path table from
+    # index 2 + colour, :259-261: `Dungeonb/u/g/r/w`), whose frames 48-52
+    # are its wizard's five poses (only 49 is ever drawn, :1325).
+    # `Dungbutt.spr`: the green-marble frame behind the card in effect
+    # (frame 0, :1373-1381; also the adventure duel's card dialog,
+    # world_lair_monster_encounter.c:423-443) and the title plaque's left
+    # end, repeatable middle and right end (1-3, :271-274, :1180-1200).
+    # A tile sheet frame by frame (64 x 64, the floor's diamond in rows
+    # 32-63; looked at on all eight sheets): 0-3 the floor with no wall,
+    # the +x wall, the -y wall, both (look 0); 4-7, 24-27, 28-31 the same
+    # four in looks 1-3 (skeletons, torches, cobwebs); 8 the chest, 9 the
+    # scroll, 10 the dice, 11 empty; 12-15 the front walls (none, +y, -x,
+    # both) and 16-19 the same for the odd rows — the same pixels in every
+    # sheet but the white castle's, whose 16 marks the floor (109 pixels;
+    # its 4 and 28 mark the floor too, 139, where every other sheet's
+    # floors are one picture: measured 2026-10-27); 20 a solid cell's
+    # rock top; 21-23 and 32-47 copies or empty, never drawn;
+    # castles only, 48-52 the wizard standing (a baked shadow) and 53-59
+    # empty. Laid out by DUNGEON_SHEETS below.
+    "dungeon_tiles_1":       ["dungeon1.spr"],
+    "dungeon_tiles_2":       ["dungeon2.spr"],
+    "dungeon_tiles_3":       ["dungeon3.spr"],
+    "dungeon_tiles_black":   ["dungeonb.spr"],
+    "dungeon_tiles_blue":    ["dungeonu.spr"],
+    "dungeon_tiles_green":   ["dungeong.spr"],
+    "dungeon_tiles_red":     ["dungeonr.spr"],
+    "dungeon_tiles_white":   ["dungeonw.spr"],
+    "dungeon_plaques":       ["dungbutt.spr"],
     # THE TITLE MENU'S SPRITE, `Begin.spr` (2026-10-08, the owner: *"Lets
     # import every frame there but we will use only icon for now"*): ALL
     # EIGHTEEN frames, one column of 265x24 cells, top to bottom —
@@ -839,7 +874,10 @@ MANIFEST: dict[str, list[str]] = {
     #                                      screen. The closest surviving
     #                                      ground to a deck-builder backdrop,
     #                                      but it is the TRADE screen's, and
-    #                                      its panes are sized for 640x480
+    #                                      its panes are sized for 640x480.
+    #                                      Imported since 2026-10-27 for a
+    #                                      castle won (`card_browser`,
+    #                                      DUNGEON_PICTURES), not for this
     #   edit_deck/Dekbtn1-3       78x23    the DECK SLOT buttons, `@DECKNUMBERS`
     #                                      "Deck1/Deck2/Deck3". Re-opened with
     #                                      PIL after an earlier pass filed them
@@ -1051,9 +1089,14 @@ MANIFEST: dict[str, list[str]] = {
     #                         on the "Exploring the Dungeon...you
     #                         encounter" text (1.3 `dungeonEncounter.c`
     #                         :809)                    sfx_dungeon_duel
-    #   Wingame.wav           winning the whole game   [M5, not imported]
-    #                         — a fanfare, not a bed, so it stays out of
-    #                         the playlist as well
+    #   Wingame.wav           winning the whole game: LOOPED by 1997 from
+    #                         the win's picture through its stats menu
+    #                         (`PlayCastleMusic(6)`, dungeonEncounter.c
+    #                         1077, 1811-1843, `LoadLoopingSound`) — a bed,
+    #                         not the fanfare this note once called it; the
+    #                         owner rules it plays ONCE in ours (part C,
+    #                         2026-10-27, the end's screens). Out of the
+    #                         playlist all the same     music_win_game
     #   Winduel.wav /         the ADVENTURE's beds after a duel won or
     #   Loseduel.wav          lost: 1.3 `PlayDuelMusic` (visitLocation.c
     #                         :2635) LOOPS one of Dueltune, Winduel and
@@ -1100,9 +1143,9 @@ MANIFEST: dict[str, list[str]] = {
     # letter quest makes a mana link) and Treasure — imported below as the
     # world's sounds (2026-10-23) — the creatures' cries (Malewiz, Fewiz,
     # Knight, Lord, Djinn, Troll, Wyrm, Dragon, Flying, Archmage),
-    # Dsummon and Newsflash, imported with part B (2026-10-23) — and, for
-    # later, Dice, Scroll, Findcard, Death, Horse, Wolf, Damb1-5+Dambloop
-    # and Manaball.
+    # Dsummon and Newsflash, imported with part B (2026-10-23) — the
+    # dungeons' Dambloop, Damb1-5, Dice, Scroll and Findcard, imported with
+    # part C (2026-10-27) — and, for later, Death, Horse, Wolf and Manaball.
     #
     # `Statscrn.wav` (in the install's root, not `Sound/`) is the wizards'
     # window's sound, played by `Statwin.dll` as the window opens and
@@ -1230,11 +1273,12 @@ MANIFEST: dict[str, list[str]] = {
     # So every LOOPABLE BED in `Sound/` is imported now, and
     # [MusicLibrary] plays them as a playlist. The one-shots are still
     # left out of it, because a stinger in a shuffle is a jump-scare:
-    # `Dngnduel.wav` (the "you encounter" text, sfx_dungeon_duel),
-    # `Wingame.wav` (winning the whole adventure). So are the two beds
-    # of an adventure duel's end, `Winduel.wav`/`Loseduel.wav`
-    # (music_win_duel, music_lose_duel): [MusicLibrary]'s list names its
-    # tracks one by one, and these two belong to their screens alone.
+    # `Dngnduel.wav` (the "you encounter" text, sfx_dungeon_duel). So are
+    # the beds that belong to one screen alone — an adventure duel's end,
+    # `Winduel.wav`/`Loseduel.wav` (music_win_duel, music_lose_duel), and
+    # the whole adventure won, `Wingame.wav` (music_win_game, part C):
+    # [MusicLibrary]'s list names its tracks one by one, so a key it does
+    # not name stays out.
     #
     # WHAT EACH BED IS, from `MAGIC.EXE` (Tier 2, cited by entry address
     # because the decompilation's function names are machine guesses; the
@@ -1363,6 +1407,32 @@ MANIFEST: dict[str, list[str]] = {
     # The wizards' window (F6): the install's root, beside the program
     # that loads `Statwin.dll` (`.\statscrn.wav`).
     "sfx_wizards.wav":           ["Statscrn.wav"],
+    # THE DUNGEONS' AND THE END'S SOUNDS (2026-10-27, part C), each where
+    # 1.3 plays it (`dungeonEncounter.c`):
+    #   Dambloop   the board's bed, LOOPED on channel 100 at volume 80 as
+    #              the board opens (:266-268) and again after every duel
+    #              that comes back to it (:908-912);
+    #   Damb1-5    the cave's noises over the bed, at random waits, never
+    #              the same one twice running, Damb5 in bursts of 2-4
+    #              (:416-447);
+    #   Dice       a dice room entered (:507);
+    #   Scroll     a scroll room entered, before its riddle (:539);
+    #   Findcard   a dead end that still holds a card (:589) — gold plays
+    #              `Treasure.wav` (sfx_treasure) and a wrong riddle
+    #              `Dsummon.wav` (sfx_dsummon), both already here;
+    #   Wingame    the whole adventure won (see the music note above:
+    #              looped by 1997, once in ours).
+    # `Statscrn.wav`, the stats screen's loop, is sfx_wizards just above.
+    "sfx_dungeon_loop.wav":       shell_sound("Dambloop.wav"),
+    "sfx_dungeon_ambience_1.wav": shell_sound("Damb1.wav"),
+    "sfx_dungeon_ambience_2.wav": shell_sound("Damb2.wav"),
+    "sfx_dungeon_ambience_3.wav": shell_sound("Damb3.wav"),
+    "sfx_dungeon_ambience_4.wav": shell_sound("Damb4.wav"),
+    "sfx_dungeon_ambience_5.wav": shell_sound("Damb5.wav"),
+    "sfx_dice.wav":               shell_sound("Dice.wav"),
+    "sfx_scroll.wav":             shell_sound("Scroll.wav"),
+    "sfx_find_card.wav":          shell_sound("Findcard.wav"),
+    "music_win_game.wav":         shell_sound("Wingame.wav"),
 }
 
 
@@ -1724,6 +1794,159 @@ def import_videos(index: dict[str, Path], dest: Path) -> None:
         print("  %-18s <- %s  (%d frames, %dx%d, %s, %gfps -> %dx%d sheet)"
               % (key, path, frames, w, h, header["codec"], header["fps"],
                  cols * w, rows * h))
+
+
+# ======================================================= THE WIN'S MOVIE ==
+#
+# `Mtgend.avi` (1997-02-19, the install's root): the movie 1.3 plays the
+# moment Arzakon falls, through `Statwin.dll` (ordinal 2,
+# `PlayStatWinMovie`, dungeonEncounter.c 1845-1853, placed at 1064-1069).
+# Indeo 4.1 (`IV41`), 576 x 340, 278 frames at 15 fps, with 8-bit stereo
+# PCM at 22 050 Hz — 18.53 s, picture and sound alike.
+#
+# NOT A SHEET, A THEORA FILE (the owner, 2026-10-27, part C: *"Convert
+# it"* — skippable by a click, quietly skipped where a device cannot play
+# it). The coin toss's way above would have to halve every frame to fit a
+# 4096 sheet (a 13 x 22 grid of 288 x 170, some 56 MB of texture) and
+# carry its sound apart. Godot plays Ogg Theora itself (`VideoStreamPlayer`
+# with a `VideoStreamTheora`), so the movie is CONVERTED, picture and sound
+# in one `.ogv`, by the player's own encoder: ffmpeg with `libtheora` (and
+# `libvorbis`, or its own `vorbis` encoder) first, `gst-launch-1.0` with
+# `theoraenc`, `vorbisenc` and `oggmux` second. Detected, never assumed;
+# without one the movie is skipped with a notice, and the win goes on
+# without it — as 1997's did without `Statwin.dll` (:1847-1852).
+#
+# THE SPIKE (2026-10-27, Godot 4.7.2, the Compatibility renderer):
+# `ffmpeg -c:v libtheora -q:v 7 -c:a libvorbis -q:a 4` makes 6.4 MB of
+# Indeo into 1.07 MB of Theora, 576 x 340, 15 fps, 18.53 s, and a
+# `VideoStreamTheora` whose `file` is the path plays it from res://, from
+# an absolute path outside the project, from user://, and from a skin zip
+# mounted at res://skin/ whether the entry is stored or deflated (as
+# tools/mtg_assets.py zips a skin) — headless too, its clock running.
+# Still to try on a device: the web build and the Quest.
+#
+# WHERE THE GAME FINDS IT: `win_movie.ogv` at the top of the skin, beside
+# the pictures — `GameSkin._find("win_movie.ogv")` gives its path in the
+# skin worn, and the end's screen (part C, stage C2) sets that path as a
+# `VideoStreamTheora`'s `file`. Nothing reads it until then
+# (SCREENS_NOT_READ).
+## skin file -> the 1997 movie it is converted from.
+THEORA_MOVIES: dict[str, list[str]] = {"win_movie.ogv": ["Mtgend.avi"]}
+## ffmpeg's quality steps: Theora 0-10, Vorbis -1-10 (the spike's).
+THEORA_QUALITY = 7
+VORBIS_QUALITY = 4
+
+
+def find_theora_encoder() -> tuple[str, str, str] | None:
+    """(program, its Vorbis encoder, a human name) for the first encoder
+    that can make an `.ogv`, or None. ffmpeg's own `vorbis` encoder is
+    marked experimental, so `libvorbis` is preferred and the native one
+    is run with `-strict experimental`."""
+    if shutil.which("ffmpeg"):
+        try:
+            listed = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                                    capture_output=True, text=True, timeout=30,
+                                    stdin=subprocess.DEVNULL).stdout
+        except (OSError, subprocess.SubprocessError):
+            listed = ""
+        names = {line.split()[1] for line in listed.splitlines()
+                 if len(line.split()) > 1 and len(line.split()[0]) == 6}
+        if "libtheora" in names:
+            for audio in ("libvorbis", "vorbis"):
+                if audio in names:
+                    return ("ffmpeg", audio, "ffmpeg (libtheora + %s)" % audio)
+    if shutil.which("gst-launch-1.0") and shutil.which("gst-inspect-1.0"):
+        try:
+            found = all(subprocess.run(["gst-inspect-1.0", element],
+                                       capture_output=True, timeout=30,
+                                       stdin=subprocess.DEVNULL).returncode == 0
+                        for element in ("decodebin", "theoraenc", "vorbisenc", "oggmux"))
+        except (OSError, subprocess.SubprocessError):
+            found = False
+        if found:
+            return ("gst-launch-1.0", "vorbisenc",
+                    "gst-launch-1.0 (theoraenc + vorbisenc)")
+    return None
+
+
+def theora_argv(program: str, audio: str, avi: Path, out: Path) -> list[str]:
+    """The command that converts [param avi] into the Ogg file [param out]:
+    Theora at THEORA_QUALITY, Vorbis at VORBIS_QUALITY, the frame size and
+    rate the AVI has."""
+    if program == "ffmpeg":
+        argv = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(avi),
+                "-c:v", "libtheora", "-q:v", str(THEORA_QUALITY),
+                "-c:a", audio, "-q:a", str(VORBIS_QUALITY)]
+        if audio == "vorbis":
+            argv += ["-strict", "experimental"]
+        # The muxer named: [param out] ends `.part` while it is written.
+        return argv + ["-f", "ogg", str(out)]
+    # GStreamer's two quality scales are its own: theoraenc 0-63, vorbisenc
+    # 0.0-1.0 — the same steps as ffmpeg's above. One argv word a token
+    # (see decode_frames).
+    return ["gst-launch-1.0", "-q",
+            "filesrc", "location=%s" % avi, "!", "decodebin", "name=d",
+            "oggmux", "name=m", "!", "filesink", "location=%s" % out,
+            "d.", "!", "queue", "!", "videoconvert", "!",
+            "theoraenc", "quality=%d" % round(THEORA_QUALITY * 63 / 10), "!", "m.",
+            "d.", "!", "queue", "!", "audioconvert", "!", "audioresample", "!",
+            "vorbisenc", "quality=%.1f" % (VORBIS_QUALITY / 10), "!", "m."]
+
+
+def is_theora(head: bytes) -> bool:
+    """An Ogg file whose first stream is Theora: `OggS`, then the Theora
+    identification header (`\\x80theora`) in its first page."""
+    return head[:4] == b"OggS" and b"\x80theora" in head[:512]
+
+
+def import_theora_movies(index: dict[str, Path], dest: Path) -> list[str]:
+    """Convert each of THEORA_MOVIES into `<dest>/<key>`. Returns the files
+    written. Never fatal: a missing movie, a missing encoder, or an
+    encoder that fails or writes no Theora leaves the file absent (an
+    older one is left as it was), and the win plays without its movie."""
+    wanted = {key: path for key, names in THEORA_MOVIES.items()
+              if (path := _first_of(index, names)) is not None}
+    if not wanted:
+        print("\nno ending movie found (Mtgend.avi ships only with the 1997 "
+              "game) — the win plays without it")
+        return []
+    encoder = find_theora_encoder()
+    if encoder is None:
+        print("\nfound the ending movie (%s) but NO THEORA ENCODER. Install"
+              % ", ".join(p.name for p in wanted.values()))
+        print("  ffmpeg built with libtheora (most are), or gstreamer1.0-plugins-")
+        print("  base with gstreamer1.0-libav (theoraenc, vorbisenc, and a")
+        print("  decoder for Indeo 4.1), then run this importer again. Until")
+        print("  then the win plays without its movie.")
+        return []
+    program, audio, label = encoder
+    written: list[str] = []
+    print("\nending movie (converting with %s):" % label)
+    for key, path in sorted(wanted.items()):
+        header = read_avi_header(path)
+        if header is None:
+            print("  %-18s SKIPPED — not a readable AVI: %s" % (key, path))
+            continue
+        target = dest / key
+        part = target.with_name(target.name + ".part")
+        try:
+            subprocess.run(theora_argv(program, audio, path, part), capture_output=True,
+                           check=True, timeout=900, stdin=subprocess.DEVNULL)
+            with part.open("rb") as handle:
+                if not is_theora(handle.read(512)):
+                    raise ValueError("what came out is not Ogg Theora")
+            part.replace(target)
+        except (OSError, subprocess.SubprocessError, ValueError) as err:
+            print("  %-18s SKIPPED — %s could not convert %s (%s): %s"
+                  % (key, program, path.name, header["codec"], err))
+            continue
+        finally:
+            part.unlink(missing_ok=True)
+        written.append(key)
+        print("  %-18s <- %s  (%dx%d, %d frames at %gfps, %s -> Theora + Vorbis, %.2f MB)"
+              % (key, path, header["width"], header["height"], header["frames"],
+                 header["fps"], header["codec"], target.stat().st_size / 1e6))
+    return written
 
 
 # ------------------------------------------------------------ portraits --
@@ -2725,6 +2948,69 @@ PIC_PALETTES["creature_thumbs"] = ["Advfac64.pic", "Advinter.pic"]
 PIC_OPAQUE: set[str] = (set(VISIT_PICTURES) | set(WORLD_SCREENS)
                         | (set(ENCOUNTER_PICTURES) - PIC_CUT))
 
+# THE DUNGEONS', THE CASTLES' AND THE END'S PICTURES (2026-10-27, part C),
+# each read where 1.3 loads it (`dungeonEncounter.c` unless named; the
+# clue screens `dungeonCluesScreen.c`), 640 x 480 unless said:
+#   - the clue list (F4): its ground, two columns of six framed rows and a
+#     Done frame (`Dung_Bd.pic`, its own palette, :681, :740, :786), and
+#     its button atlas (`Dun_Bar.pic`, no palette: cut with index 0 clear
+#     in `Dung_Bd.pic`'s, the screen it stands on, which paints index 251
+#     — the gutters between its cells, never cut — magenta where the world
+#     frame's is grey; :646-665): the Done button's frames at
+#     (16 + 60i, 1) 59 x 26 (1997 lettered `Done` over them itself), the
+#     up arrows' four states at (16 + 32i, 28) and the down arrows' at
+#     (144 + 32i, 28), 31 x 36; a scroll strip at (2, 1) 13 x 112 and a
+#     second row of double arrows are there and never drawn;
+#   - a clue's detail: its misty cave (`Clueback.pic`, its own, :1044) and
+#     its Done button (`Cluebutn.pic`, 300 x 100, no palette: cut in
+#     `Clueback.pic`'s; frames at (1 + 90i, 1) 89 x 35, :1022-1029; three
+#     20 x 36 icons at (1 + 21i, 37) are cut and never drawn);
+#   - a dungeon's card found: the cave with the open book (`Staceybk.pic`,
+#     no palette: the board's, `CaveBkgd.pic`'s, :590, :1513-1527);
+#   - a castle won: the ground of its words and of its three picks
+#     (`Tradscrn.pic`, the card browser's, no palette: the world frame's,
+#     :938-941);
+#   - the banner behind a card's caption, "Lost this card" in a dungeon
+#     (`Endtop.pic`, 152 x 19, no palette, cut: 1997 cut 149 x 19 at 0, 0
+#     and leaves index 0 out; loaded with the adventure,
+#     adventure_main_menu.c:77-78, in the world frame's palette — the
+#     lost card's own ground, `Losedul2.pic`, differs by 3 steps at most
+#     on its nine indices);
+#   - the fifth wizard beaten: Arzakon's horned face in a fiery hall
+#     (`5thwiz.pic`, its own, :1034-1036);
+#   - the adventure won: the far white castle (`Wingame.pic`, its own,
+#     :1079-1092).
+# Every palette measured against the others on the indices each picture
+# uses (2026-10-27); a picture with its own palette that came without one
+# is skipped, never painted in another's. Not imported: `Dungeon.pic` and
+# `Scroll.spr`, which no 1.3 or retail code loads (a designer's mock-up of
+# the tiles; a scroll unlike the quest panel's).
+DUNGEON_PICTURES: dict[str, list[str]] = {
+    "clues_list": ["Dung_Bd.pic"],
+    "clues_list_buttons": ["Dun_Bar.pic"],
+    "clue_detail": ["Clueback.pic"],
+    "clue_detail_buttons": ["Cluebutn.pic"],
+    "dungeon_treasure": ["Staceybk.pic"],
+    "card_browser": ["Tradscrn.pic"],
+    "card_banner": ["Endtop.pic"],
+    "fifth_wizard": ["5thwiz.pic"],
+    "win_game": ["Wingame.pic"],
+}
+PIC_SCREENS.update(DUNGEON_PICTURES)
+PIC_CUT |= {"clues_list_buttons", "clue_detail_buttons", "card_banner"}
+PIC_PALETTES.update({
+    "clues_list": ["Dung_Bd.pic"],
+    "clues_list_buttons": ["Dung_Bd.pic", "Clueback.pic", "Advfac64.pic", "Advinter.pic"],
+    "clue_detail": ["Clueback.pic"],
+    "clue_detail_buttons": ["Clueback.pic", "Dung_Bd.pic", "Advfac64.pic", "Advinter.pic"],
+    "dungeon_treasure": ["Cavebkgd.pic", "Advfac64.pic", "Advinter.pic"],
+    "card_browser": ["Advfac64.pic", "Advinter.pic"],
+    "card_banner": ["Advfac64.pic", "Advinter.pic"],
+    "fifth_wizard": ["5thwiz.pic"],
+    "win_game": ["Wingame.pic"],
+})
+PIC_OPAQUE |= set(DUNGEON_PICTURES) - PIC_CUT
+
 
 # ====================================================== THE WIZARDS' HALL ==
 #
@@ -3358,12 +3644,41 @@ CREATURE_SHEETS: dict[str, str] = {creature_sheet_key(stem): stem + ".SPR"
 for _key, _file in CREATURE_SHEETS.items():
     MANIFEST[_key] = ["spr/" + _file.lower(), _file.lower()]
     WORLD_SHEETS[_key] = (40, 154, 108, 5)
-for _key, (_cells, _w, _h, _columns) in WORLD_SHEETS.items():
+## THE CASTLE AND DUNGEON BOARD'S SHEETS (2026-10-27, part C; their
+## MANIFEST rows say what each frame is): the eight tile sheets are 64 x 64
+## frames twelve to a row, keeping the files' groups of twelve in rows —
+## 48 frames for a dungeon's (768 x 256), 60 for a castle's (768 x 320,
+## the wizard's poses on the fifth row) — each file's 3 x 1 end marker
+## left out. `Dungbutt.spr` has no end marker and four frames of four
+## sizes (201 x 281, 40 x 62, 24 x 62, 39 x 62): each stands at its
+## 201 x 281 cell's top left (804 x 281), and its sidecar's `sizes` says
+## each frame's own. Painted with the world's palette like the world's
+## sheets: the board's own ground, `CaveBkgd.pic`, differs from it only at
+## indices 251-254, which no board sheet uses, and by 3 steps of 255 at
+## most elsewhere — the same colours at the VGA's 6 bits a channel
+## (measured 2026-10-27). Kept apart from WORLD_SHEETS because
+## WorldArt.LAYOUT mirrors that table row for row (a test holds it); the
+## board's screen (stage C2) adds these rows there.
+DUNGEON_SHEETS: dict[str, tuple[int, int, int, int]] = {
+    "dungeon_tiles_1": (48, 64, 64, 12),
+    "dungeon_tiles_2": (48, 64, 64, 12),
+    "dungeon_tiles_3": (48, 64, 64, 12),
+    "dungeon_tiles_black": (60, 64, 64, 12),
+    "dungeon_tiles_blue": (60, 64, 64, 12),
+    "dungeon_tiles_green": (60, 64, 64, 12),
+    "dungeon_tiles_red": (60, 64, 64, 12),
+    "dungeon_tiles_white": (60, 64, 64, 12),
+    "dungeon_plaques": (4, 201, 281, 4),
+}
+## Every sheet cut on a grid and written with a `.json` sidecar of it:
+## the world's and the board's.
+SIDECAR_SHEETS: dict[str, tuple[int, int, int, int]] = {**WORLD_SHEETS, **DUNGEON_SHEETS}
+for _key, (_cells, _w, _h, _columns) in SIDECAR_SHEETS.items():
     SPR_SHEETS[_key] = (MANIFEST[_key], _cells, _w, _h)
 ## How many cells a sheet puts on one row; a sheet not named here is one
 ## row of every cell. `begin_menu` is one COLUMN, so frame N is row N.
 SPR_COLUMNS: dict[str, int] = {"begin_menu": 1}
-SPR_COLUMNS.update({key: row[3] for key, row in WORLD_SHEETS.items()})
+SPR_COLUMNS.update({key: row[3] for key, row in SIDECAR_SHEETS.items()})
 ## A sheet whose sprite belongs to a screen with its own palette, not the
 ## adventure's `Todpal.tr` (SPR_PALETTE): the title menu's `Begin.spr`
 ## stands on `Menubak.pic` and is painted with that picture's `M0` block
@@ -3374,7 +3689,7 @@ SPR_PALETTES: dict[str, list[str]] = {"begin_menu": ["Menubak.pic"]}
 ## `Todpal.tr` is it within six steps but leaves out indices 250-254, and
 ## the lairs, towns and castles use 250: painted with it, 133 of their
 ## pixels came out black (the world-screen survey, 2026-10-22).
-SPR_PALETTES.update({key: ["Advfac64.pic", "Advinter.pic"] for key in WORLD_SHEETS})
+SPR_PALETTES.update({key: ["Advfac64.pic", "Advinter.pic"] for key in SIDECAR_SHEETS})
 
 
 def spr_frame_tops(data: bytes) -> list[int]:
@@ -3392,9 +3707,10 @@ def spr_frame_tops(data: bytes) -> list[int]:
     return tops
 
 
-def _raw_spr_sheet(key: str, path: Path,
-                   palette: bytes | None) -> tuple[int, int, bytes] | None:
-    """One `.spr` -> a row of clipped cells as RGBA, or None."""
+def _raw_spr_sheet(key: str, path: Path, palette: bytes | None
+                   ) -> tuple[int, int, bytes, list[list[int]]] | None:
+    """One `.spr` -> a row of clipped cells as RGBA and every frame's own
+    `[width, height]` (the cells' frames only), or None."""
     cells, cell_w, cell_h = SPR_SHEETS[key][1:]
     columns = SPR_COLUMNS.get(key, cells)
     if palette is None:
@@ -3418,7 +3734,8 @@ def _raw_spr_sheet(key: str, path: Path,
             indices[start:start + len(row)] = row
     # Index 0 is the sprite format's transparency (decode_spr's own
     # convention, and `paint` without a mask reads it that way).
-    return width, height, paint(bytes(indices), palette)
+    sizes = [[frame_w, frame_h] for frame_w, frame_h, _pixels in frames[:cells]]
+    return width, height, paint(bytes(indices), palette), sizes
 
 
 def import_raw_texture(key: str, source: Path, index: dict[str, Path],
@@ -3434,19 +3751,27 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
         sheet = _raw_spr_sheet(key, source, palette)
         if sheet is None:
             return False
-        width, height, pixels = sheet
+        width, height, pixels, sizes = sheet
         write_png(dest / (key + ".png"), width, height, pixels, alpha=True)
-        if key in WORLD_SHEETS:
-            cells, cell_w, cell_h, columns = WORLD_SHEETS[key]
+        if key in SIDECAR_SHEETS:
+            cells, cell_w, cell_h, columns = SIDECAR_SHEETS[key]
             try:
                 tops = spr_frame_tops(source.read_bytes())[:cells]
             except OSError:
                 tops = []
-            (dest / (key + ".json")).write_text(json.dumps({
+            layout = {
                 "cols": columns, "rows": (cells + columns - 1) // columns,
                 "frames": cells, "frame_width": cell_w, "frame_height": cell_h,
                 "tops": tops, "source": source.name,
-            }) + "\n")
+            }
+            # A sheet whose frames are not all its cell's size says each
+            # one's own, `[width, height]` in frame order, so a frame
+            # smaller than its cell can be cut at its size (part C, for
+            # Dungbutt's four; the world's `Worlds.spr` and `Ttsprite.spr`
+            # carry a few smaller frames too, and say so since).
+            if any(size != [cell_w, cell_h] for size in sizes):
+                layout["sizes"] = sizes
+            (dest / (key + ".json")).write_text(json.dumps(layout) + "\n")
         print("  %-24s <- %s (decoded %dx%d, palette: %s)"
               % (key, source, width, height, origin))
         return True
@@ -3802,7 +4127,8 @@ def main() -> int:
     parser.add_argument("--dest", default=str(default_dest()),
                         help="skin output directory (default: %(default)s)")
     parser.add_argument("--no-videos", action="store_true",
-                        help="skip the AVI transcoding step (see VIDEOS)")
+                        help="skip the movie steps: the coin toss's sheets "
+                             "(see VIDEOS) and the win's .ogv (THE WIN'S MOVIE)")
     parser.add_argument("--check", action="store_true",
                         help="list every asset the game needs, where each "
                              "would come from and what is missing; writes "
@@ -3998,6 +4324,8 @@ def run_import(args: argparse.Namespace, index: dict[str, Path],
     # reports and returns; it never fails the import.
     if not args.no_videos:
         import_videos(index, dest)
+        # And the win's movie, converted rather than cut (THE WIN'S MOVIE).
+        import_theora_movies(index, dest)
     # The portraits are their own step for the same reason: sheets and
     # `.pic`s cut rather than copied, and skippable without failing the
     # import.
@@ -4025,19 +4353,32 @@ def run_import(args: argparse.Namespace, index: dict[str, Path],
 ## rogues and the Facemaker face (import_portraits).
 PORTRAITS_WANTED = 70
 
-## Keys this writes that the game does NOT read, so a gap there costs
-## nothing: the six set symbols and the dagger are always the game's own
-## (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and 2026-10-15),
-## two grounds no screen draws yet (a read of every consumer,
-## 2026-10-17), the adventure's world-map frame, which waits for the
-## overworld (PIC_SCREENS), and the dungeon's "you encounter" sting, which
-## waits for the dungeons (part C; imported with part B, 2026-10-23). (The
-## creatures' thumbnails were here until 2026-10-27: the hero pane's
-## creature page draws them now.)
+## MANIFEST keys this writes that the game does NOT read, so a gap there
+## costs nothing: the six set symbols and the dagger are always the game's
+## own (GameSkin.set_icon, MiniCard.ALWAYS_OURS — 2026-09-10 and
+## 2026-10-15), two grounds no screen draws yet (a read of every consumer,
+## 2026-10-17), and part C's board — its sheets and its sounds, and the
+## dungeon's "you encounter" sting (imported with part B, 2026-10-23) —
+## and the win's tune, which wait for the board's and the end's screens
+## (stage C2; imported 2026-10-27). (The creatures' thumbnails were here
+## until 2026-10-27: the hero pane's creature page draws them now.) Only
+## MANIFEST keys: THE CHECKLIST counts the files the game reads as the
+## MANIFEST less these.
 NOT_READ = {"set_icon_atq", "set_icon_arn", "set_icon_past", "set_icon_drk",
             "set_icon_4ed", "set_icon_leg", "damage_marker",
-            "deck_tile_olive", "spell_chain_panel",
-            "character_select_background", "sfx_dungeon_duel.wav"}
+            "deck_tile_olive", "spell_chain_panel", "sfx_dungeon_duel.wav",
+            "sfx_dungeon_loop.wav", "sfx_dungeon_ambience_1.wav",
+            "sfx_dungeon_ambience_2.wav", "sfx_dungeon_ambience_3.wav",
+            "sfx_dungeon_ambience_4.wav", "sfx_dungeon_ambience_5.wav",
+            "sfx_dice.wav", "sfx_scroll.wav", "sfx_find_card.wav",
+            "music_win_game.wav"} | set(DUNGEON_SHEETS)
+## The same for the other files this writes, the pictures of PIC_SCREENS and
+## the movies: the adventure's world-map frame, which waits for the
+## overworld (PIC_SCREENS — in NOT_READ until 2026-10-27, which made THE
+## CHECKLIST's count one short), and part C's pictures and the win's
+## movie, which wait for stage C2's screens.
+SCREENS_NOT_READ = ({"character_select_background"} | set(DUNGEON_PICTURES)
+                    | set(THEORA_MOVIES))
 
 
 def check(args: argparse.Namespace, index: dict[str, Path]) -> int:
@@ -4081,6 +4422,10 @@ def print_checklist(dest: Path, origin: dict[str, str],
             wants += "; no Manalink file either"
         print(f"  MISSING  {key:28s} ({wants})")
     for key, names in PIC_SCREENS.items():
+        if key in SCREENS_NOT_READ:
+            state = "here" if (dest / (key + ".png")).exists() else "absent"
+            print(f"  unused   {key:28s} ({state}; the game does not read it)")
+            continue
         state = "ok     " if (dest / (key + ".png")).exists() else "MISSING"
         print(f"  {state}  {key:28s} ({' or '.join(names)})")
     faces = len(list((dest / "portraits").glob("*.png"))) \
@@ -4099,6 +4444,20 @@ def print_checklist(dest: Path, origin: dict[str, str],
         movies += 1
         print(f"  ok       {key:28s} <- {path.name} (transcoded at import: "
               f"{decoder[1] if decoder else 'NEEDS ffmpeg or gst-launch-1.0'})")
+    encoder = None
+    for key, names in THEORA_MOVIES.items():
+        path = _first_of(index, names)
+        if path is None:
+            print(f"  MISSING  {key:28s} ({' or '.join(names)}; the win plays "
+                  f"without its movie)")
+            continue
+        encoder = encoder or find_theora_encoder()
+        how = encoder[2] if encoder else "NEEDS ffmpeg with libtheora, or gst-launch-1.0 with theoraenc"
+        if key in SCREENS_NOT_READ:
+            print(f"  unused   {key:28s} ({path.name} here, converted at import: "
+                  f"{how}; the game does not read it)")
+            continue
+        print(f"  ok       {key:28s} <- {path.name} (converted at import: {how})")
     print(f"\n{have} of the {len(MANIFEST) - len(NOT_READ)} skin files the game "
           f"reads, {faces} of {PORTRAITS_WANTED} portraits, {movies} of "
           f"{len(VIDEOS)} coin-toss movies.")

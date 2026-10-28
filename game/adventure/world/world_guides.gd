@@ -6,11 +6,15 @@ extends Control
 ## ([method WorldStatus.targets]) is ringed where it stands on the screen,
 ## its name under it, as 1.3 lettered the quest's destination on the world
 ## (`DrawWorldTileRange`); off the screen an arrow at the edge points the
-## way, named. Gold for the quest, red for a siege. The options switch
-## them off.
+## way, named. Gold for the quest and for Arzakon's portal, open or
+## petrified (part C), red for a siege ([constant INKS]). The options
+## switch them off.
 
 const GOLD := Color8(232, 190, 110)
 const SIEGE := Color8(232, 60, 40)
+## Each kind of place's ink ([method WorldStatus.targets]); another kind
+## is gold.
+const INKS := {"siege": SIEGE, "quest": GOLD, "portal": GOLD, "monument": GOLD}
 const EDGE := Color8(20, 10, 8)
 ## How far in from the screen's edge an arrow stands, and how far from the
 ## side the panel holds.
@@ -85,6 +89,11 @@ func _hidden(at: Vector2) -> bool:
 	return false
 
 
+## The ink of a place of [param kind] ([constant INKS]).
+static func ink_for(kind: String) -> Color:
+	return INKS.get(kind, GOLD)
+
+
 func _draw() -> void:
 	if view == null:
 		return
@@ -93,7 +102,7 @@ func _draw() -> void:
 	if font == null:
 		font = get_theme_default_font()
 	for target in targets:
-		var ink := SIEGE if String(target["kind"]) == "siege" else GOLD
+		var ink := ink_for(String(target["kind"]))
 		var guide := guide_for(target["tile"])
 		var at: Vector2 = guide["at"]
 		var called := String(target.get("name", ""))
