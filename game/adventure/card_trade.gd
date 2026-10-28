@@ -45,11 +45,12 @@ extends RefCounted
 ## A card costs its rarity in amulets — 1 common (2 for a common the program
 ## favoured, `extra_ability` 0x400), 2 uncommon, 3 rare, 4 special — and a
 ## basic land comes four at a time for one. The cards: every card of the
-## adventure but the restricted ones and those 1997 kept from its card
-## pickers (`extra_ability` 0x900; without the 1997 program, the restricted
-## list, the dungeons' treasures and the ante cards), by name; no copy limit
-## (a card the deck in use could take no more of shows dimmed and may still
-## be traded, as in 1997).
+## adventure but the dungeons' treasures and those 1997 kept from its card
+## pickers (`extra_ability` 0x900; without the 1997 program, the same marks
+## by name, [method CardValue.derive]: a restricted card that is no
+## treasure, and an ante card, is traded as 1997 traded it), by name; no
+## copy limit (a card the deck in use could take no more of shows dimmed and
+## may still be traded, as in 1997).
 
 const TOWN := "town"
 const BAZAAR := "bazaar"
@@ -93,18 +94,16 @@ static func catalogue() -> Array[Dictionary]:
 	if not _catalogue.is_empty():
 		return _catalogue
 	CardRegistry.ensure_loaded()
-	var treasures: Array[String] = []
-	for row in ShandalarWorld.DUNGEON_CARDS:
-		treasures.append(String(row[1]))
 	for card_name in CardRegistry.all_names():
 		var name_text := String(card_name)
 		if not in_adventure(name_text):
 			continue
 		var f := CardValue.facts(CardRegistry.get_card(name_text))
-		if bool(f.get("derived", true)):
-			if name_text in treasures or name_text in DeckFormat.BANNED or name_text in DeckFormat.RESTRICTED:
-				continue
-		elif int(f.get("extra", 0)) & 0x900 != 0:
+		# 1997's marks, the table's or the derived facts' alike (part C stage
+		# C3, h6-3; the owner, 2026-10-28): without the table the restricted
+		# and banned lists kept out Channel, Fastbond and the ante cards,
+		# which 1997 traded, and let in the 22 cards it kept back.
+		if int(f.get("extra", 0)) & (CardValue.TREASURE | CardValue.KEPT_BACK) != 0:
 			continue
 		_catalogue.append({"name": name_text, "facts": f})
 	return _catalogue

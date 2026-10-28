@@ -59,11 +59,19 @@ static func _thopter(i: CardInstance) -> bool: return i.has_subtype("thopter")
 ## a land type an animated land carries (Forest) or an artifact type is not
 ## a creature type (CR 205.3m), so two animated Forests share none. Strings
 ## only: no CardData/CardInstance may live in a static (CONTRIBUTING).
-static var _creature_types := {}
+## Built as the script loads and read-only after (part C stage C3, h5-2):
+## it was filled on the first ask, and the first ask can come from several
+## Deck Lab worker threads at once — two threads writing one Dictionary is
+## the crash [EffectIntent]'s CACHE LOCK documents. Reads alone are safe.
+static var _creature_types := _all_creature_types()
+
+static func _all_creature_types() -> Dictionary:
+	var out := {}
+	for type_name in TYPES.ALL: out[String(type_name).to_lower()] = true
+	out.make_read_only()
+	return out
 
 static func is_creature_type(subtype: String) -> bool:
-	if _creature_types.is_empty():
-		for type_name in TYPES.ALL: _creature_types[String(type_name).to_lower()] = true
 	return _creature_types.has(subtype.to_lower())
 
 ## Layer 7c (CR 613.4c): creature types were settled in layer 4, so the

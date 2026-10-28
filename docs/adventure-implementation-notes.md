@@ -1441,6 +1441,54 @@ from the shots where a choice was his.
   neither]; the castles' attempts, a beaten wizard's room and the dungeon
   treasures, built before and now reachable.
 
+## Built: part C, stage C3 — the playtest and the hunt (2026-10-28)
+
+Six hunters played and read part C: the board, the duels inside and the
+castle win, the end, a playthrough from Embark to the Hall of Fame through
+the real screens (seven runs: both Embark rules, with and without the
+skin, 1280×800, 800×600, 1920×1080, Big buttons), saves and robustness, and
+the rules against 1997 (1,920 boards cell for cell the same as a port of
+1997's maze code; the end score on 40 random states the same as 1997's
+formula). No crash, lost save or soft-lock; four fixers on disjoint files
+mended what they found, each with a test that fails without its fix.
+
+- **The board**: a double click's second press is no click, and a box or
+  page cannot be dismissed in its first 300 ms (the found card's page until
+  it stands whole); Return to main menu after a FINISHED room duel shows its
+  result, ends the visit (saved on the way out) and leaves — with its own
+  question — and after the fifth wizard it saves and leaves for the title
+  (the load opens at Arzakon's question); of two held directions the newer
+  turns the hero after the step; "Leave?" in a dungeon with no card left
+  says it will be gone; "Leave it here" asks first even on a double click.
+- **The end**: a won battle left through the menu still walks on from the
+  Hall's Return to Shandalar; a save that fails is always said; the load
+  list marks a One-life quest that began or lost its battle in every save
+  of it, and Resume passes a failed quest by; the Hall says when its file
+  cannot be read and refits on a resized window; saves are format 2 (an
+  older game will not write over them), and a save's end marks are made
+  consistent as they are read.
+- **The owner's rulings of the hunt**: the hero stands in front of a
+  castle (or its ruins) and the portal on its own tile — towns, villages,
+  cities and dungeon markers as 1997 drew them [ours]; without the
+  1997 card table the cards carry 1997's own marks — the 28 treasures
+  special, the 22 cards 1997 never traded kept back — so trades and castle
+  picks are the same with the skin and without; a beaten wizard's
+  creatures say their master has fallen ("Pay, or fight."; with five wins
+  "…tremble before you. Accept our tribute.") and near his ruins meet the
+  hero as anywhere else — ruins are no stronghold [ours]; the 2×
+  skin's board sheets are upscaled frame by frame amid their board
+  neighbours, so walls and floors meet without seams (decision 9), and
+  the pre-duel pane's frame and the world's ground layer (the land
+  diamonds, the coastlines, the roads) doubled pixel for pixel, as the
+  sandstone is (ledger row 121; `tools/upscale_skin.py`).
+- **Also**: the quest's creature keeps coming after its color's wizard
+  falls; the arrival words fade when a HUD pane opens; Power Struggle and
+  Rainbow Knights are known by their 1997 names ("Power Junction",
+  "Knights of the Rainbow Vale"); the Deck Lab's shared AI caches are
+  thread-safe (a rare crash with several games at once) and the MCP server
+  names a crashed run's signal and reason; the test runner never collects
+  the git-excluded probes, and `-gdir=<folder>` narrows a run.
+
 ## New game in the sources (cross-reference, 2026-10-22)
 
 Read in the 1.3 decompilation (`rlerrr`, commit `fda3230`) and checked

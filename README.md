@@ -69,9 +69,10 @@ Further optional packs
 add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age,
 Fifth Edition, the Mirage block** (Mirage, Visions, Weatherlight) **and the Tempest
 block** (Tempest, Stronghold, Exodus), with engine and AI support.
-The **Shandalar adventure** is in development: its world, towns, quests,
-lairs, roaming creatures and sieges can already be played from the source,
-and the castles, the dungeons and the final battle come next. Public Internet
+The **Shandalar adventure** is in development: it can be played from the
+source from Embark to the end — its world, towns, quests, lairs, roaming
+creatures and sieges, the castles, the dungeons and the final battle — and
+is being playtested; the card packs' own worlds come later. Public Internet
 matchmaking remains future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
@@ -279,8 +280,9 @@ On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 ## Post-0.50 roadmap
 
 1. [ ] **Adventure** — the Shandalar world, quests and campaign: in
-   development (the world, towns, quests, lairs, creatures and sieges are
-   built; the castles, the dungeons and the end are next).
+   development (the world, towns, quests, lairs, creatures, sieges, the
+   castles, the dungeons and the end are built and being playtested; the
+   card packs' own worlds are next).
 2. [ ] **Commander** — dedicated rules and deck-building support.
 3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
 4. [x] **Card packs** — nine optional, toggleable packs beside the core pool:

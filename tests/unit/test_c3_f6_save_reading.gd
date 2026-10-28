@@ -81,7 +81,10 @@ func test_a_save_whose_world_is_broken_is_still_refused_quietly() -> void:
 	assert_null(_read(func(d: Dictionary) -> void: d["world"]["grid"][3] = 5))
 	assert_null(_read(func(d: Dictionary) -> void: d["world"]["grid"] = "x"))
 	assert_null(_read(func(d: Dictionary) -> void: d["hero"] = "Bob"), "a main part that is not a record")
-	assert_null(_read(func(d: Dictionary) -> void: d["version"] = 2), "a newer save")
+	# A newer save than this game reads (version 2 is this game's since part C
+	# stage C3, h5-5).
+	assert_null(_read(func(d: Dictionary) -> void: d["version"] = AdventurePlayer.FORMAT_VERSION + 1),
+		"a newer save")
 
 
 func test_broken_records_are_dropped_and_the_rest_kept() -> void:

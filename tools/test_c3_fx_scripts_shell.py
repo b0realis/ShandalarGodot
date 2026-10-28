@@ -28,6 +28,10 @@ What each class pins:
   * RunTestsGateTest — `run_tests.sh` says so when the test profile's packs
     cannot be reset (a sharded run graded the LAST run's shard log), and
     one CI shard (SHARD=i) is held to the number of scripts dealt to it.
+  * RunTestsSelectionTest (part C stage C3) — `run_tests.sh` never counts
+    or runs the git-excluded probes in `tests/_hunt/` with the suite (only
+    a -gselect reaches one, by name), and a `-gdir` or `-gtest` of one's
+    own is the run: GUT added it to the script's `-gdir=res://tests`.
   * QuestEmptyLogTest — the clean-install script counts an empty log as
     "0 lines", once.
   * RuntimeOnMacTest — on a Mac without Godot.app, a `godot` on PATH is
@@ -368,6 +372,97 @@ class RunTestsGateTest(unittest.TestCase):
             log = (self.data / shard / "gut.log").read_text()
             self.assertIn("packs could not be reset", log)
             self.assertNotIn("Passing Tests 3", log)
+
+
+## Records the arguments of the GUT run, one a line, in $FAKE_ARGS; the
+## import and the pack reset answer at once, and GUT's totals count the
+## scripts handed with -gtest (or FAKE_SCRIPTS).
+GUT_GODOT_RECORDING = GUT_GODOT.replace(
+    "\t*gut_cmdln.gd*)\n",
+    "\t*gut_cmdln.gd*)\n\t\t[ -z \"${FAKE_ARGS:-}\" ] || printf '%s\\n' \"$@\" >\"$FAKE_ARGS\"\n")
+
+
+class RunTestsSelectionTest(unittest.TestCase):
+    """What `run_tests.sh` hands GUT (part C stage C3), in a tree of its own
+    — `run_tests.sh` and `tools/` linked from this checkout, two suite
+    scripts and a probe in `tests/_hunt/` — so no probe of the real tree
+    is counted or touched. The probes there (git-excluded) were counted
+    and run with the suite, and a `-gdir` of one's own was ADDED to
+    `-gdir=res://tests` by GUT and ran the whole suite."""
+
+    SCRIPT = ROOT / "run_tests.sh"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        scratch = Path(self.tmp.name)
+        self.stub = scratch / "godot"
+        self.stub.write_text(GUT_GODOT_RECORDING)
+        self.stub.chmod(0o755)
+        self.tree = scratch / "tree"
+        (self.tree / "assets" / "original").mkdir(parents=True)
+        for name in ("tools", "project.godot"):
+            (self.tree / name).symlink_to(ROOT / name)
+        (self.tree / "run_tests.sh").symlink_to(self.SCRIPT)
+        for name in ("tests/unit/test_one.gd", "tests/ui/test_two.gd",
+                     "tests/_hunt/h9/test_h9_probe.gd"):
+            (self.tree / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.tree / name).write_text("extends GutTest\n")
+        self.args = scratch / "gut-args.txt"
+        self.env = quiet_env(GODOT=str(self.stub), SHANDALAR_TEST_DATA_HOME=str(scratch / "data"),
+                             TMPDIR=str(scratch), FAKE_ARGS=str(self.args), SHARDS="1")
+        for name in ("SHARD", "FAKE_RESET", "FAKE_SCRIPTS"):
+            self.env.pop(name, None)
+
+    def run_tests(self, *args, **extra):
+        done = subprocess.run(["bash", str(self.tree / "run_tests.sh"), *args],
+                              cwd=str(self.tree), env=dict(self.env, **extra),
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=300)
+        self.assertEqual(done.returncode, 0, done.stdout[-2000:] + done.stderr)
+        return done, self.args.read_text().splitlines()
+
+    def test_the_whole_run_never_holds_a_probe(self):
+        done, gut = self.run_tests()
+        self.assertNotIn("-gdir=res://tests", gut, "the folder would bring the probe in")
+        listed = [arg for arg in gut if arg.startswith("-gtest=")]
+        self.assertEqual(len(listed), 1, gut)
+        self.assertEqual(sorted(listed[0][len("-gtest="):].split(",")),
+                         ["res://tests/ui/test_two.gd", "res://tests/unit/test_one.gd"])
+        self.assertIn("The suite passed: 2 scripts", done.stdout, "the probe is not counted")
+
+    def test_without_a_probe_the_whole_run_is_the_folder(self):
+        shutil.rmtree(self.tree / "tests" / "_hunt")
+        _, gut = self.run_tests(FAKE_SCRIPTS="2")
+        self.assertIn("-gdir=res://tests", gut)
+        self.assertIn("-ginclude_subdirs", gut)
+
+    def test_a_named_probe_is_still_reached_by_its_name(self):
+        _, gut = self.run_tests("-gselect=test_h9_probe.gd")
+        self.assertIn("-gdir=res://tests", gut)
+        self.assertIn("-gselect=test_h9_probe.gd", gut)
+
+    def test_one_test_by_name_never_loads_a_probe(self):
+        _, gut = self.run_tests("-gunit_test_name=test_bolt")
+        self.assertNotIn("-gdir=res://tests", gut)
+        self.assertNotIn("_hunt", " ".join(gut))
+
+    def test_a_gdir_of_ones_own_is_the_whole_run(self):
+        # h3's trap: GUT adds a -gdir to the ones it has, so this ran the
+        # whole suite beside the folder meant.
+        for args in (["-gdir=res://tests/_hunt/h9"], ["-gdir", "res://tests/_hunt/h9"]):
+            _, gut = self.run_tests(*args)
+            self.assertNotIn("-gdir=res://tests", gut, args)
+            self.assertFalse([arg for arg in gut if arg.startswith("-gtest=")], args)
+            self.assertIn("-ginclude_subdirs", gut, "its subfolders, as res://tests is run")
+            for arg in args:
+                self.assertIn(arg, gut)
+
+    def test_a_gtest_of_ones_own_is_the_whole_run(self):
+        _, gut = self.run_tests("-gtest=res://tests/unit/test_one.gd")
+        self.assertNotIn("-gdir=res://tests", gut)
+        self.assertEqual([arg for arg in gut if arg.startswith("-gtest=")],
+                         ["-gtest=res://tests/unit/test_one.gd"])
 
 
 class QuestEmptyLogTest(unittest.TestCase):

@@ -88,7 +88,8 @@ extends Control
 ## the hero the world's plain figure; the plaque a dark gold-rimmed bar; the
 ## words as with the skin.
 
-## A press on the page ([param page_point] in 1997's page pixels).
+## A press on the page ([param page_point] in 1997's page pixels) — never a
+## double click's second press.
 signal clicked(page_point: Vector2, button: int)
 ## The pointer over the page.
 signal pointed(page_point: Vector2)
@@ -597,7 +598,9 @@ func show_effect(card_name: String) -> void:
 		shown.gui_input.connect(func(input: InputEvent) -> void:
 			if PaneStyle.right_click(input):
 				card_read.emit(card_name)
-			elif input is InputEventMouseButton and (input as InputEventMouseButton).pressed:
+			elif input is InputEventMouseButton and (input as InputEventMouseButton).pressed \
+					and not (input as InputEventMouseButton).double_click:
+				# A double click's second press is no click (h1-1).
 				clicked.emit(EFFECT_CARD.get_center(), (input as InputEventMouseButton).button_index))
 		add_child(shown)
 		move_child(shown, _stage.get_index())
@@ -647,7 +650,12 @@ func _gui_input(input: InputEvent) -> void:
 	var press := input as InputEventMouseButton
 	if press != null and press.pressed and press.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 		accept_event()
-		clicked.emit(press.position / factor, press.button_index)
+		# A double click's second press is no click (part C stage C3, h1-1:
+		# it stepped the hero nobody moved, or put away the box or the card
+		# found the first press had just brought, unread), as on every
+		# pane's buttons (part B's q2-2).
+		if not press.double_click:
+			clicked.emit(press.position / factor, press.button_index)
 		return
 	var motion := input as InputEventMouseMotion
 	if motion != null:

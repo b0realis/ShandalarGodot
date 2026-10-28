@@ -86,6 +86,21 @@ extends Control
 ## it); the questions at FIFTH and DOOR and the last choice answer only to
 ## their buttons and first letters, never to Escape.
 ##
+## A SAVE THAT COULD NOT BE WRITTEN IS SAID (part C stage C3, h3-3): the
+## world's words after "Return to Shandalar first" and after the win's
+## "Return to Shandalar" carry [constant WorldScreen.UNSAVED] with them
+## (the world's own line under them was overwritten at once); the saves
+## made while the world is hidden say it on what shows next — the
+## battle's menu question when the door's save failed, the quest-failed
+## end when the result's did (its "waits at the door" only when a save at
+## the door or after it holds), the end taken up again when its save did.
+## A WON BATTLE LEFT FOR THE MAIN MENU (its End of Duel window up: the
+## result stands, and the world would leave once its panes are done) goes
+## through the win's pages to the last choice all the same, and that
+## choice decides: End, the title; Return to Shandalar, the hero walks on
+## (h3-1 — the world's pending leave taken back, [method
+## WorldScreen.stay_after_panes]).
+##
 ## TAKEN UP AGAIN ([method after_load], the world's load calls it): "One
 ## life" and the battle begun or lost — the quest-failed end, saved
 ## ([method FinalBattle.on_load]); a failed adventure — its end, never the
@@ -177,6 +192,12 @@ const LEAVE_ONE_LIFE := "Concede the Final Battle to Arzakon? It counts as a los
 const LEAVE_RELOAD := "Concede the Final Battle to Arzakon? It counts as a loss: your quest fails, and your adventure waits at his door."
 const MENU_ONE_LIFE := "Return to the main menu? With One life, leaving the Final Battle counts as a loss: your quest fails and the adventure ends for good."
 const MENU_RELOAD := "Return to the main menu? The Final Battle is left unfinished: your adventure waits at Arzakon's door, saved as the battle began."
+## The same when the save at the door could not be written (h3-3).
+const MENU_RELOAD_UNSAVED := "Return to the main menu? The Final Battle is left unfinished, and the adventure could not be saved at Arzakon's door: it goes back to where it was last saved."
+## The menu's question once the battle is over (its result stands, saved
+## at once): what it brought comes first — the win's pages and their last
+## choice, or the end (h3-1).
+const MENU_OVER_FINAL := "Return to the main menu? The Final Battle is over and its result stands: what it brought comes first."
 ## The record after the win: its title and the years told.
 const RECORD_TITLE := "The record of %s"
 const YEARS_LINE := "Arzakon is banished for %d years: %d for your battles, %d for the %d lives he lost."
@@ -208,6 +229,10 @@ var k := 1.0
 var settled := {}
 ## The won adventure's place in the Hall of Fame (1 the best; 0 not written).
 var hall_place := 0
+## Whether the last save could not be written ([method _save], h3-3); and
+## whether the save at Arzakon's door was.
+var unsaved := false
+var door_saved := false
 ## The battle's duel while it is up; the builder while it is open.
 var duel: WorldDuels
 var builder: AdventureBuilder
@@ -307,12 +332,15 @@ static func at_portal(world: WorldScreen, player: AdventurePlayer) -> VisitPane:
 static func after_load(world: WorldScreen, player: AdventurePlayer) -> bool:
 	if world == null or player == null:
 		return false
+	var saved := true
 	if FinalBattle.on_load(player):
 		# "One life", the battle begun or lost: the quest failed, saved so.
-		world.autosave()
+		saved = world.autosave() != ""
 	match player.ended:
 		AdventurePlayer.ENDED_FAILED:
-			world.show_end(failed_parts(false))
+			# A save that could not be written said on the end (h3-3): the
+			# world's line beside the panel lies under it.
+			world.show_end(failed_parts(false) + ([] if saved else [WorldScreen.UNSAVED]))
 			return true
 		AdventurePlayer.ENDED_WON:
 			# Taken up again, a won adventure asks End or Return again (the
@@ -644,11 +672,27 @@ func return_first() -> void:
 		FinalBattle.leave_door(player)
 	else:
 		FinalBattle.open_portal(player)
-	world.autosave()
-	var said := FinalBattle.OPENED_LOG % FinalBattle.portal_where(player)
+	_save()
+	var said := saying(FinalBattle.OPENED_LOG % FinalBattle.portal_where(player))
 	_finish(RETURNED)
 	if world.hud != null:
 		world.hud.say(said)
+
+
+## THE ADVENTURE SAVED ([method WorldScreen.autosave]): whether it was, kept
+## in [member unsaved] for the words that follow (h3-3).
+func _save() -> bool:
+	unsaved = world.autosave() == ""
+	return not unsaved
+
+
+## [param line] as the world says it after a save: with [constant
+## WorldScreen.UNSAVED] after it when the save could not be written (h3-3:
+## the world's own line said it, and this one took its place at once).
+func saying(line: String) -> String:
+	if not unsaved:
+		return line
+	return WorldScreen.UNSAVED if line == "" else "%s. %s" % [line.trim_suffix("."), WorldScreen.UNSAVED]
 
 
 ## A click, a key or Continue on a step that reads past (after its moment).
@@ -710,10 +754,11 @@ func _after_builder() -> void:
 func _begin_battle() -> void:
 	_page.visible = false
 	if FinalBattle.door(player):
-		world.autosave()
+		door_saved = _save()
 	var config := FinalBattle.duel_config(player)
 	var one_life := player.life_rule == AdventurePlayer.LIFE_ONE
-	duel = WorldDuels.host(world, config, FinalBattle.ARZAKON_NAME, MENU_ONE_LIFE if one_life else MENU_RELOAD)
+	var menu := MENU_ONE_LIFE if one_life else (MENU_RELOAD if door_saved else MENU_RELOAD_UNSAVED)
+	duel = WorldDuels.host(world, config, FinalBattle.ARZAKON_NAME, menu, MENU_OVER_FINAL)
 	if is_instance_valid(duel.duel):
 		duel.duel.leave_question = LEAVE_ONE_LIFE if one_life else LEAVE_RELOAD
 	duel.ended.connect(battle_over)
@@ -722,7 +767,11 @@ func _begin_battle() -> void:
 
 ## THE BATTLE OVER with [param report] ([signal WorldDuels.ended]; [param
 ## conceded] read off the host): settled, saved; a win written into the Hall
-## of Fame, then the movie; anything else the quest-failed end.
+## of Fame, then the movie — the world's pending leave taken back, should
+## the won battle have been left for the main menu (h3-1: the last choice
+## decides); anything else the quest-failed end, saying so when the save
+## could not be written (h3-3) — and that the adventure waits at the door
+## only when a save at the door or after it holds.
 func battle_over(report: DuelReport, conceded := false) -> void:
 	if step != BATTLE or _over:
 		return
@@ -730,12 +779,15 @@ func battle_over(report: DuelReport, conceded := false) -> void:
 	var gave_up := conceded or (is_instance_valid(duel) and duel.conceded)
 	duel = null
 	settled = FinalBattle.settle(player, report, gave_up)
-	world.autosave()
+	_save()
 	if bool(settled["won"]):
+		world.stay_after_panes()
 		hall_place = HallOfFame.add(player)
 		_show(MOVIE)
 		return
-	var parts := failed_parts(bool(settled["reload"]))
+	var parts := failed_parts(bool(settled["reload"]) and (door_saved or not unsaved))
+	if unsaved:
+		parts.append(WorldScreen.UNSAVED)
 	_finish(FAILED, false)
 	world.show_end(parts)
 
@@ -913,7 +965,8 @@ func last_choice(what: String) -> void:
 				world.leave()
 		ROAMING:
 			var line := FinalBattle.roam(player)
-			world.autosave()
+			_save()
+			line = saying(line)
 			_finish(ROAMING)
 			if line != "" and world.hud != null:
 				world.hud.say(line)

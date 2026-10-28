@@ -76,7 +76,7 @@ var _shandalar_notice: Control
 ## The Shandalar button's notice ([method _open_shandalar_notice]).
 const SHANDALAR_NOTICE_TITLE := "Shandalar — still in development"
 const SHANDALAR_ISSUES := "github.com/b0realis/ShandalarGodot/issues"
-const SHANDALAR_NOTICE := "The Shandalar adventure is still being built. The world, its towns, quests, lairs, creatures and sieges can be played now; the castles, the dungeons and the final battle come in later versions.\n\nPlease tell us what you notice — anything that seems wrong, breaks, or could be better — as an issue on the project's GitHub page:\n" + SHANDALAR_ISSUES
+const SHANDALAR_NOTICE := "The Shandalar adventure is still being built and tested. It can be played from Embark to the end now: the world, its towns, quests, lairs, creatures and sieges, the castles, the dungeons and the final battle; the card packs' own worlds come in a later version.\n\nPlease tell us what you notice — anything that seems wrong, breaks, or could be better — as an issue on the project's GitHub page:\n" + SHANDALAR_ISSUES
 var _pack_warning: Control
 var _version_label: Label
 

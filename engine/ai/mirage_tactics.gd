@@ -201,6 +201,12 @@ static func damage_is_shaped(g: MtgGame, victim: CardInstance) -> bool:
 # ================================================= dies when targeted --
 
 static var _fragile_cache: Dictionary = {}
+## The cache's lock (part C stage C3, h5-2) — [EffectIntent]'s CACHE LOCK,
+## for the same reason: the first ask comes from the Deck Lab's worker
+## threads, and eight of them writing [member _fragile_cache] at once
+## crashed the process (SIGSEGV, "double free or corruption") three runs in
+## three. Every lookup takes it too; the reading is done outside it.
+static var _fragile_lock := Mutex.new()
 
 ## What a "becomes the target" trigger line does to the creature it
 ## watches: [constant FRAGILE_DIES] — it is sacrificed or destroyed
@@ -250,7 +256,9 @@ static func dies_when_targeted(inst: CardInstance, g: MtgGame = null) -> bool:
 
 static func _fragile_kind(text: String, on_aura: bool) -> int:
 	var key := ("A:" if on_aura else "C:") + text
+	_fragile_lock.lock()
 	var hit: Variant = _fragile_cache.get(key)
+	_fragile_lock.unlock()
 	if hit == null:
 		var lower := text.to_lower()
 		hit = 0
@@ -261,7 +269,11 @@ static func _fragile_kind(text: String, on_aura: bool) -> int:
 				hit = FRAGILE_DIES
 			elif not on_aura and lower.contains("-1/-1 counter on it"):
 				hit = FRAGILE_SHRINKS
+		# Two threads that miss together both read; the answer is a pure
+		# function of the text, so whichever is kept is right.
+		_fragile_lock.lock()
 		_fragile_cache[key] = hit
+		_fragile_lock.unlock()
 	return int(hit)
 
 

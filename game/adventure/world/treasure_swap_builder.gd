@@ -13,7 +13,9 @@ extends AdventureBuilder
 ##    line says what it is for ([constant PICK]);
 ##  - "Leave it here", by Done on the command row, acts on the card on
 ##    show (the one under the pointer): pressed once it asks "Sure? Leave
-##    it" and the well names the card, pressed again the card is left — [signal swapped] with the copy's place in the hero's
+##    it" and the well names the card, pressed again — a press of its own,
+##    never a double click's second (part C stage C3, h5-1) — the card is
+##    left — [signal swapped] with the copy's place in the hero's
 ##    cards ([method give_up_index]: a copy in no deck first, then one the
 ##    deck on show does not hold, else the last), which the pane hands to
 ##    [method DungeonBoard.treasure_swap] (the card left STAYS IN THE
@@ -61,6 +63,13 @@ func _before_first_fill() -> void:
 	_leave_button.name = "LeaveButton"
 	_leave_button.disabled = true
 	_leave_button.pressed.connect(func() -> void: leave(_shown_card()))
+	# A double click's second press is no second press (part C stage C3,
+	# h5-1: it left the card without the player ever reading "Press
+	# again."), as on the panes' own buttons (part B's q2-2).
+	_leave_button.gui_input.connect(func(input: InputEvent) -> void:
+		var press := input as InputEventMouseButton
+		if press != null and press.double_click:
+			_leave_button.accept_event())
 	_command_row.add_child(_leave_button)
 	_command_row.move_child(_leave_button, _command_row.get_node("DoneButton").get_index())
 

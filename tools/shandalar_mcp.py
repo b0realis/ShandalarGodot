@@ -2228,6 +2228,57 @@ def validate_argument(value, schema: dict, tool: str, flag: str) -> None:
 
 STRING_LIST = {"type": "array", "items": {"type": "string"}}
 
+# A CRASHED RUN, SAID IN ITS OWN WORDS (part C stage C3, h5-3). Godot's
+# crash handler ends stderr with a dump — `====` rules, `handle_crash:
+# Program crashed with signal N`, the C++ frames, the GDScript frames — so
+# the last line of a crashed Lab was a row of `=` and the line that said
+# WHY (glibc's "double free or corruption (!prev)", "malloc(): corrupted
+# top size", a C++ "terminate called … what(): …", an out-of-memory
+# `ERROR: Parameter "mem" is null.`) was dropped with the eight-line tail.
+# These are the dump's own lines and the frames' (a warning's GDScript
+# frames are indented the same way): never the reason.
+CRASH_DUMP_LINE = re.compile(
+    r"^(=+|handle_crash: .*|Engine version: .*|Dumping the backtrace.*|Load address: .*"
+    r"|\[\d+\] .*|-- END OF .*|GDScript backtrace.*|\s+\[\d+\] .*|\s+at: .*)$")
+CRASH_SIGNAL = re.compile(r"^handle_crash: Program crashed with signal (\d+)")
+
+
+def signal_name(number: int) -> str:
+    try:
+        return signal.Signals(number).name
+    except ValueError:
+        return f"signal {number}"
+
+
+def crash_report(verb: str, returncode: int, stderr: str):
+    """`(message, kept lines)` for a run a signal ended (a negative exit:
+    the door `exec`s Godot, so the signal reaches us), else None. The
+    signal is the dump's own when there is one (Godot's handler aborts
+    after dumping a SIGSEGV, so the exit says SIGABRT); the reason is the
+    last line that is neither the dump's nor a frame. A SIGKILL leaves no
+    dump: on a desk nobody killed it on, it is the kernel's out-of-memory
+    killer."""
+    if returncode >= 0:
+        return None
+    lines = [line for line in stderr.splitlines() if line.strip()]
+    number = -returncode
+    dump_at = len(lines)
+    for at, line in enumerate(lines):
+        found = CRASH_SIGNAL.match(line)
+        if found:
+            number = int(found.group(1))
+            dump_at = at
+            break
+    said = [line.strip() for line in lines if not CRASH_DUMP_LINE.match(line)]
+    name = signal_name(number)
+    if number == getattr(signal, "SIGKILL", 9) and dump_at == len(lines):
+        message = f"{verb} was killed ({name}): killed by the system (memory?)"
+    else:
+        message = f"{verb} crashed: {name}" + (f" — {said[-1]}" if said else "")
+    frames = [line.strip() for line in lines[dump_at:] if re.match(r"^\s+\[\d+\] ", line)]
+    kept = said[-6:] + lines[dump_at:dump_at + 1] + frames[:6]
+    return message, kept
+
 
 class Server:
     def __init__(self, door: Path, workspace: Path):
@@ -2433,6 +2484,9 @@ class Server:
         if done.returncode not in ok:
             if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
                 raise ToolError(parsed["error"])
+            crashed = crash_report(verb, done.returncode, done.stderr or "")
+            if crashed is not None:
+                raise refusal(verb, "crash", crashed[0], exit_code=done.returncode, stderr=crashed[1])
             tail = [line for line in done.stderr.splitlines() if line.strip()][-8:]
             kind = "godot" if done.returncode == 3 else "run"
             message = tail[-1] if tail else f"{verb} exited {done.returncode}"

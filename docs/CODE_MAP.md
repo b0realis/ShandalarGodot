@@ -490,8 +490,9 @@
   adventure/world/clue_map.gd`: `ClueMap` (the F2 map with a place
   ringed). The end: `game/adventure/world/adventure_finale.gd`:
   `AdventureFinale` (`after_fifth_wizard`, `at_portal`, `after_load`,
-  `place_at`, `portal_place`, `failed_parts`, `movie_path`; inner
-  `PortalPane`, `FinalBuilder`, `EndStats`); `game/adventure/world/
+  `place_at`, `portal_place`, `failed_parts`, `movie`, `movie_wanted`,
+  `showing`, `battle_over`, `return_first`; inner `PortalPane`,
+  `FinalBuilder`); `game/adventure/world/
   hall_of_fame_pane.gd`: `HallOfFamePane` (`open`, `show_entries`,
   `lines`, `lit_place`, `chosen`); `LoadAdventureScreen.end_words` /
   `open_hall`, `SaveSlotsPane.open_hall`; `GameSkin.movie`;
@@ -501,6 +502,27 @@
   draw_world_portal.gd` (our own art, the owner's pair 2, the horned arch:
   `game/art/world_portal_{open,petrified}{,_ground}{,@2x}.png`). Tests:
   `tests/*/test_pc_w5_*.gd`, `test_pc_w6_*`, `test_pc_w7_*`, `test_pc_w8_*`.
+- Part C, stage C3: the playtest and the hunt (2026-10-28). The tools:
+  `tools/upscale_skin.py` `BOARD_SHEETS` (the board's sheets upscaled
+  frame by frame amid their board neighbours — the owner's decision 9;
+  `DOUBLED` adds `preduel_frame` and the world's ground layer, ledger row
+  121);
+  `run_tests.sh` (the git-excluded `tests/_hunt/` probes never in a whole
+  run; your own `-gdir`/`-gtest` narrows the run),
+  `tools/test_c3_fx_scripts_shell.py` `RunTestsSelectionTest`. The fixes:
+  `WorldScreen.leaving_after_panes` / `stay_after_panes`, `WorldDuels.
+  menu_over_words` and `host(…, menu_over_text)`, `DungeonPane.MENU_OVER`,
+  `READ_GUARD_MS`, `LEAVE_GONE`; `HallOfFame.damaged` / `one_life_marks`,
+  `LoadAdventureScreen.quest_failed`, `WorldView.hero_parts` /
+  `hero_tile` (the hero in front of a castle or the portal on its own
+  tile, the owner),
+  `AdventurePlayer.door_mark` and `FORMAT_VERSION` 2; `CardValue.TREASURE`
+  / `KEPT_BACK` / `KEPT_BACK_1997` / `is_treasure` (the no-skin facts carry
+  1997's marks, the owner), `CreatureMeeting.FALLEN_MASTER` /
+  `FALLEN_TRIBUTE` / `master_fallen` (and `relation_of`: ruins are no
+  stronghold), `MirageTactics`' `_fragile_lock` and the Reflecting
+  Pool's per-thread census (thread-safe for the Deck Lab),
+  `tools/shandalar_mcp.py` `crash_report`. Tests: `tests/*/test_c13_*.gd`.
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
   `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
   `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,

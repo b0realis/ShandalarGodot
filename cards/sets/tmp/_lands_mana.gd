@@ -123,22 +123,32 @@ static func _stay_tapped(g: MtgGame, source: CardInstance, pid: int) -> void:
 
 # ---------------------------------------------------------- Reflecting Pool --
 
-## Set while a Pool takes its census: a land whose own census is asked from
-## inside one (another Pool) answers nothing rather than recursing. Holds
-## no object (CONTRIBUTING.md: no static may hold a CardInstance).
-static var _census_depth := 0
+## The threads taking a Pool's census just now ([method
+## OS.get_thread_caller_id]): a land whose own census is asked from inside
+## one (another Pool) answers nothing rather than recursing. By thread (part
+## C stage C3, h5-2): one count shared by every thread made a Pool in one
+## Deck Lab game make nothing while another game's Pool took its census, and
+## two threads' `+= 1` at once could lose a step and leave every Pool empty
+## for the rest of the run. Holds no object (CONTRIBUTING.md: no static may
+## hold a CardInstance).
+static var _census_threads := {}
+static var _census_lock := Mutex.new()
 
 ## Every type of mana the OTHER lands [param source]'s controller controls
 ## could produce, in WUBRG order and colourless last.
 static func _pool_types(g: MtgGame, source: CardInstance) -> Array[int]:
 	var out: Array[int] = []
-	if _census_depth > 0: return out
+	var me := OS.get_thread_caller_id()
+	_census_lock.lock()
+	var inside := _census_threads.has(me)
+	if not inside: _census_threads[me] = true
+	_census_lock.unlock()
+	if inside: return out
 	var pid := source.controller_id
 	# "Lands you tap for mana produce {X} instead" (Deep Water) applies to
 	# every land of the seat, this one included.
 	var becomes := int(g.players[pid].land_mana_becomes)
 	var found := 0
-	_census_depth += 1
 	for land in g.players[pid].battlefield:
 		if land == source or not land.is_land(): continue
 		for ability in land.cur_mana_abilities:
@@ -151,7 +161,9 @@ static func _pool_types(g: MtgGame, source: CardInstance) -> Array[int]:
 				found |= int(ability.dynamic_color.call(g, land))
 			else:
 				for pair in ability.produces: found |= int(pair[0])
-	_census_depth -= 1
+	_census_lock.lock()
+	_census_threads.erase(me)
+	_census_lock.unlock()
 	if found != 0 and becomes != 0: found = becomes
 	var order: Array[int] = Mtg.WUBRG.duplicate()
 	order.append(Mtg.ManaColor.C)

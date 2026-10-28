@@ -27,7 +27,16 @@ extends Control
 ## says that ([method AdventurePlayer.save_at]'s `ended` and `score`); the
 ## hero's line says "One life" when the adventure was begun under it. Taken
 ## up again, a won adventure walks on in a world at peace, a failed one
-## opens on its end ([method AdventureFinale.after_load]).
+## opens on its end ([method AdventureFinale.after_load]). So does a save of
+## "One life" from before its final battle was lost or while it was fought
+## — a slot saved at the portal, the autosave of a game closed mid-battle:
+## the Hall's file marks the battle begun or lost outside every save
+## ([method HallOfFame.one_life_state]), the load settles it as a loss
+## ([method FinalBattle.on_load]), and its row says "Quest failed" too
+## ([method quest_failed]; part C stage C3, h3-2). RESUME passes over every
+## save whose quest failed — it would open on that end each time — and is
+## greyed when no other autosave is left (h3-6); a won adventure's it takes
+## up (the Hall's End or Return to Shandalar).
 ##
 ## THE HALL OF FAME [ours] (the owner, 2026-10-27: *"Only hall of fame
 ## button should be inside save/load as not to clutter the main menu!"*):
@@ -49,6 +58,9 @@ var saves: Array[Dictionary] = []
 var rows: Array[Dictionary] = []
 ## How many save files could not be read, as the note says.
 var unreadable := 0
+## The Hall's One-life marks as the list was read ([method
+## HallOfFame.one_life_marks]).
+var marks := {}
 var resume_button: Button
 var _list: ItemList
 var _say_line: Label
@@ -142,6 +154,7 @@ func refresh() -> void:
 	var scanned := AdventurePlayer.scan_saves()
 	var found: Array[Dictionary] = scanned["saves"]
 	unreadable = int(scanned["unreadable"])
+	marks = HallOfFame.one_life_marks()
 	# The adventures in the order of their newest save; each one's autosave,
 	# then its slots by number.
 	var order: Array[String] = []
@@ -175,7 +188,7 @@ func refresh() -> void:
 			else:
 				words = "      %d. %s · saved %s · day %d" % [int(save["slot"]), String(save["slot_name"]),
 					when, int(save["days"])]
-			_list.add_item(words + end_words(save))
+			_list.add_item(words + end_words(save, marks))
 			rows.append(save)
 			saves.append(save)
 	resume_button.disabled = newest_autosave().is_empty()
@@ -184,7 +197,7 @@ func refresh() -> void:
 			else "No adventure has been saved yet. Shandalar on the main menu begins one, and saves it the moment its world is made."
 		continue_button.disabled = true
 	else:
-		_say_line.text = "Choose a save and Continue, or double-click it; Resume takes up the newest autosave."
+		_say_line.text = "Choose a save and Continue, or double-click it; Resume takes up the newest autosave whose quest has not failed."
 		if unreadable > 0:
 			_say_line.text += " " + unreadable_note()
 		_list.select(1)
@@ -192,14 +205,33 @@ func refresh() -> void:
 
 
 ## The end a save's row tells of (part C): " · Won: Arzakon banished for
-## 1130 years", " · Quest failed", or "" while the adventure goes on.
-static func end_words(save: Dictionary) -> String:
-	match String(save.get("ended", "")):
-		AdventurePlayer.ENDED_WON:
-			return WON_ROW % int(save.get("score", 0))
-		AdventurePlayer.ENDED_FAILED:
-			return FAILED_ROW
+## 1130 years", " · Quest failed" (also for a save the load would settle as
+## a lost final battle, [method quest_failed]), or "" while the adventure
+## goes on. [param one_life] the Hall's One-life marks, read from its file
+## when not given.
+static func end_words(save: Dictionary, one_life: Variant = null) -> String:
+	if String(save.get("ended", "")) == AdventurePlayer.ENDED_WON:
+		return WON_ROW % int(save.get("score", 0))
+	if quest_failed(save, one_life):
+		return FAILED_ROW
 	return ""
+
+
+## WHETHER [param save] OPENS ON THE QUEST-FAILED END: its adventure failed;
+## or, of "One life" and not ended, its save stands at Arzakon's door or the
+## Hall's marks ([param one_life], `{id: state}`, read from the Hall's file
+## when not given) say its final battle began or was lost — as [method
+## FinalBattle.on_load] reads it.
+static func quest_failed(save: Dictionary, one_life: Variant = null) -> bool:
+	var how := String(save.get("ended", ""))
+	if how == AdventurePlayer.ENDED_FAILED:
+		return true
+	if how != "" or String(save.get("life_rule", "")) != AdventurePlayer.LIFE_ONE:
+		return false
+	if bool(save.get("at_door", false)):
+		return true
+	var known: Dictionary = one_life if one_life is Dictionary else HallOfFame.one_life_marks()
+	return String(known.get(String(save.get("id", "")), "")) in HallOfFame.ONE_LIFE_STATES
 
 
 ## THE HALL OF FAME over the list ([HallOfFamePane]); Done or Escape closes
@@ -225,16 +257,19 @@ func unreadable_note() -> String:
 		unreadable, "save" if unreadable == 1 else "saves"]
 
 
-## The newest autosave of all, or `{}`.
+## The newest autosave of all whose quest has not failed ([method
+## quest_failed]: Resume would open on that end every time, h3-6), or `{}`.
 func newest_autosave() -> Dictionary:
 	var best := {}
 	for save in saves:
-		if int(save["slot"]) == 0 and (best.is_empty() or String(save["saved"]) > String(best["saved"])):
+		if int(save["slot"]) == 0 and not quest_failed(save, marks) \
+				and (best.is_empty() or String(save["saved"]) > String(best["saved"])):
 			best = save
 	return best
 
 
-## RESUME: the newest autosave taken up (1997's Resume Game).
+## RESUME: the newest autosave taken up (1997's Resume Game) — of an
+## adventure whose quest has not failed.
 func resume() -> bool:
 	var newest := newest_autosave()
 	return not newest.is_empty() and continue_adventure(rows.find(newest))

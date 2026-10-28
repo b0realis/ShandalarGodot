@@ -151,6 +151,33 @@ if verb == "lab" and "--resume" in rest:
             i += 2
         else:
             refuse("deck_lab", "--resume takes only the run's folder", kind="option", flag="--resume")
+if verb == "lab" and ("crash.deck" in rest or "killed.deck" in rest):
+    # A Lab that dies of a signal (part C stage C3, h5-3): glibc's line,
+    # then Godot's crash dump, then SIGABRT (Godot's handler aborts after
+    # dumping a SIGSEGV); or the out-of-memory killer's SIGKILL, no dump.
+    import signal
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ImportError, ValueError, OSError):
+        pass
+    if "crash.deck" in rest:
+        sys.stderr.write("card pool: 897 cards in 57 ms (background)\n"
+                         "double free or corruption (!prev)\n\n" + "=" * 64 + "\n"
+                         "handle_crash: Program crashed with signal 11\n"
+                         "Engine version: Godot Engine v4.7.2.stable.official (ed1daf0)\n"
+                         "Dumping the backtrace. Please include this when reporting the bug on: x\n"
+                         "Load address: 400000\n\n"
+                         "[1] 70d42cc45cb0 (libc.so.6+45cb0) - /usr/lib/libc.so.6(+0x45cb0)\n"
+                         "[2] 46ada17 (main+42ada17) - ../tools/godot() [0x46ada17]\n"
+                         "-- END OF C++ BACKTRACE --\n" + "=" * 64 + "\n"
+                         "GDScript backtrace (most recent call first):\n"
+                         "    [0] _fragile_kind (res://engine/ai/mirage_tactics.gd:256)\n"
+                         "    [1] dies_when_targeted (res://engine/ai/mirage_tactics.gd:231)\n"
+                         "-- END OF GDSCRIPT BACKTRACE --\n" + "=" * 64 + "\n")
+        sys.stderr.flush()
+        os.kill(os.getpid(), signal.SIGABRT)
+    os.kill(os.getpid(), signal.SIGKILL)
 if verb in ("lab", "autodeck"):
     if verb == "lab" and "--progress" in rest and rest[rest.index("--progress") + 1] == "json":
         import time as _t
@@ -1133,6 +1160,41 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(typo["structuredContent"]["error"]["path"], "missing.deck")
 
     # --- the Lab and the AutoDeck -----------------------------------------
+
+    @unittest.skipIf(os.name == "nt", "a POSIX signal ends the stand-in")
+    def test_a_crashed_lab_says_why(self):
+        # Part C stage C3, h5-3: the message was the dump's last row of `=`
+        # and glibc's line was cut off with the tail.
+        crashed = self.client.call("lab", {"deck_a": "crash.deck", "deck_b": "own.deck"})
+        self.assertTrue(crashed["isError"])
+        error = crashed["structuredContent"]["error"]
+        self.assertEqual(error["kind"], "crash")
+        self.assertEqual(error["exit"], -6, "the stand-in aborts, as Godot's handler does")
+        self.assertEqual(error["message"], "lab crashed: SIGSEGV — double free or corruption (!prev)")
+        self.assertIn("double free or corruption (!prev)", error["stderr"])
+        self.assertIn("handle_crash: Program crashed with signal 11", error["stderr"])
+        self.assertIn("[0] _fragile_kind (res://engine/ai/mirage_tactics.gd:256)", error["stderr"])
+        self.assertFalse([line for line in error["stderr"] if set(line) == {"="}], "no rule kept")
+        killed = self.client.call("lab", {"deck_a": "killed.deck", "deck_b": "own.deck"})
+        error = killed["structuredContent"]["error"]
+        self.assertEqual((error["kind"], error["exit"]), ("crash", -9))
+        self.assertEqual(error["message"], "lab was killed (SIGKILL): killed by the system (memory?)")
+
+    def test_crash_report_reads_the_reason_off_any_dump(self):
+        # The shapes h5 measured (scratchpad c13/h5): glibc's line with no
+        # dump; a C++ abort; Godot's out-of-memory errors and their `at:`.
+        self.assertIsNone(mcp.crash_report("lab", 1, "ERROR: x\n"))
+        self.assertIsNone(mcp.crash_report("lab", 0, ""))
+        self.assertEqual(mcp.crash_report("lab", -6, "malloc(): corrupted top size\n")[0],
+                         "lab crashed: SIGABRT — malloc(): corrupted top size")
+        self.assertEqual(mcp.crash_report("lab", -6, "terminate called after throwing an instance of "
+                                          "'std::system_error'\n  what():  Resource temporarily unavailable\n")[0],
+                         "lab crashed: SIGABRT — what():  Resource temporarily unavailable")
+        message, kept = mcp.crash_report("lab", -11, 'ERROR: Parameter "mem" is null.\n'
+                                         "   at: alloc_static (core/os/memory.cpp:104)\n")
+        self.assertEqual(message, 'lab crashed: SIGSEGV — ERROR: Parameter "mem" is null.')
+        self.assertEqual(kept, ['ERROR: Parameter "mem" is null.'])
+        self.assertEqual(mcp.crash_report("lab", -11, "")[0], "lab crashed: SIGSEGV")
 
     def test_lab_builds_the_line(self):
         plan = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "games": 20, "seed": 3,
@@ -2806,7 +2868,10 @@ class LiveTest(unittest.TestCase):
             self.assertEqual(message.get("id"), ident, message)
             break
         result = message["result"]
-        self.assertFalse(result["isError"], result)
+        # A Lab that died says how first (part C stage C3, h5-3): a SIGKILL
+        # nobody sent is the system's out-of-memory killer.
+        error = result["structuredContent"].get("error", {}) if result["isError"] else {}
+        self.assertFalse(result["isError"], f"{error.get('message', '')}: {result}")
         run = result["structuredContent"]
         self.assertEqual(run["run"]["tool"], "deck_lab")
         self.assertIn("matchups", run["results"])

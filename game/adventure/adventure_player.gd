@@ -27,9 +27,14 @@ extends RefCounted
 ## field and not the adventure ([method from_dict]); and the lists read a
 ## file only when its bytes changed ([method scan_saves]).
 
-## The save's own name and version, first in every file.
+## The save's own name and version, first in every file. VERSION 2 (part C
+## stage C3, h5-5): part C's end — the end's marks, "One life" — rides in
+## every save, and a build that reads only version 1 kept a save of 2 as
+## unreadable ("saved by a newer version") rather than taking it up and
+## writing it back without them (a failed One-life adventure alive again,
+## a won one's end lost). This game reads both: 1 is a save from before.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2
 ## Where the adventures are saved (tests point it elsewhere).
 const SAVES_FOLDER := "user://adventures"
 static var saves_folder := SAVES_FOLDER
@@ -865,13 +870,30 @@ static func _read_clocks(player: AdventurePlayer, clocks: Dictionary) -> void:
 ## ([method _final_record]), the portal a tile of the map in a state it
 ## can be in ([method _portal_record]). A save from before part C has
 ## none: the adventure goes on.
+## MARKS THAT CONTRADICT ONE ANOTHER (a damaged save; part C stage C3,
+## h5-6) are made to agree: a won adventure's portal is the petrified
+## monument, any other's stands open (a petrified portal with the
+## adventure not won could never be entered — the end out of reach); the
+## hero stands at Arzakon's door only in an adventure going on with all
+## five wizards beaten ([method door_mark]; under "One life" a false door
+## would be a lost final battle). The wizards are read first.
 static func _read_end(player: AdventurePlayer, end: Dictionary) -> void:
 	var how := _text(end.get("ended"))
 	player.ended = how if how in ENDINGS else ""
 	player.final = _final_record(end.get("final"))
 	player.final_attempts = _count(end.get("final_attempts"))
-	player.at_door = _flag(end.get("at_door")) and player.ended == ""
+	player.at_door = door_mark(end.get("at_door"), player.ended, player.defeated_wizards.size())
 	player.portal = _portal_record(end.get("portal"))
+	if not player.portal.is_empty():
+		player.portal["state"] = FinalBattle.PORTAL_PETRIFIED if player.ended == ENDED_WON \
+			else FinalBattle.PORTAL_OPEN
+
+
+## Whether a save's door mark [param saved] stands ([member at_door]): set,
+## the adventure going on ([param how] ""), all five wizards beaten
+## ([param beaten] of them).
+static func door_mark(saved: Variant, how: String, beaten: int) -> bool:
+	return _flag(saved) and how == "" and beaten >= FinalBattle.ALL_FIVE
 
 
 ## The end's record ([member final]): its numbers numbers, its words
@@ -1430,7 +1452,7 @@ static func load_from(path: String) -> AdventurePlayer:
 
 ## THE SAVE AT [param path] as the lists show it: `{path, kind, slot,
 ## slot_name, days, gold, id, name, color, difficulty, saved, seed_text,
-## ended, score, life_rule}`
+## ended, score, life_rule, at_door}`
 ## — from its `.bak` when the file itself cannot be read; `{path,
 ## unreadable: true}` when neither can; `{}` when there is no save there.
 static func save_at(path: String) -> Dictionary:
@@ -1531,10 +1553,12 @@ static func _remember(path: String, bytes: PackedByteArray, data: Dictionary) ->
 
 ## A save's line in the lists, from [param data] (a [method readable]
 ## save): `{slot_name, days, gold, id, name, color, difficulty, saved,
-## seed_text, ended, score, life_rule}` — `ended` "" while the adventure
-## goes on, "won" or "failed" ([member ended]); `score` a won adventure's
-## years, else 0 (part C: the load list shows a won adventure with its
-## score, a failed one as failed).
+## seed_text, ended, score, life_rule, at_door}` — `ended` "" while the
+## adventure goes on, "won" or "failed" ([member ended]); `score` a won
+## adventure's years, else 0 (part C: the load list shows a won adventure
+## with its score, a failed one as failed); `at_door` the door mark as the
+## load reads it ([method door_mark]) — under "One life" a battle begun,
+## which the load settles as lost (part C stage C3, h3-2).
 static func _summary(data: Dictionary) -> Dictionary:
 	var game: Dictionary = data["adventure"]
 	var hero: Dictionary = data["hero"]
@@ -1542,6 +1566,10 @@ static func _summary(data: Dictionary) -> Dictionary:
 	var how := _text(end.get("ended"))
 	how = how if how in ENDINGS else ""
 	var final_saved := _final_record(end.get("final"))
+	var beaten := _texts(_object(data.get("record")).get("defeated_wizards"), COLORS)
+	var wizards := {}
+	for key in beaten:
+		wizards[key] = true
 	return {"slot_name": _text(game.get("slot_name")),
 		"days": _count((data["clocks"] as Dictionary).get("quest_timer")) / WorldStatus.DAY,
 		"gold": _count((data["carried"] as Dictionary).get("gold")),
@@ -1550,7 +1578,8 @@ static func _summary(data: Dictionary) -> Dictionary:
 		"saved": _text(game.get("saved")),
 		"seed_text": _text((data["world"] as Dictionary).get("seed_text")),
 		"ended": how, "score": int(final_saved.get("score", 0)) if how == ENDED_WON else 0,
-		"life_rule": life_rule_of(hero.get("life_rule"))}
+		"life_rule": life_rule_of(hero.get("life_rule")),
+		"at_door": door_mark(end.get("at_door"), how, wizards.size())}
 
 
 ## The bytes of the file at [param path], empty when there is none.

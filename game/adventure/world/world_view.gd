@@ -64,6 +64,16 @@ extends Control
 ##    solid or clear (held to the old drawing pixel for pixel; at half size
 ##    a few pixels of those parts may show their sheet's neighbouring
 ##    pixel, as half size picks one of two).
+##    THE HERO IN FRONT ON A PLACE'S OWN TILE [ours] (the owner's ruling
+##    of round C3, part C stage C3, h3-5: "hero in front — drawn over the
+##    building on its own tile"; narrowed by the owner, 2026-10-28: "only
+##    the portal and castles"): a castle or its ruins and Arzakon's portal
+##    are not drawn again over a hero whose feet are on their tile
+##    ([method hero_parts]); their foot is the tile's middle row, the
+##    hero's feet there, and 1997, queueing the hero after its equals, hid
+##    them behind it (on the portal wholly). Towns, villages, cities,
+##    domes and dungeon markers stand as 1997 drew them, and off the tile
+##    a castle or the portal stands in front as before.
 ## The ground and the uprights are drawn round one world point
 ## ([member _anchor]) for the screen and a margin round it, and only moved
 ## as the camera goes and scaled as it zooms; they are drawn again only
@@ -546,7 +556,9 @@ static func _tiles_over(area: Rect2, origin: Vector2) -> Array[Vector2i]:
 ## order drawn: up by the height of the foot, the later of two at one
 ## height behind (the queue of `RenderAdventureWorldScene`, sorted on whole
 ## numbers). A dungeon is queued after its tile's trees or rocks, as 1997
-## queued it — seen or not ([member dungeons]).
+## queued it — seen or not ([member dungeons]). A castle (or its ruins)
+## and the portal carry their tile as a fourth part, `[sheet, where, frame,
+## tile]` ([method hero_parts]).
 func _order_uprights(origin: Vector2) -> void:
 	var standing: Array = []
 	var keys := PackedInt64Array()
@@ -555,7 +567,11 @@ func _order_uprights(origin: Vector2) -> void:
 		if _seen[i] != 0:
 			for upright in _tile_recipes[i][2]:
 				keys.append(_upright_key(int(left.y) + int(upright[0]), standing.size()))
-				standing.append([upright[1], Rect2(left + upright[2].position, upright[2].size), upright[3]])
+				var op := [upright[1], Rect2(left + upright[2].position, upright[2].size), upright[3]]
+				if upright.size() > 4:
+					# The tile's place: its tile beside it ([method hero_parts]).
+					op.append(_tiles[i])
+				standing.append(op)
 		if not _dungeon_at.is_empty():
 			var dungeon := _dungeon_op(_tiles[i], false)
 			if not dungeon.is_empty():
@@ -570,6 +586,7 @@ func _order_uprights(origin: Vector2) -> void:
 	var gate := _portal_op(origin, false, _skin_twice())
 	if not gate.is_empty():
 		keys.append(_upright_key(int((gate[1] as Rect2).position.y - PORTAL_AT.y), standing.size()))
+		gate.append(portal_tile())
 		standing.append(gate)
 	keys.sort()
 	for key in keys:
@@ -702,8 +719,21 @@ func _paint_hero() -> void:
 	var frame_rect := art.frame_rect(key, _hero_frame())
 	var figure := Rect2(at - Vector2(77, 61), frame_rect.size)
 	_figure.draw_texture_rect_region(sheet, figure, frame_rect)
-	for part in _in_front_of(at.y, figure):
+	for part in hero_parts(figure):
 		_figure.draw_texture_rect_region(part[0], part[1], part[2])
+
+
+## THE PARTS DRAWN AGAIN OVER THE HERO whose frame is [param figure]
+## ([method _in_front_of]) — but not the place on the hero's own tile (the
+## class's notes, h3-5 [ours]: the hero in front of it).
+func hero_parts(figure: Rect2) -> Array:
+	return _in_front_of(_hero_at().y, figure, hero_tile())
+
+
+## The tile the hero is drawn on this frame (slid between ticks).
+func hero_tile() -> Vector2i:
+	var shown := _shown_hero()
+	return Vector2i(floori(shown.x / 32.0), floori(shown.y / 32.0))
 
 
 ## CREATURE [param creature], standing among the uprights — its sheet's
@@ -733,14 +763,17 @@ func _creature_at(creature: Dictionary) -> Vector2:
 ## the hero's frame [param figure]: `[sheet, where, frame]`, cut on whole
 ## pixels of the sheet so they fall on the ones drawn below (only at half
 ## size and the like can a cut part pick the neighbouring pixel of its
-## sheet), in the uprights' order.
-func _in_front_of(feet_y: float, figure: Rect2) -> Array:
+## sheet), in the uprights' order. The place standing on tile [param own]
+## is left out (the hero in front of it, [method hero_parts]).
+func _in_front_of(feet_y: float, figure: Rect2, own := Vector2i(-1, -1)) -> Array:
 	var parts: Array = []
 	var first := _upright_feet.bsearch(ceili(feet_y), true)
 	for i in range(first, _upright_feet.size()):
 		if _upright_feet[i] > feet_y + IN_FRONT:
 			break
 		var op: Array = _upright_ops[i]
+		if op.size() > 3 and op[3] == own:
+			continue
 		var where: Rect2 = op[1]
 		var over := where.intersection(figure)
 		if not over.has_area():
@@ -909,10 +942,12 @@ func _object(row: int, column: int, foot: Vector2, halves: Array, uprights: Arra
 	_stand(uprights, int(foot.y), _op(upright, frame, at))
 
 
-## [param op] standing with its foot [param foot] below the tile's corner.
-static func _stand(uprights: Array, foot: int, op: Array) -> void:
+## [param op] standing with its foot [param foot] below the tile's corner;
+## [param place] marks it the tile's place (a fifth part, true — [method
+## hero_parts]).
+static func _stand(uprights: Array, foot: int, op: Array, place := false) -> void:
 	if not op.is_empty():
-		uprights.append([foot, op[0], op[1], op[2]])
+		uprights.append([foot, op[0], op[1], op[2], true] if place else [foot, op[0], op[1], op[2]])
 
 
 func _site(tile: Vector2i, halves: Array, uprights: Array) -> void:
@@ -929,7 +964,7 @@ func _site(tile: Vector2i, halves: Array, uprights: Array) -> void:
 		var half := _castle_ref(frames[pick + 1])
 		_add(halves, _op(half[0], half[1], at))
 		var whole := _castle_ref(frames[pick])
-		_stand(uprights, 0, _op(whole[0], whole[1], at))
+		_stand(uprights, 0, _op(whole[0], whole[1], at), true)
 		return
 	var ruler := TownStatus.ruler(world, index)
 	if ruler != 0:

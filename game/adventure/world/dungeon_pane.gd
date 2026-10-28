@@ -29,17 +29,21 @@ extends PanelContainer
 ##
 ## MOVING [the owner's P4 "Modern"]: 1997's Home, PgUp, PgDn and End, the
 ## keypad's 7, 9, 3 and 1, the arrows and W A S D turned to the board's
-## diagonals ([method DungeonBoard.direction_of_key]); a key held walks on.
-## A click on a room next to the hero steps there; further along a straight
+## diagonals ([method DungeonBoard.direction_of_key]); a key held walks on,
+## and of two held the newer, after the step under way (part C stage C3,
+## h1-3). A click on a room next to the hero steps there; further along a straight
 ## corridor the hero has seen, the hero walks there, stopping at the first
 ## event ([method DungeonBoard.walk_toward]); anywhere else, 1997's quadrant
 ## round the hero ([method DungeonBoard.direction_toward]). A click on a
-## figure is a click on its room. Touch is a click. A creature's name shows
-## over it while the pointer rests there [ours, the owner's pick].
+## figure is a click on its room. Touch is a click; a double click's second
+## press is none, and a click puts a box or a page away only once it has
+## been up a moment (h1-1). A creature's name shows over it while the
+## pointer rests there [ours, the owner's pick].
 ## LEAVING ASKS FIRST [ours, the owner's board extras: "Leave?"]: the exit
 ## stepped onto or clicked, Escape, or Leave — "Leave Azar's Crypt? The
 ## dungeon will move elsewhere, and where it lies will be forgotten." (a
-## castle on Wizard: its wizard may send a siege) — Stay or Leave.
+## dungeon with no card left: it will be gone, h1-4; a castle on Wizard:
+## its wizard may send a siege) — Stay or Leave.
 ##
 ## THE EVENTS, each as 1997 played it (c4 §8) — the hero first walks half
 ## way into the cell ([method DungeonView.walk]):
@@ -83,7 +87,10 @@ extends PanelContainer
 ## as the pane closes ([method WorldDuels.world_music]).
 ## NOTHING IS SAVED INSIDE (the owner's D2: the world saved the adventure at
 ## the door, [method WorldScreen._enter_board]); a room duel's "Return to
-## the main menu" says so in its question.
+## the main menu" says so in its question. Taken once the duel is over
+## ([method WorldScreen.leaving_after_panes]), the result stands: it is
+## shown, the visit ends as by the exit and the world, saved on the way
+## out, leaves for the title (part C stage C3, h1-2; [constant MENU_OVER]).
 ##
 ## [signal finished] once with [method DungeonBoard.close]'s result —
 ## `{index, beaten, booted, game_over, words}` — and, after a castle's
@@ -108,6 +115,10 @@ const KEEP := "Leave it here"
 ## [Ours] The question before leaving, and its reasons.
 const LEAVE_ASK := "Leave %s?"
 const LEAVE_MOVES := "The dungeon will move elsewhere, and where it lies will be forgotten."
+## [Ours] A dungeon with no card left in it is drawn and entered no more
+## ([method WorldClues.holds_cards]): it does not move, it is gone (part C
+## stage C3, h1-4).
+const LEAVE_GONE := "No card is left here: the dungeon will be gone."
 const LEAVE_SIEGE := "The %s may send a siege against you."
 ## [Ours] The page's foot: the next duel's life, the rooms left.
 const LIFE := "Life in the next duel: %d"
@@ -121,6 +132,17 @@ const STAYS := "%s stays in the dungeon."
 const DRAWN := "A draw: %s still waits."
 ## [Ours] A room duel's "Return to main menu" question: nothing saved inside.
 const MENU := "Return to the main menu? The duel is left unfinished and nothing is saved: the adventure goes back to where it was saved, at the door of %s."
+## [Ours] The same question once the duel is over (part C stage C3, h1-2):
+## its result is shown, the visit ends as by the exit — saved on the way
+## out, as every way out is ([method WorldScreen._board_done]) — and the
+## title.
+const MENU_OVER := "Return to the main menu? The duel is over and its result stands: it is shown, then you leave %s as by its exit, and the adventure is saved and left."
+## [Ours] How long after a box or a page comes a click on the page may put
+## it away (part C stage C3, h1-1): a quick second click the desktop did not
+## call a double click never puts away, unread, what the first brought —
+## the card found's page not before it has come in ([constant
+## TREASURE_SECONDS]).
+const READ_GUARD_MS := 300
 ## The page's points where a box stands (1997's text boxes at (200, 192),
 ## the booted words at (320, 288)); beside the card found.
 const BOX_AT := Vector2(320, 236)
@@ -180,7 +202,12 @@ var _done := false
 var _most := 1.0
 var _factor := 1.0
 var _drag := {}
-var _held_key := 0
+## The direction keys pressed on the board, the newest last (part C stage
+## C3, h1-3): the newest still held walks on after the step under way.
+var _held: Array[int] = []
+## Until when a click on the page puts nothing away ([constant
+## READ_GUARD_MS]), in [method Time.get_ticks_msec].
+var _guard_until := 0
 
 
 func _ready() -> void:
@@ -394,20 +421,41 @@ func _step(way: int) -> void:
 			_idle()
 
 
-## A step walked: the next of a corridor's, the key still held, or free.
+## A step walked: the next of a corridor's, the newest key still held, or
+## free.
 func _walked() -> void:
 	_refresh()
 	step = "idle"
 	if not _queue.is_empty():
 		_step(_queue.pop_front())
 		return
-	if _held_key != 0 and Input.is_key_pressed(_held_key):
-		var way := DungeonBoard.direction_of_key(_held_key)
-		if way != 0:
-			_step(way)
-			return
-	_held_key = 0
+	var way := _held_way()
+	if way != 0:
+		_step(way)
+		return
 	_idle()
+
+
+## Direction key [param code] pressed on the board: the newest held.
+func _press_held(code: int) -> void:
+	_held.erase(code)
+	_held.append(code)
+
+
+## THE WAY OF THE NEWEST DIRECTION KEY STILL HELD [modern] (part C stage C3,
+## h1-3): a second key pressed while the hero walks turns them after the
+## step under way — a tap let go before the step ends is dropped, as
+## 1997's —, and the one still held under it walks on once it is let go;
+## 0 for none. The keys let go are forgotten.
+func _held_way() -> int:
+	while not _held.is_empty():
+		var code: int = _held[-1]
+		if Input.is_key_pressed(code):
+			var way := DungeonBoard.direction_of_key(code)
+			if way != 0:
+				return way
+		_held.pop_back()
+	return 0
 
 
 ## The hero walks on from half way into the event's cell (it was passed).
@@ -433,7 +481,10 @@ func _clicked(page_point: Vector2, button: int) -> void:
 	if _done or button != MOUSE_BUTTON_LEFT:
 		return
 	if step == "first" or (step in ["box", "lost", "booted"] and _then.is_valid()):
-		choose("go")
+		# Not in the moment the box or the page came (h1-1, [constant
+		# READ_GUARD_MS]).
+		if Time.get_ticks_msec() >= _guard_until:
+			choose("go")
 		return
 	if step != "idle":
 		return
@@ -557,6 +608,8 @@ func _treasure_page(card_name: String) -> void:
 			TREASURE_SECONDS)
 		if cover != null:
 			cover.take_screen(was)
+			# A click puts the page away only once the card has come in (h1-1).
+			_guard_until = maxi(_guard_until, Time.get_ticks_msec() + int(TREASURE_SECONDS * 1000.0))
 
 
 func _ask_swap() -> void:
@@ -662,7 +715,8 @@ func _start_duel() -> void:
 	sound.pause_for_duel()
 	var row := int(_duel_setup.get("row", 0))
 	var config := DungeonDuels.duel_config(player, board.run, _duel_setup)
-	_duel = WorldDuels.host(_host(), config, CreatureBook.name_of(row), MENU % board.title())
+	_duel = WorldDuels.host(_host(), config, CreatureBook.name_of(row), MENU % board.title(),
+		MENU_OVER % board.title())
 	_duel.ended.connect(_after_duel, CONNECT_ONE_SHOT)
 	_duel.abandoned.connect(_abandoned, CONNECT_ONE_SHOT)
 
@@ -681,15 +735,27 @@ func _after_duel(report: DuelReport) -> void:
 	board.room_done(player, outcome)
 	visible = true
 	_refresh()
+	# "Return to main menu" taken once the duel was over (part C stage C3,
+	# h1-2): its result shown, then the visit ends — saved on the way out —
+	# and the world leaves for the title; the hero walked on before.
+	var leaving := _leaving()
 	match outcome:
 		DungeonBoard.CLEARED:
 			sound.resume()
-			view.say(String(out.get("journal", "")) + ".")
-			_go_on()
+			var won := String(out.get("journal", "")) + "."
+			if leaving:
+				box([won], _end_visit)
+			else:
+				view.say(won)
+				_go_on()
 		DungeonBoard.AGAIN:
 			sound.resume()
-			view.say(DRAWN % CreatureBook.called(int(out.get("row", 0))))
-			_back()
+			var drawn := DRAWN % CreatureBook.called(int(out.get("row", 0)))
+			if leaving:
+				box([drawn], _end_visit)
+			else:
+				view.say(drawn)
+				_back()
 		DungeonBoard.BEATEN:
 			view.stand()
 			_castle_won()
@@ -699,6 +765,13 @@ func _after_duel(report: DuelReport) -> void:
 			_lost = out.get("lost", [])
 			_lost_shown = 0
 			_next_lost()
+
+
+## Whether the world screen leaves for the title once its panes are done
+## ([method WorldScreen.leaving_after_panes]: a room duel's "Return to main
+## menu" taken after it was over).
+func _leaving() -> bool:
+	return screen != null and screen.has_method("leaving_after_panes") and bool(screen.call("leaving_after_panes"))
 
 
 ## The player left the duel for the main menu: nothing settled, nothing
@@ -786,12 +859,21 @@ func ask_leave() -> void:
 	_queue.clear()
 	var lines: Array[String] = [LEAVE_ASK % board.title()]
 	if not board.castle:
-		lines.append(LEAVE_MOVES)
+		lines.append(LEAVE_MOVES if _holds_cards() else LEAVE_GONE)
 	elif player.difficulty == DungeonDoors.RETALIATING \
 			and not AdventurePlayer.COLORS[clampi(board.index, 0, 4)] in player.defeated_wizards:
 		lines.append(LEAVE_SIEGE % WorldNames.WIZARDS[clampi(board.index, 0, 4)])
 	_show_box(lines, BOX_AT)
 	offer([["stay", STAY, true], ["leave", LEAVE, true]])
+
+
+## Whether the dungeon still holds a card ([method WorldClues.holds_cards]):
+## left, it moves; with none, it is gone ([constant LEAVE_GONE]).
+func _holds_cards() -> bool:
+	var world := player.world if player != null else null
+	if world == null or board == null or board.index < 0 or board.index >= world.encounters.size():
+		return true
+	return WorldClues.holds_cards(world.encounters[board.index])
 
 
 ## THE VISIT OVER, whatever the way out ([method DungeonBoard.close]): a
@@ -938,6 +1020,7 @@ func answer_ids() -> Array[String]:
 
 ## The choices now: [param actions], each `[id, words, ready]`.
 func offer(actions: Array) -> void:
+	_guard_until = maxi(_guard_until, Time.get_ticks_msec() + READ_GUARD_MS)
 	PaneStyle.drop_children(_choices)
 	for action in actions:
 		_choices.add_child(_button(String(action[1]), String(action[0]), bool(action[2])))
@@ -1006,7 +1089,7 @@ func _unhandled_input(input: InputEvent) -> void:
 		var way := DungeonBoard.direction_of_key(key.keycode)
 		if way != 0:
 			get_viewport().set_input_as_handled()
-			_held_key = key.keycode
+			_press_held(key.keycode)
 			move(way)
 			return
 	if key != null and key.pressed and not key.echo and _then.is_valid() \
@@ -1030,6 +1113,11 @@ func _unhandled_input(input: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if step == "first" and key.pressed and not key.echo:
 			choose("go")
+		elif step == "walking" and key.pressed and not key.echo and not key.ctrl_pressed \
+				and not key.alt_pressed and not key.meta_pressed:
+			# A second direction pressed while the hero walks: the newest held
+			# wins after this step ([method _held_way], h1-3).
+			_press_held(key.keycode)
 
 
 ## A press of the mouse puts out the choice a letter lit.

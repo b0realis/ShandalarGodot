@@ -389,8 +389,10 @@ static func lifted(player: AdventurePlayer, besieger := {}) -> void:
 ## A WIZARD BEATEN (part C, `HandleDefeatedWizardCastle`): every town
 ## wizard [param wizard] holds is freed (its link stays lost), and every
 ## creature of his colour leaves the map — the besieger too, its siege then
-## over [ours: 1997 left the flag up for the clock to lower]. The towns
-## freed, in slot order.
+## over [ours: 1997 left the flag up for the clock to lower] — but the
+## quest's creature, whose quest it would end (part C stage C3, h2-2; it
+## keeps coming too, [method WorldLairs.fill]). The towns freed, in slot
+## order.
 static func free_all(player: AdventurePlayer, wizard: int) -> Array[int]:
 	var freed: Array[int] = []
 	var world := player.world
@@ -398,8 +400,12 @@ static func free_all(player: AdventurePlayer, wizard: int) -> Array[int]:
 		if TownStatus.ruler(world, slot) == wizard:
 			TownStatus.release(world, slot)
 			freed.append(slot)
+	var wanted := WorldCreatures.quest_row(player)
 	for i in range(player.monsters.size() - 1, -1, -1):
 		var held: Dictionary = player.monsters[i]
+		if wanted != 0 and int(held.get("slot", -1)) != SLOT \
+				and String(held.get("kind", "")) == "creature" and int(held.get("creature", 0)) == wanted:
+			continue
 		if int(held.get("color", 0)) == wizard:
 			if int(held.get("slot", -1)) == SLOT:
 				player.siege_active = false

@@ -650,16 +650,21 @@ static func portal_line(player: AdventurePlayer) -> String:
 
 ## THE HERO WALKS ON after the win (the owner: "The win also gives you the
 ## choice to end or return to roam Shandalar"; the finale's [constant
-## WIN_ROAM]): the journal's line, "Arzakon's Portal turned to stone in the
-## middle of Shandalar, east of Kraag Temple", pinned to the monument —
-## once ([member AdventurePlayer.final]'s `roamed`). The line, or "" for an
-## adventure not won or a line already written.
+## WIN_ROAM]): the portal the petrified monument — always, stood first when
+## none stands (part C stage C3, h5-6: one left open by a damaged save was
+## kept open, an open portal after the win) — and the journal's line,
+## "Arzakon's Portal turned to stone in the middle of Shandalar, east of
+## Kraag Temple", pinned to the monument — once ([member
+## AdventurePlayer.final]'s `roamed`). The line, or "" for an adventure not
+## won or a line already written.
 static func roam(player: AdventurePlayer) -> String:
-	if player == null or player.ended != AdventurePlayer.ENDED_WON or bool(player.final.get("roamed", false)):
+	if player == null or player.ended != AdventurePlayer.ENDED_WON:
 		return ""
 	if player.portal.is_empty():
 		open_portal(player, false)
-		player.portal["state"] = PORTAL_PETRIFIED
+	player.portal["state"] = PORTAL_PETRIFIED
+	if bool(player.final.get("roamed", false)):
+		return ""
 	var line := PETRIFIED_LOG % portal_where(player)
 	_log_at_portal(player, "portal", line)
 	player.final["roamed"] = true

@@ -10,7 +10,10 @@ transparency, the hi-res skin it writes (the same files as the 1997 skin,
 under the same names, every picture at twice the size, how it was made
 in the zip's comment), the key-exact places, reusing 2x copies already
 made — and refusing a copy of another picture — the Manalink label and
-the engine's checksum. Whether the model's pictures LOOK right
+the engine's checksum — and the castle and dungeon board's sheets cut
+into their frames, each shown to the model amid what meets it on the
+board (the stand-in keeps what it was shown when asked) and put back
+where it stands. Whether the model's pictures LOOK right
 is the owner's eye on a real run, not a test.
 
 Run from the repo root:
@@ -48,9 +51,12 @@ def arg(flag):
     return args[args.index(flag) + 1]
 scale = int(arg("-s"))
 seen = Path(sys.argv[0]).parent / "seen.txt"
+kept = Path(sys.argv[0]).parent / "inputs"
 for path in sorted(Path(arg("-i")).glob("*.png")):
     with open(seen, "a") as log:
         log.write(path.name + "\\n")
+    if kept.is_dir():
+        kept.joinpath(path.name).write_bytes(path.read_bytes())
     picture = Image.open(path).convert("RGB")
     big = picture.resize((picture.width * scale, picture.height * scale), Image.NEAREST)
     red, green, blue = big.split()
@@ -78,6 +84,11 @@ def doubled(picture, tint=0):
         bands[2] = bands[2].point(lambda v: min(255, v + tint))
         big = Image.merge(big.mode, bands)
     return big
+
+
+def colours(picture):
+    """Every colour in [param picture], once."""
+    return {colour for _, colour in picture.getcolors(1 << 24)}
 
 
 def block_sums(big, small):
@@ -264,6 +275,52 @@ class PictureTest(unittest.TestCase):
             up._spread(block, 0, total)
             self.assertEqual(sum(px[0] for px in block), total, (start, total))
             self.assertTrue(all(0 <= px[0] <= 255 for px in block))
+
+    # ------------------------------------------------ the board's sheets --
+    # Part C stage C3, decision 9 (the owner: b, upscaled frame by frame).
+
+    def test_which_pictures_are_board_sheets(self):
+        for key in ("dungeon_tiles_1", "dungeon_tiles_3", "dungeon_tiles_white"):
+            self.assertEqual(up.board_sheet(key), "tiles", key)
+        self.assertEqual(up.board_sheet("dungeon_plaques"), "plaque")
+        for key in ("dungeon_treasure", "dungeon_plaque", "world_map_tiles",
+                    "portraits/dungeon_tiles_1"):
+            self.assertIsNone(up.board_sheet(key), key)
+
+    def test_every_sheet_the_importer_cuts_for_the_board_is_one(self):
+        import import_original
+        for key, (cells, w, h, cols) in import_original.DUNGEON_SHEETS.items():
+            kind = up.board_sheet(key)
+            self.assertIsNotNone(kind, key)
+            if kind == "tiles":
+                self.assertEqual((w, h), (64, 64), key)
+                self.assertLessEqual(max(up.BOARD_LATTICE), cells - 1, key)
+            else:
+                self.assertGreater(cells, up.PLAQUE_MIDDLE, key)
+
+    def test_a_wall_runs_on_where_the_board_continues_it(self):
+        # dungeon_view.gd: back_frame 1 = up-right (x + 1), 2 = up-left
+        # (y - 1), on looks 0, 4, 24, 28; front_frame 12 + 1 down-right
+        # (y + 1), + 2 down-left (x - 1), + 4 on odd rows.
+        along_y, along_x = ["y+1", "y-1"], ["x+1", "x-1"]
+        for look in (0, 4, 24, 28):
+            self.assertEqual(up.wall_runs(look), [], look)
+            self.assertEqual(up.wall_runs(look + 1), along_y, look + 1)
+            self.assertEqual(up.wall_runs(look + 2), along_x, look + 2)
+            self.assertEqual(up.wall_runs(look + 3), along_y + along_x, look + 3)
+        for front in (12, 16):
+            self.assertEqual(up.wall_runs(front), [], front)
+            self.assertEqual(up.wall_runs(front + 1), along_x, front + 1)
+            self.assertEqual(up.wall_runs(front + 2), along_y, front + 2)
+            self.assertEqual(up.wall_runs(front + 3), along_x + along_y, front + 3)
+        self.assertEqual(up.wall_runs(20), [], "the rock top")
+
+    def test_the_floor_diamond_is_the_lower_half_of_a_cell(self):
+        mask = up.floor_diamond((64, 64))
+        self.assertEqual(mask.getbbox(), (1, 32, 63, 64))
+        self.assertEqual(mask.getpixel((31, 47)), 255)
+        self.assertEqual(mask.getpixel((0, 32)), 0)
+        self.assertEqual(mask.getpixel((31, 31)), 0)
 
     # ---------------------------------------------------------- reuse --
 
@@ -557,6 +614,24 @@ class RunTest(unittest.TestCase):
         with zipfile.ZipFile(again) as archive:
             self.assertEqual(self.picture(archive, "panel_stone.png").tobytes(), big.tobytes())
 
+    def test_the_pre_duel_frame_and_the_world_ground_are_doubled(self):
+        # The owner, 2026-10-28 (ledger row 121): "pixel-double both".
+        grain = Image.new("RGB", (32, 16))
+        grain.putdata([(120, 96, 40) if (x * 7 + y * 3) % 5 else (60, 48, 20)
+                       for y in range(16) for x in range(32)])
+        names = ("preduel_frame", "world_landtile", "world_cstline1", "world_roads")
+        for name in names:
+            grain.save(self.skin / (name + ".png"))
+        out = self.tmp / up.ZIP_NAME
+        self.assertEqual(self.run_tool(zip_out=out), 0)
+        with zipfile.ZipFile(out) as archive:
+            for name in names:
+                self.assertNotIn(name + ".png", self.seen(), "the model never sees " + name)
+                self.assertEqual(self.picture(archive, name + ".png").tobytes(),
+                                 grain.resize((64, 32), Image.NEAREST).tobytes(),
+                                 name + ": every 1997 pixel a 2x2 block of itself")
+        self.assertNotIn("world_sland", up.DOUBLED, "the ground halves stay with their uprights")
+
     def test_reuse_with_every_copy_never_runs_the_engine(self):
         old = self.old_2x_zip(self.PICTURES)
         self.engine.write_text(BROKEN_ENGINE)   # it would fail if it were run
@@ -634,6 +709,174 @@ class RunTest(unittest.TestCase):
         self.assertIn("Vulkan", str(caught.exception))
         self.assertIn("vkCreateInstance", str(caught.exception))
         self.assertFalse((self.tmp / up.ZIP_NAME).exists())
+
+    # ------------------------------------------------ the board's sheets --
+    # Part C stage C3, decision 9 (the owner: "b, upscaled"): a board
+    # sheet upscaled as one picture showed the model each frame beside its
+    # neighbours ON THE SHEET, and the castle walls broke at every cell.
+
+    FLOOR_CENTRE = (31, 47)
+    WALL = (30, 160, 220)
+    SHEET_NEIGHBOUR = (0, 0, 255)
+
+    def tile_sheet(self, key="dungeon_tiles_test", layout=True):
+        """A board tile sheet the shape of the importer's (64 x 64 cells,
+        12 a row; 24 frames here): 0 a floor whose colour falls off from
+        its centre, 1 the same floor with an up-right wall, 8 a chest, 11
+        empty, every other frame a blue floor — what lies beside 0 and 1
+        on the sheet and never beside them on the board."""
+        diamond = Image.new("L", (64, 64), 0)
+        floor = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        for y in range(32, 64):
+            for x in range(64):
+                d = abs(x - 31.5) + 2 * abs(y - 47.5)
+                if d <= 32:
+                    diamond.putpixel((x, y), 255)
+                    floor.putpixel((x, y), (int(200 - 4 * d), 100, 40, 255))
+        walled = floor.copy()
+        for x in range(32, 64):
+            for y in range(int(32 + (x - 32) / 2) - 20, int(32 + (x - 32) / 2)):
+                walled.putpixel((x, y), self.WALL + (255,))
+        blue = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        blue.paste(self.SHEET_NEIGHBOUR + (255,), (0, 0), diamond)
+        chest = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        chest.paste((250, 250, 0, 255), (20, 30, 44, 50))
+        sheet = Image.new("RGBA", (768, 128), (0, 0, 0, 0))
+        for i in range(24):
+            frame = {0: floor, 1: walled, 8: chest, 11: None}.get(i, blue)
+            if frame is not None:
+                sheet.paste(frame, ((i % 12) * 64, (i // 12) * 64))
+        sheet.save(self.skin / (key + ".png"))
+        if layout:
+            (self.skin / (key + ".json")).write_text(
+                '{"cols": 12, "rows": 2, "frames": 24, "frame_width": 64, "frame_height": 64}')
+        return sheet
+
+    def plaque_sheet(self):
+        """The plaque's sheet as the importer cuts `Dungbutt.spr`: four
+        cells, each frame at its cell's top left at its own size — 0 the
+        card's frame, 1 the left end, 2 the striped middle, 3 the right end."""
+        sheet = Image.new("RGBA", (160, 30), (0, 0, 0, 0))
+        sheet.paste((128, 128, 128, 255), (0, 0, 40, 30))
+        sheet.paste((255, 0, 0, 255), (40, 0, 50, 12))
+        for x in range(6):
+            sheet.paste((0, 200 if x % 2 else 100, 0, 255), (80 + x, 0, 81 + x, 12))
+        sheet.paste((0, 0, 255, 255), (120, 0, 129, 12))
+        sheet.save(self.skin / "dungeon_plaques.png")
+        (self.skin / "dungeon_plaques.json").write_text(
+            '{"cols": 4, "rows": 1, "frames": 4, "frame_width": 40, "frame_height": 30,'
+            ' "sizes": [[40, 30], [10, 12], [6, 12], [9, 12]]}')
+        return sheet
+
+    def shown(self, name):
+        """What the stand-in engine was shown as [param name]."""
+        return Image.open(self.engine.parent / "inputs" / name).convert("RGB")
+
+    def test_a_board_sheet_is_upscaled_frame_by_frame_and_put_back(self):
+        sheet = self.tile_sheet()
+        out = self.tmp / up.ZIP_NAME
+        self.assertEqual(self.run_tool(zip_out=out), 0)
+        seen = self.seen()
+        self.assertNotIn("dungeon_tiles_test.png", seen, "never the sheet as one picture")
+        frames = sorted(name for name in seen if name.startswith("dungeon_tiles_test"))
+        self.assertEqual(frames, ["dungeon_tiles_test__frame%02d.png" % i
+                                  for i in range(24) if i != 11],
+                         "one picture a frame, and the empty frame never")
+        with zipfile.ZipFile(out) as archive:
+            big = self.picture(archive, "dungeon_tiles_test.png")
+            self.assertEqual(archive.read("skin/dungeon_tiles_test.json"),
+                             (self.skin / "dungeon_tiles_test.json").read_bytes(),
+                             "the grid as it was: the game reads it in 1997 pixels")
+            note = archive.comment.decode()
+        self.assertEqual((big.size, big.mode), ((1536, 256), "RGBA"))
+        for i in range(24):
+            x, y = (i % 12) * 128, (i // 12) * 128
+            cell = big.crop((x, y, x + 128, y + 128))
+            small = sheet.crop(((i % 12) * 64, (i // 12) * 64, (i % 12) * 64 + 64, (i // 12) * 64 + 64))
+            self.assertEqual(cell.getchannel("A").tobytes(),
+                             up.alpha_up(small.getchannel("A")).tobytes(),
+                             "frame %d's cut-out is its own, doubled, where it stands" % i)
+        self.assertIsNone(big.crop((11 * 128, 0, 12 * 128, 128)).getbbox(), "the empty frame")
+        for got, want in zip(big.getpixel((8 * 128 + 64, 80)), (250, 250, 0, 255)):
+            self.assertAlmostEqual(got, want, delta=2)
+        centre = sheet.getpixel(self.FLOOR_CENTRE)
+        for got, want in zip(big.getpixel((2 * 31 + 1, 2 * 47 + 1)), centre):
+            self.assertAlmostEqual(got, want, delta=3)
+        self.assertIn("board    1 sheet frame by frame", note)
+        package_release.check_skin(out)
+
+    def test_a_floor_is_shown_amid_its_board_neighbours_not_the_sheets(self):
+        sheet = self.tile_sheet()
+        (self.engine.parent / "inputs").mkdir()
+        self.assertEqual(self.run_tool(zip_out=self.tmp / up.ZIP_NAME), 0)
+        n = up.BOARD_CONTEXT
+        for i in (0, 1):
+            shown = self.shown("dungeon_tiles_test__frame%02d.png" % i)
+            self.assertEqual(shown.size, (64 + 2 * n, 64 + 2 * n), i)
+            self.assertNotIn(self.SHEET_NEIGHBOUR, colours(shown),
+                             "frame %d never sees the frame beside it on the sheet" % i)
+            # The floor of each cell sharing an edge with it: a copy of its
+            # own, its centre where the board puts that cell's centre (but
+            # where the frame's own wall stands over it: frame 1's x + 1).
+            cx, cy = self.FLOOR_CENTRE
+            for edge, (dx, dy) in up.BOARD_EDGES.items():
+                if (i, edge) == (1, "x+1"):
+                    continue
+                self.assertEqual(shown.getpixel((n + cx + dx, n + cy + dy)),
+                                 sheet.getpixel(self.FLOOR_CENTRE)[:3], (i, edge))
+        # The up-right wall runs on along y: its next segments, up-left and
+        # down-right of it, are there too.
+        shown = self.shown("dungeon_tiles_test__frame01.png")
+        for dx, dy in (up.BOARD_EDGES["y+1"], up.BOARD_EDGES["y-1"], (0, 0)):
+            self.assertEqual(shown.getpixel((n + 50 + dx, n + 30 + dy)), self.WALL, (dx, dy))
+        # Anything else (the chest) alone, with the plain edge pad.
+        self.assertEqual(self.shown("dungeon_tiles_test__frame08.png").size,
+                         (64 + 2 * up.PAD, 64 + 2 * up.PAD))
+
+    def test_the_plaque_pieces_are_shown_in_the_plaques_row(self):
+        sheet = self.plaque_sheet()
+        (self.engine.parent / "inputs").mkdir()
+        out = self.tmp / up.ZIP_NAME
+        self.assertEqual(self.run_tool(zip_out=out), 0)
+        n = up.PLAQUE_CONTEXT
+        stripe = [sheet.getpixel((80 + x, 6))[:3] for x in range(6)]
+        left = self.shown("dungeon_plaques__frame01.png")
+        middle = self.shown("dungeon_plaques__frame02.png")
+        right = self.shown("dungeon_plaques__frame03.png")
+        self.assertEqual(left.size, (10 + 2 * n, 12 + 2 * n))
+        for k in range(n):
+            # The middle repeated on the inner side of each end and on
+            # both sides of itself; the edge pad outside an end.
+            self.assertEqual(left.getpixel((n + 10 + k, n + 6)), stripe[k % 6], k)
+            self.assertEqual(middle.getpixel((n + 6 + k, n + 6)), stripe[k % 6], k)
+            self.assertEqual(middle.getpixel((n - 1 - k, n + 6)), stripe[(-1 - k) % 6], k)
+            self.assertEqual(right.getpixel((n - 1 - k, n + 6)), stripe[(-1 - k) % 6], k)
+        self.assertEqual(left.getpixel((n - 5, n + 6)), (255, 0, 0))
+        self.assertEqual(right.getpixel((n + 9 + 5, n + 6)), (0, 0, 255))
+        self.assertNotIn((0, 0, 255), colours(left), "the left end never meets the right")
+        self.assertEqual(self.shown("dungeon_plaques__frame00.png").size,
+                         (40 + 2 * up.PAD, 30 + 2 * up.PAD), "the card's frame alone")
+        with zipfile.ZipFile(out) as archive:
+            big = self.picture(archive, "dungeon_plaques.png")
+        self.assertEqual(big.size, (320, 60))
+        self.assertEqual(big.getchannel("A").tobytes(),
+                         up.alpha_up(sheet.getchannel("A")).tobytes(),
+                         "each piece where it stands, at its own size, nothing round it")
+
+    def test_a_board_sheet_without_its_grid_is_upscaled_whole(self):
+        self.tile_sheet("dungeon_tiles_lost", layout=False)
+        out = self.tmp / up.ZIP_NAME
+        report = io.StringIO()
+        stdout, sys.stdout = sys.stdout, report
+        try:
+            self.assertEqual(up.upscale(self.skin, out, None, self.engine, None), 0)
+        finally:
+            sys.stdout = stdout
+        self.assertIn("dungeon_tiles_lost.png", self.seen())
+        self.assertIn("dungeon_tiles_lost.png: no readable dungeon_tiles_lost.json", report.getvalue())
+        with zipfile.ZipFile(out) as archive:
+            self.assertEqual(self.picture(archive, "dungeon_tiles_lost.png").size, (1536, 256))
+            self.assertNotIn("board ", archive.comment.decode())
 
 
 class EngineFetchTest(unittest.TestCase):

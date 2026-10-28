@@ -18,7 +18,8 @@ extends PanelContainer
 ## banished, the days on the road, the duels won and the day it was won,
 ## on the player's clock. One line is LIT ([member lit], the adventure just
 ## won) and scrolled into sight. No adventure won yet: a line says how one
-## gets here.
+## gets here; a Hall's file that cannot be read ([method HallOfFame.damaged])
+## says that instead, and that it is kept (part C stage C3, h3-4).
 ##
 ## WHERE IT STANDS ([method open]): centred over whatever opened it, a dim
 ## veil under it taking every click meant for what lies beneath, both gone
@@ -26,8 +27,9 @@ extends PanelContainer
 ## its own) answer to their first letter as every pane's do ([method
 ## VisitPane.letter_choice]); Escape is "Done" when there is one, else
 ## nothing (the win's last choice must be made). The list scrolls only when
-## it is longer than the screen allows; the big buttons ([constant
-## WorldHud.BIG]) grow the choices, not the list.
+## it is longer than the screen allows — fitted again, and centred, when
+## the window changes size (part C stage C3, h5-4) —; the big buttons
+## ([constant WorldHud.BIG]) grow the choices, not the list.
 
 ## A choice made: its id ("done" for Done).
 signal chosen(what: String)
@@ -35,6 +37,7 @@ signal chosen(what: String)
 const TITLE := "Hall of Fame"
 const ABOUT := "Every adventure won, best first: the most years, then the harder level, then the fewer days."
 const EMPTY := "No adventure has been won yet. Free Shandalar from the five wizards and banish Arzakon, and your name will stand here."
+const DAMAGED := "The Hall of Fame could not be read: its file is damaged, or was written by a newer version of the game. It is kept untouched until the Hall is next written, and then set aside beside the new one."
 const DONE := "Done"
 const ONE_LIFE := "One life"
 ## The columns: header words and widths (the face has no header).
@@ -104,7 +107,8 @@ func _ready() -> void:
 	about.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(about)
 	if entries.is_empty():
-		var none := PaneStyle.wrapped(EMPTY, 17, _width() * 0.7)
+		var unread := not _given and HallOfFame.damaged()
+		var none := PaneStyle.wrapped(DAMAGED if unread else EMPTY, 17, _width() * 0.7)
 		none.name = "Empty"
 		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		none.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -138,6 +142,20 @@ func _ready() -> void:
 		button.pressed.connect(func() -> void: chosen.emit(String(choice[0])))
 		_choices.add_child(button)
 	column.add_child(_choices)
+	if _lit_row != null:
+		_show_lit.call_deferred()
+	# A window made larger or smaller, a device turned: fitted again.
+	get_viewport().size_changed.connect(_refit)
+
+
+## THE PANE FITTED AGAIN to the window's new size: the list's height, the
+## pane shrunk to what it holds and centred, the lit line kept in sight.
+func _refit() -> void:
+	if not is_inside_tree():
+		return
+	_fit_scroll()
+	reset_size()
+	PaneStyle.centre(self)
 	if _lit_row != null:
 		_show_lit.call_deferred()
 

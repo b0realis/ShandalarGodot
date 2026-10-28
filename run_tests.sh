@@ -8,6 +8,7 @@
 #   ./run_tests.sh                 # whole suite
 #   ./run_tests.sh -gunit_test_name=test_bolt_kills_a_bear   # one test
 #   ./run_tests.sh -gselect=test_deck_lab.gd                  # one script
+#   ./run_tests.sh -gdir=res://tests/w8    # one folder and its subfolders
 #   SUITE_TIMEOUT=600 ./run_tests.sh   # whole-run guard in seconds (1800)
 #   SHARDS=4 ./run_tests.sh        # the whole suite over 4 Godot processes
 #   SHARDS=4 SHARD=2 ./run_tests.sh   # only the 2nd of those 4 deals (CI)
@@ -87,11 +88,16 @@ run_tests.sh — the whole GUT suite, headless, and the gate around it.
   ./run_tests.sh                                   the whole suite
   ./run_tests.sh -gunit_test_name=test_bolt_kills_a_bear    one test
   ./run_tests.sh -gselect=test_deck_lab.gd                  one script
+  ./run_tests.sh -gdir=res://tests/w8                       one folder
   ./run_tests.sh -h | --help                       this
   ./run_tests.sh -V | --version                    the project's version
 
 Every other argument is passed to GUT unchanged (its own flags all start
-with `-g`; `-gh` prints GUT's list of them).
+with `-g`; `-gh` prints GUT's list of them). A -gdir (that folder and
+its subfolders) or a -gtest of your own is the whole run: this script
+then names no folder of its own. The probes in tests/_hunt/ (git-excluded)
+are run only by name — a -gselect or a -gdir reaches one — never as part
+of the suite.
 
 Environment:
   GODOT                     the binary to run (default ../tools/godot,
@@ -269,6 +275,24 @@ if [ "$#" -gt 0 ]; then
 	SHARDS=1; SHARD=''
 fi
 
+# A -gdir OR A -gtest OF ONE'S OWN IS THE RUN (part C stage C3). GUT
+# ADDS every -gdir and -gtest to those it already has (its list options
+# accumulate, addons/gut/cli/optparse.gd), so `-gdir=res://tests/_hunt/x`
+# beside this script's own `-gdir=res://tests -ginclude_subdirs` ran the
+# WHOLE suite where one folder was meant — a hunter started one so by
+# mistake. Named on the command line, those folders (with their
+# subfolders, as res://tests is run) or those scripts are the run, and
+# this script names none of its own. A -gselect is noted for the probes
+# (below): it is how one is run by name.
+own_selection=''
+by_name=''
+for arg in "$@"; do
+	case "$arg" in
+		-gdir | -gdir=* | -gtest | -gtest=*) own_selection=1 ;;
+		-gselect | -gselect=*) by_name=1 ;;
+	esac
+done
+
 # Every test script GUT would find: its prefix, its suffix, its
 # directory, its subdirectories (`-gdir=res://tests -ginclude_subdirs`),
 # sorted so a deal is the same on every machine — in the C locale, by
@@ -276,7 +300,22 @@ fi
 # test_ai_times_sweeps before test_ai_time_walk, a runner's C.UTF-8 the
 # other way round, and 38 of 548 lines move with them — so a shard
 # reproduced at a desk was not the shard the runner ran (2026-10-01).
-all_scripts="$(find tests -type f -name 'test_*.gd' | LC_ALL=C sort)"
+#
+# THE PROBES ARE NOT THE SUITE (part C stage C3): tests/_hunt/ is where a
+# hunt's or a fix's throw-away probes live — git-excluded
+# (.git/info/exclude), never committed, often half made. `find` counted
+# them and `-gdir=res://tests -ginclude_subdirs` ran them, so a whole run
+# beside a hunt ran its probes and was held to a count that held them
+# too. They are pruned here, and while the folder holds one a run hands
+# GUT this list instead of the folder (below) — the whole run, a
+# -gunit_test_name, which loads every script it is given; only a -gselect
+# still gets the folder, and so reaches a probe by its name.
+HUNT_DIR=tests/_hunt
+all_scripts="$(find tests -path "$HUNT_DIR" -prune -o -type f -name 'test_*.gd' -print | LC_ALL=C sort)"
+hunt_probe=''
+if [ -d "$HUNT_DIR" ]; then
+	hunt_probe="$(find "$HUNT_DIR" -type f -name 'test_*.gd' -print 2>/dev/null | head -n 1 || true)"
+fi
 
 # THE SKIN. Some scripts pin the 1997 look itself — the card frames, the
 # grave plates, the button faces, the numerals — and can only be read
@@ -471,8 +510,14 @@ if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
 		selection="-gtest=$(deal "$SHARDS" "$SHARD")" || exit 1
 		dealt="$(printf '%s' "$selection" | tr ',' '\n' | grep -c .)"
 		echo "Shard $SHARD of $SHARDS: $dealt of $script_count scripts."
-	elif [ "$skin_left_out" -gt 0 ]; then
-		# The one deal of one, so GUT gets the list and not the directory.
+	elif [ -n "$own_selection" ]; then
+		# The command line's own -gdir or -gtest is the run (above).
+		selection="-ginclude_subdirs"
+	elif [ "$skin_left_out" -gt 0 ] || { [ -z "$by_name" ] && [ -n "$hunt_probe" ]; }; then
+		# The one deal of one, so GUT gets the list and not the directory:
+		# without the scripts that need the missing skin, or — beside a
+		# probe in tests/_hunt/, unless one is asked for by name — without
+		# the probes.
 		selection="-gtest=$(deal 1 1)" || exit 1
 	else
 		selection="-gdir=res://tests -ginclude_subdirs"

@@ -26,7 +26,9 @@ extends RefCounted
 ## program's own and a price is the 1997 price. Without it — and for every
 ## card the 1997 game never had, a pack's — the inputs are read off the
 ## card: its type, colours, cost, power and toughness, keywords and rules,
-## and no card is a staple ([method derive]). `ai`, the program's
+## and no card is a staple ([method derive]) — but the two marks no reading
+## gives, a dungeon's treasure and a card 1997 kept back, come by name
+## ([constant TREASURE], [constant KEPT_BACK]). `ai`, the program's
 ## hand-tuned value, starts at its type's ([constant AI_BY_TYPE]: creature
 ## 1, enchantment 0, sorcery 0, instant −1, artifact 1 — tuned on the 1997
 ## prices under cross-validation, where the type's commonest value had
@@ -100,6 +102,28 @@ const PUMP_POWER := 0x8
 const PUMP_TOUGHNESS := 0x10
 const STAPLE := 0x200
 const FAVOURED := 0x400
+## Two marks of `extra_ability` no reading of a card gives, which a card
+## read without the 1997 table carries by name ([method derive]; part C
+## stage C3, h6-2, h6-3): 0x100 a dungeon's treasure (all 28 of
+## [constant ShandalarWorld.DUNGEON_CARDS] — the bit 1997's world generator
+## picks them by, world_generation.c:808 — special in a shop, a rare in a
+## lair's pool: only 8 of them carry 0x80 as well, and nothing here reads
+## 0x80 alone); 0x800 a card 1997 kept from its trades and its castles'
+## picks (visitLocation.c 1839), [constant KEPT_BACK_1997].
+const TREASURE := 0x100
+const KEPT_BACK := 0x800
+## The cards the 1997 table marks 0x800, by the engine's names — its 23
+## rows but Blank Slot 13, which is no card (the owner, 2026-10-28: without
+## the table, trades and castle picks "follow 1997's own marks"). Being
+## restricted marks nothing: 1997 marked none of the restricted cards but
+## the treasures (Channel 0x1000, Fastbond 0), so Channel, Fastbond and the
+## ante cards are traded with the table or without it.
+const KEPT_BACK_1997: Array[String] = ["Bottle of Suleiman", "Call from the Grave",
+	"Diamond Valley", "Elephant Graveyard", "Gem Bazaar", "Ifh-Bíff Efreet", "Junún Efreet",
+	"Juzám Djinn", "King Suleiman", "Mana Crypt", "Mijae Djinn", "Nalathni Dragon",
+	"Necropolis of Azar", "Orcish Catapult", "Pandora's Box", "Power Struggle",
+	"Prismatic Dragon", "Rainbow Knights", "Serendib Djinn", "Serendib Efreet",
+	"Windseeker Centaur", "Ydwen Efreet"]
 const KEYWORD_WORDS: Array[String] = ["flying", "banding", "trample", "first strike",
 	"swampwalk", "islandwalk", "forestwalk", "mountainwalk", "plainswalk"]
 
@@ -112,6 +136,9 @@ const SPELLED_1997 := {"Argivian Archaeoligist": "Argivian Archaeologist",
 	"Hypnotic Spectre": "Hypnotic Specter", "Ivory Guardiands": "Ivory Guardians",
 	"Kobold Drill Sergent": "Kobold Drill Sergeant", "Mons Goblin Raiders": "Mons's Goblin Raiders",
 	"Necropolis of Azaar": "Necropolis of Azar", "Ressurection": "Resurrection",
+	# Two Astral cards 1997 named otherwise (part C stage C3, h6-1): unread,
+	# both fell to derived facts with no 0x800 and were offered in trades.
+	"Power Junction": "Power Struggle", "Knights of the Rainbow Vale": "Rainbow Knights",
 	"Tablets of Epityr": "Tablet of Epityr", "Tawnos' Coffin": "Tawnos's Coffin",
 	"Tawnos' Wand": "Tawnos's Wand", "Tawnos' Weaponry": "Tawnos's Weaponry",
 	"Turndra Wolves": "Tundra Wolves", "Veduran Enchantress": "Verduran Enchantress",
@@ -272,6 +299,10 @@ static func derive(data: CardData) -> Dictionary:
 			extra |= PUMP_POWER
 		if found.get_string(2) != "0":
 			extra |= PUMP_TOUGHNESS
+	if is_treasure(data.card_name):
+		extra |= TREASURE
+	if data.card_name in KEPT_BACK_1997:
+		extra |= KEPT_BACK
 	return {"type": kind | (ARTIFACT if kind == CREATURE and data.is_type(Mtg.CardType.ARTIFACT) else 0),
 		"color": color, "cc0": pips, "cc1": -1 if data.cost.has_x else data.cost.generic,
 		"power": maxi(data.power, 0), "tough": maxi(data.toughness, 0),
@@ -279,6 +310,15 @@ static func derive(data: CardData) -> Dictionary:
 		"ai": clampi(int(AI_BY_TYPE.get(kind, 0)) + strength_step(data, kind), -2, 3),
 		"vanilla": _plain(text), "rarity": rarity(data.card_name), "exp": 1 if is_base(data.card_name) else 2,
 		"derived": true}
+
+
+## Whether [param card_name] is one of the dungeons' 28 treasures
+## ([constant ShandalarWorld.DUNGEON_CARDS]).
+static func is_treasure(card_name: String) -> bool:
+	for row in ShandalarWorld.DUNGEON_CARDS:
+		if String(row[1]) == card_name:
+			return true
+	return false
 
 
 ## How many half steps of the hand-tuned value [param data]'s abilities are

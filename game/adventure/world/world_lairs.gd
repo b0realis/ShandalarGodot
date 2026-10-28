@@ -205,8 +205,12 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 		entry["creature"] = row
 		entry["heading"] = 0
 		entry["frame"] = 0
-	# (i) A beaten wizard's colour — never in a world at peace (part C).
-	if not player.at_peace() and color >= 1 and color <= 5 \
+	# (i) A beaten wizard's colour — never in a world at peace (part C), nor
+	# for the quest's creature in slot 0, which keeps its own colour (part C
+	# stage C3, h2-2: beating its colour's castle made the quest impossible,
+	# its creature drawn and turned away here every time).
+	if not player.at_peace() and not (slot == 0 and wanted != 0 and row == wanted) \
+			and color >= 1 and color <= 5 \
 			and AdventurePlayer.COLORS[color - 1] in player.defeated_wizards:
 		if row == CreatureBook.LAIR:
 			if player.defeated_wizards.size() > 1:

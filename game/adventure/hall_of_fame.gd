@@ -82,6 +82,15 @@ static func entries(path := "") -> Array[Dictionary]:
 	return _read(path if path != "" else file)["entries"]
 
 
+## WHETHER A FILE IS AT [param path] ([member file] when "") THAT CANNOT BE
+## READ as the Hall (not JSON, another format, a newer version): its lines
+## are not shown, and it is kept as it is until the next write sets it
+## aside (part C stage C3, h3-4: the Hall said "No adventure has been won
+## yet" over it).
+static func damaged(path := "") -> bool:
+	return bool(_read(path if path != "" else file)["damaged"])
+
+
 ## [param player]'s won adventure written into the Hall at [param path]
 ## ([member file] when ""): its place there, 1 the best — or 0 when it is
 ## not written (no win; the file could not be written, the Hall then as it
@@ -123,8 +132,14 @@ static func add(player: AdventurePlayer, path := "") -> int:
 static func one_life_state(id: String, path := "") -> String:
 	if id == "":
 		return ""
-	var marks: Dictionary = _read(path if path != "" else file)["one_life"]
-	return String(marks.get(id, ""))
+	return String(one_life_marks(path).get(id, ""))
+
+
+## EVERY ONE-LIFE MARK in the file at [param path] ([member file] when ""),
+## read once: `{adventure id: BEGUN | FAILED}` (a list of saves asks of
+## each, [LoadAdventureScreen]).
+static func one_life_marks(path := "") -> Dictionary:
+	return _read(path if path != "" else file)["one_life"]
 
 
 ## ONE-LIFE ADVENTURE [param id]'s final battle marked [param state]

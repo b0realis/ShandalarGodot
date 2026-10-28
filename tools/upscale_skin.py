@@ -88,7 +88,23 @@ WHAT EVERY PICTURE GETS before the model sees it, and why:
     so the 2x copy still meets itself without a seam;
   * opaque colour only: the transparency is scaled here — smoothed, then
     cut at half — so a cut-out stays on/off, as the game expects, without
-    its 1997 staircase.
+    its 1997 staircase;
+  * the castle and dungeon board's sheets (BOARD_SHEETS) FRAME BY FRAME,
+    each frame amid what meets it ON THE BOARD (the owner's pick of
+    2026-10-28, part C stage C3: "b, upscaled"). The board draws every
+    cell from one frame, and a frame meets the frames of the cells round
+    it, never its neighbours on the sheet: upscaled as one picture, the
+    castle walls broke at every cell joint (a brightness step of 8.6-12.8
+    levels where 1997 has 3.0-3.8) and the title plaque's marble at every
+    repeated middle. So each frame is cut out on the grid of the sheet's
+    own `.json` and shown to the model with what the board lays round it
+    — a floor among the floors of the four cells sharing an edge with it,
+    a wall beside the copy it runs on into, the plaque's ends and middle
+    in a row of middles; everything else the bleed above, never another
+    cell's colour, which leaked red floor specks onto castle wall tops
+    when tried — and pasted back where it stands on the sheet. The
+    cut-outs stay the 1997 shapes doubled, so the floors meet without a
+    hole; an empty frame stays empty and never reaches the model.
 
 THE ENGINE is Real-ESRGAN ncnn-vulkan (MIT; models BSD-3, Xintao Wang et
 al.), one program that runs on any Vulkan GPU — NVIDIA, AMD or Intel —
@@ -119,13 +135,16 @@ wanted: give those fifteen keys another method — exact pixel doubling
 CUNet (dots kept, 18.7%; stripes 0.34) — rather than a finer blur, which
 would bring the dither dots back on every picture.
 
-ONE PICTURE DOUBLED, NOT UPSCALED (the owner's playtest of 0.50.31):
-the sandstone, `panel_stone`, which every stone window and main-menu
-button wears. The model smoothed its one-pixel grain and streaked its
-edge rows, so the buttons wore streaked strips round a smeared middle;
-doubled pixel for pixel (DOUBLED) it is the 1997 stone, crisp at twice
-the pixels. Since 0.50.33 the game makes a seamless tile of it and lays
-that at its own size, so its grain is seen as it is drawn.
+PICTURES DOUBLED, NOT UPSCALED (the owner's playtest of 0.50.31): the
+sandstone, `panel_stone`, which every stone window and main-menu button
+wears. The model smoothed its one-pixel grain and streaked its edge rows,
+so the buttons wore streaked strips round a smeared middle; doubled pixel
+for pixel (DOUBLED) it is the 1997 stone, crisp at twice the pixels.
+Since 0.50.33 the game makes a seamless tile of it and lays that at its
+own size, so its grain is seen as it is drawn. The owner added (2026-10-28)
+the pre-duel pane's frame (`preduel_frame`) and the world's ground layer
+(`world_landtile`, `world_cstline1`, `world_roads`): tiles laid against
+their neighbours keep 1997's grain and meet without edges.
 
 LEFT AS THEY ARE, under their own names: the coin-toss movie sheets
 (2240x2160 already; twice that is past the 4096-pixel texture limit of
@@ -143,7 +162,9 @@ it the same way it refuses the skin it came from (tools/import_manalink.py).
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -281,7 +302,15 @@ KEY_EXACT = (
 ## is the 1997 stone at twice the pixels — and since 0.50.33 the game
 ## lays it as a seamless tile at its own size (`OriginalDialog.ground`,
 ## THE SEAMLESS GROUNDS), where the grain is seen as drawn.
-DOUBLED = ("panel_stone",)
+## The owner, 2026-10-28 (ledger row 121, "pixel-double both"): the pane
+## before a duel's frame, `preduel_frame` (the model invented marks on its
+## studs and its plain red field), and the world's ground layer — the land
+## diamonds, the coastlines and the roads (`world_landtile`,
+## `world_cstline1`, `world_roads`), each tile cut from its sheet and laid
+## against its neighbours, where a picture upscaled alone grows edges and
+## loses 1997's grain. The trees', rocks' and places' ground halves
+## (`world_sland*`) stay upscaled, as the uprights they stand under.
+DOUBLED = ("panel_stone", "preduel_frame", "world_landtile", "world_cstline1", "world_roads")
 
 ENGINE_EXE = "realesrgan-ncnn-vulkan"
 ENGINE_BUILD = "20220424"
@@ -305,6 +334,41 @@ BLEED_STEPS = 16
 ## combat window's bones), so padded by wrapping.
 TILED = {"deck_tile_olive", "deck_tile_slate", "message_panel", "attack_bones"}
 LEFT_ALONE = ("coin_toss_",)
+
+## THE BOARD'S SHEETS (above; part C stage C3, decision 9): the castle and
+## dungeon board's frame sheets (tools/import_original.py DUNGEON_SHEETS
+## and its frame notes; the grid in each sheet's `.json`), upscaled frame
+## by frame, each in what the board lays round it — measured on the nine
+## sheets, 2026-10-28 (A9): no seam at a cell joint, the cut-out shapes
+## the 1997 shapes doubled (118 of 16.4 million alpha pixels off). A name
+## ending in `_` is a family.
+##   "tiles"   a castle's or a dungeon's cells (64 x 64, the floor's
+##             diamond in rows 32-63): BOARD_LATTICE amid the board's
+##             lattice; the chest, scroll and dice (8-10), the wizard's
+##             poses (48-52) and the frames never drawn, alone;
+##   "plaque"  `Dungbutt.spr`: the title plaque's left end, repeatable
+##             middle and right end (PLAQUE_ROW) in the plaque's row; the
+##             green-marble frame behind the card in effect (0), alone.
+BOARD_SHEETS = (("dungeon_tiles_", "tiles"), ("dungeon_plaques", "plaque"))
+## The frames laid on the lattice (dungeon_view.gd `back_frame`,
+## `front_frame`): the floor with its back walls in looks 0-3 (0-3, 4-7,
+## 24-27, 28-31), the front walls on even and odd rows (12-15, 16-19) and
+## a solid cell's rock top (20).
+BOARD_LATTICE = frozenset([*range(0, 8), *range(12, 21), *range(24, 32)])
+## 1997 pixels of the board round a lattice frame: a whole cell each way.
+BOARD_CONTEXT = 64
+## The four cells sharing an edge with a cell, as page offsets in the
+## board's order of painting (DungeonBoard.cell_to_page: 32 (x + y),
+## 16 (y - x)).
+BOARD_EDGES = {"x+1": (32, -16), "y+1": (32, 16), "x-1": (-32, 16), "y-1": (-32, -16)}
+## The plaque laid along the top of the board (dungeonEncounter.c
+## 1180-1200): its left end, the middle repeated, its right end; the
+## middle is PLAQUE_MIDDLE.
+PLAQUE_ROW = (1, 2, 3)
+PLAQUE_MIDDLE = 2
+## 1997 pixels of the row (and of the edge pad outside an end) round a
+## plaque piece.
+PLAQUE_CONTEXT = 72
 
 
 # ---------------------------------------------------------------- the skin
@@ -439,37 +503,210 @@ def alpha_up(alpha: "Image.Image") -> "Image.Image":
     return big.point(lambda v: 255 if v >= 128 else 0)
 
 
+# ---------------------------------------------------------------- the board's sheets
+
+def board_sheet(key: str) -> str | None:
+    """"tiles", "plaque" or None — how [param key] is cut for the model
+    (BOARD_SHEETS)."""
+    if "/" in key:
+        return None   # a portrait
+    for place, kind in BOARD_SHEETS:
+        if key == place or (place.endswith("_") and key.startswith(place)):
+            return kind
+    return None
+
+
+def sheet_frames(layout: dict, sheet: "Image.Image") -> list[tuple[tuple[int, int], "Image.Image"]]:
+    """The frames of [param sheet] on the grid of its `.json` [param
+    layout] (`cols`, `frames`, `frame_width`, `frame_height`, and `sizes`
+    where a frame is smaller than its cell, standing at the cell's top
+    left — the plaque's), in frame order: (where it stands, its pixels)."""
+    cols, w, h = int(layout["cols"]), int(layout["frame_width"]), int(layout["frame_height"])
+    sizes = layout.get("sizes", [])
+    out = []
+    for i in range(int(layout["frames"])):
+        x, y = (i % cols) * w, (i // cols) * h
+        fw, fh = sizes[i] if i < len(sizes) else (w, h)
+        out.append(((x, y), sheet.crop((x, y, x + fw, y + fh))))
+    return out
+
+
+@functools.lru_cache(maxsize=4)
+def floor_diamond(size: tuple[int, int]) -> "Image.Image":
+    """The floor's diamond in a board frame of [param size]: the lower
+    half of the cell (rows 32-63 of a 64 x 64 frame), as a mask."""
+    w, h = size
+    mask = Image.new("L", size, 0)
+    pixels = mask.load()
+    for y in range(h):
+        for x in range(w):
+            if abs(x - (w - 1) / 2) / (w / 2) + abs(y - (h * 3 / 4 - 0.5)) / (h / 4) <= 1.0:
+                pixels[x, y] = 255
+    return mask
+
+
+def wall_runs(index: int) -> list[str]:
+    """The neighbours (BOARD_EDGES) a tile frame's walls run on into: a
+    wall on the x + 1 or the x - 1 side runs along y, one on the y + 1 or
+    the y - 1 side along x. Back frames (dungeon_view.gd `back_frame`): 1
+    the up-right wall (x + 1), 2 the up-left (y - 1); front frames
+    (`front_frame`, from 12, 16 on odd rows): 1 the down-right (y + 1), 2
+    the down-left (x - 1). The rock top (20) has none."""
+    along_y, along_x = ["y+1", "y-1"], ["x+1", "x-1"]
+    if index == 20:
+        return []
+    if 12 <= index <= 19:
+        bits = (index - 12) % 4
+        return (along_x if bits & 1 else []) + (along_y if bits & 2 else [])
+    bits = index % 4
+    return (along_y if bits & 1 else []) + (along_x if bits & 2 else [])
+
+
+def on_the_board(frame: "Image.Image", index: int) -> "Image.Image":
+    """Tile frame [param index] amid what meets it on the board, BOARD_CONTEXT
+    pixels each way, as the model's input: the floor diamonds of the four
+    cells sharing an edge with it (the floor plane, without a seam), a
+    whole copy where each of its walls runs on (the wall's next segment),
+    its own pixels on top; everything else — above a wall's top, round an
+    object — the bleed, from these alone. The neighbours are copies of the
+    frame itself: no other cell's colour reaches a cut-out edge (copies on
+    every side were tried and left red floor specks on castle wall tops)."""
+    n = BOARD_CONTEXT
+    w, h = frame.size
+    canvas = Image.new("RGBA", (w + 2 * n, h + 2 * n), (0, 0, 0, 0))
+    floor = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+    floor.paste(frame, (0, 0), Image.composite(frame.getchannel("A"), Image.new("L", frame.size, 0),
+                                               floor_diamond(frame.size)))
+    for dx, dy in BOARD_EDGES.values():
+        canvas.paste(floor, (n + dx, n + dy), floor)
+    for name in wall_runs(index):
+        dx, dy = BOARD_EDGES[name]
+        canvas.paste(frame, (n + dx, n + dy), frame)
+    canvas.paste(frame, (n, n), frame)
+    return bleed(canvas)
+
+
+def in_the_row(piece: "Image.Image", index: int, middle: "Image.Image") -> "Image.Image":
+    """Plaque piece [param index] (PLAQUE_ROW) as the plaque lays it,
+    PLAQUE_CONTEXT pixels each way, as the model's input: the middle with
+    copies of [param middle] on both sides, an end with them on its inner
+    side and the edge pad outside, and the edge pad above and below."""
+    n = PLAQUE_CONTEXT
+    repeats = -(-n // middle.width)
+    left = repeats if index != PLAQUE_ROW[0] else 0
+    right = repeats if index != PLAQUE_ROW[-1] else 0
+    row = Image.new("RGBA", (piece.width + (left + right) * middle.width, piece.height), (0, 0, 0, 0))
+    for i in range(left):
+        row.paste(middle, (i * middle.width, 0))
+    row.paste(piece, (left * middle.width, 0))
+    for i in range(right):
+        row.paste(middle, ((left + i) * middle.width + piece.width, 0))
+    padded = pad(bleed(row), n, False)
+    x0 = left * middle.width
+    return padded.crop((x0, 0, x0 + piece.width + 2 * n, piece.height + 2 * n))
+
+
+def frame_file(key: str, index: int) -> str:
+    """The engine's file for frame [param index] of board sheet [param key]."""
+    return flat(key)[:-4] + "__frame%02d.png" % index
+
+
+# ---------------------------------------------------------------- the model's input
+
+def _prepared(rgba: "Image.Image", mode: str, seen: "Image.Image", n: int, path: Path) -> dict:
+    """Write [param seen] — [param rgba]'s opaque colour with [param n]
+    pixels round it — as the engine's input at [param path], and return
+    what the finish needs to know of the picture."""
+    seen.save(path)
+    alpha = rgba.getchannel("A")
+    cut = alpha.getextrema()[0] < 255
+    hidden_black = cut and Image.composite(
+        Image.new("RGB", rgba.size), rgba.convert("RGB"), alpha).getbbox() is None
+    return dict(mode=mode, size=rgba.size, pad=n, alpha=alpha if cut else None,
+                hidden_black=hidden_black)
+
+
+def _prepared_sheet(key: str, sheet: "Image.Image", layout: dict, kind: str, src: Path) -> dict:
+    """Board sheet [param key] (BOARD_SHEETS) cut into its frames, each
+    written as the engine's input in what meets it on the board; what the
+    finish needs to put the sheet back together."""
+    rgba = sheet.convert("RGBA")
+    frames = sheet_frames(layout, rgba)
+    middle = frames[PLAQUE_MIDDLE][1] if kind == "plaque" and len(frames) > PLAQUE_MIDDLE else None
+    parts = []
+    for i, (at, frame) in enumerate(frames):
+        if frame.getchannel("A").getextrema()[1] == 0:
+            continue   # an empty cell stays empty: nothing for the model
+        if kind == "tiles" and i in BOARD_LATTICE:
+            n, seen = BOARD_CONTEXT, on_the_board(frame, i)
+        elif kind == "plaque" and i in PLAQUE_ROW and middle is not None:
+            n, seen = PLAQUE_CONTEXT, in_the_row(frame, i, middle)
+        else:
+            n = PAD
+            seen = pad(bleed(frame), n, False)
+        name = frame_file(key, i)
+        parts.append((at, name, _prepared(frame, "RGBA", seen, n, src / name)))
+    return dict(mode=sheet.mode, size=rgba.size, frames=parts)
+
+
+def layout_of(skin: Path, key: str) -> dict | None:
+    """The `.json` grid beside board sheet [param key], or None when it
+    is missing or unreadable."""
+    try:
+        layout = json.loads((skin / (key + ".json")).read_text(encoding="utf-8"))
+        for field in ("cols", "frames", "frame_width", "frame_height"):
+            int(layout[field])
+        return layout
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def prepare(skin: Path, keys: list[str], src: Path) -> dict:
     """Write each picture's opaque, padded colour to [param src] as the
-    engine's input, and return what the finish needs to know of each."""
+    engine's input — a board sheet's frame by frame (BOARD_SHEETS) — and
+    return what the finish needs to know of each."""
     src.mkdir(parents=True, exist_ok=True)
     meta = {}
     for key in keys:
         picture = Image.open(skin / (key + ".png"))
         picture.load()
+        kind = board_sheet(key)
+        layout = layout_of(skin, key) if kind is not None else None
+        if layout is not None:
+            meta[key] = _prepared_sheet(key, picture, layout, kind, src)
+            continue
+        if kind is not None:
+            print("  %s.png: no readable %s.json beside it — upscaled as one picture"
+                  % (key, key))
         rgba = picture.convert("RGBA")
         n = pad_size(key, rgba.size)
         padded = pad(bleed(rgba), n, PurePosixPath(key).name in TILED)
-        padded.save(src / flat(key))
-        alpha = rgba.getchannel("A")
-        cut = alpha.getextrema()[0] < 255
-        hidden_black = cut and Image.composite(
-            Image.new("RGB", rgba.size), rgba.convert("RGB"), alpha).getbbox() is None
-        meta[key] = dict(mode=picture.mode, size=rgba.size, pad=n,
-                         alpha=alpha if cut else None, hidden_black=hidden_black)
+        meta[key] = _prepared(rgba, picture.mode, padded, n, src / flat(key))
     return meta
 
 
 def finish(key: str, info: dict, src: Path, raw: Path) -> "Image.Image":
     """The engine's result for [param key], brought to 2x, its colours
-    taken back from 1997, its padding cut off and its transparency set."""
+    taken back from 1997, its padding cut off and its transparency set; a
+    board sheet's frames each so and put back where they stand."""
+    if "frames" in info:
+        w, h = info["size"]
+        sheet = Image.new("RGBA", (w * SCALE, h * SCALE), (0, 0, 0, 0))
+        for (x, y), name, part in info["frames"]:
+            sheet.paste(_finished(name, part, src, raw).convert("RGBA"), (x * SCALE, y * SCALE))
+        return sheet
+    return _finished(flat(key), info, src, raw)
+
+
+def _finished(name: str, info: dict, src: Path, raw: Path) -> "Image.Image":
+    """[method finish] of the one engine file [param name]."""
     w, h = info["size"]
     n = info["pad"]
     size = ((w + 2 * n) * SCALE, (h + 2 * n) * SCALE)
-    model = Image.open(raw / flat(key)).convert("RGB")
+    model = Image.open(raw / name).convert("RGB")
     if model.size != size:
         model = model.resize(size, Image.LANCZOS)
-    original = Image.open(src / flat(key)).convert("RGB").resize(size, Image.BICUBIC)
+    original = Image.open(src / name).convert("RGB").resize(size, Image.BICUBIC)
     fixed = colour_fix(model, original, COLOUR_BLUR * SCALE)
     box = (n * SCALE, n * SCALE, (n + w) * SCALE, (n + h) * SCALE)
     rgb = fixed.crop(box)
@@ -689,7 +926,7 @@ def run_engine(exe: Path, src: Path, dst: Path, gpu: str | None) -> None:
 # ---------------------------------------------------------------- the output
 
 def provenance(count: int, reused: int = 0, source: str = "", exact: int = 0,
-               plain: int = 0) -> str:
+               plain: int = 0, board: int = 0) -> str:
     """How the hi-res skin was made — the zip's comment, never a file of
     it, so it holds the same files as the skin it was made from."""
     again = ("\n  reused   %d of them taken as they were from %s\n" % (reused, source)
@@ -697,6 +934,9 @@ def provenance(count: int, reused: int = 0, source: str = "", exact: int = 0,
     if plain:
         again += ("  doubled  %d pixel for pixel, the 1997 grain kept (%s)\n"
                   % (plain, ", ".join(DOUBLED)))
+    if board:
+        again += ("  board    %d sheet%s frame by frame, each frame amid what meets it\n"
+                  "           on the castle and dungeon board\n" % (board, "" if board == 1 else "s"))
     return (
         "A 1997 skin with its pictures at twice the size, made by upscale_skin.py\n"
         "(Shandalar %s).\n\n"
@@ -771,11 +1011,17 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
                     target.parent.mkdir(parents=True, exist_ok=True)
                     doubled(picture).save(target)
                 big[key] = target
+            board = 0
             if fresh:
                 # Only now: a run that reuses every picture never needs it.
                 exe = find_engine(engine)
                 print("%d pictures from %s" % (len(fresh), skin))
                 meta = prepare(folder, fresh, work / "in")
+                board = sum(1 for key in fresh if "frames" in meta[key])
+                if board:
+                    print("  %d of them board sheets, %d frames upscaled one by one"
+                          % (board, sum(len(meta[key]["frames"]) for key in fresh
+                                        if "frames" in meta[key])))
                 run_engine(exe, work / "in", work / "raw", gpu)
                 for key in fresh:
                     target = done / (key + ".png")
@@ -801,7 +1047,7 @@ def upscale(skin: Path, zip_out: Path | None, folder_out: Path | None,
             for key, path in big.items():
                 files[key + ".png"] = path
             note = provenance(len(keys), len(taken), reuse.name if reuse is not None else "",
-                              exact, len(plain))
+                              exact, len(plain), board)
             if folder_out is not None:
                 for name, path in sorted(files.items()):
                     target = folder_out / name

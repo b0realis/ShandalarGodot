@@ -141,6 +141,10 @@ var hud: WorldHud
 var _shield: Control
 var _shield_until := 0
 var _arrival: Label
+## The arrival's fade; and whether the panel's own pane put it away ([method
+## _arrival_under_panes]).
+var _arrival_fade: Tween
+var _arrival_away := false
 var _dragging := false
 ## W and D pressed while the hero's pane was open: the pane's, not looked
 ## with until let go ([method _look_with_keys]).
@@ -399,10 +403,14 @@ func _ready() -> void:
 	_arrival.add_theme_constant_override("outline_size", 4)
 	_arrival.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_arrival)
+	# Under the panel (part C stage C3, h4-2): the hero's pane (F5), the
+	# keys, the quest pane and the small map, opened in its first seconds,
+	# cover the words instead of lying under them.
+	move_child(_arrival, hud.get_index())
 	if arrival != "" and is_inside_tree():
-		var fade := create_tween()
-		fade.tween_interval(ARRIVAL_SECONDS)
-		fade.tween_property(_arrival, "modulate:a", 0.0, 1.5)
+		_arrival_fade = create_tween()
+		_arrival_fade.tween_interval(ARRIVAL_SECONDS)
+		_arrival_fade.tween_property(_arrival, "modulate:a", 0.0, 1.5)
 	if player == null and world != null:
 		player = AdventurePlayer.begin(record, world)
 	if player != null:
@@ -416,6 +424,22 @@ func _ready() -> void:
 			_reveal(null)
 	if is_inside_tree():
 		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_builder)
+
+
+## THE ARRIVAL'S WORDS PUT AWAY as the panel opens a pane of its own over
+## them — the hero's (F5, F6), the keys, the options — in their first
+## seconds (part C stage C3, h4-2): under the panel's glass they still
+## showed through. Gone in a quarter of a second, for good.
+func _arrival_under_panes() -> void:
+	if _arrival_away or _arrival == null or not _arrival.visible or hud == null:
+		return
+	if not (hud.hero_shown() or hud.help_shown() or hud.options_shown()):
+		return
+	_arrival_away = true
+	if _arrival_fade != null and _arrival_fade.is_valid():
+		_arrival_fade.kill()
+	_arrival_fade = create_tween()
+	_arrival_fade.tween_property(_arrival, "modulate:a", 0.0, 0.25)
 
 
 ## THE DECK BUILDER'S PICTURES WARMED [QoL] (the owner, 2026-10-23: the
@@ -473,8 +497,8 @@ func _make_hud() -> void:
 
 
 ## THE SHIELD (ruling A): a clear sheet over the world, the map and the
-## panel — just above the panel, so under every pane, the card reader and
-## the arrival's words — that takes each click and hover meant for what
+## panel — just above the panel, so under every pane and the card reader —
+## that takes each click and hover meant for what
 ## lies beneath while it is up ([method _sync_rest]). Under it the pointer
 ## is the gold arrow.
 func _make_shield() -> void:
@@ -753,6 +777,20 @@ func leave_unsaved() -> void:
 ## at its own end screen instead.
 func leave_after_panes() -> void:
 	_leave_after = true
+
+
+## Whether the world will leave once its panes are done ([method
+## leave_after_panes]): a castle's or a dungeon's board reads it after its
+## room duel, to end the visit rather than walk on (part C stage C3, h1-2).
+func leaving_after_panes() -> bool:
+	return _leave_after
+
+
+## THE PENDING LEAVE CANCELLED ([method leave_after_panes]): the hero walks
+## on after all — the won final battle's "Return to Shandalar" at the Hall
+## (part C stage C3, h3-1).
+func stay_after_panes() -> void:
+	_leave_after = false
 
 
 ## The title screen, the world left as it is; a seam, so a test can count
@@ -1051,7 +1089,8 @@ func _enter_board(place: Dictionary) -> void:
 ## adventure's end instead, nothing saved ([method show_end]). `all_five`
 ## — the fifth castle's wizard beaten (his win already written by [method
 ## CastleWin.beat] before this save) — hands the world to the finale,
-## after the save ([method AdventureFinale.after_fifth_wizard]).
+## after the save ([method AdventureFinale.after_fifth_wizard]); not when
+## the world is leaving for the title ([method leaving_after_panes]).
 func _board_done(result: Dictionary, place: Dictionary, index: int) -> void:
 	if _alive(_board):
 		_board.queue_free()
@@ -1069,6 +1108,12 @@ func _board_done(result: Dictionary, place: Dictionary, index: int) -> void:
 	view.queue_redraw()
 	_sync_rest()
 	if bool(result.get("all_five", false)):
+		if _leave_after:
+			# The fifth wizard's duel left by "Return to main menu" once it was
+			# over (part C stage C3, h1-2): his win shown and saved, the title
+			# ([method _process]) — taken up again, the adventure opens at
+			# Arzakon's question ([method AdventureFinale.after_load]).
+			return
 		_after_fifth_wizard()
 
 
@@ -2089,6 +2134,7 @@ func _process(delta: float) -> void:
 	_sync_rest()
 	if world == null:
 		return
+	_arrival_under_panes()
 	if _leave_after and not modal():
 		# A held duel's Return to main menu taken once it was over ([method
 		# leave_after_panes]): what it brought seen, saved and left.

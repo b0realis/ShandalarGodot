@@ -31,7 +31,9 @@ extends Control
 ##  - THE QUESTIONS FIT THE DUEL [ours] (the playtest of part B, H1-4,
 ##    H2-6): "your ante is lost" only when the hero stakes a card (a lair's
 ##    duel stakes none of theirs), and the menu's words the holder's own
-##    when it has them (a lair's, [constant MENU_LAIR]).
+##    when it has them (a lair's, [constant MENU_LAIR]) — over, too (a
+##    board's room, [constant DungeonPane.MENU_OVER]: the visit ends; part C
+##    stage C3, h1-2).
 ##  - A DUEL OVER AS IT IS DEALT (headless, the hero at life 0) is heard
 ##    after the frame, once the holder has connected [signal ended].
 ##  - Pause → Quit ends the program, as from every duel; the world screen
@@ -74,8 +76,10 @@ var foe := "creature"
 ## The duel screen while it is up.
 var duel: DuelScreen
 ## The menu question's words when the holder has its own ("" the
-## meeting's, [constant MENU]).
+## meeting's, [constant MENU]); and once the duel is over ("" [constant
+## MENU_OVER]).
 var menu_words := ""
+var menu_over_words := ""
 ## Whether the duel was conceded.
 var conceded := false
 var _over := false
@@ -86,15 +90,19 @@ var _dealing := false
 ## THE DUEL OF [param config] OVER [param screen] against [param foe_name]:
 ## the host, in the tree, the duel dealt; [param menu_text] the menu
 ## question's words when the holder has its own (a lair's, [constant
-## MENU_LAIR]). Connect [signal ended] (and [signal abandoned]) right after:
-## a duel over as it is dealt is heard after the frame ([method _closed]).
-static func host(on: Node, duel_config: DuelConfig, foe_name := "creature", menu_text := "") -> WorldDuels:
+## MENU_LAIR]), [param menu_over_text] its words once the duel is over (a
+## board's room, [constant DungeonPane.MENU_OVER]). Connect [signal ended]
+## (and [signal abandoned]) right after: a duel over as it is dealt is heard
+## after the frame ([method _closed]).
+static func host(on: Node, duel_config: DuelConfig, foe_name := "creature", menu_text := "",
+		menu_over_text := "") -> WorldDuels:
 	var out := WorldDuels.new()
 	out.name = "WorldDuel"
 	out.screen = on
 	out.config = duel_config
 	out.foe = foe_name
 	out.menu_words = menu_text
+	out.menu_over_words = menu_over_text
 	on.add_child(out)
 	return out
 
@@ -128,14 +136,14 @@ func hero_stakes() -> bool:
 
 
 ## THE DUEL OVER, its End of Duel window to come: both doors' words say its
-## result stands ([constant LEAVE_OVER], [constant MENU_OVER]) — read as
-## each question is asked.
+## result stands ([constant LEAVE_OVER], [constant MENU_OVER] or the
+## holder's [member menu_over_words]) — read as each question is asked.
 func _questions_over(_winner: int) -> void:
 	if not is_instance_valid(duel):
 		return
 	duel.leave_title = OVER_TITLE
 	duel.leave_question = LEAVE_OVER
-	duel.menu_question = MENU_OVER
+	duel.menu_question = menu_over_words if menu_over_words != "" else MENU_OVER
 
 
 ## Whether the duel is still up.

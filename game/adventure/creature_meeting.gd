@@ -83,6 +83,10 @@ extends RefCounted
 ##    reward's copy count: usually the same deck, sometimes a stale one);
 ##  - three stakes (a castle wizard's, kind 12) are three different cards
 ##    (1997 drew each from the whole bag and could stake one card twice).
+## [Ours, the owner's: a beaten wizard's creature says the fallen-master
+## line in place of 1997's domain words, [constant FALLEN_MASTER], and in
+## place of its tribute words [constant FALLEN_TRIBUTE]; near his ruins it
+## meets the hero as anywhere else ([method relation_of]).]
 ##
 ## DESIGNED, NEVER USED (dead in 1997, dead here; each in
 ## `docs/adventure-unused-1997-features.md`, §1–4 and §10, with what it
@@ -146,6 +150,16 @@ const NEAR_STRONGHOLD := "Those who near the stronghold\nof the Mighty %s\nwill 
 const CHALLENGE := "Those who would challenge the\nGreat %s for\nSupremacy of %s must..."
 const DOMAIN := "Those who enter the domain\nof the Mighty %s\nmust pay for the privilege.\nWill you..."
 const TREMBLE := "The %s who inhabit the\ndomain of the Mighty %s\ntremble in fear of your visage.\nWill you..."
+## [Ours] THE FALLEN-MASTER LINE (the owner, 2026-10-28; part C stage C3,
+## h4-3): a creature of a beaten wizard — his castle beaten, or the world at
+## peace — speaks of no domain of his; in place of DOMAIN and TREMBLE, by
+## the wizard's own word and her/his as [method wizard_feminine] says; four
+## lines, as DOMAIN's, so the pane keeps its size.
+const FALLEN_MASTER := "The %s has fallen,\nbut %s creatures still roam\nthese lands.\nPay, or fight."
+## [Ours] ITS TRIBUTE (the owner, 2026-10-28, "fallen + tremble"): the
+## fallen-master line where 1997 said TREMBLE — five wins and more over its
+## kind on its colour, the choice Accept tribute.
+const FALLEN_TRIBUTE := "The %s has fallen,\nand %s creatures tremble\nbefore you.\nAccept our tribute."
 ## 41/42 a henchman, by its wizard's gender.
 const HENCHMAN_WORDS := "The Evil %s\nhas sent %s\nmost trusted servant to\ntest your strength.\nYou must..."
 ## The choices: 11 Duel, 12 Accept tribute, 13 Pay, 15 Answer, 16 Change.
@@ -248,12 +262,16 @@ static func meet(player: AdventurePlayer, row: int, color: int, slot := -1,
 ## THE RELATION (E:1714–1732): [constant SIEGE] for the besieger's slot;
 ## [constant STRONGHOLD] when the creature stands within `difficulty / 2 +
 ## 2` tiles, on both axes, of its colour's castle (castle slot colour − 1);
-## else [constant NONE].
+## else [constant NONE]. [Ours, the owner (2026-10-28): "ruins are no
+## stronghold" — near a beaten wizard's ruined castle, or in the world at
+## peace, a creature meets the hero as anywhere else ([method
+## master_fallen]): the fallen-master words, and Pay or the riddle offered.]
 static func relation_of(player: AdventurePlayer, _row: int, color: int, slot: int, at: Vector2i) -> int:
 	if slot == SIEGE_SLOT:
 		return SIEGE
 	var world := player.world
-	if world != null and color >= 1 and color - 1 < world.encounters.size():
+	if world != null and color >= 1 and color - 1 < world.encounters.size() \
+			and not master_fallen(player, color):
 		var castle: Dictionary = world.encounters[color - 1]
 		var reach := player.difficulty / 2 + 2
 		if absi(at.x / 32 - int(castle.get("x", -999))) <= reach \
@@ -314,11 +332,22 @@ static func words(player: AdventurePlayer, meeting: Dictionary) -> Array[String]
 			SIEGE:
 				text = CHALLENGE % [wizard, besieged_town(player, meeting)]
 			_:
-				if int(meeting["wins"]) < TRIBUTE_WINS:
+				if master_fallen(player, color):
+					var line := FALLEN_MASTER if int(meeting["wins"]) < TRIBUTE_WINS else FALLEN_TRIBUTE
+					text = line % [wizard, "her" if wizard_feminine(color) else "his"]
+				elif int(meeting["wins"]) < TRIBUTE_WINS:
 					text = DOMAIN % wizard
 				else:
 					text = TREMBLE % [String(CreatureBook.ROWS[int(meeting["row"])][CreatureBook.PLURAL]), wizard]
 	return lines_of(text)
+
+
+## Whether colour [param color]'s wizard (1 black … 5 white) is beaten —
+## his castle won, or the world at peace after Arzakon's fall
+## ([method AdventurePlayer.at_peace]) [ours, [constant FALLEN_MASTER]].
+static func master_fallen(player: AdventurePlayer, color: int) -> bool:
+	return player.at_peace() \
+		or AdventurePlayer.COLORS[clampi(color, 1, 5) - 1] in player.defeated_wizards
 
 
 ## Whether colour [param color]'s wizard is a woman (`IsWizardColorFeminine`:

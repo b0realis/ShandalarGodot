@@ -51,8 +51,11 @@ isolation uses XDG on Linux and a distinct `Shandalar Integration Tests` profile
 (Godot ignores XDG there). Manual Mac probes must use that runtime feature
 or their own named project; changing XDG alone does not protect player data.
 
-- Targeted tests: `./run_tests.sh -gselect=<test_script.gd>` or
-  `./run_tests.sh -gunit_test_name=<name>`.
+- Targeted tests: `./run_tests.sh -gselect=<test_script.gd>`,
+  `./run_tests.sh -gunit_test_name=<name>` or `./run_tests.sh
+  -gdir=res://tests/<folder>` (that folder alone). Probes under the
+  git-excluded `tests/_hunt/` are never part of a whole run: run one by
+  its name with `-gselect`.
   Full release gate: `./run_tests.sh` (headless GUT; pinned binary `../tools/godot`).
   `SHARDS=4 ./run_tests.sh` runs the same suite over four Godot
   processes at once (since 2026-09-17: 979 s in one process, ~210 s over
@@ -178,7 +181,10 @@ or their own named project; changing XDG alone does not protect player data.
   whole skin, `original_skin_realesrgan-anime_2x.zip` — the 1997 skin's
   own files and names, every picture at twice the size (the owner: *"Each
   skin pack zip should contain all required assets. Just in the upscaled
-  the relevant assets are upscaled!"*) — chosen like any skin; a Manalink
+  the relevant assets are upscaled!"*); the castle and dungeon board's
+  sheets frame by frame, each amid what meets it on the board, so walls
+  and floors meet without seams (the owner's decision 9, 2026-10-28) —
+  chosen like any skin; a Manalink
   label rides into it and is refused the same way. No switch, no second
   zip worn beside the skin: ONE skin zip is worn (`SkinPack`, ONE SKIN),
   and the loose folders only when none is (`GameSkin.zip_worn`). A slot's
