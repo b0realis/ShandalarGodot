@@ -142,9 +142,10 @@ so the buttons wore streaked strips round a smeared middle; doubled pixel
 for pixel (DOUBLED) it is the 1997 stone, crisp at twice the pixels.
 Since 0.50.33 the game makes a seamless tile of it and lays that at its
 own size, so its grain is seen as it is drawn. The owner added (2026-10-28)
-the pre-duel pane's frame (`preduel_frame`) and the world's ground layer
-(`world_landtile`, `world_cstline1`, `world_roads`): tiles laid against
-their neighbours keep 1997's grain and meet without edges.
+the pre-duel pane's frames (`preduel_frame`, `preduel_frame_tinted`) and
+the world's ground layer (`world_landtile`, `world_cstline1`,
+`world_roads`): tiles laid against their neighbours keep 1997's grain and
+meet without edges.
 
 LEFT AS THEY ARE, under their own names: the coin-toss movie sheets
 (2240x2160 already; twice that is past the 4096-pixel texture limit of
@@ -309,8 +310,14 @@ KEY_EXACT = (
 ## `world_cstline1`, `world_roads`), each tile cut from its sheet and laid
 ## against its neighbours, where a picture upscaled alone grows edges and
 ## loses 1997's grain. The trees', rocks' and places' ground halves
-## (`world_sland*`) stay upscaled, as the uprights they stand under.
-DOUBLED = ("panel_stone", "preduel_frame", "world_landtile", "world_cstline1", "world_roads")
+## (`world_sland*`) stay upscaled, as the uprights they stand under. And
+## the tinted pre-duel frame, `preduel_frame_tinted` (a place's pane: the
+## model drew eye-like marks on its studs and redrew the banner's corners;
+## the owner, 2026-10-28, "Double it", like the plain frame). The world's
+## mix of doubled ground and upscaled uprights stays as it is (the owner,
+## the same day, from real-size mockups: "As is now.").
+DOUBLED = ("panel_stone", "preduel_frame", "preduel_frame_tinted", "world_landtile",
+           "world_cstline1", "world_roads")
 
 ENGINE_EXE = "realesrgan-ncnn-vulkan"
 ENGINE_BUILD = "20220424"

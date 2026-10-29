@@ -238,8 +238,8 @@ func test_build_me_a_deck_puts_the_deck_on_the_surface_and_the_pool_in_force() -
 	screen._undo_last()
 	assert_eq(screen.deck.total(), 0, "the empty surface is back")
 	assert_eq(screen.sealed, screen._auto_pool, "the pool stays in force")
-	screen._undo_last()
-	assert_eq(screen.deck.total(), 60, "and Undo's Undo is the deck again")
+	screen._redo_last()
+	assert_eq(screen.deck.total(), 60, "and Redo is the deck again")
 	await get_tree().process_frame
 
 

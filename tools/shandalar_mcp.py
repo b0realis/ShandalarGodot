@@ -2785,7 +2785,8 @@ class Server:
                         "rules": prop("string", "`fifth` or `modern`"),
                         "format": prop("string", "require a deck format"),
                         "lives": prop("string", "starting life, `20,20`"),
-                        "mulligan": prop("string", "`on` or `off`"),
+                        "mulligan": prop("string", "`on` or `off`: offer the mulligan before turn 1 "
+                                         "(default on, as every real duel does)"),
                         "sweep": prop("string", "one AI knob and its values, `KNOB=V1,V2`"),
                         "null": prop("string", "the sweep knob's null value"),
                         "control_deck_a": prop("string", "the sweep's control pair, deck A"),

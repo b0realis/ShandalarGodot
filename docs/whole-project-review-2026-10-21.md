@@ -518,15 +518,20 @@ The computer opponent:
   (`_fire_surplus_instants` skips draw instants; it is priced 2.5). *Fixed
   in 0.50.45.*
 - It paid 4 life to Sylvan Library to keep a card, then cast Wheel of
-  Fortune in the same main phase and discarded it.
+  Fortune in the same main phase and discarded it. *Fixed in 0.50.65: no
+  life is paid for a card a wheel castable this turn would throw away.*
 - The combo runner's casts count toward the runaway guard's cast cap: after
   a 20-round Man-o'-War loop, Man-o'-War cannot be cast again that turn to
   bounce a real threat.
 - With combos off, the Wizard casts a second, useless Ashnod's Altar ahead
-  of a Hill Giant (0.50.42 fixed the combo pilot's side only).
+  of a Hill Giant (0.50.42 fixed the combo pilot's side only). *Fixed in
+  0.50.65: a second copy of a mana ability one copy already repeats is no
+  second source.*
 - It chump-blocked a Craw Wurm with Soul Warden at 20 life. *Fixed in
   0.50.45.*
-- Mana Flare boards: both pilots burn 1–2 life most turns.
+- Mana Flare boards: both pilots burn 1–2 life most turns. *Measured in
+  0.50.65: the burn is arithmetic (odd costs against doubled mana), left to
+  the AI package.*
 - Possible hidden information: CARD-COMBOS reads the names of the
   opponent's permanents, which would identify a face-down (Illusionary
   Mask) combo piece. *Fixed in 0.50.45.*
@@ -603,7 +608,13 @@ seconds for a Godot to stop. Run beside two Godot test chains on the desk
 they timed out; alone they pass (24 of 24), and on CI they pass. They want
 a wait that does not depend on how busy the machine is. Still open after
 0.50.45, which repaired four timing tests of its own (listed in
-`docs/hunt-campaign-2026-10-21.md`, Verification).
+`docs/hunt-campaign-2026-10-21.md`, Verification). (2026-10-28: fixed in
+0.50.61, and the cause was not the load: a runner started as a background
+job of a script inherits SIGINT ignored, a shell cannot trap a signal
+ignored on entry, so the Ctrl-C did nothing and the test waited out its
+timeout. The children now get the default SIGINT back before they start —
+`default_sigint` in `tools/test_lan_smoke_launcher.py`, the `preexec_fn` in
+`tools/test_c3_fx_scripts_shell.py`.)
 
 ## Verification
 

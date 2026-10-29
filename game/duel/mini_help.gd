@@ -235,7 +235,9 @@ func _on_host_children_changed() -> void:
 # ------------------------------------------------------------- building --
 
 func _build() -> void:
-	_scale = _window_scale()
+	# ...and never smaller than the duel screen's own UI scale (the polish
+	# pass, [constant DuelScreenOptions.UI_SCALE_KEY]), the larger of the two.
+	_scale = maxf(_window_scale(), DuelScreenOptions.ui_scale())
 	_panel = PanelContainer.new()
 	_panel.name = "Panel"
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP

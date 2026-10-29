@@ -212,5 +212,19 @@ class PackEightTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'trusted source'):
                 pack.verify(out, require_art=False)
 
+    def test_readme_names_the_shared_scripts_not_a_first_printing(self):
+        # The stale-docs list of 2026-10-28: 20 of the 31 shared cards came
+        # first in Mirage, Visions or Weatherlight (Man-o'-War, Natural Order,
+        # Archangel, Undo, ...), older than Portal and Portal Second Age, so
+        # "first appeared in" was wrong; what the 31 share is the other pack's
+        # rules script, as Help and Pack 9's README say.
+        *_, readme = pack.assembled()
+        text = ' '.join(readme.split())
+        self.assertNotIn('first appeared in', text)
+        self.assertIn('the other %d use the rules script of an Ice Age, Homelands, Portal or '
+                      'Portal Second Age card' % pack.SHARED, text)
+        self.assertEqual(len(pack.shared_names()), pack.SHARED)
+        self.assertEqual(set(pack.shared_names().values()), {'ice', 'hml', 'por', 'p02'})
+
 if __name__ == '__main__':
     unittest.main()

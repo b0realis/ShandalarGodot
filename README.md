@@ -27,15 +27,27 @@ engine, and the freedom to keep the game alive.
 ## Screenshots
 
 <p align="center">
-  <img src="branding/screenshots/main-menu.png" alt="ShandalarGodot main menu" width="960">
-  <br>
-  <em>The main menu with the optional original-game skin.</em>
-</p>
-
-<p align="center">
   <img src="branding/screenshots/duel-spell-chain.png" alt="A spell chain during a ShandalarGodot duel" width="960">
   <br>
   <em>A spell chain in progress during a duel.</em>
+</p>
+
+<p align="center">
+  <img src="branding/screenshots/main-menu.png" alt="ShandalarGodot main menu" width="390">
+  <img src="branding/screenshots/deck-builder.png" alt="The Deck Builder with a starter deck open" width="390">
+  <br>
+  <em>The main menu and the Deck Builder.</em>
+</p>
+
+<p align="center">
+  <img src="branding/screenshots/adventure-world.png" alt="The hero in the world of Shandalar, between towns" width="390">
+  <img src="branding/screenshots/adventure-dungeon.png" alt="A dungeon's board in the Shandalar adventure" width="390">
+  <br>
+  <em>The Shandalar adventure: the world, and a dungeon's board.</em>
+</p>
+
+<p align="center">
+  <em>Every screenshot shows the optional original-game skin and card pictures.</em>
 </p>
 
 ## Play
@@ -72,7 +84,7 @@ block** (Tempest, Stronghold, Exodus), with engine and AI support.
 The **Shandalar adventure** is in development: it can be played from the
 source from Embark to the end — its world, towns, quests, lairs, roaming
 creatures and sieges, the castles, the dungeons and the final battle — and
-is being playtested; the card packs' own worlds come later. Public Internet
+is being playtested; card packs in the adventure are not implemented yet. Public Internet
 matchmaking remains future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
@@ -120,7 +132,10 @@ games**, and **Watch duel** plays it back on the familiar table.
   conformance checklist for writers and readers.
 - [The player guide](docs/mpn-v0.1.md) — recording, exporting and watching
   in ShandalarGodot, locally and on the LAN.
-- [Two example files](docs/mpn-examples/) to import and test against.
+- [Example files](docs/mpn-examples/) to import and test against: four
+  `.mpn` records — a short finished game, a recording stopped early and two
+  whole duels — and, beside the two duels, their move lists as readable
+  text (`.txt`).
 
 MPN 0.1 is a draft, not an official Magic standard. If you build a Magic
 engine, a replay viewer, a tournament tool or an archive, please read it,
@@ -281,8 +296,8 @@ On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 
 1. [ ] **Adventure** — the Shandalar world, quests and campaign: in
    development (the world, towns, quests, lairs, creatures, sieges, the
-   castles, the dungeons and the end are built and being playtested; the
-   card packs' own worlds are next).
+   castles, the dungeons and the end are built and being playtested; card
+   packs in the adventure are not implemented yet).
 2. [ ] **Commander** — dedicated rules and deck-building support.
 3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
 4. [x] **Card packs** — nine optional, toggleable packs beside the core pool:

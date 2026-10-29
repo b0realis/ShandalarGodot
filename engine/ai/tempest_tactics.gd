@@ -1689,11 +1689,30 @@ static func magnet_option(g: MtgGame, pilot, s: CardInstance, a: ActivatedAbilit
 ## revealed this way into your graveyard" (Hermit Druid): a land when our
 ## hand has none and our lands are few — never from a thin library, since
 ## every card before the land is milled.
+##
+## NOR FROM A LIBRARY WITH NO BASIC LAND LEFT (the polish pass, 2026-10-28;
+## ledger duel-047, "Hermit Druid milling itself out"): with none the
+## reveal puts the WHOLE library into the graveyard and the next draw loses
+## the game. How many basics are left is read fairly — our own registered
+## list less the basics of ours the game has shown ([method basics_left]),
+## never the library — and the dig waits while the land it finds would cost,
+## on average, more than a third of the library or leave fewer than ten
+## cards (the cards above the first of N basics in L cards average
+## L / (N + 1): one basic in thirty is fifteen cards on average, and any
+## number up to all twenty-nine).
 static func dig_land_option(g: MtgGame, pilot, s: CardInstance, window: String) -> Dictionary:
 	var pid: int = pilot.pid
 	var me := g.players[pid]
 	if window == "COMBAT" or window == "RESPONSE" or me.library.size() < 15:
 		return {}
+	var basics := basics_left(g, pid)
+	if basics == 0:
+		return {}
+	if basics > 0:
+		var cards := float(me.library.size())
+		var milled := cards / float(basics + 1)
+		if milled > cards / 3.0 or cards - milled < 10.0:
+			return {}
 	for card in me.hand:
 		if card.data.is_land():
 			return {}
@@ -1708,6 +1727,59 @@ static func dig_land_option(g: MtgGame, pilot, s: CardInstance, window: String) 
 	if window == "SINK":
 		return {"value": 3.0, "targets": [], "bar": 0.5}
 	return {}
+
+
+## How many BASIC LAND cards of [param pid]'s are still in its library,
+## read fairly (docs/fair-play.md): the basics its own registered list
+## names ([member MtgPlayer.deck_names]) less every basic land card it
+## OWNS that the game has put somewhere a player sees or holds — its hand,
+## any battlefield (a face-down card of its own included: the owner knows
+## its own card), its graveyard and exile, the stack, the ante and the
+## phased-out permanents. -1 when the list is empty (a position set up with
+## no list): unknown, and the caller keeps its old reading. Never the
+## library itself, never its order.
+##
+## THE ANTE AND THE PHASED-OUT ARE PLACES TOO (0.50.65 bug campaign, k5-5):
+## both are public ([member MtgPlayer.ante], [member MtgPlayer.phased_out]),
+## and a basic in either was read as still in the library — two Forests
+## staked from a library with no other basic read as two left, and the
+## Druid's reveal took the whole library. A computer seat's ante may be a
+## basic (only a human's stake leaves them out), and Taniwha phases every
+## land of ours out.
+static func basics_left(g: MtgGame, pid: int) -> int:
+	var listed := 0
+	for card_name in g.players[pid].deck_names:
+		var data := CardRegistry.get_card(String(card_name))
+		if data != null and data.is_land() and (data.supertypes & Mtg.Supertype.BASIC) != 0:
+			listed += 1
+	if g.players[pid].deck_names.is_empty():
+		return -1
+	var seen := 0
+	var places: Array = [g.players[pid].hand, g.players[pid].graveyard, g.players[pid].exile]
+	for p in g.players:
+		places.append(p.battlefield)
+		places.append(p.ante)
+		places.append(p.phased_out)
+	for place in places:
+		for card in place:
+			var inst := card as CardInstance
+			if inst != null and inst.owner_id == pid and not inst.is_token \
+					and _basic_land_card(inst):
+				seen += 1
+	for item in g.stack:
+		if item.card != null and item.card.owner_id == pid and item.card.zone == Mtg.Zone.STACK \
+				and _basic_land_card(item.card):
+			seen += 1
+	return maxi(listed - seen, 0)
+
+
+## A basic land card by its PRINTED card (CR 701.16a reads a library card's
+## printed characteristics; a copy or an animation on the table does not
+## make it another card).
+static func _basic_land_card(inst: CardInstance) -> bool:
+	var printed: CardData = inst.printed_data if inst.printed_data != null else inst.data
+	return printed != null and printed.is_land() \
+		and (printed.supertypes & Mtg.Supertype.BASIC) != 0
 
 
 ## A -X/-X (or -0/-X) on target creature with no other job — Rabid Rats'

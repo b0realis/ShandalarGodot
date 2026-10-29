@@ -35,7 +35,9 @@ extends RefCounted
 ##     clear, card id above 4); the walk goes on from there for the next.
 ##     Here the collection's slots are [member AdventurePlayer.cards]' places.
 ##     [Ours: 1997 staked the same copy again when the deck held fewer such
-##     cards than the count; the stake is capped at what is there.]
+##     cards than the count; the stake is capped at what is there. Under
+##     "Unlimited card hold" a bag past 500 is walked whole, [method
+##     walked].]
 ##     `@VISIT` 0 "Your ANTE".
 ##  3. THE CREATURE ([method creature]): [method CreatureBook.pick] of the
 ##     ruling wizard's colour at a tier by the siege clock (T / 128: 0 → 4,
@@ -66,7 +68,11 @@ extends RefCounted
 ##
 ## WHAT IT LEAVES ([method settle]; every next-duel gift spent first):
 ##  - A WIN (result 1 only): the ruler gone ([method TownStatus.release]; the
-##    mana link stays lost), the win music and `Celeb.pic` (`town_freed`),
+##    mana link stays lost — [ours, the owner's ruling of 2026-10-29] under
+##    the sieges' paces Steady, Rare and None a link a siege took comes back,
+##    [method AdventurePlayer.restore_link]: "Your mana link here is
+##    restored." after the town's words, "Mana link restored at %s" in the
+##    journal), the win music and `Celeb.pic` (`town_freed`),
 ##    "%s is freed! The people rejoice." (`@VISIT` 8); THE CREATURE'S STAKE
 ##    WON INTO THE DECK IN USE (`AddCardToDeckSorted` with no "no deck" mark
 ##    after it — every other prize goes in no deck; as played), "Acquired
@@ -232,24 +238,36 @@ static func stake(player: AdventurePlayer, slot: int) -> Dictionary:
 	var names: Array[String] = []
 	var places: Array[int] = []
 	var world := player.world
-	var usable: Array[int] = []
+	var usable := {}
 	for at in CreatureMeeting.usable_cards(player):
-		if at < BAG:
-			usable.append(at)
+		usable[at] = true
 	var count := mini(stake_count(world, slot), usable.size())
 	if count > 0:
+		var bag := walked(player)
 		var seed := int(world.sites[slot]["y"])
-		# The walk visits every slot in 500 steps (7 and 500 share no
+		# The walk visits every slot in `bag` steps (7 and the bag share no
 		# factor): it finds each card in at most that.
 		var steps := 0
-		while places.size() < count and steps < BAG * (count + 1):
-			var at := posmod(seed, BAG)
+		while places.size() < count and steps < bag * (count + 1):
+			var at := posmod(seed, bag)
 			seed += SEED_STEP
 			steps += 1
-			if at in usable and not at in places:
+			if usable.has(at) and not at in places:
 				places.append(at)
 				names.append(String(player.cards[at]["card"]))
 	return {"names": names, "places": places}
+
+
+## THE SLOTS THE STAKE'S WALK GOES OVER ([method stake]): 1997's 500 — and
+## [ours, the 0.50.65 bug campaign, k6-1] under "Unlimited card hold" a
+## bag past them, every place of it, one more when 7 divides it so the
+## walk still visits each slot (as the meetings' stake draws over the
+## whole bag, [method CreatureMeeting._draw_hero_ante]). A deck in use made
+## of cards past the 500th place staked nothing and lost nothing. Under
+## the 1997 card hold the bag never passes 500: 1997's walk.
+static func walked(player: AdventurePlayer) -> int:
+	var bag := maxi(BAG, player.cards.size())
+	return bag + 1 if bag % SEED_STEP == 0 else bag
 
 
 ## The creature's tier at town [param slot] by the siege clock (see the
@@ -382,7 +400,7 @@ static func settle(player: AdventurePlayer, met: Dictionary, report: DuelReport,
 	var slot := int(met.get("town", -1))
 	var town := WorldNames.site_name(player.world, slot)
 	var out := {"result": result, "town": slot, "name": town, "card": "", "kept": false,
-		"lost": [] as Array[String], "words": [] as Array[String]}
+		"lost": [] as Array[String], "words": [] as Array[String], "restored": false}
 	player.clear_duel_gifts()
 	match result:
 		WON:
@@ -396,6 +414,12 @@ static func settle(player: AdventurePlayer, met: Dictionary, report: DuelReport,
 					(player.cards[-1] as Dictionary)["decks"] = [player.current_deck]
 			player.log_event("freed", FREED_LOG % town, {"town": slot})
 			(out["words"] as Array[String]).append(FREED % town)
+			# The link a siege took comes back under Steady, Rare and None
+			# [ours, the owner's ruling of 2026-10-29].
+			out["restored"] = player.restore_link(slot)
+			if bool(out["restored"]):
+				player.log_event("link", CastleWin.LINK_LOG % town, {"town": slot})
+				(out["words"] as Array[String]).append(AdventurePlayer.LINK_RESTORED)
 		LOST:
 			out["lost"] = CreatureMeeting.lose_stake(player, met)
 	return out

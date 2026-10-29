@@ -149,7 +149,13 @@ def pool() -> list[tuple[str, str]]:
             # tools/build_card_packs.py, which calls this, went down with
             # it. A set's card file is a LIST; anything else in the folder
             # is somebody else's.
-            records = json.loads(data_file.read_text())
+            # UTF-8 ALWAYS, NAMED (a play-tester's report, 2026-10-28):
+            # `read_text()` with no encoding reads the system's code page,
+            # which on Windows is cp1252, so "Dandân" arrived as "DandÃ¢n"
+            # and Scryfall found no picture for it — the five Arabian
+            # Nights cards with an accent failed on Windows and worked
+            # under WSL. The card lists are UTF-8 on every system.
+            records = json.loads(data_file.read_text(encoding="utf-8"))
             if not isinstance(records, list):
                 continue
             for card in records:

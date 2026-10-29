@@ -145,15 +145,16 @@ func test_the_attack_window_menu_flips_with_the_window() -> void:
 	screen._attack_menu.hide()
 
 
-func test_the_spell_chain_menus_are_recorded_even_though_unbuilt() -> void:
-	# The other two of the four §6.12 missed. Minimize is not live: our chain
-	# has no minimised state, and the 1997 restore route is the Phase Bar's
-	# window icon, which our icon already spends on the Combat window. (The
-	# menu itself opens on the chain's band since 2026-10-13, for its live
-	# Help... — tests/ui/test_c2_f_minihelp_menus.gd.)
+func test_the_spell_chain_menus_are_the_1997_pair_and_live() -> void:
+	# The other two of the four §6.12 missed. Live since the polish pass of
+	# 2026-10-28: the chain's title band minimizes it
+	# (tests/ui/test_p3_spell_chain_window.gd). (The menu opens on the
+	# chain's band since 2026-10-13, for its live Help... —
+	# tests/ui/test_c2_f_minihelp_menus.gd.)
 	assert_eq(CardMenu.SPELL_CHAIN[0]["label"], "Minimize")
 	assert_eq(CardMenu.MINIMIZED_SPELL_CHAIN[0]["label"], "Restore")
-	assert_false(bool(CardMenu.SPELL_CHAIN[0]["live"]))
+	assert_true(bool(CardMenu.SPELL_CHAIN[0]["live"]))
+	assert_true(bool(CardMenu.MINIMIZED_SPELL_CHAIN[0]["live"]))
 
 
 # ------------------------------------------------------- the live entries --

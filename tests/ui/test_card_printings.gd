@@ -94,7 +94,7 @@ func test_builder_selector_and_undo_keep_one_preference_per_name() -> void:
 	assert_true(screen._undo.printings.is_empty())
 	screen._undo_last()
 	assert_false(screen.deck.printings.has("Forest"))
-	screen._undo_last()
+	screen._redo_last()
 	assert_eq(screen.deck.printings.Forest, "por:215")
 	var chosen := []
 	var dialog := CardVariantDialog.create("Forest", "por:215", func(id: String) -> void: chosen.append(id))

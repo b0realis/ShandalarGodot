@@ -26,9 +26,11 @@ extends RefCounted
 ## program's own and a price is the 1997 price. Without it — and for every
 ## card the 1997 game never had, a pack's — the inputs are read off the
 ## card: its type, colours, cost, power and toughness, keywords and rules,
-## and no card is a staple ([method derive]) — but the two marks no reading
-## gives, a dungeon's treasure and a card 1997 kept back, come by name
-## ([constant TREASURE], [constant KEPT_BACK]). `ai`, the program's
+## and no card is a staple ([method derive]) — but the marks no reading
+## gives, a dungeon's treasure, a card 1997 kept back and its power mark,
+## come by name ([constant TREASURE], [constant KEPT_BACK], [constant
+## POWER]), the base set by the printings ([method expansion]) and a land
+## that makes no mana is of no colour, as the table has them. `ai`, the program's
 ## hand-tuned value, starts at its type's ([constant AI_BY_TYPE]: creature
 ## 1, enchantment 0, sorcery 0, instant −1, artifact 1 — tuned on the 1997
 ## prices under cross-validation, where the type's commonest value had
@@ -124,6 +126,30 @@ const KEPT_BACK_1997: Array[String] = ["Bottle of Suleiman", "Call from the Grav
 	"Necropolis of Azar", "Orcish Catapult", "Pandora's Box", "Power Struggle",
 	"Prismatic Dragon", "Rainbow Knights", "Serendib Djinn", "Serendib Efreet",
 	"Windseeker Centaur", "Ydwen Efreet"]
+## The mark 1997's table gives its power cards (`extra_ability` 0x80; the
+## 0.50.65 bug campaign, k6-2), which a card read without the table
+## carries by name, [constant POWER_1997]: special in a shop's rarity
+## ([method CardShop.shop_rarity]) and never in its stock ([method
+## CardShop.stock]).
+const POWER := 0x80
+## The cards the table marks 0x80, by the engine's names: eight treasures
+## (0x100 as well) and four cards more — the one of them of the base set,
+## Ironclaw Orcs, no 1997 shop sold.
+const POWER_1997: Array[String] = ["Ali from Cairo", "Ancestral Recall", "Black Lotus",
+	"Mox Emerald", "Mox Jet", "Mox Pearl", "Mox Ruby", "Mox Sapphire",
+	"Copper Tablet", "Gauntlet of Might", "Ironclaw Orcs", "Psionic Blast"]
+## THE 1997 BASE SETS (`expansion` & 0xC1, the bits the shops, the riddles
+## and the copy limit read): 0x1 Fourth Edition, 0x40 the Astral cards, 0x80
+## the cards that came with the game (the HarperPrism promotions, `phpr`:
+## Giant Badger, Mana Crypt, Nalathni Dragon, Sewers of Estark, Windseeker
+## Centaur; Arena, which the table lacks); 0x2 here for any other card.
+## Read off the printings without the table ([method expansion]); it agrees
+## with the table on every card of it.
+const FOURTH_EDITION := 0x1
+const OTHER_SET := 0x2
+const ASTRAL := 0x40
+const CAME_WITH_THE_GAME := 0x80
+const BASE_SETS := FOURTH_EDITION | ASTRAL | CAME_WITH_THE_GAME
 const KEYWORD_WORDS: Array[String] = ["flying", "banding", "trample", "first strike",
 	"swampwalk", "islandwalk", "forestwalk", "mountainwalk", "plainswalk"]
 
@@ -274,9 +300,13 @@ static func derive(data: CardData) -> Dictionary:
 		kind = INSTANT
 	var color := color_bits(data.color_mask())
 	# A land wears the colours of its land types, as the 1997 card table
-	# gave them (a Mountain red, Badlands black and red).
+	# gave them (a Mountain red, Badlands black and red) — and a land that
+	# makes no mana none at all, as the table's Oasis, Bazaar of Baghdad,
+	# Diamond Valley and Island of Wak-Wak (every land of it without a mana
+	# ability, and no other): no town sells it (the 0.50.65 bug campaign,
+	# k6-2).
 	if kind == LAND:
-		color = land_colors(data)
+		color = land_colors(data) if not data.mana_abilities.is_empty() else 0
 	var pips := 0
 	for hue in data.cost.colored:
 		if hue != Mtg.ManaColor.C:
@@ -299,17 +329,44 @@ static func derive(data: CardData) -> Dictionary:
 			extra |= PUMP_POWER
 		if found.get_string(2) != "0":
 			extra |= PUMP_TOUGHNESS
-	if is_treasure(data.card_name):
-		extra |= TREASURE
-	if data.card_name in KEPT_BACK_1997:
-		extra |= KEPT_BACK
+	extra |= named_marks(data.card_name)
 	return {"type": kind | (ARTIFACT if kind == CREATURE and data.is_type(Mtg.CardType.ARTIFACT) else 0),
 		"color": color, "cc0": pips, "cc1": -1 if data.cost.has_x else data.cost.generic,
 		"power": maxi(data.power, 0), "tough": maxi(data.toughness, 0),
 		"static": static_bits, "extra": extra,
 		"ai": clampi(int(AI_BY_TYPE.get(kind, 0)) + strength_step(data, kind), -2, 3),
-		"vanilla": _plain(text), "rarity": rarity(data.card_name), "exp": 1 if is_base(data.card_name) else 2,
+		"vanilla": _plain(text), "rarity": rarity(data.card_name), "exp": expansion(data.card_name),
 		"derived": true}
+
+
+## The `extra_ability` marks a card read without the 1997 table carries by
+## name ([method derive]): [constant TREASURE], [constant KEPT_BACK],
+## [constant POWER] — the table's own on every card of it. Cheap: the shop
+## reads them before any card's facts ([method CardShop.stock]).
+static func named_marks(card_name: String) -> int:
+	var marks := 0
+	if is_treasure(card_name):
+		marks |= TREASURE
+	if card_name in KEPT_BACK_1997:
+		marks |= KEPT_BACK
+	if card_name in POWER_1997:
+		marks |= POWER
+	return marks
+
+
+## [param card_name]'s 1997 `expansion` read off its printings (the
+## 0.50.65 bug campaign, k6-2: without the table the shops sold Unlimited's
+## cards 1997 never stocked and none of the Astral ones): [constant
+## FOURTH_EDITION], [constant ASTRAL], [constant CAME_WITH_THE_GAME], else
+## [constant OTHER_SET].
+static func expansion(card_name: String) -> int:
+	if CardRegistry.printed_rarity(card_name, "4ed") != "":
+		return FOURTH_EDITION
+	if CardRegistry.printed_rarity(card_name, "past") != "":
+		return ASTRAL
+	if CardRegistry.printed_rarity(card_name, "phpr") != "":
+		return CAME_WITH_THE_GAME
+	return OTHER_SET
 
 
 ## Whether [param card_name] is one of the dungeons' 28 treasures
@@ -370,11 +427,13 @@ static func rarity(card_name: String) -> int:
 	return 1
 
 
-## Whether [param card_name] is of the base set the 1997 shops sell: printed
-## in Unlimited or Fourth Edition.
+## Whether [param card_name] is of the base sets the 1997 shops sell
+## ([constant BASE_SETS], [method expansion]): Fourth Edition, the Astral
+## cards and those that came with the game. [The 0.50.65 bug campaign,
+## k6-2: Unlimited or Fourth Edition until then — 65 of Unlimited's cards
+## the table marks 0x2 counted in, the Astral cards and the promotions out.]
 static func is_base(card_name: String) -> bool:
-	return CardRegistry.printed_rarity(card_name, "2ed") != "" \
-		or CardRegistry.printed_rarity(card_name, "4ed") != ""
+	return expansion(card_name) & BASE_SETS != 0
 
 
 ## Rules text that is nothing but plain keywords (the program's `card_dummy`).

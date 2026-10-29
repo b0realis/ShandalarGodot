@@ -709,6 +709,10 @@ func _build_ui() -> void:
 	for button in [_free_play, _best_of_check]:
 		button.toggled.connect(func(_on: bool) -> void: _apply_match_mode())
 	_apply_match_mode()
+	# `Resume match`, with the match parameters, when a match is saved (P4).
+	var resume_row := _build_resume_row()
+	if resume_row != null:
+		content.add_child(resume_row)
 
 	# --- [QoL] THE SEED ---------------------------------------------------
 	# NOT a 1997 control: the original had nothing like it, and this is
@@ -1776,6 +1780,82 @@ func _build_test_hands_row() -> Control:
 signal test_hands_opened(bench: Control)
 
 
+# --- the polish pass c18, P4: Resume match ---
+## `Resume match` [ours] — 1997's `&Load saved game...` door, without the
+## file box: a best-of match from here is saved after every duel (the
+## owner, 2026-10-28: *"Saving: between duels (Gauntlet runs and matches
+## save after each duel and resume); no mid-duel save"*), and this takes
+## it up again at the window it was saved behind ([MatchSaves],
+## [member MatchScreen.resume_from]).
+const RESUME_MATCH := "Resume match"
+const RESUME_MATCH_TOOLTIP := "Take up the saved match where it stopped: after its last duel, with its record, its decks as they stood and the same players. Starting a new match replaces it once that match has been saved."
+## The `Resume match` button, null when no match is saved.
+var _resume_button: Button = null
+## A saved match is up: this screen handed it the tree. Emitted once, with
+## the screen, for a host that is not the scene tree (a test).
+signal match_resumed(screen: Control)
+
+
+## THE SAVED MATCH'S ROW, under `Sideboard between duels`: `Resume match`
+## and what it would take up — the original's record sentence, the next
+## duel, the two seats — or, when a card of it is not in the pool now (a
+## pack switched off), the button greyed and the reason in its place
+## ([method MatchSaves.cards_refusal]). A saved file that could not be read
+## is set aside the moment this screen finds it and the row says so, once,
+## with no button. Null when nothing is saved.
+func _build_resume_row() -> Control:
+	var found := MatchSaves.read_match()
+	if int(found["status"]) == MatchSaves.NONE:
+		return null
+	var row := HBoxContainer.new()
+	row.name = "ResumeMatchRow"
+	row.add_theme_constant_override("separation", 12)
+	var text := ""
+	if int(found["status"]) == MatchSaves.SET_ASIDE:
+		text = MatchSaves.set_aside_note(String(found["aside"]), "match")
+	else:
+		var taken: Dictionary = found["match"]
+		var resume := UiChrome.menu_button(RESUME_MATCH, Vector2(160, 38), 20)
+		resume.name = "ResumeMatch"
+		resume.tooltip_text = RESUME_MATCH_TOOLTIP
+		resume.pressed.connect(_resume_match.bind(taken))
+		row.add_child(resume)
+		_resume_button = resume
+		var refusal := MatchSaves.cards_refusal(MatchSaves.match_card_names(taken), "This match")
+		resume.disabled = refusal != ""
+		text = refusal if refusal != "" else "\n".join(PackedStringArray(found["summary"]))
+	var about := UiChrome.body_label(text, 14)
+	about.name = "ResumeMatchAbout"
+	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	about.custom_minimum_size.x = 600
+	about.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	about.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(about)
+	return row
+
+
+## `Resume match`: the saved match [param taken] up, as `Go!` puts a new
+## one up ([method _start_battle]) — the shell's tune stopped, this screen
+## handing over the tree (or, held by a test, its parent).
+func _resume_match(taken: Dictionary) -> void:
+	if _leaving:
+		return
+	_shell_music_call(&"stop")
+	var run: MatchScreen = load("res://game/match_screen.tscn").instantiate()
+	run.resume_from = taken
+	run.keeps_save = true
+	_leaving = true
+	var tree := get_tree()
+	if tree.current_scene == self:
+		tree.root.add_child(run)
+		tree.current_scene = run
+	else:
+		get_parent().add_child(run)
+	match_resumed.emit(run)
+	queue_free()
+# --- end P4 ---
+
+
 ## `Test hands` (2026-10-19). The owner: *"design a tool to start a duel
 ## with two predefined hands besides decks so a player can instantly test
 ## a combo. Maybe add to the bottom of the duel menu - test hand(s) button
@@ -1845,13 +1925,24 @@ func _start_battle() -> void:
 		duel.config = config
 		screen = duel
 	else:
-		var run: MatchScreen = load("res://game/match_screen.tscn").instantiate()
-		run.config = config
-		screen = run
+		screen = _match_for(config)
 	_leaving = true
 	tree.root.add_child(screen)
 	tree.current_scene = screen
 	queue_free()
+
+
+## The match `Go!` puts up for a best-of [param config] — its own function
+## so a test can read what it keeps without the tree being handed over.
+func _match_for(config: DuelConfig) -> MatchScreen:
+	var run: MatchScreen = load("res://game/match_screen.tscn").instantiate()
+	run.config = config
+	# A MATCH FROM HERE IS SAVED BETWEEN DUELS (the polish pass c18, P4):
+	# `Resume match` below takes it up again. NOT AN AI DEMO (the bug
+	# campaign of 0.50.65, k4-5): two computer seats are a show to watch,
+	# and its first duel replaced the player's own saved match.
+	run.keeps_save = _mode != BattleMode.DEMO
+	return run
 
 
 ## The duel every choice on this screen adds up to, or null when a seat's

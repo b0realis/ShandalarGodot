@@ -418,9 +418,11 @@ func test_move_by_color_out_of_deck_takes_a_whole_colour() -> void:
 	_add("Giant Growth", 4)
 	_add("Black Lotus", 1)                 # colourless: @GROUPMOVE's "Artifact"
 	_add("Mountain", 10)
-	assert_eq(deck.remove_by_color([Mtg.ManaColor.R]), 4)
+	# The basic land of the colour goes with it — 1997's own
+	# `move_colors_fromto_global_deck` (corrected 2026-10-28).
+	assert_eq(deck.remove_by_color([Mtg.ManaColor.R]), 14)
 	assert_eq(deck.count_of("Lightning Bolt"), 0)
-	assert_eq(deck.count_of("Mountain"), 10, "a land has no colour")
+	assert_eq(deck.count_of("Mountain"), 0, "red's basic land with red")
 	assert_eq(deck.remove_by_color([0]), 1, "and Artifact means colourless")
 	assert_eq(deck.count_of("Black Lotus"), 0)
 	assert_eq(deck.count_of("Giant Growth"), 4, "nothing else moved")

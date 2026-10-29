@@ -55,6 +55,23 @@ extends Control
 ## closes too, so the second click of a double click on its Done walks no
 ## one. The map is a whole screen of its own, as 1997's was: while it is
 ## up only its keys, Escape and Ctrl+S act ([method _map_key]).
+## INSIDE A TOWN, AS 1997 (ledger adventure-032; the owner, 2026-10-28:
+## *"Inside a town: as 1997 — the map (M/F2), the hero (F5) and Save
+## (Ctrl+S) open over the town's pane and come back to it"*): 1997's town
+## let the frame's icons open the map and the stats (`OpenTownWorldMap`,
+## `OpenTownAdventureStats`, visitLocation.c 1038–1079) and its right-click
+## menu the save list too (2031–2111), and came back to the town after each,
+## its picture zoomed in again. While a
+## village's, a town's or a city's own pane is on top ([method
+## town_on_top]) M or F2 opens the map — the town steps aside, hidden, and
+## the map is the world's own, its keys, City Info and Ctrl+S with it —, F5
+## the hero's pane over the town and Ctrl+S the ten slots over it, the town
+## still and deaf under them; closed, the town is back as it was, the same
+## pane ([method _town_back]). Every other key of the world stays held
+## there, and the panel's own buttons rest as under any pane ([method
+## _town_key]) [ours: the keys, 1997's icons and menu being the panel's
+## buttons here; the town stays in view under the hero's pane and the slots,
+## so only the map's return zooms it in again].
 ## THE CASTLES' AND THE DUNGEONS' DOORS ([DungeonDoors], 2026-10-27): a
 ## dungeon the hero knows of is drawn on the world and the small map; its
 ## pane's "Enter the dungeon", like a castle's "Yes, enter the castle.",
@@ -228,6 +245,12 @@ var _lost := false
 ## Whether the world leaves for the title once no pane holds it ([method
 ## leave_after_panes]).
 var _leave_after := false
+## INSIDE A TOWN ([method town_on_top]): what was opened over the town's
+## pane from inside it — `map` (the town hidden under the map), `hero` (the
+## hero's pane over it) — or ""; and where the town's pane stood among the
+## screen's children before it stepped aside.
+var _town_aside := ""
+var _aside_at := -1
 
 
 ## THE ADVENTURE NOT SAVED: asked before the hero leaves the world when its
@@ -494,6 +517,9 @@ func _make_hud() -> void:
 		_wear(WorldCursors.Kind.ARROW)
 		hud.hide_place())
 	hud.big_switched.connect(rebuild_hud, CONNECT_DEFERRED)
+	hud.names_switched.connect(func() -> void:
+		if player != null:
+			_show_hero())
 
 
 ## THE SHIELD (ruling A): a clear sheet over the world, the map and the
@@ -563,6 +589,9 @@ func _show_hero() -> void:
 	# Arzakon's portal, open or petrified (part C, 2026-10-28) [ours].
 	view.portal = player.portal
 	view.creatures = WorldCreatures.seen(player)
+	# The creatures' names over them, with the options' switch on (the
+	# owner's ruling of 2026-10-28 on the unused 1997 features, §5).
+	view.creature_names = WorldCreatures.map_names(player) if WorldHud.creature_names_wanted() else {}
 	view.hero_facing = player.facing
 	view.hero_step = player.step
 	_map.hero_tile = player.tile()
@@ -598,24 +627,33 @@ func modal() -> bool:
 
 
 ## Whether the world waits: a pane holds the screen, or the map is up
-## (ruling B).
+## (ruling B), or a town stepped aside for what was opened over it.
 func _world_waits() -> bool:
-	return modal() or _map.visible
+	return modal() or _map.visible or _town_aside != ""
 
 
 ## THE PANEL AND THE SHIELD AS THE PANES STAND: the panel rests while a pane
 ## holds the screen ([method WorldHud.rest]); the shield is up as long, and
-## [constant AFTER_PANE_MS] after the last one closed. Run before every
-## input event ([method _input]), every frame, and as a pane opens or
-## closes — so a click never meets the panel or the world in between.
+## [constant AFTER_PANE_MS] after the last one closed — but under the hero's
+## pane opened inside a town, and not for the town stepping aside. A town
+## whose map or hero's pane has closed is back ([method _town_back]). Run
+## before every input event ([method _input]), every frame, and as a pane
+## opens or closes — so a click never meets the panel or the world in
+## between.
 func _sync_rest() -> void:
 	if hud == null or _shield == null:
 		return
+	if (_town_aside == "hero" and not hud.hero_shown()) or (_town_aside == "map" and not _map.visible):
+		# What was opened over the town closed, however it was closed.
+		_town_back()
+		return
 	var held := modal()
-	if hud.resting and not held:
+	if hud.resting and not held and _town_aside == "":
 		_shield_until = Time.get_ticks_msec() + AFTER_PANE_MS
 	hud.rest(held)
-	var up := held or Time.get_ticks_msec() < _shield_until
+	# The hero's pane over a town takes its clicks: the shield down, the
+	# town still and deaf under it ([method hero_in_town]).
+	var up := (held and _town_aside != "hero") or Time.get_ticks_msec() < _shield_until
 	if _shield.visible != up:
 		_shield.visible = up
 
@@ -630,11 +668,16 @@ func _hold() -> void:
 
 
 ## Every input event is met by the panes' hold as it now stands, before any
-## control hears it; a W or D pressed while the hero's pane is open is the
+## control hears it; inside a town its keys are taken first ([method
+## _town_key]); a W or D pressed while the hero's pane is open is the
 ## pane's until it is let go ([method _look_with_keys]).
 func _input(event: InputEvent) -> void:
 	_sync_rest()
 	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and _town_key(key):
+		# Inside a town: its keys before the town's pane hears them.
+		get_viewport().set_input_as_handled()
+		return
 	if key != null and key.pressed and not key.echo and hud != null and hud.hero_shown() \
 			and key.keycode in [KEY_W, KEY_D] and not key.keycode in _pane_letters:
 		_pane_letters.append(key.keycode)
@@ -650,6 +693,11 @@ func save_now() -> SaveSlotsPane:
 		return _save_slots
 	if player == null or modal():
 		return null
+	return _open_slots()
+
+
+## The ten slots opened over what is on the screen.
+func _open_slots() -> SaveSlotsPane:
 	var slots := SaveSlotsPane.new()
 	slots.player = player
 	slots.k = WorldHud.BIG if hud.big else 1.0
@@ -854,7 +902,7 @@ func _notification(what: int) -> void:
 ## [param write] false comes back to a town after one of its services:
 ## nothing of the arrival is written again.
 func visit(tile: Vector2i, write := true) -> VisitPane:
-	if visiting():
+	if visiting() or _town_aside != "":
 		return _visit
 	if FinalBattle.portal_at(player, tile):
 		# ARZAKON'S PORTAL (part C) [ours]: its own pane over the world — the
@@ -944,10 +992,13 @@ func _arrive_in_town(slot: int) -> Dictionary:
 
 ## Whether a place's pane, or a pane over the world (the shop, the trade, a
 ## list of cards, the seller, the city list, the saves, the question of a
-## save not written, "Ready to Quit?"), is up.
+## save not written, "Ready to Quit?"), is up. A town's pane hidden under
+## the map opened from inside it is not: the map holds the world then, as
+## on the world ([method map_in_town]).
 func visiting() -> bool:
-	return _alive(_visit) or shopping() or trading() or _alive(_card_list) or _alive(_magic_seller) \
-		or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved) or _alive(_quit_ask) or _alive(_clues)
+	return (_alive(_visit) and _town_aside != "map") or shopping() or trading() or _alive(_card_list) \
+		or _alive(_magic_seller) or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved) \
+		or _alive(_quit_ask) or _alive(_clues)
 
 
 ## Whether [param node] stands on the screen still: there, and not on its
@@ -957,10 +1008,13 @@ static func _alive(node: Variant) -> bool:
 
 
 ## [param pane] closed (its Done, Escape): freed — once — and the world
-## again.
+## again, or the town it was opened over.
 func _close_pane(pane: Variant) -> void:
 	if _alive(pane):
 		(pane as Node).queue_free()
+	# A town under the slots saved into from inside it, awake again.
+	if _alive(_visit) and _town_aside == "":
+		_visit.process_mode = Node.PROCESS_MODE_INHERIT
 	_show_hero()
 	_sync_rest()
 
@@ -994,6 +1048,118 @@ func _left_place(then: String) -> void:
 			_:
 				_leave_site(place)
 	_sync_rest()
+
+
+# ------------------------------------------------------ inside a town --
+
+## WHETHER A TOWN'S OWN PANE IS ON TOP (see the class doc): a village's, a
+## town's or a city's — not a ruled town's, a castle's, a lair's or a
+## dungeon's —, shown, with nothing over it and nothing else holding the
+## screen; its M, F2, F5 and Ctrl+S then open over it ([method _town_key]).
+func town_on_top() -> bool:
+	if not _alive(_visit) or not _visit.visible or _town_aside != "" or _map.visible or _leaving:
+		return false
+	if not String(_visit.place.get("kind", "")) in VisitPane.KINDS:
+		return false
+	if shopping() or trading() or _alive(_card_list) or _alive(_magic_seller) or _alive(_city_list) \
+			or _alive(_save_slots) or _alive(_unsaved) or _alive(_quit_ask) or _alive(_clues):
+		return false
+	if building() or loading() or meeting() or _duel_held or news_shown() or on_board() or _lost:
+		return false
+	return VisitPane.on_top(_visit)
+
+
+## A KEY INSIDE A TOWN ([param key], pressed): with the town's own pane on
+## top M or F2 the map, F5 the hero's pane, Ctrl+S the ten slots, each over
+## it; with the hero's pane over the town F5, Escape or Q close it (its own
+## W, J and D are its own, [method HeroStats.key]). True when it was taken;
+## any other key goes on — to the town's pane, whose letters answer its
+## choices, or to the world, which holds it.
+func _town_key(key: InputEventKey) -> bool:
+	if _town_aside == "hero":
+		if key.keycode == KEY_F5 or key.keycode == KEY_Q or key.is_action_pressed("ui_cancel"):
+			hud.close_panels()
+			_town_back()
+			return true
+		return false
+	if not town_on_top():
+		return false
+	if key.keycode == KEY_S and key.ctrl_pressed:
+		return save_in_town() != null
+	if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
+		return false
+	match key.keycode:
+		KEY_M, KEY_F2:
+			map_in_town()
+		KEY_F5:
+			hero_in_town()
+		_:
+			return false
+	return true
+
+
+## THE MAP FROM INSIDE A TOWN (M, F2): the town steps aside — hidden, still,
+## not left — and the map is up as on the world (ruling B: its keys, City
+## Info, Ctrl+S); closed, the town again ([method toggle_map]).
+func map_in_town() -> void:
+	if not town_on_top():
+		return
+	_set_aside("map")
+	toggle_map()
+	_sync_rest()
+
+
+## THE HERO FROM INSIDE A TOWN (F5): the hero's pane on its Hero tab over
+## the town, which stays in view, still and deaf, under the panel; the
+## panel's other parts rest, the world waits; F5, Escape, Q or the pane's
+## D close it, and the town is back ([method _town_back]).
+func hero_in_town() -> void:
+	if not town_on_top():
+		return
+	_set_aside("hero")
+	hud.hero_over_town()
+	_hold()
+
+
+## SAVE FROM INSIDE A TOWN (Ctrl+S): the ten slots over the town's pane,
+## the town still and deaf under them; their Done or Escape, the town
+## again ([method _close_pane]). The slots, or null.
+func save_in_town() -> SaveSlotsPane:
+	if player == null or not town_on_top():
+		return null
+	_visit.process_mode = Node.PROCESS_MODE_DISABLED
+	return _open_slots()
+
+
+## The town's pane steps aside for [param what] (`map`, `hero`): still and
+## deaf; hidden under the map, laid under the panel for the hero's pane.
+## The caller opens what goes over it, then holds the screen anew.
+func _set_aside(what: String) -> void:
+	_town_aside = what
+	_aside_at = _visit.get_index()
+	_visit.process_mode = Node.PROCESS_MODE_DISABLED
+	if what == "map":
+		_visit.visible = false
+	else:
+		move_child(_visit, hud.get_index())
+
+
+## THE TOWN BACK, as it was, once what was opened over it has closed: the
+## same pane, shown where it stood, awake; the panel at rest under it. Back
+## from the map its picture zooms in again, as 1997's did after its screens
+## ([method VisitPane.come_back]).
+func _town_back() -> void:
+	var was := _town_aside
+	_town_aside = ""
+	if _alive(_visit):
+		if _visit.get_index() != _aside_at and _aside_at >= 0:
+			move_child(_visit, mini(_aside_at, get_child_count() - 1))
+		_visit.visible = true
+		_visit.process_mode = Node.PROCESS_MODE_INHERIT
+		if was == "map":
+			_visit.come_back()
+	_aside_at = -1
+	_hold()
 
 
 ## A RULED TOWN'S CREATURE DUELED ([RuledTowns]): the town's duel over the
@@ -1784,7 +1950,7 @@ func _deck_closed() -> void:
 ## place the hero stands on is visited again. Not while a pane holds the
 ## screen (ruling A: the small map's click under a pane walks no one).
 func walk_to_tile(tile: Vector2i) -> bool:
-	if walk == null or modal():
+	if walk == null or modal() or _town_aside != "":
 		return false
 	if tile == player.tile() and not walk.is_walking():
 		# THE ENTRY LATCH [ours] (the bug pass of part B): the place the hero
@@ -2100,8 +2266,17 @@ func back_to_hero() -> void:
 
 
 ## THE JOURNAL WALKED ON THE MAP ([method WorldMap.walk_journal]). Not while
-## a pane holds the screen.
+## a pane holds the screen — but from the hero's pane opened inside a town,
+## on the map over the town.
 func walk_journal() -> void:
+	if _town_aside == "hero":
+		# The hero's pane over a town: its journal on the map over the town.
+		hud.close_panels()
+		_town_back()
+		map_in_town()
+		if _map.visible:
+			_map.walk_journal()
+		return
 	if modal():
 		return
 	hud.close_panels()
@@ -2111,7 +2286,8 @@ func walk_journal() -> void:
 
 
 ## THE MAP (the frame's scroll, M, F2) opened or closed. Not while a pane
-## holds the screen (ruling A).
+## holds the screen (ruling A) — but inside a town ([method map_in_town]),
+## whose pane comes back as the map closes.
 func toggle_map() -> void:
 	if modal():
 		return
@@ -2128,6 +2304,9 @@ func toggle_map() -> void:
 	if _map.visible:
 		_wear(-1)
 	_map.queue_redraw()
+	if not _map.visible and _town_aside == "map":
+		# Opened from inside a town: the town again.
+		_town_back()
 
 
 func _process(delta: float) -> void:
@@ -2135,7 +2314,7 @@ func _process(delta: float) -> void:
 	if world == null:
 		return
 	_arrival_under_panes()
-	if _leave_after and not modal():
+	if _leave_after and not modal() and _town_aside == "":
 		# A held duel's Return to main menu taken once it was over ([method
 		# leave_after_panes]): what it brought seen, saved and left.
 		_leave_after = false
@@ -2252,7 +2431,9 @@ func _gui_input(event: InputEvent) -> void:
 ## Ctrl+S the slots, Space stops the walk and comes back to the hero, Home
 ## comes back, + and − zoom; Escape or Q closes what is open, else asks
 ## "Ready to Quit?". A pane that holds the screen hears its own keys
-## (ruling A); the map takes its own ([method _map_key], ruling B). For a
+## (ruling A) — but a town's own pane lets M, F2, F5 and Ctrl+S open over
+## it ([method _town_key], taken before this); the map takes its own
+## ([method _map_key], ruling B). For a
 ## moment after the last pane closed ([constant AFTER_PANE_MS], the
 ## shield's) the world hears none of them: the playtest of part B (H2-1,
 ## P1-1) — Escape reads a news flash and goes on at every spoils' picture,

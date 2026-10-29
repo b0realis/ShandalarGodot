@@ -467,6 +467,9 @@ type back to **single duel** and wins-needed to **1** before starting
 (`DAT_005f64b0 = 1; DAT_005f628c = 1;`), which is either a 1997 defect or
 a save format that only ever held a duel. **I could not settle which, and
 it does not matter for us** — see §6, where saving is out of scope.
+(2026-10-28: built since — the owner: "Between duels". A Gauntlet run and
+a best-of match save after every duel and resume, never in the middle of
+one; `MatchSaves`, `game/duel/match_saves.gd`.)
 
 ### 1.9 What `Duel.hlp` says about the gauntlet: nothing
 
@@ -781,7 +784,8 @@ for extracting the deck-picker column first.
   `game/deck_builder/deck_model.gd` already holds two of.
 
 **Not in scope, deliberately:** `&Save gauntlet` / `&Load gauntlet...`.
-See §5.5.
+See §5.5. (2026-10-28: built since, between duels — the run saves itself
+after every duel and the Gauntlet offers Resume run as it opens.)
 
 ---
 
@@ -863,7 +867,11 @@ one design, between duels first. What the gauntlet
 should do now is what the duel already does: **log its seed**, so a run is
 reproducible from a bug report even without a save file. `&Load
 gauntlet...` is listed and greyed if the setup screen has room, on §6.1's
-own precedent.
+own precedent. (2026-10-28: built since, as one design for both, the
+owner's "Between duels": `MatchSaves` writes `user://saved_match.json` and
+`user://saved_gauntlet.json` after every duel; Magic Battle's Resume
+match, the Gauntlet's Resume run / New run window; a resumed duel is dealt
+afresh; no save inside a duel.)
 
 ### 5.6 The opponent order's one oddity
 

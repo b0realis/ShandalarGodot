@@ -181,7 +181,7 @@ fork and measured at scale.
 | § | Why it stays open |
 |---|---|
 | 3.4 | Menace pre-flight would mean first inventing the restriction it pre-flights. No card in our pool has menace. Revisit only if one arrives. **Since then (checked 2026-10-13):** the optional packs carry menace — Goblin War Drums (Pack 2), Imposing Visage (Pack 3), Gorilla War Cry (Pack 5) — and the engine has the rule: `CardInstance.cur_min_blockers`, which `MtgGame.declare_blockers` enforces by refusing "…must be blocked by at least N creatures". The screen still has no pre-flight of its own on Done; the engine's refusal is what the player sees. |
-| 3.9 | The stack's description reaching the message bar. Verified WORSE than the item claimed: `StackItem.description` carries neither targets nor X, so there was never anything to forward. Weighed twice more (§6.10, §6.8) and still not cheap; it needs a naming function plus two description sites, and every test that reads the log. **The two sites are `MtgGame.cast_spell` (the `SIMPLIFIED:` marker, `"%s casts %s"`) and `MtgGame.activate_ability` (`"%s activates %s: %s"`) — re-found 2026-09-11, because `docs/ROADMAP.md`'s row for it still cites the line numbers they had before the engine grew past them, and a row that points at the wrong line is how the next pass loses an hour.** |
+| 3.9 | (Built 2026-10-28, 0.50.65: targets and X named by the log's readers, Duel Screen Options.) The stack's description reaching the message bar. Verified WORSE than the item claimed: `StackItem.description` carries neither targets nor X, so there was never anything to forward. Weighed twice more (§6.10, §6.8) and still not cheap; it needs a naming function plus two description sites, and every test that reads the log. **The two sites are `MtgGame.cast_spell` (the `SIMPLIFIED:` marker, `"%s casts %s"`) and `MtgGame.activate_ability` (`"%s activates %s: %s"`) — re-found 2026-09-11, because `docs/ROADMAP.md`'s row for it still cites the line numbers they had before the engine grew past them, and a row that points at the wrong line is how the next pass loses an hour.** |
 | 9.8 | `auto-cast` / `Don't Auto Tap` / `locked land`. Blocked behind `@MENU_MANAPOOL`'s per-mana spends, which our one-call `cast_spell` has no half-paid state to spend into — a held-open payment of §1.3's shape. **BUILT 2026-09-03 without that payment:** the left double-click auto-cast (`DuelScreen._auto_cast`) and the per-card `Don't auto tap this card` tick (`DuelScreen._no_auto_tap`). Only the per-mana spends stay grey. |
 
 Two sections are reference rather than work: **§6.0** (the names the original
@@ -3045,7 +3045,7 @@ DRAW and announced it as a win for seat 2; it now says
 Still open in this item: the **Lich Register** (`Life_Liched.pic` is
 surveyed but not imported; Lich IS in our card pool — `cards/sets/2ed/lich.gd`
 — so a Lich'd player's register has something to show: corrected
-2026-10-24), the Spell Chain's own title bar and minimise, and
+2026-10-24), the Spell Chain's own title bar and minimise (built 2026-10-28, 0.50.65), and
 `Opp Hand (N)` → `Opponent`.
 
 **CORRECTION, recorded because this file said otherwise.** The Combat Bar
@@ -3078,7 +3078,11 @@ Opponent       Your hand        Save Game      Load Saved Game
   `@CUECARD_OTHER` (`:667`), which is the window icon's tooltip. Only
   `Help...` is still missing (there is no Dueling Help at all) — live since
   2026-10-13: the Combat window's mini help (f-minihelp, §6.20l).
-- **`Spell Chain`** — ours has no title bar and no minimise;
+- **`Spell Chain`** — (2026-10-28, the polish pass, 0.50.65: it has a
+  title band, "Spell Chain (N)", with ▼, and its menu's Minimize /
+  Restore are live; the game draws the tab itself — 1997's
+  `Winbk_Spellmin.pic` stays unimported by the owner's choice.) Before:
+  ours has no title bar and no minimise;
   `@MENU_SPELLCHAIN` (`:853`) gives it the same pair (`Minimize` /
   `Help...`), `@MENU_MINIMIZEDSPELLCHAIN` (`:856`) the restored pair
   (`Restore` / `Help...`), and `Minimized spell chain`
@@ -4005,7 +4009,7 @@ What each one does now:
 | `@MENU_MANAPOOL` | Listed, all seven spends grey — see below. |
 | `@MENU_FULLCARD` | LIVE — `Expand text box`, persisted as the 1997 key `ExpandTextBoxOnBigCard`; the Showcase's text area grows UPWARD over the art, and only when the card's text needs it — corrected 2026-09-04 against `Duel.hlp` (*"when necessary"*) and the 1997 DLL's own `fullcard_expand_text_box`, which measures the overflow and moves the top up by exactly that much. |
 | `@MENU_ATTACK` / `@MENU_MINIMIZEDATTACK` | LIVE — the Combat window already had both actions; the menu flips its one entry with the window's state. |
-| `@MENU_SPELLCHAIN` / `@MENU_MINIMIZEDSPELLCHAIN` | Tabled, not live: our chain has no minimised state, and the 1997 restore route is the Phase Bar's window icon, which our icon already spends on the Combat window. Since 2026-10-13 (f-minihelp) a right click on a chain card's tan band opens `@MENU_SPELLCHAIN` — `Minimize` grey, `Help...` the Spell Chain's mini help; `@MENU_GRAVEYARD` likewise opens on the graveyard and exile plates (§6.20l). |
+| `@MENU_SPELLCHAIN` / `@MENU_MINIMIZEDSPELLCHAIN` | LIVE since 2026-10-28 (0.50.65): the chain minimizes to its title band and restores from it. Before: Tabled, not live: our chain has no minimised state, and the 1997 restore route is the Phase Bar's window icon, which our icon already spends on the Combat window. Since 2026-10-13 (f-minihelp) a right click on a chain card's tan band opens `@MENU_SPELLCHAIN` — `Minimize` grey, `Help...` the Spell Chain's mini help; `@MENU_GRAVEYARD` likewise opens on the graveyard and exile plates (§6.20l). |
 
 **Two findings from building it.**
 
@@ -4819,7 +4823,10 @@ and `s30/assets/text/Uistrings.txt` is the cleaner 1997 copy.
 0.50.48–0.50.61, `docs/adventure-implementation-notes.md`. The meeting
 before a creature's duel shows both antes and lets the hero change the
 staked card (`EncounterPane`), and the win, the loss and the draw are settled by
-`DuelSpoils`; the dungeon and castle duels are part C, still to come.)
+`DuelSpoils`; the dungeon and castle duels are part C, still to come —
+2026-10-28: built in 0.50.62–0.50.63 — `DungeonDuels` (a room's stake and
+result), `CastleWin` (a castle's wizard beaten) and Arzakon's final battle,
+`FinalBattle`.)
 
 Listed once so nothing is silently dropped. All of these are s30 features
 that belong to the world map, not the duel:

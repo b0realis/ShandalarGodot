@@ -234,11 +234,12 @@ func test_the_caption_is_the_1997_dialogs_own_two_strings() -> void:
 
 
 func test_the_caption_names_a_face_per_seat() -> void:
-	# Ours, and marked as ours in the source: the coin is called for the
-	# seat you sit in, so Heads is that seat winning.
-	assert_eq(CoinToss.result_line(0, 0), CoinToss.RESULT_LINES[CoinToss.HEADS])
-	assert_eq(CoinToss.result_line(1, 0), CoinToss.RESULT_LINES[CoinToss.TAILS])
-	assert_eq(CoinToss.result_line(1, 1), CoinToss.RESULT_LINES[CoinToss.HEADS],
+	# 1997's own (the polish pass, 2026-10-28; tests/ui/test_p5_coin_face.gd
+	# carries the citation): Tails is the seat you sit in winning, Heads
+	# the other seat.
+	assert_eq(CoinToss.result_line(0, 0), CoinToss.RESULT_LINES[CoinToss.TAILS])
+	assert_eq(CoinToss.result_line(1, 0), CoinToss.RESULT_LINES[CoinToss.HEADS])
+	assert_eq(CoinToss.result_line(1, 1), CoinToss.RESULT_LINES[CoinToss.TAILS],
 		"the viewer's seat is always the near one")
 
 

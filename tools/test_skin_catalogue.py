@@ -306,6 +306,39 @@ class TestCheckingASkin(unittest.TestCase):
         self.assertIn("title_background.png", report)
         self.assertIn("extra.png", report)
 
+    def test_check_counts_the_adventure_data_the_game_reads(self):
+        """The importer writes three data files beside the pictures — the
+        1997 card values, the card seller's hints, the wise men's words —
+        and the game reads each (card_value.gd, card_hints.gd, wise_man.gd);
+        --check listed them as "ignored by the game" (the polish pass,
+        2026-10-28). Now counted apart, a missing one said with what the
+        game does without it."""
+        path = self._zip("data.zip", {"skin/card_back.png": png_bytes(2, 2),
+                                      "skin/adventure_cards.json": b"{}",
+                                      "skin/adventure_hints.json": b"{}",
+                                      "skin/extra.png": png_bytes(2, 2)})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(cat.check(path), 0)
+        report = out.getvalue()
+        ignored = report.split("ignored by the game")[-1] if "ignored by the game" in report else ""
+        self.assertIn("extra.png", ignored, "a file the game does not read is still named")
+        for name in ("adventure_cards.json", "adventure_hints.json", "adventure_wise_words.json"):
+            self.assertNotIn(name, ignored, name + " is read by the game")
+        self.assertIn("2 of 3 adventure data files", report)
+        missing = report.split("2 of 3 adventure data files")[-1]
+        self.assertIn("adventure_wise_words.json", missing, "the one not here is named")
+        self.assertIn("wise men", missing, "with what the game does without it")
+
+    def test_the_world_frame_s_note_says_why_it_is_not_read(self):
+        """`character_select_background` (Advfac64.pic) waited "for the
+        day the overworld is built"; the world is built, full screen,
+        without the 1997 frame (the owner, 2026-10-22)."""
+        section, note = cat.note_for("character_select_background")
+        self.assertNotIn("for the day the overworld is built", note)
+        self.assertIn("full screen", note)
+        self.assertIn("NOT READ", note)
+
     def test_a_zip_of_card_pictures_alone_is_card_art(self):
         path = self._zip("art.zip", {"skin/cardart/serra_angel.jpg": b"\xff\xd8",
                                      "skin/cardart/notes.txt": b"x"})

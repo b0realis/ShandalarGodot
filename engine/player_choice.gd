@@ -117,6 +117,14 @@ var ordered := false
 ## is a complete answer, one click instead of one per card.
 var in_order := false
 
+## CARD only: are the candidates SHAPES the asking permanent will enter as
+## a copy of (Clone, Copy Artifact, Vesuvan Doppelganger's arrival —
+## [method MtgGame._apply_enters_as_copy])? Under the 1997 legend rule a
+## copy of a legend already in play is buried at once ([method
+## MtgGame.legend_copy_is_buried]): a legal answer the engine offers LAST
+## and no heuristic gives (the polish pass, 2026-10-28).
+var copying := false
+
 
 ## COLOR only: the Mtg.ManaColor flags on offer, in the order a UI should
 ## list them. Empty means "any of the five", which is what every colour

@@ -79,6 +79,12 @@ var _cards: Dictionary = {}
 ## [member StackItem.id] → the chain widget an ABILITY on the stack is
 ## drawn as (tagged by DuelScreen._make_card), captured with [member _cards].
 var _abilities: Dictionary = {}
+## The Spell Chain's title band ([member DuelScreen._chain_head], the
+## polish pass of 2026-10-28): an object ON the chain whose card is not
+## drawn — the chain minimized, or the object slid under the band by a
+## chain longer than the screen — springs from the band while it shows,
+## and not from the hand window it left long ago.
+var chain_anchor: Control = null
 
 
 func _init() -> void:
@@ -162,6 +168,10 @@ func _add_stack_links(p_game: MtgGame) -> void:
 		if item.targets.is_empty():
 			continue
 		var origin: Variant = _cast_origin(item.controller, item.card)
+		if (item.card == null or not _cards.has(item.card.id)) \
+				and chain_anchor != null and is_instance_valid(chain_anchor) \
+				and chain_anchor.visible:
+			origin = chain_anchor
 		if origin == null:
 			continue
 		for ref in item.targets:

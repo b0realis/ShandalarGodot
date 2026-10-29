@@ -107,9 +107,10 @@ extends Control
 ##
 ## [QoL] MARKS EVERY DIVERGENCE FROM 1997 in this file, per the project's
 ## standing convention. The list, with the reasoning at each site: the deck
-## SLOTS' in-memory switching and `Copy deck to`, UNDO, ADD BASIC LANDS,
-## the extended STATS graphs, the two EXPORT formats, deck NOTES, the
-## Inventory's already-in-deck badge, `Filters` (`@LONGLIST`'s Select All /
+## SLOTS' in-memory switching and `Copy deck to`, UNDO and REDO, ADD BASIC
+## LANDS, the extended STATS graphs, the two EXPORT formats, deck NOTES, the
+## Inventory's already-placed badge and its card's own mini-menu (see
+## [method _open_card_menu]), `Filters` (`@LONGLIST`'s Select All /
 ## Clear All on a strip the original gave no such button), the CLICKABLE
 ## legality line, the keyboard shortcuts, and — since the proxy pass
 ## (2026-09-01) — `Import deck` and `Add proxy card`.
@@ -182,13 +183,21 @@ const CHECKED_COMMANDS := {
 ##   find and cut every stack by hand; the 1997 dialog cuts them.
 ## - `Move by color out of deck` — `@DECKSURFACE_ADVENTURE` (:194-197) with
 ##   `@GROUPMOVE`'s own picker (:25-32, *"Select Which Color(s) to Move"*,
-##   Black / Blue / Green / Red / White / Artifact). The `into deck` half of
-##   that pair belongs to the adventure, where the Inventory is a
-##   COLLECTION; ours is the whole 800-card pool, so moving a colour in
-##   would try to add two hundred cards. Out transfers exactly, and
-##   recolouring a deck is the gesture it exists for.
+##   Black / Blue / Green / Red / White / Artifact). Out transfers exactly,
+##   and recolouring a deck is the gesture it exists for.
+## - `Move by color into deck` — the pair's first line (the owner,
+##   2026-10-28: *"Move by color INTO deck"*). 1997 offered it where the
+##   Inventory is a COLLECTION (the adventure: every copy of the colour not
+##   in the deck goes in, `move_colors_fromto_global_deck`), and so does
+##   this builder under any pool — the hero's cards, a sealed deal, a
+##   draft, AutoDeck's pool. Over the whole library, where a colour is two
+##   hundred names, it takes [QoL] what the Inventory SHOWS: one copy of
+##   each card of the colour the deck does not hold yet — "put what I am
+##   looking at in the deck" — and the dialog says so ([method
+##   _group_move_scope]). The colour's basic land comes in with it only in
+##   the adventure ([method _group_move_brings_lands]).
 const MENU_COMMANDS: Array[String] = [
-	"Extra Cards", "Move by color out of deck",
+	"Extra Cards", "Move by color into deck", "Move by color out of deck",
 ]
 ## [QoL] The commands this screen adds. They share the mini-menu with
 ## [constant COMMANDS] and are listed after it.
@@ -208,7 +217,7 @@ const MENU_COMMANDS: Array[String] = [
 ## `@DECKEXISTS` are about file names — and its Inventory was the cards
 ## the game HAS, so it had nothing to stand in for a card it did not.
 const EXTRA_COMMANDS: Array[String] = [
-	"Undo", "Big cards", "Filters", "Add basic land", "Add proxy card", "Copy deck to",
+	"Undo", "Redo", "Big cards", "Filters", "Add basic land", "Add proxy card", "Copy deck to",
 	"Deck notes", "Sideboard", "Import deck", "Export deck", "Booster Draft",
 ]
 ## [QoL] AUTODECK (2026-09-18), the mini-menu's FIRST line and
@@ -326,13 +335,45 @@ var _slot_dirty: Array[bool] = []
 var _slot := 0
 var _slot_buttons: Array[Button] = []
 
-## [QoL] ONE STEP OF UNDO over the deck's contents. The screen's most
-## destructive gesture is a right-click, which takes a whole column out at
-## once — twenty-nine Black Lotus in one click, with nothing but a status
-## line to say so. This is the answer to that, and it is deliberately one
-## step deep: a builder wants "put that back", not a history.
-var _undo: DeckModel = null
-var _undo_label := ""
+## [QoL] UNDO AND REDO over the deck's contents, a history deep. The
+## screen's most destructive gesture is a right-click, which takes a whole
+## column out at once — twenty-nine Black Lotus in one click, with nothing
+## but a status line to say so — and Undo began as one step for exactly
+## that: "put that back", a second Undo putting it back again. The owner
+## ruled the written proposal for more (2026-10-28: *"Redo + deeper
+## undo"*): `Add basic land`, `Remove Extra Cards` and the two colour moves
+## are each a large change, and two mistakes in a row could not both be
+## taken back. Now every change is a step, [constant UNDO_DEPTH] of them
+## kept, newest last; Undo walks back through them and Redo forward again
+## (Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z), and a new change after an Undo
+## drops the steps Redo would have walked, as everywhere else. Each step is
+## the whole deck as it was ([method DeckModel.duplicate_model], at most
+## 200 names in either pile), so a hundred of them are a few hundred
+## kilobytes at worst. `Clear deck`, a load, a new deck, an import, a fresh
+## sealed deal and a slot switch still start the history afresh: `Restore
+## deck` is the clear's own undo, and a step must never reach past it.
+## `Restore deck` is itself a step ([method _restore_deck]), so Undo after
+## it puts back the deck it replaced and never an older one.
+const UNDO_DEPTH := 100
+## `{deck: DeckModel, what: String}` — the deck before each change and the
+## change's own words, oldest first; and what Undo took back, newest last.
+var _undo_steps: Array[Dictionary] = []
+var _redo_steps: Array[Dictionary] = []
+## The deck Undo would put back, null for none. Setting it to null forgets
+## the whole history, both ways — what the commands that replace the deck
+## do.
+var _undo: DeckModel:
+	get:
+		return null if _undo_steps.is_empty() else _undo_steps[-1]["deck"] as DeckModel
+	set(value):
+		_undo_steps.clear()
+		_redo_steps.clear()
+		if value != null:
+			_undo_steps.append({"deck": value, "what": ""})
+## The words of the change Undo would take back ("" for none).
+var _undo_label: String:
+	get:
+		return "" if _undo_steps.is_empty() else String(_undo_steps[-1]["what"])
 
 var _showcase: CardPreview
 var _fullscreen_card: FullscreenCard
@@ -1568,16 +1609,21 @@ func _build_inventory() -> void:
 	# column would have to stand.
 	_inventory.scroll_arrows = true
 	# [QoL] The badge on an Inventory card is how many copies are ALREADY
-	# in the deck — the question a builder asks on every single card, and
-	# the one that used to need a scan of the deck area to answer. It is
-	# read per visible cell, so it costs ten dictionary lookups per deck
-	# change and never re-walks the pool.
+	# placed — the question a builder asks on every single card, and the
+	# one that used to need a scan of the deck area to answer. It is read
+	# per visible cell, so it costs ten dictionary lookups per deck change
+	# and never re-walks the pool. BOTH PILES (the owner, 2026-10-28: "the
+	# badge counts both piles"): a card 0-in-deck and 4-in-sideboard used to
+	# badge nothing while the copy rules counted four of it — the number is
+	# the copies the deck and its sideboard hold together, the count every
+	# copy rule here reads ([method DeckModel.copies_of]).
 	_inventory.badge_min = 1
-	_inventory.count_source = func(card_name: String) -> int:
-		return deck.count_of(card_name)
+	_inventory.count_source = _placed_copies
 	_inventory.art_set_for = _preferred_printing
 	_inventory.card_activated.connect(_add_one)
-	_inventory.card_bulk.connect(_add_playset)
+	# A right-click is the card's own mini-menu ([method _open_card_menu]);
+	# it was the whole playset at once, which is that menu's `Add 4` now.
+	_inventory.card_bulk.connect(_open_card_menu)
 	_inventory.card_shifted.connect(_add_one_side)
 	_inventory.card_hovered.connect(_show_in_showcase)
 	_inventory.card_dropped.connect(_dropped_on_inventory)
@@ -1830,6 +1876,84 @@ func _dropped_on_inventory(card_name: String, from: String) -> void:
 		_remove_one_side(card_name)
 	else:
 		_remove_one(card_name)
+
+
+## The Inventory badge's number: the copies of [param card_name] the deck
+## and its sideboard hold together.
+func _placed_copies(card_name: String) -> int:
+	return deck.copies_of(card_name)
+
+
+# ------------------------------- [QoL] the Inventory card's mini-menu --
+
+## The card menu's lines, the owner's own words (2026-10-28: *"add 1 / add
+## 4, view large"*) and the proposal's two that take a card back.
+const CARD_ADD_ONE := "Add 1"
+const CARD_ADD_FOUR := "Add 4"
+const CARD_TAKE_ONE := "Take 1 out"
+const CARD_TAKE_ALL := "Take all out"
+const CARD_VIEW := "View large"
+
+
+## [QoL] A RIGHT-CLICK ON AN INVENTORY CARD OPENS ITS OWN MINI-MENU (the
+## owner, 2026-10-28, ruling the second audit pass's written proposal:
+## *"right-click menu on an Inventory card"*). The right-click was an
+## unlabelled "add four", and the commonest correction on this screen —
+## taking back a card just added — meant finding it in a deck area that
+## pages. The menu says what each gesture does: `Add 1`, `Add 4` (the old
+## right-click), `Take 1 out` and `Take all out` while the deck holds the
+## card, and `View large`, the full-screen reader on it. It is
+## `docs/glossary-1997.md`'s "mini-menu", the era's word for a right-click
+## menu, and the 1997 adventure builder had one on the same row — its
+## "Sell Card for %d" ([AdventureBuilder] adds it in a town). The card
+## stands in the Showcase while its menu is up, so the menu is about the
+## card the player can see.
+func _open_card_menu(card_name: String) -> void:
+	if _dialog_busy() or not CardRegistry.has_card(card_name):
+		return
+	_show_in_showcase(CardRegistry.get_card(card_name))
+	var entries := _card_menu_entries(card_name)
+	var dialog := OriginalDialog.create(card_name,
+		Vector2(340, 104.0 + 32.0 * entries.size()))
+	dialog.set_meta("card_menu", card_name)
+	for entry in entries:
+		var run: Callable = entry[1]
+		var line := _menu_line(String(entry[0]))
+		line.pressed.connect(func() -> void:
+			dialog.dismiss()
+			run.call())
+		dialog.body().add_child(line)
+	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
+	_show_dialog(dialog)
+
+
+## `[words, Callable]` for each line of [param card_name]'s menu, in
+## order. A builder that sells or only looks says so here
+## ([AdventureBuilder]).
+func _card_menu_entries(card_name: String) -> Array:
+	var entries: Array = [
+		[CARD_ADD_ONE, func() -> void:
+			if _add_one(card_name):
+				_say("Added %s (%d in deck)" % [card_name, deck.count_of(card_name)])],
+		[CARD_ADD_FOUR, _add_playset.bind(card_name)],
+	]
+	if deck.count_of(card_name) > 0:
+		entries.append([CARD_TAKE_ONE, func() -> void:
+			_remove_one(card_name)
+			_say("%s out (%d in deck)" % [card_name, deck.count_of(card_name)])])
+		entries.append([CARD_TAKE_ALL, _remove_all.bind(card_name)])
+	entries.append([CARD_VIEW, _view_large.bind(card_name)])
+	return entries
+
+
+## `View large`: [param card_name] in the Showcase and the full-screen
+## reader on it — the R key's reader, with the chosen artwork.
+func _view_large(card_name: String) -> void:
+	if not CardRegistry.has_card(card_name):
+		return
+	_show_in_showcase(CardRegistry.get_card(card_name))
+	if _fullscreen_card != null:
+		_fullscreen_card.open_card(true)
 
 
 ## Redraw everything that depends on the DECK. The Inventory is not on
@@ -2235,9 +2359,11 @@ func _run_command(label: String) -> void:
 		"Music", "Sound Effects": _toggle_sound_setting(label)
 		"Exit deck builder": _exit()
 		"Extra Cards": _open_extra_cards()
-		"Move by color out of deck": _open_group_move()
+		"Move by color into deck": _open_group_move(true)
+		"Move by color out of deck": _open_group_move(false)
 		"Filters": _filter_bar.open_all_menu()
 		"Undo": _undo_last()
+		"Redo": _redo_last()
 		"Big cards": _toggle_big_cards()
 		"Add basic land": _open_land_dialog()
 		"Add proxy card": _open_proxy_dialog()
@@ -2366,42 +2492,100 @@ func _copy_deck_to(index: int) -> void:
 ## MUTATION SUCCEEDED: the second audit pass (2026-08-31) found that a
 ## refused change (a fifth copy in a full deck, a Remove with nothing to
 ## remove) snapshotted the deck anyway and so quietly ate the step the
-## player actually wanted back. One Dictionary copy of at most 200 keys.
+## player actually wanted back. A new step ends whatever Redo held.
 func _remember(before: DeckModel, what: String) -> void:
-	_undo = before
-	_undo_label = what
+	_undo_steps.append({"deck": before, "what": what})
+	if _undo_steps.size() > UNDO_DEPTH:
+		_undo_steps.pop_front()
+	_redo_steps.clear()
 
 
-## `Undo` — put back what the last change took away. Deliberately ONE step:
-## the gesture this exists for is a mistaken right-click that emptied a
-## column, and "put that back" is the whole of what a builder wants.
-## (A deeper history is a written proposal in docs/ROADMAP.md; the toggle
-## below is what the screenshot pass chose and it is pinned by a test.)
+## `Undo` — put back what the last change took away; the deck it leaves
+## is Redo's next step.
 func _undo_last() -> void:
-	if _undo == null:
+	if _undo_steps.is_empty():
 		_say("There is nothing to undo", true)
 		return
-	var undone := _undo_label
-	var redo := deck.duplicate_model()
-	_set_deck(_undo)
-	_undo = redo
-	_undo_label = "Undo"
+	var step: Dictionary = _undo_steps.pop_back()
+	_redo_steps.append({"deck": deck.duplicate_model(), "what": step["what"]})
+	_put_step(step["deck"] as DeckModel)
+	var undone := String(step["what"])
+	_say("Undone: %s" % undone if undone != "" else "Undone")
+
+
+## `Redo` — the change Undo took back, made again; the deck it leaves is
+## Undo's next step once more.
+func _redo_last() -> void:
+	if _redo_steps.is_empty():
+		_say("There is nothing to redo", true)
+		return
+	var step: Dictionary = _redo_steps.pop_back()
+	_undo_steps.append({"deck": deck.duplicate_model(), "what": step["what"]})
+	_put_step(step["deck"] as DeckModel)
+	var redone := String(step["what"])
+	_say("Redone: %s" % redone if redone != "" else "Redone")
+
+
+## One step of the history onto the surface.
+func _put_step(model: DeckModel) -> void:
+	_set_deck(model)
 	_dirty = true
 	# `_sorted` is NOT touched: `Sort deck` is the DISPLAY's order and undo
 	# is about the deck's contents. Resetting it threw the area back into
 	# insertion order on every undo and made `Sort deck` a click you had to
 	# repeat (third audit pass, 2026-09-01).
 	refresh()
-	_say("Undone: %s" % undone if undone != "" else "Undone")
+
+
+## Every deck the history holds, both ways — what a change to the cards
+## themselves (the adventure's Sell) must reach as well as the surface.
+func _history_models() -> Array[DeckModel]:
+	var out: Array[DeckModel] = []
+	for step in _undo_steps + _redo_steps:
+		out.append(step["deck"] as DeckModel)
+	return out
+
+
+## FORGET EVERY STEP THAT NO LONGER CHANGES ANYTHING (the 0.50.65 bug
+## campaign, k2-3), after a change to the history's decks themselves (the
+## adventure's Sell trims them all): "Add Mahamoti Djinn" undone and the
+## Djinn then sold left a Redo that put back the very deck on the surface
+## and still said "Redone: Add Mahamoti Djinn". An Undo step's change runs
+## from its deck to the next step's (the surface's, for the newest); a Redo
+## step's from the step after it (the surface's, for the next one) to its
+## own. A step whose two ends are the same deck goes, words and all; the
+## steps either side then meet on that same deck, so the history still
+## walks one change at a time.
+func _drop_idle_steps() -> void:
+	var back: Array[Dictionary] = []
+	for k in _undo_steps.size():
+		var after: DeckModel = deck if k == _undo_steps.size() - 1 \
+			else _undo_steps[k + 1]["deck"] as DeckModel
+		if not (_undo_steps[k]["deck"] as DeckModel).same_as(after):
+			back.append(_undo_steps[k])
+	var ahead: Array[Dictionary] = []
+	for k in _redo_steps.size():
+		var before: DeckModel = deck if k == _redo_steps.size() - 1 \
+			else _redo_steps[k + 1]["deck"] as DeckModel
+		if not (_redo_steps[k]["deck"] as DeckModel).same_as(before):
+			ahead.append(_redo_steps[k])
+	_undo_steps = back
+	_redo_steps = ahead
 
 
 ## [QoL] What the mini-menu writes on the `Undo` line — the change that
 ## will come back, not just the word. `_undo_label` was recorded by every
 ## mutation and then read by nothing at all until this pass.
 func _undo_menu_label() -> String:
-	if _undo == null:
-		return "Undo"
-	return "Undo" if _undo_label in ["", "Undo"] else "Undo %s" % _undo_label
+	return "Undo" if _undo_label == "" else "Undo %s" % _undo_label
+
+
+## The `Redo` line, the same way: the change it would make again.
+func _redo_menu_label() -> String:
+	if _redo_steps.is_empty():
+		return "Redo"
+	var what := String(_redo_steps[-1]["what"])
+	return "Redo" if what == "" else "Redo %s" % what
 
 
 # ------------------------------------------- [QoL] add basic land --
@@ -2629,8 +2813,8 @@ func _copies_listed() -> int:
 
 
 ## Put [param pool] in force: the medallion goes down, the Inventory
-## becomes the pool less what is placed, and its badge — copies in the
-## DECK on the whole library, since that is the question there — becomes
+## becomes the pool less what is placed, and its badge — copies placed
+## (deck and sideboard) on the whole library, the question there — becomes
 ## the entry's own count, copies IN HAND, from the second copy on, the
 ## manual's *"tiny number on the single representative card"*.
 func _enter_sealed(pool: SealedPool, fresh := false) -> void:
@@ -2665,7 +2849,7 @@ func _put_pool_in_force(pool: SealedPool) -> void:
 	_inventory.badge_min = 2
 
 
-## The whole library back, the badge back to copies in the deck. The deck
+## The whole library back, the badge back to copies placed. The deck
 ## built from the pool stays as it is.
 func _leave_sealed() -> void:
 	sealed = null
@@ -2673,8 +2857,7 @@ func _leave_sealed() -> void:
 	if _pool_button != null:
 		_pool_button.set_pressed_no_signal(false)
 	_inventory.badge_min = 1
-	_inventory.count_source = func(card_name: String) -> int:
-		return deck.count_of(card_name)
+	_inventory.count_source = _placed_copies
 	_drawn_revision = -1
 	_refresh_inventory()
 	_say("The whole library is back in the Inventory")
@@ -3097,11 +3280,13 @@ func _trim_duplicates() -> void:
 	_say("Removed %d extra card%s" % [removed, "" if removed == 1 else "s"])
 
 
-## `Move by color o&ut of deck` (`@DECKSURFACE_ADVENTURE`, Menus.txt:197)
-## through `@GROUPMOVE`'s own picker (:25-32) — *"Select Which Color(s) to
-## Move"*, and its six entries in its own order: Black, Blue, Green, Red,
-## White, Artifact. They tick INDEPENDENTLY, because "move black and blue
-## out" is one gesture in the original and two here otherwise.
+## `Move by color &into deck` and `Move by color o&ut of deck`
+## (`@DECKSURFACE_ADVENTURE`, Menus.txt:196-197) through `@GROUPMOVE`'s own
+## picker (:25-32) — *"Select Which Color(s) to Move"*, and its six entries
+## in its own order: Black, Blue, Green, Red, White, Artifact. They tick
+## INDEPENDENTLY, because "move black and blue out" is one gesture in the
+## original and two here otherwise. Which cards a colour moves — its basic
+## land with it — is [method DeckModel.moves_with_colors].
 ##
 ## Recolouring a deck is what this is for, and doing it by hand means
 ## finding every card of a colour in a deck area that pages. `Artifact` is
@@ -3113,22 +3298,33 @@ const GROUP_MOVE: Array = [
 ]
 
 
-func _open_group_move() -> void:
+## The picker for one direction, [param into] the deck or out of it. A
+## colour with nothing to move is greyed, as 1997 greyed it
+## (`check_colors_inout_edited_deck` lit only the colours the deck — or,
+## moving in, the cards outside it — held). Moving in, a line under the
+## heading says what goes in ([method _group_move_scope]).
+func _open_group_move(into := false) -> void:
 	if _dialog_busy():
 		return
 	var picked := {}
-	var dialog := OriginalDialog.create("", Vector2(420, 400))
+	var scope := _group_move_scope() if into else ""
+	var dialog := OriginalDialog.create("", Vector2(420, 400.0 + (44.0 if into else 0.0)))
+	dialog.set_meta("group_move", "into" if into else "out")
 	dialog.body().add_child(OriginalDialog.label(
 		"Select Which Color(s) to Move", 15))
-	var lines: Array[Button] = []
+	if into:
+		var said := OriginalDialog.wrapped(scope, 12)
+		said.custom_minimum_size.x = 360
+		dialog.body().add_child(said)
+	var names := _group_move_names(into)
 	for entry in GROUP_MOVE:
 		var color := int(entry[1])
 		var label := String(entry[0])
 		var line := _menu_line("[  ] " + label)
+		line.disabled = not _any_moves(names, color)
 		line.pressed.connect(func() -> void:
 			picked[color] = not bool(picked.get(color, false))
 			line.text = ("[x] " if picked[color] else "[  ] ") + label)
-		lines.append(line)
 		dialog.body().add_child(line)
 	dialog.add_button("OK").pressed.connect(func() -> void:
 		dialog.dismiss()
@@ -3136,9 +3332,112 @@ func _open_group_move() -> void:
 		for color in picked:
 			if picked[color]:
 				colors.append(color)
-		_move_out_by_color(colors))
+		if into:
+			_move_in_by_color(colors)
+		else:
+			_move_out_by_color(colors))
 	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
+
+
+## Whether any of [param names] moves with [param color].
+static func _any_moves(names: Array, color: int) -> bool:
+	for card_name in names:
+		if DeckModel.moves_with_colors(String(card_name), [color]):
+			return true
+	return false
+
+
+## The names a move could take: the deck's own going out; coming in, the
+## cards [method _group_move_candidates] would offer for any colour.
+func _group_move_names(into: bool) -> Array:
+	if not into:
+		return deck.counts.keys()
+	var out: Array = []
+	for entry in _group_move_candidates([]):
+		out.append(entry[0])
+	return out
+
+
+## What `Move by color into deck` puts in, in words: under a pool (the
+## hero's cards, a sealed deal, a draft, AutoDeck's pool) every copy of the
+## colours not placed yet, as 1997's adventure moved every copy outside the
+## deck; over the whole library [QoL] one copy of each card of the colours
+## the Inventory shows and the deck lacks. The basic lands of the colours
+## come too only where they are cards someone owns ([method
+## _group_move_brings_lands]).
+func _group_move_scope() -> String:
+	if _group_move_brings_lands():
+		return "Every copy of these colors not yet in the deck goes in, their basic lands too."
+	if sealed != null:
+		return "Every copy of these colors left in the pool goes in, basic lands aside."
+	return "One copy of each card of these colors the Inventory shows and the deck lacks goes in, basic lands aside."
+
+
+## Whether `Move by color into deck` brings each colour's basic land with
+## it, as 1997 did (its `move_colors_fromto_global_deck`). Only where the
+## lands are a collection's own cards ([AdventureBuilder]: the hero's):
+## the library holds every land without end, and a sealed deal, a draft or
+## AutoDeck's pool hands out its free lands thirty or sixty of each —
+## `Add basic land` is the door for those. Going OUT, a colour's land
+## always goes with it.
+func _group_move_brings_lands() -> bool:
+	return false
+
+
+## `[name, copies]` that `Move by color into deck` would put in for
+## [param colors] (every colour for an empty list): under a pool each card
+## with copies left — whatever the filters show, as 1997 moved from the
+## whole collection; over the whole library each card the Inventory lists
+## that neither pile holds yet, one copy.
+func _group_move_candidates(colors: Array) -> Array:
+	var wanted: Array = colors if not colors.is_empty() \
+		else GROUP_MOVE.map(func(entry: Array) -> int: return int(entry[1]))
+	var lands := _group_move_brings_lands()
+	var out: Array = []
+	var shown: Array = _sealed_library() if sealed != null else filter.apply(_pool)
+	for data in shown:
+		var card_name: String = (data as CardData).card_name
+		if not lands and DeckFormat.is_basic(card_name):
+			continue
+		var left: int = sealed.copies_of(card_name) - deck.copies_of(card_name) \
+			if sealed != null else 1 - mini(deck.copies_of(card_name), 1)
+		if left > 0 and DeckModel.moves_with_colors(card_name, wanted):
+			out.append([card_name, left])
+	return out
+
+
+## `Move by color into deck` for [param colors]: what [method
+## _group_move_candidates] offers goes in, one undo step, until the deck is
+## full (the duel's 200 names / 500 cards — said, and what fitted stays).
+func _move_in_by_color(colors: Array) -> void:
+	if colors.is_empty():
+		_say("No colors were selected", true)
+		return
+	var before := deck.duplicate_model()
+	var moved := 0
+	var refusal := ""
+	for entry in _group_move_candidates(colors):
+		var card_name := String(entry[0])
+		for _i in int(entry[1]):
+			refusal = _sealed_refusal(card_name)
+			if refusal == "":
+				refusal = deck.add(card_name)
+			if refusal != "":
+				break
+			moved += 1
+		if refusal == DeckModel.TOO_MANY_CARDS:
+			break
+	if moved == 0:
+		_say(refusal if refusal != "" else "There are no such cards to move into the deck", true)
+		return
+	_remember(before, "Move by color into deck")
+	_dirty = true
+	_audio.play(DeckAudio.CUE_ADD)
+	refresh()
+	_say("Moved %d card%s into the deck%s" % [moved, "" if moved == 1 else "s",
+		" — it holds no more" if refusal == DeckModel.TOO_MANY_CARDS else ""],
+		refusal == DeckModel.TOO_MANY_CARDS)
 
 
 func _move_out_by_color(colors: Array) -> void:
@@ -3657,8 +3956,13 @@ func _open_mini_menu() -> void:
 	# 430 put the last two entries under the button when the menu grew.
 	var labels := _command_labels()
 	# Keep a growing command list on the viewport. The draft entry pushed
-	# the old 8px-gap menu four pixels beyond each edge at 1280×800.
-	var gap := 4.0 if 72.0 + 32.0 * labels.size() > size.y - 24.0 else 8.0
+	# the old 8px-gap menu four pixels beyond each edge at 1280×800, and
+	# Redo and Move by color into deck (2026-10-28) took it to 26 lines,
+	# which a 4px gap put past the window's own margin and behind a scroll
+	# (measured at 1280×800): the gap is what the margin leaves over per
+	# line, between 2 and 8.
+	var room := size.y - 2.0 * OriginalDialog.SCREEN_MARGIN - 72.0
+	var gap := clampf(floorf(room / labels.size()) - 24.0, 2.0, 8.0)
 	var dialog := OriginalDialog.create("",
 		Vector2(380, 72.0 + (24.0 + gap) * labels.size()))
 	dialog.body().add_theme_constant_override("separation", int(gap))
@@ -3667,6 +3971,18 @@ func _open_mini_menu() -> void:
 		if label == AI_COMMAND:
 			# The one emphasised line — see [constant AI_COMMAND].
 			line.add_theme_color_override("font_color", UiChrome.CHOSEN)
+		elif label == "Undo" or label == "Redo":
+			# ONE ROW EACH (the 0.50.65 bug campaign, k2-2). These two carry
+			# the change's own words, which a card's name can make longer
+			# than the line: "Redo Remove all Circle of Protection:
+			# Artifacts from the sideboard" folded onto a second row, and
+			# the gap above, worked out for one row a line, then pushed
+			# Cancel off the stone (at 1280 × 800 and at 800 × 600). The
+			# line ends in "…" instead, the whole words on its tooltip.
+			line.autowrap_mode = TextServer.AUTOWRAP_OFF
+			line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			if line.text != label:
+				line.tooltip_text = line.text
 		line.pressed.connect(func() -> void:
 			dialog.dismiss()
 			_run_command(label))
@@ -4013,7 +4329,7 @@ func _command_labels() -> Array[String]:
 
 ## What the mini-menu writes on a line — the extras carry their marker in
 ## the menu itself, never in the command name the tests and `_run_command`
-## use. `Undo` also carries WHAT it would undo ([QoL]).
+## use. `Undo` and `Redo` also carry WHAT they would change ([QoL]).
 func _menu_text(label: String) -> String:
 	if CHECKED_COMMANDS.has(label):
 		# A checked menu item, in the convention this screen already uses
@@ -4021,7 +4337,8 @@ func _menu_text(label: String) -> String:
 		return "%s %s" % [
 			"[x]" if Settings.get_value(CHECKED_COMMANDS[label], true) else "[  ]",
 			label]
-	var text := _undo_menu_label() if label == "Undo" else label
+	var text := _undo_menu_label() if label == "Undo" \
+		else _redo_menu_label() if label == "Redo" else label
 	if label == "Big cards":
 		text = "%s %s" % ["[x]" if _big_cards else "[  ]", label]
 	return text
@@ -4178,11 +4495,21 @@ func _clear_deck() -> void:
 	_say("Deck cleared")
 
 
+## RESTORE IS A STEP OF ITS OWN (the 0.50.65 bug campaign, k2-1). The clear
+## started the history afresh, but the steps made AFTER it — "Add Giant
+## Growth" onto the emptied deck — stayed on top of the deck Restore brought
+## back, so Undo put back the empty deck before them and threw the restored
+## one away (and Redo, likewise, a deck from before the Restore). Now Undo
+## puts back the deck as it was just before Restore, and Redo starts empty.
+## A fresh sealed deal clears through the same `Restore deck`, so it is
+## covered here too.
 func _restore_deck() -> void:
 	if _cleared == null:
 		return
+	var before := deck.duplicate_model()
 	_set_deck(_cleared)
 	_cleared = null
+	_remember(before, "Restore deck")
 	_dirty = true
 	_clear_button.text = "Clear deck"
 	refresh()
@@ -6040,9 +6367,11 @@ func _toggle_deck_switch(label: String, line: Button) -> void:
 ## times a session, and none of them takes a key the screen already uses.
 ## They stand down while a dialog is open, because a dialog owns the
 ## keyboard.
+## Redo answers Ctrl+Y and, as most programs also take it, Ctrl+Shift+Z
+## ([method _unhandled_key_input] reads the Shift before this table).
 const SHORTCUTS := {
 	KEY_S: "Save deck", KEY_O: "Load deck", KEY_N: "New deck",
-	KEY_Z: "Undo", KEY_L: "Add basic land", KEY_E: "Export deck",
+	KEY_Z: "Undo", KEY_Y: "Redo", KEY_L: "Add basic land", KEY_E: "Export deck",
 }
 
 
@@ -6086,7 +6415,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	if _read_card(event):
 		return
-	if event.ctrl_pressed and SHORTCUTS.has(event.keycode):
+	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_Z:
+		_run_command("Redo")
+		accept_event()
+	elif event.ctrl_pressed and SHORTCUTS.has(event.keycode):
 		_run_command(String(SHORTCUTS[event.keycode]))
 		accept_event()
 	elif event.ctrl_pressed and event.keycode == KEY_F:

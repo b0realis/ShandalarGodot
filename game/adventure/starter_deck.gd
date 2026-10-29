@@ -72,14 +72,15 @@ static var _cards: Array[Dictionary] = []
 ## THE FIRST DECK of a hero of [param color] at [param difficulty]: card
 ## names, drawn with [param dice]. Under the Classic MTG rules ([param
 ## classic]) no card comes once the deck holds as many copies as they allow
-## ([method DeckModel.classic_allowance]: four, one of a restricted card;
-## the banned ones are never dealt, by the rule above) [ours].
-static func deal(color: String, difficulty: int, dice: MsvcRandom, classic := false) -> Array[String]:
+## under the adventure's ban list [param bans] ([method
+## DeckModel.classic_allowance]: four, one of a restricted card, none of a
+## banned one; [ClassicBans]) [ours].
+static func deal(color: String, difficulty: int, dice: MsvcRandom, classic := false, bans := "") -> Array[String]:
 	var dealt: Array[String] = []
 	_keeps = Callable()
 	if classic:
 		_keeps = func(card: Dictionary) -> bool:
-			var most := DeckModel.classic_allowance(String(card["name"]))
+			var most := DeckModel.classic_allowance(String(card["name"]), false, bans)
 			return most < 0 or dealt.count(String(card["name"])) < most
 	var used: Array[String] = [color]
 	for share in QUOTAS[clampi(difficulty, 0, 3)]:

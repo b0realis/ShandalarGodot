@@ -37,16 +37,45 @@ extends Control
 ## moment it is built. Until this landed, `Sideboard between duels` against
 ## an AI was a match in which only one side adapted, which is worse than
 ## not offering the step at all.
+##
+## SAVED BETWEEN DUELS (the polish pass c18; the owner, 2026-10-28:
+## *"Saving: between duels (Gauntlet runs and matches save after each duel
+## and resume); no mid-duel save"*). A match from Magic Battle
+## ([member keeps_save]) writes itself whole after every duel — the record,
+## the decks as they stand, the stream, what the computer saw — and again
+## when a Sideboard window closes; a decided one drops its file; a
+## Gauntlet's match hands the same snapshot to its run ([member
+## save_with]), and a decided one tells its run at once ([signal
+## match_decided]) — every save point comes before the duel's End of Duel
+## window, never after it (the bug campaign of 0.50.65, k4-1), and the
+## doors out of that window say what was kept ([method _retell_doors],
+## k4-4). [member resume_from] takes one up again AT THE
+## BETWEEN-DUELS WINDOW it was saved behind, its next duel dealt afresh
+## ([MatchSaves], the resume count). 1997's `&Save match` was a button on
+## that window (`@DIALOG_ENDEXP1DUEL_BUTTONS`, `Program/UIStrings.txt:564-
+## 571`); ours saves without one [ours] and says so on the window.
 
 ## THE MATCH IS OVER — the seat that took it, or -1 for a tie, which is
 ## exactly what [method MatchState.winner] returns and the same shape
 ## [signal DuelScreen.duel_finished] already has one layer down.
 ##
-## Always emitted, exactly once, the moment the match is decided — what
-## an owner DOES about it is [member reports_to_owner]'s business and not
-## this signal's. (Deciding it by counting connections would have been
-## neat and wrong: a test that merely WATCHES the signal is a connection.)
+## Always emitted, exactly once, when the deciding duel's End of Duel
+## window has closed (at once headless) — what an owner DOES about it is
+## [member reports_to_owner]'s business and not this signal's. (Deciding
+## it by counting connections would have been neat and wrong: a test that
+## merely WATCHES the signal is a connection.) What the owner must KEEP
+## of the match is [signal match_decided]'s, which comes first.
 signal match_finished(winner_id: int)
+
+## THE MATCH IS DECIDED — emitted once, the moment its deciding duel is
+## recorded, BEFORE that duel's End of Duel window has closed (the bug
+## campaign of 0.50.65, k4-1). An owner records the match and saves or
+## drops what it keeps here, not at [signal match_finished]: a player can
+## quit at that window — Pause → `Return to main menu`, `Quit`, closing
+## the game — and its OK never comes. The Gauntlet's run waited for it,
+## so a run lost at that window came back from its file, and a won one
+## came back a duel short. Same arguments as [signal match_finished].
+signal match_decided(winner_id: int)
 
 ## `&Continue match` / `&Quit match` — `@DIALOG_ENDEXP1DUEL`,
 ## `Program/UIStrings.txt:578-579`.
@@ -109,8 +138,66 @@ signal leave_confirmed
 signal menu_confirmed
 # --- end review 2026-10-21 ui-1 ---
 
+# --- the polish pass c18, P4: saved between duels ---
+## What the two doors out of a duel ask once the match is saved: the duel
+## in play is not kept (no mid-duel save), the match is.
+const SAVED_LEAVE_QUESTION := "Leave this match? It is saved as it stood before this duel, and you go back to Magic Battle, where Resume match takes it up again."
+const SAVED_MENU_QUESTION := "Leave this match? It is saved as it stood before this duel, and you go back to the main menu. Resume match on Magic Battle takes it up again."
+## What the same two doors ask over a finished duel's End of Duel window
+## (the bug campaign of 0.50.65, k4-4): the match is saved with that
+## duel's result — or, decided, there is nothing left to keep.
+const RESULT_SAVED_LEAVE_QUESTION := "Leave this match? It is saved with this duel's result, and you go back to Magic Battle, where Resume match takes it up again."
+const RESULT_SAVED_MENU_QUESTION := "Leave this match? It is saved with this duel's result, and you go back to the main menu. Resume match on Magic Battle takes it up again."
+const OVER_LEAVE_QUESTION := "Leave this match? It is over, and you go back to Magic Battle."
+const OVER_MENU_QUESTION := "Leave this match? It is over, and you go back to the main menu."
+## The between-duels window's line under the record, saved or not.
+const SAVED_NOTE := "Saved. Resume match on Magic Battle takes it up again."
+const NOT_SAVED_NOTE := "This match could not be saved."
+## A MATCH THAT KEEPS ITS OWN SAVE ([MatchSaves.match_file]) — set by Magic
+## Battle's `Go!` and `Resume match` before the match enters the tree. Off
+## for everything else that builds a match (the tests, the tools), so none
+## of them can write over the player's saved match.
+var keeps_save := false
+## AN OWNER'S SAVE: called with [method snapshot] at every save point
+## instead of writing a file of this match's own, answering whether it was
+## written — the Gauntlet's, which saves the match inside its run.
+var save_with := Callable()
+## A saved match to take up ([method MatchSaves.match_from_json]'s), set
+## before the match enters the tree; `{}` starts a new one.
+var resume_from: Dictionary = {}
+## Does a save hold this match as it stands — what the doors out of its
+## duels say ([member saved_leave_question]). An owner sets it for a match
+## whose run is already saved.
+var saved := false
+## The last save point could not be written (the window says so).
+var _save_failed := false
+## The owner's words for the same moments ([member saved]); "" keeps the
+## unsaved ones.
+var saved_note := SAVED_NOTE
+var saved_leave_question := SAVED_LEAVE_QUESTION
+var saved_menu_question := SAVED_MENU_QUESTION
+## ...and over a finished duel whose result is saved (k4-4). A decided
+## owner's match says nothing of its own there: what the decision means
+## is the owner's to tell ([method tell_doors], from [signal match_decided]).
+var result_saved_leave_question := RESULT_SAVED_LEAVE_QUESTION
+var result_saved_menu_question := RESULT_SAVED_MENU_QUESTION
+## How often the save point this match was taken up from has been taken up:
+## that many seeds are passed over before the next duel's is drawn, so a
+## resumed duel is never the deal that was quit ([MatchSaves]). Spent by
+## the next duel.
+var _resumes := 0
+## The window's saved line, so a later save point can correct it.
+var _saved_line: Label = null
+# --- end P4 ---
+
 var _duel: DuelScreen = null
 var _window: Control = null
+## DOES A FINISHED DUEL'S END OF DUEL WINDOW HOLD THE MATCH — true wherever
+## the window opens; false headless (tests/CI), where none does and the
+## match plays straight on. A test sets it to hold a match at that window,
+## where a player meets the deciding duel and may quit before its OK (the
+## bug campaign of 0.50.65, k4-1).
+var waits_for_result_window := DisplayServer.get_name() != "headless"
 ## Has the duel that is up been advanced past? Two ears hear the End of
 ## Duel window close — [signal DuelScreen.result_closed] and the frame
 ## loop in [method _on_duel_finished] — and only the first may act.
@@ -138,6 +225,9 @@ var _sb_buttons: Array = [null, null]
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if not resume_from.is_empty():
+		_take_up(resume_from)
+		return
 	if config == null:
 		config = DuelConfig.hotseat_default()
 	state = MatchState.new()
@@ -161,6 +251,81 @@ func _human_seat() -> int:
 	return 0
 
 
+# --- the polish pass c18, P4: saved between duels ---
+
+## TAKE UP A SAVED MATCH ([member resume_from]): its config, record, stream
+## and memories, the resume counted in the file at once (so taking the same
+## point up again deals afresh again), then the between-duels window it was
+## saved behind — `Continue match`, the Sideboard step, `Quit match` — over
+## the pre-duel ground. Headless plays straight on, as after any duel.
+func _take_up(taken: Dictionary) -> void:
+	config = taken["config"]
+	state = taken["state"]
+	_memories = (taken["memories"] as Array).duplicate()
+	_seeder.state = int(taken["seeder_state"])
+	_resumes = int(taken["resumes"]) + 1
+	# The computer's pace is today's Options', as `Go!` reads it; only a
+	# demo (two computer seats) keeps the pace it was set up with.
+	if not (config.is_ai(0) and config.is_ai(1)):
+		config.pace = Settings.ai_pace()
+	_save_point()
+	# The file holds this point whether or not the count could be added.
+	saved = true
+	print("Match resumed: duel %d of %d, seed %d" % [state.duels_played() + 1,
+		state.best_of, config.rng_seed])
+	if DisplayServer.get_name() == "headless":
+		_start_duel()
+		return
+	_backdrop()
+	_show_window()
+
+
+## THE MATCH AS IT STANDS, for a save ([method MatchSaves.match_json]).
+func snapshot() -> Dictionary:
+	return MatchSaves.match_json(config, state, _seeder.state, _resumes, _memories)
+
+
+## A SAVE POINT — between duels only: a match decided drops its own file
+## (an owner's run sees to its own, at [signal match_decided] — k4-1), any
+## other writes itself whole, to its
+## owner ([member save_with]) or its own file ([member keeps_save]).
+## Free play and a match nobody asked to save write nothing.
+func _save_point() -> void:
+	if state.best_of == MatchState.FREE_PLAY or not (keeps_save or save_with.is_valid()):
+		return
+	if state.is_over():
+		if not save_with.is_valid():
+			MatchSaves.clear_match(config.record_match)
+		saved = false
+		return
+	var ok: bool = bool(save_with.call(snapshot())) if save_with.is_valid() \
+		else MatchSaves.write_match(snapshot())
+	saved = ok
+	_save_failed = not ok
+	if is_instance_valid(_saved_line):
+		_saved_line.text = saved_note if ok else NOT_SAVED_NOTE
+
+
+## The ground a match taken up shows its window on before a duel is dealt
+## — the pre-duel `Winbk_Startduel` the Magic Battle screen and the
+## Gauntlet wear ([method GauntletScreen._backdrop]), or the flat dark one.
+func _backdrop() -> void:
+	var art := GameSkin.texture("versus_background")
+	if art == null:
+		var flat := ColorRect.new()
+		flat.color = Color(0.09, 0.08, 0.07)
+		flat.set_anchors_preset(Control.PRESET_FULL_RECT)
+		add_child(flat)
+		return
+	var ground := TextureRect.new()
+	ground.texture = art
+	ground.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ground.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	ground.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(ground)
+# --- end P4 ---
+
+
 # ------------------------------------------------------------ the duels --
 
 func _start_duel() -> void:
@@ -170,10 +335,13 @@ func _start_duel() -> void:
 	_duel.duel_finished.connect(_on_duel_finished)
 	_duel.result_closed.connect(_on_result_closed.bind(_duel))
 	_duel.leave_title = leave_title          # review 2026-10-21 ui-1
-	_duel.leave_question = leave_question
+	# Saved, the doors say so (P4): the match is kept, the duel is not.
+	var kept := saved and saved_leave_question != ""
+	_duel.leave_question = saved_leave_question if kept else leave_question
 	_duel.leave_label = leave_label
 	_duel.leave_confirmed.connect(_on_leave_confirmed)
-	_duel.menu_question = menu_question
+	_duel.menu_question = saved_menu_question if kept and saved_menu_question != "" \
+		else menu_question
 	_duel.menu_confirmed.connect(_on_menu_confirmed)
 	# `add_child` runs the duel screen's `_ready`, which builds its
 	# [MtgGame] — so the memories can start watching on the very next
@@ -215,6 +383,11 @@ func _config_for_this_duel() -> DuelConfig:
 	# The match's parameters do NOT travel into the duel: a duel inside a
 	# match is still one duel, and telling it otherwise would give it a
 	# match of its own.
+	# A MATCH TAKEN UP passes over one seed per time its save point was
+	# (P4, [member _resumes]): the duel that was quit is never dealt again.
+	for _passed in _resumes:
+		_seeder.randi()
+	_resumes = 0
 	out.rng_seed = _seeder.randi() | 1
 	return out
 
@@ -222,7 +395,17 @@ func _config_for_this_duel() -> DuelConfig:
 func _on_duel_finished(winner_id: int) -> void:
 	state.record(winner_id)
 	_ai_sideboards()
-	if DisplayServer.get_name() == "headless":
+	# SAVED THE MOMENT THE DUEL IS RECORDED (P4) — before any window, so a
+	# game closed over the End of Duel window keeps this duel's result.
+	_save_point()
+	# ...and the doors out of the finished duel say so (k4-4).
+	_retell_doors()
+	# A DECIDED MATCH IS ITS OWNER'S NOW, before the window too (the bug
+	# campaign of 0.50.65, k4-1): a Gauntlet records the match and saves
+	# or drops its run here, and may tell the doors what that means.
+	if state.is_over():
+		match_decided.emit(state.winner())
+	if not waits_for_result_window:
 		# Tests/CI: no windows and nothing to dismiss — the match simply
 		# plays on, exactly as the duel screen starts without a coin toss.
 		_advance_once(_duel)
@@ -243,6 +426,34 @@ func _on_duel_finished(winner_id: int) -> void:
 
 func _on_result_closed(duel: DuelScreen) -> void:
 	_advance_once(duel)
+
+
+## THE DOORS OUT OF A FINISHED DUEL SAY WHAT IS TRUE NOW (the bug campaign
+## of 0.50.65, k4-4). Pause → `Exit duel` and `Return to main menu` still
+## open over the End of Duel window, and their words were set when the duel
+## was dealt: after duel 1 of a match they said its record was lost when it
+## had just been saved, and after the deciding duel that Resume match would
+## take it up when its file had just been dropped. Saved with this duel's
+## result, they say so; decided, a match nobody owns says it is over (an
+## owner's says what the owner tells it, [signal match_decided]); otherwise
+## the words the duel was dealt with stand — they are still true.
+func _retell_doors() -> void:
+	if state.is_over():
+		if not reports_to_owner:
+			tell_doors(OVER_LEAVE_QUESTION, OVER_MENU_QUESTION)
+	elif saved:
+		tell_doors(result_saved_leave_question, result_saved_menu_question)
+
+
+## The two doors of the duel on the table — its splash's left button and
+## Pause → `Exit duel` ([param leave]), Pause → `Return to main menu`
+## ([param menu]) — ask these from now on. For an owner, which tells a
+## decided match's doors what its decision means (k4-4).
+func tell_doors(leave: String, menu: String) -> void:
+	if not is_instance_valid(_duel):
+		return
+	_duel.leave_question = leave
+	_duel.menu_question = menu
 
 
 ## Advance past [param duel] — once, and only while it is still the duel
@@ -316,6 +527,13 @@ func _show_window() -> void:
 		go_on.pressed.connect(_leave)
 	else:
 		dialog.body().add_child(_centred(state.duel_heading(), 14))
+		# SAVED, OR NOT (P4): one small line, so `Quit match` is read as
+		# the way out it now is — the match waits on Magic Battle.
+		_saved_line = null
+		if keeps_save or save_with.is_valid():
+			_saved_line = _centred(saved_note if saved
+				else (NOT_SAVED_NOTE if _save_failed else ""), 13)
+			dialog.body().add_child(_saved_line)
 		if state.sideboard_between_duels:
 			for pid in 2:
 				# AN AI SEAT GETS NO BUTTON — it has already sideboarded,
@@ -333,7 +551,10 @@ func _show_window() -> void:
 		dialog.add_button(EDIT_DECK).disabled = true
 		go_on = dialog.add_button(CONTINUE)
 		go_on.pressed.connect(_next_duel)
-		dialog.add_button(QUIT).pressed.connect(_leave)
+		var quit := dialog.add_button(QUIT)
+		quit.pressed.connect(_leave)
+		if saved:
+			quit.tooltip_text = saved_note      # P4: leaving keeps the match
 	add_child(dialog)
 	# THE WINDOW HOLDS ITS ROW AND TAKES THE KEYBOARD (the bug campaign
 	# c12, h4-5). Made 430 wide for two buttons, it held four or five:
@@ -519,6 +740,8 @@ func _close_sideboard() -> void:
 	_sb_dialog = null
 	_sb_pid = -1
 	_set_window_focusable(true)
+	# The deck as it now stands is the match's (P4): a save point.
+	_save_point()
 	# ...and the keyboard back to the button that opened it (the bug
 	# campaign c12, h4-5): `Done` goes with its window, and the focus went
 	# with it — Enter and the D-pad had nothing to press until a click.

@@ -225,8 +225,12 @@ func test_the_rest_of_the_1997_vocabulary_is_where_it_was() -> void:
 	assert_eq(_cue(Mtg.EventType.CARD_DRAWN, {"player": 0}), "sfx_draw")
 	assert_eq(_cue(Mtg.EventType.DECLARED_ATTACKERS, {}), "sfx_attack")
 	assert_eq(_cue(Mtg.EventType.BLOCKERS_DECLARED, {}), "sfx_block")
+	# A creature card's death is WAV_KILL, any other permanent's WAV_BURIED
+	# (the polish pass, 2026-10-28: tests/ui/test_p5_death_sounds.gd).
 	assert_eq(_cue(Mtg.EventType.DIES,
-		{"instance": _inst("Grizzly Bears")}), "sfx_buried")
+		{"instance": _inst("Grizzly Bears")}), "sfx_kill")
+	assert_eq(_cue(Mtg.EventType.DIES,
+		{"instance": _inst("Holy Strength")}), "sfx_buried")
 
 
 func test_a_discard_sounds_whoever_discards_and_whyever() -> void:

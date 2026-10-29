@@ -101,7 +101,16 @@ func test_the_project_declares_every_action_with_the_1997_keys() -> void:
 		var choice := Controls.CHOICES[i]
 		assert_true(InputMap.has_action(choice), "%s is declared" % choice)
 		assert_eq(Controls.key_text(choice), str(i + 1), "%s is the digit" % choice)
-	assert_eq(Controls.names().size(), 21, "twelve listed actions and nine choices")
+	assert_eq(Controls.names().size(), 22,
+		"twelve listed actions, nine choices and the duel screen options' one key")
+	# The polish pass (2026-10-28): the attack-all key is the duel screen
+	# options' own — declared and rebindable, never on the Options list.
+	for entry in Controls.PANEL_ACTIONS:
+		var action := String(entry["name"])
+		assert_true(InputMap.has_action(action), "%s is declared" % action)
+		assert_true(Controls.is_default(action), "%s is as the project declares" % action)
+	assert_eq(Controls.key_text("duel_attack_all"), "A")
+	assert_eq(Controls.pad_text("duel_attack_all"), Controls.UNBOUND)
 
 
 func test_done_also_answers_to_the_keypads_enter() -> void:

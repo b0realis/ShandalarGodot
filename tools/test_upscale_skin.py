@@ -619,7 +619,7 @@ class RunTest(unittest.TestCase):
         grain = Image.new("RGB", (32, 16))
         grain.putdata([(120, 96, 40) if (x * 7 + y * 3) % 5 else (60, 48, 20)
                        for y in range(16) for x in range(32)])
-        names = ("preduel_frame", "world_landtile", "world_cstline1", "world_roads")
+        names = ("preduel_frame", "preduel_frame_tinted", "world_landtile", "world_cstline1", "world_roads")
         for name in names:
             grain.save(self.skin / (name + ".png"))
         out = self.tmp / up.ZIP_NAME

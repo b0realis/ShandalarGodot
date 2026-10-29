@@ -147,7 +147,9 @@ extends RefCounted
 ##    race and burn the hero's face; a profile weight on the foe's life would
 ##    carry it ([AiProfile]).
 ##  - "ONE DECK FOR ALL DUELS" (rule 0x20, unused-features §26) and 1997's
-##    `g_one_deck_mode`: no reader; the clue line only. Switched on, the
+##    `g_one_deck_mode`: no reader, and since the owner's ruling of
+##    2026-10-28 ("the player can have multiple decks") no clue line
+##    either ([method WorldClues.lines]): it stays dead. Switched on, the
 ##    cards drawn in one room would be gone in the next — a dungeon would
 ##    wear the deck down. To switch on: the run record keeps the cards drawn
 ##    and [method hero_deck] leaves them out.
@@ -468,12 +470,13 @@ static func draw_stake(player: AdventurePlayer, duel: Dictionary) -> bool:
 		return true
 	var dice := MsvcRandom.new(player.dice)
 	var bag := maxi(AdventurePlayer.BAG_MOST, player.cards.size())
-	while true:
-		var at := dice.below(bag)
-		if allowed.has(at):
-			(duel["hero_ante"] as Array[String]).append(String(player.cards[at]["card"]))
-			(duel["hero_ante_at"] as Array[int]).append(at)
-			break
+	# 1997's draw ([method MsvcRandom.place_among]: never endless past
+	# 32,767 cards, the 0.50.65 bug campaign, k1-3).
+	var places: Array[int] = []
+	places.assign(allowed.keys())
+	var at := dice.place_among(bag, places)
+	(duel["hero_ante"] as Array[String]).append(String(player.cards[at]["card"]))
+	(duel["hero_ante_at"] as Array[int]).append(at)
 	player.dice = dice.state
 	return true
 
@@ -481,14 +484,19 @@ static func draw_stake(player: AdventurePlayer, duel: Dictionary) -> bool:
 # ------------------------------------------------------------- the lives --
 
 ## THE HERO'S LIFE IN THE NEXT DUEL OF RUN [param run], by its parts:
-## `{links, carried, gift, pool, total}` — the mana links, the world's
-## lives carried, the world's lives gift (d2: it counts here), the run's
-## life pool (the dice's lives and, in a dungeon, every duel's change). The
-## board's "life you carry" is `total`.
+## `{base, links, carried, gift, pool, total}` — the life before the links
+## (0, or under the Embark's "Base 10 + links" 10 and the World Magics'
+## bonuses, [method AdventurePlayer.life_base]; since 0.50.65), the mana
+## links, the world's lives carried, the world's lives gift (d2: it counts
+## here), the run's life pool (the dice's lives and, in a dungeon, every
+## duel's change — counted from the duel's start, so it starts from the
+## base too). The board's "life you carry" is `total`.
 static func life_parts(player: AdventurePlayer, run: Variant) -> Dictionary:
-	var out := {"links": player.mana_links(), "carried": player.next_duel_life_carried,
-		"gift": player.next_duel_life, "pool": int(read(run, "life_pool", 0))}
-	out["total"] = int(out["links"]) + int(out["carried"]) + int(out["gift"]) + int(out["pool"])
+	var out := {"base": player.life_base(), "links": player.mana_links(),
+		"carried": player.next_duel_life_carried, "gift": player.next_duel_life,
+		"pool": int(read(run, "life_pool", 0))}
+	out["total"] = int(out["base"]) + int(out["links"]) + int(out["carried"]) + int(out["gift"]) \
+		+ int(out["pool"])
 	return out
 
 

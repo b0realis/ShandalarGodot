@@ -61,7 +61,7 @@ func _walk(node: Node) -> Array:
 
 
 func _funnel() -> Button:
-	return screen._filter_bar.group_buttons("Other Filters")[3]
+	return screen._filter_bar.group_buttons("Other Filters")[4]
 
 
 func _window() -> OriginalDialog:

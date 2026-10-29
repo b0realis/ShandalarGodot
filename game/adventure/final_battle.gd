@@ -137,7 +137,7 @@ extends RefCounted
 ##    costs 12.
 ##  - ARZAKON'S TIER × (difficulty + 1) (D3, dE:1052–1054): a signed byte
 ##    (100, −56, 44, −112), overwritten by kind 13's life rule. Switched on
-##    (life from the tier + 50·d), 150/250/400/550 — broken from Magician
+##    (life from the tier + 50·d), 100/250/400/550 — broken from Magician
 ##    without a wider field. To switch on: [method CreatureBook.duel_life]
 ##    for kind 13 from the scaled tier.
 ##  - THE BATTLE'S COLOUR AND STRENGTH (D4, dE:1056, 1058): the fifth

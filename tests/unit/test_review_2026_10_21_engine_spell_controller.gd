@@ -26,12 +26,12 @@ class Seat extends DecisionAgent:
 				if c.data.card_name == wanted:
 					return c
 		return super(game, pid, candidates, prompt)
-	func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance], prompt: String, optional := false, adverse := false, ordered := false) -> CardInstance:
+	func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance], prompt: String, optional := false, adverse := false, ordered := false, copying := false) -> CardInstance:
 		for wanted in picks:
 			for c in candidates:
 				if c.data.card_name == wanted:
 					return c
-		return super(game, pid, candidates, prompt, optional, adverse, ordered)
+		return super(game, pid, candidates, prompt, optional, adverse, ordered, copying)
 
 
 func before_each() -> void:

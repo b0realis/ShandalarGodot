@@ -783,9 +783,22 @@ func test_the_status_line_names_the_damage_prevention_step() -> void:
 	screen.game.awaiting_regeneration = true
 	assert_eq(screen._status_message(),
 		"Fast Effects?...Use Regeneration Effects")
-	# The other seat's window is named, but not offered.
+	# THIS BARE SCENE IS AN OPEN TWO-HUMAN TABLE, so the other seat is at
+	# this screen too and its window is offered to it (the polish pass of
+	# 2026-10-28, ledger duel-090: the bar serves the deciding seat —
+	# tests/ui/test_p3_seats_and_stripes.gd)...
 	screen.game.priority_player = screen.game.opponent_of(screen._human_seat())
-	assert_eq(screen._status_message(), "Use Regeneration Effects")
+	assert_eq(screen._status_message(), "Fast Effects?...Use Regeneration Effects")
+	# ...and against the computer its window is named, but not offered.
+	var config := DuelConfig.vs_ai_default(AiProfile.wizard())
+	config.pace = 0.0
+	var duel: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	duel.config = config
+	add_child_autofree(duel)
+	duel.game.awaiting_regeneration = true
+	duel.game.priority_player = duel.game.opponent_of(duel._human_seat())
+	assert_eq(duel._status_message(), "Use Regeneration Effects")
+	duel.game.awaiting_regeneration = false
 
 
 func test_a_run_stops_at_the_damage_prevention_step() -> void:

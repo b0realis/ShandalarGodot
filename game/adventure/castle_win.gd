@@ -32,7 +32,11 @@ extends RefCounted
 ##    evil creatures oppress / the good people of Shandalar." (two spaces
 ##    after the full stop, as written) — then, for every town he rules, in
 ##    slot order, "<town> freed!" (2): the town FREED, its mana link still
-##    lost, no "Freed %s" journal line (as played);
+##    lost, no "Freed %s" journal line (as played) — [ours, the owner's
+##    ruling of 2026-10-29] under the sieges' paces Steady, Rare and None a
+##    link a siege took comes back ([method Sieges.free_all]): "<town>
+##    freed!", then "Its mana link is restored." ([constant LINK_BACK]) and a
+##    journal line ([constant LINK_LOG]);
 ##  - HIS CREATURES LEAVE (dE:965–972): every lair and creature of his
 ##    colour on the map, the besieger too — its siege over [ours: 1997 left
 ##    the flag up for the clock] ([method Sieges.free_all]); later spawns
@@ -72,6 +76,9 @@ const DEFEATED_HER := "You have defeated the dreaded\n%s.  No longer shall\nher 
 const DEFEATED_HIS := "You have defeated the dreaded\n%s.  No longer shall\nhis evil creatures oppress\nthe good people of Shandalar.\n"
 ## 2, after each town's name.
 const FREED := " freed!\n"
+## A freed town whose link came back [ours]: its line and its journal line.
+const LINK_BACK := " freed!\nIts mana link is restored.\n"
+const LINK_LOG := "Mana link restored at %s"
 ## 3, with `@COLORCARDS` ([constant WorldClues.COLOR_CARDS]).
 const TAKE_THREE := "You may take any three\ndifferent %s.\n"
 ## 4, the browser's title.
@@ -94,8 +101,9 @@ const MUSIC := "music_castle_%s"
 
 ## THE WIZARD OF CASTLE [param index] (0–4: black, blue, green, red, white)
 ## BEATEN — the class doc's steps, in 1997's order: `{index, color, wizard,
-## row, journal, towns, lines, take_words, music, all_five, already}` —
-## `towns` the sites freed (slot order), `lines` the words a line each (the
+## row, journal, towns, restored, lines, take_words, music, all_five,
+## already}` — `towns` the sites freed (slot order), `restored` the names of
+## those whose link came back (0.50.65), `lines` the words a line each (the
 ## defeated words, then "<town> freed!" each), `take_words` the picks' line,
 ## `all_five` every wizard now beaten (the hand-off to [FinalBattle]).
 ## `already` true, and nothing changed, for a wizard beaten before. `{}` for
@@ -107,7 +115,7 @@ static func beat(player: AdventurePlayer, index: int) -> Dictionary:
 	var hue: String = AdventurePlayer.COLORS[index]
 	var row := CreatureBook.castle_row(color)
 	var out := {"index": index, "color": color, "wizard": WorldNames.WIZARDS[index], "row": row,
-		"journal": "", "towns": [] as Array[int], "lines": [] as Array[String],
+		"journal": "", "towns": [] as Array[int], "restored": [] as Array[String], "lines": [] as Array[String],
 		"take_words": TAKE_THREE % WorldClues.COLOR_CARDS[color], "music": MUSIC % hue,
 		"all_five": false, "already": hue in player.defeated_wizards}
 	if bool(out["already"]):
@@ -127,20 +135,29 @@ static func beat(player: AdventurePlayer, index: int) -> Dictionary:
 	if site >= 0:
 		player.world.sites[site]["type"] = BEATEN_CASTLE
 	var names: Array[String] = []
+	var restored: Array[String] = []
 	for town in freed:
-		names.append(WorldNames.site_name(player.world, town))
-	out["lines"] = defeated_lines(color, names)
+		var called := WorldNames.site_name(player.world, town)
+		names.append(called)
+		# A ruled town is never linked: a freed one linked now got its link
+		# back ([method AdventurePlayer.restore_link]).
+		if TownStatus.linked(player.world, town):
+			restored.append(called)
+			player.log_event("link", LINK_LOG % called, {"town": town})
+	out["restored"] = restored
+	out["lines"] = defeated_lines(color, names, restored)
 	out["all_five"] = all_five(player)
 	return out
 
 
 ## THE WORDS over the trade backdrop (`@CASTLEWIN` 0/1, then 2 for each
-## town in [param towns]), a line each as 1997 broke them.
-static func defeated_lines(color: int, towns: Array[String]) -> Array[String]:
+## town in [param towns]), a line each as 1997 broke them — a town of
+## [param restored] with its link's words ([constant LINK_BACK]).
+static func defeated_lines(color: int, towns: Array[String], restored: Array[String] = []) -> Array[String]:
 	var c := clampi(color, 1, 5)
 	var text := (DEFEATED_HER if CreatureMeeting.wizard_feminine(c) else DEFEATED_HIS) % WorldNames.WIZARDS[c - 1]
 	for town in towns:
-		text += town + FREED
+		text += town + (LINK_BACK if town in restored else FREED)
 	return CreatureMeeting.lines_of(text)
 
 

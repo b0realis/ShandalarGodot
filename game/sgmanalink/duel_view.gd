@@ -1044,3 +1044,67 @@ func _on_game_over_dismissed() -> void:
 	super._on_game_over_dismissed()
 	if _room.has("tournament"): hall_requested.emit()
 	else: leave_requested.emit()
+
+
+# --- 0.50.65 bug campaign, k3-5: targets and X at a LAN table ---
+## THE HOST'S LABELS NAME THE TARGETS ALREADY. A projected chain object's
+## description is the host's label for this seat — its kind, then each
+## target ("Serra Angel — opponent's", a divided spell's points) on a
+## second line ([SgDuelProjection]) — so the local reading's
+## `(X=3, targeting Serra Angel)` named every target twice on the chain's
+## tooltip. Here the switch adds only what the label leaves out: the X.
+func _chain_words(item: StackItem) -> String:
+	if not DuelScreenOptions.log_targets() or item.kind == Mtg.StackKind.TRIGGER:
+		return item.description
+	var said := DuelLogText.details(game, item)
+	# [method DuelLogText.details] names the X first: "X=3, targeting ...".
+	var x_words := said.get_slice(", ", 0) if said.begins_with("X=") else ""
+	return DuelLogText.with_details(item.description, x_words)
+
+
+## Chain objects whose cast or activation line has been noted already, by
+## id, so a batch that brings two lines for two objects names each its own.
+var _noted_chain: Dictionary = {}
+
+
+## THE HOST'S HISTORY LINES ARE NOT THE CHAIN'S WORDS. The local screen
+## notes a cast's targets when the line IS the top object's description;
+## the host's journal writes its own sentence ("P0 casts Lightning Bolt."),
+## so nothing ever matched and the LAN log named no target. A line arrives
+## with the view it came in, its chain already projected: the object it
+## was written for is the lowest one not yet noted that the same seat put
+## there, of the line's kind, under the name the line ends with. Checked,
+## never assumed: no such object (it resolved in the same view, or the
+## line names "a face-down card"), or a target this seat cannot see, and
+## the line is left as the host wrote it. What is named is the
+## projection's — what the host showed this seat — and nothing more.
+func _note_log_details(index: int, line: String, meta: Dictionary) -> void:
+	if index < 0 or game == null or game.stack.is_empty():
+		return
+	var kind := String(meta.get("kind", ""))
+	var wanted: int = Mtg.StackKind.SPELL if kind == "cast" \
+		else (Mtg.StackKind.ABILITY if kind == "ability" else -1)
+	if wanted < 0:
+		return
+	var on_chain := {}
+	for item in game.stack:
+		on_chain[item.id] = true
+	for id in _noted_chain.keys():
+		if not on_chain.has(id):
+			_noted_chain.erase(id)
+	var pid := int(meta.get("pid", -1))
+	for item in game.stack:
+		if _noted_chain.has(item.id) or item.kind != wanted or item.controller != pid \
+				or item.card == null or item.card.face_down \
+				or not line.ends_with(" %s." % item.card.data.card_name):
+			continue
+		_noted_chain[item.id] = true
+		for ref in item.targets:
+			if not ref.is_player and not ref.is_ability and not ref.is_damage \
+					and game.find_instance(ref.instance_id) == null:
+				return   # a target this seat has no card for: nothing added
+		var said := DuelLogText.details(game, item)
+		if not said.is_empty():
+			_log_details[index] = said
+		return
+# --- end 0.50.65 bug campaign, k3-5 ---

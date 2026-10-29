@@ -253,7 +253,11 @@ docs/adventure-implementation-notes.md, "Built: the bug campaign c12".)*
   heuristic answers): the engine-wide row "A draw replacement asks OUTSIDE a
   resolution" in `docs/ROADMAP.md`.
 - A Clone or Doppelganger's arrival question may still offer a legend in
-  play, which the ruling then buries.
+  play, which the ruling then buries. (2026-10-28, the polish pass: such a
+  legend is now offered last, the question saying that a copy of a legend
+  already in play is buried at once, and the computer never copies one;
+  1997's Clone offered every creature in play, so it stays a legal answer.
+  `MtgGame.legend_copy_is_buried`, `tests/unit/test_p5_clone_legend.gd`.)
 
 ### Not yet tried (from the review)
 
@@ -309,6 +313,13 @@ sweeper reading (`_ground_the_sweep_opens`); face-down names in the licid
 twin key and toll; Part Water's X priced ×1.5; `matchups.csv` without a
 drawn column; the referee's handshake file readable by other local users.
 
+(2026-10-28, the polish pass: three of these are fixed. Sylvan Library no
+longer pays life to keep a card that a wheel castable this turn would throw
+away; a second Ashnod's Altar is no second mana source; Hermit Druid does
+not dig a library with no basic land left, or one the dig would likely
+empty, counted from its own deck list. Mana Flare's burn on odd costs was
+measured as arithmetic and left to the AI package.)
+
 ### Suspected — the screens
 
 - Two-human Test hands: seat 1 read as seat 0 in places
@@ -345,7 +356,11 @@ Unchanged; see the review record.
 wait 20–30 seconds for a Godot to stop and time out beside other Godot
 runs; alone and on CI they pass (and beside nothing but the desk's other
 work, in this campaign's run, they passed too). The four timing tests this
-campaign tripped over are repaired (see Verification).
+campaign tripped over are repaired (see Verification). (2026-10-28: the two
+are fixed in 0.50.61, and load was not the cause — an inherited, ignored
+SIGINT that the scripts under test could not trap; the children now start
+with the default SIGINT. `docs/whole-project-review-2026-10-21.md`, "Tests
+that fail under load".)
 
 ### Stale lines found on the way
 

@@ -456,7 +456,7 @@ class PickFirst extends DecisionAgent:
 		pick = p
 	func choose_card(_game: MtgGame, _pid: int, candidates: Array[CardInstance],
 			_prompt: String, _optional := false, _adverse := false,
-			_ordered := false) -> CardInstance:
+			_ordered := false, _copying := false) -> CardInstance:
 		return pick if candidates.has(pick) else candidates[0]
 
 

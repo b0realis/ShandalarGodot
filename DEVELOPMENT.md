@@ -598,14 +598,17 @@ Stated plainly, because the README's roadmap is a summary and this is the
 working view.
 
 - **M5, adventure mode — the overworld, cities, quests, dungeons, world
-  magics, the ante economy — is not started.** (2026-10-27: started and
-  half built — the world, the towns, quests, lairs, the roaming creatures,
+  magics, the ante economy — ~~is not started~~.** (2026-10-28: built and
+  winnable — the world, the towns, quests, lairs, the roaming creatures,
   their duels and ante, and the sieges, 0.50.48–0.50.61; the castles, the
-  dungeons' insides and the end, part C, are not built yet.) It has a placeholder section in
-  `docs/ROADMAP.md` and gets its own design document before any code; that
-  document is growing in `docs/adventure-implementation-notes.md`, beside the
-  research in `docs/world-builder-adventure-notes.md`. It is the largest
-  remaining piece of the project by a wide margin.
+  dungeons' insides, Arzakon and the end, part C, 0.50.62–0.50.64. Not built
+  yet: the card packs' own worlds and their World Lords — designed in outline
+  and postponed by the owner until the adventure plays well with the
+  original cards.) It has its section in `docs/ROADMAP.md` ("M5 — Adventure
+  mode"); its design and build record is
+  `docs/adventure-implementation-notes.md`, beside the research in
+  `docs/world-builder-adventure-notes.md`. The pack worlds are the largest
+  piece still to come.
 - **The AI's plan of 2026-09-08 is closed, not abandoned.**
   `docs/AI-next-wave.md` was written as the next wave's work list and every row
   of it was settled in the week that followed — some shipped, several built,

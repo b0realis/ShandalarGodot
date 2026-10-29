@@ -297,12 +297,12 @@ every machine. The rest of the map re-checked clean against
 | Item | What is uncertain | What would settle it |
 |---|---|---|
 | ~~**The untap step sweeps `Untap.wav`**~~ **CLOSED** (2026-10-27: `DuelAudio.cue_for` returns `""` for `BECAME_UNTAPPED`, "A PHASE MAKES NO NOISE BY ITSELF") — as it stood: | `DuelAudio.cue_for` answers `BECAME_UNTAPPED` with `sfx_untap`, and the untap STEP fires that once per permanent (coalesced to one sound). Nobody did anything: this is a phase making a noise by itself, which the owner's ruling forbids. The same event also covers an effect-driven untap (Candelabra, Tawnos's Coffin), which IS an action, and the event carries no cause to tell them apart. | One line in `game/duel/duel_audio.gd` — return `""` for `BECAME_UNTAPPED` — plus the matching row in `tests/ui/test_duel_sound.gd`. Costs the (rare) effect-untap cue; `WAV_UNTAP` has no call site in Manalink's C anyway, so nothing is lost that was sourced. **A `game/duel/` file: the duel-screen agent applies it.** |
-| **`EndTurn.wav` fired off the turn COUNTER** — *fixed the same day by the duel-screen pass* | `duel_screen.gd` played `sfx_end_turn` whenever `game.turn_number` changed: the clock, not an action, and the only cue in that file that was not something a player or a card DID. | Removed. `EndTurn.wav` is now imported and unplayed; the original's only known call site is `ai.c:588`, where the **AI ends its turn** — a seat performing the pass — so a future pass could re-hang it there, on the ACTION, and nowhere else. |
-| **`DIES` plays `Buried.wav`** | s30 uses **`Kill.wav`** for creature death — proved by decoding its `creature_death.ogg` to 75 776 bytes of PCM, which is `Kill.wav`'s data length exactly. Neither `WAV_BURIED = 1` nor `WAV_KILL = 25` has a call site in Manalink's C; both are the exe's. The 1997 glossary says **bury** = "to the graveyard, no regeneration" (p. 163), which fits a creature dying, but so does *kill*. The enum is alphabetical, so its order says nothing. | The Tier 2 decompilation, which is not in this tree: find `play_sound_effect(1)` vs `(25)` near the graveyard path. **Do not change it on s30's word alone** — that is Tier 3 against a plausible reading of the filenames. |
+| ~~**`EndTurn.wav` fired off the turn COUNTER**~~ **CLOSED 2026-10-28** (the polish pass: `EndTurn.wav` plays once a turn, as either seat hands the turn over — where the Shandalar 1.3 build plays it, at the end of `run_duel_turn` after the cleanup and the mana burn; `DuelAudio.cue_for`, `CLEANUP_START`) — *fixed the same day by the duel-screen pass* | `duel_screen.gd` played `sfx_end_turn` whenever `game.turn_number` changed: the clock, not an action, and the only cue in that file that was not something a player or a card DID. | Removed. `EndTurn.wav` is now imported and unplayed; the original's only known call site is `ai.c:588`, where the **AI ends its turn** — a seat performing the pass — so a future pass could re-hang it there, on the ACTION, and nowhere else. |
+| ~~**`DIES` plays `Buried.wav`**~~ **CLOSED 2026-10-28** (the polish pass, read from the Shandalar 1.3 build's `process_killed_card`, 0x0046dbed: a card printed as a creature plays `Kill.wav`, any other permanent `Buried.wav`, a token nothing; a sacrifice plays `Sacrfice.wav` instead, token or not. `DuelAudio.death_sound_key`, `tests/ui/test_p5_death_sounds.gd`) — as it stood: | s30 uses **`Kill.wav`** for creature death — proved by decoding its `creature_death.ogg` to 75 776 bytes of PCM, which is `Kill.wav`'s data length exactly. Neither `WAV_BURIED = 1` nor `WAV_KILL = 25` has a call site in Manalink's C; both are the exe's. The 1997 glossary says **bury** = "to the graveyard, no regeneration" (p. 163), which fits a creature dying, but so does *kill*. The enum is alphabetical, so its order says nothing. | The Tier 2 decompilation, which is not in this tree: find `play_sound_effect(1)` vs `(25)` near the graveyard path. **Do not change it on s30's word alone** — that is Tier 3 against a plausible reading of the filenames. |
 | **`Cancel.wav` is never played** | `deckdll.cpp:2040-2056` loads `DuelSounds\cancel.wav` into slot 5 beside `button.wav` in slot 4, so the original has a distinct CANCEL click and we play the button one everywhere. | A call site in `game/duel/duel_screen.gd`'s cancel paths, plus a `sfx_cancel.wav` manifest row. Needs the duel screen, which was another agent's file on 2026-09-03. |
 | ~~**A forced discard is silent**~~ **CLOSED 2026-09-06** — `Mtg.EventType.CARD_DISCARDED`, one per card from every discard path, mapped by `DuelAudio.cue_for`; see THE 2026-09-06 PASS. As it stood: | `sfx_discard` fires only on the confirmed hand-size discard. Hymn to Tourach and Mind Twist make no sound; the original plays `WAV_DISCARD` from `functions.c:14861` and `unlimited.c:2722` too. | An engine `CARD_DISCARDED` event, or a `MtgGame` hook the screen can hear. |
 | ~~**`sfx_lose` in an AI-vs-AI demo**~~ **CLOSED 2026-09-06** — a duel with no human seat ends in silence. As it stood: | `_play_sfx("sfx_win" if _is_human(winner) else "sfx_lose")` — with no human seat every demo duel ends on the LOSE sting. | A third branch, or silence, in the duel screen. |
-| **Five imported-or-namable cues with no event** | `Destroy` (which `deck.c:1158` records is the *exile* sound "despite its name"), `Kill`, `Regen`, `Sacrfice`, `ManaBurn`, `Control`, `ChangeC`/`ChangeT`, `FastFX`, and `Counter` (imported, "a counter was ADDED to a card") | Engine events we do not dispatch. `ManaBurn` is the closest — mana burn is already a rules fork. (2026-10-27: `ManaBurn` is done — `Mtg.EventType.MANA_BURN` plays `sfx_mana_burn` on an actual burn; the rest still have no event.) |
+| **Five imported-or-namable cues with no event** | `Destroy` (which `deck.c:1158` records is the *exile* sound "despite its name"), `Kill`, `Regen`, `Sacrfice`, `ManaBurn`, `Control`, `ChangeC`/`ChangeT`, `FastFX`, and `Counter` (imported, "a counter was ADDED to a card") | Engine events we do not dispatch. `ManaBurn` is the closest — mana burn is already a rules fork. (2026-10-27: `ManaBurn` is done — `Mtg.EventType.MANA_BURN` plays `sfx_mana_burn` on an actual burn; the rest still have no event.) (2026-10-28: `Kill` and `Sacrfice` play too, on a death and a sacrifice — the row above.) |
 | **Which mastering is 1997's** | Three gain stagings of the duel sounds exist locally and none is dated 1997 (`Provenance.md`, "The audio"). The importer takes the folder the player's own game reads and prints the date. | Nothing local. A sealed CD would. |
 
 ## The Showcase's mana symbols (2026-09-04) — the braces become glyphs
@@ -3364,18 +3364,29 @@ played and fixed"); **the card rules** (0.50.57) — the Embark's three, the
 Classic MTG rules among them ("Built: the Classic MTG rules").
 **Built 2026-10-27: the world's last pieces** (0.50.60) — a known dungeon
 drawn on the world and the small map, the doors of castles and dungeons
-(the board behind them still to come), the wizards' window (F6, the hero
-pane's Wizards tab), the keys and "Ready to Quit?" ("Decided: the world's
-last pieces and part C", "Built: the world's last pieces"); and the
-owner's follow-ups (0.50.61) — Save and Load on "Ready to Quit?", the card
-packs greyed on the Embark screen until their worlds exist, an
-in-development notice before Embark ("Built: the owner's follow-ups").
-Next — part C: entering a dungeon or a castle, the board and its rooms, the
-dungeon duels and their rules, the castle wizards' duels and a beaten
-wizard's towns freed, the retaliation siege, Arzakon, the win and the end
-score; beside it ~~a known dungeon drawn on the world, the wizards' window
-(F6),~~ (both built in 0.50.60) and the pack worlds. ("Open for part C" and
-"Decided: … part C" in the implementation notes.)
+(the board behind them still to come — 2026-10-28: built in part C,
+below), the wizards' window (F6, the hero pane's Wizards tab), the keys
+and "Ready to Quit?" ("Decided: the world's last pieces and part C",
+"Built: the world's last pieces"); and the owner's follow-ups (0.50.61)
+— Save and Load on "Ready to Quit?", the card packs greyed on the Embark
+screen until their worlds exist, an in-development notice before Embark
+("Built: the owner's follow-ups").
+**Built 2026-10-27–28: part C** (0.50.62–0.50.64) — entering a dungeon or
+a castle, the board and its rooms, the dungeon duels and their rules, the
+castle wizards' duels and a beaten wizard's towns freed, the retaliation
+siege, Arzakon, the win, the end score and the Hall of Fame; the adventure
+can be won ("Built: part C, stage C1", "… stage C2" and "… stage C3" in the
+implementation notes).
+**2026-10-28 (0.50.65): the owner's small package and the polish pass** —
+the dead clue line gone, the card hold and the ban list chosen at Embark,
+then the polish list and a bug campaign over the whole game.
+Next — the card packs' own worlds: each pack chosen at Embark a world of
+its own, reached from the main map, whose **World Lord** unlocks the pack's
+cards everywhere once beaten (the owner's ruling of 2026-10-22; the packs
+stay greyed on the Embark screen until their worlds exist). Their shape is
+ruled — a gate, an island, a keep — and their building postponed (the
+owner, 2026-10-28): *"But we will not build it now. After adventure works
+with original cards we will move into it!"*
 
 ## The Gauntlet — the fourth 1997 mode (BUILT 2026-09-02)
 
@@ -3636,7 +3647,9 @@ Recorded here rather than half-wired, per the pass's own brief.
 - **`<random deck>` in the Deck Lab.** The Lab is told which decks to
   compare; choosing one at random is the opposite of the question it
   answers.
-- **`--mulligan` defaults OFF.** The Lab now offers the Shandalar mulligan
+- **`--mulligan` defaults OFF.** (2026-10-28: the owner flipped it — the Lab
+  offers the mulligan by default now, `--mulligan off` replays an older
+  baseline; `DeckLab/README.md`, "The mulligan default".) The Lab now offers the Shandalar mulligan
   (it never did — `game.start()` is exactly `deal_opening_hands()` +
   `start_duel()`, and the OFFER between them was what was missing), but the
   default is off because turning it on changes every opening hand and so
@@ -3746,7 +3759,7 @@ Measured, A/B in one process on a 200-unique / 500-total deck, warm cache:
 
 ### [QoL] considered and NOT built, with the reasoning
 
-- **The Inventory badge counting BOTH piles.** It says how many copies are
+- **The Inventory badge counting BOTH piles.** (Built 2026-10-28, 0.50.65 — the owner's polish pass.) It says how many copies are
   already in the DECK, and that is what its doc promises; a card sitting
   0-in-deck / 4-in-sideboard therefore badges nothing, even though the copy
   rules now count five. Left alone because one number cannot say "four,
@@ -3783,7 +3796,7 @@ Measured, A/B in one process on a 200-unique / 500-total deck, warm cache:
 
 Added by the second audit pass:
 
-- **A deeper UNDO than one step.** Cheap to build (a ring of Dictionary
+- **A deeper UNDO than one step.** (Built 2026-10-28, 0.50.65 — the owner's polish pass.) Cheap to build (a ring of Dictionary
   copies of at most 200 keys) and the cliff is real: `Add basic land`,
   `Remove Extra Cards` and `Move by color out of deck` are each a large
   change, and two mistakes in a row cannot both be taken back. NOT built
@@ -3792,14 +3805,14 @@ Added by the second audit pass:
   (`test_undo_undoes_itself`: a second `Undo` redoes). Deepening it means
   splitting `Undo` from a `Redo`, which is two menu entries where 1997 had
   none. **A written proposal for the owner to rule on.**
-- **`Move by color INTO deck`**, the other half of
+- **`Move by color INTO deck`** (Built 2026-10-28, 0.50.65 — the owner's polish pass.), the other half of
   `@DECKSURFACE_ADVENTURE`'s pair. In Shandalar the Inventory is your
   COLLECTION, so moving a colour in is a handful of cards; ours is the
   whole pool and it would be two hundred. It would only be honest scoped
   to the FILTERED Inventory — "put everything I am looking at in the
   deck" — which is a different command wearing a 1997 label. **Owner's
   call**; if he wants it, the honest wording is its own.
-- **A right-click mini-menu on an Inventory card** (`Add one / Add four /
+- **A right-click mini-menu on an Inventory card** (Built 2026-10-28, 0.50.65 — the owner's polish pass.) (`Add one / Add four /
   Take one back / Take all back`). The single most repeated correction on
   this screen is taking back a card you just added, and it currently means
   finding it in the deck area, which pages. More 1997 than the present
@@ -4225,7 +4238,7 @@ survey.
   all the time) that are not normally displayed."* Our engine has no
   effect-card objects: a continuous effect is a recomputation, not a
   permanent, so there is nothing to reveal.
-- **The Spell Chain window does not minimize.** `@MENU_SPELLCHAIN` /
+- **The Spell Chain window does not minimize.** (Built 2026-10-28, 0.50.65: the chain has a title band with ▼ and minimizes to it; Minimize/Restore on its menu are live.) `@MENU_SPELLCHAIN` /
   `@MENU_MINIMIZEDSPELLCHAIN` are tabled in `CardMenu` (`SPELL_CHAIN`,
   `MINIMIZED_SPELL_CHAIN`). Since 2026-10-13 `@MENU_SPELLCHAIN` opens on
   the tan band over a card on the chain, with a live `Help...` (the Spell
@@ -4245,7 +4258,7 @@ survey.
   scroll, which means that the top cards cycle to the bottom."* Our ▲/▼
   zones fold the hand instead (s30's idea); the pile has no maximum size
   to scroll past yet. See `docs/duel-todo.md` §3.6.
-- **`StackItem.description` names no targets and no X**
+- **`StackItem.description` names no targets and no X** (Built 2026-10-28, 0.50.65: the readers — the log window, duel_log.txt, the chain's tooltips — name targets and X, on by default in Duel Screen Options; the engine's own sentence is unchanged.)
   (`MtgGame.cast_spell`, which carries the `SIMPLIFIED` marker, and
   `MtgGame.activate_ability` — **re-sited 2026-09-11**; this bullet cited
   `engine/mtg_game.gd:1003`, `:1170`, a thousand lines above where either
@@ -6045,7 +6058,13 @@ an aura on a permanent its caster does not control) is in
 `tests/cards/test_auras_2026_09_06.gd`. The Hurr Jackal report — the
 prevention window with no life change — is still waiting on the owner's
 answer to one question (did life not move at all, or drop by 2?) and is
-not closed by this.
+not closed by this. (2026-10-28, the polish pass: found out without the
+answer — the report's board played with real mouse clicks on the duel
+screen, under both damage timings, takes the opponent from 20 to 18: life
+drops by 2, Hurr Jackal 1/1 with The Brute's +1/+0, and Firebreathing
+pumps only when {R} is paid. `tests/ui/test_p5_hurr_jackal_clicks.gd`
+drives the screen with real pointer events, so Godot's own picking decides
+where each click lands.)
 
 ### The AI: two capabilities the control sweep had priced and left
 
@@ -6677,7 +6696,10 @@ for one subtitle, their own.
 shapes as constants (`BOOSTER` 1/3/1/10, `STARTER` 3/9/26/22), and
 `deal(library, roll)`. The library is split into four SHEETS by
 `DeckStats.rarity_tier` — rare takes the legends too, since the owner's
-rare slot is *"rare or legendary"*; the five basics are lifted out of
+rare slot is *"rare or legendary"* (2026-09-16: no longer — the sheets
+take PRINTED rarity, `DeckStats.rarity_of`, so an uncommon legend fills an
+uncommon slot; "2026-09-16 — Draft pool audit and printed-rarity
+collation" below); the five basics are lifted out of
 common into the land sheet — each sorted by name, so a seed means one
 pool whatever order the registry handed the cards over in. A pack's
 spell slots draw WITHOUT replacement within the pack (a partial
@@ -6780,16 +6802,17 @@ The list the owner asked to have written down for future work, so no
 pass has to rediscover it. None of these moved in the v0.17 and v0.18
 work; each points at the section that owns it.
 
-- **The eye medallion question** (asked 2026-09-06, still unanswered):
+- **The eye medallion question** (Built 2026-10-28, 0.50.65 — the owner's polish pass.) (asked 2026-09-06, still unanswered):
   what the 1997 eye (`@ABILITY`, `FilterBar.ABILITY_CELL`) did and why
   it left the strip. Today it is the Abilities tab's medallion inside
   the Filters window; the offered alternative — drop the funnel, put the
   eye and the gem back on the strip as their 1997 selves at 32px cells —
   waits on the owner's answer. See "The Deck Builder, reviewed — and the
   Filters window" above.
-- **The Hurr Jackal report**: the prevention window with no life change.
+- ~~**The Hurr Jackal report**: the prevention window with no life change.
   Waiting on one answer — did life not move at all, or drop by 2? See
-  "The three playtest reports" above.
+  "The three playtest reports" above.~~ (2026-10-28: closed — played with
+  real clicks, life drops by 2; `tests/ui/test_p5_hurr_jackal_clicks.gd`.)
 - **The counter threshold is an absolute card value** (`counter_threshold`,
   5.0 against 5.5 measured): The Deck counters almost nothing against
   White Knights. It needs its own measured capability — a threshold
@@ -12628,9 +12651,11 @@ Updated at the owner's request, 2026-09-15. Work completed or planned after
 the 0.20.0 duel and Deck Builder release:
 
 - [ ] **Adventure** — the Shandalar world, quests and campaign.
-  (2026-10-27: in development — the world, towns, quests, lairs, creatures
-  and sieges are built, 0.50.48–0.50.61; the castles, the dungeons and the
-  end are next, "M5 — Adventure mode" above.)
+  (2026-10-28: the world, towns, quests, lairs, creatures and sieges are
+  built, 0.50.48–0.50.61, and the castles, the dungeons, Arzakon and the
+  end, 0.50.62–0.50.64 — the adventure can be won; the card packs' own
+  worlds and their World Lords come once the adventure plays well with the
+  original cards, "M5 — Adventure mode" above.)
 - [ ] **SGManalink** — browse, host and join online duels; later booster
   drafting and complete tournaments. Develop on `sgmanalink`, preserving
   the classic interface and offline play. Experienced networking and
@@ -12640,7 +12665,6 @@ the 0.20.0 duel and Deck Builder release:
   since 2026-09-15, `docs/sgmanalink-design.md`.)
 - [ ] **MElo** — a community player ranking tied to protected personas and
   trusted, server-verified matches; separate from DeckLab's deck ratings.
-- [ ] **Commander mode** — dedicated rules and deck-building support.
 - [x] **Cardpacks foundation + Pack 1** — exact-name discovery, validation,
   live enable/disable control and the first numbered pack.
 - [x] **Pack 2 — Fallen Empires** — 102 new identities, dedicated construction
@@ -12698,6 +12722,49 @@ See [the set-pack design](set-packages-plan.md) and
 [the SGManalink design](sgmanalink-design.md) for the proposed groundwork.
 The earlier [Manalink planning study](manalink-planning.md) concerns the
 original engine's AI, not an implemented online service.
+
+### Later — the owner's list of 2026-10-28
+
+Ruled "later" when the open items were settled on 2026-10-28: written down
+here so they are not lost, none of them planned yet.
+
+- [ ] **1997 interrupt speed and timing windows.** The 1997 duel had a
+  faster tier for interrupts above instants, a window to answer the
+  face-down "potential draw" before the card is drawn, a response window at
+  the end of each phase, and the "Trying to cast" window while a spell is
+  being cast. The ruling: duels keep modern timing and ONE stack; the 1997
+  timing is recorded here for a later rules option, not built
+  (`docs/glossary-1997.md`, "interrupt" and "potential draw";
+  `docs/duel-todo.md` §6.20).
+- [ ] **Bigger formats — after the adventure matures:**
+  - **the Sealed Deck tournament** — the 1997 shell's tournament: rounds,
+    computer entrants building from their own pools, the ladder, 40 or 60
+    cards, ante and best-of per round, and saving (the Sealed pool and the
+    Booster Draft already exist);
+  - **Commander mode** — its own rules and deck building;
+  - **LAN duel formats, ante and best-of** — friendly LAN duels with the
+    offline duel's deck formats, ante, best-of matches and sideboarding
+    (a LAN table sets only life and the rules options today);
+  - **a player record** — wins, losses and draws (W/L/D) over the duels
+    played, and a totals view over the game archive.
+- [ ] **Manalink chat, AI taunts and a lobby player list** — talking at a
+  LAN table, the taunts (first: check whether 1997's computer opponents
+  ever showed them), and a list of the players in the lobby with their
+  status. The protocol has no chat yet.
+- [ ] **The decision-model training export** — one record per decision
+  (the state, every legal option, the pick, the game's outcome, seed and
+  decks) with the Wizard AI's own choice as the teacher label, so a model
+  learns from the strong player ("2026-10-04 — The agent's seat, smoothed;
+  decision models (0.50.13)" below).
+- [ ] **MPN beyond 0.1** — the next version of the game-record format
+  (coin flips, choices, costs, links between objects, a best-of match in one
+  record). It waits on the community's answer to the 0.1 proposal.
+
+**Not built, by the owner's choice (2026-10-28):** the 1997 picture of the
+minimized Spell Chain's tab, `Winbk_Spellmin.pic` (39×70, a wand — the twin
+of the Combat window's `Winbk_Attackmin.pic`), is not imported. The Spell
+Chain minimizes since the polish pass (0.50.65), and the game draws its tab
+itself.
 
 ## 2026-09-13 — Manalink globe placeholder on the main menu
 
@@ -18902,6 +18969,26 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-22 – 2026-10-28 — The adventure, built (0.50.49–0.50.64)
+
+The dated entries stop at 0.50.48; from there each version is written up in
+`docs/releases/` (one file a version, every older section carried) and the
+adventure's in `docs/adventure-implementation-notes.md` (its "Built: …"
+sections and its Log), and "M5 — Adventure mode" above keeps the
+milestone's line. In short: the Embark screen's windows lined up without
+the skin (0.50.49); walking, dressing and saving the hero, and the floating
+panel (0.50.50); the world's panes, the first deck, the deck builder in the
+towns and the places (0.50.51); the card shop, the trades, the seller's
+hints and the lairs (0.50.52); the towns' life and the look-only spellbook
+(0.50.53); part B, the creatures and their duels, played and fixed
+(0.50.54–0.50.56); a third card rule, the Classic MTG rules (0.50.57); the
+docs checked against the 1997 code (0.50.58); the MPN move list (0.50.59);
+the world's last pieces before part C (0.50.60); the owner's follow-ups, a
+feature pass and a bug campaign (0.50.61); and part C — the rules inside
+the castles and dungeons and the end (0.50.62), the castles and dungeons
+opened and the adventure winnable (0.50.63), its playtest and hunt
+(0.50.64).
+
 ## 2026-10-22 — Embark: a new adventure's hero (0.50.48)
 
 The first built piece of M5, on the owner's design of the same day: one
@@ -20288,6 +20375,11 @@ test-first ([bug-pass-2026-10-04-mirage.md](bug-pass-2026-10-04-mirage.md)):
   "you gain", Help's Heart of Bogardan and shared-reprint wording.
 - **Left open**: dealer-side "deals damage" per packet; Pack 8's
   checksummed README wording; Energy Vortex's {X} unused by the AI.
+  (2026-10-28: the first is fixed since 0.50.61 — "whenever ~ deals damage"
+  hears one `SOURCE_DEALT_DAMAGE` per source per damage event, the total it
+  dealt (`MtgGame._note_damage_dealt`, `_flush_damage_dealt`; Spirit Link,
+  El-Hajjâj, Zebra Unicorn, Emberwilde Caliph); the README's wording is
+  mended in 0.50.65; Energy Vortex is still open.)
 - `RULES_REVISION` `sgmanalink-mirage-bugpass-2026-10-04`.
 
 Gate: 644 scripts, **10,409/10,409 tests, 479,524 asserts**, exit 0 over

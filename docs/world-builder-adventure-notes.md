@@ -465,7 +465,9 @@ direction table, and the step-1 "empty loop". Still open:
 
 - Whether type 5 is exactly "wizard defeated" (read the castle code).
   (2026-10-27: read so — `Sieges.BEATEN_CASTLE`, a castle whose wizard is
-  beaten, drawn as his ruin; nothing sets it until part C beats one.)
+  beaten, drawn as his ruin; nothing sets it until part C beats one —
+  2026-10-28: part C does, `CastleWin.beat` making the castle a beaten
+  site, type 5, as 1997's dungeonEncounter.c 962–964.)
 - What a trade type of (n + 1) × 256 offers, and what status bit 1 means
   (`cityInfoScreen.c`, `visitLocation.c`). (2026-10-27: status bit 1 is
   the hero's mana link with the town, `TownStatus.LINKED` — the first ten

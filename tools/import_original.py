@@ -1183,6 +1183,14 @@ MANIFEST: dict[str, list[str]] = {
     "sfx_block.wav":         duel_sound("Block2.wav"),
     "sfx_damage.wav":        duel_sound("Damage.wav"),
     "sfx_buried.wav":        duel_sound("Buried.wav"),
+    # The 1997 death sounds split (the polish pass, 2026-10-28): the 1.3
+    # build's `process_killed_card` (SHANDALAR 0x0046dbed) plays WAV_KILL
+    # for a creature card, WAV_BURIED for any other permanent, and a
+    # sacrifice sounds WAV_SACRFICE where the body is given up
+    # (`choose_creature_to_sacrifice`, 0x0049fb64). `DuelAudio.FALLBACK`
+    # plays Buried.wav for both where a skin predates these two rows.
+    "sfx_kill.wav":          duel_sound("Kill.wav"),
+    "sfx_sacrifice.wav":     duel_sound("Sacrfice.wav"),
     "sfx_counter.wav":       duel_sound("Counter.wav"),
     "sfx_draw.wav":          duel_sound("Draw.wav"),
     "sfx_shuffle.wav":       duel_sound("Shuffle.wav"),
@@ -1790,7 +1798,7 @@ def import_videos(index: dict[str, Path], dest: Path) -> None:
             "frame_width": w, "frame_height": h, "fps": header["fps"],
             "source": path.name, "codec": header["codec"],
             "decoder": label,
-        }, indent=1) + "\n")
+        }, indent=1) + "\n", encoding="utf-8")
         print("  %-18s <- %s  (%d frames, %dx%d, %s, %gfps -> %dx%d sheet)"
               % (key, path, frames, w, h, header["codec"], header["fps"],
                  cols * w, rows * h))
@@ -2217,7 +2225,7 @@ def read_tr_palette(path: Path) -> bytes | None:
     """
     table = bytearray(768)
     try:
-        text = path.read_text(errors="replace")
+        text = path.read_text(encoding="cp1252", errors="replace")
     except OSError:
         return None
     seen = 0
@@ -2800,7 +2808,8 @@ def import_portraits(index: dict[str, Path], dest: Path) -> None:
 # a framed MAGIC: The Gathering panel where the map goes (1.3 loads it
 # under every overworld screen, `RunAdventureSession`). It carries its own
 # `M0` palette. The key keeps its name because skins already carry it;
-# **nothing reads it yet** — the overworld will.
+# **nothing reads it**: the overworld is built and draws the world full
+# screen with its own floating panel instead of this frame.
 #
 # `Menu4.pic` (640x480) IS the character screen's ground: the dark
 # scratched field with dark red veins that the fourteen faces of
@@ -3272,7 +3281,8 @@ def import_card_values(index: dict[str, Path], dest: Path) -> bool:
         print("  %-24s SKIPPED %s (no card named in Info.csv)" % (CARD_VALUES_KEY, program.name))
         return False
     (dest / (CARD_VALUES_KEY + ".json")).write_text(json.dumps(
-        {"source": program.name, "cards": values}, sort_keys=True) + "\n")
+        {"source": program.name, "cards": values}, sort_keys=True) + "\n",
+        encoding="utf-8")
     print("  %-24s <- %s (%d cards)" % (CARD_VALUES_KEY, program.name, len(values)))
     return True
 
@@ -3331,7 +3341,8 @@ def import_card_hints(index: dict[str, Path], dest: Path) -> bool:
         print("  %-24s SKIPPED %s (no hint read)" % (HINTS_KEY, source.name))
         return False
     (dest / (HINTS_KEY + ".json")).write_text(json.dumps(
-        {"source": source.name, "hints": hints}, sort_keys=True) + "\n")
+        {"source": source.name, "hints": hints}, sort_keys=True) + "\n",
+        encoding="utf-8")
     print("  %-24s <- %s (%d hints)" % (HINTS_KEY, source.name, len(hints)))
     return True
 
@@ -3381,7 +3392,8 @@ def import_wise_words(index: dict[str, Path], dest: Path) -> bool:
     if len(words["city"]) < 4 or not words["tales"]:
         print("  %-24s SKIPPED %s (no blocks read)" % (WISE_WORDS_KEY, source.name))
         return False
-    (dest / (WISE_WORDS_KEY + ".json")).write_text(json.dumps(words, sort_keys=True) + "\n")
+    (dest / (WISE_WORDS_KEY + ".json")).write_text(json.dumps(words, sort_keys=True) + "\n",
+                                                encoding="utf-8")
     print("  %-24s <- %s (%d tales)" % (WISE_WORDS_KEY, source.name, len(words["tales"])))
     return True
 
@@ -3770,7 +3782,8 @@ def import_raw_texture(key: str, source: Path, index: dict[str, Path],
             # carry a few smaller frames too, and say so since).
             if any(size != [cell_w, cell_h] for size in sizes):
                 layout["sizes"] = sizes
-            (dest / (key + ".json")).write_text(json.dumps(layout) + "\n")
+            (dest / (key + ".json")).write_text(json.dumps(layout) + "\n",
+                                                encoding="utf-8")
         print("  %-24s <- %s (decoded %dx%d, palette: %s)"
               % (key, source, width, height, origin))
         return True

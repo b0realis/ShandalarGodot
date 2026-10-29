@@ -389,7 +389,7 @@ func test_the_dungeon_carries_its_losses() -> void:
 	var run := _run(7, DungeonDuels.CARRY, 3, [22, 23, 24, 25, 26])
 	run["life_pool"] = 3
 	assert_eq(DungeonDuels.life_parts(player, run),
-		{"links": 8, "carried": 2, "gift": 2, "pool": 3, "total": 15})
+		{"base": 0, "links": 8, "carried": 2, "gift": 2, "pool": 3, "total": 15})
 	var a := DungeonDuels.setup(player, run, 0)
 	DungeonDuels.draw_stake(player, a)
 	var config := DungeonDuels.duel_config(player, run, a)

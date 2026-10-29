@@ -405,7 +405,11 @@ func test_every_new_flag_defaults_to_what_the_lab_always_did() -> void:
 	assert_eq(opts.names, ["SeatZero", "SeatOne"])
 	assert_eq(opts.format, "", "no format required")
 	assert_eq(opts.group, "", "every deck group")
-	assert_false(opts.mulligan, "OFF: turning it on changes every opening hand")
+	# The second deliberate move (owner, 2026-10-28): the mulligan is
+	# offered, as every real duel offers it — a baseline taken before
+	# that date dealt its sevens as they came (`--mulligan off` replays
+	# it; tests/tools/test_deck_lab_mulligan_default_2026_10_28.gd).
+	assert_true(opts.mulligan, "ON: the Lab offers the mulligan a real duel offers")
 	# The one deliberate move (owner, 2026-10-07): the Lab plays the
 	# player's own default table, modern rules with mana burn on — a
 	# baseline taken before 0.50.16 was taken under plain `modern`.

@@ -32,9 +32,20 @@ extends RefCounted
 ## every save, and a build that reads only version 1 kept a save of 2 as
 ## unreadable ("saved by a newer version") rather than taking it up and
 ## writing it back without them (a failed One-life adventure alive again,
-## a won one's end lost). This game reads both: 1 is a save from before.
+## a won one's end lost). VERSION 3 (the 0.50.65 bug campaign, k6-3): the
+## Embark's card hold, ban list and sieges' pace ([member card_hold],
+## [member ban_list], [member sieges]) ride in the hero's record; 0.50.64
+## read version 2 and wrote it back without them — an unlimited bag past
+## 500 cards came back to the 1997 limit, every card source then refusing.
+## Version 3 carries the rules of 2026-10-29 too — the creatures' way, the
+## duels' starting life and the ascetic hero ([member creatures], [member
+## life_start], [member ascetic]) in the hero's record, the ascetic's half
+## meal ([member meal_half]) with the food and the links a siege took
+## ([member links_taken]) in the record (0.50.65 is the version that
+## brings 3, so one number covers them all).
+## This game reads 1 to 3: 1 and 2 are saves from before.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 2
+const FORMAT_VERSION := 3
 ## Where the adventures are saved (tests point it elsewhere).
 const SAVES_FOLDER := "user://adventures"
 static var saves_folder := SAVES_FOLDER
@@ -74,6 +85,72 @@ const BAG_MOST := 500
 ## Said when a card is refused for a full bag.
 const BAG_FULL := "Your magic bag holds no more spells."
 const BAG_WARN := 450
+## THE CARD HOLD, chosen at the Embark (the owner, 2026-10-28: "A new
+## Embark setting: card hold — '1997 card hold limit' / 'unlimited card
+## hold'"; [member card_hold]): [constant HOLD_1997] keeps the bag at
+## [constant BAG_MOST] as above — every place a card comes from refuses or
+## loses it past that, the spoils warn from [constant BAG_WARN] and a
+## dungeon's treasure offers the full bag's swap; [constant HOLD_UNLIMITED]
+## takes the limit away everywhere ([method bag_room]), so no full-bag
+## word, warning or swap ever comes. An adventure from before the choice:
+## the 1997 limit. [ours]
+const HOLD_1997 := "1997 limit"
+const HOLD_UNLIMITED := "unlimited"
+const CARD_HOLDS: Array[String] = [HOLD_1997, HOLD_UNLIMITED]
+## THE SIEGES' PACE, chosen at the Embark [ours, the owner's ruling of
+## 2026-10-28 on 1997's complaint, "creatures siege towns too much and they
+## cannot explore": 1.3's clock came faster with every siege, to one every
+## ~30 s of walking with ~15 s to lift it; [member sieges], [Sieges]):
+## [constant SIEGES_1997] the clock exactly as 1997's; [constant
+## SIEGES_STEADY] (a new adventure's default) the first siege's pace all
+## game — the clock's jumps by the difficulty only; [constant SIEGES_RARE]
+## the same jumps and the clock stepping half as often (every 64 walking
+## ticks, not 32); [constant SIEGES_NONE] no siege ever begins — no town
+## lost, no Dominion; the quest still the five castles and Arzakon. An
+## adventure from before the choice: as 1997, as it was played.
+const SIEGES_1997 := "as 1997"
+const SIEGES_STEADY := "steady"
+const SIEGES_RARE := "rare"
+const SIEGES_NONE := "none"
+const SIEGE_PACES: Array[String] = [SIEGES_1997, SIEGES_STEADY, SIEGES_RARE, SIEGES_NONE]
+## THE CREATURES' WAY, chosen at the Embark [ours, the owner's ruling of
+## 2026-10-29 on the choke points: "Add, default Notice (Recommended)";
+## [member creatures], [WorldCreatures]): [constant CREATURES_HUNT] 1997 as
+## shipped — every creature steers at the hero from anywhere, every tick;
+## [constant CREATURES_NOTICE] (a new adventure's default) 1997's designed,
+## never used range and speed switched on (docs/adventure-unused-1997-
+## features.md §6–§7): a creature wanders its own lands until the hero
+## comes within its range, then hurries at them; some are slowed on certain
+## lands. An adventure from before the choice: Hunt, as it was played.
+const CREATURES_HUNT := "hunt"
+const CREATURES_NOTICE := "notice"
+const CREATURE_WAYS: Array[String] = [CREATURES_HUNT, CREATURES_NOTICE]
+## THE DUELS' STARTING LIFE, chosen at the Embark [ours, the owner's ruling
+## of 2026-10-29: "Add, default off (Recommended)"; [member life_start],
+## [method duel_start_life]): [constant START_LINKS] 1997 as shipped — a
+## life for each mana link; [constant START_BASE] 1997's design (§1 of the
+## unused features, duel.c 2205–2226, retail Kimpic.c 19685–19697, where
+## the links' count then overwrote it): [constant LIFE_BASE], and [constant
+## LIFE_BONUSES] for the three World Magics owned, then the links — every
+## adventure duel 10 or more higher. An adventure from before the choice:
+## links only, as it was played.
+const START_LINKS := "links only"
+const START_BASE := "base 10 + links"
+const LIFE_STARTS: Array[String] = [START_LINKS, START_BASE]
+## The base and the World Magics' bonuses `play_duel` set before the links
+## overwrote them (duel.c 2209–2217: bits 0x002, 0x800 and 0x080).
+const LIFE_BASE := 10
+const LIFE_BONUSES := {"Haggler's Coin": 2, "Ring of the Guardian": 3, "Fruit of Sustenance": 5}
+## THE MANA LINKS A SIEGE TOOK COME BACK when the town is freed — under the
+## sieges' paces that are ours ([constant SIEGES_STEADY], [constant
+## SIEGES_RARE], [constant SIEGES_NONE]); under [constant SIEGES_1997] they
+## stay lost, as played [ours, the owner's ruling of 2026-10-29: "With
+## Steady/Rare (Recommended)"; [member links_taken], [method restore_link]].
+const LINKS_RETURN: Array[String] = [SIEGES_STEADY, SIEGES_RARE, SIEGES_NONE]
+## "Your mana link here is restored." — said as a freed town's link comes
+## back, in 1997's words for the loss ("Your mana tap here is lost.",
+## `@NEWSFLASH` 10) turned round [ours].
+const LINK_RESTORED := "Your mana link here is restored."
 
 ## THE TWELVE WORLD MAGICS, by their bit in the original's bitmap
 ## (0x22110–0x22111). Each colour's pair is bits 2c and 2c + 1 for colour c
@@ -170,6 +247,31 @@ const LIFE_RELOAD := "reload allowed"
 const LIFE_ONE := "one life"
 const LIFE_RULES: Array[String] = [LIFE_RELOAD, LIFE_ONE]
 var life_rule := LIFE_RELOAD
+## The card hold ([constant CARD_HOLDS]; [method bag_room]).
+var card_hold := HOLD_1997
+## THE BAN LIST the Classic MTG rules read ([constant RULE_CLASSIC];
+## [ClassicBans], chosen at the Embark, the owner 2026-10-28): "1998 (the
+## original game's)", "1998 + modern" or "modern" — kept under every card
+## rule, read only under the Classic one ([method CardShop.classic_rule],
+## [method AdventureBuilder._copy_rule], [method StarterDeck.deal]). An
+## adventure from before the choice: "1998 + modern", the default.
+var ban_list := ClassicBans.DEFAULT
+## The sieges' pace ([constant SIEGE_PACES]; [Sieges]).
+var sieges := SIEGES_1997
+## The creatures' way ([constant CREATURE_WAYS]; [WorldCreatures]).
+var creatures := CREATURES_HUNT
+## The duels' starting life ([constant LIFE_STARTS]; [method
+## duel_start_life]).
+var life_start := START_LINKS
+## THE ASCETIC HERO, chosen at the Embark [ours, the owner's ruling of
+## 2026-10-29: "The option halves food consumption by the hero or other
+## words lengthens the time hero can live with food by 2"; [method
+## eats_this_step], [HeroWalk]]: off (1997 as shipped) a walking hero eats a
+## food every clock step; on, every other step — the half step kept in
+## [member meal_half] and saved, so a save and a load never skip or double
+## a meal. Fruit of Sustenance's gift in the forests is as it was. An
+## adventure from before the choice: off.
+var ascetic := false
 
 
 # --------------------------------------------------------------- where --
@@ -195,6 +297,9 @@ var entered_tile := Vector2i(-1, -1)
 
 var gold := 0                                   # 0x21D20
 var food := 0                                   # 0x21D24
+## The ascetic hero's half meal: 1 when the last clock step's food was
+## skipped and the next eats ([member ascetic]); 0 otherwise — ours.
+var meal_half := 0
 ## Amulets of each colour (0x21D0C, five counts).
 var amulets := {"black": 0, "blue": 0, "green": 0, "red": 0, "white": 0}
 ## The World Magics owned, by name ([constant WORLD_MAGICS]).
@@ -270,6 +375,12 @@ var town_quests := {}
 ## What the wise men last said: `{stage, tale, block, …}` ([WiseMan];
 ## 1997's globals, unsaved there).
 var wise_man := {}
+## THE LINKS A SIEGE TOOK: the site slots of the towns that were linked
+## when a siege took them ([method Sieges.resolve]), until each is freed —
+## then, under the paces of [constant LINKS_RETURN], the link comes back
+## ([method restore_link]). Saved; a save from before it remembers none,
+## so no link returns there. [ours]
+var links_taken: Array[int] = []
 
 
 # ------------------------------------------------------------- the end --
@@ -392,6 +503,12 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.difficulty = int(record.get("difficulty", 0))
 	player.card_rule = card_rule_of(record.get("card_rule"), record.get("copy_limit", true))
 	player.life_rule = life_rule_of(record.get("life_rule"))
+	player.card_hold = card_hold_of(record.get("card_hold"))
+	player.ban_list = ClassicBans.key_of(record.get("ban_list"))
+	player.sieges = sieges_of(record.get("sieges"))
+	player.creatures = creatures_of(record.get("creatures"))
+	player.life_start = life_start_of(record.get("life_start"))
+	player.ascetic = record.get("ascetic") is bool and bool(record.get("ascetic"))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
@@ -414,13 +531,52 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	# The first deck (ours after the amulets; 1997 dealt it first), every
 	# card in Deck 1 as `InitializeNewGameState` marks them.
 	for card_name in StarterDeck.deal(player.color, player.difficulty, rolls,
-			player.card_rule == RULE_CLASSIC):
+			player.card_rule == RULE_CLASSIC, player.ban_list):
 		player.cards.append({"card": card_name, "decks": [0]})
 	player.dice = rolls.state
 	var own := AdventureSetup.color_number(player.color)
 	player.world_magics.append(WORLD_MAGICS[own * 2])
 	made.explore_around(made.start_tile())
+	player.treasures_by_the_ban_list()
 	return player
+
+
+## THE DUNGEONS' TREASURES UNDER THE BAN LIST [ours, the owner's ruling of
+## 2026-10-28, "Skip it" — the 0.50.65 bug campaign]: under the Classic MTG
+## rules ([constant RULE_CLASSIC]) a treasure of the 28 ([constant
+## ShandalarWorld.DUNGEON_CARDS]) the adventure's list bans ([member
+## ban_list], [method ClassicBans.is_banned] — Mind Twist under "1998" and
+## "1998 + modern") is never placed in a dungeon: the dungeon holds another
+## of the 28 instead — one the list allows and the dungeon does not hold
+## yet — as every other card source gives another card. Drawn on the
+## world's own generator (at [member ShandalarWorld.seed], dungeon by
+## dungeon), never on the adventure's dice: the same world and list give
+## the same dungeons, at the Embark ([method begin]) and on loading a save
+## from before ([method from_dict]). Nothing changes when the list bans none
+## of the 28 — under the other card rules, and under "Modern", which frees
+## Mind Twist: 1997's placement.
+func treasures_by_the_ban_list() -> void:
+	if card_rule != RULE_CLASSIC or world == null:
+		return
+	var allowed: Array[int] = []
+	for k in ShandalarWorld.DUNGEON_CARDS.size():
+		if not ClassicBans.is_banned(String(ShandalarWorld.DUNGEON_CARDS[k][1]), ban_list):
+			allowed.append(k)
+	if allowed.size() == ShandalarWorld.DUNGEON_CARDS.size():
+		return
+	var dice := MsvcRandom.new(world.seed)
+	for slot in world.encounters:
+		var held: Array = (slot as Dictionary).get("cards", [])
+		for i in held.size():
+			if int(held[i]) in allowed:
+				continue
+			var choices: Array[int] = []
+			for k in allowed:
+				if not k in held:
+					choices.append(k)
+			held[i] = choices[dice.below(choices.size())] if not choices.is_empty() else -1
+		while -1 in held:
+			held.erase(-1)
 
 
 ## `<name>-<hash>` for [param hero_name] at [param unix_ms]: letters and
@@ -508,6 +664,94 @@ static func life_rule_of(value: Variant) -> String:
 	return String(value) if value is String and String(value) in LIFE_RULES else LIFE_RELOAD
 
 
+## The card hold [param value] names ([constant CARD_HOLDS]), else the 1997
+## limit (an adventure from before the choice).
+static func card_hold_of(value: Variant) -> String:
+	return String(value) if value is String and String(value) in CARD_HOLDS else HOLD_1997
+
+
+## The sieges' pace [param value] names ([constant SIEGE_PACES]), else as
+## 1997 (an adventure from before the choice, or a value no pace has).
+static func sieges_of(value: Variant) -> String:
+	return String(value) if value is String and String(value) in SIEGE_PACES else SIEGES_1997
+
+
+## The creatures' way [param value] names ([constant CREATURE_WAYS]), else
+## Hunt (an adventure from before the choice, or a value no way has).
+static func creatures_of(value: Variant) -> String:
+	return String(value) if value is String and String(value) in CREATURE_WAYS else CREATURES_HUNT
+
+
+## The duels' starting life [param value] names ([constant LIFE_STARTS]),
+## else links only (an adventure from before the choice).
+static func life_start_of(value: Variant) -> String:
+	return String(value) if value is String and String(value) in LIFE_STARTS else START_LINKS
+
+
+# ------------------------------------------- the Embark's rules, applied --
+
+## THE LIFE BEFORE THE LINKS: 0 under "Links only"; under "Base 10 + links"
+## [constant LIFE_BASE] and each [constant LIFE_BONUSES] World Magic owned
+## (duel.c 2209–2217).
+func life_base() -> int:
+	if life_start != START_BASE:
+		return 0
+	var base := LIFE_BASE
+	for magic in LIFE_BONUSES:
+		if owns(String(magic)):
+			base += int(LIFE_BONUSES[magic])
+	return base
+
+
+## THE LIFE EVERY ADVENTURE DUEL STARTS FROM, before the next duel's lives:
+## [method life_base] and the mana links ([method mana_links]) — 1997's
+## `CountDuelPoolEligibleTowns` under "Links only". THE ONE READER: a
+## meeting's, a lair's, a ruled town's, a dungeon room's (its life pool
+## counts from it), a castle's and the final battle's life
+## ([method CreatureMeeting.hero_life], [method DungeonDuels.life_parts]),
+## the carried lives' start ([DuelSpoils]) and the purse's life on the
+## pre-duel screens ([method EncounterStage.purse]).
+func duel_start_life() -> int:
+	return life_base() + mana_links()
+
+
+## Whether a link a siege took comes back with its town ([constant
+## LINKS_RETURN]).
+func links_return() -> bool:
+	return sieges in LINKS_RETURN
+
+
+## A SIEGE TOOK TOWN [param slot] while it was linked ([method
+## Sieges.resolve]): remembered in [member links_taken].
+func note_link_taken(slot: int) -> void:
+	if slot >= 0 and not slot in links_taken:
+		links_taken.append(slot)
+
+
+## TOWN [param slot] FREED (its guard beaten, [method RuledTowns.settle];
+## its wizard beaten, [method Sieges.free_all]): forgotten from [member
+## links_taken], and its link set again when [method links_return]. True
+## when the link came back.
+func restore_link(slot: int) -> bool:
+	if not slot in links_taken:
+		return false
+	links_taken.erase(slot)
+	if not links_return() or world == null:
+		return false
+	TownStatus.put(world, slot, TownStatus.LINKED)
+	return true
+
+
+## WHETHER THIS CLOCK STEP'S FOOD IS EATEN ([HeroWalk], every 32nd tick a
+## hero walks with food): always, unless the hero is ascetic ([member
+## ascetic]) — then every other step, the half kept in [member meal_half].
+func eats_this_step() -> bool:
+	if not ascetic:
+		return true
+	meal_half = 1 - clampi(meal_half, 0, 1)
+	return meal_half == 0
+
+
 # ------------------------------------------------------- the duels' record --
 
 ## A WIN LOGGED over creature [param row] met as colour [param hue] (the
@@ -572,20 +816,30 @@ func deck_cards() -> Array[String]:
 	return out
 
 
-## The cards the bag still holds room for ([constant BAG_MOST]).
+## Whether the bag has a limit: the 1997 card hold ([member card_hold]).
+func bag_limited() -> bool:
+	return card_hold != HOLD_UNLIMITED
+
+
+## The cards the bag still holds room for ([constant BAG_MOST]) — without
+## end ([constant MOST]) under "Unlimited card hold". Every place that gives
+## a card asks here or through [method add_card].
 func bag_room() -> int:
+	if not bag_limited():
+		return MOST
 	return maxi(BAG_MOST - cards.size(), 0)
 
 
 ## A CARD WON OR FOUND joins the hero's cards, in no deck, as 1997's
 ## `AddCardToDeckSorted` (duel.c 1837–1867) adds it: false, and the card
-## lost, when the bag already holds [constant BAG_MOST]. A rare or special
+## lost, when the bag already holds [constant BAG_MOST] (under the 1997 card
+## hold; never under "Unlimited card hold", [method bag_room]). A rare or special
 ## card (rarity 3 or more, `GetCardRarity`) is written in the journal,
 ## "Acquired spell: %s" (`@LOGSTRINGS` 11). [Ours: 1997 slip — it wrote the
 ## line before it found the bag full, for a card then lost; written here
 ## only for a card kept.]
 func add_card(card_name: String) -> bool:
-	if card_name == "" or cards.size() >= BAG_MOST:
+	if card_name == "" or bag_room() < 1:
 		return false
 	cards.append({"card": card_name, "decks": []})
 	if _rarity(card_name) >= 3:
@@ -673,10 +927,12 @@ func to_dict() -> Dictionary:
 			"figure_colors": figure_colors, "color": color,
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
 			"card_rule": card_rule, "copy_limit": card_rule != RULE_SHIPPED, "life_rule": life_rule,
+			"card_hold": card_hold, "ban_list": ban_list, "sieges": sieges,
+			"creatures": creatures, "life_start": life_start, "ascetic": ascetic,
 			"playmat": playmat, "packs": packs},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
-		"carried": {"gold": gold, "food": food, "amulets": amulets,
+		"carried": {"gold": gold, "food": food, "meal_half": meal_half, "amulets": amulets,
 			"world_magics": world_magics, "cards": cards, "current_deck": current_deck,
 			"deck_names": deck_names, "deck_notes": deck_notes, "deck_colors": deck_colors},
 		"duels": {"next_duel_life": next_duel_life, "next_duel_life_carried": next_duel_life_carried,
@@ -687,7 +943,8 @@ func to_dict() -> Dictionary:
 			"mana_links": mana_links(), "record": duel_record()},
 		"record": {"journal": journal, "defeated_wizards": defeated_wizards,
 			"lairs_explored": lairs_explored, "quest": quest, "quest_offer": quest_offer,
-			"last_town": last_town, "town_quests": town_quests, "wise_man": wise_man},
+			"last_town": last_town, "town_quests": town_quests, "wise_man": wise_man,
+			"links_taken": links_taken},
 		"clocks": {"monster_timer": monster_timer, "quest_timer": quest_timer,
 			"siege_timer": siege_timer, "siege_active": siege_active,
 			"siege_count": siege_count, "quickening": quickening},
@@ -742,6 +999,9 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	player.dice = _number(saved_world.get("dice"), made.rand_state)
 	player.monsters = _cleaned_monsters(saved_world.get("monsters"), made)
 	player.shops = _cleaned_shops(saved_world.get("shops"), made)
+	# A Classic adventure from before the ruling: a banned treasure still
+	# in a dungeon replaced as the Embark now replaces it.
+	player.treasures_by_the_ban_list()
 	return player
 
 
@@ -794,6 +1054,17 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	# third rule: the on/off copy limit it kept.
 	player.card_rule = card_rule_of(hero.get("card_rule"), hero.get("copy_limit", true))
 	player.life_rule = life_rule_of(hero.get("life_rule"))
+	# A save from before the Embark's card hold and ban list (2026-10-28):
+	# the 1997 limit it played by, and the default list.
+	player.card_hold = card_hold_of(hero.get("card_hold"))
+	player.ban_list = ClassicBans.key_of(hero.get("ban_list"))
+	# A save from before the sieges' pace: as 1997, as it was played.
+	player.sieges = sieges_of(hero.get("sieges"))
+	# A save from before the creatures' way, the starting life and the
+	# ascetic hero (2026-10-29): Hunt, links only, off — as it was played.
+	player.creatures = creatures_of(hero.get("creatures"))
+	player.life_start = life_start_of(hero.get("life_start"))
+	player.ascetic = _flag(hero.get("ascetic"))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
 
@@ -815,6 +1086,7 @@ static func _read_where(player: AdventurePlayer, where: Dictionary) -> void:
 static func _read_carried(player: AdventurePlayer, carried: Dictionary) -> void:
 	player.gold = _count(carried.get("gold"))
 	player.food = _count(carried.get("food"))
+	player.meal_half = clampi(_number(carried.get("meal_half")), 0, 1)
 	var amulets_saved := _object(carried.get("amulets"))
 	for key in COLORS:
 		player.amulets[key] = _count(amulets_saved.get(key))
@@ -854,6 +1126,12 @@ static func _read_record(player: AdventurePlayer, kept: Dictionary) -> void:
 		if _is_number(given[key]):
 			player.town_quests[String(key)] = _number(given[key])
 	player.wise_man = _wise_man_record(kept.get("wise_man"))
+	# The links a siege took (2026-10-29): the towns of this world, each
+	# once; a save from before remembers none.
+	player.links_taken = [] as Array[int]
+	for slot in _list(kept.get("links_taken")):
+		if _is_number(slot) and _is_site(_number(slot), player.world) and not _number(slot) in player.links_taken:
+			player.links_taken.append(_number(slot))
 
 
 static func _read_clocks(player: AdventurePlayer, clocks: Dictionary) -> void:

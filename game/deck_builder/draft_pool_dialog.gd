@@ -42,8 +42,8 @@ func _ready() -> void:
 	body().add_child(summary)
 	tree.item_edited.connect(_edited)
 	search.text_changed.connect(_search)
-	add_button("All").pressed.connect(func() -> void: choose(rows.keys()))
-	add_button("None").pressed.connect(func() -> void: choose([]))
+	add_button("All").pressed.connect(func() -> void: choose_shown(true))
+	add_button("None").pressed.connect(func() -> void: choose_shown(false))
 	add_button("Save pool").pressed.connect(_save)
 	add_button("Cancel").pressed.connect(dismiss)
 	_refresh()
@@ -149,6 +149,27 @@ func choose(names: Array) -> void:
 	for card_name in names:
 		if rows.has(card_name):
 			selected_cards[card_name] = true
+	_refresh()
+
+
+## All and None: check or uncheck THE CARDS THE SEARCH SHOWS, and leave
+## every choice it hides as it was (the owner, 2026-10-28: *"act on what
+## the search shows"*). A name is shown when any of its rows is — the
+## choice is the name, so its rows under the other sets follow it. With the
+## finder empty every card is shown, so All and None set the whole pool.
+func choose_shown(checked: bool) -> void:
+	for card_name in name_rows:
+		var shown := false
+		for row: TreeItem in name_rows[card_name]:
+			if row.visible and row.get_parent().visible:
+				shown = true
+				break
+		if not shown:
+			continue
+		if checked:
+			selected_cards[card_name] = true
+		else:
+			selected_cards.erase(card_name)
 	_refresh()
 
 

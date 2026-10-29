@@ -445,7 +445,8 @@ func clear() -> void:
 ## The copy rules ([method extra_copies]): the manual's table, the 1997
 ## adventure deck builder's own ([method copies_allowed_1997]), and the
 ## Classic MTG rules an adventure may be begun under ([method
-## classic_allowance]).
+## classic_allowance]; under a ban list other than the default, [method
+## classic_with]'s `classic:<list>`).
 const MANUAL := "manual"
 const DECK_BUILDER_1997 := "1997"
 const CLASSIC := "classic"
@@ -604,18 +605,38 @@ static func copies_allowed_1997(deck_size: int, with_tome := false) -> int:
 ## card rule of the adventure, 2026-10-24: "max 4 same cards in deck, limited
 ## cards as per rules only one per deck"; "Restricted to 4 copies!" with Tome
 ## of Enlightenment; the banned ones banned too): four copies ([constant
-## DeckFormat.COPY_LIMIT]), one of a restricted card ([constant
-## DeckFormat.RESTRICTED]) — four with the Tome —, none of a banned one
-## ([constant DeckFormat.BANNED], the Tome or not); −1, no limit, for a
-## basic land.
-static func classic_allowance(card_name: String, with_tome := false) -> int:
+## DeckFormat.COPY_LIMIT]), one of a restricted card — four with the Tome —,
+## none of a banned one (the Tome or not); −1, no limit, for a basic land.
+## THE LISTS are the adventure's ban list [param bans] ([ClassicBans], the
+## Embark's choice of 2026-10-28; "" for the default, "1998 + modern") —
+## never [DeckFormat]'s own, which stay Magic Battle's formats'.
+static func classic_allowance(card_name: String, with_tome := false, bans := "") -> int:
 	if DeckFormat.is_basic(card_name):
 		return -1
-	if DeckFormat.BANNED.has(card_name):
+	var list := ClassicBans.key_of(bans)
+	if ClassicBans.is_banned(card_name, list):
 		return 0
-	if DeckFormat.RESTRICTED.has(card_name):
+	if ClassicBans.is_restricted(card_name, list):
 		return DeckFormat.COPY_LIMIT if with_tome else 1
 	return DeckFormat.COPY_LIMIT
+
+
+## THE CLASSIC RULE UNDER BAN LIST [param bans] as a copy rule
+## ([method extra_copies]): [constant CLASSIC] for the default list,
+## `classic:<list>` for another ([ClassicBans]).
+static func classic_with(bans: String) -> String:
+	var list := ClassicBans.key_of(bans)
+	return CLASSIC if list == ClassicBans.DEFAULT else "%s:%s" % [CLASSIC, list]
+
+
+## Whether copy rule [param rule] is the Classic MTG rules, under any list.
+static func is_classic(rule: String) -> bool:
+	return rule == CLASSIC or rule.begins_with(CLASSIC + ":")
+
+
+## The ban list a Classic copy rule [param rule] reads ("" the default).
+static func _bans_in(rule: String) -> String:
+	return rule.trim_prefix(CLASSIC + ":") if rule.begins_with(CLASSIC + ":") else ""
 
 
 ## The allowance under [param rule] for this deck's size (the classic rules'
@@ -623,7 +644,7 @@ static func classic_allowance(card_name: String, with_tome := false) -> int:
 func _allowance(with_tome: bool, rule: String) -> int:
 	if rule == DECK_BUILDER_1997:
 		return copies_allowed_1997(total(), with_tome)
-	if rule == CLASSIC:
+	if is_classic(rule):
 		return DeckFormat.COPY_LIMIT
 	return duplicates_allowed(total(), with_tome)
 
@@ -631,7 +652,7 @@ func _allowance(with_tome: bool, rule: String) -> int:
 ## The copies of [param card_name] [param rule] allows: the deck's
 ## [param limit], or the card's own under [constant CLASSIC] (−1 none).
 func _most_of(card_name: String, limit: int, with_tome: bool, rule: String) -> int:
-	return classic_allowance(card_name, with_tome) if rule == CLASSIC else limit
+	return classic_allowance(card_name, with_tome, _bans_in(rule)) if is_classic(rule) else limit
 
 
 ## Every card SHANDALAR would call an extra copy, as `name -> how many are
@@ -688,7 +709,7 @@ func over_duplicate_limit(with_tome := false, rule := MANUAL) -> Array[String]:
 		var in_side := side_count_of(card_name)
 		var most := _most_of(card_name, limit, with_tome, rule)
 		var allows := "Shandalar allows %d" % most
-		if rule == CLASSIC:
+		if is_classic(rule):
 			allows = CLASSIC_BANS if most == 0 else CLASSIC_ALLOWS % most
 		found.append("%d %s (%s)%s" % [copies_of(card_name), card_name, allows,
 			"" if in_side == 0 else " — %d in the sideboard" % in_side])
@@ -730,24 +751,47 @@ func trim_duplicates(with_tome := false, rule := MANUAL) -> int:
 ## Every copy of every card in [param colors] (a list of [enum Mtg.ManaColor]
 ## values, plus 0 for "artifact / colourless"). `Move by color out of deck`
 ## (`@DECKSURFACE_ADVENTURE`) is what asks for this; the count is what came
-## out. A LAND is never taken: `@GROUPMOVE` offers no Land option and the
-## manual is firm that lands have no colour.
+## out. Which cards a colour takes is [method moves_with_colors].
 func remove_by_color(colors: Array) -> int:
 	var removed := 0
 	for card_name in counts.keys():
-		var d := _card(card_name)
-		if d == null or d.is_land():
-			continue
-		var mask := d.color_mask()
-		var hit := false
-		for color in colors:
-			if (int(color) == 0 and mask == 0) or (mask & int(color)):
-				hit = true
-				break
-		if hit:
+		if moves_with_colors(card_name, colors):
 			removed += int(counts[card_name])
 			counts.erase(card_name)
 	return removed
+
+
+## WHAT `@GROUPMOVE` MOVES — both halves of `@DECKSURFACE_ADVENTURE`'s pair,
+## `Move by color into deck` and `out of deck`, ask this of every card. The
+## 1997 test (`move_colors_fromto_global_deck`, deckdll 0x1002c6b5 in the
+## matching decompilation): a card of a ticked colour, an artifact for
+## `Artifact` — and THE BASIC LAND OF THE COLOUR WITH IT: the Swamp goes
+## with Black, the Island with Blue, the Forest with Green, the Mountain
+## with Red, the Plains with White (its second test, on the 1.3 card
+## table's first five rows; `check_colors_inout_edited_deck` lights the
+## dialog's colours by the same two tests). Corrected 2026-10-28: this
+## builder had left every land behind ("the manual is firm that lands have
+## no colour") — the code moves a deck's colour and its mana together. A
+## land that is not basic moves with nothing, as there. [ours] A gold card
+## moves with any of its colours — 1997 compared the card's one colour byte,
+## so a gold card answered to none of the five.
+static func moves_with_colors(card_name: String, colors: Array) -> bool:
+	var d := _card(card_name)
+	if d == null:
+		return false
+	var mask := d.color_mask()
+	if d.is_land():
+		if not DeckFormat.is_basic(card_name):
+			return false
+		mask = 0
+		for subtype in d.subtypes:
+			mask |= int(Mtg.BASIC_LAND_COLORS.get(String(subtype).to_lower(), 0))
+		if mask == 0:
+			return false
+	for color in colors:
+		if (int(color) == 0 and mask == 0) or (mask & int(color)):
+			return true
+	return false
 
 
 # --------------------------------------------------------------- stats --
@@ -1390,6 +1434,18 @@ func duplicate_model() -> DeckModel:
 	copy.required_packs = required_packs.duplicate()
 	copy.printings = printings.duplicate()
 	return copy
+
+
+## Whether [param other] holds the very deck this one does — every field
+## [method duplicate_model] copies, so two steps of the undo history that
+## no longer differ can be told apart from two that do (the 0.50.65 bug
+## campaign, k2-3: a sale trims the history's decks, and a step it left
+## changing nothing still named the change it had once made).
+func same_as(other: DeckModel) -> bool:
+	return other != null and deck_name == other.deck_name and counts == other.counts \
+		and sideboard == other.sideboard and notes == other.notes \
+		and draft_comments == other.draft_comments and group == other.group \
+		and required_packs == other.required_packs and printings == other.printings
 
 
 func _to_string() -> String:

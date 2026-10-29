@@ -1218,6 +1218,20 @@ class FakeDoorTest(unittest.TestCase):
         self.assertTrue(Path(raw["argv"][-2]).name.startswith("lab-"))
         self.assertEqual(raw["argv"][-1], "--quiet")
 
+    def test_lab_mulligan_defaults_on_as_the_lab_does(self):
+        # Owner, 2026-10-28: the Deck Lab offers the mulligan by default.
+        # The door adds no default of its own — a call that names none runs
+        # the Lab's (on) — and its schema says which one that is.
+        tools = self.client.ask("tools/list")["result"]["tools"]
+        spec = {t["name"]: t for t in tools}["lab"]["inputSchema"]["properties"]["mulligan"]
+        self.assertIn("default on", spec["description"])
+        self.assertNotIn("default off", spec["description"])
+        plain = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "dry_run": True})
+        self.assertNotIn("--mulligan", plain["argv"], "the Lab's own default, never a second copy here")
+        off = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "mulligan": "off",
+                                          "dry_run": True})
+        self.assertEqual(off["argv"][off["argv"].index("--mulligan") + 1], "off")
+
     def test_lab_run_and_results(self):
         out = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "games": 20, "out": "ws/run1", "limit": 2})
         self.assertEqual(out["exit"], 0)

@@ -76,8 +76,10 @@ func _tick() -> void:
 
 
 func test_the_view_is_four_pictures() -> void:
-	assert_eq(_pictures().keys(), ["Ground", "Shadow", "Uprights", "Figure"],
-		"the ground, the hero's shadow, the uprights, the hero — in that order")
+	# And over them since the polish pass (0.50.65) the creatures' names,
+	# drawn only with the options' Creature names on (test_p1_world_names).
+	assert_eq(_pictures().keys(), ["Ground", "Shadow", "Uprights", "Figure", "Names"],
+		"the ground, the hero's shadow, the uprights, the hero, the names — in that order")
 	assert_eq(view.get_child_count(), 0, "kept inside the view: the screen's own children are its own")
 
 

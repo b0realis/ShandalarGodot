@@ -476,8 +476,21 @@ func _clamp_on_screen() -> void:
 	var room := get_viewport_rect().size
 	if room.x <= 0.0 or room.y <= 0.0:
 		return
-	position.x = clampf(position.x, -size.x + EDGE + 60.0, room.x - EDGE - 60.0)
-	position.y = clampf(position.y, 0.0, room.y - EDGE - TITLE_H)
+	# As drawn: the duel screen's UI scale grows the window from its
+	# corner ([method set_ui_scale]).
+	var drawn := size * scale
+	position.x = clampf(position.x, -drawn.x + (EDGE + 60.0) * scale.x,
+		room.x - (EDGE + 60.0) * scale.x)
+	position.y = clampf(position.y, 0.0, room.y - (EDGE + TITLE_H) * scale.y)
+
+
+## THE UI SCALE (the polish pass, 2026-10-28; [constant
+## DuelScreenOptions.UI_SCALE_KEY]): the whole window larger, letters,
+## bar and gadgets, grown from its top-left corner and kept on the screen.
+func set_ui_scale(value: float) -> void:
+	scale = Vector2(value, value)
+	if is_inside_tree():
+		_clamp_on_screen()
 
 
 ## Where the window opens: where the player last left it, or else the

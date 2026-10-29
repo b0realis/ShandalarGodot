@@ -965,12 +965,10 @@ func roll_dice(player: AdventurePlayer) -> Dictionary:
 			# the dice may give: the lives instead of drawing forever.
 			lives = dice.below(3) + 1
 		else:
+			# 1997's draw ([method MsvcRandom.place_among]: never endless
+			# past 32,767 cards, the 0.50.65 bug campaign, k1-3).
 			var bag := maxi(AdventurePlayer.BAG_MOST, player.cards.size())
-			while true:
-				var at := dice.below(bag)
-				if at in usable:
-					card = String(player.cards[at]["card"])
-					break
+			card = String(player.cards[dice.place_among(bag, usable)]["card"])
 	if lives > 0:
 		life_pool += lives
 		dice_lives = lives
@@ -1110,7 +1108,9 @@ func open_treasure(player: AdventurePlayer) -> Dictionary:
 	if not pool.is_empty():
 		var entry: Dictionary = pool[dice.below(pool.size())]
 		var card_name := String(entry["card"])
-		if player.cards.size() >= AdventurePlayer.BAG_MOST:
+		# The full bag of the 1997 card hold ([method AdventurePlayer.bag_room];
+		# never under "Unlimited card hold", which offers no swap).
+		if player.bag_room() < 1:
 			found = entry
 			return {"card": card_name, "words": FOUND_CARD, "bag_full": true}
 		_take(player, entry)

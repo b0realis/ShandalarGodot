@@ -28,10 +28,17 @@ const COUNTED_FLAGS := ["cur_extra_blocks", "extra_blocks_this_turn", "skip_unta
 ## the duel's opening showed it Off at a 1997 table (campaign 2026-10-12
 ## f-order).
 const RULES := RulesOptions.IMPLEMENTED
+## The cues a seat's view may carry — every key [method DuelAudio.cue_for]
+## can answer (the land files are checked from [DuelAudio]'s own tables).
+## A seat refuses the whole view on any other key, so a new cue joins here
+## the day it joins the map: `sfx_kill`, `sfx_sacrifice` and
+## `sfx_end_turn` with the 1997 death and turn-end sounds (the polish
+## pass, 2026-10-28).
 const CUES := ["sfx_cast", "sfx_land", "sfx_draw", "sfx_tap", "sfx_attack",
 	"sfx_block", "sfx_life_loss", "sfx_damage", "sfx_mana_burn", "sfx_buried", "sfx_discard",
 	"sfx_summon", "sfx_cast_artifact", "sfx_cast_enchantment", "sfx_cast_sorcery",
-	"sfx_cast_interrupt", "sfx_cast_instant", "sfx_land_grey"]
+	"sfx_cast_interrupt", "sfx_cast_instant", "sfx_land_grey",
+	"sfx_kill", "sfx_sacrifice", "sfx_end_turn"]
 
 
 static func object_handle(match_state: SgPracticeMatch, pid: int, kind: String, id: int) -> String:

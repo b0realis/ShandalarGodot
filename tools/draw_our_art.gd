@@ -173,6 +173,12 @@ func _init() -> void:
 			[_dagger_blade(), BLADE_LIT, BLADE_DARK],
 			[_dagger_hilt(), HILT_LIT, HILT_DARK]], RIM_DAGGER),
 		dir, "damage_marker.png")
+	# The poison counter (the polish pass, 2026-10-28): the body first,
+	# the red mark on its back in front with its own rim.
+	_write(_render(POISON_SIZE, [
+			[_spider(), SPIDER_LIT, SPIDER_DARK],
+			[_hourglass(), MARK_LIT, MARK_DARK]], RIM),
+		dir, "poison_counter.png")
 	quit()
 
 
@@ -1082,6 +1088,104 @@ func _dagger_hilt() -> Array:
 		# the pommel
 		{"op": "add", "ellipse": [grip_b.x, grip_b.y, 0.095]},
 	]
+
+
+# ----------------------------------------------------- the poison counter --
+
+## THE POISON COUNTER (the polish pass, 2026-10-28) — one of these per
+## counter on the life register, as the 1997 game laid its own out
+## ([PoisonCounters]). The 1997 file (`CardArt/Poison.pic`) is the player's
+## own copy and its mask is dead in every conversion we hold, and
+## Manalink's working rescale is a third party's restyle, so neither is
+## read: this is our own drawing of the same idea — a black widow, venom's
+## oldest sign — eight jointed legs, a small head and a round abdomen with
+## a red hourglass on its back. 42x52 is twice the 1997 counter's own 21x26
+## cell, so the 1x table draws it at half size and a 2x skin at full.
+const POISON_SIZE := Vector2i(42, 52)
+const POISON_ASPECT := 42.0 / 52.0
+## The body: a charcoal lit enough at its top-left bevel to read on the
+## life register's dark stone, falling to near black.
+const SPIDER_LIT := Color(0.50, 0.48, 0.54)
+const SPIDER_DARK := Color(0.06, 0.05, 0.07)
+## The mark: the register of a wound again — salmon to strong red, the
+## dagger's own ramp pulled a step darker.
+const MARK_LIT := Color(1.00, 0.50, 0.40)
+const MARK_DARK := Color(0.80, 0.07, 0.05)
+
+## Square units (x in 0..[constant POISON_ASPECT], y in 0..1) back to the
+## 0..1 form the ops take — [method _unq]'s twin for this picture.
+func _unp(p: Vector2) -> Vector2:
+	return Vector2(p.x / POISON_ASPECT, p.y)
+
+
+## The spider's body and legs, in square units about the picture's middle
+## and mirrored, so the left side is the right side turned over.
+func _spider() -> Array:
+	var cx := POISON_ASPECT * 0.5
+	var ops: Array = []
+	# The abdomen, a little taller than wide, and the head above it on a
+	# short waist.
+	var belly := PackedVector2Array()
+	for n in 36:
+		var a := TAU * float(n) / 36.0
+		belly.append(_unp(Vector2(cx + cos(a) * 0.165, 0.615 + sin(a) * 0.205)))
+	ops.append({"op": "add", "poly": belly})
+	var head := PackedVector2Array()
+	for n in 24:
+		var a := TAU * float(n) / 24.0
+		head.append(_unp(Vector2(cx + cos(a) * 0.085, 0.315 + sin(a) * 0.075)))
+	ops.append({"op": "add", "poly": head})
+	ops.append({"op": "add", "poly": _poison_seg(Vector2(cx, 0.33), Vector2(cx, 0.45), 0.045)})
+	# Two fangs.
+	for side in [-1.0, 1.0]:
+		ops.append({"op": "add", "poly": _poison_seg(Vector2(cx + side * 0.03, 0.26),
+			Vector2(cx + side * 0.045, 0.205), 0.016)})
+	# Eight legs, four a side: each a root on the head, a knee out and up
+	# (the front pair reaching forward, the back pair trailing), and a foot.
+	var legs := [
+		[Vector2(0.050, 0.290), Vector2(0.200, 0.150), Vector2(0.230, 0.030)],
+		[Vector2(0.060, 0.310), Vector2(0.285, 0.235), Vector2(0.355, 0.360)],
+		[Vector2(0.060, 0.335), Vector2(0.275, 0.420), Vector2(0.335, 0.610)],
+		[Vector2(0.050, 0.355), Vector2(0.235, 0.640), Vector2(0.270, 0.930)],
+	]
+	for side in [-1.0, 1.0]:
+		for leg in legs:
+			var root := Vector2(cx + side * leg[0].x, leg[0].y)
+			var knee := Vector2(cx + side * leg[1].x, leg[1].y)
+			var foot := Vector2(cx + side * leg[2].x, leg[2].y)
+			ops.append({"op": "add", "poly": _poison_seg(root, knee, 0.030)})
+			ops.append({"op": "add", "poly": _poison_seg(knee, foot, 0.025)})
+	return ops
+
+
+## The hourglass on the abdomen's back: two triangles meeting at a narrow
+## waist.
+func _hourglass() -> Array:
+	var cx := POISON_ASPECT * 0.5
+	var mid := 0.62
+	return [
+		{"op": "add", "poly": PackedVector2Array([
+			_unp(Vector2(cx - 0.075, mid - 0.115)), _unp(Vector2(cx + 0.075, mid - 0.115)),
+			_unp(Vector2(cx + 0.014, mid)), _unp(Vector2(cx - 0.014, mid))])},
+		{"op": "add", "poly": PackedVector2Array([
+			_unp(Vector2(cx - 0.014, mid)), _unp(Vector2(cx + 0.014, mid)),
+			_unp(Vector2(cx + 0.075, mid + 0.115)), _unp(Vector2(cx - 0.075, mid + 0.115))])},
+	]
+
+
+## A straight stroke from [param a] to [param b] with round ends, built as
+## a polygon in square units and handed back in the ops' 0..1 form.
+func _poison_seg(a: Vector2, b: Vector2, radius: float) -> PackedVector2Array:
+	var d := (b - a).normalized()
+	var n := Vector2(-d.y, d.x)
+	var out := PackedVector2Array()
+	for i in 9:
+		var t := PI * float(i) / 8.0
+		out.append(_unp(b + (n * cos(t) + d * sin(t)) * radius))
+	for i in 9:
+		var t := PI * float(i) / 8.0
+		out.append(_unp(a - (n * cos(t) + d * sin(t)) * radius))
+	return out
 
 
 # ------------------------------------------------------- the rasteriser --

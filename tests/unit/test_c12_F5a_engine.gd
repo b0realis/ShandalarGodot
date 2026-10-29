@@ -26,12 +26,13 @@ class Seat extends DecisionAgent:
 		return true
 
 	func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance], prompt: String,
-			optional := false, adverse := false, ordered := false) -> CardInstance:
+			optional := false, adverse := false, ordered := false,
+			copying := false) -> CardInstance:
 		for wanted in picks:
 			for c in candidates:
 				if c.data.card_name == wanted:
 					return c
-		return super(game, pid, candidates, prompt, optional, adverse, ordered)
+		return super(game, pid, candidates, prompt, optional, adverse, ordered, copying)
 
 
 const PACKS := ["pack-8", "pack-9"]

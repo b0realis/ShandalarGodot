@@ -4,8 +4,9 @@
 the Shandalar overworld, towns, enemies, dungeons, castles, world magics and
 Arzakon. Nothing is built yet. (2026-10-27: no longer so — the Embark
 screen, the world, parts A and B and the world's last pieces are built,
-0.50.48–0.50.61, each in a "Built:" section below; part C, the wizards'
-castles and Arzakon, is still to come.) The ROADMAP's M5 entry says the milestone
+0.50.48–0.50.61, each in a "Built:" section below; and since 0.50.62–0.50.64
+part C too — the castles, the dungeons, Arzakon and the end: the adventure
+is played from Embark to the Hall of Fame.) The ROADMAP's M5 entry says the milestone
 "gets its own design doc before code", and this is where that design doc
 grows. Add findings as they come, with sources, and log them at the bottom.
 
@@ -271,6 +272,8 @@ creatures 0x1EA2C). The parts nothing uses yet are there, empty.
   middle, never past one. The arrows still look around.
 - **Not yet**: the dice the original draws each step for the footstep's
   sound and the roaming creatures, so the adventure's dice stand still.
+  (2026-10-28: built since — the footsteps and the roaming creatures draw
+  on the adventure's dice, 0.50.52–0.50.54; `HeroWalk`, `WorldCreatures`.)
 - **The pointers** are ours: the 1997 window class loads `IDC_ARROW`; the
   walking man and the open door are drawn (`WorldCursors`), the door shown
   over a site the hero can see.
@@ -526,7 +529,8 @@ good formula"*.
   pseudo-cards): ours never. The `trade` byte and the Trade button
   (`BuyTownSpecialCardOffer`), the card hints (`Hints.txt`,
   `FindHintPairIndexForOfferCard`) and the bazaars' `BuyAnyCardFromTown`
-  are read and not built.
+  are read and not built. (2026-10-28: built since — the trades, the hints
+  and the bazaars, 0.50.52; `CardTrade`, `CardHints`, `CardShop`.)
 - **The price** (`CalculateCardShopPrice` 004f1cce): see `CardValue`'s doc;
   town `× (type + 2)`, off-colour ×1.5 when compatible (colourless
   always), else ×2, then `⌊/50⌋ · 5` within 5–1000; sold (`SellPrice`
@@ -1478,9 +1482,11 @@ mended what they found, each with a test that fails without its fix.
   hero as anywhere else — ruins are no stronghold [ours]; the 2×
   skin's board sheets are upscaled frame by frame amid their board
   neighbours, so walls and floors meet without seams (decision 9), and
-  the pre-duel pane's frame and the world's ground layer (the land
-  diamonds, the coastlines, the roads) doubled pixel for pixel, as the
-  sandstone is (ledger row 121; `tools/upscale_skin.py`).
+  the pre-duel pane's frames (plain and tinted) and the world's ground
+  layer (the land diamonds, the coastlines, the roads) doubled pixel for
+  pixel, as the sandstone is (ledger row 121; `tools/upscale_skin.py`);
+  shown real-size mockups of the whole world doubled or upscaled, the
+  owner kept the mix: "As is now."
 - **Also**: the quest's creature keeps coming after its color's wizard
   falls; the arrival words fade when a HUD pane opens; Power Struggle and
   Rainbow Knights are known by their 1997 names ("Power Junction",
@@ -1488,6 +1494,107 @@ mended what they found, each with a test that fails without its fix.
   thread-safe (a rare crash with several games at once) and the MCP server
   names a crashed run's signal and reason; the test runner never collects
   the git-excluded probes, and `-gdir=<folder>` narrows a run.
+
+## Built: after part C — the owner's rulings of 2026-10-28 (0.50.65)
+
+After the ledger was brought up to date the owner settled the open items
+(scratchpad rounds "after the ledger", "open items" and "unused 1997
+features"). What this version builds of them:
+
+- **Card hold** (a new Embark rule): *the 1997 card hold limit* — the bag
+  of 500, as everywhere until now — or *unlimited*: no card is refused or
+  lost to a full bag, and the full-bag messages and the treasure swap never
+  appear (`AdventurePlayer.card_hold`, `bag_room`, `bag_limited`). An older
+  save reads the 1997 limit.
+- **Ban list** (a new Embark rule, for the Classic MTG card rule only, and
+  for the adventure only — Magic Battle's formats are untouched):
+  *1998* (The Duelist #22's Classic lists, with Strip Mine's restriction of
+  1 January 1998), *modern* (today's Vintage lists) or *1998 + modern*, the
+  default, never looser than either (`ClassicBans`). An older Classic save
+  reads the default.
+- **"-One deck for all duels."** is no longer a clue line (the owner: *"the
+  player can have multiple decks"*): the rule stays dead, as in 1997.
+- The Embark screen makes room for the two rules (a smaller playmat
+  preview), whole at 1280×800 and 800×600, with and without the skin.
+- **The polish pass** (the owner: "the polish pass before commit and
+  push!"): inside a village, town or city M/F2, F5 and Ctrl+S open over
+  the town's pane and bring it back as it was (1997's `OpenTownWorldMap` /
+  `OpenTownAdventureStats`; ledger adventure-032); the creature names on
+  the map, the only unused 1997 feature the owner wanted (§5), small and on
+  1997's beat, with their own switch "Creature names" (off to begin with);
+  the purple line at the end of the "Your Ante" plaque gone (the frame's
+  pieces cut with `filter_clip`, `EncounterStage.cut_of`); the skin check
+  counts the adventure's data files; best-of matches and Gauntlet runs
+  saved between duels (`MatchSaves`); in the adventure's deck builder
+  1997's sell from a card's menu ("Sell Card for %d", "How many to
+  Sell?"), Move by color into deck (1997's own adventure command, a
+  color's basic land moving with it as in 1997's code), the card hold and
+  the copy rule always shown; the deck builder, the duel screen's
+  own options and the engine's checks (their own sections of the code map
+  and the release note).
+- **Sieges** (a new Embark rule, the owner's ruling of 2026-10-28 on a
+  1997 complaint — *"creatures siege towns too much and they cannot
+  explore"*; the Slightly Magic forum, 2017 and 2021: 1.3's clock jumps by
+  `d + T/256` after a start and `2d + T/64` after a resolve, so every
+  siege brings the next sooner, from 63 steps apart (24 to lift it) to 16
+  (8 to lift), one about every thirty seconds of walking): *As 1997*,
+  *Steady* — the default — (the jumps by the difficulty alone, the first
+  siege's pace all game: 64/24 steps on Apprentice, 55/21 on Wizard),
+  *Rare* (Steady's jumps, the clock stepping every 64 walking ticks
+  instead of 32 — so the clock's other readers, the ruled towns' and
+  besiegers' tiers, the shrine's late check, the thieves, run half as fast
+  too) or *None* (no siege ever, the Wizard-difficulty retaliation
+  included: no town lost, no Dominion; the clock still climbs, without
+  jumps). `AdventurePlayer.sieges`, `Sieges.calm` / `start_jump` /
+  `resolve_jump` / `clock_steps`. A save without it plays As 1997, as it
+  was played.
+- **Dungeon treasures under the Classic rules** (the owner: *"Skip it"*):
+  a treasure the chosen ban list bans (Mind Twist under 1998 and
+  1998 + modern) is never placed; the dungeon holds another of the 28 the
+  list allows and it does not already hold, drawn from the world's seed
+  (`AdventurePlayer.treasures_by_the_ban_list`, at the Embark and when an
+  older Classic save loads). Modern, the other card rules and a list that
+  bans none of the 28 keep 1997's placement.
+- **The bug campaign's fixes** (c19): a ruled town's stake walks the whole
+  bag under an unlimited card hold (`RuledTowns.walked`; 1997's 500-place
+  walk unchanged under the 1997 hold); a draw over a bag past 32,768
+  places always ends (`MsvcRandom.below_wide`, 1997's `rand() % n` die
+  for die below it); without the 1997 card table the shops stock by the
+  same marks the table carries (`CardValue.expansion`, `named_marks`);
+  the save format is version 3.
+- **The Campaign Settings** (the owner's rulings of 2026-10-29 on the choke
+  points). The Embark keeps 1997's own choices; the modern ones sit behind
+  "Campaign Settings..." (`EmbarkScreen.open_settings`), a dark-stone window
+  of eight rows — Final battle, Card rule, Ban list, Card hold, Sieges,
+  Creatures, Starting life, Ascetic hero — each with a plain line, `As 1997`
+  and `Done`. Three new rows: *Creatures* (`AdventurePlayer.creatures`; Hunt
+  = 1997 as shipped, Notice = the default): unused-features §6–§7 switched
+  on in `WorldCreatures.goes/speed_of/pace` — out of range a creature
+  wanders its lands at half its stride [ours], in range it hurries at its
+  stride (Hunt's walk), slowed to the amble on the lands its flags name; the
+  nearest keeps its range, the others half; besieger and quest creature as
+  Hunt. Two departures, by the owner's intent ("within 1.5–4.5 tiles, then
+  hurry"): the range read in world units (`NOTICE_SCALE` 2; 1997 compared it
+  with its ApproximateDistance, about twice a straight distance, so 48
+  reached three quarters of a tile), and 1997's "far ones hurry" doubling
+  read once, as the hurry of a creature that noticed (read as written it is
+  a chase from anywhere). Henchmen, no case in 1997's switch, take 48
+  [ours]. *Starting life* (`life_start`; Links only = default, Base 10 +
+  links = §1): one reader, `AdventurePlayer.duel_start_life` (10 + Haggler's
+  Coin 2 + Ring of the Guardian 3 + Fruit of Sustenance 5 + links), feeding
+  `CreatureMeeting.hero_life` (meetings, lairs, ruled towns, the final
+  battle), `DungeonDuels.life_parts` (rooms and castles; the pool counts
+  from it), the carried-lives reward and the purse/hero panel/ankh tip.
+  *Ascetic hero* (`ascetic`, off): a food every other walking clock step,
+  the half kept in `meal_half` (saved). And *lost links come back* under
+  Steady, Rare and None: `Sieges.resolve` remembers a town taken while
+  linked (`links_taken`, saved in the record; old saves none),
+  `RuledTowns.settle` and `Sieges.free_all` give the link back
+  (`restore_link`; "Your mana link here is restored.", castle win "Its mana
+  link is restored.", journal "Mana link restored at %s"); under As 1997 it
+  stays lost. All saved in FORMAT_VERSION 3.
+- Decided, built later: the World Lords' shape (gate → island → keep),
+  built once the adventure is finished with the original cards.
 
 ## New game in the sources (cross-reference, 2026-10-22)
 
@@ -1837,3 +1944,14 @@ s30 is a guide only.)
   267dab2): "Built: the world's last pieces"; then the owner's follow-ups
   (0.50.61): "Built: the owner's follow-ups". Part C
   — the wizards' castles, their duels and Arzakon — is next.
+- **2026-10-27** — The bug campaign c12 (0.50.61, 3f27466): "Built: the bug
+  campaign c12".
+- **2026-10-27/28** — Part C in three stages: the rules (0.50.62, dd29a4b),
+  the screens (0.50.63, 2e79711), the playtest and the hunt (0.50.64,
+  4f65cdd): "Built: part C, stage C1 / C2 / C3". The adventure is played
+  from Embark to the Hall of Fame.
+- **2026-10-28** — The owner settled the open items and the unused 1997
+  features; the World Lords' shape decided and postponed until the
+  adventure is finished with the original cards. 0.50.65: "Built: after
+  part C" — the card hold and ban list rules, the polish pass and a bug
+  campaign, one version.

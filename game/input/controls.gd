@@ -86,6 +86,17 @@ const ACTIONS: Array[Dictionary] = [
 const CHOICES: Array[String] = ["duel_choice_1", "duel_choice_2", "duel_choice_3",
 	"duel_choice_4", "duel_choice_5", "duel_choice_6", "duel_choice_7", "duel_choice_8",
 	"duel_choice_9"]
+## THE KEYS THE DUEL SCREEN'S OWN OPTIONS OFFER (the polish pass of
+## 2026-10-28, [DuelScreenOptions]). Actions like the listed ones — declared
+## in `project.godot [input]`, rebound through [method bind], remembered in
+## the same `controls` key — but NOT on the Options screen's list: the
+## owner, *"All new duel screen options should be only accessible via a
+## dedicated button under a large card in the duel screen"*. That window
+## shows the row and rebinds it.
+const PANEL_ACTIONS: Array[Dictionary] = [
+	{"name": "duel_attack_all", "label": "Attack-all key",
+		"tip": "While you choose attackers, puts every creature that can attack into the attack."},
+]
 ## The pad's buttons by the names a player knows them by (the Xbox
 ## letters, which a Steam Deck and most pads print), for the file and
 ## the rows.
@@ -130,12 +141,15 @@ static func apply() -> void:
 		_set_events(action, events)
 
 
-## Every action this file owns — the listed ones and the choices.
+## Every action this file owns — the listed ones, the choices and the duel
+## screen options' own ([constant PANEL_ACTIONS]).
 static func names() -> Array[String]:
 	var out: Array[String] = []
 	for entry in ACTIONS:
 		out.append(String(entry["name"]))
 	out.append_array(CHOICES)
+	for entry in PANEL_ACTIONS:
+		out.append(String(entry["name"]))
 	return out
 
 

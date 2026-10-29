@@ -93,9 +93,12 @@ extends RefCounted
 ## would change and how to switch it on):
 ##  - THE HERO'S LIFE BASE 10 AND THE WORLD MAGICS' BONUSES (§1): duel.c
 ##    2205–2226 starts at 10, +2 Haggler's Coin, +3 Ring of the Guardian, +5
-##    Fruit of Sustenance — then sets the life again from the links. Here
-##    [method hero_life] would add [constant LIFE_BASE] and
-##    [constant LIFE_BONUSES]; they are kept as data only.
+##    Fruit of Sustenance — then sets the life again from the links.
+##    SWITCHABLE AT THE EMBARK since 0.50.65 (the owner's ruling of
+##    2026-10-29, "Starting life": Links only, the default, as played / Base
+##    10 + links): [method hero_life] starts from [method
+##    AdventurePlayer.duel_start_life], which adds [constant LIFE_BASE] and
+##    [constant LIFE_BONUSES] under the second.
 ##  - HAND SIZES BY STRENGTH (§2) and THE FIRST MOVE BY DIFFICULTY (§3):
 ##    computed in `play_duel` and overwritten (seven cards, a fair coin) —
 ##    [DuelOpening]'s doc; [method duel_config] keeps the meeting's
@@ -134,10 +137,12 @@ const DECK_LEAST: Array[int] = [30, 35, 40, 40]
 ## The hero's opening hand and the creature's: always seven (the strength
 ## formula is dead, see the class doc).
 const HAND := 7
-## DESIGNED, NEVER USED: the hero's life before the links, and the World
-## Magics that would have added to it (duel.c 2205–2216).
-const LIFE_BASE := 10
-const LIFE_BONUSES := {"Haggler's Coin": 2, "Ring of the Guardian": 3, "Fruit of Sustenance": 5}
+## The hero's life before the links, and the World Magics that add to it
+## (duel.c 2205–2216) — designed, never used in 1997; SWITCHABLE AT THE
+## EMBARK since 0.50.65 ([constant AdventurePlayer.LIFE_BASE], the one
+## place they are kept).
+const LIFE_BASE := AdventurePlayer.LIFE_BASE
+const LIFE_BONUSES := AdventurePlayer.LIFE_BONUSES
 ## Sleight of Hand, the World Magic that changes the ante (bit 0).
 const SLEIGHT := "Sleight of Hand"
 
@@ -304,12 +309,15 @@ static func _draw_hero_ante(player: AdventurePlayer, meeting: Dictionary, count:
 	var dice := MsvcRandom.new(player.dice)
 	var bag := maxi(AdventurePlayer.BAG_MOST, player.cards.size())
 	for n in mini(count, usable.size()):
-		while true:
-			var at := dice.below(bag)
-			if at in usable and not at in places:
-				places.append(at)
-				names.append(String(player.cards[at]["card"]))
-				break
+		# A usable card not staked yet, 1997's draw ([method
+		# MsvcRandom.place_among]: never endless past 32,767 cards, k1-3).
+		var left: Array[int] = []
+		for place in usable:
+			if not place in places:
+				left.append(place)
+		var at := dice.place_among(bag, left)
+		places.append(at)
+		names.append(String(player.cards[at]["card"]))
 	player.dice = dice.state
 	meeting["hero_ante"] = names
 	meeting["hero_ante_at"] = places
@@ -717,10 +725,11 @@ static func prepare_duel(player: AdventurePlayer, meeting: Dictionary) -> Array[
 ## town or city no wizard rules ([method AdventurePlayer.mana_links]), and
 ## the next duel's lives — the carried ones and the gift
 ## ([method AdventurePlayer.next_duel_lives]); no floor (0 loses at once).
-## DESIGNED, NEVER USED: [constant LIFE_BASE] and [constant LIFE_BONUSES]
-## (see the class doc).
+## Under the Embark's "Base 10 + links" [constant LIFE_BASE] and [constant
+## LIFE_BONUSES] before the links ([method AdventurePlayer.duel_start_life],
+## the one reader; see the class doc).
 static func hero_life(player: AdventurePlayer) -> int:
-	return player.mana_links() + player.next_duel_lives()
+	return player.duel_start_life() + player.next_duel_lives()
 
 
 ## THE CREATURE'S LIFE ([method CreatureBook.duel_life]) for the creature

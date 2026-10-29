@@ -95,8 +95,10 @@ func test_the_clues_say_what_is_known() -> void:
 	world.encounters[7]["clues"] = WorldClues.RULES
 	world.encounters[7]["cards"] = []
 	assert_eq(WorldClues.known(world), [6] as Array[int], "a dungeon emptied of its cards is not listed")
+	# 0x20's "-One deck for all duels." is not said (the owner, 2026-10-28;
+	# tests/unit/test_p0a_one_deck_clue.gd).
 	assert_eq(WorldClues.lines(world, 6), ["Treasure: Black Lotus", "Dungeon Rules:", "-No Red cards allowed.",
-		"-One deck for all duels.", "-Life losses carried over.", "-Winter Orb permanently in effect.",
+		"-Life losses carried over.", "-Winter Orb permanently in effect.",
 		"Location:", "-East of %s." % WorldNames.site_name(world, 0)] as Array[String])
 	world.encounters[8]["clues"] = WorldClues.RULES
 	assert_eq(WorldClues.lines(world, 8)[-1], "-No special rules.")

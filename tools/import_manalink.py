@@ -666,7 +666,7 @@ def write_label(dest: Path, taken: list[str], rewritten: set[str]) -> None:
     label = dest / LABEL
     keys = set(taken)
     if label.exists():
-        keys |= {line.strip() for line in label.read_text().splitlines()
+        keys |= {line.strip() for line in label.read_text(encoding="utf-8").splitlines()
                  if line.strip() and not line.startswith("#")}
     keys -= rewritten
     if not keys:
@@ -675,4 +675,4 @@ def write_label(dest: Path, taken: list[str], rewritten: set[str]) -> None:
     label.write_text(
         "# Skin files taken from a Manalink install (import_original.py\n"
         "# --manalink): a player's backup, never part of a release.\n"
-        + "".join(key + "\n" for key in sorted(keys)))
+        + "".join(key + "\n" for key in sorted(keys)), encoding="utf-8")

@@ -47,7 +47,10 @@ extends CardScript
 ## has been it for no time at all, so it is the one that goes, the original
 ## stays. (Until that ruling the ORIGINAL was buried, by entry order.) So
 ## the heuristic never shifts into a legend: such a shape sorts last and
-## the hint says no. The seat may still choose it.
+## the hint says no. The seat may still choose it. The ARRIVAL question
+## reads the same way (the polish pass, 2026-10-28): a legend already in
+## play is offered last, the question says the copy is buried, and no
+## heuristic seat takes it (MtgGame._apply_enters_as_copy).
 
 
 static func _any_creature(inst: CardInstance) -> bool:

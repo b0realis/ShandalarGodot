@@ -104,12 +104,17 @@ Help's Heart of Bogardan and shared-reprint wording.
 
 ## Left open
 
-- "Whenever ~ deals damage" (the dealer's side: Spirit Link, El-Hajjâj,
+- ~~"Whenever ~ deals damage" (the dealer's side: Spirit Link, El-Hajjâj,
   Zebra Unicorn, Emberwilde Caliph) still triggers once per damage packet;
-  the totals are the same.
-- Pack 8's `README.txt` still says the shared reprints "first appeared in"
+  the totals are the same.~~ (2026-10-28: fixed in 0.50.61 — one
+  `SOURCE_DEALT_DAMAGE` per source per damage event, for the total it dealt,
+  `MtgGame._note_damage_dealt` / `_flush_damage_dealt`.)
+- ~~Pack 8's `README.txt` still says the shared reprints "first appeared in"
   the older packs; it is checksummed inside every built ZIP, so the wording
-  waits for a deliberate pack revision.
+  waits for a deliberate pack revision.~~ (2026-10-28: mended in 0.50.65 —
+  the 31 "use the rules script of" an Ice Age, Homelands, Portal or Portal
+  Second Age card, as Help and Pack 9's README say; the pack ZIP is built
+  again.)
 - Energy Vortex's {X} is never activated by the AI (like Ventifact Bottle);
   Preferred Selection's payment is never taken.
 - `tests/_hunt/h1/probe_h1_1.gd` expected an engine prompt for the Cobra's

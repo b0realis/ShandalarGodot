@@ -138,8 +138,9 @@ FAMILIES: list[tuple[str, str, str]] = [
      "Behind the Options, Deck Builder and Gauntlet screens."),
     ("Backdrops", "character_select_background",
      "Imported from the 1997 game (Advfac64.pic): despite the name, the "
-     "adventure's world-map frame, for the day the overworld is built. "
-     "NOT READ by the game yet."),
+     "adventure's world-map frame. NOT READ by the game: the world is "
+     "drawn full screen, without the 1997 frame round it, and the frame's "
+     "painted gold, food, ankh and book are cut from world_frame."),
     ("The adventure world", "world_",
      "The world screen of the adventure, drawn as the 1997 game drew it: "
      "sheets of sprites from Program/SPR/ (640 x 480 set), painted with "
@@ -564,7 +565,8 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "
      "sfx_draw, sfx_shuffle, sfx_summon, sfx_attack, sfx_block, "
-     "sfx_damage, sfx_buried (a card to the graveyard), sfx_counter, "
+     "sfx_damage, sfx_kill (a creature dies), sfx_buried (another "
+     "permanent to the graveyard), sfx_sacrifice (a sacrifice), sfx_counter, "
      "sfx_discard, sfx_end_turn, sfx_life_loss, sfx_mana_burn "
      "(life lost to unspent mana), sfx_button, sfx_toss "
      "(the coin), sfx_win and sfx_lose (the fanfares), one sfx_cast_* "
@@ -1351,6 +1353,21 @@ CATALOGUE = "catalogue.txt"
 ## itself, and the note the 0.50.28 upscale tool wrote with its copies.
 SKIN_NOTES = (CATALOGUE, "UPSCALE.txt")
 
+## THE ADVENTURE'S DATA, not pictures but read by the game all the same:
+## the importer writes each from the player's own 1997 files (its
+## CARD_VALUES_KEY, HINTS_KEY and WISE_WORDS_KEY) and the game reads it as
+## the skin's metadata (game/skin.gd `metadata`) — the card prices
+## (game/adventure/card_value.gd), the card seller's hints (card_hints.gd),
+## the wise men's tales and news (wise_man.gd). Each with what the game
+## does without it. `--check` counts them apart (until 0.50.65 it listed
+## them as files "ignored by the game").
+GAME_DATA = (
+    (importer.CARD_VALUES_KEY + ".json", "the card prices come from the cards' own stats"),
+    (importer.HINTS_KEY + ".json", "the card seller gives no hints"),
+    (importer.WISE_WORDS_KEY + ".json",
+     "the wise men tell one short tale and give their news in plain words"),
+)
+
 ## THE @2x NAME. The 0.50.28 tool called a 2x picture `<name>@2x.png`,
 ## beside `<name>.png` (tools/upscale_skin.py now writes a picture at 2x
 ## under its own name), and the owner kept those names valid (2026-10-17:
@@ -1615,9 +1632,15 @@ def check(target: Path) -> int:
         print("  missing (the game draws its own for each):")
         for name in drawn:
             print("    " + name)
+    data = [name for name, _ in GAME_DATA]
+    data_missing = [(name, without) for name, without in GAME_DATA if name not in have]
+    print("  %d of %d adventure data files present (the card prices, the seller's "
+          "hints, the wise men's words)" % (len(data) - len(data_missing), len(data)))
+    for name, without in data_missing:
+        print("    not here: %s — %s" % (name, without))
     worn_from = set(worn.values())
     unknown = [n for n in names if "/" not in n and n not in known
-               and n not in worn_from and n not in SKIN_NOTES
+               and n not in worn_from and n not in SKIN_NOTES and n not in data
                and not (is_scaled(n) and n.replace(SCALED_SUFFIX + ".png", ".png") in known)]
     if unknown:
         print("  not in the catalogue (ignored by the game):")

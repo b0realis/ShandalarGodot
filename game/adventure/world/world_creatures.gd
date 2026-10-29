@@ -13,7 +13,8 @@ extends RefCounted
 ##    and the gates); a creature waiting out its slot's respawn time, or
 ##    Apprentice slot 5, keeps what it held and does nothing this tick.
 ##  - MOVE: every creature steers at the hero every tick — there is no aggro
-##    range — 1 unit a tick (2 for a flyer and the three fast ones,
+##    range (under the Embark's "Creatures: Hunt"; for "Notice" see below)
+##    — 1 unit a tick (2 for a flyer and the three fast ones,
 ##    [method CreatureBook.stride]):
 ##     - the aim is the hero, led ahead of a walking hero by `clamp(d0 / 3,
 ##       0, 16 · difficulty)` units (an Apprentice is never led);
@@ -61,6 +62,61 @@ extends RefCounted
 ## ENTERING A PLACE pushes the creatures near the hero 48 units out
 ## ([method push_back]); A MEETING spends the slot ([method met]); A DUEL
 ## clears the creatures crowding the hero ([method clear_crowd]).
+##
+## NOTICE — THE EMBARK'S "CREATURES" [ours, the owner's ruling of
+## 2026-10-29 on the choke points, "Add, default Notice (Recommended)": *"creatures
+## wander until you come within 1.5–4.5 tiles, then hurry; some slowed on
+## certain lands"*; [member AdventurePlayer.creatures]]. "Hunt" is the walk
+## above, exactly — 1997 as shipped, and an adventure from before the
+## choice. "Notice" (a new adventure's default) switches on 1997's designed,
+## never used range and speed (docs/adventure-unused-1997-features.md §6–§7;
+## slots.c 361–375, 636–714, 770–780; retail glue_adventure.c 1251–1352):
+##  - THE RANGE ([method notice_range]): the kind's ([method
+##    CreatureBook.range_of]: 32 wizards and flyers, 48 knights, lords,
+##    archmages and henchmen, 64 djinn and dragons, 96 trolls and wyrms,
+##    × 3 / 2, doubled for flag 0x200), halved for every creature but the
+##    one nearest the hero as the tick begins ([method nearest_slot]) — 48
+##    to 144 world units (1.5 to 4.5 tiles) for the nearest, 24 to 72 for
+##    the others, the wide-ranged ones twice that. [Ours: the ruling's
+##    tiles over 1997's arithmetic — 1997 compared the range with its
+##    `ApproximateDistance` (twice the longer axis and the shorter, about
+##    twice a straight distance: adventure_input.c 1246–1268), so as
+##    written a range of 48 reached 24 world units, three quarters of a
+##    tile, and a wizard noticed the hero only a hair before it met them;
+##    the question the owner answered named the ranges in tiles (1.5 to
+##    4.5), so the range is read in world units — on `d0`'s scale, twice it
+##    ([constant NOTICE_SCALE], the one number to set back to 1 for 1997's
+##    reach).]
+##  - WITHIN IT (`d0` ≤ the range on 1997's distance) the creature HURRIES at the hero: the walk
+##    above — the lead, the flight, the inertia, the probe, the crowding,
+##    the jump, the colour stop — at its whole stride ([constant HURRY]);
+##  - OUTSIDE IT it does not steer at the hero: it WANDERS its own lands
+##    [ours — 1997 gives no wander], as the world at peace's wanderers do
+##    (a way of its own, turned now and then and whenever it is stopped; the
+##    colour stop keeps it on its lands), at an AMBLE — half its stride, a
+##    stride-1 creature stepping every other tick ([constant AMBLE], [method
+##    pace]) [ours];
+##  - THE SLOW LANDS ([method CreatureBook.slowed_on], flags 0x008–0x080
+##    against the land under it): a hurrying creature there goes at an
+##    amble (1997 halved its speed only when above 1, as here);
+##  - [ours: the owner's intent over 1997's arithmetic] 1997's speed is 1
+##    inside the range and DOUBLES for every halving of the distance needed
+##    to bring the creature inside it (slots.c 709–713): read as written, a
+##    far creature would hurry at the hero — chase from anywhere, Hunt's
+##    way. The owner's ruling is that far ones wander: so the doubling is
+##    read once, as the hurry of a creature that has noticed the hero, and
+##    never for one that has not;
+##  - unchanged under Notice: the refills and spawns, the flight after
+##    difficulty + 3 wins (within 64, whatever the range: running away is
+##    not steering at the hero), the fast kinds' stride 2 (their hurry), the
+##    contact at 16 (a wanderer the hero walks into is met), the lead on the
+##    harder levels (it shapes a hurrying creature's aim), the cries, the
+##    push-back and the crowd a duel clears; THE BESIEGER (slot 7) keeps to
+##    its town and chases a hero within 24 as above; THE QUEST'S CREATURE
+##    hunts the hero as under Hunt (it is the quest's, as at peace).
+## Under Notice the world's dice go another way than Hunt's (the
+## wanderers' turns draw them): a seed's world is the same, its meetings
+## are not.
 ##
 ## THE WORLD AT PEACE (part C, after Arzakon's fall, [method
 ## AdventurePlayer.at_peace]; the owner, 2026-10-27: *"If you return to roam
@@ -112,32 +168,26 @@ extends RefCounted
 ##    halved for every creature but the one nearest the hero (a search of
 ##    its own, dead too); and a speed that doubles for every halving of the
 ##    distance needed to bring it inside the range. Nothing reads either but
-##    the range's sign (lairs −1). Switched on, a creature would steer at the
-##    hero only within its range — wandering, or standing, until the hero
-##    came near — and close the distance faster the further it was: the
-##    world would have quiet stretches and sudden rushes, the dragons and
-##    wide-ranged ones noticing the hero from twice as far. To switch on:
-##    [method _walk] aims at the hero only inside the range and multiplies
-##    [method CreatureBook.stride] by the speed.
+##    the range's sign (lairs −1). SWITCHABLE AT THE EMBARK since 0.50.65:
+##    "Creatures: Notice", above.
 ##  - SLOW ON SOME LANDS (flags 0x008–0x080, [constant
 ##    CreatureBook.MOVE_TERRAIN]; slots.c 770–780): the dead speed halved on
 ##    land of the colours the bits name — mostly not the creature's own (the
 ##    Merfolk Shaman's black, the Sedge Beast's green, the Elementalist's
 ##    black and green, the Centaur Shaman's blue, the Centaur Warchief's red;
-##    the Ape Lord's blue never). Switched on (with the speed), outrunning
-##    them would depend on where they stand. To switch on: halve the stride
-##    there.
+##    the Ape Lord's blue never). SWITCHABLE AT THE EMBARK since 0.50.65,
+##    with the range ("Creatures: Notice", above).
 ##  - CREATURE NAMES ON THE MAP (adventureWorldUi.c 2280–2284): a drawn
 ##    creature's name — for the three DISGUISE creatures the row of [method
 ##    CreatureBook.shown_row], a row lower every 32 ticks — was copied into
 ##    the message line for 8 ticks of every 32, slot by slot (`(T >> 3) & 3`
-##    the slot's `& 3`), and never drawn.
-##    Switched on, the hero would know what approaches before meeting it, and
-##    the Necromancer, the Shapeshifter and the Summoner would come
-##    disguised as weaker creatures. To switch on: the world screen's pointer
-##    tip names a creature under the pointer by [method CreatureBook.name_of]
-##    of [method CreatureBook.shown_row]. (The disguise itself is live: it
-##    moves the lurk test.)
+##    the slot's `& 3`), and never drawn. BUILT AS AN OPTION since 0.50.65
+##    (the owner, 2026-10-28: *"only §5, the creature names on the map —
+##    small, with their own on/off setting in the adventure's options
+##    menu"*): [method map_name] is that copy, and with the world's options'
+##    Creature names on ([constant WorldHud.NAMES_SETTING], off to begin
+##    with) [WorldView] draws it small over the creature — the Necromancer,
+##    the Shapeshifter and the Summoner announced as weaker creatures.
 ##  - SLOT 6: the ruled town's liberation duel writes its creature into
 ##    roaming slot 6 (visitLocation.c 4312–4313) and never places it; its
 ##    place (0, 0) is the sea, so the colour stop empties it on the next
@@ -204,6 +254,17 @@ const TEMPER_ODDS: Array[int] = [1, 2, 1]
 const WANDER_TURN := 8
 ## How far ahead along its way a wanderer aims (before its inertia).
 const WANDER_AIM := 64
+## THE SPEEDS under Notice ([method pace]): a creature that has noticed the
+## hero HURRIES — 1997's first doubling, its whole stride, Hunt's pace — one
+## that has not AMBLES at half of it [ours]; a hurrying creature on the
+## lands its flags name goes at an amble (1997 halved only a speed above 1).
+const HURRY := 2
+const AMBLE := 1
+## THE RANGE READ IN WORLD UNITS [ours — the class doc, "Notice"]: 1997's
+## distance is about twice a straight one, so a range of 48 world units is
+## 96 on it. 1 would be 1997's arithmetic exactly (a range of 48 reaching
+## three quarters of a tile).
+const NOTICE_SCALE := 2
 
 
 # ------------------------------------------------------------ the tick --
@@ -220,6 +281,9 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 		return out
 	var dice := MsvcRandom.new(player.dice)
 	var hero := player.tile()
+	# Under Notice, the one creature nearest the hero as the tick begins
+	# keeps its whole range (slots.c 361–375).
+	var nearest := nearest_slot(player) if notices(player) else -1
 	for slot in WALKED:
 		if slot < WorldLairs.SLOTS:
 			var was := WorldLairs.held_in(player, slot)
@@ -243,7 +307,7 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 				out["kind"] = "lair"
 				break
 			continue
-		var step := _walk(player, slot, held, dice)
+		var step := _walk(player, slot, held, dice, nearest)
 		if step["blocked"] or step["gone"]:
 			# Blocked: nothing else this tick. Gone (the colour stop): not
 			# met [ours: 1997 slip — an emptied slot met at 16].
@@ -253,7 +317,7 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 			out["met"] = slot
 			out["kind"] = "creature"
 			break
-		if int(held.get("frame", 0)) != 0 and int(step["d0"]) < CRY_REACH:
+		if int(held.get("frame", 0)) != 0 and int(step["d0"]) < CRY_REACH and not step.get("rested", false):
 			(out["cries"] as Array).append({"slot": slot, "creature": int(held["creature"]),
 				"distance": int(step["d0"]), "x": at.x, "y": at.y})
 	player.dice = dice.state
@@ -262,8 +326,12 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 
 ## ONE CREATURE'S WALK this tick (slots.c 641–934): its aim, the way, the
 ## probe, the crowding, the jump, the colour stop and the step — `{d0,
-## blocked, gone}`, the record [param held] changed in place.
-static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: MsvcRandom) -> Dictionary:
+## blocked, gone, rested}`, the record [param held] changed in place;
+## [param nearest] the slot nearest the hero under Notice ([method
+## nearest_slot]), `rested` true when a creature at half pace sits this
+## tick out ([method pace]).
+static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: MsvcRandom,
+		nearest := -1) -> Dictionary:
 	var row := int(held["creature"])
 	var flags := CreatureBook.move_flags(row)
 	var now := player.monster_timer
@@ -272,19 +340,20 @@ static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: Ms
 	# [ours: 1997 slip — on the tick a slot is filled 1997 measured from the
 	# slot's old place; here from where the creature stands.]
 	var d0 := _distance(hero, from)
-	match temper_of(player, held):
+	var going := goes(player, slot, held, d0, nearest)
+	var speed := speed_of(player, slot, held, going)
+	match going:
 		STANDS:
 			# At peace, standing where it was made: no step, no cry.
 			held["frame"] = 0
 			return {"d0": d0, "blocked": false, "gone": false}
 		WANDERS:
-			# A new way when it has none, when its last step was stopped, or
-			# now and then — on its turning ticks only.
-			var wander := clampi(int(held.get("wander", 0)), 0, 8)
-			if wander == 0 or ((now + slot) & 3 == 0
-					and (int(held.get("frame", 0)) == 0 or dice.below(WANDER_TURN) == 0)):
-				held["wander"] = dice.below(8) + 1
-	var aim := aim_of(player, slot, held, d0)
+			_turn(held, now, slot, dice)
+	if pace(row, speed, now, slot) == 0:
+		# At an amble, a tick sat out: no step, no cry; met if the hero
+		# walks into it.
+		return {"d0": d0, "blocked": false, "gone": false, "rested": true}
+	var aim := aim_of(player, slot, held, d0, going)
 	var heading := clampi(int(held.get("heading", 0)), 0, 8)
 	aim += _dir(heading) * INERTIA
 	var way := way_of(aim)
@@ -313,7 +382,7 @@ static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: Ms
 			empty(player, slot)
 			out["gone"] = true
 		return out
-	var to := from + _dir(way) * CreatureBook.stride(row)
+	var to := from + _dir(way) * pace(row, speed, now, slot)
 	held["x"] = to.x
 	held["y"] = to.y
 	held["heading"] = way
@@ -327,11 +396,14 @@ static func _walk(player: AdventurePlayer, slot: int, held: Dictionary, dice: Ms
 ## hero): the hero, led ahead of them by `clamp(d0 / 3, 0, 16 · difficulty)`
 ## while they walk; turned round when it flees ([method flees]); the
 ## besieger's town while the hero is further than 24; in a world at peace a
-## wanderer's own way ([method temper_of]).
-static func aim_of(player: AdventurePlayer, slot: int, held: Dictionary, d0: int) -> Vector2i:
+## wanderer's own way ([method temper_of]) — and under Notice one that has
+## not noticed the hero ([param going] [constant WANDERS], from [method
+## _walk]; "" reads the temper).
+static func aim_of(player: AdventurePlayer, slot: int, held: Dictionary, d0: int,
+		going := "") -> Vector2i:
 	var from := Vector2i(int(held["x"]), int(held["y"]))
-	if temper_of(player, held) == WANDERS:
-		# At peace, a wanderer's aim is its own way, not the hero.
+	if (going if going != "" else temper_of(player, held)) == WANDERS:
+		# A wanderer's aim is its own way, not the hero.
 		return _dir(clampi(int(held.get("wander", 0)), 0, 8)) * WANDER_AIM
 	var aim := player.position - from
 	if player.step != 0:
@@ -418,6 +490,104 @@ static func way_of(aim: Vector2i) -> int:
 	if aim.x > 0:
 		return 4 if aim.y > 0 else 2
 	return 6 if aim.y > 0 else 8
+
+
+# ------------------------------------------------------------- Notice --
+
+## Whether the creatures notice rather than hunt ([member
+## AdventurePlayer.creatures], the Embark's "Creatures").
+static func notices(player: AdventurePlayer) -> bool:
+	return player != null and player.creatures == AdventurePlayer.CREATURES_NOTICE
+
+
+## HOW CREATURE [param held] OF SLOT [param slot] GOES THIS TICK, [param d0]
+## from the hero ([param nearest] the slot nearest the hero, [method
+## nearest_slot]): its temper ([method temper_of]: [constant HUNTS] but at
+## peace) — and under Notice a hunter WANDERS while the hero is outside its
+## range ([method notice_range]) and it does not run from them (within
+## [constant FLEE], [method flees]). Never the besieger or the quest's
+## creature: they hunt as under Hunt.
+static func goes(player: AdventurePlayer, slot: int, held: Dictionary, d0: int, nearest := -1) -> String:
+	var temper := temper_of(player, held)
+	if temper != HUNTS or not _noticing(player, slot, held):
+		return temper
+	var row := int(held.get("creature", 0))
+	if d0 <= notice_range(row, slot == nearest) or (d0 < FLEE and flees(player, held)):
+		return HUNTS
+	return WANDERS
+
+
+## THE SPEED creature [param held] goes at ([constant HURRY] or [constant
+## AMBLE], for [method pace]) when it goes [param going] ([method goes]):
+## Hunt's and the world at peace's always [constant HURRY]; under Notice a
+## wanderer AMBLES, a hunter HURRIES, but at an amble on the lands its
+## flags name ([method CreatureBook.slowed_on], the land under it).
+static func speed_of(player: AdventurePlayer, slot: int, held: Dictionary, going: String) -> int:
+	if not _noticing(player, slot, held):
+		return HURRY
+	if going == WANDERS:
+		return AMBLE
+	var row := int(held.get("creature", 0))
+	var at := Vector2i(int(held.get("x", 0)), int(held.get("y", 0)))
+	return HURRY / 2 if CreatureBook.slowed_on(row, _land_colors(player.world, at)) else HURRY
+
+
+## Whether Notice moves creature [param held] of slot [param slot]: under
+## Notice, a roaming creature that hunts by temper — not the besieger, not
+## the quest's creature.
+static func _noticing(player: AdventurePlayer, slot: int, held: Dictionary) -> bool:
+	return notices(player) and slot != SIEGE_SLOT and temper_of(player, held) == HUNTS \
+		and int(held.get("creature", 0)) != quest_row(player)
+
+
+## THE SLOT NEAREST THE HERO among the live creatures of the roaming slots
+## (slots.c 361–375: 1997's distance, the first of equals; lairs never) —
+## the one whose range is not halved. −1 for none. [Ours: 1997 slip — an
+## empty slot counted at the stale place its last creature left.]
+static func nearest_slot(player: AdventurePlayer) -> int:
+	var best := -1
+	var best_distance := 0x7FFF
+	for slot in WorldLairs.SLOTS:
+		var held := WorldLairs.held_in(player, slot)
+		if not is_creature(held):
+			continue
+		var d := _distance(player.position, Vector2i(int(held["x"]), int(held["y"])))
+		if d < best_distance:
+			best_distance = d
+			best = slot
+	return best
+
+
+## THE RANGE a creature of row [param row] notices the hero within, on
+## 1997's distance (`d0`'s): its range ([method CreatureBook.range_of]),
+## halved unless it is the creature nearest the hero ([param nearest];
+## slots.c 706–708), × [constant NOTICE_SCALE].
+static func notice_range(row: int, nearest: bool) -> int:
+	var reach := CreatureBook.range_of(row)
+	return (reach if nearest else reach / 2) * NOTICE_SCALE
+
+
+## THE UNITS creature [param row] goes this tick at [param speed] ([constant
+## HURRY] or [constant AMBLE]): its [method CreatureBook.stride] × speed / 2
+## — at an amble a stride-1 creature steps only on the ticks where `(T +
+## slot)` is even (its turning ticks among them), a stride-2 one a unit
+## every tick. 0: it rests this tick.
+static func pace(row: int, speed: int, now: int, slot: int) -> int:
+	var halves := CreatureBook.stride(row) * speed
+	if halves >= HURRY:
+		return halves / HURRY
+	return 1 if (now + slot) & 1 == 0 else 0
+
+
+## A WANDERER'S TURN (at peace, or under Notice unnoticing): a new way when
+## it has none, when its last step was stopped, or now and then — on its
+## turning ticks only (`(T + slot) & 3 == 0`), one time in [constant
+## WANDER_TURN], on the adventure's dice.
+static func _turn(held: Dictionary, now: int, slot: int, dice: MsvcRandom) -> void:
+	var wander := clampi(int(held.get("wander", 0)), 0, 8)
+	if wander == 0 or ((now + slot) & 3 == 0
+			and (int(held.get("frame", 0)) == 0 or dice.below(WANDER_TURN) == 0)):
+		held["wander"] = dice.below(8) + 1
 
 
 # --------------------------------------------------- the world at peace --
@@ -556,6 +726,32 @@ static func lurks(player: AdventurePlayer, held: Dictionary) -> bool:
 	var dx := int(held["x"]) - player.position.x
 	var dy := int(held["y"]) - player.position.y
 	return WorldGenerator.distance(2 * (dx + dy), dy - dx) > LURK
+
+
+## THE NAME OVER A CREATURE ON THE MAP (see the class doc; docs/adventure-
+## unused-1997-features.md §5): the name 1997's drawing copied for the
+## creature of row [param creature] in roaming slot [param slot] at the
+## world's clock [param timer] — in the slot's eight ticks of every 32
+## (`((T >> 3) & 3) == (slot & 3)`, adventureWorldUi.c 2280–2284), the
+## name of the row its disguise shows ([method CreatureBook.shown_row]) —
+## or "" outside them.
+static func map_name(creature: int, slot: int, timer: int) -> String:
+	if ((timer >> 3) & 3) != (slot & 3):
+		return ""
+	return CreatureBook.name_of(CreatureBook.shown_row(creature, timer))
+
+
+## The names over the creatures [param player]'s hero sees now ([method
+## seen], [method map_name]): slot → name, only the slots in their ticks.
+static func map_names(player: AdventurePlayer) -> Dictionary:
+	var out := {}
+	if player == null:
+		return out
+	for creature in seen(player):
+		var called := map_name(int(creature["creature"]), int(creature["slot"]), player.monster_timer)
+		if called != "":
+			out[int(creature["slot"])] = called
+	return out
 
 
 # ------------------------------------------------------------ the slots --

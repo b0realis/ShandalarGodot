@@ -337,7 +337,8 @@ func test_the_spell_chain_menu_opens_on_the_band_and_its_help_is_live() -> void:
 	band.gui_input.emit(right)
 	var menu := screen._chain_menu
 	assert_true(menu.visible, "@MENU_SPELLCHAIN opens on the band")
-	assert_true(menu.is_item_disabled(0), "Minimize stays grey: the chain has no minimised state")
+	assert_false(menu.is_item_disabled(0),
+		"Minimize is live since the polish pass of 2026-10-28 (the chain's title band)")
 	_choose(menu, "Help...")
 	_assert_help(HelpPages.MINI_SPELL_CHAIN, "@MENU_SPELLCHAIN")
 	g.stack.clear()

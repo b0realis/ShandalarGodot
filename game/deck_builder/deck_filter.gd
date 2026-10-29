@@ -402,6 +402,19 @@ var rarity_on := false:
 			rarity_on = value
 			revision += 1
 var rarities: Dictionary = {}
+## The lists `Restricted` and `Banned` file a card by: "" for the tournament
+## lists ([constant DeckFormat.RESTRICTED], [constant DeckFormat.BANNED]),
+## else a [ClassicBans] list — the one an adventure under the Classic MTG
+## rules was begun with ([member AdventurePlayer.ban_list]), so the Rarity
+## filter files a card as that adventure's Extra Cards box judges it (the
+## 0.50.65 bug campaign, k6-4: under "1998" Mind Twist, which that list
+## bans, was filed Restricted, and Mana Vault, which it frees, Restricted
+## too). The screen's own, set as it opens: [method reset] keeps it.
+var ban_list := "":
+	set(value):
+		if ban_list != value:
+			ban_list = value
+			revision += 1
 ## `@ARTIST` — enabled, and artist name -> ticked (absent means ticked).
 var artist_on := false:
 	set(value):
@@ -1178,7 +1191,7 @@ static func _matches_rank(mode: int, limit: int, d: CardData, value: int) -> boo
 func matches_rarity(d: CardData) -> bool:
 	if not rarity_on:
 		return true
-	var kinds := rarity_kinds(d)
+	var kinds := rarity_kinds(d, ban_list)
 	for kind in kinds:
 		if rarity_ticked(kind):
 			return true
@@ -1186,8 +1199,9 @@ func matches_rarity(d: CardData) -> bool:
 
 
 ## Every [enum Rarity] that describes [param d]: its printed rarity
-## ([method DeckStats.rarity_of]) and the tournament lists it is on.
-static func rarity_kinds(d: CardData) -> Array[int]:
+## ([method DeckStats.rarity_of]) and the lists it is on — the tournament
+## lists, or with [param bans] that [ClassicBans] list ([member ban_list]).
+static func rarity_kinds(d: CardData, bans := "") -> Array[int]:
 	var kinds: Array[int] = []
 	match DeckStats.rarity_of(d.card_name):
 		"common":
@@ -1196,6 +1210,12 @@ static func rarity_kinds(d: CardData) -> Array[int]:
 			kinds.append(Rarity.UNCOMMON)
 		"rare":
 			kinds.append(Rarity.RARE)
+	if bans != "":
+		if ClassicBans.is_restricted(d.card_name, bans):
+			kinds.append(Rarity.RESTRICTED)
+		if ClassicBans.is_banned(d.card_name, bans):
+			kinds.append(Rarity.BANNED)
+		return kinds
 	if DeckFormat.RESTRICTED.has(d.card_name):
 		kinds.append(Rarity.RESTRICTED)
 	if DeckFormat.BANNED.has(d.card_name):

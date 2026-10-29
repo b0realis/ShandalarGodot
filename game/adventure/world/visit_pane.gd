@@ -329,6 +329,15 @@ func _transition_in() -> void:
 			_reveal_face(TileReveal.ZOOM_SECONDS)
 
 
+## THE TOWN COMES BACK from the map opened over it ([method
+## WorldScreen.map_in_town]): its picture zoomed in again, as 1997 zoomed
+## the town in after its map (visitLocation.c 1048, 2111) — with the
+## transitions on, and not over a zoom still under way.
+func come_back() -> void:
+	if _art != null and _art.get_node_or_null(^"ZoomIn") == null:
+		_transition_in()
+
+
 ## The whole picture hidden under the frame's dark ground, its [param
 ## tiles] coming in [param order] over [param length] seconds. Laid between
 ## the picture and what is over it: a lair's card or hoard stands at once,
@@ -658,7 +667,8 @@ func face_name() -> String:
 	return ""
 
 
-## A piece of the tinted frame's sheet (a dim box without the skin).
+## A piece of the tinted frame's sheet (a dim box without the skin), cut
+## clean of the sheet's key lines ([method EncounterStage.cut_of]).
 func _frame_piece(region: Rect2, part_name: String) -> Control:
 	var sheet := GameSkin.texture("preduel_frame_tinted")
 	if sheet == null:
@@ -670,12 +680,9 @@ func _frame_piece(region: Rect2, part_name: String) -> Control:
 		face.set_border_width_all(1)
 		box.add_theme_stylebox_override("panel", face)
 		return box
-	var cut := AtlasTexture.new()
-	cut.atlas = sheet
-	cut.region = region
 	var shown := TextureRect.new()
 	shown.name = part_name
-	shown.texture = cut
+	shown.texture = EncounterStage.cut_of(sheet, region)
 	shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shown.stretch_mode = TextureRect.STRETCH_SCALE
 	return shown

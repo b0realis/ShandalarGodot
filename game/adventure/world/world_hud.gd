@@ -58,6 +58,9 @@ signal cast_pressed(key: int)
 ## Big buttons were switched (the options): the panel is to be made again
 ## at the other size.
 signal big_switched
+## The creatures' names on the map were switched (the options): the world
+## shows them, or takes them away, at once.
+signal names_switched
 ## The pointer came over a part of the HUD: the world's pointers step aside.
 signal hovered
 
@@ -67,6 +70,10 @@ const FRAME_ICONS := {"gold": Rect2i(58, 552, 84, 46), "food": Rect2i(206, 551, 
 	"ankh": Rect2i(326, 552, 70, 46), "book": Rect2i(454, 552, 80, 46)}
 const STRIP: Array[String] = ["gold", "food", "ankh", "book"]
 const STRIP_NAMES := {"gold": "Gold", "food": "Food", "ankh": "Mana links", "book": "Deck"}
+## UNDER THE EMBARK'S "BASE 10 + LINKS" (0.50.65; [method
+## AdventurePlayer.duel_start_life]) the hero's panel and the ankh's tip
+## say what the duels start at.
+const DUELS_START := "Your duels start at %d life."
 const STRIP_TIPS := {"gold": "Buys cards, food and World Magics in the towns.",
 	"food": "Eaten as you walk; with none left you walk slower.",
 	"ankh": "Each town whose mana you have linked adds a life in your duels.",
@@ -109,7 +116,9 @@ const MAGIC_TIPS := {
 ## Space; the stats screen's W, J and D), [QoL] where they are ours: a
 ## click walks — the arrows look, where 1997's walked the hero — and the
 ## wheel, N, H and the panes' drag are new. Save stays Ctrl+S (the owner's
-## ruling C-2: W A S D keep looking; 1997's S saved).
+## ruling C-2: W A S D keep looking; 1997's S saved). In a town M or F2, F5
+## and Ctrl+S open over its pane ([method WorldScreen.town_on_top]; the
+## owner's "as 1997" of 2026-10-28).
 const KEYS := [["Click", "walk there; the way is found"],
 	["Right click", "the options"],
 	["Drag or arrows", "look around (W A S D too)"],
@@ -125,6 +134,7 @@ const KEYS := [["Click", "walk there; the way is found"],
 	["F6", "the wizards"],
 	["W, J, D", "with your hero's pane open: the wizards, the journal; D closes it"],
 	["Ctrl+S", "save the adventure"],
+	["In a town", "M or F2, F5, Ctrl+S open over the town; close them to come back"],
 	["L", "load an adventure"],
 	["H", "these keys"],
 	["Drag a pane", "move it; it stays there"],
@@ -134,15 +144,15 @@ const KEYS := [["Click", "walk there; the way is found"],
 ## ("Will you ...", `@STARTUP` 1).
 const OPTIONS := [["Save", "Save"], ["Load", "Load (L)"], ["Cities", "City list (F3)"],
 	["Wizards", "Wizards (F6)"], ["Bar", ""], ["Minimap", ""],
-	["Quest", ""], ["Guides", ""], ["Places", ""], ["Reader", ""], ["Big", ""], ["Pace", ""],
+	["Quest", ""], ["Guides", ""], ["Places", ""], ["Names", ""], ["Reader", ""], ["Big", ""], ["Pace", ""],
 	["Transitions", ""], ["Music", ""], ["Sound", ""],
 	["Menu", "Return to main menu"], ["Exit", "Exit game"]]
 ## The hero pane's tab 1997's wizards' window became ([HeroStats]).
 const WIZARDS_TAB := "Wizards"
 const HERO_TAB := "Hero"
 ## The switches that leave the options open, so the new setting shows.
-const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Reader", "Pace", "Transitions",
-	"Music", "Sound"]
+const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Names", "Reader", "Pace",
+	"Transitions", "Music", "Sound"]
 ## BIG BUTTONS, for a finger (the owner, 2026-10-23: *"touch-pad support?
 ## Maybe we can have bigger buttons on the pane with left and right arrows
 ## at the distal ends for touch"*) [QoL]: the panel and its options made
@@ -164,6 +174,13 @@ const GUIDES_SETTING := "world_guides"
 ## text with place category and name are displayed … turned on/off in
 ## menu drop down pane"*).
 const PLACES_SETTING := "world_place_names"
+## Whether a small name stands over each creature roaming the map, in its
+## eight ticks of every 32 as 1997 copied it and never drew it ([method
+## WorldCreatures.map_name]; the owner, 2026-10-28, of the unused 1997
+## features: *"only §5, the creature names on the map — small, with their
+## own on/off setting in the adventure's options menu"*). Off until
+## switched on, remembered.
+const NAMES_SETTING := "world_creature_names"
 ## Whether a right click on a card in the shop, the card trader or a lair
 ## opens it full screen, as the duel's reader does (the owner, 2026-10-23:
 ## *"Right click on card should have large card render as in the duel! …
@@ -384,7 +401,9 @@ func _ready() -> void:
 	buttons["Hero"].pressed.connect(func() -> void: hero_pressed.emit())
 	# The panel's buttons click as 1997's frame buttons did (`Button2.wav`).
 	for key in ["Deck", "Map", "Clues", "Hero"]:
-		(buttons[key] as BaseButton).pressed.connect(func() -> void: WorldSoundscape.play_from(self, "sfx_click"))
+		(buttons[key] as BaseButton).pressed.connect(func() -> void:
+			if not resting:
+				WorldSoundscape.play_from(self, "sfx_click"))
 	buttons["Options"].pressed.connect(toggle_options)
 	buttons["Help"].pressed.connect(toggle_help)
 	for key in buttons:
@@ -737,6 +756,12 @@ static func places_wanted() -> bool:
 	return bool(Settings.get_value(PLACES_SETTING, true))
 
 
+## Whether the creatures' names stand over them on the map (off until
+## switched on).
+static func creature_names_wanted() -> bool:
+	return bool(Settings.get_value(NAMES_SETTING, false))
+
+
 ## Whether a right click on a card opens it full screen (on until switched).
 static func reader_wanted() -> bool:
 	return bool(Settings.get_value(READER_SETTING, true))
@@ -758,10 +783,15 @@ func show_guides(shown: bool) -> void:
 ## panes *"with rounded corners that can be moved at will"*): dragged
 ## further than [constant PANE_SLOP] it moves, and is found there next
 ## time; a press let go where it was made is a click, given to
-## [param on_click] with the point on the part pressed.
+## [param on_click] with the point on the part pressed. At rest only the
+## hero's pane moves ([method hero_over_town]).
 func _pane_input(pane: Control, event: InputEvent, on_click := Callable()) -> void:
 	var mouse := event as InputEventMouse
 	if mouse == null:
+		return
+	if resting and pane != _hero_panel:
+		# At rest only the hero's pane moves (opened over a town).
+		_drag = {}
 		return
 	var at := mouse.global_position - get_global_rect().position
 	var button := event as InputEventMouseButton
@@ -905,6 +935,14 @@ func toggle_hero() -> void:
 	_show_hero_tab(HERO_TAB)
 
 
+## THE HERO OVER A TOWN (F5 inside a town, [method WorldScreen.hero_in_town];
+## the owner's "as 1997" of 2026-10-28): the hero's pane on its Hero tab
+## while the panel rests under the town — only the pane answers; its F5,
+## Escape, Q or D close it ([method close_panels]).
+func hero_over_town() -> void:
+	_show_hero_tab(HERO_TAB)
+
+
 ## THE WIZARDS (F6, the options' "Wizards (F6)"): the hero's pane on its
 ## Wizards tab — 1997's wizards' window (`ShowStatsWindow(0, −1)`, the
 ## Statwin window, adventure_input.c 373–396), nobody ringed, heard once as
@@ -950,10 +988,13 @@ func help_shown() -> bool:
 
 
 ## THE OPTIONS (the painted book): save, load, the panel to the other
-## edge, exit. Not while the panel rests.
+## edge, exit — their switches read afresh as they open (a setting changed
+## elsewhere, the Options screen's Transitions, shows as it stands). Not
+## while the panel rests.
 func toggle_options() -> void:
 	if resting:
 		return
+	_refresh_options()
 	_open(_options_menu, not _options_menu.visible, buttons["Options"])
 
 
@@ -968,6 +1009,7 @@ func toggle_options_at(at: Vector2) -> void:
 		close_options()
 		return
 	close_panels()
+	_refresh_options()
 	_options_menu.visible = true
 	_options_menu.reset_size()
 	var room := size - _options_menu.size - Vector2(4, 4)
@@ -1009,6 +1051,8 @@ func hero_lines() -> Array[String]:
 	var links := player.mana_links()
 	lines.append("%d gold · %d food · %d mana %s" % [player.gold, player.food, links,
 		"link" if links == 1 else "links"])
+	if player.life_start == AdventurePlayer.START_BASE:
+		lines.append(DUELS_START % player.duel_start_life())
 	var gems: Array[String] = []
 	for gem in AMULETS:
 		gems.append("%s %d" % [gem[0], int(player.amulets.get(gem[0], 0))])
@@ -1226,6 +1270,9 @@ func _choose(entry_name: String) -> void:
 		"Places":
 			Settings.set_value(PLACES_SETTING, not places_wanted())
 			hide_place()
+		"Names":
+			Settings.set_value(NAMES_SETTING, not creature_names_wanted())
+			names_switched.emit()
 		"Reader":
 			Settings.set_value(READER_SETTING, not reader_wanted())
 		"Big":
@@ -1264,6 +1311,8 @@ func _option_words(entry_name: String) -> String:
 			return "Guide arrows: " + ("on" if guides_wanted() else "off")
 		"Places":
 			return "Place names: " + ("on" if places_wanted() else "off")
+		"Names":
+			return "Creature names: " + ("on" if creature_names_wanted() else "off")
 		"Reader":
 			return "Large card on right-click: " + ("on" if reader_wanted() else "off")
 		"Big":
@@ -1311,7 +1360,9 @@ func _rests_the_pointer(part: Control, tip: String) -> void:
 
 
 func _process(delta: float) -> void:
-	if _hover == null or not is_instance_valid(_hover) or not _hover.is_visible_in_tree():
+	# At rest no tip floats: under the hero's pane opened inside a town the
+	# panel is in reach of the pointer, and answers nothing.
+	if resting or _hover == null or not is_instance_valid(_hover) or not _hover.is_visible_in_tree():
 		_hide_tip()
 		return
 	_rested += delta
@@ -1359,13 +1410,22 @@ func _hide_tip() -> void:
 	set_process(false)
 
 
+## The ankh's tip's tail under "Base 10 + links" ([constant DUELS_START],
+## with 10 and the World Magics' bonuses before the links named); "" for
+## any other strip part and under "Links only".
+func base_life_words(key: String) -> String:
+	if key != "ankh" or player == null or player.life_start != AdventurePlayer.START_BASE:
+		return ""
+	return " " + DUELS_START % player.duel_start_life() + " That is 10, and the World Magics' bonuses, before your links."
+
+
 ## `[name, what it does]` for a part's [param tip] key.
 func tip_for(tip: String) -> Array[String]:
 	var kind := tip.get_slice(":", 0)
 	var key := tip.get_slice(":", 1)
 	match kind:
 		"strip":
-			return [STRIP_NAMES[key], STRIP_TIPS[key]]
+			return [STRIP_NAMES[key], String(STRIP_TIPS[key]) + base_life_words(key)]
 		"minimap":
 			return ["Small map (N)", "The land round your hero. Click on it to walk there."]
 		"amulet":
@@ -1386,6 +1446,9 @@ func tip_for(tip: String) -> Array[String]:
 				state = " No %s amulet left to power it." % _amulet_of(i)
 			elif player != null and _active(i):
 				state = " Click, or press %d." % (i / 2)
+			if player != null and player.life_start == AdventurePlayer.START_BASE \
+					and AdventurePlayer.LIFE_BONUSES.has(magic):
+				state += " Owned, it adds %d life to every duel." % int(AdventurePlayer.LIFE_BONUSES[magic])
 			return [magic, MAGIC_TIPS[magic] + state]
 		"button":
 			match key:

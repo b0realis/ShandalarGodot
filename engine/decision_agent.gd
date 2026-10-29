@@ -249,10 +249,19 @@ func cumulative_upkeep_hint(game: MtgGame, pid: int, _source: CardInstance,
 
 ## Pick one card from [param candidates] (library search — Demonic Tutor).
 ## Returning null means "fail to find"/decline, legal where searches are.
-## Default: the first candidate (callers pre-sort by desirability).
-func answer_card(_game: MtgGame, _pid: int, candidates: Array[CardInstance],
+## Default: the first candidate (callers pre-sort by desirability) — but
+## never a SHAPE the 1997 legend rule buries the copy of ([member
+## PlayerChoice.copying]): those come last, so a first candidate that is
+## one means every shape is, and the optional copy is declined.
+func answer_card(game: MtgGame, _pid: int, candidates: Array[CardInstance],
 		_prompt: String) -> CardInstance:
-	return null if candidates.is_empty() else candidates[0]
+	if candidates.is_empty():
+		return null
+	var asked := current_choice()
+	if game != null and asked != null and asked.copying and asked.optional \
+			and game.legend_copy_is_buried(candidates[0]):
+		return null
+	return candidates[0]
 
 
 ## Choose a COLOUR (or colours) — "becomes the color of your choice"
@@ -361,12 +370,15 @@ func choose_card_in_order(game: MtgGame, pid: int, candidates: Array[CardInstanc
 ## answer with the first candidate, so the overlay must not offer a way out.
 ## [param ordered] says the candidates come ranked best-first for the seat
 ## (a targeted trigger's list, [member PlayerChoice.ordered]).
+## [param copying] says they are shapes to enter as a copy of
+## ([member PlayerChoice.copying]).
 func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 		prompt: String, optional := false, adverse := false,
-		ordered := false) -> CardInstance:
+		ordered := false, copying := false) -> CardInstance:
 	var choice := PlayerChoice.new(PlayerChoice.Kind.CARD, pid, prompt)
 	choice.candidates = candidates.duplicate()
 	choice.optional = optional
+	choice.copying = copying
 	# An ADVERSE ask ("… of an opponent's choice", see
 	# [member PlayerChoice.adverse]) comes pre-sorted from the chooser's
 	# point of view, so its hint is the first candidate — and so does an

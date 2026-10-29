@@ -14,10 +14,14 @@ extends RefCounted
 ##    tick while Quickening runs ([WorldMagic]), whose ticks count down;
 ##  - with no food every pace is slower (the divisor two more, at most 4);
 ##  - every 32nd tick a walking hero eats one food (Fruit of Sustenance
-##    gives two back in a forest) and the quest and siege clocks move on —
+##    gives two back in a forest; [ours] an ascetic hero, chosen at the
+##    Embark, eats on every other such tick, [member
+##    AdventurePlayer.ascetic]) and the quest and siege clocks move on —
 ##    the siege clock's step begins or resolves a wizard's siege when it
 ##    says ([method Sieges.on_step], as 1997 did right there), whose news
-##    waits in [member news] for the world screen to show;
+##    waits in [member news] for the world screen to show — [ours] under
+##    the sieges' pace "Rare" the siege clock on every 64th tick only
+##    ([method Sieges.clock_steps]);
 ##  - a step into the sea near a tile's middle is taken back — [ours] only
 ##    a step from land: a step out of the sea stands ([method _shore]).
 ##
@@ -299,13 +303,18 @@ func step() -> bool:
 			player.position = before
 			stop()
 		if player.monster_timer & 0x1F == 0 and d != 0:
-			if player.food != 0:
+			# Every other step for an ascetic hero [ours, the owner's ruling
+			# of 2026-10-29] ([method AdventurePlayer.eats_this_step]).
+			if player.food != 0 and player.eats_this_step():
 				player.food -= 1
 			if player.owns("Fruit of Sustenance") and world.terrain(now.x, now.y) == 2:
 				player.food += 2
-			player.siege_timer += 1
 			player.quest_timer += 1
-			news.append_array(Sieges.on_step(player))
+			# Half as often under the sieges' pace "Rare" [ours, the owner's
+			# ruling of 2026-10-28] ([method Sieges.clock_steps]).
+			if Sieges.clock_steps(player):
+				player.siege_timer += 1
+				news.append_array(Sieges.on_step(player))
 		entered = player.tile() != here
 	_arrive()
 	return entered

@@ -19,8 +19,18 @@ func _ready() -> void:
 	# cards are built later, with inspection callbacks only. No menu, pass,
 	# concede, drag-to-play, transport action or duel-layout toggle can fire.
 	_disconnect_actions(self)
+	# THE SPELL CHAIN STILL FOLDS (0.50.65 bug campaign, k3-7): its band's
+	# ▼ is a way of looking, not an action, and the strip above cut it
+	# too — the gadget stood there and did nothing. The gadget and a left
+	# click on the folded band (the window icon's job) come back; the
+	# band's right-click menu does not, as no menu fires in a replay.
+	_chain_gadget.pressed.connect(func() -> void:
+		_set_chain_minimized(not _chain_minimized))
+	_chain_head.gui_input.connect(_on_replay_chain_head_input)
+	_chain_box.under_band_changed.connect(func(_count: int) -> void:
+		_dress_chain_head())
 	for control in [_situation_bar, _arrange_button, _expand_button, _log_button,
-		_combat_window, _combat_bar, _window_icon]:
+		_screen_options_button, _combat_window, _combat_bar, _window_icon]:
 		if control != null: control.hide()
 	for hand in _hand_rows: hand.hide()
 	_flight.queue_free()
@@ -38,6 +48,12 @@ func _ready() -> void:
 	_arrows.hand_anchors = _hand_badges.duplicate()
 	resized.connect(_fit_badges)
 	_fit_badges.call_deferred()
+
+## A left click on the folded band restores the chain (k3-7).
+func _on_replay_chain_head_input(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and _chain_minimized:
+		_set_chain_minimized(false)
 
 func _disconnect_actions(node: Node) -> void:
 	for signal_info in node.get_signal_list():
@@ -65,6 +81,8 @@ func _refresh() -> void:
 		_fit_life_panel(pid)
 		_poison_labels[pid].visible = row.has("poison") and int(row.poison) > 0
 		_poison_labels[pid].text = str(int(row.get("poison", 0)))
+		if _poison_marks.size() == 2 and _poison_marks[pid] != null:
+			_poison_marks[pid].count = int(row.get("poison", 0))
 		_lib_labels[pid].text = str(int(row.library))
 		_dress_deck_stack(pid, int(row.library))
 		_grave_labels[pid].text = str(game.players[pid].graveyard.size())

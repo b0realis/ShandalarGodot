@@ -104,6 +104,15 @@ extends Control
 ## shadow at the body's anchor too). Without its sheet — the plain world, or
 ## a skin that lacks it — a creature is a disc of its slot's colour. On land
 ## the hero has not seen nothing is drawn, a creature neither.
+## THEIR NAMES ([member creature_names]; the owner, 2026-10-28, of the
+## unused 1997 features: *"only §5, the creature names on the map — small,
+## with their own on/off setting in the adventure's options menu"*): 1997
+## copied a creature's name for eight ticks of every 32 and drew it nowhere
+## ([method WorldCreatures.map_name]); with the world's options' Creature
+## names on, it stands small over the creature drawn, gold on a dark edge as
+## the place names are, its foot a few pixels over the body's top ([method
+## names_shown]) [ours: where and how it is drawn]. A picture of its own over
+## the movers, at the screen's size, not the zoom's.
 
 ## The world drawn, and the world point at the screen's [member feet].
 var world: ShandalarWorld:
@@ -187,6 +196,16 @@ var creatures: Array[Dictionary] = []:
 			_creatures_before[slot] = from
 		creatures = value
 		_changed()
+## THE NAMES OVER THE CREATURES (the class's notes): roaming slot → the
+## name standing over that creature now ([method WorldCreatures.map_names]),
+## `{}` for none — the options' Creature names off ([constant
+## WorldHud.NAMES_SETTING]).
+var creature_names: Dictionary = {}:
+	set(value):
+		if value == creature_names:
+			return
+		creature_names = value
+		_changed()
 ## Twice the 1997 pixels by default (the owner's choice, 2026-10-22): crisp,
 ## and about the original window's view scaled up; the wheel zooms.
 var zoom := DEFAULT_ZOOM:
@@ -247,6 +266,16 @@ const LAIR_FRAMES: Array[int] = [0, 4, 0, 3, 2, 1]
 const DUNGEON_LOOKS: Array[int] = [42, 48, 63, 67, 54, 60, 53, 59, 50, 56, 51, 57, 78, 84,
 	80, 86, 79, 85, 55, 61]
 
+## [ours] A creature's name over it ([member creature_names]): its size in
+## screen points, its ink and edge (the place names' gold), and the gap
+## between its foot and the body's top, in screen pixels; how far above its
+## feet a creature drawn plain reaches (its disc's top, 1997 pixels).
+const NAME_SIZE := 13
+const NAME_INK := Color8(232, 190, 110)
+const NAME_EDGE := Color8(20, 10, 8)
+const NAME_GAP := 3.0
+const PLAIN_RISE := 23.0
+
 ## [ours] Arzakon's portal's pictures by state ([member portal]): the
 ## upright's key in `game/art/`; its ground half adds `_ground`, its 2x twin
 ## `@2x` ([method portal_key]).
@@ -296,6 +325,13 @@ var _ground: Node2D
 var _shadow: Node2D
 var _uprights: Node2D
 var _figure: Node2D
+## The creatures' names, over all of them at the screen's own size ([member
+## creature_names]); what it shows (`[name, foot]` each, [method
+## names_shown]); how far above its feet each creature sheet's body reaches
+## (1997 pixels, by key, measured once: [method _body_rise]).
+var _names: Node2D
+var _names_drawn: Array = []
+var _rises := {}
 ## How far the frame is between the last tick and this one ([method
 ## frame]), and where the hero stood the tick before.
 var _blend := 1.0
@@ -343,6 +379,8 @@ func _init() -> void:
 	_shadow = _picture("Shadow", _paint_shadow)
 	_uprights = _picture("Uprights", _paint_uprights)
 	_figure = _picture("Figure", _paint_figure)
+	_names = _picture("Names", _paint_names)
+	_names.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 
 
 ## One of the view's pictures, drawn by [param paint].
@@ -463,6 +501,9 @@ func _refresh(look_again: bool) -> void:
 			_upright_feet.clear()
 			for picture in [_ground, _shadow, _uprights, _figure]:
 				picture.queue_redraw()
+		if not _names_drawn.is_empty():
+			_names_drawn = []
+			_names.queue_redraw()
 		return
 	if look_again or _shown.is_empty():
 		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), world.sites.hash(),
@@ -490,6 +531,60 @@ func _refresh(look_again: bool) -> void:
 		_figure_drawn = figure
 		_shadow.queue_redraw()
 		_figure.queue_redraw()
+	var named := names_shown()
+	if named != _names_drawn:
+		_names_drawn = named
+		_names.queue_redraw()
+
+
+## THE NAMES STANDING OVER THE CREATURES this frame ([member
+## creature_names]): `[name, foot]` for each creature drawn that has one —
+## the foot the middle of the name's baseline, on the screen, over the body's
+## top ([method _body_rise]) — in the creatures' order.
+func names_shown() -> Array:
+	var out := []
+	if creature_names.is_empty() or world == null:
+		return out
+	for creature in _creatures_drawn():
+		var called := String(creature_names.get(int(creature["slot"]), ""))
+		if called == "":
+			continue
+		var feet := drawn_at(_shown_creature(creature))
+		out.append([called, (feet - Vector2(0, _body_rise(creature) * zoom + NAME_GAP)).round()])
+	return out
+
+
+## How far above its feet creature [param creature]'s body reaches, in 1997
+## pixels: its sheet's first frame's opaque top under the frame's anchor —
+## measured once a sheet, on its 1x pixels ([method GameSkin.original]) —
+## or the plain disc's top without the sheet.
+func _body_rise(creature: Dictionary) -> float:
+	var key := String(CreatureBook.sprite_keys(int(creature["creature"]))["body"])
+	var sheet := art.texture(key) if not _plain else null
+	if sheet == null:
+		return PLAIN_RISE
+	if not _rises.has(key):
+		var rise := float(art.creature_top(key))
+		var img := GameSkin.original(sheet)
+		if img != null:
+			var used := img.get_region(Rect2i(art.creature_rect(key, 0))).get_used_rect()
+			if used.has_area():
+				rise -= used.position.y
+		_rises[key] = rise
+	return float(_rises[key])
+
+
+## THE NAMES, each centred on its foot, gold on a dark edge.
+func _paint_names() -> void:
+	if _names_drawn.is_empty():
+		return
+	var font := get_theme_font("font", "Label")
+	for shown in _names_drawn:
+		var text := String(shown[0])
+		var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, NAME_SIZE).x
+		var at: Vector2 = (shown[1] as Vector2) - Vector2(roundf(width / 2.0), font.get_descent(NAME_SIZE))
+		_names.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, NAME_SIZE, 4, NAME_EDGE)
+		_names.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, NAME_SIZE, NAME_INK)
 
 
 ## The screen, in the pictures' own units when drawn round [param anchor]

@@ -44,6 +44,17 @@ would change** · **How to switch it on**.
 - **How to switch it on.** One place: the hero's starting life for an
   adventure duel (the meeting's hand-off, `CreatureMeeting.hero_life`) adds
   the base and the bonuses before the links. A setting, off by default.
+- **Ours: switchable at the Embark since 0.50.65** (the owner's ruling of
+  2026-10-29, "Add, default off (Recommended)"): the Campaign Settings' row
+  "Starting life" — *Links only* (the default, as played) or *Base 10 +
+  links*. Under the second every adventure duel starts at 10, +2 Haggler's
+  Coin, +3 Ring of the Guardian, +5 Fruit of Sustenance, then the links and
+  the next-duel lives, through one reader (`AdventurePlayer.duel_start_life`,
+  `life_base`): the meetings, the lairs, the ruled towns, the dungeon rooms
+  (whose carried pool counts from it), the castle duels and the final
+  battle; the carried-lives reward counts from it too, and the pre-duel
+  purse, the hero's panel and the ankh's tip show it. Saved in the hero's
+  record (`life_start`); an older save plays links only.
 
 ## 2. Hand sizes by the creature's strength
 
@@ -56,6 +67,12 @@ would change** · **How to switch it on**.
   wins mount — a gentle opening curve that hardens as the hero grows.
 - **How to switch it on.** The meeting's duel set-up passes a hand size per
   seat to the duel (a DuelConfig field) instead of 7.
+- **Inside the castles and dungeons too** (part C). A room creature's
+  strength (2 in a castle, dungeonEncounter.c 790, 798) with a hand modifier
+  of 0, and the final battle's strength 3 (§44), feed only this formula:
+  switched on, a castle's creatures would open with 2 + difficulty + 4 cards
+  (6 to 8; seven at Wizard, where the formula gives way to 7, duel.c
+  2289–2292). Ours keeps seven (`DungeonDuels`, `FinalBattle`).
 
 ## 3. The first move by difficulty
 
@@ -79,6 +96,13 @@ would change** · **How to switch it on**.
   be balanced by the hero's first turn.
 - **How to switch it on.** In the meeting's set-up, `first_player = hero` when
   the creature has a card in play.
+- **Inside the castles and dungeons too** (part C; duel.c 2502–2520). It
+  would fire in every castle duel (a castle always has its card in effect),
+  in every dungeon room with one, and in the final battle (Arzakon's Black
+  Lotus and Celestial Prism): the hero would always open there. Ours keeps
+  the coin toss; to switch on, `first_player = 0` in
+  `DungeonDuels.duel_config` (and `FinalBattle.duel_config`) when
+  `start_in_play[1]` is not empty.
 
 ## 5. Creature names on the map
 
@@ -99,6 +123,15 @@ would change** · **How to switch it on**.
   the pointer; a creature under the pointer (or near the hero) would show its
   name — the disguised row's name for the three DISGUISE creatures. Also the
   lurk test of §7 reads the disguised row.
+- **Ours.** Switched on in 0.50.65 as an option [ours, the owner's ruling of
+  2026-10-28: *"only §5, the creature names on the map — small, with their
+  own on/off setting in the adventure's options menu"*]: a small name over
+  each roaming creature, on 1997's beat (eight ticks of every 32), the three
+  disguised kinds cycling their false names as above; its own switch,
+  "Creature names" in the world's Options (`world_creature_names`), off
+  until the player turns it on (`WorldCreatures.map_name`,
+  `WorldView.names_shown`). The other world rules of this page stay as
+  played.
 
 ## 6. The creatures' range and speed
 
@@ -119,6 +152,37 @@ would change** · **How to switch it on**.
 - **How to switch it on.** `WorldCreatures`' movement step: steer at the hero
   only inside the kind's range, wander otherwise; scale the stride by the
   terrain speed.
+- **Ours: switchable at the Embark since 0.50.65** (the owner's ruling of
+  2026-10-29, "Add, default Notice (Recommended)"): the Campaign Settings'
+  row "Creatures" — *Hunt* (as played) or *Notice* (the default).
+  Under Notice (`WorldCreatures.goes`, `speed_of`, `pace`,
+  `notice_range`, `nearest_slot`; `CreatureBook.range_of`, `slowed_on`) a
+  roaming creature out of its range wanders its own lands at an amble (half
+  its stride, a stride-1 creature stepping every other tick) [ours: 1997
+  gives no wander], and in range hurries at the hero at its whole stride —
+  Hunt's walk, the lead and the flight included; on the lands its flags
+  name (§7) a hurrying creature goes at an amble. The nearest creature keeps
+  its whole range, the others half (the search of 361–375, live creatures
+  only [ours: 1997 slip — an empty slot counted at its stale place]); the
+  henchmen, which 1997's switch has no case for (a stale range), take the
+  archmages' 48 [ours]. Two departures from 1997's arithmetic, by the
+  owner's intent ("creatures wander until you come within 1.5–4.5 tiles,
+  then hurry"): **the range is read in world units** — 1997 compared it with
+  its `ApproximateDistance` (twice the longer axis and the shorter, about
+  twice a straight distance, adventure_input.c 1246–1268), so as written 48
+  reached three quarters of a tile; ours compares the distance with twice
+  the range (`WorldCreatures.NOTICE_SCALE`, 1 for 1997's reach) — and
+  **the speed's doubling is read once**, as the hurry of a creature that
+  has noticed the hero: read as written, a far creature would hurry
+  (speed 2^k beyond the range), which is Hunt's chase from anywhere. The
+  besieger keeps to its town and chases a hero within 24 as before; the
+  quest's creature hunts; the refills, the flight after difficulty + 3
+  wins, the contact at 16 and the crowding are as played. Measured (a
+  seeded headless walk, three worlds, 20 minutes each, the hero walking
+  from place to place on land): Apprentice 2.03 meetings a minute under
+  Hunt, 1.73 under Notice; Wizard 4.43 under Hunt, 2.43 under Notice
+  (1997's own reach, `NOTICE_SCALE` 1: 1.05 and 1.63). Saved in the hero's
+  record (`creatures`); an older save plays Hunt.
 
 ## 7. Slow on some lands (flags 0x008–0x080) and flag 0x200
 
@@ -136,6 +200,12 @@ would change** · **How to switch it on**.
   lands named above (a Merfolk Shaman wading black swamps, a Sedge Beast in
   green forest), or wider-ranging, giving each its own feel.
 - **How to switch it on.** With §6, in `WorldCreatures`' step.
+- **Ours: switchable at the Embark since 0.50.65**, with §6 ("Creatures:
+  Notice"): a creature that has noticed the hero goes at an amble on the
+  lands its bits name (1997 halved only a speed above 1; a wanderer is
+  already at its amble), and the wide range (0x200) doubles its range. In
+  the generated worlds the Ape Lord's blue is never under it (no land of
+  green or red holds blue), and the Centaur Shaman's 0x08 names no land.
 
 ## 8. The rules filter of the creature decks (.vFAST, .vLARGE, .vDIRECT, .vARTIFACT)
 
@@ -241,8 +311,9 @@ would change** · **How to switch it on**.
 
 - **What 1997 laid out.** The ruled town's lines (`@VISIT` 2–7), the
   meeting's (`@ENCOUNTER_PREDUEL`), the news flashes' (`@NEWSFLASH` 2/3,
-  4/5), the end's (`@QUESTFAILED` 2/3) and the quest rewards' (`@VISIT`
-  21/22, 26/27) come in pairs, one chosen by the wizard's gender
+  4/5), the end's (`@QUESTFAILED` 2/3), the quest rewards' (`@VISIT`
+  21/22, 26/27) and the board's words for a hero booted from a castle
+  (`@DUNGEON` 11/12) come in pairs, one chosen by the wizard's gender
   (`IsWizardColorFeminine`), one by the creature's
   (`IsCreatureTypeFeminine`).
 - **Why it never took effect.** Each pair holds the same words: the choice
@@ -361,12 +432,25 @@ would change** · **How to switch it on**.
 ## 26. A dungeon rule "one deck for all duels" (0x20)
 
 - **What 1997 laid out.** The dungeons' rules word has a bit for "One deck for
-  all duels" among the rules the clues describe.
-- **Why it never took effect.** No code reads the bit.
+  all duels" among the rules the clues describe; beside it, the duel
+  engine's saved switch `g_one_deck_mode` (global_state.c 529, 736; read at
+  duel.c 2851 and visitLocation.c 2186), which would keep a duel's marks on
+  the cards it dealt after the duel ended.
+- **Why it never took effect.** No code reads the bit, and nothing sets the
+  switch. As coded it was never finished: every card dealt into a library is
+  marked (duel.c 2474), so a second duel would find no library at all.
 - **What it would change.** A dungeon would hold the hero to the deck they
-  entered with, room after room — no deck builder between the rooms.
-- **How to switch it on.** With part C's board: lock the deck in use while
+  entered with, room after room — no deck builder between the rooms — and,
+  as the switch means it, the cards drawn in one room would be gone in the
+  next: a dungeon would wear the deck down.
+- **How to switch it on.** Part C's board is built and keeps it dead
+  (`DungeonDuels`' header): the run record keeps the cards drawn and
+  `DungeonDuels.hero_deck` leaves them out, the deck in use locked while
   inside a dungeon that carries the bit.
+- **Dropped by the owner's ruling (2026-10-28):** *"no — the player can have
+  multiple decks"*: the rule stays dead and its clue line, "-One deck for all
+  duels.", is no longer said (`WorldClues.lines`); the bit stays in the
+  rules word, read by nothing.
 
 ## 27. The castle wizards' wins in the end score
 
@@ -377,8 +461,12 @@ would change** · **How to switch it on**.
   a castle wizard is never met on the world.
 - **What it would change.** Every castle beaten would raise the score by 25 —
   the castles counted in the end, as the formula means.
-- **How to switch it on.** With part C: log the castle wizard's win as the
-  score reads it.
+- **Ours.** Built in 0.50.62 [ours: a 1997 slip fixed — the owner's ruling
+  SC2 of 2026-10-27, *"Castle wizards count"*]: `CastleWin.beat` logs the
+  castle wizard's win, kind 12, on his colour, so it counts in the hero's
+  wins and the end score pays its 25 more (`FinalBattle.CASTLE_WIZARD_YEARS`;
+  with the win's own kind + 2, doubled with the rest, 78 years a castle).
+  Room wins stay out of the log, as played.
 
 ## 28. Three stakes for a castle wizard met on the world
 
@@ -399,8 +487,9 @@ would change** · **How to switch it on**.
   only "in play from the start".
 - **What it would change.** A card the dungeon keeps working every turn, even
   if destroyed — a much harder dungeon.
-- **How to switch it on.** With part C's dungeon duel: a duel rule that puts
-  the card back in play at each cleanup.
+- **How to switch it on.** Part C's dungeon duel is built and keeps it dead
+  (`DungeonDuels`' header): a duel rule, set in `DungeonDuels.duel_config`,
+  that puts the card back in play at each cleanup.
 
 ## 30. A castle clue's creature flags
 
@@ -416,8 +505,9 @@ would change** · **How to switch it on**.
   beaten (@LOGSTRINGS).
 - **Why it never took effect.** No code writes it.
 - **What it would change.** The journal would tell each room's victory.
-- **How to switch it on.** With part C: `AdventurePlayer.log_event` at a room
-  won.
+- **How to switch it on.** Part C is built and keeps it unwritten
+  (`CastleWin`'s and `DungeonDuels`' headers): a second journal line,
+  `AdventurePlayer.log_event`, in `CastleWin.beat` and at a room won.
 
 ## 32. Two dungeon names more than the dungeons
 
@@ -427,8 +517,9 @@ would change** · **How to switch it on**.
   are never given.
 - **What it would change.** Two more names in the draw, if the dungeons were
   ever named at random.
-- **How to switch it on.** Draw the names, not take them in order, when part
-  C names the dungeons.
+- **How to switch it on.** Draw the names instead of taking them by slot
+  (`WorldNames.dungeon_name`); part C names the fifteen slots by their
+  index, as 1997 did.
 
 ## 33. The U key
 
@@ -537,7 +628,123 @@ would change** · **How to switch it on**.
 - **What it would change.** Nothing.
 - **How to switch it on.** Not needed: ours scrolls the whole grid.
 
+## 41. The room creatures' double weight on the hero's life
+
+- **What 1997 computed.** As a room's duel is set up, the AI's combat weight
+  on the hero's life goes from 8 to 16 for every creature slot but the
+  castle wizard's (dungeonEncounter.c 792–795).
+- **Why it never took effect.** Every duel resets the weights before the AI
+  first reads them (duel_engine.c 796 → `InitializeDuelUiGlobalIds`,
+  global_duel_ui_ids.c 67; retail the same, Kimpic.c 14627–14629).
+- **What it would change.** The room creatures would race: valuing each of
+  the hero's lives twice over, they would attack and burn the hero's face
+  rather than trade, and the life the hero carries from room to room in a
+  dungeon would drain sooner — the dungeons faster and more dangerous.
+- **How to switch it on.** Not reproduced (the lead's call AI-1,
+  `DungeonDuels`' header): a weight on the foe's life in the room
+  creature's `AiProfile`, given in `DungeonDuels.duel_config`.
+
+## 42. The ruled towns in the end score
+
+- **What 1997 computed.** The end score takes 2 for each town a wizard rules
+  before the sum is tripled and doubled — 12 years a town held
+  (`CalculateDungeonEndgameScore`, dungeonEncounter.c 1856–1888; retail the
+  same).
+- **Why it never took effect.** The score is computed only once all five
+  wizards have fallen, when no town can be ruled: the fifth wizard's towns
+  were just freed (dungeonEncounter.c 951–959), the others' as each fell,
+  and a beaten wizard never besieges again. The term is always 0.
+- **What it would change.** A score read during play would charge every
+  town lost to a wizard twice — its mana link and 12 years of the end.
+- **Ours.** The hero's record shows the score so far
+  (`AdventurePlayer.score_so_far`) [ours, the owner's Q-RANK], where a town
+  held costs its 12; the end's own score keeps the term, 0 there as in
+  1997.
+
+## 43. Arzakon's tier × (difficulty + 1)
+
+- **What 1997 computed.** As the final battle is set up, Arzakon's tier
+  (100) is multiplied by the difficulty + 1 and written back into the
+  creature table (dungeonEncounter.c 1052–1054; retail database.c
+  1704–1705) — into a signed byte: 100, −56, 44, −112 from Apprentice to
+  Wizard.
+- **Why it never took effect.** Nothing reads it: his duel's life rule
+  (kind 13) overwrites the life with its own, 100 × (difficulty + 1)
+  (duel.c 2284–2287).
+- **What it would change.** Read as the other creatures' life is read (the
+  tier, + 50 a difficulty step for his rows), Arzakon would start at 100,
+  250, 400 or 550 — and only with a wider field than a byte: as stored,
+  the value breaks from Magician up.
+- **How to switch it on.** `CreatureBook.duel_life` for kind 13 from the
+  scaled tier (`FinalBattle`'s header). Not wanted as played: the table
+  holds the result.
+
+## 44. The final battle's colour and strength
+
+- **What 1997 computed.** The final battle takes the fifth wizard's colour
+  and a strength of 3 (dungeonEncounter.c 1056, 1058).
+- **Why it never took effect.** Both are read only by the castle wizards'
+  life rule, which Arzakon's kind does not take, and by the dead hand-size
+  formula (duel.c 2245, 2289; §2).
+- **What it would change.** With §2 on, Arzakon would open with 3 +
+  difficulty + 4 cards (7 to 9; seven at Wizard).
+- **How to switch it on.** With §2, in `FinalBattle.duel_config`.
+
+## 45. Arzakon's row as a creature met
+
+- **What 1997 laid out.** Arzakon's row in the creature table carries the
+  pre-duel flag 0x80 ("starts with its reward card in play") and reward
+  card 29, Celestial Prism, with no reward flags (row 55,
+  `creature_names_init.inc`).
+- **Why it never took effect.** No meeting with him exists: the final
+  battle puts Black Lotus and Celestial Prism in play itself
+  (dungeonEncounter.c 1061–1062).
+- **What it would change.** Nothing a player could meet.
+- **How to switch it on.** Nothing to switch on (`FinalBattle.IN_PLAY`
+  holds the two cards).
+
+## 46. A dungeon's fifth creature
+
+- **What 1997 computed.** Every dungeon picks five creatures — the fifth at
+  tier 16, or 18 in a large dungeon — and loads all five figures
+  (dungeonEncounter.c 275–344).
+- **Why it never took effect.** The rooms use slots 0–3 only; slot 4's
+  room exists only in a castle, where the slot is picked again as the
+  wizard (338–342). A dungeon's fifth creature is never met.
+- **What it would change.** A guardian in each dungeon — for example in
+  the deepest dead end, over the best treasure: every dungeon would end on
+  a stronger fight.
+- **How to switch it on.** `DungeonBoard`'s events: give one cell slot 4's
+  room in a dungeon (`DungeonBoard`'s header, N8).
+
+## 47. The forced final encounter
+
+- **What 1997 laid out.** A switch, `g_dungeon_force_final_encounter`, that
+  turns every event cell into the castle wizard's room
+  (dungeonEncounter.c 500).
+- **Why it never took effect.** It is only ever set to 0 (244): a
+  designer's shortcut for testing the wizard's duel.
+- **What it would change.** In a castle, the next step into any room would
+  face the wizard; in a dungeon, which has no wizard, nothing.
+- **How to switch it on.** Not wanted: a test reaches the wizard through
+  `DungeonBoard`'s own dice.
+
+## 48. The board's unreachable branches
+
+- **What 1997 laid out.** The dice's "nothing → throw again" and the reward
+  line's "id 5 → nothing" (dungeonEncounter.c 532, 1532); a "First Move" won from the dice
+  (`@DUNGEON` 2, 1541–1544); the castle's defeated bit cleared while the
+  hero picks the three cards and set again after (981, 1024).
+- **Why it never took effect.** The dice writes lives (1–3) or a card id
+  of 6 or more, never 0 or 5; and no reader runs while the three cards are
+  picked.
+- **What it would change.** Nothing a player could meet. Ours shows "First
+  Move" only for the world's gift (`DungeonBoard`'s header).
+- **How to switch it on.** Not needed.
+
 ---
 
-*This page grows as the creatures, their duels, the castles and the dungeons
-are built: each builder adds what it meets.*
+*The castles, the dungeons and the end are built (part C, 0.50.62–0.50.64)
+and their dead features are listed above (§2, §4, §16, §26–§32, §41–§48).
+The page grows as the card packs' own worlds are built: each builder adds
+what it meets.*

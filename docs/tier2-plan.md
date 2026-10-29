@@ -168,7 +168,7 @@ re-reviewing the same screenshots twice.
 | **E** | **2.6** pacing | M | Independent, and the only Tier 2 item that changes how a *turn* reads rather than how a *card* reads. Wants Waves A-D landed so the frames it slows down are already the right frames. |
 | **F** | **2.5** choosers, remaining half | S (UI) + S (engine) | Wants Wave D, because the missing half is "the enlarged card beside the dialog" and Wave D is where `CardPreview` learns to render somewhere other than its dock. |
 | **G** | **2.7** life count-down | S | Pure `[s30]` cosmetic with no 1997 basis. Cheap, pleasant, last. |
-| **H** | **2.4** spell-cast animation | M | **Recommend deferring out of Tier 2.** `[s30]`, contradicted by `Duel.hlp`, and the 1997 shape it would compete with (the Spell Chain window's title bar + minimise, §6.5/§6.6) is not built yet. |
+| **H** | **2.4** spell-cast animation | M | **Recommend deferring out of Tier 2.** `[s30]`, contradicted by `Duel.hlp`, and the 1997 shape it would compete with (the Spell Chain window's title bar — built 2026-10-28, 0.50.65 — + minimise, §6.5/§6.6) is not built yet. |
 | — | **2.2** lift | — | **DROP.** |
 
 **Rationale in one line:** finish the cheap board-readability work first

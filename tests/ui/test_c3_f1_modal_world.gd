@@ -194,8 +194,10 @@ func test_a_place_s_pane_holds_the_world() -> void:
 	await _click(Vector2(40, 400))
 	assert_eq(screen.walked, [] as Array[Vector2i], "nor a click on the land beside the pane")
 	assert_false(screen.walk.is_walking())
-	# The keys: nothing either.
-	for code in [KEY_2, KEY_M, KEY_F1, KEY_F3, KEY_F4, KEY_F5, KEY_H, KEY_N]:
+	# The keys: nothing either — but M, F2, F5 and Ctrl+S, which open over a
+	# town's own pane since the polish pass (the owner's "as 1997" of
+	# 2026-10-28; tests/ui/test_p1_town_keys.gd).
+	for code in [KEY_2, KEY_F1, KEY_F3, KEY_F4, KEY_H, KEY_N]:
 		await _key(code)
 	assert_eq(player.position, at, "2 casts nothing")
 	assert_false(_map().visible)

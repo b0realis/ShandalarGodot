@@ -2439,13 +2439,55 @@ static func stripes_width(d: CardData) -> float:
 	return STRIPE_W + (STRIPE_SLOT_COUNT - 1 - leftmost) * STRIPE_PITCH
 
 
+## THE COLOURS ON THE TABLE (the polish pass, 2026-10-28; ledger
+## duel-047's probe). [method mana_colors] reads the PRINTED abilities,
+## and three cards print a colour they do not make: Gem Bazaar's dynamic
+## colour reads white until a colour is chosen (white is its stand-in),
+## Fellwar Stone and Reflecting Pool print colourless and choose among
+## what other lands could make. On the table — a game to ask, the card on
+## the battlefield — each mana ability's first entry is what it would
+## make NOW: a colour choice's census, a dynamic colour's reading, nothing
+## while its dynamic amount is zero (the reading Fellwar Stone's own
+## `_could_produce` takes, CR 106.7); the live abilities, so a Blood Moon's
+## Mountain says red. Off the table such an entry says nothing — it
+## promises no colour until it is read. Every other entry is the printed
+## colour, as before. Queries only: none of these readers chooses.
+static func live_mana_colors(inst: CardInstance, g: MtgGame) -> Array[int]:
+	if inst == null:
+		return []
+	var on_table := g != null and inst.zone == Mtg.Zone.BATTLEFIELD
+	var abilities: Array = inst.cur_mana_abilities if on_table else inst.data.mana_abilities
+	var out: Array[int] = []
+	for ability: ManaAbility in abilities:
+		for i in ability.produces.size():
+			var made: Array = []
+			if i == 0 and (ability.color_options.is_valid() or ability.dynamic_color.is_valid()):
+				if not on_table:
+					continue
+				if ability.dynamic_amount.is_valid() and ability.amount_for(g, inst) <= 0:
+					continue
+				if ability.color_options.is_valid():
+					made.append_array(ability.color_options.call(g, inst))
+				else:
+					made.append(int(ability.dynamic_color.call(g, inst)))
+			else:
+				made.append(int(ability.produces[i][0]))
+			for color in made:
+				if not out.has(int(color)):
+					out.append(int(color))
+	return out
+
+
 func _rebuild_stripes(d: CardData) -> void:
 	for child in _stripes.get_children():   # detach first — see _rebuild_badges
 		_stripes.remove_child(child)
 		child.queue_free()
-	var colors := mana_colors(d)
+	var colors := live_mana_colors(instance, game) if instance != null else mana_colors(d)
 	if colors.is_empty():
 		_name_label.offset_right = -4
+		return
+	if DuelScreenOptions.colorblind_mana():
+		_rebuild_pips(colors)
 		return
 	# Slots run W U B R G C from left to right, each PITCH apart, the
 	# last one flush with the bar's right end. Every colour therefore
@@ -2464,6 +2506,86 @@ func _rebuild_stripes(d: CardData) -> void:
 	# The name stops short of the LEFTMOST slot actually used, so a
 	# single-colour card keeps its room.
 	_name_label.offset_right = _stripe_x(leftmost) - (SIZE.x - 6.0) - 4.0
+
+
+# --- the polish pass 2026-10-28 (P3): colorblind-safe mana ---
+## THE SYMBOL IN PLACE OF THE STRIPE ([constant
+## DuelScreenOptions.COLORBLIND_KEY]). A stripe says its colour by hue
+## alone — a red and a green slash differ in nothing else, which is the
+## pair the commonest colour blindness loses. Switched on, each colour is
+## a symbol: the 1997 mana symbol where the skin is imported (sun, drop,
+## skull, fire, tree — a SHAPE each, `Manasymbols.pic`, [ManaIcons]), and
+## a lettered disc where it is not, or for colourless, which the 1997
+## sheet has no symbol for. The discs wear the Okabe–Ito inks, chosen to
+## stay apart under every common colour blindness; the letter says it
+## anyway. The symbols stand side by side at the bar's right end in the
+## stripes' W U B R G C order — not in fixed slots: a symbol says WHICH,
+## so it need not say it by where.
+const PIP_SIZE := 13.0
+const PIP_GAP := 1.0
+## The colour a symbol says, on the node — what a test reads.
+const PIP_META := &"pip_color"
+const PIP_INK := {
+	Mtg.ManaColor.W: Color8(240, 228, 200), Mtg.ManaColor.U: Color8(0, 114, 178),
+	Mtg.ManaColor.B: Color8(64, 60, 66), Mtg.ManaColor.R: Color8(213, 94, 0),
+	Mtg.ManaColor.G: Color8(0, 158, 115), Mtg.ManaColor.C: Color8(170, 170, 170),
+}
+const PIP_LETTER := {
+	Mtg.ManaColor.W: "W", Mtg.ManaColor.U: "U", Mtg.ManaColor.B: "B",
+	Mtg.ManaColor.R: "R", Mtg.ManaColor.G: "G", Mtg.ManaColor.C: "C",
+}
+
+
+func _rebuild_pips(colors: Array[int]) -> void:
+	var ordered := colors.duplicate()
+	ordered.sort_custom(func(a: int, b: int) -> bool:
+		return int(STRIPE_SLOT.get(a, 5)) < int(STRIPE_SLOT.get(b, 5)))
+	var strip_w := SIZE.x - 6.0
+	var left := strip_w - ordered.size() * PIP_SIZE - (ordered.size() - 1) * PIP_GAP
+	for i in ordered.size():
+		var one := pip(int(ordered[i]))
+		one.position = Vector2(left + i * (PIP_SIZE + PIP_GAP), (STRIPE_H - PIP_SIZE) * 0.5)
+		_stripes.add_child(one)
+	_name_label.offset_right = left - strip_w - 4.0
+
+
+## One colour's symbol, [constant PIP_SIZE] square.
+static func pip(color: int) -> Control:
+	var letter: String = PIP_LETTER.get(color, "C")
+	var sym: Texture2D = ManaIcons.symbol(letter) if color != Mtg.ManaColor.C else null
+	if sym != null:
+		var rect := TextureRect.new()
+		rect.texture = sym
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		rect.size = Vector2(PIP_SIZE, PIP_SIZE)
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rect.set_meta(PIP_META, color)
+		return rect
+	var disc := Panel.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = PIP_INK.get(color, PIP_INK[Mtg.ManaColor.C])
+	style.border_color = Color(0, 0, 0, 0.85)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(int(PIP_SIZE / 2.0) + 1)
+	disc.add_theme_stylebox_override("panel", style)
+	disc.size = Vector2(PIP_SIZE, PIP_SIZE)
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var text := Label.new()
+	text.name = "Letter"
+	text.text = letter
+	text.set_anchors_preset(Control.PRESET_FULL_RECT)
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	text.add_theme_font_size_override("font_size", 10)
+	var dark_letter := color == Mtg.ManaColor.W or color == Mtg.ManaColor.C
+	text.add_theme_color_override("font_color",
+		Color8(28, 24, 26) if dark_letter else Color(1, 1, 1))
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	disc.add_child(text)
+	disc.set_meta(PIP_META, color)
+	return disc
+# --- end the polish pass (P3): colorblind-safe mana ---
 
 
 ## X of a colour slot inside the stripe strip (slot 5 sits flush right).

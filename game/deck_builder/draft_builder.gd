@@ -1,12 +1,16 @@
 class_name DraftBuilder
 extends DeckBuilderScreen
 ## [QoL] The ordinary builder with one pool, one slot and no outside-card doors.
+## Both colour moves are here (2026-10-28): the dealt pool is a collection,
+## so `Move by color into deck` moves the dealt copies, as 1997's adventure
+## moved the hero's.
 
 signal finish_requested
 
 const ALLOWED: Array[String] = ["Consolidate duplicate cards", "Clear deck", "Restore deck",
-	"Sort deck", "Stats", "Music", "Sound Effects", "Move by color out of deck", "Filters",
-	"Undo", "Big cards", "Add basic land", "Deck notes", "Sideboard", "Save deck", "Exit deck builder"]
+	"Sort deck", "Stats", "Music", "Sound Effects", "Move by color into deck",
+	"Move by color out of deck", "Filters", "Undo", "Redo", "Big cards", "Add basic land",
+	"Deck notes", "Sideboard", "Save deck", "Exit deck builder"]
 var draft_counts: Dictionary = {}
 var input_guard := Callable()
 

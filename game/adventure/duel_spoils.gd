@@ -255,7 +255,9 @@ static func _keep_cards(player: AdventurePlayer, spoils: Dictionary) -> void:
 ## After the cards (E:2392–2645): the bag's note, the amulet, the reward,
 ## the colour learning.
 static func _after_cards(player: AdventurePlayer, meeting: Dictionary, spoils: Dictionary) -> void:
-	if player.cards.size() >= AdventurePlayer.BAG_WARN:
+	# The note only where the bag has a limit: never under "Unlimited card
+	# hold" ([method AdventurePlayer.bag_limited]).
+	if player.bag_limited() and player.cards.size() >= AdventurePlayer.BAG_WARN:
 		spoils["bag"] = player.cards.size()
 	var row := int(meeting["row"])
 	var color := clampi(int(meeting["color"]), 1, 5)
@@ -299,7 +301,9 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 	# start held the gifts just spent and any earlier carry: 10 links and the
 	# wise man's +2 began at 12, ended at 15, said "(15)" and began the next
 	# duel at 13. The carry is the end less the hero's links, the life every
-	# duel starts from ([method CreatureMeeting.hero_life]), so the next
+	# duel starts from ([method CreatureMeeting.hero_life]; under the
+	# Embark's "Base 10 + links" the base with them, [method
+	# AdventurePlayer.duel_start_life], 0.50.65), so the next
 	# duel starts at the life the words name; with no gift and no earlier
 	# carry the start is the links and the carry is 1997's own. The field
 	# keeps its meaning (lives added to the links), so a save of an old carry
@@ -307,7 +311,7 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 	# says nothing, as 1997's (the end at the start) said nothing. A link won
 	# or lost before the next duel, or a new gift, still moves its start as
 	# it moves every duel's.
-	var carried := int(spoils["lives_end"]) - player.mana_links()
+	var carried := int(spoils["lives_end"]) - player.duel_start_life()
 	if left & CreatureBook.REWARD_LIFE_CARRIED != 0 and carried != 0:
 		player.next_duel_life_carried = carried
 		lines.append_array(lines_of(LIVES_CARRIED % int(spoils["lives_end"])))

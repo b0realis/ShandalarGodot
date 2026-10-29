@@ -182,6 +182,7 @@ with the same gold card emblem and bevelled stone on/off tiles as the other pack
 | `filter_hml_on.png` | Homelands — globe on bright stone and gold ring, 48x48 | `tools/draw_our_art.gd` (`_globe`, `_stone_medallion`) | GPL-3.0 | `aa0b940ad78c4ea0eb674d4d6edce777a7d5002c4604c99f9455cfb35a14920e` |
 | `filter_hml_off.png` | Homelands — dim globe tile, 48x48 | `tools/draw_our_art.gd` (`_globe`, `_stone_medallion`) | GPL-3.0 | `91b3aa4ebefdbbbdc2dbb1050e50c0daeced7993e1802b54fb3eba647b1824b4` |
 | `damage_marker.png` | the dagger on a wounded creature, 64x40 | `tools/draw_our_art.gd` (`_dagger_blade`, `_dagger_hilt`) | GPL-3.0 | `771a24e7139e7df3757728350e0acf5e2fffb553e1a78bc48e1b04c20c52d489` |
+| `poison_counter.png` | one poison counter on the life register — a black widow, eight jointed legs, a red hourglass on its back, 42x52 | `tools/draw_our_art.gd` (`_spider`, `_hourglass`) | GPL-3.0 | `41ff2946c92042266f19d0dddc69c32e40b4507d981aa4143b6d19f58f4f3946` |
 | `manalink_globe.png` | the Manalink button's mark — a green wire globe and a starred violet sky sharing one disc under a rainbow rim, 256x256 | the owner's own picture, supplied 2026-09-17; cropped to its outline and reduced to 256 px, NOT drawn by `tools/draw_our_art.gd` | GPL-3.0, with the rest of this project | `08ba71afe94739d45fe55210cac43442150a399b5d909a62bc6a1eadebbd765d` |
 | `card_back_holly.png` | a card back — holly, red berries, snowflakes and a gold star on a red oval in a green border, 342x479 | the owner's own picture, supplied 2026-10-14; reduced to 342 px with a Lanczos filter, NOT drawn by `tools/draw_our_art.gd` | GPL-3.0, with the rest of this project | `9d9a7450068b64f3bf69b5d67e4315598959a46a303fe4bfc50f9459291e02b7` |
 | `card_back_moon.png` | a card back — a full moon, bats, pumpkins and vines on a rust oval in a black border, 342x479 | the owner's own picture, supplied 2026-10-14; reduced to 342 px with a Lanczos filter, NOT drawn by `tools/draw_our_art.gd` | GPL-3.0, with the rest of this project | `261dd51bfba6a7333bf12870db766160dcd031343050a511d060212be6d979f5` |
@@ -233,6 +234,17 @@ also moved in FRONT of the blade instead of behind it — as one unbroken
 bar across the diagonal rather than two lobes either side of it — which
 is the whole of what keeps a crossguard legible at the eighteen pixels
 the small card draws it at.
+
+`poison_counter.png` joined on 2026-10-28 (the polish pass). The 1997
+game drew one `Poison.pic` per poison counter on its life window, four to
+a row and three rows deep, under the life number; that file is the
+player's own copy, its mask is dead in every conversion we hold, and the
+one working rescale is Manalink's — a third party's — so neither is read.
+This is the same idea drawn here as geometry: a black widow, venom's
+oldest sign, its body a charcoal lit enough to read on the register's dark
+stone and its mark the dagger's red pulled a step darker. 42x52 is twice
+the 1997 cell, so the register draws it at half size. `PoisonCounters`
+(`game/duel/poison_counters.gd`) lays it out the 1997 way.
 
 ## Arzakon's portal on the world
 

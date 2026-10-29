@@ -451,6 +451,15 @@ the corroboration is stronger than the original claim:
   `Coin flip results: Heads` and `Coin flip results: Tails` — one caption
   per movie. The panel used to print a truncated `Coin flip results:` with
   no face after it; it now prints the whole line.
+- (2026-10-28, the polish pass: WHICH FACE IS WHOSE is now 1997's, read
+  back from the decompilation. The toss shows **Tails when you win it and
+  Heads when the opponent does**: the 1.3 build's
+  `run_duel_coin_flip_dialogs` (SHANDALAR 0x00535090) gives the toss to
+  the computer when `coin_flip` (0x0053f510) comes up 0, and `coin_flip`
+  shows 0 as Heads, with `COINTOSS_Heads.AVI`; the retail DUEL.EXE proc at
+  `004492ad` picks the Heads movie on the same zero. Until then ours showed
+  Heads for your own win — a convention, and the wrong way round.
+  `CoinToss.result_face`; `tests/ui/test_p5_coin_face.gd`.)
 
 That is why no coin art exists anywhere to import, and it means
 `Show coin flip animations` gated PLAYING A MOVIE. Ours is a
@@ -2403,7 +2412,7 @@ rule after two passes were burned by guessing). Every finding is in
 | `Winbk_Attacksword.pic` 56x132 | image+mask → a 28x132 steel sword: the ATTACKERS' lane marker |
 | `Winbk_Attackshield.pic` 44x128 | image+mask → a 22x128 green kite shield: the BLOCKERS' lane marker |
 | `Winbk_Attackbones.pic` 777x70 | image over mask (a VERTICAL split, the only one in the set) → a 777x35 strip of bones: the window's floor |
-| `Winbk_Attackmin.pic` 39x70 | a dagger on dark green in a blue rule. **39 wide against a 41px Phase Bar column and 70 tall against its ~100px centre band**: this is the *"window icon in the center area of the Phase Bar"* (manual p.126) that restores the minimised window, drawn at 1:1. `Winbk_Spellmin.pic` is its twin (a wand) for the Spell Chain, and is surveyed but not imported — our chain has no minimise yet |
+| `Winbk_Attackmin.pic` 39x70 | a dagger on dark green in a blue rule. **39 wide against a 41px Phase Bar column and 70 tall against its ~100px centre band**: this is the *"window icon in the center area of the Phase Bar"* (manual p.126) that restores the minimised window, drawn at 1:1. `Winbk_Spellmin.pic` is its twin (a wand) for the Spell Chain, and is surveyed but not imported — our chain has no minimise yet (2026-10-28: it has — the chain minimizes to its own title band since the polish pass, a tab the game draws; the picture stays unimported by the owner's choice, ROADMAP "Later — the owner's list of 2026-10-28") |
 | `Winbk_Attackrats.pic` 142x210 | SIX 71x35 image+mask frames of a rat scurrying — the window's live decoration. Surveyed, not built |
 
 One genuine difference worth recording: the Phase Bar's icons sit on
@@ -2543,7 +2552,7 @@ PIL and looked at, because two earlier passes were burned by guessing:
 | `Winbk_Fireball.pic` 545x410 | the X-spell dialog's red spiral — a picture the size of a whole window, where our X dialog is a two-line question | surveyed, not imported |
 | `Winbk_Manaburn.pic` 260x170 | an illustration (the mana-burn flash), not chrome; we have no mana burn | not imported |
 | `Winbk_Attack.pic` 888x316 + `Attackbones/rats/shield/sword` | the attack animation's backdrop (a field of skulls) and its actors | not imported |
-| `Winbk_Attackmin` / `Winbk_Spellmin` 39x70 | the MINIMISED attack and spell-chain windows (a sword, a wand) — `@MENU_MINIMIZEDATTACK` | not imported: nothing to minimise yet |
+| `Winbk_Attackmin` / `Winbk_Spellmin` 39x70 | the MINIMISED attack and spell-chain windows (a sword, a wand) — `@MENU_MINIMIZEDATTACK` | not imported: nothing to minimise yet (2026-10-28: the Combat window and the Spell Chain both minimize now; the chain's tab is drawn by the game, so `Winbk_Spellmin` stays unimported by the owner's choice) |
 | `Winbk_Questmanaselection.pic` 36x57 | one beveled grey CELL of the mana-question grid | not imported |
 | `Winbk_Phasecombat.pic` 164x760 | the **Combat Bar** — a real to-do (`duel-todo.md §6.5`), not popup chrome | not imported |
 
@@ -3557,8 +3566,9 @@ the phase bar), the auto-tap (the double-click auto-cast and `Don't auto
 tap`), the hover zoom (the docked preview), the original sound cues
 (`DuelAudio`, from the imported 1997 files), the 1997 targeting cursor,
 and a public game record of every duel (`MpnArchive`, MPN; a record, not
-a full rules replay). Undo, a UI scale slider and a colorblind palette
-are still not built.)
+a full rules replay). Undo is still not built; a UI scale and a
+colorblind-safe mana palette are, since 2026-10-28, in Duel Screen
+Options.)
 - **Phase stops config** (the original's duel options panel): choose which
   steps pause for you; per-seat.
 - **Auto-tap mana**: click a card with an empty pool → the engine suggests

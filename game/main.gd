@@ -76,7 +76,7 @@ var _shandalar_notice: Control
 ## The Shandalar button's notice ([method _open_shandalar_notice]).
 const SHANDALAR_NOTICE_TITLE := "Shandalar — still in development"
 const SHANDALAR_ISSUES := "github.com/b0realis/ShandalarGodot/issues"
-const SHANDALAR_NOTICE := "The Shandalar adventure is still being built and tested. It can be played from Embark to the end now: the world, its towns, quests, lairs, creatures and sieges, the castles, the dungeons and the final battle; the card packs' own worlds come in a later version.\n\nPlease tell us what you notice — anything that seems wrong, breaks, or could be better — as an issue on the project's GitHub page:\n" + SHANDALAR_ISSUES
+const SHANDALAR_NOTICE := "The Shandalar adventure is still being built and tested. It can be played from Embark to the end now: the world, its towns, quests, lairs, creatures and sieges, the castles, the dungeons and the final battle.\n\nPlease tell us what you notice — anything that seems wrong, breaks, or could be better — as an issue on the project's GitHub page:\n" + SHANDALAR_ISSUES
 var _pack_warning: Control
 var _version_label: Label
 
@@ -282,8 +282,8 @@ func _ready() -> void:
 	SkinPack.fetch_progressed.connect(_on_fetch_progressed)
 
 	# [QoL] Owner request, 2026-09-13: a square shell button wearing a
-	# green globe, reserved for Manalink online games. Enabled, like the
-	# adventure placeholder, so mouse and keyboard can ask what it is.
+	# green globe, reserved for Manalink games; it opens the SGManalink
+	# lobby (LAN play), and its tooltip says what that is.
 	var online := UiChrome.menu_button("", MANALINK_SIZE, MENU_FONT, MENU_BOLD)
 	online.name = "Manalink"
 	# What the lobby is, in its own words (the bug campaign c12, h6-7): it

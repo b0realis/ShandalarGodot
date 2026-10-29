@@ -1506,13 +1506,17 @@ static func _turn_key(game: MtgGame) -> String:
 ##    Llanowar Elves ate our board one upkeep at a time;
 ##  * w2-5 a creature sacrificed on arrival unless we discard a card we do
 ##    not hold ([method _arrival_discard_unpaid]) — Balduvian Horde into an
-##    empty hand, Thundering Wurm with no land card.
+##    empty hand, Thundering Wurm with no land card;
+##  * k5-2 a permanent that ENTERS AS A COPY with no shape on the table its
+##    copy lives as ([method _copy_shape_missing]) — a Clone onto an empty
+##    board, a Copy Artifact with no artifact in play.
 func _arrival_refused(game: MtgGame, inst: CardInstance) -> bool:
 	if not profile.forecasts_tactics:
 		return false
 	return _freeze_in_force(game, inst.data) or _rent_copy_in_play(game, inst.data) \
 		or _repeatable_copy_in_play(game, inst.data) \
-		or _least_power_meal_is_ours(game, inst) or _arrival_discard_unpaid(game, inst)
+		or _least_power_meal_is_ours(game, inst) or _arrival_discard_unpaid(game, inst) \
+		or _copy_shape_missing(game, inst)
 
 
 ## w1-5: does [param data] freeze the untap step ([method _card_freezes])
@@ -1557,11 +1561,21 @@ func _rent_copy_in_play(game: MtgGame, data: CardData) -> bool:
 ## The second Pestilence adds no activation the first does not have, and
 ## one more card for the empty board to take at end of turn; in hand it is
 ## the backup a Disenchant cannot reach. The Wizard cast three.
+##
+## A MANA ABILITY ONE COPY REPEATS counts the same way (the polish pass,
+## 2026-10-28; review of 2026-10-21: "with combos off, the Wizard casts a
+## second, useless Ashnod's Altar ahead of a Hill Giant"): no {T}, no
+## limit a turn, nothing of the source's own given up — "Sacrifice a
+## creature: Add {C}{C}" runs out of creatures, never out of Altars
+## ([method _mana_ability_repeats]).
 func _repeatable_copy_in_play(game: MtgGame, data: CardData) -> bool:
 	if not data.is_permanent_type() or data.is_creature() or data.is_land() \
 			or data.is_aura() or not data.static_abilities.is_empty() \
-			or not data.mana_abilities.is_empty() or data.activated_abilities.is_empty():
+			or (data.activated_abilities.is_empty() and data.mana_abilities.is_empty()):
 		return false
+	for mana in data.mana_abilities:
+		if not _mana_ability_repeats(mana):
+			return false
 	for ability in data.activated_abilities:
 		if ability.tap_cost or ability.sacrifice_cost or ability.max_per_turn > 0 \
 				or ability.turn_restriction != 0 or ability.counter_cost_kind != "" \
@@ -1577,6 +1591,19 @@ func _repeatable_copy_in_play(game: MtgGame, data: CardData) -> bool:
 		if not perm.face_down and perm.data.card_name == data.card_name:
 			return true
 	return false
+
+
+## Does ONE copy of a permanent already make every mana [param mana] could
+## make — no {T}, no once a turn, no counter put on it, nothing of the
+## source itself sacrificed or exiled, no other object as a price? Then a
+## second copy is no second source: what limits it is the bodies or the
+## mana or the life it eats, and the first copy eats those as well.
+static func _mana_ability_repeats(mana: ManaAbility) -> bool:
+	return not mana.taps_source and not mana.sacrifice_source \
+		and not mana.exile_source and mana.max_per_turn == 0 \
+		and mana.put_counter_kind == "" and mana.counter_cost_kind == "" \
+		and mana.object_costs.is_empty() \
+		and mana.activation_zone == Mtg.Zone.BATTLEFIELD
 
 
 ## Pestilence: what a sweep that leaves NO creature on the battlefield costs
@@ -1702,6 +1729,32 @@ func _arrival_discard_unpaid(game: MtgGame, inst: CardInstance) -> bool:
 		if not paid:
 			return true
 	return false
+
+
+## k5-2: does [param inst] ENTER AS A COPY ([member CardData.enters_as_copy]
+## — Clone, Vesuvan Doppelganger, Copy Artifact) with no shape on the
+## battlefield that its copy lives as? (0.50.65 bug campaign, k5-2.) The
+## arrival declines a shape the 1997 legend rule buries ([method
+## answer_card], [method MtgGame.legend_copy_is_buried]), so with no
+## permanent its own filter takes, or only legends already in play, the
+## card enters as printed: a 0/0 that dies at once, an enchantment with no
+## text. The Lab saw 3 of 125 copy arrivals die so — a Doppelganger with
+## only an opposing Sir Shandlar to copy, a Clone onto an empty board — and
+## the adventure's Shapeshifter plays four Clones and two Doppelgangers.
+## The shapes are gathered the way the arrival gathers them ([method
+## MtgGame._apply_enters_as_copy]), off the public battlefield; a
+## face-down permanent copies as a nameless 2/2 and is a shape that lives.
+func _copy_shape_missing(game: MtgGame, inst: CardInstance) -> bool:
+	var spec: Dictionary = inst.data.enters_as_copy
+	if spec.is_empty():
+		return false
+	var filter: Callable = spec.get("filter", Callable())
+	for other in game.all_battlefield():
+		if other == inst or (filter.is_valid() and not bool(filter.call(other))):
+			continue
+		if not game.legend_copy_is_buried(other):
+			return false
+	return true
 
 
 ## w6-9: the ids of the permanents in [param ranked] (the cast ranking's
@@ -15175,6 +15228,16 @@ func _damage_order_pick(game: MtgGame, options: Array[String], hint: int) -> int
 func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> bool:
 	if profile.forecasts_tactics and p_pid == pid and prompt == "Exile the targeted creature cards and gain life instead of assigning combat damage?":
 		return HOMELANDS_TACTICS.trade_damage_for_life(game, self, hint)
+	# A CARD THE WHEEL WILL THROW AWAY IS NOT BOUGHT (the polish pass,
+	# 2026-10-28; review of 2026-10-21: "It paid 4 life to Sylvan Library
+	# to keep a card, then cast Wheel of Fortune in the same main phase and
+	# discarded it"). A drawn card put back on top is the first of the
+	# wheel's seven, so with a wheel castable this turn the life buys
+	# nothing ([method _keep_price_ask], [method _wheel_this_turn]).
+	if hint and profile.forecasts_tactics and p_pid == pid \
+			and _keep_price_ask(game, prompt) \
+			and _wheel_this_turn(game, _keep_price_moves(game, prompt)):
+		return false
 	# A CUMULATIVE UPKEEP PAID IN BODIES FOR THEM (campaign fix-ai-c):
 	# Varchild's War-Riders, [method _upkeep_gift_answer].
 	if hint and p_pid == pid:
@@ -15232,6 +15295,132 @@ func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> boo
 ## charged at one of them will be charged again. Everywhere else a "you
 ## may pay" is a purchase made once.
 const OFFER_BEATS: Array[int] = [Mtg.Step.UPKEEP, Mtg.Step.DRAW, Mtg.Step.END]
+
+
+## THE PRICE OF KEEPING A DRAWN CARD (the polish pass, 2026-10-28): is the
+## question in front of us "Pay N life." asked in OUR draw step by a
+## permanent of ours whose draw-step trigger is resolving — Sylvan
+## Library's `@SYLVAN_LIBRARY` entry, "pay 4 life or put the card on top
+## of your library"? Read off the question's own source and step, never a
+## card name.
+func _keep_price_ask(game: MtgGame, prompt: String) -> bool:
+	var asked := current_choice()
+	if asked == null or asked.source == "" or game.active_player != pid \
+			or game.current_step() != Mtg.Step.DRAW:
+		return false
+	if not (prompt.begins_with("Pay ") and prompt.ends_with(" life.") \
+			and prompt.trim_prefix("Pay ").trim_suffix(" life.").is_valid_int()):
+		return false
+	for perm in game.players[pid].battlefield:
+		if perm.face_down or perm.data.card_name != asked.source:
+			continue
+		for trigger in perm.data.triggered_abilities:
+			if trigger.listens(Mtg.EventType.DRAW_STEP):
+				return true
+	return false
+
+
+## How many cards a KEEP-PRICE ([method _keep_price_ask]) can still put
+## back on top of our library, the card the question in front of us is
+## about included: the price's [constant KEEP_PRICE_CARDS] less the price
+## questions of this resolution already answered, and never more than the
+## cards drawn this turn that are still in our hand.
+##
+## NOT EVERY CARD DRAWN THIS TURN (0.50.65 bug campaign, k5-3): the cards
+## drawn this turn include the turn's normal draw, which no price puts
+## back. Counted whole, the hand the wheel was promised with read one card
+## short of the hand it is cast with ([method _wheel_swing]): with their
+## hand at two, the Wizard put both Library cards back for a Wheel of
+## Fortune whose swing then read 0, and cast a Gray Ogre instead.
+##
+## The questions already answered are read off the game's record of OUR
+## OWN answers ([member MtgGame.choice_log]): the run of this source's
+## questions in this step, back to the first yes/no that is not this price
+## (the trigger's own "draw two more?" opens each resolution, so a second
+## Library starts its count afresh).
+func _keep_price_moves(game: MtgGame, prompt: String) -> int:
+	var drawn_held := 0
+	for card in game.players[pid].drawn_this_turn:
+		if card.zone == Mtg.Zone.HAND:
+			drawn_held += 1
+	var asked := current_choice()
+	var settled := 0
+	if asked != null:
+		for i in range(game.choice_log.size() - 1, -1, -1):
+			var earlier: PlayerChoice = game.choice_log[i]
+			if earlier.pid != pid or earlier.source != asked.source \
+					or earlier.step != asked.step:
+				break
+			if earlier.kind != PlayerChoice.Kind.YES_NO:
+				continue   # the pick of the card the price is about
+			if earlier.prompt != prompt:
+				break
+			settled += 1
+	return clampi(KEEP_PRICE_CARDS - settled, 0, drawn_held)
+
+
+## The cards a keep-price chooses: "choose TWO cards in your hand drawn
+## this turn" — Sylvan Library's, the one keep-price shape in the pool.
+const KEEP_PRICE_CARDS := 2
+
+
+## Do we hold a WHEEL ([member EffectIntent.wheels] — a spell that empties
+## each hand and deals it back) that this turn's mana can pay for, and
+## that this pilot would cast once [param moved] cards drawn this turn
+## ([method _keep_price_moves]) are back on our library? Our own hand and
+## our own mana producers only ([method _next_turn_reach], the land drop
+## still to come counted).
+##
+## THE CAST'S OWN READING (0.50.65 bug campaign, k5-3): the wheel promised
+## here is the wheel [method _size_and_aim] would cast — never one whose
+## library it would empty, never one that hands a decking race back
+## ([method _hands_back_the_race]); and for a pilot that prices a wheel by
+## the cards it moves ([member AiProfile.runs_loops]), one that moves cards
+## our way ([method _wheel_swing]: their hand less ours without the wheel)
+## and is the turn's first. Our hand is read as it will be, the
+## [param moved] cards gone; a land played before the wheel makes it one
+## smaller still, so the swing promised here is never more than the swing
+## the cast reads.
+func _wheel_this_turn(game: MtgGame, moved: int) -> bool:
+	var reach := _next_turn_reach(game)
+	var me := game.players[pid]
+	for card in me.hand:
+		if card.is_land() or card.data.cost.mana_value() > reach:
+			continue
+		# A wheel drawn THIS turn may be the very card the price is asked
+		# about ("choose two cards in your hand drawn this turn"): putting
+		# it back to save the life would throw the wheel itself away.
+		if me.drawn_this_turn.has(card):
+			continue
+		var intent := _intent_of(card)
+		# ONLY A FIXED-COUNT WHEEL (0.50.65 bug campaign, k5-4): Winds of
+		# Change ([constant EffectIntent.WHEEL_REDRAW], -1) deals each hand
+		# back exactly what it held, so a card put back is a card fewer for
+		# it to deal, not the first of seven — paid 0, put both back, then
+		# redrew none.
+		if intent.wheels <= 0:
+			continue
+		if me.library.size() + moved <= intent.wheels:
+			continue
+		if _hands_back_the_race(game, card, intent):
+			continue
+		if profile.runs_loops:
+			var ours := me.hand.size() - moved - 1
+			if game.players[game.opponent_of(pid)].hand.size() - ours <= 0 \
+					or _wheel_turn == _turn_key(game):
+				continue
+		# Its COLOURS too: a Wheel of Fortune with Forests and Llanowar
+		# Elves for sources is no wheel this turn (the probe of the polish
+		# pass saw the put-back fire under exactly that). Our permanents
+		# are untapped in our own draw step, so the plan is the real one.
+		var cost := game.spell_cost_for(pid, card.data)
+		var surcharge := game.spell_surcharge(pid, card.data)
+		if not (_cost_is_free(cost) and surcharge <= 0) \
+				and _plan_taps_from(_mana_sources(game), cost, surcharge,
+					game.mana_usage_keys(card.data, card)).is_empty():
+			continue
+		return true
+	return false
 
 
 ## THE OFFER'S SUBJECT (2026-09-11, [member AiProfile.prices_offers]):
@@ -15544,6 +15733,20 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 		prompt: String) -> CardInstance:
 	var asked := current_choice()
+	# A SHAPE THE LEGEND RULE BURIES IS NO SHAPE (the polish pass,
+	# 2026-10-28; hunt of 2026-10-21): a Clone or a Doppelganger arriving
+	# as a copy of a legend already in play is the newer legend and is
+	# buried at once ([method MtgGame.legend_copy_is_buried]), so the most
+	# valuable body on the table was the one shape that killed it. The best
+	# shape that lives is taken, and none at all when every shape is one.
+	if asked != null and asked.copying:
+		var lives: Array[CardInstance] = []
+		for inst in candidates:
+			if not game.legend_copy_is_buried(inst):
+				lives.append(inst)
+		if lives.is_empty():
+			return null
+		candidates = lives
 	# A LOOP'S OWN QUESTIONS (2026-10-19, CARD-COMBOS): the Sliver token the
 	# Altar eats, the Man-o'-War that returns itself — answered as the
 	# search that found the loop answered them.

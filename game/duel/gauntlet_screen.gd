@@ -50,10 +50,20 @@ extends Control
 ## opponents in the Gauntlet is now fixed"* (FAQ 1.2,
 ## `s30/shandalar-faq.txt:458-465`).
 ##
-## WHAT IS NOT HERE, deliberately: `&Save gauntlet` / `&Load gauntlet...`.
-## We have no save/load for a duel or a match (the adventure has its own
-## slots), and the gauntlet's and the match's should land as one design
-## (`docs/gauntlet-design.md` §5.5). The run logs its seed instead.
+## SAVED BETWEEN DUELS (the polish pass c18; the owner, 2026-10-28:
+## *"Saving: between duels (Gauntlet runs and matches save after each duel
+## and resume); no mid-duel save"*) — 1997's `&Save gauntlet` and `&Load
+## saved game...` (`docs/gauntlet-design.md` §1.8), landed with the
+## match's as one design ([MatchSaves], §5.5's wish). The run is written
+## whole after every duel, the match in play inside it ([member
+## MatchScreen.save_with]), and after every match it wins; a run that ends
+## drops its file — both the moment the deciding duel is recorded, before
+## its End of Duel window closes (the bug campaign of 0.50.65, k4-1) — and
+## `Quit Gauntlet` or leaving from inside a duel keeps it. Entering the Gauntlet with a run saved offers it first
+## ([method _show_resume]: `Resume run` / `New run` / `Exit`) [ours]; the
+## run then plays on from its last save point, the match in play at its
+## between-duels window, and its next match or duel dealt afresh. The run
+## still logs its seed.
 
 ## Over [MatchScreen]'s own between-duels window (400), which is over the
 ## duel screen's coin panel (250) and dialogs (200). The round window is a
@@ -92,6 +102,45 @@ var _running := false
 ## what the window shows, kept so a headless run can be asked.
 var last_refusal := ""
 
+# --- the polish pass c18, P4: saved between duels ---
+## The resume window's words and buttons [ours].
+const RESUME_HEADING := "A gauntlet run is saved."
+const RESUME_RUN := "Resume run"
+const NEW_RUN := "New run"
+const NEW_RUN_TIP := "Set up a new run. The saved one is replaced when the new run is first saved, after its first duel."
+## What the doors out of a round's duel ask once the run is saved, and the
+## round window's line.
+const SAVED_QUESTION := "Leave the gauntlet? Your run is saved as it stood before this duel, and you go back to the main menu. Gauntlet takes it up again."
+const SAVED_NOTE := "Saved. Gauntlet on the main menu takes this run up again."
+const NOT_SAVED_NOTE := "This run could not be saved."
+## What the same doors ask over a finished duel's End of Duel window (the
+## bug campaign of 0.50.65, k4-4): the run saved with that duel's result;
+## its match won, saved for the next round; or over.
+const RESULT_SAVED_QUESTION := "Leave the gauntlet? Your run is saved with this duel's result, and you go back to the main menu. Gauntlet takes it up again."
+const NEXT_ROUND_SAVED_QUESTION := "Leave the gauntlet? Your run is saved, ready for round %d, and you go back to the main menu. Gauntlet takes it up again."
+const RUN_OVER_QUESTION := "Leave the gauntlet? Your run is over, and you go back to the main menu."
+## This run's id, written into its save so that its end drops only its own
+## file ([method MatchSaves.clear_gauntlet]).
+var run_id := ""
+## A saved run to take up ([method MatchSaves.gauntlet_from_json]'s), set
+## before the screen enters the tree; `{}` offers it from the window (or,
+## headless, begins a new run).
+var resume_from: Dictionary = {}
+## Does a save hold this run as it stands; did the last save point fail.
+var _run_saved := false
+var _save_failed := false
+## How often the between-matches save point this run was taken up from has
+## been: that many seeds are passed over before the next match's
+## ([member MatchScreen._resumes]'s rule, one layer up).
+var _resumes := 0
+## The resume window while it is up, so Escape can find its `Exit`.
+var _resume_window: OriginalDialog = null
+# --- end P4 ---
+## Has the match in play been recorded on the run ([method
+## _on_match_decided]), and the round window's lines it left (k4-1).
+var _match_recorded := false
+var _round_lines: Array[String] = []
+
 
 ## Every deck this project can see THAT A GAUNTLET COULD DEAL — the
 ## original's rule (every `.dck` in its directory), less the decks a round
@@ -126,6 +175,11 @@ func _ready() -> void:
 		run_seed = randi() | 1      # never 0: that means "roll one"
 		config.rng_seed = run_seed
 	_rng.seed = run_seed
+	if not resume_from.is_empty():
+		if DisplayServer.get_name() != "headless":
+			_start_music()
+		resume_run(resume_from)
+		return
 	# LOGGED, on the same reasoning the duel logs its own: a run is
 	# reproducible from a bug report without a save file.
 	print("Gauntlet seed: %d" % run_seed)
@@ -135,7 +189,7 @@ func _ready() -> void:
 		# screen starts its first duel without a coin toss.
 		begin_run()
 		return
-	_show_options()
+	_offer_saved_run()
 	_start_music()
 
 ## THE GAUNTLET'S OWN BED, and the longest the library has: a gauntlet is
@@ -255,10 +309,13 @@ var _options_window: OriginalDialog = null
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("ui_cancel", false, true):
 		return
-	if not is_instance_valid(_options_window) \
-			or _options_window.is_queued_for_deletion():
+	# The resume window's `Exit` the same way (P4): it is the front door too.
+	var front := _options_window
+	if is_instance_valid(_resume_window) and not _resume_window.is_queued_for_deletion():
+		front = _resume_window
+	if not is_instance_valid(front) or front.is_queued_for_deletion():
 		return
-	for button in _options_window.find_children("*", "Button", true, false):
+	for button in front.find_children("*", "Button", true, false):
 		if (button as Button).text == GauntletOptions.EXIT:
 			get_viewport().set_input_as_handled()
 			(button as Button).pressed.emit()
@@ -304,6 +361,11 @@ func begin_run() -> void:
 	if not _apply_options():
 		return                        # your deck was refused, and said so
 	_running = true
+	# A NEW RUN, its own id (P4): a run saved before it stays saved until
+	# this one first saves over it, and this one's end drops only its own.
+	run_id = MpnArchive.new_id()
+	_run_saved = false
+	_save_failed = false
 	var pool: Array[String] = opponent_paths.duplicate()
 	state.begin(pool, _rng, options.run_length(pool.size()))
 	for path in state.order:
@@ -404,6 +466,125 @@ func _refuse_your_deck(message: String) -> void:
 	_hold_the_keyboard(dialog)
 
 
+# --------------------------------------------- the saved run (P4, c18) --
+
+## THE GAUNTLET'S DOOR WITH A RUN SAVED BEHIND IT: the run offered first
+## ([method _show_resume]); a file that could not be read said once, as it
+## is set aside ([method MatchSaves.read_gauntlet]); nothing saved, the
+## options as ever.
+func _offer_saved_run() -> void:
+	var found := MatchSaves.read_gauntlet()
+	match int(found["status"]):
+		MatchSaves.READY:
+			_show_resume(found)
+		MatchSaves.SET_ASIDE:
+			_show_note(MatchSaves.set_aside_note(String(found["aside"]), "run"))
+		_:
+			_show_options()
+
+
+## THE RESUME WINDOW [ours] — the saved run in a few lines (its round, its
+## record, the match in play or the next opponent: [method
+## MatchSaves.gauntlet_summary]) over `Resume run` / `New run` / `Exit`.
+## `Resume run` is greyed, with the reason under the lines, when the run
+## holds a card this game does not have now (a pack switched off, the
+## owner's ruling: *"a missing pack refuses and says which"*) — in your
+## deck, the match in play or an opponent still to come (k4-2). `New run`
+## is the options window; the saved run stays saved until the new one
+## first saves over it.
+func _show_resume(found: Dictionary) -> void:
+	_close_window()
+	var taken: Dictionary = found["run"]
+	var dialog := OriginalDialog.create(GauntletState.TITLE, Vector2(430, 220),
+		"panel_dark_stone")
+	dialog.z_index = WINDOW_Z
+	_window = dialog
+	_resume_window = dialog
+	dialog.body().add_child(_centred(RESUME_HEADING, 16, true))
+	for line in found["summary"]:
+		dialog.body().add_child(_centred(String(line), 14))
+	var refusal := MatchSaves.cards_refusal(MatchSaves.gauntlet_card_names(taken), "This run")
+	if refusal != "":
+		dialog.body().add_child(_centred(refusal, 13))
+	var resume := GauntletOptions.fit(dialog.add_button(RESUME_RUN))
+	resume.disabled = refusal != ""
+	resume.pressed.connect(func() -> void: resume_run(taken))
+	var fresh := GauntletOptions.fit(dialog.add_button(NEW_RUN))
+	fresh.tooltip_text = NEW_RUN_TIP
+	fresh.pressed.connect(func() -> void:
+		_close_window()
+		_show_options())
+	GauntletOptions.fit(dialog.add_button(GauntletOptions.EXIT)).pressed.connect(
+		func() -> void:
+			_close_window()
+			_leave())
+	add_child(dialog)
+	_hold_the_keyboard(dialog)
+	if resume.disabled:
+		fresh.grab_focus()
+
+
+## A word before the options — a saved run set aside, said once.
+func _show_note(message: String) -> void:
+	_close_window()
+	var dialog := OriginalDialog.create(GauntletState.TITLE, Vector2(430, 150),
+		"panel_dark_stone")
+	dialog.z_index = WINDOW_Z
+	_window = dialog
+	dialog.body().add_child(_centred(message, 14))
+	GauntletOptions.fit(dialog.add_button("OK")).pressed.connect(
+		func() -> void:
+			_close_window()
+			_show_options())
+	add_child(dialog)
+	_hold_the_keyboard(dialog)
+
+
+## `Resume run` — THE RUN TAKEN UP from [param taken] ([method
+## MatchSaves.gauntlet_from_json]'s): its id, template, options, record and
+## opponent order, and its stream. Between matches it goes on at the next
+## round's announcement, its seed dealt afresh (the resume counted in the
+## file at once); saved inside a match, that match is taken up at its
+## between-duels window ([member MatchScreen.resume_from]), which counts its
+## own resume. Public so a test can take a run up without a window.
+func resume_run(taken: Dictionary) -> void:
+	if _running:
+		return
+	_close_window()
+	_running = true
+	run_id = String(taken["id"])
+	config = taken["config"]
+	options = taken["options"]
+	state = taken["state"]
+	_rng.state = int(taken["rng_state"])
+	config.pace = Settings.ai_pace()     # today's Options', as `Run` reads it
+	_run_saved = true
+	_save_failed = false
+	var in_play: Dictionary = taken["match"]
+	print("Gauntlet resumed: seed %d, round %d of %d" % [config.rng_seed,
+		state.round_number, state.length()])
+	if in_play.is_empty():
+		_resumes = int(taken["resumes"]) + 1
+		_save_run()
+		_run_saved = true      # the file holds this point either way
+		_start_match()
+		return
+	_resumes = 0
+	_play_match(in_play["config"], in_play)
+
+
+## THE RUN WRITTEN WHOLE ([method MatchSaves.write_gauntlet]) with
+## [param in_play], the match in play's [method MatchScreen.snapshot] (`{}`
+## between matches) — what a round's match calls at each of its save
+## points ([member MatchScreen.save_with]). True when it was written.
+func _save_run(in_play: Dictionary = {}) -> bool:
+	var ok := MatchSaves.write_gauntlet(MatchSaves.gauntlet_json(run_id, state, config,
+		options, _rng.state, _resumes, in_play))
+	_run_saved = ok
+	_save_failed = not ok
+	return ok
+
+
 # ------------------------------------------------------------ the rounds --
 
 ## ONE ROUND: check the opponent's deck, ANNOUNCE who it is, then play the
@@ -425,8 +606,10 @@ func _start_match() -> void:
 	_show_announcement(round_config)
 
 
-## The match itself: a whole [MatchScreen] against the round's opponent.
-func _play_match(round_config: DuelConfig) -> void:
+## The match itself: a whole [MatchScreen] against the round's opponent —
+## or, [param taken] given, the match in play a saved run was saved inside
+## ([method resume_run]).
+func _play_match(round_config: DuelConfig, taken: Dictionary = {}) -> void:
 	# THE BED STOPS UNDER THE DUEL (campaign 2026-10-12): the gauntlet's
 	# screen stays in the tree while its match plays on top, and its bed
 	# went on under every duel's own tune. It comes back with the next
@@ -439,6 +622,11 @@ func _play_match(round_config: DuelConfig) -> void:
 	# not its own before it can possibly reach it.
 	_match.reports_to_owner = true
 	_match.match_finished.connect(_on_match_finished)
+	# ...and the run keeps the match the moment it is decided, before the
+	# End of Duel window (the bug campaign of 0.50.65, k4-1).
+	_match_recorded = false
+	_round_lines = []
+	_match.match_decided.connect(_on_match_decided)
 	# ...and the words its duels ask before they let the player go, and
 	# where a yes goes: here (review 2026-10-21, ui-1; [method _quit_from_duel]).
 	_match.leave_title = GauntletState.TITLE
@@ -447,6 +635,16 @@ func _play_match(round_config: DuelConfig) -> void:
 	_match.leave_confirmed.connect(_quit_from_duel)
 	_match.menu_question = LEAVE_QUESTION % state.round_number
 	_match.menu_confirmed.connect(_quit_from_duel)
+	# ...and its save points are the run's (P4): the match hands each one
+	# up, and once the run is saved its duels say so.
+	_match.save_with = _save_run
+	_match.saved = _run_saved
+	_match.saved_note = SAVED_NOTE
+	_match.saved_leave_question = SAVED_QUESTION
+	_match.saved_menu_question = SAVED_QUESTION
+	_match.result_saved_leave_question = RESULT_SAVED_QUESTION    # k4-4
+	_match.result_saved_menu_question = RESULT_SAVED_QUESTION
+	_match.resume_from = taken
 	add_child(_match)
 
 
@@ -508,7 +706,14 @@ func _config_for_this_round() -> DuelConfig:
 	var deck := DeckList.load_file(path, true) if path != "" else DeckList.new()
 	var problem := GauntletState.opponent_deck_problem(path, deck)
 	if problem != "":
-		_end_run_on_error(problem % state.opponent_name())
+		# A PACK SWITCHED OFF IS NOT A BROKEN DECK (the bug campaign of
+		# 0.50.65, k4-2): the round is refused and the run kept for the
+		# pack to come back on; only a deck broken another way ends it.
+		var packs_off := _packs_off_for(path)
+		if packs_off != "":
+			_refuse_round(packs_off)
+		else:
+			_end_run_on_error(problem % state.opponent_name())
 		return null
 	var out := DuelConfig.new()
 	out.decks = [(config.decks[0] as Array).duplicate(), deck.cards]
@@ -528,14 +733,31 @@ func _config_for_this_round() -> DuelConfig:
 	out.best_of = config.best_of
 	out.sideboard_between_duels = config.sideboard_between_duels
 	out.deck_format = config.deck_format
+	# A RUN TAKEN UP between matches passes over one seed per time its save
+	# point was (P4, [member _resumes]).
+	for _passed in _resumes:
+		_rng.randi()
+	_resumes = 0
 	out.rng_seed = _rng.randi() | 1
 	return out
 
 
-## A match has ended. Fold its duels into the session record, compose the
+## A match is DECIDED — its last duel just recorded, its End of Duel window
+## not yet closed. Fold its duels into the session record, compose the
 ## message BEFORE the round counter moves (`That was round %d` names the
-## round just played), then advance or stop.
-func _on_match_finished(winner_id: int) -> void:
+## round just played), advance or stop the run, and save or drop it.
+##
+## HERE AND NOT AT THE WINDOW'S OK (the bug campaign of 0.50.65, k4-1).
+## This was [method _on_match_finished]'s, which comes only when the
+## deciding duel's End of Duel window closes — and Pause still opens over
+## that window: `Return to main menu` (or `Quit`, or the game closed) left
+## the file as it stood before the duel, so a run lost there came back
+## from the Gauntlet's door, and a won match came back a duel short (in a
+## best of one, every duel of the run waited on OK). Once only per match.
+func _on_match_decided(winner_id: int) -> void:
+	if _match_recorded or not is_instance_valid(_match):
+		return
+	_match_recorded = true
 	var human: int = _match.state.human_seat
 	var won := winner_id == human
 	# THE RECORD IS THE SESSION'S, NOT THE MATCH'S — three counters the
@@ -549,15 +771,35 @@ func _on_match_finished(winner_id: int) -> void:
 		state.record_duel(GauntletState.Outcome.LOST)
 	for _i in tally.draws:
 		state.record_duel(GauntletState.Outcome.TIED)
-	var lines := state.end_of_duel_lines(
+	_round_lines = state.end_of_duel_lines(
 		GauntletState.outcome_for(tally.last_winner, human), true, won)
 	state.record_match(won)
+	# A SAVE POINT BETWEEN MATCHES (P4): the run as it goes on, or — over,
+	# lost or run — its file dropped. The doors out of the finished duel
+	# then say which (k4-4).
+	var door := RUN_OVER_QUESTION
+	if state.over:
+		MatchSaves.clear_gauntlet(run_id)
+		_run_saved = false
+	elif _save_run():
+		door = NEXT_ROUND_SAVED_QUESTION % state.round_number
+	else:
+		door = LEAVE_QUESTION % state.round_number
+	_match.tell_doors(door, door)
+
+
+## A match has ENDED — its deciding duel's End of Duel window closed (at
+## once headless) and the run already told ([method _on_match_decided]):
+## the round window, or the next round.
+func _on_match_finished(winner_id: int) -> void:
+	# A match that said nothing first is recorded now, as it always was.
+	_on_match_decided(winner_id)
 	if DisplayServer.get_name() == "headless":
 		# Tests/CI: no window to dismiss, so the run plays straight on —
 		# and adds no wait a headless run did not have.
 		_advance()
 		return
-	_show_round_window(lines)
+	_show_round_window(_round_lines)
 
 
 ## `&Next round`, or what the headless path does instead of offering it.
@@ -615,10 +857,16 @@ func _show_round_window(lines: Array[String]) -> void:
 	if state.over:
 		GauntletOptions.fit(dialog.add_button("OK")).pressed.connect(_leave)
 	else:
+		# SAVED, OR NOT (P4) — so `Quit Gauntlet` reads as the way out it
+		# now is: the run waits behind the Gauntlet's door.
+		if _run_saved or _save_failed:
+			dialog.body().add_child(_centred(SAVED_NOTE if _run_saved else NOT_SAVED_NOTE, 13))
 		GauntletOptions.fit(dialog.add_button(
 			GauntletState.NEXT_ROUND)).pressed.connect(_next_round)
-		GauntletOptions.fit(dialog.add_button(
-			GauntletState.QUIT)).pressed.connect(_quit_run)
+		var quit := GauntletOptions.fit(dialog.add_button(GauntletState.QUIT))
+		quit.pressed.connect(_quit_run)
+		if _run_saved:
+			quit.tooltip_text = SAVED_NOTE
 	add_child(dialog)
 	_hold_the_keyboard(dialog)
 
@@ -649,7 +897,8 @@ func _next_round() -> void:
 
 ## `&Quit Gauntlet` — the original's dialog returns 0 and its driver falls
 ## back to the startup screen. Ours goes back to the title, which is where
-## every other screen in this project ends.
+## every other screen in this project ends — and the run stays saved as the
+## match just won left it (P4), for the Gauntlet to offer again.
 func _quit_run() -> void:
 	state.quit()
 	_close_window()
@@ -688,10 +937,52 @@ func _close_window() -> void:
 ## the original shows a message box and returns to its startup screen.
 func _end_run_on_error(message: String) -> void:
 	state.quit()
+	# Over, so not to be taken up again (P4): the same deck would end it.
+	MatchSaves.clear_gauntlet(run_id)
+	_run_saved = false
 	push_warning(message)
 	if DisplayServer.get_name() == "headless":
 		return
 	_show_round_window([message] as Array[String])
+
+
+## Why the deck at [param path] cannot be dealt now WHEN ONLY PACKS
+## SWITCHED OFF SAY SO — [method MatchSaves.packs_refusal]'s sentence, read
+## off a lenient load (a card of a pack switched off is a name there, not
+## an error) — or "" when the deck is broken some other way (k4-2).
+static func _packs_off_for(path: String) -> String:
+	if path == "":
+		return ""
+	var loose := DeckList.load_file(path, false)
+	if not loose.errors.is_empty() or loose.proxies.is_empty():
+		return ""
+	return MatchSaves.packs_refusal(loose.proxies, "This run")
+
+
+## A ROUND WHOSE OPPONENT NEEDS A PACK SWITCHED OFF (the bug campaign of
+## 0.50.65, k4-2; the owner's ruling, *"a missing pack refuses and says
+## which"*): refused in [method MatchSaves.cards_refusal]'s words, and the
+## run is NOT dropped as [method _end_run_on_error] drops one for a broken
+## deck — its file waits at its last save point, and with the pack back on
+## the Gauntlet takes it up there. Until this, such a round ended the run
+## and deleted its file. OK goes to the title, as the run's last window does.
+func _refuse_round(message: String) -> void:
+	state.quit()
+	push_warning(message)
+	if DisplayServer.get_name() == "headless":
+		return
+	_close_window()
+	_resume_bed()
+	var dialog := OriginalDialog.create(GauntletState.TITLE, Vector2(430, 150),
+		"panel_dark_stone")
+	dialog.z_index = WINDOW_Z
+	_window = dialog
+	dialog.body().add_child(_centred(message, 14))
+	if _run_saved:
+		dialog.body().add_child(_centred(SAVED_NOTE, 13))
+	GauntletOptions.fit(dialog.add_button("OK")).pressed.connect(_leave)
+	add_child(dialog)
+	_hold_the_keyboard(dialog)
 
 
 ## The title — only while this screen is the scene: a Gauntlet a test

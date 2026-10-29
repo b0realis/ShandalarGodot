@@ -181,12 +181,12 @@ def main() -> int:
                 raise ValueError("GNU timeout/gtimeout is required")
             apk.parent.mkdir(parents=True, exist_ok=True)
             log = apk.parent / "export.log"
-            with log.open("w") as stream:
+            with log.open("w", encoding="utf-8") as stream:
                 result = subprocess.run([timeout, "-k", "5", "1800", godot, "--headless",
                                          "--path", str(ROOT), "--export-release", PRESET, str(apk)],
                                         stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
                                         timeout=1810)
-            if result.returncode or re.search(r"(?:SCRIPT )?ERROR:", log.read_text()):
+            if result.returncode or re.search(r"(?:SCRIPT )?ERROR:", log.read_text(encoding="utf-8", errors="replace")):
                 raise ValueError("Android export failed; inspect export.log")
         verify(apk, args.sdk.resolve(), version, args.build_tools)
         return 0

@@ -168,6 +168,8 @@ func clear() -> void:
 
 ## A piece of a skin sheet [param key] — [param region] in its own pixels —
 ## at [param at] on the page; a dim box in its place without the sheet.
+## CUT CLEAN [ours] (the polish pass, 2026-10-28): clipped to its region
+## ([method cut_of]).
 func piece(key: String, region: Rect2, at: Rect2, part_name := "") -> Control:
 	var sheet := GameSkin.texture(key)
 	if sheet == null:
@@ -179,14 +181,27 @@ func piece(key: String, region: Rect2, at: Rect2, part_name := "") -> Control:
 		face.set_corner_radius_all(4)
 		box.add_theme_stylebox_override("panel", face)
 		return _add(box, at, part_name)
-	var cut := AtlasTexture.new()
-	cut.atlas = sheet
-	cut.region = region
 	var shown := TextureRect.new()
-	shown.texture = cut
+	shown.texture = cut_of(sheet, region)
 	shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shown.stretch_mode = TextureRect.STRETCH_SCALE
 	return _add(shown, at, part_name)
+
+
+## [param region] of the frames' sheet [param sheet], CLIPPED TO IT: the
+## sheets part their pieces with lines of the transparent key — in
+## `preduel_frame` and `preduel_frame_tinted` a magenta column at x = 129,
+## just right of the hero's plaque (1..128) — and a piece drawn scaled and
+## filtered took that line in at its edge: the 1-px purple line at the
+## right end of "Your Ante", with the 1997 skin and the 2x one alike (the
+## owner's polish list, 2026-10-28). The map's buttons were cut so before
+## ([method WorldMap.cell]).
+static func cut_of(sheet: Texture2D, region: Rect2) -> AtlasTexture:
+	var cut := AtlasTexture.new()
+	cut.atlas = sheet
+	cut.region = region
+	cut.filter_clip = true
+	return cut
 
 
 ## Words at [param at] on the page: [param size] page points, centred.
@@ -341,14 +356,16 @@ func stakes(hero: Array, creature: Array) -> void:
 
 
 ## THE PURSE'S PANELS (E:1627–1683): gold, food, the deck in use's cards of
-## all owned ("%d/%d") and the life the links give. [Ours] Without the skin
+## all owned ("%d/%d") and the life the links give — the life duels start
+## from ([method AdventurePlayer.duel_start_life]: under the Embark's "Base
+## 10 + links" the base with the links, since 0.50.65). [Ours] Without the skin
 ## (no picture says which is which) four boxes apart, each its word: "Gold
 ## 1000", "Food 50", "Deck 39/39", "Life 10".
 func purse(player: AdventurePlayer) -> void:
 	var deck := "%d/%d" % [player.deck_cards().size(), player.cards.size()]
 	if GameSkin.texture("preduel_panels") == null:
 		var counts := [["Gold", PLAIN_GOLD_AT, str(player.gold)], ["Food", PLAIN_FOOD_AT, str(player.food)],
-			["Deck", PLAIN_DECK_AT, deck], ["Life", PLAIN_LIFE_AT, str(player.mana_links())]]
+			["Deck", PLAIN_DECK_AT, deck], ["Life", PLAIN_LIFE_AT, str(player.duel_start_life())]]
 		for count in counts:
 			var at: Rect2 = count[1]
 			piece("preduel_panels", Rect2(), at, String(count[0]) + "Panel")
@@ -362,7 +379,7 @@ func purse(player: AdventurePlayer) -> void:
 	words(str(player.gold), centred(GOLD_POINT, Vector2(58, 32)), 15, PaneStyle.LIT, "Gold")
 	words(str(player.food), centred(FOOD_POINT, Vector2(58, 32)), 15, PaneStyle.LIT, "Food")
 	words(deck, centred(DECK_POINT, Vector2(76, 32)), 15, PaneStyle.LIT, "Deck")
-	words(str(player.mana_links()), centred(LIFE_POINT, Vector2(56, 32)), 15, PaneStyle.LIT, "Life")
+	words(str(player.duel_start_life()), centred(LIFE_POINT, Vector2(56, 32)), 15, PaneStyle.LIT, "Life")
 
 
 ## THE QUEST SCROLL (E:1684–1688, `BuildQuestStatusMessage`): what calls the

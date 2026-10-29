@@ -1,7 +1,8 @@
 extends GutTest
 ## PART C, W3 — THE FINAL BATTLE'S RULE ON THE EMBARK SCREEN (the owner,
 ## 2026-10-27: "A setting at Embark" — "Reload allowed" or "One life"): a
-## real choice on the line of "Your rules", above the card rule, named as
+## real choice, the first row of the Campaign Settings since 2026-10-29
+## (it stood on the line of "Your rules" before), above the card rule, named as
 ## the owner named them, "Reload allowed" by default, its tooltip saying
 ## what it does; chosen, the record, the next visit and the adventure carry
 ## it; Randomize leaves it; and the
@@ -37,11 +38,14 @@ func test_the_final_battles_rule_is_chosen_at_the_embark() -> void:
 	assert_eq(rule.selected, 0, "reload allowed by default")
 	assert_string_contains(rule.tooltip_text, "Arzakon's door")
 	assert_eq((_find("LifeRuleWords") as Label).text, "Final battle")
-	var magic := _find("MagicPanel")
-	assert_true(magic.is_ancestor_of(rule), "in Your rules, with the card rule")
-	assert_true(_find("RulesRow").is_ancestor_of(rule), "on the line of Your rules")
+	# [0.50.65] In the Campaign Settings, their first row.
+	assert_true(_find("CampaignSettingsWindow").is_ancestor_of(rule), "in the Campaign Settings")
+	screen.open_settings()
+	for i in 3:
+		await get_tree().process_frame
 	assert_lt(rule.get_global_rect().end.y, (_find("CardRule") as Control).global_position.y + 1.0,
 		"above the card rule")
+	screen.close_settings()
 	rule.select(1)
 	rule.item_selected.emit(1)
 	assert_eq(screen.setup.life_rule, AdventurePlayer.LIFE_ONE)
@@ -108,7 +112,13 @@ func _whole(on: EmbarkScreen, how: String, every_column: bool) -> void:
 		assert_false(scroll.get_v_scroll_bar().visible, "%s: the columns do not scroll" % how)
 		assert_lte(columns.get_combined_minimum_size().y, scroll.size.y, "%s: they fit" % how)
 	assert_lte(magic.get_combined_minimum_size().y, scroll.size.y, "%s: the rules' column fits" % how)
-	var row := _find("RulesRow", on) as Control
-	assert_true(magic.get_global_rect().encloses(row.get_global_rect()), "%s: the rule in its window" % how)
-	assert_lt(_find("CardRule", on).get_global_rect().end.y, (_find("Leave", on) as Control).global_position.y,
-		"%s: the rules above the buttons" % how)
+	# [0.50.65] The rule in the Campaign Settings' window, the window on the
+	# screen.
+	on.open_settings()
+	for i in 3:
+		await get_tree().process_frame
+	var window := _find("CampaignSettingsWindow", on) as Control
+	var row := _find("LifeRuleRow", on) as Control
+	assert_true(window.get_global_rect().encloses(row.get_global_rect()), "%s: the rule in its window" % how)
+	assert_true(Rect2(Vector2.ZERO, on.size).encloses(window.get_global_rect()), "%s: the window on the screen" % how)
+	on.close_settings()

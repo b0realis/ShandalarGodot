@@ -33,3 +33,42 @@ func rand() -> int:
 ## for a maximum of 1 or less, without drawing.
 func below(maximum: int) -> int:
 	return rand() % maximum if maximum > 1 else 0
+
+
+## The largest maximum [method below] reaches every number under: `rand()`
+## gives 0 to 32767 and nothing more.
+const REACH := 0x8000
+
+
+## [Ours] 0 to [param maximum] − 1 for a maximum past `rand()`'s reach
+## ([constant REACH]): two draws, 30 bits, `% maximum`. Up to the reach it
+## is [method below] exactly (one draw).
+func below_wide(maximum: int) -> int:
+	if maximum <= REACH:
+		return below(maximum)
+	return ((rand() << 15) | rand()) % maximum
+
+
+## THE PLACE IN A BAG OF [param bag] DRAWN AS 1997 DREW ONE: `rand(bag)`
+## again and again until one of [param places] comes up (the meetings' and
+## the room duels' stakes, the dungeon's dice; 1997's bag was 500) — −1
+## when [param places] is empty. [Ours, the 0.50.65 bug campaign, k1-3:
+## a bag past [constant REACH] (an unlimited card hold) — or a place past
+## the bag — is drawn among [param places] at once ([method below_wide]):
+## `rand()` never reaches a place past 32767, and a bag whose places all
+## stood there was drawn forever. The odds are the same: the redraws pick
+## any place of [param places] alike.]
+func place_among(bag: int, places: Array[int]) -> int:
+	if places.is_empty():
+		return -1
+	var wanted := {}
+	var reached := bag <= REACH
+	for at in places:
+		wanted[at] = true
+		reached = reached and at >= 0 and at < bag
+	if not reached:
+		return places[below_wide(places.size())]
+	var drawn := below(bag)
+	while not wanted.has(drawn):
+		drawn = below(bag)
+	return drawn

@@ -14,6 +14,12 @@ extends CardScript
 ## DecisionAgent: a human seat is held open on it (docs/duel-todo.md
 ## §1.3) and every other seat answers for itself. The value the card
 ## computes is only the HINT, and the candidates are pre-sorted for it.
+##
+## A legend already in play is a shape that buries the Clone: under the
+## 1997 legend rule the copy is the newer legend (MtgGame.
+## legend_copy_is_buried). It stays a legal answer, offered last with the
+## question saying so, and no heuristic seat takes it (the polish pass,
+## 2026-10-28; tests/unit/test_p5_clone_legend.gd).
 
 
 static func _any_creature(inst: CardInstance) -> bool:

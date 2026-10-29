@@ -510,14 +510,14 @@ that runs a thousand games.
 | `--names A,B` | seat names in the log | `SeatZero,SeatOne` |
 | `--format NAME` | require a deck format: `unrestricted`, `wild`, `type1`, `type1.5`, `highlander`. An illegal deck **fails at parse time**, naming the card. Since 2026-09-01 the check counts the deck's `SB:` SIDEBOARD with its maindeck — which is also what keeps a sideboarded deck legal at duel 2, since a one-for-one swap leaves the union of the two piles alone | none |
 | `--group NAME` | when a DIR is expanded, keep only one deck group: `originals`, `ancients`, `planeswalkers`, `coyote_tex`, `kevin_bane`, `other`, `starter`, `tournament`, `community`, `extended_community`, `user` — or `all`, every group at once. The Portal 1997 starters, the Portal Second Age decks and the Playable variants have no value of their own; `--group all` includes them. Since 2026-09-02 a DIR given with `--group` is walked **into its subfolders** — that is how the 312 ported decks under `decks/1997/<group>/`, `decks/tournament/`, `decks/community/` and `decks/extended_community/` ([decks-1997.md](decks-1997.md)) are reached: `--gauntlet decks/ --group originals` is the 55 enemy decks of the 1997 game, `--group community` the 48 proxy-free community decks. Without `--group` a DIR is its own files only, so the default field is still the five starter decks. A DIR deck that holds proxy cards is skipped with a note on stderr (a named file is never skipped; the loader refuses it and says why) | all |
-| `--mulligan on\|off` | offer the mulligan before turn 1 — since 2026-09-08 the PARIS one (any hand, one card fewer each redraw, until the seat keeps), each seat judged by its pilot (`AiProfile.mulligans`; the plain rule when that knob is off) | **off** — see below |
+| `--mulligan on\|off` | offer the mulligan before turn 1 — since 2026-09-08 the PARIS one (any hand, one card fewer each redraw, until the seat keeps), each seat judged by its pilot (`AiProfile.mulligans`; the plain rule when that knob is off) | **on** — see below |
 | `--rules NAME` | a rules preset: `modern_mana_burn` (the player's default table: modern rules, mana burn on), `modern` (mana burn off) or `fifth` (every fork at the 1997 answer) | **`modern_mana_burn`** — see below |
 | `--rule KEY=on\|off` | override one fork on top of `--rules`; repeatable | — |
 | `--best-of N` | play MATCHES of up to N duels (1, 3 or 5) instead of single duels — the original's `&Best of:` | 0 (`&Free play`) |
 | `--sideboard on\|off` | let each AI seat swap cards with its own sideboard between the duels of a match; needs `--best-of 3` or `5` | off |
 
 **Every default above is what this tool did before the flag existed — with
-one deliberate exception, `--rules`.** The determinism check — same seed,
+two deliberate exceptions, `--rules` and `--mulligan`.** The determinism check — same seed,
 same win/loss split, byte-identical `matchups.csv` — is how this project
 proves an engine change was safe, and a moved default silently invalidates
 it. A run at the defaults prints no `settings:` line and writes the same
@@ -537,6 +537,18 @@ tournament duels that a `modern` Lab run could not see). So:
   records its preset in `run.json`;
 - a run at the new default prints no `rules` on its `settings:` line;
   `--rules modern` and `--rules fifth` do.
+
+**The mulligan default (owner, 2026-10-28).** The Lab offers the mulligan
+before turn 1, as every real duel does — `--mulligan off` is now the
+switch, not `on`. The same three consequences as for the rules:
+
+- **a baseline taken before 2026-10-28 dealt its sevens as they came**:
+  compare it with a new run by passing `--mulligan off`, or retake it;
+- a run interrupted before the change resumes with the mulligan off it
+  started with — its `run.json` names no `mulligan` — and every run since
+  records it there;
+- a run at the new default prints no `mulligan` on its `settings:` line;
+  `--mulligan off` does.
 
 `--rules fifth` is the one worth reaching for on its own: it replays a whole
 pool under the ruleset the 1997 game actually played (mana burn on, attacker
@@ -1167,7 +1179,11 @@ duty and is worth choosing for it: a pair the change cannot reach must
 come out 0 of N different BETWEEN THE TREES as well as inside each one,
 and that is the nearest thing a knobless change has to a null.
 
-### Why `--mulligan` defaults off, and what it costs
+### Why `--mulligan` defaulted off until 2026-10-28, and what it cost
+
+**It defaults ON since 2026-10-28** (the owner's ruling; see the defaults
+above). What follows is the record of why it started off and what leaving
+it off was measured to cost.
 
 Until 2026-09-01 the Lab never mulliganed. `MtgGame.start()` is exactly
 `deal_opening_hands()` followed by `start_duel()` — the two openings were
@@ -1206,8 +1222,8 @@ which is the case worth re-measuring if the default ever flips.
 time, and the pilot judges by `AiMulligan` — no mana, all land, a mana
 count outside the keep range for the hand's size, or mana that casts
 none of the spells. That is a wider filter than the 1997 one, so the
-table above is the old rule's; the default stays **off** for the same
-reason as before (the baseline), and the judgement itself is measured in
+table above is the old rule's; the default stayed **off** for the same
+reason as before (the baseline) until 2026-10-28, and the judgement itself is measured in
 `docs/ROADMAP.md`, "THE OPENING HAND (2026-09-08)": `--sweep
 mulligans=on --mulligan on`, with two all-land decks as the control —
 both rules throw an all-land hand back down to the same floor, so the

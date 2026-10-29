@@ -163,20 +163,21 @@ const MINIMIZED_ATTACK: Array[Dictionary] = [
 ]
 
 ## `@MENU_SPELLCHAIN` (`:851`) and `@MENU_MINIMIZEDSPELLCHAIN` (`:856`) —
-## the same two words for the chain window. `Minimize` / `Restore` are NOT
-## live: our chain has no minimised state to restore from, and the 1997
-## restore route is the Phase Bar's window icon, which our icon already
-## spends on the Combat window. Since 2026-10-13 `@MENU_SPELLCHAIN` is
-## OPENED — a right-click on the tan band over a card on the chain (the
-## card itself keeps its own `@MENU_SMALLCARD`) — so its `Help...`, the
-## Spell Chain's mini help, has somewhere to be pressed. The minimised
-## twin is never shown (there is nothing minimised to right-click).
+## the same two words for the chain window. Since 2026-10-13
+## `@MENU_SPELLCHAIN` is OPENED — a right-click on the tan band over a
+## card on the chain (the card itself keeps its own `@MENU_SMALLCARD`) —
+## so its `Help...`, the Spell Chain's mini help, has somewhere to be
+## pressed. BOTH LIVE since the polish pass of 2026-10-28 (the owner:
+## *"Spell Chain minimize"*): the chain has a title band now
+## ([member DuelScreen._chain_head]) that shrinks to a tab, and the tab
+## opens the minimised twin. (The 1997 restore route, the Phase Bar's
+## window icon, stays the Combat window's: the bar has one centre band.)
 const SPELL_CHAIN: Array[Dictionary] = [
-	{"label": "Minimize", "live": false},
+	{"label": "Minimize", "live": true},
 	{"label": "Help...", "live": true},
 ]
 const MINIMIZED_SPELL_CHAIN: Array[Dictionary] = [
-	{"label": "Restore", "live": false},
+	{"label": "Restore", "live": true},
 	{"label": "Help...", "live": true},
 ]
 

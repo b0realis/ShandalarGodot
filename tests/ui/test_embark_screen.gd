@@ -56,8 +56,10 @@ func test_every_choice_is_on_the_one_screen() -> void:
 	else:
 		assert_not_null(_find("NoPacks"))
 	assert_null(_find("Pack_pack-1"), "Pack 1 is never offered")
-	assert_eq((_find("PacksChallenge") as Label).text,
-		"These are additional challenges. The base cards are always present.")
+	# The owner, 2026-10-28: until the packs are built they say only "Not
+	# implemented yet." — what they will be is a surprise.
+	assert_null(_find("PacksChallenge"), "no word of the packs' worlds yet")
+	assert_eq((_find("PacksAbout") as Label).text, EmbarkScreen.NOT_YET)
 
 
 func test_the_ground_is_the_portrait_screen_or_its_dark() -> void:
@@ -479,7 +481,8 @@ func test_the_title_menu_opens_it() -> void:
 ## built: the packs show greyed and unticked, and nothing chooses them.
 func test_the_card_packs_wait_greyed() -> void:
 	assert_false(EmbarkScreen.packs_ready)
-	assert_string_contains((_find("PacksAbout") as Label).text, "Coming in a later version")
+	assert_eq((_find("PacksAbout") as Label).text, EmbarkScreen.NOT_YET, "the owner: just \"Not implemented yet.\"")
+	assert_null(_find("PacksChallenge"), "no word of what the packs will be: a surprise")
 	for id in screen._pack_checks:
 		var check := screen._pack_checks[id] as CheckBox
 		assert_true(check.disabled, "%s greyed" % id)

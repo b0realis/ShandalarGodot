@@ -23,11 +23,10 @@ extends RefCounted
 ##    the 2nd, 5th … up to uncommon, the 3rd, 6th … up to rare; the 2nd,
 ##    4th and 6th never an artifact;
 ##  - only the base set; never a card made for ante, a dungeon's treasure,
-##    a power card or a restricted one ([method stock]) — with the 1997
-##    program imported, that lets two lands other than basic ones through,
-##    Mishra's Factory and Strip Mine (without it, no land but the basic
-##    ones); a basic land only by its own place [ours: 1997's other places
-##    could draw one too];
+##    a power card or a restricted one ([method stock]) — that lets two
+##    lands other than basic ones through, Mishra's Factory and Strip Mine,
+##    with the 1997 program imported or without it; a basic land only by
+##    its own place [ours: 1997's other places could draw one too];
 ##  - never a card the hero could not put in the deck in use: no more
 ##    copies there than the deck's size allows (one under 40 cards, two from
 ##    40, three from 60, one more with Tome of Enlightenment).
@@ -139,7 +138,7 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	# Under the Classic MTG rules a card drawn for sale before the hero held
 	# all the copies they allow is not sold to them now [ours].
 	if not may_offer(player, card_name):
-		return {"bought": false, "said": classic_refusal(card_name), "price": price}
+		return {"bought": false, "said": classic_refusal(card_name, player.ban_list), "price": price}
 	player.gold -= price
 	player.add_card(card_name)
 	var shop := town_record(player, slot)
@@ -338,9 +337,11 @@ static func counted_copies(player: AdventurePlayer) -> Dictionary:
 ## the owner, 2026-10-24: "Traders stop offering the cards if you have 4
 ## copies all-ready in your possession", every source alike): `{owned: name
 ## -> copies the hero owns, in any deck or none, tome: Tome of
-## Enlightenment owned}`, or `{}` under the two 1997 rules — each place then
-## keeps its own 1997 count. Read once for a whole draw or list ([method
-## classic_allows]). A creature's stake won is not offered and never limited.
+## Enlightenment owned, bans: the adventure's ban list}` ([member
+## AdventurePlayer.ban_list], [ClassicBans]), or `{}` under the two 1997
+## rules — each place then keeps its own 1997 count. Read once for a whole
+## draw or list ([method classic_allows]). A creature's stake won is not
+## offered and never limited.
 static func classic_rule(player: AdventurePlayer) -> Dictionary:
 	if player == null or player.card_rule != AdventurePlayer.RULE_CLASSIC:
 		return {}
@@ -348,7 +349,7 @@ static func classic_rule(player: AdventurePlayer) -> Dictionary:
 	for card in player.cards:
 		var card_name := String((card as Dictionary).get("card", ""))
 		owned[card_name] = int(owned.get(card_name, 0)) + 1
-	return {"owned": owned, "tome": player.owns("Tome of Enlightenment")}
+	return {"owned": owned, "tome": player.owns("Tome of Enlightenment"), "bans": player.ban_list}
 
 
 ## Whether [param card_name] may be offered under [param rule] ([method
@@ -359,7 +360,7 @@ static func classic_rule(player: AdventurePlayer) -> Dictionary:
 static func classic_allows(rule: Dictionary, card_name: String) -> bool:
 	if rule.is_empty():
 		return true
-	var most := DeckModel.classic_allowance(card_name, bool(rule.get("tome", false)))
+	var most := DeckModel.classic_allowance(card_name, bool(rule.get("tome", false)), String(rule.get("bans", "")))
 	return most < 0 or int((rule["owned"] as Dictionary).get(card_name, 0)) < most
 
 
@@ -368,9 +369,10 @@ static func may_offer(player: AdventurePlayer, card_name: String) -> bool:
 	return classic_allows(classic_rule(player), card_name)
 
 
-## Why the Classic MTG rules refuse [param card_name] ([method may_offer]).
-static func classic_refusal(card_name: String) -> String:
-	if DeckFormat.BANNED.has(card_name):
+## Why the Classic MTG rules refuse [param card_name] ([method may_offer])
+## under ban list [param bans] ([ClassicBans]; "" the default).
+static func classic_refusal(card_name: String, bans := "") -> String:
+	if ClassicBans.is_banned(card_name, bans):
 		return CLASSIC_BANNED % card_name
 	return CLASSIC_HELD % card_name
 
@@ -391,9 +393,13 @@ static func _in_use(player: AdventurePlayer, entry: Dictionary) -> bool:
 ## the program's card pickers (`extra_ability` 0x900), nor a power or
 ## restricted card (0x180) — Mishra's Factory and Strip Mine among them, and
 ## the Oasis, whose lack of any colour no town sells ([method _draw]).
-## Without it: the base set's cards less every land, a dungeon's treasure, a
-## banned or restricted card. The basic lands come by their own place only.
-## Read again when the card pool changes ([method CardValue.pool_moved]).
+## Without it, the same marks read off the printings and carried by name
+## ([method CardValue.expansion], [method CardValue.named_marks]; the
+## 0.50.65 bug campaign, k6-2 — until then the base set's cards less every
+## land, a treasure, a banned or restricted card: 37 cards 1997 never sold,
+## Junún Efreet among them, and 15 it did missing). The basic lands come by
+## their own place only. Read again when the card pool changes ([method
+## CardValue.pool_moved]).
 static func stock() -> Array[Dictionary]:
 	if CardValue.pool_moved(_read_at):
 		forget()
@@ -401,14 +407,11 @@ static func stock() -> Array[Dictionary]:
 	if not _stock.is_empty():
 		return _stock
 	CardRegistry.ensure_loaded()
-	var treasures: Array[String] = []
-	for row in ShandalarWorld.DUNGEON_CARDS:
-		treasures.append(String(row[1]))
 	var names: Array = CardRegistry.all_names()
 	names.sort()
 	for card_name in names:
 		var name_text := String(card_name)
-		if _stocked(name_text, treasures):
+		if _stocked(name_text):
 			_stock.append({"name": name_text, "facts": CardValue.facts(CardRegistry.get_card(name_text))})
 	return _stock
 
@@ -417,16 +420,15 @@ static func stock() -> Array[Dictionary]:
 ## the cheap marks before its facts are read: a card the 1997 program never
 ## had and of no base set — a pack's, thousands of them — is passed over
 ## before [method CardValue.derive] would read it off the card for nothing.
-static func _stocked(card_name: String, treasures: Array[String]) -> bool:
+## The table's marks, or without it the same read off the printings and
+## carried by name: no list of ours (no DeckFormat list, no rule on lands).
+static func _stocked(card_name: String) -> bool:
 	if card_name in LANDS or not CardRegistry.has_card(card_name):
 		return false
 	var own := CardValue.original(card_name)
-	if not own.is_empty():
-		return int(own.get("exp", 0)) & 0xC1 != 0 and int(own.get("extra", 0)) & 0x980 == 0
-	if not CardValue.is_base(card_name) or card_name in treasures \
-			or card_name in DeckFormat.BANNED or card_name in DeckFormat.RESTRICTED:
-		return false
-	return not CardRegistry.get_card(card_name).is_land()
+	var expansion := int(own.get("exp", 0)) if not own.is_empty() else CardValue.expansion(card_name)
+	var extra := int(own.get("extra", 0)) if not own.is_empty() else CardValue.named_marks(card_name)
+	return expansion & CardValue.BASE_SETS != 0 and extra & 0x980 == 0
 
 
 ## Forget the stock (a skin imported again, the card pool changed, a test).

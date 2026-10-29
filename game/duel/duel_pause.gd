@@ -89,11 +89,15 @@ const BUTTON_RECTS: Array[Rect2] = [
 ## scene or killing the process.
 signal chosen(action: int)
 
+## The marble board the entries stand on ([method VersusPanel.build_panel]).
+var _board: Control = null
+
 
 func build(config: DuelConfig) -> void:
 	# No deck lines: the *"playing with <deck>"* band is where the buttons
 	# go, and five of them need all of it.
 	var board := build_panel(config, TITLE, false)
+	_board = board
 	if config != null and config.is_test():
 		_labels = TEST_ENTRIES
 		_actions = TEST_ACTIONS
@@ -114,6 +118,20 @@ func build(config: DuelConfig) -> void:
 	# [DuelIntro]'s `Go!` needs.
 	if first != null and is_inside_tree():
 		first.grab_focus()
+
+
+## THE DUEL'S UI SCALE, handed in by the screen ([method
+## DuelScreen._apply_ui_scale]) — the board grown about its centre, where
+## it stands, so the dim still covers the whole table (0.50.65 bug
+## campaign, k3-3: the Pause window stayed at 100% under a 150% Situation
+## Bar). 500x400 at 150% is 750x600, inside the 800 logical rows every
+## supported screen has. The switch itself lives only behind the duel
+## screen's own options button, never here.
+func set_ui_scale(value: float) -> void:
+	if _board == null:
+		return
+	_board.pivot_offset = SPLASH * 0.5
+	_board.scale = Vector2(value, value)
 
 
 ## The entry in place [param index] was pressed: its action, by the table

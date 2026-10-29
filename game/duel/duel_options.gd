@@ -571,7 +571,9 @@ static func _type_index_or_none(label: String) -> int:
 ##
 ## `Duel Options...` is entry 17 of `@MENU_TERRITORY`, so this opens from
 ## a right-click on either territory, which is where the 1997 player found
-## it.
+## it — and, `[ours]` since the polish pass of 2026-10-28, from the foot of
+## the duel screen's own options ([DuelScreenOptions]), whose new switches
+## stay out of this 1997 table.
 ##
 ## The layout follows the original's own dialog: the five checkboxes in a
 ## column under the Layout radio pair, then the territory box "in the

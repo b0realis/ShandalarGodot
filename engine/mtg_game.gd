@@ -11759,8 +11759,27 @@ func _apply_enters_as_copy(inst: CardInstance, controller: int) -> void:
 	# is sometimes the only sane line (a forced copy of an opponent's Lord
 	# of the Pit or Ankh of Mishra is worse than entering as a 0/0), so the
 	# question is OPTIONAL: a null answer means "enter as printed".
+	# A LEGEND ALREADY IN PLAY IS A SHAPE THAT BURIES THE COPY (the polish
+	# pass, 2026-10-28; hunt of 2026-10-21): under the 1997 legend rule
+	# the newest legend of a name goes ([method _newest_duplicate_legend]),
+	# and a copy has been that legend for no time at all. 1997's Clone
+	# offered every creature in play (`card_clone`, SHANDALAR 0x00473c2e),
+	# so the shape stays a legal answer — offered LAST, the question saying
+	# why, and never a heuristic's pick ([member PlayerChoice.copying]).
+	var lives: Array[CardInstance] = []
+	var buried: Array[CardInstance] = []
+	for other in candidates:
+		if legend_copy_is_buried(other):
+			buried.append(other)
+		else:
+			lives.append(other)
+	var prompt := "Copy %s?" % String(spec.get("desc", "a permanent"))
+	if not buried.is_empty():
+		prompt += " A copy of a legend already in play is buried at once."
+		lives.append_array(buried)
+		candidates = lives
 	var chosen := agents[controller].choose_card(self, controller, candidates,
-		"Copy %s?" % String(spec.get("desc", "a permanent")), true)
+		prompt, true, false, false, true)
 	if chosen == null:
 		return
 	if not candidates.has(chosen):
@@ -13286,6 +13305,21 @@ func _newest_duplicate_legend(legend_name: String) -> CardInstance:
 				newest = inst
 				newest_since = since
 	return newest if seen >= 2 else null
+
+
+## Would a COPY of [param original] — a permanent entering as one (Clone,
+## Copy Artifact, Vesuvan Doppelganger's arrival) or becoming one — be
+## buried at once by the 1997 legend rule? True when its copiable values
+## ([method copiable_data]) are LEGENDARY: [param original] is on the
+## battlefield with that name, and the copy is the newer legend ([method
+## _newest_duplicate_legend]). A face-down permanent copies as a nameless
+## 2/2 (CR 707.2) and buries nothing. Public information only.
+func legend_copy_is_buried(original: CardInstance) -> bool:
+	if original == null or original.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	var values := copiable_data(original)
+	return values != null and values.card_name != "" \
+		and (values.supertypes & Mtg.Supertype.LEGENDARY) != 0
 
 
 ## WHEN [param inst] BECAME WHAT IT IS NOW — the moment, on the clock every

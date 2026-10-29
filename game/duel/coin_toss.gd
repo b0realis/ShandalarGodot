@@ -105,15 +105,20 @@ const RESULT_LINES: Array[String] = [
 	"Coin flip results: Tails",
 ]
 
-## WHICH FACE BELONGS TO WHICH SEAT IS **OURS**, and it is a convention
-## rather than a finding. The original's own entry point is
-## `coin_flip(int player, ...)` — the coin is flipped FOR a seat — and
-## `@DIALOG_PLAYORDRAW` answers the viewer in the second person ("You won
-## the coin toss."), so the reading below is the natural one: the coin is
-## called for the seat you are sitting in, and Heads is that seat winning.
-## The decompilation is not checked out on this machine, so the mapping
-## could not be read back from `004492ad`; if it ever is and it disagrees,
-## this one constant is the whole of the change.
+## WHICH FACE BELONGS TO WHICH SEAT IS 1997'S, read back from the
+## decompilation (the polish pass, 2026-10-28; until then it was our
+## convention, Heads for your seat, and it was the wrong way round). The
+## Shandalar 1.3 build's `run_duel_coin_flip_dialogs` (SHANDALAR
+## 0x00535090 / MAGIC 0x004996d0) makes the computer (`coin_winner` 1) the
+## winner when `coin_flip` comes up 0, and `coin_flip` (SHANDALAR
+## 0x0053f510) shows result 0 as `@DIALOG_COINFLIP`'s first line, Heads,
+## and as `COINTOSS_Heads.AVI` (its proc, 0x0053f72a; the retail DUEL.EXE
+## proc at `004492ad` picks the Heads movie on the same zero). So HEADS IS
+## THE OTHER SEAT'S WIN AND TAILS IS YOURS. Over a 1997 network the host
+## wins on Tails and the guest on Heads, on both screens; our tables have
+## no host seat, so [method result_face] reads the face from the seat the
+## screen is drawn for — in every single-player duel, 1997's exactly
+## (cited, not copied; `tests/ui/test_p5_coin_face.gd`).
 const HEADS := 0
 const TAILS := 1
 
@@ -394,11 +399,12 @@ static func toss_start_face(winner: int) -> int:
 	return posmod(winner - HALF_TURNS, 2)
 
 
-## Heads or Tails for a given outcome — see the note on [constant HEADS].
+## Heads or Tails for a given outcome — see the note on [constant HEADS]:
+## Tails when the seat the screen serves won, Heads when the other did.
 ## Pure, and the same predicate that aims the seat pointer, so the words
 ## and the picture can never disagree.
 static func result_face(winner: int, viewer_seat: int) -> int:
-	return HEADS if winner == viewer_seat else TAILS
+	return TAILS if winner == viewer_seat else HEADS
 
 
 ## `@DIALOG_COINFLIP`'s own caption for an outcome.

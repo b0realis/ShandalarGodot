@@ -107,7 +107,7 @@ static func _same(a: Variant, b: Variant) -> bool:
 class FirstPick extends DecisionAgent:
 	func choose_card(_game: MtgGame, _pid: int, candidates: Array[CardInstance],
 			_prompt: String, _optional := false, _adverse := false,
-			_ordered := false) -> CardInstance:
+			_ordered := false, _copying := false) -> CardInstance:
 		return candidates[0] if not candidates.is_empty() else null
 
 

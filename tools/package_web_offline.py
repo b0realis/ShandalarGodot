@@ -163,7 +163,7 @@ def package(source: Path, out: Path) -> Path:
                       for p in folder.rglob("*") if p.is_file() and p != folder / "SHA256SUMS"}
             if actual != expected:
                 raise ValueError("Input files do not match their SHA256SUMS")
-        if (folder / "VERSION.txt").read_text().strip() != version:
+        if (folder / "VERSION.txt").read_text(encoding="utf-8").strip() != version:
             raise ValueError("Archive name and VERSION.txt disagree")
         if (folder / "skin/original_skin.zip").exists() != bool(skin):
             raise ValueError("Archive name and included skin disagree")

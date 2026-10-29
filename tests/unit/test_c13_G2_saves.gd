@@ -64,10 +64,11 @@ func _read_back(player: AdventurePlayer, end: Dictionary) -> AdventurePlayer:
 func test_a_save_says_version_2_and_a_version_1_save_still_reads() -> void:
 	var player := _player()
 	var data: Dictionary = JSON.parse_string(JSON.stringify(player.to_dict()))
-	assert_eq(int(data["version"]), 2, "part C's saves are version 2: an older build refuses them")
+	# Version 3 since the 0.50.65 bug campaign (k6-3): still past 1.
+	assert_gte(int(data["version"]), 2, "part C's saves are version 2: an older build refuses them")
 	data["version"] = 1
 	assert_not_null(AdventurePlayer.from_dict(data), "a save from before still reads")
-	data["version"] = 3
+	data["version"] = AdventurePlayer.FORMAT_VERSION + 1
 	assert_null(AdventurePlayer.from_dict(data), "a newer one does not")
 
 

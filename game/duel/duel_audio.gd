@@ -83,10 +83,12 @@ extends Node
 ## STILL UNPLAYED, catalogued rather than forgotten
 ## ------------------------------------------------------------------------
 ## `Destroy.wav` (which `deck.c:1158` records is *"the rfg sound effect,
-## despite its name"*), `Kill.wav`, `Regen.wav`, `Sacrfice.wav`,
-## `Control.wav`, `ChangeC/ChangeT.wav`, `EndPhase.wav`,
-## `FastFX.wav`, `Counter.wav`. Every one of them needs an engine event we
-## do not dispatch. `LifeGain.wav` is **not** a 1997 sound at all —
+## despite its name"*), `Regen.wav`, `Control.wav`, `ChangeC/ChangeT.wav`,
+## `EndPhase.wav`, `FastFX.wav`, `Counter.wav`. Every one of them needs an
+## engine event we do not dispatch. `Kill.wav`, `Sacrfice.wav` and
+## `EndTurn.wav` play since the polish pass of 2026-10-28, each where the
+## Shandalar 1.3 decompilation plays it ([method death_sound_key], the
+## CLEANUP_START row of [method cue_for]). `LifeGain.wav` is **not** a 1997 sound at all —
 ## `Duelsounds/sounds.txt` credits it as a Manalink addition, and
 ## `WAV_LIFEGAIN = 79` sits above `WAV_HIGHEST_EXE = 68` in the enum.
 ##
@@ -151,13 +153,29 @@ func play(key: String) -> void:
 		recent = recent.slice(recent.size() - RECENT_MAX)
 	if silent:
 		return
-	var stream := GameSkin.sound(key)
+	var stream := stream_for(key)
 	if stream == null:
 		return          # the player has no 1997 sounds; that is fine
 	var voice := _free_voice()
 	voice.set_meta("cue_key", key)
 	voice.stream = stream
 	voice.play()
+
+
+## A cue a skin may not carry yet, and the cue it borrows meanwhile (the
+## polish pass, 2026-10-28): `Kill.wav` and `Sacrfice.wav` joined the
+## importer with the 1997 death sounds, and a skin made before that has
+## only `Buried.wav` — a creature's death plays that rather than nothing
+## until the player imports again.
+const FALLBACK := {"sfx_kill": "sfx_buried", "sfx_sacrifice": "sfx_buried"}
+
+
+## The sample for [param key], or its [constant FALLBACK]'s, or null.
+static func stream_for(key: String) -> AudioStream:
+	var stream := GameSkin.sound(key)
+	if stream == null and FALLBACK.has(key):
+		stream = GameSkin.sound(String(FALLBACK[key]))
+	return stream
 
 
 ## Stop only this cue, not other effects or music. The key follows voice
@@ -287,7 +305,16 @@ static func cue_for(event: GameEvent) -> String:
 			# excluding speculation. Not damage or a phase-change cue.
 			return "sfx_mana_burn" if int(event.data.get("amount", 0)) > 0 else ""
 		Mtg.EventType.DIES:
-			return "sfx_buried"            # WAV_BURIED
+			return death_sound_key(event)
+		Mtg.EventType.CLEANUP_START:
+			# WAV_ENDTURN — the turn PASSING, once per turn for either seat:
+			# the 1.3 build plays it in `run_duel_turn`'s last state
+			# (`ai_decision_phase`, SHANDALAR 0x00408dcc, a decompiler's
+			# name for the turn loop's tail) after the cleanup and the mana
+			# burn (the polish pass, 2026-10-28). It marks a seat handing
+			# the turn over, an action, not a step changing — the owner's
+			# 2026-09-03 rule keeps every step and phase boundary silent.
+			return "sfx_end_turn"
 		Mtg.EventType.CARD_DISCARDED:
 			# WAV_DISCARD, `functions.c:14861` — played INSIDE the discard
 			# itself, once per card, whoever is discarding and whyever.
@@ -304,6 +331,30 @@ static func cue_for(event: GameEvent) -> String:
 ## Play whatever [method cue_for] decides this event is worth.
 func on_event(event: GameEvent) -> void:
 	play(cue_for(event))
+
+
+## WHICH 1997 SOUND A PERMANENT GOING TO THE GRAVEYARD MAKES (the polish
+## pass, 2026-10-28; until then every one was `Buried.wav`). The 1.3
+## build's `process_killed_card` (SHANDALAR 0x0046dbed) is the door every
+## permanent leaves play by: a SACRIFICE and a token make no sound there,
+## a card whose ORIGINAL type is a creature plays WAV_KILL, any other
+## permanent WAV_BURIED. The sacrifice is sounded where the body is given
+## up instead — WAV_SACRFICE (`choose_creature_to_sacrifice`, 0x0049fb64,
+## and the card code's own sacrifices), token or not. The printed type is
+## 1997's test, so an animated Mishra's Factory is buried and a Clone that
+## was a creature is killed.
+static func death_sound_key(event: GameEvent) -> String:
+	if bool(event.data.get("sacrificed", false)):
+		return "sfx_sacrifice"         # WAV_SACRFICE
+	var inst: CardInstance = event.data.get("instance")
+	if inst == null:
+		return "sfx_buried"
+	if inst.is_token:
+		return ""
+	var printed: CardData = inst.printed_data if inst.printed_data != null else inst.data
+	if printed != null and (printed.types & Mtg.CardType.CREATURE) != 0:
+		return "sfx_kill"              # WAV_KILL
+	return "sfx_buried"                # WAV_BURIED
 
 
 ## Which sound a spell makes, by CARD TYPE (`engine.c:1784-1802`).

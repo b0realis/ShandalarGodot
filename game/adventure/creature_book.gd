@@ -67,19 +67,20 @@ extends RefCounted
 ##    walk slower over the lands named (a Merfolk Shaman in black swamps, a
 ##    Sedge Beast in green forest) and notice the hero from twice as far — the world would
 ##    have quiet stretches and dangerous ones, and outrunning a creature would
-##    depend on the land. To switch on: `WorldCreatures`' step scales the
-##    stride by the terrain under the creature for these bits and steers at
-##    the hero only inside the kind's range (doubled by 0x200).
+##    depend on the land. SWITCHABLE AT THE EMBARK since 0.50.65 (the
+##    owner's ruling of 2026-10-29, "Creatures": Hunt, as played / Notice,
+##    the default): [method range_of] and [method slowed_on], read by
+##    [WorldCreatures]' step under Notice.
 ##  - CREATURE NAMES ON THE MAP. While a creature is drawn, the drawing
 ##    copies its name — for the three DISGUISE creatures the name of
 ##    [method shown_row], which steps a row down every 32 ticks — into a
 ##    label nothing draws (adventureWorldUi.c 2280–2284). Switched on, the player would know what
 ##    approaches before meeting it, and the Necromancer, the Shapeshifter and
 ##    the Summoner would come disguised as weaker creatures — a Shapeshifter
-##    announced as a Conjurer. To switch on: the world screen's pointer tip
-##    names a creature under the pointer by [method name_of] of
-##    [method shown_row]. (The disguise itself is live: it moves the lurk
-##    test of [constant MOVE_HIDDEN].)
+##    announced as a Conjurer. BUILT AS AN OPTION since 0.50.65 (the
+##    owner's ruling of 2026-10-28; [method WorldCreatures.map_name], the
+##    world's options' Creature names). (The disguise moves the lurk test of
+##    [constant MOVE_HIDDEN] too.)
 ##  - PRE-DUEL FLAG 0x020 ([constant PRE_UNREAD], Thought Invoker) and THE
 ##    TABLE'S BYTE 0x0E ([constant UNREAD_BYTE_0E], nineteen rows): no reader
 ##    in 1.3 or retail. Reserved hooks — another pre-duel event, a
@@ -227,12 +228,14 @@ const MOVE_DISGUISE := 0x002
 ## BLINK: every 64 ticks a jump of 32 units in a random straight way (War
 ## Mage, Mind Stealer, the four djinn).
 const MOVE_BLINK := 0x004
-## DESIGNED, NEVER USED: slow on these terrains (see the class doc).
+## SLOW ON THESE TERRAINS (see the class doc): designed, never used in
+## 1997; read under the Embark's "Creatures: Notice" ([method slowed_on]).
 const MOVE_TERRAIN := 0x0F8
 ## HIDDEN, the lurkers: not drawn while further than 256 page pixels from the
 ## screen's centre (adventureWorldUi.c 2236; Conjurer, Troll Shaman).
 const MOVE_HIDDEN := 0x100
-## DESIGNED, NEVER USED: twice the range (see the class doc).
+## TWICE THE RANGE (see the class doc): designed, never used in 1997; read
+## under the Embark's "Creatures: Notice" ([method range_of]).
 const MOVE_WIDE_RANGE := 0x200
 
 ## PRE-DUEL FLAGS ([constant PREDUEL_FLAGS]), read only on a "special"
@@ -654,6 +657,49 @@ static func stride(index: int) -> int:
 	if kind(index) == LAIR:
 		return 0
 	return 2 if kind(index) == FLYER or move_flags(index) & MOVE_FAST != 0 else 1
+
+
+## THE RANGE BY KIND, world units, before 1997's × 3 / 2 (world_lair_
+## monster_slots.c 641–697; retail glue_adventure.c 1251–1300): the
+## wizards and the flyers 32, the knights, lords and archmages 48, the
+## djinn and the dragons 64, the trolls and the wyrms 96; the lair −1 (it
+## never walks). [Ours: 1997 slip — the henchmen (kind 11) have no case, so
+## 1997 read whatever range the slot before had left (0 in the decompiled
+## MODERN_FIXES build): they take the archmages' 48.]
+const RANGES := {LAIR: -1, MALE_WIZARD: 32, FEMALE_WIZARD: 32, KNIGHT: 48, LORD: 48, DJINN: 64,
+	TROLL: 96, WYRM: 96, DRAGON: 64, FLYER: 32, ARCHMAGE: 48, HENCHMAN: 48}
+
+
+## THE CREATURE'S RANGE (slots.c 698–704): its kind's ([constant RANGES])
+## × 3 / 2, doubled for [constant MOVE_WIDE_RANGE] — 48 for a wizard up to
+## 288 for a wide-ranged wyrm; −1 for the lair, 0 for no row. 1997's number,
+## on its own distance; Notice reads it in world units (48 a tile and a
+## half, [constant WorldCreatures.NOTICE_SCALE]) and halves it for every
+## creature but the one nearest the hero ([method
+## WorldCreatures.notice_range]).
+## Designed, never used in 1997; read under the Embark's "Creatures:
+## Notice" since 0.50.65.
+static func range_of(index: int) -> int:
+	if not is_row(index):
+		return 0
+	var reach := int(RANGES.get(kind(index), 0))
+	if reach < 0:
+		return reach
+	reach = reach * 3 / 2
+	if move_flags(index) & MOVE_WIDE_RANGE != 0:
+		reach <<= 1
+	return reach
+
+
+## WHETHER THE CREATURE IS SLOWED on land of colours [param land] (1997
+## colour bits; slots.c 770–780: `flags & 0xF8` and `flags & (land << 3)`)
+## — the Merfolk Shaman on black land, the Sedge Beast on green, the
+## Elementalist on black and green, the Centaur Shaman on blue, the Centaur
+## Warchief on red, the Ape Lord on blue. Designed, never used in 1997;
+## read under the Embark's "Creatures: Notice" since 0.50.65.
+static func slowed_on(index: int, land: int) -> bool:
+	var flags := move_flags(index)
+	return flags & MOVE_TERRAIN != 0 and flags & (land << 3) != 0
 
 
 ## THE ROW SHOWN on the map at the world's clock [param timer]: a DISGUISE

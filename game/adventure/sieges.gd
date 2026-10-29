@@ -62,6 +62,35 @@ extends RefCounted
 ## creatures gone (`HandleDefeatedWizardCastle`, dungeonEncounter.c
 ## 918–970).
 ##
+## THE PACE, CHOSEN AT THE EMBARK [ours, the owner's ruling of 2026-10-28
+## on 1997's complaint — "creatures siege towns too much and they cannot
+## explore" (Slightly Magic, 2017 and 2021): the clock's jumps grow with T,
+## so each siege came sooner than the last, late in the game one every ~30
+## s of walking with ~15 s to lift it] ([member AdventurePlayer.sieges],
+## [method start_jump], [method resolve_jump], [method clock_steps]):
+##  - "As 1997": the clock above, exactly;
+##  - "Steady" (a new adventure's default): the first siege's pace all game
+##    — the jumps by the difficulty only, `clamp(d, 0, 16)` and `clamp(2d,
+##    0, 32)`, no T term: a siege every 64 steps for an Apprentice (about
+##    two minutes of walking) with 24 to lift it, every 55 with 21 for a
+##    Wizard. The besieger's tier ([method tier_for]) climbs by T as before;
+##  - "Rare": Steady's jumps, the clock stepping on every 64 ticks the hero
+##    walks instead of 32 — sieges half as often, about four minutes apart
+##    with a minute and a half to lift one; the clock's other readers (the
+##    ruled towns', the shrines', the thieves') go by it as it stands;
+##  - "None": no siege ever begins — [method on_step], [method start] (the
+##    Wizard difficulty's retaliation too) and [method resolve] as in a
+##    world at peace; no town lost, no Dominion; the quest is still the
+##    five castles and Arzakon. The clock still steps (the other readers).
+## An adventure saved before the choice plays as 1997.
+## THE LINKS COME BACK under Steady, Rare and None [ours, the owner's ruling
+## of 2026-10-29]: a town a siege took while it was linked ([member
+## AdventurePlayer.links_taken], remembered by [method resolve]) gets its
+## link back when the hero frees it ([method RuledTowns.settle]) or its
+## wizard falls ([method free_all]) — "Your mana link here is restored."
+## Under As 1997 it stays lost, as played; a save from before remembers no
+## such town, so none comes back there.
+##
 ## THE WORLD AT PEACE (part C, after Arzakon's fall — [method
 ## AdventurePlayer.at_peace]; the owner, 2026-10-27: creatures *"do not
 ## cocer towns etc - the game is passive"*): no siege begins, none falls —
@@ -148,17 +177,46 @@ const SUFFER := "The people will suffer\na thousand more years of their oppressi
 ## the state is changed already.
 static func on_step(player: AdventurePlayer) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
-	if player.at_peace():
+	if calm(player):
 		return news
-	var d := clampi(player.difficulty, 0, 3)
 	if player.siege_timer & 63 == START_AT:
 		news.append_array(start(player))
 		# The jump is taken even when a siege was already under way.
-		player.siege_timer += clampi(d + player.siege_timer / 256, 0, START_JUMP_MOST)
+		player.siege_timer += start_jump(player)
 	if player.siege_timer & 63 == RESOLVE_AT:
 		news.append_array(resolve(player))
-		player.siege_timer += clampi(2 * d + player.siege_timer / 64, 0, RESOLVE_JUMP_MOST)
+		player.siege_timer += resolve_jump(player)
 	return news
+
+
+## Whether no siege may begin or fall: a world at peace ([method
+## AdventurePlayer.at_peace]), or the sieges' pace "None" (the class doc).
+static func calm(player: AdventurePlayer) -> bool:
+	return player.at_peace() or player.sieges == AdventurePlayer.SIEGES_NONE
+
+
+## THE CLOCK'S JUMP AFTER A START: 1997's `clamp(d + T / 256, 0, 16)`; the
+## difficulty only, `clamp(d, 0, 16)`, under "Steady" and "Rare" (the class
+## doc).
+static func start_jump(player: AdventurePlayer) -> int:
+	var d := clampi(player.difficulty, 0, 3)
+	var late := player.siege_timer / 256 if player.sieges == AdventurePlayer.SIEGES_1997 else 0
+	return clampi(d + late, 0, START_JUMP_MOST)
+
+
+## THE CLOCK'S JUMP AFTER A RESOLVE: 1997's `clamp(2d + T / 64, 0, 32)`;
+## `clamp(2d, 0, 32)` under "Steady" and "Rare" (the class doc).
+static func resolve_jump(player: AdventurePlayer) -> int:
+	var d := clampi(player.difficulty, 0, 3)
+	var late := player.siege_timer / 64 if player.sieges == AdventurePlayer.SIEGES_1997 else 0
+	return clampi(2 * d + late, 0, RESOLVE_JUMP_MOST)
+
+
+## Whether the siege clock steps on this one of the hero's 32-tick steps
+## ([HeroWalk], at `monster_timer & 31 == 0`): always, but under "Rare" —
+## every other one, at `monster_timer & 63 == 0` (the class doc).
+static func clock_steps(player: AdventurePlayer) -> bool:
+	return player.sieges != AdventurePlayer.SIEGES_RARE or player.monster_timer & 63 == 0
 
 
 ## The besieger's tier for siege clock [param timer] and a town on row
@@ -181,7 +239,7 @@ static func tier_for(timer: int, town_y: int) -> int:
 ## town, as 1997 drew them) — and never in a world at peace (no die drawn).
 static func start(player: AdventurePlayer, retaliating_wizard := 0) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
-	if player.siege_active or player.world == null or player.at_peace():
+	if player.siege_active or player.world == null or calm(player):
 		return news
 	var world := player.world
 	var castles := castle_tiles(player)
@@ -301,9 +359,9 @@ static func siege_lines(player: AdventurePlayer, wizard: int, row: int, town: in
 static func resolve(player: AdventurePlayer, besieger := {}) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
 	player.siege_active = false
-	if player.at_peace():
-		# No town falls in a world at peace: a besieger an odd save still
-		# holds simply goes.
+	if calm(player):
+		# No town falls in a world at peace (nor under "None"): a besieger
+		# an odd save still holds simply goes.
 		WorldCreatures.empty(player, SLOT)
 		return news
 	var held := besieger if not besieger.is_empty() else WorldLairs.held_in(player, SLOT)
@@ -321,7 +379,11 @@ static func resolve(player: AdventurePlayer, besieger := {}) -> Array[Dictionary
 		WorldCreatures.empty(player, SLOT)
 		return news
 	# The link is read before the town is taken: taking it clears the link.
+	# A link lost is remembered: freed, the town gives it back under the
+	# paces that are ours ([method AdventurePlayer.restore_link], 0.50.65).
 	var link_lost := TownStatus.linked(world, town)
+	if link_lost:
+		player.note_link_taken(town)
 	TownStatus.take(world, town, wizard)
 	var taps: int = WorldStatus.taps(player)[wizard - 1]
 	var needed := WorldStatus.dominion(player)
@@ -387,7 +449,10 @@ static func lifted(player: AdventurePlayer, besieger := {}) -> void:
 # --------------------------------------------------------------- part C --
 
 ## A WIZARD BEATEN (part C, `HandleDefeatedWizardCastle`): every town
-## wizard [param wizard] holds is freed (its link stays lost), and every
+## wizard [param wizard] holds is freed — its link lost as played, but
+## under the sieges' paces Steady, Rare and None a link a siege took comes
+## back ([method AdventurePlayer.restore_link]; the owner's ruling of
+## 2026-10-29, [ours]) — and every
 ## creature of his colour leaves the map — the besieger too, its siege then
 ## over [ours: 1997 left the flag up for the clock to lower] — but the
 ## quest's creature, whose quest it would end (part C stage C3, h2-2; it
@@ -399,6 +464,7 @@ static func free_all(player: AdventurePlayer, wizard: int) -> Array[int]:
 	for slot in world.sites.size():
 		if TownStatus.ruler(world, slot) == wizard:
 			TownStatus.release(world, slot)
+			player.restore_link(slot)
 			freed.append(slot)
 	var wanted := WorldCreatures.quest_row(player)
 	for i in range(player.monsters.size() - 1, -1, -1):

@@ -320,8 +320,10 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
   --mulligan on|off   Offer the mulligan before turn 1 — the Paris one,
                       each seat keeping or redrawing one card fewer until
                       it keeps, judged by its pilot (AiProfile.mulligans)
-                      (default OFF; see DeckLab/README.md for why, and for
-                      the measured cost of leaving it off).
+                      (default ON since 2026-10-28, as every real duel
+                      offers it; `off` plays the sevens as dealt, which
+                      is what a run before that date did — see
+                      DeckLab/README.md).
   --best-of N         The original's `&Best of:` — play MATCHES of up to N
                       duels instead of single duels, N = 1, 3 or 5
                       (default 0 = `&Free play`, one duel; 1 is the
@@ -710,6 +712,7 @@ func _main(argv: PackedStringArray) -> int:
 			_packs_in_force = chosen.ids
 	var opts := _parse_args(argv + _resume_chrome)
 	_rules_in_force = String(opts.get("rules", RulesOptions.DEFAULT_PRESET))
+	_mulligan_in_force = bool(opts.get("mulligan", true))
 	_quiet = bool(opts.get("quiet", false))
 	_banner_wanted = not bool(opts.get("no_banner", false)) \
 		and OS.get_environment(LabConsole.NO_BANNER_ENV) != "1"
@@ -1360,6 +1363,9 @@ var _run_started := 0
 ## The rules preset the run plays under, written into every run.json so a
 ## `--resume` reads it back (see [method resume_rules]).
 var _rules_in_force := RulesOptions.DEFAULT_PRESET
+## Whether the run offers the mulligan, written into every run.json for
+## the same reason (see [method resume_mulligan]).
+var _mulligan_in_force := true
 
 
 func _run_json(out_dir: String, exit: Variant, run: Dictionary) -> bool:
@@ -1367,6 +1373,7 @@ func _run_json(out_dir: String, exit: Variant, run: Dictionary) -> bool:
 		"tool": "deck_lab", "version": LabConsole.version(),
 		"git": LabConsole.git_sha(),
 		"argv": Array(_argv), "rules": _rules_in_force,
+		"mulligan": _mulligan_in_force,
 		"packs": _packs_in_force, "packs_on": packs_on(),
 		"out": out_dir,
 		"started": Time.get_datetime_string_from_unix_time(_run_started) + "Z",
@@ -1451,7 +1458,7 @@ func _resume(dir: String) -> int:
 	if argv.has("--resume"):
 		return _refuse(2, "the run in '%s' was itself a --resume line; nothing to read back" % dir,
 			{"kind": "resume", "path": dir, "flag": "--resume"})
-	argv = resume_rules(argv, run)
+	argv = resume_mulligan(resume_rules(argv, run), run)
 	_resume_dir = dir
 	_run_id = String(run.get("run_id", ""))
 	_reused = checkpoint_records(absolute.path_join(CHECKPOINT), _run_id)
@@ -1467,6 +1474,18 @@ static func resume_rules(argv: PackedStringArray, run: Dictionary) -> PackedStri
 		return argv
 	var out := argv.duplicate()
 	out.append_array(PackedStringArray(["--rules", "modern"]))
+	return out
+
+
+## A run started before the mulligan became the default (the owner's
+## ruling of 2026-10-28) wrote no `mulligan` into its run.json and played
+## the sevens as dealt unless its line said `--mulligan on`: a resume
+## finishes it the way it started, not under today's default.
+static func resume_mulligan(argv: PackedStringArray, run: Dictionary) -> PackedStringArray:
+	if argv.has("--mulligan") or run.has("mulligan"):
+		return argv
+	var out := argv.duplicate()
+	out.append_array(PackedStringArray(["--mulligan", "off"]))
 	return out
 
 
@@ -2969,7 +2988,7 @@ const FLAG_HINTS := {
 	"--names": "--names A,B: the two seat names, default SeatZero,SeatOne",
 	"--format": "--format NAME: unrestricted|wild|type1|type1.5|highlander",
 	"--group": "--group NAME: keep one deck group when a folder is expanded, or `all` for every group",
-	"--mulligan": "--mulligan on|off: offer the mulligan before turn 1, default off",
+	"--mulligan": "--mulligan on|off: offer the mulligan before turn 1, default on",
 	"--rules": "--rules modern_mana_burn|modern|fifth: which ruleset, default modern_mana_burn (the player's default table)",
 	"--rule": "--rule KEY=on|off: override one rules fork; repeatable",
 	"--best-of": "--best-of N: play matches of 1, 3 or 5 duels instead of single duels",
@@ -3078,9 +3097,15 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		# for a run of its own. `_main` acts on it before parsing.
 		"resume": "",
 		# The duel settings. Every default here is what this script did
-		# before the flag existed — see the class doc.
+		# before the flag existed — see the class doc — but two: the rules
+		# below, and the mulligan.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
-		"format": "", "group": "", "mulligan": false,
+		"format": "", "group": "",
+		# THE MULLIGAN (owner, 2026-10-28): ON, because every real duel
+		# offers it (`OpeningHand.run`) and a Lab hand nobody would keep
+		# measures a game nobody plays. Runs before that date played the
+		# sevens as dealt (a resumed one still does: `resume_mulligan`).
+		"mulligan": true,
 		# THE RULES (owner, 2026-10-07): the player's own default table,
 		# RulesOptions.DEFAULT_PRESET — modern rules with mana burn on —
 		# not plain modern, so a Lab measurement sees the mana burn a
@@ -3697,8 +3722,8 @@ func _settings_line(opts: Dictionary) -> String:
 		parts.append("group %s" % opts.group)
 	if not opts.get("field", []).is_empty() and int(opts.get("top", 10)) != 10:
 		parts.append("top %d" % opts.top)
-	if opts.mulligan:
-		parts.append("mulligan on")
+	if not opts.mulligan:
+		parts.append("mulligan off")
 	if opts.best_of != MatchState.FREE_PLAY:
 		parts.append("best of %d" % opts.best_of)
 	if opts.sideboard:

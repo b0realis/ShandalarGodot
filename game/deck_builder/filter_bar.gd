@@ -47,7 +47,7 @@ extends HBoxContainer
 ## `@CREATURE`, `@ENCHANTMENT`, `@ABILITY`, `@RARITY`, `@ARTIST` — are
 ## the pages of the FILTER WINDOW (2026-09-06), opened by the funnel
 ## medallion that closes the Other Filters group and by a right-click on
-## Creatures or Enchantments; see [method window_pages].
+## Creatures, Enchantments or the eye; see [method window_pages].
 ##
 ## THE TAIL OF THE ROW IS [QoL] and is described at [method _search_group]:
 ## the type-ahead the manual promises and the Inventory's sort. Both set
@@ -75,7 +75,7 @@ signal menu_requested(request: Dictionary)
 signal expand_toggled(on: bool)
 
 const CELL := 40
-## Displayed medallion size. 34 rather than the art's 40: twenty-four
+## Displayed medallion size. 34 rather than the art's 40: twenty-five
 ## medallions, four group gaps and the [QoL] tail have to fit the 1280
 ## window the game opens in (tests/ui/test_deck_builder.gd pins it).
 const ICON_SIZE := Vector2(34, 34)
@@ -164,9 +164,11 @@ const POWER_CELL := [2, 2]
 const TOUGHNESS_CELL := [2, 7]
 ## `@ABILITY`'s eye and `@RARITY`'s gem, both in the screenshot's Other
 ## Filters run, and `@ARTIST`'s palette — the one cell left unassigned by
-## the audits, and the sheet's only glyph that is a painter's tool. Not
-## medallions here (the strip has no room for three more — the owner,
-## 2026-09-06) but the tabs of their pages in the filter window.
+## the audits, and the sheet's only glyph that is a painter's tool. The
+## tabs of their pages in the filter window; the strip had no room for
+## three more medallions (the owner, 2026-09-06), and the eye alone came
+## back to it (the owner, 2026-10-28: "the Eye medallion back") — see
+## [method _other_group].
 const ABILITY_CELL := [0, 0]
 const RARITY_CELL := [2, 3]
 const ARTIST_CELL := [0, 5]
@@ -227,7 +229,7 @@ const RANK_MENU: Array[String] = ["Greater than or equal to",
 ## window's own "Enable Filter / Select All / Clear All". `Enable Filter`
 ## is the window's master switch and this strip has none — the medallions
 ## ARE the filter — but the other two are the answer to a strip of
-## twenty-four toggles with no way back, and they are the ORIGINAL's own
+## twenty-five toggles with no way back, and they are the ORIGINAL's own
 ## words for it. Every medallion that has no sub-menu of its own opens
 ## this one on a right-click, which is the manual's own promise that
 ## *"you can also right-click on some of the filter buttons"* extended to
@@ -528,7 +530,8 @@ func _flip_ranged(key: String, mode: int, off: int, first: int) -> int:
 ## sets both halves of "power >= 4". The last three were ENABLE switches
 ## whose right-click was a window of checks; they are the pages of ONE
 ## filter window here, behind the funnel that closes the group — see
-## [method window_pages].
+## [method window_pages] — and the first of them, the eye, is on the strip
+## again as its 1997 self, between the shield and the funnel.
 func _other_group() -> Control:
 	var strip := _group(GROUPS[3])
 
@@ -570,6 +573,22 @@ func _other_group() -> Control:
 		func() -> int: return filter.toughness_value,
 		func(value: int) -> void: filter.toughness_value = value)
 	_add(strip, GROUPS[3], toughness)
+
+	# `@ABILITY`'S EYE, BACK ON THE STRIP (the owner, 2026-10-28: "the Eye
+	# medallion back", answering the question of 2026-09-06). Where the 1997
+	# Other Filters run put it — X, sword, shield, eye — and as 1997's
+	# button was: a click is the filter's ENABLE switch
+	# ([member DeckFilter.ability_on] — with nothing unticked, every card
+	# that has an ability at all), a right-click is its list, the filter
+	# window's Abilities page. Lit while the switch is on, which ticking
+	# or unticking an ability in the window also does.
+	var eye := _toggle("ability",
+		func() -> bool: return filter.ability_on,
+		func() -> void: filter.ability_on = not filter.ability_on,
+		true)
+	_dress_icon(eye, ABILITY_CELL)
+	_with_window(eye, "abilities")
+	_add(strip, GROUPS[3], eye)
 
 	# [QoL] THE FUNNEL — the door to the filter window, closing the group
 	# where the 1997 strip went on to Ability, Rarity and Artist. It is

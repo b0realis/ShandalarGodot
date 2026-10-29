@@ -3,8 +3,11 @@ extends Control
 ## EMBARK TO THE WORLD OF SHANDALAR — the new adventure's one screen
 ## (owner design, 2026-10-22): the hero's face, their name, the figure
 ## that walks the map, the colour of their magic, their playmat, the card
-## packs that join, the difficulty and the rules (the card rule, the final
-## battle's), then `Adventure` or `Leave`.
+## packs that join and the difficulty — 1997's own choices — and the
+## CAMPAIGN SETTINGS, the modern rules, behind one button (the owner,
+## 2026-10-29: *"we just make a button called 'campaign settings' with a
+## popup and all modern settings with short explanations there"*; [method
+## open_settings]), then `Adventure` or `Leave`.
 ##
 ## THE 1997 GAME ASKED ON THREE SCREENS and 1.3 on five (difficulty,
 ## colour, the face designer, the name; `RunAdventureSession`); here it is
@@ -40,7 +43,10 @@ const PORTRAIT_SIZE := Vector2(250, 308)
 const SYMBOL_CELL := 48
 const SYMBOL_SIZE := Vector2(60, 60)
 ## The board half's own proportions (914 × 400), as the battle-setup
-## screen's preview keeps them, so a picture is cropped here as there.
+## screen's preview keeps them, so a picture is cropped here as there — at
+## its size again since the rules moved into the Campaign Settings
+## (2026-10-29; three quarters of it, 240 × 105, while four rules stood
+## under it in the column, 2026-10-28).
 const PLAYMAT_PREVIEW := Vector2(320, 140)
 ## The narrowest the three windows go; on the 1280-wide layout each is a
 ## third of the row.
@@ -92,7 +98,7 @@ const RULE_NAMES := {
 const RULE_TIPS := {
 	AdventurePlayer.RULE_MEANT: "The shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant.",
 	AdventurePlayer.RULE_SHIPPED: "The shops and the duels' rewards offer any number of copies, as the 1997 game really did.",
-	AdventurePlayer.RULE_CLASSIC: "A deck holds at most four copies of a card, basic lands aside; one of a restricted card, four with Tome of Enlightenment; none of a banned one. No shop, trader, reward or lair offers you a card you already own as many copies of as a deck may hold.",
+	AdventurePlayer.RULE_CLASSIC: "A deck holds at most four copies of a card, basic lands aside; one of a restricted card, four with Tome of Enlightenment; none of a banned one, by the ban list below. No shop, trader, reward or lair offers you a card you already own as many copies of as a deck may hold.",
 }
 ## THE FINAL BATTLE'S RULE (the owner, 2026-10-27: "A setting at Embark"),
 ## by [constant AdventurePlayer.LIFE_RULES], named as the owner named them;
@@ -106,9 +112,173 @@ const LIFE_TIPS := {
 	AdventurePlayer.LIFE_RELOAD: "Your adventure is saved at Arzakon's door as the final battle begins. Lose it, and loading the adventure puts you back at his door to face him again; every battle lost is written in your record.",
 	AdventurePlayer.LIFE_ONE: "One final battle: lose it, or leave or close the game during it, and the adventure is over for good, its save marked failed. No save of it can fight the battle again.",
 }
+## THE CARD HOLD (the owner, 2026-10-28: "A new Embark setting: card hold —
+## '1997 card hold limit' / 'unlimited card hold'"), by [constant
+## AdventurePlayer.CARD_HOLDS], named as the owner named them; what each
+## does is its tooltip, and the arrival says the one chosen.
+var _card_hold: OptionButton
+const HOLD_NAMES := {
+	AdventurePlayer.HOLD_1997: "1997 card hold limit",
+	AdventurePlayer.HOLD_UNLIMITED: "Unlimited card hold",
+}
+const HOLD_TIPS := {
+	AdventurePlayer.HOLD_1997: "Your magic bag holds 500 cards, as in 1997. With it full, a card you win or find is lost, the shops, traders and the wise man give you nothing more, and a dungeon's treasure asks you to leave one of your cards in its place.",
+	AdventurePlayer.HOLD_UNLIMITED: "Your magic bag holds any number of cards: no card is ever lost or refused for a full bag.",
+}
+const HOLD_SUMMARY := {
+	AdventurePlayer.HOLD_1997: "Card hold: 500 cards, as in 1997.",
+	AdventurePlayer.HOLD_UNLIMITED: "Card hold: unlimited, your magic bag holds any number of cards.",
+}
+## THE BAN LIST of the Classic MTG rules (the owner, 2026-10-28: "an Embark
+## setting (Embark only) with three lists"), by [constant ClassicBans.LISTS],
+## named as the owner named them; greyed, its tooltip saying why, unless the
+## card rule is the Classic MTG rules, the one rule that reads it.
+var _ban_list: OptionButton
+var _ban_words: Label
+const BAN_NAMES := {
+	ClassicBans.OLD: "1998 (the original game's)",
+	ClassicBans.BOTH: "1998 + modern",
+	ClassicBans.MODERN: "Modern",
+}
+const BAN_TIPS := {
+	ClassicBans.OLD: "The lists of the original game's day: the Classic (Type 1) banned and restricted lists of January 1998, as The Duelist #22 printed them. Banned: Channel, Divine Intervention, Mind Twist and the ante cards. Restricted: Black Lotus, the Moxen, Sol Ring, Black Vise, Berserk, Regrowth, Strip Mine and others; Mana Crypt, Mana Vault and Time Vault are not.",
+	ClassicBans.BOTH: "Never looser than either list: a card banned in 1998 or today is banned, one restricted in 1998 or today is restricted. Channel, Divine Intervention and Mind Twist are banned; Mana Crypt, Mana Vault, Time Vault and Black Vise are restricted.",
+	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards. Restricted: Black Lotus, the Moxen, Sol Ring, Mana Crypt, Mana Vault, Time Vault, Channel, Demonic Tutor, Strip Mine and others. Banned: the ante cards and seven cards with offensive art or text. Mind Twist, Black Vise and Berserk are free.",
+}
+const BAN_GREYED := "Only the Classic MTG rules read a ban list: choose them as your card rule to use one."
+## THE SIEGES' PACE [ours, the owner's ruling of 2026-10-28 on 1997's
+## complaint: "creatures siege towns too much and they cannot explore"], by
+## [constant AdventurePlayer.SIEGE_PACES] ([Sieges]); what each does is its
+## tooltip, and the arrival says the one chosen. A row of the Campaign
+## Settings (it stood under the difficulty until they were made).
+var _sieges: OptionButton
+const SIEGE_NAMES := {
+	AdventurePlayer.SIEGES_1997: "As 1997",
+	AdventurePlayer.SIEGES_STEADY: "Steady",
+	AdventurePlayer.SIEGES_RARE: "Rare",
+	AdventurePlayer.SIEGES_NONE: "None",
+}
+const SIEGE_TIPS := {
+	AdventurePlayer.SIEGES_1997: "The wizards' sieges as in 1997: each comes sooner than the last. Late in the game a town is besieged about every half minute of walking, with a quarter of a minute to lift the siege.",
+	AdventurePlayer.SIEGES_STEADY: "A siege about every two minutes of walking, never faster, with about 45 seconds to lift it. 1997's sieges came faster with every one.",
+	AdventurePlayer.SIEGES_RARE: "A siege about every four minutes of walking, never faster, with about a minute and a half to lift it.",
+	AdventurePlayer.SIEGES_NONE: "The wizards never besiege a town: no town is lost to them and no wizard casts the Spell of Dominion. Your quest is still the five castles and Arzakon.",
+}
+const SIEGE_SUMMARY := {
+	AdventurePlayer.SIEGES_1997: "Sieges: as in 1997, each sooner than the last.",
+	AdventurePlayer.SIEGES_STEADY: "Sieges: steady, about one every two minutes of walking.",
+	AdventurePlayer.SIEGES_RARE: "Sieges: rare, about one every four minutes of walking.",
+	AdventurePlayer.SIEGES_NONE: "Sieges: none, no town is ever besieged.",
+}
+## THE CREATURES' WAY [ours, the owner's ruling of 2026-10-29], by
+## [constant AdventurePlayer.CREATURE_WAYS] ([WorldCreatures]).
+var _creatures: OptionButton
+const CREATURE_NAMES := {
+	AdventurePlayer.CREATURES_HUNT: "Hunt",
+	AdventurePlayer.CREATURES_NOTICE: "Notice",
+}
+const CREATURE_TIPS := {
+	AdventurePlayer.CREATURES_HUNT: "As the 1997 game played: every creature on the map comes at you, every moment, from wherever it is. Only a road outruns the slower ones.",
+	AdventurePlayer.CREATURES_NOTICE: "The 1997 game's own design, which it never switched on: a creature wanders its own lands until you come within its range (a tile and a half for a wizard, up to four and a half for a troll or a wyrm, twice that for a few wide-ranging ones), then hurries at you. Some are slowed on certain lands: a Merfolk Shaman in black swamps, a Sedge Beast in green forests.",
+}
+const CREATURE_SUMMARY := {
+	AdventurePlayer.CREATURES_HUNT: "Creatures: they hunt you from anywhere, as in 1997.",
+	AdventurePlayer.CREATURES_NOTICE: "Creatures: they notice you as you come near.",
+}
+## THE DUELS' STARTING LIFE [ours, the owner's ruling of 2026-10-29], by
+## [constant AdventurePlayer.LIFE_STARTS].
+var _life_start: OptionButton
+const START_NAMES := {
+	AdventurePlayer.START_LINKS: "Links only",
+	AdventurePlayer.START_BASE: "Base 10 + links",
+}
+const START_TIPS := {
+	AdventurePlayer.START_LINKS: "As the 1997 game played: every adventure duel starts with a life for each town or city whose mana you have linked (ten to begin with), and any bonus for the next duel.",
+	AdventurePlayer.START_BASE: "The 1997 game's own design, which it never switched on: every adventure duel starts at 10 life, 2 more with Haggler's Coin, 3 with Ring of the Guardian, 5 with Fruit of Sustenance, then a life for each mana link and any bonus for the next duel. A new hero starts duels at 20.",
+}
+const START_SUMMARY := {
+	AdventurePlayer.START_LINKS: "Starting life: a life for each mana link, as in 1997.",
+	AdventurePlayer.START_BASE: "Starting life: 10, and the World Magics' bonuses, before your mana links.",
+}
+## THE ASCETIC HERO [ours, the owner's ruling of 2026-10-29]: a box.
+var _ascetic: CheckBox
+const ASCETIC_BOX := "Eat half as much"
+const ASCETIC_TIP := "Your hero eats half as much: food lasts twice as long. Fruit of Sustenance still gives its food in the forests; with none left you still walk slower."
+const ASCETIC_ON_LINE := "Your hero eats half as much: food lasts twice as long."
+const ASCETIC_OFF_LINE := "Your hero eats a food every few steps, as in 1997."
+const ASCETIC_SUMMARY := "Ascetic hero: your food lasts twice as long."
+## THE ROWS' PLAIN LINES, always shown under each choice in the Campaign
+## Settings (the owner, 2026-10-29: "all modern settings with short
+## explanations there") — what the one chosen does, in a line; the
+## tooltips say it whole.
+const LIFE_LINES := {
+	AdventurePlayer.LIFE_RELOAD: "Lose to Arzakon and you face him again from his door.",
+	AdventurePlayer.LIFE_ONE: "Lose the final battle and the adventure is over for good.",
+}
+const RULE_LINES := {
+	AdventurePlayer.RULE_MEANT: "No shop or reward offers more copies than your deck's size allows.",
+	AdventurePlayer.RULE_SHIPPED: "Shops and rewards offer any number of copies, as 1997 really did.",
+	AdventurePlayer.RULE_CLASSIC: "Four copies of a card, one of a restricted card, none of a banned one.",
+}
+const BAN_LINES := {
+	ClassicBans.OLD: "The Classic lists of January 1998, the original game's day.",
+	ClassicBans.BOTH: "Banned or restricted in 1998 or today: never looser than either.",
+	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards.",
+}
+const BAN_GREYED_LINE := "Read only under the Classic MTG rules."
+const HOLD_LINES := {
+	AdventurePlayer.HOLD_1997: "Your magic bag holds 500 cards; a card won with it full is lost.",
+	AdventurePlayer.HOLD_UNLIMITED: "Your magic bag holds any number of cards.",
+}
+const SIEGE_LINES := {
+	AdventurePlayer.SIEGES_1997: "Each siege comes sooner than the last, as in 1997.",
+	AdventurePlayer.SIEGES_STEADY: "A siege about every two minutes of walking, never faster.",
+	AdventurePlayer.SIEGES_RARE: "A siege about every four minutes of walking.",
+	AdventurePlayer.SIEGES_NONE: "No town is ever besieged and no wizard casts Dominion.",
+}
+const CREATURE_LINES := {
+	AdventurePlayer.CREATURES_HUNT: "Every creature comes at you from wherever it is, as in 1997.",
+	AdventurePlayer.CREATURES_NOTICE: "Creatures wander until you come near, then hurry at you.",
+}
+const START_LINES := {
+	AdventurePlayer.START_LINKS: "Each duel starts with a life for each of your mana links.",
+	AdventurePlayer.START_BASE: "Each duel starts at 10, more with three World Magics, plus links.",
+}
+## THE LINE UNDER THE BUTTON's words ([method settings_line]).
+const SIEGE_SHORT := {
+	AdventurePlayer.SIEGES_1997: "Sieges as 1997",
+	AdventurePlayer.SIEGES_STEADY: "Steady sieges",
+	AdventurePlayer.SIEGES_RARE: "Rare sieges",
+	AdventurePlayer.SIEGES_NONE: "No sieges",
+}
+const CREATURE_SHORT := {
+	AdventurePlayer.CREATURES_HUNT: "Creatures hunt",
+	AdventurePlayer.CREATURES_NOTICE: "Creatures notice",
+}
+const LIFE_SHORT := {
+	AdventurePlayer.LIFE_RELOAD: "Reload allowed",
+	AdventurePlayer.LIFE_ONE: "One life",
+}
+const RULE_SHORT := {
+	AdventurePlayer.RULE_SHIPPED: "No card limit",
+	AdventurePlayer.RULE_CLASSIC: "Classic MTG rules",
+}
+const START_SHORT := "Base 10 life"
+const ASCETIC_SHORT := "Ascetic hero"
+const HOLD_SHORT := "Unlimited card hold"
+const SETTINGS_TIP := "The campaign's modern settings: open them to read and change each."
+## The Campaign Settings: the veil, its window, the button that opens it,
+## the line under it, each row's plain line (by its choice's name) and the
+## window's two buttons.
+var _settings: Control
+var _settings_dialog: OriginalDialog
+var settings_button: Button
+var _settings_summary: Label
+var _lines := {}
+var _as_1997: Button
+var _done: Button
 var _playmat_type: OptionButton
 var _playmat_preview: Control
-var _playmat_note: Label
 var _difficulty_buttons: Array[Button] = []
 var _difficulty_word: Label
 var _difficulty_note: Label
@@ -120,6 +290,8 @@ var _pack_checks: Dictionary = {}
 ## the choice remembered from before. True once the World Lords are built
 ## (the tests set it to try the choice).
 static var packs_ready := false
+## What the greyed packs say until then (the owner, 2026-10-28).
+const NOT_YET := "Not implemented yet."
 var _seed_edit: LineEdit
 ## The walking figure: its preview on the portrait, the six part swatches
 ## and the popup a swatch opens ([HeroColors]).
@@ -260,6 +432,8 @@ func _build() -> void:
 		panel.custom_minimum_size.x = widest
 
 	page.add_child(_build_buttons())
+	# The Campaign Settings' window, over everything, shown by its button.
+	add_child(_build_settings())
 
 
 func _build_hero() -> Control:
@@ -367,7 +541,7 @@ func _build_hero() -> Control:
 		_figure_swatches.append(swatch)
 	var original := UiChrome.menu_button("1997", Vector2(62, 28), 13)
 	original.name = "FigureOriginal"
-	original.tooltip_text = "The figure in the 1997 game's own colours."
+	original.tooltip_text = "The figure in the 1997 game's own colors."
 	original.pressed.connect(reset_figure_colors)
 	dress.add_child(original)
 	box.add_child(dress)
@@ -431,7 +605,7 @@ func _build_magic() -> Control:
 	_playmat_type.add_item(AdventureSetup.RANDOM_TYPE)
 	for entry in DuelOptions.TERRITORY_TYPES:
 		_playmat_type.add_item(String(entry["label"]))
-	_playmat_type.tooltip_text = "Which of the color's three grounds. Random: one of them, drawn when the world is made, as in 1997."
+	_playmat_type.tooltip_text = "Which of the color's three grounds. Random: one of them, drawn when the world is made, as in 1997 (the picture shows one of the three)."
 	_playmat_type.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_playmat_type.item_selected.connect(func(index: int) -> void:
 		setup.playmat_type = _playmat_type.get_item_text(index)
@@ -452,26 +626,25 @@ func _build_magic() -> Control:
 	_playmat_preview.clip_contents = true
 	well.add_child(_playmat_preview)
 	box.add_child(well)
-	_playmat_note = _text("", 13)
-	_playmat_note.add_theme_color_override("font_color", DIM)
-	_playmat_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_playmat_note)
-	# YOUR RULES, under the playmat: the one column with room to spare at
-	# 1280 × 800 (the difficulty's holds the eight card packs).
-	# Lettered a size down and with no rule above it: without the 1997 skin
-	# the fallback faces are taller, and the screen had no pixels to spare —
-	# so the final battle's rule stands on the heading's own line (a line
-	# of its own overflowed the column without the skin, 2026-10-27).
-	var rules := HBoxContainer.new()
-	rules.name = "RulesRow"
-	rules.add_theme_constant_override("separation", 8)
-	var heading := _heading("Your rules", 18)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	rules.add_child(heading)
-	rules.add_child(_build_life_rule())
-	box.add_child(rules)
-	box.add_child(_build_card_rule())
+	# THE CAMPAIGN SETTINGS, under the playmat (the owner's ruling of
+	# 2026-10-29): the modern rules — the four that stood here under "Your
+	# rules", the sieges' pace, the creatures' way, the starting life, the
+	# ascetic hero — behind one button, the Embark's own, and under it a
+	# line of what is chosen (the whole in its tooltip).
+	box.add_child(HSeparator.new())
+	settings_button = UiChrome.menu_button(SETTINGS_BUTTON, Vector2(260, 40), 20)
+	settings_button.name = "CampaignSettings"
+	settings_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	settings_button.pressed.connect(open_settings)
+	box.add_child(settings_button)
+	_settings_summary = _text("", 14)
+	_settings_summary.name = "CampaignSummary"
+	_settings_summary.add_theme_color_override("font_color", DIM)
+	_settings_summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_settings_summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_settings_summary.clip_text = true
+	_settings_summary.mouse_filter = Control.MOUSE_FILTER_PASS
+	box.add_child(_settings_summary)
 	return box
 
 
@@ -520,13 +693,18 @@ func _build_journey() -> Control:
 			header.add_child(button)
 	box.add_child(header)
 	# The owner's words, 2026-10-22, first and in gold.
-	var challenge := _text("These are additional challenges. The base cards are always present.", 14)
-	challenge.name = "PacksChallenge"
-	challenge.add_theme_color_override("font_color", GOLD)
-	challenge.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(challenge)
+	# The owner's words, 2026-10-22, first and in gold — once the packs are
+	# built. Until then the packs say nothing of what they will be (the
+	# owner, 2026-10-28: "remove explanation for the packs as it will be a
+	# surprise, just: Not implemented yet.").
+	if packs_ready:
+		var challenge := _text("These are additional challenges. The base cards are always present.", 14)
+		challenge.name = "PacksChallenge"
+		challenge.add_theme_color_override("font_color", GOLD)
+		challenge.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(challenge)
 	var about := _text("Each pack opens its own world on the map, ruled by a World Lord. Defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards."
-		if packs_ready else "Coming in a later version: each pack will open its own world on the map, ruled by a World Lord; defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards.", 13)
+		if packs_ready else NOT_YET, 13)
 	about.name = "PacksAbout"
 	about.add_theme_color_override("font_color", DIM)
 	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -558,7 +736,7 @@ func _build_journey() -> Control:
 			check.button_pressed = id in setup.packs
 			check.disabled = not packs_ready
 			if not packs_ready:
-				check.tooltip_text += "\nComing in a later version."
+				check.tooltip_text += "\n" + NOT_YET
 			check.toggled.connect(choose_pack.bind(id))
 			list.add_child(check)
 			_pack_checks[id] = check
@@ -566,31 +744,156 @@ func _build_journey() -> Control:
 	return box
 
 
+# ------------------------------------------------------ campaign settings --
+
+## THE CAMPAIGN SETTINGS' WINDOW (the owner, 2026-10-29: *"we just make a
+## button called 'campaign settings' with a popup and all modern settings
+## with short explanations there"*): the 1997 dark stone of the game's
+## dialogs ([OriginalDialog], its own fallback without the skin) over a veil
+## that keeps the screen under it from the pointer; a row a setting — its
+## name, its choice (a list, a box for the ascetic hero) and under it one
+## plain line of what the choice does, always shown (the whole in the
+## choice's tooltip) — in the owner's order: [constant SETTING_ROWS]. Its
+## buttons: `As 1997` ([method as_1997]: every row the 1997 game's choice,
+## [constant AS_1997]) and `Done`; Escape is Done. A choice takes effect as
+## it is made; Done only closes. Built once, hidden: the rows' lists are
+## the screen's own ([member setup] behind them), there to be read whether
+## the window shows or not ([method open_settings], [method close_settings]).
+func _build_settings() -> Control:
+	_settings = Control.new()
+	_settings.name = "CampaignSettingsVeil"
+	_settings.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings.visible = false
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings.add_child(dim)
+	_settings_dialog = OriginalDialog.create(SETTINGS_TITLE, SETTINGS_SIZE, "panel_dark_stone")
+	_settings_dialog.name = "CampaignSettingsWindow"
+	var body := _settings_dialog.body()
+	body.add_theme_constant_override("separation", SETTINGS_GAP)
+	body.add_child(_build_life_rule())
+	body.add_child(_build_card_rule())
+	body.add_child(_build_ban_list())
+	body.add_child(_build_card_hold())
+	body.add_child(_build_sieges())
+	body.add_child(_build_creatures())
+	body.add_child(_build_life_start())
+	body.add_child(_build_ascetic())
+	_as_1997 = _settings_dialog.add_button(AS_1997_WORDS)
+	_as_1997.name = "As1997"
+	_as_1997.custom_minimum_size.x = 120
+	_as_1997.tooltip_text = AS_1997_TIP
+	_as_1997.pressed.connect(as_1997)
+	_done = _settings_dialog.add_button("Done")
+	_done.name = "Done"
+	_done.custom_minimum_size.x = 120
+	_done.pressed.connect(close_settings)
+	_settings.add_child(_settings_dialog)
+	_show_settings()
+	return _settings
+
+
+## The window's size as made; it grows to what its rows hold ([method
+## OriginalDialog.fit_height]) as it opens.
+const SETTINGS_SIZE := Vector2(700, 300)
+## The rows' spacing, and the width of the names' column.
+const SETTINGS_GAP := 8
+const SETTING_NAME_WIDTH := 132
+const SETTINGS_TITLE := "Campaign Settings"
+const SETTINGS_BUTTON := "Campaign Settings..."
+## The rows, in the owner's order (2026-10-29), by the names of their
+## choices' nodes.
+const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "CardHold", "Sieges",
+	"Creatures", "LifeStart", "Ascetic"]
+const AS_1997_WORDS := "As 1997"
+const AS_1997_TIP := "Every setting as the 1997 game played: reload allowed, no card limit, the 1998 ban list, a 500-card bag, the 1997 sieges, creatures that hunt you, a life for each mana link, food as it was eaten."
+## WHAT "AS 1997" CHOOSES, each row the 1997 game's own: the card rule as
+## it shipped (no copy limit), the 500-card bag, the sieges' 1997 clock, the
+## creatures hunting, a life for each link, the food as eaten. Two rows had
+## no choice in 1997 and take the nearest: the final battle "Reload
+## allowed" (1997 ended the program after the battle and its Resume took up
+## the last save, from before the fifth castle — a retry from further back,
+## never a lost adventure), and the ban list "1998" (read only under the
+## Classic MTG rules, which 1997 did not have; the lists of its day).
+const AS_1997 := {"life_rule": AdventurePlayer.LIFE_RELOAD, "card_rule": AdventurePlayer.RULE_SHIPPED,
+	"ban_list": ClassicBans.OLD, "card_hold": AdventurePlayer.HOLD_1997,
+	"sieges": AdventurePlayer.SIEGES_1997, "creatures": AdventurePlayer.CREATURES_HUNT,
+	"life_start": AdventurePlayer.START_LINKS, "ascetic": false}
+
+
+## A SETTING'S ROW: its name, dim, in a column of its own and beside it
+## [param choice] (named [param base]; the row `<base>Row`, the name
+## `<base>Words`), and under the choice its plain line (`<base>Line`,
+## [method _explain_line]).
+func _setting_row(base: String, words_text: String, choice: Control) -> VBoxContainer:
+	var row := VBoxContainer.new()
+	row.name = base + "Row"
+	row.add_theme_constant_override("separation", 2)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 10)
+	var words := OriginalDialog.label(words_text, 15, true)
+	words.name = base + "Words"
+	words.custom_minimum_size.x = SETTING_NAME_WIDTH
+	words.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	line.add_child(words)
+	choice.name = base
+	choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(choice)
+	row.add_child(line)
+	var under := HBoxContainer.new()
+	under.add_theme_constant_override("separation", 10)
+	var indent := Control.new()
+	indent.custom_minimum_size.x = SETTING_NAME_WIDTH
+	under.add_child(indent)
+	var said := OriginalDialog.label("", 14)
+	said.name = base + "Line"
+	said.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+	said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	said.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	said.clip_text = true
+	under.add_child(said)
+	row.add_child(under)
+	_lines[base] = said
+	return row
+
+
+## A list of [param keys] by their [param names], for a row.
+func _list_of(option: OptionButton, keys: Array[String], names: Dictionary) -> OptionButton:
+	for key in keys:
+		option.add_item(String(names[key]))
+		option.set_item_metadata(option.item_count - 1, key)
+	option.fit_to_longest_item = false
+	option.clip_text = true
+	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	option.add_theme_font_size_override("font_size", 15)
+	return option
+
+
+## Row [param base]'s plain line: [param text], its tooltip [param tip].
+func _explain_line(base: String, text: String, tip := "") -> void:
+	var said: Label = _lines.get(base)
+	if said == null:
+		return
+	said.text = text
+	said.tooltip_text = tip
+	said.mouse_filter = Control.MOUSE_FILTER_PASS if tip != "" else Control.MOUSE_FILTER_IGNORE
+
+
 ## THE CARD RULE OF THE ADVENTURE (the owner, 2026-10-24: "This should be an
 ## on off setting during shandalar embark construction!", then "one more
 ## rule … also classic MTG rules", "name the rules as i named them!"): one
 ## choice of three ([constant RULE_NAMES], [member AdventureSetup.card_rule],
-## [member AdventurePlayer.card_rule]) — one line, as the box it replaced
-## (the column holds eight card packs at 1280 × 800); the tooltip says what
-## the one chosen does.
+## [member AdventurePlayer.card_rule]); the tooltip says what the one
+## chosen does, the row's line in short.
 func _build_card_rule() -> Control:
-	_card_rule = OptionButton.new()
-	_card_rule.name = "CardRule"
-	for rule in AdventurePlayer.CARD_RULES:
-		_card_rule.add_item(String(RULE_NAMES[rule]))
-		_card_rule.set_item_metadata(_card_rule.item_count - 1, rule)
-	_card_rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# As wide as the column, not as its longest name: fitted to that, it
-	# widened the column and the screen scrolled sideways.
-	_card_rule.fit_to_longest_item = false
-	_card_rule.clip_text = true
-	# Lettered a size down, as the box it replaced: the longest name whole.
-	_card_rule.add_theme_font_size_override("font_size", 15)
-	_card_rule.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_card_rule = _list_of(OptionButton.new(), AdventurePlayer.CARD_RULES, RULE_NAMES)
+	var row := _setting_row("CardRule", "Card rule", _card_rule)
 	_card_rule.item_selected.connect(func(index: int) -> void:
 		choose_card_rule(String(_card_rule.get_item_metadata(index))))
 	_show_card_rule()
-	return _card_rule
+	return row
 
 
 ## The card rule [param rule] chosen ([constant AdventurePlayer.CARD_RULES]).
@@ -598,6 +901,7 @@ func choose_card_rule(rule: String) -> void:
 	if rule in AdventurePlayer.CARD_RULES:
 		setup.card_rule = rule
 	_show_card_rule()
+	_show_ban_list()
 
 
 func _show_card_rule() -> void:
@@ -605,34 +909,19 @@ func _show_card_rule() -> void:
 		return
 	_card_rule.select(AdventurePlayer.CARD_RULES.find(setup.card_rule))
 	_card_rule.tooltip_text = String(RULE_TIPS.get(setup.card_rule, ""))
+	_explain_line("CardRule", String(RULE_LINES.get(setup.card_rule, "")), _card_rule.tooltip_text)
+	_show_settings_summary()
 
 
 ## THE FINAL BATTLE'S RULE (the owner, 2026-10-27, round P3: "A setting at
 ## Embark" — "Reload allowed" or "One life"; [constant LIFE_NAMES], [member
-## AdventureSetup.life_rule], [member AdventurePlayer.life_rule]): on the
-## line of "Your rules", above the card rule, its words beside it — a
-## choice of the same kind as the card rule's; the tooltip says what the
-## one chosen does. Not drawn by Randomize, as the card rule is not.
+## AdventureSetup.life_rule], [member AdventurePlayer.life_rule]): the
+## Campaign Settings' first row. Not drawn by Randomize, as no setting is.
 func _build_life_rule() -> Control:
-	var row := HBoxContainer.new()
-	row.name = "LifeRuleRow"
-	row.size_flags_horizontal = Control.SIZE_SHRINK_END
-	row.add_theme_constant_override("separation", 6)
-	var words := _label("Final battle")
-	words.name = "LifeRuleWords"
-	words.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(words)
-	_life_rule = OptionButton.new()
-	_life_rule.name = "LifeRule"
-	for rule in AdventurePlayer.LIFE_RULES:
-		_life_rule.add_item(String(LIFE_NAMES[rule]))
-		_life_rule.set_item_metadata(_life_rule.item_count - 1, rule)
-	# As wide as its longer name, which is short: the heading takes the rest.
-	_life_rule.fit_to_longest_item = true
-	_life_rule.add_theme_font_size_override("font_size", 15)
+	_life_rule = _list_of(OptionButton.new(), AdventurePlayer.LIFE_RULES, LIFE_NAMES)
+	var row := _setting_row("LifeRule", "Final battle", _life_rule)
 	_life_rule.item_selected.connect(func(index: int) -> void:
 		choose_life_rule(String(_life_rule.get_item_metadata(index))))
-	row.add_child(_life_rule)
 	_show_life_rule()
 	return row
 
@@ -650,6 +939,328 @@ func _show_life_rule() -> void:
 		return
 	_life_rule.select(maxi(AdventurePlayer.LIFE_RULES.find(setup.life_rule), 0))
 	_life_rule.tooltip_text = String(LIFE_TIPS.get(setup.life_rule, ""))
+	_explain_line("LifeRule", String(LIFE_LINES.get(setup.life_rule, "")), _life_rule.tooltip_text)
+	_show_settings_summary()
+
+
+## THE BAN LIST (the owner, 2026-10-28: "Ban list: an Embark setting
+## (Embark only)"; [constant BAN_NAMES], [member AdventureSetup.ban_list],
+## [member AdventurePlayer.ban_list], [ClassicBans]): the row under the card
+## rule it serves, greyed unless that rule is the Classic MTG rules
+## ([method _show_ban_list]).
+func _build_ban_list() -> Control:
+	_ban_list = _list_of(OptionButton.new(), ClassicBans.LISTS, BAN_NAMES)
+	var row := _setting_row("BanList", "Ban list", _ban_list)
+	_ban_words = row.find_child("BanListWords", true, false) as Label
+	_ban_list.item_selected.connect(func(index: int) -> void:
+		choose_ban_list(String(_ban_list.get_item_metadata(index))))
+	_show_ban_list()
+	return row
+
+
+## The ban list [param list] chosen ([constant ClassicBans.LISTS]).
+func choose_ban_list(list: String) -> void:
+	if list in ClassicBans.LISTS:
+		setup.ban_list = list
+	_show_ban_list()
+
+
+func _show_ban_list() -> void:
+	if _ban_list == null:
+		return
+	var read := setup.card_rule == AdventurePlayer.RULE_CLASSIC
+	_ban_list.select(maxi(ClassicBans.LISTS.find(setup.ban_list), 0))
+	_ban_list.disabled = not read
+	_ban_list.focus_mode = Control.FOCUS_ALL if read else Control.FOCUS_NONE
+	_ban_words.modulate = Color.WHITE if read else Color(1, 1, 1, 0.45)
+	var tip := String(BAN_TIPS.get(setup.ban_list, ""))
+	_ban_list.tooltip_text = tip if read else "%s\n\n%s" % [BAN_GREYED, tip]
+	_explain_line("BanList", String(BAN_LINES.get(setup.ban_list, "")) if read else BAN_GREYED_LINE,
+		_ban_list.tooltip_text)
+	var said: Label = _lines.get("BanList")
+	if said != null:
+		said.modulate = Color.WHITE if read else Color(1, 1, 1, 0.6)
+	_fence_settings()
+	_show_settings_summary()
+
+
+## THE CARD HOLD (the owner, 2026-10-28; [constant HOLD_NAMES], [member
+## AdventureSetup.card_hold], [member AdventurePlayer.card_hold]).
+func _build_card_hold() -> Control:
+	_card_hold = _list_of(OptionButton.new(), AdventurePlayer.CARD_HOLDS, HOLD_NAMES)
+	var row := _setting_row("CardHold", "Card hold", _card_hold)
+	_card_hold.item_selected.connect(func(index: int) -> void:
+		choose_card_hold(String(_card_hold.get_item_metadata(index))))
+	_show_card_hold()
+	return row
+
+
+## The card hold [param hold] chosen ([constant AdventurePlayer.CARD_HOLDS]).
+func choose_card_hold(hold: String) -> void:
+	if hold in AdventurePlayer.CARD_HOLDS:
+		setup.card_hold = hold
+	_show_card_hold()
+
+
+func _show_card_hold() -> void:
+	if _card_hold == null:
+		return
+	_card_hold.select(maxi(AdventurePlayer.CARD_HOLDS.find(setup.card_hold), 0))
+	_card_hold.tooltip_text = String(HOLD_TIPS.get(setup.card_hold, ""))
+	_explain_line("CardHold", String(HOLD_LINES.get(setup.card_hold, "")), _card_hold.tooltip_text)
+	_show_settings_summary()
+
+
+## THE SIEGES' PACE ([constant SIEGE_NAMES], [member AdventureSetup.sieges],
+## [member AdventurePlayer.sieges]).
+func _build_sieges() -> Control:
+	_sieges = _list_of(OptionButton.new(), AdventurePlayer.SIEGE_PACES, SIEGE_NAMES)
+	var row := _setting_row("Sieges", "Sieges", _sieges)
+	_sieges.item_selected.connect(func(index: int) -> void:
+		choose_sieges(String(_sieges.get_item_metadata(index))))
+	_show_sieges()
+	return row
+
+
+## The sieges' pace [param pace] chosen ([constant AdventurePlayer.SIEGE_PACES]).
+func choose_sieges(pace: String) -> void:
+	if pace in AdventurePlayer.SIEGE_PACES:
+		setup.sieges = pace
+	_show_sieges()
+
+
+func _show_sieges() -> void:
+	if _sieges == null:
+		return
+	_sieges.select(maxi(AdventurePlayer.SIEGE_PACES.find(setup.sieges), 0))
+	_sieges.tooltip_text = String(SIEGE_TIPS.get(setup.sieges, ""))
+	_explain_line("Sieges", String(SIEGE_LINES.get(setup.sieges, "")), _sieges.tooltip_text)
+	_show_settings_summary()
+
+
+## THE CREATURES' WAY [ours, the owner's ruling of 2026-10-29: "Add, default
+## Notice (Recommended)"; [constant CREATURE_NAMES], [member
+## AdventureSetup.creatures], [member AdventurePlayer.creatures],
+## [WorldCreatures]].
+func _build_creatures() -> Control:
+	_creatures = _list_of(OptionButton.new(), AdventurePlayer.CREATURE_WAYS, CREATURE_NAMES)
+	var row := _setting_row("Creatures", "Creatures", _creatures)
+	_creatures.item_selected.connect(func(index: int) -> void:
+		choose_creatures(String(_creatures.get_item_metadata(index))))
+	_show_creatures()
+	return row
+
+
+## The creatures' way [param way] chosen ([constant
+## AdventurePlayer.CREATURE_WAYS]).
+func choose_creatures(way: String) -> void:
+	if way in AdventurePlayer.CREATURE_WAYS:
+		setup.creatures = way
+	_show_creatures()
+
+
+func _show_creatures() -> void:
+	if _creatures == null:
+		return
+	_creatures.select(maxi(AdventurePlayer.CREATURE_WAYS.find(setup.creatures), 0))
+	_creatures.tooltip_text = String(CREATURE_TIPS.get(setup.creatures, ""))
+	_explain_line("Creatures", String(CREATURE_LINES.get(setup.creatures, "")), _creatures.tooltip_text)
+	_show_settings_summary()
+
+
+## THE DUELS' STARTING LIFE [ours, the owner's ruling of 2026-10-29: "Add,
+## default off (Recommended)"; [constant START_NAMES], [member
+## AdventureSetup.life_start], [member AdventurePlayer.life_start]].
+func _build_life_start() -> Control:
+	_life_start = _list_of(OptionButton.new(), AdventurePlayer.LIFE_STARTS, START_NAMES)
+	var row := _setting_row("LifeStart", "Starting life", _life_start)
+	_life_start.item_selected.connect(func(index: int) -> void:
+		choose_life_start(String(_life_start.get_item_metadata(index))))
+	_show_life_start()
+	return row
+
+
+## The duels' starting life [param start] chosen ([constant
+## AdventurePlayer.LIFE_STARTS]).
+func choose_life_start(start: String) -> void:
+	if start in AdventurePlayer.LIFE_STARTS:
+		setup.life_start = start
+	_show_life_start()
+
+
+func _show_life_start() -> void:
+	if _life_start == null:
+		return
+	_life_start.select(maxi(AdventurePlayer.LIFE_STARTS.find(setup.life_start), 0))
+	_life_start.tooltip_text = String(START_TIPS.get(setup.life_start, ""))
+	_explain_line("LifeStart", String(START_LINES.get(setup.life_start, "")), _life_start.tooltip_text)
+	_show_settings_summary()
+
+
+## THE ASCETIC HERO [ours, the owner's ruling of 2026-10-29: "The option
+## halves food consumption by the hero"; [member AdventureSetup.ascetic],
+## [member AdventurePlayer.ascetic]]: a box, off by default.
+func _build_ascetic() -> Control:
+	_ascetic = CheckBox.new()
+	_ascetic.text = ASCETIC_BOX
+	_ascetic.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+	_ascetic.add_theme_color_override("font_hover_color", OriginalDialog.CHOICE_LIT)
+	_ascetic.add_theme_color_override("font_pressed_color", OriginalDialog.CHOICE_LIT)
+	_ascetic.add_theme_color_override("font_hover_pressed_color", OriginalDialog.CHOICE_LIT)
+	_ascetic.add_theme_color_override("font_focus_color", OriginalDialog.CHOICE_LIT)
+	_ascetic.add_theme_font_size_override("font_size", 15)
+	_ascetic.add_theme_icon_override("checked", UiChrome.check_icon(true))
+	_ascetic.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+	_ascetic.tooltip_text = ASCETIC_TIP
+	var row := _setting_row("Ascetic", "Ascetic hero", _ascetic)
+	_ascetic.toggled.connect(choose_ascetic)
+	_show_ascetic()
+	return row
+
+
+## The ascetic hero chosen ([param on]) or not.
+func choose_ascetic(on: bool) -> void:
+	setup.ascetic = on
+	_show_ascetic()
+
+
+func _show_ascetic() -> void:
+	if _ascetic == null:
+		return
+	_ascetic.set_pressed_no_signal(setup.ascetic)
+	_explain_line("Ascetic", ASCETIC_ON_LINE if setup.ascetic else ASCETIC_OFF_LINE, ASCETIC_TIP)
+	_show_settings_summary()
+
+
+## Every row shown as [member setup] holds it.
+func _show_settings() -> void:
+	_show_life_rule()
+	_show_card_rule()
+	_show_ban_list()
+	_show_card_hold()
+	_show_sieges()
+	_show_creatures()
+	_show_life_start()
+	_show_ascetic()
+
+
+## "AS 1997": every row the 1997 game's choice ([constant AS_1997]), at once.
+func as_1997() -> void:
+	setup.life_rule = String(AS_1997["life_rule"])
+	setup.card_rule = String(AS_1997["card_rule"])
+	setup.ban_list = String(AS_1997["ban_list"])
+	setup.card_hold = String(AS_1997["card_hold"])
+	setup.sieges = String(AS_1997["sieges"])
+	setup.creatures = String(AS_1997["creatures"])
+	setup.life_start = String(AS_1997["life_start"])
+	setup.ascetic = bool(AS_1997["ascetic"])
+	_show_settings()
+
+
+## THE WINDOW OPENS: over the screen, grown to its rows, the keyboard (and
+## a pad's D-pad) on its first row and kept inside it ([method
+## _fence_settings]).
+func open_settings() -> void:
+	if _settings == null or _leaving:
+		return
+	_show_settings()
+	_settings.visible = true
+	_settings_dialog.fit_height()
+	_settings_dialog.keep_on_screen()
+	_fence_settings()
+	_life_rule.grab_focus()
+
+
+## Done (or Escape): the window closes, the keyboard back on its button.
+func close_settings() -> void:
+	if _settings == null or not _settings.visible:
+		return
+	_settings.visible = false
+	if settings_button != null and settings_button.is_inside_tree():
+		settings_button.grab_focus()
+
+
+## Whether the Campaign Settings' window is up.
+func settings_shown() -> bool:
+	return _settings != null and _settings.visible
+
+
+## THE RING STAYS IN THE WINDOW: Up and Down (and Tab) walk its rows, the
+## greyed ban list passed over, round to the buttons and back; Left and
+## Right walk the buttons (UiChrome's fence, a column of it).
+func _fence_settings() -> void:
+	if _settings_dialog == null or _done == null:
+		return
+	var ring: Array[Control] = []
+	for base in SETTING_ROWS:
+		var choice := _settings_dialog.find_child(base, true, false) as Control
+		if choice != null and choice.focus_mode != Control.FOCUS_NONE:
+			ring.append(choice)
+	var last_row := ring.size()
+	ring.append(_as_1997)
+	ring.append(_done)
+	var count := ring.size()
+	for i in count:
+		var here := ring[i]
+		var up := ring[(i - 1 + count) % count]
+		var down := ring[(i + 1) % count]
+		here.focus_neighbor_top = here.get_path_to(up)
+		here.focus_neighbor_bottom = here.get_path_to(down)
+		here.focus_previous = here.get_path_to(up)
+		here.focus_next = here.get_path_to(down)
+		if i < last_row:
+			here.focus_neighbor_left = here.get_path_to(here)
+			here.focus_neighbor_right = here.get_path_to(here)
+	_as_1997.focus_neighbor_left = _as_1997.get_path_to(_done)
+	_as_1997.focus_neighbor_right = _as_1997.get_path_to(_done)
+	_done.focus_neighbor_left = _done.get_path_to(_as_1997)
+	_done.focus_neighbor_right = _done.get_path_to(_as_1997)
+
+
+## THE LINE UNDER THE BUTTON ([constant SETTING_SHORT]): the sieges, the
+## creatures and the final battle, then whatever else is not the default
+## — "Steady sieges · Creatures notice · Reload allowed"; one line, cut
+## short with "…" when it cannot hold them all ([method settings_words]
+## names every one, its tooltip).
+static func settings_line(chosen: AdventureSetup) -> String:
+	var parts: Array[String] = [String(SIEGE_SHORT[AdventurePlayer.sieges_of(chosen.sieges)]),
+		String(CREATURE_SHORT[AdventurePlayer.creatures_of(chosen.creatures)]),
+		String(LIFE_SHORT[AdventurePlayer.life_rule_of(chosen.life_rule)])]
+	if RULE_SHORT.has(chosen.card_rule):
+		parts.append(String(RULE_SHORT[chosen.card_rule]))
+	if chosen.life_start == AdventurePlayer.START_BASE:
+		parts.append(START_SHORT)
+	if chosen.ascetic:
+		parts.append(ASCETIC_SHORT)
+	if chosen.card_hold == AdventurePlayer.HOLD_UNLIMITED:
+		parts.append(HOLD_SHORT)
+	return " · ".join(parts)
+
+
+## Every setting in full words, a line each (the button's and the line's
+## tooltip).
+static func settings_words(chosen: AdventureSetup) -> String:
+	var lines: Array[String] = [
+		"Final battle: %s" % LIFE_NAMES[AdventurePlayer.life_rule_of(chosen.life_rule)],
+		"Card rule: %s" % RULE_NAMES.get(chosen.card_rule, ""),
+		"Ban list: %s%s" % [BAN_NAMES[ClassicBans.key_of(chosen.ban_list)],
+			"" if chosen.card_rule == AdventurePlayer.RULE_CLASSIC else " (read only by the Classic MTG rules)"],
+		"Card hold: %s" % HOLD_NAMES[AdventurePlayer.card_hold_of(chosen.card_hold)],
+		"Sieges: %s" % SIEGE_NAMES[AdventurePlayer.sieges_of(chosen.sieges)],
+		"Creatures: %s" % CREATURE_NAMES[AdventurePlayer.creatures_of(chosen.creatures)],
+		"Starting life: %s" % START_NAMES[AdventurePlayer.life_start_of(chosen.life_start)],
+		"Ascetic hero: %s" % ("on" if chosen.ascetic else "off")]
+	return "\n".join(lines)
+
+
+func _show_settings_summary() -> void:
+	if _settings_summary == null:
+		return
+	_settings_summary.text = settings_line(setup)
+	var words := "%s\n\n%s" % [SETTINGS_TIP, settings_words(setup)]
+	_settings_summary.tooltip_text = words
+	if settings_button != null:
+		settings_button.tooltip_text = words
 
 
 func _build_buttons() -> Control:
@@ -821,9 +1432,8 @@ func _on_name_changed(text: String) -> void:
 ## on the map and its colours, the colour,
 ## the playmat's colour and style, the card packs, the difficulty and a new
 ## seed (a time of day, as the clock gives) — for the player to enjoy and
-## change before setting out. Your rules (the card rule, the final battle's
-## rule) are not drawn: they stay as the player set them. [param rng] is
-## for tests.
+## change before setting out. The Campaign Settings are not drawn: they
+## stay as the player set them. [param rng] is for tests.
 func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	if _leaving:
 		return
@@ -944,9 +1554,6 @@ func _show_playmat() -> void:
 	var style := setup.playmat_type
 	if style == AdventureSetup.RANDOM_TYPE:
 		style = String(DuelOptions.TERRITORY_TYPES[1]["label"])
-		_playmat_note.text = "Random: one of the color's three, drawn when the world is made."
-	else:
-		_playmat_note.text = ""
 	var ground := TerritoryGround.node(setup.playmat_color_shown(), style)
 	_playmat_preview.add_child(ground)
 
@@ -1173,6 +1780,12 @@ func summary(record: Dictionary) -> String:
 		lines.append("Pack worlds: %s." % ", ".join(names))
 	if AdventurePlayer.life_rule_of(record.get("life_rule")) == AdventurePlayer.LIFE_ONE:
 		lines.append(ONE_LIFE_SUMMARY)
+	lines.append(String(HOLD_SUMMARY[AdventurePlayer.card_hold_of(record.get("card_hold"))]))
+	lines.append(String(SIEGE_SUMMARY[AdventurePlayer.sieges_of(record.get("sieges"))]))
+	lines.append(String(CREATURE_SUMMARY[AdventurePlayer.creatures_of(record.get("creatures"))]))
+	lines.append(String(START_SUMMARY[AdventurePlayer.life_start_of(record.get("life_start"))]))
+	if record.get("ascetic") is bool and bool(record.get("ascetic")):
+		lines.append(ASCETIC_SUMMARY)
 	lines.append("World seed %s." % String(record.get("seed_text", str(record["seed"]))))
 	return "\n".join(lines)
 
@@ -1197,6 +1810,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _leaving or not event.is_action_pressed("ui_cancel"):
 		return
 	get_viewport().set_input_as_handled()
+	if settings_shown():
+		# Escape is the Campaign Settings' Done.
+		close_settings()
+		return
 	if is_instance_valid(_popup) and not _popup.is_queued_for_deletion():
 		UiChrome.dismiss_popup(_popup)
 		_popup = null
@@ -1226,9 +1843,14 @@ func _panel(inner: Control, panel_name: String) -> PanelContainer:
 	return panel
 
 
+## The windows' lines' spacing: 7 since the four rules (2026-10-28; 8
+## before), the Magic window's last pixels at 1280 × 800 without the skin.
+const COLUMN_GAP := 7
+
+
 func _column(heading: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+	box.add_theme_constant_override("separation", COLUMN_GAP)
 	box.add_child(_heading(heading, 24))
 	return box
 

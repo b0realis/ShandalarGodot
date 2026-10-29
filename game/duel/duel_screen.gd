@@ -153,6 +153,9 @@ var _prompt_label: Label
 var _situation_bar: PanelContainer = null
 var _life_buttons: Array[Button] = []
 var _poison_labels: Array[Label] = []   # venom-green clock on the life panel
+## One poison counter per counter on the life register, under its number
+## ([PoisonCounters], our own picture on 1997's grid; the polish pass).
+var _poison_marks: Array[PoisonCounters] = []
 var _pass_button: Button
 ## The Situation Bar's OTHER button. `@BUTTONLABELS` (UIStrings.txt:178) is
 ## `Cancel` / `Done` and the bar carries *"a Done button, a Cancel button,
@@ -212,8 +215,17 @@ var _over_dialog: OriginalDialog = null       # the duel's last word
 ## wait for" in between (2026-09-02).
 var _result_pending := false
 var _options_dialog: OriginalDialog = null    # `Duel Options...` (§6.4)
+## The duel screen's own options (the polish pass, 2026-10-28): the
+## reserve strip's fourth button and the one window it opens.
+var _screen_options_button: Button = null
+var _screen_options_dialog: OriginalDialog = null
 var _duel_log: DuelLog = null                # the log window, `L` [QoL]
 var _log_file: DuelLogFile = null            # the running `duel_log.txt` [QoL]
+## The targets and X of a cast's or an activation's log line, by the line's
+## index in [member MtgGame.log_lines] — read off the chain object the
+## moment the line lands ([method _note_log_details]; polish pass
+## 2026-10-28). Shown while [method DuelScreenOptions.log_targets] is on.
+var _log_details: Dictionary = {}
 var _public_archive: MpnArchive = null      # public-only, permanent MPN record
 var _log_button: Button = null                # its switch on the reserve strip
 ## THE LOOK (2026-10-03): the window naming the cards an effect showed
@@ -438,6 +450,13 @@ const AURA_PEEK := Vector2(6, 18)
 const ROW_Z_STEP := 7
 const FREE_LAYER_Z := ROW_Z_STEP * 3
 var _chain_box: ChainColumn = null   # the original's floating spell chain (c12 h4-2)
+## THE SPELL CHAIN'S TITLE BAND, over the column (the polish pass,
+## 2026-10-28): `Spell Chain (N)` and the corner gadget that minimizes the
+## chain to this band alone — [method _set_chain_minimized].
+var _chain_head: PanelContainer = null
+var _chain_head_label: Label = null
+var _chain_gadget: Button = null
+var _chain_minimized := false
 var _mode_overlay: Control = null      # modal-choice dialog (Winbk_Bigcard)
 var _preview_dock: Control = null      # sidebar slot for the big card
 var _qol_reserve: Control = null       # black strip under it, for future QoL
@@ -734,6 +753,7 @@ func _new_game() -> void:
 	# opening. `Shuffle.wav` had been imported and never played.
 	_play_sfx("sfx_shuffle")
 	game = MtgGame.new()
+	_log_details.clear()
 	game.log_appended.connect(_on_log_line)
 	game.state_changed.connect(_on_engine_state_changed)
 	game.game_ended.connect(_on_game_over)
@@ -861,7 +881,9 @@ func _is_human(pid: int) -> bool:
 ## rule: the original had none) — the viewer is a window on `L`, § THE
 ## DUEL LOG below.
 func _on_log_line(line: String, meta: Dictionary) -> void:
-	var shown := _log_for_viewer(line, meta)
+	var index := game.log_lines.size() - 1 if game != null else -1
+	_note_log_details(index, line, meta)
+	var shown := _log_shown(index, line, meta)
 	if _log_file != null:
 		_log_file.write(shown[0], shown[1])
 	if _duel_log != null and is_instance_valid(_duel_log):
@@ -905,6 +927,50 @@ func _log_for_viewer(line: String, meta: Dictionary) -> Array:
 	shown["card"] = ""
 	shown["colors"] = 0
 	return [String(meta.get("public", "(hidden)")), shown]
+
+
+# --- the polish pass 2026-10-28 (P3): targets and X in the log ---
+## A CAST'S OR AN ACTIVATION'S TARGETS AND X, kept by the line's index the
+## moment it lands. The engine logs a cast as the last thing
+## [method MtgGame.cast_spell] does and an activation the moment it is on
+## the stack, so the chain object the sentence was written for is the TOP
+## of the chain then — the one whose own description IS the sentence
+## (checked, never assumed: a line that does not match notes nothing).
+## Kept whatever the switch says, so turning it on mid-duel names the
+## lines already written too.
+func _note_log_details(index: int, line: String, meta: Dictionary) -> void:
+	if index < 0 or game == null or game.stack.is_empty():
+		return
+	var kind := String(meta.get("kind", ""))
+	if kind != "cast" and kind != "activate":
+		return
+	var top: Variant = game.stack.back()
+	if not (top is StackItem) or (top as StackItem).description != line:
+		return
+	var said := DuelLogText.details(game, top)
+	if not said.is_empty():
+		_log_details[index] = said
+
+
+## [method _log_for_viewer], then the targets and X when the switch is on
+## — never on a line the viewer reads redacted (its public sentence names
+## no card, and its targets would).
+func _log_shown(index: int, line: String, meta: Dictionary) -> Array:
+	var shown := _log_for_viewer(line, meta)
+	if DuelScreenOptions.log_targets() and _log_details.has(index) \
+			and not meta.has("private_to"):
+		shown[0] = DuelLogText.with_details(String(shown[0]), String(_log_details[index]))
+	return shown
+
+
+## What the chain shows for [param item] on its band and its card: the
+## object's own description, and its targets and X as the log names them
+## — a trigger's description carries its targets already.
+func _chain_words(item: StackItem) -> String:
+	if not DuelScreenOptions.log_targets() or item.kind == Mtg.StackKind.TRIGGER:
+		return item.description
+	return DuelLogText.with_details(item.description, DuelLogText.details(game, item))
+# --- end the polish pass (P3): targets and X ---
 
 
 ## May the local viewer read [param seat]'s private log lines? The same
@@ -1631,7 +1697,14 @@ func _phase_status_message() -> String:
 		if _is_human(game.winner):
 			return "You won!"
 		return "%s won" % game.players[game.winner].player_name
-	var human := _private_decision_seat() if config.private_hotseat() else (0 if _is_human(0) else 1)
+	# THE SEAT THE BAR SPEAKS TO: whenever both seats are human — a private
+	# hotseat AND an open table (a Test hands duel with two humans) — the
+	# deciding seat, [method _viewing_seat]'s one read (the bug campaign
+	# c12, h4-4). This line kept seat 0 at an open table until the polish
+	# pass of 2026-10-28 (ledger duel-090): seat 1's own main phase read as
+	# seat 0's opponent's.
+	var human := _viewing_seat() if _is_human(0) and _is_human(1) \
+		else (0 if _is_human(0) else 1)
 	var my_turn := game.active_player == human
 	var step := game.current_step()
 	# A resolution held open for a question (§1.3): the overlay carries the
@@ -4031,6 +4104,60 @@ func _toggle_attacker(inst: CardInstance) -> void:
 	_refresh()
 
 
+## THE ATTACK-ALL KEY (the polish pass, 2026-10-28; the owner's
+## accessibility set — `docs/duel-screen-design.md`'s wishlist line
+## *"Space=pass, A=attack-all"*). While attackers are being chosen, every
+## creature of the attacking seat that [method _attack_refusal] lets
+## attack joins the lineup, as a click on each would — but alone, never
+## banded (a band is still a click on two), and nothing is DECLARED: Done
+## sends the attack, so a second look and a click to take one back stay
+## the player's. The 1997 game had no such key [QoL].
+##
+## UNDER THE 1997 RULE THERE IS NO SECOND LOOK (0.50.65 bug campaign,
+## k3-2): with `attackers_revocable` off a creature in the lineup is in it
+## for good ([method _toggle_attacker] refuses to take it back), so one
+## stray press was an all-out attack. There the first press only asks, on
+## the bar ([method attack_all_question]), and a second press in the same
+## declaration commits; every door out of the declaration
+## ([method _clear_attack_lineup]) forgets the first. Under modern timing
+## it stays one press.
+func _attack_with_everything() -> void:
+	if not DuelScreenOptions.attack_all_key() or game == null \
+			or mode != Mode.ATTACKERS or not game.awaiting_attackers \
+			or _modal_open() or _dialogs_open():
+		return
+	var joining: Array[int] = []
+	for inst in game.players[game.active_player].battlefield:
+		if not inst.is_creature() or _selected_attackers.has(inst.id):
+			continue
+		if _attack_refusal(inst) == "":
+			joining.append(inst.id)
+	if joining.is_empty():
+		return   # nobody would join: nothing to ask, nothing to do
+	var are_final := not game.rules.attackers_revocable
+	if are_final and not _attack_all_asked:
+		_attack_all_asked = true
+		_set_prompt(attack_all_question())
+		return
+	_attack_all_asked = false
+	if _band_candidate != -1:
+		_close_band_question()
+	_selected_attackers.append_array(joining)
+	if are_final:
+		_set_prompt(CHOOSE_ATTACKERS)   # the question is answered
+	_refresh()
+
+
+## Has the attack-all key asked its question in this declaration (k3-2)?
+var _attack_all_asked := false
+
+
+## The bar's question under the 1997 rule, naming the key as bound.
+static func attack_all_question() -> String:
+	return "Press %s again to attack with every creature — attackers are final." \
+		% Controls.text(DuelScreenOptions.ATTACK_ALL_ACTION)
+
+
 ## `@PROMPT_BANDWITHWHOM` entry 1, UIStrings.txt:1031, verbatim.
 const BAND_QUESTION := "Band with which attacker?"
 ## @PROMPT_MAIN entry 5 — the standing instruction the question returns to.
@@ -4123,6 +4250,7 @@ func _clear_attack_lineup() -> void:
 	_selected_attackers = []
 	_selected_bands = []
 	_band_candidate = -1
+	_attack_all_asked = false   # the attack-all key's question (k3-2)
 
 
 ## The bands the Combat window frames: the engine's own once declared
@@ -4635,6 +4763,10 @@ func _on_escape() -> void:
 		return
 	if _options_dialog != null and is_instance_valid(_options_dialog):
 		_options_dialog.dismiss()
+		return
+	# The duel screen's own options, the same rung (the polish pass).
+	if _screen_options_dialog != null and is_instance_valid(_screen_options_dialog):
+		_screen_options_dialog.dismiss()
 		return
 	# The look's window is a bare dialog too, with one button: OK.
 	if reveal_window_open():
@@ -5152,6 +5284,10 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 	# Pause window's buttons under them answered (Exit game among them).
 	dialog.z_index = 0
 	scrim.add_child(dialog)
+	# THE UI SCALE REACHES IT TOO (0.50.65 bug campaign, k3-3): it stands on
+	# its scrim, not on this screen, so [method _on_child_entered_for_scale]
+	# never saw it and the question stayed at 100% under a 150% bar.
+	_scale_dialog(dialog)
 	# The REASON'S CARD, left — s30 draws `req.Reason`'s image and so do we.
 	var asking := _choice_source_card(choice)
 	if asking != null:
@@ -7363,6 +7499,8 @@ func _refresh() -> void:
 			var venom: int = game.players[pid].poison
 			_poison_labels[pid].visible = venom > 0
 			_poison_labels[pid].text = "%d/10" % venom
+			if _poison_marks.size() == 2 and _poison_marks[pid] != null:
+				_poison_marks[pid].count = venom
 		if _lib_labels.size() == 2 and _lib_labels[pid] != null:
 			var left_in_library: int = game.players[pid].library.size()
 			_lib_labels[pid].text = str(left_in_library)
@@ -8516,7 +8654,9 @@ func _open_duel_log() -> void:
 	# sidebar and Phase Bar on the left, over the far corner of the
 	# opponent's territory. The clamp needs a viewport, so after add.
 	var room := get_viewport_rect().size
-	window.place(Vector2(room.x - DuelLog.SIZE.x - 12.0, 8.0))
+	var ui_scale := DuelScreenOptions.ui_scale()
+	window.set_ui_scale(ui_scale)   # the polish pass: the UI scale
+	window.place(Vector2(room.x - DuelLog.SIZE.x * ui_scale - 12.0, 8.0))
 	window.set_names(PackedStringArray([game.players[0].player_name,
 		game.players[1].player_name]))
 	# THE REFILL READS THE LOG THE SAME WAY the line-by-line follow does
@@ -8526,7 +8666,7 @@ func _open_duel_log() -> void:
 	var metas: Array[Dictionary] = []
 	for i in game.log_lines.size():
 		var meta: Dictionary = game.log_meta[i] if i < game.log_meta.size() else {}
-		var shown := _log_for_viewer(game.log_lines[i], meta)
+		var shown := _log_shown(i, game.log_lines[i], meta)
 		lines.append(shown[0])
 		metas.append(shown[1])
 	window.fill(lines, metas)
@@ -8735,6 +8875,8 @@ func _open_pause() -> void:
 	# [method _run_intro] needs, and for the same reason.
 	add_child(menu)
 	menu.build(config)
+	# The UI scale reaches the Pause window too (0.50.65 bug campaign, k3-3).
+	menu.set_ui_scale(DuelScreenOptions.ui_scale())
 	menu.chosen.connect(_on_pause_chosen)
 	_pause_menu = menu
 	_hold_opening(true)   # the bug campaign c12, h4-8
@@ -8947,10 +9089,10 @@ func _hand_over_to(next: Control) -> void:
 	queue_free()
 
 
-## The strip's test controls under the large card: the caption that says
-## this table is a test and the `Restart test` button, at the strip's LEFT
-## — Arrange, Expand and the log run across its right. Built only over a
-## test.
+## The strip's test controls under the large card: the `Restart test`
+## button (which says this table is a test), at the strip's LEFT
+## — Arrange, Expand, the log and the duel screen options run across its
+## right. Built only over a test.
 ##
 ## ONE ROW, ACROSS THE STRIP (2026-10-19, the verification screenshots):
 ## stacked, the caption over the button, the button's lower half covered
@@ -8959,6 +9101,12 @@ func _hand_over_to(next: Control) -> void:
 ## button is the era's stone button with its dark ink, the Done beside the
 ## Situation Bar's (the owner's *"the correct button"*, 2026-09-03): on
 ## the bar's pink stone its pale letters could hardly be read.
+##
+## THE CAPTION GAVE WAY (the polish pass, 2026-10-28): the strip's fourth
+## button — the duel screen's own options, the owner's *"dedicated button
+## under a large card"* — needs the room the `Test hands` caption stood
+## in, and the strip has no second row. `Restart test` says what the table
+## is on its own face; the caption's sentence leads its tooltip.
 func _build_test_strip() -> void:
 	var row := HBoxContainer.new()
 	row.name = "TestStrip"
@@ -8966,18 +9114,10 @@ func _build_test_strip() -> void:
 	row.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	row.offset_left = 4.0
 	row.offset_top = 4.0
-	var caption := Label.new()
-	caption.text = TEST_CAPTION
-	caption.add_theme_color_override("font_color", UiChrome.CHOSEN)
-	caption.add_theme_font_size_override("font_size", 12)
-	caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	caption.tooltip_text = "This duel is a test: it began from the position on the Test hands screen, and nothing about it is recorded."
-	caption.mouse_filter = Control.MOUSE_FILTER_PASS
-	row.add_child(caption)
 	var again := OriginalDialog.button(RESTART_TEST, Vector2(88, ArrangeButton.FACE.y))
 	again.name = "RestartTest"
 	again.focus_mode = Control.FOCUS_NONE
-	again.tooltip_text = "The same test again from its start: the same position and the same shuffle."
+	again.tooltip_text = "%s: this duel is a test — it began from the position on the Test hands screen, and nothing about it is recorded. %s: the same test again from its start, the same position and the same shuffle." % [TEST_CAPTION, RESTART_TEST]
 	again.pressed.connect(restart_test)
 	row.add_child(again)
 	_qol_reserve.add_child(row)
@@ -9599,17 +9739,136 @@ func _on_grave_plate_input(event: InputEvent, pid: int) -> void:
 
 
 ## `@MENU_SPELLCHAIN` on a right-click of the tan band over a card on the
-## chain: `Minimize` (grey — the chain has no minimised state) and `Help...`.
+## chain or of the chain's title band — `Minimize` / `Help...` — and its
+## twin `@MENU_MINIMIZEDSPELLCHAIN`, `Restore` / `Help...`, on the band
+## while the chain is minimized (the polish pass: both live).
 func _open_chain_menu(at: Vector2) -> void:
 	if _chain_menu == null:
 		return
-	CardMenu.build(_chain_menu, CardMenu.SPELL_CHAIN)
+	CardMenu.build(_chain_menu, CardMenu.MINIMIZED_SPELL_CHAIN
+		if _chain_minimized else CardMenu.SPELL_CHAIN)
 	_popup_menu_at(_chain_menu, at)
 
 
 func _on_chain_menu_chosen(id: int) -> void:
-	if id == CardMenu.help_id(CardMenu.SPELL_CHAIN):
+	if id == 0:
+		_set_chain_minimized(not _chain_minimized)
+	elif id == CardMenu.help_id(CardMenu.SPELL_CHAIN):
 		_open_mini_help(HelpPages.MINI_SPELL_CHAIN, _menu_anchor(_chain_menu))
+
+
+# --- the polish pass 2026-10-28 (P3): the Spell Chain minimizes ---
+## `@WINDOWTITLES[2]`, the chain window's own title.
+const CHAIN_TITLE := "Spell Chain"
+## `Minimized spell chain` (`UIStrings.txt:670`) — the cue the 1997 tab
+## carried; ours says it over the band while the chain is minimized.
+const CHAIN_MINIMIZED_CUE := "Minimized spell chain"
+## The title band's height; it stands over the column's top (y 150), so
+## a short chain's first card stays where it always stood.
+const CHAIN_HEAD_H := 22.0
+
+
+## Is the chain minimized? (The band stays; the cards go.)
+func chain_minimized() -> bool:
+	return _chain_minimized
+
+
+## Minimized AND hidden: a spell being AIMED shows the chain whatever the
+## band says, because a counterspell's target is a card on it.
+func _chain_folded() -> bool:
+	return _chain_minimized and mode != Mode.TARGETING
+
+
+## MINIMIZE / RESTORE — manual p.122: *"you can minimize the Spell Chain
+## window by clicking in its upper right corner. To restore the minimized
+## window, click on the window icon"*. The corner is the band's gadget,
+## and the icon is the band itself: the Phase Bar's one centre band is
+## the Combat window's ([member _window_icon]), so the chain's tab stands
+## where the chain does [ours]. A fresh chain opens again
+## ([method _rebuild_stack]), as a fresh attack opens its window.
+func _set_chain_minimized(on: bool) -> void:
+	if _chain_minimized == on:
+		return
+	_chain_minimized = on
+	_play_sfx("sfx_button")
+	if game != null:
+		_refresh()   # the column, the band and the arrows they spring from
+
+
+## The band's words, for the tests and the eye.
+func _chain_head_text() -> String:
+	return _chain_head_label.text if _chain_head_label != null else ""
+
+
+## The band: one card wide (it grows for its words), the Situation Bar's
+## stone, the count of the chain and of any objects slid under it, and
+## the gadget at the right.
+func _build_chain_head() -> void:
+	_chain_head = PanelContainer.new()
+	_chain_head.name = "SpellChainHead"
+	_chain_head.add_theme_stylebox_override("panel", OriginalDialog.bar_style(2.0))
+	# Its FOOT is pinned 2 px over the column's top, and it grows upward
+	# and rightward for its words.
+	_chain_head.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_chain_head.offset_left = _chain_box.offset_left
+	_chain_head.offset_bottom = _chain_box.offset_top - 2.0
+	_chain_head.offset_top = _chain_head.offset_bottom - CHAIN_HEAD_H
+	_chain_head.offset_right = _chain_head.offset_left + MiniCard.SIZE.x
+	_chain_head.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_chain_head.custom_minimum_size = Vector2(MiniCard.SIZE.x, CHAIN_HEAD_H)
+	_chain_head.z_index = _chain_box.z_index
+	_chain_head.mouse_filter = Control.MOUSE_FILTER_STOP
+	_chain_head.visible = false
+	_chain_head.gui_input.connect(_on_chain_head_input)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	_chain_head.add_child(row)
+	_chain_head_label = OriginalDialog.label(CHAIN_TITLE, 12, true)
+	_chain_head_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chain_head_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_chain_head_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_chain_head_label)
+	# The Combat window's own gadget, the same glyphs (`@MENU_ATTACK`'s
+	# Minimize is ▼ there).
+	_chain_gadget = OriginalDialog.bar_button("▼", Vector2(20.0, 16.0))
+	_chain_gadget.focus_mode = Control.FOCUS_NONE
+	_chain_gadget.pressed.connect(func() -> void:
+		_set_chain_minimized(not _chain_minimized))
+	row.add_child(_chain_gadget)
+	add_child(_chain_head)
+	_chain_box.under_band_changed.connect(func(_count: int) -> void:
+		_dress_chain_head())
+	if _arrows != null:
+		_arrows.chain_anchor = _chain_head
+
+
+func _dress_chain_head() -> void:
+	if _chain_head == null:
+		return
+	var count := game.stack.size() if game != null else 0
+	_chain_head.visible = count > 0
+	var folded := _chain_folded()
+	var words := "%s (%d)" % [CHAIN_TITLE, count]
+	var buried := _chain_box.under_band if not folded else 0
+	if buried > 0:
+		words += " · %d not shown" % buried
+	_chain_head_label.text = words
+	_chain_gadget.text = "▲" if _chain_minimized else "▼"
+	_chain_gadget.tooltip_text = "Restore" if _chain_minimized else "Minimize"
+	_chain_head.tooltip_text = CHAIN_MINIMIZED_CUE if folded else ""
+
+
+## A left click on the minimized band restores it (the window icon's
+## job); a right click opens the chain's menu either way.
+func _on_chain_head_input(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed:
+		return
+	if mb.button_index == MOUSE_BUTTON_LEFT and _chain_minimized:
+		_set_chain_minimized(false)
+	elif mb.button_index == MOUSE_BUTTON_RIGHT:
+		_open_chain_menu(mb.global_position)
+# --- end the polish pass (P3): the Spell Chain minimizes ---
 
 
 func _on_chain_band_input(event: InputEvent, band: Control) -> void:
@@ -9640,6 +9899,167 @@ func _on_duel_options_closed() -> void:
 	for pid in 2:
 		_redress_territory(pid)
 	_refresh()
+
+
+# --- the polish pass 2026-10-28 (P3): the duel screen's own options ---
+## The reserve strip's fourth button: ONE window, and a second press while
+## it is up opens nothing.
+func _open_screen_options() -> void:
+	if _screen_options_dialog != null and is_instance_valid(_screen_options_dialog):
+		return
+	_screen_options_dialog = DuelScreenOptions.window(_screen_options_door)
+	_screen_options_dialog.closed.connect(_on_screen_options_closed)
+	add_child(_screen_options_dialog)
+
+
+## The window's foot: the 1997 `Duel Options...` — this one closes first,
+## so one window stands at a time.
+func _screen_options_door() -> void:
+	if _screen_options_dialog != null and is_instance_valid(_screen_options_dialog):
+		_screen_options_dialog.dismiss()
+	_open_duel_options()
+
+
+## Everything in the window writes as it is touched; closing it redresses
+## what reads it: the chrome's scale, the small cards' stripes, the log's
+## lines (an open log window is refilled, so the switch reaches the lines
+## already written) and the chain's words.
+func _on_screen_options_closed() -> void:
+	_screen_options_dialog = null
+	_apply_ui_scale()
+	if duel_log_is_open():
+		_close_duel_log()
+		_open_duel_log()
+	if game != null:
+		_refresh()
+
+
+## THE UI SCALE ([constant DuelScreenOptions.UI_SCALE_KEY]) on the duel's
+## CHROME — the Situation Bar, the mini-menus' letters, the dialogs (the
+## question on its scrim among them), the Pause window, the duel log and
+## the mini help ([method DuelMiniHelp._build]) — and not on
+## the table: one card size is the 1997 rule (`set_smallcard_size`), and a
+## whole-window zoom has no room on the 800 logical rows the duel is laid
+## out on. Each piece grows about its own anchor: the bar from its left
+## end at the seam, a dialog about its centre, the log from its corner.
+## The coin toss and the opening hand's window keep their size, and the
+## switch's words say so (0.50.65 bug campaign, k3-3): [OpeningWindow] is
+## built around two full-size cards that never rescale, and at 150% it
+## would be wider than the screen.
+func _apply_ui_scale() -> void:
+	var s := DuelScreenOptions.ui_scale()
+	if _situation_bar != null:
+		_situation_bar.scale = Vector2(s, s)
+		_pivot_situation_bar()
+	for child in get_children():
+		if child is PopupMenu:
+			(child as PopupMenu).add_theme_font_size_override("font_size", roundi(MENU_FONT_SIZE * s))
+		elif child is OriginalDialog:
+			_scale_dialog(child)
+		elif child is DuelLog:
+			(child as DuelLog).set_ui_scale(s)
+		elif child is DuelPause:
+			(child as DuelPause).set_ui_scale(s)   # k3-3
+	# The question's dialog stands on its scrim (k3-3).
+	if _choice_overlay != null and is_instance_valid(_choice_overlay):
+		for child in _choice_overlay.get_children():
+			if child is OriginalDialog:
+				_scale_dialog(child)
+	_fit_prompt()   # the bar's sentence at its new size (k3-4)
+	if _chain_box != null:
+		_chain_box.queue_sort()
+
+
+## The mini-menus' letter size at 100% — `_dress_menu`'s and the four
+## long-lived menus' own.
+const MENU_FONT_SIZE := 14
+
+
+## The bar grows from its left end and about its middle row — where it
+## stands at the seam.
+func _pivot_situation_bar() -> void:
+	if _situation_bar != null:
+		_situation_bar.pivot_offset = Vector2(0.0, _situation_bar.size.y * 0.5)
+
+
+func _on_child_entered_for_scale(node: Node) -> void:
+	if node is OriginalDialog:
+		_scale_dialog(node)
+
+
+## A dialog grows about its centre (it stands centred), and keeps the
+## pivot there as it grows to its lines ([method OriginalDialog.fit_height]);
+## [method OriginalDialog.keep_on_screen] measures it as drawn.
+func _scale_dialog(dialog: Control) -> void:
+	var s := DuelScreenOptions.ui_scale()
+	dialog.scale = Vector2(s, s)
+	dialog.pivot_offset = dialog.size * 0.5
+	if not dialog.has_meta(&"ui_scale_pivot"):
+		dialog.set_meta(&"ui_scale_pivot", true)
+		dialog.resized.connect(func() -> void: dialog.pivot_offset = dialog.size * 0.5)
+	if dialog.is_inside_tree() and dialog.has_method("keep_on_screen"):
+		dialog.keep_on_screen()
+# --- end the polish pass (P3): the duel screen's own options ---
+
+
+# --- 0.50.65 bug campaign, k3-4: the bar's sentence on the screen ---
+## THE BAR'S SENTENCE STAYS ON THE SCREEN (0.50.65 bug campaign, k3-4). The
+## bar grows to the right for its words, and at 150% a long refusal ("Illegal
+## blocker. can't block creatures whose power is at least this creature's
+## toughness") drew it out to x 1398 on a 1280 screen, its last word cut
+## off. The sentence keeps its row while it fits between the buttons and
+## the screen's right edge (less [constant BAR_RIGHT_MARGIN]), as drawn —
+## the bar's scale included — and folds onto a second row when it does
+## not; a line that fits is laid out exactly as before. Run whenever the
+## bar's row asks for a new size (a new sentence, Cancel or Skip coming or
+## going), on a new scale and on a new screen size.
+func _fit_prompt() -> void:
+	if _prompt_label == null or _situation_bar == null or size.x <= 0.0:
+		return
+	var s := maxf(_situation_bar.scale.x, 0.01)
+	var room := (size.x - _situation_bar.position.x - BAR_RIGHT_MARGIN) / s
+	var cap := maxf(PROMPT_MIN_WIDTH, room - _bar_chrome_width())
+	var font := _prompt_label.get_theme_font("font")
+	if font == null:
+		return
+	var natural := font.get_multiline_string_size(_prompt_label.text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1.0,
+		_prompt_label.get_theme_font_size("font_size")).x
+	natural += 2.0 * _prompt_label.get_theme_constant("outline_size")
+	var box := _prompt_label.get_theme_stylebox("normal")
+	if box != null:
+		natural += box.get_minimum_size().x
+	if natural <= cap:
+		_prompt_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		_prompt_label.custom_minimum_size.x = PROMPT_MIN_WIDTH
+	else:
+		_prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_prompt_label.custom_minimum_size.x = floorf(cap)
+
+
+## The sentence's least room on the bar — its width since the bar was built.
+const PROMPT_MIN_WIDTH := 340.0
+## How near the screen's right edge the bar may come (k3-4).
+const BAR_RIGHT_MARGIN := 8.0
+
+
+## What the bar spends besides its sentence, in its own units: the stone's
+## margins, and each button showing with the row's gap after it.
+func _bar_chrome_width() -> float:
+	var width := 0.0
+	var stone := _situation_bar.get_theme_stylebox("panel")
+	if stone != null:
+		width += stone.get_minimum_size().x
+	var row := _prompt_label.get_parent() as BoxContainer
+	if row == null:
+		return width
+	var gap := row.get_theme_constant("separation")
+	for child in row.get_children():
+		if child == _prompt_label or not (child is Control) or not (child as Control).visible:
+			continue
+		width += (child as Control).get_combined_minimum_size().x + gap
+	return width
+# --- end 0.50.65 bug campaign, k3-4 ---
 
 
 ## THE GROUND NODE for one half — `Your territory background` (§6.4).
@@ -9846,6 +10266,21 @@ class ChainColumn:
 	## The Control whose band the entries keep off — the Situation Bar.
 	var keep_clear: Control = null
 
+	## THE OVERFLOW (the polish pass, 2026-10-28). Slid under one another
+	## to [constant MIN_SHOWN] each, about two dozen objects fit the
+	## column; a longer chain — a loop, a storm of triggers — ran off the
+	## screen's foot, and the entry that went first was the LAST, the top
+	## of the chain, the object that resolves next. Now the OLDEST go:
+	## hidden under the title band ([member DuelScreen._chain_head]),
+	## which counts them, until there is room for them again. The meta
+	## marks an entry this column hid, so a hide is never mistaken for
+	## the screen's own.
+	const UNDER := &"chain_under_band"
+	## How many of the oldest are under the band now.
+	var under_band := 0
+	## Said when [member under_band] changes — the band counts them.
+	signal under_band_changed(count: int)
+
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -9861,10 +10296,14 @@ class ChainColumn:
 			want.x = maxf(want.x, child.get_combined_minimum_size().x)
 		return want
 
+	## Every entry the column lays out: the visible ones and the ones IT
+	## put under the band ([constant UNDER]) — those come back the moment
+	## there is room again.
 	func _entries() -> Array[Control]:
 		var out: Array[Control] = []
 		for child in get_children():
-			if child is Control and child.visible and not child.top_level:
+			if child is Control and not child.top_level \
+					and (child.visible or child.has_meta(UNDER)):
 				out.append(child)
 		return out
 
@@ -9876,7 +10315,10 @@ class ChainColumn:
 				or not keep_clear.is_visible_in_tree() \
 				or keep_clear.get_parent() != get_parent():
 			return Vector2.ZERO
-		var bar := keep_clear.get_rect()
+		# AS DRAWN, scale and all — the UI scale sets the bar's (the polish
+		# pass); [method Control.get_rect] is the unscaled box.
+		var bar := Rect2(keep_clear.position + keep_clear.pivot_offset
+			* (Vector2.ONE - keep_clear.scale), keep_clear.size * keep_clear.scale)
 		if bar.position.x >= position.x + size.x or bar.end.x <= position.x:
 			return Vector2.ZERO
 		return Vector2(bar.position.y - position.y - SEPARATION,
@@ -9900,24 +10342,58 @@ class ChainColumn:
 			y += h + SEPARATION - under
 		return bottom
 
+	## The most any of [param heights] may slide: every one but the last
+	## keeps [constant MIN_SHOWN] of itself in sight.
+	static func most_under(heights: Array[float]) -> float:
+		var most := INF
+		for i in heights.size() - 1:
+			most = minf(most, heights[i] + SEPARATION - MIN_SHOWN)
+		return maxf(0.0, most) if most != INF else 0.0
+
 	func _lay_out() -> void:
-		var kids := _entries()
-		if kids.is_empty():
+		var entries := _entries()
+		if entries.is_empty():
+			_set_under_band(0)
 			return
-		var heights: Array[float] = []
-		for child in kids:
-			heights.append(child.get_combined_minimum_size().y)
+		var entry_heights: Array[float] = []
+		for child in entries:
+			entry_heights.append(child.get_combined_minimum_size().y)
 		var band := clear_band()
 		var tops: Array[float] = []
+		# How many of the oldest must go under the band for the rest to fit
+		# slid as far as they may — none while they fit; never the last.
+		# Halved towards (burying one more only ever lowers the bottom): a
+		# chain of a loop's thousand objects is twenty measures, not a
+		# thousand.
+		var buried := 0
+		var fits := func(count: int) -> bool:
+			var rest := entry_heights.slice(count)
+			return place(rest, band, most_under(rest), tops) <= size.y
+		if not fits.call(0):
+			var lo := 0
+			var hi := entries.size() - 1
+			while lo < hi:
+				var mid := (lo + hi) >> 1
+				if fits.call(mid):
+					hi = mid
+				else:
+					lo = mid + 1
+			buried = lo
+		for i in entries.size():
+			var under_band_now := i < buried
+			if under_band_now:
+				entries[i].set_meta(UNDER, true)
+			elif entries[i].has_meta(UNDER):
+				entries[i].remove_meta(UNDER)
+			if entries[i].visible == under_band_now:
+				entries[i].visible = not under_band_now
+		_set_under_band(buried)
+		var kids := entries.slice(buried)
+		var heights := entry_heights.slice(buried)
 		var under := 0.0
 		if place(heights, band, 0.0, tops) > size.y:
-			# The most any entry may slide: every one but the last keeps
-			# [constant MIN_SHOWN] of itself in sight.
-			var most := INF
-			for i in heights.size() - 1:
-				most = minf(most, heights[i] + SEPARATION - MIN_SHOWN)
 			var lo := 0.0
-			var hi := maxf(0.0, most) if most != INF else 0.0
+			var hi := most_under(heights)
 			for _i in 20:
 				var mid := (lo + hi) * 0.5
 				if place(heights, band, mid, tops) > size.y:
@@ -9928,6 +10404,12 @@ class ChainColumn:
 		place(heights, band, under, tops)
 		for i in kids.size():
 			fit_child_in_rect(kids[i], Rect2(0.0, tops[i], size.x, heights[i]))
+
+	func _set_under_band(count: int) -> void:
+		if count == under_band:
+			return
+		under_band = count
+		under_band_changed.emit(count)
 # --- end the bug campaign c12, h4-2 ---
 
 
@@ -9950,7 +10432,12 @@ func _rebuild_stack() -> void:
 	var chain_root: Control = _chain_box
 	if _chain_box.get_parent() is PanelContainer:
 		chain_root = _chain_box.get_parent()
-	chain_root.visible = not game.stack.is_empty()
+	# A FRESH CHAIN OPENS (the polish pass): an emptied chain ends the
+	# minimized state, as a fresh attack opens the Combat window.
+	if game.stack.is_empty():
+		_chain_minimized = false
+	chain_root.visible = not game.stack.is_empty() and not _chain_folded()
+	_dress_chain_head()
 	for item in game.stack:
 		var entry := VBoxContainer.new()
 		entry.add_theme_constant_override("separation", 0)
@@ -9978,7 +10465,8 @@ func _rebuild_stack() -> void:
 		# under it keeps its own menu. STOP so the press ends here, and the
 		# band carries the entry's tooltip itself for the same reason.
 		caption_box.mouse_filter = Control.MOUSE_FILTER_STOP
-		caption_box.tooltip_text = item.description
+		var words := _chain_words(item)
+		caption_box.tooltip_text = words
 		caption_box.gui_input.connect(_on_chain_band_input.bind(caption_box))
 		entry.add_child(caption_box)
 		# The card itself — fully wired by _make_card: clickable (which is
@@ -10003,8 +10491,8 @@ func _rebuild_stack() -> void:
 		# The chain object's description (its TARGETS) on top of the card's
 		# own tooltip. A `Button` stops Godot's tooltip walk at itself, so
 		# the entry's copy below would never be reached over the card.
-		w.tooltip_text = "%s\n%s" % [item.description, w.tooltip_text]
-		entry.tooltip_text = item.description
+		w.tooltip_text = "%s\n%s" % [words, w.tooltip_text]
+		entry.tooltip_text = words
 		_chain_box.add_child(entry)
 
 
@@ -11788,6 +12276,18 @@ func _build_ui() -> void:
 	_log_button.offset_right = -ArrangeButton.FACE.x * 2.0 - 16.0
 	_log_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
 	_qol_reserve.add_child(_log_button)
+	# THE DUEL SCREEN'S OWN OPTIONS, the fourth tenant (the polish pass,
+	# 2026-10-28). The owner: *"All new duel screen options should be only
+	# accessible via a dedicated button under a large card in the duel
+	# screen."* One button, one window ([DuelScreenOptions]), and no other
+	# door anywhere.
+	_screen_options_button = DuelScreenOptions.button(_open_screen_options)
+	_screen_options_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_screen_options_button.offset_left = -ArrangeButton.FACE.x * 4.0 - 22.0
+	_screen_options_button.offset_top = 4.0
+	_screen_options_button.offset_right = -ArrangeButton.FACE.x * 3.0 - 22.0
+	_screen_options_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
+	_qol_reserve.add_child(_screen_options_button)
 	# A TEST says so, and offers its restart, at the strip's left.
 	if config != null and config.is_test():
 		_build_test_strip()
@@ -12084,6 +12584,7 @@ func _build_ui() -> void:
 	_chain_box.offset_bottom = -ChainColumn.FOOT
 	_chain_box.z_index = 80
 	add_child(_chain_box)
+	_build_chain_head()
 
 
 	# THE SITUATION BAR (the original's own name for it — manual p.118,
@@ -12161,10 +12662,13 @@ func _build_ui() -> void:
 	# already right; the outline was hiding it.
 	_prompt_label = OriginalDialog.label("", 16)
 	_prompt_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_prompt_label.custom_minimum_size.x = 340
+	_prompt_label.custom_minimum_size.x = PROMPT_MIN_WIDTH
 	msg_row.add_child(_prompt_label)
 	add_child(msg_panel)
 	_situation_bar = msg_panel
+	# ...and never past the screen's edge (0.50.65 bug campaign, k3-4).
+	msg_row.minimum_size_changed.connect(_fit_prompt)
+	resized.connect(_fit_prompt)
 	# The chain's entries keep off the bar, wherever its sentence takes it
 	# (the bug campaign c12, h4-2).
 	_chain_box.keep_clear = msg_panel
@@ -12275,6 +12779,12 @@ func _build_ui() -> void:
 	# [GameAudio] owns the volume, on a bus.
 	_audio = DuelAudio.new()
 	add_child(_audio)
+
+	# THE UI SCALE (the polish pass): the chrome built above wears it, and
+	# every dialog opened from here on as it arrives.
+	child_entered_tree.connect(_on_child_entered_for_scale)
+	_situation_bar.resized.connect(_pivot_situation_bar)
+	_apply_ui_scale()
 
 	# (The body face — our Spectral for every player since 2026-10-15,
 	# in place of MPlantin, the card face of the era — is applied by
@@ -12417,6 +12927,15 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	life.add_child(poison)
 	_poison_labels.resize(2)
 	_poison_labels[pid] = poison
+	# THE COUNTERS THEMSELVES (the polish pass, 2026-10-28): 1997 painted
+	# one `Poison.pic` per counter on the life window before the number;
+	# ours is P5's own drawing on the same grid ([PoisonCounters]). The
+	# register's FIRST child, so the clock and every badge stand over it.
+	var marks := PoisonCounters.new()
+	life.add_child(marks)
+	life.move_child(marks, 0)
+	_poison_marks.resize(2)
+	_poison_marks[pid] = marks
 
 	# Library as a PHYSICAL stack of card backs with the count on its top
 	# card, beside the graveyard panel (the original's [deck] [graveyard]
@@ -13156,3 +13675,7 @@ func _on_control(event: InputEvent) -> void:
 	elif Controls.pressed(event, "duel_screenshot"):
 		_save_screenshot(get_viewport().get_texture().get_image(),
 			"user://screenshot_%d.png" % Time.get_ticks_msec())
+	elif Controls.pressed(event, DuelScreenOptions.ATTACK_ALL_ACTION):
+		# The duel screen options' key (the polish pass) — A unless moved
+		# in that window, which is also where it is switched off.
+		_attack_with_everything()

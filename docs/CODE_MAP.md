@@ -502,11 +502,147 @@
   draw_world_portal.gd` (our own art, the owner's pair 2, the horned arch:
   `game/art/world_portal_{open,petrified}{,_ground}{,@2x}.png`). Tests:
   `tests/*/test_pc_w5_*.gd`, `test_pc_w6_*`, `test_pc_w7_*`, `test_pc_w8_*`.
+- After part C (0.50.65, 2026-10-28, the owner's rulings): `game/adventure/
+  classic_bans.gd`: `ClassicBans` (the adventure's Classic MTG ban lists
+  chosen at the Embark: `OLD` 1998 / `BOTH` 1998 + modern, the default /
+  `MODERN`; `key_of`, `is_banned`, `is_restricted`, `banned`,
+  `restricted`), read by `DeckModel.classic_allowance` / `classic_with` /
+  `is_classic`, `CardShop.classic_rule`, `StarterDeck`; the card hold:
+  `AdventurePlayer.card_hold` / `HOLD_1997` / `HOLD_UNLIMITED` /
+  `card_hold_of` / `bag_limited` / `ban_list`, `AdventureSetup.card_hold`
+  / `ban_list`, `EmbarkScreen.CardHold` / `BanList` / `RulesBox` /
+  `_choice_row`; `WorldClues.ONE_DECK_RULE` (the clue line dropped);
+  `DeckLab/simulate.gd` mulligan on by default (`run.json` records it);
+  `DraftPoolDialog` All / None on what the search shows. Tests:
+  `tests/*/test_p0a_*.gd`, `test_deck_lab_mulligan_default_2026_10_28.gd`,
+  `test_draft_pool_all_none_search_2026_10_28.gd`.
+- Saving between duels (0.50.65, the owner's "Between duels"): `game/duel/
+  match_saves.gd`: `MatchSaves` (the saved match and the saved Gauntlet
+  run, `user://saved_match.json` / `user://saved_gauntlet.json`: written
+  whole after every duel, read field by field, unusable files set aside as
+  `.bad`; a finished one deletes only its own file, by id; a resumed duel
+  dealt afresh by its resume count; `cards_refusal` names a pack that is
+  off; summary lines for the resume windows); `MatchScreen.keeps_save` /
+  `save_with` / `resume_from` / `snapshot` / `_save_point` / `_take_up`;
+  `GauntletScreen._offer_saved_run` / `_show_resume` / `resume_run` /
+  `_save_run`; `SetupScreen._build_resume_row` / `_resume_match` /
+  `match_resumed`. Tests: `tests/unit/test_p4_match_saves.gd`,
+  `tests/ui/test_p4_match_resume.gd`.
+- The polish pass, the adventure world (0.50.65): inside a town M/F2, F5
+  and Ctrl+S over its pane — `WorldScreen.town_on_top` / `_town_key` /
+  `map_in_town` / `hero_in_town` / `save_in_town` / `_set_aside` /
+  `_town_back`, `VisitPane.come_back`, `WorldHud.hero_over_town`; the
+  creature names (§5) — `WorldHud.NAMES_SETTING` / `creature_names_wanted`
+  / `names_switched`, `WorldView.creature_names` / `names_shown`,
+  `WorldCreatures.map_name` / `map_names`; the frame pieces cut clean —
+  `EncounterStage.cut_of`; `tools/skin_catalogue.py` `GAME_DATA` (the
+  adventure's data files in `--check`). Tests: `tests/*/test_p1_*.gd`.
+- The polish pass, the deck builder (0.50.65): undo/redo —
+  `DeckBuilderScreen.UNDO_DEPTH`, `_undo_steps` / `_redo_steps`,
+  `_redo_last`, `_put_step`, `_history_models`, `_redo_menu_label`; the
+  Inventory card's menu — `_open_card_menu`, `_card_menu_entries`,
+  `_view_large`, the `CARD_*` words, `_placed_copies`; the color moves —
+  `_open_group_move(into)`, `_move_in_by_color`, `_group_move_candidates`,
+  `_group_move_scope`, `_group_move_brings_lands`, `DeckModel.
+  moves_with_colors`; the eye back on the strip (`FilterBar._other_group`);
+  the adventure builder — `AdventureBuilder.sellable`, `_ask_sell`,
+  `SELL_CARD`, `NUMBER_TO_SELL`, `hold_line`, `rule_line`, `keeps_text`,
+  `bag_nearly_full`, `_keeps`, `SLOT_TIP`. Tests: `tests/ui/test_p2_*.gd`.
+- The polish pass, the duel screen's own options (0.50.65, the owner: "All
+  new duel screen options should be only accessible via a dedicated button
+  under a large card"): `game/duel/duel_screen_options.gd`:
+  `DuelScreenOptions` (the keys `duel_log_targets`, `duel_colorblind_mana`,
+  `duel_ui_scale`, `duel_attack_all_key` with their readers and setters,
+  `button`, `glyph`, `window`, `KeyCapture`); `DuelScreen.
+  _screen_options_button` / `_open_screen_options` / `_screen_options_door`
+  / `_on_screen_options_closed`, `_apply_ui_scale` / `_scale_dialog`,
+  `_note_log_details` / `_log_shown` / `_chain_words`, the Spell Chain's
+  title — `_chain_head`, `_set_chain_minimized`, `chain_minimized`,
+  `_chain_folded`, `_dress_chain_head`, `ChainColumn.UNDER` / `under_band`
+  / `most_under` (the chain's menus' Minimize/Restore live, `CardMenu`) —,
+  `_attack_with_everything`; `DuelLogText.details` / `with_details`;
+  `MiniCard.live_mana_colors` / `pip` / `PIP_META` (Gem Bazaar, Fellwar
+  Stone, Reflecting Pool show the colors they would make); `Controls.
+  PANEL_ACTIONS` (the `duel_attack_all` action); `TargetArrows.
+  chain_anchor`; the status line at an open two-human table speaks to the
+  deciding seat. Tests: `tests/ui/test_p3_*.gd`.
+- The polish pass, the engine's checks and the AI's slips (0.50.65):
+  `game/duel/poison_counters.gd`: `PoisonCounters` (a sprite per poison
+  counter on 1997's grid of the life window, our own picture
+  `game/art/poison_counter.png` from `tools/draw_our_art.gd` `_spider` /
+  `_hourglass`, the life number drawn again on top; on each life
+  register as `DuelScreen._poison_marks`, child 0, its count set in
+  `_refresh`, and in a replay by `MpnDuelTable`); `MtgGame.
+  legend_copy_is_buried`, `PlayerChoice.copying` (a Clone's legend offered
+  last, the computer never copies one); `CoinToss.result_face` (1997's
+  faces: Tails when you win); `DuelAudio.death_sound_key` / `stream_for` /
+  `FALLBACK` (Kill / Buried / Sacrfice, EndTurn once per turn) and the
+  LAN view's `DuelPresentation.CUES`; `AiPlayer._keep_price_ask` /
+  `_wheel_this_turn` / `_mana_ability_repeats`, `TempestTactics.
+  basics_left`. Tests: `tests/*/test_p5_*.gd`.
+- The bug campaign of 0.50.65 (c19, 2026-10-28/29), the fixes and the
+  owner's rulings in it. The adventure: `MsvcRandom.REACH` / `below_wide`
+  / `place_among` (a draw over a bag past 32,768 places always ends; under
+  it 1997's draw die for die); `RuledTowns.walked` (a ruled town's stake
+  walks the whole bag under an unlimited card hold); `CardValue.expansion`
+  / `named_marks` / `is_base` / `POWER` / `POWER_1997` / `BASE_SETS` (the
+  shop's stock by 1997's marks, with or without the card table);
+  `AdventurePlayer.FORMAT_VERSION` 3, `treasures_by_the_ban_list` (the
+  owner's "Skip it": a dungeon never holds a treasure the Classic ban list
+  bans), `sieges` / `SIEGE_PACES` / `sieges_of`, `AdventureSetup.sieges`,
+  `Sieges.calm` / `start_jump` / `resolve_jump` / `clock_steps`,
+  `HeroWalk` (Rare's clock), `EmbarkScreen.choose_sieges` / `SIEGE_NAMES`
+  / `SIEGE_TIPS` / `SIEGE_SUMMARY` (the Embark's Sieges: As 1997 / Steady,
+  the default / Rare / None). The deck builder: `DeckBuilderScreen.
+  _restore_deck` a step of its own, `_drop_idle_steps`, `DeckModel.
+  same_as`, `DeckFilter.ban_list` / `rarity_kinds(d, bans)` (the Embark's
+  list under the Classic rules), the adventure's "How many to Sell?" sells
+  on Enter. The duel screen: `DuelScreenOptions.KeyCapture` (listens on a
+  click only), `DuelScreen._attack_with_everything` (a second press where
+  attackers are final), `_fit_prompt` / `_bar_chrome_width`, the UI scale
+  on the question window and `DuelPause.set_ui_scale`, `SgDuelView.
+  _chain_words` / `_note_log_details` (a LAN table), `PoisonCounters`
+  twelve at most, `MpnDuelTable` (the replay's chain gadget). Saving
+  between duels: `MatchScreen.match_decided` / `tell_doors` /
+  `_retell_doors` / `waits_for_result_window`, `GauntletScreen.
+  _on_match_decided` / `_refuse_round` / `_packs_off_for`, `MatchSaves.
+  packs_refusal` (`gauntlet_card_names` counts the opponents to come),
+  `SetupScreen._match_for` (an AI Demo match keeps no save). The engine
+  and the AI: `AiPlayer._copy_shape_missing` / `_keep_price_moves` /
+  `KEEP_PRICE_CARDS`, `_wheel_this_turn(game, moved)`, `TempestTactics.
+  basics_left` (the ante and phased-out cards). The tools:
+  `tools/fetch_card_art.py` and every player tool name UTF-8 (a
+  play-tester's Windows report), `tools/test_text_encoding.py`. Tests:
+  `tests/*/test_c19_*.gd`.
+- The Campaign Settings and the choke-point rulings (0.50.65, the owner's
+  rulings of 2026-10-29): `EmbarkScreen.open_settings` / `close_settings` /
+  `settings_shown` / `as_1997` / `AS_1997` / `SETTING_ROWS` /
+  `settings_line` / `settings_words` / `_setting_row` / `_fence_settings`
+  (the "Campaign Settings..." button, `CampaignSummary`, the
+  `CampaignSettingsWindow` OriginalDialog; `RulesBox`/`_choice_row` gone),
+  `choose_creatures` / `choose_life_start` / `choose_ascetic`, `CREATURE_*`,
+  `START_*`, `ASCETIC_*`, `*_LINES`, `*_SHORT`; `AdventurePlayer.creatures`
+  / `CREATURE_WAYS` / `creatures_of`, `life_start` / `LIFE_STARTS` /
+  `life_start_of` / `LIFE_BASE` / `LIFE_BONUSES` / `life_base` /
+  `duel_start_life` (the one reader of every adventure duel's starting
+  life), `ascetic` / `meal_half` / `eats_this_step`, `links_taken` /
+  `LINKS_RETURN` / `links_return` / `note_link_taken` / `restore_link` /
+  `LINK_RESTORED`; `AdventureSetup.creatures` / `life_start` / `ascetic`;
+  `WorldCreatures.notices` / `goes` / `speed_of` / `pace` / `notice_range` /
+  `nearest_slot` / `HURRY` / `AMBLE` / `NOTICE_SCALE`; `CreatureBook.RANGES`
+  / `range_of` / `slowed_on`; `DungeonDuels.life_parts` `base`;
+  `CastleWin.LINK_BACK` / `LINK_LOG`, `beat`'s `restored`;
+  `RuledTowns.settle`'s `restored`; `WorldHud.DUELS_START` /
+  `base_life_words`. Tests: `tests/unit/test_c19_A1_rules.gd`,
+  `tests/unit/test_c19_A1_creatures.gd`,
+  `tests/ui/test_c19_A1_campaign_settings.gd`,
+  `tests/ui/test_c19_A1_life_shown.gd`.
 - Part C, stage C3: the playtest and the hunt (2026-10-28). The tools:
   `tools/upscale_skin.py` `BOARD_SHEETS` (the board's sheets upscaled
   frame by frame amid their board neighbours — the owner's decision 9;
-  `DOUBLED` adds `preduel_frame` and the world's ground layer, ledger row
-  121);
+  `DOUBLED` adds `preduel_frame`, `preduel_frame_tinted` and the world's
+  ground layer, ledger row 121 — the world's upscaled uprights on the
+  doubled ground stay, the owner's "As is now.");
   `run_tests.sh` (the git-excluded `tests/_hunt/` probes never in a whole
   run; your own `-gdir`/`-gtest` narrows the run),
   `tools/test_c3_fx_scripts_shell.py` `RunTestsSelectionTest`. The fixes:
@@ -1050,8 +1186,9 @@ it is and upon "go test" button you are instant in the turn"*.
 - `game/duel/duel_screen.gd`: `_begin_test` (no ante, splash, toss,
   opening hand, mulligan or running `duel_log.txt`), `restart_test` (same
   config, same seed), `edit_test` (back to the bench), `_hand_over_to` /
-  `handed_over`, the strip's `Test hands` caption and `Restart test`
-  button (`_build_test_strip`), `Restart test` beside OK on the End of
+  `handed_over`, the strip's `Restart test` button (`_build_test_strip`;
+  its `Test hands` caption gone in 0.50.65 for the Duel Screen Options
+  button, the sentence now the button's tooltip), `Restart test` beside OK on the End of
   Duel window, OK back to the bench.
 - `game/duel/duel_pause.gd`: `TEST_ENTRIES` / `TEST_ACTIONS` — `Restart
   test` in Concede's place, `Edit test` in Exit duel's; `Action.RESTART_TEST`.
@@ -7381,6 +7518,15 @@ shandalar/
 │   │                          paths and soak-help engine failure status
 │   │                          Catalogue stdout is checked against the same
 │   │                          local inputs, including alternate RGB/RGBA skins
+│   ├── test_text_encoding.py  The player's tools read and write text as
+│   │                          UTF-8 on every system (2026-10-28, a play-
+│   │                          tester's Windows report: fetch_card_art.py
+│   │                          read the card list in cp1252 and lost the
+│   │                          five accented Arabian Nights names):
+│   │                          pool() under -X warn_default_encoding made
+│   │                          an error, and a scan of every non-test
+│   │                          tools/*.py for a text read/write naming no
+│   │                          encoding
 │   ├── test_tracked_tree.py The two rules about the tracked tree itself
 │   │                          (2026-09-17, after eight source files were
 │   │                          found with no row): every file under engine/,

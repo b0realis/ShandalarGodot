@@ -8,10 +8,13 @@ extends RefCounted
 ## THE CHOICES (owner design, 2026-10-04, put on one screen 2026-10-22):
 ## the hero's face, their name, the figure that walks the map, the colour
 ## of their magic, their playmat, the card packs that join, and the
-## difficulty; and the rules: the card rule (2026-10-24) and the final
-## battle's rule (2026-10-27, part C). The 1997 game asked three of these on three screens
-## (difficulty, colour, face); version 1.3 designed the face and typed the
-## name; the rest is ours, and every row below says which it is.
+## difficulty; and the rules: the card rule (2026-10-24), the final
+## battle's rule (2026-10-27, part C), the card hold, the Classic rule's
+## ban list and the sieges' pace (2026-10-28); the creatures' way, the
+## duels' starting life and the ascetic hero (2026-10-29). The 1997 game asked three
+## of these on three screens (difficulty, colour, face); version 1.3
+## designed the face and typed the name; the rest is ours, and every row
+## below says which it is.
 ##
 ## [method resolve] turns the choices into the record the world will be
 ## made from: what was chosen, what the seed decided, and what the hero
@@ -210,6 +213,26 @@ var copy_limit: bool:
 ## allowed" (an autosave at Arzakon's door) or "One life" (the loss closes
 ## the adventure) — the owner's setting of 2026-10-27.
 var life_rule := AdventurePlayer.LIFE_RELOAD
+## THE CARD HOLD ([member AdventurePlayer.card_hold]): "1997 card hold
+## limit" (the bag's 500) or "Unlimited card hold" — the owner's setting of
+## 2026-10-28.
+var card_hold := AdventurePlayer.HOLD_1997
+## THE BAN LIST the Classic MTG rules read ([member
+## AdventurePlayer.ban_list], [ClassicBans]) — the owner's setting of
+## 2026-10-28; kept whatever the card rule, read only under the Classic one.
+var ban_list := ClassicBans.DEFAULT
+## THE SIEGES' PACE ([member AdventurePlayer.sieges], [Sieges]) — the
+## owner's setting of 2026-10-28; "Steady" for a new adventure [ours].
+var sieges := AdventurePlayer.SIEGES_STEADY
+## THE CREATURES' WAY ([member AdventurePlayer.creatures], [WorldCreatures])
+## — the owner's setting of 2026-10-29; "Notice" for a new adventure [ours].
+var creatures := AdventurePlayer.CREATURES_NOTICE
+## THE DUELS' STARTING LIFE ([member AdventurePlayer.life_start]) — the
+## owner's setting of 2026-10-29; "Links only", 1997's, for a new adventure.
+var life_start := AdventurePlayer.START_LINKS
+## THE ASCETIC HERO ([member AdventurePlayer.ascetic]) — the owner's
+## setting of 2026-10-29; off, 1997's, for a new adventure.
+var ascetic := false
 var seed_text := ""
 ## The walking figure's colours, `{part: key}` ([HeroColors]); a part not
 ## named keeps its 1997 colour.
@@ -391,6 +414,12 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"card_rule": card_rule,
 		"copy_limit": card_rule != AdventurePlayer.RULE_SHIPPED,
 		"life_rule": AdventurePlayer.life_rule_of(life_rule),
+		"card_hold": AdventurePlayer.card_hold_of(card_hold),
+		"ban_list": ClassicBans.key_of(ban_list),
+		"sieges": AdventurePlayer.sieges_of(sieges),
+		"creatures": AdventurePlayer.creatures_of(creatures),
+		"life_start": AdventurePlayer.life_start_of(life_start),
+		"ascetic": ascetic,
 		"playmat": {"color": playmat_color_shown(), "type": style},
 		"packs": chosen_packs,
 		"start": start,
@@ -431,6 +460,12 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
 	Settings.set_value(KEY_PREFIX + "card_rule", card_rule, false)
 	Settings.set_value(KEY_PREFIX + "life_rule", AdventurePlayer.life_rule_of(life_rule), false)
+	Settings.set_value(KEY_PREFIX + "card_hold", AdventurePlayer.card_hold_of(card_hold), false)
+	Settings.set_value(KEY_PREFIX + "ban_list", ClassicBans.key_of(ban_list), false)
+	Settings.set_value(KEY_PREFIX + "sieges", AdventurePlayer.sieges_of(sieges), false)
+	Settings.set_value(KEY_PREFIX + "creatures", AdventurePlayer.creatures_of(creatures), false)
+	Settings.set_value(KEY_PREFIX + "life_start", AdventurePlayer.life_start_of(life_start), false)
+	Settings.set_value(KEY_PREFIX + "ascetic", ascetic, false)
 	Settings.set_value(KEY_PREFIX + "difficulty", difficulty)
 
 
@@ -460,13 +495,22 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 		Settings.get_value(KEY_PREFIX + "copy_limit", true))
 	setup.figure_colors = HeroColors.from_text(String(Settings.get_value(KEY_PREFIX + "figure_colors", "")))
 	setup.life_rule = AdventurePlayer.life_rule_of(Settings.get_value(KEY_PREFIX + "life_rule", null))
+	setup.card_hold = AdventurePlayer.card_hold_of(Settings.get_value(KEY_PREFIX + "card_hold", null))
+	setup.ban_list = ClassicBans.key_of(Settings.get_value(KEY_PREFIX + "ban_list", null))
+	setup.sieges = AdventurePlayer.sieges_of(Settings.get_value(KEY_PREFIX + "sieges",
+		AdventurePlayer.SIEGES_STEADY))
+	setup.creatures = AdventurePlayer.creatures_of(Settings.get_value(KEY_PREFIX + "creatures",
+		AdventurePlayer.CREATURES_NOTICE))
+	setup.life_start = AdventurePlayer.life_start_of(Settings.get_value(KEY_PREFIX + "life_start", null))
+	var ascetic_kept: Variant = Settings.get_value(KEY_PREFIX + "ascetic", false)
+	setup.ascetic = ascetic_kept is bool and bool(ascetic_kept)
 	return setup
 
 
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
 	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "card_rule", "copy_limit",
-	"life_rule"]
+	"life_rule", "card_hold", "ban_list", "sieges", "creatures", "life_start", "ascetic"]
 
 
 ## Forget the remembered hero, so the screen opens on the defaults.

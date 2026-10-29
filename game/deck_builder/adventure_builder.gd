@@ -44,6 +44,22 @@ extends DeckBuilderScreen
 ## `SellPrice` 004f1bcc): Sell takes one copy of the card on show — one in
 ## no deck first, never the deck's own — for the town's price
 ## ([method CardShop.sell_price_at]), the gold on the title slab at once.
+## A right-click on an Inventory card offers it too, in 1997's words
+## (`@SELLCARD`, "Sell Card for %d" — the horizontal list's own mini-menu,
+## `wndproc_HorzListClass`, deckdll 0x1002887e in the matching
+## decompilation), and asks 1997's "How many to Sell?" (`@NUMBERTOSELL`)
+## when more than one copy may go ([method _ask_sell]).
+##
+## WHAT THE ADVENTURE KEEPS, ALL ON THIS SCREEN (the owner, 2026-10-28:
+## *"check that money (gold) and other Adventure relevant functionality is
+## in the Adventure deck builder!"*): the gold on the title slab; selling
+## and the prices (the worth strip, the Sell button, the card's own menu);
+## the copy rule the deck is judged by and, under the Classic MTG rules,
+## the Embark's ban list, named at the foot of the worth strip ([method
+## rule_line]); the card hold — the bag's count against its 500 under the
+## 1997 hold ([method hold_line]); the three decks and the deck in use
+## (the starred slot, said on each slot's tooltip); 1997's two colour moves
+## of `@DECKSURFACE_ADVENTURE`.
 
 ## The builder is done: the decks are written back to the hero.
 signal closed
@@ -52,8 +68,9 @@ signal closed
 signal exit_requested
 
 const ALLOWED: Array[String] = ["Consolidate duplicate cards", "Clear deck", "Restore deck",
-	"Sort deck", "Stats", "Music", "Sound Effects", "Extra Cards", "Move by color out of deck",
-	"Filters", "Undo", "Big cards", "Copy deck to", "Deck notes", "Save deck", "Exit deck builder"]
+	"Sort deck", "Stats", "Music", "Sound Effects", "Extra Cards", "Move by color into deck",
+	"Move by color out of deck", "Filters", "Undo", "Redo", "Big cards", "Copy deck to", "Deck notes",
+	"Save deck", "Exit deck builder"]
 ## What the builder offers when it only looks: the views, nothing that
 ## changes a deck.
 const LOOK_ALLOWED: Array[String] = ["Consolidate duplicate cards", "Sort deck", "Stats", "Music",
@@ -71,6 +88,24 @@ const NOT_HERE := "The adventure's decks are built from your own cards."
 const NO_ARTWORK := "The adventure's decks keep no choice of artwork."
 ## The 1997 adventure builder's title field (`@GOLDTITLE`).
 const GOLD_TITLE := "GOLD: %d"
+## The 1997 adventure builder's line on a card's mini-menu in a town
+## (`@SELLCARD`), and its question when more than one copy may go
+## (`@NUMBERTOSELL`).
+const SELL_CARD := "Sell Card for %d"
+const NUMBER_TO_SELL := "How many to Sell?"
+## The card hold on the worth strip ([method hold_line]): the bag
+## against its 500 under the 1997 hold, the count alone without one.
+const HOLD_LINE := "Your cards: %d of %d"
+const HOLD_LINE_UNLIMITED := "Your cards: %d"
+## The copy rule on the worth strip ([method rule_line]): the 1997
+## deck builder's (`check_card_count`), with Tome of Enlightenment's, and
+## the Classic MTG rules under the Embark's ban list.
+const RULE_1997 := "Copies: 3 of a card, 4 from 59 cards"
+const RULE_1997_TOME := "Copies: 4 of a card, any from 59 cards"
+const RULE_CLASSIC := "Copies: Classic MTG rules, %s list"
+## Each slot's tooltip: the deck in use, as 1997's starred slot meant it.
+const SLOT_TIP := "Your deck %d of three: the deck on show when you leave is the one you duel with."
+const SLOT_TIP_LOOKING := "Your deck %d of three: you duel with Deck%d."
 ## The worth strip before a card is pointed at.
 const WORTH_HEADING := "What a card is worth"
 const WORTH_PROMPT := "Point at a card to see what the places pay for it."
@@ -91,6 +126,8 @@ var _worth: VBoxContainer
 var _worth_title: Label
 var _worth_lines: Array[Label] = []
 var _worth_card := ""
+## The strip's foot line: the card hold and the copy rule ([method keeps_text]).
+var _keeps: Label
 
 
 func _ready() -> void:
@@ -132,6 +169,12 @@ func _before_first_fill() -> void:
 	_dirty = false
 	# In force, not drawn: the first fill draws it.
 	_put_pool_in_force(pool)
+	# The Rarity filter's Restricted and Banned under the Classic MTG rules
+	# are the Embark's ban list, the one the Extra Cards box judges by (the
+	# 0.50.65 bug campaign, k6-4); under 1997's copy rule, the tournament
+	# lists as everywhere else.
+	filter.ban_list = ClassicBans.key_of(player.ban_list) \
+		if player.card_rule == AdventurePlayer.RULE_CLASSIC else ""
 	for door in ["LoadButton", "ExtrasButton"]:
 		var button := _command_row.get_node_or_null(door) as Control
 		if button != null:
@@ -140,6 +183,9 @@ func _before_first_fill() -> void:
 	_pool_button.hide()
 	_variant_button.hide()
 	_build_gold()
+	for i in _slot_buttons.size():
+		_slot_buttons[i].tooltip_text = SLOT_TIP_LOOKING % [i + 1, _slot + 1] if looking \
+			else SLOT_TIP % (i + 1)
 	if sell_site >= 0:
 		_sell_button = OriginalDialog.button("Sell", Vector2(150, COMMAND_BAR_H))
 		_sell_button.name = "SellButton"
@@ -239,6 +285,13 @@ func refresh() -> void:
 	if _gold != null and player != null:
 		_gold.text = GOLD_TITLE % player.gold
 		_header_slab.tooltip_text = "%s\nGold: %d\n\nDeck Info — name this deck" % [deck.deck_name, player.gold]
+	# The foot of the worth strip: the bag and the rule the deck answers
+	# to, always in view.
+	if _keeps != null and player != null:
+		_keeps.text = keeps_text()
+		# Warm from the 450 the spoils warn at ([constant
+		# AdventurePlayer.BAG_WARN]): the bag is nearly full.
+		_keeps.add_theme_color_override("font_color", WELL_WARNING if bag_nearly_full() else WELL_INK)
 	# After every change to the decks the worth strip's counts, and the Sell
 	# button beside them, are read again (a card taken out may be sold now).
 	if _worth_card != "":
@@ -248,6 +301,38 @@ func refresh() -> void:
 
 func gold_text() -> String:
 	return _gold.text if _gold != null else ""
+
+
+## THE CARD HOLD on this screen (the Embark's "1997 card hold limit" /
+## "Unlimited card hold", [member AdventurePlayer.card_hold]): every card the
+## hero owns against the bag's [constant AdventurePlayer.BAG_MOST], or the
+## count alone when the bag has no limit.
+func hold_line() -> String:
+	if player.bag_limited():
+		return HOLD_LINE % [player.cards.size(), AdventurePlayer.BAG_MOST]
+	return HOLD_LINE_UNLIMITED % player.cards.size()
+
+
+## Whether the bag holds the 450 cards from which the spoils warn of a full
+## bag (the 1997 card hold only).
+func bag_nearly_full() -> bool:
+	return player.bag_limited() and player.cards.size() >= AdventurePlayer.BAG_WARN
+
+
+## The worth strip's foot line: [method hold_line] and [method rule_line].
+func keeps_text() -> String:
+	return "%s · %s" % [hold_line(), rule_line()]
+
+
+## THE COPY RULE the decks are judged by ([method _copy_rule]): the 1997
+## deck builder's under the first two card rules, with Tome of
+## Enlightenment's allowance when the hero owns it; under the Classic MTG
+## rules, the Embark's ban list by its Embark name.
+func rule_line() -> String:
+	if player.card_rule == AdventurePlayer.RULE_CLASSIC:
+		return RULE_CLASSIC % String(EmbarkScreen.BAN_NAMES.get(
+			ClassicBans.key_of(player.ban_list), player.ban_list))
+	return RULE_1997_TOME if _with_tome() else RULE_1997
 
 
 # ------------------------------------------------------------ selling --
@@ -271,19 +356,27 @@ func _price_sell(card_name: String) -> void:
 	_sell_button.disabled = not spare
 
 
-## SELL one copy of [param card_name] to the town: one in no deck first,
-## else one in another deck (it leaves that deck), never one the deck on
-## the surface holds. The gold it brings, 0 when nothing was sold.
-func sell(card_name: String) -> int:
+## SELL [param count] copies of [param card_name] to the town, one at a
+## time: one in no deck first, else one in another deck (it leaves that
+## deck), never one the deck on the surface holds — so fewer go when fewer
+## may. The gold they bring, 0 when nothing was sold.
+func sell(card_name: String, count := 1) -> int:
 	if sell_site < 0:
 		return 0
-	var at := _spare_copy(card_name)
-	if at < 0:
+	var gold := 0
+	var sold := 0
+	for _i in maxi(count, 1):
+		var at := _spare_copy(card_name)
+		if at < 0:
+			break
+		var price := CardShop.sell_price_at(player, sell_site, card_name)
+		player.cards.remove_at(at)
+		player.gold += price
+		gold += price
+		sold += 1
+	if sold == 0:
 		_say("Every %s you own is in this deck: take one out to sell it." % card_name, true)
 		return 0
-	var price := CardShop.sell_price_at(player, sell_site, card_name)
-	player.cards.remove_at(at)
-	player.gold += price
 	var left := 0
 	for card in player.cards:
 		if String((card as Dictionary).get("card", "")) == card_name:
@@ -293,24 +386,81 @@ func sell(card_name: String) -> int:
 	else:
 		sealed.counts.erase(card_name)
 	# Every deck that holds more than the copies left gives one up — the
-	# decks in the slots, and the deck Undo or Restore deck would put back
-	# (else a sold card came back on the surface until Done).
+	# decks in the slots, and every deck Undo, Redo or Restore deck would
+	# put back (else a sold card came back on the surface until Done).
 	var models: Array[DeckModel] = []
 	for slot in SLOTS:
 		models.append(deck if slot == _slot else _slots[slot])
-	for kept in [_undo, _cleared]:
-		if kept != null:
-			models.append(kept)
+	models.append_array(_history_models())
+	if _cleared != null:
+		models.append(_cleared)
 	for model in models:
 		while model.count_of(card_name) > left:
 			model.remove(card_name)
+	# A step the trim left changing nothing goes (the 0.50.65 bug campaign,
+	# k2-3): Redo after "Add Mahamoti Djinn", undone and the Djinn sold,
+	# said "Redone" and changed nothing.
+	_drop_idle_steps()
 	_drawn_revision = -1
 	refresh()
 	_refresh_inventory()
 	_price_sell(card_name)
 	_show_worth(card_name)
-	_say("Sold %s for %d gold." % [card_name, price])
-	return price
+	if sold == 1:
+		_say("Sold %s for %d gold." % [card_name, gold])
+	else:
+		_say("Sold %d %s for %d gold." % [sold, card_name, gold])
+	return gold
+
+
+## How many copies of [param card_name] may be sold here: those the deck on
+## show does not hold ([method sell]); 0 outside a town.
+func sellable(card_name: String) -> int:
+	if sell_site < 0:
+		return 0
+	return maxi(int(owned_counts(player).get(card_name, 0)) - deck.count_of(card_name), 0)
+
+
+## SELL FROM THE CARD'S OWN MENU: one copy at once, or — when more than one
+## may go — 1997's "How many to Sell?" first (`show_dialog_sellxcards`,
+## `@NUMBERTOSELL`), the number from one to every copy outside the deck on
+## show, the price of one beside it.
+func _ask_sell(card_name: String) -> void:
+	var most := sellable(card_name)
+	if most <= 1:
+		sell(card_name)
+		return
+	if _dialog_busy():
+		return
+	var price := CardShop.sell_price_at(player, sell_site, card_name)
+	var dialog := OriginalDialog.create(NUMBER_TO_SELL, Vector2(400, 220))
+	dialog.set_meta("sell_count", card_name)
+	dialog.body().add_child(OriginalDialog.label(
+		"%s: %d gold each, %d to sell" % [card_name, price, most], 14))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.add_child(OriginalDialog.label("Number", 14))
+	var spin := OriginalDialog.field(80.0)
+	spin.min_value = 1
+	spin.max_value = most
+	spin.value = 1
+	row.add_child(spin)
+	dialog.body().add_child(row)
+	var sell_button := dialog.add_button("Sell")
+	sell_button.pressed.connect(func() -> void:
+		dialog.dismiss()
+		sell(card_name, int(spin.value)))
+	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
+	# ENTER IN THE NUMBER SELLS (the 0.50.65 bug campaign, k2-4), as 1997's
+	# dialog took it for OK (`show_dialog_sellxcards` → `dlgproc_AskX`, a
+	# Windows dialog whose OK is its default button): it only set the number
+	# and the Sell button still had to be clicked. The number typed is taken
+	# first ([method SpinBox.apply]), so "2" and Enter sells two.
+	spin.get_line_edit().text_submitted.connect(func(_text: String) -> void:
+		spin.apply()
+		sell_button.pressed.emit())
+	_show_dialog(dialog)
+	spin.get_line_edit().grab_focus()
 
 
 ## The index in the hero's cards of a copy of [param card_name] that may be
@@ -367,10 +517,12 @@ func _with_tome() -> bool:
 ## 2026-10-24: the 1997 code is the rule). An adventure begun under the
 ## Classic MTG rules is judged by them instead ([constant DeckModel.CLASSIC]:
 ## four of a card, one restricted — four with the Tome —, no banned card),
-## asked about as it is left just the same.
+## under the ban list chosen at its Embark ([member
+## AdventurePlayer.ban_list], [method DeckModel.classic_with]), asked about
+## as it is left just the same.
 func _copy_rule() -> String:
 	if player != null and player.card_rule == AdventurePlayer.RULE_CLASSIC:
-		return DeckModel.CLASSIC
+		return DeckModel.classic_with(player.ban_list)
 	return DeckModel.DECK_BUILDER_1997
 
 
@@ -419,6 +571,11 @@ func _run_command(label: String) -> void:
 ##    better than here ([method CardShop.best_known_sale]);
 ##  - how many the hero owns, how many are in this deck, and in a town how
 ##    many may be sold (all but the deck's own, as [method sell] sells).
+## Its foot line says what the adventure keeps, whatever the pointer is on
+## ([method keeps_text]): the card hold and the copy rule — under the deck's
+## numbers they pushed the well's own lines out of the left column at
+## 1280 × 800 (seen in the running game, 2026-10-28), and the strip has
+## the room.
 ## The sideboard's own area stays built, hidden, so the screen's common
 ## code finds it.
 func _build_sideboard_area() -> void:
@@ -436,6 +593,14 @@ func _build_sideboard_area() -> void:
 		line.clip_text = true
 		_worth.add_child(line)
 		_worth_lines.append(line)
+	var room := Control.new()
+	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_worth.add_child(room)
+	_keeps = _well_label(15, false)
+	_keeps.name = "KeepsLine"
+	_keeps.clip_text = true
+	_worth.add_child(_keeps)
 	add_child(_worth)
 	_show_worth("")
 
@@ -542,6 +707,29 @@ func _remove_all(card_name: String) -> void:
 func _move_out_by_color(colors: Array) -> void:
 	if not _refuse_change():
 		super._move_out_by_color(colors)
+
+
+func _move_in_by_color(colors: Array) -> void:
+	if not _refuse_change():
+		super._move_in_by_color(colors)
+
+
+## The hero's basic lands are cards the hero owns: a colour brings its own
+## in, as 1997's adventure builder did.
+func _group_move_brings_lands() -> bool:
+	return true
+
+
+## The card's own menu here: looking only, `View large` alone; in a town,
+## 1997's "Sell Card for %d" before it while a copy may go.
+func _card_menu_entries(card_name: String) -> Array:
+	if looking:
+		return [[CARD_VIEW, _view_large.bind(card_name)]]
+	var entries := super._card_menu_entries(card_name)
+	if sellable(card_name) > 0:
+		entries.insert(entries.size() - 1, [SELL_CARD % CardShop.sell_price_at(player,
+			sell_site, card_name), _ask_sell.bind(card_name)])
+	return entries
 
 
 func _copy_deck_to(index: int) -> void:

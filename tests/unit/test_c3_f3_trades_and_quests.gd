@@ -242,20 +242,33 @@ func test_a_land_the_1997_flags_let_through_is_sold() -> void:
 	assert_true("Mishra's Factory" in names, "of the base set (0x01), no 0x900/0x180: in the shop")
 	assert_false("Library of Alexandria" in names, "Arabian Nights (0x04): never")
 	assert_false("Swamp" in names, "a basic land only by its own place [ours]")
+	# A land the table does not hold goes by the same marks read off it (the
+	# 0.50.65 bug campaign, k6-2; until then no land without the table).
 	for card_name in names:
-		var data := CardRegistry.get_card(card_name)
-		if data.is_land():
-			assert_false(bool(CardValue.facts(data).get("derived", true)), card_name + ": a land only by the 1997 table")
+		var f := CardValue.facts(CardRegistry.get_card(card_name))
+		assert_ne(int(f.get("exp", 0)) & 0xC1, 0, card_name + ": of the base sets")
+		assert_eq(int(f.get("extra", 0)) & 0x980, 0, card_name + ": no mark keeps it out")
 
 
-func test_without_the_1997_table_no_land_is_sold() -> void:
+## Without the table the lands 1997's marks let through (the 0.50.65 bug
+## campaign, k6-2: until then none): Mishra's Factory and Strip Mine; the
+## Oasis and Arena stand in the stock with no colour, which no town sells.
+func test_without_the_1997_table_the_1997_lands_are_sold() -> void:
 	CardRegistry.ensure_loaded()
 	CardValue.forget()
 	CardValue._imported_read = true
 	CardValue._imported = {}
 	CardShop.forget()
+	var lands: Array[String] = []
 	for row in CardShop.stock():
-		assert_false(CardRegistry.get_card(String(row["name"])).is_land(), String(row["name"]))
+		var card_name := String(row["name"])
+		if CardRegistry.get_card(card_name).is_land():
+			lands.append(card_name)
+			if not card_name in ["Mishra's Factory", "Strip Mine"]:
+				assert_eq(int((row["facts"] as Dictionary)["color"]), 0, card_name + ": no colour, never drawn")
+	assert_true("Mishra's Factory" in lands)
+	assert_true("Strip Mine" in lands)
+	CardValue.forget()
 
 
 # ----------------------------------------------- h5-5: the stock, read --
@@ -263,9 +276,6 @@ func test_without_the_1997_table_no_land_is_sold() -> void:
 ## THE STOCK THE SLOW WAY — every card's facts read first, then the rules:
 ## the rows [method CardShop.stock] must give.
 func _stock_by_hand() -> Array[Dictionary]:
-	var treasures: Array[String] = []
-	for row in ShandalarWorld.DUNGEON_CARDS:
-		treasures.append(String(row[1]))
 	var names: Array = CardRegistry.all_names()
 	names.sort()
 	var rows: Array[Dictionary] = []
@@ -278,14 +288,13 @@ func _stock_by_hand() -> Array[Dictionary]:
 		var f: Dictionary
 		if own.is_empty():
 			f = CardValue.derive(data)
-			if data.is_land() or not CardValue.is_base(name_text) or name_text in treasures \
-					or name_text in DeckFormat.BANNED or name_text in DeckFormat.RESTRICTED:
-				continue
 		else:
 			f = own.duplicate()
 			f["derived"] = false
-			if int(f.get("exp", 0)) & 0xC1 == 0 or int(f.get("extra", 0)) & 0x980 != 0:
-				continue
+		# The same marks with the table or without it (the 0.50.65 bug
+		# campaign, k6-2: the derived path read DeckFormat's lists).
+		if int(f.get("exp", 0)) & 0xC1 == 0 or int(f.get("extra", 0)) & 0x980 != 0:
+			continue
 		rows.append({"name": name_text, "facts": f})
 	return rows
 

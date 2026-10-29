@@ -1091,8 +1091,11 @@ func body() -> VBoxContainer:
 func keep_on_screen() -> void:
 	if not is_inside_tree():
 		return
-	var room := get_viewport().get_visible_rect().size \
-		- Vector2.ONE * (2 * SCREEN_MARGIN)
+	# AS DRAWN: a dialog the duel's UI scale grows about its centre (the
+	# polish pass, [method DuelScreen._scale_dialog]) has that much less
+	# room in its own units.
+	var room := (get_viewport().get_visible_rect().size
+		- Vector2.ONE * (2 * SCREEN_MARGIN)) / maxf(scale.x, 0.01)
 	if size.x <= room.x and size.y <= room.y:
 		return
 	if size.y > room.y:

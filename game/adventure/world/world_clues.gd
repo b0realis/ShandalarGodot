@@ -44,6 +44,10 @@ extends RefCounted
 
 ## Rules bit 0x200: the cards were taken over this slot's clue.
 const CARDS_TAKEN := 0x200
+## Rules bit 0x20, 1997's "one deck for all duels" ([constant
+## DungeonDuels.ONE_DECK]): read by nothing, and its clue line dropped by
+## the owner's ruling of 2026-10-28 ([method lines]).
+const ONE_DECK_RULE := 0x20
 ## The castle and dungeon slots the pick and the forgetting walk (1997's
 ## fifteen, `g_castle_dungeon_slots`).
 const SLOTS := 15
@@ -293,8 +297,11 @@ static func lines(world: ShandalarWorld, index: int) -> Array[String]:
 		var rules := int(slot.get("rules", 0))
 		if rules & 0x10 != 0:
 			out.append("-No %s allowed." % COLOR_CARDS[color])
-		if rules & 0x20 != 0:
-			out.append("-One deck for all duels.")
+		# 0x20, "-One deck for all duels.", is not said [ours: the owner's
+		# ruling of 2026-10-28 — "the player can have multiple decks": the
+		# rule stays dead (no code reads the bit, in 1997 or here;
+		# docs/adventure-unused-1997-features.md §26) and its clue line
+		# goes]; a dungeon whose only rule it was has none to tell.
 		if rules & 0x40 != 0:
 			out.append("-No artifacts allowed.")
 		if rules & 0x80 != 0:
@@ -306,7 +313,7 @@ static func lines(world: ShandalarWorld, index: int) -> Array[String]:
 		var effect := int(slot.get("card_in_effect", -1))
 		if effect != -1:
 			out.append("-%s permanently in effect." % String(EFFECT_CARDS.get(effect, "A card")))
-		elif rules == 0:
+		elif rules & ~ONE_DECK_RULE == 0:
 			out.append("-No special rules.")
 	if clues & LOCATION != 0:
 		out.append("Location:")

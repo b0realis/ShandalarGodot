@@ -296,8 +296,8 @@ func test_the_filter_bar_offers_every_group() -> void:
 		"five colours and @GOLD")
 	assert_eq(bar.group_buttons("Type Filters").size(),
 		DeckFilter.TYPE_ORDER.size())
-	assert_eq(bar.group_buttons("Other Filters").size(), 4,
-		"cast cost, power, toughness and the funnel")
+	assert_eq(bar.group_buttons("Other Filters").size(), 5,
+		"cast cost, power, toughness, the eye (the owner, 2026-10-28) and the funnel")
 
 
 func test_the_filter_strip_is_one_row() -> void:
@@ -536,7 +536,8 @@ func test_only_one_mini_menu_opens_at_a_time() -> void:
 func test_the_playset_shortcut_reports_what_it_really_added() -> void:
 	# It said "Added 4 X" even when the deck was full and nothing went in.
 	screen.deck.counts["Mountain"] = DeckModel.MAX_TOTAL
-	screen._inventory.card_bulk.emit("Lightning Bolt")
+	# The card menu's `Add 4` (the right-click's old playset).
+	screen._add_playset("Lightning Bolt")
 	assert_eq(screen.deck.count_of("Lightning Bolt"), 0, "the deck was full")
 	assert_false(screen._status_label.text.begins_with("Added 4"),
 		"and the screen does not claim otherwise")
@@ -885,12 +886,16 @@ func test_undo_is_one_step_and_says_so_when_there_is_none() -> void:
 	assert_string_contains(screen._status_label.text, "nothing to undo")
 
 
-func test_undo_undoes_itself() -> void:
+## The owner, 2026-10-28: "Redo + deeper undo" — a second Undo is no longer
+## the first one's toggle; Redo puts the change back.
+func test_undo_then_redo_puts_the_change_back() -> void:
 	screen._add_one("Mountain")
 	screen._run_command("Undo")
 	assert_eq(screen.deck.total(), 0)
 	screen._run_command("Undo")
-	assert_eq(screen.deck.count_of("Mountain"), 1, "the step is a toggle")
+	assert_eq(screen.deck.total(), 0, "nothing older to undo")
+	screen._run_command("Redo")
+	assert_eq(screen.deck.count_of("Mountain"), 1, "Redo makes it again")
 
 
 # ------------------------------------------------ [QoL] add basic land --
@@ -1224,7 +1229,7 @@ func test_the_menu_says_what_undo_would_put_back() -> void:
 
 func test_a_playset_that_is_partly_refused_reports_and_undoes_what_it_did() -> void:
 	screen.deck.counts["Mountain"] = DeckModel.MAX_TOTAL - 2
-	screen._inventory.card_bulk.emit("Lightning Bolt")
+	screen._add_playset("Lightning Bolt")
 	assert_eq(screen.deck.count_of("Lightning Bolt"), 2, "two fitted")
 	assert_string_contains(screen._status_label.text, "Added 2")
 	screen._run_command("Undo")
@@ -1276,8 +1281,8 @@ func test_move_by_color_takes_a_whole_colour_out_of_the_deck() -> void:
 	screen._move_out_by_color([Mtg.ManaColor.R])
 	assert_eq(screen.deck.count_of("Lightning Bolt"), 0, "the red went")
 	assert_eq(screen.deck.count_of("Giant Growth"), 4, "the green stayed")
-	assert_eq(screen.deck.count_of("Mountain"), 10,
-		"and a land has no colour — @GROUPMOVE offers no Land option")
+	assert_eq(screen.deck.count_of("Mountain"), 0,
+		"and red's basic land with it — 1997's move_colors_fromto_global_deck")
 	screen._run_command("Undo")
 	assert_eq(screen.deck.count_of("Lightning Bolt"), 4, "one undo step")
 
@@ -1559,7 +1564,7 @@ func test_the_regions_do_not_overlap_at_either_window_height() -> void:
 			screen._filter_bar.global_position.y,
 			"the left column clears the strip at %d" % height)
 		assert_lte(screen._filter_bar.get_combined_minimum_size().x, 1280.0,
-			"and twenty-four medallions plus the tail still fit 1280")
+			"and twenty-five medallions plus the tail still fit 1280")
 
 
 # ============================================================ THIRD PASS ==
@@ -2950,10 +2955,11 @@ func test_the_matchups_page_names_what_the_deck_is_blunted_against() -> void:
 # medallion more? That opens the advanced filtering window."*
 # (2026-09-06). There was: the twenty-fourth medallion is the funnel, and
 # the five `@LONGLIST` sub-filters are the pages of the one window it
-# opens.
+# opens. The eye came back before it (2026-10-28), making it the
+# twenty-fifth.
 
 func _funnel() -> Button:
-	return screen._filter_bar.group_buttons("Other Filters")[3]
+	return screen._filter_bar.group_buttons("Other Filters")[4]
 
 
 func _right_click(button: Button) -> void:
@@ -3008,17 +3014,17 @@ func _finder() -> LineEdit:
 	return null
 
 
-func test_the_funnel_is_the_twenty_fourth_medallion() -> void:
+func test_the_funnel_is_the_twenty_fifth_medallion() -> void:
 	var others: Array = screen._filter_bar.group_buttons("Other Filters")
-	assert_eq(others.size(), 4, "cost, power, toughness and the funnel")
-	var funnel: Button = others[3]
+	assert_eq(others.size(), 5, "cost, power, toughness, the eye and the funnel")
+	var funnel: Button = others[4]
 	assert_eq(funnel.get_meta("icon_cell"), FilterBar.FUNNEL_CELL,
 		"drawn from the X stone, not a sheet cell of its own")
 	assert_true(funnel.has_meta("has_menu"), "its right-click is its own, not Select All")
 	assert_eq(funnel.custom_minimum_size, FilterBar.ICON_SIZE, "one of the row")
 	var strip := screen._filter_bar
 	assert_lt(strip.get_combined_minimum_size().x, 1280.0,
-		"twenty-four still fit the 1997 width")
+		"twenty-five still fit the 1997 width")
 	assert_false(funnel.button_pressed, "up while no page is in force")
 
 
