@@ -95,8 +95,18 @@ var strip := CASTLE_STRIP
 var active := CASTLE_ACTIVE
 ## What the tiles not yet come hide: [member before] (its [member source]
 ## region, an empty one the whole picture — or the screen as it stood,
-## [method take_screen]), else [member ground].
-var before: Texture2D
+## [method take_screen]), else [member ground]. The screen as it stood
+## ([method picture_of], a [TileReveal.Snapshot]) is held while this cover
+## lasts.
+var before: Texture2D:
+	set(value):
+		if value == before:
+			return
+		_release()
+		before = value
+		_held = Snapshot.of(value)
+		if _held != null:
+			_held.take()
 var source := Rect2()
 var ground := Color(0.02, 0.015, 0.015, 1.0)
 ## The zoom-in's picture ([method zoom_in]); null for a cover.
@@ -113,6 +123,83 @@ var _born := -1
 var _moments := PackedByteArray()
 var _material: ShaderMaterial
 var _target_alpha := 1.0
+## The snapshot [member before] is, held until this cover goes.
+var _held: Snapshot
+
+
+## THE SCREEN AS IT STOOD, KEPT ON THE GPU (the smoothness pass, 0.50.66).
+## [method picture_of] read the whole window back off the graphics card
+## and sent it up again as a new texture: 3-6 ms of the frame a meeting's
+## summoned face, a dungeon's treasure or Leap of Fate came in on the
+## desk's RTX 4060 at 1920 × 1080 — a stall of the whole pipeline, and far
+## longer on a handheld's GPU. This copies it there instead: a viewport of
+## the window's pixels that draws the window's own last picture once, 1:1,
+## the next time the screen is drawn — before the window draws again, so it
+## is the picture as it stood, the same pixels the read gave. Nothing goes
+## through the processor. One window-sized texture (8 MB at 1920 × 1080,
+## as the read's texture was), held while a cover shows it ([method take],
+## [method drop]) and let go when the last one goes, or after
+## [constant UNUSED_SECONDS] when none took it.
+class Snapshot extends SubViewport:
+	const META := &"tile_reveal_snapshot"
+	const UNUSED_SECONDS := 2.0
+	var _users := 0
+	var _taken := false
+
+	## The snapshot [param picture] is the texture of, or null.
+	static func of(picture: Texture2D) -> Snapshot:
+		if picture == null or not picture.has_meta(META):
+			return null
+		var shot: Variant = picture.get_meta(META)
+		return shot as Snapshot if is_instance_valid(shot) else null
+
+	## The window's last picture [param source], [param pixels] in size,
+	## copied once — in [param host]'s viewport, beside the screens rather
+	## than among a pane's own children.
+	static func make(host: Node, source: Texture2D, pixels: Vector2i) -> Snapshot:
+		var shot := Snapshot.new()
+		shot.name = "ScreenSnapshot"
+		shot.size = pixels
+		shot.disable_3d = true
+		shot.transparent_bg = false
+		shot.render_target_update_mode = SubViewport.UPDATE_ONCE
+		shot.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+		var shown := SnapshotCopy.new()
+		shown.source = source
+		shown.pixels = pixels
+		shown.size = Vector2(pixels)
+		shown.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		shot.add_child(shown)
+		host.get_viewport().add_child(shot)
+		shot.get_texture().set_meta(META, shot)
+		host.get_tree().create_timer(UNUSED_SECONDS, true, false, true).timeout.connect(shot._unused)
+		return shot
+
+	func take() -> void:
+		_users += 1
+		_taken = true
+
+	func drop() -> void:
+		_users -= 1
+		if _users <= 0 and not is_queued_for_deletion():
+			queue_free()
+
+	func _unused() -> void:
+		if not _taken and not is_queued_for_deletion():
+			queue_free()
+
+
+## The window's picture drawn 1:1 into a [TileReveal.Snapshot]: its region
+## named in the window's own [member pixels] — the texture's reported size
+## is the window's times the canvas stretch again (2593 × 1458 for a
+## 1920 × 1080 window), and a region in those units drew it zoomed;
+## measured identical, pixel for pixel, to the read back on the desk.
+class SnapshotCopy extends Control:
+	var source: Texture2D
+	var pixels := Vector2i.ONE
+
+	func _draw() -> void:
+		draw_texture_rect_region(source, Rect2(Vector2.ZERO, Vector2(pixels)), Rect2(Vector2.ZERO, Vector2(pixels)))
 
 
 ## Whether the transitions play: the Options' switch, on by default, and a
@@ -165,6 +252,38 @@ static func cover(host: Control, at: Rect2, tiles: Vector2i, length: float,
 	return made
 
 
+## [QoL] THE TRANSITIONS' SHADER COMPILED BEFORE ITS FIRST USE (the
+## smoothness pass, 0.50.66): the cover's little shader ([constant SHADER])
+## was compiled the first time a cover was drawn — a lair's picture coming
+## in, a face — inside that frame; on a handheld's or a headset's GL driver
+## that is tens of milliseconds. As the world opens one pixel under
+## [param host] is drawn through it with every tile's moment come, so every
+## fragment is dropped (nothing is seen), and let go half a second later.
+## Nothing with the transitions off, or headless.
+static func warm_shader(host: Node) -> ColorRect:
+	if not wanted() or host == null or not host.is_inside_tree():
+		return null
+	if _shader == null:
+		_shader = Shader.new()
+		_shader.code = SHADER
+	var warm := ShaderMaterial.new()
+	warm.shader = _shader
+	var moments := PackedByteArray([1])
+	warm.set_shader_parameter("order", ImageTexture.create_from_image(
+		Image.create_from_data(1, 1, false, Image.FORMAT_R8, moments)))
+	warm.set_shader_parameter("grid", Vector2.ONE)
+	warm.set_shader_parameter("area", Vector2.ONE)
+	warm.set_shader_parameter("shown", 255.0)
+	var dot := ColorRect.new()
+	dot.name = "TransitionShaderWarm"
+	dot.size = Vector2.ONE
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.material = warm
+	host.add_child(dot)
+	host.get_tree().create_timer(0.5, true, false, true).timeout.connect(dot.queue_free)
+	return dot
+
+
 ## Every transition under [param root] over at once (a test, a pane that
 ## must show itself whole).
 static func finish_all(root: Node) -> void:
@@ -174,8 +293,10 @@ static func finish_all(root: Node) -> void:
 
 ## The screen as it now stands, or null when it cannot be read (headless,
 ## no renderer): what a cover over a part of it hides ([method
-## take_screen]). In the window's pixels. Tests that play the transitions
-## headless ([member forced] 1) get a blank picture of the screen's size.
+## take_screen]). In the window's pixels — kept on the GPU, not read back
+## ([TileReveal.Snapshot]; the smoothness pass, 0.50.66). Tests that play
+## the transitions headless ([member forced] 1) get a blank picture of the
+## screen's size.
 static func picture_of(host: Control) -> Texture2D:
 	if host == null or not host.is_inside_tree():
 		return null
@@ -185,8 +306,21 @@ static func picture_of(host: Control) -> Texture2D:
 		var area := host.get_viewport_rect().size
 		return ImageTexture.create_from_image(Image.create(maxi(int(area.x), 1), maxi(int(area.y), 1),
 			false, Image.FORMAT_RGB8))
-	var image := host.get_viewport().get_texture().get_image()
-	return ImageTexture.create_from_image(image) if image != null else null
+	var viewport := host.get_viewport()
+	var window := viewport.get_texture()
+	if window == null:
+		return null
+	# The picture's own pixels: the window's size (what a read back gave),
+	# not the texture's reported size, which under the canvas stretch is
+	# the window's times the stretch again.
+	var pixels := Vector2i(window.get_size())
+	if viewport is Window:
+		pixels = (viewport as Window).size
+	elif viewport is SubViewport:
+		pixels = (viewport as SubViewport).size
+	if pixels.x <= 0 or pixels.y <= 0:
+		return null
+	return Snapshot.make(host, window, pixels).get_texture()
 
 
 func _ready() -> void:
@@ -265,6 +399,17 @@ func finish() -> void:
 		zoom_target.modulate.a = _target_alpha
 	done.emit()
 	queue_free()
+
+
+func _exit_tree() -> void:
+	_release()
+
+
+## The snapshot held let go (see [member before]).
+func _release() -> void:
+	if _held != null and is_instance_valid(_held):
+		_held.drop()
+	_held = null
 
 
 ## THE COVER HIDES WHAT THE SCREEN SHOWED where it now lies: [param

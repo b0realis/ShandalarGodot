@@ -239,10 +239,6 @@ const SEAMLESS_BEVEL := 3
 const SEAMLESS_BAND := 40
 const SEAMLESS_FEATHER := 6
 
-## key -> [the skin's picture, the tile made of it].
-static var _grounds: Dictionary = {}
-
-
 ## [param key]'s ground as [method frame] and [method panel_style] wear
 ## it: the worn skin's picture, or for a ground [constant PANELS] marks
 ## `seamless`, the tile made of that picture. Null without a skin.
@@ -251,15 +247,9 @@ static func ground(key: String) -> Texture2D:
 	var spec: Dictionary = PANELS.get(key, {})
 	if art == null or not spec.get("seamless", false):
 		return art
-	var made: Array = _grounds.get(key, [])
-	if made.size() == 2 and made[0] == art:
-		return made[1]
-	var scale := GameSkin.scale_of(art)
-	var img := seamless(art.get_image(), scale, spec.get("period", Vector2i.ZERO),
-		spec.get("flatten", true))
-	var tex := GameSkin.texture_of(img, img.get_size() / scale)
-	_grounds[key] = [art, tex]
-	return tex
+	# Made once per picture, the tile of [method seamless]: THE DERIVED
+	# STONES' three steps, so a warm-up can make it off the thread too.
+	return _stone(STONE_GROUND, key)
 
 
 ## The seamless tile made of the ground [param source], a picture at
@@ -429,6 +419,166 @@ static func _bevel_round(src: Image, out: Image, bevel: int) -> void:
 		out.blit_rect(strip, Rect2i(Vector2i.ZERO, strip.get_size()), edge[1])
 
 
+# --- the smoothness pass (0.50.66, M1): the derived stones kept ---
+## THE DERIVED STONES ARE MADE ONCE (the smoothness pass, 0.50.66; the
+## owner, 2026-10-29: *"I really want our adventure to play silky butter
+## smooth"*). A ruled ground ([method ruled_texture]), the bar's button
+## ([method bar_button_texture]), a Classic frame ([method
+## ridged_texture]) and a seamless ground ([method ground], which was
+## always made once) are each the skin's picture walked pixel by pixel —
+## and every duel built them again, sixteen times over for the four
+## buttons under the large card alone, the Combat window's 888x316 field of
+## skulls on top: 240 ms of every duel's opening on the desk, 700 with the
+## 2x skin, whose pictures hold four times the pixels. Each is now made
+## once per picture and handed out again — the same texture, so the same
+## pixels — while the skin wears that picture: a skin that arrives
+## ([method GameSkin.clear_caches]) gives a new picture, and the stone is
+## made afresh from it. Nothing draws into these textures after they are
+## made. Memory: the stones a session has shown, each its picture's size —
+## about 1.6 MB of textures with the 1997 skin, 6.5 MB with the 2x skin,
+## which every duel held anyway while it was up.
+##
+## A STONE IS MADE IN THREE STEPS, so a warmer ([DuelWarmup]) can make it
+## off the thread that draws, before a duel asks: [method stone_job] (main
+## thread) — the picture's pixels and what to make of them, `{}` when it is
+## kept already or the skin has no such picture; [method make_stone] (ANY
+## thread: it reads the job and constants only); [method keep_stone] (main
+## thread). The three functions above take the same three steps at once,
+## so a stone is the same pixels whichever way it was made.
+##
+## cache key -> [the picture's instance id, the texture made of it].
+static var _derived: Dictionary = {}
+
+## The kinds of stone: [method ruled_texture]'s, [method
+## bar_button_texture]'s, [method ridged_texture]'s.
+const STONE_RULED := "ruled"
+const STONE_BUTTON := "button"
+const STONE_RIDGED := "ridged"
+## [method ground]'s seamless tile.
+const STONE_GROUND := "ground"
+
+
+## What [method make_stone] needs to make a stone of [param kind] from the
+## skin's picture [param key] — [param raised] for a ruled ground or a
+## button (a button is raised when not pressed), [param gain] a button's,
+## [param frame] a Classic frame's — or `{}` when that stone is kept
+## already for the picture worn, or the skin has no such picture. Main
+## thread: it reads the picture's pixels back.
+##
+## [param pixels]: the picture's pixels when the caller has read them back
+## already (several stones of one picture), else they are read here.
+static func stone_job(kind: String, key: String, raised := true, gain := 1.55,
+		frame := "", pixels: Image = null) -> Dictionary:
+	var art := GameSkin.texture(key)
+	if art == null:
+		return {}
+	var cache_key := _stone_key(kind, key, raised, gain, frame)
+	if _derived_of(cache_key, art) != null:
+		return {}
+	return {"kind": kind, "cache_key": cache_key, "art": art.get_instance_id(), "key": key,
+		"src": pixels if pixels != null else art.get_image(), "scale": GameSkin.scale_of(art),
+		"raised": raised, "gain": gain, "frame": frame}
+
+
+static func _stone_key(kind: String, key: String, raised: bool, gain: float,
+		frame: String) -> String:
+	match kind:
+		STONE_BUTTON:
+			return "bar_button|%d|%s" % [int(not raised), var_to_str(gain)]
+		STONE_RIDGED:
+			return "ridged|%s|%s" % [key, frame]
+		STONE_GROUND:
+			return "ground|%s" % key
+	return "ruled|%s|%d" % [key, int(raised)]
+
+
+## [param job]'s stone made into it (`img`). Any thread: it reads only the
+## job and constants, and writes only `img`.
+static func make_stone(job: Dictionary) -> void:
+	if job.is_empty() or not (job.get("src") is Image):
+		return
+	if String(job["kind"]) == STONE_GROUND:
+		var spec: Dictionary = PANELS.get(String(job["key"]), {})
+		job["img"] = seamless(job["src"], int(job["scale"]), spec.get("period", Vector2i.ZERO),
+			spec.get("flatten", true))
+		return
+	var img := (job["src"] as Image).duplicate() as Image
+	img.convert(Image.FORMAT_RGBA8)
+	var scale := int(job["scale"])
+	match String(job["kind"]):
+		STONE_BUTTON:
+			var gain := float(job["gain"])
+			for y in img.get_height():
+				for x in img.get_width():
+					var c: Color = img.get_pixel(x, y)
+					img.set_pixel(x, y, Color(minf(c.r * gain, 1.0),
+						minf(c.g * gain, 1.0), minf(c.b * gain, 1.0), c.a))
+			_rule(img, bool(job["raised"]), scale)
+		STONE_RIDGED:
+			var frame := String(job["frame"])
+			var pale := HIGHLIGHT
+			var dark := INK
+			if frame != DuelOptions.BAR_FRAME_CLASSIC:
+				var mean := _mean_colour(img)
+				pale = Color(minf(mean.r * RIDGE_LIGHT, 1.0), minf(mean.g * RIDGE_LIGHT, 1.0),
+					minf(mean.b * RIDGE_LIGHT, 1.0))
+				dark = Color(mean.r * RIDGE_DARK, mean.g * RIDGE_DARK, mean.b * RIDGE_DARK)
+			_ridge(img, pale, dark, ridge_width(frame), scale)
+		_:
+			_rule(img, bool(job["raised"]), scale)
+	job["img"] = img
+
+
+## [param job]'s stone as a texture, kept — the one kept already when there
+## is one; null for a job never made, or one whose picture the skin no
+## longer wears (nothing is kept then). Main thread.
+static func keep_stone(job: Dictionary) -> ImageTexture:
+	if job.is_empty():
+		return null
+	var art := GameSkin.texture(String(job["key"]))
+	if art == null or art.get_instance_id() != int(job["art"]):
+		return null
+	var cache_key := String(job["cache_key"])
+	var kept := _derived_of(cache_key, art)
+	if kept != null:
+		return kept
+	if not (job.get("img") is Image):
+		return null
+	var img: Image = job["img"]
+	return _keep_derived(cache_key, art, GameSkin.texture_of(img, img.get_size() / int(job["scale"])))
+
+
+## [param kind]'s stone of picture [param key], made now when it is not
+## kept — the three steps at once.
+static func _stone(kind: String, key: String, raised := true, gain := 1.55,
+		frame := "") -> ImageTexture:
+	var art := GameSkin.texture(key)
+	if art == null:
+		return null
+	var kept := _derived_of(_stone_key(kind, key, raised, gain, frame), art)
+	if kept != null:
+		return kept
+	var job := stone_job(kind, key, raised, gain, frame)
+	make_stone(job)
+	return keep_stone(job)
+
+
+## The texture kept under [param cache_key] when it was made of [param
+## art], else null.
+static func _derived_of(cache_key: String, art: Texture2D) -> ImageTexture:
+	var made: Array = _derived.get(cache_key, [])
+	if made.size() == 2 and int(made[0]) == art.get_instance_id():
+		return made[1]
+	return null
+
+
+## [param tex], kept under [param cache_key] as made of [param art].
+static func _keep_derived(cache_key: String, art: Texture2D, tex: ImageTexture) -> ImageTexture:
+	_derived[cache_key] = [art.get_instance_id(), tex]
+	return tex
+# --- end the smoothness pass (M1): the derived stones ---
+
+
 # ------------------------------------------------- the Situation Bar rule --
 
 ## The Situation Bar's ground. `Winbk_Telluser.pic` is 600x35 of mottled
@@ -438,6 +588,8 @@ static func _bevel_round(src: Image, out: Image, bevel: int) -> void:
 ## is stone RULED by the same routine that draws the buttons. This paints
 ## that rule onto a copy of the tile: the era's dark outline at the very
 ## edge and the highlight one pixel in, raised (light top/left) or sunken.
+
+
 static func bar_texture(raised := true) -> ImageTexture:
 	return ruled_texture("message_panel", raised)
 
@@ -448,12 +600,7 @@ static func bar_texture(raised := true) -> ImageTexture:
 ## window's field of skulls). Both are ruled by the routine below, so the
 ## bar and the window read as the same piece of furniture.
 static func ruled_texture(key: String, raised := true) -> ImageTexture:
-	var art := GameSkin.texture(key)
-	if art == null:
-		return null
-	var img := art.get_image().duplicate()
-	img.convert(Image.FORMAT_RGBA8)
-	return _rule(img, raised, GameSkin.scale_of(art))
+	return _stone(STONE_RULED, key, raised)
 
 
 ## A ruled ground as a StyleBox. Patch margin 4 keeps the outline and the
@@ -501,17 +648,8 @@ static func ruled_style(key: String, content_margin := 6.0,
 ## beige. At 1.55 the bar's mean RGB(125,89,93) becomes ~(194,138,144) —
 ## the photo's tan/salmon face.
 static func bar_button_texture(pressed := false, gain := 1.55) -> ImageTexture:
-	var art := GameSkin.texture("message_panel")
-	if art == null:
-		return null
-	var img := art.get_image().duplicate()
-	img.convert(Image.FORMAT_RGBA8)
-	for y in img.get_height():
-		for x in img.get_width():
-			var c: Color = img.get_pixel(x, y)
-			img.set_pixel(x, y, Color(minf(c.r * gain, 1.0),
-				minf(c.g * gain, 1.0), minf(c.b * gain, 1.0), c.a))
-	return _rule(img, not pressed, GameSkin.scale_of(art))
+	# The gain walk and the rule: [method make_stone] (THE DERIVED STONES).
+	return _stone(STONE_BUTTON, "message_panel", not pressed, gain)
 
 
 ## Paint the era's frame onto [param img]: the dark outline at the very
@@ -528,7 +666,9 @@ const RULE_WIDTH := 2
 ## [param scale]: image pixels per drawn pixel — a 2x picture's rule is
 ## twice as many of its own pixels, and it is drawn at the 1997 size
 ## (GameSkin, THE 2x PICTURES).
-static func _rule(img: Image, raised: bool, scale := 1) -> ImageTexture:
+## The rule is painted onto [param img], which is returned; any thread
+## (THE DERIVED STONES).
+static func _rule(img: Image, raised: bool, scale := 1) -> Image:
 	# THE RULE IS THE ART'S OWN, remeasured 2026-09-03 after the owner's
 	# playtest note on the Situation Bar — *"in the central message I am
 	# missing the lighter border"*. It was: a 1px INK outline at the very
@@ -555,7 +695,7 @@ static func _rule(img: Image, raised: bool, scale := 1) -> ImageTexture:
 				img.set_pixel(x, y, bottom)
 			elif near_tl < RULE_WIDTH * scale:
 				img.set_pixel(x, y, top)
-	return GameSkin.texture_of(img, img.get_size() / scale)
+	return img
 
 
 ## The Done button as it sits on the Situation Bar (see
@@ -689,19 +829,8 @@ static func ridge_width(frame: String) -> int:
 ## [param key]'s ground with the 1997 bar's ridge painted round it, in
 ## [param frame]'s colours, or null when the skin has no such ground.
 static func ridged_texture(key: String, frame: String) -> ImageTexture:
-	var art := GameSkin.texture(key)
-	if art == null:
-		return null
-	var img: Image = art.get_image().duplicate()
-	img.convert(Image.FORMAT_RGBA8)
-	var pale := HIGHLIGHT
-	var dark := INK
-	if frame != DuelOptions.BAR_FRAME_CLASSIC:
-		var mean := _mean_colour(img)
-		pale = Color(minf(mean.r * RIDGE_LIGHT, 1.0), minf(mean.g * RIDGE_LIGHT, 1.0),
-			minf(mean.b * RIDGE_LIGHT, 1.0))
-		dark = Color(mean.r * RIDGE_DARK, mean.g * RIDGE_DARK, mean.b * RIDGE_DARK)
-	return _ridge(img, pale, dark, ridge_width(frame), GameSkin.scale_of(art))
+	# The colours from the stone's mean, and the ridge: [method make_stone].
+	return _stone(STONE_RIDGED, key, true, 1.55, frame)
 
 
 ## THE RIDGE, measured on the owner's photo of the 1997 bar (2026-10-19):
@@ -711,8 +840,10 @@ static func ridged_texture(key: String, frame: String) -> ImageTexture:
 ## inside it at the top and left and outside it at the bottom and right.
 ## The corners are mitred as [method _rule]'s are: the nearer edge wins,
 ## the bottom and right taking a tie.
+## Painted onto [param img], which is returned; any thread (THE DERIVED
+## STONES).
 static func _ridge(img: Image, pale: Color, dark: Color, line: int,
-		scale := 1) -> ImageTexture:
+		scale := 1) -> Image:
 	var w: int = img.get_width()
 	var h: int = img.get_height()
 	var band: int = line * scale
@@ -728,7 +859,7 @@ static func _ridge(img: Image, pale: Color, dark: Color, line: int,
 				img.set_pixel(x, y, dark if outer else pale)
 			else:
 				img.set_pixel(x, y, pale if outer else dark)
-	return GameSkin.texture_of(img, img.get_size() / scale)
+	return img
 
 
 ## The average colour of [param img], from every other pixel each way.

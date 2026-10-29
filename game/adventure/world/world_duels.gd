@@ -123,6 +123,26 @@ func _ready() -> void:
 	_dealing = false
 
 
+## THE DUEL MADE READY BEFORE IT OPENS (the smoothness pass, 0.50.66;
+## [DuelWarmup]): its pictures, sounds and stones made off the thread that
+## draws while the player reads what comes before it, under [param on]
+## (the meeting's pane; the world screen) — the seats' colours the hero's
+## deck's and, when [param color] names one (1 black … 5 white, a
+## meeting's `color`), the creature's, and the coin's sheets with it. The
+## first duel of a session then opens in about the time the later ones do.
+## Null where no warm-up runs (headless, the web).
+static func warm_for(on: Node, player: AdventurePlayer, color := 0) -> DuelWarmup:
+	if on == null or player == null or not DuelWarmup.runs_here():
+		return null
+	var colors: Array[String] = [DuelConfig.dominant_color(player.deck_cards()), ""]
+	if color >= 1 and color <= AdventurePlayer.COLORS.size():
+		colors[1] = AdventurePlayer.COLORS[color - 1]
+	# A special meeting's sound plays as its Duel is clicked
+	# ([method EncounterPane._to_duel]); the coin's sheets (39 MB) only for
+	# a meeting, a duel at hand — not on arrival in the world.
+	return DuelWarmup.warm(on, colors, player.playmat, ["sfx_dsummon"] as Array[String], color > 0)
+
+
 ## Whether the hero stakes a card in this duel ([member DuelConfig.ante_cards]
 ## or [member DuelConfig.ante_extras] of seat 0): a meeting's, a ruled
 ## town's; a lair's none.

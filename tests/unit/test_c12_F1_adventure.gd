@@ -178,7 +178,7 @@ func test_the_embark_s_playmat_reaches_the_duel() -> void:
 func test_the_help_tells_what_the_adventure_does_now() -> void:
 	var text := HelpPages.all_text()
 	assert_true(text.contains("Save and Load are there too (S, L)"), "Ready to Quit? holds Save and Load")
-	assert_true(text.contains("the guide arrows and the place names"), "the place names' switch")
+	assert_true(text.contains("the path arrows (on to begin with) and the place names"), "the place names' switch")
 	assert_false(text.contains("your attempts at each (click a beaten wizard's castle"),
 		"no castle room promised before the castles open")
 	assert_false(text.contains("your duels won and lost, the dungeon treasures"),

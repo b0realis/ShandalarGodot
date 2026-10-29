@@ -195,7 +195,11 @@ func _init() -> void:
 	_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(_title)
 	# `@MENU_ATTACK` (UIStrings.txt:843) names this exactly `Minimize`.
-	_minimize = OriginalDialog.bar_button("▼", Vector2(22.0, 18.0))
+	# LETTERED WHEN FIRST PRESENTED ([method present]; the smoothness pass,
+	# 0.50.66): `▼` is in no face the game ships, and laying it out asks the
+	# system for a font that has it — 3 ms of every duel's opening for a
+	# window most duels open late or never.
+	_minimize = OriginalDialog.bar_button("", Vector2(22.0, 18.0))
 	_minimize.tooltip_text = "Minimize"
 	_minimize.pressed.connect(_on_minimize_pressed)
 	row.add_child(_minimize)
@@ -206,6 +210,8 @@ func _init() -> void:
 ## it", so a player who has never moved it is not pinned to a position
 ## chosen on somebody else's resolution.
 const POS_SETTING := "combat_window_pos"
+## The minimise gadget's glyph (`@MENU_ATTACK`'s Minimize).
+const MINIMIZE_GLYPH := "▼"
 ## A press moves a pixel or two under the finger; without a threshold
 ## every click on the bar would read as a drag. [StackHand]'s number.
 const DRAG_SLOP := 4.0
@@ -383,6 +389,8 @@ func fit(area: Rect2) -> void:
 ## lane — see [constant BAND_INK].
 func present(game: MtgGame, attacker_ids: Array, blocker_ids: Array,
 		attacking_pid: int, human_pid: int, bands: Array = []) -> void:
+	if _minimize.text == "":
+		_minimize.text = MINIMIZE_GLYPH
 	_title.text = title_for(attacking_pid, human_pid,
 		game.players[attacking_pid].player_name)
 	var attackers_on_bottom := attacking_pid == human_pid

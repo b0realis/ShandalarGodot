@@ -214,13 +214,29 @@ static var _sprites := {}
 static func sprite(sheet: Texture2D, place: Rect2) -> Texture2D:
 	if sheet == null:
 		return null
-	var memo := "%d:%s" % [sheet.get_instance_id(), place]
+	var memo := _sprite_key(sheet, place)
 	if _sprites.has(memo):
 		return _sprites[memo]
-	var cut := Rect2i(place)
 	var small := GameSkin.original(sheet)
 	if small == null:
 		return null
+	var scale := GameSkin.scale_of(sheet)
+	keep_sprite(sheet, place, sprite_image(small, sheet.get_image() if scale > 1 else null, scale, place))
+	return _sprites[memo]
+
+
+static func _sprite_key(sheet: Texture2D, place: Rect2) -> String:
+	return "%d:%s" % [sheet.get_instance_id(), place]
+
+
+## THE SPRITE'S PIXELS ([method sprite]): [param place] cut from the
+## sheet's 1997 pixels [param small] with pure black clear, and with a big
+## picture ([param scale] > 1) cut from its own pixels [param big] at that
+## scale, the clear taken from the 1997 cut ([method GameSkin.lift_alpha]).
+## Touches nothing shared: a worker thread may cut a sheet it decoded
+## ([PaneWarmer]).
+static func sprite_image(small: Image, big: Image, scale: int, place: Rect2) -> Image:
+	var cut := Rect2i(place)
 	if small.is_compressed():
 		small.decompress()
 	small = small.get_region(cut)
@@ -230,14 +246,30 @@ static func sprite(sheet: Texture2D, place: Rect2) -> Texture2D:
 			var px := small.get_pixel(x, y)
 			if px.r8 == 0 and px.g8 == 0 and px.b8 == 0:
 				small.set_pixel(x, y, Color(0, 0, 0, 0))
-	var big := small
-	if GameSkin.scale_of(sheet) > 1:
-		big = GameSkin.cut(sheet, cut)
-		big.convert(Image.FORMAT_RGBA8)
-		big = GameSkin.lift_alpha(small, big)
-	var out := GameSkin.texture_of(big, cut.size)
-	_sprites[memo] = out
-	return out
+	if scale <= 1 or big == null:
+		return small
+	var lifted := big.get_region(Rect2i(cut.position * scale, cut.size * scale))
+	lifted.convert(Image.FORMAT_RGBA8)
+	return GameSkin.lift_alpha(small, lifted)
+
+
+## [param image] ([method sprite_image]) kept as [param sheet]'s sprite of
+## [param place], unless one is kept already. Main thread.
+static func keep_sprite(sheet: Texture2D, place: Rect2, image: Image) -> void:
+	var memo := _sprite_key(sheet, place)
+	if not _sprites.has(memo):
+		_sprites[memo] = GameSkin.texture_of(image, Rect2i(place).size)
+
+
+## Whether [param sheet]'s sprite of [param place] is kept.
+static func sprite_kept(sheet: Texture2D, place: Rect2) -> bool:
+	return sheet != null and _sprites.has(_sprite_key(sheet, place))
+
+
+## The places the map cuts from `map_buttons`: the ornament, the amulet
+## panel ([PaneWarmer]).
+static func sprite_places() -> Array[Rect2]:
+	return [ORNAMENT[1], AMULET_PANEL[1]] as Array[Rect2]
 
 
 func _draw() -> void:

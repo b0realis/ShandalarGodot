@@ -351,7 +351,8 @@ func test_space_stops_the_walk_and_comes_back() -> void:
 
 
 ## The letters look while the hero's pane is closed, and are the pane's
-## while it is open; the arrows look either way.
+## while it is open; the arrows look either way no more — they walk the
+## hero (0.50.66, the owner's ruling of 2026-10-29).
 func test_the_letters_are_the_hero_pane_s_while_it_is_open() -> void:
 	var w := InputEventKey.new()
 	w.keycode = KEY_W
@@ -377,7 +378,7 @@ func test_the_letters_are_the_hero_pane_s_while_it_is_open() -> void:
 	Input.parse_input_event(arrow)
 	Input.flush_buffered_events()
 	screen._look_with_keys(0.1)
-	assert_ne(screen.view.camera, camera, "the arrows still look")
+	assert_eq(screen.view.camera, camera, "the arrows look no more: they walk")
 
 
 # ------------------------------------------------------- the right click --

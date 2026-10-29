@@ -178,6 +178,52 @@ static func all() -> Array[Dictionary]:
 static func refresh() -> void:
 	_cache = []
 	_textures = {}
+	_generation += 1
+
+
+## THE FACE READ OFF THE MAIN THREAD (the smoothness pass, 0.50.66): a
+## creature's face was read on the thread that draws as its meeting opened
+## (8.8 ms of that frame on the desk with the 1997 faces); the world warms it
+## as the creature comes near ([method WorldSoundscape.warm_near],
+## [SkinWarmer]), in three steps as [method GameSkin.picture_job] does a
+## skin picture's: [method face_job] (main thread) — `{id, key: "", path,
+## own, generation}`, or `{}` when the face is kept already, is not there,
+## or is one of ours (read through the import pipeline, at once); the
+## decode on any thread ([method GameSkin.decode_picture]); [method
+## keep_face] (main thread) — kept as [method texture] keeps it, unless the
+## faces were looked for again meanwhile ([method refresh]).
+static var _generation := 0
+
+
+static func face_job(id: String) -> Dictionary:
+	if id == "" or _textures.has(id):
+		return {}
+	for entry in all():
+		if entry["id"] != id:
+			continue
+		var path := String(entry["path"])
+		if is_shipped(path):
+			return {}
+		var found := GameSkin.worn(path)
+		return {"id": id, "key": "", "path": String(found["path"]), "own": String(found["own"]),
+			"generation": _generation}
+	return {}
+
+
+## [param job]'s face kept as [method texture] keeps it, and returned —
+## the one kept already when there is one; null for a job never decoded,
+## or one made before the faces were looked for again.
+static func keep_face(job: Dictionary) -> Texture2D:
+	var id := String(job.get("id", ""))
+	if id == "":
+		return null
+	if _textures.has(id):
+		return _textures[id]
+	if not job.has("img") or int(job.get("generation", -1)) != _generation:
+		return null
+	var made := GameSkin.picture_from(job)
+	_textures[id] = made
+	return made
 
 
 ## One portrait's texture, or null. Cached by id.

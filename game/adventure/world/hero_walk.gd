@@ -31,6 +31,20 @@ extends RefCounted
 ## costed by the same pace (Godot's [AStarGrid2D]); the hero walks it tile
 ## middle to tile middle, which are always one of the eight ways apart.
 ##
+## THE KEYS WALK AS 1997'S DID (the owner's ruling of 2026-10-29: *"The
+## arrow keys (and the keypad's 8 directions, two arrows for a diagonal)
+## would walk the hero step by step while held, no pathfinding"*): a key
+## set 1997's heading, one of the eight ways (`g_world_move_dir_index`,
+## adventure_input.c 328–353), and the step above walked it. Here the keys
+## held ([member keyed], [method WorldScreen._keyed_way]) walk the hero a
+## tile at a time that way, no way found ([method key_toward], [method
+## _key_on]), through the same step — the pace, the food and the clocks.
+## [ours, the owner's ruling: 1997 queued a key's press, never its release
+## (shandalar.c 1019–1021), so its heading stayed after the key was let go,
+## until Space, the shore or a town (adventure_input.c 352–353, 612, 846);
+## here the walk is the keys' while they are held, and let go the hero
+## stops on the middle of the tile under way, as a click's walk ends.]
+##
 ## THE SEA'S CORNERS [ours]. A diagonal step north-east or south-west
 ## between two land tiles stands for one tick on the corner of a third:
 ## from (x, y) to (x + 1, y − 1) the hero passes (32 (x + 1), 32 y), which
@@ -43,6 +57,11 @@ extends RefCounted
 ## stands by ([method _standing_tile]), only a step from land into the sea
 ## is taken back, and a walker made for a hero off the land sets them back
 ## on it ([method settle]) — which heals a save written before.
+##
+## THE FOOD FORESEEN [ours] (the path arrows, 0.50.66, [WorldPath]): a
+## click's way is walked ahead on copies, tick by tick, through the step's
+## own pace, stride and meal ([method forecast]) — which tiles the hero
+## reaches with food left, which hungry.
 ##
 ## A TICK IN 1997'S ORDER (shandalar.c 625–655): the hero's step ([method
 ## step]), then the roaming creatures ([WorldCreatures], which read the clock
@@ -61,6 +80,13 @@ const SLOW_COST := 1.5
 const ROAD_COST := 2.0 / 3.0
 ## A step into the sea this near a tile's middle is taken back.
 const SHORE := 12
+## How near a tile's middle (world units, on each axis) the hero still
+## stands on it for a key pressed ([method key_toward]): a second arrow
+## pressed a tick after the first turns the walk from that middle, so two
+## arrows walk the diagonal from the first step. Two units at most: from
+## further a diagonal would cut a sea tile's corner within [constant
+## SHORE] of its middle.
+const TURN_SLACK := 2
 
 var player: AdventurePlayer
 ## The tiles still to walk to, the next first.
@@ -73,9 +99,26 @@ var heading := 0
 var stepped := false
 ## Where the walk goes: the last tile of its way, (-1, -1) for none.
 var destination := Vector2i(-1, -1)
+## THE KEYS' WAY (1–8; 0 for none): the way the walking keys held point,
+## set by the world screen before each tick ([method
+## WorldScreen._keyed_way]). While the walk is the keys' ([member by_keys])
+## each tile middle reached walks on to the next tile that way ([method
+## _key_on]).
+var keyed := 0
+## Whether the walk is the keys' — a tile at a time, no way found ([method
+## key_toward]) — rather than a click's ([method walk_to]).
+var by_keys := false
+## Whether this tick's step ended on the middle of a tile the walk went to
+## ([method step]): the keys' walk arrives at every place it steps onto, as
+## 1997's did ([method WorldScreen.advance]).
+var at_middle := false
 ## THE SIEGES' NEWS the walk's steps brought ([method Sieges.on_step]), the
 ## oldest first, until the world screen takes it ([method take_news]).
 var news: Array[Dictionary] = []
+## THE WAY'S COUNT: one more each time the way is set anew — a click's walk,
+## the keys', a stop — and not as its tiles are reached: how the path arrows
+## ([WorldPath]) tell a new way from a step along the old one.
+var plans := 0
 ## THE WAY-FINDER'S GRID of the world's land and its costs, kept between
 ## clicks (building it reads all 4,096 tiles: about 3 ms on a desk, 10 on
 ## a handheld) and built again when what shapes it changes — the world,
@@ -111,22 +154,84 @@ func is_walking() -> bool:
 	return not path.is_empty()
 
 
+## The walk stopped where the hero stands — the keys' too: a key still held
+## walks again only once pressed again ([method key_toward]).
 func stop() -> void:
 	path.clear()
+	plans += 1
 	heading = 0
+	by_keys = false
 	if player != null:
 		player.step = 0
 
 
 ## Walk to [param target]: true when there is a way (to it, or to the land
-## nearest it when it is sea or out of reach).
+## nearest it when it is sea or out of reach). The keys' walk is given up.
 func walk_to(target: Vector2i) -> bool:
 	var way := plan(target)
 	if way.is_empty():
 		return false
 	path = way
+	plans += 1
 	destination = way[way.size() - 1]
+	by_keys = false
 	return true
+
+
+## THE WALKING KEYS PRESSED toward [param d] (1–8 — 1997's ways, which the
+## screen's keys point: [constant WorldScreen.WALK_KEYS]; 0, two keys
+## against each other): the walk becomes the keys' — a click's way given up
+## (the owner's ruling of 2026-10-29) — and goes a tile at a time that way,
+## from a tile's middle: the one the hero stands on or has hardly left
+## ([constant TURN_SLACK]), else the one the step under way reaches, else
+## the middle of the tile they stand on (a walk stopped half way). A tap
+## walks one tile. The tile that way is not walked onto when it is the sea
+## [ours: 1997 walked on to the shore's very edge and took the step into
+## the sea back there, the heading dropped (adventure_input.c 607–614);
+## here the hero stands on the middle of the last land tile, as a click's
+## walk ends]. Held, the walk goes on ([method _key_on]).
+func key_toward(d: int) -> void:
+	keyed = d
+	var at := player.position
+	var near := Vector2i(roundi((at.x - 16) / 32.0), roundi((at.y - 16) / 32.0))
+	var start := _standing_tile()
+	if absi(at.x - _middle(near).x) <= TURN_SLACK and absi(at.y - _middle(near).y) <= TURN_SLACK \
+			and player.world.is_land(near.x, near.y):
+		start = near
+	elif not path.is_empty():
+		start = path[0]
+	path.clear()
+	plans += 1
+	if at != _middle(start):
+		path.append(start)
+	if d != 0:
+		var next := start + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
+		if player.world.is_land(next.x, next.y):
+			path.append(next)
+	by_keys = true
+	destination = path[path.size() - 1] if not path.is_empty() else Vector2i(-1, -1)
+	if path.is_empty():
+		heading = 0
+		player.step = 0
+
+
+## THE KEYS' NEXT TILE, the walk's middle reached with a key still held:
+## the tile beside it the keys' way ([member keyed]) — 1997's heading
+## walked on, step after step (adventure_input.c 516–606) — unless it is
+## the sea or off the map ([method key_toward]); the hero stands then.
+func _key_on() -> void:
+	if not by_keys or keyed == 0:
+		return
+	var next := player.tile() + Vector2i(ShandalarWorld.DX[keyed], ShandalarWorld.DY[keyed])
+	if player.world.is_land(next.x, next.y):
+		path.append(next)
+		plans += 1
+		destination = next
+
+
+## The middle of [param tile], in world units.
+static func _middle(tile: Vector2i) -> Vector2i:
+	return tile * 32 + Vector2i(16, 16)
 
 
 ## THE WAY from the hero's tile to [param target], the hero's tile first;
@@ -258,10 +363,12 @@ func tick() -> bool:
 
 ## THE HERO'S STEP this tick (`UpdateAdventureWorldInputAndMovement`), the
 ## clock read as it stands — the creatures move after it, before [method
-## end_tick]. True when the step brought the hero onto another tile.
+## end_tick]. True when the step brought the hero onto another tile. The
+## pace, the stride and the meal are [method pace], [method stride] and
+## [method meal], which the food forecast runs too ([method forecast]).
 func step() -> bool:
-	var world := player.world
 	_arrive()
+	at_middle = false
 	var target := Vector2i(-1, -1)
 	if not path.is_empty():
 		target = path[0] * 32 + Vector2i(16, 16)
@@ -270,20 +377,12 @@ func step() -> bool:
 		heading = 0
 	var entered := false
 	var d := heading
-	var ahead := player.position + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
-	var kind := world.terrain(ahead.x / 32, ahead.y / 32)
-	var divisor := SLOW if _slow(kind) else 1
 	var here := player.tile()
-	var roads := world.road_bits(here.x, here.y)
-	if d != 0 and (roads & (1 << (d - 1)) != 0 or roads & (1 << (back(d) - 1)) != 0):
-		divisor = 1
-	if player.food == 0:
-		divisor = clampi(divisor + 2, 0, 4)
+	var divisor := pace(player.position, d, player.food == 0)
 	stepped = player.monster_timer % divisor == 0
 	if stepped:
 		var before := player.position
-		var stride := 2 if divisor == SLOW else 1
-		player.position += Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d]) * stride
+		player.position = stride(before, d, divisor, player.monster_timer, player.quickening, target)
 		player.step += 1
 		if player.step > 4:
 			player.step = 1
@@ -291,24 +390,12 @@ func step() -> bool:
 			player.step = 0
 		else:
 			player.facing = d
-		if d != 0 and (player.quickening > 0
-				or player.monster_timer & 1 != 0 and roads & (1 << (back(d) - 1)) != 0):
-			player.position += Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
-		# Ours: never past the tile middle being walked to, on either axis.
-		if d != 0:
-			player.position = Vector2i(_not_past(before.x, player.position.x, target.x),
-				_not_past(before.y, player.position.y, target.y))
 		var now := player.tile()
 		if _shore(before):
 			player.position = before
 			stop()
 		if player.monster_timer & 0x1F == 0 and d != 0:
-			# Every other step for an ascetic hero [ours, the owner's ruling
-			# of 2026-10-29] ([method AdventurePlayer.eats_this_step]).
-			if player.food != 0 and player.eats_this_step():
-				player.food -= 1
-			if player.owns("Fruit of Sustenance") and world.terrain(now.x, now.y) == 2:
-				player.food += 2
+			player.food = meal(player.food, now)
 			player.quest_timer += 1
 			# Half as often under the sieges' pace "Rare" [ours, the owner's
 			# ruling of 2026-10-28] ([method Sieges.clock_steps]).
@@ -318,6 +405,99 @@ func step() -> bool:
 		entered = player.tile() != here
 	_arrive()
 	return entered
+
+
+## THE PACE of a step from [param at] (world units) the way [param d]: its
+## divisor — the step is taken on the ticks the clock divides by it ([method
+## step]). Slow land ([method _slow]) three, else one; one on a road leaving
+## the tile that way or coming in from behind; [param hungry], two more, at
+## most four. ONE PACE for the walk and for the food it foresees ([method
+## forecast]; the path arrows, 0.50.66), so the two never drift.
+func pace(at: Vector2i, d: int, hungry: bool) -> int:
+	var world := player.world
+	var ahead := at + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
+	var divisor := SLOW if _slow(world.terrain(ahead.x / 32, ahead.y / 32)) else 1
+	var roads := world.road_bits(at.x / 32, at.y / 32)
+	if d != 0 and (roads & (1 << (d - 1)) != 0 or roads & (1 << (back(d) - 1)) != 0):
+		divisor = 1
+	if hungry:
+		divisor = clampi(divisor + 2, 0, 4)
+	return divisor
+
+
+## THE STRIDE of a step taken ([method pace]'s [param divisor] allowing it)
+## from [param at] the way [param d] toward the tile middle [param target],
+## on clock tick [param timer] with [param quickening] ticks of Quickening
+## left: where it takes the hero. Two units on slow land, else one; a unit
+## more on every tick of Quickening, and on every other tick on a road
+## coming in from behind; [ours] never past the middle, on either axis.
+func stride(at: Vector2i, d: int, divisor: int, timer: int, quickening: int, target: Vector2i) -> Vector2i:
+	var dv := Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
+	var now := at + dv * (2 if divisor == SLOW else 1)
+	var roads := player.world.road_bits(at.x / 32, at.y / 32)
+	if d != 0 and (quickening > 0 or timer & 1 != 0 and roads & (1 << (back(d) - 1)) != 0):
+		now += dv
+	if d != 0:
+		now = Vector2i(_not_past(at.x, now.x, target.x), _not_past(at.y, now.y, target.y))
+	return now
+
+
+## THE MEAL of a walking hero's 32nd tick, on tile [param tile]: [param
+## food] less the one eaten — every other step for an ascetic hero [ours,
+## the owner's ruling of 2026-10-29] ([method
+## AdventurePlayer.eats_this_step]) — and two given back by Fruit of
+## Sustenance in a forest.
+func meal(food: int, tile: Vector2i) -> int:
+	if food != 0 and player.eats_this_step():
+		food -= 1
+	if player.owns("Fruit of Sustenance") and player.world.terrain(tile.x, tile.y) == 2:
+		food += 2
+	return food
+
+
+## THE FOOD FORESEEN along [param tiles] — a way's tiles still to walk to,
+## the next first — for the path arrows ([WorldPath]; the owner's ruling of
+## 2026-10-29: the steps the food covers in one colour, the hungry ones in
+## another) [ours]: for each tile, 1 when the hero reaches its middle with
+## food left, else 0. The walk's own ticks are run from where the hero
+## stands, on copies of their place, food, the clock and Quickening's ticks
+## ([method pace], [method stride], [method meal]; an ascetic's half-meal
+## put back after) — tick for tick what the walk will do, unless a creature
+## met or a siege's news stops it first. The shore rule never takes a step
+## of a way found on land back, so it is not run.
+func forecast(tiles: Array[Vector2i]) -> PackedByteArray:
+	var fed := PackedByteArray()
+	fed.resize(tiles.size())
+	if player == null or player.world == null:
+		return fed
+	var at := player.position
+	var food := player.food
+	var timer := player.monster_timer
+	var quickening := player.quickening
+	var half := player.meal_half
+	var i := 0
+	# The slowest tile is 128 ticks (hungry on slow land: a unit every fourth).
+	var most := tiles.size() * 160 + 160
+	var ticks := 0
+	while i < tiles.size() and ticks < most:
+		var middle := tiles[i] * 32 + Vector2i(16, 16)
+		if at == middle:
+			fed[i] = 1 if food > 0 else 0
+			i += 1
+			continue
+		var d := way(at, middle)
+		var divisor := pace(at, d, food == 0)
+		if timer % divisor == 0:
+			at = stride(at, d, divisor, timer, quickening, middle)
+			if timer & 0x1F == 0:
+				food = meal(food, Vector2i(at.x / 32, at.y / 32))
+		# The tick's end ([method end_tick]).
+		if quickening > 0:
+			quickening -= 1
+		timer += 1
+		ticks += 1
+	player.meal_half = half
+	return fed
 
 
 ## The sieges' news brought so far ([member news]), taken: none is left.
@@ -358,10 +538,15 @@ static func _not_past(before: int, now: int, target: int) -> int:
 	return now
 
 
-## The tile middle walked to is reached: on to the next.
+## The tile middle walked to is reached: on to the next — with a walking
+## key held, the next tile its way ([method _key_on]), the hero never
+## standing between the two.
 func _arrive() -> void:
 	while not path.is_empty() and player.position == path[0] * 32 + Vector2i(16, 16):
 		path.remove_at(0)
+		at_middle = true
+	if path.is_empty():
+		_key_on()
 	if path.is_empty() and heading != 0:
 		heading = 0
 		player.step = 0

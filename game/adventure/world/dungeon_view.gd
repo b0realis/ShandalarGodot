@@ -455,6 +455,24 @@ func hero_point() -> Vector2:
 	return Vector2(DungeonBoard.cell_to_page(board.hero)) if board != null else Vector2.ZERO
 
 
+## WHERE THE HERO IS DRAWN NOW [QoL] (the smoothness pass, 0.50.66): the
+## walk's point ([method hero_point]) carried on toward the next frame's by
+## the time since its frame began — the figure slides at the screen's own
+## rate, not in 1997's 66 ms hops of four page pixels — on the composed
+## page's own pixels ([constant SCALE] to a page pixel). The pose, the
+## walk's frames and its length stay 1997's ([method hero_step]); standing,
+## it is [method hero_point].
+func shown_hero_point() -> Vector2:
+	var at := hero_point()
+	if _walk.is_empty() or frame_seconds <= 0.0:
+		return at
+	var step := 1 if int(_walk["end"]) > int(_walk["frame"]) else -1
+	var part := clampf(_walk_time / frame_seconds, 0.0, 1.0)
+	var way: Vector2 = WALK.get(int(_walk["way"]), Vector2.ZERO)
+	at += way * float(step) * part
+	return (at * SCALE).round() / SCALE
+
+
 ## The hero's walking step now (0 standing).
 func hero_step() -> int:
 	var shown := _walk if not _walk.is_empty() else _pose
@@ -871,7 +889,7 @@ func _paint_hero() -> void:
 	if board == null:
 		return
 	var canvas := _hero_layer
-	var feet := hero_point()
+	var feet := shown_hero_point()
 	var key := "world_ego_f" if walker == "female" else "world_ego_m"
 	var sheet := hero_sheet if hero_sheet != null else art.texture(key)
 	if sheet == null or not skinned():

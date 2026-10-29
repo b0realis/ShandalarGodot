@@ -36,12 +36,14 @@ const DUNGEON_MOUTH := Color8(14, 10, 12)
 var world: ShandalarWorld:
 	set(value):
 		world = value
-		_follow()
+		if not _held:
+			_follow()
 ## The hero, in world units (32 to a tile).
 var hero := Vector2.ZERO:
 	set(value):
 		hero = value
-		_follow()
+		if not _held:
+			_follow()
 ## The places called out ([method WorldStatus.targets]): `{tile, kind,
 ## name}`, the kind `quest` or `siege`.
 var marks: Array[Dictionary] = []
@@ -50,7 +52,8 @@ var marks: Array[Dictionary] = []
 var dungeons: Array[Dictionary] = []:
 	set(value):
 		dungeons = value
-		_follow()
+		if not _held:
+			_follow()
 ## What takes the pointer: the whole map, drawing nothing itself.
 var _land: Control
 ## The land, roads and towns, drawn round [member _anchor] and moved under
@@ -64,6 +67,11 @@ var _marks: Node2D
 var _anchor := Vector2.ZERO
 var _drawn: Array = []
 var _time := 0.0
+## While [method show_hero] sets what it shows, one look for all of it.
+var _held := false
+## How many times it looked whether to draw the land again ([method
+## _follow]; the tests).
+var looks := 0
 
 
 func _ready() -> void:
@@ -110,6 +118,22 @@ func _ready() -> void:
 	add_child(rim)
 
 
+## THE HERO SHOWN in one go — [param shown_world], where they stand
+## ([param at], world units), the places calling ([param calling]) and the
+## dungeons known ([param known]) — and looked at once ([method _follow])
+## rather than once for each (the smoothness pass, 0.50.66: every tick
+## hashed the world's page and sites three times over).
+func show_hero(shown_world: ShandalarWorld, at: Vector2, calling: Array[Dictionary],
+		known: Array[Dictionary]) -> void:
+	_held = true
+	world = shown_world
+	hero = at
+	dungeons = known
+	_held = false
+	marks = calling
+	_follow()
+
+
 ## The part of it that takes the pointer (for the HUD's tips).
 func land() -> Control:
 	return _land
@@ -130,6 +154,7 @@ func _process(delta: float) -> void:
 func _follow() -> void:
 	if _ground == null:
 		return
+	looks += 1
 	var tile := Vector2i(floori(hero.x / 32.0), floori(hero.y / 32.0))
 	var shown: Array = [null, tile, size]
 	if world != null:
@@ -139,6 +164,11 @@ func _follow() -> void:
 		_anchor = Vector2(tile * 32 + Vector2i(16, 16))
 		_ground.queue_redraw()
 	_ground.position = project(_anchor) - size * 0.5
+
+
+## The tile the land was last drawn round.
+func drawn_tile() -> Vector2i:
+	return Vector2i(floori(_anchor.x / 32.0), floori(_anchor.y / 32.0))
 
 
 ## Where world point [param point] falls on it.

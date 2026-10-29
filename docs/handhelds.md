@@ -272,10 +272,12 @@ leave through the menu's Exit game. Every line lands in
 `shandalar/conf/godot/app_userdata/Shandalar/logs/perf.log`. Send
 `portmaster.log`, say what you were doing when it stuttered, and **delete
 `perf-log`** again: the next launch is back to normal. The log says how long
-the start took, every second that had a slow frame, each frame of a tenth of
-a second or more with what ran inside it (the computer's decision, the
-screen's refresh — or nothing labelled, which points at the drawing), and a
-summary every minute. Each job counts its own time: a refresh that ran
+the start took, every second that had a slow frame (twice the screen's
+refresh period or more: 33 ms on a 60 Hz screen), each frame of four
+refresh periods or more (67 ms at 60 Hz; never more than a tenth of a
+second) with what ran inside it (the computer's decision, the screen's
+refresh — or nothing labelled, which points at the drawing or a file being
+read), and a summary every minute. Each job counts its own time: a refresh that ran
 inside the computer's decision is its own row, `screen refresh (inside
 computer decision)`, and the decision's time leaves it out. On a Steam Deck
 or a desktop the same file beside the executable works (on a Mac beside

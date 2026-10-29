@@ -61,6 +61,9 @@ signal big_switched
 ## The creatures' names on the map were switched (the options): the world
 ## shows them, or takes them away, at once.
 signal names_switched
+## The path arrows were switched (the options): the world shows them, or
+## takes them away, at once.
+signal paths_switched
 ## The pointer came over a part of the HUD: the world's pointers step aside.
 signal hovered
 
@@ -113,15 +116,18 @@ const MAGIC_TIPS := {
 ## The keys, for the help (?): what the line under the world once said —
 ## the world's keys ([method WorldScreen._unhandled_input]), 1997's where
 ## they were 1997's (adventure_input.c 304–503: F1–F6, L, Escape and Q,
-## Space; the stats screen's W, J and D), [QoL] where they are ours: a
-## click walks — the arrows look, where 1997's walked the hero — and the
-## wheel, N, H and the panes' drag are new. Save stays Ctrl+S (the owner's
-## ruling C-2: W A S D keep looking; 1997's S saved). In a town M or F2, F5
-## and Ctrl+S open over its pane ([method WorldScreen.town_on_top]; the
-## owner's "as 1997" of 2026-10-28).
+## Space; the stats screen's W, J and D; the arrows, Home, PgUp, PgDn, End
+## and the keypad walk the hero, the owner's ruling of 2026-10-29), [QoL]
+## where they are ours: a click walks to a place, the way found, W A S D
+## look around, and the wheel, N, H and the panes' drag are new. Save
+## stays Ctrl+S (the owner's ruling C-2: W A S D keep looking; 1997's S
+## saved). In a town M or F2, F5 and Ctrl+S open over its pane ([method
+## WorldScreen.town_on_top]; the owner's "as 1997" of 2026-10-28).
 const KEYS := [["Click", "walk there; the way is found"],
 	["Right click", "the options"],
-	["Drag or arrows", "look around (W A S D too)"],
+	["Arrows", "walk your hero while held; two at once walk a diagonal"],
+	["Home, PgUp, PgDn, End", "walk the diagonals; the keypad walks every way"],
+	["Drag or W A S D", "look around"],
 	["Wheel", "zoom (+ and - too)"],
 	["Space", "back to your hero; stops the walk"],
 	["1 to 5", "cast a World Magic (or click its icon)"],
@@ -144,14 +150,15 @@ const KEYS := [["Click", "walk there; the way is found"],
 ## ("Will you ...", `@STARTUP` 1).
 const OPTIONS := [["Save", "Save"], ["Load", "Load (L)"], ["Cities", "City list (F3)"],
 	["Wizards", "Wizards (F6)"], ["Bar", ""], ["Minimap", ""],
-	["Quest", ""], ["Guides", ""], ["Places", ""], ["Names", ""], ["Reader", ""], ["Big", ""], ["Pace", ""],
+	["Quest", ""], ["Guides", ""], ["Paths", ""], ["Places", ""], ["Names", ""], ["Reader", ""], ["Big", ""],
+	["Pace", ""],
 	["Transitions", ""], ["Music", ""], ["Sound", ""],
 	["Menu", "Return to main menu"], ["Exit", "Exit game"]]
 ## The hero pane's tab 1997's wizards' window became ([HeroStats]).
 const WIZARDS_TAB := "Wizards"
 const HERO_TAB := "Hero"
 ## The switches that leave the options open, so the new setting shows.
-const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Places", "Names", "Reader", "Pace",
+const SWITCHES: Array[String] = ["Minimap", "Quest", "Guides", "Paths", "Places", "Names", "Reader", "Pace",
 	"Transitions", "Music", "Sound"]
 ## BIG BUTTONS, for a finger (the owner, 2026-10-23: *"touch-pad support?
 ## Maybe we can have bigger buttons on the pane with left and right arrows
@@ -181,6 +188,11 @@ const PLACES_SETTING := "world_place_names"
 ## own on/off setting in the adventure's options menu"*). Off until
 ## switched on, remembered.
 const NAMES_SETTING := "world_creature_names"
+## Whether a click's way is drawn on the land, its arrows coloured by the
+## food ([WorldPath]; the owner, 2026-10-29: *"visual pathfinding arrows …
+## with visual pathfinding on/off setting!"*). On until switched off,
+## remembered.
+const PATHS_SETTING := "world_path_arrows"
 ## Whether a right click on a card in the shop, the card trader or a lair
 ## opens it full screen, as the duel's reader does (the owner, 2026-10-23:
 ## *"Right click on card should have large card render as in the duel! …
@@ -190,6 +202,9 @@ const READER_SETTING := "world_card_reader"
 const PANE_SETTING := "world_pane_"
 ## A press that moves no further than this is a click on a pane.
 const PANE_SLOP := 4.0
+## At most this many frames a pane just opened is fitted to its page
+## ([method _refit]).
+const REFIT_FRAMES := 8
 ## How fast the world's clock runs against the 1997 game's 60 ms tick
 ## [QoL]: the hero walks faster, and everything else in the world keeps
 ## pace with them, so a day's march costs the same food.
@@ -247,6 +262,22 @@ var _numbers := {}
 var _amulet_numbers := {}
 var _magic_icons: Array[TextureRect] = []
 var _magic_names: Label
+## What the purse's slower numbers were last read from ([method
+## refresh_numbers], the smoothness pass, 0.50.66: it runs every tick, and
+## every frame under a pane): the mana links by the world and its sites'
+## hash, and the World Magics' look by what decides it.
+var _links_for: Array = []
+var _links := 0
+var _magics_for: Array = []
+## The deck's count as last taken, and what it was taken for ([method
+## refresh_numbers]); how many times the panel has rested under a pane.
+var _in_deck := 0
+var _counted_for: Array = []
+var _rests := 0
+## How many times the World Magics' icons were looked at, and the bag walked
+## for the deck's count (the tests).
+var magic_looks := 0
+var bag_walks := 0
 var _hero_panel: PanelContainer
 ## The hero's stats in their pane ([HeroStats]).
 var hero_stats: HeroStats
@@ -507,8 +538,9 @@ func show_player(adventure: AdventurePlayer) -> void:
 		refresh()
 
 
-## The numbers and the lit icons, as the hero now stands.
-func refresh() -> void:
+## The numbers and the lit icons, as the hero now stands — [param ticked]
+## after a tick of the world's clock alone ([method refresh_numbers]).
+func refresh(ticked := false) -> void:
 	if player == null or _name == null:
 		return
 	var line := "%s · %s" % [player.name, player.difficulty_name()] if player.name != "" else ""
@@ -519,7 +551,7 @@ func refresh() -> void:
 		var inks: Array = NAME_INKS.get(player.color, [INK, EDGE])
 		_name.add_theme_color_override("font_color", inks[0])
 		_name.add_theme_color_override("font_outline_color", inks[1])
-	refresh_numbers()
+	refresh_numbers(ticked)
 	refresh_quest()
 	# The hero's pane, open, follows what it shows — rebuilt only when that
 	# changes, not every tick.
@@ -535,25 +567,57 @@ func refresh() -> void:
 ## THE PURSE, THE AMULETS AND THE WORLD MAGICS as the hero now stands —
 ## cheap enough for every frame, so what a place's pane changes under the
 ## resting panel (food bought, a card sold, an amulet paid) shows at once.
-func refresh_numbers() -> void:
+## [param ticked]: after a tick of the free world's clock, which changes no
+## card — the deck's count is taken again only when the bag's size, the deck
+## in use or the adventure changed, or a pane has held the panel since it was
+## last taken (the smoothness pass, 0.50.66: a long adventure's bag of
+## hundreds was walked every tick).
+func refresh_numbers(ticked := false) -> void:
 	if player == null or _name == null:
 		return
 	_numbers["gold"].text = str(player.gold)
 	_numbers["food"].text = str(player.food)
-	_numbers["ankh"].text = str(player.mana_links())
-	_numbers["book"].text = "%d/%d" % [cards_in_deck(), player.cards.size()]
+	_numbers["ankh"].text = str(_mana_links())
+	var counted := [player.get_instance_id(), player.cards.size(), player.current_deck, _rests]
+	if not ticked or counted != _counted_for:
+		_counted_for = counted
+		_in_deck = cards_in_deck()
+		bag_walks += 1
+	_numbers["book"].text = "%d/%d" % [_in_deck, player.cards.size()]
 	for gem in AMULETS:
 		_amulet_numbers[gem[0]].text = str(int(player.amulets.get(gem[0], 0)))
-	for i in _magic_icons.size():
-		_show_magic(i)
-	if _magic_names != null:
-		_magic_names.text = "World Magics: " + (", ".join(player.world_magics) if not player.world_magics.is_empty() else "none")
+	# The World Magics' icons and words: looked at again only when what
+	# decides them changed — the magics owned, the amulets, Quickening.
+	var magics := [player.world_magics.hash(), player.amulets.hash(), player.quickening > 0]
+	if magics != _magics_for:
+		_magics_for = magics
+		magic_looks += 1
+		for i in _magic_icons.size():
+			_show_magic(i)
+		if _magic_names != null:
+			_magic_names.text = "World Magics: " + (", ".join(player.world_magics) if not player.world_magics.is_empty() else "none")
+
+
+## The hero's mana links ([method AdventurePlayer.mana_links]), counted
+## again only when the world's sites changed — a town linked, taken or
+## freed (all the count reads).
+func _mana_links() -> int:
+	var world := player.world
+	var looked := [world.get_instance_id(), world.sites.hash()] if world != null else []
+	if looked != _links_for:
+		_links_for = looked
+		_links = player.mana_links()
+	return _links
 
 
 func cards_in_deck() -> int:
 	var count := 0
+	var deck := player.current_deck
 	for card in player.cards:
-		if (card as Dictionary).get("decks", []).has(player.current_deck):
+		# No default array made for each card (every tick, and every frame
+		# under a pane, walks the whole bag).
+		var decks: Variant = (card as Dictionary).get("decks")
+		if decks is Array and (decks as Array).has(deck):
 			count += 1
 	return count
 
@@ -762,6 +826,11 @@ static func creature_names_wanted() -> bool:
 	return bool(Settings.get_value(NAMES_SETTING, false))
 
 
+## Whether a click's way is drawn on the land (on until switched off).
+static func path_arrows_wanted() -> bool:
+	return bool(Settings.get_value(PATHS_SETTING, true))
+
+
 ## Whether a right click on a card opens it full screen (on until switched).
 static func reader_wanted() -> bool:
 	return bool(Settings.get_value(READER_SETTING, true))
@@ -915,6 +984,7 @@ func rest(on: bool) -> void:
 	if on == resting:
 		return
 	resting = on
+	_rests += 1
 	if on:
 		close_panels()
 		_hide_tip()
@@ -1131,18 +1201,32 @@ func _open(panel: PanelContainer, shown: bool, beside: Control) -> void:
 ## is laid out: a page built while the pane was closed — the hero's pane
 ## opened straight on its Wizards tab (F6) — measures its wrapping lines
 ## before they have their width, and the pane came out the screen's
-## height, over the panel.
+## height, over the panel. Fitted each frame its size is not its least
+## until that has held two frames, at most [constant REFIT_FRAMES]: the
+## lines can take more than a frame to get their width (the smoothness
+## pass, 0.50.66: with the hall's pictures made ahead, F6 opened in one
+## short frame and the pane stayed the screen's height, 1372 high round a
+## 498-high page, on the 2x skin).
 func _refit(panel: PanelContainer, beside: Control) -> void:
 	if not is_inside_tree():
 		return
-	await get_tree().process_frame
-	if not is_instance_valid(panel) or not panel.visible or _drag.get("pane") == panel:
-		return
-	panel.reset_size()
-	if not _place_remembered(panel):
-		_float(panel, _rect_of(beside).end.x - panel.size.x, 6.0)
-	else:
-		place_pane(panel, panel.position)
+	var last := Vector2(-1, -1)
+	var held := 0
+	for i in REFIT_FRAMES:
+		await get_tree().process_frame
+		if not is_instance_valid(panel) or not panel.visible or _drag.get("pane") == panel:
+			return
+		var least := panel.get_combined_minimum_size()
+		if i == 0 or panel.size != least:
+			panel.reset_size()
+			if not _place_remembered(panel):
+				_float(panel, _rect_of(beside).end.x - panel.size.x, 6.0)
+			else:
+				place_pane(panel, panel.position)
+		held = held + 1 if least == last else 0
+		last = least
+		if held >= 2:
+			return
 
 
 ## [param part] floating beside the panel — under it, or over it when the
@@ -1267,6 +1351,9 @@ func _choose(entry_name: String) -> void:
 			show_quest_pane(not quest_pane_wanted())
 		"Guides":
 			show_guides(not guides_wanted())
+		"Paths":
+			Settings.set_value(PATHS_SETTING, not path_arrows_wanted())
+			paths_switched.emit()
 		"Places":
 			Settings.set_value(PLACES_SETTING, not places_wanted())
 			hide_place()
@@ -1309,6 +1396,8 @@ func _option_words(entry_name: String) -> String:
 			return "Quest pane: " + ("on" if quest_pane_wanted() else "off")
 		"Guides":
 			return "Guide arrows: " + ("on" if guides_wanted() else "off")
+		"Paths":
+			return "Path arrows: " + ("on" if path_arrows_wanted() else "off")
 		"Places":
 			return "Place names: " + ("on" if places_wanted() else "off")
 		"Names":

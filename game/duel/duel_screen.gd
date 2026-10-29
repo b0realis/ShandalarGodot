@@ -9832,7 +9832,9 @@ func _build_chain_head() -> void:
 	row.add_child(_chain_head_label)
 	# The Combat window's own gadget, the same glyphs (`@MENU_ATTACK`'s
 	# Minimize is ▼ there).
-	_chain_gadget = OriginalDialog.bar_button("▼", Vector2(20.0, 16.0))
+	# Lettered while the band is up ([method _dress_chain_head]; the
+	# smoothness pass, 0.50.66): `▼` asks the system for a font, 3 ms.
+	_chain_gadget = OriginalDialog.bar_button("", Vector2(20.0, 16.0))
 	_chain_gadget.focus_mode = Control.FOCUS_NONE
 	_chain_gadget.pressed.connect(func() -> void:
 		_set_chain_minimized(not _chain_minimized))
@@ -9855,7 +9857,8 @@ func _dress_chain_head() -> void:
 	if buried > 0:
 		words += " · %d not shown" % buried
 	_chain_head_label.text = words
-	_chain_gadget.text = "▲" if _chain_minimized else "▼"
+	if count > 0:
+		_chain_gadget.text = "▲" if _chain_minimized else "▼"
 	_chain_gadget.tooltip_text = "Restore" if _chain_minimized else "Minimize"
 	_chain_head.tooltip_text = CHAIN_MINIMIZED_CUE if folded else ""
 

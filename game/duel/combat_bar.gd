@@ -280,27 +280,63 @@ static func keyed_texture(region: Rect2, fill := Fill.BLACK) -> Texture2D:
 	var cache_key := "%s|%d" % [region, fill]
 	if _keyed.has(cache_key):
 		return _keyed[cache_key]
+	if GameSkin.texture("combat_bar") == null:
+		return null
+	var job := keyed_job(region, fill)
+	make_keyed(job)
+	return keep_keyed(job)
+
+
+# --- the smoothness pass (0.50.66, M1): a keyed column made off the thread ---
+## THE KEYING IN THREE STEPS, so a warm-up ([DuelWarmup]) can make a column
+## off the thread that draws before a duel asks for it — the first duel of
+## a session walked its column there, 4 ms with the 1997 skin and 20 with
+## the 2x skin, whose key is carried up to four times the pixels; and the
+## other seat's column at the first attack of the other side. [method
+## keyed_texture] takes the same three steps at once, so a column is the
+## same pixels whichever way it was made:
+##  - [method keyed_job] (main thread): the sheet's pixels the column needs
+##    — `{}` when it is kept already or there is no skin;
+##  - [method make_keyed] (ANY thread: Image work on the job alone);
+##  - [method keep_keyed] (main thread): the texture, kept as before — the
+##    one already kept when there is one; null when the skin changed.
+static func keyed_job(region: Rect2, fill := Fill.BLACK) -> Dictionary:
+	var cache_key := "%s|%d" % [region, fill]
+	if _keyed.has(cache_key):
+		return {}
 	var sheet := GameSkin.texture("combat_bar")
 	if sheet == null:
-		return null
+		return {}
 	# The near-white key is decided on the 1997 pixels; the picture and the
 	# stone it is filled with are cut at the sheet's own resolution, the
 	# key carried up to it (GameSkin, THE 2x PICTURES).
-	var scale := GameSkin.scale_of(sheet)
-	var keyed := GameSkin.original(sheet).get_region(Rect2i(region))
+	var band: Image = null
+	if fill == Fill.STONE:
+		band = GameSkin.cut(sheet, Rect2i(int(region.position.x), STONE_BAND_Y,
+			int(region.size.x), STONE_BAND_H))
+	return {"cache_key": cache_key, "sheet": sheet.get_instance_id(), "region": region,
+		"scale": GameSkin.scale_of(sheet),
+		"keyed": GameSkin.original(sheet).get_region(Rect2i(region)),
+		"img": GameSkin.cut(sheet, Rect2i(region)), "band": band}
+
+
+## [param job]'s column keyed into it (`out`). Any thread.
+static func make_keyed(job: Dictionary) -> void:
+	if job.is_empty():
+		return
+	var keyed: Image = job["keyed"]
 	keyed.convert(Image.FORMAT_RGBA8)
 	for y in keyed.get_height():
 		for x in keyed.get_width():
 			var c: Color = keyed.get_pixel(x, y)
 			keyed.set_pixel(x, y, Color(c, 0.0 if c.r >= WHITE_KEY and c.g >= WHITE_KEY
 				and c.b >= WHITE_KEY else 1.0))
-	var img := GameSkin.cut(sheet, Rect2i(region))
+	var img: Image = job["img"]
 	img.convert(Image.FORMAT_RGBA8)
-	var white := GameSkin.lift_alpha(keyed, img.duplicate() as Image) if scale > 1 else keyed
-	var band: Image = null
-	if fill == Fill.STONE:
-		band = GameSkin.cut(sheet, Rect2i(int(region.position.x), STONE_BAND_Y,
-			int(region.size.x), STONE_BAND_H))
+	var white := GameSkin.lift_alpha(keyed, img.duplicate() as Image) \
+		if int(job["scale"]) > 1 else keyed
+	var band: Image = job["band"]
+	if band != null:
 		band.convert(Image.FORMAT_RGBA8)
 	for y in img.get_height():
 		for x in img.get_width():
@@ -311,9 +347,23 @@ static func keyed_texture(region: Rect2, fill := Fill.BLACK) -> Texture2D:
 					img.set_pixel(x, y,
 						band.get_pixel(x % band.get_width(),
 							y % band.get_height()))
-	var tex := GameSkin.texture_of(img, Vector2i(region.size))
+	job["out"] = img
+
+
+## [param job]'s column as a texture, kept. Main thread.
+static func keep_keyed(job: Dictionary) -> Texture2D:
+	if job.is_empty():
+		return null
+	var cache_key := String(job["cache_key"])
+	if _keyed.has(cache_key):
+		return _keyed[cache_key]
+	var sheet := GameSkin.texture("combat_bar")
+	if sheet == null or sheet.get_instance_id() != int(job["sheet"]) or not (job.get("out") is Image):
+		return null
+	var tex := GameSkin.texture_of(job["out"], Vector2i((job["region"] as Rect2).size))
 	_keyed[cache_key] = tex
 	return tex
+# --- end the smoothness pass (M1): the keyed column ---
 
 
 ## The sheet rectangle of the column that replaces the Phase Bar's own
@@ -358,8 +408,8 @@ func slot() -> int:
 ## Redraw the red dots from [member stops].
 func refresh_stops() -> void:
 	for i in _dots.size():
-		_dots[i].visible = stops != null \
-			and stops.is_marked(_half, PhaseStops.Bar.COMBAT, i)
+		PhaseBar.show_stop_dot(_dots[i], stops != null \
+			and stops.is_marked(_half, PhaseStops.Bar.COMBAT, i))
 
 
 func _relayout() -> void:

@@ -56,15 +56,29 @@ extends Node
 ##   - a header: version, system, processor, renderer, screen, window,
 ##     frame cap, power saver, the handheld the launcher named, and how
 ##     long the start took before the log began;
-##   - a line for each second in which something was slow (a frame over
-##     50 ms, or labelled work over 20 ms) — the frames, their average and
-##     worst, and what the labelled work cost in that second;
-##   - a HITCH line for each frame of 100 ms or more, naming the labelled
-##     work that ran inside it;
+##   - a line for each second in which something was slow (a frame of
+##     twice the screen's refresh period or more, or labelled work over
+##     20 ms) — the frames, their average and worst, and what the labelled
+##     work cost in that second;
+##   - a HITCH line for each frame of four refresh periods or more, naming
+##     the labelled work that ran inside it;
 ##   - a SUMMARY every minute and on exit: frame-time percentiles and every
 ##     label's count, average, worst and total. Written a minute at a time
 ##     so a run ended by the power button still leaves one.
 ## The lines are flushed as they are written.
+##
+## THE THRESHOLDS FOLLOW THE SCREEN (the smoothness pass, 0.50.66; the
+## owner, 2026-10-29: *"silky butter smooth and high fps if needed"*).
+## Until then a frame was slow at 50 ms and a hitch at 100 — and the walk's
+## hitches, a tune or a sheet read on the thread that draws, were 15-60 ms:
+## a player's log showed none of them. Now a frame is SLOW at [constant
+## SLOW_PERIODS] of the screen's refresh period ([method frame_period_ms]:
+## the screen's rate, or the frame cap when that is lower; 60 Hz when
+## neither is known) — 33 ms at 60 Hz, 14 at 144 — and a HITCH at
+## [constant HITCH_PERIODS] — 67 ms at 60 Hz, 28 at 144; never later than
+## the old 50 and 100 ([method slow_for], [method hitch_for]). The header
+## says which, and the summary every minute looks at the screen again (a
+## frame cap changed in the Options).
 
 const ENV := "SHANDALAR_PERF_LOG"
 const FLAG := "--perf-log"
@@ -72,10 +86,17 @@ const FLAG := "--perf-log"
 const MARKERS: Array[String] = ["perf-log", "perf-log.txt"]
 const PATH := "user://logs/perf.log"
 const PREVIOUS := "user://logs/perf.previous.log"
-## A frame this long is a hitch, and gets a line of its own.
+## A frame this long is a hitch, and gets a line of its own — at the most
+## ([method hitch_for]: [constant HITCH_PERIODS] refresh periods, sooner).
 const HITCH_MS := 100.0
-## A frame this long makes its second worth a line.
+## A frame this long makes its second worth a line — at the most ([method
+## slow_for]: [constant SLOW_PERIODS] refresh periods, sooner).
 const SLOW_MS := 50.0
+## A frame of this many refresh periods is slow, of this many a hitch.
+const SLOW_PERIODS := 2.0
+const HITCH_PERIODS := 4.0
+## The refresh rate taken when the screen gives none.
+const FALLBACK_HZ := 60.0
 ## Labelled work this long makes its second worth a line.
 const SLOW_SPAN_MS := 20.0
 ## Frame times are kept as a millisecond histogram up to this, the rest
@@ -98,6 +119,15 @@ var path := PATH
 var keep_previous := false
 ## How this launch asked (for the header).
 var asked_by := ""
+## The refresh period the thresholds are taken from, in ms; 0 (the game's)
+## is the screen's ([method frame_period_ms]), looked at again each
+## summary. A test sets its own before adding the node to the tree.
+var period_ms := 0.0
+## This run's thresholds ([method slow_for], [method hitch_for]).
+var slow_ms := SLOW_MS
+var hitch_ms := HITCH_MS
+## The refresh period they were taken from, in ms (for the header).
+var _period_now := 1000.0 / FALLBACK_HZ
 
 var _file: FileAccess = null
 var _started_us := 0
@@ -218,6 +248,40 @@ static func is_active() -> bool:
 	return _active != null
 
 
+## THE PERIOD A FRAME SHOULD TAKE, in ms: the screen's refresh
+## ([param refresh_hz], what V-Sync waits for), or the frame cap
+## [param max_fps] when that is lower (0: no cap); [constant FALLBACK_HZ]
+## when the screen gives no rate.
+static func frame_period_ms(refresh_hz: float, max_fps: int) -> float:
+	var hz := refresh_hz if refresh_hz > 0.0 else FALLBACK_HZ
+	if max_fps > 0:
+		hz = minf(hz, float(max_fps))
+	return 1000.0 / hz
+
+
+## A frame of this many ms or more is slow, at [param period] ms a
+## refresh: [constant SLOW_PERIODS] periods, [constant SLOW_MS] at most.
+static func slow_for(period: float) -> float:
+	return minf(SLOW_MS, SLOW_PERIODS * period)
+
+
+## A frame of this many ms or more is a hitch: [constant HITCH_PERIODS]
+## periods, [constant HITCH_MS] at most.
+static func hitch_for(period: float) -> float:
+	return minf(HITCH_MS, HITCH_PERIODS * period)
+
+
+## The thresholds from [member period_ms], or from the screen as it is now.
+func _take_thresholds() -> void:
+	var period := period_ms
+	if period <= 0.0:
+		var hz := DisplayServer.screen_get_refresh_rate() if DisplayServer.get_name() != "headless" else -1.0
+		period = frame_period_ms(hz, Engine.max_fps)
+	_period_now = period
+	slow_ms = slow_for(period)
+	hitch_ms = hitch_for(period)
+
+
 func _enter_tree() -> void:
 	name = "PerfLog"
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -227,6 +291,7 @@ func _enter_tree() -> void:
 	_active = self
 	_histogram.resize(HISTOGRAM_MS + 1)
 	_histogram.fill(0)
+	_take_thresholds()
 	_open()
 	_started_us = Time.get_ticks_usec()
 	_last_us = _started_us
@@ -265,9 +330,9 @@ func _frame(ms: float, now_us: int) -> void:
 	_sec_frames += 1
 	_sec_sum_ms += ms
 	_sec_worst_ms = maxf(_sec_worst_ms, ms)
-	if ms >= SLOW_MS:
+	if ms >= slow_ms:
 		_sec_slow += 1
-	if ms >= HITCH_MS:
+	if ms >= hitch_ms:
 		_hitches += 1
 		_sec_hitches += 1
 		var inside := PackedStringArray()
@@ -282,6 +347,7 @@ func _frame(ms: float, now_us: int) -> void:
 		# ten-minute sleep is one summary, not one per minute slept.
 		_next_summary_s = (floorf(elapsed_s / SUMMARY_EVERY_S) + 1.0) * SUMMARY_EVERY_S
 		_summary("SUMMARY (every minute)")
+		_take_thresholds()
 
 
 ## A job opened at [param started_us] has closed at [param ended_us]: its
@@ -353,9 +419,9 @@ func _close_second() -> void:
 		if float(_sec_spans[label][2]) >= SLOW_SPAN_MS:
 			slow_work = true
 	if _sec_frames > 0 and (_sec_slow > 0 or slow_work):
-		var parts := PackedStringArray(["[%5ds] frames %d  avg %.1f ms  worst %.0f ms  >%dms %d  >%dms %d"
+		var parts := PackedStringArray(["[%5ds] frames %d  avg %.1f ms  worst %.0f ms  >%.0fms %d  >%.0fms %d"
 			% [_second, _sec_frames, _sec_sum_ms / _sec_frames, _sec_worst_ms,
-			int(SLOW_MS), _sec_slow, int(HITCH_MS), _sec_hitches]])
+			slow_ms, _sec_slow, hitch_ms, _sec_hitches]])
 		for label in _sec_spans:
 			var row: Array = _sec_spans[label]
 			parts.append("%s %d× avg %.1f ms worst %.0f ms" % [label, row[0], float(row[1]) / int(row[0]), row[2]])
@@ -369,9 +435,9 @@ func _close_second() -> void:
 
 
 func _summary(title: String) -> void:
-	_say("%s after %.0f s: %d frames, frame ms p50 %d / p95 %d / p99 %d / worst %.0f, %d hitches of %d ms or more"
+	_say("%s after %.0f s: %d frames, frame ms p50 %d / p95 %d / p99 %d / worst %.0f, %d hitches of %.0f ms or more"
 		% [title, float(Time.get_ticks_usec() - _started_us) / 1000000.0, _frames,
-		percentile(0.50), percentile(0.95), percentile(0.99), _worst_ms, _hitches, int(HITCH_MS)])
+		percentile(0.50), percentile(0.95), percentile(0.99), _worst_ms, _hitches, hitch_ms])
 	for label in _run_spans:
 		var row: Array = _run_spans[label]
 		_say("  %s: %d×, avg %.1f ms, worst %.0f ms, total %.1f s"
@@ -411,8 +477,9 @@ func header() -> PackedStringArray:
 	lines.append("the log began %.1f s after the process started (the skin, the card packs, the title screen)"
 		% (float(Time.get_ticks_msec()) / 1000.0))
 	lines.append("file: %s" % ProjectSettings.globalize_path(path))
-	lines.append("A line per second with a frame over %d ms or labelled work over %d ms; HITCH = one frame of %d ms or more."
-		% [int(SLOW_MS), int(SLOW_SPAN_MS), int(HITCH_MS)])
+	lines.append(("A line per second with a frame of %.1f ms or more or labelled work over %d ms; HITCH = one frame"
+		+ " of %.1f ms or more (the screen's refresh period %.1f ms: %.0f and %.0f of them, at most %d and %d ms).")
+		% [slow_ms, int(SLOW_SPAN_MS), hitch_ms, _period_now, SLOW_PERIODS, HITCH_PERIODS, int(SLOW_MS), int(HITCH_MS)])
 	lines.append("Each job counts its own time: work done inside another job is its own row, \"(inside …)\".")
 	return lines
 

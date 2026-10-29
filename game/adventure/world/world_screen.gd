@@ -11,10 +11,13 @@ extends Control
 ## the way there is found and walked at the 1997 pace ([HeroWalk]), the
 ## world's clock ticking every 60 ms as the original's did, the land the
 ## hero passes explored. The pointer is a small walking man, an open door
-## over a site, the place's name by it. The arrows or a drag look around,
-## the wheel zooms, Space stops the walk and comes back to the hero, a
-## right click opens the options, Escape or Q asks "Ready to Quit?"
-## ([method ask_quit]; the keys in full at [method _unhandled_input]).
+## over a site, the place's name by it. The arrows walk the hero a tile at
+## a time while held, no way found, as 1997's keys did — two for a
+## diagonal, Home, PgUp, PgDn, End and the keypad too ([method
+## _press_walk]); W A S D or a drag look around, the wheel zooms, Space
+## stops the walk and comes back to the hero, a right click opens the
+## options, Escape or Q asks "Ready to Quit?" ([method ask_quit]; the keys
+## in full at [method _unhandled_input]).
 ## A pinch zooms and a touchpad's two-finger slide looks, and a finger
 ## does what the mouse does ([TouchControls]).
 ## The floating panel ([WorldHud]) shows what the hero carries; its World
@@ -22,6 +25,8 @@ extends Control
 ## load (over the world), return to the title and exit the game. A small
 ## map, the quest pane and the clues float in panes the player may move;
 ## guide arrows point to the places that call the hero ([WorldGuides]).
+## A click's way is drawn on the land, coloured by the food ([WorldPath]),
+## and the pointer resting on a tile shows the way there faintly.
 ## A place walked to opens its pane ([VisitPane]) — a town's card shop, its
 ## trade, its wise man and its quest ([WiseManPane]), its deck builder, and
 ## the World Magic seller as it is left ([WorldMagicPane]) — and a lair
@@ -97,6 +102,15 @@ extends Control
 
 const LOOK_SPEED := 600.0   # screen pixels a second, at zoom 1
 const ZOOM_STEP := 1.25
+## THE ZOOM EASED [QoL] (the smoothness pass, 0.50.66; the owner,
+## 2026-10-29: *"silky butter smooth"*): a wheel's notch, + and − set where
+## the zoom goes ([method zoom_step]) and every frame it moves there by
+## 1 − e^(−[constant ZOOM_EASE]·delta) of the way left, evenly to the eye
+## (in log space), taking the goal once within [constant ZOOM_NEAR] of it —
+## a notch most of the way in a sixth of a second, all of it in a quarter,
+## at any frame rate. A pinch and [method set_zoom] are at once.
+const ZOOM_EASE := 18.0
+const ZOOM_NEAR := 0.002
 ## A press that moves no further than this is a click, not a drag.
 const CLICK_SLOP := 6.0
 ## Screen pixels a touchpad's two-finger slide looks for each unit of it.
@@ -111,6 +125,17 @@ const AFTER_PANE_MS := 500
 ## the background ([method _warm_the_builder]): past the first frames, and
 ## the arrival's own work.
 const WARM_AFTER := 1.0
+## How long after the world opens the panes' pictures are made in the
+## background ([method _warm_the_panes]): after the deck's begin, and the
+## world's own sheets and tunes ([method WorldSoundscape.warm_arrival]).
+const WARM_PANES_AFTER := 2.0
+## The pictures the hero's pane (F5), its Wizards tab (F6) and the map (M)
+## draw as they are, warmed for them ([method _warm_the_panes]): the hero's
+## frame, the creatures' faces, the World Magics' and the amulets' sheets,
+## the map's ground and tiles, the hall's floor; and the hall's sound.
+const PANE_PICTURES: Array[String] = ["world_frame", "creature_thumbs", "world_magics", "world_amulets",
+	"map_ground", "world_map_tiles", "wizards_ground"]
+const PANE_SOUNDS: Array[String] = ["sfx_wizards"]
 ## Said beside the panel when the adventure could not be written (the
 ## robustness pass, 2026-10-23: a whole adventure was played and lost on
 ## exit with no word of it).
@@ -123,6 +148,34 @@ const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
 ## 0x10: a village, a town, a city, a castle, as a wizard holds them or
 ## not; a dungeon never).
 const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen"]
+## THE WALKING KEYS (the owner's ruling of 2026-10-29), each with its way
+## on the screen (x right, y down): 1997's arrows, Home, PgUp, PgDn and
+## End, which set its heading (adventure_input.c 328–353: Up 2, PgUp 3,
+## Right 4, PgDn 5, Down 6, End 7, Left 8, Home 1 — the world's ways as the
+## screen draws them: up is the world's north-east). 1997 read the keys'
+## scan codes (`QueueKeyInputFromMessage`, sidlib's lib.c 185–249), so the
+## keypad's 7 8 9 4 6 1 2 3 were the same keys whatever NumLock said — its
+## NumLock test reads `GetAsyncKeyState`, a key held, not the lock — and
+## they walk here too, under either of Godot's names; the keypad's 5 was no
+## key at all (virtual_key_char_map_init.inc, scan code 0x4C), and no digit
+## of the keypad cast a World Magic: its digits came only with Shift, kept
+## apart from the top row's (`PopNormalizedQueuedKeyInput`,
+## adventure_input.c 1300–1373).
+const WALK_KEYS := {
+	KEY_UP: Vector2i(0, -1), KEY_KP_8: Vector2i(0, -1),
+	KEY_PAGEUP: Vector2i(1, -1), KEY_KP_9: Vector2i(1, -1),
+	KEY_RIGHT: Vector2i(1, 0), KEY_KP_6: Vector2i(1, 0),
+	KEY_PAGEDOWN: Vector2i(1, 1), KEY_KP_3: Vector2i(1, 1),
+	KEY_DOWN: Vector2i(0, 1), KEY_KP_2: Vector2i(0, 1),
+	KEY_END: Vector2i(-1, 1), KEY_KP_1: Vector2i(-1, 1),
+	KEY_LEFT: Vector2i(-1, 0), KEY_KP_4: Vector2i(-1, 0),
+	KEY_HOME: Vector2i(-1, -1), KEY_KP_7: Vector2i(-1, -1)}
+## The screen's eight ways as the world's (1–8, [constant
+## ShandalarWorld.DX]): 1997's heading for each key above — and for two
+## arrows held, the key between them (Up and Right walk as PgUp does).
+const SCREEN_WAYS := {
+	Vector2i(0, -1): 2, Vector2i(1, -1): 3, Vector2i(1, 0): 4, Vector2i(1, 1): 5,
+	Vector2i(0, 1): 6, Vector2i(-1, 1): 7, Vector2i(-1, 0): 8, Vector2i(-1, -1): 1}
 ## The places whose tune comes to full voice as they are entered: a
 ## village, a town, a city — and a castle, standing or beaten [1997: every
 ## site's arrival set the place's channel to full, adventure_input.c 703–722
@@ -148,6 +201,8 @@ const ARRIVAL_SECONDS := 8.0
 var view: WorldView
 ## The arrows to the places that call the hero ([WorldGuides]).
 var guides: WorldGuides
+## The click's way drawn on the land, and the hover preview ([WorldPath]).
+var paths: WorldPath
 var _map: WorldMap
 ## The floating icons ([WorldHud]): the purse, the amulets, the World
 ## Magics and the round buttons.
@@ -166,8 +221,15 @@ var _dragging := false
 ## W and D pressed while the hero's pane was open: the pane's, not looked
 ## with until let go ([method _look_with_keys]).
 var _pane_letters: Array[int] = []
+## THE WALKING KEYS PRESSED on the world and still held, the newest last
+## ([method _press_walk]): only a press the free world heard walks — a key
+## held as a pane opens is forgotten ([method _disarm_keys]), so held on as
+## it closes it walks no one until pressed again.
+var _walk_keys: Array[int] = []
 var _pressed_at := Vector2.ZERO
 var _dragged := false
+## Where the eased zoom goes ([method zoom_step]); 0 when it stands.
+var _zoom_goal := 0.0
 var _leaving := false
 var _tick_left := 0.0
 var _pointer := -1
@@ -390,6 +452,13 @@ func _ready() -> void:
 	view.name = "View"
 	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(view)
+	# Over the land and its figures, under the guide arrows and the panel.
+	paths = WorldPath.new()
+	paths.name = "Paths"
+	paths.view = view
+	paths.wanted = WorldHud.path_arrows_wanted()
+	paths.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(paths)
 	guides = WorldGuides.new()
 	guides.name = "Guides"
 	guides.view = view
@@ -447,6 +516,8 @@ func _ready() -> void:
 			_reveal(null)
 	if is_inside_tree():
 		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_builder)
+		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_duels)
+		get_tree().create_timer(WARM_PANES_AFTER).timeout.connect(_warm_the_panes)
 
 
 ## THE ARRIVAL'S WORDS PUT AWAY as the panel opens a pane of its own over
@@ -475,6 +546,41 @@ func _warm_the_builder() -> void:
 	if not is_inside_tree() or player == null:
 		return
 	CardArtWarmer.warm(self, _cards_to_warm())
+
+
+## THE DUELS' PICTURES WARMED [QoL] (the smoothness pass, 0.50.66): a
+## second after the world opens, every adventure duel's table — a meeting's,
+## a lair's, a ruled town's, a dungeon room's, the finale's — is decoded and
+## made in the background ([method WorldDuels.warm_for]), so the first duel
+## opens as quickly as the later ones.
+func _warm_the_duels() -> void:
+	if is_inside_tree() and player != null:
+		WorldDuels.warm_for(self, player)
+
+
+## THE PANES' PICTURES WARMED [QoL] (the smoothness pass, 0.50.66): two
+## seconds after the world opens, what the first hero's pane (F5), Wizards
+## tab (F6) and map (M) of a session would read and make on the thread that
+## draws — 38, 48 and 11 ms with the 1997 skin, 61, 129 and 31 with the 2x
+## skin — is decoded and made on worker threads instead: the pictures they
+## draw as they are ([constant PANE_PICTURES], [SkinWarmer]) and the ones
+## they make of the skin's ([PaneWarmer]: the hall's bled pictures for the
+## wizards as they stand now, the castles' trims, the map's cuts). Their
+## memory, held from then even if no pane opens: about 12 MB of textures
+## with the 1997 skin (the plain pictures 8.8 MB, the hero's frame 3.1 of
+## it; the hall's 3.1), about 48 MB with the 2x skin — what the first
+## openings would hold anyway.
+func _warm_the_panes() -> void:
+	if not is_inside_tree() or player == null:
+		return
+	SkinWarmer.warm(self, PANE_PICTURES, PANE_SOUNDS)
+	var trims: Array[Array] = []
+	for ref in HeroStats.castle_frames():
+		trims.append([ref[0], ref[1], view.art.frame_rect(String(ref[0]), int(ref[1]))])
+	var sprites: Array[Array] = []
+	for place in WorldMap.sprite_places():
+		sprites.append(["map_buttons", place])
+	PaneWarmer.warm(self, WizardsPicture.pictures_for(WorldStatus.wizard_rows(player)), trims, sprites)
 
 
 ## The hero's cards as the builder first shows them: the deck in use, then
@@ -515,7 +621,9 @@ func _make_hud() -> void:
 	hud.walk_requested.connect(func(tile: Vector2i) -> void: walk_to_tile(tile))
 	hud.hovered.connect(func() -> void:
 		_wear(WorldCursors.Kind.ARROW)
-		hud.hide_place())
+		hud.hide_place()
+		paths.hover(Vector2i(-1, -1)))
+	hud.paths_switched.connect(func() -> void: paths.wanted = WorldHud.path_arrows_wanted())
 	hud.big_switched.connect(rebuild_hud, CONNECT_DEFERRED)
 	hud.names_switched.connect(func() -> void:
 		if player != null:
@@ -560,6 +668,7 @@ func show_player(adventure: AdventurePlayer) -> void:
 	# the hero stands on.
 	_entered_tile = player.entered_tile if player.entered_tile == player.tile() else Vector2i(-1, -1)
 	walk = HeroWalk.new(player)
+	paths.walk = walk
 	view.world = world
 	view.hero_walker = player.walker
 	view.hero_sheet = HeroColors.dressed(view.art, player.walker, player.figure_colors)
@@ -581,7 +690,11 @@ func show_world(shown: ShandalarWorld) -> void:
 	show_player(AdventurePlayer.begin(record, shown))
 
 
-func _show_hero() -> void:
+## The hero as they now stand shown: the view, the small map, the guides,
+## the panel — [param ticked] when the world's clock moved them, which is
+## all that changed (the panel need not walk the bag again: [method
+## WorldHud.refresh]).
+func _show_hero(ticked := false) -> void:
 	view.hero = Vector2(player.position)
 	view.lairs = WorldLairs.seen(player)
 	var known := WorldClues.on_world(world)
@@ -597,10 +710,9 @@ func _show_hero() -> void:
 	_map.hero_tile = player.tile()
 	_map.player = player
 	var calling := WorldStatus.targets(player)
-	hud.minimap.world = world
-	hud.minimap.hero = Vector2(player.position)
-	hud.minimap.marks = calling
-	hud.minimap.dungeons = known
+	# One look for the small map, not one for each thing it shows (the
+	# smoothness pass, 0.50.66).
+	hud.minimap.show_hero(world, Vector2(player.position), calling, known)
 	var guided: Array[Dictionary] = []
 	if WorldHud.guides_wanted():
 		guided = calling
@@ -612,7 +724,7 @@ func _show_hero() -> void:
 			covered.append((pane as Control).get_global_rect())
 	guides.avoid = covered
 	guides.visible = not guides.targets.is_empty()
-	hud.refresh()
+	hud.refresh(ticked)
 
 
 # ------------------------------------------------------- the panes' hold --
@@ -1994,7 +2106,10 @@ func advance(seconds: float) -> void:
 		soundscape.tick(walk)
 		if walking:
 			view.camera = Vector2(player.position)
-		var reached := walking and not walk.is_walking() and player.tile() == walk.destination
+		# The keys' walk arrives at every place it steps onto, as 1997's did
+		# (adventure_input.c 835–846); a click's at the place walked to.
+		var reached := walking and ((walk.by_keys and walk.at_middle)
+			or not walk.is_walking() and player.tile() == walk.destination)
 		var news := walk.take_news()
 		if not news.is_empty():
 			# 1997 showed the news inside the hero's step, the creatures
@@ -2013,7 +2128,7 @@ func advance(seconds: float) -> void:
 		# part B, q3-3; 1997 entered the town inside the step).
 		if not _tick_held:
 			_check_quest()
-		_show_hero()
+		_show_hero(true)
 		view.queue_redraw()
 		if _map.visible:
 			_map.queue_redraw()
@@ -2022,13 +2137,18 @@ func advance(seconds: float) -> void:
 ## THE TICK'S SECOND HALF, after the hero's step: the place walked to
 ## visited ([param reached] the step reached it) — [QoL: only the place
 ## walked to; 1997 entered every town stepped on, and a way found for the
-## hero would wander into towns not chosen], the creatures resting that
+## hero would wander into towns not chosen; the keys' walk enters every
+## place it steps onto, as 1997's did, and stops there (its heading
+## dropped, adventure_input.c 846)], the creatures resting that
 ## tick [ours: 1997 walked them after the town, already pushed back] — or
 ## the roaming slots ([WorldCreatures]: refilled, walked, met, crying); a
 ## lair reached entered, a creature met; then the clock on. True when the
 ## clock's run stops here (a place opened, a lair, a meeting).
 func _rest_of_tick(reached: bool) -> bool:
 	var opened := reached and visit(player.tile()) != null
+	if opened and walk.by_keys:
+		# The keys' next tile is not walked on to once the place is left.
+		walk.stop()
 	var slots := {} if opened else WorldCreatures.tick(player)
 	_cry(slots.get("cries", []))
 	var met := int(slots.get("met", -1))
@@ -2223,7 +2343,10 @@ func _exit_tree() -> void:
 ## THE PLACE UNDER THE POINTER at [param point]: its pointer worn, its kind
 ## and name floating by it — none while a drag looks around.
 func _hover_world(point: Vector2) -> void:
-	var place := place_at(tile_at(point))
+	var tile := tile_at(point)
+	# The hover preview's tile ([WorldPath]): none while a drag looks round.
+	paths.hover(Vector2i(-1, -1) if _dragged else tile)
+	var place := place_at(tile)
 	_wear(WorldCursors.FOR_PLACE.get(String(place.get("kind", "")), WorldCursors.Kind.WALK))
 	if place.is_empty() or _dragged:
 		hud.hide_place()
@@ -2255,9 +2378,51 @@ func look(pixels: Vector2) -> void:
 	view.queue_redraw()
 
 
+## The zoom set at once (a pinch, a test); an eased zoom under way is
+## given up.
 func set_zoom(value: float) -> void:
+	_zoom_goal = 0.0
+	view.zoom_goal = 0.0
 	view.zoom = clampf(value, WorldView.ZOOM_MIN, WorldView.ZOOM_MAX)
 	view.queue_redraw()
+
+
+## THE ZOOM EASED one notch — [param out] or in, [constant ZOOM_STEP] —
+## from where it is going ([constant ZOOM_EASE]), so three quick notches go
+## as far as three slow ones, each to the zoom the jump went to. The view
+## draws the land for the further out of the zoom and its goal ([member
+## WorldView.zoom_goal]): one drawing covers the whole ease out, as many as
+## the jump made.
+func zoom_step(out: bool) -> void:
+	var from := zoom_goal()
+	var goal := clampf(from / ZOOM_STEP if out else from * ZOOM_STEP, WorldView.ZOOM_MIN, WorldView.ZOOM_MAX)
+	if goal == view.zoom:
+		set_zoom(goal)
+		return
+	_zoom_goal = goal
+	view.zoom_goal = goal
+
+
+## Where the zoom stands once the eased zoom is done.
+func zoom_goal() -> float:
+	return _zoom_goal if _zoom_goal > 0.0 else view.zoom
+
+
+## Whether an eased zoom is under way.
+func zooming() -> bool:
+	return _zoom_goal > 0.0
+
+
+## The eased zoom's frame: [param delta] seconds of the way.
+func _ease_zoom(delta: float) -> void:
+	if _zoom_goal <= 0.0:
+		return
+	var now := exp(lerpf(log(view.zoom), log(_zoom_goal), 1.0 - exp(-ZOOM_EASE * delta)))
+	if absf(now / _zoom_goal - 1.0) <= ZOOM_NEAR:
+		now = _zoom_goal
+		_zoom_goal = 0.0
+		view.zoom_goal = 0.0
+	view.zoom = now
 
 
 func back_to_hero() -> void:
@@ -2313,6 +2478,7 @@ func _process(delta: float) -> void:
 	_sync_rest()
 	if world == null:
 		return
+	_ease_zoom(delta)
 	_arrival_under_panes()
 	if _leave_after and not modal() and _town_aside == "":
 		# A held duel's Return to main menu taken once it was over ([method
@@ -2324,6 +2490,7 @@ func _process(delta: float) -> void:
 	if _entered_tile.x >= 0 and player != null and player.tile() != _entered_tile:
 		_entered_tile = Vector2i(-1, -1)
 	if _map.visible or modal():
+		_disarm_keys()
 		# The world waits under it; what a pane changes — food bought, a card
 		# sold, an amulet paid, a meeting's tribute, a link lost to the news —
 		# shows on the panel at once (the playtest of part B, P4-5: under a
@@ -2332,30 +2499,37 @@ func _process(delta: float) -> void:
 		if (visiting() or meeting() or news_shown()) and not _duel_held:
 			hud.refresh_numbers()
 		# The hero stands where the last tick left them, not a step short.
-		view.frame(1.0)
+		view.frame(1.0, delta * WorldHud.pace())
+		paths.frame(true)
 		return
+	if walk != null:
+		walk.keyed = _keyed_way()
 	advance(delta * WorldHud.pace())
 	# A walk's last step opened a place's pane this tick: the world waits
 	# from now, as above, and the pointer is not read again under the pane
 	# (the bug pass after the campaign, r3-1: the place's name and its
 	# pointer came back beside the pane).
 	if _world_waits():
-		view.frame(1.0)
+		view.frame(1.0, delta * WorldHud.pace())
+		paths.frame(true)
 		return
 	# THE GLIDE [QoL]: the clock ticks every [constant HeroWalk.TICK], the
 	# hero and the view slide between its ticks ([method WorldView.frame]).
-	view.frame(_tick_left / HeroWalk.TICK)
+	view.frame(_tick_left / HeroWalk.TICK, delta * WorldHud.pace())
 	_look_with_keys(delta)
 	_point_again()
+	# The path arrows last, with the view where this frame draws it.
+	paths.frame(false)
 
 
-## The arrows (W A S D too) look around; Ctrl+S saves, so with Ctrl held
-## they never look down. While the hero's pane is open W and D are the
-## pane's — W the Wizards, D closes it (J the Journal), as 1997's stats
-## screen took them (adventureStats.c 136–138; the owner's ruling C-3) — so
-## they look no more until it closes, nor while the key that closed it is
-## still held ([member _pane_letters]); A, S and the arrows still do.
-## [QoL: the arrows look where 1997's walked the hero — a click walks here.]
+## W A S D look around [QoL] — the arrows walk, as 1997's did ([method
+## _press_walk]; the owner's ruling of 2026-10-29: *"Scrolling the view
+## would move to W A S D only, plus the mouse drag"*); Ctrl+S saves, so
+## with Ctrl held they never look down. While the hero's pane is open W
+## and D are the pane's — W the Wizards, D closes it (J the Journal), as
+## 1997's stats screen took them (adventureStats.c 136–138; the owner's
+## ruling C-3) — so they look no more until it closes, nor while the key
+## that closed it is still held ([member _pane_letters]); A and S still do.
 func _look_with_keys(delta: float) -> void:
 	for code in _pane_letters.duplicate():
 		if not Input.is_key_pressed(code):
@@ -2366,13 +2540,13 @@ func _look_with_keys(delta: float) -> void:
 	var w := Input.is_key_pressed(KEY_W) and not pane and not KEY_W in _pane_letters
 	var d := Input.is_key_pressed(KEY_D) and not pane and not KEY_D in _pane_letters
 	var direction := Vector2.ZERO
-	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
+	if Input.is_key_pressed(KEY_A):
 		direction.x -= 1
-	if Input.is_key_pressed(KEY_RIGHT) or d:
+	if d:
 		direction.x += 1
-	if Input.is_key_pressed(KEY_UP) or w:
+	if w:
 		direction.y -= 1
-	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
+	if Input.is_key_pressed(KEY_S):
 		direction.y += 1
 	if direction != Vector2.ZERO:
 		look(direction.normalized() * LOOK_SPEED * delta)
@@ -2404,9 +2578,9 @@ func _gui_input(event: InputEvent) -> void:
 			hud.hide_place()
 			hud.toggle_options_at(button.position)
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_UP:
-			set_zoom(view.zoom * ZOOM_STEP)
+			zoom_step(false)
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			set_zoom(view.zoom / ZOOM_STEP)
+			zoom_step(true)
 	elif event is InputEventMagnifyGesture:
 		# A pinch on a touchpad or a touchscreen zooms.
 		set_zoom(view.zoom * (event as InputEventMagnifyGesture).factor)
@@ -2425,12 +2599,13 @@ func _gui_input(event: InputEvent) -> void:
 		_hover_world(motion.position)
 
 
-## The world's keys ([constant WorldHud.KEYS] says them): M or F2 the map,
-## F1 the deck, F3 the cities, F4 the clues, F5 the hero, F6 the wizards,
-## 1–5 a World Magic, N the small map, H the keys, L the saved adventures,
-## Ctrl+S the slots, Space stops the walk and comes back to the hero, Home
-## comes back, + and − zoom; Escape or Q closes what is open, else asks
-## "Ready to Quit?". A pane that holds the screen hears its own keys
+## The world's keys ([constant WorldHud.KEYS] says them): the arrows, Home,
+## PgUp, PgDn, End and the keypad walk ([method _press_walk]), M or F2 the
+## map, F1 the deck, F3 the cities, F4 the clues, F5 the hero, F6 the
+## wizards, the top row's 1–5 a World Magic, N the small map, H the keys, L
+## the saved adventures, Ctrl+S the slots, Space stops the walk and comes
+## back to the hero, + and − zoom; Escape or Q closes what is open, else
+## asks "Ready to Quit?". A pane that holds the screen hears its own keys
 ## (ruling A) — but a town's own pane lets M, F2, F5 and Ctrl+S open over
 ## it ([method _town_key], taken before this); the map takes its own
 ## ([method _map_key], ruling B). For a
@@ -2457,6 +2632,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _map.visible:
 		_map_key(key)
 		return
+	if WALK_KEYS.has(key.keycode):
+		if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
+			return
+		get_viewport().set_input_as_handled()
+		_press_walk(key.keycode)
+		return
 	match key.keycode:
 		KEY_M, KEY_F2:
 			toggle_map()
@@ -2467,9 +2648,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F4:
 			show_clues()
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
+			# The top row's digits only: the keypad's walk ([constant
+			# WALK_KEYS]), as 1997's did.
 			cast(key.keycode - KEY_0)
-		KEY_KP_1, KEY_KP_2, KEY_KP_3, KEY_KP_4, KEY_KP_5:
-			cast(key.keycode - KEY_KP_0)
 		KEY_N:
 			hud.show_minimap(not hud.minimap_shown())
 		KEY_F5:
@@ -2489,15 +2670,72 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 		KEY_SPACE:
 			stop_and_back()
-		KEY_HOME:
-			back_to_hero()
 		KEY_PLUS, KEY_KP_ADD, KEY_EQUAL:
-			set_zoom(view.zoom * ZOOM_STEP)
+			zoom_step(false)
 		KEY_MINUS, KEY_KP_SUBTRACT:
-			set_zoom(view.zoom / ZOOM_STEP)
+			zoom_step(true)
 		_:
 			return
 	get_viewport().set_input_as_handled()
+
+
+## A WALKING KEY [param code] PRESSED on the free world (the owner's ruling
+## of 2026-10-29: *"The arrow keys (and the keypad's 8 directions, two
+## arrows for a diagonal) would walk the hero step by step while held, no
+## pathfinding; clicks keep walking with pathfinding"*): the hero walks a
+## tile at a time the way of the keys held ([constant WALK_KEYS], two
+## arrows a diagonal), a click's way given up ([method HeroWalk.key_toward]),
+## at the 1997 pace through the world's own tick ([method advance]: the
+## food, the clocks, the creatures, every place stepped onto arrived at);
+## let go, the hero stops on the middle of the tile under way. The view
+## goes back to the hero, as a click's walk takes it. With the options
+## open the press closes them and walks no one, as a click on the land
+## does.
+func _press_walk(code: int) -> void:
+	if walk == null or player == null or hud.close_options():
+		return
+	# The keys pressed before it, still held, and it.
+	for held in _walk_keys.duplicate():
+		if held == code or not Input.is_key_pressed(held):
+			_walk_keys.erase(held)
+	_walk_keys.append(code)
+	walk.key_toward(_way_of(_walk_keys))
+	view.camera = view.hero
+	_show_hero()
+
+
+## THE WAY THE WALKING KEYS HELD POINT (1–8; 0 for none), every frame the
+## world runs ([method _process]): the keys let go are forgotten; none with
+## Ctrl held (Ctrl+S saves) or while the options are open (a key held as
+## they open is forgotten, as under a pane).
+func _keyed_way() -> int:
+	for code in _walk_keys.duplicate():
+		if not Input.is_key_pressed(code):
+			_walk_keys.erase(code)
+	if hud.options_shown():
+		_walk_keys.clear()
+	if _walk_keys.is_empty() or Input.is_key_pressed(KEY_CTRL):
+		return 0
+	return _way_of(_walk_keys)
+
+
+## The world's way (1–8) of the walking keys [param codes] together — two
+## against each other cancel, 0.
+static func _way_of(codes: Array[int]) -> int:
+	var on_screen := Vector2i.ZERO
+	for code in codes:
+		on_screen += WALK_KEYS.get(code, Vector2i.ZERO) as Vector2i
+	return int(SCREEN_WAYS.get(on_screen.sign(), 0))
+
+
+## THE WALKING KEYS FORGOTTEN while the world waits (a pane, the map): the
+## keys' walk under way ends on its tile's middle once the world runs
+## again, and a key still held walks no one until it is pressed again (as
+## [member _pane_letters] wait to be let go).
+func _disarm_keys() -> void:
+	_walk_keys.clear()
+	if walk != null:
+		walk.keyed = 0
 
 
 ## ESCAPE OR Q: what the panel has open closed (its panes, the options, the
@@ -2563,7 +2801,8 @@ func toggle_wizards() -> void:
 ## stood (adventure_input.c 328–353) — and the camera back on the hero, as
 ## Space brought it back before [1997 + ours].
 func stop_and_back() -> void:
-	if walk != null and walk.is_walking():
+	if walk != null and (walk.is_walking() or walk.by_keys):
+		# The keys' walk too: a key still held walks again once pressed again.
 		walk.stop()
 		_show_hero()
 	back_to_hero()

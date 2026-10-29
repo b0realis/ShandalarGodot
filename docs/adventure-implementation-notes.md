@@ -194,8 +194,8 @@ screen"*): `WorldScreen` draws the world as 1.3 drew it (`WorldView`,
 "Drawing the world" in the companion notes), with a zoom, and the hero
 standing at the start. Adventure on the Embark screen now makes the world
 (an hourglass runs in the bottom strip, "Conjuration of Shandalar World")
-and opens it. The player can look around (arrows, a
-drag), zoom (wheel, + and −), come back to the hero (Space) and open the
+and opens it. The player can look around (W A S D since
+0.50.66, a drag), zoom (wheel, + and −), come back to the hero (Space) and open the
 map of the world (M; it shows the whole world until walking exists).
 
 **Next:** walking (the original's pace and terrain costs, read), towns,
@@ -269,7 +269,7 @@ creatures 0x1EA2C). The parts nothing uses yet are there, empty.
   (`MapWorldClickToMovementKey`, keys for the eight) or the arrows; a
   click is a destination here and the way round the water is found
   (`AStarGrid2D`, costed by the same pace), walked tile middle to tile
-  middle, never past one. The arrows still look around.
+  middle, never past one. The keys walk as 1997's did (0.50.66, the owner's ruling of 2026-10-29): the arrows, Home, PgUp, PgDn, End and the keypad set one of the eight ways (adventure_input.c 328–353) and the hero walks it a tile at a time while held, no way found (`HeroWalk.key_toward`); two arrows walk the diagonal between; every place stepped onto is entered and the sea stops the walk. [ours: let go, the hero stops on the tile's middle — 1997's heading stayed until Space, the shore or a town.] W A S D and a drag look around; the keypad's digits walk rather than cast (1997's keypad never cast). Path arrows [ours, 0.50.66, the owner's HoMM3 reference]: `WorldPath` draws `HeroWalk.path` on the explored land with `HeroWalk.forecast`, which runs `step`'s own `pace`/`stride`/`meal` ahead on copies (orange fed, red hungry; creatures met and siege news not foreseen); the preview after a 150 ms rest; nothing for key walks or while the world waits; switch "Path arrows", on by default.
 - **Not yet**: the dice the original draws each step for the footstep's
   sound and the roaming creatures, so the adventure's dice stand still.
   (2026-10-28: built since — the footsteps and the roaming creatures draw
@@ -1595,6 +1595,34 @@ features"). What this version builds of them:
   stays lost. All saved in FORMAT_VERSION 3.
 - Decided, built later: the World Lords' shape (gate → island → keep),
   built once the adventure is finished with the original cards.
+
+## Built: the smoothness pass (0.50.66)
+
+The owner (2026-10-29): *"One critique of og game was clunkiness. I really
+want our adventure to play silky butter smooth and high fps if needed."*
+Measured first on the desk's GPU (RTX 4060, every scene 380–1300 FPS
+uncapped: not the frame rate but stalls and uneven motion), then mended,
+the 60 ms tick, the 1997 pace, the dice and the meetings untouched — only
+how the world is drawn, loaded and scheduled:
+
+- [QoL] The hero, the creatures and the view glide at an even speed over
+  1997's stop-and-start steps (each drawn at its average place over the
+  last three ticks, two for a creature; at most about 90 ms behind the
+  tick); the map is drawn ahead over frames, in fewer draw calls with the
+  same pixels; a town's flags no longer redraw the world.
+- [QoL] The zoom eases (1−e^(−18·dt) in log space) and lands on the
+  jump's zoom; the board's hero slides between 1997's 66 ms walk frames,
+  the poses and timing 1997's.
+- [ours] The world reads its pictures, sounds and tunes before they are
+  wanted — the places' sheets, the meeting's pictures and the walk's
+  sounds as the world opens, and every 4 ticks the tunes, pane pictures,
+  meeting grounds and lair sounds near the hero — decoded on a worker
+  (`SkinWarmer`); a new creature is drawn once its sheets are ready (1–4
+  frames later); F5, F6 and the map's pictures are made before they open
+  (`PaneWarmer`); every adventure duel is warmed on arrival and again as a
+  meeting opens (`DuelWarmup`), so a duel opens in about 40–80 ms instead
+  of 0.4–1.3 s.
+- [ours, owner 2026-10-29] Path arrows and their X only on explored tiles.
 
 ## New game in the sources (cross-reference, 2026-10-22)
 

@@ -889,6 +889,13 @@ static func skin_texture(key: String) -> Texture2D:
 	return result
 
 
+## Whether [param key]'s picture has been read (or found missing) and is
+## kept — asking [method skin_texture] for it reads no file. A warm-up's
+## question ([DuelWarmup]; the smoothness pass, 0.50.66).
+static func is_kept(key: String) -> bool:
+	return _texture_cache.has(key)
+
+
 ## Font for a manifest key ("font_title", "font_body"), or null when
 ## neither a skin nor this project has one — the caller then gets Godot's
 ## own default face.
@@ -1553,3 +1560,144 @@ static func _slot(filename: String, every := false) -> Dictionary:
 
 static func _find(filename: String, every := false) -> String:
 	return String(_slot(filename, every)["path"])
+
+
+# ------------------------------------------- decoded off the main thread --
+
+## THE SKIN'S PICTURES AND SOUNDS DECODED ON A WORKER THREAD (the
+## smoothness pass, 0.50.66; the owner, 2026-10-29: *"I really want our
+## adventure to play silky butter smooth"*). Read the first time it is
+## drawn, a world sheet held the frame 7-18 ms (31-63 with the 2x skin), a
+## meeting's pictures and tune 49 ms (97): [method picture] and [method
+## sound] decode on the thread that draws. These three steps are the card
+## art's [method decode_card_art] / [method keep_card_art] for the skin's
+## own files, so a warmer ([SkinWarmer]) can have them ready before they
+## are asked for:
+##  1. [method picture_job] (main thread) — where key's picture would be
+##     read from: `{key, path, own}`, or `{}` when it is kept already or no
+##     place has it (the on-demand read then answers, as cheaply as before);
+##  2. [method decode_picture] (ANY thread) — the files decoded into the
+##     job; it touches no static and no node (the Deck Lab runs games on
+##     threads, the 0.50.64 caches rule);
+##  3. [method keep_picture] (main thread) — what [method picture] makes of
+##     those images, kept as [method skin_texture] keeps it. Idempotent: a
+##     key kept meanwhile is handed back as it is.
+## [method sound_job] / [method decode_sound] / [method keep_sound] the
+## same for [method sound]. A job whose place changed meanwhile (a skin
+## that arrived, [method clear_caches]) is not kept; the on-demand read
+## answers instead.
+
+## Where [param key]'s picture would be read from, for [method
+## decode_picture]: `{key, path, own}`; `{}` when it is kept already, no
+## place has it, or its file would not read and is unchanged. Main thread.
+## [param kept_too]: a job even when the picture is kept already — for a
+## worker that derives an image from the decoded FILE (rather than reading
+## the kept texture back off the graphics card); such a job is decoded and
+## never handed to [method keep_picture].
+static func picture_job(key: String, kept_too := false) -> Dictionary:
+	if key == "" or (_texture_cache.has(key) and not kept_too):
+		return {}
+	var found := _slot(key + ".png")
+	var path := String(found["path"])
+	if path == "" or (_unreadable.has(path) and int(_unreadable[path]) == _stamp(path)):
+		return {}
+	return {"key": key, "path": path, "own": String(found["own"])}
+
+
+## [param job]'s files decoded into it: `img` the picture, and `own_img`
+## the slot's 1x file when [method picture] would need it to know the
+## slot's size. Any thread: it reads only [param job] and constants.
+static func decode_picture(job: Dictionary) -> void:
+	if job.is_empty():
+		return
+	var img := Image.load_from_file(String(job["path"]))
+	job["img"] = img
+	var own := String(job["own"])
+	if img == null or own == "" or own == String(job["path"]):
+		return
+	if scale_for(img.get_size(), SIZES.get(String(job["key"]), Vector2i.ZERO)) == 1:
+		job["own_img"] = Image.load_from_file(own)
+
+
+## The texture [method picture] makes of [param job]'s decoded files, kept
+## under its key as [method skin_texture] keeps it — the one already kept
+## when there is one; null for a job that is empty, was never decoded, or
+## whose place changed meanwhile (then nothing is kept). Main thread.
+static func keep_picture(job: Dictionary) -> Texture2D:
+	var key := String(job.get("key", ""))
+	if key == "":
+		return null
+	if _texture_cache.has(key):
+		return _texture_cache[key]
+	var path := String(job["path"])
+	if not job.has("img") or String(_slot(key + ".png")["path"]) != path:
+		return null
+	var img: Image = job["img"]
+	if img == null:
+		_unreadable[path] = _stamp(path)
+		_texture_cache[key] = null
+		return null
+	_unreadable.erase(path)
+	var result := picture_from(job)
+	_texture_cache[key] = result
+	return result
+
+
+## What [method picture] makes of [param job]'s decoded files ([method
+## decode_picture]: `img`, and `own_img` when the slot's size is its 1x
+## file's) — kept nowhere; the caller keeps it ([method keep_picture], and
+## the portraits' [method PortraitLibrary.keep_face], whose job's key is
+## ""). Main thread: it makes the texture.
+static func picture_from(job: Dictionary) -> Texture2D:
+	var img: Image = job.get("img")
+	if img == null:
+		return null
+	var path := String(job["path"])
+	var own := String(job["own"])
+	if own == path:
+		own = ""
+	var slot: Vector2i = SIZES.get(String(job.get("key", "")), Vector2i.ZERO)
+	var scale := scale_for(img.get_size(), slot)
+	if scale == 1 and own != "":
+		var one: Image = job["own_img"] if job.has("own_img") else _image(own)
+		if one != null:
+			slot = one.get_size()
+			scale = scale_for(img.get_size(), slot)
+	if scale == 1:
+		return ImageTexture.create_from_image(img)
+	var tex := texture_of(img, slot)
+	if own != "":
+		tex.set_meta(ORIGINAL_META, own)
+	return tex
+
+
+## Where [param key]'s sound would be read from, for [method
+## decode_sound]: `{key, path}`; `{}` when it is kept already or no place
+## has it. Main thread.
+static func sound_job(key: String) -> Dictionary:
+	if key == "" or _sound_cache.has(key):
+		return {}
+	var path := _find(key + ".wav")
+	return {"key": key, "path": path} if path != "" else {}
+
+
+## [param job]'s sound decoded into it (`stream`). Any thread.
+static func decode_sound(job: Dictionary) -> void:
+	if not job.is_empty():
+		job["stream"] = AudioStreamWAV.load_from_file(String(job["path"]))
+
+
+## The sound [method sound] would give for [param job]'s key, kept as it
+## keeps it — the one already kept when there is one; null for a job that
+## is empty, was never decoded, or whose place changed meanwhile. Main
+## thread.
+static func keep_sound(job: Dictionary) -> AudioStream:
+	var key := String(job.get("key", ""))
+	if key == "":
+		return null
+	if _sound_cache.has(key):
+		return _sound_cache[key]
+	if not job.has("stream") or _find(key + ".wav") != String(job["path"]):
+		return null
+	_sound_cache[key] = job["stream"]
+	return job["stream"]

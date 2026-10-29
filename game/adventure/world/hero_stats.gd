@@ -341,6 +341,7 @@ func _rebuild() -> void:
 			_clear_page()
 			_journal_page()
 	_drop_kept_scrolls()
+	_read_back.clear()
 	_built = _shape()
 
 
@@ -1094,22 +1095,70 @@ func _label(text: String, size: int, color := INK) -> Label:
 func _painted(key: String, frame: int) -> AtlasTexture:
 	var sheet := art.texture(key)
 	var region := art.frame_rect(key, frame)
-	var memo := "%s#%d" % [key, frame]
+	var memo := trim_key(key, frame)
 	if not _trims.has(memo):
 		_trims[memo] = region
-		var image := sheet.get_image()
+		# The sheet's pixels read back once for all its frames this build
+		# (the smoothness pass, 0.50.66: five castles read the whole sheet
+		# back five times, ~6 ms each), unless [PaneWarmer] trimmed it first.
+		var id := sheet.get_instance_id()
+		if not _read_back.has(id):
+			_read_back[id] = sheet.get_image()
+		var image: Image = _read_back[id]
 		if image != null:
-			if image.is_compressed():
-				image.decompress()
-			# A 2x skin's sheet holds twice the pixels of the 1997 frame.
-			var scale := GameSkin.scale_of(sheet)
-			var used := image.get_region(GameSkin.image_rect(sheet, Rect2i(region))).get_used_rect()
-			if used.size.x > 0:
-				_trims[memo] = Rect2(region.position + Vector2(used.position) / scale, Vector2(used.size) / scale)
+			_trims[memo] = trimmed(image, region, GameSkin.scale_of(sheet))
 	var cut := AtlasTexture.new()
 	cut.atlas = sheet
 	cut.region = _trims[memo]
 	return cut
+
+
+## The sheets read back for [method _painted] while a page is built, by
+## instance; let go as the build ends ([method _rebuild]).
+static var _read_back := {}
+
+
+## The memo of frame [param frame] of sheet [param key]'s painted part.
+static func trim_key(key: String, frame: int) -> String:
+	return "%s#%d" % [key, frame]
+
+
+## FRAME [param region] (drawn pixels) OF A SHEET'S PIXELS [param image]
+## ([param scale] image pixels to a drawn one) cut to its painted part — the
+## whole region when nothing is painted. Touches nothing shared: a worker
+## thread may trim a sheet it decoded ([PaneWarmer]).
+static func trimmed(image: Image, region: Rect2, scale: int) -> Rect2:
+	if image.is_compressed():
+		image.decompress()
+	# A 2x skin's sheet holds twice the pixels of the 1997 frame.
+	var rect := Rect2i(Rect2i(region).position * scale, Rect2i(region).size * scale)
+	var used := image.get_region(rect).get_used_rect()
+	if used.size.x > 0:
+		return Rect2(region.position + Vector2(used.position) / scale, Vector2(used.size) / scale)
+	return region
+
+
+## A painted part found ([method trimmed]) kept for [param memo] ([method
+## trim_key]), unless one is kept already. Main thread.
+static func keep_trim(memo: String, rect: Rect2) -> void:
+	if not _trims.has(memo):
+		_trims[memo] = rect
+
+
+## Whether [param memo]'s painted part is kept.
+static func trim_kept(memo: String) -> bool:
+	return _trims.has(memo)
+
+
+## THE CASTLES' FRAMES the hero's page trims ([method _castles]): `[key,
+## frame]` for each wizard's castle, standing and beaten — for [PaneWarmer]
+## to trim before the page opens.
+static func castle_frames() -> Array[Array]:
+	var out: Array[Array] = []
+	for i in 5:
+		for state in [0, 2]:
+			out.append(WorldView._castle_ref(int(WorldView.CASTLE_FRAMES[i][state])))
+	return out
 
 
 func _icon(texture: Texture2D, at: Vector2) -> TextureRect:

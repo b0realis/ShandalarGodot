@@ -141,9 +141,17 @@ func _init() -> void:
 ## same way. The sheet carries no marker sprite (checked: `Winbk_Phase.pic`
 ## is icons and stone), so the original drew it in code, and the owner's
 ## own word for it is "red dot".
+##
+## LETTERED WHEN FIRST SHOWN (the smoothness pass, 0.50.66): `●` is in no
+## face the game ships, so laying it out asks the system for a font that
+## has it — 2.5 ms a dot on the desk, and the two bars' twenty-four dots
+## made 60 ms of every duel's opening while nearly all of them stay hidden.
+## A dot is built without its letter and given it the first time it is
+## shown ([method show_stop_dot]): the same Label, the same pixels.
+const STOP_DOT := "●"
+
 static func make_stop_dot() -> Label:
 	var dot := Label.new()
-	dot.text = "●"
 	dot.add_theme_font_size_override("font_size", 13)
 	dot.add_theme_color_override("font_color", Color(0.85, 0.10, 0.08))
 	dot.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
@@ -152,6 +160,13 @@ static func make_stop_dot() -> Label:
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dot.visible = false
 	return dot
+
+
+## [param dot] shown or hidden, lettered the first time it is shown.
+static func show_stop_dot(dot: Label, on: bool) -> void:
+	if on and dot.text == "":
+		dot.text = STOP_DOT
+	dot.visible = on
 
 
 ## The cue card one icon carries. [param half] is a
@@ -191,8 +206,8 @@ func refresh_stops() -> void:
 	for i in _dots.size():
 		var half := i / SLOTS
 		var slot := i % SLOTS
-		_dots[i].visible = stops != null \
-			and stops.is_marked(half, PhaseStops.Bar.PHASE, slot)
+		show_stop_dot(_dots[i], stops != null \
+			and stops.is_marked(half, PhaseStops.Bar.PHASE, slot))
 
 
 func _on_zone_input(event: InputEvent, half: int, slot: int) -> void:

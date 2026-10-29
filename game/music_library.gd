@@ -407,9 +407,15 @@ static var _unreadable: Dictionary = {}
 
 ## How many tunes [method stream] keeps: the three an adventure's F1 goes
 ## back and forth between — the deck builder's bed, and on the way back
-## the shell's bed and the tune of the place the hero stands by. About
-## 8 MB of the original's PCM.
-const KEPT_TUNES := 3
+## the shell's bed and the tune of the place the hero stands by — and,
+## since the smoothness pass (0.50.66), the places' tunes the world warms
+## as the hero comes near ([method WorldSoundscape.warm_near], on a worker
+## thread, [SkinWarmer]), so walking from one place's music into the next
+## never reads a file on the thread that draws. Six: the three, and the
+## few places a walk passes between two of them. At most about 17 MB of the
+## original's 22 kHz PCM (2.5-2.8 MB a tune); one that is playing is held
+## by its player anyway, so the cost is the ones kept and not playing.
+const KEPT_TUNES := 6
 
 ## The tunes [method stream] read last, the oldest first: `[path, the
 ## file's modified time then, the stream]`.
@@ -436,6 +442,61 @@ static func _take_kept(path: String, stamp: int) -> AudioStream:
 
 static func _forget_kept() -> void:
 	_kept.clear()
+
+
+## A TUNE DECODED OFF THE MAIN THREAD (the smoothness pass, 0.50.66;
+## [SkinWarmer]) — [method stream]'s read in three steps, as
+## [method GameSkin.picture_job] is the skin's: [method tune_job] (main
+## thread) where track [param id] would be read from — `{id, path, stamp}`,
+## or `{}` when it is kept already, is not there, or would not read at this
+## modified time; [method decode_tune] (any thread: it reads only the job);
+## [method keep_tune] (main thread) kept as [method stream] keeps a tune,
+## so the next ask is handed it.
+static func tune_job(id: String) -> Dictionary:
+	for entry in all():
+		if entry["id"] != id:
+			continue
+		var path := String(entry["path"])
+		var stamp := FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+		if stamp < 0 or (_unreadable.has(path) and int(_unreadable[path]) == stamp):
+			return {}
+		for row in _kept:
+			if row[0] == path and int(row[1]) == stamp:
+				return {}
+		return {"id": id, "path": path, "stamp": stamp}
+	return {}
+
+
+## [param job]'s file decoded into it (`stream`). Any thread.
+static func decode_tune(job: Dictionary) -> void:
+	if not job.is_empty():
+		job["stream"] = _read(String(job["path"]))
+
+
+## [param job]'s tune kept, the youngest, as [method stream] keeps one —
+## the one already kept when there is one; null for a job never decoded,
+## a file changed since, or one that would not read (then remembered so, as
+## [method stream] remembers it). Main thread.
+static func keep_tune(job: Dictionary) -> AudioStream:
+	if job.is_empty() or not job.has("stream"):
+		return null
+	var path := String(job["path"])
+	var stamp := int(job["stamp"])
+	var now := FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	if now != stamp:
+		return null
+	var kept := _take_kept(path, stamp)
+	if kept != null:
+		return kept
+	var read: AudioStream = job["stream"]
+	if read == null:
+		_unreadable[path] = stamp
+		return null
+	_unreadable.erase(path)
+	_kept.append([path, stamp, read])
+	while _kept.size() > KEPT_TUNES:
+		_kept.pop_front()
+	return read
 
 
 ## One file off the disk, by its extension; null for a format the engine

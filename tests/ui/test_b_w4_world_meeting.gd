@@ -277,13 +277,16 @@ func test_a_creature_glides_between_ticks_and_leaps_show_at_once() -> void:
 	moved["x"] = int(hero.x) + 39
 	var second: Array[Dictionary] = [moved]
 	view.creatures = second
-	view.frame(0.5)
-	assert_eq(view._shown_creature(moved), hero + Vector2(39.5, 0), "half way between the ticks")
+	view.frame(0.5, 0.0)
+	# The glide (the smoothness pass, 0.50.66): a creature is drawn where it
+	# stood on average over the last two ticks — half a tick after a step, a
+	# quarter of the way.
+	assert_eq(view._shown_creature(moved), hero + Vector2(39.75, 0), "glided between the ticks")
 	var leapt := moved.duplicate()
 	leapt["x"] = int(hero.x) + 200
 	var third: Array[Dictionary] = [leapt]
 	view.creatures = third
-	view.frame(0.5)
+	view.frame(0.5, 0.0)
 	assert_eq(view._shown_creature(leapt), hero + Vector2(200, 0), "a leap is not slid over")
 
 

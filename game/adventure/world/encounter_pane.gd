@@ -197,6 +197,12 @@ func _begin() -> void:
 		return
 	_play_music("music_duel")
 	_show_meeting()
+	# [QoL] The spoils' pictures and tunes decoded while the meeting is read
+	# (the smoothness pass, [method EncounterStage.warm_spoils]).
+	stage.warm_spoils.call_deferred()
+	# [QoL] The duel's own pictures, sounds and stones decoded while the
+	# meeting is read (the smoothness pass, M1's [method WorldDuels.warm_for]).
+	WorldDuels.warm_for(self, player, int(meeting.get("color", 0)))
 
 
 # ----------------------------------------------------------- the stage --

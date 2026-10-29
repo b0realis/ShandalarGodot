@@ -9,6 +9,10 @@ extends GutTest
 ## show changes; the tiles drawn are worked out from the screen's corners.
 ## And the hero, who moved only on the tick, slides between ticks
 ## ([method WorldView.frame]) while the game reads the tick's places.
+## THE SMOOTHNESS PASS (0.50.66): the pictures are drawn into canvas items
+## of their own ([WorldView.Picture]) — counted by [member WorldView._drawing]
+## — the next ones ahead, a share of a frame at a time; the hero glides
+## evenly over 1997's stop-and-start steps (test_c20_M2_world_glide).
 
 var view: WorldView
 var world: ShandalarWorld
@@ -65,7 +69,7 @@ func _drawn(counts: Dictionary, called: String) -> int:
 
 
 ## What the world screen does every tick: everything given again, moved or
-## not, and a redraw asked for.
+## not, and a redraw asked for — and the frame told a tick ran.
 func _tick() -> void:
 	view.hero = view.hero
 	view.hero_facing = view.hero_facing
@@ -73,6 +77,21 @@ func _tick() -> void:
 	var lairs: Array[Dictionary] = []
 	view.lairs = lairs
 	view.queue_redraw()
+	view.frame(0.0, HeroWalk.TICK)
+
+
+## The pictures drawn anew (and shown) up to now.
+func _drawings() -> int:
+	return view._drawing
+
+
+## Frames waited until new pictures are shown (at most [param most]).
+func _frames_until_drawn(drawings: int, most := 12) -> int:
+	for i in most:
+		if view._drawing > drawings:
+			return i
+		await get_tree().process_frame
+	return most
 
 
 func test_the_view_is_four_pictures() -> void:
@@ -85,63 +104,75 @@ func test_the_view_is_four_pictures() -> void:
 
 func test_standing_still_nothing_is_drawn_again() -> void:
 	var counts := _counting()
+	var drawings := _drawings()
 	for i in 12:
 		_tick()
 		await get_tree().process_frame
 	for called in counts:
 		assert_eq(_drawn(counts, called), 0, "%s not drawn again" % called)
+	assert_eq(_drawings(), drawings, "nor the ground and the uprights")
 
 
 func test_walking_draws_only_the_hero() -> void:
 	var counts := _counting()
 	var pictures := _pictures()
+	var drawings := _drawings()
 	for i in 20:
 		view.camera = view.hero + Vector2(1, 0)
 		view.hero = view.hero + Vector2(1, 0)
 		_tick()
 		await get_tree().process_frame
-	assert_eq(_drawn(counts, "Ground"), 0, "the ground is only moved")
-	assert_eq(_drawn(counts, "Uprights"), 0, "nor the uprights")
+		if i == 7:
+			assert_eq(_drawings(), drawings, "within half the margin the ground and the uprights are only moved")
+	assert_gt(_drawings(), drawings, "past it the next ones were drawn ahead")
+	# The 1997 ground is drawn on canvas items of its own, never on the
+	# Ground picture; the plain ground (no sheets) on the picture, once for
+	# each new drawing shown.
+	var on_ground := _drawings() - drawings if view._plain else 0
+	assert_eq(_drawn(counts, "Ground"), on_ground, "the Ground picture itself drawn on only plain")
+	assert_eq(_drawn(counts, "Uprights"), on_ground, "and the Uprights picture likewise")
 	assert_gte(_drawn(counts, "Figure"), 19, "the hero is drawn where they walk")
 	assert_gte(_drawn(counts, "Shadow"), 19, "with their shadow")
 	var ground := pictures["Ground"] as Node2D
-	assert_almost_eq(ground.position, view.feet() + view._lay(Vector2(view._anchor) - view.camera) * view.zoom,
-		Vector2(0.001, 0.001), "moved with the camera")
-	assert_eq(view.drawn_at(view.hero), view.feet(), "the hero at the screen's feet")
+	assert_almost_eq(ground.position, view.feet() + view._lay(Vector2(view._anchor) - view._shown_camera()) * view.zoom,
+		Vector2(0.001, 0.001), "moved with the camera as drawn")
+	assert_eq(view.drawn_at(view._shown_hero()), view.feet(), "the hero as drawn at the screen's feet")
+	assert_almost_eq(view._shown_hero(), view.hero - Vector2(2, 0), Vector2(0.001, 0.001),
+		"just at a tick: where they stood on average over the last three (the glide)")
 
 
 func test_the_camera_past_the_margin_draws_again_round_it() -> void:
-	var counts := _counting()
+	var drawings := _drawings()
 	view.camera = start + Vector2(200, 0)
 	await wait_process_frames(2)
-	assert_eq(_drawn(counts, "Ground"), 1, "the ground drawn again")
-	assert_eq(_drawn(counts, "Uprights"), 1, "and the uprights")
+	assert_eq(_drawings(), drawings + 1, "the ground and the uprights drawn again, in one go")
 	assert_eq(view._anchor, Vector2i(start + Vector2(200, 0)), "round the camera")
 
 
 func test_new_land_seen_draws_the_ground_again() -> void:
-	var counts := _counting()
+	var drawings := _drawings()
 	var seen := hash(world.page)
 	world.explore_around(Vector2i(view.hero / 32.0) + Vector2i(2, 2))
 	assert_ne(hash(world.page), seen, "new land seen")
 	_tick()
-	await wait_process_frames(2)
-	assert_eq(_drawn(counts, "Ground"), 1, "the dark lifted")
+	var frames := await _frames_until_drawn(drawings)
+	assert_eq(_drawings(), drawings + 1, "the dark lifted")
+	assert_lte(frames, 4, "within a few frames' shares (%d frames)" % frames)
 	_tick()
 	await wait_process_frames(2)
-	assert_eq(_drawn(counts, "Ground"), 1, "once")
+	assert_eq(_drawings(), drawings + 1, "once")
 
 
 func test_zooming_in_only_scales_and_zooming_out_draws() -> void:
-	var counts := _counting()
+	var drawings := _drawings()
 	var ground := _pictures()["Ground"] as Node2D
 	view.zoom = 2.5
 	await wait_process_frames(2)
-	assert_eq(_drawn(counts, "Ground"), 0, "closer: the picture is only scaled")
+	assert_eq(_drawings(), drawings, "closer: the picture is only scaled")
 	assert_eq(ground.scale, Vector2(2.5, 2.5))
 	view.zoom = 1.0
 	await wait_process_frames(2)
-	assert_eq(_drawn(counts, "Ground"), 1, "further: drawn again for the wider screen")
+	assert_eq(_drawings(), drawings + 1, "further: drawn again for the wider screen")
 
 
 ## The tiles drawn: a window of the original's whole order, and every tile
@@ -156,6 +187,8 @@ func test_the_tiles_drawn_are_the_screen_s_in_the_original_order() -> void:
 		view.zoom = look[0]
 		view.camera = look[1]
 		await wait_process_frames(2)
+		# A closer zoom's smaller pictures are drawn ahead (0.50.66): done.
+		view.finish_drawing()
 		var tiles := view._tiles
 		var last := -1
 		var in_order := true
@@ -180,44 +213,51 @@ func test_the_tiles_drawn_are_the_screen_s_in_the_original_order() -> void:
 		assert_lt(tiles.size(), wanted * 2 + 200, "and not the whole map: %d drawn" % tiles.size())
 
 
-func test_frame_slides_the_hero_and_the_camera_between_ticks() -> void:
+func test_frame_glides_the_hero_and_the_camera_between_ticks() -> void:
 	var counts := _counting()
+	var tick := HeroWalk.TICK
 	var step := start + Vector2(3, 0)
+	view.frame(0.0, tick)
 	view.hero = step
 	view.camera = step
-	view.frame(0.0)
+	view.frame(0.0, tick)
 	await get_tree().process_frame
-	assert_eq(view._shown_hero(), start, "just after the tick: where the last one left them")
+	assert_eq(view._shown_hero(), start, "just after the tick: where the last ticks left them")
 	assert_eq(view.drawn_at(start), view.feet(), "the camera with them")
-	view.frame(0.5)
-	assert_eq(view._shown_hero(), start + Vector2(1.5, 0), "half way")
-	assert_eq(view.drawn_at(start + Vector2(1.5, 0)), view.feet())
-	view.frame(1.0)
-	assert_eq(view._shown_hero(), step, "and there by the next")
+	view.frame(0.5, tick * 0.5)
+	assert_almost_eq(view._shown_hero(), start + Vector2(0.5, 0), Vector2(0.001, 0.001),
+		"half a tick on: a sixth of the step — the step averaged over three ticks")
+	assert_almost_eq(view.drawn_at(start + Vector2(0.5, 0)), view.feet(), Vector2(0.001, 0.001))
+	view.frame(0.0, tick * 0.5)
+	assert_almost_eq(view._shown_hero(), start + Vector2(1, 0), Vector2(0.001, 0.001), "a tick on: a third")
+	view.frame(0.0, tick)
+	view.frame(0.0, tick)
+	assert_almost_eq(view._shown_hero(), step, Vector2(0.001, 0.001), "and there three ticks after the step")
 	assert_eq(view.hero, step, "the game reads the tick's place")
 	assert_eq(view.camera, step)
 	assert_eq(view.project(step), Vector2.ZERO, "and projects by it")
 	assert_almost_eq(view.unproject(view.feet()), step, Vector2(0.001, 0.001))
 	await get_tree().process_frame
 	var figure := _drawn(counts, "Figure")
-	view.frame(1.0)
+	view.frame(0.5, tick * 0.5)
 	await get_tree().process_frame
 	assert_eq(_drawn(counts, "Figure"), figure, "nothing moved: nothing drawn")
-	assert_eq(_drawn(counts, "Ground"), 0, "the ground only moved, all along")
 	view.hero = step
-	view.frame(0.0)
+	view.frame(0.0, tick * 0.5)
 	assert_eq(view._shown_hero(), step, "standing at the next tick: they stand")
 
 
 func test_a_leap_is_not_slid_and_a_camera_looking_elsewhere_stays() -> void:
+	var tick := HeroWalk.TICK
 	view.hero = start + Vector2(400, 0)
-	view.frame(0.0)
+	view.frame(0.0, tick)
 	assert_eq(view._shown_hero(), start + Vector2(400, 0), "a leap is shown at once")
 	var looking := start + Vector2(-50, 80)
 	view.camera = looking
-	view.hero = view.hero + Vector2(2, 2)
-	view.frame(0.25)
-	assert_eq(view._shown_hero(), start + Vector2(400.5, 0.5), "the hero slides")
+	view.hero = view.hero + Vector2(3, 3)
+	view.frame(0.0, tick)
+	view.frame(0.5, tick * 0.5)
+	assert_almost_eq(view._shown_hero(), start + Vector2(400.5, 0.5), Vector2(0.001, 0.001), "the hero glides")
 	assert_eq(view.drawn_at(looking), view.feet(), "the camera stays where it looks")
 
 
@@ -254,10 +294,12 @@ func test_the_plain_world_is_kept_the_same_way() -> void:
 	assert_false(plain._tiles.is_empty())
 	view = plain
 	var counts := _counting()
+	var drawings := _drawings()
 	for i in 6:
 		view.camera = view.hero + Vector2(1, 0)
 		view.hero = view.hero + Vector2(1, 0)
 		_tick()
 		await get_tree().process_frame
 	assert_eq(_drawn(counts, "Ground"), 0, "the plain ground is only moved")
+	assert_eq(_drawings(), drawings, "not drawn anew")
 	assert_gte(_drawn(counts, "Figure"), 5, "the hero's mark is drawn where they walk")

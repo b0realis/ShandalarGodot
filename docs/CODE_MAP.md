@@ -21,13 +21,25 @@
   sheets.
 - `game/adventure/world/world_screen.gd` and
   `game/adventure/world/world_screen.tscn`: `WorldScreen`, the adventure
-  full screen — `show_player`, `walk_to_tile` (a click walks), `advance`
+  full screen — `show_player`, `walk_to_tile` (a click walks),
+  `_press_walk` / `WALK_KEYS` (the arrows, Home, PgUp, PgDn, End and the
+  keypad walk while held, 1997's keys), `advance`
   (the world's 60 ms ticks), `tile_at`, `pointer_for` (the walking man or
-  the door), `look`, `set_zoom`, `back_to_hero`, `toggle_map`, `leave`, the
+  the door), `look` (W A S D, a drag), `set_zoom`, `back_to_hero`, `toggle_map`, `leave`, the
   arrival note and the HUD (gold, food, amulets).
 - `game/adventure/world/hero_walk.gd`: `HeroWalk`, walking at the 1.3 pace
   tick for tick (`tick`: terrain, roads, hunger, food and the clocks) on a
-  way found around the sea (`plan`, `walk_to`; Godot's `AStarGrid2D`).
+  way found around the sea (`plan`, `walk_to`; Godot's `AStarGrid2D`),
+  or a tile at a time the keys' way (`key_toward`, `keyed`, `by_keys`);
+  one pace for the walk and its forecast (`pace`, `stride`, `meal`),
+  `forecast` (the food foreseen per tile), `plans` (the way's count).
+  Tests: `tests/unit/test_c20_V1_path_forecast.gd`.
+- `game/adventure/world/world_path.gd`: `WorldPath`, the path arrows — a
+  click's way marked on the explored land, orange where the food lasts and
+  red hungry, bent at turns, an X at the end; the hover preview (`frame`,
+  `hover`, `shape`); the switch `WorldHud.PATHS_SETTING` /
+  `path_arrows_wanted` / `paths_switched`. Tests:
+  `tests/ui/test_c20_V1_path_arrows.gd`.
 - `game/adventure/world/world_cursors.gd`: `WorldCursors`, the drawn
   pointers — the walking man and the open door (`image`, `wear`,
   `take_off`).
@@ -637,6 +649,50 @@
   `tests/unit/test_c19_A1_creatures.gd`,
   `tests/ui/test_c19_A1_campaign_settings.gd`,
   `tests/ui/test_c19_A1_life_shown.gd`.
+- The smoothness pass (0.50.66, the owner: "One critique of og game was
+  clunkiness. I really want our adventure to play silky butter smooth and
+  high fps if needed"; measured on the desk's GPU, the 1997 tick, pace and
+  rules untouched). The duel opens at once: `game/duel/duel_warmup.gd`:
+  `DuelWarmup` (the duel made ready before it opens: `warm`,
+  `pictures_for`, `runs_here` / `forced`, `finish_now`), hooked from the
+  world's arrival (`WorldDuels.warm_for`), the meeting pane, Magic Battle's
+  setup and the Gauntlet; `OriginalDialog`'s derived stones made once
+  (`stone_job` / `make_stone` / `keep_stone`), `CombatBar.keyed_job` /
+  `make_keyed` / `keep_keyed`, `PhaseBar.STOP_DOT` / `show_stop_dot` (a
+  dot's letter only when shown), `MusicPlayer`'s tune window decoded off
+  the drawing thread (`settle_window`, `window_pending`, `due`,
+  `threaded`, `build_list`), `GameSkin.is_kept`. The world view:
+  `WorldView.frame` (the glide: each mover drawn at its average place over
+  the last ticks), `zoom_goal`, `Picture` (the ground drawn ahead over
+  frames, `finish_drawing`), the ground's draws grouped per row and the
+  dark as polygons (the same pixels), only changed sites worked out again,
+  a creature drawn once its sheets are ready. Loads off the main thread:
+  `game/skin_warmer.gd`: `SkinWarmer.warm(parent, pictures, sounds,
+  tunes, urgent)` (decoded on a worker, kept within a per-frame budget;
+  `warm_faces`, `runs_here`, `forced`, `picture_pending`, `finish_now`,
+  `finish_all`) over
+  `GameSkin.picture_job` / `decode_picture` / `keep_picture` and
+  `sound_job` / `decode_sound` / `keep_sound` (the end of `skin.gd`) and
+  `MusicLibrary.tune_job` / `decode_tune` / `keep_tune` (six tunes kept),
+  `PortraitLibrary.face_job` / `keep_face` (a creature's face on approach);
+  `WorldArt.PLACE_SHEETS` / `sheet_ready`; `WorldSoundscape.warm_arrival` /
+  `warm_near` / `pane_picture` / `ground_sounds` / `_start_tune` /
+  `_warm_stakes`; LairEvent's card tables built as the world opens; `EncounterStage.
+  warm_spoils`; `TileReveal.Snapshot` / `SnapshotCopy` (the screen copied
+  on the GPU, not read back; `warm_shader`, the transition compiled at
+  arrival); `PerfLog.frame_period_ms` / `slow_for` /
+  `hitch_for` / `period_ms` (slow at twice the refresh period, a hitch at
+  four times). The screen's own work: `WorldScreen.zoom_step` /
+  `ZOOM_EASE` (the zoom eased), `_warm_the_panes` / `_warm_the_duels`;
+  `game/adventure/world/pane_warmer.gd`: `PaneWarmer` (the pictures F5, F6
+  and the map make from the skin, made on a worker before they open:
+  `WizardsPicture.bleed` / `pictures_for`, `HeroStats.trimmed`,
+  `WorldMap.sprite_image`); `WorldHud._refit` / `REFIT_FRAMES`;
+  `WorldMinimap.show_hero`; `refresh_numbers(ticked)`; `WorldStatus.lines`
+  kept until what it reads changes (`_lines_read`, `lines_fresh`);
+  `DungeonView.shown_hero_point` (the board's hero between 1997's 66 ms
+  frames); `WorldPath.drawn` / `_light` (path arrows on explored land
+  only). Tests: `tests/*/test_c20_M*.gd`.
 - Part C, stage C3: the playtest and the hunt (2026-10-28). The tools:
   `tools/upscale_skin.py` `BOARD_SHEETS` (the board's sheets upscaled
   frame by frame amid their board neighbours — the owner's decision 9;
@@ -660,7 +716,8 @@
   Pool's per-thread census (thread-safe for the Deck Lab),
   `tools/shandalar_mcp.py` `crash_report`. Tests: `tests/*/test_c13_*.gd`.
 - `tests/unit/test_world_generator.gd`, `tests/ui/test_world_screen.gd`,
-  `tests/unit/test_hero_walk.gd`, `tests/unit/test_hero_colors.gd`,
+  `tests/unit/test_hero_walk.gd`, `tests/ui/test_c20_W1_world_key_walk.gd`,
+  `tests/unit/test_hero_colors.gd`,
   `tests/unit/test_world_status.gd`, `tests/unit/test_starter_deck.gd`,
   `tests/ui/test_adventure_builder.gd`.
 

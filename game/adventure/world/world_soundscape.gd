@@ -40,6 +40,19 @@ extends Node
 ## world's dice give; a call is let ring (1997 cut one in three as it
 ## changed the sample, and on colourless land played the white right
 ## footstep as a call).] Silent with no sound device (the tests).
+##
+## [QoL] WHAT THE HERO WILL MEET, READ BEFORE IT IS MET (the smoothness
+## pass, 0.50.66): the world read each place's tune, a place's sheet, a
+## meeting's pictures and tune off the disk on the thread that draws, the
+## first time each was wanted — the walk's 15-60 ms hitches. As the world
+## opens ([method warm_arrival]) the places' sheets and the meeting's frame,
+## panels and tune, and every [constant WARM_EVERY] ticks ([method
+## warm_near]) what lies near the hero — the tunes of the places within
+## [constant TUNE_WARM], the pictures of the places within [constant
+## PANE_WARM], a creature's colour's meeting ground and a lair's picture and
+## sound within [constant MEET_WARM] — are decoded on a worker thread
+## ([SkinWarmer]). Nothing the world does waits on it or changes with it:
+## a file not yet warm is read on demand, as before.
 
 ## How far the title's tune sits under the world, and how much more it
 ## gives way to a place's tune at full voice (ours, to the ear).
@@ -47,12 +60,49 @@ const BED_DB := -12.0
 const DUCK_DB := 12.0
 ## A place's tune is heard above this (of 100).
 const HEARD := 10
+## [QoL] WHAT IS WARMED, AND HOW FAR OUT ([method warm_near]; 1997's
+## distance, a tile straight on being 64): every this many ticks; a place's
+## tune within this — heard within 118, so about three tiles before (four
+## seconds of a road); a place's picture (its pane) within about three
+## tiles; a creature's meeting ground and a lair's picture within the ring
+## the creatures come in at (4 tiles, [constant WorldLairs.RING]) and a
+## little more. A key asked for is not asked again for [constant
+## WARM_AGAIN_MS] (a tune let go of since is warmed again after it).
+const WARM_EVERY := 4
+const TUNE_WARM := 310
+const PANE_WARM := 192
+const MEET_WARM := 288
+const WARM_AGAIN_MS := 20000
+## The meeting pane's own pictures and tune (`preduel_*`, `music_duel`,
+## [EncounterPane]) and the card frames its stakes and a lair's card are
+## drawn on ([CardPreview]), warmed as the world opens: about 6 MB of
+## textures at 1x (24 MB with the 2x skin) and 0.9 MB of sound, kept for
+## the session as the first meeting or card read would have kept them.
+const MEETING_PICTURES: Array[String] = ["preduel_frame", "preduel_panels", "mana_symbols",
+	"card_frame_white", "card_frame_blue", "card_frame_black", "card_frame_red", "card_frame_green",
+	"card_frame_gold", "card_frame_artifact", "card_frame_land_white", "card_frame_land_blue",
+	"card_frame_land_black", "card_frame_land_red", "card_frame_land_green"]
+const MEETING_SOUNDS: Array[String] = ["music_duel"]
+## A lair's sounds, warmed as one comes near: its duel's sting and the
+## sounds of the card it may give ([method card_key]: every kind of card,
+## since which card is the lair's to draw) — 14 files, about 1.9 MB.
+const LAIR_SOUNDS: Array[String] = [LairDuels.SOUND, "sfx_summon", "sfx_cast_artifact",
+	"sfx_cast_enchantment", "sfx_cast_instant", "sfx_cast_interrupt", "sfx_cast_sorcery",
+	"sfx_land_black", "sfx_land_blue", "sfx_land_green", "sfx_land_red", "sfx_land_white",
+	"sfx_land_grey", "sfx_treasure"]
 ## The calls each colour has, black … white, the first its bird.
 const CALLS: Array[Array] = [["bird", "land_1", "land_2"], ["bird", "land_1", "land_2"],
 	["bird", "land_1"], ["bird", "land_1"], ["bird", "land_1"]]
 const COLOR_WORDS: Array[String] = ["black", "blue", "green", "red", "white"]
 
-var player: AdventurePlayer
+## The hero's adventure, set by the world screen; set, what the world
+## will want first is warmed ([method warm_arrival]).
+var player: AdventurePlayer:
+	set(value):
+		var fresh := value != player
+		player = value
+		if fresh and value != null and is_inside_tree():
+			warm_arrival.call_deferred()
 ## The place whose tune plays, −1 for none, and how loud (of 100).
 var site := -1
 var level := 0
@@ -66,9 +116,18 @@ var _calls: Array[AudioStreamPlayer2D] = []
 var _cry: AudioStreamPlayer2D
 ## Each colour's call for next time (an index into [constant CALLS]).
 var _next_call: Array[int] = [0, 0, 0, 0, 0]
+## Ticks seen ([method tick]), and when each file was last asked to be
+## warmed (`"picture:" + key` and the like -> ms).
+var _ticks := 0
+var _asked := {}
+## A place's tune being decoded to start ([method _start_tune]), and when
+## it was asked for.
+var _tune_waiting := ""
+var _tune_asked := 0
 
 
 func _ready() -> void:
+	set_process(false)
 	name = "Soundscape"
 	add_to_group("world_soundscape")
 	rng.randomize()
@@ -169,6 +228,9 @@ static func nearest(world: ShandalarWorld, point: Vector2i) -> Dictionary:
 ## yet moved on): a footstep, a call, the place's tune, as 1997 played them
 ## on a step of its walk.
 func tick(walk: HeroWalk) -> void:
+	_ticks += 1
+	if _ticks % WARM_EVERY == 0:
+		warm_near()
 	if player == null or walk == null or not walk.stepped:
 		return
 	var world := player.world
@@ -263,8 +325,45 @@ func hear_places() -> void:
 		site = int(near["slot"])
 		if not _quiet:
 			_tune.stop_music()
-			_tune.play_one(key)
+			_start_tune(key)
 	_set_level(percent)
+
+
+## [QoL] THE PLACE'S TUNE STARTED WITHOUT A STALL (the smoothness pass,
+## 0.50.66): a tune the walk did not warm on the way (the hero set down by
+## Leap of Fate beside a town, a game loaded at one) was read on the thread
+## that draws, 15-40 ms of that frame; it is decoded on a worker instead and
+## starts as it is kept, a frame or a few later ([method _process]), at
+## the volume the hero's place then gives. One already kept, or with no
+## worker here, starts at once, as before.
+func _start_tune(key: String) -> void:
+	_tune_waiting = ""
+	var job := MusicLibrary.tune_job(key)
+	if not job.is_empty() and SkinWarmer.runs_here():
+		var tunes: Array[String] = [key]
+		SkinWarmer.warm(self, [] as Array[String], [] as Array[String], tunes)
+		_tune_waiting = key
+		_tune_asked = Time.get_ticks_msec()
+		set_process(true)
+		return
+	_tune.play_one(key)
+
+
+## A tune waited for ([method _start_tune]): started once kept (a worker
+## gone or slow: read on demand after [constant SkinWarmer.MOST_WAIT_MS]),
+## dropped if the hero has left its place meanwhile.
+func _process(_delta: float) -> void:
+	if _tune_waiting == "":
+		set_process(false)
+		return
+	if site < 0 or tune_key(player.world, site) != _tune_waiting:
+		_tune_waiting = ""
+		return
+	if MusicLibrary.tune_job(_tune_waiting).is_empty() \
+			or Time.get_ticks_msec() - _tune_asked >= SkinWarmer.MOST_WAIT_MS:
+		var key := _tune_waiting
+		_tune_waiting = ""
+		_tune.play_one(key)
 
 
 ## A screen with its own music over the world (the deck builder), or a
@@ -293,6 +392,7 @@ func _set_level(percent: int) -> void:
 func _stop_tune() -> void:
 	if site >= 0 or level > 0:
 		_tune.stop_music()
+	_tune_waiting = ""
 	site = -1
 	level = 0
 	_bed(BED_DB)
@@ -306,6 +406,161 @@ func _bed(level_db: float) -> void:
 	var bed: MusicPlayer = music.call("player")
 	if bed != null:
 		bed.volume_db = level_db
+
+
+# ------------------------------------------------------------- warming --
+
+## THE WORLD OPENED: the places' sheets ([constant WorldArt.PLACE_SHEETS])
+## and the meeting's pictures and tune warmed, then what is near.
+func warm_arrival() -> void:
+	if player == null or not is_inside_tree():
+		return
+	var pictures: Array[String] = []
+	pictures.append_array(WorldArt.PLACE_SHEETS)
+	pictures.append_array(MEETING_PICTURES)
+	var sounds: Array[String] = []
+	sounds.append_array(MEETING_SOUNDS)
+	sounds.append_array(ground_sounds())
+	_warm(pictures, sounds, [])
+	# The transitions' shader compiled now, not as the first lair's picture
+	# comes in ([method TileReveal.warm_shader]).
+	TileReveal.warm_shader(get_parent())
+	# THE LAIRS' CARD TABLES built in this, the opening frame: the first
+	# lair entered built them on the walk — 33-36 ms of that frame on the
+	# desk ([method LairEvent.rare_of_any_kind] on dice of its own, the
+	# answer thrown away; the adventure's dice are not touched).
+	CardTrade.catalogue()
+	LairEvent.rare_of_any_kind(MsvcRandom.new(0))
+	warm_near()
+
+
+## THE WALK'S OWN SOUNDS: every colour's footsteps and calls (34 small
+## files, about 1.8 MB of sound, each read the first time the hero walked a
+## land of its colour — a file read on the thread that draws, 10-20 ms of
+## that frame on the desk).
+static func ground_sounds() -> Array[String]:
+	var out: Array[String] = []
+	for color in range(1, 6):
+		out.append(step_key(color, 0))
+		out.append(step_key(color, 1))
+		for index in (CALLS[color - 1] as Array).size():
+			out.append(call_key(color, index))
+	return out
+
+
+## WHAT LIES NEAR THE HERO warmed (see the class doc): the tunes and the
+## panes' pictures of the places near, the meeting ground of a creature's
+## colour and a lair's picture and sound.
+func warm_near() -> void:
+	if player == null or player.world == null or not is_inside_tree() or not SkinWarmer.runs_here():
+		return
+	var world := player.world
+	var hero := player.position
+	var pictures: Array[String] = []
+	var sounds: Array[String] = []
+	var tunes: Array[String] = []
+	var faces: Array[String] = []
+	var stakes: Array[int] = []
+	var music := Settings.music_enabled()
+	for slot in world.sites.size():
+		var site_entry: Dictionary = world.sites[slot]
+		if int(site_entry["type"]) <= 0:
+			continue
+		var d := WorldGenerator.distance(int(site_entry["x"]) * 32 + 16 - hero.x,
+			int(site_entry["y"]) * 32 + 16 - hero.y)
+		if d < TUNE_WARM and music:
+			var key := tune_key(world, slot)
+			if key != "":
+				tunes.append(key)
+		if d < PANE_WARM:
+			var picture := pane_picture(world, slot)
+			if picture != "":
+				pictures.append(picture)
+	for held in player.monsters:
+		if not (held is Dictionary) or not held.has("x") or not held.has("y"):
+			continue
+		var d := WorldGenerator.distance(int(held["x"]) - hero.x, int(held["y"]) - hero.y)
+		if d >= MEET_WARM:
+			continue
+		var color: String = AdventurePlayer.COLORS[clampi(int(held.get("color", 1)), 1, 5) - 1]
+		if WorldCreatures.is_creature(held):
+			pictures.append("preduel_" + color)
+			var row := int(held.get("creature", 0))
+			var cry := CreatureBook.cry_key(row)
+			if cry != "":
+				sounds.append(cry)
+			faces.append(CreatureBook.face_id(row))
+			stakes.append(row)
+		elif WorldCreatures.is_lair(held):
+			pictures.append("visit_lair_" + color)
+			sounds.append_array(LAIR_SOUNDS)
+	_warm(pictures, sounds, tunes)
+	var new_faces := _fresh(faces, "face:", Time.get_ticks_msec())
+	if not new_faces.is_empty():
+		SkinWarmer.warm_faces(self, new_faces)
+	for row in stakes:
+		_warm_stakes(row)
+
+
+## THE CARDS A CREATURE MAY STAKE, their pictures decoded on a worker
+## thread as it comes near ([CardArtWarmer]): the stake is drawn from its
+## deck as it meets the hero ([method CreatureDeck.ante_draw]), and its
+## card's picture was read on the thread that draws, 5-20 ms of the
+## meeting's first frame. The deck's own cards, basic lands left out — 10
+## to 16 pictures a creature, about 1.3 MB each (the card art's own
+## bounded cache, [constant GameSkin.ART_CACHE_CAP]).
+func _warm_stakes(row: int) -> void:
+	var asked := "stakes:%d" % row
+	var now := Time.get_ticks_msec()
+	if _asked.has(asked) and now - int(_asked[asked]) < WARM_AGAIN_MS:
+		return
+	_asked[asked] = now
+	var names: Array[String] = []
+	for entry in CreatureDeck.library(row, 0):
+		var card_name := String(entry["name"])
+		if bool(entry.get("known", true)) and not card_name in CreatureDeck.BASICS and not names.has(card_name):
+			names.append(card_name)
+	if not names.is_empty():
+		CardArtWarmer.warm(self, names)
+
+
+## THE PICTURE OF THE PANE site [param slot] opens ([VisitPane]): a
+## village's, a town's or city's, a castle's by its colour; "" for none.
+static func pane_picture(world: ShandalarWorld, slot: int) -> String:
+	if world == null or slot < 0 or slot >= world.sites.size():
+		return ""
+	var kind := int(world.sites[slot]["type"])
+	if kind == ShandalarWorld.VILLAGE:
+		return "visit_village"
+	if kind >= ShandalarWorld.CASTLE:
+		var castle := WorldNames.castle_of_site(world, slot)
+		return "visit_castle_" + COLOR_WORDS[castle] if castle >= 0 else ""
+	return "visit_city" if kind > ShandalarWorld.VILLAGE else ""
+
+
+## The files not asked for in the last [constant WARM_AGAIN_MS] handed to
+## a [SkinWarmer] under this node.
+func _warm(pictures: Array[String], sounds: Array[String], tunes: Array[String]) -> void:
+	var now := Time.get_ticks_msec()
+	var new_pictures := _fresh(pictures, "picture:", now)
+	var new_sounds := _fresh(sounds, "sound:", now)
+	var new_tunes := _fresh(tunes, "tune:", now)
+	if new_pictures.is_empty() and new_sounds.is_empty() and new_tunes.is_empty():
+		return
+	SkinWarmer.warm(self, new_pictures, new_sounds, new_tunes)
+
+
+## Those of [param keys] not asked for since [constant WARM_AGAIN_MS]
+## before [param now], marked asked now.
+func _fresh(keys: Array[String], kind: String, now: int) -> Array[String]:
+	var out: Array[String] = []
+	for key in keys:
+		var asked := kind + key
+		if _asked.has(asked) and now - int(_asked[asked]) < WARM_AGAIN_MS:
+			continue
+		_asked[asked] = now
+		out.append(key)
+	return out
 
 
 # ------------------------------------------------------------ one-shots --

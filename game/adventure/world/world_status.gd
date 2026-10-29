@@ -223,8 +223,50 @@ static func next_duel_line(player: AdventurePlayer) -> String:
 	return "Next Duel: " + ", ".join(parts) if not parts.is_empty() else ""
 
 
-## Everything the quest pane shows, a line each; empty when nothing calls.
+## Everything the quest pane shows, a line each; empty when nothing calls —
+## [method lines_fresh]'s lines, made again only when what they read changed
+## ([method _lines_read]): the quest pane asks every tick ([method
+## WorldHud.refresh_quest]), and the wizards' taps walked every site, about
+## 60 µs a tick (the smoothness pass, 0.50.66).
 static func lines(player: AdventurePlayer) -> Array[String]:
+	if player == null:
+		return [] as Array[String]
+	var read := _lines_read(player)
+	if read != _lines_from:
+		_lines_from = read
+		_lines = lines_fresh(player)
+	return _lines.duplicate()
+
+
+## The lines last made ([method lines]) and what they were made from.
+static var _lines: Array[String] = []
+static var _lines_from: Array = []
+
+
+## WHAT THE LINES READ, as cheaply as it can be read: the adventure and its
+## world; the sites (the towns' names, their rulers' taps, a reward's wares,
+## the portal's nearest town) and the castles' places; the quest, its days
+## left and — a card quest — whether its card is held; the besieger's
+## creature and town; the portal and the adventure's end; the next duel's
+## gifts; Ring of the Guardian.
+static func _lines_read(player: AdventurePlayer) -> Array:
+	var world := player.world
+	var besieger := siege(player)
+	var card_held := -1
+	if has_quest(player) and int(player.quest.get("type", 0)) == Quests.CARD:
+		card_held = 1 if Quests.card_for_quest(player) >= 0 else 0
+	return [player.get_instance_id(), world.get_instance_id() if world != null else 0,
+		world.sites.hash() if world != null else 0,
+		world.encounters.slice(0, 5).hash() if world != null else 0,
+		player.quest.hash(), days_left(player), card_held,
+		besieger.is_empty(), besieger.get("creature", 0), besieger.get("town", -1),
+		player.portal.hash(), player.ended,
+		player.next_duel_life_carried, player.next_duel_life, player.next_duel_first_move, player.next_duel_card,
+		player.owns("Ring of the Guardian")]
+
+
+## Everything the quest pane shows, made afresh ([method lines] keeps it).
+static func lines_fresh(player: AdventurePlayer) -> Array[String]:
 	var out: Array[String] = []
 	if player == null:
 		return out

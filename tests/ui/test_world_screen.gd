@@ -488,7 +488,7 @@ func test_the_options() -> void:
 		words.append(option.call(entry[0]).text)
 	var on_off := func(on: bool) -> String: return "on" if on else "off"
 	assert_eq(words, ["Save", "Load (L)", "City list (F3)", "Wizards (F6)", "Panel at the bottom", "Small map: on",
-		"Quest pane: on", "Guide arrows: on", "Place names: on", "Creature names: off",
+		"Quest pane: on", "Guide arrows: on", "Path arrows: on", "Place names: on", "Creature names: off",
 		"Large card on right-click: on", "Big buttons: off",
 		"Pace: as in 1997", "Transitions: " + on_off.call(Settings.transitions()), "Music: " + on_off.call(_music),
 		"Sound: " + on_off.call(_sound), "Return to main menu", "Exit game"] as Array[String])

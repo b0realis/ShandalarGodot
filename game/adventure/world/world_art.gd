@@ -103,6 +103,17 @@ const CREATURE_TOP := 61
 const AMULET_INKS: Array[Color] = [Color8(60, 50, 60), Color8(60, 120, 220), Color8(50, 160, 70),
 	Color8(210, 50, 40), Color8(240, 236, 220)]
 
+## THE PLACES' SHEETS — the villages', towns', cities', dungeons' and lairs'
+## (`world_locatn01`-`07`) and the castles' — warmed on a worker thread as
+## the world opens ([method WorldSoundscape.warm_arrival], [SkinWarmer]):
+## each was read on the thread that draws the first time a place of its
+## kind came into view, 7-18 ms (the 2x skin 31-63) of one frame of the
+## walk. Nine sheets, about 15 MB of textures at 1x (60 MB with the 2x
+## skin) that a walk across the map draws anyway — warmed sooner, not more.
+const PLACE_SHEETS: Array[String] = ["world_locatn01", "world_locatn02", "world_locatn03",
+	"world_locatn04", "world_locatn05", "world_locatn06", "world_locatn07",
+	"world_castles1", "world_castles2"]
+
 var _textures := {}
 var _meta := {}
 
@@ -114,6 +125,33 @@ func texture(key: String) -> Texture2D:
 		var sheet := GameSkin.texture(key)
 		_textures[key] = sheet if sheet != null and _gridded(key) else null
 	return _textures[key]
+
+
+## WHETHER SHEET [param key] CAN BE DRAWN THIS FRAME WITHOUT A STALL (the
+## smoothness pass, 0.50.66): true when it is in hand, when no place has it
+## ([method texture] then answers null at once, as always), when the key is
+## empty, or where no worker may decode ([method SkinWarmer.runs_here]:
+## headless — the tests —, the web), where [method texture] reads it on
+## demand as before; false while a worker decodes it — the first ask starts
+## that, and past [constant SkinWarmer.MOST_WAIT_MS] the sheet is read on
+## demand after all. A creature just come into view is drawn once its
+## sheets are in hand, a frame or a few later, instead of the frame
+## stalling on them (a new creature stands 4 tiles out, already in view, so
+## nothing can be warmed before it is: [WorldLairs]' refill). One
+## dictionary look-up once the sheet is in hand.
+func sheet_ready(key: String) -> bool:
+	if _textures.has(key) or key == "":
+		return true
+	if SkinWarmer.picture_pending(key):
+		return false
+	if not SkinWarmer.runs_here():
+		return true
+	var job := GameSkin.picture_job(key)
+	if job.is_empty():
+		texture(key)
+		return true
+	var wanted: Array[String] = [key]
+	return SkinWarmer.warm(null, wanted, [], [], true) == null
 
 
 ## A square of amulet colour [param color] (0 black … 4 white,

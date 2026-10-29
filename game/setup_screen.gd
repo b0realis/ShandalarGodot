@@ -266,6 +266,17 @@ func _ready() -> void:
 	# `ShellMusic` there was a compile error on the first pass (Godot
 	# retried and ran, but every Lab log opened with it).
 	_shell_music_call(&"play")
+	# THE DUEL MADE READY WHILE IT IS SET UP (the smoothness pass, 0.50.66):
+	# its pictures, sounds and stones off the thread that draws, so `Go!`
+	# opens it without the first duel's freeze ([DuelWarmup]; nothing
+	# headless) — in the colours of the decks picked now (cached by
+	# `_update_face` above; a random deck has none yet).
+	var colors: Array[String] = []
+	for pid in 2:
+		var meta: Variant = _deck_options[pid].get_selected_metadata()
+		var path := str(meta) if meta != null else ""
+		colors.append(_color_of(path) if path != "" and not path.begins_with(GROUP_RANDOM) else "")
+	DuelWarmup.warm(self, colors)
 	# THE KEYBOARD AND THE D-PAD START ON THE MODE ROW (2026-09-27, the
 	# Steam Deck release): the chosen mode holds the focus, so the first
 	# arrow moves from something and Enter presses something, as on the

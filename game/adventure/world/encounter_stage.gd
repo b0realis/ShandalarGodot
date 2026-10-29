@@ -29,6 +29,15 @@ signal card_read(card_name: String)
 
 ## The 1997 page.
 const PAGE := Vector2(640, 480)
+## [QoL] THE SPOILS' PICTURES AND TUNES, warmed on a worker thread while a
+## meeting is read ([method warm_spoils], [SkinWarmer]; the smoothness
+## pass, 0.50.66): the cards won's and the card lost's grounds, the
+## dungeon's plaque, the win's and the loss's tunes were read on the thread
+## that draws as the duel handed back — 27-62 ms of that frame (the 2x skin
+## 100). About 2.5 MB of textures at 1x (10 MB 2x) and 2 MB of sound, which
+## the first spoils would have kept for the session anyway.
+const SPOILS_PICTURES: Array[String] = ["win_back_cards", "lose_card", "end_plaque"]
+const SPOILS_SOUNDS: Array[String] = ["music_win_duel", "music_lose_duel"]
 ## `Prdfrmb.pic`'s pieces (W3): the portrait's frame, the name banner, the
 ## creature's ante plaque, the hero's.
 const FACE_FRAME := Rect2(1, 165, 180, 180)
@@ -137,6 +146,14 @@ func set_factor(value: float) -> void:
 	_ground.size = custom_minimum_size
 	for part in _parts:
 		_place(part)
+
+
+## The spoils' pictures and tunes warmed (see [constant SPOILS_PICTURES]);
+## the warmer, or null.
+func warm_spoils() -> SkinWarmer:
+	if not is_inside_tree():
+		return null
+	return SkinWarmer.warm(self, SPOILS_PICTURES, SPOILS_SOUNDS)
 
 
 ## The ground: skin picture [param key] (the plain field without it).

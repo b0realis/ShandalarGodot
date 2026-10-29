@@ -191,6 +191,9 @@ func _ready() -> void:
 		return
 	_offer_saved_run()
 	_start_music()
+	# The duels' pictures and stones made ready while the run is set up
+	# (the smoothness pass, 0.50.66; [DuelWarmup]).
+	DuelWarmup.warm(self, [String(config.panel_colors[0])] as Array[String])
 
 ## THE GAUNTLET'S OWN BED, and the longest the library has: a gauntlet is
 ## a RUN of duels, so its screen is looked at repeatedly across a session

@@ -248,12 +248,54 @@ static func picture(key: String) -> Texture2D:
 		if image == null:
 			_bled[memo] = source
 		else:
-			if image.is_compressed():
-				image.decompress()
-			image.convert(Image.FORMAT_RGBA8)
-			image.fix_alpha_edges()
-			_bled[memo] = GameSkin.texture_of(image, Vector2i(source.get_size()))
+			keep_bled(source, bleed(image))
 	return _bled[memo]
+
+
+## [param image] (a keyed picture's pixels) with its clear pixels given
+## their opaque neighbours' colour — changed and returned. It touches
+## nothing shared: a worker thread may bleed a picture it decoded
+## ([PaneWarmer]).
+static func bleed(image: Image) -> Image:
+	if image.is_compressed():
+		image.decompress()
+	image.convert(Image.FORMAT_RGBA8)
+	image.fix_alpha_edges()
+	return image
+
+
+## [param bled] ([method bleed]) kept as [param source]'s bled picture, at
+## its drawn size — unless one is kept already. Main thread.
+static func keep_bled(source: Texture2D, bled: Image) -> void:
+	var memo := source.get_instance_id()
+	if not _bled.has(memo):
+		_bled[memo] = GameSkin.texture_of(bled, Vector2i(source.get_size()))
+
+
+## Whether [param source]'s bled picture is kept.
+static func bled_kept(source: Texture2D) -> bool:
+	return source != null and _bled.has(source.get_instance_id())
+
+
+## THE KEYED PICTURES THE HALL BLEEDS for the record [param shown] ([method
+## WorldStatus.wizard_rows]) — what [method _draw] asks [method picture]
+## for: each standing wizard's figure, staffs and gems, every colour's
+## skulls' step — for [PaneWarmer] to make before the Wizards tab opens.
+static func pictures_for(shown: Array[Dictionary]) -> Array[String]:
+	var out: Array[String] = []
+	for color in ORDER:
+		var row := {}
+		for one in shown:
+			if String(one.get("color", "")) == color:
+				row = one
+		if not row.is_empty() and not bool(row.get("beaten", false)):
+			for part in ["wizards_figure_", "wizards_staff_lit_", "wizards_staff_drained_", "wizards_gems_"]:
+				out.append(part + color)
+	for row in shown:
+		var step := int(row.get("skulls", 0))
+		if step > 0 and not out.has("wizards_skulls_%d" % step):
+			out.append("wizards_skulls_%d" % step)
+	return out
 
 
 func _get_tooltip(at: Vector2) -> String:
