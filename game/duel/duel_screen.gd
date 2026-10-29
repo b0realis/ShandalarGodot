@@ -740,6 +740,8 @@ func _ready() -> void:
 		config = DuelConfig.hotseat_default()
 	_build_ui()
 	_new_game()
+	# After the deal, when the seats are known ([method _debug_win_seat]).
+	_build_debug_win_line()
 
 
 # ================================================================ game glue --
@@ -13507,6 +13509,9 @@ var _last_stroke := {"action": "", "key": false, "device": 0, "ms": -1000000}
 ## the action's modifiers and no others — so `Show ID tags` on Ctrl+T
 ## leaves a bare T free, as the 1997 accelerator did (§6.3a).
 func _on_control(event: InputEvent) -> void:
+	# The tester's debug key, before anything else holds the keys (below).
+	if _debug_win_pressed(event):
+		return
 	if _is_doubled(event):
 		return
 	# --- 2026-10-13 f-minihelp: the mini help owns the keys while it is up ---
@@ -13679,3 +13684,106 @@ func _on_control(event: InputEvent) -> void:
 		# The duel screen options' key (the polish pass) — A unless moved
 		# in that window, which is also where it is switched off.
 		_attack_with_everything()
+
+
+# --- a tester's tool: the debug win (main.gd's DEBUG_WIN_FLAG) ---
+## THE DEBUG WIN, for walking a campaign quickly: with the game started as
+## `-- --debug-win` ([constant MainScreen.DEBUG_WIN_FLAG], read once at
+## start by [method MainScreen.read_debug_win]), Ctrl+Shift+W wins the
+## duel at once for its one human seat. Never saved, never on the Options
+## screen, not an action (not rebindable); false — the flag absent — and
+## nothing here does anything, the line below included.
+static var debug_win := false
+## The loss's reason, the duel log's note ("… loses: debug win. … wins!").
+const DEBUG_WIN_REASON := "debug win"
+## The line on the table while the key is live.
+const DEBUG_WIN_LINE := "Debug: Ctrl+Shift+W wins this duel"
+## The bar's word for the key before the duel has begun (the toss, the
+## opening hand): nothing to win yet, as nothing to concede.
+const DEBUG_WIN_EARLY := "Debug: the duel has not begun yet."
+
+
+## The one human seat the debug key wins for, or -1 when it is refused: the
+## flag off; an SGManalink table ([method _network_opponent]: the host's
+## game, not this computer's); no human seat (a demo, the MPN replay); two
+## (a hotseat, open or private: no single human to win for).
+func _debug_win_seat() -> int:
+	if not debug_win or game == null or config == null or _network_opponent():
+		return -1
+	var seat := -1
+	for pid in game.players.size():
+		if _is_human(pid):
+			if seat >= 0:
+				return -1
+			seat = pid
+	return seat
+
+
+## Ctrl+Shift+W exactly — not with Alt or Meta — by the key's letter, as
+## [Controls] reads its keys.
+static func _is_debug_win_key(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return false
+	var code := key.keycode if key.keycode != KEY_NONE else key.physical_keycode
+	return code == KEY_W and key.ctrl_pressed and key.shift_pressed \
+		and not key.alt_pressed and not key.meta_pressed
+
+
+## THE KEY PRESSED: the other seat loses through the engine's own loss path
+## ([method MtgGame.lose_game]), so the verdict, the End of Duel window, the
+## record and everything a holder does after a won duel (stakes and spoils,
+## a room, a castle, the final battle, a Gauntlet round, a match's next
+## duel) run as after a real win. Over the Pause window, which closes, and
+## the card reader; not before the duel has begun. True when the key was
+## taken; refused, it is any other key, as without the flag.
+func _debug_win_pressed(event: InputEvent) -> bool:
+	if not debug_win or not _is_debug_win_key(event):
+		return false
+	var seat := _debug_win_seat()
+	if seat < 0 or game.game_over:
+		return false
+	if _toss_active:
+		_report(DEBUG_WIN_EARLY)
+		return true
+	if is_paused():
+		_close_pause()
+	if _fullscreen_card_open():
+		_fullscreen_card.dismiss()
+	game.lose_game(game.opponent_of(seat), DEBUG_WIN_REASON)
+	_refresh()
+	return true
+
+
+## The table says the key is live ([constant DEBUG_WIN_LINE]) — only where
+## [method _debug_win_seat] would let it act, so a real duel never shows it.
+## A small plaque in the top half's top-left corner, where the opponent's
+## rows (which hug the right) seldom reach; over the placed cards, under
+## the arrows and every window, and never in the way of a click. The strip
+## under the large card has no room left for a line.
+func _build_debug_win_line() -> void:
+	if _debug_win_seat() < 0 or _half_rows[1] == null:
+		return
+	var plaque := PanelContainer.new()
+	plaque.name = "DebugWin"
+	var backing := StyleBoxFlat.new()
+	backing.bg_color = Color(0.05, 0.04, 0.03, 0.85)
+	backing.set_corner_radius_all(2)
+	backing.content_margin_left = 6
+	backing.content_margin_right = 6
+	backing.content_margin_top = 1
+	backing.content_margin_bottom = 1
+	plaque.add_theme_stylebox_override("panel", backing)
+	plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plaque.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	plaque.position = Vector2(6, 4)
+	plaque.z_index = FREE_LAYER_Z + 1
+	var line := Label.new()
+	line.name = "DebugWinLine"
+	line.text = DEBUG_WIN_LINE
+	line.add_theme_font_size_override("font_size", 13)
+	line.add_theme_color_override("font_color", Color("efb66b"))
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plaque.add_child(line)
+	(_half_rows[1].get_parent() as Control).add_child(plaque)
+# --- end the debug win ---

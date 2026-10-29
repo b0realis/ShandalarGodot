@@ -62,6 +62,11 @@ const VERIFY_PACK_5_FLAG := "--verify-pack-5"
 const VERIFY_PACK_8_FLAG := "--verify-pack-8"
 ## The Tempest block (Pack 9): [method pack_9_probe] behind the same door.
 const VERIFY_PACK_9_FLAG := "--verify-pack-9"
+## A tester's tool, for walking a campaign quickly: started with
+## `-- --debug-win`, Ctrl+Shift+W wins a duel played on this computer
+## ([member DuelScreen.debug_win], set by [method read_debug_win] at start
+## and never saved). No door in the game leads to it.
+const DEBUG_WIN_FLAG := "--debug-win"
 
 ## The corner line that reports a skin zip on its way (web builds).
 var _fetching: Label
@@ -118,6 +123,7 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_9_FLAG):
 		_verify_exported_pack_9()
 		return
+	read_debug_win(OS.get_cmdline_user_args())
 	# NO `CardRegistry.ensure_loaded()` HERE ANY MORE (2026-09-30). It
 	# stood on this line for a year and cost the Meta Quest 4.6 of its
 	# 9.1 seconds to the title: nothing on this screen reads a card. The
@@ -573,6 +579,17 @@ func _open_manalink_notice() -> void:
 		return
 	_manalink_notice = load("res://game/sgmanalink/lobby.gd").new()
 	add_child(_manalink_notice)
+
+
+## [constant DEBUG_WIN_FLAG] among [param args]: the duel screen's debug
+## key is on for the rest of this run. Its script is loaded by path, and
+## only with the flag: naming [DuelScreen] here would compile the whole
+## duel into the title's start (see [method _open_manalink_notice]). The
+## script keeps its static for the run (a script with statics stays
+## loaded); the title shown again reads the same line to the same end.
+static func read_debug_win(args: PackedStringArray) -> void:
+	if args.has(DEBUG_WIN_FLAG):
+		load("res://game/duel/duel_screen.gd").set(&"debug_win", true)
 
 
 ## Hand the rest of the command line to the Deck Lab and quit with its
