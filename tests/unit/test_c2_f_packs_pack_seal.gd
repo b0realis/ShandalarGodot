@@ -313,6 +313,14 @@ pictures = {name: ("picture of " + name).encode("utf-8") * 4 for name in names}
 def sha(b):
     return hashlib.sha256(b).hexdigest()
 
+# One fixed date for every entry: writestr stamps the clock (2-second steps),
+# so a good and a damaged build on either side of a tick had different
+# directories (a CI failure of 2026-10-30).
+def put(z, name, data):
+    info = zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0))
+    info.external_attr = 0o600 << 16
+    z.writestr(info, data)
+
 def art(entries):
     d = hashlib.sha256()
     for name, payload in sorted(entries.items()):
@@ -325,11 +333,11 @@ with zipfile.ZipFile(source) as z:
 manifest["checksums"] = {"algorithm": "sha256", "metadata": {n: sha(core[n]) for n in CORE},
     "artwork": {"files": len(pictures), "sha256": art(pictures)}}
 with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:
-    z.writestr(prefix + "manifest.json", json.dumps(manifest, indent=2))
+    put(z, prefix + "manifest.json", json.dumps(manifest, indent=2))
     for n in CORE:
-        z.writestr(prefix + n, core[n])
+        put(z, prefix + n, core[n])
     for n in sorted(pictures):
-        z.writestr(n, pictures[n])
+        put(z, n, pictures[n])
 if mode == "damaged":
     victim = sorted(pictures)[len(pictures) // 2]
     with zipfile.ZipFile(out) as z:
