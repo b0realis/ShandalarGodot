@@ -7,8 +7,9 @@ extends PanelContainer
 ##
 ## THE MEETING (E = world_lair_monster_encounter.c; [CreatureMeeting] holds
 ## the rules): the ground of the creature's colour (`preduel_<colour>`), its
-## face and name, "Your Ante" and "Opponent Ante" with the cards staked
-## (right click reads one), the purse's panels and the quest scroll; the
+## face and name (the pane's header only "Creature", [method
+## CreatureBook.kind_word]), "Your Ante" and "Opponent Ante" with the cards
+## staked (right click reads one), the purse's panels and the quest scroll; the
 ## creature's words by its relation and the hero's wins, and the choices —
 ## Duel, Pay, Answer a riddle (the lair's riddle: the question in the words,
 ## the answers as choices, the card shown), Change ante card, Accept
@@ -93,7 +94,6 @@ var step := ""
 var result := NO_DUEL
 var stage: EncounterStage
 var _title: Label
-var _subtitle: Label
 var _words: Label
 var _choices: HFlowContainer
 var _note: Label
@@ -129,10 +129,6 @@ func _ready() -> void:
 	_title.name = "EncounterTitle"
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_title)
-	_subtitle = PaneStyle.label("", 15, PaneStyle.DIM)
-	_subtitle.name = "EncounterKind"
-	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_subtitle)
 	var frame := PanelContainer.new()
 	frame.name = "Picture"
 	var rim := StyleBoxFlat.new()
@@ -190,8 +186,9 @@ func _begin() -> void:
 		_end()
 		return
 	var row := int(meeting["row"])
-	_title.text = CreatureBook.name_of(row)
-	_subtitle.text = "A creature of the %s" % WorldNames.WIZARDS[clampi(int(meeting["color"]), 1, 5) - 1]
+	# What it is, alone: its face's banner names it (the owner, 2026-10-30:
+	# "Yes, header = kind").
+	_title.text = CreatureBook.kind_word(row)
 	if bool(meeting.get("no_ante", false)):
 		_game_over()
 		return
@@ -474,7 +471,7 @@ func _to_duel() -> void:
 		return
 	step = "special"
 	if int(meeting.get("summoned", 0)) > 0:
-		_title.text = CreatureBook.name_of(int(meeting["row"]))
+		_title.text = CreatureBook.kind_word(int(meeting["row"]))
 		# The summoned creature's face comes in over the one met, tile by
 		# tile (`DrawCreaturePortrait` mode 1, E:2183; [method
 		# EncounterStage.reveal_face]): the screen read before it is drawn.

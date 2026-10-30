@@ -10,7 +10,8 @@ extends StagePane
 ## ([StagePane]) shows, on the meeting's ground of the place's colour
 ## (`preduel_<colour>`, as a creature met on the world):
 ##  - THE CREATURE'S FACE in its frame, its name on the banner
-##    ([method EncounterStage.creature_face]);
+##    ([method EncounterStage.creature_face]) — the pane's header says only
+##    what it is, "Creature" or "Wizard" ([method CreatureBook.kind_word]);
 ##  - "Your Ante" over THE HERO'S STAKE ([method DungeonDuels.draw_stake]),
 ##    or "No stake" — the dungeon's rules allowing none of the cards that
 ##    could be staked (the owner's f2, [DungeonDuels]): the note says so;
@@ -98,8 +99,9 @@ func _ready() -> void:
 	super._ready()
 	name = "RoomDuelPane"
 	var row := int(duel.get("row", 0))
-	var index := int(duel.get("index", DungeonDuels.index_of(run)))
-	set_title(CreatureBook.name_of(row) if row > 0 else "", WorldClues.title(index) if index >= 0 else "")
+	# What it is, alone: its face's banner names it (the owner, 2026-10-30:
+	# "Yes, header = kind").
+	set_title(CreatureBook.kind_word(row) if row > 0 else "")
 	draw_page()
 	var lines: Array[String] = DungeonDuels.words(duel) if row > 0 else [] as Array[String]
 	if bool(duel.get("no_ante", false)):

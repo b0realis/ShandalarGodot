@@ -151,6 +151,9 @@ const ARCHMAGE := 10
 const HENCHMAN := 11
 const CASTLE_WIZARD := 12
 const ARZAKON := 13
+## The kinds' words over a creature's face ([method kind_word]).
+const CREATURE_WORD := "Creature"
+const WIZARD_WORD := "Wizard"
 const DECKS_FOLDER := "res://decks/1997/originals"
 
 const ROWS: Array[Array] = [
@@ -456,6 +459,18 @@ static func is_row(index: int) -> bool:
 ## The creature's name: "Witch".
 static func name_of(index: int) -> String:
 	return String(ROWS[index][NAME]) if is_row(index) else ""
+
+
+## WHAT THE ROW IS, for the header of a pane whose face banner already names
+## it (the owner, 2026-10-30: "Yes, header = kind"): "Wizard" for a castle's
+## wizard, "Creature" for every other — 1997's own words for them
+## (`@WIZARDNAMES`, AdvStrings.txt:155–159; " Duel the creature.",
+## AdvStrings.txt:510, 611); 1997's meeting had no header to word it. ""
+## for no row.
+static func kind_word(index: int) -> String:
+	if not is_row(index):
+		return ""
+	return WIZARD_WORD if kind(index) == CASTLE_WIZARD else CREATURE_WORD
 
 
 ## With its article: "a Witch", "an Undead Knight".

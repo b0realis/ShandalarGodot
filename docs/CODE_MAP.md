@@ -482,8 +482,11 @@
   true). The board: `game/adventure/world/dungeon_view.gd`: `DungeonView`
   (the 1997 page — back then front frames with the odd-row offset,
   `facing`, `walk`, `cell_look`, `figure_rect` — the white castle's floor
-  as 1997 showed it, the owner); `CreatureBook.duel_name` (the duel and
-  the journal spell a creature alike: "VampireLord"); `game/adventure/world/
+  as 1997 showed it, the owner; the name in the middle of the plaque's
+  green field: `plaque_field`, `title_baselines`, `ink_reach`);
+  `CreatureBook.duel_name` (the duel and the journal spell a creature
+  alike: "VampireLord"), `CreatureBook.kind_word` (a creature pane's
+  header: "Creature", "Wizard"); `game/adventure/world/
   dungeon_pane.gd`: `DungeonPane` (`move`, `ask_leave`, `box`, `answer`,
   `rooms_words`; the events, the room duels through `WorldDuels.host` and
   `DungeonDuels.settle`, `CastleWin.beat` once); `game/adventure/world/

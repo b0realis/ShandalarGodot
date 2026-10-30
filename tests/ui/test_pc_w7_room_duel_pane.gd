@@ -129,8 +129,9 @@ func test_the_wizard_s_room_shows_his_face_the_stake_his_minion_and_the_card_in_
 	var duel := _staked(run)
 	var pane := await _open(run, duel)
 	assert_eq(pane.stage.ground_key(), "preduel_black", "the meeting's ground of the castle's colour")
-	assert_eq(pane.title_text(), CreatureBook.name_of(int(duel["row"])), "the creature named")
-	assert_eq(pane.subtitle_text(), WorldClues.title(0), "the place under it")
+	# The owner, 2026-10-30: "Yes, header = kind" — the banner names him.
+	assert_eq(pane.title_text(), "Wizard", "the header says what he is")
+	assert_eq(pane.subtitle_text(), "", "nothing under it")
 	assert_not_null(pane.stage.part("CreatureName"), "its face's banner")
 	var shown := pane.stage.cards_shown()
 	assert_eq(String((duel["hero_ante"] as Array)[0]), pane.stake(), "the stake drawn is the one shown")

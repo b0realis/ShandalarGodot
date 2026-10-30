@@ -11,8 +11,9 @@ extends PanelContainer
 ## each answers. The world's doors open it ([method WorldScreen._open_board],
 ## [DungeonDoors]) and close it with [signal finished].
 ##
-## THE PANE: the castle's or the dungeon's name and what it is ("Dungeon",
-## "Red Castle"); the 1997 page; under it one row of choices — "Leave"
+## THE PANE: what the place is ("Dungeon", "Red Castle") — its name is on
+## the page's plaque, not twice (the owner, 2026-10-30: "Top title should
+## just say Dungeon"); the 1997 page; under it one row of choices — "Leave"
 ## always there while the hero stands free [QoL]. The page never changes
 ## size from step to step: 1997's text boxes stand OVER the board, in a
 ## box of the panes' glass ([method box]), so nothing under the page swells
@@ -177,7 +178,6 @@ var step := ""
 var result := {}
 
 var _title: Label
-var _subtitle: Label
 var _choices: HFlowContainer
 var _box: PanelContainer
 var _box_words: Label
@@ -219,14 +219,12 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 6)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(column)
-	_title = PaneStyle.title(board.title() if board != null else "")
+	# What the place is, alone: its name is on the page's plaque (the
+	# owner, 2026-10-30: "Top title should just say Dungeon").
+	_title = PaneStyle.title(_kind())
 	_title.name = "BoardTitle"
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_title)
-	_subtitle = PaneStyle.label(_kind(), 15, PaneStyle.DIM)
-	_subtitle.name = "BoardKind"
-	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_subtitle)
 	var frame := PanelContainer.new()
 	frame.name = "Picture"
 	var rim := StyleBoxFlat.new()
@@ -272,7 +270,7 @@ func _ready() -> void:
 	_begin()
 
 
-## The pane's subtitle: "Dungeon", or the castle's colour ("Red Castle").
+## The pane's title: "Dungeon", or the castle's colour ("Red Castle").
 func _kind() -> String:
 	if board == null:
 		return ""

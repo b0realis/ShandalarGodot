@@ -1399,6 +1399,10 @@ from the shots where a choice was his.
   castle's wizard, the creatures facing the way in, the hero's walk of
   eight frames (ending on the cell, where 1997 stopped 4 pixels short) —
   in a rounded pane at most 1.25× the 1997 page that never changes size.
+  The name in the middle of the plaque's green field (with the next-duel
+  line, the two as one block there), the pane's header saying only what
+  the place is — "Dungeon", "Red Castle" (the owner, 2026-10-30: "Bottom
+  title should be in the middle", "Top title should just say Dungeon").
   The white castle's floor as 1997 showed it (the owner, after seeing all
   its marks in play). Moves: 1997's keys, the arrows, W A S D, the keypad,
   a held key walks on, a click on a neighbour or along a seen corridor.
@@ -1414,7 +1418,10 @@ from the shots where a choice was his.
   the place's ground, the stake or "No stake", the cards starting in play,
   the minion and the card in effect in the board's marble frame, the
   purse with the duel's own starting life (the owner), one choice: Duel.
-  Then `WorldDuels.host`, `DungeonDuels.settle` once, `room_done`.
+  Then `WorldDuels.host`, `DungeonDuels.settle` once, `room_done`. Its
+  header, as the meeting's, says only what the creature is — "Creature", a
+  castle's wizard "Wizard" (`CreatureBook.kind_word`) — and its face's
+  banner names it (the owner, 2026-10-30: "Yes, header = kind").
 - **A castle won** (`CastleWinPane`): his room's still, the 1997 words on
   Tradscrn with the news of the freed towns, the three picks (`CastleWin.
   offered` / `take`), a full bag said; his tune throughout.

@@ -12,11 +12,17 @@ extends Control
 ##  1. the cave's ground, `visit_dungeon` (CaveBkgd.pic), over the page;
 ##  2. the TITLE PLAQUE (`dungeon_plaques` = Dungbutt.spr frames 1, n × 2,
 ##     3, at the top, the least n with 29 + 24n at least the name's width)
-##     and the castle's or the dungeon's name on it, centred at (320, 18),
-##     white over a one-pixel shadow ([member title_text]);
+##     and the castle's or the dungeon's name on it, white over a one-pixel
+##     shadow ([member title_text]) — IN THE MIDDLE OF THE PLAQUE'S GREEN
+##     FIELD ([method plaque_field]) [ours, the owner's ruling of
+##     2026-10-30: "Bottom title should be in the middle"; 1997 set the
+##     name's top at y 18 (dE:1200; its slot 4 font 10 pixels tall,
+##     shandalar.c:911), in the field's upper half];
 ##  3. under it, while the next duel brings something, 1997's line in green
-##     #04bb34 at (320, 48): "+2 (14) Lives", the card, "First Move"
-##     ([member gift_line], [method DungeonBoard.next_duel_line]);
+##     #04bb34: "+2 (14) Lives", the card, "First Move" ([member
+##     gift_line], [method DungeonBoard.next_duel_line]) — 1997 centred it
+##     at (320, 48) (dE:1207), in the field's lower half; here the name and
+##     the line stand as one block in the middle of the field [ours];
 ##  4. THE CELLS, x from 14 down to 0 and for each y from 0 up to 12
 ##     ([method draw_order]), each tile frame 64 × 64 at its anchor less
 ##     (32, 48) — the anchor `(32 (x + y) − 96, 16 (y − x) + 272)`
@@ -121,8 +127,19 @@ const WHITE := "dungeon_tiles_white"
 const PLAQUES := "dungeon_plaques"
 const PLAQUE_SIZES: Array[Vector2] = [Vector2(201, 281), Vector2(40, 62), Vector2(24, 62), Vector2(39, 62)]
 const PLAQUE_TOP := 1.0
-## The name's place and the next duel's line's; the line's green.
-const TITLE_AT := Vector2(320, 18)
+## THE PLAQUE'S GREEN FIELD, measured off Dungbutt.spr: from x 13 of the
+## left end to 13 short of the right end's 39, rows 14 to 52 of the 62 —
+## inside the greek-key border, the dragons and the skulls. The owner's
+## report of 2026-10-30 ("The positioning of title is not ok"): the name
+## was centred on 1997's y 18, which is where 1997 set its TOP, so it stood
+## half over the border.
+const FIELD_SIDE := 13.0
+const FIELD_TOP := 14.0
+const FIELD_HIGH := 39.0
+## [Ours] The room between the name and the next duel's line on the plaque.
+const LINE_GAP := 1.0
+## The next duel's line where no name is on the plaque (1997's, dE:1207);
+## the line's green.
 const GIFT_AT := Vector2(320, 48)
 const GIFT_INK := Color8(4, 187, 52)
 ## The card in effect (dE:1373–1381): the frame, the card, its words.
@@ -208,6 +225,8 @@ var _said_left := 0.0
 ## The cells a step newly showed, fading in ([constant FRESH_SECONDS]).
 var _fresh := {}
 var _fresh_left := 0.0
+## [method ink_reach]'s answers ([method _reach]).
+var _reaches := {}
 
 
 func _init() -> void:
@@ -336,6 +355,31 @@ static func plaque_middles(width: float) -> int:
 ## The plaque's left end for [param middles] pieces: 320 − 12n − 40.
 static func plaque_left(middles: int) -> float:
 	return 320.0 - 12.0 * middles - 40.0
+
+
+## The plaque's green field on the page for a name [param width] page
+## pixels wide ([constant FIELD_SIDE]).
+static func plaque_field(width: float) -> Rect2:
+	var middles := plaque_middles(width)
+	var wide := PLAQUE_SIZES[1].x + PLAQUE_SIZES[2].x * middles + PLAQUE_SIZES[3].x
+	return Rect2(plaque_left(middles) + FIELD_SIDE, PLAQUE_TOP + FIELD_TOP, wide - 2.0 * FIELD_SIDE, FIELD_HIGH)
+
+
+## WHERE THE NAME AND THE NEXT DUEL'S LINE STAND in [param field] (the
+## class's notes): their baselines (`x` the name's, `y` the line's), for
+## letters reaching [param title_reach] and [param line_reach] above and
+## below their baselines ([method ink_reach]). The name's letters from their
+## top down to the baseline in the middle of the field — what hangs below
+## it, a C's tail or a g, left out, as a sign is lettered; with a line (a
+## reach), the name, [constant LINE_GAP] and the line, every letter of both,
+## as one block in the middle (the field holds no more).
+static func title_baselines(field: Rect2, title_reach: Vector2, line_reach := Vector2.ZERO) -> Vector2:
+	var middle := field.get_center().y
+	if line_reach == Vector2.ZERO:
+		return Vector2(middle + title_reach.x / 2.0, 0.0)
+	var top := middle - (title_reach.x + title_reach.y + LINE_GAP + line_reach.x + line_reach.y) / 2.0
+	var name_base := top + title_reach.x
+	return Vector2(name_base, name_base + title_reach.y + LINE_GAP + line_reach.x)
 
 
 ## The tile frame's top-left for cell [param cell].
@@ -725,7 +769,8 @@ func _paint_board() -> void:
 			else Vector2(DungeonBoard.cell_to_page(hover)) + Vector2(0, -52)
 		_words(canvas, hover_text, over, EXIT_POINTS, Color.WHITE)
 	if gift_line != "":
-		_words(canvas, gift_line, GIFT_AT, LINE_POINTS, GIFT_INK, true)
+		var line_at := Vector2(gift_rect().get_center().x, line_middle(_body_font(), LINE_POINTS, _gift_base()))
+		_words(canvas, gift_line, line_at, LINE_POINTS, GIFT_INK, true)
 	if status_left != "":
 		_words(canvas, status_left, Vector2(14, STATUS_Y), LINE_POINTS, PaneStyle.GOLD, true,
 			HORIZONTAL_ALIGNMENT_LEFT)
@@ -759,14 +804,70 @@ func _paint_plaque(canvas: CanvasItem) -> void:
 			canvas.draw_texture_rect_region(sheet, Rect2(Vector2(x, PLAQUE_TOP), own), region)
 			x += own.x
 	else:
-		var box := Rect2(left + 6, PLAQUE_TOP + 4, sizes[1].x + sizes[2].x * middles + sizes[3].x - 12, 30)
+		# The plain bar round the plaque's green field, where the name stands.
+		var box := plaque_field(width).grow_individual(FIELD_SIDE - 6.0, 4.0, FIELD_SIDE - 6.0, 4.0)
 		var face := StyleBoxFlat.new()
 		face.bg_color = Color(0.06, 0.04, 0.03, 0.92)
 		face.border_color = Color(PaneStyle.GOLD, 0.8)
 		face.set_border_width_all(1)
 		face.set_corner_radius_all(6)
 		canvas.draw_style_box(face, box)
-	_words(canvas, title_text, TITLE_AT, TITLE_POINTS, Color.WHITE, false, HORIZONTAL_ALIGNMENT_CENTER, font)
+	var name_at := Vector2(title_field().get_center().x, line_middle(font, TITLE_POINTS, baselines().x))
+	_words(canvas, title_text, name_at, TITLE_POINTS, Color.WHITE, false, HORIZONTAL_ALIGNMENT_CENTER, font)
+
+
+## The plaque's green field under the name now ([method plaque_field]).
+func title_field() -> Rect2:
+	return plaque_field(words_width(_title_font(), title_text, TITLE_POINTS))
+
+
+## The name's letters on the page, from their top to the lowest that hangs
+## below the baseline ([method ink_reach]); empty for no name.
+func title_rect() -> Rect2:
+	if title_text == "":
+		return Rect2()
+	return _letters(_title_font(), title_text, TITLE_POINTS, title_field().get_center().x, baselines().x)
+
+
+## The next duel's line's letters on the page: under the name on the
+## plaque, or round 1997's place with no name; empty for no line.
+func gift_rect() -> Rect2:
+	if gift_line == "":
+		return Rect2()
+	var middle_x := title_field().get_center().x if title_text != "" else GIFT_AT.x
+	return _letters(_body_font(), gift_line, LINE_POINTS, middle_x, _gift_base())
+
+
+## The next duel's line's baseline: under the name on the plaque, or its
+## line box centred on 1997's (320, 48) with no name.
+func _gift_base() -> float:
+	if title_text != "":
+		return baselines().y
+	var font := _body_font()
+	var size := int(round(LINE_POINTS * SCALE))
+	return GIFT_AT.y + (font.get_ascent(size) - font.get_descent(size)) / 2.0 / SCALE
+
+
+## The name's and the line's baselines on the plaque ([method title_baselines]).
+func baselines() -> Vector2:
+	var line := _reach(_body_font(), gift_line, LINE_POINTS) if gift_line != "" else Vector2.ZERO
+	return title_baselines(title_field(), _reach(_title_font(), title_text, TITLE_POINTS), line)
+
+
+## The letters of [param text] centred on [param middle_x] on [param base].
+func _letters(font: Font, text: String, points: int, middle_x: float, base: float) -> Rect2:
+	var reach := _reach(font, text, points)
+	var wide := words_width(font, text, points)
+	return Rect2(middle_x - wide / 2.0, base - reach.x, wide, reach.x + reach.y)
+
+
+## [method ink_reach], kept by face, words and size: the page is drawn again
+## at every frame of a walk.
+func _reach(font: Font, text: String, points: int) -> Vector2:
+	var key := "%d|%d|%s" % [font.get_instance_id(), points, text]
+	if not _reaches.has(key):
+		_reaches[key] = ink_reach(font, text, points)
+	return _reaches[key]
 
 
 ## Dungbutt's frames' own sizes: the sheet's `sizes`, else 1997's.
@@ -935,6 +1036,35 @@ func _words(canvas: CanvasItem, text: String, at: Vector2, points: int, ink: Col
 ## How wide [param text] is on the page at [param points] in [param font].
 static func words_width(font: Font, text: String, points: int) -> float:
 	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(points * SCALE))).x / SCALE
+
+
+## HOW FAR THE LETTERS OF [param text] REACH above and below the baseline
+## (`x` up, `y` down) in [param font] at [param points], in page pixels:
+## the glyphs' own boxes (a face's line box keeps room for accents and
+## descenders a name may not have — the plaque's name centred on it stood
+## high, the owner's report of 2026-10-30).
+static func ink_reach(font: Font, text: String, points: int) -> Vector2:
+	var server := TextServerManager.get_primary_interface()
+	var line := TextLine.new()
+	line.add_string(text, font, int(round(points * SCALE)))
+	var reach := Vector2.ZERO
+	for glyph: Dictionary in server.shaped_text_get_glyphs(line.get_rid()):
+		var face: RID = glyph["font_rid"]
+		if not face.is_valid():
+			continue
+		var size := Vector2i(int(glyph["font_size"]), 0)
+		var top := server.font_get_glyph_offset(face, size, int(glyph["index"])).y
+		var high := server.font_get_glyph_size(face, size, int(glyph["index"])).y
+		if high > 0.0:
+			reach = Vector2(maxf(reach.x, -top), maxf(reach.y, top + high))
+	return reach / SCALE
+
+
+## The point [method _words] centres a line on, for its baseline at
+## [param base] in [param font] at [param points].
+static func line_middle(font: Font, points: int, base: float) -> float:
+	var size := int(round(points * SCALE))
+	return base - (font.get_ascent(size) - font.get_descent(size)) / 2.0 / SCALE
 
 
 func _title_font() -> Font:
