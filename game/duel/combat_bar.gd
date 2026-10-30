@@ -268,20 +268,34 @@ static func slot_for_step(step: int, awaiting_attackers: bool,
 	return Slot.DECLARE_ATTACKERS
 
 
-## Cache: one keyed texture per (sheet rectangle, fill). The keying walks
-## every pixel, so it must not run per frame.
+## Cache: one keyed texture per (sheet rectangle, fill), as [the sheet's
+## instance id, the column keyed out of it]. The keying walks every pixel,
+## so it must not run per frame. A hit is the SAME SHEET's (0.50.66 bug
+## campaign, h4-1): a skin zip that replaces a zip is a new sheet ([method
+## GameSkin.clear_caches]), and a column kept from the old one used to be
+## handed out for it — the other skin's colours on this one's bar.
 static var _keyed: Dictionary = {}
+
+
+## The column kept under [param cache_key] when it was keyed out of
+## [param sheet], else null (h4-1).
+static func _kept_column(cache_key: String, sheet: Texture2D) -> Texture2D:
+	var kept: Array = _keyed.get(cache_key, [])
+	if kept.size() == 2 and int(kept[0]) == sheet.get_instance_id():
+		return kept[1]
+	return null
 
 
 ## [param region] of the sheet with every near-WHITE pixel replaced, per
 ## [param fill] — see [constant WHITE_KEY] and [enum Fill]. Null without a
 ## skin.
 static func keyed_texture(region: Rect2, fill := Fill.BLACK) -> Texture2D:
-	var cache_key := "%s|%d" % [region, fill]
-	if _keyed.has(cache_key):
-		return _keyed[cache_key]
-	if GameSkin.texture("combat_bar") == null:
+	var sheet := GameSkin.texture("combat_bar")
+	if sheet == null:
 		return null
+	var kept := _kept_column("%s|%d" % [region, fill], sheet)
+	if kept != null:
+		return kept
 	var job := keyed_job(region, fill)
 	make_keyed(job)
 	return keep_keyed(job)
@@ -302,10 +316,8 @@ static func keyed_texture(region: Rect2, fill := Fill.BLACK) -> Texture2D:
 ##    one already kept when there is one; null when the skin changed.
 static func keyed_job(region: Rect2, fill := Fill.BLACK) -> Dictionary:
 	var cache_key := "%s|%d" % [region, fill]
-	if _keyed.has(cache_key):
-		return {}
 	var sheet := GameSkin.texture("combat_bar")
-	if sheet == null:
+	if sheet == null or _kept_column(cache_key, sheet) != null:
 		return {}
 	# The near-white key is decided on the 1997 pixels; the picture and the
 	# stone it is filled with are cut at the sheet's own resolution, the
@@ -355,13 +367,16 @@ static func keep_keyed(job: Dictionary) -> Texture2D:
 	if job.is_empty():
 		return null
 	var cache_key := String(job["cache_key"])
-	if _keyed.has(cache_key):
-		return _keyed[cache_key]
 	var sheet := GameSkin.texture("combat_bar")
-	if sheet == null or sheet.get_instance_id() != int(job["sheet"]) or not (job.get("out") is Image):
+	if sheet == null or sheet.get_instance_id() != int(job["sheet"]):
+		return null
+	var kept := _kept_column(cache_key, sheet)
+	if kept != null:
+		return kept
+	if not (job.get("out") is Image):
 		return null
 	var tex := GameSkin.texture_of(job["out"], Vector2i((job["region"] as Rect2).size))
-	_keyed[cache_key] = tex
+	_keyed[cache_key] = [sheet.get_instance_id(), tex]
 	return tex
 # --- end the smoothness pass (M1): the keyed column ---
 

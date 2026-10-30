@@ -113,6 +113,15 @@ const MAGIC_TIPS := {
 	"Sword of Resistance": "Risk one white amulet to reach a city under siege.",
 	"Ring of the Guardian": "The wizards now need 5 mana taps to cast Dominion.",
 }
+## [Ours] THE WORLD MAGICS THAT ANSWER A SIEGE, MARKED WHERE NONE CAN COME
+## (the owner's ruling of 2026-10-29, "Mark them, skip the Ring"; the
+## 0.50.66 bug campaign, h3-2): under the Embark's Sieges "None", or with
+## the world at peace ([method Sieges.calm]), Sword of Resistance finds no
+## town to aid and Ring of the Guardian no Dominion to delay — their tips
+## say so ([method magic_tip]). The white hero keeps the Sword; the shops
+## leave the Ring out ([method WorldMagicShop.idle]).
+const SIEGE_MAGICS: Array[String] = ["Sword of Resistance", "Ring of the Guardian"]
+const NO_SIEGES := " (no sieges in this campaign)"
 ## The keys, for the help (?): what the line under the world once said —
 ## the world's keys ([method WorldScreen._unhandled_input]), 1997's where
 ## they were 1997's (adventure_input.c 304–503: F1–F6, L, Escape and Q,
@@ -1508,6 +1517,16 @@ func base_life_words(key: String) -> String:
 	return " " + DUELS_START % player.duel_start_life() + " That is 10, and the World Magics' bonuses, before your links."
 
 
+## What World Magic [param magic] does, in its 1997 words ([constant
+## MAGIC_TIPS]); for [param player]'s campaign with no siege to come, a
+## siege's World Magic marked [constant NO_SIEGES] (h3-2).
+static func magic_tip(magic: String, player: AdventurePlayer = null) -> String:
+	var words := String(MAGIC_TIPS.get(magic, ""))
+	if player != null and magic in SIEGE_MAGICS and Sieges.calm(player):
+		words += NO_SIEGES
+	return words
+
+
 ## `[name, what it does]` for a part's [param tip] key.
 func tip_for(tip: String) -> Array[String]:
 	var kind := tip.get_slice(":", 0)
@@ -1538,7 +1557,7 @@ func tip_for(tip: String) -> Array[String]:
 			if player != null and player.life_start == AdventurePlayer.START_BASE \
 					and AdventurePlayer.LIFE_BONUSES.has(magic):
 				state += " Owned, it adds %d life to every duel." % int(AdventurePlayer.LIFE_BONUSES[magic])
-			return [magic, MAGIC_TIPS[magic] + state]
+			return [magic, magic_tip(magic, player) + state]
 		"button":
 			match key:
 				"Options":

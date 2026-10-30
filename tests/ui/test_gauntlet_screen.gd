@@ -759,7 +759,8 @@ func test_a_deck_of_yours_that_passes_is_the_one_you_play() -> void:
 	await get_tree().process_frame
 	assert_eq(screen.last_refusal, "")
 	assert_not_null(screen._match)
-	assert_eq(screen.config.player_names[0], "You")
+	assert_eq(screen.config.player_names[0], SetupScreen.your_name(),
+		"your Magic Battle name, not \"You\" (0.50.66 bug campaign)")
 	assert_eq(screen._match.config.decks[0].size(),
 		DeckList.load_file(DECK_A, true).cards.size(), "seat 0 holds YOUR deck")
 

@@ -20,6 +20,8 @@ extends RefCounted
 ##  - BOUGHT: the World Magic is the hero's, its seller is cleared (1997
 ##    tested Haggler's Coin, the Fruit and the Ring by that), and the
 ##    journal says "Bought WM: %s".
+##  - [Ours] NOT OFFERED: a World Magic that would do nothing in this
+##    campaign ([method idle]) — Ring of the Guardian with no siege to come.
 ## The pane is [WorldMagicPane]; the world screen asks [method offer] as
 ## the hero leaves a town.
 
@@ -64,6 +66,23 @@ static func sold_at(world: ShandalarWorld, slot: int) -> int:
 	return world.world_magic_sites.find(slot)
 
 
+## [Ours] WHETHER WORLD MAGIC [param index] WOULD DO NOTHING for [param
+## player], and is not offered ([method offer]; the owner's ruling of
+## 2026-10-29, "Mark them, skip the Ring"; the 0.50.66 bug campaign, h3-2):
+## Ring of the Guardian only raises the taps Dominion needs, and with no
+## siege to come — the Embark's Sieges "None", or the world at peace
+## ([method Sieges.calm]) — there is no Dominion; it is offered then only
+## under Starting life "Base 10 + links", where it adds its 3 life to every
+## duel ([constant AdventurePlayer.LIFE_BONUSES]). Sword of Resistance
+## stays as it was — a white hero's from the start, for sale to the others
+## — its tip marked ([method WorldHud.magic_tip]).
+static func idle(player: AdventurePlayer, index: int) -> bool:
+	if player == null or index < 0 or index >= AdventurePlayer.WORLD_MAGICS.size():
+		return false
+	return AdventurePlayer.WORLD_MAGICS[index] == "Ring of the Guardian" and Sieges.calm(player) \
+		and player.life_start != AdventurePlayer.START_BASE
+
+
 ## Whether leaving site [param slot] brings the World Magic seller's offer:
 ## a town or a city no wizard holds.
 static func asks_at(world: ShandalarWorld, slot: int) -> bool:
@@ -83,7 +102,7 @@ static func offer(player: AdventurePlayer, slot: int) -> Dictionary:
 	var best_distance := 999
 	for index in AdventurePlayer.WORLD_MAGICS.size():
 		var sold_at := seller(world, index)
-		if sold_at <= 0 or player.owns(AdventurePlayer.WORLD_MAGICS[index]):
+		if sold_at <= 0 or player.owns(AdventurePlayer.WORLD_MAGICS[index]) or idle(player, index):
 			continue
 		var there := Vector2i(int(world.sites[sold_at]["x"]), int(world.sites[sold_at]["y"]))
 		var distance := WorldGenerator.distance(here.x - there.x, here.y - there.y)

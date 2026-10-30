@@ -224,9 +224,14 @@ class TuneWindow extends RefCounted:
 	var jobs: Array[Dictionary] = []
 	var done := 0
 	var stop := false
+	## Set by the worker as it begins (h1-3, [method SkinWarmer.release]).
+	var started := false
 	var lock := Mutex.new()
 
 	func run() -> void:
+		lock.lock()
+		started = true
+		lock.unlock()
 		for i in jobs.size():
 			lock.lock()
 			var stopped := stop
@@ -316,7 +321,7 @@ func _open_window(new_key: String, ids: Array[String]) -> bool:
 	_list = null
 	_places = {}
 	_opening = null
-	_task = WorkerThreadPool.add_task(_window.run, false, "Music window")
+	_task = SkinWarmer.track(_window, WorkerThreadPool.add_task(_window.run, false, "Music window"))
 	set_process(true)
 	_advance()
 	return true
@@ -423,7 +428,7 @@ func settle_window() -> void:
 	if _window == null:
 		return
 	if _task != -1:
-		WorkerThreadPool.wait_for_task_completion(_task)
+		SkinWarmer.claim(_task)
 		_task = -1
 	_take(_window.decoded())
 	if _list == null:
@@ -431,9 +436,12 @@ func settle_window() -> void:
 	_close_window()
 
 
+## The window closed: its worker let go — waited for only when it has
+## started, never behind a warm-up still queued ahead of it (the bug
+## campaign of 0.50.66, h1-3: [method SkinWarmer.release]).
 func _close_window() -> void:
 	if _task != -1:
-		WorkerThreadPool.wait_for_task_completion(_task)
+		SkinWarmer.release(_window, _task)
 		_task = -1
 	_window = null
 	_places = {}
@@ -441,14 +449,12 @@ func _close_window() -> void:
 	set_process(false)
 
 
-## The window let go: the worker asked to stop and waited for (it ends
-## after the tune in hand), nothing started.
+## The window let go: the worker asked to stop and, when it has started,
+## waited for (it ends after the tune in hand; [method _close_window]),
+## nothing started.
 func _drop_window() -> void:
 	if _window == null:
 		return
-	_window.lock.lock()
-	_window.stop = true
-	_window.lock.unlock()
 	_close_window()
 	_window_key = ""
 

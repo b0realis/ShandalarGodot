@@ -23,8 +23,8 @@ extends Node
 ##
 ## Nothing is lost if a warmer is cut short: a file it did not reach is
 ## read on demand, as before. A file whose place changed meanwhile (a skin
-## that arrived) is not kept. Leaving the tree asks the worker to stop and
-## waits for it.
+## that arrived) is not kept. Leaving the tree asks the worker to stop, and
+## waits for it only when it has started (h1-3, [method release]).
 ##
 ## NOT HEADLESS (the tests, the tools: nothing is drawn or heard, and a
 ## test must not race a thread), NOT ON THE WEB, nor where the engine has no
@@ -43,6 +43,123 @@ const MOST_WAIT_MS := 250
 
 ## Tests: 1 warms headless too, 0 never, -1 by the rule ([method runs_here]).
 static var forced := -1
+
+# --- 0.50.66 bug campaign, h1-3: never wait behind another warm-up ---
+## NEVER WAIT BEHIND ANOTHER WARM-UP (the bug campaign of 0.50.66, h1-3).
+## Every warm-up is a low-priority task — this one's, [PaneWarmer]'s,
+## [CardArtWarmer]'s, the music's window ([MusicPlayer]), [DuelWarmup]'s —
+## and on a 2-6-core machine the engine runs low-priority tasks ONE AT A
+## TIME (`threading/worker_pool/low_priority_thread_ratio`, 0.3 of the
+## pool: one thread; two on a Steam Deck). A main-thread wait on a task
+## still in that queue waited for every warm-up ahead of it, each to its
+## last file: leaving the world waited for the skin's warm-ups queued ahead
+## of the stakes', and at quit the newest warmer, the first to leave, for
+## the older ones, never told to stop. So a warmer lets its task go through
+## [method release]: its job is told to stop, and the task is waited for
+## only when it has STARTED — it ends after the file in hand. One that has
+## not started is never waited for: when its turn comes it sees `stop` and
+## returns at once, and it is reclaimed then ([method _reclaim], once a
+## frame while any is outstanding) — or as the game closes, after every
+## node has left the tree, every job told to stop first ([method
+## _reclaim_all]), so the engine's pool never ends on a task nobody
+## claimed. A job that takes part has a `lock` (a [Mutex]), `stop` and
+## `started`, its worker setting `started` under the lock as it begins
+## ([method Job.run]); its task is registered with [method track] as it is
+## added, and let go with [method release] (or waited for on purpose with
+## [method claim]). The rule for a new warmer is in this order: track,
+## release — never `wait_for_task_completion` on a task of its own.
+
+## The tasks at work, by id: the job each runs. Main thread only.
+static var _at_work: Dictionary = {}
+## The tasks let go of before they started, by id: the job is held here
+## until its task has run (the task calls into it). Main thread only.
+static var _unclaimed: Dictionary = {}
+
+
+## [param task] — just added to run [param job]'s `run` — at work, and
+## returned: `_task = SkinWarmer.track(job, WorkerThreadPool.add_task(...))`.
+static func track(job: Object, task: int) -> int:
+	if task == -1 or job == null:
+		return task
+	_at_work[task] = job
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.root != null and not tree.root.tree_exiting.is_connected(_reclaim_all):
+		tree.root.tree_exiting.connect(_reclaim_all)
+	return task
+
+
+## [param job] told to stop and its [param task] let go: waited for when it
+## has started (it ends after the file in hand); otherwise left to see
+## `stop` and return by itself, and reclaimed once it has. True when the
+## task has ended here (it was waited for). Main thread.
+static func release(job: Object, task: int) -> bool:
+	if task == -1:
+		return true
+	_at_work.erase(task)
+	var started := true
+	if job != null:
+		var lock: Mutex = job.get("lock")
+		lock.lock()
+		job.set("stop", true)
+		started = bool(job.get("started"))
+		lock.unlock()
+	if started or job == null:
+		WorkerThreadPool.wait_for_task_completion(task)
+		return true
+	_unclaimed[task] = job
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and not tree.process_frame.is_connected(_reclaim):
+		tree.process_frame.connect(_reclaim)
+	return false
+
+
+## [param task] waited for ON PURPOSE — a test, or the music's deadline
+## ([method MusicPlayer.settle_window]), that needs what it makes now —
+## and no longer at work.
+static func claim(task: int) -> void:
+	if task == -1:
+		return
+	_at_work.erase(task)
+	WorkerThreadPool.wait_for_task_completion(task)
+
+
+## How many tasks let go of before they started are not reclaimed yet (a
+## test).
+static func unclaimed() -> int:
+	return _unclaimed.size()
+
+
+## The tasks let go of that have run, reclaimed — once a frame while any is
+## outstanding.
+static func _reclaim() -> void:
+	for task: int in _unclaimed.keys():
+		if WorkerThreadPool.is_task_completed(task):
+			WorkerThreadPool.wait_for_task_completion(task)
+			_unclaimed.erase(task)
+	if _unclaimed.is_empty():
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null and tree.process_frame.is_connected(_reclaim):
+			tree.process_frame.disconnect(_reclaim)
+
+
+## AS THE GAME CLOSES — the root leaving the tree, after every node under
+## it: every job still at work told to stop FIRST, then every task waited
+## for, those let go of included. None of them has a file left to finish
+## but the one in hand.
+static func _reclaim_all() -> void:
+	for task: int in _at_work:
+		var job: Object = _at_work[task]
+		var lock: Mutex = job.get("lock")
+		lock.lock()
+		job.set("stop", true)
+		lock.unlock()
+	for task: int in _at_work:
+		WorkerThreadPool.wait_for_task_completion(task)
+	_at_work.clear()
+	for task: int in _unclaimed:
+		WorkerThreadPool.wait_for_task_completion(task)
+	_unclaimed.clear()
+# --- end 0.50.66 bug campaign, h1-3 ---
 
 ## The pictures, sounds and tunes being warmed, by key (a tune by its
 ## file's path): when each was asked for, in ms. Main thread only.
@@ -66,9 +183,14 @@ class Job extends RefCounted:
 	## How many of [member entries] the worker has been through.
 	var done := 0
 	var stop := false
+	## Set by the worker as it begins (h1-3, [method SkinWarmer.release]).
+	var started := false
 	var lock := Mutex.new()
 
 	func run() -> void:
+		lock.lock()
+		started = true
+		lock.unlock()
 		for i in entries.size():
 			lock.lock()
 			var stopped := stop
@@ -160,7 +282,7 @@ static func _start(parent: Node, entries: Array[Dictionary], urgent: bool) -> Sk
 	warmer._job = Job.new()
 	warmer._job.entries = entries
 	_live.append(warmer)
-	warmer._task = WorkerThreadPool.add_task(warmer._job.run, urgent, "Skin warm-up")
+	warmer._task = track(warmer._job, WorkerThreadPool.add_task(warmer._job.run, urgent, "Skin warm-up"))
 	var tree := Engine.get_main_loop() as SceneTree
 	var host: Node = tree.root if tree != null else null
 	if host == null or (parent != null and not parent.is_inside_tree()):
@@ -247,7 +369,7 @@ func finish_now() -> void:
 	if _job == null:
 		return
 	if _task != -1:
-		WorkerThreadPool.wait_for_task_completion(_task)
+		claim(_task)
 		_task = -1
 	while _kept < _job.done:
 		keep(_job.entries[_kept])
@@ -283,8 +405,9 @@ func _process(_delta: float) -> void:
 		_finish()
 
 
-## Stops the worker (it ends after the file in hand), waits for it, lets go
-## of what it did not keep, and frees the node ([param free_self]).
+## Stops the worker (it ends after the file in hand), waits for it when it
+## has started ([method release]), lets go of what it did not keep, and
+## frees the node ([param free_self]).
 func _finish(free_self := true) -> void:
 	_live.erase(self)
 	_stop_worker()
@@ -299,11 +422,7 @@ func _finish(free_self := true) -> void:
 func _stop_worker() -> void:
 	if _task == -1:
 		return
-	if _job != null:
-		_job.lock.lock()
-		_job.stop = true
-		_job.lock.unlock()
-	WorkerThreadPool.wait_for_task_completion(_task)
+	release(_job, _task)
 	_task = -1
 
 

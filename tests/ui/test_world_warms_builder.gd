@@ -61,7 +61,10 @@ func _in_deck(card_name: String) -> bool:
 
 func test_a_moment_after_opening_the_pictures_are_warmed() -> void:
 	screen._warm_the_builder()
-	var warmer := screen.find_child("CardArtWarmer", false, false) as CardArtWarmer
+	# Under the tree's root, joined at the end of the frame (the bug
+	# campaign of 0.50.66, h1-3).
+	await get_tree().process_frame
+	var warmer := get_tree().root.find_child("CardArtWarmer", false, false) as CardArtWarmer
 	# No card art ships: with none on this machine there is nothing to warm.
 	if warmer == null:
 		assert_true(CardArtWarmer._job_for(screen._cards_to_warm()).paths.is_empty(),

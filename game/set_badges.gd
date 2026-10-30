@@ -156,6 +156,13 @@ var icons := true
 ## calls [method UiChrome.explain_popup] with [method facts_for].
 signal set_clicked(code: String)
 
+## Cache: set code -> [the strip's instance id (0 for none), the symbol].
+## KEPT WITH THE STRIP IT WAS CUT FROM (0.50.66 bug campaign, h4-1): a row
+## shown while no skin was worn kept our glyph — or nothing — for the
+## session, and a skin dropped on the title later never put the printed
+## symbols back on it; a zip that replaced a zip kept the old one's. A
+## skin that arrives is a new strip ([method GameSkin.clear_caches]), and
+## so cut again. [method _entry] is the pair for the strip worn now.
 static var _symbol_cache: Dictionary = {}
 
 ## Where the set facts live: name, release date, printed size and a short
@@ -342,10 +349,11 @@ static func badge_suffix(code: String) -> String:
 static func symbol(code: String) -> Texture2D:
 	if not SYMBOL_SLOT.has(code):
 		return null
-	if _symbol_cache.has(code):
-		return _symbol_cache[code]
-	var result: Texture2D = null
 	var sheet := GameSkin.texture(SHEET_KEY)
+	var kept: Variant = _symbol_cache.get(code)
+	if kept is Array and (kept as Array).size() == 2 and int(kept[0]) == _id_of(sheet):
+		return kept[1]
+	var result: Texture2D = null
 	if sheet != null:
 		# The key and the crop are decided on the 1997 strip; a 2x strip
 		# only lends its pixels (GameSkin, THE 2x PICTURES).
@@ -353,8 +361,19 @@ static func symbol(code: String) -> Texture2D:
 			sheet.get_image() if GameSkin.scale_of(sheet) > 1 else null)
 	if result == null:
 		result = ink_tight(GameSkin.set_icon(code))
-	_symbol_cache[code] = result
+	_symbol_cache[code] = [_id_of(sheet), result]
 	return result
+
+
+## The pair [member _symbol_cache] keeps [param symbol] as, made of the
+## strip worn now (h4-1) — and how a test says "this machine has the
+## comet" (or has not).
+static func _entry(symbol: Texture2D) -> Array:
+	return [_id_of(GameSkin.texture(SHEET_KEY)), symbol]
+
+
+static func _id_of(sheet: Texture2D) -> int:
+	return sheet.get_instance_id() if sheet != null else 0
 
 
 ## A glyph cropped to its own ink — the same trim [method symbol_from_sheet]

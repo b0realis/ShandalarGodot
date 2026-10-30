@@ -51,9 +51,14 @@ class Job extends RefCounted:
 	var entries: Array[Dictionary] = []
 	var done := 0
 	var stop := false
+	## Set by the worker as it begins (h1-3, [method SkinWarmer.release]).
+	var started := false
 	var lock := Mutex.new()
 
 	func run() -> void:
+		lock.lock()
+		started = true
+		lock.unlock()
 		for i in entries.size():
 			lock.lock()
 			var stopped := stop
@@ -119,7 +124,7 @@ static func warm(parent: Node, bled: Array[String], trims: Array[Array], sprites
 	warmer._job = Job.new()
 	warmer._job.entries = entries
 	parent.get_tree().root.add_child.call_deferred(warmer)
-	warmer._task = WorkerThreadPool.add_task(warmer._job.run, false, "Pane warm-up")
+	warmer._task = SkinWarmer.track(warmer._job, WorkerThreadPool.add_task(warmer._job.run, false, "Pane warm-up"))
 	_live.append(warmer)
 	return warmer
 
@@ -230,7 +235,7 @@ func finish_now() -> void:
 	if _job == null:
 		return
 	if _task != -1:
-		WorkerThreadPool.wait_for_task_completion(_task)
+		SkinWarmer.claim(_task)
 		_task = -1
 	while _kept < _job.done:
 		keep(_job.entries[_kept])
@@ -256,15 +261,13 @@ func _process(_delta: float) -> void:
 		_finish()
 
 
-## Stops the worker (it ends after the entry in hand), waits for it, and
-## frees the node.
+## Stops the worker (it ends after the entry in hand), waits for it when it
+## has started — never behind another warm-up still queued (the bug
+## campaign of 0.50.66, h1-3: [method SkinWarmer.release]) — and frees the
+## node.
 func _finish() -> void:
 	if _task != -1:
-		if _job != null:
-			_job.lock.lock()
-			_job.stop = true
-			_job.lock.unlock()
-		WorkerThreadPool.wait_for_task_completion(_task)
+		SkinWarmer.release(_job, _task)
 		_task = -1
 	_job = null
 	_live.erase(self)

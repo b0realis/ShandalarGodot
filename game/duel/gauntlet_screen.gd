@@ -427,7 +427,10 @@ func _apply_options() -> bool:
 	config.decks[0] = deck.cards
 	config.printings[0] = deck.printings.duplicate()
 	config.sideboards[0] = deck.sideboard
-	config.player_names[0] = "You"
+	# YOUR NAME IS THE ONE YOU GO BY IN MAGIC BATTLE (0.50.66 bug campaign,
+	# a leftover): "You" here alone, and the engine's third-person lines
+	# read "You wins!" ([method SetupScreen.your_name]).
+	config.player_names[0] = SetupScreen.your_name()
 	# The deck's name, for the splash under your portrait and the duel's
 	# sidebar — the deck you chose, or the one the run drew for you when
 	# `your_deck` was "" (nothing named it before the 2026-09-08 playtest
@@ -543,6 +546,11 @@ func _show_note(message: String) -> void:
 	_hold_the_keyboard(dialog)
 
 
+## What the Gauntlet called your seat until 0.60.0 — a saved run's name
+## that [method resume_run] replaces with [method SetupScreen.your_name].
+const OLD_SEAT_NAME := "You"
+
+
 ## `Resume run` — THE RUN TAKEN UP from [param taken] ([method
 ## MatchSaves.gauntlet_from_json]'s): its id, template, options, record and
 ## opponent order, and its stream. Between matches it goes on at the next
@@ -557,6 +565,10 @@ func resume_run(taken: Dictionary) -> void:
 	_running = true
 	run_id = String(taken["id"])
 	config = taken["config"]
+	# A run saved before 0.60.0 seated you as "You": the name you go by
+	# now, so its log reads as a new run's does.
+	if String(config.player_names[0]) == OLD_SEAT_NAME:
+		config.player_names[0] = SetupScreen.your_name()
 	options = taken["options"]
 	state = taken["state"]
 	_rng.state = int(taken["rng_state"])

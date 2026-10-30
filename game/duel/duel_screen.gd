@@ -9945,8 +9945,9 @@ func _on_screen_options_closed() -> void:
 ## the mini help ([method DuelMiniHelp._build]) — and not on
 ## the table: one card size is the 1997 rule (`set_smallcard_size`), and a
 ## whole-window zoom has no room on the 800 logical rows the duel is laid
-## out on. Each piece grows about its own anchor: the bar from its left
-## end at the seam, a dialog about its centre, the log from its corner.
+## out on. Each piece grows about its own anchor: the bar from its top
+## left corner at the seam (h4-3), a dialog about its centre, the log from
+## its corner.
 ## The coin toss and the opening hand's window keep their size, and the
 ## switch's words say so (0.50.65 bug campaign, k3-3): [OpeningWindow] is
 ## built around two full-size cards that never rescale, and at 150% it
@@ -9980,11 +9981,18 @@ func _apply_ui_scale() -> void:
 const MENU_FONT_SIZE := 14
 
 
-## The bar grows from its left end and about its middle row — where it
-## stands at the seam.
+## The bar grows from its left end and DOWN FROM ITS TOP EDGE, which stays
+## where it stands at 100% (0.50.66 bug campaign, h4-3). It grew about its
+## middle row until then, and at 150% climbed 9 rows over the opponent's
+## hand window, whose default corner hangs its title bar just above the
+## seam: "Opponent (n)" and its ↑ were half hidden at 1280x800 under an
+## ordinary prompt. Downward the bar lies over the player's half, as at
+## 100%: only a sentence long enough to reach the player's own window
+## (x 1062 at its default corner) meets its title bar, which the middle
+## pivot covered nearly as far.
 func _pivot_situation_bar() -> void:
 	if _situation_bar != null:
-		_situation_bar.pivot_offset = Vector2(0.0, _situation_bar.size.y * 0.5)
+		_situation_bar.pivot_offset = Vector2.ZERO
 
 
 func _on_child_entered_for_scale(node: Node) -> void:

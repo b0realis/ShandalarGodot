@@ -272,6 +272,8 @@ var _buttons: Array[Button] = []
 ## Group name -> its buttons, so [method group_names] can prove the
 ## manual's four groups are all still on the strip.
 var _groups: Dictionary = {}
+## [method sheet_cell]'s cells, as [the sheet's instance id, the cell]
+## (h4-1, there).
 static var _cell_cache: Dictionary = {}
 
 
@@ -1190,19 +1192,24 @@ func _dress_text(button: Button, letters: String) -> void:
 
 ## `panel_dark_stone` under [param tint], cached per tint. Texture and
 ## flat grounds both take the tint, so the skinless stone splits its
-## states exactly as the skinned one does.
+## states exactly as the skinned one does. Kept as [the stone picture's
+## instance id (0 for none), the box]: the flat box made with no skin is
+## made again in stone when a skin arrives (0.50.66 bug campaign, h4-1).
 static var _stone_cache: Dictionary = {}
 
 static func _stone(tint: Color) -> StyleBox:
 	var id := str(tint)
-	if _stone_cache.has(id):
-		return _stone_cache[id]
+	var art := GameSkin.texture("panel_dark_stone")
+	var made := art.get_instance_id() if art != null else 0
+	var kept: Array = _stone_cache.get(id, [])
+	if kept.size() == 2 and int(kept[0]) == made:
+		return kept[1]
 	var box := OriginalDialog.panel_style("panel_dark_stone", 2.0)
 	if box is StyleBoxTexture:
 		box.modulate_color = tint
 	elif box is StyleBoxFlat:
 		box.bg_color = box.bg_color * tint
-	_stone_cache[id] = box
+	_stone_cache[id] = [made, box]
 	return box
 
 
@@ -1274,10 +1281,19 @@ static func _flat_face(face: Color) -> StyleBoxFlat:
 
 
 ## One 40x40 cell of a filter sheet, cached. Null without the skin.
+## Every cell — the medallions drawn here on its blank disc too — is made
+## of the sheet [param key] names, and kept with it, never as a null for
+## want of one (0.50.66 bug campaign, h4-1): a Deck Builder opened with no
+## skin used to keep its lettered stand-ins for the session, after a skin
+## was dropped on the title too.
 static func sheet_cell(key: String, row: int, col: int) -> Texture2D:
+	var sheet := GameSkin.texture(key)
+	if sheet == null:
+		return null
 	var id := "%s:%d:%d" % [key, row, col]
-	if _cell_cache.has(id):
-		return _cell_cache[id]
+	var kept: Array = _cell_cache.get(id, [])
+	if kept.size() == 2 and int(kept[0]) == sheet.get_instance_id():
+		return kept[1]
 	var result: Texture2D = null
 	if row == DICE_CELL[0]:
 		result = _dice_cell(key)
@@ -1285,15 +1301,12 @@ static func sheet_cell(key: String, row: int, col: int) -> Texture2D:
 		result = _pool_cell(key)
 	elif row < 0:
 		result = _funnel_cell(key)
-	else:
-		var sheet := GameSkin.texture(key)
-		if sheet != null:
-			# Drawn size for the bounds, the sheet's own pixels for the cut
-			# (GameSkin, THE 2x PICTURES).
-			if sheet.get_width() >= (col + 1) * CELL and sheet.get_height() >= (row + 1) * CELL:
-				var rect := Rect2i(col * CELL, row * CELL, CELL, CELL)
-				result = GameSkin.texture_of(GameSkin.cut(sheet, rect), rect.size)
-	_cell_cache[id] = result
+	# Drawn size for the bounds, the sheet's own pixels for the cut
+	# (GameSkin, THE 2x PICTURES).
+	elif sheet.get_width() >= (col + 1) * CELL and sheet.get_height() >= (row + 1) * CELL:
+		var rect := Rect2i(col * CELL, row * CELL, CELL, CELL)
+		result = GameSkin.texture_of(GameSkin.cut(sheet, rect), rect.size)
+	_cell_cache[id] = [sheet.get_instance_id(), result]
 	return result
 
 

@@ -190,9 +190,13 @@ static func _news(player: AdventurePlayer, dice: MsvcRandom) -> String:
 			var text := String(city[1]) if city.size() >= 4 else "Two of the cities with which you have links are %s and %s."
 			return fill(text, [WorldNames.site_name(player.world, a), WorldNames.site_name(player.world, b)])
 		_:
+			# [Ours] Never a World Magic the shops no longer offer ([method
+			# WorldMagicShop.idle]: Ring of the Guardian with no siege to come)
+			# — its town would not sell it (the 0.50.66 bug campaign, h3-2).
 			var open: Array[int] = []
 			for i in AdventurePlayer.WORLD_MAGICS.size():
-				if WorldMagicShop.seller(player.world, i) > 0 and not player.owns(AdventurePlayer.WORLD_MAGICS[i]):
+				if WorldMagicShop.seller(player.world, i) > 0 and not player.owns(AdventurePlayer.WORLD_MAGICS[i]) \
+						and not WorldMagicShop.idle(player, i):
 					open.append(i)
 			if open.is_empty():
 				return ""

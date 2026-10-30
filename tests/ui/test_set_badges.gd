@@ -34,8 +34,9 @@ func _has_symbol(badge: Node) -> bool:
 
 
 ## A stand-in for a set's symbol. [method SetBadges.symbol] memoises into
-## a STATIC dictionary, so seeding it is how a test says "this machine has
-## the comet" (or "has not") without depending on whether the player
+## a STATIC dictionary, so seeding it — as the strip worn now would
+## ([method SetBadges._entry], 0.50.66 h4-1) — is how a test says "this
+## machine has the comet" (or "has not") without depending on whether the player
 ## running the suite has imported the 1997 art. Put back in `after_each`:
 ## a fake glyph must not outlive the test that asked for one.
 var _cache_was: Dictionary = {}
@@ -121,14 +122,14 @@ func test_astral_shows_its_comet_alone_and_its_word_only_without_one() -> void:
 	# skin supplies one. Both halves are forced through the symbol cache,
 	# so this reads the same on a machine with the 1997 art and one
 	# without.
-	SetBadges._symbol_cache["past"] = _fake_symbol()
+	SetBadges._symbol_cache["past"] = SetBadges._entry(_fake_symbol())
 	var skinned: SetBadges = await _row(true)
 	var comet := skinned.get_node("badge_past")
 	assert_true(_has_symbol(comet), "the star trailing sparks, slot 4")
 	assert_null(_lettered(comet),
 		"and NOT the word beside it — the symbol already says Astral")
 
-	SetBadges._symbol_cache["past"] = null
+	SetBadges._symbol_cache["past"] = SetBadges._entry(null)
 	var bare: SetBadges = await _row(true)
 	var word := bare.get_node("badge_past")
 	assert_false(_has_symbol(word), "no art imported, no comet")

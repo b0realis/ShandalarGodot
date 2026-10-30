@@ -207,6 +207,13 @@ func _follow_walk(player: AdventurePlayer) -> void:
 ## rested [constant REST_MS] ms.
 func _follow_hover(player: AdventurePlayer) -> void:
 	var tile := player.tile()
+	if not _preview and not _way.is_empty():
+		# A click's way its walk left behind (0.50.66 bug campaign, h2-3): a
+		# walk stopped on its first tile — Space, an arrow into the sea, a
+		# meeting there — left its arrows at full strength, the pointer
+		# still on the tile previewed. Given up; the preview looked for anew.
+		_clear()
+		_previewed = Vector2i(-1, -1)
 	if _hover.x < 0 or _hover == tile:
 		_clear()
 		return

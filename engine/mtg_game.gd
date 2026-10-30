@@ -13437,8 +13437,15 @@ func _lose(pid: int, reason: String) -> void:
 	game_over = true
 	winner = opponent_of(pid)
 	_release_pending_actions()
-	log_line("%s loses: %s. %s wins!" % [
-		players[pid].player_name, reason, players[winner].player_name],
+	# "You" TAKES ITS OWN VERB (0.50.66 bug campaign, leftover): the
+	# Gauntlet seated the human as "You" until 0.60.0, and its log read
+	# "You wins!" / "You loses: …". It seats them by their Magic Battle
+	# name now; a seat still called "You" — a name typed so, a duel
+	# recorded before — still reads right at its end.
+	var loser_name := players[pid].player_name
+	var winner_name := players[winner].player_name
+	log_line("%s %s: %s. %s %s!" % [loser_name, "lose" if loser_name == "You" else "loses",
+		reason, winner_name, "win" if winner_name == "You" else "wins"],
 		null, "end", pid)
 	if not _probing:
 		game_ended.emit(winner)

@@ -162,9 +162,10 @@ func test_a_seat_without_a_plate_leaves_nothing_behind() -> void:
 	for key in keys:
 		saved[key] = GameSkin._texture_cache.get(key)
 		GameSkin._texture_cache[key] = null
-	# ExilePlate caches a null per colour when it finds no grave plate to
-	# paint from: emptied here and put back below, or every later table in
-	# the run would lose its exile art.
+	# ExilePlate keeps each plate with the grave plate it was painted from
+	# and never a null (0.50.66 bug campaign, h4-1), so taking the grave
+	# plates away needs nothing of it; it is emptied here and put back
+	# below all the same, so the run's plates are as this test found them.
 	var saved_exile: Dictionary = ExilePlate._cache.duplicate()
 	ExilePlate._cache = {}
 	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()

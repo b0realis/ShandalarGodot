@@ -253,10 +253,17 @@ func test_the_card_found_s_page_stays_while_it_comes_in() -> void:
 	var pane := await _enter(8)
 	pane.move(_plant(pane, DungeonBoard.TREASURE))
 	assert_not_null(pane.view.page(), "the card found's page")
-	await get_tree().create_timer(0.4).timeout
+	# Both clicks on the clock the guard reads (wall time,
+	# `DungeonPane._guard_until`), not on frame-time timers: after a stretch
+	# of slow frames those ran fast and the second click came early (a
+	# loaded gate, once, 0.60.0).
+	await get_tree().process_frame
+	assert_lt(Time.get_ticks_msec(), pane._guard_until, "the first click comes while the page comes in")
 	pane._clicked(Vector2(320, 240), MOUSE_BUTTON_LEFT)
 	assert_not_null(pane.view.page(), "still coming in: a click puts it not away")
-	await get_tree().create_timer(0.4).timeout
+	var deadline := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < pane._guard_until and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
 	pane._clicked(Vector2(320, 240), MOUSE_BUTTON_LEFT)
 	await _frames()
 	assert_null(pane.view.page(), "come in, a click goes on")

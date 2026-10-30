@@ -391,7 +391,9 @@ func _info(slot: int, at: Vector2, ink: Color) -> void:
 
 ## The Info Map's words for place [param slot], a line each: what it
 ## trades, then the World Magic it sells ([method WorldMagicShop.sold_at]);
-## none for a castle.
+## none for a castle. [Ours] Not a World Magic the shops no longer offer
+## ([method WorldMagicShop.idle]: Ring of the Guardian with no siege to
+## come) — the town would not sell it (the 0.50.66 bug campaign, h3-2).
 func info_words(slot: int) -> PackedStringArray:
 	var words := PackedStringArray()
 	var site: Dictionary = world.sites[slot]
@@ -403,7 +405,7 @@ func info_words(slot: int) -> PackedStringArray:
 		trade = trade.trim_prefix("Any ").capitalize()
 	words.append(trade)
 	var magic := WorldMagicShop.sold_at(world, slot)
-	if magic >= 0:
+	if magic >= 0 and not WorldMagicShop.idle(player, magic):
 		words.append(AdventurePlayer.WORLD_MAGICS[magic])
 	return words
 

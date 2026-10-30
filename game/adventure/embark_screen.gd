@@ -171,7 +171,10 @@ const SIEGE_SUMMARY := {
 	AdventurePlayer.SIEGES_NONE: "Sieges: none, no town is ever besieged.",
 }
 ## THE CREATURES' WAY [ours, the owner's ruling of 2026-10-29], by
-## [constant AdventurePlayer.CREATURE_WAYS] ([WorldCreatures]).
+## [constant AdventurePlayer.CREATURE_WAYS] ([WorldCreatures]). Notice's
+## ranges are the nearest creature's; every other notices the hero at half
+## of its own ([method WorldCreatures.notice_range], slots.c 706–708) — the
+## tip says so (the 0.50.66 bug campaign, h3-3).
 var _creatures: OptionButton
 const CREATURE_NAMES := {
 	AdventurePlayer.CREATURES_HUNT: "Hunt",
@@ -179,7 +182,7 @@ const CREATURE_NAMES := {
 }
 const CREATURE_TIPS := {
 	AdventurePlayer.CREATURES_HUNT: "As the 1997 game played: every creature on the map comes at you, every moment, from wherever it is. Only a road outruns the slower ones.",
-	AdventurePlayer.CREATURES_NOTICE: "The 1997 game's own design, which it never switched on: a creature wanders its own lands until you come within its range (a tile and a half for a wizard, up to four and a half for a troll or a wyrm, twice that for a few wide-ranging ones), then hurries at you. Some are slowed on certain lands: a Merfolk Shaman in black swamps, a Sedge Beast in green forests.",
+	AdventurePlayer.CREATURES_NOTICE: "The 1997 game's own design, which it never switched on: a creature wanders its own lands until you come within its range (a tile and a half for a wizard, up to four and a half for a troll or a wyrm, twice that for a few wide-ranging ones; that is for the creature nearest you, the others notice you at half that), then hurries at you. Some are slowed on certain lands: a Merfolk Shaman in black swamps, a Sedge Beast in green forests.",
 }
 const CREATURE_SUMMARY := {
 	AdventurePlayer.CREATURES_HUNT: "Creatures: they hunt you from anywhere, as in 1997.",

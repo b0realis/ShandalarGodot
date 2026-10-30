@@ -602,13 +602,10 @@ working view.
   winnable — the world, the towns, quests, lairs, the roaming creatures,
   their duels and ante, and the sieges, 0.50.48–0.50.61; the castles, the
   dungeons' insides, Arzakon and the end, part C, 0.50.62–0.50.64. Not built
-  yet: the card packs' own worlds and their World Lords — designed in outline
-  and postponed by the owner until the adventure plays well with the
-  original cards.) It has its section in `docs/ROADMAP.md` ("M5 — Adventure
+  yet: the card packs in the adventure.) It has its section in `docs/ROADMAP.md` ("M5 — Adventure
   mode"); its design and build record is
   `docs/adventure-implementation-notes.md`, beside the research in
-  `docs/world-builder-adventure-notes.md`. The pack worlds are the largest
-  piece still to come.
+  `docs/world-builder-adventure-notes.md`.
 - **The AI's plan of 2026-09-08 is closed, not abandoned.**
   `docs/AI-next-wave.md` was written as the next wave's work list and every row
   of it was settled in the week that followed — some shipped, several built,

@@ -37,7 +37,25 @@ extends Node
 ## is decoded on demand, as before. A registry rebuilt meanwhile (a card
 ## pack switched, [member CardRegistry.revision]) drops what was decoded,
 ## since its paths may no longer be the ones asked for. Leaving the tree
-## asks the worker to stop and waits for it.
+## asks the worker to stop, and waits for it only when it has started
+## ([method SkinWarmer.release]).
+##
+## UNDER THE TREE'S ROOT (the bug campaign of 0.50.66, h1-3), as
+## [SkinWarmer]'s and [PaneWarmer]'s are: what it keeps is the caches', not
+## a screen's, and leaving the world used to wait in its leaving for the
+## builder's and the stakes' warmers — and, on a machine whose engine runs
+## one low-priority task at a time, for every warm-up queued ahead of them.
+##
+## PICTURES WARMED AHEAD (the bug campaign of 0.50.66, h1-2): the cards a
+## creature near the hero may stake ([method WorldSoundscape._warm_stakes])
+## are warmed AHEAD — kept apart from the pictures on show, in the small
+## budget of their own [constant GameSkin.ART_AHEAD_CAP], until a card asks
+## for one ([method GameSkin.keep_card_art]). Every creature that came
+## within four tiles had its 10-16 pictures kept in the shown pictures'
+## cache, about 1.45 MB each, met or not: a 12-minute walk held 163
+## pictures where the cards shown were 65, and 25 minutes the cache's whole
+## 256. A pack's pictures ([CardPacks]) have no such budget, so a warm
+## ahead leaves them to be decoded when asked, as before 0.50.66.
 
 ## The most pictures one warm decodes: the deck on show and the first page
 ## of the cards beside it, well under the caches' bound
@@ -62,9 +80,16 @@ class Job extends RefCounted:
 	## How many of [member paths] the worker has been through.
 	var done := 0
 	var stop := false
+	## Set by the worker as it begins (h1-3, [method SkinWarmer.release]).
+	var started := false
+	## Warmed ahead of being shown (h1-2, see the class doc).
+	var ahead := false
 	var lock := Mutex.new()
 
 	func run() -> void:
+		lock.lock()
+		started = true
+		lock.unlock()
 		for i in paths.size():
 			lock.lock()
 			var stopped := stop
@@ -85,13 +110,15 @@ var _kept := 0
 var _revision := -1
 
 
-## Starts warming [param card_names]' pictures under [param parent] (the
-## first name first: give the deck in use before the rest); null when
-## every picture is kept already, or there is nothing to decode them from.
-static func warm(parent: Node, card_names: Array[String]) -> CardArtWarmer:
+## Starts warming [param card_names]' pictures (the first name first: give
+## the deck in use before the rest) — [param ahead], into the budget of the
+## pictures warmed ahead of being shown (see the class doc); [param parent]
+## only says the asker is in a tree. Null when every picture is kept
+## already, or there is nothing to decode them from.
+static func warm(parent: Node, card_names: Array[String], ahead := false) -> CardArtWarmer:
 	if not runs_here():
 		return null
-	return _start(parent, _job_for(card_names))
+	return _start(parent, _job_for(card_names, ahead))
 
 
 ## True where a worker thread may decode: an engine with threads, not the
@@ -100,23 +127,27 @@ static func runs_here() -> bool:
 	return OS.has_feature("threads") and not OS.has_feature("web")
 
 
-## [param job] decoded on a worker thread under [param parent]; null when
-## it holds nothing to decode.
+## [param job] decoded on a worker thread, the warmer under the tree's
+## root, joined at the end of the frame (h1-3; [param parent] only says the
+## asker is in a tree); null when it holds nothing to decode or there is no
+## tree.
 static func _start(parent: Node, job: Job) -> CardArtWarmer:
-	if job.paths.is_empty():
+	if job.paths.is_empty() or parent == null or not parent.is_inside_tree():
 		return null
 	var warmer := CardArtWarmer.new()
 	warmer.name = "CardArtWarmer"
 	warmer._job = job
 	warmer._revision = CardRegistry.revision
-	parent.add_child(warmer)
-	warmer._task = WorkerThreadPool.add_task(job.run, false, "Card art warm-up")
+	parent.get_tree().root.add_child.call_deferred(warmer)
+	warmer._task = SkinWarmer.track(job, WorkerThreadPool.add_task(job.run, false, "Card art warm-up"))
 	return warmer
 
 
-## The files still to decode for [param card_names], each once.
-static func _job_for(card_names: Array[String]) -> Job:
+## The files still to decode for [param card_names], each once — for a
+## warm [param ahead], the skin's alone (see the class doc).
+static func _job_for(card_names: Array[String], ahead := false) -> Job:
 	var job := Job.new()
+	job.ahead = ahead
 	var packs := CardPrintings.service()
 	var seen := {}
 	for card_name in card_names:
@@ -128,7 +159,7 @@ static func _job_for(card_names: Array[String]) -> Job:
 		var set_code := CardRegistry.get_card(card_name).set_code
 		var path: String = packs.art_path(card_name, set_code) if packs != null else ""
 		if path != "":
-			if packs != null and not packs.art_kept(path):
+			if packs != null and not packs.art_kept(path) and not ahead:
 				job.paths.append(path)
 				job.skin_names.append("")
 		elif not GameSkin.card_art_known(card_name):
@@ -147,6 +178,9 @@ func finished() -> bool:
 
 func _process(_delta: float) -> void:
 	if _job == null:
+		# Finished before it joined the root: it goes now that it is in.
+		if not is_queued_for_deletion():
+			queue_free()
 		return
 	if CardRegistry.revision != _revision:
 		_finish()
@@ -167,29 +201,28 @@ func _process(_delta: float) -> void:
 	for k in taken.size():
 		var at := taken[k]
 		if _job.skin_names[at] != "":
-			GameSkin.keep_card_art(_job.skin_names[at], images[k])
+			GameSkin.keep_card_art(_job.skin_names[at], images[k], _job.ahead)
 		elif packs != null:
 			packs.keep_art(_job.paths[at], images[k])
 	if _kept >= _job.paths.size():
 		_finish()
 
 
-## Stops the worker (it ends after the picture in hand), waits for it, and
-## frees the node.
+## Stops the worker (it ends after the picture in hand), waits for it when
+## it has started ([method SkinWarmer.release]), and frees the node.
 func _finish() -> void:
 	_stop_worker()
 	_job = null
-	queue_free()
+	# Not before it has joined the root (it joins at the end of the frame it
+	# was made in): [method _process] frees it then.
+	if is_inside_tree() and not is_queued_for_deletion():
+		queue_free()
 
 
 func _stop_worker() -> void:
 	if _task == -1:
 		return
-	if _job != null:
-		_job.lock.lock()
-		_job.stop = true
-		_job.lock.unlock()
-	WorkerThreadPool.wait_for_task_completion(_task)
+	SkinWarmer.release(_job, _task)
 	_task = -1
 
 

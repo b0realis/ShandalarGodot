@@ -269,14 +269,9 @@ func _ready() -> void:
 	# THE DUEL MADE READY WHILE IT IS SET UP (the smoothness pass, 0.50.66):
 	# its pictures, sounds and stones off the thread that draws, so `Go!`
 	# opens it without the first duel's freeze ([DuelWarmup]; nothing
-	# headless) — in the colours of the decks picked now (cached by
-	# `_update_face` above; a random deck has none yet).
-	var colors: Array[String] = []
-	for pid in 2:
-		var meta: Variant = _deck_options[pid].get_selected_metadata()
-		var path := str(meta) if meta != null else ""
-		colors.append(_color_of(path) if path != "" and not path.begins_with(GROUP_RANDOM) else "")
-	DuelWarmup.warm(self, colors)
+	# headless) — in the colours of the decks picked now, and again as a
+	# pick brings colours not warmed yet ([method _warm_duel]).
+	_warm_duel()
 	# THE KEYBOARD AND THE D-PAD START ON THE MODE ROW (2026-09-27, the
 	# Steam Deck release): the chosen mode holds the focus, so the first
 	# arrow moves from something and Enter presses something, as on the
@@ -288,6 +283,35 @@ func _ready() -> void:
 	if not _mode_buttons.is_empty():
 		_mode_buttons[0].grab_focus()
 
+
+
+## The seat colours [method _warm_duel] has asked [DuelWarmup] for.
+var _warmed: Dictionary = {}
+
+
+## The duel warmed in the colours the two pickers hold: a deck's own colour
+## (cached by [method _update_face]), and for a random row — a deck drawn
+## at `Go!` — all five in full ([constant DuelWarmup.ANY_COLOR]; the owner,
+## 2026-10-29: "Magic Battle warms all five colors only when a random deck
+## is picked"; the first random duel read the colour it drew as it opened,
+## ~100 ms with the 2x skin). Only what no earlier call asked for: a pick
+## that brings nothing new starts nothing (null, as where none runs).
+func _warm_duel() -> DuelWarmup:
+	var colors: Array[String] = []
+	var fresh := false
+	for pid in 2:
+		var meta: Variant = _deck_options[pid].get_selected_metadata()
+		var path := str(meta) if meta != null else ""
+		var color := DuelWarmup.ANY_COLOR if path == "" or path.begins_with(GROUP_RANDOM) \
+			else _color_of(path)
+		colors.append(color)
+		if not _warmed.has(color) and not _warmed.has(DuelWarmup.ANY_COLOR):
+			fresh = true
+	if not fresh:
+		return null
+	for color in colors:
+		_warmed[color] = true
+	return DuelWarmup.warm(self, colors)
 
 
 ## The `ShellMusic` autoload, `play` or `stop`, looked up in the tree so
@@ -551,6 +575,7 @@ func _build_ui() -> void:
 			else _row_of_deck(deck_option, pid))
 		deck_option.item_selected.connect(func(_i: int) -> void:
 			_update_face(pid)
+			_warm_duel()
 			# `Deck color` follows seat 1's deck, so the preview beside
 			# the lists has to follow the picker too.
 			_update_territory_preview()
@@ -1565,6 +1590,21 @@ func _default_name(pid: int, mode: int) -> String:
 static func _seat_is_ai(pid: int, mode: int) -> bool:
 	return mode == BattleMode.DEMO \
 		or (mode == BattleMode.VS_AI and pid == 1)
+
+
+## THE NAME A PERSON GOES BY AT THE FIRST SEAT, for the modes that seat
+## one without asking: the name typed for it here, as this screen
+## remembers it, else the name this screen gives a person there —
+## "Player 1", as Test hands does ([DuelConfig]). The Gauntlet takes it,
+## as it takes the portrait chosen here ([method
+## PortraitLibrary.chosen_for]) (0.50.66 bug campaign, a leftover): it
+## used to seat you as "You", which no other mode does, and every line the
+## engine writes in the third person read "You wins!", "You gains 3 life".
+static func your_name() -> String:
+	var typed := str(_remembered("name_0", "")).strip_edges().left(SEAT_NAME_MAX).strip_edges()
+	if typed == "" or _is_auto_name(typed):
+		return "Player 1"
+	return typed
 
 
 ## Is [param text] a name this screen wrote, rather than one the player

@@ -21,8 +21,32 @@
 > — b0realis
 
 An open-source, from-scratch remake of MicroProse's 1997 *Magic: The
-Gathering*, built in GDScript with Godot. Early Magic, a modern rules
-engine, and the freedom to keep the game alive.
+Gathering* — its duels and its Shandalar adventure — built in GDScript with
+Godot. Early Magic, a modern rules engine, and the freedom to keep the game
+alive.
+
+## What's in it
+
+- **The Shandalar adventure** — make a hero and walk a world built from a
+  seed as the 1997 game built them: villages, towns and cities with card
+  shops, traders, wise men and quests; hidden lairs; the five wizards'
+  creatures roaming the land and besieging towns; the World Magics; the
+  castles, the dungeons, Arzakon and the Hall of Fame. **Campaign
+  Settings** keep every 1997 rule one button away (**As 1997**) beside
+  modern choices — the card rule, the ban list, the sieges' pace, how
+  creatures notice you, the card hold, starting life and the final battle.
+  Ten save slots per adventure, plus autosaves.
+- **Duels** — the 897-card early-Magic core, four non-cheating computer
+  opponents, hotseat, the Gauntlet, sealed decks and best-of matches that
+  save between duels, Test hands, 1997 or modern rules, and colorblind-safe
+  mana symbols.
+- **The Deck Builder with AutoDeck**, Booster Draft, and **nine optional
+  card packs** up to the Tempest block.
+- **LAN duels and tournaments** for up to 40 players.
+- **MPN game records** — export a duel, watch it again, or read it as a
+  move list.
+- **The Deck Lab, the AutoDeck command line and an MCP server** for
+  experiments and agents.
 
 ## Screenshots
 
@@ -52,27 +76,32 @@ engine, and the freedom to keep the game alive.
 
 ## Play
 
-**Duels, deck building, optional expansions, Booster Draft and LAN play.**
+**The Shandalar adventure, duels, deck building, optional expansions, Booster Draft and LAN play.**
 
 Download the **[latest Shandalar release](https://github.com/b0realis/ShandalarGodot/releases/latest)**
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 New to it? **[Getting Started](https://b0realis.github.io/ShandalarGodot/)**
 goes step by step from the download to your first duel, with card pictures
 and every set up to Tempest.
-Handheld test packages — Steam Deck, ArkOS, and the Meta Quest as a
-sideloaded flat panel app — are built locally; see [docs/handhelds.md](docs/handhelds.md).
+Handheld packages — Steam Deck, ArkOS (experimental), the Meta Quest as a
+sideloaded flat-panel app, and experimental Android ARM64 — are on the
+release page too; see [docs/handhelds.md](docs/handhelds.md) and
+[docs/android-experimental.md](docs/android-experimental.md).
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below).
+run the source with Godot 4.7.2 (below).
 
 Play with an **897-card early-Magic core**, historic decks, four computer
 opponents, local hotseat, Gauntlet, sealed decks and best-of matches with
-sideboarding. Optional `Pack-1-DotP-complete.zip` finishes the eight set
+sideboarding. Matches and Gauntlet runs save between duels (Resume match,
+Resume run), and Test hands sets up any position to try a combo. Duel
+Screen Options, the button under the large card, adds colorblind-safe mana
+symbols, a UI scale and an attack-all key. Optional `Pack-1-DotP-complete.zip` finishes the eight set
 checklists: its title-screen `1-tDotP` button can enable 373 additional set
 entries, for **1,270 set entries / 901 unique rules identities**. The Deck Builder
 supports large cards, live filters and keyboard browsing, **AutoDeck**, which
 builds a deck from a set, a dealt pool or a pasted list to your wishes —
-colours up to five, a gold deck, the rarity from pauper to rares only, classic
+colors up to five, a gold deck, the rarity from pauper to rares only, classic
 or non-classic lands, the Power Nine on or off, the variety between one seed
 and the next — with its lands fitted to the curve and its basics to the pips,
 and a Stats window that audits the mana base. The duel's keys are rebindable
@@ -81,11 +110,15 @@ Further optional packs
 add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age,
 Fifth Edition, the Mirage block** (Mirage, Visions, Weatherlight) **and the Tempest
 block** (Tempest, Stronghold, Exodus), with engine and AI support.
-The **Shandalar adventure** is in development: it can be played from the
-source from Embark to the end — its world, towns, quests, lairs, roaming
-creatures and sieges, the castles, the dungeons and the final battle — and
-is being playtested; card packs in the adventure are not implemented yet. Public Internet
-matchmaking remains future work.
+The **Shandalar adventure** is in this release: press **Shandalar** on the
+main menu, then **Go test**, and make your hero on the Embark screen. It
+plays from the Embark to the end — the world, towns, quests, lairs, roaming
+creatures and sieges, the castles, the dungeons, Arzakon and the Hall of
+Fame. It is still in development and being playtested: please tell us what
+you notice in an [issue](https://github.com/b0realis/ShandalarGodot/issues).
+**Help** on the main menu has a page for each part. Card packs in the
+adventure are not implemented yet. Public Internet matchmaking remains
+future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
 Every platform package includes the Python builders and
@@ -98,7 +131,8 @@ at a time, or the `shandalar://play-guide` resource.
 
 ## LAN play and Booster Draft
 
-The desktop release includes local-network duels and
+The desktop release includes local-network duels — open them with the
+green globe at the bottom right of the title screen — and
 [random-draw knockout tournaments](docs/sgmanalink-tournaments.md), including
 up to **40 players**, configurable match lengths and deck policies, the
 host's own table rules (starting life and the implemented rules forks),
@@ -124,14 +158,16 @@ library's order. **Magic Public Notation** is our proposal for an open,
 shared format for such records, independent of any one engine: reading one
 takes a JSON parser and the specification's patch rules — not Godot, a
 card database or a rules engine. Export
-one at the end of a duel, open it under **Options → View past-played
-games**, and **Watch duel** plays it back on the familiar table.
+one at the end of a duel, open it under **Options → Game records → View
+past-played games**, and **Watch duel** plays it back on the familiar table.
 
 - [The MPN 0.1 specification](docs/mpn-specification.md) — the grammar, the
   public-information boundary, how to rebuild each state, and a
   conformance checklist for writers and readers.
 - [The player guide](docs/mpn-v0.1.md) — recording, exporting and watching
   in ShandalarGodot, locally and on the LAN.
+- [The move list](docs/mpn-move-list.md) — any recorded game as turn-by-turn
+  text, defined exactly so other Magic programs can show it too.
 - [Example files](docs/mpn-examples/) to import and test against: four
   `.mpn` records — a short finished game, a recording stopped early and two
   whole duels — and, beside the two duels, their move lists as readable
@@ -168,12 +204,18 @@ release for the original look and sounds, or add `original_skin.zip`
 separately. Import packs through **Options → Skin**; on desktop they can
 also live in `skin/` beside the game.
 
+**Coming from 0.50.34?** The adventure's pictures, sounds, music and ending
+movie are new to the skin, so an older `original_skin.zip` or hi-res zip
+lacks them. Take this release's skin download, or build the skin again from
+your copy of the 1997 game (below); the ending movie is converted when
+ffmpeg, or GStreamer with Theora, is installed. Without the skin the
+adventure is drawn in plain colors.
+
 **Card pictures are not included in the repository or release downloads.**
-Packages from 0.32.0 on for **all platforms** include the construction tools
-and their required metadata in `tools/`, `cards/data/` and
-`packaging/card_packs/`; no source checkout is needed. Older 0.20.0 downloads
-do not include the numbered-pack builders. Use Python 3.10+ and run these
-commands from the extracted game folder (Windows: use `py -3` for `python3`):
+Every package, on every platform, includes the construction tools and
+their metadata in `tools/`, `cards/data/` and `packaging/card_packs/`; no
+source checkout is needed. Use Python 3.10+ and run these commands from the
+extracted game folder (Windows: use `py -3` for `python3`):
 
 ```sh
 python3 tools/fetch_card_art.py --out cache/cardart
@@ -197,7 +239,9 @@ It also ships as `CARD-ART-AND-PACKS.md` and is included in each package's READM
 On desktop, keep `original_skin.zip` and `cardart.zip` in **`skin/`**, and
 the exact-name `Pack-*.zip` files in **`cardpacks/`**, both beside the game
 executable (beside `Shandalar.app` on Mac, never inside it). **Leave ZIPs
-zipped.** Use **Options → Card Packs → Rescan**, then enable the packs.
+zipped.** Use **Options → Card Packs → Rescan**, then enable the packs;
+**Add pack...** on the same page copies a built pack in from anywhere (on
+Android, the only way).
 The separate `packaging/card_packs/` directory is builder metadata, not an
 installation folder. Completed packs and card art are never bundled in releases.
 
@@ -208,14 +252,14 @@ Its included Python tools run on your computer and can build packs for desktop.
 To rebuild the original skin from your own copy of the game:
 
 ```sh
-python3 tools/mtg_assets.py --install /path/to/game
+python3 tools/mtg_assets.py --install /path/to/game --out skin/original_skin.zip
 ```
 
 **The original skin requires only the original 1997 MicroProse game:**
 its CD, or the folder you installed it to. Nothing from a later
 re-release or another project is needed or read. The importer reads your
-installation without changing it. The 1997 skin is the default, and the
-only skin a release ever carries.
+installation without changing it. The 1997 skin is the default; a release
+carries no other skin than it and its hi-res copy.
 
 **No 1997 copy? A Manalink install as a backup.** The tool can also read
 a later Manalink install, if you add `--manalink`. Each file the 1997 game
@@ -229,23 +273,25 @@ nothing:
 
 ```sh
 python3 tools/mtg_assets.py --check /path/to/manalink --manalink
-python3 tools/mtg_assets.py --install /path/to/manalink --manalink
+python3 tools/mtg_assets.py --install /path/to/manalink --manalink --out skin/original_skin.zip
 ```
 
 **A hi-res skin for big screens.** `tools/upscale_skin.py` makes a second
 skin out of your 1997 one, `original_skin_realesrgan-anime_2x.zip`: the
 same files under the same names, with every picture at twice the size and
 the music, sounds, fonts and coin toss as they are. It runs Real-ESRGAN's
-anime model, which is free and open source, then takes the colours back
+anime model, which is free and open source, then takes the colors back
 from the 1997 picture, so the art gets sharper without changing its
-colours. On Linux the tool fetches the upscaler once; it needs Pillow and
+colors. On Linux the tool fetches the upscaler once; it needs Pillow and
 a Vulkan GPU driver. The hi-res skin is a skin like the 1997 one: choose it
 in Options → Skin or drop it on the window, and it is worn from the next
 start; choose the 1997 skin again to go back. The game draws each 2x
 picture at the 1997 size, so the layout doesn't change and every picture is
 sharper on a big screen. To mix, put a 1997 picture back into the hi-res
-zip under its own name. A zip of 2x copies made by 0.50.28 is reused rather
-than upscaled again with `--reuse`:
+zip under its own name. The release page also offers it ready-made as
+`original_skin_realesrgan-anime_2x.zip`. An earlier hi-res zip — the
+0.50.34 download, say — is reused with `--reuse`: each 2x picture that still
+matches is kept, and only the new pictures are upscaled:
 
 ```sh
 python3 tools/upscale_skin.py --skin original_skin.zip
@@ -278,7 +324,7 @@ AutoDeck tool as a command line: it builds a folder of seeded decks from
 every combination of the switches you give it, and plays no game; its
 `--packs` names the card packs the cards come from, and a field mined with
 `--packs X` is played by the Lab with the same `--packs X`; `--colors pairs
---distinct 60` is a field of every colour pair with no two decks less than
+--distinct 60` is a field of every color pair with no two decks less than
 60% different, and `--keep FILE --vary "Fireball, 2 Lightning Bolt"` holds a
 deck but for the named cards, for the Lab to find a better card for a slot.
 The [DeckLab manual](DeckLab/README.md) has examples and all options.
@@ -294,13 +340,15 @@ On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 
 ## Post-0.50 roadmap
 
-1. [ ] **Adventure** — the Shandalar world, quests and campaign: in
-   development (the world, towns, quests, lairs, creatures, sieges, the
-   castles, the dungeons and the end are built and being playtested; card
-   packs in the adventure are not implemented yet).
-2. [ ] **Commander** — dedicated rules and deck-building support.
-3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
-4. [x] **Card packs** — nine optional, toggleable packs beside the core pool:
+1. [ ] **Adventure** — playable from the Embark to the Hall of Fame and
+   being playtested; card packs in the adventure are not implemented yet.
+2. [ ] **Internet play** — LAN duels and tournaments are built; Internet
+   hosting and discovery are parked.
+3. [ ] **Bigger formats, after the adventure matures** — the 1997 Sealed
+   Deck tournament, Commander, LAN duels with ante and best-of matches, and
+   a player record.
+4. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
+5. [x] **Card packs** — nine optional, toggleable packs beside the core pool:
    Pack 1 (DotP Complete), then Fallen Empires through the Tempest block.
    Each is built locally from its guide in `docs/`; ZIPs and downloaded art
    stay local.

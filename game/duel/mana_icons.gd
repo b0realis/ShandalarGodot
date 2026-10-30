@@ -43,7 +43,30 @@ const LETTER := {Mtg.ManaColor.W: "W", Mtg.ManaColor.U: "U",
 ## A [method color_strip] is always this many pips wide, filled or not.
 const STRIP_PIPS := 5
 
+## Cache: key -> [the sheet's instance id (0 for none), what was made of
+## it]. KEPT WITH THE SHEET IT WAS MADE OF, AND NEVER A NULL FOR WANT OF
+## ONE (0.50.66 bug campaign, h4-1): a symbol asked for while no skin was
+## worn — a Deck Builder browsed, a card read — used to be kept as a null
+## for the session, and a skin dropped on the title later left every cost
+## in braces and every deck row in flat discs; a zip that replaced a zip
+## kept the old one's symbols. A skin that arrives is a new sheet ([method
+## GameSkin.clear_caches]), and so made again.
 static var _atlas_cache: Dictionary = {}
+
+
+## The thing kept under [param key] when it was made of [param sheet] (null:
+## no sheet), else `[]` — its pair otherwise (h4-1).
+static func _made_of(key: String, sheet: Texture2D) -> Array:
+	var kept: Variant = _atlas_cache.get(key)
+	if kept is Array and (kept as Array).size() == 2 \
+			and int(kept[0]) == (sheet.get_instance_id() if sheet != null else 0):
+		return kept
+	return []
+
+
+## [param made] kept under [param key] as made of [param sheet] (h4-1).
+static func _keep(key: String, sheet: Texture2D, made: Variant) -> void:
+	_atlas_cache[key] = [sheet.get_instance_id() if sheet != null else 0, made]
 
 
 ## Texture for one brace symbol ("W", "3", "X", "T"...) or null when the
@@ -55,31 +78,32 @@ static var _atlas_cache: Dictionary = {}
 ## is cut out and masked to its inscribed circle — corners go
 ## transparent, with a one-pixel feather so the rim doesn't alias.
 static func symbol(sym: String) -> Texture2D:
-	if _atlas_cache.has(sym):
-		return _atlas_cache[sym]
-	var result: Texture2D = null
 	var sheet := GameSkin.texture("mana_symbols")
-	if sheet != null and CELL.has(sym):
-		var size := sheet.get_height()   # cells are height-sized squares
-		# Cut at the sheet's own resolution: a 2x sheet gives a 2x cell, its
-		# circle and its one-pixel feather measured in ITS pixels
-		# (GameSkin, THE 2x PICTURES).
-		var cell := GameSkin.cut(sheet, Rect2i(CELL[sym] * size, 0, size, size))
-		cell.convert(Image.FORMAT_RGBA8)
-		var pixels := cell.get_width()
-		var centre := (pixels - 1) / 2.0
-		var radius := pixels / 2.0
-		for y in pixels:
-			for x in pixels:
-				var dist := Vector2(x - centre, y - centre).length()
-				if dist <= radius - 1.0:
-					continue
-				var px := cell.get_pixel(x, y)
-				# Feather the last pixel of the rim, cut everything beyond.
-				px.a = maxf(0.0, radius - dist) if dist < radius else 0.0
-				cell.set_pixel(x, y, px)
-		result = GameSkin.texture_of(cell, Vector2i(size, size))
-	_atlas_cache[sym] = result
+	if sheet == null or not CELL.has(sym):
+		return null
+	var kept := _made_of(sym, sheet)
+	if not kept.is_empty():
+		return kept[1]
+	var size := sheet.get_height()   # cells are height-sized squares
+	# Cut at the sheet's own resolution: a 2x sheet gives a 2x cell, its
+	# circle and its one-pixel feather measured in ITS pixels
+	# (GameSkin, THE 2x PICTURES).
+	var cell := GameSkin.cut(sheet, Rect2i(CELL[sym] * size, 0, size, size))
+	cell.convert(Image.FORMAT_RGBA8)
+	var pixels := cell.get_width()
+	var centre := (pixels - 1) / 2.0
+	var radius := pixels / 2.0
+	for y in pixels:
+		for x in pixels:
+			var dist := Vector2(x - centre, y - centre).length()
+			if dist <= radius - 1.0:
+				continue
+			var px := cell.get_pixel(x, y)
+			# Feather the last pixel of the rim, cut everything beyond.
+			px.a = maxf(0.0, radius - dist) if dist < radius else 0.0
+			cell.set_pixel(x, y, px)
+	var result := GameSkin.texture_of(cell, Vector2i(size, size))
+	_keep(sym, sheet, result)
 	return result
 
 
@@ -127,8 +151,11 @@ static func strip_width(cell: int) -> int:
 ## takes a texture per row and not a control.
 static func color_strip(mask: int, cell := 14) -> Texture2D:
 	var key := "strip/%d/%d" % [mask, cell]
-	if _atlas_cache.has(key):
-		return _atlas_cache[key]
+	# Its pips are the sheet's symbols, or the discs with none (h4-1).
+	var sheet := GameSkin.texture("mana_symbols")
+	var kept := _made_of(key, sheet)
+	if not kept.is_empty():
+		return kept[1]
 	var result: Texture2D = null
 	var image: Image = null
 	var slot := 0
@@ -142,7 +169,7 @@ static func color_strip(mask: int, cell := 14) -> Texture2D:
 		slot += 1
 	if image != null:
 		result = ImageTexture.create_from_image(image)
-	_atlas_cache[key] = result
+	_keep(key, sheet, result)
 	return result
 
 
@@ -151,8 +178,10 @@ static func color_strip(mask: int, cell := 14) -> Texture2D:
 ## from the texture five times at most.
 static func _pip(color: int, cell: int) -> Image:
 	var key := "pip/%d/%d" % [color, cell]
-	if _atlas_cache.has(key):
-		return _atlas_cache[key]
+	var sheet := GameSkin.texture("mana_symbols")
+	var kept := _made_of(key, sheet)
+	if not kept.is_empty():
+		return kept[1]
 	var pip: Image = null
 	var sym := symbol(LETTER[color])
 	if sym != null:
@@ -172,5 +201,5 @@ static func _pip(color: int, cell: int) -> Image:
 				var px := rim if dist > radius - 1.5 else ink
 				px.a = minf(1.0, radius - dist)   # feather the last pixel
 				pip.set_pixel(x, y, px)
-	_atlas_cache[key] = pip
+	_keep(key, sheet, pip)
 	return pip

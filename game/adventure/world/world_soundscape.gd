@@ -73,6 +73,11 @@ const TUNE_WARM := 310
 const PANE_WARM := 192
 const MEET_WARM := 288
 const WARM_AGAIN_MS := 20000
+## The creatures whose stakes are warmed at a time: the nearest, within
+## [constant MEET_WARM] (the bug campaign of 0.50.66, h1-2) — as many as the
+## card art's budget for pictures warmed ahead holds
+## ([constant GameSkin.ART_AHEAD_CAP]).
+const STAKES_WARMED := 2
 ## The meeting pane's own pictures and tune (`preduel_*`, `music_duel`,
 ## [EncounterPane]) and the card frames its stakes and a lair's card are
 ## drawn on ([CardPreview]), warmed as the world opens: about 6 MB of
@@ -460,7 +465,7 @@ func warm_near() -> void:
 	var sounds: Array[String] = []
 	var tunes: Array[String] = []
 	var faces: Array[String] = []
-	var stakes: Array[int] = []
+	var stakes: Array[Array] = []
 	var music := Settings.music_enabled()
 	for slot in world.sites.size():
 		var site_entry: Dictionary = world.sites[slot]
@@ -490,7 +495,7 @@ func warm_near() -> void:
 			if cry != "":
 				sounds.append(cry)
 			faces.append(CreatureBook.face_id(row))
-			stakes.append(row)
+			stakes.append([d, row])
 		elif WorldCreatures.is_lair(held):
 			pictures.append("visit_lair_" + color)
 			sounds.append_array(LAIR_SOUNDS)
@@ -498,8 +503,22 @@ func warm_near() -> void:
 	var new_faces := _fresh(faces, "face:", Time.get_ticks_msec())
 	if not new_faces.is_empty():
 		SkinWarmer.warm_faces(self, new_faces)
-	for row in stakes:
+	for row in nearest_rows(stakes, STAKES_WARMED):
 		_warm_stakes(row)
+
+
+## The rows of the [param count] nearest of [param near] (`[distance, row]`
+## each), nearest first, each row once (h1-2).
+static func nearest_rows(near: Array[Array], count: int) -> Array[int]:
+	var by_distance := near.duplicate()
+	by_distance.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var out: Array[int] = []
+	for one in by_distance:
+		if out.size() >= count:
+			break
+		if not out.has(int(one[1])):
+			out.append(int(one[1]))
+	return out
 
 
 ## THE CARDS A CREATURE MAY STAKE, their pictures decoded on a worker
@@ -507,8 +526,11 @@ func warm_near() -> void:
 ## deck as it meets the hero ([method CreatureDeck.ante_draw]), and its
 ## card's picture was read on the thread that draws, 5-20 ms of the
 ## meeting's first frame. The deck's own cards, basic lands left out — 10
-## to 16 pictures a creature, about 1.3 MB each (the card art's own
-## bounded cache, [constant GameSkin.ART_CACHE_CAP]).
+## to 16 pictures a creature, about 1.45 MB each — warmed AHEAD (the bug
+## campaign of 0.50.66, h1-2): kept in the card art's small budget for
+## pictures not shown yet ([constant GameSkin.ART_AHEAD_CAP]), never in the
+## shown pictures' cache until the meeting shows one; and only for the
+## [constant STAKES_WARMED] nearest creatures.
 func _warm_stakes(row: int) -> void:
 	var asked := "stakes:%d" % row
 	var now := Time.get_ticks_msec()
@@ -521,7 +543,7 @@ func _warm_stakes(row: int) -> void:
 		if bool(entry.get("known", true)) and not card_name in CreatureDeck.BASICS and not names.has(card_name):
 			names.append(card_name)
 	if not names.is_empty():
-		CardArtWarmer.warm(self, names)
+		CardArtWarmer.warm(self, names, true)
 
 
 ## THE PICTURE OF THE PANE site [param slot] opens ([VisitPane]): a

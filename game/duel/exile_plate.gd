@@ -37,7 +37,14 @@ extends RefCounted
 ## cards are read — an art box over three text lines — so the silhouette is
 ## unmistakably A CARD at the 40x60 the sidebar shows it at.
 
-## Cache: seat colour name -> plate texture (or null when there is no skin).
+## Cache: seat colour name -> [the grave plate's instance id, the plate
+## painted from it]. KEPT WITH THE PICTURE IT WAS PAINTED FROM, AND NEVER A
+## NULL (0.50.66 bug campaign, h4-1): it used to keep a null per colour
+## asked for while there was no skin — since 0.50.66 the duel's warm-up
+## asks before any duel ([DuelWarmup]) — and a skin dropped on the title
+## later left every duel of the session without its exile plates. A skin
+## that arrives is a new grave plate ([method GameSkin.clear_caches]), and
+## so a new exile plate, as [method OriginalDialog.stone_job]'s stones are.
 static var _cache: Dictionary = {}
 
 ## Ordered 4x4 dither (Bayer), the era's own way of making a gradient out
@@ -55,15 +62,16 @@ const BAYER := [
 ## "red", "green"), or null when the original skin is absent — the same
 ## condition that leaves the seat with no graveyard plate.
 static func plate(seat_color: String) -> Texture2D:
-	if _cache.has(seat_color):
-		return _cache[seat_color]
-	var result: Texture2D = null
 	var grave := GameSkin.texture("grave_panel_" + seat_color)
-	if grave != null:
-		# The 1997 palette: a 2x picture's colours are an upscaler's blend,
-		# never three percent of anything (GameSkin, THE 2x PICTURES).
-		result = ImageTexture.create_from_image(_paint(GameSkin.original(grave)))
-	_cache[seat_color] = result
+	if grave == null:
+		return null
+	var kept: Array = _cache.get(seat_color, [])
+	if kept.size() == 2 and int(kept[0]) == grave.get_instance_id():
+		return kept[1]
+	# The 1997 palette: a 2x picture's colours are an upscaler's blend,
+	# never three percent of anything (GameSkin, THE 2x PICTURES).
+	var result := ImageTexture.create_from_image(_paint(GameSkin.original(grave)))
+	_cache[seat_color] = [grave.get_instance_id(), result]
 	return result
 
 

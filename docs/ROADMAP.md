@@ -12653,9 +12653,8 @@ the 0.20.0 duel and Deck Builder release:
 - [ ] **Adventure** — the Shandalar world, quests and campaign.
   (2026-10-28: the world, towns, quests, lairs, creatures and sieges are
   built, 0.50.48–0.50.61, and the castles, the dungeons, Arzakon and the
-  end, 0.50.62–0.50.64 — the adventure can be won; the card packs' own
-  worlds and their World Lords come once the adventure plays well with the
-  original cards, "M5 — Adventure mode" above.)
+  end, 0.50.62–0.50.64 — the adventure can be won; card packs in the
+  adventure are not implemented yet, "M5 — Adventure mode" above.)
 - [ ] **SGManalink** — browse, host and join online duels; later booster
   drafting and complete tournaments. Develop on `sgmanalink`, preserving
   the classic interface and offline play. Experienced networking and

@@ -180,8 +180,9 @@ state and signals, and calls the same public API the tests use. Whole duels
 through this presentation layer are checked by `duel_soak.sh` in addition to
 the component tests. See `docs/CODE_MAP.md` for the implemented scene layout.
 
-The adventure layer (overworld, cities, quests) remains a separate future
-milestone. Its title-screen entries currently explain that status.
+The adventure layer (`game/adventure/`: the world, its places and
+creatures, the castles, the dungeons and the end) is built on the same
+duel engine; `docs/adventure-implementation-notes.md` is its record.
 
 ## Why these technology choices
 

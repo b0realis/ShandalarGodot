@@ -410,7 +410,9 @@ func test_a_dropped_card_art_zip_is_kept_as_the_players_card_art() -> void:
 		var head := _first_label(SkinPack.notice())
 		assert_eq(head.text if head != null else "", "The card art is in.",
 			"the notice names the kind that arrived")
-		assert_not_null(SkinPack.notice().find_child("Restart", true, false))
+		# Off the title and Options no restart is offered (the bug campaign
+		# of 0.50.66, h5-1): the notice says "from the next start", plain OK.
+		assert_null(SkinPack.notice().find_child("Restart", true, false))
 	get_tree().current_scene = was
 	elsewhere.queue_free()
 
@@ -503,9 +505,18 @@ func test_forgetting_deletes_the_players_zips_and_offers_a_restart() -> void:
 	var told := [0]   # a lambda captures a number by value, an array by reference
 	var count := func(_kind: String) -> void:
 		told[0] += 1
+	# "Forget my zips" is an Options button, and Options offers the restart
+	# (h5-1): the scene pinned to a stand-in for it.
+	var was := get_tree().current_scene
+	var options := Node.new()
+	options.scene_file_path = SkinPack.OPTIONS_SCENE
+	get_tree().root.add_child(options)
+	get_tree().current_scene = options
 	SkinPack.changed.connect(count)
 	SkinPack.forget()
 	SkinPack.changed.disconnect(count)
+	get_tree().current_scene = was
+	options.queue_free()
 	assert_false(FileAccess.file_exists(SkinPack.USER_ZIP))
 	assert_false(FileAccess.file_exists(SkinPack.USER_DIR + "/other.zip"))
 	assert_false(FileAccess.file_exists(SkinPack.user_zip("cardart")))

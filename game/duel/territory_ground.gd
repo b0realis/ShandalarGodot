@@ -118,7 +118,10 @@ static var _glyph_cache: Dictionary = {}
 ## is cheap and painting a 320x180 picture is not free, and both are
 ## asked for on every redress.
 static var _derived_cache: Dictionary = {}
-## Cache: skin key -> the file's 1px-black-edge width (0 or 1).
+## Cache: skin key -> [the picture's instance id, its 1px-black-edge
+## width (0 or 1)]. Kept with the picture it was measured on (0.50.66 bug
+## campaign, h4-1): a zip that replaced a zip — another skin's files, the
+## 2x skin's — was cut by the old file's measure.
 static var _edge_cache: Dictionary = {}
 
 ## The metadata name [method node] writes its ground's key under (the bug
@@ -232,7 +235,8 @@ static func _texture_rect(tex: Texture2D, wallpaper: bool) -> TextureRect:
 ## would throw away art. Sampled every 8px along the top row and left
 ## column — an edge that is black at those points is black.
 static func _inner(key: String, tex: Texture2D) -> Rect2i:
-	var edge: int = _edge_cache.get(key, -1)
+	var kept: Array = _edge_cache.get(key, [])
+	var edge := int(kept[1]) if kept.size() == 2 and int(kept[0]) == tex.get_instance_id() else -1
 	if edge < 0:
 		edge = 0
 		# Measured on the 1997 pixels: an upscaler's black is not always 0.
@@ -248,7 +252,7 @@ static func _inner(key: String, tex: Texture2D) -> Rect2i:
 					if img.get_pixel(0, y).v > 0.02:
 						edge = 0
 						break
-		_edge_cache[key] = edge
+		_edge_cache[key] = [tex.get_instance_id(), edge]
 	return Rect2i(edge, edge, tex.get_width() - 2 * edge,
 		tex.get_height() - 2 * edge)
 

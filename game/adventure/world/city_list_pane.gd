@@ -255,7 +255,12 @@ func _row(slot: int, j: int) -> Control:
 		_stone(stones[n], Vector2(COLUMNS[1] - width / 2.0 + n * 17, y - 8.5), row)
 	_text(CardTrade.wares(int(world.sites[slot].get("trade", 0))), Vector2(COLUMNS[2], y), 13, ink,
 		COLUMN_WIDTHS[2], row)
+	# [Ours] Not a World Magic the shops no longer offer ([method
+	# WorldMagicShop.idle]: Ring of the Guardian with no siege to come) — the
+	# town would not sell it (the 0.50.66 bug campaign, h3-2).
 	var magic := WorldMagicShop.sold_at(world, slot)
+	if WorldMagicShop.idle(player, magic):
+		magic = -1
 	_text(AdventurePlayer.WORLD_MAGICS[magic] if magic >= 0 else "", Vector2(COLUMNS[3], y), 13, ink,
 		COLUMN_WIDTHS[3], row)
 	_text("X" if TownStatus.linked(world, slot) else "", Vector2(COLUMNS[4], y), 15, ink, COLUMN_WIDTHS[4], row)

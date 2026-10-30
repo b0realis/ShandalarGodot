@@ -236,6 +236,9 @@ var _pointer := -1
 ## The view the place under the pointer was last looked for in: camera and
 ## zoom ([method _point_again]).
 var _pointed := Vector3.INF
+## Where the pointer was last seen, on this screen ([method _input]): the
+## mouse's, a pad's or a finger's events alike; INF before the first.
+var _pointer_seen := Vector2.INF
 ## The saved adventures, open over the world from the options.
 var _load_screen: LoadAdventureScreen
 ## The deck builder, open over the world ([AdventureBuilder]); and whether
@@ -782,9 +785,13 @@ func _hold() -> void:
 ## Every input event is met by the panes' hold as it now stands, before any
 ## control hears it; inside a town its keys are taken first ([method
 ## _town_key]); a W or D pressed while the hero's pane is open is the
-## pane's until it is let go ([method _look_with_keys]).
+## pane's until it is let go ([method _look_with_keys]); a pointer's event
+## says where the pointer is ([member _pointer_seen]).
 func _input(event: InputEvent) -> void:
 	_sync_rest()
+	var mouse := event as InputEventMouse
+	if mouse != null:
+		_pointer_seen = (make_input_local(mouse) as InputEventMouse).position
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and _town_key(key):
 		# Inside a town: its keys before the town's pane hears them.
@@ -2357,6 +2364,11 @@ func _hover_world(point: Vector2) -> void:
 ## THE POINTER LOOKED AT AGAIN when the land moved under it — a walk, a
 ## look, a zoom, a leap: the place now under a still pointer named and its
 ## pointer worn, as a motion would, while the pointer rests on the world.
+## The pointer is where its last event put it ([member _pointer_seen]), not
+## the system's mouse (the 0.50.66 bug campaign, h2-4): a pad's or a
+## finger's pointer moves no mouse ([TouchControls], "NO OS POINTER
+## MOVES"), and the preview, the place's name and the pointer worn
+## followed the hidden mouse whenever the view moved.
 func _point_again() -> void:
 	if _world_waits():
 		return
@@ -2366,7 +2378,7 @@ func _point_again() -> void:
 	_pointed = looked
 	var under := get_viewport().gui_get_hovered_control()
 	if under == view or under == self:
-		_hover_world(get_local_mouse_position())
+		_hover_world(_pointer_seen if _pointer_seen.is_finite() else get_local_mouse_position())
 
 
 ## Look by [param pixels] on the screen.
@@ -2613,11 +2625,16 @@ func _gui_input(event: InputEvent) -> void:
 ## shield's) the world hears none of them: the playtest of part B (H2-1,
 ## P1-1) — Escape reads a news flash and goes on at every spoils' picture,
 ## so one press too many saved and left for the title unasked, and a digit
-## cast a World Magic. Under the map its keys act as ever (none leaves).
+## cast a World Magic. A walking key pressed anew goes through it (the
+## 0.50.66 bug campaign, h2-2: one pressed in that half second and held
+## walked no one until pressed again): it neither closes nor casts, and a
+## key held through the close sends only its repeats, which still walk no
+## one ([method _disarm_keys]). Under the map its keys act as ever (none
+## leaves).
 func _unhandled_input(event: InputEvent) -> void:
 	if _leaving or modal():
 		return
-	if not _map.visible and Time.get_ticks_msec() < _shield_until:
+	if not _map.visible and Time.get_ticks_msec() < _shield_until and not _fresh_walk_key(event):
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
@@ -2677,6 +2694,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_:
 			return
 	get_viewport().set_input_as_handled()
+
+
+## Whether [param event] is a walking key pressed anew ([constant
+## WALK_KEYS]): not a repeat of one held.
+static func _fresh_walk_key(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	return key != null and key.pressed and not key.echo and WALK_KEYS.has(key.keycode)
 
 
 ## A WALKING KEY [param code] PRESSED on the free world (the owner's ruling

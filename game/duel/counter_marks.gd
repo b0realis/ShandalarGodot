@@ -245,8 +245,12 @@ static func _row(tag: String) -> Array:
 
 ## One stone cut out of the strip and masked, at its native 22x28, or
 ## null when the skin does not carry the strip (the clean skin) or the
-## row is out of range. Cached per row for the run — the same texture on
-## every Sengir Vampire on the table.
+## row is out of range. Cached per row, as [the strip's instance id, the
+## stone] — the same texture on every Sengir Vampire on the table — and
+## never a null for want of a strip: a skin that arrives is a new strip
+## ([method GameSkin.clear_caches]) and the stones are cut again (0.50.66
+## bug campaign, h4-1: a null kept before the skin was dropped on the
+## title left every later duel's counters as plain numbers).
 ##
 ## The decode is [method MiniCard.masked_sprite]'s rule applied
 ## vertically with one mask for all: the mask cell's own corner is
@@ -261,11 +265,14 @@ static func _row(tag: String) -> Array:
 static var _tile_cache: Dictionary = {}
 
 static func tile(row: int) -> Texture2D:
-	if _tile_cache.has(row):
-		return _tile_cache[row]
-	var result: Texture2D = null
 	var sheet := GameSkin.texture(SKIN_KEY)
-	if sheet != null and row >= 0 and row < STONE_COUNT \
+	if sheet == null:
+		return null
+	var kept: Array = _tile_cache.get(row, [])
+	if kept.size() == 2 and int(kept[0]) == sheet.get_instance_id():
+		return kept[1]
+	var result: Texture2D = null
+	if row >= 0 and row < STONE_COUNT \
 			and sheet.get_height() >= CELL_H * (MASK_ROW + 1) \
 			and sheet.get_width() >= CELL_W:
 		# The mask row is read at 1997 size and its alpha carried up to a
@@ -307,13 +314,13 @@ static func tile(row: int) -> Texture2D:
 				STONE.size)
 		else:
 			result = ImageTexture.create_from_image(img.get_region(STONE))
-	_tile_cache[row] = result
+	_tile_cache[row] = [sheet.get_instance_id(), result]
 	return result
 
 
-## Forget the cut stones. [method GameSkin.clear_caches] does not reach
-## the derived caches ([member MiniCard._badge_cache] is the same shape)
-## — a skin arriving mid-game restarts the duel screen instead — so this
-## is for a test that takes the strip away from a running widget.
+## Forget the cut stones. A skin that arrives needs no call here — each
+## stone is kept with the strip it was cut from, as [member
+## MiniCard._badge_cache]'s cells are (h4-1) — so this is for a test that
+## takes the strip away from a running widget.
 static func clear_cache() -> void:
 	_tile_cache.clear()

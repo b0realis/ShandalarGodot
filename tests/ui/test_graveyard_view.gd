@@ -553,9 +553,9 @@ const PLATE_COLOURS := ["white", "blue", "black", "red", "green", "artifact", "g
 
 
 ## Null every grave plate in [GameSkin]'s cache and empty [ExilePlate]'s
-## (which caches a null per colour when it finds no grave plate to paint
-## from — so it is restored afterwards too, or every later table in the
-## run would lose its exile art). Returns what to put back.
+## (which keeps each plate with the grave plate it was painted from and
+## never a null, 0.50.66 h4-1 — it is restored afterwards all the same, so
+## the run's plates are as the test found them). Returns what to put back.
 func _strip_plates() -> Dictionary:
 	var saved := {"skin": {}, "exile": ExilePlate._cache.duplicate()}
 	for colour in PLATE_COLOURS:

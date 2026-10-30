@@ -61,7 +61,9 @@ func _until_finished(warmer: CardArtWarmer) -> void:
 func test_the_pictures_are_decoded_aside_and_kept() -> void:
 	var warmer := CardArtWarmer._start(holder, _job(NAMES))
 	assert_not_null(warmer, "three pictures to decode")
-	assert_eq(warmer.get_parent(), holder)
+	# Under the tree's root, joined at the end of the frame (the bug
+	# campaign of 0.50.66, h1-3): the caches', not the asker's.
+	assert_eq(holder.get_child_count(), 0)
 	for card_name in NAMES:
 		assert_false(GameSkin.card_art_known(card_name), "not kept before the worker")
 	await _until_finished(warmer)
@@ -92,7 +94,8 @@ func test_leaving_stops_the_worker_and_keeps_nothing_half_done() -> void:
 		names.append("Warmer Probe One %d" % i)
 	var job := _job(names)
 	var warmer := CardArtWarmer._start(holder, job)
-	holder.remove_child(warmer)
+	await get_tree().process_frame      # joined the root
+	warmer.get_parent().remove_child(warmer)
 	warmer.free()
 	assert_true(job.stop, "the worker was asked to stop")
 	var done_then := job.done

@@ -175,10 +175,22 @@ func has_ground() -> bool:
 ## Every part taken off the page (the ground stays).
 func clear() -> void:
 	for part in _parts:
-		var node: Node = part["node"]
-		if is_instance_valid(node):
+		var node := _node_of(part)
+		if node != null:
 			PaneStyle.drop(node)
 	_parts.clear()
+
+
+## The node of page part [param entry], or null once it is gone. A face's
+## reveal ([method reveal_face]) frees itself when it is over and stays
+## among the parts; read straight into a typed variable the freed cover
+## was a script error ("previously freed instance") that stopped [method
+## clear] half-way, so the next page was drawn over the last — the cards
+## won under the reward (the 0.50.66 bug campaign, h1-1). Looked at first,
+## untyped, at every reading.
+static func _node_of(entry: Dictionary) -> Control:
+	var node: Variant = entry.get("node")
+	return node as Control if is_instance_valid(node) else null
 
 
 # ---------------------------------------------------------------- parts --
@@ -468,8 +480,8 @@ func amulet(stone_hue: String) -> Control:
 ## The part named [param part_name], or null.
 func part(part_name: String) -> Node:
 	for entry in _parts:
-		var node: Node = entry["node"]
-		if is_instance_valid(node) and node.name == part_name:
+		var node := _node_of(entry)
+		if node != null and node.name == part_name:
 			return node
 	return null
 
@@ -478,8 +490,8 @@ func part(part_name: String) -> Node:
 func cards_shown() -> Array[String]:
 	var out: Array[String] = []
 	for entry in _parts:
-		var node: Node = entry["node"]
-		if is_instance_valid(node) and node is CardPreview:
+		var node := _node_of(entry)
+		if node is CardPreview:
 			out.append(String(node.get_meta("card", "")))
 	return out
 
@@ -499,8 +511,8 @@ func _add(node: Control, at: Rect2, part_name := "") -> Control:
 
 
 func _place(entry: Dictionary) -> void:
-	var node: Control = entry["node"]
-	if not is_instance_valid(node):
+	var node := _node_of(entry)
+	if node == null:
 		return
 	var at: Rect2 = entry["at"]
 	node.position = at.position * factor

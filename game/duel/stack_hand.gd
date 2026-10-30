@@ -226,30 +226,35 @@ static func bar_label(text: String) -> Label:
 ## stone. It has NO left border (the file starts flush against the title
 ## bar), so the 11 right-hand columns are MIRRORED onto the left. The
 ## result is a symmetric 156x51 window that nine-patches to any height with
-## the pattern unbroken down both sides. Cached per colour.
+## the pattern unbroken down both sides. Cached per colour, as [the
+## picture's instance id, the window made of it] — never a null, and a
+## skin that arrives is a new picture and so a new window (0.50.66 bug
+## campaign, h4-1: a null kept by the warm-up before the skin was dropped
+## on the title left every duel of the session in the plain window).
 static var _window_cache: Dictionary = {}
 
 static func window_texture(color_name: String) -> Texture2D:
-	if _window_cache.has(color_name):
-		return _window_cache[color_name]
-	var result: Texture2D = null
 	var source := GameSkin.texture("hand_panel_" + color_name)
-	if source != null:
-		var src := source.get_image()
-		src.convert(Image.FORMAT_RGBA8)
-		# BORDER is in drawn pixels; a 2x picture mirrors twice as many of
-		# its own (GameSkin, THE 2x PICTURES).
-		var scale := GameSkin.scale_of(source)
-		var edge := int(BORDER) * scale
-		var w := src.get_width()
-		var h := src.get_height()
-		var mirror := src.get_region(Rect2i(w - edge, 0, edge, h))
-		mirror.flip_x()
-		var whole := Image.create_empty(w + edge, h, false, Image.FORMAT_RGBA8)
-		whole.blit_rect(mirror, Rect2i(0, 0, edge, h), Vector2i.ZERO)
-		whole.blit_rect(src, Rect2i(0, 0, w, h), Vector2i(edge, 0))
-		result = GameSkin.texture_of(whole, Vector2i(whole.get_size() / scale))
-	_window_cache[color_name] = result
+	if source == null:
+		return null
+	var kept: Array = _window_cache.get(color_name, [])
+	if kept.size() == 2 and int(kept[0]) == source.get_instance_id():
+		return kept[1]
+	var src := source.get_image()
+	src.convert(Image.FORMAT_RGBA8)
+	# BORDER is in drawn pixels; a 2x picture mirrors twice as many of
+	# its own (GameSkin, THE 2x PICTURES).
+	var scale := GameSkin.scale_of(source)
+	var edge := int(BORDER) * scale
+	var w := src.get_width()
+	var h := src.get_height()
+	var mirror := src.get_region(Rect2i(w - edge, 0, edge, h))
+	mirror.flip_x()
+	var whole := Image.create_empty(w + edge, h, false, Image.FORMAT_RGBA8)
+	whole.blit_rect(mirror, Rect2i(0, 0, edge, h), Vector2i.ZERO)
+	whole.blit_rect(src, Rect2i(0, 0, w, h), Vector2i(edge, 0))
+	var result := GameSkin.texture_of(whole, Vector2i(whole.get_size() / scale))
+	_window_cache[color_name] = [source.get_instance_id(), result]
 	return result
 
 

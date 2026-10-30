@@ -327,7 +327,7 @@ class PackageReleaseTest(unittest.TestCase):
                     self.assertNotIn("LAN SGManalink are included", head)
                     self.assertNotIn("for LAN play", head)
                     self.assertIn("no LAN play", head)
-                    self.assertIn("Duels, Deck Builder and Booster Draft are included", head)
+                    self.assertIn("The Shandalar adventure, duels, Deck Builder and Booster Draft are", head)
                 else:
                     self.assertIn("LAN SGManalink are included", head)
                     self.assertIn("Use matching builds and enabled packs for LAN play", head)

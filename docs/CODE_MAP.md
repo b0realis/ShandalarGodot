@@ -649,6 +649,30 @@
   `tests/unit/test_c19_A1_creatures.gd`,
   `tests/ui/test_c19_A1_campaign_settings.gd`,
   `tests/ui/test_c19_A1_life_shown.gd`.
+- The bug campaign of 0.50.66 (c21, 2026-10-29/30; 0.60.0). The world:
+  `WorldView._settle_ticks` (the glide after a wait), `rise_of` /
+  `pixels_1997` (creature names' rise from the sheet's file, on a worker),
+  `WorldScreen._pointer_seen` (pad and touch), `_fresh_walk_key` (a fresh
+  walking press passes the shield), `WorldPath._follow_hover` (a stopped
+  walk's arrows cleared). The adventure's panes and rules:
+  `EncounterStage._node_of`, `VisitPane._over_node` (a freed reveal
+  skipped), `WorldHud.magic_tip` / `SIEGE_MAGICS` / `NO_SIEGES`,
+  `WorldMagicShop.idle`, `WorldMagicPane.tip_words`, the wise man, the
+  city list and the Info Map leave the idle Ring out, `Hourglass.fillable`.
+  Duels: the caches keyed on their source picture (`ExilePlate.plate`,
+  `StackHand.window_texture`, `MiniCard._made_of`, `CombatBar._kept_column`,
+  `ManaIcons._made_of` / `_keep`, `SetBadges._entry`, `CounterMarks.tile`,
+  `FilterBar.sheet_cell` / `_stone`, `TerritoryGround._inner`),
+  `DuelWarmup.ANY_COLOR` / `_add_seat`, `SetupScreen._warm_duel` /
+  `your_name`, `GauntletScreen.OLD_SEAT_NAME`, the Situation Bar pivoted at
+  its top. The skin pack and the warmers: `SkinPack.restart_offered_on` /
+  `restart_way` / `relaunch_args`, `is_shipped` / `_wear_shipped` /
+  `settle_retired` (`skins/retired.txt`), `SkinPack.Copy` (`_copy_start` /
+  `_copy_step`); `SkinWarmer.track` / `release` / `claim` / `_reclaim_all`
+  (never wait on a task not started); `GameSkin.ART_AHEAD_CAP` /
+  `_art_ahead`, `CardArtWarmer.warm(…, ahead)` (under the root),
+  `WorldSoundscape.STAKES_WARMED` / `nearest_rows`. Tests:
+  `tests/*/test_c21_*.gd`.
 - The smoothness pass (0.50.66, the owner: "One critique of og game was
   clunkiness. I really want our adventure to play silky butter smooth and
   high fps if needed"; measured on the desk's GPU, the 1997 tick, pace and

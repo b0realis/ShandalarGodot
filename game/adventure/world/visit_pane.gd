@@ -661,8 +661,8 @@ func show_face(row: int, at := FACE_AT, banner_at := FACE_BANNER_AT) -> void:
 ## Whether the creature's face shows ([method show_face]), and whose.
 func face_name() -> String:
 	for part in _over_parts:
-		var node: Node = part["node"]
-		if is_instance_valid(node) and node.name == "FaceName":
+		var node := _over_node(part)
+		if node != null and node.name == "FaceName":
 			return (node as Label).text
 	return ""
 
@@ -704,18 +704,29 @@ func _drop_over(group: String) -> void:
 	var kept: Array = []
 	for part in _over_parts:
 		if String(part["group"]) == group:
-			var node: Node = part["node"]
-			if is_instance_valid(node):
+			var node := _over_node(part)
+			if node != null:
 				PaneStyle.drop(node)
 		else:
 			kept.append(part)
 	_over_parts = kept
 
 
+## The node of part [param part] over the picture, or null once it is gone.
+## The ruled town's face reveal ([method _reveal_face]) frees itself when
+## it is over and stays among the parts; read straight into a typed
+## variable it was a script error ("previously freed instance") on the
+## next resize or face (the 0.50.66 bug campaign, h1-1). Looked at first,
+## untyped.
+static func _over_node(part: Dictionary) -> Control:
+	var node: Variant = part.get("node")
+	return node as Control if is_instance_valid(node) else null
+
+
 ## A part over the picture placed at the picture's size now.
 func _place_over(part: Dictionary) -> void:
-	var node: Control = part["node"]
-	if not is_instance_valid(node):
+	var node := _over_node(part)
+	if node == null:
 		return
 	var at: Rect2 = part["at"]
 	node.position = at.position * _grow

@@ -861,7 +861,11 @@ func ask_leave() -> void:
 	if not board.castle:
 		lines.append(LEAVE_MOVES if _holds_cards() else LEAVE_GONE)
 	elif player.difficulty == DungeonDoors.RETALIATING \
-			and not AdventurePlayer.COLORS[clampi(board.index, 0, 4)] in player.defeated_wizards:
+			and not AdventurePlayer.COLORS[clampi(board.index, 0, 4)] in player.defeated_wizards \
+			and not Sieges.calm(player):
+		# No warning where no siege can begin ([method Sieges.start]): the
+		# Embark's Sieges "None", a world at peace (the 0.50.66 bug campaign,
+		# h3-1).
 		lines.append(LEAVE_SIEGE % WorldNames.WIZARDS[clampi(board.index, 0, 4)])
 	_show_box(lines, BOX_AT)
 	offer([["stay", STAY, true], ["leave", LEAVE, true]])

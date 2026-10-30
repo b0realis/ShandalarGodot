@@ -141,13 +141,17 @@ func test_a_lair_s_treasure() -> void:
 	assert_eq(pane.words(), LairEvent.FOUND)
 	var found := pane.reward()
 	assert_eq(pane.shown_card(), found, "the card over the picture")
+	# The lair is spent as it is entered, and the world waits under its
+	# pane: checked here, not after leaving, where one world tick may
+	# already refill the empty slot (1997: a lair never waits) — a slow
+	# frame in a loaded run did, once (0.60.0).
+	assert_eq(WorldLairs.held_in(player, 1), {}, "the lair gone")
+	assert_eq(player.lairs_explored, 1)
 	pane.choose("leave")
 	await get_tree().process_frame
 	assert_false(screen.visiting(), "left")
 	assert_eq(player.cards.size(), cards + 1)
 	assert_eq(String(player.cards[-1]["card"]), found)
-	assert_eq(WorldLairs.held_in(player, 1), {}, "the lair gone")
-	assert_eq(player.lairs_explored, 1)
 
 
 func test_the_gemcutter_s_guild() -> void:

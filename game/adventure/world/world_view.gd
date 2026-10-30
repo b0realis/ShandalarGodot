@@ -113,7 +113,9 @@ extends Control
 ## speed everywhere). [method frame] keeps the clock's ticks and the time
 ## since the last; while the world waits under a pane the movers walk on
 ## into the places the clock left them, at [constant SETTLE] times their
-## pace, so a creature met is seen to reach the hero. What the game reads —
+## pace, so a creature met is seen to reach the hero, and the first tick
+## after it glides on from where they stand drawn, never back along the
+## walk ([method _settle_ticks]). What the game reads —
 ## [member hero], [member camera], [method project], [method unproject] —
 ## stays the tick's.
 ##
@@ -390,6 +392,10 @@ var _figure: Node2D
 var _names: Node2D
 var _names_drawn: Array = []
 var _rises := {}
+## The rises being measured, by key ([method rise_of]'s measures), and the
+## workers' tasks the views gone left to reap ([method _let_measures_go]).
+var _measuring := {}
+static var _unreaped := PackedInt64Array()
 ## THE GLIDE'S CLOCK ([method frame]): how far the frame is between the
 ## last tick and the next as the screen said ([member _blend]; 1 while the
 ## world waits), as the clock last ran ([member _blend_before]); the time
@@ -535,6 +541,7 @@ func _init() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
+		_let_measures_go()
 		# The pictures' own canvas items are the view's to free.
 		for picture in [_front, _next, _spare]:
 			if picture != null:
@@ -647,6 +654,14 @@ func frame(blend: float, seconds := -1.0) -> void:
 		# the world now waits under, or a place given between ticks.
 		ticks = 1
 	if ticks > 0:
+		if _waited > 0.0:
+			# The first tick kept after a wait (0.50.66 bug campaign, h2-1):
+			# the movers walked on into their places, further than a tick's
+			# glide reaches — drawn from the kept places again they stepped
+			# back along the walk (2 units, 6 pixels at zoom 2) and slid
+			# forward over the next frames, after every town, meeting and
+			# map left. They go on from where they are drawn.
+			_settle_ticks()
 		_keep_ticks(mini(ticks, KEPT_TICKS))
 		_waited = 0.0
 		if waiting:
@@ -688,6 +703,18 @@ func _keep_ticks(count: int) -> void:
 		var slot := int(creature["slot"])
 		_creature_ticks[slot] = _kept(_creature_ticks.get(slot, PackedVector2Array()),
 			Vector2(int(creature["x"]), int(creature["y"])), count)
+
+
+## Every mover's kept places given up for the one it is drawn at now ([member
+## _since] as the last frame drew it) — what a wait's walk-on leaves behind
+## ([method frame]).
+func _settle_ticks() -> void:
+	if not _hero_ticks.is_empty():
+		_hero_ticks = PackedVector2Array([_glide(_hero_ticks, _since, HERO_GLIDE)])
+	for slot in _creature_ticks:
+		var ticks: PackedVector2Array = _creature_ticks[slot]
+		if not ticks.is_empty():
+			_creature_ticks[slot] = PackedVector2Array([_glide(ticks, _since, CREATURE_GLIDE)])
 
 
 ## [param ticks] with [param count] more places kept, the last [param now]
@@ -848,29 +875,139 @@ func names_shown() -> Array:
 		var called := String(creature_names.get(int(creature["slot"]), ""))
 		if called == "":
 			continue
+		var rise := _body_rise(creature)
+		if rise < 0.0:
+			# Its sheet still being measured: the name stands once it is.
+			continue
 		var feet := drawn_at(_shown_creature(creature))
-		out.append([called, (feet - Vector2(0, _body_rise(creature) * zoom + NAME_GAP)).round()])
+		out.append([called, (feet - Vector2(0, rise * zoom + NAME_GAP)).round()])
 	return out
 
 
 ## How far above its feet creature [param creature]'s body reaches, in 1997
 ## pixels: its sheet's first frame's opaque top under the frame's anchor —
-## measured once a sheet, on its 1x pixels ([method GameSkin.original]) —
-## or the plain disc's top without the sheet.
+## measured once a sheet, on its 1x pixels as [method GameSkin.original]
+## reads them — or the plain disc's top without the sheet; −1 while it is
+## being measured. MEASURED FROM THE SHEET'S FILE ([method rise_of]; the
+## 0.50.66 bug campaign, the leftovers): read back off the graphics card,
+## the texture stalled the frame a creature's name first stood in, once a
+## sheet. Where a worker may decode ([method SkinWarmer.runs_here]) the
+## file is read on one, and the name stands a frame or a few later, as the
+## creature's sheets do ([method _creatures_drawn]); elsewhere (headless,
+## the web) at once.
 func _body_rise(creature: Dictionary) -> float:
 	var key := String(CreatureBook.sprite_keys(int(creature["creature"]))["body"])
 	var sheet := art.texture(key) if not _plain else null
 	if sheet == null:
 		return PLAIN_RISE
-	if not _rises.has(key):
-		var rise := float(art.creature_top(key))
-		var img := GameSkin.original(sheet)
-		if img != null:
-			var used := img.get_region(Rect2i(art.creature_rect(key, 0))).get_used_rect()
-			if used.has_area():
-				rise -= used.position.y
-		_rises[key] = rise
+	if _rises.has(key):
+		return float(_rises[key])
+	var measure: Dictionary = _measuring.get(key, {})
+	if measure.is_empty():
+		measure = {"job": GameSkin.picture_job(key, true), "frame": Rect2i(art.creature_rect(key, 0)),
+			"top": art.creature_top(key), "lock": Mutex.new(), "stop": false, "started": false,
+			"rise": -1.0, "task": -1}
+		_reap()
+		if not SkinWarmer.runs_here():
+			rise_of(measure)
+			_rises[key] = float(measure["rise"])
+			return float(_rises[key])
+		measure["task"] = WorkerThreadPool.add_task(WorldView.rise_of.bind(measure), true, "Creature name rise")
+		_measuring[key] = measure
+		return -1.0
+	var task := int(measure["task"])
+	if not WorkerThreadPool.is_task_completed(task):
+		return -1.0
+	WorkerThreadPool.wait_for_task_completion(task)
+	_measuring.erase(key)
+	_rises[key] = float(measure["rise"])
 	return float(_rises[key])
+
+
+## THE RISE MEASURED ([method _body_rise]) into [param measure] — `job` (a
+## [method GameSkin.picture_job], decoded here), `frame` (the sheet's first,
+## in 1997 pixels), `top` (its anchor) — as `rise`, unless `stop` was set
+## before it began (`started`); `lock` guards those three. Any thread: it
+## reads only the measure and constants, and touches no static.
+static func rise_of(measure: Dictionary) -> void:
+	var lock: Mutex = measure["lock"]
+	lock.lock()
+	var go := not bool(measure["stop"])
+	measure["started"] = go
+	var job: Dictionary = measure["job"]
+	var frame: Rect2i = measure["frame"]
+	var rise := float(measure["top"])
+	lock.unlock()
+	if not go:
+		return
+	GameSkin.decode_picture(job)
+	var small := pixels_1997(job)
+	if small != null:
+		var used := small.get_region(frame).get_used_rect()
+		if used.has_area():
+			rise -= used.position.y
+	lock.lock()
+	measure["rise"] = rise
+	lock.unlock()
+
+
+## The 1997 pixels of [param job]'s decoded file ([method
+## GameSkin.decode_picture]) exactly as [method GameSkin.original] reads
+## them off the texture [method GameSkin.picture_from] makes of it: a 1x
+## picture itself; a bigger one's own 1x file when it is the drawn size,
+## else the picture shrunk back ([method GameSkin.shrunk]). Null when it
+## did not decode. Any thread.
+static func pixels_1997(job: Dictionary) -> Image:
+	var img: Image = job.get("img")
+	if img == null:
+		return null
+	var own := String(job.get("own", ""))
+	if own == String(job.get("path", "")):
+		own = ""
+	var slot: Vector2i = GameSkin.SIZES.get(String(job.get("key", "")), Vector2i.ZERO)
+	var scale := GameSkin.scale_for(img.get_size(), slot)
+	var one: Image = null
+	if own != "":
+		one = job.get("own_img")
+		if one == null:
+			one = Image.load_from_file(own)
+	if scale == 1 and one != null:
+		slot = one.get_size()
+		scale = GameSkin.scale_for(img.get_size(), slot)
+	if scale == 1:
+		return img
+	if one != null and one.get_size() == slot:
+		return one
+	return GameSkin.shrunk(img, scale)
+
+
+## The measures in flight let go as the view goes: each told to stop; one
+## a worker has begun is waited for (the file in hand, at most), one not
+## begun is not — it ends at once when its turn comes, and is reaped then
+## ([member _unreaped]; the 0.50.66 bug campaign's rule for the warmers,
+## h1-3: never wait on a task not started).
+func _let_measures_go() -> void:
+	for key in _measuring:
+		var measure: Dictionary = _measuring[key]
+		var lock: Mutex = measure["lock"]
+		lock.lock()
+		measure["stop"] = true
+		var begun := bool(measure["started"])
+		lock.unlock()
+		var task := int(measure["task"])
+		if begun or WorkerThreadPool.is_task_completed(task):
+			WorkerThreadPool.wait_for_task_completion(task)
+		else:
+			_unreaped.append(task)
+	_measuring.clear()
+
+
+## The tasks [method _let_measures_go] left, waited for once done.
+static func _reap() -> void:
+	for i in range(_unreaped.size() - 1, -1, -1):
+		if WorkerThreadPool.is_task_completed(_unreaped[i]):
+			WorkerThreadPool.wait_for_task_completion(_unreaped[i])
+			_unreaped.remove_at(i)
 
 
 ## THE NAMES, each centred on its foot, gold on a dark edge.

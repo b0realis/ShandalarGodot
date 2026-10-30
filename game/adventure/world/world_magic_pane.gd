@@ -81,7 +81,7 @@ func _ready() -> void:
 	heading.position.y -= heading.get_line_height() / 2.0
 	_line(magic, 146, SKY, 18)
 	_line(WorldMagicShop.COSTS % int(offer.get("price", 0)), 162, SAND, 16)
-	_line("(%s)" % String(WorldHud.MAGIC_TIPS.get(magic, "")), 178, SAND, 15)
+	_line(tip_words(magic, player), 178, SAND, 15)
 	var words := WorldMagicShop.words(offer)
 	var here := bool(offer.get("here", false))
 	var afford := bool(offer.get("afford", false))
@@ -114,6 +114,17 @@ func _ready() -> void:
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_note)
 	set_meta("index", index)
+
+
+## What World Magic [param magic] does, in brackets as 1997 wrote it; for
+## [param player]'s campaign with no siege to come Sword of Resistance's
+## and Ring of the Guardian's marked after it, "(no sieges in this
+## campaign)" ([method WorldHud.magic_tip]; the owner's ruling of
+## 2026-10-29, the 0.50.66 bug campaign h3-2).
+static func tip_words(magic: String, player: AdventurePlayer = null) -> String:
+	var plain := String(WorldHud.MAGIC_TIPS.get(magic, ""))
+	var marked := WorldHud.magic_tip(magic, player)
+	return "(%s)%s" % [plain, marked.trim_prefix(plain)]
 
 
 ## The World Magic's icon in the crystal ball (`Worlds.spr` frame `index`).

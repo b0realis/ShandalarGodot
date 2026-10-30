@@ -98,13 +98,16 @@ func _draw_glass(width: float, half: float, run: float, turning: bool) -> void:
 	var outline := _side(-half, half, half, width, 1.0)
 	var back := _side(half, -half, half, width, -1.0)
 	outline.append_array(back)
-	draw_colored_polygon(outline, GLASS)
+	_fill(outline, GLASS)
 	# The sand above: settled against the neck, its top sinking as it runs,
-	# a little hollow where it drains.
+	# a little hollow where it drains — none once its top has sunk to the
+	# neck (in the last moment of the run it came down past it, the sand
+	# drawn upside down under the neck, and level with it, no shape at all:
+	# the 0.50.66 bug campaign, h1-4).
 	var left := 1.0 - run
-	if left > 0.001:
-		var top := -half * 0.86 * pow(left, 0.6)
-		var neck := -half * 0.04
+	var top := -half * 0.86 * pow(left, 0.6)
+	var neck := -half * 0.04
+	if left > 0.001 and top < neck:
 		var sand := _side(top, neck, half, width, 1.0)
 		sand.append_array(_side(neck, top, half, width, -1.0))
 		var across := _profile(top, half, width)
@@ -114,7 +117,7 @@ func _draw_glass(width: float, half: float, run: float, turning: bool) -> void:
 			var x := lerpf(-across, across, i / 8.0)
 			surface.append(Vector2(x, top + hollow * (1.0 - pow(x / across, 2.0))))
 		sand.append_array(surface)
-		draw_colored_polygon(sand, SAND)
+		_fill(sand, SAND)
 		draw_polyline(surface, SAND_DEEP, 1.0, true)
 	# The sand below: a heap rising from the bottom; the same sand, so the
 	# glass turned over shows it unchanged.
@@ -124,7 +127,7 @@ func _draw_glass(width: float, half: float, run: float, turning: bool) -> void:
 		var pile := _side(level, half, half, width, 1.0)
 		pile.append_array(_side(half, level, half, width, -1.0))
 		pile.append(Vector2(0.0, level - heap))
-		draw_colored_polygon(pile, SAND)
+		_fill(pile, SAND)
 		draw_polyline(PackedVector2Array([Vector2(-_profile(level, half, width), level),
 			Vector2(0.0, level - heap), Vector2(_profile(level, half, width), level)]), SAND_DEEP, 1.0, true)
 		# The stream, and grains falling in it, while there is sand above.
@@ -145,6 +148,21 @@ func _draw_glass(width: float, half: float, run: float, turning: bool) -> void:
 	for y in [half * 0.3, half * 0.55, half * 0.8]:
 		glint.append(Vector2(-_profile(y, half, width) * 0.62, y))
 	draw_polyline(glint, Color(1, 1, 1, 0.25), 1.2, true)
+
+
+## [param points] filled with [param color]; nothing when they hold no
+## shape to fill. A sliver the renderer cannot cut into triangles was
+## "Invalid polygon data, triangulation failed." in the log (the sand above
+## level with the neck, a glass a few pixels tall as a screen is laid out;
+## the 0.50.66 bug campaign, h1-4).
+func _fill(points: PackedVector2Array, color: Color) -> void:
+	if fillable(points):
+		draw_colored_polygon(points, color)
+
+
+## Whether [param points] make a shape the renderer can fill ([method _fill]).
+static func fillable(points: PackedVector2Array) -> bool:
+	return points.size() >= 3 and not Geometry2D.triangulate_polygon(points).is_empty()
 
 
 func _draw_posts(width: float, height: float, cap: float) -> void:

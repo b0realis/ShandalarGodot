@@ -91,9 +91,11 @@ extends Node
 ## and a null they cached for "no skin" would stay null. On the title
 ## screen nothing of that has been built, so the title is simply rebuilt
 ## on the new art ([method GameSkin.clear_caches] and a scene reload);
-## anywhere else the game says the art is in and offers a restart
-## (`OS.set_restart_on_exit`; `location.reload()` in a browser). Honest,
-## and one code path instead of twenty-five cache invalidations.
+## anywhere else the game says the art is in from the next start — and
+## offers the restart on the title and in Options, where nothing is left
+## unsaved (`OS.set_restart_on_exit`; `location.reload()` in a browser;
+## see A SAFE RESTART at [method restart_offered_on]). Honest, and one
+## code path instead of twenty-five cache invalidations.
 ##
 ## THE BROWSER'S FETCH. With nothing stored, a web build asks for each
 ## zip it lacks beside its own `index.html` — `skin/original_skin.zip`
@@ -154,6 +156,8 @@ const PREFIX := "skin/"
 const ART_PREFIX := PREFIX + "cardart/"
 ## The scene that is rebuilt in place when a pack arrives on it.
 const TITLE_SCENE := "res://game/main.tscn"
+## The other screen a restart is offered on (h5-1, [method restart_offered_on]).
+const OPTIONS_SCENE := "res://game/options_screen.tscn"
 ## Seconds before the browser's "reload" button arms — the engine
 ## syncs `user://` to IndexedDB on its own schedule after a file closes,
 ## and a reload that outruns the sync loses the zip it just saved.
@@ -256,12 +260,27 @@ var _beside := ""
 var _beside_tried := {}
 var _notice: CanvasLayer = null
 var _arrived_at := 0.0
+## A chosen or dropped zip being copied into the player's folder, a piece a
+## frame (h5-4, [method _copy_start]): the copy, the name the player knows
+## it by, its kind, and where it is kept once whole.
+var _copy: Copy = null
+var _copy_shown := ""
+var _copy_kind := ""
+var _copy_dest := ""
+## How much of a copy one frame may take: a block of this many bytes at a
+## time, until this many microseconds are spent — and always one block.
+## Tests make them small.
+var copy_block := CHUNK
+var copy_frame_usec := 8000
 
 
 func _ready() -> void:
 	_migrate()
-	# Before anything is mounted: a zip that replaced a worn one last run
-	# takes its own name now (h6-8; see [method settle_successors]).
+	# Before anything is mounted: the copies retired when the zip beside the
+	# game was chosen back go (h5-3, [method settle_retired]) — before a
+	# successor of one could take its name — then a zip that replaced a
+	# worn one last run takes its own name (h6-8; [method settle_successors]).
+	settle_retired()
 	settle_successors(USER_DIR)
 	settle_successors(GamePaths.cardpacks_folder())
 	# The skin folder instead of the zip: no skin zip is opened, the
@@ -320,6 +339,9 @@ func _migrate() -> void:
 ## know the length and never hit the branch; the rename is harmless
 ## there, and [method _on_fetched] accepts either name.
 func _process(_delta: float) -> void:
+	if _copy != null:
+		_copy_step()
+		return
 	if _repack != null:
 		_repack_step()
 		return
@@ -802,20 +824,171 @@ func adopt(source: String) -> bool:
 		_complain(source.get_file(), String(report["why"]))
 		return false
 	var kind := String(report["kind"])
+	if kind == "skin" and is_shipped(source):
+		return _wear_shipped(source)
 	var dest := home_for(kind, source)
 	if ProjectSettings.globalize_path(source) != ProjectSettings.globalize_path(dest):
 		# Never over a zip mounted this run (h6-8).
 		dest = _unmounted_home(dest)
 		DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
-		if copy_whole(source, dest) != OK:
-			_complain(source.get_file(), "could not be copied into the game's folder")
-			return false
+		return _copy_start(source, dest, kind)
+	return _adopted(dest, kind)
+
+
+## [param dest], a zip of [param kind] now in the player's folder, mounted
+## and worn from now on, and the arrival told.
+func _adopted(dest: String, kind: String) -> bool:
 	var replaced := kind == "skin" and GameSkin.zip_worn
 	if not mount(dest, true):
 		return false
 	_wear(kind, dest)
 	_arrived(kind, replaced)
 	return true
+
+
+# --- 0.50.66 bug campaign, h5-4: a chosen zip copied a piece a frame ---
+## A CHOSEN ZIP IS COPIED A PIECE A FRAME (the bug campaign of 0.50.66,
+## h5-4), the way a tar is repacked: it used to be copied whole in the
+## frame it was chosen — the 230 MB hi-res skin froze the window 464 ms on
+## the desk's NVMe, and an SD card at 20-40 MB/s would have frozen it six
+## to twelve seconds with nothing said. Now [member copy_block] at a time
+## for at most [member copy_frame_usec] a frame, the transfer line saying
+## "Copying…" ([method transfer_line]) on the title and in Options; a zip
+## small enough for one frame is in at once, as before. The copy keeps its
+## whole-or-nothing rule ([method copy_whole]): written to the pending
+## name, checked, then renamed over the kept zip. True when it is in or
+## under way — what it came to is said through the notice and [signal
+## changed], as a repack's is.
+func _copy_start(source: String, dest: String, kind: String) -> bool:
+	var shown := source.get_file()
+	if _copy != null or _repack != null:
+		_complain(shown, "arrived while another pack was still being copied")
+		return false
+	var job := Copy.new()
+	if job.open(source, Settings.pending_path(dest)) != OK:
+		job.abandon()
+		_complain(shown, "could not be copied into the game's folder")
+		return false
+	_copy = job
+	_copy_shown = shown
+	_copy_kind = kind
+	_copy_dest = dest
+	var ok := _copy_step()
+	if _copy != null:
+		set_process(true)
+		fetch_progressed.emit(_copy.progress())
+	return ok
+
+
+## One frame of the copy; the last one puts the zip in its place and takes
+## it as [method adopt] would have. False when that failed.
+func _copy_step() -> bool:
+	if _copy.step(copy_block, copy_frame_usec):
+		fetch_progressed.emit(_copy.progress())
+		return true
+	var job := _copy
+	var shown := _copy_shown
+	var kind := _copy_kind
+	var dest := _copy_dest
+	_copy = null
+	_copy_shown = ""
+	_copy_kind = ""
+	_copy_dest = ""
+	set_process(picking or fetching or _repack != null)
+	fetch_progressed.emit(-1.0)
+	var pending := job.to
+	if _put_in_place(job.close(), pending, _pending_target(pending)) != OK:
+		_complain(shown, "could not be copied into the game's folder")
+		return false
+	return _adopted(dest, kind)
+
+
+## ONE COPY, A BLOCK AT A TIME (h5-4): [param source]'s bytes into
+## [member to], each write checked; [method close] compares the length
+## that reached the disk with the source's. Quiet when it fails — the
+## caller says what that means to the player.
+class Copy extends RefCounted:
+	var to := ""
+	var _from: FileAccess = null
+	var _into: FileAccess = null
+	var _length := 0
+	var _err := OK
+	## Whether [member to] was opened (made, or emptied) by this copy.
+	var _wrote := false
+
+	func open(source: String, to_path: String) -> Error:
+		to = to_path
+		_from = FileAccess.open(source, FileAccess.READ)
+		if _from == null:
+			_err = ERR_FILE_CANT_OPEN
+			return _err
+		_into = FileAccess.open(to_path, FileAccess.WRITE)
+		if _into == null:
+			_err = ERR_FILE_CANT_WRITE
+			return _err
+		_wrote = true
+		_length = _from.get_length()
+		return OK
+
+	## Blocks of [param block] bytes until [param usec] microseconds are
+	## spent (at least one block; a negative budget: to the end). True
+	## while more is left to copy.
+	func step(block: int, usec: int) -> bool:
+		var started := Time.get_ticks_usec()
+		while _err == OK and _from.get_position() < _length:
+			var want := mini(block, _length - _from.get_position())
+			var bytes := _from.get_buffer(want)
+			if bytes.size() != want:
+				_err = ERR_FILE_CANT_READ
+			elif not _into.store_buffer(bytes):
+				_err = ERR_FILE_CANT_WRITE
+			if usec >= 0 and Time.get_ticks_usec() - started >= usec:
+				break
+		return _err == OK and _from.get_position() < _length
+
+	## The fraction copied.
+	func progress() -> float:
+		return clampf(float(_from.get_position()) / float(_length), 0.0, 1.0) \
+			if _from != null and _length > 0 else -1.0
+
+	## Both files closed and what reached the disk checked; OK when [member
+	## to] holds the whole source.
+	func close() -> Error:
+		if _into != null:
+			_into.flush()
+			if _err == OK and _into.get_error() != OK:
+				_err = ERR_FILE_CANT_WRITE
+			_into.close()
+			_into = null
+		if _from != null:
+			_from.close()
+			_from = null
+		if _err == OK:
+			var check := FileAccess.open(to, FileAccess.READ)
+			if check == null or check.get_length() != _length:
+				_err = ERR_FILE_CANT_WRITE
+			if check != null:
+				check.close()   # closed before the rename: Windows will not move an open file
+		return _err
+
+	## Both files closed and the half copy, if this copy began one, deleted.
+	func abandon() -> void:
+		if _into != null:
+			_into.close()
+			_into = null
+		if _from != null:
+			_from.close()
+			_from = null
+		if _wrote and FileAccess.file_exists(to):
+			DirAccess.remove_absolute(to)
+
+
+## A copy in flight as the game closes: the half copy is not left behind.
+func _exit_tree() -> void:
+	if _copy != null:
+		_copy.abandon()
+		_copy = null
+# --- end 0.50.66 bug campaign, h5-4 ---
 
 
 ## COPY [param source] OVER [param dest] WHOLE OR NOT AT ALL (review of
@@ -840,9 +1013,18 @@ func adopt(source: String) -> bool:
 ## so this is the fallback for a file some other program holds open.)
 static func copy_whole(source: String, dest: String) -> Error:
 	var pending := Settings.pending_path(dest)
-	# The file the rename replaces: [param dest], or the file it links to.
-	var target := pending.substr(0, pending.rfind(Settings.PENDING_TAIL))
-	var err := _copy_bytes(source, pending)
+	return _put_in_place(_copy_bytes(source, pending), pending, _pending_target(pending))
+
+
+## The file a rename of [param pending] replaces: the path it was made
+## for, or the file that path links to.
+static func _pending_target(pending: String) -> String:
+	return pending.substr(0, pending.rfind(Settings.PENDING_TAIL))
+
+
+## A whole copy at [param pending] ([param err] OK) renamed over
+## [param target]; the pending file gone whatever came of it.
+static func _put_in_place(err: Error, pending: String, target: String) -> Error:
 	if err == OK:
 		err = DirAccess.rename_absolute(pending, target)
 		if err != OK and OS.get_name() == "Windows":
@@ -854,51 +1036,150 @@ static func copy_whole(source: String, dest: String) -> Error:
 
 ## [param source]'s bytes into [param to], [const CHUNK] at a time, each
 ## write checked and the length that reached the disk compared with the
-## source's. Quiet when it fails — the caller says what that means to the
-## player — where `DirAccess.copy_absolute` prints an engine error.
+## source's ([Copy], to its end in one go). Quiet when it fails — the
+## caller says what that means to the player — where
+## `DirAccess.copy_absolute` prints an engine error.
 static func _copy_bytes(source: String, to: String) -> Error:
-	var from := FileAccess.open(source, FileAccess.READ)
-	if from == null:
-		return ERR_FILE_CANT_OPEN
-	var into := FileAccess.open(to, FileAccess.WRITE)
-	if into == null:
-		from.close()
-		return ERR_FILE_CANT_WRITE
-	var length := from.get_length()
-	var err := OK
-	while err == OK and from.get_position() < length:
-		var want := mini(CHUNK, length - from.get_position())
-		var block := from.get_buffer(want)
-		if block.size() != want:
-			err = ERR_FILE_CANT_READ
-		elif not into.store_buffer(block):
-			err = ERR_FILE_CANT_WRITE
-	into.flush()
-	if err == OK and into.get_error() != OK:
-		err = ERR_FILE_CANT_WRITE
-	into.close()
-	from.close()
-	if err == OK:
-		var check := FileAccess.open(to, FileAccess.READ)
-		if check == null or check.get_length() != length:
-			err = ERR_FILE_CANT_WRITE
-		if check != null:
-			check.close()   # closed before the rename: Windows will not move an open file
-	return err
+	var job := Copy.new()
+	var err := job.open(source, to)
+	if err != OK:
+		return err      # nothing was written: the files close with the job
+	job.step(CHUNK, -1)
+	return job.close()
 
 
 ## A skin zip that arrived is the one worn from now on: the `skin_zip`
 ## key names it — unless it is the default pick itself, when the key is
 ## cleared instead, so no default is written into the file and an older
 ## choice stops winning over it. A card pack needs no key: every zip in
-## the card folder is worn.
+## the card folder is worn. A zip worn is never retired (h5-3).
 static func _wear(kind: String, dest: String) -> void:
 	if kind != "skin":
 		return
+	_unretire(dest)
 	if dest == USER_ZIP:
 		Settings.clear_value(GamePaths.KEY_SKIN_ZIP)
 	else:
 		Settings.set_value(GamePaths.KEY_SKIN_ZIP, dest)
+
+
+# --- 0.50.66 bug campaign, h5-3: the zip beside the game, chosen back ---
+## THE ZIP BESIDE THE GAME, CHOSEN BACK (the bug campaign of 0.50.66, h5-3;
+## the owner's ruling, "Wear the shipped one"): it was copied into the
+## skins folder like any chosen zip, and the copy — "your own" in Options —
+## was worn at every later start instead of the zip beside the game, which
+## an update replaces: the player kept the old skin for good, and the
+## copies stayed (337 MB on the desk). Now nothing is copied: the zip
+## beside the game is mounted where it is, the `skin_zip` key cleared, and
+## the player's own copies that would be worn over it at the next start —
+## `skins/original_skin.zip` and the zip the key named, when it is in the
+## skins folder, with any successor of either — are RETIRED: deleted now
+## when this run does not wear them, else at the next start, before
+## anything is mounted ([method settle_retired]) — the engine reads a
+## mounted zip by its path for as long as it runs. A zip chosen again
+## before that start is kept ([method _wear]).
+
+## The names, in the skins folder, of the zips to delete at the next start.
+const RETIRED := USER_DIR + "/retired.txt"
+
+
+## Tests: the skin zip beside the game, where the editor has none.
+static var shipped_for_tests := ""
+
+
+## Whether [param path] is the skin zip beside the game.
+static func is_shipped(path: String) -> bool:
+	var shipped := shipped_for_tests if shipped_for_tests != "" else portable_zip("skin")
+	return shipped != "" and ProjectSettings.globalize_path(path) == ProjectSettings.globalize_path(shipped)
+
+
+func _wear_shipped(shipped: String) -> bool:
+	var replaced := GameSkin.zip_worn
+	var retire := _worn_over_shipped()
+	if not mount(shipped, true):
+		return false
+	Settings.clear_value(GamePaths.KEY_SKIN_ZIP)
+	for path in retire:
+		if _is_mounted(path):
+			_retire(path)
+		else:
+			DirAccess.remove_absolute(path)
+	_arrived("skin", replaced)
+	return true
+
+
+## The player's own skin zips that the next start would wear over the zip
+## beside the game: `skins/original_skin.zip`, the zip the `skin_zip` key
+## names when it is in the skins folder, and the successors of either
+## ([method settle_successors] would give one its name).
+static func _worn_over_shipped() -> Array[String]:
+	var proper: Array[String] = [ProjectSettings.globalize_path(USER_ZIP)]
+	var named := GamePaths.skin_zip()
+	if named != "" and ProjectSettings.globalize_path(named).get_base_dir() \
+			== ProjectSettings.globalize_path(USER_DIR):
+		proper.append(ProjectSettings.globalize_path(proper_name(named)))
+	var out: Array[String] = []
+	for path in _zips_in(USER_DIR):
+		if proper.has(ProjectSettings.globalize_path(proper_name(path))):
+			out.append(path)
+	return out
+
+
+## [param path] (in the skins folder) to be deleted at the next start.
+static func _retire(path: String) -> void:
+	var names := _retired()
+	if not names.has(path.get_file()):
+		names.append(path.get_file())
+	_write_retired(names)
+
+
+## [param path] and the zip it stands in for no longer to be deleted.
+static func _unretire(path: String) -> void:
+	if not FileAccess.file_exists(RETIRED):
+		return
+	var names := _retired()
+	var before := names.size()
+	names.erase(path.get_file())
+	names.erase(proper_name(path).get_file())
+	if names.size() != before:
+		_write_retired(names)
+
+
+static func _retired() -> Array[String]:
+	var out: Array[String] = []
+	for line in FileAccess.get_file_as_string(RETIRED).split("\n", false):
+		var name := line.strip_edges()
+		# A name, never a path: nothing outside the skins folder is touched.
+		if name != "" and name.is_valid_filename() and not out.has(name):
+			out.append(name)
+	return out
+
+
+static func _write_retired(names: Array[String]) -> void:
+	if names.is_empty():
+		DirAccess.remove_absolute(RETIRED)
+		return
+	DirAccess.make_dir_recursive_absolute(USER_DIR)
+	var file := FileAccess.open(RETIRED, FileAccess.WRITE)
+	if file != null:
+		file.store_string("\n".join(names) + "\n")
+		file.close()
+
+
+## AT THE NEXT START, before anything is mounted: every retired zip
+## deleted — unless the `skin_zip` key names it after all — and the list
+## with them.
+static func settle_retired() -> void:
+	if not FileAccess.file_exists(RETIRED):
+		return
+	var named := GamePaths.skin_zip()
+	var kept := ProjectSettings.globalize_path(named) if named != "" else ""
+	for name in _retired():
+		var path := USER_DIR.path_join(name)
+		if ProjectSettings.globalize_path(path) != kept and FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(RETIRED)
+# --- end 0.50.66 bug campaign, h5-3 ---
 
 
 ## A ZIP REPLACED WHILE IT IS WORN (the bug campaign c12, h6-8). The
@@ -1147,14 +1428,111 @@ func _current_scene_path() -> String:
 	return scene.scene_file_path if scene != null else ""
 
 
-## Leave and come back: the desktop relaunches the same binary with the
-## same arguments; a browser reloads its page.
+# --- 0.50.66 bug campaign, h5-1 + h5-2: a safe restart ---
+## A SAFE RESTART (the bug campaign of 0.50.66, h5-1 and h5-2; the owner's
+## ruling, "Safe restart"). "Restart now" quit the game as it stood —
+## `quit()` sends no close request — so the Deck Builder's "Do you wish to
+## save?", the world's save on close and a duel in progress were all passed
+## by: a deck built and not saved was lost to a card art zip dropped on the
+## window. Now the restart is offered ONLY on the title and in Options
+## ([method restart_offered_on]), where nothing is left unsaved; anywhere
+## else the notice says the pack takes effect at the next start, with a
+## plain OK. And the relaunch kept none of the launch's own options
+## (`OS.get_cmdline_args` holds neither the engine's options nor what
+## follows `--`): the handhelds' launchers start the game with their
+## display, renderer, audio and frame-rate options, inside a wrapper that
+## ends with the first process. So the relaunch repeats the launch whole
+## ([method relaunch_args]) — and on a handheld, which a launcher started,
+## the button says "Quit and start again" and quits, for the player to
+## start it from the launcher again ([method restart_way]).
+
+## Whether "Restart now" is offered on the screen [param scene_path]: the
+## title and Options alone.
+static func restart_offered_on(scene_path: String) -> bool:
+	return scene_path == TITLE_SCENE or scene_path == OPTIONS_SCENE
+
+
+## How the game starts again: "reload" a browser's page, "quit" on a
+## handheld ([param handheld], [method Settings.handheld]: a launcher
+## started it, and starts it again), "relaunch" on a desk.
+static func restart_way(web: bool, handheld: String) -> String:
+	if web:
+		return "reload"
+	return "quit" if handheld != "" else "relaunch"
+
+
+## The notice's restart button, by [method restart_way].
+static func restart_label(way: String) -> String:
+	match way:
+		"reload":
+			return "Reload the page"
+		"quit":
+			return "Quit and start again"
+	return "Restart now"
+
+
+## THE LAUNCH'S OWN ARGUMENTS, every one, the program left out: on Linux
+## the process's own command line (`/proc/self/cmdline`), else what the
+## engine hands on — its arguments, then `--` and the game's own.
+static func relaunch_args() -> PackedStringArray:
+	if OS.get_name() == "Linux":
+		var raw := _read_whole("/proc/self/cmdline")
+		if not raw.is_empty():
+			return args_after_program(raw)
+	var out := OS.get_cmdline_args()
+	var user := OS.get_cmdline_user_args()
+	if not user.is_empty():
+		out.append("--")
+		out.append_array(user)
+	return out
+
+
+## [param raw] — a command line as the kernel keeps it, each argument
+## ended by a zero byte — without its first, the program.
+static func args_after_program(raw: PackedByteArray) -> PackedStringArray:
+	var out := PackedStringArray()
+	var start := 0
+	var first := true
+	while start < raw.size():
+		var end := raw.find(0, start)
+		if end < 0:
+			end = raw.size()
+		if not first:
+			out.append(raw.slice(start, end).get_string_from_utf8())
+		first = false
+		start = end + 1
+	return out
+
+
+## Every byte of [param path], for a file whose length the system does not
+## say (a `/proc` file reads as empty to a length-first read).
+static func _read_whole(path: String) -> PackedByteArray:
+	var out := PackedByteArray()
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return out
+	while true:
+		var piece := file.get_buffer(4096)
+		out.append_array(piece)
+		if piece.size() < 4096:
+			break
+	file.close()
+	return out
+
+
+## Leave and come back ([method restart_way]): a browser reloads its page;
+## a handheld quits; the desktop relaunches the same binary with the same
+## arguments, all of them ([method relaunch_args]).
 func restart() -> void:
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval("location.reload()")
-		return
-	OS.set_restart_on_exit(true, OS.get_cmdline_args())
-	get_tree().quit()
+	match restart_way(OS.has_feature("web"), Settings.handheld()):
+		"reload":
+			JavaScriptBridge.eval("location.reload()")
+		"quit":
+			get_tree().quit()
+		_:
+			OS.set_restart_on_exit(true, relaunch_args())
+			get_tree().quit()
+# --- end 0.50.66 bug campaign, h5-1 + h5-2 ---
 
 
 # ------------------------------------------------------------- the drop --
@@ -1324,9 +1702,11 @@ static func pack_url(href: String, kind: String = "skin") -> String:
 	return base.left(base.rfind("/") + 1) + PREFIX + file_name(kind)
 
 
-## The fraction downloaded — or repacked — or -1 when nothing is in
-## flight or the host did not say how big the file is.
+## The fraction downloaded — or repacked, or copied — or -1 when nothing
+## is in flight or the host did not say how big the file is.
 func fetch_progress() -> float:
+	if _copy != null:
+		return _copy.progress()
 	if _repack != null:
 		return _repack.progress()
 	if _request == null:
@@ -1350,6 +1730,10 @@ static func fetch_line(fraction: float, kind: String = "skin") -> String:
 ## What is on its way right now, for a label: the download's line, a
 ## chosen file's, or "" when nothing is.
 func transfer_line(fraction: float) -> String:
+	if _copy != null:
+		if fraction < 0.0:
+			return "Copying %s…" % _copy_shown
+		return "Copying %s… %d%%" % [_copy_shown, int(round(fraction * 100.0))]
 	if _repack != null:
 		if fraction < 0.0:
 			return "Repacking %s…" % _repack_shown
@@ -1367,7 +1751,7 @@ func transfer_line(fraction: float) -> String:
 
 ## Whether a download or a read is in flight — what shows a progress line.
 func busy() -> bool:
-	return fetching or (picking and _pick_file != null) or _repack != null
+	return fetching or (picking and _pick_file != null) or _repack != null or _copy != null
 
 
 ## Ask the host how big the next zip is (HEAD), then fetch it. Two
@@ -1470,10 +1854,13 @@ func _complain(shown: String, why: String) -> void:
 
 
 ## The overlay over whatever screen is up: a stone panel with a line or
-## two and, with [param offer_restart], a button that restarts (armed
-## after [constant RELOAD_GUARD] in a browser) beside one that does not.
+## two and, with [param offer_restart] on the title or in Options (h5-1,
+## [method restart_offered_on]), a button that restarts (armed after
+## [constant RELOAD_GUARD] in a browser) beside one that does not; a plain
+## OK elsewhere — the detail already says "from the next start".
 func _show_notice(headline: String, detail: String, offer_restart: bool) -> void:
 	_hide_notice()
+	offer_restart = offer_restart and restart_offered_on(_current_scene_path())
 	var layer := CanvasLayer.new()
 	layer.layer = 128
 	var column := VBoxContainer.new()
@@ -1486,7 +1873,7 @@ func _show_notice(headline: String, detail: String, offer_restart: bool) -> void
 	row.alignment = BoxContainer.ALIGNMENT_END
 	if offer_restart:
 		var go := UiChrome.menu_button(
-			"Reload the page" if OS.has_feature("web") else "Restart now",
+			restart_label(restart_way(OS.has_feature("web"), Settings.handheld())),
 			Vector2(170, 34), 16)
 		go.name = "Restart"
 		go.pressed.connect(restart)

@@ -579,11 +579,13 @@ static func take_spell(player: AdventurePlayer, card_name: String) -> bool:
 ## "THE LOCATION OF WORLDMAGIC CARDS?" (E:1947–1987): the World Magics not
 ## yet owned, by their index in [constant AdventurePlayer.WORLD_MAGICS];
 ## empty when all are ("You have already gathered all of the WORLDMAGIC
-## SPELLS!").
+## SPELLS!"). [Ours] Not one the shops no longer offer ([method
+## WorldMagicShop.idle]: Ring of the Guardian with no siege to come) — its
+## town would not sell it (the 0.50.66 bug campaign, h3-2).
 static func magic_choices(player: AdventurePlayer) -> Array[int]:
 	var out: Array[int] = []
 	for i in AdventurePlayer.WORLD_MAGICS.size():
-		if not player.owns(AdventurePlayer.WORLD_MAGICS[i]):
+		if not player.owns(AdventurePlayer.WORLD_MAGICS[i]) and not WorldMagicShop.idle(player, i):
 			out.append(i)
 	return out
 

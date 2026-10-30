@@ -223,12 +223,13 @@ START["android-arm64-experimental"] = (
 # LAN and Find LAN games — so the two Web READMEs say so instead of
 # promising LAN play (review of 2026-10-21; until then only the offline
 # Web package's README was corrected, by tools/package_web_offline.py).
-PLAY = ("Duels, Deck Builder, Booster Draft and LAN SGManalink are included.\n"
-        "Adventure and public Internet play are not included.\n"
+PLAY = ("The Shandalar adventure, duels, Deck Builder, Booster Draft and\n"
+        "LAN SGManalink are included. Public Internet play is not included.\n"
         "Use matching builds and enabled packs for LAN play. See RELEASE_NOTES.md.\n\n")
-WEB_PLAY = ("Duels, Deck Builder and Booster Draft are included. The Web build has\n"
-            "no LAN play: hosting or joining an SGManalink table needs an installed\n"
-            "(non-Web) build. Adventure and public Internet play are not included.\n"
+WEB_PLAY = ("The Shandalar adventure, duels, Deck Builder and Booster Draft are\n"
+            "included. The Web build has no LAN play: hosting or joining an\n"
+            "SGManalink table needs an installed (non-Web) build. Public Internet\n"
+            "play is not included.\n"
             "See RELEASE_NOTES.md.\n\n")
 
 

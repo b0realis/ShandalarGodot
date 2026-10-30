@@ -2112,19 +2112,38 @@ static var _strip_cache: Dictionary = {}
 
 static func frame_strip(d: CardData) -> Texture2D:
 	var key := frame_skin_key(d)
-	if _strip_cache.has(key):
-		return _strip_cache[key]
-	var result: Texture2D = null
 	var frame := GameSkin.texture(key)
-	if frame != null:
-		# Top border of Cardbk_*.pic: the first 5.5% of the card's height.
-		var strip := AtlasTexture.new()
-		strip.atlas = frame
-		strip.region = Rect2(0, 0, frame.get_width(),
-			maxf(6.0, frame.get_height() * 0.055))
-		result = strip
-	_strip_cache[key] = result
-	return result
+	if frame == null:
+		return null
+	var kept := _made_of(_strip_cache, key, frame)
+	if not kept.is_empty():
+		return kept[1]
+	# Top border of Cardbk_*.pic: the first 5.5% of the card's height.
+	var strip := AtlasTexture.new()
+	strip.atlas = frame
+	strip.region = Rect2(0, 0, frame.get_width(),
+		maxf(6.0, frame.get_height() * 0.055))
+	_strip_cache[key] = [frame.get_instance_id(), strip]
+	return strip
+
+
+## THE PICTURES MADE OF THE SKIN'S ARE KEPT WITH THE PICTURE THEY WERE MADE
+## OF (0.50.66 bug campaign, h4-1) — [member _strip_cache], [member
+## _masked_cache] and the sheet's cells in [member _badge_cache] hold
+## [that picture's instance id (0 for none), what was made of it], as
+## [method OriginalDialog.stone_job]'s stones do. They used to keep what
+## they made — a null too — for the session: a Deck Builder browsed, or a
+## duel played, before the skin was dropped on the title left every duel
+## after it with flat title strips, and a zip that replaced a zip kept the
+## old one's. A skin that arrives is a new picture ([method
+## GameSkin.clear_caches]), and so made again. The pair kept under
+## [param key] when it was made of [param source], else `[]`.
+static func _made_of(cache: Dictionary, key: Variant, source: Texture2D) -> Array:
+	var kept: Variant = cache.get(key)
+	if kept is Array and (kept as Array).size() == 2 \
+			and int(kept[0]) == (source.get_instance_id() if source != null else 0):
+		return kept
+	return []
 
 
 ## Which original-skin frame key fits this card (see the importer
@@ -2674,10 +2693,13 @@ const ALWAYS_OURS := ["damage_marker"]
 
 static func masked_sprite(key: String, vertical := false) -> Texture2D:
 	var cache_key := key + ("|v" if vertical else "")
-	if _masked_cache.has(cache_key):
-		return _masked_cache[cache_key]
-	var result: Texture2D = null
 	var sheet: Texture2D = null if key in ALWAYS_OURS else GameSkin.texture(key)
+	# Kept with the sheet it was cut from — ours, or nothing, with none
+	# (h4-1, [method _made_of]).
+	var kept := _made_of(_masked_cache, cache_key, sheet)
+	if not kept.is_empty():
+		return kept[1]
+	var result: Texture2D = null
 	if sheet != null:
 		# The mask half is read at 1997 size, where it is two-tone, and the
 		# alpha it gives is carried up to a 2x picture (GameSkin, THE 2x
@@ -2735,7 +2757,7 @@ static func masked_sprite(key: String, vertical := false) -> Texture2D:
 		# 2026-09-09) and every other key falls through as null exactly as
 		# before.
 		result = GameSkin.our_art(key)
-	_masked_cache[cache_key] = result
+	_masked_cache[cache_key] = [sheet.get_instance_id() if sheet != null else 0, result]
 	return result
 
 
@@ -2822,30 +2844,33 @@ static func badge_texture(keyword: int) -> Texture2D:
 ## icon's outline) survive untouched. The last pixel of the rim is
 ## feathered so it does not alias, as `ManaIcons.symbol` does.
 static func badge_from_slot(slot: int) -> Texture2D:
-	if _badge_cache.has(slot):
-		return _badge_cache[slot]
-	var result: Texture2D = null
 	var sheet := GameSkin.texture("ability_icons")
-	if sheet != null and slot >= 0:
-		var cell := sheet.get_width()   # the sheet is one column wide
-		if (slot + 1) * cell <= sheet.get_height():
-			# At the sheet's own resolution (GameSkin, THE 2x PICTURES): the
-			# cut at 0.51 of the cell and the feather in its pixels.
-			var img := GameSkin.cut(sheet, Rect2i(0, slot * cell, cell, cell))
-			img.convert(Image.FORMAT_RGBA8)
-			var pixels := img.get_width()
-			var centre := (pixels - 1) / 2.0
-			var radius := pixels * 0.51
-			for y in pixels:
-				for x in pixels:
-					var dist := Vector2(x - centre, y - centre).length()
-					if dist <= radius - 1.0:
-						continue
-					var px := img.get_pixel(x, y)
-					px.a = maxf(0.0, radius - dist) if dist < radius else 0.0
-					img.set_pixel(x, y, px)
-			result = GameSkin.texture_of(img, Vector2i(cell, cell))
-	_badge_cache[slot] = result
+	if sheet == null or slot < 0:
+		return null
+	# Kept with the sheet it was cut from (h4-1, [method _made_of]).
+	var kept := _made_of(_badge_cache, slot, sheet)
+	if not kept.is_empty():
+		return kept[1]
+	var result: Texture2D = null
+	var cell := sheet.get_width()   # the sheet is one column wide
+	if (slot + 1) * cell <= sheet.get_height():
+		# At the sheet's own resolution (GameSkin, THE 2x PICTURES): the
+		# cut at 0.51 of the cell and the feather in its pixels.
+		var img := GameSkin.cut(sheet, Rect2i(0, slot * cell, cell, cell))
+		img.convert(Image.FORMAT_RGBA8)
+		var pixels := img.get_width()
+		var centre := (pixels - 1) / 2.0
+		var radius := pixels * 0.51
+		for y in pixels:
+			for x in pixels:
+				var dist := Vector2(x - centre, y - centre).length()
+				if dist <= radius - 1.0:
+					continue
+				var px := img.get_pixel(x, y)
+				px.a = maxf(0.0, radius - dist) if dist < radius else 0.0
+				img.set_pixel(x, y, px)
+		result = GameSkin.texture_of(img, Vector2i(cell, cell))
+	_badge_cache[slot] = [sheet.get_instance_id(), result]
 	return result
 
 

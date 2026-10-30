@@ -134,6 +134,7 @@ static func clear_caches() -> void:
 	_sound_cache.clear()
 	_meta_cache.clear()
 	_art_cache.clear()
+	_art_ahead.clear()
 	_art_missing.clear()
 	_set_icon_cache.clear()
 	_region_cache.clear()
@@ -167,6 +168,23 @@ static var _art_cache: Dictionary = {}
 ## The names [method card_art] looked for and found no file — kept apart
 ## so a missing picture costs one search and no cache slot.
 static var _art_missing: Dictionary = {}
+
+# --- 0.50.66 bug campaign, h1-2: pictures warmed ahead ---
+## [QoL] PICTURES WARMED AHEAD OF BEING SHOWN (the bug campaign of 0.50.66,
+## h1-2) have a budget of their own, apart from the pictures on show: the
+## cards a creature near the hero may stake ([CardArtWarmer], [method
+## WorldSoundscape._warm_stakes]) — 10-16 a creature, met or not. In the
+## shown pictures' cache they broke the bound's premise above (art "never
+## asked for" costs nothing): a 12-minute walk kept 163 pictures where 65
+## were shown, 25 minutes all 256 (about 370 MB with their mipmaps), and
+## a warmed stake pushed a shown picture out. Here the oldest warmed
+## picture goes first past this many (two creatures' stakes, about 46 MB
+## at most), and one is moved into the shown pictures' cache the moment a
+## card asks for it ([method card_art]) — the same texture, decoded once.
+const ART_AHEAD_CAP := 32
+## The pictures warmed ahead and not asked for yet, youngest LAST.
+static var _art_ahead: Dictionary = {}
+# --- end 0.50.66 bug campaign, h1-2 ---
 
 
 ## THE SEASONS' CARD BACKS: two pictures of this project's own
@@ -1142,6 +1160,9 @@ static func card_art(card_name: String) -> Texture2D:
 		_art_cache.erase(key)
 		_art_cache[key] = hit
 		return hit
+	if _art_ahead.has(key):
+		# Warmed ahead (h1-2) and asked for now: shown, so kept as shown.
+		return _keep_shown(key, _art_ahead[key])
 	if _art_missing.has(key):
 		return null
 	var path := card_art_path(card_name)
@@ -1198,26 +1219,46 @@ static func decode_card_art(path: String) -> Image:
 
 ## [param card_name]'s picture kept from [param image] (decoded by
 ## [method decode_card_art]) and returned; a picture already kept wins.
-## Main thread only: it makes the texture and bounds the cache.
-static func keep_card_art(card_name: String, image: Image) -> Texture2D:
+## [param ahead]: warmed ahead of being shown, kept in that budget of its
+## own ([constant ART_AHEAD_CAP], h1-2) — never pushing a shown picture
+## out. Main thread only: it makes the texture and bounds the cache.
+static func keep_card_art(card_name: String, image: Image, ahead := false) -> Texture2D:
 	var key := "cardart/" + _snake(card_name)
 	if _art_cache.has(key):
 		return _art_cache[key]
+	if _art_ahead.has(key):
+		return _art_ahead[key] if ahead else _keep_shown(key, _art_ahead[key])
 	var result := ImageTexture.create_from_image(image)
-	_art_cache[key] = result
 	_art_missing.erase(key)
+	if ahead:
+		_art_ahead[key] = result
+		while _art_ahead.size() > ART_AHEAD_CAP:
+			for oldest in _art_ahead:
+				_art_ahead.erase(oldest)
+				break
+		return result
+	return _keep_shown(key, result)
+
+
+## [param texture] kept under [param key] as a shown picture, the youngest,
+## out of the warmed-ahead budget if it was there; the oldest shown past
+## [constant ART_CACHE_CAP] let go.
+static func _keep_shown(key: String, texture: Texture2D) -> Texture2D:
+	_art_ahead.erase(key)
+	_art_cache[key] = texture
 	while _art_cache.size() > ART_CACHE_CAP:
 		for oldest in _art_cache:
 			_art_cache.erase(oldest)
 			break
-	return result
+	return texture
 
 
 ## True when [method card_art] would answer [param card_name] without
-## reading a file: its picture kept, or known to be missing.
+## reading a file: its picture kept (or warmed ahead), or known to be
+## missing.
 static func card_art_known(card_name: String) -> bool:
 	var key := "cardart/" + _snake(card_name)
-	return _art_cache.has(key) or _art_missing.has(key)
+	return _art_cache.has(key) or _art_ahead.has(key) or _art_missing.has(key)
 
 
 ## Short label for a set that has NO symbol to show. Every card still

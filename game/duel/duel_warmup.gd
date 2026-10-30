@@ -25,7 +25,8 @@ extends Node
 ## pictures ([constant PICTURES]: 5.2 MB of textures with the 1997 skin,
 ## 20.7 MB with the 2x skin), its stones and the Combat Bar's two columns
 ## (2.7 / 10.6 MB), each seat colour's 1.8 / 7.1 MB, and the coin's sheets
-## (39 MB, only with [param coin] of [method warm], a duel at hand).
+## (39 MB, only with [param coin] of [method warm], a duel at hand, and
+## only when the toss is the movie).
 ##
 ## NOT HEADLESS (the tests, the tools), NOT ON THE WEB, nor where the
 ## engine has no threads ([method SkinWarmer.runs_here], [member forced]):
@@ -39,10 +40,21 @@ const PICTURES: Array[String] = ["message_panel", "attack_panel", "attack_min", 
 	"versus_background", "card_frame_artifact", "card_back", "summon_sick", "panel_end_duel"]
 ## The coin's two sheets — 2240x2160 each, 39 MB of textures with either
 ## skin — warmed only when a duel is at hand ([param coin] of [method
-## warm]: a meeting, a setup), never on arrival in the world.
+## warm]: a meeting, a setup) and the player's toss is the movie (h4-2),
+## never on arrival in the world.
 const COIN_PICTURES: Array[String] = ["coin_toss_heads", "coin_toss_tails"]
+## A seat whose deck is drawn as the duel starts — Magic Battle's random
+## rows (`<random deck>`, `<random from …>`): ALL FIVE COLOURS IN FULL,
+## each colour's [constant SEAT_PICTURES] and its ground, the exile plates
+## and the hand windows (the owner, 2026-10-29: Magic Battle warms all five
+## colours only when a random deck is picked). About 9 MB of textures with
+## the 1997 skin, 37 MB with the 2x skin; measured on the desk, the first
+## random duel's Go! to its first frame fell from 115-129 ms to 101-116
+## with the 1997 skin, from 145-252 to 124-140 with the 2x skin (the rest
+## is the build itself and the drawn decks' card art, unknown until Go!).
+const ANY_COLOR := "*"
 ## The small ones of [constant SEAT_PICTURES], warmed in all five colours
-## for a seat whose colour is not known yet.
+## for a seat whose colour is not known yet (`""`: a creature not met).
 const SMALL_SEAT_PICTURES: Array[String] = ["life_panel_%s", "grave_panel_%s", "hand_panel_%s"]
 ## Each seat colour's pictures (`%s` the colour key), and the ground
 ## [DuelOptions] would lay: 1.8 MB of textures with the 1997 skin, 7.1 MB
@@ -74,14 +86,22 @@ static var forced := -1
 
 
 ## The stones (and the Combat Bar's keyed columns) made by a worker. The
-## worker writes only into the jobs and [member done], under [member lock].
+## worker writes only into the jobs, [member done] and [member started],
+## under [member lock]. Let go through [method SkinWarmer.release]: told
+## to stop, and waited for only once [member started] (0.50.66 bug
+## campaign, h1-3).
 class StoneWork extends RefCounted:
 	var jobs: Array[Dictionary] = []
 	var done := 0
 	var stop := false
+	## Set by the worker as it begins (h1-3).
+	var started := false
 	var lock := Mutex.new()
 
 	func run() -> void:
+		lock.lock()
+		started = true
+		lock.unlock()
 		for i in jobs.size():
 			lock.lock()
 			var stopped := stop
@@ -131,7 +151,8 @@ static func runs_here() -> bool:
 
 
 ## Starts warming a duel whose seats may wear [param colors] (colour keys,
-## `"green"`; either may be `""`) — [param hero_mat] the hero's playmat
+## `"green"`; either may be `""`, or [constant ANY_COLOR]) — [param
+## hero_mat] the hero's playmat
 ## ([member DuelConfig.territories], `{color, type}`) — for [param parent]
 ## (a meeting's pane, the setup screen, the world). The warm-up itself
 ## lives under the tree's root, joined at the end of the frame: it outlives
@@ -152,7 +173,15 @@ static func warm(parent: Node, colors: Array[String] = [], hero_mat := {},
 	warmup._colors = colors.duplicate()
 	warmup._sounds = SOUNDS.duplicate()
 	if coin:
-		warmup._pictures.append_array(COIN_PICTURES)
+		# The movie's sheets only for a toss the movie will play (0.50.66
+		# bug campaign, h4-2): under "Our coin animation" or "Instant" they
+		# were 39 MB of textures kept for the session and never drawn. The
+		# player's choice as stored — [method CoinToss.current_style] would
+		# read both sheets here, on this thread, to see whether they exist;
+		# a skin without them leaves the warmer nothing to read. The toss's
+		# sound plays whatever the style.
+		if DuelOptions.coin_flip_style() == DuelOptions.COIN_VIDEO:
+			warmup._pictures.append_array(COIN_PICTURES)
 		warmup._sounds.append_array(COIN_SOUNDS)
 	for key in sounds:
 		if key not in warmup._sounds:
@@ -168,6 +197,10 @@ static func pictures_for(colors: Array[String], hero_mat := {}) -> Array[String]
 	out.append_array(PICTURES)
 	for pid in colors.size():
 		var color := String(colors[pid])
+		if color == ANY_COLOR:
+			for any in AdventurePlayer.COLORS:
+				_add_seat(out, pid, any, hero_mat)
+			continue
 		if color == "":
 			# A seat whose colour is not known yet (a random deck, the
 			# creature not met): the five colours' small panels, 0.5 MB of
@@ -178,15 +211,21 @@ static func pictures_for(colors: Array[String], hero_mat := {}) -> Array[String]
 					if small_key not in out:
 						out.append(small_key)
 			continue
-		var ground := DuelOptions.ground_for(pid, 0, color, hero_mat if pid == 0 else {})
-		var key := DuelOptions.ground_key(String(ground["color"]), String(ground["type"]))
-		if key not in out:
-			out.append(key)
-		for pattern in SEAT_PICTURES:
-			var seat_key := pattern % color
-			if seat_key not in out:
-				out.append(seat_key)
+		_add_seat(out, pid, color, hero_mat)
 	return out
+
+
+## Seat [param pid]'s pictures in [param color] added to [param out]: the
+## ground [DuelOptions] would lay and [constant SEAT_PICTURES].
+static func _add_seat(out: Array[String], pid: int, color: String, hero_mat: Dictionary) -> void:
+	var ground := DuelOptions.ground_for(pid, 0, color, hero_mat if pid == 0 else {})
+	var key := DuelOptions.ground_key(String(ground["color"]), String(ground["type"]))
+	if key not in out:
+		out.append(key)
+	for pattern in SEAT_PICTURES:
+		var seat_key := pattern % color
+		if seat_key not in out:
+			out.append(seat_key)
 
 
 ## The stones to make, as [method OriginalDialog.stone_job] specs: [constant
@@ -298,7 +337,9 @@ func _launch() -> void:
 	if _stones.jobs.is_empty():
 		_small_ones()
 		return
-	_task = WorkerThreadPool.add_task(_stones.run, false, "Duel warm-up")
+	# Tracked, so the game's close tells it to stop before anything is
+	# waited for (h1-3, [method SkinWarmer.track]).
+	_task = SkinWarmer.track(_stones, WorkerThreadPool.add_task(_stones.run, false, "Duel warm-up"))
 
 
 ## One job made, by its work. Any thread.
@@ -322,9 +363,17 @@ static func keep(job: Dictionary) -> void:
 ## window — then done.
 func _small_ones() -> void:
 	_small = []
+	var colors: Array[String] = []
 	for color in _colors:
-		if color == "":
-			continue
+		var each: Array[String] = []
+		if color == ANY_COLOR:
+			each.assign(AdventurePlayer.COLORS)
+		elif color != "":
+			each.append(color)
+		for one in each:
+			if one not in colors:
+				colors.append(one)
+	for color in colors:
 		_small.append(func() -> void: ExilePlate.plate(color))
 		_small.append(func() -> void: StackHand.window_texture(color))
 	if _small.is_empty():
@@ -350,7 +399,7 @@ func finish_now() -> void:
 	if not _launched:
 		_launch()
 	if _task != -1:
-		WorkerThreadPool.wait_for_task_completion(_task)
+		SkinWarmer.claim(_task)     # on purpose: wanted this frame
 		_task = -1
 		while _kept < _stones.made():
 			keep(_stones.jobs[_kept])
@@ -370,14 +419,17 @@ func _finish() -> void:
 		queue_free()
 
 
+## The worker let go (0.50.66 bug campaign, h1-3): told to stop, and
+## waited for only when it has started — it ends after the stone in hand.
+## One still queued behind other warm-ups (a 2-6-core machine runs the
+## engine's low-priority tasks one at a time) is never waited for here: the
+## newest warmer, the first to leave as the game closes, used to wait for
+## every older one, never told to stop, to its last file. It sees `stop`
+## when its turn comes and is reclaimed then ([method SkinWarmer.release]).
 func _stop_worker() -> void:
 	if _task == -1:
 		return
-	if _stones != null:
-		_stones.lock.lock()
-		_stones.stop = true
-		_stones.lock.unlock()
-	WorkerThreadPool.wait_for_task_completion(_task)
+	SkinWarmer.release(_stones, _task)
 	_task = -1
 
 
