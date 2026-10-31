@@ -13900,6 +13900,11 @@ found, what was fixed, what was left and why).
   flip entries.
 <!-- end repo check 2026-10-13 fx-code -->
 
+## Adventure card-frame update (0.60.3)
+
+- `docs/releases/0.60.3.md`: mini-card frame correction for the adventure
+  deck builder, with both classic and high-resolution skins.
+
 ## Adventure playtest update (0.60.2)
 
 - `docs/releases/0.60.2.md`: player-facing summary of Quickslot, the single

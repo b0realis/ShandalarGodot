@@ -381,6 +381,18 @@ func test_a_card_flipped_back_face_up_is_clickable_again() -> void:
 	assert_false(card.disabled, "turned face up, it does again")
 
 
+func test_a_disabled_face_restores_its_frame_after_turning_face_up() -> void:
+	var card := _mini(give_hand(0, "Hill Giant"))
+	card.face_down = true
+	var back := card.get_theme_stylebox("disabled")
+	card.face_down = false
+	card.disabled = true
+	assert_same(card.get_theme_stylebox("disabled"), card.get_theme_stylebox("normal"),
+		"a display-only face wears its own frame in both states")
+	assert_ne(card.get_theme_stylebox("disabled"), back,
+		"the hidden hand's back must not remain as its disabled frame")
+
+
 func test_a_face_down_permanent_is_still_clickable() -> void:
 	# **A FACE-DOWN PERMANENT IS STILL A PERMANENT** — it attacks, it
 	# blocks, it is a legal target, and every one of those is a click on

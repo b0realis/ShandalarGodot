@@ -2236,15 +2236,19 @@ func _apply_style() -> void:
 		else _frame_color().to_html(false), _highlight]
 	if key == _style_key:
 		return   # nothing about the frame changed; the overrides still hold
-	# THE FOUR OVERRIDES ARE THE EXPENSIVE PART, and not because of the
+	# THE STYLE OVERRIDES ARE THE EXPENSIVE PART, and not because of the
 	# StyleBoxes (those are cached above): `add_theme_stylebox_override`
 	# raises NOTIFICATION_THEME_CHANGED and Godot propagates it to every
-	# descendant, so pushing four of them onto a finished card is four
-	# walks of its fourteen children. `_init` therefore calls this ONCE
+	# descendant, so each override walks the finished card's children.
+	# `_init` therefore calls this ONCE
 	# before `_build_face`, while the card is still childless.
 	_style_key = key
 	var pair := _boxes_for(key, skinned)
 	add_theme_stylebox_override("normal", pair[0])
+	# CardArea disables a face when its holder handles clicks. Keep the
+	# card's frame in that state too, rather than the theme's disabled
+	# button background. Also replaces a previously face-down card's back.
+	add_theme_stylebox_override("disabled", pair[0])
 	add_theme_stylebox_override("hover", pair[1])
 	add_theme_stylebox_override("pressed", pair[1])
 	add_theme_stylebox_override("focus", pair[1])

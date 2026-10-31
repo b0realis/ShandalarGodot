@@ -68,6 +68,18 @@ func test_a_new_page_keeps_the_face_each_card_was_built_with() -> void:
 		assert_false(cell.face.hovered)
 
 
+func test_a_new_page_keeps_card_frames_when_the_holder_handles_clicks() -> void:
+	var area := _area()
+	area.set_entries(_entries(["Amulet of Kroog", "Firebreathing", "Hill Giant"]))
+	for cell in _shown(area):
+		assert_true(cell.face.disabled, "the holder takes clicks on a fresh face")
+		assert_true(cell.face.has_theme_stylebox_override("disabled"),
+			"a disabled face must not fall through to the surrounding UI theme")
+		assert_same(cell.face.get_theme_stylebox("disabled"),
+			cell.face.get_theme_stylebox("normal"),
+			"the whole frame stays visible behind the name and artwork")
+
+
 func test_a_cell_moved_to_another_card_is_redrawn_as_that_card() -> void:
 	var area := _area()
 	area.set_entries(_entries(["Grizzly Bears", "Shivan Dragon"]))
