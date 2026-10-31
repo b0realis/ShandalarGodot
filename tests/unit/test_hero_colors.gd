@@ -71,3 +71,66 @@ func test_the_choices_are_kept_as_text_and_drawn_at_random() -> void:
 	assert_gt(dressed, kept, "but mostly a new one")
 	assert_eq(HeroColors.swatch("body", HeroColors.ORIGINAL, false), HeroColors.PAINTED["body"][0], "his red vest")
 	assert_eq(HeroColors.swatch("body", HeroColors.ORIGINAL, true), HeroColors.PAINTED["body"][1], "her blue bodice")
+
+
+func _art_with_sheet(image: Image, logical: Vector2i, walker := "male") -> WorldArt:
+	var art := WorldArt.new()
+	var key := "world_ego_f" if walker == "female" else "world_ego_m"
+	art._textures[key] = GameSkin.texture_of(image, logical)
+	art._meta[key] = {"cols": 2, "frame_width": 4, "frame_height": 8}
+	return art
+
+
+func test_upscaled_dressed_figures_keep_the_original_size_and_each_complete_frame() -> void:
+	var colors := {"hair": "blond", "body": "blue", "boots": "brown"}
+	for walker in ["male", "female"]:
+		var original := _sheet()
+		var female: bool = walker == "female"
+		if female:
+			for x in range(1, 8):
+				original.set_pixel(x, 2, Color8(19, 83, 203))
+				original.set_pixel(x, 5, Color8(7, 187, 55))
+		var expected := HeroColors.dress(original, Vector2i(4, 8), female, colors)
+		for scale in [1, 2, 4]:
+			var image := original.duplicate() as Image
+			image.resize(8 * scale, 8 * scale, Image.INTERPOLATE_NEAREST)
+			var art := _art_with_sheet(image, original.get_size(), walker)
+			var dressed := HeroColors.dressed(art, walker, colors)
+			assert_eq(dressed.get_size(), Vector2(8, 8), "same drawn size at %dx" % scale)
+			assert_eq(GameSkin.scale_of(dressed), scale, "resolution retained at %dx" % scale)
+			assert_eq(dressed.get_image().get_size(), image.get_size(), "keep the detailed pixels")
+			for frame in 2:
+				var rect := Rect2i(art.frame_rect("world_ego_f" if female else "world_ego_m", frame))
+				var cut := GameSkin.cut(dressed, rect)
+				cut.resize(4, 8, Image.INTERPOLATE_NEAREST)
+				assert_eq(cut.get_data(), expected.get_region(rect).get_data(),
+					"complete, correctly dressed frame %d at %dx" % [frame, scale])
+
+
+func test_upscaled_recoloring_keeps_fine_shading_and_transparency() -> void:
+	var original := _sheet()
+	original.set_pixel(3, 2, Color8(100, 20, 10))
+	var image := original.duplicate() as Image
+	image.resize(16, 16, Image.INTERPOLATE_NEAREST)
+	image.set_pixel(4, 4, Color(0.5, 0.1, 0.05, 0.5))
+	var painted := HeroColors.dress(image, Vector2i(4, 8), false, {"body": "blue"}, "", original)
+	assert_lt(painted.get_pixel(4, 4).v, painted.get_pixel(5, 4).v, "keep the larger picture's finer shades")
+	assert_almost_eq(painted.get_pixel(4, 4).h, (HeroColors.choice("body", "blue")[2] as Color).h, 0.02)
+	assert_eq(painted.get_pixel(4, 4).a, image.get_pixel(4, 4).a, "keep partial alpha")
+	assert_eq(painted.get_pixel(0, 4), image.get_pixel(0, 4), "leave clear pixels alone")
+
+
+func test_a_different_skin_with_the_same_sheet_size_gets_its_own_parts() -> void:
+	var first := _sheet()
+	var second := first.duplicate() as Image
+	second.set_pixel(2, 2, Color8(223, 223, 223)) # A sleeve where the first skin had its vest.
+	HeroColors.dressed(_art_with_sheet(first, first.get_size()), "male", {"body": "blue"})
+	var dressed := HeroColors.dressed(_art_with_sheet(second, second.get_size()), "male", {"body": "blue"})
+	assert_eq(dressed.get_image().get_pixel(2, 2), second.get_pixel(2, 2), "the new skin's sleeve is left alone")
+
+
+func test_original_colors_keep_the_skin_sheet_without_a_recolored_copy() -> void:
+	var original := _sheet()
+	var art := _art_with_sheet(original, original.get_size())
+	assert_null(HeroColors.dressed(art, "male", {}))
+	assert_null(HeroColors.dressed(art, "male", {"body": HeroColors.ORIGINAL}))

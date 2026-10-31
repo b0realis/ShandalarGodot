@@ -209,6 +209,7 @@ static func find_parts(sheet: Image, frame: Vector2i, female: bool, key := "") -
 		found[part] = PackedInt32Array(offsets[part])
 		found[part + "_shade"] = values
 		found[part + "_usual"] = clampf(total / maxf(values.size(), 1.0), 0.2, 0.8)
+		found[part + "_span"] = span
 	if key != "":
 		_found[key] = found
 	return found
@@ -228,8 +229,13 @@ static func dressed(art: WorldArt, walker: String, colors: Dictionary) -> Textur
 	if image.is_compressed():
 		image.decompress()
 	var frame := Vector2i(art.frame_size(key))
-	var cache := "%s@%dx%d" % [key, image.get_width(), image.get_height()]
-	return ImageTexture.create_from_image(dress(image, frame, walker == "female", colors, cache))
+	# Find parts in the original frame grid; a 2x picture has twice as many
+	# image pixels, not twice as many frames. Keep that logical size on the
+	# recolored texture too, for the world, dungeon and Embark preview.
+	var original := GameSkin.original(sheet)
+	var cache := "%s@%d" % [key, sheet.get_instance_id()]
+	var painted := dress(image, frame, walker == "female", colors, cache, original)
+	return GameSkin.texture_of(painted, Vector2i(sheet.get_size()))
 
 
 ## [param target]'s ramp at [param t], 0 darkest to 1 lightest: the colour
@@ -241,23 +247,34 @@ static func ramp(target: Color, t: float, usual := 0.5) -> Color:
 
 
 ## [param sheet] dressed in [param colors] (`{part: key}`): a new image,
-## or [param sheet] itself when every part keeps its 1997 colour.
-static func dress(sheet: Image, frame: Vector2i, female: bool, colors: Dictionary, key := "") -> Image:
+## or [param sheet] itself when every part keeps its 1997 colour. For a
+## high-resolution sheet, [param original] supplies the logical frame
+## grid and part boundaries; the large picture keeps its shading and alpha.
+static func dress(sheet: Image, frame: Vector2i, female: bool, colors: Dictionary, key := "", original: Image = null) -> Image:
 	var wanted := cleaned(colors)
 	if wanted.is_empty():
 		return sheet
-	var found := find_parts(sheet, frame, female, key)
+	var source := original if original != null else sheet
+	var found := find_parts(source, frame, female, key)
 	var out := sheet.duplicate() as Image
-	var width := out.get_width()
+	var width := source.get_width()
+	var scale := sheet.get_width() / width
 	for part in wanted:
 		var target: Color = choice(part, String(wanted[part]))[2]
 		var offsets: PackedInt32Array = found[part]
 		var shades: PackedFloat32Array = found[part + "_shade"]
 		var usual: float = found[part + "_usual"]
+		var span: float = found[part + "_span"]
 		for i in offsets.size():
 			var at := offsets[i]
-			var alpha := out.get_pixel(at % width, at / width).a
-			var color := ramp(target, shades[i], usual)
-			color.a = alpha
-			out.set_pixel(at % width, at / width, color)
+			var point := Vector2i(at % width, at / width)
+			var value := source.get_pixelv(point).v
+			for dy in scale:
+				for dx in scale:
+					var pixel := point * scale + Vector2i(dx, dy)
+					var before := sheet.get_pixelv(pixel)
+					var shade := clampf(shades[i] + (before.v - value) / span, 0.0, 1.0)
+					var color := ramp(target, shade, usual)
+					color.a = before.a
+					out.set_pixelv(pixel, color)
 	return out

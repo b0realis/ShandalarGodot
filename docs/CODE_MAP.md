@@ -325,7 +325,8 @@
 - `game/adventure/world/hero_colors.gd`: `HeroColors`, the walking figure's
   colours — `PARTS`, the choices (`HAIR`, `SKIN`, `CLOTH`), `part_of` (a
   1997 pixel's part by colour and height), `find_parts`, `ramp`, `dress`,
-  `dressed` (the hero's sheet in their colours), `random`, `to_text` /
+  `dressed` (the hero's sheet in their colours, retaining its logical size
+  and high-resolution pixels), `random`, `to_text` /
   `from_text`; `WorldView.hero_sheet` draws it.
 - `game/adventure/figure_preview.gd`: `FigurePreview`, the dressed figure
   walking under the Embark screen's colour swatches.
@@ -13899,6 +13900,11 @@ found, what was fixed, what was left and why).
   packs as the Card Packs screen names them, and both of the life register's
   flip entries.
 <!-- end repo check 2026-10-13 fx-code -->
+
+## Adventure figure update (0.60.4)
+
+- `docs/releases/0.60.4.md`: player-facing summary of the high-resolution
+  character size and animation correction.
 
 ## Adventure card-frame update (0.60.3)
 
