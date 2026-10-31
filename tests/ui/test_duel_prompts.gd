@@ -189,9 +189,9 @@ func test_a_card_question_lists_the_candidates_and_a_way_out() -> void:
 	var game: MtgGame = screen.game
 	var choice := PlayerChoice.new(PlayerChoice.Kind.CARD, 0, "Select target card.")
 	choice.candidates = [
-		_make(0, "Grizzly Bears", Mtg.Zone.HAND),
-		_make(0, "Grizzly Bears", Mtg.Zone.HAND),
-		_make(0, "Lightning Bolt", Mtg.Zone.HAND),
+		_make(0, "Grizzly Bears", Mtg.Zone.LIBRARY),
+		_make(0, "Grizzly Bears", Mtg.Zone.LIBRARY),
+		_make(0, "Lightning Bolt", Mtg.Zone.LIBRARY),
 	]
 	# A tutor lists a NAME once, however many copies the library holds.
 	assert_eq(DuelScreen.choice_options(choice),

@@ -90,6 +90,41 @@ func _load_screen() -> LoadAdventureScreen:
 	return screen
 
 
+func test_quickslot_is_blue_and_first_in_both_lists_and_can_be_loaded() -> void:
+	var player := _begin()
+	var auto := player.autosave()
+	SaveSlots.save_into(player, 1, "Keep this")
+	var pane := SaveSlotsPane.new()
+	pane.player = player
+	viewport.add_child(pane)
+	await _frames(2)
+	var rows := pane.find_child("Slots", true, false)
+	assert_eq(rows.get_child_count(), 11, "Quickslot plus all ten manual slots")
+	var quick := rows.get_child(0).find_child("Pick_-1", true, false) as Button
+	assert_not_null(quick)
+	assert_string_contains(quick.text, "Quickslot")
+	assert_string_contains(quick.text, SaveSlots.EMPTY)
+	assert_eq(quick.get_theme_color("font_color"), PaneStyle.QUICK_BLUE)
+	player.gold = 4321
+	await _click(quick)
+	assert_eq(pane.note(), "Saved to Quickslot.")
+	assert_eq(player.slot_name, "Keep this")
+	pane.queue_free()
+	await _frames(1)
+	var screen := await _load_screen()
+	var list := screen.find_child("Saves", true, false) as ItemList
+	assert_string_contains(list.get_item_text(1), "Quickslot")
+	assert_eq(list.get_item_custom_fg_color(1), PaneStyle.QUICK_BLUE)
+	assert_string_contains(list.get_item_text(2), "autosaved")
+	assert_string_contains(list.get_item_text(3), "Keep this")
+	assert_eq(screen.newest_autosave()["path"], auto, "initial selection prefers the autosave")
+	assert_eq(list.get_selected_items(), PackedInt32Array([2]), "autosave initially highlighted")
+	var loaded := LoadAdventureScreen.open_save(String(screen.rows[1]["path"]))
+	assert_not_null(loaded)
+	assert_eq(loaded.player.gold, 4321, "the quickslot can be taken up normally")
+	loaded.free()
+
+
 # ----------------------------------------------- h4-2: the load screen --
 
 func test_the_load_screen_lists_what_it_can_and_counts_what_it_cannot() -> void:

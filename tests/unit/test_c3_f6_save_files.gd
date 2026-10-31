@@ -70,6 +70,52 @@ func _variant(player: AdventurePlayer, id: String, change: Callable) -> String:
 	return JSON.stringify(data, "\t")
 
 
+func test_quicksaving_preserves_autosave_and_all_ten_manual_slots() -> void:
+	var player := _begin()
+	var untouched := {}
+	var auto := player.autosave()
+	untouched[auto] = FileAccess.get_file_as_bytes(auto)
+	for slot in range(1, 11):
+		var manual := SaveSlots.save_into(player, slot, "Keep %d" % slot)
+		untouched[manual] = FileAccess.get_file_as_bytes(manual)
+	player.gold = 1234
+	var quick := SaveSlots.save_quick(player)
+	assert_eq(quick, player.save_path(SaveSlots.QUICK_KIND))
+	assert_eq(player.slot_name, "Keep 10", "quicksaving never renames a manual save")
+	assert_eq(String(_data(quick)["adventure"]["slot_name"]), "", "no borrowed manual name on disk")
+	assert_eq(AdventurePlayer.load_from(quick).gold, 1234)
+	for path in untouched:
+		assert_eq(FileAccess.get_file_as_bytes(path), untouched[path], "unchanged: " + String(path))
+	assert_eq(SaveSlots.slots_of(player.adventure_id).size(), 10)
+	assert_eq(AdventurePlayer.list_saves().size(), 12, "quickslot, autosave and ten manual saves")
+	assert_eq(SaveSlots.quickslot_of(player.adventure_id)["saved"], player.saved)
+	var other := _begin("another")
+	other.gold = 5678
+	SaveSlots.save_quick(other)
+	assert_eq(AdventurePlayer.load_from(quick).gold, 1234, "each adventure has its own quickslot")
+	assert_eq(SaveSlots.first_free(other.adventure_id, FOLDER), 1, "no named slot consumed")
+
+
+func test_quickslot_failed_write_and_damaged_file_recover_previous_save() -> void:
+	var player := _begin()
+	player.gold = 111
+	var path := SaveSlots.save_quick(player)
+	player.gold = 222
+	SaveSlots.save_quick(player)
+	var pending := Settings.pending_path(path)
+	DirAccess.make_dir_recursive_absolute(pending)
+	player.gold = 333
+	assert_eq(SaveSlots.save_quick(player), "", "failed atomic write is reported")
+	DirAccess.remove_absolute(pending)
+	assert_eq(AdventurePlayer.load_from(path).gold, 222, "last complete save is intact")
+	_write(path, "{ cut short")
+	assert_eq(AdventurePlayer.load_from(path).gold, 222, "last good backup is recovered")
+	var found := AdventurePlayer.list_saves()
+	assert_eq(found.size(), 1, "backup is listed once, under Quickslot")
+	assert_eq(found[0]["slot"], SaveSlots.QUICK_SLOT)
+	assert_eq(found[0]["path"], path)
+
+
 # ------------------------------------------------------- h4-1: whole saves --
 
 func test_a_save_that_cannot_be_written_leaves_the_last_good_one() -> void:

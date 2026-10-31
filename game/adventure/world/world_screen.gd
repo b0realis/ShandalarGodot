@@ -32,7 +32,7 @@ extends Control
 ## the World Magic seller as it is left ([WorldMagicPane]) — and a lair
 ## walked onto opens its own ([LairPane], [WorldLairs]). F3 lists the towns
 ## visited ([CityListPane]); M is the map, the journal walked on it
-## ([WorldMap]); Ctrl+S saves into ten slots ([SaveSlotsPane]).
+## ([WorldMap]); Ctrl+S writes a separate Quickslot; Save opens [SaveSlotsPane].
 ## THE CREATURES roam the land round the hero and come for them
 ## ([WorldCreatures], part B): one that reaches the hero is MET ([method
 ## meet_creature]) — the game saved with it still there, its meeting's pane
@@ -70,7 +70,7 @@ extends Control
 ## village's, a town's or a city's own pane is on top ([method
 ## town_on_top]) M or F2 opens the map — the town steps aside, hidden, and
 ## the map is the world's own, its keys, City Info and Ctrl+S with it —, F5
-## the hero's pane over the town and Ctrl+S the ten slots over it, the town
+## the hero's pane over the town. Ctrl+S now quicksaves without a picker; the town
 ## still and deaf under them; closed, the town is back as it was, the same
 ## pane ([method _town_back]). Every other key of the world stays held
 ## there, and the panel's own buttons rest as under any pane ([method
@@ -279,6 +279,8 @@ var _city_list: CityListPane
 ## The dungeon and castle clues (F4), over the world ([CluesPane]).
 var _clues: CluesPane
 var _save_slots: SaveSlotsPane
+var _quick_notice: Label
+var _quick_notice_timer: Timer
 ## The question asked when the adventure could not be saved as the hero
 ## leaves the world ([UnsavedAsk]), and "Ready to Quit?" ([QuitAsk]).
 var _unsaved: UnsavedAsk
@@ -804,7 +806,7 @@ func _input(event: InputEvent) -> void:
 
 # ------------------------------------------------------------ the saves --
 
-## SAVE (the options' Save, Ctrl+S): the ten named slots over the world
+## SAVE (the options' Save): Quickslot and the ten named slots over the world
 ## ([SaveSlotsPane]); a slot clicked and named is saved into. Not while a
 ## pane holds the screen (ruling A).
 func save_now() -> SaveSlotsPane:
@@ -815,7 +817,7 @@ func save_now() -> SaveSlotsPane:
 	return _open_slots()
 
 
-## The ten slots opened over what is on the screen.
+## Quickslot and the ten named slots opened over what is on the screen.
 func _open_slots() -> SaveSlotsPane:
 	var slots := SaveSlotsPane.new()
 	slots.player = player
@@ -835,6 +837,61 @@ func save_into_slot(slot: int, slot_name: String) -> String:
 	var path := SaveSlots.save_into(player, slot, slot_name) if player != null else ""
 	hud.say("Saved." if path != "" else UNSAVED)
 	return path
+
+
+## Ctrl+S saves immediately to its own file on the road, map or town pane.
+## Encounters, duels and other modal choices cannot be saved midway.
+func quick_save() -> String:
+	if player == null or player.adventure_id == "" or _lost or _leaving \
+			or (modal() and not town_on_top()):
+		return ""
+	var path := _write_quicksave()
+	_show_quicksave_notice(path != "")
+	return path
+
+
+func _write_quicksave() -> String:
+	return SaveSlots.save_quick(player)
+
+
+## A noninteractive popup over the map or town as well as the world HUD.
+## Restarting its timer gives each new save two full seconds of confirmation.
+func _show_quicksave_notice(success: bool) -> void:
+	if _quick_notice == null:
+		var layer := CanvasLayer.new()
+		layer.name = "QuickSaveFeedback"
+		layer.layer = 10
+		add_child(layer)
+		_quick_notice = PaneStyle.label("", 18, PaneStyle.QUICK_BLUE)
+		_quick_notice.name = "QuickSaveNotice"
+		_quick_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_quick_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		layer.add_child(_quick_notice)
+		# Wrapping is measured after the width is assigned. Shrink again when
+		# that measurement arrives, rather than keeping the initial tall box.
+		_quick_notice.minimum_size_changed.connect(_fit_quicksave_notice)
+		_quick_notice_timer = Timer.new()
+		_quick_notice_timer.one_shot = true
+		_quick_notice_timer.ignore_time_scale = true
+		_quick_notice_timer.timeout.connect(_quick_notice.hide)
+		layer.add_child(_quick_notice_timer)
+		get_viewport().size_changed.connect(_fit_quicksave_notice)
+	var color := PaneStyle.QUICK_BLUE if success else PaneStyle.GOLD
+	var face := PaneStyle.glass(10.0, 8)
+	face.border_color = color
+	face.bg_color = Color(0.025, 0.075, 0.15, 0.96) if success else PaneStyle.GLASS
+	_quick_notice.add_theme_stylebox_override("normal", face)
+	_quick_notice.add_theme_color_override("font_color", color)
+	_quick_notice.text = "QUICKSAVED Adventurer!" if success else UNSAVED
+	_quick_notice.show()
+	_fit_quicksave_notice()
+	_quick_notice_timer.start(2.0 if success else WorldHud.NOTICE_SECONDS)
+
+
+func _fit_quicksave_notice() -> void:
+	var area := get_viewport_rect().size
+	_quick_notice.size = Vector2(minf(440.0, maxf(1.0, area.x - 24.0)), 0.0)
+	_quick_notice.position = Vector2((area.x - _quick_notice.size.x) / 2.0, 72.0)
 
 
 ## THE AUTOSAVE as the hero leaves a place or the world (Exit game, Return
@@ -1174,7 +1231,7 @@ func _left_place(then: String) -> void:
 ## WHETHER A TOWN'S OWN PANE IS ON TOP (see the class doc): a village's, a
 ## town's or a city's — not a ruled town's, a castle's, a lair's or a
 ## dungeon's —, shown, with nothing over it and nothing else holding the
-## screen; its M, F2, F5 and Ctrl+S then open over it ([method _town_key]).
+## screen; M, F2 and F5 open over it and Ctrl+S quicksaves ([method _town_key]).
 func town_on_top() -> bool:
 	if not _alive(_visit) or not _visit.visible or _town_aside != "" or _map.visible or _leaving:
 		return false
@@ -1189,11 +1246,11 @@ func town_on_top() -> bool:
 
 
 ## A KEY INSIDE A TOWN ([param key], pressed): with the town's own pane on
-## top M or F2 the map, F5 the hero's pane, Ctrl+S the ten slots, each over
+## top M or F2 opens the map, F5 the hero's pane, each over
 ## it; with the hero's pane over the town F5, Escape or Q close it (its own
 ## W, J and D are its own, [method HeroStats.key]). True when it was taken;
-## any other key goes on — to the town's pane, whose letters answer its
-## choices, or to the world, which holds it.
+## Ctrl+S quicksaves in place. Any other key goes on — to the town's pane,
+## whose letters answer its choices, or to the world, which holds it.
 func _town_key(key: InputEventKey) -> bool:
 	if _town_aside == "hero":
 		if key.keycode == KEY_F5 or key.keycode == KEY_Q or key.is_action_pressed("ui_cancel"):
@@ -1204,7 +1261,8 @@ func _town_key(key: InputEventKey) -> bool:
 	if not town_on_top():
 		return false
 	if key.keycode == KEY_S and key.ctrl_pressed:
-		return save_in_town() != null
+		quick_save()
+		return true
 	if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
 		return false
 	match key.keycode:
@@ -1240,7 +1298,7 @@ func hero_in_town() -> void:
 	_hold()
 
 
-## SAVE FROM INSIDE A TOWN (Ctrl+S): the ten slots over the town's pane,
+## MANUAL SAVE FROM INSIDE A TOWN: the slots over the town's pane,
 ## the town still and deaf under them; their Done or Escape, the town
 ## again ([method _close_pane]). The slots, or null.
 func save_in_town() -> SaveSlotsPane:
@@ -2615,7 +2673,7 @@ func _gui_input(event: InputEvent) -> void:
 ## PgUp, PgDn, End and the keypad walk ([method _press_walk]), M or F2 the
 ## map, F1 the deck, F3 the cities, F4 the clues, F5 the hero, F6 the
 ## wizards, the top row's 1–5 a World Magic, N the small map, H the keys, L
-## the saved adventures, Ctrl+S the slots, Space stops the walk and comes
+## the saved adventures, Ctrl+S quicksaves, Space stops the walk and comes
 ## back to the hero, + and − zoom; Escape or Q closes what is open, else
 ## asks "Ready to Quit?". A pane that holds the screen hears its own keys
 ## (ruling A) — but a town's own pane lets M, F2, F5 and Ctrl+S open over
@@ -2682,7 +2740,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_or_ask()
 		KEY_S:
 			if key.ctrl_pressed:
-				save_now()
+				quick_save()
 			else:
 				return
 		KEY_SPACE:
@@ -2839,5 +2897,5 @@ func _map_key(key: InputEventKey) -> void:
 	if _map.key(key.keycode):
 		get_viewport().set_input_as_handled()
 	elif key.keycode == KEY_S and key.ctrl_pressed:
-		save_now()
+		quick_save()
 		get_viewport().set_input_as_handled()

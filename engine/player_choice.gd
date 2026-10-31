@@ -76,6 +76,12 @@ var count := 0
 ## fixed.
 var candidates: Array[CardInstance] = []
 
+## CARD: ids that were in hand when asked. Preflight can rewind newly drawn
+## cards back into the library before the UI reads the question (Sylvan
+## Library). Keep their role so the picker still offers each physical copy,
+## rather than grouping their names as it would for a library search.
+var hand_candidates: Array[int] = []
+
 ## OPTION only: the labelled things there are to choose between, in the
 ## order the answer INDEXES them. This is the one kind whose choices are
 ## neither fixed (YES_NO, COLOR) nor cards (CARD, DISCARD): "choose a
@@ -177,6 +183,10 @@ const BASIC_LAND_NAMES := ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 ## our pool has: `Fellwar Stone: What kind of mana?`.
 static func mana_color_prompt(source_name: String) -> String:
 	return "%s: What kind of mana?" % source_name
+
+
+func is_hand_candidate(card: CardInstance) -> bool:
+	return card.zone == Mtg.Zone.HAND or card.id in hand_candidates
 
 
 func _init(p_kind: int, p_pid: int, p_prompt: String, p_hint: Variant = null) -> void:

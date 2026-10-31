@@ -271,9 +271,10 @@ var castable := false:
 
 ## Is the pointer on this card's ROW? In a pile the widget is
 ## mouse-transparent (the row's holder Button takes the click), so the
-## pile pushes the state here. The original's hand list LIGHTENS the row
-## under the pointer and turns its name YELLOW — the owner's zoomed
-## screenshot, where "Disenchant" reads lighter and gold.
+## pile pushes the state here. Hover LIGHTENS the face. [QoL] In hand,
+## the name stays tied to castability: a yellow hover on an unaffordable
+## card looked like a promise it could be cast (issue #3). Other zones keep
+## their yellow hover, where there is no hand-castability promise.
 var hovered := false:
 	set(value):
 		if hovered == value:
@@ -2386,7 +2387,7 @@ func _tint_face() -> void:
 	#
 	# * **The name follows the CASTABLE rule and nothing else** — yellow
 	#   when you can cast or use the card right now (or the pointer is on
-	#   its row), white when you cannot: [method name_color],
+	#   its row OUTSIDE THE HAND), white when you cannot: [method name_color],
 	#   unconditionally. That rule is the original's own hand list and it
 	#   outranks contrast, because it is INFORMATION rather than styling —
 	#   a name that went dark on a marble bar would be saying "not
@@ -2761,10 +2762,11 @@ static func masked_sprite(key: String, vertical := false) -> Texture2D:
 	return result
 
 
-## Name colour: the reference's rule — YELLOW when castable now OR while
-## the pointer rests on the row, else WHITE.
+## [QoL] A hand's yellow name means playable, even under the pointer.
+## Other zones retain the original yellow hover; every hovered face lifts.
 func name_color() -> Color:
-	return Color(1.0, 0.90, 0.30) if castable or hovered \
+	var hover_name := hovered and instance.zone != Mtg.Zone.HAND
+	return Color(1.0, 0.90, 0.30) if castable or hover_name \
 		else Color(0.95, 0.95, 0.92)
 
 

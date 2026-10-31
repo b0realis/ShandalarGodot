@@ -146,6 +146,12 @@ const BAN_TIPS := {
 	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards. Restricted: Black Lotus, the Moxen, Sol Ring, Mana Crypt, Mana Vault, Time Vault, Channel, Demonic Tutor, Strip Mine and others. Banned: the ante cards and seven cards with offensive art or text. Mind Twist, Black Vise and Berserk are free.",
 }
 const BAN_GREYED := "Only the Classic MTG rules read a ban list: choose them as your card rule to use one."
+## [QoL] Broader paid-trader selections, chosen per campaign; off by default.
+var _all_trader_cards: CheckBox
+const TRADER_BOX := "All cards offered by traders"
+const TRADER_TIP := "Town traders, the Nomad's Bazaar and the Diamond Mine can offer every card in this adventure's pool, including special cards and dungeon treasures. Town categories, Classic bans and copy limits still apply. Shops and free rewards are unchanged."
+const TRADER_ON_LINE := "Special cards and treasures can be traded."
+const TRADER_OFF_LINE := "Traders keep their original selection."
 ## THE SIEGES' PACE [ours, the owner's ruling of 2026-10-28 on 1997's
 ## complaint: "creatures siege towns too much and they cannot explore"], by
 ## [constant AdventurePlayer.SIEGE_PACES] ([Sieges]); what each does is its
@@ -779,6 +785,7 @@ func _build_settings() -> Control:
 	body.add_child(_build_life_rule())
 	body.add_child(_build_card_rule())
 	body.add_child(_build_ban_list())
+	body.add_child(_build_all_trader_cards())
 	body.add_child(_build_card_hold())
 	body.add_child(_build_sieges())
 	body.add_child(_build_creatures())
@@ -808,10 +815,10 @@ const SETTINGS_TITLE := "Campaign Settings"
 const SETTINGS_BUTTON := "Campaign Settings..."
 ## The rows, in the owner's order (2026-10-29), by the names of their
 ## choices' nodes.
-const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "CardHold", "Sieges",
+const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "AllTraderCards", "CardHold", "Sieges",
 	"Creatures", "LifeStart", "Ascetic"]
 const AS_1997_WORDS := "As 1997"
-const AS_1997_TIP := "Every setting as the 1997 game played: reload allowed, no card limit, the 1998 ban list, a 500-card bag, the 1997 sieges, creatures that hunt you, a life for each mana link, food as it was eaten."
+const AS_1997_TIP := "Every setting as the 1997 game played: reload allowed, no card limit, the 1998 ban list, the original trader selection, a 500-card bag, the 1997 sieges, creatures that hunt you, a life for each mana link, food as it was eaten."
 ## WHAT "AS 1997" CHOOSES, each row the 1997 game's own: the card rule as
 ## it shipped (no copy limit), the 500-card bag, the sieges' 1997 clock, the
 ## creatures hunting, a life for each link, the food as eaten. Two rows had
@@ -821,7 +828,7 @@ const AS_1997_TIP := "Every setting as the 1997 game played: reload allowed, no 
 ## never a lost adventure), and the ban list "1998" (read only under the
 ## Classic MTG rules, which 1997 did not have; the lists of its day).
 const AS_1997 := {"life_rule": AdventurePlayer.LIFE_RELOAD, "card_rule": AdventurePlayer.RULE_SHIPPED,
-	"ban_list": ClassicBans.OLD, "card_hold": AdventurePlayer.HOLD_1997,
+	"ban_list": ClassicBans.OLD, "all_trader_cards": false, "card_hold": AdventurePlayer.HOLD_1997,
 	"sieges": AdventurePlayer.SIEGES_1997, "creatures": AdventurePlayer.CREATURES_HUNT,
 	"life_start": AdventurePlayer.START_LINKS, "ascetic": false}
 
@@ -1100,6 +1107,38 @@ func _show_life_start() -> void:
 	_show_settings_summary()
 
 
+## [QoL] Paid traders may include cards withheld by the original game.
+func _build_all_trader_cards() -> Control:
+	_all_trader_cards = CheckBox.new()
+	_all_trader_cards.text = TRADER_BOX
+	_all_trader_cards.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+	_all_trader_cards.add_theme_color_override("font_hover_color", OriginalDialog.CHOICE_LIT)
+	_all_trader_cards.add_theme_color_override("font_pressed_color", OriginalDialog.CHOICE_LIT)
+	_all_trader_cards.add_theme_color_override("font_hover_pressed_color", OriginalDialog.CHOICE_LIT)
+	_all_trader_cards.add_theme_color_override("font_focus_color", OriginalDialog.CHOICE_LIT)
+	_all_trader_cards.add_theme_font_size_override("font_size", 15)
+	_all_trader_cards.add_theme_icon_override("checked", UiChrome.check_icon(true))
+	_all_trader_cards.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+	_all_trader_cards.tooltip_text = TRADER_TIP
+	var row := _setting_row("AllTraderCards", "Traders", _all_trader_cards)
+	_all_trader_cards.toggled.connect(choose_all_trader_cards)
+	_show_all_trader_cards()
+	return row
+
+
+func choose_all_trader_cards(on: bool) -> void:
+	setup.all_trader_cards = on
+	_show_all_trader_cards()
+
+
+func _show_all_trader_cards() -> void:
+	if _all_trader_cards == null:
+		return
+	_all_trader_cards.set_pressed_no_signal(setup.all_trader_cards)
+	_explain_line("AllTraderCards", TRADER_ON_LINE if setup.all_trader_cards else TRADER_OFF_LINE, TRADER_TIP)
+	_show_settings_summary()
+
+
 ## THE ASCETIC HERO [ours, the owner's ruling of 2026-10-29: "The option
 ## halves food consumption by the hero"; [member AdventureSetup.ascetic],
 ## [member AdventurePlayer.ascetic]]: a box, off by default.
@@ -1140,6 +1179,7 @@ func _show_settings() -> void:
 	_show_life_rule()
 	_show_card_rule()
 	_show_ban_list()
+	_show_all_trader_cards()
 	_show_card_hold()
 	_show_sieges()
 	_show_creatures()
@@ -1152,6 +1192,7 @@ func as_1997() -> void:
 	setup.life_rule = String(AS_1997["life_rule"])
 	setup.card_rule = String(AS_1997["card_rule"])
 	setup.ban_list = String(AS_1997["ban_list"])
+	setup.all_trader_cards = bool(AS_1997["all_trader_cards"])
 	setup.card_hold = String(AS_1997["card_hold"])
 	setup.sieges = String(AS_1997["sieges"])
 	setup.creatures = String(AS_1997["creatures"])
@@ -1237,6 +1278,8 @@ static func settings_line(chosen: AdventureSetup) -> String:
 		parts.append(ASCETIC_SHORT)
 	if chosen.card_hold == AdventurePlayer.HOLD_UNLIMITED:
 		parts.append(HOLD_SHORT)
+	if chosen.all_trader_cards:
+		parts.append("All trader cards")
 	return " · ".join(parts)
 
 
@@ -1248,6 +1291,7 @@ static func settings_words(chosen: AdventureSetup) -> String:
 		"Card rule: %s" % RULE_NAMES.get(chosen.card_rule, ""),
 		"Ban list: %s%s" % [BAN_NAMES[ClassicBans.key_of(chosen.ban_list)],
 			"" if chosen.card_rule == AdventurePlayer.RULE_CLASSIC else " (read only by the Classic MTG rules)"],
+		"All cards offered by traders: %s" % ("on" if chosen.all_trader_cards else "off"),
 		"Card hold: %s" % HOLD_NAMES[AdventurePlayer.card_hold_of(chosen.card_hold)],
 		"Sieges: %s" % SIEGE_NAMES[AdventurePlayer.sieges_of(chosen.sieges)],
 		"Creatures: %s" % CREATURE_NAMES[AdventurePlayer.creatures_of(chosen.creatures)],
@@ -1789,6 +1833,8 @@ func summary(record: Dictionary) -> String:
 	lines.append(String(START_SUMMARY[AdventurePlayer.life_start_of(record.get("life_start"))]))
 	if record.get("ascetic") is bool and bool(record.get("ascetic")):
 		lines.append(ASCETIC_SUMMARY)
+	if record.get("all_trader_cards") is bool and bool(record.get("all_trader_cards")):
+		lines.append(TRADER_ON_LINE)
 	lines.append("World seed %s." % String(record.get("seed_text", str(record["seed"]))))
 	return "\n".join(lines)
 

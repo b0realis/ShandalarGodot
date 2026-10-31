@@ -330,7 +330,7 @@ func test_a_one_life_slot_whose_battle_began_reads_quest_failed() -> void:
 	var load_screen := await _load_screen()
 	var text := _rows(load_screen)
 	assert_string_contains(text, "1. At the portal", "the slot")
-	assert_eq(text.count(LoadAdventureScreen.FAILED_ROW), 2, "the slot and the autosave both: Continue opens the end")
+	assert_eq(text.count(LoadAdventureScreen.FAILED_ROW), 2, "the slot and the autosave both: explicit selection opens the end")
 	load_screen.queue_free()
 
 
@@ -343,6 +343,8 @@ func test_resume_passes_over_a_failed_quest() -> void:
 	assert_eq(String(load_screen.newest_autosave().get("id", "")), "going",
 		"the newest autosave whose quest has not failed")
 	assert_false(load_screen.resume_button.disabled)
+	var list := load_screen.find_child("Saves", true, false) as ItemList
+	assert_eq(load_screen.rows[list.get_selected_items()[0]]["id"], "going", "failed quests are not selected initially")
 	load_screen.queue_free()
 	await _frames()
 	for path in [SAVES.path_join("going.autosave.json"), SAVES.path_join("going.autosave.json.bak")]:

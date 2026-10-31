@@ -1990,3 +1990,153 @@ s30 is a guide only.)
   adventure is finished with the original cards. 0.50.65: "Built: after
   part C" — the card hold and ban list rules, the polish pass and a bug
   campaign, one version.
+
+## Playtest patch queue — 2026-10-31
+
+Work through these separately, discussing each before proceeding to the next.
+
+1. **Trader selection — implemented.** Ifh-Bíff Efreet
+   and Serendib Efreet belong to the base adventure pool, but the original
+   card-picker marks exclude them. The owner's chosen [QoL] option is
+   **All cards offered by traders**, below Ban list in Campaign Settings,
+   off by default. It includes the original withheld cards and dungeon
+   treasures at town amulet traders, the Nomad's Bazaar and the Diamond
+   Mine. Town categories and Classic bans/copy limits still apply; prices,
+   ordinary shop stock and free rewards stay as before. It uses the current
+   adventure pool, not optional expansion packs. The choice is remembered
+   for the next Embark and saved per campaign; old saves default to off,
+   and As 1997 switches it off.
+2. **Sylvan Library duplicate choices — implemented.**
+   The engine offered every drawn copy, but both local and LAN card pickers
+   grouped hidden-zone choices by name. Hand choices now offer each copy
+   separately; local duplicate rows say "copy 1 of 2", and the selected
+   instance is kept through the pay-life or return-card decision. Preflight
+   remembers which candidates were in hand before rewinding the draws.
+   Library searches retain their compact name lists; LAN sends only the
+   choosing seat's rows, never persistent handles for these hidden cards.
+3. **Duel start actions — implemented.** Adventure's
+   versus panel put Concede (190 px wide) beside Go (120 px). Go now takes
+   the wider button, with larger, heavier lettering, warm stone and a
+   permanent gold rim; Concede takes the smaller button. Their positions,
+   Go's initial keyboard focus and the concession confirmation stay the
+   same. Other modes retain space for their longer Reconfigure/Quit labels.
+4. **Ctrl+S saving — implemented with item 8.** Saves directly to Quickslot
+   on the road, the map or the town pane, without opening a picker.
+5. **Buying and selling prices — implemented.** Reproduced Karma at 200 to
+   buy and 300 to sell on black/white or green/white town terrain, using
+   its imported 1997 valuation. The original purchase formula tests color
+   overlap, while resale tests exact color equality; this makes mixed land
+   charge the local price but pay an off-color bonus. The original also
+   caps purchases at 1,000 gold without capping resale. [QoL] Resale now
+   stops at the same town's asking price. Both the sale action and the
+   builder's quotes/worth strip use that price. Other prices, shop stock,
+   amulet trades, Bazaar bargains and profitable travel between markets
+   remain unchanged. This needs no save migration.
+6. **Adventure menu — already implemented.** The owner confirmed this is
+   complete; skip it in this patch sequence.
+7. **Pathfinding arrows — implemented.** Route markers are half their
+   previous width and height. Orange arrows, red hungry steps, hover
+   previews and the destination X use the same scale, including their
+   outlines, bevels and shadows. Tile positions, pathfinding, food
+   forecasting, zoom behavior and the on/off setting are unchanged.
+8. **Dedicated quickslot — implemented.** Each adventure has its own
+   `<id>.quickslot.json`, using the same atomic writes and backup recovery
+   as existing saves. Quickslot appears first in blue in both save/load
+   lists, separate from the autosave and all ten named slots. Ctrl+S shows
+   a blue **QUICKSAVED Adventurer!** popup for two seconds after a successful
+   write, including over the map and town. Repeating the shortcut restarts
+   the message's timer; holding it does not repeatedly save. Failed writes
+   show an error instead. Encounters, duels, modal choices and ended games
+   remain protected from saving midway. Options → Save still opens the
+   picker; Resume still selects the newest eligible autosave (see item 9).
+9. **Load-screen actions — implemented.** One Resume button loads the
+   highlighted save. The newest eligible autosave is selected initially,
+   falling back to the newest quickslot/manual save if no autosave is
+   available. Failed quests are not selected automatically but can still
+   be opened explicitly to view their end. Quickslot stays first in blue.
+   Hall of Fame has a gold stone button at the far left; Back sits directly
+   to the left of Resume at the right.
+
+
+Patch 1 validation: 33 targeted tests, 3,677 assertions passed across the
+trader option, existing trading and campaign-settings UI suites. Coverage
+includes both Efreets, treasures, actual purchase, category and Classic
+filters, older saves, save/load persistence, remembered settings, As 1997,
+keyboard navigation and layout at 1280 × 800 and 1280 × 960.
+The real Campaign Settings window was also rendered and visually checked
+with the original skin at 1280 × 800; the new row and both bottom buttons
+fit without clipping.
+
+Patch 2 validation: reproduced the failure in three focused regressions
+before the fix (three drawn Forests became one row in both pickers). After
+the fix, 72 tests and 3,615 assertions passed across the copy regressions,
+duel prompts, choice preflight, draw effects and LAN full-pool suites.
+Tests cover exact selected copies, return order, paying for one copy,
+excluding an older card in hand, unchanged library-search grouping and
+private LAN choices without hidden-card handles. A staged real duel was
+rendered with the original skin at 1280 × 800 and both Forest rows were
+visually checked. The screenshot run's dummy-audio driver reported retained
+audio playback objects at exit; the headless regression gate was clean.
+
+Patch 3 validation: all 22 existing intro, held-duel and leave-confirmation
+tests passed (82 assertions). The final adventure versus panel was rendered
+with the original skin at 1280 × 800: Concede is 120 px wide, Go is 190 px,
+the gold highlight is visible, and the keyboard focus ring sits outside it.
+
+Patches 4/8 validation: all 91 focused save/load and adventure UI tests
+passed (8,653 assertions across ten suites). Coverage includes preservation
+of autosave and all ten manual slots, separate adventures, atomic-write
+failure, backup recovery, loading Quickslot, real Ctrl+S input on the world,
+map and town, repeat suppression, the two-second timeout, failure feedback
+and modal/duel guards. The original-skin save/load lists and compact blue
+popup were rendered and visually checked at 1280 × 800. The final native
+popup capture exited cleanly; no release package was rebuilt.
+
+Patch 5 source check: the matching 1.3 decompilation's
+[`SellPrice` (004f1bcc) and shop price calculation](https://github.com/rlerrr/shandalar-decomp/blob/fda3230/src/shandalar/src/visitLocation.c#L1477)
+confirm both inherited inconsistencies. The correction is deliberately
+labelled [QoL], rather than claiming these were transcription mistakes.
+
+Patch 5 validation: the new regressions first failed in four cases,
+including Karma's exact 200/300 prices and an actual shop → deck-builder
+transaction that increased the purse. After the correction, all 67 tests
+passed (2,964 assertions across eight pricing, trade, shop and builder
+suites). The catalogue check covered 24,219 combinations: 897 loaded
+cards × nine generated terrain types × three settlement sizes. It found
+4,078 profitable same-market price combinations before the fix and none
+afterwards. Separate checks preserve ordinary prices and a profitable
+journey between two markets; imported Karma values work without needing
+a skin in the test environment.
+
+Patch 7 validation: all 13 existing path-marker and world-input tests
+passed (95 assertions), covering active paths, food colors, hover previews,
+arrival/stop cleanup, keyboard walking, modal screens and the on/off setting.
+The original-skin world was rendered at 1280 × 800 with 2× and 1× map zoom;
+the smaller orange/red arrows, shadows and destination X were visually
+checked. Both native captures exited cleanly. This is a drawing-only change;
+no release package was rebuilt.
+
+Patch 9 validation: all 32 focused save/load and world-modal tests passed
+(197 assertions). They cover selecting quick/manual saves, no-autosave
+fallback, failed One-life quests, completed adventures, damaged saves and
+the single Resume action. The original-skin layout was rendered at 1280 ×
+800 and checked for readable buttons and the selected autosave.
+
+### Follow-up: GitHub issue #3 — hand hints
+
+The owner's [issue comment](https://github.com/b0realis/ShandalarGodot/issues/3#issuecomment-6539676140)
+confirms the open hand borders are intentional; they are unchanged. The
+reported four Forests plus Wild Growth correctly fail the current engine's
+six-mana Craw Wurm check. The exact initial-yellow/hover-gray sequence from
+0.50.65 was not reproduced on this checkout, but hovering an unaffordable
+hand card did turn its name yellow independently of castability.
+
+[QoL] Hand names now retain their playability color under the pointer.
+Hover still brightens the face and opens its preview; other zones retain
+their yellow hover. A regression failed on the misleading yellow before
+the correction. All 176 focused casting, pile, hand and mini-card tests
+passed afterwards (1,186 assertions), including changes in available mana
+without mouse motion. Native mouse input with the original skin confirmed
+Craw Wurm stays neutral while hovered; that capture exited cleanly.
+The issue remains open for confirmation against the reporter's original
+sequence. No public comment was posted and no release was rebuilt.

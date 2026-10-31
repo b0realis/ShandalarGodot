@@ -19,6 +19,8 @@ const SKIN_DIR := "user://test_c3_f7_music_skin"
 var _made: Array[String] = []
 var _had_choice := false
 var _choice: Variant = null
+var _had_music := false
+var _music: Variant = null
 
 
 func before_each() -> void:
@@ -27,6 +29,9 @@ func before_each() -> void:
 	_had_choice = Settings.has_value(MusicLibrary.SETTING)
 	_choice = Settings.get_value(MusicLibrary.SETTING, null)
 	Settings.clear_value(MusicLibrary.SETTING)
+	_had_music = Settings.has_value("music_enabled")
+	_music = Settings.get_value("music_enabled", null)
+	Settings.set_value("music_enabled", true)
 	MusicLibrary.dirs = [PLAYER_DIR]
 	MusicLibrary.skin_dirs = [SKIN_DIR]
 	MusicLibrary.refresh()
@@ -44,6 +49,12 @@ func after_each() -> void:
 	MusicPlayer.reset_order()
 	if _had_choice:
 		Settings.set_value(MusicLibrary.SETTING, _choice)
+	else:
+		Settings.clear_value(MusicLibrary.SETTING)
+	if _had_music:
+		Settings.set_value("music_enabled", _music)
+	else:
+		Settings.clear_value("music_enabled")
 	ShellMusic.stop()
 
 

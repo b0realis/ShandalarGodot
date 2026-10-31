@@ -221,6 +221,8 @@ var card_hold := AdventurePlayer.HOLD_1997
 ## AdventurePlayer.ban_list], [ClassicBans]) — the owner's setting of
 ## 2026-10-28; kept whatever the card rule, read only under the Classic one.
 var ban_list := ClassicBans.DEFAULT
+## [QoL] Include special cards and dungeon treasures at paid traders.
+var all_trader_cards := false
 ## THE SIEGES' PACE ([member AdventurePlayer.sieges], [Sieges]) — the
 ## owner's setting of 2026-10-28; "Steady" for a new adventure [ours].
 var sieges := AdventurePlayer.SIEGES_STEADY
@@ -416,6 +418,7 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"life_rule": AdventurePlayer.life_rule_of(life_rule),
 		"card_hold": AdventurePlayer.card_hold_of(card_hold),
 		"ban_list": ClassicBans.key_of(ban_list),
+		"all_trader_cards": all_trader_cards,
 		"sieges": AdventurePlayer.sieges_of(sieges),
 		"creatures": AdventurePlayer.creatures_of(creatures),
 		"life_start": AdventurePlayer.life_start_of(life_start),
@@ -462,6 +465,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "life_rule", AdventurePlayer.life_rule_of(life_rule), false)
 	Settings.set_value(KEY_PREFIX + "card_hold", AdventurePlayer.card_hold_of(card_hold), false)
 	Settings.set_value(KEY_PREFIX + "ban_list", ClassicBans.key_of(ban_list), false)
+	Settings.set_value(KEY_PREFIX + "all_trader_cards", all_trader_cards, false)
 	Settings.set_value(KEY_PREFIX + "sieges", AdventurePlayer.sieges_of(sieges), false)
 	Settings.set_value(KEY_PREFIX + "creatures", AdventurePlayer.creatures_of(creatures), false)
 	Settings.set_value(KEY_PREFIX + "life_start", AdventurePlayer.life_start_of(life_start), false)
@@ -497,6 +501,8 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 	setup.life_rule = AdventurePlayer.life_rule_of(Settings.get_value(KEY_PREFIX + "life_rule", null))
 	setup.card_hold = AdventurePlayer.card_hold_of(Settings.get_value(KEY_PREFIX + "card_hold", null))
 	setup.ban_list = ClassicBans.key_of(Settings.get_value(KEY_PREFIX + "ban_list", null))
+	var traders_kept: Variant = Settings.get_value(KEY_PREFIX + "all_trader_cards", false)
+	setup.all_trader_cards = traders_kept is bool and bool(traders_kept)
 	setup.sieges = AdventurePlayer.sieges_of(Settings.get_value(KEY_PREFIX + "sieges",
 		AdventurePlayer.SIEGES_STEADY))
 	setup.creatures = AdventurePlayer.creatures_of(Settings.get_value(KEY_PREFIX + "creatures",
@@ -510,7 +516,7 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
 	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "card_rule", "copy_limit",
-	"life_rule", "card_hold", "ban_list", "sieges", "creatures", "life_start", "ascetic"]
+	"life_rule", "card_hold", "ban_list", "all_trader_cards", "sieges", "creatures", "life_start", "ascetic"]
 
 
 ## Forget the remembered hero, so the screen opens on the defaults.

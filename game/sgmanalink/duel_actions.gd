@@ -606,15 +606,29 @@ func _choice_entries() -> Array:
 			for i in question.options.size(): entries.append({"label": question.options[i], "answer": i})
 		PlayerChoice.Kind.CARD, PlayerChoice.Kind.DISCARD:
 			var seen := {}
+			var public_ids := {}
+			var label_counts := {}
 			for card in question.candidates:
 				var public_card: bool = card.zone == Mtg.Zone.BATTLEFIELD
-				if question.kind == PlayerChoice.Kind.CARD and not public_card and seen.has(card.data.card_name): continue
+				var hand_copy: bool = question.kind == PlayerChoice.Kind.CARD and question.is_hand_candidate(card)
+				if question.kind == PlayerChoice.Kind.CARD and not public_card and not hand_copy and seen.has(card.data.card_name): continue
 				seen[card.data.card_name] = true
 				entries.append({"label": target_label(TargetRef.card(card), question.pid) if public_card else card.data.card_name,
-					"answer": card.id if public_card else card.data.card_name})
-			entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.label < b.label)
+					"answer": card.id if public_card or hand_copy else card.data.card_name})
+				if public_card:
+					public_ids[card.id] = true
+				var label: String = entries[-1].label
+				label_counts[label] = int(label_counts.get(label, 0)) + 1
+			entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				if a.label == b.label and a.answer is int and b.answer is int:
+					return a.answer < b.answer
+				return a.label < b.label)
 			for i in entries.size():
-				if entries[i].answer is int: entries[i].label += " [choice %d]" % (i + 1)
+				# Board tags remain stable; hand names need a suffix only when
+				# two physical copies would otherwise have the same label.
+				if entries[i].answer is int and (public_ids.has(entries[i].answer) \
+						or int(label_counts[entries[i].label]) > 1):
+					entries[i].label += " [choice %d]" % (i + 1)
 			if question.kind == PlayerChoice.Kind.CARD and question.optional:
 				entries.append({"label": decline_label(question), "answer": ""})
 			# ONE PICK OF AN "IN ANY ORDER" SEQUENCE (Pack 8 — Teferi's Puzzle
@@ -695,7 +709,11 @@ func choice_view(pid: int, handle: Callable = Callable()) -> Dictionary:
 	for entry in _choice_entries():
 		var card: CardInstance = game.find_instance(int(entry.answer)) if entry.answer is int \
 			and question.kind in [PlayerChoice.Kind.CARD, PlayerChoice.Kind.DISCARD] else null
-		var key := String(handle.call(card)) if card != null and handle.is_valid() else ""
+		# Hand-copy answers are referee-side ids too, but must not acquire
+		# persistent wire handles (including cards preflight rewound into
+		# the library). Only battlefield choices name a public board card.
+		var key := String(handle.call(card)) if card != null and card.zone == Mtg.Zone.BATTLEFIELD \
+			and handle.is_valid() else ""
 		var line := String(entry.label)
 		if key != "":
 			var ordinal := line.rfind(" [choice ")

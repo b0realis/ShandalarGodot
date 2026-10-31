@@ -112,3 +112,40 @@ func test_sell_cards_in_a_town() -> void:
 	var opened := screen.show_deck()
 	assert_eq(opened.sell_site, -1, "the spellbook out in the world does not sell")
 	assert_null(opened.find_child("SellButton", true, false))
+
+
+func test_buying_and_reselling_karma_in_one_town_does_not_increase_the_purse() -> void:
+	var player := screen.player
+	var slot := _town()
+	var tile := Vector2i(int(screen.world.sites[slot]["x"]), int(screen.world.sites[slot]["y"]))
+	var at := tile.y * ShandalarWorld.PAGE_WIDTH + tile.x
+	screen.world.page[at] = (screen.world.page[at] & 0xF0) | 13 # Black/white terrain.
+	var record := CardShop.town_record(player, slot)
+	record["cards"] = ["Karma", "", "", "", ""]
+	record["restock"] = [player.quest_timer, player.quest_timer, player.quest_timer,
+		player.quest_timer, player.quest_timer]
+	player.gold = 1000
+	var before := player.gold
+	var count := player.cards.size()
+	var pane := screen.visit(tile)
+	(pane.find_child("Choice_buy", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	var shop := screen.find_child("CardShop", true, false) as CardShopPane
+	shop.choose(0)
+	var price := CardShop.price_at(player, slot, "Karma")
+	assert_eq(shop.ask_text(), "Buy Karma for %d gold?" % price)
+	(shop.find_child("Buy", true, false) as Button).pressed.emit()
+	assert_eq(player.gold, before - price)
+	assert_eq(player.cards.size(), count + 1)
+	(shop.find_child("Done", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	(screen._visit.find_child("Choice_deck", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	var builder := screen.find_child("DeckBuilder", true, false) as AdventureBuilder
+	builder._show_in_showcase(CardRegistry.get_card("Karma"))
+	var sell := builder.find_child("SellButton", true, false) as Button
+	assert_eq(sell.text, "Sell for %d" % price, "the displayed quote matches the shop")
+	sell.pressed.emit()
+	assert_eq(player.gold, before, "no gold created by buying and immediately selling")
+	assert_eq(player.cards.size(), count, "the purchased copy was sold")

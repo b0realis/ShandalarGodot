@@ -443,7 +443,7 @@ func test_the_round_buttons() -> void:
 	assert_true(hud.help_shown(), "? shows the keys")
 	assert_false(hud.hero_shown(), "one panel at a time")
 	var keys := "\n".join(hud.key_lines())
-	for said_key in ["Click: walk there", "Space: back to your hero", "Ctrl+S: save the adventure",
+	for said_key in ["Click: walk there", "Space: back to your hero", "Ctrl+S: save to Quickslot (keeps named saves)",
 			"H: these keys"]:
 		assert_string_contains(keys, said_key)
 	var escape := InputEventAction.new()
@@ -497,8 +497,8 @@ func test_the_options() -> void:
 	(option.call("Save") as Button).pressed.emit()
 	assert_false(hud.options_shown(), "a choice closes the options")
 	var slots := screen.find_child("SaveSlots", true, false) as SaveSlotsPane
-	assert_not_null(slots, "the ten slots")
-	assert_eq(slots.find_child("Slots", true, false).get_child_count(), 10)
+	assert_not_null(slots, "Quickslot and the ten named slots")
+	assert_eq(slots.find_child("Slots", true, false).get_child_count(), 11)
 	var path := slots.save_into(2, "")
 	assert_true(FileAccess.file_exists(path), "Save writes the adventure")
 	assert_string_contains(slots.note(), "Saved to slot 2: Day 0 near", "a blank name: the day and the place")

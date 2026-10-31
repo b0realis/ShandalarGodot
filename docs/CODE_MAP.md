@@ -37,7 +37,8 @@
 - `game/adventure/world/world_path.gd`: `WorldPath`, the path arrows — a
   click's way marked on the explored land, orange where the food lasts and
   red hungry, bent at turns, an X at the end; the hover preview (`frame`,
-  `hover`, `shape`); the switch `WorldHud.PATHS_SETTING` /
+  `hover`, `shape`); `MARK_SCALE` halves the complete glyph at its tile
+  center, including the destination X, bevel and shadow; the switch `WorldHud.PATHS_SETTING` /
   `path_arrows_wanted` / `paths_switched`. Tests:
   `tests/ui/test_c20_V1_path_arrows.gd`.
 - `game/adventure/world/world_cursors.gd`: `WorldCursors`, the drawn
@@ -99,6 +100,11 @@
   over `AutoDeck.score`, `STRENGTH_MIDDLE`), `price_of`, `base_price`,
   `buy_price`, `sell_price`, `goes_with`, `rarity`, `is_base`,
   `engine_name` / `SPELLED_1997` (the 1997 lists' names to the engine's).
+  `sell_price` caps resale at the same town's asking price, preventing
+  immediate buy/resell profit while preserving trading between towns;
+  `tests/unit/test_adventure_resale.gd` covers mixed terrain, the price
+  ceiling and the loaded catalogue; `tests/ui/test_card_shop.gd` checks
+  the purchase, displayed resale quote and actual purse through both UIs.
 - `game/adventure/card_shop.gd`: `CardShop`, a town's shop by the 1997
   rules — `offers` (drawn, kept, restocked: `AdventurePlayer.shops`),
   `buy`, `price_at`, `sell_price_at`, `colors_sold`, `stock`,
@@ -198,11 +204,17 @@
   `pick_duplicate` / the reward card, `EncounterPane._offered`,
   `LairEvent._lair_rare` / `_treasure`, `WiseMan.copy` and
   `WorldScreen._copyable`, and `StarterDeck.deal(…, classic)`.
-- `game/adventure/save_slots.gd`: `SaveSlots`, the ten named slots per
-  adventure (`slots_of`, `save_into`, `default_name`, `migrate`);
+- `game/adventure/save_slots.gd`: `SaveSlots`, the ten named slots and
+  separate Quickslot per adventure (`slots_of`, `save_into`, `default_name`,
+  `migrate`, `QUICK_SLOT`, `QUICK_KIND`, `quickslot_of`, `save_quick`);
   `game/adventure/world/save_slots_pane.gd`: `SaveSlotsPane`;
-  `WorldScreen.save_now` / `save_into_slot` / `autosave`;
-  `LoadAdventureScreen` lists them by adventure (`rows`, `resume`).
+  `WorldScreen.save_now` / `save_into_slot` / `autosave` / `quick_save`;
+  `_show_quicksave_notice` shows the two-second confirmation above the map
+  and town; `PaneStyle.QUICK_BLUE` marks it and the Quickslot rows.
+  `LoadAdventureScreen` lists saves by adventure (`rows`, `resume`).
+  Regressions: `tests/unit/test_c3_f6_save_files.gd`,
+  `tests/ui/test_c3_f6_save_screens.gd`, `tests/ui/test_p1_town_keys.gd`,
+  `tests/ui/test_c3_f1_modal_world.gd`.
 - `game/adventure/world/city_list_pane.gd`: `CityListPane`, the F3 city
   list (`towns`, `scroll`, `shown`); `WorldScreen.show_city_list`.
   `game/adventure/world/world_map.gd`: `WorldMap`, the F2 map's three maps
@@ -652,6 +664,29 @@
   `tests/unit/test_c19_A1_creatures.gd`,
   `tests/ui/test_c19_A1_campaign_settings.gd`,
   `tests/ui/test_c19_A1_life_shown.gd`.
+- Adventure duel-start emphasis (2026-10-31 playtest):
+  `DuelIntro.build` / `_highlight_go` / `GO_ACCENT` (wider Go, smaller
+  Concede, larger Go lettering and a permanent gold rim; existing focus,
+  confirmation and timer behavior). Existing checks:
+  `tests/ui/test_duel_intro.gd`,
+  `tests/ui/test_hunt_2026_10_21_screens_held_duel_splash.gd`.
+- Individual hand-card choices (2026-10-31 playtest, Sylvan Library):
+  `PlayerChoice.hand_candidates` / `is_hand_candidate`, recorded by
+  `DecisionAgent.choose_card` before preflight rewinds newly drawn cards;
+  `DuelScreen.choice_card_lines` (separate numbered copies, answers by id),
+  `HumanAgent.answer_card`, `SgDuelActions._choice_entries` / `choice_view`
+  (separate private choices without hidden-card handles). Library searches
+  still group names. Tests: `tests/ui/test_sylvan_library_copies.gd`,
+  `tests/ui/test_duel_prompts.gd`.
+- Optional expanded adventure traders (2026-10-31):
+  `AdventureSetup.all_trader_cards` and `AdventurePlayer.all_trader_cards`
+  (remembered Embark choice and saved campaign flag, default off),
+  `EmbarkScreen.choose_all_trader_cards` / `_build_all_trader_cards` /
+  `_show_all_trader_cards` (below Ban list, reset by As 1997),
+  `CardTrade.catalogue(all_cards)` / `for_trader` (separate cached selections,
+  paid traders only), `CardTradePane.cards` (category and Classic filters).
+  Tests: `tests/unit/test_adventure_trader_option.gd`,
+  `tests/ui/test_c19_A1_campaign_settings.gd`.
 - The bug campaign of 0.50.66 (c21, 2026-10-29/30; 0.60.0). The world:
   `WorldView._settle_ticks` (the glide after a wait), `rise_of` /
   `pixels_1997` (creature names' rise from the sheet's file, on a worker),
@@ -761,8 +796,10 @@
   `autosave`, `save`, `load_from`, `list_saves`, `world_intact`.
 - `game/adventure/load_adventure_screen.gd` and
   `game/adventure/load_adventure_screen.tscn`: `LoadAdventureScreen`, the
-  saved adventures newest first — `refresh`, `continue_adventure`,
-  `open_save`, `leave`.
+  saved adventures newest first — `refresh`, `initial_selection`, `resume`,
+  `continue_adventure`, `open_save`, `leave`. One Resume action loads the
+  highlighted save, initially the newest eligible autosave; Quickslot is
+  blue, Hall of Fame gold at the left, Back beside Resume at the right.
 - `game/adventure/embark_screen.gd`: `set_out` (the adventure begun,
   autosaved, its world screen); `game/main.gd`: Save / Load opens the
   saved adventures, or says how one comes to be.
@@ -8789,7 +8826,9 @@ shandalar/
 │    sources lighting, Done refusing to pass priority under a waiting
 │    cast, Cancel leaving the mana floating), the yellow name meaning
 │    could_afford, and the double-click AUTO-CAST including X funnelling
-│    and `Don't auto tap this card`;
+│    and `Don't auto tap this card`; issue #3 pins Craw Wurm with four
+│    Forests + Wild Growth, neutral hand names on unaffordable hover, and
+│    fresh names after available mana changes (`MiniCard.name_color`);
 │    tests/ui/test_outpost_activation.gd — Kjeldoran Outpost's Soldier
 │    activation before/after drawing mana, reserved tap excluded from
 │    payment plans/clicks/highlights/menus, cancellation, already-tapped
@@ -13860,3 +13899,9 @@ found, what was fixed, what was left and why).
   packs as the Card Packs screen names them, and both of the life register's
   flip entries.
 <!-- end repo check 2026-10-13 fx-code -->
+
+## Adventure playtest update (0.60.2)
+
+- `docs/releases/0.60.2.md`: player-facing summary of Quickslot, the single
+  Resume action, trader selection, resale prices, adventure controls,
+  separate Sylvan Library copies and unambiguous hand hint colors.

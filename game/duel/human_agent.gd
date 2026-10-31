@@ -200,9 +200,9 @@ func answer_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 		prompt: String) -> CardInstance:
 	var parked: Variant = _take(PlayerChoice.Kind.CARD)
 	if parked != null:
-		# A PERMANENT is answered by instance id (the overlay tells two
-		# Grizzly Bears apart — DuelScreen.choice_card_lines); a card in a
-		# hidden zone by name, since a shuffle may have replaced instances.
+		# A permanent or hand copy is answered by instance id (the overlay
+		# tells namesakes apart — DuelScreen.choice_card_lines). A library
+		# search answers by name, since a shuffle may replace instances.
 		for inst in candidates:
 			if (inst.id == int(parked)) if parked is int \
 					else (inst.data.card_name == String(parked)):

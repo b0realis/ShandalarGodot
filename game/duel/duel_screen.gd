@@ -5145,10 +5145,13 @@ static func offers_keep_order(choice: PlayerChoice) -> bool:
 ## [method _on_choice_option] hands to MtgGame.answer_choice, built
 ## together so the two cannot drift.
 ##
-## A card in a HIDDEN zone — the library a tutor searches, a hand — is
-## interchangeable with its namesakes, so a NAME is listed once and
-## answered by name (a shuffle between the question and the answer can
-## replace the instances; see HumanAgent.answer_card). A PERMANENT is not:
+## A library search lists a NAME once and answers by name (a shuffle between
+## the question and the answer can replace the instances; see
+## HumanAgent.answer_card). Hand choices list every physical copy, labelled
+## "copy 1 of 2" when names repeat, and answer by instance id. The question
+## remembers newly drawn hand candidates even after preflight rewinds them
+## into the library, so Sylvan Library still shows both Forests.
+## A PERMANENT is also individual:
 ## two Grizzly Bears on the battlefield are two objects, one of them
 ## pumped or blocking, and "Select creature to sacrifice." (Ashnod's
 ## Altar) must be able to name either — so those are listed one line per
@@ -5158,6 +5161,7 @@ static func choice_card_lines(choice: PlayerChoice) -> Array:
 	var lines: Array = []
 	var seen := {}
 	var namesakes := {}
+	var copies_seen := {}
 	for inst in choice.candidates:
 		var card_name: String = (inst as CardInstance).data.card_name
 		namesakes[card_name] = int(namesakes.get(card_name, 0)) + 1
@@ -5168,6 +5172,13 @@ static func choice_card_lines(choice: PlayerChoice) -> Array:
 			var label := card_name
 			if int(namesakes[card_name]) > 1:
 				label += " #%d" % card.id
+			lines.append({"label": label, "answer": card.id})
+			continue
+		if choice.is_hand_candidate(card):
+			copies_seen[card_name] = int(copies_seen.get(card_name, 0)) + 1
+			var label := card_name
+			if int(namesakes[card_name]) > 1:
+				label += " (copy %d of %d)" % [copies_seen[card_name], namesakes[card_name]]
 			lines.append({"label": label, "answer": card.id})
 			continue
 		if seen.has(card_name):

@@ -1,20 +1,10 @@
 class_name LoadAdventureScreen
 extends Control
-## CONTINUE AN ADVENTURE (the owner, 2026-10-22: *"implement a load function
-## that loads that player init autosave with the corresponding world, world
-## state and all player stats"*). The title's Save / Load opens it: every
-## adventure saved ([AdventurePlayer], newest first), and `Continue` takes
-## the chosen one back into its world — the hero where they stood, with
-## everything they carry, the world as they left it. On the Embark screen's
-## dark ground, in its lettering. The world screen's options open it over
-## the world ([method WorldScreen.open_load]): Back comes back to that
-## world, Continue takes the place of it.
-##
-## THE SAVES BY ADVENTURE (2026-10-23, the owner: *"Add 10 named slots"*):
-## each adventure under its hero's line — the autosave first ("Resume", as
-## 1997's Resume Game took its slot 3), then the named slots it has
-## ([SaveSlots]); the newest adventure at the top. Resume, beside Continue,
-## takes up the newest autosave of all.
+## RESUME AN ADVENTURE: the highlighted save restores its hero and world.
+## The newest eligible autosave is selected initially; without one, use the
+## newest quickslot or manual save whose quest has not failed. Each adventure
+## lists its blue Quickslot, autosave and ten named slots under its hero.
+## Back returns to the underlying world, or to the title screen.
 ##
 ## A SAVE THAT CANNOT BE READ (campaign of 2026-10-23) hides no other: the
 ## list shows every save it can read, on the player's clock, and the note
@@ -33,17 +23,15 @@ extends Control
 ## the Hall's file marks the battle begun or lost outside every save
 ## ([method HallOfFame.one_life_state]), the load settles it as a loss
 ## ([method FinalBattle.on_load]), and its row says "Quest failed" too
-## ([method quest_failed]; part C stage C3, h3-2). RESUME passes over every
-## save whose quest failed — it would open on that end each time — and is
-## greyed when no other autosave is left (h3-6); a won adventure's it takes
-## up (the Hall's End or Return to Shandalar).
+## ([method quest_failed]). Initial selection skips failed quests, but a
+## player can still choose one explicitly to view its end.
 ##
 ## THE HALL OF FAME [ours] (the owner, 2026-10-27: *"Only hall of fame
 ## button should be inside save/load as not to clutter the main menu!"*):
 ## the button beside Back opens it over the list ([HallOfFamePane]); Done or
 ## Escape closes it, the list as it was.
 
-const TITLE := "Continue an adventure"
+const TITLE := "Resume an adventure"
 const HALL := "Hall of Fame"
 ## A save's end on its row (part C): a won adventure with its years, a
 ## failed quest; and the hero's line under "One life".
@@ -64,7 +52,6 @@ var marks := {}
 var resume_button: Button
 var _list: ItemList
 var _say_line: Label
-var continue_button: Button
 var back_button: Button
 var hall_button: Button
 var _hall: HallOfFamePane
@@ -112,7 +99,7 @@ func _ready() -> void:
 	well.set_content_margin_all(10)
 	_list.add_theme_stylebox_override("panel", well)
 	_list.item_selected.connect(func(index: int) -> void:
-		continue_button.disabled = index < 0 or index >= rows.size() or rows[index].is_empty())
+		resume_button.disabled = index < 0 or index >= rows.size() or rows[index].is_empty())
 	_list.item_activated.connect(func(index: int) -> void: continue_adventure(index))
 	page.add_child(_list)
 	_say_line = _lettering("", 15, EmbarkScreen.DIM, "font_body")
@@ -124,26 +111,19 @@ func _ready() -> void:
 	back_button = UiChrome.menu_button("Back", Vector2(180, 46))
 	back_button.name = "Back"
 	back_button.pressed.connect(leave)
-	row.add_child(back_button)
 	hall_button = UiChrome.menu_button(HALL, Vector2(200, 46))
 	hall_button.name = "HallButton"
 	hall_button.pressed.connect(func() -> void: open_hall())
+	_gild_hall_button()
 	row.add_child(hall_button)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
+	row.add_child(back_button)
 	resume_button = UiChrome.menu_button("Resume", Vector2(200, 46), 24, 0.6)
 	resume_button.name = "Resume"
 	resume_button.pressed.connect(resume)
 	row.add_child(resume_button)
-	continue_button = UiChrome.menu_button("Continue", Vector2(220, 46), 24, 0.6)
-	continue_button.name = "Continue"
-	continue_button.disabled = true
-	continue_button.pressed.connect(func() -> void:
-		var picked := _list.get_selected_items()
-		if not picked.is_empty():
-			continue_adventure(picked[0]))
-	row.add_child(continue_button)
 	page.add_child(row)
 	refresh()
 
@@ -155,8 +135,7 @@ func refresh() -> void:
 	var found: Array[Dictionary] = scanned["saves"]
 	unreadable = int(scanned["unreadable"])
 	marks = HallOfFame.one_life_marks()
-	# The adventures in the order of their newest save; each one's autosave,
-	# then its slots by number.
+	# Adventures by newest save; each one's quickslot, autosave, named slots.
 	var order: Array[String] = []
 	var by_id := {}
 	for save in found:
@@ -183,25 +162,29 @@ func refresh() -> void:
 		for save in group:
 			var when := AdventurePlayer.local_time(String(save["saved"]))
 			var words := ""
-			if int(save["slot"]) == 0:
-				words = "      Resume · autosaved %s · day %d · %d gold" % [when, int(save["days"]), int(save["gold"])]
+			if int(save["slot"]) == SaveSlots.QUICK_SLOT:
+				words = "      Quickslot · saved %s · day %d · %d gold" % [when, int(save["days"]), int(save["gold"])]
+			elif int(save["slot"]) == 0:
+				words = "      Autosave · autosaved %s · day %d · %d gold" % [when, int(save["days"]), int(save["gold"])]
 			else:
 				words = "      %d. %s · saved %s · day %d" % [int(save["slot"]), String(save["slot_name"]),
 					when, int(save["days"])]
-			_list.add_item(words + end_words(save, marks))
+			var index := _list.add_item(words + end_words(save, marks))
+			if int(save["slot"]) == SaveSlots.QUICK_SLOT:
+				_list.set_item_custom_fg_color(index, PaneStyle.QUICK_BLUE)
 			rows.append(save)
 			saves.append(save)
-	resume_button.disabled = newest_autosave().is_empty()
+	var selected := initial_selection()
+	resume_button.disabled = selected < 0
+	if selected >= 0:
+		_list.select(selected)
 	if saves.is_empty():
 		_say_line.text = unreadable_note() if unreadable > 0 \
 			else "No adventure has been saved yet. Shandalar on the main menu begins one, and saves it the moment its world is made."
-		continue_button.disabled = true
 	else:
-		_say_line.text = "Choose a save and Continue, or double-click it; Resume takes up the newest autosave whose quest has not failed."
+		_say_line.text = "Choose a save and Resume, or double-click it."
 		if unreadable > 0:
 			_say_line.text += " " + unreadable_note()
-		_list.select(1)
-		continue_button.disabled = false
 
 
 ## The end a save's row tells of (part C): " · Won: Arzakon banished for
@@ -258,7 +241,7 @@ func unreadable_note() -> String:
 
 
 ## The newest autosave of all whose quest has not failed ([method
-## quest_failed]: Resume would open on that end every time, h3-6), or `{}`.
+## quest_failed]), used for initial selection, or `{}`.
 func newest_autosave() -> Dictionary:
 	var best := {}
 	for save in saves:
@@ -268,11 +251,39 @@ func newest_autosave() -> Dictionary:
 	return best
 
 
-## RESUME: the newest autosave taken up (1997's Resume Game) — of an
-## adventure whose quest has not failed.
+## [QoL] Prefer the newest eligible autosave even when a quickslot or manual
+## save appears before it. Failed quests are only opened by explicit choice.
+func initial_selection() -> int:
+	var selected := newest_autosave()
+	if selected.is_empty():
+		for save in saves:
+			if not quest_failed(save, marks) and (selected.is_empty() \
+					or String(save["saved"]) > String(selected["saved"])):
+				selected = save
+	return -1 if selected.is_empty() else rows.find(selected)
+
+
+## RESUME always takes up the highlighted save, including a manual slot.
 func resume() -> bool:
-	var newest := newest_autosave()
-	return not newest.is_empty() and continue_adventure(rows.find(newest))
+	var picked := _list.get_selected_items()
+	return not picked.is_empty() and continue_adventure(picked[0])
+
+
+## [QoL] Gold stone for the Hall, retaining the shell's texture and feedback.
+func _gild_hall_button() -> void:
+	for state in ["normal", "hover", "pressed", "hover_pressed"]:
+		var face := hall_button.get_theme_stylebox(state).duplicate() as StyleBox
+		var tint := Color(1.18, 0.98, 0.48)
+		if state == "hover":
+			tint = Color(1.30, 1.12, 0.62)
+		elif state in ["pressed", "hover_pressed"]:
+			tint = Color(0.95, 0.77, 0.36)
+		if face is StyleBoxTexture:
+			face.modulate_color = tint
+		elif face is StyleBoxFlat:
+			face.bg_color = Color(0.66, 0.46, 0.12) * tint
+			face.border_color = EmbarkScreen.GOLD
+		hall_button.add_theme_stylebox_override(state, face)
 
 
 ## TAKE THE ADVENTURE UP AGAIN: the save in row [param index] read, and its

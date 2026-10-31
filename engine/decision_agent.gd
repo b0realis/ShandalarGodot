@@ -377,6 +377,9 @@ func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 		ordered := false, copying := false) -> CardInstance:
 	var choice := PlayerChoice.new(PlayerChoice.Kind.CARD, pid, prompt)
 	choice.candidates = candidates.duplicate()
+	for card in candidates:
+		if card.zone == Mtg.Zone.HAND:
+			choice.hand_candidates.append(card.id)
 	choice.optional = optional
 	choice.copying = copying
 	# An ADVERSE ask ("… of an opponent's choice", see

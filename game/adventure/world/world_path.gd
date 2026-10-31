@@ -50,6 +50,9 @@ const SHADOW := Color(0.08, 0.08, 0.09, 0.4)
 const SHADOW_AT := Vector2(-3.8, 4.7)
 ## The marks' size against the first mock-ups' (the owner: "a bit smaller").
 const SIZE := 0.75
+## Smaller route markers (playtest, 2026-10-31): scale the whole glyph,
+## including its outline, bevel and shadow, without moving the tile centers.
+const MARK_SCALE := Vector2(0.5, 0.5)
 ## The hover preview's strength, and how long the pointer rests first.
 const PREVIEW := 0.5
 const REST_MS := 150
@@ -348,9 +351,9 @@ func _paint() -> void:
 		var inks: Array[Color] = FED if i < _fed.size() and _fed[i] == 1 else HUNGRY
 		var off := Vector2(_way[i] * 32 + Vector2i(16, 16) - _anchor)
 		var at := Vector2(2.0 * (off.x + off.y), off.y - off.x)
-		_marks.draw_set_transform(at + SHADOW_AT)
+		_marks.draw_set_transform(at + SHADOW_AT * MARK_SCALE, 0.0, MARK_SCALE)
 		_marks.draw_colored_polygon(layers[0], SHADOW)
-		_marks.draw_set_transform(at)
+		_marks.draw_set_transform(at, 0.0, MARK_SCALE)
 		_marks.draw_colored_polygon(layers[0], INK)
 		_marks.draw_polyline(layers[1], INK, 1.0, true)
 		_marks.draw_colored_polygon(layers[2], inks[2])

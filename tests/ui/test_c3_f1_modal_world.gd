@@ -287,10 +287,9 @@ func test_the_map_holds_the_world() -> void:
 	assert_true(_map().visible, "Escape closed the list, the map is up")
 	# Ctrl+S saves over the map.
 	await _key(KEY_S, true)
-	var slots := screen.find_child("SaveSlots", true, false) as SaveSlotsPane
-	assert_not_null(slots, "Ctrl+S: the ten slots over the map")
-	slots.done.emit()
-	await _frames()
+	assert_true(FileAccess.file_exists(screen.player.save_path(SaveSlots.QUICK_KIND)))
+	assert_null(screen.find_child("SaveSlots", true, false), "quicksaving leaves the map open")
+	assert_true(screen._quick_notice.is_visible_in_tree(), "visible even with the HUD hidden")
 	# A screen over the whole world gives the map back, not the panel over it.
 	screen._cover_world(true)
 	screen._cover_world(false)
@@ -377,8 +376,9 @@ func test_the_place_s_name_follows_the_land_and_goes_under_a_pane() -> void:
 	await _after_pane()
 	await show_it.call()
 	assert_eq(hud.place_shown(), called)
-	await _key(KEY_S, true)
-	assert_eq(hud.place_shown(), "", "Ctrl+S: gone under the saves")
+	screen.save_now()
+	await _frames()
+	assert_eq(hud.place_shown(), "", "Save: gone under the slots")
 	await _key(KEY_ESCAPE)
 	await _after_pane()
 	await show_it.call()

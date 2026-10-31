@@ -14,6 +14,12 @@ extends GutTest
 
 class Probe extends WorldScreen:
 	var walked: Array[Vector2i] = []
+	var quick_writes := 0
+	var fail_quick := false
+
+	func _write_quicksave() -> String:
+		quick_writes += 1
+		return "" if fail_quick else super()
 
 	func walk_to_tile(tile: Vector2i) -> bool:
 		walked.append(tile)
@@ -170,11 +176,9 @@ func test_the_map_over_the_town_keeps_its_own_keys() -> void:
 	assert_false(screen.city_list_shown())
 	assert_true(_map().visible, "the map still up")
 	await _key(KEY_S, true)
-	var slots := screen.find_child("SaveSlots", true, false) as SaveSlotsPane
-	assert_not_null(slots, "Ctrl+S on the map: the slots")
-	if slots != null:
-		slots.done.emit()
-		await _frames()
+	assert_true(FileAccess.file_exists(screen.player.save_path(SaveSlots.QUICK_KIND)))
+	assert_null(screen.find_child("SaveSlots", true, false), "quicksave leaves the map open")
+	assert_true(screen._quick_notice.is_visible_in_tree(), "confirmation above the map")
 	await _key(KEY_ESCAPE)
 	assert_false(_map().visible)
 	assert_true(pane.visible and screen.town_on_top(), "and the town again")
@@ -246,25 +250,70 @@ func test_the_hero_s_journal_on_the_map_from_inside_a_town() -> void:
 	_town_back(pane, note, "after the journal")
 
 
-func test_ctrl_s_saves_over_the_town_and_comes_back() -> void:
+func test_ctrl_s_quicksaves_without_leaving_the_town() -> void:
 	var pane := await _in_town()
 	var note := pane.note()
 	await _key(KEY_S, true)
-	var slots := screen.find_child("SaveSlots", true, false) as SaveSlotsPane
-	assert_not_null(slots, "Ctrl+S: the ten slots over the town")
-	assert_true(pane.visible, "the town in view under them")
-	assert_eq(pane.process_mode, Node.PROCESS_MODE_DISABLED, "still and deaf under them")
-	assert_gt(slots.get_index(), pane.get_index(), "over it")
-	var path := slots.save_into(1, "In town")
-	assert_true(FileAccess.file_exists(path), "saved inside the town")
-	await _key(KEY_ESCAPE)
-	assert_false(is_instance_valid(slots) and not slots.is_queued_for_deletion(), "Escape closes the slots")
-	_town_back(pane, note, "after the save")
+	assert_true(FileAccess.file_exists(screen.player.save_path(SaveSlots.QUICK_KIND)))
+	assert_null(screen.find_child("SaveSlots", true, false), "no picker interrupts the town")
+	assert_true(screen._quick_notice.is_visible_in_tree(), "confirmation above the town")
+	_town_back(pane, note, "after quicksaving")
+	assert_eq(screen.quick_writes, 1, "one key press writes once")
+	assert_eq(AdventurePlayer.load_from(screen.player.save_path(SaveSlots.QUICK_KIND)).gold,
+		screen.player.gold, "purchases made in town are kept")
+
+
+func test_world_quicksave_confirmation_expires_and_repeated_keys_restart_it() -> void:
 	await _key(KEY_S, true)
-	slots = screen.find_child("SaveSlots", true, false) as SaveSlotsPane
-	(slots.find_child("SaveDone", true, false) as BaseButton).pressed.emit()
-	await _frames()
-	_town_back(pane, note, "Done")
+	assert_eq(screen.quick_writes, 1)
+	assert_null(screen.find_child("SaveSlots", true, false))
+	assert_false(screen.modal(), "quicksaving does not pause play")
+	var notice := screen._quick_notice
+	assert_eq(notice.text, "QUICKSAVED Adventurer!")
+	assert_eq(notice.get_theme_color("font_color"), PaneStyle.QUICK_BLUE)
+	assert_lt(notice.size.y, 80.0, "a compact popup, not a panel covering the town")
+	assert_lte(notice.size.x, float(viewport.size.x), "fits the viewport")
+	assert_eq(notice.mouse_filter, Control.MOUSE_FILTER_IGNORE, "does not take clicks")
+	var echo := InputEventKey.new()
+	echo.keycode = KEY_S
+	echo.ctrl_pressed = true
+	echo.pressed = true
+	echo.echo = true
+	viewport.push_input(echo, true)
+	assert_eq(screen.quick_writes, 1, "holding the key does not repeatedly write")
+	await get_tree().create_timer(1.1).timeout
+	assert_true(notice.visible)
+	await _key(KEY_S, true)
+	await get_tree().create_timer(1.1).timeout
+	assert_true(notice.visible, "the first save's timeout cannot hide a newer message")
+	await get_tree().create_timer(1.0).timeout
+	assert_false(notice.visible, "gone two seconds after the latest save")
+
+
+func test_failed_quicksave_replaces_success_with_an_error() -> void:
+	await _key(KEY_S, true)
+	var path := screen.player.save_path(SaveSlots.QUICK_KIND)
+	var before := FileAccess.get_file_as_bytes(path)
+	screen.fail_quick = true
+	screen.player.gold += 10
+	await _key(KEY_S, true)
+	assert_eq(screen._quick_notice.text, WorldScreen.UNSAVED)
+	assert_eq(FileAccess.get_file_as_bytes(path), before, "the previous save remains")
+
+
+func test_quicksave_is_blocked_during_a_duel_or_after_the_adventure_ends() -> void:
+	screen._duel_held = true
+	await _key(KEY_S, true)
+	assert_eq(screen.quick_save(), "")
+	assert_eq(screen.quick_writes, 0)
+	screen._duel_held = false
+	screen._lost = true
+	assert_eq(screen.quick_save(), "")
+	assert_eq(screen.quick_writes, 0)
+	screen._lost = false
+	screen._leaving = true
+	assert_eq(screen.quick_save(), "")
+	assert_eq(screen.quick_writes, 0)
 
 
 func test_every_other_key_stays_held_in_the_town() -> void:
@@ -308,9 +357,9 @@ func test_a_castle_s_pane_is_no_town() -> void:
 	await _key(KEY_F5)
 	await _key(KEY_S, true)
 	assert_false(_map().visible or screen.hud.hero_shown(), "a castle's pane holds its keys")
-	assert_null(screen.find_child("SaveSlots", true, false), "no save from a castle's door")
+	assert_eq(screen.quick_writes, 0, "no save from a castle's door")
 
 
 func test_help_says_the_town_s_keys() -> void:
 	var keys := "\n".join(screen.hud.key_lines())
-	assert_string_contains(keys, "In a town: M or F2, F5, Ctrl+S open over the town; close them to come back")
+	assert_string_contains(keys, "In a town: M or F2 and F5 open over the town; Ctrl+S quicksaves")

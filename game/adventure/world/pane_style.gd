@@ -16,6 +16,8 @@ const DIM := Color8(160, 146, 128)
 const FAINT := Color8(120, 108, 96)
 const LIT := Color8(255, 236, 170)
 const EDGE := Color8(20, 10, 8)
+## The dedicated quickslot and its brief save confirmation.
+const QUICK_BLUE := Color8(125, 195, 255)
 ## A card's rarity as its set symbol wears it (the owner, 2026-10-23: *"the
 ## gold writing on black buttons should turn black on white, black on
 ## silver, black on gold or black on purple … depending on the card symbol

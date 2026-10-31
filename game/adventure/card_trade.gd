@@ -78,6 +78,7 @@ const AFFORD := "Hmmm... you can't afford this card yet."
 const ASK := "Do you wish to trade?"
 
 static var _catalogue: Array[Dictionary] = []
+static var _all_catalogue: Array[Dictionary] = []
 ## The card pool's revision the catalogue was read against (−1: not yet).
 static var _read_at := -1
 
@@ -86,13 +87,15 @@ static var _read_at := -1
 
 ## EVERY CARD A TRADE MAY OFFER, read once for the card pool as it stands
 ## (again when it changes, [method CardValue.pool_moved]): `{name, facts}`
-## by name.
-static func catalogue() -> Array[Dictionary]:
+## by name. [QoL] With all_cards, include the cards 1997 withheld; only
+## paid traders opt in, through for_trader. Rewards keep the original pool.
+static func catalogue(all_cards := false) -> Array[Dictionary]:
 	if CardValue.pool_moved(_read_at):
 		forget()
 	_read_at = CardRegistry.revision
-	if not _catalogue.is_empty():
-		return _catalogue
+	var rows: Array[Dictionary] = _all_catalogue if all_cards else _catalogue
+	if not rows.is_empty():
+		return rows
 	CardRegistry.ensure_loaded()
 	for card_name in CardRegistry.all_names():
 		var name_text := String(card_name)
@@ -103,10 +106,16 @@ static func catalogue() -> Array[Dictionary]:
 		# C3, h6-3; the owner, 2026-10-28): without the table the restricted
 		# and banned lists kept out Channel, Fastbond and the ante cards,
 		# which 1997 traded, and let in the 22 cards it kept back.
-		if int(f.get("extra", 0)) & (CardValue.TREASURE | CardValue.KEPT_BACK) != 0:
+		if not all_cards and int(f.get("extra", 0)) & (CardValue.TREASURE | CardValue.KEPT_BACK) != 0:
 			continue
-		_catalogue.append({"name": name_text, "facts": f})
-	return _catalogue
+		rows.append({"name": name_text, "facts": f})
+	return rows
+
+
+## The campaign's choice applies to town trades, the Bazaar and the Mine.
+## The same pane's free quest reward keeps its original selection.
+static func for_trader(player: AdventurePlayer, way: String) -> Array[Dictionary]:
+	return catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
 
 
 ## Whether [param card_name] is one of the adventure's cards: the 1997
@@ -121,6 +130,7 @@ static func in_adventure(card_name: String) -> bool:
 ## Forget the cards (a skin imported again, the card pool changed, a test).
 static func forget() -> void:
 	_catalogue.clear()
+	_all_catalogue.clear()
 	_read_at = -1
 
 

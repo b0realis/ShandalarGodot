@@ -28,7 +28,7 @@ const SKIN := SCRATCH + "/skin"
 const MUSIC_PLAYER_DIR := SCRATCH + "/music_player"
 const MUSIC_SKIN_DIR := SCRATCH + "/music_skin"
 const KEYS: Array[String] = [GamePaths.KEY_SKIN_FOLDER, GamePaths.KEY_USE_SKIN_FOLDER,
-	DuelOptions.BAR_FRAME_KEY, MusicLibrary.SETTING]
+	DuelOptions.BAR_FRAME_KEY, DuelOptions.COIN_FLIP_KEY, MusicLibrary.SETTING]
 const PALETTE: Array[Color] = [Color.BLACK, Color.WHITE, Color(0.18, 0.18, 0.18),
 	Color(0.62, 0.20, 0.18), Color(0.20, 0.35, 0.70), Color(0.30, 0.62, 0.28),
 	Color(0.80, 0.70, 0.30), Color(0.49, 0.35, 0.36)]

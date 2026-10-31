@@ -4,7 +4,7 @@ extends GutTest
 ## short explanations there"*; builder A1 of 0.50.65): the Embark keeps
 ## 1997's own choices, and one button "Campaign Settings..." under the
 ## playmat opens a window of the 1997 dark stone with a row a setting —
-## Final battle, Card rule, Ban list (greyed unless Classic), Card hold,
+## Final battle, Card rule, Ban list (greyed unless Classic), Traders, Card hold,
 ## Sieges, Creatures, Starting life, Ascetic hero — each with its plain line
 ## under it; "As 1997" and "Done"; Escape is Done; the keys walk the rows
 ## and stay in the window; a line under the button says what is chosen.
@@ -85,7 +85,8 @@ func test_the_rules_left_the_screen_for_one_button() -> void:
 	var line := _find("CampaignSummary") as Label
 	assert_eq(line.text, "Steady sieges · Creatures notice · Reload allowed", "the defaults in a line")
 	for words in ["Final battle: Reload allowed", "Sieges: Steady", "Creatures: Notice",
-			"Starting life: Links only", "Ascetic hero: off", "Card hold: 1997 card hold limit"]:
+			"Starting life: Links only", "Ascetic hero: off", "Card hold: 1997 card hold limit",
+			"All cards offered by traders: off"]:
 		assert_string_contains(line.tooltip_text, words)
 	assert_eq(button.tooltip_text, line.tooltip_text)
 	screen.choose_life_start(AdventurePlayer.START_BASE)
@@ -103,6 +104,7 @@ func test_the_window_holds_every_row_in_the_owners_order() -> void:
 	assert_string_contains(_texts(window), "Campaign Settings")
 	var last := -1.0
 	var names := {"LifeRule": "Final battle", "CardRule": "Card rule", "BanList": "Ban list",
+		"AllTraderCards": "Traders",
 		"CardHold": "Card hold", "Sieges": "Sieges", "Creatures": "Creatures", "LifeStart": "Starting life",
 		"Ascetic": "Ascetic hero"}
 	for base in EmbarkScreen.SETTING_ROWS:
@@ -193,10 +195,31 @@ func test_the_ascetic_hero_box() -> void:
 	assert_false(screen.summary(plain.resolve({})).contains(EmbarkScreen.ASCETIC_SUMMARY), "off says nothing")
 
 
+func test_all_trader_cards_is_optional_and_remembered() -> void:
+	var box := _find("AllTraderCards") as CheckBox
+	assert_eq(box.text, "All cards offered by traders")
+	assert_false(box.button_pressed, "off by default")
+	assert_string_contains(box.tooltip_text, "Classic bans and copy limits still apply")
+	box.button_pressed = true
+	assert_true(screen.setup.all_trader_cards)
+	assert_eq((_find("AllTraderCardsLine") as Label).text, EmbarkScreen.TRADER_ON_LINE)
+	assert_string_contains((_find("CampaignSummary") as Label).text, "All trader cards")
+	watch_signals(screen)
+	(_find("HeroName") as LineEdit).text = "Ysolde Starfall"
+	screen.embark()
+	var record: Dictionary = get_signal_parameters(screen, "embarked")[0]
+	assert_true(bool(record["all_trader_cards"]))
+	assert_true(AdventureSetup.restore([] as Array[String]).all_trader_cards, "the next visit")
+	assert_string_contains(screen.summary(record), EmbarkScreen.TRADER_ON_LINE)
+	var hero := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
+	assert_true(hero.all_trader_cards, "the adventure uses the selected rule")
+
+
 func test_as_1997_sets_every_row_to_the_1997_game() -> void:
 	screen.choose_life_rule(AdventurePlayer.LIFE_ONE)
 	screen.choose_card_rule(AdventurePlayer.RULE_CLASSIC)
 	screen.choose_ban_list(ClassicBans.MODERN)
+	screen.choose_all_trader_cards(true)
 	screen.choose_card_hold(AdventurePlayer.HOLD_UNLIMITED)
 	screen.choose_life_start(AdventurePlayer.START_BASE)
 	screen.choose_ascetic(true)
@@ -209,6 +232,8 @@ func test_as_1997_sets_every_row_to_the_1997_game() -> void:
 	assert_eq((_find("Creatures") as OptionButton).selected, 0)
 	assert_eq((_find("CardRule") as OptionButton).selected, 1)
 	assert_false((_find("Ascetic") as CheckBox).button_pressed)
+	assert_false(s.all_trader_cards)
+	assert_false((_find("AllTraderCards") as CheckBox).button_pressed)
 	assert_true((_find("BanList") as OptionButton).disabled, "no Classic rule: the list greyed")
 	assert_eq((_find("CampaignSummary") as Label).text, "Sieges as 1997 · Creatures hunt · Reload allowed · No card limit")
 
@@ -246,10 +271,10 @@ func test_by_the_mouse_and_the_keys() -> void:
 	life_rule.grab_focus()
 	await _frames()
 	var walked: Array[String] = []
-	for i in 9:
+	for i in 10:
 		walked.append(String(port.gui_get_focus_owner().name))
 		await _key(port, KEY_DOWN)
-	assert_eq(walked, ["LifeRule", "CardRule", "CardHold", "Sieges", "Creatures", "LifeStart", "Ascetic",
+	assert_eq(walked, ["LifeRule", "CardRule", "AllTraderCards", "CardHold", "Sieges", "Creatures", "LifeStart", "Ascetic",
 		"As1997", "Done"] as Array[String], "the rows, then the buttons")
 	assert_eq(String(port.gui_get_focus_owner().name), "LifeRule", "and round again: the ring stays in")
 	await _key(port, KEY_UP)

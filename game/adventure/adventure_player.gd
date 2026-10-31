@@ -256,6 +256,10 @@ var card_hold := HOLD_1997
 ## [method AdventureBuilder._copy_rule], [method StarterDeck.deal]). An
 ## adventure from before the choice: "1998 + modern", the default.
 var ban_list := ClassicBans.DEFAULT
+## [QoL] Paid traders include special cards and dungeon treasures from the
+## adventure's pool. Town categories and Classic rules still apply. Off
+## for new campaigns and older saves unless chosen at the Embark.
+var all_trader_cards := false
 ## The sieges' pace ([constant SIEGE_PACES]; [Sieges]).
 var sieges := SIEGES_1997
 ## The creatures' way ([constant CREATURE_WAYS]; [WorldCreatures]).
@@ -505,6 +509,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.life_rule = life_rule_of(record.get("life_rule"))
 	player.card_hold = card_hold_of(record.get("card_hold"))
 	player.ban_list = ClassicBans.key_of(record.get("ban_list"))
+	player.all_trader_cards = _flag(record.get("all_trader_cards"))
 	player.sieges = sieges_of(record.get("sieges"))
 	player.creatures = creatures_of(record.get("creatures"))
 	player.life_start = life_start_of(record.get("life_start"))
@@ -927,7 +932,8 @@ func to_dict() -> Dictionary:
 			"figure_colors": figure_colors, "color": color,
 			"difficulty": difficulty, "difficulty_name": difficulty_name(),
 			"card_rule": card_rule, "copy_limit": card_rule != RULE_SHIPPED, "life_rule": life_rule,
-			"card_hold": card_hold, "ban_list": ban_list, "sieges": sieges,
+			"card_hold": card_hold, "ban_list": ban_list, "all_trader_cards": all_trader_cards,
+			"sieges": sieges,
 			"creatures": creatures, "life_start": life_start, "ascetic": ascetic,
 			"playmat": playmat, "packs": packs},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
@@ -1058,6 +1064,7 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	# the 1997 limit it played by, and the default list.
 	player.card_hold = card_hold_of(hero.get("card_hold"))
 	player.ban_list = ClassicBans.key_of(hero.get("ban_list"))
+	player.all_trader_cards = _flag(hero.get("all_trader_cards"))
 	# A save from before the sieges' pace: as 1997, as it was played.
 	player.sieges = sieges_of(hero.get("sieges"))
 	# A save from before the creatures' way, the starting life and the
@@ -1656,7 +1663,7 @@ func save(path := "") -> String:
 	var before := saved
 	saved = Time.get_datetime_string_from_system(true) + "Z"
 	var data := to_dict()
-	if SaveSlots.slot_of(kind_of(path)) == 0:
+	if SaveSlots.slot_of(kind_of(path)) <= 0:
 		(data["adventure"] as Dictionary)["slot_name"] = ""
 	var bytes := JSON.stringify(data, "\t").to_utf8_buffer()
 	_keep_backup(path)
@@ -1791,10 +1798,10 @@ static func list_saves(folder := "") -> Array[Dictionary]:
 
 
 ## Whether a file of kind [param file_kind] is a save the lists show: the
-## autosave and the ten slots. (An older `save` waits for [method
+## quickslot, autosave and the ten slots. (An older `save` waits for [method
 ## SaveSlots.migrate]; it is counted when it cannot be read.)
 static func _kept_kind(file_kind: String) -> bool:
-	return file_kind == AUTOSAVE or (file_kind.begins_with("slot")
+	return file_kind in [AUTOSAVE, SaveSlots.QUICK_KIND] or (file_kind.begins_with("slot")
 		and SaveSlots.kind(SaveSlots.slot_of(file_kind)) == file_kind)
 
 

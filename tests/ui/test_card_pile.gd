@@ -361,3 +361,15 @@ func test_the_lone_cards_turn_holder_takes_no_mouse_either() -> void:
 	var holder := MiniCard.turn_holder(MiniCard.new(put_battlefield(0, "Forest")))
 	add_child_autofree(holder)
 	assert_eq(holder.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+
+
+func test_a_battlefield_row_keeps_its_yellow_hover() -> void:
+	var pile := _pile([put_battlefield(0, "Forest")])
+	var holder := _rows(pile)[0]
+	var face := _faces(pile)[0]
+	var ink := face._name_label.get_theme_color("font_color")
+	holder.mouse_entered.emit()
+	assert_true(face.hovered)
+	assert_ne(face._name_label.get_theme_color("font_color"), ink)
+	holder.mouse_exited.emit()
+	assert_eq(face._name_label.get_theme_color("font_color"), ink)

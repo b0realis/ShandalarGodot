@@ -23,8 +23,8 @@ extends RefCounted
 ##
 ## THE INPUTS. With the player's 1997 program imported
 ## (`adventure_cards.json`, `tools/import_original.py`) every number is the
-## program's own and a price is the 1997 price. Without it — and for every
-## card the 1997 game never had, a pack's — the inputs are read off the
+## program's own and the base valuation is the 1997 price. Without it —
+## and for every card the 1997 game never had, a pack's — the inputs are read off the
 ## card: its type, colours, cost, power and toughness, keywords and rules,
 ## and no card is a staple ([method derive]) — but the marks no reading
 ## gives, a dungeon's treasure, a card 1997 kept back and its power mark,
@@ -71,6 +71,10 @@ extends RefCounted
 ## 5, between 5 and 1000. SOLD (`SellPrice`, 004f1bcc): the same base and
 ## site, a card not exactly of the town's colours a third more when its
 ## colour goes with them, half again otherwise; down to a multiple of 5.
+## [QoL, 2026-10-31] Resale cannot exceed that same town's purchase price:
+## 1997's equality/overlap mismatch on mixed terrain and its purchase-only
+## 1000-gold ceiling otherwise allowed buying a card and selling it back
+## for more. Prices between different towns still vary.
 
 ## The 1997 card types and colour bits.
 const LAND := 1
@@ -565,7 +569,8 @@ static func land_markup(value: int, card_bits: int, tile_bits: int) -> int:
 	return value * 2
 
 
-## WHAT A TOWN PAYS for [param data] (`SellPrice`).
+## WHAT A TOWN PAYS for [param data] (`SellPrice`), capped at its own asking
+## price [QoL]. This also keeps the builder's quotes and worth ranges in step.
 static func sell_price(data: CardData, site_type: int, tile_bits: int) -> int:
 	var f := facts(data)
 	var value := price_of(f) * (site_type + 2)
@@ -575,4 +580,4 @@ static func sell_price(data: CardData, site_type: int, tile_bits: int) -> int:
 			value = value * 4 / 3
 		else:
 			value = value * 3 / 2
-	return _div(value, 50) * 5
+	return mini(_div(value, 50) * 5, buy_price(data, site_type, tile_bits))

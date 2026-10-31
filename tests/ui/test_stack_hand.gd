@@ -548,9 +548,8 @@ func test_title_is_light_grey_not_yellow() -> void:
 	assert_gt(ink.get_luminance(), 0.7, "and light")
 
 
-func test_hovered_row_lifts_and_its_name_turns_yellow() -> void:
-	# The owner's zoomed hand: the row under the pointer is LIGHTER and
-	# its name reads YELLOW.
+func test_hovered_hand_row_lifts_without_changing_castability_ink() -> void:
+	# Hover lightens the row without promising that an unplayable card is usable.
 	var stack := StackHand.new()
 	add_child_autofree(stack)
 	stack.populate([_instance("Island"), _instance("Lightning Bolt")],
@@ -563,7 +562,7 @@ func test_hovered_row_lifts_and_its_name_turns_yellow() -> void:
 	assert_gt(face.modulate.get_luminance(), resting.get_luminance(),
 		"the hovered row lightens")
 	var ink: Color = face._name_label.get_theme_color("font_color")
-	assert_gt(ink.r, ink.b, "and its name turns yellow")
+	assert_almost_eq(ink.r, ink.b, 0.08, "an unplayable name remains neutral")
 	holder.mouse_exited.emit()
 	assert_false(face.hovered)
 	assert_eq(face.modulate, resting)

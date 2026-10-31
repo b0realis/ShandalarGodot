@@ -394,3 +394,54 @@ func test_the_double_click_is_the_LEFT_button_only() -> void:
 	ev.button_index = MOUSE_BUTTON_RIGHT
 	screen._on_hand_card_input(ev, bears)
 	assert_eq(screen.game.stack.size(), 0, "a right double-click casts nothing")
+
+
+func test_issue_3_craw_wurm_name_does_not_promise_six_mana_on_hover() -> void:
+	var wurm := _stage("Craw Wurm", 4)
+	var g := screen.game
+	var growth := CardInstance.new(CardRegistry.get_card("Wild Growth"), 93900, 0)
+	g._instances[growth.id] = growth
+	growth.zone = Mtg.Zone.HAND
+	g.players[0].hand.append(growth)
+	g.attach_aura_from_anywhere(growth, g.players[0].battlefield[0], 0)
+	assert_eq(growth.attached_to, g.players[0].battlefield[0].id)
+	assert_false(g.could_afford(0, wurm.data, {}, wurm), "four Forests plus Wild Growth make five, not six")
+	assert_eq(screen._highlight_for(wurm), MiniCard.Highlight.NONE)
+	var hand := StackHand.new()
+	add_child_autofree(hand)
+	hand.populate([wurm], false, func(_i): pass, screen._highlight_for)
+	var holder: Button = hand._pile.get_child(0)
+	var face := CardPile._face_in(holder)
+	var ink := face._name_label.get_theme_color("font_color")
+	assert_false(face.castable)
+	var resting := face.modulate
+	holder.mouse_entered.emit()
+	assert_true(face.hovered)
+	assert_gt(face.modulate.get_luminance(), resting.get_luminance(), "hover still lights the face")
+	assert_eq(face._name_label.get_theme_color("font_color"), ink, "hover cannot promise a cast the engine refuses")
+	holder.mouse_exited.emit()
+	assert_eq(face._name_label.get_theme_color("font_color"), ink)
+	await get_tree().process_frame
+
+
+func test_hand_name_refreshes_after_available_mana_changes_without_mouse_motion() -> void:
+	var wurm := _stage("Craw Wurm", 6)
+	var g := screen.game
+	var hand := StackHand.new()
+	add_child_autofree(hand)
+	hand.populate([wurm], false, func(_i): pass, screen._highlight_for)
+	var face := CardPile._face_in(hand._pile.get_child(0))
+	assert_true(face.castable)
+	var payable_ink := face._name_label.get_theme_color("font_color")
+	g.players[0].battlefield[0].tapped = true
+	g.recalculate()
+	hand.populate([wurm], false, func(_i): pass, screen._highlight_for)
+	face = CardPile._face_in(hand._pile.get_child(0))
+	assert_false(face.castable, "a new draw of the hand uses the five remaining mana")
+	assert_ne(face._name_label.get_theme_color("font_color"), payable_ink, "no pointer movement needed")
+	g.players[0].mana_pool.add(Mtg.ManaColor.G)
+	hand.populate([wurm], false, func(_i): pass, screen._highlight_for)
+	face = CardPile._face_in(hand._pile.get_child(0))
+	assert_true(face.castable, "floating mana also counts")
+	assert_eq(face._name_label.get_theme_color("font_color"), payable_ink)
+	await get_tree().process_frame

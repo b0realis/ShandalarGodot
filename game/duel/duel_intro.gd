@@ -30,6 +30,9 @@ const TIMEOUT := 5.0
 ## [QoL] One shared reminder before a private duel, never a phase prompt.
 const HOTSEAT_NOTICE := "Dear players, only show your hand when your opponent looks away. Good luck!"
 
+## [QoL] Adventure's start action stays prominent even without keyboard focus.
+const GO_ACCENT := Color(0.98, 0.81, 0.32)
+
 signal go_pressed
 signal reconfigure_pressed
 
@@ -61,10 +64,16 @@ func build(config: DuelConfig, back_label := "Reconfigure duel") -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.position = Vector2(60, 345)
 	buttons.size = Vector2(380, 40)
-	var back := UiChrome.menu_button(back_label, Vector2(190, 34), 15)
+	# Adventure replaces Reconfigure with Concede. Its destructive action
+	# must not inherit the wider button intended for that longer caption.
+	var adventure := back_label == "Concede"
+	var back := UiChrome.menu_button(back_label, Vector2(120 if adventure else 190, 34), 15)
 	back.pressed.connect(func() -> void: reconfigure_pressed.emit())
 	buttons.add_child(back)
-	var go := UiChrome.menu_button("Go!", Vector2(120, 34), 15)
+	var go := UiChrome.menu_button("Go!", Vector2(190 if adventure else 120, 34),
+		18 if adventure else 15, 0.4 if adventure else 0.0)
+	if adventure:
+		_highlight_go(go)
 	go.pressed.connect(func() -> void: go_pressed.emit())
 	buttons.add_child(go)
 	board.add_child(buttons)
@@ -75,6 +84,31 @@ func build(config: DuelConfig, back_label := "Reconfigure duel") -> void:
 	if is_inside_tree():
 		go.grab_focus()
 	set_process(true)
+
+
+## Warm stone and a permanent gold rim, separate from the keyboard's focus
+## ring. The rim ignores the mouse; the button keeps its pressed feedback.
+static func _highlight_go(button: Button) -> void:
+	button.add_theme_font_size_override("font_size", 18)
+	var face := button.get_theme_stylebox("normal").duplicate() as StyleBox
+	if face is StyleBoxTexture:
+		face.modulate_color = Color(1.10, 1.03, 0.84)
+	elif face is StyleBoxFlat:
+		face.bg_color = UiChrome.FACE.lightened(0.13)
+	button.add_theme_stylebox_override("normal", face)
+	var focus := OriginalDialog.focus_ring().duplicate() as StyleBoxFlat
+	focus.set_expand_margin_all(3.0)
+	button.add_theme_stylebox_override("focus", focus)
+	var rim := StyleBoxFlat.new()
+	rim.draw_center = false
+	rim.border_color = GO_ACCENT
+	rim.set_border_width_all(2)
+	var highlight := Panel.new()
+	highlight.name = "PrimaryHighlight"
+	highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	highlight.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	highlight.add_theme_stylebox_override("panel", rim)
+	button.add_child(highlight)
 
 
 ## The five-second timer. Kept here rather than in a SceneTreeTimer so a

@@ -1,11 +1,12 @@
 class_name SaveSlotsPane
 extends PanelContainer
-## SAVE THE ADVENTURE (the options' Save, Ctrl+S; the owner, 2026-10-23:
+## SAVE THE ADVENTURE (the options' Save; the owner, 2026-10-23:
 ## *"Add 10 named slots"*) — 1997's save list (`RunLoadSaveMenu` in save
 ## mode): ten rows, each a slot's name or "(Empty)"; a click on one lets its
 ## name be typed (the old name in it, nothing for an empty one), Enter
 ## saves into it, Escape puts the name back — and Escape again, or Done,
-## closes the list. In the panes' glass ([PaneStyle]).
+## closes the list. A separate blue Quickslot row comes first.
+## In the panes' glass ([PaneStyle]).
 ## [Ours: any letters and marks (1997 took letters, digits and spaces), at
 ## most [constant LONGEST] of them; a blank name becomes the day and the
 ## place ("Day 12 near Kraag Temple"); the list says where it was saved and
@@ -26,7 +27,7 @@ var player: AdventurePlayer
 var k := 1.0
 ## The slot whose name is being typed, 0 for none.
 var editing := 0
-## The ten slots as last read ([method SaveSlots.slots_of]): picking a
+## Quickslot and the ten named slots as last read ([method SaveSlots.slots_of]): picking a
 ## slot to name it remakes the rows from these, reading no file
 ## (campaign of 2026-10-23: every pick read every save in the folder).
 var _slots: Array[Dictionary] = []
@@ -46,7 +47,7 @@ func _ready() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(column)
 	column.add_child(PaneStyle.title("Save the adventure", 24))
-	column.add_child(PaneStyle.label("Click a slot, name it, and press Enter.", 15, PaneStyle.DIM))
+	column.add_child(PaneStyle.label("Ctrl+S replaces only Quickslot. Name a slot below to keep a save.", 15, PaneStyle.DIM))
 	_rows = VBoxContainer.new()
 	_rows.name = "Slots"
 	_rows.add_theme_constant_override("separation", 4)
@@ -70,13 +71,14 @@ func _ready() -> void:
 	refresh()
 
 
-## The ten rows as the files now stand.
+## Quickslot and the ten named rows as the files now stand.
 func refresh() -> void:
 	_slots = SaveSlots.slots_of(player.adventure_id)
+	_slots.push_front(SaveSlots.quickslot_of(player.adventure_id))
 	_show_rows()
 
 
-## The ten rows remade from the slots as last read.
+## The rows remade from the slots as last read.
 func _show_rows() -> void:
 	PaneStyle.drop_children(_rows)
 	_edit = null
@@ -90,7 +92,8 @@ func _row(entry: Dictionary) -> Control:
 	row.name = "Slot_%d" % slot
 	row.add_theme_constant_override("separation", 8)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var number := PaneStyle.label(str(slot), 16, PaneStyle.GOLD)
+	var quick := slot == SaveSlots.QUICK_SLOT
+	var number := PaneStyle.label("" if quick else str(slot), 16, PaneStyle.GOLD)
 	number.custom_minimum_size = Vector2(26, 0)
 	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(number)
@@ -105,12 +108,20 @@ func _row(entry: Dictionary) -> Control:
 		row.add_child(_edit)
 		_focus_later(_edit)
 	else:
-		var pick := PaneStyle.button(String(entry["name"]), "Pick_%d" % slot, k, 15)
+		var words := "Quickslot · Ctrl+S" if quick else String(entry["name"])
+		if quick and (bool(entry["empty"]) or bool(entry.get("damaged", false))):
+			words += " · " + String(entry["name"])
+		var pick := PaneStyle.button(words, "Pick_%d" % slot, k, 15)
 		pick.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if bool(entry["empty"]) or bool(entry.get("damaged", false)):
+		if quick:
+			pick.add_theme_color_override("font_color", PaneStyle.QUICK_BLUE)
+			pick.tooltip_text = "Replace Quickslot. Autosave and the ten named slots stay unchanged."
+			pick.pressed.connect(func() -> void: save_into(SaveSlots.QUICK_SLOT, ""))
+		elif bool(entry["empty"]) or bool(entry.get("damaged", false)):
 			pick.add_theme_color_override("font_color", PaneStyle.DIM)
-		pick.pressed.connect(edit.bind(slot))
+		if not quick:
+			pick.pressed.connect(edit.bind(slot))
 		row.add_child(pick)
 	# On the player's clock (the file keeps UTC).
 	var stamp := PaneStyle.label(AdventurePlayer.local_time(String(entry.get("saved", ""))), 13, PaneStyle.DIM)
@@ -143,9 +154,10 @@ func save_into(slot: int, slot_name: String) -> String:
 	var path := SaveSlots.save_into(player, slot, slot_name)
 	editing = 0
 	refresh()
-	_note.text = ("Saved to slot %d: %s." % [slot, player.slot_name]) if path != "" \
-		else "The adventure could not be saved."
+	_note.text = "The adventure could not be saved."
 	if path != "":
+		_note.text = "Saved to Quickslot." if slot == SaveSlots.QUICK_SLOT \
+			else "Saved to slot %d: %s." % [slot, player.slot_name]
 		saved.emit(path)
 	return path
 

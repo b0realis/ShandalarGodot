@@ -11,12 +11,17 @@ extends RefCounted
 ## carrying its own name (`adventure.slot_name`; 1997 kept the names in a
 ## file of their own, `saveDescs`, which could fall out of step with the
 ## saves). A slot is saved into from [SaveSlotsPane], loaded from
-## [LoadAdventureScreen]. A save written by an older version as
+## [LoadAdventureScreen]. Ctrl+S writes its own `<id>.quickslot.json`,
+## preserving the autosave and every named slot. A save written by an older version as
 ## `<id>.save.json` becomes the first free slot, "Saved game" ([method
 ## migrate]). Each save keeps its last good version beside it as `.bak`
 ## ([method AdventurePlayer.save]).
 
 const SLOTS := 10
+## A separate file, sorted before the autosave (0) and named slots (1–10).
+const QUICK_SLOT := -1
+const QUICK_KIND := "quickslot"
+const QUICK_NAME := "Quickslot"
 const EMPTY := "(Empty)"
 ## A slot whose file is there but cannot be read (damaged, or from a newer
 ## version of the game): not empty — saving into it replaces the file.
@@ -25,13 +30,17 @@ const LEGACY := "save"
 const LEGACY_NAME := "Saved game"
 
 
-## A slot's file kind: "slot01" … "slot10".
+## A slot's file kind: "quickslot", or "slot01" … "slot10".
 static func kind(slot: int) -> String:
+	if slot == QUICK_SLOT:
+		return QUICK_KIND
 	return "slot%02d" % clampi(slot, 1, SLOTS)
 
 
-## The slot of a file kind, 0 for the autosave or none.
+## The slot of a file kind: -1 quickslot, 1–10 manual, 0 autosave or none.
 static func slot_of(file_kind: String) -> int:
+	if file_kind == QUICK_KIND:
+		return QUICK_SLOT
 	return int(file_kind.trim_prefix("slot")) if file_kind.begins_with("slot") else 0
 
 
@@ -55,23 +64,39 @@ static func slots_of(id: String, folder := "") -> Array[Dictionary]:
 	migrate(folder)
 	var out: Array[Dictionary] = []
 	for slot in range(1, SLOTS + 1):
-		var path := path_of(id, slot, folder)
-		var save := AdventurePlayer.save_at(path)
-		var row := {"slot": slot, "path": path, "name": EMPTY, "saved": "", "empty": save.is_empty(),
-			"damaged": bool(save.get("unreadable", false))}
-		if row["damaged"]:
-			row["name"] = DAMAGED
-		elif not save.is_empty():
-			row["name"] = String(save["slot_name"])
-			row["saved"] = String(save["saved"])
-		out.append(row)
+		out.append(_slot_row(id, slot, folder))
 	return out
+
+
+## The quickslot beside the ten named slots; it never borrows one of them.
+static func quickslot_of(id: String, folder := "") -> Dictionary:
+	return _slot_row(id, QUICK_SLOT, AdventurePlayer.saves_folder if folder == "" else folder)
+
+
+static func _slot_row(id: String, slot: int, folder: String) -> Dictionary:
+	var path := path_of(id, slot, folder)
+	var save := AdventurePlayer.save_at(path)
+	var row := {"slot": slot, "path": path, "name": EMPTY, "saved": "", "empty": save.is_empty(),
+		"damaged": bool(save.get("unreadable", false))}
+	if row["damaged"]:
+		row["name"] = DAMAGED
+	elif not save.is_empty():
+		row["name"] = QUICK_NAME if slot == QUICK_SLOT else String(save["slot_name"])
+		row["saved"] = String(save["saved"])
+	return row
+
+
+## Ctrl+S uses its own atomic save and backup, without renaming a manual slot.
+static func save_quick(player: AdventurePlayer) -> String:
+	return player.save(player.save_path(QUICK_KIND))
 
 
 ## SAVE [param player] into slot [param slot] (1–10) by the name
 ## [param slot_name] (a day and a place when it is blank): the path
 ## written, or "".
 static func save_into(player: AdventurePlayer, slot: int, slot_name: String) -> String:
+	if slot == QUICK_SLOT:
+		return save_quick(player)
 	var called := slot_name.strip_edges()
 	if called == "" or called == EMPTY or called == DAMAGED:
 		called = default_name(player)

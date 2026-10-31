@@ -342,9 +342,8 @@ func _make_card(inst: CardInstance, hidden: bool, click_cb: Callable,
 	return holder
 
 
-## The original's list lights the row under the pointer (lighter strip,
-## YELLOW name — the owner's zoomed hand screenshot) and fills the docked
-## enlarged card with it.
+## Light the row under the pointer and fill the enlarged-card preview.
+## A hand's name still reflects castability, independently of hover.
 ##
 ## [param face] is deliberately UNTYPED: the pile is rebuilt on every board
 ## refresh, so a queued mouse_exited can arrive carrying a row widget that

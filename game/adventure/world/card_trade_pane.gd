@@ -230,7 +230,7 @@ func cards() -> Array[String]:
 	# Under the Classic MTG rules no card the hero holds every copy of the
 	# rules allow is offered ([method CardShop.classic_rule]).
 	var rule := CardShop.classic_rule(player)
-	for row in CardTrade.catalogue():
+	for row in CardTrade.for_trader(player, way):
 		var f: Dictionary = row["facts"]
 		if not CardShop.classic_allows(rule, String(row["name"])):
 			continue
