@@ -74,7 +74,7 @@ func _start() -> void:
 			if told < 0:
 				_ask_riddle(lines)
 				return
-			lines.append("Among its stones you learn of %s:" % WorldClues.title(told))
+			lines.append("Among its stones you learn of %s:" % WorldClues.title(told, player.world))
 			lines.append_array(WorldClues.lines(player.world, told))
 			_settle(lines)
 		LairEvent.LOREMASTER, LairEvent.PYRAMIDS:

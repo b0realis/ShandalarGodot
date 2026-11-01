@@ -192,7 +192,7 @@ static func on_step(player: AdventurePlayer) -> Array[Dictionary]:
 ## Whether no siege may begin or fall: a world at peace ([method
 ## AdventurePlayer.at_peace]), or the sieges' pace "None" (the class doc).
 static func calm(player: AdventurePlayer) -> bool:
-	return player.at_peace() or player.sieges == AdventurePlayer.SIEGES_NONE
+	return RefugeCampaign.on_island(player) or player.at_peace() or player.sieges == AdventurePlayer.SIEGES_NONE
 
 
 ## THE CLOCK'S JUMP AFTER A START: 1997's `clamp(d + T / 256, 0, 16)`; the

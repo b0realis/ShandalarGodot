@@ -272,6 +272,7 @@ static func meet(player: AdventurePlayer, row: int, color: int, slot := -1,
 ## peace, a creature meets the hero as anywhere else ([method
 ## master_fallen]): the fallen-master words, and Pay or the riddle offered.]
 static func relation_of(player: AdventurePlayer, _row: int, color: int, slot: int, at: Vector2i) -> int:
+	if RefugeCampaign.on_island(player): return NONE
 	if slot == SIEGE_SLOT:
 		return SIEGE
 	var world := player.world
@@ -328,6 +329,8 @@ static func _draw_hero_ante(player: AdventurePlayer, meeting: Dictionary, count:
 ## THE CREATURE'S WORDS by its relation and the wins (E:1745–1797; a
 ## henchman's 2085–2112), a line each as 1997 broke them.
 static func words(player: AdventurePlayer, meeting: Dictionary) -> Array[String]:
+	if RefugeCampaign.on_island(player):
+		return RefugeStories.roaming_words(player, int(meeting.get("wins", 0)))
 	var color := clampi(int(meeting["color"]), 1, 5)
 	var wizard: String = WorldNames.WIZARDS[color - 1]
 	var text := ""
@@ -615,6 +618,13 @@ static func reveal_magic(player: AdventurePlayer, index: int) -> Array[String]:
 ## all known, one more is learned ([method WorldClues.reveal]); then what is
 ## known of it, as the clue screen shows it. The lines.
 static func secrets(player: AdventurePlayer, meeting: Dictionary) -> Array[String]:
+	if RefugeCampaign.on_island(player):
+		var dungeon := WorldClues.reveal_for_hint(player)
+		if dungeon < 0:
+			return ["No further secrets of the island remain to tell."] as Array[String]
+		var local: Array[String] = [WorldClues.title(dungeon, player.world)]
+		local.append_array(WorldClues.lines(player.world, dungeon))
+		return local
 	var color := clampi(int(meeting["color"]), 1, 5)
 	if AdventurePlayer.COLORS[color - 1] in player.defeated_wizards:
 		return lines_of(DESTROYED % WorldNames.CASTLES[color - 1])

@@ -125,6 +125,10 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	if index < 0 or index >= cards.size() or cards[index] == "":
 		return {"bought": false, "said": "That card is sold.", "price": 0}
 	var card_name := cards[index]
+	# Saved stock survives disabling an optional pack, but its missing
+	# definition must not turn price_at's zero into a free purchase.
+	if not CardRegistry.has_card(card_name):
+		return {"bought": false, "said": "Enable this card's pack to buy it.", "price": 0}
 	var price := price_at(player, slot, card_name)
 	if player.gold < price:
 		return {"bought": false, "said": POOR, "price": price}
@@ -232,7 +236,8 @@ static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
 	for card_name in in_use:
 		size += int(in_use[card_name])
 	return {"sold": colors_sold(player.world, slot), "held": counted_copies(player),
-		"limit": allowed_for(player, size), "classic": classic_rule(player)}
+		"limit": allowed_for(player, size), "classic": classic_rule(player),
+		"stock": RefugeCampaign.add_stock(player, stock())}
 
 
 ## One card for place [param place]: a basic land of a colour the town
@@ -252,7 +257,7 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 	var held: Dictionary = rules["held"]
 	var limit := int(rules["limit"])
 	var fitting: Array[String] = []
-	for row in stock():
+	for row in rules.get("stock", stock()):
 		var f: Dictionary = row["facts"]
 		var bits := int(f.get("color", CardValue.COLORLESS))
 		if bits != CardValue.COLORLESS and not CardValue.first_color(bits) in sold:

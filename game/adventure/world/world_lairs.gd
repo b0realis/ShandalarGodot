@@ -156,8 +156,10 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 			var dy := RING if dice.below(2) != 0 else -RING
 			at = Vector2i(hero.x + dice.below(9) - RING, hero.y + dy)
 		mask = ShandalarWorld.magic_mask(world.terrain(at.x, at.y))
-		if mask != 0:
+		if mask != 0 and RefugeCampaign.marker(world, at) == "" \
+				and not (RefugeCampaign.on_island(player) and world.tile_flags(at.x, at.y) & ShandalarWorld.DUNGEON != 0):
 			break
+		mask = 0
 	if mask == 0:
 		_empty(player, slot)
 		return true
@@ -209,7 +211,7 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 	# for the quest's creature in slot 0, which keeps its own colour (part C
 	# stage C3, h2-2: beating its colour's castle made the quest impossible,
 	# its creature drawn and turned away here every time).
-	if not player.at_peace() and not (slot == 0 and wanted != 0 and row == wanted) \
+	if not RefugeCampaign.on_island(player) and not player.at_peace() and not (slot == 0 and wanted != 0 and row == wanted) \
 			and color >= 1 and color <= 5 \
 			and AdventurePlayer.COLORS[color - 1] in player.defeated_wizards:
 		if row == CreatureBook.LAIR:

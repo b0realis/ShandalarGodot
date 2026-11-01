@@ -35,6 +35,9 @@ const DUNGEON_MOUTH := Color8(14, 10, 12)
 
 var world: ShandalarWorld:
 	set(value):
+		if world != value:
+			if world != null: world.appearance_changed.disconnect(_follow)
+			if value != null: value.appearance_changed.connect(_follow)
 		world = value
 		if not _held:
 			_follow()
@@ -158,7 +161,7 @@ func _follow() -> void:
 	var tile := Vector2i(floori(hero.x / 32.0), floori(hero.y / 32.0))
 	var shown: Array = [null, tile, size]
 	if world != null:
-		shown = [world.get_instance_id(), tile, size, hash(world.page), world.sites.hash(), dungeons.hash()]
+		shown = [world.get_instance_id(), tile, size, hash(world.page), world.sites.hash(), dungeons.hash(), world.appearance_revision]
 	if shown != _drawn:
 		_drawn = shown
 		_anchor = Vector2(tile * 32 + Vector2i(16, 16))
@@ -220,7 +223,7 @@ func _draw_ground() -> void:
 				continue
 			_ground.draw_colored_polygon(PackedVector2Array([left, left + Vector2(TILE * 2.0, -TILE),
 				left + Vector2(TILE * 4.0, 0), left + Vector2(TILE * 2.0, TILE)]),
-				WorldView.PLAIN.get(world.terrain(x, y), WorldView.PLAIN[0]))
+				WorldTerrainPalette.plain(world, world.terrain(x, y), WorldView.PLAIN.get(world.terrain(x, y), WorldView.PLAIN[0]), Vector2i(x, y)))
 	for y in range(here.y - reach, here.y + reach + 1):
 		for x in range(here.x - reach, here.x + reach + 1):
 			var roads := world.road_bits(x, y)
@@ -232,7 +235,8 @@ func _draw_ground() -> void:
 			for d in range(1, 9):
 				if roads & (1 << (d - 1)) != 0:
 					var to := _on_ground(Vector2((x + ShandalarWorld.DX[d]) * 32 + 16, (y + ShandalarWorld.DY[d]) * 32 + 16))
-					_ground.draw_line(middle, middle.lerp(to, 0.5), ROAD, 1.0)
+					_ground.draw_line(middle, middle.lerp(to, 0.5), ROAD *
+						WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, Vector2i(x, y)), "roads"), 1.0)
 	for site in world.sites:
 		var x := int(site["x"])
 		var y := int(site["y"])
@@ -245,6 +249,14 @@ func _draw_ground() -> void:
 		var radius: float = [0.0, 1.6, 2.2, 2.8, 3.2, 3.2][clampi(kind, 0, 5)]
 		_ground.draw_circle(middle, radius + 1.0, Color(0, 0, 0, 0.85))
 		_ground.draw_circle(middle, radius, TOWN if kind < ShandalarWorld.CASTLE else GOLD)
+	for key in ["port", "castle"]:
+		var point: Array = world.expansion.get(key, [])
+		if point.size() == 2:
+			var at := _on_ground(Vector2(int(point[0]) * 32 + 16, int(point[1]) * 32 + 16))
+			if box.has_point(at):
+				_ground.draw_circle(at, 3.4, GOLD)
+				_ground.draw_circle(at, 1.8, Color(0.1, 0.3, 0.45) if key == "port" else Color(0.16, 0.08, 0.18))
+
 	for dungeon in dungeons:
 		var mouth := _on_ground(Vector2(int(dungeon["x"]) * 32 + 16, int(dungeon["y"]) * 32 + 16))
 		if box.has_point(mouth):

@@ -668,6 +668,7 @@ func rebuild_hud() -> void:
 ## Show [param adventure]: its world, the hero where they stand.
 func show_player(adventure: AdventurePlayer) -> void:
 	player = adventure
+	RefugeCampaign.initialize(player)
 	world = player.world
 	# The entry latch as the adventure kept it (c12, h1-1): only for the tile
 	# the hero stands on.
@@ -705,7 +706,7 @@ func _show_hero(ticked := false) -> void:
 	var known := WorldClues.on_world(world)
 	view.dungeons = known
 	# Arzakon's portal, open or petrified (part C, 2026-10-28) [ours].
-	view.portal = player.portal
+	view.portal = {} if RefugeCampaign.on_island(player) else player.portal
 	view.creatures = WorldCreatures.seen(player)
 	# The creatures' names over them, with the options' switch on (the
 	# owner's ruling of 2026-10-28 on the unused 1997 features, §5).
@@ -1159,7 +1160,9 @@ func _arrive_in_town(slot: int) -> Dictionary:
 		player.log_event("quest", "Completed quest at %s" % name, {"done": true})
 	TownStatus.put(world, slot, TownStatus.VISITED)
 	CardTrade.arrive(player, slot)
-	if player.last_town != slot:
+	# The five communities have their own petitions; other island
+	# settlements offer the same local errands as mainland settlements.
+	if player.last_town != slot and (not RefugeCampaign.on_island(player) or slot > 5):
 		Quests.arrive(player, slot)
 	CardShop.offers(player, slot)
 	CardHints.arrive(player, slot)
@@ -1206,6 +1209,8 @@ func _left_place(then: String) -> void:
 		_visit.queue_free()
 	_visit = null
 	_show_hero()
+	if RefugeJourney.act(self, then, place):
+		return
 	if not place.is_empty():
 		var slot := int(place["slot"])
 		match then:

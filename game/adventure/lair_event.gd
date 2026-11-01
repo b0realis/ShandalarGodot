@@ -67,6 +67,11 @@ const FOUND := "Found this card"
 ## The siege clock before thieves may win (`g_siege_timer < 0x80`).
 const SAFE_SIEGE := 128
 
+## Regional unlocks belong to the player, never the shared core cache.
+static func reward_pool(player: AdventurePlayer) -> Array[Dictionary]:
+	return RefugeCampaign.add_stock(player, _cards()) if player != null else _cards()
+
+
 ## Every card of the adventure ([method _cards]), and the card pool's
 ## revision it was read against (−1: not yet) — read again when a pack is
 ## turned on or off ([method CardValue.pool_moved]).
@@ -98,7 +103,7 @@ static func begin(player: AdventurePlayer, lair: Dictionary) -> Dictionary:
 		if color >= 1 and dice.below(2) != 0:
 			out["reward"] = CardShop.LANDS[color - 1]
 		else:
-			out["reward"] = _treasure(dice, color, CardShop.classic_rule(player))
+			out["reward"] = _treasure(dice, color, CardShop.classic_rule(player), player)
 		player.dice = dice.state
 		return out
 	var event := 0
@@ -109,7 +114,7 @@ static func begin(player: AdventurePlayer, lair: Dictionary) -> Dictionary:
 	out["event"] = event
 	out["name"] = NAMES[event]
 	if dice.below(4) == 0:
-		out["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
+		out["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player), player)
 	player.dice = dice.state
 	player.log_event("lair", "Discovered %s" % with_article(NAMES[event]))
 	return out
@@ -149,7 +154,7 @@ static func thieves(player: AdventurePlayer, event: Dictionary) -> String:
 		said = "You get 500 gold!"
 	else:
 		player.gold /= 2
-		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
+		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player), player)
 		said = "Thieves take half your gold!"
 	player.dice = dice.state
 	return said
@@ -167,7 +172,7 @@ static func lost_city(player: AdventurePlayer, event: Dictionary) -> String:
 		event["reward"] = ""
 		said = "You find an amulet of each color!"
 	else:
-		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
+		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player), player)
 		said = "Thieves take half your amulets!"
 	player.dice = dice.state
 	return said
@@ -222,7 +227,7 @@ static func riddle_answered(player: AdventurePlayer, event: Dictionary, right: b
 		return
 	if int(event.get("event", 0)) == PYRAMIDS:
 		var dice := MsvcRandom.new(player.dice)
-		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player))
+		event["reward"] = rare_of_any_kind(dice, CardShop.classic_rule(player), player)
 		player.dice = dice.state
 	else:
 		event["reward"] = String(event.get("lair_rare", ""))
@@ -250,9 +255,9 @@ static func finish(player: AdventurePlayer, event: Dictionary) -> String:
 ## gave such cards, the one source the rules had missed (the bug campaign
 ## c12, h2-1). One die still cast, as before. A lair duel's hoard passes no
 ## rule ([method LairDuels.begin]): a creature's stake is never limited.
-static func rare_of_any_kind(dice: MsvcRandom, classic := {}) -> String:
+static func rare_of_any_kind(dice: MsvcRandom, classic := {}, player: AdventurePlayer = null) -> String:
 	var rares: Array[String] = []
-	for row in _cards():
+	for row in reward_pool(player):
 		if CardShop.shop_rarity(row["facts"]) >= 3 and CardShop.classic_allows(classic, String(row["name"])):
 			rares.append(String(row["name"]))
 	return rares[dice.below(rares.size())] if not rares.is_empty() else ""
@@ -274,7 +279,7 @@ static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) ->
 	var classic := CardShop.classic_rule(player)
 	var spells: Array[String] = []
 	var artifacts: Array[String] = []
-	for row in CardTrade.catalogue():
+	for row in CardTrade.for_trader(player, CardTrade.REWARD):
 		var f: Dictionary = row["facts"]
 		if CardShop.shop_rarity(f) != 3:
 			continue
@@ -294,11 +299,11 @@ static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) ->
 ## The treasure's card: any of the lair's colour [param color] or none,
 ## never a dungeon's — nor, under the Classic MTG rules, one they let no one
 ## offer the hero ([param classic]: [method CardShop.classic_rule]).
-static func _treasure(dice: MsvcRandom, color: int, classic := {}) -> String:
+static func _treasure(dice: MsvcRandom, color: int, classic := {}, player: AdventurePlayer = null) -> String:
 	var found: Array[String] = []
-	for row in _cards():
+	for row in reward_pool(player):
 		var f: Dictionary = row["facts"]
-		if int(f.get("extra", 0)) & 0x100 != 0 or bool(row["treasure"]):
+		if int(f.get("extra", 0)) & 0x100 != 0 or bool(row.get("treasure", false)):
 			continue
 		if not CardShop.classic_allows(classic, String(row["name"])):
 			continue

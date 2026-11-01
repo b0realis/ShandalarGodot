@@ -260,7 +260,7 @@ static func _lines_read(player: AdventurePlayer) -> Array:
 		world.encounters.slice(0, 5).hash() if world != null else 0,
 		player.quest.hash(), days_left(player), card_held,
 		besieger.is_empty(), besieger.get("creature", 0), besieger.get("town", -1),
-		player.portal.hash(), player.ended,
+		player.portal.hash(), player.ended, player.refuge.get("quests", []).hash(), player.refuge.get("liberated", false),
 		player.next_duel_life_carried, player.next_duel_life, player.next_duel_first_move, player.next_duel_card,
 		player.owns("Ring of the Guardian")]
 
@@ -274,6 +274,7 @@ static func lines_fresh(player: AdventurePlayer) -> Array[String]:
 	if under_siege != "":
 		out.append(under_siege)
 	out.append_array(quest_lines(player))
+	out.append_array(RefugeCampaign.status_lines(player))
 	var portal := FinalBattle.portal_line(player)
 	if portal != "":
 		out.append(portal)
@@ -301,6 +302,10 @@ static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 		var site: Dictionary = player.world.sites[target]
 		out.append({"tile": Vector2i(int(site["x"]), int(site["y"])), "kind": "quest",
 			"name": WorldNames.site_name(player.world, target)})
+	# A timed errand takes priority over the island's continuing story.
+	var refuge := RefugeCampaign.next_target(player)
+	if not refuge.is_empty():
+		out.append(refuge)
 	var portal := FinalBattle.portal_target(player)
 	if not portal.is_empty():
 		out.append(portal)

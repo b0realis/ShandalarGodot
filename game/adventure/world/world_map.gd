@@ -79,7 +79,13 @@ const STONE_FRAMES: Array[int] = [2, 1, 4, 3, 0]
 ## How long the hero's square is lit, and then dark.
 const BLINK := 0.33
 
-var world: ShandalarWorld
+var world: ShandalarWorld:
+	set(value):
+		if world != value:
+			if world != null: world.appearance_changed.disconnect(_appearance_changed)
+			if value != null: value.appearance_changed.connect(_appearance_changed)
+		world = value
+		_appearance_changed()
 ## The adventure, for the amulets, the links and the journal; may be null.
 var player: AdventurePlayer
 ## The hero's tile; setting it moves the blinking square.
@@ -99,6 +105,11 @@ var _hero_mark: ColorRect
 var _art := WorldArt.new()
 var _buttons := {}
 var _font: Font
+
+
+func _appearance_changed() -> void:
+	_art.terrain_palette = WorldTerrainPalette.for_world(world)
+	queue_redraw()
 
 
 func _ready() -> void:
@@ -173,7 +184,8 @@ func _written(from: int, way: int) -> int:
 		return -1
 	var at := from
 	while at >= 0 and at < player.journal.size():
-		if String((player.journal[at] as Dictionary).get("text", "")) != "":
+		if String((player.journal[at] as Dictionary).get("text", "")) != "" \
+				and player.journal[at].get("region", "mainland") == (world.expansion.get("region", "mainland") if world != null else "mainland"):
 			return at
 		at += way if way != 0 else -1
 	return -1
@@ -302,14 +314,17 @@ func _draw_land() -> void:
 				continue
 			var at := tile_point(Vector2i(x, y))
 			var code := world.terrain(x, y) & 0x0F
-			if tiles != null:
+			var style := WorldTerrainPalette.resolve(world, Vector2i(x, y))
+			var sheet := tiles if style["preset"] == _art.terrain_palette else _art.texture_for("world_map_tiles", style["preset"])
+			if sheet != null:
 				var frame := tile_look(Vector2i(x, y)) * 16 + code
 				var cell := _art.frame_rect("world_map_tiles", frame)
-				draw_texture_rect_region(tiles, Rect2(at - Vector2(6, 6), Vector2(13, 13)),
-					Rect2(cell.position, Vector2(13, 13)))
+				draw_texture_rect_region(sheet, Rect2(at - Vector2(6, 6), Vector2(13, 13)),
+					Rect2(cell.position, Vector2(13, 13)), WorldTerrainPalette.modulate(style, "ground"))
 			elif code != ShandalarWorld.OCEAN:
 				draw_colored_polygon(PackedVector2Array([at + Vector2(-6, 0), at + Vector2(0, -6),
-					at + Vector2(6, 0), at + Vector2(0, 6)]), WorldView.PLAIN.get(code, WorldView.PLAIN[0]))
+					at + Vector2(6, 0), at + Vector2(0, 6)]),
+					WorldTerrainPalette.plain(world, code, WorldView.PLAIN.get(code, WorldView.PLAIN[0]), Vector2i(x, y)))
 	# The roads: world direction (k mod 8) + 1 drawn as screen direction k.
 	for y in ShandalarWorld.TILES:
 		for x in ShandalarWorld.TILES:
@@ -320,10 +335,22 @@ func _draw_land() -> void:
 			for k in range(1, 9):
 				var d := (k % 8) + 1
 				if roads & (1 << (d - 1)) != 0:
-					draw_line(at, at + Vector2(ShandalarWorld.DX[k], ShandalarWorld.DY[k]) * 7.0, ROAD_INK, 2.0)
+					draw_line(at, at + Vector2(ShandalarWorld.DX[k], ShandalarWorld.DY[k]) * 7.0,
+						ROAD_INK * WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, Vector2i(x, y)), "roads"), 2.0)
 
 
 func _draw_places() -> void:
+	if world.expansion.get("region", "") == RefugeCampaign.ISLAND:
+		for dungeon in WorldClues.on_world(world):
+			var at := tile_point(Vector2i(dungeon["x"], dungeon["y"]))
+			draw_circle(at, 4.0, Color(0.7, 0.5, 0.9))
+			_boxed("Dungeon", at + Vector2(0, -12), Color.WHITE, 9)
+	for key in ["port", "castle"]:
+		var point: Array = world.expansion.get(key, [])
+		if point.size() == 2:
+			var at := tile_point(Vector2i(int(point[0]), int(point[1])))
+			draw_circle(at, 5.0, Color(0.9, 0.72, 0.3))
+			_boxed("Ship" if key == "port" else "Ebon Crown", at + Vector2(0, -12), Color.WHITE, 10)
 	var tiles := _art.texture("world_map_tiles")
 	var besieged := WorldStatus.siege_town(player) if player != null else -1
 	for slot in world.sites.size():

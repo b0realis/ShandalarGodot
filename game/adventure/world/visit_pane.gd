@@ -157,6 +157,9 @@ static func describe(hero: AdventurePlayer, tile: Vector2i) -> Dictionary:
 	var world := hero.world
 	if world == null:
 		return {}
+	var refuge := RefugeJourney.describe(hero, tile)
+	if not refuge.is_empty():
+		return refuge
 	for lair in WorldLairs.seen(hero):
 		if Vector2i(int(lair["x"]) / 32, int(lair["y"]) / 32) == tile:
 			return _lair(lair)
@@ -167,15 +170,15 @@ static func describe(hero: AdventurePlayer, tile: Vector2i) -> Dictionary:
 		if kind >= ShandalarWorld.CASTLE:
 			return _castle(hero, slot, kind)
 		if kind >= ShandalarWorld.VILLAGE:
-			return _town(hero, slot, kind)
+			return RefugeJourney.decorate_town(hero, slot, _town(hero, slot, kind))
 	if world.tile_flags(tile.x, tile.y) & ShandalarWorld.DUNGEON != 0:
 		for index in range(5, world.encounters.size()):
 			var dungeon: Dictionary = world.encounters[index]
 			if int(dungeon.get("x", -1)) == tile.x and int(dungeon.get("y", -1)) == tile.y \
 					and index in WorldClues.known(world):
-				return {"kind": "dungeon", "slot": index, "name": WorldNames.dungeon_name(index),
+				return {"kind": "dungeon", "slot": index, "name": WorldNames.dungeon_name(index, world),
 					"subtitle": "Dungeon", "picture": "visit_dungeon",
-					"lines": ["The way down into %s." % WorldNames.dungeon_name(index)]
+					"lines": [RefugeStories.VAULT if RefugeCampaign.on_island(hero) else "The way down into %s." % WorldNames.dungeon_name(index, world)]
 						+ WorldClues.lines(world, index),
 					"actions": [["enter", "Enter the dungeon", DungeonDoors.BOARD_READY], ["leave", "Leave", true]]}
 	return {}
@@ -427,7 +430,7 @@ func _picture() -> Control:
 	_most = clampf(minf((room.x - 120.0) / PICTURE.x, (room.y - rest) / PICTURE.y), LEAST, MOST)
 	_art = TextureRect.new()
 	_art.name = "Art"
-	_art.texture = GameSkin.texture(String(place.get("picture", "")))
+	_art.texture = RefugeArt.picture(String(place.get("picture", "")))
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -760,6 +763,9 @@ func words() -> String:
 
 ## What a choice does.
 func choose(action: String) -> void:
+	if action.begins_with("refuge_"):
+		left.emit(action)
+		return
 	match action:
 		"leave":
 			left.emit("")

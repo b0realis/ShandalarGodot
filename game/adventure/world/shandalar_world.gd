@@ -92,6 +92,12 @@ var start := Vector2i.ZERO
 var lair_respawn: Array[int] = []
 ## The dice after the world was made, for whatever draws next.
 var rand_state := 0
+## Optional regional places and names; the original terrain remains intact.
+var expansion: Dictionary = {}
+## Presentation-only edits notify views; this counter is not part of saves
+## or the terrain fingerprint. Appearance settings live in expansion.
+signal appearance_changed
+var appearance_revision := 0
 
 
 func terrain(x: int, y: int) -> int:

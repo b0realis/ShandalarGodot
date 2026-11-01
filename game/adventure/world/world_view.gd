@@ -148,8 +148,11 @@ extends Control
 ## The world drawn, and the world point at the screen's [member feet].
 var world: ShandalarWorld:
 	set(value):
+		if world != value:
+			if world != null: world.appearance_changed.disconnect(_appearance_changed)
+			if value != null: value.appearance_changed.connect(_appearance_changed)
 		world = value
-		_changed()
+		_appearance_changed()
 var camera := Vector2(0, 0):
 	set(value):
 		camera = value
@@ -761,6 +764,11 @@ func _changed() -> void:
 	queue_redraw()
 
 
+func _appearance_changed() -> void:
+	art.terrain_palette = WorldTerrainPalette.for_world(world)
+	_changed()
+
+
 ## The next pictures drawn on every frame they are being drawn, whoever
 ## else looks at the view ([method _draw_ahead]).
 func _process(_delta: float) -> void:
@@ -825,7 +833,7 @@ func _refresh(look_again: bool) -> void:
 	if look_again or _shown.is_empty():
 		_look_at_sites()
 		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), _sites_drawn,
-			lairs.hash(), dungeons.hash(), portal.hash()]
+			lairs.hash(), dungeons.hash(), portal.hash(), art.terrain_palette, world.appearance_revision]
 		if shown != _shown:
 			if _shown.size() < 3 or shown.slice(0, 3) != _shown.slice(0, 3):
 				# Another world, the sheets come or gone, the dark switched:
@@ -1113,7 +1121,7 @@ func _begin(camera_now: Vector2, cover: float) -> Picture:
 	picture.origin = _lay(Vector2(picture.anchor))
 	picture.shown = _shown
 	picture.plain = not art.ready()
-	var recipe_for := [world.get_instance_id(), picture.plain]
+	var recipe_for := [world.get_instance_id(), picture.plain, art.terrain_palette, world.appearance_revision]
 	if recipe_for != _recipe_for:
 		_recipes.clear()
 		_recipe_for = recipe_for
@@ -1344,7 +1352,9 @@ func _gather(picture: Picture, i: int) -> void:
 		for upright in picture.recipes[i][2]:
 			picture.keys.append(_upright_key(int(left.y) + int(upright[0]), picture.standing.size()))
 			var op := [upright[1], Rect2(left + upright[2].position, upright[2].size), upright[3]]
-			if upright.size() > 4:
+			if upright.size() > 4 and upright[4] is Color:
+				op.append(upright[4])
+			elif upright.size() > 4:
 				# The tile's place: its tile beside it ([method hero_parts]).
 				op.append(picture.tiles[i])
 			picture.standing.append(op)
@@ -1463,7 +1473,12 @@ static func _put(item: RID, op: Array, left: Vector2) -> void:
 	if op.is_empty():
 		return
 	var where: Rect2 = op[1]
-	(op[0] as Texture2D).draw_rect_region(item, Rect2(left + where.position, where.size), op[2])
+	(op[0] as Texture2D).draw_rect_region(item, Rect2(left + where.position, where.size), op[2], op_color(op))
+
+
+## Optional fourth part: a tint for terrain, or a tile for a place.
+static func op_color(op: Array) -> Color:
+	return op[3] if op.size() > 3 and op[3] is Color else Color.WHITE
 
 
 ## THE GROUND PLAIN (no 1997 sheets): drawn here, on the Ground picture
@@ -1630,7 +1645,7 @@ func _paint_hero() -> void:
 	var figure := Rect2(at - Vector2(77, 61), frame_rect.size)
 	_figure.draw_texture_rect_region(sheet, figure, frame_rect)
 	for part in hero_parts(figure):
-		_figure.draw_texture_rect_region(part[0], part[1], part[2])
+		_figure.draw_texture_rect_region(part[0], part[1], part[2], op_color(part))
 
 
 ## THE PARTS DRAWN AGAIN OVER THE HERO whose frame is [param figure]
@@ -1659,7 +1674,7 @@ func _paint_creature(creature: Dictionary) -> void:
 	var body := Rect2(at - art.creature_anchor(key), rect.size)
 	_figure.draw_texture_rect_region(sheet, body, rect)
 	for part in _in_front_of(at.y, body):
-		_figure.draw_texture_rect_region(part[0], part[1], part[2])
+		_figure.draw_texture_rect_region(part[0], part[1], part[2], op_color(part))
 
 
 ## Where creature [param creature]'s feet are on the pictures.
@@ -1682,7 +1697,7 @@ func _in_front_of(feet_y: float, figure: Rect2, own := Vector2i(-1, -1)) -> Arra
 		if _upright_feet[i] > feet_y + IN_FRONT:
 			break
 		var op: Array = _upright_ops[i]
-		if op.size() > 3 and op[3] == own:
+		if op.size() > 3 and op[3] is Vector2i and op[3] == own:
 			continue
 		var where: Rect2 = op[1]
 		var over := where.intersection(figure)
@@ -1690,7 +1705,9 @@ func _in_front_of(feet_y: float, figure: Rect2, own := Vector2i(-1, -1)) -> Arra
 			continue
 		var from := (over.position - where.position).floor()
 		var to := (over.end - where.position).ceil().min(where.size)
-		parts.append([op[0], Rect2(where.position + from, to - from), Rect2(op[2].position + from, to - from)])
+		var part := [op[0], Rect2(where.position + from, to - from), Rect2(op[2].position + from, to - from)]
+		if op_color(op) != Color.WHITE: part.append(op_color(op))
+		parts.append(part)
 	return parts
 
 
@@ -1724,17 +1741,24 @@ func _paint_fog(canvas: CanvasItem) -> void:
 ## at [param left] on [param canvas].
 static func _blit(canvas: CanvasItem, op: Array, left: Vector2) -> void:
 	if not op.is_empty():
-		canvas.draw_texture_rect_region(op[0], Rect2(left + op[1].position, op[1].size), op[2])
+		canvas.draw_texture_rect_region(op[0], Rect2(left + op[1].position, op[1].size), op[2], op_color(op))
 
 
 ## Frame [param frame] of sheet [param key] with its corner at [param at]:
 ## `[sheet, where, frame]`, or [] when the skin lacks the sheet.
-func _op(key: String, frame: int, at: Vector2) -> Array:
+func _op(key: String, frame: int, at: Vector2, tile := Vector2i(-1, -1)) -> Array:
 	var sheet := art.texture(key)
+	var tint := Color.WHITE
+	var layer := WorldTerrainPalette.layer_for(key)
+	if tile.x >= 0 and layer != "":
+		var style := WorldTerrainPalette.resolve(world, tile)
+		if style["preset"] != art.terrain_palette:
+			sheet = art.texture_for(key, style["preset"])
+		tint = WorldTerrainPalette.modulate(style, layer)
 	if sheet == null:
 		return []
 	var rect := art.frame_rect(key, frame)
-	return [sheet, Rect2(at, rect.size), rect]
+	return [sheet, Rect2(at, rect.size), rect, tint] if tint != Color.WHITE else [sheet, Rect2(at, rect.size), rect]
 
 
 ## WHAT A TILE SHOWS, round its left corner, worked out once a world:
@@ -1761,12 +1785,12 @@ func _ground_of(tile: Vector2i, ops: Array) -> void:
 	var code := world.terrain(tile.x, tile.y)
 	var colors := ShandalarWorld.magic_mask(code)
 	if code == 0 or code == 8:
-		_add(ops, _op("world_landtile", 1, box))
+		_add(ops, _op("world_landtile", 1, box, tile))
 	else:
 		if code == 1:
-			_add(ops, _op("world_landtile", 2, box))
+			_add(ops, _op("world_landtile", 2, box, tile))
 		else:
-			_add(ops, _op("world_landtile", 4 if colors == 2 else 0, box))
+			_add(ops, _op("world_landtile", 4 if colors == 2 else 0, box, tile))
 		var coast := 0
 		var black := 0
 		for d in range(1, 9):
@@ -1778,12 +1802,12 @@ func _ground_of(tile: Vector2i, ops: Array) -> void:
 				coast |= 0x80
 			if colors != 2 and next_colors == 2:
 				black |= 0x80
-		_edges(black, 4, box, ops)
-		_edges(coast, 0, box, ops)
+		_edges(black, 4, box, ops, tile)
+		_edges(coast, 0, box, ops, tile)
 	var roads := world.road_bits(tile.x, tile.y)
 	for i in 8:
 		if roads & (1 << i) != 0:
-			_add(ops, _op("world_roads", ((i - 2) & 7) + 1, box))
+			_add(ops, _op("world_roads", ((i - 2) & 7) + 1, box, tile))
 
 
 static func _add(ops: Array, op: Array) -> void:
@@ -1794,7 +1818,7 @@ static func _add(ops: Array, op: Array) -> void:
 ## The four quarters of a diamond, each reading its two edge neighbours
 ## and the corner between (bits of the eight directions, wrapped): top
 ## N NE E, bottom S SW W, left W NW N, right E SE S.
-func _edges(bits: int, first_row: int, box: Vector2, ops: Array) -> void:
+func _edges(bits: int, first_row: int, box: Vector2, ops: Array, tile := Vector2i(-1, -1)) -> void:
 	if bits == 0:
 		return
 	bits |= bits << 8
@@ -1808,12 +1832,16 @@ func _edges(bits: int, first_row: int, box: Vector2, ops: Array) -> void:
 		if three == 0:
 			continue
 		var at := box + (Vector2(32, (i & 1) * 32) if i < 2 else Vector2((i & 1) * 64, 16))
-		_add(ops, _op("world_cstline1", (first_row + i) * 7 + three - 1, at))
+		_add(ops, _op("world_cstline1", (first_row + i) * 7 + three - 1, at, tile))
 
 
 ## What stands on [param tile]: its two trees or rocks, or its site — the
 ## ground halves into [param halves], the uprights into [param uprights].
 func _standing_on(tile: Vector2i, halves: Array, uprights: Array) -> void:
+	var refuge := RefugeCampaign.marker(world, tile)
+	if refuge != "":
+		_stand(uprights, 0, RefugeArt.map_op(refuge), true)
+		return
 	if tile == portal_tile():
 		return  # [ours] the portal stands alone on its tile, as a site does
 	var flags := world.tile_flags(tile.x, tile.y)
@@ -1830,22 +1858,22 @@ func _standing_on(tile: Vector2i, halves: Array, uprights: Array) -> void:
 		if column >= 5:
 			column %= 5
 			row += 11
-		_object(row, column, Vector2(ox, -oy), halves, uprights)
+		_object(row, column, Vector2(ox, -oy), halves, uprights, tile)
 		row = (pattern + tile.x) % 11 + (11 if row >= 11 else 0)
-		_object(row, column, Vector2(-ox, oy), halves, uprights)
+		_object(row, column, Vector2(-ox, oy), halves, uprights, tile)
 	if flags & ShandalarWorld.SITE != 0:
 		_site(tile, halves, uprights)
 
 
 ## One tree or rock standing at [param foot]: its ground half and its
 ## upright, both at the foot less the frame's anchor.
-func _object(row: int, column: int, foot: Vector2, halves: Array, uprights: Array) -> void:
+func _object(row: int, column: int, foot: Vector2, halves: Array, uprights: Array, tile := Vector2i(-1, -1)) -> void:
 	var upright := "world_land2" if row >= 11 else "world_land"
 	var ground := "world_sland2" if row >= 11 else "world_sland"
 	var frame := (row % 11) * 5 + column
 	var at := foot - Vector2(0, art.top(upright, frame))
-	_add(halves, _op(ground, frame, at))
-	_stand(uprights, int(foot.y), _op(upright, frame, at))
+	_add(halves, _op(ground, frame, at, tile))
+	_stand(uprights, int(foot.y), _op(upright, frame, at, tile))
 
 
 ## [param op] standing with its foot [param foot] below the tile's corner;
@@ -1853,7 +1881,10 @@ func _object(row: int, column: int, foot: Vector2, halves: Array, uprights: Arra
 ## hero_parts]).
 static func _stand(uprights: Array, foot: int, op: Array, place := false) -> void:
 	if not op.is_empty():
-		uprights.append([foot, op[0], op[1], op[2], true] if place else [foot, op[0], op[1], op[2]])
+		if op_color(op) != Color.WHITE:
+			uprights.append([foot, op[0], op[1], op[2], op_color(op)])
+		else:
+			uprights.append([foot, op[0], op[1], op[2], true] if place else [foot, op[0], op[1], op[2]])
 
 
 func _site(tile: Vector2i, halves: Array, uprights: Array) -> void:
@@ -1998,7 +2029,8 @@ func _paint_plain() -> void:
 		var left := _lefts[i]
 		var points := PackedVector2Array([left, left + Vector2(64, -32),
 			left + Vector2(128, 0), left + Vector2(64, 32)])
-		canvas.draw_colored_polygon(points, PLAIN.get(world.terrain(tile.x, tile.y), PLAIN[0]))
+		canvas.draw_colored_polygon(points, WorldTerrainPalette.plain(world,
+			world.terrain(tile.x, tile.y), PLAIN.get(world.terrain(tile.x, tile.y), PLAIN[0]), tile))
 	if fog:
 		_paint_fog(canvas)
 	var origin := _lay(Vector2(_anchor))
@@ -2012,7 +2044,8 @@ func _paint_plain() -> void:
 			if roads & (1 << (d - 1)) != 0:
 				var to := _lay(Vector2((tile.x + ShandalarWorld.DX[d]) * 32 + 16,
 					(tile.y + ShandalarWorld.DY[d]) * 32 + 16)) - origin
-				canvas.draw_line(middle, middle.lerp(to, 0.5), Color8(123, 63, 7), 3.0)
+				canvas.draw_line(middle, middle.lerp(to, 0.5), Color8(123, 63, 7) *
+					WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, tile), "roads"), 3.0)
 	for i in _tiles.size():
 		var tile := _tiles[i]
 		if world.tile_flags(tile.x, tile.y) & ShandalarWorld.SITE == 0 or _seen[i] == 0:
@@ -2025,6 +2058,14 @@ func _paint_plain() -> void:
 		var radius: float = [0, 7, 11, 14, 18, 18][clampi(kind, 0, 5)]
 		canvas.draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
+	for i in _tiles.size():
+		var kind := RefugeCampaign.marker(world, _tiles[i])
+		if kind != "" and _seen[i] != 0:
+			var op := RefugeArt.map_op(kind)
+			var dest: Rect2 = op[1]
+			dest.position += _lefts[i]
+			canvas.draw_texture_rect_region(op[0], dest, op[2])
+
 	for dungeon in dungeons:
 		draw_dungeon_plain(canvas, _lay(Vector2(int(dungeon["x"]) * 32 + 16, int(dungeon["y"]) * 32 + 16)) - origin)
 	for lair in lairs:

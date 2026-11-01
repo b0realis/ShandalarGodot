@@ -113,14 +113,16 @@ static func catalogue(all_cards := false) -> Array[Dictionary]:
 
 
 ## The campaign's choice applies to town trades, the Bazaar and the Mine.
-## The same pane's free quest reward keeps its original selection.
+## Free quest rewards retain their original exclusions; both pools then
+## receive whichever regional expansion the campaign has unlocked.
 static func for_trader(player: AdventurePlayer, way: String) -> Array[Dictionary]:
-	return catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
+	var base := catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
+	return RefugeCampaign.add_stock(player, base) if player != null else base
 
 
 ## Whether [param card_name] is one of the adventure's cards: the 1997
-## game's base sets (Unlimited to Fourth Edition, the Astral cards), not a
-## pack's — adventures are made without packs for now.
+## game's base sets (Unlimited to Fourth Edition, the Astral cards).
+## Regional expansion stock is added separately by [method for_trader].
 static func in_adventure(card_name: String) -> bool:
 	var data := CardRegistry.get_card(card_name) if CardRegistry.has_card(card_name) else null
 	return data != null and data.set_code in CardRegistry.SET_ORDER \

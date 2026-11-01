@@ -200,7 +200,7 @@ static func offered(player: AdventurePlayer, taken: Array, color: int) -> Array[
 	var out: Array[String] = []
 	var bit := 1 << clampi(color, 1, 5)
 	var rule := CardShop.classic_rule(player)
-	for row in CardTrade.catalogue():
+	for row in CardTrade.for_trader(player, CardTrade.REWARD):
 		var card_name := String(row["name"])
 		if card_name in taken or not CardTrade.wanted(bit, row["facts"]):
 			continue

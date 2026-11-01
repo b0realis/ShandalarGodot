@@ -204,7 +204,7 @@ static func _won(player: AdventurePlayer, meeting: Dictionary, spoils: Dictionar
 	spoils["heights"] = heights
 	var hint := int(spoils["hint"])
 	if hint >= 0:
-		spoils["plaque"] = {"name": WorldNames.dungeon_name(hint),
+		spoils["plaque"] = {"name": WorldNames.dungeon_name(hint, player.world),
 			"cards": ", ".join(PackedStringArray(WorldClues.treasures(player.world, hint))),
 			"clue": WorldClues.clue_word(player.world, hint)}
 		WorldClues.forget_marks(player)
@@ -231,7 +231,7 @@ static func choose(player: AdventurePlayer, meeting: Dictionary, spoils: Diction
 		spoils["took"] = "cards"
 	else:
 		WorldClues.reveal(player, hint)
-		var clue: Array[String] = [WorldClues.title(hint)]
+		var clue: Array[String] = [WorldClues.title(hint, player.world)]
 		clue.append_array(WorldClues.lines(player.world, hint))
 		spoils["clue"] = clue
 		spoils["took"] = "clue"
@@ -355,7 +355,7 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 			spoils["reward_card"] = card
 			lines.append(CARD_NEXT % card)
 	if left & CreatureBook.REWARD_ARTIFACT_NEXT != 0:
-		var artifact := _random_artifact(dice)
+		var artifact := _random_artifact(dice, player)
 		if artifact != "":
 			player.next_duel_card = artifact
 			spoils["reward_card"] = artifact
@@ -380,8 +380,8 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 ## A random non-creature artifact for the next duel (E:2556–2567: a card
 ## drawn until it is an artifact and not a creature), "" when the pool has
 ## none.
-static func _random_artifact(dice: MsvcRandom) -> String:
-	var pool := CardTrade.catalogue()
+static func _random_artifact(dice: MsvcRandom, player: AdventurePlayer = null) -> String:
+	var pool := CardTrade.for_trader(player, CardTrade.REWARD)
 	if pool.is_empty():
 		return ""
 	for attempt in PICK_GUARD:
@@ -393,11 +393,14 @@ static func _random_artifact(dice: MsvcRandom) -> String:
 
 
 ## "YOU GET ANY CARD OF YOUR CHOICE!" — [param card_name] picked from every
-## card ([method CardTrade.catalogue]) joins the collection. 1997 asked
+## card in the regional reward pool joins the collection. 1997 asked
 ## again until a card was picked (E:2604–2612): the pane does.
 static func pick_any(player: AdventurePlayer, spoils: Dictionary, card_name: String) -> bool:
 	if not bool(spoils.get("pick_any", false)) or not CardRegistry.has_card(card_name) \
 			or not CardShop.may_offer(player, card_name):
+		return false
+	if not CardTrade.for_trader(player, CardTrade.REWARD).any(func(row: Dictionary) -> bool:
+		return String(row["name"]) == card_name):
 		return false
 	spoils["pick_any"] = false
 	spoils["picked"] = card_name
@@ -429,7 +432,7 @@ static func pick_duplicate(player: AdventurePlayer, spoils: Dictionary, card_nam
 ## among the first three picks (its first card the first pick).
 static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: MsvcRandom) -> Array[String]:
 	var out: Array[String] = []
-	var pool := CardTrade.catalogue()
+	var pool := RefugeCampaign.add_stock(player, CardTrade.catalogue())
 	var color := clampi(int(meeting["color"]), 1, 5)
 	var stakes: Array = meeting.get("creature_ante", [])
 	# The copy limit as the Embark chose it ([method CardShop.counted_copies]),

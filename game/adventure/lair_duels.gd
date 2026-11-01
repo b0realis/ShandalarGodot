@@ -192,7 +192,7 @@ static func begin(player: AdventurePlayer, event: Dictionary) -> Dictionary:
 	for n in int(setup["count"]):
 		# The hoard is the creature's stake: never limited, under the
 		# Classic MTG rules too (the owner's ruling; c12, h2-1).
-		var rare := LairEvent.rare_of_any_kind(dice)
+		var rare := LairEvent.rare_of_any_kind(dice, {}, player)
 		if rare != "":
 			(setup["rares"] as Array[String]).append(rare)
 	var row := 0

@@ -1,5 +1,55 @@
 # Code Map
 
+## The Last Refuge island expansion (2nd_pack)
+
+- `tests/cards/test_pack_2_refuge_mechanics.gd`: Merseine absent/zero/copied
+  mana costs and temporary shroud timing against Humility.
+- `tests/unit/test_refuge_card_availability.gd`: all 102 regional stock entries,
+  reward draws, liberation, saved shops, pack loss and wizard reward filters.
+- `tests/ui/test_refuge_card_rewards.gd`: regional choose-any reward lists and
+  unavailable shop stock restored when its pack returns.
+- `docs/refuge-card-audit.md`: availability matrix, original restrictions,
+  corrected reward paths, card mechanics and targeted verification.
+
+- `game/adventure/expansions/refuge_stories.gd`: original regional lore,
+  community epilogues, seven wise-man tales, local news and roaming dialogue.
+- `tests/unit/test_refuge_quest_audit.gd`: quest/duel parity, rewards, island
+  dialogue, local errands and malformed regional-save regressions.
+- `docs/refuge-quest-audit.md`: reachable island stories and assignments,
+  lore boundaries, fixes, verification and remaining playtest scope.
+- `game/adventure/world/world_terrain_palette.gd`: cached regional vegetation/water
+  recoloring, named presets, terrain-type and coordinate overrides, validated
+  saved styles, live updates, and map/minimap colors without per-tile textures.
+- `tests/unit/test_world_terrain_palette.gd`: regional scope, return to mainland,
+  skin immutability, alpha, matching sea/shore water, map icons, 2x detail, tint
+  inheritance, live updates, occlusion and JSON save validation.
+- `docs/terrain-palettes.md`: reusable preset and tile-style API, examples,
+  new-preset recipe, layer boundaries, persistence and caching.
+- `game/adventure/expansions/refuge_roads.gd`: seeded terrain costs, nearby
+  settlement connections and shared eight-direction lanes without sea crossings.
+- `game/adventure/expansions/refuge_world.gd`: quarter-area terrain sampling,
+  connected landmass, safe mainland harbor placement, varied settlements,
+  trades, World Magic sellers, roads and one regional dungeon.
+- `game/adventure/expansions/refuge_campaign.gd`: region travel and snapshots,
+  save validation, five quest rewards, duel decks, final deck gate, stock unlock
+  and quest guidance.
+- `game/adventure/expansions/refuge_journey.gd`: harbor and castle visits,
+  community petitions, the existing duel host and result settlement.
+- `game/adventure/expansions/refuge_art.gd`: expansion illustrations and map
+  sprites rendered at fixed world sizes for every skin.
+- `game/adventure/expansions/art/refuge_harbor.png` and
+  `game/adventure/expansions/art/refuge_castle.png`: arrival illustrations.
+- `game/adventure/expansions/art/refuge_port_map.png` and
+  `game/adventure/expansions/art/refuge_castle_map.png`: transparent map sprites.
+- `tests/unit/test_refuge_campaign.gd`: generation, mainland preservation,
+  travel/save round-trips, pack loss, malformed saves, rewards and deck gating.
+- `tests/unit/test_refuge_geography.gd`: road connectivity and terrain preference,
+  town services, all trade and random lair types, dungeon/clue/save isolation.
+- `tests/ui/test_refuge_journey.gd`: harbor controls, real duel hosting, regional
+  town visits, castle requirements and image sizes.
+- `docs/fallen-empires-adventure.md`: playing guide, lore boundaries, save
+  contract, artwork prompt set and current prototype scope.
+
 ## The world of Shandalar: the 1997 generator and the world screen (2026-10-22)
 
 - `game/adventure/world/msvc_random.gd`: `MsvcRandom`, the C runtime's

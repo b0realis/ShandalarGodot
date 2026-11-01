@@ -56,7 +56,7 @@ enum Kind { WALK, VILLAGE, TOWN, CITY, CASTLE, FALLEN, RULED, DUNGEON, LAIR, ARR
 	MONUMENT }
 ## The pointer for each kind of place [method VisitPane.describe] gives —
 ## and Arzakon's portal, open or petrified ([method AdventureFinale.place_at]).
-const FOR_PLACE := {"village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
+const FOR_PLACE := {"refuge_port": Kind.TOWN, "refuge_castle": Kind.CASTLE, "village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
 	"castle": Kind.CASTLE, "fallen": Kind.FALLEN, "ruled": Kind.RULED,
 	"dungeon": Kind.DUNGEON, "lair": Kind.LAIR, "portal": Kind.PORTAL, "monument": Kind.MONUMENT}
 

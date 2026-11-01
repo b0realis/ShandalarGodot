@@ -333,7 +333,7 @@ static func _grant_shroud(g: MtgGame, source: CardInstance, _pid: int, target: T
 		func(game: MtgGame, _src: CardInstance) -> void:
 			var inst := game.find_instance(id)
 			if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD:
-				inst.cur_shroud = true, "Shroud until end of turn."),
+				inst.cur_shroud = true, "Shroud until end of turn.").changing_abilities(),
 		ContinuousEffects.Duration.END_OF_TURN, -1, false, id)
 	g.recalculate()
 
@@ -938,7 +938,12 @@ static func _heroism(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x:
 
 static func _merseine_activator(g: MtgGame, source: CardInstance, pid: int) -> String:
 	var host := g.find_instance(source.attached_to)
-	return "" if host != null and host.controller_id == pid else "Only the enchanted creature's controller may activate this ability."
+	if host == null or host.controller_id != pid:
+		return "Only the enchanted creature's controller may activate this ability."
+	# CR 118.6: no mana cost is unpayable, unlike a printed {0}.
+	if host.data.cost.text.is_empty():
+		return "This creature has no mana cost to pay."
+	return ""
 
 static func _merseine(g: MtgGame, source: CardInstance) -> void:
 	var host := g.find_instance(source.attached_to)
@@ -949,7 +954,8 @@ static func _merseine(g: MtgGame, source: CardInstance) -> void:
 	if not source.cur_activated_abilities.is_empty():
 		var ability := source.cur_activated_abilities[0].shallow_copy()
 		ability.cost = host.data.cost_for(0)
-		ability.text = "Pay " + host.data.cost.to_string() + ": Remove a net counter from Merseine."
+		ability.text = "Pay " + host.data.cost.to_string() + ": Remove a net counter from Merseine." \
+			if not host.data.cost.text.is_empty() else "No mana cost to pay: net counters cannot be removed this way."
 		source.cur_activated_abilities[0] = ability
 
 static func _remove_net(g: MtgGame, source: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:

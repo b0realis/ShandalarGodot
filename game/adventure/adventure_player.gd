@@ -43,9 +43,10 @@ extends RefCounted
 ## meal ([member meal_half]) with the food and the links a siege took
 ## ([member links_taken]) in the record (0.50.65 is the version that
 ## brings 3, so one number covers them all).
-## This game reads 1 to 3: 1 and 2 are saves from before.
+## Version 4 adds regional snapshots for the Last Refuge. This game reads
+## versions 1–4; earlier saves acquire the optional harbor when opened.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 3
+const FORMAT_VERSION := 4
 ## Where the adventures are saved (tests point it elsewhere).
 const SAVES_FOLDER := "user://adventures"
 static var saves_folder := SAVES_FOLDER
@@ -460,6 +461,8 @@ var quickening := 0
 
 ## The world itself: terrain, sites, roads, encounters, what is explored.
 var world: ShandalarWorld
+## Regional snapshots and progress for the optional Last Refuge voyage.
+var refuge: Dictionary = {}
 ## The seed as the player typed or was given it.
 var world_seed_text := ""
 ## The world's fingerprint when it was made, before a tile was explored
@@ -865,7 +868,7 @@ static func _rarity(card_name: String) -> int:
 ## a life in a duel ([method TownStatus.mana_links]; the sites keep them —
 ## a save's `mana_links` is that count, for a reader of the file).
 func mana_links() -> int:
-	return TownStatus.mana_links(world)
+	return TownStatus.mana_links(world) + RefugeCampaign.extra_links(self)
 
 
 ## Wins and losses, read from the journal (event 2, `won` true or false).
@@ -890,7 +893,7 @@ func log_event(event: String, text: String, more := {}) -> void:
 	if journal.size() >= JOURNAL_MOST:
 		return
 	var entry :={"event": event, "text": text, "x": position.x, "y": position.y, "time": monster_timer,
-		"day": quest_timer / WorldStatus.DAY}
+		"day": quest_timer / WorldStatus.DAY, "region": world.expansion.get("region", "mainland") if world != null else "mainland"}
 	entry.merge(more)
 	journal.append(entry)
 
@@ -911,7 +914,7 @@ func tile() -> Vector2i:
 # ---------------------------------------------------------- the save --
 
 ## The adventure as a dictionary, every part named, for JSON.
-func to_dict() -> Dictionary:
+func to_dict(include_refuge := true) -> Dictionary:
 	var grid: Array[String] = []
 	for y in ShandalarWorld.TILES * 2:
 		grid.append(world.page.slice(y * ShandalarWorld.PAGE_WIDTH,
@@ -925,6 +928,7 @@ func to_dict() -> Dictionary:
 	return {
 		"format": FORMAT,
 		"version": FORMAT_VERSION,
+		"refuge": refuge if include_refuge else {},
 		"about": "One adventure in the world of Shandalar: the hero, what they carry, their record, the clocks, and the world as it now stands. The world's grid is 128 rows of 64 tile bytes in hex: rows 0-63 the tiles (terrain in the low four bits; 0x10 a site, 0x20 a road, 0x40 a dungeon, 0x80 explored), rows 64-127 the roads leaving each tile, a bit per direction.",
 		"adventure": {"id": adventure_id, "created": created, "saved": saved, "game_version": game_version,
 			"slot_name": slot_name},
@@ -957,8 +961,10 @@ func to_dict() -> Dictionary:
 		"end": {"ended": ended, "final": final, "final_attempts": final_attempts,
 			"at_door": at_door, "portal": portal, "score_so_far": score_so_far()},
 		"world": {
+			"expansion": world.expansion,
 			"seed": world.seed, "seed_text": world_seed_text, "slot_start": world.slot_start,
-			"color": world.color, "difficulty": world.difficulty, "generator": "1997 (1.3)",
+			"color": world.color, "difficulty": world.difficulty,
+			"generator": "Last Refuge (32x32 from 1997 terrain)" if RefugeCampaign.on_island(self) else "1997 (1.3)",
 			"made_fingerprint": made_fingerprint, "dice": dice,
 			"start": [world.start.x, world.start.y],
 			"grid": grid,
@@ -992,6 +998,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	var made := _world_from(saved_world, Vector2i(_number(where.get("x")), _number(where.get("y"))))
 	var player := AdventurePlayer.new()
 	player.world = made
+	player.refuge = _whole(_object(data.get("refuge")))
 	_read_game(player, data["adventure"])
 	_read_hero(player, data["hero"])
 	_read_where(player, where)
@@ -1025,7 +1032,7 @@ static func readable(data: Variant) -> bool:
 	for part in MAIN_PARTS:
 		if not data.get(part) is Dictionary:
 			return false
-	return _grid_whole((data["world"] as Dictionary).get("grid"))
+	return _grid_whole((data["world"] as Dictionary).get("grid")) and RefugeCampaign.valid_saved(data)
 
 
 ## Whether [param grid] is the world's grid: 128 rows of 128 hex digits.
@@ -1225,6 +1232,7 @@ static func _portal_record(value: Variant) -> Dictionary:
 ## say.
 static func _world_from(saved_world: Dictionary, fallback_start: Vector2i) -> ShandalarWorld:
 	var made := ShandalarWorld.new()
+	made.expansion = _whole(_object(saved_world.get("expansion")))
 	made.seed = _number(saved_world.get("seed"))
 	made.slot_start = _number(saved_world.get("slot_start"))
 	made.color = clampi(_number(saved_world.get("color"), 1), 1, 5)

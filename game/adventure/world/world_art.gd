@@ -116,15 +116,21 @@ const PLACE_SHEETS: Array[String] = ["world_locatn01", "world_locatn02", "world_
 
 var _textures := {}
 var _meta := {}
+var terrain_palette := WorldTerrainPalette.SHANDALAR
+var _terrain := WorldTerrainPalette.new()
 
 
 ## Sheet [param key], or null when the skin lacks it or its grid is
 ## unknown (no sidecar and no [constant LAYOUT] row).
 func texture(key: String) -> Texture2D:
+	return texture_for(key, terrain_palette)
+
+
+func texture_for(key: String, preset: String) -> Texture2D:
 	if not _textures.has(key):
 		var sheet := GameSkin.texture(key)
 		_textures[key] = sheet if sheet != null and _gridded(key) else null
-	return _textures[key]
+	return _terrain.texture(key, _textures[key], preset)
 
 
 ## WHETHER SHEET [param key] CAN BE DRAWN THIS FRAME WITHOUT A STALL (the

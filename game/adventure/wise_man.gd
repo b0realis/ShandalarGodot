@@ -106,7 +106,7 @@ static func speak(player: AdventurePlayer, slot: int) -> Dictionary:
 	if fresh:
 		if dice.below(5) == 0:
 			stage = STAGE_TALE
-			state["tale"] = dice.rand() % 12
+			state["tale"] = dice.rand() % (RefugeStories.TALES.size() if RefugeCampaign.on_island(player) else 12)
 		elif dice.below(5) == 0:
 			stage = STAGE_NEWS
 			state["news"] = _news(player, dice)
@@ -141,7 +141,8 @@ static func speak(player: AdventurePlayer, slot: int) -> Dictionary:
 
 ## The tale last told (a new one when there is none): its pages.
 static func _tale(player: AdventurePlayer) -> PackedStringArray:
-	var tales: Array = words().get("tales", [])
+	var local := RefugeCampaign.on_island(player)
+	var tales: Array = RefugeStories.TALES if local else words().get("tales", [])
 	var pages := PackedStringArray()
 	if tales.is_empty():
 		pages.append("The wise man speaks of Shandalar long ago, when magic was free to all.")
@@ -152,8 +153,11 @@ static func _tale(player: AdventurePlayer) -> PackedStringArray:
 		index = dice.rand() % tales.size()
 		player.dice = dice.state
 		player.wise_man["tale"] = index
-	for page in tales[index]:
-		pages.append(String(page))
+	if local:
+		pages.append("\n\n".join(tales[index]))
+	else:
+		for page in tales[index]:
+			pages.append(String(page))
 	return pages
 
 
@@ -164,6 +168,7 @@ static func _news(player: AdventurePlayer, dice: MsvcRandom) -> String:
 	var block := dice.rand() % 3
 	match block:
 		0:
+			if RefugeCampaign.on_island(player): return RefugeStories.news(player)
 			var standing: Array[int] = []
 			for i in 5:
 				if not AdventurePlayer.COLORS[i] in player.defeated_wizards:
@@ -272,28 +277,29 @@ static func _gift(player: AdventurePlayer, slot: int) -> Dictionary:
 ## that need no choice made.
 static func give(player: AdventurePlayer, gift: int, color: int) -> Dictionary:
 	var talk := {"pages": PackedStringArray(), "then": "", "color": color}
+	var applause := RefugeStories.applause(player) if RefugeCampaign.on_island(player) else APPLAUSE
 	var hue := COLOR_WORDS[clampi(color, 1, 5) - 1]
 	match gift:
 		TALE:
-			talk["pages"].append(APPLAUSE + String(GIFT_WORDS[TALE]))
+			talk["pages"].append(applause + String(GIFT_WORDS[TALE]))
 			player.wise_man["tale"] = -1
 			talk["pages"].append_array(_tale(player))
 		CLUE:
 			var told := WorldClues.reveal_for_hint(player)
 			if told < 0:
 				return give(player, LIVES, color)
-			var lines := PackedStringArray([APPLAUSE + String(GIFT_WORDS[CLUE]), "", WorldClues.title(told)])
+			var lines := PackedStringArray([applause + String(GIFT_WORDS[CLUE]), "", WorldClues.title(told, player.world)])
 			lines.append_array(WorldClues.lines(player.world, told))
 			talk["pages"].append("\n".join(lines))
 		LIVES:
 			if not player.duel_gift_waiting():
 				player.next_duel_life = LIVES_GIFT
-				talk["pages"].append(APPLAUSE + String(GIFT_WORDS[LIVES]))
+				talk["pages"].append(applause + String(GIFT_WORDS[LIVES]))
 			else:
 				player.food += FOOD_GIFT
-				talk["pages"].append(APPLAUSE + FOOD_WORDS)
+				talk["pages"].append(applause + FOOD_WORDS)
 		DECK:
-			talk["pages"].append(APPLAUSE + String(GIFT_WORDS[DECK]) % hue)
+			talk["pages"].append(applause + String(GIFT_WORDS[DECK]) % hue)
 			talk["then"] = "deck"
 		COMPANION:
 			if player.duel_gift_waiting():
@@ -302,14 +308,14 @@ static func give(player: AdventurePlayer, gift: int, color: int) -> Dictionary:
 			var companion: String = COMPANIONS[clampi(color, 1, 5) - 1][dice.below(2)]
 			player.dice = dice.state
 			player.next_duel_card = companion
-			talk["pages"].append(APPLAUSE + String(GIFT_WORDS[COMPANION]) % companion)
+			talk["pages"].append(applause + String(GIFT_WORDS[COMPANION]) % companion)
 		COPY:
 			# [Ours: a full bag, like too few amulets, turns the copy into
 			# the lives — the gift is not spent on a copy the bag would
 			# refuse (the c5 campaign, H3-1).]
 			if int(player.amulets.get(hue, 0)) < COPY_COST or player.bag_room() < 1:
 				return give(player, LIVES, color)
-			talk["pages"].append(APPLAUSE + String(GIFT_WORDS[COPY]) % ("%s amulets" % hue))
+			talk["pages"].append(applause + String(GIFT_WORDS[COPY]) % ("%s amulets" % hue))
 			talk["then"] = "copy"
 	return talk
 

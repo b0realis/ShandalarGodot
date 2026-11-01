@@ -624,7 +624,7 @@ static func portal_near(player: AdventurePlayer) -> String:
 ## `{tile, kind, name}` — "portal" while it is open and the adventure goes
 ## on, "monument" once petrified; `{}` otherwise.
 static func portal_target(player: AdventurePlayer) -> Dictionary:
-	if player == null or player.portal.is_empty() or player.ended == AdventurePlayer.ENDED_FAILED:
+	if player == null or RefugeCampaign.on_island(player) or player.portal.is_empty() or player.ended == AdventurePlayer.ENDED_FAILED:
 		return {}
 	var state := String(player.portal.get("state", ""))
 	if state == PORTAL_OPEN and player.ended == "":
@@ -723,12 +723,12 @@ static func fifth_castle(player: AdventurePlayer) -> int:
 
 ## Whether Arzakon's portal stands on [param tile] (open or petrified).
 static func portal_at(player: AdventurePlayer, tile: Vector2i) -> bool:
-	return player != null and not player.portal.is_empty() and portal_tile_of(player) == tile
+	return player != null and not RefugeCampaign.on_island(player) and not player.portal.is_empty() and portal_tile_of(player) == tile
 
 
 ## Whether the hero may enter the portal: open, Arzakon not yet beaten.
 static func portal_open(player: AdventurePlayer) -> bool:
-	return player != null and String(player.portal.get("state", "")) == PORTAL_OPEN and player.ended == ""
+	return player != null and not RefugeCampaign.on_island(player) and String(player.portal.get("state", "")) == PORTAL_OPEN and player.ended == ""
 
 
 ## The portal's name on the world: open or petrified, "" for none.

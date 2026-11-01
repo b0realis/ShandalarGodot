@@ -304,7 +304,7 @@ static func accept(player: AdventurePlayer, giver: int) -> String:
 
 ## Whether a quest is under way.
 static func has_quest(player: AdventurePlayer) -> bool:
-	return not player.quest.is_empty() and int(player.quest.get("destination", -1)) >= 0
+	return not player.quest.is_empty() and is_site(player.world, int(player.quest.get("destination", -1)))
 
 
 ## THE HERO ARRIVES AT TOWN [param slot]: the quest whose destination it is
@@ -522,7 +522,8 @@ static func reward_line(player: AdventurePlayer) -> String:
 ## Whether [param slot] is one of the world's sites — a quest read from a
 ## save may name one that is not.
 static func is_site(world: ShandalarWorld, slot: int) -> bool:
-	return world != null and slot >= 0 and slot < world.sites.size()
+	return world != null and slot >= 0 and slot < world.sites.size() \
+		and int(world.sites[slot].get("type", 0)) in [ShandalarWorld.VILLAGE, ShandalarWorld.TOWN, ShandalarWorld.CITY]
 
 
 ## Site [param slot]'s tile ((0, 0) for no such site).
