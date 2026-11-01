@@ -5,6 +5,8 @@ extends RefCounted
 
 const ORIGIN := "The captain tells of Sarpadia, a distant continent on Dominaria. Refugees carried its traditions to Shandalar before the Great Barrier. Their descendants call this island the Last Refuge; it is not the lost Sarpadia."
 const VOYAGE := "This ship crosses only Shandalar's sea. Help five communities resist the Ebon Crown, then challenge its lord. Passage home is always free."
+const DANGER := "This is a dangerous land for experienced adventurers. Its roaming creatures are strong; the Crown's commanders have 26–30 life and its lord has 36. Build your deck and life on the mainland first if needed. Their strength does not follow yours."
+const GATE := "The final challenge needs all five pledges and at least half of your main deck's nonland cards from Fallen Empires. Lands and sideboard do not count. Community rewards can help build one or two colors."
 const EPILOGUES := [
 	"The grain wagons roll again. Leitbur's Rest pledges its aid, and its keepers agree that neither the Crown nor a zealot may decide who deserves bread.",
 	"The blockade is broken. Vodalian fishers and homarids mark shared channels through the harbor. Their pledge begins with safe passage for both peoples.",

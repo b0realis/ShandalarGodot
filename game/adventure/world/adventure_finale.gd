@@ -330,7 +330,7 @@ static func at_portal(world: WorldScreen, player: AdventurePlayer) -> VisitPane:
 ## the finale or the end took the screen — the world does not run; false
 ## for an adventure that walks on as it is.
 static func after_load(world: WorldScreen, player: AdventurePlayer) -> bool:
-	if world == null or player == null or RefugeCampaign.on_island(player):
+	if world == null or player == null or not AdventureRegions.mainland(player):
 		return false
 	var saved := true
 	if FinalBattle.on_load(player):

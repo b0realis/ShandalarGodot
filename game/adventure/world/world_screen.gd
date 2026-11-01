@@ -520,9 +520,32 @@ func _ready() -> void:
 		if not finale_took and player.monster_timer == 0 and is_inside_tree():
 			_reveal(null)
 	if is_inside_tree():
+		var packs := get_node_or_null(^"/root/CardPacks")
+		if packs != null:
+			packs.connect(&"changed", _expansion_packs_changed)
+			packs.connect(&"rescanned", _expansion_packs_changed)
 		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_builder)
 		get_tree().create_timer(WARM_AFTER).timeout.connect(_warm_the_duels)
 		get_tree().create_timer(WARM_PANES_AFTER).timeout.connect(_warm_the_panes)
+
+
+## Rebuild cached places after a pack toggle or removal on Rescan. Keep saved
+## maps intact; only the mainland's optional entry disappears.
+func _expansion_packs_changed(_id: String = "", _enabled := false) -> void:
+	if player == null or world == null:
+		return
+	AdventureExpansions.initialize(player)
+	world.appearance_revision += 1
+	world.appearance_changed.emit()
+	if AdventureRegions.mainland(player) and _alive(_visit) \
+			and (_visit.place.get("departure", false) or (_visit.place.has("expansion") and not AdventureExpansions.enabled(_visit.place["expansion"]))):
+		_visit.queue_free()
+		_visit = null
+		_visit_tile = Vector2i(-1, -1)
+		_sync_rest()
+	hud.hide_place()
+	_pointed = Vector3.INF
+	_point_again()
 
 
 ## THE ARRIVAL'S WORDS PUT AWAY as the panel opens a pane of its own over
@@ -615,6 +638,9 @@ func _make_hud() -> void:
 	hud.map_pressed.connect(toggle_map)
 	hud.city_list_pressed.connect(func() -> void: show_city_list())
 	hud.journal_map_pressed.connect(walk_journal)
+	hud.task_selected.connect(func() -> void:
+		_show_hero()
+		autosave())
 	hud.hero_pressed.connect(toggle_hero)
 	hud.deck_pressed.connect(func() -> void: open_spellbook())
 	hud.save_pressed.connect(save_now)
@@ -668,7 +694,7 @@ func rebuild_hud() -> void:
 ## Show [param adventure]: its world, the hero where they stand.
 func show_player(adventure: AdventurePlayer) -> void:
 	player = adventure
-	RefugeCampaign.initialize(player)
+	AdventureExpansions.initialize(player)
 	world = player.world
 	# The entry latch as the adventure kept it (c12, h1-1): only for the tile
 	# the hero stands on.
@@ -706,7 +732,7 @@ func _show_hero(ticked := false) -> void:
 	var known := WorldClues.on_world(world)
 	view.dungeons = known
 	# Arzakon's portal, open or petrified (part C, 2026-10-28) [ours].
-	view.portal = {} if RefugeCampaign.on_island(player) else player.portal
+	view.portal = {} if not AdventureRegions.mainland(player) else player.portal
 	view.creatures = WorldCreatures.seen(player)
 	# The creatures' names over them, with the options' switch on (the
 	# owner's ruling of 2026-10-28 on the unused 1997 features, §5).
@@ -716,12 +742,13 @@ func _show_hero(ticked := false) -> void:
 	_map.hero_tile = player.tile()
 	_map.player = player
 	var calling := WorldStatus.targets(player)
+	AdventureTasks.rows(player) # discover and archive goals even with the Tasks tab closed
 	# One look for the small map, not one for each thing it shows (the
 	# smoothness pass, 0.50.66).
 	hud.minimap.show_hero(world, Vector2(player.position), calling, known)
 	var guided: Array[Dictionary] = []
 	if WorldHud.guides_wanted():
-		guided = calling
+		guided = AdventureTasks.guide(player, calling)
 	guides.targets = guided
 	guides.bar_at_bottom = hud.bar_at_bottom
 	var covered: Array[Rect2] = []
@@ -791,6 +818,9 @@ func _hold() -> void:
 ## pane's until it is let go ([method _look_with_keys]); a pointer's event
 ## says where the pointer is ([member _pointer_seen]).
 func _input(event: InputEvent) -> void:
+	if _debug_port_pressed(event):
+		get_viewport().set_input_as_handled()
+		return
 	_sync_rest()
 	var mouse := event as InputEventMouse
 	if mouse != null:
@@ -1162,7 +1192,7 @@ func _arrive_in_town(slot: int) -> Dictionary:
 	CardTrade.arrive(player, slot)
 	# The five communities have their own petitions; other island
 	# settlements offer the same local errands as mainland settlements.
-	if player.last_town != slot and (not RefugeCampaign.on_island(player) or slot > 5):
+	if player.last_town != slot and AdventureExpansions.ordinary_quests(player, slot):
 		Quests.arrive(player, slot)
 	CardShop.offers(player, slot)
 	CardHints.arrive(player, slot)
@@ -1209,7 +1239,7 @@ func _left_place(then: String) -> void:
 		_visit.queue_free()
 	_visit = null
 	_show_hero()
-	if RefugeJourney.act(self, then, place):
+	if AdventureExpansions.act(self, then, place):
 		return
 	if not place.is_empty():
 		var slot := int(place["slot"])
@@ -2728,6 +2758,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F4:
 			show_clues()
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
+			if key.ctrl_pressed or key.alt_pressed or key.meta_pressed: return
 			# The top row's digits only: the keypad's walk ([constant
 			# WALK_KEYS]), as 1997's did.
 			cast(key.keycode - KEY_0)
@@ -2904,3 +2935,57 @@ func _map_key(key: InputEventKey) -> void:
 	elif key.keycode == KEY_S and key.ctrl_pressed:
 		quick_save()
 		get_viewport().set_input_as_handled()
+
+
+## Opt-in developer launcher only; the normal exported debug template is not
+## permission to teleport. This flag lives for the process and is never saved.
+static var debug_campaign := false
+
+static func _debug_port_key(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	return (key != null and key.pressed and not key.echo and key.ctrl_pressed and key.shift_pressed
+		and not key.alt_pressed and not key.meta_pressed
+		and (key.keycode in [KEY_2, KEY_KP_2] or key.physical_keycode == KEY_2))
+
+func _debug_port_pressed(event: InputEvent) -> bool:
+	if not debug_campaign or not _debug_port_key(event): return false
+	if player == null or hud == null: return true
+	if _leaving or modal():
+		hud.say("Debug: close the current encounter or window before teleporting.")
+		return true
+	if not AdventureExpansions.enabled("refuge"):
+		hud.say("Debug: enable Pack 2: Fallen Empires in Options first.")
+		return true
+	if not AdventureRegions.mainland(player):
+		if not AdventureRegions.travel(player, AdventureRegions.MAINLAND):
+			hud.say("Debug: no mainland return map is available.")
+			return true
+	AdventureExpansions.initialize(player)
+	var point: Array = player.world.expansion.get("entries", {}).get("refuge", [])
+	if point.size() != 2:
+		hud.say("Debug: no Pack 2 harbor was found on this map.")
+		return true
+	var port := Vector2i(point[0], point[1])
+	var landing := port
+	for delta in [Vector2i.DOWN, Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP]:
+		var tile: Vector2i = port + delta
+		if (player.world.is_land(tile.x, tile.y) and player.world.tile_flags(tile.x, tile.y) & ShandalarWorld.SITE == 0
+				and AdventureExpansions.marker(player.world, tile) == ""):
+			landing = tile
+			break
+	_disarm_keys()
+	walk.stop()
+	player.position = landing * 32 + Vector2i(16, 16)
+	player.entered_tile = Vector2i(-1, -1)
+	player.step = 0
+	if _map.visible: toggle_map()
+	hud.close_panels()
+	show_player(player)
+	player.world.explore_around(port)
+	player.tracked_task = "mainland/voyage:refuge" if not player.regions.has("refuge") else ""
+	player.log_event("debug", "Teleported near the Last Refuge departure harbor.")
+	_show_hero()
+	view.camera = view.hero
+	view.queue_redraw()
+	hud.say("Debug: Pack 2 harbor nearby — visit Sarpadian Anchorage to sail.")
+	return true

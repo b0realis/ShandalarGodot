@@ -7,7 +7,6 @@ extends RefCounted
 const SHANDALAR := "shandalar"
 const LAST_REFUGE := "last_refuge"
 const DRY_COAST := LAST_REFUGE
-const REGIONS := {"refuge": LAST_REFUGE}
 const LAYERS := ["ground", "objects", "roads"]
 const PROFILES := {
 	SHANDALAR: {"name": "Shandalar"},
@@ -25,7 +24,7 @@ var _textures := {}
 
 static func for_world(world: ShandalarWorld) -> String:
 	if world == null: return SHANDALAR
-	var fallback: String = REGIONS.get(world.expansion.get("region", ""), SHANDALAR)
+	var fallback: String = AdventureExpansions.definition(AdventureRegions.id(world)).get("palette", SHANDALAR)
 	return String(world.expansion.get("appearance", {}).get("preset", fallback))
 
 ## Resolved style: tile overrides terrain, which overrides the world preset.

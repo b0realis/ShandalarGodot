@@ -5,29 +5,18 @@ extends RefCounted
 
 const MAINLAND := "mainland"
 const ISLAND := "refuge"
-const LOCAL_RECORD := ["quest", "quest_offer", "last_town", "town_quests", "wise_man", "links_taken", "lairs_explored"]
 const QUESTS := [
-	["white", "The Bread Road", "Leitbur's Rest remembers Icatia's soldiers and its divisive zealots. The Crown's tithe-collector now uses those traditions to seize the harvest. Defeat his soldiers so grain can reach the harbor.", "Ebon Crown Tithe-Collector"],
-	["blue", "A Harbor for Both Peoples", "Vodalian fishers and homarids have made a new harbor pact, despite their ancestors' wars. The Crown's captain commands sea magic to blockade them. Defeat the captain to reopen their shared channels.", "The Blockade Captain"],
+	["white", "The Bread Road", "Leitbur's Rest remembers Icatia's soldiers and its divisive zealots. Some keepers would feed only the faithful. Carry their grain warrant to Refuge Harbor for everyone, then return to defeat the Crown's tithe-collector.", "Ebon Crown Tithe-Collector"],
+	["blue", "A Harbor for Both Peoples", "Vodalian fishers and homarids have made a new harbor pact, despite their ancestors' wars. The Crown's captain commands sea magic to blockade them. Neither people trusts the other's charts. Survey the disputed channel first, then return to defeat the captain and reopen it to both.", "The Blockade Captain"],
 	["black", "No More Masters", "Free thrulls live here beside people who rejected the Ebon Hand. The Crown's overseer would drag them back into breeding pits. Defeat him and defend their freedom.", "The Pit Overseer"],
-	["red", "The Mountain Road", "Dwarven smiths and goblin traders refuse to repeat their ancestors' wars. They share a mountain pass, but the Crown's raiders demand tribute. Defeat the raider who bars the road.", "The Tribute-Raider"],
+	["red", "The Mountain Road", "Dwarven smiths and goblin traders refuse to repeat their ancestors' wars. They share a mountain pass, but the Crown's raiders demand tribute. Both accuse the other of paying the raider. Seek him where the road's travelers shelter and break the tribute barrier there.", "The Tribute-Raider"],
 	["green", "Room to Grow", "Havenwood's elves and thallids tend an uneasy border. The Crown's sporekeeper spreads unchecked growth to drive them apart. Defeat the sporekeeper and protect the grove's balance.", "The Crown's Sporekeeper"],
 ]
-const SPELLS := [
-	["Icatian Javelineers", "Order of Leitbur", "Icatian Infantry", "Icatian Priest", "Farrel's Zealot", "Combat Medic"],
-	["Vodalian Soldiers", "Vodalian Mage", "Homarid", "Homarid Warrior", "High Tide", "Deep Spawn"],
-	["Basal Thrull", "Armor Thrull", "Order of the Ebon Hand", "Hymn to Tourach", "Thrull Retainer", "Soul Exchange"],
-	["Dwarven Soldier", "Goblin Chirurgeon", "Goblin War Drums", "Goblin Grenade", "Orcish Veteran", "Goblin Warrens"],
-	["Thallid", "Thorn Thallid", "Elvish Farmer", "Elvish Hunter", "Feral Thallid", "Spore Flower"],
-]
-const LANDS := ["Plains", "Island", "Swamp", "Mountain", "Forest"]
-
 static func on_island(player: AdventurePlayer) -> bool:
 	return player != null and player.world != null and player.world.expansion.get("region", MAINLAND) == ISLAND
 
 static func available() -> bool:
-	var packs := _packs()
-	return packs != null and packs.is_enabled(FallenEmpiresPack.ID)
+	return AdventureExpansions.enabled(ISLAND)
 
 ## AdventurePlayer is also compiled by standalone tools before autoload
 ## identifiers exist. Resolve the pack service only when it is needed.
@@ -36,19 +25,16 @@ static func _packs() -> Node:
 	return (loop as SceneTree).root.get_node_or_null("CardPacks") if loop is SceneTree else null
 
 static func initialize(player: AdventurePlayer) -> void:
-	if player.world == null or on_island(player):
-		return
-	if not player.world.expansion.has("port"):
-		var tile := RefugeWorld.port_for(player.world, player.world.start_tile())
-		if tile.x >= 0:
-			player.world.expansion["port"] = [tile.x, tile.y]
-			player.world.expansion["region"] = MAINLAND
-	# A chart on the map makes the new coast discoverable without replacing
-	# a town, a dungeon, a quest destination, or a tile of the original map.
-	if player.refuge.is_empty():
-		player.refuge = {"regions": {}, "quests": [], "pending": [], "liberated": false}
+	AdventureExpansions.initialize(player)
+
+## Disabled packs add no mainland places. Saved coordinates and progress stay
+## intact, and an adventurer already on the island always keeps the way home.
+static func places_visible(world: ShandalarWorld) -> bool:
+	return world != null and (world.expansion.get("region", MAINLAND) == ISLAND or available())
 
 static func marker(world: ShandalarWorld, tile: Vector2i) -> String:
+	if not places_visible(world):
+		return ""
 	for key in ["port", "castle"]:
 		var point: Array = world.expansion.get(key, [])
 		if point.size() == 2 and tile == Vector2i(int(point[0]), int(point[1])):
@@ -56,173 +42,43 @@ static func marker(world: ShandalarWorld, tile: Vector2i) -> String:
 	return ""
 
 static func snapshot(player: AdventurePlayer) -> Dictionary:
-	var saved := player.to_dict(false)
-	var record := {}
-	for key in LOCAL_RECORD:
-		record[key] = saved["record"][key]
-	return {"world": saved["world"], "where": saved["where"], "clocks": saved["clocks"],
-		"record": record, "links": TownStatus.mana_links(player.world)}.duplicate(true)
+	return AdventureRegions.snapshot(player)
 
 static func restore(player: AdventurePlayer, region: Dictionary) -> void:
-	var saved_world: Dictionary = region["world"]
-	player.world = AdventurePlayer._world_from(saved_world, Vector2i.ZERO)
-	AdventurePlayer._read_where(player, region["where"])
-	AdventurePlayer._read_clocks(player, region["clocks"])
-	var record: Dictionary = player.to_dict(false)["record"]
-	for key in LOCAL_RECORD:
-		record[key] = region["record"].get(key, record[key])
-	AdventurePlayer._read_record(player, record)
-	player.world_seed_text = str(saved_world.get("seed_text", player.world.seed))
-	player.made_fingerprint = str(saved_world.get("made_fingerprint", ""))
-	player.dice = int(saved_world.get("dice", player.world.rand_state))
-	player.monsters = AdventurePlayer._cleaned_monsters(saved_world.get("monsters"), player.world)
-	player.shops = AdventurePlayer._cleaned_shops(saved_world.get("shops"), player.world)
-	player.step = 0
+	AdventureRegions.restore(player, region)
 
 static func travel(player: AdventurePlayer) -> bool:
 	initialize(player)
-	var leaving := ISLAND if on_island(player) else MAINLAND
-	var entering := MAINLAND if leaving == ISLAND else ISLAND
-	if entering == ISLAND and not available():
-		return false
-	var regions: Dictionary = player.refuge.get("regions", {})
-	if entering == MAINLAND and not regions.has(MAINLAND):
-		return false
-	if entering == ISLAND:
-		var has_record := false
+	var returning := on_island(player)
+	if not returning and not available(): return false
+	var seed_value := player.world.seed
+	var color := player.world.color
+	var make := func() -> ShandalarWorld: return AdventureExpansions.generate(ISLAND, seed_value, color, player.difficulty)
+	if not AdventureRegions.travel(player, MAINLAND if returning else ISLAND, make): return false
+	if not returning:
+		player.log_clue(RefugeStories.GATE, "quest_clue")
+		player.log_clue("Refuge Harbor always offers a free voyage home. Petitions wait; mainland deadlines pause while you are away.")
+		var listed := false
 		for pack in player.packs:
-			if pack.get("id", "") == FallenEmpiresPack.ID:
-				has_record = true
-		if not has_record:
-			player.packs.append({"id": FallenEmpiresPack.ID, "version": str(_packs().info(FallenEmpiresPack.ID).get("version", "1"))})
-	regions[leaving] = snapshot(player)
-	if regions.has(entering):
-		restore(player, regions[entering])
-		regions.erase(entering)
-	else:
-		var made := RefugeWorld.generate(player.world.seed ^ 0x46454D, player.world.color, player.difficulty)
-		var fresh := AdventurePlayer.new()
-		fresh.world = made
-		fresh.position = made.start
-		fresh.dice = made.rand_state
-		fresh.made_fingerprint = made.fingerprint()
-		restore(player, snapshot(fresh))
-	player.refuge["regions"] = regions
-	player.entered_tile = player.tile()
-	player.log_event("voyage", "Sailed to the Last Refuge." if entering == ISLAND else "Returned to Shandalar's mainland.")
+			if pack.get("id", "") == FallenEmpiresPack.ID: listed = true
+		if not listed: player.packs.append({"id": FallenEmpiresPack.ID, "version": str(_packs().info(FallenEmpiresPack.ID).get("version", "1"))})
+	player.log_event("voyage", "Returned to Shandalar's mainland." if returning else "Sailed to the Last Refuge.")
 	return true
 
 static func valid_saved(data: Dictionary) -> bool:
-	var state: Variant = data.get("refuge", {})
-	if not state is Dictionary:
-		return false
-	var regions: Variant = state.get("regions", {})
-	if not regions is Dictionary:
-		return false
-	var done: Variant = state.get("quests", [])
-	var pending: Variant = state.get("pending", [])
-	if not done is Array or not pending is Array or not state.get("liberated", false) is bool:
-		return false
-	if done.size() > 5 or pending.size() > 60:
-		return false
-	var unique := {}
-	for index in done:
-		if not AdventurePlayer._is_number(index) or int(index) != index or index < 0 or index > 4 or unique.has(int(index)):
-			return false
-		unique[int(index)] = true
-	for card in pending:
-		if not card is String or not card in FallenEmpiresPack.names():
-			return false
-	if bool(state.get("liberated", false)) and done.size() != 5:
-		return false
-	var extra: Variant = data.get("world", {}).get("expansion", {})
-	if not valid_places(extra) or not _valid_island(data.get("world", {})):
-		return false
-	var active: String = extra.get("region", MAINLAND)
-	for key in regions:
-		if not key in [MAINLAND, ISLAND] or key == active or not regions[key] is Dictionary:
-			return false
-		var region: Dictionary = regions[key]
-		for part in ["world", "where", "clocks", "record"]:
-			if not region.get(part) is Dictionary:
-				return false
-		if not AdventurePlayer._grid_whole(region["world"].get("grid")):
-			return false
-		if not valid_places(region["world"].get("expansion", {})):
-			return false
-		if region["world"].get("expansion", {}).get("region", MAINLAND) != key or not _valid_island(region["world"]):
-			return false
-	return extra.get("region", MAINLAND) != ISLAND or regions.has(MAINLAND)
-
-## A saved island must still contain its return harbor and five communities.
-## Reject damaged records before travel can strand the hero or index a void.
-static func _valid_island(saved: Dictionary) -> bool:
-	var extra: Dictionary = saved.get("expansion", {})
-	if extra.get("region", MAINLAND) != ISLAND: return true
-	var sites: Variant = saved.get("sites", [])
-	if not sites is Array or sites.size() < 6: return false
-	var used := {}
-	for key in ["port", "castle"]:
-		var point: Array = extra[key]
-		var tile := Vector2i(int(point[0]), int(point[1]))
-		if used.has(tile) or String(saved["grid"][tile.y]).hex_decode()[tile.x] & 15 == 0: return false
-		used[tile] = true
-	for index in range(1, 6):
-		if not sites[index] is Dictionary: return false
-		var site: Dictionary = sites[index]
-		var kind: Variant = site.get("type")
-		if not AdventurePlayer._is_number(kind) or int(kind) != kind \
-				or int(kind) not in [ShandalarWorld.TOWN, ShandalarWorld.CITY]: return false
-		for axis in ["x", "y"]:
-			var at: Variant = site.get(axis)
-			if not AdventurePlayer._is_number(at) or int(at) != at or at < 0 or at >= 64: return false
-		var tile := Vector2i(int(site["x"]), int(site["y"]))
-		if used.has(tile) or String(saved["grid"][tile.y]).hex_decode()[tile.x] & 15 == 0: return false
-		used[tile] = true
-	return true
-
-static func valid_places(extra: Variant) -> bool:
-	if not extra is Dictionary or not extra.get("region", MAINLAND) in [MAINLAND, ISLAND]:
-		return false
-	if not WorldTerrainPalette.valid_appearance(extra.get("appearance", {})):
-		return false
-	for key in ["town_names", "dungeon_names"]:
-		if not extra.get(key, {}) is Dictionary:
-			return false
-		for name in extra.get(key, {}).values():
-			if not name is String:
-				return false
-	for key in ["port", "castle"]:
-		if not extra.has(key):
-			if extra.get("region", MAINLAND) == ISLAND:
-				return false
-			continue
-		var point: Variant = extra[key]
-		if not point is Array or point.size() != 2:
-			return false
-		for axis in point:
-			if not AdventurePlayer._is_number(axis) or int(axis) != axis or axis < 0 or axis >= 64:
-				return false
-	return true
+	return AdventureRegions.valid_saved(data)
 
 static func extra_links(player: AdventurePlayer) -> int:
-	var count := 0
-	for region in player.refuge.get("regions", {}).values():
-		# Sites are authoritative, as on the active map. The cached count
-		# in an older snapshot may be stale or malformed.
-		for site in region.get("world", {}).get("sites", []):
-			if site is Dictionary and AdventurePlayer._is_number(site.get("status")) \
-					and int(site["status"]) & TownStatus.LINKED != 0:
-				count += 1
-	return count
+	return AdventureRegions.extra_links(player)
 
 static func next_target(player: AdventurePlayer) -> Dictionary:
 	if not on_island(player):
 		return {}
 	for index in 5:
 		if not completed(player, index):
-			var site: Dictionary = player.world.sites[index + 1]
-			return {"tile": Vector2i(site["x"], site["y"]), "kind": "quest", "name": RefugeWorld.TOWNS[index]}
+			var target := RefugeQuests.destination(player, index)
+			target["kind"] = "quest"
+			return target
 	var key := "port" if bool(player.refuge.get("liberated", false)) else "castle"
 	var point: Array = player.world.expansion.get(key, [])
 	return {"tile": Vector2i(point[0], point[1]), "kind": "quest", "name": "Refuge Harbor" if key == "port" else "Castle of the Ebon Crown"} if point.size() == 2 else {}
@@ -251,7 +107,9 @@ static func add_stock(player: AdventurePlayer, base: Array[Dictionary]) -> Array
 	return out
 
 static func deck_gate(player: AdventurePlayer) -> Dictionary:
-	var cards := player.deck_cards()
+	return gate_for_cards(player.deck_cards())
+
+static func gate_for_cards(cards: Array) -> Dictionary:
 	var count := 0
 	var total := 0
 	var known := true
@@ -276,13 +134,13 @@ static func finish_quest(player: AdventurePlayer, quest: int) -> bool:
 	var done: Array = player.refuge.get("quests", [])
 	done.append(quest)
 	player.refuge["quests"] = done
-	var pending: Array = player.refuge.get("pending", [])
-	for card in SPELLS[quest]:
-		for copy in 2:
-			pending.append(card)
-	player.refuge["pending"] = pending
-	player.gold += 100
-	player.food += 20
+	var choices: Array = player.refuge.get("reward_choices", [])
+	choices.append(quest)
+	player.refuge["reward_choices"] = choices
+	player.gold += RefugeQuests.GOLD
+	player.food += RefugeQuests.FOOD
+	# Pledges change this community, never the mainland mana-link progression.
+	RefugeQuests.refresh_appearance(player)
 	player.log_event("quest", "The Last Refuge: %s completed." % QUESTS[quest][1], {"done": true})
 	claim(player)
 	return true
@@ -311,6 +169,7 @@ static func liberate(player: AdventurePlayer) -> bool:
 	if not can_challenge(player):
 		return false
 	player.refuge["liberated"] = true
+	RefugeQuests.refresh_appearance(player)
 	# Existing shop stock can now draw from the expanded pool on restock.
 	player.log_event("freed", "The Last Refuge is free. Fallen Empires spells now reach the mainland.")
 	return true
@@ -318,31 +177,13 @@ static func liberate(player: AdventurePlayer) -> bool:
 static func duel_config(player: AdventurePlayer, quest: int) -> DuelConfig:
 	var config := DuelConfig.new()
 	var index := quest if quest >= 0 else 2
-	var deck: Array = []
-	for card in SPELLS[index]:
-		for copy in 4:
-			deck.append(card)
-	for copy in 16:
-		deck.append(LANDS[index])
-	if quest == 1:
-		# Deep Spawn costs eight mana: two finishers and eighteen lands.
-		for copy in 2:
-			deck.erase("Deep Spawn")
-			deck.append("Island")
-	if quest < 0:
-		# A coherent black deck led by the old cult's successors.
-		deck = ["Order of the Ebon Hand", "Order of the Ebon Hand", "Order of the Ebon Hand", "Order of the Ebon Hand",
-			"Hymn to Tourach", "Hymn to Tourach", "Hymn to Tourach", "Hymn to Tourach", "Thrull Champion", "Thrull Champion",
-			"Basal Thrull", "Basal Thrull", "Basal Thrull", "Basal Thrull", "Armor Thrull", "Armor Thrull", "Armor Thrull", "Armor Thrull",
-			"Dark Ritual", "Dark Ritual", "Terror", "Terror", "Drain Life", "Drain Life"]
-		for copy in 16:
-			deck.append("Swamp")
+	var deck := RefugeEncounters.deck(quest)
 	config.decks = [CreatureMeeting.padded_deck(player, player.deck_cards()), deck]
 	config.player_names = [player.name if player.name != "" else "Adventurer", String(QUESTS[index][3]) if quest >= 0 else "Lord of the Ebon Crown"]
 	var deck_name := player.deck_names[player.current_deck] if player.current_deck < player.deck_names.size() else ""
 	config.deck_names = [deck_name if deck_name != "" else "Deck %d" % (player.current_deck + 1), String(QUESTS[index][1]) if quest >= 0 else "The Ebon Crown"]
-	config.portraits = [player.portrait, CreatureBook.face_id(1)]
-	config.lives = [CreatureMeeting.hero_life(player), 20 if quest >= 0 else 25]
+	config.portraits = [player.portrait, CreatureBook.face_id(RefugeEncounters.FACES[quest if quest >= 0 else 5])]
+	config.lives = [CreatureMeeting.hero_life(player), RefugeEncounters.LIVES[quest if quest >= 0 else 5]]
 	config.pilots = [null, CreatureMeeting.ai_for(player.difficulty)]
 	config.mulligan_rule = MtgGame.MULLIGAN_1997
 	config.ai_random_play_or_draw = true

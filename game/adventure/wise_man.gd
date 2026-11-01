@@ -106,7 +106,7 @@ static func speak(player: AdventurePlayer, slot: int) -> Dictionary:
 	if fresh:
 		if dice.below(5) == 0:
 			stage = STAGE_TALE
-			state["tale"] = dice.rand() % (RefugeStories.TALES.size() if RefugeCampaign.on_island(player) else 12)
+			state["tale"] = dice.rand() % (maxi(1, AdventureExpansions.active(player, "tales", [], []).size()) if not AdventureRegions.mainland(player) else 12)
 		elif dice.below(5) == 0:
 			stage = STAGE_NEWS
 			state["news"] = _news(player, dice)
@@ -126,8 +126,10 @@ static func speak(player: AdventurePlayer, slot: int) -> Dictionary:
 				stage = STAGE_TALE
 			else:
 				talk["pages"].append(news)
+				player.log_clue(news)
 		STAGE_GIFT:
 			var reminded := reminder(player) if bool(state.get("remind", false)) and Quests.has_quest(player) else ""
+			if reminded != "": player.log_clue(reminded, "quest_clue")
 			if reminded != "":
 				talk["pages"].append(reminded)
 			else:
@@ -141,8 +143,8 @@ static func speak(player: AdventurePlayer, slot: int) -> Dictionary:
 
 ## The tale last told (a new one when there is none): its pages.
 static func _tale(player: AdventurePlayer) -> PackedStringArray:
-	var local := RefugeCampaign.on_island(player)
-	var tales: Array = RefugeStories.TALES if local else words().get("tales", [])
+	var local := not AdventureRegions.mainland(player)
+	var tales: Array = AdventureExpansions.active(player, "tales", [], []) if local else words().get("tales", [])
 	var pages := PackedStringArray()
 	if tales.is_empty():
 		pages.append("The wise man speaks of Shandalar long ago, when magic was free to all.")
@@ -168,7 +170,7 @@ static func _news(player: AdventurePlayer, dice: MsvcRandom) -> String:
 	var block := dice.rand() % 3
 	match block:
 		0:
-			if RefugeCampaign.on_island(player): return RefugeStories.news(player)
+			if not AdventureRegions.mainland(player): return AdventureExpansions.active(player, "news", [], "")
 			var standing: Array[int] = []
 			for i in 5:
 				if not AdventurePlayer.COLORS[i] in player.defeated_wizards:
@@ -252,7 +254,7 @@ static func reminder(player: AdventurePlayer) -> String:
 	match kind:
 		Quests.LETTER_LINK:
 			quest["data"] = way
-			return "If you seek the mana link, travel %s to %s." % [WorldNames.DIRECTIONS[way], town]
+			return ("If you seek the mana link, travel %s to %s." if AdventureExpansions.mana_links_allowed(player.world) else "To earn your amulet, travel %s to %s.") % [WorldNames.DIRECTIONS[way], town]
 		Quests.CARD:
 			if Quests.card_for_quest(player) < 0:
 				return "I see that the people of %s have asked for a %s." % [town, Quests.spell_name(color, destination)]
@@ -277,7 +279,7 @@ static func _gift(player: AdventurePlayer, slot: int) -> Dictionary:
 ## that need no choice made.
 static func give(player: AdventurePlayer, gift: int, color: int) -> Dictionary:
 	var talk := {"pages": PackedStringArray(), "then": "", "color": color}
-	var applause := RefugeStories.applause(player) if RefugeCampaign.on_island(player) else APPLAUSE
+	var applause: String = AdventureExpansions.active(player, "applause", [], APPLAUSE) if not AdventureRegions.mainland(player) else APPLAUSE
 	var hue := COLOR_WORDS[clampi(color, 1, 5) - 1]
 	match gift:
 		TALE:
@@ -289,7 +291,11 @@ static func give(player: AdventurePlayer, gift: int, color: int) -> Dictionary:
 			if told < 0:
 				return give(player, LIVES, color)
 			var lines := PackedStringArray([applause + String(GIFT_WORDS[CLUE]), "", WorldClues.title(told, player.world)])
-			lines.append_array(WorldClues.lines(player.world, told))
+			var clues := WorldClues.lines(player.world, told)
+			lines.append_array(clues)
+			for clue in clues:
+				if not clue.ends_with(":"):
+					player.log_clue(WorldClues.title(told, player.world) + " — " + clue.trim_prefix("-"))
 			talk["pages"].append("\n".join(lines))
 		LIVES:
 			if not player.duel_gift_waiting():

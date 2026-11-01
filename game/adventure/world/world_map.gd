@@ -340,17 +340,16 @@ func _draw_land() -> void:
 
 
 func _draw_places() -> void:
-	if world.expansion.get("region", "") == RefugeCampaign.ISLAND:
+	if AdventureRegions.id(world) != AdventureRegions.MAINLAND:
 		for dungeon in WorldClues.on_world(world):
 			var at := tile_point(Vector2i(dungeon["x"], dungeon["y"]))
 			draw_circle(at, 4.0, Color(0.7, 0.5, 0.9))
 			_boxed("Dungeon", at + Vector2(0, -12), Color.WHITE, 9)
-	for key in ["port", "castle"]:
-		var point: Array = world.expansion.get(key, [])
-		if point.size() == 2:
-			var at := tile_point(Vector2i(int(point[0]), int(point[1])))
-			draw_circle(at, 5.0, Color(0.9, 0.72, 0.3))
-			_boxed("Ship" if key == "port" else "Ebon Crown", at + Vector2(0, -12), Color.WHITE, 10)
+	for place in AdventureExpansions.places(world):
+		var point: Array = place["point"]
+		var at := tile_point(Vector2i(int(point[0]), int(point[1])))
+		draw_circle(at, 5.0, Color(0.9, 0.72, 0.3))
+		_boxed(place["name"], at + Vector2(0, -12), Color.WHITE, 10)
 	var tiles := _art.texture("world_map_tiles")
 	var besieged := WorldStatus.siege_town(player) if player != null else -1
 	for slot in world.sites.size():
@@ -485,9 +484,11 @@ func _draw_journal() -> void:
 		return
 	var entry: Dictionary = player.journal[journal_index]
 	var tile := Vector2i(int(entry.get("x", 0)) / 32, int(entry.get("y", 0)) / 32)
-	var at := tile_point(tile)
-	draw_rect(Rect2(at - Vector2(2, 2), Vector2(5, 5)), Color.WHITE)
-	_boxed(String(entry.get("text", "")).replace("\n", " "), at + Vector2(0, 6), Color.WHITE, 10)
+	var same := String(entry.get("region", "mainland")) == AdventureRegions.id(player.world)
+	var at := tile_point(tile) if same else Vector2(320, 390)
+	if same: draw_rect(Rect2(at - Vector2(2, 2), Vector2(5, 5)), Color.WHITE)
+	var ink := Color("9bd8ef") if entry.get("event", "") == "clue" else PaneStyle.GOLD if bool(entry.get("highlight", false)) else Color.WHITE
+	_boxed(HeroStats.journal_line(entry), at + Vector2(0, 6), ink, 10)
 	_boxed("Day %d — line %d of %d" % [int(entry.get("day", 0)), journal_index + 1, player.journal.size()],
 		Vector2(320, 450), PaneStyle.GOLD, 11)
 

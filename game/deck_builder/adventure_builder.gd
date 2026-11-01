@@ -658,7 +658,8 @@ func worth_lines(card_name: String) -> Array[String]:
 
 ## A builder that only looks keeps saying so after any other message.
 func _resting_line() -> String:
-	return LOOK_ONLY if looking else ""
+	var line: String = AdventureExpansions.active(player, "deck_line", [deck.to_card_list() if deck != null else []], "")
+	return (LOOK_ONLY + (" · " if line != "" else "") if looking else "") + line
 
 
 ## True — and the reason said — when the builder only looks.

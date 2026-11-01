@@ -149,6 +149,7 @@ static func arrive(player: AdventurePlayer, slot: int) -> void:
 	if delivery:
 		var destination := _destination(world, slot, dice)
 		var kind := LETTER_LINK if dice.below(2) != 0 else LETTER_AMULET
+		if not AdventureExpansions.mana_links_allowed(world): kind = LETTER_AMULET
 		if destination >= 0:
 			var favoured := CardTrade.favoured(player, slot)
 			var color := 0
@@ -265,13 +266,13 @@ static func offer_words(player: AdventurePlayer) -> PackedStringArray:
 	match kind:
 		LETTER_LINK:
 			lines.append("Take this message %s to my brother, the keeper of %s." % [way, town])
-			lines.append("He will reward you with a mana link.")
+			lines.append("He will reward you with a mana link." if AdventureExpansions.mana_links_allowed(player.world) else "He will reward you with a fine %s." % amulet_name(color))
 		LETTER_AMULET:
 			lines.append("Take this message %s to my brother, the keeper of %s." % [way, town])
 			lines.append("He will reward you with a %s." % amulet_name(color))
 		CARD:
 			lines.append("Take a %s %s to the keeper of %s." % [spell_name(color, destination), way, town])
-			lines.append("He will give you a mana link and 1 %s." % amulet_name(color))
+			lines.append(("He will give you a mana link and 1 %s." if AdventureExpansions.mana_links_allowed(player.world) else "He will give you 1 %s.") % amulet_name(color))
 	return lines
 
 
@@ -296,7 +297,9 @@ static func accept(player: AdventurePlayer, giver: int) -> String:
 	for slot in [destination, giver]:
 		var tile := site_tile(player.world, slot)
 		player.world.explore_around(tile)
+	AdventureTasks.rows(player)
 	player.log_event("quest_begun", "Quest for %s" % WorldNames.site_name(player.world, giver))
+	player.log_clue(WiseMan.reminder(player) + " Deadline: %d local days." % (units / 8), "quest_clue")
 	return "You have %d days to complete the quest." % (units / 8)
 
 
@@ -326,9 +329,14 @@ static func complete_at(player: AdventurePlayer, slot: int) -> Dictionary:
 	match int(player.quest["type"]):
 		LETTER_LINK:
 			lines.append("The keeper is pleased to receive his brother's letter.")
-			lines.append("You create a mana link here.")
-			TownStatus.put(world, slot, TownStatus.LINKED)
-			sound = "sfx_mana_link"
+			if AdventureExpansions.mana_links_allowed(world):
+				lines.append("You create a mana link here.")
+				TownStatus.put(world, slot, TownStatus.LINKED)
+				sound = "sfx_mana_link"
+			else:
+				player.amulets[hue] = int(player.amulets.get(hue, 0)) + 1
+				lines.append("You are rewarded with a fine %s." % amulet_name(color))
+				sound = "sfx_reward"
 		LETTER_AMULET:
 			lines.append("The keeper is pleased to receive his brother's letter.")
 			lines.append("You are rewarded with a fine %s." % amulet_name(color))
@@ -343,9 +351,10 @@ static func complete_at(player: AdventurePlayer, slot: int) -> Dictionary:
 			player.amulets[hue] = int(player.amulets.get(hue, 0)) + 1
 			TownStatus.put(world, slot, TownStatus.LINKED)
 			lines.append("The people are pleased to receive the %s spell." % card_name)
-			lines.append("You are rewarded with a fine %s and a mana link." % amulet_name(color))
+			lines.append(("You are rewarded with a fine %s and a mana link." if AdventureExpansions.mana_links_allowed(world) else "You are rewarded with a fine %s.") % amulet_name(color))
 		_:
 			return {}
+	AdventureTasks.finish(player, AdventureTasks.errand_id(player.quest))
 	player.quest = {}
 	return {"lines": lines, "sound": sound}
 
@@ -381,6 +390,7 @@ static func _creature_reward(player: AdventurePlayer, slot: int) -> Dictionary:
 		TownStatus.put(world, slot, TownStatus.LINKED)
 	if player.last_town == slot:
 		player.last_town = -1
+	AdventureTasks.finish(player, AdventureTasks.errand_id(player.quest))
 	player.quest = {}
 	out["lines"] = lines
 	return out
@@ -437,6 +447,7 @@ static func check_deadline(player: AdventurePlayer) -> String:
 	var giver := int(player.quest.get("giver", -1))
 	var town := WorldNames.site_name(player.world, giver)
 	TownStatus.put(player.world, giver, TownStatus.NO_QUESTS)
+	AdventureTasks.finish(player, AdventureTasks.errand_id(player.quest), "expired")
 	player.log_event("quest", "Quest failed for %s" % town, {"done": false})
 	player.quest = {}
 	return "The people of %s are sorry their quest was not completed." % town if town != "" \

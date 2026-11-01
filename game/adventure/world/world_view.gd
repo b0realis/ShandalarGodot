@@ -833,7 +833,8 @@ func _refresh(look_again: bool) -> void:
 	if look_again or _shown.is_empty():
 		_look_at_sites()
 		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), _sites_drawn,
-			lairs.hash(), dungeons.hash(), portal.hash(), art.terrain_palette, world.appearance_revision]
+			lairs.hash(), dungeons.hash(), portal.hash(), art.terrain_palette, world.appearance_revision,
+			AdventureExpansions.places_visible(world)]
 		if shown != _shown:
 			if _shown.size() < 3 or shown.slice(0, 3) != _shown.slice(0, 3):
 				# Another world, the sheets come or gone, the dark switched:
@@ -1121,7 +1122,8 @@ func _begin(camera_now: Vector2, cover: float) -> Picture:
 	picture.origin = _lay(Vector2(picture.anchor))
 	picture.shown = _shown
 	picture.plain = not art.ready()
-	var recipe_for := [world.get_instance_id(), picture.plain, art.terrain_palette, world.appearance_revision]
+	var recipe_for := [world.get_instance_id(), picture.plain, art.terrain_palette, world.appearance_revision,
+		AdventureExpansions.places_visible(world)]
 	if recipe_for != _recipe_for:
 		_recipes.clear()
 		_recipe_for = recipe_for
@@ -1838,9 +1840,10 @@ func _edges(bits: int, first_row: int, box: Vector2, ops: Array, tile := Vector2
 ## What stands on [param tile]: its two trees or rocks, or its site — the
 ## ground halves into [param halves], the uprights into [param uprights].
 func _standing_on(tile: Vector2i, halves: Array, uprights: Array) -> void:
-	var refuge := RefugeCampaign.marker(world, tile)
+	var refuge := AdventureExpansions.marker(world, tile)
 	if refuge != "":
-		_stand(uprights, 0, RefugeArt.map_op(refuge), true)
+		_stand(uprights, 0, AdventureExpansions.map_op(refuge), true)
+		_stand(uprights, 1, RegionPresentation.banner(world, tile))
 		return
 	if tile == portal_tile():
 		return  # [ours] the portal stands alone on its tile, as a site does
@@ -1863,6 +1866,7 @@ func _standing_on(tile: Vector2i, halves: Array, uprights: Array) -> void:
 		_object(row, column, Vector2(-ox, oy), halves, uprights, tile)
 	if flags & ShandalarWorld.SITE != 0:
 		_site(tile, halves, uprights)
+		_stand(uprights, 1, RegionPresentation.banner(world, tile))
 
 
 ## One tree or rock standing at [param foot]: its ground half and its
@@ -2059,9 +2063,9 @@ func _paint_plain() -> void:
 		canvas.draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
 	for i in _tiles.size():
-		var kind := RefugeCampaign.marker(world, _tiles[i])
+		var kind := AdventureExpansions.marker(world, _tiles[i])
 		if kind != "" and _seen[i] != 0:
-			var op := RefugeArt.map_op(kind)
+			var op := AdventureExpansions.map_op(kind)
 			var dest: Rect2 = op[1]
 			dest.position += _lefts[i]
 			canvas.draw_texture_rect_region(op[0], dest, op[2])

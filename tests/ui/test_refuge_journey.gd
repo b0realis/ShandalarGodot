@@ -26,6 +26,79 @@ func choose(action: String) -> void:
 	screen._visit.choose(action)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	# Leaving a community may offer World Magic before returning to the map.
+	# Dismiss that real pane before the fixture walks to its next destination.
+	if action == "leave" and WorldScreen._alive(screen._magic_seller):
+		screen._magic_seller.close()
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+func test_disabling_pack_closes_mainland_harbor_and_removes_its_interaction() -> void:
+	var point: Array = screen.world.expansion["port"].duplicate()
+	var port := Vector2i(point[0], point[1])
+	screen.player.position = port * 32 + Vector2i(16, 16)
+	screen.show_player(screen.player)
+	screen.visit(port)
+	assert_true(screen.visiting())
+	var revision := screen.world.appearance_revision
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_false(screen.visiting())
+	assert_true(screen.place_at(port).is_empty())
+	assert_gt(screen.world.appearance_revision, revision, "all three map caches refresh")
+	assert_eq(screen.world.expansion["port"], point, "saved location is kept")
+	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
+	assert_eq(screen.place_at(port).get("kind"), "refuge_port")
+
+func test_fresh_disabled_campaign_gains_harbor_when_pack_is_enabled() -> void:
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	var setup := AdventureSetup.new()
+	setup.seed_text = "48271"
+	var record := setup.resolve({})
+	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
+	screen.show_player(player)
+	assert_false(screen.world.expansion.has("port"))
+	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
+	assert_true(screen.world.expansion.has("port"))
+
+func test_rescan_pack_loss_hides_mainland_entry_and_restoration_recovers_it() -> void:
+	var point: Array = screen.world.expansion["port"].duplicate()
+	var port := Vector2i(point[0], point[1])
+	screen.player.position = port * 32 + Vector2i(16, 16)
+	screen.show_player(screen.player)
+	screen.visit(port)
+	# Reproduce discovery losing the ZIP while its enabled preference remains.
+	# No real pack files or registry definitions are changed by this UI fixture.
+	var report: Dictionary = CardPacks._available[FallenEmpiresPack.ID]
+	CardPacks._available.erase(FallenEmpiresPack.ID)
+	CardPacks.rescanned.emit()
+	await get_tree().process_frame
+	assert_true(Settings.enabled_card_packs().has(FallenEmpiresPack.ID))
+	assert_false(screen.visiting())
+	assert_true(screen.place_at(port).is_empty())
+	assert_eq(screen.world.expansion["port"], point)
+	CardPacks._available[FallenEmpiresPack.ID] = report
+	CardPacks.rescanned.emit()
+	assert_eq(screen.place_at(port).get("kind"), "refuge_port")
+
+func test_disabled_pack_still_returns_home_through_the_real_ship_button() -> void:
+	var point: Array = screen.world.expansion["port"].duplicate()
+	var port := Vector2i(point[0], point[1])
+	screen.player.position = port * 32 + Vector2i(16, 16)
+	screen.show_player(screen.player)
+	screen.visit(port)
+	await choose("refuge_sail")
+	assert_true(RefugeCampaign.on_island(screen.player))
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	assert_true(screen.visiting())
+	assert_true(screen._visit.place["actions"][0][2], "return remains enabled")
+	await choose("refuge_sail")
+	assert_false(RefugeCampaign.on_island(screen.player))
+	assert_eq(screen.player.tile(), port)
+	assert_false(screen.visiting(), "the vanished mainland town opens no empty pane")
+	assert_true(screen.place_at(port).is_empty())
+	assert_true(screen.player.regions.has("refuge"))
 
 func test_harbor_buttons_sail_and_return_through_real_visit_pane() -> void:
 	var coords: Array = screen.world.expansion["port"]
@@ -59,6 +132,19 @@ func test_town_petition_opens_full_duel_and_result_only_rewards_once() -> void:
 	assert_eq(pane.place["name"], RefugeWorld.TOWNS[0])
 	await choose("refuge_quest")
 	assert_eq(screen._visit.place["name"], "The Bread Road")
+	await choose("refuge_accept_0")
+	assert_false(RefugeQuests.ready(screen.player, 0))
+	await choose("refuge_back")
+	await choose("leave")
+	var destination: Vector2i = RefugeQuests.destination(screen.player, 0)["tile"]
+	screen.player.position = destination * 32 + Vector2i(16, 16)
+	screen.visit(destination, false)
+	await choose("refuge_deliver_0")
+	assert_true(RefugeQuests.ready(screen.player, 0))
+	await choose("refuge_leave")
+	screen.player.position = Vector2i(town["x"], town["y"]) * 32 + Vector2i(16, 16)
+	screen.visit(screen.player.tile(), false)
+	await choose("refuge_quest")
 	await choose("refuge_fight")
 	var host: WorldDuels
 	for node in screen.get_children():
@@ -146,7 +232,7 @@ func test_added_village_offers_a_local_quest_separate_from_mainland_and_pledges(
 
 func test_draw_loss_and_retry_keep_pledges_and_rewards_honest() -> void:
 	assert_true(RefugeCampaign.travel(screen.player))
-	var town: Dictionary = screen.player.world.sites[1]
+	var town: Dictionary = screen.player.world.sites[3]
 	screen.player.position = Vector2i(town["x"], town["y"]) * 32 + Vector2i(16, 16)
 	screen.show_player(screen.player)
 	screen.visit(screen.player.tile())
@@ -168,15 +254,75 @@ func test_draw_loss_and_retry_keep_pledges_and_rewards_honest() -> void:
 		await get_tree().process_frame
 		assert_false(screen._duel_held)
 		assert_true(screen.visiting())
-		assert_eq(RefugeCampaign.completed(screen.player, 0), result == DuelReport.WIN)
+		assert_eq(RefugeCampaign.completed(screen.player, 2), result == DuelReport.WIN)
 		if result != DuelReport.WIN:
 			assert_eq(screen.player.gold, gold)
 			assert_eq(screen.player.cards.size(), cards)
 		await choose("refuge_back")
-	assert_eq(screen.player.gold, gold + 100)
+	assert_eq(screen.player.gold, gold + 40)
 	await choose("refuge_quest")
-	assert_false(screen._visit.place["actions"][0][2], "completed pledge cannot be farmed")
+	assert_false(screen._visit.place["actions"].any(func(action: Array) -> bool: return action[0] == "refuge_fight"), "completed pledge cannot be farmed")
 	var saved := AdventurePlayer.load_from(screen.player.save_path())
 	assert_not_null(saved)
 	if saved == null: return
-	assert_true(RefugeCampaign.completed(saved, 0))
+	assert_true(RefugeCampaign.completed(saved, 2))
+
+func test_survey_village_objective_and_reward_choice_use_real_buttons() -> void:
+	assert_true(RefugeCampaign.travel(screen.player))
+	for quest in [1, 3]:
+		var tile := Quests.site_tile(screen.player.world, quest + 1)
+		screen.player.position = tile * 32 + Vector2i(16, 16)
+		screen.show_player(screen.player)
+		screen.visit(tile, false)
+		await choose("refuge_quest")
+		await choose("refuge_accept_%d" % quest)
+		await choose("refuge_back")
+		await choose("leave")
+		tile = RefugeQuests.destination(screen.player, quest)["tile"]
+		screen.player.position = tile * 32 + Vector2i(16, 16)
+		screen.visit(tile, false)
+		if quest == 1:
+			assert_eq(screen._visit.place["actions"][0][0], "refuge_deliver_1")
+			await choose("refuge_deliver_1")
+			assert_true(RefugeQuests.ready(screen.player, 1))
+		else:
+			assert_eq(screen._visit.place["actions"][0][0], "refuge_petition_3")
+			await choose("refuge_petition_3")
+			assert_true(screen._visit.place["actions"][0][2], "the confrontation is offered at the village")
+		await choose("refuge_leave")
+	assert_true(RefugeCampaign.finish_quest(screen.player, 2))
+	var tile := Quests.site_tile(screen.player.world, 3)
+	screen.player.position = tile * 32 + Vector2i(16, 16)
+	screen.visit(tile, false)
+	await choose("refuge_quest")
+	await choose("refuge_reward")
+	assert_eq(screen._visit.place["name"], "The Communities' Spells")
+	var before := screen.player.cards.size()
+	await choose("refuge_reward_4")
+	assert_eq(screen.player.cards.size(), before + 6)
+	assert_true(screen.player.refuge["reward_choices"].is_empty())
+	await choose("refuge_reward_999")
+	assert_eq(screen.player.cards.size(), before + 6)
+
+func test_tasks_tab_tracks_selected_petition_and_updates_world_guides() -> void:
+	assert_true(RefugeCampaign.travel(screen.player))
+	screen.show_player(screen.player)
+	var panel := HeroStats.new()
+	panel.player = screen.player
+	add_child_autofree(panel)
+	panel.tab = "Tasks"
+	panel.refresh()
+	await get_tree().process_frame
+	var button := panel.find_child("Task_refuge_pledge_0", true, false) as Button
+	assert_not_null(button)
+	if button == null: return
+	button.pressed.emit()
+	await get_tree().process_frame
+	assert_eq(screen.player.tracked_task, "refuge/pledge:0")
+	screen._show_hero()
+	assert_eq(screen.guides.targets.size(), 1)
+	assert_eq(screen.guides.targets[0]["tile"], Quests.site_tile(screen.player.world, 1))
+	assert_true(RefugeQuests.start(screen.player, 0))
+	screen._show_hero()
+	var point: Array = screen.player.world.expansion["port"]
+	assert_eq(screen.guides.targets[0]["tile"], Vector2i(point[0], point[1]))

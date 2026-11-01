@@ -47,6 +47,7 @@ static func has(world: ShandalarWorld, slot: int, bit: int) -> bool:
 static func put(world: ShandalarWorld, slot: int, bit: int, on := true) -> void:
 	if world == null or slot < 0 or slot >= world.sites.size():
 		return
+	if on and not AdventureExpansions.mana_links_allowed(world): bit &= ~LINKED
 	var word := of(world, slot)
 	world.sites[slot]["status"] = (word | bit) if on else (word & ~bit)
 
@@ -54,7 +55,7 @@ static func put(world: ShandalarWorld, slot: int, bit: int, on := true) -> void:
 # ------------------------------------------------------------ the bits --
 
 static func linked(world: ShandalarWorld, slot: int) -> bool:
-	return has(world, slot, LINKED)
+	return AdventureExpansions.mana_links_allowed(world) and has(world, slot, LINKED)
 
 
 static func visited(world: ShandalarWorld, slot: int) -> bool:

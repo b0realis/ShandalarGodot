@@ -219,7 +219,7 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i,
 		portal := Vector2i(-1, -1)) -> bool:
 	if tile == hero or tile == portal or not world.is_land(tile.x, tile.y) \
-			or RefugeCampaign.marker(world, tile) != "":
+			or AdventureExpansions.marker(world, tile) != "":
 		return false
 	var taken := ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON
 	return world.tile_flags(tile.x, tile.y) & taken == 0

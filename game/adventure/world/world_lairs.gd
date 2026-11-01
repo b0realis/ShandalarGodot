@@ -156,8 +156,8 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 			var dy := RING if dice.below(2) != 0 else -RING
 			at = Vector2i(hero.x + dice.below(9) - RING, hero.y + dy)
 		mask = ShandalarWorld.magic_mask(world.terrain(at.x, at.y))
-		if mask != 0 and RefugeCampaign.marker(world, at) == "" \
-				and not (RefugeCampaign.on_island(player) and world.tile_flags(at.x, at.y) & ShandalarWorld.DUNGEON != 0):
+		if mask != 0 and AdventureExpansions.marker(world, at) == "" \
+				and not (not AdventureRegions.mainland(player) and world.tile_flags(at.x, at.y) & ShandalarWorld.DUNGEON != 0):
 			break
 		mask = 0
 	if mask == 0:
@@ -177,6 +177,7 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 		var roll := dice.below(200)
 		tier = 10 if roll < 50 else 11 if roll < 85 else 12 if roll < 115 else 13 if roll < 142 \
 			else 14 if roll < 165 else 16 if roll < 185 else 18
+	tier = AdventureExpansions.active(player, "roaming_tier", [tier], tier)
 	# (e) Slot 0 holds the quest's creature's tier while its quest runs.
 	var wanted := WorldCreatures.quest_row(player)
 	if slot == 0 and wanted != 0:
@@ -211,7 +212,7 @@ static func fill(player: AdventurePlayer, slot: int, dice: MsvcRandom) -> bool:
 	# for the quest's creature in slot 0, which keeps its own colour (part C
 	# stage C3, h2-2: beating its colour's castle made the quest impossible,
 	# its creature drawn and turned away here every time).
-	if not RefugeCampaign.on_island(player) and not player.at_peace() and not (slot == 0 and wanted != 0 and row == wanted) \
+	if AdventureRegions.mainland(player) and not player.at_peace() and not (slot == 0 and wanted != 0 and row == wanted) \
 			and color >= 1 and color <= 5 \
 			and AdventurePlayer.COLORS[color - 1] in player.defeated_wizards:
 		if row == CreatureBook.LAIR:

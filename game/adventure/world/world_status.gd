@@ -76,7 +76,7 @@ const GO: Array[String] = ["Go North to %s", "Go East to %s", "Go South to %s", 
 ## Days on the road: the quest clock, which steps on every 32 ticks the
 ## hero walks, in the quest's own days [QoL] (1997 counted no days).
 static func days_on_road(player: AdventurePlayer) -> int:
-	return player.quest_timer / DAY
+	return player.journey_steps() / DAY
 
 
 ## Whether a quest is under way.
@@ -131,11 +131,11 @@ static func quest_lines(player: AdventurePlayer) -> Array[String]:
 		lines.append("Take letter to %s" % town)
 	match kind:
 		Quests.LETTER_LINK:
-			lines.append("Reward: Mana Link")
+			lines.append("Reward: Mana Link" if AdventureExpansions.mana_links_allowed(player.world) else "Reward: %s" % Quests.amulet_name(color).capitalize())
 		Quests.LETTER_AMULET:
 			lines.append("Reward: %s" % Quests.amulet_name(color).capitalize())
 		Quests.CARD:
-			lines.append("Reward: Mana Link and an amulet")
+			lines.append("Reward: Mana Link and an amulet" if AdventureExpansions.mana_links_allowed(player.world) else "Reward: An amulet")
 		_:
 			if kind < 0:
 				lines.append(Quests.reward_line(player))
@@ -274,7 +274,7 @@ static func lines_fresh(player: AdventurePlayer) -> Array[String]:
 	if under_siege != "":
 		out.append(under_siege)
 	out.append_array(quest_lines(player))
-	out.append_array(RefugeCampaign.status_lines(player))
+	out.append_array(AdventureExpansions.status_lines(player))
 	var portal := FinalBattle.portal_line(player)
 	if portal != "":
 		out.append(portal)
@@ -303,9 +303,7 @@ static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 		out.append({"tile": Vector2i(int(site["x"]), int(site["y"])), "kind": "quest",
 			"name": WorldNames.site_name(player.world, target)})
 	# A timed errand takes priority over the island's continuing story.
-	var refuge := RefugeCampaign.next_target(player)
-	if not refuge.is_empty():
-		out.append(refuge)
+	out.append_array(AdventureExpansions.targets(player))
 	var portal := FinalBattle.portal_target(player)
 	if not portal.is_empty():
 		out.append(portal)

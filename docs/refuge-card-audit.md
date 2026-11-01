@@ -21,8 +21,9 @@ obeys its color, type, rarity, budget and campaign copy/ban restrictions.
 The eleven island trade categories provide access to every card type.
 
 Visiting the island alone does not unlock new mainland stock. Completing a
-community pledge grants its twelve Fallen Empires cards once, before the final
-battle; these cards can be brought home immediately. All five pledges and a
+community pledge grants six Fallen Empires cards in a chosen color once, before
+the final battle; these cards can be brought home immediately. Unchosen rewards
+and cards waiting for bag space remain owed, including older twelve-card awards. All five pledges and a
 main deck containing at least 50% Fallen Empires **nonland copies** qualify the
 hero to challenge the lord. Lands contribute to neither side of that ratio.
 Victory records the permanent unlock; a loss does not.
@@ -99,5 +100,5 @@ matching mana costs, Oracle text and creature power/toughness against the
 
 These checks establish the tested paths; they are not an exhaustive proof of
 every possible interaction among the game's optional packs. The preceding
-[quest audit](refuge-quest-audit.md) records the twelve completed live duels
+[quest audit](refuge-quest-audit.md) records the latest 144-game encounter study
 against all five community decks and the lord.

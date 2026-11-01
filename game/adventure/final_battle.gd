@@ -306,10 +306,11 @@ static func failed_lines() -> Array[String]:
 static func score_parts(player: AdventurePlayer) -> Dictionary:
 	var sieges := maxi(player.siege_count, 0)
 	var ruled := 0
-	if player.world != null:
-		for slot in player.world.sites.size():
-			if TownStatus.ruled(player.world, slot):
-				ruled += 1
+	var sites: Array = player.world.sites if player.world != null else []
+	if not AdventureRegions.mainland(player):
+		sites = player.regions.get(AdventureRegions.MAINLAND, {}).get("world", {}).get("sites", [])
+	for site in sites:
+		if int(site.get("status", 0)) & TownStatus.RULER_MASK != 0: ruled += 1
 	var kinds_sum := 0
 	var castle_wizards := 0
 	for win in player.duel_victories:
@@ -624,7 +625,7 @@ static func portal_near(player: AdventurePlayer) -> String:
 ## `{tile, kind, name}` — "portal" while it is open and the adventure goes
 ## on, "monument" once petrified; `{}` otherwise.
 static func portal_target(player: AdventurePlayer) -> Dictionary:
-	if player == null or RefugeCampaign.on_island(player) or player.portal.is_empty() or player.ended == AdventurePlayer.ENDED_FAILED:
+	if player == null or not AdventureRegions.mainland(player) or player.portal.is_empty() or player.ended == AdventurePlayer.ENDED_FAILED:
 		return {}
 	var state := String(player.portal.get("state", ""))
 	if state == PORTAL_OPEN and player.ended == "":
@@ -723,12 +724,12 @@ static func fifth_castle(player: AdventurePlayer) -> int:
 
 ## Whether Arzakon's portal stands on [param tile] (open or petrified).
 static func portal_at(player: AdventurePlayer, tile: Vector2i) -> bool:
-	return player != null and not RefugeCampaign.on_island(player) and not player.portal.is_empty() and portal_tile_of(player) == tile
+	return player != null and AdventureRegions.mainland(player) and not player.portal.is_empty() and portal_tile_of(player) == tile
 
 
 ## Whether the hero may enter the portal: open, Arzakon not yet beaten.
 static func portal_open(player: AdventurePlayer) -> bool:
-	return player != null and not RefugeCampaign.on_island(player) and String(player.portal.get("state", "")) == PORTAL_OPEN and player.ended == ""
+	return player != null and AdventureRegions.mainland(player) and String(player.portal.get("state", "")) == PORTAL_OPEN and player.ended == ""
 
 
 ## The portal's name on the world: open or petrified, "" for none.

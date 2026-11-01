@@ -59,6 +59,7 @@ func test_owned_cards_can_return_before_liberation_without_unlocking_stock() -> 
 	var player := hero()
 	assert_true(RefugeCampaign.travel(player))
 	assert_true(RefugeCampaign.finish_quest(player, 0))
+	assert_true(RefugeQuests.choose_reward(player, 0))
 	var bag := player.cards.duplicate(true)
 	assert_true(bag.any(func(row: Dictionary) -> bool: return row["card"] in FallenEmpiresPack.names()))
 	assert_true(RefugeCampaign.travel(player))

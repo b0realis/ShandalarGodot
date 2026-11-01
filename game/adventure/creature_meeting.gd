@@ -227,6 +227,7 @@ static func begin(player: AdventurePlayer, slot: int) -> Dictionary:
 	var meeting := meet(player, row, clampi(int(held.get("color", 1)), 1, 5), slot, at)
 	if held.has("town"):
 		meeting["town"] = int(held["town"])
+	AdventureExpansions.active(player, "roaming_encounter", [meeting])
 	return meeting
 
 
@@ -272,7 +273,7 @@ static func meet(player: AdventurePlayer, row: int, color: int, slot := -1,
 ## peace, a creature meets the hero as anywhere else ([method
 ## master_fallen]): the fallen-master words, and Pay or the riddle offered.]
 static func relation_of(player: AdventurePlayer, _row: int, color: int, slot: int, at: Vector2i) -> int:
-	if RefugeCampaign.on_island(player): return NONE
+	if not AdventureRegions.mainland(player): return NONE
 	if slot == SIEGE_SLOT:
 		return SIEGE
 	var world := player.world
@@ -329,8 +330,10 @@ static func _draw_hero_ante(player: AdventurePlayer, meeting: Dictionary, count:
 ## THE CREATURE'S WORDS by its relation and the wins (E:1745–1797; a
 ## henchman's 2085–2112), a line each as 1997 broke them.
 static func words(player: AdventurePlayer, meeting: Dictionary) -> Array[String]:
-	if RefugeCampaign.on_island(player):
-		return RefugeStories.roaming_words(player, int(meeting.get("wins", 0)))
+	if not AdventureRegions.mainland(player):
+		var lines: Array[String] = AdventureExpansions.active(player, "roaming_words", [int(meeting.get("wins", 0))], [] as Array[String])
+		if meeting.has("regional_name"): lines.append("My spells are those of the %s." % meeting["regional_name"])
+		return lines
 	var color := clampi(int(meeting["color"]), 1, 5)
 	var wizard: String = WorldNames.WIZARDS[color - 1]
 	var text := ""
@@ -567,7 +570,7 @@ static func spell_choices(meeting: Dictionary) -> Dictionary:
 	for treasure in ShandalarWorld.DUNGEON_CARDS:
 		treasures[String(treasure[1])] = true
 	var out := {}
-	for card_name in CreatureDeck.for_meeting(int(meeting["row"]), 0):
+	for card_name in opponent_deck(meeting, 0):
 		if not treasures.has(card_name):
 			out[card_name] = int(out.get(card_name, 0)) + 1
 	return out
@@ -618,7 +621,7 @@ static func reveal_magic(player: AdventurePlayer, index: int) -> Array[String]:
 ## all known, one more is learned ([method WorldClues.reveal]); then what is
 ## known of it, as the clue screen shows it. The lines.
 static func secrets(player: AdventurePlayer, meeting: Dictionary) -> Array[String]:
-	if RefugeCampaign.on_island(player):
+	if not AdventureRegions.mainland(player):
 		var dungeon := WorldClues.reveal_for_hint(player)
 		if dungeon < 0:
 			return ["No further secrets of the island remain to tell."] as Array[String]
@@ -749,6 +752,7 @@ static func hero_life(player: AdventurePlayer) -> int:
 ## Magics, a castle wizard's with the wins over its colour and the towns it
 ## rules (`extras.towns`; [param extras] merged in, `tier` an override).
 static func creature_life(player: AdventurePlayer, meeting: Dictionary, extras := {}) -> int:
+	if meeting.has("regional_life"): return int(meeting["regional_life"])
 	var more := {"world_magics": player.world_magics, "wins": player.wins_over_color(int(meeting["color"]))}
 	more.merge(extras, true)
 	return CreatureBook.duel_life(int(meeting["row"]), player.difficulty, more)
@@ -789,7 +793,7 @@ static func duel_config(player: AdventurePlayer, meeting: Dictionary) -> DuelCon
 	else:
 		hero_deck = padded_deck(player, player.deck_cards())
 		config.ante_cards[0] = hero_ante.duplicate()
-	var creature_deck: Array = CreatureDeck.for_meeting(row, int(meeting.get("filter", 0)))
+	var creature_deck: Array = opponent_deck(meeting, int(meeting.get("filter", 0)))
 	for stake in meeting.get("creature_ante", []):
 		if String(stake) in creature_deck:
 			(config.ante_cards[1] as Array).append(String(stake))
@@ -799,7 +803,7 @@ static func duel_config(player: AdventurePlayer, meeting: Dictionary) -> DuelCon
 	config.player_names = [player.name if player.name != "" else "Hero", CreatureBook.duel_name(row)]
 	var deck_name := player.deck_names[player.current_deck] if player.current_deck < player.deck_names.size() else ""
 	config.deck_names = [CreatureBook.name_of(swap) if swap > 0 else
-		(deck_name if deck_name != "" else "Deck %d" % (player.current_deck + 1)), CreatureBook.name_of(row)]
+		(deck_name if deck_name != "" else "Deck %d" % (player.current_deck + 1)), String(meeting.get("regional_name", CreatureBook.name_of(row)))]
 	config.portraits = [player.portrait, CreatureBook.face_id(row)]
 	config.lives = [hero_life(player), creature_life(player, meeting)]
 	config.pilots = [null, ai_for(player.difficulty)]
@@ -880,3 +884,8 @@ static func lines_of(text: String) -> Array[String]:
 	for line in text.strip_edges().split("\n"):
 		out.append(line)
 	return out
+
+## Regional spells also feed tribute choices; no invisible template mismatch.
+static func opponent_deck(meeting: Dictionary, filter := 0) -> Array:
+	if meeting.has("regional_deck"): return meeting["regional_deck"].duplicate()
+	return CreatureDeck.for_meeting(int(meeting["row"]), filter)

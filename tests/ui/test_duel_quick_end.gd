@@ -27,6 +27,7 @@ var referee: SgPracticeMatch
 func before_each() -> void:
 	super()
 	DuelScreen.debug_win = false
+	WorldScreen.debug_campaign = false
 	finished = []
 	closed = []
 	viewport = SubViewport.new()
@@ -37,6 +38,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	DuelScreen.debug_win = false
+	WorldScreen.debug_campaign = false
 	referee = null
 	var dir := DirAccess.open(SAVES)
 	if dir != null:

@@ -69,7 +69,7 @@ func test_save_round_trip_and_return_preserve_each_region_and_shared_bag() -> vo
 	if loaded == null: return
 	assert_true(RefugeCampaign.travel(loaded))
 	assert_false(RefugeCampaign.on_island(loaded))
-	assert_eq(loaded.quest, player.refuge["regions"]["mainland"]["record"]["quest"])
+	assert_eq(loaded.quest, player.regions["mainland"]["record"]["quest"])
 	assert_eq(loaded.quest_timer, 321)
 	assert_eq(loaded.siege_timer, 99)
 	assert_eq(loaded.cards.size(), cards + 1)
@@ -85,23 +85,63 @@ func test_missing_pack_never_strands_a_returning_player() -> void:
 	assert_true(RefugeCampaign.travel(player))
 	assert_false(RefugeCampaign.travel(player))
 
+func test_disabled_pack_adds_nothing_to_a_fresh_mainland() -> void:
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	var player := hero()
+	var terrain := player.world.page.duplicate()
+	var sites := player.world.sites.duplicate(true)
+	var dice := player.dice
+	RefugeCampaign.initialize(player)
+	assert_true(player.world.expansion.is_empty())
+	assert_true(player.refuge.is_empty())
+	assert_eq(player.world.page, terrain)
+	assert_eq(player.world.sites, sites)
+	assert_eq(player.dice, dice)
+
+func test_disabled_pack_hides_saved_harbor_without_erasing_progress() -> void:
+	var player := hero()
+	RefugeCampaign.initialize(player)
+	var point: Array = player.world.expansion["port"].duplicate()
+	var port := Vector2i(point[0], point[1])
+	assert_eq(RefugeCampaign.marker(player.world, port), "port")
+	assert_true(RefugeCampaign.travel(player))
+	assert_true(RefugeCampaign.finish_quest(player, 0))
+	assert_true(RefugeCampaign.travel(player))
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	assert_eq(RefugeCampaign.marker(player.world, port), "")
+	assert_true(VisitPane.describe(player, port).is_empty())
+	player = AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
+	assert_not_null(player)
+	if player == null: return
+	assert_eq(player.world.expansion["port"], point)
+	assert_eq(RefugeCampaign.marker(player.world, port), "")
+	assert_true(RefugeCampaign.completed(player, 0))
+	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
+	RefugeCampaign.initialize(player)
+	assert_eq(player.world.expansion["port"], point)
+	assert_eq(RefugeCampaign.marker(player.world, port), "port")
+	assert_true(RefugeCampaign.travel(player))
+	assert_true(RefugeCampaign.completed(player, 0))
+
 func test_corrupt_inactive_map_is_rejected_and_old_saves_still_load() -> void:
 	var player := hero()
 	var old := player.to_dict()
-	old.erase("refuge")
+	old.erase("expansions")
+	old.erase("regions")
+	old.erase("journey")
 	old["world"].erase("expansion")
 	old["version"] = 3
 	assert_not_null(AdventurePlayer.from_dict(old))
 	assert_true(RefugeCampaign.travel(player))
 	var broken := player.to_dict().duplicate(true)
-	broken["refuge"]["regions"]["mainland"]["world"]["grid"] = []
+	broken["regions"]["mainland"]["world"]["grid"] = []
 	assert_null(AdventurePlayer.from_dict(broken))
 	broken = player.to_dict().duplicate(true)
-	broken["refuge"]["regions"].erase("mainland")
+	broken["regions"].erase("mainland")
 	assert_null(AdventurePlayer.from_dict(broken))
 	for value in ["not a list", [0, 0], [6], ["white"]]:
 		broken = player.to_dict().duplicate(true)
-		broken["refuge"]["quests"] = value
+		broken["expansions"]["refuge"]["quests"] = value
 		assert_null(AdventurePlayer.from_dict(broken))
 	broken = player.to_dict().duplicate(true)
 	broken["world"]["expansion"]["port"] = ["bad", 1]
@@ -113,12 +153,13 @@ func test_unclaimed_rewards_survive_a_full_bag_and_can_be_collected_later() -> v
 	while player.bag_room() > 0:
 		player.cards.append({"card": "Forest", "decks": []})
 	assert_true(RefugeCampaign.finish_quest(player, 0))
-	assert_eq(player.refuge["pending"].size(), 12)
+	assert_true(RefugeQuests.choose_reward(player, 0))
+	assert_eq(player.refuge["pending"].size(), 6)
 	player = AdventurePlayer.from_dict(player.to_dict())
 	assert_not_null(player)
 	for i in 3: player.cards.pop_back()
 	assert_eq(RefugeCampaign.claim(player), 3)
-	assert_eq(player.refuge["pending"].size(), 9)
+	assert_eq(player.refuge["pending"].size(), 3)
 	assert_eq(RefugeCampaign.claim(player), 0)
 
 func test_island_steps_shops_and_guidance_keep_mainland_threats_separate() -> void:

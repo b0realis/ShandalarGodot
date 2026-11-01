@@ -50,3 +50,30 @@ func test_shop_disables_unknown_saved_card_and_restores_it_when_pack_returns() -
 	await get_tree().process_frame
 	assert_true(bool(pane._row.get_child(0).get_meta("available")))
 	assert_false(pane._buy.disabled)
+
+func test_island_builder_counts_live_nonlands_and_journal_clues_use_distinct_inks() -> void:
+	assert_true(RefugeCampaign.travel(player))
+	var builder := AdventureBuilder.new()
+	builder.player = player
+	add_child_autofree(builder)
+	await get_tree().process_frame
+	builder.deck.clear()
+	builder.deck.add("Thallid")
+	builder.deck.add("Grizzly Bears")
+	builder.deck.add("Forest")
+	assert_string_contains(builder._resting_line(), "FE nonlands 1/2")
+	builder.deck.add("Grizzly Bears")
+	assert_string_contains(builder._resting_line(), "need 2")
+	var stats := HeroStats.new()
+	stats.player = player
+	add_child_autofree(stats)
+	var clue := stats._journal_label("Seek the vault.", {"event": "clue", "highlight": true})
+	var quest := stats._journal_label("Carry the warrant.", {"event": "quest_clue", "highlight": true})
+	assert_ne(clue.get_theme_color("font_color"), quest.get_theme_color("font_color"))
+	assert_eq(quest.get_theme_color("font_color"), HeroStats.GOLD)
+	clue.free()
+	quest.free()
+	builder.queue_free()
+	stats.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame

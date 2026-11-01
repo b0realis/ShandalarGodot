@@ -51,6 +51,7 @@ signal clues_pressed
 signal city_list_pressed
 ## The journal, to be walked on the map.
 signal journal_map_pressed
+signal task_selected
 ## The small map was clicked: walk to [param tile].
 signal walk_requested(tile: Vector2i)
 ## A World Magic's icon was clicked: cast key [param key] (1–5).
@@ -483,6 +484,7 @@ func _ready() -> void:
 	_hero_panel = _panel("HeroPanel")
 	hero_stats = HeroStats.new()
 	hero_stats.journal_map_pressed.connect(func() -> void: journal_map_pressed.emit())
+	hero_stats.task_selected.connect(func() -> void: task_selected.emit())
 	# D or Space while the pane shows: done (1997's stats screen's Done).
 	hero_stats.done_pressed.connect(func() -> void: close_panels())
 	_hero_panel.add_child(hero_stats)

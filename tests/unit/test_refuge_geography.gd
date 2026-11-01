@@ -104,7 +104,7 @@ func test_settlements_offer_the_mainland_service_types_and_all_trade_categories(
 		if slot > 0:
 			assert_false(sellers.has(slot), "one World Magic per seller")
 			sellers[slot] = true
-	assert_eq(sellers.size(), 11)
+	assert_eq(sellers.size(), 3, "a compact island is not all eleven World Magic sellers")
 
 func test_dungeon_opens_a_real_board_and_survives_save_and_region_changes() -> void:
 	var player := island()

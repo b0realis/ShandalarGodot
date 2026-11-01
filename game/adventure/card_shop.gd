@@ -237,7 +237,7 @@ static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
 		size += int(in_use[card_name])
 	return {"sold": colors_sold(player.world, slot), "held": counted_copies(player),
 		"limit": allowed_for(player, size), "classic": classic_rule(player),
-		"stock": RefugeCampaign.add_stock(player, stock())}
+		"stock": AdventureExpansions.add_stock(player, stock())}
 
 
 ## One card for place [param place]: a basic land of a colour the town

@@ -9,46 +9,13 @@ const TOWNS := ["Leitbur's Rest", "Vodalian Haven", "Freehold of the Hand", "Dwa
 const COLORS := [6, 1, 3, 5, 2]  # plains, island, swamp, mountain, forest
 
 static func component(world: ShandalarWorld, start: Vector2i) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	if not world.is_land(start.x, start.y):
-		return out
-	var seen := {start: true}
-	out.append(start)
-	var i := 0
-	while i < out.size():
-		var at := out[i]
-		i += 1
-		for d in [1, 3, 5, 7]:
-			var next := at + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
-			if not seen.has(next) and world.is_land(next.x, next.y):
-				seen[next] = true
-				out.append(next)
-	return out
+	return RegionGeography.component(world, start)
 
 static func coast(world: ShandalarWorld, tile: Vector2i) -> bool:
-	for d in [1, 3, 5, 7]:
-		if not world.is_land(tile.x + ShandalarWorld.DX[d], tile.y + ShandalarWorld.DY[d]):
-			return true
-	return false
+	return RegionGeography.coast(world, tile)
 
 static func port_for(world: ShandalarWorld, from: Vector2i) -> Vector2i:
-	var best := Vector2i(-1, -1)
-	var score := INF
-	for tile in component(world, from):
-		if not coast(world, tile) or world.tile_flags(tile.x, tile.y) & (ShandalarWorld.SITE | ShandalarWorld.DUNGEON):
-			continue
-		var clear := true
-		for site in world.sites:
-			if int(site["type"]) > 0 and tile.distance_to(Vector2i(site["x"], site["y"])) < 3.0:
-				clear = false
-		for encounter in world.encounters:
-			if tile.distance_to(Vector2i(encounter.get("x", 0), encounter.get("y", 0))) < 3.0:
-				clear = false
-		var distance := tile.distance_squared_to(from)
-		if clear and distance < score:
-			best = tile
-			score = distance
-	return best
+	return RegionGeography.port_for(world, from)
 
 static func generate(seed_value: int, color: int, difficulty: int) -> ShandalarWorld:
 	var source := WorldGenerator.generate(seed_value, 0, color, difficulty)
@@ -109,13 +76,20 @@ static func generate(seed_value: int, color: int, difficulty: int) -> ShandalarW
 	# The mainland's town, city and village services, with the same named
 	# temple/oasis/bazaar/shrine/tower/mill variants and randomized places.
 	for slot in [22, 43, 58, 76, 80, 103]:
-		var tile := _random_place(largest, used, dice, 4.0)
+		var pool := shore if slot == 22 else largest
+		var tile := _random_place(pool, used, dice, 4.0)
+		if tile.x < 0: tile = _random_place(largest, used, dice, 1.0)
 		used.append(tile)
 		_put_site(world, slot, tile, ShandalarWorld.CITY if slot in [22, 58] else ShandalarWorld.TOWN)
 		traders.append(slot)
 	var villages := 6 + dice.below(4)
 	for i in villages:
-		var tile := _random_place(largest, used, dice, 3.0)
+		var pool: Array[Vector2i] = []
+		if i == 0:
+			for point in largest:
+				if RegionObjectives.matches(world, point, {"near_terrain": 5, "radius": 2}): pool.append(point)
+		var tile := _random_place(pool if not pool.is_empty() else largest, used, dice, 3.0)
+		if tile.x < 0: tile = _random_place(largest, used, dice, 1.0)
 		used.append(tile)
 		_put_site(world, (i + 1) * 8, tile, ShandalarWorld.VILLAGE)
 	# Every mainland trade category appears: six colors and five card types.
@@ -124,10 +98,12 @@ static func generate(seed_value: int, color: int, difficulty: int) -> ShandalarW
 		world.sites[slot]["trade"] = goods.pop_at(dice.below(goods.size()))
 	world.world_magic_sites.assign([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	var sellers := traders.duplicate()
+	var magics: Array[int] = []
 	for magic in 12:
-		if magic != color * 2:
-			world.world_magic_sites[magic] = sellers.pop_at(dice.below(sellers.size()))
-	RefugeRoads.build(world, used, dice)
+		if magic != color * 2: magics.append(magic)
+	for offer in 3:
+		world.world_magic_sites[magics.pop_at(dice.below(magics.size()))] = sellers.pop_at(dice.below(sellers.size()))
+	RegionRoads.build(world, used, dice)
 	# Keep the five wizard slots empty; the shared dungeon system reserves
 	# indices 0-4 for the mainland's lords. Only slot 5 is a real encounter.
 	for i in 5:
@@ -146,7 +122,7 @@ static func generate(seed_value: int, color: int, difficulty: int) -> ShandalarW
 	world.page[door.y * 320 + door.x] |= ShandalarWorld.DUNGEON
 	world.lair_respawn.assign([0, 0, 0, 0, 0, 0, 0])
 	world.start = port * 32 + Vector2i(16, 16)
-	world.expansion = {"region": "refuge", "layout_version": 2, "port": [port.x, port.y],
+	world.expansion = {"region": "refuge", "layout_version": 4, "port": [port.x, port.y],
 		"castle": [middle.x, middle.y], "town_names": names,
 		"dungeon_names": {"5": "Vaults of the First Crossing"}}
 	world.rand_state = dice.state

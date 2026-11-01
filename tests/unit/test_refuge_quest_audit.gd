@@ -49,6 +49,8 @@ func test_community_battles_keep_adventure_padding_gifts_and_no_ante() -> void:
 			assert_eq(config.ante, 0)
 			assert_false(config.plays_named_ante())
 			assert_eq(config.decks[1].size(), 40)
+			player.refuge["stages"] = {"0": 2, "1": 2, "3": 1}
+			player.position = RefugeQuests.destination(player, quest)["tile"] * 32 + Vector2i(16, 16)
 			assert_true(RefugeJourney.quest_place(player, quest)["actions"][0][2], "pledges accept non-Fallen-Empires decks")
 	assert_eq(RefugeCampaign.duel_config(player, 1).decks[1].count("Deep Spawn"), 2)
 	assert_eq(RefugeCampaign.duel_config(player, 1).decks[1].count("Island"), 18)
@@ -56,6 +58,7 @@ func test_community_battles_keep_adventure_padding_gifts_and_no_ante() -> void:
 func test_unavailable_cards_disable_pledge_duels_with_an_explanation() -> void:
 	var player := hero()
 	player.cards = [{"card": "Missing expansion card", "decks": [0]}]
+	player.refuge["stages"] = {"0": 2}
 	assert_false(RefugeJourney.quest_place(player, 0)["actions"][0][2])
 	assert_string_contains(" ".join(RefugeJourney.quest_place(player, 0)["lines"]), "unavailable cards")
 	player.cards.clear()
@@ -99,16 +102,18 @@ func test_all_pledges_out_of_order_and_pending_rewards_survive_region_round_trip
 	for quest in [4, 1, 3, 0, 2]:
 		assert_true(RefugeCampaign.finish_quest(player, quest))
 		assert_false(RefugeCampaign.finish_quest(player, quest))
-	assert_eq(player.gold, gold + 500)
-	assert_eq(player.food, food + 100)
-	assert_eq(player.refuge["pending"].size(), 60)
+	assert_eq(player.gold, gold + 200)
+	assert_eq(player.food, food + 40)
+	assert_eq(player.refuge["reward_choices"].size(), 5)
+	for color in 5: assert_true(RefugeQuests.choose_reward(player, color))
+	assert_eq(player.refuge["pending"].size(), 30)
 	assert_true(RefugeCampaign.travel(player))
 	player = AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
 	assert_not_null(player)
 	if player == null: return
 	assert_true(RefugeCampaign.travel(player))
-	for i in 60: player.cards.pop_back()
-	assert_eq(RefugeCampaign.claim(player), 60)
+	for i in 30: player.cards.pop_back()
+	assert_eq(RefugeCampaign.claim(player), 30)
 	assert_eq(RefugeCampaign.claim(player), 0)
 	assert_eq(player.refuge["quests"].size(), 5)
 
@@ -135,7 +140,7 @@ func test_damaged_region_identity_or_missing_communities_is_rejected() -> void:
 	var player := hero()
 	var saved := player.to_dict()
 	var broken := saved.duplicate(true)
-	broken["refuge"]["regions"]["mainland"]["world"]["expansion"]["region"] = "refuge"
+	broken["regions"]["mainland"]["world"]["expansion"]["region"] = "refuge"
 	assert_null(AdventurePlayer.from_dict(broken))
 	broken = saved.duplicate(true)
 	broken["world"]["sites"] = []
@@ -144,10 +149,10 @@ func test_damaged_region_identity_or_missing_communities_is_rejected() -> void:
 	broken["world"]["expansion"]["port"] = [0, 0]
 	assert_null(AdventurePlayer.from_dict(broken), "the return ship cannot be saved in open water")
 	broken = saved.duplicate(true)
-	broken["refuge"]["liberated"] = true
+	broken["expansions"]["refuge"]["liberated"] = true
 	assert_null(AdventurePlayer.from_dict(broken), "freedom requires all five pledges")
 	var links := player.mana_links()
-	saved["refuge"]["regions"]["mainland"]["links"] = ["damaged counter"]
+	saved["regions"]["mainland"]["links"] = ["damaged counter"]
 	var loaded := AdventurePlayer.from_dict(saved)
 	assert_not_null(loaded)
 	assert_eq(loaded.mana_links(), links, "real settlement status supplies the links")
