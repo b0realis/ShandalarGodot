@@ -269,7 +269,7 @@ static func rare_of_any_kind(dice: MsvcRandom, classic := {}, player: AdventureP
 ## CardShop.counted_copies]), never one the deck in use holds more of than
 ## it may — 1997 threw such a card back (`GetRemainingAllowedCardCopies(card)
 ## < 0`, world_lair_monster_encounter.c 997–1001; [method
-## DuelSpoils.copies_left]; the playtest of part B, P3-4): one it may take no
+## CardShop.copies_left]; the playtest of part B, P3-4): one it may take no
 ## more of still comes. Off, as 1997 shipped it, no copy is counted and none
 ## is thrown back. Under the Classic MTG rules none the hero holds every
 ## copy of they allow ([method CardShop.classic_allows]).
@@ -283,7 +283,7 @@ static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) ->
 		var f: Dictionary = row["facts"]
 		if CardShop.shop_rarity(f) != 3:
 			continue
-		if not counts.is_empty() and DuelSpoils.copies_left(player, String(row["name"]), f, counts, limit) < 0:
+		if not counts.is_empty() and CardShop.copies_left(player, String(row["name"]), f, counts, limit) < 0:
 			continue
 		if not CardShop.classic_allows(classic, String(row["name"])):
 			continue

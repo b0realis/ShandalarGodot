@@ -235,7 +235,7 @@ func test_as_1997_sets_every_row_to_the_1997_game() -> void:
 	assert_false(s.all_trader_cards)
 	assert_false((_find("AllTraderCards") as CheckBox).button_pressed)
 	assert_true((_find("BanList") as OptionButton).disabled, "no Classic rule: the list greyed")
-	assert_eq((_find("CampaignSummary") as Label).text, "Sieges as 1997 · Creatures hunt · Reload allowed · No card limit")
+	assert_eq((_find("CampaignSummary") as Label).text, "Sieges as 1997 · Creatures hunt · Reload allowed · Copies not counted")
 
 
 # ------------------------------------------------------- mouse and keys --

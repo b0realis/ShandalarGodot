@@ -473,7 +473,7 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 				if not CardValue.goes_with(1 << color, int(f.get("color", CardValue.COLORLESS)), level):
 					continue
 				if classic.is_empty():
-					if copies_left(player, String(drawn["name"]), f, counts, limit) <= 0:
+					if CardShop.copies_left(player, String(drawn["name"]), f, counts, limit) <= 0:
 						continue
 				elif not CardShop.classic_allows(classic, String(drawn["name"])):
 					continue
@@ -501,32 +501,6 @@ static func _types_in(pool: Array) -> int:
 		if found == all:
 			break
 	return found
-
-
-## The copies of [param card_name] the deck in use may still take
-## (`GetRemainingAllowedCardCopies`, adventure_new_game.c 425–512): the
-## deck's limit (one, two from 40 cards, three from 60, one more with Tome
-## of Enlightenment, [method CardShop.copies_allowed] — [param limit]),
-## halved for a card outside the base sets, less the copies in the deck
-## ([param counts]); a basic land always 99.
-static func copies_left(player: AdventurePlayer, card_name: String, f: Dictionary, counts: Dictionary,
-		limit: int) -> int:
-	if card_name in CreatureDeck.BASICS:
-		return 99
-	var allowed := limit
-	if int(f.get("extra", 0)) & 0x100 != 0:
-		allowed = 1 if player.difficulty <= allowed else 0
-	elif not _is_base(card_name, f):
-		allowed = allowed / 2
-	return allowed - int(counts.get(card_name, 0))
-
-
-## Whether a card is of the 1997 base sets (`expansion & 0xC1`; read off the
-## card without the program's table, as [CardRiddle] does).
-static func _is_base(card_name: String, f: Dictionary) -> bool:
-	if not bool(f.get("derived", true)):
-		return int(f.get("exp", 0)) & 0xC1 != 0
-	return CardValue.is_base(card_name)
 
 
 ## A card's 1997 rarity (`GetCardRarity`, 1 common … 4 special;

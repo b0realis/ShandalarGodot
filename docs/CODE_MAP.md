@@ -1,5 +1,21 @@
 # Code Map
 
+- `game/adventure/embark_screen.gd`: card-rule hover references on the selected
+  mode, its summary and each dropdown entry, including small decks and the Tome.
+- `game/ui_chrome.gd` / `tests/ui/test_tooltips_fit_2026_09_18.gd`: tooltip
+  measurement after theme inheritance; dropdown help uses the containing game
+  viewport. Campaign references fit whole at 640×480 and 1280×800.
+
+- `tests/ui/test_refuge_card_rule_gameplay.gd`: Pack 2 purchases and deck editing,
+  a complete encounter duel under each campaign card rule, save/load and return.
+  `tests/unit/test_c19_A1_creatures.gd` also checks hero-initiated contact with
+  passive/wandering/fleeing creatures and the tribute menu's Duel Anyway choice.
+
+- `tests/unit/test_adventure_card_economy.gd`: original starter eligibility,
+  special rarities, artifact creatures, stale trades, pack shop/trade copy
+  limits, 39/40 and 58/59/60 thresholds, Tome bonuses and duel-only land padding.
+- `docs/adventure-card-economy-audit.md`: original source comparison, confirmed
+  acquisition fixes and Pack 2's preserved rules versus explicit balance changes.
 - `game/adventure/adventure_packs.gd`: campaign-local card selection, independent
   optional adventure links, cached stock, activation and legacy choice migration.
 - `game/adventure/expansions/refuge_module.gd`: metadata-only Pack 2 adventure
@@ -360,7 +376,12 @@
   `record_ink`, `journal_lines`; the creature page's pictures).
 - `game/adventure/starter_deck.gd`: `StarterDeck`, the first deck by the
   1997 rules (`deal`, `QUOTAS`, `copies_left`, `cards` — the base set read
-  from the registry, `enchantment`; `CardRegistry.printed_rarity`).
+  through `CardValue` flags/rarities, overlapping artifact/creature slots;
+  `forget` follows registry and skin changes). `CardShop.remaining_copies`
+  and `copies_left` share original reward limits and trade-list dimming; each
+  caller retains its own acceptance threshold. Shops keep their existing slot
+  allowance for optional cards too. Embark descriptions distinguish these
+  rules from card-hold capacity and selected-pack/region availability.
 - `game/deck_builder/adventure_builder.gd`: `AdventureBuilder`, the deck
   builder over the hero's own cards (a `SealedPool` of `AdventurePlayer.cards`,
   the three decks, `write_back`, the gold on the title slab, `ALLOWED`;

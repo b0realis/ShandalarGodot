@@ -46,7 +46,7 @@ func test_a_share_without_a_rare_ends_on_its_last_creature_again() -> void:
 			assert_true(CardRegistry.get_card(wizard[45]).is_creature(), where)
 			# The own share's last card is its rare, never a creature's copy.
 			var apprentice := _deck(color, 0, seed_value)
-			assert_eq(CardRegistry.rarity_of(apprentice[35]).to_lower(), "rare", where)
+			assert_gte(CardShop.shop_rarity(CardValue.facts(CardRegistry.get_card(apprentice[35]))), 3, where)
 
 
 func test_the_coloured_spells_are_enchantments_only() -> void:
@@ -98,9 +98,8 @@ func test_under_the_classic_rules_the_extra_copy_keeps_their_allowance() -> void
 
 
 func test_under_the_classic_rules_an_apprentice_still_gets_36_cards() -> void:
-	# The one common artifact of the base sets (Amulet of Kroog) is dealt
-	# on every artifact toss of a commons-only spell: a fifth time the
-	# Classic allowance refuses it, and the toss's other side is dealt.
+	# If a side of the spell coin has no more candidates under Classic
+	# copy limits, the other side keeps the starting deck complete.
 	for color in StarterDeck.MASKS:
 		for seed in 60:
 			var dealt := StarterDeck.deal(color, 0, MsvcRandom.new(seed), true)

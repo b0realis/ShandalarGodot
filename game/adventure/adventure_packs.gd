@@ -7,6 +7,10 @@ extends RefCounted
 static var _stock := {}
 static var _revision := -1
 
+static func forget() -> void:
+	_stock.clear()
+	_revision = -1
+
 static func selected(player: AdventurePlayer, pack: String) -> bool:
 	return player != null and player.packs.any(func(row: Variant) -> bool:
 		return row is Dictionary and row.get("id", "") == pack)

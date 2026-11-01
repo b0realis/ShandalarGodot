@@ -34,7 +34,7 @@ func _rare(seed: int, color := 4) -> String:
 
 
 func _left(card_name: String, facts: Dictionary) -> int:
-	return DuelSpoils.copies_left(player, card_name, facts, CardShop.deck_counts(player),
+	return CardShop.copies_left(player, card_name, facts, CardShop.deck_counts(player),
 		CardShop.copies_allowed(player))
 
 

@@ -30,9 +30,10 @@ extends RefCounted
 ##    for ante, no dungeon's treasure (`extra_ability & 0x900`), only the
 ##    base set (`expansion & 0xc1`).
 ##
-## OURS: the base set is the cards printed in Unlimited or Fourth Edition,
-## each at its first printing's rarity — the rarity the 1997 game read from
-## `Rarity.csv`'s original set. The dice are the adventure's, drawing among
+## Base eligibility and rarity use the same 1997 facts as the adventure's
+## other card sources, including Astral/promotional cards and special marks.
+## Without the imported table, CardValue derives those facts from printings.
+## OURS: the dice are the adventure's, drawing among
 ## the cards that fit, where 1997 drew any card and threw back the ones that
 ## did not: the same odds, not the same cards. Under the Classic MTG rules
 ## the last creature's extra copy is not added past the rules' allowance
@@ -58,15 +59,14 @@ const BASICS := {"black": "Swamp", "blue": "Island", "green": "Forest", "red": "
 	"white": "Plains"}
 const MASKS := {"black": Mtg.ManaColor.B, "blue": Mtg.ManaColor.U, "green": Mtg.ManaColor.G,
 	"red": Mtg.ManaColor.R, "white": Mtg.ManaColor.W}
-const RARITIES := {"common": 1, "uncommon": 2, "rare": 3, "special": 4, "mythic": 4}
-const BASE_SETS: Array[String] = ["2ed", "4ed"]
 
 ## The base cards, read once: `{name, color, kind, rarity, walker,
-## rare_type, enchantment}` — the colour a key of [constant MASKS], ""
+## rare_type, enchantment, artifact}` — the colour a key of [constant MASKS], ""
 ## colourless or "gold"; the kind `creature`, `artifact`, `spell` (an
 ## instant, a sorcery or an enchantment — the coloured spell's
 ## `enchantment`, the rare's `rare_type`) or `other`.
 static var _cards: Array[Dictionary] = []
+static var _read_at := -1
 
 
 ## THE FIRST DECK of a hero of [param color] at [param difficulty]: card
@@ -114,13 +114,12 @@ static func _share(dealt: Array[String], hue: String, lands: int, spells: int, c
 			if int(card["rarity"]) > most:
 				return false
 			if of_artifacts:
-				return String(card["kind"]) == "artifact"
+				return bool(card["artifact"])
 			return String(card["kind"]) == "spell" and bool(card["enchantment"]) and _of(card, hue)
 		var picked := _pick(dice, spell.bind(artifact))
 		if picked == "" and _keeps.is_valid():
 			# [ours] Under the Classic MTG rules a side the allowance has
-			# emptied (the one common artifact, Amulet of Kroog, a fifth
-			# time) deals from the other side of the coin, so the deck keeps
+			# emptied deals from the other side of the coin, so the deck keeps
 			# its size.
 			picked = _pick(dice, spell.bind(not artifact))
 		if picked != "":
@@ -196,26 +195,25 @@ static func _pick(dice: MsvcRandom, fits: Callable) -> String:
 ## The base cards a first deck is drawn from (see the class doc), read
 ## from the card registry once.
 static func cards() -> Array[Dictionary]:
+	CardRegistry.ensure_loaded()
+	if CardValue.pool_moved(_read_at): forget()
+	_read_at = CardRegistry.revision
 	if not _cards.is_empty():
 		return _cards
-	CardRegistry.ensure_loaded()
-	var barred: Array[String] = DeckFormat.BANNED.duplicate()
-	for row in ShandalarWorld.DUNGEON_CARDS:
-		barred.append(String(row[1]))
 	var names: Array = CardRegistry.all_names()
 	names.sort()
 	for card_name in names:
 		var name_text := String(card_name)
-		if name_text in barred or name_text in BASICS.values():
-			continue
-		var base := false
-		for code in BASE_SETS:
-			if CardRegistry.printed_rarity(name_text, code) != "":
-				base = true
-		if not base:
+		# Starter cards are independent of optional packs selected for duels
+		# or the campaign. Reprints cannot introduce new starting identities.
+		if not CardTrade.in_adventure(name_text) or name_text in BASICS.values():
 			continue
 		var data := CardRegistry.get_card(name_text)
 		if data == null or data.is_land():
+			continue
+		var f := CardValue.facts(data)
+		if int(f.get("exp", 0)) & CardValue.BASE_SETS == 0 \
+				or int(f.get("extra", 0)) & (CardValue.TREASURE | CardValue.KEPT_BACK) != 0:
 			continue
 		var color := ""
 		var mask := data.color_mask()
@@ -233,10 +231,18 @@ static func cards() -> Array[Dictionary]:
 				or data.is_type(Mtg.CardType.ENCHANTMENT):
 			kind = "spell"
 		var walks := data.landwalk.has("swamp") or data.landwalk.has("island")
+		if not bool(f.get("derived", false)):
+			walks = int(f.get("static", 0)) & 3 != 0
 		_cards.append({"name": name_text, "color": color, "kind": kind,
-			"rarity": int(RARITIES.get(CardRegistry.rarity_of(name_text).to_lower(), 1)),
+			"rarity": CardShop.shop_rarity(f),
 			"walker": walks,
+			"artifact": data.is_type(Mtg.CardType.ARTIFACT),
 			"rare_type": data.is_creature() or data.is_type(Mtg.CardType.ENCHANTMENT)
 				or data.is_type(Mtg.CardType.SORCERY),
 			"enchantment": data.is_type(Mtg.CardType.ENCHANTMENT)})
 	return _cards
+
+
+static func forget() -> void:
+	_cards.clear()
+	_read_at = -1

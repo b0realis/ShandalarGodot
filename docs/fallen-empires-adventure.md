@@ -30,15 +30,20 @@ it is not presented as an event documented in published Magic stories.
 
 ## Playing the journey
 
-Enable **Pack 2: Fallen Empires** in Options. Open an existing adventure or
-begin a new one. On the full map, **Ship: The Last Refuge** marks Sarpadian Anchorage, a reachable
+Install **Pack 2: Fallen Empires** in Options, select it on **Embark**, and
+check **Expanded adventure** at the bottom of the window. Leave that box off
+to use its cards in the original mainland campaign without the island story.
+These choices belong to the saved hero; globally enabling a pack does not add
+an adventure to an unrelated campaign. Existing expedition saves retain their
+journey. On the full map, **Ship: The Last Refuge** marks Sarpadian Anchorage, a reachable
 coastal site clear of existing towns and encounters. Walk to it and choose
 **Sail to the Island**. The other choice is **Mindfully leave the coastal town**.
 Passage is free, including every return trip.
 
 With Pack 2 disabled or missing, Sarpadian Anchorage is absent: no town on the
 mainland, no map or minimap marker, and no visit or enable-pack prompt. A fresh
-campaign creates no harbor until the pack is enabled. Existing harbor coordinates
+campaign creates no harbor unless the pack and its adventure are selected and
+the pack is enabled. Existing harbor coordinates
 and island progress are kept, so re-enabling the pack restores the same journey.
 
 The island occupies a 32 × 32 tile footprint, one quarter of the mainland's

@@ -138,3 +138,28 @@ func test_a_tooltip_a_control_shaped_for_itself_is_left_alone() -> void:
 	holder.add_child(elsewhere)
 	assert_eq(elsewhere.autowrap_mode, TextServer.AUTOWRAP_OFF)
 	assert_eq(elsewhere.custom_minimum_size, Vector2.ZERO)
+
+
+func test_campaign_card_rule_help_fits_whole_on_small_and_large_windows() -> void:
+	for room in [Vector2i(640, 480), Vector2i(1280, 800)]:
+		var holder := _room(room)
+		var screen: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
+		holder.add_child(screen)
+		var choice := screen.find_child("CardRule", true, false) as OptionButton
+		var summary := screen.find_child("CardRuleLine", true, false) as Label
+		# Model the internal item control inside Godot's short dropdown
+		# viewport. The tooltip must fit the game, not those three rows.
+		var menu := choice.get_popup()
+		menu.size = Vector2i(480, 80)
+		var item := Control.new()
+		menu.add_child(item)
+		for rule in AdventurePlayer.CARD_RULES:
+			screen.choose_card_rule(rule)
+			item.tooltip_text = choice.get_item_tooltip(AdventurePlayer.CARD_RULES.find(rule))
+			for control in [choice, summary, item]:
+				var popup := _popup(control, control.tooltip_text)
+				var required := popup.get_contents_minimum_size()
+				assert_lte(required.x, float(room.x) - MARGIN, rule)
+				assert_lte(required.y, float(room.y) - MARGIN, rule)
+				assert_eq(_label(popup).max_lines_visible, -1, rule + ": every rule is readable, no ellipsis")
+				popup.free()

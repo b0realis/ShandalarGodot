@@ -289,3 +289,51 @@ func test_notice_meets_fewer_creatures_than_hunt() -> void:
 		hunt["lairs"], notice["meetings"], notice["lairs"]])
 	assert_gt(int(hunt["meetings"]), 0, "control: creatures are met under Hunt")
 	assert_lt(int(notice["meetings"]), int(hunt["meetings"]), "fewer under Notice")
+
+
+func test_hero_can_walk_up_to_a_passive_creature_under_either_setting() -> void:
+	for mode in AdventurePlayer.CREATURE_WAYS:
+		var player := _player(mode)
+		player.ended = AdventurePlayer.ENDED_WON
+		player.food = 100
+		_park(player, [1])
+		var creature := _creature(player, 1, CLERIC, Vector2i(32, 0))
+		creature["temper"] = WorldCreatures.STANDS
+		var start := player.position
+		var walk := HeroWalk.new(player)
+		assert_true(walk.walk_to(HERO + Vector2i(1, 0)), mode)
+		var met := -1
+		for tick in 64:
+			walk.step()
+			met = int(WorldCreatures.tick(player)["met"])
+			if met >= 0: break
+			walk.end_tick()
+		assert_eq(met, 1, mode + ": approaching triggers contact without a creature attack")
+		assert_gt(player.position.x, start.x, "the hero walked to the creature")
+		assert_eq(_at(creature), start + Vector2i(32, 0), "the passive creature did not move")
+
+
+func test_close_contact_also_meets_wanderers_and_fleeing_creatures() -> void:
+	for temper in [WorldCreatures.WANDERS, WorldCreatures.HUNTS]:
+		var player := _player(AdventurePlayer.CREATURES_NOTICE)
+		player.ended = AdventurePlayer.ENDED_WON
+		player.cards = [{"card": "Grizzly Bears", "decks": [0]}]
+		_park(player, [1])
+		var creature := _creature(player, 1, CLERIC, Vector2i(5, 0))
+		creature["temper"] = temper
+		creature["wander"] = 3
+		creature["heading"] = 3
+		if temper == WorldCreatures.HUNTS:
+			for i in CreatureMeeting.TRIBUTE_WINS: player.log_victory(CLERIC, 5)
+			assert_true(WorldCreatures.flees(player, creature))
+		assert_eq(int(WorldCreatures.tick(player)["met"]), 1, temper + ": contact still opens a meeting")
+		var meeting := CreatureMeeting.begin(player, 1)
+		assert_false(meeting.is_empty())
+		assert_false(bool(meeting["no_ante"]), "the hero has a spell to stake")
+		var choices := CreatureMeeting.options(player, meeting)
+		if temper == WorldCreatures.HUNTS:
+			assert_eq(choices[0][0], "tribute")
+			assert_true(CreatureMeeting.tribute(player, meeting)["choices"].any(
+				func(choice: Array) -> bool: return choice[0] == "duel" and choice[1] == "Duel Anyway"))
+		else:
+			assert_eq(choices[0][0], "duel")

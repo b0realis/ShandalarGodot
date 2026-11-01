@@ -553,6 +553,8 @@ func test_the_card_rule_is_chosen_at_the_embark() -> void:
 	var names: Array[String] = []
 	for i in rules.item_count:
 		names.append(rules.get_item_text(i))
+		assert_eq(rules.get_item_tooltip(i), EmbarkScreen.RULE_TIPS[rules.get_item_metadata(i)],
+			"each alternative explains itself before selection")
 	assert_eq(names, ["Adventure limit of cards (as intended in 1997)", "No limit (as shipped in 1997)",
 		"Classic MTG rules"] as Array[String], "the owner's names, in order")
 	assert_eq(rules.selected, 0, "as intended in 1997 by default")

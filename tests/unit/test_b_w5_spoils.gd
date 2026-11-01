@@ -155,7 +155,7 @@ func test_no_reward_card_breaks_the_decks_copy_limit() -> void:
 		var dice := MsvcRandom.new(seed)
 		for card_name in DuelSpoils.reward_cards(player, meeting, dice):
 			var f := CardValue.facts(CardRegistry.get_card(card_name))
-			assert_gt(DuelSpoils.copies_left(player, card_name, f, counts, limit), 0, card_name)
+			assert_gt(CardShop.copies_left(player, card_name, f, counts, limit), 0, card_name)
 			assert_eq(int(f.get("type", 0)) & CardValue.ARTIFACT != 0 and int(f.get("type", 0)) & 0x3F == 0,
 				false, "a plain artifact is never drawn: %s" % card_name)
 			# 1997's order (E:2282–2284): the creature's colour first, the card's

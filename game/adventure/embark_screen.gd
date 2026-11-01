@@ -95,10 +95,13 @@ const RULE_NAMES := {
 	AdventurePlayer.RULE_SHIPPED: "No limit (as shipped in 1997)",
 	AdventurePlayer.RULE_CLASSIC: "Classic MTG rules",
 }
+const RULE_1997_DECK_TIP := "Deck Builder: three copies per nonbasic card below 59 cards, four from 59. With Tome of Enlightenment: four below 59, unlimited from 59. Both original modes use this check."
+const RULE_SMALL_DECK_TIP := "Small decks can play. For a duel only, random basic lands fill a short deck to 30/35/40/40 cards at Apprentice/Magician/Sorcerer/Wizard, counting the ante. Offers still use your saved deck's size."
+const RULE_COMMON_TIP := "Basic lands have no copy cap. Card hold, selected packs and regional unlocks still apply."
 const RULE_TIPS := {
-	AdventurePlayer.RULE_MEANT: "The shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant.",
-	AdventurePlayer.RULE_SHIPPED: "The shops and the duels' rewards offer any number of copies, as the 1997 game really did.",
-	AdventurePlayer.RULE_CLASSIC: "A deck holds at most four copies of a card, basic lands aside; one of a restricted card, four with Tome of Enlightenment; none of a banned one, by the ban list below. No shop, trader, reward or lair offers you a card you already own as many copies of as a deck may hold.",
+	AdventurePlayer.RULE_MEANT: "AS INTENDED\nNew shop stock counts active-deck copies only; spare copies do not count. Allowance: one under 40 cards, two at 40–59, three at 60+. Tome of Enlightenment adds one. Existing shelf stock stays.\n\nOrdinary duel rewards use that allowance; non-base cards (including Fallen Empires) halve it, rounded down. A 36-card deck gets no random FE reward without the Tome; a 40-card deck allows one, minus copies in use. Won ante bypasses this; special treasures and lairs keep their own rules. Paid trades still allow dimmed cards.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
+	AdventurePlayer.RULE_SHIPPED: "AS SHIPPED\nOwned copies do not block new shop stock or ordinary duel rewards. Paid trades also permit duplicates. This disables offer-copy counting, not every card rule.\n\nNon-base random duel rewards (including Fallen Empires) still need at least 40 active-deck cards, or Tome of Enlightenment. Thus a 36-card deck can buy or trade for FE cards, but needs the Tome for random FE duel rewards. Won ante bypasses this; special treasures and lairs keep their own rules.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
+	AdventurePlayer.RULE_CLASSIC: "CLASSIC MTG\nDeck Builder checks four copies per nonbasic card; one for restricted cards, none for banned cards, using the Ban list below. Tome of Enlightenment raises restricted cards to four; banned cards stay banned.\n\nShops, traders and generated rewards count ALL owned copies, including spare cards and other decks. At the limit, no further copy is offered. Won ante is kept even above the limit; owning a card does not make it legal in the deck.\n\nA 36-card deck and a 40-card deck have the same copy allowance. There is no non-base halving or 40-card acquisition gate.\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
 }
 ## THE FINAL BATTLE'S RULE (the owner, 2026-10-27: "A setting at Embark"),
 ## by [constant AdventurePlayer.LIFE_RULES], named as the owner named them;
@@ -123,7 +126,7 @@ const HOLD_NAMES := {
 }
 const HOLD_TIPS := {
 	AdventurePlayer.HOLD_1997: "Your magic bag holds 500 cards, as in 1997. With it full, a card you win or find is lost, the shops, traders and the wise man give you nothing more, and a dungeon's treasure asks you to leave one of your cards in its place.",
-	AdventurePlayer.HOLD_UNLIMITED: "Your magic bag holds any number of cards: no card is ever lost or refused for a full bag.",
+	AdventurePlayer.HOLD_UNLIMITED: "Your magic bag holds any number of cards: no card is ever lost or refused for a full bag. Card-copy rules and pack unlocks still apply.",
 }
 const HOLD_SUMMARY := {
 	AdventurePlayer.HOLD_1997: "Card hold: 500 cards, as in 1997.",
@@ -142,14 +145,14 @@ const BAN_NAMES := {
 }
 const BAN_TIPS := {
 	ClassicBans.OLD: "The lists of the original game's day: the Classic (Type 1) banned and restricted lists of January 1998, as The Duelist #22 printed them. Banned: Channel, Divine Intervention, Mind Twist and the ante cards. Restricted: Black Lotus, the Moxen, Sol Ring, Black Vise, Berserk, Regrowth, Strip Mine and others; Mana Crypt, Mana Vault and Time Vault are not.",
-	ClassicBans.BOTH: "Never looser than either list: a card banned in 1998 or today is banned, one restricted in 1998 or today is restricted. Channel, Divine Intervention and Mind Twist are banned; Mana Crypt, Mana Vault, Time Vault and Black Vise are restricted.",
-	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards. Restricted: Black Lotus, the Moxen, Sol Ring, Mana Crypt, Mana Vault, Time Vault, Channel, Demonic Tutor, Strip Mine and others. Banned: the ante cards and seven cards with offensive art or text. Mind Twist, Black Vise and Berserk are free.",
+	ClassicBans.BOTH: "Never looser than either list: a card banned by either the 1998 or included Vintage list is banned, one restricted by either is restricted. Channel, Divine Intervention and Mind Twist are banned; Mana Crypt, Mana Vault, Time Vault and Black Vise are restricted.",
+	ClassicBans.MODERN: "The included Vintage lists, for this game's cards; not the Modern format. These lists do not update automatically. Restricted: Black Lotus, the Moxen, Sol Ring, Mana Crypt, Mana Vault, Time Vault, Channel, Demonic Tutor, Strip Mine and others. Banned: the ante cards and seven cards with offensive art or text. Mind Twist, Black Vise and Berserk are free.",
 }
 const BAN_GREYED := "Only the Classic MTG rules read a ban list: choose them as your card rule to use one."
 ## [QoL] Broader paid-trader selections, chosen per campaign; off by default.
 var _all_trader_cards: CheckBox
 const TRADER_BOX := "All cards offered by traders"
-const TRADER_TIP := "Town traders, the Nomad's Bazaar and the Diamond Mine can offer every card in this adventure's pool, including special cards and dungeon treasures. Town categories, Classic bans and copy limits still apply. Shops and free rewards are unchanged."
+const TRADER_TIP := "Town traders, the Nomad's Bazaar and the Diamond Mine can offer the original special cards and dungeon treasures normally withheld from trades. Town categories, Classic bans and copy limits still apply. Selected packs and adventure unlocks still govern regional cards. Shops and free rewards are unchanged."
 const TRADER_ON_LINE := "Special cards and treasures can be traded."
 const TRADER_OFF_LINE := "Traders keep their original selection."
 ## THE SIEGES' PACE [ours, the owner's ruling of 2026-10-28 on 1997's
@@ -225,14 +228,14 @@ const LIFE_LINES := {
 	AdventurePlayer.LIFE_ONE: "Lose the final battle and the adventure is over for good.",
 }
 const RULE_LINES := {
-	AdventurePlayer.RULE_MEANT: "No shop or reward offers more copies than your deck's size allows.",
-	AdventurePlayer.RULE_SHIPPED: "Shops and rewards offer any number of copies, as 1997 really did.",
-	AdventurePlayer.RULE_CLASSIC: "Four copies of a card, one of a restricted card, none of a banned one.",
+	AdventurePlayer.RULE_MEANT: "Shops count active-deck copies; duel rewards also keep original set restrictions.",
+	AdventurePlayer.RULE_SHIPPED: "Copies owned do not block offers; original reward restrictions remain.",
+	AdventurePlayer.RULE_CLASSIC: "Four copies owned, one restricted, none banned; basic lands unlimited.",
 }
 const BAN_LINES := {
 	ClassicBans.OLD: "The Classic lists of January 1998, the original game's day.",
-	ClassicBans.BOTH: "Banned or restricted in 1998 or today: never looser than either.",
-	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards.",
+	ClassicBans.BOTH: "Uses the stricter of the 1998 and included Vintage lists.",
+	ClassicBans.MODERN: "The included Vintage lists, for this game's cards; not the Modern format. These lists do not update automatically.",
 }
 const BAN_GREYED_LINE := "Read only under the Classic MTG rules."
 const HOLD_LINES := {
@@ -269,7 +272,7 @@ const LIFE_SHORT := {
 	AdventurePlayer.LIFE_ONE: "One life",
 }
 const RULE_SHORT := {
-	AdventurePlayer.RULE_SHIPPED: "No card limit",
+	AdventurePlayer.RULE_SHIPPED: "Copies not counted",
 	AdventurePlayer.RULE_CLASSIC: "Classic MTG rules",
 }
 const START_SHORT := "Base 10 life"
@@ -824,7 +827,7 @@ const SETTINGS_BUTTON := "Campaign Settings..."
 const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "AllTraderCards", "CardHold", "Sieges",
 	"Creatures", "LifeStart", "Ascetic"]
 const AS_1997_WORDS := "As 1997"
-const AS_1997_TIP := "Every setting as the 1997 game played: reload allowed, no card limit, the 1998 ban list, the original trader selection, a 500-card bag, the 1997 sieges, creatures that hunt you, a life for each mana link, food as it was eaten."
+const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reload allowed, copies not counted, the 1998 ban list, original traders, a 500-card bag, accelerating sieges, hunting creatures, links-only life and normal food use. The ban list is inactive under this card rule. Selected packs and Expanded adventure are unchanged."
 ## WHAT "AS 1997" CHOOSES, each row the 1997 game's own: the card rule as
 ## it shipped (no copy limit), the 500-card bag, the sieges' 1997 clock, the
 ## creatures hunting, a life for each link, the food as eaten. Two rows had
@@ -905,7 +908,24 @@ func _explain_line(base: String, text: String, tip := "") -> void:
 ## chosen does, the row's line in short.
 func _build_card_rule() -> Control:
 	_card_rule = _list_of(OptionButton.new(), AdventurePlayer.CARD_RULES, RULE_NAMES)
+	for index in _card_rule.item_count:
+		_card_rule.set_item_tooltip(index, RULE_TIPS[_card_rule.get_item_metadata(index)])
 	var row := _setting_row("CardRule", "Card rule", _card_rule)
+	# This reference is longer than an ordinary hint. Keep its body at the
+	# settings' reading size so all thresholds fit even in a small window;
+	# the row's controls and the dropdown choices inherit the same tooltip.
+	row.theme = Theme.new()
+	row.theme.set_font_size("font_size", "TooltipLabel", 14)
+	row.theme.set_constant("line_spacing", "TooltipLabel", 1)
+	var paper := StyleBoxFlat.new()
+	paper.bg_color = Color(0.035, 0.03, 0.025, 0.98)
+	paper.border_color = Color(0.48, 0.39, 0.24)
+	paper.set_border_width_all(1)
+	paper.content_margin_left = 10
+	paper.content_margin_right = 10
+	paper.content_margin_top = 8
+	paper.content_margin_bottom = 8
+	row.theme.set_stylebox("panel", "TooltipPanel", paper)
 	_card_rule.item_selected.connect(func(index: int) -> void:
 		choose_card_rule(String(_card_rule.get_item_metadata(index))))
 	_show_card_rule()

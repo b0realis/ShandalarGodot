@@ -79,3 +79,29 @@ func test_island_builder_counts_live_nonlands_and_journal_clues_use_distinct_ink
 	stats.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
+
+func test_stale_trade_is_refused_and_removed_from_the_real_pane() -> void:
+	assert_true(RefugeCampaign.travel(player))
+	player.amulets["green"] = 10
+	var pane := CardTradePane.new()
+	pane.player = player
+	pane.way = CardTrade.TOWN
+	pane.color = "green"
+	add_child_autofree(pane)
+	pane.choose("Thallid")
+	assert_false(pane._yes.disabled)
+	var count := player.cards.size()
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	pane.trade_chosen()
+	assert_eq(player.amulets["green"], 10)
+	assert_eq(player.cards.size(), count)
+	assert_eq(pane.chosen, "")
+	assert_true(pane._yes.disabled)
+	assert_false(pane._large.visible)
+	assert_string_contains(pane._note.text, "no longer available")
+	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
+	pane.refresh()
+	pane.choose("Thallid")
+	pane.trade_chosen()
+	assert_eq(player.cards.size(), count + 1)
+	assert_eq(player.amulets["green"], 9)

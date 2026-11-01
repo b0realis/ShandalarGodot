@@ -2,13 +2,18 @@
 
 Pack 2 contains **102 distinct cards, with 187 printings**. Its trusted card
 scripts ship with the game; the optional pack supplies metadata and artwork.
-Enable Pack 2 in Options before taking the coastal ship to the Last Refuge.
+Select Pack 2 on **Embark** for this campaign. **Expanded adventure** is off
+by default: cards alone join the mainland, with no ship or story. Turn it on
+to use the Last Refuge journey and its local-to-global unlock. Installation
+and global enablement are necessary but do not select a pack for another hero.
 
 ## Availability
 
 | Campaign state | Newly offered Fallen Empires cards | Cards already owned |
 | --- | --- | --- |
-| Mainland, before defeating the island lord | No | Keep, play, sell or copy them normally |
+| Pack 2 unselected, even if globally enabled | No | Preserve saved cards |
+| Pack 2 selected, Expanded adventure off | Yes on the mainland | Shared collection; no island |
+| Expanded adventure on: mainland, before defeating the island lord | No | Keep, play, sell or copy them normally |
 | Last Refuge, before defeating the lord | Yes | Available in the shared collection |
 | Last Refuge, after defeating the lord | Yes | Available in the shared collection |
 | Mainland, after defeating the lord | Yes, permanently for this campaign while the pack is enabled | Available in the shared collection |
@@ -38,16 +43,20 @@ Several original rules remain deliberate:
 - Starting decks use the original base-card pool. Enabling Pack 2 changes no
   starter deal. Normal, non-campaign Deck Builder browsing remains independent
   of campaign progress.
-- A roaming opponent's deck and named ante remain that opponent's own cards;
-  expansion availability does not rewrite existing creature decks. The island's
-  five pledge decks and lord's deck explicitly use Fallen Empires cards.
+- Mainland opponents retain their decks and ante. Island roaming encounters
+  may use the fixed regional Fallen Empires decks and stake cards from those
+  decks; named hunts and special preduel summons/swaps retain their exact
+  identities. The five pledge opponents and lord also use explicit regional
+  decks. Their strength does not scale to the hero's collection.
 - Fixed dungeon treasures and fixed named gifts retain their identities. The
   island dungeon uses the existing dungeon treasure rules. Card-riddle clues
   retain their original base-card vocabulary; their random rare prize follows
   the regional pool.
 - Under the original adventure copy rules, random duel spoils halve the allowed
   copies of non-base cards. With fewer than forty main-deck cards this rounds
-  down to zero; shops, trades and pledge rewards provide other sources. Classic
+  down to zero without the Tome. Town shop draws retain their existing slot
+  allowance, so they, amulet trades, the Bazaar and pledge rewards provide
+  other sources. Classic
   MTG campaign limits use their separate configured rules.
 
 Disabling a pack never substitutes another card for a missing saved card. A
@@ -82,7 +91,16 @@ Saved stock from a disabled pack could previously be bought for zero gold and
 added as an unavailable card. The purchase is refused without changing stock,
 gold or collection; the shop also refreshes correctly when the pack returns.
 
-## Verification
+## Original-economy review, 2026-11-01
+
+The [card-economy audit](adventure-card-economy-audit.md) compares the original
+1.3 source with every acquisition channel. It corrects starter eligibility,
+special rarity and artifact slots, and stale trade confirmation. Its Embark
+follow-up distinguishes the existing card rules and preserves shops as a
+source of optional cards for sub-forty-card decks. The
+original restrictions in the matrix apply after the regional pool is selected.
+
+## Earlier verification
 
 The new focused regressions passed **15 tests / 9,875 assertions**, including
 all 102 names across four states, actual deterministic shop/spoil/artifact

@@ -25,6 +25,7 @@ func after_each() -> void:
 func _forget() -> void:
 	CardValue.forget()
 	CardShop.forget()
+	StarterDeck.forget()
 
 
 func _without_table() -> void:
@@ -74,3 +75,21 @@ func test_a_shop_stocks_the_same_cards_with_the_table_or_without() -> void:
 		assert_true(with_table.has(card_name), "only without: " + card_name)
 		if with_table.has(card_name) and not card_name in COLOURED_IN_1997:
 			assert_eq(without[card_name], with_table[card_name], card_name + ": its colour")
+
+
+func test_starter_eligibility_matches_the_imported_1997_flags() -> void:
+	var pool := {}
+	for row in StarterDeck.cards(): pool[row["name"]] = true
+	var checked := 0
+	for name in CardRegistry.all_names():
+		var facts := CardValue.original(name)
+		if facts.is_empty() or not CardTrade.in_adventure(name): continue
+		if CardRegistry.get_card(name).is_land(): continue
+		var eligible := int(facts["exp"]) & 0xC1 != 0 and int(facts["extra"]) & 0x900 == 0
+		assert_eq(pool.has(name), eligible, name)
+		checked += 1
+	assert_gt(checked, 500)
+	_without_table()
+	var fallback := {}
+	for row in StarterDeck.cards(): fallback[row["name"]] = true
+	assert_true(pool == fallback, "starter eligibility agrees without the optional imported table")

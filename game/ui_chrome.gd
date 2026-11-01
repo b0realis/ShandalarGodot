@@ -486,6 +486,11 @@ static func fit_tooltip(node: Node) -> void:
 	if label == null or label.theme_type_variation != &"TooltipLabel" \
 			or label.autowrap_mode != TextServer.AUTOWRAP_OFF:
 		return
+	# node_added precedes inherited theme setup. Shape at ready, still
+	# before the engine measures/shows the popup, using its real font.
+	if not label.is_node_ready():
+		label.ready.connect(fit_tooltip.bind(label), CONNECT_ONE_SHOT)
+		return
 	var popup := label.get_parent() as PopupPanel
 	if popup == null or popup.theme_type_variation != &"TooltipPanel":
 		return
@@ -493,7 +498,12 @@ static func fit_tooltip(node: Node) -> void:
 	if holder == null:
 		return
 	var panel := popup.get_theme_stylebox("panel")
-	shape_tooltip(label, holder.get_viewport().get_visible_rect().size,
+	var viewport := holder.get_viewport()
+	# A dropdown's item control lives inside its short PopupMenu viewport.
+	# Its help can extend beyond the menu, up to the containing game window.
+	while viewport is Popup and viewport.get_parent() != null:
+		viewport = viewport.get_parent().get_viewport()
+	shape_tooltip(label, viewport.get_visible_rect().size,
 		label.get_theme_font("font"), label.get_theme_font_size("font_size"),
 		label.get_theme_constant("line_spacing"), panel)
 	# The popup measures itself from its children's minimum sizes, and a

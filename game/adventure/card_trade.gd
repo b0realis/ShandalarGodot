@@ -308,8 +308,15 @@ static func _amulets_held(player: AdventurePlayer) -> int:
 ## cast while the trader waited) — then no trade, never a purse below
 ## nothing nor a card underpaid.
 static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color := "") -> Dictionary:
+	var card_name := String(asked.get("card", ""))
+	# The browser's offer can outlive its catalogue or campaign eligibility.
+	# Check again before charging or consuming a reward, just as for the purse.
+	if not for_trader(player, way).any(func(row: Dictionary) -> bool: return row["name"] == card_name):
+		return {"traded": false, "said": "That card is no longer available from this trader."}
+	if not CardShop.may_offer(player, card_name):
+		return {"traded": false, "said": CardShop.classic_refusal(card_name, player.ban_list)}
 	if way == REWARD:
-		return _take_reward(player, String(asked.get("card", "")))
+		return _take_reward(player, card_name)
 	if not affords(player, asked, way, color):
 		return {"traded": false, "said": AFFORD}
 	# Through the bag ([method AdventurePlayer.add_card]; the bug pass of
@@ -333,7 +340,6 @@ static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color :
 				var hue := held[dice.below(held.size())]
 				player.amulets[hue] = int(player.amulets[hue]) - 1
 			player.dice = dice.state
-	var card_name := String(asked["card"])
 	for i in int(asked["copies"]):
 		player.add_card(card_name)
 	var count := int(asked["copies"])
