@@ -16,7 +16,7 @@ static func describe(player: AdventurePlayer, tile: Vector2i) -> Dictionary:
 			lines = ["The captain welcomes the liberator of the Last Refuge. The communities are free, and their spells now reach the mainland.", "Sail back to explore, trade or collect waiting rewards. Both voyages remain free."]
 		if not player.refuge.get("pending", []).is_empty():
 			lines.append("%d reward cards are waiting at a community or the castle; make room in your bag to collect them." % player.refuge["pending"].size())
-		var actions: Array = [["refuge_sail", "Sail to Shandalar" if island else "Sail to the Island", island or RefugeCampaign.available()],
+		var actions: Array = [["refuge_sail", "Sail to Shandalar" if island else "Sail to the Island", island or AdventureExpansions.enabled_for(player, "refuge")],
 			["refuge_leave", "Mindfully leave the coastal town", true]]
 		if island:
 			for index in [0, 1]:

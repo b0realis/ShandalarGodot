@@ -198,6 +198,8 @@ var color := "white"
 var playmat_color := ""
 var playmat_type := RANDOM_TYPE
 var packs: Array[String] = []
+## Optional lands and stories; off means selected packs add cards on Shandalar.
+var expanded_adventure := false
 var difficulty := 0
 ## The card rule of the adventure ([member AdventurePlayer.card_rule]): as
 ## 1997 meant it, as 1997 shipped it, or the classic MTG rules.
@@ -425,6 +427,7 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"ascetic": ascetic,
 		"playmat": {"color": playmat_color_shown(), "type": style},
 		"packs": chosen_packs,
+		"expanded_adventure": expanded_adventure,
 		"start": start,
 	}
 
@@ -460,6 +463,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "playmat_color", playmat_color, false)
 	Settings.set_value(KEY_PREFIX + "playmat_type", playmat_type, false)
 	Settings.set_value(KEY_PREFIX + "packs", ",".join(packs), false)
+	Settings.set_value(KEY_PREFIX + "expanded_adventure", expanded_adventure, false)
 	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
 	Settings.set_value(KEY_PREFIX + "card_rule", card_rule, false)
 	Settings.set_value(KEY_PREFIX + "life_rule", AdventurePlayer.life_rule_of(life_rule), false)
@@ -491,6 +495,8 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 	for id in String(Settings.get_value(KEY_PREFIX + "packs", "")).split(",", false):
 		if id in offered_packs(installed) and not id in setup.packs:
 			setup.packs.append(id)
+	var expanded: Variant = Settings.get_value(KEY_PREFIX + "expanded_adventure", false)
+	setup.expanded_adventure = expanded is bool and bool(expanded)
 	setup.difficulty = clampi(int(Settings.get_value(KEY_PREFIX + "difficulty", 0)),
 		0, DIFFICULTIES.size() - 1)
 	# The rule remembered, else the on/off copy limit remembered before the
@@ -515,7 +521,7 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
-	"playmat_color", "playmat_type", "packs", "difficulty", "figure_colors", "card_rule", "copy_limit",
+	"playmat_color", "playmat_type", "packs", "expanded_adventure", "difficulty", "figure_colors", "card_rule", "copy_limit",
 	"life_rule", "card_hold", "ban_list", "all_trader_cards", "sieges", "creatures", "life_start", "ascetic"]
 
 

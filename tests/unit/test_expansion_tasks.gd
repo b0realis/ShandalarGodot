@@ -11,8 +11,10 @@ func after_each() -> void:
 
 func hero(seed_text := "48271") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	return AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 
 func test_only_mainland_links_count_across_travel_and_legacy_saves() -> void:

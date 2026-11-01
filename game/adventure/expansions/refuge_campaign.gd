@@ -18,19 +18,13 @@ static func on_island(player: AdventurePlayer) -> bool:
 static func available() -> bool:
 	return AdventureExpansions.enabled(ISLAND)
 
-## AdventurePlayer is also compiled by standalone tools before autoload
-## identifiers exist. Resolve the pack service only when it is needed.
-static func _packs() -> Node:
-	var loop := Engine.get_main_loop()
-	return (loop as SceneTree).root.get_node_or_null("CardPacks") if loop is SceneTree else null
-
 static func initialize(player: AdventurePlayer) -> void:
 	AdventureExpansions.initialize(player)
 
 ## Disabled packs add no mainland places. Saved coordinates and progress stay
 ## intact, and an adventurer already on the island always keeps the way home.
 static func places_visible(world: ShandalarWorld) -> bool:
-	return world != null and (world.expansion.get("region", MAINLAND) == ISLAND or available())
+	return world != null and (world.expansion.get("region", MAINLAND) == ISLAND or AdventureExpansions.enabled_in(world, ISLAND))
 
 static func marker(world: ShandalarWorld, tile: Vector2i) -> String:
 	if not places_visible(world):
@@ -50,7 +44,7 @@ static func restore(player: AdventurePlayer, region: Dictionary) -> void:
 static func travel(player: AdventurePlayer) -> bool:
 	initialize(player)
 	var returning := on_island(player)
-	if not returning and not available(): return false
+	if not returning and not AdventureExpansions.enabled_for(player, ISLAND): return false
 	var seed_value := player.world.seed
 	var color := player.world.color
 	var make := func() -> ShandalarWorld: return AdventureExpansions.generate(ISLAND, seed_value, color, player.difficulty)
@@ -58,10 +52,6 @@ static func travel(player: AdventurePlayer) -> bool:
 	if not returning:
 		player.log_clue(RefugeStories.GATE, "quest_clue")
 		player.log_clue("Refuge Harbor always offers a free voyage home. Petitions wait; mainland deadlines pause while you are away.")
-		var listed := false
-		for pack in player.packs:
-			if pack.get("id", "") == FallenEmpiresPack.ID: listed = true
-		if not listed: player.packs.append({"id": FallenEmpiresPack.ID, "version": str(_packs().info(FallenEmpiresPack.ID).get("version", "1"))})
 	player.log_event("voyage", "Returned to Shandalar's mainland." if returning else "Sailed to the Last Refuge.")
 	return true
 
@@ -92,19 +82,7 @@ static func status_lines(player: AdventurePlayer) -> Array[String]:
 		"The ship at Refuge Harbor always offers a free voyage home."]
 
 static func offers_cards(player: AdventurePlayer) -> bool:
-	return available() and (on_island(player) or bool(player.refuge.get("liberated", false)))
-
-static func add_stock(player: AdventurePlayer, base: Array[Dictionary]) -> Array[Dictionary]:
-	if not offers_cards(player):
-		return base
-	var out := base.duplicate()
-	var held := {}
-	for row in out:
-		held[String(row["name"])] = true
-	for name in FallenEmpiresPack.names():
-		if not held.has(name) and CardRegistry.has_card(name):
-			out.append({"name": name, "facts": CardValue.facts(CardRegistry.get_card(name))})
-	return out
+	return AdventurePacks.offers_cards(player, FallenEmpiresPack.ID)
 
 static func deck_gate(player: AdventurePlayer) -> Dictionary:
 	return gate_for_cards(player.deck_cards())

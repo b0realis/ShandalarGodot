@@ -432,7 +432,7 @@ static func pick_duplicate(player: AdventurePlayer, spoils: Dictionary, card_nam
 ## among the first three picks (its first card the first pick).
 static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: MsvcRandom) -> Array[String]:
 	var out: Array[String] = []
-	var pool := AdventureExpansions.add_stock(player, CardTrade.catalogue())
+	var pool := AdventurePacks.add_stock(player, CardTrade.catalogue())
 	var color := clampi(int(meeting["color"]), 1, 5)
 	var stakes: Array = meeting.get("creature_ante", [])
 	# The copy limit as the Embark chose it ([method CardShop.counted_copies]),

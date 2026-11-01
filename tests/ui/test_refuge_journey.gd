@@ -7,10 +7,12 @@ func before_each() -> void:
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	AdventurePlayer.saves_folder = SAVES
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = "12345"
 	setup.player_name = "Wayfarer"
 	screen = load("res://game/adventure/world/world_screen.tscn").instantiate()
-	screen.record = setup.resolve({})
+	screen.record = setup.resolve({"pack-2": "1"})
 	add_child_autofree(screen)
 	await get_tree().process_frame
 
@@ -54,8 +56,10 @@ func test_disabling_pack_closes_mainland_harbor_and_removes_its_interaction() ->
 func test_fresh_disabled_campaign_gains_harbor_when_pack_is_enabled() -> void:
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 	screen.show_player(player)
 	assert_false(screen.world.expansion.has("port"))

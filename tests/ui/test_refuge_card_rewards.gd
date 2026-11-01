@@ -8,8 +8,10 @@ func before_each() -> void:
 	pack_was_enabled = CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	player = AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 
 func after_each() -> void:

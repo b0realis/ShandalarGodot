@@ -9,10 +9,12 @@ func after_each() -> void:
 
 func hero(seed_text := "5") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
 	setup.card_rule = AdventurePlayer.RULE_CLASSIC
 	setup.ban_list = ClassicBans.BOTH
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	return AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 
 func test_hero_effects_and_lifetime_counts_survive_travel() -> void:

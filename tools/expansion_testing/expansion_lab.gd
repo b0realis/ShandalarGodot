@@ -125,8 +125,11 @@ func _scenario(region: String, seed_value: int, trips: int) -> void:
 	var started := Time.get_ticks_msec()
 	var memory_before := int(Performance.get_monitor(Performance.MEMORY_STATIC))
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	var pack: String = AdventureExpansions.definition(region).get("pack", "")
+	if pack != "": setup.packs.append(pack)
 	setup.seed_text = str(seed_value)
-	var record := setup.resolve({})
+	var record := setup.resolve({pack: "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 	AdventureExpansions.initialize(player)
 	var mainland := player.world.fingerprint()
@@ -152,7 +155,6 @@ func _scenario(region: String, seed_value: int, trips: int) -> void:
 		check(player != null, "Save round-trip failed")
 		if player == null: return
 		# Disable content while on the land: returning must still be possible.
-		var pack: String = AdventureExpansions.definition(region).get("pack", "")
 		if pack != "": get_tree().root.get_node("CardPacks").set_enabled(pack, false)
 		else:
 			AdventureExpansions._development[region]["enabled"] = false

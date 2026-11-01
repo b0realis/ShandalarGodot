@@ -6,7 +6,6 @@ static func describe(player: AdventurePlayer, tile: Vector2i) -> Dictionary: ret
 static func decorate_town(player: AdventurePlayer, slot: int, place: Dictionary) -> Dictionary: return RefugeJourney.decorate_town(player, slot, place)
 static func ordinary_quests(_player: AdventurePlayer, slot: int) -> bool: return slot > 5
 static func act(screen: WorldScreen, action: String, place: Dictionary) -> bool: return RefugeJourney.act(screen, action, place)
-static func add_stock(player: AdventurePlayer, base: Array[Dictionary]) -> Array[Dictionary]: return RefugeCampaign.add_stock(player, base)
 static func status_lines(player: AdventurePlayer) -> Array[String]: return RefugeCampaign.status_lines(player)
 static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

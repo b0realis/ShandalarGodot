@@ -13,9 +13,11 @@ func before_each() -> void:
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	AdventurePlayer.saves_folder = SAVES
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
 	screen = load("res://game/adventure/world/world_screen.tscn").instantiate()
-	screen.record = setup.resolve({})
+	screen.record = setup.resolve({"pack-2": "1"})
 	add_child_autofree(screen)
 	await get_tree().process_frame
 
@@ -175,3 +177,11 @@ func test_target_click_switches_guidance_in_vanilla_with_quest_panel_open() -> v
 	wizard = panel.find_child("Task_mainland_wizard_0", true, false) as Button
 	assert_false((wizard.get_node("GuideMark") as HeroStats.TaskGuideMark).tracking)
 	assert_true(screen.hud.quest_pane_shown(), "changing tracked tasks keeps the quest status panel open")
+
+func test_debug_shortcut_respects_cards_only_campaign() -> void:
+	WorldScreen.debug_campaign = true
+	screen.player.expanded_adventure = false
+	var before := screen.player.position
+	assert_true(screen._debug_port_pressed(chord()))
+	assert_eq(screen.player.position, before)
+	assert_true(AdventureRegions.mainland(screen.player))

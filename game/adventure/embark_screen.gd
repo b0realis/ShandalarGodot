@@ -291,16 +291,11 @@ var _playmat_preview: Control
 var _difficulty_buttons: Array[Button] = []
 var _difficulty_word: Label
 var _difficulty_note: Label
+## Packs currently open for new campaigns; other installed packs stay visible.
+const SELECTABLE_PACKS: Array[String] = ["pack-2"]
 var _pack_checks: Dictionary = {}
-## THE CARD PACKS WAIT (the owner, 2026-10-27: "on the embark Menu gray out
-## lack options as they are not implemented!"): a pack's world, ruled by
-## its World Lord, is not built yet, so the packs are shown greyed and
-## unticked, and nothing chooses them — no tick, All or None, Randomize, nor
-## the choice remembered from before. True once the World Lords are built
-## (the tests set it to try the choice).
-static var packs_ready := false
-## What the greyed packs say until then (the owner, 2026-10-28).
-const NOT_YET := "Not implemented yet."
+var _expanded_check: CheckBox
+var _packs_about: Label
 var _seed_edit: LineEdit
 ## The walking figure: its preview on the portrait, the six part swatches
 ## and the popup a swatch opens ([HeroColors]).
@@ -324,8 +319,8 @@ var randomize_button: Button
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	setup = AdventureSetup.restore(_installed_packs())
-	if not packs_ready:
-		setup.packs.clear()
+	for id in setup.packs.duplicate():
+		if id not in SELECTABLE_PACKS: setup.packs.erase(id)
 	_faces = faces()
 	if PortraitLibrary.texture(setup.portrait) == null:
 		setup.portrait = String(_faces[0]["id"]) if not _faces.is_empty() else ""
@@ -696,28 +691,16 @@ func _build_journey() -> Control:
 		for label in ["All", "None"]:
 			var button := UiChrome.menu_button(label, Vector2(72, 28), 14)
 			button.name = "Packs" + label
+			button.disabled = not installed.any(func(id: String) -> bool: return id in SELECTABLE_PACKS)
 			button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			button.pressed.connect(choose_all_packs.bind(label == "All"))
-			button.disabled = not packs_ready
 			header.add_child(button)
 	box.add_child(header)
-	# The owner's words, 2026-10-22, first and in gold.
-	# The owner's words, 2026-10-22, first and in gold — once the packs are
-	# built. Until then the packs say nothing of what they will be (the
-	# owner, 2026-10-28: "remove explanation for the packs as it will be a
-	# surprise, just: Not implemented yet.").
-	if packs_ready:
-		var challenge := _text("These are additional challenges. The base cards are always present.", 14)
-		challenge.name = "PacksChallenge"
-		challenge.add_theme_color_override("font_color", GOLD)
-		challenge.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(challenge)
-	var about := _text("Each pack opens its own world on the map, ruled by a World Lord. Defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards."
-		if packs_ready else NOT_YET, 13)
-	about.name = "PacksAbout"
-	about.add_theme_color_override("font_color", DIM)
-	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(about)
+	_packs_about = _text("", 13)
+	_packs_about.name = "PacksAbout"
+	_packs_about.add_theme_color_override("font_color", DIM)
+	_packs_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_packs_about)
 	if installed.is_empty():
 		var none := _text("No card packs are installed. Options › Card Packs... adds them.", 14)
 		none.name = "NoPacks"
@@ -742,14 +725,37 @@ func _build_journey() -> Control:
 			check.add_theme_font_size_override("font_size", 15)
 			check.add_theme_icon_override("checked", UiChrome.check_icon(true))
 			check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+			check.disabled = id not in SELECTABLE_PACKS
+			if check.disabled:
+				check.modulate = Color(0.55, 0.55, 0.55)
+				check.tooltip_text += "\nUnavailable for new adventures."
 			check.button_pressed = id in setup.packs
-			check.disabled = not packs_ready
-			if not packs_ready:
-				check.tooltip_text += "\n" + NOT_YET
+			var adventures := AdventurePacks.adventures(id)
+			if not adventures.is_empty():
+				check.tooltip_text += "\nOptional adventure: " + ", ".join(adventures.map(AdventureExpansions.label))
 			check.toggled.connect(choose_pack.bind(id))
 			list.add_child(check)
 			_pack_checks[id] = check
 		box.add_child(list)
+	var pack_spacer := Control.new()
+	pack_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pack_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(pack_spacer)
+	_expanded_check = CheckBox.new()
+	_expanded_check.name = "ExpandedAdventure"
+	_expanded_check.text = "Expanded adventure"
+	_expanded_check.tooltip_text = "Add the selected packs' optional lands, stories and quests. Their cards reach Shandalar when you complete their adventure. Packs without an adventure add their cards immediately. Leave off for the original world with extra cards."
+	_expanded_check.add_theme_font_size_override("font_size", 14)
+	_expanded_check.add_theme_color_override("font_color", PARCHMENT)
+	_expanded_check.add_theme_color_override("font_hover_color", GOLD)
+	_expanded_check.add_theme_color_override("font_pressed_color", PARCHMENT)
+	_expanded_check.add_theme_color_override("font_hover_pressed_color", GOLD)
+	_expanded_check.add_theme_icon_override("checked", UiChrome.check_icon(true))
+	_expanded_check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+	_expanded_check.button_pressed = setup.expanded_adventure
+	_expanded_check.toggled.connect(choose_expanded_adventure)
+	box.add_child(_expanded_check)
+	_show_pack_mode()
 	return box
 
 
@@ -1451,7 +1457,10 @@ func choose_difficulty(level: int) -> void:
 
 
 func choose_pack(on: bool, id: String) -> void:
-	if not packs_ready:
+	if not _pack_checks.has(id): return
+	if id not in SELECTABLE_PACKS:
+		(_pack_checks[id] as CheckBox).set_pressed_no_signal(false)
+		setup.packs.erase(id)
 		return
 	if on and not id in setup.packs:
 		setup.packs.append(id)
@@ -1460,10 +1469,21 @@ func choose_pack(on: bool, id: String) -> void:
 
 
 func choose_all_packs(on: bool) -> void:
-	if not packs_ready:
-		return
 	for id in _pack_checks:
-		(_pack_checks[id] as CheckBox).button_pressed = on
+		var check := _pack_checks[id] as CheckBox
+		check.button_pressed = on and not check.disabled
+
+
+func choose_expanded_adventure(on: bool) -> void:
+	setup.expanded_adventure = on
+	_expanded_check.set_pressed_no_signal(on)
+	_show_pack_mode()
+
+
+func _show_pack_mode() -> void:
+	_packs_about.text = "Add cards to shops and rewards on Shandalar. Your first deck uses base cards."
+	if setup.expanded_adventure:
+		_packs_about.text = "Add available lands and quests. Packs without an adventure add their cards immediately."
 
 
 func _on_name_changed(text: String) -> void:
@@ -1500,9 +1520,9 @@ func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	setup.figure_colors = HeroColors.random(rng)
 	var time := "%02d%02d%02d" % [rng.randi_range(0, 23), rng.randi_range(0, 59), rng.randi_range(0, 59)]
 	setup.seed_text = "240000" if time == "000000" else time
-	if packs_ready:
-		for id in _pack_checks:
-			(_pack_checks[id] as CheckBox).button_pressed = rng.randi_range(0, 1) == 1
+	for id in _pack_checks:
+		var check := _pack_checks[id] as CheckBox
+		check.button_pressed = not check.disabled and rng.randi_range(0, 1) == 1
 	_show_all()
 	_say("")
 
@@ -1529,6 +1549,7 @@ func _show_all() -> void:
 	_show_color()
 	_show_playmat()
 	_show_difficulty()
+	choose_expanded_adventure(setup.expanded_adventure)
 
 
 func _show_face() -> void:
@@ -1633,6 +1654,10 @@ func embark() -> void:
 	if refusal != "":
 		_say(refusal)
 		_name_edit.grab_focus()
+		return
+	refusal = AdventurePacks.activate(setup.packs)
+	if refusal != "":
+		_say(refusal)
 		return
 	_say("")
 	var versions := {}
@@ -1824,7 +1849,9 @@ func summary(record: Dictionary) -> String:
 			var id := String(pack["id"])
 			var info: Dictionary = catalogue.info(id) if catalogue != null else {}
 			names.append(String(info.get("name", id)))
-		lines.append("Pack worlds: %s." % ", ".join(names))
+		lines.append("Card packs: %s." % ", ".join(names))
+		if record.get("expanded_adventure", false):
+			lines.append("Expanded adventure: optional lands and quests enabled.")
 	if AdventurePlayer.life_rule_of(record.get("life_rule")) == AdventurePlayer.LIFE_ONE:
 		lines.append(ONE_LIFE_SUMMARY)
 	lines.append(String(HOLD_SUMMARY[AdventurePlayer.card_hold_of(record.get("card_hold"))]))

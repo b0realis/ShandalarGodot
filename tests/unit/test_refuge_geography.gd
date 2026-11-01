@@ -8,9 +8,11 @@ func after_each() -> void:
 
 func island(seed_text := "48271") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
 	setup.player_name = "Wayfarer"
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 	RefugeCampaign.travel(player)
 	return player

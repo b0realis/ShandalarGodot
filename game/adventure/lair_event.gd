@@ -69,7 +69,7 @@ const SAFE_SIEGE := 128
 
 ## Regional unlocks belong to the player, never the shared core cache.
 static func reward_pool(player: AdventurePlayer) -> Array[Dictionary]:
-	return AdventureExpansions.add_stock(player, _cards()) if player != null else _cards()
+	return AdventurePacks.add_stock(player, _cards()) if player != null else _cards()
 
 
 ## Every card of the adventure ([method _cards]), and the card pool's

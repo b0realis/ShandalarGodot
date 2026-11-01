@@ -8,9 +8,11 @@ func after_each() -> void:
 
 func hero(seed_text := "12345") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.player_name = "Wayfarer"
 	setup.seed_text = seed_text
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	return AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 
 func test_port_preserves_mainland_and_is_reachable_from_start() -> void:
@@ -185,9 +187,9 @@ func test_island_steps_shops_and_guidance_keep_mainland_threats_separate() -> vo
 func test_quests_rewards_gate_and_unlock_are_persistent_and_not_repeatable() -> void:
 	var player := hero()
 	var original_stock := CardShop.stock().size()
-	assert_eq(RefugeCampaign.add_stock(player, CardShop.stock()).size(), original_stock)
+	assert_eq(AdventurePacks.add_stock(player, CardShop.stock()).size(), original_stock)
 	assert_true(RefugeCampaign.travel(player))
-	assert_gt(RefugeCampaign.add_stock(player, CardShop.stock()).size(), original_stock)
+	assert_gt(AdventurePacks.add_stock(player, CardShop.stock()).size(), original_stock)
 	for index in 5:
 		var config := RefugeCampaign.duel_config(player, index)
 		assert_eq(config.decks[1].size(), 40)
@@ -210,7 +212,7 @@ func test_quests_rewards_gate_and_unlock_are_persistent_and_not_repeatable() -> 
 	assert_true(RefugeCampaign.liberate(player))
 	assert_false(RefugeCampaign.liberate(player))
 	assert_true(RefugeCampaign.travel(player))
-	assert_gt(RefugeCampaign.add_stock(player, CardShop.stock()).size(), original_stock)
+	assert_gt(AdventurePacks.add_stock(player, CardShop.stock()).size(), original_stock)
 	assert_eq(player.defeated_wizards, [] as Array[String])
 	assert_true(AdventurePlayer.from_dict(player.to_dict()).refuge["liberated"])
 

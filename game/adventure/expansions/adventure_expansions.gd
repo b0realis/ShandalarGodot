@@ -4,14 +4,7 @@ extends RefCounted
 ## preloaded art, generated maps, card definitions or quest controllers.
 ## Add a descriptor and content provider for another land; core callers stay put.
 
-const CATALOGUE := {
-	"refuge": {"pack": "pack-2", "title": "The Last Refuge", "salt": 0x46454D, "palette": "last_refuge",
-		"provider": "res://game/adventure/expansions/refuge_content.gd",
-		"required_markers": ["port", "castle"], "required_sites": [1, 2, 3, 4, 5], "pledges": 5, "mana_links": false, "progress_schema": {"quests": 5, "max_stage": 2, "max_pending": 60},
-		"castle_name": "Ebon Crown", "generator": "Last Refuge (32x32 from 1997 terrain)",
-		"pictures": {"refuge_harbor": "res://game/adventure/expansions/art/refuge_harbor.png", "refuge_castle": "res://game/adventure/expansions/art/refuge_castle.png"},
-		"sprites": {"port": ["res://game/adventure/expansions/art/refuge_port_map.png", 160.0], "castle": ["res://game/adventure/expansions/art/refuge_castle_map.png", 192.0]}}
-}
+const CATALOGUE := {"refuge": preload("res://game/adventure/expansions/refuge_module.gd").DESCRIPTOR}
 static var _development := {}
 static var _providers := {}
 static var _hooked := false
@@ -33,9 +26,34 @@ static func packs() -> Node:
 	return node
 
 static func enabled(id: String) -> bool:
-	if _development.has(id): return bool(_development[id].get("enabled", true))
+	if _development.has(id) and not bool(_development[id].get("enabled", true)): return false
+	var pack: String = definition(id).get("pack", "")
+	if pack == "": return _development.has(id)
 	var service := packs()
-	return service != null and service.is_enabled(String(definition(id).get("pack", "")))
+	return service != null and service.is_enabled(pack)
+
+## Available globally is separate from selected in this campaign.
+static func chosen(player: AdventurePlayer, id: String) -> bool:
+	if player == null or not player.expanded_adventure: return false
+	var pack: String = definition(id).get("pack", "")
+	return AdventurePacks.selected(player, pack) if pack != "" else _development.has(id)
+
+static func enabled_for(player: AdventurePlayer, id: String) -> bool:
+	return chosen(player, id) and enabled(id)
+
+static func enabled_in(world: ShandalarWorld, id: String) -> bool:
+	return world != null and id in world.expansion.get("adventures", []) and enabled(id)
+
+## Map renderers need only these IDs, never the hero or an adventure provider.
+static func sync_choices(player: AdventurePlayer) -> void:
+	if player == null or player.world == null: return
+	var ids: Array[String] = []
+	for id in definitions():
+		if enabled_for(player, id): ids.append(id)
+	# Leave an ordinary mainland's metadata empty when there are no expeditions.
+	if not ids.is_empty() or player.world.expansion.has("adventures"):
+		player.world.expansion["adventures"] = ids
+	_places_key.clear()
 
 static func refresh(_pack := "", _enabled := false) -> void:
 	revision += 1
@@ -56,12 +74,15 @@ static func active(player: AdventurePlayer, method: String, args := [], fallback
 	return content.callv(method, [player] + args) if content != null and content.has_method(method) else fallback
 
 static func initialize(player: AdventurePlayer) -> void:
-	if player == null or player.world == null or not AdventureRegions.mainland(player): return
+	if player == null or player.world == null: return
+	sync_choices(player)
+	release_inactive(AdventureRegions.id(player.world))
+	if not AdventureRegions.mainland(player): return
 	var entries: Dictionary = player.world.expansion.get("entries", {})
 	if player.world.expansion.has("port") and not entries.has("refuge"):
 		entries["refuge"] = player.world.expansion["port"]
 	for id in definitions():
-		if not enabled(id): continue
+		if not enabled_for(player, id): continue
 		if not entries.has(id):
 			var tile := RegionGeography.entry_for(player.world, player.world.start_tile(), entries.values())
 			if tile.x < 0: continue
@@ -80,6 +101,7 @@ static func release_inactive(active: String) -> void:
 		if key != active: _providers.erase(key)
 
 static func entered(player: AdventurePlayer) -> void:
+	sync_choices(player)
 	# Keep only the active region's script. Unvisited content has no runtime state.
 	var id := AdventureRegions.id(player.world)
 	for key in _providers.keys():
@@ -100,7 +122,7 @@ static func label(id: String) -> String:
 static func places(world: ShandalarWorld) -> Array[Dictionary]:
 	if world == null: return []
 	if not _hooked: packs()
-	var key := [world.get_instance_id(), world.appearance_revision, revision]
+	var key := [world.get_instance_id(), world.appearance_revision, revision, world.expansion.get("adventures", [])]
 	if key == _places_key: return _places
 	_places_key = key
 	_places = []
@@ -109,7 +131,7 @@ static func places(world: ShandalarWorld) -> Array[Dictionary]:
 		var entries: Dictionary = world.expansion.get("entries", {}).duplicate()
 		if world.expansion.has("port") and not entries.has("refuge"): entries["refuge"] = world.expansion["port"]
 		for entry in entries:
-			if enabled(entry) and AdventureRegions.valid_point(entries[entry]):
+			if enabled_in(world, entry) and AdventureRegions.valid_point(entries[entry]):
 				var shared := false
 				for place in _places:
 					if place["point"] == entries[entry]:
@@ -164,7 +186,7 @@ static func is_action(action: String) -> bool:
 static func act(screen: WorldScreen, action: String, place: Dictionary) -> bool:
 	if action.begins_with("region_visit:"):
 		var id := action.get_slice(":", 1)
-		if enabled(id):
+		if enabled_for(screen.player, id):
 			var visit: Dictionary = provider(id).call("describe", screen.player, screen.player.tile())
 			if not visit.is_empty(): show_place(screen, visit)
 		return true
@@ -187,14 +209,6 @@ static func show_place(screen: WorldScreen, place: Dictionary) -> VisitPane:
 	pane.left.connect(screen._left_place, WorldScreen.CLOSING)
 	screen._hold()
 	return pane
-
-static func add_stock(player: AdventurePlayer, base: Array[Dictionary]) -> Array[Dictionary]:
-	if player == null: return base
-	var out := base
-	for id in definitions():
-		if not enabled(id) or not (AdventureRegions.id(player.world) == id or bool(progress(player, id).get("liberated", false))): continue
-		out = provider(id).call("add_stock", player, out)
-	return out
 
 static func status_lines(player: AdventurePlayer) -> Array[String]:
 	return active(player, "status_lines", [], [] as Array[String])

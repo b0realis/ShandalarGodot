@@ -117,7 +117,7 @@ static func catalogue(all_cards := false) -> Array[Dictionary]:
 ## receive whichever regional expansion the campaign has unlocked.
 static func for_trader(player: AdventurePlayer, way: String) -> Array[Dictionary]:
 	var base := catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
-	return AdventureExpansions.add_stock(player, base) if player != null else base
+	return AdventurePacks.add_stock(player, base) if player != null else base
 
 
 ## Whether [param card_name] is one of the adventure's cards: the 1997

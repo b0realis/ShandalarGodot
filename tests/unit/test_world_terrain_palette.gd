@@ -246,8 +246,10 @@ func test_mainland_and_island_keep_independent_saved_styles() -> void:
 	var enabled := CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 	WorldTerrainPalette.tint_tile(player.world, player.tile(), Color("cceeff"), 0.25)
 	var mainland: Dictionary = player.world.expansion["appearance"].duplicate(true)

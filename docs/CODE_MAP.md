@@ -1,5 +1,12 @@
 # Code Map
 
+- `game/adventure/adventure_packs.gd`: campaign-local card selection, independent
+  optional adventure links, cached stock, activation and legacy choice migration.
+- `game/adventure/expansions/refuge_module.gd`: metadata-only Pack 2 adventure
+  descriptor; the card module works without loading its story provider.
+- `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
+  reprints, dormant providers, save migration and missing-pack return travel.
+
 ## Shared expansion regions and the Last Refuge (2nd_pack)
 
 - `game/adventure/adventure_tasks.gd`: cached objectives, selected guidance,

@@ -38,6 +38,7 @@ static func restore(player: AdventurePlayer, region: Dictionary) -> void:
 	player.step = 0
 	# New regions and restored regions obey the same campaign rules as Embark.
 	player.treasures_by_the_ban_list()
+	AdventureExpansions.sync_choices(player)
 
 static func travel(player: AdventurePlayer, destination: String, make_world := Callable()) -> bool:
 	if player == null or player.world == null: return false

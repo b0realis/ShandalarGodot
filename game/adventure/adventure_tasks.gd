@@ -17,7 +17,7 @@ static var _rows: Array[Dictionary] = []
 static func rows(player: AdventurePlayer) -> Array[Dictionary]:
 	if player == null or player.world == null: return []
 	var key: Array = [player.get_instance_id(), player.world.get_instance_id(), AdventureExpansions.revision,
-		player.quest, player.quest_timer, player.expansions, player.defeated_wizards, player.portal,
+		player.expanded_adventure, player.packs, player.quest, player.quest_timer, player.expansions, player.defeated_wizards, player.portal,
 		player.world.sites, player.world.encounters, player.world.expansion, player.siege_timer, player.siege_count, player.ended, player.task_sequence, WorldStatus.siege_town(player)]
 	for region in player.regions:
 		var saved: Dictionary = player.regions[region]
@@ -89,7 +89,7 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 				out.append(task)
 			for id in AdventureExpansions.definitions():
 				var visited: bool = player.regions.has(id) or id == active
-				if not visited and not AdventureExpansions.enabled(id): continue
+				if not visited and not AdventureExpansions.enabled_for(player, id): continue
 				var point: Array = data.get("expansion", {}).get("entries", {}).get(id, [])
 				if point.size() == 2:
 					var task := row("voyage:" + id, region, "Visit " + AdventureExpansions.label(id), "Speak to the captain about this optional expedition.", Vector2i(point[0], point[1]))
@@ -126,7 +126,7 @@ static func guide(player: AdventurePlayer, ordinary: Array[Dictionary]) -> Array
 	if selected["region"] != active:
 		var point: Array = player.world.expansion.get("port", [])
 		if active == AdventureRegions.MAINLAND:
-			if not AdventureExpansions.enabled(selected["region"]): return []
+			if not AdventureExpansions.enabled_for(player, selected["region"]): return []
 			point = player.world.expansion.get("entries", {}).get(selected["region"], [])
 		if point.size() != 2: return []
 		selected = selected.duplicate()

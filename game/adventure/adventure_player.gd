@@ -45,9 +45,10 @@ extends RefCounted
 ## brings 3, so one number covers them all).
 ## Version 5 stores independent regions and expansion progress, with a lifetime
 ## adventure clock. Version 6 retains task selection and known clues independently
-## of journal history. Versions 1–5 migrate without regenerating visited maps.
+## of journal history. Version 7 separates campaign card packs from optional
+## expanded adventures. Older saves preserve evidenced expeditions and visited maps.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 6
+const FORMAT_VERSION := 7
 ## Where the adventures are saved (tests point it elsewhere).
 const SAVES_FOLDER := "user://adventures"
 static var saves_folder := SAVES_FOLDER
@@ -230,6 +231,7 @@ var copy_limit: bool:
 var playmat := {}
 ## The card packs that join this adventure, `[{id, version}]` — ours.
 var packs: Array = []
+var expanded_adventure := false
 ## THE FINAL BATTLE'S RULE, chosen at the Embark (the owner, 2026-10-27,
 ## round P3: "A setting at Embark"; the names are the owner's) — what a lost
 ## battle against Arzakon leaves ([FinalBattle]):
@@ -538,6 +540,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.ascetic = record.get("ascetic") is bool and bool(record.get("ascetic"))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
+	player.expanded_adventure = _flag(record.get("expanded_adventure"))
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
 	player.game_version = String(ProjectSettings.get_setting("application/config/version", ""))
 	var now := Time.get_unix_time_from_system()
@@ -975,7 +978,7 @@ func to_dict(include_regions := true) -> Dictionary:
 			"card_hold": card_hold, "ban_list": ban_list, "all_trader_cards": all_trader_cards,
 			"sieges": sieges,
 			"creatures": creatures, "life_start": life_start, "ascetic": ascetic,
-			"playmat": playmat, "packs": packs},
+			"playmat": playmat, "packs": packs, "expanded_adventure": expanded_adventure},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
 		"carried": {"gold": gold, "food": food, "meal_half": meal_half, "amulets": amulets,
@@ -1052,6 +1055,8 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	# in a dungeon replaced as the Embark now replaces it.
 	player.treasures_by_the_ban_list()
 	AdventureRegions.read(player, data)
+	AdventurePacks.migrate(player, int(data["version"]))
+	AdventureExpansions.sync_choices(player)
 	AdventureTasks.read(player, data.get("tasks"))
 	return player
 
@@ -1119,6 +1124,7 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	player.ascetic = _flag(hero.get("ascetic"))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
+	player.expanded_adventure = _flag(hero.get("expanded_adventure"))
 
 
 ## The hero's place, on the map: where the world starts them when the save

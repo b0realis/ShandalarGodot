@@ -12,8 +12,10 @@ func after_each() -> void:
 
 func hero() -> AdventurePlayer:
 	var setup := AdventureSetup.new()
+	setup.expanded_adventure = true
+	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
-	var record := setup.resolve({})
+	var record := setup.resolve({"pack-2": "1"})
 	return AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 
 func names(rows: Array) -> Array:
