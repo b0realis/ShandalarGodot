@@ -43,9 +43,12 @@ extends RefCounted
 ## meal ([member meal_half]) with the food and the links a siege took
 ## ([member links_taken]) in the record (0.50.65 is the version that
 ## brings 3, so one number covers them all).
-## This game reads 1 to 3: 1 and 2 are saves from before.
+## Version 5 stores independent regions and expansion progress, with a lifetime
+## adventure clock. Version 6 retains task selection and known clues independently
+## of journal history. Version 7 separates campaign card packs from optional
+## expanded adventures. Older saves preserve evidenced expeditions and visited maps.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 3
+const FORMAT_VERSION := 7
 ## Where the adventures are saved (tests point it elsewhere).
 const SAVES_FOLDER := "user://adventures"
 static var saves_folder := SAVES_FOLDER
@@ -228,6 +231,7 @@ var copy_limit: bool:
 var playmat := {}
 ## The card packs that join this adventure, `[{id, version}]` — ours.
 var packs: Array = []
+var expanded_adventure := false
 ## THE FINAL BATTLE'S RULE, chosen at the Embark (the owner, 2026-10-27,
 ## round P3: "A setting at Embark"; the names are the owner's) — what a lost
 ## battle against Arzakon leaves ([FinalBattle]):
@@ -460,6 +464,26 @@ var quickening := 0
 
 ## The world itself: terrain, sites, roads, encounters, what is explored.
 var world: ShandalarWorld
+## Inactive worlds are snapshots, never live maps or scene trees.
+var regions: Dictionary = {}
+var expansions: Dictionary = {}
+## Lifetime quest-clock steps; -1 supports old in-memory fixtures until first use.
+var journey_time := -1
+## Current guidance and learned facts survive a full historical journal.
+var tracked_task := ""
+var known_clues: Array = []
+var task_history: Dictionary = {}
+var task_sequence := 0
+## Compatibility accessor for Last Refuge content; persistence is region-neutral.
+var refuge: Dictionary:
+	get: return expansions.get("refuge", {})
+	set(value):
+		var state := value.duplicate(true)
+		if state.has("regions"):
+			regions = state["regions"]
+			state.erase("regions")
+		if state.is_empty(): expansions.erase("refuge")
+		else: expansions["refuge"] = state
 ## The seed as the player typed or was given it.
 var world_seed_text := ""
 ## The world's fingerprint when it was made, before a tile was explored
@@ -516,6 +540,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.ascetic = record.get("ascetic") is bool and bool(record.get("ascetic"))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
+	player.expanded_adventure = _flag(record.get("expanded_adventure"))
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
 	player.game_version = String(ProjectSettings.get_setting("application/config/version", ""))
 	var now := Time.get_unix_time_from_system()
@@ -865,7 +890,7 @@ static func _rarity(card_name: String) -> int:
 ## a life in a duel ([method TownStatus.mana_links]; the sites keep them —
 ## a save's `mana_links` is that count, for a reader of the file).
 func mana_links() -> int:
-	return TownStatus.mana_links(world)
+	return TownStatus.mana_links(world) + AdventureRegions.extra_links(self)
 
 
 ## Wins and losses, read from the journal (event 2, `won` true or false).
@@ -886,11 +911,25 @@ func duel_record() -> Dictionary:
 ## words ([param text], `@LOGSTRINGS`), where and when (the world's clock
 ## and the day on the road), and [param more] ([HeroStats.record]). Not
 ## written when the journal is full ([constant JOURNAL_MOST]).
+func journey_steps() -> int:
+	return quest_timer if journey_time < 0 else journey_time
+
+
+func log_clue(text: String, kind := "clue") -> void:
+	var region := AdventureRegions.id(world)
+	text = text.replace("\n", " ").strip_edges()
+	if text.is_empty(): return
+	AdventureTasks.remember(self, text, kind)
+	for entry in journal:
+		if entry.get("event", "") == kind and entry.get("region", "mainland") == region and entry.get("text", "") == text: return
+	log_event(kind, text, {"highlight": true})
+
+
 func log_event(event: String, text: String, more := {}) -> void:
 	if journal.size() >= JOURNAL_MOST:
 		return
 	var entry :={"event": event, "text": text, "x": position.x, "y": position.y, "time": monster_timer,
-		"day": quest_timer / WorldStatus.DAY}
+		"day": journey_steps() / WorldStatus.DAY, "region": AdventureRegions.id(world)}
 	entry.merge(more)
 	journal.append(entry)
 
@@ -911,7 +950,7 @@ func tile() -> Vector2i:
 # ---------------------------------------------------------- the save --
 
 ## The adventure as a dictionary, every part named, for JSON.
-func to_dict() -> Dictionary:
+func to_dict(include_regions := true) -> Dictionary:
 	var grid: Array[String] = []
 	for y in ShandalarWorld.TILES * 2:
 		grid.append(world.page.slice(y * ShandalarWorld.PAGE_WIDTH,
@@ -925,6 +964,10 @@ func to_dict() -> Dictionary:
 	return {
 		"format": FORMAT,
 		"version": FORMAT_VERSION,
+		"regions": regions if include_regions else {},
+		"expansions": expansions if include_regions else {},
+		"journey": {"time": journey_steps()},
+		"tasks": {"selected": tracked_task, "clues": known_clues, "history": task_history, "sequence": task_sequence},
 		"about": "One adventure in the world of Shandalar: the hero, what they carry, their record, the clocks, and the world as it now stands. The world's grid is 128 rows of 64 tile bytes in hex: rows 0-63 the tiles (terrain in the low four bits; 0x10 a site, 0x20 a road, 0x40 a dungeon, 0x80 explored), rows 64-127 the roads leaving each tile, a bit per direction.",
 		"adventure": {"id": adventure_id, "created": created, "saved": saved, "game_version": game_version,
 			"slot_name": slot_name},
@@ -935,7 +978,7 @@ func to_dict() -> Dictionary:
 			"card_hold": card_hold, "ban_list": ban_list, "all_trader_cards": all_trader_cards,
 			"sieges": sieges,
 			"creatures": creatures, "life_start": life_start, "ascetic": ascetic,
-			"playmat": playmat, "packs": packs},
+			"playmat": playmat, "packs": packs, "expanded_adventure": expanded_adventure},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
 		"carried": {"gold": gold, "food": food, "meal_half": meal_half, "amulets": amulets,
@@ -957,8 +1000,10 @@ func to_dict() -> Dictionary:
 		"end": {"ended": ended, "final": final, "final_attempts": final_attempts,
 			"at_door": at_door, "portal": portal, "score_so_far": score_so_far()},
 		"world": {
+			"expansion": world.expansion,
 			"seed": world.seed, "seed_text": world_seed_text, "slot_start": world.slot_start,
-			"color": world.color, "difficulty": world.difficulty, "generator": "1997 (1.3)",
+			"color": world.color, "difficulty": world.difficulty,
+			"generator": AdventureExpansions.definition(AdventureRegions.id(world)).get("generator", "1997 (1.3)"),
 			"made_fingerprint": made_fingerprint, "dice": dice,
 			"start": [world.start.x, world.start.y],
 			"grid": grid,
@@ -992,6 +1037,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	var made := _world_from(saved_world, Vector2i(_number(where.get("x")), _number(where.get("y"))))
 	var player := AdventurePlayer.new()
 	player.world = made
+
 	_read_game(player, data["adventure"])
 	_read_hero(player, data["hero"])
 	_read_where(player, where)
@@ -1008,6 +1054,10 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	# A Classic adventure from before the ruling: a banned treasure still
 	# in a dungeon replaced as the Embark now replaces it.
 	player.treasures_by_the_ban_list()
+	AdventureRegions.read(player, data)
+	AdventurePacks.migrate(player, int(data["version"]))
+	AdventureExpansions.sync_choices(player)
+	AdventureTasks.read(player, data.get("tasks"))
 	return player
 
 
@@ -1025,7 +1075,7 @@ static func readable(data: Variant) -> bool:
 	for part in MAIN_PARTS:
 		if not data.get(part) is Dictionary:
 			return false
-	return _grid_whole((data["world"] as Dictionary).get("grid"))
+	return _grid_whole((data["world"] as Dictionary).get("grid")) and AdventureRegions.valid_saved(data)
 
 
 ## Whether [param grid] is the world's grid: 128 rows of 128 hex digits.
@@ -1074,6 +1124,7 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	player.ascetic = _flag(hero.get("ascetic"))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
+	player.expanded_adventure = _flag(hero.get("expanded_adventure"))
 
 
 ## The hero's place, on the map: where the world starts them when the save
@@ -1225,6 +1276,7 @@ static func _portal_record(value: Variant) -> Dictionary:
 ## say.
 static func _world_from(saved_world: Dictionary, fallback_start: Vector2i) -> ShandalarWorld:
 	var made := ShandalarWorld.new()
+	made.expansion = _whole(_object(saved_world.get("expansion")))
 	made.seed = _number(saved_world.get("seed"))
 	made.slot_start = _number(saved_world.get("slot_start"))
 	made.color = clampi(_number(saved_world.get("color"), 1), 1, 5)
@@ -1417,13 +1469,13 @@ static func _cleaned_journal(value: Variant) -> Array:
 		if not entry is Dictionary:
 			continue
 		var line: Dictionary = _whole(entry)
-		for key in ["event", "text"]:
+		for key in ["event", "text", "region"]:
 			if line.has(key):
 				line[key] = _text(line[key])
 		for key in ["x", "y", "time", "day"]:
 			if line.has(key):
 				line[key] = _number(line[key])
-		for key in ["won", "done"]:
+		for key in ["won", "done", "highlight", "regional_day"]:
 			if line.has(key):
 				line[key] = _flag(line[key])
 		kept.append(line)

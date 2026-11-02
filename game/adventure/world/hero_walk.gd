@@ -396,6 +396,7 @@ func step() -> bool:
 			stop()
 		if player.monster_timer & 0x1F == 0 and d != 0:
 			player.food = meal(player.food, now)
+			player.journey_time = player.journey_steps() + 1
 			player.quest_timer += 1
 			# Half as often under the sieges' pace "Rare" [ours, the owner's
 			# ruling of 2026-10-28] ([method Sieges.clock_steps]).

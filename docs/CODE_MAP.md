@@ -1,5 +1,139 @@
 # Code Map
 
+- `game/duel/mini_card.gd` / `tests/ui/test_land_art.gd`: issue #4, current
+  land types label changed mini-cards; tooltips retain the printed card name
+  and distinguish current types from printed rules. Shared by piles and
+  local/network duels, with no change to engine names or the printed Showcase.
+
+- `game/adventure/expansions/adventure_expansions.gd`: per-launch
+  `--expanded-adventure` opt-in for the prototype game design test; normal
+  launches keep story hooks dormant. Embark has card selection only.
+- `tests/unit/test_adventure_packs.gd`, `tests/ui/test_embark_screen.gd` and
+  `tests/ui/test_refuge_journey.gd`: ignored legacy checkbox preferences,
+  explicit prototype labels, saved-progress retention and flag-free return.
+
+- `tests/ui/test_opponent_spell_notice.gd`: regular-duel removal remains on
+  the spell chain for a readable pause; target notices, response priority,
+  stale timers, repeated activations, pause/Done and private targets.
+- `game/duel/duel_screen.gd`: `_opponent_action_wait` extends the existing
+  computer-action timer for new public chain items; quiet phases stay automatic.
+
+- `game/adventure/embark_screen.gd`: card-rule hover references on the selected
+  mode, its summary and each dropdown entry, including small decks and the Tome.
+- `game/ui_chrome.gd` / `tests/ui/test_tooltips_fit_2026_09_18.gd`: tooltip
+  measurement after theme inheritance; dropdown help uses the containing game
+  viewport. Campaign references fit whole at 640×480 and 1280×800.
+
+- `tests/ui/test_refuge_card_rule_gameplay.gd`: Pack 2 purchases and deck editing,
+  a complete encounter duel under each campaign card rule, save/load and return.
+  `tests/unit/test_c19_A1_creatures.gd` also checks hero-initiated contact with
+  passive/wandering/fleeing creatures and the tribute menu's Duel Anyway choice.
+
+- `tests/unit/test_adventure_card_economy.gd`: original starter eligibility,
+  special rarities, artifact creatures, stale trades, pack shop/trade copy
+  limits, 39/40 and 58/59/60 thresholds, Tome bonuses and duel-only land padding.
+- `docs/adventure-card-economy-audit.md`: original source comparison, confirmed
+  acquisition fixes and Pack 2's preserved rules versus explicit balance changes.
+- `game/adventure/adventure_packs.gd`: campaign-local card selection, independent
+  optional adventure links, cached stock, activation and legacy choice migration.
+- `game/adventure/expansions/refuge_module.gd`: metadata-only Pack 2 adventure
+  descriptor; the card module works without loading its story provider.
+- `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
+  reprints, dormant providers, save migration and missing-pack return travel.
+
+## Shared expansion regions and the Last Refuge (2nd_pack)
+
+- `game/adventure/adventure_tasks.gd`: cached objectives, selected guidance,
+  cross-region routes, countdowns and saved completion history/newest-first order.
+  Clue facts and task outcomes survive journal trimming.
+- `game/adventure/expansions/expansion_contract.gd`: metadata-only progression
+  schemas for pledge quests or bounded fields; provider-independent save checks.
+- `game/adventure/expansions/region_objectives.gd`: deterministic coastal,
+  road and terrain-neighborhood objective placement, safe old-map fallbacks.
+- `game/adventure/expansions/region_presentation.gd`: shared tiny pennants baked
+  into the existing map cache from saved regional achievement markers.
+- `expansion_lab.sh`: isolated, bounded region testing and balance CLI wrapper.
+- `tools/expansion_testing/expansion_lab.gd` and
+  `tools/expansion_testing/expansion_lab.tscn`: repeatable travel, reachability,
+  saves and dormant-provider scenarios; crossed hero-deck/life duel reports.
+- `tools/expansion_testing/beacon_region.gd`: opt-in eight-tile-wide test land
+  with three beacons, no castle, pledges, artwork or Fallen Empires dependency.
+- `tests/unit/test_expansion_tasks.gd`: task persistence and routes, geography,
+  mainland-only mana links, different progress schemas, opponents and pennants.
+- `tests/ui/test_adventure_task_history.gd`: completed-task colors and order,
+  timer display, target/tracking selection in the vanilla campaign with the
+  quest status panel open, and
+  launch-flag-only Ctrl+Shift+2 harbor teleport safety.
+
+
+- `game/adventure/expansions/adventure_expansions.gd`: lightweight descriptors,
+  lazy content/art, shared departure menus, availability and provider hooks.
+- `game/adventure/expansions/adventure_regions.gd`: one active map, inactive
+  snapshots, travel, validation, version-4 migration and cumulative hero clocks.
+- `game/adventure/expansions/region_geography.gd`: connected land, coast and safe
+  entry placement, sharing an anchorage when independent coastal space runs out.
+- `game/adventure/expansions/region_roads.gd`: reusable seeded terrain-following
+  road network with shared lanes and no water-corner shortcuts.
+- `game/adventure/expansions/refuge_content.gd`: Last Refuge provider hooks.
+- `game/adventure/expansions/refuge_quests.gd`: persistent delivery, survey and
+  village confrontation stages; bounded, color-chosen pledge rewards.
+- `game/adventure/expansions/refuge_encounters.gd`: fixed thematic decks, lives
+  and a roaming strength floor, separate from rewards and hero strength.
+- `tests/unit/test_adventure_regions.gd`: nine saved regions and entry routes,
+  cumulative hero state, migration, banned treasures and dormant providers.
+- `tests/unit/test_refuge_progression.gd`: objective stages, chosen and legacy
+  rewards, copy limits, fixed opponents and labeled journal clues.
+
+
+- `tests/cards/test_pack_2_refuge_mechanics.gd`: Merseine absent/zero/copied
+  mana costs and temporary shroud timing against Humility.
+- `tests/unit/test_refuge_card_availability.gd`: all 102 regional stock entries,
+  reward draws, liberation, saved shops, pack loss and wizard reward filters.
+- `tests/ui/test_refuge_card_rewards.gd`: regional choose-any reward lists and
+  unavailable shop stock restored when its pack returns.
+- `docs/refuge-card-audit.md`: availability matrix, original restrictions,
+  corrected reward paths, card mechanics and targeted verification.
+
+- `game/adventure/expansions/refuge_stories.gd`: original regional lore,
+  community epilogues, seven wise-man tales, local news and roaming dialogue.
+- `tests/unit/test_refuge_quest_audit.gd`: quest/duel parity, rewards, island
+  dialogue, local errands and malformed regional-save regressions.
+- `docs/refuge-quest-audit.md`: reachable island stories and assignments,
+  lore boundaries, fixes, verification and remaining playtest scope.
+- `game/adventure/world/world_terrain_palette.gd`: cached regional vegetation/water
+  recoloring, named presets, terrain-type and coordinate overrides, validated
+  saved styles, live updates, and map/minimap colors without per-tile textures.
+- `tests/unit/test_world_terrain_palette.gd`: regional scope, return to mainland,
+  skin immutability, alpha, matching sea/shore water, map icons, 2x detail, tint
+  inheritance, live updates, occlusion and JSON save validation.
+- `docs/terrain-palettes.md`: reusable preset and tile-style API, examples,
+  new-preset recipe, layer boundaries, persistence and caching.
+- `game/adventure/expansions/refuge_roads.gd`: compatibility name for the shared road router.
+- `game/adventure/expansions/refuge_world.gd`: quarter-area terrain sampling,
+  connected landmass, safe mainland harbor placement, varied settlements,
+  trades, World Magic sellers, roads and one regional dungeon.
+- `game/adventure/expansions/refuge_campaign.gd`: region travel and snapshots,
+  save validation, five quest rewards, duel decks, final deck gate, stock unlock
+  and quest guidance; shared place visibility and safe return with Pack 2 off.
+- `game/adventure/expansions/refuge_journey.gd`: harbor and castle visits,
+  community petitions, the existing duel host and result settlement.
+- `game/adventure/expansions/refuge_art.gd`: expansion illustrations and map
+  sprites rendered at fixed world sizes for every skin.
+- `game/adventure/expansions/art/refuge_harbor.png` and
+  `game/adventure/expansions/art/refuge_castle.png`: arrival illustrations.
+- `game/adventure/expansions/art/refuge_port_map.png` and
+  `game/adventure/expansions/art/refuge_castle_map.png`: transparent map sprites.
+- `tests/unit/test_refuge_campaign.gd`: generation, mainland preservation,
+  travel/save round-trips, hidden entry with pack off, pack loss, malformed saves,
+  rewards and deck gating.
+- `tests/unit/test_refuge_geography.gd`: road connectivity and terrain preference,
+  town services, all trade and random lair types, dungeon/clue/save isolation.
+- `tests/ui/test_refuge_journey.gd`: harbor controls, real duel hosting, regional
+  town visits, castle requirements and image sizes; live pack toggles/rescans,
+  closed mainland entry and always-available return ship.
+- `docs/fallen-empires-adventure.md`: playing guide, lore boundaries, save
+  contract, artwork prompt set and current prototype scope.
+
 ## The world of Shandalar: the 1997 generator and the world screen (2026-10-22)
 
 - `game/adventure/world/msvc_random.gd`: `MsvcRandom`, the C runtime's
@@ -260,7 +394,12 @@
   `record_ink`, `journal_lines`; the creature page's pictures).
 - `game/adventure/starter_deck.gd`: `StarterDeck`, the first deck by the
   1997 rules (`deal`, `QUOTAS`, `copies_left`, `cards` — the base set read
-  from the registry, `enchantment`; `CardRegistry.printed_rarity`).
+  through `CardValue` flags/rarities, overlapping artifact/creature slots;
+  `forget` follows registry and skin changes). `CardShop.remaining_copies`
+  and `copies_left` share original reward limits and trade-list dimming; each
+  caller retains its own acceptance threshold. Shops keep their existing slot
+  allowance for optional cards too. Embark descriptions distinguish these
+  rules from card-hold capacity and selected-pack/region availability.
 - `game/deck_builder/adventure_builder.gd`: `AdventureBuilder`, the deck
   builder over the hero's own cards (a `SealedPool` of `AdventurePlayer.cards`,
   the three decks, `write_back`, the gold on the title slab, `ALLOWED`;

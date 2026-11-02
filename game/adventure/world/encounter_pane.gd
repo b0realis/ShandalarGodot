@@ -690,7 +690,7 @@ func _reward() -> void:
 func _pick_any() -> void:
 	step = "pick"
 	var every := {}
-	for row in CardTrade.catalogue():
+	for row in CardTrade.for_trader(player, CardTrade.REWARD):
 		every[String(row["name"])] = 1
 	_open_list(DuelSpoils.PICK_CARD, MUST_PICK, _offered(every), func(card_name: String) -> void:
 			DuelSpoils.pick_any(player, spoils, card_name)

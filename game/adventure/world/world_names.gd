@@ -39,6 +39,9 @@ const DIRECTIONS: Array[String] = ["North", "East", "South", "West"]
 static func site_name(world: ShandalarWorld, slot: int) -> String:
 	if world == null or slot < 0 or slot >= world.sites.size():
 		return ""
+	var regional: String = world.expansion.get("town_names", {}).get(str(slot), "")
+	if regional != "":
+		return regional
 	var kind := int(world.sites[slot]["type"])
 	if kind >= ShandalarWorld.CASTLE:
 		var castle := castle_of_site(world, slot)
@@ -61,7 +64,11 @@ static func castle_of_site(world: ShandalarWorld, slot: int) -> int:
 
 
 ## The name of castle or dungeon slot [param index].
-static func dungeon_name(index: int) -> String:
+static func dungeon_name(index: int, world: ShandalarWorld = null) -> String:
+	if world != null:
+		var regional: String = world.expansion.get("dungeon_names", {}).get(str(index), "")
+		if regional != "":
+			return regional
 	return DUNGEONS[index] if index >= 0 and index < DUNGEONS.size() else ""
 
 

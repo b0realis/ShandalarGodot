@@ -75,7 +75,7 @@ extends VBoxContainer
 ## read stays where it is. (Built whole at every food step, a journal of
 ## 2,000 lines took near half a second each time, and jumped to its top.)
 
-const TABS: Array[String] = ["Hero", "Wizards", "Journal"]
+const TABS: Array[String] = ["Hero", "Wizards", "Journal", "Tasks"]
 const GOLD := Color8(232, 190, 110)
 const INK := Color8(236, 222, 196)
 const DIM := Color8(160, 146, 128)
@@ -117,6 +117,7 @@ const JOURNAL_NEAR := 400.0
 
 ## The journal is to be walked on the map ([method WorldMap.walk_journal]).
 signal journal_map_pressed
+signal task_selected
 ## D or Space: the pane is to be closed ([method key]).
 signal done_pressed
 
@@ -247,6 +248,8 @@ func key(keycode: int) -> bool:
 		KEY_W:
 			if tab != "Wizards":
 				show_wizards()
+		KEY_T:
+			show_tab("Tasks")
 		KEY_J:
 			show_tab("Journal")
 		KEY_D:
@@ -316,6 +319,8 @@ func _shape() -> String:
 				player.world_magics, player.defeated_wizards, player.portrait, player.name, player.color,
 				player.difficulty, _castle_tries(), show_all_creatures, banished_words(player),
 				player.final_attempts])
+		"Tasks":
+			parts.append_array([AdventureTasks.rows(player), player.tracked_task, player.known_clues.size(), AdventureExpansions.revision])
 		"Wizards":
 			parts.append_array([WorldStatus.wizard_rows(player), WorldStatus.dominion(player),
 				player.owns("Ring of the Guardian"), highlighted, room_shown])
@@ -340,6 +345,9 @@ func _rebuild() -> void:
 		"Journal":
 			_clear_page()
 			_journal_page()
+		"Tasks":
+			_clear_page()
+			_tasks_page()
 	_drop_kept_scrolls()
 	_read_back.clear()
 	_built = _shape()
@@ -734,8 +742,8 @@ func _number_values() -> Dictionary:
 			deck += 1
 	var values := {"gold": str(player.gold), "food": str(player.food),
 		"ankh": str(player.mana_links()), "book": "%d/%d" % [deck, player.cards.size()],
-		"road": "Days on the road %d · lairs explored %d · World seed %s" % [
-			WorldStatus.days_on_road(player), player.lairs_explored, player.world_seed_text]}
+		"road": "Days on the road %d · lairs explored %d · World seed %s (%s)" % [
+			WorldStatus.days_on_road(player), player.lairs_explored, player.world_seed_text, AdventureExpansions.label(AdventureRegions.id(player.world))]}
 	for gem in WorldHud.AMULETS:
 		values[String(gem[0])] = str(int(player.amulets.get(gem[0], 0)))
 	return values
@@ -944,7 +952,12 @@ static func journal_line(entry: Dictionary) -> String:
 	if text == "":
 		return ""
 	var day := int(entry.get("day", -1))
-	return ("Day %d: " % day if day >= 0 else "") + text.replace("\n", " ")
+	var stamp := ("Region day %d" if bool(entry.get("regional_day", false)) else "Day %d") % day if day >= 0 else ""
+	if entry.has("region"):
+		stamp += (" · " if stamp != "" else "") + AdventureExpansions.label(String(entry["region"]))
+	var kind: String = entry.get("event", "")
+	var prefix := "Clue: " if kind == "clue" else ("Quest: " if kind == "quest_clue" else "")
+	return (stamp + ": " if stamp != "" else "") + prefix + text.replace("\n", " ")
 
 
 ## Whether the journal holds a line to show.
@@ -1010,8 +1023,9 @@ func _journal_page() -> void:
 
 ## A line of the journal, wrapped at the page's width — given its width at
 ## once, it is wrapped once, not first at every word.
-func _journal_label(text: String) -> Label:
-	var said := _label(text, 14)
+func _journal_label(text: String, entry := {}) -> Label:
+	var hue := Color("9bd8ef") if entry.get("event", "") == "clue" else GOLD
+	var said := _label(text, 14, hue if bool(entry.get("highlight", false)) else INK)
 	said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	said.custom_minimum_size = Vector2(_journal_width, 0)
 	return said
@@ -1028,7 +1042,7 @@ func _journal_more() -> void:
 		_journal_depth += 1
 		var line := journal_line(journal[journal.size() - _journal_depth])
 		if line != "":
-			_journal.add_child(_journal_label(line))
+			_journal.add_child(_journal_label(line, journal[journal.size() - _journal_depth]))
 			made += 1
 
 
@@ -1050,7 +1064,7 @@ func _journal_news() -> bool:
 	for i in range(since + 1, journal.size()):
 		var line := journal_line(journal[i])
 		if line != "":
-			var said := _journal_label(line)
+			var said := _journal_label(line, journal[i])
 			_journal.add_child(said)
 			_journal.move_child(said, 0)
 	_journal_depth += journal.size() - 1 - since
@@ -1196,3 +1210,134 @@ func _dress(button: Button) -> void:
 	button.add_theme_stylebox_override("pressed", lit)
 	button.add_theme_stylebox_override("hover_pressed", lit)
 	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+## Shared expedition objectives. The historical Journal remains unchanged.
+var _task_latest := 0
+
+func _tasks_page() -> void:
+	var scroll := _scroll("Tasks")
+	scroll.custom_minimum_size = page_size
+	_page.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.name = "TaskList"
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 7)
+	scroll.add_child(list)
+	var automatic := Button.new()
+	automatic.name = "TaskAutomatic"
+	automatic.text = "Automatic guidance" + (" ✓" if player.tracked_task == "" else "")
+	_dress(automatic)
+	automatic.pressed.connect(_select_task.bind(""))
+	list.add_child(automatic)
+	var hint := _label("Click a target or task title to guide the help arrows.", 13, INK)
+	hint.custom_minimum_size.x = maxf(page_size.x - 28, 200)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(hint)
+	list.add_child(_label("Newest first · green: completed · red: urgent or expired", 12, DIM))
+	var finished := false
+	var tasks := AdventureTasks.rows(player)
+	var latest := 0
+	for task in tasks:
+		if task.get("status", "active") == "active": latest = maxi(latest, int(task.get("order", 0)))
+	if latest > _task_latest: scroll.set_deferred("scroll_vertical", 0)
+	_task_latest = latest
+	for task in tasks:
+		var status: String = task.get("status", "active")
+		var done := status != "active"
+		if done and not finished:
+			_task_clues(list)
+			list.add_child(HSeparator.new())
+			list.add_child(_label("Finished tasks", 16, GOLD))
+			finished = true
+		var selected: bool = player.tracked_task == task["id"] and not done
+		var ink := Color("a8d7a0") if status == "completed" else Color("ff9494") if done else WorldGuides.ink_for(task["kind"]) if selected else Color("e2d8bd")
+		var button := Button.new()
+		button.name = "Task_" + String(task["id"]).replace("/", "_").replace(":", "_")
+		button.text = ("✓ " if status == "completed" else "× " if done else "") + task["title"]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.clip_text = true
+		button.tooltip_text = ("" if done else "Tracking task…\n" if selected else "Click to guide the help arrows to this task.\n") + task["text"]
+		_dress(button)
+		if not done: _task_marker(button, selected, ink)
+		button.disabled = done
+		button.add_theme_color_override("font_color", ink)
+		button.add_theme_color_override("font_disabled_color", ink)
+		button.pressed.connect(_select_task.bind(task["id"]))
+		list.add_child(button)
+		var state := "COMPLETED" if status == "completed" else "EXPIRED" if status == "expired" else "FAILED" if done else "Tracking task…" if selected else "ACTIVE"
+		var status_line := _label(state + " · " + AdventureExpansions.label(task["region"]), 13 if selected else 12, ink if done or selected else Color("9bd8ef"))
+		status_line.name = button.name + "_Status"
+		status_line.custom_minimum_size.x = maxf(page_size.x - 28, 200)
+		status_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		list.add_child(status_line)
+		var info := _label(task.get("description", task["text"]), 14, DIM if done else Color("e2d8bd"))
+		info.custom_minimum_size.x = maxf(page_size.x - 28, 200)
+		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		list.add_child(info)
+		var timer := AdventureTasks.timer_text(task)
+		if timer != "":
+			var clock := _label(timer, 13, AdventureTasks.timer_color(task))
+			clock.name = button.name + "_Timer"
+			clock.custom_minimum_size.x = maxf(page_size.x - 28, 200)
+			clock.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			list.add_child(clock)
+		if not done and task["region"] != AdventureRegions.MAINLAND and not AdventureExpansions.enabled(task["region"]) and task["region"] != AdventureRegions.id(player.world):
+			list.add_child(_label("Enable this region's pack to travel there.", 13, GOLD))
+	if not finished: _task_clues(list)
+
+## [QoL] Vector marks stay crisp with either skin and need no font symbol.
+## The whole title, including its target, is one keyboard-accessible button.
+func _task_marker(button: Button, selected: bool, ink: Color) -> void:
+	for state in ["normal", "hover", "pressed", "hover_pressed"]:
+		var face := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		face.content_margin_left = 38
+		face.content_margin_top = 5
+		face.content_margin_bottom = 5
+		if selected:
+			face.bg_color = Color(ink, 0.16)
+			face.border_color = Color(ink, 0.65)
+			face.set_border_width_all(1)
+		button.add_theme_stylebox_override(state, face)
+	button.add_theme_stylebox_override("focus", OriginalDialog.focus_ring())
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var mark := TaskGuideMark.new(selected, ink)
+	mark.name = "GuideMark"
+	button.add_child(mark)
+	mark.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+	mark.position = Vector2(10, -11)
+
+class TaskGuideMark extends Control:
+	var tracking: bool
+	var ink: Color
+
+	func _init(chosen: bool, color: Color) -> void:
+		tracking = chosen
+		ink = color
+		custom_minimum_size = Vector2(22, 22)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		if tracking:
+			var points := PackedVector2Array([Vector2(19, 3), Vector2(14, 19), Vector2(10, 13), Vector2(3, 9)])
+			draw_colored_polygon(points, ink)
+			points.append(points[0])
+			draw_polyline(points, WorldGuides.EDGE, 1.0, true)
+		else:
+			var centre := Vector2(11, 11)
+			draw_arc(centre, 7, 0, TAU, 32, ink, 1.5, true)
+			draw_circle(centre, 2, ink, true, -1, true)
+
+func _task_clues(list: VBoxContainer) -> void:
+	list.add_child(_label("Known clues", 16, GOLD))
+	for clue in player.known_clues:
+		if clue.get("kind", "") != "clue": continue
+		var line := _label(AdventureExpansions.label(clue["region"]) + ": " + clue["text"], 14, Color("9bd8ef"))
+		line.custom_minimum_size.x = maxf(page_size.x - 28, 200)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		list.add_child(line)
+
+func _select_task(id: String) -> void:
+	if AdventureTasks.select(player, id):
+		task_selected.emit()
+		refresh()

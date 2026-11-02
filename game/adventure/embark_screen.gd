@@ -95,10 +95,13 @@ const RULE_NAMES := {
 	AdventurePlayer.RULE_SHIPPED: "No limit (as shipped in 1997)",
 	AdventurePlayer.RULE_CLASSIC: "Classic MTG rules",
 }
+const RULE_1997_DECK_TIP := "Deck Builder: three copies per nonbasic card below 59 cards, four from 59. With Tome of Enlightenment: four below 59, unlimited from 59. Both original modes use this check."
+const RULE_SMALL_DECK_TIP := "Small decks can play. For a duel only, random basic lands fill a short deck to 30/35/40/40 cards at Apprentice/Magician/Sorcerer/Wizard, counting the ante. Offers still use your saved deck's size."
+const RULE_COMMON_TIP := "Basic lands have no copy cap. Card hold, selected packs and regional unlocks still apply."
 const RULE_TIPS := {
-	AdventurePlayer.RULE_MEANT: "The shops and the duels' rewards offer no card your deck in use already holds as many copies of as its size allows: one under 40 cards, two from 40, three from 60, one more with Tome of Enlightenment — as the 1997 game meant.",
-	AdventurePlayer.RULE_SHIPPED: "The shops and the duels' rewards offer any number of copies, as the 1997 game really did.",
-	AdventurePlayer.RULE_CLASSIC: "A deck holds at most four copies of a card, basic lands aside; one of a restricted card, four with Tome of Enlightenment; none of a banned one, by the ban list below. No shop, trader, reward or lair offers you a card you already own as many copies of as a deck may hold.",
+	AdventurePlayer.RULE_MEANT: "AS INTENDED\nNew shop stock counts active-deck copies only; spare copies do not count. Allowance: one under 40 cards, two at 40–59, three at 60+. Tome of Enlightenment adds one. Existing shelf stock stays.\n\nOrdinary duel rewards use that allowance; non-base cards (including Fallen Empires) halve it, rounded down. A 36-card deck gets no random FE reward without the Tome; a 40-card deck allows one, minus copies in use. Won ante bypasses this; special treasures and lairs keep their own rules. Paid trades still allow dimmed cards.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
+	AdventurePlayer.RULE_SHIPPED: "AS SHIPPED\nOwned copies do not block new shop stock or ordinary duel rewards. Paid trades also permit duplicates. This disables offer-copy counting, not every card rule.\n\nNon-base random duel rewards (including Fallen Empires) still need at least 40 active-deck cards, or Tome of Enlightenment. Thus a 36-card deck can buy or trade for FE cards, but needs the Tome for random FE duel rewards. Won ante bypasses this; special treasures and lairs keep their own rules.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
+	AdventurePlayer.RULE_CLASSIC: "CLASSIC MTG\nDeck Builder checks four copies per nonbasic card; one for restricted cards, none for banned cards, using the Ban list below. Tome of Enlightenment raises restricted cards to four; banned cards stay banned.\n\nShops, traders and generated rewards count ALL owned copies, including spare cards and other decks. At the limit, no further copy is offered. Won ante is kept even above the limit; owning a card does not make it legal in the deck.\n\nA 36-card deck and a 40-card deck have the same copy allowance. There is no non-base halving or 40-card acquisition gate.\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
 }
 ## THE FINAL BATTLE'S RULE (the owner, 2026-10-27: "A setting at Embark"),
 ## by [constant AdventurePlayer.LIFE_RULES], named as the owner named them;
@@ -123,7 +126,7 @@ const HOLD_NAMES := {
 }
 const HOLD_TIPS := {
 	AdventurePlayer.HOLD_1997: "Your magic bag holds 500 cards, as in 1997. With it full, a card you win or find is lost, the shops, traders and the wise man give you nothing more, and a dungeon's treasure asks you to leave one of your cards in its place.",
-	AdventurePlayer.HOLD_UNLIMITED: "Your magic bag holds any number of cards: no card is ever lost or refused for a full bag.",
+	AdventurePlayer.HOLD_UNLIMITED: "Your magic bag holds any number of cards: no card is ever lost or refused for a full bag. Card-copy rules and pack unlocks still apply.",
 }
 const HOLD_SUMMARY := {
 	AdventurePlayer.HOLD_1997: "Card hold: 500 cards, as in 1997.",
@@ -142,14 +145,14 @@ const BAN_NAMES := {
 }
 const BAN_TIPS := {
 	ClassicBans.OLD: "The lists of the original game's day: the Classic (Type 1) banned and restricted lists of January 1998, as The Duelist #22 printed them. Banned: Channel, Divine Intervention, Mind Twist and the ante cards. Restricted: Black Lotus, the Moxen, Sol Ring, Black Vise, Berserk, Regrowth, Strip Mine and others; Mana Crypt, Mana Vault and Time Vault are not.",
-	ClassicBans.BOTH: "Never looser than either list: a card banned in 1998 or today is banned, one restricted in 1998 or today is restricted. Channel, Divine Intervention and Mind Twist are banned; Mana Crypt, Mana Vault, Time Vault and Black Vise are restricted.",
-	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards. Restricted: Black Lotus, the Moxen, Sol Ring, Mana Crypt, Mana Vault, Time Vault, Channel, Demonic Tutor, Strip Mine and others. Banned: the ante cards and seven cards with offensive art or text. Mind Twist, Black Vise and Berserk are free.",
+	ClassicBans.BOTH: "Never looser than either list: a card banned by either the 1998 or included Vintage list is banned, one restricted by either is restricted. Channel, Divine Intervention and Mind Twist are banned; Mana Crypt, Mana Vault, Time Vault and Black Vise are restricted.",
+	ClassicBans.MODERN: "The included Vintage lists, for this game's cards; not the Modern format. These lists do not update automatically. Restricted: Black Lotus, the Moxen, Sol Ring, Mana Crypt, Mana Vault, Time Vault, Channel, Demonic Tutor, Strip Mine and others. Banned: the ante cards and seven cards with offensive art or text. Mind Twist, Black Vise and Berserk are free.",
 }
 const BAN_GREYED := "Only the Classic MTG rules read a ban list: choose them as your card rule to use one."
 ## [QoL] Broader paid-trader selections, chosen per campaign; off by default.
 var _all_trader_cards: CheckBox
 const TRADER_BOX := "All cards offered by traders"
-const TRADER_TIP := "Town traders, the Nomad's Bazaar and the Diamond Mine can offer every card in this adventure's pool, including special cards and dungeon treasures. Town categories, Classic bans and copy limits still apply. Shops and free rewards are unchanged."
+const TRADER_TIP := "Town traders, the Nomad's Bazaar and the Diamond Mine can offer the original special cards and dungeon treasures normally withheld from trades. Town categories, Classic bans and copy limits still apply. Selected packs and adventure unlocks still govern regional cards. Shops and free rewards are unchanged."
 const TRADER_ON_LINE := "Special cards and treasures can be traded."
 const TRADER_OFF_LINE := "Traders keep their original selection."
 ## THE SIEGES' PACE [ours, the owner's ruling of 2026-10-28 on 1997's
@@ -225,14 +228,14 @@ const LIFE_LINES := {
 	AdventurePlayer.LIFE_ONE: "Lose the final battle and the adventure is over for good.",
 }
 const RULE_LINES := {
-	AdventurePlayer.RULE_MEANT: "No shop or reward offers more copies than your deck's size allows.",
-	AdventurePlayer.RULE_SHIPPED: "Shops and rewards offer any number of copies, as 1997 really did.",
-	AdventurePlayer.RULE_CLASSIC: "Four copies of a card, one of a restricted card, none of a banned one.",
+	AdventurePlayer.RULE_MEANT: "Shops count active-deck copies; duel rewards also keep original set restrictions.",
+	AdventurePlayer.RULE_SHIPPED: "Copies owned do not block offers; original reward restrictions remain.",
+	AdventurePlayer.RULE_CLASSIC: "Four copies owned, one restricted, none banned; basic lands unlimited.",
 }
 const BAN_LINES := {
 	ClassicBans.OLD: "The Classic lists of January 1998, the original game's day.",
-	ClassicBans.BOTH: "Banned or restricted in 1998 or today: never looser than either.",
-	ClassicBans.MODERN: "Today's Vintage lists, for this game's cards.",
+	ClassicBans.BOTH: "Uses the stricter of the 1998 and included Vintage lists.",
+	ClassicBans.MODERN: "The included Vintage lists, for this game's cards; not the Modern format. These lists do not update automatically.",
 }
 const BAN_GREYED_LINE := "Read only under the Classic MTG rules."
 const HOLD_LINES := {
@@ -269,7 +272,7 @@ const LIFE_SHORT := {
 	AdventurePlayer.LIFE_ONE: "One life",
 }
 const RULE_SHORT := {
-	AdventurePlayer.RULE_SHIPPED: "No card limit",
+	AdventurePlayer.RULE_SHIPPED: "Copies not counted",
 	AdventurePlayer.RULE_CLASSIC: "Classic MTG rules",
 }
 const START_SHORT := "Base 10 life"
@@ -291,16 +294,10 @@ var _playmat_preview: Control
 var _difficulty_buttons: Array[Button] = []
 var _difficulty_word: Label
 var _difficulty_note: Label
+## Packs currently open for new campaigns; other installed packs stay visible.
+const SELECTABLE_PACKS: Array[String] = ["pack-2"]
 var _pack_checks: Dictionary = {}
-## THE CARD PACKS WAIT (the owner, 2026-10-27: "on the embark Menu gray out
-## lack options as they are not implemented!"): a pack's world, ruled by
-## its World Lord, is not built yet, so the packs are shown greyed and
-## unticked, and nothing chooses them — no tick, All or None, Randomize, nor
-## the choice remembered from before. True once the World Lords are built
-## (the tests set it to try the choice).
-static var packs_ready := false
-## What the greyed packs say until then (the owner, 2026-10-28).
-const NOT_YET := "Not implemented yet."
+var _packs_about: Label
 var _seed_edit: LineEdit
 ## The walking figure: its preview on the portrait, the six part swatches
 ## and the popup a swatch opens ([HeroColors]).
@@ -324,8 +321,8 @@ var randomize_button: Button
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	setup = AdventureSetup.restore(_installed_packs())
-	if not packs_ready:
-		setup.packs.clear()
+	for id in setup.packs.duplicate():
+		if id not in SELECTABLE_PACKS: setup.packs.erase(id)
 	_faces = faces()
 	if PortraitLibrary.texture(setup.portrait) == null:
 		setup.portrait = String(_faces[0]["id"]) if not _faces.is_empty() else ""
@@ -696,28 +693,16 @@ func _build_journey() -> Control:
 		for label in ["All", "None"]:
 			var button := UiChrome.menu_button(label, Vector2(72, 28), 14)
 			button.name = "Packs" + label
+			button.disabled = not installed.any(func(id: String) -> bool: return id in SELECTABLE_PACKS)
 			button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			button.pressed.connect(choose_all_packs.bind(label == "All"))
-			button.disabled = not packs_ready
 			header.add_child(button)
 	box.add_child(header)
-	# The owner's words, 2026-10-22, first and in gold.
-	# The owner's words, 2026-10-22, first and in gold — once the packs are
-	# built. Until then the packs say nothing of what they will be (the
-	# owner, 2026-10-28: "remove explanation for the packs as it will be a
-	# surprise, just: Not implemented yet.").
-	if packs_ready:
-		var challenge := _text("These are additional challenges. The base cards are always present.", 14)
-		challenge.name = "PacksChallenge"
-		challenge.add_theme_color_override("font_color", GOLD)
-		challenge.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(challenge)
-	var about := _text("Each pack opens its own world on the map, ruled by a World Lord. Defeat the lord and the pack's cards appear everywhere. Your first deck is always base cards."
-		if packs_ready else NOT_YET, 13)
-	about.name = "PacksAbout"
-	about.add_theme_color_override("font_color", DIM)
-	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(about)
+	_packs_about = _text("", 13)
+	_packs_about.name = "PacksAbout"
+	_packs_about.add_theme_color_override("font_color", DIM)
+	_packs_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_packs_about)
 	if installed.is_empty():
 		var none := _text("No card packs are installed. Options › Card Packs... adds them.", 14)
 		none.name = "NoPacks"
@@ -742,14 +727,19 @@ func _build_journey() -> Control:
 			check.add_theme_font_size_override("font_size", 15)
 			check.add_theme_icon_override("checked", UiChrome.check_icon(true))
 			check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+			check.disabled = id not in SELECTABLE_PACKS
+			if check.disabled:
+				check.modulate = Color(0.55, 0.55, 0.55)
+				check.tooltip_text += "\nUnavailable for new adventures."
 			check.button_pressed = id in setup.packs
-			check.disabled = not packs_ready
-			if not packs_ready:
-				check.tooltip_text += "\n" + NOT_YET
+			var adventures := AdventurePacks.adventures(id)
+			if setup.expanded_adventure and not adventures.is_empty():
+				check.tooltip_text += "\nOptional adventure: " + ", ".join(adventures.map(AdventureExpansions.label))
 			check.toggled.connect(choose_pack.bind(id))
 			list.add_child(check)
 			_pack_checks[id] = check
 		box.add_child(list)
+	_show_pack_mode()
 	return box
 
 
@@ -818,7 +808,7 @@ const SETTINGS_BUTTON := "Campaign Settings..."
 const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "AllTraderCards", "CardHold", "Sieges",
 	"Creatures", "LifeStart", "Ascetic"]
 const AS_1997_WORDS := "As 1997"
-const AS_1997_TIP := "Every setting as the 1997 game played: reload allowed, no card limit, the 1998 ban list, the original trader selection, a 500-card bag, the 1997 sieges, creatures that hunt you, a life for each mana link, food as it was eaten."
+const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reload allowed, copies not counted, the 1998 ban list, original traders, a 500-card bag, accelerating sieges, hunting creatures, links-only life and normal food use. The ban list is inactive under this card rule. Selected card packs are unchanged."
 ## WHAT "AS 1997" CHOOSES, each row the 1997 game's own: the card rule as
 ## it shipped (no copy limit), the 500-card bag, the sieges' 1997 clock, the
 ## creatures hunting, a life for each link, the food as eaten. Two rows had
@@ -899,7 +889,24 @@ func _explain_line(base: String, text: String, tip := "") -> void:
 ## chosen does, the row's line in short.
 func _build_card_rule() -> Control:
 	_card_rule = _list_of(OptionButton.new(), AdventurePlayer.CARD_RULES, RULE_NAMES)
+	for index in _card_rule.item_count:
+		_card_rule.set_item_tooltip(index, RULE_TIPS[_card_rule.get_item_metadata(index)])
 	var row := _setting_row("CardRule", "Card rule", _card_rule)
+	# This reference is longer than an ordinary hint. Keep its body at the
+	# settings' reading size so all thresholds fit even in a small window;
+	# the row's controls and the dropdown choices inherit the same tooltip.
+	row.theme = Theme.new()
+	row.theme.set_font_size("font_size", "TooltipLabel", 14)
+	row.theme.set_constant("line_spacing", "TooltipLabel", 1)
+	var paper := StyleBoxFlat.new()
+	paper.bg_color = Color(0.035, 0.03, 0.025, 0.98)
+	paper.border_color = Color(0.48, 0.39, 0.24)
+	paper.set_border_width_all(1)
+	paper.content_margin_left = 10
+	paper.content_margin_right = 10
+	paper.content_margin_top = 8
+	paper.content_margin_bottom = 8
+	row.theme.set_stylebox("panel", "TooltipPanel", paper)
 	_card_rule.item_selected.connect(func(index: int) -> void:
 		choose_card_rule(String(_card_rule.get_item_metadata(index))))
 	_show_card_rule()
@@ -1451,7 +1458,10 @@ func choose_difficulty(level: int) -> void:
 
 
 func choose_pack(on: bool, id: String) -> void:
-	if not packs_ready:
+	if not _pack_checks.has(id): return
+	if id not in SELECTABLE_PACKS:
+		(_pack_checks[id] as CheckBox).set_pressed_no_signal(false)
+		setup.packs.erase(id)
 		return
 	if on and not id in setup.packs:
 		setup.packs.append(id)
@@ -1460,10 +1470,16 @@ func choose_pack(on: bool, id: String) -> void:
 
 
 func choose_all_packs(on: bool) -> void:
-	if not packs_ready:
-		return
 	for id in _pack_checks:
-		(_pack_checks[id] as CheckBox).button_pressed = on
+		var check := _pack_checks[id] as CheckBox
+		check.button_pressed = on and not check.disabled
+
+
+func _show_pack_mode() -> void:
+	_packs_about.add_theme_color_override("font_color", GOLD if setup.expanded_adventure else DIM)
+	_packs_about.text = "Add cards to shops and rewards on Shandalar. Your first deck uses base cards."
+	if setup.expanded_adventure:
+		_packs_about.text = "Prototype game design test: add available lands and quests. Packs without an adventure add their cards immediately."
 
 
 func _on_name_changed(text: String) -> void:
@@ -1500,9 +1516,9 @@ func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	setup.figure_colors = HeroColors.random(rng)
 	var time := "%02d%02d%02d" % [rng.randi_range(0, 23), rng.randi_range(0, 59), rng.randi_range(0, 59)]
 	setup.seed_text = "240000" if time == "000000" else time
-	if packs_ready:
-		for id in _pack_checks:
-			(_pack_checks[id] as CheckBox).button_pressed = rng.randi_range(0, 1) == 1
+	for id in _pack_checks:
+		var check := _pack_checks[id] as CheckBox
+		check.button_pressed = not check.disabled and rng.randi_range(0, 1) == 1
 	_show_all()
 	_say("")
 
@@ -1529,6 +1545,7 @@ func _show_all() -> void:
 	_show_color()
 	_show_playmat()
 	_show_difficulty()
+	_show_pack_mode()
 
 
 func _show_face() -> void:
@@ -1633,6 +1650,10 @@ func embark() -> void:
 	if refusal != "":
 		_say(refusal)
 		_name_edit.grab_focus()
+		return
+	refusal = AdventurePacks.activate(setup.packs)
+	if refusal != "":
+		_say(refusal)
 		return
 	_say("")
 	var versions := {}
@@ -1824,7 +1845,9 @@ func summary(record: Dictionary) -> String:
 			var id := String(pack["id"])
 			var info: Dictionary = catalogue.info(id) if catalogue != null else {}
 			names.append(String(info.get("name", id)))
-		lines.append("Pack worlds: %s." % ", ".join(names))
+		lines.append("Card packs: %s." % ", ".join(names))
+		if record.get("expanded_adventure", false):
+			lines.append("Expanded adventure: prototype game design test. Optional lands and quests enabled.")
 	if AdventurePlayer.life_rule_of(record.get("life_rule")) == AdventurePlayer.LIFE_ONE:
 		lines.append(ONE_LIFE_SUMMARY)
 	lines.append(String(HOLD_SUMMARY[AdventurePlayer.card_hold_of(record.get("card_hold"))]))

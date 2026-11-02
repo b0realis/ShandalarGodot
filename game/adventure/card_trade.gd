@@ -113,14 +113,16 @@ static func catalogue(all_cards := false) -> Array[Dictionary]:
 
 
 ## The campaign's choice applies to town trades, the Bazaar and the Mine.
-## The same pane's free quest reward keeps its original selection.
+## Free quest rewards retain their original exclusions; both pools then
+## receive whichever regional expansion the campaign has unlocked.
 static func for_trader(player: AdventurePlayer, way: String) -> Array[Dictionary]:
-	return catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
+	var base := catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
+	return AdventurePacks.add_stock(player, base) if player != null else base
 
 
 ## Whether [param card_name] is one of the adventure's cards: the 1997
-## game's base sets (Unlimited to Fourth Edition, the Astral cards), not a
-## pack's — adventures are made without packs for now.
+## game's base sets (Unlimited to Fourth Edition, the Astral cards).
+## Regional expansion stock is added separately by [method for_trader].
 static func in_adventure(card_name: String) -> bool:
 	var data := CardRegistry.get_card(card_name) if CardRegistry.has_card(card_name) else null
 	return data != null and data.set_code in CardRegistry.SET_ORDER \
@@ -306,8 +308,15 @@ static func _amulets_held(player: AdventurePlayer) -> int:
 ## cast while the trader waited) — then no trade, never a purse below
 ## nothing nor a card underpaid.
 static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color := "") -> Dictionary:
+	var card_name := String(asked.get("card", ""))
+	# The browser's offer can outlive its catalogue or campaign eligibility.
+	# Check again before charging or consuming a reward, just as for the purse.
+	if not for_trader(player, way).any(func(row: Dictionary) -> bool: return row["name"] == card_name):
+		return {"traded": false, "said": "That card is no longer available from this trader."}
+	if not CardShop.may_offer(player, card_name):
+		return {"traded": false, "said": CardShop.classic_refusal(card_name, player.ban_list)}
 	if way == REWARD:
-		return _take_reward(player, String(asked.get("card", "")))
+		return _take_reward(player, card_name)
 	if not affords(player, asked, way, color):
 		return {"traded": false, "said": AFFORD}
 	# Through the bag ([method AdventurePlayer.add_card]; the bug pass of
@@ -331,7 +340,6 @@ static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color :
 				var hue := held[dice.below(held.size())]
 				player.amulets[hue] = int(player.amulets[hue]) - 1
 			player.dice = dice.state
-	var card_name := String(asked["card"])
 	for i in int(asked["copies"]):
 		player.add_card(card_name)
 	var count := int(asked["copies"])

@@ -80,6 +80,13 @@ func test_a_walker_eats_and_the_clocks_move_on() -> void:
 	assert_eq(walk.player.food, 48, "a food on ticks 0 and 32")
 	assert_eq([walk.player.quest_timer, walk.player.siege_timer], [2, 2])
 	assert_eq(walk.player.monster_timer, 64, "the world's clock, a tick each")
+	assert_eq(walk.player.journey_steps(), 2, "lifetime clock advances with actual movement")
+	walk.player.world.expansion["region"] = "refuge"
+	walk.player.quest_timer = 0
+	walk.walk_to(Vector2i(14, 10))
+	_ticks(walk)
+	assert_eq(walk.player.journey_steps(), 4)
+	assert_eq(walk.player.quest_timer, 2, "regional timing remains independent")
 
 
 func test_with_no_food_the_pace_is_slower() -> void:

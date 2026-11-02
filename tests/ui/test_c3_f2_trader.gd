@@ -186,7 +186,7 @@ func test_a_card_the_deck_may_hold_no_more_of_is_dimmed() -> void:
 
 ## The c5 campaign (P3-2, P3-3): the dimmed names follow 1997's own
 ## allowance (`GetRemainingAllowedCardCopies(card) <= 0`, visitLocation.c
-## 3822, [method DuelSpoils.copies_left]): a basic land is never dimmed,
+## 3822, [method CardShop.copies_left]): a basic land is never dimmed,
 ## however many the deck holds; a card outside the base sets has half the
 ## deck's limit — none under 40 cards — and is dimmed with none in the deck.
 ## "-N" follows a name only for a card the hero owns (visitLocation.c

@@ -250,12 +250,16 @@ func cards() -> Array[String]:
 ## The list, the purse, the question, as they now stand.
 func refresh() -> void:
 	_shown = cards()
+	if chosen != "" and not chosen in _shown:
+		chosen = ""
+		asked = {}
+		_large.visible = false
 	_list.clear()
 	_hovered = -1
 	var owned := AdventureBuilder.owned_counts(player)
 	# Dimmed: no copy left to the deck in use by 1997's own allowance
 	# (`GetRemainingAllowedCardCopies(card) <= 0`, visitLocation.c 3822;
-	# [method DuelSpoils.copies_left]: basic lands always lit, the cards
+	# [method CardShop.copies_left]: basic lands always lit, the cards
 	# outside the base sets halved, the 0x100 ones by the difficulty), its
 	# copies counted once for the whole list — none with the copy limit off
 	# ([method CardShop.counted_copies]). The name carries "-N" only for a
@@ -267,7 +271,7 @@ func refresh() -> void:
 	for card_name in _shown:
 		var count := int(owned.get(card_name, 0))
 		var index := _list.add_item("%s-%d" % [card_name, count] if count > 0 else card_name)
-		if dims and DuelSpoils.copies_left(player, card_name, _facts.get(card_name, {}), in_deck, limit) <= 0:
+		if dims and CardShop.copies_left(player, card_name, _facts.get(card_name, {}), in_deck, limit) <= 0:
 			_list.set_item_custom_fg_color(index, PaneStyle.FAINT)
 		if card_name == chosen:
 			_list.select(index)
@@ -347,7 +351,9 @@ func trade_chosen() -> void:
 		refresh()
 		show_large(keep)
 	else:
-		_show_ask()
+		# Rebuild after a refusal: a disabled pack or a reached copy limit
+		# can remove the selected card, not just change the purse.
+		refresh()
 
 
 ## Card [param card_name] large beside the list ([method PaneStyle.show_card]:

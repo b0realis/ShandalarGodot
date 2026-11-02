@@ -267,10 +267,10 @@ static func on_world(world: ShandalarWorld) -> Array[Dictionary]:
 
 ## The slot's name in the list: "Castle Necris (Black Castle)", or the
 ## dungeon's.
-static func title(index: int) -> String:
+static func title(index: int, world: ShandalarWorld = null) -> String:
 	if index < 5:
 		return "%s (%s)" % [WorldNames.dungeon_name(index), WorldNames.CASTLES[index]]
-	return WorldNames.dungeon_name(index)
+	return WorldNames.dungeon_name(index, world)
 
 
 ## What is known of slot [param index], a line each, as the detail screen

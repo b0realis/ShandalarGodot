@@ -63,7 +63,8 @@ const VERIFY_PACK_8_FLAG := "--verify-pack-8"
 ## The Tempest block (Pack 9): [method pack_9_probe] behind the same door.
 const VERIFY_PACK_9_FLAG := "--verify-pack-9"
 ## A tester's tool, for walking a campaign quickly: started with
-## `-- --debug-win`, Ctrl+Shift+W wins a duel played on this computer
+## `-- --debug-win`, Ctrl+Shift+2 visits the Pack 2 departure coast, and
+## Ctrl+Shift+W wins a duel played on this computer
 ## ([member DuelScreen.debug_win], set by [method read_debug_win] at start
 ## and never saved). No door in the game leads to it.
 const DEBUG_WIN_FLAG := "--debug-win"
@@ -590,6 +591,7 @@ func _open_manalink_notice() -> void:
 static func read_debug_win(args: PackedStringArray) -> void:
 	if args.has(DEBUG_WIN_FLAG):
 		load("res://game/duel/duel_screen.gd").set(&"debug_win", true)
+		load("res://game/adventure/world/world_screen.gd").set(&"debug_campaign", true)
 
 
 ## Hand the rest of the command line to the Deck Lab and quit with its

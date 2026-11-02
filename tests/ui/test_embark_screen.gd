@@ -7,9 +7,12 @@ extends GutTest
 ## neither the skin nor the 1997 faces, a dev checkout has both.
 
 var screen: EmbarkScreen
+var _launch_before: bool
 
 
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray())
 	AdventureSetup.forget()
 	screen = load("res://game/adventure/embark_screen.tscn").instantiate()
 	add_child_autofree(screen)
@@ -17,18 +20,8 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	AdventureSetup.forget()
-	EmbarkScreen.packs_ready = false
-
-
-## The screen made again with the card packs' choice open (the World Lords
-## built), for the tests of that choice.
-func _with_packs_ready() -> void:
-	EmbarkScreen.packs_ready = true
-	screen.queue_free()
-	screen = load("res://game/adventure/embark_screen.tscn").instantiate()
-	add_child_autofree(screen)
-	await get_tree().process_frame
 
 
 func _find(node_name: String) -> Node:
@@ -56,10 +49,9 @@ func test_every_choice_is_on_the_one_screen() -> void:
 	else:
 		assert_not_null(_find("NoPacks"))
 	assert_null(_find("Pack_pack-1"), "Pack 1 is never offered")
-	# The owner, 2026-10-28: until the packs are built they say only "Not
-	# implemented yet." — what they will be is a surprise.
-	assert_null(_find("PacksChallenge"), "no word of the packs' worlds yet")
-	assert_eq((_find("PacksAbout") as Label).text, EmbarkScreen.NOT_YET)
+	assert_null(_find("ExpandedAdventure"), "no GUI opt-in for prototype stories")
+	assert_false(screen.setup.expanded_adventure)
+	assert_string_contains((_find("PacksAbout") as Label).text, "shops and rewards")
 
 
 func test_the_ground_is_the_portrait_screen_or_its_dark() -> void:
@@ -167,9 +159,8 @@ func test_the_packs_all_and_none() -> void:
 	if offered.is_empty():
 		pass_test("no packs here")
 		return
-	await _with_packs_ready()
 	screen.choose_all_packs(true)
-	assert_eq(screen.setup.packs, offered, "every pack but Pack 1")
+	assert_eq(screen.setup.packs, offered.filter(func(id: String) -> bool: return id in EmbarkScreen.SELECTABLE_PACKS), "only selectable packs")
 	screen.choose_all_packs(false)
 	assert_eq(screen.setup.packs, [] as Array[String])
 
@@ -262,8 +253,8 @@ func test_randomize_draws_every_choice() -> void:
 	for key in seen:
 		if key == "portrait" and screen._faces.size() < 2:
 			continue
-		if key == "packs" and (screen._pack_checks.is_empty() or not EmbarkScreen.packs_ready):
-			assert_eq(screen.setup.packs, [] as Array[String], "the packs wait: never drawn")
+		if key == "packs" and screen._pack_checks.is_empty():
+			assert_eq(screen.setup.packs, [] as Array[String], "no installed packs to draw")
 			continue
 		assert_gt((seen[key] as Dictionary).size(), 1, "%s is drawn" % key)
 
@@ -476,25 +467,45 @@ func test_the_title_menu_opens_it() -> void:
 	assert_true(title.is_inside_tree(), "and still the menu: Escape is Back, not Go test")
 
 
-## The owner (2026-10-27): "on the embark Menu gray out lack options as they
-## are not implemented!" — the card packs' worlds (the World Lords) are not
-## built: the packs show greyed and unticked, and nothing chooses them.
-func test_the_card_packs_wait_greyed() -> void:
-	assert_false(EmbarkScreen.packs_ready)
-	assert_eq((_find("PacksAbout") as Label).text, EmbarkScreen.NOT_YET, "the owner: just \"Not implemented yet.\"")
-	assert_null(_find("PacksChallenge"), "no word of what the packs will be: a surprise")
+func test_card_packs_never_enable_prototype_stories_without_launch_flag() -> void:
+	assert_null(_find("ExpandedAdventure"))
 	for id in screen._pack_checks:
 		var check := screen._pack_checks[id] as CheckBox
-		assert_true(check.disabled, "%s greyed" % id)
-		assert_false(check.button_pressed, "%s unticked" % id)
-	for name in ["PacksAll", "PacksNone"]:
-		var button := _find(name) as Button
-		if button != null:
-			assert_true(button.disabled, name)
+		assert_eq(check.disabled, id != "pack-2")
+		assert_false(check.button_pressed)
+		assert_false(check.tooltip_text.contains("Optional adventure"))
+		if check.disabled:
+			check.button_pressed = true
+			assert_false(check.button_pressed, "disabled choices cannot be selected indirectly")
+			assert_false(id in screen.setup.packs)
 	screen.choose_all_packs(true)
-	if not screen._pack_checks.is_empty():
-		screen.choose_pack(true, String(screen._pack_checks.keys()[0]))
-	assert_eq(screen.setup.packs, [] as Array[String], "nothing chooses a pack")
+	assert_false(screen.setup.expanded_adventure)
+	screen.randomize_all(RandomNumberGenerator.new())
+	assert_false(screen.setup.expanded_adventure)
+	screen.setup.packs.assign(screen._pack_checks.keys())
+	screen.setup.remember()
+	Settings.set_value(AdventureSetup.KEY_PREFIX + "expanded_adventure", true)
+	var reopened: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
+	add_child_autofree(reopened)
+	await get_tree().process_frame
+	assert_false(reopened.setup.expanded_adventure, "legacy checkbox preference cannot opt in")
+	assert_true(reopened.setup.packs.all(func(id: String) -> bool: return id == "pack-2"))
+
+func test_flag_labels_the_prototype_and_preserves_card_pack_choices() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
+	var reopened: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
+	add_child_autofree(reopened)
+	await get_tree().process_frame
+	assert_null(reopened.find_child("ExpandedAdventure", true, false))
+	assert_true(reopened.setup.expanded_adventure)
+	assert_string_contains((reopened.find_child("PacksAbout", true, false) as Label).text, "Prototype game design test")
+	reopened.choose_all_packs(true)
+	assert_eq(reopened.setup.packs, ["pack-2"] as Array[String])
+	reopened.randomize_all(RandomNumberGenerator.new())
+	assert_true(reopened.setup.expanded_adventure)
+	reopened.choose_all_packs(false)
+	assert_true(reopened.setup.packs.is_empty())
+	assert_true(reopened.setup.expanded_adventure, "launch mode does not force pack selection")
 
 
 ## WITHOUT THE 1997 ART — the ground and the five symbols are the skin's;
@@ -549,6 +560,8 @@ func test_the_card_rule_is_chosen_at_the_embark() -> void:
 	var names: Array[String] = []
 	for i in rules.item_count:
 		names.append(rules.get_item_text(i))
+		assert_eq(rules.get_item_tooltip(i), EmbarkScreen.RULE_TIPS[rules.get_item_metadata(i)],
+			"each alternative explains itself before selection")
 	assert_eq(names, ["Adventure limit of cards (as intended in 1997)", "No limit (as shipped in 1997)",
 		"Classic MTG rules"] as Array[String], "the owner's names, in order")
 	assert_eq(rules.selected, 0, "as intended in 1997 by default")

@@ -191,7 +191,7 @@ func _entry(index: int) -> Button:
 	words.alignment = BoxContainer.ALIGNMENT_CENTER
 	words.add_theme_constant_override("separation", 0)
 	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var named := PaneStyle.wrapped(WorldNames.dungeon_name(index), 15, ENTRY.x - ICON - 26.0, PaneStyle.INK)
+	var named := PaneStyle.wrapped(WorldNames.dungeon_name(index, player.world), 15, ENTRY.x - ICON - 26.0, PaneStyle.INK)
 	named.name = "Name"
 	words.add_child(named)
 	var kind := PaneStyle.label(kind_of(index), 13, PaneStyle.DIM)
@@ -252,7 +252,7 @@ func show_clue(index: int) -> void:
 	if _closed or not index in known():
 		return
 	slot = index
-	set_title(WorldNames.dungeon_name(index), kind_of(index))
+	set_title(WorldNames.dungeon_name(index, player.world), kind_of(index))
 	show_body(null)
 	draw_page(index)
 	say([])
@@ -400,12 +400,12 @@ func show_on_map() -> ClueMap:
 	map.player = player
 	map.hero_tile = player.tile()
 	map.mark_tile = Vector2i(int(entry.get("x", -1)), int(entry.get("y", -1)))
-	map.mark_name = WorldNames.dungeon_name(slot)
+	map.mark_name = WorldNames.dungeon_name(slot, player.world)
 	map.mark_dungeon = slot >= 5
 	var lines := WorldClues.lines(player.world, slot)
 	var where := lines.find("Location:")
-	map.mark_line = "%s: %s" % [WorldNames.dungeon_name(slot), lines[where + 1].trim_prefix("-")] \
-		if where >= 0 and where + 1 < lines.size() else WorldNames.dungeon_name(slot)
+	map.mark_line = "%s: %s" % [WorldNames.dungeon_name(slot, player.world), lines[where + 1].trim_prefix("-")] \
+		if where >= 0 and where + 1 < lines.size() else WorldNames.dungeon_name(slot, player.world)
 	_map = map
 	get_parent().add_child(map)
 	map.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

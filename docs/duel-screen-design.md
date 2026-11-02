@@ -613,6 +613,17 @@ them**, and twice it was the item's central claim.
   it is s30's 100ms case) and a blow lingers (600ms). The damage record
   is per PERMANENT, not a total, because a sum would cancel a heal
   against a wound.
+  **[QoL, 2026-11-02] Readable opponent actions.** In a human-versus-computer
+  duel, a newly shown opponent spell or ability gets a two-second minimum
+  before the computer's next action. The same timer enforces the deadline,
+  including when an older short timer was already pending; redraws do not
+  restart it. The Situation Bar names the public action and target, the
+  chain and targeting arrows remain visible, and the docked Showcase shows
+  the spell. This fixes unanswered removal such as Swords to Plowshares
+  disappearing during an opponent's turn with only “Still thinking...” on
+  the bar. No extra confirmation click is required. Existing legal responses
+  still hold priority; quiet phases, demo/hotseat pacing and zero-pace tools
+  are unchanged. No rule, card effect or private-information access changes.
 - **§6.10 THE REASONS DO NOT CONCATENATE.** The item read Manalink's
   accumulate-into-one-buffer shape and concluded the player reads
   `Illegal target (type,color,tapped).` Every one of
@@ -667,6 +678,13 @@ wrong**. In section order:
   pre-damage life. That invariant has its own test, because it is what
   would break silently if the engine ever emitted in the other order.
 - **§2.12 a retuned land wears the new land's art** (`MiniCard.art_name`).
+  **[QoL, issue #4, 2026-11-02]** Its title now makes the change explicit:
+  `Island` for a retuned Forest, or `Mountain` for a Strip Mine under Blood Moon.
+  The tooltip keeps the printed name, names the live land types and labels the
+  original text as printed rules. Multiple live basic types
+  remain listed. This is a table label only: CR 305.7 does not rename a card, and
+  the engine, logs, deck names and printed Showcase retain the real identity.
+  Removing the effect or returning the land to hand restores its ordinary label.
   Filed [s30]; it is [1997]. `Duel.hlp`'s **Original Type** mini-menu
   entry — *"shows you what this card was when it was cast, before any
   spells and effects changed it"* — only earns its place on a table where

@@ -409,7 +409,7 @@ func cards() -> Array[String]:
 	var look := _search.text.strip_edges().to_lower() if _search != null else ""
 	var facts := {}
 	if type_filter != 0:
-		for row in CardTrade.catalogue():
+		for row in CardTrade.for_trader(player, CardTrade.REWARD):
 			facts[String(row["name"])] = row["facts"]
 	for card_name in CastleWin.offered(player, picked, color()):
 		if type_filter != 0 and int((facts.get(card_name, {}) as Dictionary).get("type", 0)) & type_filter == 0:

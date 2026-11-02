@@ -1410,6 +1410,8 @@ static func _forget_adventure_tables() -> void:
 	WiseMan.forget()
 	CardHints.forget()
 	CardValue.forget()
+	StarterDeck.forget()
+	AdventurePacks.forget()
 	CardShop.forget()
 	CardRiddle.forget()
 	CardTrade.forget()

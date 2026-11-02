@@ -192,7 +192,7 @@ static func on_step(player: AdventurePlayer) -> Array[Dictionary]:
 ## Whether no siege may begin or fall: a world at peace ([method
 ## AdventurePlayer.at_peace]), or the sieges' pace "None" (the class doc).
 static func calm(player: AdventurePlayer) -> bool:
-	return player.at_peace() or player.sieges == AdventurePlayer.SIEGES_NONE
+	return not AdventureRegions.mainland(player) or player.at_peace() or player.sieges == AdventurePlayer.SIEGES_NONE
 
 
 ## THE CLOCK'S JUMP AFTER A START: 1997's `clamp(d + T / 256, 0, 16)`; the
@@ -281,6 +281,7 @@ static func start(player: AdventurePlayer, retaliating_wizard := 0) -> Array[Dic
 	player.siege_count += 1
 	_explore_tile(world, tile)
 	player.siege_active = true
+	AdventureTasks.rows(player)
 	news.append({"kind": "siege", "town": town, "wizard": wizard, "creature": row,
 		"lines": siege_lines(player, wizard, row, town, retaliating_wizard != 0)})
 	return news
@@ -384,6 +385,7 @@ static func resolve(player: AdventurePlayer, besieger := {}) -> Array[Dictionary
 	var link_lost := TownStatus.linked(world, town)
 	if link_lost:
 		player.note_link_taken(town)
+	AdventureTasks.finish(player, "siege:%d:%d" % [town, player.siege_count], "failed")
 	TownStatus.take(world, town, wizard)
 	var taps: int = WorldStatus.taps(player)[wizard - 1]
 	var needed := WorldStatus.dominion(player)
@@ -443,6 +445,7 @@ static func lifted(player: AdventurePlayer, besieger := {}) -> void:
 	player.siege_active = false
 	var town := int(held.get("town", -1))
 	var named := WorldNames.site_name(player.world, town) if Quests.is_site(player.world, town) else ""
+	AdventureTasks.finish(player, "siege:%d:%d" % [town, player.siege_count])
 	player.log_event("saved", "Saved %s" % named, {"town": town})
 
 
@@ -474,6 +477,7 @@ static func free_all(player: AdventurePlayer, wizard: int) -> Array[int]:
 			continue
 		if int(held.get("color", 0)) == wizard:
 			if int(held.get("slot", -1)) == SLOT:
+				AdventureTasks.finish(player, "siege:%d:%d" % [int(held.get("town", -1)), player.siege_count])
 				player.siege_active = false
 			player.monsters.remove_at(i)
 	return freed

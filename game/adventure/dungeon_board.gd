@@ -434,6 +434,7 @@ static func enter(player: AdventurePlayer, setup: Dictionary, seed_value := -1) 
 	var slot: Dictionary = world.encounters[at]
 	var board := DungeonBoard.new()
 	board.index = at
+	board.run["place_name"] = WorldNames.dungeon_name(at, world)
 	board.castle = at < DungeonDoors.CASTLES
 	board.color = clampi(int(slot.get("color", setup.get("color", 1))), 1, 5)
 	board.rules = int(slot.get("rules", 0))
@@ -753,7 +754,7 @@ func room_creature(event: int) -> int:
 
 ## The castle's or the dungeon's name (`@DUNGEON_NAMES`).
 func title() -> String:
-	return WorldNames.dungeon_name(index)
+	return String(run.get("place_name", WorldNames.dungeon_name(index)))
 
 
 ## The card in effect's name ("%s in effect."), "" for none.

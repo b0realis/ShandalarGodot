@@ -170,6 +170,9 @@ func refresh() -> void:
 			if cards[i] != "":
 				show_large(cards[i])
 				break
+	elif not CardRegistry.has_card(cards[chosen]):
+		_ask.text = "Enable this card's pack to buy it."
+		_buy.disabled = true
 	else:
 		var price := CardShop.price_at(player, slot, cards[chosen])
 		_ask.text = "Buy %s for %d gold?" % [cards[chosen], price]
@@ -184,7 +187,8 @@ func _sync_row(cards: Array[String]) -> void:
 	for i in cards.size():
 		if i >= _row.get_child_count():
 			_row.add_child(_offer(i, cards[i]))
-		elif String(_row.get_child(i).get_meta("card", "")) != cards[i]:
+		elif String(_row.get_child(i).get_meta("card", "")) != cards[i] \
+				or bool(_row.get_child(i).get_meta("available", false)) != CardRegistry.has_card(cards[i]):
 			PaneStyle.swap(_row.get_child(i), _offer(i, cards[i]))
 			if _hovered == i:
 				_hovered = -1
@@ -198,6 +202,7 @@ func _offer(index: int, card_name: String) -> Control:
 	var place := VBoxContainer.new()
 	place.name = "Offer_%d" % index
 	place.set_meta("card", card_name)
+	place.set_meta("available", CardRegistry.has_card(card_name))
 	place.add_theme_constant_override("separation", 4)
 	place.mouse_filter = Control.MOUSE_FILTER_STOP
 	var holder := Control.new()
@@ -209,7 +214,7 @@ func _offer(index: int, card_name: String) -> Control:
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	place.add_child(tag)
 	if not CardRegistry.has_card(card_name):
-		var sold := PaneStyle.label("Sold", 16, PaneStyle.DIM)
+		var sold := PaneStyle.label("Sold" if card_name.is_empty() else "Pack unavailable", 16, PaneStyle.DIM)
 		sold.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 		holder.add_child(sold)
 		return place

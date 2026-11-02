@@ -255,10 +255,13 @@ the player's settings or saved decks to make a screenshot/test pass.
 
 - Add the new Python tests and metadata fixture to `run_tests.sh`.
 - Run focused catalogue, engine, AI, loading/metadata and UI tests first.
-- Run the **full wrapper** after the final code change. Its exit status is
+- Run the **test wrapper with the selected relevant suites** after the final
+  code change. Reserve the full suite for release preparation or an explicit
+  request, as CONTRIBUTING requires. The wrapper's exit status is
   authoritative: GUT can skip a script that fails to load and still print
   a misleading passing summary. Investigate script errors and leaks.
-- Run all Python tests and formatting/whitespace checks.
+- Run the affected Python tests and formatting/whitespace checks; broaden to
+  the full Python suite during the release gate.
 - Run seeded in-engine campaigns with decks that actually contain the new
   mechanics under both rules profiles; log completion, stalls and errors.
 - Run matched Deck Lab candidate/null/control arms with the same seeds and

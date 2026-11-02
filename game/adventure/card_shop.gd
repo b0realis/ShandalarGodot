@@ -125,6 +125,10 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	if index < 0 or index >= cards.size() or cards[index] == "":
 		return {"bought": false, "said": "That card is sold.", "price": 0}
 	var card_name := cards[index]
+	# Saved stock survives disabling an optional pack, but its missing
+	# definition must not turn price_at's zero into a free purchase.
+	if not CardRegistry.has_card(card_name):
+		return {"bought": false, "said": "Enable this card's pack to buy it.", "price": 0}
 	var price := price_at(player, slot, card_name)
 	if player.gold < price:
 		return {"bought": false, "said": POOR, "price": price}
@@ -232,7 +236,8 @@ static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
 	for card_name in in_use:
 		size += int(in_use[card_name])
 	return {"sold": colors_sold(player.world, slot), "held": counted_copies(player),
-		"limit": allowed_for(player, size), "classic": classic_rule(player)}
+		"limit": allowed_for(player, size), "classic": classic_rule(player),
+		"stock": AdventurePacks.add_stock(player, stock())}
 
 
 ## One card for place [param place]: a basic land of a colour the town
@@ -252,7 +257,7 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 	var held: Dictionary = rules["held"]
 	var limit := int(rules["limit"])
 	var fitting: Array[String] = []
-	for row in stock():
+	for row in rules.get("stock", stock()):
 		var f: Dictionary = row["facts"]
 		var bits := int(f.get("color", CardValue.COLORLESS))
 		if bits != CardValue.COLORLESS and not CardValue.first_color(bits) in sold:
@@ -261,6 +266,9 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 			continue
 		if shop_rarity(f) > most:
 			continue
+		# [QoL] Optional cards use the existing town-slot allowance. The
+		# original shops stocked only base cards; do not introduce the
+		# non-base spoil restriction as a new minimum-size gate for shops.
 		if int(held.get(String(row["name"]), 0)) >= limit:
 			continue
 		if not classic_allows(rules.get("classic", {}), String(row["name"])):
@@ -275,6 +283,28 @@ static func shop_rarity(f: Dictionary) -> int:
 	if int(f.get("extra", 0)) & 0x180 != 0 or int(f.get("exp", 1)) == 0x40:
 		return 4
 	return int(f.get("rarity", 1))
+
+
+## Shared 1997 acquisition allowance (1.3 GetRemainingAllowedCardCopies,
+## 004bb1cf). The caller chooses shipped/intended counts, and whether zero
+## is accepted: spoils need > 0; lair rares accept >= 0. Trades only dim.
+## Town draws use their existing slot allowance, including optional cards.
+static func remaining_copies(card_name: String, f: Dictionary, counts: Dictionary,
+		limit: int, difficulty: int) -> int:
+	if card_name in LANDS: return 99
+	var allowed := limit
+	if int(f.get("extra", 0)) & CardValue.TREASURE != 0:
+		allowed = 1 if difficulty <= allowed else 0
+	else:
+		var base := CardValue.is_base(card_name) if bool(f.get("derived", true)) \
+			else int(f.get("exp", 0)) & CardValue.BASE_SETS != 0
+		if not base: allowed = allowed / 2
+	return allowed - int(counts.get(card_name, 0))
+
+
+static func copies_left(player: AdventurePlayer, card_name: String, f: Dictionary,
+		counts: Dictionary, limit: int) -> int:
+	return remaining_copies(card_name, f, counts, limit, player.difficulty)
 
 
 ## How many copies of a card the deck in use may hold

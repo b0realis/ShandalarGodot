@@ -143,7 +143,7 @@ static func enter(player: AdventurePlayer, index: int) -> Dictionary:
 		player.log_event("castle", ENTERED % [WorldNames.dungeon_name(index), WorldNames.CASTLES[index]],
 			{"slot": index})
 	else:
-		player.log_event("dungeon", EXPLORED % WorldNames.dungeon_name(index), {"slot": index})
+		player.log_event("dungeon", EXPLORED % WorldNames.dungeon_name(index, world), {"slot": index})
 	slot["entered"] = entered(world, index) + 1
 	for room in ROOMS:
 		WorldCreatures.empty(player, room)
@@ -218,7 +218,8 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 ## none).
 static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i,
 		portal := Vector2i(-1, -1)) -> bool:
-	if tile == hero or tile == portal or not world.is_land(tile.x, tile.y):
+	if tile == hero or tile == portal or not world.is_land(tile.x, tile.y) \
+			or AdventureExpansions.marker(world, tile) != "":
 		return false
 	var taken := ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON
 	return world.tile_flags(tile.x, tile.y) & taken == 0
