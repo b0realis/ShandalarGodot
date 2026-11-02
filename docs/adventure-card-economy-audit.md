@@ -1,6 +1,6 @@
 # Adventure card economy: original game and Pack 2
 
-Review of `2nd_pack`, 2026-11-01. The aim is to preserve Shandalar's loop:
+Review, 2026-11-01. The aim is to preserve Shandalar's loop:
 explore, risk cards in duels, earn or buy particular cards, improve a limited
 collection, and challenge stronger opponents. Installing a set must not turn
 the campaign into the unrestricted Deck Builder.
@@ -104,47 +104,29 @@ The modal's nine settings and fresh-profile defaults are:
 | Eat half as much | Off | Food consumption only. |
 
 The screen, setup record and hero save carry the choices. Randomize preserves
-campaign settings and story mode, but can change card-pack selections.
+campaign settings, but can change card-pack selections.
 **As 1997** resets only these nine settings: shipped card
 counting, 500-card hold, original traders, accelerating sieges, Hunt, links-only
 life, normal food use, reload allowed and the inactive 1998 list. It leaves
-selected card packs unchanged. Prototype story content requires the
-`--expanded-adventure` launch flag; it has no Embark checkbox. Card selection
-and the prototype launch mode do not replace copy rules.
+selected card packs unchanged. Card selection does not replace copy rules.
 
 The menu descriptions now distinguish acquisition, deck legality, collection
 capacity and content unlocks. Option names and defaults remain unchanged.
 
 ## Pack 2 and the main game
 
-The [availability matrix](refuge-card-audit.md) distinguishes campaign
-selection from global installation, and cards-only play from expanded play.
+Campaign selection is separate from global installation. Select Pack 2 on
+Embark to add its cards to this hero's mainland shops, trades and rewards;
+ordinary acquisition and copy rules still apply.
+
 Pack 2 adds **102 identities, not 187 independent lottery entries**. Its
 trusted catalogue classifies 36 common, 30 uncommon and 36 rare identities;
 alternate illustrations do not multiply draw chances. Reprints must not
 reintroduce a core card withheld by a particular source.
 
-Expanded play retains all five pledges and at least 50% Fallen Empires
-**nonland copies in the active deck** for the lord. The island does not award
-mana links or replace the mainland victory condition. Liberation opens new
-mainland offers, without refreshing every existing shelf. Cards earned before
-liberation can already be brought home, played, sold or copied. Global settings
-and another hero's progress cannot unlock this hero's shops.
-
-The original mainland remains mechanically recognizable, but balance cannot
-be identical after adding new cards and another region. Six cards per pledge,
-shared gold/food, retained amulets/life/World Magics and the island dungeon can
-strengthen the hero before liberation. Those retained rewards are intentional;
-only mana links were removed by the chosen design. Mainland clocks pause while
-away, although cumulative journey time remains recorded. These are explicit
-expansion differences, not original-game features.
-
-More sets also dilute individual-card draw chances because the original
-selection works over eligible card identities. Do not silently add per-pack
-weights, price discounts, free collections, scaling enemies or automatic
-mainland deck replacements. Those would be separate balance decisions. The
-next useful playtest measurements are time to the first usable regional deck,
-cost of acquiring the lord's required cards, and mainland power after returning.
+More sets dilute individual-card draw chances because selection works over
+eligible identities. Per-pack weights, discounts, free collections, scaling
+opponents or automatic deck replacements would be separate balance decisions.
 
 ## Verification
 
@@ -157,10 +139,9 @@ trades, spoils, lair rares, campaign card modules and Pack 2 availability.
 Before the Embark follow-up, the targeted run passed **116 tests / 23,678 assertions across 14
 scripts**, including the imported-table/fallback eligibility comparison,
 disabled-pack trade confirmation through the real pane, same-town resale,
-card values and island progression. No selected script was skipped; the runner
+card values and campaign state. No selected script was skipped; the runner
 exited successfully. The tracked-tree/privacy check passed all 12 checks, and
-the whitespace check was clean. The local expansion playbook and plan template
-were updated and remain untracked, as does the lore file.
+the whitespace check was clean.
 
 This is acquisition-flow coverage, not a full campaign balance certification.
 
@@ -169,37 +150,6 @@ the actual settings window and Embark controls, setup records, original/Classic
 copy policies, card-hold limits, the revised economy regressions, campaign pack
 modes and regional availability. Its runner exited 0 with no selected scripts
 skipped. The separate tracked-tree/privacy check passed all 12 checks.
-
-### Pack 2 gameplay smoke, 2026-11-01
-
-`tests/ui/test_refuge_card_rule_gameplay.gd` plays one complete ordinary
-regional encounter per card rule. Each begins with a real 36-card green
-Apprentice starter, buys generated Fallen Empires shop stock, trades for a
-Thallid through the trader pane, adds it through the adventure builder, saves
-and loads on the island, plays the 37-card deck against the Icatian Patrol,
-settles the actual ante/spoils, saves and loads again, then returns home.
-Cards-only mainland availability is checked separately from the expanded
-campaign's liberation gate. Travel preserves both collection and mana links.
-
-| Rule | Shop purchase | Duel result | Turns |
-| --- | --- | --- | --- |
-| As intended | Icatian Infantry | Won | 21 |
-| As shipped | Spirit Shield | Won | 23 |
-| Classic | Farrel's Zealot | Won | 29 |
-
-The three gameplay cases and twelve existing journey UI cases passed. The
-creature suite passed all thirteen tests, including walking up to a stationary
-creature under Notice and Hunt, contact with wanderers/fleeing creatures, and
-the tribute menu's Duel Anyway option. Its initial tribute fixture had only a
-basic land, so no valid ante; supplying a spell corrected the test setup.
-No creature behavior change was needed. The privacy checker passed twelve
-checks.
-
-These are automated smoke runs, not three completed human campaigns or a
-balance study. Shop funds are supplied by the fixture; the generated decks,
-prices, life totals, opponent, ante and rewards use the real campaign code.
-The duel engine runs headless with a fair Wizard stand-in for the human seat
-and the campaign's configured opponent. No outcome is forced.
 
 ### Card-rule hover reference and final bug pass, 0.60.8
 
@@ -230,4 +180,4 @@ assertions**, exit 0). Native macOS viewport captures verified all three
 references and the open dropdown's item help with the original skin: every
 paragraph was visible, with no clipped final line. These were source-scene
 checks, not exported release builds. The tracked-tree privacy and code-map
-check passed all twelve checks; local design documents remain excluded.
+check passed all twelve checks.

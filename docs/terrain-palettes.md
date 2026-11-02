@@ -9,13 +9,11 @@ with the original skin, upscaled skins and the plain map fallback.
 | ID | Name | Look |
 | --- | --- | --- |
 | `shandalar` | Shandalar | The chosen skin's original colors. |
-| `last_refuge` | The Last Refuge | Straw grass, olive vegetation and a richer blue sea. |
 
-The mainland defaults to Shandalar; the `refuge` region defaults to Last Refuge.
-An explicit choice overrides that default, including on an already saved map.
+The mainland defaults to Shandalar. An explicit choice overrides a region's
+default, including on an already saved map.
 
 ```gdscript
-WorldTerrainPalette.set_preset(world, WorldTerrainPalette.LAST_REFUGE)
 WorldTerrainPalette.set_preset(world, WorldTerrainPalette.SHANDALAR)
 ```
 
@@ -69,7 +67,7 @@ the world view, map and minimap immediately and invalidate cached tile recipes.
 ## Adding another preset
 
 Add an entry to `WorldTerrainPalette.PROFILES` with a stable ID and a display
-`name`. Copy the Last Refuge entry as a starting point. The optional `grass`,
+`name`. The optional `grass`,
 `foliage` and `water` vectors are **target hue (0–1), saturation multiplier,
 brightness multiplier, strength (0–1)**. Each recipe targets its own colors
 and atlas cells, preserving neutral stone, sandy shores and brown soil. Water

@@ -209,12 +209,6 @@ These sit beside the repository, not in it; `Provenance.md` ranks them.
 
 ### Optional adventure regions
 
-The optional lands are a **prototype game design test** for Shandalar world
-design, quests/tasks and MTG-lore integration. `--expanded-adventure` after
-`--` is required each launch; saved progress does not grant runtime opt-in.
-Embark offers card packs only, with no story checkbox. A saved island retains
-return travel without the flag; prototype hooks and outward travel stay off.
-
 `AdventureExpansions` is a lightweight directory of pack IDs, labels, provider
 paths and art paths. Core screens ask its hooks for regional visits, stock,
 guidance and encounter tiers. It loads providers and art on demand; disabled
@@ -228,8 +222,8 @@ Quickening and lifetime statistics are global. Regional quest, shop, monster
 and siege clocks stay local. Generating or restoring a world applies the same
 campaign treasure restrictions. Returning from an occupied region remains
 possible when its pack is disabled. Per-expansion progress lives separately in
-`AdventurePlayer.expansions`; only Last Refuge content uses the compatibility
-`refuge` accessor. Nine-region round trips are covered by a synthetic save test.
+`AdventurePlayer.expansions`. Nine-region round trips are covered by a synthetic
+save test.
 
 `AdventureTasks` derives cached objectives from active state and inactive save
 metadata. A stable selected ID moves with a quest's stage; cross-region guidance
@@ -242,8 +236,8 @@ come from the region's own clock and pause while that region is inactive.
 settlements. `RegionPresentation` bakes small saved achievement pennants into the
 existing world cache, with no new animation loop.
 
-Descriptors explicitly control mana links (off for the Last Refuge) and required
-markers. `ExpansionContract` validates progress from metadata without loading
+Descriptors explicitly control mana links and required markers.
+`ExpansionContract` validates progress from metadata without loading
 content; bounded fields support other quest structures. The opt-in beacon test
 provider proves travel, tasks and persistence without castle or pledge assumptions.
 `expansion_lab.sh` exercises that contract and writes reproducible scenario and

@@ -7,30 +7,6 @@ would replace, in one of the forms `SIMPLIFIED:` or `SIMPLIFIED
 finds them all, and `tests/test_simplified_ledger.gd` pins each engine
 marker to its row here.
 
-## 2026-11-01 — Last Refuge adventure prototype (0.60.5)
-
-On `2nd_pack`, Pack 2 adds an optional coastal voyage to the Last Refuge:
-a compact seeded island, five community pledges, ordinary settlements and
-encounters, an optional dungeon and the Lord of the Ebon Crown. All five
-pledges and at least 50% Fallen Empires nonland copies in the active main
-deck qualify the hero for the lord. Victory unlocks the pack's cards in
-mainland shops, trades and ordinary rewards. Travel preserves both regions
-and the shared hero; adventure save version 4 still reads versions 1–3.
-
-Reusable terrain palettes give the island dry grass and blue coastal water
-without changing the chosen skin or the mainland. Rules corrections cover
-Merseine's unpayable absent mana cost and temporary shroud under Humility.
-Reward lists and their filters share regional availability, and unavailable
-saved shop stock cannot be bought for zero gold.
-
-The [playing guide](fallen-empires-adventure.md),
-[quest audit](refuge-quest-audit.md), [card audit](refuge-card-audit.md) and
-[palette API](terrain-palettes.md) record scope and verification. The quest
-pass ran 87 targeted tests and twelve complete encounter-deck games; the
-subsequent card/reward pass ran 192 targeted tests. These selections overlap
-and are not a full-suite or balance certification. This is source work on
-the expansion branch; no public release or release binaries are replaced.
-
 ## 2026-09-24 — Portal Second Age
 
 Pack 6 now combines both Portal sets: 380 printings / 318 distinct names.

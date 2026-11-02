@@ -9,15 +9,6 @@ it that this project learned the hard way.
 
 ## Why we are building it
 
-**The Last Refuge expansion (2026-10-31, branch `2nd_pack`) is new game
-fiction.** Its harbor, five communities, tyrant, quests and island are not
-locations or events claimed for the 1997 campaign or published Sarpadian
-history. The four pictures under `game/adventure/expansions/art/` were created
-for this expansion, with the original town artwork as a style reference and
-the owner's fortress photograph as an architectural reference. They are not
-extracted 1997 assets. The sources, prompt set and gameplay scope are recorded
-in `docs/fallen-empires-adventure.md`.
-
 > This project is a love letter to MicroProse MTG: to preserve that special
 > 90s Shandalar feeling — the feel of playing early Magic, up to Fourth
 > Edition, Alliances, and maybe Fifth — while still going for

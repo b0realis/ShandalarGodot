@@ -1,9 +1,5 @@
 # Fallen Empires — rules and AI audit, 2026-09-15
 
-The later [Last Refuge card audit](refuge-card-audit.md) covers regional
-availability and additional Merseine/shroud regressions. The results below
-are the historical September audit.
-
 Scope: the 102 unique names in the checked-in Scryfall Fallen Empires snapshot,
 their dormant scripts, `_rules.gd`, engine payment/combat/trigger hooks and the
 AI's actual activation paths. The 187 printings are metadata/art variants,

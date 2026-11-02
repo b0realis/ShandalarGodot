@@ -601,11 +601,9 @@ working view.
   magics, the ante economy — ~~is not started~~.** (2026-10-28: built and
   winnable — the world, the towns, quests, lairs, the roaming creatures,
   their duels and ante, and the sieges, 0.50.48–0.50.61; the castles, the
-  dungeons' insides, Arzakon and the end, part C, 0.50.62–0.50.64.) On
-  `2nd_pack`, Fallen Empires now has the playable Last Refuge prototype;
-  see `docs/fallen-empires-adventure.md`. Other pack worlds and a general
-  multi-region expansion framework remain future work. This prototype is
-  not a claim of publication in an existing release.
+  dungeons' insides, Arzakon and the end, part C, 0.50.62–0.50.64.)
+  Campaign card selection now supports Pack 2: Fallen Empires on `main`;
+  further campaign packs await integration. Published builds may lag source.
   Adventure has its section in `docs/ROADMAP.md` ("M5 — Adventure
   mode"); its design and build record is
   `docs/adventure-implementation-notes.md`, beside the research in
