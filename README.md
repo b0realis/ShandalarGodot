@@ -65,7 +65,7 @@ alive.
 
 <p align="center">
   <img src="branding/screenshots/adventure-world.png" alt="The hero in the world of Shandalar, between towns" width="390">
-  <img src="branding/screenshots/adventure-dungeon.png" alt="A dungeon's board in the Shandalar adventure" width="390">
+  <img src="branding/screenshots/adventure-dungeon.png?v=0.60.1" alt="The Paths of Chronus dungeon in the Shandalar adventure" width="390">
   <br>
   <em>The Shandalar adventure: the world, and a dungeon's board.</em>
 </p>
