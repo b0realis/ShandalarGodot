@@ -28,7 +28,7 @@ class PackageReleaseTest(unittest.TestCase):
         for name in (*("tools/" + n for n in pack.TOOLS), "LICENSE",
                      "docs/setup.txt", "docs/skin-catalogue.txt", "docs/skin-catalogue.csv",
                      "docs/releases/1.2.3.md", "DeckLab/README.md", "AGENTS.md", "game/icon.png",
-                     "docs/setup-web.txt", "docs/card-art-and-packs.md", "agentic-playgude-mtg.md"):
+                     "docs/setup-web.txt", "docs/card-art-and-packs.md", "tools/agentic-playgude-mtg.md"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fixture")
@@ -111,8 +111,8 @@ class PackageReleaseTest(unittest.TestCase):
                             prefix += "shandalar/"
                             self.assertEqual(archive.getinfo(outer + "Shandalar.sh").external_attr >> 16 & 0o777, 0o755)
                         entries = archive.namelist()
-                        self.assertIn(prefix + "agentic-playgude-mtg.md", entries)
-                        self.assertEqual(archive.read(prefix + "agentic-playgude-mtg.md"), b"fixture")
+                        self.assertIn(prefix + "tools/agentic-playgude-mtg.md", entries)
+                        self.assertEqual(archive.read(prefix + "tools/agentic-playgude-mtg.md"), b"fixture")
                         self.assertEqual(archive.read(prefix + "VERSION.txt"), b"1.2.3\n")
                         self.assertEqual(archive.read(prefix + "decks/test.deck"), b"name: Bundled Test\n40 Island\n")
                         self.assertNotIn(prefix + "decks/private.deck", entries)
@@ -436,7 +436,7 @@ class PackageReleaseTest(unittest.TestCase):
         repo_door = (pack.ROOT / 'shandalar.sh').read_text(encoding='utf-8')
         for verb, target in (("lab", "DeckLab/deck_lab.sh"), ("autodeck", "DeckLab/auto_deck_cli.sh"),
                              ("check | packs | cards", 'DeckLab/lab_query.sh "$verb"'),
-                             ("referee", "DeckLab/referee.sh"), ("convert", "./deck_convert.sh"),
+                             ("referee", "DeckLab/referee.sh"), ("convert", "./tools/deck_convert.sh"),
                              ("mcp", "python3 tools/shandalar_mcp.py")):
             self.assertIn(f'{verb}) exec {target} "$@" ;;', repo_door)
         self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', repo_door)

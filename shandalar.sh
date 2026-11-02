@@ -9,7 +9,7 @@
 #   ./shandalar.sh cards NAME...      a card's record     (DeckLab/lab_query.sh)
 #   ./shandalar.sh referee ARGS...    one duel through a pipe, a program
 #                                     in a seat            (DeckLab/referee.sh)
-#   ./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
+#   ./shandalar.sh convert IN OUT     .deck <-> .dck      (tools/deck_convert.sh)
 #   ./shandalar.sh mcp                the tools as an MCP server on stdio
 #                                                          (tools/shandalar_mcp.py)
 #   ./shandalar.sh VERB --help        that tool's own manual
@@ -41,7 +41,7 @@ case "$verb" in
 	check | packs | cards) exec DeckLab/lab_query.sh "$verb" "$@" ;;
 	query) exec DeckLab/lab_query.sh "$@" ;;
 	referee) exec DeckLab/referee.sh "$@" ;;
-	convert) exec ./deck_convert.sh "$@" ;;
+	convert) exec ./tools/deck_convert.sh "$@" ;;
 	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
 # The verb goes into the line with what JSON cannot carry raw removed —

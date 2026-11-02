@@ -1641,7 +1641,7 @@ class TestSoundManifest(unittest.TestCase):
         out = self._report({"sfx_land_grey.wav": path})
         self.assertIn("2009", out)
         self.assertIn("LATER THAN 1997", out)
-        self.assertIn("Provenance.md", out)
+        self.assertIn('README.md, "Provenance"', out)
 
     def test_a_1997_sound_is_not_flagged(self):
         root = self._tree({"Duelsounds/Grey.wav": None})

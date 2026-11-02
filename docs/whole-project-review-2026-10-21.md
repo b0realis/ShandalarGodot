@@ -361,7 +361,7 @@ in CI nor in the release recipe.
 Playwright 1.63.0, Chromium only; `--channel chromium`, a new option of the
 test); "The offline Web package" in `docs/release-builds.md`, building both
 offline ZIPs and running the test against one; the test named in
-`DEVELOPMENT.md`.
+[the development guide](../CONTRIBUTING.md).
 
 **Left.** The job has not run yet: Playwright is not installed on the desk
 the fixes were made on. Its first CI run is its test.
@@ -639,7 +639,7 @@ with no `ERROR:` line:
   `test_bar_frame`, `test_card_back`, `test_skin_pack`, `test_card_packs`,
   `test_help`, `test_sgmanalink` (38 scripts, 386), `test_android`.
 
-`./duel_soak.sh` and `./duel_soak.sh --rules fifth`: exit 0, 6 duels each
+`./tools/duel_soak.sh` and `./tools/duel_soak.sh --rules fifth`: exit 0, 6 duels each
 (the demo and the human seat) through the live duel screen. Python:
 `python3 -m unittest discover -s tools -p 'test_*.py'`, 797 tests OK (15
 skipped). The version bump to 0.50.42 also moves the Android preset's

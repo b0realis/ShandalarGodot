@@ -7,7 +7,7 @@ what each command is for, what it prints where, what its exit codes
 mean, what files it leaves and under which keys.
 The house rules for **editing** the repository are in `CONTRIBUTING.md`;
 the manuals with the reasoning are `DeckLab/README.md` and `docs/`.
-For **learning to play**, read [the MTG play guide](agentic-playgude-mtg.md):
+For **learning to play**, read [the MTG play guide](tools/agentic-playgude-mtg.md):
 rules, fair information, combat study, worked examples and deck-building
 strategy. It complements this interface contract; it does not replace it.
 Every claim below is pinned by
@@ -28,7 +28,7 @@ Every claim below is pinned by
 ./shandalar.sh cards NAME...      a card's record     (DeckLab/lab_query.sh)
 ./shandalar.sh referee ARGS...    one duel through a pipe, a program
                                   in a seat            (DeckLab/referee.sh)
-./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
+./shandalar.sh convert IN OUT     .deck <-> .dck      (tools/deck_convert.sh)
 ./shandalar.sh mcp                the tools as an MCP server on stdio
                                                        (tools/shandalar_mcp.py)
 ./shandalar.sh VERB --help        that tool's own manual
@@ -1023,7 +1023,7 @@ with `--trace` (every decision, its options and the pick, then the winner);
 a dataset export and Wizard teacher labels are an open, unbuilt request
 (ROADMAP, 0.50.13).
 
-## Deck convert — `./deck_convert.sh INPUT OUTPUT`
+## Deck convert — `./tools/deck_convert.sh INPUT OUTPUT`
 
 Formats come from the extensions (`.deck`/`.dec` ↔ `.dck`). Exit 0 with
 the converted deck's report on stdout; 2 on anything else (a missing
@@ -1039,7 +1039,7 @@ tool inside the game binary (what a release's `deck_lab.sh`,
 `--verify-pack-1` … `--verify-pack-5`, `--verify-pack-8` and
 `--verify-pack-9`; the LAN protocol is 30 at 0.50.44 (`SgProtocol.VERSION`;
 `docs/sgmanalink-*.md`). Headless soaks and audits live under `tools/*.gd`
-(`./duel_soak.sh --help`). `./run_tests.sh` is the gate:
+(`./tools/duel_soak.sh --help`). `./run_tests.sh` is the gate:
 trust its exit code, not the printed tally.
 
 ## A session, in order

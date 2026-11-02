@@ -79,5 +79,5 @@ own test (`docs/CODE_MAP.md`, "The repository check (2026-10-13)").
   131 to 28 (each a refusal a test asks for).
 - Python: `python3 -m unittest discover -s tools -p 'test_*.py'` — 698
   tests, OK (15 skipped), with no ResourceWarning or UserWarning lines.
-- Boot smoke clean; `./duel_soak.sh` with the default, fifth and modern
+- Boot smoke clean; `./tools/duel_soak.sh` with the default, fifth and modern
   rules — 6 duels each, no ERROR, WARNING or STALL.

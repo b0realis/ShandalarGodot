@@ -16,8 +16,9 @@ folder and is inventoried at the foot of this page all the same, because
 the inventory is what the test reads.
 
 That distinction is the whole reason the folder exists. The 1997 art is
-the player's own copy and is never redistributed (`Provenance.md`,
-`README.md` § Legal); a Manalink install's flat gold set glyphs and its
+the player's own copy and is separate from this source tree
+([README](../../README.md#provenance) and its Legal section); a Manalink
+install's flat gold set glyphs and its
 damage dagger are a **third party's restyle** of MicroProse's drawings
 and are not ours to copy either. So the game's look does not borrow
 from either of them: it is drawn here. Since 2026-10-15 the six set
@@ -423,7 +424,7 @@ one; and this sound now carries the GPL-3.0 for the same reason as the
 pictures — it is noise, a filter and an envelope, generated to simulate
 the sound of stone scraping on stone. The generator that makes it is kept
 outside this repository, with the samples and the method.
-`Provenance.md` § *Our own assets* has what was there before and why it
-went.
+[The historical asset register](https://github.com/b0realis/ShandalarGodot/blob/04305db4599868acdcc8c84b698982188c9e4030/Provenance.md#our-own-assets--the-short-list-and-where-each-came-from)
+records what was there before and why it went.
 
 `b0realis`, 2026-09-09.

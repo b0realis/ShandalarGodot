@@ -788,7 +788,8 @@ class FakeDoorTest(unittest.TestCase):
         cls.guide = "# Play guide\n\n## Contents\n\n" + "".join(
             f"## {chapter}. Chapter {chapter}\n\nLesson {chapter}.\n\n"
             for chapter in range(1, 17))
-        (cls.home / "agentic-playgude-mtg.md").write_text(cls.guide, encoding="utf-8")
+        (cls.home / "tools").mkdir()
+        (cls.home / "tools/agentic-playgude-mtg.md").write_text(cls.guide, encoding="utf-8")
         decks = cls.home / "decks" / "tournament"
         decks.mkdir(parents=True)
         (decks / "burn.deck").write_text("// NAME: Burn\n4 Lightning Bolt\n20 Mountain\nSB: 3 Red Elemental Blast\n", encoding="utf-8")
@@ -920,7 +921,7 @@ class FakeDoorTest(unittest.TestCase):
         before = self.calls()
         page = self.client.payload("play_guide")
         self.assertEqual(page["text"], self.guide)
-        self.assertTrue(page["file"].endswith("agentic-playgude-mtg.md"))
+        self.assertTrue(page["file"].endswith("tools/agentic-playgude-mtg.md"))
         for chapter in range(1, 17):
             page = self.client.payload("play_guide", {"chapter": chapter})
             self.assertEqual(page["chapter"], chapter)
@@ -942,7 +943,7 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(page["text"], self.client.payload("play_guide")["text"])
 
     def test_missing_play_guide_is_a_clear_refusal(self):
-        page = self.home / "agentic-playgude-mtg.md"
+        page = self.home / "tools/agentic-playgude-mtg.md"
         page.rename(page.with_suffix(".saved"))
         try:
             result = self.client.call("play_guide")
@@ -2808,7 +2809,7 @@ class LiveTest(unittest.TestCase):
         self.assertEqual(status["version"], version)
         self.assertEqual(status["root"], str(ROOT))
         full = self.client.payload("play_guide")["text"]
-        self.assertEqual(full, (ROOT / "agentic-playgude-mtg.md").read_text(encoding="utf-8"))
+        self.assertEqual(full, (ROOT / "tools/agentic-playgude-mtg.md").read_text(encoding="utf-8"))
         for chapter in range(1, 17):
             page = self.client.payload("play_guide", {"chapter": chapter})["text"]
             self.assertTrue(page.startswith(f"## {chapter}. "))

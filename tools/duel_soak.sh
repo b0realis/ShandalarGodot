@@ -5,12 +5,12 @@
 # player is tools/duel_soak.gd; read its header for what the two modes do.
 #
 # Usage:
-#   ./duel_soak.sh                          # 3 seeds, demo AND human seat
-#   ./duel_soak.sh --mode human --count 10  # fuzz the human seat harder
-#   ./duel_soak.sh --seeds 4242             # replay one seed (both modes)
-#   ./duel_soak.sh --rules fifth            # every fork the 1997 way
-#   ./duel_soak.sh --help
-#   ./duel_soak.sh --version                # the one version string
+#   ./tools/duel_soak.sh                          # 3 seeds, demo AND human seat
+#   ./tools/duel_soak.sh --mode human --count 10  # fuzz the human seat harder
+#   ./tools/duel_soak.sh --seeds 4242             # replay one seed (both modes)
+#   ./tools/duel_soak.sh --rules fifth            # every fork the 1997 way
+#   ./tools/duel_soak.sh --help
+#   ./tools/duel_soak.sh --version                # the one version string
 #
 # Exit 0 only when every duel reached game over AND the log holds no
 # ERROR, WARNING or SCRIPT ERROR line beyond Xvfb's own two (the X input
@@ -33,7 +33,7 @@
 # grep); stdin closed. Ten duels take about three minutes; the whole-run
 # guard is SOAK_TIMEOUT seconds (default 1800).
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # THE FAMILY BANNER (tools/banner.sh): stderr, and only on a terminal.
 # stdout here is the SOAK lines and the "not clean" report, and this
@@ -44,15 +44,15 @@ BANNER_ROW_1=' │││ │├┤ │    └─┐│ │├─┤├┴┐'
 BANNER_ROW_2='─┴┘└─┘└─┘┴─┘  └─┘└─┘┴ ┴┴ ┴'
 BANNER_CAP_0='Shandalar 1997 · live duels'
 BANNER_CAP_1='whole games through the live screen'
-# THE MINI-HELP, for a bare `./duel_soak.sh` and no other: the two
+# THE MINI-HELP, for a bare `./tools/duel_soak.sh` and no other: the two
 # invocations from the Usage block at the top of this file, so there is
 # nothing here to keep in step by hand, and the flag that has the rest. A
 # bare run is three seeds in both modes and takes minutes — worth saying
 # before it starts.
 shandalar_banner_hint "$#" \
-	'./duel_soak.sh                          # 3 seeds, demo AND human seat' \
-	'./duel_soak.sh --mode human --count 10  # fuzz the human seat harder' \
-	'./duel_soak.sh -h                       # --rules, --seeds, --stall'
+	'./tools/duel_soak.sh                          # 3 seeds, demo AND human seat' \
+	'./tools/duel_soak.sh --mode human --count 10  # fuzz the human seat harder' \
+	'./tools/duel_soak.sh -h                       # --rules, --seeds, --stall'
 
 for arg in "$@"; do
 	case "$arg" in

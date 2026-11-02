@@ -137,7 +137,7 @@ value: `Lifecycle._ready()` sets `CardRegistry.enabled_packs` before
 `CardRegistry.reload(Settings.enabled_packs())` on leave. Nothing is live
 while Options is open (main menu only), so a reload there is safe; the
 deck builder and setup screen rebuild their lists from the registry when
-opened. Headless entry points (`deck_lab.sh`, `duel_soak.sh`) get a
+opened. Headless entry points (`deck_lab.sh`, `tools/duel_soak.sh`) get a
 `--packs classic` switch that sets the same static before loading.
 
 ### Deck builder and saved decks
@@ -346,7 +346,7 @@ are labelled as such.
 
 | Phase | Work | Size (est.) |
 |---|---|---|
-| 0 Gate | `PACKS` table, `enabled_packs`, `active_set_order()`, folder guard, `reload()`; Settings key + Options section; `Lifecycle` push; label tables; `test_every_stub_has_graduated` relaxed; pack pin test + `GameTest.packs()`; `--packs` for `deck_lab.sh` / `duel_soak.sh`; pack README with balance statement | 8–12 agent-hours |
+| 0 Gate | `PACKS` table, `enabled_packs`, `active_set_order()`, folder guard, `reload()`; Settings key + Options section; `Lifecycle` push; label tables; `test_every_stub_has_graduated` relaxed; pack pin test + `GameTest.packs()`; `--packs` for `deck_lab.sh` / `tools/duel_soak.sh`; pack README with balance statement | 8–12 agent-hours |
 | 0 Data | `fetch_cards.py::SETS` += ice, fem, hml, all (network); `gen_cards.py::POOL` same order appended after phpr (reprints stay in their 1997 folder); `fetch_card_art.py` `pool()` ordered by set order; run all three | 1–2 hours plus fetch time; ~150 MB art |
 | 1 Homelands | 115 cards, 11 auto; no engine work | ~9 waves, 25–35 agent-hours |
 | 1 Fallen Empires | 102 cards, 2 auto; shared vocabulary only | ~8 waves, 25–35 agent-hours |

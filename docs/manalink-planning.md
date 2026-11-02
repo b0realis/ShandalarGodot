@@ -97,8 +97,8 @@ workers carry the explicit challenge token with the deck.
 
 ```sh
 SUITE_TIMEOUT=600 ./run_tests.sh
-SOAK_HEADLESS=1 ./duel_soak.sh --unfair --rules modern --seeds 91328
-SOAK_HEADLESS=1 ./duel_soak.sh --unfair --rules fifth --seeds 91328
+SOAK_HEADLESS=1 ./tools/duel_soak.sh --unfair --rules modern --seeds 91328
+SOAK_HEADLESS=1 ./tools/duel_soak.sh --unfair --rules fifth --seeds 91328
 DeckLab/deck_lab.sh --deck-a big_green.deck --deck-b white_knights.deck \
   --profile-b unfair --games 100 --no-elo --no-svg
 ```

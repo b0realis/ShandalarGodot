@@ -94,8 +94,11 @@ sequence and `docs/mechanics.md` explains it card by card. Recompute-the-world
 is the approach XMage/mage-go use; it trades negligible CPU for correctness
 that never drifts, and `docs/audit-2026-09.md` has the measurements behind
 the parts that were made cheaper. General dependency analysis (613.8) is
-still missing; `engine/continuous.gd` handles this pool's land-type
-reader/writer dependency in two waves. See `DEVELOPMENT.md` for the scope.
+still incomplete; `engine/continuous.gd` applies land-type writers before
+readers, then orders readers by dependency, breaking cycles by timestamp.
+Other continuous-effect dependencies are not generally detected. See
+[the development guide](../CONTRIBUTING.md#current-scope-and-further-reading)
+for the scope.
 
 ### Cards as composition
 
@@ -143,8 +146,9 @@ replays and the Deck Lab's AI-versus-AI runs.
 
 Framework: **GUT 9.x** (addons/gut, vendored). Run via `./run_tests.sh`
 (headless, uses the pinned Godot discovered by `tools/runtime.sh`). Current
-measured test counts and timings live in `DEVELOPMENT.md` and the dated
-verification records; this architecture overview does not keep another count.
+test commands and coverage policy live in
+[the development guide](../CONTRIBUTING.md#commands). Dated verification
+records retain measured counts and timings; this overview keeps no second count.
 
 - `tests/game_test.gd` — `GameTest`, the harness DSL: `put_battlefield`,
   `give_hand`, `add_mana`, `resolve_stack`, `run_combat`,
@@ -177,7 +181,7 @@ battle setup to the duel screen; the shell also exposes Gauntlet, Deck
 Builder, Options, Help and the globe (SGManalink LAN duels and tournaments,
 `game/sgmanalink/`). The duel screen holds an `MtgGame`, renders its
 state and signals, and calls the same public API the tests use. Whole duels
-through this presentation layer are checked by `duel_soak.sh` in addition to
+through this presentation layer are checked by `tools/duel_soak.sh` in addition to
 the component tests. See `docs/CODE_MAP.md` for the implemented scene layout.
 
 The adventure layer (`game/adventure/`: the world, its places and
@@ -195,7 +199,8 @@ duel engine; `docs/adventure-implementation-notes.md` is its record.
 
 ## Provenance & upstream references
 
-These sit beside the repository, not in it; `Provenance.md` ranks them.
+These sit beside the repository, not in it; the
+[provenance summary](../README.md#provenance) links the historical source audit.
 
 - `../s30/` — Go remake (screens, adventure systems, rogue decks in
   `assets/configs/rogues/`, original text in `assets/text/`).
@@ -240,5 +245,5 @@ Descriptors explicitly control mana links and required markers.
 `ExpansionContract` validates progress from metadata without loading
 content; bounded fields support other quest structures. The opt-in beacon test
 provider proves travel, tasks and persistence without castle or pledge assumptions.
-`expansion_lab.sh` exercises that contract and writes reproducible scenario and
+`tools/expansion_lab.sh` exercises that contract and writes reproducible scenario and
 independent deck/life reports. Normal startup never registers test regions.

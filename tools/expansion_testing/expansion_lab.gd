@@ -22,7 +22,7 @@ func _run() -> void:
 		options[args[index]] = args[index + 1]
 		index += 2
 	if not OS.has_feature("shandalar_test") or options["--out"] == "":
-		printerr("Use expansion_lab.sh --out NEW_DIRECTORY")
+		printerr("Use ./tools/expansion_lab.sh --out NEW_DIRECTORY")
 		get_tree().quit(2)
 		return
 	for key in ["--trips", "--games"]:

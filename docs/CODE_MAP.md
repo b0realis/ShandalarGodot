@@ -42,7 +42,7 @@
   road and terrain-neighborhood objective placement, safe old-map fallbacks.
 - `game/adventure/expansions/region_presentation.gd`: shared tiny pennants baked
   into the existing map cache from saved regional achievement markers.
-- `expansion_lab.sh`: isolated, bounded region testing and balance CLI wrapper.
+- `tools/expansion_lab.sh`: isolated, bounded region testing and balance CLI wrapper.
 - `tools/expansion_testing/expansion_lab.gd` and
   `tools/expansion_testing/expansion_lab.tscn`: repeatable travel, reachability,
   saves and dormant-provider scenarios; crossed hero-deck/life duel reports.
@@ -1203,7 +1203,7 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Agent play guide
 
-- `agentic-playgude-mtg.md`: tool-neutral MTG learning and play manual for
+- `tools/agentic-playgude-mtg.md`: tool-neutral MTG learning and play manual for
   agents, covering fair information, safe action sequencing, rules presets,
   combat study, worked decisions and deck-building strategy.
 - `tools/shandalar_mcp.py`: `play_guide` serves the whole guide or one of its
@@ -3437,7 +3437,7 @@ moved; a LAN table joined by name; a joined seat's journal for the log.
   kept duel played through the socket to a result, a kept duel conceded
   idle.
 - `tests/tools/test_mcp_2026_09_27.gd`: `referee_resume` in the tool list.
-- `agentic-playgude-mtg.md`: "Driving a duel through the referee" in
+- `tools/agentic-playgude-mtg.md`: "Driving a duel through the referee" in
   chapter 3 (`default` acts, read the printed rule, `attack_bands`, the
   `until` stops, `delta`, kept games, a table by name, the `log`), the
   journal in chapter 13's review, two rows in chapter 14's table; the
@@ -5541,11 +5541,9 @@ shandalar/
 │                              .gdignore keeps it out of the Godot project
 ├── .gitignore               Ignores .godot/ cache, *.import, assets/cardart/,
 │                              packs/ (build_card_packs.py --out packs)
-├── DEVELOPMENT.md           The front door for a fresh clone (2026-09-12):
-│                              orientation, the gate, a tour of the folders;
-│                              it points at CONTRIBUTING.md,
-│                              docs/ARCHITECTURE.md and this map rather than
-│                              repeating them
+├── CONTRIBUTING.md          Combined development and contribution guide:
+│                              setup, source boundaries, tests, experiments,
+│                              privacy and release policy
 │
 ├── engine/                  ← THE RULES ENGINE (pure, headless, no Node)
 │   ├── core/                Data model & vocabulary
@@ -8174,9 +8172,16 @@ shandalar/
 │   │                          exit 1 a failed check, 2 a deadline, 3 bad
 │   │                          argument, 124 the whole-run guard (manual
 │   │                          in the file)
+│   ├── deck_convert.sh      Deck-format converter entry point
+│   ├── expansion_lab.sh     Isolated adventure-region checks and battle baselines
+│   ├── agentic-playgude-mtg.md  MTG learning and play guide, also served by MCP
+│   ├── duel_soak.sh         Duel-soak entry point: wraps tools/duel_soak.gd
+│   │                          in the safe Xvfb recipe and fails on any
+│   │                          ERROR/WARNING/STALL line; exit 2 stall, 3 bad
+│   │                          argument, 124 timeout (manual in the file)
 │   ├── deck_convert.gd      Deck-format converter (community .deck/.dec ⇄
 │   │                          the original MicroProse .dck); entry point
-│   │                          ./deck_convert.sh
+│   │                          ./tools/deck_convert.sh
 │   ├── bench_probe.gd       THE PROBE COST CURVE (SceneTree script) —
 │   │                          GameSnapshot take/restore and a whole
 │   │                          MtgGame._preflight timed against board size,
@@ -8223,7 +8228,7 @@ shandalar/
 │                              DuelScreen under Xvfb (AI vs AI, and a human
 │                              seat fuzzed by its HumanClicker), Godot's
 │                              errors counted; `--rules fifth|modern` instead
-│                              of user://settings.cfg; run via ./duel_soak.sh
+│                              of user://settings.cfg; run via ./tools/duel_soak.sh
 ├── DeckLab/                 ← THE DECK LAB (moved here 2026-09-05: CLI,
 │                              manual and results in one folder)
 │   ├── deck_lab.sh          Entry point (see --help). Finds Godot, tells
@@ -8356,16 +8361,11 @@ shandalar/
 │   └── results/             Where a run writes unless --out says otherwise
 │                              (a sweep: report.txt, sweep.json, sweep.csv,
 │                              games.csv)
-├── duel_soak.sh             Duel-soak entry point: wraps tools/duel_soak.gd
-│                              in the safe Xvfb recipe and FAILS on any
-│                              ERROR/WARNING/STALL line; exit 2 stall, 3 bad
-│                              argument, 124 timeout (manual in the file)
 ├── shandalar.sh             THE ONE DOOR (2026-09-27): lab | autodeck |
 │                              check | packs | cards | convert, each
 │                              exec'ing its tool with the rest of the
 │                              line; --help the list; an unknown verb one
 │                              JSON line on stdout, exit 2 (AGENTS.md)
-├── deck_convert.sh          Deck-format converter entry point
 ├── build_release.sh         Release build: exports the "Linux 64" preset with
 │                              the pinned Godot — with the DEBUG template
 │                              (--export-debug, 2026-09-08: the optimized
@@ -12071,7 +12071,7 @@ shandalar/
 │   │                          SHA-256 per file, including the one shipped
 │   │                          asset that lives elsewhere,
 │   │                          deck_builder/stone_grind.wav);
-│   │                          Provenance.md is the register;
+│   │                          README.md#provenance links the older register;
 │   │                          tests/ui/test_our_art.gd holds the folder
 │   │                          to that list and to the export filters.
 │   ├── deck_builder/        THE DECK BUILDER (@SHELLSCREEN_TOOLS: "Deck

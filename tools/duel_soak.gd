@@ -1,6 +1,6 @@
 extends SceneTree
 ## THE DUEL SOAK — whole duels played THROUGH THE LIVE DUEL SCREEN, several
-## in a row, with the engine's errors counted. Run it with `./duel_soak.sh`
+## in a row, with the engine's errors counted. Run it with `./tools/duel_soak.sh`
 ## (see the manual there); this file is the part that plays.
 ##
 ##   xvfb-run -a timeout -k 5 900 ../tools/godot --path . \

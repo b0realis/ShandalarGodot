@@ -28,8 +28,8 @@ From the checkout:
 ```sh
 ./run_tests.sh
 python3 -m unittest discover -s tools -p 'test_*.py'
-./duel_soak.sh
-./duel_soak.sh --rules fifth
+./tools/duel_soak.sh
+./tools/duel_soak.sh --rules fifth
 ./build_release.sh --macos
 open ../shandalar-build/macos/Shandalar.app
 ```

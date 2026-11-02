@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Development scenarios and battle baselines; never the player's profile.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 . tools/banner.sh
 . tools/runtime.sh
 case "${1:-}" in
   -V|--version) shandalar_version_line expansion_lab.sh .; exit 0;;
   -h|--help) cat <<'HELP'
 Expansion Lab — reusable adventure-region development checks
-  ./expansion_lab.sh --out NEW_DIRECTORY [--region refuge|beacon_test]
+  ./tools/expansion_lab.sh --out NEW_DIRECTORY [--region refuge|beacon_test]
     [--seeds 5,37,48271] [--trips 3] [--games 0] [--lives 10,20,30]
 
 Each seed checks travel, terrain, objectives, saves, mana links and dormant

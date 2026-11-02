@@ -144,7 +144,7 @@ Evidence is retained outside Git in
   120-game large-seed sweep with two worker processes, exit 0, no fallback,
   and byte-identical fingerprints to the source serial run. A temporary
   `override.cfg` isolated its profile; that override was removed afterward.
-- Native `./duel_soak.sh --rules modern`: six completed duels, seeds 1000,
+- Native `./tools/duel_soak.sh --rules modern`: six completed duels, seeds 1000,
   1037 and 1074 in demo and human-fuzz modes, exit 0. The human runs made
   119, 73 and 102 clicks, including the live options path; the wrapper found
   no ERROR/WARNING/STALL lines.

@@ -32,7 +32,7 @@ your own copy at runtime (see *The skin*).
 
 *A note for anyone working in the source checkout:* a dev run of this
 project has the same project name, so its `user://` is the same directory
-— it reads and writes YOUR files. `run_tests.sh` and `duel_soak.sh`
+— it reads and writes YOUR files. `run_tests.sh` and `tools/duel_soak.sh`
 therefore point `XDG_DATA_HOME` at a scratch directory of their own
 (`SHANDALAR_TEST_DATA_HOME`) on Linux. On macOS, Godot ignores XDG; the
 wrappers instead select a separate `Shandalar Integration Tests` profile using their

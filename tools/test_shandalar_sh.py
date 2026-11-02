@@ -42,7 +42,7 @@ QUERY = "DeckLab/lab_query.sh"
 VERBS = {"lab": "DeckLab/deck_lab.sh", "autodeck": "DeckLab/auto_deck_cli.sh",
          "check | packs | cards": 'DeckLab/lab_query.sh "$verb"',
          "query": "DeckLab/lab_query.sh", "referee": "DeckLab/referee.sh",
-         "convert": "./deck_convert.sh", "mcp": "python3 tools/shandalar_mcp.py"}
+         "convert": "./tools/deck_convert.sh", "mcp": "python3 tools/shandalar_mcp.py"}
 
 
 def run(argv, **extra_env):

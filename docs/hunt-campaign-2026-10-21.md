@@ -392,7 +392,7 @@ chains of `./run_tests.sh -gselect=…`, each with its own test data folder:
   `test_bands` and `test_legend`, match no script; the banding and legend
   tests are in the hunt, ruling, attack-bands, campaign-fix and fidelity
   groups.)
-- **The soaks** — `./duel_soak.sh` and `./duel_soak.sh --rules fifth`,
+- **The soaks** — `./tools/duel_soak.sh` and `./tools/duel_soak.sh --rules fifth`,
   isolated: six duels each finished, exit 0, no `ERROR:` line.
 - **The tools** — `python3.12 -m unittest discover` in `tools/`: 821
   tests, one failure (below), repaired; `test_shandalar_mcp` again: 92

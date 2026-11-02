@@ -500,7 +500,7 @@ def player_tool_files(root: Path = ROOT) -> dict[str, Path]:
     files = {"tools/" + name: root / "tools" / name for name in TOOLS}
     files.update({name: root / name for name in BUILDER_DATA})
     files["CARD-ART-AND-PACKS.md"] = root / "docs/card-art-and-packs.md"
-    files["agentic-playgude-mtg.md"] = root / "agentic-playgude-mtg.md"
+    files["tools/agentic-playgude-mtg.md"] = root / "tools/agentic-playgude-mtg.md"
     files.update(bundled_deck_files(root))
     return files
 

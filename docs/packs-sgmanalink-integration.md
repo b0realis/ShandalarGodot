@@ -146,8 +146,8 @@ From the integration checkout:
 ```sh
 ./run_tests.sh
 python3 -m unittest discover -s tools -p 'test_*.py'
-SOAK_HEADLESS=1 ./duel_soak.sh --rules modern
-SOAK_HEADLESS=1 ./duel_soak.sh --rules fifth
+SOAK_HEADLESS=1 ./tools/duel_soak.sh --rules modern
+SOAK_HEADLESS=1 ./tools/duel_soak.sh --rules fifth
 ./build_release.sh --macos --out ../shandalar-build/packs-sgmanalink-integration/macos
 ```
 

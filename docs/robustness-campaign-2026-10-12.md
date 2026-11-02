@@ -173,7 +173,7 @@ it opens the menu even after typing in the Deck Builder's search.
   the test now stops polling a stream once it has sent.)
 - Python: `python3 -m unittest discover -s tools -p 'test_*.py'` — 676 tests,
   OK (15 skipped).
-- Boot smoke clean; `./duel_soak.sh` and `./duel_soak.sh --rules fifth` — 6
+- Boot smoke clean; `./tools/duel_soak.sh` and `./tools/duel_soak.sh --rules fifth` — 6
   duels each, no ERROR, WARNING or STALL.
 - Each fixer's own runs: the related existing scripts for every change (for
   example 326 scripts / 6,208 tests around the state-based actions, 185 duel

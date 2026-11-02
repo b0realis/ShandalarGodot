@@ -107,7 +107,7 @@ LATEST_PROTOCOL = PROTOCOL_VERSIONS[-1]
 DOOR_NAME = "shandalar.sh"
 WINDOWS_DOOR = "Shandalar.console.exe"
 CONTRACT = "AGENTS.md"
-PLAY_GUIDE = "agentic-playgude-mtg.md"
+PLAY_GUIDE = "tools/agentic-playgude-mtg.md"
 WORKSPACE = "workspace"
 # What a deck file is called — the suffixes the door reads a deck from.
 DECK_SUFFIXES = (".deck", ".dec", ".dck", ".txt")
@@ -3104,7 +3104,7 @@ class Server:
                           flag="chapter")
         path = self.root / PLAY_GUIDE
         if not path.is_file():
-            raise refusal("play_guide", "path", f"{PLAY_GUIDE} is not beside the door",
+            raise refusal("play_guide", "path", f"{PLAY_GUIDE} is missing from the installation",
                           exit_code=1, path=str(path))
         text = path.read_text(encoding="utf-8")
         if chapter is not None:

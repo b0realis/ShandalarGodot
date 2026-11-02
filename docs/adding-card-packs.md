@@ -7,7 +7,7 @@ an arbitrary new set ZIP into an old executable cannot add mechanics.
 
 Use this guide with [CONTRIBUTING](../CONTRIBUTING.md),
 [adding a card](adding-cards.md), [architecture](ARCHITECTURE.md),
-[fair play](fair-play.md), and [provenance](../Provenance.md). Read those
+[fair play](fair-play.md), and [provenance](../README.md#provenance). Read those
 before changing the rules engine or AI. This is a development checklist, not
 a promise that every Scryfall set can be supported without engine changes.
 

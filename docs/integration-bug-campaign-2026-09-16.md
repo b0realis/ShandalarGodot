@@ -99,8 +99,8 @@ From the integration checkout:
 ```sh
 ./run_tests.sh
 python3 -m unittest discover -s tools -p 'test_*.py'
-SOAK_HEADLESS=1 ./duel_soak.sh --rules modern --seeds 8100,8137,8174
-SOAK_HEADLESS=1 ./duel_soak.sh --rules fifth --seeds 8100,8137,8174
+SOAK_HEADLESS=1 ./tools/duel_soak.sh --rules modern --seeds 8100,8137,8174
+SOAK_HEADLESS=1 ./tools/duel_soak.sh --rules fifth --seeds 8100,8137,8174
 ./build_release.sh --macos --out ../shandalar-build/integration-bug-campaign-2026-09-16/macos
 ```
 

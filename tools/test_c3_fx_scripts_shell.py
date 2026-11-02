@@ -97,7 +97,11 @@ class HelpFromAnotherFolderTest(unittest.TestCase):
 
     def test_each_entry_point_answers_help_from_any_folder(self):
         cases = (("shandalar.sh", ["--help"]), ("shandalar.sh", []),
-                 ("build_release.sh", ["--help"]), ("tools/lan_smoke.sh", ["--help"]))
+                 ("build_release.sh", ["--help"]), ("tools/lan_smoke.sh", ["--help"]),
+                 ("tools/expansion_lab.sh", ["--help"]),
+                 ("tools/expansion_lab.sh", ["--version"]),
+                 ("tools/deck_convert.sh", ["--version"]),
+                 ("tools/duel_soak.sh", ["--version"]))
         for script, args in cases:
             home = self.help_of(["./" + script, *args], ROOT)
             self.assertEqual(home.returncode, 0, home.stderr)
@@ -256,7 +260,7 @@ class SoakInterruptTest(unittest.TestCase):
             # background job of a script inherits it IGNORED, the script
             # cannot trap a signal ignored on entry, and this Ctrl-C did
             # nothing — the test timed out and read as flaky under load.
-            proc = subprocess.Popen(["bash", str(ROOT / "duel_soak.sh"), "--count", "1"],
+            proc = subprocess.Popen(["bash", str(ROOT / "tools/duel_soak.sh"), "--count", "1"],
                                     cwd=str(ROOT), env=env, stdin=subprocess.DEVNULL,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     start_new_session=True,

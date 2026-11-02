@@ -245,4 +245,5 @@ checked into the source repository. No release or online push was performed.
 [Scryfall Homelands catalogue](https://scryfall.com/sets/hml), its checked-in
 Oracle snapshot and [creature-type catalogue](https://api.scryfall.com/catalog/creature-types).
 Forge cross-check details and the original procedural UI artwork are recorded
-in [Provenance](../Provenance.md) and the [art inventory](../game/art/README.md).
+in the [historical source audit](https://github.com/b0realis/ShandalarGodot/blob/04305db4599868acdcc8c84b698982188c9e4030/Provenance.md#homelands-pack-4-2026-09-15)
+and the [art inventory](../game/art/README.md).

@@ -41,7 +41,7 @@ func _touch(key: String) -> void:
 ## same way and then takes it out of the file, so what the test reads is
 ## the default and not whatever this machine happens to hold.
 ##
-## It is not hypothetical. `./duel_soak.sh` drives a FUZZED human seat
+## It is not hypothetical. `./tools/duel_soak.sh` drives a FUZZED human seat
 ## through the live duel screen, which includes this panel, and one soak
 ## on 2026-09-03 left `PlayerTerritoryColor="Red"` in the settings file —
 ## after which "the original ships on Deck color" failed on that machine

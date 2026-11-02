@@ -100,7 +100,7 @@ and the 1997 feeling. Optional additions should leave that core intact.
 
 **Port, don't invent.** The original game's decisions guide the remake;
 quality-of-life changes and rules simplifications are explicit. The
-[source history](Provenance.md) and [fidelity ledger](docs/simplified-cards.md)
+[source history](#provenance) and [fidelity ledger](docs/simplified-cards.md)
 keep those choices open to inspection.
 
 **Strong play. Fair information.** Apprentice, Magician, Sorcerer and Wizard
@@ -142,7 +142,7 @@ See the [DeckLab manual](DeckLab/README.md) for commands and examples.
 
 **Play MTG with your favorite agent.** The bundled **MCP server** exposes deck
 browsing, deck tools and live duel decisions. The [interface guide](AGENTS.md)
-covers setup; the [agent play guide](agentic-playgude-mtg.md) teaches rules,
+covers setup; the [agent play guide](tools/agentic-playgude-mtg.md) teaches rules,
 fair-information play, combat and deck-building strategy.
 
 ## Game records: MPN
@@ -169,12 +169,21 @@ See the [roadmap](docs/ROADMAP.md#major-features-for-the-future) and
 
 ## Build and contribute
 
-Use **Godot 4.7.2**. Start with [DEVELOPMENT.md](DEVELOPMENT.md) and
-[CONTRIBUTING.md](CONTRIBUTING.md) for setup and focused tests;
+Use **Godot 4.7.2**. Start with the combined
+[development and contribution guide](CONTRIBUTING.md) for setup and focused tests;
 [release builds](docs/release-builds.md) require export templates.
 The [architecture](docs/ARCHITECTURE.md) and [code map](docs/CODE_MAP.md)
 explain the source. Bug reports should include platform, version, decks and
 seed where available.
+
+## Provenance
+
+The 1997 manual, help and original files guide the remake; decompilations
+help verify their behavior. s30, mage-go, Manalink and Forge inform the
+implementation; Scryfall supplies card data. Intentional changes are labeled
+in code. [Detailed source audits](https://github.com/b0realis/ShandalarGodot/blob/04305db4599868acdcc8c84b698982188c9e4030/Provenance.md)
+remain in Git history; [asset credits](game/art/README.md) and third-party
+licences stay with the files.
 
 ## Thanks
 
@@ -193,7 +202,7 @@ Have fun, build something unexpected, and enjoy the duels.
 
 Code and project-created assets: **[GPL-3.0](LICENSE)**.
 Third-party components and fonts retain their own licences; see the
-[asset inventory](game/art/README.md) and [provenance](Provenance.md).
+[asset inventory](game/art/README.md) and [provenance](#provenance).
 
 Every font shipped with the game is an open-source font under the
 [SIL Open Font License 1.1](game/art/fonts/OFL.txt): Spectral for the text

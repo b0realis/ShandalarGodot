@@ -141,7 +141,7 @@ DECK ARGUMENTS ARE PATHS, NOT DECK NAMES
   DECK is a .deck/.dec file — the community (Dojo/Apprentice) format:
   '4 Lightning Bolt' lines, '//' comments, '4x' counts, 'SB:' sideboard
   lines — or an ORIGINAL MicroProse .dck file (used interchangeably;
-  convert between them with ./deck_convert.sh). Sideboards parse and
+  convert between them with ./tools/deck_convert.sh). Sideboards parse and
   validate; the AI only SWAPS with them in a best-of-N match with
   `--sideboard on` (see DUEL SETTINGS). LIST is comma-separated deck
   files; DIR is a directory whose *.deck/*.dec/*.dck files become the
@@ -2833,7 +2833,7 @@ func _load_deck(path: String, format := "") -> DeckList:
 			# waiting for the card. Neither is obvious from "unknown
 			# card", and the converter is deliberately lenient.
 			printerr("  the Lab plays IMPLEMENTED cards only, so a deck may parse")
-			printerr("  everywhere else and still be refused here. ./deck_convert.sh")
+			printerr("  everywhere else and still be refused here. ./tools/deck_convert.sh")
 			printerr("  converts such a deck without complaint; editing the list is")
 			printerr("  the fix for a misspelling (names must be exact and printed).")
 			_refuse(2, "problems in '%s': %s" % [candidate, "; ".join(

@@ -1,6 +1,6 @@
 extends SceneTree
 ## DECK CONVERT — command-line converter between the deck formats the
-## project speaks. Run via ./deck_convert.sh; formats inferred from file
+## project speaks. Run via ./tools/deck_convert.sh; formats inferred from file
 ## extensions:
 ##   .deck / .dec  the community (Dojo/Apprentice) text format —
 ##                 '4 Card Name' lines, '//' comments, 'SB:' sideboard
@@ -38,16 +38,16 @@ Deck Convert — translate between Shandalar deck formats
 ========================================================
 
 USAGE
-  ./deck_convert.sh INPUT OUTPUT
-  ./deck_convert.sh -h | --help
+  ./tools/deck_convert.sh INPUT OUTPUT
+  ./tools/deck_convert.sh -h | --help
 
   INPUT/OUTPUT formats come from their extensions:
     .deck  .dec   community text format ('4 Lightning Bolt', SB: lines)
     .dck           original MicroProse 1997 format
 
 EXAMPLES
-  ./deck_convert.sh "Decks - Original/0010.dck" lord_of_fate.dec
-  ./deck_convert.sh my_brew.deck my_brew.dck
+  ./tools/deck_convert.sh "Decks - Original/0010.dck" lord_of_fate.dec
+  ./tools/deck_convert.sh my_brew.deck my_brew.dck
 
 NOTES
   - Conversion never requires cards to be implemented in the engine.

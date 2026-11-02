@@ -13,7 +13,7 @@ ShandalarGodot-specific notes were checked against the source at **0.50.5,
 3 October 2026**. A later build, host policy, card pack or custom rules preset
 may differ. Inspect the current match rather than treating these notes as an API.
 
-The current tool contract is [AGENTS.md](AGENTS.md). MCP clients can read this
+The current tool contract is [AGENTS.md](../AGENTS.md). MCP clients can read this
 guide through `play_guide` (optionally one `chapter`, 1–16) or the
 `shandalar://play-guide` resource. Relative source/documentation links below
 refer to a checkout; for files absent from a packaged build, consult the
@@ -97,7 +97,7 @@ At each decision, ask:
 
 ShandalarGodot's standard opponents are designed to play strongly **without
 cheating**. Agents should uphold the same contract. See
-[Strong play. Fair information.](docs/fair-play.md).
+[Strong play. Fair information.](../docs/fair-play.md).
 
 ### Allowed knowledge
 
@@ -234,7 +234,7 @@ Repeating an identical invalid action indefinitely is not progress.
 ### Driving a duel through the referee
 
 The MCP door's `referee_*` tools put a seat at a table the engine referees;
-[AGENTS.md](AGENTS.md) carries the schemas. Habits that keep that seat honest:
+[AGENTS.md](../AGENTS.md) carries the schemas. Habits that keep that seat honest:
 
 - **`action: "default"` is an answer, not a view.** It submits the pilot's own
   choice for the open decision and the game moves on. To look before deciding,
@@ -287,7 +287,7 @@ The MCP door's `referee_*` tools put a seat at a table the engine referees;
   through `tools/shandalar_decide.py`: each decision is a compact observation
   and a numbered list of complete legal actions — `cast:c12->opp`,
   `attack:add:c7`, `block:c4->c9` — answered with one number. The habits of
-  this guide still decide which number; [AGENTS.md](AGENTS.md), "Decision
+  this guide still decide which number; [AGENTS.md](../AGENTS.md), "Decision
   models", has the lines, the menu and the observation's fields.
 
 ### Network and UI considerations
@@ -757,7 +757,7 @@ divides an attacker's damage when a banding creature is among the blockers
 band it blocked (CR 702.22j). The engine asks the right seat; its default
 answer puts the whole packet on the cheapest body, so read the assignment
 prompt when it is offered (`damage` with `free_order`) and consult the
-[mechanics notes](docs/mechanics.md), not an assumed tabletop control that
+[mechanics notes](../docs/mechanics.md), not an assumed tabletop control that
 the adapter has not exposed.
 
 Do not silently import modern keywords into an older pool. This engine's
@@ -793,7 +793,7 @@ rules object defaults to modern rules without burn, and callers can override
 settings. A preset name is therefore not enough evidence about a running duel.
 
 These are the important implemented switches; the authoritative definitions
-are in [RulesOptions](engine/rules_options.gd).
+are in [RulesOptions](../engine/rules_options.gd).
 
 | Setting | What an agent must change in its reasoning |
 |---|---|
@@ -829,7 +829,7 @@ displaces older world permanents even with different names. Playing one can
 therefore remove an opposing world enchantment without targeting it. These
 are state-based consequences, not ordinary destroy spells to counter after
 the new permanent has already entered. See the
-[engine state checks](engine/mtg_game.gd) for the current implementation.
+[engine state checks](../engine/mtg_game.gd) for the current implementation.
 
 ### Opening hands: Paris, not London
 
@@ -837,8 +837,8 @@ The current duel offers a **Paris-style mulligan**: shuffle the entire hand
 back and draw one fewer card each time. Keeping ends that seat's mulligans.
 This is not the modern tabletop London procedure of repeatedly drawing seven
 and then putting cards on the bottom. Nor is it a free redraw limited to
-all-land or no-land hands. See [opening-hand flow](game/duel/opening_hand.gd)
-and the [engine's mulligan implementation](engine/mtg_game.gd).
+all-land or no-land hands. See [opening-hand flow](../game/duel/opening_hand.gd)
+and the [engine's mulligan implementation](../engine/mtg_game.gd).
 
 Evaluate a starting hand as a playable plan:
 
@@ -898,8 +898,8 @@ eligible set can be a valid result, not evidence that the interface is broken.
 ### Implemented card behavior is not unlimited tabletop coverage
 
 Some unusual cards have explicit digital adaptations. Consult the current
-[simplified-card ledger](docs/simplified-cards.md) and
-[mechanics coverage](docs/mechanics.md) when an interaction is unusual. Do not
+[simplified-card ledger](../docs/simplified-cards.md) and
+[mechanics coverage](../docs/mechanics.md) when an interaction is unusual. Do not
 invent a subgame, dexterity test, keyword or choice absent from the engine.
 
 If runtime behavior conflicts with expected rules, record the discrepancy as
@@ -1196,8 +1196,8 @@ never get the opportunity to resolve.
    separately from measuring playing strength.
 
 The shipped Portal teaching lists and in-game Help are useful starting points;
-see the [Portal starters](docs/portal-starters.md) and
-[Portal Second Age deck notes](docs/portal-second-age-decks.md). Simpler cards
+see the [Portal starters](../docs/portal-starters.md) and
+[Portal Second Age deck notes](../docs/portal-second-age-decks.md). Simpler cards
 reduce the number of simultaneous concepts without making good combat trivial.
 
 ### Review decisions, not just results
@@ -1282,22 +1282,22 @@ an accepted engine action as proof that all tabletop rules were followed.
 
 Useful project references:
 
-- [Tool contract](AGENTS.md): actual MCP discovery, referee decisions, action
+- [Tool contract](../AGENTS.md): actual MCP discovery, referee decisions, action
   schemas, refusals and session behavior. Use this for the interface, and this
   guide for deciding which legal play is good.
-- [Fair-information design](docs/fair-play.md): allowed knowledge and the separate
+- [Fair-information design](../docs/fair-play.md): allowed knowledge and the separate
   Unfair challenge.
-- [Rules options](engine/rules_options.gd): supported rule switches and presets.
-- [Mechanics coverage](docs/mechanics.md) and
-  [simplified-card ledger](docs/simplified-cards.md): implementation details and
+- [Rules options](../engine/rules_options.gd): supported rule switches and presets.
+- [Mechanics coverage](../docs/mechanics.md) and
+  [simplified-card ledger](../docs/simplified-cards.md): implementation details and
   known adaptations. Some narrative entries describe earlier implementation
   states; the active build and focused tests settle discrepancies.
-- [Deck format implementation](engine/deck_format.gd) and
-  [Deck Builder model](game/deck_builder/deck_model.gd): current local validation.
-- [LAN tournaments](docs/sgmanalink-tournaments.md): host policies and event flow.
-- [Booster Draft](docs/booster-draft.md) and
-  [draft replay specification](docs/draft-replay-v1.md): pools and verification.
-- [Deck Lab manual](DeckLab/README.md): reproducible automated deck experiments.
+- [Deck format implementation](../engine/deck_format.gd) and
+  [Deck Builder model](../game/deck_builder/deck_model.gd): current local validation.
+- [LAN tournaments](../docs/sgmanalink-tournaments.md): host policies and event flow.
+- [Booster Draft](../docs/booster-draft.md) and
+  [draft replay specification](../docs/draft-replay-v1.md): pools and verification.
+- [Deck Lab manual](../DeckLab/README.md): reproducible automated deck experiments.
 
 Primary external learning references:
 
@@ -1592,7 +1592,7 @@ a tournament deck between rounds unless the event permits it.
 ShandalarGodot's Booster Draft workflow currently deals a **sealed-style pool**
 for timed construction; it is not multiplayer pick-and-pass drafting. Its packs
 use defined rarity slots and shared eligible sheets, not a claim to reproduce
-every historical factory collation. See the [draft guide](docs/booster-draft.md).
+every historical factory collation. See the [draft guide](../docs/booster-draft.md).
 
 For pool construction:
 
@@ -1619,7 +1619,7 @@ looks favorable and then present it as the original event deal.
 
 ### 16.12 Test the deck, not your optimism
 
-Use real play and the [Deck Lab](DeckLab/README.md) to test assumptions. Start
+Use real play and the [Deck Lab](../DeckLab/README.md) to test assumptions. Start
 with its current help rather than inventing switches:
 
 ```sh

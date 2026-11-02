@@ -538,7 +538,7 @@ func test_the_one_door_and_the_launchers() -> void:
 	var door := FileAccess.get_file_as_string("res://shandalar.sh")
 	for line in ['lab) exec DeckLab/deck_lab.sh "$@" ;;', 'autodeck) exec DeckLab/auto_deck_cli.sh "$@" ;;',
 			'check | packs | cards) exec DeckLab/lab_query.sh "$verb" "$@" ;;',
-			'convert) exec ./deck_convert.sh "$@" ;;', '{"error":{"tool":"shandalar","exit":2']:
+			'convert) exec ./tools/deck_convert.sh "$@" ;;', '{"error":{"tool":"shandalar","exit":2']:
 		assert_true(door.contains(line), line)
 	assert_true(FileAccess.file_exists("res://DeckLab/lab_query.sh"))
 	assert_true(FileAccess.get_file_as_string("res://DeckLab/lab_query.sh").contains(

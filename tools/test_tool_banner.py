@@ -54,7 +54,7 @@ PY_TOOLS = ["build_card_packs", "fetch_card_art", "fetch_cards",
             "upscale_skin"]
 
 ## Every shell tool, relative to the repo root.
-SH_TOOLS = ["build_release.sh", "deck_convert.sh", "duel_soak.sh",
+SH_TOOLS = ["build_release.sh", "tools/deck_convert.sh", "tools/duel_soak.sh",
             "run_tests.sh", "DeckLab/deck_lab.sh", "DeckLab/auto_deck_cli.sh"]
 
 ## THE TOOLS THAT ARRIVED WITH THE NUMBERED CARD PACKS. They are NOT in
@@ -91,8 +91,8 @@ NO_HINT = ["mtg_assets"]
 ## the .gd it forwards to, so both files count as its source.
 SH_HINT_SOURCE = {
     "build_release.sh": ["build_release.sh"],
-    "deck_convert.sh": ["deck_convert.sh", "tools/deck_convert.gd"],
-    "duel_soak.sh": ["duel_soak.sh"],
+    "tools/deck_convert.sh": ["tools/deck_convert.sh", "tools/deck_convert.gd"],
+    "tools/duel_soak.sh": ["tools/duel_soak.sh"],
     "run_tests.sh": ["run_tests.sh"],
 }
 
@@ -947,9 +947,9 @@ class RuntimeContractTest(unittest.TestCase):
     def test_every_wrapper_refuses_a_missing_explicit_godot(self):
         commands = {
             "run_tests.sh": ["-gselect=test_game_paths.gd"],
-            "duel_soak.sh": ["--help"],
+            "tools/duel_soak.sh": ["--help"],
             "build_release.sh": ["--macos"],
-            "deck_convert.sh": ["--help"],
+            "tools/deck_convert.sh": ["--help"],
             "DeckLab/deck_lab.sh": ["--help"],
             "DeckLab/auto_deck_cli.sh": ["--help"],
         }
@@ -965,7 +965,7 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_soak_help_propagates_an_engine_failure(self):
         proc = subprocess.run(
-            ["bash", "duel_soak.sh", "--help"], cwd=ROOT,
+            ["bash", "tools/duel_soak.sh", "--help"], cwd=ROOT,
             capture_output=True, timeout=10,
             env=env_without_optouts(GODOT="/usr/bin/false"))
         self.assertEqual(proc.returncode, 1)

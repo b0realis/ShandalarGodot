@@ -1,5 +1,5 @@
 # The gate, on every push and pull request — the release-gate commands of
-# CONTRIBUTING.md (Commands) and DEVELOPMENT.md (The gate), on GitHub's
+# CONTRIBUTING.md (Commands), on GitHub's
 # runners:
 #
 #   ./run_tests.sh              the GUT suite, here dealt over four runners

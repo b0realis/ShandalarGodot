@@ -786,7 +786,7 @@ func test_soak_floating_mana_is_not_a_permanent_to_click() -> void:
 
 ## A REPORTING TOOL MUST NOT CHANGE THE GAME IT REPORTS ON.
 ##
-## `./duel_soak.sh` drives a FUZZED human seat through the live duel
+## `./tools/duel_soak.sh` drives a FUZZED human seat through the live duel
 ## screen, and that screen carries the Dueling Options panel — so a run
 ## can flip any option the player owns. One did on 2026-09-03: a soak left
 ## `PlayerTerritoryColor="Red"` in `user://settings.cfg`, which changed

@@ -160,7 +160,7 @@ its own section below.
   `size` on a full-rect node, which Godot warns about once per duel;
   the assignment was redundant (the anchors preset had already resized
   it) and is gone. Ten duels now finish with zero errors and zero
-  warnings. The probe is now `./duel_soak.sh` (`tools/duel_soak.gd`),
+  warnings. The probe is now `./tools/duel_soak.sh` (`tools/duel_soak.gd`),
   and since later that day it also plays seat 0 as a HUMAN seat driven
   by a clicker that goes through the screen's own input paths — the
   targeting cursor, the prompts, the hand window — so those are soaked
@@ -2202,7 +2202,7 @@ instrumentation above before anyone touches a number.
 
 ### Gates
 
-Suite 250 scripts / 4,376 tests, exit 0. `./duel_soak.sh` green (`SOAK
+Suite 250 scripts / 4,376 tests, exit 0. `./tools/duel_soak.sh` green (`SOAK
 done`, 6 duels, exit 0). `matchups.csv` for the headline run is
 byte-identical at `--jobs 1 --procs 1`, at the default, and at `--jobs 8
 --procs 4`.
@@ -4596,7 +4596,7 @@ The sweep fixed its real findings (`tests/cards/test_fidelity_2026_09_02_sweep.g
 
 ### Noted by the 2026-09-02 test/tool-wrapper sweep — verified, left
 
-The sweep fixed what it owned (`run_tests.sh` now times out and fails on any `ERROR:` line, a risky test or a leak; `duel_soak.sh` keeps the .gd's exit codes and refuses non-numbers; `tools/duel_soak.gd` gained `--rules` and a "never started" stall; the Deck Lab exits 1 on a crashed or unwritten run and refuses `--seed abc`, `--best-of 1 --sideboard on` and a gauntlet that contains its own deck under test; the rules preset writes the settings file once). One coverage item it left:
+The sweep fixed what it owned (`run_tests.sh` now times out and fails on any `ERROR:` line, a risky test or a leak; `tools/duel_soak.sh` keeps the .gd's exit codes and refuses non-numbers; `tools/duel_soak.gd` gained `--rules` and a "never started" stall; the Deck Lab exits 1 on a crashed or unwritten run and refuses `--seed abc`, `--best-of 1 --sideboard on` and a gauntlet that contains its own deck under test; the rules preset writes the settings file once). One coverage item it left:
 
 - **The soak's `HumanClicker` (`tools/duel_soak.gd`) never reaches five of the human seat's paths.** It never presses number keys or the overlay's own buttons (it calls `duel._on_choice_option` directly, so `OriginalDialog.choice_line` wiring is only built and destroyed); never clicks a chain ability (`_click_ref` uses `_try_take_target`, never `_on_chain_ability_clicked`); never declares a many-to-one block (`_tick_blockers` is one attacker per blocker); never opens the graveyard (it only closes it); and never opens the territory menu, the concede dialog or the hand toggle. Each is a small addition to the clicker's tick, gated on the seeded RNG so a failure still replays; the STALL clock would already catch an overlay that opened with no labels.
 
@@ -4718,7 +4718,7 @@ went LIVE with it. Pinned by `tests/ui/test_casting_flow.gd` and
 **PAYING is only ever entered while the cost is still REACHABLE** from
 what the seat has untapped (`DuelScreen._pending_is_reachable`): a spell
 the player simply cannot afford is refused in the engine's own words
-exactly as before. That rule exists because `duel_soak.sh` found the
+exactly as before. That rule exists because `tools/duel_soak.sh` found the
 alternative — its fuzzer clicks an unaffordable card one try in ten, sat
 in the mode, and tripped the 240s stall detector. The soak's `HumanClicker`
 learned the mode too.
@@ -4971,7 +4971,7 @@ declared empty is not held a second time at its end. Pinned by
 `..._is_a_dot_the_combat_bar_answers_for`, renamed for what it now says).
 
 **THE DEV TREE WRITES THE PLAYER'S PROFILE, and that is why a manual
-deletion did not stick.** `run_tests.sh`, `duel_soak.sh` and every tool
+deletion did not stick.** `run_tests.sh`, `tools/duel_soak.sh` and every tool
 run in this checkout share `user://` with the exported game — same project
 name, same `app_userdata/Shandalar`. Two things were observed on
 2026-09-04: `tests/ui/test_phase_stops.gd` writes
@@ -4985,7 +4985,7 @@ rows deleted behind its back — `hand_stack_pos` was seen moving from
 chosen `Portrait1` and their dragged hand-window position were *deleted
 outright* by a third run.
 
-**FIXED the same day.** `run_tests.sh` and `duel_soak.sh` now export
+**FIXED the same day.** `run_tests.sh` and `tools/duel_soak.sh` now export
 `XDG_DATA_HOME` (`$TMPDIR/shandalar-test-data`, overridable with
 `SHANDALAR_TEST_DATA_HOME`), which moves `user://` out of
 `~/.local/share/godot/app_userdata/Shandalar` for every run they start.
@@ -5109,7 +5109,7 @@ asks it from the moment a blocker is in hand until it is aimed.
   declares. One extra click, never a lost block. Refusing outright was the
   other candidate and is worse: a Two-Headed Giant of Foriys with no
   second attacker to take would never be able to leave the step, which is
-  a hung duel and exactly what `duel_soak.sh` exists to catch.
+  a hung duel and exactly what `tools/duel_soak.sh` exists to catch.
 
 **WHY 4089 TESTS DID NOT CATCH IT.** Two blind spots, and they are worth
 naming exactly rather than in general.
@@ -9414,7 +9414,7 @@ click in draw phase."*
   re-running); `test_engine_additions.gd` 50 → 59; the casting neighbours
   green (`test_casting_flow` 20/20, `test_tutor_payment` 2/2,
   `test_x_dialog` 18/18, `test_duel_screen` 57/57, `test_stack_hand`
-  47/47 and a dozen more); `./duel_soak.sh --mode human --count 6` clean.
+  47/47 and a dozen more); `./tools/duel_soak.sh --mode human --count 6` clean.
 
 ## THE FIREBREATHER THAT NEVER SWUNG (2026-09-09) — measured, and the largest single knob yet
 
@@ -12221,7 +12221,7 @@ family really is set in one face. The Python side is `tools/tool_banner.py`, the
 shell side `tools/banner.sh`, and both keep the Lab's rule exactly: **stderr, and
 only when stderr is a terminal.** That rule is not decoration policy, it is
 correctness — `skin_catalogue.py --stdout` IS the catalogue, `build_release.sh`'s
-stdout names the files a release is made of, and `run_tests.sh` and `duel_soak.sh`
+stdout names the files a release is made of, and `run_tests.sh` and `tools/duel_soak.sh`
 grep their own logs. `tool > log 2>&1` gets nothing, without anyone having to
 remember a flag.
 
@@ -12435,7 +12435,7 @@ punctuation/case variants and ordinary names that must not move. The four
 tests now pass all 64 assertions, exit 0.
 
 No rules, AI, card data or export preset changed. The platform contract is
-now explicit in DEVELOPMENT.md: Linux/macOS/Windows remain core targets,
+now explicit in CONTRIBUTING.md: Linux/macOS/Windows remain core targets,
 and other Godot exports stay possible. Full verification and the unproven
 follow-up candidates are recorded in
 [`bug-hunt-2026-09-13.md`](bug-hunt-2026-09-13.md).
@@ -12443,7 +12443,7 @@ follow-up candidates are recorded in
 ## 2026-09-13 — Four core release targets, including the existing Web release
 
 Owner clarification: "we have a web release also. Add it to the mix".
-Windows, Linux, macOS and Web are all core release targets. DEVELOPMENT.md
+Windows, Linux, macOS and Web are all core release targets. CONTRIBUTING.md
 now states this explicitly; Web is no longer described as just an optional
 export. Its browser checks belong alongside native build/runtime checks.
 This is a documentation-only clarification; no export preset or runtime
@@ -12518,7 +12518,7 @@ local skin and card-art packs; neither the old play app nor its baselines
 were overwritten. Evidence and the new app are outside Git under
 `../shandalar-build/deckbuilder-playtest-2026-09-13/`.
 
-Native live-duel smoke: `./duel_soak.sh --count 1 --rules modern --stall 45`
+Native live-duel smoke: `./tools/duel_soak.sh --count 1 --rules modern --stall 45`
 completed both seed-1000 modes, 19 turns in demo and 14 in human-fuzz with
 119 clicks; wrapper exit 0 and no ERROR/WARNING/STALL lines. This is a
 two-duel smoke check, not a new six-duel soak measurement. The final native
@@ -17667,7 +17667,7 @@ controller's Cancel closes it. Only a card already shown is ever read:
 a hidden hand cannot stay visible in the reader. Local computer play
 waits while a person reads; a table on the network plays on.
 
-**The play guide.** `agentic-playgude-mtg.md`, 1,605 lines in sixteen
+**The play guide.** `tools/agentic-playgude-mtg.md`, 1,605 lines in sixteen
 chapters: the rules, fair-information play, the turn and its timing
 windows, priority and the stack, mana, combat as a tactical problem,
 the game's own rules and older cards, a strategic role and the turn's
@@ -19668,7 +19668,7 @@ problems are in the main menu"*.
 - Tests: `tests/ui/test_upkeep_after_their_turn_2026_10_17.gd` (new: the
   unmarked upkeep passes itself, fails without the fix; a Stop there
   still holds), `tools/test_upscale_skin.py` (+1: the sandstone doubled,
-  never sent to the model, never reused). `./duel_soak.sh` green.
+  never sent to the model, never reused). `./tools/duel_soak.sh` green.
 
 ## 2026-10-17 — The hi-res skin is the 1997 skin's own files (0.50.31)
 
@@ -20520,7 +20520,7 @@ every finding, the rulings, the verification — is
   kept-socket close race, the transcript tail, ASCII on the wire.
 
 Gate: 555 scripts, **8,562/8,562 tests, 412,099 asserts**, exit 0 in
-521 s wall over 6 shards; Python 484 (8 skipped), exit 0; `duel_soak.sh`
+521 s wall over 6 shards; Python 484 (8 skipped), exit 0; `tools/duel_soak.sh`
 fifth and modern, 24 duels, clean.
 
 ## 2026-10-03 — The table the program hosts (0.50.6)
@@ -20624,7 +20624,7 @@ would reach for a card.
   {log}`) writes the journal the seat saw — every line of the game as
   the table told it — at the end, the record chapter 13 of the play
   guide reviews.
-- **The guide.** `agentic-playgude-mtg.md` chapter 3 "Driving a duel
+- **The guide.** `tools/agentic-playgude-mtg.md` chapter 3 "Driving a duel
   through the referee" (the lessons of the first game: `default` ACTS,
   read the printed rule before a Jihad, `attack_bands` only at
   declare-attackers, the `until` stops, `delta`, kept games, a table by

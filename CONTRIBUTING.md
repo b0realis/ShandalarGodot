@@ -1,431 +1,482 @@
 # Contributing to Shandalar
 
-A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
-`docs/ARCHITECTURE.md` first, `docs/CODE_MAP.md` to locate anything.
+The development and contribution guide for ShandalarGodot, a GPL-3.0 remake
+of MicroProse's 1997 *Magic: The Gathering*. Checked against **0.60.12** on
+**2 November 2026**. The version in `project.godot` is authoritative;
+published downloads can lag behind `main`.
 
-New to the project? `DEVELOPMENT.md` (repo root) is the orientation that
-comes before these rules: the folder tour and what may depend on what, the
-gate commands and their exit-code contracts, how a change is measured and
-refused here, and the traps that have already cost this project days. This
-file stays the authority on the rules themselves.
+Start here for setup, tests and contribution rules. Use the
+[architecture](docs/ARCHITECTURE.md) for design, the
+[code map](docs/CODE_MAP.md) to locate a file or class, and
+[provenance](README.md#provenance) before drawing conclusions from reference games.
 
-## Publication
+- [Get it running](#get-it-running)
+- [Source layout](#source-layout)
+- [Hard rules](#hard-rules)
+- [Making and measuring a change](#making-and-measuring-a-change)
+- [Commands and tests](#commands)
+- [Safe Godot runs](#commands-that-can-hang)
+- [Skins, card art and paths](#skins-card-art-and-paths)
+- [Gotchas](#gotchas)
+- [Publication](#publication)
+- [Current scope and further reading](#current-scope-and-further-reading)
 
-Owner policy (2026-09-20): every pushed change increments the LAST numeric
-version component in `project.godot` (for example, `0.40.3` -> `0.40.4`;
-the owner's term for this is a "minor version" bump). Group one coherent
-change and its verification before pushing; do not create or replace a
-release unless requested.
+## Get it running
 
-Keep commit subjects short and descriptive. Use a pseudonymous author and
-committer with a GitHub noreply address. Keep personal home paths, private
-email addresses and local tooling metadata out of tracked files. Ignore
-machine-local tooling through `.git/info/exclude`, not the shared ignore file.
-`tools/test_tracked_tree.py` holds the tree to that rule — every tracked
-file, binaries included (a font's names, a picture's text chunks), is read
-for ANY user's home folder in any spelling (`/home/<name>`, `/Users/<name>`,
-`C:\Users\<name>`), an email address or a tool vendor's name, with a short
-allow-list of the placeholders the docs use (2026-10-21), so a leak fails at
-the commit rather than at the upload — and to the CODE_MAP rule below.
+Use **Godot 4.7.2**, Bash and GNU `timeout` (`gtimeout` also works; on macOS,
+`brew install coreutils`). Packaging tools require **Python 3.10+**. Most
+Python tools use the standard library; skin upscaling additionally needs
+Pillow and a Real-ESRGAN runtime. Browser tests need Node, Playwright and a
+browser. Read each tool's help for its own dependencies.
+
+Run commands from the directory containing `project.godot`.
+The root keeps three entry points: `shandalar.sh` for the tool dispatcher,
+`build_release.sh` for builds and `run_tests.sh` for the test gate. Supporting
+scripts and the agent play guide live in `tools/`; Deck Lab's own launchers
+stay with its implementation in `DeckLab/`.
+`tools/runtime.sh` provides common runtime discovery:
+
+- Linux prefers the sibling `../tools/godot`, then `godot` on `PATH`.
+- macOS prefers `../tools/Godot.app/Contents/MacOS/Godot`, then `godot` on
+  `PATH`, then the sibling binary if no command is available. Check that
+  the sibling binary is native to the Mac.
+- An explicit `GODOT` overrides discovery. A missing explicit binary is an
+  error (exit 3), never an invitation to substitute another engine.
+
+The sibling tools directory is outside this repository; it is different
+from the tracked `tools/` directory. In a worktree, set the binary explicitly:
+
+```sh
+export GODOT=/path/to/Godot
+"$GODOT" --version
+"$GODOT" --editor --path .
+```
+
+Open the project and run it in Godot. An ordinary development run shares
+its player profile with the installed game; use the isolation recipe below
+for scripted probes. The game runs without imported art or a skin.
+
+For exports, copy `export_presets.cfg.example` to the ignored
+`export_presets.cfg` and configure the official export templates and local
+paths. Follow [release builds](docs/release-builds.md) for the target matrix,
+signing, packaging and verification. Export templates are not needed for
+normal editor play or headless engine tests.
+
+Keep shared code portable across Windows, Linux, macOS and Web. Handheld
+and Android targets have their own packaging requirements. A successful
+cross-export is not a native runtime test; Web must also run in a browser.
+
+## Source layout
+
+| Location | Purpose and boundary |
+|---|---|
+| `engine/` | Pure, headless MTG rules, card registry and computer players. `MtgGame` is the mutation surface. No dependency on `game/`. |
+| `cards/` | Card scripts composed from engine effects and abilities, plus catalogue data. Core sets load by default; numbered-pack implementations activate only with validated, enabled packs. ZIPs never supply executable card scripts. |
+| `game/` | Godot scenes and presentation: adventure, duels, deck builder, help, input, skins, LAN play and records. May use the engine and cards. |
+| `DeckLab/` | Headless duel simulation and experiments using the rules and card registry. No dependency on game scenes or a renderer. |
+| `decks/` | Bundled deck lists grouped by provenance, plus the committed `ratings.txt` ledger. [Deck provenance](docs/decks-1997.md) explains the groups. |
+| `tests/` | GUT regressions and shared fixtures. `tests/game_test.gd` supplies the `GameTest` harness. |
+| `tools/` | Build, import, packaging and measurement tools. Excluded from the game PCK; approved player tools are copied beside packaged games. |
+| `addons/gut/` | Vendored test framework. Keep framework changes separate from game changes. |
+| `assets/` | Local imported 1997 material and card art; not tracked. A fresh clone or worktree has none. |
+| `docs/` | Design, authoring guides, audits and release records. Use the code map rather than keeping another file census here. |
+| `branding/`, `pages/` | Project artwork and screenshots; the public getting-started site. |
+
+## Hard rules
+
+The rule numbers below are stable: source comments cite them.
+
+1. `engine/` and `cards/` stay pure: RefCounted only — never Node, scenes,
+   Input, or anything from `game/`. They must run headless.
+2. All game-state mutation goes through `MtgGame` helpers. Never move cards
+   between zone arrays or change life, damage or characteristics elsewhere.
+3. Action methods return `""` on success or a human-readable refusal string.
+   Player-level mistakes never assert or throw.
+4. One card per file in `cards/sets/<set>/`; filename = snake_case card name;
+   no `class_name` on card files. The header gives the name/cost/type, exact
+   Oracle text and implementation notes. Follow [adding cards](docs/adding-cards.md),
+   including its test-first rule.
+5. Rules code reads live characteristics: `cur_power`, `cur_toughness`,
+   `cur_keywords`, live types and colors. Printed `data.power` and similar
+   fields do not describe a permanent after effects have changed it.
+6. Every rules shortcut has a `SIMPLIFIED` comment at the implementation
+   and a matching entry in [simplified cards](docs/simplified-cards.md)
+   (card-scoped) or [the roadmap](docs/ROADMAP.md) (engine-wide).
+   The card-scoped form is `SIMPLIFIED (docs/simplified-cards.md, "Name"):`.
+   `tests/test_simplified_ledger.gd` checks the correspondence. When lifting
+   a shortcut, remove both marker and entry and add a regression for the
+   complete behavior. New files and classes get a row in `docs/CODE_MAP.md`.
+7. Duel-engine randomness goes through `MtgGame.rng`. Preserve deterministic
+   replay of the same seed and action sequence.
+8. Fair information is mandatory at all four standard difficulties.
+   Strategy may read its own registered deck and hand, public state, and
+   choices or reveals that a rule permits. Never inspect the opponent's
+   hidden hand or face-down identities, either library's secret order, or
+   RNG state to choose a move. This includes proposal generation,
+   evaluation, cache keys, speculative search and card-authored hints.
+   Add hidden-state substitution tests and public-change controls; see
+   [fair play](docs/fair-play.md) and `tests/ai/test_ai_fair_planning.gd`.
+   Only the separately constructed, explicitly opt-in `UnfairPlayer`
+   challenge may read the opponent's current hand. It is not an `AiProfile`
+   override or a global reveal; other information boundaries still apply.
+   Its runs are labeled and excluded from fair sweeps and Elo.
+
+Treat `CardData` and its composed ability/effect objects as shared,
+immutable definitions. Mutating an ability in a test changes it for later
+users of that registry entry. Replace instance lists with copied abilities
+when needed; `ActivatedAbility.shallow_copy()` and `discounted()` support
+this pattern.
+
+**No `static var` may hold a `CardData` or `CardInstance`.** Their Callables
+can outlive the scripts they reference during shutdown and corrupt the
+heap. Cache names or instance IDs instead. The `Lifecycle` autoload settles
+`ScreenWarmup` loads and clears the registry before shutdown; preserve that
+ordering. `CardRegistry.ensure_loaded()` joins an in-progress registry build.
+
+## Making and measuring a change
+
+### Fidelity and reproduction
+
+Read [provenance](README.md#provenance) first. Original 1997 artifacts outrank the
+decompilation, which outranks reimplementations. Label sourced behavior
+`[1997]`, deliberate conveniences `[QoL]`, and borrowed mechanisms `[s30]`
+or `[forge]` as appropriate. Cite Comprehensive Rules numbers for rules
+behavior. Forge citations name the source file, lines and pinned commit;
+[the Forge notes](docs/forge/README.md) record the reference revision.
+Local code references should use symbols or headings rather than fragile
+line numbers.
+
+Older source comments and dated audits cite the former `Provenance.md`.
+Its full text is preserved in the [historical source audit](https://github.com/b0realis/ShandalarGodot/blob/04305db4599868acdcc8c84b698982188c9e4030/Provenance.md),
+also available locally with `git show 04305db4:Provenance.md`. Keep new
+source citations at the implementation site and in the relevant design or
+asset inventory; the README holds only the short overview.
+
+Reproduce a reported defect before changing behavior. Use a focused test,
+a seeded simulation or a bounded live probe, and record the decisive output
+with its setup. If it does not reproduce, say so and record what was tried;
+do not add a speculative mechanism just to close the report.
+
+For a card change, read [adding cards](docs/adding-cards.md), write its
+regression first, then implement with existing effects. Cover targeting,
+timing, resolution and relevant interactions. A missing reusable mechanic
+belongs in `engine/` with its own tests. Setup helpers in
+`tests/game_test.gd` may construct otherwise unreachable states; the action
+under test uses the public API and checks its refusal or success.
+
+Update the code map when adding or moving files/classes, the
+[mechanics catalogue](docs/mechanics.md) for new mechanics, and
+[player files](docs/player-files.md) when adding a persistent path. For a
+numbered pack, use [adding card packs](docs/adding-card-packs.md).
+
+### Computer-player changes
+
+Read [AI difficulty](docs/ai-difficulty.md), [fair play](docs/fair-play.md)
+and [Deck Lab](DeckLab/README.md) before changing decisions. New strategy
+capabilities get named `AiProfile` fields, so experiments can disable them
+exactly. Difficulty progression must remain monotone; do not introduce a
+second hidden difficulty system. Basic correctness applies at every rung.
+
+Measure a capability with a seeded Lab sweep: candidate, null and an
+unaffected control pair. The control must reproduce its own null game for
+game; `--sweep` exits 4 if it does not. The new off arm must also reproduce
+the pre-change null. Choose control decks on which the capability cannot
+fire, and follow the worked sweep examples in the Lab manual.
+
+Report the commit, seed, decks, rules, profiles, enabled packs, game count
+and command with every result. Jobs must not change the games simulated.
+Use the Lab's Wilson intervals, play/draw split and paired outcomes; a
+percentage without its seed cannot establish an improvement.
+
+A statistical wash can justify a switchable fix for a visible malfunction;
+state that claim separately from strength. A constant with no null needs
+stronger evidence. Read previous measurements before revisiting a refused
+idea. A measured rejection is a valid outcome, not unfinished work;
+[the closed AI plan](docs/AI-next-wave.md) contains examples.
+
+**Experiments must use `--no-elo` or a scratch `--elo-file`.** A normal Lab
+run updates the tracked `decks/ratings.txt`, so replaying the same seed can
+count the same games twice. Sweeps disable Elo themselves. Use the
+[tool interface contract](AGENTS.md) for machine-readable output, exit
+codes, resume behavior and the MCP interface.
 
 ## Commands
 
 ### Test scope
 
-Owner policy (2026-09-23): during feature development, run targeted tests
-for the changed code and its immediate callers/interactions. Do not run the
-full suite for every feature; reserve it for release preparation unless the
-owner explicitly asks for it. Add focused regressions for fixes and use
-visual checks for presentation changes. Run a bounded duel soak only when
-the changed behavior needs live duel-flow coverage, not automatically for
-every cosmetic edit under `game/duel/`. Report exactly what was tested.
-This policy governs local development; existing CI configuration is unchanged.
+During development, run focused tests for the changed behavior and its
+immediate interactions. Reserve the full suite for release preparation or
+an explicit request. Use visual checks for presentation changes and a
+bounded duel soak when live duel flow needs coverage; cosmetic edits do
+not automatically require a soak. Report exactly what was checked.
 
-### Commands and safety
+**Never edit source files or `run_tests.sh` while a suite is running.**
+Bash reads the script as it runs, and Godot workers must see one source tree.
 
-macOS setup and the local baseline record: `docs/macos-baseline-2026-09-12.md`.
-The shared `tools/runtime.sh` discovers the sibling macOS Godot app and
-GNU `timeout`/`gtimeout`. `./build_release.sh --macos` exports a native app;
-the Linux and web commands below retain their behavior. Test/soak profile
-isolation uses XDG on Linux and a distinct `Shandalar Integration Tests` profile on Mac
-(Godot ignores XDG there). Manual Mac probes must use that runtime feature
-or their own named project; changing XDG alone does not protect player data.
-
-- Targeted tests: `./run_tests.sh -gselect=<test_script.gd>`,
-  `./run_tests.sh -gunit_test_name=<name>` or `./run_tests.sh
-  -gdir=res://tests/<folder>` (that folder alone). Probes under the
-  git-excluded `tests/_hunt/` are never part of a whole run: run one by
-  its name with `-gselect`.
-  Full release gate: `./run_tests.sh` (headless GUT; pinned binary `../tools/godot`).
-  `SHARDS=4 ./run_tests.sh` runs the same suite over four Godot
-  processes at once (since 2026-09-17: 979 s in one process, ~210 s over
-  six on this desk); each shard has its own `user://` and its own gate
-  read, and the sum must add up to every `test_*.gd` on disk. The default
-  is half the cores on Linux and 1 on macOS, where Godot ignores XDG and
-  two processes would share one profile. NEVER edit a source file — nor
-  `run_tests.sh` itself, bash reads it as it runs — while a suite runs.
-  The same script runs on GitHub Actions for every push and pull request
-  (`.github/workflows/gate.yml`, `SHARD=i` of 4 per job); a red run there
-  is a red gate, read the job's log. No runner and no fresh clone has the
-  imported 1997 skin (`assets/original`), so the scripts that pin that
-  look are left out there BY NAME (17 on 2026-09-17, each marked
-  `## Needs the imported 1997 skin` on its first doc line, counted in the
-  last line of the log); a test that reads the skin must carry that line.
-  TRUST ITS EXIT CODE, NOT THE PRINTED SUMMARY: GUT silently SKIPS a test
-  script it cannot parse and still prints "All tests passed" (verified
-  2026-08-31 — one broken file, summary read 1894/1894 passing while a
-  whole file never ran). The script therefore greps its own log and fails
-  on a parse/compile error or a missing GutTest base, derives success
-  from GUT's own tally, AND requires exit 0. Since 2026-09-02 it also
-  fails on ANY `ERROR:`/`SCRIPT ERROR:` line (an error in before_each,
-  a teardown frame or a deferred call never reaches GUT's tally), on a
-  risky/pending test, on the exit-time "ObjectDB instances were leaked"
-  line, and it kills a hung run after `SUITE_TIMEOUT` (1800 s) instead
-  of waiting forever. A 134 (SIGABRT) at teardown is a real bug, not
-  renderer noise: `CardRegistry`'s static card table used to be destroyed
-  after the card scripts its Callables point into, corrupting the heap on
-  every exit (bisected 2026-09-01). The `Lifecycle` autoload
-  (`game/lifecycle.gd`) now drops it first. The rule that follows: NO
-  `static var` may hold a `CardData`/`CardInstance` (a second such cache,
-  `DeckFilter._facts`, aborted every run that had opened the Deck Builder
-  until 2026-09-02) — key caches by name or instance id instead. Since
-  2026-09-30 the same hook first settles the title's background screen
-  loads (`ScreenWarmup`): a threaded load never taken is the exit-time
-  leak line, and the card pool itself builds on a thread the first ask
-  joins (`CardRegistry.ensure_loaded` waits for a build in flight).
-  Both this script and the soak run with `XDG_DATA_HOME` pointed at
-  `$TMPDIR/shandalar-test-data` (override: `SHANDALAR_TEST_DATA_HOME`), so
-  `user://` is NOT the player's real profile — which it was until
-  2026-09-04, and which is how a test's half-second write of
-  `phase_stoppers` and a stale cached `ConfigFile` between them kept the
-  three default Stops from ever reaching the player and deleted their
-  chosen portrait (docs/ROADMAP.md, "WHY THE THREE DOTS DID NOT REACH THE
-  OWNER"). A suite must not be able to write the file the shipped game
-  reads.
-- Duel soak: `./duel_soak.sh` — whole duels through the live duel screen
-  under Xvfb (AI seats and a fuzzed human seat); passes only on `SOAK
-  done` with no ERROR/WARNING/STALL line (exit 2 = a duel stood still or
-  never started, 3 = bad argument, 124 = whole-run timeout (137 if Godot
-  had to be killed), 130 = Ctrl-C, 1 = a stray line). `--rules fifth|modern` sets every rules fork to its 1997 or its
-  modern answer for the run (so `modern` is no mana burn with forced
-  sacrifices waiting on the chain — not one of the Options presets)
-  instead of whatever the (isolated — see above) `user://settings.cfg`
-  holds, which with no player file to read is the built-in defaults. Use
-  relevant seeds, modes and rules for changes needing live duel-flow coverage;
-  widget tests and visual checks suffice for isolated presentation changes.
-- Boot scene smoke: `../tools/godot --headless --path . --quit-after 3`
-- Release build: `./build_release.sh` exports the `Linux 64` preset
-  (`export_presets.cfg`, copied from `export_presets.cfg.example`) to
-  `../shandalar-build/linux64/` and smoke-boots it; `--skin` links this
-  checkout's `assets/` into `user://original_skin` so the exported build
-  wears the original graphics. The `.pck` ships scripts, `cards/data/` and
-  every `.deck` — never art: `GameSkin` reads art off the filesystem
-  (`user://` first), so the original 1997 files stay the player's own
-  copy. The export templates here are `4.7.stable` while the pinned engine
-  is 4.7.2, so the preset names both Linux templates by path — which is
-  why the preset itself is gitignored and only the example is committed.
-  The Linux export is `--export-debug` ON PURPOSE (2026-09-08): Godot's
-  optimized template prints two "nonexistent connection" errors on
-  every popup close and the pile again at quit (Godot #87626, see the
-  gotcha below); the debug template prints none and looks the same.
-  `--web` exports the `Web` preset (the `web_nothreads` template: static
-  hosting, no COOP/COEP headers) to `../shandalar-build/web/` and checks
-  that index.html/.js/.wasm/.pck came out; nothing boots headless there,
-  a browser does that (`python3 -m http.server --directory
-  ../shandalar-build/web`). `--web --skin` writes the skin zip and its
-  catalogue beside the page (`web/skin/`) for the page to fetch, and
-  `--web --skin --cardart` the card art too, for a page served on this
-  machine only. `--package`, since the owner's ruling of 2026-09-08
-  ("Cardart we dont release, only scripts to build it — licence"),
-  writes the game zip (`pkg/Shandalar-<ver>-linux64.zip` — the game,
-  `skin/SKIN.txt` and `skin/SKIN.csv`, `icon.png`, `shortcut.sh`, the tools, NO art), the
-  same again with the skin zip in its `skin/`
-  (`…-linux64-with-skin.zip`, "so only cards are needed to play"), the
-  skin zip beside them (`pkg/original_skin.zip`, a download of its own)
-  and the card art zip where nothing is uploaded from
-  (`../shandalar-build/local/cardart.zip`, never a release asset); the
-  staged folder the game zip was made from is left with both packs in
-  its `skin/` as the play copy. `--web --package` zips the web folder
-  the same two ways (`…-web.zip`, `…-web-with-skin.zip`: the page's
-  files, `skin/SKIN.txt` and `.csv`, the tools under `tools/`, `docs/setup-web.txt`
-  as README.txt — never the card art, whatever `--cardart` put beside
-  the page). Every stage is read for the builder's home path before
-  it is zipped and the build fails on a hit (`guard_stage`, through
-  `tools/package_release.py --guard` — the packager's own guard: every
-  spelling of the home, the members of every zip; since 0.50.10) — a
-  stale README once carried one. `--quest` reads its APK the same way
-  and checks its manifest asks for the network. `--package` and
-  `--web --package` write five of a release's zips (two Linux, two web,
-  the skin); a full release is the platform matrix in
-  `docs/release-builds.md`. Since 2026-09-08 a built game mounts
-  the skin as TWO zips (`SkinPack`, `load_resource_pack`): the 1997
-  material and, apart, the card art — a zip's kind is what it holds,
-  not its name. A player chooses either in Options → Skin, or drops it
-  on the window: a skin zip lands in `user://skins/` (the `skin_zip` key
-  names the one worn), a card pack in `user://cardpacks/`, where every
-  zip is mounted. The places a player can fill (the skin zip and folder,
-  the card folder, portraits, music, the tournament and draft folders) —
-  and their `settings.cfg` keys — live in ONE file, `game/paths.gd`
-  (`GamePaths`);
-  read a place through it, never through a literal `user://...`, and
-  never write a key as a default. `tools/skin_catalogue.py --check`
-  says whether a zip is complete. THE RELEASED SKIN IS THE 1997 GAME'S
-  (the owner, 2026-10-17: *"we will never generate or include manalink
-  only skin in releases"*): `import_original.py --manalink` is a backup
-  in the tool for a player's own folder, and the build refuses a skin
-  it wrote into — its label, `from_manalink.txt`, fails `skin_zip` and
-  `package_release.check_skin` alike. THE 2x SKIN IS A SKIN (the owner,
-  2026-10-17: *"A skin is a skin and gets applied after game reset. No
-  switches."*): `tools/upscale_skin.py` (Real-ESRGAN's anime model, its
-  colours taken back from 1997 — the owner's pick of 2026-10-17) writes a
-  whole skin, `original_skin_realesrgan-anime_2x.zip` — the 1997 skin's
-  own files and names, every picture at twice the size (the owner: *"Each
-  skin pack zip should contain all required assets. Just in the upscaled
-  the relevant assets are upscaled!"*); the castle and dungeon board's
-  sheets frame by frame, each amid what meets it on the board, so walls
-  and floors meet without seams (the owner's decision 9, 2026-10-28) —
-  chosen like any skin; a Manalink
-  label rides into it and is refused the same way. No switch, no second
-  zip worn beside the skin: ONE skin zip is worn (`SkinPack`, ONE SKIN),
-  and the loose folders only when none is (`GameSkin.zip_worn`). A slot's
-  file is the catalogue's line, else its `@2x` sibling, else its own name
-  (`GameSkin._in_place`);
-  a picture at 2-4x its slot's size (`GameSkin.SIZES`, held to
-  `docs/skin-catalogue.csv` by `tools/test_skin_catalogue.py`) is a
-  texture whose size is overridden to the slot's (`GameSkin.picture`), so
-  whatever DRAWS it stays in 1997 coordinates; code that reads a skin
-  picture's PIXELS goes through `GameSkin.cut`, `texture_of`, `scale_of`,
-  and decides a colour key or a measurement on `GameSkin.original` (the
-  slot's 1x file, else the picture shrunk back), carried up by
-  `lift_alpha` — never `get_image().get_region()` at 1997 coordinates. The
-  hi-res skin has no 1x files, so the tool makes the pictures whose keys or
-  measures an upscaler's blend would move average back to their 1997
-  pixels exactly, block by block; a new keyed cutter adds its place there.
-  `docs/` carries a `.gdignore`:
-  Godot imports any `.csv` as a translation table, and
-  `docs/skin-catalogue.csv` is a catalogue, not one.
-  The build is the LOCAL step and the GitHub release is a separate one:
-  a local build gets played first, and `gh release create` runs only
-  when the owner asks for the release — never as the automatic tail of a
-  piece of work.
-- Python tool self-tests (no Godot, no network):
-  `python3 -m unittest discover -s tools -p 'test_*.py'`
-- EVERY TOOL HERE ANSWERS `-h` AND `--version`, and opens with a
-  wordmark naming itself (2026-09-11). The version comes from ONE place,
-  `project.godot`'s `config/version` — no tool keeps a copy, and one that
-  cannot find the file says "version unknown" and where it looked rather
-  than guessing (which is what the tools shipped beside a packaged game
-  see). The wordmark, the caption and the five mana pips are
-  `DeckLab/lab_console.gd`'s design, shared by `tools/tool_banner.py`
-  (Python) and `tools/banner.sh` (shell); all three draw ONLY on stderr
-  and ONLY when stderr is a terminal, because several of these tools have
-  a stdout something reads — `skin_catalogue.py --stdout` IS the
-  catalogue, `build_release.sh`'s stdout names the release's files, and
-  `run_tests.sh`/`duel_soak.sh` grep their own logs. So `tool > log 2>&1`
-  gets no decoration without anyone remembering a flag.
-  `SHANDALAR_NO_BANNER=1` switches them all off (the Deck Lab's own
-  `DECK_LAB_NO_BANNER` still works, and `deck_lab.sh` maps one onto the
-  other); `NO_COLOR=1` keeps the shape and drops the colour.
-  `tools/test_tool_banner.py` pins all of it, including the rule that
-  would actually hurt: nothing decorative in stdout.
-- Screenshots under Xvfb: see **Commands that can hang** below. Do not
-  pipe a Godot run into anything. It has already cost 12.7 hours once.
-
-## Commands that can hang — READ BEFORE RUNNING GODOT UNDER Xvfb
-
-**THE RULE: never pipe a process that might hang into a reader, and put
-the timeout where it can reach the process that actually blocks.**
-
-**The recipe for any windowed Godot run:**
-
-```bash
-LOG="$SCRATCH/shot.log"
-xvfb-run -a timeout -k 5 120 ../tools/godot --path . res://tools/X.tscn \
-    > "$LOG" 2>&1 </dev/null
-tail -6 "$LOG"
+```sh
+./run_tests.sh -gselect=test_simplified_ledger.gd
+./run_tests.sh -gselect=test_simplified_ledger.gd -gunit_test_name=TEST_NAME
+./run_tests.sh -gdir=res://tests/cards
+python3 tools/test_tracked_tree.py
 ```
 
-Three things make it safe, and all three are load-bearing:
-`timeout` is INSIDE `xvfb-run` so it signals Godot itself; output goes to a
-FILE, so no reader can be left waiting on a pipe; stdin is CLOSED, so
-nothing can block asking for input.
+Replace `TEST_NAME` with an actual test method. A `-gdir` or `-gtest`
+selects only that scope, rather than adding the entire suite. Scratch
+`tests/_hunt/` probes are excluded from whole runs and must be selected
+explicitly. Permanent assertion-free benchmarks do not belong in `tests/`.
 
-**What went wrong on 2026-09-01, and why the obvious guard failed.** A run
-was launched with a guard that looked entirely reasonable:
+For release preparation:
 
-```bash
-timeout 100 xvfb-run -a ../tools/godot ... | tail -6      # DO NOT
+```sh
+./run_tests.sh
+python3 -m unittest discover -s tools -p 'test_*.py'
 ```
 
-`timeout` killed `xvfb-run` — **not** the Godot process `xvfb-run` had
-spawned. Orphaned Godot kept the write end of the pipe open, so `tail`
-never saw EOF, and the shell waited on the pipeline. A 100-second guard
-became **12.7 hours**; the rest of that day's work took about twenty
-minutes between them.
+`SHARDS=N ./run_tests.sh` distributes a whole run over processes. Linux
+uses half the cores, clamped to 1–6, by default. macOS defaults to one
+because processes share the integration-test profile; keep its runs
+sequential. Targeted selections run in one process. `SHARDS=N SHARD=i`
+selects one CI shard. The runner checks the expected script counts as well
+as individual results. Current CI configuration is in
+[gate.yml](.github/workflows/gate.yml): pushes to `main`, pull requests and
+manual runs use four Linux GUT shards, Python tests, boot and offline-Web
+checks. Local test-scope policy does not reduce CI coverage.
 
-**The generalisation, which matters more than the recipe.** A timeout only
-protects you if it can signal the process that is actually blocking. Any
-wrapper that spawns a child — `xvfb-run`, `env`, `nohup`, a shell
-function, `sh -c` — puts a layer between `timeout` and the thing that
-hangs. Assume every Godot invocation can hang, write every long command so
-that it can FAIL without wedging you, and prefer a log file to a pipe
-whenever the producer is not certain to exit.
+**Trust the runner's exit status, not GUT's printed summary.** GUT can skip
+an unparseable script and still print success. The wrapper also rejects
+parse/compile errors, missing test bases, `ERROR:`/`SCRIPT ERROR:` output,
+risky or pending tests, leaked objects and nonzero engine exits. A shutdown
+SIGABRT is a failure, not renderer noise. `SUITE_TIMEOUT` defaults to 1800
+seconds; CI can override it.
 
-**If a command runs longer than a few minutes for a reason you cannot
-name, stop and investigate rather than waiting.** Waiting is how a
-two-hour job becomes a thirteen-hour one.
+Tests requiring the imported 1997 skin must carry
+`## Needs the imported 1997 skin` on their first doc line. Without that
+skin, the runner excludes those scripts by name and reports the exclusions.
+A green art-free run does not verify them. Do not copy historical test
+counts or timings into a current guarantee.
 
-## Scratch files: not in `tests/`, not left behind
+### Live and browser checks
 
-Benchmarks and probes belong OUTSIDE `tests/`, and get deleted when the
-question they answered is answered. A one-off A/B benchmark once sat
-inside `tests/ui/`; its four timing functions assert nothing, so GUT
-reported them as "risky", and they were mistaken for a pre-existing quirk
-of the suite for most of a day. Deleting the file took the suite to
-2368/2368 with zero risky — the first genuinely clean reading in a while.
+`./tools/duel_soak.sh` drives complete duels through the real screen, under Xvfb
+on Linux or a native Mac window. Select relevant seeds, modes and rules;
+`--rules fifth|modern` forces the corresponding rules answers rather than
+reading player settings. This `modern` mode is not the fresh-install
+preset: it disables mana burn and enables waiting sacrifice clauses.
 
-If your `/tmp` is tmpfs it is RAM. Screenshots there are memory. Use ONE
-directory, inspect, delete immediately; the screenshot tour writes ~100 MB
-per run. A session once accumulated 2.4 GB across 420 directories and was
-OOM-killed.
+A soak needs `SOAK done` and no `ERROR`/`WARNING`/`STALL` line. Exit 2 means
+a stalled or unstarted duel; 3 a bad argument; 124 timeout (137 after a
+forced kill); 130 interruption; 1 other rejected output. See its help for
+run limits and selection options.
 
-A scratch Godot run that is NOT a test (a screenshot script, a click-through
-probe) gets two more flags, and both matter. `--log-file "$SCRATCH/x.log"`:
-Godot keeps only the last five files in `user://logs/`, so a scratch run
-without it silently pushes the owner's own play logs out of the ring — and
-a probe you want to read after the fact is then the one that got rotated.
-`XDG_DATA_HOME="$SCRATCH/xdg"` whenever the script touches `Settings`, the
-options screen, or Magic Battle's `Go!`: `user://settings.cfg` is the
-owner's own file, `Settings.set_value` persists by default, and a run that
-ticks Full screen or presses `Go!` from a script would otherwise rewrite
-what the owner opens on next time. `run_tests.sh` and `duel_soak.sh`
-already isolate it; a hand-written run does not unless you say so. The
-same flag keeps a scratch duel out of the owner's running `duel_log.txt`
-(`DuelLogFile`): beside the executable in an exported game, under
-`user://` whenever the editor binary runs the project — so every duel a
-scratch script plays through the live screen is appended there too.
+After changing offline-Web code or packaging, run:
 
-## Hard rules
+```sh
+node tools/test_web_offline.cjs
+```
 
-SGManalink compatibility: the handshake hashes the printed catalogue, the
-protocol version, the release version (`config/version`) and
-`SgCompatibility.RULES_REVISION`, so a version bump already separates two
-builds. When engine or card behavior changes WITHOUT a version bump (two
-local builds of one version), bump `RULES_REVISION`. This portable stamp is
-a compatibility check, not player authentication or executable attestation.
+It needs Node, Playwright and Chrome; `--channel chromium` selects
+Playwright's Chromium. Before publishing, also test a cold offline start of
+the actual package as described in [release builds](docs/release-builds.md).
+A service-worker test alone does not prove that the game starts a duel.
 
-1. `engine/` and `cards/` stay pure: RefCounted only — never Node, scenes,
-   Input, or anything from `game/`. Must run headless.
-2. ALL game-state mutation goes through `MtgGame` helpers. Never move cards
-   between zone arrays or change life/damage/characteristics anywhere else.
-3. Action methods return `""` on success or a human-readable refusal string —
-   never assert/throw on player-level mistakes.
-4. One card per file in `cards/sets/<set>/`; filename = snake_case card name;
-   no `class_name` on card files; header doc comment = name line + exact
-   oracle text + implementation notes. Follow `docs/adding-cards.md` and its
-   checklist exactly, including the test-first rule.
-5. Rules code reads `cur_power`/`cur_toughness`/`cur_keywords` (live values),
-   never `data.power` etc. (printed values).
-6. Any rules shortcut gets a comment at the site containing the word
-   `SIMPLIFIED` in caps (`grep -rlw SIMPLIFIED cards` finds them all; the
-   card-scoped form is `SIMPLIFIED (docs/simplified-cards.md, "Name"):`)
-   plus a row in `docs/simplified-cards.md` (card-scoped) or
-   `docs/ROADMAP.md` (engine-wide). `tests/test_simplified_ledger.gd`
-   pins marker and ledger to each other. Lifting one: delete marker +
-   row, pin with a test.
-   New files/classes get a row in `docs/CODE_MAP.md`.
-7. Deterministic engine: randomness only via `MtgGame.rng`.
-8. Fair information is non-negotiable at all four standard difficulties. Strategy may
-   read its own registered deck and hand, public state, and choices/reveals
-   a rule actually permits. Never inspect an opponent's hidden hand,
-   hidden face-down identity, either library's secret order, or the RNG
-   state to choose a move. Apply this to proposal generation, evaluation,
-   cache keys, speculative search and card-authored choice hints alike.
-   Add hidden-state substitution tests and public-change controls; see
-   `docs/fair-play.md` and `tests/ai/test_ai_fair_planning.gd`.
-   The separately constructed, explicitly opt-in `UnfairPlayer` challenge
-   alone may inspect the opposing current hand. This permission must not
-   become an AiProfile override or a global reveal. All other boundaries
-   still apply. Its runs are labeled and excluded from fair sweeps and Elo.
+### Profile isolation
+
+The suite and soak call `shandalar_test_profile` from `tools/runtime.sh`.
+On Linux it redirects `XDG_DATA_HOME` to
+`${SHANDALAR_TEST_DATA_HOME:-${TMPDIR:-/tmp}/shandalar-test-data}`. It also
+sets the `shandalar_test` feature. **macOS ignores XDG:** that feature selects
+`~/Library/Application Support/Godot/app_userdata/Shandalar Integration Tests/`
+before autoloads start. A different scratch directory alone does not create
+a different Mac profile. Run settings-dependent suite/soak work sequentially.
+
+Manual probes must opt in too. Use a subshell so the test feature cannot
+leak into later export commands. This bounded boot smoke checks project
+loading after card changes; inspect its log as well as its status:
+
+```sh
+(
+  set -e
+  . tools/runtime.sh
+  shandalar_find_godot
+  shandalar_find_timeout
+  shandalar_test_profile
+  SCRATCH=$(mktemp -d)
+  "$SHANDALAR_TIMEOUT" -k 5 120 "$GODOT" --headless --path . \
+    --quit-after 3 --log-file "$SCRATCH/engine.log" \
+    > "$SCRATCH/boot.log" 2>&1 </dev/null
+  cat "$SCRATCH/boot.log"
+)
+```
+
+Keep the logs needed for diagnosis, then remove the scratch directory.
+Never export with the test-profile feature enabled.
+Some tool help, including `duel_soak.sh --help`, starts Godot to print its
+usage. Apply the same profile, timeout and logging safeguards to it.
+
+## Commands that can hang
+
+Put the timeout directly around Godot, **inside** a wrapper such as
+`xvfb-run`. Write output to a file, close stdin and never pipe a potentially
+hanging Godot process into a reader:
+
+```sh
+# Linux: replace the headless command inside the isolated subshell above.
+xvfb-run -a "$SHANDALAR_TIMEOUT" -k 5 120 "$GODOT" --path . \
+  --quit-after 120 --log-file "$SCRATCH/engine.log" \
+  > "$SCRATCH/window.log" 2>&1 </dev/null
+tail -6 "$SCRATCH/window.log"
+```
+
+Use this within the same subshell, where its runtime and scratch variables
+are defined. On macOS, omit `xvfb-run` and keep the timeout, log and closed stdin.
+A timeout outside a spawning wrapper can kill the wrapper while its child
+keeps a pipe open indefinitely. If a command takes unexpectedly long,
+investigate rather than waiting without a reason.
+
+## Scratch files
+
+Put disposable probes and benchmarks outside `tests/`; remove them once
+their question is answered. Keep useful failures as proper regressions.
+Use one bounded scratch directory. On tmpfs, accumulated screenshots
+consume RAM, not spare disk.
+
+Every manual Godot probe needs an explicit `--log-file` and an isolated
+profile. Otherwise it can rotate real play logs, change persisted settings
+or append a scratch duel to the player's `duel_log.txt`. The suite and soak
+provide these guards; a hand-written command does not.
+
+## Skins, card art and paths
+
+Imported 1997 material and card pictures stay out of Git.
+Public packages contain no card art or generated numbered packs: they
+include the tools for players to build them. Plain game packages have no
+skin; `-with-skin` packages include the release's `original_skin.zip`.
+The 2x skin is a separate download. See [card art and packs](docs/card-art-and-packs.md)
+and [the skin catalogue](docs/skin-catalogue.txt).
+
+Use `GamePaths` (`game/paths.gd`) for configurable folders and their
+settings keys, not literal `user://` paths. Reading a default must not
+persist it as a user choice. Update [player files](docs/player-files.md)
+when storage or lookup order changes.
+
+Only one skin ZIP is active at a time; its choice applies after restart.
+Loose skin folders are fallbacks only when no ZIP is worn. Card packs are
+separate and may be mounted together. Detect ZIP kind from its contents,
+not its name. `tools/skin_catalogue.py --check` validates completeness.
+The released skin comes from the 1997 game; a Manalink-derived skin marked
+`from_manalink.txt` is rejected by the release builders and packager.
+
+A high-resolution skin keeps the same filenames and logical geometry.
+`GameSkin.picture` exposes the slot's original size, even when pixels are
+larger. Code that cuts or examines pixels must use `GameSkin.cut`,
+`texture_of`, `scale_of` and `original`, with `lift_alpha` for masks;
+never call `get_image().get_region()` using unscaled 1997 coordinates.
+New color-keyed cutters must also be handled by the upscaler's preservation
+logic. Keep `GameSkin.SIZES` consistent with `docs/skin-catalogue.csv`;
+`tools/test_skin_catalogue.py` checks this contract. Preserve `docs/.gdignore`:
+otherwise Godot treats that CSV catalogue as a translation table.
 
 ## Gotchas
 
-- `Color` is a Godot built-in — our enum is `Mtg.ManaColor` (that rename
-  already happened once; don't reintroduce). Watch for other reserved names
-  when adding enums.
-- GDScript treats "variable type inferred from a Variant value" as an
-  ERROR here. `var x := weakref(g)` and `var y := node.get_ref()` both
-  fail to parse; write `var x: WeakRef = weakref(g)`. A single
-  unparseable card file drops the pool from 897 to 708 and produces
-  hundreds of failures, so run the boot smoke after touching any card.
-- Test-only state surgery belongs in `tests/game_test.gd` helpers, which may
-  reach into `g._instances` etc.; real tests act through the public API.
-- A `-s` script (`duel_soak.gd`, the benches, any scratch SceneTree
-  script) is COMPILED BEFORE THE AUTOLOADS EXIST. Naming an autoload —
-  `ShellMusic.stop()` — in a script the tool depends on (a typed
-  `DuelScreen` variable pulls in `duel_screen.gd`) is "Identifier not
-  found" for the whole chain and the soak never starts a duel, while
-  the suite, which runs as a scene, is green. A screen that a tool may
-  depend on reaches an autoload through the tree at call time
-  (`get_node_or_null(^"/root/ShellMusic")`), and a scratch `-s` script
-  keeps its screen variables untyped (`var duel = load(...).instantiate()`).
-  The soak is the gate that catches it: run it after touching a screen.
-- GODOT'S POPUP SPAM IN THE RELEASE TEMPLATE (2026-09-08). A game built
-  with the optimized Linux template prints, on every tooltip, menu or
-  dropdown close, `ERROR: Attempt to disconnect a nonexistent
-  connection from 'root:<Window#…>', Signal: 'focus_entered', callable:
-  ''` and the same for `tree_exited`; "already connected" on reopen;
-  and the whole pile again at quit — the owner's terminal after a game
-  of 0.19.0. It is Godot's (godotengine/godot #87626, open since 4.2,
-  the fix in PR #95100 unmerged as of 4.7.2): `Popup::
-  _initialize_visible_parents` connects two signals per parent window
-  and the release build's disconnect does not match them; nothing in
-  the game is wrong and the stale connections do nothing. The editor
-  binary and the debug template (both DEBUG_ENABLED) never print it —
-  which is why the gate cannot see it and a fresh repro project with
-  one OptionButton and one tooltip, exported both ways, is the test
-  (release: 20 lines; debug: 0). `build_release.sh` therefore exports
-  the Linux preset with `--export-debug`: same look, same play, 0.2 MB
-  more, the headless Deck Lab ~13% slower. The other cure is native
-  popups, `display/window/subwindows/embed_subwindows=false` (0 lines
-  with the release template) — every tooltip an OS window. RULED OUT
-  by the owner (2026-09-08): the game's windows look and feel right as
-  they are, and no desktop is to be checked for a new look. The web
-  build is unaffected either way. Do not "fix" it in GDScript: the
-  connections are the engine's own.
-  THE REVERT, kept possible and not taken (2026-09-08): the debug
-  template is the slower one (the 13% above), so `LINUX_TEMPLATE=
-  release ./build_release.sh …` exports the optimized binary again
-  with nothing else changed — the preset keeps both template paths —
-  and the default is one word in `build_release.sh`. Take it when a
-  Godot release carries the fix (watch #87626) or when the speed
-  matters more than the lines; the terminal grows the lines back the
-  same day. WHY the debug template is quiet is not pinned, here or
-  upstream: the issue's thread reproduces the same split (editor,
-  debug export, web: clean; release export on every desktop: loud)
-  and names no cause, and this repository has only observed the
-  optimized binary, not read it. What differs between the templates
-  on that path is DEBUG_ENABLED — a `callable_mp` callable carries
-  its method's text only under it (the empty `callable: ''` in the
-  lines is that), and the two callables are matched by a byte
-  comparison of {instance, object id, method pointer}. Which of those
-  the optimized build gets wrong is upstream's to find; do not write
-  a cause into this file that has not been read from the binary.
-- Cite CR (Comprehensive Rules) numbers in comments for rules behavior —
-  existing code shows the style.
-- Reference implementations for tricky cards/rules: the mage-go clone
-  (search its `cards/` by card name) and s30 for UI/adventure design.
-  Forge (`../forge`, GPL-3.0) for AI reads and card decompositions —
-  read through `docs/forge/`, whose notes pin every pointer to one
-  commit; a ported mechanism carries a `[forge]` marker at the site
-  naming file, lines and commit, never a card name or a random roll.
-- `docs/player-files.md` is the player-facing map of every path the
-  BUILT game reads or writes — decks, portraits, the imported skin, card
-  art, settings, logs — and the search order when a name exists twice.
-  Update it when a new one appears.
-- `Provenance.md` (repo root) is the register of every source, which one
-  outranks which, and the rules for reading them — including the ones
-  that have already cost this project time: `Program/UIStrings.txt` is
-  latin-1 so `grep` needs `-a` or it prints NOTHING; always the
-  `Program/` copies of the string tables; a `.bmp` in a Manalink install
-  is never a 1997 file. Read it before citing a source.
+- GDScript inference from a Variant is an error here. For example, use
+  `var x: WeakRef = weakref(g)`, not `var x := weakref(g)`. One card parse
+  failure can remove much of the registered pool; run a boot smoke after
+  card changes. `Color` is a Godot built-in; our enum is `Mtg.ManaColor`.
+- A `-s` SceneTree script compiles before autoloads exist. Screens used by
+  such tools should resolve autoloads from the tree at call time, for
+  example `get_node_or_null(^"/root/ShellMusic")`. Keep scratch screen
+  variables untyped if their type would pull in autoload-dependent scripts.
+- The duel screen coalesces engine changes into a refresh once per frame.
+  UI tests must wait a frame or call `_refresh()` before inspecting it;
+  drive screen AI through `_ai_step()`, not `_ais[pid].act()`.
+- Fresh clones/worktrees lack ignored assets. Import or link the intended
+  local assets and rerun a bounded Godot import before art-dependent
+  checks. Set `GODOT` explicitly when the sibling tools path does not exist.
+- Some bundled historic decks use cards outside the enabled pool. The
+  proxy gate refuses unknown card names before dealing; this is not by
+  itself a regression. Check the enabled packs and the Lab's proxy report
+  before changing a historic list.
+- Desktop exports deliberately use debug templates because optimized
+  templates produced popup signal-disconnection errors with the pinned
+  engine. Preserve embedded popups and do not hide engine errors with a
+  GDScript workaround. `LINUX_TEMPLATE=release` is the explicit Linux
+  override; changing the default needs a verified export-level fix. Web
+  uses release templates. See [release builds](docs/release-builds.md).
+- Reference tables can be Latin-1: use `rg --text` when searching
+  `Program/UIStrings.txt`. Check it against the original tables preserved
+  in `s30/assets/text/`; `Program/Text.res` contains later Manalink changes.
+  A BMP in a later installation does not establish the 1997 appearance;
+  genuine 1997 `Statwin/` bitmaps are an exception. The historical source
+  audit linked above records the evidence and other import pitfalls.
+
+## Publication
+
+Every pushed change increments the **last numeric component** of
+`project.godot`'s `config/version`, unless the owner explicitly directs a
+different version. Group a coherent change and its verification before
+pushing. Commit subjects stay short and descriptive. Use a pseudonymous
+author and committer with a GitHub noreply address.
+
+Keep personal home paths, private email addresses and local tooling
+metadata out of tracked files. Machine-local tooling belongs in
+`.git/info/exclude`, not shared ignore rules. Run
+`python3 tools/test_tracked_tree.py`: it checks the code map and scans
+published files, including binary metadata, for personal paths, addresses
+and disallowed tooling references. The release packager separately guards
+staged files and ZIP members with `tools/package_release.py --guard`.
+
+The SGManalink handshake hashes the printed catalogue, protocol version,
+release version and `SgCompatibility.RULES_REVISION`. A version bump already
+separates builds. If engine/card behavior changes between local builds of
+the same version, bump `RULES_REVISION`. This is compatibility detection,
+not identity authentication or proof that an executable is trusted.
+
+New command-line tools answer `-h`/`--help` and `--version`. The shared helper
+reads `project.godot`; packaged MCP also reads the generated `VERSION.txt`.
+Never maintain a separate version constant. When the version is unavailable,
+report it as unknown and identify the searched location. Shared banners write only to
+terminal stderr, never machine-readable stdout. Respect
+`SHANDALAR_NO_BANNER=1` and `NO_COLOR=1`; Deck Lab also supports
+`DECK_LAB_NO_BANNER`. See `tools/test_tool_banner.py`.
+
+Building locally and publishing a release are separate actions. Do not
+create or replace releases unless requested. Follow
+[release builds](docs/release-builds.md) for the full matrix, shared skin,
+checksums, privacy guard, signing and native/browser checks. Keep local
+verification logs outside downloadable packages and state which targets
+were only cross-exported.
+
+## Current scope and further reading
+
+Adventure is implemented and playable through the ending; work now includes
+playtesting, fidelity and robustness. Campaign card selection currently
+supports Pack 2: Fallen Empires; other campaign packs are unavailable until
+integrated. All nine optional packs are implemented for ordinary duels.
+Do not describe source-only additions as already published.
+
+Duel rules forks live in `engine/rules_options.gd`. A fresh player profile
+uses **Modern rules, mana burn on**. All presets keep
+`sacrifice_clauses_wait` off; enabling it is a custom mix. Bare engine
+defaults and the soak's `--rules modern` are different contexts, so tests
+must choose their rules explicitly. Campaign card-acquisition rules are a
+separate setting; see the [card-economy audit](docs/adventure-card-economy-audit.md).
+
+General CR 613.8 dependency analysis remains incomplete. The current
+implementation orders land-type writers before readers, then orders readers
+by their dependencies, breaking cycles by timestamp. It does not detect
+all dependencies between arbitrary continuous effects. See
+`ContinuousEffects._ordered_readers` and the `SIMPLIFIED` entry in
+`engine/continuous.gd` before extending this machinery.
+
+Use these references for the detail rather than duplicating it here:
+
+| Working on | Read |
+|---|---|
+| Rules or a card | [Mechanics](docs/mechanics.md), [adding cards](docs/adding-cards.md), [simplifications](docs/simplified-cards.md) |
+| Card packs | [Pack authoring](docs/adding-card-packs.md), [LAN pack integration](docs/packs-sgmanalink-integration.md) |
+| Adventure | [Implementation record](docs/adventure-implementation-notes.md), [world-building research](docs/world-builder-adventure-notes.md) |
+| Computer play and experiments | [Fair play](docs/fair-play.md), [difficulty](docs/ai-difficulty.md), [Deck Lab](DeckLab/README.md) |
+| Tools or MCP | [Programmatic interfaces](AGENTS.md) |
+| Duel presentation | [Duel-screen design](docs/duel-screen-design.md), [card states](docs/card-states.md) |
+| Platform builds | [Release procedure](docs/release-builds.md), [handhelds](docs/handhelds.md), [Android](docs/android-experimental.md), [Web](docs/setup-web.txt) |
+| Historical decisions | [Roadmap](docs/ROADMAP.md), searched by topic/date; dated audits record measurements, not current guarantees |

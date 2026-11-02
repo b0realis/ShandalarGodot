@@ -4084,7 +4084,8 @@ def report_audio_dates(chosen: dict[str, Path]) -> None:
     print("  install, or the files were copied without their dates (a git")
     print("  checkout keeps none). The sounds themselves are almost")
     print("  certainly the originals at a different mastering; see")
-    print("  Provenance.md, \"The audio\". Imported either way: they are")
+    print("  the source audit linked from README.md, \"Provenance\".")
+    print("  Imported either way: they are")
     print("  what your installed game plays.")
     print("  Example: %s <- %s" % (later[0], sounds[later[0]]))
 
