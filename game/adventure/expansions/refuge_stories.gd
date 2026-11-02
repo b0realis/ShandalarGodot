@@ -1,5 +1,8 @@
 class_name RefugeStories
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: learn to intertwine MTG lore with the Shandalar
+## adventure naturally. Sarpadian history is inspiration; this refuge and its
+## characters are original prototype fiction, not official Magic canon.
 ## [QoL] Original Last Refuge fiction. Sarpadia belongs to Dominaria;
 ## these communities preserve its traditions on a different plane.
 

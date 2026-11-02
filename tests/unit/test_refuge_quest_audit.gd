@@ -3,11 +3,16 @@ extends GutTest
 
 var pack_was_enabled := false
 
+var _launch_before: bool
+
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	pack_was_enabled = CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, pack_was_enabled)
 
 func hero() -> AdventurePlayer:

@@ -3,7 +3,11 @@ extends GutTest
 var screen: WorldScreen
 const SAVES := "user://refuge_ui_tests"
 
+var _launch_before: bool
+
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	AdventurePlayer.saves_folder = SAVES
 	var setup := AdventureSetup.new()
@@ -17,6 +21,7 @@ func before_each() -> void:
 	await get_tree().process_frame
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	var dir := DirAccess.open(SAVES)
 	if dir != null:
 		for file in dir.get_files(): dir.remove(file)
@@ -102,6 +107,36 @@ func test_disabled_pack_still_returns_home_through_the_real_ship_button() -> voi
 	assert_eq(screen.player.tile(), port)
 	assert_false(screen.visiting(), "the vanished mainland town opens no empty pane")
 	assert_true(screen.place_at(port).is_empty())
+	assert_true(screen.player.regions.has("refuge"))
+
+func test_no_flag_saved_island_has_a_working_return_button_and_no_rewards() -> void:
+	assert_true(RefugeCampaign.travel(screen.player))
+	screen.player.refuge["pending"] = ["Thallid"]
+	screen.player.refuge["quests"] = [0]
+	screen.player.refuge["reward_choices"] = [0]
+	var saved := screen.player.to_dict()
+	AdventureExpansions.read_launch(PackedStringArray())
+	var loaded := AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(saved)))
+	assert_not_null(loaded)
+	if loaded == null: return
+	screen.show_player(loaded)
+	var port: Array = loaded.world.expansion["port"]
+	screen.visit(Vector2i(port[0], port[1]))
+	assert_true(screen.visiting())
+	assert_eq(screen._visit.place["actions"], [["refuge_sail", "Sail to Shandalar", true], ["refuge_leave", "Leave", true]])
+	var cards := loaded.cards.duplicate(true)
+	# Stale/direct actions cannot collect or advance prototype content either.
+	assert_true(RefugeJourney.act(screen, "refuge_claim", {}))
+	assert_true(RefugeJourney.act(screen, "refuge_accept_1", {}))
+	assert_true(RefugeJourney.act(screen, "refuge_reward_0", {}))
+	assert_eq(loaded.cards, cards)
+	assert_eq(loaded.refuge["pending"], ["Thallid"])
+	assert_eq(loaded.refuge["reward_choices"], [0])
+	assert_eq(RefugeQuests.stage(loaded, 1), 0)
+	await choose("refuge_sail")
+	assert_true(AdventureRegions.mainland(screen.player))
+	assert_false(screen.visiting())
+	assert_true(AdventureExpansions.places(screen.world).is_empty())
 	assert_true(screen.player.regions.has("refuge"))
 
 func test_harbor_buttons_sail_and_return_through_real_visit_pane() -> void:

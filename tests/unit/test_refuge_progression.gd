@@ -1,10 +1,15 @@
 extends GutTest
 ## Travel objectives, chosen rewards, fixed opposition and journal persistence.
 
+var _launch_before: bool
+
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 
 func hero() -> AdventurePlayer:

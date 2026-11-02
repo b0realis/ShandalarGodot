@@ -1,5 +1,8 @@
 class_name RefugeJourney
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: visits and choices explore how MTG lore can
+## become readable goals at the table. The refuge narrative is original fiction;
+## these conversations do not establish official Magic continuity.
 ## The island's conversations and battles use the adventure's existing
 ## illustrated visit pane and full duel host.
 
@@ -8,6 +11,13 @@ static func describe(player: AdventurePlayer, tile: Vector2i) -> Dictionary:
 	if kind == "":
 		return {}
 	var island := RefugeCampaign.on_island(player)
+	if island and not AdventureExpansions.launch_enabled:
+		var actions: Array = [["refuge_leave", "Leave", true]]
+		if kind == "port": actions.push_front(["refuge_sail", "Sail to Shandalar", true])
+		return {"kind": "refuge_port" if kind == "port" else "refuge_castle", "slot": -1,
+			"name": "Refuge Harbor" if kind == "port" else "Castle of the Ebon Crown",
+			"subtitle": "The Last Refuge", "picture": "refuge_harbor" if kind == "port" else "refuge_castle",
+			"lines": [AdventureExpansions.LAUNCH_HELP, "Your progress and waiting rewards are preserved."], "actions": actions}
 	if kind == "port":
 		var lines: Array = [RefugeStories.ORIGIN, RefugeStories.VOYAGE, RefugeStories.DANGER, RefugeStories.GATE]
 		if island:
@@ -112,6 +122,7 @@ static func act(screen: WorldScreen, action: String, place: Dictionary) -> bool:
 	if not action.begins_with("refuge_"):
 		return false
 	var player := screen.player
+	if not AdventureExpansions.launch_enabled and action not in ["refuge_sail", "refuge_leave", "refuge_back"]: return true
 	if action.begins_with("refuge_accept_"):
 		var index := action_index(action, "refuge_accept_")
 		if index < 0: return true

@@ -35,6 +35,8 @@ func _run() -> void:
 	if seeds.is_empty() or lives.is_empty():
 		get_tree().quit(2)
 		return
+	# This isolated development tool explicitly exercises optional stories.
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	AdventureExpansions.register_development(BEACON.ID, BEACON.descriptor())
 	var region: String = options["--region"]
 	if not AdventureExpansions.definitions().has(region):

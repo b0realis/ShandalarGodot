@@ -198,8 +198,8 @@ var color := "white"
 var playmat_color := ""
 var playmat_type := RANDOM_TYPE
 var packs: Array[String] = []
-## Optional lands and stories; off means selected packs add cards on Shandalar.
-var expanded_adventure := false
+## Launch-only opt-in for new campaigns; saved heroes retain their own mode.
+var expanded_adventure := AdventureExpansions.launch_enabled
 var difficulty := 0
 ## The card rule of the adventure ([member AdventurePlayer.card_rule]): as
 ## 1997 meant it, as 1997 shipped it, or the classic MTG rules.
@@ -463,7 +463,6 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "playmat_color", playmat_color, false)
 	Settings.set_value(KEY_PREFIX + "playmat_type", playmat_type, false)
 	Settings.set_value(KEY_PREFIX + "packs", ",".join(packs), false)
-	Settings.set_value(KEY_PREFIX + "expanded_adventure", expanded_adventure, false)
 	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
 	Settings.set_value(KEY_PREFIX + "card_rule", card_rule, false)
 	Settings.set_value(KEY_PREFIX + "life_rule", AdventurePlayer.life_rule_of(life_rule), false)
@@ -495,8 +494,7 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 	for id in String(Settings.get_value(KEY_PREFIX + "packs", "")).split(",", false):
 		if id in offered_packs(installed) and not id in setup.packs:
 			setup.packs.append(id)
-	var expanded: Variant = Settings.get_value(KEY_PREFIX + "expanded_adventure", false)
-	setup.expanded_adventure = expanded is bool and bool(expanded)
+	# The former checkbox preference must never enable stories on a normal launch.
 	setup.difficulty = clampi(int(Settings.get_value(KEY_PREFIX + "difficulty", 0)),
 		0, DIFFICULTIES.size() - 1)
 	# The rule remembered, else the on/off copy limit remembered before the
@@ -520,6 +518,7 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 
 
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
+## The old expanded_adventure preference remains only so forget() cleans it.
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
 	"playmat_color", "playmat_type", "packs", "expanded_adventure", "difficulty", "figure_colors", "card_rule", "copy_limit",
 	"life_rule", "card_hold", "ban_list", "all_trader_cards", "sieges", "creatures", "life_start", "ascetic"]

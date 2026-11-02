@@ -5,11 +5,16 @@ extends GutTest
 const SAVE := "user://refuge_card_rule_gameplay.json"
 var packs_before: Array[String] = []
 
+var _launch_before: bool
+
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	packs_before = Settings.enabled_card_packs().duplicate()
 	CardPacks.set_enabled("pack-2", true)
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	for path in [SAVE, AdventurePlayer.backup_path(SAVE)]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
 	for id in CardPacks.available_ids():

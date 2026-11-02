@@ -2953,8 +2953,11 @@ func _debug_port_pressed(event: InputEvent) -> bool:
 	if _leaving or modal():
 		hud.say("Debug: close the current encounter or window before teleporting.")
 		return true
+	if not AdventureExpansions.launch_enabled:
+		hud.say(AdventureExpansions.LAUNCH_HELP)
+		return true
 	if not AdventureExpansions.chosen(player, "refuge"):
-		hud.say("Debug: choose Pack 2 and Expanded adventure when embarking first.")
+		hud.say("Debug: launch with --expanded-adventure and select Pack 2 when embarking first.")
 		return true
 	if not AdventureExpansions.enabled("refuge"):
 		hud.say("Debug: enable Pack 2: Fallen Empires in Options first.")

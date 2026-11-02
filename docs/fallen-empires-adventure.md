@@ -4,6 +4,14 @@ Playable prototype on `2nd_pack`. This is an optional island journey alongside
 Shandalar's main adventure. It does not replace a guild lord, original town,
 dungeon, or main-quest destination.
 
+## Prototype game design test
+
+Expanded adventure is a **prototype game design test** for learning Shandalar
+world design: how to build regions, make quests and tasks clear, and intertwine
+MTG lore naturally with exploration and duels. Its narrative, progression and
+balance are provisional. It is separate from the card pack and the default
+campaign, and is not an assertion of official Magic canon.
+
 ## Story and lore
 
 Fallen Empires takes place in ancient Sarpadia on Dominaria. Its five cultures
@@ -30,20 +38,44 @@ it is not presented as an event documented in published Magic stories.
 
 ## Playing the journey
 
-Install **Pack 2: Fallen Empires** in Options, select it on **Embark**, and
-check **Expanded adventure** at the bottom of the window. Leave that box off
-to use its cards in the original mainland campaign without the island story.
-These choices belong to the saved hero; globally enabling a pack does not add
-an adventure to an unrelated campaign. Existing expedition saves retain their
-journey. On the full map, **Ship: The Last Refuge** marks Sarpadian Anchorage, a reachable
+Install **Pack 2: Fallen Empires** in Options and select it on **Embark**.
+Normal launches add its cards to the original mainland campaign, without the
+island story. There is no expanded-adventure checkbox.
+
+To opt into the prototype, pass `--expanded-adventure` after the game's `--`
+separator. From a source checkout:
+
+```sh
+godot --path . -- --expanded-adventure
+```
+
+From the folder containing the macOS app:
+
+```sh
+open -n ./Shandalar.app --args -- --expanded-adventure
+```
+
+On Linux use `./Shandalar.x86_64 -- --expanded-adventure`; on Windows use
+`.\Shandalar.exe -- --expanded-adventure`. Select Pack 2 on Embark as usual.
+The screen labels the active mode **Prototype game design test**.
+
+The flag is required **each launch**, including for saved expeditions. The old
+checkbox preference is ignored. Campaigns retain their selected packs, story
+mode, maps and progress; launching without the flag does not convert an existing
+expedition to cards-only or bypass its mainland card unlock. A hero saved on the
+island can always sail home without the flag, but prototype quests and rewards
+remain inactive. Starting again with the flag restores access. Globally enabling
+a pack or using the debug launcher alone never enables this prototype.
+
+On the full map, **Ship: The Last Refuge** marks Sarpadian Anchorage, a reachable
 coastal site clear of existing towns and encounters. Walk to it and choose
 **Sail to the Island**. The other choice is **Mindfully leave the coastal town**.
 Passage is free, including every return trip.
 
 With Pack 2 disabled or missing, Sarpadian Anchorage is absent: no town on the
 mainland, no map or minimap marker, and no visit or enable-pack prompt. A fresh
-campaign creates no harbor unless the pack and its adventure are selected and
-the pack is enabled. Existing harbor coordinates
+campaign creates no harbor unless the pack is selected and enabled and the
+prototype launch flag is present. Existing harbor coordinates
 and island progress are kept, so re-enabling the pack restores the same journey.
 
 The island occupies a 32 × 32 tile footprint, one quarter of the mainland's
@@ -97,7 +129,8 @@ Timers turn amber, then red as time runs short. Tasks in an inactive region show
 a blue **PAUSED while away** label. Pledges have no deadline.
 
 For playtesting, the debug launcher (`--debug-win`) enables **Ctrl+Shift+2** on
-the adventure map. With Pack 2 enabled, this moves the hero beside Sarpadian
+the adventure map. Also pass `--expanded-adventure` and select Pack 2 when
+embarking. With Pack 2 enabled, this moves the hero beside Sarpadian
 Anchorage, where the captain offers passage to the Last Refuge. Close any duel
 or encounter first. The shortcut adds no rewards, spends no campaign time and
 does not enable a missing or disabled pack. It also works when returning from

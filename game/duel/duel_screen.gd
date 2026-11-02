@@ -1745,6 +1745,19 @@ func _phase_status_message() -> String:
 		return "Combat phase: Choose attackers."
 	if game.awaiting_blockers and _is_human(game.block_chooser()):
 		return "Combat phase: Choose blockers."
+	# [QoL] A spell being shown is not an invisible computer decision.
+	# Name its public action and target during the reading dwell, before
+	# the computer passes and an unanswerable spell resolves automatically.
+	if _humans.size() == 1 and not _is_human(game.priority_player) \
+			and not game.stack.is_empty():
+		var item: StackItem = game.stack.back()
+		if _ais.has(item.controller) and item.card != null:
+			var action := item.description
+			if not _may_show_face(item.card):
+				action = "%s: a face-down creature" % game.players[item.controller].player_name
+			if item.kind != Mtg.StackKind.TRIGGER:
+				action = DuelLogText.with_details(action, DuelLogText.details(game, item))
+			return action
 	# THE FAMOUS QUESTION. The player holds priority at instant speed — a
 	# spell waits on the chain, it is not their own quiet main phase, or
 	# their own combat is in one of the moments the Combat Bar draws a
@@ -1780,6 +1793,8 @@ func _phase_status_message() -> String:
 					verb = "Process"
 					frame = "Triggered effects?..."
 			subject = "%s %s" % [verb, top.card.data.card_name]
+			if top.controller != human:
+				subject = DuelLogText.with_details(subject, DuelLogText.details(game, top))
 		return frame + subject
 	# THE BEGINNING OF YOUR OWN COMBAT, nothing on the chain: the owner's
 	# question (2026-09-08, [constant SKIP_OFFER]), in the owner's words;
@@ -4869,6 +4884,13 @@ const DWELL_QUIET := 1.0 / 3.0    ## s30 100ms — the active player is YOU
 const DWELL_ENEMY := 1.0          ## s30 300ms — the opponent's turn
 const DWELL_EVENT := 2.0          ## s30 600ms — life or damage moved
 
+## [QoL] A newly revealed computer spell/ability stays on the table long
+## enough to read, even if the human cannot respond. Uses the existing
+## pacing timer; quiet steps, demos, hotseat and zero-pace tools are unchanged.
+const OPPONENT_ACTION_SECONDS := 2.0
+var _pace_chain_ids: Dictionary = {}
+var _pace_action_until := 0
+
 ## The board figures the last AI action left behind — s30's `prev.State`,
 ## which is what its detectors diff against.
 var _pace_life: Array[int] = [0, 0]
@@ -4921,6 +4943,41 @@ func _board_stirred() -> bool:
 func _reset_pacing() -> void:
 	_pace_life = [game.players[0].life, game.players[1].life]
 	_pace_damage = {}
+	_pace_chain_ids.clear()
+	_pace_action_until = 0
+
+
+## The remaining reading time, keyed by stack OBJECT, not source card:
+## two activations of the same permanent are two separate visible actions.
+## Redraws and stale timers cannot restart or bypass the same item's pause.
+func _opponent_action_wait(now_ms := -1) -> float:
+	if game == null or game.game_over or config.pace <= 0.0 \
+			or _humans.size() != 1 or _ais.is_empty():
+		_pace_chain_ids.clear()
+		_pace_action_until = 0
+		return 0.0
+	if now_ms < 0:
+		now_ms = Time.get_ticks_msec()
+	var live := {}
+	var fresh := false
+	for item in game.stack:
+		if not _ais.has(item.controller) or item.card == null:
+			continue
+		var key := item.get_instance_id()
+		live[key] = true
+		fresh = fresh or not _pace_chain_ids.has(key)
+	_pace_chain_ids = live
+	if live.is_empty():
+		_pace_action_until = 0
+	elif fresh:
+		_pace_action_until = now_ms + int(OPPONENT_ACTION_SECONDS * 1000.0)
+		var top: StackItem = game.stack.back()
+		# The docked Showcase may otherwise keep a card hovered last turn.
+		# Floating previews remain pointer-controlled, and private faces stay hidden.
+		if _card_preview != null and _card_preview.docked and mode == Mode.NORMAL \
+				and _pending_card == null and top.card != null and _may_show_face(top.card):
+			_show_top_of_chain()
+	return maxf(0.0, float(_pace_action_until - now_ms) / 1000.0)
 
 
 func _maybe_schedule_ai() -> void:
@@ -4936,6 +4993,7 @@ func _maybe_schedule_ai() -> void:
 	var mine := _humans.has(game.active_player)
 	var wait: float = config.pace \
 		* dwell_multiplier(mine, _board_stirred())
+	wait = maxf(wait, _opponent_action_wait())
 	get_tree().create_timer(wait).timeout.connect(
 		_ai_step, CONNECT_ONE_SHOT)
 
@@ -4960,6 +5018,11 @@ func _ai_step() -> void:
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
+		# A short dwell may already have been armed when this spell appeared.
+		# Let the same scheduler finish its reading time before any next act.
+		if _opponent_action_wait() > 0.0:
+			_maybe_schedule_ai()
+			return
 		# The opt-in timing log ([PerfLog]): the decision runs on the
 		# thread that draws the screen, so its length is a frozen screen.
 		var perf_start := PerfLog.now()

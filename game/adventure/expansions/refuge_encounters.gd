@@ -1,5 +1,8 @@
 class_name RefugeEncounters
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: encounter decks and life totals test regional
+## difficulty and how card-set themes support a story. They are provisional
+## balance choices and must not change the mainland encounter progression.
 ## Fixed regional opposition: stronger decks and lives, never hidden information
 ## or a response to the hero's collection. Rewards are a separate card selection.
 const LIVES := [26, 28, 28, 26, 30, 36]

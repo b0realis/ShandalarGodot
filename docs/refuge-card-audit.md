@@ -2,18 +2,21 @@
 
 Pack 2 contains **102 distinct cards, with 187 printings**. Its trusted card
 scripts ship with the game; the optional pack supplies metadata and artwork.
-Select Pack 2 on **Embark** for this campaign. **Expanded adventure** is off
-by default: cards alone join the mainland, with no ship or story. Turn it on
-to use the Last Refuge journey and its local-to-global unlock. Installation
-and global enablement are necessary but do not select a pack for another hero.
+Select Pack 2 on **Embark** for this campaign. Normal launches add cards alone
+to the mainland, with no ship or story. Launch with `-- --expanded-adventure`
+to opt into the **prototype game design test** and its local-to-global unlock.
+There is no GUI checkbox; the flag is required each launch. Installation and
+global enablement are necessary but do not select a pack for another hero.
+Saved expeditions keep their card-unlock rules even without the flag, and an
+island hero can always sail home. See [launch instructions](fallen-empires-adventure.md).
 
 ## Availability
 
 | Campaign state | Newly offered Fallen Empires cards | Cards already owned |
 | --- | --- | --- |
 | Pack 2 unselected, even if globally enabled | No | Preserve saved cards |
-| Pack 2 selected, Expanded adventure off | Yes on the mainland | Shared collection; no island |
-| Expanded adventure on: mainland, before defeating the island lord | No | Keep, play, sell or copy them normally |
+| New cards-only campaign, Pack 2 selected | Yes on the mainland | Shared collection; no island |
+| Saved prototype campaign: mainland, before defeating the island lord | No | Keep, play, sell or copy them normally |
 | Last Refuge, before defeating the lord | Yes | Available in the shared collection |
 | Last Refuge, after defeating the lord | Yes | Available in the shared collection |
 | Mainland, after defeating the lord | Yes, permanently for this campaign while the pack is enabled | Available in the shared collection |

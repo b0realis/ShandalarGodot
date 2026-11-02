@@ -1,5 +1,8 @@
 class_name RefugeQuests
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: petitions and task stages are experiments in
+## clear goals, lore-driven choices and reusable quest progression, not final
+## content commitments. Preserve saved progress while refining the design.
 ## Persistent petitions with different journeys. Numeric stages, no live nodes;
 ## old completed pledges and waiting card rewards remain valid without migration.
 const GOLD := 40

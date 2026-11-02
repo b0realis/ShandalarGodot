@@ -1,5 +1,7 @@
 class_name RefugeWorld
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: the smaller island explores region geography,
+## pacing and readable quest routes using the existing Shandalar world systems.
 ## A compact island made from the mainland generator's terrain, with its
 ## own places. Mainland generation and its random stream are untouched.
 

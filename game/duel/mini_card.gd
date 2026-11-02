@@ -560,21 +560,33 @@ func _init(p_instance: CardInstance, p_game: MtgGame = null) -> void:
 ## a card USED to be only earns its place on a table where the card in play
 ## already shows what it has BECOME.
 ##
-## Nothing else changes: the NAME band still reads the printed name (the
-## card is still called Tundra), and only the art window follows the type.
-## CR 305.7 is why the change is worth drawing at all — a land retuned to a
-## basic type loses its rules text and really is just that land.
+## [QoL, issue #4] The name band identifies the current land types. The
+## printed name remains in the tooltip and Showcase. CR 305.7 changes
+## land types and mana abilities, NOT the card's name (CR 201); this label
+## is presentation only, never an input to name-based rules.
 static func art_name(inst: CardInstance) -> String:
 	if inst == null:
 		return ""
-	if not inst.is_land():
-		return inst.data.card_name
+	var live := retuned_land_types(inst)
+	# Preserve the art selection: prefer a newly gained basic type.
+	for subtype in live:
+		if not inst.data.subtypes.has(subtype):
+			return subtype.capitalize()
+	return live[0].capitalize() if not live.is_empty() else inst.data.card_name
+
+
+## Live basic land types only when they differ from the printed set. Shared
+## by the art, title and tooltip so they cannot disagree about a changed land.
+## Keep every live type: gaining Swamp does not erase an existing Forest.
+static func retuned_land_types(inst: CardInstance) -> Array[String]:
+	if inst == null or not inst.is_land():
+		return []
 	var live: Array[String] = []
 	for subtype in inst.cur_subtypes:
 		if Mtg.BASIC_LAND_COLORS.has(subtype) and not live.has(subtype):
 			live.append(subtype)
 	if live.is_empty():
-		return inst.data.card_name
+		return []
 	var printed: Array[String] = []
 	for subtype in inst.data.subtypes:
 		if Mtg.BASIC_LAND_COLORS.has(subtype):
@@ -586,15 +598,23 @@ static func art_name(inst: CardInstance) -> String:
 			if not printed.has(subtype):
 				changed = true
 				break
-	if not changed:
-		return inst.data.card_name
-	# The first live type the printed card did NOT have is the interesting
-	# one — a Bayou turned into a Forest should not go on drawing the
-	# Forest half of a card it already had (s30 makes the same choice).
-	for subtype in live:
-		if not printed.has(subtype):
-			return subtype.capitalize()
-	return live[0].capitalize()
+	if changed:
+		return live
+	return []
+
+
+## Keep the type label short: the mana stripes share this narrow title band,
+## so an appended printed name would be cut in half. The tooltip carries it.
+## Outside the battlefield only the card name is shown.
+static func table_title(inst: CardInstance) -> String:
+	if inst == null: return ""
+	var types := retuned_land_types(inst) if inst.zone == Mtg.Zone.BATTLEFIELD else ([] as Array[String])
+	if types.is_empty(): return inst.data.card_name
+	return _land_type_words(types)
+
+
+static func _land_type_words(types: Array[String]) -> String:
+	return "/".join(types.map(func(subtype: String) -> String: return subtype.capitalize()))
 
 
 ## The mini-card face, built once: name strip (top), art window (middle),
@@ -1144,7 +1164,7 @@ func refresh() -> void:
 	for child in [_name_label, _name_band, _art_frame, _art_placeholder,
 			_pt_label, _status_label, _stripes]:
 		child.visible = true
-	_name_label.text = bar_title(d.card_name, _name_label.get_theme_font("font"))
+	_name_label.text = bar_title(table_title(instance), _name_label.get_theme_font("font"))
 	# NO mana cost on cards in play or in hand — the reference shows the
 	# cost only on the enlarged card in the sidebar. (Three branches that
 	# tore down a `_cost_row` stood here and on the face-down path; nothing
@@ -1188,6 +1208,10 @@ func refresh() -> void:
 	# card stays clickable, which makes this the only place the player
 	# actually reads them.
 	tooltip_text = "%s\n%s" % [d.card_name, d.oracle_text]
+	var land_types := retuned_land_types(instance) if instance.zone == Mtg.Zone.BATTLEFIELD else ([] as Array[String])
+	if not land_types.is_empty():
+		tooltip_text = "%s\nCurrent land %s: %s\nPrinted rules:\n%s" % [d.card_name,
+			"type" if land_types.size() == 1 else "types", _land_type_words(land_types), d.oracle_text]
 	if instance.prevention > 0:
 		tooltip_text += "\n" + shield_cue()
 	if instance.zone == Mtg.Zone.BATTLEFIELD and instance.cur_cant_phase_out \

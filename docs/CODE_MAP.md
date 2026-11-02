@@ -1,5 +1,23 @@
 # Code Map
 
+- `game/duel/mini_card.gd` / `tests/ui/test_land_art.gd`: issue #4, current
+  land types label changed mini-cards; tooltips retain the printed card name
+  and distinguish current types from printed rules. Shared by piles and
+  local/network duels, with no change to engine names or the printed Showcase.
+
+- `game/adventure/expansions/adventure_expansions.gd`: per-launch
+  `--expanded-adventure` opt-in for the prototype game design test; normal
+  launches keep story hooks dormant. Embark has card selection only.
+- `tests/unit/test_adventure_packs.gd`, `tests/ui/test_embark_screen.gd` and
+  `tests/ui/test_refuge_journey.gd`: ignored legacy checkbox preferences,
+  explicit prototype labels, saved-progress retention and flag-free return.
+
+- `tests/ui/test_opponent_spell_notice.gd`: regular-duel removal remains on
+  the spell chain for a readable pause; target notices, response priority,
+  stale timers, repeated activations, pause/Done and private targets.
+- `game/duel/duel_screen.gd`: `_opponent_action_wait` extends the existing
+  computer-action timer for new public chain items; quiet phases stay automatic.
+
 - `game/adventure/embark_screen.gd`: card-rule hover references on the selected
   mode, its summary and each dropdown entry, including small decks and the Tome.
 - `game/ui_chrome.gd` / `tests/ui/test_tooltips_fit_2026_09_18.gd`: tooltip

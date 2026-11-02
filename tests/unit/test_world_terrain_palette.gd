@@ -243,6 +243,8 @@ func test_saved_appearance_round_trips_as_json_and_invalid_styles_are_refused() 
 	assert_null(AdventurePlayer.from_dict(json), "malformed saved coordinates are rejected")
 
 func test_mainland_and_island_keep_independent_saved_styles() -> void:
+	var launch_before := AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	var enabled := CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	var setup := AdventureSetup.new()
@@ -265,3 +267,4 @@ func test_mainland_and_island_keep_independent_saved_styles() -> void:
 	assert_true(RefugeCampaign.travel(player))
 	assert_eq(player.world.expansion["appearance"], island)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, enabled)
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if launch_before else PackedStringArray())

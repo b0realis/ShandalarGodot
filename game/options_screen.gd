@@ -170,6 +170,7 @@ func _ready() -> void:
 
 	content.add_child(UiChrome.body_label("AI pace in duels (seconds/action):"))
 	var pace := HSlider.new()
+	pace.tooltip_text = "Normal delay between computer actions. New opponent spells and abilities stay visible for at least two seconds before the computer acts again. If you can respond, the duel waits for you."
 	pace.min_value = 0.1
 	pace.max_value = 1.5
 	pace.step = 0.05

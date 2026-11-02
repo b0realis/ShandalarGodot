@@ -1,8 +1,17 @@
 class_name AdventureExpansions
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: optional lands are a learning environment for
+## Shandalar world design, quests/tasks and seamless MTG-lore integration.
+## The launch flag is deliberate; this is not part of the default campaign.
 ## Lightweight expansion directory. Paths, IDs and small metadata only: no
 ## preloaded art, generated maps, card definitions or quest controllers.
 ## Add a descriptor and content provider for another land; core callers stay put.
+
+## [QoL] Optional stories require an explicit opt-in on every launch. Saved
+## progress is kept separately; a saved island always retains its way home.
+const LAUNCH_FLAG := "--expanded-adventure"
+const LAUNCH_HELP := "Restart with --expanded-adventure to continue this optional adventure. You can still sail home."
+static var launch_enabled := OS.get_cmdline_user_args().has(LAUNCH_FLAG)
 
 const CATALOGUE := {"refuge": preload("res://game/adventure/expansions/refuge_module.gd").DESCRIPTOR}
 static var _development := {}
@@ -12,6 +21,10 @@ static var revision := 0
 static var _places_key := []
 static var _places: Array[Dictionary] = []
 static var _trims := {}
+
+static func read_launch(args: PackedStringArray) -> void:
+	launch_enabled = args.has(LAUNCH_FLAG)
+	refresh()
 
 static func definition(id: String) -> Dictionary:
 	return _development.get(id, CATALOGUE.get(id, {}))
@@ -26,6 +39,7 @@ static func packs() -> Node:
 	return node
 
 static func enabled(id: String) -> bool:
+	if not launch_enabled: return false
 	if _development.has(id) and not bool(_development[id].get("enabled", true)): return false
 	var pack: String = definition(id).get("pack", "")
 	if pack == "": return _development.has(id)
@@ -69,7 +83,7 @@ static func provider(id: String) -> Script:
 	return _providers[id]
 
 static func active(player: AdventurePlayer, method: String, args := [], fallback: Variant = null) -> Variant:
-	if player == null or AdventureRegions.mainland(player): return fallback
+	if not launch_enabled or player == null or AdventureRegions.mainland(player): return fallback
 	var content := provider(AdventureRegions.id(player.world))
 	return content.callv(method, [player] + args) if content != null and content.has_method(method) else fallback
 

@@ -108,8 +108,9 @@ campaign settings and story mode, but can change card-pack selections.
 **As 1997** resets only these nine settings: shipped card
 counting, 500-card hold, original traders, accelerating sieges, Hunt, links-only
 life, normal food use, reload allowed and the inactive 1998 list. It leaves
-selected packs and **Expanded adventure** unchanged. Those separate outer
-controls select the card pool and story content; they do not replace copy rules.
+selected card packs unchanged. Prototype story content requires the
+`--expanded-adventure` launch flag; it has no Embark checkbox. Card selection
+and the prototype launch mode do not replace copy rules.
 
 The menu descriptions now distinguish acquisition, deck legality, collection
 capacity and content unlocks. Option names and defaults remain unchanged.

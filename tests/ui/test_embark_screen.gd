@@ -7,9 +7,12 @@ extends GutTest
 ## neither the skin nor the 1997 faces, a dev checkout has both.
 
 var screen: EmbarkScreen
+var _launch_before: bool
 
 
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray())
 	AdventureSetup.forget()
 	screen = load("res://game/adventure/embark_screen.tscn").instantiate()
 	add_child_autofree(screen)
@@ -17,6 +20,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	AdventureSetup.forget()
 
 
@@ -45,7 +49,7 @@ func test_every_choice_is_on_the_one_screen() -> void:
 	else:
 		assert_not_null(_find("NoPacks"))
 	assert_null(_find("Pack_pack-1"), "Pack 1 is never offered")
-	assert_not_null(_find("ExpandedAdventure"))
+	assert_null(_find("ExpandedAdventure"), "no GUI opt-in for prototype stories")
 	assert_false(screen.setup.expanded_adventure)
 	assert_string_contains((_find("PacksAbout") as Label).text, "shops and rewards")
 
@@ -463,42 +467,45 @@ func test_the_title_menu_opens_it() -> void:
 	assert_true(title.is_inside_tree(), "and still the menu: Escape is Back, not Go test")
 
 
-func test_card_packs_and_optional_adventures_are_independent() -> void:
-	var toggle := _find("ExpandedAdventure") as CheckBox
-	assert_false(toggle.button_pressed)
+func test_card_packs_never_enable_prototype_stories_without_launch_flag() -> void:
+	assert_null(_find("ExpandedAdventure"))
 	for id in screen._pack_checks:
 		var check := screen._pack_checks[id] as CheckBox
 		assert_eq(check.disabled, id != "pack-2")
 		assert_false(check.button_pressed)
+		assert_false(check.tooltip_text.contains("Optional adventure"))
 		if check.disabled:
 			check.button_pressed = true
 			assert_false(check.button_pressed, "disabled choices cannot be selected indirectly")
 			assert_false(id in screen.setup.packs)
-		assert_gt(toggle.get_global_rect().position.y, check.get_global_rect().position.y)
 	screen.choose_all_packs(true)
-	assert_almost_eq(toggle.get_global_rect().end.y, (toggle.get_parent() as Control).get_global_rect().end.y, 1.0, "checkbox at the panel bottom")
-	var selected := screen.setup.packs.duplicate()
-	assert_false(screen.setup.expanded_adventure, "selecting cards does not select adventures")
-	toggle.button_pressed = true
-	assert_true(screen.setup.expanded_adventure)
-	assert_eq(screen.setup.packs, selected)
-	assert_string_contains((_find("PacksAbout") as Label).text, "lands and quests")
-	screen.setup.remember()
-	var restored := AdventureSetup.restore(screen.setup.packs)
-	assert_true(restored.expanded_adventure)
-	assert_eq(restored.packs, screen.setup.packs)
+	assert_false(screen.setup.expanded_adventure)
 	screen.randomize_all(RandomNumberGenerator.new())
-	assert_true(screen.setup.expanded_adventure, "Randomize does not change campaign mode")
-	screen.choose_all_packs(false)
-	assert_true(screen.setup.expanded_adventure, "mode never changes pack selections or vice versa")
-	toggle.button_pressed = false
 	assert_false(screen.setup.expanded_adventure)
 	screen.setup.packs.assign(screen._pack_checks.keys())
 	screen.setup.remember()
+	Settings.set_value(AdventureSetup.KEY_PREFIX + "expanded_adventure", true)
 	var reopened: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
 	add_child_autofree(reopened)
 	await get_tree().process_frame
-	assert_true(reopened.setup.packs.all(func(id: String) -> bool: return id == "pack-2"), "remembered disabled packs are not silently selected")
+	assert_false(reopened.setup.expanded_adventure, "legacy checkbox preference cannot opt in")
+	assert_true(reopened.setup.packs.all(func(id: String) -> bool: return id == "pack-2"))
+
+func test_flag_labels_the_prototype_and_preserves_card_pack_choices() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
+	var reopened: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
+	add_child_autofree(reopened)
+	await get_tree().process_frame
+	assert_null(reopened.find_child("ExpandedAdventure", true, false))
+	assert_true(reopened.setup.expanded_adventure)
+	assert_string_contains((reopened.find_child("PacksAbout", true, false) as Label).text, "Prototype game design test")
+	reopened.choose_all_packs(true)
+	assert_eq(reopened.setup.packs, ["pack-2"] as Array[String])
+	reopened.randomize_all(RandomNumberGenerator.new())
+	assert_true(reopened.setup.expanded_adventure)
+	reopened.choose_all_packs(false)
+	assert_true(reopened.setup.packs.is_empty())
+	assert_true(reopened.setup.expanded_adventure, "launch mode does not force pack selection")
 
 
 ## WITHOUT THE 1997 ART — the ground and the five symbols are the skin's;

@@ -37,6 +37,11 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 		if id != active: regions.append(id)
 	for region in regions:
 		var data := world_data(player, region)
+		if region != AdventureRegions.MAINLAND and not AdventureExpansions.launch_enabled:
+			var port: Array = data.get("expansion", {}).get("port", [])
+			if region == active and port.size() == 2:
+				out.append(row("return", region, "Return to Shandalar", "Free passage home is always available.", Vector2i(port[0], port[1]), "navigation"))
+			continue
 		var creatures: Array = player.monsters if region == active else data.get("monsters", [])
 		for creature in creatures:
 			if int(creature.get("slot", -1)) != Sieges.SLOT or not creature.has("town"): continue
@@ -88,6 +93,7 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 				if player.ended == AdventurePlayer.ENDED_WON: completed(task, "Arzakon has been banished.")
 				out.append(task)
 			for id in AdventureExpansions.definitions():
+				if not AdventureExpansions.launch_enabled: continue
 				var visited: bool = player.regions.has(id) or id == active
 				if not visited and not AdventureExpansions.enabled_for(player, id): continue
 				var point: Array = data.get("expansion", {}).get("entries", {}).get(id, [])

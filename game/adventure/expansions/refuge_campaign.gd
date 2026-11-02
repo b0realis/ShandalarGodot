@@ -1,5 +1,8 @@
 class_name RefugeCampaign
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: pledges, deck gates and card unlocks explore
+## how an optional journey can teach deck building without replacing the main
+## campaign. These design choices remain subject to playtesting and revision.
 ## The Last Refuge: new game fiction about descendants of Sarpadian
 ## refugees. The island is in Shandalar; the ship crosses no planar barrier.
 
@@ -137,6 +140,7 @@ static func can_challenge(player: AdventurePlayer) -> bool:
 		and not bool(player.refuge.get("liberated", false)) and bool(deck_gate(player)["ready"])
 
 static func deck_problem(player: AdventurePlayer) -> String:
+	if not AdventureExpansions.launch_enabled: return AdventureExpansions.LAUNCH_HELP
 	if not available(): return "Enable Pack 2: Fallen Empires in Options to begin this battle."
 	if player.deck_cards().is_empty(): return "Choose a deck in a town's deck builder before beginning this battle."
 	for card in player.deck_cards():

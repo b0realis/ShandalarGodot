@@ -297,7 +297,6 @@ var _difficulty_note: Label
 ## Packs currently open for new campaigns; other installed packs stay visible.
 const SELECTABLE_PACKS: Array[String] = ["pack-2"]
 var _pack_checks: Dictionary = {}
-var _expanded_check: CheckBox
 var _packs_about: Label
 var _seed_edit: LineEdit
 ## The walking figure: its preview on the portrait, the six part swatches
@@ -734,30 +733,12 @@ func _build_journey() -> Control:
 				check.tooltip_text += "\nUnavailable for new adventures."
 			check.button_pressed = id in setup.packs
 			var adventures := AdventurePacks.adventures(id)
-			if not adventures.is_empty():
+			if setup.expanded_adventure and not adventures.is_empty():
 				check.tooltip_text += "\nOptional adventure: " + ", ".join(adventures.map(AdventureExpansions.label))
 			check.toggled.connect(choose_pack.bind(id))
 			list.add_child(check)
 			_pack_checks[id] = check
 		box.add_child(list)
-	var pack_spacer := Control.new()
-	pack_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	pack_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(pack_spacer)
-	_expanded_check = CheckBox.new()
-	_expanded_check.name = "ExpandedAdventure"
-	_expanded_check.text = "Expanded adventure"
-	_expanded_check.tooltip_text = "Add the selected packs' optional lands, stories and quests. Their cards reach Shandalar when you complete their adventure. Packs without an adventure add their cards immediately. Leave off for the original world with extra cards."
-	_expanded_check.add_theme_font_size_override("font_size", 14)
-	_expanded_check.add_theme_color_override("font_color", PARCHMENT)
-	_expanded_check.add_theme_color_override("font_hover_color", GOLD)
-	_expanded_check.add_theme_color_override("font_pressed_color", PARCHMENT)
-	_expanded_check.add_theme_color_override("font_hover_pressed_color", GOLD)
-	_expanded_check.add_theme_icon_override("checked", UiChrome.check_icon(true))
-	_expanded_check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
-	_expanded_check.button_pressed = setup.expanded_adventure
-	_expanded_check.toggled.connect(choose_expanded_adventure)
-	box.add_child(_expanded_check)
 	_show_pack_mode()
 	return box
 
@@ -827,7 +808,7 @@ const SETTINGS_BUTTON := "Campaign Settings..."
 const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "AllTraderCards", "CardHold", "Sieges",
 	"Creatures", "LifeStart", "Ascetic"]
 const AS_1997_WORDS := "As 1997"
-const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reload allowed, copies not counted, the 1998 ban list, original traders, a 500-card bag, accelerating sieges, hunting creatures, links-only life and normal food use. The ban list is inactive under this card rule. Selected packs and Expanded adventure are unchanged."
+const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reload allowed, copies not counted, the 1998 ban list, original traders, a 500-card bag, accelerating sieges, hunting creatures, links-only life and normal food use. The ban list is inactive under this card rule. Selected card packs are unchanged."
 ## WHAT "AS 1997" CHOOSES, each row the 1997 game's own: the card rule as
 ## it shipped (no copy limit), the 500-card bag, the sieges' 1997 clock, the
 ## creatures hunting, a life for each link, the food as eaten. Two rows had
@@ -1494,16 +1475,11 @@ func choose_all_packs(on: bool) -> void:
 		check.button_pressed = on and not check.disabled
 
 
-func choose_expanded_adventure(on: bool) -> void:
-	setup.expanded_adventure = on
-	_expanded_check.set_pressed_no_signal(on)
-	_show_pack_mode()
-
-
 func _show_pack_mode() -> void:
+	_packs_about.add_theme_color_override("font_color", GOLD if setup.expanded_adventure else DIM)
 	_packs_about.text = "Add cards to shops and rewards on Shandalar. Your first deck uses base cards."
 	if setup.expanded_adventure:
-		_packs_about.text = "Add available lands and quests. Packs without an adventure add their cards immediately."
+		_packs_about.text = "Prototype game design test: add available lands and quests. Packs without an adventure add their cards immediately."
 
 
 func _on_name_changed(text: String) -> void:
@@ -1569,7 +1545,7 @@ func _show_all() -> void:
 	_show_color()
 	_show_playmat()
 	_show_difficulty()
-	choose_expanded_adventure(setup.expanded_adventure)
+	_show_pack_mode()
 
 
 func _show_face() -> void:
@@ -1871,7 +1847,7 @@ func summary(record: Dictionary) -> String:
 			names.append(String(info.get("name", id)))
 		lines.append("Card packs: %s." % ", ".join(names))
 		if record.get("expanded_adventure", false):
-			lines.append("Expanded adventure: optional lands and quests enabled.")
+			lines.append("Expanded adventure: prototype game design test. Optional lands and quests enabled.")
 	if AdventurePlayer.life_rule_of(record.get("life_rule")) == AdventurePlayer.LIFE_ONE:
 		lines.append(ONE_LIFE_SUMMARY)
 	lines.append(String(HOLD_SUMMARY[AdventurePlayer.card_hold_of(record.get("card_hold"))]))

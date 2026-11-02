@@ -5,7 +5,11 @@ var previous_guides: bool
 var previous_quest_pane: bool
 const SAVES := "user://task_history_ui_tests"
 
+var _launch_before: bool
+
 func before_each() -> void:
+	_launch_before = AdventureExpansions.launch_enabled
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	previous_guides = WorldHud.guides_wanted()
 	previous_quest_pane = bool(Settings.get_value(WorldHud.QUEST_SETTING, true))
 	WorldScreen.debug_campaign = false
@@ -22,6 +26,7 @@ func before_each() -> void:
 	await get_tree().process_frame
 
 func after_each() -> void:
+	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	Settings.set_value(WorldHud.GUIDES_SETTING, previous_guides)
 	Settings.set_value(WorldHud.QUEST_SETTING, previous_quest_pane)
 	WorldScreen.debug_campaign = false

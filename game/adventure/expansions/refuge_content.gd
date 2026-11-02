@@ -1,4 +1,7 @@
 extends RefCounted
+## PROTOTYPE GAME DESIGN TEST: this adapter is the boundary between reusable
+## Shandalar systems and one experimental island story. Keep story-specific
+## decisions here so they never alter the default mainland campaign.
 ## Last Refuge provider. Loaded on demand through AdventureExpansions.
 
 static func initialize(player: AdventurePlayer) -> void: RefugeCampaign.initialize(player)

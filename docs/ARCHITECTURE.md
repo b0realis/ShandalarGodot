@@ -209,6 +209,12 @@ These sit beside the repository, not in it; `Provenance.md` ranks them.
 
 ### Optional adventure regions
 
+The optional lands are a **prototype game design test** for Shandalar world
+design, quests/tasks and MTG-lore integration. `--expanded-adventure` after
+`--` is required each launch; saved progress does not grant runtime opt-in.
+Embark offers card packs only, with no story checkbox. A saved island retains
+return travel without the flag; prototype hooks and outward travel stay off.
+
 `AdventureExpansions` is a lightweight directory of pack IDs, labels, provider
 paths and art paths. Core screens ask its hooks for regional visits, stock,
 guidance and encounter tiers. It loads providers and art on demand; disabled
