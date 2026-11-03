@@ -196,7 +196,7 @@ static func _won(player: AdventurePlayer, meeting: Dictionary, spoils: Dictionar
 	var rarities: Array[int] = []
 	var heights: Array[int] = []
 	for card_name in cards:
-		rarities.append(_rarity(card_name))
+		rarities.append(_rarity(card_name, player))
 		heights.append(dice.below(10))
 	player.dice = dice.state
 	spoils["cards"] = cards
@@ -379,9 +379,21 @@ static func _rewards(player: AdventurePlayer, row: int, bits: int, spoils: Dicti
 
 ## A random non-creature artifact for the next duel (E:2556–2567: a card
 ## drawn until it is an artifact and not a creature), "" when the pool has
-## none.
+## none. With card packs in the campaign, the pack share first ([PackShare];
+## 0.60.14, the owner's pack rulings of 2026-11-03): the base cards or one
+## pack's, among the sides holding such an artifact, then drawn so there.
 static func _random_artifact(dice: MsvcRandom, player: AdventurePlayer = null) -> String:
-	var pool := CardTrade.for_trader(player, CardTrade.REWARD)
+	var packs := AdventurePacks.pools(player)
+	var pool := CardTrade.for_trader(player, CardTrade.REWARD) if packs.is_empty() else CardTrade.catalogue()
+	if not packs.is_empty():
+		var held: Array[int] = []
+		for rows in packs:
+			held.append(_artifacts_in(rows))
+		var at := PackShare.side(dice, _artifacts_in(pool), held)
+		if at == PackShare.NONE:
+			return ""
+		if at != PackShare.BASE:
+			pool = packs[at]
 	if pool.is_empty():
 		return ""
 	for attempt in PICK_GUARD:
@@ -390,6 +402,16 @@ static func _random_artifact(dice: MsvcRandom, player: AdventurePlayer = null) -
 		if kind & (CardValue.ARTIFACT | CardValue.CREATURE) == CardValue.ARTIFACT:
 			return String(row["name"])
 	return ""
+
+
+## How many of [param rows] are artifacts and not creatures.
+static func _artifacts_in(rows: Array) -> int:
+	var count := 0
+	for row in rows:
+		if int(((row as Dictionary)["facts"] as Dictionary).get("type", 0)) & (CardValue.ARTIFACT | CardValue.CREATURE) \
+				== CardValue.ARTIFACT:
+			count += 1
+	return count
 
 
 ## "YOU GET ANY CARD OF YOUR CHOICE!" — [param card_name] picked from every
@@ -429,10 +451,16 @@ static func pick_duplicate(player: AdventurePlayer, spoils: Dictionary, card_nam
 
 ## THE CARDS WON (E:2273–2295): drawn on [param dice] while the budget — the
 ## creature's strength — lasts (see the class doc). The creature's stake is
-## among the first three picks (its first card the first pick).
+## among the first three picks (its first card the first pick). With card
+## packs in the campaign each pick takes the pack share first ([PackShare];
+## 0.60.14, the owner's pack rulings of 2026-11-03): the base cards or one
+## pack's, among the sides with a card the pick could give, then 1997's
+## draw there; without, 1997's draw over the base cards, as always.
 static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: MsvcRandom) -> Array[String]:
 	var out: Array[String] = []
-	var pool := AdventurePacks.add_stock(player, CardTrade.catalogue())
+	var base := CardTrade.catalogue()
+	var packs := AdventurePacks.pools(player)
+	var pool := AdventurePacks.joined(base, packs)
 	var color := clampi(int(meeting["color"]), 1, 5)
 	var stakes: Array = meeting.get("creature_ante", [])
 	# The copy limit as the Embark chose it ([method CardShop.counted_copies]),
@@ -441,44 +469,34 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 	var counts := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player)
 	var classic := CardShop.classic_rule(player)
+	var rules := {"player": player, "color": color, "counts": counts, "limit": limit, "classic": classic}
 	var budget := int(meeting.get("strength", CreatureBook.strength(int(meeting["row"]))))
 	var present := _types_in(pool)
+	var sides: Array = [base]
+	sides.append_array(packs)
+	var kinds: Array[int] = []
+	for rows in sides:
+		kinds.append(_types_in(rows))
+	# Which sides could give a card, by the pick's colour level: read again
+	# for each pick only under the Classic MTG rules, whose count grows.
+	var gives := {}
 	while budget > 0:
 		var picked := ""
-		if not pool.is_empty():
-			for attempt in PICK_GUARD:
-				var bit := 1 << dice.below(PICK_TYPES)
-				# [Ours: without the player's 1997 card table no card is typed
-				# an interrupt ([method CardValue.derive]); a type no card has
-				# is drawn again — else its 999 tries ended on any card at
-				# all, a plain artifact among them, which 1997 never gave (the
-				# bug pass of part B, q4-2). With the table every type has
-				# cards and the dice are 1997's.]
-				var again := 0
-				while present & bit == 0 and present != 0 and again < PICK_TYPES * 16:
-					bit = 1 << dice.below(PICK_TYPES)
-					again += 1
-				var drawn: Dictionary = pool[0]
-				for tries in TYPE_TRIES:
-					drawn = pool[dice.below(pool.size())]
-					if int((drawn["facts"] as Dictionary).get("type", 0)) & bit != 0:
-						break
-				var f: Dictionary = drawn["facts"]
-				var level := 1 if out.size() & 1 != 0 else 3
-				# 1997's order (E:2282–2284, `is_card_color_compatible_with_mask(1 <<
-				# monster_color, card.color, level)`): the creature's colour looked
-				# for in the card's row. The rows are lopsided — the other way round
-				# gave green creatures white cards and white ones no green (the fix
-				# pass of part B, c5, P3-1).
-				if not CardValue.goes_with(1 << color, int(f.get("color", CardValue.COLORLESS)), level):
-					continue
-				if classic.is_empty():
-					if CardShop.copies_left(player, String(drawn["name"]), f, counts, limit) <= 0:
-						continue
-				elif not CardShop.classic_allows(classic, String(drawn["name"])):
-					continue
-				picked = String(drawn["name"])
-				break
+		rules["level"] = 1 if out.size() & 1 != 0 else 3
+		if packs.is_empty():
+			if not pool.is_empty():
+				picked = _pick(pool, present, dice, rules)
+		else:
+			if not classic.is_empty() or not gives.has(rules["level"]):
+				var could: Array[int] = []
+				for rows in sides:
+					could.append(1 if _gives(rows, rules) else 0)
+				gives[rules["level"]] = could
+			var fits: Array[int] = gives[rules["level"]]
+			var at := PackShare.side(dice, fits[0], fits.slice(1))
+			if at != PackShare.NONE:
+				var side := 0 if at == PackShare.BASE else at + 1
+				picked = _pick(sides[side], kinds[side], dice, rules)
 		if out.size() < 3 and out.size() < stakes.size():
 			picked = String(stakes[out.size()])
 		if picked == "":
@@ -487,8 +505,65 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 		if not classic.is_empty():
 			var owned: Dictionary = classic["owned"]
 			owned[picked] = int(owned.get(picked, 0)) + 1
-		budget -= maxi(_rarity(picked) + _favoured(picked), 1)
+		budget -= maxi(_rarity(picked, player) + _favoured(picked, player), 1)
 	return out
+
+
+## ONE PICK of the cards won from [param pool] (whose types are [param
+## present], [method _types_in]) on [param dice], by [param rules] (`{player,
+## color, counts, limit, classic, level}`, [method reward_cards]): a type
+## drawn of six, a card drawn until it is of that type, kept when its colour
+## goes with the creature's and a copy is left — else drawn again, up to
+## [constant PICK_GUARD] times; "" then.
+static func _pick(pool: Array, present: int, dice: MsvcRandom, rules: Dictionary) -> String:
+	for attempt in PICK_GUARD:
+		var bit := 1 << dice.below(PICK_TYPES)
+		# [Ours: without the player's 1997 card table no card is typed
+		# an interrupt ([method CardValue.derive]); a type no card has
+		# is drawn again — else its 999 tries ended on any card at
+		# all, a plain artifact among them, which 1997 never gave (the
+		# bug pass of part B, q4-2). With the table every type has
+		# cards and the dice are 1997's.]
+		var again := 0
+		while present & bit == 0 and present != 0 and again < PICK_TYPES * 16:
+			bit = 1 << dice.below(PICK_TYPES)
+			again += 1
+		var drawn: Dictionary = pool[0]
+		for tries in TYPE_TRIES:
+			drawn = pool[dice.below(pool.size())]
+			if int((drawn["facts"] as Dictionary).get("type", 0)) & bit != 0:
+				break
+		if _may_give(drawn, rules):
+			return String(drawn["name"])
+	return ""
+
+
+## Whether a pick could keep [param row] ([method _pick]'s tests): 1997's
+## order (E:2282–2284, `is_card_color_compatible_with_mask(1 <<
+## monster_color, card.color, level)`): the creature's colour looked for in
+## the card's row. The rows are lopsided — the other way round gave green
+## creatures white cards and white ones no green (the fix pass of part B,
+## c5, P3-1). Then a copy left for the deck in use, or the Classic MTG
+## rules' allowance.
+static func _may_give(row: Dictionary, rules: Dictionary) -> bool:
+	var f: Dictionary = row["facts"]
+	if not CardValue.goes_with(1 << int(rules["color"]), int(f.get("color", CardValue.COLORLESS)), int(rules["level"])):
+		return false
+	var classic: Dictionary = rules["classic"]
+	if classic.is_empty():
+		return CardShop.copies_left(rules["player"], String(row["name"]), f, rules["counts"], int(rules["limit"])) > 0
+	return CardShop.classic_allows(classic, String(row["name"]))
+
+
+## Whether some card of [param rows] of the six reward types could be kept
+## by a pick now ([method _may_give]): a side of the pack share that has none
+## leaves its share to the others ([PackShare.side]).
+static func _gives(rows: Array, rules: Dictionary) -> bool:
+	var all := (1 << PICK_TYPES) - 1
+	for row in rows:
+		if int(((row as Dictionary)["facts"] as Dictionary).get("type", 0)) & all != 0 and _may_give(row, rules):
+			return true
+	return false
 
 
 ## The reward's types ([constant PICK_TYPES] bits) some card of [param pool]
@@ -504,19 +579,21 @@ static func _types_in(pool: Array) -> int:
 
 
 ## A card's 1997 rarity (`GetCardRarity`, 1 common … 4 special;
-## [method CardShop.shop_rarity]), 1 for a card the pool does not know.
-static func _rarity(card_name: String) -> int:
+## [method CardShop.shop_rarity]), 1 for a card the pool does not know — in
+## [param player]'s campaign, its rarity there ([method AdventurePacks.facts]:
+## a Fifth Edition card at Fifth Edition's).
+static func _rarity(card_name: String, player: AdventurePlayer = null) -> int:
 	if not CardRegistry.has_card(card_name):
 		return 1
-	return clampi(CardShop.shop_rarity(CardValue.facts(CardRegistry.get_card(card_name))), 1, 4)
+	return clampi(CardShop.shop_rarity(AdventurePacks.facts(player, card_name)), 1, 4)
 
 
 ## 1 for a card with the program's 0x400 mark (the reward pick's extra
 ## cost), else 0.
-static func _favoured(card_name: String) -> int:
+static func _favoured(card_name: String, player: AdventurePlayer = null) -> int:
 	if not CardRegistry.has_card(card_name):
 		return 0
-	return 1 if int(CardValue.facts(CardRegistry.get_card(card_name)).get("extra", 0)) & CardValue.FAVOURED != 0 else 0
+	return 1 if int(AdventurePacks.facts(player, card_name).get("extra", 0)) & CardValue.FAVOURED != 0 else 0
 
 
 ## A card's caption under it on the cards won (`@BROWSE` 13–16).

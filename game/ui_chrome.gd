@@ -471,10 +471,29 @@ static func shadowed_button(button: Control) -> void:
 
 
 ## Have every stock tooltip in `tree` shaped by [method fit_tooltip] as it
-## appears. Safe to call twice.
+## appears, on [method tooltip_paper]. Safe to call twice.
 static func watch_tooltips(tree: SceneTree) -> void:
+	ThemeDB.get_default_theme().set_stylebox("panel", "TooltipPanel", tooltip_paper())
 	if not tree.node_added.is_connected(fit_tooltip):
 		tree.node_added.connect(fit_tooltip)
+
+
+## THE TOOLTIP'S PAPER: dark, all but opaque, a thin gold rule — for every
+## tooltip in the game (the owner, 2026-11-03: "Fix tooltip see through
+## over the playmat"). The engine's own panel is see-through, so a hint
+## over a picture or a button read through it; Embark's card-rule hints
+## already wore this one, and now all do. Custom tooltips read it too
+## (they ask the theme for `TooltipPanel`'s panel).
+static func tooltip_paper() -> StyleBoxFlat:
+	var paper := StyleBoxFlat.new()
+	paper.bg_color = Color(0.035, 0.03, 0.025, 0.98)
+	paper.border_color = Color(0.48, 0.39, 0.24)
+	paper.set_border_width_all(1)
+	paper.content_margin_left = 10
+	paper.content_margin_right = 10
+	paper.content_margin_top = 8
+	paper.content_margin_bottom = 8
+	return paper
 
 
 ## The `node_added` hook: the engine's own tooltip label — a `TooltipLabel`

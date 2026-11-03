@@ -30,6 +30,10 @@ extends RefCounted
 ##    something else — a riddle answered gives its own rare instead; the
 ##    Hideout's and the Lost City's luck take it, their thieves leave
 ##    another.
+## With card packs in the campaign every card drawn here — the treasure,
+## the rares, the thieves', the Pyramids', the lair duel's hoard — takes the
+## pack share first ([PackShare]; 0.60.14, the owner's pack rulings of
+## 2026-11-03) [ours]; without, the one die over the base cards, as always.
 ## The four duels ([constant DUELS]) are [LairDuels]': a creature of the
 ## lair's tier and its hoard of rares, Leave quietly or Duel the creature —
 ## the waiting rare is given after, whatever came of it, as at every lair.
@@ -93,7 +97,7 @@ static func begin(player: AdventurePlayer, lair: Dictionary) -> Dictionary:
 	for i in player.cards.size():
 		var card_name := String((player.cards[i] as Dictionary).get("card", ""))
 		if CardRegistry.has_card(card_name) \
-				and CardShop.shop_rarity(CardValue.facts(CardRegistry.get_card(card_name))) >= 2:
+				and CardShop.shop_rarity(AdventurePacks.facts(player, card_name)) >= 2:
 			dear.append(i)
 	if not dear.is_empty():
 		out["oasis"] = dear[dice.below(dear.size())]
@@ -256,11 +260,16 @@ static func finish(player: AdventurePlayer, event: Dictionary) -> String:
 ## c12, h2-1). One die still cast, as before. A lair duel's hoard passes no
 ## rule ([method LairDuels.begin]): a creature's stake is never limited.
 static func rare_of_any_kind(dice: MsvcRandom, classic := {}, player: AdventurePlayer = null) -> String:
-	var rares: Array[String] = []
-	for row in reward_pool(player):
-		if CardShop.shop_rarity(row["facts"]) >= 3 and CardShop.classic_allows(classic, String(row["name"])):
-			rares.append(String(row["name"]))
-	return rares[dice.below(rares.size())] if not rares.is_empty() else ""
+	var rares := func(rows: Array) -> Array[String]:
+		var out: Array[String] = []
+		for row in rows:
+			if CardShop.shop_rarity(row["facts"]) >= 3 and CardShop.classic_allows(classic, String(row["name"])):
+				out.append(String(row["name"]))
+		return out
+	var packs: Array = []
+	for rows in AdventurePacks.pools(player):
+		packs.append(rares.call(rows))
+	return PackShare.pick(dice, rares.call(_cards()), packs)
 
 
 ## The lair's rare (`reward_cards[3]`): two times in three a rare of its
@@ -277,40 +286,55 @@ static func _lair_rare(player: AdventurePlayer, dice: MsvcRandom, color: int) ->
 	var counts := CardShop.counted_copies(player)
 	var limit := CardShop.copies_allowed(player) if not counts.is_empty() else 0
 	var classic := CardShop.classic_rule(player)
-	var spells: Array[String] = []
-	var artifacts: Array[String] = []
-	for row in CardTrade.for_trader(player, CardTrade.REWARD):
-		var f: Dictionary = row["facts"]
-		if CardShop.shop_rarity(f) != 3:
-			continue
-		if not counts.is_empty() and CardShop.copies_left(player, String(row["name"]), f, counts, limit) < 0:
-			continue
-		if not CardShop.classic_allows(classic, String(row["name"])):
-			continue
-		var kind := int(f.get("type", 0))
-		if kind & CardValue.ARTIFACT != 0:
-			artifacts.append(String(row["name"]))
-		elif kind & 0x3F != 0 and (color == 0 or int(f.get("color", CardValue.COLORLESS)) & (1 << color) != 0):
-			spells.append(String(row["name"]))
-	var pick := spells if dice.below(3) != 0 and not spells.is_empty() else artifacts
-	return pick[dice.below(pick.size())] if not pick.is_empty() else ""
+	# The base cards' and then each campaign pack's ([PackShare]).
+	var sides: Array = [CardTrade.catalogue()]
+	sides.append_array(AdventurePacks.pools(player))
+	var spells: Array = []
+	var artifacts: Array = []
+	var any_spell := false
+	for rows in sides:
+		var side_spells: Array[String] = []
+		var side_artifacts: Array[String] = []
+		for row in rows:
+			var f: Dictionary = row["facts"]
+			if CardShop.shop_rarity(f) != 3:
+				continue
+			if not counts.is_empty() and CardShop.copies_left(player, String(row["name"]), f, counts, limit) < 0:
+				continue
+			if not CardShop.classic_allows(classic, String(row["name"])):
+				continue
+			var kind := int(f.get("type", 0))
+			if kind & CardValue.ARTIFACT != 0:
+				side_artifacts.append(String(row["name"]))
+			elif kind & 0x3F != 0 and (color == 0 or int(f.get("color", CardValue.COLORLESS)) & (1 << color) != 0):
+				side_spells.append(String(row["name"]))
+		any_spell = any_spell or not side_spells.is_empty()
+		spells.append(side_spells)
+		artifacts.append(side_artifacts)
+	var pick := spells if dice.below(3) != 0 and any_spell else artifacts
+	return PackShare.pick(dice, pick[0], pick.slice(1))
 
 
 ## The treasure's card: any of the lair's colour [param color] or none,
 ## never a dungeon's — nor, under the Classic MTG rules, one they let no one
 ## offer the hero ([param classic]: [method CardShop.classic_rule]).
 static func _treasure(dice: MsvcRandom, color: int, classic := {}, player: AdventurePlayer = null) -> String:
-	var found: Array[String] = []
-	for row in reward_pool(player):
-		var f: Dictionary = row["facts"]
-		if int(f.get("extra", 0)) & 0x100 != 0 or bool(row.get("treasure", false)):
-			continue
-		if not CardShop.classic_allows(classic, String(row["name"])):
-			continue
-		var bits := int(f.get("color", CardValue.COLORLESS))
-		if color == 0 or bits == CardValue.COLORLESS or CardValue.first_color(bits) == 1 << color:
-			found.append(String(row["name"]))
-	return found[dice.below(found.size())] if not found.is_empty() else ""
+	var found := func(rows: Array) -> Array[String]:
+		var out: Array[String] = []
+		for row in rows:
+			var f: Dictionary = row["facts"]
+			if int(f.get("extra", 0)) & 0x100 != 0 or bool(row.get("treasure", false)):
+				continue
+			if not CardShop.classic_allows(classic, String(row["name"])):
+				continue
+			var bits := int(f.get("color", CardValue.COLORLESS))
+			if color == 0 or bits == CardValue.COLORLESS or CardValue.first_color(bits) == 1 << color:
+				out.append(String(row["name"]))
+		return out
+	var packs: Array = []
+	for rows in AdventurePacks.pools(player):
+		packs.append(found.call(rows))
+	return PackShare.pick(dice, found.call(_cards()), packs)
 
 
 ## Every card of the adventure, once for the card pool as it stands:

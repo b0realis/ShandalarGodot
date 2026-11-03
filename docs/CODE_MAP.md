@@ -31,6 +31,41 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## Card packs in the ordinary adventure (0.60.14, 2026-11-03)
+
+The owner's pack rulings of 2026-11-03 (any of Packs 2–9 on Embark, each
+pack its own cards at a fixed rarity, strong cards special, ante cards off
+the shelves, the pack share in every random draw);
+`docs/adventure-card-economy-audit.md` "Card packs and the main game".
+
+- `game/adventure/pack_share.gd`: `PackShare`, the pack share of every
+  random card draw (`share`, `side`, `pick`; `PER_PACK` 20, `MOST` 60):
+  each pack min(20%, 60% / N); no packs, no extra die.
+- `game/adventure/adventure_packs.gd`: `campaign_packs`, `pools`
+  (`shelves` leaves out ante cards), `joined`, `card_stock` (a pack's own
+  cards; Pack 7 its 147 reprints), `fifth_printing`, `fifth_facts`,
+  `facts`, `printed_rarity`, `owner_of`; `card_pack` and `card_refusal`
+  take the player and name a pack the campaign chose.
+- `game/adventure/card_value.gd`: `STRONG_PACK_CARDS` (the power mark for
+  21 pack cards), `rank_of`; `buy_price` and `sell_price` take facts.
+- `game/adventure/card_shop.gd`: `_draw_rules` gains `base` and `packs`,
+  `_fitting`, a `fits` cache per place kind; `duel_spoils.gd`: `_pick`,
+  `_may_give`, `_gives`, `_artifacts_in`.
+- `game/adventure/embark_screen.gd`: every pack `AdventureSetup.offered_packs`
+  lists (Packs 2–9; Pack 1 never) can be ticked; All, None and Randomize
+  cover them all (`SELECTABLE_PACKS` removed); `_show_pack_mode` says what a
+  pack brings; `RULE_TIPS` say "pack cards".
+- `game/adventure/world/card_shop_pane.gd`: a place's pack and rarity read
+  in the campaign's printing (`AdventurePacks.card_refusal(name, player)`,
+  `AdventurePacks.facts`).
+- `game/ui_chrome.gd`: `tooltip_paper()` — every tooltip on opaque paper
+  (`watch_tooltips` sets the default theme's `TooltipPanel`).
+- Regressions: `tests/unit/test_c28_E1_no_pack_draws.gd`,
+  `tests/unit/test_c28_E1_pack_economy.gd`,
+  `tests/unit/test_c28_E1_marks.gd`, `tests/unit/test_c28_E1_pack_share.gd`,
+  `tests/ui/test_c28_E2_packs_and_words.gd`,
+  `tests/ui/test_c28_tooltip_paper.gd`.
+
 ## The bug campaign after 0.60.12 (0.60.13, 2026-11-03)
 
 - `tools/test_script_entry_points.py`: follows each `--script` entry point's
@@ -553,7 +588,8 @@
   letters on `WorldMagicPane` and `WorldScreen.UnsavedAsk`;
   `WorldScreen._pane_letters`. 0.50.61: `WorldScreen.QuitAsk.chose` (Save
   and Load on "Ready to Quit?"), `EmbarkScreen.packs_ready` (the card
-  packs greyed until the World Lords are built), `game/main.gd`
+  packs greyed until the World Lords are built; removed in 0.60.7, the
+  packs chosen on Embark since 0.60.14), `game/main.gd`
   `_open_shandalar_notice` / `SHANDALAR_NOTICE` (the in-development
   notice before Embark). Tests:
   `tests/unit/test_q1_dungeon_doors.gd`, `tests/unit/test_q1_world_dungeons.gd`,

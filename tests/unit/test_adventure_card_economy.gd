@@ -29,6 +29,10 @@ func thallid_draw(player: AdventurePlayer) -> String:
 	var rules := CardShop._draw_rules(player, 1)
 	rules["sold"] = [8] as Array[int]
 	rules["stock"] = [{"name": "Thallid", "facts": CardValue.facts(CardRegistry.get_card("Thallid"))}]
+	# The pack's only card, no base card (0.60.14: a campaign with packs
+	# draws by the pack share, from `base` and `packs`).
+	rules["base"] = [] as Array[Dictionary]
+	rules["packs"] = [rules["stock"]]
 	return CardShop._draw(0, false, MsvcRandom.new(17), rules)
 
 func test_first_deck_uses_the_original_base_flags_and_special_rarity() -> void:

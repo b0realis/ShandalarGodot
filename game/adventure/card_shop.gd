@@ -26,7 +26,11 @@ extends RefCounted
 ##    a power card or a restricted one ([method stock]) — that lets two
 ##    lands other than basic ones through, Mishra's Factory and Strip Mine,
 ##    with the 1997 program imported or without it; a basic land only by
-##    its own place [ours: 1997's other places could draw one too];
+##    its own place [ours: 1997's other places could draw one too]; a
+##    campaign's card packs add their own cards by the pack share
+##    ([PackShare], [method _draw]) — never one made for ante, and a
+##    strong one is special, in no place (0.60.14, the owner's pack
+##    rulings of 2026-11-03) [ours];
 ##  - never a card the hero could not put in the deck in use: no more
 ##    copies there than the deck's size allows (one under 40 cards, two from
 ##    40, three from 60, one more with Tome of Enlightenment).
@@ -168,7 +172,7 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	# definition must not turn price_at's zero into a free purchase. The
 	# words name the pack ([method _mark_unavailable]).
 	if not CardRegistry.has_card(card_name):
-		return {"bought": false, "said": AdventurePacks.card_refusal(card_name), "price": 0}
+		return {"bought": false, "said": AdventurePacks.card_refusal(card_name, player), "price": 0}
 	var price := price_at(player, slot, card_name)
 	if player.gold < price:
 		return {"bought": false, "said": POOR, "price": price}
@@ -194,12 +198,13 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 	return {"bought": true, "said": "You buy %s for %d gold." % [card_name, price], "price": price}
 
 
-## What [param card_name] costs at site [param slot] ([method CardValue.buy_price]).
+## What [param card_name] costs at site [param slot] ([method CardValue.buy_price]),
+## at its rarity in the hero's campaign ([method AdventurePacks.facts]).
 static func price_at(player: AdventurePlayer, slot: int, card_name: String) -> int:
 	if not CardRegistry.has_card(card_name):
 		return 0
 	return CardValue.buy_price(CardRegistry.get_card(card_name), int(player.world.sites[slot]["type"]),
-		town_colors(player.world, slot))
+		town_colors(player.world, slot), AdventurePacks.facts(player, card_name))
 
 
 ## What site [param slot] pays for [param card_name] ([method CardValue.sell_price]).
@@ -207,7 +212,7 @@ static func sell_price_at(player: AdventurePlayer, slot: int, card_name: String)
 	if not CardRegistry.has_card(card_name):
 		return 0
 	return CardValue.sell_price(CardRegistry.get_card(card_name), int(player.world.sites[slot]["type"]),
-		town_colors(player.world, slot))
+		town_colors(player.world, slot), AdventurePacks.facts(player, card_name))
 
 
 ## WHAT THE PLACES PAY FOR [param card_name], AT LEAST AND AT MOST [ours,
@@ -269,22 +274,30 @@ static func town_record(player: AdventurePlayer, slot: int) -> Dictionary:
 
 ## WHAT ONE DRAW AT SITE [param slot] READS, once for all its places: the
 ## colours sold, the deck in use counted by card ([method deck_counts]) and
-## how many copies of a card it may hold.
+## how many copies of a card it may hold; the cards — the base set's
+## (`base`, [method stock]), each campaign pack's for a shelf (`packs`,
+## [method AdventurePacks.pools]: never a card made for ante) and all of
+## them once (`stock`).
 static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
 	var in_use := deck_counts(player)
 	var size := 0
 	for card_name in in_use:
 		size += int(in_use[card_name])
+	var base := stock()
+	var packs := AdventurePacks.pools(player, true)
 	return {"sold": colors_sold(player.world, slot), "held": counted_copies(player),
 		"limit": allowed_for(player, size), "classic": classic_rule(player),
-		"stock": AdventurePacks.add_stock(player, stock())}
+		"stock": AdventurePacks.joined(base, packs), "base": base, "packs": packs}
 
 
 ## One card for place [param place]: a basic land of a colour the town
 ## sells when [param land], else a card the rules allow — of the colours
 ## sold (or colourless), up to the place's rarity, no artifact in an even
 ## place, not one the deck in use is full of ([param rules]:
-## [method _draw_rules]).
+## [method _draw_rules]). With card packs in the campaign, the pack share
+## first ([PackShare]; 0.60.14, the owner's pack rulings of 2026-11-03):
+## a base card or one pack's, then alike among that side's; without, the
+## one die among every card that fits, as always.
 static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -> String:
 	var sold: Array[int] = rules["sold"]
 	if land:
@@ -293,11 +306,31 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 			if COLOR_BITS[i] in sold:
 				lands.append(LANDS[i])
 		return lands[dice.below(lands.size())] if not lands.is_empty() else ""
+	var packs: Array = rules.get("packs", [])
+	if packs.is_empty():
+		var fitting := _fitting(rules.get("stock", stock()), place, rules)
+		return fitting[dice.below(fitting.size())] if not fitting.is_empty() else ""
+	# Read once for each kind of place (its rarity, its artifact rule) of a
+	# draw: nothing a draw reads changes between its places.
+	var kinds: Dictionary = rules.get_or_add("fits", {})
+	var kind := place % 6
+	if not kinds.has(kind):
+		var lists: Array = []
+		for rows in packs:
+			lists.append(_fitting(rows, place, rules))
+		kinds[kind] = [_fitting(rules.get("base", stock()), place, rules), lists]
+	return PackShare.pick(dice, kinds[kind][0], kinds[kind][1])
+
+
+## The names of [param rows] that fit place [param place] by [param rules]
+## ([method _draw]), in their order.
+static func _fitting(rows: Array, place: int, rules: Dictionary) -> Array[String]:
+	var sold: Array[int] = rules["sold"]
 	var most := place % 3 + 1
 	var held: Dictionary = rules["held"]
 	var limit := int(rules["limit"])
 	var fitting: Array[String] = []
-	for row in rules.get("stock", stock()):
+	for row in rows:
 		var f: Dictionary = row["facts"]
 		var bits := int(f.get("color", CardValue.COLORLESS))
 		if bits != CardValue.COLORLESS and not CardValue.first_color(bits) in sold:
@@ -314,7 +347,7 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 		if not classic_allows(rules.get("classic", {}), String(row["name"])):
 			continue
 		fitting.append(String(row["name"]))
-	return fitting[dice.below(fitting.size())] if not fitting.is_empty() else ""
+	return fitting
 
 
 ## A card's rarity as the shop reads it (`GetCardRarity`): power and

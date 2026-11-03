@@ -160,7 +160,7 @@ func test_the_packs_all_and_none() -> void:
 		pass_test("no packs here")
 		return
 	screen.choose_all_packs(true)
-	assert_eq(screen.setup.packs, offered.filter(func(id: String) -> bool: return id in EmbarkScreen.SELECTABLE_PACKS), "only selectable packs")
+	assert_eq(screen.setup.packs, offered, "every offered pack (0.60.14: all of 2–9 at once)")
 	screen.choose_all_packs(false)
 	assert_eq(screen.setup.packs, [] as Array[String])
 
@@ -471,13 +471,9 @@ func test_card_packs_never_enable_prototype_stories_without_launch_flag() -> voi
 	assert_null(_find("ExpandedAdventure"))
 	for id in screen._pack_checks:
 		var check := screen._pack_checks[id] as CheckBox
-		assert_eq(check.disabled, id != "pack-2")
+		assert_false(check.disabled, "every offered pack can join (0.60.14)")
 		assert_false(check.button_pressed)
 		assert_false(check.tooltip_text.contains("Optional adventure"))
-		if check.disabled:
-			check.button_pressed = true
-			assert_false(check.button_pressed, "disabled choices cannot be selected indirectly")
-			assert_false(id in screen.setup.packs)
 	screen.choose_all_packs(true)
 	assert_false(screen.setup.expanded_adventure)
 	screen.randomize_all(RandomNumberGenerator.new())
@@ -489,7 +485,8 @@ func test_card_packs_never_enable_prototype_stories_without_launch_flag() -> voi
 	add_child_autofree(reopened)
 	await get_tree().process_frame
 	assert_false(reopened.setup.expanded_adventure, "legacy checkbox preference cannot opt in")
-	assert_true(reopened.setup.packs.all(func(id: String) -> bool: return id == "pack-2"))
+	assert_eq(reopened.setup.packs, AdventureSetup.offered_packs(CardPacks.available_ids()),
+		"the packs are kept: a card choice, not a story")
 
 func test_flag_labels_the_prototype_and_preserves_card_pack_choices() -> void:
 	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
@@ -500,7 +497,7 @@ func test_flag_labels_the_prototype_and_preserves_card_pack_choices() -> void:
 	assert_true(reopened.setup.expanded_adventure)
 	assert_string_contains((reopened.find_child("PacksAbout", true, false) as Label).text, "Prototype game design test")
 	reopened.choose_all_packs(true)
-	assert_eq(reopened.setup.packs, ["pack-2"] as Array[String])
+	assert_eq(reopened.setup.packs, AdventureSetup.offered_packs(CardPacks.available_ids()))
 	reopened.randomize_all(RandomNumberGenerator.new())
 	assert_true(reopened.setup.expanded_adventure)
 	reopened.choose_all_packs(false)

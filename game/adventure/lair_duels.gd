@@ -350,7 +350,7 @@ static func settle(player: AdventurePlayer, setup: Dictionary, report: DuelRepor
 	for card_name in setup.get("rares", []):
 		var name := String(card_name)
 		(out["cards"] as Array[String]).append(name)
-		(out["rarities"] as Array[int]).append(rarity_of(name))
+		(out["rarities"] as Array[int]).append(rarity_of(name, player))
 		(out["heights"] as Array[int]).append(dice.below(10))
 		if player.add_card(name):
 			(out["kept"] as Array[String]).append(name)
@@ -374,8 +374,9 @@ static func result_of(report: DuelReport, conceded := false) -> int:
 
 
 ## A card's 1997 rarity (1 common … 4 unique; [method CardShop.shop_rarity]),
-## 0 for one the game does not know.
-static func rarity_of(card_name: String) -> int:
+## 0 for one the game does not know — in [param player]'s campaign, its
+## rarity there ([method AdventurePacks.facts]).
+static func rarity_of(card_name: String, player: AdventurePlayer = null) -> int:
 	if not CardRegistry.has_card(card_name):
 		return 0
-	return CardShop.shop_rarity(CardValue.facts(CardRegistry.get_card(card_name)))
+	return CardShop.shop_rarity(AdventurePacks.facts(player, card_name))

@@ -173,7 +173,7 @@ func test_the_help_says_randomize_draws_the_packs_that_can_join() -> void:
 	assert_string_contains(embark, "Randomize draws every choice")
 	assert_false(embark.contains("the card packs stay unticked while they wait"),
 		"the packs are drawn too")
-	assert_string_contains(embark, "ticks each card pack that can join an adventure, or not, at random")
+	assert_string_contains(embark, "ticks each card pack on the list, or not, at random")
 	assert_false(embark.contains("not implemented yet"), "Pack 2 joins adventures")
 
 

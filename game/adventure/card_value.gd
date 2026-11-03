@@ -142,6 +142,25 @@ const POWER := 0x80
 const POWER_1997: Array[String] = ["Ali from Cairo", "Ancestral Recall", "Black Lotus",
 	"Mox Emerald", "Mox Jet", "Mox Pearl", "Mox Ruby", "Mox Sapphire",
 	"Copper Tablet", "Gauntlet of Might", "Ironclaw Orcs", "Psionic Blast"]
+## THE STRONG PACK CARDS (0.60.14, the owner's pack rulings of 2026-11-03:
+## "Strong cards marked special" — never in shops, 4 amulets: Necropotence,
+## Force of Will, Lion's Eye Diamond, the Tutors, Mox Diamond, Survival of
+## the Fittest, Wasteland, Lotus Petal, Hymn…) [ours]: each carries
+## [constant POWER] by name, as 1997's own power cards carry it — special in
+## a shop's rarity, so never in a shop's place ([method
+## CardShop.shop_rarity]), four amulets in a trade, the special budget in a
+## duel's spoils, priced special. A card of a numbered pack only (the base
+## keeps 1997's own marks); the one list to edit. The pack cards on the
+## adventure's ban lists ([ClassicBans], any of the three) but the two ante
+## cards, which are ruled apart ([method AdventurePacks.pools]); then the
+## owner's names those lists miss; then the packs' other Tutors.
+const STRONG_PACK_CARDS: Array[String] = [
+	"Brainstorm", "Demonic Consultation", "Flash", "Lion's Eye Diamond", "Lotus Petal",
+	"Merchant Scroll", "Mystical Tutor", "Necropotence", "Vampiric Tutor",
+	"Ancient Tomb", "City of Traitors", "Force of Will", "Hymn to Tourach", "Mox Diamond",
+	"Survival of the Fittest", "Wasteland",
+	"Cruel Tutor", "Enlightened Tutor", "Personal Tutor", "Sylvan Tutor", "Worldly Tutor",
+]
 ## THE 1997 BASE SETS (`expansion` & 0xC1, the bits the shops, the riddles
 ## and the copy limit read): 0x1 Fourth Edition, 0x40 the Astral cards, 0x80
 ## the cards that came with the game (the HarperPrism promotions, `phpr`:
@@ -345,15 +364,16 @@ static func derive(data: CardData) -> Dictionary:
 
 ## The `extra_ability` marks a card read without the 1997 table carries by
 ## name ([method derive]): [constant TREASURE], [constant KEPT_BACK],
-## [constant POWER] — the table's own on every card of it. Cheap: the shop
-## reads them before any card's facts ([method CardShop.stock]).
+## [constant POWER] — the table's own on every card of it; a strong pack
+## card's power mark ([constant STRONG_PACK_CARDS]). Cheap: the shop reads
+## them before any card's facts ([method CardShop.stock]).
 static func named_marks(card_name: String) -> int:
 	var marks := 0
 	if is_treasure(card_name):
 		marks |= TREASURE
 	if card_name in KEPT_BACK_1997:
 		marks |= KEPT_BACK
-	if card_name in POWER_1997:
+	if card_name in POWER_1997 or card_name in STRONG_PACK_CARDS:
 		marks |= POWER
 	return marks
 
@@ -417,18 +437,35 @@ static func color_bits(mask: int) -> int:
 ## A card's rarity for the shop, 1 common to 3 rare, 4 special: its first
 ## printing's (closest to the 1997 game's own list: it agrees on 84 in 100
 ## of the cards a shop sells, Fourth Edition's on 76), an Astral card
-## special.
+## special. A numbered pack's card: its original printing's, in the trusted
+## catalogue of the pack that introduced it ([method
+## AdventurePacks.printed_rarity]; 0.60.14, the owner's pack rulings of
+## 2026-11-03: "Rarity is deterministic") — the card pool's first printing
+## was whichever pack Options switched on first (Wood Elves Portal's rare
+## with Portal on, Exodus's common without it).
 static func rarity(card_name: String) -> int:
 	if CardRegistry.printed_rarity(card_name, "past") != "":
 		return 4
-	match CardRegistry.rarity_of(card_name).to_lower():
+	var word := ""
+	if CardRegistry.has_card(card_name) and not CardTrade.in_adventure(card_name):
+		word = AdventurePacks.printed_rarity(card_name)
+	var rank := rank_of(word if word != "" else CardRegistry.rarity_of(card_name))
+	return rank if rank != 0 else 1
+
+
+## A rarity's word as the shop's rank: 1 common, 2 uncommon, 3 rare
+## (mythic too), 4 special; 0 for no word (or one no rank reads).
+static func rank_of(word: String) -> int:
+	match word.to_lower():
+		"common":
+			return 1
 		"uncommon":
 			return 2
 		"rare", "mythic":
 			return 3
 		"special":
 			return 4
-	return 1
+	return 0
 
 
 ## Whether [param card_name] is of the base sets the 1997 shops sell
@@ -546,9 +583,11 @@ static func goes_with(card_bits: int, tile_bits: int, level: int) -> bool:
 
 ## THE PRICE IN A TOWN: [param data] at a site of [param site_type] (1
 ## village … 3 city) on land of colours [param tile_bits]
-## ([method ShandalarWorld.magic_mask]).
-static func buy_price(data: CardData, site_type: int, tile_bits: int) -> int:
-	var f := facts(data)
+## ([method ShandalarWorld.magic_mask]) — on [param given] facts when a
+## campaign reads the card otherwise ([method AdventurePacks.facts]: a Fifth
+## Edition printing), else its own.
+static func buy_price(data: CardData, site_type: int, tile_bits: int, given := {}) -> int:
+	var f := given if not given.is_empty() else facts(data)
 	var value := price_of(f) * (site_type + 2)
 	value = land_markup(value, int(f.get("color", COLORLESS)), tile_bits)
 	return clampi(_div(value, 50) * 5, 5, 1000)
@@ -571,8 +610,9 @@ static func land_markup(value: int, card_bits: int, tile_bits: int) -> int:
 
 ## WHAT A TOWN PAYS for [param data] (`SellPrice`), capped at its own asking
 ## price [QoL]. This also keeps the builder's quotes and worth ranges in step.
-static func sell_price(data: CardData, site_type: int, tile_bits: int) -> int:
-	var f := facts(data)
+## [param given]: as [method buy_price]'s.
+static func sell_price(data: CardData, site_type: int, tile_bits: int, given := {}) -> int:
+	var f := given if not given.is_empty() else facts(data)
 	var value := price_of(f) * (site_type + 2)
 	var color := int(f.get("color", COLORLESS))
 	if color != tile_bits and color != 0:
@@ -580,4 +620,4 @@ static func sell_price(data: CardData, site_type: int, tile_bits: int) -> int:
 			value = value * 4 / 3
 		else:
 			value = value * 3 / 2
-	return mini(_div(value, 50) * 5, buy_price(data, site_type, tile_bits))
+	return mini(_div(value, 50) * 5, buy_price(data, site_type, tile_bits, f))

@@ -171,7 +171,7 @@ func refresh() -> void:
 				show_large(cards[i])
 				break
 	elif not CardRegistry.has_card(cards[chosen]):
-		_ask.text = AdventurePacks.card_refusal(cards[chosen])
+		_ask.text = AdventurePacks.card_refusal(cards[chosen], player)
 		_buy.disabled = true
 	else:
 		var price := CardShop.price_at(player, slot, cards[chosen])
@@ -221,7 +221,7 @@ func _offer(index: int, card_name: String) -> Control:
 		if not card_name.is_empty():
 			# Its pack named, in full on the pointer and once chosen (the
 			# owner's polish of 2026-11-03, [method CardShop._mark_unavailable]).
-			place.tooltip_text = AdventurePacks.card_refusal(card_name)
+			place.tooltip_text = AdventurePacks.card_refusal(card_name, player)
 			place.gui_input.connect(_place_input.bind(index))
 		return place
 	var card := CardPreview.new()
@@ -230,8 +230,10 @@ func _offer(index: int, card_name: String) -> Control:
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(card)
 	card.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
-	# The tag wears the card's rarity under the pointer and once chosen.
-	tag.set_meta("rarity", CardShop.shop_rarity(CardValue.facts(CardRegistry.get_card(card_name))))
+	# The tag wears the card's rarity under the pointer and once chosen —
+	# in this campaign's printing (a Fifth Edition card at its 5ED rarity;
+	# 0.60.14, the owner's pack rulings of 2026-11-03).
+	tag.set_meta("rarity", CardShop.shop_rarity(AdventurePacks.facts(player, card_name)))
 	place.mouse_entered.connect(_hover.bind(index, true))
 	place.mouse_exited.connect(_hover.bind(index, false))
 	place.gui_input.connect(_place_input.bind(index))

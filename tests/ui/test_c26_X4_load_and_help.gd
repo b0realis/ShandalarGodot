@@ -106,9 +106,9 @@ func test_the_shop_place_whose_pack_is_off_names_it() -> void:
 func test_the_help_tells_the_packs_as_the_embark_offers_them() -> void:
 	var embark := _page_text("Shandalar — a new adventure")
 	assert_false(embark.contains("not implemented yet"), "Pack 2 joins adventures since 0.60.7")
-	assert_string_contains(embark, "Pack 2 · Fallen Empires can join an adventure")
-	assert_string_contains(embark, "unavailable for new adventures", "as the greyed boxes' tooltip says")
-	assert_string_contains(embark, "ticks each card pack that can join an adventure, or not, at random")
+	assert_string_contains(embark, "Any of Packs 2 to 9 can join an adventure", "all at once since 0.60.14")
+	assert_false(embark.contains("unavailable for new adventures"), "no box is greyed since 0.60.14")
+	assert_string_contains(embark, "ticks each card pack on the list, or not, at random")
 	assert_string_contains(embark, "its allowance is halved, rounded down", "the card rule's non-base halving")
 	assert_string_contains(embark, "only to a deck of 40 cards or more, or with the Tome")
 	assert_false(embark.contains("--expanded-adventure"), "the prototype is never named in Help")

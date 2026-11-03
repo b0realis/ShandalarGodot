@@ -43,7 +43,8 @@ extends RefCounted
 ## read again as the trade is made ([method pay]), as 1997 did: what was
 ## held then may be gone.
 ## A card costs its rarity in amulets — 1 common (2 for a common the program
-## favoured, `extra_ability` 0x400), 2 uncommon, 3 rare, 4 special — and a
+## favoured, `extra_ability` 0x400), 2 uncommon, 3 rare, 4 special (a
+## strong pack card too, [constant CardValue.STRONG_PACK_CARDS]) — and a
 ## basic land comes four at a time for one. The cards: every card of the
 ## adventure but the dungeons' treasures and those 1997 kept from its card
 ## pickers (`extra_ability` 0x900; without the 1997 program, the same marks
@@ -114,7 +115,9 @@ static func catalogue(all_cards := false) -> Array[Dictionary]:
 
 ## The campaign's choice applies to town trades, the Bazaar and the Mine.
 ## Free quest rewards retain their original exclusions; both pools then
-## receive whichever regional expansion the campaign has unlocked.
+## receive whichever regional expansion the campaign has unlocked — and every
+## card of its card packs, each pack its own ([method AdventurePacks.add_stock]):
+## a list, so no pack share (0.60.14, the owner's pack rulings of 2026-11-03).
 static func for_trader(player: AdventurePlayer, way: String) -> Array[Dictionary]:
 	var base := catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
 	return AdventurePacks.add_stock(player, base) if player != null else base
@@ -173,9 +176,11 @@ static func copies(card_name: String) -> int:
 
 
 ## THE NOMAD'S PRICE for [param data], the hero where they stand: with the
-## dice's draw of [param draw] (0 to the hero's place's tenth − 1).
+## dice's draw of [param draw] (0 to the hero's place's tenth − 1); at the
+## card's rarity in the hero's campaign ([method AdventurePacks.facts]).
 static func bazaar_price(player: AdventurePlayer, data: CardData, draw: int) -> int:
-	var f := CardValue.facts(data)
+	var f := AdventurePacks.fifth_facts(data.card_name) if AdventurePacks.fifth_printing(player, data.card_name) \
+		else CardValue.facts(data)
 	var value := CardValue.price_of(f) * 4
 	var color := int(f.get("color", CardValue.COLORLESS))
 	var here := player.tile()
@@ -251,11 +256,12 @@ static func traded(player: AdventurePlayer, slot: int) -> void:
 ## WHAT THE TRADER ASKS for [param card_name] in a trade of [param way]
 ## ([constant TOWN], [constant BAZAAR], [constant MINE]; [param color] the
 ## town's amulets, [param price] the Nomad's gold): `{copies, amulets, gold,
-## words, afford}` — "I'll trade you 1 Serra Angel for 3 white amulets."
+## words, afford}` — "I'll trade you 1 Serra Angel for 3 white amulets." The
+## amulets by the card's rarity in the hero's campaign ([method
+## AdventurePacks.facts]: a Fifth Edition card at Fifth Edition's).
 static func offer(player: AdventurePlayer, card_name: String, way: String, color := "",
 		price := 0) -> Dictionary:
-	var data := CardRegistry.get_card(card_name)
-	var f := CardValue.facts(data)
+	var f := AdventurePacks.facts(player, card_name)
 	var count := copies(card_name)
 	var out := {"copies": count, "amulets": 0, "gold": 0, "card": card_name}
 	if way == REWARD:

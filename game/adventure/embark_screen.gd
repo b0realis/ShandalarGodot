@@ -99,8 +99,8 @@ const RULE_1997_DECK_TIP := "Deck Builder: three copies per nonbasic card below 
 const RULE_SMALL_DECK_TIP := "Small decks can play. For a duel only, random basic lands fill a short deck to 30/35/40/40 cards at Apprentice/Magician/Sorcerer/Wizard, counting the ante. Offers still use your saved deck's size."
 const RULE_COMMON_TIP := "Basic lands have no copy cap. Card hold, selected packs and regional unlocks still apply."
 const RULE_TIPS := {
-	AdventurePlayer.RULE_MEANT: "AS INTENDED\nNew shop stock counts active-deck copies only; spare copies do not count. Allowance: one under 40 cards, two at 40–59, three at 60+. Tome of Enlightenment adds one. Existing shelf stock stays.\n\nOrdinary duel rewards use that allowance; non-base cards (including Fallen Empires) halve it, rounded down. A 36-card deck gets no random FE reward without the Tome; a 40-card deck allows one, minus copies in use. Won ante bypasses this; special treasures and lairs keep their own rules. Paid trades still allow dimmed cards.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
-	AdventurePlayer.RULE_SHIPPED: "AS SHIPPED\nOwned copies do not block new shop stock or ordinary duel rewards. Paid trades also permit duplicates. This disables offer-copy counting, not every card rule.\n\nNon-base random duel rewards (including Fallen Empires) still need at least 40 active-deck cards, or Tome of Enlightenment. Thus a 36-card deck can buy or trade for FE cards, but needs the Tome for random FE duel rewards. Won ante bypasses this; special treasures and lairs keep their own rules.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
+	AdventurePlayer.RULE_MEANT: "AS INTENDED\nNew shop stock counts active-deck copies only; spare copies do not count. Allowance: one under 40 cards, two at 40–59, three at 60+. Tome of Enlightenment adds one. Existing shelf stock stays.\n\nOrdinary duel rewards use that allowance; non-base cards (pack cards) halve it, rounded down. A 36-card deck gets no random pack card without the Tome; a 40-card deck allows one, minus copies in use. Won ante bypasses this; special treasures and lairs keep their own rules. Paid trades still allow dimmed cards.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
+	AdventurePlayer.RULE_SHIPPED: "AS SHIPPED\nOwned copies do not block new shop stock or ordinary duel rewards. Paid trades also permit duplicates. This disables offer-copy counting, not every card rule.\n\nNon-base random duel rewards (pack cards) still need at least 40 active-deck cards, or Tome of Enlightenment. Thus a 36-card deck can buy or trade for pack cards, but needs the Tome to win them at random. Won ante bypasses this; special treasures and lairs keep their own rules.\n\n" + RULE_1997_DECK_TIP + "\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
 	AdventurePlayer.RULE_CLASSIC: "CLASSIC MTG\nDeck Builder checks four copies per nonbasic card; one for restricted cards, none for banned cards, using the Ban list below. Tome of Enlightenment raises restricted cards to four; banned cards stay banned.\n\nShops, traders and generated rewards count ALL owned copies, including spare cards and other decks. At the limit, no further copy is offered. Won ante is kept even above the limit; owning a card does not make it legal in the deck.\n\nA 36-card deck and a 40-card deck have the same copy allowance. There is no non-base halving or 40-card acquisition gate.\n\n" + RULE_SMALL_DECK_TIP + "\n" + RULE_COMMON_TIP,
 }
 ## THE FINAL BATTLE'S RULE (the owner, 2026-10-27: "A setting at Embark"),
@@ -294,8 +294,10 @@ var _playmat_preview: Control
 var _difficulty_buttons: Array[Button] = []
 var _difficulty_word: Label
 var _difficulty_note: Label
-## Packs currently open for new campaigns; other installed packs stay visible.
-const SELECTABLE_PACKS: Array[String] = ["pack-2"]
+## THE CARD PACKS' BOXES, one for each pack the adventure offers
+## ([method AdventureSetup.offered_packs]: every installed pack, Pack 1
+## never). Every one can be ticked, all at once (0.60.14, the owner's pack
+## rulings of 2026-11-03: "All of 2–9 at once"; before it, Pack 2 alone).
 var _pack_checks: Dictionary = {}
 var _packs_about: Label
 var _seed_edit: LineEdit
@@ -321,8 +323,6 @@ var randomize_button: Button
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	setup = AdventureSetup.restore(_installed_packs())
-	for id in setup.packs.duplicate():
-		if id not in SELECTABLE_PACKS: setup.packs.erase(id)
 	_faces = faces()
 	if PortraitLibrary.texture(setup.portrait) == null:
 		setup.portrait = String(_faces[0]["id"]) if not _faces.is_empty() else ""
@@ -693,7 +693,6 @@ func _build_journey() -> Control:
 		for label in ["All", "None"]:
 			var button := UiChrome.menu_button(label, Vector2(72, 28), 14)
 			button.name = "Packs" + label
-			button.disabled = not installed.any(func(id: String) -> bool: return id in SELECTABLE_PACKS)
 			button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			button.pressed.connect(choose_all_packs.bind(label == "All"))
 			header.add_child(button)
@@ -727,10 +726,6 @@ func _build_journey() -> Control:
 			check.add_theme_font_size_override("font_size", 15)
 			check.add_theme_icon_override("checked", UiChrome.check_icon(true))
 			check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
-			check.disabled = id not in SELECTABLE_PACKS
-			if check.disabled:
-				check.modulate = Color(0.55, 0.55, 0.55)
-				check.tooltip_text += "\nUnavailable for new adventures."
 			check.button_pressed = id in setup.packs
 			var adventures := AdventurePacks.adventures(id)
 			if setup.expanded_adventure and not adventures.is_empty():
@@ -898,15 +893,7 @@ func _build_card_rule() -> Control:
 	row.theme = Theme.new()
 	row.theme.set_font_size("font_size", "TooltipLabel", 14)
 	row.theme.set_constant("line_spacing", "TooltipLabel", 1)
-	var paper := StyleBoxFlat.new()
-	paper.bg_color = Color(0.035, 0.03, 0.025, 0.98)
-	paper.border_color = Color(0.48, 0.39, 0.24)
-	paper.set_border_width_all(1)
-	paper.content_margin_left = 10
-	paper.content_margin_right = 10
-	paper.content_margin_top = 8
-	paper.content_margin_bottom = 8
-	row.theme.set_stylebox("panel", "TooltipPanel", paper)
+	row.theme.set_stylebox("panel", "TooltipPanel", UiChrome.tooltip_paper())
 	_card_rule.item_selected.connect(func(index: int) -> void:
 		choose_card_rule(String(_card_rule.get_item_metadata(index))))
 	_show_card_rule()
@@ -1459,10 +1446,6 @@ func choose_difficulty(level: int) -> void:
 
 func choose_pack(on: bool, id: String) -> void:
 	if not _pack_checks.has(id): return
-	if id not in SELECTABLE_PACKS:
-		(_pack_checks[id] as CheckBox).set_pressed_no_signal(false)
-		setup.packs.erase(id)
-		return
 	if on and not id in setup.packs:
 		setup.packs.append(id)
 	elif not on:
@@ -1471,13 +1454,16 @@ func choose_pack(on: bool, id: String) -> void:
 
 func choose_all_packs(on: bool) -> void:
 	for id in _pack_checks:
-		var check := _pack_checks[id] as CheckBox
-		check.button_pressed = on and not check.disabled
+		(_pack_checks[id] as CheckBox).button_pressed = on
 
 
+## The words over the list: what a ticked pack brings (0.60.14, the owner's
+## pack rulings of 2026-11-03) — its own cards, as a share of the random
+## cards of shops, duel spoils and lairs: 20% for each pack, 60% at most
+## for them all; the rest stay base cards.
 func _show_pack_mode() -> void:
 	_packs_about.add_theme_color_override("font_color", GOLD if setup.expanded_adventure else DIM)
-	_packs_about.text = "Add cards to shops and rewards on Shandalar. Your first deck uses base cards."
+	_packs_about.text = "Each ticked pack adds its own cards to shops and rewards on Shandalar: 20% of random cards per pack, 60% at most in all. Your first deck uses base cards."
 	if setup.expanded_adventure:
 		_packs_about.text = "Prototype game design test: add available lands and quests. Packs without an adventure add their cards immediately."
 
@@ -1517,8 +1503,7 @@ func randomize_all(rng: RandomNumberGenerator = null) -> void:
 	var time := "%02d%02d%02d" % [rng.randi_range(0, 23), rng.randi_range(0, 59), rng.randi_range(0, 59)]
 	setup.seed_text = "240000" if time == "000000" else time
 	for id in _pack_checks:
-		var check := _pack_checks[id] as CheckBox
-		check.button_pressed = not check.disabled and rng.randi_range(0, 1) == 1
+		(_pack_checks[id] as CheckBox).button_pressed = rng.randi_range(0, 1) == 1
 	_show_all()
 	_say("")
 

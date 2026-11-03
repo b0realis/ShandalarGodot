@@ -1,9 +1,10 @@
-# Adventure card economy: original game and Pack 2
+# Adventure card economy: original game and card packs
 
-Review, 2026-11-01. The aim is to preserve Shandalar's loop:
-explore, risk cards in duels, earn or buy particular cards, improve a limited
-collection, and challenge stronger opponents. Installing a set must not turn
-the campaign into the unrestricted Deck Builder.
+Review, 2026-11-01; card packs 2–9 in campaigns, 2026-11-03 (0.60.14).
+The aim is to preserve Shandalar's loop: explore, risk cards in duels, earn
+or buy particular cards, improve a limited collection, and challenge stronger
+opponents. Installing a set must not turn the campaign into the unrestricted
+Deck Builder.
 
 ## Evidence and limits
 
@@ -65,7 +66,7 @@ optional all-original-cards trader setting. Cross-town trading remains possible.
    share `CardShop.remaining_copies` / `copies_left`, keeping each caller's
    original comparison. Classic limits remain independent. Shops retain
    their existing slot allowance for both base and optional cards: a hero
-   with a 36-card starter can find Fallen Empires in shops. The initial audit
+   with a 36-card starter can find pack cards in shops. The initial audit
    extended the non-base spoil reduction to shops, but that was a new balance
    restriction, not a demonstrated original shop bug; it has been withdrawn.
    Existing shelves are not rerolled or confiscated.
@@ -113,19 +114,49 @@ selected card packs unchanged. Card selection does not replace copy rules.
 The menu descriptions now distinguish acquisition, deck legality, collection
 capacity and content unlocks. Option names and defaults remain unchanged.
 
-## Pack 2 and the main game
+## Card packs and the main game
 
-Campaign selection is separate from global installation. Select Pack 2 on
-Embark to add its cards to this hero's mainland shops, trades and rewards;
-ordinary acquisition and copy rules still apply.
+Campaign selection is separate from global installation. Since 0.60.14 (the
+owner's pack rulings of 2026-11-03) every installed pack from Pack 2 to Pack 9
+can be ticked on Embark, any number at once; Pack 1 is never offered
+(`AdventureSetup.IGNORED_PACKS`). Ticked packs add cards to this hero's
+mainland shops, trades and rewards; ordinary acquisition and copy rules still
+apply, the non-base spoil halving included. The first deck and the fixed 1997
+decks (creatures, castle wizards, ruled towns, dungeons, Arzakon) stay base
+cards. Setting out enables a ticked pack in Options › Card Packs as well.
 
-Pack 2 adds **102 identities, not 187 independent lottery entries**. Its
-trusted catalogue classifies 36 common, 30 uncommon and 36 rare identities;
-alternate illustrations do not multiply draw chances. Reprints must not
-reintroduce a core card withheld by a particular source.
+| Rule | Meaning |
+| --- | --- |
+| Own cards | A ticked pack adds the identities it introduced. Its reprint of another pack's card comes only when that pack is ticked too. Exception: Pack 7 (Fifth Edition) adds its 147 Fallen Empires, Ice Age and Homelands reprints as Fifth Edition printings. |
+| Fixed rarity | A pack card's rarity (hence its price, shop place and amulet cost) is its original printing in the trusted catalogue that ships in the game; for Pack 7's reprints, the Fifth Edition rarity unless the original pack is ticked too, then the original's. It never depends on which packs are switched on in Options. |
+| Ante cards | Pack cards made for ante (Amulet of Quoz, Timmerian Fiends) are never in a shop's places; elsewhere they are treated as the base pool's ante cards are. |
+| Strong cards | One list, `CardValue.STRONG_PACK_CARDS` (21 names), gives pack cards the power mark: special like the base pool's power cards — never in a shop place, four amulets in trades, the special budget in spoils. It holds the pack cards on the adventure's restricted and banned names (`ClassicBans`: Brainstorm, Demonic Consultation, Flash, Lion's Eye Diamond, Lotus Petal, Merchant Scroll, Mystical Tutor, Necropotence, Vampiric Tutor), the owner's names those lists miss (Ancient Tomb, City of Traitors, Force of Will, Hymn to Tourach, Mox Diamond, Survival of the Fittest, Wasteland) and the other pack Tutors (Cruel, Enlightened, Personal, Sylvan, Worldly). The banned ante cards follow the ante rule instead; Demonic Tutor is a base card, decided by the 1997 marks. |
+| Pack share | In every random draw (shop places; duel spoils: cards won and the artifact for the next duel; lair rewards: treasure, rares, thieves, Pyramids and the lair duel's hoard) each ticked pack's share is min(20%, 60% / N) and all packs' together min(20% × N, 60%); the rest are base cards. When one side has no eligible card for the place's color, type or rarity, the draw takes the other side, so no place is left empty. |
+| No packs | A campaign with no ticked pack draws exactly as before: the same seed gives the same cards. |
+| Choice lists | Trades, the castle win's pick, "any card of your choice" and quest rewards still list every eligible card, base and pack alike. |
+| Old saves | Saves of 0.50.48–0.50.60 that carry Packs 3–9 keep them and follow these rules; nothing they own is taken. |
 
-More sets dilute individual-card draw chances because selection works over
-eligible identities. Per-pack weights, discounts, free collections, scaling
+Measured (0.60.14, seeded): shop places 19.6% with one pack, 39.8% with two, 60.1% with three and with all eight (7.1–8.0% each); cards won 20.3% / 59.8% with one / three packs; the artifact for the next duel, a rare of any kind, the lair's rare and the treasure 59.5–62.2% with three packs. A campaign with no packs draws exactly as before (digests of shops, spoils and lairs unchanged).
+
+| Packs ticked | Each pack | All packs | Base cards |
+| --- | --- | --- | --- |
+| none | — | 0% | 100% (as before) |
+| 1 | 20% | 20% | 80% |
+| 2 | 20% | 40% | 60% |
+| 3 | 20% | 60% | 40% |
+| 4 | 15% | 60% | 40% |
+| 8 (Packs 2–9) | 7.5% | 60% | 40% |
+
+Selection works over identities: Pack 2 adds **102 identities, not 187
+independent lottery entries** (its trusted catalogue classifies 36 common,
+30 uncommon and 36 rare identities); alternate illustrations do not multiply
+draw chances. Reprints must not reintroduce a core card withheld by a
+particular source.
+
+Not adopted yet (measured first): Ice Age's Snow-Covered basics stay ordinary
+pack cards rather than basic lands, and the speed fixes (a cached pack stock,
+prewarmed pack prices, one registry rebuild on setting out) wait for numbers.
+Per-pack weights beyond the share, discounts, free collections, scaling
 opponents or automatic deck replacements would be separate balance decisions.
 
 ## Verification
