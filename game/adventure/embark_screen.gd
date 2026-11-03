@@ -74,6 +74,10 @@ var _name_follows := true
 var _leaving := false
 ## The thread making the world behind the veil ([method _make_world_aside]).
 var _worker: Thread
+## Whether packs to switch on are built behind the hourglass, on a thread
+## ([method embark]; 0.60.15): where the hourglass and the world are made,
+## windowed — headless (the tests) on the spot, unless a test says so.
+var packs_aside := DisplayServer.get_name() != "headless"
 var _popup: Control = null
 
 var _portrait: TextureRect
@@ -1636,11 +1640,34 @@ func embark() -> void:
 		_say(refusal)
 		_name_edit.grab_focus()
 		return
-	refusal = AdventurePacks.activate(setup.packs)
+	refusal = AdventurePacks.activate_refusal(setup.packs)
 	if refusal != "":
 		_say(refusal)
 		return
 	_say("")
+	# PACKS TO SWITCH ON, BEHIND THE HOURGLASS (0.60.15, the owner's ruling
+	# of 2026-11-03: "Embark: no frozen window"). Switching Packs 2–9 on
+	# rebuilt the card pool eight times on this thread before the hourglass
+	# came: a window frozen 3.3–5.3 s. Now the hourglass shows first, the
+	# packs go on in one rebuild compiled on a thread ([method
+	# AdventurePacks.activate]), the world is made meanwhile, and the hero
+	# sets out when the pool is ready ([method _materialize]). A start-up
+	# pool still building (a quick player) is waited out under the glass
+	# first, so switching never waits for it here.
+	var aside := packs_aside and not AdventurePacks.to_enable(setup.packs).is_empty()
+	if aside:
+		_leaving = true
+		show_generating()
+		await get_tree().process_frame
+		while CardRegistry.is_loading() and not CardRegistry.poll():
+			await get_tree().process_frame
+		if not is_inside_tree():
+			return
+	refusal = AdventurePacks.activate(setup.packs, aside)
+	if refusal != "":
+		_stop_generating()
+		_say(refusal)
+		return
 	var versions := {}
 	var packs := _card_packs()
 	if packs != null:
@@ -1667,6 +1694,14 @@ func _materialize(record: Dictionary) -> void:
 	var world := await _make_world_aside(record)
 	if not is_inside_tree() or world == null:
 		return
+	# The card pool the campaign's packs went on in, built on its thread
+	# meanwhile ([method embark]): waited for frame by frame, the hourglass
+	# running — the hero's first deck and the world read cards. A pool
+	# dropped meanwhile is built where it is next asked for, as always.
+	while not CardRegistry.poll() and CardRegistry.is_loading():
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
 	var screen := set_out(record, world)
 	var tree := get_tree()
 	tree.root.add_child(screen)
@@ -1723,6 +1758,25 @@ func show_generating() -> void:
 	_bar.add_child(_wait)
 	_wait_time = 0.0
 	get_viewport().gui_release_focus()
+
+
+## The hourglass put away and the choices given back: the packs were
+## refused after it showed ([method embark]).
+func _stop_generating() -> void:
+	if _wait == null:
+		return
+	_wait.queue_free()
+	_wait = null
+	_wait_stars = null
+	var hold := get_node_or_null(^"HoldStill")
+	if hold != null:
+		hold.queue_free()
+	for item in [leave_button, _seed_row, randomize_button, adventure_button]:
+		(item as Control).visible = true
+	leave_button.disabled = false
+	randomize_button.disabled = false
+	adventure_button.disabled = false
+	_leaving = false
 
 
 ## How long each row of stars shows.

@@ -40,17 +40,48 @@ static func adventures(pack: String) -> Array[String]:
 
 ## Selecting cards on Embark enables their installed rules once, when setting out.
 ## Other packs' duel settings are left alone; they do not join this campaign.
-static func activate(ids: Array[String]) -> String:
+## IN ONE REBUILD (0.60.15, the owner's ruling of 2026-11-03: "Embark: no
+## frozen window"): every pack of [param ids] that is off is switched on at
+## once ([method CardPacks.set_enabled_many]) — one at a time, the card pool
+## was rebuilt once a pack, eight times for Packs 2–9: 3.2 s of a frozen
+## window before the hourglass. [param aside]: the rebuild compiles on a
+## thread and this returns at once; the caller waits for [method
+## CardRegistry.poll] behind its hourglass ([method EmbarkScreen.embark]).
+## Refused before anything is switched ([method activate_refusal]).
+static func activate(ids: Array[String], aside := false) -> String:
+	var refusal := activate_refusal(ids)
+	if refusal != "": return refusal
+	var off := to_enable(ids)
+	if off.is_empty(): return ""
+	if not AdventureExpansions.packs().set_enabled_many(off, true, aside):
+		return "Could not enable %s. Check Options › Card Packs." % _titles(off)
+	return ""
+
+## Why [param ids] cannot be switched on now ([method activate]), "" when
+## they can or are on already. Changes nothing.
+static func activate_refusal(ids: Array[String]) -> String:
 	if ids.is_empty(): return ""
 	var service := AdventureExpansions.packs()
 	if service == null: return "Card packs are unavailable."
 	for id in ids:
 		if not service.has_pack(id): return "Install %s in Options › Card Packs before setting out." % title(id)
 		if not service.is_enabled(id) and service.change_refusal() != "": return service.change_refusal()
-	for id in ids:
-		if not service.is_enabled(id) and not service.set_enabled(id, true):
-			return "Could not enable %s. Check Options › Card Packs." % title(id)
 	return ""
+
+## The packs of [param ids] installed but switched off — those [method
+## activate] switches on — in their order.
+static func to_enable(ids: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	var service := AdventureExpansions.packs()
+	if service == null: return out
+	for id in ids:
+		if service.has_pack(id) and not service.is_enabled(id) and not id in out: out.append(id)
+	return out
+
+static func _titles(ids: Array[String]) -> String:
+	var out: Array[String] = []
+	for id in ids: out.append(title(id))
+	return ", ".join(out)
 
 ## A pack as the Embark lists it, "Pack 2 · Fallen Empires"; one not installed
 ## by its file, "Pack 2 (Pack-2-Fallen-Empires.zip)"; one this build does not
@@ -72,7 +103,10 @@ static func title(id: String) -> String:
 ## out does ([method activate]), and named in the notice. `{refusal,
 ## enabled}`: the refusal "" when the campaign may resume; the packs enabled
 ## now, by [method title]. Pack 1 is never a campaign's (AdventureSetup).
-static func resume(player: AdventurePlayer) -> Dictionary:
+## Those switched off are switched on in ONE rebuild, on a thread with
+## [param aside] (0.60.15, the owner's ruling of 2026-11-03: "Same for
+## `resume` on load"; [method activate], [method LoadAdventureScreen.open_save]).
+static func resume(player: AdventurePlayer, aside := false) -> Dictionary:
 	var enabled: Array[String] = []
 	var ids: Array[String] = []
 	for row in player.packs:
@@ -86,14 +120,16 @@ static func resume(player: AdventurePlayer) -> Dictionary:
 		var one := missing.size() == 1
 		return {"refusal": "This adventure needs the card %s %s. Add %s in Options › Card Packs, then resume." % [
 			"pack" if one else "packs", " and ".join(missing), "it" if one else "them"], "enabled": enabled}
+	var off: Array[String] = []
 	for id in ids:
-		if service.is_enabled(id): continue
-		if service.change_refusal() != "":
-			return {"refusal": "This adventure needs %s enabled. %s" % [title(id), service.change_refusal()], "enabled": enabled}
-		if not service.set_enabled(id, true):
-			return {"refusal": "Could not enable %s. Check Options › Card Packs." % title(id), "enabled": enabled}
-		enabled.append(title(id))
-	if not enabled.is_empty(): AdventureExpansions.sync_choices(player)
+		if not service.is_enabled(id): off.append(id)
+	if off.is_empty(): return {"refusal": "", "enabled": enabled}
+	if service.change_refusal() != "":
+		return {"refusal": "This adventure needs %s enabled. %s" % [title(off[0]), service.change_refusal()], "enabled": enabled}
+	if not service.set_enabled_many(off, true, aside):
+		return {"refusal": "Could not enable %s. Check Options › Card Packs." % _titles(off), "enabled": enabled}
+	for id in off: enabled.append(title(id))
+	AdventureExpansions.sync_choices(player)
 	return {"refusal": "", "enabled": enabled}
 
 ## The pack [param card_name] comes in, by the packs this build knows,
@@ -206,20 +242,32 @@ static func add_stock(player: AdventurePlayer, base: Array[Dictionary]) -> Array
 ## ([method fifth_facts]). [param shelves]: less the cards made for ante
 ## ([method MtgGame.is_ante_card]). Cache values only, never CardData or
 ## artwork. Printing variants count once.
+## Read on a worker as the world opens when it can be ([method warm]):
+## one still at work is waited for here, by the first draw that needs it.
 static func card_stock(id: String, shelves := false) -> Array[Dictionary]:
+	if _warm_thread != null: settle_warm()
 	_follow_pool()
 	var key := id + ("|shelves" if shelves else "")
 	if _stock.has(key): return _stock[key]
-	var rows: Array[Dictionary] = []
 	_read_catalogues()
+	var rows := _rows_of(id, shelves, func(data: CardData) -> Dictionary: return CardValue.facts(data),
+		func(card: String) -> Dictionary: return fifth_facts(card))
+	_stock[key] = rows
+	return rows
+
+## [method card_stock]'s rows, the facts by [param facts_of] (a card's
+## [CardData] to its facts) and, for Fifth Edition's, [param fifth_of] (a
+## name to its facts at Fifth Edition's rarity): the caches' on the main
+## thread, read apart on [method warm]'s worker — the one walk for both.
+static func _rows_of(id: String, shelves: bool, facts_of: Callable, fifth_of: Callable) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
 	for card in _own.get(id, []):
 		if not CardRegistry.has_card(card): continue
 		# A reprint must not bypass a core trader's treasure/withheld-card rules.
 		if CardTrade.in_adventure(card): continue
 		var data := CardRegistry.get_card(card)
 		if shelves and MtgGame.is_ante_card(data): continue
-		rows.append({"name": card, "facts": fifth_facts(card) if id == FifthEditionPack.ID else CardValue.facts(data)})
-	_stock[key] = rows
+		rows.append({"name": card, "facts": fifth_of.call(card) if id == FifthEditionPack.ID else facts_of.call(data)})
 	return rows
 
 ## Whether [param card_name] is, in [param player]'s campaign, a card of
@@ -237,17 +285,22 @@ static func fifth_printing(player: AdventurePlayer, card_name: String) -> bool:
 static func fifth_facts(card_name: String) -> Dictionary:
 	_follow_pool()
 	_read_catalogues()
-	var data := CardRegistry.get_card(card_name)
-	var f := CardValue.facts(data)
+	var f := CardValue.facts(CardRegistry.get_card(card_name))
+	var key := "5ed|" + card_name
+	if _stock.has(key): return _stock[key]
+	var fifth := _at_fifth_rarity(card_name, f)
+	if not is_same(fifth, f): _stock[key] = fifth
+	return fifth
+
+## [param f] at Fifth Edition's rarity of [param card_name]: [param f] itself
+## when that is its own (or there is none), else a read-only copy.
+static func _at_fifth_rarity(card_name: String, f: Dictionary) -> Dictionary:
 	var rank := CardValue.rank_of(String(_fifth.get(card_name, "")))
 	if rank == 0 or rank == int(f.get("rarity", 1)): return f
-	var key := "5ed|" + card_name
-	if not _stock.has(key):
-		var out := f.duplicate()
-		out["rarity"] = rank
-		out.make_read_only()
-		_stock[key] = out
-	return _stock[key]
+	var out := f.duplicate()
+	out["rarity"] = rank
+	out.make_read_only()
+	return out
 
 ## [param card_name]'s facts in [param player]'s campaign: [method
 ## CardValue.facts], a Fifth Edition card at its Fifth Edition rarity there
@@ -272,6 +325,175 @@ static func printed_rarity(card_name: String) -> String:
 static func owner_of(card_name: String) -> String:
 	_read_catalogues()
 	return String(_owner.get(card_name, ""))
+
+# --- 0.60.15: the campaign's pack cards read on a worker as the world opens ---
+
+## THE CAMPAIGN'S PACK CARDS READ AS THE WORLD OPENS, ON A WORKER (0.60.15,
+## the owner's ruling of 2026-11-03: "Prewarm pack prices"). The first pack
+## draw of a session — a town's shelves, a trade list, a duel's spoils, a
+## lair — read the facts of every card of the campaign's packs ([method
+## card_stock], [method CardValue.facts]) on the thread that draws: 190–313
+## ms with Packs 2–9 on the desk. [method warm] (main thread, as the world
+## opens: [method WorldSoundscape.warm_arrival]) hands that reading to a
+## [Thread] of its own — not the engine's pool, where the low-priority
+## warm-ups run one at a time ([SkinWarmer]) and it could wait behind
+## them. The worker walks [method _rows_of], the very walk of [method
+## card_stock], with each card's facts read apart from every cache ([method
+## CardValue.read_aside], a scorer of its own): the same code on the same
+## cards, so the same rows. [method settle_warm] (main thread) takes them
+## in — once the worker is done ([method warm_done], asked as the world's
+## clock ticks), or at the first draw that comes before it is, which waits
+## for the rest ([method card_stock]). The worker writes nothing shared and
+## reads only the card pool and tables complete before it starts; a pool
+## about to change stops it first and waits ([method stop_warm], from
+## [method CardPacks._configure_registry]), as leaving the world does.
+## Not headless (the tests, the tools: a test must not race a thread), not
+## on the Web, nor without threads ([member warm_forced]): there the first
+## draw reads the cards, as before.
+static var _warm_thread: Thread = null
+static var _warm_job: WarmJob = null
+## Tests: 1 warms headless too, 0 never, -1 by the rule (as [member
+## SkinWarmer.forced]).
+static var warm_forced := -1
+
+## What [method warm]'s worker is given: the packs to read (`[id, shelves]`
+## each), the pool's revision and the 1997 table ([method
+## CardValue.imported_table]) as they stood, the hero it was started for
+## (an instance id), and a stop asked under its lock.
+class WarmJob extends RefCounted:
+	var lock := Mutex.new()
+	var stop := false
+	var revision := -1
+	var owner := 0
+	var table: Dictionary = {}
+	var jobs: Array = []
+
+	func stopped() -> bool:
+		lock.lock()
+		var asked := stop
+		lock.unlock()
+		return asked
+
+	func ask_stop() -> void:
+		lock.lock()
+		stop = true
+		lock.unlock()
+
+## Start reading [param player]'s campaign packs' cards on a worker (see
+## above). Main thread. False when there is nothing to read (no campaign
+## pack, every one read already), one is at work, or no worker may run here.
+static func warm(player: AdventurePlayer) -> bool:
+	if _warm_thread != null or not _warm_runs_here(): return false
+	var ids := campaign_packs(player)
+	if ids.is_empty(): return false
+	_follow_pool()
+	_read_catalogues()
+	var job := WarmJob.new()
+	for id in ids:
+		for shelves in [false, true]:
+			if not _stock.has(id + ("|shelves" if shelves else "")): job.jobs.append([id, shelves])
+	if job.jobs.is_empty(): return false
+	job.revision = CardRegistry.revision
+	job.table = CardValue.imported_table()
+	job.owner = player.get_instance_id()
+	var thread := Thread.new()
+	if thread.start(func() -> Dictionary: return _read_aside(job)) != OK: return false
+	_warm_thread = thread
+	_warm_job = job
+	return true
+
+## Whether [method warm]'s worker is out (at work or done, not yet taken in).
+static func warming() -> bool:
+	return _warm_thread != null
+
+## Whether [method warm]'s worker is done, its rows waiting to be taken in
+## ([method settle_warm]) — which then waits for nothing.
+static func warm_done() -> bool:
+	return _warm_thread != null and not _warm_thread.is_alive()
+
+## THE WORKER'S ROWS TAKEN IN (main thread): waited for if still at work,
+## then kept as [method card_stock] and [method CardValue.facts] would have
+## kept them — unless the pool or the 1997 table moved on meanwhile; what
+## the main thread read meanwhile is kept, and the rows point at it.
+static func settle_warm() -> void:
+	if _warm_thread == null: return
+	var out: Variant = _warm_thread.wait_to_finish()
+	var job := _warm_job
+	_warm_thread = null
+	_warm_job = null
+	if not (out is Dictionary) or (out as Dictionary).is_empty(): return
+	if job.revision != CardRegistry.revision or not is_same(job.table, CardValue.imported_table()): return
+	_follow_pool()
+	var moved := CardValue.adopt(out["facts"])
+	var fifth: Dictionary = out["fifth"]
+	var fifth_moved := {}
+	for card in fifth:
+		var key := "5ed|" + String(card)
+		if _stock.has(key): fifth_moved[card] = _stock[key]
+		else: _stock[key] = fifth[card]
+	var stock: Dictionary = out["stock"]
+	for key in stock:
+		if _stock.has(key): continue
+		var at_fifth := String(key).get_slice("|", 0) == FifthEditionPack.ID
+		var rows: Array[Dictionary] = stock[key]
+		# The rows point at the facts kept: the worker's, but where the main
+		# thread read a card meanwhile (seldom), at those.
+		if not moved.is_empty() or (at_fifth and not fifth_moved.is_empty()):
+			for row in rows:
+				var card := String(row["name"])
+				if at_fifth and fifth.has(card):
+					row["facts"] = fifth_moved.get(card, row["facts"])
+				else:
+					row["facts"] = moved.get(card, row["facts"])
+		_stock[key] = rows
+
+## [method warm]'s worker stopped and waited for, its rows let go: the card
+## pool about to change; the world of [param player] left — a worker
+## started for another hero's world (one loaded from this one) goes on.
+## Main thread.
+static func stop_warm(player: AdventurePlayer = null) -> void:
+	if _warm_thread == null: return
+	if player != null and _warm_job.owner != player.get_instance_id(): return
+	_warm_job.ask_stop()
+	_warm_thread.wait_to_finish()
+	_warm_thread = null
+	_warm_job = null
+
+static func _warm_runs_here() -> bool:
+	if warm_forced >= 0: return warm_forced == 1
+	return OS.has_feature("threads") and not OS.has_feature("web") and DisplayServer.get_name() != "headless"
+
+## THE WORKER ([method warm]): [param job]'s packs walked as [method
+## card_stock] walks them, each card's facts read apart ([method
+## CardValue.read_aside]) and Fifth Edition's at its rarity ([method
+## _at_fifth_rarity]) — into locals only. `{facts: {name: facts}, fifth:
+## {name: facts at 5ED's rarity, where it differs}, stock: {key: rows}}`,
+## `{}` when stopped.
+static func _read_aside(job: WarmJob) -> Dictionary:
+	var scorer := AutoDeck.new()
+	var facts := {}
+	var fifth := {}
+	var facts_of := func(data: CardData) -> Dictionary:
+		if not facts.has(data.card_name):
+			var f := CardValue.read_aside(data, job.table, scorer)
+			f.make_read_only()
+			facts[data.card_name] = f
+		return facts[data.card_name]
+	var fifth_of := func(card: String) -> Dictionary:
+		if fifth.has(card): return fifth[card]
+		var f: Dictionary = facts_of.call(CardRegistry.get_card(card))
+		var at := _at_fifth_rarity(card, f)
+		if not is_same(at, f): fifth[card] = at
+		return at
+	var stock := {}
+	for pair in job.jobs:
+		if job.stopped(): return {}
+		var id := String(pair[0])
+		var shelves := bool(pair[1])
+		stock[id + ("|shelves" if shelves else "")] = _rows_of(id, shelves, facts_of, fifth_of)
+	return {"facts": facts, "fifth": fifth, "stock": stock}
+
+# --- end 0.60.15 ---
 
 ## The cards and facts kept ([member _stock]) read again when the card pool
 ## has moved on (a pack switched on or off).

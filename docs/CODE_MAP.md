@@ -31,6 +31,50 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## The pack speed fixes and Snow-Covered basics (0.60.15, 2026-11-03)
+
+Measured against M1's 0.60.13 baseline (packs 2–9): setting out with the
+packs off no longer freezes, the first pack draw no longer stalls, the
+trader's keystrokes stay within a frame or two.
+
+- `game/card_packs.gd`: `set_enabled_many(ids, enabled, background)` — one
+  settings write, one rebuild, built on a thread with `background`;
+  `_configure_registry` stops the pack-stock worker first.
+- `game/adventure/adventure_packs.gd`: `activate(ids, aside)`,
+  `activate_refusal`, `to_enable`, `resume(player, aside)`; the pack-stock
+  warm-up `warm`, `warming`, `warm_done`, `settle_warm`, `stop_warm(player)`,
+  `warm_forced`, `WarmJob`, `_read_aside`; `card_stock` shares `_rows_of`
+  with the worker; `_at_fifth_rarity`.
+- `game/adventure/card_value.gd`: `read_aside(data, table, scorer)` (safe on
+  a worker), `imported_table`, `adopt`; `derive` and `strength_step` take a
+  scorer.
+- `game/adventure/embark_screen.gd`: `packs_aside`; `embark` puts the
+  hourglass before the packs; `_materialize` waits for the pool;
+  `_stop_generating`.
+- `game/adventure/load_adventure_screen.gd`: `packs_aside`,
+  `open_save(path, refusal, aside)`, `_take_up`, `_take_up_after_pool`,
+  `_put_up_when_ready`, `_put_up`, `_show_waiting`, `_hide_waiting`,
+  `WAITING`.
+- `game/adventure/world/world_soundscape.gd`: after `warm_arrival`, the
+  next frame reads `CardShop.stock()` (`_warm_stock`) and the one after
+  starts `AdventurePacks.warm` (`_warm_packs`), each outside the world
+  screen's own frame; `tick` takes the results in; `_exit_tree` takes them
+  in or stops the worker.
+- `game/adventure/world/card_trade_pane.gd`: `TYPING_PAUSE` ("TypingPause"
+  timer), `ROWS_AT_ONCE`, `ROWS_PER_FRAME`, `ROWS_DROPPED_PER_FRAME`;
+  `_fill_rows`, `_set_row`, `_fill_sight`, `_row_ready`, `fill_now`.
+- `game/adventure/card_trade.gd`: `for_trader` kept in `_lists` by
+  `_list_key`; `offered_by`; `copies` reads `CardShop.is_basic_land`.
+- `game/adventure/card_shop.gd`: `SNOW_LANDS`, `is_basic_land`, `own_share`
+  (each pack its own share of a draw), `_pack_lands`; `_fitting` skips basic
+  lands.
+- `game/adventure/duel_spoils.gd`: a small deck's pack basic lands in place
+  of a basic land (`_pick`'s `lands`, `_basic_lands`, `_gives`' `no_lands`).
+- Regressions: `tests/unit/test_c29_S1_packs_warm.gd`,
+  `tests/ui/test_c29_S1_embark_resume.gd`,
+  `tests/ui/test_c29_S2_trader_search.gd`,
+  `tests/unit/test_c29_S2_snow_lands.gd`.
+
 ## Card packs in the ordinary adventure (0.60.14, 2026-11-03)
 
 The owner's pack rulings of 2026-11-03 (any of Packs 2–9 on Embark, each

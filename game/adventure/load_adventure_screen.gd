@@ -56,6 +56,18 @@ var back_button: Button
 var hall_button: Button
 var _hall: HallOfFamePane
 var _leaving := false
+## Whether a save's packs to switch on are built on a thread while the
+## hourglass shows ([method continue_adventure]; 0.60.15): windowed —
+## headless (the tests) on the spot, unless a test says so.
+var packs_aside := DisplayServer.get_name() != "headless"
+## The buttons' row, and the hourglass shown in its place while the cards
+## load ([method _show_waiting]).
+var _row: HBoxContainer
+var _wait: HBoxContainer
+var _hold: Control
+## What the wait says: the title's own words for the same wait (`main.gd`,
+## `WAITING_TEXT`).
+const WAITING := "Loading cards…"
 
 
 func _ready() -> void:
@@ -107,6 +119,7 @@ func _ready() -> void:
 	_say_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(_say_line)
 	var row := HBoxContainer.new()
+	_row = row
 	row.add_theme_constant_override("separation", 16)
 	back_button = UiChrome.menu_button("Back", Vector2(180, 46))
 	back_button.name = "Back"
@@ -288,15 +301,112 @@ func _gild_hall_button() -> void:
 
 ## TAKE THE ADVENTURE UP AGAIN: the save in row [param index] read, and its
 ## world screen made the current scene. False when it cannot be read.
+##
+## ITS PACKS SWITCHED ON BEHIND AN HOURGLASS (0.60.15, the owner's ruling of
+## 2026-11-03: "Same for `resume` on load"): a save whose packs are off
+## rebuilt the card pool once a pack on this thread — a frozen window of
+## 1.5–2.8 s. They go on in one rebuild compiled on a thread ([method
+## open_save]); the hourglass shows in the buttons' place while it runs,
+## and the world is put up when the pool is ready. A start-up pool still
+## building as the save is chosen is waited out the same way first (true:
+## taken up once it is done, or the note says why not).
 func continue_adventure(index: int) -> bool:
 	if _leaving or index < 0 or index >= rows.size() or rows[index].is_empty():
 		return false
+	var path := String(rows[index]["path"])
+	if packs_aside and CardRegistry.is_loading():
+		_take_up_after_pool(path)
+		return true
+	return _take_up(path)
+
+
+## The save at [param path] taken up ([method continue_adventure]).
+func _take_up(path: String) -> bool:
 	var refusal: Array[String] = []
-	var screen := open_save(String(rows[index]["path"]), refusal)
+	var screen := open_save(path, refusal, packs_aside)
 	if screen == null:
+		_hide_waiting()
+		_leaving = false
 		_say_line.text = refusal[0] if not refusal.is_empty() else "That save could not be read."
 		return false
 	_leaving = true
+	if packs_aside and CardRegistry.is_loading():
+		_show_waiting()
+		_put_up_when_ready(screen)
+		return true
+	_put_up(screen)
+	return true
+
+
+## The start-up pool waited out under the hourglass, then the save taken up.
+func _take_up_after_pool(path: String) -> void:
+	_leaving = true
+	_show_waiting()
+	while CardRegistry.is_loading() and not CardRegistry.poll():
+		await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	_take_up(path)
+
+
+## [param screen] put up once the pool its packs went on in is ready.
+func _put_up_when_ready(screen: WorldScreen) -> void:
+	while not CardRegistry.poll() and CardRegistry.is_loading():
+		await get_tree().process_frame
+		if not is_inside_tree():
+			screen.free()
+			return
+	_put_up(screen)
+
+
+## THE WAIT, SHOWN: the hourglass and its words in the buttons' place, the
+## list held still.
+func _show_waiting() -> void:
+	if _wait != null:
+		return
+	_hold = Control.new()
+	_hold.name = "HoldStill"
+	_hold.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hold.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_hold)
+	var height := maxf(_row.size.y, 46.0)
+	for child in _row.get_children():
+		(child as Control).visible = false
+	_wait = HBoxContainer.new()
+	_wait.name = "Waiting"
+	_wait.alignment = BoxContainer.ALIGNMENT_CENTER
+	_wait.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_wait.custom_minimum_size.y = height
+	_wait.add_theme_constant_override("separation", 18)
+	var glass := Hourglass.new()
+	glass.name = "Hourglass"
+	glass.custom_minimum_size = Vector2(height, height)
+	glass.reach = 1.4
+	glass.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_wait.add_child(glass)
+	var words := _lettering(WAITING, 24, EmbarkScreen.GOLD, "font_title")
+	words.name = "Words"
+	words.autowrap_mode = TextServer.AUTOWRAP_OFF
+	words.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_wait.add_child(words)
+	_row.add_child(_wait)
+	get_viewport().gui_release_focus()
+
+
+func _hide_waiting() -> void:
+	if _wait == null:
+		return
+	_wait.queue_free()
+	_wait = null
+	_hold.queue_free()
+	_hold = null
+	for child in _row.get_children():
+		(child as Control).visible = true
+
+
+## [param screen] made the current scene, over this list's scene or the
+## world it was opened over.
+func _put_up(screen: WorldScreen) -> void:
 	if is_inside_tree():
 		var tree := get_tree()
 		var over := _world_under()
@@ -307,7 +417,6 @@ func continue_adventure(index: int) -> bool:
 		elif over != null and tree.current_scene == over:
 			tree.current_scene = screen
 			over.queue_free()
-	return true
 
 
 ## The world screen for the adventure saved at [param path] — not yet in
@@ -319,11 +428,16 @@ func continue_adventure(index: int) -> bool:
 ## naming the pack appended to [param refusal]; one installed but switched
 ## off is enabled, as the Embark does, and the arrival says so ([method
 ## AdventurePacks.resume]).
-static func open_save(path: String, refusal: Array[String] = []) -> WorldScreen:
+##
+## [param aside] (0.60.15): those packs go on in one rebuild compiled on a
+## thread, and the screen comes back at once — not to be put in the tree
+## until [method CardRegistry.poll] says the pool is ready ([method
+## continue_adventure]); without it the pool is built here.
+static func open_save(path: String, refusal: Array[String] = [], aside := false) -> WorldScreen:
 	var adventure := AdventurePlayer.load_from(path)
 	if adventure == null:
 		return null
-	var packs := AdventurePacks.resume(adventure)
+	var packs := AdventurePacks.resume(adventure, aside)
 	if String(packs["refusal"]) != "":
 		refusal.append(String(packs["refusal"]))
 		return null

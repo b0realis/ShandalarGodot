@@ -300,16 +300,56 @@ static func facts(data: CardData) -> Dictionary:
 
 
 static func _read_facts(data: CardData) -> Dictionary:
-	var own := original(data.card_name)
+	return read_aside(data, imported_table())
+
+
+## THE FACTS READ APART FROM EVERY CACHE (0.60.15, the owner's ruling of
+## 2026-11-03: "Prewarm pack prices"), safe on a worker thread ([method
+## AdventurePacks.warm]): what [method facts] reads for [param data] — the
+## 1997 table's row from [param table] ([method imported_table], taken on
+## the main thread), else [method derive] with [param scorer] (a worker's
+## own [AutoDeck]: its scores are a cache) — touching no table of this
+## class. The card pool and the catalogues it reads must be complete and
+## stand still while it runs. [method facts] reads through it, so the two
+## agree.
+static func read_aside(data: CardData, table: Dictionary, scorer: AutoDeck = null) -> Dictionary:
+	var own: Dictionary = table.get(data.card_name, {})
 	if not own.is_empty():
 		var out := own.duplicate()
 		out["derived"] = false
 		return out
-	return derive(data)
+	return derive(data, scorer)
+
+
+## The 1997 program's table as [method original] reads it (by the engine's
+## names), read now if it was not — main thread. The same dictionary until
+## the tables are read again ([method forget]).
+static func imported_table() -> Dictionary:
+	original("")
+	return _imported
+
+
+## FACTS READ APART ([method read_aside]: a worker's, [method
+## AdventurePacks.settle_warm]) kept as [method facts] would have kept them
+## — main thread; [param read] (name -> read-only facts) of cards of the pool
+## as it stands, read against the 1997 table as [method imported_table]
+## gives it now. Facts already kept win: returned are those cards, by name,
+## with the facts kept for them.
+static func adopt(read: Dictionary) -> Dictionary:
+	_follow_pool()
+	var kept := {}
+	for card_name in read:
+		if _facts_read.has(card_name):
+			kept[card_name] = _facts_read[card_name]
+		else:
+			_facts_read[card_name] = read[card_name]
+	return kept
 
 
 ## The inputs read off the card itself, for a card the program never had.
-static func derive(data: CardData) -> Dictionary:
+## [param scorer]: the [AutoDeck] whose rating it reads — a worker's own
+## ([method read_aside]); none, this class's.
+static func derive(data: CardData, scorer: AutoDeck = null) -> Dictionary:
 	var kind := LAND
 	if data.is_creature():
 		kind = CREATURE
@@ -357,7 +397,7 @@ static func derive(data: CardData) -> Dictionary:
 		"color": color, "cc0": pips, "cc1": -1 if data.cost.has_x else data.cost.generic,
 		"power": maxi(data.power, 0), "tough": maxi(data.toughness, 0),
 		"static": static_bits, "extra": extra,
-		"ai": clampi(int(AI_BY_TYPE.get(kind, 0)) + strength_step(data, kind), -2, 3),
+		"ai": clampi(int(AI_BY_TYPE.get(kind, 0)) + strength_step(data, kind, scorer), -2, 3),
 		"vanilla": _plain(text), "rarity": rarity(data.card_name), "exp": expansion(data.card_name),
 		"derived": true}
 
@@ -403,14 +443,17 @@ static func is_treasure(card_name: String) -> bool:
 
 
 ## How many half steps of the hand-tuned value [param data]'s abilities are
-## worth over the middle of its type ([constant STRENGTH_MIDDLE]).
-static func strength_step(data: CardData, kind: int) -> int:
+## worth over the middle of its type ([constant STRENGTH_MIDDLE]), rated by
+## [param scorer] (none: this class's own).
+static func strength_step(data: CardData, kind: int, scorer: AutoDeck = null) -> int:
 	var middle: Array = STRENGTH_MIDDLE.get(kind, [])
 	if middle.is_empty():
 		return 0
-	if _scorer == null:
-		_scorer = AutoDeck.new()
-	return roundi(0.5 * (_scorer.score(data) - float(middle[0])) / float(middle[1]))
+	if scorer == null:
+		if _scorer == null:
+			_scorer = AutoDeck.new()
+		scorer = _scorer
+	return roundi(0.5 * (scorer.score(data) - float(middle[0])) / float(middle[1]))
 
 
 ## A land's 1997 colour bits by its land types (swamp black, island blue,

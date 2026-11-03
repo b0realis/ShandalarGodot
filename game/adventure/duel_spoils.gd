@@ -456,6 +456,15 @@ static func pick_duplicate(player: AdventurePlayer, spoils: Dictionary, card_nam
 ## 0.60.14, the owner's pack rulings of 2026-11-03): the base cards or one
 ## pack's, among the sides with a card the pick could give, then 1997's
 ## draw there; without, 1997's draw over the base cards, as always.
+## A DECK THAT MAY TAKE NO PACK CARD (under 40 cards, no Tome, the 1997
+## rules: their allowance halves to none) takes a pack's basic land — Ice
+## Age's Snow-Covered ones — only IN PLACE OF A BASIC LAND (0.60.15, the
+## owner's ruling of 2026-11-03): when the pick draws the land type, within
+## that pack's own share of the pick ([method CardShop.own_share]: 20% alone,
+## 7.5% of eight packs), never through its share of another type, which goes
+## back to the base cards as any pack's with no card to give
+## ([method _pick]'s [param lands]). A deck of 40 cards or more takes them
+## as any pack card, by the pack share, without a copy limit.
 static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: MsvcRandom) -> Array[String]:
 	var out: Array[String] = []
 	var base := CardTrade.catalogue()
@@ -470,6 +479,9 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 	var limit := CardShop.copies_allowed(player)
 	var classic := CardShop.classic_rule(player)
 	var rules := {"player": player, "color": color, "counts": counts, "limit": limit, "classic": classic}
+	# No pack card for this deck but a pack's basic lands, in place of a
+	# basic land only (see above).
+	var small := classic.is_empty() and limit / 2 <= 0
 	var budget := int(meeting.get("strength", CreatureBook.strength(int(meeting["row"]))))
 	var present := _types_in(pool)
 	var sides: Array = [base]
@@ -478,8 +490,10 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 	for rows in sides:
 		kinds.append(_types_in(rows))
 	# Which sides could give a card, by the pick's colour level: read again
-	# for each pick only under the Classic MTG rules, whose count grows.
+	# for each pick only under the Classic MTG rules, whose count grows; and
+	# for a small deck each pack's basic lands that could be given.
 	var gives := {}
+	var lands := {}
 	while budget > 0:
 		var picked := ""
 		rules["level"] = 1 if out.size() & 1 != 0 else 3
@@ -489,14 +503,18 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 		else:
 			if not classic.is_empty() or not gives.has(rules["level"]):
 				var could: Array[int] = []
-				for rows in sides:
-					could.append(1 if _gives(rows, rules) else 0)
+				for i in sides.size():
+					could.append(1 if _gives(sides[i], rules, small and i > 0) else 0)
 				gives[rules["level"]] = could
+				var own: Array = []
+				for rows in packs:
+					own.append(_basic_lands(rows, rules) if small else [])
+				lands[rules["level"]] = own
 			var fits: Array[int] = gives[rules["level"]]
 			var at := PackShare.side(dice, fits[0], fits.slice(1))
 			if at != PackShare.NONE:
 				var side := 0 if at == PackShare.BASE else at + 1
-				picked = _pick(sides[side], kinds[side], dice, rules)
+				picked = _pick(sides[side], kinds[side], dice, rules, lands[rules["level"]] if side == 0 else [])
 		if out.size() < 3 and out.size() < stakes.size():
 			picked = String(stakes[out.size()])
 		if picked == "":
@@ -514,8 +532,12 @@ static func reward_cards(player: AdventurePlayer, meeting: Dictionary, dice: Msv
 ## color, counts, limit, classic, level}`, [method reward_cards]): a type
 ## drawn of six, a card drawn until it is of that type, kept when its colour
 ## goes with the creature's and a copy is left — else drawn again, up to
-## [constant PICK_GUARD] times; "" then.
-static func _pick(pool: Array, present: int, dice: MsvcRandom, rules: Dictionary) -> String:
+## [constant PICK_GUARD] times; "" then. [param lands]: a small deck's pick
+## of the base cards ([method reward_cards]), each campaign pack's basic
+## lands it may give: the pick's land type drawn, each pack's own share of
+## it gives one of that pack's, alike among them ([method
+## CardShop.own_share]; 0.60.15, the owner's ruling of 2026-11-03).
+static func _pick(pool: Array, present: int, dice: MsvcRandom, rules: Dictionary, lands: Array = []) -> String:
 	for attempt in PICK_GUARD:
 		var bit := 1 << dice.below(PICK_TYPES)
 		# [Ours: without the player's 1997 card table no card is typed
@@ -528,6 +550,11 @@ static func _pick(pool: Array, present: int, dice: MsvcRandom, rules: Dictionary
 		while present & bit == 0 and present != 0 and again < PICK_TYPES * 16:
 			bit = 1 << dice.below(PICK_TYPES)
 			again += 1
+		if attempt == 0 and bit & CardValue.LAND != 0 and not lands.is_empty():
+			var at := CardShop.own_share(dice, lands)
+			if at >= 0:
+				var own: Array = lands[at]
+				return String(own[dice.below(own.size())])
 		var drawn: Dictionary = pool[0]
 		for tries in TYPE_TRIES:
 			drawn = pool[dice.below(pool.size())]
@@ -557,13 +584,27 @@ static func _may_give(row: Dictionary, rules: Dictionary) -> bool:
 
 ## Whether some card of [param rows] of the six reward types could be kept
 ## by a pick now ([method _may_give]): a side of the pack share that has none
-## leaves its share to the others ([PackShare.side]).
-static func _gives(rows: Array, rules: Dictionary) -> bool:
+## leaves its share to the others ([PackShare.side]). [param no_lands]: its
+## basic lands not counted (a small deck's: in place of a basic land only).
+static func _gives(rows: Array, rules: Dictionary, no_lands := false) -> bool:
 	var all := (1 << PICK_TYPES) - 1
 	for row in rows:
+		if no_lands and CardShop.is_basic_land(String((row as Dictionary)["name"])):
+			continue
 		if int(((row as Dictionary)["facts"] as Dictionary).get("type", 0)) & all != 0 and _may_give(row, rules):
 			return true
 	return false
+
+
+## The basic lands of [param rows] a pick could keep now ([method
+## _may_give]): a pack's Snow-Covered basics of a colour that goes with the
+## creature's.
+static func _basic_lands(rows: Array, rules: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for row in rows:
+		if CardShop.is_basic_land(String((row as Dictionary)["name"])) and _may_give(row, rules):
+			out.append(String((row as Dictionary)["name"]))
+	return out
 
 
 ## The reward's types ([constant PICK_TYPES] bits) some card of [param pool]

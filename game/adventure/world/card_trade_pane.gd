@@ -20,6 +20,18 @@ extends PanelContainer
 ## "Yes" / "No" — with no Done: a card must be taken (1997 looped its
 ## browser until one was), Escape only puts the card chosen back; taken,
 ## the pane is done.
+## THE LIST WITHOUT A STALL (0.60.15, the owner's ruling of 2026-11-03,
+## "Trader search without stutter"): with Packs 2–9 a keystroke emptied and
+## refilled the list with up to 3,039 names, then laid them out, in one frame
+## of 77–158 ms. Now the name box waits for a short pause in the typing
+## ([constant TYPING_PAUSE]) before the list follows it; the list keeps every
+## row whose name stays where it was (a narrowed search, a trade made: few or
+## none drawn anew), and with card packs it is filled a slice a frame from
+## the top ([constant ROWS_PER_FRAME]) — the base game's trader, every row
+## at once as before ([constant ROWS_AT_ONCE]). The rows, their order, the
+## dimming, the counts, the scroll and the card chosen are as they were; only
+## a card chosen far down a list that grows longer is scrolled to a moment
+## later, once its slice is filled.
 
 ## Done: back to the town or the lair.
 signal done
@@ -33,6 +45,15 @@ const COLOR_CHIPS: Array[Array] = [["Colorless", 1], ["Black", 2], ["Blue", 4], 
 	["Red", 16], ["White", 32]]
 const TYPE_CHIPS: Array[Array] = [["Land", 1], ["Summon", 2], ["Enchantment", 4], ["Sorcery", 8],
 	["Instant", 16], ["Interrupt", 32], ["Artifact", 64]]
+## The pause in the typing, in seconds, before the list follows the name box.
+const TYPING_PAUSE := 0.15
+## A trader of up to this many cards ([method CardTrade.for_trader]: the base
+## game's 847–897) fills its list at once, as before; one with more (card
+## packs) [constant ROWS_PER_FRAME] rows a frame, the first slice at once,
+## and lets go of the rows left over [constant ROWS_DROPPED_PER_FRAME] a frame.
+const ROWS_AT_ONCE := 1000
+const ROWS_PER_FRAME := 120
+const ROWS_DROPPED_PER_FRAME := 800
 
 var player: AdventurePlayer
 ## [constant CardTrade.TOWN], [constant CardTrade.BAZAAR] or
@@ -70,6 +91,18 @@ var _chips := {}
 ## The row last under the pointer, -1 for none: the pointer moving within
 ## it asks nothing more of the large card.
 var _hovered := -1
+## The rows of [member _shown] set in the list so far (the rest follow a
+## slice a frame, [method _fill_rows]), and the rows in sight set before
+## them ([method _fill_sight]); a row of neither still shows an older list's
+## name and answers no pointer ([method _row_ready]).
+var _filled := 0
+var _sight := Vector2i.ZERO
+## What the rows being filled read once per refresh: the copies owned, the
+## deck's counted copies and limit, whether to dim, and whether the whole
+## list is filled at once ([constant ROWS_AT_ONCE]).
+var _fill := {}
+## The pause in the typing ([constant TYPING_PAUSE]).
+var _typing: Timer
 
 
 func _ready() -> void:
@@ -126,7 +159,15 @@ func _ready() -> void:
 	_search.name = "TradeSearch"
 	_search.placeholder_text = "type a name"
 	_search.custom_minimum_size = Vector2(220, 0)
-	_search.text_changed.connect(func(_text: String) -> void: refresh())
+	_typing = Timer.new()
+	_typing.name = "TypingPause"
+	_typing.one_shot = true
+	_typing.wait_time = TYPING_PAUSE
+	_typing.timeout.connect(refresh)
+	add_child(_typing)
+	# The list follows the name box after a pause in the typing, not at
+	# every key.
+	_search.text_changed.connect(func(_text: String) -> void: _typing.start())
 	column.add_child(_search)
 	_list = ItemList.new()
 	_list.name = "TradeCards"
@@ -150,7 +191,12 @@ func _ready() -> void:
 	_list.add_theme_stylebox_override("selected", pick)
 	_list.add_theme_stylebox_override("selected_focus", pick)
 	_list.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	_list.item_selected.connect(func(index: int) -> void: choose(_shown[index]))
+	_list.item_selected.connect(func(index: int) -> void:
+		if _row_ready(index):
+			choose(_shown[index])
+		else:
+			# A row not filled yet shows an older list's name: no choice.
+			_list.deselect(index))
 	_list.gui_input.connect(_hover_list)
 	_list.mouse_exited.connect(func() -> void: _hovered = -1)
 	column.add_child(_list)
@@ -247,16 +293,17 @@ func cards() -> Array[String]:
 	return out
 
 
-## The list, the purse, the question, as they now stand.
+## The list, the purse, the question, as they now stand: the names at
+## once, the rows of a long list a slice a frame ([method _fill_rows]).
 func refresh() -> void:
+	if _typing != null:
+		_typing.stop()
 	_shown = cards()
 	if chosen != "" and not chosen in _shown:
 		chosen = ""
 		asked = {}
 		_large.visible = false
-	_list.clear()
 	_hovered = -1
-	var owned := AdventureBuilder.owned_counts(player)
 	# Dimmed: no copy left to the deck in use by 1997's own allowance
 	# (`GetRemainingAllowedCardCopies(card) <= 0`, visitLocation.c 3822;
 	# [method CardShop.copies_left]: basic lands always lit, the cards
@@ -264,24 +311,117 @@ func refresh() -> void:
 	# copies counted once for the whole list — none with the copy limit off
 	# ([method CardShop.counted_copies]). The name carries "-N" only for a
 	# card the hero owns (visitLocation.c 3804–3808).
-	var in_deck := CardShop.counted_copies(player)
-	var limit := CardShop.copies_allowed(player)
 	# The classic rules list only what they allow: nothing to dim.
-	var dims := player.card_rule != AdventurePlayer.RULE_CLASSIC
-	for card_name in _shown:
-		var count := int(owned.get(card_name, 0))
-		var index := _list.add_item("%s-%d" % [card_name, count] if count > 0 else card_name)
-		if dims and CardShop.copies_left(player, card_name, _facts.get(card_name, {}), in_deck, limit) <= 0:
-			_list.set_item_custom_fg_color(index, PaneStyle.FAINT)
-		if card_name == chosen:
-			_list.select(index)
-			_list.ensure_current_is_visible()
+	var at_once := CardTrade.for_trader(player, way).size() <= ROWS_AT_ONCE
+	_fill = {"owned": AdventureBuilder.owned_counts(player), "in_deck": CardShop.counted_copies(player),
+		"limit": CardShop.copies_allowed(player), "dims": player.card_rule != AdventurePlayer.RULE_CLASSIC,
+		"at_once": at_once}
+	_filled = 0
+	_sight = Vector2i.ZERO
+	_list.deselect_all()
+	if at_once:
+		_fill_rows(_shown.size())
+	else:
+		_fill_sight()
+		_fill_rows(ROWS_PER_FRAME)
 	_gold.text = AdventureBuilder.GOLD_TITLE % player.gold
 	var held: Array[String] = []
 	for hue in AdventurePlayer.COLORS:
 		held.append("%s %d" % [hue, int(player.amulets.get(hue, 0))])
 	_purse.text = "Amulets: " + " · ".join(held)
 	_show_ask()
+
+
+## The next [param count] rows of [member _shown] into the list: a row whose
+## name is already there is kept (only its dimming and selection looked at),
+## another's name set anew or added; the list done, the rows past it go (a
+## long list's [constant ROWS_DROPPED_PER_FRAME] a frame). Work left, the
+## next slice comes next frame ([method _process]).
+func _fill_rows(count: int) -> void:
+	var stop := mini(_filled + count, _shown.size())
+	for index in range(_filled, stop):
+		_set_row(index)
+	_filled = stop
+	if _filled >= _shown.size() and _list.item_count > _shown.size():
+		_list.item_count = _shown.size() if bool(_fill.get("at_once", true)) or count >= _list.item_count \
+			else maxi(_shown.size(), _list.item_count - ROWS_DROPPED_PER_FRAME)
+	set_process(_filled < _shown.size() or _list.item_count > _shown.size())
+
+
+## Row [param index] of the list as [member _shown] has it: its name ("-N"
+## for the copies owned) set when it differs or added, its dimming, its
+## selection.
+func _set_row(index: int) -> void:
+	var card_name := _shown[index]
+	var copies := int((_fill["owned"] as Dictionary).get(card_name, 0))
+	var text := "%s-%d" % [card_name, copies] if copies > 0 else card_name
+	if index >= _list.item_count:
+		_list.add_item(text)
+	elif _list.get_item_text(index) != text:
+		_list.set_item_text(index, text)
+	var faint := bool(_fill["dims"]) and CardShop.copies_left(player, card_name, _facts.get(card_name, {}),
+		_fill["in_deck"], int(_fill["limit"])) <= 0
+	# An ItemList row's own colour is Color() until one is set.
+	_list.set_item_custom_fg_color(index, PaneStyle.FAINT if faint else Color())
+	if card_name == chosen and not _list.is_selected(index):
+		_list.select(index)
+		_list.ensure_current_is_visible()
+
+
+## A LONG LIST'S ROWS IN SIGHT FIRST: where the list will show once it is
+## set — the card chosen and the rows round it (the list scrolls to it), or
+## the rows the scroll shows now, at the list's end when the list grows
+## shorter than that (the scroll comes back to it, as it did) — set before
+## the slices from the top, so no older list's name is seen there.
+func _fill_sight() -> void:
+	var count := _shown.size()
+	if _list.item_count == 0:
+		return
+	# Inside the well's margin a position finds no row reliably: 20 points in.
+	var top := _list.get_item_at_position(Vector2(20, 2))
+	var bottom := _list.get_item_at_position(_list.size - Vector2(20, 2))
+	if top < 0 or bottom < top:
+		return
+	var seen := clampi(bottom - top + 1, 2, ROWS_PER_FRAME)
+	var at := _shown.find(chosen) if chosen != "" else -1
+	if top + seen > count and _list.item_count > count:
+		# Shorter than the scroll shows: the rows left over go now, and the
+		# scroll comes back to the list's end at once, as it did.
+		_list.item_count = count
+	if count <= ROWS_PER_FRAME:
+		return
+	var from := top
+	if at >= 0:
+		from = at - seen
+	elif top + seen > count:
+		from = count - seen
+	var to := mini(from + seen * (2 if at >= 0 else 1), count)
+	from = clampi(from, 0, count)
+	to = mini(to, _list.item_count)
+	if to <= ROWS_PER_FRAME or from >= to:
+		return
+	for index in range(from, to):
+		_set_row(index)
+	_sight = Vector2i(from, to)
+
+
+## Whether row [param index] shows its name of [member _shown] yet.
+func _row_ready(index: int) -> bool:
+	return index >= 0 and (index < _filled or (index >= _sight.x and index < _sight.y))
+
+
+func _process(_delta: float) -> void:
+	if _fill.is_empty():
+		set_process(false)
+		return
+	_fill_rows(ROWS_PER_FRAME)
+
+
+## Every row of the list set now, and no row left over (a test, or a caller
+## that reads the rows).
+func fill_now() -> void:
+	if not _fill.is_empty():
+		_fill_rows(_list.item_count + _shown.size())
 
 
 func _show_ask() -> void:
@@ -316,7 +456,8 @@ func choose(card_name: String) -> void:
 	if card_name != "":
 		show_large(card_name)
 		var at := _shown.find(card_name)
-		if at >= 0 and not _list.is_selected(at):
+		# A row not filled yet is selected as it is filled ([method _set_row]).
+		if _row_ready(at) and not _list.is_selected(at):
 			_list.select(at)
 			_list.ensure_current_is_visible()
 	else:
@@ -368,7 +509,7 @@ func show_large(card_name: String) -> void:
 func _hover_list(input: InputEvent) -> void:
 	if PaneStyle.right_click(input):
 		var at := _list.get_item_at_position((input as InputEventMouseButton).position, true)
-		if at >= 0 and at < _shown.size():
+		if _row_ready(at):
 			show_large(_shown[at])
 			card_read.emit(_shown[at])
 			_list.accept_event()
@@ -377,10 +518,10 @@ func _hover_list(input: InputEvent) -> void:
 	if motion == null:
 		return
 	var index := _list.get_item_at_position(motion.position, true)
-	if index == _hovered:
+	if index == _hovered or (index >= 0 and not _row_ready(index)):
 		return
 	_hovered = index
-	if index >= 0 and index < _shown.size():
+	if index >= 0:
 		show_large(_shown[index])
 
 

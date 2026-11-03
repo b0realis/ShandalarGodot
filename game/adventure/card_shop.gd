@@ -30,7 +30,11 @@ extends RefCounted
 ##    campaign's card packs add their own cards by the pack share
 ##    ([PackShare], [method _draw]) — never one made for ante, and a
 ##    strong one is special, in no place (0.60.14, the owner's pack
-##    rulings of 2026-11-03) [ours];
+##    rulings of 2026-11-03) [ours] — and Ice Age's Snow-Covered basics,
+##    with Pack 3 in the campaign, are basic lands as the deck rules count
+##    them: the land's place only, in Ice Age's own share of it, no copy
+##    limit ([constant SNOW_LANDS]; 0.60.15, the owner's rulings of
+##    2026-11-03) [ours];
 ##  - never a card the hero could not put in the deck in use: no more
 ##    copies there than the deck's size allows (one under 40 cards, two from
 ##    40, three from 60, one more with Tome of Enlightenment).
@@ -41,6 +45,20 @@ extends RefCounted
 ## The basic lands by colour, black to white (the 1.3 card table's first
 ## five rows).
 const LANDS: Array[String] = ["Swamp", "Island", "Forest", "Mountain", "Plains"]
+## ICE AGE'S SNOW-COVERED BASICS by colour, black to white (Pack 3): basic
+## lands in the adventure as in the deck rules ([method DeckFormat.is_basic]:
+## the Basic supertype; the owner's rulings of 2026-11-03, 0.60.15) — the
+## land's place their only place, in Ice Age's own share of it ([method
+## _draw]), no copy limit, four for one amulet at a trader ([method
+## CardTrade.copies]); a deck under 40 cards wins one as a duel's spoil only
+## in place of a basic land ([method DuelSpoils.reward_cards]). They come
+## only with Pack 3 among the campaign's packs: no other source has them.
+const SNOW_LANDS: Array[String] = ["Snow-Covered Swamp", "Snow-Covered Island", "Snow-Covered Forest",
+	"Snow-Covered Mountain", "Snow-Covered Plains"]
+## Both, by name ([method is_basic_land], asked of every row of a list).
+const _BASIC_LANDS := {"Swamp": true, "Island": true, "Forest": true, "Mountain": true, "Plains": true,
+	"Snow-Covered Swamp": true, "Snow-Covered Island": true, "Snow-Covered Forest": true,
+	"Snow-Covered Mountain": true, "Snow-Covered Plains": true}
 const COLOR_BITS: Array[int] = [2, 4, 8, 16, 32]
 ## Each colour's companions in a shop (`is_card_color_compatible_with_mask`
 ## at level 1 for black, green and white, 3 for blue and red).
@@ -297,7 +315,15 @@ static func _draw_rules(player: AdventurePlayer, slot: int) -> Dictionary:
 ## [method _draw_rules]). With card packs in the campaign, the pack share
 ## first ([PackShare]; 0.60.14, the owner's pack rulings of 2026-11-03):
 ## a base card or one pack's, then alike among that side's; without, the
-## one die among every card that fits, as always.
+## one die among every card that fits, as always. THE LAND'S PLACE, EACH
+## PACK ITS OWN (0.60.15, the owner's ruling of 2026-11-03): a basic land
+## of a colour sold; in Ice Age's own share of the place ([method
+## own_share]: 20% alone, 7.5% of eight packs) one of its Snow-Covered
+## basics of a colour sold ([method _pack_lands]) — every other pack's
+## share gives an ordinary basic land (Portal, Fifth Edition, Mirage and
+## Tempest print the same Plains … Forest; the others print none), so a
+## Snow-Covered basic never takes another pack's share. With no pack basic
+## land, the one die over the basic lands as always.
 static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -> String:
 	var sold: Array[int] = rules["sold"]
 	if land:
@@ -305,6 +331,11 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 		for i in COLOR_BITS.size():
 			if COLOR_BITS[i] in sold:
 				lands.append(LANDS[i])
+		var own := _pack_lands(rules)
+		var at := own_share(dice, own)
+		if at >= 0:
+			var snow: Array = own[at]
+			return String(snow[dice.below(snow.size())])
 		return lands[dice.below(lands.size())] if not lands.is_empty() else ""
 	var packs: Array = rules.get("packs", [])
 	if packs.is_empty():
@@ -322,8 +353,51 @@ static func _draw(place: int, land: bool, dice: MsvcRandom, rules: Dictionary) -
 	return PackShare.pick(dice, kinds[kind][0], kinds[kind][1])
 
 
+## THE LAND'S PLACE'S PACK LANDS of a draw ([param rules], [method
+## _draw_rules]): for each campaign pack, in the order of its `packs`, its
+## basic lands ([constant SNOW_LANDS]) of the colours sold, black
+## to white — Pack 3's Snow-Covered basics, none for the other packs. Read
+## once a draw.
+static func _pack_lands(rules: Dictionary) -> Array:
+	if rules.has("lands"):
+		return rules["lands"]
+	var sold: Array[int] = rules["sold"]
+	var out: Array = []
+	for rows in rules.get("packs", []):
+		var held := {}
+		for row in rows:
+			if String(row["name"]) in SNOW_LANDS:
+				held[String(row["name"])] = true
+		var lands: Array[String] = []
+		for i in COLOR_BITS.size():
+			if COLOR_BITS[i] in sold and held.has(SNOW_LANDS[i]):
+				lands.append(SNOW_LANDS[i])
+		out.append(lands)
+	rules["lands"] = out
+	return out
+
+
+## EACH PACK ITS OWN SHARE OF ONE DRAW (0.60.15, the owner's rulings of
+## 2026-11-03): [param lists] one list a campaign pack ([method
+## AdventurePacks.campaign_packs]' order) of the cards only that pack's
+## share may give. One die over the packs' shares ([method PackShare.share]:
+## `min(20% × N, 60%)` in all, each pack alike — 20% alone, 7.5% of eight);
+## the index of the pack whose share it falls in, when that pack has a card
+## — else −1, the draw's own cards (a pack without one leaves its share to
+## them, never to another pack). No list holding a card, no die is cast.
+static func own_share(dice: MsvcRandom, lists: Array) -> int:
+	if lists.all(func(list: Variant) -> bool: return (list as Array).is_empty()):
+		return -1
+	var count := lists.size()
+	var each := PackShare.share(count)
+	var at := dice.below(100 * count) / each
+	return at if at < count and not (lists[at] as Array).is_empty() else -1
+
+
 ## The names of [param rows] that fit place [param place] by [param rules]
-## ([method _draw]), in their order.
+## ([method _draw]), in their order — never a basic land: a pack's
+## Snow-Covered basics stand in the land's place only ([method _pack_lands];
+## 0.60.15, the owner's ruling of 2026-11-03).
 static func _fitting(rows: Array, place: int, rules: Dictionary) -> Array[String]:
 	var sold: Array[int] = rules["sold"]
 	var most := place % 3 + 1
@@ -331,6 +405,8 @@ static func _fitting(rows: Array, place: int, rules: Dictionary) -> Array[String
 	var limit := int(rules["limit"])
 	var fitting: Array[String] = []
 	for row in rows:
+		if is_basic_land(String(row["name"])):
+			continue
 		var f: Dictionary = row["facts"]
 		var bits := int(f.get("color", CardValue.COLORLESS))
 		if bits != CardValue.COLORLESS and not CardValue.first_color(bits) in sold:
@@ -362,9 +438,13 @@ static func shop_rarity(f: Dictionary) -> int:
 ## 004bb1cf). The caller chooses shipped/intended counts, and whether zero
 ## is accepted: spoils need > 0; lair rares accept >= 0. Trades only dim.
 ## Town draws use their existing slot allowance, including optional cards.
+## Every basic land, Ice Age's Snow-Covered ones too ([method
+## is_basic_land]; 0.60.15, the owner's rulings of 2026-11-03), has no limit
+## (a small deck's spoils give a Snow-Covered one only in place of a basic
+## land: [method DuelSpoils.reward_cards]).
 static func remaining_copies(card_name: String, f: Dictionary, counts: Dictionary,
 		limit: int, difficulty: int) -> int:
-	if card_name in LANDS: return 99
+	if is_basic_land(card_name): return 99
 	var allowed := limit
 	if int(f.get("extra", 0)) & CardValue.TREASURE != 0:
 		allowed = 1 if difficulty <= allowed else 0
@@ -373,6 +453,15 @@ static func remaining_copies(card_name: String, f: Dictionary, counts: Dictionar
 			else int(f.get("exp", 0)) & CardValue.BASE_SETS != 0
 		if not base: allowed = allowed / 2
 	return allowed - int(counts.get(card_name, 0))
+
+
+## Whether [param card_name] is a basic land to the adventure: Plains …
+## Forest ([constant LANDS]) and Ice Age's Snow-Covered basics ([constant
+## SNOW_LANDS]) — the Basic supertype the deck rules exempt from every copy
+## limit ([method DeckFormat.is_basic]; 0.60.15, the owner's ruling of
+## 2026-11-03).
+static func is_basic_land(card_name: String) -> bool:
+	return _BASIC_LANDS.has(card_name)
 
 
 static func copies_left(player: AdventurePlayer, card_name: String, f: Dictionary,

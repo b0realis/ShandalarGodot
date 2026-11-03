@@ -45,7 +45,9 @@ extends RefCounted
 ## A card costs its rarity in amulets — 1 common (2 for a common the program
 ## favoured, `extra_ability` 0x400), 2 uncommon, 3 rare, 4 special (a
 ## strong pack card too, [constant CardValue.STRONG_PACK_CARDS]) — and a
-## basic land comes four at a time for one. The cards: every card of the
+## basic land comes four at a time for one (Ice Age's Snow-Covered basics
+## too, with Pack 3 in the campaign: [method CardShop.is_basic_land]; 0.60.15,
+## the owner's ruling of 2026-11-03). The cards: every card of the
 ## adventure but the dungeons' treasures and those 1997 kept from its card
 ## pickers (`extra_ability` 0x900; without the 1997 program, the same marks
 ## by name, [method CardValue.derive]: a restricted card that is no
@@ -82,6 +84,12 @@ static var _catalogue: Array[Dictionary] = []
 static var _all_catalogue: Array[Dictionary] = []
 ## The card pool's revision the catalogue was read against (−1: not yet).
 static var _read_at := -1
+## THE TRADERS' LISTS KEPT ([method for_trader]; 0.60.15, the owner's ruling
+## of 2026-11-03, "Trader search without stutter"): `{key: {rows, names}}`,
+## the key the card pool's revision, the all-trader-cards choice, the packs
+## that give the campaign cards now and the packs chosen ([method
+## _list_key]) — the rows by name, names only (no CardData).
+static var _lists := {}
 
 
 # ------------------------------------------------------------ the cards --
@@ -118,9 +126,51 @@ static func catalogue(all_cards := false) -> Array[Dictionary]:
 ## receive whichever regional expansion the campaign has unlocked — and every
 ## card of its card packs, each pack its own ([method AdventurePacks.add_stock]):
 ## a list, so no pack share (0.60.14, the owner's pack rulings of 2026-11-03).
+## The list is made once for what it depends on and kept ([member _lists]):
+## each keystroke in the trader's name box asked for all 3,039 rows of
+## Packs 2–9 again. The same rows, in the same order, as [method
+## AdventurePacks.add_stock] gives; never changed by a caller.
 static func for_trader(player: AdventurePlayer, way: String) -> Array[Dictionary]:
-	var base := catalogue(player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE])
-	return AdventurePacks.add_stock(player, base) if player != null else base
+	return _kept_list(player, way)["rows"]
+
+
+## Whether [param card_name] is on [param player]'s list for [param way]
+## ([method for_trader]), by name at once.
+static func offered_by(player: AdventurePlayer, way: String, card_name: String) -> bool:
+	return (_kept_list(player, way)["names"] as Dictionary).has(card_name)
+
+
+static func _kept_list(player: AdventurePlayer, way: String) -> Dictionary:
+	var all_cards := player != null and player.all_trader_cards and way in [TOWN, BAZAAR, MINE]
+	var base := catalogue(all_cards)
+	var key := _list_key(player, all_cards)
+	if _lists.has(key):
+		return _lists[key]
+	var rows := AdventurePacks.add_stock(player, base) if player != null else base
+	var names := {}
+	for row in rows:
+		names[row["name"]] = true
+	if _lists.size() > 8:
+		_lists.clear()
+	_lists[key] = {"rows": rows, "names": names}
+	return _lists[key]
+
+
+## What a trader's list depends on: the card pool as it stands, the
+## all-trader-cards choice, the packs that give the campaign cards now
+## ([method AdventurePacks.campaign_packs]: a region freed may add one) and
+## the packs chosen (a Fifth Edition reprint's printing, [method
+## AdventurePacks.fifth_printing]).
+static func _list_key(player: AdventurePlayer, all_cards: bool) -> String:
+	if player == null or player.packs.is_empty():
+		return "%d|%s" % [CardRegistry.revision, all_cards]
+	var chosen: Array[String] = []
+	for row in player.packs:
+		if row is Dictionary:
+			chosen.append(str((row as Dictionary).get("id", "")))
+	chosen.sort()
+	return "%d|%s|%s|%s" % [CardRegistry.revision, all_cards, ",".join(AdventurePacks.campaign_packs(player)),
+		",".join(chosen)]
 
 
 ## Whether [param card_name] is one of the adventure's cards: the 1997
@@ -136,6 +186,7 @@ static func in_adventure(card_name: String) -> bool:
 static func forget() -> void:
 	_catalogue.clear()
 	_all_catalogue.clear()
+	_lists.clear()
 	_read_at = -1
 
 
@@ -170,9 +221,10 @@ static func amulets_for(f: Dictionary) -> int:
 	return rank
 
 
-## How many copies one trade gives: four basic lands, else one.
+## How many copies one trade gives: four basic lands ([method
+## CardShop.is_basic_land]: a Snow-Covered one too), else one.
 static func copies(card_name: String) -> int:
-	return LAND_COPIES if card_name in CardShop.LANDS else 1
+	return LAND_COPIES if CardShop.is_basic_land(card_name) else 1
 
 
 ## THE NOMAD'S PRICE for [param data], the hero where they stand: with the
@@ -317,7 +369,7 @@ static func pay(player: AdventurePlayer, asked: Dictionary, way: String, color :
 	var card_name := String(asked.get("card", ""))
 	# The browser's offer can outlive its catalogue or campaign eligibility.
 	# Check again before charging or consuming a reward, just as for the purse.
-	if not for_trader(player, way).any(func(row: Dictionary) -> bool: return row["name"] == card_name):
+	if not offered_by(player, way, card_name):
 		return {"traded": false, "said": "That card is no longer available from this trader."}
 	if not CardShop.may_offer(player, card_name):
 		return {"traded": false, "said": CardShop.classic_refusal(card_name, player.ban_list)}

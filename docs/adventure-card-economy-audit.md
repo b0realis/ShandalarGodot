@@ -153,9 +153,20 @@ independent lottery entries** (its trusted catalogue classifies 36 common,
 draw chances. Reprints must not reintroduce a core card withheld by a
 particular source.
 
-Not adopted yet (measured first): Ice Age's Snow-Covered basics stay ordinary
-pack cards rather than basic lands, and the speed fixes (a cached pack stock,
-prewarmed pack prices, one registry rebuild on setting out) wait for numbers.
+Ice Age's Snow-Covered basics are basic lands (0.60.15): a shop's land place
+only, in Ice Age's own share of it (other packs' shares give ordinary basic
+lands — Portal, Fifth Edition, Mirage and Tempest print the same Plains…Forest);
+four for one amulet; no copy limit. A deck under 40 cards wins one only in
+place of a basic land: a land-type pick, within Ice Age's own share (measured
+3.2% of a small deck's spoils with Ice Age alone, 1.3% with all eight packs;
+19.8% / 7.5% of land places).
+
+Packs switched on at setting out or resuming go on in one rebuild, compiled
+on a thread behind the hourglass, and the campaign's pack cards are priced on
+a worker as the world opens (`AdventurePacks.warm`); the trader's list
+follows its name box after a short pause and fills long lists in slices
+(0.60.15, measured against the 0.60.13 baseline).
+
 Per-pack weights beyond the share, discounts, free collections, scaling
 opponents or automatic deck replacements would be separate balance decisions.
 

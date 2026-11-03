@@ -170,6 +170,12 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_bed(0.0)
+	# The pack cards' worker ([method warm_arrival]) never outlives the
+	# world: taken in when done, else stopped and waited for.
+	if AdventurePacks.warm_done():
+		AdventurePacks.settle_warm()
+	elif player != null:
+		AdventurePacks.stop_warm(player)
 
 
 # ------------------------------------------------------------ the rules --
@@ -234,6 +240,8 @@ static func nearest(world: ShandalarWorld, point: Vector2i) -> Dictionary:
 ## on a step of its walk.
 func tick(walk: HeroWalk) -> void:
 	_ticks += 1
+	if AdventurePacks.warm_done():
+		AdventurePacks.settle_warm()
 	if _ticks % WARM_EVERY == 0:
 		warm_near()
 	if player == null or walk == null or not walk.stepped:
@@ -437,6 +445,30 @@ func warm_arrival() -> void:
 	CardTrade.catalogue()
 	LairEvent.rare_of_any_kind(MsvcRandom.new(0))
 	warm_near()
+	# The shops' stock and the pack cards' worker on the frames after this
+	# one, each a frame of its own: in this one they made the world screen's
+	# frame 30 ms longer with Packs 2–9 (190 -> 220 ms on the desk).
+	get_tree().process_frame.connect(_warm_stock, CONNECT_ONE_SHOT)
+
+
+## The shops' base stock (0.60.15): read off every card of the pool, 3,089
+## with Packs 2–9 — 15–19 ms of the first town's frame on the desk.
+func _warm_stock() -> void:
+	if player == null or not is_inside_tree():
+		return
+	CardShop.stock()
+	get_tree().process_frame.connect(_warm_packs, CONNECT_ONE_SHOT)
+
+
+## THE CAMPAIGN'S PACK CARDS (0.60.15, the owner's ruling of 2026-11-03:
+## "Prewarm pack prices"): read on a worker from here, beside the base
+## tables — the first town, trade list, spoils or lair drew them on the
+## thread that draws, 190–313 ms with Packs 2–9 ([method
+## AdventurePacks.warm]); taken in as the clock ticks ([method tick]).
+func _warm_packs() -> void:
+	if player == null or not is_inside_tree():
+		return
+	AdventurePacks.warm(player)
 
 
 ## THE WALK'S OWN SOUNDS: every colour's footsteps and calls (34 small

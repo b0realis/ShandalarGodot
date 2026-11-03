@@ -103,11 +103,13 @@ static func ensure_loaded() -> void:
 
 
 ## Build the pool on a [Thread] so the caller can go on — the game's
-## start, from `CardPacks._ready`. Idempotent: a pool already built or
+## start, from `CardPacks._ready`, and (0.60.15) the packs a campaign
+## switches on as it sets out or resumes, behind its hourglass
+## (`CardPacks.set_enabled_many`). Idempotent: a pool already built or
 ## building is left alone (false). The first [method ensure_loaded] on
 ## any thread waits for the build; [method poll] says when it is done
-## without waiting. Nothing else starts a thread — a pack toggle or a
-## rescan rebuilds in the foreground as before, on the next ask.
+## without waiting. A pack toggle or a rescan rebuilds in the foreground
+## as before, on the next ask.
 static func load_in_background(allow_threads := true) -> bool:
 	# The single-threaded Web template cannot start a real Thread (its
 	# stub may still return OK). Never record that stub as a pending build:

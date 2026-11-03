@@ -82,9 +82,11 @@ func _ready() -> void:
 	_configure_registry()
 	# The pool compiles on a thread from here (2026-09-30): the title
 	# draws while it runs, and the first screen that asks for a card
-	# waits for it ([method CardRegistry.load_in_background]). Only the
-	# start: a toggle or a rescan below rebuilds in the foreground, on
-	# the spot, as it always did.
+	# waits for it ([method CardRegistry.load_in_background]). A toggle or
+	# a rescan below rebuilds in the foreground, on the spot, as it always
+	# did; the packs a campaign switches on as it sets out or resumes are
+	# built on a thread again, behind the hourglass (0.60.15,
+	# [method set_enabled_many]).
 	CardRegistry.load_in_background()
 
 
@@ -613,6 +615,48 @@ func set_enabled(id: String, enabled: bool) -> bool:
 	return true
 
 
+## SEVERAL PACKS SWITCHED AT ONCE, IN ONE REBUILD (0.60.15, the owner's
+## ruling of 2026-11-03: "the packs are switched on in ONE registry
+## rebuild"): [param ids] enabled (or disabled) with one settings write and
+## one rebuild of the card pool. [method set_enabled] one by one rebuilt the
+## pool once a pack — eight times for Packs 2–9, 3.2 s on the desk from all
+## off (1.2 s again in the same session). With [param background] the
+## rebuild compiles on a thread ([method CardRegistry.load_in_background],
+## the start-up's own build) and this returns at once: the caller shows its
+## hourglass and waits for [method CardRegistry.poll] — the Embark's and the
+## resume's ([method AdventurePacks.activate], [method AdventurePacks.resume]).
+## Without it, or where no thread may run (the Web), the rebuild is done
+## here, in the foreground. False, and nothing changed, while a session
+## holds the catalogue or when one of [param ids] is not installed; true
+## with nothing to do when every one is already as asked. [signal changed]
+## is emitted for each pack that moved, after the settings are written.
+func set_enabled_many(ids: Array[String], enabled: bool, background := false) -> bool:
+	if not change_refusal().is_empty(): return false
+	for id in ids:
+		if not has_pack(id):
+			return false
+	var now := Settings.enabled_card_packs()
+	var moved: Array[String] = []
+	for id in ids:
+		if enabled and not now.has(id):
+			now.append(id)
+			moved.append(id)
+		elif not enabled and now.has(id):
+			now.erase(id)
+			moved.append(id)
+	if moved.is_empty():
+		return true
+	Settings.set_enabled_card_packs(now)
+	if not enabled:
+		_art_cache.clear()
+	_configure_registry()
+	if not background or not CardRegistry.load_in_background():
+		CardRegistry.ensure_loaded()
+	for id in moved:
+		changed.emit(id, enabled)
+	return true
+
+
 ## The exact full path shown by the Card Packs page. Creating the folder is
 ## harmless and makes Open Folder useful before the first ZIP exists.
 func ensure_folder() -> String:
@@ -1105,6 +1149,10 @@ func missing_requirements(ids: Array[String]) -> Array[String]:
 
 
 func _configure_registry() -> void:
+	# The campaign's pack cards read on a worker as the world opens (0.60.15,
+	# [method AdventurePacks.warm]) read this pool: stopped and waited for
+	# before it is let go, never cleared under the worker.
+	AdventurePacks.stop_warm()
 	_printing_cache.clear()
 	_printing_cache_ready = false
 	if not is_enabled(ID):
