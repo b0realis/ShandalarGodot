@@ -116,7 +116,9 @@ func test_journal_keeps_cumulative_days_regions_and_short_deduplicated_clues() -
 	assert_eq(player.journal.size(), size)
 	assert_true(RefugeCampaign.travel(player))
 	player.log_clue("Deliver the letter to the eastern town.", "quest_clue")
-	assert_string_contains(HeroStats.journal_line(player.journal.back()), "Day 3 · Shandalar: Quest:")
+	# A campaign that chose the island names every line's region (the
+	# owner's ruling of 2026-11-03).
+	assert_string_contains(HeroStats.journal_line(player.journal.back(), player), "Day 3 · Shandalar: Quest:")
 	var loaded := AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
 	assert_not_null(loaded)
 	if loaded != null: assert_eq(loaded.journal, player.journal)

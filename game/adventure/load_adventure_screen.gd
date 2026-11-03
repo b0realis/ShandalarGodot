@@ -291,9 +291,10 @@ func _gild_hall_button() -> void:
 func continue_adventure(index: int) -> bool:
 	if _leaving or index < 0 or index >= rows.size() or rows[index].is_empty():
 		return false
-	var screen := open_save(String(rows[index]["path"]))
+	var refusal: Array[String] = []
+	var screen := open_save(String(rows[index]["path"]), refusal)
 	if screen == null:
-		_say_line.text = "That save could not be read."
+		_say_line.text = refusal[0] if not refusal.is_empty() else "That save could not be read."
 		return false
 	_leaving = true
 	if is_inside_tree():
@@ -311,13 +312,27 @@ func continue_adventure(index: int) -> bool:
 
 ## The world screen for the adventure saved at [param path] — not yet in
 ## the tree — or null.
-static func open_save(path: String) -> WorldScreen:
+##
+## ITS CARD PACKS FIRST (0.60.13 bug campaign, h3-1; the owner, 2026-10-28:
+## "resume with a notice (a missing pack refuses and says which)"): a pack
+## the campaign chose that is not installed refuses it — null, and the words
+## naming the pack appended to [param refusal]; one installed but switched
+## off is enabled, as the Embark does, and the arrival says so ([method
+## AdventurePacks.resume]).
+static func open_save(path: String, refusal: Array[String] = []) -> WorldScreen:
 	var adventure := AdventurePlayer.load_from(path)
 	if adventure == null:
+		return null
+	var packs := AdventurePacks.resume(adventure)
+	if String(packs["refusal"]) != "":
+		refusal.append(String(packs["refusal"]))
 		return null
 	var screen: WorldScreen = load("res://game/adventure/world/world_screen.tscn").instantiate()
 	screen.player = adventure
 	screen.arrival = "%s takes up the adventure again." % adventure.name
+	var enabled := AdventurePacks.enabled_notice(packs["enabled"])
+	if enabled != "":
+		screen.arrival += "\n" + enabled
 	return screen
 
 

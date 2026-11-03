@@ -639,6 +639,15 @@ const ADD_MAX_BYTES := 384 * 1024 * 1024
 const ADD_MAX_ENTRIES := 2676
 
 
+## THE SKIN PACK'S SCRIPT, loaded when one of its static helpers is asked
+## for (0.60.13 bug campaign, h5-6): `SkinPack` is an autoload's name, and
+## a `--script` tool that reaches this file (the AutoDeck CLI) is compiled
+## before the autoloads are named — "Identifier not found: SkinPack" on
+## every run. A preload would not do: skin_pack.gd names this autoload.
+static func _skin_pack() -> Script:
+	return load("res://game/skin_pack.gd")
+
+
 ## THE WAY TO ADD A PACK WITHOUT A FOLDER (the owner, 2026-10-21, on the
 ## mockups: *"Yes A is the leanest"*). A phone's game folder lies under
 ## Android/data, which its own file manager will not open and Open Folder
@@ -659,7 +668,7 @@ func pick_pack() -> void:
 	box.filters = PackedStringArray(["*.zip ; Card packs"])
 	box.use_native_dialog = true
 	box.size = Vector2i(760, 520)
-	box.current_dir = SkinPack.pick_start_dir()
+	box.current_dir = _skin_pack().pick_start_dir()
 	box.file_selected.connect(func(path: String) -> void:
 		box.queue_free()
 		add_pack(path))
@@ -722,7 +731,7 @@ static func install_pack(source: String, folder: String) -> Dictionary:
 	var staging := ProjectSettings.globalize_path(INCOMING)
 	DirAccess.make_dir_recursive_absolute(staging)
 	var staged := staging.path_join(file_name)
-	if SkinPack.copy_whole(source, staged) != OK:
+	if _skin_pack().copy_whole(source, staged) != OK:
 		return {"ok": false, "id": id, "message": "%s could not be copied." % shown}
 	var report := inspect(staged, true)
 	if not bool(report.get("ok", false)):
@@ -730,7 +739,7 @@ static func install_pack(source: String, folder: String) -> Dictionary:
 		return {"ok": false, "id": id, "message": "%s was not added: %s" % [
 			shown, String(report.get("why", "refused"))]}
 	var dest := folder.path_join(file_name)
-	var copied := SkinPack.copy_whole(staged, dest)
+	var copied: Error = _skin_pack().copy_whole(staged, dest)
 	DirAccess.remove_absolute(staged)
 	if copied != OK:
 		return {"ok": false, "id": id, "message": "%s could not be copied into %s." % [

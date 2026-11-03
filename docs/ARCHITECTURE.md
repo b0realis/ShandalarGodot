@@ -232,7 +232,11 @@ save test.
 
 `AdventureTasks` derives cached objectives from active state and inactive save
 metadata. A stable selected ID moves with a quest's stage; cross-region guidance
-uses the ship. Version 6 saves selection, task order/outcomes and clue facts
+uses the ship. Several tasks may guide at once: each chosen history entry is
+flagged `guided`, and the old `selected` string names a single choice and is
+empty for several, so older builds read Automatic guidance. Arzakon's portal
+arrow is drawn last, in its own ink, unless switched off. Errand ids are whole
+numbers. Version 6 saves selection, task order/outcomes and clue facts
 separately from bounded journal history. Optional history fields keep older saves
 readable. Explicit completion/expiry hooks archive town errands and sieges;
 permanent objectives derive their outcomes from campaign state. Countdown values

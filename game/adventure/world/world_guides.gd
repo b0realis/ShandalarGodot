@@ -6,15 +6,26 @@ extends Control
 ## ([method WorldStatus.targets]) is ringed where it stands on the screen,
 ## its name under it, as 1.3 lettered the quest's destination on the world
 ## (`DrawWorldTileRange`); off the screen an arrow at the edge points the
-## way, named. Gold for the quest and for Arzakon's portal, open or
-## petrified (part C), red for a siege ([constant INKS]). The options
-## switch them off.
+## way, named. Gold for the quest, red for a siege, Arzakon's portal, open
+## or petrified (part C), in its own ink drawn over the others ([constant
+## INKS], [method drawn]). The options switch them off; the Tasks tab
+## chooses the tasks they follow and switches the portal's own arrow.
 
 const GOLD := Color8(232, 190, 110)
 const SIEGE := Color8(232, 60, 40)
+## [QoL] Arzakon's portal, open or petrified (the owner's ruling of
+## 2026-11-03: *"the portal arrow is of different color and overlaid on
+## other arrows"*): violet as the portal's own glow
+## (`tools/draw_world_portal.gd`). The first of three candidates shown to
+## the owner — violet, magenta (240, 90, 210), aether cyan (80, 225, 240) —
+## until the owner picks.
+const PORTAL := Color8(178, 128, 255)
 ## Each kind of place's ink ([method WorldStatus.targets]); another kind
 ## is gold.
-const INKS := {"siege": SIEGE, "quest": GOLD, "portal": GOLD, "monument": GOLD}
+const INKS := {"siege": SIEGE, "quest": GOLD, "portal": PORTAL, "monument": PORTAL}
+## Whether the portal's own arrow shows while no task chosen points there
+## (the Tasks tab's switch, the ruling of 2026-11-03; on until switched off).
+const PORTAL_SETTING := "world_portal_arrow"
 const EDGE := Color8(20, 10, 8)
 ## How far in from the screen's edge an arrow stands, and how far from the
 ## side the panel holds.
@@ -94,6 +105,41 @@ static func ink_for(kind: String) -> Color:
 	return INKS.get(kind, GOLD)
 
 
+static func portal_wanted() -> bool:
+	return bool(Settings.get_value(PORTAL_SETTING, true))
+
+
+static func want_portal(shown: bool) -> void:
+	Settings.set_value(PORTAL_SETTING, shown)
+
+
+## The arrows in the order drawn: Arzakon's portal last, over the others;
+## its automatic arrow ([method AdventureTasks.guide], `overlay`) not at
+## all with the Tasks tab's switch off — a chosen portal task still shows.
+func drawn() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var over: Array[Dictionary] = []
+	var portal_shown := portal_wanted()
+	for target in targets:
+		if target.get("overlay", false) and not portal_shown:
+			continue
+		if AdventureTasks.portal(target):
+			over.append(target)
+		else:
+			out.append(target)
+	out.append_array(over)
+	return out
+
+
+## Where the name of an arrow standing at [param at] and pointing along
+## [param way] is written (its baseline's middle): back from the tip, under
+## the arrow or, pointing down, over it — never beside it, where, held on
+## the screen, the name covered its own arrow at a side (0.60.13 bug
+## campaign, seen with the several arrows of the ruling of 2026-11-03).
+static func arrow_label_at(at: Vector2, way: Vector2) -> Vector2:
+	return Vector2(at.x - way.x * 30.0, at.y + (30.0 if way.y <= 0.0 else -20.0))
+
+
 func _draw() -> void:
 	if view == null:
 		return
@@ -101,7 +147,7 @@ func _draw() -> void:
 	var font := GameSkin.font("font_title")
 	if font == null:
 		font = get_theme_default_font()
-	for target in targets:
+	for target in drawn():
 		var ink := ink_for(String(target["kind"]))
 		var guide := guide_for(target["tile"])
 		var at: Vector2 = guide["at"]
@@ -116,7 +162,7 @@ func _draw() -> void:
 			draw_colored_polygon(points, Color(ink, 0.75 + 0.25 * pulse))
 			points.append(tip)
 			draw_polyline(points, EDGE, 2.0, true)
-			label_at = at - way * 30.0 + Vector2(0, 5)
+			label_at = arrow_label_at(at, way)
 		else:
 			var radius := 26.0 * view.zoom * 0.5 + pulse * 4.0
 			draw_arc(at, radius + 1.5, 0.0, TAU, 40, Color(EDGE, 0.7), 4.0, true)

@@ -386,6 +386,9 @@ otherwise Godot treats that CSV catalogue as a translation table.
   such tools should resolve autoloads from the tree at call time, for
   example `get_node_or_null(^"/root/ShellMusic")`. Keep scratch screen
   variables untyped if their type would pull in autoload-dependent scripts.
+  `tools/test_script_entry_points.py` follows every `--script` entry
+  point's `class_name`/`preload` references: a model-side script must not
+  name a screen class (keep it an untyped `Node`, or `load()` it at run time).
 - The duel screen coalesces engine changes into a refresh once per frame.
   UI tests must wait a frame or call `_refresh()` before inspecting it;
   drive screen AI through `_ai_step()`, not `_ais[pid].act()`.

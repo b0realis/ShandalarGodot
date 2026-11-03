@@ -159,6 +159,44 @@ func _maybe_schedule_ai() -> void:
 	pass
 
 
+## A BOT SEAT IS A COMPUTER OPPONENT HERE TOO (0.60.13 bug campaign, h4-1):
+## the host runs it, so this view has no `_ais`, and the 0.60.9 notice — the
+## bar naming the computer's new spell and its target, the docked Showcase
+## showing it — never came: "Still thinking..." while a bot's Swords to
+## Plowshares resolved. The room names its bot seats ([member
+## DuelConfig.pilots], presentation only); the host keeps the reading pause
+## itself ([SgLocalServer]).
+func _computer_seat(pid: int) -> bool:
+	return config != null and config.is_ai(pid)
+
+
+## Every table received rebuilds the chain's objects; the referee's handle
+## ([member StackItem.id] here) is what stays the same object to object.
+func _chain_key(item: StackItem) -> int:
+	return item.id
+
+
+## The engine's sentence ("Wizard casts Swords to Plowshares") is not sent:
+## the referee's row is the object's kind, " — " and its chosen mode, then
+## its targets on a line of their own ([SgDuelProjection]). The same words
+## from what was sent; the shared bar adds the targets.
+func _opponent_action_line(item: StackItem) -> String:
+	var head := item.description.get_slice("\n", 0)
+	var chosen := head.get_slice(" — ", 1) if head.contains(" — ") else ""
+	var who: String = game.players[item.controller].player_name
+	var what := item.card.data.card_name
+	var line := "%s casts %s" % [who, what]
+	match item.kind:
+		Mtg.StackKind.ABILITY:
+			line = "%s activates %s" % [who, what]
+		Mtg.StackKind.TRIGGER:
+			# The bar leaves a trigger's targets to its sentence, as the
+			# engine's carries them.
+			line = DuelLogText.with_details("%s — triggered ability" % what,
+				DuelLogText.details(game, item))
+	return line if chosen.is_empty() else "%s — %s" % [line, chosen]
+
+
 func _refresh() -> void:
 	if not _built: return
 	# A received view can cross several engine transitions at once. Drop the
@@ -172,6 +210,9 @@ func _refresh() -> void:
 		_discard_picks.clear()
 		_damage_picks.clear()
 	super._refresh()
+	# A bot's new spell to the docked Showcase, as at a local table (h4-1).
+	if game.game_over: _pace_chain_ids.clear()
+	else: _note_opponent_chain()
 	_pass_button.disabled = projection.locked or game.game_over
 	# Transport state belongs beside the table controls, never on top of a
 	# combat/target/payment instruction. Even a brief ACK wait used to flash

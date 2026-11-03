@@ -837,11 +837,17 @@ func learn_deck_colors(hue: int, bits: int) -> void:
 
 # --------------------------------------------------------------- the cards --
 
-## The cards of the deck in use ([member current_deck]), by name.
-func deck_cards() -> Array[String]:
+## The cards of the deck in use ([member current_deck]), by name — only
+## those the game knows (0.60.13 bug campaign, h3-1: a card of a pack
+## switched off or gone went into every duel's deck and dropped out of it
+## with an error; no duel counts it now, as the adventure's deck builder
+## already left it off its surface, [method AdventureBuilder.write_back]).
+## [param with_unknown] keeps them, for a check that must refuse such a deck.
+func deck_cards(with_unknown := false) -> Array[String]:
 	var out: Array[String] = []
 	for card in cards:
-		if (card.get("decks", []) as Array).has(current_deck):
+		if (card.get("decks", []) as Array).has(current_deck) \
+				and (with_unknown or CardRegistry.has_card(String(card["card"]))):
 			out.append(String(card["card"]))
 	return out
 
@@ -1908,15 +1914,33 @@ static func _summary(data: Dictionary) -> Dictionary:
 	for key in beaten:
 		wizards[key] = true
 	return {"slot_name": _text(game.get("slot_name")),
-		"days": _count((data["clocks"] as Dictionary).get("quest_timer")) / WorldStatus.DAY,
+		"days": _journey_days(data),
 		"gold": _count((data["carried"] as Dictionary).get("gold")),
 		"id": _text(game.get("id")), "name": _text(hero.get("name")),
 		"color": _text(hero.get("color")), "difficulty": clampi(_number(hero.get("difficulty")), 0, 3),
 		"saved": _text(game.get("saved")),
-		"seed_text": _text((data["world"] as Dictionary).get("seed_text")),
+		# An old island save's from its mainland (0.60.13 bug campaign, h1-3).
+		"seed_text": AdventureRegions.seed_text(data),
 		"ended": how, "score": int(final_saved.get("score", 0)) if how == ENDED_WON else 0,
 		"life_rule": life_rule_of(hero.get("life_rule")),
 		"at_door": door_mark(end.get("at_door"), how, wizards.size())}
+
+
+## The days on the road of a save's line: the whole journey's clock, as
+## the hero pane counts them ([method journey_steps]) — not the clock of the
+## region the save stands in (0.60.13 bug campaign, h1-2: saved on the
+## island after 40 days on the mainland and 2 there, the list said "day 2").
+## A save from before the journey's clock (version 4 and older) sums its
+## regions' clocks, as the load does ([method AdventureRegions.read]).
+static func _journey_days(data: Dictionary) -> int:
+	var steps := _count(_object(data.get("clocks")).get("quest_timer"))
+	var journey := _object(data.get("journey"))
+	if journey.has("time"):
+		steps = _count(journey["time"])
+	elif _number(data.get("version"), 1) < 5:
+		for region: Variant in _object(AdventureRegions.saved_regions(data)).values():
+			steps += _count(_object(_object(region).get("clocks")).get("quest_timer"))
+	return steps / WorldStatus.DAY
 
 
 ## The bytes of the file at [param path], empty when there is none.

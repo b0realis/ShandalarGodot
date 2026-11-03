@@ -81,8 +81,10 @@ func test_the_run_record_is_the_contract() -> void:
 	var run := board.run
 	var keys := run.keys()
 	keys.sort()
+	# "place_name" since 0.60.5: the region's own name for the board's title
+	# (DungeonBoard.title; 0.60.13 bug campaign, h5-4). The run is not saved.
 	assert_eq(keys, ["card_in_effect", "castle", "code", "color", "dice_card", "index", "life_pool", "monsters",
-		"rules"], "c2 §12.5's keys, and the card in effect")
+		"place_name", "rules"], "c2 §12.5's keys, the card in effect, and the place's name")
 	assert_eq(run["index"], 0)
 	assert_eq(run["castle"], true)
 	assert_eq(run["color"], 1, "the black castle")

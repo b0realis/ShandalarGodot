@@ -63,14 +63,16 @@ const ABOUT := "The adventures won in Shandalar, best first: the hero, their col
 
 
 ## THE LINE OF [param player]'s won adventure ([member AdventurePlayer.final]
-## holds the end's record; an adventure not won has none: `{}`).
+## holds the end's record; an adventure not won has none: `{}`). A record
+## without its days reads the hero's days on the road, the whole journey's
+## (0.60.13 bug campaign, h1-2: the region's own clock left out the island).
 static func entry_of(player: AdventurePlayer) -> Dictionary:
 	if player == null or player.ended != AdventurePlayer.ENDED_WON:
 		return {}
 	var end := player.final
 	return {"id": player.adventure_id, "name": player.name, "portrait": player.portrait,
 		"color": player.color, "difficulty": player.difficulty,
-		"score": int(end.get("score", 0)), "days": int(end.get("days", player.quest_timer / WorldStatus.DAY)),
+		"score": int(end.get("score", 0)), "days": int(end.get("days", WorldStatus.days_on_road(player))),
 		"wins": int(end.get("wins", player.duel_record()["won"])),
 		"date": String(end.get("date", "")), "seed_text": player.world_seed_text,
 		"life_rule": player.life_rule, "attempts": int(end.get("attempts", player.final_attempts))}

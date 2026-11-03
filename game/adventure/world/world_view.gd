@@ -473,6 +473,10 @@ var _dungeon_at := {}
 ## pictures were drawn for: where they stood and how they looked, and
 ## which drawing of the ground (one more each time new pictures are shown).
 var _plain := false
+## The pictures the plain's last painting drew from the optional lands — a
+## place's sprite, a pennant — held until it paints again ([method
+## _paint_plain]; 0.60.13 bug campaign, h1-1).
+var _plain_held: Array = []
 var _figure_drawn: Array = []
 var _drawing := 0
 ## Of those, how many were drawn in one go ([method _draw_pictures]).
@@ -1487,6 +1491,7 @@ static func op_color(op: Array) -> Color:
 ## itself; the 1997 ground is the pictures' own canvas items ([method _put]).
 func _paint_ground() -> void:
 	if world == null or _tiles.is_empty() or not _plain:
+		_plain_held = []
 		return
 	_paint_plain()
 
@@ -2062,13 +2067,32 @@ func _paint_plain() -> void:
 		var radius: float = [0, 7, 11, 14, 18, 18][clampi(kind, 0, 5)]
 		canvas.draw_circle(middle, radius + 2, Color(0, 0, 0, 0.6))
 		canvas.draw_circle(middle, radius, Color8(236, 222, 196) if kind < 4 else Color8(232, 190, 110))
+	# THE OPTIONAL LANDS' PLACES AND PENNANTS (0.60.13 bug campaign, h1-1).
+	# Each picture is held until the plain paints again: a canvas keeps a
+	# texture's RID, not the texture, and a place's sprite loaded for this
+	# painting alone was freed as it returned — the anchorage, the harbor
+	# and the Ebon Crown drawn as white boxes. The pennants of the freed
+	# communities and the liberated castle, the sheets' uprights only until
+	# now ([method _standing_on]), are drawn plain too, over the marks.
+	var held: Array = []
 	for i in _tiles.size():
-		var kind := AdventureExpansions.marker(world, _tiles[i])
-		if kind != "" and _seen[i] != 0:
-			var op := AdventureExpansions.map_op(kind)
+		if _seen[i] == 0:
+			continue
+		var tile := _tiles[i]
+		var kind := AdventureExpansions.marker(world, tile)
+		var marks: Array = []
+		if kind != "":
+			marks.append(AdventureExpansions.map_op(kind))
+		if kind != "" or world.tile_flags(tile.x, tile.y) & ShandalarWorld.SITE != 0:
+			marks.append(RegionPresentation.banner(world, tile))
+		for op in marks:
+			if (op as Array).is_empty():
+				continue
 			var dest: Rect2 = op[1]
 			dest.position += _lefts[i]
 			canvas.draw_texture_rect_region(op[0], dest, op[2])
+			held.append(op[0])
+	_plain_held = held
 
 	for dungeon in dungeons:
 		draw_dungeon_plain(canvas, _lay(Vector2(int(dungeon["x"]) * 32 + 16, int(dungeon["y"]) * 32 + 16)) - origin)

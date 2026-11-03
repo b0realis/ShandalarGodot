@@ -118,8 +118,10 @@ the same day; see "Built: the Embark screen".
   *(This replaces the 2026-10-04 ruling that a selected pack's cards are
   available everywhere from the start.)*
 - **A campaign started with packs can be resumed only with those packs
-  installed.** Without them it does not load (the game should name the
-  missing packs). A campaign without packs always resumes.
+  installed.** Without them it does not load, and the save list names the
+  missing pack; one installed but switched off is enabled, as setting out
+  does, and the arrival says so (built 0.60.13). A campaign without packs
+  always resumes.
 - **A newer version of the same pack still resumes** the campaign (owner,
   2026-10-04). The pack's id must match; its version may be newer than the
   one the campaign recorded. `card_packs.gd` already compares versions

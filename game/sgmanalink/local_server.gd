@@ -111,6 +111,18 @@ var _bot_due: Dictionary = {}
 var _bot_cursor := 0
 # Test-only pacing override; never accepted from a network command.
 var bot_pace_override := -1
+## [QoL] THE READING PAUSE AT A BOT TABLE (0.60.13 bug campaign, h4-1): a
+## computer seat's newly shown spell or ability stands this long before the
+## bot's next step — the local screen's two seconds
+## (`DuelScreen.OPPONENT_ACTION_SECONDS`, the 0.60.9 notice), which the
+## seats' views name on the bar meanwhile. The bot used to step at its pace
+## (350 ms by default) whatever it had just cast, so an unanswerable Swords
+## to Plowshares resolved before it could be read. Counted from the step
+## that showed it, per stack object; a table of two bots and the tests' zero
+## pace keep their speed, as demo play and zero-pace tools do locally.
+const BOT_READING_MS := 2000
+## The bot seats' objects on each table's chain, by room id: {object id: true}.
+var _bot_reading: Dictionary = {}
 ## Encrypted connections told [constant HOST_CLOSED], kept open until the
 ## guest has read it: [{socket, until}] (see [method _tell_closing]).
 var _closing: Array = []
@@ -267,6 +279,7 @@ func stop() -> void:
 	_view_cache.clear()
 	_pending_publish.clear()
 	_bot_due.clear()
+	_bot_reading.clear()
 	_entries_from.clear()
 	_flush_queued = false
 	access_code = ""
@@ -863,10 +876,15 @@ func _poll_bots(now: int) -> void:
 		if not _connected(room.seats[0]) or not _connected(room.seats[1]): continue
 		var match_game: SgPracticeMatch = room.match
 		var actor := int(match_game.decision_state().actor)
-		if not match_game.bots.has(actor) or now < int(_bot_due.get(room.id, 0)): continue
+		if not match_game.bots.has(actor): continue
 		var pace := int(match_game.bot_options[actor].pace_ms) if bot_pace_override < 0 else bot_pace_override
+		# An object shown by the other seat's action (a bot's trigger) is
+		# read from the moment the bot would answer it (h4-1).
+		_note_bot_reading(room, now, pace)
+		if now < int(_bot_due.get(room.id, 0)): continue
 		_bot_due[room.id] = now + pace
 		SgBotPlayer.step(match_game, match_game.bots[actor])
+		_note_bot_reading(room, now, pace)
 		room.revision += 1
 		if tournament != null: tournament.collect_result(room)
 		_publish(room.id, 0, match_game.game.game_over)
@@ -889,6 +907,30 @@ func _poll_bots(now: int) -> void:
 			_sessions.erase(sid)
 	for room_id in _bot_due.keys():
 		if not _rooms.has(room_id): _bot_due.erase(room_id)
+	for room_id in _bot_reading.keys():
+		if not _rooms.has(room_id): _bot_reading.erase(room_id)
+
+
+## [constant BOT_READING_MS]: remembers [param room]'s bot-seat objects on
+## the chain and, when one is new, holds the bot's next step until it has
+## stood that long from [param now] — never sooner than [param pace] would.
+## The same rule as `DuelScreen._opponent_action_wait`: keyed by stack
+## object, so a redraw or an older object back on top does not restart it.
+func _note_bot_reading(room: Dictionary, now: int, pace: int) -> void:
+	var match_game: SgPracticeMatch = room.match
+	var seen: Dictionary = _bot_reading.get(room.id, {})
+	var live := {}
+	var fresh := false
+	if pace > 0 and match_game.bots.size() == 1:
+		for item: StackItem in match_game.game.stack:
+			if not match_game.bots.has(item.controller) or item.card == null:
+				continue
+			var key := item.get_instance_id()
+			live[key] = true
+			fresh = fresh or not seen.has(key)
+	_bot_reading[room.id] = live
+	if fresh:
+		_bot_due[room.id] = maxi(int(_bot_due.get(room.id, 0)), now + BOT_READING_MS)
 
 
 func _command(sid: int, action: Dictionary, revision: int) -> String:

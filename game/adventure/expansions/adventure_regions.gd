@@ -30,7 +30,14 @@ static func restore(player: AdventurePlayer, region: Dictionary) -> void:
 	AdventurePlayer._read_clocks(player, current["clocks"])
 	for key in RECORD: current["record"][key] = region["record"].get(key, current["record"][key])
 	AdventurePlayer._read_record(player, current["record"])
-	player.world_seed_text = str(saved.get("seed_text", player.world.seed))
+	_voyaged(player)
+	# The campaign's seed text travels: a region saved by 0.60.5–0.60.12 kept
+	# a blank one (0.60.13 bug campaign, h1-3).
+	var text: Variant = saved.get("seed_text", "")
+	if text is String and text != "":
+		player.world_seed_text = text
+	elif player.world_seed_text == "":
+		player.world_seed_text = str(player.world.seed)
 	player.made_fingerprint = str(saved.get("made_fingerprint", ""))
 	player.dice = int(saved.get("dice", player.world.rand_state))
 	player.monsters = AdventurePlayer._cleaned_monsters(saved.get("monsters"), player.world)
@@ -52,6 +59,7 @@ static func travel(player: AdventurePlayer, destination: String, make_world := C
 		if made == null or id(made) != destination: return false
 		var fresh := AdventurePlayer.new()
 		fresh.world = made
+		fresh.world_seed_text = player.world_seed_text  # the campaign's (h1-3)
 		fresh.position = made.start
 		fresh.dice = made.rand_state
 		fresh.made_fingerprint = made.fingerprint()
@@ -102,9 +110,39 @@ static func read(player: AdventurePlayer, data: Dictionary) -> void:
 	player.journey_time = AdventurePlayer._count(totals.get("time", days))
 	player.lairs_explored = lairs
 	player.siege_count = sieges
-	# New journal entries use the lifetime clock; old ones explicitly say region day.
-	if int(data.get("version", 1)) < 5:
-		for entry in player.journal: entry["regional_day"] = true
+	# Old journal lines read "Day N: …" as they always did, with no region —
+	# the owner's ruling of 2026-11-03 ("Region only with an island"); the
+	# "Region day" mark 0.60.6–0.60.12 gave them is dropped (0.60.13 bug
+	# campaign, h2-Q2/h3-Q1).
+	for entry in player.journal: entry.erase("regional_day")
+	if player.world_seed_text == "":
+		player.world_seed_text = seed_text(data)
+	_voyaged(player)
+
+## THE CAMPAIGN'S WORLD SEED as the player typed it, from save [param data]
+## (the load list's reading too): the active world's, else the mainland's —
+## 0.60.5–0.60.12 wrote an island's blank (0.60.13 bug campaign, h1-3) —
+## else the seed's number; "" when the save holds none.
+static func seed_text(data: Dictionary) -> String:
+	var world: Variant = data.get("world")
+	if not world is Dictionary: return ""
+	var text: Variant = world.get("seed_text")
+	if text is String and text != "": return text
+	var regions: Variant = saved_regions(data)
+	if regions is Dictionary and regions.get(MAINLAND) is Dictionary and regions[MAINLAND].get("world") is Dictionary:
+		text = regions[MAINLAND]["world"].get("seed_text")
+		if text is String and text != "": return text
+	var number: Variant = world.get("seed")
+	return str(int(number)) if AdventurePlayer._is_number(number) else ""
+
+## A region other than the mainland is never a new adventure: at clock 0 a
+## save made on landing loaded as one, replaying the new adventure's reveal
+## ([WorldScreen]; 0.60.13 bug campaign, h1-5). The voyage takes the
+## region's first tick; the clock stays its own, so the creatures of a
+## fresh island still wait as on a fresh world.
+static func _voyaged(player: AdventurePlayer) -> void:
+	if not mainland(player) and player.monster_timer == 0:
+		player.monster_timer = 1
 
 static func valid_saved(data: Dictionary) -> bool:
 	var regions: Variant = saved_regions(data)

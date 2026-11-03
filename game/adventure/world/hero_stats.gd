@@ -320,7 +320,8 @@ func _shape() -> String:
 				player.difficulty, _castle_tries(), show_all_creatures, banished_words(player),
 				player.final_attempts])
 		"Tasks":
-			parts.append_array([AdventureTasks.rows(player), player.tracked_task, player.known_clues.size(), AdventureExpansions.revision])
+			parts.append_array([AdventureTasks.rows(player), AdventureTasks.tracked(player), WorldGuides.portal_wanted(),
+				player.known_clues.size(), AdventureExpansions.revision])
 		"Wizards":
 			parts.append_array([WorldStatus.wizard_rows(player), WorldStatus.dominion(player),
 				player.owns("Ring of the Guardian"), highlighted, room_shown])
@@ -742,8 +743,12 @@ func _number_values() -> Dictionary:
 			deck += 1
 	var values := {"gold": str(player.gold), "food": str(player.food),
 		"ankh": str(player.mana_links()), "book": "%d/%d" % [deck, player.cards.size()],
-		"road": "Days on the road %d · lairs explored %d · World seed %s (%s)" % [
-			WorldStatus.days_on_road(player), player.lairs_explored, player.world_seed_text, AdventureExpansions.label(AdventureRegions.id(player.world))]}
+		"road": "Days on the road %d · lairs explored %d · World seed %s" % [
+			WorldStatus.days_on_road(player), player.lairs_explored, player.world_seed_text]}
+	# The region named only in a campaign that chose another land (the
+	# owner's ruling of 2026-11-03, "Region only with an island").
+	if regions_named(player):
+		values["road"] += " (%s)" % AdventureExpansions.label(AdventureRegions.id(player.world))
 	for gem in WorldHud.AMULETS:
 		values[String(gem[0])] = str(int(player.amulets.get(gem[0], 0)))
 	return values
@@ -940,24 +945,43 @@ static func wizard_words(row: Dictionary) -> String:
 func journal_lines() -> Array[String]:
 	var lines: Array[String] = []
 	for i in range(player.journal.size() - 1, -1, -1):
-		var line := journal_line(player.journal[i])
+		var line := journal_line(player.journal[i], player)
 		if line != "":
 			lines.append(line)
 	return lines
 
 
 ## A journal entry as its line reads ("Day 3: …"); "" for one with no words.
-static func journal_line(entry: Dictionary) -> String:
+## The owner's ruling of 2026-11-03, "Region only with an island": the
+## region ("Day 3 · The Last Refuge: …") only in a campaign of [param
+## player]'s that chose another land ([method regions_named]) — without a
+## [param player], only a line from another land than Shandalar — and never
+## "Region day": an old line reads "Day N" (0.60.13 bug campaign, h2-Q2).
+static func journal_line(entry: Dictionary, player: AdventurePlayer = null) -> String:
 	var text := String(entry.get("text", ""))
 	if text == "":
 		return ""
 	var day := int(entry.get("day", -1))
-	var stamp := ("Region day %d" if bool(entry.get("regional_day", false)) else "Day %d") % day if day >= 0 else ""
-	if entry.has("region"):
-		stamp += (" · " if stamp != "" else "") + AdventureExpansions.label(String(entry["region"]))
+	var stamp := "Day %d" % day if day >= 0 else ""
+	var region := String(entry.get("region", ""))
+	if region != "" and (regions_named(player) if player != null else region != AdventureRegions.MAINLAND):
+		stamp += (" · " if stamp != "" else "") + AdventureExpansions.label(region)
 	var kind: String = entry.get("event", "")
 	var prefix := "Clue: " if kind == "clue" else ("Quest: " if kind == "quest_clue" else "")
 	return (stamp + ": " if stamp != "" else "") + prefix + text.replace("\n", " ")
+
+
+## Whether [param player]'s campaign names the regions: it chose another
+## land than Shandalar, or has been there.
+static func regions_named(player: AdventurePlayer) -> bool:
+	if player == null:
+		return false
+	if not player.regions.is_empty():
+		return true
+	for id in AdventureExpansions.definitions():
+		if AdventureExpansions.chosen(player, id):
+			return true
+	return false
 
 
 ## Whether the journal holds a line to show.
@@ -1040,7 +1064,7 @@ func _journal_more() -> void:
 	var made := 0
 	while made < JOURNAL_STEP and _journal_depth < journal.size():
 		_journal_depth += 1
-		var line := journal_line(journal[journal.size() - _journal_depth])
+		var line := journal_line(journal[journal.size() - _journal_depth], player)
 		if line != "":
 			_journal.add_child(_journal_label(line, journal[journal.size() - _journal_depth]))
 			made += 1
@@ -1062,7 +1086,7 @@ func _journal_news() -> bool:
 	if since < 0:
 		return false
 	for i in range(since + 1, journal.size()):
-		var line := journal_line(journal[i])
+		var line := journal_line(journal[i], player)
 		if line != "":
 			var said := _journal_label(line, journal[i])
 			_journal.add_child(said)
@@ -1224,19 +1248,37 @@ func _tasks_page() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 7)
 	scroll.add_child(list)
+	# [QoL] Several tasks guide at once, an arrow each, and Arzakon's portal
+	# has its own arrow with a switch here (the owner's ruling of 2026-11-03).
+	var tasks := AdventureTasks.rows(player)
+	var chosen := AdventureTasks.tracked(player)
+	var following := tasks.any(func(task: Dictionary) -> bool: return chosen.has(task["id"]) and task.get("status", "active") == "active")
+	var switches := HBoxContainer.new()
+	switches.add_theme_constant_override("separation", 8)
+	list.add_child(switches)
 	var automatic := Button.new()
 	automatic.name = "TaskAutomatic"
-	automatic.text = "Automatic guidance" + (" ✓" if player.tracked_task == "" else "")
+	automatic.text = "Automatic guidance" + ("" if following else " ✓")
+	automatic.tooltip_text = "With no task chosen, the arrow points to what calls you first. Click to clear the chosen tasks."
 	_dress(automatic)
 	automatic.pressed.connect(_select_task.bind(""))
-	list.add_child(automatic)
-	var hint := _label("Click a target or task title to guide the help arrows.", 13, INK)
+	switches.add_child(automatic)
+	var portal := Button.new()
+	portal.name = "TaskPortalArrow"
+	var portal_shown := WorldGuides.portal_wanted()
+	portal.text = "Portal arrow" + (" ✓" if portal_shown else "")
+	portal.tooltip_text = ("Arzakon's portal has its own arrow, drawn over the others, whenever it calls you. Click to hide it."
+		if portal_shown else "The portal's own arrow is hidden. Click to show it again.")
+	_dress(portal)
+	_task_marker(portal, portal_shown, WorldGuides.PORTAL if portal_shown else DIM)
+	portal.pressed.connect(_switch_portal_arrow)
+	switches.add_child(portal)
+	var hint := _label("Click tasks to add or remove their guide arrows; several can be followed at once.", 13, INK)
 	hint.custom_minimum_size.x = maxf(page_size.x - 28, 200)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	list.add_child(hint)
 	list.add_child(_label("Newest first · green: completed · red: urgent or expired", 12, DIM))
 	var finished := false
-	var tasks := AdventureTasks.rows(player)
 	var latest := 0
 	for task in tasks:
 		if task.get("status", "active") == "active": latest = maxi(latest, int(task.get("order", 0)))
@@ -1250,20 +1292,20 @@ func _tasks_page() -> void:
 			list.add_child(HSeparator.new())
 			list.add_child(_label("Finished tasks", 16, GOLD))
 			finished = true
-		var selected: bool = player.tracked_task == task["id"] and not done
+		var selected: bool = chosen.has(task["id"]) and not done
 		var ink := Color("a8d7a0") if status == "completed" else Color("ff9494") if done else WorldGuides.ink_for(task["kind"]) if selected else Color("e2d8bd")
 		var button := Button.new()
 		button.name = "Task_" + String(task["id"]).replace("/", "_").replace(":", "_")
 		button.text = ("✓ " if status == "completed" else "× " if done else "") + task["title"]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.clip_text = true
-		button.tooltip_text = ("" if done else "Tracking task…\n" if selected else "Click to guide the help arrows to this task.\n") + task["text"]
+		button.tooltip_text = ("" if done else "Tracking task… Click to take its arrow away.\n" if selected else "Click to add a guide arrow to this task.\n") + task["text"]
 		_dress(button)
 		if not done: _task_marker(button, selected, ink)
 		button.disabled = done
 		button.add_theme_color_override("font_color", ink)
 		button.add_theme_color_override("font_disabled_color", ink)
-		button.pressed.connect(_select_task.bind(task["id"]))
+		button.pressed.connect(_toggle_task.bind(task["id"]))
 		list.add_child(button)
 		var state := "COMPLETED" if status == "completed" else "EXPIRED" if status == "expired" else "FAILED" if done else "Tracking task…" if selected else "ACTIVE"
 		var status_line := _label(state + " · " + AdventureExpansions.label(task["region"]), 13 if selected else 12, ink if done or selected else Color("9bd8ef"))
@@ -1328,10 +1370,15 @@ class TaskGuideMark extends Control:
 			draw_arc(centre, 7, 0, TAU, 32, ink, 1.5, true)
 			draw_circle(centre, 2, ink, true, -1, true)
 
+## The known clues under a heading; no heading with none known (0.60.13
+## bug campaign, from X6).
 func _task_clues(list: VBoxContainer) -> void:
-	list.add_child(_label("Known clues", 16, GOLD))
-	for clue in player.known_clues:
-		if clue.get("kind", "") != "clue": continue
+	var known := player.known_clues.filter(func(clue: Dictionary) -> bool: return clue.get("kind", "") == "clue")
+	if known.is_empty(): return
+	var heading := _label("Known clues", 16, GOLD)
+	heading.name = "KnownClues"
+	list.add_child(heading)
+	for clue in known:
 		var line := _label(AdventureExpansions.label(clue["region"]) + ": " + clue["text"], 14, Color("9bd8ef"))
 		line.custom_minimum_size.x = maxf(page_size.x - 28, 200)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1341,3 +1388,13 @@ func _select_task(id: String) -> void:
 	if AdventureTasks.select(player, id):
 		task_selected.emit()
 		refresh()
+
+func _toggle_task(id: String) -> void:
+	if AdventureTasks.toggle(player, id):
+		task_selected.emit()
+		refresh()
+
+func _switch_portal_arrow() -> void:
+	WorldGuides.want_portal(not WorldGuides.portal_wanted())
+	task_selected.emit()
+	refresh()

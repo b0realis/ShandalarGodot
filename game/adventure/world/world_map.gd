@@ -488,7 +488,9 @@ func _draw_journal() -> void:
 	var at := tile_point(tile) if same else Vector2(320, 390)
 	if same: draw_rect(Rect2(at - Vector2(2, 2), Vector2(5, 5)), Color.WHITE)
 	var ink := Color("9bd8ef") if entry.get("event", "") == "clue" else PaneStyle.GOLD if bool(entry.get("highlight", false)) else Color.WHITE
-	_boxed(HeroStats.journal_line(entry), at + Vector2(0, 6), ink, 10)
+	# The player too, so an island campaign names every line's region here
+	# as the hero pane does (0.60.13 bug campaign, X3).
+	_boxed(HeroStats.journal_line(entry, player), at + Vector2(0, 6), ink, 10)
 	_boxed("Day %d — line %d of %d" % [int(entry.get("day", 0)), journal_index + 1, player.journal.size()],
 		Vector2(320, 450), PaneStyle.GOLD, 11)
 

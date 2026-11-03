@@ -88,7 +88,9 @@ static func offers_cards(player: AdventurePlayer) -> bool:
 	return AdventurePacks.offers_cards(player, FallenEmpiresPack.ID)
 
 static func deck_gate(player: AdventurePlayer) -> Dictionary:
-	return gate_for_cards(player.deck_cards())
+	# With the cards the game does not know: they cannot qualify (0.60.13
+	# bug campaign, h3-1: deck_cards() leaves them out of every duel).
+	return gate_for_cards(player.deck_cards(true))
 
 static func gate_for_cards(cards: Array) -> Dictionary:
 	var count := 0
@@ -142,8 +144,9 @@ static func can_challenge(player: AdventurePlayer) -> bool:
 static func deck_problem(player: AdventurePlayer) -> String:
 	if not AdventureExpansions.launch_enabled: return AdventureExpansions.LAUNCH_HELP
 	if not available(): return "Enable Pack 2: Fallen Empires in Options to begin this battle."
-	if player.deck_cards().is_empty(): return "Choose a deck in a town's deck builder before beginning this battle."
-	for card in player.deck_cards():
+	# The deck as built, unknown cards too, so they are named (h3-1).
+	if player.deck_cards(true).is_empty(): return "Choose a deck in a town's deck builder before beginning this battle."
+	for card in player.deck_cards(true):
 		if not CardRegistry.has_card(card): return "Your deck contains unavailable cards. Enable their packs or edit the deck in town."
 	return ""
 

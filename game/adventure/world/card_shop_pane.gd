@@ -171,7 +171,7 @@ func refresh() -> void:
 				show_large(cards[i])
 				break
 	elif not CardRegistry.has_card(cards[chosen]):
-		_ask.text = "Enable this card's pack to buy it."
+		_ask.text = AdventurePacks.card_refusal(cards[chosen])
 		_buy.disabled = true
 	else:
 		var price := CardShop.price_at(player, slot, cards[chosen])
@@ -214,9 +214,15 @@ func _offer(index: int, card_name: String) -> Control:
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	place.add_child(tag)
 	if not CardRegistry.has_card(card_name):
-		var sold := PaneStyle.label("Sold" if card_name.is_empty() else "Pack unavailable", 16, PaneStyle.DIM)
+		var sold := PaneStyle.label("Sold" if card_name.is_empty() else unavailable_words(card_name), 16, PaneStyle.DIM)
+		sold.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sold.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 		holder.add_child(sold)
+		if not card_name.is_empty():
+			# Its pack named, in full on the pointer and once chosen (the
+			# owner's polish of 2026-11-03, [method CardShop._mark_unavailable]).
+			place.tooltip_text = AdventurePacks.card_refusal(card_name)
+			place.gui_input.connect(_place_input.bind(index))
 		return place
 	var card := CardPreview.new()
 	card.docked = true
@@ -230,6 +236,13 @@ func _offer(index: int, card_name: String) -> Control:
 	place.mouse_exited.connect(_hover.bind(index, false))
 	place.gui_input.connect(_place_input.bind(index))
 	return place
+
+
+## A shelf card the game does not know now, on its place: its pack by
+## number, "Pack 2\nunavailable" — "Pack unavailable" when no pack has it.
+static func unavailable_words(card_name: String) -> String:
+	var pack := AdventurePacks.card_pack(card_name)
+	return "Pack unavailable" if pack == "" else "Pack %s\nunavailable" % pack.trim_prefix("pack-")
 
 
 ## Place [param index] as it now stands: its price tag ("✦" on the
@@ -274,7 +287,7 @@ func _place_input(event: InputEvent, index: int) -> void:
 	var click := event as InputEventMouseButton
 	if click != null and click.button_index == MOUSE_BUTTON_LEFT and not click.pressed:
 		choose(index)
-	elif PaneStyle.right_click(event):
+	elif PaneStyle.right_click(event) and bool(_row.get_child(index).get_meta("available", false)):
 		card_read.emit(String(_row.get_child(index).get_meta("card", "")))
 
 

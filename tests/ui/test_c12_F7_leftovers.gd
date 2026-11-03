@@ -165,12 +165,16 @@ func _page_text(title: String) -> String:
 	return ""
 
 
-func test_the_help_says_randomize_leaves_the_waiting_packs_alone() -> void:
+## Randomize ticks a pack that can join an adventure half the time
+## ([method EmbarkScreen.randomize_all]) since Pack 2 joins campaigns
+## (0.60.7); the Help said they stayed unticked (0.60.13 bug campaign, h3-3).
+func test_the_help_says_randomize_draws_the_packs_that_can_join() -> void:
 	var embark := _page_text("Shandalar — a new adventure")
 	assert_string_contains(embark, "Randomize draws every choice")
-	assert_false(embark.contains("the playmat, the card packs, the difficulty"),
-		"the packs are not drawn while they wait")
-	assert_string_contains(embark, "the card packs stay unticked while they wait")
+	assert_false(embark.contains("the card packs stay unticked while they wait"),
+		"the packs are drawn too")
+	assert_string_contains(embark, "ticks each card pack that can join an adventure, or not, at random")
+	assert_false(embark.contains("not implemented yet"), "Pack 2 joins adventures")
 
 
 func test_the_help_says_the_booster_deals_by_printed_rarity() -> void:

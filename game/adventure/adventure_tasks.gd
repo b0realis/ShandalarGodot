@@ -105,7 +105,10 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 		for slot in range(5, encounters.size()):
 			var dungeon: Dictionary = encounters[slot]
 			if int(dungeon.get("clues", 0)) & WorldClues.LOCATION == 0: continue
-			var title: String = data.get("expansion", {}).get("dungeon_names", {}).get(str(slot), "Dungeon %d" % (slot - 4))
+			# The region's own name, else the 1997 name the clues and the visit
+			# pane give it (0.60.13 bug campaign, h2-4: "Dungeon 1" before).
+			var title: String = data.get("expansion", {}).get("dungeon_names", {}).get(str(slot), WorldNames.dungeon_name(slot))
+			if title == "": title = "Dungeon %d" % (slot - 4)
 			var task := row("dungeon:%d" % slot, region, title, "Find and enter this known dungeon. Its clues remain below.", Vector2i(dungeon.get("x", -1), dungeon.get("y", -1)), "clue")
 			if int(dungeon.get("entered", 0)) > 0: completed(task, "Dungeon visited. You can return to explore its remaining rooms.")
 			out.append(task)
@@ -113,34 +116,117 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 	AdventureExpansions.release_inactive(active)
 	return out
 
+## [QoL] THE TASKS THAT GUIDE THE ARROWS (the owner's ruling of 2026-11-03:
+## *"In tasks a user can choose multiple arrows"*): several tasks at once, an
+## arrow each; none chosen is Automatic guidance, the default. Each chosen
+## task's history entry carries [constant GUIDED], so the choice is saved
+## with the history. The old single string ([member AdventurePlayer.tracked_task],
+## saved as "selected") names the choice when it is one task and is empty
+## when it is several: 0.60.12 and older read several as Automatic guidance.
+## A choice made in that string alone (a save from 0.60.12 or older, a direct
+## assignment) replaces the flags.
+const GUIDED := "guided"
+
+## The tasks chosen to guide. A task hidden for now (its region's tasks out
+## of this launch, its pack off) stays chosen (0.60.13 bug campaign, h2-7).
+static func tracked(player: AdventurePlayer) -> Array[String]:
+	var out: Array[String] = []
+	if player == null: return out
+	rows(player) # the history up to date: a finished task is chosen no more
+	for id in player.task_history:
+		var entry: Dictionary = player.task_history[id]
+		var guided: Variant = entry.get(GUIDED, false)
+		if guided is bool and guided and entry.get("status") == "active": out.append(id)
+	if player.tracked_task == (out[0] if out.size() == 1 else ""): return out
+	for id in out: player.task_history[id].erase(GUIDED)
+	out.clear()
+	if player.task_history.get(player.tracked_task, {}).get("status", "") == "active":
+		player.task_history[player.tracked_task][GUIDED] = true
+		out.append(player.tracked_task)
+	else: player.tracked_task = ""
+	return out
+
+## Guide the arrows to [param id] alone, or "" for Automatic guidance.
 static func select(player: AdventurePlayer, id: String) -> bool:
-	if id != "" and not rows(player).any(func(task: Dictionary) -> bool: return task["id"] == id and task.get("status", "active") == "active"): return false
+	if id != "" and not _choosable(player, id): return false
+	for chosen in tracked(player): player.task_history[chosen].erase(GUIDED)
+	if id != "": player.task_history[id][GUIDED] = true
 	player.tracked_task = id
 	return true
 
+## [QoL] Add [param id]'s arrow to the others, or take it away (the ruling of
+## 2026-11-03).
+static func toggle(player: AdventurePlayer, id: String) -> bool:
+	if not _choosable(player, id): return false
+	var chosen := tracked(player)
+	if chosen.has(id):
+		player.task_history[id].erase(GUIDED)
+		chosen.erase(id)
+	else:
+		player.task_history[id][GUIDED] = true
+		chosen.append(id)
+	player.tracked_task = chosen[0] if chosen.size() == 1 else ""
+	return true
+
+static func _choosable(player: AdventurePlayer, id: String) -> bool:
+	var live := rows(player).any(func(task: Dictionary) -> bool: return task["id"] == id and task.get("status", "active") == "active")
+	return live and player.task_history.has(id)
+
+## Whether [param target] ([method WorldStatus.targets]) is Arzakon's portal,
+## open or petrified.
+static func portal(target: Dictionary) -> bool:
+	return String(target.get("kind", "")) in [FinalBattle.PORTAL_KIND, FinalBattle.MONUMENT_KIND]
+
+## THE ARROWS: one for each chosen task (a task in another region: the ship
+## there), else the first of [param ordinary] ([method WorldStatus.targets])
+## that is not the portal; and Arzakon's portal whenever it is a target,
+## last so it is drawn over the others and marked `overlay` — the Tasks
+## tab's switch hides that one ([method WorldGuides.drawn]; the ruling of
+## 2026-11-03). When no chosen task can be reached (its region's pack off,
+## or hidden this launch) the automatic guidance takes over (0.60.13 bug
+## campaign, h1-4), and nothing is unchosen (h2-7).
 static func guide(player: AdventurePlayer, ordinary: Array[Dictionary]) -> Array[Dictionary]:
-	if player.tracked_task == "": return ordinary.slice(0, 1)
-	var selected := {}
-	for task in rows(player):
-		if task["id"] == player.tracked_task and task.get("status", "active") == "active":
-			selected = task
-			break
-	if selected.is_empty():
-		player.tracked_task = ""
-		return ordinary.slice(0, 1)
-	var active := AdventureRegions.id(player.world)
-	if selected["region"] != active:
-		var point: Array = player.world.expansion.get("port", [])
-		if active == AdventureRegions.MAINLAND:
-			if not AdventureExpansions.enabled_for(player, selected["region"]): return []
-			point = player.world.expansion.get("entries", {}).get(selected["region"], [])
-		if point.size() != 2: return []
-		selected = selected.duplicate()
-		selected["tile"] = Vector2i(point[0], point[1])
-		selected["name"] = "Ship toward " + AdventureExpansions.label(selected["region"])
 	var out: Array[Dictionary] = []
-	if selected["tile"].x >= 0: out.append(selected)
+	var chosen := tracked(player)
+	var following := false
+	if not chosen.is_empty():
+		for task in rows(player):
+			if not chosen.has(task["id"]) or task.get("status", "active") != "active": continue
+			var target := _toward(player, task)
+			if target.is_empty(): continue
+			following = true
+			if target["tile"].x >= 0 and not _pointed(out, target["tile"]): out.append(target)
+	if not following:
+		for target in ordinary:
+			if not portal(target):
+				out.append(target)
+				break
+	for target in ordinary:
+		if portal(target) and not _pointed(out, target["tile"]):
+			var mark := target.duplicate()
+			mark["overlay"] = true
+			out.append(mark)
 	return out
+
+## Where [param task]'s arrow points: the task itself in this region, the
+## ship toward its region from another; {} when the way is shut.
+static func _toward(player: AdventurePlayer, task: Dictionary) -> Dictionary:
+	var active := AdventureRegions.id(player.world)
+	if task["region"] == active: return task
+	var point: Array = player.world.expansion.get("port", [])
+	if active == AdventureRegions.MAINLAND:
+		if not AdventureExpansions.enabled_for(player, task["region"]): return {}
+		point = player.world.expansion.get("entries", {}).get(task["region"], [])
+	if point.size() != 2: return {}
+	var ship := task.duplicate()
+	ship["tile"] = Vector2i(point[0], point[1])
+	ship["name"] = "Ship toward " + AdventureExpansions.label(task["region"])
+	return ship
+
+## One arrow to a place: two chosen tasks there (two ships to one region)
+## share it.
+static func _pointed(out: Array[Dictionary], tile: Vector2i) -> bool:
+	return out.any(func(target: Dictionary) -> bool: return target["tile"] == tile)
 
 static func remember(player: AdventurePlayer, text: String, kind: String) -> void:
 	var region := AdventureRegions.id(player.world)
@@ -165,7 +251,15 @@ static func read(player: AdventurePlayer, saved: Variant) -> void:
 				if not entry.get(field) is String or entry[field].length() > 4096: valid = false
 			if not valid or entry["status"] not in ["active", "completed", "expired", "failed"]: continue
 			if not AdventurePlayer._is_number(entry.get("order")) or entry["order"] < 0 or entry["order"] > 1000000000: continue
-			player.task_history[id] = entry.duplicate(true)
+			var kept: Dictionary = entry.duplicate(true)
+			if not kept.get(GUIDED, false) is bool: kept.erase(GUIDED)
+			# An errand's id floated in 0.60.12 after a load ("errand:8.0:63.0",
+			# h2-3): mended, its twin dropped, its tracking moved.
+			var whole := _whole_errand(id)
+			if whole != id:
+				if player.tracked_task == id: player.tracked_task = whole
+				if history.has(whole): continue
+			player.task_history[whole] = kept
 			player.task_sequence = maxi(player.task_sequence, int(entry["order"]))
 	var clues: Variant = data.get("clues", [])
 	if clues is Array:
@@ -180,8 +274,17 @@ static func read(player: AdventurePlayer, saved: Variant) -> void:
 				player.known_clues.append({"region": entry.get("region", "mainland"), "text": entry.get("text", ""), "kind": entry["event"], "day": entry.get("day", 0)})
 
 
+## Whole numbers: a region saved away is read back from JSON as floats
+## (0.60.13 bug campaign, h2-3).
 static func errand_id(quest: Dictionary) -> String:
-	return "errand:%s:%s" % [quest.get("giver", -1), quest.get("deadline", 0)]
+	return "errand:%d:%d" % [int(quest.get("giver", -1)), int(quest.get("deadline", 0))]
+
+static func _whole_errand(id: String) -> String:
+	var at := id.find("/errand:")
+	if at < 0 or not id.contains("."): return id
+	var parts := id.substr(at + 8).split(":")
+	if parts.size() != 2 or not parts[0].is_valid_float() or not parts[1].is_valid_float(): return id
+	return id.substr(0, at) + "/errand:%d:%d" % [int(float(parts[0])), int(float(parts[1]))]
 
 static func completed(task: Dictionary, description: String) -> void:
 	task["status"] = "completed"

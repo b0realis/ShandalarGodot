@@ -547,9 +547,12 @@ static func portal_tile(world: ShandalarWorld) -> Vector2i:
 
 
 ## Whether the portal may stand on [param tile]: land, with no site (a
-## castle is one), no road and no dungeon.
+## castle is one), no road and no dungeon — nor a region's anchorage, shown
+## or hidden ([method DungeonDoors.expansion_place]; 0.60.13 bug campaign,
+## h2-8: its tile carries no flag, and the portal's pane would stand over
+## the ship's for good).
 static func portal_may_stand(world: ShandalarWorld, tile: Vector2i) -> bool:
-	if not world.is_land(tile.x, tile.y):
+	if not world.is_land(tile.x, tile.y) or DungeonDoors.expansion_place(world, tile):
 		return false
 	var taken := ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON
 	return world.tile_flags(tile.x, tile.y) & taken == 0
@@ -841,11 +844,14 @@ static func on_load(player: AdventurePlayer, hall_path := "", when := "") -> boo
 
 
 ## The end's record ([member AdventurePlayer.final]) of [param outcome]
-## from the settled battle [param settled].
+## from the settled battle [param settled]. Its days are the hero's days on
+## the road, the whole journey's as the hero pane counts them ([method
+## WorldStatus.days_on_road]) — never the region's own quest clock, which
+## left out the days on the island (0.60.13 bug campaign, h1-2).
 static func _record(player: AdventurePlayer, outcome: String, settled: Dictionary, when: String) -> Dictionary:
 	var out := {"result": outcome, "base": int(settled["base"]), "years": int(settled["years"]),
 		"lives_start": settled["lives_start"], "lives_end": settled["lives_end"],
-		"difficulty": player.difficulty, "days": player.quest_timer / WorldStatus.DAY,
+		"difficulty": player.difficulty, "days": WorldStatus.days_on_road(player),
 		"wins": int(player.duel_record()["won"]), "attempts": player.final_attempts,
 		"date": when if when != "" else Time.get_datetime_string_from_system(true) + "Z",
 		"life_rule": player.life_rule}

@@ -247,8 +247,11 @@ static var _lines_from: Array = []
 ## world; the sites (the towns' names, their rulers' taps, a reward's wares,
 ## the portal's nearest town) and the castles' places; the quest, its days
 ## left and — a card quest — whether its card is held; the besieger's
-## creature and town; the portal and the adventure's end; the next duel's
-## gifts; Ring of the Guardian.
+## creature and town; the portal and the adventure's end; a region's own
+## progress (its petitions' stages too, whose next place the island's
+## "Seek …" names — 0.60.13 bug campaign, h2-2: only the pledges were read,
+## so an accepted petition left the old place named) and whether the
+## regions are shown at all; the next duel's gifts; Ring of the Guardian.
 static func _lines_read(player: AdventurePlayer) -> Array:
 	var world := player.world
 	var besieger := siege(player)
@@ -260,7 +263,7 @@ static func _lines_read(player: AdventurePlayer) -> Array:
 		world.encounters.slice(0, 5).hash() if world != null else 0,
 		player.quest.hash(), days_left(player), card_held,
 		besieger.is_empty(), besieger.get("creature", 0), besieger.get("town", -1),
-		player.portal.hash(), player.ended, player.refuge.get("quests", []).hash(), player.refuge.get("liberated", false),
+		player.portal.hash(), player.ended, player.expansions.hash(), AdventureExpansions.launch_enabled,
 		player.next_duel_life_carried, player.next_duel_life, player.next_duel_first_move, player.next_duel_card,
 		player.owns("Ring of the Guardian")]
 

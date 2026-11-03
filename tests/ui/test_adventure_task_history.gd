@@ -172,13 +172,21 @@ func test_target_click_switches_guidance_in_vanilla_with_quest_panel_open() -> v
 	var other := panel.find_child(node_name, true, false) as Button
 	other.pressed.emit()
 	await get_tree().process_frame
-	assert_eq(screen.guides.targets[0]["id"], siege["id"])
+	# Several tasks guide at once (the owner's ruling of 2026-11-03): the
+	# siege's arrow joins the wizard's; a second click takes one away.
+	var guided := screen.guides.targets.map(func(target: Dictionary) -> String: return target["id"])
+	assert_true(guided.has(siege["id"]) and guided.has("mainland/wizard:0"), str(guided))
 	marked = panel.find_child(node_name, true, false) as Button
 	assert_true((marked.get_node("GuideMark") as HeroStats.TaskGuideMark).tracking)
 	assert_eq((marked.get_node("GuideMark") as HeroStats.TaskGuideMark).ink, WorldGuides.SIEGE)
 	var status := panel.find_child(node_name + "_Status", true, false) as Label
 	assert_true(status.text.begins_with("Tracking task…"))
 	assert_eq(status.get_theme_color("font_color"), WorldGuides.SIEGE)
+	wizard = panel.find_child("Task_mainland_wizard_0", true, false) as Button
+	assert_true((wizard.get_node("GuideMark") as HeroStats.TaskGuideMark).tracking)
+	wizard.pressed.emit()
+	await get_tree().process_frame
+	assert_eq(screen.guides.targets.map(func(target: Dictionary) -> String: return target["id"]), [siege["id"]])
 	wizard = panel.find_child("Task_mainland_wizard_0", true, false) as Button
 	assert_false((wizard.get_node("GuideMark") as HeroStats.TaskGuideMark).tracking)
 	assert_true(screen.hud.quest_pane_shown(), "changing tracked tasks keeps the quest status panel open")

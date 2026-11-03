@@ -317,8 +317,11 @@ func set_active(on: bool) -> void:
 
 func _on_pads_changed(device: int, connected: bool) -> void:
 	# Named in the log, for a playtest report: which pad Steam Input
-	# shows the game says which of its layouts is in force.
-	print("pad %d %s: %s" % [device, "connected" if connected else "gone",
+	# shows the game says which of its layouts is in force. On stderr
+	# (0.60.13 bug campaign, h4-4): this autoload runs in every tool too,
+	# and a tool's stdout is its report — the MCP server reads it as one
+	# JSON object, which this line after it broke on every Steam Deck.
+	printerr("pad %d %s: %s" % [device, "connected" if connected else "gone",
 		Input.get_joy_name(device) if connected else "-"])
 	# A PAD GONE mid-press owes no release — but only one that went (hunt
 	# of 2026-10-21): this ran on a pad ARRIVING too (a second pad, Steam

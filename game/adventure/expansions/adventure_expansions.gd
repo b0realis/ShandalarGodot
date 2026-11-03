@@ -10,7 +10,12 @@ extends RefCounted
 ## [QoL] Optional stories require an explicit opt-in on every launch. Saved
 ## progress is kept separately; a saved island always retains its way home.
 const LAUNCH_FLAG := "--expanded-adventure"
-const LAUNCH_HELP := "Restart with --expanded-adventure to continue this optional adventure. You can still sail home."
+## The flag as a launch must give it: after the engine's own `--`, which is
+## where [method OS.get_cmdline_user_args] reads (0.60.13 bug campaign,
+## h4-2: the messages named the bare flag, and a launch that followed them
+## literally left the prototype off without a word).
+const LAUNCH_ARGS := "-- " + LAUNCH_FLAG
+const LAUNCH_HELP := "Restart with " + LAUNCH_ARGS + " to continue this optional adventure. You can still sail home."
 static var launch_enabled := OS.get_cmdline_user_args().has(LAUNCH_FLAG)
 
 const CATALOGUE := {"refuge": preload("res://game/adventure/expansions/refuge_module.gd").DESCRIPTOR}
@@ -127,6 +132,21 @@ static func mana_links_allowed(world: ShandalarWorld) -> bool:
 	var id := AdventureRegions.id(world)
 	return id == AdventureRegions.MAINLAND or bool(definition(id).get("mana_links", false))
 
+## [QoL] THE WAY TO AN OPTIONAL LAND, for a campaign that chose one but was
+## launched without [constant LAUNCH_ARGS] (the owner's ruling of
+## 2026-11-03): its ships are gone from the mainland, and nothing there
+## said why. The screen says it once a launch. "" when nothing is hidden
+## that way: the flag given, the hero off the mainland, no land chosen.
+static func mainland_note(player: AdventurePlayer) -> String:
+	if launch_enabled or player == null or player.world == null or not AdventureRegions.mainland(player):
+		return ""
+	var lands: Array[String] = []
+	for id in definitions():
+		if chosen(player, id): lands.append(label(id))
+	if lands.is_empty():
+		return ""
+	return "Ships to %s sail only when the game is started with %s." % [" and ".join(lands), LAUNCH_ARGS]
+
 static func progress(player: AdventurePlayer, id: String) -> Dictionary:
 	return player.expansions.get(id, {})
 
@@ -197,7 +217,15 @@ static func is_action(action: String) -> bool:
 		if action.begins_with(id + "_"): return true
 	return false
 
-static func act(screen: WorldScreen, action: String, place: Dictionary) -> bool:
+## THE SCREEN ARRIVES UNTYPED (0.60.13 bug campaign, h5-1). This directory
+## is model-side: AdventurePlayer reaches it, and through AdventurePlayer
+## every `--script` tool (Deck Lab, AutoDeck, lab_query). Naming
+## WorldScreen, VisitPane or WorldHud here compiled the whole world UI in
+## those tools, and that UI names autoloads, which a `--script` is compiled
+## before (CONTRIBUTING, Gotchas). The screen builds its own pane
+## ([method WorldScreen.open_place]); tools/test_script_entry_points.py
+## follows the references so the chain cannot come back.
+static func act(screen: Node, action: String, place: Dictionary) -> bool:
 	if action.begins_with("region_visit:"):
 		var id := action.get_slice(":", 1)
 		if enabled_for(screen.player, id):
@@ -210,19 +238,8 @@ static func act(screen: WorldScreen, action: String, place: Dictionary) -> bool:
 			return content.call("act", screen, action, place)
 	return false
 
-static func show_place(screen: WorldScreen, place: Dictionary) -> VisitPane:
-	var pane := VisitPane.new()
-	pane.player = screen.player
-	pane.place = place
-	pane.k = WorldHud.BIG if screen.hud.big else 1.0
-	screen._visit = pane
-	screen.add_child(pane)
-	pane.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	pane.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	pane.grow_vertical = Control.GROW_DIRECTION_BOTH
-	pane.left.connect(screen._left_place, WorldScreen.CLOSING)
-	screen._hold()
-	return pane
+static func show_place(screen: Node, place: Dictionary) -> Control:
+	return screen.open_place(place)
 
 static func status_lines(player: AdventurePlayer) -> Array[String]:
 	return active(player, "status_lines", [], [] as Array[String])

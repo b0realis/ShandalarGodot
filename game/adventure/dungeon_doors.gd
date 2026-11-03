@@ -215,14 +215,37 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 ## road (1997's tests) — and [ours: 1997 slip D-s1] no other dungeon, not
 ## the hero's tile [param hero]; nor [ours, part C] Arzakon's portal's
 ## tile [param portal] ([method FinalBattle.portal_tile_of]; (−1, −1) for
-## none).
+## none); nor a place a region keeps on [param world] ([method
+## expansion_place]).
 static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i,
 		portal := Vector2i(-1, -1)) -> bool:
 	if tile == hero or tile == portal or not world.is_land(tile.x, tile.y) \
-			or AdventureExpansions.marker(world, tile) != "":
+			or AdventureExpansions.marker(world, tile) != "" or expansion_place(world, tile):
 		return false
 	var taken := ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON
 	return world.tile_flags(tile.x, tile.y) & taken == 0
+
+
+## Whether [param tile] holds a place a region keeps in [param world]'s
+## saved data — an anchorage (`entries`, an older save's `port`), an
+## island's harbor or castle — whether or not it shows now: a pack turned
+## off, or a game launched without the island, hides the anchorage, and
+## its tile carries no flag (0.60.13 bug campaign, h2-8: a dungeon moved
+## onto the hidden anchorage, and once it showed again its pane stood
+## first, the dungeon never to be entered).
+static func expansion_place(world: ShandalarWorld, tile: Vector2i) -> bool:
+	if world == null or world.expansion.is_empty():
+		return false
+	var points: Array = []
+	var entries: Variant = world.expansion.get("entries", {})
+	if entries is Dictionary:
+		points.append_array((entries as Dictionary).values())
+	for mark in ["port", "castle"]:
+		points.append(world.expansion.get(mark))
+	for point: Variant in points:
+		if AdventureRegions.valid_point(point) and Vector2i(int(point[0]), int(point[1])) == tile:
+			return true
+	return false
 
 
 ## Whether any tile could still take a moved dungeon.

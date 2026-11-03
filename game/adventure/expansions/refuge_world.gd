@@ -8,6 +8,19 @@ extends RefCounted
 const SIDE := 32
 const OFFSET := 16
 const TOWNS := ["Leitbur's Rest", "Vodalian Haven", "Freehold of the Hand", "Dwarven Hearth", "Havenwood"]
+## The island's own names for its other places, Sarpadian in feeling and none
+## a mainland name (the owner's ruling of 2026-11-03, 0.60.13 bug campaign;
+## they took the mainland's names by slot before). The extra towns by slot,
+## each keeping the word of the picture its slot shows ([WorldView] draws a
+## town by its slot) — the temple city stands on the shore, where the
+## Vodalian channel quest prefers it …
+const PLACES := {22: "Svyelun's Temple", 43: "Thelon's Oasis", 58: "Trokair Bazaar",
+	76: "Delif's Shrine", 80: "Zelyon Tower", 103: "Farrel's Mill"}
+## … and the six to nine villages, slots 8, 16 … 72: the first near the
+## mountains, where the Dwarven Hearth's raider waits. Names consume no dice,
+## so every seed's island is laid out as before.
+const VILLAGES := ["Anvilholm", "Thrullwick", "Moonwater", "Brassclaw Hollow", "Shellcove",
+	"Tourach's Fall", "Sporeford", "New Icatia", "Warrenmouth"]
 const COLORS := [6, 1, 3, 5, 2]  # plains, island, swamp, mountain, forest
 
 static func component(world: ShandalarWorld, start: Vector2i) -> Array[Vector2i]:
@@ -75,14 +88,16 @@ static func generate(seed_value: int, color: int, difficulty: int) -> ShandalarW
 		world.page[tile.y * 320 + tile.x] = COLORS[i] | ShandalarWorld.SITE
 		names[str(i + 1)] = TOWNS[i]
 		traders.append(i + 1)
-	# The mainland's town, city and village services, with the same named
-	# temple/oasis/bazaar/shrine/tower/mill variants and randomized places.
+	# The mainland's town, city and village services, with its temple/oasis/
+	# bazaar/shrine/tower/mill pictures, in randomized places under the
+	# island's own names.
 	for slot in [22, 43, 58, 76, 80, 103]:
 		var pool := shore if slot == 22 else largest
 		var tile := _random_place(pool, used, dice, 4.0)
 		if tile.x < 0: tile = _random_place(largest, used, dice, 1.0)
 		used.append(tile)
 		_put_site(world, slot, tile, ShandalarWorld.CITY if slot in [22, 58] else ShandalarWorld.TOWN)
+		names[str(slot)] = PLACES[slot]
 		traders.append(slot)
 	var villages := 6 + dice.below(4)
 	for i in villages:
@@ -94,6 +109,7 @@ static func generate(seed_value: int, color: int, difficulty: int) -> ShandalarW
 		if tile.x < 0: tile = _random_place(largest, used, dice, 1.0)
 		used.append(tile)
 		_put_site(world, (i + 1) * 8, tile, ShandalarWorld.VILLAGE)
+		names[str((i + 1) * 8)] = VILLAGES[i]
 	# Every mainland trade category appears: six colors and five card types.
 	var goods := [1, 2, 4, 8, 16, 32, 0x100, 0x200, 0x300, 0x400, 0x500]
 	for slot in traders:

@@ -44,6 +44,9 @@ const SELLS := {2: [2], 4: [4, 2, 32], 8: [8], 16: [16, 8, 2], 32: [32]}
 const POOR := "Not enough gold for that card."
 ## A place never filled yet: its wait long over.
 const NEVER_FILLED := -0x7fffffff
+## A shop record's places whose card the game does not know now, `{place:
+## quest clock when first found so}` ([method _mark_unavailable]).
+const UNAVAILABLE := "unavailable"
 
 ## The cards a shop may hold, read once for the card pool as it stands:
 ## `{name, facts}`.
@@ -87,14 +90,19 @@ static func offers(player: AdventurePlayer, slot: int) -> Array[String]:
 	while cards.size() < wanted:
 		cards.append("")
 		restock.append(NEVER_FILLED)
-	var empty := _to_fill(player, slot, cards, restock)
+	var gone := _mark_unavailable(player, shop)
+	var empty := _to_fill(player, slot, cards, restock, gone)
 	if not empty.is_empty():
 		var rules := _draw_rules(player, slot)
 		var dice := MsvcRandom.new(player.dice)
 		var land := dice.below(cards.size())
 		for i in empty:
+			# The seller's hint goes with a card whose pack is gone.
+			if cards[i] != "" and String(CardHints.current(player, slot).get("card", "")) == cards[i]:
+				shop.erase("hint")
 			cards[i] = _draw(i, i == land, dice, rules)
 		player.dice = dice.state
+		_mark_unavailable(player, shop)
 	var out: Array[String] = []
 	for card in cards:
 		out.append(String(card))
@@ -105,18 +113,49 @@ static func offers(player: AdventurePlayer, slot: int) -> Array[String]:
 ## a place sold, once the quest clock is `(difficulty + 3) · 5` steps past
 ## its time in [param restock] — and only on a visit to a town other than
 ## the last one ([member AdventurePlayer.last_town]; `RunTownServicesMenu`
-## drew a shop only then, visitLocation.c 1689).
-static func _to_fill(player: AdventurePlayer, slot: int, cards: Array, restock: Array) -> Array[int]:
+## drew a shop only then, visitLocation.c 1689). A place whose card the
+## game does not know now ([param gone], [method _mark_unavailable]) waits
+## as a sold one, from when it was found so.
+static func _to_fill(player: AdventurePlayer, slot: int, cards: Array, restock: Array, gone := {}) -> Array[int]:
 	var wait := (clampi(player.difficulty, 0, 3) + 3) * 5
 	var fresh := player.last_town != slot
 	var empty: Array[int] = []
 	for i in cards.size():
-		if String(cards[i]) != "":
-			continue
 		var at := int(restock[i])
+		if String(cards[i]) != "":
+			if not gone.has(str(i)):
+				continue
+			at = int(gone[str(i)])
 		if at == NEVER_FILLED or (fresh and player.quest_timer - at >= wait):
 			empty.append(i)
 	return empty
+
+
+## A CARD WHOSE PACK IS GONE ([QoL], the owner, 2026-11-03, the 0.60.13 bug
+## campaign's polish: "a shop slot whose pack is unavailable names the pack
+## and restocks with an available card"). A card on a shelf that the game
+## does not know now — its pack switched off or removed — stayed there for
+## good, "Pack unavailable", sold to no one. Its place is marked in [param
+## shop] ([constant UNAVAILABLE]) with the quest clock when first found so;
+## it names its pack ([method AdventurePacks.card_refusal]) and waits as a
+## sold place does ([method _to_fill]): the pack back before then, the card
+## is on offer again and the mark is gone; else a card on offer now takes
+## its place. The marks, `{place: time}`.
+static func _mark_unavailable(player: AdventurePlayer, shop: Dictionary) -> Dictionary:
+	var cards: Array = shop["cards"]
+	var saved: Variant = shop.get(UNAVAILABLE)
+	var marks := {}
+	for i in cards.size():
+		var card := String(cards[i])
+		if card == "" or CardRegistry.has_card(card):
+			continue
+		var since: Variant = (saved as Dictionary).get(str(i)) if saved is Dictionary else null
+		marks[str(i)] = AdventurePlayer._number(since, player.quest_timer)
+	if marks.is_empty():
+		shop.erase(UNAVAILABLE)
+	else:
+		shop[UNAVAILABLE] = marks
+	return marks
 
 
 ## BUY offer [param index] of site [param slot]: `{bought, said, price}`.
@@ -126,9 +165,10 @@ static func buy(player: AdventurePlayer, slot: int, index: int) -> Dictionary:
 		return {"bought": false, "said": "That card is sold.", "price": 0}
 	var card_name := cards[index]
 	# Saved stock survives disabling an optional pack, but its missing
-	# definition must not turn price_at's zero into a free purchase.
+	# definition must not turn price_at's zero into a free purchase. The
+	# words name the pack ([method _mark_unavailable]).
 	if not CardRegistry.has_card(card_name):
-		return {"bought": false, "said": "Enable this card's pack to buy it.", "price": 0}
+		return {"bought": false, "said": AdventurePacks.card_refusal(card_name), "price": 0}
 	var price := price_at(player, slot, card_name)
 	if player.gold < price:
 		return {"bought": false, "said": POOR, "price": price}

@@ -146,8 +146,13 @@ const UNSAVED := "The adventure could not be saved."
 const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
 ## The places whose entering pushes the creatures back (1997's sites, flag
 ## 0x10: a village, a town, a city, a castle, as a wizard holds them or
-## not; a dungeon never).
-const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen"]
+## not; a dungeon never). [ours] And an optional land's ports and castle as
+## its towns and castles — the mainland's anchorage, its several-voyage
+## form, the island's harbor and the Ebon Crown (the owner's ruling of
+## 2026-11-03, h1-Q1): a roamer of the island's strength stood at the
+## harbor's door met the hero the moment its pane closed.
+const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen",
+	"refuge_port", "expansion_port", "refuge_castle"]
 ## THE WALKING KEYS (the owner's ruling of 2026-10-29), each with its way
 ## on the screen (x right, y down): 1997's arrows, Home, PgUp, PgDn and
 ## End, which set its heading (adventure_input.c 328–353: Up 2, PgUp 3,
@@ -714,6 +719,30 @@ func show_player(adventure: AdventurePlayer) -> void:
 	_show_hero()
 	view.camera = view.hero
 	view.queue_redraw()
+	_say_mainland_note()
+
+
+## [QoL] Whether this launch has said [method AdventureExpansions.mainland_note]
+## yet: once a launch, not once a campaign — a later launch without the flag
+## needs the words as much (the owner's ruling of 2026-11-03).
+static var mainland_note_said := false
+
+## THE WAY TO THE ISLAND, said once a launch on the mainland of a campaign
+## that chose an optional land but was launched without the flag (the
+## owner's ruling of 2026-11-03): its anchorage is gone, and nothing said
+## why. Under the arrival's words while they show (a save taken up again),
+## else as a notice (a hero sailed home).
+func _say_mainland_note() -> void:
+	if mainland_note_said or player == null or hud == null:
+		return
+	var note := AdventureExpansions.mainland_note(player)
+	if note == "":
+		return
+	mainland_note_said = true
+	if _arrival != null and _arrival.visible and _arrival.text != "" and _arrival.modulate.a > 0.0:
+		_arrival.text += "\n" + note
+	else:
+		hud.say(note)
 
 
 ## The world's own adventure, begun from [param shown] (the screen's
@@ -1226,6 +1255,25 @@ func _close_pane(pane: Variant) -> void:
 		_visit.process_mode = Node.PROCESS_MODE_INHERIT
 	_show_hero()
 	_sync_rest()
+
+
+## AN OPTIONAL LAND'S PLACE, [param place] described by its content (a
+## harbor's voyage, a petition, a reward, a battle's result), in the
+## town's pane over the world. Built here, not in the model-side expansion
+## directory, which only asks for it ([method AdventureExpansions.show_place];
+## 0.60.13 bug campaign, h5-1).
+func open_place(place: Dictionary) -> VisitPane:
+	_visit = VisitPane.new()
+	_visit.player = player
+	_visit.place = place
+	_visit.k = WorldHud.BIG if hud.big else 1.0
+	add_child(_visit)
+	_visit.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_visit.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_visit.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_visit.left.connect(_left_place, CLOSING)
+	_hold()
+	return _visit
 
 
 ## THE TOWN'S PANE CLOSED, [param then] what the hero chose ([signal
@@ -2947,20 +2995,33 @@ static func _debug_port_key(event: InputEvent) -> bool:
 		and not key.alt_pressed and not key.meta_pressed
 		and (key.keycode in [KEY_2, KEY_KP_2] or key.physical_keycode == KEY_2))
 
+## What stops the tester's teleport for [param hero], "" when nothing does.
+## A launch without the flag gets the tester's own line, never the island's
+## "Restart … You can still sail home." (0.60.13 bug campaign, h4-3: that
+## showed on the mainland of a campaign with no island), and the flag
+## written as a launch must give it, after `--` (h4-2).
+static func debug_port_refusal(hero: AdventurePlayer) -> String:
+	var needs: Array[String] = []
+	if not AdventureExpansions.launch_enabled:
+		needs.append("launch with " + AdventureExpansions.LAUNCH_ARGS)
+	if not AdventureExpansions.chosen(hero, "refuge"):
+		needs.append("select Pack 2 when embarking")
+	if not needs.is_empty():
+		return "Debug: %s first." % " and ".join(needs)
+	if not AdventureExpansions.enabled("refuge"):
+		return "Debug: enable Pack 2: Fallen Empires in Options first."
+	return ""
+
+
 func _debug_port_pressed(event: InputEvent) -> bool:
 	if not debug_campaign or not _debug_port_key(event): return false
 	if player == null or hud == null: return true
 	if _leaving or modal():
 		hud.say("Debug: close the current encounter or window before teleporting.")
 		return true
-	if not AdventureExpansions.launch_enabled:
-		hud.say(AdventureExpansions.LAUNCH_HELP)
-		return true
-	if not AdventureExpansions.chosen(player, "refuge"):
-		hud.say("Debug: launch with --expanded-adventure and select Pack 2 when embarking first.")
-		return true
-	if not AdventureExpansions.enabled("refuge"):
-		hud.say("Debug: enable Pack 2: Fallen Empires in Options first.")
+	var refusal := debug_port_refusal(player)
+	if refusal != "":
+		hud.say(refusal)
 		return true
 	if not AdventureRegions.mainland(player):
 		if not AdventureRegions.travel(player, AdventureRegions.MAINLAND):

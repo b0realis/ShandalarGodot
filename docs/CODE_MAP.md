@@ -31,6 +31,70 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## The bug campaign after 0.60.12 (0.60.13, 2026-11-03)
+
+- `tools/test_script_entry_points.py`: follows each `--script` entry point's
+  compiled references (`class_name`, `preload`, an `extends` path; not
+  `load`); a reached script naming an autoload fails, with its chain.
+  `DOOR_ONLY` exempts `DeckLab/referee.gd` (run through `game/main.gd
+  --referee`). No autoload prints to stdout.
+- `game/adventure/expansions/adventure_expansions.gd`: `LAUNCH_ARGS`,
+  `mainland_note()`; `act`/`show_place` take an untyped screen, so the
+  model side never compiles the world's screens.
+- `game/adventure/world/world_screen.gd`: `open_place()`,
+  `debug_port_refusal()`, `mainland_note_said`; the optional lands' places
+  in `PUSHING_PLACES`.
+- `game/adventure/world/world_view.gd`: `_plain_held` keeps the plain
+  view's optional-land sprites alive until the next paint; the plain view
+  draws the pennants too.
+- `game/card_packs.gd`: `_skin_pack()` reaches SkinPack at run time.
+- `game/adventure/expansions/adventure_regions.gd`: the campaign's seed
+  text across regions (`seed_text`); a region's first tick is never a new
+  adventure; older saves' journal lines carry no region.
+- `game/adventure/expansions/refuge_world.gd`: map generation and the
+  island's own place names (`PLACES`, `VILLAGES`).
+- `game/adventure/adventure_tasks.gd`: several tasks may guide at once
+  (`tracked`, `select`, `toggle`, `GUIDED` in the history; `selected` kept
+  for 0.60.12), `guide` (the chosen tasks or the first target, the portal
+  last as `overlay`), `portal`; errand ids are whole numbers.
+- `game/adventure/world/world_guides.gd`: `guide_for`, `room`, `on_screen`,
+  `drawn` (the portal last), `PORTAL` (violet, the owner's pick),
+  `PORTAL_SETTING`/`portal_wanted`/`want_portal`, `arrow_label_at`.
+- `game/adventure/world/hero_stats.gd`: the Tasks tab (several tasks, the
+  portal-arrow switch); `journal_line(entry, player)`, `regions_named`.
+- `game/adventure/adventure_packs.gd`: `resume` (a saved campaign's packs:
+  enabled if off, refused and named if missing), `title`, `card_pack`,
+  `card_refusal`.
+- `game/adventure/load_adventure_screen.gd`: `open_save(path, refusal)`
+  checks the campaign's packs first.
+- `game/adventure/card_shop.gd`: an unknown card's place waits and
+  restocks (`UNAVAILABLE`, `_mark_unavailable`).
+- `game/adventure/dungeon_doors.gd`: `DungeonDoors.expansion_place` — saved
+  region places, shown or hidden, refused to moved dungeons and to the
+  portal (`FinalBattle.portal_may_stand`).
+- `game/adventure/wise_man.gd`: `NEWS_EVENT`/`NEWS_LOG` — the news as a
+  dated journal line, not a clue.
+- `game/duel/duel_screen.gd`: the computer-seat hooks and
+  `_note_opponent_chain`; `game/sgmanalink/duel_view.gd`: `_computer_seat`,
+  `_chain_key`, `_opponent_action_line` give a LAN bot seat the
+  opponent-spell notice and the Showcase; `game/sgmanalink/local_server.gd`:
+  `BOT_READING_MS`, `_note_bot_reading` hold a bot's next step 2 s after
+  its new spell or ability.
+- `game/adventure/world/world_terrain_palette.gd`: the recolor on workers
+  (`_recolor_aside`, `_deliver`, `recoloring`); the skin's sheet is drawn
+  meanwhile and the world is told once.
+- Regressions: `tests/unit/test_c26_X1_launch_words.gd`,
+  `tests/ui/test_c26_X1_expansion_screen.gd`,
+  `tests/unit/test_c26_X2_regions.gd`,
+  `tests/unit/test_c26_X3_tasks_fixes.gd`,
+  `tests/unit/test_c26_X3_guide_arrows.gd`,
+  `tests/ui/test_c26_X3_tasks_tab.gd`, `tests/unit/test_c26_X4_packs.gd`,
+  `tests/ui/test_c26_X4_load_and_help.gd`,
+  `tests/ui/test_c26_X5_lan_bot_notice.gd`,
+  `tests/unit/test_c26_X5_palette_off_thread.gd`,
+  `tests/unit/test_c26_X6_campaign.gd`,
+  `tests/ui/test_c26_X6_island_finale.gd`.
+
 ## Shared adventure systems
 
 - `game/adventure/adventure_tasks.gd`: cached objectives, selected guidance,

@@ -165,6 +165,12 @@ const FALLEN_MASTER := "The %s has fallen,\nbut %s creatures still roam\nthese l
 ## fallen-master line where 1997 said TREMBLE — five wins and more over its
 ## kind on its colour, the choice Accept tribute.
 const FALLEN_TRIBUTE := "The %s has fallen,\nand %s creatures tremble\nbefore you.\nAccept our tribute."
+## A creature's words away from the mainland when no story speaks for it
+## (0.60.13 bug campaign, h2-6: on the island, launched without the
+## prototype's flag, a meeting said nothing at all), by the wins as DOMAIN
+## and TREMBLE are, with no wizard to name. [ours]
+const ROAMING := "A roaming challenger\nbars your way.\nWill you..."
+const ROAMING_TRIBUTE := "Your victories are known\nin these lands.\nWill you..."
 ## 41/42 a henchman, by its wizard's gender.
 const HENCHMAN_WORDS := "The Evil %s\nhas sent %s\nmost trusted servant to\ntest your strength.\nYou must..."
 ## The choices: 11 Duel, 12 Accept tribute, 13 Pay, 15 Answer, 16 Change.
@@ -289,13 +295,17 @@ static func relation_of(player: AdventurePlayer, _row: int, color: int, slot: in
 
 ## The places in [member AdventurePlayer.cards] of the cards the hero may
 ## stake: the deck in use's, basic lands left out (`deck & 0x4000` clear,
-## card id above 4 — `ExitIfNoUsableDeckCards`, visitLocation.c 2252).
+## card id above 4 — `ExitIfNoUsableDeckCards`, visitLocation.c 2252) — and
+## a card the game does not know (0.60.13 bug campaign, h3-1: a card of a
+## pack switched off or gone, never in the duel, could be staked and lost;
+## [method AdventurePlayer.deck_cards]).
 static func usable_cards(player: AdventurePlayer) -> Array[int]:
 	var out: Array[int] = []
 	for i in player.cards.size():
 		var entry := player.cards[i] as Dictionary
+		var card := String(entry.get("card", ""))
 		if (entry.get("decks", []) as Array).has(player.current_deck) \
-				and not String(entry.get("card", "")) in CreatureDeck.BASICS:
+				and not card in CreatureDeck.BASICS and CardRegistry.has_card(card):
 			out.append(i)
 	return out
 
@@ -332,6 +342,8 @@ static func _draw_hero_ante(player: AdventurePlayer, meeting: Dictionary, count:
 static func words(player: AdventurePlayer, meeting: Dictionary) -> Array[String]:
 	if not AdventureRegions.mainland(player):
 		var lines: Array[String] = AdventureExpansions.active(player, "roaming_words", [int(meeting.get("wins", 0))], [] as Array[String])
+		if lines.is_empty():
+			lines = lines_of(ROAMING_TRIBUTE if int(meeting.get("wins", 0)) >= TRIBUTE_WINS else ROAMING)
 		if meeting.has("regional_name"): lines.append("My spells are those of the %s." % meeting["regional_name"])
 		return lines
 	var color := clampi(int(meeting["color"]), 1, 5)

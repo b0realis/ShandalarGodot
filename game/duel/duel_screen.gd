@@ -1748,11 +1748,13 @@ func _phase_status_message() -> String:
 	# [QoL] A spell being shown is not an invisible computer decision.
 	# Name its public action and target during the reading dwell, before
 	# the computer passes and an unanswerable spell resolves automatically.
+	# A LAN table's bot seat counts too: it runs on the host, so this
+	# screen has no `_ais` of its own there (0.60.13 bug campaign, h4-1).
 	if _humans.size() == 1 and not _is_human(game.priority_player) \
 			and not game.stack.is_empty():
 		var item: StackItem = game.stack.back()
-		if _ais.has(item.controller) and item.card != null:
-			var action := item.description
+		if _computer_seat(item.controller) and item.card != null:
+			var action := _opponent_action_line(item)
 			if not _may_show_face(item.card):
 				action = "%s: a face-down creature" % game.players[item.controller].player_name
 			if item.kind != Mtg.StackKind.TRIGGER:
@@ -4958,26 +4960,60 @@ func _opponent_action_wait(now_ms := -1) -> float:
 		return 0.0
 	if now_ms < 0:
 		now_ms = Time.get_ticks_msec()
-	var live := {}
-	var fresh := false
-	for item in game.stack:
-		if not _ais.has(item.controller) or item.card == null:
-			continue
-		var key := item.get_instance_id()
-		live[key] = true
-		fresh = fresh or not _pace_chain_ids.has(key)
-	_pace_chain_ids = live
-	if live.is_empty():
+	var fresh := _note_opponent_chain()
+	if _pace_chain_ids.is_empty():
 		_pace_action_until = 0
 	elif fresh:
 		_pace_action_until = now_ms + int(OPPONENT_ACTION_SECONDS * 1000.0)
+	return maxf(0.0, float(_pace_action_until - now_ms) / 1000.0)
+
+
+## The computer's objects now on the chain, remembered in
+## [member _pace_chain_ids]; true when one of them is new since the last
+## look, and a new one goes to the docked Showcase. Split out of [method
+## _opponent_action_wait] for a LAN view, which shows a bot's new spell the
+## same way while the host keeps its reading pause ([SgLocalServer]; 0.60.13
+## bug campaign, h4-1).
+func _note_opponent_chain() -> bool:
+	var live := {}
+	var fresh := false
+	for item in game.stack:
+		if not _computer_seat(item.controller) or item.card == null:
+			continue
+		var key := _chain_key(item)
+		live[key] = true
+		fresh = fresh or not _pace_chain_ids.has(key)
+	_pace_chain_ids = live
+	if fresh:
 		var top: StackItem = game.stack.back()
 		# The docked Showcase may otherwise keep a card hovered last turn.
 		# Floating previews remain pointer-controlled, and private faces stay hidden.
 		if _card_preview != null and _card_preview.docked and mode == Mode.NORMAL \
 				and _pending_card == null and top.card != null and _may_show_face(top.card):
 			_show_top_of_chain()
-	return maxf(0.0, float(_pace_action_until - now_ms) / 1000.0)
+	return fresh
+
+
+## Whether seat [param pid] is a computer player whose actions get the
+## reading pause and the bar's notice: one of this screen's own `_ais`.
+## A LAN view answers for the host's bot seats (h4-1).
+func _computer_seat(pid: int) -> bool:
+	return _ais.has(pid)
+
+
+## What [method _note_opponent_chain] remembers a chain object by: the
+## object itself — two activations of one card are two actions. A LAN view
+## rebuilds its objects from every table it receives, so it keys them by
+## the referee's handle instead (h4-1).
+func _chain_key(item: StackItem) -> int:
+	return item.get_instance_id()
+
+
+## The bar's sentence for a computer's chain object — the engine's own
+## ("Wizard casts Swords to Plowshares"). A LAN view is sent the object's
+## kind and card, not that sentence, and says it in the same form (h4-1).
+func _opponent_action_line(item: StackItem) -> String:
+	return item.description
 
 
 func _maybe_schedule_ai() -> void:

@@ -213,8 +213,9 @@ func test_the_arrows_and_the_quest_pane_point_to_it() -> void:
 	assert_true(WorldStatus.lines(player).has("Petrified Portal: east of %s" % town))
 	player.ended = AdventurePlayer.ENDED_FAILED
 	assert_eq(FinalBattle.portal_target(player), {}, "a failed adventure: none")
-	assert_eq(WorldGuides.ink_for("portal"), WorldGuides.GOLD)
-	assert_eq(WorldGuides.ink_for("monument"), WorldGuides.GOLD)
+	# Its own ink since the owner's ruling of 2026-11-03 (0.60.13).
+	assert_eq(WorldGuides.ink_for("portal"), WorldGuides.PORTAL)
+	assert_eq(WorldGuides.ink_for("monument"), WorldGuides.PORTAL)
 	assert_eq(WorldGuides.ink_for("siege"), WorldGuides.SIEGE)
 
 

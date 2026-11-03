@@ -92,7 +92,11 @@ old saves without appearance settings use their region's default. Unknown
 presets, invalid coordinates, malformed colors and out-of-range strengths are
 rejected before loading a save or applying an edit.
 
-Preset remapping is cached by skin texture and preset. Per-tile tints use draw
+Preset remapping is cached by skin texture and preset, and the remapped sheets
+are shared by every view and map. Where a worker thread may run (not headless,
+not the web), a sheet is decoded from the skin file and recolored on a worker;
+the skin's sheet is drawn meanwhile, and the world's views redraw once every
+requested sheet has arrived. Per-tile tints use draw
 colors, so different tints share the same textures. The renderer preserves its
 depth order and tint when tree fragments are drawn again in front of a hero.
 The skin ZIP and its textures are never modified.

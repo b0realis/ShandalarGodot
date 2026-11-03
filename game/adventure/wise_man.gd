@@ -69,6 +69,10 @@ const GIFT_WORDS := {
 	COPY: "To assist you I shall fashion 3 %s into a duplicate of any spell you possess.”",
 }
 const FOOD_WORDS := "To assist you I shall fortify you with extra food for your journeys.”"
+## The news in the journal, a dated line of its own [ours]: the town, the
+## news (0.60.13 bug campaign, h2-9).
+const NEWS_EVENT := "news"
+const NEWS_LOG := "News from the wise man of %s: %s"
 const COLOR_WORDS: Array[String] = ["black", "blue", "green", "red", "white"]
 
 static var _words: Dictionary = {}
@@ -126,7 +130,13 @@ static func speak(player: AdventurePlayer, slot: int) -> Dictionary:
 				stage = STAGE_TALE
 			else:
 				talk["pages"].append(news)
-				player.log_clue(news)
+				# Dated in the journal, once for the talk that brought it —
+				# never a Known clue: the news goes out of date (a wizard
+				# beaten, his towns, the pledges), a clue stays (0.60.13 bug
+				# campaign, h2-9).
+				if fresh:
+					player.log_event(NEWS_EVENT, NEWS_LOG % [WorldNames.site_name(player.world, slot),
+						news.replace("\n", " ").strip_edges()])
 		STAGE_GIFT:
 			var reminded := reminder(player) if bool(state.get("remind", false)) and Quests.has_quest(player) else ""
 			if reminded != "": player.log_clue(reminded, "quest_clue")

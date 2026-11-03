@@ -283,16 +283,21 @@ func test_ironclaw_orcs_is_special_without_the_table_as_with_it() -> void:
 
 # ---------------------------------------------------------------- k6-3 --
 
-func test_a_save_is_version_3_and_versions_1_and_2_still_read() -> void:
+## The format has grown since (0.60.13 bug campaign, h5-3): 4 in 0.60.5, 6
+## in 0.60.6 and 7 in 0.60.7 (AdventurePlayer's header) — the card hold and
+## the ban list still ride every save, every older version still reads, and
+## the next one is still refused.
+func test_a_save_is_the_current_version_and_every_older_one_still_reads() -> void:
 	player.ban_list = ClassicBans.OLD
 	var data: Dictionary = JSON.parse_string(JSON.stringify(player.to_dict()))
-	assert_eq(int(data["version"]), 3, "the card hold and the ban list: 0.50.64 reads up to 2 and refuses it")
+	assert_gte(AdventurePlayer.FORMAT_VERSION, 3, "the card hold and the ban list: 0.50.64 reads up to 2 and refuses it")
+	assert_eq(int(data["version"]), AdventurePlayer.FORMAT_VERSION, "a save is written at the current version")
 	var back := AdventurePlayer.from_dict(data)
 	assert_eq([back.card_hold, back.ban_list], [AdventurePlayer.HOLD_UNLIMITED, ClassicBans.OLD], "carried")
-	for version in [1, 2]:
+	for version in range(1, AdventurePlayer.FORMAT_VERSION):
 		data["version"] = version
 		assert_not_null(AdventurePlayer.from_dict(data), "version %d reads" % version)
-	data["version"] = 4
+	data["version"] = AdventurePlayer.FORMAT_VERSION + 1
 	assert_null(AdventurePlayer.from_dict(data), "a newer one does not")
 
 

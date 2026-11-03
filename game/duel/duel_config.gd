@@ -281,12 +281,17 @@ func hidden_seats() -> Array[int]:
 	return hidden
 
 
-## Dominant color key of a deck (drives the wizard life-panel art).
+## Dominant color key of a deck (drives the wizard life-panel art). A name
+## the game does not know counts for no color, quietly (0.60.13 bug
+## campaign, h3-1: an adventure's card whose pack was off printed an ERROR
+## per copy as the world warmed its duels).
 static func dominant_color(cards: Array) -> String:
 	var counts := {"white": 0, "blue": 0, "black": 0, "red": 0, "green": 0}
 	var by_mask := {Mtg.ManaColor.W: "white", Mtg.ManaColor.U: "blue",
 		Mtg.ManaColor.B: "black", Mtg.ManaColor.R: "red", Mtg.ManaColor.G: "green"}
 	for card_name in cards:
+		if not CardRegistry.has_card(card_name):
+			continue
 		var data := CardRegistry.get_card(card_name)
 		if data == null:
 			continue

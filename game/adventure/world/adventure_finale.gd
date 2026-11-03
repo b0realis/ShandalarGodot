@@ -328,9 +328,14 @@ static func at_portal(world: WorldScreen, player: AdventurePlayer) -> VisitPane:
 
 ## AN ADVENTURE TAKEN UP AGAIN, its world made (the class's notes): true when
 ## the finale or the end took the screen — the world does not run; false
-## for an adventure that walks on as it is.
+## for an adventure that walks on as it is. "One life"'s lost battle and an
+## adventure ended — failed or won — settle wherever the save stands, the
+## island too (0.60.13 bug campaign, h2-1: an island save of a lost One-life
+## battle walked on, and a won one never asked End or Return); only the
+## questions at Arzakon's door and at the fifth wizard's fall stand on the
+## mainland, where his portal opens.
 static func after_load(world: WorldScreen, player: AdventurePlayer) -> bool:
-	if world == null or player == null or not AdventureRegions.mainland(player):
+	if world == null or player == null:
 		return false
 	var saved := true
 	if FinalBattle.on_load(player):
@@ -347,7 +352,7 @@ static func after_load(world: WorldScreen, player: AdventurePlayer) -> bool:
 			# owner's ruling of 2026-10-28): the Hall and its last choice.
 			_begin(world, player, HALL)
 			return true
-	if not FinalBattle.all_beaten(player):
+	if not AdventureRegions.mainland(player) or not FinalBattle.all_beaten(player):
 		return false
 	if player.at_door:
 		_begin(world, player, DOOR)

@@ -421,7 +421,8 @@ func test_the_round_buttons() -> void:
 	var hero_size := pane.size
 	screen.player.log_event("magic", "JUMP!")
 	(stats.find_child("Tab_Journal", true, false) as Button).pressed.emit()
-	assert_eq(stats.journal_lines(), ["Day 0 · Shandalar: JUMP!"] as Array[String], "the journal tab")
+	# No region in an ordinary campaign (the owner's ruling of 2026-11-03).
+	assert_eq(stats.journal_lines(), ["Day 0: JUMP!"] as Array[String], "the journal tab")
 	await get_tree().process_frame
 	assert_eq(pane.size, hero_size, "the journal keeps the Hero tab's size")
 	(stats.find_child("Tab_Wizards", true, false) as Button).pressed.emit()
