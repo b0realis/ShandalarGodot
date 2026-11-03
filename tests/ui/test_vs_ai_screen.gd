@@ -11,7 +11,12 @@ func test_vs_ai_duel_plays_real_turns() -> void:
 	assert_not_null(screen.game)
 	assert_eq(screen.hidden_hands, [1] as Array[int], "AI hand hides")
 	# Drive the human side mechanically; let AI timers fire in real time.
-	for _i in 12:
+	# Until the AI's turn is over, not a fixed 12 steps: each AI action
+	# holds its 2 s pause (OPPONENT_ACTION_SECONDS) and the seed is fresh,
+	# so a busy first turn outlasted the old 7.2 s on CI (2026-11-03): 4
+	# seeds of 20 reach turn 2 only at the 15th step (9 s). The ceiling (30
+	# steps, 18 s) is twice that.
+	for _i in 30:
 		if screen.game.game_over or screen.game.turn_number >= 3:
 			break
 		if screen.mode == DuelScreen.Mode.ATTACKERS \
