@@ -177,6 +177,15 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn("-- --auto-deck %*", archive.read(prefix + "auto_deck.bat").decode())
                             self.assertIn("-- --lab-query %*", archive.read(prefix + "lab_query.bat").decode())
                             self.assertIn("-- --referee %*", archive.read(prefix + "referee.bat").decode())
+                            # The portable start (issue #5): user:// beside the game.
+                            portable = archive.read(prefix + "Shandalar-portable.bat").decode()
+                            self.assertNotIn("\n", portable.replace("\r\n", ""))
+                            self.assertIn('set "APPDATA=%~dp0userdata"\r\n', portable)
+                            self.assertIn('set "LOCALAPPDATA=%~dp0userdata"\r\n', portable)
+                            self.assertTrue(portable.endswith('start "" "%~dp0Shandalar.exe" %*\r\n'))
+                            self.assertIn("Shandalar-portable.bat", readme)
+                        else:
+                            self.assertNotIn(prefix + "Shandalar-portable.bat", entries)
                         if platform in pack.MAC_PLATFORMS:
                             entry = archive.getinfo(prefix + "Shandalar.app/Contents/MacOS/Shandalar")
                             self.assertEqual(entry.external_attr >> 16 & 0o777, 0o755)

@@ -134,7 +134,9 @@ START = {
                "This is not an ARM Linux binary.",
     "windows64": "Windows x86-64: extract the whole folder, then open Shandalar.exe.\n"
                  "Keep Shandalar.pck beside it. The executable is unsigned.\n"
-                 "Shandalar.console.exe is the optional terminal launcher.",
+                 "Shandalar.console.exe is the optional terminal launcher.\n"
+                 "Shandalar-portable.bat starts it with its settings and saves kept in\n"
+                 "userdata\\ inside this folder instead of AppData, e.g. on a USB stick.",
     "macos": "macOS: extract the whole folder, then open Shandalar.app.\n"
              "Universal: Apple Silicon and Intel. Ad-hoc signed, not notarized.\n"
              "macOS may require explicit approval to open a downloaded app.\n"
@@ -619,6 +621,17 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                                       "Shandalar.console.exe --headless --no-header -- --lab-query %*\r\n").encode()
             extra["referee.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
                                     "Shandalar.console.exe --headless --no-header -- --referee %*\r\n").encode()
+            # A portable game (issue #5, 0.60.17): Godot builds user:// from
+            # the APPDATA variable on Windows (OS_Windows::get_config_path,
+            # its cache from LOCALAPPDATA), so pointing both at userdata\
+            # here keeps every write in the extracted folder.
+            extra["Shandalar-portable.bat"] = ("@echo off\r\n"
+                                               "rem Shandalar with its settings and saves in userdata\\ beside this\r\n"
+                                               "rem file instead of AppData: a portable game, e.g. on a USB stick.\r\n"
+                                               "cd /d \"%~dp0\"\r\n"
+                                               "set \"APPDATA=%~dp0userdata\"\r\n"
+                                               "set \"LOCALAPPDATA=%~dp0userdata\"\r\n"
+                                               "start \"\" \"%~dp0Shandalar.exe\" %*\r\n").encode()
         if platform == "steam-deck":
             # Use the reviewed launcher rather than the generic Linux one.
             extra.pop("run.sh")

@@ -12,6 +12,15 @@ running duel log, `duel_log.txt`, is kept beside the executable so it is
 where you look for it (and under `user://` instead when that directory
 cannot be written). Draft and tournament saves can also use a folder you explicitly choose.
 
+**A portable game.** The Windows download's `Shandalar-portable.bat`
+(0.60.17) starts the game with `APPDATA` and `LOCALAPPDATA` pointed at
+`userdata\` in the game folder, so `user://` becomes
+`userdata\Godot\app_userdata\Shandalar\` there and everything above travels
+with the folder: settings, decks, adventures, the Hall of Fame, the logs.
+Godot reads `user://` from those variables on Windows. On Linux the same is
+`XDG_DATA_HOME="$PWD/userdata" ./run.sh`. A folder chosen in Options is
+saved as a full path, so it may need choosing again on another computer.
+
 In configurable paths, `~` uses `HOME`, or `USERPROFILE` when `HOME` is
 absent (a native Windows launch). If neither is known, the spelling is
 left unchanged rather than turned into a root-relative path. In the browser,
