@@ -252,6 +252,22 @@ exec env -i "${keep[@]}" "$@"
         self.assertIn('1280x800', lines)
         self.assertIn('60', lines)
 
+    def test_steam_launcher_hands_a_bare_help_to_the_game(self):
+        # The engine answers a bare -h/--help itself, before the game runs
+        # (0.60.16): the launcher hands it to the game's own list.
+        self.script(self.game / 'Shandalar.x86_64', 'printf "%s\\n" "$@"\n')
+        shutil.copyfile(ROOT / 'packaging/handhelds/steam-deck.sh', self.game / 'run.sh')
+        for flag in ('--help', '-h'):
+            result = subprocess.run(['sh', str(self.game / 'run.sh'), flag],
+                                    cwd=self.root, capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(),
+                             ['--headless', '--no-header', '--', '--help'], flag)
+        result = subprocess.run(['sh', str(self.game / 'run.sh'), '--', '--help'],
+                                cwd=self.root, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.stdout.splitlines()[-2:], ['--', '--help'],
+                         'an explicit -- --help goes through as given')
+
     def test_all_launchers_parse(self):
         for name in ('arkos.sh', 'steam-deck.sh'):
             result = subprocess.run(['bash', '-n', str(ROOT / 'packaging/handhelds' / name)],

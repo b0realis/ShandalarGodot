@@ -62,6 +62,10 @@ const VERIFY_PACK_5_FLAG := "--verify-pack-5"
 const VERIFY_PACK_8_FLAG := "--verify-pack-8"
 ## The Tempest block (Pack 9): [method pack_9_probe] behind the same door.
 const VERIFY_PACK_9_FLAG := "--verify-pack-9"
+## Every pack check, for [method launch_help].
+const VERIFY_PACK_FLAGS: Array[String] = [VERIFY_PACK_1_FLAG, VERIFY_PACK_2_FLAG,
+	VERIFY_PACK_3_FLAG, VERIFY_PACK_4_FLAG, VERIFY_PACK_5_FLAG,
+	VERIFY_PACK_8_FLAG, VERIFY_PACK_9_FLAG]
 ## A tester's tool, for walking a campaign quickly: started with
 ## `-- --debug-win`, Ctrl+Shift+2 visits the Pack 2 departure coast, and
 ## Ctrl+Shift+W wins a duel played on this computer
@@ -123,6 +127,10 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_9_FLAG):
 		_verify_exported_pack_9()
+		return
+	if wants_help(OS.get_cmdline_user_args()):
+		print(launch_help(str(ProjectSettings.get_setting("application/config/version", ""))))
+		get_tree().quit(0)
 		return
 	read_debug_win(OS.get_cmdline_user_args())
 	# NO `CardRegistry.ensure_loaded()` HERE ANY MORE (2026-09-30). It
@@ -588,6 +596,53 @@ func _open_manalink_notice() -> void:
 ## duel into the title's start (see [method _open_manalink_notice]). The
 ## script keeps its static for the run (a script with statics stays
 ## loaded); the title shown again reads the same line to the same end.
+## Whether [param args] (the user args) ask for [method launch_help]
+## ([method LaunchHelp.asked]: `-h` or `--help` beside no tool's switch —
+## `-- --deck-lab --help` is the Deck Lab's own manual).
+static func wants_help(args: PackedStringArray) -> bool:
+	return LaunchHelp.asked(args)
+
+
+## THE GAME'S OWN HELP (0.60.16, the owner's ask of 2026-11-04; see
+## [LaunchHelp]): the switches the game reads after the engine's `--`, and
+## the variables it reads, for a terminal (each line under 80 characters).
+static func launch_help(version: String) -> String:
+	var packs := PackedStringArray()
+	for flag in VERIFY_PACK_FLAGS:
+		packs.append(flag.trim_prefix("--verify-pack-"))
+	return "\n".join([
+		"Shandalar %s" % version,
+		"",
+		"Usage: Shandalar [engine options] -- [game switches]",
+		"The game's switches go after \"--\". Before it go the engine's own",
+		"(--fullscreen, --resolution WxH, --headless...); a bare --help lists",
+		"those. On Windows, use Shandalar.console.exe to see this in a terminal.",
+		"",
+		"Play:",
+		"  %-22s the expanded adventure, a prototype: Pack 2 on in" % AdventureExpansions.LAUNCH_FLAG,
+		"  %-22s Options and ticked on Embark" % "",
+		"  %-22s a tester's tool: Ctrl+Shift+W wins a duel played on" % DEBUG_WIN_FLAG,
+		"  %-22s this computer; with %s, Ctrl+Shift+2" % ["", AdventureExpansions.LAUNCH_FLAG],
+		"  %-22s visits the Pack 2 coast" % "",
+		"  %-22s the timing log: logs/perf.log in the user folder," % PerfLog.FLAG,
+		"  %-22s and on stderr" % "",
+		"  %-22s this list" % "-h, --help",
+		"",
+		"Tools (no window: add --headless before \"--\"; TOOL --help is its manual):",
+		"  %-22s the Deck Lab: decks played against each other" % (DECK_LAB_FLAG + " ..."),
+		"  %-22s the AutoDeck builder" % (AUTO_DECK_FLAG + " ..."),
+		"  %-22s check, packs, cards: answers as JSON" % (LAB_QUERY_FLAG + " ..."),
+		"  %-22s one duel through a pipe, a program in a seat" % (REFEREE_FLAG + " ..."),
+		"  %-22s check card pack N's zip, then quit (N: %s)" % ["--verify-pack-N", ",".join(packs)],
+		"",
+		"Environment:",
+		"  %-22s the timing log, as %s" % [PerfLog.ENV + "=1", PerfLog.FLAG],
+		"  %-22s card pack N's zip from PATH" % "SHANDALAR_PACK_N=PATH",
+		"  %s" % (Settings.HANDHELD_ENV + "=NAME"),
+		"  %-22s a handheld's defaults (steam-deck, arkos)" % "",
+	])
+
+
 static func read_debug_win(args: PackedStringArray) -> void:
 	if args.has(DEBUG_WIN_FLAG):
 		load("res://game/duel/duel_screen.gd").set(&"debug_win", true)

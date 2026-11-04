@@ -87,6 +87,10 @@ func _ready() -> void:
 	# did; the packs a campaign switches on as it sets out or resumes are
 	# built on a thread again, behind the hourglass (0.60.15,
 	# [method set_enabled_many]).
+	# A launch that asks only for the game's help ([LaunchHelp], 0.60.16)
+	# prints it and quits: no pool, which the quit would wait for.
+	if LaunchHelp.asked(OS.get_cmdline_user_args()):
+		return
 	CardRegistry.load_in_background()
 
 

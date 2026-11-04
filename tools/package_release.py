@@ -71,7 +71,7 @@ case "$verb" in
 			'  packs     every card pack: found, on, why not' \\
 			'  cards     a card record' \\
 			'  referee   one duel through a pipe, a program in a seat (referee.sh)' \\
-			'  play      the game itself (run.sh)' \\
+			'  play      the game itself (run.sh; play --help lists its switches)' \\
 			'  mcp       the tools as an MCP server on stdio (tools/shandalar_mcp.py)' \\
 			'VERB --help is that tool manual; -V the version; AGENTS.md is the contract page.'
 		exit 0 ;;
@@ -591,14 +591,18 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
         if platform in LINUX_BINARIES or platform in MAC_PLATFORMS:
             binary = "./" + LINUX_BINARIES[platform] if platform in LINUX_BINARIES else "./Shandalar.app/Contents/MacOS/Shandalar"
             prefix = '#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$0")"\n'
-            extra["run.sh"] = (prefix + f'exec "{binary}" "$@"\n').encode()
+            # A bare -h/--help is the engine's own (it prints Godot's options
+            # and exits before the game runs): run.sh hands it to the game's
+            # own list, `-- --help` (0.60.16, main.gd launch_help).
+            game_help = f'case "${{1:-}}" in -h | --help) exec "{binary}" --headless --no-header -- --help ;; esac\n'
+            extra["run.sh"] = (prefix + game_help + f'exec "{binary}" "$@"\n').encode()
             extra["deck_lab.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --deck-lab "$@"\n').encode()
             extra["auto_deck.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --auto-deck "$@"\n').encode()
             extra["lab_query.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --lab-query "$@"\n').encode()
             extra["referee.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --referee "$@"\n').encode()
             extra["shandalar.sh"] = (prefix + DISPATCHER.replace("@VERSION@", version)).encode()
             if platform == "raspberry-pi5-arm64":
-                extra["run.sh"] = (prefix +
+                extra["run.sh"] = (prefix + game_help +
                     'exec "./Shandalar.arm64" --rendering-method gl_compatibility '
                     '--rendering-driver opengl3_es --max-fps 60 "$@"\n').encode()
         elif platform == "windows64":

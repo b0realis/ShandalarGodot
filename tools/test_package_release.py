@@ -148,6 +148,11 @@ class PackageReleaseTest(unittest.TestCase):
                                 self.assertIn('../Shandalar.sh', archive.read(prefix + "run.sh").decode())
                             else:
                                 self.assertIn(binary, archive.read(prefix + "run.sh").decode())
+                                # A bare --help reaches the game's own list (0.60.16).
+                                self.assertIn(f'-h | --help) exec "./{binary}" --headless --no-header -- --help ;;'
+                                              if platform != "steam-deck" else
+                                              '-h | --help) exec ./Shandalar.x86_64 --headless --no-header -- --help ;;',
+                                              archive.read(prefix + "run.sh").decode())
                             self.assertIn(binary, archive.read(prefix + "deck_lab.sh").decode())
                             self.assertIn("-- --auto-deck", archive.read(prefix + "auto_deck.sh").decode())
                             self.assertEqual(archive.getinfo(prefix + "auto_deck.sh").external_attr >> 16 & 0o777, 0o755)

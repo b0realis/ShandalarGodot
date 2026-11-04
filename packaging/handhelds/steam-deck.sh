@@ -9,4 +9,6 @@
 set -eu
 cd -- "$(dirname -- "$0")"
 export SHANDALAR_HANDHELD=steam-deck
+# A bare -h/--help is the engine's own; this hands it to the game's list.
+case "${1:-}" in -h | --help) exec ./Shandalar.x86_64 --headless --no-header -- --help ;; esac
 exec ./Shandalar.x86_64 --rendering-method gl_compatibility --max-fps 60 --resolution 1280x800 "$@"

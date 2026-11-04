@@ -31,6 +31,25 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## The game's own `-- --help` (0.60.16, 2026-11-04)
+
+A bare `-h`/`--help` is the engine's: it prints Godot's options and exits
+before any script runs. The game's list answers after the separator, and
+the release's `run.sh` hands a bare one on.
+
+- `game/launch_help.gd`: `LaunchHelp` — `HELP_FLAGS`, `TOOL_FLAGS` (the
+  tools' own `--help` stays theirs), `asked(args)`; no dependencies.
+- `game/main.gd`: `VERIFY_PACK_FLAGS`, `wants_help`, `launch_help(version)`
+  (every switch the game reads and its variables, under 80 columns);
+  `_ready` prints it and quits after the tools' doors.
+- `game/card_packs.gd`: `_ready` builds no pool for a help-only launch.
+- `tools/package_release.py`: `run.sh` (Linux, Raspberry Pi, macOS) and
+  `packaging/handhelds/steam-deck.sh` map a bare `-h`/`--help` to
+  `--headless --no-header -- --help`; the `shandalar.sh` door's `play`
+  line says so.
+- Tests: `tests/unit/test_c30_launch_help.gd`,
+  `tools/test_handheld_launchers.py`, `tools/test_package_release.py`.
+
 ## The pack speed fixes and Snow-Covered basics (0.60.15, 2026-11-03)
 
 Measured against M1's 0.60.13 baseline (packs 2–9): setting out with the
