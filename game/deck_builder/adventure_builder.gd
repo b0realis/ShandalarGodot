@@ -359,7 +359,8 @@ func _price_sell(card_name: String) -> void:
 ## SELL [param count] copies of [param card_name] to the town, one at a
 ## time: one in no deck first, else one in another deck (it leaves that
 ## deck), never one the deck on the surface holds — so fewer go when fewer
-## may. The gold they bring, 0 when nothing was sold.
+## may. The gold they bring, 0 when nothing was sold; a sale is heard
+## ([constant DeckAudio.CUE_SELL]).
 func sell(card_name: String, count := 1) -> int:
 	if sell_site < 0:
 		return 0
@@ -406,6 +407,7 @@ func sell(card_name: String, count := 1) -> int:
 	_refresh_inventory()
 	_price_sell(card_name)
 	_show_worth(card_name)
+	_audio.play(DeckAudio.CUE_SELL)
 	if sold == 1:
 		_say("Sold %s for %d gold." % [card_name, gold])
 	else:

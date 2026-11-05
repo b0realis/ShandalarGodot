@@ -140,6 +140,11 @@ const PANE_SOUNDS: Array[String] = ["sfx_wizards"]
 ## robustness pass, 2026-10-23: a whole adventure was played and lost on
 ## exit with no word of it).
 const UNSAVED := "The adventure could not be saved."
+## Ctrl+L's words ([method quick_load]): the Quickslot taken up, none saved
+## yet, or one that cannot be read.
+const QUICKLOADED := "QUICKLOADED Adventurer!"
+const NO_QUICKSLOT := "No Quickslot yet: Ctrl+S saves one."
+const QUICKSLOT_UNREAD := "The Quickslot could not be read."
 ## A pane's closing signal is heard once, after the frame's input: a second
 ## Leave or Escape in the same frame finds nothing left to close, and no
 ## pane is freed under its own click.
@@ -233,6 +238,13 @@ var _pane_letters: Array[int] = []
 var _walk_keys: Array[int] = []
 var _pressed_at := Vector2.ZERO
 var _dragged := false
+## A walking key pressed while the button was down: the view went back to
+## the hero, so the press let go clicks no tile it was not aimed at.
+var _press_spent := false
+## THE CREATURE THE HERO GOES FOR (its slot; -1 for none): a click on it
+## ([method engage]) walks to it, the way found again as it moves, until
+## they meet ([method WorldCreatures.bumps]) or another walk is chosen.
+var _chase := -1
 ## Where the eased zoom goes ([method zoom_step]); 0 when it stands.
 var _zoom_goal := 0.0
 var _leaving := false
@@ -914,9 +926,42 @@ func _write_quicksave() -> String:
 	return SaveSlots.save_quick(player)
 
 
+## [QoL] CTRL+L TAKES THE QUICKSLOT UP AT ONCE (a play-tester's report and
+## the owner, 2026-11-05: *"ctrl-l should load from quicksave slot!"*),
+## wherever Ctrl+S may save it: the road, the map, a town's own pane. The
+## adventure as its last Ctrl+S left it replaces this one, as an
+## emulator's quickload: what was done since is gone, and the autosave and
+## the named slots stay as they are. With no Quickslot yet, or one that
+## cannot be read, the notice says so and the hero stays where they are.
+## L alone still opens the saved adventures ([method open_load]). True
+## when the Quickslot's world is put up.
+func quick_load() -> bool:
+	if player == null or player.adventure_id == "" or _lost or _leaving \
+			or (modal() and not town_on_top()):
+		return false
+	var slot := SaveSlots.quickslot_of(player.adventure_id)
+	if bool(slot["empty"]) or bool(slot["damaged"]):
+		_show_quicksave_notice(false, NO_QUICKSLOT if bool(slot["empty"]) else QUICKSLOT_UNREAD)
+		return false
+	var refusal: Array[String] = []
+	var screen := LoadAdventureScreen.open_save(String(slot["path"]), refusal)
+	if screen == null:
+		_show_quicksave_notice(false, refusal[0] if not refusal.is_empty() else QUICKSLOT_UNREAD)
+		return false
+	screen.ready.connect(func() -> void: screen._show_quicksave_notice(true, QUICKLOADED), CONNECT_ONE_SHOT)
+	_leaving = true
+	var tree := get_tree()
+	tree.root.add_child(screen)
+	if tree.current_scene == self:
+		tree.current_scene = screen
+	queue_free()
+	return true
+
+
 ## A noninteractive popup over the map or town as well as the world HUD.
 ## Restarting its timer gives each new save two full seconds of confirmation.
-func _show_quicksave_notice(success: bool) -> void:
+## [param words] other than the save's own: Ctrl+L's ([method quick_load]).
+func _show_quicksave_notice(success: bool, words := "") -> void:
 	if _quick_notice == null:
 		var layer := CanvasLayer.new()
 		layer.name = "QuickSaveFeedback"
@@ -942,7 +987,9 @@ func _show_quicksave_notice(success: bool) -> void:
 	face.bg_color = Color(0.025, 0.075, 0.15, 0.96) if success else PaneStyle.GLASS
 	_quick_notice.add_theme_stylebox_override("normal", face)
 	_quick_notice.add_theme_color_override("font_color", color)
-	_quick_notice.text = "QUICKSAVED Adventurer!" if success else UNSAVED
+	if words == "":
+		words = "QUICKSAVED Adventurer!" if success else UNSAVED
+	_quick_notice.text = words
 	_quick_notice.show()
 	_fit_quicksave_notice()
 	_quick_notice_timer.start(2.0 if success else WorldHud.NOTICE_SECONDS)
@@ -1345,6 +1392,9 @@ func _town_key(key: InputEventKey) -> bool:
 		return false
 	if key.keycode == KEY_S and key.ctrl_pressed:
 		quick_save()
+		return true
+	if key.keycode == KEY_L and key.ctrl_pressed:
+		quick_load()
 		return true
 	if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
 		return false
@@ -1947,6 +1997,7 @@ func meet_creature(slot: int) -> Control:
 	if not WorldCreatures.is_creature(WorldLairs.held_in(player, slot)):
 		return null
 	walk.stop()
+	_chase = -1
 	soundscape.rest(true)
 	autosave()
 	var pane := _open_meeting(slot)
@@ -2212,6 +2263,7 @@ func _deck_closed() -> void:
 func walk_to_tile(tile: Vector2i) -> bool:
 	if walk == null or modal() or _town_aside != "":
 		return false
+	_chase = -1
 	if tile == player.tile() and not walk.is_walking():
 		# THE ENTRY LATCH [ours] (the bug pass of part B): the place the hero
 		# arrived at and still stands on opens again — our QoL; 1997 entered a
@@ -2227,7 +2279,56 @@ func walk_to_tile(tile: Vector2i) -> bool:
 	var going := walk.walk_to(tile)
 	if going:
 		view.camera = view.hero
+		# THE LAST INPUT WINS [ours] (a play-tester's report, 2026-11-05): a
+		# key still held as the click walks walks no one until pressed
+		# again, and is no half of the next key's diagonal.
+		_disarm_keys()
 	return going
+
+
+## [QoL] GO FOR THE CREATURE in slot [param slot] (0.60.18; the owner,
+## 2026-11-05: *"Can we actively engage the creature if clicking with the
+## mouse in it or walking straight into it?"*): one the hero sees, walked
+## to as a click walks, the way found again each tick it has moved ([method
+## _follow_chase]); within [constant WorldCreatures.BUMP] of it they meet.
+## True when the hero sets out.
+func engage(slot: int) -> bool:
+	if walk == null or modal() or _town_aside != "":
+		return false
+	var held := WorldLairs.held_in(player, slot)
+	if not WorldCreatures.is_creature(held) or not _sees(slot):
+		return false
+	if not walk.walk_to(Vector2i(int(held["x"]) / 32, int(held["y"]) / 32)):
+		return false
+	_chase = slot
+	view.camera = view.hero
+	_disarm_keys()
+	return true
+
+
+## Whether the hero sees the creature in slot [param slot] ([method
+## WorldCreatures.seen]).
+func _sees(slot: int) -> bool:
+	for creature in WorldCreatures.seen(player):
+		if int(creature["slot"]) == slot:
+			return true
+	return false
+
+
+## THE CHASE GOES ON (each tick, before the hero's step): the way found
+## again to the tile the creature stands on when it is not the walk's; the
+## chase given up when the creature is gone or out of sight, the hero
+## walking on to where it was last seen.
+func _follow_chase() -> void:
+	if _chase < 0:
+		return
+	var held := WorldLairs.held_in(player, _chase)
+	if not WorldCreatures.is_creature(held) or not _sees(_chase) or walk.by_keys:
+		_chase = -1
+		return
+	var tile := Vector2i(int(held["x"]) / 32, int(held["y"]) / 32)
+	if not walk.is_walking() or walk.destination != tile:
+		walk.walk_to(tile)
 
 
 ## The world's clock run for [param seconds]: a tick every
@@ -2247,6 +2348,7 @@ func advance(seconds: float) -> void:
 	while _tick_left >= HeroWalk.TICK and ticks < MOST_TICKS:
 		_tick_left -= HeroWalk.TICK
 		ticks += 1
+		_follow_chase()
 		var walking := walk.is_walking()
 		if walk.step():
 			world.explore_around(player.tile())
@@ -2257,7 +2359,7 @@ func advance(seconds: float) -> void:
 		# The keys' walk arrives at every place it steps onto, as 1997's did
 		# (adventure_input.c 835–846); a click's at the place walked to.
 		var reached := walking and ((walk.by_keys and walk.at_middle)
-			or not walk.is_walking() and player.tile() == walk.destination)
+			or not walk.is_walking() and player.tile() == walk.destination and _chase < 0)
 		var news := walk.take_news()
 		if not news.is_empty():
 			# 1997 showed the news inside the hero's step, the creatures
@@ -2270,6 +2372,8 @@ func advance(seconds: float) -> void:
 	if ticks == MOST_TICKS:
 		_tick_left = 0.0
 	if ticks > 0:
+		# The creatures moved under a still pointer: the sword follows them.
+		_point_again(true)
 		# Not while the tick waits for the news: the place that step reached
 		# is entered first ([method _after_news]) — a letter delivered on its
 		# last day, not failed for the news read before it (the bug pass of
@@ -2297,7 +2401,7 @@ func _rest_of_tick(reached: bool) -> bool:
 	if opened and walk.by_keys:
 		# The keys' next tile is not walked on to once the place is left.
 		walk.stop()
-	var slots := {} if opened else WorldCreatures.tick(player)
+	var slots := {} if opened else WorldCreatures.tick(player, _chase)
 	_cry(slots.get("cries", []))
 	var met := int(slots.get("met", -1))
 	if met >= 0:
@@ -2495,6 +2599,11 @@ func _hover_world(point: Vector2) -> void:
 	# The hover preview's tile ([WorldPath]): none while a drag looks round.
 	paths.hover(Vector2i(-1, -1) if _dragged else tile)
 	var place := place_at(tile)
+	if not _dragged and not view.creature_under(point).is_empty():
+		# A creature the hero sees: the sword, and a click goes for it.
+		_wear(WorldCursors.Kind.CREATURE)
+		hud.hide_place()
+		return
 	_wear(WorldCursors.FOR_PLACE.get(String(place.get("kind", "")), WorldCursors.Kind.WALK))
 	if place.is_empty() or _dragged:
 		hud.hide_place()
@@ -2510,11 +2619,11 @@ func _hover_world(point: Vector2) -> void:
 ## finger's pointer moves no mouse ([TouchControls], "NO OS POINTER
 ## MOVES"), and the preview, the place's name and the pointer worn
 ## followed the hidden mouse whenever the view moved.
-func _point_again() -> void:
+func _point_again(creatures_moved := false) -> void:
 	if _world_waits():
 		return
 	var looked := Vector3(view.camera.x, view.camera.y, view.zoom)
-	if looked == _pointed:
+	if looked == _pointed and not creatures_moved:
 		return
 	_pointed = looked
 	var under := get_viewport().gui_get_hovered_control()
@@ -2714,13 +2823,17 @@ func _gui_input(event: InputEvent) -> void:
 			if button.pressed:
 				_dragging = true
 				_dragged = false
+				_press_spent = false
 				_pressed_at = button.position
 			else:
 				_dragging = false
 				# A press let go where it was made is a click: walk there —
 				# unless it closes the options, as a click outside a menu does.
-				if not _dragged and not hud.close_options():
-					walk_to_tile(tile_at(button.position))
+				if not _dragged and not _press_spent and not hud.close_options():
+					var creature := view.creature_under(button.position)
+					if creature.is_empty() or not engage(int(creature["slot"])):
+						walk_to_tile(tile_at(button.position))
+				_press_spent = false
 		elif button.pressed and button.button_index == MOUSE_BUTTON_RIGHT:
 			# THE RIGHT CLICK: the options at the pointer — 1997's right
 			# button on the world opened its "Will you ..." menu (`@STARTUP`
@@ -2749,6 +2862,9 @@ func _gui_input(event: InputEvent) -> void:
 				_dragged = true
 			if _dragged:
 				look(-motion.relative)
+		# The pointer moved: the hover preview may show again ([member
+		# WorldPath.quiet]).
+		paths.quiet = false
 		_hover_world(motion.position)
 
 
@@ -2756,7 +2872,8 @@ func _gui_input(event: InputEvent) -> void:
 ## PgUp, PgDn, End and the keypad walk ([method _press_walk]), M or F2 the
 ## map, F1 the deck, F3 the cities, F4 the clues, F5 the hero, F6 the
 ## wizards, the top row's 1–5 a World Magic, N the small map, H the keys, L
-## the saved adventures, Ctrl+S quicksaves, Space stops the walk and comes
+## the saved adventures, Ctrl+S quicksaves and Ctrl+L quickloads ([method
+## quick_load]), Space stops the walk and comes
 ## back to the hero, + and − zoom; Escape or Q closes what is open, else
 ## asks "Ready to Quit?". A pane that holds the screen hears its own keys
 ## (ruling A) — but a town's own pane lets M, F2, F5 and Ctrl+S open over
@@ -2819,7 +2936,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_H:
 			toggle_help()
 		KEY_L:
-			open_load()
+			if key.ctrl_pressed:
+				quick_load()
+			else:
+				open_load()
 		KEY_Q:
 			_close_or_ask()
 		KEY_S:
@@ -2865,7 +2985,11 @@ func _press_walk(code: int) -> void:
 		if held == code or not Input.is_key_pressed(held):
 			_walk_keys.erase(held)
 	_walk_keys.append(code)
+	_chase = -1
 	walk.key_toward(_way_of(_walk_keys))
+	paths.quiet = true
+	if _dragging:
+		_press_spent = true
 	view.camera = view.hero
 	_show_hero()
 
@@ -2967,21 +3091,27 @@ func toggle_wizards() -> void:
 ## stood (adventure_input.c 328–353) — and the camera back on the hero, as
 ## Space brought it back before [1997 + ours].
 func stop_and_back() -> void:
+	_chase = -1
 	if walk != null and (walk.is_walking() or walk.by_keys):
-		# The keys' walk too: a key still held walks again once pressed again.
+		# The keys' walk too: a key still held walks again once pressed
+		# again, and is no half of the next key's diagonal.
 		walk.stop()
+		_disarm_keys()
 		_show_hero()
 	back_to_hero()
 
 
 ## THE KEYS WHILE THE MAP IS UP (ruling B: the map is a whole screen, as
 ## 1997's was): its own ([method WorldMap.key] — its maps, City Info, Done)
-## and Ctrl+S act; no other key reaches the world under it.
+## and Ctrl+S and Ctrl+L act; no other key reaches the world under it.
 func _map_key(key: InputEventKey) -> void:
-	if _map.key(key.keycode):
+	if key.ctrl_pressed and key.keycode in [KEY_S, KEY_L]:
+		if key.keycode == KEY_S:
+			quick_save()
+		else:
+			quick_load()
 		get_viewport().set_input_as_handled()
-	elif key.keycode == KEY_S and key.ctrl_pressed:
-		quick_save()
+	elif _map.key(key.keycode):
 		get_viewport().set_input_as_handled()
 
 

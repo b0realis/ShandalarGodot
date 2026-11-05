@@ -280,6 +280,22 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(transitions)
 	content.add_child(transitions)
 
+	# `[QoL]` HI-RES CURSORS (0.60.18; the owner, 2026-11-05: *"Just options
+	# with highres cursors default!!"*) — the pointers the game draws
+	# itself, at twice their 1997 size or at it ([method
+	# Settings.hi_res_cursors]).
+	var cursors := CheckButton.new()
+	cursors.name = "HiResCursors"
+	cursors.text = "Hi-res cursors"
+	cursors.tooltip_text = "The game's own pointers — the adventure's " \
+		+ "walker, places and sword, and the duel's targeting crosshair — " \
+		+ "at twice the 1997 size, sharp. Off: the 1997 size."
+	cursors.button_pressed = Settings.hi_res_cursors()
+	cursors.toggled.connect(func(on: bool) -> void:
+		Settings.set_value(Settings.HI_RES_CURSORS, on))
+	UiChrome.shadowed_button(cursors)
+	content.add_child(cursors)
+
 	# `[QoL]` TOUCH CONTROLS — the finger-as-mouse layer (`TouchControls`,
 	# `game/input/touch_controls.gd`) for the web export on a tablet or a
 	# phone and for touch laptops. Three states, one stored key, and the

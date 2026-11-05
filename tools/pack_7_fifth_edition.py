@@ -187,6 +187,7 @@ def fetch_art(art_dir):
                     os.replace(staged, path)
                 time.sleep(fetch_card_art.DELAY_S)
             except (OSError, ValueError, KeyError) as error:
+                fetch_cards.tls_trust.stop_if_refused(error)
                 print('WARN:', row['name'], error, flush=True)
                 failed += 1
         if index % 10 == 0 or index == len(cards):

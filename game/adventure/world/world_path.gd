@@ -95,6 +95,12 @@ var _waited := false
 ## tile last looked at for a preview, and from where.
 var _hover := Vector2i(-1, -1)
 var _hover_since := 0
+## THE KEYS WALKED, THE POINTER STILL [ours] (a play-tester's report,
+## 2026-11-05): the land moving under a pointer resting on it brought a
+## preview up after every walk the keys made, to wherever the mouse lay.
+## Set as a walking key is pressed ([method WorldScreen._press_walk]); only
+## the pointer moved clears it, and no preview shows meanwhile.
+var quiet := false
 var _previewed := Vector2i(-1, -1)
 var _previewed_from := Vector2i(-1, -1)
 
@@ -209,6 +215,9 @@ func _follow_walk(player: AdventurePlayer) -> void:
 ## The hero standing: the way to the tile the pointer rests on, once it has
 ## rested [constant REST_MS] ms.
 func _follow_hover(player: AdventurePlayer) -> void:
+	if quiet:
+		_clear()
+		return
 	var tile := player.tile()
 	if not _preview and not _way.is_empty():
 		# A click's way its walk left behind (0.50.66 bug campaign, h2-3): a

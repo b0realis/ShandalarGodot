@@ -46,6 +46,11 @@ from pathlib import Path
 # folder beside a PACKAGED game rather than from a checkout.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tool_banner  # noqa: E402
+# Windows trusts its root store alone, and a certificate that cannot be
+# checked stops the run with the fix (tools/tls_trust.py, 2026-11-05).
+import tls_trust  # noqa: E402
+
+tls_trust.install()
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "cards" / "data"
@@ -176,8 +181,12 @@ def pool_from_scryfall() -> list[tuple[str, str]]:
         while url:
             time.sleep(DELAY_S)
             request = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(request, timeout=30) as response:
-                page = json.loads(response.read().decode("utf-8"))
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    page = json.loads(response.read().decode("utf-8"))
+            except OSError as err:
+                tls_trust.stop_if_refused(err)
+                raise
             for card in page.get("data", []):
                 seen.setdefault(card["name"], card["set"])
                 count += 1
@@ -212,6 +221,7 @@ def fetch_art_url(name: str, set_code: str) -> dict | None:
             print(f"WARN: Scryfall answered {err.code} for {name}")
             return None
         except (OSError, ValueError) as err:   # URLError, timeout, bad JSON
+            tls_trust.stop_if_refused(err)
             print(f"WARN: lookup failed for {name}: {err}")
             return None
         uris = card.get("image_uris") or {}
@@ -269,12 +279,15 @@ def fetch_missing_art(name: str, set_code: str,
             os.replace(staged, dest)
             done += 1
         except Exception as e:
-            print(f"WARN: download failed for {name} ({variant}): {e}")
-            failed += 1
             try:
                 staged.unlink()
             except OSError:
                 pass
+            # One certificate refused is every picture refused: stop, and
+            # say how to fix it, rather than a warning per card.
+            tls_trust.stop_if_refused(e)
+            print(f"WARN: download failed for {name} ({variant}): {e}")
+            failed += 1
     time.sleep(DELAY_S)
     return done, failed
 

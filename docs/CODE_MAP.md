@@ -466,10 +466,23 @@ the shelves, the pack share in every random draw);
   `WorldScreen.save_now` / `save_into_slot` / `autosave` / `quick_save`;
   `_show_quicksave_notice` shows the two-second confirmation above the map
   and town; `PaneStyle.QUICK_BLUE` marks it and the Quickslot rows.
+  HI-RES CURSORS (0.60.18): `Settings.hi_res_cursors` / `cursor_scale` /
+  `HI_RES_CURSORS` (Options' switch, on by default), worn by
+  `WorldCursors.image` / `hotspot` (32 or 64 px) and the duel's
+  `_set_target_cursor`; `tests/ui/test_options_display.gd`.
+  GOING FOR A CREATURE (0.60.18): `WorldView.creature_under` (the creature
+  drawn under a point), `WorldCursors.Kind.CREATURE` (the sword),
+  `WorldScreen.engage` / `_follow_chase` / `_chase` (a click on it chases
+  it), `WorldCreatures.bumps` / `BUMP` (met within 24 when walked into or
+  gone for); `tests/unit/test_tester_report_engage.gd`,
+  `tests/ui/test_tester_report_mixed_walk.gd`.
+  `WorldScreen.quick_load` (Ctrl+L, 0.60.18) takes the Quickslot up at once
+  where Ctrl+S may save it (`QUICKLOADED`, `NO_QUICKSLOT`,
+  `QUICKSLOT_UNREAD`).
   `LoadAdventureScreen` lists saves by adventure (`rows`, `resume`).
   Regressions: `tests/unit/test_c3_f6_save_files.gd`,
   `tests/ui/test_c3_f6_save_screens.gd`, `tests/ui/test_p1_town_keys.gd`,
-  `tests/ui/test_c3_f1_modal_world.gd`.
+  `tests/ui/test_c3_f1_modal_world.gd`, `tests/ui/test_tester_report_saves.gd`.
 - `game/adventure/world/city_list_pane.gd`: `CityListPane`, the F3 city
   list (`towns`, `scroll`, `shown`); `WorldScreen.show_city_list`.
   `game/adventure/world/world_map.gd`: `WorldMap`, the F2 map's three maps
@@ -1062,6 +1075,10 @@ the shelves, the pack share in every random draw);
   `continue_adventure`, `open_save`, `leave`. One Resume action loads the
   highlighted save, initially the newest eligible autosave; Quickslot is
   blue, Hall of Fame gold at the left, Back beside Resume at the right.
+  Delete beside Back, or the Delete key (0.60.18), asks first
+  (`LoadAdventureScreen.DeleteAsk`: Delete this save, All its saves, Keep)
+  and removes the files with their `.bak` (`ask_delete`, `delete_save`,
+  `delete_adventure`, `saves_of`).
 - `game/adventure/embark_screen.gd`: `set_out` (the adventure begun,
   autosaved, its world screen); `game/main.gd`: Save / Load opens the
   saved adventures, or says how one comes to be.
@@ -8278,6 +8295,23 @@ shandalar/
 │   │                          up; legacy_snake() names the old spelling);
 │   │                          targets_for() / fetch_missing_art() are the
 │   │                          per-card pieces build_card_packs.py reuses
+│   ├── tls_trust.py         THE DOWNLOADS' SECOND TRY (2026-11-05, a play-
+│   │                          tester's Windows 10 report: every picture
+│   │                          refused, "certificate has expired"): nothing
+│   │                          changes off Windows or for a download that
+│   │                          works; on Windows a certificate refused is
+│   │                          asked once more trusting the ROOT store alone
+│   │                          (Python also trusts the intermediate store,
+│   │                          where an expired ISRG Root X2 cross-sign
+│   │                          sat), kept for the run (SecondTryHandler;
+│   │                          install() from fetch_cards + fetch_card_art,
+│   │                          so every pack builder has it); a refusal
+│   │                          left stops the run with the fix
+│   │                          (stop_if_refused: CertificateRefused, a
+│   │                          SystemExit, no traceback, exit 1)
+│   ├── test_tls_trust.py    its test: nothing installed off Windows, a
+│   │                          download that works untouched, only a refused
+│   │                          certificate asked again, ROOT alone, the stop
 │   ├── build_card_packs.py  THE PACK BUILDER (2026-09-02) — freezes each
 │   │                          cards/data set as ../shandalar-packs/
 │   │                          <code>.tar.gz (set.json, enriched cards.json,

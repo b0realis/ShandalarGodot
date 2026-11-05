@@ -79,6 +79,11 @@ const CUE_FILTER := "deck_stone"   ## a filter medallion, on our own sound
 const CUE_ADD := "sfx_draw"        ## `Draw.wav`, slot 2 — a card into the deck
 const CUE_REMOVE := "sfx_discard"  ## `Discard.wav`, slot 3 — a card out of it
 const CUE_BUTTON := "sfx_button"   ## `Button.wav`, slot 4 — a command
+## [QoL] A card SOLD in a town (a play-tester's report, 2026-11-05: *"I
+## didn't notice a sound when you sell a card"*): 1997's builder had no
+## sound for it, so the gold heard is the world's own — `Treasure.wav`, the
+## lair's treasure and the thieves' gold ([AdventureBuilder.sell]).
+const CUE_SELL := "sfx_treasure"
 
 ## How many effects may sound at once. The original held five slots for
 ## this screen; four voices covers every gesture it has, since the bed is

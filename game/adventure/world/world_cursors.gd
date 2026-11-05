@@ -11,7 +11,11 @@ extends RefCounted
 ## a town a wizard rules, a dungeon's skull, a lair's cave mouth,
 ## Arzakon's horned portal round its violet void and, after the win, the
 ## same arch in grey stone, sealed (part C [ours]: no 1997 picture of it
-## was ever made); elsewhere
+## was ever made); over a creature the hero sees, a sword held point
+## first, its tip the pointer's (0.60.18; the owner, 2026-11-05: *"The
+## cursor should show a mini sword in the style of other cursors we
+## have"*, the diagonal one picked from the mock-ups): a click there goes
+## for it ([method WorldScreen.engage]); elsewhere
 ## the walking man; over the panel and the panes a gold arrow (the owner:
 ## *"over panes the cursor is normal gold mouse"*), and the hand over what
 ## is clicked and the four arrows over a pane to drag in the same gold
@@ -19,6 +23,11 @@ extends RefCounted
 ## 1997 world screen kept Windows' own arrow (its window class loads
 ## `IDC_ARROW`), so these are drawn [QoL], in the Embark screen's gold on a
 ## dark outline: drawn large, edges smoothed, then made cursor-sized.
+##
+## TWO SIZES (0.60.18; Options' Hi-res cursors, [method Settings.hi_res_cursors],
+## on by default): each pointer is worn at [constant SIZE] pixels, 1997's
+## size, or at twice that — the same drawing made pointer-sized once for
+## each.
 ##
 ## HOW THEY ARE PAINTED. Each pointer is a few shapes ([method shapes]),
 ## laid at four times the size and outlined together in ink: a pixel takes
@@ -50,10 +59,13 @@ const DARK := Color8(30, 18, 14)
 const SLATE := Color8(64, 56, 82)
 const VOID := Color8(124, 64, 200)
 const VOID_HEART := Color8(220, 196, 255)
+## The sword's blade: its lit edge and its shaded one.
+const STEEL := Color8(214, 218, 226)
+const STEEL_DARK := Color8(140, 146, 158)
 
 ## What a pointer shows: walking on, or the place under it.
 enum Kind { WALK, VILLAGE, TOWN, CITY, CASTLE, FALLEN, RULED, DUNGEON, LAIR, ARROW, HAND, MOVE, PORTAL,
-	MONUMENT }
+	MONUMENT, CREATURE }
 ## The pointer for each kind of place [method VisitPane.describe] gives —
 ## and Arzakon's portal, open or petrified ([method AdventureFinale.place_at]).
 const FOR_PLACE := {"refuge_port": Kind.TOWN, "refuge_castle": Kind.CASTLE, "village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
@@ -65,14 +77,17 @@ static var _made := {}
 static var _shapes_on := false
 
 
-## The pointer picture for [param kind], made once: its drawing made
+## The pointer picture for [param kind] at the size worn ([method
+## Settings.cursor_scale]), made once for each: its drawing made
 ## pointer-sized, edges smoothed.
 static func image(kind: Kind) -> Image:
-	if not _made.has(kind):
+	var scale := Settings.cursor_scale()
+	var key := Vector2i(kind, scale)
+	if not _made.has(key):
 		var picture := drawing(kind)
-		picture.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
-		_made[kind] = picture
-	return _made[kind]
+		picture.resize(SIZE * scale, SIZE * scale, Image.INTERPOLATE_LANCZOS)
+		_made[key] = picture
+	return _made[key]
 
 
 ## [param kind]'s pointer drawn large ([constant DRAWN] pixels across),
@@ -113,6 +128,8 @@ static func shapes(kind: Kind) -> Array:
 			return _hand()
 		Kind.MOVE:
 			return _move()
+		Kind.CREATURE:
+			return _sword()
 		Kind.ARROW:
 			return [["poly", PackedVector2Array([Vector2(10, 6), Vector2(10, 104),
 				Vector2(36, 80), Vector2(54, 120), Vector2(72, 112), Vector2(54, 74),
@@ -127,8 +144,13 @@ static func outline(kind: Kind) -> float:
 
 
 ## Where the pointer points: the walker's feet, the arrow's tip, a place's
-## middle.
+## middle — at the size worn ([method image]).
 static func hotspot(kind: Kind) -> Vector2:
+	return _point(kind) * Settings.cursor_scale()
+
+
+## [method hotspot] at 1997's size.
+static func _point(kind: Kind) -> Vector2:
 	match kind:
 		Kind.WALK:
 			return Vector2(15, 30)
@@ -136,6 +158,8 @@ static func hotspot(kind: Kind) -> Vector2:
 			return Vector2(2, 1)
 		Kind.HAND:
 			return Vector2(11, 1)
+		Kind.CREATURE:
+			return Vector2(2, 2)
 	return Vector2(16, 16)
 
 
@@ -250,6 +274,25 @@ static func _skull() -> Array:
 		["poly", PackedVector2Array([Vector2(64, 70), Vector2(57, 86), Vector2(71, 86)]), DARK],
 		["rect", Rect2(48, 98, 4, 16), DARK], ["rect", Rect2(58, 98, 4, 16), DARK],
 		["rect", Rect2(68, 98, 4, 16), DARK], ["rect", Rect2(78, 98, 4, 16), DARK],
+	]
+
+
+## A sword held point first, the point at the top left: the blade's shaded
+## half and its lit one, the gold guard across it, the wooden grip and the
+## gold pommel.
+static func _sword() -> Array:
+	var tip := Vector2(8, 8)
+	var base := Vector2(80, 80)
+	var along := (base - tip).normalized()
+	var across := Vector2(along.y, -along.x)
+	var shoulder := tip + along * 14.4
+	return [
+		["poly", PackedVector2Array([tip, shoulder + across * 8.0, base + across * 8.0, base - across * 8.0,
+			shoulder - across * 8.0]), STEEL_DARK],
+		["poly", PackedVector2Array([tip, shoulder + across * 8.0, base + across * 8.0, base]), STEEL],
+		["capsule", [base + across * 22.0, base - across * 22.0, 6.0], GOLD],
+		["capsule", [base + along * 4.0, base + along * 26.0, 4.8], WOOD],
+		["circle", [base + along * 32.0, 8.0], GOLD],
 	]
 
 

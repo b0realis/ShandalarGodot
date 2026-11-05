@@ -524,12 +524,13 @@ if [ "$WEB" = 1 ]; then
 		# import it for their banner and their --version, and the stage
 		# is flat, so leaving it behind ships four tools that cannot
 		# start. import_manalink.py is the same for import_original.py,
-		# which loads it at start (2026-10-17). tools/test_tool_banner.py
+		# which loads it at start (2026-10-17), and tls_trust.py for
+		# fetch_card_art.py's downloads (2026-11-05). tools/test_tool_banner.py
 		# pins this list to that fact.
 		cp -p tools/mtg_assets.py tools/import_original.py \
 		      tools/import_manalink.py \
 		      tools/fetch_card_art.py tools/skin_catalogue.py \
-		      tools/tool_banner.py "$STAGE/tools/"
+		      tools/tool_banner.py tools/tls_trust.py "$STAGE/tools/"
 		# Share the complete builder dependency/data list with every other platform.
 		python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "tools"); from package_release import stage_player_tools; stage_player_tools(Path(sys.argv[1]))' "$STAGE"
 		zip_stage "$STAGE" "Shandalar-$VERSION-$WEB_PLATFORM"
@@ -899,7 +900,7 @@ DOOR
 	cp -p tools/mtg_assets.py tools/import_original.py \
 	      tools/import_manalink.py \
 	      tools/fetch_card_art.py tools/skin_catalogue.py \
-	      tools/tool_banner.py "$STAGE/"
+	      tools/tool_banner.py tools/tls_trust.py "$STAGE/"
 	# Keep the historical flat helpers, and add the common tools/ layout plus
 	# numbered-pack metadata and player README used by all current platforms.
 	python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "tools"); from package_release import stage_player_tools; stage_player_tools(Path(sys.argv[1]))' "$STAGE"

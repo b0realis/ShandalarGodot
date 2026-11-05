@@ -37,6 +37,11 @@ from pathlib import Path
 # checkout — the same line build_card_packs.py already carries.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tool_banner  # noqa: E402
+# Windows trusts its root store alone, and a certificate that cannot be
+# checked stops the run with the fix (tools/tls_trust.py, 2026-11-05).
+import tls_trust  # noqa: E402
+
+tls_trust.install()
 
 TOOL = "fetch_cards.py"
 ## The tool's name in the half-height box-drawing face the whole family
@@ -129,8 +134,12 @@ KEEP_FIELDS = [
 def scryfall_get(url: str) -> dict:
     """One GET against Scryfall, parsed as JSON, followed by the pause."""
     req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.load(resp)
+    except OSError as err:
+        tls_trust.stop_if_refused(err)
+        raise
     time.sleep(0.1)
     return data
 

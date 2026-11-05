@@ -205,3 +205,32 @@ func test_the_autoload_that_leaves_last_enters_first_and_applies_it() -> void:
 	var source: String = (hook.get_script() as GDScript).source_code
 	assert_true(source.contains("GameDisplay.apply_settings()"),
 		"and it is GameDisplay that puts it there")
+
+
+## HI-RES CURSORS (0.60.18; the owner, 2026-11-05: *"Just options with
+## highres cursors default!!"*): on by default and unwritten; the switch
+## stores the choice, and the pointers are worn at twice 1997's size or at
+## it, their points with them.
+func test_hi_res_cursors_are_on_by_default_and_the_switch_sets_their_size() -> void:
+	var had: Variant = Settings.get_value(Settings.HI_RES_CURSORS, null) \
+		if Settings.has_value(Settings.HI_RES_CURSORS) else null
+	Settings.clear_value(Settings.HI_RES_CURSORS)
+	var fresh: Control = load("res://game/options_screen.tscn").instantiate()
+	add_child_autofree(fresh)
+	await get_tree().process_frame
+	var switch := fresh.find_child("HiResCursors", true, false) as CheckButton
+	assert_not_null(switch)
+	if switch != null:
+		assert_true(switch.button_pressed, "on by default")
+		assert_false(Settings.has_value(Settings.HI_RES_CURSORS), "and not written")
+		assert_eq(WorldCursors.image(WorldCursors.Kind.WALK).get_size(), Vector2i(64, 64), "twice 1997's")
+		assert_eq(WorldCursors.hotspot(WorldCursors.Kind.WALK), Vector2(30, 60), "the walker's feet")
+		switch.button_pressed = false
+		assert_false(Settings.hi_res_cursors(), "stored")
+		assert_true(Settings.has_value(Settings.HI_RES_CURSORS))
+		assert_eq(WorldCursors.image(WorldCursors.Kind.WALK).get_size(), Vector2i(32, 32), "1997's size")
+		assert_eq(WorldCursors.hotspot(WorldCursors.Kind.WALK), Vector2(15, 30))
+	if had == null:
+		Settings.clear_value(Settings.HI_RES_CURSORS)
+	else:
+		Settings.set_value(Settings.HI_RES_CURSORS, had)

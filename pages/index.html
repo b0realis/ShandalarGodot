@@ -776,6 +776,10 @@ Pack 9: 621 unique cards · 636 printings -&gt; cardpacks/Pack-9-Tempest-Block.z
       <summary><code>CERTIFICATE_VERIFY_FAILED</code></summary>
       <div><p>Open <b>Applications → Python 3.x</b>, double-click <b>Install Certificates.command</b>, and paste the commands again.</p></div>
     </details>
+    <details data-os="win">
+      <summary><code>CERTIFICATE_VERIFY_FAILED</code> or <code>certificate has expired</code></summary>
+      <div><p>Windows couldn't check the download server's certificate. First check that the computer's date and time are right. Then, in the same Command Prompt, type <code>py -3 -m pip install --upgrade certifi</code>, then <code>for /f %i in ('py -3 -m certifi') do set SSL_CERT_FILE=%i</code>, and paste the commands again. A virus scanner that checks HTTPS traffic can also cause this.</p></div>
+    </details>
     <details data-os="mac linux">
       <summary><code>TypeError: unsupported operand type(s) for |</code></summary>
       <div><p>The window is using an older Python. Type <code>python3 --version</code>: it must say 3.10 or newer. <span data-os="mac">Macs come with an older Python of their own: install the one from python.org (step 4), then open a new Terminal window, so it uses the new one.</span></p></div>

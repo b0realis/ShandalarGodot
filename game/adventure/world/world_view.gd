@@ -1684,6 +1684,27 @@ func _paint_creature(creature: Dictionary) -> void:
 		_figure.draw_texture_rect_region(part[0], part[1], part[2], op_color(part))
 
 
+## THE CREATURE UNDER SCREEN POINT [param point] (0.60.18 [ours]: the
+## sword pointer over it and a click that goes for it, [method
+## WorldScreen.engage]): of the creatures shown ([member creatures] — never
+## one the hero cannot see), the one whose picture as drawn this frame holds
+## the point, the one in front (the lowest feet) first; `{}` for none.
+func creature_under(point: Vector2) -> Dictionary:
+	var best := {}
+	var front := -INF
+	for creature in creatures:
+		var feet := drawn_at(_shown_creature(creature))
+		var key := String(CreatureBook.sprite_keys(int(creature["creature"]))["body"])
+		var body := Rect2(feet - Vector2(12, 28) * zoom, Vector2(24, 32) * zoom)
+		if not _plain and art.texture(key) != null:
+			var rect := art.creature_rect(key, WorldArt.creature_frame(int(creature["heading"]), int(creature["frame"])))
+			body = Rect2(feet - art.creature_anchor(key) * zoom, rect.size * zoom)
+		if body.grow(2.0).has_point(point) and feet.y > front:
+			best = creature
+			front = feet.y
+	return best
+
+
 ## Where creature [param creature]'s feet are on the pictures.
 func _creature_at(creature: Dictionary) -> Vector2:
 	return _lay(_shown_creature(creature) - Vector2(_anchor))

@@ -704,6 +704,22 @@ static func sfx_volume_db() -> float:
 static func transitions() -> bool:
 	return get_value("transitions", true)
 
+## [QoL] `Hi-res cursors` on the Options screen (0.60.18; the owner,
+## 2026-11-05: *"all cursors should adapt to original skin graphics or
+## highres"*, *"Just options with highres cursors default!!"*): every
+## pointer the game draws itself — the adventure's ([WorldCursors]) and the
+## duel's targeting crosshair — worn at twice its 1997 size. On by default;
+## off, 1997's size.
+const HI_RES_CURSORS := "hi_res_cursors"
+
+static func hi_res_cursors() -> bool:
+	return get_value(HI_RES_CURSORS, true)
+
+## How many times its 1997 size a pointer is worn: 2 with [method
+## hi_res_cursors], else 1.
+static func cursor_scale() -> int:
+	return 2 if hi_res_cursors() else 1
+
 ## Seconds between AI actions in vs-AI play (demo mode has its own knob
 ## on the battle-setup screen).
 static func ai_pace() -> float:

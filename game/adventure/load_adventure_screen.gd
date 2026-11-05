@@ -30,6 +30,13 @@ extends Control
 ## button should be inside save/load as not to clutter the main menu!"*):
 ## the button beside Back opens it over the list ([HallOfFamePane]); Done or
 ## Escape closes it, the list as it was.
+##
+## [QoL] DELETE (a play-tester's report and the owner, 2026-11-05: *"Is
+## there a way in game to delete save files you don't want?"*): the button
+## beside Back, or the Delete key, asks first ([DeleteAsk]) — the
+## highlighted save alone, or every save of its adventure — and then
+## removes the files with their `.bak` copies. The Hall of Fame keeps its
+## lines; the list is read again.
 
 const TITLE := "Resume an adventure"
 const HALL := "Hall of Fame"
@@ -54,7 +61,9 @@ var _list: ItemList
 var _say_line: Label
 var back_button: Button
 var hall_button: Button
+var delete_button: Button
 var _hall: HallOfFamePane
+var _delete_ask: DeleteAsk
 var _leaving := false
 ## Whether a save's packs to switch on are built on a thread while the
 ## hourglass shows ([method continue_adventure]; 0.60.15): windowed —
@@ -110,8 +119,7 @@ func _ready() -> void:
 	well.set_corner_radius_all(6)
 	well.set_content_margin_all(10)
 	_list.add_theme_stylebox_override("panel", well)
-	_list.item_selected.connect(func(index: int) -> void:
-		resume_button.disabled = index < 0 or index >= rows.size() or rows[index].is_empty())
+	_list.item_selected.connect(func(index: int) -> void: _sync_buttons(index))
 	_list.item_activated.connect(func(index: int) -> void: continue_adventure(index))
 	page.add_child(_list)
 	_say_line = _lettering("", 15, EmbarkScreen.DIM, "font_body")
@@ -132,6 +140,11 @@ func _ready() -> void:
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
+	delete_button = UiChrome.menu_button("Delete", Vector2(160, 46))
+	delete_button.name = "Delete"
+	delete_button.tooltip_text = "Delete the highlighted save, or every save of its adventure (Delete key)."
+	delete_button.pressed.connect(func() -> void: ask_delete())
+	row.add_child(delete_button)
 	row.add_child(back_button)
 	resume_button = UiChrome.menu_button("Resume", Vector2(200, 46), 24, 0.6)
 	resume_button.name = "Resume"
@@ -188,7 +201,7 @@ func refresh() -> void:
 			rows.append(save)
 			saves.append(save)
 	var selected := initial_selection()
-	resume_button.disabled = selected < 0
+	_sync_buttons(selected)
 	if selected >= 0:
 		_list.select(selected)
 	if saves.is_empty():
@@ -198,6 +211,13 @@ func refresh() -> void:
 		_say_line.text = "Choose a save and Resume, or double-click it."
 		if unreadable > 0:
 			_say_line.text += " " + unreadable_note()
+
+
+## Resume and Delete as row [param index] stands: a save, or nothing.
+func _sync_buttons(index: int) -> void:
+	var none := index < 0 or index >= rows.size() or rows[index].is_empty()
+	resume_button.disabled = none
+	delete_button.disabled = none
 
 
 ## The end a save's row tells of (part C): " · Won: Arzakon banished for
@@ -274,6 +294,105 @@ func initial_selection() -> int:
 					or String(save["saved"]) > String(selected["saved"])):
 				selected = save
 	return -1 if selected.is_empty() else rows.find(selected)
+
+
+# ------------------------------------------------------------- delete --
+
+## ASK BEFORE DELETING the highlighted save ([DeleteAsk]): this save, or
+## every save of its adventure when it has more than one. The ask, the one
+## already open, or null when no save is highlighted.
+func ask_delete() -> DeleteAsk:
+	if delete_shown():
+		return _delete_ask
+	var picked := _list.get_selected_items()
+	if _leaving or hall_shown() or picked.is_empty() or rows[picked[0]].is_empty():
+		return null
+	var save: Dictionary = rows[picked[0]]
+	var id := String(save["id"])
+	var group := saves_of(id)
+	_delete_ask = DeleteAsk.new()
+	var kind := _kind_words(save)
+	_delete_ask.words = "%s of %s will be deleted for good." % [kind[0].to_upper() + kind.substr(1),
+		String(save["name"])]
+	var world := _world_under()
+	if world != null and world.player != null and world.player.adventure_id == id:
+		_delete_ask.words += " It is the adventure you are playing: it is saved again as you go on."
+	_delete_ask.all_count = group.size()
+	add_child(_delete_ask)
+	PaneStyle.centre(_delete_ask)
+	var asked := _delete_ask
+	asked.answered.connect(func(what: String) -> void:
+		if is_instance_valid(asked):
+			asked.queue_free()
+		if what == DeleteAsk.THIS:
+			delete_save(save)
+		elif what == DeleteAsk.ALL:
+			delete_adventure(id), CONNECT_DEFERRED | CONNECT_ONE_SHOT)
+	return asked
+
+
+## Whether the delete ask is open over the list.
+func delete_shown() -> bool:
+	return is_instance_valid(_delete_ask) and not _delete_ask.is_queued_for_deletion()
+
+
+## The saves listed for adventure [param id].
+func saves_of(id: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for save in saves:
+		if String(save["id"]) == id:
+			out.append(save)
+	return out
+
+
+## DELETE [param save]: its file and its `.bak`; the list read again. True
+## when nothing of it is left.
+func delete_save(save: Dictionary) -> bool:
+	var gone := _remove_save_files(String(save["path"]))
+	refresh()
+	_say_line.text = ("Deleted %s of %s." if gone else "Could not delete %s of %s.") % [
+		_kind_words(save), String(save["name"])]
+	return gone
+
+
+## DELETE EVERY SAVE OF ADVENTURE [param id]: the files listed, and every
+## file its Quickslot, autosave and ten slots would be, with their `.bak`
+## copies; the list read again. True when nothing of it is left.
+func delete_adventure(id: String) -> bool:
+	var hero := ""
+	var paths: Array[String] = []
+	for save in saves_of(id):
+		hero = String(save["name"])
+		paths.append(String(save["path"]))
+	var folder := AdventurePlayer.saves_folder
+	paths.append(folder.path_join("%s.%s.json" % [id, AdventurePlayer.AUTOSAVE]))
+	for slot in [SaveSlots.QUICK_SLOT] + range(1, SaveSlots.SLOTS + 1):
+		paths.append(SaveSlots.path_of(id, slot, folder))
+	var gone := true
+	for path in paths:
+		gone = _remove_save_files(path) and gone
+	refresh()
+	_say_line.text = ("Deleted every save of %s." if gone else "Could not delete every save of %s.") % (
+		hero if hero != "" else id)
+	return gone
+
+
+## The file at [param path] and its `.bak` removed: true when neither is left.
+static func _remove_save_files(path: String) -> bool:
+	for file in [path, AdventurePlayer.backup_path(path)]:
+		if FileAccess.file_exists(file):
+			DirAccess.remove_absolute(file)
+	return not FileAccess.file_exists(path) and not FileAccess.file_exists(AdventurePlayer.backup_path(path))
+
+
+## "the Quickslot", "the autosave", "slot 3 “By the river”" for [param save].
+static func _kind_words(save: Dictionary) -> String:
+	var slot := int(save["slot"])
+	if slot == SaveSlots.QUICK_SLOT:
+		return "the Quickslot"
+	if slot == 0:
+		return "the autosave"
+	return "slot %d “%s”" % [slot, String(save["slot_name"])]
 
 
 ## RESUME always takes up the highlighted save, including a manual slot.
@@ -466,8 +585,14 @@ func _world_under() -> WorldScreen:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if hall_shown():
-		# The Hall over the list hears its own keys (its Escape is Done).
+	if hall_shown() or delete_shown():
+		# The Hall over the list hears its own keys (its Escape is Done),
+		# and so does the delete ask (its Escape keeps the save).
+		return
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_DELETE:
+		get_viewport().set_input_as_handled()
+		ask_delete()
 		return
 	if event.is_action_pressed("ui_cancel"):
 		# Taken even while leaving: a second Escape in the same frame finds
@@ -490,3 +615,58 @@ func _lettering(text: String, size: int, color: Color, font_key: String) -> Labe
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return label
+
+
+## DELETE, ASKED (the class doc): the save's words, then Delete this save,
+## All its saves (when its adventure has more than one) and Keep; Escape,
+## or K, keeps it. The choices answer to their first letter, as the
+## world's asks do ([method VisitPane.letter_choice]).
+class DeleteAsk extends PanelContainer:
+	## [param what] [constant THIS], [constant ALL], or "" for Keep.
+	signal answered(what: String)
+
+	const THIS := "this"
+	const ALL := "all"
+
+	## The words over the choices.
+	var words := ""
+	## How many saves its adventure has: All its saves shows above one.
+	var all_count := 1
+	var _choices: HBoxContainer
+
+	func _ready() -> void:
+		name = "DeleteAsk"
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		add_theme_stylebox_override("panel", PaneStyle.glass(16.0))
+		var column := VBoxContainer.new()
+		column.add_theme_constant_override("separation", 10)
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(column)
+		column.add_child(PaneStyle.title("Delete save?", 24))
+		column.add_child(PaneStyle.wrapped(words + " This cannot be undone.", 16, 440.0))
+		var choices := HBoxContainer.new()
+		_choices = choices
+		choices.alignment = BoxContainer.ALIGNMENT_CENTER
+		choices.add_theme_constant_override("separation", 10)
+		choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var this_one := PaneStyle.button("Delete this save", "DeleteThis")
+		this_one.pressed.connect(func() -> void: answered.emit(THIS))
+		choices.add_child(this_one)
+		if all_count > 1:
+			var every := PaneStyle.button("All its saves (%d)" % all_count, "DeleteAll")
+			every.pressed.connect(func() -> void: answered.emit(ALL))
+			choices.add_child(every)
+		var keep := PaneStyle.button("Keep", "Keep")
+		keep.pressed.connect(func() -> void: answered.emit(""))
+		choices.add_child(keep)
+		column.add_child(choices)
+
+	func _input(event: InputEvent) -> void:
+		VisitPane.drop_letter(_choices, event)
+
+	func _unhandled_input(input: InputEvent) -> void:
+		if input.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			answered.emit("")
+		elif VisitPane.letter_choice(self, _choices, input):
+			get_viewport().set_input_as_handled()

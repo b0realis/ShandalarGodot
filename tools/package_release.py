@@ -104,6 +104,9 @@ TOOLS = ("mtg_assets.py", "import_original.py", "import_manalink.py",
          # The 2x skin (2026-10-17): a player's own skin, twice the size.
          "upscale_skin.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
+         # The downloads' trust (2026-11-05): fetch_cards and fetch_card_art
+         # import it, so every pack builder does.
+         "tls_trust.py",
          "shandalar_mcp.py",
          # The decision-model door (2026-10-04): it imports the MCP server's
          # door route and its menus from beside itself.

@@ -38,7 +38,8 @@ extends RefCounted
 ##       has none either, it is gone. Otherwise it steps on, its walk's frame
 ##       1–4.
 ##  - CONTACT: within 16 of the hero (1997's distance, twice the longer axis
-##    and the shorter; a lair within 26) the creature is MET — the tick ends
+##    and the shorter; a lair within 26) — or walked into, [ours]: [method
+##    bumps] — the creature is MET — the tick ends
 ##    there and the world opens the meeting ([method WorldScreen.meet_creature],
 ##    a lair [method WorldScreen.enter_lair]). [Ours: 1997 went on through
 ##    the slots after the one met in the same pass, the clock already at
@@ -203,6 +204,15 @@ const RING := 4
 ## A creature is met within this (1997's distance), a lair within
 ## [constant WorldLairs.REACH].
 const CONTACT := 16
+## [QoL] WALKED INTO (0.60.18; the owner, 2026-11-05: *"Can we actively
+## engage the creature if clicking with the mouse in it or walking straight
+## into it?"*): within this many world units (a straight line, three
+## quarters of a tile) a creature is met by a hero walking toward it, or
+## going for it ([method bumps]) — 1997's [constant CONTACT] needs the two
+## all but on top of each other, and a hero walks from one tile's middle to
+## the next, so one standing or wandering a little off the hero's line was
+## walked up to and never met.
+const BUMP := 24
 ## Within this of the hero a creature that has lost to the hero often
 ## enough runs from them.
 const FLEE := 64
@@ -275,7 +285,7 @@ const NOTICE_SCALE := 2
 ## creatures that may cry (`{slot, creature, distance, x, y}`, for [method
 ## WorldSoundscape.cry], which throws its own dice). Reads the clock `T`
 ## before this tick moves it on ([method HeroWalk.end_tick]).
-static func tick(player: AdventurePlayer) -> Dictionary:
+static func tick(player: AdventurePlayer, engage := -1) -> Dictionary:
 	var out := {"met": -1, "kind": "", "cries": []}
 	if player == null or player.world == null:
 		return out
@@ -313,7 +323,7 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 			# met [ours: 1997 slip — an emptied slot met at 16].
 			continue
 		at = Vector2i(int(held["x"]), int(held["y"]))
-		if _distance(player.position, at) < CONTACT:
+		if _distance(player.position, at) < CONTACT or bumps(player, slot, at, engage):
 			out["met"] = slot
 			out["kind"] = "creature"
 			break
@@ -322,6 +332,27 @@ static func tick(player: AdventurePlayer) -> Dictionary:
 				"distance": int(step["d0"]), "x": at.x, "y": at.y})
 	player.dice = dice.state
 	return out
+
+
+## WHETHER THE HERO WALKS INTO the creature in slot [param slot], standing
+## at [param at] ([constant BUMP]): within that of the hero, and either the
+## creature the hero goes for ([param engage], the slot a click on it
+## chases, [method WorldScreen.engage]) or ahead of a walking hero — their
+## way within 45° of it. One the hero stands by, walks past or walks away
+## from is not met so [QoL].
+static func bumps(player: AdventurePlayer, slot: int, at: Vector2i, engage := -1) -> bool:
+	var off := Vector2(at - player.position)
+	if off.length() >= BUMP:
+		return false
+	if slot == engage:
+		return true
+	var facing := clampi(player.facing, 0, 8)
+	if player.step == 0 or facing == 0:
+		return false
+	if off.length() < 1.0:
+		return true
+	var ahead := Vector2(ShandalarWorld.DX[facing], ShandalarWorld.DY[facing]).normalized()
+	return ahead.dot(off.normalized()) >= 0.7
 
 
 ## ONE CREATURE'S WALK this tick (slots.c 641–934): its aim, the way, the

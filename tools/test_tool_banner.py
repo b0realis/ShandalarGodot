@@ -71,11 +71,13 @@ PACK_TOOLS = ["pack_1_dotp_complete", "pack_2_fallen_empires",
               "serve_web", "build_android", "package_web_offline"]
 
 ## The four Python tools build_release.sh copies into a package, plus the
-## modules they import: tool_banner.py, and import_manalink.py, which
-## import_original.py loads at start (2026-10-17). See
+## modules they import: tool_banner.py, import_manalink.py, which
+## import_original.py loads at start (2026-10-17), and tls_trust.py, which
+## fetch_card_art.py loads for its downloads (2026-11-05). See
 ## test_the_package_ships_the_module_its_tools_import.
 SHIPPED_TOOLS = ["mtg_assets.py", "import_original.py", "fetch_card_art.py",
-                 "skin_catalogue.py", "tool_banner.py", "import_manalink.py"]
+                 "skin_catalogue.py", "tool_banner.py", "import_manalink.py",
+                 "tls_trust.py"]
 
 ## THE ONE TOOL WITH NO MINI-HELP, and why (2026-09-11): a bare
 ## `mtg_assets.py` already prints its own GUIDE — "WHAT THIS NEEDS", down

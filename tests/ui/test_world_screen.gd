@@ -316,8 +316,9 @@ func test_the_pointer_is_the_walker_the_place_or_the_gold_arrow() -> void:
 	var seen: Array = []
 	for kind in WorldCursors.Kind.values():
 		var picture := WorldCursors.image(kind)
-		assert_eq(picture.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE))
-		assert_gt(picture.get_pixelv(Vector2i(WorldCursors.hotspot(kind))).a + picture.get_pixel(16, 16).a, 0.0,
+		assert_eq(picture.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE) * Settings.cursor_scale())
+		assert_gt(picture.get_pixelv(Vector2i(WorldCursors.hotspot(kind))).a
+				+ picture.get_pixelv(picture.get_size() / 2).a, 0.0,
 			"something is drawn")
 		assert_false(picture.get_data() in seen, "each its own")
 		seen.append(picture.get_data())

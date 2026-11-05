@@ -307,14 +307,20 @@ func choose(index: int) -> void:
 	refresh()
 
 
-## BUY the chosen card ([method CardShop.buy]).
+## BUY the chosen card ([method CardShop.buy]). [QoL] A card bought is
+## heard as a card found is, by its kind ([method WorldSoundscape.card_key];
+## a play-tester's report, 2026-11-05: the shop was silent).
 func buy_chosen() -> void:
 	if chosen < 0:
 		return
+	var cards := CardShop.offers(player, slot)
+	var card_name := cards[chosen] if chosen < cards.size() else ""
 	var result := CardShop.buy(player, slot, chosen)
 	chosen = -1
 	refresh()
 	_note.text = String(result["said"])
+	if bool(result["bought"]):
+		WorldSoundscape.play_from(self, WorldSoundscape.card_key(card_name))
 
 
 func ask_text() -> String:

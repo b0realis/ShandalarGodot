@@ -362,4 +362,4 @@ func test_a_castle_s_pane_is_no_town() -> void:
 
 func test_help_says_the_town_s_keys() -> void:
 	var keys := "\n".join(screen.hud.key_lines())
-	assert_string_contains(keys, "In a town: M or F2 and F5 open over the town; Ctrl+S quicksaves")
+	assert_string_contains(keys, "In a town: M or F2 and F5 open over the town; Ctrl+S and Ctrl+L work there too")

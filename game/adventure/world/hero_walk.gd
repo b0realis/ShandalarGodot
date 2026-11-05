@@ -167,10 +167,19 @@ func stop() -> void:
 
 ## Walk to [param target]: true when there is a way (to it, or to the land
 ## nearest it when it is sea or out of reach). The keys' walk is given up.
+##
+## NO STEP BACK MID-STEP [ours] (a play-tester's report, 2026-11-05: arrows
+## and clicks mixed "get a little messy"): the way is found from the tile
+## the hero stands on, which before half a step is the one just left; when
+## the way goes on through the tile the step under way reaches, the hero
+## walks on to it rather than back to the middle left behind first — a
+## click during the keys' walk, or a second click during a click's.
 func walk_to(target: Vector2i) -> bool:
 	var way := plan(target)
 	if way.is_empty():
 		return false
+	if not path.is_empty() and way.size() > 1 and way[1] == path[0] and way[0] != path[0]:
+		way.remove_at(0)
 	path = way
 	plans += 1
 	destination = way[way.size() - 1]
@@ -190,21 +199,33 @@ func walk_to(target: Vector2i) -> bool:
 ## the sea back there, the heading dropped (adventure_input.c 607–614);
 ## here the hero stands on the middle of the last land tile, as a click's
 ## walk ends]. Held, the walk goes on ([method _key_on]).
+##
+## A KEY AGAINST THE STEP UNDER WAY [ours] (a play-tester's report,
+## 2026-11-05: arrows and clicks mixed "get a little messy"): the hero turns
+## on the spot and walks back to the tile just left — not on to the tile
+## ahead and back again, which walked a held key the wrong way for seconds
+## on slow land.
 func key_toward(d: int) -> void:
 	keyed = d
 	var at := player.position
 	var near := Vector2i(roundi((at.x - 16) / 32.0), roundi((at.y - 16) / 32.0))
 	var start := _standing_tile()
+	var turned := false
 	if absi(at.x - _middle(near).x) <= TURN_SLACK and absi(at.y - _middle(near).y) <= TURN_SLACK \
 			and player.world.is_land(near.x, near.y):
 		start = near
 	elif not path.is_empty():
 		start = path[0]
+		var behind := start - Vector2i(ShandalarWorld.DX[heading], ShandalarWorld.DY[heading])
+		if d != 0 and heading != 0 and start + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d]) == behind \
+				and player.world.is_land(behind.x, behind.y):
+			start = behind
+			turned = true
 	path.clear()
 	plans += 1
 	if at != _middle(start):
 		path.append(start)
-	if d != 0:
+	if d != 0 and not turned:
 		var next := start + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
 		if player.world.is_land(next.x, next.y):
 			path.append(next)

@@ -132,8 +132,10 @@ const NO_SIEGES := " (no sieges in this campaign)"
 ## look around, and the wheel, N, H and the panes' drag are new. Save
 ## stays Ctrl+S (the owner's ruling C-2: W A S D keep looking; 1997's S
 ## saved). In a town M or F2 and F5 open over its pane; Ctrl+S quicksaves
-## without opening a picker ([method WorldScreen.town_on_top]).
+## without opening a picker ([method WorldScreen.town_on_top]), and Ctrl+L
+## takes the Quickslot up again ([method WorldScreen.quick_load], 0.60.18).
 const KEYS := [["Click", "walk there; the way is found"],
+	["Click a creature", "go for it (the sword pointer); walking into one meets it too"],
 	["Right click", "the options"],
 	["Arrows", "walk your hero while held; two at once walk a diagonal"],
 	["Home, PgUp, PgDn, End", "walk the diagonals; the keypad walks every way"],
@@ -150,7 +152,8 @@ const KEYS := [["Click", "walk there; the way is found"],
 	["F6", "the wizards"],
 	["W, J, D", "with your hero's pane open: the wizards, the journal; D closes it"],
 	["Ctrl+S", "save to Quickslot (keeps named saves)"],
-	["In a town", "M or F2 and F5 open over the town; Ctrl+S quicksaves"],
+	["Ctrl+L", "load the Quickslot at once"],
+	["In a town", "M or F2 and F5 open over the town; Ctrl+S and Ctrl+L work there too"],
 	["L", "load an adventure"],
 	["H", "these keys"],
 	["Drag a pane", "move it; it stays there"],
