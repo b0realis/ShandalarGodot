@@ -800,6 +800,10 @@ Pack 9: 621 unique cards · 636 printings -&gt; cardpacks/Pack-9-Tempest-Block.z
       <summary><code>Permission denied</code> when starting run.sh</summary>
       <div><p>Your unzip tool dropped the “executable” mark. In the game folder, run <code>chmod +x run.sh Shandalar.x86_64</code>.</p></div>
     </details>
+    <details id="saves">
+      <summary>Where are my saves? Can I take them to another computer?</summary>
+      <div><p>Your adventures are in an <code>adventures</code> folder, beside your decks (<code>decks</code>) and options (<code>settings.cfg</code>):</p><p data-os="win"><code>%APPDATA%\Godot\app_userdata\Shandalar\adventures</code> — paste it into File Explorer's address bar. Started with <b>Shandalar-portable.bat</b>, it's <code>userdata\Godot\app_userdata\Shandalar\adventures</code> inside the game folder.</p><p data-os="mac"><code>~/Library/Application Support/Godot/app_userdata/Shandalar/adventures</code> — in Finder, choose <b>Go → Go to Folder…</b> and paste it.</p><p data-os="linux"><code>~/.local/share/godot/app_userdata/Shandalar/adventures</code> — the same on a Steam Deck.</p><p>Each adventure is a few files starting with the hero's name: its autosave, its Quickslot and its named slots, each with a <code>.bak</code> copy. To play it on another computer, copy them all into the same folder there, and use the same version of the game or a newer one, with the same card packs.</p><p>On Android and the Meta Quest the saves stay in the game's private storage, which file managers and computers can't open, so they can't be copied yet. The browser version keeps them in the browser.</p></div>
+    </details>
     <details>
       <summary>A new version is out</summary>
       <div><p>Download and unzip it as in steps 1 and 2, then copy <code>skin/cardart.zip</code> and the <code>cardpacks</code> folder from your old game folder into the new one. If the Card Packs page says a pack needs rebuilding, run that pack's two lines again in the new folder.</p></div>
@@ -846,8 +850,15 @@ Pack 9: 621 unique cards · 636 printings -&gt; cardpacks/Pack-9-Tempest-Block.z
   });
   var HASH_OS = { "#windows": "win", "#mac": "mac", "#linux": "linux" };
   setOs(HASH_OS[location.hash] || state.os || guessOs());
+  // A link to one answer (#saves) opens it.
+  function openAnswer() {
+    var answer = location.hash.length > 1 ? document.getElementById(location.hash.slice(1)) : null;
+    if (answer && answer.tagName === "DETAILS") answer.open = true;
+  }
+  openAnswer();
   window.addEventListener("hashchange", function () {
     if (HASH_OS[location.hash]) setOs(HASH_OS[location.hash]);
+    openAnswer();
   });
 
   var boxes = document.querySelectorAll(".check input");
