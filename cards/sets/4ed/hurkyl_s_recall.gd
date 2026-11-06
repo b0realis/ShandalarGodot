@@ -17,6 +17,10 @@ func build() -> CardData:
 class RecallEffect extends EffectBase:
 	func _init() -> void:
 		target_spec = TargetSpec.player()
+		# Its shape, for the AI: worth the artifacts the target owns, so it
+		# is never cast at a player who owns none
+		# (AiPlayer._player_artifact_bounce_worth).
+		ai_role = &"player_artifact_bounce"
 
 	func resolve(game: MtgGame, _source: CardInstance, _controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:

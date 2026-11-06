@@ -5391,6 +5391,9 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 		var gain := _own_life_gain(inst.data.spell_effects, targets, x_value)
 		if gain >= 0:
 			return _life_gain_worth(game, gain) + _vise_relief(game, inst)
+		var recall := _player_artifact_bounce_worth(game, inst, targets)
+		if not is_nan(recall):
+			return recall
 	var value := _card_value(inst.data)
 	if inst.data.cost.has_x:
 		value = maxf(value, float(x_value) * 1.5)
@@ -5454,6 +5457,32 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 				return LETHAL_WORTH
 			value += _face_damage_value(game, intent.life_loss, t.player_id)
 	return value
+
+
+## "RETURN ALL ARTIFACTS TARGET PLAYER OWNS TO THEIR HAND" (Hurkyl's
+## Recall, `player_artifact_bounce`; the owner's report of 2026-11-06,
+## forecasts_tactics): worth the artifacts it sends home, half each one's
+## worth on the table as a bounce is, credited for the ones we do not
+## control and charged for the ones we do — so with nothing of theirs to
+## send home it is worth nothing and stays in hand. Until this the card was
+## priced at its printed worth like any spell nobody had described, and was
+## cast in our main phase at a player who owned no artifact at all. Reads
+## the battlefield only. NAN when [param inst] is no such card.
+func _player_artifact_bounce_worth(game: MtgGame, inst: CardInstance,
+		targets: Array) -> float:
+	if inst.data.spell_effects.is_empty() \
+			or inst.data.spell_effects[0].ai_role != &"player_artifact_bounce":
+		return NAN
+	var worth := 0.0
+	for t in targets:
+		if not (t is TargetRef) or not t.is_player:
+			continue
+		for body in game.all_battlefield():
+			if body.owner_id != t.player_id or not body.is_type(Mtg.CardType.ARTIFACT):
+				continue
+			var lost := Evaluator.permanent_value(body, profile) * 0.5
+			worth += lost if body.controller_id != pid else -lost
+	return worth
 
 
 ## How much [param intent]'s "damage to that permanent's controller"

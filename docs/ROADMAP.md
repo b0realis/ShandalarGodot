@@ -19091,7 +19091,11 @@ Pack 9 was ([pack-10-urza-block.md](pack-10-urza-block.md)):
   counting, Veiled Sentry and repeat pings; Save / Load's Import on a fresh
   device, damaged zips, `.bak` saves; Help wording. Opal Titan keeps one
   ledger row (a spell countered before its trigger resolves is read as
-  cast).
+  cast). After the pass, from the owner's own play: the fair AI cast
+  Hurkyl's Recall at a player who owned no artifacts (it priced the card
+  at its printed worth); the card now declares `player_artifact_bounce`
+  and is worth the artifacts the target owns
+  (`AiPlayer._player_artifact_bounce_worth`).
 - **Known, not done**: a "from anywhere" listener among a sweep's victims
   hears the ones moved before it; a static prevention shield prevents the
   whole event (`add_static_damage_effect` writes `points` 0); Contamination

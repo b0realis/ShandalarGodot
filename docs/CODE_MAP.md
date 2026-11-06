@@ -442,6 +442,12 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
     referee's view names that point "You" to the defender.
   - `test_urza_bugpass_x7_negator_counts.gd` (tests/cards): Phyrexian
     Negator's sacrifice prompts count "(n of total)" against one total.
+  - `test_ai_hurkyl_recall_2026_11_06.gd` (tests/ai): the owner's report
+    after the pass — Hurkyl's Recall declares its shape
+    (`player_artifact_bounce`) and the fair AI prices it by the artifacts
+    the target owns (`AiPlayer._player_artifact_bounce_worth`), so it is
+    never cast at a player who owns none; gate-off arm and a hidden-hand
+    check.
 - `docs/pack-10-urza-block.md`: the pack's audit — counts, construction,
   emblems, reprints and providers, the archive contract, the engine
   review, the AI review, known limits, verification and the commands that
