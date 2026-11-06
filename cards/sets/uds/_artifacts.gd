@@ -15,7 +15,9 @@ extends RefCounted
 ##   only while it is still that object (CR 400.7).
 ## Fodder Cannon — "Sacrifice a creature" is paid after the target is
 ##   chosen (CR 602.2b): sacrificing the target itself leaves the ability
-##   without a legal target (CR 608.2b).
+##   without a legal target (CR 608.2b). An animated Cannon (Animate
+##   Artifact, Karn) is "a creature" too: tapped and sacrificed for its own
+##   cost, the 4 damage is still dealt (CR 113.7a).
 ## Powder Keg — the fuse counters come from the activation's cost record
 ##   (snapshotted before the self-sacrifice, CR 608.2h); "mana value" is the
 ##   permanent's copiable one (a token's, a face-down creature's: 0), and the
@@ -59,7 +61,7 @@ static func configure(c: CardData) -> bool:
 		"Fodder Cannon":
 			c.activated(ActivatedAbility.new("{4}", true, [DamageEffect.new(4).target_creature()],
 				"{4}, {T}, Sacrifice a creature: This artifact deals 4 damage to target creature.") \
-				.with_sacrifice_of("creature", _creature))
+				.with_sacrifice_of("creature", _creature).may_sacrifice_itself())
 		"Mantis Engine":
 			c.activated(ActivatedAbility.new("{2}", false, [PumpEffect.new(0, 0, [Mtg.Keyword.FLYING]).self_buff()],
 				"{2}: This creature gains flying until end of turn."))

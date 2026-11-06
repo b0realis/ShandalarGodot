@@ -92,7 +92,7 @@ case "$1" in
     fi
     if copy_quota "$2" "$dst"; then echo "$2: 1 file pushed, 0 skipped."
     else rm -f "$dst"; echo "adb: error: failed to copy '$2' to '$3': remote write failed: No space left on device"; exit 1; fi ;;
-  pull) src=$(printf '%s' "$2" | map); cp "$src" "$3" ;;
+  pull) src=$(printf '%s' "$2" | map); cp -r "$src" "$3" ;;
   logcat) [ "${2:-}" = -c ] && exit 0; echo "I/godot: started"; exec sleep 600 ;;
   shell) shift; cmd=$(printf '%s ' "$@" | map)
     case "$cmd" in
@@ -260,6 +260,60 @@ class QuestScriptsTest(unittest.TestCase):
         self.assertFalse(list(self.folder.glob("start_report-*.txt")))
         closing = result.stdout[result.stdout.index("did not reach the title screen"):]
         self.assertNotIn("start_report-", closing)
+
+    # ------------------------------------------- 0.60.19 bug pass (h9-9) --
+
+    def make_saved_adventures(self):
+        """Two saves and a .bak in the game's adventures folder, as the game
+        keeps them on the headset since 0.60.19 (`files/adventures`)."""
+        saves = self.device / GAME / "files/adventures"
+        saves.mkdir(parents=True)
+        made = {}
+        for name in ("Goya-1a2b3c4d.autosave.json", "Goya-1a2b3c4d.autosave.json.bak",
+                     "Goya-1a2b3c4d.slot02.json"):
+            made[name] = os.urandom(700)
+            (saves / name).write_bytes(made[name])
+        return saves, made
+
+    def test_fresh_install_names_the_saved_adventures_and_keeps_a_copy(self):
+        # h9-9: step 1 deleted the headset's saved adventures with the rest
+        # and never said so. It names them now and, when there are any,
+        # offers to copy them to this computer first.
+        saves, made = self.make_saved_adventures()
+        # y (copy them), yes, then as the clean install above
+        result = self.run_script("quest_fresh_install.sh", "y\nyes\n\n\ny\n\n\n\ny\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("your saved adventures", result.stdout)
+        self.assertIn("3 saved adventure files", result.stdout)
+        kept = list(self.folder.glob("adventures-*"))
+        self.assertEqual(len(kept), 1, result.stdout)
+        self.assertEqual({p.name: p.read_bytes() for p in kept[0].iterdir()}, made, "every file, byte for byte")
+        self.assertFalse(saves.exists(), "the clean install still removes them from the headset")
+        calls = (self.device / "adb-calls.log").read_text()
+        self.assertLess(calls.index("pull"), calls.index("uninstall"), "copied before anything is deleted")
+
+    def test_fresh_install_without_the_copy_still_says_what_goes(self):
+        saves, _made = self.make_saved_adventures()
+        result = self.run_script("quest_fresh_install.sh", "n\nyes\n\n\ny\n\n\n\ny\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("your saved adventures", result.stdout)
+        self.assertFalse(list(self.folder.glob("adventures-*")), "no copy asked for, none made")
+        self.assertFalse(saves.exists())
+
+    def test_a_copy_that_fails_deletes_nothing(self):
+        saves, made = self.make_saved_adventures()
+        result = self.run_script("quest_fresh_install.sh", "y\nyes\n\n\ny\n\n\n\ny\n", FAKE_DOWN_ON="pull")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("nothing was deleted", result.stdout)
+        self.assertEqual({p.name: p.read_bytes() for p in saves.iterdir()}, made)
+        self.assertNotIn("uninstall", (self.device / "adb-calls.log").read_text())
+
+    def test_no_saved_adventures_no_question(self):
+        # Without saves on the headset step 1 asks only for its "yes".
+        result = self.run_script("quest_fresh_install.sh", "yes\n\n\ny\n\n\n\ny\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("your saved adventures", result.stdout)
+        self.assertNotIn("Copy them to this computer", result.stdout)
 
     def test_fresh_install_deletes_nothing_without_yes(self):
         old = self.device / GAME / "files/cardpacks/Pack-0-old.zip"

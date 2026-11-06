@@ -1962,10 +1962,26 @@ func _ability_highlight(item: StackItem) -> int:
 func _on_life_clicked(pid: int) -> void:
 	if mode == Mode.TARGETING:
 		_try_take_target(TargetRef.player(pid))
-	elif mode == Mode.DAMAGE and pid != _viewing_seat():   # c12 h4-4: either human's
+	elif mode == Mode.DAMAGE and pid == _damage_player_seat():
 		# Trample's spill: the life register IS the player-target click
-		# (`@MENU_LIFE` = "Target %s" / "Target yourself").
+		# (`@MENU_LIFE` = "Target %s" / "Target yourself"). The register is
+		# the DEFENDING player's whoever divides — the attacker as a rule,
+		# the defender under Defensive Formation or a banding block (CR
+		# 702.22j), who then clicks their own. "The register that is not
+		# mine" took the defender's point on the attacker's register
+		# (0.60.19 bug pass, h8-2).
 		_assign_one_point(MtgGame.DAMAGE_TO_PLAYER)
+
+
+## The seat [constant MtgGame.DAMAGE_TO_PLAYER] stands for in the division
+## under way: the defending player (CR 506.2, 702.19b), as the engine's
+## request records it. A LAN view's request carries no `defender`; at a
+## two-seat table it is the seat whose turn it is not. -1 with no division.
+func _damage_player_seat() -> int:
+	var request := game.damage_assignment_request()
+	if request.is_empty():
+		return -1
+	return int(request.get("defender", game.opponent_of(game.active_player)))
 
 
 # ------------------------------------------ THE DUELIST'S FACE (§6.5) --

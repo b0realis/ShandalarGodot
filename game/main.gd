@@ -221,21 +221,14 @@ func _ready() -> void:
 
 	# THE ADVENTURES SAVED (2026-10-22): an adventure is saved the moment
 	# its world is made ([AdventurePlayer]); this opens the list to take one
-	# up again ([LoadAdventureScreen]). With none saved yet it says how one
-	# comes to be — but saves that could not be read open the list, which
-	# says how many there are, rather than "none saved".
+	# up again ([LoadAdventureScreen]) — with none saved yet too, when its
+	# note says how one comes to be (the 0.60.19 bug pass, h9-1): a popup
+	# with only OK stood in for the empty list, so Import, beside it, could
+	# not be reached on the very device an adventure is brought to.
 	var save_load := _menu_button("Save / Load")
 	save_load.tooltip_text = "Take up a saved adventure again."
-	save_load.pressed.connect(func() -> void:
-		var scanned := AdventurePlayer.scan_saves()
-		if (scanned["saves"] as Array).is_empty() and int(scanned["unreadable"]) == 0:
-			UiChrome.explain_popup(self, "Save / Load",
-				"No adventure has been saved yet. Shandalar on this menu "
-				+ "begins one, and it is saved the moment its world is "
-				+ "made. Decks you build are kept too — the Deck Builder "
-				+ "writes them into your own folder.")
-		else:
-			_open("res://game/adventure/load_adventure_screen.tscn", save_load))
+	save_load.pressed.connect(
+		_open.bind("res://game/adventure/load_adventure_screen.tscn", save_load))
 	box.add_child(save_load)
 
 	# `@SHELLSCREEN_TOOLS` (shandalar-src/Program/UIStrings.txt) lists the
@@ -555,7 +548,7 @@ func _open_shandalar_notice(button: Button) -> void:
 # --- the bug campaign c12, h4-9 + h1-3: Escape closes the title's popups ---
 ## ESCAPE CLOSES THE POPUP ON TOP (the bug campaign c12, h4-9 and h1-3):
 ## the new Shandalar notice (its `Back`), a pack's notice and its warning,
-## a set badge's window, the Save / Load note. Escape, a pad's B, the
+## a set badge's window. Escape, a pad's B, the
 ## Quest's back gesture and the R36's Start all arrive as `ui_cancel`, and
 ## this screen had no ear for it — the notice's own words say Escape stays
 ## on the menu. The popup's cancel action (or its only one) runs, else it

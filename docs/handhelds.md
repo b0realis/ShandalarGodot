@@ -392,9 +392,12 @@ told to trust this computer — put it on and answer the prompt.
    **through the headset's Download folder**, one zip at a time with
    its size checked, and skips any zip the
    headset already holds byte for byte. For a clean install from
-   nothing — the game, its settings, its decks and its zips deleted
-   first, then every step one at a time, with the start recorded at
-   the end — run `./quest_fresh_install.sh` instead.
+   nothing — the game, its settings, its decks, its saved adventures
+   and its zips deleted first, then every step one at a time, with the
+   start recorded at the end — run `./quest_fresh_install.sh` instead.
+   When the headset holds saved adventures it offers to copy them to
+   `adventures-<stamp>` on the computer first, each file's size checked;
+   a copy that fails deletes nothing.
 
    Both scripts read the headset's free space before each zip (it
    needs twice the zip while it is copied, and 100 MB to spare) and

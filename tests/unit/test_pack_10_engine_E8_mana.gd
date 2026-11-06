@@ -248,14 +248,18 @@ func test_a_cradle_makes_one_black_whatever_it_counts() -> void:
 	assert_eq(g.players[0].mana_pool.total(), 1, "three creatures, still one {B}")
 
 
-func test_a_cradle_that_counts_nothing_still_makes_one_black() -> void:
-	# "produces {B} instead of any other type and amount": the tap of a land
-	# for mana makes {B} — pinned on the literal reading (B13 may revisit).
+func test_a_cradle_that_counts_nothing_makes_nothing() -> void:
+	# CR 106.12b: the replacement modifies a mana production event "while
+	# such an ability is resolving and producing mana" — a Cradle that
+	# counts nothing produces none, so there is nothing to replace (lead
+	# ruling, bug pass 0.60.19 h4-Q1; this pinned one {B} until then).
 	put_synthetic(0, _contamination())
 	var cradle := put_synthetic(0, _cradle())
 	g.recalculate()
+	assert_true(_row_of(cradle).is_empty(), "no mana to plan")
 	assert_ok(g.tap_for_mana(0, cradle))
-	assert_eq(g.players[0].mana_pool.total(), 1)
+	assert_true(cradle.tapped)
+	assert_eq(g.players[0].mana_pool.total(), 0)
 
 
 func test_basic_lands_of_both_players_make_black() -> void:

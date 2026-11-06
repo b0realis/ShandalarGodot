@@ -392,6 +392,56 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
   coming; Temporal Aperture is a main-phase mana sink and its revealed card
   is cast free. Each has its gate-off arm and a hidden-information
   permutation.
+- The Pack 10 bug pass (`bug-pass-2026-11-06-urza.md`, 0.60.19), its
+  regression scripts `test_urza_bugpass_<fixer>_*.gd`:
+  - `test_urza_bugpass_x1_payments.gd` (tests/unit): engine-paid costs
+    whose taps ask (echo, Power Taint, cumulative upkeep, Propaganda, Iron
+    Star; a computer seat; Drain Power; Relic Bind), taps that make no mana,
+    Contamination on an empty Cradle, Metalworker's planned count, a replay
+    keeping its colour, the planner's exact payments.
+  - `test_urza_bugpass_x2_aperture.gd` (tests/cards): Temporal Aperture's
+    reveal never names a hidden card (log, LAN view, AI observation), and
+    "remains on top" ends for good once the library's top moves
+    (`MtgPlayer.library_top_epoch`).
+  - `test_urza_bugpass_x2_show_and_tell.gd` (tests/cards): Show and Tell's
+    choices stay hidden until both players have chosen (a human seat held
+    mid-resolution, a LAN guest, an AI permutation).
+  - `test_urza_bugpass_x2_cards.gd` (tests/cards): Thran Turbine's mana
+    with the Turbine gone; Interdict refuses cycling abilities and its ban
+    ends when the permanent leaves the battlefield.
+  - `test_urza_bugpass_x3_worship.gd` (tests/cards): a life floor (Worship,
+    Ali from Cairo) limits the life lost, not the damage dealt — damage
+    readers, LIFE_LOST, the damage-order question, the forecasts.
+  - `test_urza_bugpass_x3_layers.gd` (tests/unit): Ashnod's Transmogrant as
+    a timestamped type change; Kismet judging an arrival as it would exist
+    (CR 614.12).
+  - `test_urza_bugpass_x3_arrivals.gd` (tests/unit): cards arriving
+    together, each seat ordering its own arrivals when it matters (CR
+    613.7m: a human seat held, an AI permutation) and the world-rule tie
+    (CR 704.5k).
+  - `test_urza_bugpass_x4_cards.gd` (tests/cards): values read as the
+    ability resolves (Remembrance, Opal Titan, Disappear) and self-sacrifice
+    costs (Attrition, Fodder Cannon, Phyrexian Tower).
+  - `test_urza_bugpass_x5_fair_ai.gd` (tests/ai): Damping Engine's ignore
+    priced after the sacrifice (our own Engine first, never a twin), each
+    mana source counted once, our own Engine cast only when it binds them,
+    Veiled Sentry's wake priced against the cheapest wake and never into
+    their lethal swing, repeat pings only for plain damage; gate-off arms
+    and hidden-zone permutations.
+  - `test_urza_bugpass_x6_transfer.gd` (tests/unit): adventure Export and
+    Import with null words, a zip cut short ("damaged or incomplete"), saves
+    shown from their `.bak`, the lists of one folder.
+  - `test_urza_bugpass_x6_menu.gd` (tests/ui): Save / Load always opens the
+    list, so Import is reachable on a fresh device.
+  - `test_urza_bugpass_x6_help.gd` (tests/ui): the Urza Help wording
+    (Opalescence, Aperture, Damping Engine, echo on copies, tapped artifact
+    creatures, Serra Avatar, Show and Tell), checked against the game.
+  - `test_urza_bugpass_x7_trample_register.gd` (tests/ui): under Defensive
+    Formation or defensive banding the defender takes a trampler's excess
+    by clicking their own life register, local and as a LAN guest; the
+    referee's view names that point "You" to the defender.
+  - `test_urza_bugpass_x7_negator_counts.gd` (tests/cards): Phyrexian
+    Negator's sacrifice prompts count "(n of total)" against one total.
 - `docs/pack-10-urza-block.md`: the pack's audit — counts, construction,
   emblems, reprints and providers, the archive contract, the engine
   review, the AI review, known limits, verification and the commands that
@@ -14323,6 +14373,9 @@ shandalar/
     │                          what was found, left open and verified
     ├── bug-pass-2026-10-06-tempest.md  The Tempest block bug pass
     │                          (0.50.15): six hunters, six fixers,
+    │                          what was found, left open and verified
+    ├── bug-pass-2026-11-06-urza.md  The Urza block bug pass
+    │                          (0.60.19): nine hunters, seven fixers,
     │                          what was found, left open and verified
     ├── bug-hunt-campaign-2026-10-07.md  The whole-game campaign
     │                          (0.50.16): seven hunters, nine fixers,

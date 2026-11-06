@@ -296,7 +296,9 @@ func test_temporal_aperture_reveals_the_top_card_and_lets_it_be_played_free() ->
 	for i in 5: _named_in(0, "Grizzly Bears", Mtg.Zone.LIBRARY)
 	_activate_aperture()
 	var top: CardInstance = g.players[0].library.back()
-	assert_true(g.players[0].top_card_revealed, "played with the top card revealed")
+	# That card only, judged live (MtgPlayer.top_revealed_card_id; the
+	# 0.60.19 bug pass): not the Field of Dreams flag for any top.
+	assert_eq(g.players[0].top_revealed_card_id, top.id, "played with the top card revealed")
 	assert_eq(g.revealed_top_card(0), top)
 	var shown := false
 	for row in revealed:
@@ -320,7 +322,7 @@ func test_temporal_aperture_casts_a_spell_without_paying_its_mana_cost() -> void
 	resolve_stack()
 	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD)
 	assert_eq(g.players[0].mana_pool.total(), 2, "nothing was paid")
-	assert_false(g.players[0].top_card_revealed, "nothing on top any more")
+	assert_null(g.revealed_top_card(0), "nothing on top any more")
 
 
 func test_temporal_aperture_plays_a_land_as_the_land_drop() -> void:
@@ -353,7 +355,7 @@ func test_temporal_aperture_ends_when_the_card_leaves_the_top() -> void:
 	assert_false(g.can_play_from_zone(0, top), "drawn")
 	g.put_from_hand_on_top_of_library(top)
 	assert_false(g.can_play_from_zone(0, top), "put back: it did not REMAIN on top")
-	assert_false(g.players[0].top_card_revealed, "the reveal ends with it")
+	assert_null(g.revealed_top_card(0), "the reveal ends with it")
 	assert_not_null(bear)
 
 
@@ -368,7 +370,7 @@ func test_temporal_aperture_ends_on_a_shuffle_even_one_that_leaves_it_on_top() -
 	assert_eq(g.players[0].library.back(), bear)
 	assert_false(g.can_play_from_zone(0, bear), "shuffled: it did not REMAIN on top")
 	g.recalculate()   # as the resolution that shuffled it does
-	assert_false(g.players[0].top_card_revealed, "the reveal ends with it")
+	assert_null(g.revealed_top_card(0), "the reveal ends with it")
 
 
 func test_temporal_aperture_ends_with_the_turn() -> void:
@@ -378,7 +380,7 @@ func test_temporal_aperture_ends_with_the_turn() -> void:
 	advance_to_next_turn()   # the opponent's turn: P0 draws nothing
 	assert_eq(g.players[0].library.back(), bear)
 	assert_false(g.can_play_from_zone(0, bear))
-	assert_false(g.players[0].top_card_revealed)
+	assert_null(g.revealed_top_card(0))
 
 
 func test_temporal_aperture_needs_five_and_a_tap() -> void:

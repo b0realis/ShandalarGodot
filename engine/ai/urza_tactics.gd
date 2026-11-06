@@ -72,6 +72,9 @@ const KEG_NET := 3.0
 ## power (their next swing), and its absolute floor.
 const LIFE_MARGIN := 2
 const LIFE_FLOOR := 5
+## How many bodies Damping Engine's ignore prices under the search journal
+## ([method damping_action]) — each is a sacrifice and a read of the hand.
+const IGNORE_TRIES := 3
 
 
 # ======================================================= the activations --
@@ -804,13 +807,20 @@ static func untap_artifact_option(g: MtgGame, pilot, s: CardInstance, a: Activat
 # ---------------------------------------------------- pings and shrinks --
 
 ## A repeatable ping at a creature: "{c}: N damage to target creature"
-## with no {T} and no other cost (Masticore).
+## with no {T} and no other cost (Masticore). The effect is the shared
+## [DamageEffect] itself, not a card's subclass of it: a subclass does
+## more than the damage — Splintering Wind's makes a Splinter each ping,
+## a cumulative-upkeep flier that hits us and each of our creatures as it
+## leaves, and three pings at a Hill Giant were three Splinters (the
+## 0.60.19 bug pass, h5-5) — and a counter removed from the source (Spitting
+## Hydra's +1/+1) is a cost beyond the mana.
 static func repeat_ping(a: ActivatedAbility) -> bool:
 	if a.tap_cost or a.sacrifice_cost or a.sacrifice_filter.is_valid() \
-			or a.has_life_cost() or a.effects.size() != 1 or a.cost.mana_value() <= 0:
+			or a.has_life_cost() or a.counter_cost_kind != "" \
+			or a.effects.size() != 1 or a.cost.mana_value() <= 0:
 		return false
 	var e: EffectBase = a.effects[0]
-	return e is DamageEffect and e.amount > 0 and not e.use_x and e.target_spec != null \
+	return e.get_script() == DamageEffect and e.amount > 0 and not e.use_x and e.target_spec != null \
 		and e.target_spec.kind == TargetSpec.Kind.CREATURE and e.divided_total == 0
 
 
@@ -966,41 +976,121 @@ static func main_action(g: MtgGame, pilot) -> String:
 
 ## DAMPING ENGINE'S IGNORE (CR 116.2d, the special action "Sacrifice a
 ## permanent: ignore this effect until end of turn"): taken in our main
-## phase when the ban stops a card of our own hand we could otherwise play
-## — a land with the drop unused, a spell the mana on the table pays for —
-## worth more than the cheapest permanent the cost would take. Never for
-## an Aura's curse (Volrath's Curse is the Tempest module's).
+## phase when the ban stops a card of our own hand we would then play — a
+## land with the drop unused, a spell the pilot casts — worth more than
+## the permanent the cost takes. Never for an Aura's curse (Volrath's
+## Curse is the Tempest module's).
+##
+## THE BODY IS PRICED GONE (the 0.60.19 bug pass, h5-1; the Pack 9 curse's
+## lesson, [method TempestTactics.curse_action]). The probe sacrificed the
+## Mountain a Shivan Dragon needed and cast nothing, a land for a Gilded
+## Drake with nothing of theirs to take, and a land while our own Engine —
+## the lock itself — stayed. So each body is tried in [method
+## _ignore_order]'s order: under the search journal the ignore is recorded
+## and that body sacrificed, and only then is the hand read ([method
+## _ignored_gain]). The cost question is then answered with that body.
 static func damping_action(g: MtgGame, pilot) -> String:
 	var pid: int = pilot.pid
 	if g.active_player != pid or not Mtg.is_main_step(g.current_step()) or not g.stack.is_empty():
 		return ""
-	var mana := mana_on_table(g, pilot)
-	for row in g.special_actions(pid):
+	var rows: Array[Dictionary] = g.special_actions(pid)
+	for row in rows:
 		if String(row.get("kind", "")) != "ignore_effect":
 			continue
 		var engine: CardInstance = row.get("card")
 		if engine == null or engine.data.is_aura() or g.special_action_refusal(pid, row) != "":
 			continue
-		var gained := 0.0
+		var stopped: Array[CardInstance] = []
+		var most := 0.0   # the most any stopped card could gain
 		for card in g.players[pid].hand:
 			if g.play_banned(pid, card.data) == "":
 				continue
-			if card.is_land():
-				if g.land_drop_available(pid):
-					gained = maxf(gained, LAND_WORTH)
-			elif card.data.cost.mana_value() <= mana:
-				gained = maxf(gained, Evaluator.card_value(card.data))
-		if gained <= 0.0:
+			stopped.append(card)
+			most = maxf(most, LAND_WORTH if card.is_land() else Evaluator.card_value(card.data))
+		if stopped.is_empty():
 			continue
-		var cheapest := INF
-		for body in g._ignore_bodies(pid, engine):
-			cheapest = minf(cheapest, float(pilot._own_value(g, body)))
-		if cheapest == INF or gained <= cheapest + 1.0:
-			continue
-		var done: String = TEMPEST_TACTICS.take_special(g, pid, "ignore_effect", engine.id)
-		if done != "":
-			return "ignores %s: %s" % [engine.data.card_name, done]
+		for pair in _ignore_order(g, pilot, engine, rows):
+			var body: CardInstance = pair[1]
+			var price: float = pair[0]
+			if most <= price + 1.0:
+				break   # the dearer bodies after it cannot pay either
+			if _ignored_gain(g, pilot, engine, body, stopped) <= price + 1.0:
+				continue
+			# The cost question is ours to answer ([method AiPlayer.answer_card]
+			# pays a cost with the cheapest body it is not told to spare): every
+			# other body is spared, so the body paid is the body priced.
+			var saved: Dictionary = pilot._cost_spares
+			var spared := {}
+			for other in g._ignore_bodies(pid, engine):
+				if other != body:
+					spared[other.id] = true
+			pilot._cost_spares = spared
+			var done: String = TEMPEST_TACTICS.take_special(g, pid, "ignore_effect", engine.id)
+			pilot._cost_spares = saved
+			if done != "":
+				return "ignores %s: %s" % [engine.data.card_name, done]
+			break
 	return ""
+
+
+## The bodies the ignore of [param engine] may give up, `[price, body]`,
+## cheapest first, at most [constant IGNORE_TRIES]: a LOCK ON US first —
+## a permanent of ours whose own effect we are offered to ignore (our own
+## Damping Engine, binding us for being ahead on permanents: [param rows]
+## lists it) stops only us, so it is priced at nothing — then the rest by
+## [method AiPlayer._own_value].
+static func _ignore_order(g: MtgGame, pilot, engine: CardInstance, rows: Array) -> Array:
+	var locks := {}
+	for row in rows:
+		if String(row.get("kind", "")) == "ignore_effect":
+			locks[int(row.get("id", -1))] = true
+	var out: Array = []
+	for body in g._ignore_bodies(pilot.pid, engine):
+		out.append([0.0 if locks.has(body.id) else float(pilot._own_value(g, body)), body])
+	out.sort_custom(func(p: Array, q: Array) -> bool: return float(p[0]) < float(q[0]))
+	return out.slice(0, IGNORE_TRIES)
+
+
+## What ignoring [param engine] by sacrificing [param body] gains, read
+## after it under the search journal: the best card of [param stopped] (our
+## hand the ban stopped) that no ban stops any more and that is then a
+## land drop ([constant LAND_WORTH]) or a spell [method
+## AiPlayer._plan_spell_choice] casts with the mana left — its card's
+## worth; never a copy of the body itself (the duel audit's Burn deck gave
+## up a Torch Song to cast its twin). 0.0 for none.
+static func _ignored_gain(g: MtgGame, pilot, engine: CardInstance, body: CardInstance,
+		stopped: Array[CardInstance]) -> float:
+	var pid: int = pilot.pid
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec(engine, &"memory")
+	var ignored: Dictionary = {}
+	if engine.memory.get("ignored") is Dictionary:
+		ignored = (engine.memory["ignored"] as Dictionary).duplicate()
+	ignored[pid] = g.turn_number
+	engine.memory["ignored"] = ignored
+	g.sacrifice_permanent(body)
+	g.recalculate()
+	var gained := 0.0
+	for card in stopped:
+		if card.zone != Mtg.Zone.HAND or g.play_banned(pid, card.data) != "":
+			continue
+		if card.data.card_name == body.data.card_name:
+			continue   # the body's own twin: a Torch Song given up to cast a Torch Song buys nothing
+		if card.is_land():
+			if g.land_drop_available(pid):
+				gained = maxf(gained, LAND_WORTH)
+			continue
+		var max_x := 0
+		if card.data.cost.has_x:
+			max_x = pilot._max_affordable_x(g, card.data.cost, g.spell_surcharge(pid, card.data),
+				pilot._mana_sources(g), card.data.x_color, g.mana_usage_keys(card.data, card))
+		if not (pilot._plan_spell_choice(g, card, max_x) as Dictionary).is_empty():
+			gained = maxf(gained, Evaluator.card_value(card.data))
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return gained
 
 
 # ========================================================= the responses --
@@ -1147,20 +1237,38 @@ static func _lethal_past_blocks(g: MtgGame, attackers: Array, blockers: int, lif
 
 
 ## The mana [param pilot] can make now: the pool and every untapped
-## source the planner sees.
+## source the planner sees ([method rows_mana]).
 static func mana_on_table(g: MtgGame, pilot) -> int:
-	var n: int = g.players[pilot.pid].mana_pool.total()
-	for row in pilot._mana_sources(g):
-		if row[0] != null:
-			n += int(row[3])
-	return n
+	return g.players[pilot.pid].mana_pool.total() + rows_mana(pilot._mana_sources(g))
 
 
 ## [param pid]'s open mana on the public board: the pool and the untapped
 ## sources ([method ManaPlanner.sources], read as the opponent sees them).
 static func open_mana(g: MtgGame, pid: int) -> int:
-	var n: int = g.players[pid].mana_pool.total()
-	for row in ManaPlanner.sources(g, pid, {}, false, g.opponent_of(pid)):
-		if row[0] != null:
-			n += int(row[3])
+	return g.players[pid].mana_pool.total() \
+		+ rows_mana(ManaPlanner.sources(g, pid, {}, false, g.opponent_of(pid)))
+
+
+## The mana the planner's source [param rows] make together, EACH SOURCE
+## ONCE. The planner lists a dual land once per ability and an any-color
+## source (City of Brass, Birds of Paradise) once per color, and its plans
+## tap each instance once ([method ManaPlanner.source_key]); summed row by
+## row, four Volcanic Islands were eight mana and two Cities ten (the
+## 0.60.19 bug pass, h5-2). A source is its biggest row — every output of
+## a coupled row ([method AiPlayer._row_output]) — less the mana a
+## converting row takes in. Floating rows (a null instance) only with
+## [param floating]; [method mana_on_table] reads the pool's own total.
+static func rows_mana(rows: Array, floating := false) -> int:
+	var best: Dictionary = {}
+	for row in rows:
+		if row[0] == null and not floating:
+			continue
+		var made: int = AiPlayer._row_output(row)
+		if row.size() > 8 and row[8] is Dictionary and row[8].get("cost") is ManaCost:
+			made -= (row[8]["cost"] as ManaCost).mana_value()
+		var key := ManaPlanner.source_key(row)
+		best[key] = maxi(int(best.get(key, 0)), maxi(made, 0))
+	var n := 0
+	for key in best:
+		n += int(best[key])
 	return n

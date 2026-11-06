@@ -23,10 +23,12 @@ extends RefCounted
 ##   untargeted, so it happens unless both targets are gone (CR 608.2b).
 ## - Interdict counts its permanent by the ability's SOURCE: on the
 ##   battlefield its live types, gone (sacrificed as a cost) its last-known
-##   printed types; an ability activated from a graveyard is a card's, not
-##   a permanent's (CR 109.2), and is no legal target. The activation ban
-##   binds that permanent's battlefield incarnation (CR 400.7) and covers
-##   its mana abilities too — they are activated abilities.
+##   printed types; an ability activated from a hand (cycling) or a
+##   graveyard is a card's, not a permanent's (CR 109.2), and is no legal
+##   target (MtgGame.activate_ability records `_source_zone`). The
+##   activation ban binds that permanent's battlefield incarnation, on the
+##   battlefield only (CR 400.7: bounced, it may cycle), and covers its
+##   mana abilities too — they are activated abilities.
 ## - Stun's "can't block this turn" is a floating static bound to the
 ##   creature (forgotten if it leaves, CR 400.7), expiring at cleanup.
 ## - Blood Frenzy's destruction is the engine's end-step doom: unconditional,
@@ -204,6 +206,11 @@ class Interdict extends CounterAbilityEffect:
 		var card := item.card
 		if card == null:
 			return false
+		# Activated anywhere but the battlefield (cycling from a hand): a
+		# card's ability, never a permanent's (CR 109.2).
+		var activated_from := int(item.cost_paid.get("_source_zone", Mtg.Zone.BATTLEFIELD))
+		if activated_from != Mtg.Zone.BATTLEFIELD:
+			return false
 		if card.zone == Mtg.Zone.BATTLEFIELD:
 			return (card.cur_types & KINDS) != 0
 		# Activated where it lies now, in a graveyard: a card's ability.
@@ -221,9 +228,12 @@ class Interdict extends CounterAbilityEffect:
 			return   # "that permanent" is gone: nothing to ban
 		g.add_floating_activation_ban(-1, Interdict._banned.bind(source.id, source.layer_timestamp),
 			"Interdict: %s" % source.data.card_name)
+	## "That permanent": on the battlefield only — the card bounced to a
+	## hand is a new object (CR 400.7) and may cycle.
 	static func _banned(_g: MtgGame, _pid: int, inst: CardInstance, _ability: Variant,
 			_is_mana: bool, id: int, stamp: int) -> bool:
-		return inst != null and inst.id == id and inst.layer_timestamp == stamp
+		return inst != null and inst.zone == Mtg.Zone.BATTLEFIELD and inst.id == id \
+			and inst.layer_timestamp == stamp
 	func describe() -> String:
 		return "counter target activated ability from an artifact, creature, enchantment, or land; that permanent's activated abilities can't be activated this turn"
 

@@ -390,7 +390,11 @@ func view(pid: int) -> Dictionary:
 						"lethal": maxi(0, card.cur_toughness - card.damage \
 							- int(request.assigned.get(id, 0)))})
 			if bool(request.trample) or not String(request.get("special", "")).is_empty():
-				targets.append({"id": "player", "name": "Opponent", "lethal": 0})
+				# The point is the DEFENDING player's (CR 702.19b), named from the
+				# assigner's seat: "You" when the defender divides (Defensive
+				# Formation, a banding block; 0.60.19 bug pass, h8-2).
+				var defender := int(request.get("defender", game.opponent_of(game.active_player)))
+				targets.append({"id": "player", "name": "You" if defender == pid else "Opponent", "lethal": 0})
 			damage = {"source": "Face-down creature" if request.source.face_down else request.source.data.card_name,
 				"amount": int(request.amount), "targets": targets}
 	var result := {"players": players, "hand": _cards(pid, game.players[pid].hand),

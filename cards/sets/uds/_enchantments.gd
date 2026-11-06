@@ -12,6 +12,8 @@ extends RefCounted
 ##   `tap_permanent_filter`).
 ## - Attrition: the sacrifice is a cost (CR 601.2h) paid after the target is
 ##   chosen — the target may be sacrificed, and the ability then fizzles.
+##   Under Opalescence Attrition is "a creature" itself and may pay with its
+##   own body; the ability still resolves (CR 113.7a).
 ## - Carnival of Souls: every creature entering, either side; the {B} is
 ##   added as the trigger resolves (it is not a mana ability, CR 605.1a/b)
 ##   and empties with the step.
@@ -53,7 +55,8 @@ static func configure(c: CardData) -> bool:
 		"Attrition":
 			c.activated(ActivatedAbility.new("{B}", false,
 				[DestroyEffect.new(TargetSpec.creature("target nonblack creature", _nonblack).because("color"))],
-				"{B}, Sacrifice a creature: Destroy target nonblack creature.").with_sacrifice_of("creature", _creature))
+				"{B}, Sacrifice a creature: Destroy target nonblack creature.").with_sacrifice_of("creature", _creature) \
+				.may_sacrifice_itself())
 		"Carnival of Souls":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.ENTERS_BATTLEFIELD, _carnival,
 				"Whenever a creature enters, you lose 1 life and add {B}.", _a_creature_entered))

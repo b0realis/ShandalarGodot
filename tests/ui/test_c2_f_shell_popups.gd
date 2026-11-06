@@ -129,25 +129,29 @@ func test_a_popup_opened_by_a_popup_keeps_the_ring() -> void:
 	assert_eq(_focus(), ok, "the closing popup does not take the ring off the new one")
 
 
+## The title's popup here is the Shandalar notice (Go test / Back). It was
+## Save / Load's "No adventure has been saved yet" until the 0.60.19 bug
+## pass (h9-1): Save / Load opens the list now, saves or none, so that
+## its Import is always within reach.
 func test_the_title_gets_the_ring_back_after_the_placeholder() -> void:
 	var menu: Control = load("res://game/main.tscn").instantiate()
 	add_child_autofree(menu)
 	await get_tree().process_frame
-	# Save / Load with no adventure saved yet explains itself in a popup
-	# (2026-10-22; until then it was the title's placeholder).
-	assert_true(AdventurePlayer.list_saves().is_empty(), "no adventure saved in the test's folder")
 	var placeholder: Button = null
 	for n in menu.find_children("*", "Button", true, false):
-		if (n as Button).text == "Save / Load":
+		if (n as Button).text == "Shandalar":
 			placeholder = n
 	assert_not_null(placeholder)
 	placeholder.grab_focus()
 	_key(KEY_ENTER)
 	await get_tree().process_frame
-	assert_true(_focus() is Button and (_focus() as Button).name == "OK", "the popup's OK holds the ring")
+	assert_true(_focus() is Button and (_focus() as Button).name == "GoTest", "the notice's first button holds the ring")
 	_key(KEY_DOWN)
 	await get_tree().process_frame
-	assert_true(_focus() is Button and (_focus() as Button).name == "OK", "Down cannot reach the menu under the veil")
+	assert_true(_focus() is Button and (_focus() as Button).name == "GoTest", "Down cannot reach the menu under the veil")
+	_key(KEY_RIGHT)
+	await get_tree().process_frame
+	assert_true(_focus() is Button and (_focus() as Button).name == "Back", "Right walks to Back")
 	_key(KEY_ENTER)
 	await get_tree().process_frame
 	await get_tree().process_frame

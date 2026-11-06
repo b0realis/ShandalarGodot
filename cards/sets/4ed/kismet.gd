@@ -11,9 +11,12 @@ extends CardScript
 ## all stay quiet, exactly as they do in paper.
 ##
 ## Types are read LIVE (CONTRIBUTING.md rule 5), so an animated artifact arrives
-## tapped for the same reason a creature does. A second Kismet changes
-## nothing: the replacement is a yes/no question, asked of the board until
-## one permanent says yes.
+## tapped for the same reason a creature does — and they are the arriving
+## permanent's types AS IT WOULD EXIST on the battlefield (CR 614.12): MtgGame
+## asks with it probed there, so an enchantment entering under an Opalescence
+## already in play is a creature and enters tapped (0.60.19 bug pass, h2-2).
+## A second Kismet changes nothing: the replacement is a yes/no question,
+## asked of the board until one permanent says yes.
 
 
 func build() -> CardData:

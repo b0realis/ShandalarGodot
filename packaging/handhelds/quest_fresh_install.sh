@@ -10,7 +10,8 @@
 #     ./quest_fresh_install.sh
 #
 # It stops before every step and says what comes next:
-#   1. removes the installed game and everything it kept on the headset
+#   1. removes the installed game and everything it kept on the headset —
+#      your saved adventures too, which it offers to copy here first
 #   2. installs Shandalar.apk
 #   3. has you start the game once in the headset, so it makes its own folders
 #   4. copies the skin, the card art and the card packs into them, one file at
@@ -151,9 +152,30 @@ else
 fi
 
 # ------------------------------------------------------------------ step 1 --
+# The saved adventures sit beside the packs, in files/adventures (the game
+# moves them there from its private folder, which only root can open), and
+# step 1 deletes them with the rest: it says so, and when there are any it
+# offers to copy them to this computer first, each file's size checked
+# (the 0.60.19 bug pass, h9-9: they went without a word).
+SAVES=$(dev "ls '$F/adventures' 2>/dev/null" | grep '\.json' || true)
+SAVED=$(printf '%s\n' "$SAVES" | grep -c . || true)
 say "Step 1 of 5 — remove the game and everything it kept"
 note "This uninstalls Shandalar and deletes what it kept on the headset:"
-note "its settings, any decks built on the Quest, the skin, the card art and the packs."
+note "its settings, your saved adventures, any decks built on the Quest, the skin,"
+note "the card art and the packs."
+if [ "$SAVED" -gt 0 ]; then
+	KEEP="adventures-$STAMP"
+	printf '\n'
+	note "The headset holds $SAVED saved adventure files."
+	if ask "Copy them to this computer first, into $KEEP?"; then
+		adb pull "$F/adventures/" "$KEEP" > /dev/null 2>&1
+		for s in $SAVES; do
+			[ -f "$KEEP/$s" ] && [ "$(size_here "$KEEP/$s")" = "$(size_there "$F/adventures/$s")" ] \
+				|| fail "the saved adventures could not be copied to $KEEP; nothing was deleted."
+		done
+		ok "your saved adventures are in $PWD/$KEEP"
+	fi
+fi
 printf '\n'
 read -r -p "  Type yes to delete them: " answer
 [ "${answer:-}" = yes ] || fail "nothing was deleted."

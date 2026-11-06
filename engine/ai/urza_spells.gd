@@ -33,6 +33,8 @@ extends RefCounted
 ##    Titania's Boon's creatures, Congregate's bodies, Goblin Offensive's X.
 ##  * GIFTS — a creature that hands itself to the opponent (Sleeper Agent),
 ##    the exchange on arrival (Gilded Drake), Donate, Brand, Flicker.
+##  * A LOCK ON WHOEVER IS AHEAD — Damping Engine, cast only while their
+##    board outnumbers ours with it ([method permanent_count_lock]).
 ##  * MANA HANDED BACK — "untap up to N lands" (the untap spells, Great
 ##    Whale, Peregrine Drake, Palinchron, Treachery) is worth the cast it
 ##    then pays for ([method cast_adjustment]).
@@ -48,6 +50,7 @@ extends RefCounted
 
 const TEMPEST := preload("res://engine/ai/tempest_spells.gd")
 const DAMAGE := preload("res://engine/ai/ice_age_tactics.gd")
+const URZA_TACTICS := preload("res://engine/ai/urza_tactics.gd")
 
 ## What a sweep must swing to be cast ([constant AiPlayer.SWEEP_BAR]).
 const SWEEP_BAR := 3.0
@@ -97,6 +100,9 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance, max_x: int, mode
 	var animator: Variant = card_type_animator(g, pilot, inst)
 	if animator != null:
 		return animator
+	var lock: Variant = permanent_count_lock(g, pilot, inst)
+	if lock != null:
+		return lock
 	var effects: Array = data.modes[mode]["effects"] if data.is_modal() \
 		and mode < data.modes.size() else data.spell_effects
 	for e in effects:
@@ -245,6 +251,25 @@ static func card_type_animator(g: MtgGame, pilot, inst: CardInstance) -> Variant
 	if ours - theirs < 1.0:
 		return {}
 	return {"x": 0, "targets": [], "value": ours - theirs + Evaluator.card_value(data) * 0.5}
+
+
+## DAMPING ENGINE (no role; a play ban and its printed line: "A player who
+## controls more permanents than each other player can't play lands or
+## cast artifact, creature, or enchantment spells"): a lock on whoever is
+## AHEAD on permanents, counted live at every play — the Engine itself
+## among ours once it lands. The probe cast it four lands and a Bear to
+## one Forest, a lock on nobody but us (the 0.60.19 bug pass, h5-3). `{}`
+## unless their board still outnumbers ours with the Engine on it (equal
+## counts bind nobody); then null — the shared reader's cast. null for any
+## other card.
+static func permanent_count_lock(g: MtgGame, pilot, inst: CardInstance) -> Variant:
+	var data := inst.data
+	if not data.play_ban.is_valid() or not data.oracle_text.to_lower().contains(
+			"who controls more permanents than each other player can't"):
+		return null
+	var pid: int = pilot.pid
+	var ours := g.players[pid].battlefield.size() + (0 if inst.zone == Mtg.Zone.BATTLEFIELD else 1)
+	return null if g.players[g.opponent_of(pid)].battlefield.size() > ours else {}
 
 
 ## PLANAR BIRTH (`return_all_basic_lands`): every basic land card in every
@@ -1010,9 +1035,7 @@ static func graveyard_replay(g: MtgGame, pilot, inst: CardInstance) -> Dictionar
 	var paid: Array = pilot._plan_taps_from(sources, inst.data.cost, g.spell_surcharge(pid, inst.data))
 	if paid.is_empty():
 		return {}
-	var left := 0
-	for row in _rows_without(sources, paid):
-		left += int(row[3])
+	var left: int = URZA_TACTICS.rows_mana(_rows_without(sources, paid), true)
 	var value := 0.0
 	var land := false
 	var spells: Array = []
@@ -1102,11 +1125,20 @@ static func _untap_count(line: String) -> int:
 	return int(EffectIntent.WHEEL_COUNTS.get(word, 0)) if not word.is_valid_int() else int(word)
 
 
-## [param sources] without the rows a [param plan] taps.
+## [param sources] without the rows a [param plan] taps — EVERY row of a
+## source it taps: a dual land is listed once per ability and an
+## any-color source once per color ([method ManaPlanner.source_key]), and
+## the tap spends the source whichever row the plan named. Dropping only
+## the row named left the Underground Sea the Will was paid with as mana
+## for the replays (the 0.60.19 bug pass, h5-2). A floating step drops its
+## own unit.
 static func _rows_without(sources: Array, plan: Array) -> Array:
 	return sources.filter(func(s: Array) -> bool:
 		for step in plan:
-			if step[0] == s[0] and int(step[1]) == int(s[1]):
+			if step[0] == null:
+				if s[0] == null and int(step[1]) == int(s[1]):
+					return false
+			elif step[0] == s[0]:
 				return false
 		return true)
 
@@ -1127,16 +1159,19 @@ static func refund_value(g: MtgGame, pilot, inst: CardInstance, refund: int, sou
 		return 0.0
 	var rest := _rows_without(sources, paid)
 	var back := rest.duplicate()
-	var given := 0
+	# Each land handed back once, with every row it is listed by (a dual's
+	# two abilities are one land untapped, not two).
+	var handed := {}
 	for row in sources:
-		if given >= refund:
-			break
 		var land: CardInstance = row[0]
 		if land == null or not land.is_land() or rest.has(row):
 			continue
+		if not handed.has(land.id):
+			if handed.size() >= refund:
+				continue
+			handed[land.id] = true
 		back.append(row)
-		given += 1
-	if given == 0:
+	if handed.is_empty():
 		return 0.0
 	var best := 0.0
 	for other in g.players[pid].hand:
@@ -1173,9 +1208,22 @@ static func refund_value(g: MtgGame, pilot, inst: CardInstance, refund: int, sou
 ## hand; once every card of our hand would wake it (or it wakes on any
 ## spell at all — Veil of Birds) the waking is the price of playing at all
 ## and only a share of it is charged.
+##
+## THE SENTRY'S SIZE IS OUR CHOICE (the 0.60.19 bug pass, h5-4): a body
+## the size of our spell's mana value was charged that share whatever the
+## spell — a Yawgmoth's Bargain into a Veiled Sentry handed them a 6/6 at
+## 0.4 of its worth. Only the body the CHEAPEST waking card of our hand
+## would make is the price of playing at all; what this cast adds over it
+## is charged in full (with no other waking card in hand, all of it). And
+## no cast whose woken bodies turn their visible power into our life total
+## (urza_tactics.gd `their_power` — the duel audit's seed 456012 died to
+## exactly that): priced at half the game, so only a cast that wins
+## outright still goes ahead.
 static func awakened_worth(g: MtgGame, pilot, inst: CardInstance) -> float:
 	var pid: int = pilot.pid
 	var total := 0.0
+	var woken_power := 0
+	var mana_value := inst.data.cost.mana_value()
 	for body in g.players[g.opponent_of(pid)].battlefield:
 		if not g.is_present(body) or body.is_creature() \
 				or not body.is_type(Mtg.CardType.ENCHANTMENT):
@@ -1188,15 +1236,27 @@ static func awakened_worth(g: MtgGame, pilot, inst: CardInstance) -> float:
 				continue
 			if not _wakes(g, pid, body, t, inst):
 				continue
-			var share := 1.0
+			var worth := _awakened_body(line, mana_value)
+			woken_power += _awakened_size(line, mana_value).x
+			var least := INF   # the body the cheapest other waking card makes
 			var unavoidable := true
 			for card in g.players[pid].hand:
-				if card != inst and not card.data.is_land() and not _wakes(g, pid, body, t, card):
+				if card == inst or card.data.is_land():
+					continue
+				if not _wakes(g, pid, body, t, card):
 					unavoidable = false
 					break
+				least = minf(least, _awakened_body(line, card.data.cost.mana_value()))
 			if unavoidable:
-				share = 0.4
-			total += _awakened_body(line, inst.data.cost.mana_value()) * share
+				if least == INF:   # no other waking card: a printed size is the same body anyway
+					least = worth if _printed_size(line) else 0.0
+				var floor_worth := minf(worth, least)
+				worth = floor_worth * 0.4 + (worth - floor_worth)
+			total += worth
+	var their_power: int = URZA_TACTICS.their_power(g, pilot)
+	var life := g.players[pid].life
+	if woken_power > 0 and their_power < life and their_power + woken_power >= life:
+		return LETHAL_WORTH * 0.5
 	return total
 
 
@@ -1214,18 +1274,33 @@ static func _wakes(g: MtgGame, pid: int, body: CardInstance, t: TriggeredAbility
 ## spell's mana value") and flying, on [method Evaluator.permanent_value]'s
 ## scale, three quarters of it (a body that can still be answered).
 static func _awakened_body(line: String, mana_value: int) -> float:
-	var at := line.find("it becomes a")
-	var power := mana_value
-	var toughness := mana_value
-	if at >= 0:
-		var word := line.substr(at + 12).strip_edges().get_slice(" ", 0)
-		if word.contains("/"):
-			power = word.get_slice("/", 0).to_int()
-			toughness = word.get_slice("/", 1).to_int()
-	var worth := float(power + toughness)
+	var size := _awakened_size(line, mana_value)
+	var worth := float(size.x + size.y)
 	if line.contains("flying"):
 		worth += 1.5
 	return worth * 0.75
+
+
+## The P/T a dormant enchantment's [param line] prints ("it becomes a 4/4
+## …"), or ([param mana_value], [param mana_value]) for a body the size of
+## the spell that wakes it (Veiled Sentry).
+static func _awakened_size(line: String, mana_value: int) -> Vector2i:
+	var word := _size_word(line)
+	if word.contains("/"):
+		return Vector2i(word.get_slice("/", 0).to_int(), word.get_slice("/", 1).to_int())
+	return Vector2i(mana_value, mana_value)
+
+
+## Does [param line] print the body's P/T (not "equal to that spell's mana
+## value")?
+static func _printed_size(line: String) -> bool:
+	return _size_word(line).contains("/")
+
+
+## The word after "it becomes a" in [param line], or "".
+static func _size_word(line: String) -> String:
+	var at := line.find("it becomes a")
+	return "" if at < 0 else line.substr(at + 12).strip_edges().get_slice(" ", 0)
 
 
 ## THE ECHO A CAST COMMITS TO: an echo permanent cast now owes its echo at
@@ -1639,12 +1714,10 @@ static func memory_jar(g: MtgGame, pilot, window: String) -> Dictionary:
 	var me := g.players[pid]
 	if me.library.size() < 10 or me.hand.size() > 2:
 		return {}
-	var open := 0
-	for row in pilot._mana_sources(g):
-		open += int(row[3])
+	var open: int = URZA_TACTICS.rows_mana(pilot._mana_sources(g), true)   # each source once (h5-2)
 	if open < 3:
 		return {}
-	var theirs: int = pilot._their_open_mana(g, g.opponent_of(pid))
+	var theirs: int = URZA_TACTICS.open_mana(g, g.opponent_of(pid))
 	var value := float(mini(open, 7)) * 0.75 - float(theirs) * 0.5
 	return {} if value < 2.0 else {"value": value, "targets": []}
 

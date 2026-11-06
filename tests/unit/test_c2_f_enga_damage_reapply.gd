@@ -62,8 +62,9 @@ func _burn_p0(spell: String) -> void:
 	resolve_stack()
 
 
-# Ali from Cairo at 4 life: the Bolt's 3 would leave 1, so Ali does not
-# apply to the event as cast. Furnace doubles it to 6 — and now it does.
+# Ali from Cairo at 4 life: Furnace doubles the Bolt to 6. Since the 0.60.19
+# bug pass a life floor is no damage gate: the 6 is dealt in full and Ali
+# limits only the life it costs (MtgGame.damage_life_loss).
 func test_ali_from_cairo_applies_to_the_doubled_bolt() -> void:
 	for preset in PRESETS:
 		_fresh(preset)

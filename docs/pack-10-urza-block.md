@@ -252,9 +252,13 @@ creatures (the literal "instead of any other type and amount"); an Opal
 Acrolith under Opalescence is 3/3 only when the Opalescence is newer than
 its trigger; a spell that fizzles is not countered under either rules
 preset, so Multani's Presence draws nothing for it; Temporal Aperture's
-card stays playable while it remains on top: not drawn since and the
-library not shuffled since, even by a shuffle that leaves it on top, as
-Forge's does (`MtgPlayer.library_shuffles`); Witch Engine's
+card stays playable while it remains on top: the library's top not moved
+since — drawn, milled, covered or shuffled, even a shuffle that leaves it
+on top — and once it moves the permission ends for good, as Forge's does
+(`MtgPlayer.library_top_epoch`); its reveal names that one card, judged
+live (`MtgGame.revealed_top_card`), so no hidden card is ever announced;
+Show and Tell's choices stay hidden until both players have chosen (CR
+101.4a), then both are revealed and arrive together; Witch Engine's
 targeted ability is not a mana ability (CR 605.1a); Masticore's upkeep
 discard is a payment (Megrim hears it, Library of Leng has no say);
 Memory Jar's cards are exiled face down and nobody may look at them.
@@ -274,8 +278,12 @@ takes away and the second has only while enchanted.
 
 ### Explicit digital adaptations
 
-None. Pack 10 adds no row to `docs/simplified-cards.md` and no engine-wide
-simplification, and no Pack 10 card file carries a `SIMPLIFIED` marker.
+One, from the bug pass: *Opal Titan* reads "that spell's colors" live while
+the spell is on the stack, but a spell countered before the trigger
+resolves is read as it was cast (the engine keeps last known information
+only for permanents), so a color changed on it and then countered is not
+remembered (`docs/simplified-cards.md`, "Opal Titan"; marker in
+`cards/sets/usg/opal_titan.gd`). No engine-wide simplification.
 The inventory's candidates — Show and Tell, Replenish and Exhume arriving
 one after another, Temporal Aperture cast from the hand, Outmaneuver's
 optional bypass, Archery Training reading the first Training, Abundance's

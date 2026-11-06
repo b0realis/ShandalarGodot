@@ -492,8 +492,12 @@ static func damage_through(g: MtgGame, source: CardInstance, ref: TargetRef, amo
 		match String(gate.kind):
 			"pool": through -= g.players[ref.player_id].damage_prevention if ref.is_player else body.prevention
 			"tracked_pool": through -= int(g.prevention_receipt(body, int(gate.receipt)).get("remaining", 0))
-			"floor": through = mini(through, maxi(0, g.players[ref.player_id].life - g.players[ref.player_id].min_life_from_damage))
 			_: return 0
+	# A life floor (Ali from Cairo, Worship) is no gate: the damage lands in
+	# full and only the life it costs is limited (0.60.19 bug pass, h6-1) —
+	# and the life is what every caller here prices.
+	if ref.is_player:
+		return g.damage_life_loss(ref.player_id, maxi(0, through))
 	return maxi(0, through)
 
 ## forecasts_tactics owns the existing visible-damage correctness layer.

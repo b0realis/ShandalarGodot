@@ -2245,7 +2245,7 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 ## moment it lands (the legend rule as 1997 played it, the newcomer
 ## loses: MtgGame._newest_duplicate_legend), and a world enchantment
 ## buries every other world on arrival (CR 704.5k,
-## MtgGame._superseded_world_permanent) — a world of OURS with it, which
+## MtgGame._superseded_world_permanents) — a world of OURS with it, which
 ## is the same card twice or a world traded for a world; a world of
 ## THEIRS is what ours is for. The pilot that never asked cast its
 ## second and third The Abyss over the first, four mana and a card each.

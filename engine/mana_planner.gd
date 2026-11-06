@@ -139,6 +139,9 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 			if ability.put_counter_kind != "" and _counter_kills(inst, ability): continue
 			if inst.zone != ability.activation_zone: continue
 			if bans and game.activation_ban_reason(pid, inst, ability, true) != "": continue
+			# Contamination's one {B} from an empty Gaea's Cradle: no mana to
+			# replace, so none to plan (CR 106.12b, [method replaced_makes_nothing]).
+			if replaced_makes_nothing(game, inst, ability, pid): continue
 			# Sacrificing a Swamp is never an implicit auto-tap. A player may
 			# activate it explicitly; planners must not count its output free.
 			if game.BLACK_SYMBOL_COST.amount(game, ability.cost) > 0: continue
@@ -370,12 +373,18 @@ static func _one_flag(mask: int) -> bool:
 ## A trigger whose description is a fixed colour, or that describes
 ## nothing ([member TriggeredAbility.mana_bonus_amount] 0), asks here
 ## nothing: it asks from inside its own resolution, as before.
-## [param chosen_color] / [param borrowed]: as tap_for_mana has them.
+## [param chosen_color] / [param borrowed]: as tap_for_mana has them;
+## [param rider_bonus] the mana its riders add ([method tap_amount]). A tap
+## that will make NO mana asks nothing: "is tapped for mana" triggers only
+## when the ability produces mana (CR 106.12a — an empty Tolarian Academy
+## under Fertile Ground; bug pass 0.60.19, h4-2).
 static func bonus_color_questions(game: MtgGame, land: CardInstance, ability: ManaAbility,
-		pid: int, chosen_color := -1, borrowed := false) -> Array[Dictionary]:
+		pid: int, chosen_color := -1, borrowed := false, rider_bonus := 0) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if not land.is_land() or not ability.taps_source \
 			or not game.has_trigger_listener(Mtg.EventType.TAPPED_FOR_MANA):
+		return out
+	if tap_amount(game, land, ability, pid, rider_bonus, chosen_color) <= 0:
 		return out
 	var preview := tap_preview(game, land, ability, pid, chosen_color, borrowed)
 	var made: int = int(preview[0])
@@ -406,6 +415,53 @@ static func bonus_color_questions(game: MtgGame, land: CardInstance, ability: Ma
 					"kind": PlayerChoice.Kind.COLOR, "colors": colors,
 					"hint": color_hint(game, land.controller_id, made, colors)})
 	return out
+
+
+## HOW MUCH one activation of [param ability] of [param inst] by
+## [param pid] makes, worked out before it is paid: its amount (a dynamic
+## one read now — a Gaea's Cradle's creatures) and every later literal
+## entry, plus [param rider_bonus], what the riders announced with it add
+## (a battery's counters, Metalworker's revealed cards). 0 when it makes
+## nothing at all: a fixed replacement with no production to replace
+## ([method replaced_makes_nothing]), or a borrowed-type ability with no
+## type chosen. Read by the tap's trigger questions and by the reveal
+## count a plan prices (bug pass 0.60.19, h4-2 / h4-3).
+static func tap_amount(game: MtgGame, inst: CardInstance, ability: ManaAbility,
+		pid: int, rider_bonus := 0, chosen_color := -1) -> int:
+	if replaced_makes_nothing(game, inst, ability, pid):
+		return 0
+	if ability.borrow_paid_land_type and chosen_color == -1:
+		return 0
+	var total := ability.amount_for(game, inst, pid) + rider_bonus
+	for i in range(1, ability.produces.size()):
+		total += int(ability.produces[i][1])
+	return total
+
+
+## CR 106.12b — "a replacement effect that applies if a permanent is
+## tapped for mana ... modifies the mana production event while such an
+## ability is resolving AND PRODUCING MANA". Contamination's "it produces
+## {B} instead of any other type and amount" is such a replacement, and
+## its fixed-amount copy ([method ManaAbility.forcing_color]) makes its one
+## {B} only when the ability it replaced ([member
+## ManaAbility.unreplaced_ability]) would have made mana at all: a Gaea's
+## Cradle with no creature, a Tolarian Academy with no artifact make
+## nothing, so nothing is replaced (lead ruling, bug pass 0.60.19 h4-Q1).
+## An ability whose amount a rider could still raise (a battery's counters,
+## a reveal, a sacrifice's mana value) is assumed to make mana — the fixed
+## copy no longer asks the rider.
+static func replaced_makes_nothing(game: MtgGame, inst: CardInstance,
+		ability: ManaAbility, pid: int) -> bool:
+	var base: ManaAbility = ability.unreplaced_ability
+	if base == null or ability.forced_output_color == 0:
+		return false
+	if base.any_number_counter_kind != "" or base.reveal_filter.is_valid() \
+			or base.scales_with_sacrifice_mv:
+		return false
+	var total := base.amount_for(game, inst, pid)
+	for i in range(1, base.produces.size()):
+		total += int(base.produces[i][1])
+	return total <= 0
 
 
 ## What a tap of [param land]'s [param ability] by [param pid] will make,
@@ -663,6 +719,8 @@ static func _plan_with_lump(src: Array, ordinary: Array, cost: ManaCost,
 static func _step_amount(src: Array, step: Array) -> int:
 	if step[0] == null:
 		return 1
+	if step.size() > 3:
+		return int(step[3])   # the amount a reveal step settled on ([method step_of])
 	for s in src:
 		if s[0] == step[0] and int(s[1]) == int(step[1]) \
 				and (step.size() < 3 or int(s[2]) == int(step[2])):
@@ -721,7 +779,52 @@ static func _plan_rows(src: Array, cost: ManaCost, x_value: int,
 	if not _cover_generic(src, generic, usage_keys, out, used_instances, cost.colored):
 		return []
 	_drop_surplus(out, used_instances, cost, x_value, usage_keys, src if replan else [])
+	if replan:
+		_trim_reveals(out, used_instances, cost, x_value, usage_keys)
 	return [out, used_instances]
+
+
+## THE FEWEST CARDS A REVEAL NEEDS (bug pass 0.60.19, h4-3). A "reveal any
+## number of artifact cards in your hand" source (Metalworker) is listed at
+## its seat's maximum ([method sources]) and the tap's default revealed
+## every card, so a {2} bill revealed three, made six and burned four
+## under the 1997 rules. Here its row steps down by
+## [member ManaAbility.reveal_per_card] while the plan's rows still pay
+## ([method _rows_pay]); the step then names the mana it settled on
+## ([method step_of]'s fourth entry, which [method run_step] hands to
+## [method MtgGame.tap_for_mana_as_planned] as the count's default), and a
+## reveal the bill never needed leaves the plan. In place, on the plan's
+## [param out] and its rows [param used].
+static func _trim_reveals(out: Array, used: Dictionary, cost: ManaCost,
+		x_value: int, usage_keys: Array) -> void:
+	for key in used.keys():
+		var row: Array = used[key]
+		if not source_reveals(row) or row.size() > 8:
+			continue
+		var per: int = row[0].cur_mana_abilities[int(row[1])].reveal_per_card
+		var at := out.find(step_of(row))
+		if per <= 0 or at < 0:
+			continue
+		var best := int(row[3])
+		while best - per >= 0:
+			var trial: Array = row.duplicate()
+			trial[3] = best - per
+			used[key] = trial
+			var pays := _rows_pay(used, "", cost, x_value, usage_keys)
+			used[key] = row
+			if not pays:
+				break
+			best -= per
+		if best == int(row[3]):
+			continue
+		if best <= 0:
+			out.remove_at(at)
+			used.erase(key)
+			continue
+		var trimmed: Array = row.duplicate()
+		trimmed[3] = best
+		used[key] = trimmed
+		out[at] = step_of(trimmed)
 
 
 ## THE GENERIC MANA, PAID WITH THE LEAST LEFT OVER (2026-10-07, w6-1).
@@ -1398,9 +1501,17 @@ static func source_key(s: Array) -> String:
 ## A colour the source does not offer is ignored there and the tap asks
 ## instead: that is how [method auto_tap_sources]' generic-only row
 ## ({C}) leaves the question to the player.
+##
+## A REVEAL source (Metalworker) adds a fourth entry, the mana the row
+## counts — `[instance, ability_index, -1, amount]` (the colour entry -1,
+## "nobody chose") — which [method run_step] hands on as the amount its
+## count question defaults to ([method _trim_reveals], bug pass 0.60.19).
 static func step_of(s: Array) -> Array:
+	var reveals := source_reveals(s)
 	if source_chooses_color(s):
-		return [s[0], s[1], int(s[2])]
+		return [s[0], s[1], int(s[2]), int(s[3])] if reveals else [s[0], s[1], int(s[2])]
+	if reveals:
+		return [s[0], s[1], -1, int(s[3])]
 	return [s[0], s[1]]
 
 
@@ -1408,6 +1519,13 @@ static func step_of(s: Array) -> Array:
 static func source_chooses_color(s: Array) -> bool:
 	return s[0] != null and int(s[1]) < s[0].cur_mana_abilities.size() \
 		and s[0].cur_mana_abilities[int(s[1])].color_options.is_valid()
+
+
+## Is the source row [param s] a "reveal any number of cards" ability's
+## (Metalworker), whose amount is a count its controller announces?
+static func source_reveals(s: Array) -> bool:
+	return s[0] != null and int(s[1]) < s[0].cur_mana_abilities.size() \
+		and s[0].cur_mana_abilities[int(s[1])].reveal_filter.is_valid()
 
 
 ## The source list a PLAYER's auto-tap plans over — the duel's double-click
@@ -1495,11 +1613,14 @@ static func run_plan(game: MtgGame, pid: int, tap_plan: Array,
 
 ## Tap one plan [param step] (never a floating-mana step, whose source is
 ## null): the colour a three-entry step carries goes with it, so a
-## colour-choice source makes what the plan priced instead of asking.
+## colour-choice source makes what the plan priced instead of asking; the
+## amount a four-entry step carries is what a reveal's count defaults to
+## ([method step_of]).
 ## Returns [method MtgGame.tap_for_mana]'s refusal, "" when it tapped.
 static func run_step(game: MtgGame, pid: int, step: Array) -> String:
-	return game.tap_for_mana(pid, step[0], step[1],
-		int(step[2]) if step.size() > 2 else -1)
+	return game.tap_for_mana_as_planned(pid, step[0], step[1],
+		int(step[2]) if step.size() > 2 else -1,
+		int(step[3]) if step.size() > 3 else -1)
 
 
 ## Plan and pay [param cost] plus [param extra] generic. True when the pool

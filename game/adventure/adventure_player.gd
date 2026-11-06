@@ -1930,7 +1930,11 @@ static func save_at(path: String) -> Dictionary:
 ## By default every folder of [method saves_folders] is read — on Android
 ## the one the saves came from too, while a save is left in it.
 static func scan_saves(folder := "") -> Dictionary:
-	var folders: Array[String] = [folder] if folder != "" else saves_folders()
+	# Not one conditional: its `[folder]` is an untyped Array there, which
+	# this typed one refuses at run time (the 0.60.19 bug pass, h9-7).
+	var folders: Array[String] = [folder]
+	if folder == "":
+		folders = saves_folders()
 	var saves: Array[Dictionary] = []
 	var unreadable := 0
 	var files := {}

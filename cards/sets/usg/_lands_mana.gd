@@ -43,6 +43,9 @@ extends RefCounted
 ##   either player's — with its intervening if.
 ## - Shivan Gorge: the damage is the land's, to each opponent of its
 ##   activator.
+## - Phyrexian Tower: "a creature" includes the Tower itself while
+##   something makes it one (Living Plane) — it may be tapped and
+##   sacrificed for its own cost (CR 602.2b; ManaAbility.may_sacrifice_itself).
 ##
 ## tests/cards/test_pack_10_B9_lands_mana.gd and
 ## test_pack_10_B9_hierophants.gd pin each card.
@@ -86,7 +89,7 @@ static func configure(c: CardData) -> bool:
 			c.mana(ManaAbility.new(Mtg.ManaColor.G).with_dynamic_amount(_yours_of.bind(Mtg.CardType.CREATURE), true))
 		"Phyrexian Tower":
 			c.mana(ManaAbility.new(Mtg.ManaColor.C))
-			c.mana(ManaAbility.new(Mtg.ManaColor.B, 2).with_sacrifice_of("creature", F._creature))
+			c.mana(ManaAbility.new(Mtg.ManaColor.B, 2).with_sacrifice_of("creature", F._creature).may_sacrifice_itself())
 		"Serra's Sanctum":
 			c.mana(ManaAbility.new(Mtg.ManaColor.W).with_dynamic_amount(_yours_of.bind(Mtg.CardType.ENCHANTMENT), true))
 		"Shivan Gorge":

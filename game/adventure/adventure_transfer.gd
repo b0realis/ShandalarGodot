@@ -59,6 +59,9 @@ const NOT_EXPORTED := "%s is not an adventure exported by Shandalar."
 const NEWER := "%s was saved by a newer version of the game. Update the game to import it."
 const MIXED := "%s holds files that are not the saves of one adventure."
 const TOO_BIG := "%s is bigger than an exported adventure can be."
+## A zip whose end is missing or whose list of files does not hold
+## together: a copy that stopped half way, a download cut short.
+const INCOMPLETE := "%s is damaged or incomplete: it may not have been copied whole."
 const DAMAGED := "%s is damaged: %s is not as it was exported."
 const UNREADABLE := "%s is damaged: %s cannot be read as a save."
 const NOT_READ := "%s could not be read."
@@ -124,9 +127,12 @@ static func existing(id: String, folders: Array[String] = []) -> Dictionary:
 	var found := files_of(id, folders)
 	var out := {"files": found.size(), "saves": 0, "newest": "", "hero": ""}
 	for name: String in found:
-		if name.ends_with(AdventurePlayer.BACKUP_TAIL):
+		# A `.bak` whose save is not here is the save the lists show
+		# ([method AdventurePlayer.save_at] reads it in the save's place).
+		if name.ends_with(AdventurePlayer.BACKUP_TAIL) \
+				and found.has(name.trim_suffix(AdventurePlayer.BACKUP_TAIL)):
 			continue
-		var save := AdventurePlayer.save_at(String(found[name]))
+		var save := AdventurePlayer.save_at(String(found[name]).trim_suffix(AdventurePlayer.BACKUP_TAIL))
 		if save.is_empty() or save.get("unreadable", false):
 			continue
 		out["saves"] = int(out["saves"]) + 1
@@ -175,8 +181,8 @@ static func pack(id: String, to := OUTGOING, folders: Array[String] = []) -> Dic
 	var out := {"ok": false, "message": "", "id": id, "hero": "", "saves": 0, "left_out": 0}
 	var found := files_of(id, folders)
 	var members: Array[Dictionary] = []
+	var read := {}
 	var total := 0
-	var newest := ""
 	for name in names_of(id):
 		if not found.has(name):
 			continue
@@ -184,17 +190,15 @@ static func pack(id: String, to := OUTGOING, folders: Array[String] = []) -> Dic
 		var data := _save_of(bytes) if bytes is PackedByteArray \
 			and (bytes as PackedByteArray).size() <= MAX_MEMBER_BYTES else {}
 		if data.is_empty() or not AdventurePlayer.readable(data) \
-				or String((data["adventure"] as Dictionary).get("id", "")) != id:
+				or _text((data["adventure"] as Dictionary).get("id")) != id:
 			out["left_out"] = int(out["left_out"]) + 1
 			continue
 		total += (bytes as PackedByteArray).size()
 		members.append({"name": name, "bytes": bytes})
-		if not name.ends_with(AdventurePlayer.BACKUP_TAIL):
-			out["saves"] = int(out["saves"]) + 1
-			var saved := String((data["adventure"] as Dictionary).get("saved", ""))
-			if out["hero"] == "" or saved >= newest:
-				newest = saved
-				out["hero"] = String((data["hero"] as Dictionary).get("name", ""))
+		read[name] = data
+	var shown := _shown_saves(read)
+	out["saves"] = shown["saves"]
+	out["hero"] = shown["hero"]
 	if int(out["saves"]) == 0:
 		out["message"] = "Nothing of that adventure could be read, so nothing was exported."
 		return out
@@ -347,14 +351,15 @@ static func take_in(source: String, shown := "") -> Dictionary:
 
 ## THE ZIP AT [param path], CHECKED WHOLE before anything is written:
 ## `{ok, message, id, hero, files: {name: bytes}, saves, newest, one_life}`
-## — `saves` how many saves the lists will show (without the `.bak`
-## copies), `newest` the newest one's time as kept. Refused (`ok` false,
-## `message` the words, [param shown] the file's name in them) when it is
-## not a zip, has no manifest or one of another kind; is of a newer
-## format or holds a save of a newer format; holds a member with a path,
-## of another adventure or of no save kind, or one the manifest does not
-## list; is too big, a member or in all; or a member's size or hash is not
-## the manifest's, or it is not a save the game reads.
+## — `saves` how many saves the lists will show (a `.bak` only where its
+## save is not there, [method _shown_saves]), `newest` the newest one's
+## time as kept. Refused (`ok` false, `message` the words, [param shown]
+## the file's name in them) when it is not a zip, or one cut short; has
+## no manifest or one of another kind; is of a newer format or holds a
+## save of a newer format; holds a member with a path, of another
+## adventure or of no save kind, or one the manifest does not list; is
+## too big, a member or in all; or a member's size or hash is not the
+## manifest's, or it is not a save the game reads.
 static func read_package(path: String, shown := "") -> Dictionary:
 	if shown == "":
 		shown = path.get_file()
@@ -368,10 +373,15 @@ static func read_package(path: String, shown := "") -> Dictionary:
 		return _refused(TOO_BIG % shown)
 	if not PortalPack.bounded_zip(path, MAX_ENTRIES, max_total_bytes):
 		# A zip's own first bytes, `PK` 3 4 (or 5 6 for one with nothing
-		# in it): a zip past the bounds, else no zip at all.
+		# in it), else no zip at all. A zip WHOLE and past the bounds is
+		# too big; one whose end is missing or does not hold together — a
+		# copy that stopped half way, a download cut short — is damaged or
+		# incomplete (the 0.60.19 bug pass, h9-3: it was called too big).
 		var zip := head.size() == 4 and head[0] == 0x50 and head[1] == 0x4B \
 			and ((head[2] == 3 and head[3] == 4) or (head[2] == 5 and head[3] == 6))
-		return _refused((TOO_BIG if zip else NOT_EXPORTED) % shown)
+		if not zip:
+			return _refused(NOT_EXPORTED % shown)
+		return _refused((TOO_BIG if _past_bounds(path) else INCOMPLETE) % shown)
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
 		return _refused(NOT_EXPORTED % shown)
@@ -385,11 +395,11 @@ static func _read_members(reader: ZIPReader, shown: String) -> Dictionary:
 	if not MANIFEST in names:
 		return _refused(NOT_EXPORTED % shown)
 	var manifest := _json(reader.read_file(MANIFEST))
-	if String(manifest.get("format", "")) != FORMAT or not _is_number(manifest.get("version")):
+	if _text(manifest.get("format")) != FORMAT or not _is_number(manifest.get("version")):
 		return _refused(NOT_EXPORTED % shown)
 	if int(manifest["version"]) > FORMAT_VERSION:
 		return _refused(NEWER % shown)
-	var id := String(manifest.get("adventure_id", "")) if manifest.get("adventure_id") is String else ""
+	var id := _text(manifest.get("adventure_id"))
 	if int(manifest["version"]) < 1 or not manifest.get("files") is Array or not plain_id(id):
 		return _refused(NOT_EXPORTED % shown)
 	# Every member listed once, every listed one there: plain names of
@@ -419,6 +429,7 @@ static func _read_members(reader: ZIPReader, shown: String) -> Dictionary:
 	# Each save: its size and hash as listed, then read as the game reads one.
 	var out := {"ok": true, "message": "", "id": id, "hero": "", "files": {}, "saves": 0, "newest": "",
 		"one_life": ""}
+	var read := {}
 	var total := 0
 	for name: String in listed:
 		var row: Dictionary = listed[name]
@@ -431,25 +442,88 @@ static func _read_members(reader: ZIPReader, shown: String) -> Dictionary:
 		if bytes.size() != int(row["bytes"]) or sha256(bytes) != String(row["sha256"]).to_lower():
 			return _refused(DAMAGED % [shown, name])
 		var data := _save_of(bytes)
-		if String(data.get("format", "")) == AdventurePlayer.FORMAT and _is_number(data.get("version")) \
+		if _text(data.get("format")) == AdventurePlayer.FORMAT and _is_number(data.get("version")) \
 				and int(data["version"]) > AdventurePlayer.FORMAT_VERSION:
 			return _refused(NEWER % shown)
 		if not AdventurePlayer.readable(data):
 			return _refused(UNREADABLE % [shown, name])
-		if String((data["adventure"] as Dictionary).get("id", "")) != id:
+		if _text((data["adventure"] as Dictionary).get("id")) != id:
 			return _refused(MIXED % shown)
 		(out["files"] as Dictionary)[name] = bytes
-		if not name.ends_with(AdventurePlayer.BACKUP_TAIL):
-			out["saves"] = int(out["saves"]) + 1
-			var saved := String((data["adventure"] as Dictionary).get("saved", ""))
-			if out["hero"] == "" or saved >= String(out["newest"]):
-				out["newest"] = saved
-				out["hero"] = String((data["hero"] as Dictionary).get("name", ""))
+		read[name] = data
+	var shown_saves := _shown_saves(read)
+	out["saves"] = shown_saves["saves"]
+	out["newest"] = shown_saves["newest"]
+	out["hero"] = shown_saves["hero"]
 	if int(out["saves"]) == 0:
 		return _refused(NOT_EXPORTED % shown)
-	if String(manifest.get("one_life", "")) in HallOfFame.ONE_LIFE_STATES:
-		out["one_life"] = String(manifest["one_life"])
+	if _text(manifest.get("one_life")) in HallOfFame.ONE_LIFE_STATES:
+		out["one_life"] = _text(manifest["one_life"])
 	return out
+
+
+## THE SAVES THE LISTS WILL SHOW of the files [param read] `{file name:
+## save record}`, each one a save the game reads: each save once — the
+## file itself, or its `.bak` when the save is not among them (missing, or
+## left out as unreadable), as [method AdventurePlayer.save_at] takes a
+## damaged save up from its copy (the 0.60.19 bug pass, h9-6: a save the
+## list showed from its `.bak` could not be exported). `{saves, newest,
+## hero}`: how many, and the newest one's time as kept and its hero.
+static func _shown_saves(read: Dictionary) -> Dictionary:
+	var out := {"saves": 0, "newest": "", "hero": ""}
+	for name: String in read:
+		if name.ends_with(AdventurePlayer.BACKUP_TAIL) \
+				and read.has(name.trim_suffix(AdventurePlayer.BACKUP_TAIL)):
+			continue
+		var data: Dictionary = read[name]
+		var saved := _text((data["adventure"] as Dictionary).get("saved"))
+		out["saves"] = int(out["saves"]) + 1
+		if int(out["saves"]) == 1 or saved >= String(out["newest"]):
+			out["newest"] = saved
+			out["hero"] = _text((data["hero"] as Dictionary).get("name"))
+	return out
+
+
+## Whether the zip at [param path] is WHOLE — its end record there and its
+## list of files reaching it, read as [method PortalPack.bounded_zip]
+## reads them — and past this format's bounds: more members than an
+## export has, a member bigger than a save can be, or more bytes in all.
+## False for a zip cut short or damaged in its list of files.
+static func _past_bounds(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() < 22:
+		return false
+	var length := file.get_length()
+	var tail_size := mini(65557, length)
+	file.seek(length - tail_size)
+	var tail := file.get_buffer(tail_size)
+	var end := tail.size() - 22
+	while end >= 0:
+		if tail.decode_u32(end) == 0x06054b50 and end + 22 + tail.decode_u16(end + 20) == tail.size():
+			break
+		end -= 1
+	if end < 0:
+		return false
+	var count := tail.decode_u16(end + 10)
+	var directory_end := length - tail_size + end
+	var offset := tail.decode_u32(end + 16)
+	if offset + tail.decode_u32(end + 12) != directory_end:
+		return false
+	file.seek(offset)
+	var total := 0
+	var largest := 0
+	for n in count:
+		if file.get_position() + 46 > directory_end:
+			return false
+		var header := file.get_buffer(46)
+		if header.decode_u32(0) != 0x02014b50:
+			return false
+		total += header.decode_u32(24)
+		largest = maxi(largest, header.decode_u32(24))
+		file.seek(file.get_position() + header.decode_u16(28) + header.decode_u16(30) + header.decode_u16(32))
+	if file.get_position() != directory_end:
+		return false
+	return count > MAX_ENTRIES or largest > MAX_MEMBER_BYTES or total > max_total_bytes
 
 
 ## PUT THE CHECKED [param package] ([method read_package]) AMONG THE SAVES:
@@ -545,3 +619,12 @@ static func _json(bytes: PackedByteArray) -> Dictionary:
 
 static func _is_number(value: Variant) -> bool:
 	return value is int or value is float
+
+
+## [param value] when it is text, else "": a manifest's or a save's word
+## that is null or a number reads as none, as the lists read a save
+## ([method AdventurePlayer.scan_saves]) — the 0.60.19 bug pass, h9-2:
+## `String(null)` stopped the read with a script error and Import did
+## nothing at all.
+static func _text(value: Variant) -> String:
+	return value if value is String else ""

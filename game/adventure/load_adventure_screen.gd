@@ -295,7 +295,7 @@ func refresh() -> void:
 		_list.select(selected)
 	if saves.is_empty():
 		_say_line.text = unreadable_note() if unreadable > 0 \
-			else "No adventure has been saved yet. Shandalar on the main menu begins one, and saves it the moment its world is made."
+			else "No adventure has been saved yet. Shandalar on the main menu begins one, and saves it the moment its world is made; Import brings in an adventure exported on another device."
 	else:
 		_say_line.text = "Choose a save and Resume, or double-click it."
 		if unreadable > 0:

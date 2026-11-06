@@ -34,17 +34,21 @@ extends RefCounted
 ##   players, then a LIBRARY permission naming that card, free ("without
 ##   paying its mana cost": its own payment row, X = 0, CR 118.9, 107.3b),
 ##   lands as the land drop, and a floating "play with the top card
-##   revealed" — both only "for as long as that card remains on top": it
-##   is the top card and has not been drawn since (a card drawn and put
-##   back did not REMAIN on top) nor the library shuffled since — even a
-##   shuffle that leaves it on top ends it, as Forge's does.
+##   revealed" naming THAT card (MtgPlayer.top_revealed_card_id, judged
+##   live by MtgGame.revealed_top_card, so the card under it is never
+##   shown) — both only "for as long as that card remains on top": it is
+##   the top card and the library's top has not moved since
+##   (MtgPlayer.library_top_epoch) — a card drawn, milled or covered and
+##   back on top did not REMAIN there, and even a shuffle that leaves it on
+##   top ends it, as Forge's does.
 ## - Show and Tell (Pack 10 E10, MtgGame.put_onto_battlefield_together):
 ##   each player, the active player first (CR 101.4), may choose an
 ##   artifact, creature, enchantment or land card in their hand — an Aura
 ##   only when something on the battlefield could hold it (CR 303.4f-g) —
-##   and the cards it chose are revealed as they are chosen; then the
-##   chosen cards arrive TOGETHER (each "whenever another ... enters" sees
-##   the other), under their owners' control. Not cast, not a land drop.
+##   and the choices stay hidden until both players have chosen (CR
+##   101.4a), then are revealed together; then the chosen cards arrive
+##   TOGETHER (each "whenever another ... enters" sees the other), under
+##   their owners' control. Not cast, not a land drop.
 ## - Serra's Hymn (Pack 10 E7, EffectBase.divided_by): the verse upkeep of
 ##   the Saga verse enchantments (usg/_enchantments.gd `verse`), and "prevent
 ##   the next X damage ... divided as you choose" with X read from its verse
@@ -52,7 +56,8 @@ extends RefCounted
 ##   and locked on the targets' shares (CR 601.2c-d, 602.2b, 608.2h).
 ## - Thran Turbine (Pack 10 E8): "you may add {C}{C}" at each of your
 ##   upkeeps — an ordinary trigger on the stack (CR 605.1b does not make it a
-##   mana ability) — as mana no spell may spend (ManaPool.NOT_SPELL, CR
+##   mana ability), which still resolves with the Turbine gone (CR 113.7a)
+##   — as mana no spell may spend (ManaPool.NOT_SPELL, CR
 ##   106.6); it burns like any other under the mana-burn rule, so the
 ##   default answer is yes only when it cannot burn or the seat has an
 ##   activated ability with a mana cost to spend it on (its own board).
@@ -252,38 +257,38 @@ static func _aperture(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: 
 		[top.data.card_name])
 	g.log_line("%s reveals %s from the top of their library" % [g.players[pid].player_name,
 		top.data.card_name], top)
-	var still := _still_on_top.bind(pid, top.id, g.players[pid].drawn_this_turn.size(),
-		g.players[pid].library_shuffles)
+	var epoch := g.players[pid].library_top_epoch
+	var still := _still_on_top.bind(pid, top.id, epoch)
 	g.grant_zone_play(pid, {"zone": Mtg.Zone.LIBRARY, "card": top, "lands": true,
 		"spells": true, "free": true, "while": still, "source": s,
 		"desc": "%s from the top of their library without paying its mana cost" % top.data.card_name})
-	g.continuous.add_floating_static(s, StaticAbility.new(_reveal_top.bind(pid, still),
+	g.continuous.add_floating_static(s, StaticAbility.new(_reveal_top.bind(pid, top.id, epoch, still),
 		"Play with the top card of your library revealed."))
 	g.recalculate()
 
 
 ## "For as long as that card remains on top of your library": it is the top
-## card now, it has not been drawn since (a card drawn and put back did
-## not REMAIN there) and the library has not been shuffled since — a
-## shuffle that happens to leave it on top ends it too (Forge's
-## ShuffleCheck, temporal_aperture.txt). `drawn_this_turn` and the effect
-## both end at cleanup.
+## card now and the top of the library has not moved since
+## ([member MtgPlayer.library_top_epoch]) — a card drawn, milled or covered
+## and then back on top did not REMAIN there (CR 400.7; Forge's
+## StillTopCheck ends for good), and a shuffle that happens to leave it on
+## top ends it too (Forge's ShuffleCheck, temporal_aperture.txt). The
+## effect ends at cleanup.
 static func _still_on_top(g: MtgGame, _card: CardInstance, pid: int, card_id: int,
-		drawn_before: int, shuffles: int) -> bool:
+		epoch: int) -> bool:
 	var p := g.players[pid]
-	if p.library.is_empty() or p.library.back().id != card_id:
-		return false
-	if p.library_shuffles != shuffles:
-		return false
-	for i in range(drawn_before, p.drawn_this_turn.size()):
-		if p.drawn_this_turn[i].id == card_id:
-			return false
-	return true
+	return not p.library.is_empty() and p.library.back().id == card_id \
+		and p.library_top_epoch == epoch
 
 
-static func _reveal_top(g: MtgGame, _s: CardInstance, pid: int, still: Callable) -> void:
+## "Play with the top card of your library revealed": THAT card only, named
+## with the epoch it was revealed at — MtgGame.revealed_top_card judges it
+## live, so a draw inside a resolution never reveals the card under it.
+static func _reveal_top(g: MtgGame, _s: CardInstance, pid: int, card_id: int, epoch: int,
+		still: Callable) -> void:
 	if bool(still.call(g, null)):
-		g.players[pid].top_card_revealed = true
+		g.players[pid].top_revealed_card_id = card_id
+		g.players[pid].top_revealed_epoch = epoch
 
 
 # ----------------------------------------------------------- Show and Tell --
@@ -293,18 +298,24 @@ const SHOWN_TYPES := Mtg.CardType.ARTIFACT | Mtg.CardType.CREATURE \
 
 
 static func _show_and_tell(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
+	# Each player chooses, the active player first (CR 101.4), and the
+	# choices stay hidden until both have chosen (CR 101.4a: cards chosen
+	# from a hidden zone may stay face down until every player has) — no
+	# reveal and no log line before the second choice, so neither the
+	# opponent's question nor its answer can know the first (bug pass
+	# 0.60.19). Then both are revealed and arrive together.
 	var entries: Array = []
 	for pid in [g.active_player, g.opponent_of(g.active_player)]:
 		if g.players[pid].has_lost:
 			continue
 		var pick := _shown_card(g, pid)
-		if pick == null:
-			continue
-		g.reveal_information(-1, "Show and Tell — %s's choice" % g.players[pid].player_name,
-			[pick.data.card_name])
-		g.log_line("%s chooses %s for Show and Tell" % [g.players[pid].player_name,
-			pick.data.card_name], pick)
-		entries.append({"instance": pick, "controller": pid})
+		if pick != null:
+			entries.append({"instance": pick, "controller": pid})
+	for entry in entries:
+		var pick: CardInstance = entry["instance"]
+		var who := g.players[int(entry["controller"])].player_name
+		g.reveal_information(-1, "Show and Tell — %s's choice" % who, [pick.data.card_name])
+		g.log_line("%s chooses %s for Show and Tell" % [who, pick.data.card_name], pick)
 	g.put_onto_battlefield_together(entries)
 
 
@@ -337,9 +348,10 @@ static func _shown_card(g: MtgGame, pid: int) -> CardInstance:
 
 # ------------------------------------------------------------ Thran Turbine --
 
+## The trigger is independent of its source once it is on the stack (CR
+## 113.7a): a Turbine gone in response still adds the mana, to the
+## trigger's controller (Forge's resolves the same; bug pass 0.60.19).
 static func _turbine(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s):
-		return
 	var pid := g.controller_acting_for(s)
 	if g.agents[pid].choose_yes_no(g, pid,
 			"Thran Turbine: add {C}{C}? (It can't be spent to cast spells.)", _turbine_hint(g, pid)):

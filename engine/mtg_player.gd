@@ -41,10 +41,22 @@ var last_red_spell_damage_controller := -1
 var max_hand_size: int = 7
 
 ## "Players play with the top card of their libraries revealed" (Field of
-## Dreams): the top card of THIS player's library is public. Rebuilt by
-## the continuous pipeline from the statics on the battlefield; read
-## through MtgGame.revealed_top_card, which also announces a new top.
+## Dreams): the top card of THIS player's library is public, whatever card
+## it is. Rebuilt by the continuous pipeline from the statics on the
+## battlefield; read through MtgGame.revealed_top_card, which also
+## announces a new top.
 var top_card_revealed: bool = false
+
+## "Play with the top card of your library revealed" for as long as ONE
+## card remains on top (Temporal Aperture): that card's instance id and the
+## [member library_top_epoch] it was revealed at, or -1. Unlike
+## [member top_card_revealed] it names its card, so it is judged LIVE by
+## MtgGame.revealed_top_card — a draw, a mill or a shuffle inside a
+## resolution (where nothing is recalculated) never turns the next, hidden
+## card face up (bug pass 0.60.19: the log, the LAN view and the AI read
+## it). Rebuilt by the continuous pipeline on every recalculation.
+var top_revealed_card_id: int = -1
+var top_revealed_epoch: int = -1
 
 ## Revelation makes this seat's entire hand public. Rebuilt by continuous
 ## effects; separate from a single card's revealed_in_hand duration.
@@ -204,10 +216,17 @@ var draws_this_step: int = 0
 ## Journaled with the turn machinery (MtgGame.TURN_PLAYER_FIELDS).
 var upkeeps_begun: int = 0
 
-## How many times this player's library has been shuffled this duel
-## (MtgGame._shuffle, journaled there). Temporal Aperture's "for as long as
-## that card remains on top" ends on any shuffle (Pack 10).
-var library_shuffles: int = 0
+## How many times the TOP of this player's library has moved this duel:
+## bumped by every MtgGame helper that takes the top card off the library,
+## puts a card on it, or shuffles, reorders or rebuilds the library — never
+## by one that leaves the top card where it was (a card leaving from deeper
+## down, one put on the bottom). Journaled (MtgGame._library_top_moved).
+## "For as long as that card remains on top" (Temporal Aperture, Pack 10)
+## holds while the card is on top AND this count is unchanged, so it ends
+## for good: a card covered and uncovered, drawn or milled and put back,
+## or shuffled — even back onto the top — did not REMAIN there (CR 400.7;
+## Forge's StillTopCheck and ShuffleCheck, temporal_aperture.txt).
+var library_top_epoch: int = 0
 
 ## Instance id of a permanent that soaks up COMBAT damage this player would
 ## be dealt by UNBLOCKED creatures (Veteran Bodyguard). -1 = nobody;

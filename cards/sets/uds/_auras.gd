@@ -31,9 +31,10 @@ extends RefCounted
 ##   (CR 603.6c) with a target chosen by the Aura's last controller; an Aura
 ##   exiled instead never triggers.
 ## - Disappear: "{U}: Return enchanted creature and this Aura to their
-##   owners' hands" — the creature the Aura enchanted when the ability was
-##   activated and this very Aura, each only if it is still that object
-##   (CR 400.7), returned together.
+##   owners' hands" — the creature the Aura enchants as the ability
+##   resolves (as it last existed, if the Aura has left; CR 608.2h) and
+##   this very Aura, each only if it is still that object (CR 400.7),
+##   returned together.
 ## - Mark of Fury: an end-step trigger with no "your" — every end step
 ##   (vis Viashino Sandstalker).
 ## - Mask of Law and Grace: CardData.grants_host_protection (layer 6 at the
@@ -144,14 +145,32 @@ static func _you(g: MtgGame, s: CardInstance) -> int:
 
 # ------------------------------------------------------------------ Disappear --
 
+## "Enchanted creature" is read as the ability resolves (CR 608.2h): while
+## this is still the Aura that was activated, the creature it enchants NOW
+## (an Enchantment Alteration in response moved it — the new host goes);
+## once it has left, the one it enchanted as it last existed on the
+## battlefield, and only if that creature is still on the battlefield (the
+## activation's host is also stamp-checked: still that object, CR 400.7).
 static func _disappear(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
-	var host := A.paid_host(g, s)
 	var aura_here := F._same_activation_source(g, s)
+	var host := A.host(g, s) if aura_here else _disappear_last_host(g, s)
 	if host == null and not aura_here: return
 	g.begin_simultaneous()
 	if host != null: g.return_to_hand(host)
 	if aura_here and g.is_present(s): g.return_to_hand(s)
 	g.end_simultaneous()
+
+
+static func _disappear_last_host(g: MtgGame, s: CardInstance) -> CardInstance:
+	# Still that object, only phased out (with its host): treated as though
+	# it doesn't exist (CR 702.26b) — it enchants nothing to return.
+	if s.zone == Mtg.Zone.BATTLEFIELD and s.layer_timestamp == int(g.cost_paid("_source_timestamp", -1)):
+		return null
+	# It left after the activation, so its departure recorded the host.
+	if s.last_attached_to == -1 or s.last_attached_to == int(g.cost_paid("_source_attached_to", -1)):
+		return A.paid_host(g, s)
+	var moved := g.find_instance(s.last_attached_to)
+	return moved if g.is_present(moved) else null
 
 
 # ----------------------------------------------------------- Private Research --

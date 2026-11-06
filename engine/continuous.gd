@@ -1407,6 +1407,8 @@ func recalculate(game: MtgGame) -> void:
 		p.life_gain_becomes_draw = false
 		p.max_hand_size = 7
 		p.top_card_revealed = false   # Field of Dreams rebuilds it
+		p.top_revealed_card_id = -1   # Temporal Aperture rebuilds both
+		p.top_revealed_epoch = -1
 		p.hand_revealed = false       # Revelation rebuilds it
 		p.discard_to_library_top = false   # Library of Leng rebuilds both
 		p.graveyard_becomes_exile = false  # Forbidden Crypt rebuilds it

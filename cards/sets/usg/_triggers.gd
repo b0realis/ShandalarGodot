@@ -342,10 +342,13 @@ static func sacrifice_some(g: MtgGame, pid: int, filter: Callable, desc: String,
 	for i in g.players[pid].battlefield:
 		if g.is_present(i) and filter.call(i): pool.append(i)
 	least_valuable_first(pool, keep)
+	# How many go, fixed before the first pick: the pool shrinks as it is
+	# picked from, and "(2 of 4)" after "(1 of 5)" miscounted (h8-3).
+	var total := mini(count, pool.size())
 	var picked: Array[CardInstance] = []
-	for n in mini(count, pool.size()):
+	for n in total:
 		picked.append(M.pick(g, pid, pool,
-			"%s (%d of %d)" % [desc, n + 1, mini(count, pool.size())] if count > 1 else desc))
+			"%s (%d of %d)" % [desc, n + 1, total] if count > 1 else desc))
 		pool.erase(picked[-1])
 	if picked.is_empty(): return
 	g.begin_simultaneous()

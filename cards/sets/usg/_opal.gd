@@ -259,19 +259,42 @@ static func creature_to_opponents_graveyard(_g: MtgGame, s: CardInstance, e: Gam
 		and dead.owner_id != s.controller_id
 
 
-## The trigger context plus "that spell"'s colours and mana value AS IT WAS
-## CAST (Opal Titan, Veiled Sentry) — read as the trigger is put on the
-## stack, so a spell countered or resolved before the trigger resolves is
-## still described by what it was (CR 608.2h). The mana value counts X as
+## The trigger context plus "that spell" (Opal Titan, Veiled Sentry): its
+## stack object, and its colours and mana value AS IT WAS CAST — read as the
+## trigger is put on the stack, so a spell countered before the trigger
+## resolves is still described (CR 608.2h). The mana value counts X as
 ## announced (CR 202.3e).
 static func _spell_context(g: MtgGame, s: CardInstance, e: GameEvent) -> Dictionary:
 	var context := F._source_context(g, s, e)
 	var spell: CardInstance = e.data.get("instance", null)
 	if spell != null:
+		var item := g.find_stack_item(spell)
+		context["spell_item"] = item.id if item != null else -1
 		context["colors"] = spell.cur_colors
-		context["mana_value"] = spell.data.cost.mana_value() \
-			+ g.casting_x(spell) * spell.data.cost.x_count
+		context["mana_value"] = _mana_value(g, spell)
 	return context
+
+
+static func _mana_value(g: MtgGame, spell: CardInstance) -> int:
+	return spell.data.cost.mana_value() + g.casting_x(spell) * spell.data.cost.x_count
+
+
+## "That spell"'s colours ([param key] "colors") or mana value ("mana_value")
+## as the ability resolves (CR 608.2h): read LIVE while the spell is still
+## the same object on the stack — a Purelace in response makes it white, so
+## the Titan gets protection from white, not green.
+## SIMPLIFIED (docs/simplified-cards.md, "Opal Titan"): a spell that has
+## left the stack is described as it was cast, not as it last existed on
+## the stack — a colour changed on the stack and then countered before the
+## trigger resolves is not remembered (the stack keeps no last known
+## information).
+static func _that_spell(g: MtgGame, s: CardInstance, key: String) -> int:
+	var ctx := g.trigger_context(s)
+	var item_id := int(ctx.get("spell_item", -1))
+	for item: StackItem in g.stack:
+		if item.id == item_id and item.kind == Mtg.StackKind.SPELL and item.card != null:
+			return item.card.cur_colors if key == "colors" else _mana_value(g, item.card)
+	return int(ctx.get(key, 0))
 
 
 # -------------------------------------------------------- the riders --
@@ -279,7 +302,7 @@ static func _spell_context(g: MtgGame, s: CardInstance, e: GameEvent) -> Diction
 ## Opal Titan: "with protection from each of that spell's colors" — a
 ## colourless spell gives none.
 static func _titan_protection(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	var colors := int(g.trigger_context(s).get("colors", 0))
+	var colors := _that_spell(g, s, "colors")
 	if colors != 0:
 		g.grant_protection_permanently(s, colors)
 
@@ -289,7 +312,7 @@ static func _titan_protection(g: MtgGame, s: CardInstance, _e: GameEvent) -> voi
 static func _sentry(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if not F._same_trigger_source(g, s) or not s.is_type(ENCHANTMENT):
 		return
-	var size := int(g.trigger_context(s).get("mana_value", 0))
+	var size := _that_spell(g, s, "mana_value")
 	make_creature(g, s, size, size, ["illusion"])
 
 

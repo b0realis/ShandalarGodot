@@ -1118,6 +1118,19 @@ var _replaying_cost := false
 ## exactly as a resolution's questions are.
 var _cost_source := ""
 
+## Depth of [method try_pay]'s plan run: the ENGINE is tapping a seat's
+## sources for a cost it is paying on that seat's behalf (echo, "unless
+## pays", an attack or block tax). Such a tap can be neither held open (the
+## hold re-issues the mana ability alone — the trigger or declaration it was
+## paying for would be lost) nor pre-flown, so the plan that priced it
+## answers its questions ([method _plan_answers]; bug pass 0.60.19, h1-1).
+var _engine_paying := 0
+
+## The mana a PLAN priced the tap in progress at, -1 when no plan did — set
+## by [method tap_for_mana_as_planned] for the one call, so a "reveal any
+## number" source makes what the plan counted on and no more (h4-3).
+var _planned_amount := -1
+
 ## The card whose TURN-BASED ACTION is asking a question right now (a
 ## Smoke choosing which creature untaps, an Old Man of the Sea choosing
 ## not to), "" outside one. Scopes the question the way [member _cost_source]
@@ -1820,14 +1833,27 @@ func _shuffle(cards: Array[CardInstance]) -> void:
 		var tmp := cards[i]
 		cards[i] = cards[j]
 		cards[j] = tmp
-	# A shuffled LIBRARY is counted, whatever shuffled it ([member
-	# MtgPlayer.library_shuffles]): "for as long as that card remains on
-	# top" ends on any shuffle, even one that leaves it there (Temporal
-	# Aperture, Pack 10; Forge's ShuffleCheck, temporal_aperture.txt).
+	# A shuffled LIBRARY's top has moved, whatever shuffled it: "for as
+	# long as that card remains on top" ends on any shuffle, even one that
+	# leaves it there (Temporal Aperture, Pack 10; Forge's ShuffleCheck,
+	# temporal_aperture.txt).
 	for p in players:
 		if is_same(p.library, cards):
-			_rec(p, &"library_shuffles")
-			p.library_shuffles += 1
+			_library_top_moved(p)
+
+
+## THE TOP OF [param p]'s LIBRARY MOVED ([member
+## MtgPlayer.library_top_epoch], bug pass 0.60.19): every helper that takes
+## the top card off a library, puts a card on it, or shuffles or reorders
+## it calls this, journaled, so "for as long as that card remains on top"
+## (Temporal Aperture) ends for good — a card that comes back to the top
+## did not REMAIN there. With [param leaving], a card about to be taken
+## out of the library: the top moves only when it IS the top card.
+func _library_top_moved(p: MtgPlayer, leaving: CardInstance = null) -> void:
+	if leaving != null and (p.library.is_empty() or p.library.back() != leaving):
+		return   # from deeper down: the top card stays where it is
+	_rec(p, &"library_top_epoch")
+	p.library_top_epoch += 1
 
 
 # ------------------------------------------------------------------ queries --
@@ -2402,6 +2428,7 @@ func play_land(pid: int, inst: CardInstance) -> String:
 		players[pid].graveyard.erase(inst)
 	elif from_zone:
 		_rec(players[pid], &"library")
+		_library_top_moved(players[pid], inst)
 		players[pid].library.erase(inst)
 	else: players[pid].hand.erase(inst)
 	players[pid].lands_played_this_turn += 1
@@ -2617,6 +2644,23 @@ func mana_ability_refusal(pid: int, inst: CardInstance, ability_index := 0) -> S
 	return ""
 
 
+## [method tap_for_mana] as a PLAN step runs it ([method ManaPlanner.run_step]):
+## [param planned] is the mana the plan priced this tap at, -1 when none —
+## a "reveal any number" source (Metalworker) then offers the fewest cards
+## that make it as its default instead of every card, so a {2} bill no
+## longer reveals three, floats four and burns them (bug pass 0.60.19,
+## h4-3). A seat that is asked still answers for itself. Its own entry
+## point, so an override of tap_for_mana (the LAN projection) keeps its
+## signature.
+func tap_for_mana_as_planned(pid: int, inst: CardInstance, ability_index := 0,
+		chosen := -1, planned := -1) -> String:
+	var outer := _planned_amount
+	_planned_amount = planned
+	var result := tap_for_mana(pid, inst, ability_index, chosen)
+	_planned_amount = outer
+	return result
+
+
 ## Activate [param inst]'s mana ability [param ability_index] for
 ## [param pid]. [param chosen] is the colour a PLAN already picked for a
 ## colour-choice source (Fellwar Stone; [method ManaPlanner.step_of]) —
@@ -2625,7 +2669,14 @@ func mana_ability_refusal(pid: int, inst: CardInstance, ability_index := 0) -> S
 ## for) leaves the colour to the activating player as before.
 func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		chosen := -1) -> String:
-	_begin_cost_choices()
+	# The mana a plan step priced this tap at ([method tap_for_mana_as_planned])
+	# is this tap's alone; and a tap the ENGINE makes while it pays a cost
+	# ([member _engine_paying]) holds nothing, so it starts no question count
+	# of its own — the one running belongs to the action being paid for.
+	var planned := _planned_amount
+	_planned_amount = -1
+	if _engine_paying == 0:
+		_begin_cost_choices()
 	var refusal := mana_ability_refusal(pid, inst, ability_index)
 	if refusal != "":
 		return refusal
@@ -2669,7 +2720,7 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# nothing but a record of this call to re-issue (docs/duel-todo.md §1.3):
 	# there is no stack item to probe, and nothing to rewind either.
 	var replay := {"kind": "mana", "pid": pid, "inst": inst,
-		"index": ability_index}
+		"index": ability_index, "chosen": chosen, "planned": planned}
 	var object_picks := OBJECT_COSTS.choose(self, pid, inst, ability.object_costs, replay)
 	if awaiting_choice != null: return ""
 	var drought_picks := BLACK_SYMBOL_COST.choose(self, pid, inst, ability.cost, replay, drought_groups, drought_excluded)
@@ -2746,12 +2797,28 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 			var reveal_q := _cost_question(pid, inst, PlayerChoice.Kind.OPTION,
 				"How many %s cards do you reveal? (max: %d)" % [ability.reveal_desc, offered.size()])
 			reveal_q.options = counts
-			reveal_q.hint = offered.size()
-			if _hold_cost_choice(reveal_q, replay):
-				return ""
-			var wanted := _ask_cost_option(pid, inst, counts, reveal_q.prompt, offered.size())
+			# The default is every card — or, for a tap a PLAN priced, the
+			# fewest that make what it counted on (h4-3: a {2} bill revealed
+			# three cards, floated four mana and burned it).
+			var default_count := offered.size()
+			if planned >= 0 and ability.reveal_per_card > 0:
+				var short := planned - ManaPlanner.tap_amount(self, inst, ability, pid)
+				default_count = clampi(ceili(float(short) / ability.reveal_per_card), 0, offered.size())
+			reveal_q.hint = default_count
+			var wanted := default_count
+			if not _plan_answers(pid):
+				if _hold_cost_choice(reveal_q, replay):
+					return ""
+				wanted = _ask_cost_option(pid, inst, counts, reveal_q.prompt, default_count)
 			if wanted >= offered.size():
 				revealed = offered
+			elif _plan_answers(pid):
+				# The engine paying for the seat shows the fewest NEW cards:
+				# one already revealed in hand first (CR 701.16a).
+				for card in offered:
+					if card.revealed_in_hand and revealed.size() < wanted: revealed.append(card)
+				for card in offered:
+					if not revealed.has(card) and revealed.size() < wanted: revealed.append(card)
 			else:
 				var left: Array[CardInstance] = offered.duplicate()
 				for n in wanted:
@@ -2770,7 +2837,12 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# here, one per trigger (ManaPlanner.bonus_color_questions), and ride the
 	# TAPPED_FOR_MANA event as `bonus_colors` {trigger source id: colour}.
 	var bonus_colors := {}
-	for row in ManaPlanner.bonus_color_questions(self, inst, ability, pid, chosen_color, borrowed):
+	# A tap that makes no mana fires none of them (CR 106.12a — h4-2), so
+	# the rows need what the riders asked above add.
+	var rider_bonus := counters_spent * ability.bonus_per_counter \
+		+ revealed.size() * ability.reveal_per_card
+	for row in ManaPlanner.bonus_color_questions(self, inst, ability, pid, chosen_color,
+			borrowed, rider_bonus):
 		var asking: CardInstance = row["source"]
 		var asks := int(row["asks"])
 		var offered_colors: Array = row["colors"]
@@ -2778,6 +2850,10 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		var bonus_q := _cost_question(asks, asking, int(row["kind"]),
 			PlayerChoice.mana_color_prompt(asking.data.card_name))
 		bonus_q.adverse = asks != pid   # the land's controller, not the hand that tapped it
+		if _plan_answers(asks):
+			# The colour the plan counted the bonus as (h1-1).
+			bonus_colors[asking.id] = hint_color
+			continue
 		if int(row["kind"]) == PlayerChoice.Kind.OPTION:
 			var type_labels: Array[String] = []
 			for color in offered_colors:
@@ -2871,13 +2947,19 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	var recolor: int = ability.forced_output_color
 	if recolor == 0 and not borrowed: recolor = players[pid].land_mana_becomes
 	var output := ManaPool.new() if borrowed else players[pid].mana_pool
+	var made_before := output.total()
 	# EVERY type this activation made, for "one mana of any type that land
 	# produced" (Mana Flare): the first colour as it came out above, plus
 	# any later literal entry — a two-type ability lets the Flare's player
 	# choose (Duel.hlp, Mana Flare). `color` stays the first, for the
 	# mono-producing lands that are the whole pool.
 	var produced_types: Array = [produced_color]
-	if ability.borrow_paid_land_type and chosen_color == -1:
+	if ManaPlanner.replaced_makes_nothing(self, inst, ability, pid):
+		# CR 106.12b: "instead of any other type and amount" (Contamination)
+		# replaces a mana PRODUCTION event — an empty Gaea's Cradle has none
+		# to replace, so it makes nothing at all (lead ruling, h4-Q1).
+		produced_types.clear()
+	elif ability.borrow_paid_land_type and chosen_color == -1:
 		produced_types.clear() # a land with no mana ability supplies no type
 	elif recolor != 0 and inst.is_land() and not ability.scales_with_sacrifice_mv:
 		var scratch := ManaPool.new()
@@ -2899,6 +2981,7 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 			var extra: int = int(ability.produces[i][0])
 			if int(ability.produces[i][1]) > 0 and not produced_types.has(extra):
 				produced_types.append(extra)
+	var made := output.total() - made_before
 	if borrowed:
 		for color in output._mana:
 			players[pid].mana_pool.add_restricted(int(color), int(output._mana[color]), "spell")
@@ -2931,7 +3014,13 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 			"color": produced_color, "colors": produced_types}
 		if not bonus_colors.is_empty():
 			tapped_data["bonus_colors"] = bonus_colors   # asked above (Pack 10 E8)
-		dispatch_event(Mtg.EventType.TAPPED_FOR_MANA, tapped_data)
+		# CR 106.12a: "is tapped for mana" triggers when the ability RESOLVES
+		# AND PRODUCES MANA — an empty Gaea's Cradle, Tolarian Academy or
+		# Serra's Sanctum was still tapped for mana (Desolation's flag above,
+		# CR 106.12) but feeds no Mana Flare, Fertile Ground or Manabarbs
+		# (bug pass 0.60.19, h4-2).
+		if made > 0:
+			dispatch_event(Mtg.EventType.TAPPED_FOR_MANA, tapped_data)
 	# "Becomes tapped" triggers (City of Brass) — normal stacked triggers.
 	#
 	# `controller` IS THE PERMANENT'S CONTROLLER on this event, as on every
@@ -2988,7 +3077,12 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	if not _stack_frozen and not awaiting_attackers and not awaiting_blockers \
 			and awaiting_choice == null:
 		check_state_based_actions()
-	if _hold_trigger_targets(priority_player):
+	# Nobody receives priority after a tap the ENGINE made paying a cost, or
+	# one a resolution made (Drain Power): the trigger's target is named the
+	# next time a player would receive priority (CR 603.3) — a hold here
+	# re-issued only this tap and lost the payment around it (h1-1).
+	if _engine_paying == 0 and _resolving_item == null \
+			and _hold_trigger_targets(priority_player):
 		return ""
 	_emit_state()
 	return ""
@@ -3919,6 +4013,7 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		_rec(inst, &"zone")
 		if inst.zone == Mtg.Zone.LIBRARY:   # Pack 10 E5: the library's revealed top
 			_rec(players[inst.owner_id], &"library")
+			_library_top_moved(players[inst.owner_id], inst)
 			players[inst.owner_id].library.erase(inst)
 		else:
 			_rec(players[inst.owner_id], &"graveyard")
@@ -4600,8 +4695,12 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	# StackItem below — never written onto the permanent, which has one
 	# slot and would let two stacked activations read each other's record.
 	# See [member StackItem.cost_paid] for the bug that taught us.
+	# `_source_zone`: where it was ACTIVATED from, before any cost moved it
+	# — a cycling card's is its hand, a permanent's the battlefield (CR
+	# 109.2; Interdict, bug pass 0.60.19).
 	var cost_record := {"_source_timestamp": inst.layer_timestamp,
 		"_source_graveyard_entry": inst.graveyard_entry,
+		"_source_zone": inst.zone,
 		"_source_untap_sequence": inst.untap_sequence,
 		"_source_control_sequence": inst.control_sequence}
 	if ability.capture_mana_spent: cost_record["_mana_spent"] = stored_mana
@@ -5592,14 +5691,24 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 			p.last_red_spell_damage_controller = source.controller_id
 		damage_dealt_this_turn[source.id] = \
 			int(damage_dealt_this_turn.get(source.id, 0)) + amount
-		p.life -= amount
+		# The DAMAGE is dealt in full; a life floor (Ali from Cairo,
+		# Worship) limits only the LIFE it costs (0.60.19 bug pass, h6-1;
+		# [method damage_life_loss]). Every reader of the damage — this
+		# turn's tallies, DAMAGE_DEALT, "the damage dealt this way" — sees
+		# all of it; LIFE_LOST hears only what was really lost, if anything.
+		var loss := damage_life_loss(target.player_id, amount)
+		p.life -= loss
 		_refresh_after_life_change()   # Pack 10 E3: judged at the same check (CR 704.5f-g)
-		dispatch_event(Mtg.EventType.LIFE_LOST, {"player": target.player_id, "amount": amount})
+		if loss > 0:
+			dispatch_event(Mtg.EventType.LIFE_LOST, {"player": target.player_id, "amount": loss})
 		if not source.damaged_players_this_turn.has(target.player_id):
 			source.damaged_players_this_turn.append(target.player_id)
 		log_line("%s deals %d damage to %s (life %d)" % [
 			source.data.card_name, amount, p.player_name, p.life],
 			source, "damage")
+		if loss < amount:
+			log_line("%s's life can't go below %d (life floor)" % [
+				p.player_name, p.min_life_from_damage])
 		dispatch_event(Mtg.EventType.DAMAGE_DEALT,
 			{"source": source, "amount": amount, "to_player": target.player_id,
 			"packet": packet})
@@ -5677,6 +5786,29 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 	return amount
 
 
+## The LIFE that [param amount] damage dealt to seat [param pid] costs it
+## right now: all of it, unless a LIFE FLOOR holds — "damage that would
+## reduce your life total to less than 1 reduces it to 1 instead" (Ali from
+## Cairo, Worship; [member MtgPlayer.min_life_from_damage]).
+##
+## The floor replaces the life REDUCTION, never the damage (0.60.19 bug
+## pass, h6-1). Gatherer 2004-10-04 on Worship: "It doesn't prevent damage;
+## it changes the result of the damage dealt to you"; Forge models both
+## cards as a replacement of the life reduction (`res/cardsfolder/w/
+## worship.txt`, `Event$ LifeReduced | IsDamage$ True`, revision b09a3d3f).
+## So the damage is dealt in full and every reader of it sees it, and the
+## floor is no line of the CR 616.1 damage-order question. A player already
+## below the floor loses as normal (Forge's `ValidPlayer$ You.lifeGE1`).
+## Public: the AI's face-damage forecasts price the same loss.
+func damage_life_loss(pid: int, amount: int) -> int:
+	if amount <= 0 or pid < 0 or pid >= players.size():
+		return 0
+	var p := players[pid]
+	if p.min_life_from_damage <= 0 or p.life < p.min_life_from_damage:
+		return amount
+	return mini(amount, p.life - p.min_life_from_damage)
+
+
 ## Could ANY replacement or prevention touch a packet aimed at [param p]?
 ## One cheap test per list, in front of building a candidate list at all:
 ## a table with none of these on it takes this branch, allocates nothing
@@ -5691,7 +5823,6 @@ func _has_damage_gates(p: MtgPlayer, source: CardInstance,
 		or not p.prevention_shield_filters.is_empty() \
 		or not p.static_prevention_shields.is_empty() \
 		or p.damage_prevention > 0 \
-		or p.min_life_from_damage > 0 \
 		or p.combat_damage_redirect != -1 \
 		or p.artifact_damage_redirect != -1 \
 		or (source.damage_all_redirect_to >= 0 and not packet.from_redirect) \
@@ -5755,8 +5886,9 @@ func _damage_gates(packet: DamagePacket, p: MtgPlayer,
 	if p.damage_prevention > 0:
 		candidates.append({"kind": &"pool",
 			"label": "%d prevented damage" % p.damage_prevention})
-	if p.min_life_from_damage > 0:
-		candidates.append({"kind": &"floor", "label": "life floor"})
+	# No life floor here (Ali from Cairo, Worship): it replaces the LIFE the
+	# damage costs, not the damage, so it changes no line of this question
+	# and lands with the damage instead ([method damage_life_loss]).
 	candidates.append_array(fx_late)
 	var out: Array[Dictionary] = []
 	for gate in candidates:
@@ -5825,9 +5957,6 @@ func _damage_gate_applies(packet: DamagePacket, p: MtgPlayer,
 			return bool(gate["entry"]["filter"].call(source))
 		&"pool":
 			return p.damage_prevention > 0
-		&"floor":
-			return p.min_life_from_damage > 0 \
-				and p.life - amount < p.min_life_from_damage
 	return false
 
 
@@ -5960,13 +6089,6 @@ func _apply_damage_gate(packet: DamagePacket, p: MtgPlayer,
 			_rec(p, &"damage_prevention")
 			p.damage_prevention -= soaked
 			log_line("%d damage to %s is prevented" % [soaked, p.player_name])
-			return -1
-		&"floor":
-			# Ali from Cairo: damage can't take you below the floor.
-			packet.prevent(amount - maxi(p.life - p.min_life_from_damage, 0))
-			if packet.remaining() <= 0:
-				log_line("%s's damage to %s is reduced to nothing (life floor)" % [
-					source.data.card_name, p.player_name])
 			return -1
 	return -1
 
@@ -6872,6 +6994,7 @@ func predict_damage(source: CardInstance, target: TargetRef, amount: int,
 	agents = [DecisionAgent.new(), DecisionAgent.new()]
 	var life_before: Array[int] = [players[0].life, players[1].life]
 	var marked_before := victim.damage if victim != null else 0
+	var taken_before := players[target.player_id].damage_taken_this_turn if victim == null else 0
 	var packet := _plan_damage(source, target, amount, is_combat)
 	if packet != null:
 		if as_spell == 1 or (as_spell < 0 and (source.zone == Mtg.Zone.STACK
@@ -6890,7 +7013,11 @@ func predict_damage(source: CardInstance, target: TargetRef, amount: int,
 		else:
 			result["dealt"] = maxi(life_before[target.player_id] - players[target.player_id].life, 0)
 		result["prevented"] = packet.prevented
-		result["elsewhere"] = maxi(total - int(result["dealt"]), 0)
+		# Damage a life floor kept from costing life still landed on the
+		# player (h6-1, [method damage_life_loss]) — it went nowhere else.
+		var on_target := int(result["dealt"]) if victim != null else maxi(int(result["dealt"]),
+			players[target.player_id].damage_taken_this_turn - taken_before)
+		result["elsewhere"] = maxi(total - on_target, 0)
 		end_simultaneous()
 	if victim != null:
 		result["dies"] = victim.zone != Mtg.Zone.BATTLEFIELD \
@@ -7637,6 +7764,7 @@ func draw_cards(pid: int, count: int) -> void:
 			_rec(p, &"library")
 			_rec(p, &"hand")
 			_rec(p, &"drawn_this_turn")
+		_library_top_moved(p)
 		var inst: CardInstance = p.library.pop_back()
 		if undo_log != null:
 			_rec(inst, &"zone")
@@ -7913,6 +8041,7 @@ func put_from_hand_on_top_of_library(inst: CardInstance) -> void:
 	_rec_move(inst, inst.owner_id, Mtg.Zone.LIBRARY)
 	p.hand.erase(inst)
 	inst.zone = Mtg.Zone.LIBRARY
+	_library_top_moved(p)
 	p.library.append(inst)
 	# Hand to library: hidden zone to hidden zone, so the name is the
 	# owner's alone (bug pass 2026-10-03 — Sylvan Library's put-backs
@@ -7937,6 +8066,8 @@ func put_on_bottom_of_library(inst: CardInstance) -> void:
 	_rec_move(inst, inst.owner_id, Mtg.Zone.LIBRARY)
 	_remove_from_zone(inst)
 	inst.zone = Mtg.Zone.LIBRARY
+	if p.library.is_empty():
+		_library_top_moved(p)   # the bottom of an empty library is its top
 	p.library.insert(0, inst)
 	_emit_state()
 
@@ -8118,6 +8249,7 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 	_rec_move(inst, inst.owner_id, destination)
 	if destination == Mtg.Zone.LIBRARY:
 		inst.zone = Mtg.Zone.LIBRARY
+		_library_top_moved(players[inst.owner_id])
 		players[inst.owner_id].library.append(inst)
 	elif destination == Mtg.Zone.EXILE:
 		_enter_exile(inst)
@@ -8206,6 +8338,7 @@ func _return_from_battlefield(inst: CardInstance, destination: int) -> void:
 		inst.zone = Mtg.Zone.EXILE   # nowhere, really — it stops existing
 		log_line("%s ceases to exist" % inst.data.card_name)
 	elif destination == Mtg.Zone.LIBRARY:
+		_library_top_moved(players[inst.owner_id])
 		players[inst.owner_id].library.append(inst)
 		log_line("%s goes on top of its owner's library" % inst.data.card_name)
 	else:
@@ -8551,6 +8684,7 @@ func exile_top_of_library(pid: int, face_down := true, viewer := -1) -> CardInst
 	var inst: CardInstance = players[pid].library.back()
 	_rec_move(inst, pid, Mtg.Zone.EXILE)
 	_rec(inst, &"face_down")
+	_library_top_moved(players[pid])
 	players[pid].library.pop_back()
 	_enter_exile(inst)
 	inst.face_down = face_down
@@ -8801,6 +8935,7 @@ func top_of_library_to_hand(pid: int) -> CardInstance:
 		return null
 	var inst: CardInstance = p.library.back()
 	_rec_move(inst, p.id, Mtg.Zone.HAND)
+	_library_top_moved(p)
 	p.library.pop_back()
 	inst.zone = Mtg.Zone.HAND
 	p.hand.append(inst)
@@ -8826,6 +8961,7 @@ func mill(pid: int, count: int) -> void:
 			break
 		var inst: CardInstance = p.library.back()
 		_rec_move(inst, p.id, Mtg.Zone.GRAVEYARD)
+		_library_top_moved(p)
 		p.library.pop_back()
 		log_line("%s mills %s" % [p.player_name, inst.data.card_name])
 		if _land_in_graveyard(inst):   # Forbidden Crypt exiles it instead
@@ -8859,6 +8995,7 @@ func put_library_card_into_graveyard(inst: CardInstance) -> void:
 	if not p.library.has(inst):
 		return
 	_rec(p, &"library")
+	_library_top_moved(p, inst)
 	p.library.erase(inst)
 	put_into_graveyard(inst)
 
@@ -9795,6 +9932,7 @@ func stake_ante(pid: int, count := 1, exclude_basic_lands := false) -> Array[Car
 			break
 		var picked: CardInstance = pool[rng.randi_range(0, pool.size() - 1)]
 		_rec_move(picked, pid, Mtg.Zone.ANTE)
+		_library_top_moved(p, picked)
 		p.library.erase(picked)
 		picked.zone = Mtg.Zone.ANTE
 		p.ante.append(picked)
@@ -9854,6 +9992,7 @@ func stake_named_ante(pid: int, names: Array) -> Array[CardInstance]:
 			log_line("%s has no %s in the library to ante" % [p.player_name, wanted])
 			continue
 		_rec_move(picked, pid, Mtg.Zone.ANTE)
+		_library_top_moved(p, picked)
 		p.library.erase(picked)
 		picked.zone = Mtg.Zone.ANTE
 		p.ante.append(picked)
@@ -9908,6 +10047,7 @@ func ante_top_of_library(pid: int) -> CardInstance:
 		return null
 	var inst: CardInstance = p.library.back()
 	_rec_move(inst, inst.owner_id, Mtg.Zone.ANTE)
+	_library_top_moved(p)
 	p.library.pop_back()
 	inst.zone = Mtg.Zone.ANTE
 	players[inst.owner_id].ante.append(inst)
@@ -9936,7 +10076,9 @@ func remove_from_ante(inst: CardInstance, to_zone: int) -> void:
 	match to_zone:
 		Mtg.Zone.HAND:      players[inst.owner_id].hand.append(inst)
 		Mtg.Zone.EXILE:     players[inst.owner_id].exile.append(inst)
-		Mtg.Zone.LIBRARY:   players[inst.owner_id].library.append(inst)
+		Mtg.Zone.LIBRARY:
+			_library_top_moved(players[inst.owner_id])
+			players[inst.owner_id].library.append(inst)
 		_:
 			inst.zone = Mtg.Zone.ANTE
 			players[inst.owner_id].ante.append(inst)
@@ -9989,7 +10131,9 @@ func change_owner(inst: CardInstance, new_owner: int) -> void:
 		Mtg.Zone.GRAVEYARD:  _land_in_graveyard(inst, was_controller)
 		Mtg.Zone.HAND:       players[new_owner].hand.append(inst)
 		Mtg.Zone.EXILE:      players[new_owner].exile.append(inst)
-		Mtg.Zone.LIBRARY:    players[new_owner].library.append(inst)
+		Mtg.Zone.LIBRARY:
+			_library_top_moved(players[new_owner])
+			players[new_owner].library.append(inst)
 		Mtg.Zone.BATTLEFIELD:
 			players[inst.controller_id].battlefield.append(inst)
 	log_line("%s now owns %s" % [players[new_owner].player_name, inst.data.card_name])
@@ -10027,6 +10171,7 @@ func _remove_from_zone(inst: CardInstance) -> void:
 				for f in ZONE_FIELD.values():
 					undo_log.record(p, f, p.get(f))
 	for p in players:
+		_library_top_moved(p, inst)   # only when it was that library's top card
 		p.library.erase(inst)
 		p.hand.erase(inst)
 		p.graveyard.erase(inst)
@@ -10124,6 +10269,7 @@ func put_into_play(inst: CardInstance, controller: int) -> void:
 func put_library_card_onto_battlefield(inst: CardInstance, controller: int, tapped := false) -> void:
 	if inst == null or inst.zone != Mtg.Zone.LIBRARY: return
 	_rec_move(inst, controller, Mtg.Zone.BATTLEFIELD)
+	_library_top_moved(players[inst.owner_id], inst)
 	players[inst.owner_id].library.erase(inst)
 	_put_on_battlefield(inst, controller, null, tapped)
 
@@ -10203,6 +10349,7 @@ func search_library(pid: int, filter: Callable, prompt: String,
 		if not reveal_title.is_empty():
 			reveal_information(-1, reveal_title, [chosen.data.card_name])
 		_rec_move(chosen, pid, Mtg.Zone.HAND)
+		_library_top_moved(p, chosen)
 		p.library.erase(chosen)
 		# A private search (Demonic Tutor) names its card to its searcher
 		# only; a revealed one, or one that goes onto the battlefield face
@@ -10290,6 +10437,7 @@ func _discard_to_library_instead(pid: int, inst: CardInstance,
 	_rec_move(inst, pid, Mtg.Zone.LIBRARY)
 	p.hand.erase(inst)
 	inst.zone = Mtg.Zone.LIBRARY
+	_library_top_moved(p)
 	p.library.append(inst)
 	# Library of Leng: the card goes from the hand to the top of the
 	# library — both hidden — so only its owner hears its name.
@@ -10348,6 +10496,7 @@ func return_from_graveyard_to_library_top(inst: CardInstance) -> void:
 	inst.zone = Mtg.Zone.LIBRARY
 	# The library's TOP is the END of the array (draw_cards pops the back),
 	# so cards land on top in the order they are handed to this method.
+	_library_top_moved(players[inst.owner_id])
 	players[inst.owner_id].library.append(inst)
 	log_line("%s goes on top of %s's library" % [
 		inst.data.card_name, players[inst.owner_id].player_name])
@@ -10536,6 +10685,10 @@ func try_pay(pid: int, cost: ManaCost, usage_keys: Array = []) -> bool:
 	var plan: Variant = _payment_plan(pid, cost, usage_keys)
 	if plan == null:
 		return false
+	# THE ENGINE IS PAYING (bug pass 0.60.19, h1-1): a tap below that asks
+	# (Fertile Ground's colour, Metalworker's count) is answered by this
+	# plan, never held — see [member _engine_paying].
+	_engine_paying += 1
 	for step in plan:
 		# Campaign fix-mana (2026-10-07, w1-1): covered already — a mana
 		# trigger the plan did not price (Mana Flare) made the rest, and
@@ -10546,6 +10699,7 @@ func try_pay(pid: int, cost: ManaCost, usage_keys: Array = []) -> bool:
 			continue   # mana already floating — there is nothing to tap
 		if ManaPlanner.run_step(self, pid, step) != "":
 			break   # the plan went stale — stop before tapping more
+	_engine_paying -= 1
 	if not players[pid].mana_pool.can_pay(cost, 0, usage_keys):
 		return false   # a tap trigger disturbed the pool — refuse safely
 	players[pid].mana_pool.pay(cost, 0, usage_keys)
@@ -10610,6 +10764,13 @@ func _payment_plan(pid: int, cost: ManaCost, usage_keys: Array = [],
 ## trigger. A battery with no counters on it asks nothing and is planned
 ## like any other source, and so is a Stone with ONE colour on offer —
 ## [method tap_for_mana] makes it without a question (2026-09-17).
+##
+## NOT IN THIS RULE: the questions Pack 10 E8 put into the tap — a mana
+## trigger's colour (Fertile Ground, Mana Flare on a two-type land) and
+## Metalworker's count. The plan prices each of them (the bonus as the
+## land's colour, the count it needs), so while [method try_pay] runs it
+## the plan's answer is taken and nothing is held ([member _engine_paying],
+## bug pass 0.60.19 h1-1 — they used to be held, and the echo was lost).
 func _mana_ability_asks(inst: CardInstance, index: int) -> bool:
 	if index < 0 or index >= inst.cur_mana_abilities.size():
 		return true
@@ -11195,6 +11356,14 @@ func _preflight() -> PlayerChoice:
 			continue
 		if choice.pid < 0 or choice.pid >= agents.size():
 			continue
+		# A COST question asked INSIDE the resolution (a land it taps asking
+		# its Aura's colour — Drain Power) is no question for this hold: its
+		# answer would go to the cost replay ([method answer_choice]), which
+		# has no action to re-issue, and the real run never holds it
+		# ([method _hold_cost_choice]). The seat's agent answers it there, on
+		# the ledger (bug pass 0.60.19, h1-1 — it was asked twice, in vain).
+		if choice.is_cost:
+			continue
 		# A seat is only held open on a question it can actually ANSWER
 		# (DecisionAgent.can_answer). A kind its front end has no case for
 		# would otherwise stop the duel dead; skipped, it falls through to
@@ -11356,7 +11525,16 @@ func _cost_question(pid: int, source: CardInstance, kind: int,
 ## ([method DecisionAgent.can_answer]) — and, crucially, when this question
 ## is one the player has ALREADY answered in an earlier run of the same
 ## action, whose answer is waiting in the mailbox.
+##
+## NEVER inside a payment or a resolution (bug pass 0.60.19, h1-1 / h4-1):
+## the hold re-issues [param action] ALONE, so a tap held while
+## [method try_pay] pays an echo, or while a resolution taps lands (Drain
+## Power), lost the trigger or the rest of the resolution and left the mana
+## floating. The engine's payment is answered by its plan
+## ([method _plan_answers]); a resolution's ask falls to the seat's agent.
 func _hold_cost_choice(question: PlayerChoice, action: Dictionary) -> bool:
+	if _engine_paying > 0:
+		return false   # the counters belong to the action being paid for
 	_rec(self, &"_cost_asked")
 	_cost_asked += 1
 	if _cost_asked <= _cost_answers:
@@ -11367,7 +11545,8 @@ func _hold_cost_choice(question: PlayerChoice, action: Dictionary) -> bool:
 			agents[pid_answered].accept_answer(question,
 				_cost_values[_cost_asked - 1])
 		return false
-	if not interactive_choices or _probing or awaiting_choice != null:
+	if not interactive_choices or _probing or awaiting_choice != null \
+			or _resolving_item != null:
 		return false
 	var pid := question.pid
 	if pid < 0 or pid >= agents.size():
@@ -11378,6 +11557,19 @@ func _hold_cost_choice(question: PlayerChoice, action: Dictionary) -> bool:
 	_pending_action = action
 	_emit_state()
 	return true
+
+
+## Does the PLAN answer [param pid]'s question in the tap in progress,
+## instead of the seat? While [method try_pay] pays (h1-1): the engine is
+## paying on the seat's behalf with its own plan, the way the 1997
+## auto-tapper did, so the answer is the one the plan priced — a mana
+## trigger's colour counted as the land's own, Metalworker's count the bill
+## needs. Only for a seat that WANTS to be asked: it can be neither held
+## nor pre-flown here, and an ask would only put the heuristic on its
+## ledger. A computer seat is asked as before (its hint is the same answer).
+func _plan_answers(pid: int) -> bool:
+	return _engine_paying > 0 and pid >= 0 and pid < agents.size() \
+		and agents[pid].wants_to_be_asked()
 
 
 ## HOLD a land drop open on its ENTRY PAYMENT's next unanswered question —
@@ -11730,8 +11922,12 @@ func _replay_cost_action(action: Dictionary) -> String:
 			return activate_ability(int(action["pid"]), action["inst"],
 				int(action["index"]), action["targets"], int(action["x"]))
 		"mana":
-			return tap_for_mana(int(action["pid"]), action["inst"],
-				int(action["index"]))
+			# With the colour and the amount the PLAN gave the first run
+			# (h4-4): without them a Reflecting Pool held on its Aura's
+			# colour came back asking its own colour as well.
+			return tap_for_mana_as_planned(int(action["pid"]), action["inst"],
+				int(action["index"]), int(action.get("chosen", -1)),
+				int(action.get("planned", -1)))
 		"land":
 			# A land's entry payment ([method _hold_entry_payment]): the
 			# land drop again, with the answers in the seat's mailbox.
@@ -12312,19 +12508,39 @@ func _arrival_refused(inst: CardInstance, why: String) -> void:
 ## trigger. [param own] false: the permanent would have no abilities as it
 ## exists on the battlefield (CR 614.12 — a nonbasic land under Blood Moon),
 ## so only the radiated clauses are asked (Pack 9 bug pass h4-2).
+##
+## A radiated clause is asked about the permanent AS IT WOULD EXIST on the
+## battlefield, too (CR 614.12; 0.60.19 bug pass, h2-2): an enchantment
+## entering under an Opalescence already there is a creature there, and
+## Kismet taps it. The clauses that apply are the board's as it is — what
+## the arriving permanent would do to THEM is no part of the question.
 func _arrives_tapped(inst: CardInstance, controller: int, own := true) -> bool:
 	if own and inst.data.enters_tapped:
 		return true
+	var radiating: Array[CardInstance] = []
 	for other in all_battlefield():
-		if other.cur_abilities_silenced or other.cur_statics_suspended:
+		if other == inst or other.cur_abilities_silenced or other.cur_statics_suspended:
 			continue
-		if not other.data.enters_tapped_rule.is_valid():
-			continue
-		if bool(other.data.enters_tapped_rule.call(self, other, inst, controller)):
-			log_line("%s enters tapped (%s)" % [
-				inst.data.card_name, other.data.card_name])
-			return true
-	return false
+		if other.data.enters_tapped_rule.is_valid():
+			radiating.append(other)
+	if radiating.is_empty():
+		return false
+	var first_yes := func() -> CardInstance:
+		for other in radiating:
+			if bool(other.data.enters_tapped_rule.call(self, other, inst, controller)):
+				return other
+		return null
+	var tapper: CardInstance = null
+	if not inst.face_down and _entry_silencer_possible(inst) \
+			and not players[controller].battlefield.has(inst) \
+			and not _battlefield_order.has(inst.id):
+		tapper = _as_it_would_exist(inst, controller, first_yes)
+	else:
+		tapper = first_yes.call()
+	if tapper == null:
+		return false
+	log_line("%s enters tapped (%s)" % [inst.data.card_name, tapper.data.card_name])
+	return true
 
 
 ## Resolve a card's enters-as-a-copy replacement (Clone, Copy Artifact,
@@ -12709,6 +12925,7 @@ func exile_library_card(inst: CardInstance) -> void:
 	if inst == null or inst.zone != Mtg.Zone.LIBRARY or not players[inst.owner_id].library.has(inst): return
 	_rec_move(inst, inst.owner_id, Mtg.Zone.EXILE)
 	_rec(inst, &"face_down")
+	_library_top_moved(players[inst.owner_id], inst)
 	players[inst.owner_id].library.erase(inst)
 	_enter_exile(inst)
 	inst.face_down = false
@@ -12720,6 +12937,7 @@ func exile_library_card(inst: CardInstance) -> void:
 func library_card_to_hand(inst: CardInstance) -> void:
 	if inst == null or inst.zone != Mtg.Zone.LIBRARY or not players[inst.owner_id].library.has(inst): return
 	_rec_move(inst, inst.owner_id, Mtg.Zone.HAND)
+	_library_top_moved(players[inst.owner_id], inst)
 	players[inst.owner_id].library.erase(inst)
 	inst.zone = Mtg.Zone.HAND
 	players[inst.owner_id].hand.append(inst)
@@ -13380,6 +13598,8 @@ func move_library_card_to_top(inst: CardInstance) -> void:
 	var p := players[inst.owner_id]
 	if not p.library.has(inst): return
 	_rec(p, &"library")
+	if p.library.back() != inst:
+		_library_top_moved(p)
 	p.library.erase(inst)
 	p.library.append(inst)
 	_emit_state()
@@ -13399,6 +13619,8 @@ func reorder_top_of_library(pid: int, ordered: Array[CardInstance]) -> void:
 		if p.library.find(inst) < floor_index:
 			return
 	_rec(p, &"library")
+	if p.library.back() != ordered[0]:
+		_library_top_moved(p)   # another card on top: the old one did not remain there
 	for inst in ordered:
 		p.library.erase(inst)
 	for i in range(n - 1, -1, -1):
@@ -13642,12 +13864,23 @@ func check_state_based_actions() -> void:
 			# enchantments (Concordant Crossroads, Gravity Sphere,
 			# Living Plane, The Abyss...) police each other by name AND
 			# across names — unlike the legend rule, which is per-name.
+			# Every loser goes at once, as one state-based action (CR 704.3):
+			# a tie buries all of them, and burying one at a time would
+			# leave the last of a tie alone and alive (h2-4).
 			if (inst.data.supertypes & Mtg.Supertype.WORLD) != 0:
-				var superseded := _superseded_world_permanent()
-				if superseded != null:
-					log_line("%s is put into the graveyard — the world rule" % \
-						superseded.data.card_name)
-					_move_to_graveyard(superseded, false)
+				var superseded := _superseded_world_permanents()
+				if not superseded.is_empty():
+					_rec(self, &"_departure_batch")
+					_departure_batch = _death_listener_snapshot()
+					_hold_departures()
+					for loser in superseded:
+						if loser.zone != Mtg.Zone.BATTLEFIELD:
+							continue
+						log_line("%s is put into the graveyard — the world rule" % \
+							loser.data.card_name)
+						_move_to_graveyard(loser, false)
+					_release_departures()
+					_departure_batch = []
 					acted = true
 					break
 			# inst.is_aura(), not the printed answer: an Aura that came back
@@ -13762,17 +13995,24 @@ func _check_state_triggers() -> void:
 
 
 ## World-rule helper (CR 704.5k): if 2+ WORLD permanents are on the
-## battlefield, return the OLDEST one (the one that loses); else null.
-## Repeated SBA passes bury them one at a time until only the newest is
-## left.
-func _superseded_world_permanent() -> CardInstance:
+## battlefield, return every one that loses — all but the newest, or ALL of
+## them when the newest arrived together with another (a tie for the
+## shortest time, [method _tie_arriving_worlds]; 0.60.19 bug pass, h2-4);
+## else none.
+func _superseded_world_permanents() -> Array[CardInstance]:
 	var worlds: Array[CardInstance] = []
 	for id in _battlefield_order:   # oldest → newest
 		var inst: CardInstance = _instances[id]
 		if inst.zone == Mtg.Zone.BATTLEFIELD \
 				and (inst.data.supertypes & Mtg.Supertype.WORLD) != 0:
 			worlds.append(inst)
-	return worlds[0] if worlds.size() >= 2 else null
+	if worlds.size() < 2:
+		worlds.clear()
+		return worlds
+	var tie := int(worlds.back().memory.get(WORLD_TIE_KEY, -1))
+	if tie < 0 or int(worlds[worlds.size() - 2].memory.get(WORLD_TIE_KEY, -1)) != tie:
+		worlds.pop_back()   # the newest stays
+	return worlds
 
 
 ## Is [param inst] currently sustaining something that would end if it
@@ -15085,11 +15325,22 @@ func _emit_state() -> void:
 ## "Players play with the top card of their libraries revealed" (Field of
 ## Dreams): the top card of [param pid]'s library when it is public, else
 ## null. The single read for the duel screen and the AI — a library's top
-## is otherwise hidden information.
+## is otherwise hidden information. A reveal limited to ONE card (Temporal
+## Aperture, [member MtgPlayer.top_revealed_card_id]) is judged here, live:
+## only that card, and only while its top has not moved — between two
+## recalculations (a resolution's draw, mill or shuffle) the card under it
+## stays hidden (bug pass 0.60.19).
 func revealed_top_card(pid: int) -> CardInstance:
-	if not players[pid].top_card_revealed or players[pid].library.is_empty():
+	var p := players[pid]
+	if p.library.is_empty():
 		return null
-	return players[pid].library[-1]
+	var top: CardInstance = p.library[-1]
+	if p.top_card_revealed:
+		return top
+	if top != null and p.top_revealed_card_id == top.id \
+			and p.top_revealed_epoch == p.library_top_epoch:
+		return top
+	return null
 
 
 ## Log a revealed library top the first time it is that card, so the
@@ -18763,6 +19014,19 @@ func _enters_without_abilities(inst: CardInstance, controller: int) -> bool:
 		return false
 	if players[controller].battlefield.has(inst) or _battlefield_order.has(inst.id):
 		return inst.cur_abilities_silenced   # already there: ask it
+	return bool(_as_it_would_exist(inst, controller,
+		func() -> bool: return inst.cur_abilities_silenced))
+
+
+## THE CR 614.12 PROBE: [param read] (no arguments) is called with
+## [param inst] on the battlefield arrays under [param controller] for one
+## recalculation — the permanent as it would exist there — and its answer
+## returned once the permanent is taken off again. Nothing is dispatched,
+## logged or journaled (a probe run, [member _probing]), and the board is
+## recalculated without it. The caller pays for it only when something
+## could change the answer ([method _entry_silencer_possible]); shared by
+## [method _enters_without_abilities] and [method _arrives_tapped].
+func _as_it_would_exist(inst: CardInstance, controller: int, read: Callable) -> Variant:
 	var was_zone := inst.zone
 	var was_controller := inst.controller_id
 	var was_stamp := inst.layer_timestamp
@@ -18777,7 +19041,7 @@ func _enters_without_abilities(inst: CardInstance, controller: int) -> bool:
 	_battlefield_order.append(inst.id)
 	_battlefield_changed()
 	continuous.recalculate(self)
-	var silenced := inst.cur_abilities_silenced
+	var answer: Variant = read.call()
 	players[controller].battlefield.erase(inst)
 	_battlefield_order.erase(inst.id)
 	_battlefield_changed()
@@ -18788,7 +19052,7 @@ func _enters_without_abilities(inst: CardInstance, controller: int) -> bool:
 	_probing = outer_probing
 	inst.reset_characteristics()
 	recalculate()
-	return silenced
+	return answer
 
 
 ## Could anything take [param inst]'s abilities away as it enters? A
@@ -19156,6 +19420,9 @@ func put_onto_battlefield_together(entries: Array) -> Array[CardInstance]:
 		row["silenced"] = silenced
 		row["tapped"] = bool(row["tapped"]) or _arrives_tapped(inst, pid, not silenced)
 		arriving.append(row)
+	# 2b. Each seat's own arrivals in the order it chooses (CR 613.7m),
+	# asked only where the order would change the board.
+	_order_arrivals(arriving)
 	# 3. One moment.
 	begin_simultaneous()
 	for row in arriving:
@@ -19170,6 +19437,7 @@ func put_onto_battlefield_together(entries: Array) -> Array[CardInstance]:
 		entered.append(inst)
 		log_line("%s is put onto the battlefield under %s's control" % [
 			inst.data.card_name, players[pid].player_name], inst)
+	_tie_arriving_worlds(entered)
 	if not entered.is_empty():
 		recalculate()
 	for row in arriving:
@@ -19191,6 +19459,152 @@ func put_onto_battlefield_together(entries: Array) -> Array[CardInstance]:
 			entered.append(aura)
 	_emit_state()
 	return entered
+
+
+# --- 0.60.19 bug pass (h2-3, h2-4): arriving together, in order and in a tie ---
+
+## The orders [method _arrival_order_matters] tries, by row count.
+const _ARRIVAL_ORDERS := {
+	2: [[0, 1], [1, 0]],
+	3: [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]],
+}
+
+## The [member CardInstance.memory] key that ties WORLD permanents which
+## arrived at one moment ([method _tie_arriving_worlds]).
+const WORLD_TIE_KEY := "world_arrival_tie"
+
+
+## CR 613.7m: "If two or more objects would receive a timestamp
+## simultaneously ... their relative timestamps are determined in APNAP
+## order ... Objects controlled by the active player ... have an earlier
+## relative timestamp in the order of that player's choice, followed by
+## each other player in turn order." [param arriving] is APNAP already (the
+## active player's rows first); each seat orders its OWN rows here, in
+## place. It is asked only when two or more of them carry a static ordered
+## by timestamp ([method _arrival_order_sensitive]) and a trial shows the
+## order would really change the board ([method _arrival_order_matters]):
+## Replenish with Opalescence and Humility makes Humility a 4/4 or a 1/1;
+## two Crusades, or two Opalescences sizing each other, ask nothing. The
+## hint is the order the effect listed them in, and a computer seat answers
+## an ordered card question with its first candidate — so its answer is
+## that order: deterministic, and read off nothing but the cards arriving.
+func _order_arrivals(arriving: Array[Dictionary]) -> void:
+	for seat in [active_player, opponent_of(active_player)]:
+		var slots: Array[int] = []
+		for i in arriving.size():
+			if int(arriving[i]["controller"]) == seat \
+					and _arrival_order_sensitive(arriving[i]["instance"]):
+				slots.append(i)
+		if slots.size() < 2 or not _arrival_order_matters(arriving, slots):
+			continue
+		var rows := {}
+		var rest: Array[CardInstance] = []
+		for i in slots:
+			var card: CardInstance = arriving[i]["instance"]
+			rows[card.id] = arriving[i]
+			rest.append(card)
+		var by := current_resolution_source()
+		var ask := "which of your permanents enters first (each next one is newer: where their effects clash, the newer one wins)"
+		var prompt := ("%s: choose %s" % [by, ask]) if by != "" else ("Choose %s" % ask)
+		var chosen: Array[CardInstance] = []
+		while rest.size() > 1:
+			var next: CardInstance = agents[int(seat)].choose_card_in_order(self, int(seat), rest, prompt)
+			if next == null or not rest.has(next):
+				next = rest[0]
+			chosen.append(next)
+			rest.erase(next)
+		chosen.append_array(rest)
+		for k in slots.size():
+			arriving[slots[k]] = rows[chosen[k].id]
+
+
+## Does [param inst]'s place in the timestamp order matter to one of its
+## own statics — a type, colour or ability change, or a layer-7b size (CR
+## 613.7)? A plain anthem (layer 7c) adds up the same in any order.
+func _arrival_order_sensitive(inst: CardInstance) -> bool:
+	for ability in inst.data.static_abilities:
+		if ability.changes_types or ability.changes_colors \
+				or ability.changes_abilities or ability.silences_abilities \
+				or ability.sets_base_pt:
+			return true
+	return false
+
+
+## Would another order of the rows at [param slots] leave a different
+## board? Every order is tried ([method _arrival_trial_board]) up to three
+## rows (six orders); four or more are taken to matter.
+func _arrival_order_matters(arriving: Array[Dictionary], slots: Array[int]) -> bool:
+	if not _ARRIVAL_ORDERS.has(slots.size()):
+		return true
+	var first := ""
+	var tried := false
+	for order in _ARRIVAL_ORDERS[slots.size()]:
+		var rows: Array[Dictionary] = arriving.duplicate()
+		for k in slots.size():
+			rows[slots[k]] = arriving[slots[int(order[k])]]
+		var board := _arrival_trial_board(rows)
+		if not tried:
+			first = board
+			tried = true
+		elif board != first:
+			return true
+	return false
+
+
+## ONE TRIAL of an arrival order: [param rows] placed in that order, as
+## step 3 of [method put_onto_battlefield_together] places them, the board
+## recalculated and every permanent's characteristics read — then all of it
+## taken back ([method make_mark] / [method unmake_to]): a search node, so
+## nothing it does reaches the duel. The board comes back as one string,
+## the same whatever order the permanents sit in.
+func _arrival_trial_board(rows: Array[Dictionary]) -> String:
+	var nested := undo_log != null
+	var mark := make_mark()
+	_rec_turn()
+	for row in rows:
+		var inst: CardInstance = row["instance"]
+		var host: CardInstance = row["host"]
+		if host != null and not _entry_host_still_legal(inst, host):
+			continue
+		_place_arrival(inst, int(row["controller"]), host, bool(row["tapped"]),
+			row["counters"], bool(row["silenced"]), false)
+	recalculate()
+	var parts := PackedStringArray()
+	for inst in all_battlefield():
+		var keywords := inst.cur_keywords.duplicate()
+		keywords.sort()
+		parts.append("%d %d %d %d %d %s %d/%d %s %d %s %d %d" % [inst.id,
+			inst.controller_id, inst.cur_types, inst.cur_supertypes,
+			inst.cur_colors, ",".join(PackedStringArray(inst.cur_subtypes)),
+			inst.cur_power, inst.cur_toughness, str(keywords),
+			inst.cur_protection, str(inst.cur_abilities_silenced),
+			inst.cur_activated_abilities.size(), inst.cur_triggered_abilities.size()])
+	parts.sort()
+	unmake_to(mark)
+	if not nested:
+		end_search()
+	return "|".join(parts)
+
+
+## CR 704.5k: "all except the one that has had the world supertype for the
+## shortest amount of time are put into their owners' graveyards. In the
+## event of a tie for the shortest amount of time, all are put into their
+## owners' graveyards." Worlds among [param entered] arrived at one moment
+## — such a tie — and are marked with one tie (the first one's timestamp)
+## in their battlefield memory, which leaving clears (CR 400.7);
+## [method _superseded_world_permanents] reads it.
+func _tie_arriving_worlds(entered: Array[CardInstance]) -> void:
+	var worlds: Array[CardInstance] = []
+	for inst in entered:
+		if inst.zone == Mtg.Zone.BATTLEFIELD \
+				and (inst.data.supertypes & Mtg.Supertype.WORLD) != 0:
+			worlds.append(inst)
+	if worlds.size() < 2:
+		return
+	var tie := worlds[0].layer_timestamp
+	for inst in worlds:
+		_rec(inst, &"memory")
+		inst.memory[WORLD_TIE_KEY] = tie
 
 
 ## What [param aura] may enchant as it is PUT onto the battlefield under
@@ -19596,8 +20010,9 @@ func damage_order_question() -> Dictionary:
 ## WHAT COUNTS: only damage that lands on the affected one. A
 ## REDIRECTION counts where it lands — what goes to another player or
 ## creature counts nothing here (and damage that comes back to the
-## affected one counts). A LIFE FLOOR (Ali from Cairo) is a prevention like
-## any other: what it stops never lands. Life gained on the way (Reverse
+## affected one counts). A LIFE FLOOR (Ali from Cairo, Worship) is no line
+## and changes no line's damage: the damage lands in full and only the life
+## it costs is limited ([method damage_life_loss]). Life gained on the way (Reverse
 ## Damage) is not damage and is not netted. A creature that leaves the
 ## battlefield during the walk (Rock Hydra shedding its last counter) is
 ## `gone`, with 0 damage.

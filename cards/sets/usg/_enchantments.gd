@@ -67,7 +67,7 @@ static func configure(c: CardData) -> bool:
 		"Remembrance":
 			c.triggered(TriggeredAbility.new(DIES, _remembrance,
 				"Whenever a nontoken creature you control dies, you may search your library for a card with the same name as that creature, reveal it, put it into your hand, then shuffle.",
-				_own_nontoken_creature_died))
+				_own_nontoken_creature_died).capturing(_dead_name_context))
 		"Serra's Liturgy":
 			verse(c)
 			c.activated(ActivatedAbility.new("{W}", false, [DestroyEffect.new(TargetSpec.new(
@@ -497,12 +497,23 @@ static func _own_nontoken_creature_died(_g: MtgGame, s: CardInstance, e: GameEve
 		and int(e.data.get("controller", -1)) == s.controller_id
 
 
+## "That creature"'s name as it last existed on the battlefield (CR 608.2h),
+## read as the trigger is put on the stack: a dead Clone that copied
+## Grizzly Bears is a card named Clone again by the time the ability
+## resolves (CR 707.2), but it died as "Grizzly Bears".
+static func _dead_name_context(g: MtgGame, s: CardInstance, e: GameEvent) -> Dictionary:
+	var ctx := F._source_context(g, s, e)
+	var dead: CardInstance = e.data.get("instance")
+	if dead != null: ctx["name"] = dead.data.card_name
+	return ctx
+
+
 ## "You may search": declining searches nothing and shuffles nothing; a
 ## search may fail to find (CR 701.19b). The found card is revealed.
 static func _remembrance(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
 	var dead: CardInstance = e.data.get("instance")
 	if dead == null: return
-	var card_name := dead.data.card_name
+	var card_name := String(g.trigger_context(s).get("name", dead.data.card_name))
 	var pid := you(g, s)
 	if not g.agents[pid].choose_yes_no(g, pid,
 			"Remembrance: search your library for a card named %s?" % card_name, true):
