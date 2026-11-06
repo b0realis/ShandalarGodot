@@ -4257,14 +4257,15 @@ with AI and go over MCP code for bugfix and improvement run!"*
 
 ## The gate's clock and the deal's locale (2026-10-01)
 
-- `.github/workflows/gate.yml`: the `Shard n of 4` step has its own
+- `.github/workflows/gate.yml`: the `Shard n of 8` step has its own
   `timeout-minutes: 40` under the job's 45 — a step that runs out
   fails and the `if: always()` upload still runs (a job-level cancel
   skips it: shard 2 of run 36869119748, no log, no artifact). The
   comment above the step says why. Since 2026-10-07 (owner) the step sets
   `SUITE_TIMEOUT: 2400` — a 40-minute suite guard, shard 1 having taken
   29m42s against the default 30 — under a step clock of 52 and a job
-  clock of 56.
+  clock of 56. Since 0.60.19 (2026-11-06) the suite is dealt over EIGHT
+  runners: with Pack 10, three of four shards ran out of the 40 minutes.
 - `run_tests.sh`: `all_scripts` and the skin-marked list are
   `LC_ALL=C sort`ed — the deal no longer follows the shell's collation
   (`en_US` and `C.UTF-8` ordered 38 of 548 scripts differently, so a
@@ -6088,7 +6089,7 @@ shandalar/
 │   ├── gate.yml             The gate on GitHub's runners (2026-09-17): on
 │                              every push to main and every pull request, the
 │                              official 4.7.2 Linux binary pinned by its
-│                              zip's SHA-256 and cached, four `SHARD=i of 4`
+│                              zip's SHA-256 and cached, eight `SHARD=i of 8`
 │                              GUT jobs plus one job for the Python tests
 │                              and the boot smoke. Uploads each shard's
 │                              engine log and JUnit file for fourteen days

@@ -2,8 +2,8 @@
 # CONTRIBUTING.md (Commands), on GitHub's
 # runners:
 #
-#   ./run_tests.sh              the GUT suite, here dealt over four runners
-#                               (SHARDS=4 SHARD=n — run_tests.sh's own deal,
+#   ./run_tests.sh              the GUT suite, here dealt over eight runners
+#                               (SHARDS=8 SHARD=n — run_tests.sh's own deal,
 #                               so a shard on a runner is a shard on a desk)
 #   python3 -m unittest ...     the tool tests, from the project root
 #   godot --headless --quit-after 3   the boot smoke, with no ERROR line
@@ -47,13 +47,13 @@ env:
 
 jobs:
   gut:
-    name: GUT shard ${{ matrix.shard }} of 4
+    name: GUT shard ${{ matrix.shard }} of 8
     runs-on: ubuntu-24.04
     timeout-minutes: 56
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v5
 
@@ -88,10 +88,15 @@ jobs:
       # healthy shard never reaches it; a stalled runner does. The suite
       # guard is 40 minutes here, not run_tests.sh's 30 (owner, 2026-10-07):
       # shard 1 of run 37629189768 took 29m42s with the 0.50.16 gate.
-      - name: Shard ${{ matrix.shard }} of 4
+      # EIGHT shards since 0.60.19 (2026-11-06): Pack 10 added a third to
+      # the suite (2,400 s of GUT's own time, 9,100 s in all), and three of
+      # the four shards of run 42206673586 ran out of the 40 minutes after
+      # 245–273 of their ~335 scripts. Eight keep each shard near 25
+      # minutes under the same guard, and finish the gate sooner.
+      - name: Shard ${{ matrix.shard }} of 8
         timeout-minutes: 52
         env:
-          SHARDS: 4
+          SHARDS: 8
           SHARD: ${{ matrix.shard }}
           SUITE_TIMEOUT: 2400
           SHANDALAR_TEST_DATA_HOME: ${{ runner.temp }}/shandalar-test-data

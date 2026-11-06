@@ -239,7 +239,7 @@ sequential. Targeted selections run in one process. `SHARDS=N SHARD=i`
 selects one CI shard. The runner checks the expected script counts as well
 as individual results. Current CI configuration is in
 [gate.yml](.github/workflows/gate.yml): pushes to `main`, pull requests and
-manual runs use four Linux GUT shards, Python tests, boot and offline-Web
+manual runs use eight Linux GUT shards, Python tests, boot and offline-Web
 checks. Local test-scope policy does not reduce CI coverage.
 
 **Trust the runner's exit status, not GUT's printed summary.** GUT can skip
