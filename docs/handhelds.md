@@ -547,9 +547,23 @@ without any permission: `cardpacks/`,
 `portraits/`, `music/` and `skin/` under it, the desktop play copy's
 layout one level down. The `cardpacks_folder`, `portraits_folder` and
 `music_folder` keys in `settings.cfg` still move them (`GamePaths`).
+Your adventures are saved there too, in `adventures/` — a save an older
+version kept in the private folder moves over by itself once, copied
+whole and read back before the old one goes — so a computer copies them:
+
+```sh
+adb pull /sdcard/Android/data/com.b0realis.shandalar/files/adventures/ quest-adventures
+```
+
+(`com.b0realis.shandalar.android` on an Android phone or tablet.) One
+adventure travels more simply as one file: **Save / Load → Export** on
+the headset writes it to Downloads, and **Import** on the other device,
+or on the headset, takes it in.
+
 Options has no "Forget my zips" on the headset (that button is the browser
 build's): what you pushed is yours to remove with `adb shell rm`.
-Uninstalling the app removes both folders.
+Uninstalling the app removes both folders, the adventures with them:
+export the ones you want to keep first.
 
 The on-screen keyboard opens for a name or a search field. The headset's
 Android back gesture is Escape. The three handheld defaults above apply

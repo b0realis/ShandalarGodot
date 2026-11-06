@@ -1161,7 +1161,8 @@ func required_pack_ids() -> Array[String]:
 	for pack_id in packs.packs_required_by(all_names):
 		if not out.has(pack_id):
 			out.append(pack_id)
-	out.sort()
+	# By pack number (2026-11-06): a text sort wrote `pack-10` before `pack-2`.
+	packs.sort_ids(out)
 	return out
 
 

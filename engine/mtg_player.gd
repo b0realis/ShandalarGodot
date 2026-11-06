@@ -66,11 +66,17 @@ var discard_to_library_top: bool = false
 var graveyard_becomes_exile: bool = false
 
 ## "Until end of turn, you may cast <filter> spells from the top of your
-## graveyard" (Bösium Strip) — permissions granted by
-## MtgGame.grant_graveyard_cast, each {filter: Callable(card) -> bool,
-## desc, top_only, exile_instead, source_id}, read by
-## MtgGame.can_cast_from_graveyard and cleared at cleanup. A permission
-## widens the source ZONE only, never timing or payment (CR 601.3).
+## graveyard" (Bösium Strip) and every other until-end-of-turn permission to
+## PLAY cards from another of this player's zones (Pack 10 E5:
+## MtgGame.grant_zone_play — Yawgmoth's Will's graveyard lands and spells,
+## Temporal Aperture's revealed library top, free). Each row {zone (default
+## GRAVEYARD), filter: Callable(card) -> bool, desc, top_only,
+## exile_instead, source_id, spells (default true), lands (default false),
+## free, card_id, entry, while}, read by MtgGame.zone_play_permission /
+## can_cast_from_graveyard / can_play_from_zone and cleared at cleanup. A
+## permission widens the source ZONE only, never timing or the land drop
+## (CR 601.3, 305.2); a `free` one pays with the "Without paying its mana
+## cost" rows (CR 118.9).
 var graveyard_cast_permissions: Array[Dictionary] = []
 
 ## Damage can never take this player below this life total (Ali from
@@ -191,10 +197,32 @@ var drawn_this_turn: Array[CardInstance] = []
 ## Reset at every step boundary.
 var draws_this_step: int = 0
 
+## How many upkeeps this player has BEGUN this duel — counted just before
+## each of their UPKEEP_START events (MtgGame._enter_step). Echo's clock
+## (CR 702.30a, Pack 10 E1): a permanent remembers this count as it comes
+## under this player's control ([member CardInstance.control_upkeep_mark]).
+## Journaled with the turn machinery (MtgGame.TURN_PLAYER_FIELDS).
+var upkeeps_begun: int = 0
+
+## How many times this player's library has been shuffled this duel
+## (MtgGame._shuffle, journaled there). Temporal Aperture's "for as long as
+## that card remains on top" ends on any shuffle (Pack 10).
+var library_shuffles: int = 0
+
 ## Instance id of a permanent that soaks up COMBAT damage this player would
 ## be dealt by UNBLOCKED creatures (Veteran Bodyguard). -1 = nobody;
 ## rebuilt by the continuous pipeline every recalculation.
 var combat_damage_redirect: int = -1
+
+## Pack 10 E6 — "Rather than the attacking player, you assign the combat
+## damage of each creature attacking you. You can divide that creature's
+## combat damage as you choose among any of the creatures blocking it"
+## (Defensive Formation, CR 510.1a-d). While set, MtgGame's damage step
+## hands every division of an attacker's damage against this player to
+## this player, in any order — the defensive-banding path (CR 702.22j).
+## Written by CombatState.defender_assigns_damage; rebuilt by the
+## continuous pipeline every recalculation.
+var assigns_attackers_damage: bool = false
 
 ## One-shot "the next time a SOURCE OF YOUR CHOICE would deal damage to
 ## you this turn, prevent it and gain that much life" shields (Reverse

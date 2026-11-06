@@ -5,7 +5,7 @@ extends GutTest
 ## lands — while each manifest counts every distinct card the game already
 ## had: 669 − 621 = 48 and 621 − 574 = 47.
 
-const PACKS := ["pack_8_mirage_block", "pack_9_tempest_block"]
+const PACKS := ["pack_8_mirage_block", "pack_9_tempest_block", "pack_10_urza_block"]
 
 
 func test_each_readme_counts_the_cards_the_game_already_has_as_its_manifest() -> void:

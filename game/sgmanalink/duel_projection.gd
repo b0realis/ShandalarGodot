@@ -125,7 +125,13 @@ func ingest(room: Dictionary) -> void:
 		p.hand.append_array(_hidden_zone(pid, Mtg.Zone.HAND, maxi(0, int(dto.hand_count) - p.hand.size())))
 		p.library.assign(_hidden_zone(pid, Mtg.Zone.LIBRARY, int(dto.library_count)))
 		p.top_card_revealed = not dto.top.is_empty()
-		if p.top_card_revealed and not p.library.is_empty() and CardRegistry.has_card(dto.top):
+		# THE TOP CARD AS A CARD (Pack 10, protocol 31): played with revealed
+		# or named by this seat's own zone permission (Temporal Aperture),
+		# the referee sends it with a handle — the library pile's left
+		# click plays it ([method can_play_from_zone]).
+		if not dto.library_top.is_empty() and not p.library.is_empty():
+			p.library[-1] = _face(dto.library_top[0], Mtg.Zone.LIBRARY)
+		elif p.top_card_revealed and not p.library.is_empty() and CardRegistry.has_card(dto.top):
 			p.library[-1] = CardInstance.new(CardRegistry.get_card(dto.top), -1, pid)
 			p.library[-1].zone = Mtg.Zone.LIBRARY
 		mulligan_kept[pid] = dto.kept
@@ -270,6 +276,8 @@ func _face(dto: Dictionary, zone: int) -> CardInstance:
 	var previous: CardInstance = _instances.get(id)
 	var retained_zone := previous.zone if previous != null else zone
 	var card := SgCardPresentation.make(dto, local_seat(int(dto.owner)), zone, previous)
+	if zone == Mtg.Zone.HAND and not card.face_down:
+		_hand_abilities(card)
 	card.id = id
 	card.zone = zone if not _seen.has(id) else retained_zone
 	card.owner_id = local_seat(int(dto.owner))
@@ -284,6 +292,25 @@ func _face(dto: Dictionary, zone: int) -> CardInstance:
 	_seen[id] = true
 	faces[dto.id] = dto
 	return card
+
+
+## AN ABILITY THAT WORKS FROM THE HAND (Pack 10 E2 — cycling, CR
+## 702.29a) is the card's PRINTED one. A face lists a card's activated
+## abilities by their cost alone ([SgCardPresentation]), so a hand card's
+## "Cycling {2}" came without its zone, its words or its cycling mark, and
+## no menu offered it. Its local definition — the catalogue both ends
+## share — supplies them at the same index, the cost checked against the
+## face's. The menus read it ([method DuelScreen._hand_ability_indices],
+## [method DuelScreen.hand_ability_label]); whether it can be activated
+## now is the referee's own option ([method SgDuelView._hand_ability_refusal]).
+## Shared and never activated here: [method activate_ability] is a message.
+static func _hand_abilities(card: CardInstance) -> void:
+	var printed: Array[ActivatedAbility] = card.data.activated_abilities
+	for i in mini(card.cur_activated_abilities.size(), printed.size()):
+		var ability := printed[i]
+		if ability.activation_zone == Mtg.Zone.HAND \
+				and ability.cost.text == card.cur_activated_abilities[i].cost.text:
+			card.cur_activated_abilities[i] = ability
 
 
 func _unknown(pid: int, zone: int, label := "Unknown card") -> CardInstance:
@@ -338,11 +365,27 @@ func can_cast_from_graveyard(pid: int, inst: CardInstance) -> bool:
 	return false
 
 
+## PLAYING FROM ANOTHER ZONE (Pack 10 E5 — a land in the graveyard under
+## Yawgmoth's Will, Temporal Aperture's revealed library top) is the
+## referee's permission too, read off the face's `zone_playable`
+## (protocol 31, MtgGame.can_play_from_zone). The graveyard view's click
+## and the library pile's click play the card or start its cast — every
+## step of it a message the referee judges.
+func can_play_from_zone(pid: int, inst: CardInstance) -> bool:
+	if pid != 0 or inst == null or inst.owner_id != 0 \
+			or (inst.zone != Mtg.Zone.GRAVEYARD and inst.zone != Mtg.Zone.LIBRARY):
+		return false
+	return bool(faces.get(handle(inst.id), {}).get("zone_playable", false))
+
+
 func playable_cards(pid: int) -> Array[CardInstance]:
 	var out := super.playable_cards(pid)
 	if pid == 0:
 		for inst in players[0].graveyard:
-			if can_cast_from_graveyard(0, inst): out.append(inst)
+			if can_cast_from_graveyard(0, inst) or can_play_from_zone(0, inst): out.append(inst)
+		var library := players[0].library
+		if not library.is_empty() and can_play_from_zone(0, library.back()):
+			out.append(library.back())
 	return out
 
 

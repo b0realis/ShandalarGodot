@@ -58,10 +58,10 @@ func test_tempest_block_alone_and_alongside_every_previous_pack() -> void:
 	assert_eq(CardPacks.packs_required_by(["Counterspell", "Tranquility"]), [])
 	assert_eq(CardPacks.packs_required_by(["Mirri, Cat Warrior", "Counterspell"]), ["pack-9"])
 	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
-	assert_eq(CardRegistry.size(), 2519 + 574)   # Packs 1-8, and the Tempest block's 574
+	assert_eq(CardRegistry.size(), 2519 + 574 + 591)   # Packs 1-8, the Tempest block's 574, the Urza block's 591
 	assert_eq(CardRegistry.names_in_set("tmp").size(), 335)
 	CardPacks.set_enabled("pack-9", false)
-	assert_eq(CardRegistry.size(), 2519)
+	assert_eq(CardRegistry.size(), 2519 + 591)
 	assert_false(CardRegistry.has_card("Mirri, Cat Warrior"))
 	assert_true(CardRegistry.has_card("Pacifism"))
 
@@ -121,10 +121,10 @@ func test_pack_of_set_and_known_ids() -> void:
 		assert_eq(CardPacks.pack_of_set(code), "pack-9", code)
 		assert_true(CardPacks._numbered_set(code), code)
 	assert_true(CardPacks.known_ids().has("pack-9"))
-	assert_eq(CardPacks.known_ids().back(), "pack-9", "the newest pack is last")
+	assert_eq(CardPacks.known_ids()[8], "pack-9", "in pack-number order")
 	assert_eq(CardPacks.file_name_for("pack-9"), "Pack-9-Tempest-Block.zip")
 	assert_eq(CardPacks.label_for("pack-9"), "Pack 9")
-	assert_eq(CardPacks.expansions().back(), TempestBlockPack)
+	assert_true(CardPacks.expansions().has(TempestBlockPack))
 
 
 func test_tempest_basic_lands_offer_four_numbered_pictures() -> void:

@@ -185,7 +185,10 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		"attackable": [], "blockable": [], "assignment": {}, "targets": [],
 		"prevention": g.awaiting_damage_prevention, "regeneration": g.awaiting_regeneration,
 		"doomed": [], "draft": {}, "respond": false, "floating": false,
-		"untap_capped": not g.untap_caps.is_empty(), "block_taxes": [], "phase_holds": [],
+		# "Won't all untap": a cap (Winter Orb, Smoke) or, Pack 10, a kind
+		# chosen in the untap step (Storage Matrix — MtgGame.untap_kind_choices).
+		"untap_capped": not g.untap_caps.is_empty() or not g.untap_kind_choices.is_empty(),
+		"block_taxes": [], "phase_holds": [],
 		"attack_companions": [], "special_rows": []}
 	for key in RULES: result.rules[key] = g.rules.get(key)
 	var window_open := g.awaiting_damage_prevention or g.awaiting_regeneration
@@ -205,6 +208,11 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		var visible: Array = p.battlefield + p.graveyard + p.exile + p.ante + p.phased_out
 		for card in p.hand:
 			if m._visible(pid, card): visible.append(card)
+		# The library's top card when this seat may see it (Pack 10 —
+		# Temporal Aperture; SgPracticeMatch._library_top_seen): its row
+		# carries `castable` and its free payment row like a hand card's.
+		if not p.library.is_empty() and m._visible(pid, p.library.back()):
+			visible.append(p.library.back())
 		for card: CardInstance in visible:
 			var row := {"id": m._handle(pid, card), "flags": {}, "abilities": [], "castable": false}
 			var open_modes: Array = []
@@ -216,9 +224,12 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 			# Where this seat may cast from (Pack 8): its hand, an exiled card
 			# it may play — a Three Wishes card face down to everyone else —
 			# and the top of its graveyard under Bösium Strip, the engine's
-			# own permissions, as MtgGame.playable_cards reads them.
+			# own permissions, as MtgGame.playable_cards reads them; Pack 10
+			# E5, its graveyard under Yawgmoth's Will (a land there stays
+			# uncastable: lands are played) and the library top Temporal
+			# Aperture names.
 			if (card.zone == Mtg.Zone.HAND and card.owner_id == pid) or g.can_play_from_exile(pid, card) \
-					or g.can_cast_from_graveyard(pid, card):
+					or g.can_cast_from_graveyard(pid, card) or g.can_play_from_zone(pid, card):
 				# Something to AIM AT too (2026-10-04): `castable` is the
 				# referee's "the cast would be accepted", read by the
 				# program's `prepare.casts`; a hand Aura with no creature on
@@ -294,7 +305,14 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 				# window of the opponent's turn open for an MCP program.
 				if option.kind == "ability":
 					result.respond = true
-					result.floating = true
+					# AN ABILITY THAT WORKS FROM THE HAND (Pack 10 — cycling)
+					# holds the standing orders only with its cost FLOATING,
+					# the local screen's rule for its fast effects
+					# (DuelScreen._has_affordable_fast_effect): a cycling card
+					# beside two untapped lands is a response every window
+					# offers (`respond`), not one the seat has prepared.
+					if card.zone != Mtg.Zone.HAND or _floated(g, pid, card, int(option.index)):
+						result.floating = true
 			result.cards.append(row)
 			# Nothing about a phased-out permanent attacks or blocks (702.26b).
 			if card.phased_out: continue
@@ -388,6 +406,16 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		result.draft = {"card": m._handle(pid, d.card), "kind": d.kind, "index": d.index, "x": d.x, "mode": d.mode,
 			"reachable": m.actions.payment_reachable()}
 	return result
+
+
+## Is hand ability [param index] of [param card] paid for by [param pid]'s
+## FLOATING pool now — and does it cost mana at all (a free cycling, two
+## Fluctuators' {0}, prepares nothing, as the local screen judges it)?
+static func _floated(g: MtgGame, pid: int, card: CardInstance, index: int) -> bool:
+	var due := g.ability_payment(pid, card, index, 0)
+	if ManaPlanner.cost_is_free(due.cost) and int(due.extra) <= 0:
+		return false
+	return SgPayment.can_pay_now(g, pid, due, "ability")
 
 
 ## Has [param card] something to be cast at now? A modal spell is left to

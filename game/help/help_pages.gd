@@ -261,7 +261,7 @@ static func _page_table() -> Dictionary:
 		_heading("The prompt tells you what to do next"),
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
 		_text("A question that takes a color or colors (Dream Coat, Prismatic Lace, Shyft) ticks each color you click; Done. answers with all you ticked."),
-		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect, a licid's cost to end its effect, and the permanent sacrificed to ignore Volrath's Curse. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
+		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect, a licid's cost to end its effect, and the permanent sacrificed to ignore Volrath's Curse or Damping Engine. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
 		_heading("Keep these keys handy"),
 		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again; a click on the card does the same unless Options, Display turns that off. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
 			Controls.key_text("duel_done"), Controls.key_text("duel_cancel"), Controls.key_text("duel_space"),
@@ -269,6 +269,11 @@ static func _page_table() -> Dictionary:
 			Controls.pad_text("duel_pause"), Controls.text("duel_read")]),
 		_heading("Hand, library and graveyard"),
 		_text("Your hand holds cards you can play. The face-down library supplies draws. Click either graveyard to inspect discarded cards; the menu also gives access to exile."),
+		# PLAYING FROM THE HAND, THE GRAVEYARD AND THE LIBRARY'S TOP (Pack 10:
+		# cycling's hand menu, DuelScreen._open_hand_action_menu; Yawgmoth's
+		# Will's ringed graveyard cards and Temporal Aperture's library click,
+		# DuelScreen._on_graveyard_card / _click_library_top).
+		_text("A card with an ability that works from your hand, such as cycling, asks what you want when you click it: Cast it (Play, for a land) or use the ability, such as Cycling {2}; its right-click menu offers the ability too. When you may play cards from your graveyard, as Yawgmoth's Will allows, click your graveyard: the cards you may play now are ringed, their names yellow, and a click on one plays the land or casts the spell. When you may play the top card of your library, as Temporal Aperture allows, a click on your library shows that card and plays it; a spell then offers to be cast without paying its mana cost."),
 		_heading("Hotseat · Take turns privately"),
 		_text("Player 1 uses the lower playfield; Player 2 uses the upper one. Names carry (below) or (above). Drag either hand stack by its title bar; both buttons move with it. Press Show hand when the other player looks away. Hide hand%s conceals it again. The other hand shows only its card count. Opening hands and mulligans use the same Show/Hide button. The opening screen gives one privacy reminder; during the duel, the Situation Bar names the player who must act and keeps the phase or choice instruction visible." % _or_key("duel_hand")),
 		_heading("Hotseat · Let your opponent respond"),
@@ -454,9 +459,9 @@ static func _page_embark() -> Dictionary:
 		_text("Apprentice is a training game, Magician an easy one, Sorcerer a normal one and Wizard a hard one. The easier the level, the more you start with: 250, 200, 150 or 100 gold, 50 food, four amulets down to one, and a first deck of 36, 40, 46 or 46 cards in one, two, three or all five colors."),
 		_heading("Card packs"),
 		# THE CARD PACKS IN AN ADVENTURE (0.60.14, the owner's pack rulings of
-		# 2026-11-03): any of Packs 2–9, each with its own cards, as a share of
+		# 2026-11-03): any of Packs 2–10, each with its own cards, as a share of
 		# the random cards; strong cards special, ante cards off the shelves.
-		_text("Card packs lists the numbered card packs you have installed (Options › Card Packs). Any of Packs 2 to 9 can join an adventure, one, several or all of them: tick a pack, and the cards it brought to the game join the shops, the traders, the lairs and the duels' rewards on Shandalar. Its reprints of another pack's cards come only when that pack joins too — except Fifth Edition's: it brings its Ice Age, Homelands and Fallen Empires cards as well, at their Fifth Edition rarity unless their own pack joins too. Your first deck and the creatures' decks stay base cards. Of the cards a shop, a duel's spoils or a lair draws at random, pack cards are a share: 20% for each pack, 60% at most shared among them (one pack 20%, two 40%, three or more 60%); the rest are base cards, and with no pack ticked they all are, as before. A trader's list, and a reward where you choose the card, is not shared out: it lists base and pack cards alike. Strong pack cards, such as Necropotence, Force of Will and the Tutors, are special, as the base game's strongest cards are: never sold in a shop, four amulets at a trader. Cards made for ante, such as Amulet of Quoz and Timmerian Fiends, are never on a shop's shelves. With Ice Age, its Snow-Covered basics are basic lands: a shop's land place may hold one, a trader gives four for one amulet, and a deck under 40 cards may win one in place of a basic land. Setting out with a pack enables it in Options › Card Packs, for duels and deck building too. All ticks every pack, None unticks them. An adventure begun with a pack is taken up again only with that pack installed (see Saved adventures)."),
+		_text("Card packs lists the numbered card packs you have installed (Options › Card Packs). Any of Packs 2 to 10 can join an adventure, one, several or all of them: tick a pack, and the cards it brought to the game join the shops, the traders, the lairs and the duels' rewards on Shandalar. Its reprints of another pack's cards come only when that pack joins too — except Fifth Edition's: it brings its Ice Age, Homelands and Fallen Empires cards as well, at their Fifth Edition rarity unless their own pack joins too. Your first deck and the creatures' decks stay base cards. Of the cards a shop, a duel's spoils or a lair draws at random, pack cards are a share: 20% for each pack, 60% at most shared among them (one pack 20%, two 40%, three or more 60%); the rest are base cards, and with no pack ticked they all are, as before. A trader's list, and a reward where you choose the card, is not shared out: it lists base and pack cards alike. Strong pack cards, such as Necropotence, Force of Will and the Tutors, are special, as the base game's strongest cards are: never sold in a shop, four amulets at a trader. Cards made for ante, such as Amulet of Quoz and Timmerian Fiends, are never on a shop's shelves. With Ice Age, its Snow-Covered basics are basic lands: a shop's land place may hold one, a trader gives four for one amulet, and a deck under 40 cards may win one in place of a basic land. Setting out with a pack enables it in Options › Card Packs, for duels and deck building too. All ticks every pack, None unticks them. An adventure begun with a pack is taken up again only with that pack installed (see Saved adventures)."),
 		_heading("Campaign Settings"),
 		_text("Campaign Settings..., under your playmat, opens the campaign's modern settings in a window of their own, one row each with a line under it saying what the choice does; the line under the button names the main ones. A choice takes effect as you make it; Done (or Escape) closes the window, and As 1997 sets every row as the 1997 game played. Randomize leaves them as you set them, and the next adventure opens on them."),
 		_text("Final battle: Reload allowed (the default): your adventure is saved at Arzakon's door as the final battle begins; lose it, and loading puts you back at his door, every battle lost written in your record. One life: lose the final battle, or leave or close the game during it, and the adventure is over for good; no save of it can fight the battle again. Randomize leaves your rules as you set them."),
@@ -566,6 +571,7 @@ static func _page_adventure_castles() -> Dictionary:
 static func _page_adventure_saves() -> Dictionary:
 	return {"title": "Saved adventures", "blocks": [
 		_text("An adventure is saved the moment its world is made, under the hero's name — gold, food, amulets, World Magics, the clocks and the world as it stands — and again on its own (the autosave) as you leave a town or a lair, as you meet a creature and when the meeting is over, as a ruled town's duel begins, at a castle's or a dungeon's door and as you come out, at Arzakon's door, and as you quit. Save in the options offers ten slots for each adventure: click one, give it a name and press Enter; a blank name becomes the day and the place. Ctrl+S saves at once to the adventure's own Quickslot and leaves the named saves as they are; Ctrl+L takes the Quickslot up again at once, on the road, on the map or in a town, and what was done since that save is gone. Save / Load on the main menu lists each adventure with its Quickslot, its autosave and its named slots, with the days on the road; Resume, or a double-click, takes the save you choose back into its world, the newest autosave whose quest has not failed chosen to begin with. Delete, or the Delete key, asks first, then deletes the save you chose, or every save of its adventure; the Hall of Fame keeps its lines. An adventure begun with a card pack needs that pack: a pack that is not installed is named, and the save waits until you add it in Options › Card Packs; a pack switched off is enabled again, and the adventure says so as it comes back. A save is written whole or not at all: if it cannot be written the game says so and keeps your last good save, and Exit game asks before leaving without saving. Each save keeps its previous version beside it, taken up if the save itself is damaged; a save that cannot be read is counted on the list, never hiding the others. Times are shown on your own clock. The list marks an adventure won, with the years Arzakon is banished, and a quest that failed — under One life every save of it, from before the battle too; the Hall of Fame button there, and beside the save slots, shows every adventure won, best first: the most years, then the harder level, then the fewer days."),
+		_text("Export, or Ctrl+E, saves the highlighted save's whole adventure — every save of it — as one file, wherever you choose: on a phone or a headset the system's file box opens, so the Downloads folder will do; in a browser it is downloaded. Import, or Ctrl+I, takes such a file from this device or another, checks all of it before anything is written, asks before it replaces an adventure that is here already (and says so when the saves here are newer), and highlights the adventure on the list. A file that is damaged, holds anything but one adventure's saves, or was saved by a newer version of the game is refused, and the line under the list says why. On Android the saves are in the game's folder on the shared storage, Android/data/com.b0realis.shandalar.android/files/adventures (on the Meta Quest Android/data/com.b0realis.shandalar/files/adventures), beside the card packs, where adb pull can copy them."),
 	]}
 
 
@@ -1099,8 +1105,10 @@ static func _page_icons_counters_more() -> Dictionary:
 		]},
 		_heading("When a counter has no stone"),
 		_text("Pupa, glyph, sleep, mire, hatchling and +0/+1 counters use "
-			+ "a plain dark chip with their count inside it. Read the cue "
-			+ "card for the counter's name and effect."),
+			+ "a plain dark chip with their count inside it, and so do the "
+			+ "Urza block's verse, page, petal, fuse, soot, arrow, growth "
+			+ "and infection counters. Read the cue card for the counter's "
+			+ "name and effect."),
 		_text("The same dark chip stands in for every stone if you are "
 			+ "playing without the 1997 graphics. The count is always "
 			+ "there either way; it is only the picture that needs the "
@@ -1460,7 +1468,7 @@ static func _page_builder() -> Dictionary:
 			+ "Select a printing, preview it and press Use variant. Automatic follows the set filter. "
 			+ "Your saved deck remembers one printing for every copy of that card name, including the sideboard. "
 			+ "Rules, copy limits and draft pools stay the same. Missing artwork falls back to the normal face. "
-			+ "Portal, Fifth Edition, Mirage and Tempest include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
+			+ "Portal, Fifth Edition, Mirage, Tempest and Urza's Saga include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
 		_text("Pack 8: The Mirage Block brings Mirage, Visions and Weatherlight: 669 different cards "
 			+ "and 684 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
 			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
@@ -1473,6 +1481,13 @@ static func _page_builder() -> Dictionary:
 			+ "can be played with any pack that provides it installed, Pack 9 included. The Abilities pages "
 			+ "at the end of this Help explain shadow, buyback, licids, Slivers, Spikes and the block's "
 			+ "other new rules."),
+		_text("Pack 10: The Urza Block brings Urza's Saga, Urza's Legacy and Urza's Destiny: 621 different cards "
+			+ "and 636 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
+			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
+			+ "usual rules, and a card whose rules script lives in Ice Age, Portal, Portal Second Age or Mirage "
+			+ "can be played with any pack that provides it installed, Pack 10 included. The Abilities pages "
+			+ "at the end of this Help explain echo, cycling, the enchantments that become creatures, "
+			+ "untapping lands, verse counters and the block's other new rules."),
 		_text("LOAD is a door to the Load Deck dialog from the bar: "
 			+ "your own decks head the list, a finder above it keeps the "
 			+ "rows whose title or file name contains what you type, "
@@ -2023,6 +2038,12 @@ const MINI_CARD_TERMS: Array = [
 	["storage counter", "Storage lands"], ["storage counters", "Storage lands"],
 	["licid", "Licids"], ["sliver", "Slivers"], ["slivers", "Slivers"],
 	["spike", "Spikes"],
+	# Pack 10, the Urza block.
+	["echo", "Echo"], ["cycling", "Cycling"],
+	["verse counter", "Verse counters"], ["verse counters", "Verse counters"],
+	["untap up to", "Untap up to N lands"],
+	["reveal any number", "Revealing cards from your hand"],
+	["graveyard from anywhere", "Put into a graveyard from anywhere"],
 ]
 ## At most this many glossary entries under `Help for this card...`.
 const MINI_CARD_MAX := 4
@@ -2059,7 +2080,9 @@ static func mini(subject: String) -> Dictionary:
 			return _mini("Library", "Your library is the face-down pile you "
 				+ "draw from. The number on it is how many cards are left, and "
 				+ "Count library cards writes it on the Situation Bar. A "
-				+ "player who has to draw from an empty library loses.",
+				+ "player who has to draw from an empty library loses. When "
+				+ "you may play its top card, as Temporal Aperture allows, "
+				+ "click the pile to play it.",
 				"The Dueling Table")
 		MINI_HAND:
 			var fold := Controls.text("duel_hand")
@@ -2067,7 +2090,8 @@ static func mini(subject: String) -> Dictionary:
 				+ "play. Click a card to cast it, or double-click to have its "
 				+ "mana paid automatically; you still choose its targets. "
 				+ "Right-click a card for its own menu, or hold the right "
-				+ "button to lift it to the front."
+				+ "button to lift it to the front. A card with cycling asks "
+				+ "whether to cast it or to cycle it."
 				+ ("" if fold == Controls.UNBOUND else
 					" %s folds a stacked hand window away and back; in a "
 					% fold + "private hotseat duel it shows or hides the hand."),
@@ -2135,7 +2159,9 @@ static func mini(subject: String) -> Dictionary:
 				+ "beside it, is a separate zone. Click either pile, or choose "
 				+ "a View entry on this menu, to lay out both players' "
 				+ "graveyards, exiled cards and ante. Hover over a card there "
-				+ "to read it; Done or a click outside closes the view.",
+				+ "to read it; Done or a click outside closes the view. Cards "
+				+ "you may play from there, as Yawgmoth's Will allows, are "
+				+ "ringed: click one to play it.",
 				"The kinds of card")
 	return {}
 

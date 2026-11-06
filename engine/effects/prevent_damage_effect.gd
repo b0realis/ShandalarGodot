@@ -64,7 +64,9 @@ func divided(total: int) -> PreventDamageEffect:
 ## target".
 func resolve_multi(game: MtgGame, source: CardInstance, controller: int,
 		targets: Array, x_value: int = 0) -> void:
-	if divided_amount(x_value) <= 0:
+	# Pack 10 E7: a total the source decided ([method EffectBase.divided_by])
+	# was locked on the refs at announcement and is never read again.
+	if divided_amount(x_value) <= 0 and not divided_count_fn.is_valid():
 		super(game, source, controller, targets, x_value)
 		return
 	for ref in targets:
@@ -162,9 +164,9 @@ func _prevent_into(game: MtgGame, source: CardInstance, target: TargetRef,
 ## One-line log/UI text.
 func describe() -> String:
 	var n := "X" if use_x else str(amount)
-	if divided_total > 0 or divided_uses_x:
+	if is_divided():
 		return "prevents the next %s damage this turn to any number of targets, divided as you choose" \
-			% ("X" if divided_uses_x else str(divided_total))
+			% ("X" if divided_uses_x or divided_count_fn.is_valid() else str(divided_total))
 	if controller_mode:
 		return "prevents the next %s damage to you this turn" % n
 	var rider := "; then pay {1} any time for 1 more" if paid_rider else ""

@@ -27,7 +27,7 @@ extends RefCounted
 ##   hint counts them against the hand, never names them (fair play).
 ## - Living Death: every player exiles at once, then every creature is
 ##   sacrificed in one simultaneous event (CR 704.3), then each player's
-##   exiled cards return under their control.
+##   exiled cards return under their control, all at one moment.
 ## - Hand to Hand's two bans read the step live: the whole combat phase
 ##   (beginning of combat through end of combat, CR 506.1).
 ## tests/cards/test_pack_9_B8_misc.gd pins each card.
@@ -86,10 +86,13 @@ static func configure(c: CardData) -> bool:
 			c.static_ability(StaticAbility.new(_custody,
 				"All artifacts have shroud.").changing_abilities())
 		"Humility":
+			# One printed ability in two layers (CR 613.6, Pack 10 E3): once the
+			# removal has run, the 1/1 applies even after Humility humbled
+			# itself (Opalescence made it a creature).
 			c.static_ability(StaticAbility.removing_all_abilities(_any_creature,
-				"All creatures lose all abilities."))
+				"All creatures lose all abilities.").part_of(&"humility"))
 			c.static_ability(StaticAbility.base_pt_for(_any_creature, 1, 1,
-				"All creatures have base power and toughness 1/1."))
+				"All creatures have base power and toughness 1/1.").part_of(&"humility"))
 		"Light of Day":
 			c.static_ability(StaticAbility.new(_light_of_day, "Black creatures can't attack or block."))
 		"Living Death":
@@ -297,10 +300,9 @@ static func _light_of_day(g: MtgGame, _s: CardInstance) -> void:
 ## graveyards, sacrifice the creatures on the battlefield in one event,
 ## then each player puts the cards THEY exiled this way onto the
 ## battlefield — exactly those objects, on that exile visit (CR 400.7).
-## SIMPLIFIED (docs/simplified-cards.md, "Living Death"): the returned
-## creatures enter one after another in APNAP order rather than at the
-## same instant, so a returned "whenever another creature enters" ability
-## (Soul Warden) sees only the creatures that enter after it.
+## They return at ONE moment (MtgGame.put_onto_battlefield_together, Pack
+## 10 E10): every returned "whenever another creature enters" ability
+## (Soul Warden) sees all the others, both players' (CR 603.6a, 603.10).
 class LivingDeath extends EffectBase:
 	func _init() -> void:
 		ai_role = &"living_death"
@@ -321,13 +323,13 @@ class LivingDeath extends EffectBase:
 				if g.is_present(inst) and inst.is_creature() and inst.controller_id == p:
 					g.sacrifice_permanent(inst)
 		g.end_simultaneous()
-		g.begin_simultaneous()
+		var entries: Array = []
 		for p in order:
 			for row in exiled[p]:
 				var inst := g.find_instance(int(row[0]))
 				if inst != null and inst.zone == Mtg.Zone.EXILE and inst.exile_entry == int(row[1]):
-					g.return_from_exile_to_play(inst, p)
-		g.end_simultaneous()
+					entries.append({"instance": inst, "controller": p})
+		g.put_onto_battlefield_together(entries)
 	func describe() -> String:
 		return "each player exiles all creature cards from their graveyard, then sacrifices all creatures they control, then puts all cards they exiled this way onto the battlefield"
 

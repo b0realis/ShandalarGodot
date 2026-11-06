@@ -313,6 +313,41 @@ enum EventType {
 	                     ## by two bears triggers once, for 6 — not twice, once
 	                     ## per packet (the bug campaign c12, h3-8). Dispatched
 	                     ## with WAS_DEALT_DAMAGE, inside a bracket or out.
+	CARD_PUT_INTO_GRAVEYARD,  ## data: {instance, owner, from_zone,
+	                     ## from_controller, graveyard_entry} — Pack 10 E4: a
+	                     ## CARD was put into its owner's graveyard, from
+	                     ## anywhere (CR 603.6a): a resolved, countered or
+	                     ## fizzled spell, a refused permanent spell, a
+	                     ## discard, a mill, a death, the legend rule, exile,
+	                     ## the ante, another graveyard (an owner change). ONE
+	                     ## event per card, after it is there; `from_zone` is
+	                     ## the Mtg.Zone it left, `from_controller` the seat
+	                     ## that controlled it there (off the battlefield its
+	                     ## owner: a spell goes home before it lands, CR
+	                     ## 110.2), `graveyard_entry` the
+	                     ## card's graveyard incarnation (CR 400.7 — a resolving
+	                     ## trigger compares it). Never for a token or a spell
+	                     ## copy (not cards, CR 111.7/111.8), never for a card a
+	                     ## graveyard replacement exiled instead (Forbidden
+	                     ## Crypt, CR 614.1). The battlefield hears it, and so
+	                     ## do the MOVED card's own graveyard triggers (Serra
+	                     ## Avatar); a "from anywhere" trigger never looks back
+	                     ## (CR 603.6c), so a listener that left hears nothing.
+	                     ## Dispatched only when something listens
+	                     ## (MtgGame._announce_graveyard_arrival) — every
+	                     ## spell resolution passes here.
+	SPELL_COUNTERED,     ## data: {instance, controller, owner, is_copy,
+	                     ## destination} — Pack 10 E4: MtgGame.counter_spell
+	                     ## countered a spell (CR 701.5a), whatever replaced
+	                     ## its destination (`destination`: the Mtg.Zone it went
+	                     ## to). `controller` is the player who CAST it (its
+	                     ## stack controller, read before it went home to its
+	                     ## owner — CR 110.2); `is_copy` marks a copy, which was
+	                     ## never cast ("a spell you've cast" skips it —
+	                     ## Multani's Presence). Not for a spell that can't be
+	                     ## countered (it stays on the stack), and not for a
+	                     ## fizzle: a spell whose targets are all illegal does
+	                     ## not resolve (CR 608.2b) — it is not countered.
 }
 
 ## What kind of object a StackItem is.

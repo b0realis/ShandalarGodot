@@ -1,7 +1,7 @@
 # SGManalink LAN playtest
 
 Development source: `main`, version **0.50.37** (2026-10-27: now 0.50.61,
-protocol 30). A desktop LAN full-pool duel
+protocol 30; 2026-11-06: 0.60.19, protocol 31). A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -31,7 +31,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 ## Two computers on the same network
 
 Use matching **0.50.37 development builds** (2026-10-27: matching builds of
-the same version, protocol 30) and enabled packs on both computers. The older
+the same version, protocol 30; 0.60.19 uses protocol 31) and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name

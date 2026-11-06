@@ -257,7 +257,8 @@ func _hash_plan(paths: Array) -> Dictionary:
 func _all_candidate_paths() -> Array:
 	return candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) \
 		+ candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) \
-		+ candidate_paths(FifthEditionPack.ID) + candidate_paths(MirageBlockPack.ID) + candidate_paths(TempestBlockPack.ID)
+		+ candidate_paths(FifthEditionPack.ID) + candidate_paths(MirageBlockPack.ID) + candidate_paths(TempestBlockPack.ID) \
+		+ candidate_paths(UrzaBlockPack.ID)
 
 
 ## Which pack a file is, by its exact name; Pack 1 for any other name.
@@ -271,6 +272,7 @@ static func _id_for(path: String) -> String:
 		FifthEditionPack.FILE_NAME: return FifthEditionPack.ID
 		MirageBlockPack.FILE_NAME: return MirageBlockPack.ID
 		TempestBlockPack.FILE_NAME: return TempestBlockPack.ID
+		UrzaBlockPack.FILE_NAME: return UrzaBlockPack.ID
 	return ID
 
 
@@ -319,6 +321,8 @@ static func candidate_paths(id := ID) -> Array[String]:
 ## With [param art_trusted] — a sealed pack, [PackSeal] — the manifest's word
 ## for the artwork digest stands and no picture is read; everything else runs.
 static func inspect(path: String, art_trusted := false) -> Dictionary:
+	if path.get_file() == UrzaBlockPack.FILE_NAME:
+		return UrzaBlockPack.inspect(path, art_trusted)
 	if path.get_file() == TempestBlockPack.FILE_NAME:
 		return TempestBlockPack.inspect(path, art_trusted)
 	if path.get_file() == MirageBlockPack.FILE_NAME:
@@ -542,12 +546,34 @@ static func _snake(value: String) -> String:
 	return out.trim_prefix("_").trim_suffix("_")
 
 
+## The found packs in PACK-NUMBER order ([method sort_ids]): Pack 10 after
+## Pack 9, never between Packs 1 and 2 as a text sort put it.
 func available_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for id in _available:
 		ids.append(String(id))
-	ids.sort()
+	sort_ids(ids)
 	return ids
+
+
+## THE PACK NUMBER OF [param id] — 10 for `pack-10` — or 0 for anything
+## that is not a numbered pack id. Read as a whole number, never a digit at
+## a time: Pack 10 is the first two-digit pack (2026-11-06).
+static func number_of(id: String) -> int:
+	var digits := id.trim_prefix("pack-")
+	return int(digits) if id.begins_with("pack-") and digits.is_valid_int() else 0
+
+
+## Sort [param ids] in place by pack number (`pack-2` before `pack-10`), an
+## id that is no numbered pack after them in text order. A plain
+## [method Array.sort] compares text and puts `pack-10` second.
+static func sort_ids(ids: Array) -> void:
+	ids.sort_custom(func(a: Variant, b: Variant) -> bool:
+		var left := number_of(String(a))
+		var right := number_of(String(b))
+		if left != right:
+			return left != 0 and (right == 0 or left < right)
+		return String(a) < String(b))
 
 
 func has_pack(id: String) -> bool:
@@ -682,7 +708,7 @@ signal pack_added(result: Dictionary)
 
 ## Where a chosen zip is checked before it may replace anything.
 const INCOMING := "user://cardpack_incoming"
-## No numbered pack is bigger, nor holds more entries (Packs 8 and 9).
+## No numbered pack is bigger, nor holds more entries (Packs 8 to 10).
 const ADD_MAX_BYTES := 384 * 1024 * 1024
 const ADD_MAX_ENTRIES := 2676
 
@@ -774,7 +800,7 @@ static func install_pack(source: String, folder: String) -> Dictionary:
 	var id := pack_in(source)
 	if id == "":
 		return {"ok": false, "id": "",
-			"message": "%s is not a numbered card pack (Pack-1 to Pack-9)." % shown}
+			"message": "%s is not a numbered card pack (Pack-1 to Pack-10)." % shown}
 	var file_name := file_name_for(id)
 	var staging := ProjectSettings.globalize_path(INCOMING)
 	DirAccess.make_dir_recursive_absolute(staging)
@@ -797,8 +823,8 @@ static func install_pack(source: String, folder: String) -> Dictionary:
 
 
 ## Available installed printings. Earlier packs expose their supplied
-## printing per name/set; the Portal sets, Fifth Edition and the Mirage
-## and Tempest blocks carry every numbered version.
+## printing per name/set; the Portal sets, Fifth Edition and the Mirage,
+## Tempest and Urza blocks carry every numbered version.
 func printing_choices(card_name: String) -> Array:
 	if not _printing_cache_ready:
 		for id in available_ids():
@@ -855,6 +881,8 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 		prefix = MirageBlockPack.PREFIX
 	if id == TempestBlockPack.ID:
 		prefix = TempestBlockPack.PREFIX
+	if id == UrzaBlockPack.ID:
+		prefix = UrzaBlockPack.PREFIX
 	var stem := _snake(card_name)
 	if _numbered_set(set_code) and number != "":
 		var first := ""
@@ -963,6 +991,9 @@ func _names_of(id: String) -> Array:
 	if id == TempestBlockPack.ID:
 		names = TempestBlockPack.new_names()
 		names.append_array(TempestBlockPack.shared().keys())
+	if id == UrzaBlockPack.ID:
+		names = UrzaBlockPack.new_names()
+		names.append_array(UrzaBlockPack.shared().keys())
 	return names
 
 
@@ -1057,6 +1088,7 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 	var sixth := PortalPack.new_names()
 	var eighth := MirageBlockPack.new_names()
 	var ninth := TempestBlockPack.new_names()
+	var tenth := UrzaBlockPack.new_names()
 	for name in names:
 		if _shared_source(name) != "":
 			var provider := _shared_provider(name)
@@ -1065,6 +1097,7 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 		if sixth.has(name) and not ids.has(PortalPack.ID): ids.append(PortalPack.ID)
 		if eighth.has(name) and not ids.has(MirageBlockPack.ID): ids.append(MirageBlockPack.ID)
 		if ninth.has(name) and not ids.has(TempestBlockPack.ID): ids.append(TempestBlockPack.ID)
+		if tenth.has(name) and not ids.has(UrzaBlockPack.ID): ids.append(UrzaBlockPack.ID)
 		if ADDED_NAMES.has(name) and not ids.has(ID):
 			ids.append(ID)
 		if second.has(name) and not ids.has(FallenEmpiresPack.ID):
@@ -1075,7 +1108,7 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 			ids.append(HomelandsPack.ID)
 		if fifth.has(name) and not ids.has(AlliancesPack.ID):
 			ids.append(AlliancesPack.ID)
-	ids.sort()
+	sort_ids(ids)
 	return ids
 
 
@@ -1083,7 +1116,8 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 ## (2026-09-26). The one table of it: `fem` is Fallen Empires' pack,
 ## `ice` Ice Age's, `hml` Homelands', `all` Alliances', `por`/`p02`
 ## Portal's, `5ed` Fifth Edition's, `mir`/`vis`/`wth` the Mirage
-## block's and `tmp`/`sth`/`exo` the Tempest block's — so a tool that is
+## block's, `tmp`/`sth`/`exo` the Tempest block's and `usg`/`ulg`/`uds`
+## the Urza block's — so a tool that is
 ## asked for a set can say which pack must be in play for it, rather than
 ## "unknown set code" (which is what the AutoDeck CLI said about `ice`
 ## with no pack enabled).
@@ -1101,6 +1135,8 @@ static func pack_of_set(set_code: String) -> String:
 		return MirageBlockPack.ID
 	if TempestBlockPack.SET_COUNTS.has(set_code):
 		return TempestBlockPack.ID
+	if UrzaBlockPack.SET_COUNTS.has(set_code):
+		return UrzaBlockPack.ID
 	return ""
 
 
@@ -1110,7 +1146,7 @@ static func pack_of_set(set_code: String) -> String:
 ## expression to GDScript.)
 static func expansions() -> Array:
 	return [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack, FifthEditionPack, MirageBlockPack,
-		TempestBlockPack]
+		TempestBlockPack, UrzaBlockPack]
 
 
 ## Every pack id this build knows, Pack 1 first, found or not — the
@@ -1123,6 +1159,8 @@ static func known_ids() -> Array[String]:
 
 
 static func file_name_for(id: String) -> String:
+	if id == UrzaBlockPack.ID:
+		return UrzaBlockPack.FILE_NAME
 	if id == TempestBlockPack.ID:
 		return TempestBlockPack.FILE_NAME
 	if id == MirageBlockPack.ID:
@@ -1186,13 +1224,15 @@ func _configure_registry() -> void:
 ## Sets whose basic lands ship several numbered illustrations.
 static func _numbered_set(set_code: String) -> bool:
 	return PortalPack.SET_COUNTS.has(set_code) or FifthEditionPack.SET_COUNTS.has(set_code) \
-		or MirageBlockPack.SET_COUNTS.has(set_code) or TempestBlockPack.SET_COUNTS.has(set_code)
+		or MirageBlockPack.SET_COUNTS.has(set_code) or TempestBlockPack.SET_COUNTS.has(set_code) \
+		or UrzaBlockPack.SET_COUNTS.has(set_code)
 
 
-## The expansion whose script a Portal, Fifth Edition, Mirage block or
-## Tempest block reprint reuses. The tables agree where they overlap
-## (Flare is Ice Age's in Fifth Edition's and in the Mirage block's; Dark
-## Banishing Ice Age's and Coercion Second Age's in both blocks').
+## The expansion whose script a Portal, Fifth Edition, Mirage block,
+## Tempest block or Urza block reprint reuses. The tables agree where they
+## overlap (Flare is Ice Age's in Fifth Edition's and in the Mirage block's;
+## Dark Banishing Ice Age's and Coercion Second Age's in both blocks';
+## Pacifism Mirage's in the Tempest and Urza blocks').
 static func _shared_source(name: String) -> String:
 	if PortalPack.SHARED.has(name):
 		return PortalPack.SHARED[name]
@@ -1202,7 +1242,10 @@ static func _shared_source(name: String) -> String:
 	var mirage := String(MirageBlockPack.shared().get(name, ""))
 	if mirage != "":
 		return mirage
-	return String(TempestBlockPack.shared().get(name, ""))
+	var tempest := String(TempestBlockPack.shared().get(name, ""))
+	if tempest != "":
+		return tempest
+	return String(UrzaBlockPack.shared().get(name, ""))
 
 
 ## A reprint needs any one enabled provider, not every pack that carries it.
@@ -1210,17 +1253,20 @@ static func _shared_source(name: String) -> String:
 ## the set that printed it first: Archangel appeared in Visions before Portal
 ## reprinted it, and Portal's script is the one it runs, so Portal is asked
 ## before Pack 8. A Tempest block reprint of a Mirage card (Pacifism)
-## has the Mirage block as its original pack, and Pack 9 after it.
+## has the Mirage block as its original pack, and Pack 9 after it; an Urza
+## block reprint asks the Tempest block before Pack 10.
 func _shared_provider(name: String, excluding := "") -> String:
 	var original := {"fem": FallenEmpiresPack.ID, "ice": IceAgePack.ID,
 		"hml": HomelandsPack.ID, "all": AlliancesPack.ID,
 		"por": PortalPack.ID, "p02": PortalPack.ID,
-		"mir": MirageBlockPack.ID, "vis": MirageBlockPack.ID, "wth": MirageBlockPack.ID}
+		"mir": MirageBlockPack.ID, "vis": MirageBlockPack.ID, "wth": MirageBlockPack.ID,
+		"tmp": TempestBlockPack.ID, "sth": TempestBlockPack.ID, "exo": TempestBlockPack.ID}
 	var ids: Array[String] = [original[_shared_source(name)]]
 	if PortalPack.SHARED.has(name): ids.append(PortalPack.ID)
 	if FifthEditionPack.shared().has(name): ids.append(FifthEditionPack.ID)
 	if MirageBlockPack.shared().has(name): ids.append(MirageBlockPack.ID)
 	if TempestBlockPack.shared().has(name): ids.append(TempestBlockPack.ID)
+	if UrzaBlockPack.shared().has(name): ids.append(UrzaBlockPack.ID)
 	for id in ids:
 		if id != excluding and is_enabled(id): return id
 	return ids[0] if excluding.is_empty() else ""

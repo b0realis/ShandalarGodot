@@ -141,13 +141,58 @@ const RECIPES := [
 		"gives": "tap for {C}{C}{C}, untap for {1}: {C}{C} a round"},
 ]
 
+## PACK 10'S LOOPS (the Urza block, 2026-11-06), a list of their own so the
+## pool test of the first six ([constant RECIPES], tests/ai/test_card_combos.gd,
+## Packs 3-9) is never asked about cards it has not switched on. Played by
+## hand under both rules presets in tests/cards/test_pack_10_B9_loops.gd
+## and pinned for the pilot by tests/ai/test_ai_pack_10_tactics_combos.gd.
+##  * GRIM MONOLITH + POWER ARTIFACT — the Basalt recipe at {2} an untap:
+##    {C} a round; the search finds it and the pilot runs it.
+##  * VOLTAIC KEY + TIME VAULT — the Vault's tap is an extra turn and the
+##    Key untaps it for {1}, once a turn: no mana loop for the walk to see
+##    (an extra turn is not on the board's shape). Catalogued for
+##    assembly, keeping and defence; the Key's untap is the Urza module's
+##    reading (engine/ai/urza_tactics.gd `untap_artifact_option`).
+##  * TOLARIAN ACADEMY + MIND OVER MATTER — a card from the hand for each
+##    untap of the Academy: a cost the walk does not count (see LIMITS),
+##    and Mind Over Matter's discard is not one the pilot pays. Kept and
+##    defended against, never pushed out of the hand for itself
+##    (`"assembles": false`).
+##  * PALINCHRON + HIGH TIDE — seven doubled Islands pay {5}{U}{U} and
+##    {2}{U}{U} with three to spare, the Palinchron returning itself: seven
+##    taps a round, past the walk's depth, and High Tide is a spell that
+##    never sits on the table. Kept and defended against only, likewise.
+const PACK_10_RECIPES := [
+	{"name": "Powered Grim Monolith", "loop_slot": -1,
+		"slots": [["Grim Monolith"], ["Power Artifact"]],
+		"gives": "tap for {C}{C}{C}, untap for {2}: {C} a round"},
+	{"name": "Voltaic Vault", "loop_slot": -1,
+		"slots": [["Time Vault"], ["Voltaic Key"]],
+		"gives": "an extra turn for {1}, every turn"},
+	{"name": "Academy and Mind Over Matter", "loop_slot": -1, "assembles": false,
+		"slots": [["Tolarian Academy"], ["Mind Over Matter"]],
+		"gives": "a card for an untap of the Academy: blue mana for the hand"},
+	{"name": "Palinchron and High Tide", "loop_slot": -1, "assembles": false,
+		"slots": [["Palinchron"], ["High Tide"]],
+		"gives": "three blue mana a round off seven Islands"},
+]
+
+
+## Every catalogued loop: [constant RECIPES] and [constant PACK_10_RECIPES].
+static func recipes() -> Array:
+	if _all_recipes.is_empty():
+		_all_recipes = RECIPES + PACK_10_RECIPES
+	return _all_recipes
+
+static var _all_recipes: Array = []
+
 
 # ================================================================ the catalogue --
 
 ## Every (recipe, slot) [param card_name] fills, as `{"recipe", "slot"}`.
 static func pieces_of(card_name: String) -> Array:
 	var out: Array = []
-	for recipe in RECIPES:
+	for recipe in recipes():
 		var slots: Array = recipe["slots"]
 		for i in slots.size():
 			if (slots[i] as Array).has(card_name):
@@ -200,7 +245,7 @@ static func standing(g: MtgGame, pid: int, recipe: Dictionary, with_hand: bool,
 ## untaps them. Empty when no catalogued loop is whole.
 static func assembled_focus(g: MtgGame, pid: int) -> Dictionary:
 	var focus: Dictionary = {}
-	for recipe in RECIPES:
+	for recipe in recipes():
 		var st := standing(g, pid, recipe, true)
 		if int(st["filled"]) < int(st["size"]):
 			continue
@@ -240,6 +285,8 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	var best_value := 0.0
 	for piece in pieces_of(inst.data.card_name):
 		var recipe: Dictionary = piece["recipe"]
+		if not bool(recipe.get("assembles", true)):
+			continue   # kept and defended against, never cast for itself
 		var slot := int(piece["slot"])
 		var st := standing(g, pid, recipe, true, inst)
 		var others_filled := 0
@@ -705,7 +752,7 @@ static func _ability_tryable(inst: CardInstance, a: ActivatedAbility) -> bool:
 		return false
 	if a.tap_cost and (inst.tapped or (inst.is_creature() and inst.summoning_sick)):
 		return false
-	return a.discard_cost == 0 and a.life_cost == 0 and a.library_exile_cost == 0 \
+	return a.discard_cost == 0 and not a.has_life_cost() and a.library_exile_cost == 0 \
 		and a.random_discard_cost == 0 and not a.discard_last_drawn_cost
 
 

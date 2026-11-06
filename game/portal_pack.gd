@@ -110,9 +110,10 @@ static func _bounded_zip(path: String) -> bool:
 ## 1-5 call it too since the bug pass of 2026-10-03; they went straight to
 ## `ZIPReader.read_file`, which allocates whatever an entry DECLARES.
 ## [param max_bytes] bounds the archive and the sum of its declared sizes:
-## 256 MiB for every pack but Packs 8 and 9, whose three sets' pictures
-## measure 253.7 and 237.3 MiB, too close to it for a re-scanned picture
-## set ([constant MirageBlockPack.MAX_BYTES], [constant TempestBlockPack.MAX_BYTES]).
+## 256 MiB for every pack but Packs 8, 9 and 10, whose three sets' pictures
+## measure 253.7, 237.3 and 240.4 MiB, too close to it for a re-scanned
+## picture set ([constant MirageBlockPack.MAX_BYTES], [constant
+## TempestBlockPack.MAX_BYTES], [constant UrzaBlockPack.MAX_BYTES]).
 static func bounded_zip(path: String, max_entries: int, max_bytes := 256 * 1024 * 1024) -> bool:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null or file.get_length() < 22 or file.get_length() > max_bytes: return false
@@ -242,7 +243,7 @@ static func _version_less(left: String, right: String) -> bool:
 
 
 # --- review 2026-10-21 cards-1: the versions before the rest ---
-## THE VERSIONS BEFORE THE REST OF THE MANIFEST, for Packs 2-9, as
+## THE VERSIONS BEFORE THE REST OF THE MANIFEST, for Packs 2-10, as
 ## [method CardPacks.inspect] has always checked them for Pack 1. Every
 ## contract compared the zip's manifest with its trusted copy key by key
 ## FIRST, and a manifest that passes that carries the trusted minimum, which

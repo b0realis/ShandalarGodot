@@ -49,9 +49,21 @@ extends RefCounted
 ## expanded adventures. Older saves preserve evidenced expeditions and visited maps.
 const FORMAT := "shandalar-adventure"
 const FORMAT_VERSION := 7
-## Where the adventures are saved (tests point it elsewhere).
+## Where the adventures are saved (tests point it elsewhere): this folder
+## — on Android `<files>/adventures/` instead, in the app's corner of the
+## shared storage ([method saves_place]).
 const SAVES_FOLDER := "user://adventures"
-static var saves_folder := SAVES_FOLDER
+## The app's corner of the shared storage on Android ([method
+## GamePaths.android_files_dir]), "" everywhere else; a test stands in for
+## the platform through it, as through [member CardPacksScreen.on_android].
+static var android_dir := GamePaths.android_files_dir()
+static var saves_folder := saves_place(android_dir)
+## A folder read beside [member saves_folder] while saves are left in it:
+## on Android `user://adventures`, until every save there has moved
+## ([method move_saves]); "" when there is none.
+static var saves_left := ""
+## Whether this run has looked for saves to move ([method settle_saves]).
+static var _settled := false
 const AUTOSAVE := "autosave"
 ## The tail of the copy kept of a save's last good version ([method save]).
 const BACKUP_TAIL := ".bak"
@@ -1680,6 +1692,99 @@ func save_path(kind := AUTOSAVE) -> String:
 	return saves_folder.path_join("%s.%s.json" % [adventure_id, kind])
 
 
+## THE SAVES' FOLDER WITH [param files_dir], the app's corner of the shared
+## storage on Android ("" elsewhere): `user://adventures` on a desktop and
+## in a browser, `<files_dir>/adventures` on Android.
+##
+## [QoL] WHERE A PLAYER CAN REACH THEM (a player on Android, and the owner,
+## 2026-11-06: *"Yes implement both point 1. And 2.!"*): on Android
+## `user://` is the app's private folder, which no file manager, no
+## `adb run-as` (a release build) and no `adb backup` (the export allows
+## none) can open — only root. The card packs, portraits and music live in
+## the corner already ([GamePaths]); the saves join them, so `adb pull`
+## or a file manager given the access copies them.
+static func saves_place(files_dir: String) -> String:
+	return GamePaths.player_place(SAVES_FOLDER, files_dir)
+
+
+## Every folder the saves are read from: [member saves_folder], and while a
+## save is left in it the folder they came from ([member saves_left]). The
+## first time a run asks, any saves still in `user://adventures` on Android
+## are moved ([method settle_saves]).
+static func saves_folders() -> Array[String]:
+	settle_saves()
+	var out: Array[String] = [saves_folder]
+	if saves_left != "" and saves_left != saves_folder:
+		out.append(saves_left)
+	return out
+
+
+## ONCE A RUN, ON ANDROID: the saves in [param from] (`user://adventures`)
+## moved into the shared corner ([method move_saves]). Nothing anywhere
+## else, nor when a test pointed [member saves_folder] at a folder of its
+## own; the fallback-only rule — a working setup stays exactly as it was.
+static func settle_saves(from := SAVES_FOLDER) -> void:
+	if _settled:
+		return
+	_settled = true
+	var shared := saves_place(android_dir)
+	if android_dir == "" or shared == from or saves_folder != shared:
+		return
+	move_saves(from, shared)
+
+
+## THE SAVES IN [param from] MOVED INTO [param to], file by file: each one
+## (a save, a slot, an older `save.json`, their `.bak` copies) read whole,
+## written whole into [param to] ([method Settings.write_atomically]),
+## read back byte for byte, and only then removed from [param from].
+## `{moved, left}`.
+##
+## NEVER A SAVE LOST: a file that cannot be read, written or checked is
+## left where it is; so is one whose name is taken in [param to] by other
+## bytes (a save the game wrote there meanwhile — it is never written
+## over) unless that file or its `.bak` holds the same bytes. While any
+## is left, [member saves_left] names [param from] and the lists read
+## both folders — the newer of two saves of one slot shown ([method
+## scan_saves]) — and the next run tries again.
+static func move_saves(from: String, to: String) -> Dictionary:
+	var moved := 0
+	var left := 0
+	var names := DirAccess.get_files_at(from) if DirAccess.dir_exists_absolute(from) else PackedStringArray()
+	for file_name in names:
+		if not file_name.trim_suffix(BACKUP_TAIL).ends_with(".json"):
+			continue
+		var old := from.path_join(file_name)
+		var dest := to.path_join(file_name)
+		var bytes: Variant = whole_bytes(old)
+		var safe := false
+		if bytes is PackedByteArray and _folder_ready(to):
+			if FileAccess.file_exists(dest):
+				safe = _bytes_at(dest) == bytes or (not file_name.ends_with(BACKUP_TAIL)
+					and _bytes_at(backup_path(dest)) == bytes)
+			else:
+				safe = Settings.write_atomically(dest, bytes) == OK and whole_bytes(dest) == bytes
+		if safe:
+			DirAccess.remove_absolute(old)
+		if safe and not FileAccess.file_exists(old):
+			moved += 1
+		else:
+			left += 1
+	saves_left = from if left > 0 else ""
+	return {"moved": moved, "left": left}
+
+
+## The bytes of the file at [param path] when all of them could be read,
+## else null — an empty buffer is not mistaken for a file read in full.
+static func whole_bytes(path: String) -> Variant:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return null
+	var length := file.get_length()
+	var bytes := file.get_buffer(length)
+	file.close()
+	return bytes if bytes.size() == length else null
+
+
 ## The kind of save the file at [param path] is, from its name:
 ## `autosave`, `slot01` … `slot10` ([SaveSlots]).
 static func kind_of(path: String) -> String:
@@ -1822,22 +1927,24 @@ static func save_at(path: String) -> Dictionary:
 ## or `<id>.slot01.json` … `<id>.slot10.json` (with its `.bak`); any other
 ## file is not looked at. When two files claim one adventure's slot (a
 ## copy kept in the folder), the one by the adventure's own name is shown.
+## By default every folder of [method saves_folders] is read — on Android
+## the one the saves came from too, while a save is left in it.
 static func scan_saves(folder := "") -> Dictionary:
-	if folder == "":
-		folder = saves_folder
+	var folders: Array[String] = [folder] if folder != "" else saves_folders()
 	var saves: Array[Dictionary] = []
 	var unreadable := 0
-	var dir := DirAccess.open(folder)
-	if dir == null:
-		return {"saves": saves, "unreadable": 0}
 	var files := {}
-	for file_name in dir.get_files():
-		var main := file_name.trim_suffix(BACKUP_TAIL)
-		if main.ends_with(".json") and (_kept_kind(kind_of(main)) or kind_of(main) == SaveSlots.LEGACY):
-			files[main] = true
+	for place in folders:
+		var dir := DirAccess.open(place)
+		if dir == null:
+			continue
+		for file_name in dir.get_files():
+			var main := file_name.trim_suffix(BACKUP_TAIL)
+			if main.ends_with(".json") and (_kept_kind(kind_of(main)) or kind_of(main) == SaveSlots.LEGACY):
+				files[place.path_join(main)] = true
 	var by_slot := {}
-	for main: String in files:
-		var save := save_at(folder.path_join(main))
+	for path: String in files:
+		var save := save_at(path)
 		if save.get("unreadable", false):
 			unreadable += 1
 		elif not save.is_empty() and _kept_kind(String(save["kind"])):

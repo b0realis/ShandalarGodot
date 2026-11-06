@@ -119,7 +119,7 @@ const OUT_DIR := "res://game/art"
 func _init() -> void:
 	var dir := ProjectSettings.globalize_path(OUT_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
-	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed", "mir", "vis", "wth", "tmp", "sth", "exo"]:
+	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed", "mir", "vis", "wth", "tmp", "sth", "exo", "usg", "ulg", "uds"]:
 		var img := _render(Vector2i(GLYPH_SIZE, GLYPH_SIZE),
 			[[_glyph(code), GOLD_LIT, GOLD_DARK]], RIM)
 		_write(img, dir, "set_icon_%s.png" % code)
@@ -149,6 +149,12 @@ func _init() -> void:
 	_write(_stone_medallion(false, _gateway()), dir, "filter_sth_off.png")
 	_write(_stone_medallion(true, _bridge()), dir, "filter_exo_on.png")
 	_write(_stone_medallion(false, _bridge()), dir, "filter_exo_off.png")
+	_write(_stone_medallion(true, _gears()), dir, "filter_usg_on.png")
+	_write(_stone_medallion(false, _gears()), dir, "filter_usg_off.png")
+	_write(_stone_medallion(true, _hammer()), dir, "filter_ulg_on.png")
+	_write(_stone_medallion(false, _hammer()), dir, "filter_ulg_off.png")
+	_write(_stone_medallion(true, _flask()), dir, "filter_uds_on.png")
+	_write(_stone_medallion(false, _flask()), dir, "filter_uds_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -237,6 +243,12 @@ func _glyph(code: String) -> Array:
 			return _gateway()
 		"exo":
 			return _bridge()
+		"usg":
+			return _gears()
+		"ulg":
+			return _hammer()
+		"uds":
+			return _flask()
 	return []
 
 
@@ -468,6 +480,144 @@ func _bridge() -> Array:
 			at.call(mirror.call(0.162), 0.36), at.call(mirror.call(0.113), 0.36)])})
 		ops.append({"op": "add", "poly": _circle_poly(at.call(mirror.call(0.1375), 0.17), 0.04, 28)})
 	return ops
+
+
+## URZA'S SAGA — two cogwheels side by side, the left one standing a
+## little higher: the set's own mark, redrawn as our own geometry and not
+## a copy of its outline. Each wheel has eight broad teeth, a ring channel
+## cut round its hub and a hole through the middle, and the left wheel
+## turns a tooth into the right one's gap, so the pair reads as one train
+## of gears — Urza's workshop — rather than two loose coins. Polygons
+## only, so the stone medallion carves the very same wheels.
+func _gears() -> Array:
+	var left := Vector2(0.255, 0.445)
+	var right := Vector2(0.745, 0.555)
+	var line := (right - left).angle()
+	var ops: Array = []
+	for wheel in [[left, line], [right, line + PI / 8.0]]:
+		var centre: Vector2 = wheel[0]
+		ops.append({"op": "add", "poly": _cog_wheel(centre, 0.245, 0.185, 8, float(wheel[1]))})
+		ops.append({"op": "sub", "poly": _circle_poly(centre, 0.128, 40)})
+		ops.append({"op": "add", "poly": _circle_poly(centre, 0.096, 32)})
+		ops.append({"op": "sub", "poly": _circle_poly(centre, 0.040, 20)})
+	return ops
+
+
+## One cogwheel's outline about [param centre]: [param teeth] teeth
+## standing from a root circle of radius [param root] out to [param tip],
+## the first centred on the angle [param turn]. A tooth narrows from its
+## base to its flat top, as cut teeth do, and the root between two teeth
+## is a short arc.
+func _cog_wheel(centre: Vector2, tip: float, root: float, teeth: int,
+		turn: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var pitch := TAU / float(teeth)
+	for k in teeth:
+		var a := turn + pitch * float(k)
+		out.append(centre + Vector2.from_angle(a - pitch * 0.38) * root)
+		for n in 5:
+			out.append(centre + Vector2.from_angle(a + pitch * 0.22 * (float(n) / 2.0 - 1.0)) * tip)
+		out.append(centre + Vector2.from_angle(a + pitch * 0.38) * root)
+		out.append(centre + Vector2.from_angle(a + pitch * 0.5) * root)
+	return out
+
+
+## URZA'S LEGACY — a smith's hammer, the set's own mark redrawn as our own
+## geometry: a cross-peen head standing upright, its peen narrowing to the
+## top with a hollowed cheek and a chamfered back, its face square at the
+## bottom, and a long haft through its eye whose end shows on the far
+## side; the whole tool lies tilted, haft falling to the right. Worked
+## level in [code]u[/code] along the haft and [code]v[/code] across it
+## (the haft is 0.14 thick), then turned and fitted to the square by
+## [method _fit_tilted].
+func _hammer() -> Array:
+	const HAFT := 0.07
+	var head := PackedVector2Array([Vector2(0.075, -0.27), Vector2(0.145, -0.27)])
+	# the cheek, hollowed, flaring from the peen out to the eye
+	for n in range(1, 9):
+		var s := float(n) / 8.0
+		var t := 1.0 - s
+		head.append(Vector2(0.145, -0.27) * (t * t) + Vector2(0.15, -0.10) * (2.0 * t * s)
+			+ Vector2(0.215, -HAFT) * (s * s))
+	head.append(Vector2(0.215, 0.245))
+	head.append(Vector2(0.0, 0.245))
+	head.append(Vector2(0.0, -0.165))
+	# the haft, its butt square with the corners rounded off
+	var haft := PackedVector2Array([Vector2(0.2, -HAFT)])
+	_round_corner(haft, Vector2(0.88, -HAFT), Vector2(0.92, -HAFT), Vector2(0.92, -HAFT + 0.04))
+	_round_corner(haft, Vector2(0.92, HAFT - 0.04), Vector2(0.92, HAFT), Vector2(0.88, HAFT))
+	haft.append(Vector2(0.2, HAFT))
+	# its end, standing out of the head's back
+	var stub := PackedVector2Array([Vector2(0.01, HAFT)])
+	_round_corner(stub, Vector2(-0.025, HAFT), Vector2(-0.06, HAFT), Vector2(-0.06, HAFT - 0.035))
+	_round_corner(stub, Vector2(-0.06, 0.035 - HAFT), Vector2(-0.06, -HAFT), Vector2(-0.025, -HAFT))
+	stub.append(Vector2(0.01, -HAFT))
+	# a wider margin than the other glyphs: the butt is the corner that
+	# would otherwise run onto the stone medallion's gold ring
+	return _fit_tilted([{"op": "add", "poly": head}, {"op": "add", "poly": haft},
+		{"op": "add", "poly": stub}], deg_to_rad(14.0), 0.05)
+
+
+## A rounded corner appended to [param poly]: the quadratic curve from
+## [param from] to [param to] bent toward the square [param corner] the
+## two of them cut off.
+func _round_corner(poly: PackedVector2Array, from: Vector2, corner: Vector2,
+		to: Vector2) -> void:
+	for n in 7:
+		var s := float(n) / 6.0
+		var t := 1.0 - s
+		poly.append(from * (t * t) + corner * (2.0 * t * s) + to * (s * s))
+
+
+## [param ops] drawn level, turned by [param angle] and fitted into the
+## unit square with [param margin] to spare on its longer side, centred
+## both ways.
+func _fit_tilted(ops: Array, angle: float, margin: float) -> Array:
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	for op in ops:
+		for point in op.poly:
+			var p: Vector2 = point.rotated(angle)
+			low = Vector2(minf(low.x, p.x), minf(low.y, p.y))
+			high = Vector2(maxf(high.x, p.x), maxf(high.y, p.y))
+	var fit := (1.0 - 2.0 * margin) / maxf(high.x - low.x, high.y - low.y)
+	var mid := (low + high) * 0.5
+	var out: Array = []
+	for op in ops:
+		var poly := PackedVector2Array()
+		for point in op.poly:
+			poly.append((Vector2(point).rotated(angle) - mid) * fit + Vector2(0.5, 0.5))
+		out.append({"op": op.op, "poly": poly})
+	return out
+
+
+## URZA'S DESTINY — a conical flask, the set's own mark redrawn as our own
+## geometry: a flat round lip, a straight neck, a body flaring out from
+## square shoulders to a bottom that bows down, and a slim highlight
+## cut along the glass on the left, standing free of the edge. A vessel
+## for the brew that ends the block's story.
+func _flask() -> Array:
+	var glass := PackedVector2Array([Vector2(0.395, 0.10), Vector2(0.605, 0.10),
+		Vector2(0.605, 0.42), Vector2(0.87, 0.845)])
+	# the bottom, bowed down between the two corners
+	for n in range(1, 17):
+		var s := float(n) / 16.0
+		var t := 1.0 - s
+		glass.append(Vector2(0.87, 0.845) * (t * t) + Vector2(0.5, 1.03) * (2.0 * t * s)
+			+ Vector2(0.13, 0.845) * (s * s))
+	glass.append(Vector2(0.395, 0.42))
+	var lip := PackedVector2Array()
+	for n in 40:
+		var a := TAU * float(n) / 40.0
+		lip.append(Vector2(0.5 + cos(a) * 0.165, 0.10 + sin(a) * 0.052))
+	# Every corner stays within 0.53 of the middle — the stone medallion's
+	# gold ring, once the glyph is inset — so the carving stops short of it.
+	return [
+		{"op": "add", "poly": glass},
+		{"op": "add", "poly": lip},
+		{"op": "sub", "poly": PackedVector2Array([
+			Vector2(0.385, 0.58), Vector2(0.34, 0.835), Vector2(0.255, 0.815)])},
+	]
 
 
 ## A circle as a polygon, so the stone medallion (polygons only) can carve it.

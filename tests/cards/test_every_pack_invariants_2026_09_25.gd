@@ -11,8 +11,8 @@ extends GameTest
 ## dependency analysis, an Aura the AI aims at its own board by default, a
 ## token-making ability the planner cannot see.
 ##
-## This file enables all nine packs from the suite's own metadata-only
-## archives (run_tests.sh sets SHANDALAR_PACK_1..9; one registry reload)
+## This file enables all ten packs from the suite's own metadata-only
+## archives (run_tests.sh sets SHANDALAR_PACK_1..10; one registry reload)
 ## and asks the pack cards. The base pool keeps its own pins in the tests
 ## these are drawn from — a player with no pack installed loses nothing —
 ## so where a list is compared, the names the base tests already vouch for
@@ -20,7 +20,7 @@ extends GameTest
 
 const ALL_PACKS: Array[String] = [CardPacks.ID, FallenEmpiresPack.ID,
 	IceAgePack.ID, HomelandsPack.ID, AlliancesPack.ID, PortalPack.ID,
-	FifthEditionPack.ID, MirageBlockPack.ID, TempestBlockPack.ID]
+	FifthEditionPack.ID, MirageBlockPack.ID, TempestBlockPack.ID, UrzaBlockPack.ID]
 
 ## The base pool as the suite sees it with no pack enabled, taken before
 ## the packs are; the names a pack adds are `_pack_names`.
@@ -55,7 +55,7 @@ func _is_pending(data: CardData) -> bool:
 
 func test_the_packs_add_a_thousand_identities_to_the_base_pool() -> void:
 	assert_gt(_base.size(), 890, "the base pool")
-	assert_gt(_pack_names.size(), 990, "the nine packs' own identities")
+	assert_gt(_pack_names.size(), 1500, "the ten packs' own identities")
 	assert_eq(CardRegistry.all_names().size(), _base.size() + _pack_names.size())
 
 
@@ -150,14 +150,15 @@ func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 			assert_true(trigger.modes.is_empty())
 	opted.sort()
 	assert_eq(opted, ["Baron Sengir", "Bellowing Fiend", "Death Pits of Rath",
-		"Dingus Staff", "Field of Souls", "Jackal Pup", "Lowland Basilisk",
+		"Dingus Staff", "Electryte", "Field of Souls", "Flesh Reaver", "Jackal Pup", "Lowland Basilisk",
 		"Mogg Maniac", "Mongrel Pack", "Pit Spawn", "Sadistic Glee", "Sengir Bats",
 		"Wall of Essence", "Wall of Souls", "Warrior Angel"] as Array[String],
 		"the two Homelands death triggers of Sengir Vampire's shape, Dingus "
 		+ "Staff's fixed 2 damage to the dead creature's controller, and the "
 		+ "Tempest block's deterministic damage, death, token and life "
 		+ "payloads (cards/sets/{tmp,sth,exo}/_triggers.gd, tmp/_auras.gd), "
-		+ "and no other: " + str(opted))
+		+ "Urza's Saga's Electryte and Flesh Reaver (their fixed damage, "
+		+ "cards/sets/usg/_triggers.gd), and no other: " + str(opted))
 
 
 ## From test_ai_targeting: an Aura nobody classified is aimed at OUR OWN
@@ -203,6 +204,22 @@ func test_every_pack_aura_is_classified() -> void:
 		"Frog Tongue", "Hero's Resolve", "Maniacal Rage", "Overgrowth",
 		"Predatory Hunger", "Robe of Mirrors", "Sadistic Glee", "Samite Blessing",
 		"Shimmering Wings", "Spinal Graft", "Tahngarth's Rage",
+		# Pack 10, the Urza block (2026-11-06, the AI stage's sweep): pumps,
+		# grants, shields and engines for our own creature or land, and the
+		# Auras whose payoff is their host's death (Chime of Night, Dying
+		# Wail, Incendiary, Pattern of Rebirth, Private Research) — on the
+		# body we expect to lose. Twisted Experiment's -1 toughness is the
+		# picker's guard's (EffectIntent.aura_worst_toughness), as Tahngarth's
+		# Rage's; Disappear saves its host. The punishers, Pariah and
+		# Lingering Mirage's colour screw are in AURA_HOSTILE.
+		"Archery Training", "Blanchwood Armor", "Bravado", "Brilliant Halo",
+		"Capashen Standard", "Chime of Night", "Cloak of Mists", "Destructive Urge",
+		"Disappear", "Dying Wail", "Fertile Ground", "Fiery Mantle", "Fortitude",
+		"Gaea's Embrace", "Granite Grip", "Hermetic Study", "Illuminated Wings",
+		"Incendiary", "Launch", "Mark of Fury", "Momentum", "Pattern of Rebirth",
+		"Private Research", "Rancor", "Reflexes", "Serra's Embrace", "Shiv's Embrace",
+		"Sigil of Sleep", "Sleeper's Guile", "Twisted Experiment", "Vampiric Embrace",
+		"Venomous Fangs", "Zephid's Embrace",
 	]
 	var unclassified: Array[String] = []
 	var auras := 0
@@ -246,10 +263,16 @@ func test_every_pack_aura_is_classified() -> void:
 ## Echo Chamber (Pack 9) is refused on the Spawning Bed's ruling: its
 ## token is a copy of the creature the OPPONENT names, so one activation
 ## guarantees no body at all — the opponent picks their worst.
+## Phyrexian Processor (Pack 10) is refused for its life: "an X/X Minion,
+## where X is the life paid as Phyrexian Processor entered" is a number the
+## reader cannot see on the ability, so it reads a 0/0 and is left to the
+## card's own hint. Metrognome's 1/1 Gnome and Midsummer Revel's Beasts are
+## read off their CreateTokenEffect.
 func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 	const NAMES_A_TOKEN_BUT_MAKES_NONE: Array[String] = ["Caribou Range", "Ovinomancer"]
 	const REFUSED_FOR_THE_SACRIFICE: Array[String] = ["Homarid Spawning Bed"]
 	const REFUSED_FOR_THEIR_CHOICE: Array[String] = ["Echo Chamber"]
+	const REFUSED_FOR_THE_LIFE_PAID: Array[String] = ["Phyrexian Processor"]
 	var unlisted: Array[String] = []
 	var priced: Array[String] = []
 	for card_name in _pack_names:
@@ -260,7 +283,8 @@ func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 				continue
 			if NAMES_A_TOKEN_BUT_MAKES_NONE.has(card_name) \
 					or REFUSED_FOR_THE_SACRIFICE.has(card_name) \
-					or REFUSED_FOR_THEIR_CHOICE.has(card_name):
+					or REFUSED_FOR_THEIR_CHOICE.has(card_name) \
+					or REFUSED_FOR_THE_LIFE_PAID.has(card_name):
 				continue
 			var intent := EffectIntent.read(ability.effects, card_name)
 			if intent.makes_token.is_empty():
@@ -276,9 +300,10 @@ func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 	priced.sort()
 	assert_eq(priced, ["Diamond Kaleidoscope", "Drudge Spell", "Elvish Farmer",
 		"Giant Caterpillar", "Goblin Warrens", "Hornet Cannon", "Jungle Patrol",
-		"Keeper of the Beasts", "Kjeldoran Outpost", "Night Soil", "Pegasus Refuge",
+		"Keeper of the Beasts", "Kjeldoran Outpost", "Metrognome", "Midsummer Revel",
+		"Night Soil", "Pegasus Refuge",
 		"Sacred Mesa", "Sliver Queen", "Snake Basket", "Spike Breeder", "Thallid",
 		"Thallid Devourer", "Thopter Squadron", "Tooth and Claw",
 		"Volrath's Laboratory", "Wall of Kelp"] as Array[String], "priced: " + str(priced))
-	for refused in REFUSED_FOR_THE_SACRIFICE + REFUSED_FOR_THEIR_CHOICE:
+	for refused in REFUSED_FOR_THE_SACRIFICE + REFUSED_FOR_THEIR_CHOICE + REFUSED_FOR_THE_LIFE_PAID:
 		assert_false(EffectIntent.TOKEN_MAKERS.has(refused), refused + " stays refused")

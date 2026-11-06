@@ -160,10 +160,85 @@ func target_range(x_value: int) -> Vector2i:
 
 
 ## The total a DIVIDED effect splits among its targets (0 = not divided).
+## A total its SOURCE decides ([method divided_by]) is not known here —
+## readers that hold the source ask [method divided_amount_at].
 func divided_amount(x_value: int) -> int:
 	if divided_uses_x:
 		return x_value
 	return divided_total
+
+
+# ----------------------- Pack 10 E7: a divided total the source decides --
+
+## A DIVIDED total read off the SOURCE as the spell or ability is
+## announced (CR 601.2c-d): "Prevent the next X damage … divided as you
+## choose, where X is the number of verse counters on this enchantment"
+## (Serra's Hymn). [code]func(game: MtgGame, source: CardInstance) ->
+## int[/code]. Read by [TargetPlan] with the targets — before any cost is
+## paid, so a "Sacrifice this" ability still sees its counters — and never
+## again: the shares are locked on the refs ([member TargetRef.amount]),
+## so a counter added in response changes nothing and a target that is gone
+## takes its share with it. Readers that re-plan an ability already on the
+## stack (a retarget, CR 115.7) ask it again, which is why the function
+## should read last known information once the source has left —
+## [method source_counters] does. Unset = not this kind. Set with
+## [method divided_by].
+var divided_count_fn: Callable = Callable()
+
+
+## Fluent: this effect divides [param fn]'s total among "any number of
+## targets" (see [member divided_count_fn]). The target count follows the
+## total — at least one target and at most one per point, none when the
+## total is 0 (CR 601.2d: every target gets at least one) — through
+## [member target_count_fn], so every reader of a counted slot (TargetPlan,
+## the duel screen, SGManalink, the AI) sees the exact range; the STATIC
+## range ([method target_range]) stays "one or more".
+func divided_by(fn: Callable) -> EffectBase:
+	divided_count_fn = fn
+	divided_total = 0
+	divided_uses_x = false
+	target_min = 1
+	target_max = -1
+	target_count_fn = _span_of_total(fn)
+	return self
+
+
+## The target range a divided total allows: (min(1, total), total). Built
+## in a static function so the closure holds [param fn] and nothing else.
+static func _span_of_total(fn: Callable) -> Callable:
+	return func(game: MtgGame, source: CardInstance, _earlier: Array) -> Vector2i:
+		var total := maxi(0, int(fn.call(game, source)))
+		return Vector2i(mini(1, total), total)
+
+
+## The divided total with the source in hand: [member divided_count_fn]'s
+## when set, else [method divided_amount] (which a card script may
+## override — Meteor Shower's X + 1).
+func divided_amount_at(game: MtgGame, source: CardInstance, x_value: int) -> int:
+	if divided_count_fn.is_valid():
+		return maxi(0, int(divided_count_fn.call(game, source)))
+	return divided_amount(x_value)
+
+
+## Does this effect divide a total among its targets at all — a fixed one,
+## the spell's X or the source's count? (A divided-X spell cast for 0 still
+## does.)
+func is_divided() -> bool:
+	return divided_total > 0 or divided_uses_x or divided_count_fn.is_valid()
+
+
+## A count of the SOURCE's own counters of [param kind], for
+## [method divided_by] (and for a [method targets_counted_by] function to
+## wrap): live while the source is on the battlefield, and as it last
+## existed once it has left (CR 608.2h) — a "Sacrifice this" cost has
+## moved it by the time anything reads it again.
+static func source_counters(kind: String) -> Callable:
+	return func(_game: MtgGame, source: CardInstance) -> int:
+		if source == null:
+			return 0
+		var counters: Dictionary = source.counters \
+			if source.zone == Mtg.Zone.BATTLEFIELD else source.last_counters
+		return int(counters.get(kind, 0))
 
 
 # ------------------------------- Pack 9 E7: a target count fixed by a target --

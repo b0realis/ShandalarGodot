@@ -74,6 +74,45 @@ a regression — Spikes cashing their counters before combat damage, −9.5 ±
 Humility) and −1.5 ± 8.5 (Humility v Licids), 200 games an arm. The tests
 and the limits are in [the Pack 9 guide](pack-9-tempest-block.md).
 
+The Urza block (Pack 10) adds two modules behind the same
+`forecasts_tactics` gate. `engine/ai/urza_spells.gd` reads the casts and
+the questions put while they resolve: the symmetric spells (Sunder,
+Hibernation, Catastrophe, Harmonic Convergence, Exhume, Opalescence…)
+priced by what each side loses or gains, the hand spells by our own cards
+and the opponent's hand SIZE (Windfall, Ill-Gotten Gains, Show and Tell),
+the counted ones off the board (Corrupt's Swamps, the Scents' revealed
+cards), the gifts (Sleeper Agent, Gilded Drake, Donate), Yawgmoth's Will
+only with a graveyard worth replaying, an untap card cast first when the
+lands it hands back pay for the next cast, a creature held behind a
+noncreature card while the opponent's dormant Opal would wake, echo paid
+or let go by what the permanent is worth to our board against the cast it
+would cost, Masticore's discard, and cycling (dead cards, a Rune whose
+color the opponent never showed, free cycles under Fluctuator).
+`engine/ai/urza_tactics.gd` reads the board: verse, page and fuse
+counters cashed only when X covers the board or the permanent is about to
+go; no gift of itself (Witch Engine); Auras sold for a card only as their
+host leaves; Lurking Evil priced by the life it really costs; cheated-in
+creatures only for a lethal or half-the-game attack; Monoliths and the
+Voltaic Key untapped with spare end-step mana; Masticore's pings only when
+the mana finishes the kill; Opal Acrolith's dodge; Damping Engine's
+ignore; Goblin Cadets and Phyrexian Negator kept out of losing fights; and
+the block's loops in the combo catalogue. Difficulty presets are
+unchanged. The duel audit caught two defects, fixed before the study:
+Serra's Hymn cashed to shield the opponent's creatures, and Temporal
+Aperture never activated. Deck Lab (`--sweep forecasts_tactics=on,off`,
+Wizard v Wizard, Pack 10 only, 200 games an arm), the win-rate delta with
+its 95% margin: Graveyard v Burn −1.0 ± 9.4, Artifacts v White Weenie
++3.5 ± 5.8, Echo v Enchantress −0.5 ± 8.8, Tricks v Cycling +31.0 ± 9.2,
+White Weenie v Opal +10.5 ± 9.5 and Burn v Graveyard +4.0 ± 9.2: none
+significantly worse, two clear of their margin. The Big Green v White
+Knights control no longer replays byte-identically under this gate: an
+older reading of the same gate (the cleanup discard,
+`AiPlayer._discard_worth`) moves one or two games in a hundred, so the
+study used two plain core-set decks (Control Vanilla White v Control
+Vanilla Green, listed in the Pack 10 guide), byte-identical in every arm.
+The tests and the limits are in
+[the Pack 10 guide](pack-10-urza-block.md).
+
 ## 1. The rule of the ladder
 
 **Every standard opponent plays fair.** Difficulty changes analysis and mistakes,
@@ -198,7 +237,7 @@ override any knob on any preset for a measurement
 | `prices_liabilities` | on | on | on | on | knows that a permanent of its OWN can be worth less than nothing: the reckoning (a permanent whose printed line says losing it loses the GAME is never given up — a Lich), the dead weight (tapped, not untapping, every ability needing the {T} it cannot pay — a Mana Vault with no {4}, a creature under a Paralyze whose {4} we cannot reach; since the fifth pass the escape printed on the AURA counts, so an Angel we could free for {4} is an Angel again) and the toll it still takes each turn, priced for the turns our mana needs to reach the price the card itself prints. It is what opens `spares_own`'s one door: with it the AI Detonates the Vault it cannot untap and keeps the one it can — and since the same pass it reads the sting a punisher deals its target's controller on BOTH sides of the table, so a Detonate on their Nevinyrral's Disk with the opponent at four is the kill it always was; on everywhere, the same reason |
 | `prices_fallout` | on | on | on | on | prices what its own spell does to its OWN side of the table on the way past — the other half of `spares_own`, which only guards the slots. Volcanic Eruption ("destroy X target Mountains, then that many damage to each creature and each player") is the pool's one card of the shape: on, the planner walks every affordable X, prices the blast on the sweeper's own scale (`_sweep_value`: what dies on each side, both life totals, never an X lethal to us), refuses one that would put it on its own `chump_threshold` or below unless the blast wins outright, and keeps the cheapest X worth casting. Off, the blast is free and the X is whatever the lands will pay: at five life against six Mountains it cast for X=6 and killed itself. On everywhere, the same reason; the panic line gives it a per-rung shape without a number of its own |
 | `uses_tactical_effects` | on | on | on | on | reads a mass pump or debuff and a colour change by its visible payoff (`EffectIntent.tactical_effect`, asked at the cast, the activation and the response) instead of casting it at an empty board; on everywhere, the same reason. Off keeps the old caster exactly, for a seeded comparison |
-| `forecasts_tactics` | on | on | on | on | the correctness layer the packs' tactics build on (§1): resolves visible damage consequences when pricing a tactical effect, and gates the pack arms built on it (Ice Age's second pass, among them its divided-burn sizing and damage retargeting; Homelands, Alliances, Portal and Second Age; the Mirage and Tempest blocks' modules), and the order of our own damage effects under the modern rules (`AiPlayer._damage_order_pick`, CR 616.1; off takes the fixed order). No hidden information and no aggression weight; on everywhere, the same reason. Off keeps each module's first-pass decisions, for a paired run. Since the review of 2026-10-21 it also carries two readings of the pilot's own: a creature whose untargeted arrival returns a creature of ours (Shrieking Drake) is not cast to return ITSELF — it sends back a body whose own arrival is worth having again (a Man-o'-War with a creature of theirs to bounce) and stays, or it waits, unless our table pays for each arrival (Soul Warden, Pandemonium: the Aluren loops) (`AiPlayer._returns_itself`, `_rebuy_pick`); and under a mana-burn rule Mana Drain's payout is priced as the burn it would leave — the {C} the hand cannot spend at our next main phase lifts the counter bar by that much life, so a harmless six-drop is not drained into six burn while a real threat still is (`AiPlayer._payout_burns`) |
+| `forecasts_tactics` | on | on | on | on | the correctness layer the packs' tactics build on (§1): resolves visible damage consequences when pricing a tactical effect, and gates the pack arms built on it (Ice Age's second pass, among them its divided-burn sizing and damage retargeting; Homelands, Alliances, Portal and Second Age; the Mirage, Tempest and Urza blocks' modules), and the order of our own damage effects under the modern rules (`AiPlayer._damage_order_pick`, CR 616.1; off takes the fixed order). No hidden information and no aggression weight; on everywhere, the same reason. Off keeps each module's first-pass decisions, for a paired run. Since the review of 2026-10-21 it also carries two readings of the pilot's own: a creature whose untargeted arrival returns a creature of ours (Shrieking Drake) is not cast to return ITSELF — it sends back a body whose own arrival is worth having again (a Man-o'-War with a creature of theirs to bounce) and stays, or it waits, unless our table pays for each arrival (Soul Warden, Pandemonium: the Aluren loops) (`AiPlayer._returns_itself`, `_rebuy_pick`); and under a mana-burn rule Mana Drain's payout is priced as the burn it would leave — the {C} the hand cannot spend at our next main phase lifts the counter bar by that much life, so a harmless six-drop is not drained into six burn while a real threat still is (`AiPlayer._payout_burns`) |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose — and since 2026-09-10 THE LAND SWEEP, which is the same sentence with only the land clause: a sweeper whose every kill is a LAND (Armageddon, and the sideboards' Flashfires and Tsunami) levels both manabases, so it is priced by what each side would lose rather than by a head count. Each land it takes is worth what it is worth to its controller (`Evaluator.land_value` — scarcity, a dual, the only source of a colour, a land that does more than make mana) instead of `permanent_value`'s flat 1.0, so a Library of Alexandria and three duals are not four Plains; and whatever THEIR board gets through that ours does not is charged against the swing at the reaper's rate (`AiPlayer._drought_clock`, the damage each side puts through the other's blocks — the reading `times_sweeps`' relief already asks their next attack with — priced by `_life_price`). An all-lands sweep kills nothing on the table, so both boards go on hitting each other with no mana to answer with, and the pilot used to Armageddon on the land count alone with two Serra Angels facing it |
 | `tutors_for_the_turn` | off | off | on | on | fetches the card THIS TURN wants instead of the dearest card in the deck. A search of our own library is the one gain ask with an ORDER rather than a maximum (`AiPlayer._tutor_pick`, casting P9): a LAND when we are short of them, hold none and can cast nothing off the board's own mana — taken for the colour the hand is missing; then the best of what NEXT TURN's mana reaches; then the card worth most on THIS BOARD, which is a sweeper priced by what the sweep would swing and a leveller by what each side would lose. Off, the answer was `Evaluator.card_value` and nothing else, so in a hundred and fifty logged games The Deck's Demonic Tutor named exactly three cards out of the sixty in the deck and never a land |

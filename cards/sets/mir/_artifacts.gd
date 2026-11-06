@@ -237,9 +237,12 @@ class Chariot extends PumpEffect:
 
 # --------------------------------------------------------------- Cursed Totem --
 
-static func _cursed_totem(_g: MtgGame, _s: CardInstance, _pid: int, inst: CardInstance,
+## "Activated abilities of CREATURES" — creature permanents (CR 109.2): a
+## creature card's ability from the hand (Elvish Spirit Guide's mana,
+## cycling) or from a graveyard is no creature's, and stays usable.
+static func _cursed_totem(g: MtgGame, _s: CardInstance, _pid: int, inst: CardInstance,
 		_ability: Variant, _is_mana: bool) -> bool:
-	return inst.is_creature()
+	return g.is_present(inst) and inst.is_creature()
 
 
 # ------------------------------------------------------------- Grinning Totem --

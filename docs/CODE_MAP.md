@@ -31,6 +31,376 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## The Urza Block, Pack 10 (2026-11-06)
+
+The first two-digit pack: every list of packs keeps it after Pack 9, and
+`10` is read as one number.
+
+- `game/urza_block_pack.gd`: Pack 10's trusted three-set contract
+  (`UrzaBlockPack`: Urza's Saga `usg`, Urza's Legacy `ulg`, Urza's Destiny
+  `uds`; 636 printings, 621 names, 591 new identities), bounded ZIP
+  inventory (2,494 entries, a 384 MiB `MAX_BYTES` like Packs 8 and 9
+  through `PortalPack.bounded_zip`) and hashes; `scripts()` loads the new
+  names from `cards/sets/<set>/` and the 18 shared reprints from their
+  original pack's folder, read from `shared_names.json`.
+- `packaging/card_packs/pack_10_urza_block/manifest.json`, `cards.json`,
+  `cards_ulg.json`, `cards_uds.json`, `set.json`, `set_ulg.json`,
+  `set_uds.json`, `reprint_names.json` (30 names), `shared_names.json`
+  (18 names → original set), `README.txt`: the pack's identity (`pack-10`,
+  `Pack-10-Urza-Block.zip`, badge `10-USG`, minimum game 0.60.19, set order
+  `usg`, `ulg`, `uds`); text only, no artwork.
+- `cards/sets/usg/` (309 cards), `cards/sets/ulg/` (140), `cards/sets/uds/`
+  (142): one trusted file per new name; each folder's `_rules.gd` is the
+  fail-closed dispatcher over the family modules `_basic.gd`, `_spells.gd`,
+  `_creatures.gd`, `_auras.gd`, `_enchantments.gd`, `_opal.gd`,
+  `_artifacts.gd`, `_lands_mana.gd`, `_combat.gd`, `_triggers.gd`,
+  `_choices.gd`, `_costs.gd`, `_echo.gd`, `_cycling.gd`, `_untap.gd`,
+  `_misc.gd`;
+  unclaimed cards carry the `_pending` cast guard ("Urza block rules
+  integration is not yet complete for this card").
+- `game/art/set_icon_usg.png`, `set_icon_ulg.png`, `set_icon_uds.png`,
+  `filter_{usg,ulg,uds}_{on,off}.png`: the gold gears, hammer and flask and
+  their carved-stone medallions; drawn by `tools/draw_our_art.gd`
+  (`_gears`, `_hammer`, `_flask`), hashed in `game/art/README.md`.
+- `tools/pack_10_urza_block.py`, `tools/test_pack_10_urza_block.py`:
+  pinned-printing fetcher over the three sets, deterministic local builder
+  and bounded archive validation tests.
+- `engine/abilities/echo.gd`: `EchoAbility` — echo (CR 702.30a): the
+  upkeep trigger with its intervening "if" (came under your control since
+  your last upkeep), the echo payment or the sacrifice, and the public
+  readers `echo_cost` / `due_next_upkeep`.
+- The engine API the block added to existing files (each with its row in
+  `docs/mechanics.md`):
+  - `engine/mtg_game.gd`: echo's clock (`came_under_control_since_last_upkeep`);
+    cards arriving together (`put_onto_battlefield_together`,
+    `aura_entry_hosts`; `_put_on_battlefield` split into
+    `_arrival_replacements`, `_place_arrival` and `_announce_arrival`);
+    the draw step's held questions (`_hold_draw_step`,
+    `_draw_step_turn_action`, `DRAW_STEP_SOURCE`); abilities activated
+    from the hand (`_ability_announce_checks`, `_ability_resource_checks`,
+    `ability_life_cost`); "put into a graveyard from anywhere" and "spell
+    countered" (`_announce_graveyard_arrival`, `_announce_countered`);
+    playing from another zone (`grant_zone_play`, `zone_play_permission`,
+    `can_play_from_zone`, `zone_play_row_refusal`); a life total read live
+    (`_refresh_after_life_change`); a mana trigger's colour and
+    Metalworker's reveal asked in `tap_for_mana`; Storage Matrix's untap
+    kind (`restrict_untap_to_chosen_kind`, `untap_kind_choices`); Damping
+    Engine's payer (`_ignore_payer`, the source argument of `play_banned`).
+  - `engine/continuous.gd`: type changes that set a type
+    (`add_type_change`, `subtype_card_type`), the layer-4 writers and
+    card-type readers (`_layer_four_writers`, `_layer_four_readers`),
+    `Duration.UNTIL_EVENT` (`until_spell_cast`, `expire_on_event`),
+    `ability_removed_since`; `engine/abilities/static_ability.gd`:
+    `reading_card_types`, `part_of`, `reading_life`.
+  - `engine/abilities/activated_ability.gd`: `from_hand`,
+    `with_discard_self_cost`, `as_cycling`, `with_life_cost_fn`,
+    `with_half_life_cost`, `granted_by`, `grantor_counters`;
+    `engine/core/card_data.gd`: `with_cycling`, the payer of
+    `ignorable_by_sacrifice`; `engine/abilities/triggered_ability.gd`:
+    `still_resolves`; `engine/core/mtg.gd`: `CARD_PUT_INTO_GRAVEYARD`,
+    `SPELL_COUNTERED`.
+  - `engine/core/mana_pool.gd`: `NOT_SPELL`; `engine/abilities/mana_ability.gd`:
+    `replace_land_mana`, `with_reveal_from_hand`; `engine/mana_planner.gd`:
+    `bonus_color_questions`, `BONUS_ANY_COLOR`.
+  - `engine/combat.gd`: `defender_assigns_damage`, `attack_companion` /
+    `block_companion`, `assign_as_though_unblocked_this_turn`;
+    `engine/core/combat_declaration.gd`: the companion checks and repairs;
+    `engine/effects/effect_base.gd`: `divided_by`, `divided_amount_at`,
+    `source_counters`.
+  - `engine/mtg_player.gd`: `upkeeps_begun`, `assigns_attackers_damage`;
+    `engine/core/card_instance.gd`: `control_upkeep_mark`, the companion
+    and forced-unblocked fields, `cur_land_mana_fixed`;
+    `engine/decision_agent.gd`: `echo_hint`; `engine/duel_position.gd`:
+    a permanent's `echo_due` (`set_echo_due`).
+  - `cards/sets/usg/_untap.gd`: `UntapUpToEffect`, the block's shared
+    "untap up to N lands" (own lands first, any player's legal, held for a
+    human), used by the Legacy and Destiny modules too.
+- `game/card_packs.gd`: `number_of(id)` and `sort_ids(ids)` — pack ids in
+  pack-number order (`available_ids`, `packs_required_by`), used too by
+  `DeckModel.required_pack_ids` and `SgCompatibility.enabled_packs`.
+- `tests/cards/test_pack_10_catalogue.gd`, `tests/cards/test_pack_10_basic.gd`,
+  `tests/ui/test_pack_10_integration.gd`: the pack alone and beside the
+  others (counts per set, shared providers in both enable orders, numbered
+  Urza's Saga basics, scaffold fidelity, the `_basic` creatures cast with
+  their keywords, and the catalogue gate refusing any `_pending` card), its
+  badge, Extras rows and Options block, and the two-digit regressions.
+- `game/main.gd`: `VERIFY_PACK_10_FLAG` (`--verify-pack-10`) and
+  `pack_10_probe` — with the real ZIP, in memory only: every dormant
+  script, picture, fallback and UI texture, and no rule pending; one
+  summary line, exit 0/1. `tests/ui/test_pack_10_verify_probe.gd` runs the
+  same checks on a fixture.
+- Card batches (`tests/cards/test_pack_10_B<n>_*.gd`, each card's main
+  effect, refusals, held human questions, both rules presets where they
+  differ and the AI roles it declares, with null arms and hidden-hand
+  checks):
+  - `test_pack_10_B1_white_blue.gd`, `_black.gd`, `_red.gd`, `_green.gd`,
+    `_ai.gd`, `_exhume.gd`: the Urza's Saga and Urza's Legacy instants and
+    sorceries (the usg and ulg `_spells.gd`); Exhume's choices made APNAP
+    before anything moves, its cards arriving together, a held human, fair
+    hints.
+  - `test_pack_10_B2_reveals.gd`, `_same_name.gd`, `_choices.gd`,
+    `_spells.gd`, `_ai.gd`: the "reveal any number of <color> cards" Seers,
+    Scents and Rofellos's Gift (number then which, held for a human, shown
+    to both seats), the same-name exile family (Scour, Quash, Eradicate,
+    Sowing Salt, Splinter), Catastrophe, Persecute, Victimize, Parch,
+    Pyromancy and the Urza's Destiny spells.
+  - `test_pack_10_B3_usg_white_blue.gd`, `_usg_black_red_green.gd`,
+    `_uds_white_blue.gd`, `_uds_black_red_green.gd`, `_ai.gd`: the Saga and
+    Destiny activated and static creatures (the usg and uds `_creatures.gd`), the
+    shroud, menace and unblockable the scaffolds do not carry, Master Healer
+    in the 1997 prevention window, Elvish Piper's held question.
+  - `test_pack_10_B4_white_blue.gd`, `_black_red.gd`, `_green.gd`, `_ai.gd`,
+    `_glare_picker.gd`: the Urza's Legacy creatures and triggers
+    (Legacy's `_creatures.gd`, `_triggers.gd` and `_combat.gd`) and
+    Destiny's Wall of Glare and Thorn Elemental (Destiny's `_combat.gd`):
+    protection from artifacts in both presets; Wall of Glare, the first
+    printed "any number" blocker, in the human block gesture.
+  - `test_pack_10_B5_enters.gd`, `_dies.gd`, `_upkeep.gd`, `_combat.gd`,
+    `_casts_targets.gd`: the triggered permanents of the usg and uds `_triggers.gd`
+    — enters, dies, upkeep, combat, spell-cast and becomes-the-target
+    triggers, "may" and "unless" choices, sources that left (CR 608.2h),
+    both sacrifice-clause forks and the Fifth/Modern mana-burn split.
+  - `test_pack_10_B6_statics.gd`, `_verse.gd`, `_triggers.gd`,
+    `_activated.gd`, `_upkeep.gd`, `_ai.gd`: the non-Aura enchantments of
+    Saga and Legacy (their `_enchantments.gd`): global statics, the
+    verse-counter cycle (up to X fixed at announcement, X from the
+    sacrifice), Diabolic Servitude's link, Sneak Attack's end-step
+    sacrifice, Abundance's draw replacement with its draw-step hold,
+    Defense of the Heart's simultaneous arrival.
+  - `test_pack_10_B7_saga_auras.gd`, `_legacy_auras.gd`,
+    `_destiny_auras.gd`, `_destiny_enchantments.gd`, `_ai.gd`, `_human.gd`:
+    every Aura of the block (the three `_auras.gd`) and Destiny's
+    non-Aura enchantments (Destiny's `_enchantments.gd`): the eleven self-returning
+    Auras (Rancor with Forbidden Crypt, a return after state-based actions),
+    counters read as an Aura last existed, Fertile Ground's color and its
+    `bonus_colors` contract, Carnival of Souls and Pariah in both presets.
+  - `test_pack_10_B8_usg_a.gd`, `_usg_b.gd`, `_ulg.gd`, `_uds.gd`,
+    `_interactions.gd`, `_ai.gd`: the block's artifacts
+    (the three `_artifacts.gd`): Phyrexian Processor's and Urza's
+    Incubator's held questions, the 1997 tapped-artifact rule, Memory Jar
+    against Megrim, Metrognome and Library of Leng.
+  - `test_pack_10_B9_untap_up_to.gd`, `_untap.gd`, `_lands_mana.gd`,
+    `_manlands.gd`, `_hierophants.gd`, `_loops.gd`, `_ai.gd`: mana
+    producers, lands and untap effects (the three `_lands_mana.gd` and
+    `_untap.gd`): the shared "untap up to N lands" (Saga's `_untap.gd`
+    `UntapUpToEffect`, own lands first, held for a human), Legacy's creature
+    lands, Citanul Hierophants' granted mana ability, and Voltaic Key + Time
+    Vault, Grim Monolith + Power Artifact and Palinchron + High Tide finite
+    per action, cut by the loop limit.
+  - `test_pack_10_B10_echo.gd`, `_triggers.gd`, `_artifacts.gd`: the 34
+    echo cards (the three `_echo.gd`) — each echo cost as printed and owed
+    once, the enters and dies triggers, Thran Weaponry's locked set,
+    Extruder, Simian Grunts flashed in.
+  - `test_pack_10_B11_cycling.gd`, `_usg.gd`, `_ulg_uds.gd`,
+    `_fluctuator.gd`: every cycling card's cycling (table-driven), the
+    cycling lands, each card's own text, Fluctuator, and the fair AI cycling
+    a dead card.
+  - `test_pack_10_B12_opal.gd`, `_veiled.gd`, `_hidden.gd`,
+    `_opalescence.gd`, `_ai.gd`: the Opal, Veiled, Hidden and Lurking
+    enchantments, Opalescence and Soul Sculptor (the three `_opal.gd`) —
+    becoming creatures and back, the intervening "if this permanent is an
+    enchantment", Opalescence with Humility in both orders, Veiled
+    Serpent's granted restriction and cycling, Lurking Evil's half-life
+    cost, and the AI's reading of an indefinite type change.
+  - `test_pack_10_B13_graveyard.gd`, `_stack.gd`, `_archery.gd`,
+    `_together.gd`, `_combat.gd`, `_mana.gd`: the engine one-offs (the
+    three `_misc.gd` and Saga's `_combat.gd`) — Planar Void, Energy Field,
+    Compost and Serra Avatar on "put into a graveyard from anywhere"
+    (every door, tokens, Crypt and Will exiles, the same-object check,
+    Serra Avatar's life-total size including after a mana burn); Multani's
+    Presence (no draw for a fizzle, a draw for an unpaid Force Spike),
+    Gilded Drake (exchange, sacrifice, given away, flicker, a creature that
+    can't change controllers), Yawgmoth's Will (graveyard land drop,
+    replays exiled, cleanup) and Temporal Aperture (free row, X = 0, land
+    drop, drawn and put back, end of turn); Archery Training's arrow
+    upkeep and its granted shot (live counters vs. counters when
+    activated, two Trainings); Show and Tell (both players' choices first,
+    revealed, optional, card types, Auras, a human being asked) and
+    Replenish (together, Aura hosts); Defensive Formation, Okk (under
+    Humility too), Outmaneuver and Serra's Hymn's verse-divided
+    prevention; Thran Turbine, Contamination, Metalworker, Storage Matrix
+    and Damping Engine.
+  - `test_pack_10_E10_together_cards.gd`: Victimize's and Planar Birth's
+    cards arriving together.
+- Engine packages (`tests/unit/test_pack_10_engine_E<n>_*.gd`):
+  - `test_pack_10_engine_E1_echo.gd`: echo's clock — due once, an arrival
+    during the upkeep, control changes (steal, exchange, borrow and return,
+    stolen in response), flicker, phasing, Clone and a become-copy,
+    Humility, a tapped artifact under the 1997 rules, a held human, both
+    presets, Test hands, the search journal.
+  - `test_pack_10_engine_E2_cycling.gd`, `_E2_costs.gd`, `_E2_ai.gd`,
+    `test_pack_10_engine_E2_hand_menu.gd` (tests/ui),
+    `test_sgmanalink_pack_10_cycling.gd`: cycling from the hand
+    (instant speed, the stack, owner only, the land drop, countered, two
+    stacked, the 1997 window, the journal; Megrim, Library of Leng,
+    Forbidden Crypt, the discard's cause), Fluctuator's shape, the Gloom /
+    Cursed Totem / Null Rod / Elvish Spirit Guide fixes, the half-life cost,
+    the grantor link, the AI's cycling with its gate-off arm; the hand
+    card's Cast/Play or "Cycling {2}" menu; cycling as the "ability" action
+    of a hand card over SGManalink.
+  - `test_pack_10_engine_E3_type_change.gd`, `_E3_opalescence.gd`,
+    `_E3_durations.gd`, `_E3_life.gd`: type changes that set a card type
+    (CR 205.1a) and the card-type readers (CR 613.8a), Opalescence +
+    Humility both orders and two Opalescences (CR 613.6), durations ending
+    as a creature spell is cast (CR 601.2i, 603.10), a life-total size
+    judged live (CR 704.5f-g).
+  - `test_pack_10_engine_E4_graveyard_arrival.gd`,
+    `_E4_countered_and_still_resolves.gd`: one "put into a graveyard"
+    event per card at every door (none for tokens, copies or a card exiled
+    instead), the moved card's own graveyard triggers, the "spell
+    countered" event (none for a fizzle or "can't be countered") and a
+    trigger that still resolves when its target becomes illegal.
+  - `test_pack_10_engine_E5_zone_play.gd`, `test_pack_10_zone_play.gd` (tests/ui):
+    playing a land from the graveyard and the top card of the library
+    (`MtgGame.grant_zone_play`), the land drop, the free payment row, X = 0,
+    buyback on top; the graveyard view's ring and the library-pile click.
+  - `test_pack_10_engine_E6_combat.gd`: who assigns an attacker's damage
+    (Defensive Formation's static — the defender's free division, a
+    trampler held on its blockers, both presets, the optional bypass
+    beside it), predicate companions (Okk: the attack and block twins,
+    powers as declared, Humility, the AI repairs, a required Okk under CR
+    508.1d) and forced unblocked damage (Outmaneuver: all to the player,
+    no question, still blocked, Veteran Bodyguard, end of turn, a new
+    object, the journal); the AI's declared-damage read of both.
+  - `test_pack_10_engine_E7_divided.gd`, `test_pack_10_engine_E7_divided_ui.gd`
+    (tests/ui): a divided total read from the source's counters (Serra's
+    Hymn's shape — X at announcement before the sacrifice, the shares, no
+    target at X = 0, a counter added in response, a gone target's share,
+    divided damage too, the journal), the SGManalink referee's exact slot
+    for a first-slot count, and the duel screen's per-point dial.
+  - `test_pack_10_engine_E8_mana.gd`, `_E8_questions.gd`: mana that can't
+    be spent to cast spells (abilities, a mana ability's cost, echo,
+    cumulative upkeep, an "unless pays"; never a spell; burns), a land's
+    mana of a fixed type and amount (Karoo, Cradle, both seats, Mana Flare /
+    Wild Growth extras, Deep Water's variants, the borrowed land), the
+    reveal-to-pay mana ability (how many / which, held and withdrawable, the
+    reveal to both seats, the planner's own maximum) and a mana trigger's
+    colour asked before the tap (Fertile Ground's shape, Mana Flare).
+  - `test_pack_10_engine_E9_untap_kind.gd`, `_E9_damping.gd`: Storage
+    Matrix's untap-step kind (the registry, default, human hold, artifact
+    land, Winter Orb after it, both seats, two Matrices) and Damping
+    Engine's ban with its non-Aura "sacrifice to ignore" (the payer, live
+    counts, held sacrifice, the 1997 tapped artifact, three-argument bans).
+  - `test_sgmanalink_pack_10_E8_E9_questions.gd`: every E8/E9 question at
+    the local screen's readers and the SGManalink referee (ops "mana",
+    "tap", "special", "choice"), the opponent shown Metalworker's reveal.
+  - `test_pack_10_engine_E10_arrive_together.gd`: `put_onto_battlefield_together`
+    — one moment, APNAP choices, Clone and Kismet inside a batch,
+    refusals, Aura hosts among what was already there, Animate Dead, a
+    held human, the journal, Living Death with Soul Warden.
+  - `test_pack_10_engine_E11_draw_step_hold.gd`: the draw step's held
+    questions — Island Sanctuary, Fasting, Abundance's two questions, the
+    CR 616.1 order question, heuristic seats never held.
+- `tests/ui/test_pack_10_help.gd`: the nine Urza block glossary pages
+  (`game/help/ability_glossary.gd`) — echo and cycling, the enchantments
+  that become creatures with Opalescence and Humility, untapping lands and
+  mana, verse and other counters, cards arriving together and their Auras,
+  other zones and revealed cards, graveyard and counterspell triggers,
+  combat and the notable cards — plus Living Death's new entry, the
+  Dueling Table page's and the duel menu helps' clicks (cycling,
+  Yawgmoth's Will, Temporal Aperture, Damping Engine), Help for this
+  card's new words, the Deck Builder entry, the counter chips, and the
+  pages rendered with every pack disabled.
+- `engine/ai/urza_spells.gd`: the fair AI's Pack 10 casting and resolution
+  answers (`spell_choice`, `cast_adjustment`, `echo_choice`,
+  `unless_objects_answer`, `cycling_sources`, `respond`, `option`,
+  `held_veto`, `main_phase_card`; hooked from `AiPlayer._size_and_aim`,
+  `_try_cast_best`, `echo_hint`, `answer_yes_no`, `_activation_sources`,
+  `_respond_action`, `_ability_option`, `_is_held_instant`,
+  `_fire_held_instant`, `_held_reserve`) — the symmetric spells priced on
+  both sides of the table (Sunder, Hibernation, Rebuild, Harmonic
+  Convergence, Catastrophe, Curfew, Planar Birth, Exhume, Disorder, Acidic
+  Soil, Meltdown's X, Opalescence), the hand spells by our cards and their
+  hand's SIZE (Windfall, Tolarian Winds, Ill-Gotten Gains, Unnerve, Show
+  and Tell, Gamble), the graveyard replays (Yawgmoth's Will, Replenish),
+  the counted spells (Corrupt, the Scents and Seers, Titania's Boon,
+  Congregate, Goblin Offensive, Falter, Last-Ditch Effort, Plow Under,
+  Fatigue), the gifts (Sleeper Agent, Gilded Drake, Donate, Brand,
+  Flicker, Wild Dogs), the mana an untap hands back, the opponent's
+  dormant Opals a creature spell wakes, echo paid or let go, Masticore-type
+  "unless" payments, cycling (dead cards, Rune colors, Fluctuator, Energy
+  Field), Humble and Redeem in combat, Memory Jar and Temporal Aperture.
+  Behind `forecasts_tactics`. `EffectIntent.untaps_lands` reads the
+  `untap_lands` role; thirteen Pack 10 Auras joined `AURA_HOSTILE`.
+- `engine/ai/urza_tactics.gd`: the fair AI's Pack 10 board, combat and
+  activation policy, hooked from `MirageTactics.option`, `respond`,
+  `price_forced_attackers`, `price_block_tax` and `lion_eye_action` —
+  verse, page and fuse counters cashed only when X covers the board or the
+  permanent is about to go, Auras sold for a card only as their host
+  leaves, creatures put in from the hand only for a lethal or half-the-game
+  attack, Monoliths, Colossus and Voltaic Key untapped with spare mana,
+  Masticore's pings only when the mana finishes the kill, the Phyrexian
+  -N/-N sacrifices, Lurking Evil priced by the life it really costs, Opal
+  Acrolith's dodge, Damping Engine's ignore, Goblin Cadets and Phyrexian
+  Negator kept out of losing fights; `CardCombos.PACK_10_RECIPES` (Grim
+  Monolith + Power Artifact run; Voltaic Key + Time Vault boosted; Tolarian
+  Academy + Mind Over Matter and Palinchron + High Tide kept and defended).
+  Behind `forecasts_tactics`.
+- `test_ai_pack_10_spells_symmetric.gd`, `_hands.gd`, `_gifts.gd`,
+  `_counted.gd`, `_upkeep.gd`, `_cycling.gd`, `_casting.gd` and
+  `test_ai_pack_10_tactics_activations.gd`, `_counters.gd`, `_combat.gd`,
+  `_combos.gd` (tests/ai): those policies, each with its gate-off arm and,
+  where a hidden zone could matter, a hidden-information permutation
+  (their hand's contents and both library orders changed, the answer
+  unmoved); the Pack 10 loops in the combo catalogue.
+- `test_sgmanalink_pack_10_table.gd` (tests/ui),
+  `test_sgmanalink_pack_10_questions.gd`, `test_referee_pack_10_options.gd`
+  (tests/tools): protocol 31 at an SGManalink table — cycling from the
+  networked hand menu (the printed Clear and Remote Isle; greyed without
+  mana, waiting for and auto-tapping its mana), cycling's
+  `respond`/`floating`, a graveyard land under Yawgmoth's Will
+  (`zone_playable`, the graveyard view, the referee's `play`), the library
+  top under Temporal Aperture (`library_top`, owner-only unless revealed,
+  the library pile's land play and free cast, a program's casts), every
+  Pack 10 held question at a guest seat (echo, the draw step, Show and
+  Tell, Snap, Scent of Jasmine, Metalworker, Fertile Ground, Storage
+  Matrix, Damping Engine, Defensive Formation, Serra's Hymn) and the
+  referee's options for the same.
+- `test_pack_10_test_hands_echo.gd` (tests/ui): Test hands' `Echo due` box
+  — only on a card with echo, sets the entry, the test duel owes the echo
+  at the next upkeep, the flag round-trips.
+- `test_pack_10_cycling_responses.gd` (tests/ui): cycling as a response at
+  the local duel screen — `_could_respond` with lands to tap,
+  `_has_affordable_fast_effect` only with its cost floating.
+- `test_pack_10_untap_kind_hint.gd` (tests/ui): Storage Matrix silences the
+  WILL_UNTAP mark and sets the networked `untap_capped`.
+- `pack_10_duel_audit.gd` (tools): seeded complete duels with nine themed
+  Urza block decks (Echo, Cycling, Enchantress, Opal, Artifacts, Graveyard,
+  Burn, White Weenie, Tricks) in both rules profiles, Wizard v Wizard and
+  Wizard v Apprentice (`--rounds`, `--seed` 99000, `--pilots`,
+  `--only-index`, `--rules`, `--turn-cap`, `--verbose`). Counts actual use
+  — casts, activations, triggers, echo paid and let go, cycles (and free
+  ones under Fluctuator), lands an untap handed back, Opal/Veiled/Hidden
+  creatures, verse/page/fuse counters cashed, cards entering together, Show
+  and Tell picks, plays from the graveyard under Yawgmoth's Will and from
+  the library top under Temporal Aperture, Okk, Defensive Formation,
+  Outmaneuver, Metalworker reveals, Storage Matrix choices (from
+  `MtgGame.choice_log`), Damping Engine ignored, the block's mana sources and
+  the AI's refused tries. Exits 2 on a stall or any error a logger sees.
+  Pack 10 in memory only; `shandalar_test` required.
+- `pack_10_ui_soak.gd` (tools): the Pack 9 soak with five Urza block decks.
+  Its human-seat fuzzer answers the hand card's Cast/Play/Cycling menu,
+  cycles from it and from the card's right-click menu, plays graveyard cards
+  under Yawgmoth's Will and the library top under Temporal Aperture,
+  sacrifices Serra's Hymn once it has verses, and keeps creatures home and
+  gang-blocks under Defensive Formation. Prints each duel's Pack 10 flows
+  and the human seat's gestures taken up and questions answered. Real Pack
+  10 ZIP, isolated `shandalar_test` profile, both rules profiles.
+- `test_ai_pack_10_study_hymn.gd`, `test_ai_pack_10_study_aperture.gd`
+  (tests/ai): the Pack 10 study's AI fixes. Serra's Hymn's prevention goes
+  only on our own side, against damage the stack or a blocked combat shows
+  coming; Temporal Aperture is a main-phase mana sink and its revealed card
+  is cast free. Each has its gate-off arm and a hidden-information
+  permutation.
+- `docs/pack-10-urza-block.md`: the pack's audit — counts, construction,
+  emblems, reprints and providers, the archive contract, the engine
+  review, the AI review, known limits, verification and the commands that
+  reproduce it.
+- `docs/releases/0.60.19.md`: Pack 10 — the Urza block (Urza's Saga,
+  Urza's Legacy, Urza's Destiny; 591 new cards), echo, cycling, the
+  enchantments that become creatures, untap mana, arriving together, the
+  fixes on the way, and taking an adventure to another device.
+
 ## The game's own `-- --help` (0.60.16, 2026-11-04)
 
 A bare `-h`/`--help` is the engine's: it prints Godot's options and exits
@@ -1079,6 +1449,22 @@ the shelves, the pack share in every random draw);
   (`LoadAdventureScreen.DeleteAsk`: Delete this save, All its saves, Keep)
   and removes the files with their `.bak` (`ask_delete`, `delete_save`,
   `delete_adventure`, `saves_of`).
+  EXPORT AND IMPORT (2026-11-06): Export and Import beside the Hall, or
+  Ctrl+E / Ctrl+I — `pick_export`, `export_to`, `export_on_page` (a
+  download in a browser), `pick_import`, `import_from`, `_pick_on_page` /
+  `_read_page_pick` (`PAGE_PICK_JS`; `on_web`, `web_page`, `web_download`
+  stand in for the browser in tests), `LoadAdventureScreen.ReplaceAsk`
+  (Replace or Cancel), `highlighted`, `replace_shown`.
+- `game/adventure/adventure_transfer.gd`: `AdventureTransfer`, one adventure
+  as one zip — `MANIFEST`, `FORMAT`, `file_name_for`, `files_of`, `existing`,
+  `pack`, `packed_bytes`, `export_to`, `take_in`, `read_package` (every check
+  before a write), `install` (written whole, read back, put back on failure),
+  `STAGING`. ANDROID SAVES IN THE SHARED CORNER (2026-11-06):
+  `AdventurePlayer.saves_place`, `android_dir`, `saves_folders`, `saves_left`,
+  `settle_saves` (also at start, from `Lifecycle._ready`), `move_saves`,
+  `whole_bytes`; `scan_saves` reads every folder of `saves_folders`. Tests:
+  `tests/unit/test_adventure_transfer.gd`,
+  `tests/unit/test_android_saves_folder.gd`, `tests/ui/test_saves_export_import.gd`.
 - `game/adventure/embark_screen.gd`: `set_out` (the adventure begun,
   autosaved, its world screen); `game/main.gd`: Save / Load opens the
   saved adventures, or says how one comes to be.

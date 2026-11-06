@@ -148,6 +148,31 @@ not read, embedded or required; the shapes are polygons in this script.
 | `filter_exo_on.png` | Exodus — bridge carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_bridge`, `_stone_medallion`) | GPL-3.0 | `b7c6a2d20fc7d2aeb48eaac7964e2fa79fe0226919445e5bff33379b80a90632` |
 | `filter_exo_off.png` | Exodus — matching dim stone bridge, 48x48 | `tools/draw_our_art.gd` (`_bridge`, `_stone_medallion`) | GPL-3.0 | `387483ff32642e8748ad56d6cdb80b115b0bcbc992b74b79d7cfc16ed6bc6f55` |
 
+The Urza block (Pack 10) has three sets and three emblems of our own,
+drawn as polygons by `_gears`, `_hammer` and `_flask` in the same gold
+relief and carved stone as the earlier packs. Each follows its set's own
+mark, redrawn as our own geometry rather than copied: **Urza's Saga** two
+cogwheels side by side, the left a little higher, each with eight broad
+teeth, a ring channel round the hub and a hole through the middle;
+**Urza's Legacy** a smith's hammer lying tilted, a cross-peen head with a
+hollowed cheek and a long haft whose end shows through the head's back;
+**Urza's Destiny** a conical flask with a flat lip, a straight neck, a
+bottom that bows down and a slim highlight cut along the glass. The
+reference images are not read, embedded or required; the shapes are
+polygons in this script.
+
+| File | Artwork | Generator | License | SHA-256 |
+|---|---|---|---|---|
+| `set_icon_usg.png` | Urza's Saga — two gold cogwheels, 48x48 | `tools/draw_our_art.gd` (`_gears`) | GPL-3.0 | `cc16478da5cb353ebf293897593b0bf717fddba4804860317c662dd6c2458771` |
+| `filter_usg_on.png` | Urza's Saga — cogwheels carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_gears`, `_stone_medallion`) | GPL-3.0 | `e4a10164fede2fb28e1687c516a7b3c625c9e3647bed6db33e0aeb86e0371e76` |
+| `filter_usg_off.png` | Urza's Saga — matching dim stone cogwheels, 48x48 | `tools/draw_our_art.gd` (`_gears`, `_stone_medallion`) | GPL-3.0 | `fccdcd5d3dcc76b9af694ccb6cf6ea35c812dfaa0e67eb6e29a37d356b41cdbd` |
+| `set_icon_ulg.png` | Urza's Legacy — gold smith's hammer, 48x48 | `tools/draw_our_art.gd` (`_hammer`) | GPL-3.0 | `fbed31e2a69ca65714464877eb142bb48ac53eeb9e169d19f50755f2be1d80d5` |
+| `filter_ulg_on.png` | Urza's Legacy — hammer carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_hammer`, `_stone_medallion`) | GPL-3.0 | `611d8005637aae9fc98ac529db4549e947c4fceb22fdf37a73aa0966cc9e7e5a` |
+| `filter_ulg_off.png` | Urza's Legacy — matching dim stone hammer, 48x48 | `tools/draw_our_art.gd` (`_hammer`, `_stone_medallion`) | GPL-3.0 | `9b8062bb7d0edaa1e6de24daf75ffc5c76077a66e759258b47d5f7b822ee20a8` |
+| `set_icon_uds.png` | Urza's Destiny — gold conical flask, 48x48 | `tools/draw_our_art.gd` (`_flask`) | GPL-3.0 | `2cfcc587cd2a0bf6eae2025406875cfa897163fb45f19c63e4b20dfb7f5c508c` |
+| `filter_uds_on.png` | Urza's Destiny — flask carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_flask`, `_stone_medallion`) | GPL-3.0 | `0d3aa3f98082fe6bce282bcc214a12336289e84323c781dc03096a349b71caf2` |
+| `filter_uds_off.png` | Urza's Destiny — matching dim stone flask, 48x48 | `tools/draw_our_art.gd` (`_flask`, `_stone_medallion`) | GPL-3.0 | `04d9b1ccda33c934c4637f1e978a8ad3c8f92f396486952490b5d2112297825f` |
+
 The card-variant medallion floats at 32px just below the large card's lower-right
 corner, over the unchanged information area. Its overlapping frames distinguish artwork selection
 from Pack 1's fanned-card pool emblem. The transparent circular edge,

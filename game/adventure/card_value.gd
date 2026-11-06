@@ -153,13 +153,18 @@ const POWER_1997: Array[String] = ["Ali from Cairo", "Ancestral Recall", "Black 
 ## keeps 1997's own marks); the one list to edit. The pack cards on the
 ## adventure's ban lists ([ClassicBans], any of the three) but the two ante
 ## cards, which are ruled apart ([method AdventurePacks.pools]); then the
-## owner's names those lists miss; then the packs' other Tutors.
+## owner's names those lists miss; then the packs' other Tutors; then the
+## Urza block's (Pack 10, the owner's pick of 2026-11-06: "the cards banned
+## or restricted in their day" — the five the ban lists hold first).
 const STRONG_PACK_CARDS: Array[String] = [
 	"Brainstorm", "Demonic Consultation", "Flash", "Lion's Eye Diamond", "Lotus Petal",
 	"Merchant Scroll", "Mystical Tutor", "Necropotence", "Vampiric Tutor",
 	"Ancient Tomb", "City of Traitors", "Force of Will", "Hymn to Tourach", "Mox Diamond",
 	"Survival of the Fittest", "Wasteland",
 	"Cruel Tutor", "Enlightened Tutor", "Personal Tutor", "Sylvan Tutor", "Worldly Tutor",
+	"Memory Jar", "Tinker", "Tolarian Academy", "Windfall", "Yawgmoth's Will",
+	"Fluctuator", "Frantic Search", "Gaea's Cradle", "Grim Monolith", "Serra's Sanctum",
+	"Time Spiral", "Voltaic Key", "Yawgmoth's Bargain",
 ]
 ## THE 1997 BASE SETS (`expansion` & 0xC1, the bits the shops, the riddles
 ## and the copy limit read): 0x1 Fourth Edition, 0x40 the Astral cards, 0x80

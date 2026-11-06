@@ -324,8 +324,10 @@ func test_the_pool_has_ten_player_side_prevention_writers() -> void:
 	# also writes its chosen-colour source filter directly) and Righteous
 	# Aura (vis/_misc.gd). Pack 9 (2026-10-06) adds Circle of Protection:
 	# Shadow (tmp/_shadow.gd), a creature-with-shadow source filter on the same
-	# shield and the same CR 616.1 choice.
-	assert_eq(circles.size(), 13, "the Circle family, Ice Age, Seasoned Tactician, Prismatic Circle, Righteous Aura and Circle of Protection: Shadow: %s" % [circles])
+	# shield and the same CR 616.1 choice. Pack 10 (2026-11-06) adds the seven
+	# Runes of Protection (usg/_cycling.gd): five colors, artifacts and
+	# lands, each a source filter on the same shield and the same choice.
+	assert_eq(circles.size(), 14, "the Circle family, Ice Age, Seasoned Tactician, Prismatic Circle, Righteous Aura, Circle of Protection: Shadow and the Runes of Protection: %s" % [circles])
 	direct.sort()
 	assert_eq(direct, ["_choices.gd", "_costs.gd", "al_abara_s_carpet.gd", "scarecrow.gd"],
 		"the all-turn class shields, Mercenaries' one-source shield and Prismatic Circle's chosen source")

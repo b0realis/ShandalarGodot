@@ -1,0 +1,17 @@
+{
+  "badge": "10-USG",
+  "description": "The Urza block — Urza's Saga (1998), Urza's Legacy (1999) and Urza's Destiny (1999): 621 distinct cards and 636 original English printings, 591 of them new to the game.",
+  "file_name": "Pack-10-Urza-Block.zip",
+  "id": "pack-10",
+  "minimum_game_version": "0.60.19",
+  "name": "The Urza Block",
+  "number": 10,
+  "pack_format": 1,
+  "rules_note": "Original Urza's Saga, Urza's Legacy and Urza's Destiny artwork with current Oracle rules. The 30 cards the game already has (the five basic lands among them) keep their existing scripts; the 18 of them that live only in Ice Age, Portal, Portal Second Age or Mirage are provided by this pack too when that pack is off.",
+  "set_order": [
+    "usg",
+    "ulg",
+    "uds"
+  ],
+  "version": "1.0.0"
+}

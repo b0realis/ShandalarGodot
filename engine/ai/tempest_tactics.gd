@@ -1935,7 +1935,7 @@ static func ability_ready(g: MtgGame, pilot, s: CardInstance, index: int,
 		return false
 	if a.sacrifice_cost and not self_sacrifice_ok:
 		return false
-	if a.life_cost > 0 or a.sacrifice_filter.is_valid() \
+	if a.has_life_cost() or a.sacrifice_filter.is_valid() \
 			or a.discard_cost > 0 or a.random_discard_cost > 0 or a.cost.has_x \
 			or not a.object_costs.is_empty() or a.tap_permanent_count > 0 \
 			or a.exile_cost or a.exile_filter.is_valid() or a.library_exile_cost > 0:

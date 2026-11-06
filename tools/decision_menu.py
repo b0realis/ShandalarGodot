@@ -162,7 +162,7 @@ def card_index(view: dict, seat: int) -> dict:
         if not isinstance(player, dict):
             continue
         side = "me" if player.get("seat") == seat else "opp"
-        for zone in ("battlefield", "phased_out", "graveyard", "exile", "revealed"):
+        for zone in ("battlefield", "phased_out", "graveyard", "exile", "revealed", "library_top"):
             for card in player.get(zone) or []:
                 if isinstance(card, dict) and card.get("id") and card["id"] not in out:
                     owner = side if zone != "battlefield" else (
@@ -266,7 +266,7 @@ def _side(view: dict, seat: int, rows: dict) -> dict:
         out["mana"] = player["mana"]
     if pres_row.get("poison"):
         out["poison"] = pres_row["poison"]
-    for zone in ("graveyard", "exile", "revealed"):
+    for zone in ("graveyard", "exile", "revealed", "library_top"):
         if player.get(zone):
             out[zone] = [c.get("name", "") if isinstance(c, dict) else str(c) for c in player[zone]]
     return out

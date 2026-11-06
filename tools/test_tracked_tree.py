@@ -60,6 +60,13 @@ VENDORED = ("addons/",)
 ## would flag it. Read as bytes, binary files included (2026-10-21).
 _TOOL_NAMES = codecs.decode("pynhqr|naguebcvp|pungtcg|bcra ?nv|pbcvybg|pbqrk|trzvav", "rot13")
 FORBIDDEN_TOOLS = re.compile(rb"(?i)\b(" + _TOOL_NAMES.encode() + rb")\b")
+## A Magic card whose name holds one of those words: an Urza's Saga
+## artifact of Barrin's (Pack 10; rot13 "Oneeva'f Pbqrk"), spelt as its
+## header, its JSON, its Scryfall address and its snake_case file name
+## spell it. Taken out of a view before the scan, so the card is no
+## offender and the word anywhere else still is.
+CARD_NAMES = re.compile(rb"(?i)barrin(?:'s|\xe2\x80\x99s|s|_s)?[ _-]+"
+                        + codecs.decode("pbqrk", "rot13").encode())
 ## One of them, for the guard's own test.
 TOOL_NAME = _TOOL_NAMES.split("|")[0]
 
@@ -208,7 +215,7 @@ def private_addresses(view: bytes, binary: bool = False) -> list[str]:
 
 
 def assistant_names(view: bytes) -> list[str]:
-    return [found.decode("ascii") for found in FORBIDDEN_TOOLS.findall(view)]
+    return [found.decode("ascii") for found in FORBIDDEN_TOOLS.findall(CARD_NAMES.sub(b"", view))]
 
 
 class CodeMapTest(unittest.TestCase):

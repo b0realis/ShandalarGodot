@@ -6,7 +6,7 @@ extends RefCounted
 ## The readable stamp travels beside the digest so a mismatch can be named
 ## ("you run 0.31.0", "the host has Pack 3 enabled") instead of only detected.
 
-const RULES_REVISION := "sgmanalink-hand-choices-2026-10-31"
+const RULES_REVISION := "sgmanalink-urza-block-2026-11-06"
 const MAX_PACKS := 12
 static var _fingerprint := ""
 static var _cache_key := ""
@@ -37,7 +37,8 @@ static func enabled_packs() -> Array:
 	var packs: Array = []
 	for id in CardPacks.available_ids():
 		if CardPacks.is_enabled(id): packs.append(String(id))
-	packs.sort()
+	# By pack number (2026-11-06), so the lobby reads "Packs 2, 9, 10".
+	CardPacks.sort_ids(packs)
 	return packs
 
 

@@ -468,7 +468,8 @@ func _refresh_all() -> void:
 
 ## One seat's four places, rebuilt from [member test_position]. A row is a
 ## card's name — marked when it is an extra — and its × ; a table row has
-## `Tapped`, and a creature's `Sick` too.
+## `Tapped`, a creature's `Sick` too, and a permanent with echo `Echo due`
+## (Pack 10).
 func _refresh_seat(pid: int) -> void:
 	var lists := _seat_lists[pid]
 	for child in lists.get_children():
@@ -549,6 +550,19 @@ func _row(pid: int, zone: String, index: int, card_name: String, extra: bool) ->
 		# artifact on the table shows no box for it.
 		sick.visible = known and CardRegistry.get_card(card_name).is_creature()
 		row.add_child(sick)
+		# ECHO (Pack 10, CR 702.30a): a permanent placed on the table has been
+		# there since before its controller's last upkeep, so it owes none —
+		# unless the player says it arrived since, as if just cast
+		# (DuelPosition.set_echo_due, read by MtgGame.begin_from_position).
+		# Only a card with echo has the box.
+		if known and has_echo(CardRegistry.get_card(card_name)):
+			var echo := CheckBox.new()
+			echo.text = "Echo due"
+			echo.tooltip_text = ECHO_DUE_TIP
+			echo.button_pressed = bool(entry.get("echo_due", false))
+			UiChrome.shadowed_button(echo)
+			echo.toggled.connect(func(on: bool) -> void: test_position.set_echo_due(pid, index, on))
+			row.add_child(echo)
 	var remove := UiChrome.menu_button("×", Vector2(28, 24), 14)
 	remove.tooltip_text = "Take %s out of the test." % card_name
 	remove.pressed.connect(func() -> void:
@@ -556,6 +570,18 @@ func _row(pid: int, zone: String, index: int, card_name: String, extra: bool) ->
 		_changed(pid, zone))
 	row.add_child(remove)
 	return row
+
+
+## The `Echo due` box's words (Pack 10).
+const ECHO_DUE_TIP := "Echo due: it came under its controller's control since their last upkeep, as if just cast, so at their next upkeep they pay its echo cost or sacrifice it."
+
+
+## Does [param data] print echo (Pack 10, [EchoAbility])?
+static func has_echo(data: CardData) -> bool:
+	for trig in data.triggered_abilities:
+		if trig is EchoAbility.EchoTrigger:
+			return true
+	return false
 
 
 ## What a card says, for a row's tooltip: name and cost, then the rules.

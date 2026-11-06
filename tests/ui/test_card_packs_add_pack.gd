@@ -103,7 +103,7 @@ func test_a_locked_catalogue_adds_nothing() -> void:
 # ========================================================== which pack ==
 
 func test_each_pack_is_known_by_what_it_holds() -> void:
-	for number in range(1, 10):
+	for number in range(1, 11):
 		var source := OS.get_environment("SHANDALAR_PACK_%d" % number)
 		if source == "" or not FileAccess.file_exists(source):
 			fail_test("the runner built no Pack %d" % number)

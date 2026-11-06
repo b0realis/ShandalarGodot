@@ -1235,6 +1235,11 @@ func _try_cast_best(game: MtgGame) -> String:
 		var x: int = sized["x"]
 		var targets: Array = sized["targets"]
 		var value: float = sized["value"]
+		# THE URZA BLOCK'S PRICE OF A CAST (Pack 10, forecasts_tactics; 0.0
+		# off): the lands an untap hands back for the next cast, their
+		# dormant Opals our spell wakes, the echo it commits next upkeep to
+		# (urza_spells.gd `cast_adjustment`).
+		value += URZA_SPELLS.cast_adjustment(game, self, inst, sources)
 		if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
 			continue   # our own Skulking Ghost would be sacrificed (Pack 8)
 		if not _cost_spares_targets(game, inst, targets, mode, x):
@@ -2180,7 +2185,7 @@ func _answered_on_arrival(game: MtgGame, data: CardData) -> bool:
 			if ability.effects.is_empty() or ability.only_opponents_may_activate:
 				continue
 			if ability.sacrifice_cost or ability.exile_cost \
-					or ability.life_cost > 0 or ability.random_discard_cost > 0:
+					or ability.has_life_cost() or ability.random_discard_cost > 0:
 				continue
 			if ability.sacrifice_filter.is_valid() or ability.exile_filter.is_valid() \
 					or ability.discard_cost > 0 or ability.counter_cost_kind != "" \
@@ -2326,8 +2331,8 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # what cannot be cast tonight reserves nothing
-		if TEMPEST_SPELLS.held_veto(game, self, inst):
-			continue   # nor a card its Pack 9 reading would not fire
+		if TEMPEST_SPELLS.held_veto(game, self, inst) or URZA_SPELLS.held_veto(game, self, inst):
+			continue   # nor a card its Pack 9 or Pack 10 reading would not fire
 		if intent.self_damage >= me.life:
 			continue   # _fire_held_instant would never fire it either
 		# THE ROW IT PAYS WITH (the Mirage bug pass, 2026-10-04,
@@ -2710,6 +2715,10 @@ func _declared_damage(game: MtgGame) -> Dictionary:
 			if blocker.has_keyword(Mtg.Keyword.BANDING):
 				free_order = true
 				break
+		# Pack 10 E6: Defensive Formation hands the division to the
+		# defender too, as MtgGame._collect_damage_requests does.
+		if blocked and game.players[game.opponent_of(game.active_player)].assigns_attackers_damage:
+			free_order = true
 		var already: Dictionary = {}
 		for member in members:
 			if member.cur_assigns_no_combat_damage:
@@ -2717,7 +2726,8 @@ func _declared_damage(game: MtgGame) -> Dictionary:
 			var power := maxi(member.cur_power, 0)
 			if power <= 0:
 				continue
-			if not blocked or member.cur_damage_as_unblocked:
+			# Pack 10 E6: Outmaneuver's forced form lands it all as well.
+			if not blocked or member.cur_damage_as_unblocked or member.cur_damage_as_unblocked_forced:
 				out[member.id] = power
 				continue
 			var split := game.default_damage_split(member, blocker_ids, power,
@@ -2838,6 +2848,7 @@ const ALLIANCES_TACTICS := preload("res://engine/ai/alliances_tactics.gd")
 const PORTAL_TACTICS := preload("res://engine/ai/portal_tactics.gd")
 const MIRAGE_TACTICS := preload("res://engine/ai/mirage_tactics.gd")
 const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
+const URZA_SPELLS := preload("res://engine/ai/urza_spells.gd")
 const CARD_COMBOS := preload("res://engine/ai/card_combos.gd")
 
 
@@ -2982,6 +2993,18 @@ func _activation_sources(game: MtgGame) -> Array[CardInstance]:
 				if ability.any_player_may_activate and not ability.effects.is_empty() and ability.effects[0].ai_role != &"":
 					out.append(inst)
 					break
+	# Pack 10 E2 — OUR HAND'S ABILITIES (cycling, CR 702.29a), behind
+	# [member AiProfile.forecasts_tactics], and only where a card is not
+	# worth more held: THEIR end step with the stack empty (the mana sink,
+	# where open mana is lost to our untap anyway), for a card DEAD on the
+	# public board — a land beyond a working mana base ([method _land_light]),
+	# or a spell or Aura whose every permanent or graveyard target is missing
+	# (Scrap with no artifact, Clear with no enchantment). The Urza AI's
+	# deeper reading (urza_spells.gd `cycling_sources`, Pack 10 stage 4)
+	# adds a Rune of Protection whose colour they never showed, what a free
+	# cycle (Fluctuator) is worth, the discard our own Energy Field or their
+	# Megrim punishes, and the order — the card we miss least first.
+	out.append_array(URZA_SPELLS.cycling_sources(game, self))
 	return out
 
 
@@ -3108,7 +3131,7 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	# Incarnation's redirect, Dream Coat) are card-local; the general
 	# scorer leaves them to their moment.
 	if not ability.tap_cost and ability.cost.mana_value() == 0 and not ability.cost.has_x \
-			and ability.life_cost <= 0 and ability.max_per_turn <= 0 \
+			and not ability.has_life_cost() and ability.max_per_turn <= 0 \
 			and not sacrifices and ability.object_costs.is_empty() \
 			and ability.counter_cost_kind == "" and ability.tap_permanent_count == 0 \
 			and inst.data.card_name != "Blinking Spirit" \
@@ -3119,7 +3142,9 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 		# mana, free of the tap and capped by nothing but the birds it has
 		# eaten, and without this line the sink would offer it forever.
 		return false
-	if ability.life_cost > 0 and game.players[pid].life - ability.life_cost <= 3:
+	# The life it costs NOW (Pack 10 E2: fixed, or Lurking Evil's half).
+	var life_due := game.ability_life_cost(pid, inst, ability)
+	if life_due > 0 and game.players[pid].life - life_due <= 3:
 		return false   # never pay life down to the last few points
 	if ability.tap_cost and (inst.tapped
 			or (inst.is_creature() and inst.summoning_sick
@@ -3224,6 +3249,8 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		expansion = ALLIANCES_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
 		expansion = TEMPEST_SPELLS.option(game, self, inst, index, Moment.keys()[moment])
+	if expansion == null:
+		expansion = URZA_SPELLS.option(game, self, inst, index, Moment.keys()[moment])   # Pack 10
 	if expansion == null:
 		expansion = MIRAGE_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
@@ -3339,8 +3366,9 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 			return {}
 		value = 5.0 if ability.cost.mana_value() <= 2 else 3.0
 		value += _draw_need(me.hand.size())
-		if ability.life_cost > 0:
-			value -= ability.life_cost * 15.0 / maxf(me.life, 1.0)
+		var life_due := game.ability_life_cost(pid, inst, ability)   # Pack 10 E2
+		if life_due > 0:
+			value -= life_due * 15.0 / maxf(me.life, 1.0)
 		if moment == Moment.SINK:
 			value += 1.0
 	elif intent.life_gain > 0 and intent.target_spec == null:
@@ -5693,6 +5721,8 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	if mirage != null: return mirage
 	var tempest: Variant = TEMPEST_SPELLS.spell_choice(game, self, inst, max_x, mode)
 	if tempest != null: return tempest
+	var urza: Variant = URZA_SPELLS.spell_choice(game, self, inst, max_x, mode)   # Pack 10
+	if urza != null: return urza
 	if data.card_name == "Dwarven Catapult":
 		return FALLEN_EMPIRES_TACTICS.catapult_choice(game, self, inst, max_x)
 	# ...and worth nothing while they control no land to walk past (bug
@@ -6615,7 +6645,8 @@ func _is_held_instant(inst: CardInstance, intent: EffectIntent) -> bool:
 	# A PACK 9 SHAPE WHOSE MOMENT IS OUR FIRST MAIN PHASE (2026-10-06,
 	# forecasts_tactics): Stun's "can't block" draws a card, and was held
 	# for their end step like a draw — where it stops no block at all.
-	if profile.forecasts_tactics and TEMPEST_SPELLS.main_phase_card(inst.data):
+	if profile.forecasts_tactics and (TEMPEST_SPELLS.main_phase_card(inst.data)
+			or URZA_SPELLS.main_phase_card(inst.data)):   # Pack 10: Falter
 		return false
 	if intent.pumps and not intent.pump_self:
 		return true
@@ -6844,8 +6875,8 @@ func _fire_held_instant(game: MtgGame) -> String:
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # locked, banned, "cast only ...", or refused this step
-		if TEMPEST_SPELLS.held_veto(game, self, inst):
-			continue   # a Pack 9 response, or a draw that skips a turn we cannot spare
+		if TEMPEST_SPELLS.held_veto(game, self, inst) or URZA_SPELLS.held_veto(game, self, inst):
+			continue   # a Pack 9/10 response, or a draw that skips a turn we cannot spare
 		var surcharge := game.spell_surcharge(pid, inst.data)
 		# The row the card pays with (Pack 8 — Spinning Darkness's
 		# graveyard), the printed cost otherwise.
@@ -6956,6 +6987,11 @@ func _respond_action(game: MtgGame) -> String:
 	var tempest := TEMPEST_SPELLS.respond(game, self)
 	if tempest != "":
 		return tempest
+	# THE URZA BLOCK'S (Pack 10): Humble and Redeem in a declared combat
+	# (urza_spells.gd `respond`).
+	var urza := URZA_SPELLS.respond(game, self)
+	if urza != "":
+		return urza
 	var expansion := _try_activate(game, Moment.RESPONSE)
 	if expansion != "": return expansion
 	if profile.uses_tactical_effects:
@@ -8801,7 +8837,7 @@ func _cheapest_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 		if ability.cost.has_x or ability.sacrifice_cost \
 				or ability.sacrifice_filter.is_valid() or ability.exile_cost \
 				or ability.exile_filter.is_valid() or ability.discard_cost > 0 \
-				or ability.random_discard_cost > 0 or ability.life_cost > 0 \
+				or ability.random_discard_cost > 0 or ability.has_life_cost() \
 				or ability.counter_cost_kind != "":
 			continue
 		var intent := EffectIntent.read(ability.effects, source.data.card_name)
@@ -10728,7 +10764,8 @@ func _berserk_their_attacker(game: MtgGame) -> String:
 			continue
 		var blockers: Array[CardInstance] = []
 		var blocker_ids: Array = []
-		if game.combat.was_blocked(band) and not attacker.cur_damage_as_unblocked:
+		if game.combat.was_blocked(band) and not attacker.cur_damage_as_unblocked \
+				and not attacker.cur_damage_as_unblocked_forced:   # Pack 10 E6
 			for blocker_id in game.combat.ordered_blockers_of_band(band):
 				var blocker := game.find_instance(int(blocker_id))
 				if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:
@@ -12072,8 +12109,11 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.a_free[i] = 0 if (profile.animates_to_attack
 			and _creature_until_end_of_turn(game, inst)) else 1
 		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
-		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
-		search.a_bypass[i] = 1 if inst.cur_damage_as_unblocked else 0
+		# Pack 10 E6 (reads_gaze): a trampler whose damage THEY divide
+		# (Defensive Formation) spills nothing — they keep it on the gang.
+		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) \
+			and not (profile.reads_gaze and game.players[defender].assigns_attackers_damage) else 0
+		search.a_bypass[i] = 1 if inst.cur_damage_as_unblocked or inst.cur_damage_as_unblocked_forced else 0
 		search.a_soak[i] = maxi(inst.cur_toughness - inst.damage, 0)
 		search.a_first[i] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
 		var a_shield := _shieldable(game, inst)
@@ -12112,8 +12152,9 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_val[j] = AiContextValue.of(game, inst, profile)
 		search.d_free[j] = 0 if (inst.tapped or inst.phased_out) else 1
 		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
-		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
-		search.d_bypass[j] = 1 if inst.cur_damage_as_unblocked else 0
+		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) \
+			and not (profile.reads_gaze and game.players[pid].assigns_attackers_damage) else 0
+		search.d_bypass[j] = 1 if inst.cur_damage_as_unblocked or inst.cur_damage_as_unblocked_forced else 0
 		search.d_soak[j] = maxi(inst.cur_toughness - inst.damage, 0)
 		# Their PAID first strike counts (campaign 2026-10-12 f-aiA, b5-5),
 		# as it does in [method _dies_to], which fills we_kill below.
@@ -14000,7 +14041,7 @@ func _choose_targets(game: MtgGame, inst: CardInstance, x_value: int, mode := 0)
 		# left at ONE target, which TargetPlan lets absorb the whole total.
 		if effect != null:
 			var span: Vector2i = effect.target_range(x_value)
-			if span.x > 1 and effect.divided_amount(x_value) <= 0:
+			if span.x > 1 and effect.divided_amount_at(game, inst, x_value) <= 0:
 				for extra in _extra_targets(game, inst, spec, effect,
 						span.x - 1, targets, x_value):
 					targets.append(extra)
@@ -15158,6 +15199,20 @@ func cumulative_upkeep_hint(game: MtgGame, p_pid: int, source: CardInstance,
 	price += float(burn) * minf(_life_price(me.life), Evaluator.W_LIFE)   # b5-7
 	return value >= price
 
+
+## ECHO, PAID OR LET GO (Pack 10, CR 702.30a; [member
+## AiProfile.forecasts_tactics]): our permanent's worth to our side against
+## the echo priced like a rent, the cast this turn it would cost us and the
+## mana it would burn — a creature whose worth was its arrival is let go
+## (urza_spells.gd `echo_choice`). Gate off: [method DecisionAgent.echo_hint],
+## every affordable echo paid, as before Pack 10.
+func echo_hint(game: MtgGame, p_pid: int, source: CardInstance, cost: ManaCost) -> bool:
+	if p_pid == pid:
+		var pay: Variant = URZA_SPELLS.echo_choice(game, self, source, cost)
+		if pay != null:
+			return bool(pay)
+	return super(game, p_pid, source, cost)
+
 func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[String], hint: int) -> int:
 	# THE VAULT'S QUESTION (2026-09-26, [member AiProfile.takes_the_turn]):
 	# "Skip this turn to untap X?" is put by the engine's turn-based hold
@@ -15244,6 +15299,13 @@ func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> boo
 		var gift := _upkeep_gift_answer(game, prompt)
 		if gift >= 0:
 			return gift == 1
+		# "...: discard a card? (otherwise sacrifice ...)" (Pack 10:
+		# Masticore, Body Snatcher, Endless Wurm): the payment's cheapest
+		# object against the source's own worth (urza_spells.gd
+		# `unless_objects_answer`; -1 with the gate off).
+		var kept := URZA_SPELLS.unless_objects_answer(game, self, prompt)
+		if kept >= 0:
+			return kept == 1
 	# THE FREEZE THAT IS AGAINST US (2026-09-26, [member
 	# AiProfile.pays_the_rent]): a rent on a permanent that takes the
 	# untap step away is paid while the freeze is worth having ([method
@@ -16803,7 +16865,8 @@ func _escapes_on_demand(game: MtgGame, victim: CardInstance) -> bool:
 			continue
 		if ability.sacrifice_cost or ability.exile_cost or ability.only_opponents_may_activate:
 			continue
-		if ability.life_cost > 0 and game.players[who].life <= ability.life_cost:
+		var life_due := game.ability_life_cost(who, victim, ability)   # Pack 10 E2
+		if life_due > 0 and game.players[who].life <= life_due:
 			continue
 		if ability.discard_cost + ability.random_discard_cost > game.players[who].hand.size():
 			continue
@@ -17226,7 +17289,7 @@ func _paid_first_strike(game: MtgGame, inst: CardInstance) -> bool:
 				or ability.sacrifice_cost or ability.sacrifice_filter.is_valid() \
 				or ability.exile_cost or ability.exile_filter.is_valid() \
 				or ability.discard_cost > 0 or ability.random_discard_cost > 0 \
-				or ability.life_cost > 0 or ability.counter_cost_kind != "":
+				or ability.has_life_cost() or ability.counter_cost_kind != "":
 			continue
 		if ability.only_owner_may_activate and inst.owner_id != who:
 			continue

@@ -246,6 +246,15 @@ func cumulative_upkeep_hint(game: MtgGame, pid: int, _source: CardInstance,
 		_cost: ManaCost, life: int, _lands: int) -> bool:
 	return game.players[pid].life > life
 
+## Structured advice for the ECHO offer (CR 702.30a, [EchoAbility]): asked only
+## when [param cost] is affordable, and the answer is the hint of a
+## choose_yes_no, so a human keeps the whole choice. Default: pay — the
+## permanent was cast to be kept. A strategy that lets an enters-the-
+## battlefield creature go overrides this (public state only, rule 8).
+func echo_hint(_game: MtgGame, _pid: int, _source: CardInstance,
+		_cost: ManaCost) -> bool:
+	return true
+
 
 ## Pick one card from [param candidates] (library search — Demonic Tutor).
 ## Returning null means "fail to find"/decline, legal where searches are.

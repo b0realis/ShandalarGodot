@@ -14,6 +14,11 @@ static func attack_error(g: MtgGame, pid: int, ids: Array, requirements := true)
 		var i := g.find_instance(id)
 		if i.cur_attacks_alone and ids.size() != 1: return "%s can attack only alone" % i.data.card_name
 		if ids.size() < i.cur_min_attack_group: return "%s needs at least %d attacking creatures" % [i.data.card_name, i.cur_min_attack_group]
+		# Pack 10 E6: a PREDICATE COMPANION (Okk, CR 508.1c) — another
+		# declared attacker its predicate accepts, powers as they are now.
+		if not i.cur_attack_companion.is_empty():
+			var lacking := CombatState.companion_missing(i, _instances(g, ids), false)
+			if lacking != "": return "%s can't attack unless %s also attacks" % [i.data.card_name, lacking]
 		if mandatory(i): met += 1
 	if requirements and met < required_attacks(g, pid):
 		for i in g.players[pid].battlefield:
@@ -150,6 +155,10 @@ static func block_error(g: MtgGame, blocks: Dictionary) -> String:
 	for id in blocks:
 		var i := g.find_instance(id)
 		if blocks.size() < i.cur_min_block_group: return "%s needs at least %d blocking creatures" % [i.data.card_name, i.cur_min_block_group]
+		# Pack 10 E6: the block twin (Okk, CR 509.1b).
+		if not i.cur_block_companion.is_empty():
+			var lacking := CombatState.companion_missing(i, _instances(g, blocks.keys()), true)
+			if lacking != "": return "%s can't block unless %s also blocks" % [i.data.card_name, lacking]
 		for target in blocks[id]:
 			counts[target] = int(counts.get(target, 0)) + 1
 			var attacker := g.find_instance(target)
@@ -204,6 +213,11 @@ static func repair_attacks(g: MtgGame, pid: int, proposed: Array) -> Array:
 		if not base.has(id): base.append(id)
 	for id in base.duplicate():
 		if g.find_instance(id).cur_min_attack_group > base.size(): base.erase(id)
+	# Pack 10 E6: a COMPANION-bound attacker (Okk) stays only beside one its
+	# predicate accepts; dropping it may leave a group short again.
+	if _keep_attack_companions(g, base, ordinary):
+		for id in base.duplicate():
+			if g.find_instance(id).cur_min_attack_group > base.size(): base.erase(id)
 	candidates.append(base)
 	candidates.append([])
 	var best: Array = []
@@ -262,11 +276,98 @@ static func repair_blocks(g: MtgGame, pid: int, proposed: Dictionary) -> Diction
 		for target in out[id].duplicate():
 			if int(counts[target]) < g.find_instance(target).cur_min_blockers: out[id].erase(target)
 		if out[id].is_empty(): out.erase(id)
+	_trim_block_companions(g, out)   # Pack 10 E6
 	# Pack 9 E4: the blocks a requirement orders (Watchdog, Invasion Plans,
 	# Provoke — and since the Pack 9 bug pass every Lure and Blaze of Glory,
 	# counted together as the engine counts them) go in last, over the
 	# trimmed plan, so nothing above can take one out again.
 	return _add_forced_blocks(g, pid, out)
+
+
+# --- Pack 10 E6: predicate companions in the AI's repairs ---
+
+## The attack plan [param base] (ids, edited in place) made to obey every
+## PREDICATE COMPANION in it (Okk, CR 508.1c): a MANDATORY one first takes
+## a volunteer from [param ordinary] (the able attackers, best first) that
+## its predicate accepts — with both declared one more requirement is
+## obeyed than without (CR 508.1d) — then every one still without its
+## companion leaves, until nothing changes. True when it took any out. A
+## plan with no companion-bound creature is returned untouched.
+static func _keep_attack_companions(g: MtgGame, base: Array, ordinary: Array) -> bool:
+	var bound := false
+	for id in base:
+		if not g.find_instance(id).cur_attack_companion.is_empty(): bound = true
+	if not bound: return false
+	for id in base.duplicate():
+		var i := g.find_instance(id)
+		if i.cur_attack_companion.is_empty() or not mandatory(i): continue
+		for other_id in ordinary:
+			var lacking := _companions_lacking(i, _instances(g, base))
+			if lacking == 0: break
+			if base.has(other_id) or (g.max_attackers > 0 and base.size() >= g.max_attackers): continue
+			if _companions_lacking(i, _instances(g, base + [other_id])) < lacking:
+				base.append(other_id)
+	var dropped := false
+	var changed := true
+	while changed:
+		changed = false
+		var declared := _instances(g, base)
+		for id in base:
+			var i := g.find_instance(id)
+			if not i.cur_attack_companion.is_empty() \
+					and CombatState.companion_missing(i, declared, false) != "":
+				base.erase(id)
+				dropped = true
+				changed = true
+				break
+	return dropped
+
+
+## How many of [param i]'s attack companions [param others] lack.
+static func _companions_lacking(i: CardInstance, others: Array) -> int:
+	var n := 0
+	for entry in i.cur_attack_companion:
+		var filter: Callable = entry["filter"]
+		var found := false
+		for other in others:
+			if other != i and bool(filter.call(i, other)):
+				found = true
+				break
+		if not found: n += 1
+	return n
+
+
+## The block twin, over a normalised plan [param out] (edited in place):
+## a blocker without its companion leaves, and so does whatever that leaves
+## short — a group below its minimum, a block below an attacker's minimum
+## blockers — until nothing changes. A plan with no companion-bound blocker
+## is left exactly as it was.
+static func _trim_block_companions(g: MtgGame, out: Dictionary) -> void:
+	var bound := false
+	for id in out:
+		if not g.find_instance(id).cur_block_companion.is_empty(): bound = true
+	if not bound: return
+	var changed := true
+	while changed:
+		changed = false
+		var declared := _instances(g, out.keys())
+		for id in out.keys():
+			var i := g.find_instance(id)
+			if i.cur_min_block_group > out.size() or (not i.cur_block_companion.is_empty() \
+					and CombatState.companion_missing(i, declared, true) != ""):
+				out.erase(id)
+				changed = true
+				break
+		if changed: continue
+		var counts := {}
+		for id in out:
+			for target in out[id]: counts[target] = int(counts.get(target, 0)) + 1
+		for id in out.keys():
+			for target in (out[id] as Array).duplicate():
+				if int(counts[target]) < g.find_instance(target).cur_min_blockers:
+					(out[id] as Array).erase(target)
+					changed = true
+			if (out[id] as Array).is_empty(): out.erase(id)
 
 
 # --- Pack 9 E4: Combat requirements ---

@@ -55,7 +55,7 @@ QUEST_FILES = f"/sdcard/Android/data/{QUEST_PACKAGE}/files"
 ARKOS_LAUNCHER = "packaging/handhelds/arkos.sh"
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
                  "pack_4_homelands", "pack_5_alliances", "pack_6_portal", "pack_7_fifth_edition",
-                 "pack_8_mirage_block", "pack_9_tempest_block")
+                 "pack_8_mirage_block", "pack_9_tempest_block", "pack_10_urza_block")
 # THE ONE DOOR of a release (2026-09-27), after the launcher prefix: the
 # repo's shandalar.sh with the release's own targets. POSIX sh, like the
 # prefix it follows. A verb it does not know is refused the way every
@@ -125,6 +125,8 @@ PACK_DATA["pack_8_mirage_block"] += ("cards_vis.json", "set_vis.json", "cards_wt
                                      "set_wth.json", "shared_names.json")
 PACK_DATA["pack_9_tempest_block"] += ("cards_sth.json", "set_sth.json", "cards_exo.json",
                                       "set_exo.json", "shared_names.json")
+PACK_DATA["pack_10_urza_block"] += ("cards_ulg.json", "set_ulg.json", "cards_uds.json",
+                                    "set_uds.json", "shared_names.json")
 BUILDER_DATA = tuple(f"cards/data/{code}.json" for code in pack_one.SET_ORDER) + tuple(
     f"packaging/card_packs/{pack}/{name}" for pack, names in PACK_DATA.items() for name in names)
 BASE_ASSIGNMENTS = "packaging/card_packs/pack_1_dotp_complete/base_assignments.json"

@@ -268,9 +268,12 @@ func test_the_special_discard_is_an_option_outside_the_window() -> void:
 # ===================================================== the version stamp --
 
 func test_protocol_30_and_the_hand_choices_rules_revision() -> void:
-	assert_eq(SgProtocol.VERSION, 30)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v30")
-	assert_eq(SgCompatibility.RULES_REVISION, "sgmanalink-hand-choices-2026-10-31")
+	# The whole-game campaign's additions travel since protocol 30 (the
+	# exact version and rules revision are pinned by the latest bump's own
+	# test: 31 and Pack 10's, tests/ui/test_sgmanalink_pack_10_table.gd).
+	assert_true(SgProtocol.VERSION >= 30)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v%d" % SgProtocol.VERSION)
+	assert_ne(SgCompatibility.RULES_REVISION, "sgmanalink-tempest-block-2026-10-06")
 	assert_true(SgCompatibility.valid_stamp(SgCompatibility.stamp()), "the stamp's rules text fits the wire")
 	assert_true(SgProtocol.subprotocols().has("sgmanalink-local-v28"),
 		"the last protocol is still named, so a 28 build is told, not hung up on")

@@ -1583,13 +1583,15 @@ func _state_active(state: int) -> bool:
 			# (`MtgGame._enter_step`'s untap branch) plus, when we have a
 			# game to ask, the global throttles — Winter Orb and Smoke cap
 			# how many untap at all, and while one is out this widget
-			# cannot promise anything, so it stays quiet.
+			# cannot promise anything, so it stays quiet. So does a kind
+			# chosen in the untap step (Pack 10 — Storage Matrix's
+			# "artifact, creature, or land": MtgGame.untap_kind_choices).
 			if not on_table or not instance.tapped:
 				return false
 			if instance.skip_next_untap or instance.skip_untaps > 0 \
 					or instance.cur_skips_untap:
 				return false
-			return game == null or game.untap_caps.is_empty()
+			return game == null or (game.untap_caps.is_empty() and game.untap_kind_choices.is_empty())
 		State.NOT_OWNED:
 			return on_table and instance.controller_id != instance.owner_id
 		State.IS_TARGET:

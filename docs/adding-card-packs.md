@@ -58,13 +58,14 @@ ships fallback pictures (`skin/cardart/`) for the shared names, since the
 original pack's artwork may be absent.
 
 A pack may also span **several sets**. Portal (Pack 6) holds two, the
-Mirage block (Pack 8) and the Tempest block (Pack 9) three each: one
+Mirage block (Pack 8), the Tempest block (Pack 9) and the Urza block
+(Pack 10) three each: one
 `cards*.json`/`set*.json` pair per set, one `cards/sets/<code>/` folder
 and `_rules.gd` dispatcher per set, one Extras row and medallion per set,
 and the shared-names table for the reprints whose script lives only in
 another optional pack — whichever pack it is, Portal included
 (`_shared_provider` names the original pack first, then Portal, Fifth
-Edition, the Mirage block and the Tempest block).
+Edition, the Mirage block, the Tempest block and the Urza block).
 
 Commit metadata and the reviewed reprint checklist, not downloaded art.
 Card headers must retain the actual Oracle text, including Unicode names;
@@ -121,8 +122,8 @@ test feature; it is not a distributable game pack.
 Every numbered reader enforces exact membership and checksums, and checks
 the central directory's declared sizes before reading a member
 (`PortalPack.bounded_zip`: 8 MiB a member and 256 MiB in all by default;
-Packs 8 and 9, whose real archives measured within 2.3 MiB and 18.7 MiB of
-that, pass their own 384 MiB). Measure the real ZIP, not an estimate.
+Packs 8, 9 and 10, whose real archives measured within 2.3 MiB, 18.7 MiB
+and 15.6 MiB of that, pass their own 384 MiB). Measure the real ZIP, not an estimate.
 Before accepting arbitrary third-party downloads, add further defences rather than treating these
 locally constructed ZIP readers as a complete hostile-archive sandbox.
 
@@ -148,6 +149,13 @@ Wire the pack into `game/card_packs.gd`:
 - namespaced artwork lookup and fallback;
 - compatible registry provider ordering.
 
+Pack numbers are numbers, not text: sort and compare ids with
+`CardPacks.number_of` and `sort_ids`, never as strings. Pack 10 was the
+first two-digit pack, and a string sort put it before Pack 2 in the title
+badges, the Embark list, a saved deck's required packs and the LAN lobby.
+Check environment names, file-name matching and argument parsing the same
+way (`SHANDALAR_PACK_10`, `Pack-1-` against `Pack-10-`, `--packs 1,10`).
+
 Keep `game/skin_pack.gd` from treating the numbered gameplay ZIP as a UI
 skin. Disabled or absent packs must not register their new names. Enabling
 one pack must not silently enable another. Handle a removed or replaced ZIP
@@ -158,7 +166,7 @@ trusted rules. A version string alone does not establish support: the build
 must also contain the loader/provider and dormant scripts. Test both gates.
 Ask about versions BEFORE comparing the zip's manifest with the trusted one:
 call `PortalPack.version_refusal` and then `PortalPack.manifest_mismatch`,
-as Packs 2–9 do (the review of 2026-10-21, cards-1). The other order makes
+as Packs 2–10 do (the review of 2026-10-21, cards-1). The other order makes
 the "requires game version" refusal unreachable — a manifest that passes the
 comparison already carries the trusted minimum — and a player with a pack
 from another release reads "manifest mismatch: version" instead.

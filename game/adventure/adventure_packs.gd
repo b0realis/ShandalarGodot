@@ -4,7 +4,7 @@ extends RefCounted
 ## CardPacks owns installation and card rules; this layer owns campaign eligibility.
 ## An adventure is linked by its descriptor's pack ID, never by a special-case shop.
 ## THE CARDS A CAMPAIGN'S PACKS BRING (0.60.14, the owner's pack rulings of
-## 2026-11-03), any of Packs 2–9, an old save's too: each pack its own cards
+## 2026-11-03), any of Packs 2–10, an old save's too: each pack its own cards
 ## ([method card_stock]; Fifth Edition its 147 reprints), at their original
 ## printing's rarity ([method printed_rarity], [method facts]); a card made
 ## for ante on no shelf ([method pools]); the strong ones special
@@ -520,7 +520,7 @@ static func _read_catalogues() -> void:
 		var own: Array = contract.names() if id == FallenEmpiresPack.ID else contract.new_names()
 		var carried: Dictionary = {}
 		if id == PortalPack.ID: carried = PortalPack.SHARED
-		elif id in [FifthEditionPack.ID, MirageBlockPack.ID, TempestBlockPack.ID]: carried = contract.shared()
+		elif id in [FifthEditionPack.ID, MirageBlockPack.ID, TempestBlockPack.ID, UrzaBlockPack.ID]: carried = contract.shared()
 		for card in own:
 			_owner[card] = id
 			_printed[card] = words.get(card, "")

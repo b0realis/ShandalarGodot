@@ -100,6 +100,15 @@ var damage: int = 0
 ## CR 302.6). Cleared by MtgGame during the untap step. Haste bypasses it.
 var summoning_sick: bool = false
 
+## ECHO'S CLOCK (CR 702.30a, Pack 10 E1): its controller's
+## [member MtgPlayer.upkeeps_begun] at the moment this permanent came under
+## that controller's control — written (journaled) by MtgGame's two doors,
+## `_put_on_battlefield` and `_set_controller`, and read by
+## [method MtgGame.came_under_control_since_last_upkeep]. -1 = no such
+## moment on record (a permanent a Test hands position placed, or one off
+## the battlefield): never "came under your control since …".
+var control_upkeep_mark: int = -1
+
 ## CONTROL LEASH: the instance id of the permanent whose presence (and,
 ## when [member leash_needs_tapped] is set, whose tapped state) sustains
 ## this permanent's change of control — Old Man of the Sea, Rubinia
@@ -207,6 +216,15 @@ var cur_attack_costs: Array[Dictionary] = []
 var cur_attacks_alone := false
 var cur_min_attack_group := 1
 var cur_min_block_group := 1
+## Pack 10 E6 — PREDICATE COMPANIONS (CR 508.1c / 509.1b): "This creature
+## can't attack unless a creature with greater power also attacks" and its
+## block twin (Okk). Each entry {desc: String, filter: Callable(holder:
+## CardInstance, other: CardInstance) -> bool}: the declaration must hold
+## ANOTHER attacking (blocking) creature the filter accepts, judged on the
+## characteristics as they are when it is declared. Added by
+## CombatState.attack_companion / block_companion each recalculation.
+var cur_attack_companion: Array[Dictionary] = []
+var cur_block_companion: Array[Dictionary] = []
 ## Zero means unlimited; a restriction, so it takes precedence over Lure.
 var cur_max_blockers := 0
 var cur_attack_land_sacrifices := 0
@@ -241,6 +259,11 @@ var cur_attack_requirements: Array[Dictionary] = []
 
 ## Derived land-mana replacement choices, collected by continuous effects.
 var cur_land_mana_replacements: Array[int] = []
+## Pack 10 E8 — "... instead of any other type AND AMOUNT" (Contamination):
+## {replacement colour: the amount that colour's variant is fixed at},
+## written beside [member cur_land_mana_replacements] by
+## ManaAbility.replace_land_mana; empty = every amount as the ability makes.
+var cur_land_mana_fixed: Dictionary = {}
 var cur_wind_untap_replacement := false
 
 ## "For each 1 damage that would be dealt to this creature, if it has a
@@ -796,6 +819,13 @@ var cur_prevent_combat_damage_dealt: bool = false
 ## Delif/Farrel replacements suppress assignment, not damage prevention.
 var cur_assigns_no_combat_damage: bool = false
 var cur_damage_as_unblocked: bool = false
+## Pack 10 E6 — the MANDATORY form of the line above: "assign their combat
+## damage this turn as though they weren't blocked" (Outmaneuver, CR
+## 510.1a-c). A blocked creature with it deals all of its combat damage to
+## the defending player and is asked nothing; it stays blocked (CR 509.1h)
+## and its blockers still deal theirs. Set by statics each recalculation
+## (CombatState.assign_as_though_unblocked_this_turn binds one to a target).
+var cur_damage_as_unblocked_forced: bool = false
 var cur_unblocked_damage_to_creature: bool = false
 ## Vodalian War Machine retains defender but may ignore it while attacking.
 var cur_can_attack_with_defender: bool = false
@@ -872,6 +902,8 @@ func _init(p_data: CardData, p_id: int, p_owner: int) -> void:
 ## snapshot — they are live views by contract (see the class doc).
 func reset_characteristics() -> void:
 	cur_land_mana_replacements.clear()
+	if not cur_land_mana_fixed.is_empty():
+		cur_land_mana_fixed.clear()   # Pack 10 E8 (Contamination)
 	cur_wind_untap_replacement = false
 	cur_statics_suspended = false
 	cur_power = data.power
@@ -910,6 +942,8 @@ func reset_characteristics() -> void:
 	cur_attacks_alone = false
 	cur_min_attack_group = 1
 	cur_min_block_group = 1
+	cur_attack_companion.clear()   # Pack 10 E6
+	cur_block_companion.clear()    # Pack 10 E6
 	cur_max_blockers = 0
 	cur_attack_land_sacrifices = 0
 	cur_block_power_tax_threshold = 0
@@ -935,6 +969,7 @@ func reset_characteristics() -> void:
 	cur_prevent_combat_damage_dealt = false
 	cur_assigns_no_combat_damage = false
 	cur_damage_as_unblocked = false
+	cur_damage_as_unblocked_forced = false   # Pack 10 E6
 	cur_unblocked_damage_to_creature = false
 	cur_can_attack_with_defender = false
 	cur_prevent_combat_damage_taken = false
@@ -1222,6 +1257,7 @@ func clear_battlefield_state() -> void:
 	tapped = false
 	damage = 0
 	summoning_sick = false
+	control_upkeep_mark = -1   # Pack 10 E1: a new object when it returns (CR 400.7)
 	attached_to = -1
 	lost_enchant = false
 	controlled_via = -1

@@ -56,13 +56,43 @@ The package ID is `com.b0realis.shandalar.android`; Quest keeps
 `com.b0realis.shandalar`. The two installations and their saves are separate.
 Update by installing a newer APK with the same signing certificate over the
 old one. Do not uninstall first: uninstalling or clearing app data can erase
-decks, settings and imported packs. Export important decks before updates.
+decks, settings, adventures and imported packs. Export important decks and
+adventures before updates.
 No account, ranking service or store subscription is required. LAN play is
 still local-network only; use matching game versions and enabled card packs.
 
 Please report device model, Android version, RAM, graphics issues, whether
 touch and file import work, and the steps to reproduce a problem. Emulator
 checks do not establish physical-device compatibility, battery life or speed.
+
+## Your adventures
+
+The adventures are saved in the game's own folder on the shared storage,
+beside the card packs:
+`Android/data/com.b0realis.shandalar.android/files/adventures/` (on the
+Meta Quest `Android/data/com.b0realis.shandalar/files/adventures/`). Each
+adventure is a few files starting with the hero's name: its autosave, its
+Quickslot and its named slots, each with a `.bak` copy. Saves an older
+version kept in the app's private storage move there by themselves once;
+each is copied whole and read back before the old one is removed, and one
+that cannot move stays where it was and is still listed.
+
+To take an adventure to another device, use the game: on **Save / Load**,
+highlight one of its saves and press **Export**. The system's file box
+opens; choose Downloads. The file, `Shandalar adventure - <hero> -
+<date>.zip`, holds every save of that adventure. On the other device — a
+computer, a Quest, another phone — press **Import** on the same screen and
+choose it. The game checks the whole file before it writes anything, and
+asks before it replaces an adventure that is there already.
+
+With USB debugging on, `adb` copies the whole folder to a computer:
+
+```sh
+adb pull /sdcard/Android/data/com.b0realis.shandalar.android/files/adventures/ shandalar-adventures
+```
+
+A file manager that is given access to `Android/data` (through Shizuku,
+for example) can copy them too. The way back in is **Import**.
 
 ## Reproducible target recipe
 

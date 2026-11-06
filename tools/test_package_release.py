@@ -135,6 +135,7 @@ class PackageReleaseTest(unittest.TestCase):
                         self.assertIn('build cardpacks/Pack-7-Fifth-Edition.zip', readme)
                         self.assertIn('build cardpacks/Pack-8-Mirage-Block.zip', readme)
                         self.assertIn('build cardpacks/Pack-9-Tempest-Block.zip', readme)
+                        self.assertIn('build cardpacks/Pack-10-Urza-Block.zip', readme)
                         self.assertIn('browser import/auto-fetch path', readme)
                         if platform not in pack.WEB_PLATFORMS:
                             self.assertIn("LAN SGManalink are included", readme)
@@ -387,7 +388,7 @@ class PackageReleaseTest(unittest.TestCase):
                 'Pack-1-DotP-complete.zip', 'Pack-2-Fallen-Empires.zip',
                 'Pack-3-Ice_Age.zip', 'Pack-4-Homelands.zip', 'Pack-5-Alliances.zip',
                 'Pack-6-Portal.zip', 'Pack-7-Fifth-Edition.zip', 'Pack-8-Mirage-Block.zip',
-                'Pack-9-Tempest-Block.zip')):
+                'Pack-9-Tempest-Block.zip', 'Pack-10-Urza-Block.zip')):
             for command in ('build', 'verify'):
                 result = subprocess.run([
                     sys.executable, '-I', str(standalone / 'tools' / (builder + '.py')),

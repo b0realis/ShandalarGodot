@@ -17,7 +17,8 @@ const HELP_FLAGS: Array[String] = ["-h", "--help"]
 ## lists the same).
 const TOOL_FLAGS: Array[String] = ["--deck-lab", "--auto-deck", "--lab-query",
 	"--referee", "--verify-pack-1", "--verify-pack-2", "--verify-pack-3",
-	"--verify-pack-4", "--verify-pack-5", "--verify-pack-8", "--verify-pack-9"]
+	"--verify-pack-4", "--verify-pack-5", "--verify-pack-8", "--verify-pack-9",
+	"--verify-pack-10"]
 
 
 ## Whether [param args] (the user args) ask for the help.

@@ -45,11 +45,11 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 				if not body.has_subtype(e.ai_parameters.subtype) or (body.cur_types & (Mtg.CardType.CREATURE | Mtg.CardType.ARTIFACT | Mtg.CardType.ENCHANTMENT | Mtg.CardType.LAND)) == 0: continue
 				best = better(best, result(Evaluator.card_value(body.data) + 2.0))
 		&"remove_creature_ban":
-			if me.life <= a.life_cost + 3: return {}
+			if me.life <= g.ability_life_cost(pilot.pid, s, a) + 3: return {}
 			# Own known creature cards, not the opponent's unseen hand.
 			for body in me.hand:
 				if body.is_creature() and body.data.cost.mana_value() <= pilot._mana_sources(g).size() + me.mana_pool.total():
-					best = better(best, result(Evaluator.card_value(body.data) + 2.0 - a.life_cost * pilot._life_price(me.life)))
+					best = better(best, result(Evaluator.card_value(body.data) + 2.0 - g.ability_life_cost(pilot.pid, s, a) * pilot._life_price(me.life)))
 		&"stat_counter", &"stat_debuff", &"counter_host":
 			if role == &"counter_host":
 				var host := g.find_instance(s.attached_to)

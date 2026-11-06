@@ -22,7 +22,7 @@ func after_each() -> void:
 	AdventurePacks.forget()
 
 
-## Every identity a numbered pack introduced (its own scripts), Packs 2–9.
+## Every identity a numbered pack introduced (its own scripts), Packs 2–10.
 func _identities() -> Dictionary:
 	var out := {}
 	for card in FallenEmpiresPack.names(): out[card] = FallenEmpiresPack.ID
@@ -32,6 +32,7 @@ func _identities() -> Dictionary:
 	for card in PortalPack.new_names(): out[card] = PortalPack.ID
 	for card in MirageBlockPack.new_names(): out[card] = MirageBlockPack.ID
 	for card in TempestBlockPack.new_names(): out[card] = TempestBlockPack.ID
+	for card in UrzaBlockPack.new_names(): out[card] = UrzaBlockPack.ID
 	return out
 
 
@@ -40,6 +41,11 @@ func test_the_strong_list_covers_the_ban_lists_and_the_owner_s_names() -> void:
 	for card in ["Necropotence", "Force of Will", "Lion's Eye Diamond", "Mystical Tutor", "Vampiric Tutor",
 			"Mox Diamond", "Survival of the Fittest", "Wasteland", "Lotus Petal", "Hymn to Tourach",
 			"Ancient Tomb", "City of Traitors"]:
+		assert_has(CardValue.STRONG_PACK_CARDS, card)
+	# The Urza block's, the owner's pick of 2026-11-06.
+	for card in ["Tolarian Academy", "Yawgmoth's Will", "Yawgmoth's Bargain", "Tinker", "Windfall",
+			"Memory Jar", "Time Spiral", "Gaea's Cradle", "Serra's Sanctum", "Voltaic Key", "Fluctuator",
+			"Grim Monolith", "Frantic Search"]:
 		assert_has(CardValue.STRONG_PACK_CARDS, card)
 	for card in own:
 		if String(card).ends_with(" Tutor"):

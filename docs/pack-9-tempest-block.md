@@ -199,7 +199,9 @@ ceases to exist (CR 111.7).
 Engine-wide row (`docs/ROADMAP.md`): *A licid keeps its entry timestamp
 when it becomes an Aura* (`become_licid_aura`). Card rows
 (`docs/simplified-cards.md`): *Living Death (Pack 9)* — the returned cards
-enter one after another; Skeleton Scavengers joining *Debt of Loyalty;
+entered one after another, until Pack 10's "arrive together" engine
+(`MtgGame.put_onto_battlefield_together`, 2026-11-06) returned them at the
+same moment and lifted the row; Skeleton Scavengers joining *Debt of Loyalty;
 Matopi Golem*; Whim of Volrath joining *Text changes*. Help → Abilities
 explains each in plain words. Humility, which the inventory offered as a
 fallback candidate, is implemented as printed.

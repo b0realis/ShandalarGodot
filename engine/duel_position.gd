@@ -23,7 +23,7 @@ extends RefCounted
 ##   random_cards  how many more cards the hand gets off the top of the
 ##                 rest of the library (the shuffle is the duel's seed's);
 ##   table         the permanents already in play, each
-##                 `{"name", "tapped", "sick"}`;
+##                 `{"name", "tapped", "sick", "echo_due"}`;
 ##   graveyards    bottom first — the LAST name is the top card, the one
 ##                 Corpse Dance's "top creature card" reads;
 ##   library_tops  the cards on top of the library, NEXT DRAW FIRST;
@@ -77,20 +77,23 @@ func names_in(pid: int, zone: String) -> Array[String]:
 	return out
 
 
-## One table entry, `{"name", "tapped", "sick"}`.
+## One table entry, `{"name", "tapped", "sick", "echo_due"}`.
 func table_entry(pid: int, index: int) -> Dictionary:
 	return table[pid][index]
 
 
 ## Name one more card into [param zone]. A table entry starts UNTAPPED and
 ## NOT summoning sick: it has been there since before the turn, so it can
-## be used at once, which is what a combo test wants.
+## be used at once, which is what a combo test wants. For the same reason
+## it owes no ECHO (CR 702.30a, Pack 10): it did not come under its
+## controller's control since their last upkeep unless the player says so
+## ([method set_echo_due]).
 func add(pid: int, zone: String, card_name: String) -> void:
 	var list := _list(pid, zone)
 	if list.size() >= MAX_CARDS:
 		return
 	if zone == TABLE:
-		list.append({"name": card_name, "tapped": false, "sick": false})
+		list.append({"name": card_name, "tapped": false, "sick": false, "echo_due": false})
 	else:
 		list.append(card_name)
 
@@ -113,6 +116,15 @@ func set_tapped(pid: int, index: int, on: bool) -> void:
 func set_sick(pid: int, index: int, on: bool) -> void:
 	if index >= 0 and index < table[pid].size():
 		table[pid][index]["sick"] = on
+
+
+## Does this table entry OWE ECHO at its controller's next upkeep — as if
+## it had just been cast (CR 702.30a)? Off by default; meaningful only for
+## a permanent with echo. Read as the position is placed
+## (MtgGame.begin_from_position).
+func set_echo_due(pid: int, index: int, on: bool) -> void:
+	if index >= 0 and index < table[pid].size():
+		table[pid][index]["echo_due"] = on
 
 
 ## How many copies of [param card_name] [param pid] names, in every place
@@ -195,7 +207,8 @@ func to_dict() -> Dictionary:
 	for pid in 2:
 		for entry in table[pid]:
 			rows[pid].append({"name": String(entry["name"]),
-				"tapped": bool(entry.get("tapped", false)), "sick": bool(entry.get("sick", false))})
+				"tapped": bool(entry.get("tapped", false)), "sick": bool(entry.get("sick", false)),
+				"echo_due": bool(entry.get("echo_due", false))})
 	return {
 		"hands": [_plain(hands[0]), _plain(hands[1])],
 		"random_cards": [random_cards[0], random_cards[1]],
@@ -230,9 +243,10 @@ static func from_dict(value: Variant) -> DuelPosition:
 				break
 			if row is Dictionary and _text(row.get("name")) != "":
 				rows.append({"name": _text(row["name"]),
-					"tapped": _flag(row.get("tapped")), "sick": _flag(row.get("sick"))})
+					"tapped": _flag(row.get("tapped")), "sick": _flag(row.get("sick")),
+					"echo_due": _flag(row.get("echo_due"))})
 			elif _text(row) != "":
-				rows.append({"name": _text(row), "tapped": false, "sick": false})
+				rows.append({"name": _text(row), "tapped": false, "sick": false, "echo_due": false})
 		out.table[pid] = rows
 		out.random_cards[pid] = clampi(_number(_seat_value(d.get("random_cards"), pid), 0), 0, MAX_RANDOM)
 		out.lives[pid] = clampi(_number(_seat_value(d.get("lives"), pid), 20), 1, MAX_LIFE)

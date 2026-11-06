@@ -26,6 +26,9 @@ extends RefCounted
 ##   silencers that also retype   layer 6 (dependency) (Titania's Song)
 ##   type-changing statics        layer 4             (Blood Moon, Kormus Bell)
 ##   floating statics             the same layers     (Titania's Song, once gone)
+##   type changes that SET types  layer 4, by stamp   (Opal Caryatid, Soul
+##                                                     Sculptor — Pack 10)
+##   card-type readers            layer 4 (dependency) (Opalescence)
 ##   "loses all abilities"        layer 6 (dependency) (Humility)
 ##   base-P/T sets, BY TIMESTAMP  layer 7a/7b         (Nightmare, Humility's
 ##                                                     1/1, Island of Wak-Wak,
@@ -64,7 +67,16 @@ extends RefCounted
 ## than by analysis: a retyper that READS a land type (Conversion, the
 ## pool's only one) is applied after every retyper that WRITES one, so a
 ## Mishra's Factory under a Blood Moon and a Conversion is a Plains
-## whichever entered first.
+## whichever entered first. Pack 10 adds the card-type twin: a static that
+## decides by CARD TYPE whom it animates (Opalescence) applies after every
+## other layer-4 writer, the type changes that SET a type included.
+##
+## ONE EFFECT, SEVERAL LAYERS (CR 613.6, Pack 10). A source that loses its
+## abilities in layer 6 contributes nothing in the later layers — except the
+## later halves of an effect that already STARTED: a keyed static half
+## ([method StaticAbility.part_of]) that ran in layer 4 or as a silencer
+## keeps its 7b/7c halves. Humility made a creature by Opalescence humbles
+## itself and still sets every creature 1/1 ([member _started]).
 
 ## How long a floating effect lasts (CR 611.2b — a one-shot effect that
 ## creates a continuous effect states its own duration).
@@ -92,12 +104,21 @@ extends RefCounted
 ##   upkeep of turn N+2. The entry stamps the turn it was created on
 ##   (`lasts_turn`) to tell the two apart.
 ##
+## - [constant Duration.UNTIL_EVENT] (Pack 10 E3) — "until a player casts a
+##   creature spell" (Soul Sculptor). Ends AS a game event happens: the
+##   entry carries `ends_on` ({event_type, predicate}, see
+##   [method until_spell_cast]) and [method expire_on_event], called by
+##   [method MtgGame.dispatch_event] before anything hears the event, drops
+##   it (CR 611.2b; a spell "is cast" at CR 601.2i, before it resolves).
+##   `ends_on` may ride on an entry with another duration too ("until end
+##   of turn or until ...") — whichever comes first ends it.
+##
 ## An entry carries `lasts` (one of these) and, for the two upkeep
 ## durations, `lasts_pid` (plus `lasts_turn` for the second). Absent, all
 ## default to END_OF_TURN, which is why every existing caller keeps
 ## working untouched.
 enum Duration { END_OF_TURN, END_OF_COMBAT, UNTIL_UPKEEP_OF, INDEFINITE,
-	UNTIL_END_OF_UPKEEP_OF, UNTIL_UNTAP_OF }
+	UNTIL_END_OF_UPKEEP_OF, UNTIL_UNTAP_OF, UNTIL_EVENT }
 
 ## THE LAYER-6 CLOCK (CR 613.7). Every effect that GRANTS or REMOVES an
 ## ability is stamped with the moment it was created, and
@@ -208,6 +229,33 @@ var _ability_grants: Array[Dictionary] = []
 ## an effect that is meant to outlive its source must not be dropped when
 ## that source leaves. Duration is the only thing that ends one.
 var _floating_statics: Array[Dictionary] = []
+
+
+## Pack 10 E3 — active TYPE CHANGES that SET a card type (CR 205.1a): "it
+## becomes a 2/2 Soldier creature" (the Opal, Veiled, Hidden and Lurking
+## enchantments — no longer an enchantment), "this permanent becomes an
+## enchantment" (Opal Acrolith, Hidden Stag, Soul Sculptor — no longer a
+## creature), as {instance_id, set_types: int, set_subtypes: Array[String],
+## retain_types: bool, until_combat, lasts, lasts_pid, ts[, ends_on]}.
+## [member _animations] only ever ADD a type; these replace. Applied in layer
+## 4 on ONE timestamp clock with the type-changing statics and the
+## animations' type half ([method _layer_four_writers]); the statics that
+## READ a card type (Opalescence) apply after all of them (CR 613.8a). See
+## [method add_type_change].
+var _type_changes: Array[Dictionary] = []
+
+## Pack 10 E3 — how many entries were registered with an `ends_on` event
+## ([constant Duration.UNTIL_EVENT]) since [method expire_on_event] last
+## found none left. 0 lets that method, which runs on EVERY event the game
+## dispatches, return at once on the common board. Journaled with the lists.
+var _event_watch := 0
+
+## Pack 10 E3 — CR 613.6, DERIVED (rebuilt by every [method recalculate],
+## never journaled): source instance id → {part key: true} for each keyed
+## static half ([member StaticAbility.part_key]) that has RUN this
+## recalculation in layer 4 or as a silencer. A silenced source's other
+## halves with a started key still apply in the later layers.
+var _started: Dictionary = {}
 
 
 ## Active until-end-of-turn / until-end-of-combat KEYWORD GRANTS ("gains
@@ -371,20 +419,22 @@ func add_until_eot_animation(instance_id: int, add_types: int,
 ## [param lasts] / [param lasts_pid]: a longer duration than end of turn —
 ## Brine Hag's indefinite 0/2 curse (see [enum Duration]); [param
 ## lasts_turn] is the turn the effect is created on, which
-## UNTIL_END_OF_UPKEEP_OF needs (Halfdane's borrowed body).
+## UNTIL_END_OF_UPKEEP_OF needs (Halfdane's borrowed body). [param ends_on]
+## (Pack 10 E3): an event that ends it, see [constant Duration.UNTIL_EVENT].
 func add_until_eot_base_pt(instance_id: int, power: int, toughness: int,
 		until_end_of_combat := false, lasts := Duration.END_OF_TURN,
-		lasts_pid := -1, lasts_turn := -1, exact := false) -> void:
+		lasts_pid := -1, lasts_turn := -1, exact := false,
+		ends_on: Dictionary = {}) -> void:
 	if _phased(instance_id): return   # CR 702.26e
 	_rec(&"_base_pt")
-	_base_pt.append({
+	_base_pt.append(_ending_on({
 		"instance_id": instance_id,
 		"set_power": power >= 0 or exact, "power": power,
 		"set_toughness": toughness >= 0 or exact, "toughness": toughness,
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid, "lasts_turn": lasts_turn,
 		"ts": _stamp(),   # Pack 9 E5: layer 7b in timestamp order (CR 613.7)
-	})
+	}, ends_on))
 
 
 ## Register "gains <type>walk until end of turn" on an instance.
@@ -459,12 +509,16 @@ func add_until_eot_keywords(instance_id: int, keywords: Array,
 ## Register [param ability] as a FLOATING static — one that goes on
 ## applying after [param source] has left the battlefield (Titania's Song).
 ## See [member _floating_statics]. [param lasts] defaults to END_OF_TURN,
-## which is the duration the pool's only user prints.
+## which is the duration the pool's only user prints. [param ends_on]
+## (Pack 10 E3): an event that ends it — Soul Sculptor's "loses all
+## abilities until a player casts a creature spell", see
+## [constant Duration.UNTIL_EVENT].
 func add_floating_static(source: CardInstance, ability: StaticAbility,
 		lasts := Duration.END_OF_TURN, lasts_pid := -1,
-		until_end_of_combat := false, bound_instance_id := -1) -> void:
+		until_end_of_combat := false, bound_instance_id := -1,
+		ends_on: Dictionary = {}) -> void:
 	_rec(&"_floating_statics")
-	_floating_statics.append({
+	_floating_statics.append(_ending_on({
 		"instance_id": bound_instance_id, "source": source, "ability": ability,
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid,
@@ -472,7 +526,145 @@ func add_floating_static(source: CardInstance, ability: StaticAbility,
 		# than every permanent still on the table entered — so its layer-6
 		# half sorts after theirs (CR 613.7).
 		"ts": _stamp(),
-	})
+	}, ends_on))
+
+
+# ------------------------------------------- Pack 10 E3: type changes --
+
+## Register "[param instance_id] BECOMES <types>" — a type change that SETS
+## the card types (CR 205.1a) rather than adding one:
+## [codeblock]
+## {"set_types": Mtg.CardType.CREATURE,   # the new card types (required)
+##  "set_subtypes": ["soldier"],           # optional; lowercase
+##  "retain_types": false}                 # optional; true = "in addition"
+## [/codeblock]
+## - The new card types REPLACE the old ones, and a subtype goes with its
+##   card type: a Grizzly Bears that becomes an enchantment is no Bear, a
+##   Mishra's Factory no Assembly-Worker and no land (205.1a).
+## - A given subtype replaces the existing subtypes OF ITS OWN KIND only
+##   (creature types, land types, ...; [method subtype_card_type]): a land
+##   that becomes a "Soldier land creature" keeps Forest.
+## - `retain_types` keeps every prior card type and subtype (CR 205.1b,
+##   "in addition to its other types") and still replaces the creature
+##   types when creature types are given ("a [type] artifact creature").
+## The SIZE is a separate layer-7b effect: pair it with
+## [method add_until_eot_base_pt] at the same duration ("it becomes a 2/2
+## Soldier creature" = this + a 2/2 base). Keywords: [method
+## MtgGame.grant_keyword_permanently].
+##
+## [param lasts] defaults to INDEFINITE — no stated duration means the rest
+## of the game (CR 611.2a), and only the object leaving the battlefield
+## ends it ([method forget_instance], CR 400.7); a control change does not.
+## [param ends_on]: an event that ends it ([constant Duration.UNTIL_EVENT],
+## Soul Sculptor). Stamped on the layer-4 clock (CR 613.7): the later of two
+## changes wins, an animation made after it adds its types on top, one made
+## before it is overwritten. An INDEFINITE full set makes every older
+## change of the same object moot, so those are dropped (the list stays as
+## short as the board, however often Opal Acrolith flips).
+func add_type_change(instance_id: int, change: Dictionary,
+		lasts := Duration.INDEFINITE, lasts_pid := -1,
+		ends_on: Dictionary = {}) -> void:
+	if _phased(instance_id): return   # CR 702.26e
+	var subtypes: Array[String] = []
+	for subtype in change.get("set_subtypes", []):
+		subtypes.append(String(subtype).to_lower())
+	var retain := bool(change.get("retain_types", false))
+	_rec(&"_type_changes")
+	if lasts == Duration.INDEFINITE and not retain and ends_on.is_empty():
+		for i in range(_type_changes.size() - 1, -1, -1):
+			if int(_type_changes[i]["instance_id"]) == instance_id:
+				_type_changes.remove_at(i)
+	_type_changes.append(_ending_on({
+		"instance_id": instance_id,
+		"set_types": int(change.get("set_types", 0)),
+		"set_subtypes": subtypes,
+		"retain_types": retain,
+		"until_combat": false,
+		"lasts": lasts, "lasts_pid": lasts_pid,
+		"ts": _stamp(),
+	}, ends_on))
+
+
+## "Until a player casts a <kind> spell" — the `ends_on` an adder takes
+## (Soul Sculptor: [param types] = CREATURE). The spell's types are read
+## LIVE off the stack (an Opalescence-made creature card in hand is still
+## an enchantment spell). [param caster] >= 0 narrows it to one seat ("until
+## you cast ..."). The effect ends as the spell BECOMES cast (CR 601.2i),
+## before it resolves, and before anything triggered by the cast is looked
+## at (CR 603.10: the continuous effects that exist immediately after the
+## event decide what the triggers see).
+static func until_spell_cast(types: int, caster := -1) -> Dictionary:
+	return {"event_type": Mtg.EventType.SPELL_CAST,
+		"predicate": ContinuousEffects._spell_cast_matches.bind(types, caster)}
+
+
+static func _spell_cast_matches(_game: MtgGame, event: GameEvent, types: int,
+		caster: int) -> bool:
+	var spell: CardInstance = event.data.get("instance", null)
+	if spell == null or (types != 0 and not spell.is_type(types)):
+		return false
+	return caster < 0 or int(event.data.get("controller", -1)) == caster
+
+
+## Attach [param ends_on] to [param entry] (an adder's new entry) and note
+## that [method expire_on_event] has something to look at.
+func _ending_on(entry: Dictionary, ends_on: Dictionary) -> Dictionary:
+	if not ends_on.is_empty():
+		entry["ends_on"] = ends_on
+		_rec(&"_event_watch")
+		_event_watch += 1
+	return entry
+
+
+## Pack 10 E3 — [constant Duration.UNTIL_EVENT]: drop every entry whose
+## `ends_on` names this event and whose predicate (`func(game, event) ->
+## bool`, none = any) accepts it. Called by [method MtgGame.dispatch_event]
+## BEFORE the event's listeners hear it, which recalculates when this
+## returns true: "until a player casts a creature spell" is over at the
+## moment the spell becomes cast (CR 601.2i), so a trigger on that cast
+## sees the permanent as it is without the effect (CR 603.10). Journaled
+## ([method record_all]) only when something ends; one integer test
+## otherwise ([member _event_watch]).
+func expire_on_event(game: MtgGame, type: int, data: Dictionary) -> bool:
+	if _event_watch == 0:
+		return false
+	var event: GameEvent = null
+	var watched := false
+	var hits := 0
+	for list in _all_lists():
+		for entry in list:
+			var ends: Dictionary = entry.get("ends_on", {})
+			if ends.is_empty():
+				continue
+			watched = true
+			if int(ends.get("event_type", -1)) != type:
+				continue
+			if event == null:
+				event = GameEvent.new(type, data)
+			var predicate: Callable = ends.get("predicate", Callable())
+			if predicate.is_valid() and not bool(predicate.call(game, event)):
+				continue
+			entry["_ends_now"] = true
+			hits += 1
+	if not watched:
+		_rec(&"_event_watch")
+		_event_watch = 0
+		return false
+	if hits == 0:
+		return false
+	# The marks went onto the live entries; take them off again before the
+	# journal copies the lists, so a rewind restores clean entries.
+	var doomed: Array = []
+	for list in _all_lists():
+		for i in list.size():
+			if list[i].has("_ends_now"):
+				list[i].erase("_ends_now")
+				doomed.append([list, i])
+	record_all()
+	doomed.reverse()   # last index first within each list
+	for pair in doomed:
+		(pair[0] as Array).remove_at(int(pair[1]))
+	return true
 
 
 ## Register "[param instance_id] gains [param ability]" (Life Matrix).
@@ -606,7 +798,16 @@ func forget_instance(instance_id: int) -> void:
 ## otherwise counted an animated Mishra's Factory held home as a blocker
 ## for a turn on which it would not be a creature
 ## ([method AiPlayer._build_combat_model], 2026-09-08).
+## Pack 10 E3: a type change ([method add_type_change]) that makes it a
+## creature for longer than this turn (an Opal enchantment that "becomes a
+## 2/2 Soldier creature", indefinitely) answers false whatever animation is
+## on it too — it is still a creature next turn.
 func creature_until_end_of_turn(instance_id: int) -> bool:
+	for change in _type_changes:
+		if int(change["instance_id"]) == instance_id \
+				and (int(change["set_types"]) & Mtg.CardType.CREATURE) != 0 \
+				and int(change.get("lasts", Duration.END_OF_TURN)) != Duration.END_OF_TURN:
+			return false
 	var found := false
 	for animation in _animations:
 		if int(animation["instance_id"]) != instance_id \
@@ -624,7 +825,7 @@ func _all_lists() -> Array:
 	return [_floating, _animations, _switches, _losses, _keyword_grants,
 		_protection_grants, _damage_immunities, _base_pt, _combat_prevention,
 		_landwalk_grants, _rampage_grants, _color_changes, _block_restrictions,
-		_ability_grants, _floating_statics]
+		_ability_grants, _floating_statics, _type_changes]
 
 
 ## The same lists BY NAME, for the journal ([method record_all]) — kept
@@ -633,7 +834,8 @@ const LIST_NAMES: Array[StringName] = [&"_floating", &"_animations",
 	&"_switches", &"_losses", &"_keyword_grants", &"_protection_grants",
 	&"_damage_immunities", &"_base_pt", &"_combat_prevention",
 	&"_landwalk_grants", &"_rampage_grants", &"_color_changes",
-	&"_block_restrictions", &"_ability_grants", &"_floating_statics"]
+	&"_block_restrictions", &"_ability_grants", &"_floating_statics",
+	&"_type_changes"]
 
 
 ## Drop all until-end-of-turn effects (cleanup step, CR 514.2).
@@ -736,7 +938,7 @@ static func parse_pt_counter(kind: String) -> Vector2i:
 ## power or toughness ([member StaticAbility.reads_pt]), which every P/T
 ## layer has to have finished with before their question can be answered.
 enum _StaticPass { SILENCE, LAND_TYPES, LAND_TYPE_READERS, TYPES, BASE_PT, REST,
-	PT_READERS, SILENCE_LATE, BASE_PT_READERS }
+	PT_READERS, SILENCE_LATE, BASE_PT_READERS, TYPE_READERS }
 
 
 ## Run the FLOATING statics ([member _floating_statics]) that belong to
@@ -864,6 +1066,11 @@ static func _runs_in(ability: StaticAbility, which: int) -> bool:
 			return ability.changes_land_types and ability.reads_land_types
 		_StaticPass.TYPES:
 			return ability.changes_types and not ability.changes_land_types \
+				and not ability.silences_abilities and not ability.reads_card_types
+		# Pack 10 E3: a layer-4 static that decides by CARD TYPE whom it
+		# affects (Opalescence) — after every other layer-4 writer, CR 613.8a.
+		_StaticPass.TYPE_READERS:
+			return ability.reads_card_types and not ability.changes_land_types \
 				and not ability.silences_abilities
 		_StaticPass.BASE_PT:
 			return ability.sets_base_pt and not ability.changes_types \
@@ -1173,6 +1380,8 @@ func recalculate(game: MtgGame) -> void:
 	# battlefield indexes the next line rebuilds follow the new text.
 	_graveyard_top_copies(game)
 	_silence_strips.clear()
+	if not _started.is_empty():
+		_started.clear()   # Pack 10 E3: CR 613.6, derived per pass
 	var battlefield: Array[CardInstance] = game.all_battlefield()
 
 	# Pass 1: reset to printed values; ANIMATIONS then rewrite the base
@@ -1188,6 +1397,7 @@ func recalculate(game: MtgGame) -> void:
 	game.melee_active_effects.clear()
 	game.untap_caps.clear()
 	game.untap_cap_sources.clear()
+	game.untap_kind_choices.clear()   # Storage Matrix rebuilds it (Pack 10 E9)
 	game.unlimited_land_plays.clear()
 	game.extra_land_plays.clear()
 	for p in game.players:
@@ -1203,6 +1413,7 @@ func recalculate(game: MtgGame) -> void:
 		p.min_life_from_damage = 0
 		p.artifact_damage_redirect = -1
 		p.combat_damage_redirect = -1   # Veteran Bodyguard rebuilds it
+		p.assigns_attackers_damage = false   # Pack 10 E6: Defensive Formation rebuilds it
 		p.damage_caps.clear()           # Forethought Amulet rebuilds it
 		p.static_prevention_shields.clear()
 		p.skips_untap_step = false      # Sands of Time rebuilds it
@@ -1302,10 +1513,14 @@ func recalculate(game: MtgGame) -> void:
 	# a Swamp in addition") was undone by it, and the Forest was an Island
 	# where CR 613.7 makes it an Island Swamp.
 	#
-	# SIMPLIFIED (docs/ROADMAP.md, "Simplified layers"): these two waves and
-	# [method _ordered_readers] are the only CR 613.8 dependency this engine
-	# resolves. No other dependency between two effects is detected; they
-	# apply in the order their layer's pass takes them.
+	# SIMPLIFIED (docs/ROADMAP.md, "Simplified layers"): these two waves,
+	# [method _ordered_readers], the card-type readers' wave after them
+	# (Pack 10 E3, [method _layer_four_readers]), the silencers' order in
+	# [method _silence_pass] and the readers of layers 6 and 7
+	# ([member StaticAbility.reads_abilities], [member StaticAbility.reads_pt])
+	# are the CR 613.8 dependencies this engine resolves, each by
+	# construction. No other dependency between two effects is detected;
+	# they apply in the order their layer's pass takes them.
 	for wave in [false, true]:
 		var which: int = _StaticPass.LAND_TYPE_READERS if wave else _StaticPass.LAND_TYPES
 		var entries: Array[Dictionary] = []
@@ -1339,17 +1554,16 @@ func recalculate(game: MtgGame) -> void:
 					or _tap_suspended(source, entry["ability"])):
 				continue
 			entry["ability"].apply.call(game, source)
+			_note_started(source, entry["ability"])
 	# 2a-2 — LAYER 4, the rest: animations that ADD a type ("all Swamps
-	# are 1/1 creatures"), reading the board the retypers just settled.
-	for inst in type_sources:
-		if inst.cur_abilities_silenced:
-			continue
-		for ability in inst.data.static_abilities:
-			if ability.changes_types and not ability.changes_land_types \
-					and not ability.silences_abilities \
-					and not _tap_suspended(inst, ability):
-				ability.apply.call(game, inst)
-	_floating_statics_pass(game, _StaticPass.TYPES)
+	# are 1/1 creatures"), reading the board the retypers just settled, and
+	# since Pack 10 the type changes that SET one ([member _type_changes]),
+	# all on one timestamp clock ([method _layer_four_writers]) — then the
+	# statics that decide by CARD TYPE whom they affect (Opalescence), which
+	# depend on every one of those (CR 613.8a) and so come last
+	# ([method _layer_four_readers]).
+	_layer_four_writers(game, type_sources)
+	_layer_four_readers(game, type_sources)
 	# 2a-3 — LAYER 6's DEPENDENCY HALF for a pure "loses all abilities"
 	# (Pack 9 E5, Humility): it applies to what layer 4 left a creature
 	# (Living Lands' Forests, an animated Mishra's Factory), and a source it
@@ -1417,9 +1631,12 @@ func recalculate(game: MtgGame) -> void:
 			inst.cur_toughness += delta.y * n
 
 	for inst in static_sources:
-		if inst.cur_abilities_silenced:
+		var silenced := inst.cur_abilities_silenced
+		if silenced and not _started.has(inst.id):
 			continue   # Titania's Song silenced it in an earlier pass
 		for ability in inst.data.static_abilities:
+			if silenced and not _continues(inst, ability):
+				continue   # Pack 10 E3: only a started effect goes on (CR 613.6)
 			# The silencers ran first, in 2a-0; they do not run again here,
 			# and neither does a layer-6 grant — pass 2c-0 above took it.
 			# A static that READS a power waits for pass 5, below; a
@@ -1540,7 +1757,8 @@ func recalculate(game: MtgGame) -> void:
 			if not ability.taps_source:
 				replaced.append(ability)
 				continue
-			for color in colors: replaced.append(ability.forcing_color(color, color == deep and not inst.cur_land_mana_replacements.has(color)))
+			# Contamination's "and amount" (Pack 10 E8): fixed in every variant.
+			for color in colors: replaced.append(ability.forcing_color(color, color == deep and not inst.cur_land_mana_replacements.has(color), false, ManaAbility.land_fixed_amount(inst, color)))
 		inst.cur_mana_abilities = replaced
 
 	# THE WARDS' PROTECTION (CR 702.16), merged after every other source of
@@ -1601,12 +1819,32 @@ func _silence_pass(game: MtgGame, which: int, type_sources: Array[CardInstance])
 		return
 	if entries.size() > 1:
 		entries.sort_custom(_by_timestamp_then_entry)
+	if entries.size() > 1 and which == _StaticPass.SILENCE_LATE:
+		# Pack 10 E3 — CR 613.8a-b: a floating PURE silencer (Soul
+		# Sculptor's "loses all abilities until ...") or one functioning
+		# from the stack can never lose its own ability, so a LIVE silencer
+		# whose source it reaches depends on it and applies after it
+		# whatever the timestamps: a Humility that a Sculptor's effect
+		# humbled never starts. Only the run order moves; each strip keeps
+		# its own timestamp for layer 6, and a pure silencer only raises
+		# flags, so nothing else can tell. (Not the early pass: a silencer
+		# that also retypes — Titania's Song — changes what the next one
+		# applies to, and there timestamp order decides, CR 613.8b.)
+		var ordered: Array[Dictionary] = []
+		for entry in entries:
+			if not entry.has("live"):
+				ordered.append(entry)
+		for entry in entries:
+			if entry.has("live"):
+				ordered.append(entry)
+		entries = ordered
 	var battlefield: Array[CardInstance] = game.all_battlefield()
 	for entry in entries:
 		var source: CardInstance = entry["source"]
 		if entry.has("live") and source.cur_abilities_silenced:
 			continue
 		_run_silencer(game, battlefield, entry["ability"], source, int(entry["ts"]))
+		_note_started(source, entry["ability"])
 
 
 ## Apply one silencer and note WHOM it silenced. A silencer's callback says
@@ -1714,9 +1952,12 @@ func _layer_seven_b(game: MtgGame, static_sources: Array[CardInstance]) -> void:
 	if _animations.is_empty() and _base_pt.is_empty() \
 			and _floating_statics.is_empty() and _stack_sources.is_empty():
 		for inst in static_sources:
-			if inst.cur_abilities_silenced:
+			var quiet := inst.cur_abilities_silenced
+			if quiet and not _started.has(inst.id):
 				continue
 			for ability in inst.data.static_abilities:
+				if quiet and not _continues(inst, ability):
+					continue   # Pack 10 E3: CR 613.6
 				if ability.sets_base_pt and not ability.changes_types \
 						and not ability.changes_abilities \
 						and not ability.silences_abilities \
@@ -1726,9 +1967,12 @@ func _layer_seven_b(game: MtgGame, static_sources: Array[CardInstance]) -> void:
 		return
 	var entries: Array[Dictionary] = []
 	for inst in static_sources:
-		if inst.cur_abilities_silenced:
+		var quiet := inst.cur_abilities_silenced
+		if quiet and not _started.has(inst.id):
 			continue
 		for ability in inst.data.static_abilities:
+			if quiet and not _continues(inst, ability):
+				continue   # Pack 10 E3: CR 613.6
 			if ability.sets_base_pt and _runs_in(ability, _StaticPass.BASE_PT) \
 					and not _tap_suspended(inst, ability):
 				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
@@ -1784,9 +2028,12 @@ func _layer_seven_b(game: MtgGame, static_sources: Array[CardInstance]) -> void:
 func _cda_readers_pass(game: MtgGame, static_sources: Array[CardInstance]) -> bool:
 	var entries: Array[Dictionary] = []
 	for inst in static_sources:
-		if inst.cur_abilities_silenced:
+		var quiet := inst.cur_abilities_silenced
+		if quiet and not _started.has(inst.id):
 			continue
 		for ability in inst.data.static_abilities:
+			if quiet and not _continues(inst, ability):
+				continue   # Pack 10 E3: CR 613.6
 			if ability.reads_abilities and ability.sets_base_pt \
 					and _runs_in(ability, _StaticPass.BASE_PT_READERS) \
 					and not _tap_suspended(inst, ability):
@@ -1877,3 +2124,212 @@ func _graveyard_top_copies(game: MtgGame) -> void:
 			inst.printed_data.card_name, wanted.card_name], inst)
 	if swapped:
 		game._battlefield_changed()
+
+
+# ------------------------------------------------ Pack 10 E3: layers --
+
+## CR 613.6: note that [param ability] of [param source] has RUN in an early
+## layer this recalculation, so its other keyed halves keep applying after
+## [param source] loses its abilities ([member _started]).
+func _note_started(source: CardInstance, ability: StaticAbility) -> void:
+	if ability.part_key == &"" or source == null:
+		return
+	var keys: Dictionary = _started.get(source.id, {})
+	keys[ability.part_key] = true
+	_started[source.id] = keys
+
+
+## Has a "loses all abilities" effect NEWER than [param stamp] (a value from
+## [method next_timestamp]) reached [param inst] in this recalculation? For
+## an ability a card grants through a floating static that writes a live
+## field the layer-6 strip does not clear — Veiled Serpent's "can't attack
+## unless defending player controls an Island" on
+## [member CardInstance.cur_cant_attack]: a grant made at [param stamp] is
+## removed by a Humility that arrived later and survives one that was
+## there first (CR 613.7), exactly as [method _layer_six] treats a keyword.
+## Answers from the silence passes onward (the layer-7 passes, the REST
+## pass where such a static runs).
+func ability_removed_since(inst: CardInstance, stamp: int) -> bool:
+	for strip in _silence_strips:
+		if int(strip["ts"]) > stamp and (strip["victims"] as Array).has(inst):
+			return true
+	return false
+
+
+## Does [param ability] of the SILENCED [param source] still apply — is it
+## one half of an effect whose other half already started (CR 613.6)?
+func _continues(source: CardInstance, ability: StaticAbility) -> bool:
+	if ability.part_key == &"":
+		return false
+	var keys: Dictionary = _started.get(source.id, {})
+	return keys.has(ability.part_key)
+
+
+## LAYER 4's writers after the land retypers: the type-changing statics
+## (Living Lands, Kormus Bell, Animate Artifact's creature type), the
+## floating and stack ones, and — Pack 10 E3 — the type changes that SET a
+## card type ([member _type_changes]). Without a type change on the board
+## this is the pass as it always ran (battlefield order, which is entry
+## order, then the floating ones). With one, every writer joins ONE list in
+## timestamp order (CR 613.7), the animations' type half included (pass 1
+## added it already; adding it again at its own stamp is how an animation
+## made AFTER a type change still adds its types, and one made before it is
+## overwritten — adding a type twice changes nothing).
+func _layer_four_writers(game: MtgGame, type_sources: Array[CardInstance]) -> void:
+	if _type_changes.is_empty():
+		for inst in type_sources:
+			if inst.cur_abilities_silenced:
+				continue
+			for ability in inst.data.static_abilities:
+				if _runs_in(ability, _StaticPass.TYPES) \
+						and not _tap_suspended(inst, ability):
+					ability.apply.call(game, inst)
+					_note_started(inst, ability)
+		_floating_statics_pass(game, _StaticPass.TYPES)
+		return
+	var entries: Array[Dictionary] = []
+	for inst in type_sources:
+		if inst.cur_abilities_silenced:
+			continue
+		for ability in inst.data.static_abilities:
+			if _runs_in(ability, _StaticPass.TYPES) and not _tap_suspended(inst, ability):
+				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
+					"source": inst, "ability": ability, "live": true})
+	for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
+		for stacked in spell.data.stack_static_abilities:
+			if _runs_in(stacked, _StaticPass.TYPES):
+				entries.append({"ts": _timestamp + 1, "i": entries.size(),
+					"source": spell, "ability": stacked})
+	for entry in _floating_statics:
+		var floater: StaticAbility = entry["ability"]
+		if _runs_in(floater, _StaticPass.TYPES):
+			entries.append({"ts": int(entry.get("ts", 0)), "i": entries.size(),
+				"source": entry["source"], "ability": floater})
+	for animation in _animations:
+		if int(animation["add_types"]) != 0 or not animation["add_subtypes"].is_empty():
+			entries.append({"ts": int(animation.get("ts", -1)), "i": entries.size(),
+				"animation": animation})
+	for change in _type_changes:
+		entries.append({"ts": int(change["ts"]), "i": entries.size(), "change": change})
+	if entries.size() > 1:
+		entries.sort_custom(_by_timestamp_then_entry)
+	for entry in entries:
+		if entry.has("change"):
+			_apply_type_change(game, entry["change"])
+		elif entry.has("animation"):
+			var animation: Dictionary = entry["animation"]
+			var body := game.find_instance(int(animation["instance_id"]))
+			if body == null or body.zone != Mtg.Zone.BATTLEFIELD or body.phased_out:
+				continue
+			body.cur_types |= int(animation["add_types"])
+			for subtype in animation["add_subtypes"]:
+				if not body.cur_subtypes.has(subtype):
+					body.cur_subtypes.append(subtype)
+		else:
+			var source: CardInstance = entry["source"]
+			if entry.has("live") and source.cur_abilities_silenced:
+				continue
+			entry["ability"].apply.call(game, source)
+			_note_started(source, entry["ability"])
+
+
+## LAYER 4's CARD-TYPE READERS (Pack 10 E3, [member
+## StaticAbility.reads_card_types] — Opalescence's "each other non-Aura
+## enchantment is a creature"). A type change decides what such a static
+## applies to — the Opal creature is no enchantment any more, the creature
+## a Soul Sculptor made an enchantment is one — so the reader depends on it
+## and applies after every writer whatever the timestamps (CR 613.8a-b);
+## among themselves the readers go in timestamp order (they only ADD a
+## type, so none changes what another applies to).
+func _layer_four_readers(game: MtgGame, type_sources: Array[CardInstance]) -> void:
+	var entries: Array[Dictionary] = []
+	for inst in type_sources:
+		if inst.cur_abilities_silenced:
+			continue
+		for ability in inst.data.static_abilities:
+			if _runs_in(ability, _StaticPass.TYPE_READERS) \
+					and not _tap_suspended(inst, ability):
+				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
+					"source": inst, "ability": ability, "live": true})
+	for spell in _stack_sources:
+		for stacked in spell.data.stack_static_abilities:
+			if _runs_in(stacked, _StaticPass.TYPE_READERS):
+				entries.append({"ts": _timestamp + 1, "i": entries.size(),
+					"source": spell, "ability": stacked})
+	for entry in _floating_statics:
+		var floater: StaticAbility = entry["ability"]
+		if _runs_in(floater, _StaticPass.TYPE_READERS):
+			entries.append({"ts": int(entry.get("ts", 0)), "i": entries.size(),
+				"source": entry["source"], "ability": floater})
+	if entries.is_empty():
+		return
+	if entries.size() > 1:
+		entries.sort_custom(_by_timestamp_then_entry)
+	for entry in entries:
+		var source: CardInstance = entry["source"]
+		if entry.has("live") and source.cur_abilities_silenced:
+			continue
+		entry["ability"].apply.call(game, source)
+		_note_started(source, entry["ability"])
+
+
+## Apply one [member _type_changes] entry — CR 205.1a; see
+## [method add_type_change] for the three rules it follows.
+func _apply_type_change(game: MtgGame, change: Dictionary) -> void:
+	var inst := game.find_instance(int(change["instance_id"]))
+	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or inst.phased_out:
+		return
+	var set_types := int(change["set_types"])
+	var new_types := (inst.cur_types | set_types) if bool(change["retain_types"]) \
+		else set_types
+	var given: Array = change["set_subtypes"]
+	var given_kinds := 0
+	for subtype in given:
+		given_kinds |= subtype_card_type(String(subtype))
+	var kept: Array[String] = []
+	for subtype in inst.cur_subtypes:
+		var kind := subtype_card_type(subtype)
+		if (kind & given_kinds) != 0:
+			continue   # replaced from its own set (205.1a)
+		if (kind & new_types) == 0:
+			continue   # its card type was removed (205.1a)
+		kept.append(subtype)
+	for subtype in given:
+		# CR 205.3d: no subtype without its card type.
+		if not kept.has(subtype) and (subtype_card_type(String(subtype)) & new_types) != 0:
+			kept.append(String(subtype))
+	inst.cur_types = new_types
+	inst.cur_subtypes.assign(kept)
+
+
+## The land types (CR 205.3i) the pool and its successors print — every
+## other word that is not an artifact, enchantment or spell type below is a
+## creature type (CR 205.3m).
+const _LAND_SUBTYPES: Array[String] = ["plains", "island", "swamp", "mountain",
+	"forest", "desert", "gate", "lair", "locus", "mine", "power-plant", "tower",
+	"urza's", "cave", "sphere", "town"]
+const _ENCHANTMENT_SUBTYPES: Array[String] = ["aura", "cartouche", "class",
+	"curse", "rune", "saga", "shard", "shrine", "background", "case", "role", "room"]
+const _ARTIFACT_SUBTYPES: Array[String] = ["equipment", "fortification",
+	"vehicle", "contraption", "attraction", "blood", "clue", "food", "gold",
+	"incubator", "map", "powerstone", "treasure", "junk", "bobblehead",
+	"spacecraft"]
+const _SPELL_SUBTYPES: Array[String] = ["arcane", "trap", "adventure", "lesson",
+	"chorus", "omen"]
+
+
+## Which card type a SUBTYPE belongs to (CR 205.3): LAND for a land type,
+## ARTIFACT / ENCHANTMENT for theirs, INSTANT | SORCERY for a spell type, and
+## CREATURE for everything else (the creature types). Lowercase, as
+## [member CardInstance.cur_subtypes] holds them. Public: what a type change
+## keeps and drops ([method add_type_change]) is decided by it.
+static func subtype_card_type(subtype: String) -> int:
+	if _LAND_SUBTYPES.has(subtype):
+		return Mtg.CardType.LAND
+	if _ENCHANTMENT_SUBTYPES.has(subtype):
+		return Mtg.CardType.ENCHANTMENT
+	if _ARTIFACT_SUBTYPES.has(subtype):
+		return Mtg.CardType.ARTIFACT
+	if _SPELL_SUBTYPES.has(subtype):
+		return Mtg.CardType.INSTANT | Mtg.CardType.SORCERY
+	return Mtg.CardType.CREATURE

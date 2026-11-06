@@ -62,10 +62,12 @@ const VERIFY_PACK_5_FLAG := "--verify-pack-5"
 const VERIFY_PACK_8_FLAG := "--verify-pack-8"
 ## The Tempest block (Pack 9): [method pack_9_probe] behind the same door.
 const VERIFY_PACK_9_FLAG := "--verify-pack-9"
+## The Urza block (Pack 10): [method pack_10_probe] behind the same door.
+const VERIFY_PACK_10_FLAG := "--verify-pack-10"
 ## Every pack check, for [method launch_help].
 const VERIFY_PACK_FLAGS: Array[String] = [VERIFY_PACK_1_FLAG, VERIFY_PACK_2_FLAG,
 	VERIFY_PACK_3_FLAG, VERIFY_PACK_4_FLAG, VERIFY_PACK_5_FLAG,
-	VERIFY_PACK_8_FLAG, VERIFY_PACK_9_FLAG]
+	VERIFY_PACK_8_FLAG, VERIFY_PACK_9_FLAG, VERIFY_PACK_10_FLAG]
 ## A tester's tool, for walking a campaign quickly: started with
 ## `-- --debug-win`, Ctrl+Shift+2 visits the Pack 2 departure coast, and
 ## Ctrl+Shift+W wins a duel played on this computer
@@ -127,6 +129,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_9_FLAG):
 		_verify_exported_pack_9()
+		return
+	if OS.get_cmdline_user_args().has(VERIFY_PACK_10_FLAG):
+		_verify_exported_pack_10()
 		return
 	if wants_help(OS.get_cmdline_user_args()):
 		print(launch_help(str(ProjectSettings.get_setting("application/config/version", ""))))
@@ -633,7 +638,9 @@ static func launch_help(version: String) -> String:
 		"  %-22s the AutoDeck builder" % (AUTO_DECK_FLAG + " ..."),
 		"  %-22s check, packs, cards: answers as JSON" % (LAB_QUERY_FLAG + " ..."),
 		"  %-22s one duel through a pipe, a program in a seat" % (REFEREE_FLAG + " ..."),
-		"  %-22s check card pack N's zip, then quit (N: %s)" % ["--verify-pack-N", ",".join(packs)],
+		# "pack" alone (2026-11-06): with Pack 10 the list is two digits
+		# longer, and "card pack" took the line past 79 columns.
+		"  %-22s check pack N's zip, then quit (N: %s)" % ["--verify-pack-N", ",".join(packs)],
 		"",
 		"Environment:",
 		"  %-22s the timing log, as %s" % [PerfLog.ENV + "=1", PerfLog.FLAG],
@@ -1230,6 +1237,117 @@ static func pack_9_probe() -> Dictionary:
 			PACK_9_FALLBACKS, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
 	# The storm, keep and bird glyphs and their six Extras medallions.
 	for code in TempestBlockPack.SET_COUNTS:
+		for key in ["set_icon_" + code, "filter_%s_on" % code, "filter_%s_off" % code]:
+			var symbol := GameSkin.our_art(key)
+			if symbol == null or symbol.get_image() == null or symbol.get_image().is_empty():
+				failures.append("missing UI texture: " + key)
+			else:
+				counts.textures += 1
+	Settings.set_value("enabled_card_packs", before, false)
+	CardPacks._configure_registry()
+	return {"failures": failures, "counts": counts}
+
+
+## The Urza block (Pack 10) in the RUNNING binary — an export, or the
+## source tree — with the real external ZIP (SHANDALAR_PACK_10 or the card
+## pack folder) under an isolated profile. Prints one summary line either
+## way and exits 0 when every check of [method pack_10_probe] passed, 1
+## otherwise. Editor success is not export success: run it on the export.
+func _verify_exported_pack_10() -> void:
+	var report := pack_10_probe()
+	var failures: Array = report["failures"]
+	var counts: Dictionary = report["counts"]
+	for why in failures: printerr("PACK 10 EXPORT VERIFY FAILED: " + String(why))
+	print("PACK 10 EXPORT RESOURCES %s — %d identities; %d/%d dormant scripts loaded; %d/%d artwork pictures and %d/%d skin fallbacks decoded; %d/9 UI textures; %d rules pending" % [
+		"OK" if failures.is_empty() else "FAILED", counts.identities,
+		counts.scripts, PACK_10_SCRIPTS, counts.art, PACK_10_ART, counts.fallbacks,
+		PACK_10_FALLBACKS, counts.textures, counts.pending])
+	get_tree().quit(0 if failures.is_empty() else 1)
+
+
+## What [method pack_10_probe] expects of the real archive: the pool with
+## Pack 10 alone, the 591 new identities plus the 18 shared reprints it
+## provides, an art crop and a full-card scan for each of the 636
+## printings, and both fallbacks for each of the 609 names.
+const PACK_10_POOL := 1506
+const PACK_10_SCRIPTS := 609
+const PACK_10_ART := 1272
+const PACK_10_FALLBACKS := 1218
+
+
+## The checks behind [constant VERIFY_PACK_10_FLAG]: {failures, counts}.
+## Enables Pack 10 IN MEMORY ONLY (never saved) and restores the previous
+## selection before returning. Static, so the suite runs the very same
+## checks against its metadata-only Pack 10 fixture, whose missing pictures
+## are then its only other failures (tests/ui/test_pack_10_verify_probe.gd).
+## A name still carrying its family dispatcher's `_pending` cast guard is
+## counted and reported as ONE failure line: the probe passes whole only
+## once every Urza block card has its rules (the catalogue gate,
+## tests/cards/test_pack_10_catalogue.gd, is the same finish line).
+static func pack_10_probe() -> Dictionary:
+	var counts := {"identities": 0, "scripts": 0, "art": 0, "fallbacks": 0,
+		"textures": 0, "pending": 0}
+	var failures: Array[String] = []
+	if not CardPacks.has_pack(UrzaBlockPack.ID):
+		failures.append("the exact Pack 10 ZIP was not discovered or validated")
+		return {"failures": failures, "counts": counts}
+	var before := Settings.enabled_card_packs()
+	Settings.set_value("enabled_card_packs", [UrzaBlockPack.ID], false)
+	CardPacks._configure_registry()
+	CardRegistry.ensure_loaded()
+	counts.identities = CardRegistry.size()
+	if CardRegistry.size() != PACK_10_POOL:
+		failures.append("expected %d identities with Pack 10 alone, found %d" % [PACK_10_POOL, CardRegistry.size()])
+	for code in UrzaBlockPack.SET_COUNTS:
+		var wanted := int(UrzaBlockPack.SET_COUNTS[code][1])
+		if CardRegistry.names_in_set(code).size() != wanted:
+			failures.append("expected %d %s names, found %d" % [wanted, code, CardRegistry.names_in_set(code).size()])
+	# Every dormant script: the 591 new names and the 18 shared reprints.
+	var rows := UrzaBlockPack.scripts()
+	if rows.size() != PACK_10_SCRIPTS:
+		failures.append("expected %d dormant scripts, the contract lists %d" % [PACK_10_SCRIPTS, rows.size()])
+	var pending: Array[String] = []
+	for row in rows:
+		var name := String(row.name)
+		var path := String(row.path)
+		if not ResourceLoader.exists(path) or load(path) == null or not CardRegistry.has_card(name):
+			failures.append("dormant script did not load: %s (%s)" % [name, path])
+			continue
+		counts.scripts += 1
+		var card := CardRegistry.get_card(name)
+		if card.cast_condition.is_valid() and card.cast_condition.get_method() == "_pending":
+			pending.append(name)
+	counts.pending = pending.size()
+	if not pending.is_empty():
+		failures.append("rules pending: %d names still carry the `_pending` cast guard, e.g. %s" % [
+			pending.size(), ", ".join(PackedStringArray(pending.slice(0, 4)))])
+	# Every picture of every printing, decoded — not merely present.
+	var missing: Array[String] = []
+	for row in UrzaBlockPack.printings():
+		for full in [false, true]:
+			var path := CardPacks.art_path(String(row.name), String(row.set), full, String(row.collector_number))
+			var picture := Image.load_from_file(path) if path != "" else null
+			if picture == null or picture.is_empty():
+				missing.append("%s/%s #%s%s" % [row.set, row.name, row.collector_number, " (card)" if full else ""])
+			else:
+				counts.art += 1
+	if counts.art != PACK_10_ART:
+		failures.append("artwork: %d of %d pictures decoded; missing %d, e.g. %s" % [counts.art,
+			PACK_10_ART, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
+	var named: Array[String] = UrzaBlockPack.new_names()
+	for shared_name in UrzaBlockPack.shared(): named.append(String(shared_name))
+	missing.clear()
+	for name in named:
+		for suffix in [".jpg", "_card.jpg"]:
+			var path: String = "res://skin/cardart/" + UrzaBlockPack.snake(name) + String(suffix)
+			var picture := Image.load_from_file(path) if FileAccess.file_exists(path) else null
+			if picture == null or picture.is_empty(): missing.append(path.get_file())
+			else: counts.fallbacks += 1
+	if counts.fallbacks != PACK_10_FALLBACKS:
+		failures.append("skin/cardart fallbacks: %d of %d decoded; missing %d, e.g. %s" % [counts.fallbacks,
+			PACK_10_FALLBACKS, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
+	# The three set glyphs and their six Extras medallions.
+	for code in UrzaBlockPack.SET_COUNTS:
 		for key in ["set_icon_" + code, "filter_%s_on" % code, "filter_%s_off" % code]:
 			var symbol := GameSkin.our_art(key)
 			if symbol == null or symbol.get_image() == null or symbol.get_image().is_empty():

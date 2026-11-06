@@ -2747,9 +2747,9 @@ picker before tutor casts).
 | ~~Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first)~~ **THE "LANDS ONLY" HALF DONE 2026-09-11** — `_payment_plan` builds its plan through `ManaPlanner` (`sources` / `plan_from`), the planner the AI seat and the human's double-click auto-cast already shared, so every untapped mana source the payer controls pays a mid-trigger cost: **CR 605.3a**, a player may activate a mana ability whenever a rule or effect asks them to pay a mana cost. A Sol Ring, the five Moxen, a Mana Crypt, a Basalt Monolith, a Black Lotus (sorted last, reached only when nothing else is), a Llanowar Elves. Restricted mana is refused up front now rather than by accident of a simulation (Mishra's Workshop, CR 106.6). The reproduction was the prison land of the era killing a Grizzly Bears with a Sol Ring standing untapped beside it; 45 card files reach this path. Five helpers that served only the old scan are gone. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. **STILL SIMPLIFIED, and the marker says exactly this**: the payer does not CHOOSE the sources — the planner's order decides — and a source whose activation would ASK (a colour CHOICE, Fellwar Stone; a mana battery with charge counters, CR 601.2b) is left OUT of the plan (`MtgGame._mana_ability_asks`), because a payment nested in a resolution cannot hold the duel open for the answer: the COST hold re-issues the mana ability alone and the trigger paying for it would be lost. Six cards under-reported, never over-reported. **The order since 2026-10-07** (campaign, w6-1/w1-2): sacrifice last, then a tap an Aura punishes, then a source that does not untap, painful after painless; the least surplus within those | Let the payer choose the sources; and give a payment nested in a resolution somewhere to put a cost question, which is what the six asking sources are waiting on |
 | ~~No banding~~ **DONE** (attack bands wave 3, defensive banding 2026-09-01, "bands with other [quality]" 2026-09-02 — `CardInstance.cur_bands_with` / `grant_bands_with`, `CombatState.shared_bands_with` / `bands_with_offered` / `bands_with_among`; the five Legends banding lands and Master of the Hunt's Wolves grant the real per-quality restriction, not plain banding, pinned by `tests/cards/test_fidelity_2026_09_02_bands_with_other.gd`). No protection-from-artifacts etc. | As stubs demand them |
 | ~~Mid-resolution questions are answered by a heuristic~~ **DONE 2026-08-31, FINISHED 2026-09-01** — every ask is a first-class `PlayerChoice` on the record. 103 of the 109 call sites are inside a stack resolution and the engine PRE-FLIGHTS each one over a `GameSnapshot` rewind point, then holds it open on `MtgGame.awaiting_choice` until `answer_choice`. The four COST payments outside the stack (`tap_for_mana`'s sacrifice, Fellwar Stone's colour, `cast_spell`'s additional sacrifice, `activate_ability`'s sacrifice cost) are held open by `MtgGame._pending_action` — a record of the ACTION that `answer_choice` re-issues, no rewind point, because all four ask after every refusal check and before any mutation (CR 601.2h). Same overlay, same `answer_choice`, told apart by `PlayerChoice.is_cost` (docs/duel-todo.md §1.3) | Only `CardData.as_it_enters` run from a NON-resolution path is left, and reached the ordinary way (a creature resolving) even that is inside the probe. Fellwar Stone's colour moved out of the card into `ManaAbility.color_options` on the way, which also fixed it being asked TWICE per activation and being asked after the source was already tapped |
-| **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"*, Fasting's *"you may skip that step"* and Breathstealer's Crypt's *"that player discards it unless they pay 3 life"* (vis, Pack 8 — `vis/_misc.gd`, `_breathstealer_draw`; added by the Mirage bug pass, 2026-10-04) are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
-| **The damage-order question during combat damage** (`MtgGame._c2o_walk_player` / `_c2o_walk_creature`, 2026-10-12). Under the modern answer of `damage_effects_fixed_order` a person is asked which damage effect applies first (CR 616.1) only while a spell or ability resolves; during combat damage — and when the 1997 prevention step closes on a Custom table — the fixed order is taken for them and LEDGERED by `MtgGame.record_choice` ("(decided for P0) Which applies first to the 2 damage from Grizzly Bears?"). The fixed order applies what helps the victim first, and Forethought Amulet's cap never applies to combat damage, so it rarely costs anything. The `SIMPLIFIED` marker is on `MtgGame._c2o_ask_player`, where both walks' questions are put (`_c2o_ask_creature` is its twin) | The same third hold as the row above, for the combat-damage step |
-| ~~**Two draw replacements are applied in a fixed order** (`_replace_draw`): one-shots first, then statics in battlefield timestamp order. CR 616.1 gives the AFFECTED PLAYER the choice~~ **DONE 2026-09-10 (the engine pass)** — when more than one applies, `MtgGame._replace_draw` asks the drawing seat (`choose_option`, "Which replacement applies to your draw first?") and puts the rule again to what is left (CR 614.5); the old order is the hint. The pair this row called impossible exists (Chains of Mephistopheles and Island Sanctuary under a Howling Mine). Asked from the draw step itself, a person's question still falls to the heuristic — the row above | — |
+| ~~**A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`)~~ **DONE FOR THE DRAW STEP 2026-11-06 (Pack 10 E11)** — Island Sanctuary's *"you may skip that draw"*, Fasting's *"you may skip that step"*, Breathstealer's Crypt's *"that player discards it unless they pay 3 life"* and Abundance's two questions (Pack 10) are asked from the draw step's turn-based action, and that action is now held for a human seat like the untap step's: `MtgGame._hold_draw_step` probes `_draw_step_turn_action` over a snapshot, the duel waits on `awaiting_choice` (pending action `draw_step`) and the step is entered again with the answer parked; every such question wears the source `DRAW_STEP_SOURCE` ("Draw step"), and the CR 616.1 order question between two of them is held the same way. Pinned by `tests/unit/test_pack_10_engine_E11_draw_step_hold.gd`. `MtgGame.record_choice` still ledgers whatever the heuristic answers for a seat that wanted to be asked — since Pack 10 only the combat-damage question of the row below — and its `SIMPLIFIED` marker still quotes this row's words; it belongs to that row now | The "third hold" this row asked for is built for the draw step; the combat-damage step is the row below |
+| **The damage-order question during combat damage** (`MtgGame._c2o_walk_player` / `_c2o_walk_creature`, 2026-10-12). Under the modern answer of `damage_effects_fixed_order` a person is asked which damage effect applies first (CR 616.1) only while a spell or ability resolves; during combat damage — and when the 1997 prevention step closes on a Custom table — the fixed order is taken for them and LEDGERED by `MtgGame.record_choice` ("(decided for P0) Which applies first to the 2 damage from Grizzly Bears?"). The fixed order applies what helps the victim first, and Forethought Amulet's cap never applies to combat damage, so it rarely costs anything. The `SIMPLIFIED` marker is on `MtgGame._c2o_ask_player`, where both walks' questions are put (`_c2o_ask_creature` is its twin) | The draw step's hold of the row above (Pack 10 E11, `_hold_draw_step`), for the combat-damage step |
+| ~~**Two draw replacements are applied in a fixed order** (`_replace_draw`): one-shots first, then statics in battlefield timestamp order. CR 616.1 gives the AFFECTED PLAYER the choice~~ **DONE 2026-09-10 (the engine pass)** — when more than one applies, `MtgGame._replace_draw` asks the drawing seat (`choose_option`, "Which replacement applies to your draw first?") and puts the rule again to what is left (CR 614.5); the old order is the hint. The pair this row called impossible exists (Chains of Mephistopheles and Island Sanctuary under a Howling Mine). Asked from the draw step itself, a person's question fell to the heuristic until Pack 10 held it — the row above | — |
 | **A shield's rider runs per packet** (`engine/damage_replacements.gd`, `apply`; Pack 8, 2026-10-03). "If damage from a black source is prevented this way, you gain that much life" (Shadowbane) and "... deals that much damage to the source's controller" (Honorable Passage) are ONE additional effect after the whole prevented event (CR 615.5); ours runs once per damage PACKET the shield stopped, with that packet's amount. The total is the same; a simultaneous event against several victims (a Pestilence against you and your creatures) gains the life, or deals the damage, in several pieces — visible only to a "whenever you gain life" trigger or a per-event damage cap | Collect the rider's amount per (effect, event) and run it once as the event ends (the end of the simultaneous bracket or of the resolution) |
 | ~~A static ability cannot outlive its source, and nothing runs at the INSTANT a permanent leaves~~ **DONE 2026-09-02** — `CardData.as_it_leaves` is the twin of `as_it_enters`: `MtgGame._run_leave_hook` calls it from all four battlefield exits (graveyard, exile, hand, ante) after the leave-triggers are on the stack and after `forget_instance`, but BEFORE `recalculate()`, and hands it the parting memory snapshot. A trigger cannot do this work — it resolves after the world has been recomputed without the departing permanent. `ContinuousEffects.add_floating_static` is what the hook registers: the same `StaticAbility`, run in the same five sub-passes of `recalculate` in the same layer order, with only the source's presence lifted (CR 611.3a — such an effect is NOT locked in). Lifted Titania's Song's rider and made Oubliette's *"until this enchantment leaves the battlefield"* the duration it is printed as rather than a trigger. Pinned by `tests/unit/test_leave_hook.gd` | — |
 | ~~Departure events carry no CAUSE (`_move_to_graveyard`)~~ **DONE 2026-09-01** — `sacrificed` rides on both the LEAVES_BATTLEFIELD and the DIES payload, set by `sacrifice_permanent` and by nothing else, which lifted Urza's Miter's *"if it wasn't sacrificed"* | — |
@@ -2760,12 +2760,17 @@ picker before tutor casts).
 | ~~Triggers that fire while a cost is being paid go on the stack BELOW the object being cast/activated (`activate_ability`, `cast_spell`)~~ **DONE 2026-09-10 (the engine pass)** — `MtgGame._freeze_stack` / `_unfreeze_stack` park every trigger the payment raises in `_waiting_triggers` and stack them in one APNAP pass once the object is on the stack (CR 603.3b); triggered mana abilities never wait (CR 605.1b) | — |
 | ~~An until-end-of-turn LOSS beats a later grant (`ContinuousEffects._losses`)~~ **DONE 2026-09-10 (the engine pass)** — `ContinuousEffects._layer_six` applies the grants and the losses in one timestamp-sorted pass (CR 613.7), so Radjan Spirit then Jump leaves the Angel flying; since 2026-09-11 printed statics that change abilities join the same pass | — |
 | ~~`ContinuousEffects` durations are end-of-turn and end-of-combat only~~ **DONE 2026-09-01** — every floating entry now carries a `lasts` (`ContinuousEffects.Duration`), so the pipeline knows four: end of turn, end of combat, **until your next upkeep** (`expire_upkeep_of`, called as the upkeep step opens and before its triggers stack — Xenic Poltergeist, Erhnam Djinn) and **indefinite** (Brine Hag). `add_granted_activated_ability` is the same idea for a granted ABILITY, which CR 611.2b makes durationless by default (Life Matrix). Pinned by `tests/unit/test_effect_durations.gd` | — |
-| The CR 613 layer passes have no general dependency analysis (CR 613.8) — **NARROWED**: layer 4 applies the land-type WRITERS before the READERS in two waves (2026-09-10, `ContinuousEffects.recalculate`), and `ContinuousEffects._ordered_readers` orders the readers among themselves, a loop broken by timestamp (CR 613.8b; 0.40.16, 2026-09-25). Any other dependency is not detected: those effects apply in the order their layer's pass takes them. The `SIMPLIFIED` marker sits in `recalculate`, above the two waves | Real dependency ordering |
+| The CR 613 layer passes have no general dependency analysis (CR 613.8) — **NARROWED**: layer 4 applies the land-type WRITERS before the READERS in two waves (2026-09-10, `ContinuousEffects.recalculate`), and `ContinuousEffects._ordered_readers` orders the readers among themselves, a loop broken by timestamp (CR 613.8b; 0.40.16, 2026-09-25). Any other dependency is not detected: those effects apply in the order their layer's pass takes them. The `SIMPLIFIED` marker sits in `recalculate`, above the two waves. **Pack 10 E3 (2026-11-06):** a layer-4 static that decides by CARD TYPE whom it affects (`StaticAbility.reading_card_types`, Opalescence) applies after every other layer-4 writer, type changes that SET a type included; a floating pure silencer runs before the live silencers it reaches; and an effect that started in layer 4 or as a silencer keeps its later halves after its source loses its abilities (CR 613.6, `StaticAbility.part_of`) | Real dependency ordering |
 | ~~No POTENTIAL-mana query~~ **HALF-LIFTED 2026-09-03** — `MtgGame.could_afford(pid, data, excluded)` walks the untapped sources through the shared [ManaPlanner] and prices them with `can_afford`'s own modifiers, restricted-mana keys and `spell_payment` arithmetic, so a plan and a payment cannot disagree. The **castable highlight** now uses it, which is what makes the yellow name mean what `Duel.hlp` says it means (*"you must have enough mana available"*, topic **Hands**) and what the click-then-tap flow and the auto-cast both promise. **STILL OWED:** `DuelScreen._has_affordable_fast_effect` — the Done order's third condition — is deliberately left on the FLOATING pool, so Done stops only for a fast effect the player has actually floated for; its own `SIMPLIFIED` marker still says so. Moving it to `could_afford` would make Done stop at every phase you hold an instant, which is the clicking the 2026-09-03 playtest was about. **Narrowed 2026-09-08:** the four instant windows (both combat fast-effects rounds, after first-strike damage, the opponent's end step) hold on POTENTIAL mana through `_could_respond` — see "THE INSTANT WINDOWS" | Point `_has_affordable_fast_effect` at `could_afford` when (and only when) the player asks for the stricter 1997 Done |
 | **SIMPLIFIED — `could_afford` under-reports for two cards** (`mtg_game.gd`): colour SUBSTITUTIONS (Sunglasses of Urza) and North Star's any-type charge widen only the FLOATING half of the answer, because `can_afford` is asked first and [ManaPlanner] models neither. It never over-reports, which is the safe direction for a highlight and for an auto-tapper | Teach the planner substitutions and the wildcard, or price the potential pool through `ManaPool.can_pay` once it can take a source list |
 | **SIMPLIFIED — the legacy/specialised fallback prices one blocker per attacker in forward combat. NARROWED 2026-09-13:** the `studies_combat` path coordinates `_cohort_value`, `_damage_through_blocks` and declarations over whole assignments and the shared `CombatSearch.resolve_block` resolver. Bounded gangs and an own-hand trick are included; repeatable pumps, gaze/tap execution and wide boards retain specialised policies. The historical 2026-09-05 measurement above explains why an isolated ply-2 change was rejected. The new coordinated path and its tests/measurements are documented in [the planning study](planning-study-2026-09-13.md). The old model remains an explicit reproducible null. | Extend the shared model to the remaining specialised cases only with legality, hidden-information, latency and fixed-baseline regression evidence. Multiple attackers per blocker and defensive banding remain separate limits. |
 | **SIMPLIFIED — Two dying-card replacements are applied in a fixed order** (`MtgGame._move_to_graveyard`, Pack 8 E7, 2026-10-03): a creature's OWN "if it would die, instead" (Firestorm Phoenix's hand, Gravebane Zombie's library top, Disintegrate's exile) is applied before Forbidden Crypt's "if a card would be put into your graveyard, exile it instead", without asking. CR 616.1 lets the affected object's controller choose; the fixed order is the one that keeps the card | A choice when both apply (the CR 616.1 question `_replace_draw` already asks for draws, struck above) |
 | **SIMPLIFIED — Phase-out look-back is per permanent** (`MtgGame.phase_simultaneously`, Pack 8 E1, 2026-10-03): CR 603.10a makes "whenever a permanent phases out" look back in time, so the listeners are what was on the battlefield BEFORE the simultaneous phasing event. The engine dispatches each `PHASED_OUT` after the whole batch with only the departing permanent itself added back (`also_listen`), so a permanent that phases IN in the same event hears the others phase out, and two that phase out together do not hear each other. Every phase-out trigger in the pool (Teferi's Imp, Ertai's Familiar) is about the permanent itself, which hears its own; nothing listens for ANOTHER permanent phasing out | A look-back listener set for the batch (the `_departure_batch` shape `DIES` uses), when a card listens for other permanents phasing out |
+| **A "from anywhere" listener leaving with a sweep** (`MtgGame._announce_graveyard_arrival`, Pack 10 E4, 2026-11-06). A mass removal moves its victims one at a time, so a Planar Void or Compost among them hears the victims moved before it — Tranquility destroying Planar Void with other enchantments: the Void exiles the ones processed before it. CR 603.10: only objects present after the event see it | Hold the battlefield door's `CARD_PUT_INTO_GRAVEYARD` events until the departure batch closes (`_release_departures`, `end_simultaneous`), then announce the ones still in a graveyard |
+| **A static prevention shield prevents the whole event** (`MtgGame.add_static_damage_effect`, which writes `points` 0 on every entry; Pack 10, 2026-11-06). A static "prevent N of that damage" cannot be registered through it — Urza's Armor's "prevent 1 of that damage" is built as a replacement entry instead — and the AI's burn forecast reads any static entry as "no damage" | Honour the spec's `points` for static entries, and teach the forecast the partial amount |
+| **Contamination overwrites Hall of Gemstone's colour** (the forcing loop in `ContinuousEffects.recalculate`, Pack 10 E8, 2026-11-06). Both replace the mana a land makes, and CR 616.1 lets the land's controller order them: with Hall of Gemstone applied last the land makes one mana of Hall's colour. The engine offers that order for a type-only replacement (Deep Water's variants) but not for Hall's colours-only copy, which Contamination's fixed {B} always overwrites | Offer Hall's "applied last" variant beside Contamination's, as Deep Water's are offered |
+| **Okk's restriction is judged only by the referee over SGManalink** (the networked client, `game/sgmanalink/duel_view.gd`; Pack 10 E6, 2026-11-06). The client's view does not carry the companion restriction ("can't attack unless a creature with greater power also attacks", and the block twin), so a networked seat may declare Okk alone and the referee refuses the declaration, naming the reason; the local duel screen does not light it | Carry the restriction in the table view, so the client greys a lone Okk as the local screen does |
+| **Veiled Serpent's refusal does not name the Island** (`cards/sets/usg/_opal.gd`, `_island_or_stay`; Pack 10 E3, 2026-11-06). Its granted "can't attack unless defending player controls an Island" is a floating static that writes the live attack ban (`cur_cant_attack`) while the defending player has no Island: the rule is exact, and a later Humility removes it, but the refusal reads as a plain "can't attack" | A live counterpart of `CardData.attack_needs_defender_land`, the field Sea Serpent's printed clause uses |
 Card-level simplifications are tracked separately in
 **docs/simplified-cards.md** — one row per card that deviates from its
 printed behavior, so future passes can lift them one by one.
@@ -18967,6 +18972,128 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-11-06 — Pack 10: the Urza block (0.60.19)
+
+The owner asked for *"a final (for now) card pack 10. Urza's pack. It will
+contain: Urza's Saga, Urza's Legacy and Urza's Destiny. Integrate with
+everything and consult how previous packs were made."* Done, built the way
+Pack 9 was ([pack-10-urza-block.md](pack-10-urza-block.md)):
+
+- **The pack**: `tools/pack_10_urza_block.py`, the trusted
+  `game/urza_block_pack.gd`, metadata in
+  `packaging/card_packs/pack_10_urza_block/`; 636 printings, 621 names,
+  591 new identities, 30 reprints (12 in the core, 18 provided when their
+  own pack is off); badge 10-USG, gears, a hammer and a flask. Rules in
+  `cards/sets/{usg,ulg,uds}/`: a fail-closed `_rules.gd` per set over
+  sixteen family modules (`_echo`, `_cycling`, `_opal` and `_untap` new);
+  **no name is pending**. Core + Pack 10: 1,518 set entries / 1,506 unique
+  cards; all ten packs 4,704 / 3,684.
+- **How it was built**: a read-only inventory (921 Oracle clauses; 468
+  cards buildable on the existing engine, 123 needing 24 missing
+  capabilities), nine engine packages and the two optional ones, all
+  built, then thirteen card batches with disjoint files and their own test
+  scripts. The packages:
+  - **E1 echo** (CR 702.30a): one printed upkeep trigger with its
+    intervening "if", on a clock of upkeeps begun against the moment a
+    permanent came under its controller's control (`EchoAbility`,
+    `came_under_control_since_last_upkeep`); Test hands' `echo_due`.
+  - **E2 activation**: cycling from the owner's hand (a cost discard, the
+    stack, no land drop), Fluctuator's floored reduction, a life cost
+    worked out as it is paid (Lurking Evil), and a granted ability that
+    names its grantor (Archery Training).
+  - **E3 layers**: type changes that SET a card type (the Opal, Veiled,
+    Hidden and Lurking enchantments), the card-type readers after every
+    other layer-4 writer (Opalescence), CR 613.6's continuation (Humility
+    and Opalescence in both orders), durations that end on an event (Soul
+    Sculptor) and a size read live as a life total changes (Serra Avatar).
+  - **E4 events**: "put into a graveyard from anywhere", one per card at
+    every door; "spell countered", naming its caster; a trigger that still
+    resolves when its target becomes illegal (Gilded Drake).
+  - **E5 zone play**: lands and spells played from the graveyard
+    (Yawgmoth's Will) and the revealed top of the library, free (Temporal
+    Aperture), with the duel screen's graveyard ring and pile click.
+  - **E6 combat**: the defender assigns the attackers' damage (Defensive
+    Formation), an attack or block companion (Okk), damage assigned as
+    though unblocked, mandatory (Outmaneuver).
+  - **E7**: a divided total the source's counters decide (Serra's Hymn).
+  - **E8 mana**: mana that can't be spent on spells (Thran Turbine), land
+    mana of a fixed type and amount (Contamination), a reveal-to-pay mana
+    ability (Metalworker), and a mana trigger's colour asked before the
+    tap is paid (Fertile Ground, Mana Flare).
+  - **E9**: untapping only a chosen kind (Storage Matrix) and a non-Aura
+    "sacrifice to ignore" with its own payer (Damping Engine).
+  - **E10 arrive together**: "put those cards onto the battlefield" as one
+    moment, choices APNAP first (Show and Tell, Replenish, Exhume, Planar
+    Birth, Victimize, Defense of the Heart — and Pack 9's Living Death).
+  - **E11**: the draw step's questions held for a person (Island
+    Sanctuary, Fasting, Abundance, Breathstealer's Crypt).
+- **Engine-wide fixes found on the way**: `MtgGame.discard_hand` now fires
+  the cards' own discard abilities, so Psychic Purge punishes a Wheel of
+  Fortune; Gloom's tax and the Cursed Totem and Null Rod bans read
+  permanents only (CR 109.2), so a card in a hand is untouched and Elvish
+  Spirit Guide works under Cursed Totem; a graveyard card whose entry
+  payment fails goes back to its graveyard; the ante → graveyard and an
+  owner change pass the one graveyard door (a new object, Forbidden Crypt
+  applies); mana burn recalculates a life-reading size before its
+  state-based check.
+- **The first two-digit pack**: pack ids are numbers, not text
+  (`CardPacks.number_of`, `sort_ids`; a saved deck's required packs, the
+  LAN lobby's "Packs 2, 10", the Add pack refusal "Pack-1 to Pack-10"),
+  and `SHANDALAR_PACK_10`, `Pack-1-` against `Pack-10-` and `--packs 1,10`
+  were checked the same way. `tools/test_tracked_tree.py`'s tool-name scan
+  lets one Urza's Saga card name through (`CARD_NAMES`, Barrin's Codex).
+- **The adventure**: Pack 10 joins campaigns — any of Packs 2–10 on Embark,
+  each its own cards at their printed rarity. The owner's ruling of the
+  same day marks the banned-era thirteen strong (Tolarian Academy,
+  Yawgmoth's Will, Yawgmoth's Bargain, Tinker, Windfall, Memory Jar, Time
+  Spiral, Gaea's Cradle, Serra's Sanctum, Voltaic Key, Fluctuator, Grim
+  Monolith, Frantic Search): never on a shop shelf, four amulets at a
+  trader (`CardValue.STRONG_PACK_CARDS`).
+- **Saves to another device** (the owner's ask, shipped with the pack):
+  Save / Load's **Export** writes one adventure, every save of it, as one
+  checked zip, and **Import** brings one in on any platform
+  (`game/adventure/adventure_transfer.gd`); on Android and the Meta Quest
+  the saves now live in the game's folder on the shared storage, where
+  `adb pull` reaches them, and the old ones move there by themselves.
+- **Player-facing**: cycling on the hand card's menu, the graveyard view's
+  ring for a playable land, the library pile's click for a permitted top
+  card, Serra's Hymn's division on the per-point dial, nine Help pages
+  ("Abilities — Urza block …"); SGManalink protocol **31**,
+  `RULES_REVISION` `sgmanalink-urza-block-2026-11-06`.
+- **Digital adaptations**: none new. E10 lifted Pack 9's *Living Death*
+  row: its returned cards now arrive at the same moment.
+- **The fair AI**: `engine/ai/urza_spells.gd` (casts and their questions)
+  and `engine/ai/urza_tactics.gd` (board, combat, activations), behind
+  `forecasts_tactics`, each policy with its gate-off arm. The duel audit
+  (`tools/pack_10_duel_audit.gd`, 432 complete duels, no stall, error or
+  refused try) caught two defects, fixed with tests: Serra's Hymn cashed to
+  shield the opponent's creatures (`UrzaTactics.hymn_cash`), and Temporal
+  Aperture never activated (`UrzaSpells.aperture`). Deck Lab, six pairings
+  at 200 games an arm: none significantly worse, Tricks v Cycling +31.0 ±
+  9.2 and White Weenie v Opal +10.5 ± 9.5. Big Green v White Knights moves
+  under an older reading of the gate (the cleanup discard), so the study's
+  control is two plain core-set decks, byte-identical in every arm.
+- **Known, not done**: a "from anywhere" listener among a sweep's victims
+  hears the ones moved before it; a static prevention shield prevents the
+  whole event (`add_static_damage_effect` writes `points` 0); Contamination
+  overwrites Hall of Gemstone's colour; Okk's restriction is judged only by
+  the referee over SGManalink; Veiled Serpent's refusal does not name the
+  Island (rows under "Engine simplifications still to lift"). Temporal
+  Aperture's permission ends on any shuffle of the library, even one that
+  leaves its card on top, as Forge's does (`MtgPlayer.library_shuffles`,
+  counted in `MtgGame._shuffle`).
+- **Verification**: the gate (`SHARDS=4 SUITE_TIMEOUT=3600`), 1,339
+  scripts, 18,246 tests, 808,581 asserts: the damage-gate surveys re-taken
+  with the pack's writers named (prevention pools 29 → 32, source-filtered
+  immunities 14 → 15, combat shields 15 → 16, the Circle family 13 → 14),
+  and seven failures only because a physical gamepad was plugged into the
+  desk (`test_pad_controls.gd` ×6, `test_fullscreen_card_text_2026_10_10.gd`
+  ×1), which pass with the pad hidden from the process. Python 949 tests, 15
+  skipped, OK. The duel audit, the soaks both ways and the export probe
+  (`--verify-pack-10`: 1,506 identities, 609 dormant scripts, 1,272
+  pictures and 1,218 fallbacks, 0 rules pending) are in
+  [the Pack 10 guide](pack-10-urza-block.md).
 
 ## 2026-10-22 – 2026-10-28 — The adventure, built (0.50.49–0.50.64)
 

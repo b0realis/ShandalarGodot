@@ -1,6 +1,6 @@
 extends GutTest
 ## THE CARD PACKS OPEN (0.60.14, the owner's pack rulings of 2026-11-03):
-## every pack the Embark offers — Packs 2 to 9, Pack 1 never — can join an
+## every pack the Embark offers — Packs 2 to 10, Pack 1 never — can join an
 ## ordinary adventure, all at once; the screen, its card-rule tooltips and
 ## the Help say what a pack brings: its own cards, a share of every random
 ## card (20% a pack, 60% at most), strong cards special, ante cards never on
@@ -157,7 +157,7 @@ const EMBARK_PAGE := "Shandalar — a new adventure"
 func test_the_help_tells_any_pack_can_join() -> void:
 	var packs := _block(EMBARK_PAGE, "Card packs lists")
 	assert_ne(packs, "", "the Card packs block")
-	assert_string_contains(packs, "Packs 2 to 9")
+	assert_string_contains(packs, "Packs 2 to 10")
 	assert_false(packs.contains("greyed"), "no pack is greyed")
 	assert_false(packs.to_lower().contains("unavailable for new adventures"))
 	assert_string_contains(packs, "first deck and the creatures' decks stay base cards")

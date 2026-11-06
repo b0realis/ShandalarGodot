@@ -89,7 +89,9 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 ## CR 601.2d); everything else falls back to the base "once per target".
 func resolve_multi(game: MtgGame, source: CardInstance, controller: int,
 		targets: Array, x_value: int = 0) -> void:
-	if divided_amount(x_value) <= 0:
+	# Pack 10 E7: a total the source decided ([method EffectBase.divided_by])
+	# was locked on the refs at announcement and is never read again.
+	if divided_amount(x_value) <= 0 and not divided_count_fn.is_valid():
 		super(game, source, controller, targets, x_value)
 		return
 	for ref in targets:
@@ -98,8 +100,8 @@ func resolve_multi(game: MtgGame, source: CardInstance, controller: int,
 
 ## One-line log/UI text.
 func describe() -> String:
-	if divided_total > 0 or divided_uses_x:
-		var total := "X" if divided_uses_x else str(divided_total)
+	if is_divided():
+		var total := "X" if divided_uses_x or divided_count_fn.is_valid() else str(divided_total)
 		return "deals %s damage divided as you choose among any number of targets" % total
 	var n := "X" if use_x else str(amount)
 	return "deals %s damage to %s" % [n, target_spec.description if target_spec else "?"]

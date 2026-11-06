@@ -214,6 +214,10 @@ python3 tools/test_pack_9_tempest_block.py >/dev/null
 PACK_NINE_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-9-Tempest-Block.zip"
 python3 tools/pack_9_tempest_block.py build "$PACK_NINE_PATH" --metadata-only >/dev/null
 export SHANDALAR_PACK_9="$PACK_NINE_PATH"
+python3 tools/test_pack_10_urza_block.py >/dev/null
+PACK_TEN_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-10-Urza-Block.zip"
+python3 tools/pack_10_urza_block.py build "$PACK_TEN_PATH" --metadata-only >/dev/null
+export SHANDALAR_PACK_10="$PACK_TEN_PATH"
 
 # Import step (quick no-op when the .godot cache is warm; a cold import
 # of the card art is minutes, not hours, so 600 s is generous). ONCE, and

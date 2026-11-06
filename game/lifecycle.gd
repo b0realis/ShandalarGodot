@@ -47,6 +47,11 @@ func _ready() -> void:
 	if OS.has_feature("android"):
 		var corner := GamePaths.android_files_dir()
 		AndroidCorner.prepare(corner)
+		# The saves move into the shared corner at start (2026-11-06), so
+		# an `adb pull` before Save / Load is ever opened finds them. By
+		# path, not by class: an autoload naming the class would compile
+		# it into every command-line tool.
+		load("res://game/adventure/adventure_player.gd").settle_saves()
 		var tracer := AndroidCorner.new()
 		tracer.corner = corner
 		tracer.say(AndroidCorner.version_line())

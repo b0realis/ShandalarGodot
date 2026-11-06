@@ -23,10 +23,14 @@ func _information_received(viewer: int, title: String, names: Array) -> void:
 
 
 ## May [param pid] cast [param card] from where it lies — the engine's
-## permission ([param referee] null: a projection's own reading).
+## permission ([param referee] null: a projection's own reading). Pack 10
+## E5: a graveyard or library-top zone permission too (Yawgmoth's Will,
+## Temporal Aperture — MtgGame.can_play_from_zone; a land it covers gets
+## no spell row, lands are played).
 static func casts_from(referee: MtgGame, pid: int, card: CardInstance) -> bool:
 	return (card.zone == Mtg.Zone.HAND and card.owner_id == pid) \
-		or (referee != null and (referee.can_play_from_exile(pid, card) or referee.can_cast_from_graveyard(pid, card))) \
+		or (referee != null and (referee.can_play_from_exile(pid, card) or referee.can_cast_from_graveyard(pid, card)
+			or referee.can_play_from_zone(pid, card))) \
 		or (referee == null and card.zone == Mtg.Zone.EXILE and not card.face_down and card.exile_playable_by == pid)
 
 
@@ -73,7 +77,10 @@ static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Ar
 			# A TAPPED LAND WAS LISTED as a mana source to every program.
 			if referee != null and referee.mana_ability_refusal(pid, card, i) != "": continue
 			result.append({"kind": "mana", "index": i, "label": str(referee.mana_ability_for(pid, card, i) if referee != null else card.cur_mana_abilities[i]), "x": false, "modes": []})
-	if card.zone not in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD]: return result
+	# Pack 10 E2: an ability that works from the HAND (cycling, CR 702.29a)
+	# is offered to the card's OWNER — the engine's own refusal with the
+	# referee at hand, the projection's reading below without it.
+	if card.zone not in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD, Mtg.Zone.HAND]: return result
 	for i in card.cur_activated_abilities.size():
 		var ability: ActivatedAbility = card.cur_activated_abilities[i]
 		if ability.activation_zone != card.zone: continue
@@ -93,6 +100,8 @@ static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Ar
 			or (ability.only_owner_may_activate and card.owner_id == pid) \
 			or (ability.only_opponents_may_activate and card.controller_id != pid) \
 			or (not ability.only_owner_may_activate and not ability.only_opponents_may_activate and card.controller_id == pid)
+		if card.zone == Mtg.Zone.HAND:
+			permitted = card.owner_id == pid   # a hand card has no controller (CR 108.4)
 		if permitted:
 			result.append({"kind": "ability", "index": i, "label": str(ability),
 				"x": ability.cost.has_x, "modes": []})
@@ -428,8 +437,17 @@ func request(pid: int) -> Dictionary:
 	for effect in effects:
 		if effect.target_spec == null or not effect.target_spec.is_supplied_by_caster(): continue
 		var span: Vector2i = effect.target_range(draft.x)
+		# Pack 10 E7: a count in the FIRST slot reads no earlier target —
+		# only the source (the verse cards' "up to X", Serra's Hymn's
+		# divided X) — so it is exact now, as TargetPlan will judge it;
+		# bounded by the candidates like an X count. [method _counted_slot]
+		# keeps the per-candidate rows for a count an earlier target sets.
+		var first_count: bool = effect.target_count_fn.is_valid() and slots.is_empty()
+		if first_count:
+			span = effect.target_range_at(game, source, int(draft.x), [])
 		slots.append({"spec": effect.target_spec, "min": span.x, "max": span.y,
-			"clamp": effect.target_count_is_x, "divided": maxi(0, effect.divided_amount(draft.x)),
+			"clamp": effect.target_count_is_x or first_count,
+			"divided": maxi(0, effect.divided_amount_at(game, source, int(draft.x))),
 			"effect": effect})
 	_targets.clear()
 	var result: Array = []
@@ -468,7 +486,9 @@ func request(pid: int) -> Dictionary:
 ## narrows the slot to the opponent it picks (SgDuelView._counted_range)
 ## and the referee judges the submit as the cast will (TargetPlan).
 ## [] for an ordinary slot, and when the slots before it hold anything
-## but exactly one target (no card in the pool reads more).
+## but exactly one target (no card in the pool reads more). A count in the
+## FIRST slot (Pack 10 E7 — the source's own counters) needs no rows: its
+## range is exact in the slot itself ([method request]).
 func _counted_slot(source: CardInstance, slot: Dictionary, earlier_slots: Array, available: int) -> Array:
 	var effect: Variant = slot.get("effect")
 	if not effect is EffectBase or not (effect as EffectBase).target_count_fn.is_valid():

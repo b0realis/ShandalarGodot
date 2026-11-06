@@ -14,7 +14,7 @@ extends GutTest
 
 const CARD_PACKS_SCREEN := "res://game/card_packs_screen.gd"
 const PACK_NAMES := ["Pack 6: Portal & Second Age", "Pack 8: The Mirage Block",
-	"Pack 9: The Tempest Block"]
+	"Pack 9: The Tempest Block", "Pack 10: The Urza Block"]
 
 var _saved: Variant = null
 

@@ -122,10 +122,27 @@ func _on_state_changed() -> void:
 ## a departed permanent (CR 400.7), is no object a zone of the view
 ## carries. A row naming one (a token Sabertooth Cobra's ransom) failed
 ## the wire check (SgViewProtocol.linked_cards) and cut the seat off.
+## A LIBRARY card only on top, as [method _library_top_seen] says (Pack 10).
 func _visible(pid: int, card: CardInstance) -> bool:
 	return card != null and game.find_instance(card.id) == card and (card.zone in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD, Mtg.Zone.STACK, Mtg.Zone.EXILE, Mtg.Zone.ANTE] \
 		or (card.zone == Mtg.Zone.HAND and (card.owner_id == pid or card.revealed_in_hand \
-			or game.players[card.owner_id].hand_revealed)))
+			or game.players[card.owner_id].hand_revealed)) \
+		or (card.zone == Mtg.Zone.LIBRARY and _library_top_seen(pid, card)))
+
+
+## THE TOP OF A LIBRARY A SEAT MAY SEE (Pack 10 — the Urza block, protocol
+## 31): the card played with revealed (Field of Dreams; Temporal Aperture's
+## "play with the top card of your library revealed" —
+## MtgGame.revealed_top_card) by both seats, and the card a zone permission
+## of its owner's names (the Aperture's "you may play that card" —
+## MtgGame.can_play_from_zone; a library permission always names the card
+## an effect revealed) by that owner. It is a card of the view
+## (`library_top`), so the permitted seat can play it. Every other library
+## card stays a count: the order is secret (rule 8).
+func _library_top_seen(pid: int, card: CardInstance) -> bool:
+	var library := game.players[card.owner_id].library
+	if library.is_empty() or library.back() != card: return false
+	return game.revealed_top_card(card.owner_id) == card or game.can_play_from_zone(pid, card)
 
 
 func _retire_hidden() -> void:
@@ -202,7 +219,12 @@ func _cards(pid: int, list: Array) -> Array:
 			"attached": attached,
 			"abilities": [] if masked else _abilities(card),
 			"actions": [] if masked else SgDuelActions.options(card, pid, game),
-			"exile_playable": game.can_play_from_exile(pid, card)})
+			"exile_playable": game.can_play_from_exile(pid, card),
+			# Pack 10 (protocol 31): a zone permission covers it — a land
+			# in the graveyard under Yawgmoth's Will, the revealed library
+			# top under Temporal Aperture (MtgGame.can_play_from_zone). The
+			# permission, not the moment: `playable` says whether now.
+			"zone_playable": false if masked else game.can_play_from_zone(pid, card)})
 		if masked and card.zone != Mtg.Zone.BATTLEFIELD:
 			var hidden: Dictionary = out.back()
 			hidden.name = "Face-down card"
@@ -255,8 +277,10 @@ func _text_effects(card: CardInstance) -> Array:
 
 
 func _playable(pid: int, card: CardInstance) -> bool:
+	# Pack 10: a zone permission too (MtgGame.can_play_from_zone — a land
+	# in the graveyard under Yawgmoth's Will, Temporal Aperture's top card).
 	if not ((card.owner_id == pid and card.zone == Mtg.Zone.HAND) or game.can_play_from_exile(pid, card) \
-		or game.can_cast_from_graveyard(pid, card)) or game.game_over \
+		or game.can_cast_from_graveyard(pid, card) or game.can_play_from_zone(pid, card)) or game.game_over \
 		or game.mulligan_open or game.priority_player != pid:
 		return false
 	if card.is_land():
@@ -311,11 +335,17 @@ func view(pid: int) -> Dictionary:
 		for card in player.hand:
 			if player.hand_revealed or card.revealed_in_hand: revealed.append(card)
 		var top := game.revealed_top_card(seat)
+		# The top card as a CARD (Pack 10, protocol 31) when this seat may
+		# see it ([method _library_top_seen]); `top` keeps its name.
+		var library_top: Array = []
+		if not player.library.is_empty() and _visible(pid, player.library.back()):
+			library_top.append(player.library.back())
 		players.append({"seat": seat, "life": player.life, "deck_name": deck_names[seat],
 			"hand_count": player.hand.size(), "library_count": player.library.size(),
 			"mana": player.mana_pool.total(), "kept": game.mulligan_kept[seat],
 			"mana_colors": mana, "revealed": _cards(pid, revealed),
 			"top": "" if top == null else top.data.card_name,
+			"library_top": _cards(pid, library_top),
 			"exile": _cards(pid, player.exile), "ante": _cards(pid, player.ante),
 			"battlefield": _cards(pid, player.battlefield),
 			"graveyard": _cards(pid, player.graveyard),
@@ -332,7 +362,7 @@ func view(pid: int) -> Dictionary:
 			var group := 0
 			for effect in item.effects:
 				if effect.target_spec == null: continue
-				if effect.divided_amount(item.x_value) > 0 and group < item.target_groups.size():
+				if effect.divided_amount_at(game, item.card, item.x_value) > 0 and group < item.target_groups.size():
 					divisions.append_array(item.target_groups[group])
 				group += 1
 			for target in item.targets:
@@ -470,7 +500,11 @@ func act(pid: int, action: Dictionary) -> String:
 					return "Card unavailable."
 				_paying(pid)
 				return game.tap_for_mana(pid, card)
-			if not game.players[pid].hand.has(card) and not game.can_play_from_exile(pid, card):
+			# Pack 10: a zone permission's card too — a graveyard land under
+			# Yawgmoth's Will, Temporal Aperture's top card. The engine
+			# judges the play as from the hand (MtgGame.play_land).
+			if not game.players[pid].hand.has(card) and not game.can_play_from_exile(pid, card) \
+					and not game.can_play_from_zone(pid, card):
 				return "Card unavailable."
 			return game.play_land(pid, card) if card.is_land() else game.cast_spell(pid, card)
 		"attack", "attack_bands", "discard":

@@ -18,7 +18,7 @@ func test_portal_alone_and_alongside_every_previous_pack() -> void:
 		var c := CardRegistry.get_card(row.name)
 		assert_false(c.cast_condition.is_valid() and c.cast_condition.get_method() == "_pending", row.name)
 	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
-	assert_eq(CardRegistry.size(), 3093)   # 1,898 with Packs 1-7, the Mirage block's 621, the Tempest block's 574
+	assert_eq(CardRegistry.size(), 3684)   # 1,898 with Packs 1-7, the Mirage block's 621, the Tempest block's 574, the Urza block's 591
 	assert_eq(CardRegistry.names_in_set("por").size(), 200)
 	CardPacks.set_enabled("pack-6", false)
 	assert_false(CardRegistry.has_card("Cloud Dragon"))

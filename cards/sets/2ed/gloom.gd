@@ -23,8 +23,10 @@ static func _tax_white_spell(_game: MtgGame, _caster: int, data: CardData,
 	return 3 if (data.color_mask() & Mtg.ManaColor.W) != 0 else 0
 
 
-static func _tax_white_enchantment_ability(_game: MtgGame, _caster: int,
+## "White enchantments" are PERMANENTS (CR 109.2): a Rune of Protection
+## cycled from the hand (Pack 10) is no enchantment yet and pays no tax.
+static func _tax_white_enchantment_ability(game: MtgGame, _caster: int,
 		source: CardInstance, _modifier: CardInstance) -> int:
-	if not source.is_type(Mtg.CardType.ENCHANTMENT):
+	if not game.is_present(source) or not source.is_type(Mtg.CardType.ENCHANTMENT):
 		return 0
 	return 3 if (source.cur_colors & Mtg.ManaColor.W) != 0 else 0

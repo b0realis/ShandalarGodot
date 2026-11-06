@@ -1419,7 +1419,7 @@ static func _every_card(view: Dictionary) -> Array:
 	# "hand" cards against a hand count of 7).
 	var cards: Array = view.get("hand", []).duplicate()
 	for player in view.get("players", []):
-		for zone in ["battlefield", "graveyard", "exile", "revealed"]:
+		for zone in ["battlefield", "graveyard", "exile", "revealed", "library_top"]:
 			cards.append_array(player.get(zone, []))
 	return cards
 

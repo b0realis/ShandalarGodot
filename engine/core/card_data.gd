@@ -905,6 +905,27 @@ func with_discard_special_action() -> CardData:
 	discard_special_action = true
 	return self
 
+## Pack 10 E2 — "Cycling [cost] ([cost], Discard this card: Draw a card.)"
+## (CR 702.29a): an activated ability that functions only from its owner's
+## hand ([method ActivatedAbility.from_hand]), costs [param cost] and
+## discarding this card ([method ActivatedAbility.with_discard_self_cost]),
+## uses the stack and draws a card. Marked [member
+## ActivatedAbility.is_cycling] for Fluctuator. APPENDED, so any printed
+## battlefield ability keeps its index; a cycling land played as a land
+## has the ability on its list but cannot activate it there.
+func with_cycling(cost := "{2}") -> CardData:
+	activated_abilities.append(ActivatedAbility.new(cost, false, [DrawEffect.new(1)],
+		"Cycling %s (%s, Discard this card: Draw a card.)" % [cost, cost]) \
+		.from_hand().with_discard_self_cost().as_cycling())
+	return self
+
+## Pack 10 E2: does this card print a cycling ability ([method with_cycling])?
+func has_cycling() -> bool:
+	for ability in activated_abilities:
+		if ability.is_cycling:
+			return true
+	return false
+
 ## "Spend only black mana on X" (Drain Life) — the spell's X is paid in
 ## COLOURED mana of this Mtg.ManaColor instead of generic. 0 = the usual
 ## generic X. The 1997 exe charged Drain Life's X as black
@@ -1111,12 +1132,18 @@ class LicidEffect extends EffectBase:
 ## (filter: `func(inst: CardInstance) -> bool`, invalid = any permanent).
 ## The card's own statics and bans ask [method MtgGame.effect_ignored_by]
 ## and stand aside for that player for the rest of the turn. Empty = none.
+## A non-Aura names its PAYER (Pack 10 E9 — Damping Engine's "that player",
+## the one who controls more permanents than each other player):
+## `payer: func(game: MtgGame, source: CardInstance) -> int`, the one seat
+## the action is offered to right now, -1 for none.
 var ignore_effect_sacrifice: Dictionary = {}
 
 
-## Fluent: see [member ignore_effect_sacrifice].
-func ignorable_by_sacrifice(desc := "permanent", filter := Callable()) -> CardData:
-	ignore_effect_sacrifice = {"desc": desc, "filter": filter}
+## Fluent: see [member ignore_effect_sacrifice]. [param payer] invalid =
+## the enchanted permanent's controller (Volrath's Curse).
+func ignorable_by_sacrifice(desc := "permanent", filter := Callable(),
+		payer := Callable()) -> CardData:
+	ignore_effect_sacrifice = {"desc": desc, "filter": filter, "payer": payer}
 	return self
 
 

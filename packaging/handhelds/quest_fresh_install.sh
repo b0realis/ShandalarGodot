@@ -32,7 +32,8 @@ T=/sdcard/Download/shandalar-push
 # game/); a zip under any other name is never opened by the game.
 PACKS=(Pack-1-DotP-complete.zip Pack-2-Fallen-Empires.zip Pack-3-Ice_Age.zip
 	Pack-4-Homelands.zip Pack-5-Alliances.zip Pack-6-Portal.zip
-	Pack-7-Fifth-Edition.zip Pack-8-Mirage-Block.zip Pack-9-Tempest-Block.zip)
+	Pack-7-Fifth-Edition.zip Pack-8-Mirage-Block.zip Pack-9-Tempest-Block.zip
+	Pack-10-Urza-Block.zip)
 # Room left free on the headset beyond the copies, so it keeps working.
 SPARE_KB=102400
 STAMP=$(date +%Y%m%d-%H%M%S)

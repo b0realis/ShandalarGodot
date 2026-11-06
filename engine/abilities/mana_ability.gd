@@ -41,7 +41,17 @@ var unreplaced_ability: ManaAbility
 ##   takes the forced one.
 ## Every rider (costs, amount, restriction, side effect) travels with the
 ## copy, and a later full replacement over it replaces everything again.
-func forcing_color(color: int, controller_only := false, colored_only := false) -> ManaAbility:
+##
+## [param fixed_amount] (Pack 10 E8) — "instead of any other type AND
+## AMOUNT" (Contamination, CR 106.6 / 614.1a): above 0, the copy makes
+## exactly that many of [param color] and nothing else — a Karoo's {C}{U},
+## a Gaea's Cradle's {G} per creature, a battery's spent counters all
+## become one {B}. Every AMOUNT rider is dropped with the old output
+## ([member dynamic_amount], [member any_number_counter_kind],
+## [member scales_with_sacrifice_mv], [member reveal_filter]); the costs,
+## restriction and side effect still travel. 0 keeps the amount.
+func forcing_color(color: int, controller_only := false, colored_only := false,
+		fixed_amount := 0) -> ManaAbility:
 	var copy := ManaAbility.new(0, 0)
 	for prop in get_property_list():
 		if int(prop.usage) & PROPERTY_USAGE_SCRIPT_VARIABLE: copy.set(prop.name, get(prop.name))
@@ -52,12 +62,58 @@ func forcing_color(color: int, controller_only := false, colored_only := false) 
 	copy.dynamic_color = Callable()
 	copy.color_options = Callable()
 	copy.produces = []
+	if fixed_amount > 0:
+		copy.produces = [[color, fixed_amount]]
+		copy.dynamic_amount = Callable()
+		copy.amount_reads_activator = false
+		copy.any_number_counter_kind = ""
+		copy.bonus_per_counter = 0
+		copy.scales_with_sacrifice_mv = false
+		copy.reveal_filter = Callable()
+		copy.reveal_per_card = 0
+		return copy
 	for i in produces.size():
 		var pair: Array = produces[i]
 		var keeps := colored_only and int(pair[0]) == Mtg.ManaColor.C \
 			and not (i == 0 and chosen_at_activation)
 		copy.produces.append([int(pair[0]) if keeps else color, pair[1]])
 	return copy
+
+
+## A STATIC'S WAY TO REPLACE A LAND'S MANA (Pack 10 E8): "if [param land]
+## is tapped for mana, it produces [param color] instead of any other type"
+## — and, with [param fixed_amount] above 0, "... and amount"
+## (Contamination: {B}, 1). Called from a static on every recalculation;
+## writes the land's derived [member CardInstance.cur_land_mana_replacements]
+## and [member CardInstance.cur_land_mana_fixed], which the continuous
+## pipeline turns into [method forcing_color] copies of every {T} mana
+## ability (one variant per final colour, CR 616.1).
+static func replace_land_mana(land: CardInstance, color: int, fixed_amount := 0) -> void:
+	if not land.cur_land_mana_replacements.has(color):
+		land.cur_land_mana_replacements.append(color)
+	if fixed_amount > 0:
+		var had := int(land.cur_land_mana_fixed.get(color, 0))
+		land.cur_land_mana_fixed[color] = fixed_amount if had <= 0 else mini(had, fixed_amount)
+
+
+## The amount the [param color] variant of [param land]'s replaced mana is
+## fixed at, or 0 for "whatever the ability makes". CR 616.1: the land's
+## controller orders the replacements, and whichever applies LAST names the
+## colour — but an amount, once fixed, stands in every order, since a
+## type-only replacement keeps the amount it is handed. So a variant whose
+## colour fixes no amount (Deep Water's {U} under Contamination) still makes
+## the fixed one; with two fixed amounts the smaller is used (no card in the
+## pool has a second).
+static func land_fixed_amount(land: CardInstance, color: int) -> int:
+	if land.cur_land_mana_fixed.is_empty():
+		return 0
+	if land.cur_land_mana_fixed.has(color):
+		return int(land.cur_land_mana_fixed[color])
+	var least := 0
+	for amount in land.cur_land_mana_fixed.values():
+		if least <= 0 or int(amount) < least:
+			least = int(amount)
+	return least
 
 ## When true the cost also includes sacrificing the source (Black Lotus's
 ## "{T}, Sacrifice Black Lotus: Add three mana of any one color" — modeled
@@ -379,6 +435,42 @@ func with_any_number_of_counters(kind: String, bonus := 1) -> ManaAbility:
 	any_number_counter_kind = kind
 	bonus_per_counter = bonus
 	return self
+
+
+## "Reveal any number of <kind> cards in your hand. Add {C}{C} for each
+## card revealed this way" (Metalworker — Pack 10 E8; CR 605.1a, 701.16a).
+## [member reveal_filter] picks the hand cards that may be revealed
+## ([code]func(card: CardInstance) -> bool[/code]); MtgGame.tap_for_mana
+## asks the activating player HOW MANY (an OPTION "0".."N", hint N) and,
+## when fewer than all, WHICH (one CARD question per card) — each held for
+## a human seat like a battery's count — reveals them to every player and
+## adds [member reveal_per_card] more of the first produced colour per card.
+## Build the ability with an amount of 0 ([code]ManaAbility.new(C, 0)[/code]).
+## ManaPlanner counts the seat's own maximum (its own hand — fair).
+var reveal_filter: Callable = Callable()
+var reveal_desc: String = ""
+var reveal_per_card: int = 0
+
+## Fluent: see [member reveal_filter]. [param desc] names the kind in the
+## questions ("artifact": "Select artifact card to reveal.").
+func with_reveal_from_hand(filter: Callable, desc: String, per_card := 2) -> ManaAbility:
+	reveal_filter = filter
+	reveal_desc = desc
+	reveal_per_card = per_card
+	return self
+
+## The cards of [param hand] this ability may reveal. [param public_only]:
+## only those already revealed — what ANOTHER seat may count (rule 8).
+func reveal_candidates(hand: Array, public_only := false) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	if not reveal_filter.is_valid():
+		return out
+	for card: CardInstance in hand:
+		if public_only and not card.revealed_in_hand:
+			continue
+		if bool(reveal_filter.call(card)):
+			out.append(card)
+	return out
 
 
 ## RESTRICTED output: "Spend this mana only to cast artifact spells"

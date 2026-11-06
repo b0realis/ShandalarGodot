@@ -221,6 +221,23 @@ func test_library_of_leng_keeps_psychic_purge_biting() -> void:
 	assert_eq(g.players[1].life, 15, "the Purge still punished its discarder")
 
 
+func test_psychic_purge_bites_an_opponent_s_wheel_of_fortune() -> void:
+	# A whole hand discarded (MtgGame.discard_hand) is still each card's
+	# discard: the Purge's own ability fires, as it does for a chosen or a
+	# random discard (Pack 10's B8 found it silent, 2026-11-06).
+	var purge := give_hand(0, "Psychic Purge")
+	advance_to_next_turn()
+	advance_to_step(Mtg.Step.MAIN1)
+	var wheel := give_hand(1, "Wheel of Fortune")
+	add_mana(1, Mtg.ManaColor.R, 1)
+	add_mana(1, Mtg.ManaColor.C, 2)
+	assert_ok(g.cast_spell(1, wheel, []))
+	resolve_stack()
+	assert_eq(purge.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.players[1].life, 15, "the Wheel's caster lost 5")
+	assert_eq(g.players[0].life, 20)
+
+
 func test_library_of_leng_applies_to_your_own_wheel_of_fortune() -> void:
 	# Duel.hlp: "using Sindbad or Wheel of Fortune is considered a forced
 	# discard" — the classic Leng + Wheel: the hand goes on top of the

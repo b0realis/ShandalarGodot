@@ -31,6 +31,10 @@ const COSTS := preload("res://engine/additional_object_costs.gd")
 ## pay_ransom], [method lion_eye_action] and [method spell_choice] ask the
 ## Tempest module first (until it has its own place in AiPlayer).
 const TEMPEST_TACTICS := preload("res://engine/ai/tempest_tactics.gd")
+## Pack 10's readings (the Urza block): [method option], [method respond],
+## [method price_forced_attackers] and [method price_block_tax] ask the
+## Urza module before the Tempest one.
+const URZA_TACTICS := preload("res://engine/ai/urza_tactics.gd")
 
 
 # ================================================== lands with an entry --
@@ -317,8 +321,13 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 	var a: ActivatedAbility = s.cur_activated_abilities[index]
 	if a.effects.is_empty():
 		return null
+	# Pack 10 (the Urza block's gifts, counters, untaps, cheats and
+	# shrinks): the Urza module's reading first, whole.
+	var urza: Variant = URZA_TACTICS.option(g, pilot, s, index, window)
+	if urza != null:
+		return urza
 	# Pack 9 (licids, shadow tricks, the block's roles): the Tempest
-	# module's reading first, whole.
+	# module's reading next, whole.
 	var tempest: Variant = TEMPEST_TACTICS.option(g, pilot, s, index, window)
 	if tempest != null:
 		return tempest
@@ -629,9 +638,14 @@ static func ability_mana(g: MtgGame, pilot, src: CardInstance, index: int, sourc
 static func respond(g: MtgGame, pilot) -> String:
 	if not pilot.profile.forecasts_tactics:
 		return ""
-	# Pack 9's moments first (tempest_tactics.gd `respond`): a licid saved
-	# from its host's removal, a shadow trick before blocks.
-	var done := TEMPEST_TACTICS.respond(g, pilot)
+	# Pack 10's moments first (urza_tactics.gd `respond`): an Opal
+	# creature turned back into an enchantment out of harm's way.
+	var done := URZA_TACTICS.respond(g, pilot)
+	if done != "":
+		return done
+	# Pack 9's moments (tempest_tactics.gd `respond`): a licid saved from
+	# its host's removal, a shadow trick before blocks.
+	done = TEMPEST_TACTICS.respond(g, pilot)
 	if done != "":
 		return done
 	done = save_by_phasing(g, pilot)
@@ -1580,6 +1594,9 @@ static func pending_flank(g: MtgGame, blocker: CardInstance) -> int:
 ## to drop a volunteered land-taxed attacker — Exalted Dragon — while
 ## rebuilding).
 static func price_forced_attackers(g: MtgGame, pilot, attackers: Array, defender: int) -> Array:
+	# Pack 10 (forecasts_tactics): a defector or a Negator kept out of a
+	# swing the board shows it loses (urza_tactics.gd `price_attackers`).
+	attackers = URZA_TACTICS.price_attackers(g, pilot, attackers, defender)
 	if attackers.is_empty() or not pilot.profile.reads_gaze:
 		return attackers
 	var CD := preload("res://engine/core/combat_declaration.gd")
@@ -1626,6 +1643,9 @@ static func price_forced_attackers(g: MtgGame, pilot, attackers: Array, defender
 ## attacker, when it stops more damage than the life it costs, or when it
 ## is part of surviving the attack; otherwise the life is not spent.
 static func price_block_tax(g: MtgGame, pilot, block_map: Dictionary) -> Dictionary:
+	# Pack 10 (forecasts_tactics): a defector or a Negator kept out of a
+	# block the board shows it loses (urza_tactics.gd `price_blocks`).
+	block_map = URZA_TACTICS.price_blocks(g, pilot, block_map)
 	if block_map.is_empty() or not pilot.profile.reads_gaze:
 		return block_map
 	var out := block_map.duplicate(true)
@@ -1928,7 +1948,7 @@ static func shield_tools(g: MtgGame, pilot, victim: TargetRef,
 			if mana < 0:
 				continue
 			var price: float = float(mana) * 0.5 + float(pilot._sacrifice_price(g, src, a)) \
-				+ float(a.life_cost) * pilot._life_price(g.players[pid].life)
+				+ float(g.ability_life_cost(pid, src, a)) * pilot._life_price(g.players[pid].life)
 			var aimed: Array = []
 			if e is SourceShieldEffect and e.target_spec != null:
 				aimed = [victim]
@@ -2148,6 +2168,10 @@ static func lion_eye_action(g: MtgGame, pilot, moment: int) -> String:
 	# Pack 9's main-phase special actions (Volrath's Curse ignored for an
 	# attack, tempest_tactics.gd `main_action`) — asked from the same seat.
 	if moment == AiPlayer.Moment.MAIN:
+		# Pack 10's (Damping Engine's ignore, urza_tactics.gd `main_action`).
+		var urza := URZA_TACTICS.main_action(g, pilot)
+		if urza != "":
+			return urza
 		var tempest := TEMPEST_TACTICS.main_action(g, pilot)
 		if tempest != "":
 			return tempest

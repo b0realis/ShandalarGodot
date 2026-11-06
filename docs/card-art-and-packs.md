@@ -20,7 +20,7 @@ Then run **Install Certificates.command** from Applications → Python 3.x
 once; without it every download fails with `CERTIFICATE_VERIFY_FAILED`.
 
 New to command windows? [Getting Started](https://b0realis.github.io/ShandalarGodot/)
-walks from the download to the first duel, every set up to Tempest included.
+walks from the download to the first duel, every set up to the Urza block included.
 
 ## Base card pictures: cardart.zip
 
@@ -137,6 +137,18 @@ python3 tools/pack_9_tempest_block.py build cardpacks/Pack-9-Tempest-Block.zip
 python3 tools/pack_9_tempest_block.py verify cardpacks/Pack-9-Tempest-Block.zip
 ```
 
+Pack 10 — The Urza Block (requires game 0.60.19 or later). Urza's Saga,
+Urza's Legacy and Urza's Destiny in one pack: 621 names and 636 printings,
+591 of them new to the game, with four illustrations for each Urza's Saga
+basic land and a separate Extras switch for each set (about 128 MB of
+fetched art):
+
+```sh
+python3 tools/pack_10_urza_block.py fetch-art
+python3 tools/pack_10_urza_block.py build cardpacks/Pack-10-Urza-Block.zip
+python3 tools/pack_10_urza_block.py verify cardpacks/Pack-10-Urza-Block.zip
+```
+
 Run `build` only after `fetch-art` succeeds. Each builder's default artwork
 cache is `../shandalar-packs/cache/pack_N_art/`, relative to the game folder.
 To put it elsewhere, pass the same `--art-dir PATH` to `fetch-art` and `build`.
@@ -170,7 +182,8 @@ extracted-game-folder/
     ├── Pack-6-Portal.zip
     ├── Pack-7-Fifth-Edition.zip
     ├── Pack-8-Mirage-Block.zip
-    └── Pack-9-Tempest-Block.zip
+    ├── Pack-9-Tempest-Block.zip
+    └── Pack-10-Urza-Block.zip
 ```
 
 On Mac, `skin/` and `cardpacks/` go **beside Shandalar.app**, never inside

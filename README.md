@@ -83,15 +83,15 @@ The in-game **Help** covers duels, deck building and adventure play.
 
 ## Card packs
 
-The **897-card core** grows to **3,093 unique cards** with all nine optional
-packs enabled, from DotP Complete and Fallen Empires through the Tempest block,
-including both Portal sets. Packs are optional and built locally;
+The **897-card core** grows to **3,684 unique cards** (4,704 set entries) with
+all ten optional packs enabled, from DotP Complete and Fallen Empires through
+the Urza block, including both Portal sets. Packs are optional and built locally;
 [the pack guide](docs/card-art-and-packs.md) lists every set and builder.
 
-**Campaigns on current main:** tick any of **Packs 2–9** on Embark to add each
+**Campaigns on current main:** tick any of **Packs 2–10** on Embark to add each
 pack's own cards to mainland shops, trades and rewards: 20% of random shop and
 reward cards per pack, 60% at most, the rest base cards. The first deck and the
-creatures' decks stay base cards. All nine packs are available for ordinary
+creatures' decks stay base cards. All ten packs are available for ordinary
 duels and deck building on native platforms. Published downloads may predate
 these campaign additions.
 

@@ -305,6 +305,12 @@ func _on_life_clicked(pid: int) -> void:
 func _click_hand_card(inst: CardInstance) -> void:
 	if projection.locked or game.priority_player != 0: return
 	if not _castable_source(inst): return
+	# A CARD WITH AN ABILITY THAT WORKS FROM THE HAND (Pack 10 — cycling,
+	# CR 702.29a) asks which, as at a local table: Cast (Play, for a
+	# cycling land) or "Cycling {2}" ([method _start_hand_ability]).
+	if inst.zone == Mtg.Zone.HAND and not _hand_ability_indices(inst).is_empty():
+		_open_hand_action_menu(inst)
+		return
 	if inst.is_land():
 		_report(game.play_land(0, inst))
 		return
@@ -319,10 +325,73 @@ func _click_hand_card(inst: CardInstance) -> void:
 
 ## Where this seat may cast from (Pack 8): its hand, an exiled card it may
 ## play (a Three Wishes card it alone may look at) and the graveyard card
-## the referee offers a cast for (Bösium Strip).
+## the referee offers a cast for (Bösium Strip) — and (Pack 10) a card a
+## zone permission covers: a graveyard land under Yawgmoth's Will, the
+## library top Temporal Aperture revealed (SgDuelProjection.can_play_from_zone).
 func _castable_source(inst: CardInstance) -> bool:
 	return (inst.zone == Mtg.Zone.HAND and inst.owner_id == 0) or game.can_play_from_exile(0, inst) \
-		or game.can_cast_from_graveyard(0, inst)
+		or game.can_cast_from_graveyard(0, inst) or game.can_play_from_zone(0, inst)
+
+
+## Pack 10 E2: the networked seat starts its hand abilities too — through
+## the referee ([method _start_hand_ability]).
+func _offers_hand_abilities() -> bool:
+	return true
+
+
+## Pack 10 E2: a hand ability the referee does not offer now.
+const HAND_ABILITY_UNAVAILABLE := "That ability can't be activated now."
+
+
+## Why the hand menus grey hand ability [param index] of [param inst]: what
+## the local screen says (something already pending, priority), the host
+## still answering, and then the REFEREE's verdict — the face lists the
+## ability as an option only while the engine would take it now
+## (SgDuelActions.options: the owner alone, the timing, the mana in reach).
+func _hand_ability_refusal(inst: CardInstance, index: int) -> String:
+	if _pending_card != null:
+		return VULTURES_CASTING % inst.data.card_name if _pending_card == inst else HAND_ABILITY_BUSY
+	if game.priority_player != 0 or inst.owner_id != 0:
+		return "you don't have priority"
+	if projection.locked:
+		return "Waiting for the host."
+	return "" if not _hand_ability_option(inst, index).is_empty() else HAND_ABILITY_UNAVAILABLE
+
+
+## The referee's option for [param inst]'s hand ability [param index], or {}.
+func _hand_ability_option(inst: CardInstance, index: int) -> Dictionary:
+	for option in projection.faces.get(projection.handle(inst.id), {}).get("actions", []):
+		if option.kind == "ability" and int(option.index) == index:
+			return option
+	return {}
+
+
+## Pack 10 E2 — A HAND ABILITY IS ANNOUNCED TO THE REFEREE like a
+## permanent's ([method _on_ability_chosen]): `prepare` with its index,
+## then its targets, the payment and `submit`. The engine discards the card
+## as part of the cost when it activates it (CR 702.29a); the projection
+## never moves it.
+func _start_hand_ability(inst: CardInstance, index: int) -> void:
+	if projection.locked or game.priority_player != 0 or inst == null \
+			or inst.zone != Mtg.Zone.HAND or inst.owner_id != 0:
+		return
+	if mode != Mode.NORMAL or _modal_open() or _pending_card != null:
+		_report(VULTURES_CASTING % inst.data.card_name if _pending_card == inst else HAND_ABILITY_BUSY)
+		return
+	var option := _hand_ability_option(inst, index)
+	if option.is_empty():
+		_report(HAND_ABILITY_UNAVAILABLE)
+		return
+	_announcement_refused = false
+	_pending_card = inst
+	_pending_pid = 0
+	_pending_ability_index = index
+	_pending_targets = []
+	_pending_x = 0
+	_pending_mode = 0
+	_prepared_key = ""
+	if option.x: _open_x_dialog()
+	else: _prepare()
 
 
 ## The cast chain of a card the seat has chosen to CAST — the click's, the
@@ -644,8 +713,11 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 	# Only a quiet table starts something from a pile (the local rule).
 	if mode != Mode.NORMAL or _pending_card != null: return
 	# An exiled card this seat may play (Three Wishes, the Bottle) and the
-	# graveyard card the referee offers a cast for (Bösium Strip, Pack 8).
-	if game.can_play_from_exile(0, inst) or game.can_cast_from_graveyard(0, inst):
+	# graveyard card the referee offers a cast for (Bösium Strip, Pack 8);
+	# Pack 10, a graveyard land Yawgmoth's Will lets it play (the face's
+	# `zone_playable`), played as the land drop.
+	if game.can_play_from_exile(0, inst) or game.can_cast_from_graveyard(0, inst) \
+			or game.can_play_from_zone(0, inst):
 		_close_graveyard()
 		_click_hand_card(inst)
 	elif not projection.faces.get(projection.handle(inst.id), {}).get("actions", []).is_empty():

@@ -505,7 +505,7 @@ static func retarget_value(g: MtgGame, pilot, spell: CardInstance, ref: TargetRe
 	if item == null or item.effects.size() != 1 or not item.effects[0] is DamageEffect: return old
 	var effect: DamageEffect = item.effects[0]
 	var damage := item.x_value + effect.x_bonus if effect.use_x else effect.amount
-	if effect.divided_amount(item.x_value) > 0: damage = ref.amount
+	if effect.divided_amount_at(g, spell, item.x_value) > 0: damage = ref.amount
 	var through := damage_through(g, spell, ref, damage, effect.unpreventable_to_creatures)
 	if through <= 0: return 0.0
 	var who := ref.player_id

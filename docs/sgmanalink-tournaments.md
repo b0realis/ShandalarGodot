@@ -1,7 +1,7 @@
 # LAN tournaments
 
 Development implementation on `main`, **0.50.37** (protocol **29**; 2026-10-27: now
-0.50.61, protocol **30**). Internet play, permanent accounts,
+0.50.61, protocol **30**; 2026-11-06: 0.60.19, protocol **31**). Internet play, permanent accounts,
 MElo and tournament-integrated drafting are parked. A separate
 [timed draft builder](booster-draft.md) is available for local practice.
 Windows, Linux and macOS use the existing LAN
@@ -150,7 +150,7 @@ checkpoint and the recovery codes below.
 Recovery requires a matching build and the same enabled gameplay packs. Earlier
 development checkpoints remain untouched but are not migrated across a changed
 build fingerprint. Use matching 0.50.37 builds and enabled packs for recovery
-(2026-10-27: matching builds of one version, protocol 30 now).
+(2026-10-27: matching builds of one version; protocol 31 since 0.60.19).
 Computer entries retain their settings and are recreated without recovery codes.
 
 **Tournament setup → Save folder** offers a typed path, **Browse…** and
@@ -168,7 +168,7 @@ application cannot reclaim an entry by matching its nickname.
 
 ## Play on a LAN
 
-1. Use matching builds (0.50.37 uses protocol 29; 0.50.61 uses 30) and enabled card packs. Open the globe, choose a
+1. Use matching builds (0.50.37 uses protocol 29; 0.50.61 uses 30; 0.60.19 uses 31) and enabled card packs. Open the globe, choose a
    temporary name, and check the LAN address/port under **Host Game →
    Network settings…** if the computer has several adapters.
 2. Open **Tournament**. Name the event, choose 2–40 maximum entrants and a

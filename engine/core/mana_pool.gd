@@ -22,6 +22,17 @@ extends RefCounted
 ## cost-matters cards); if that ever changes, replace [method pay] with a
 ## player-choice flow and delete this paragraph.
 
+## "THIS MANA CAN'T BE SPENT TO CAST SPELLS" (Thran Turbine; CR 106.6) —
+## the one INVERSE restriction (Pack 10 E8). Every other key is opt-in: a
+## bucket is spendable only by a payment that names it. A bucket under
+## this key is spendable by every payment whose usage keys do NOT name
+## "spell" — an activated ability, a mana ability's own mana cost, echo,
+## cumulative upkeep, an "unless pays", an attack or block tax — and by no
+## spell, since [method MtgGame.mana_usage_keys] always names "spell".
+## Every spending path here reads it through [method _with_not_spell];
+## [method ManaPlanner.source_usable] through [method key_usable].
+const NOT_SPELL := "not_spell"
+
 ## Floating mana, keyed by Mtg.ManaColor flag → count.
 var _mana: Dictionary = {}
 
@@ -117,12 +128,30 @@ func total() -> int:
 	return sum
 
 
+## May mana restricted to [param key] ("" = unrestricted) pay for something
+## that qualifies for [param usage_keys]? Its own key, or
+## [constant NOT_SPELL] for anything that is no spell.
+static func key_usable(key: String, usage_keys: Array) -> bool:
+	if key == "" or usage_keys.has(key):
+		return true
+	return key == NOT_SPELL and not usage_keys.has("spell")
+
+
+## [param usage_keys] as this pool spends them: with [constant NOT_SPELL]
+## added for a payment that is no spell while such mana floats. The same
+## Array otherwise — the common case allocates nothing.
+func _with_not_spell(usage_keys: Array) -> Array:
+	if not _restricted.has(NOT_SPELL) or usage_keys.has("spell") or usage_keys.has(NOT_SPELL):
+		return usage_keys
+	return usage_keys + [NOT_SPELL]
+
+
 ## A merged {color: count} view of everything spendable on a payment that
 ## qualifies for [param usage_keys].
 func _spendable(usage_keys: Array) -> Dictionary:
 	var out: Dictionary = _mana.duplicate()
 	var seen: Dictionary = {}
-	for key in usage_keys:
+	for key in _with_not_spell(usage_keys):
 		# A key named twice must not count its bucket twice: `can_pay`
 		# would say yes to a cost `pay` cannot finish (2026-09-02).
 		if seen.has(key):
@@ -204,6 +233,7 @@ func pay(cost: ManaCost, x_value: int = 0, usage_keys: Array = [],
 		substitutions: Array = [], any_color: bool = false) -> Dictionary:
 	assert(can_pay(cost, x_value, usage_keys, substitutions, any_color),
 		"ManaPool.pay called without can_pay check")
+	usage_keys = _with_not_spell(usage_keys)   # Thran Turbine's mana (Pack 10 E8)
 	var generic_due: int = maxi(0, cost.generic + x_value)
 	if any_color:
 		# North Star: every pip is payable with anything, so the whole cost
@@ -274,7 +304,7 @@ func clear() -> void:
 func _take(color: int, due: int, usage_keys: Array) -> int:
 	if due <= 0:
 		return due
-	for key in usage_keys:
+	for key in _with_not_spell(usage_keys):
 		if not _restricted.has(key):
 			continue
 		var bucket: Dictionary = _restricted[key]

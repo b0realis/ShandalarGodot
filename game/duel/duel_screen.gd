@@ -2409,8 +2409,11 @@ func _repopulate_graveyard() -> void:
 		playable = func(inst: CardInstance) -> bool:
 			if game.priority_player != seat:
 				return false
+			# Pack 10 E5: a graveyard LAND under Yawgmoth's Will too
+			# ([method MtgGame.can_play_from_zone]).
 			if not (game.can_play_from_exile(seat, inst)
-					or game.can_cast_from_graveyard(seat, inst)):
+					or game.can_cast_from_graveyard(seat, inst)
+					or game.can_play_from_zone(seat, inst)):
 				return false
 			return _pile_card_playable(seat, inst)
 	_grave_view.populate(game, seat, legal, playable, _looking_seat())
@@ -2483,8 +2486,13 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 		# your graveyard" — the engine's own permission
 		# ([method MtgGame.can_cast_from_graveyard]) decides which card,
 		# and the cast is the hand's own chain from there (timing, mode,
-		# targets, mana: the printed ones, CR 601.3).
-		if game.can_cast_from_graveyard(seat, inst) and game.priority_player == seat:
+		# targets, mana: the printed ones, CR 601.3). Pack 10 E5: a LAND
+		# under Yawgmoth's Will ("you may play lands ... from your
+		# graveyard") is played from here the same way, as the land drop
+		# ([method MtgGame.can_play_from_zone]; the hand click routes a land
+		# to MtgGame.play_land).
+		if (game.can_cast_from_graveyard(seat, inst) or game.can_play_from_zone(seat, inst)) \
+				and game.priority_player == seat:
 			_close_graveyard()
 			_click_hand_card(inst)
 			return
@@ -2508,6 +2516,13 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 
 func _click_hand_card(inst: CardInstance) -> void:
 	var pid := inst.exile_playable_by if inst.zone == Mtg.Zone.EXILE else inst.owner_id
+	# A CARD WITH AN ABILITY THAT WORKS FROM THE HAND (cycling, Pack 10 E2 —
+	# CR 702.29a) asks which: Play or Cast, or the ability. A cycling LAND
+	# too, which is otherwise played at once.
+	if inst.zone == Mtg.Zone.HAND and not _hand_ability_indices(inst).is_empty() \
+			and _offers_hand_abilities():
+		_open_hand_action_menu(inst)
+		return
 	if inst.is_land():
 		_report(game.play_land(pid, inst))
 		_flush_refresh()   # r1-1: the land on the table before the click returns
@@ -2604,13 +2619,64 @@ func _start_cast(inst: CardInstance) -> void:
 ## forbids it (a creature outside your main phase) and the discard when
 ## the seat does not hold priority. The engine stays the referee on the
 ## rest and its refusal is shown verbatim.
+##
+## Pack 10 E2: the same menu offers a card's ABILITIES THAT WORK FROM THE
+## HAND — "Cycling {2}" (CR 702.29a) — beside "Cast" (or "Play" for a
+## cycling land), each greyed with the engine's own announce-time reason
+## ([method MtgGame.ability_announce_refusal]). Unlike the special discard,
+## an activation uses the chain like any other ability.
 const HAND_ACTION_CAST := 0
 const HAND_ACTION_DISCARD := 1
+## Pack 10 E2: the id of the hand ability at live index i is this plus i.
+const HAND_ACTION_ABILITY_BASE := 10
 ## Why the special-action discard waits while the card's OWN cast is
 ## pending (H8-3): the cast is still pointing at it.
 const VULTURES_CASTING := "%s is being cast: cancel the cast first."
+## Pack 10 E2: why a hand ability waits while something else is pending.
+const HAND_ABILITY_BUSY := "Finish or cancel what you are doing first."
 var _hand_action_menu: PopupMenu = null
 var _hand_action_inst: CardInstance = null
+
+
+## Pack 10 E2: the live indices of [param inst]'s activated abilities that
+## work from the HAND (cycling) — [] for a card that is not in a hand.
+static func _hand_ability_indices(inst: CardInstance) -> Array[int]:
+	var out: Array[int] = []
+	if inst == null or inst.zone != Mtg.Zone.HAND:
+		return out
+	for i in inst.cur_activated_abilities.size():
+		if inst.cur_activated_abilities[i].activation_zone == Mtg.Zone.HAND:
+			out.append(i)
+	return out
+
+
+## Pack 10 E2: does THIS screen start hand abilities itself? The local
+## table does. The networked screen ([SgDuelView]) announces every action
+## to its referee and has its own door for them, so it offers none until it
+## overrides [method _start_hand_ability] and this.
+func _offers_hand_abilities() -> bool:
+	return not _network_opponent()
+
+
+## Pack 10 E2: a hand ability as the menus name it — "Cycling {2}", the
+## words before the reminder text; any other hand ability by its full text.
+static func hand_ability_label(ability: ActivatedAbility) -> String:
+	var words := ability.text
+	if ability.is_cycling and words.contains(" ("):
+		words = words.left(words.find(" ("))
+	return words if words != "" else "Activate from hand"
+
+
+## Pack 10 E2: why the menus grey hand ability [param index] of
+## [param inst] — the engine's announce-time refusal, priority, or a cast or
+## activation already pending — or "" when it may be started.
+func _hand_ability_refusal(inst: CardInstance, index: int) -> String:
+	if _pending_card != null:
+		return VULTURES_CASTING % inst.data.card_name if _pending_card == inst \
+			else HAND_ABILITY_BUSY
+	if game.priority_player != inst.owner_id:
+		return "you don't have priority"
+	return game.ability_announce_refusal(inst.owner_id, inst, index)
 
 
 func _open_hand_action_menu(inst: CardInstance) -> void:
@@ -2619,22 +2685,51 @@ func _open_hand_action_menu(inst: CardInstance) -> void:
 	_hand_action_inst = inst
 	_hand_action_menu.clear()
 	var card_name := inst.data.card_name
-	_hand_action_menu.add_item("Cast %s" % card_name, HAND_ACTION_CAST)
-	var cast_why := game.cast_timing_refusal(inst.owner_id, inst)
-	_hand_action_menu.set_item_disabled(
-		_hand_action_menu.get_item_index(HAND_ACTION_CAST), cast_why != "")
-	if cast_why != "":
-		_hand_action_menu.set_item_tooltip(
-			_hand_action_menu.get_item_index(HAND_ACTION_CAST), cast_why)
-	_hand_action_menu.add_item("Discard %s (special action)" % card_name,
-		HAND_ACTION_DISCARD)
-	var at := _hand_action_menu.get_item_index(HAND_ACTION_DISCARD)
-	_hand_action_menu.set_item_disabled(at, game.priority_player != inst.owner_id \
-		or _pending_card == inst)
-	_hand_action_menu.set_item_tooltip(at, VULTURES_CASTING % card_name \
-		if _pending_card == inst else
-		"Any time you could cast an instant. It uses no stack, nobody can "
-		+ "respond to it, and you keep priority.")
+	if inst.is_land():
+		# Pack 10 E2: a cycling LAND is played as the turn's land (a special
+		# action, CR 305.1) or cycled — never both, and cycling spends no
+		# land drop. Greyed when the drop is not open; the engine still
+		# referees the play and its refusal is shown verbatim.
+		_hand_action_menu.add_item("Play %s" % card_name, HAND_ACTION_CAST)
+		var pid := inst.owner_id
+		var play_why := ""
+		if pid != game.active_player or not Mtg.is_main_step(game.current_step()) \
+				or not game.stack.is_empty():
+			play_why = "lands can only be played in your main phase with an empty stack"
+		elif not game.land_drop_available(pid):
+			play_why = "you already played a land this turn"
+		var play_at := _hand_action_menu.get_item_index(HAND_ACTION_CAST)
+		_hand_action_menu.set_item_disabled(play_at, play_why != "")
+		if play_why != "":
+			_hand_action_menu.set_item_tooltip(play_at, play_why)
+	else:
+		_hand_action_menu.add_item("Cast %s" % card_name, HAND_ACTION_CAST)
+		var cast_why := game.cast_timing_refusal(inst.owner_id, inst)
+		_hand_action_menu.set_item_disabled(
+			_hand_action_menu.get_item_index(HAND_ACTION_CAST), cast_why != "")
+		if cast_why != "":
+			_hand_action_menu.set_item_tooltip(
+				_hand_action_menu.get_item_index(HAND_ACTION_CAST), cast_why)
+	if inst.data.discard_special_action:
+		_hand_action_menu.add_item("Discard %s (special action)" % card_name,
+			HAND_ACTION_DISCARD)
+		var at := _hand_action_menu.get_item_index(HAND_ACTION_DISCARD)
+		_hand_action_menu.set_item_disabled(at, game.priority_player != inst.owner_id \
+			or _pending_card == inst)
+		_hand_action_menu.set_item_tooltip(at, VULTURES_CASTING % card_name \
+			if _pending_card == inst else
+			"Any time you could cast an instant. It uses no stack, nobody can "
+			+ "respond to it, and you keep priority.")
+	var offered: Array[int] = []
+	if _offers_hand_abilities():
+		offered = _hand_ability_indices(inst)
+	for index in offered:
+		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+		_hand_action_menu.add_item(hand_ability_label(ability), HAND_ACTION_ABILITY_BASE + index)
+		var ability_at := _hand_action_menu.get_item_index(HAND_ACTION_ABILITY_BASE + index)
+		var why := _hand_ability_refusal(inst, index)
+		_hand_action_menu.set_item_disabled(ability_at, why != "")
+		_hand_action_menu.set_item_tooltip(ability_at, why if why != "" else ability.text)
 	_popup_menu_at(_hand_action_menu, _pointer())
 
 
@@ -2645,7 +2740,12 @@ func _on_hand_action_chosen(id: int) -> void:
 		return   # the hand changed under the open menu
 	match id:
 		HAND_ACTION_CAST:
-			if mode == Mode.NORMAL and _pending_card == null and not _modal_open():
+			if inst.is_land():
+				# Pack 10 E2: a cycling land's Play line — the plain click's play.
+				if mode == Mode.NORMAL and _pending_card == null and not _modal_open():
+					_report(game.play_land(inst.owner_id, inst))
+					_flush_refresh()
+			elif mode == Mode.NORMAL and _pending_card == null and not _modal_open():
 				_start_cast(inst)
 		HAND_ACTION_DISCARD:
 			if _pending_card == inst:
@@ -2653,6 +2753,42 @@ func _on_hand_action_chosen(id: int) -> void:
 				return
 			_report(game.discard_as_special_action(inst.owner_id, inst))
 			_refresh()
+		_:
+			if id >= HAND_ACTION_ABILITY_BASE:
+				_start_hand_ability(inst, id - HAND_ACTION_ABILITY_BASE)
+
+
+## Pack 10 E2 — START A HAND ABILITY (cycling): the pending chain an
+## ability chosen from a permanent's menu starts ([method _on_ability_chosen]),
+## with the OWNER as the payer — targets, X, then the engine's
+## [method MtgGame.activate_ability], which pays the mana (or waits in
+## [constant Mode.PAYING] for it) and discards the card as part of the cost.
+## Only on a quiet table: anything already pending is left alone and said.
+func _start_hand_ability(inst: CardInstance, index: int) -> void:
+	if inst == null or inst.zone != Mtg.Zone.HAND \
+			or index < 0 or index >= inst.cur_activated_abilities.size():
+		return
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	if ability.activation_zone != Mtg.Zone.HAND:
+		return
+	if mode != Mode.NORMAL or _modal_open() or _pending_card != null:
+		_report(VULTURES_CASTING % inst.data.card_name if _pending_card == inst \
+			else HAND_ABILITY_BUSY)
+		return
+	if not _effects_aimable(ability.effects, inst, ability.cost.has_x):
+		_report(NO_TARGET_PROMPT % inst.data.card_name)
+		return
+	_pending_card = inst
+	_pending_ability_index = index
+	_pending_pid = inst.owner_id
+	_pending_specs = ability.target_specs()
+	_build_ability_slots(ability)
+	_pending_targets = []
+	_pending_x = 0
+	if ability.cost.has_x:
+		_open_x_dialog()
+	else:
+		_advance_pending()
 
 
 ## The steps of the cast chain AFTER any mode is known.
@@ -3758,7 +3894,7 @@ func _build_target_slots(data: CardData, chosen_mode: int) -> void:
 		# slots are chosen.
 		_pending_slots.append({
 			"spec": e.target_spec, "min": span.x, "max": span.y,
-			"divided": e.divided_amount(_pending_x), "effect": e,
+			"divided": e.divided_amount_at(game, _pending_card, _pending_x), "effect": e,
 		})
 		_pending_groups.append([])
 
@@ -3779,7 +3915,8 @@ func _build_ability_slots(ability: ActivatedAbility, x_value := 0) -> void:
 		var span: Vector2i = e.target_range(x_value)
 		_pending_slots.append({
 			"spec": e.target_spec, "min": span.x, "max": span.y,
-			"divided": e.divided_amount(x_value), "effect": e,
+			# Pack 10 E7: the source's own total (Serra's Hymn's verses).
+			"divided": e.divided_amount_at(game, _pending_card, x_value), "effect": e,
 		})
 		_pending_groups.append([])
 
@@ -5972,7 +6109,26 @@ func _has_affordable_fast_effect(pid: int) -> bool:
 			continue
 		if game.activation_refusal(pid, inst, index, {}, true) == "":
 			return true
+	# Pack 10 E2 — AN ABILITY THAT WORKS FROM THE HAND (cycling) is a fast
+	# effect too, held for on the same terms: its cost floated, never a
+	# free one ([method _hand_abilities_of]).
+	for pair in _hand_abilities_of(pid):
+		if not _ability_costs_no_mana(pid, pair[0], pair[1]) \
+				and game.activation_refusal(pid, pair[0], pair[1], {}, true) == "":
+			return true
 	return false
+
+
+## Pack 10 E2: every `[hand card, ability index]` of [param pid]'s own hand
+## whose ability works from the HAND (cycling — only the card's owner
+## activates it, CR 702.29a). [method MtgGame.activation_refusal] is the
+## verdict on each, as for a permanent's ([method _abilities_open_to]).
+func _hand_abilities_of(pid: int) -> Array:
+	var out: Array = []
+	for inst in game.players[pid].hand:
+		for index in _hand_ability_indices(inst):
+			out.append([inst, index])
+	return out
 
 
 ## Every `[permanent, ability index]` [param pid] may activate by the
@@ -6267,6 +6423,13 @@ func _could_respond(pid: int) -> bool:
 	# activate it: an "any player may" ability on the opponent's permanent
 	# is a response of this seat's, an opponents-only one on its own is not.
 	for pair in _abilities_open_to(pid):
+		if game.activation_refusal(pid, pair[0], pair[1]) == "":
+			return true
+	# Pack 10 E2 — AN ABILITY THAT WORKS FROM THE HAND (cycling, CR 702.29a)
+	# is a response like any other, priced the same way: the opponent's end
+	# step is cycling's own moment, and the automatic pass walked a player
+	# holding only a cycling card straight past it.
+	for pair in _hand_abilities_of(pid):
 		if game.activation_refusal(pid, pair[0], pair[1]) == "":
 			return true
 	# A PAYMENT ON THE SEAT IS A RESPONSE TOO (H1-F1, 2026-10-04): Sabertooth
@@ -9420,6 +9583,9 @@ const CARD_MENU_ORIGINAL_TYPE := 0
 const CARD_MENU_HAND_MANA := 100
 ## Circling Vultures' special action, on the card's own mini-menu too.
 const CARD_MENU_DISCARD_SPECIAL := 101
+## Pack 10 E2: a hand ability (cycling) on the card's own mini-menu — the
+## id of live index i is this plus i (below [constant CARD_MENU_SPECIAL_BASE]).
+const CARD_MENU_HAND_ABILITY_BASE := 120
 
 func _hand_mana(inst: CardInstance) -> bool:
 	if inst.zone != Mtg.Zone.HAND: return false
@@ -9448,6 +9614,19 @@ func _open_card_menu(inst: CardInstance, at: Vector2) -> void:
 		if casting:
 			_card_menu.set_item_tooltip(_card_menu.get_item_index(CARD_MENU_DISCARD_SPECIAL),
 				VULTURES_CASTING % inst.data.card_name)
+	# Pack 10 E2: its abilities that work from the hand (cycling), as the
+	# click's own menu offers them ([method _open_hand_action_menu]).
+	var hand_abilities := _hand_ability_indices(inst)
+	if not hand_abilities.is_empty() and _is_human(inst.owner_id) \
+			and _may_see_hand(inst.owner_id) and _offers_hand_abilities():
+		_card_menu.add_separator()
+		for index in hand_abilities:
+			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+			_card_menu.add_item(hand_ability_label(ability), CARD_MENU_HAND_ABILITY_BASE + index)
+			var ability_at := _card_menu.get_item_index(CARD_MENU_HAND_ABILITY_BASE + index)
+			var why := _hand_ability_refusal(inst, index)
+			_card_menu.set_item_disabled(ability_at, why != "")
+			_card_menu.set_item_tooltip(ability_at, why if why != "" else ability.text)
 	# The payments that belong to THIS card (H1-F1): the ransom its bite
 	# left, a point of prevention bought for it.
 	_card_specials = _special_actions_on(inst)
@@ -9505,6 +9684,11 @@ func _on_card_menu_chosen(id: int) -> void:
 		_report(game.discard_as_special_action(_card_menu_inst.owner_id, _card_menu_inst))
 		_refresh()
 		return
+	if id >= CARD_MENU_HAND_ABILITY_BASE and id < CARD_MENU_SPECIAL_BASE:
+		# Pack 10 E2: a hand ability chosen from the card's mini-menu.
+		if _card_menu_inst != null and _card_menu_inst.zone == Mtg.Zone.HAND:
+			_start_hand_ability(_card_menu_inst, id - CARD_MENU_HAND_ABILITY_BASE)
+		return
 	if id >= CARD_MENU_SPECIAL_BASE:
 		var at := id - CARD_MENU_SPECIAL_BASE
 		if at < _card_specials.size():
@@ -9557,13 +9741,41 @@ func _on_card_menu_chosen(id: int) -> void:
 
 
 ## A right-click on a deck stack opens `@MENU_LIBRARY`; a left click
-## falls through to whatever the stack already did (nothing).
+## falls through to whatever the stack already did (nothing) — unless the
+## seat at the screen may PLAY the top card of its own library (Pack 10
+## E5, Temporal Aperture: "for as long as that card remains on top of your
+## library, play with the top card of your library revealed and you may
+## play that card without paying its mana cost"). Then the click shows the
+## revealed card and starts its play, the hand's own chain: a land is
+## played as the land drop, a spell asks its payment row ("Without paying
+## its mana cost") first ([method MtgGame.can_play_from_zone] decides —
+## never a hidden card: the permission names the revealed one).
 func _on_pile_input(event: InputEvent, pid: int) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
 	if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
 		_open_library_menu(pid, mb.global_position)
+	elif mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		_click_library_top(pid)
+
+
+## Pack 10 E5 — the left click on [param pid]'s library pile: play its
+## top card when the seat at the screen may ([method _on_pile_input]).
+## Only a quiet table starts something from a pile (the graveyard's rule,
+## [method _on_graveyard_card]); anything else does nothing.
+func _click_library_top(pid: int) -> void:
+	var seat := _viewing_seat()
+	if pid != seat or game.players[pid].library.is_empty():
+		return
+	var top: CardInstance = game.players[pid].library.back()
+	if not game.can_play_from_zone(seat, top):
+		return
+	if _card_preview != null:
+		_card_preview.show_card(top)
+	if mode != Mode.NORMAL or _pending_card != null or game.priority_player != seat:
+		return
+	_click_hand_card(top)
 
 
 ## A right-click anywhere in the mana column opens `@MENU_MANAPOOL`.

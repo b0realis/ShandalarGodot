@@ -65,6 +65,14 @@ var taps: bool = false
 ## Targeted untap.
 var untaps: bool = false
 
+## "Untap up to N lands" (Pack 10, 2026-11-06): the N an untargeted
+## [member EffectBase.ai_role] `untap_lands` effect hands back
+## (cards/sets/usg/_untap.gd `UntapUpToEffect` — Snap, Frantic Search,
+## Rewind). A mana refund, not removal: read so the effect is no longer
+## `unknown`, and priced by the cast it pays for
+## (engine/ai/urza_spells.gd `cast_adjustment`).
+var untaps_lands: int = 0
+
 ## Cards drawn (0 = none); [member draws_use_x] when the count is X.
 var draws: int = 0
 var draws_use_x: bool = false
@@ -765,6 +773,8 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.swaps_life = true   # THE PRISON READINGS: [member swaps_life]
 		elif e.ai_role == &"fog_attacker":
 			intent.fogs_attacker = true
+		elif e.ai_role == &"untap_lands":
+			intent.untaps_lands += int(e.ai_parameters.get("count", 0))   # Pack 10
 		elif note.is_empty():
 			intent.unknown = true
 			# ...but an AIMED DISCARD says so in its own description, and
@@ -1131,6 +1141,28 @@ const AURA_HOSTILE := {
 	"Volrath's Curse": true,       # can't attack or block, no activations
 	"Shackles": true,              # doesn't untap
 	"Paroxysm": true,              # a land on top destroys it
+	# THE URZA BLOCK (Pack 10, 2026-11-06, the AI stage's sweep of the
+	# pack's Auras). Pariah reads friendly at a glance and is here for the
+	# reason the card is played: "all damage that would be dealt to you is
+	# dealt to enchanted creature instead" — on their creature, our burn
+	# taken by their body; on ours, our own creature eats every hit.
+	# Lingering Mirage is Phantasmal Terrain's colour screw with cycling.
+	# Confiscate and Treachery steal and Mask of Law and Grace grants
+	# protection: structural, no row. The friendly rest are the every-pack
+	# test's reviewed list.
+	"Pariah": true,                # our damage dealt to their creature
+	"Pendrell Flux": true,         # its mana cost each upkeep, or sacrificed
+	"Despondency": true,           # -2/-0
+	"Parasitic Bond": true,        # 2 damage to its controller each upkeep
+	"Cessation": true,             # can't attack
+	"Slow Motion": true,           # {2} each upkeep, or sacrificed
+	"Treacherous Link": true,      # its damage dealt to its controller
+	"Sluggishness": true,          # can't block
+	"Spreading Algae": true,       # the Swamp destroyed when it taps
+	"Festering Wound": true,       # counters, then damage to its controller
+	"Sicken": true,                # -1/-1
+	"Power Taint": true,           # 2 life a turn unless they pay {2}
+	"Lingering Mirage": true,      # colour screw
 }
 
 

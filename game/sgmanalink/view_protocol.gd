@@ -131,7 +131,7 @@ static func cards(value: Variant) -> bool:
 			"power", "toughness", "print_power", "print_toughness", "tapped", "sick", "damage",
 			"attacking", "blocking", "playable",
 			"creature", "owner", "controller", "masked", "types", "colors", "keywords", "subtypes", "counters",
-			"protection", "landwalk", "rampage", "prevention", "regeneration", "chosen", "shield", "attached", "abilities", "actions", "exile_playable", "text_effects", "warded"] + (["printing"] if card.has("printing") else [])) \
+			"protection", "landwalk", "rampage", "prevention", "regeneration", "chosen", "shield", "attached", "abilities", "actions", "exile_playable", "zone_playable", "text_effects", "warded"] + (["printing"] if card.has("printing") else [])) \
 			or not SgProtocol.short_text(card.id, 16) or not card_name(card.name) \
 			or not text(card.rules, 4096) \
 			or not text(card.shield, 128) \
@@ -144,9 +144,11 @@ static func cards(value: Variant) -> bool:
 			or not text_effects(card.text_effects) or (card.masked and not card.text_effects.is_empty()) \
 			or not abilities(card.abilities) or (card.masked and not card.abilities.is_empty()):
 			return false
-		for key in ["land", "tapped", "sick", "attacking", "playable", "creature", "masked", "exile_playable", "warded"]:
+		for key in ["land", "tapped", "sick", "attacking", "playable", "creature", "masked", "exile_playable", "zone_playable", "warded"]:
 			if not card[key] is bool:
 				return false
+		# A zone permission (protocol 31) names a card its seat can see.
+		if card.masked and card.zone_playable: return false
 		# A masked face carries no ward: the board badges nothing on a
 		# face-down card, and the flag would name what the mask hides.
 		if card.masked and card.warded: return false
@@ -215,11 +217,13 @@ static func game(value: Variant) -> bool:
 	for i in 2:
 		var player: Variant = value.players[i]
 		if not player is Dictionary or not SgProtocol.exact(player, ["seat", "life", "hand_count",
-			"library_count", "mana", "kept", "battlefield", "graveyard", "deck_name", "mana_colors", "revealed", "top", "exile", "ante", "phased_out"]) \
+			"library_count", "mana", "kept", "battlefield", "graveyard", "deck_name", "mana_colors", "revealed", "top", "library_top", "exile", "ante", "phased_out"]) \
 			or not SgProtocol.integer(player.seat, i, i) \
 			or not SgProtocol.integer(player.life, -1000000, 1000000) or not player.kept is bool \
 			or not cards(player.battlefield) or not cards(player.graveyard) or not cards(player.revealed) \
 			or not cards(player.phased_out) \
+			or not cards(player.library_top) or player.library_top.size() > 1 \
+			or (not player.library_top.is_empty() and int(player.library_top[0].owner) != i) \
 			or not cards(player.exile) or not cards(player.ante) or not text(player.top, 128) \
 			or not text(player.deck_name, 128) or not numbers(player.mana_colors, 6) or player.mana_colors.size() != 6:
 			return false
@@ -264,7 +268,8 @@ static func linked_cards(value: Dictionary) -> bool:
 	for seat in 2:
 		# A PHASED-OUT permanent is no battlefield card (CR 702.26b) but lies
 		# on the table: a zone of its own here, never aliasing a present one.
-		for zone in ["battlefield", "graveyard", "exile", "ante", "revealed", "phased_out"]:
+		# So is a library's top card the seat may see (protocol 31).
+		for zone in ["battlefield", "graveyard", "exile", "ante", "revealed", "phased_out", "library_top"]:
 			if not _zone_cards(index, value.players[seat][zone],
 				"%s/%d" % ["hand" if zone == "revealed" else zone, seat]): return false
 	var objects := {}

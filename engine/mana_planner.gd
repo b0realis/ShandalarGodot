@@ -163,6 +163,13 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 			# counter choice (whose default is all available fuel) supplies it.
 			if amount == 0 and ability.any_number_counter_kind != "":
 				amount = int(inst.counters.get(ability.any_number_counter_kind, 0)) * ability.bonus_per_counter
+			# "Reveal any number of artifact cards in your hand. Add {C}{C}
+			# for each" (Metalworker, Pack 10 E8): the seat's OWN maximum —
+			# the count question's default — read from its own hand; any
+			# other seat counts only the cards already revealed (rule 8).
+			if ability.reveal_filter.is_valid():
+				amount += ability.reveal_per_card * ability.reveal_candidates(
+					game.players[pid].hand, viewer >= 0 and viewer != pid).size()
 			if amount <= 0:
 				continue
 			# A dynamic-colour source (Gem Bazaar) makes the colour it is
@@ -266,8 +273,11 @@ static func _source_row(game: MtgGame, pool: ManaPool, inst: CardInstance,
 			var bonus: int = trigger.mana_bonus_amount
 			if (inst.cur_supertypes & Mtg.Supertype.SNOW) != 0: bonus += trigger.mana_bonus_snow_extra
 			# Colour 0: "one mana of any type that land produced" (Mana
-			# Flare) — the colour this row makes.
-			var bonus_color: int = trigger.mana_bonus_color if trigger.mana_bonus_color != 0 else color
+			# Flare) — the colour this row makes; a mask of several colours
+			# (Fertile Ground) is counted as this row's colour too, or as
+			# generic mana when the land's colour is not on offer
+			# ([method bonus_color_for], Pack 10 E8).
+			var bonus_color: int = bonus_color_for(trigger.mana_bonus_color, color)
 			if not borrowed and bonus_color == color and restriction == ability.restriction_key: amount += bonus
 			else: bonuses.append([bonus_color, bonus, restriction])
 	var rank := RANK_SPENDS_SOURCE if ability.sacrifice_source or ability.exile_source else 0
@@ -313,6 +323,137 @@ const BONUS_ANY_LAND := ""
 ## "whenever enchanted land is tapped for mana". Two words, so it can never
 ## be a land type.
 const BONUS_ENCHANTED_LAND := "enchanted land"
+## [member TriggeredAbility.mana_bonus_color] for "one mana of ANY color"
+## (Fertile Ground — Pack 10 E8): a MASK of the five colours. Any mask of
+## two or more colours means "one of these, the land's controller's
+## choice", asked as the land is tapped ([method bonus_color_questions]);
+## a single flag is a fixed colour, 0 "a type that land produced".
+const BONUS_ANY_COLOR := Mtg.ManaColor.W | Mtg.ManaColor.U | Mtg.ManaColor.B \
+	| Mtg.ManaColor.R | Mtg.ManaColor.G
+
+
+## The colour a plan counts a described bonus as, on a row making
+## [param made]: 0 → the row's own colour (Mana Flare); one flag → that
+## colour; a mask of several → the row's colour when it is on offer (the
+## choice's hint), else colourless — generic mana, a safe subset of any
+## colour the player may then name.
+static func bonus_color_for(described: int, made: int) -> int:
+	if described == 0 or _one_flag(described):
+		return made if described == 0 else described
+	return made if (made & described) != 0 else Mtg.ManaColor.C
+
+
+static func _one_flag(mask: int) -> bool:
+	return mask != 0 and (mask & (mask - 1)) == 0
+
+
+## THE QUESTIONS OF THE MANA TRIGGERS A TAP WILL FIRE (Pack 10 E8 — CR
+## 605.1b, 106.1, 605.3b). A triggered mana ability resolves the moment the
+## land is tapped, inside [method MtgGame.tap_for_mana], where a human seat
+## cannot be held open; so the tap asks its triggers' choices FIRST, with
+## the rest of the activation, and hands the answers to them on the event
+## (TAPPED_FOR_MANA's `bonus_colors`, {trigger source id: colour}).
+##
+## Rows `{source: CardInstance (the trigger's permanent), asks: int (the
+## seat), kind: PlayerChoice.Kind.COLOR or .OPTION, colors: Array[int]
+## (on offer, in display order), hint: int (a colour)}`, in APNAP order of
+## the permanents — the order the dispatcher fires them in. Read from each
+## trigger's public description, never from the card:
+## - [member TriggeredAbility.mana_bonus_color] a mask of several colours
+##   ([constant BONUS_ANY_COLOR]): a COLOR question to the LAND'S
+##   controller ("its controller adds", Fertile Ground), hint the colour the
+##   land makes when on offer, else the colour the asked seat's own hand
+##   asks for most ([method color_hint]);
+## - colour 0 ("a type that land produced", Mana Flare): an OPTION among
+##   the types this tap makes, to the TAPPING player ("that player adds"),
+##   only when it makes more than one.
+## A trigger whose description is a fixed colour, or that describes
+## nothing ([member TriggeredAbility.mana_bonus_amount] 0), asks here
+## nothing: it asks from inside its own resolution, as before.
+## [param chosen_color] / [param borrowed]: as tap_for_mana has them.
+static func bonus_color_questions(game: MtgGame, land: CardInstance, ability: ManaAbility,
+		pid: int, chosen_color := -1, borrowed := false) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not land.is_land() or not ability.taps_source \
+			or not game.has_trigger_listener(Mtg.EventType.TAPPED_FOR_MANA):
+		return out
+	var preview := tap_preview(game, land, ability, pid, chosen_color, borrowed)
+	var made: int = int(preview[0])
+	var types: Array = preview[1]
+	var event := GameEvent.new(Mtg.EventType.TAPPED_FOR_MANA, {"instance": land,
+		"controller": land.controller_id, "player": pid, "color": made, "colors": types})
+	for seat in [game.active_player, game.opponent_of(game.active_player)]:
+		for permanent in game.players[seat].battlefield:
+			for trigger in permanent.cur_triggered_abilities:
+				if not trigger.is_mana_trigger or trigger.mana_bonus_amount <= 0 \
+						or _one_flag(trigger.mana_bonus_color):
+					continue
+				if permanent.cur_abilities_silenced and MtgGame.trigger_silenced(permanent, trigger):
+					continue
+				if not trigger.matches(game, permanent, event):
+					continue
+				if trigger.mana_bonus_color == 0:
+					if types.size() < 2:
+						continue
+					out.append({"source": permanent, "asks": pid, "kind": PlayerChoice.Kind.OPTION,
+						"colors": types.duplicate(), "hint": made})
+					continue
+				var colors: Array[int] = []
+				for color in Mtg.ManaColor.values():
+					if (trigger.mana_bonus_color & int(color)) != 0:
+						colors.append(int(color))
+				out.append({"source": permanent, "asks": land.controller_id,
+					"kind": PlayerChoice.Kind.COLOR, "colors": colors,
+					"hint": color_hint(game, land.controller_id, made, colors)})
+	return out
+
+
+## What a tap of [param land]'s [param ability] by [param pid] will make,
+## worked out BEFORE it is paid: `[first colour, every type made]` — the
+## event's `color` and `colors` ([method MtgGame.tap_for_mana] computes the
+## same after paying; this mirrors it: a colour already chosen, a dynamic
+## colour, a land-wide or Deep Water recolour, the extra literal entries).
+static func tap_preview(game: MtgGame, land: CardInstance, ability: ManaAbility,
+		pid: int, chosen_color := -1, borrowed := false) -> Array:
+	var made: int = int(ability.produces[0][0])
+	if chosen_color != -1:
+		made = chosen_color
+	elif ability.dynamic_color.is_valid():
+		made = int(ability.dynamic_color.call(game, land))
+	var recolor: int = ability.forced_output_color
+	if recolor == 0 and not borrowed:
+		recolor = game.players[pid].land_mana_becomes
+	if ability.borrow_paid_land_type and chosen_color == -1:
+		return [made, []]
+	if recolor != 0 and land.is_land() and not ability.scales_with_sacrifice_mv:
+		return [recolor, [recolor]]
+	var types: Array = [made]
+	if not ability.scales_with_sacrifice_mv:
+		for i in range(1, ability.produces.size()):
+			var extra: int = int(ability.produces[i][0])
+			if int(ability.produces[i][1]) > 0 and not types.has(extra):
+				types.append(extra)
+	return [made, types]
+
+
+## The default answer to "which of [param colors]?" for [param pid]: the
+## colour the tap makes ([param made]) when it is on offer — what a plan
+## counted ([method bonus_color_for]) — else the one [param pid]'s OWN hand
+## asks for most in coloured pips (its own cards — fair), else the first.
+static func color_hint(game: MtgGame, pid: int, made: int, colors: Array) -> int:
+	if colors.has(made):
+		return made
+	var best: int = int(colors[0]) if not colors.is_empty() else made
+	var most := 0
+	for color in colors:
+		var pips := 0
+		for card in game.players[pid].hand:
+			if card.data.cost != null:
+				pips += int(card.data.cost.colored.get(int(color), 0))
+		if pips > most:
+			most = pips
+			best = int(color)
+	return best
 
 ## [method source_rank] bits: what tapping a source spends besides its mana.
 ## A source that does not untap (Mana Vault, Basalt Monolith, anything under
@@ -1091,10 +1232,12 @@ static func source_usable(s: Array, usage_keys: Array) -> bool:
 	# land mana is spell-only, while High Tide's independent bonus is not.
 	if s.size() > 8 and s[8].has("outputs"):
 		for output in s[8].outputs:
-			if int(output[1]) > 0 and (output[2] == "" or usage_keys.has(output[2])): return true
+			if int(output[1]) > 0 and ManaPool.key_usable(String(output[2]), usage_keys): return true
 		return false
+	# ManaPool.key_usable: also "can't be spent to cast spells" mana (Thran
+	# Turbine, Pack 10 E8) for anything that is no spell.
 	var key: String = String(s[5]) if s.size() > 5 else ""
-	return key == "" or usage_keys.has(key)
+	return ManaPool.key_usable(key, usage_keys)
 
 
 ## Comparator for [method sources]: non-sacrifice sources first, then the

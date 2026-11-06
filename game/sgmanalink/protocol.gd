@@ -20,8 +20,17 @@ extends RefCounted
 ## card each stands for (`choice.cards`, a handle or "" per line), so two
 ## same-named permanents can be told apart at a network table.
 ## 30: read-only, bounded public MPN download for either finished seat.
-const VERSION := 30
-const SUBPROTOCOL := "sgmanalink-local-v30"
+## 31 (Pack 10 — the Urza block, 2026-11-06): the top card of a library a
+## seat may see — played with revealed (Field of Dreams, Temporal
+## Aperture's reveal) or named by a zone permission of its owner's — is a
+## card of the view (`library_top`, a handle, a face and a presentation
+## row), so the permitted seat plays or casts it with the existing `play`
+## and `prepare` ops; and each face says whether a zone permission covers
+## it (`zone_playable`: a graveyard land under Yawgmoth's Will). Cycling
+## and the Urza block's new questions ride the existing `ability` action
+## and question kinds.
+const VERSION := 31
+const SUBPROTOCOL := "sgmanalink-local-v31"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]

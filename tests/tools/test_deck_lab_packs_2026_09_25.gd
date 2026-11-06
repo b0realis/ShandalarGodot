@@ -84,10 +84,21 @@ func test_a_word_that_is_no_pack_is_refused_in_the_switchs_own_terms() -> void:
 
 
 func test_a_pack_this_build_does_not_know_is_refused_by_name() -> void:
-	var read: Dictionary = _lab().parse_packs("pack-10", CardPacks.known_ids())
-	assert_string_contains(str(read.get("error", "")), "pack-10 is not a pack this build knows")
+	var read: Dictionary = _lab().parse_packs("pack-11", CardPacks.known_ids())
+	assert_string_contains(str(read.get("error", "")), "pack-11 is not a pack this build knows")
 	assert_string_contains(str(read.get("error", "")), ", ".join(PackedStringArray(CardPacks.known_ids())))
-	assert_eq(CardPacks.known_ids(), ["pack-1", "pack-2", "pack-3", "pack-4", "pack-5", "pack-6", "pack-7", "pack-8", "pack-9"] as Array[String])
+	assert_eq(CardPacks.known_ids(), ["pack-1", "pack-2", "pack-3", "pack-4", "pack-5", "pack-6", "pack-7", "pack-8", "pack-9", "pack-10"] as Array[String])
+
+
+## THE FIRST TWO-DIGIT PACK (2026-11-06): `10` is Pack 10, one whole
+## number — never Packs 1 and 0 — and `1,10` is two packs.
+func test_a_two_digit_pack_is_read_as_one_number() -> void:
+	var lab = _lab()
+	var every := CardPacks.known_ids()
+	assert_eq(lab.parse_packs("10", every), {"ids": ["pack-10"]})
+	assert_eq(lab.parse_packs("pack-10", every), {"ids": ["pack-10"]})
+	assert_eq(lab.parse_packs("1,10", every), {"ids": ["pack-1", "pack-10"]})
+	assert_eq(lab.parse_packs("10,1,10", every), {"ids": ["pack-10", "pack-1"]})
 
 
 func test_a_known_pack_that_was_not_found_says_where_it_looked() -> void:
@@ -151,9 +162,9 @@ func test_enabling_a_pack_puts_its_cards_in_the_registry_in_memory_only() -> voi
 
 func test_a_pack_that_cannot_be_enabled_is_a_refusal_not_a_silent_base_run() -> void:
 	var lab = _lab()
-	var refusal: String = lab.enable_packs(["pack-10"])
-	assert_string_contains(refusal, "could not enable pack-10")
-	assert_false(CardPacks.is_enabled("pack-10"))
+	var refusal: String = lab.enable_packs(["pack-11"])
+	assert_string_contains(refusal, "could not enable pack-11")
+	assert_false(CardPacks.is_enabled("pack-11"))
 
 
 # --------------------------------------------------------------- workers --
@@ -173,7 +184,7 @@ func test_the_packs_in_force_ride_the_worker_payload_and_the_worker_applies_them
 	assert_true(lab._write(in_path, JSON.stringify(payload)))
 	assert_eq(lab._run_worker(in_path, out_path), 0)
 	assert_true(CardRegistry.has_card(ICE_AGE_CARD), "the worker put the pack on")
-	payload.packs = ["pack-10"]
+	payload.packs = ["pack-11"]
 	assert_true(lab._write(in_path, JSON.stringify(payload)))
 	assert_eq(lab._run_worker(in_path, out_path), 1, "a pack the worker cannot enable fails its slice")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(in_path))
@@ -252,7 +263,7 @@ func test_the_autodeck_cli_takes_the_labs_packs_switch() -> void:
 	var bad: int = cli._main(PackedStringArray(["--out", "user://never_written", "--packs", "pack-x", "--quiet"]))
 	assert_eq(bad, 2, "a word that is no pack is exit 2 before anything is written")
 	assert_false(DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://never_written")))
-	assert_eq(cli._main(PackedStringArray(["--out", "user://never_written", "--packs", "pack-10", "--quiet"])), 2,
+	assert_eq(cli._main(PackedStringArray(["--out", "user://never_written", "--packs", "pack-11", "--quiet"])), 2,
 		"a pack this build does not know, likewise")
 
 

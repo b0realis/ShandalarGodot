@@ -27,6 +27,14 @@ extends CardScript
 ## type, you can choose which type of mana is produced by Mana Flare. If
 ## there is more than one Mana Flare in play, you make a separate choice
 ## for each Mana Flare." The heuristic doubles the first type made.
+##
+## ASKED BEFORE THE TAP IS PAID (Pack 10 E8): a mana trigger resolves the
+## moment the land is tapped, where a human seat cannot be held open, so
+## MtgGame.tap_for_mana puts this question first, with the rest of the
+## activation (ManaPlanner.bonus_color_questions, from the description
+## below: colour 0 = "a type that land produced"), and hands the answer
+## over in the event's `bonus_colors`, keyed by this Flare's id. The ask
+## below is the fallback for a dispatch that did not carry one.
 
 
 func build() -> CardData:
@@ -46,11 +54,14 @@ func build() -> CardData:
 		.oracle("Whenever a player taps a land for mana, that player adds one mana of any type that land produced.")
 
 
-static func _bonus_mana(game: MtgGame, _source: CardInstance, event: GameEvent) -> void:
+static func _bonus_mana(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
 	var pid: int = event.data["player"]
 	var color: int = int(event.data["color"])
 	var types: Array = event.data.get("colors", [color])
-	if types.size() > 1:
+	var answered := int((event.data.get("bonus_colors", {}) as Dictionary).get(source.id, -1))
+	if types.has(answered):
+		color = answered
+	elif types.size() > 1:
 		var labels: Array[String] = []
 		for t in types:
 			labels.append(Mtg.COLOR_NAMES[int(t)])

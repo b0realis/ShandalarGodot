@@ -40,6 +40,41 @@ func from_graveyard() -> ActivatedAbility:
 	activation_zone = Mtg.Zone.GRAVEYARD
 	return self
 
+## Pack 10 E2: an ability that functions only while its card is in its
+## OWNER'S HAND — cycling (CR 702.29a, 113.6). Only the owner may activate
+## it (a card in a hand is not a permanent and has no controller, CR 109.2,
+## 108.4); it uses the stack like every other activated ability (CR 602.2),
+## and a cycling LAND on the battlefield has no such ability to activate.
+func from_hand() -> ActivatedAbility:
+	activation_zone = Mtg.Zone.HAND
+	return self
+
+## Pack 10 E2: "Discard this card" as part of the cost (cycling, CR
+## 702.29a). The source itself leaves its owner's hand for the graveyard as
+## the cost is paid (CR 601.2h) — a COST discard, [method
+## MtgGame.discard_cards] with `by_effect` false: Library of Leng has no
+## say, "whenever a player discards" triggers fire (Megrim, CR 701.8), and
+## Psychic Purge's "a spell or ability an opponent controls causes you to
+## discard" does not. Payable only while the card is in the payer's hand;
+## recorded on the activation as `_discarded_name` / `_discarded_types`.
+var discard_self_cost: bool = false
+
+## Fluent: add "Discard this card" to the cost (see [member discard_self_cost]).
+func with_discard_self_cost() -> ActivatedAbility:
+	discard_self_cost = true
+	return self
+
+## Pack 10 E2: this is a CYCLING ability (CR 702.29a) — the marker
+## "cycling abilities you activate cost {2} less" reads (Fluctuator, through
+## [method CardData.with_ability_cost_reduction]), and the AI and the help
+## read. Set by [method CardData.with_cycling].
+var is_cycling: bool = false
+
+## Fluent: mark this ability as a cycling ability (see [member is_cycling]).
+func as_cycling() -> ActivatedAbility:
+	is_cycling = true
+	return self
+
 ## "Sacrifice this permanent" as part of the cost (Strip Mine). Paid after
 ## mana/tap — the source is in the graveyard while the ability resolves.
 var sacrifice_cost: bool = false
@@ -112,6 +147,39 @@ func with_exile_cost() -> ActivatedAbility:
 func with_life_cost(amount: int) -> ActivatedAbility:
 	life_cost = amount
 	return self
+
+
+## Pack 10 E2: a life cost whose amount is worked out as the cost is paid
+## — `func(game: MtgGame, source: CardInstance, pid: int) -> int` (Lurking
+## Evil's "Pay half your life, rounded up:"). Invalid = the fixed
+## [member life_cost]. Every reader asks [method MtgGame.ability_life_cost],
+## never this field or [member life_cost] alone, so the refusal, the
+## payment and the AI's price agree.
+var life_cost_fn: Callable = Callable()
+
+## Fluent: make the life cost [param fn]'s answer (see [member life_cost_fn]).
+func with_life_cost_fn(fn: Callable) -> ActivatedAbility:
+	life_cost_fn = fn
+	return self
+
+## Fluent: "Pay half your life, rounded up" (Lurking Evil) — see
+## [method half_life_rounded_up].
+func with_half_life_cost() -> ActivatedAbility:
+	life_cost_fn = half_life_rounded_up
+	return self
+
+## "Half your life, rounded up" (CR 107.1a): 7 life pays 4, 1 pays 1, and a
+## life total of 0 or less pays 0 — a player can always pay 0 life
+## (CR 119.4, 107.1b).
+static func half_life_rounded_up(game: MtgGame, _source: CardInstance, pid: int) -> int:
+	var life: int = game.players[pid].life
+	return 0 if life <= 0 else ceili(life / 2.0)
+
+## Does this ability's cost include paying life at all — a fixed amount or
+## a worked-out one? For the readers that only ask whether a life payment
+## is involved; the AMOUNT is [method MtgGame.ability_life_cost]'s.
+func has_life_cost() -> bool:
+	return life_cost > 0 or life_cost_fn.is_valid()
 
 
 ## "Activate only during combat." (Jade Statue.) Enforced by
@@ -272,7 +340,62 @@ func shallow_copy() -> ActivatedAbility:
 	for prop in get_property_list():
 		if (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0:
 			out.set(prop.name, get(prop.name))
+	# The per-grantor cache is this object's own (Pack 10 E2): shared, the
+	# copy would hold the dictionary that holds the copy — a reference cycle.
+	out._granted_copies = {}
 	return out
+
+
+## Pack 10 E2 — THE GRANTOR LINK (CR 613.7: a granted ability belongs to
+## the object it is granted to, but its text may name the object that grants
+## it — Archery Training's "where X is the number of arrow counters on
+## Archery Training"). The id of the permanent that grants this copy, -1 on
+## every printed ability. Stamped onto each activation's cost record as
+## `_grantor`, `_grantor_timestamp` and `_grantor_counters` by
+## MtgGame.activate_ability; read back with [method grantor_counters].
+var grantor_id: int = -1
+
+## Copies already made by [method granted_by], keyed by grantor id. A cache,
+## never game state: a copy carries nothing but the grantor's id, so the
+## same id in two games may share one. Guarded by [member _grant_mutex] —
+## the Deck Lab runs games on a WorkerThreadPool over one shared registry.
+var _granted_copies: Dictionary = {}
+static var _grant_mutex := Mutex.new()
+
+
+## THIS ability as granted by [param grantor] — a shallow copy that knows
+## its grantor ([member grantor_id]), the SAME copy every recalculation (a
+## static that appends it to its host's live list keeps one identity, as a
+## shared printed ability does). Two Archery Trainings on one creature hand
+## it two copies, each reading its own Aura. Null [param grantor] = self.
+func granted_by(grantor: CardInstance) -> ActivatedAbility:
+	if grantor == null:
+		return self
+	_grant_mutex.lock()
+	var copy: ActivatedAbility = _granted_copies.get(grantor.id)
+	if copy == null:
+		copy = shallow_copy()
+		copy.grantor_id = grantor.id
+		_granted_copies[grantor.id] = copy
+	_grant_mutex.unlock()
+	return copy
+
+
+## The [param kind] counters on the GRANTOR of the ability being resolved
+## (see [member grantor_id]): its live count while that very permanent is
+## still on the battlefield, else the count it had as the ability was
+## activated (last known information, CR 608.2h). 0 when the ability being
+## resolved was not granted by a permanent.
+static func grantor_counters(game: MtgGame, kind: String) -> int:
+	var grantor_id_paid := int(game.cost_paid("_grantor", -1))
+	if grantor_id_paid < 0:
+		return 0
+	var grantor := game.find_instance(grantor_id_paid)
+	if game.is_present(grantor) \
+			and grantor.layer_timestamp == int(game.cost_paid("_grantor_timestamp", -1)):
+		return int(grantor.counters.get(kind, 0))
+	var snapshot: Dictionary = game.cost_paid("_grantor_counters", {})
+	return int(snapshot.get(kind, 0))
 
 
 ## A shallow copy whose mana cost is [param n] generic cheaper.

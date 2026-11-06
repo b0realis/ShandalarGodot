@@ -453,7 +453,7 @@ static func dress_source_medallion(button: Button, source: String) -> void:
 	var face := GameSkin.font("font_body")
 	if face != null:
 		button.add_theme_font_override("font", face)
-	var key: String = {"Original": "source", "Pack1": "pack1", "Pack2": "fem", "Pack3": "ice", "Pack4": "hml", "Pack5": "all", "Pack6": "por", "SecondAge": "p02", "Pack7": "5ed", "Pack8": "mir", "Visions": "vis", "Weatherlight": "wth", "Pack9": "tmp", "Stronghold": "sth", "Exodus": "exo"}[source]
+	var key: String = {"Original": "source", "Pack1": "pack1", "Pack2": "fem", "Pack3": "ice", "Pack4": "hml", "Pack5": "all", "Pack6": "por", "SecondAge": "p02", "Pack7": "5ed", "Pack8": "mir", "Visions": "vis", "Weatherlight": "wth", "Pack9": "tmp", "Stronghold": "sth", "Exodus": "exo", "Pack10": "usg", "Legacy": "ulg", "Destiny": "uds"}[source]
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		var selected: bool = state.contains("pressed")
 		var art := GameSkin.our_art("filter_" + key + ("_on" if selected else "_off"))

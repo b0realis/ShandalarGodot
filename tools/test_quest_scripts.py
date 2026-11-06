@@ -401,10 +401,31 @@ class QuestScriptsTest(unittest.TestCase):
         for script in (ROOT / "game").rglob("*.gd"):
             for match in re.finditer(r'const FILE_NAME := "(Pack-[0-9]+-[^"]+\.zip)"', script.read_text()):
                 names.add(match.group(1))
-        self.assertEqual(len(names), 9, names)
+        self.assertEqual(len(names), 10, names)
         for script in (PUSH, FRESH):
             listed = set(re.findall(r"\bPack-[0-9]+-[A-Za-z_-]+\.zip\b", script.read_text()))
             self.assertEqual(listed, names, script.name)
+
+    def test_a_two_digit_pack_is_its_own_number(self):
+        # Pack 10, the first two-digit pack (2026-11-06): its misnamed copy
+        # is named as Pack 10 and not as Pack 1, and Pack 1's misnamed copy
+        # is not taken for Pack 10's.
+        self.temp2 = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp2.cleanup)
+        self.make_package(Path(self.temp2.name) / "Shandalar-9.9.9-meta-quest", {
+            "cardpacks/Pack-3-Ice_Age.zip": 3500,
+            "cardpacks/Pack-10-Urza-Block (1).zip": 4000,
+            "cardpacks/Pack-1-DotP-complete (1).zip": 5000})
+        self.make_game_folders()
+        result = self.run_script("push_to_quest.sh")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        packs = sorted(p.name for p in (self.device / GAME / "files/cardpacks").iterdir())
+        self.assertEqual(packs, ["Pack-3-Ice_Age.zip"])
+        lines = result.stdout.splitlines()
+        ten = [line for line in lines if "Pack-10-Urza-Block (1).zip" in line]
+        one = [line for line in lines if "Pack-1-DotP-complete (1).zip" in line]
+        self.assertTrue(ten and all("rename it to Pack-10-Urza-Block.zip" in line for line in ten), ten)
+        self.assertTrue(one and all("rename it to Pack-1-DotP-complete.zip" in line for line in one), one)
 
     def test_the_fresh_install_counts_what_step_1_frees(self):
         # r5-8: a 3 MB old install and a headset just short of the room the

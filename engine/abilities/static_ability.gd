@@ -35,8 +35,8 @@ extends RefCounted
 ## pipeline skips it, so a static never has to check whether it still exists.
 ##
 ## The remaining approximations (no full dependency analysis beyond the two
-## layer-4 rounds and the layer-7 one below, CR 613.8) are documented in
-## docs/ROADMAP.md.
+## layer-4 rounds — land types, and card types since Pack 10 — and the
+## layer-7 one below, CR 613.8) are documented in docs/ROADMAP.md.
 
 ## func(game, source) -> void; adjust cur_power/cur_toughness/cur_keywords
 ## of affected instances. Runs on every recalculation, always from printed
@@ -148,6 +148,73 @@ func reading_land_types(reads: Array[String] = [], writes: Array[String] = []) -
 func reading_chosen_land_types(edge: Callable) -> StaticAbility:
 	reads_land_types = true
 	land_types_edge = edge
+	return self
+
+
+## Pack 10 E3 — does this layer-4 static decide whom it affects by a CARD
+## TYPE that other layer-4 effects write? Opalescence's "each other non-Aura
+## enchantment is a creature" does: an Opal Caryatid that "becomes a 2/2
+## Soldier creature" stops being an enchantment (CR 205.1a), and a creature
+## that "becomes an enchantment" (Soul Sculptor, Opal Acrolith's {0}) starts
+## being one. Applying such a type change changes what the reader applies
+## to, so the reader DEPENDS on it (CR 613.8a) and applies after it whatever
+## the two timestamps say (613.8b): a Grizzly Bears a Soul Sculptor made an
+## enchantment under an older Opalescence is an enchantment creature 2/2.
+##
+## [method ContinuousEffects.recalculate] runs the flagged statics in a
+## second wave after every other non-land layer-4 writer — type statics,
+## animations and type changes ([method ContinuousEffects.add_type_change])
+## — the [member reads_land_types] two-wave shape one step further on. The
+## readers among themselves go in timestamp order: the pool's readers only
+## ADD a card type (two Opalescences each animate the other), so none
+## changes what another applies to and timestamp order is the whole analysis.
+var reads_card_types: bool = false
+
+## Fluent: mark this layer-4 static as reading a card type (CR 613.8a);
+## implies [member changes_types].
+func reading_card_types() -> StaticAbility:
+	reads_card_types = true
+	changes_types = true
+	return self
+
+
+## Pack 10 E3 — CR 613.6, ONE EFFECT IN SEVERAL LAYERS. The halves of one
+## printed ability that the engine runs as separate statics (Opalescence's
+## creature type in layer 4 and its size in 7b; Humility's "lose all
+## abilities" in layer 6 and its 1/1 in 7b) share this key. "If an effect
+## starts to apply in one layer and/or sublayer, it will continue to be
+## applied to the same set of objects in each other applicable layer and/or
+## sublayer, even if the ability generating the effect is removed during
+## this process": once a keyed half has RUN this recalculation, every other
+## half with the same key on the same source still applies after the source
+## lost its abilities (layer 7b, the general pass and the P/T definitions
+## that count an ability) — Humility made a creature by Opalescence humbles
+## itself in layer 6 and its 1/1 still lands in 7b. A static without a key
+## (a characteristic-defining P/T, a plain anthem) has nothing that started
+## earlier and stays skipped. Empty = no key.
+var part_key: StringName = &""
+
+## Fluent: name the printed ability this static is one half of (CR 613.6).
+## The key need only be unique among the statics of one card.
+func part_of(key: StringName) -> StaticAbility:
+	part_key = key
+	return self
+
+
+## Pack 10 E3 — does this static READ A LIFE TOTAL (Serra Avatar's "power
+## and toughness are each equal to your life total")? A life total is not
+## the board, and nothing used to recalculate when one changed: an Avatar
+## whose controller dropped from 20 to 4 in combat was judged by the
+## state-based check with its old toughness. A flagged static makes
+## [method MtgGame.adjust_life] and a player's damage recompute the
+## characteristics as the life total changes (CR 604.3, 704.5f-g) — see
+## [method MtgGame._refresh_after_life_change]. The flag costs nothing on a
+## board without one.
+var reads_life: bool = false
+
+## Fluent: mark this static as reading a life total.
+func reading_life() -> StaticAbility:
+	reads_life = true
 	return self
 
 

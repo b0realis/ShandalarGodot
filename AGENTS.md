@@ -1036,8 +1036,8 @@ that would not write — the reason on stderr). No JSON envelope here yet.
 `--auto-deck`, `--lab-query` and `--referee`, each hosting that headless
 tool inside the game binary (what a release's `deck_lab.sh`,
 `auto_deck.sh`, `lab_query.sh` and `referee.sh` are), and
-`--verify-pack-1` … `--verify-pack-5`, `--verify-pack-8` and
-`--verify-pack-9`; the LAN protocol is 30 at 0.50.44 (`SgProtocol.VERSION`;
+`--verify-pack-1` … `--verify-pack-5`, `--verify-pack-8`,
+`--verify-pack-9` and `--verify-pack-10`; the LAN protocol is 30 at 0.50.44 (`SgProtocol.VERSION`;
 `docs/sgmanalink-*.md`). Headless soaks and audits live under `tools/*.gd`
 (`./tools/duel_soak.sh --help`). `./run_tests.sh` is the gate:
 trust its exit code, not the printed tally.

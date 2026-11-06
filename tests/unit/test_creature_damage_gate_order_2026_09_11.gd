@@ -345,7 +345,10 @@ func test_the_pool_has_one_counter_eater_and_one_point_redirect() -> void:
 	# en-Vec and Orim (tmp/_creatures), Squee's Toy (tmp/_artifacts), Anoint
 	# (tmp/_buyback) and Bandage (sth/_spells); sth/_creatures only READS the
 	# type (the en-Kor redirects pass a prevention by), so it writes no gate.
-	assert_eq(pools.size(), 29, "the prevention-pool family through the Tempest block: %s" % [pools])
+	# Pack 10 (2026-11-06) adds ordinary pools in three shared modules:
+	# Sanctum Custodian (usg/_creatures), Serra's Hymn's divided pool
+	# (usg/_misc) and Field Surgeon and Master Healer (uds/_creatures).
+	assert_eq(pools.size(), 32, "the prevention-pool family through the Urza block: %s" % [pools])
 	assert_has(pools, "_rules.gd")
 
 
@@ -364,15 +367,18 @@ func test_the_pool_has_the_seven_creature_side_gate_writers() -> void:
 	assert_eq(_cards_containing("cur_prevent_damage_from_creatures"),
 		["uncle_istvan.gd"], "a second blanket creature-damage prevention")
 	var immunities := _cards_containing("cur_damage_immunity")
-	assert_eq(immunities.size(), 14,
+	# Pack 10's Angelic Curator and Yavimaya Scion share protection from
+	# artifacts in ulg/_creatures.gd (2026-11-06).
+	assert_eq(immunities.size(), 15,
 		"the source-filtered immunities: %s" % [immunities])
 	var combat_shields := _cards_containing("add_until_eot_combat_prevention")
 	# Elvish Scout and Heroism share the new Fallen Empires writer. Pack 8's
 	# Mtenda Lion and Delirium share mir/_combat.gd (2026-10-03). Pack 9's
 	# Maze of Shadows (tmp/_shadow.gd) is Maze of Ith's shield on a shadow
 	# attacker, and Fighting Chance (exo/_spells.gd) the blockers' half on a
-	# coin (2026-10-06).
-	assert_eq(combat_shields.size(), 15,
+	# coin (2026-10-06). Pack 10's Redeem (usg/_spells.gd) is the
+	# all-damage entry on up to two creatures (2026-11-06).
+	assert_eq(combat_shields.size(), 16,
 		"the floating combat-damage preventions including Winter's Chill: %s" % [combat_shields])
 	assert_has(combat_shields, "_rules.gd")
 

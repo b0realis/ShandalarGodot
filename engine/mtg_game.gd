@@ -164,7 +164,10 @@ func mana_ability_for(pid: int, inst: CardInstance, index: int) -> ManaAbility:
 	# satisfies neither half for that player; land-wide replacements remain.
 	if pid != inst.controller_id and ability.controller_replacement and ability.unreplaced_ability != null:
 		ability = ability.unreplaced_ability
-		if not inst.cur_land_mana_replacements.is_empty(): ability = ability.forcing_color(inst.cur_land_mana_replacements[0])
+		if not inst.cur_land_mana_replacements.is_empty():
+			# Contamination's "and amount" stays fixed (Pack 10 E8).
+			var color: int = inst.cur_land_mana_replacements[0]
+			ability = ability.forcing_color(color, false, false, ManaAbility.land_fixed_amount(inst, color))
 	return ability
 
 
@@ -242,6 +245,27 @@ func cap_untaps(kind: String, cap: int, source: CardInstance) -> void:
 		return
 	untap_caps[kind] = cap
 	untap_cap_sources[kind] = source.data.card_name
+
+## "Each player chooses artifact, creature, or land during their untap
+## step. That player can untap only permanents of the chosen type this
+## step" (Storage Matrix — Pack 10 E9, CR 502.3): {source instance id: its
+## name}, one entry per effect, each asked as its own question by
+## [method _untap_step]. DERIVED like [member untap_caps]: cleared by every
+## recalculation and rebuilt by the statics that call
+## [method restrict_untap_to_chosen_kind].
+var untap_kind_choices: Dictionary = {}
+
+## The kinds the untap-step question offers, in its order (Oracle's).
+const UNTAP_KIND_LABELS: Array[String] = ["Artifact", "Creature", "Land"]
+const UNTAP_KINDS: Array[String] = ["artifact", "creature", "land"]
+
+
+## Register [param source]'s "choose artifact, creature, or land — untap
+## only that kind" for every player's untap step. Called from a static on
+## every recalculation while its condition holds (the Matrix's own "as long
+## as this artifact is untapped" is the card's test).
+func restrict_untap_to_chosen_kind(source: CardInstance) -> void:
+	untap_kind_choices[source.id] = source.data.card_name
 
 ## Player ids allowed to play ANY number of lands this turn (Fastbond).
 ## Rebuilt from scratch every recalculation.
@@ -915,6 +939,8 @@ const TURN_PLAYER_FIELDS: Array[StringName] = [
 	&"cast_permanents_this_turn",
 	# Pack 8 E7: Bösium Strip's until-end-of-turn graveyard permission.
 	&"graveyard_cast_permissions",
+	# Pack 10 E1: echo's clock, counted as each upkeep begins.
+	&"upkeeps_begun",
 ]
 
 ## The [CardInstance] fields the UNTAP STEP writes on every permanent
@@ -1668,6 +1694,10 @@ func begin_from_position(position: DuelPosition) -> String:
 			var entry := position.table_entry(pid, i)
 			_place_from_position(on_table[i], pid, bool(entry.get("tapped", false)),
 				bool(entry.get("sick", false)))
+			# Echo owed at this seat's next upkeep, as if it had just come
+			# under its control (Pack 10 E1); otherwise it owes nothing.
+			if bool(entry.get("echo_due", false)):
+				on_table[i].control_upkeep_mark = p.upkeeps_begun
 		p.life = position.lives[pid]
 	recalculate()
 	# A seat whose decklist grew by an extra tells its agent so: an AI
@@ -1790,6 +1820,14 @@ func _shuffle(cards: Array[CardInstance]) -> void:
 		var tmp := cards[i]
 		cards[i] = cards[j]
 		cards[j] = tmp
+	# A shuffled LIBRARY is counted, whatever shuffled it ([member
+	# MtgPlayer.library_shuffles]): "for as long as that card remains on
+	# top" ends on any shuffle, even one that leaves it there (Temporal
+	# Aperture, Pack 10; Forge's ShuffleCheck, temporal_aperture.txt).
+	for p in players:
+		if is_same(p.library, cards):
+			_rec(p, &"library_shuffles")
+			p.library_shuffles += 1
 
 
 # ------------------------------------------------------------------ queries --
@@ -2022,7 +2060,10 @@ func can_play_from_exile(pid: int, inst: CardInstance) -> bool:
 
 ## Available identities are public or in the player's own hand. A permission
 ## expands the source zone, never timing, land limits, or payment rules.
-## A graveyard permission (Bösium Strip) adds the card it currently names.
+## A graveyard permission (Bösium Strip) adds the card it currently names;
+## a zone permission (Pack 10 E5, [method grant_zone_play]) its graveyard
+## lands and spells (Yawgmoth's Will) and the REVEALED top card of the
+## library it names (Temporal Aperture) — never a hidden one (fair play).
 func playable_cards(pid: int) -> Array[CardInstance]:
 	var out: Array[CardInstance] = players[pid].hand.duplicate()
 	for p in players:
@@ -2030,7 +2071,10 @@ func playable_cards(pid: int) -> Array[CardInstance]:
 			if can_play_from_exile(pid, inst): out.append(inst)
 	if not players[pid].graveyard_cast_permissions.is_empty():
 		for inst in players[pid].graveyard:
-			if can_cast_from_graveyard(pid, inst): out.append(inst)
+			if can_play_from_zone(pid, inst): out.append(inst)
+		var library := players[pid].library
+		if not library.is_empty() and can_play_from_zone(pid, library.back()):
+			out.append(library.back())
 	return out
 
 
@@ -2067,23 +2111,197 @@ func grant_graveyard_cast(pid: int, filter: Callable, desc: String,
 ## The permission row that lets [param pid] cast [param inst] from their
 ## graveyard right now, or {} — the card must be theirs, in their
 ## graveyard, on top when the permission says so, and pass its filter.
+## Never a LAND: a land is played, not cast — a `lands` zone permission
+## covers it ([method zone_play_permission], Pack 10 E5).
 func graveyard_cast_permission(pid: int, inst: CardInstance) -> Dictionary:
-	if inst == null or inst.zone != Mtg.Zone.GRAVEYARD or inst.owner_id != pid:
+	if inst == null or inst.zone != Mtg.Zone.GRAVEYARD or inst.is_land():
 		return {}
-	var grave := players[pid].graveyard
-	if not grave.has(inst):
-		return {}
-	for row in players[pid].graveyard_cast_permissions:
-		if bool(row.get("top_only", true)) and grave.back() != inst: continue
-		var filter: Callable = row.get("filter", Callable())
-		if filter.is_valid() and not bool(filter.call(inst)): continue
-		return row
-	return {}
+	return zone_play_permission(pid, inst)
 
 
 ## May [param pid] cast [param inst] from their graveyard right now?
 func can_cast_from_graveyard(pid: int, inst: CardInstance) -> bool:
 	return not graveyard_cast_permission(pid, inst).is_empty()
+
+
+# ---------------------------------------- playing from another zone --
+# Pack 10 E5. "Until end of turn, you may play lands and cast spells from
+# your graveyard" (Yawgmoth's Will) and "Until end of turn, for as long as
+# that card remains on top of your library, ... you may play that card
+# without paying its mana cost" (Temporal Aperture): Bösium Strip's
+# permission (above) widened to LANDS — PLAYED from there, so they spend
+# the land drop (CR 305.1, 305.2) — to the TOP card of the library, and to
+# a FREE cast: "without paying its mana cost" is an alternative cost (CR
+# 118.9), offered as payment rows of its own ([method payment_rows]), X is
+# 0 (CR 107.3b), and the printed rows are refused from there
+# ([method zone_play_row_refusal]). A permission widens the zone a card may
+# be played from (CR 601.3) and nothing else: timing, the land drop and
+# every other cost stay. The rows share Bösium Strip's journaled list
+# ([member MtgPlayer.graveyard_cast_permissions]), so they are cleared at
+# cleanup with it.
+
+## Grant [param pid] an until-end-of-turn permission to PLAY cards from
+## another of their own zones. [param spec]:
+## - `zone`: Mtg.Zone.GRAVEYARD (default) or Mtg.Zone.LIBRARY;
+## - `spells` (default true) / `lands` (default false): cast spells / play
+##   lands from there (a land as the turn's land drop);
+## - `card`: the one CardInstance the permission names (its graveyard
+##   incarnation is pinned, CR 400.7). REQUIRED for the library, whose
+##   permission is always for its TOP card: a library card is hidden, and
+##   only the card an effect has revealed may be offered (fair play) — so
+##   a draw, a shuffle or a card put on top of it ends the permission;
+## - `top_only` (the graveyard's; default false): only its top card;
+## - `filter`: Callable(card) -> bool;
+## - `free`: "you may play that card without paying its mana cost" — cast
+##   only through the "Without paying its mana cost" rows;
+## - `exile_instead`: a spell cast this way is exiled wherever it would go
+##   to a graveyard (CR 614.1);
+## - `while`: Callable(game, card) -> bool — "for as long as ...": the
+##   permission holds only while it answers true;
+## - `source`: the card granting it (named on the free row and the stack);
+## - `desc`: the log's words for what may be played.
+## Journaled; cleared at cleanup.
+func grant_zone_play(pid: int, spec: Dictionary) -> void:
+	var zone := int(spec.get("zone", Mtg.Zone.GRAVEYARD))
+	var card: CardInstance = spec.get("card", null)
+	var source: CardInstance = spec.get("source", null)
+	_rec(players[pid], &"graveyard_cast_permissions")
+	players[pid].graveyard_cast_permissions.append({"zone": zone,
+		"filter": spec.get("filter", Callable()), "desc": String(spec.get("desc", "")),
+		"top_only": bool(spec.get("top_only", false)) or zone == Mtg.Zone.LIBRARY,
+		"exile_instead": bool(spec.get("exile_instead", false)),
+		"source_id": source.id if source != null else -1,
+		"spells": bool(spec.get("spells", true)), "lands": bool(spec.get("lands", false)),
+		"free": bool(spec.get("free", false)),
+		"card_id": card.id if card != null else -1,
+		"entry": card.graveyard_entry if card != null and zone == Mtg.Zone.GRAVEYARD else -1,
+		"while": spec.get("while", Callable())})
+	var what := String(spec.get("desc", ""))
+	if what == "":
+		what = "the top card of their library" if zone == Mtg.Zone.LIBRARY \
+			else "cards from their graveyard"
+	log_line("%s may play %s this turn" % [players[pid].player_name, what])
+
+
+## Every permission row that lets [param pid] play [param inst] from where
+## it lies right now — their OWN graveyard, or the top of their own library
+## for a row naming that card — in grant order. A land needs a `lands` row,
+## a spell a `spells` row. Pure.
+func _zone_play_rows(pid: int, inst: CardInstance) -> Array:
+	var out: Array = []
+	if inst == null or pid < 0 or pid >= players.size() or inst.owner_id != pid:
+		return out
+	var rows := players[pid].graveyard_cast_permissions
+	if rows.is_empty():
+		return out
+	var pile: Array[CardInstance]
+	if inst.zone == Mtg.Zone.GRAVEYARD:
+		pile = players[pid].graveyard
+	elif inst.zone == Mtg.Zone.LIBRARY:
+		pile = players[pid].library
+	else:
+		return out
+	if pile.is_empty() or not pile.has(inst):
+		return out
+	var land := inst.is_land()
+	for row in rows:
+		if int(row.get("zone", Mtg.Zone.GRAVEYARD)) != inst.zone: continue
+		if land and not bool(row.get("lands", false)): continue
+		if not land and not bool(row.get("spells", true)): continue
+		if bool(row.get("top_only", true)) and pile.back() != inst: continue
+		var card_id := int(row.get("card_id", -1))
+		if inst.zone == Mtg.Zone.LIBRARY and card_id < 0: continue   # a hidden card is never offered
+		if card_id >= 0 and card_id != inst.id: continue
+		if inst.zone == Mtg.Zone.GRAVEYARD and card_id >= 0 \
+				and int(row.get("entry", -1)) != inst.graveyard_entry: continue
+		var filter: Callable = row.get("filter", Callable())
+		if filter.is_valid() and not bool(filter.call(inst)): continue
+		var hold: Callable = row.get("while", Callable())
+		if hold.is_valid() and not bool(hold.call(self, inst)): continue
+		out.append(row)
+	return out
+
+
+## The permission row that lets [param pid] PLAY [param inst] from their
+## graveyard or the top of their library right now ([method
+## grant_zone_play], Bösium Strip's [method grant_graveyard_cast] too), or
+## {}. A row that lets the printed cost be paid wins over a `free` one, so
+## the row returned is `free` only when nothing else covers the card —
+## and then it is cast only without paying its mana cost.
+func zone_play_permission(pid: int, inst: CardInstance) -> Dictionary:
+	var rows := _zone_play_rows(pid, inst)
+	for row in rows:
+		if not bool(row.get("free", false)):
+			return row
+	return rows[0] if not rows.is_empty() else {}
+
+
+## May [param pid] play [param inst] — cast it, or play it as a land — from
+## their graveyard or the top of their library right now? The question the
+## duel screen's piles, SGManalink and [method playable_cards] ask.
+func can_play_from_zone(pid: int, inst: CardInstance) -> bool:
+	return not zone_play_permission(pid, inst).is_empty()
+
+
+## Why [param pid] can't cast [param inst] in payment row [param mode]
+## because a FREE zone permission alone lets them cast it from where it
+## lies (Temporal Aperture: "you may play that card without paying its
+## mana cost") and [param mode] is not one of its "Without paying its mana
+## cost" rows — "" otherwise. [method cast_spell] asks it; it is pure, so a
+## row menu may grey a row with it.
+func zone_play_row_refusal(pid: int, inst: CardInstance, mode: int) -> String:
+	if inst == null or (inst.zone != Mtg.Zone.GRAVEYARD and inst.zone != Mtg.Zone.LIBRARY):
+		return ""
+	var row := zone_play_permission(pid, inst)
+	if row.is_empty() or not bool(row.get("free", false)):
+		return ""
+	if bool(payment_option_for(pid, inst.data, mode, inst).get("zone_free", false)):
+		return ""
+	return "%s can be cast from your %s only without paying its mana cost" % [
+		inst.data.card_name, "library" if inst.zone == Mtg.Zone.LIBRARY else "graveyard"]
+
+
+## The FREE permission row covering [param inst] for [param pid], or {} —
+## the rows [method payment_rows] adds its free rows for.
+func _zone_free_permission(pid: int, inst: CardInstance) -> Dictionary:
+	for row in _zone_play_rows(pid, inst):
+		if bool(row.get("free", false)):
+			return row
+	return {}
+
+
+## The "Without paying its mana cost" row built on printed row
+## [param base_row] (index [param index]) under the free permission
+## [param perm]: {0} and an alternative cost (CR 118.9; X is 0, CR
+## 107.3b); a buyback row keeps its buyback, any other additional cost
+## stays (CR 118.9d). `zone_free` marks it for [method
+## zone_play_row_refusal]; the granting card, when known, is named
+## (`granted_by`, as a permanent's granted row is).
+func _zone_free_row(base_row: Dictionary, index: int, perm: Dictionary) -> Dictionary:
+	var base: Dictionary = base_row.get("payment", {})
+	var source := find_instance(int(perm.get("source_id", -1)))
+	var pay := {"cost": ManaCost.parse(""), "alt": true, "zone_free": true}
+	var label := "Without paying its mana cost"
+	var printed_label := String(base_row.get("label", ""))
+	if printed_label != "" and not printed_label.begins_with("Pay "):
+		label = "%s — without paying its mana cost" % printed_label   # a mode's own words
+	if bool(base.get("buyback", false)):
+		pay["cost"] = CardData.sum_costs(pay["cost"], base["buyback_cost"])
+		pay["buyback"] = true
+		pay["buyback_cost"] = base["buyback_cost"]
+		pay["buyback_text"] = base.get("buyback_text", "")
+		if printed_label.begins_with("Pay "):
+			label = "%s with buyback (%s)" % [label, String(base.get("buyback_text", ""))]
+	var groups: Array = base.get("object_costs", [])
+	if not groups.is_empty():
+		pay["object_costs"] = groups
+	if int(base.get("life", 0)) > 0:
+		pay["life"] = int(base["life"])
+	if source != null:
+		pay["granted_by"] = source.id
+		label = "%s (%s)" % [label, source.data.card_name]
+	return {"label": label, "effects": base_row["effects"], "payment": pay,
+		"effects_mode": index, "granted_by": source.id if source != null else -1}
 
 
 ## "You may discard this card any time you could cast an instant"
@@ -2121,7 +2339,14 @@ func play_land(pid: int, inst: CardInstance) -> String:
 		return err
 	if not inst.is_land():
 		return "%s is not a land" % inst.data.card_name
-	if not ((inst.zone == Mtg.Zone.HAND and inst.owner_id == pid) or can_play_from_exile(pid, inst)):
+	# Pack 10 E5: a land in the graveyard (Yawgmoth's Will) or on top of the
+	# library (Temporal Aperture) under a zone permission is PLAYED from
+	# there — the land drop and every timing rule below unchanged (CR
+	# 305.1, 305.2).
+	var from_zone := (inst.zone == Mtg.Zone.GRAVEYARD or inst.zone == Mtg.Zone.LIBRARY) \
+		and can_play_from_zone(pid, inst)
+	if not ((inst.zone == Mtg.Zone.HAND and inst.owner_id == pid) or can_play_from_exile(pid, inst)
+			or from_zone):
 		return "that land is not in your hand"
 	var locked_why := hand_lock_reason(inst)
 	if locked_why != "":
@@ -2172,6 +2397,12 @@ func play_land(pid: int, inst: CardInstance) -> String:
 		_rec(players[inst.owner_id], &"exile")
 		players[inst.owner_id].exile.erase(inst)
 		_turn_face_up_leaving_exile(inst)
+	elif from_zone and inst.zone == Mtg.Zone.GRAVEYARD:
+		_rec(players[pid], &"graveyard")
+		players[pid].graveyard.erase(inst)
+	elif from_zone:
+		_rec(players[pid], &"library")
+		players[pid].library.erase(inst)
 	else: players[pid].hand.erase(inst)
 	players[pid].lands_played_this_turn += 1
 	_put_on_battlefield(inst, pid)
@@ -2501,6 +2732,72 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 			if _hold_cost_choice(count_q, replay):
 				return ""
 			counters_spent = _ask_cost_option(pid, inst, labels, count_q.prompt, have)
+	# "Reveal any number of artifact cards in your hand. Add {C}{C} for each
+	# card revealed this way" (Metalworker — Pack 10 E8, CR 605.1a/701.16a):
+	# HOW MANY, then — fewer than all — WHICH, asked with the rest of the
+	# activation and each held for a human seat like a battery's count.
+	var revealed: Array[CardInstance] = []
+	if ability.reveal_filter.is_valid():
+		var offered := ability.reveal_candidates(players[pid].hand)
+		if not offered.is_empty():
+			var counts: Array[String] = []
+			for n in offered.size() + 1:
+				counts.append(str(n))
+			var reveal_q := _cost_question(pid, inst, PlayerChoice.Kind.OPTION,
+				"How many %s cards do you reveal? (max: %d)" % [ability.reveal_desc, offered.size()])
+			reveal_q.options = counts
+			reveal_q.hint = offered.size()
+			if _hold_cost_choice(reveal_q, replay):
+				return ""
+			var wanted := _ask_cost_option(pid, inst, counts, reveal_q.prompt, offered.size())
+			if wanted >= offered.size():
+				revealed = offered
+			else:
+				var left: Array[CardInstance] = offered.duplicate()
+				for n in wanted:
+					var pick_q := _cost_question(pid, inst, PlayerChoice.Kind.CARD,
+						"Select %s card to reveal." % ability.reveal_desc)
+					pick_q.candidates = left
+					if _hold_cost_choice(pick_q, replay):
+						return ""
+					var pick := _ask_cost_card(pid, inst, left, pick_q.prompt)
+					revealed.append(pick)
+					left.erase(pick)
+	# THE MANA TRIGGERS' QUESTIONS, ASKED BEFORE THE TAP IS PAID (Pack 10 E8 —
+	# CR 605.1b, 106.1, 605.3b): Fertile Ground's "one mana of any color" and
+	# Mana Flare's "any type that land produced" resolve the moment the land
+	# is tapped, where a human seat cannot be held; their choices are put
+	# here, one per trigger (ManaPlanner.bonus_color_questions), and ride the
+	# TAPPED_FOR_MANA event as `bonus_colors` {trigger source id: colour}.
+	var bonus_colors := {}
+	for row in ManaPlanner.bonus_color_questions(self, inst, ability, pid, chosen_color, borrowed):
+		var asking: CardInstance = row["source"]
+		var asks := int(row["asks"])
+		var offered_colors: Array = row["colors"]
+		var hint_color := int(row["hint"])
+		var bonus_q := _cost_question(asks, asking, int(row["kind"]),
+			PlayerChoice.mana_color_prompt(asking.data.card_name))
+		bonus_q.adverse = asks != pid   # the land's controller, not the hand that tapped it
+		if int(row["kind"]) == PlayerChoice.Kind.OPTION:
+			var type_labels: Array[String] = []
+			for color in offered_colors:
+				type_labels.append(Mtg.COLOR_NAMES[int(color)])
+			bonus_q.options = type_labels
+			bonus_q.hint = maxi(offered_colors.find(hint_color), 0)
+			if _hold_cost_choice(bonus_q, replay):
+				return ""
+			bonus_colors[asking.id] = int(offered_colors[_ask_cost_option(asks, asking,
+				type_labels, bonus_q.prompt, int(bonus_q.hint))])
+		else:
+			bonus_q.colors.assign(offered_colors)
+			bonus_q.hint = hint_color
+			if _hold_cost_choice(bonus_q, replay):
+				return ""
+			var hint_first: Array = [hint_color]   # _ask_cost_color's hint is the first
+			for color in offered_colors:
+				if int(color) != hint_color:
+					hint_first.append(int(color))
+			bonus_colors[asking.id] = _ask_cost_color(asks, asking, hint_first, bonus_q.prompt)
 	if ability.cost != null:
 		players[pid].mana_pool.pay(ability.cost, 0, ability_mana_usage_keys(inst))
 	if ability.counter_cost_kind != "":
@@ -2527,7 +2824,17 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# next one, mid-payment) must see the 0/0.
 	if ability.counter_cost_kind != "" or counters_spent > 0:
 		recalculate()
-	var bonus: int = counters_spent * ability.bonus_per_counter
+	var bonus: int = counters_spent * ability.bonus_per_counter \
+		+ revealed.size() * ability.reveal_per_card
+	if not revealed.is_empty():
+		# Revealed to every player (CR 701.16a): the names are public now.
+		var shown: Array = []
+		for card in revealed:
+			shown.append(card.data.card_name)
+		reveal_information(-1, "%s — revealed from %s's hand" % [inst.data.card_name,
+			players[pid].player_name], shown)
+		log_line("%s reveals %s (%s)" % [players[pid].player_name,
+			", ".join(PackedStringArray(shown)), inst.data.card_name], inst, "", pid)
 	OBJECT_COSTS.pay(self, pid, object_picks)
 	if ability.life_cost > 0:
 		adjust_life(pid, -ability.life_cost)
@@ -2620,9 +2927,11 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		if not players[pid].tapped_land_for_mana_this_turn:
 			_rec(players[pid], &"tapped_land_for_mana_this_turn")
 			players[pid].tapped_land_for_mana_this_turn = true
-		dispatch_event(Mtg.EventType.TAPPED_FOR_MANA,
-			{"instance": inst, "controller": inst.controller_id, "player": pid,
-				"color": produced_color, "colors": produced_types})
+		var tapped_data := {"instance": inst, "controller": inst.controller_id, "player": pid,
+			"color": produced_color, "colors": produced_types}
+		if not bonus_colors.is_empty():
+			tapped_data["bonus_colors"] = bonus_colors   # asked above (Pack 10 E8)
+		dispatch_event(Mtg.EventType.TAPPED_FOR_MANA, tapped_data)
 	# "Becomes tapped" triggers (City of Brass) — normal stacked triggers.
 	#
 	# `controller` IS THE PERMANENT'S CONTROLLER on this event, as on every
@@ -2730,13 +3039,19 @@ func play_banned(pid: int, data: CardData) -> String:
 	# below holds nothing else, CR 702.26b) and still has the ability — not
 	# silenced (Titania's Song, CR 613 layer 6) and not a tapped artifact
 	# under the 1997 rule (manual p.124) — the same gate entry_refused
-	# applies to the entry bans. The callback is not told its source, so
-	# the card cannot ask for itself.
+	# applies to the entry bans. A callback that takes a FOURTH argument
+	# is told the radiating permanent (Pack 10 E9), so the card can ask
+	# for itself — Damping Engine's effect_ignored_by(source, pid); the
+	# three-argument bans written before (Arcane Laboratory, City in a
+	# Bottle) are called as they always were.
 	for inst in all_battlefield():
 		if not inst.data.play_ban.is_valid() or not is_present(inst) \
 				or inst.cur_abilities_silenced or inst.cur_statics_suspended:
 			continue
-		if bool(inst.data.play_ban.call(self, pid, data)):
+		var ban: Callable = inst.data.play_ban
+		var banned: bool = bool(ban.call(self, pid, data, inst)) if ban.get_argument_count() >= 4 \
+			else bool(ban.call(self, pid, data))
+		if banned:
 			return inst.data.card_name
 	# Until-end-of-turn bans a resolved spell left behind (Solfatara,
 	# Abeyance — [method add_floating_play_ban]).
@@ -3197,8 +3512,12 @@ func grant_flash(pid: int, filter: Callable, desc := "") -> void:
 ## here reads the mode, the targets, X or the pool, which is what lets it
 ## be asked before any of them exists.
 func _cast_announce_checks(pid: int, inst: CardInstance) -> String:
+	# The zone: the hand, an exile permission, or a graveyard / library-top
+	# permission (Bösium Strip; Pack 10 E5 — Yawgmoth's Will, Temporal
+	# Aperture: [method can_play_from_zone]). A land it covers is refused
+	# just below, in words.
 	if not ((inst.zone == Mtg.Zone.HAND and inst.owner_id == pid) or can_play_from_exile(pid, inst)
-			or can_cast_from_graveyard(pid, inst)):
+			or can_play_from_zone(pid, inst)):
 		return "%s is not in your hand" % inst.data.card_name
 	var locked_why := hand_lock_reason(inst)
 	if locked_why != "":
@@ -3276,6 +3595,13 @@ func spell_announce_refusal(pid: int, inst: CardInstance, x_value := 0, mode := 
 ## Harvest's X Swamps), a card to exile for a pitch row, and the life.
 ## Lifted out of [method _cast_checks] whole (2026-10-04). Pure reads.
 func _spell_cost_checks(pid: int, inst: CardInstance, x_value: int, mode: int) -> String:
+	# Pack 10 E5: a card only a FREE zone permission covers (Temporal
+	# Aperture) is cast only "without paying its mana cost" — so every
+	# asker (the cast, the row menu, the network's options, the AI) refuses
+	# its other rows alike ([method zone_play_row_refusal]).
+	var zone_why := zone_play_row_refusal(pid, inst, mode)
+	if zone_why != "":
+		return zone_why
 	var alternate := payment_option_for(pid, inst.data, mode, inst)
 	# X is 0 when the cost paid is an alternative one without the {X} the
 	# mana cost prints (CR 107.3b; Aluren: "X can only be 0") — Pack 9 E2.
@@ -3441,12 +3767,20 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	# The payment row and the printed row it casts (Pack 9 E2: they differ
 	# only for a granted row — see [method payment_rows]).
 	mode = int(checks["mode"])
+	# Pack 10 E5: a card only a FREE zone permission lets this seat cast
+	# from where it lies (Temporal Aperture) is cast "without paying its
+	# mana cost" or not at all — refused before anything is asked or paid.
+	var free_why := zone_play_row_refusal(pid, inst, mode)
+	if free_why != "":
+		return free_why
 	var effects_mode := int(checks["effects_mode"])
 	var plan: TargetPlan = checks["plan"]
 	var extra_bodies: Array[CardInstance] = checks["bodies"]
 	var extra_sacrifice: CardInstance = null
-	var from_graveyard := graveyard_cast_permission(pid, inst) \
-		if inst.zone == Mtg.Zone.GRAVEYARD else {}
+	# The graveyard or library-top permission it is cast under (Bösium
+	# Strip; Pack 10 E5 — Yawgmoth's Will, Temporal Aperture).
+	var from_graveyard := zone_play_permission(pid, inst) \
+		if inst.zone == Mtg.Zone.GRAVEYARD or inst.zone == Mtg.Zone.LIBRARY else {}
 	# The Mirage flash rider's condition is judged NOW, before the spell
 	# itself is on the stack: "if you cast it any time a sorcery couldn't
 	# have been cast" (CR 307.1 timing; [member CardData.flash_rider]).
@@ -3582,9 +3916,13 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	# the stack before any cost is paid, so a sacrifice burying a land on
 	# top of it cannot take the permission away).
 	if not from_graveyard.is_empty():
-		_rec(players[inst.owner_id], &"graveyard")
 		_rec(inst, &"zone")
-		players[inst.owner_id].graveyard.erase(inst)
+		if inst.zone == Mtg.Zone.LIBRARY:   # Pack 10 E5: the library's revealed top
+			_rec(players[inst.owner_id], &"library")
+			players[inst.owner_id].library.erase(inst)
+		else:
+			_rec(players[inst.owner_id], &"graveyard")
+			players[inst.owner_id].graveyard.erase(inst)
 		if bool(from_graveyard.get("exile_instead", false)):
 			_rec(inst, &"graveyard_exile_spell")
 			inst.graveyard_exile_spell = true
@@ -3831,8 +4169,15 @@ func ability_cost_bodies(pid: int, inst: CardInstance, ability: ActivatedAbility
 ## it always asked; [method ability_announce_refusal] asks it before any
 ## is made. Pure reads.
 func _ability_resource_checks(pid: int, inst: CardInstance, ability: ActivatedAbility) -> String:
-	if ability.life_cost > 0 and players[pid].life < ability.life_cost:
-		return "not enough life to pay %d" % ability.life_cost
+	# The life — fixed, or worked out now (Pack 10 E2, [method ability_life_cost]).
+	var life_due := ability_life_cost(pid, inst, ability)
+	if life_due > 0 and players[pid].life < life_due:
+		return "not enough life to pay %d" % life_due
+	# "Discard this card" (Pack 10 E2, cycling): the card must still be in
+	# the payer's hand (CR 601.2h — a cost that can't be paid can't be).
+	if ability.discard_self_cost \
+			and (inst.zone != Mtg.Zone.HAND or not players[pid].hand.has(inst)):
+		return "%s is not in your hand to discard" % inst.data.card_name
 	if players[pid].library.size() < ability.library_exile_cost:
 		return "not enough cards in your library to exile"
 	if ability.random_discard_cost > 0 \
@@ -3858,6 +4203,20 @@ func _ability_resource_checks(pid: int, inst: CardInstance, ability: ActivatedAb
 				< ability.counter_cost_count:
 		return "not enough %s counters to remove" % ability.counter_cost_kind
 	return ""
+
+
+## Pack 10 E2 — THE LIFE [param pid] would pay for [param inst]'s
+## [param ability] right now: the fixed [member ActivatedAbility.life_cost],
+## or what its [member ActivatedAbility.life_cost_fn] works out (Lurking
+## Evil's half, rounded up). Never negative: a player can always pay 0 life
+## (CR 119.4). The one reading of the refusal, the payment and the AI's
+## price. Pure read.
+func ability_life_cost(pid: int, inst: CardInstance, ability: ActivatedAbility) -> int:
+	if ability == null:
+		return 0
+	if ability.life_cost_fn.is_valid():
+		return maxi(0, int(ability.life_cost_fn.call(self, inst, pid)))
+	return maxi(0, ability.life_cost)
 
 
 ## Would [method activate_ability] refuse [param inst]'s ability
@@ -3915,7 +4274,13 @@ func _ability_announce_checks(pid: int, inst: CardInstance, ability: ActivatedAb
 		return "only the card's owner may activate it from their graveyard"
 	# Normally only the controller may activate; Clergy of the Holy
 	# Nimbus hands one ability to the opponents instead.
-	if ability.any_player_may_activate:
+	if ability.activation_zone == Mtg.Zone.HAND:
+		# Pack 10 E2: a HAND ability (cycling, CR 702.29a) is its OWNER'S —
+		# a card in a hand is no permanent and has no controller (CR 109.2,
+		# 108.4), so the controller branches below do not apply.
+		if inst.owner_id != pid or not players[pid].hand.has(inst):
+			return "only the card's owner may activate it from their hand"
+	elif ability.any_player_may_activate:
 		pass   # anybody may activate it
 	elif ability.only_owner_may_activate:
 		# "Only this creature's owner may activate this ability" (Personal
@@ -3954,7 +4319,9 @@ func _ability_announce_checks(pid: int, inst: CardInstance, ability: ActivatedAb
 	return ""
 
 
-## Activate a (non-mana) activated ability of a battlefield permanent.
+## Activate a (non-mana) activated ability of a battlefield permanent — or
+## of a card in its owner's graveyard or hand, for an ability that
+## functions there (Ashen Ghoul; cycling, Pack 10 E2 — CR 113.6).
 func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array = [],
 		x_value := 0) -> String:
 	_begin_cost_choices()
@@ -4222,8 +4589,11 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		# Land's Edge hand out their untapped ones.
 		dispatch_event(Mtg.EventType.BECAME_TAPPED,
 			{"instance": inst, "controller": inst.controller_id})
-	if ability.life_cost > 0:
-		adjust_life(pid, -ability.life_cost)
+	# The life — fixed, or worked out as it is paid (Pack 10 E2: Lurking
+	# Evil's half, rounded up — [method ability_life_cost]).
+	var life_paid := ability_life_cost(pid, inst, ability)
+	if life_paid > 0:
+		adjust_life(pid, -life_paid)
 	if ability.random_discard_cost > 0:
 		discard_random(pid, ability.random_discard_cost, false)
 	# WHAT THE COST ATE, collected for THIS activation and handed to the
@@ -4264,6 +4634,15 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		cost_record["_discarded_types"] = last_drawn.data.types
 		cost_record["_discarded_name"] = last_drawn.data.card_name
 		discard_cards(pid, [last_drawn], false)
+	if ability.discard_self_cost:
+		# Pack 10 E2 — "Discard this card" (cycling, CR 702.29a): the source
+		# itself, checked in the payer's hand above. A COST discard, so
+		# Library of Leng has no say, Megrim hears it and Psychic Purge does
+		# not ([method discard_cards]); the ability then resolves with its
+		# card in the graveyard (CR 113.7a), as Ashen Ghoul's does.
+		cost_record["_discarded_types"] = inst.data.types
+		cost_record["_discarded_name"] = inst.data.card_name
+		discard_cards(pid, [inst], false)
 	if sacrifice_pick != null:
 		# Record what the cost ate so the ability's OWN effects can read it
 		# on resolution ("You gain life equal to the sacrificed creature's
@@ -4319,6 +4698,17 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		cost_record["_source_returned"] = true
 		return_to_hand(inst)
 	for i in drought_picks: sacrifice_permanent(i)
+	if life_paid > 0:
+		cost_record["_life_paid"] = life_paid
+	if ability.grantor_id >= 0:
+		# Pack 10 E2 — THE GRANTOR LINK ([method ActivatedAbility.granted_by]):
+		# the permanent that gave this ability, as it was now, for a text
+		# that names it (Archery Training's arrow counters, CR 613.7 and
+		# 608.2h) — read back by ActivatedAbility.grantor_counters.
+		var grantor := find_instance(ability.grantor_id)
+		cost_record["_grantor"] = ability.grantor_id
+		cost_record["_grantor_timestamp"] = grantor.layer_timestamp if grantor != null else -1
+		cost_record["_grantor_counters"] = grantor.counters.duplicate() if grantor != null else {}
 	if ability.on_cost_paid.is_valid():
 		ability.on_cost_paid.call(self, inst, cost_record)
 	var item := StackItem.new()
@@ -5203,6 +5593,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		damage_dealt_this_turn[source.id] = \
 			int(damage_dealt_this_turn.get(source.id, 0)) + amount
 		p.life -= amount
+		_refresh_after_life_change()   # Pack 10 E3: judged at the same check (CR 704.5f-g)
 		dispatch_event(Mtg.EventType.LIFE_LOST, {"player": target.player_id, "amount": amount})
 		if not source.damaged_players_this_turn.has(target.player_id):
 			source.damaged_players_this_turn.append(target.player_id)
@@ -7419,6 +7810,97 @@ func _draw_step_skipped(pid: int) -> bool:
 	return false
 
 
+# ------------------------------- Pack 10 E11: the draw step's held questions --
+#
+# The draw step's draw is a TURN-BASED action (CR 504.1), so a question one
+# of its replacements asks — Island Sanctuary's "skip that draw?",
+# Abundance's land or nonland, Fasting's "skip that step?", Breathstealer's
+# Crypt's 3 life — has no stack item for the pre-flight to probe. It is
+# held the entry payment's way ([method _hold_entry_payment]): the step's
+# action is run once over a [GameSnapshot] with the answers given so far
+# parked on the seats, its questions recorded, everything put back; the
+# first one a human seat has not answered holds the step on a `draw_step`
+# pending action, which [method answer_choice] parks and replays by
+# entering the step again. Every question of that action wears
+# [constant DRAW_STEP_SOURCE], in the probe and in the real run alike, so
+# a parked answer matches the question it was given for.
+
+## The name the draw step's questions wear (their [member PlayerChoice.source]).
+const DRAW_STEP_SOURCE := "Draw step"
+
+
+## The draw step's turn-based action for [param pid]: Fasting's skip of the
+## whole step (CR 614.1b — no draw, no DRAW_STEP event, no priority: true
+## is returned and the caller moves on), the first player's skipped first
+## draw, else the draw (with its replacements, [method _replace_draw]).
+func _draw_step_turn_action(pid: int) -> bool:
+	if _draw_step_skipped(pid):
+		log_line("%s skips their draw step" % players[pid].player_name)
+		return true
+	if _skip_first_draw and turn_number == 1:
+		log_line("%s skips the first draw" % players[pid].player_name)
+	else:
+		draw_cards(pid, 1)
+	return false
+
+
+## Could the draw step ask anybody anything? Only a replacement can — of
+## the step or of a draw — so a board with none (nearly every board) is
+## never probed.
+func _draw_step_may_ask(pid: int) -> bool:
+	all_battlefield()   # refreshes the indexes below if they are stale
+	if not _battlefield_draw_step_replacements.is_empty() \
+			or not _battlefield_draw_replacements.is_empty():
+		return true
+	for entry in _one_shot_draws:
+		if int(entry["player"]) == pid:
+			return true
+	return false
+
+
+## HOLD the draw step on its next unanswered question — true when it did,
+## and the step then does nothing until [method answer_choice]. False when
+## interactive choices are off, a probe is running, nothing could ask, every
+## question is answered (the real run serves them), or — the liveness check
+## — an answer the player gave was not served (asking again could never
+## consume it, so the heuristic answers instead and is ledgered).
+func _hold_draw_step(pid: int) -> bool:
+	if not interactive_choices or _probing or awaiting_choice != null:
+		return false
+	if not _draw_step_may_ask(pid):
+		return false
+	var snapshot := GameSnapshot.take(self)
+	var outer_choices := _resolving_choices
+	var outer_turn := _turn_source
+	_probing = true
+	_probe_information = []
+	_resolving_choices = []
+	_turn_source = DRAW_STEP_SOURCE
+	_draw_step_turn_action(pid)
+	var asked: Array = _resolving_choices.duplicate()
+	_probing = false
+	_probe_information = []
+	snapshot.restore()
+	_resolving_choices = outer_choices
+	_turn_source = outer_turn
+	var answered := 0
+	var open_question: PlayerChoice = null
+	for entry in asked:
+		var choice: PlayerChoice = entry
+		if choice.answered_by_player:
+			answered += 1
+		elif open_question == null and choice.pid >= 0 and choice.pid < agents.size() \
+				and agents[choice.pid].wants_to_be_asked() \
+				and agents[choice.pid].can_answer(choice):
+			open_question = choice
+	if open_question == null or answered < _cost_answers:
+		return false
+	awaiting_choice = open_question
+	_pending_action = {"kind": "draw_step", "pid": pid}
+	_emit_state()
+	return true
+
+
 ## Put a card from [param pid]'s HAND on top of their library (Sylvan
 ## Library's "put the card on top of your library"). Not a draw in reverse:
 ## nothing is shuffled and no event fires.
@@ -7593,9 +8075,13 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 		return
 	if destination == Mtg.Zone.BATTLEFIELD and controller < 0:
 		destination = Mtg.Zone.GRAVEYARD
+	# Pack 10 E4: who CAST it — its stack controller (CR 110.2), read
+	# before it goes home to its owner — for SPELL_COUNTERED below.
+	var caster := inst.controller_id
 	_rec(self, &"stack")
 	for i in range(stack.size() - 1, -1, -1):
 		if stack[i].kind == Mtg.StackKind.SPELL and stack[i].card == inst:
+			caster = stack[i].controller
 			stack.remove_at(i)
 			break
 	log_line("%s is countered" % inst.data.card_name, inst)
@@ -7611,6 +8097,7 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 		inst.zone = Mtg.Zone.EXILE
 		_instances.erase(inst.id)
 		_emit_state()
+		_announce_countered(inst, caster)
 		return
 	# Memory Lapse replaces the destination. Never visit the graveyard:
 	# graveyard-entry effects and timestamps must not see an intermediate move.
@@ -7626,6 +8113,7 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 			inst.data.card_name, players[controller].player_name], inst)
 		_put_on_battlefield(inst, controller)
 		_emit_state()
+		_announce_countered(inst, caster)
 		return
 	_rec_move(inst, inst.owner_id, destination)
 	if destination == Mtg.Zone.LIBRARY:
@@ -7638,6 +8126,23 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 	else:
 		_land_in_graveyard(inst)
 	_emit_state()
+	_announce_countered(inst, caster)
+
+
+## Pack 10 E4 — "Whenever a spell you've cast is countered" (Multani's
+## Presence): [constant Mtg.EventType.SPELL_COUNTERED] for the spell
+## [param inst] [method counter_spell] has just countered (CR 701.5a), cast
+## by [param caster]. Dispatched once its card has gone where the counter
+## sent it — `destination` is that zone ([member CardInstance.zone] now;
+## -1 for a copy, which ceased to exist, CR 707.10a), so a trigger of the
+## countered card's own move ([constant Mtg.EventType.CARD_PUT_INTO_GRAVEYARD])
+## goes on below this one. Not gated: countering is rare. A FIZZLE never
+## comes here — it is not a counter under the modern rules (CR 608.2b),
+## and [RulesOptions] has no Fifth Edition fork that would make it one.
+func _announce_countered(inst: CardInstance, caster: int) -> void:
+	dispatch_event(Mtg.EventType.SPELL_COUNTERED, {"instance": inst,
+		"controller": caster, "owner": inst.owner_id, "is_copy": inst.is_copy,
+		"destination": -1 if inst.is_copy else inst.zone})
 
 
 ## An AURA is leaving the battlefield: unhook it from its host's
@@ -9419,9 +9924,16 @@ func remove_from_ante(inst: CardInstance, to_zone: int) -> void:
 		return
 	_rec_move(inst, inst.owner_id, to_zone)
 	players[inst.owner_id].ante.erase(inst)
+	if to_zone == Mtg.Zone.GRAVEYARD:
+		# Pack 10 E4: through THE graveyard door — a new graveyard object
+		# (CR 400.7), Forbidden Crypt's "exile it instead" (CR 614.1), and
+		# the arrival announced (CR 603.6a). It used to be appended here.
+		log_line("%s leaves the ante" % inst.data.card_name)
+		_land_in_graveyard(inst)
+		_emit_state()
+		return
 	inst.zone = to_zone
 	match to_zone:
-		Mtg.Zone.GRAVEYARD: players[inst.owner_id].graveyard.append(inst)
 		Mtg.Zone.HAND:      players[inst.owner_id].hand.append(inst)
 		Mtg.Zone.EXILE:     players[inst.owner_id].exile.append(inst)
 		Mtg.Zone.LIBRARY:   players[inst.owner_id].library.append(inst)
@@ -9464,12 +9976,17 @@ func change_owner(inst: CardInstance, new_owner: int) -> void:
 		if field != &"":
 			_rec(players[new_owner], field)
 	_remove_from_zone(inst)
+	var was_controller := inst.controller_id
 	inst.owner_id = new_owner
 	if zone != Mtg.Zone.BATTLEFIELD:
 		inst.controller_id = new_owner
 	match zone:
 		Mtg.Zone.ANTE:       players[new_owner].ante.append(inst)
-		Mtg.Zone.GRAVEYARD:  players[new_owner].graveyard.append(inst)
+		# Pack 10 E4: into ANOTHER player's graveyard — another zone, so a
+		# new object (CR 400.7) — through THE graveyard door: the new
+		# owner's Forbidden Crypt exiles it (Tempest Efreet "into that
+		# player's graveyard"), else the arrival is announced (CR 603.6a).
+		Mtg.Zone.GRAVEYARD:  _land_in_graveyard(inst, was_controller)
 		Mtg.Zone.HAND:       players[new_owner].hand.append(inst)
 		Mtg.Zone.EXILE:      players[new_owner].exile.append(inst)
 		Mtg.Zone.LIBRARY:    players[new_owner].library.append(inst)
@@ -9718,8 +10235,14 @@ func discard_hand(pid: int) -> void:
 		_rec(p, &"graveyard")
 		for inst in p.hand:
 			_rec(inst, &"zone")
+	# The cards' own "when you discard this" abilities (Psychic Purge,
+	# Pack 10's B8 found them silent under Wheel of Fortune), fired after
+	# the whole hand has gone, as discard_cards fires them.
+	var fired: Array[CardInstance] = []
 	while not p.hand.is_empty():
 		var inst: CardInstance = p.hand[-1]
+		if inst.data.on_discarded.is_valid():
+			fired.append(inst)
 		if _discard_to_library_instead(pid, inst, true):
 			_announce_discard(pid, inst, true, true)
 			continue
@@ -9728,6 +10251,8 @@ func discard_hand(pid: int) -> void:
 		_announce_discard(pid, inst, true, false)
 	log_line("%s discards their hand" % p.player_name)
 	_emit_state()
+	for inst in fired:
+		inst.data.on_discarded.call(self, inst, pid, _resolving_controller)
 
 
 ## One card has left [param pid]'s hand as a discard — say so on the
@@ -9870,6 +10395,7 @@ func adjust_life(pid: int, delta: int) -> void:
 		return
 	if undo_log != null: _rec(players[pid], &"life")
 	players[pid].life += delta
+	_refresh_after_life_change()   # Pack 10 E3: Serra Avatar's size is live
 	if delta < 0: dispatch_event(Mtg.EventType.LIFE_LOST, {"player": pid, "amount": -delta})
 	log_line("%s %s %d life (now %d)" % [players[pid].player_name,
 		"gains" if delta >= 0 else "loses", absi(delta), players[pid].life])
@@ -10718,12 +11244,13 @@ func answer_choice(value: Variant) -> String:
 		_pending_action = {}
 		_cost_values.append(value)
 		_cost_answers += 1
-		if String(action.get("kind", "")) == "land":
+		if String(action.get("kind", "")) in ["land", "draw_step"]:
 			# A land's ENTRY PAYMENT is asked from inside the card's own
 			# callable, so its answers ride the seat's MAILBOX the way a
 			# resolution's do: each one parked as given, kept across the
 			# probes by the rewind, served by the real run
-			# ([method _hold_entry_payment]).
+			# ([method _hold_entry_payment]). So is a draw replacement's in
+			# the draw step (Pack 10 E11, [method _hold_draw_step]).
 			agents[choice.pid].accept_answer(choice, value)
 		_replaying_cost = true
 		var err := _replay_cost_action(action)
@@ -11247,6 +11774,12 @@ func _replay_cost_action(action: Dictionary) -> String:
 			if _flush_upkeep_batch(int(action.get("untap_raised", 0))):
 				_open_priority()
 			return ""
+		"draw_step":
+			# The draw step's held question (Pack 10 E11): nothing of the
+			# step had happened, so it is entered again with the answers
+			# parked — it may hold on the next question.
+			_enter_step(_step_index)
+			return ""
 		"trigger_target":
 			# A targeted trigger's question (CR 603.3d), put as a player
 			# was about to receive priority: give it again, which re-runs
@@ -11531,6 +12064,26 @@ func _pay_entry(inst: CardInstance, controller: int) -> bool:
 ## campaign c12, h3-16).
 func _put_on_battlefield(inst: CardInstance, controller: int,
 		host: CardInstance = null, tapped := false, extra_counters: Dictionary = {}) -> bool:
+	# Pack 10 E10 split this arrival into its three moments, so that
+	# [method put_onto_battlefield_together] can run the first for every
+	# card of a batch before the second runs for any (CR 101.4, 303.4f):
+	# the replacements and choices, the placement, the announcement.
+	var arrival := _arrival_replacements(inst, controller)
+	if arrival.is_empty():
+		return false
+	var silenced := bool(arrival["silenced"])
+	_place_arrival(inst, controller, host, tapped, extra_counters, silenced)
+	recalculate()
+	_announce_arrival(inst, controller, silenced)
+	return true
+
+
+## The FIRST moment of an arrival ([method _put_on_battlefield]): what
+## replaces or refuses it, asked before the permanent touches the
+## battlefield. Returns `{}` when it does not enter at all (refused — it is
+## back where it came from — or an entry payment not made — it is in its
+## owner's graveyard), else `{"silenced": bool}`.
+func _arrival_replacements(inst: CardInstance, controller: int) -> Dictionary:
 	# "Lands can't enter the battlefield" (Worms of the Earth) and "put this
 	# creature into its owner's graveyard instead of onto the battlefield"
 	# (Frankenstein's Monster): a refusal, asked before anything about the
@@ -11539,7 +12092,7 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 	var refused := entry_refused(inst, controller)
 	if refused != "":
 		_arrival_refused(inst, refused)
-		return false
+		return {}
 	# THE PERMANENT'S OWN ENTRY REPLACEMENTS (CR 614.12, Pack 9 bug pass
 	# h4-2 / h2-7): which apply is judged on the permanent AS IT WOULD EXIST
 	# on the battlefield — with the continuous effects that already exist
@@ -11572,8 +12125,28 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 			inst.added_types = was_added_types
 			inst.color_override = was_color_override
 			inst.restore_printed_identity()
-		card_to_graveyard_from_anywhere(inst)
-		return false
+		if inst.zone == Mtg.Zone.GRAVEYARD:
+			# Already its owner's graveyard card (raised and refused): it
+			# stays there — card_to_graveyard_from_anywhere would see the
+			# zone and do nothing, leaving it in no zone array (E10).
+			if not players[inst.owner_id].graveyard.has(inst):
+				_rec(players[inst.owner_id], &"graveyard")
+				players[inst.owner_id].graveyard.append(inst)
+		else:
+			card_to_graveyard_from_anywhere(inst)
+		return {}
+	return {"silenced": silenced}
+
+
+## The SECOND moment of an arrival: the permanent is on the battlefield —
+## zone, controller, timestamp, host, sickness, tapped, counters — with
+## nothing recalculated and nothing announced yet. [param check_tapped]
+## false: [param tapped] was decided already (a batch decides it for every
+## card before any is placed, so a Kismet arriving in the same batch does
+## not reach the others).
+func _place_arrival(inst: CardInstance, controller: int, host: CardInstance,
+		tapped: bool, extra_counters: Dictionary, silenced: bool,
+		check_tapped := true) -> void:
 	if undo_log != null:
 		_rec(inst, &"zone")
 		_rec(inst, &"controller_id")
@@ -11581,11 +12154,15 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 		_rec(inst, &"tapped")
 		_rec(inst, &"counters")
 		_rec(inst, &"layer_timestamp")
+		_rec(inst, &"control_upkeep_mark")
 		_rec(players[controller], &"battlefield")
 		_rec(players[controller], &"acted_this_turn")
 		_rec(self, &"_battlefield_order")
 	inst.zone = Mtg.Zone.BATTLEFIELD
 	inst.controller_id = controller
+	# Echo's clock (CR 702.30a, Pack 10 E1): it came under this player's
+	# control now — see [method came_under_control_since_last_upkeep].
+	inst.control_upkeep_mark = players[controller].upkeeps_begun
 	if inst.graveyard_exile_spell:
 		# A spell's "if it would be put into a graveyard, exile it instead"
 		# (Bösium Strip) ends when it stops being a spell (CR 400.7).
@@ -11617,7 +12194,7 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 	# controller's control since their turn began" (CR 302.6), and a LAND
 	# animated into a creature the turn it was played must not attack.
 	inst.summoning_sick = true
-	inst.tapped = tapped or _arrives_tapped(inst, controller, not silenced)
+	inst.tapped = tapped or (check_tapped and _arrives_tapped(inst, controller, not silenced))
 	if not silenced:   # CR 614.12 (above)
 		for kind in inst.data.enters_with_counters:   # Triskelion, Clockwork Beast
 			inst.counters[kind] = int(inst.data.enters_with_counters[kind])
@@ -11626,21 +12203,28 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 	players[controller].battlefield.append(inst)
 	_battlefield_order.append(inst.id)
 	_battlefield_changed()
-	recalculate()
-	# "As this permanent enters, ..." — a REPLACEMENT effect (CR 614.1c).
-	# It runs with the permanent already on the battlefield, so it may
-	# sacrifice, pay life or ask its controller something, but before state
-	# -based actions and before the ENTERS_BATTLEFIELD trigger below: a */*
-	# body (Wood Elemental, Nameless Race) has to settle its size before
-	# anything could see a 0/0. The second recalculate is what publishes
-	# whatever the callback wrote into memory. Not for a permanent with no
-	# abilities as it exists here (CR 614.12: Dracoplasm under Humility).
+
+
+## The THIRD moment of an arrival, after the board has been recalculated
+## with it: "as this enters" and then the ENTERS_BATTLEFIELD event.
+func _announce_arrival(inst: CardInstance, controller: int, silenced: bool) -> void:
+	_as_enters(inst, controller, silenced)
+	dispatch_event(Mtg.EventType.ENTERS_BATTLEFIELD,
+		{"instance": inst, "controller": controller})
+
+
+## "As this permanent enters, ..." — a REPLACEMENT effect (CR 614.1c).
+## It runs with the permanent already on the battlefield, so it may
+## sacrifice, pay life or ask its controller something, but before state
+## -based actions and before the ENTERS_BATTLEFIELD trigger: a */* body
+## (Wood Elemental, Nameless Race) has to settle its size before anything
+## could see a 0/0. The recalculate is what publishes whatever the
+## callback wrote into memory. Not for a permanent with no abilities as it
+## exists here (CR 614.12: Dracoplasm under Humility).
+func _as_enters(inst: CardInstance, controller: int, silenced: bool) -> void:
 	if not silenced and inst.data.as_enters.is_valid():
 		inst.data.as_enters.call(self, inst, controller)
 		recalculate()
-	dispatch_event(Mtg.EventType.ENTERS_BATTLEFIELD,
-		{"instance": inst, "controller": controller})
-	return true
 
 
 ## Why [param inst] may NOT enter the battlefield under [param controller],
@@ -11947,6 +12531,12 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	# been offered the event, so a Clone of Onulet still pays out (608.2h).
 	inst.restore_printed_identity()
 	recalculate()
+	# Pack 10 E4: a CARD put into a graveyard from the battlefield (a token
+	# rests nowhere, CR 111.7) — announced LAST, after its own leave and
+	# dies events, as the new graveyard object it is (CR 400.7: printed
+	# characteristics again). A "from anywhere" listener never looks back
+	# (CR 603.6c), so the departed permanent itself is not offered it.
+	_announce_graveyard_arrival(inst, Mtg.Zone.BATTLEFIELD, controller)
 	# A Living Lands going takes its Forests out of combat at once (CR
 	# 506.4; campaign 2026-10-12 b3-6) — this departure runs no state-based
 	# check of its own. Held inside a departure batch: its close checks.
@@ -12032,9 +12622,16 @@ func _graveyard_becomes_exile(inst: CardInstance) -> bool:
 ## array: its owner's graveyard, or exile when [method
 ## _graveyard_becomes_exile] says so. The caller journaled the move with
 ## [method _rec_move] (toward the graveyard); the exile array is recorded
-## here. Returns true when the card is in the graveyard.
-func _land_in_graveyard(inst: CardInstance) -> bool:
+## here. Returns true when the card is in the graveyard — and then it has
+## been announced ([method _announce_graveyard_arrival], Pack 10 E4: the
+## card's zone is still the one it left as it comes through this door;
+## [param from_controller] names who held it there when the caller has
+## already rewritten its controller — [method change_owner]).
+func _land_in_graveyard(inst: CardInstance, from_controller := -1) -> bool:
 	var home := players[inst.owner_id]
+	var from_zone := inst.zone
+	if from_controller < 0:
+		from_controller = inst.controller_id
 	var spell_exiled := inst.graveyard_exile_spell   # Bösium Strip's cast
 	if spell_exiled:
 		_rec(inst, &"graveyard_exile_spell")
@@ -12049,7 +12646,47 @@ func _land_in_graveyard(inst: CardInstance) -> bool:
 		return false
 	_enter_graveyard(inst)
 	home.graveyard.append(inst)
+	_announce_graveyard_arrival(inst, from_zone, from_controller)
 	return true
+
+
+## Pack 10 E4 — "WHEN/WHENEVER A CARD IS PUT INTO A GRAVEYARD FROM
+## ANYWHERE" (CR 603.6a): announce that the CARD [param inst] has just
+## landed in its owner's graveyard, out of [param from_zone] where
+## [param from_controller] controlled it — one
+## [constant Mtg.EventType.CARD_PUT_INTO_GRAVEYARD] per card, from
+## [method _land_in_graveyard] (every door but the battlefield's) and
+## [method _move_to_graveyard] (the battlefield's). A token or a spell
+## copy is not a card (CR 111.7/111.8) and a card a replacement exiled
+## never got here (CR 614.1). GATED: every resolving spell passes this
+## door, so the event is built only when something can hear it — a
+## battlefield trigger, a delayed one, or the moved card's own graveyard
+## trigger ([method _graveyard_arrival_heard]). The UI's
+## [signal event_occurred] therefore carries unheard arrivals no more
+## than unheard mana activations (Mtg.EventType.ABILITY_ACTIVATED).
+func _announce_graveyard_arrival(inst: CardInstance, from_zone: int,
+		from_controller: int) -> void:
+	if inst == null or inst.is_token or inst.is_copy or inst.zone != Mtg.Zone.GRAVEYARD:
+		return
+	if not _graveyard_arrival_heard(inst):
+		return
+	dispatch_event(Mtg.EventType.CARD_PUT_INTO_GRAVEYARD, {"instance": inst,
+		"owner": inst.owner_id, "from_zone": from_zone,
+		"from_controller": from_controller, "graveyard_entry": inst.graveyard_entry})
+
+
+## Could anything hear [param inst] arrive in a graveyard? A battlefield
+## listener (the trigger index), a delayed trigger, or one of the card's
+## OWN graveyard triggers (Serra Avatar) — the only graveyard listener the
+## event is offered to ([method dispatch_event]).
+func _graveyard_arrival_heard(inst: CardInstance) -> bool:
+	var type := Mtg.EventType.CARD_PUT_INTO_GRAVEYARD
+	if has_trigger_listener(type) or _delayed_listens(type):
+		return true
+	for trig in inst.data.graveyard_triggers:
+		if trig.listens(type):
+			return true
+	return false
 
 
 func _enter_exile(inst: CardInstance) -> void:
@@ -12483,6 +13120,22 @@ func change_control(inst: CardInstance, new_pid: int) -> void:
 	recalculate()
 
 
+## ECHO'S INTERVENING IF (CR 702.30a, Pack 10 E1): did [param inst] come
+## under its current controller's control since the beginning of that
+## player's last upkeep? Asked as the upkeep begins and again as the echo
+## trigger resolves (CR 603.4), after [member MtgPlayer.upkeeps_begun] has
+## counted the upkeep under way — so "your last upkeep" is the one before
+## it, and a permanent that arrived during it (or since) is due. The mark
+## is written by the only two doors a permanent comes under a player's
+## control through ([method _put_on_battlefield], [method _set_controller]);
+## phasing passes through neither (CR 702.26d). See [EchoAbility].
+func came_under_control_since_last_upkeep(inst: CardInstance) -> bool:
+	if inst == null or inst.control_upkeep_mark < 0 \
+			or inst.controller_id < 0 or inst.controller_id >= players.size():
+		return false
+	return inst.control_upkeep_mark >= players[inst.controller_id].upkeeps_begun - 1
+
+
 ## Physical move used only after evaluating all active control effects.
 func _set_controller(inst: CardInstance, new_pid: int) -> void:
 	# A phased-out permanent never changes control (CR 702.26d) — moving it
@@ -12508,6 +13161,10 @@ func _set_controller(inst: CardInstance, new_pid: int) -> void:
 	inst.controller_id = new_pid
 	players[new_pid].battlefield.append(inst)
 	inst.summoning_sick = true
+	# Echo's clock (CR 702.30a, Pack 10 E1): it came under the new
+	# controller's control now, whoever had it before.
+	_rec(inst, &"control_upkeep_mark")
+	inst.control_upkeep_mark = players[new_pid].upkeeps_begun
 	# CR 506.4: a permanent is removed from combat when its controller
 	# changes — otherwise a stolen attacker keeps swinging at its new
 	# controller, and a stolen blocker keeps fighting for the thief.
@@ -13462,6 +14119,8 @@ func _lose(pid: int, reason: String) -> void:
 ## or a SPELL on the stack hearing its own SPELL_CAST ("When you cast
 ## this spell", Mana Vortex), which listens with its controller's seat.
 func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = null) -> void:
+	# Pack 10 E3: "until a player casts a creature spell" ends AS the event happens, before anyone hears it (CR 611.2b, 603.10).
+	if continuous.expire_on_event(self, type, data): recalculate()
 	if type == Mtg.EventType.BLOCKED:
 		record_combat_pair(data.attacker, data.blocker)
 		for body in [data.attacker, data.blocker]:
@@ -13537,6 +14196,27 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 				moved_item.event = event
 				moved_item.description = "%s — %s" % [moved.data.card_name, grave_trig.text]
 				_push_trigger(moved_item)
+	# Pack 10 E4 — "When this is put into a graveyard from anywhere" (Serra
+	# Avatar, CR 603.6a/603.10a): the card that just ARRIVED hears its own
+	# trip with its graveyard triggers, as the library event above does;
+	# no other graveyard card is offered it. Collected with its OWNER's
+	# seat, so it goes on in APNAP order with the battlefield's triggers
+	# (CR 603.3b) — the event is gated on a listener before it gets here
+	# ([method _announce_graveyard_arrival]).
+	elif type == Mtg.EventType.CARD_PUT_INTO_GRAVEYARD:
+		var arrived: CardInstance = data.get("instance", null)
+		if arrived != null and arrived.zone == Mtg.Zone.GRAVEYARD:
+			for grave_trig in arrived.data.graveyard_triggers:
+				if not grave_trig.matches(self, arrived, event):
+					continue
+				var arrived_item := StackItem.new()
+				arrived_item.kind = Mtg.StackKind.TRIGGER
+				arrived_item.card = arrived
+				arrived_item.controller = arrived.owner_id
+				arrived_item.trigger = grave_trig
+				arrived_item.event = event
+				arrived_item.description = "%s — %s" % [arrived.data.card_name, grave_trig.text]
+				(grave_items[arrived.owner_id] as Array).append(arrived_item)
 	all_battlefield()
 	var delayed_listen := _delayed_listens(type)
 	var death_batch := type in [Mtg.EventType.DIES, Mtg.EventType.LEAVES_BATTLEFIELD] and not _departure_batch.is_empty()
@@ -14128,10 +14808,14 @@ func _hold_trigger_targets(actor := -1) -> bool:
 
 
 ## Is the targeted trigger [param item] about to resolve with an ILLEGAL
-## target (CR 608.2b — it fizzles)?
+## target (CR 608.2b — it fizzles)? Never one that "still resolves if
+## its target becomes illegal" (Gilded Drake, Pack 10 E4 —
+## [member TriggeredAbility.resolves_untargeted], the printed exception
+## to 608.2b): it resolves, and [method current_trigger_target] answers
+## null for the target that is gone.
 func _trigger_target_illegal(item: StackItem) -> bool:
 	var spec: TargetSpec = item.trigger.target_spec
-	if spec == null:
+	if spec == null or item.trigger.resolves_untargeted:
 		return false
 	if item.targets.is_empty():
 		return item.trigger.target_min > 0
@@ -14731,6 +15415,12 @@ func _close_step_boundary() -> void:
 						p.player_name, burned, p.life])
 					burns.append({"player": p.id, "amount": burned})
 			p.mana_pool.clear()
+		# Pack 10 E3: a size that reads a life total (Serra Avatar) is
+		# recomputed from the burned totals before anything hears the loss
+		# and before the state-based check below judges its damage (CR
+		# 604.3, 704.5f-g) — the same order adjust_life keeps.
+		if not burns.is_empty():
+			_refresh_after_life_change()
 		for burn in burns:
 			# Public fact, never a damage event. dispatch_event suppresses
 			# presentation signals during speculative search as usual.
@@ -15297,6 +15987,44 @@ func _untap_step() -> bool:
 	var mine := players[pid].battlefield
 	# ---- 0. (the pre-untap census and the phasing ran once, before this:
 	#         _run_untap_step — this part may be held and re-run) -----------
+	# ---- 0b. "Choose artifact, creature, or land ... untap only permanents
+	#          of the chosen type this step" (Storage Matrix — Pack 10 E9,
+	#          CR 502.3): one question per effect, before anything else is
+	#          worked out; a tapped permanent then untaps only if it is of
+	#          EVERY chosen kind (an artifact land counts for either), and
+	#          the may-skip question and the caps apply to what is left.
+	#          Nothing tapped that could untap: nothing to ask. --------------
+	var only_kinds: Array[String] = []
+	if not untap_kind_choices.is_empty():
+		var tapped_of := {"artifact": 0, "creature": 0, "land": 0}
+		var any_tapped := false
+		for inst in mine:
+			if not inst.tapped or inst.skip_next_untap or inst.skip_untaps > 0 \
+					or inst.skip_untap_for.has(pid) or inst.cur_skips_untap \
+					or int(inst.counters.get("glyph", 0)) > 0:
+				continue
+			any_tapped = true
+			for kind in _untap_kinds(inst):
+				if tapped_of.has(kind):
+					tapped_of[kind] = int(tapped_of[kind]) + 1
+		if any_tapped:
+			# The default: the kind the seat has most of tapped — lands on a
+			# tie, then creatures (its own public permanents).
+			var kind_hint := 2
+			for k in [1, 0]:
+				if int(tapped_of[UNTAP_KINDS[k]]) > int(tapped_of[UNTAP_KINDS[kind_hint]]):
+					kind_hint = k
+			for source_id in untap_kind_choices:
+				var source_name := String(untap_kind_choices[source_id])
+				var labels: Array[String] = UNTAP_KIND_LABELS.duplicate()
+				var kind_q := _turn_question(pid, source_name, PlayerChoice.Kind.OPTION,
+					"Untap only artifacts, creatures, or lands this step?")
+				kind_q.options = labels
+				kind_q.hint = kind_hint
+				if _hold_cost_choice(kind_q, {"kind": "untap"}):
+					return false
+				only_kinds.append(UNTAP_KINDS[clampi(_ask_turn_option(pid, source_name,
+					labels, kind_q.prompt, kind_hint), 0, UNTAP_KINDS.size() - 1)])
 	# ---- 1. classify, mutating nothing --------------------------------
 	var eligible: Array[CardInstance] = []   # untaps unless a cap says no
 	var may_stay: Array[CardInstance] = []   # tapped, "may choose not to"
@@ -15309,6 +16037,13 @@ func _untap_step() -> bool:
 			           # controller's upkeep)
 		if inst.cur_skips_untap:
 			continue   # Meekstone-style locks
+		if inst.tapped and not only_kinds.is_empty():
+			var of_kinds := true
+			for kind in only_kinds:
+				if not _untap_kinds(inst).has(kind):
+					of_kinds = false
+			if not of_kinds:
+				continue   # not of the type chosen for Storage Matrix (0b)
 		# "You may choose not to untap" is the permanent's own static
 		# ability: one that lost all abilities (Humility) has none (CR
 		# 613.1f, Pack 9 bug pass h4-3) and simply untaps.
@@ -15488,6 +16223,13 @@ func _enter_step(index: int) -> void:
 					inst.counters["glyph"] = glyphs - 1
 				log_line("%s loses a glyph counter" % inst.data.card_name)
 				_counter_removal_event(inst, "glyph", 1)
+			# ECHO'S CLOCK (CR 702.30a, Pack 10 E1): this upkeep has begun.
+			# Counted HERE, after the "until your next upkeep" expiries
+			# above: a permanent those hand back now came under its
+			# controller's control before this count, so it owes echo at
+			# this upkeep and not again at the next.
+			_rec(players[active_player], &"upkeeps_begun")
+			players[active_player].upkeeps_begun += 1
 			dispatch_event(Mtg.EventType.UPKEEP_START, {"player": active_player})
 			# CR 503.1a: the untap step's triggers and the upkeep's go on
 			# the stack together, ordered by their controllers — which may
@@ -15496,19 +16238,27 @@ func _enter_step(index: int) -> void:
 				return
 			_open_priority()
 		Mtg.Step.DRAW:
-			# "If you would begin your draw step, you may skip that step
-			# instead" (Fasting) — CR 614 applied to a turn-based action.
-			# A skipped step happens not at all: no draw, no DRAW_STEP
-			# event, no priority in it.
-			if _draw_step_skipped(active_player):
-				log_line("%s skips their draw step"
-					% players[active_player].player_name)
+			# Pack 10 E11: a question the draw step's replacements ask
+			# (Island Sanctuary, Abundance, Fasting, Breathstealer's
+			# Crypt) is HELD for a human seat like the untap step's — the
+			# step is probed first and re-run once the answer is parked.
+			_begin_cost_choices()
+			if _hold_draw_step(active_player):
+				return
+			var outer_turn := _turn_source
+			_turn_source = DRAW_STEP_SOURCE
+			var skipped := _draw_step_turn_action(active_player)
+			_turn_source = outer_turn
+			if _cost_answers > 0:
+				# An answer the real run did not take must not wait in the
+				# mailbox for the next draw step's question.
+				for seat_agent in agents:
+					seat_agent.end_resolution(DRAW_STEP_SOURCE)
+				_cost_answers = 0
+				_cost_values.clear()
+			if skipped:
 				_advance_step()
 				return
-			if _skip_first_draw and turn_number == 1:
-				log_line("%s skips the first draw" % players[active_player].player_name)
-			else:
-				draw_cards(active_player, 1)
 			if game_over:
 				return
 			# Howling Mine et al. hook in here, after the normal draw.
@@ -15905,6 +16655,12 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 			if b3.has_keyword(Mtg.Keyword.BANDING):
 				banded_block = true
 				break
+		# Pack 10 E6 — DEFENSIVE FORMATION: "Rather than the attacking
+		# player, you assign the combat damage of each creature attacking
+		# you. You can divide that creature's combat damage as you choose"
+		# — the same hand-over as a banding block, for every band
+		# ([member MtgPlayer.assigns_attackers_damage]; CR 510.1a-d).
+		var defender_divides := banded_block or players[defender].assigns_attackers_damage
 
 		# --- attacker side ---
 		for member in members:
@@ -15912,19 +16668,29 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 				continue
 			if _first_strike_ids.has(member.id) != first_strike_wave:
 				continue
+			# Pack 10 E6 — OUTMANEUVER: "assign their combat damage this
+			# turn as though they weren't blocked", MANDATORY — an
+			# unblocked-shaped request, all of it to the defending player
+			# and no question. The creature stays blocked (combat is not
+			# touched, CR 509.1h) and its blockers still strike it below.
+			var forced := was_blocked and member.cur_damage_as_unblocked_forced
+			var divided := was_blocked and not forced
+			# An unblocked attacker's own options (Cunning Giant's creature)
+			# stay its controller's, as they always were.
+			var defender_assigns := divided and defender_divides
 			out.append({
 				"source": member,
-				"targets": [] if not was_blocked else blocker_ids.duplicate(),
+				"targets": [] if not divided else blocker_ids.duplicate(),
 				"amount": member.cur_power,
-				"trample": was_blocked and member.has_keyword(Mtg.Keyword.TRAMPLE),
-				"blocked": was_blocked,
+				"trample": divided and member.has_keyword(Mtg.Keyword.TRAMPLE),
+				"blocked": divided,
 				"spill_to_last": false,
-				"assigner": defender if banded_block else member.controller_id,
-				"free_order": banded_block,
+				"assigner": defender if defender_assigns else member.controller_id,
+				"free_order": defender_assigns,
 				"defender": defender,
 			})
 			var request: Dictionary = out[-1]
-			if was_blocked and member.cur_damage_as_unblocked:
+			if divided and member.cur_damage_as_unblocked:
 				request["special"] = "bypass"
 				request["normal_assigner"] = request.assigner
 				request.assigner = member.controller_id
@@ -16876,13 +17642,21 @@ func effect_ignored_by(source: CardInstance, pid: int) -> bool:
 	return ignored is Dictionary and int((ignored as Dictionary).get(pid, -1)) == turn_number
 
 
-## The seat [param source]'s ignore action is offered to — the controller
-## of the permanent it enchants — or -1 when none (not such a card, not
-## attached, gone, or its abilities are lost: no effect left to ignore).
+## The seat [param source]'s ignore action is offered to — the card's own
+## PAYER when it names one (Damping Engine's "that player", the one who
+## controls the most permanents — Pack 10 E9, [method
+## CardData.ignorable_by_sacrifice]), else the controller of the permanent
+## it enchants — or -1 when none (not such a card, not attached, gone, or
+## its abilities are lost or have ceased — a tapped artifact under the 1997
+## rule: no effect left to ignore).
 func _ignore_payer(source: CardInstance) -> int:
 	if source == null or source.data.ignore_effect_sacrifice.is_empty() \
-			or not is_present(source) or source.cur_abilities_silenced:
+			or not is_present(source) or source.cur_abilities_silenced \
+			or source.cur_statics_suspended:
 		return -1
+	var payer: Callable = source.data.ignore_effect_sacrifice.get("payer", Callable())
+	if payer.is_valid():
+		return int(payer.call(self, source))
 	var host := find_instance(source.attached_to)
 	return host.controller_id if is_present(host) else -1
 
@@ -17111,6 +17885,18 @@ func payment_rows(pid: int, inst: CardInstance) -> Array:
 				if is_alternative_payment(Dictionary(printed[i]).get("payment", {})):
 					continue
 				rows.append(_p9e2_granted_row(printed[i], i, alt, source))
+	# Pack 10 E5 — "you may play that card without paying its mana cost"
+	# (Temporal Aperture): a card a FREE zone permission covers where it
+	# lies gets one "Without paying its mana cost" row per printed row that
+	# is not itself an alternative cost (only one may apply, CR 118.9a) —
+	# after every other row, so no index moves ([method _zone_free_row]).
+	if inst.zone == Mtg.Zone.GRAVEYARD or inst.zone == Mtg.Zone.LIBRARY:
+		var free := _zone_free_permission(pid, inst)
+		if not free.is_empty():
+			for i in printed.size():
+				if is_alternative_payment(Dictionary(printed[i]).get("payment", {})):
+					continue
+				rows.append(_zone_free_row(printed[i], i, free))
 	return rows
 
 
@@ -17916,6 +18702,31 @@ func _refresh_after_hand_change() -> void:
 	recalculate()
 
 
+## Pack 10 E3 — a LIFE TOTAL changed ([method adjust_life], a player's
+## damage landing): a static that READS one ([member
+## StaticAbility.reads_life], Serra Avatar's "power and toughness are each
+## equal to your life total") is a continuous effect whose answer changes
+## with it (CR 604.3, 611.3a), and a life total is not the board. So the
+## characteristics are recomputed here — before the LIFE_LOST listeners hear
+## it and before the next state-based check, which must judge the Avatar's
+## new toughness against its damage (CR 704.5f-g): an Avatar that blocked
+## a 5/5 while its controller fell from 7 to 4 dies in that same combat
+## check. Unlike [method _refresh_after_hand_change] it runs inside a
+## resolution too — an effect reading the Avatar's power after "lose half
+## your life" sees the new one — but only while such a static is on the
+## battlefield or floating: one flag test per static otherwise.
+func _refresh_after_life_change() -> void:
+	for inst in battlefield_with_statics():
+		for ability in inst.data.static_abilities:
+			if ability.reads_life:
+				recalculate()
+				return
+	for entry in continuous._floating_statics:
+		if (entry["ability"] as StaticAbility).reads_life:
+			recalculate()
+			return
+
+
 # --- Pack 9 AI: the ranking event ---
 
 ## The event of the trigger whose targets are being RANKED right now (a
@@ -18254,6 +19065,199 @@ func _release_departures() -> void:
 	if _depart_hold == 0 and _depart_recalc_due:
 		_depart_recalc_due = false
 		recalculate()
+
+
+# --- Pack 10 E10: simultaneous arrivals ---
+
+## ONE SIMULTANEOUS ARRIVAL (Pack 10 E10) — the arrival twin of
+## [method depart_together]: "put all those cards onto the battlefield"
+## (Living Death, Replenish, Show and Tell, Exhume) puts them there at
+## ONE moment, so each "whenever another creature enters" sees every
+## other card of the batch (CR 603.6a, 603.10), and no card of the batch
+## sees another as already there while it is being decided how it enters.
+##
+## [param entries]: Dictionaries, one per card —
+##   "instance":   the CardInstance, in any zone but the battlefield and
+##                 the stack (a hand, a graveyard, exile, a library) or
+##                 in none (just picked out of a library);
+##   "controller": the seat it enters under (default its owner);
+##   "tapped":     enters tapped (default false);
+##   "counters":   {kind: n} put on it as it enters (default none);
+##   "host":       an Aura's host chosen by the effect (default: asked).
+##
+## The order of events:
+## 1. every card leaves its zone (journaled) — none is in two places;
+## 2. THE CHOICES, APNAP (CR 101.4: the active player's cards first, each
+##    seat's in the order given): each card's refusal, copy, entry payment
+##    ([method _arrival_replacements]) and whether it enters tapped are
+##    decided while NONE of the batch is on the battlefield — so a Clone
+##    can't copy a card entering with it and a Kismet entering with the
+##    batch does not tap the others; an AURA's controller chooses what it
+##    enchants among what is ALREADY there (CR 303.4f — it can't enchant a
+##    card entering with it), and an Aura with nothing to enchant stays
+##    where it was (CR 303.4g);
+## 3. inside one [method begin_simultaneous] bracket, every card is placed,
+##    the board is recalculated once, each "as this enters" runs, and then
+##    each ENTERS_BATTLEFIELD event is dispatched; the bracket's close runs
+##    the state-based actions once.
+## An Aura that raises its host from a graveyard as it attaches (Animate
+## Dead, [member CardData.aura_reanimates]) chooses its card with the
+## others and then arrives through [method attach_aura_from_anywhere]
+## right after the batch — the engine's model of that Aura raises the
+## creature first, which the printed card does by a trigger anyway.
+## Returns the cards that entered, in batch order.
+func put_onto_battlefield_together(entries: Array) -> Array[CardInstance]:
+	var entered: Array[CardInstance] = []
+	var plan: Array[Dictionary] = []
+	for seat in [active_player, opponent_of(active_player)]:
+		for raw in entries:
+			if not (raw is Dictionary):
+				continue
+			var inst: CardInstance = (raw as Dictionary).get("instance")
+			if inst == null or inst.zone == Mtg.Zone.BATTLEFIELD or inst.zone == Mtg.Zone.STACK:
+				continue
+			var pid := int((raw as Dictionary).get("controller", inst.owner_id))
+			if pid != seat:
+				continue
+			var host: Variant = (raw as Dictionary).get("host")
+			plan.append({"instance": inst, "controller": pid,
+				"tapped": bool((raw as Dictionary).get("tapped", false)),
+				"counters": (raw as Dictionary).get("counters", {}),
+				"host": host if host is CardInstance else null})
+	# 1. Out of every zone first.
+	for row in plan:
+		var inst: CardInstance = row["instance"]
+		_rec_move(inst, int(row["controller"]), Mtg.Zone.BATTLEFIELD)
+		_remove_from_zone(inst)
+		if inst.zone == Mtg.Zone.EXILE:
+			_turn_face_up_leaving_exile(inst)
+	# 2. The choices, APNAP, with none of the batch on the battlefield.
+	var arriving: Array[Dictionary] = []
+	var raise_after: Array[Dictionary] = []
+	for row in plan:
+		var inst: CardInstance = row["instance"]
+		var pid := int(row["controller"])
+		var reanimating := inst.data.is_aura() and inst.data.aura_reanimates
+		var arrival := {"silenced": false} if reanimating else _arrival_replacements(inst, pid)
+		if arrival.is_empty():
+			continue
+		var host: CardInstance = row["host"]
+		if inst.data.is_aura() and host == null:
+			var hosts := aura_entry_hosts(inst, pid)
+			if hosts.is_empty():
+				_arrival_refused(inst, "nothing to enchant")   # CR 303.4g
+				continue
+			host = _ask_aura_entry_host(inst, pid, hosts)
+		row["host"] = host
+		if reanimating:
+			raise_after.append(row)
+			continue
+		var silenced := bool(arrival["silenced"])
+		row["silenced"] = silenced
+		row["tapped"] = bool(row["tapped"]) or _arrives_tapped(inst, pid, not silenced)
+		arriving.append(row)
+	# 3. One moment.
+	begin_simultaneous()
+	for row in arriving:
+		var inst: CardInstance = row["instance"]
+		var pid := int(row["controller"])
+		var host: CardInstance = row["host"]
+		if host != null and not _entry_host_still_legal(inst, host):
+			_arrival_refused(inst, "nothing to enchant")   # it left meanwhile
+			continue
+		_place_arrival(inst, pid, host, bool(row["tapped"]), row["counters"],
+			bool(row["silenced"]), false)
+		entered.append(inst)
+		log_line("%s is put onto the battlefield under %s's control" % [
+			inst.data.card_name, players[pid].player_name], inst)
+	if not entered.is_empty():
+		recalculate()
+	for row in arriving:
+		if entered.has(row["instance"]):
+			_as_enters(row["instance"], int(row["controller"]), bool(row["silenced"]))
+	for row in arriving:
+		if entered.has(row["instance"]):
+			dispatch_event(Mtg.EventType.ENTERS_BATTLEFIELD,
+				{"instance": row["instance"], "controller": int(row["controller"])})
+	end_simultaneous()
+	for row in raise_after:
+		var aura: CardInstance = row["instance"]
+		var host: CardInstance = row["host"]
+		if host != null and host.zone == Mtg.Zone.GRAVEYARD:
+			attach_aura_from_anywhere(aura, host, int(row["controller"]))
+		else:
+			_arrival_refused(aura, "nothing to enchant")
+		if aura.zone == Mtg.Zone.BATTLEFIELD:
+			entered.append(aura)
+	_emit_state()
+	return entered
+
+
+## What [param aura] may enchant as it is PUT onto the battlefield under
+## [param pid]'s control, not cast (CR 303.4f): what its enchant ability
+## and protection allow — nothing it would have to target. An Aura that
+## enchants a creature card in a graveyard (Animate Dead, Dance of the
+## Dead) names the cards its enchant spec allows there. The batch's own
+## cards are in no zone while this is asked, so none is offered.
+func aura_entry_hosts(aura: CardInstance, _pid: int = -1) -> Array[CardInstance]:
+	var hosts: Array[CardInstance] = []
+	if aura == null or not aura.data.is_aura():
+		return hosts
+	if aura.data.aura_reanimates or aura.data.aura_graveyard_entry:
+		if aura.data.aura_target == null:
+			return hosts
+		for ref in aura.data.aura_target.legal_targets(self, aura):
+			var card := find_instance(ref.instance_id)
+			if card != null and card.zone == Mtg.Zone.GRAVEYARD \
+					and players[card.owner_id].graveyard.has(card):
+				hosts.append(card)
+		return hosts
+	for inst in all_battlefield():
+		if inst == aura or inst.phased_out:
+			continue
+		if not aura_can_enchant(aura, inst):
+			continue
+		if (inst.cur_protection & aura.data.color_mask()) != 0:
+			continue
+		hosts.append(inst)
+	return hosts
+
+
+## The Aura's controller chooses its host (CR 303.4f). The hint: the
+## helpful side's biggest body for a friendly Aura, the other side's for
+## a hostile one (Eureka's order, cards/sets/leg/eureka.gd).
+func _ask_aura_entry_host(aura: CardInstance, pid: int,
+		hosts: Array[CardInstance]) -> CardInstance:
+	var friendly := EffectIntent.aura_aim(aura.data) != EffectIntent.Aim.HOSTILE
+	var ordered: Array[CardInstance] = []
+	ordered.assign(hosts)
+	ordered.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		if a.zone == Mtg.Zone.BATTLEFIELD and b.zone == Mtg.Zone.BATTLEFIELD:
+			var a_side := (a.controller_id == pid) == friendly
+			var b_side := (b.controller_id == pid) == friendly
+			if a_side != b_side:
+				return a_side
+		var a_size := a.cur_power + a.cur_toughness if a.zone == Mtg.Zone.BATTLEFIELD \
+			else a.data.power + a.data.toughness
+		var b_size := b.cur_power + b.cur_toughness if b.zone == Mtg.Zone.BATTLEFIELD \
+			else b.data.power + b.data.toughness
+		if a_size != b_size:
+			return a_size > b_size
+		return a.id < b.id)
+	var picked := agents[pid].choose_card(self, pid, ordered,
+		"Choose what %s enchants" % aura.data.card_name, false, false, true)
+	if picked == null or not ordered.has(picked):
+		picked = ordered[0]
+	return picked
+
+
+## Is [param host] still something [param aura] may enter attached to
+## (it was chosen a moment ago; a later card's entry payment may have
+## taken it away)?
+func _entry_host_still_legal(aura: CardInstance, host: CardInstance) -> bool:
+	if aura.data.aura_graveyard_entry:
+		return host.zone == Mtg.Zone.GRAVEYARD
+	return is_present(host) and aura_can_enchant(aura, host)
 
 
 ## CR 506.4 (campaign 2026-10-12 b3-6): "A permanent that's removed from

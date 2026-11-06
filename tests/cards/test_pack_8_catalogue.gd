@@ -49,11 +49,12 @@ func test_mirage_block_alone_and_alongside_every_previous_pack() -> void:
 	assert_eq(CardPacks.packs_required_by(["Disenchant", "Sandstorm"]), [])
 	assert_eq(CardPacks.packs_required_by(["Bösium Strip", "Disenchant"]), ["pack-8"])
 	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
-	assert_eq(CardRegistry.size(), 1898 + 621 + 574)   # and the Tempest block's 574
+	assert_eq(CardRegistry.size(), 1898 + 621 + 574 + 591)   # and the Tempest block's 574, the Urza block's 591
 	assert_eq(CardRegistry.names_in_set("mir").size(), 335)
 	CardPacks.set_enabled("pack-8", false)
-	# The four Mirage cards Tempest reprints stay, provided by Pack 9.
-	assert_eq(CardRegistry.size(), 1898 + 574 + 4)
+	# The four Mirage cards Tempest reprints stay, provided by Pack 9 (and
+	# Pacifism by Pack 10 too).
+	assert_eq(CardRegistry.size(), 1898 + 574 + 591 + 4)
 	assert_false(CardRegistry.has_card("Bösium Strip"))
 	assert_true(CardRegistry.has_card("Archangel"))
 	assert_eq(CardRegistry.get_card("Pacifism").set_code, "tmp")

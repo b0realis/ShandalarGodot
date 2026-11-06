@@ -6,12 +6,15 @@ extends GutTest
 ## Rootwater Shaman's flash, licids and their end cost, Volrath's Curse,
 ## Slivers, Spikes, Humility as printed and the block's other rules-heavy
 ## cards — and, page of its own, every Pack 9 digital adaptation recorded
-## in the simplified-card ledger and the roadmap, in plain words. The
+## in the simplified-card ledger and the roadmap, in plain words (Living
+## Death's entry stays on that page, now saying that its creatures return
+## together: Pack 10's arrive-together engine lifted its adaptation). The
 ## Dueling Table page says where the licid and Curse payments are, the
 ## ability-badge icon page explains the small card's painted shadow disc,
 ## and the Deck Builder page's Pack 9 entry points at the Abilities pages. The
 ## glossary stays the final Help chapter and renders with every pack
-## disabled (tests/ui/test_help_screen.gd pins both for the whole chapter).
+## disabled (tests/ui/test_help_screen.gd pins both for the whole chapter);
+## the Pack 10 pages follow these (tests/ui/test_pack_10_help.gd).
 
 const GLOSSARY := preload("res://game/help/ability_glossary.gd")
 
@@ -53,12 +56,19 @@ func _help_page(title: String) -> Dictionary:
 	return {}
 
 
-func test_the_tempest_pages_close_the_help_right_after_the_mirage_pages() -> void:
+func test_the_tempest_pages_come_right_after_the_mirage_pages() -> void:
+	# The pack pages close the final chapter in pack order: Pack 8's, then
+	# these, then Pack 10's (which end it, test_pack_10_help.gd).
 	var titles := HelpPages.pages().map(func(p: Dictionary) -> String: return String(p.title))
-	assert_eq(titles.slice(-TEMPEST_PAGES.size()), TEMPEST_PAGES,
-		"the newest pack's pages end the final chapter")
-	assert_eq(String(titles[titles.size() - TEMPEST_PAGES.size() - 1]),
+	var at := titles.find(TEMPEST_PAGES[0])
+	assert_gt(at, 0, "the Tempest pages are in the final chapter")
+	assert_eq(titles.slice(at, at + TEMPEST_PAGES.size()), TEMPEST_PAGES, "together, in order")
+	assert_eq(String(titles[at - 1]),
 		"Abilities — Mirage block digital adaptations", "Pack 8's pages come just before")
+	assert_eq(String(titles[at + TEMPEST_PAGES.size()]),
+		"Abilities — Urza block echo and cycling", "Pack 10's pages come just after")
+	for title in titles.slice(at):
+		assert_true(String(title).begins_with("Abilities — "), "%s: still the final chapter" % title)
 
 
 func test_shadow_and_the_block_requirements_are_explained() -> void:
@@ -149,12 +159,14 @@ func test_every_pack_9_ledger_adaptation_has_a_plain_words_entry() -> void:
 	assert_eq(_headings(page), ["Living Death", "Skeleton Scavengers",
 		"Licids and the order of effects", "Whim of Volrath"])
 	var text := _text(page)
-	# docs/simplified-cards.md (the Pack 9 rows: Living Death; Skeleton
-	# Scavengers in the Debt of Loyalty / Matopi Golem row; Whim of Volrath
-	# in the Text changes group) and docs/ROADMAP.md (become_licid_aura:
-	# a licid keeps its entry timestamp), each by the card a player meets.
-	for phrase in ["one after another, the active player's first", "Soul Warden",
-			"notices only the creatures returned after it",
+	# docs/simplified-cards.md (the Pack 9 rows: Skeleton Scavengers in the
+	# Debt of Loyalty / Matopi Golem row; Whim of Volrath in the Text changes
+	# group) and docs/ROADMAP.md (become_licid_aura: a licid keeps its entry
+	# timestamp), each by the card a player meets. Living Death's row was
+	# lifted by Pack 10's MtgGame.put_onto_battlefield_together: its entry
+	# now says the creatures return together.
+	for phrase in ["at the same moment, both players' together", "Soul Warden",
+			"sees all the others arrive",
 			"uses its own shield first without asking", "always gets its +1/+1 counter",
 			"Debt of Loyalty and Matopi Golem work the other way round",
 			"keeps its place in the order of effects from when it entered the battlefield",

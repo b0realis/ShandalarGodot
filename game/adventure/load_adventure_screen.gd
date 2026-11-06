@@ -37,6 +37,17 @@ extends Control
 ## highlighted save alone, or every save of its adventure — and then
 ## removes the files with their `.bak` copies. The Hall of Fame keeps its
 ## lines; the list is read again.
+##
+## [QoL] EXPORT AND IMPORT (a player on Android asked whether he can copy
+## his saves to a PC; the owner, 2026-11-06: *"Yes implement both point 1.
+## And 2.!"*): Export, or Ctrl+E, writes the highlighted save's whole
+## adventure — every save of it with their `.bak` copies — as one zip
+## where the player chooses in the platform's own file box (on Android the
+## system's, so Downloads will do; in a browser it is downloaded). Import,
+## or Ctrl+I, takes such a zip from anywhere, checks all of it, and puts
+## the adventure among the saves — asking first ([ReplaceAsk]) when it is
+## here already, and saying so when the saves here are newer. The list is
+## read again with the adventure highlighted ([AdventureTransfer]).
 
 const TITLE := "Resume an adventure"
 const HALL := "Hall of Fame"
@@ -62,9 +73,74 @@ var _say_line: Label
 var back_button: Button
 var hall_button: Button
 var delete_button: Button
+var export_button: Button
+var import_button: Button
 var _hall: HallOfFamePane
 var _delete_ask: DeleteAsk
+var _replace_ask: ReplaceAsk
 var _leaving := false
+## Export's and Import's words on their buttons.
+const EXPORT_TIP := "Save the highlighted save's whole adventure, every save of it, as one file you can copy to another device (Ctrl+E)."
+const EXPORT_TIP_WEB := "Download the highlighted save's whole adventure, every save of it, as one file (Ctrl+E)."
+const IMPORT_TIP := "Bring in an adventure exported on this or another device (Ctrl+I)."
+## Whether this is the browser, where Export is a download and Import
+## opens the page's own file box ([method pick_import]); a test stands in
+## for it.
+var on_web := OS.has_feature("web")
+## The doors to the page in a browser — a script run on it, and a
+## download — so a test, where no browser runs, can stand in for them.
+var web_page := func(script: String) -> Variant: return JavaScriptBridge.eval(script, true)
+var web_download := func(bytes: PackedByteArray, file_name: String) -> void: JavaScriptBridge.download_buffer(bytes, file_name, "application/zip")
+## The browser's file box for Import: whether one is open or its file
+## being read in, the file's name and size as the page said them, how far
+## the read is, and the file it goes into ([method _read_page_pick]).
+var _page_picking := false
+var _page_file: FileAccess
+var _page_name := ""
+var _page_size := 0
+var _page_offset := 0
+## Eight megabytes a frame from the page's memory, as Options › Skin reads
+## a chosen zip in ([member SkinPack.PICK_CHUNK]).
+const PAGE_CHUNK := 8 << 20
+## The page's half of the browser's file box for Import: an `<input
+## type=file>` opened for the player, the chosen file read whole into
+## `window.shandalarAdventurePick` as a Uint8Array for [method
+## _read_page_pick] to pull across — the way Options › Skin's chooser
+## does ([constant SkinPack.PICK_JS]). Run again while a box waits, it
+## takes the earlier one off the page first; only the newest answers. `%d`
+## is the largest file taken.
+const PAGE_PICK_JS := """
+(function () {
+	var stale = window.shandalarAdventureInput;
+	if (stale && stale.parentNode) { stale.parentNode.removeChild(stale); }
+	window.shandalarAdventurePick = {state: "open"};
+	var input = document.createElement("input");
+	window.shandalarAdventureInput = input;
+	input.type = "file";
+	input.accept = ".zip,application/zip";
+	input.style.display = "none";
+	document.body.appendChild(input);
+	var done = function (result) {
+		if (window.shandalarAdventureInput !== input) { return; }
+		window.shandalarAdventureInput = null;
+		window.shandalarAdventurePick = result;
+		if (input.parentNode) { input.parentNode.removeChild(input); }
+	};
+	input.addEventListener("change", function () {
+		var file = input.files && input.files[0];
+		if (!file) { done({state: "cancelled"}); return; }
+		if (file.size > %d) { done({state: "big", name: file.name}); return; }
+		var reader = new FileReader();
+		reader.onload = function () {
+			done({state: "ready", name: file.name, data: new Uint8Array(reader.result)});
+		};
+		reader.onerror = function () { done({state: "failed", name: file.name}); };
+		reader.readAsArrayBuffer(file);
+	});
+	input.addEventListener("cancel", function () { done({state: "cancelled"}); });
+	input.click();
+})();
+"""
 ## Whether a save's packs to switch on are built on a thread while the
 ## hourglass shows ([method continue_adventure]; 0.60.15): windowed —
 ## headless (the tests) on the spot, unless a test says so.
@@ -137,6 +213,18 @@ func _ready() -> void:
 	hall_button.pressed.connect(func() -> void: open_hall())
 	_gild_hall_button()
 	row.add_child(hall_button)
+	# Export and Import beside the Hall (2026-11-06): the adventure taken
+	# elsewhere and brought back; Delete, Back and Resume stay together.
+	export_button = UiChrome.menu_button("Export", Vector2(150, 46))
+	export_button.name = "Export"
+	export_button.tooltip_text = EXPORT_TIP_WEB if on_web else EXPORT_TIP
+	export_button.pressed.connect(func() -> void: pick_export())
+	row.add_child(export_button)
+	import_button = UiChrome.menu_button("Import", Vector2(150, 46))
+	import_button.name = "Import"
+	import_button.tooltip_text = IMPORT_TIP
+	import_button.pressed.connect(func() -> void: pick_import())
+	row.add_child(import_button)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
@@ -156,6 +244,7 @@ func _ready() -> void:
 
 ## Read the saves again and list them, adventure by adventure.
 func refresh() -> void:
+	AdventurePlayer.settle_saves()
 	SaveSlots.migrate(AdventurePlayer.saves_folder)
 	var scanned := AdventurePlayer.scan_saves()
 	var found: Array[Dictionary] = scanned["saves"]
@@ -213,11 +302,13 @@ func refresh() -> void:
 			_say_line.text += " " + unreadable_note()
 
 
-## Resume and Delete as row [param index] stands: a save, or nothing.
+## Resume, Delete and Export as row [param index] stands: a save, or
+## nothing.
 func _sync_buttons(index: int) -> void:
 	var none := index < 0 or index >= rows.size() or rows[index].is_empty()
 	resume_button.disabled = none
 	delete_button.disabled = none
+	export_button.disabled = none
 
 
 ## The end a save's row tells of (part C): " · Won: Arzakon banished for
@@ -304,10 +395,9 @@ func initial_selection() -> int:
 func ask_delete() -> DeleteAsk:
 	if delete_shown():
 		return _delete_ask
-	var picked := _list.get_selected_items()
-	if _leaving or hall_shown() or picked.is_empty() or rows[picked[0]].is_empty():
+	var save := highlighted()
+	if _leaving or hall_shown() or replace_shown() or save.is_empty():
 		return null
-	var save: Dictionary = rows[picked[0]]
 	var id := String(save["id"])
 	var group := saves_of(id)
 	_delete_ask = DeleteAsk.new()
@@ -345,10 +435,15 @@ func saves_of(id: String) -> Array[Dictionary]:
 	return out
 
 
-## DELETE [param save]: its file and its `.bak`; the list read again. True
+## DELETE [param save]: its file and its `.bak` — and on Android its copy
+## left in the folder the saves came from, which would show in its place
+## ([method AdventurePlayer.saves_folders]); the list read again. True
 ## when nothing of it is left.
 func delete_save(save: Dictionary) -> bool:
-	var gone := _remove_save_files(String(save["path"]))
+	var path := String(save["path"])
+	var gone := _remove_save_files(path)
+	for folder in AdventurePlayer.saves_folders():
+		gone = _remove_save_files(folder.path_join(path.get_file())) and gone
 	refresh()
 	_say_line.text = ("Deleted %s of %s." if gone else "Could not delete %s of %s.") % [
 		_kind_words(save), String(save["name"])]
@@ -357,17 +452,18 @@ func delete_save(save: Dictionary) -> bool:
 
 ## DELETE EVERY SAVE OF ADVENTURE [param id]: the files listed, and every
 ## file its Quickslot, autosave and ten slots would be, with their `.bak`
-## copies; the list read again. True when nothing of it is left.
+## copies, in every folder the saves are read from; the list read again.
+## True when nothing of it is left.
 func delete_adventure(id: String) -> bool:
 	var hero := ""
 	var paths: Array[String] = []
 	for save in saves_of(id):
 		hero = String(save["name"])
 		paths.append(String(save["path"]))
-	var folder := AdventurePlayer.saves_folder
-	paths.append(folder.path_join("%s.%s.json" % [id, AdventurePlayer.AUTOSAVE]))
-	for slot in [SaveSlots.QUICK_SLOT] + range(1, SaveSlots.SLOTS + 1):
-		paths.append(SaveSlots.path_of(id, slot, folder))
+	for folder in AdventurePlayer.saves_folders():
+		paths.append(folder.path_join("%s.%s.json" % [id, AdventurePlayer.AUTOSAVE]))
+		for slot in [SaveSlots.QUICK_SLOT] + range(1, SaveSlots.SLOTS + 1):
+			paths.append(SaveSlots.path_of(id, slot, folder))
 	var gone := true
 	for path in paths:
 		gone = _remove_save_files(path) and gone
@@ -393,6 +489,279 @@ static func _kind_words(save: Dictionary) -> String:
 	if slot == 0:
 		return "the autosave"
 	return "slot %d “%s”" % [slot, String(save["slot_name"])]
+
+
+## The save highlighted in the list, `{}` when none is.
+func highlighted() -> Dictionary:
+	var picked := _list.get_selected_items()
+	return {} if picked.is_empty() or picked[0] >= rows.size() else rows[picked[0]]
+
+
+# ---------------------------------------------------- export and import --
+
+## EXPORT THE HIGHLIGHTED SAVE'S ADVENTURE (the class doc): the platform's
+## own file box to choose where — on Android the system's, so Downloads
+## will do — opening on the player's downloads with the file's name
+## filled in ([method AdventureTransfer.file_name_for]); in a browser a
+## download at once ([method export_on_page]).
+func pick_export() -> void:
+	var save := highlighted()
+	if _busy() or save.is_empty():
+		return
+	if on_web:
+		export_on_page(String(save["id"]))
+		return
+	var id := String(save["id"])
+	var box := FileDialog.new()
+	box.name = "ExportChooser"
+	box.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	# After the mode: setting the mode retitles the box.
+	box.title = "Export the adventure"
+	box.access = FileDialog.ACCESS_FILESYSTEM
+	box.filters = PackedStringArray(["*.zip ; Exported adventures"])
+	box.use_native_dialog = true
+	box.size = Vector2i(760, 520)
+	box.current_dir = load("res://game/skin_pack.gd").pick_start_dir()
+	box.current_file = AdventureTransfer.file_name_for(String(save["name"]))
+	box.file_selected.connect(func(path: String) -> void:
+		box.queue_free()
+		export_to(path, id))
+	box.canceled.connect(box.queue_free)
+	add_child(box)
+	box.popup_centered()
+
+
+## ADVENTURE [param id] (the highlighted save's by default) EXPORTED to
+## [param dest] ([method AdventureTransfer.export_to]); the note says how
+## it went. A path the player typed without `.zip` is refused rather than
+## given one, which could land on another file the box never asked about
+## (as Export MPN does, [method MpnFiles.export_bytes]). True when written.
+func export_to(dest: String, id := "") -> bool:
+	if id == "":
+		id = String(highlighted().get("id", ""))
+	if id == "":
+		return false
+	if not AdventureTransfer.is_uri(dest) and dest.get_extension().to_lower() != "zip":
+		_say_line.text = "Please use a file name ending in .zip. Nothing was exported."
+		return false
+	var made := AdventureTransfer.export_to(id, dest)
+	_say_line.text = _exported_words(made, "" if AdventureTransfer.is_uri(dest) else " in " + dest.get_file()) \
+		if bool(made["ok"]) else String(made["message"])
+	return bool(made["ok"])
+
+
+## IN A BROWSER: adventure [param id] packed and handed to the browser as a
+## download (there is no folder to choose); the note says so.
+func export_on_page(id: String) -> bool:
+	var made := AdventureTransfer.packed_bytes(id)
+	if not bool(made["ok"]):
+		_say_line.text = String(made["message"])
+		return false
+	var file_name := AdventureTransfer.file_name_for(String(made["hero"]))
+	web_download.call(made["bytes"], file_name)
+	_say_line.text = _exported_words(made, ", downloaded as " + file_name)
+	return true
+
+
+## "Exported Goya's adventure: 5 saves in <file>." — and how many files
+## of it could not be read and were left out.
+static func _exported_words(made: Dictionary, where: String) -> String:
+	var count := int(made["saves"])
+	var words := "Exported %s's adventure: %d %s%s." % [String(made["hero"]), count,
+		"save" if count == 1 else "saves", where]
+	var left := int(made.get("left_out", 0))
+	if left > 0:
+		words += " %d %s that could not be read %s left out." % [left, "file" if left == 1 else "files",
+			"was" if left == 1 else "were"]
+	return words
+
+
+## IMPORT AN ADVENTURE (the class doc): the platform's own file box for a
+## zip from anywhere — the downloads first — then [method import_from]; in
+## a browser the page's own box ([method _pick_on_page]).
+func pick_import() -> void:
+	if _busy():
+		return
+	if on_web:
+		_pick_on_page()
+		return
+	var box := FileDialog.new()
+	box.name = "ImportChooser"
+	box.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	box.title = "Choose an exported adventure"
+	box.access = FileDialog.ACCESS_FILESYSTEM
+	box.filters = PackedStringArray(["*.zip ; Exported adventures"])
+	box.use_native_dialog = true
+	box.size = Vector2i(760, 520)
+	box.current_dir = load("res://game/skin_pack.gd").pick_start_dir()
+	box.file_selected.connect(func(path: String) -> void:
+		box.queue_free()
+		import_from(path))
+	box.canceled.connect(box.queue_free)
+	add_child(box)
+	box.popup_centered()
+
+
+## THE ZIP AT [param source] IMPORTED: copied in and checked whole first
+## ([method AdventureTransfer.take_in]; a refusal is the note, nothing
+## written). An adventure that is here already asks Replace or Cancel
+## ([ReplaceAsk]) — saying so when the saves here are newer — and the one
+## being played is not written over at all. [param shown] names the file
+## in the note. True when the adventure was put among the saves now
+## (false while the ask is open).
+func import_from(source: String, shown := "") -> bool:
+	if _busy():
+		return false
+	var package := AdventureTransfer.take_in(source, shown)
+	if not bool(package["ok"]):
+		_say_line.text = String(package["message"])
+		return false
+	var id := String(package["id"])
+	var hero := String(package["hero"])
+	var world := _world_under()
+	if world != null and world.player != null and world.player.adventure_id == id:
+		_say_line.text = "%s's adventure is the one you are playing: import it from Save / Load on the main menu." % hero
+		return false
+	var here := AdventureTransfer.existing(id)
+	if int(here["files"]) == 0:
+		return _install(package)
+	_replace_ask = ReplaceAsk.new()
+	var count := int(package["saves"])
+	var words := "%s's adventure is here already, with %d %s." % [hero, int(here["saves"]),
+		"save" if int(here["saves"]) == 1 else "saves"] if int(here["saves"]) > 0 \
+		else "Files of %s's adventure are here already." % hero
+	words += " Replace them with the %d imported %s?" % [count, "save" if count == 1 else "saves"]
+	if String(here["newest"]) > String(package["newest"]):
+		words += " The saves here are newer: the last was saved %s, the imported ones %s." % [
+			AdventurePlayer.local_time(String(here["newest"])), AdventurePlayer.local_time(String(package["newest"]))]
+	_replace_ask.words = words
+	add_child(_replace_ask)
+	PaneStyle.centre(_replace_ask)
+	var asked := _replace_ask
+	asked.answered.connect(func(replace: bool) -> void:
+		if is_instance_valid(asked):
+			asked.queue_free()
+		if replace:
+			_install(package)
+		else:
+			_say_line.text = "Nothing was imported.", CONNECT_DEFERRED | CONNECT_ONE_SHOT)
+	return false
+
+
+## Whether the Replace ask is open over the list.
+func replace_shown() -> bool:
+	return is_instance_valid(_replace_ask) and not _replace_ask.is_queued_for_deletion()
+
+
+## The checked [param package] written among the saves ([method
+## AdventureTransfer.install]), the list read again with its adventure
+## highlighted, and the note saying what happened.
+func _install(package: Dictionary) -> bool:
+	var done := AdventureTransfer.install(package)
+	refresh()
+	if bool(done["ok"]):
+		_highlight_adventure(String(done["id"]))
+	_say_line.text = String(done["message"])
+	return bool(done["ok"])
+
+
+## Adventure [param id]'s save highlighted: its newest autosave whose quest
+## has not failed, else its newest such save, else its newest.
+func _highlight_adventure(id: String) -> void:
+	var best := {}
+	var rank := func(save: Dictionary) -> int:
+		return (0 if quest_failed(save, marks) else 2) + (1 if int(save["slot"]) == 0 else 0)
+	for save in saves_of(id):
+		if best.is_empty() or rank.call(save) > rank.call(best) \
+				or (rank.call(save) == rank.call(best) and String(save["saved"]) > String(best["saved"])):
+			best = save
+	var index := rows.find(best) if not best.is_empty() else -1
+	if index >= 0:
+		_list.select(index)
+		_list.ensure_current_is_visible()
+	_sync_buttons(index)
+
+
+## Whether a pane over the list, the wait, or the way out holds the list.
+func _busy() -> bool:
+	return _leaving or hall_shown() or delete_shown() or replace_shown()
+
+
+## THE BROWSER'S BOX for Import, opened — or opened afresh when a box
+## still waits with nothing read (a browser that never says a box was
+## closed would otherwise hold Import dead, as Options › Skin learnt,
+## [method SkinPack._pick_on_page]). Not while a chosen file is read in.
+func _pick_on_page() -> void:
+	if _page_file != null:
+		return
+	_page_picking = true
+	web_page.call(PAGE_PICK_JS % AdventureTransfer.max_total_bytes)
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	if _page_picking:
+		_read_page_pick()
+
+
+## One frame of the browser's box: while it is open, wait; once the page
+## has the file, pull a slice across into [constant
+## AdventureTransfer.INCOMING]; when the last is in, [method import_from].
+func _read_page_pick() -> void:
+	if _page_file == null:
+		var state := String(web_page.call(
+			"window.shandalarAdventurePick ? window.shandalarAdventurePick.state : 'gone'"))
+		if state == "open":
+			return
+		if state != "ready":
+			var named := String(web_page.call("window.shandalarAdventurePick ? (window.shandalarAdventurePick.name || '') : ''"))
+			named = named if named != "" else "The file"
+			if state == "big":
+				_say_line.text = AdventureTransfer.TOO_BIG % named
+			elif state == "failed":
+				_say_line.text = AdventureTransfer.NOT_READ % named
+			_page_pick_over()
+			return
+		_page_name = String(web_page.call("window.shandalarAdventurePick.name"))
+		_page_size = int(web_page.call("window.shandalarAdventurePick.data.length"))
+		_page_offset = 0
+		DirAccess.make_dir_recursive_absolute(AdventureTransfer.STAGING)
+		_page_file = FileAccess.open(AdventureTransfer.INCOMING, FileAccess.WRITE)
+		if _page_file == null:
+			_say_line.text = AdventureTransfer.NOT_READ % _page_name
+			_page_pick_over()
+			return
+	var stop := mini(_page_offset + PAGE_CHUNK, _page_size)
+	if stop > _page_offset:
+		var slice: Variant = web_page.call("window.shandalarAdventurePick.data.subarray(%d, %d)" % [_page_offset, stop])
+		if not slice is PackedByteArray or (slice as PackedByteArray).size() != stop - _page_offset:
+			_say_line.text = AdventureTransfer.NOT_READ % _page_name
+			_page_pick_over()
+			return
+		_page_file.store_buffer(slice)
+		_page_offset = stop
+	if _page_offset >= _page_size:
+		_page_file.close()
+		_page_file = null
+		_page_pick_over()
+		import_from(AdventureTransfer.INCOMING, _page_name)
+
+
+## The browser's box done with: the page's copy let go, the frames quiet,
+## and a file half read in closed and removed.
+func _page_pick_over() -> void:
+	_page_picking = false
+	set_process(false)
+	web_page.call("window.shandalarAdventurePick = null;")
+	if _page_file != null:
+		_page_file.close()
+		_page_file = null
+		DirAccess.remove_absolute(AdventureTransfer.INCOMING)
+
+
+func _exit_tree() -> void:
+	if _page_picking:
+		_page_pick_over()
 
 
 ## RESUME always takes up the highlighted save, including a manual slot.
@@ -585,14 +954,24 @@ func _world_under() -> WorldScreen:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if hall_shown() or delete_shown():
+	if hall_shown() or delete_shown() or replace_shown():
 		# The Hall over the list hears its own keys (its Escape is Done),
-		# and so does the delete ask (its Escape keeps the save).
+		# and so do the delete ask (its Escape keeps the save) and the
+		# Replace ask (its Escape cancels the import).
 		return
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_DELETE:
 		get_viewport().set_input_as_handled()
 		ask_delete()
+		return
+	# Ctrl+E exports, Ctrl+I imports (2026-11-06): no key of the list's own.
+	if key != null and key.pressed and not key.echo and key.ctrl_pressed and not key.alt_pressed \
+			and key.keycode in [KEY_E, KEY_I]:
+		get_viewport().set_input_as_handled()
+		if key.keycode == KEY_E:
+			pick_export()
+		else:
+			pick_import()
 		return
 	if event.is_action_pressed("ui_cancel"):
 		# Taken even while leaving: a second Escape in the same frame finds
@@ -668,5 +1047,51 @@ class DeleteAsk extends PanelContainer:
 		if input.is_action_pressed("ui_cancel"):
 			get_viewport().set_input_as_handled()
 			answered.emit("")
+		elif VisitPane.letter_choice(self, _choices, input):
+			get_viewport().set_input_as_handled()
+
+
+## REPLACE, ASKED (the class doc): an adventure imported that is here
+## already — the words say how many saves each side has and whether the
+## saves here are newer — then Replace and Cancel; Escape, or C, cancels.
+## The choices answer to their first letter, as [DeleteAsk]'s do.
+class ReplaceAsk extends PanelContainer:
+	## [param replace] true for Replace, false for Cancel.
+	signal answered(replace: bool)
+
+	## The words over the choices.
+	var words := ""
+	var _choices: HBoxContainer
+
+	func _ready() -> void:
+		name = "ReplaceAsk"
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		add_theme_stylebox_override("panel", PaneStyle.glass(16.0))
+		var column := VBoxContainer.new()
+		column.add_theme_constant_override("separation", 10)
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(column)
+		column.add_child(PaneStyle.title("Replace saves?", 24))
+		column.add_child(PaneStyle.wrapped(words + " The saves here are deleted; this cannot be undone.", 16, 440.0))
+		var choices := HBoxContainer.new()
+		_choices = choices
+		choices.alignment = BoxContainer.ALIGNMENT_CENTER
+		choices.add_theme_constant_override("separation", 10)
+		choices.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var replace := PaneStyle.button("Replace", "Replace")
+		replace.pressed.connect(func() -> void: answered.emit(true))
+		choices.add_child(replace)
+		var cancel := PaneStyle.button("Cancel", "Cancel")
+		cancel.pressed.connect(func() -> void: answered.emit(false))
+		choices.add_child(cancel)
+		column.add_child(choices)
+
+	func _input(event: InputEvent) -> void:
+		VisitPane.drop_letter(_choices, event)
+
+	func _unhandled_input(input: InputEvent) -> void:
+		if input.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			answered.emit(false)
 		elif VisitPane.letter_choice(self, _choices, input):
 			get_viewport().set_input_as_handled()

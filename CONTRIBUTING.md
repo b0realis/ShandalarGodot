@@ -453,10 +453,10 @@ were only cross-exported.
 
 Adventure is implemented and playable through the ending; work now includes
 playtesting, fidelity and robustness. Campaign card selection offers every
-installed pack from Pack 2 to Pack 9 (Pack 1 never); the rules a pack's cards
+installed pack from Pack 2 to Pack 10 (Pack 1 never); the rules a pack's cards
 follow there are in
 [the card economy audit](docs/adventure-card-economy-audit.md#card-packs-and-the-main-game).
-All nine optional packs are implemented for ordinary duels.
+All ten optional packs are implemented for ordinary duels.
 Do not describe source-only additions as already published.
 
 Duel rules forks live in `engine/rules_options.gd`. A fresh player profile

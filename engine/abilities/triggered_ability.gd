@@ -243,6 +243,25 @@ var mode_hint: Callable = Callable()
 var mode_prompt: String = ""
 
 
+## Pack 10 E4 — "This ability still resolves if its target becomes
+## illegal" (Gilded Drake): the printed exception to CR 608.2b. Read by
+## [method MtgGame._trigger_target_illegal]: a trigger with this flag is
+## never removed for an illegal target — it resolves, and
+## [method MtgGame.current_trigger_target] answers null for the target
+## that is gone ([method MtgGame.current_targets] lists none), so the card
+## does what its text says without it. Mirrors
+## [member EffectBase.resolves_untargeted] (Ebony Charm's targets). Set
+## with [method still_resolves].
+var resolves_untargeted := false
+
+
+## Fluent: this trigger still resolves if its target becomes illegal
+## (see [member resolves_untargeted]).
+func still_resolves() -> TriggeredAbility:
+	resolves_untargeted = true
+	return self
+
+
 ## Fluent: this trigger is MODAL. [param labels], [param hint] and
 ## [param prompt] as documented on [member modes], [member mode_hint] and
 ## [member mode_prompt].

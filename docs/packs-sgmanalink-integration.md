@@ -193,3 +193,31 @@ native Windows/Linux playtests, and a physical multi-machine LAN smoke check.
 The automated socket tests run locally and do not establish real-network
 discovery/firewall behavior. Continue distributing only pack construction
 tools and trusted source metadata, never the locally built pack/art ZIPs.
+
+## Pack 10 at the table — protocol 31 (2026-11-06)
+
+Pack 10 (the Urza block) needs one wire change, and the release carries it
+as protocol **31** with `RULES_REVISION` `sgmanalink-urza-block-2026-11-06`.
+A library's top card a seat may see — one played with revealed (Field of
+Dreams, Temporal Aperture's reveal) or named by its owner's own zone
+permission — is now a card of that seat's view (`players[i].library_top`,
+a handle, a face and a presentation row), so the permitted seat plays a land
+or casts a spell from there with the existing `play` and `prepare` ops (the
+Aperture's free row is a payment row like any other). Every face also says
+whether a zone permission covers it (`zone_playable`): a land in the
+graveyard under Yawgmoth's Will is played from the networked graveyard view.
+Every other library card stays a count; a permitted card the owner alone may
+see is never sent to the other seat.
+
+Nothing else needed a new field. Cycling is the existing `ability` action of
+a hand card, offered to its owner only; the networked screen now opens the
+same Cast / Cycling menu as a local table. Echo's question, the draw step's
+held question (Island Sanctuary, Abundance), Show and Tell's choices, "untap
+up to N lands", the "reveal any number" cards, Metalworker's reveal, a mana
+trigger's colour, Storage Matrix's untap-step kind, Damping Engine's special
+action, Defensive Formation's division and Serra's Hymn's divided total all
+use existing question kinds and reach a guest seat (`tests/unit/test_sgmanalink_pack_10_questions.gd`,
+`tests/ui/test_sgmanalink_pack_10_table.gd`, `tests/tools/test_referee_pack_10_options.gd`).
+Okk's attack and block restrictions are not sent: the networked screen
+offers Okk, and the referee refuses a declaration that breaks them with its
+reason.

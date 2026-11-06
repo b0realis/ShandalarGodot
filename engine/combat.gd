@@ -370,6 +370,18 @@ static func attack_illegality(game: MtgGame, inst: CardInstance, defender_pid: i
 		for other in game.players[inst.controller_id].battlefield:
 			if not other.cur_attacks_alone and attack_illegality(game, other, defender_pid, false) == "": possible += 1
 		if possible < inst.cur_min_attack_group: return "not enough other creatures can attack"
+	# Pack 10 E6 — a PREDICATE COMPANION (Okk): could some OTHER creature of
+	# its controller's attack beside it that the predicate accepts? The
+	# declaration itself is judged by CombatDeclaration.attack_error.
+	if check_group and not inst.cur_attack_companion.is_empty():
+		if inst.cur_attacks_alone or (game.max_attackers > 0 and game.max_attackers < 2): return "not enough permitted attackers"
+		var able: Array = []
+		for other in game.players[inst.controller_id].battlefield:
+			if other != inst and not other.cur_attacks_alone \
+					and attack_illegality(game, other, defender_pid, false) == "":
+				able.append(other)
+		var lacking := companion_missing(inst, able, false)
+		if lacking != "": return "needs %s attacking beside it" % lacking
 	return ""
 
 
@@ -576,6 +588,25 @@ static func block_illegality(game: MtgGame, blocker: CardInstance,
 					possible += 1
 					break
 		if possible < blocker.cur_min_block_group: return "not enough other creatures can block"
+	# Pack 10 E6 — the block twin of the companion (Okk): could some OTHER
+	# creature of the defender's block beside it — an attacker in combat,
+	# or this one when the question is asked before attackers are declared
+	# (the AI's forecasts) — that the predicate accepts?
+	if check_group and not blocker.cur_block_companion.is_empty():
+		if game.max_blockers > 0 and game.max_blockers < 2: return "not enough permitted blockers"
+		var against: Array = [attacker]
+		for id in game.combat.attackers:
+			var declared := game.find_instance(id)
+			if declared != null and declared != attacker: against.append(declared)
+		var able: Array = []
+		for other in game.players[defender_pid].battlefield:
+			if other == blocker: continue
+			for target in against:
+				if block_illegality(game, other, target, defender_pid, false, viewer) == "":
+					able.append(other)
+					break
+		var lacking := companion_missing(blocker, able, true)
+		if lacking != "": return "needs %s blocking beside it" % lacking
 	return ""
 
 
@@ -696,6 +727,146 @@ static func add_attack_requirement(attacker: CardInstance, source: CardInstance,
 	attacker.cur_attack_requirements.append({
 		"source": source.id, "condition": condition,
 		"desc": desc if desc != "" else "its condition is met"})
+
+
+# --- Pack 10 E6: who assigns, companions, forced unblocked damage ---
+
+const DEFENDER_ASSIGNS_TEXT := "Rather than the attacking player, you assign the combat damage of each creature attacking you. You can divide that creature's combat damage as you choose among any of the creatures blocking it."
+
+## "Rather than the attacking player, you assign the combat damage of each
+## creature attacking you. You can divide that creature's combat damage as
+## you choose among any of the creatures blocking it" (Defensive
+## Formation) as a printed STATIC:
+## `c.static_ability(CombatState.defender_assigns_damage())`. It sets
+## [member MtgPlayer.assigns_attackers_damage] for its controller each
+## recalculation; [method MtgGame._collect_damage_requests] then hands each
+## division of an attacker's damage against that player to that player,
+## freely (`free_order`, the defensive-banding path of CR 702.22j). A
+## trampler's excess is the assigning player's to place (CR 702.19c), so
+## the defender may keep all of it on the blockers. The attacker's own
+## "may assign as though it weren't blocked" (Thorn Elemental) stays the
+## attacker's choice; declined, the division is the defender's.
+static func defender_assigns_damage(text := DEFENDER_ASSIGNS_TEXT) -> StaticAbility:
+	return StaticAbility.new(_defender_assigns, text)
+
+
+static func _defender_assigns(game: MtgGame, source: CardInstance) -> void:
+	game.players[source.controller_id].assigns_attackers_damage = true
+
+
+## "This creature can't attack unless [a creature …] also attacks" as a
+## printed STATIC (Okk: [method has_greater_power], "a creature with
+## greater power") — a PREDICATE COMPANION restriction (CR 508.1c).
+## [param filter] is `func(holder: CardInstance, other: CardInstance) ->
+## bool`, asked of every OTHER declared attacker with the characteristics
+## as they are when attackers are declared (the restriction is checked
+## then and only then: a later pump or shrink changes nothing, CR 506.4).
+## [param desc] names the companion in the refusal ("Okk can't attack
+## unless a creature with greater power also attacks"). Rebuilt every
+## recalculation ([member CardInstance.cur_attack_companion]), so a
+## silenced creature (Humility) has none. Two entries are two
+## restrictions; each needs a companion of its own kind.
+static func attack_companion(filter: Callable, desc: String, text := "") -> StaticAbility:
+	return StaticAbility.new(_attack_companion_rule.bind(filter, desc),
+		text if text != "" else "This creature can't attack unless %s also attacks." % desc)
+
+
+## The block twin of [method attack_companion]: "This creature can't block
+## unless [a creature …] also blocks" (CR 509.1b), over the other declared
+## BLOCKERS ([member CardInstance.cur_block_companion]).
+static func block_companion(filter: Callable, desc: String, text := "") -> StaticAbility:
+	return StaticAbility.new(_block_companion_rule.bind(filter, desc),
+		text if text != "" else "This creature can't block unless %s also blocks." % desc)
+
+
+static func _attack_companion_rule(_game: MtgGame, source: CardInstance, filter: Callable, desc: String) -> void:
+	add_attack_companion(source, filter, desc)
+
+
+static func _block_companion_rule(_game: MtgGame, source: CardInstance, filter: Callable, desc: String) -> void:
+	add_block_companion(source, filter, desc)
+
+
+## Bind [param inst] to an attack companion from a static's apply callback
+## — for a static that restricts OTHER creatures (see [method
+## attack_companion] for the arguments).
+static func add_attack_companion(inst: CardInstance, filter: Callable, desc: String) -> void:
+	if inst != null and filter.is_valid():
+		inst.cur_attack_companion.append({"desc": desc, "filter": filter})
+
+
+## The block twin of [method add_attack_companion].
+static func add_block_companion(inst: CardInstance, filter: Callable, desc: String) -> void:
+	if inst != null and filter.is_valid():
+		inst.cur_block_companion.append({"desc": desc, "filter": filter})
+
+
+## Okk's predicate: [param other] has GREATER power than [param holder] —
+## live values, so Humility's 1/1s (were the ability left) or a pump read
+## as they are at the declaration.
+static func has_greater_power(holder: CardInstance, other: CardInstance) -> bool:
+	return other.cur_power > holder.cur_power
+
+
+## The first companion [param holder] lacks among [param others] (the
+## CardInstances declared beside it — the holder itself never counts), as
+## its `desc`; "" when every one of its entries has a creature to accept.
+## [param blocking] picks the block entries over the attack ones.
+static func companion_missing(holder: CardInstance, others: Array, blocking := false) -> String:
+	var entries: Array[Dictionary] = holder.cur_block_companion if blocking else holder.cur_attack_companion
+	for entry in entries:
+		var filter: Callable = entry["filter"]
+		var found := false
+		for other in others:
+			if other != null and other != holder and bool(filter.call(holder, other)):
+				found = true
+				break
+		if not found:
+			return String(entry["desc"])
+	return ""
+
+
+## "Target BLOCKED creature" (Outmaneuver) as a [method
+## TargetSpec.with_game_filter] predicate: an attacking creature whose band
+## was blocked this combat (CR 509.1h — it stays blocked when its blockers
+## are gone).
+static func is_blocked_attacker(game: MtgGame, inst: CardInstance) -> bool:
+	return inst != null and game.combat.attackers.has(inst.id) \
+		and game.combat.was_blocked(game.combat.band_of(inst.id))
+
+
+## "It assigns its combat damage as though it weren't blocked" — the
+## MANDATORY form, as a printed STATIC on the creature itself. (The
+## optional "you may have it…" is [member CardInstance.cur_damage_as_unblocked],
+## Thorn Elemental's and Lone Wolf's.)
+static func damage_as_though_unblocked(text := "This creature assigns its combat damage as though it weren't blocked.") -> StaticAbility:
+	return StaticAbility.new(_forced_unblocked_self, text)
+
+
+static func _forced_unblocked_self(_game: MtgGame, source: CardInstance) -> void:
+	source.cur_damage_as_unblocked_forced = true
+
+
+## "[Target blocked creature] assigns its combat damage this turn as though
+## it weren't blocked" (Outmaneuver, once per target): a floating static
+## bound to [param target_id] until end of turn — gone with the creature
+## if it leaves (a new object, CR 400.7) — that sets
+## [member CardInstance.cur_damage_as_unblocked_forced]. MtgGame's damage
+## step then sends all of that creature's combat damage to the defending
+## player with no question asked; its blockers still deal theirs (CR
+## 510.1a-c, 509.1h). Journaled with the floating statics.
+static func assign_as_though_unblocked_this_turn(game: MtgGame, source: CardInstance, target_id: int) -> void:
+	game.continuous.add_floating_static(source,
+		StaticAbility.new(_forced_unblocked_on.bind(target_id),
+			"Assigns its combat damage this turn as though it weren't blocked."),
+		ContinuousEffects.Duration.END_OF_TURN, -1, false, target_id)
+	game.recalculate()
+
+
+static func _forced_unblocked_on(game: MtgGame, _source: CardInstance, id: int) -> void:
+	var inst := game.find_instance(id)
+	if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD:
+		inst.cur_damage_as_unblocked_forced = true
 
 
 ## Does [param pid] control a land of [param land_type]? The pseudo-type

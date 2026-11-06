@@ -156,8 +156,8 @@ static func _build(game: MtgGame, effects: Array, targets: Array, x_value: int,
 			# honours the range and the divided total recorded here.
 			plan.random_groups.append(reqs.size())
 			plan.random_spans.append(span)
-			plan.random_totals.append(e.divided_amount(x_value)
-				if (e.divided_uses_x or e.divided_total > 0) else -1)
+			plan.random_totals.append(e.divided_amount_at(game, source, x_value)
+				if e.is_divided() else -1)
 			lo = 0
 			hi = 0
 		# Only VARIABLE-count effects need the legal-target census; the
@@ -278,7 +278,9 @@ func _validate(game: MtgGame, source: CardInstance, effects: Array,
 		var effect: EffectBase = effects[gi]
 		if effect == null:
 			continue
-		var total: int = effect.divided_amount(x_value)
+		# Pack 10 E7: a total the source decides (Serra's Hymn's verses)
+		# is read here, with the targets, before any cost is paid.
+		var total: int = effect.divided_amount_at(game, source, x_value)
 		if total <= 0:
 			continue
 		var group: Array = groups[gi]

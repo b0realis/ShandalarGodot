@@ -1174,6 +1174,21 @@ func _open_extra_sets() -> void:
 			if filter.set_on("exo") != on:
 				filter.toggle_set("exo"),
 		"Exodus (1998): 143 distinct cards, the Tempest block's third set.\nIts own artwork and switch within Pack 9; other filters still apply.")
+	_extra_source_row(body, "Pack10", "Urza's Saga Pack 10", CardRegistry.extra_set_order().has("usg"),
+		filter.set_on("usg"), func(on: bool) -> void:
+			if filter.set_on("usg") != on:
+				filter.toggle_set("usg"),
+		"Urza's Saga (1998): 335 distinct cards across 350 printings.\nFour illustrations for each basic land; other filters still apply.")
+	_extra_source_row(body, "Legacy", "Urza's Legacy Pack 10", CardRegistry.extra_set_order().has("ulg"),
+		filter.set_on("ulg"), func(on: bool) -> void:
+			if filter.set_on("ulg") != on:
+				filter.toggle_set("ulg"),
+		"Urza's Legacy (1999): 143 distinct cards, the Urza block's second set.\nIts own artwork and switch within Pack 10; other filters still apply.")
+	_extra_source_row(body, "Destiny", "Urza's Destiny Pack 10", CardRegistry.extra_set_order().has("uds"),
+		filter.set_on("uds"), func(on: bool) -> void:
+			if filter.set_on("uds") != on:
+				filter.toggle_set("uds"),
+		"Urza's Destiny (1999): 143 distinct cards, the Urza block's third set.\nIts own artwork and switch within Pack 10; other filters still apply.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 

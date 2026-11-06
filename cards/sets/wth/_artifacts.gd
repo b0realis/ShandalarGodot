@@ -93,9 +93,11 @@ static func _instant_or_sorcery(i: CardInstance) -> bool:
 
 ## "Activated abilities of artifacts can't be activated" — any player's,
 ## mana abilities too, read on live types (an animated artifact still is one).
-static func _null_rod(_g: MtgGame, _source: CardInstance, _pid: int, inst: CardInstance,
+## Artifacts are PERMANENTS (CR 109.2): an artifact card's ability from the
+## hand or a graveyard is not stopped.
+static func _null_rod(g: MtgGame, _source: CardInstance, _pid: int, inst: CardInstance,
 		_ability: Variant, _is_mana: bool) -> bool:
-	return inst.is_type(Mtg.CardType.ARTIFACT)
+	return g.is_present(inst) and inst.is_type(Mtg.CardType.ARTIFACT)
 
 
 # -------------------------------------------------------------- predicates --

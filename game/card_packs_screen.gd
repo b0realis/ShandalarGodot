@@ -34,6 +34,9 @@ var _eighth_disable: Button
 var _ninth_status: Label
 var _ninth_enable: Button
 var _ninth_disable: Button
+var _tenth_status: Label
+var _tenth_enable: Button
+var _tenth_disable: Button
 ## `Add pack...` (2026-10-21) and the line saying what it last came to.
 const ADD_PACK := "Add pack..."
 const ADD_PACK_TOOLTIP := "Choose a Pack-N zip (from your Downloads, say): the game checks it and copies it into this folder under its proper name."
@@ -253,11 +256,27 @@ func _ready() -> void:
 	_ninth_disable.pressed.connect(_request_disable.bind(TempestBlockPack.ID))
 	ninth_actions.add_child(_ninth_disable)
 	content.add_child(ninth_actions)
+	content.add_child(UiChrome.body_label("10-USG — Pack 10: The Urza Block", 18))
+	_tenth_status = UiChrome.body_label("", 14)
+	_tenth_status.name = "Pack10Status"
+	_tenth_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_tenth_status)
+	var tenth_actions := HBoxContainer.new()
+	tenth_actions.add_theme_constant_override("separation", 10)
+	_tenth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
+	_tenth_enable.name = "EnablePack10"
+	_tenth_enable.pressed.connect(CardPacks.set_enabled.bind(UrzaBlockPack.ID, true))
+	tenth_actions.add_child(_tenth_enable)
+	_tenth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
+	_tenth_disable.name = "DisablePack10"
+	_tenth_disable.pressed.connect(_request_disable.bind(UrzaBlockPack.ID))
+	tenth_actions.add_child(_tenth_disable)
+	content.add_child(tenth_actions)
 
 	var local_only := UiChrome.body_label(
 		"Packs are not distributed with the game. Build them locally with "
 		+ "tools/pack_1_dotp_complete.py, tools/pack_2_fallen_empires.py, "
-		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py, tools/pack_7_fifth_edition.py, tools/pack_8_mirage_block.py or tools/pack_9_tempest_block.py, "
+		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py, tools/pack_7_fifth_edition.py, tools/pack_8_mirage_block.py, tools/pack_9_tempest_block.py or tools/pack_10_urza_block.py, "
 		+ "place the exact ZIP here, then Rescan.", 13)
 	local_only.name = "LocalOnly"
 	local_only.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -303,6 +322,17 @@ func _ready() -> void:
 
 
 func _refresh() -> void:
+	var tenth := CardPacks.status(UrzaBlockPack.ID)
+	_tenth_enable.disabled = not tenth.available or tenth.enabled
+	_tenth_disable.disabled = not tenth.available or not tenth.enabled
+	if tenth.available:
+		_tenth_status.text = "Status: %s — Version: %s — Minimum game: %s\n" % [
+			"Enabled" if tenth.enabled else "Disabled", tenth.version, tenth.minimum_game_version]
+		_tenth_status.text += "621 names · 636 printings · 591 new identities\n" \
+			+ "Urza's Saga 335 · Urza's Legacy 143 · Urza's Destiny 143\nDeck Builder filters: Extras > Urza's Saga, Urza's Legacy, Urza's Destiny"
+	else:
+		_tenth_status.text = "Status: Not available\nExpected: %s\nReason: %s" % [
+			UrzaBlockPack.FILE_NAME, tenth.rejection]
 	var ninth := CardPacks.status(TempestBlockPack.ID)
 	_ninth_enable.disabled = not ninth.available or ninth.enabled
 	_ninth_disable.disabled = not ninth.available or not ninth.enabled
@@ -420,10 +450,11 @@ func _refresh() -> void:
 	add.tooltip_text = refusal if not refusal.is_empty() else ADD_PACK_TOOLTIP
 	# EVERY pack's pair — Pack 7's was missing until the bug pass of
 	# 2026-10-03, so it stayed live under an SGManalink session's lock;
-	# Pack 8's and Pack 9's joined the list with their packs.
+	# Pack 8's, Pack 9's and Pack 10's joined the list with their packs.
 	for button in [_enable, _disable, _second_enable, _second_disable,
 		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable, _sixth_enable, _sixth_disable,
-		_seventh_enable, _seventh_disable, _eighth_enable, _eighth_disable, _ninth_enable, _ninth_disable]:
+		_seventh_enable, _seventh_disable, _eighth_enable, _eighth_disable, _ninth_enable, _ninth_disable,
+		_tenth_enable, _tenth_disable]:
 		button.disabled = button.disabled or not refusal.is_empty()
 		button.tooltip_text = refusal
 	if not refusal.is_empty(): _status.text += "\n" + refusal
