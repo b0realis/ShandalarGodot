@@ -74,7 +74,9 @@ func test_choose_soldier_first_then_tap_other_lands() -> void:
 	_choose_soldier()
 	assert_eq(screen.mode, DuelScreen.Mode.PAYING)
 	assert_eq(screen._pending_card, outpost)
-	assert_eq(screen._prompt_label.text, "Pay mana to activate Kjeldoran Outpost")
+	assert_true(screen._prompt_label.text.begins_with("ACTIVATING: Kjeldoran Outpost, Tap {"),
+		"1997's line for an ability: @PROMPT_ACTION's ACTIVATING, then the mana owed — %s"
+		% screen._prompt_label.text)
 	assert_false(outpost.tapped, "reserve its tap until the mana is paid")
 	screen._on_card_clicked(forest)
 	assert_eq(screen.mode, DuelScreen.Mode.PAYING)

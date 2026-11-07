@@ -448,6 +448,13 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
     the target owns (`AiPlayer._player_artifact_bounce_worth`), so it is
     never cast at a player who owns none; gate-off arm and a hidden-hand
     check.
+- `dice_icon.gd` (game): `DiceIcon`, a die's five drawn in code (no art,
+  no skin) on a button — the Magic Battle screen's per-seat dice
+  (`SetupScreen.randomize_seat`, the owner's ask of 2026-11-07).
+- `test_setup_dice_2026_11_07.gd` (tests/ui): the per-seat dice — one die
+  each, at the top of the seat's column; a deck the format allows, a
+  magical name, the player's mat set to follow the deck; the opponent's
+  die leaves the player's seat alone; silent.
 - `docs/pack-10-urza-block.md`: the pack's audit — counts, construction,
   emblems, reprints and providers, the archive contract, the engine
   review, the AI review, known limits, verification and the commands that

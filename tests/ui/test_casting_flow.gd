@@ -65,8 +65,26 @@ func test_clicking_a_spell_holds_it_open_for_its_mana() -> void:
 	assert_eq(screen.mode, DuelScreen.Mode.PAYING,
 		"the cast is in progress, not refused")
 	assert_eq(screen._pending_card, bears)
-	assert_eq(screen._prompt_label.text, "Tap Grizzly Bears",
-		"@PROMPT_GRABMANA entry 1, verbatim (UIStrings.txt:1090)")
+	assert_eq(screen._prompt_label.text, "CASTING: Grizzly Bears, Tap {1}{G}",
+		"1997's line: @PROMPT_ACTION's CASTING with the card, then "
+		+ "@PROMPT_GRABMANA's Tap %s around the mana still owed")
+
+
+## THE BAR ASKS FOR MANA, NOT THE CARD (a play-tester, 2026-11-07: "it says
+## Tap Timetwister … makes me think I have to click the spell not the
+## mana"). 1997 put the cost left to pay in @PROMPT_GRABMANA's %s and wrote
+## the line again before every tap (`format_mana_payment_prompt`), so the
+## bar counts down as the lands go.
+func test_the_bar_counts_the_mana_down_as_lands_are_tapped() -> void:
+	var g: MtgGame = screen.game
+	var bears := _stage("Grizzly Bears", 2)
+	screen._on_card_clicked(bears)
+	assert_eq(screen._prompt_label.text, "CASTING: Grizzly Bears, Tap {1}{G}")
+	screen._on_card_clicked(g.players[0].battlefield[0])
+	assert_eq(screen.mode, DuelScreen.Mode.PAYING, "one Forest is not enough")
+	assert_eq(screen._prompt_label.text, "CASTING: Grizzly Bears, Tap {1}",
+		"the green pip is paid: one generic left")
+	assert_false(screen._prompt_label.text.contains("Tap Grizzly Bears"))
 
 
 func test_tapping_lands_afterwards_casts_the_spell() -> void:

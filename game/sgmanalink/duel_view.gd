@@ -517,14 +517,10 @@ func show_notice(message: String) -> void:
 		mode = Mode.PAYING
 		_paying_pool = _payment_pool_state()
 		_set_target_cursor(false)
-		var ask := GRAB_MANA_PROMPT % _pending_card.data.card_name
-		# [QoL] What the TARGET adds (Pack 8 — a spell aimed at a Kaervek's
-		# Torch costs {2} more), said as the local screen says it; the
-		# referee's own payment and auto-tap include it.
-		var fee := game.targets_surcharge(_flatten_pending_targets(), _pending_card) \
-			if _pending_ability_index < 0 else 0
-		if fee > 0: ask += " ({%d} more for its target)" % fee
-		_set_prompt(ask)
+		# The local screen's line, CASTING: <card>, Tap <mana still owed>,
+		# and what a target adds (Pack 8, Kaervek's Torch) said the same
+		# way; the referee's own payment and auto-tap include it.
+		_set_prompt(_paying_prompt(_flatten_pending_targets()))
 		return
 	if _sent_op in ["prepare", "autoprepare"]: _clear_pending()
 	if _sent_op == "submit":

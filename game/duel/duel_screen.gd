@@ -37,11 +37,19 @@ extends Control
 enum Mode { NORMAL, TARGETING, ATTACKERS, BLOCKERS, DISCARD, DAMAGE, PAYING }
 
 ## `@PROMPT_GRABMANA` entry 1, `shandalar-src/Program/UIStrings.txt:1090` —
-## `Tap %s`, the original's whole prompt for the moment mana is being drawn
-## for a named spell or ability. (`@PROMPT_SPECIALFEPHASE` entries 7-8,
-## `:1046`, name the same two moments for the fast-effects line: `Casting`
-## and `Tapping`.)
+## `Tap %s`, where the %s is the MANA STILL OWED, not the card. The
+## original builds the whole line before every tap (`magic.exe`
+## `format_mana_payment_prompt`, 0x0043479e, in the decompilation): the
+## action in hand — `@PROMPT_ACTION`'s `CASTING` or `ACTIVATING` with the
+## card's name, `"%s: %s"` (`format_stack_action_text`) — then `, ` and
+## this line around the cost left to pay, so the bar counts down as lands
+## are tapped. Until 0.60.19 the screen put the card's name in the %s, and
+## a play-tester read "Tap Timetwister" as an order to click the spell
+## (2026-11-07). [method _paying_prompt] builds the whole line.
 const GRAB_MANA_PROMPT := "Tap %s"
+## `@PROMPT_ACTION` entries 1-2 (`UIStrings.txt`), with the card's name.
+const CASTING_ACTION := "CASTING: %s"
+const ACTIVATING_ACTION := "ACTIVATING: %s"
 ## The engine's whole-declaration checks (no class_name): block and attack
 ## requirements ([method _must_block_now], [method _attack_companions]).
 const DECLARATION := preload("res://engine/core/combat_declaration.gd")
@@ -3076,15 +3084,7 @@ func _submit_pending() -> void:
 		mode = Mode.PAYING
 		_set_target_cursor(false)
 		_paying_pool = _payment_pool_state()
-		var ask: String = "Pay mana to activate %s" % _pending_card.data.card_name \
-			if _pending_ability_index >= 0 else GRAB_MANA_PROMPT % _pending_card.data.card_name
-		# [QoL] What the TARGET adds (Pack 8 — a spell aimed at a Kaervek's
-		# Torch costs {2} more): said, so the extra land is not a mystery.
-		var fee := game.targets_surcharge(_pending_targets, _pending_card) \
-			if _pending_ability_index < 0 else 0
-		if fee > 0:
-			ask += " ({%d} more for its target)" % fee
-		_set_prompt(ask)
+		_set_prompt(_paying_prompt(_pending_targets))
 		return
 	# A cast that WENT THROUGH keeps its tutor pick: the search happens
 	# when the spell resolves, priority rounds from now, and the pick is
@@ -3092,6 +3092,47 @@ func _submit_pending() -> void:
 	# made Demonic Tutor ask twice (2026-09-02). A refused one drops it.
 	_clear_pending(err == "")
 	_report(err)
+
+
+## The Situation Bar's line while a cast waits for its mana (see
+## [constant GRAB_MANA_PROMPT]): `CASTING: Timetwister, Tap {2}{U}` — the
+## engine's own bill for the pending spell or ability, less what is
+## already floating, as 1997 recomputed it before each tap. Plain mana
+## that matches a coloured pip pays it; what is left over pays the
+## generic part. Restricted mana is not counted (the bar may ask for a
+## little more than the engine will take, never less). [param targets] are
+## the cast's chosen targets: what a target adds (Pack 8 — a spell aimed
+## at a Kaervek's Torch costs {2} more) is in the bill and said, so the
+## extra land is not a mystery.
+func _paying_prompt(targets: Array) -> String:
+	var card_name := _pending_card.data.card_name
+	var bill: Dictionary
+	var fee := 0
+	if _pending_ability_index >= 0:
+		if _pending_ability_index >= _pending_card.cur_activated_abilities.size():
+			return ACTIVATING_ACTION % card_name
+		bill = game.ability_payment(_pending_pid, _pending_card, _pending_ability_index,
+			_pending_x)
+	else:
+		bill = game.spell_payment(_pending_pid, _pending_card.data, _pending_x,
+			maxi(targets.size(), 1), _pending_card, _pending_mode, targets)
+		fee = game.targets_surcharge(targets, _pending_card)
+	var pool: ManaPool = game.players[_pending_pid].mana_pool
+	var cost: ManaCost = bill["cost"]
+	var pips := ""
+	var spare := 0
+	for pair in ManaCost._PIPS:
+		var need := int(cost.colored.get(pair[0], 0))
+		var have := pool.amount_of(pair[0])
+		pips += ("{%s}" % pair[1]).repeat(maxi(need - have, 0))
+		spare += maxi(have - need, 0)
+	var generic := maxi(cost.generic + int(bill["extra"]) - spare, 0)
+	var owed := ("{%d}" % generic if generic > 0 else "") + pips
+	var action := (ACTIVATING_ACTION if _pending_ability_index >= 0 else CASTING_ACTION) % card_name
+	var ask := "%s, %s" % [action, GRAB_MANA_PROMPT % (owed if owed != "" else "{0}")]
+	if fee > 0:
+		ask += " ({%d} more for its target)" % fee
+	return ask
 
 
 ## [method _submit_pending] is on the engine's side of the door right now

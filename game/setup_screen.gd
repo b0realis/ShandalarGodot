@@ -62,6 +62,9 @@ var _fair_skills: Array[int] = [3, 3]
 var _difficulty_labels: Array[Label] = []
 ## The chosen-portrait row under each duelist face.
 var _portrait_rects: Array[TextureRect] = []
+## Each seat's dice ([method randomize_seat]).
+var _dice_buttons: Array[Button] = []
+const DICE_TIP := "Roll this seat: a deck, a name and a look at random"
 var _portrait_captions: Array[Label] = []
 var _portrait_arrows: Array = []
 ## `Back` / `Go!`, pinned under the scroller rather than in it.
@@ -539,7 +542,23 @@ func _build_ui() -> void:
 		seat_box.custom_minimum_size.x = 300
 		seat_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		seat_row.add_child(seat_box)
-		seat_box.add_child(UiChrome.body_label("— Seat %d —" % (pid + 1), 16))
+		# THE SEAT'S DICE (the owner, 2026-11-07: "a small randomize button
+		# … at the top where most common changes are … the player and
+		# opponent should have separate randomize buttons"), beside the
+		# seat's heading: [method randomize_seat].
+		var heading := HBoxContainer.new()
+		heading.add_theme_constant_override("separation", 6)
+		var seat_label := UiChrome.body_label("— Seat %d —" % (pid + 1), 16)
+		seat_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		heading.add_child(seat_label)
+		var dice := UiChrome.menu_button("", Vector2(30, 30))
+		dice.name = "Dice%d" % (pid + 1)
+		dice.tooltip_text = DICE_TIP
+		DiceIcon.on(dice)
+		dice.pressed.connect(randomize_seat.bind(pid))
+		heading.add_child(dice)
+		_dice_buttons.append(dice)
+		seat_box.add_child(heading)
 
 		# `&Your deck:` (`Program/Text.res:2865`) — worded "Deck:" here
 		# because this screen sets BOTH seats and "your" would be a lie on
@@ -573,13 +592,7 @@ func _build_ui() -> void:
 		var opened := _row_of_group(deck_option, DeckGroups.ORIGINALS)
 		deck_option.select(opened if opened >= 0
 			else _row_of_deck(deck_option, pid))
-		deck_option.item_selected.connect(func(_i: int) -> void:
-			_update_face(pid)
-			_warm_duel()
-			# `Deck color` follows seat 1's deck, so the preview beside
-			# the lists has to follow the picker too.
-			_update_territory_preview()
-			_refresh_format_note())
+		deck_option.item_selected.connect(func(_i: int) -> void: _on_deck_chosen(pid))
 		seat_box.add_child(deck_option)
 		_deck_options.append(deck_option)
 
@@ -798,6 +811,56 @@ func _build_ui() -> void:
 ## the same breath as the deck and the face, and having to start the duel
 ## to reach it is a modern annoyance the 90s did not know it had.
 ##
+## A seat's deck picker moved (by hand or by its dice): its face, the
+## warm-up, the territory preview (`Deck color` follows seat 1's deck) and
+## the format note follow it.
+func _on_deck_chosen(pid: int) -> void:
+	_update_face(pid)
+	_warm_duel()
+	_update_territory_preview()
+	_refresh_format_note()
+
+
+## THE SEAT'S DICE (the owner, 2026-11-07): one seat's choices drawn at
+## random, the other seat's left alone — a deck from the picker's own rows
+## that the chosen format allows (never a `<random …>` row, never one the
+## card packs refuse), a name as the Embark screen's dice make one
+## ([method AdventureSetup.random_name]), and its own face from the
+## library. Seat 1's dice also roll YOUR territory background: its colour
+## `Deck color`, so it matches the deck drawn, in one of that colour's
+## three arts; the opponent's half always follows its own deck (`Duel.hlp`,
+## the reason it has no picker). Silent, as the Embark screen's Randomize
+## is (the owner's ruling of 2026-11-05). [param rng] is for tests.
+func randomize_seat(pid: int, rng: RandomNumberGenerator = null) -> void:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	var option := _deck_options[pid]
+	var legal := {}
+	for path in _format_playable():
+		legal[path] = true
+	var rows: Array[int] = []
+	for i in option.item_count:
+		if option.is_item_separator(i) or option.is_item_disabled(i):
+			continue
+		if legal.has(str(option.get_item_metadata(i))):
+			rows.append(i)
+	if not rows.is_empty():
+		option.select(rows[rng.randi_range(0, rows.size() - 1)])
+	_name_edits[pid].text = AdventureSetup.random_name(rng)
+	var faces := PortraitLibrary.all()
+	if not faces.is_empty():
+		Settings.set_value(PORTRAIT_KEY % pid, String(faces[rng.randi_range(0, faces.size() - 1)]["id"]))
+		_update_portrait(pid)
+	if pid == 0 and _territory_color != null:
+		DuelOptions.set_territory_color(DuelOptions.DECK_COLOR)
+		_territory_color.select(maxi(0, DuelOptions.TERRITORY_COLORS.find(DuelOptions.DECK_COLOR)))
+		var style := rng.randi_range(0, DuelOptions.TERRITORY_TYPES.size() - 1)
+		DuelOptions.set_territory_type(String(DuelOptions.TERRITORY_TYPES[style]["label"]))
+		_territory_type.select(style)
+	_on_deck_chosen(pid)
+
+
 ## ONE SETTING, NOT TWO. Both lists write [DuelOptions]'s own accessors,
 ## which write the same two [Settings] keys the Duel Options panel writes
 ## (`PlayerTerritoryColor` and `PlayerTerritoryType`), so this control and
