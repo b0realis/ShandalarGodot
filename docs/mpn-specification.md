@@ -7,9 +7,10 @@ two-player Magic game**. It records what happened, not instructions for making
 it happen again. A reader needs a JSON parser and a state-patch applicator;
 it does not need Godot, ShandalarGodot, a card database, artwork or a rules engine.
 This is a proposed community format, not an official Magic standard.
-Comments, questions and reports from other implementations are welcome:
-open an issue at <https://github.com/b0realis/ShandalarGodot/issues>
-with "MPN" in the title.
+Its home is <https://github.com/b0realis/MagicPublicNotation-MPN>, where it is
+developed with other Magic programs; this copy belongs to the first
+implementation. Comments, questions and reports from other implementations
+are welcome there: open an issue at <https://github.com/b0realis/MagicPublicNotation-MPN/issues>.
 
 This document defines the portable contract independently of the first
 implementation. The [player guide](mpn-v0.1.md) describes that implementation's

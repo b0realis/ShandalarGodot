@@ -9,7 +9,7 @@ MPN (Magic Public Notation) is a proposed open format for the **public
 history of a two-player Magic game**: what both players and any onlooker at
 the table could see, never a hidden card. It is independent of any engine.
 Questions and reports: an issue at
-<https://github.com/b0realis/ShandalarGodot/issues> with "MPN" in the title.
+<https://github.com/b0realis/MagicPublicNotation-MPN/issues>, MPN's own home.
 
 ## What to read
 

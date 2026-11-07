@@ -155,9 +155,12 @@ a move list or watch recorded states on the duel table. Hidden hands and
 library order stay private; playback does not invent unrecorded details.
 
 **Magic Public Notation 0.1** is a proposed open format, independent of this
-engine. See the [player guide](docs/mpn-v0.1.md),
+engine, with a home of its own: **[MagicPublicNotation-MPN](https://github.com/b0realis/MagicPublicNotation-MPN)** —
+the specification, the implementation guide and the examples, developed with
+other Magic programs. Other implementations and feedback are welcome there.
+This project's copies: the [player guide](docs/mpn-v0.1.md),
 [specification](docs/mpn-specification.md), [move-list format](docs/mpn-move-list.md)
-and [examples](docs/mpn-examples/). Other implementations and feedback are welcome.
+and [examples](docs/mpn-examples/).
 
 ## Next
 
