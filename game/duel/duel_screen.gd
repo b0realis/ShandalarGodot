@@ -5607,13 +5607,20 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 	# never saw it and the question stayed at 100% under a 150% bar.
 	_scale_dialog(dialog)
 	# The REASON'S CARD, left — s30 draws `req.Reason`'s image and so do we.
+	# It is also where a CARD LINE shows its card while the pointer (or the
+	# pad's focus) is on it ([method _preview_choice_line]).
 	var asking := _choice_source_card(choice)
-	if asking != null:
-		var face := CardPreview.new()
+	var face: CardPreview = null
+	if asking != null or choice_lists_cards(choice):
+		face = CardPreview.new()
+		# DOCKED: it lives in the window. An undocked card parks itself in
+		# the middle of the screen whenever it shows a card (the examine
+		# popup), which would put it over the choice lines on every hover.
+		face.docked = true
 		face.scale = Vector2(0.9, 0.9)
 		face.position = Vector2(18, 12)
-		face.show_card(asking)
 		dialog.add_child(face)
+		_preview_choice_line(face, asking)
 	var lines := VBoxContainer.new()
 	lines.position = Vector2(300, 26)
 	lines.custom_minimum_size = Vector2(235, 0)
@@ -5657,6 +5664,11 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 			text += "  *"
 		var line := OriginalDialog.choice_line(text)
 		line.pressed.connect(_on_choice_option.bind(i))
+		var shown := choice_line_card(choice, i)
+		if face != null and shown != null:
+			line.mouse_entered.connect(_preview_choice_line.bind(face, shown))
+			line.focus_entered.connect(_preview_choice_line.bind(face, shown))
+			line.mouse_exited.connect(_preview_choice_line.bind(face, asking))
 		column.add_child(line)
 	if choice.is_cost and not choice.adverse:
 		# A COST question can be backed out of — nothing is paid until the
@@ -5671,6 +5683,60 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 	_add_private_hide_action(scrim)
 	if help_gave_way:   # repository check 2026-10-13 fx-code (c1-1)
 		_settle_question(scrim)
+
+
+## THE CARD A LINE NAMES, BIG (the owner, 2026-11-07, on Bazaar of
+## Baghdad's discard: "a large card should show cards you hover over in the
+## list … sometimes you don't remember a card by name"). The window's large
+## card shows [param inst] — the hovered line's card, or the question's own
+## card again when the pointer leaves — face down when this seat may not
+## see its face ([method _may_show_face]), and nothing when there is none.
+func _preview_choice_line(face: CardPreview, inst: CardInstance) -> void:
+	if not is_instance_valid(face):
+		return
+	face.visible = inst != null
+	if inst == null:
+		return
+	if _may_show_face(inst):
+		face.show_card(inst)
+	else:
+		face.show_back()
+
+
+## Does [param choice] list cards by name (a search, a pick, a discard, a
+## named card)? Then its window has a large card to show them in.
+static func choice_lists_cards(choice: PlayerChoice) -> bool:
+	for i in choice_options(choice).size():
+		if choice_line_card(choice, i) != null:
+			return true
+	return false
+
+
+## The card the [param index]-th line of [param choice] names, or null: a
+## CARD line's candidate (by id, or the first of its name for a grouped
+## library line), a DISCARD line's hand card, an OPTION that is a card's
+## name (Petra Sphinx's "name a card") as a fresh look at the card. The
+## lines are [method choice_options]'s, in its order.
+static func choice_line_card(choice: PlayerChoice, index: int) -> CardInstance:
+	if index < 0:
+		return null
+	match choice.kind:
+		PlayerChoice.Kind.CARD:
+			var lines := choice_card_lines(choice)
+			if index >= lines.size():
+				return null
+			var answer: Variant = lines[index]["answer"]
+			for inst in choice.candidates:
+				if (answer is int and inst.id == int(answer)) \
+						or (answer is String and inst.data.card_name == String(answer)):
+					return inst
+		PlayerChoice.Kind.DISCARD:
+			if index < choice.candidates.size():
+				return choice.candidates[index]
+		PlayerChoice.Kind.OPTION:
+			if index < choice.options.size() and CardRegistry.has_card(choice.options[index]):
+				return CardInstance.new(CardRegistry.get_card(choice.options[index]), -1, choice.pid)
+	return null
 
 
 # --- repo check 2026-10-13 fx-code: the question that closes the mini help ---

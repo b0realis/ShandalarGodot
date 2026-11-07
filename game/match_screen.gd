@@ -214,6 +214,10 @@ var _sb_dialog: OriginalDialog = null
 var _sb_columns: HBoxContainer = null
 var _sb_note: Label = null
 var _sb_done: Button = null
+## The Sideboard window's large card: the line under the pointer (or the
+## keyboard's focus), [method _show_sideboard_card].
+var _sb_preview: CardPreview = null
+const SB_PREVIEW_SCALE := 0.75
 var _sb_pid := -1
 ## The size the deck must go back into the next duel at.
 var _sb_size := 0
@@ -709,13 +713,30 @@ func _open_sideboard(pid: int) -> void:
 	_sb_pid = pid
 	_sb_size = (config.decks[pid] as Array).size()
 	var dialog := OriginalDialog.create(
-		"%s — %s" % [config.player_names[pid], SIDEBOARD], Vector2(600, 470))
+		"%s — %s" % [config.player_names[pid], SIDEBOARD],
+		Vector2(600 + CardPreview.SIZE.x * SB_PREVIEW_SCALE + 16, 470))
 	dialog.z_index = WINDOW_Z + 1     # over the between-duels window
 	_sb_dialog = dialog
 	_sb_columns = HBoxContainer.new()
 	_sb_columns.add_theme_constant_override("separation", 16)
 	_sb_columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dialog.body().add_child(_sb_columns)
+	_sb_columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# THE CARD BESIDE ITS NAME (the owner, 2026-11-07: a list of names
+	# "should show cards you hover over … as sometimes you don't remember a
+	# card by name"), right of the two piles.
+	var beside := HBoxContainer.new()
+	beside.add_theme_constant_override("separation", 16)
+	beside.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	beside.add_child(_sb_columns)
+	var holder := Control.new()
+	holder.custom_minimum_size = CardPreview.SIZE * SB_PREVIEW_SCALE
+	_sb_preview = CardPreview.new()
+	_sb_preview.docked = true
+	_sb_preview.scale = Vector2(SB_PREVIEW_SCALE, SB_PREVIEW_SCALE)
+	_sb_preview.visible = false
+	holder.add_child(_sb_preview)
+	beside.add_child(holder)
+	dialog.body().add_child(beside)
 	_sb_note = OriginalDialog.label("", 13)
 	_sb_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.body().add_child(_sb_note)
@@ -808,12 +829,22 @@ func _pile_column(heading: String, from_main: bool) -> Control:
 		var line := OriginalDialog.choice_line("%d  %s" % [
 			counted(pile)[card_name], card_name])
 		line.pressed.connect(_move_one.bind(String(card_name), from_main))
+		line.mouse_entered.connect(_show_sideboard_card.bind(String(card_name)))
+		line.focus_entered.connect(_show_sideboard_card.bind(String(card_name)))
 		rows.add_child(line)
 	if rows.get_child_count() == 0:
 		var empty := OriginalDialog.label("(empty)", 13)
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		rows.add_child(empty)
 	return column
+
+
+## The Sideboard window's large card shows [param card_name].
+func _show_sideboard_card(card_name: String) -> void:
+	if not is_instance_valid(_sb_preview) or not CardRegistry.has_card(card_name):
+		return
+	_sb_preview.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, maxi(_sb_pid, 0)))
+	_sb_preview.visible = true
 
 
 ## card name -> how many, in name order. Static so a test can check the

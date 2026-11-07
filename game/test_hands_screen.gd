@@ -667,6 +667,11 @@ func open_picker(pid: int, zone: String) -> void:
 	_picker_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_picker_list.item_selected.connect(_show_picked)
 	_picker_list.item_activated.connect(func(_index: int) -> void: _add_picked())
+	_picker_list.gui_input.connect(_hover_picked)
+	_picker_list.mouse_exited.connect(func() -> void:
+		var chosen := _picker_list.get_selected_items()
+		if not chosen.is_empty():
+			_show_picked(chosen[0]))
 	row.add_child(_picker_list)
 	var holder := Control.new()
 	holder.custom_minimum_size = CardPreview.SIZE * 0.8
@@ -756,6 +761,19 @@ func _fill_picker() -> void:
 			and not _picker_list.is_item_disabled(0):
 		_picker_list.select(0)
 		_show_picked(0)
+
+
+## The row under the pointer on the large card as well (the owner,
+## 2026-11-07: a list of names "should show cards you hover over … as
+## sometimes you don't remember a card by name"); leaving the list puts
+## the selected row back.
+func _hover_picked(event: InputEvent) -> void:
+	var motion := event as InputEventMouseMotion
+	if motion == null or _picker_list == null:
+		return
+	var index := _picker_list.get_item_at_position(motion.position, true)
+	if index >= 0:
+		_show_picked(index)
 
 
 ## The selected row on the large card.

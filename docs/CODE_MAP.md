@@ -451,6 +451,12 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
 - `dice_icon.gd` (game): `DiceIcon`, a die's five drawn in code (no art,
   no skin) on a button — the Magic Battle screen's per-seat dice
   (`SetupScreen.randomize_seat`, the owner's ask of 2026-11-07).
+- `test_hover_shows_card_2026_11_07.gd` (tests/ui): a list of card names
+  shows the hovered card big — the duel's question window
+  (`DuelScreen.choice_line_card`, `_preview_choice_line`: a discard, a
+  search, a pick, a named card; the question's own card again on leaving),
+  the Sideboard window (`MatchScreen._show_sideboard_card`) and Test hands'
+  picker (`TestHandsScreen._hover_picked`).
 - `test_setup_dice_2026_11_07.gd` (tests/ui): the per-seat dice — one die
   each, at the top of the seat's column; a deck the format allows, a
   magical name, the player's mat set to follow the deck; the opponent's
