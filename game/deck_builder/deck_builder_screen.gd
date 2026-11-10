@@ -1516,6 +1516,13 @@ func _build_deck_area() -> void:
 	# watermark. It is what makes this area read as a deck's worth of
 	# places rather than a blue field with some cards on it.
 	_deck_area.slot_plaques = true
+	# [QoL] The owner, 2026-11-10: *"purple arrows at the right indicating
+	# that the deck is larger than window"* — players missed the bottom
+	# rows of large decks. An up arrow while cards are hidden above, a
+	# down arrow while cards are hidden below, on the right edge beside
+	# the bar; the area scrolls smoothly by the pixel, so a row cut by the
+	# bottom edge says the same thing ([CardArea]'s header).
+	_deck_area.more_arrows = true
 	_deck_area.card_activated.connect(_remove_one)
 	_deck_area.card_bulk.connect(_remove_all)
 	_deck_area.card_shifted.connect(_move_to_sideboard)

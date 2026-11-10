@@ -451,6 +451,18 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
 - `dice_icon.gd` (game): `DiceIcon`, a die's five drawn in code (no art,
   no skin) on a button — the Magic Battle screen's per-seat dice
   (`SetupScreen.randomize_seat`, the owner's ask of 2026-11-07).
+- `test_deck_area_smooth_scroll_2026_11_10.gd` (tests/ui): the Deck area's
+  smooth scrolling and purple arrows (the owner, 2026-11-10) — a wheel notch
+  glides half a row (`CardArea.WHEEL_ROWS`, `GLIDE_RATE`, `settle_scroll`), a
+  touchpad pan follows at once, the side bar counts pixels (`scroll_px`,
+  `scroll_px_to`, `content_height`, `max_scroll_px`), a row cut at the edge,
+  the page is the rows in view plus one and rotates rather than rebuilds
+  (`_slide`, `_lay_slots`), the carved ground rides with its cards
+  (`_quilt`), the keys reveal a cut row whole (`_first_in_view`), a click
+  never scrolls, a still pointer's card is lit (`_note_pointer`), a resize
+  keeps the top-left card (`_keep_top_card`); `more_arrows` — up/down in the
+  1997 stone tinted purple (`MORE_TINT`), shown only while cards are hidden
+  that way, a click glides one row, held repeats; the Inventory still steps.
 - `test_hover_shows_card_2026_11_07.gd` (tests/ui): a list of card names
   shows the hovered card big — the duel's question window
   (`DuelScreen.choice_line_card`, `_preview_choice_line`: a discard, a
@@ -13159,7 +13171,11 @@ shandalar/
 │   │   │                      DeckBuilderScreen._take_auto_deck, one
 │   │   │                      undoable step
 │   │   ├── card_area.gd     class CardArea — the Deck area and the
-│   │   │                      Inventory area, one widget twice: a PAGED
+│   │   │                      Inventory area, one widget twice (since
+│   │   │                      2026-11-10 the side-barred Deck area scrolls
+│   │   │                      smoothly by the pixel, with purple up/down
+│   │   │                      arrows, `more_arrows`; the bottom-barred
+│   │   │                      surfaces still step): a PAGED
 │   │   │                      grid of MiniCards (s30's ScrollableList
 │   │   │                      renders only its visible window, and so does
 │   │   │                      this — 788 MiniCards at once would be ten

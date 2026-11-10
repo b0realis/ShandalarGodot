@@ -27,9 +27,43 @@ extends Control
 ## the bottom* moves it sideways — *"At the bottom of the Inventory area
 ## is a scroll bar you can use to move through your inventory"* — so the
 ## Inventory reads top-to-bottom then across, the way a card rack does.
-## Both bars count whole STEPS (a row or a column of cards), so the wheel,
+## The bottom bar counts whole STEPS (a column of cards), so the wheel,
 ## the bar and the keyboard always land on the same page; before the fix
 ## the bar counted single cards and drifted out of step with the wheel.
+## The side bar counted rows the same way until 2026-11-10, and counts
+## PIXELS now — see the next paragraph.
+##
+## [QoL] SMOOTH SCROLLING ON THE DECK AREA. The owner, 2026-11-10: *"Deck
+## builder smooth scrolling of cards and purple arrows at the right
+## indicating that the deck is larger than window !!!! (Smooth scrolling
+## i mean you can scroll continuously and show half a card in bottom row)
+## - now some players miss bottom rows in large decks in deck builder."*
+## At 1280x800 the deck area holds four rows EXACTLY, so a stepped page
+## always ended on a clean edge and a 70-card deck looked like a 24-card
+## one. A side-barred surface keeps where it stands in PIXELS ([member
+## _scroll_px]): the wheel glides half a row a notch ([constant
+## WHEEL_ROWS]), the bar and its thumb move by the pixel, the keyboard
+## scrolls just far enough to show the cursor's row whole, and a row cut
+## by the bottom edge is the cue that there is more. The PAGING above is
+## kept, one row deeper: the widgets are the rows the view touches — the
+## visible rows plus one at most — laid at the fraction of a row the
+## surface stands at, and a row that leaves the top is rotated round to
+## the bottom and rebound exactly as a stepped page's was. The quilt
+## travels with its cards ([method _quilt]) and the keyboard ring rides
+## the fraction with the card it frames.
+##
+## THE BOTTOM-BARRED SURFACES STILL STEP, decided rather than left. The
+## Inventory and the sideboard strip are one card tall, so there is no
+## "bottom row" to miss; the Inventory's block is centred on its teal
+## field with an arrow at each end, a tally in the corner and a count line
+## that letters which cards are showing, and every one of those reads a
+## whole-column offset. Gliding it sideways would cut a card at both ends
+## under the arrows for no question the player was asking.
+##
+## [QoL] THE PURPLE ARROWS — the same request's other half: the Deck
+## area wears an up arrow at the top of its right edge while cards are
+## hidden above, a down arrow at the bottom while cards are hidden below,
+## and neither while the whole deck fits. See [member more_arrows].
 ##
 ## THE GESTURES are the manual's: *"To move a card from the inventory into
 ## your deck, simply double-click on it or drag it there with the mouse,
@@ -127,6 +161,38 @@ const ARROW_W := 20.0
 ## feel rather than an invention.
 const ARROW_DELAY := 0.35
 const ARROW_REPEAT := 0.07
+
+## [QoL] SMOOTH SCROLLING (the class header, 2026-11-10). One notch of the
+## wheel on a side-barred surface glides HALF A ROW: a whole row a notch
+## was a jump the eye could not follow, and the half row a notch leaves
+## at the bottom edge is exactly the "there is more" the owner asked for.
+## A precise touchpad's fraction of a notch ([member
+## InputEventMouseButton.factor]) moves that fraction of it.
+const WHEEL_ROWS := 0.5
+## How fast a glide closes on where it is going, per second — an
+## exponential approach that covers nine tenths of a notch in about an
+## eighth of a second: quick enough to feel like the wheel, slow enough to
+## be seen as motion rather than as a jump.
+const GLIDE_RATE := 18.0
+## [QoL] THE PURPLE ARROWS' COLUMN, down the Deck area's right edge — the
+## Inventory's own arrow width, so the two kinds of arrow on the screen
+## are one size. The side bar runs down the middle of it, between them.
+const MORE_W := ARROW_W
+## How tall each one is — under half a card, so the two never meet over
+## the bar on any window the screen lays out ([method _more_h]).
+const MORE_H := 48.0
+## THE PURPLE. The 1997 Deck Builder carries no purple of its own (navy
+## slate, olive, Dekbar1's teal, grey stone), so the arrows wear the era's
+## own BUTTON STONE ([method OriginalDialog.button]) tinted to the purple
+## the original game DID paint: the lavender sky over the castle on the
+## victory screen (`win_game.png`, 160,128,216 at its heart). On the 1997
+## stone the tint lands on that sky, and its dark INK arrow reads on it
+## the way the original letters every light-faced button. Hover lifts it,
+## a press sinks it, like every other stone on the screen.
+const MORE_TINT := Color(0.84, 0.66, 1.18)
+## The same purple as a flat face, for a game run with no skin imported
+## ([method OriginalDialog._flat_button]'s case).
+const MORE_FLAT := Color8(150, 116, 208)
 
 ## THE DECK AREA'S EMPTY-SLOT WATERMARKS. `deck_slot_plaques` (Bldr_sheet,
 ## 5 cells of 117 x 2 rows of 100) is the 1997 carving that makes the deck
@@ -227,6 +293,25 @@ var scroll_arrows := false:
 			_build_arrows()
 		else:
 			_free_arrows()
+		_relayout()
+## [QoL] THE PURPLE ARROWS on a side-barred surface's right edge (the
+## owner, 2026-11-10 — the class header): an UP arrow at the top while
+## cards are hidden above the view, a DOWN arrow at the bottom while cards
+## are hidden below it, neither while the whole list fits. They are a
+## signpost first — the thin bar alone was not enough of one, and players
+## missed the bottom rows of large decks — and buttons second: a click
+## glides one row, a hold keeps going ([constant ARROW_DELAY], the bottom
+## bar's own feel). Only meaningful with a side bar; a bottom-barred
+## surface has [member scroll_arrows] instead.
+var more_arrows := false:
+	set(value):
+		if more_arrows == value or not _vertical_bar:
+			return
+		more_arrows = value
+		if value:
+			_build_more_arrows()
+		else:
+			_free_more_arrows()
 		_relayout()
 ## [QoL] The smallest count that earns a badge. The Deck area badges
 ## DUPLICATES (2+), which is the manual's *"tiny number on the single
@@ -364,6 +449,9 @@ var _title_label: Label = null
 var _tally_label: Label = null
 var _left_arrow: Button = null
 var _right_arrow: Button = null
+## The purple pair — see [member more_arrows].
+var _up_arrow: Button = null
+var _down_arrow: Button = null
 ## Which way a held arrow is scrolling: -1, 0 or +1. See [method _process].
 var _held := 0
 ## Seconds until the held arrow steps again.
@@ -377,6 +465,32 @@ var _cursor := -1
 var _cursor_ring: Panel = null
 ## How many cells the last [method _rebuild] left showing.
 var _shown := 0
+## [QoL] SMOOTH SCROLLING: how far down a side-barred surface stands, in
+## pixels — the one source of truth there; [member _offset] is derived
+## from it (the first card of the first row the view touches). Unused on
+## a bottom-barred surface, which still steps.
+var _scroll_px := 0.0
+## Where a glide (the wheel, a purple arrow) is heading, while [member
+## _gliding] is set. See [method _process].
+var _glide_to := 0.0
+var _gliding := false
+## The first card of the top row as the player last LEFT it by scrolling —
+## what a resize that changes the column count keeps on the top row
+## ([method _keep_top_card]).
+var _anchor := 0
+## Set while this surface writes its own bar, so the bar's own
+## `value_changed` (a range clamping its value as its maximum moves) does
+## not scroll the surface from inside its own rebuild.
+var _writing_bar := false
+## WHERE THE POINTER STANDS over the cards, in [member _grid]'s
+## coordinates, from the last motion or wheel event this surface or one
+## of its cards received; [member _pointer_known] is cleared when the
+## pointer leaves. A stepped page hands the hover to whatever card lands
+## in the hovered SLOT; a smooth one moves its cards by the pixel, so the
+## card under a still pointer is found by WHERE the pointer is ([method
+## _settle_hover]).
+var _pointer := Vector2.ZERO
+var _pointer_known := false
 
 
 func _init(vertical_bar := true) -> void:
@@ -395,8 +509,11 @@ func _init(vertical_bar := true) -> void:
 	focus_entered.connect(_place_cursor)
 	focus_exited.connect(_place_cursor)
 	_bar = VScrollBar.new() if vertical_bar else HScrollBar.new()
-	_bar.value_changed.connect(func(value: float) -> void:
-		scroll_to(int(value) * scroll_step()))
+	# A side bar counts pixels ([method smooth]), so its value must not be
+	# rounded to whole ones on the way through.
+	if vertical_bar:
+		_bar.step = 0.0
+	_bar.value_changed.connect(_on_bar_moved)
 	add_child(_bar)
 	_title_label = OriginalDialog.label("", 12, true)
 	_title_label.visible = false
@@ -421,6 +538,10 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_relayout()
+	elif what == NOTIFICATION_MOUSE_EXIT:
+		# The pointer has left the surface and every card on it: no card is
+		# under it, whatever slides past next ([method _settle_hover]).
+		_pointer_known = false
 
 
 func _relayout() -> void:
@@ -430,8 +551,20 @@ func _relayout() -> void:
 	_grid.position = Vector2(pad, 0.0)
 	_grid.size = inner
 	if _vertical_bar:
-		_bar.position = Vector2(size.x - BAR_THICKNESS, 0)
-		_bar.size = Vector2(BAR_THICKNESS, size.y)
+		# The bar runs down the middle of the right-hand column, and with
+		# the purple arrows it runs BETWEEN them — they stand at its two
+		# ends, where a scroll bar's own arrows would.
+		var side := side_width()
+		var reach := _more_h() + 2.0 if more_arrows else 0.0
+		_bar.position = Vector2(size.x - side + (side - BAR_THICKNESS) / 2.0, reach)
+		_bar.size = Vector2(BAR_THICKNESS, maxf(0.0, size.y - 2.0 * reach))
+		if _up_arrow != null:
+			var tall := _more_h()
+			_up_arrow.position = Vector2(maxf(0.0, size.x - MORE_W), 0.0)
+			_up_arrow.size = Vector2(MORE_W, tall)
+			_down_arrow.position = Vector2(maxf(0.0, size.x - MORE_W), maxf(0.0, size.y - tall))
+			_down_arrow.size = Vector2(MORE_W, tall)
+		_keep_top_card()
 	else:
 		# The heading, when there is one, takes the left of the bar row,
 		# the [member tally] takes the right of it, and the bar takes what
@@ -448,7 +581,7 @@ func _relayout() -> void:
 	if _tally_label != null:
 		# A VERTICAL bar owns the right edge, so the tally steps in off it;
 		# a bottom bar has already given up [constant TALLY_W] above.
-		var edge := (BAR_THICKNESS if _vertical_bar else 0.0) + pad
+		var edge := (side_width() if _vertical_bar else 0.0) + pad
 		# TALL ENOUGH FOR THE FONT IT NOW CARRIES. At [constant
 		# TALLY_FONT_RATIO] of a card the number is 27px, so a 17px box
 		# clipped its own descenders; it is sized off the font for the same
@@ -527,10 +660,24 @@ func _inner_size() -> Vector2:
 	var pad := 2.0 * arrow_pad()
 	var lead := _lead()
 	if _vertical_bar:
-		return Vector2(maxf(size.x - BAR_THICKNESS - 2.0 - pad - lead.x, 0.0),
+		return Vector2(maxf(size.x - side_width() - 2.0 - pad - lead.x, 0.0),
 			maxf(size.y - lead.y, 0.0))
 	return Vector2(maxf(size.x - pad - lead.x, 0.0),
 		maxf(size.y - BAR_THICKNESS - 2.0 - lead.y, 0.0))
+
+
+## What a side-barred surface gives up down its right edge: the bar's own
+## width, or the purple arrows' column when it has them ([constant
+## MORE_W]) — reserved whether or not they are showing, so the deck's
+## columns never jump as the deck grows past one screen.
+func side_width() -> float:
+	return MORE_W if more_arrows else BAR_THICKNESS
+
+
+## How tall a purple arrow stands: [constant MORE_H], or a third of a very
+## short area, so the pair and the bar between them always fit.
+func _more_h() -> float:
+	return minf(MORE_H, floorf(size.y / 3.0))
 
 
 ## The tally's font size — see [constant TALLY_FONT_RATIO].
@@ -561,7 +708,8 @@ func scroll_step() -> int:
 
 ## Index of the first card on the page. Always a multiple of
 ## [method scroll_step], so the surface reads as a grid rather than a
-## sliding window.
+## sliding window. On a [method smooth] surface it is the first card of
+## the first row the view touches, however little of that row shows.
 func offset() -> int:
 	return _offset
 
@@ -569,13 +717,20 @@ func offset() -> int:
 ## The largest [method offset] that still fills the page — the last card
 ## always sits on the last page, never one row below it.
 func max_offset() -> int:
+	if smooth():
+		return int(floorf(max_scroll_px() / row_pitch())) * columns()
 	var step := scroll_step()
 	var total: int = int(ceil(float(_visible_entries().size()) / float(step)))
 	var visible: int = int(ceil(float(page_size()) / float(step)))
 	return maxi(0, total - visible) * step
 
 
+## Scroll so card [param card_index] is on the page — at the top of it, on
+## a [method smooth] surface, its row's carving on the area's top edge.
 func scroll_to(card_index: int) -> void:
+	if smooth():
+		scroll_px_to(float(maxi(0, card_index) / columns()) * row_pitch())
+		return
 	var step := scroll_step()
 	var wanted: int = clampi(card_index - card_index % step, 0, max_offset())
 	if wanted == _offset:
@@ -586,11 +741,177 @@ func scroll_to(card_index: int) -> void:
 	scrolled.emit()
 
 
+## [param steps] rows (or columns) on. A [method smooth] surface keeps the
+## fraction of a row it stands at.
 func scroll_by(steps: int) -> void:
+	if smooth():
+		scroll_px_to(_scroll_px + steps * row_pitch())
+		return
 	scroll_to(_offset + steps * scroll_step())
 
 
+# ------------------------------------------- [QoL] smooth scrolling --
+# The owner, 2026-11-10 — see the class header. Everything here is the
+# side-barred surface's; [method smooth] says which surface that is.
+
+## Does this surface scroll by the pixel? The side-barred one (the Deck
+## area) does; the bottom-barred ones step whole columns — the class
+## header says why.
+func smooth() -> bool:
+	return _vertical_bar
+
+
+## One row of cards and its gap: the distance the quilt repeats down.
+func row_pitch() -> float:
+	return _cell.y + GAP.y
+
+
+## How far down the surface stands, in pixels.
+func scroll_px() -> float:
+	return _scroll_px
+
+
+## How tall the whole list stands laid out: every row and the gaps
+## between, and the quilt's half gap above the first card and below the
+## last — so the last carving's bottom edge meets the area's bottom edge.
+func content_height() -> float:
+	var count := _visible_entries().size()
+	if count == 0:
+		return 0.0
+	var rows_total: int = int(ceil(float(count) / float(columns())))
+	return rows_total * row_pitch() - GAP.y + 2.0 * _lead().y
+
+
+## The furthest down the surface can stand: the last card's bottom on the
+## bottom edge (half a gap inside it, on a quilt), never a pixel past.
+func max_scroll_px() -> float:
+	return maxf(0.0, content_height() - size.y)
+
+
+## Stand the surface [param px] pixels down, at once — the bar, the keys,
+## a resize. Stops any glide on the way.
+func scroll_px_to(px: float) -> void:
+	_gliding = false
+	_apply_scroll_px(px)
+	_sync_process()
+
+
+## Finish a glide where it was going, now. Public: it is the seam the
+## tests settle the wheel through, since a headless run has frames only
+## when it asks for them.
+func settle_scroll() -> void:
+	if _gliding:
+		_gliding = false
+		_apply_scroll_px(_glide_to)
+	_sync_process()
+
+
+## Move the surface to [param px] (clamped) and lay the cards there. True
+## when it moved. Crossing into a new first row ROTATES the page and
+## rebinds the row that came in ([method _rebuild], as a stepped scroll
+## does); a move inside the same row only slides the widgets ([method
+## _slide]) — no card is redrawn for a pixel.
+func _apply_scroll_px(px: float) -> bool:
+	var target := clampf(px, 0.0, max_scroll_px())
+	if is_equal_approx(target, _scroll_px):
+		return false
+	_scroll_px = target
+	var wanted := _first_row() * columns()
+	_anchor = wanted
+	if wanted != _offset:
+		var moved := wanted - _offset
+		_offset = wanted
+		_rebuild(moved)
+	else:
+		_slide()
+	scrolled.emit()
+	return true
+
+
+## The first row the view touches.
+func _first_row() -> int:
+	return int(floorf(_scroll_px / row_pitch()))
+
+
+## How far into that row the view starts, in pixels: the distance every
+## card and carving is drawn ABOVE its stepped place.
+func _frac() -> float:
+	return fposmod(_scroll_px, row_pitch()) if smooth() else 0.0
+
+
+## Start gliding [param delta] pixels on from wherever the last glide was
+## heading, so a quick spin of the wheel adds up instead of restarting.
+func _glide_by(delta: float) -> void:
+	var from := _glide_to if _gliding else _scroll_px
+	var target := clampf(from + delta, 0.0, max_scroll_px())
+	if not _gliding and is_equal_approx(target, _scroll_px):
+		return
+	_glide_to = target
+	_gliding = true
+	_sync_process()
+
+
+## Glide to the next row boundary [param facing] (-1 up, +1 down) — what a
+## purple arrow does, so a click always leaves a row's carving on the top
+## edge. False when there is no further to go.
+func _glide_row(facing: int) -> bool:
+	var pitch := row_pitch()
+	var from := _glide_to if _gliding else _scroll_px
+	var row := from / pitch
+	var target: float
+	if facing > 0:
+		target = (floorf(row + 0.001) + 1.0) * pitch
+	else:
+		target = (ceilf(row - 0.001) - 1.0) * pitch
+	target = clampf(target, 0.0, max_scroll_px())
+	if is_equal_approx(target, from):
+		return false
+	_glide_to = target
+	_gliding = true
+	_sync_process()
+	return true
+
+
+## A RESIZE THAT CHANGES THE COLUMN COUNT REFLOWS EVERY ROW, so the same
+## pixel offset would name a different card. The card that stood at the
+## top-left when the player last scrolled ([member _anchor]) stays on the
+## top row — the stepped offset's own promise — at the same fraction of a
+## row. It is the card from the last SCROLL, not from the last layout, so
+## a window dragged through a dozen widths does not walk the deck away
+## one floored row at a time.
+func _keep_top_card() -> void:
+	if not smooth():
+		return
+	var cols := columns()
+	if cols == _columns:
+		return
+	_scroll_px = float(_anchor / cols) * row_pitch() + _frac()
+
+
+## Processing runs only while something needs a frame: a glide, or a held
+## arrow ([method _process]).
+func _sync_process() -> void:
+	set_process(_gliding or _held != 0)
+
+
+## The bar was moved by the player — dragged, or clicked in its track.
+## A side bar counts pixels; a bottom bar counts steps.
+func _on_bar_moved(value: float) -> void:
+	if _writing_bar:
+		return
+	if smooth():
+		scroll_px_to(value)
+	else:
+		scroll_to(int(value) * scroll_step())
+
+
+## The last card on the bottom edge. On a [method smooth] surface that is
+## [method max_scroll_px] itself — the row-floored [method max_offset]
+## would stop short of it by the fraction of a row.
 func scroll_to_end() -> void:
+	if smooth():
+		scroll_px_to(max_scroll_px())
+		return
 	scroll_to(max_offset())
 
 
@@ -651,7 +972,7 @@ func _free_arrows() -> void:
 	_left_arrow = null
 	_right_arrow = null
 	_held = 0
-	set_process(false)
+	_sync_process()
 
 
 ## One arrow: the era's own stone button with a triangle painted on it.
@@ -680,39 +1001,61 @@ func _make_arrow(facing: int) -> Button:
 
 ## Take one arrow down — one step now, and the repeat armed. Public: it is
 ## the seam the tests hold the button down through, since a headless run
-## has no pointer to hold it with.
+## has no pointer to hold it with. The same for both kinds of arrow: a
+## step is a column on the bottom bar, a row's glide on a [method smooth]
+## surface.
 func press_arrow(facing: int) -> void:
 	_held = facing
 	_repeat_in = ARROW_DELAY
-	scroll_by(facing)
-	set_process(true)
+	_arrow_step(facing)
+	_sync_process()
 
 
-## Let it up again.
+## Let it up again. A glide already under way finishes its row.
 func release_arrow() -> void:
 	_held = 0
-	set_process(false)
+	_sync_process()
 
 
-func _process(delta: float) -> void:
-	if _held == 0:
-		set_process(false)
-		return
-	_repeat_in -= delta
-	if _repeat_in > 0.0:
-		return
-	_repeat_in = ARROW_REPEAT
+## One step of a held or clicked arrow. False at the end of the list.
+func _arrow_step(facing: int) -> bool:
+	if smooth():
+		return _glide_row(facing)
 	var before := _offset
-	scroll_by(_held)
-	if _offset == before:
-		# The end of the list. Stop the repeat rather than spinning on it;
-		# the button is about to be disabled under the finger anyway.
-		release_arrow()
+	scroll_by(facing)
+	return _offset != before
+
+
+## The two things that want frames: a glide closing on where it is going,
+## and a held arrow's repeat. Neither running, nothing ticks.
+func _process(delta: float) -> void:
+	if _gliding and delta > 0.0:
+		var gap := _glide_to - _scroll_px
+		var next := _glide_to if absf(gap) <= 0.5 \
+			else _scroll_px + gap * (1.0 - exp(-GLIDE_RATE * delta))
+		# Arrived, or held back by the end of a list that shrank under it.
+		if not _apply_scroll_px(next) or next == _glide_to:
+			_gliding = false
+	if _held != 0:
+		_repeat_in -= delta
+		if _repeat_in <= 0.0:
+			_repeat_in = ARROW_REPEAT
+			if not _arrow_step(_held):
+				# The end of the list. Stop the repeat rather than spinning
+				# on it; the button is about to be disabled (or, purple,
+				# hidden) under the finger anyway.
+				_held = 0
+	_sync_process()
 
 
 ## Grey out the arrow that has nowhere left to go — and both of them when
-## the whole list already fits on one page.
+## the whole list already fits on one page. The purple pair HIDE instead:
+## each one is a signpost saying "more this way", and a signpost to
+## nothing is a lie.
 func _refresh_arrows() -> void:
+	if _up_arrow != null:
+		_up_arrow.visible = _scroll_px > 0.5
+		_down_arrow.visible = _scroll_px < max_scroll_px() - 0.5
 	if _left_arrow == null:
 		return
 	_left_arrow.disabled = _offset <= 0
@@ -731,22 +1074,107 @@ func _refresh_arrows() -> void:
 ## carry is a tofu box on the one control whose whole job is to be
 ## unmistakable.
 class Arrow extends Control:
-	## -1 points left, +1 points right.
+	## -1 points left (or up), +1 points right (or down).
 	var facing := -1
+	## Points up or down instead — the purple pair ([member
+	## CardArea.more_arrows]).
+	var vertical := false
+	## How big the triangle is, against the button's narrower side.
+	var reach := 0.28
 
 	func _draw() -> void:
 		var w := size.x
 		var h := size.y
-		var half := minf(w, h) * 0.28
+		var half := minf(w, h) * reach
 		var mid := Vector2(w * 0.5, h * 0.5)
-		var tip := Vector2(mid.x + facing * half * 0.9, mid.y)
-		var points := PackedVector2Array([tip,
-			Vector2(mid.x - facing * half * 0.7, mid.y - half),
-			Vector2(mid.x - facing * half * 0.7, mid.y + half)])
+		var points: PackedVector2Array
+		if vertical:
+			points = PackedVector2Array([Vector2(mid.x, mid.y + facing * half * 0.9),
+				Vector2(mid.x - half, mid.y - facing * half * 0.7),
+				Vector2(mid.x + half, mid.y - facing * half * 0.7)])
+		else:
+			points = PackedVector2Array([Vector2(mid.x + facing * half * 0.9, mid.y),
+				Vector2(mid.x - facing * half * 0.7, mid.y - half),
+				Vector2(mid.x - facing * half * 0.7, mid.y + half)])
 		# The button face is the era's pale speckle, so the arrow is the
 		# era's DARK INK on it — the same voice the original letters its
 		# own light-faced buttons in ([method OriginalDialog.ink_label]).
 		draw_colored_polygon(points, OriginalDialog.INK)
+
+
+# ------------------------------------------ [QoL] the purple arrows --
+# The owner, 2026-11-10: *"purple arrows at the right indicating that the
+# deck is larger than window"* — see [member more_arrows].
+
+func _build_more_arrows() -> void:
+	if _up_arrow != null:
+		return
+	_up_arrow = _make_more_arrow(-1)
+	_down_arrow = _make_more_arrow(1)
+	add_child(_up_arrow)
+	add_child(_down_arrow)
+
+
+func _free_more_arrows() -> void:
+	for button in [_up_arrow, _down_arrow]:
+		if button != null:
+			button.queue_free()
+	_up_arrow = null
+	_down_arrow = null
+	_held = 0
+	_sync_process()
+
+
+## One purple arrow: the era's stone in the victory sky's purple
+## ([constant MORE_TINT]) with an ink triangle on it, pointing up
+## ([param facing] -1) or down (+1). FOCUS_NONE for the reason [method
+## _make_arrow] gives. Hidden until [method _refresh_arrows] finds cards
+## its way.
+func _make_more_arrow(facing: int) -> Button:
+	var button := OriginalDialog.button("", Vector2(MORE_W, MORE_W))
+	button.focus_mode = Control.FOCUS_NONE
+	button.tooltip_text = ("More cards above — click to scroll up, hold to keep going"
+		if facing < 0 else "More cards below — click to scroll down, hold to keep going")
+	_dress_purple(button)
+	var glyph := Arrow.new()
+	glyph.facing = facing
+	glyph.vertical = true
+	# Bolder than the bottom bar's: this one is a signpost first.
+	glyph.reach = 0.36
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glyph.set_anchors_preset(Control.PRESET_FULL_RECT)
+	button.add_child(glyph)
+	button.button_down.connect(press_arrow.bind(facing))
+	button.button_up.connect(release_arrow)
+	# The arrows stand on the edge the bar used to have to itself, and the
+	# bar scrolls under the wheel; so do they.
+	button.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed \
+				and _wheel(event as InputEventMouseButton):
+			button.accept_event())
+	button.visible = false
+	return button
+
+
+## Tint every state of a stone button to the arrows' purple: the 1997
+## stone itself where the skin is worn, a flat face where it is not.
+## Hover lifts the tint and a press sinks it, as on every other stone.
+static func _dress_purple(button: Button) -> void:
+	var lift := {"normal": 1.0, "hover": 1.14, "pressed": 0.82,
+		"hover_pressed": 0.82, "disabled": 0.7}
+	for state: String in lift:
+		var box := button.get_theme_stylebox(state)
+		if box == null:
+			continue
+		box = box.duplicate()
+		var by: float = lift[state]
+		if box is StyleBoxTexture:
+			(box as StyleBoxTexture).modulate_color = Color(MORE_TINT.r * by,
+				MORE_TINT.g * by, MORE_TINT.b * by)
+		elif box is StyleBoxFlat:
+			(box as StyleBoxFlat).bg_color = Color(MORE_FLAT.r * by,
+				MORE_FLAT.g * by, MORE_FLAT.b * by)
+		button.add_theme_stylebox_override(state, box)
 
 
 # -------------------------------------------------------------- content --
@@ -813,21 +1241,50 @@ func cursor_entry() -> CardData:
 
 ## [QoL] Stand the keyboard cursor on card [param index] of the list
 ## (-1 clears it), turning the page so it is in view, and ring it.
-func set_cursor(index: int) -> void:
+## [param reveal] false leaves the page where it is — a CLICK's cursor: the
+## player clicked the card they could see, and a half-shown card that
+## scrolled itself whole would move under the pointer mid-click.
+func set_cursor(index: int, reveal := true) -> void:
 	_cursor = clampi(index, -1, _visible_entries().size() - 1)
-	if _cursor >= 0:
+	if _cursor >= 0 and reveal:
 		_reveal(_cursor)
 	_place_cursor()
 
 
-## Is card [param index] on the page now showing?
+## Is card [param index] on the page now showing? On a [method smooth]
+## surface, any card of a row the view touches is.
 func _on_page(index: int) -> bool:
 	return index >= _offset and index < _offset + _shown
 
 
+## [QoL] THE FIRST CARD THE KEYS ACT ON when the cursor is not on the page
+## — *"the keys act on what is in view"* ([method handle_key]). On a
+## stepped page that is its first card. On a [method smooth] surface it is
+## the first card of the first row shown WHOLE: a row cut to a sliver at
+## the top is not what the player is looking at, and landing on it would
+## scroll the view back up to show it.
+func _first_in_view() -> int:
+	if not smooth():
+		return _offset
+	var skip: int = maxi(0, int(ceilf((_frac() - _lead().y) / row_pitch())))
+	var first := _offset + skip * columns()
+	var whole := _lead().y + skip * row_pitch() - _frac() + _cell.y <= size.y
+	return first if whole and first < _visible_entries().size() else _offset
+
+
 ## Turn the page the shortest way that puts card [param index] on it —
-## nothing when it already is.
+## nothing when it already is. A [method smooth] surface scrolls just far
+## enough to show the card's row WHOLE, carving and all, at whichever edge
+## it was cut by.
 func _reveal(index: int) -> void:
+	if smooth():
+		var top := float(index / columns()) * row_pitch()
+		var bottom := top + _cell.y + 2.0 * _lead().y
+		if top < _scroll_px:
+			scroll_px_to(top)
+		elif bottom > _scroll_px + size.y:
+			scroll_px_to(bottom - size.y)
+		return
 	if index < _offset:
 		scroll_to(index)
 	elif index >= _offset + page_size():
@@ -868,7 +1325,8 @@ static func owns_key(event: InputEvent) -> bool:
 ## the pair that reads naturally. An arrow with no cursor on the page
 ## (none yet, or one the type-ahead has scrolled away from) stands it on
 ## the page's first card and moves nothing: the keys act on what is in
-## view. PageUp/PageDown turn the page and carry the cursor with it, in
+## view ([method _first_in_view] — the first WHOLE row, on a smooth
+## surface). PageUp/PageDown turn the page and carry the cursor with it, in
 ## its slot; Home and End go to the ends of the list. Without a cursor
 ## the paging keys scroll as they always did — the manual's list-window
 ## words hold: *"You can use the up and down arrow keys and the scroll
@@ -888,7 +1346,7 @@ func handle_key(event: InputEventKey) -> bool:
 			if event.is_echo() or count == 0:
 				return true
 			if not _on_page(_cursor):
-				_step_to(_offset)
+				_step_to(_first_in_view())
 			var data := cursor_entry()
 			if data == null:
 				return true
@@ -901,7 +1359,7 @@ func handle_key(event: InputEventKey) -> bool:
 			if count == 0:
 				return true
 			if not _on_page(_cursor):
-				_step_to(_offset)
+				_step_to(_first_in_view())
 				return true
 			var along := scroll_step()
 			var delta := 0
@@ -926,7 +1384,7 @@ func handle_key(event: InputEventKey) -> bool:
 			if was_on_page:
 				_step_to(clampi(_cursor + _offset - before, 0, count - 1))
 			elif _cursor >= 0 and count > 0:
-				_step_to(_offset)
+				_step_to(_first_in_view())
 			return true
 		KEY_HOME:
 			if _cursor >= 0 and count > 0:
@@ -971,19 +1429,19 @@ func _rebuild(shifted := 0) -> void:
 	if shifted != 0:
 		_rotate_cells(shifted)
 	var entries := _visible_entries()
-	var per_page := page_size()
 	var cols := columns()
-	var row_count := rows()
-	var step := scroll_step()
-	_offset = clampi(_offset - _offset % step, 0, max_offset())
-	# The bar counts STEPS, and `_offset` is always a whole number of them,
-	# so bar and wheel can never drift apart.
-	var total_steps: int = int(ceil(float(entries.size()) / float(step)))
-	var visible_steps: int = int(ceil(float(per_page) / float(step)))
-	_bar.max_value = maxf(total_steps, visible_steps)
-	_bar.page = visible_steps
-	_bar.set_value_no_signal(float(_offset) / float(step))
-	_bar.visible = total_steps > visible_steps
+	_columns = cols
+	if smooth():
+		# The pixel position is the truth on a smooth surface; the offset
+		# is read off it, so the two cannot drift apart either.
+		_scroll_px = clampf(_scroll_px, 0.0, max_scroll_px())
+		if _glide_to > max_scroll_px():
+			_glide_to = max_scroll_px()
+		_offset = _first_row() * cols
+	else:
+		var step := scroll_step()
+		_offset = clampi(_offset - _offset % step, 0, max_offset())
+	_write_bar()
 	_refresh_arrows()
 	# Centre the fixed block of columns in the area: the column count never
 	# changes with the card count, so this is a stable margin, not a
@@ -992,41 +1450,112 @@ func _rebuild(shifted := 0) -> void:
 	# first carved frame and the leftover stays on the right, under the
 	# carvings ([method _lead]).
 	var lead := _lead()
-	var inset := lead.x if slot_plaques \
+	_inset = lead.x if slot_plaques \
 		else maxf(0.0, (_inner_size().x - (cols * (_cell.x + GAP.x) - GAP.x)) / 2.0)
-	_inset = inset
-	_columns = cols
 	queue_redraw()
-	var shown: int = mini(per_page, maxi(0, entries.size() - _offset))
-	_shown = shown
+	_lay_slots(_slots_wanted(entries.size()), 0)
+	_settle_hover(_shown)
+	_place_cursor()
+
+
+## THE SAME PAGE, SLID A FEW PIXELS — a [method smooth] move that stays
+## inside the first row the view touches. Every widget moves with the
+## fraction; only the slots the move has just uncovered at the bottom are
+## bound, and none already showing is touched — a glide redraws no card.
+func _slide() -> void:
+	_write_bar()
+	_refresh_arrows()
+	queue_redraw()
+	_lay_slots(_slots_wanted(_visible_entries().size()), _shown)
+	_settle_hover(_shown)
+	_place_cursor()
+
+
+## Write the bar from the surface. A bottom bar counts STEPS, and
+## `_offset` is always a whole number of them, so bar and wheel can never
+## drift apart; a side bar counts the PIXELS the surface stands at, its
+## page the view's own height, so dragging its thumb moves the cards by
+## the pixel.
+func _write_bar() -> void:
+	_writing_bar = true
+	if smooth():
+		var content := content_height()
+		_bar.max_value = maxf(content, size.y)
+		_bar.page = size.y
+		_bar.set_value_no_signal(_scroll_px)
+		_bar.visible = content > size.y
+	else:
+		var step := scroll_step()
+		var total_steps: int = int(ceil(float(_visible_entries().size()) / float(step)))
+		var visible_steps: int = int(ceil(float(page_size()) / float(step)))
+		_bar.max_value = maxf(total_steps, visible_steps)
+		_bar.page = visible_steps
+		_bar.set_value_no_signal(float(_offset) / float(step))
+		_bar.visible = total_steps > visible_steps
+	_writing_bar = false
+
+
+## How many slots the page shows: a page of [method page_size], or on a
+## [method smooth] surface every card of every row the view touches —
+## the rows in view, plus the one a fraction has pulled up from below.
+func _slots_wanted(count: int) -> int:
+	var room := page_size()
+	if smooth():
+		var rows_in_view: int = maxi(1, int(ceilf((size.y + _frac()) / row_pitch())))
+		room = rows_in_view * columns()
+	return mini(room, maxi(0, count - _offset))
+
+
+## Show slots `0 .. shown-1` at their places and hide the rest, binding
+## the slots from [param bind_from] on — all of them for a rebuild, only
+## the newly uncovered ones for a slide ([method _slide]).
+func _lay_slots(shown: int, bind_from: int) -> void:
+	var entries := _visible_entries()
 	for i in maxi(shown, _cells.size()):
 		if i >= shown:
 			_cells[i].visible = false
 			continue
-		var entry: Array = entries[_offset + i]
-		var cell: Cell
-		if i < _cells.size():
-			cell = _cells[i]
-		else:
-			cell = _make_cell(entry[0])
-			_cells.append(cell)
-			_grid.add_child(cell)
-		_bind_cell(cell, entry[0], int(entry[1]))
-		# Row-major under a side bar, COLUMN-major under a bottom bar.
-		var col := (i % cols) if _vertical_bar else (i / row_count)
-		var row := (i / cols) if _vertical_bar else (i % row_count)
-		cell.position = Vector2(inset + col * (_cell.x + GAP.x),
-			lead.y + row * (_cell.y + GAP.y))
-		cell.visible = true
-	_settle_hover(shown)
-	_place_cursor()
+		if i >= bind_from or i >= _cells.size():
+			var entry: Array = entries[_offset + i]
+			var cell: Cell
+			if i < _cells.size():
+				cell = _cells[i]
+			else:
+				cell = _make_cell(entry[0])
+				_cells.append(cell)
+				_grid.add_child(cell)
+			_bind_cell(cell, entry[0], int(entry[1]))
+		_cells[i].position = _slot_position(i)
+		_cells[i].visible = true
+	_shown = shown
+
+
+## Where slot [param i] of the page stands in [member _grid]. Row-major
+## under a side bar, COLUMN-major under a bottom bar — and on a [method
+## smooth] surface drawn the fraction of a row the surface stands at above
+## its stepped place.
+func _slot_position(i: int) -> Vector2:
+	var cols := _columns
+	var row_count := rows()
+	var col := (i % cols) if _vertical_bar else (i / row_count)
+	var row := (i / cols) if _vertical_bar else (i % row_count)
+	return Vector2(_inset + col * (_cell.x + GAP.x),
+		_lead().y + row * (_cell.y + GAP.y) - _frac())
 
 
 ## HAND THE HOVER TO WHOEVER IS IN THE SLOT NOW. The pointer has not moved,
 ## so Godot will send no `mouse_entered`; the widgets moved instead. The
 ## Showcase is only told when the card in the slot really changed, so a
 ## card click (which rebinds the whole page) says nothing.
+##
+## A [method smooth] surface asks WHERE the pointer is instead ([member
+## _pointer]): its cards move by the pixel, so the card under a still
+## pointer after half a notch is not the one in the slot it was over —
+## and the pointer may now be over a gap, or a gap may have slid out from
+## under it onto a card.
 func _settle_hover(shown: int) -> void:
+	if smooth() and _pointer_known:
+		_hovered_slot = _slot_under(_pointer, shown)
 	# Exactly one card is lit, and it is the one in the hovered slot: the
 	# widget that used to be there has moved somewhere else on the page and
 	# would otherwise stay lit under no pointer at all. `MiniCard.hovered`
@@ -1040,6 +1569,22 @@ func _settle_hover(shown: int) -> void:
 	if cell.data != null and cell.card_name != _hovered_card:
 		_hovered_card = cell.card_name
 		card_hovered.emit(cell.data)
+
+
+## Which showing slot's card [param at] (in [member _grid]'s coordinates)
+## is over, or -1 for a gap.
+func _slot_under(at: Vector2, shown: int) -> int:
+	for i in mini(shown, _cells.size()):
+		if Rect2(_cells[i].position, _cell).has_point(at):
+			return i
+	return -1
+
+
+## Note where the pointer is, from an event at [param at] in [member
+## _grid]'s coordinates — see [member _pointer].
+func _note_pointer(at: Vector2) -> void:
+	_pointer = at
+	_pointer_known = true
 
 
 ## The ring itself — see [constant RING_WIDTH].
@@ -1122,18 +1667,36 @@ func _draw() -> void:
 	var sheet := GameSkin.texture("deck_slot_plaques")
 	if sheet == null:
 		return
+	for laid: Array in _quilt():
+		var art := _plaque(int(laid[1]))
+		if art != null:
+			draw_texture_rect(art, laid[0], false)
+
+
+## Where every carving of the quilt goes and which one it is: `[[Rect2,
+## index], ...]`, in this area's coordinates — what [method _draw] lays,
+## kept apart so a test can read the quilt without a renderer.
+##
+## [QoL] THE QUILT SCROLLS WITH ITS CARDS (2026-11-10). On a [method
+## smooth] surface it is drawn the same fraction of a row up as the cards
+## are, and the cycle `index = (row * columns + col) % 5` counts the row
+## from the TOP OF THE LIST rather than the top of the view — so each card
+## keeps its own carving under it as it glides, instead of the carvings
+## standing still and the cards sliding over them.
+func _quilt() -> Array:
+	var out: Array = []
 	var pitch := _cell + GAP
 	var pad := arrow_pad()
-	var down: int = int(ceil(size.y / pitch.y))
+	var frac := _frac()
+	var first := _first_row() if smooth() else 0
+	var down: int = int(ceil((size.y + frac) / pitch.y))
 	var across: int = int(ceil((size.x - 2.0 * pad) / pitch.x))
 	for row in down:
 		for col in across:
-			var index: int = (row * _columns + col) % PLAQUE_COLUMNS
-			var art := _plaque(index)
-			if art == null:
-				continue
-			draw_texture_rect(art, Rect2(
-				Vector2(pad + col * pitch.x, row * pitch.y), pitch), false)
+			var index: int = ((first + row) * _columns + col) % PLAQUE_COLUMNS
+			out.append([Rect2(Vector2(pad + col * pitch.x, row * pitch.y - frac), pitch),
+				index])
+	return out
 
 
 ## One carved slot, from the sheet's BOTTOM row (cool blue slate — the row
@@ -1608,21 +2171,25 @@ func _badge() -> Control:
 ## The WHEEL is handled here too, because a Cell covers most of the
 ## surface and a wheel event it ignored would scroll nothing.
 func _on_cell_input(event: InputEvent, cell: Cell) -> void:
+	# [QoL] Where the pointer is over the cards, for a smooth surface's
+	# hover ([member _pointer]); the event is in the card's own coordinates.
+	if event is InputEventMouse:
+		_note_pointer(cell.position + (event as InputEventMouse).position)
+	if _pan(event):
+		accept_event()
+		return
 	if not (event is InputEventMouseButton):
 		return
 	if event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			scroll_by(1)
-			accept_event()
-		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			scroll_by(-1)
+		if _wheel(event as InputEventMouseButton):
 			accept_event()
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		grab_focus()      # so the arrow keys walk the surface just clicked
 		# [QoL] and the click stands the cursor on the card, BEFORE the
-		# signal: the relist the signal causes keeps a cursor by name.
-		set_cursor(_offset + _cells.find(cell))
+		# signal: the relist the signal causes keeps a cursor by name. It
+		# leaves the page where it is ([method set_cursor]).
+		set_cursor(_offset + _cells.find(cell), false)
 		# [QoL] SHIFT sends the card to the other pile instead of moving it
 		# in or out of this one — see [signal card_shifted].
 		if event.shift_pressed:
@@ -1632,20 +2199,49 @@ func _on_cell_input(event: InputEvent, cell: Cell) -> void:
 		accept_event()
 	elif event.button_index == MOUSE_BUTTON_RIGHT:
 		grab_focus()
-		set_cursor(_offset + _cells.find(cell))
+		set_cursor(_offset + _cells.find(cell), false)
 		card_bulk.emit(cell.card_name)
 		accept_event()
 
 
-## The wheel scrolls one step of cards on either surface; the keys walk
-## the cursor.
+## One press of the wheel, from a card or from the surface between them.
+## A stepped surface moves one step; a [method smooth] one glides
+## [constant WHEEL_ROWS] of a row — the fraction of that a precise
+## touchpad reports, when it reports one. True when it was the wheel.
+func _wheel(event: InputEventMouseButton) -> bool:
+	var down := event.button_index == MOUSE_BUTTON_WHEEL_DOWN
+	if not down and event.button_index != MOUSE_BUTTON_WHEEL_UP:
+		return false
+	if smooth():
+		var factor := event.factor if event.factor > 0.0 else 1.0
+		_glide_by((1.0 if down else -1.0) * WHEEL_ROWS * row_pitch() * factor)
+	else:
+		scroll_by(1 if down else -1)
+	return true
+
+
+## [QoL] A touchpad's two-finger scroll, on a [method smooth] surface: the
+## cards follow the fingers by the pixel, at the wheel's rate of half a
+## row per unit, with no glide of their own — the fingers are the glide.
+## True when it was taken.
+func _pan(event: InputEvent) -> bool:
+	if not smooth() or not (event is InputEventPanGesture):
+		return false
+	var delta := (event as InputEventPanGesture).delta.y
+	scroll_px_to(_scroll_px + delta * WHEEL_ROWS * row_pitch())
+	return true
+
+
+## The wheel scrolls on either surface — by a step, or smoothly ([method
+## _wheel]); the keys walk the cursor.
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouse:
+		_note_pointer((event as InputEventMouse).position - _grid.position)
+	if _pan(event):
+		accept_event()
+		return
 	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			scroll_by(1)
-			accept_event()
-		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			scroll_by(-1)
+		if _wheel(event as InputEventMouseButton):
 			accept_event()
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			grab_focus()
