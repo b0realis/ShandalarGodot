@@ -1381,17 +1381,20 @@ class _C2FSettingsProblemLine extends Label:
 # ------------------------------------------------------------ demo screen --
 
 class DemoSetup extends Control:
-	## The `Demo screen` window, opened from Options: which cards (a set, every
-	## set, or a list typed or pasted in), which show, fronts or backs, and Go.
-	## The window stays up under the show and comes back when the show is left,
-	## so a second show is one click away.
+	## The `Demo screen` window, opened from Options: which cards (the sets
+	## ticked, any mix of them, or a list typed or pasted in), which show,
+	## fronts or backs, and Go. The window stays up under the show and comes
+	## back when the show is left, so a second show is one click away.
 	##
 	## The choices last for the session ([member _last]) and are written
 	## nowhere: nothing here touches `settings.cfg`.
 
 	const TITLE := "Demo screen"
 	const CARDS_FROM := "Cards from:"
-	const ALL_SETS := "All sets"
+	const FROM_SETS := "Sets ticked below"
+	const ALL := "All"
+	const NONE := "None"
+	const NO_SETS := "No set is ticked."
 	const CARD_LIST := "Card list (below)"
 	const LIST_HINT := "One card name per line. A deck list works too."
 	const SHOW := "Show:"
@@ -1399,15 +1402,23 @@ class DemoSetup extends Control:
 	const FOIL := "Foil on rare cards"
 	const GO := "Go"
 	const BACK := "Back"
-	## The ids [member _last] keeps for the source: "" for every set, a set
-	## code, or this.
+	## The ids [member _last] keeps for the source: the sets ticked, or the
+	## typed list.
+	const SETS := "sets"
 	const LIST := "list"
 	## A list longer than this is cut, so a pasted file cannot stall the window.
 	const MAX_LIST_LINES := 2000
+	## The set boxes stand in this many columns, under this indent; the
+	## window is as wide as they need.
+	const SET_COLUMNS := 4
+	const SET_INDENT := 22
+	const WINDOW_SIZE := Vector2(600, 560)
 
-	## The session's last choices, so the window reopens as it was left.
-	static var _last := {"source": "", "list": "", "mode": DemoScreen.Mode.SOLITAIRE,
-		"faces": DemoScreen.Faces.FRONT, "foil": true}
+	## The session's last choices, so the window reopens as it was left. `off`
+	## holds the sets unticked, so every set starts ticked, and a set a card
+	## pack brings in later comes in ticked.
+	static var _last := {"source": SETS, "off": [], "list": "",
+		"mode": DemoScreen.Mode.SOLITAIRE, "faces": DemoScreen.Faces.FRONT, "foil": true}
 
 	## This window's own copy of the session's choices: [member _last] here,
 	## the draw window's in [DrawSetup].
@@ -1418,7 +1429,11 @@ class DemoSetup extends Control:
 	var prefix := "Demo"
 	var window: OriginalDialog
 	var go_button: Button
-	var source_list: OptionButton
+	## The two sources, one or the other: the sets ticked, or the list.
+	var sets_line: CheckBox
+	var list_line: CheckBox
+	## Set code -> its box, in the game's set order.
+	var set_boxes: Dictionary = {}
 	var list_box: TextEdit
 	var check_label: Label
 	var mode_list: OptionButton
@@ -1442,16 +1457,39 @@ class DemoSetup extends Control:
 		return setup
 
 
-	## Each source the window offers, in the order its list shows them:
-	## every set, then each set the game has cards for, then the typed list.
-	static func sources() -> Array[Dictionary]:
-		var out: Array[Dictionary] = [{"id": "", "label": ALL_SETS}]
+	## Each set the window has a box for, in the game's set order: every set
+	## the game has cards for, an enabled card pack's sets with them.
+	static func set_choices() -> Array[Dictionary]:
+		var out: Array[Dictionary] = []
 		for code in CardRegistry.active_set_order():
 			if CardRegistry.names_in_set(code).is_empty():
 				continue
 			out.append({"id": code,
 				"label": String(DeckFilter.SET_LABELS.get(code, code.to_upper()))})
-		out.append({"id": LIST, "label": CARD_LIST})
+		return out
+
+
+	## The cards of the sets [param codes], each once (a card a pack prints
+	## in two of them too). Every set ticked is every card the game has.
+	static func pool_of_sets(codes: Array) -> Array[String]:
+		var out: Array[String] = []
+		var seen := {}
+		for code in codes:
+			for card_name in CardRegistry.names_in_set(String(code)):
+				if not seen.has(card_name):
+					seen[card_name] = true
+					out.append(card_name)
+		return out
+
+
+	## Which set each card of [param codes] is shown from: the first of them
+	## that printed it.
+	static func printings_of_sets(codes: Array) -> Dictionary:
+		var out := {}
+		for code in codes:
+			for card_name in CardRegistry.names_in_set(String(code)):
+				if not out.has(card_name):
+					out[card_name] = String(code)
 		return out
 
 
@@ -1507,28 +1545,29 @@ class DemoSetup extends Control:
 		return card_name.replace("’", "'").replace("‘", "'").strip_edges().to_lower()
 
 
-	## The cards a source deals from: a set's own, every card the game has,
-	## or the list's found cards.
-	static func pool_for(source_id: String, list_text: String) -> Array[String]:
+	## The cards a source deals from: the list's found cards, or the cards
+	## of the sets ticked ([param codes]).
+	static func pool_for(source_id: String, codes: Array, list_text: String) -> Array[String]:
 		var out: Array[String] = []
 		if source_id == LIST:
 			out.assign(check_list(list_text).found)
-		elif source_id == "":
-			out.assign(CardRegistry.all_names())
 		else:
-			out.assign(CardRegistry.names_in_set(source_id))
+			out = pool_of_sets(codes)
 		return out
 
 
 	## What the window's foot says about the keys, in the player's own
 	## bindings where the game has one. One key a line: the window's lettering
-	## has no middle dot to run them together with.
-	static func keys_text(again := "new cards", pad_again := "deals new cards") -> String:
+	## has no middle dot to run them together with. [param more] are lines
+	## of the show's own keys, before the pad's.
+	static func keys_text(again := "new cards", pad_again := "deals new cards",
+			more: Array[String] = []) -> String:
 		var lines: Array[String] = ["Click or Esc: back to this window",
 			"R: %s" % again, "Space: pause"]
 		var shot := Controls.key_text("duel_screenshot")
 		if shot != Controls.UNBOUND:
 			lines.append("%s: save the screen as a picture" % shot)
+		lines.append_array(more)
 		lines.append("On a pad: A or B goes back, Y %s, Start pauses." % pad_again)
 		return "\n".join(lines)
 
@@ -1548,7 +1587,7 @@ class DemoSetup extends Control:
 
 
 	func _build_window() -> OriginalDialog:
-		var dialog := OriginalDialog.create(_title(), Vector2(500, 560))
+		var dialog := OriginalDialog.create(_title(), WINDOW_SIZE)
 		var box := dialog.body()
 		_add_source_rows(box)
 		_add_show_rows(box)
@@ -1574,22 +1613,56 @@ class DemoSetup extends Control:
 		return keys_text()
 
 
-	## Which cards: the source list, the list box under it and its check.
+	## Which cards: the sets, a box each with All and None over them, or the
+	## list box under them; and the check of what that comes to.
 	func _add_source_rows(box: VBoxContainer) -> void:
 		box.add_child(OriginalDialog.label(CARDS_FROM, 14, true))
-		source_list = OptionButton.new()
-		source_list.name = prefix + "Source"
-		source_list.fit_to_longest_item = false
-		source_list.clip_text = true
-		source_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		for entry in sources():
-			source_list.add_item(String(entry.label))
-			source_list.set_item_metadata(source_list.item_count - 1, String(entry.id))
-		_select_source(String(memory.source))
-		source_list.item_selected.connect(func(_index: int) -> void:
-			memory.source = _source_id()
-			_refresh())
-		box.add_child(source_list)
+		var source := ButtonGroup.new()
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 8)
+		sets_line = _tick(FROM_SETS, prefix + "FromSets")
+		sets_line.button_group = source
+		sets_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(sets_line)
+		for word in [ALL, NONE]:
+			var on := String(word) == ALL
+			var quick := GauntletOptions.fit(OriginalDialog.button(word, Vector2(64, 24)))
+			quick.name = prefix + word
+			quick.pressed.connect(func() -> void: _tick_all(on))
+			head.add_child(quick)
+		box.add_child(head)
+
+		var grid := GridContainer.new()
+		grid.name = prefix + "Sets"
+		grid.columns = SET_COLUMNS
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 0)
+		set_boxes.clear()
+		for entry in set_choices():
+			var code := String(entry.id)
+			var tick := _tick(String(entry.label), prefix + "Set_" + code, 13)
+			tick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			tick.set_pressed_no_signal(not (memory.off as Array).has(code))
+			tick.toggled.connect(func(on: bool) -> void: _tick_set(code, on))
+			set_boxes[code] = tick
+			grid.add_child(tick)
+		var indent := MarginContainer.new()
+		indent.add_theme_constant_override("margin_left", SET_INDENT)
+		indent.add_child(grid)
+		box.add_child(indent)
+
+		list_line = _tick(CARD_LIST, prefix + "FromList")
+		list_line.button_group = source
+		box.add_child(list_line)
+		_use_source(String(memory.source))
+		sets_line.toggled.connect(func(on: bool) -> void:
+			if on:
+				memory.source = SETS
+				_refresh())
+		list_line.toggled.connect(func(on: bool) -> void:
+			if on:
+				memory.source = LIST
+				_refresh())
 
 		list_box = TextEdit.new()
 		list_box.name = prefix + "List"
@@ -1611,8 +1684,7 @@ class DemoSetup extends Control:
 			memory.list = list_box.text
 			# Typing a list means dealing from it.
 			if list_box.text.strip_edges() != "" and _source_id() != LIST:
-				_select_source(LIST)
-				memory.source = LIST
+				_use_source(LIST)
 			_refresh())
 		box.add_child(list_box)
 
@@ -1646,27 +1718,72 @@ class DemoSetup extends Control:
 
 
 	func _add_foil_row(box: VBoxContainer) -> void:
-		foil_check = CheckBox.new()
-		foil_check.name = prefix + "Foil"
-		foil_check.text = FOIL
+		foil_check = _tick(FOIL, prefix + "Foil")
 		foil_check.button_pressed = bool(memory.get("foil", true))
-		foil_check.add_theme_color_override("font_color", OriginalDialog.CHOICE)
 		foil_check.toggled.connect(func(on: bool) -> void:
 			memory.foil = on)
 		box.add_child(foil_check)
 
 
+	## One of the window's tick boxes, in the colours of its other lines and
+	## the game's own tick box ([method UiChrome.check_icon]): the engine's
+	## empty box is dark on the dark stone. The two sources, one or the
+	## other, wear it too, as the AutoDeck window's sources do.
+	func _tick(text: String, node_name: String, font_size := 0) -> CheckBox:
+		var tick := CheckBox.new()
+		tick.name = node_name
+		tick.text = text
+		tick.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+		for on in [true, false]:
+			var icon := UiChrome.check_icon(on)
+			tick.add_theme_icon_override("checked" if on else "unchecked", icon)
+			tick.add_theme_icon_override("radio_checked" if on else "radio_unchecked", icon)
+		if font_size > 0:
+			tick.add_theme_font_size_override("font_size", font_size)
+		return tick
+
+
 	func _source_id() -> String:
-		var index := source_list.selected
-		return "" if index < 0 else String(source_list.get_item_metadata(index))
+		return LIST if list_line.button_pressed else SETS
 
 
-	func _select_source(id: String) -> void:
-		for i in source_list.item_count:
-			if String(source_list.get_item_metadata(i)) == id:
-				source_list.select(i)
-				return
-		source_list.select(0)
+	## Deal from [param id], the sets or the list, without a signal.
+	func _use_source(id: String) -> void:
+		id = LIST if id == LIST else SETS
+		sets_line.set_pressed_no_signal(id == SETS)
+		list_line.set_pressed_no_signal(id == LIST)
+		memory.source = id
+
+
+	## The sets ticked now, in the game's set order.
+	func _ticked() -> Array[String]:
+		var out: Array[String] = []
+		for code in set_boxes:
+			if (set_boxes[code] as CheckBox).button_pressed:
+				out.append(String(code))
+		return out
+
+
+	## A set box ticked or unticked: kept, and the sets dealt from.
+	func _tick_set(code: String, on: bool) -> void:
+		var off: Array = memory.off
+		off.erase(code)
+		if not on:
+			off.append(code)
+		_use_source(SETS)
+		_refresh()
+
+
+	## All or None: every set box at once.
+	func _tick_all(on: bool) -> void:
+		for code in set_boxes:
+			(set_boxes[code] as CheckBox).set_pressed_no_signal(on)
+		var off: Array = []
+		if not on:
+			off.assign(set_boxes.keys())
+		memory.off = off
+		_use_source(SETS)
+		_refresh()
 
 
 	## The check line and Go, after any change to the source or the list.
@@ -1684,28 +1801,35 @@ class DemoSetup extends Control:
 					", ..." if unknown.size() > shown.size() else "."]
 			check_label.text = words
 			go_button.disabled = found.is_empty()
+		elif _ticked().is_empty():
+			check_label.text = NO_SETS
+			go_button.disabled = true
 		else:
-			var count := pool_for(id, "").size()
+			var count := pool_of_sets(_ticked()).size()
 			check_label.text = "%d cards." % count
 			go_button.disabled = count == 0
 
 
 	## The cards Go deals from.
 	func _pool() -> Array[String]:
-		return pool_for(_source_id(), list_box.text)
+		return pool_for(_source_id(), _ticked(), list_box.text)
 
 
-	## The set whose printings the show draws, or "" for each card's own.
-	func _printing() -> String:
-		var id := _source_id()
-		return id if id != "" and id != LIST else ""
+	## Which set the show draws each card from: the first ticked set that
+	## printed it; nothing, each card its own printing, for the list and for
+	## every set.
+	func _printings() -> Dictionary:
+		var codes := _ticked()
+		if _source_id() == LIST or codes.size() == set_boxes.size():
+			return {}
+		return printings_of_sets(codes)
 
 
 	## The show Go starts, not yet in the tree.
 	func _make_show(pool: Array[String]) -> DemoScreen:
 		var show_now := DemoScreen.new()
 		show_now.pool = pool
-		show_now.printing = _printing()
+		show_now.printings = _printings()
 		show_now.mode = mode_list.selected
 		show_now.faces = faces_list.selected
 		show_now.foil = foil_check.button_pressed
@@ -1867,8 +1991,9 @@ class DemoScreen extends Control:
 	const VELVET := [Color(0.17, 0.14, 0.22), Color(0.04, 0.03, 0.06)]
 
 	var pool: Array[String] = []
-	## The set whose printings to show, or "" for each card's own.
-	var printing := ""
+	## Card name -> the set it is shown from; a card not here is shown in
+	## its own printing.
+	var printings: Dictionary = {}
 	var mode: int = Mode.SOLITAIRE
 	var faces: int = Faces.FRONT
 	## Rare cards wear a passing glint of foil on the collector tables and
@@ -2109,6 +2234,7 @@ class DemoScreen extends Control:
 		# The widget's own switch, as the duel turns a card down; the
 		# instance's flag alone leaves the face showing.
 		mini.face_down = back
+		var printing := _printing_of(card_name)
 		if not back and printing != "":
 			var art := CardPrintings.texture(card_name, printing)
 			if art != null:
@@ -2124,11 +2250,16 @@ class DemoScreen extends Control:
 			preview.show_back()
 		else:
 			preview.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0),
-				printing)
+				_printing_of(card_name))
+
+
+	## The set [param card_name] is shown from, or "" for its own printing.
+	func _printing_of(card_name: String) -> String:
+		return String(printings.get(card_name, ""))
 
 
 	func _is_rare(card_name: String) -> bool:
-		return CardRegistry.rarity_of(card_name, printing) == "rare"
+		return CardRegistry.rarity_of(card_name, _printing_of(card_name)) == "rare"
 
 
 	## Nothing on the table takes the mouse: a click anywhere is "back".
@@ -2721,7 +2852,9 @@ class DemoScreen extends Control:
 	## The screen as it is now, at the window's resolution, into the game's
 	## folder beside the duel's screenshots.
 	func save_picture() -> void:
-		var shot := get_viewport().get_texture().get_image()
+		# A headless run draws no screen to take.
+		var shot: Image = null if DisplayServer.get_name() == "headless" \
+			else get_viewport().get_texture().get_image()
 		var path := "user://screenshot_%d.png" % Time.get_ticks_msec()
 		var err := ERR_INVALID_DATA
 		if shot != null and not shot.is_empty():
@@ -2751,18 +2884,18 @@ class DemoScreen extends Control:
 # ----------------------------------------------------- draw random cards --
 
 class DrawSetup extends DemoSetup:
-	## The `Draw random card(s)` window, opened from Options: which cards (a
-	## set, every set or a list, as the demo window has them), the Deck
-	## Builder's colour medallions, how many (one to seven), and Go. A list
-	## shorter than the number asked for is drawn whole.
+	## The `Draw random card(s)` window, opened from Options: which cards (the
+	## sets ticked, any mix of them, or a list, as the demo window has them),
+	## the Deck Builder's colour medallions, how many (one to seven), and Go.
+	## A list shorter than the number asked for is drawn whole.
 
 	const DRAW_TITLE := "Draw random card(s)"
-	const COLOURS := "Colours:"
-	const COLOUR_NOTE := "As in the Deck Builder: lands and colourless cards are always in."
+	const COLOURS := "Colors:"
+	const COLOUR_NOTE := "As in the Deck Builder: lands and colorless cards are always in."
 	const HOW_MANY := "How many:"
 
-	static var _kept := {"source": "", "list": "", "colours": [true, true, true, true, true],
-		"gold": true, "count": 1, "foil": true}
+	static var _kept := {"source": SETS, "off": [], "list": "",
+		"colours": [true, true, true, true, true], "gold": true, "count": 1, "foil": true}
 
 	var count_list: OptionButton
 	## The five colour medallions, then Gold.
@@ -2805,7 +2938,8 @@ class DrawSetup extends DemoSetup:
 
 
 	func _keys_text() -> String:
-		return keys_text("draw again", "draws again")
+		return keys_text("draw again", "draws again, X exports them",
+			[DrawScreen.EXPORT_KEY_LINE] as Array[String])
 
 
 	func _add_show_rows(box: VBoxContainer) -> void:
@@ -2882,7 +3016,7 @@ class DrawSetup extends DemoSetup:
 	func _make_show(pool: Array[String]) -> DemoScreen:
 		var draw := DrawScreen.new()
 		draw.pool = pool
-		draw.printing = _printing()
+		draw.printings = _printings()
 		draw.count = int(memory.count)
 		draw.foil = foil_check.button_pressed
 		return draw
@@ -2894,7 +3028,8 @@ class DrawScreen extends DemoScreen:
 	## flat as it grows, a different card on each turn, slowing until it
 	## lands face up in its place as the card drawn — one in the middle, or
 	## up to [constant MOST] in one row or two. The same keys as the demo
-	## screen; R draws again.
+	## screen; R draws again, and E (a pad's X, or the Export button in the
+	## corner) saves the cards drawn as a deck ([method open_export]).
 	##
 	## Big cards keep sharp letters: while the draw is up the viewport's
 	## text is cut at the cards' size ([method _sharpen]), as the full-screen
@@ -2919,17 +3054,245 @@ class DrawScreen extends DemoScreen:
 	## A landed card's light: how bright it flashes, then rests.
 	const GLOW_FLASH := 0.95
 	const GLOW_REST := 0.4
+	## The Export button, this far in from the bottom right corner, and its
+	## window's words.
+	const EXPORT := "Export"
+	const EXPORT_TIP := "Save the cards drawn as a deck (E)"
+	const EXPORT_EDGE := 16
+	const EXPORT_TITLE := "Export the drawn cards"
+	const EXPORT_NAME := "Random draw %s"
+	const EXPORT_WHERE := "Saved with your own decks: Load deck in the Deck Builder lists it."
+	const EXPORT_KEY_LINE := "E: export the drawn cards as a deck"
 
 	var count := 1
 	## The cards this draw lands, in their places' order.
 	var drawn: Array[String] = []
 	var _spinners: Array[Dictionary] = []
 
+	var export_button: Button
+	## The export window while it is up, and its title field, its line and
+	## its Save.
+	var _export_dialog: OriginalDialog
+	var _export_field: LineEdit
+	var _export_line: Label
+	var _export_save: Button
+	## The deck file the window has asked about replacing: Save again with
+	## the same title replaces it.
+	var _replace_path := ""
+	## A press the Export button took: its release is the button's too.
+	var _clicking := false
+
 	static var _glow_texture: GradientTexture2D
 
 
 	func _init() -> void:
 		mode = Mode.COLLECTOR_BIG
+
+
+	func _ready() -> void:
+		super()
+		export_button = GauntletOptions.fit(OriginalDialog.button(EXPORT, Vector2(96, 28)))
+		export_button.name = "DrawExport"
+		export_button.tooltip_text = EXPORT_TIP
+		# The keys are the show's: the button is for the pointer and a touch.
+		export_button.focus_mode = Control.FOCUS_NONE
+		export_button.z_index = 10
+		export_button.pressed.connect(open_export)
+		# Grown up and to the left from the corner, so it stays on the screen
+		# whatever size its letters make it.
+		export_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		export_button.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		add_child(export_button)
+		export_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT,
+			Control.PRESET_MODE_MINSIZE, EXPORT_EDGE)
+
+
+	# --------------------------------------------------------------- export --
+
+	## The title the export window offers: `Random draw` and the date,
+	## numbered past a title the player's decks already have.
+	static func export_title(today := "") -> String:
+		var base := EXPORT_NAME % (today if today != "" else Time.get_date_string_from_system())
+		var title := base
+		var n := 2
+		while DeckStore.is_shipped_name(title) or FileAccess.file_exists(DeckStore.path_for(title)):
+			title = "%s (%d)" % [base, n]
+			n += 1
+		return title
+
+
+	## The cards drawn now as a deck titled [param title], each in the
+	## printing it was drawn in.
+	func drawn_deck(title: String) -> DeckModel:
+		var deck := DeckModel.new()
+		deck.deck_name = title
+		for card_name in drawn:
+			deck.add(card_name)
+			var printing := _printing_of(card_name)
+			if printing != "":
+				deck.printings[card_name] = printing
+		return deck
+
+
+	## E, a pad's X or the Export button: a window to save the cards drawn
+	## now as a deck — the Deck Builder's own `.deck` file, written as its
+	## Save deck writes one ([method DeckStore.save]), with the player's own
+	## decks — under the title it offers ([method export_title]) or one
+	## typed over it. On a pad Save has the focus; otherwise the title,
+	## ready to type over.
+	func open_export(from_pad := false) -> void:
+		if drawn.is_empty() or is_instance_valid(_export_dialog):
+			return
+		_clicking = false
+		var dialog := OriginalDialog.create(EXPORT_TITLE, Vector2(460, 180))
+		dialog.name = "DrawExportWindow"
+		var box := dialog.body()
+		box.add_child(OriginalDialog.label("Title", 14))
+		_export_field = OriginalDialog.text_field()
+		_export_field.name = "DrawExportTitle"
+		_export_field.max_length = DeckModel.TITLE_MAX
+		_export_field.text = export_title()
+		_export_field.text_changed.connect(func(_text: String) -> void: _ask_again())
+		_export_field.text_submitted.connect(func(_text: String) -> void: _export_dialog_save())
+		box.add_child(_export_field)
+		_export_line = OriginalDialog.wrapped(EXPORT_WHERE, 13)
+		_export_line.name = "DrawExportLine"
+		box.add_child(_export_line)
+		_export_save = GauntletOptions.fit(dialog.add_button("Save"))
+		_export_save.pressed.connect(_export_dialog_save)
+		GauntletOptions.fit(dialog.add_button("Cancel")).pressed.connect(_close_export)
+		_export_dialog = dialog
+		_replace_path = ""
+		add_child(dialog)
+		dialog.fit_height()
+		if from_pad:
+			_export_save.grab_focus()
+		else:
+			_export_field.grab_focus()
+			_export_field.select_all()
+
+
+	## Save, from the export window. The title is checked as the Deck
+	## Builder checks one: none, a deck the game ships, a deck of the
+	## player's own already there (`@DECKEXISTS`; Save again replaces it).
+	## Then the deck is written and the window goes, the note saying so.
+	func _export_dialog_save() -> void:
+		if not is_instance_valid(_export_dialog):
+			return
+		var title := _export_field.text.strip_edges()
+		if title == "":
+			_tell(DeckModel.NAME_YOUR_DECK)
+			return
+		if DeckStore.is_shipped_name(title):
+			_tell(DeckStore.shipped_name_refusal(title))
+			return
+		var path := DeckStore.path_for(title)
+		if FileAccess.file_exists(path) and path != _replace_path:
+			_replace_path = path
+			_export_save.text = "OK"
+			_tell(DeckStore.DECK_EXISTS % path.get_file())
+			return
+		var deck := drawn_deck(title)
+		var refusal := DeckStore.save(deck)
+		if refusal != "":
+			_tell(refusal)
+			return
+		_close_export()
+		say(DeckStore.saved_message(deck))
+
+
+	## A new title: any question asked about the old one is withdrawn.
+	func _ask_again() -> void:
+		_replace_path = ""
+		_export_save.text = "Save"
+		_tell(EXPORT_WHERE)
+
+
+	func _tell(text: String) -> void:
+		_export_line.text = text
+		_export_dialog.fit_height()
+
+
+	func _close_export() -> void:
+		if is_instance_valid(_export_dialog):
+			_export_dialog.dismiss()
+		_export_dialog = null
+
+
+	## The show's keys, and E or a pad's X for the export. While the export
+	## window is up every key and click is the window's, Esc (a pad's B)
+	## closing it; a click on the Export button is the button's.
+	func _input(event: InputEvent) -> void:
+		if is_instance_valid(_export_dialog):
+			if not event.is_echo() and (event.is_action_pressed("ui_cancel")
+					or (event is InputEventKey and event.is_pressed()
+						and (event as InputEventKey).keycode == KEY_ESCAPE)):
+				get_viewport().set_input_as_handled()
+				_close_export()
+			return
+		if _for_the_button(event):
+			return
+		if _asks_export(event):
+			get_viewport().set_input_as_handled()
+			open_export(event is InputEventJoypadButton)
+			return
+		super(event)
+
+
+	## What the export window's controls leave stops here, as the show's own
+	## keys stop in [method _input]: nothing reaches the screens under it.
+	func _unhandled_input(_event: InputEvent) -> void:
+		if is_instance_valid(_export_dialog):
+			get_viewport().set_input_as_handled()
+
+
+	func _asks_export(event: InputEvent) -> bool:
+		if not is_visible_in_tree() or _leaving or not event.is_pressed() or event.is_echo():
+			return false
+		if Time.get_ticks_msec() - _opened_ms < SETTLE_MS:
+			return false
+		var key := event as InputEventKey
+		if key != null:
+			return key.keycode == KEY_E and not Controls.pressed(event, "duel_screenshot")
+		var pad := event as InputEventJoypadButton
+		return pad != null and pad.button_index == JOY_BUTTON_X
+
+
+	## Whether [param event] is a click or a touch the Export button takes:
+	## a press on it, and the release of that press wherever it comes, so the
+	## button is never left held down.
+	func _for_the_button(event: InputEvent) -> bool:
+		var mouse := event as InputEventMouseButton
+		var touch := event as InputEventScreenTouch
+		if mouse == null and touch == null:
+			return false
+		if not event.is_pressed() and _clicking:
+			if mouse != null:
+				_clicking = false
+			return true
+		if export_button == null or not export_button.is_visible_in_tree():
+			return false
+		var at: Vector2 = mouse.position if mouse != null else touch.position
+		if not export_button.get_global_rect().has_point(at):
+			return false
+		if event.is_pressed() and mouse != null:
+			_clicking = true
+		return true
+
+
+	## The picture is of the cards: the Export button steps out of it for
+	## the frame the picture is taken from.
+	func save_picture() -> void:
+		if export_button == null or not export_button.visible:
+			super()
+			return
+		export_button.visible = false
+		RenderingServer.frame_post_draw.connect(_picture_drawn, CONNECT_ONE_SHOT)
+
+
+	func _picture_drawn() -> void:
+		super.save_picture()
+		export_button.visible = true
 
 
 	## Where [param n] drawn cards land on [param view]: one row, or two

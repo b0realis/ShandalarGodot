@@ -1,8 +1,9 @@
 extends GutTest
-## The demo screen opened from Options: its window, the card-list check and
-## the four shows (solitaire's end, the mess table, the two collector
-## tables), with fronts, backs or both, and its keys. Then the draw of
-## random cards beside it: its window, its colours, and the spin.
+## The demo screen opened from Options: its window, its set boxes, the
+## card-list check and the four shows (solitaire's end, the mess table, the
+## two collector tables), with fronts, backs or both, and its keys. Then the
+## draw of random cards beside it: its window, its sets and colours, the
+## spin, and the drawn cards saved as a deck.
 
 const Options := preload("res://game/options_screen.gd")
 const POOL: Array[String] = ["Lightning Bolt", "Forest", "Serra Angel",
@@ -87,24 +88,43 @@ func test_a_line_of_names_splits_at_its_commas_but_a_comma_name_stays_whole() ->
 		[quote_name])
 
 
-func test_the_sources_are_every_set_each_set_and_the_list() -> void:
-	var sources := Options.DemoSetup.sources()
-	assert_eq(sources.front().id, "")
-	assert_eq(sources.front().label, Options.DemoSetup.ALL_SETS)
-	assert_eq(sources.back().id, Options.DemoSetup.LIST)
-	var labels: Array = sources.map(func(entry: Dictionary) -> String: return entry.label)
+func test_each_set_has_a_box_and_any_mix_of_them_deals() -> void:
+	var choices := Options.DemoSetup.set_choices()
+	var codes: Array = choices.map(func(entry: Dictionary) -> String: return entry.id)
+	var labels: Array = choices.map(func(entry: Dictionary) -> String: return entry.label)
 	assert_has(labels, "Unlimited")
-	for entry in sources.slice(1, sources.size() - 1):
+	for entry in choices:
 		assert_false(CardRegistry.names_in_set(entry.id).is_empty(), entry.label)
-	assert_eq(Options.DemoSetup.pool_for("2ed", "").size(),
+	for code in CardRegistry.active_set_order():
+		if not CardRegistry.names_in_set(code).is_empty():
+			assert_has(codes, code, "every set with cards has its box")
+	assert_eq(Options.DemoSetup.pool_of_sets(["2ed"]).size(),
 		CardRegistry.names_in_set("2ed").size())
-	assert_eq(Options.DemoSetup.pool_for("", "").size(), CardRegistry.size())
-	assert_eq(Options.DemoSetup.pool_for(Options.DemoSetup.LIST, "Forest\nNope"), ["Forest"] as Array[String])
+	var two := Options.DemoSetup.pool_of_sets(["leg", "drk"])
+	var both := {}
+	for card_name in CardRegistry.names_in_set("leg") + CardRegistry.names_in_set("drk"):
+		both[card_name] = true
+	assert_eq(two.size(), both.size(), "the two sets' cards, each once")
+	for card_name in two:
+		assert_true(both.has(card_name), card_name)
+	assert_eq(Options.DemoSetup.pool_of_sets(codes).size(), CardRegistry.size(),
+		"every box ticked: every card the game has")
+	assert_eq(Options.DemoSetup.pool_of_sets([]).size(), 0)
+	assert_eq(Options.DemoSetup.pool_for(Options.DemoSetup.SETS, ["leg", "drk"], "Forest"), two)
+	assert_eq(Options.DemoSetup.pool_for(Options.DemoSetup.LIST, ["2ed"], "Forest\nNope"),
+		["Forest"] as Array[String])
+	# Each card is shown from a ticked set that printed it.
+	var shown := Options.DemoSetup.printings_of_sets(["leg", "drk"])
+	assert_eq(shown.size(), two.size())
+	for card_name in two:
+		assert_has(["leg", "drk"], shown[card_name], card_name)
+		assert_true(CardRegistry.names_in_set(shown[card_name]).has(card_name), card_name)
 
 
 func test_options_has_the_button_and_the_window_runs_a_show_and_comes_back() -> void:
 	var saved: Dictionary = Options.DemoSetup._last.duplicate()
-	Options.DemoSetup._last = {"source": "", "list": "", "mode": Options.DemoScreen.Mode.COLLECTOR_SMALL,
+	Options.DemoSetup._last = {"source": Options.DemoSetup.SETS, "off": [], "list": "",
+		"mode": Options.DemoScreen.Mode.COLLECTOR_SMALL,
 		"faces": Options.DemoScreen.Faces.FRONT, "foil": true}
 	var options_screen: Control = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(options_screen)
@@ -118,10 +138,26 @@ func test_options_has_the_button_and_the_window_runs_a_show_and_comes_back() -> 
 			window = child
 	assert_not_null(window, "the window opened")
 	assert_string_contains(window.find_child("DemoKeys", true, false).text, "R: new cards")
+	assert_false(window.find_child("DemoKeys", true, false).text.contains("E:"),
+		"the demo has nothing to save")
+
+	# The same set boxes as the draw window, every one ticked to begin with.
+	assert_eq(window.set_boxes.size(), Options.DemoSetup.set_choices().size())
+	assert_true(window.sets_line.button_pressed)
+	assert_string_contains(window.check_label.text, "%d cards." % CardRegistry.size())
+	window.find_child("DemoNone", true, false).pressed.emit()
+	assert_true(window.go_button.disabled, "no set ticked")
+	window.set_boxes["2ed"].button_pressed = true
+	assert_string_contains(window.check_label.text,
+		"%d cards." % CardRegistry.names_in_set("2ed").size())
+	assert_eq(Options.DemoSetup._last.off.size(), window.set_boxes.size() - 1)
+	window.find_child("DemoAll", true, false).pressed.emit()
+	assert_eq(Options.DemoSetup._last.off, [])
 
 	# The list: empty means no Go; typing names picks the list as the source.
-	window._select_source(Options.DemoSetup.LIST)
-	window._refresh()
+	window.list_line.button_pressed = true
+	assert_eq(String(Options.DemoSetup._last.source), Options.DemoSetup.LIST)
+	assert_false(window.sets_line.button_pressed, "one source or the other")
 	assert_true(window.go_button.disabled)
 	window.list_box.text = "Forest\nCounterspell\nNot A Card"
 	window.list_box.text_changed.emit()
@@ -497,8 +533,8 @@ func _spin(draw: Options.DrawScreen, seconds: float, each: Callable = Callable()
 
 func test_options_has_the_draw_button_and_its_window_draws_and_comes_back() -> void:
 	var saved: Dictionary = Options.DrawSetup._kept.duplicate(true)
-	Options.DrawSetup._kept = {"source": "", "list": "", "colours": [true, true, true, true, true],
-		"gold": true, "count": 1, "foil": true}
+	Options.DrawSetup._kept = {"source": Options.DemoSetup.SETS, "off": [], "list": "",
+		"colours": [true, true, true, true, true], "gold": true, "count": 1, "foil": true}
 	var options_screen: Control = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(options_screen)
 	var button := options_screen.find_child("DrawCards", true, false) as Button
@@ -511,6 +547,9 @@ func test_options_has_the_draw_button_and_its_window_draws_and_comes_back() -> v
 			window = child
 	assert_not_null(window, "the window opened")
 	assert_string_contains(window.find_child("DrawKeys", true, false).text, "R: draw again")
+	assert_string_contains(window.find_child("DrawKeys", true, false).text,
+		"E: export the drawn cards as a deck")
+	assert_string_contains(window.find_child("DrawKeys", true, false).text, "X exports them")
 	assert_eq(window.colour_buttons.size(), 6, "five colours and Gold")
 	for medallion in window.colour_buttons:
 		assert_true(medallion.button_pressed, "%s starts on" % medallion.name)
@@ -693,3 +732,273 @@ func test_big_cards_cut_their_letters_at_their_size_and_no_new_deal_follows() ->
 	draw.leave()
 	await get_tree().process_frame
 	assert_eq(get_viewport().oversampling_override, 0.0)
+
+
+# ------------------------------------------------- the draw window's sets --
+
+func _open_draw_window(options_screen: Control) -> Options.DrawSetup:
+	(options_screen.find_child("DrawCards", true, false) as Button).pressed.emit()
+	for child in options_screen.get_children():
+		if child is Options.DrawSetup and not child.is_queued_for_deletion():
+			return child
+	return null
+
+
+func test_the_draw_window_ticks_any_mix_of_sets_and_remembers_them() -> void:
+	var saved: Dictionary = Options.DrawSetup._kept.duplicate(true)
+	Options.DrawSetup._kept = {"source": Options.DemoSetup.SETS, "off": [], "list": "",
+		"colours": [true, true, true, true, true], "gold": true, "count": 1, "foil": true}
+	var options_screen: Control = load("res://game/options_screen.tscn").instantiate()
+	add_child_autofree(options_screen)
+	var window := _open_draw_window(options_screen)
+	var choices := Options.DemoSetup.set_choices()
+	assert_eq(window.set_boxes.size(), choices.size(), "a box for every set")
+	for entry in choices:
+		var box: CheckBox = window.set_boxes[entry.id]
+		assert_eq(box.text, entry.label)
+		assert_true(box.button_pressed, "%s starts ticked" % entry.label)
+	assert_true(window.sets_line.button_pressed, "dealing from the sets")
+	assert_string_contains(window.check_label.text, "%d cards." % CardRegistry.size())
+	# The game's own tick box, light on the dark stone, on every one of them.
+	for tick in [window.set_boxes["leg"], window.sets_line, window.list_line, window.foil_check]:
+		for state in ["unchecked", "radio_unchecked"]:
+			assert_eq((tick as CheckBox).get_theme_icon(state), UiChrome.check_icon(false),
+				"%s %s" % [tick.name, state])
+
+	# None: nothing to draw.
+	window.find_child("DrawNone", true, false).pressed.emit()
+	for code in window.set_boxes:
+		assert_false(window.set_boxes[code].button_pressed, code)
+	assert_true(window.go_button.disabled, "no set, no draw")
+	assert_eq(window.check_label.text, Options.DemoSetup.NO_SETS)
+	# Two sets ticked by hand, and the colours on top of them.
+	window.set_boxes["leg"].button_pressed = true
+	window.set_boxes["drk"].button_pressed = true
+	var both := Options.DemoSetup.pool_of_sets(["leg", "drk"])
+	assert_string_contains(window.check_label.text, "%d cards." % both.size())
+	window.colour_buttons[1].button_pressed = false
+	var not_blue := Options.DrawSetup.colour_pool(both, [true, false, true, true, true], true)
+	assert_lt(not_blue.size(), both.size())
+	assert_string_contains(window.check_label.text, "%d in the chosen colours" % not_blue.size())
+	assert_false(window.go_button.disabled)
+
+	# A typed list takes over; a set ticked again gives the sets back.
+	window.list_box.text = "Forest"
+	window.list_box.text_changed.emit()
+	assert_true(window.list_line.button_pressed, "typing a list deals from it")
+	assert_eq(String(Options.DrawSetup._kept.source), Options.DemoSetup.LIST)
+	window.set_boxes["drk"].button_pressed = false
+	window.set_boxes["drk"].button_pressed = true
+	assert_true(window.sets_line.button_pressed, "a box touched: the sets again")
+	assert_eq(String(Options.DrawSetup._kept.source), Options.DemoSetup.SETS)
+
+	window.count_list.select(6)
+	window.count_list.item_selected.emit(6)
+	window.start()
+	await get_tree().process_frame
+	var draw := window.demo as Options.DrawScreen
+	assert_eq(draw.pool.size(), not_blue.size(), "the two sets, less blue")
+	assert_eq(draw.drawn.size(), 7)
+	for card_name in draw.drawn:
+		assert_has(not_blue, card_name)
+		assert_has(["leg", "drk"], draw._printing_of(card_name), "shown from a ticked set")
+	draw.leave()
+	await get_tree().process_frame
+	window.close()
+	await get_tree().process_frame
+
+	# Opened again: as it was left.
+	window = _open_draw_window(options_screen)
+	for code in window.set_boxes:
+		assert_eq(window.set_boxes[code].button_pressed, code in ["leg", "drk"], code)
+	assert_true(window.sets_line.button_pressed)
+	assert_eq(window.list_box.text, "Forest")
+	# All: every set again, each card in its own printing.
+	window.find_child("DrawAll", true, false).pressed.emit()
+	for code in window.set_boxes:
+		assert_true(window.set_boxes[code].button_pressed, code)
+	assert_eq(Options.DrawSetup._kept.off, [])
+	assert_eq(window._printings(), {})
+	window.close()
+	await get_tree().process_frame
+	Options.DrawSetup._kept = saved
+
+
+# ------------------------------------------------ the drawn cards, saved --
+
+func _gone(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_e_saves_the_drawn_cards_as_a_deck_with_the_players_own() -> void:
+	var draw := _draw(3)
+	assert_not_null(draw.export_button, "the Export button")
+	assert_eq(draw.export_button.text, "Export")
+	draw._input(_key(KEY_E))
+	var dialog := draw._export_dialog
+	assert_not_null(dialog, "E opens the export")
+	assert_eq(draw._export_field.text, Options.DrawScreen.export_title())
+	assert_true(draw._export_field.text.begins_with(
+		"Random draw " + Time.get_date_string_from_system()), draw._export_field.text)
+	assert_true(draw._export_field.has_focus(), "the title, ready to type over")
+	var title := "Draw Export Test"
+	var path := DeckStore.path_for(title)
+	_gone(path)
+	draw._export_field.text = title
+	draw._export_dialog_save()
+	assert_true(FileAccess.file_exists(path), "written")
+	assert_true(path.begins_with(DeckStore.USER_DIR + "/"), "with the player's own decks")
+	assert_has(DeckStore.all_deck_paths(), path, "Load deck lists it")
+	var list := DeckList.load_file(path)
+	assert_eq(list.errors, [] as Array[String])
+	assert_eq(list.deck_name, title)
+	var cards := list.cards.duplicate()
+	cards.sort()
+	var drawn := draw.drawn.duplicate()
+	drawn.sort()
+	assert_eq(cards, drawn, "the cards drawn, one of each")
+	assert_eq(draw._note.text, DeckStore.SAVED % path.get_file())
+	await get_tree().process_frame
+	assert_false(is_instance_valid(dialog), "the window goes")
+	assert_null(draw._export_dialog)
+	_gone(path)
+
+
+func test_the_cards_keep_the_printing_they_were_drawn_in() -> void:
+	var dark := CardRegistry.names_in_set("drk").slice(0, 3)
+	var draw := _draw(3, dark)
+	draw.printings = Options.DemoSetup.printings_of_sets(["drk"])
+	draw.open_export()
+	var title := "Draw Export Printings"
+	var path := DeckStore.path_for(title)
+	draw._export_field.text = title
+	draw._export_dialog_save()
+	var list := DeckList.load_file(path)
+	assert_eq(list.cards.size(), 3)
+	for card_name in dark:
+		assert_eq(String(list.printings.get(card_name, "")), "drk", card_name)
+	_gone(path)
+
+
+func test_an_export_over_a_deck_asks_first_and_a_shipped_name_is_refused() -> void:
+	var draw := _draw(2)
+	var title := "Draw Export Twice"
+	var path := DeckStore.path_for(title)
+	var old := DeckModel.new()
+	old.deck_name = title
+	old.add("Forest")
+	assert_eq(DeckStore.save(old), "")
+	draw.open_export()
+	draw._export_field.text = title
+	draw._export_dialog_save()
+	assert_eq(draw._export_line.text, DeckStore.DECK_EXISTS % path.get_file())
+	assert_eq(DeckList.load_file(path).cards.size(), 1, "not yet")
+	draw._export_dialog_save()
+	assert_eq(DeckList.load_file(path).cards.size(), 2, "the second press replaces it")
+	_gone(path)
+
+	# Another title after the question is a new question.
+	assert_eq(DeckStore.save(old), "")
+	draw.open_export()
+	draw._export_field.text = title
+	draw._export_dialog_save()
+	draw._export_field.text = "Big Green"
+	draw._export_field.text_changed.emit("Big Green")
+	draw._export_dialog_save()
+	assert_eq(draw._export_line.text, DeckStore.shipped_name_refusal("Big Green"))
+	assert_false(FileAccess.file_exists(DeckStore.path_for("Big Green")), "never written")
+	assert_not_null(draw._export_dialog, "the window stays for another name")
+	draw._export_field.text = title
+	draw._export_field.text_changed.emit(title)
+	draw._export_dialog_save()
+	assert_eq(DeckList.load_file(path).cards.size(), 1, "asked again, not replaced")
+	draw._close_export()
+	_gone(path)
+
+
+func test_the_default_title_is_the_date_and_skips_a_title_taken() -> void:
+	assert_eq(Options.DrawScreen.export_title("2026-01-02"), "Random draw 2026-01-02")
+	var taken := DeckModel.new()
+	taken.deck_name = "Random draw 2026-01-02"
+	taken.add("Forest")
+	assert_eq(DeckStore.save(taken), "")
+	assert_eq(Options.DrawScreen.export_title("2026-01-02"), "Random draw 2026-01-02 (2)")
+	_gone(DeckStore.path_for(taken.deck_name))
+
+
+func test_while_the_export_is_up_the_keys_are_its_own_and_esc_closes_it() -> void:
+	var draw := _draw(2)
+	watch_signals(draw)
+	draw.open_export()
+	var first: Dictionary = draw._spinners[0]
+	draw._input(_key(KEY_R))
+	draw._input(_key(KEY_SPACE))
+	assert_eq(draw._spinners[0], first, "R is a letter in the title, not a new draw")
+	assert_false(draw.paused)
+	draw._input(_key(KEY_ESCAPE))
+	assert_signal_not_emitted(draw, "left", "Esc closes the window, not the draw")
+	assert_null(draw._export_dialog)
+	await get_tree().process_frame
+	draw._input(_key(KEY_ESCAPE))
+	assert_signal_emitted(draw, "left")
+
+
+func test_a_pad_exports_with_x_and_save_has_the_focus() -> void:
+	var draw := _draw(1)
+	var x := InputEventJoypadButton.new()
+	x.button_index = JOY_BUTTON_X
+	x.pressed = true
+	var first: Dictionary = draw._spinners[0]
+	draw._input(x)
+	assert_not_null(draw._export_dialog, "X exports")
+	assert_eq(draw._spinners[0], first, "and does not draw again")
+	assert_true(draw._export_save.has_focus(), "Save is one press away")
+	draw._close_export()
+
+
+func test_a_click_on_export_is_the_buttons_and_a_click_elsewhere_leaves() -> void:
+	var draw := _draw(1)
+	watch_signals(draw)
+	var view := draw.get_viewport_rect().size
+	var rect := draw.export_button.get_global_rect()
+	assert_true(Rect2(Vector2.ZERO, view).encloses(rect), "on the screen: %s in %s" % [rect, view])
+	assert_almost_eq(rect.end, view - Vector2.ONE * Options.DrawScreen.EXPORT_EDGE, Vector2.ONE,
+		"in the bottom right corner")
+	for n in range(1, Options.DrawScreen.MOST + 1):
+		var where := Options.DrawScreen.layout(view, n)
+		var card: Vector2 = CardPreview.SIZE * float(where.scale)
+		for spot in where.spots:
+			assert_false(rect.intersects(Rect2(spot - card * 0.5, card)),
+				"%d cards: none under the button" % n)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = rect.get_center()
+	draw._input(click)
+	assert_true(draw._clicking, "the press is the button's")
+	var release := click.duplicate() as InputEventMouseButton
+	release.pressed = false
+	release.position = Vector2(5, 5)
+	draw._input(release)
+	assert_false(draw._clicking, "and so is its release, wherever it is")
+	assert_signal_not_emitted(draw, "left")
+	draw.export_button.pressed.emit()
+	assert_not_null(draw._export_dialog, "Export opens the window")
+	draw._close_export()
+	click.position = Vector2(5, 5)
+	draw._input(click)
+	assert_signal_emitted(draw, "left", "anywhere else: back")
+
+
+func test_a_picture_of_the_draw_leaves_the_button_out() -> void:
+	var draw := _draw(1)
+	draw.save_picture()
+	assert_false(draw.export_button.visible, "not in the picture")
+	assert_true(RenderingServer.frame_post_draw.is_connected(draw._picture_drawn),
+		"taken from the next frame drawn")
+	# The frame drawn, by hand: a headless run never draws one.
+	RenderingServer.frame_post_draw.disconnect(draw._picture_drawn)
+	draw._picture_drawn()
+	assert_true(draw.export_button.visible, "back once it is taken")
+	assert_true(draw._note.visible, "and the note says what became of the picture")
