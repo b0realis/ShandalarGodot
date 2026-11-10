@@ -924,7 +924,8 @@ the shelves, the pack share in every random draw);
   dark colour); the duel's `_set_target_cursor` wears 1997's 61-px frame in
   its own colours; `tests/ui/test_options_display.gd`,
   `test_cursor_color_2026_11_10.gd` (with the Booster Draft's gold building
-  time, `DraftSetup._emphasize_time`).
+  time, `DraftSetup._emphasize_time`), `test_cursor_crosshair_2026_11_10.gd`
+  (the crosshair's 61 px; needs the imported 1997 skin).
   GOING FOR A CREATURE (0.60.18): `WorldView.creature_under` (the creature
   drawn under a point), `WorldCursors.Kind.CREATURE` (the sword),
   `WorldScreen.engage` / `_follow_chase` / `_chase` (a click on it chases

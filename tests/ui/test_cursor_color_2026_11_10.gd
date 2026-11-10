@@ -51,25 +51,6 @@ func test_an_unknown_stored_color_is_gold() -> void:
 	assert_eq(Settings.cursor_color_name(), "Gold")
 
 
-func test_the_duel_crosshair_is_normal_size_and_keeps_its_colors() -> void:
-	if GameSkin.texture("target_cursor") == null:
-		pending("the crosshair is the imported 1997 skin's Target.pic")
-		return
-	Settings.set_value(Settings.CURSOR_COLOR, "Electric blue")
-	var duel: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
-	duel.config = DuelConfig.hotseat_default()
-	add_child_autofree(duel)
-	await get_tree().process_frame
-	duel._set_target_cursor(true)
-	var frame: Image = duel._target_cursor.get_image()
-	assert_eq(frame.get_size(), Vector2i(61, 61), "1997's 61 pixels, not twice them")
-	var sheet := GameSkin.texture("target_cursor")
-	var cell := Rect2i(0, 0, sheet.get_height(), sheet.get_height())
-	var original := GameSkin.original(sheet).get_region(cell)
-	assert_eq(frame.get_data(), original.get_data(), "the 1997 frame's own colors")
-	duel._set_target_cursor(false)
-
-
 func test_the_draft_time_is_gold() -> void:
 	var setup: DraftSetup = DraftSetup.new()
 	add_child_autofree(setup)
