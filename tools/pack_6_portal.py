@@ -37,10 +37,11 @@ CAPTION = ('Shandalar · gameplay pack 6', 'Portal & Second Age — local constr
 SETS = {'por': (215, 200), 'p02': (165, 155)}
 MAX_ENTRIES = 1356
 HINT = (
-    'python3 tools/pack_6_portal.py fetch      # refresh the set data',
     'python3 tools/pack_6_portal.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_6_portal.py            # build the local ZIP',
     'python3 tools/pack_6_portal.py verify     # validate the ZIP',
+    'python3 tools/pack_6_portal.py fetch      # developer step: may make',
+    '                                          # the pack incompatible',
 )
 
 def read_json(path):

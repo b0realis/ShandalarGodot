@@ -30,10 +30,11 @@ TOOL = 'pack_3_ice_age.py'
 WORDMARK = ('┌─┐┌─┐┌─┐┬┌─  ┌─┐', '├─┘├─┤│  ├┴┐   ─┤', '┴  ┴ ┴└─┘┴ ┴  └─┘')
 CAPTION = ('Shandalar · gameplay pack 3', 'Ice Age — local construction')
 HINT = (
-    'python3 tools/pack_3_ice_age.py fetch      # refresh the set data',
     'python3 tools/pack_3_ice_age.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_3_ice_age.py            # build the local ZIP',
     'python3 tools/pack_3_ice_age.py verify     # validate the ZIP',
+    'python3 tools/pack_3_ice_age.py fetch      # developer step: may make',
+    '                                           # the pack incompatible',
 )
 
 def read_json(path):

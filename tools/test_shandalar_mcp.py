@@ -1040,7 +1040,10 @@ class FakeDoorTest(unittest.TestCase):
         bad = self.client.call("write_deck", {"file": "bad.deck", "cards": ["Lightning Bolt"]})
         self.assertTrue(bad["isError"])
         self.assertEqual(bad["structuredContent"]["error"]["flag"], "cards")
-        unchecked = self.client.payload("write_deck", {"file": "sub/raw.deck", "cards": "2 Island\n1 Plains", "check": False})
+        # In the workspace, spelled from the checkout (2026-11-10: `sub/raw.deck`
+        # was the checkout's own sub/ — a write outside the workspace, refused now).
+        unchecked = self.client.payload("write_deck", {"file": "ws/sub/raw.deck", "cards": "2 Island\n1 Plains", "check": False})
+        self.assertTrue((self.workspace / "sub" / "raw.deck").is_file())
         self.assertNotIn("check", unchecked)
         self.assertEqual(unchecked["cards"], 3)
         read = self.client.payload("read_deck", {"deck": "tournament/burn.deck"})
@@ -1117,6 +1120,127 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(self.client.payload("read_deck", {"deck": "list.txt"})["cards"], 24)
         self.assertEqual(self.client.payload("read_deck", {"deck": str(self.home / "decks/tournament/burn.deck")})["name"],
                          "Burn")
+
+    def test_a_raw_switch_is_fenced_like_a_typed_deck(self):
+        """The gap review of 2026-11-10 (r5-1): the typed deck arguments were
+        fenced, the raw route was not — `lab`'s `argv`, the `extra_args` of
+        `lab` and `autodeck` (the last `--deck-a` wins over the typed one),
+        a comma list in `deck_pool`, a `user://` path (the player's profile),
+        the Lab's hidden `--worker` (reads and writes any file), a `run.json`
+        whose `next.argv` `lab_next` plays. Each handed an outside file to
+        the door, whose refusal quotes its lines."""
+        with tempfile.TemporaryDirectory(prefix="shandalar-mcp-outside-") as outside:
+            secret = Path(outside) / "secret.deck"
+            secret.write_text("4 OWNER-SECRET-LINE\n", encoding="utf-8")
+            listed = Path(outside) / "secret.txt"
+            listed.write_text(str(secret) + "\n", encoding="utf-8")
+            planted = self.workspace / "planted"
+            planted.mkdir(parents=True, exist_ok=True)
+            (planted / "run.json").write_text(json.dumps({"tool": "deck_lab", "exit": 0, "next": {
+                "why": "planted", "argv": ["--deck-a", str(secret), "--deck-b", "random"]}}), encoding="utf-8")
+            before = len(self.calls())
+            cases = [("lab", {"argv": ["--deck-a", str(secret), "--deck-b", "random", "--dry-run"]}),
+                     ("lab", {"argv": ["--deck-a=" + str(secret), "--deck-b", "random", "--dry-run"]}),
+                     ("lab", {"deck_a": "random", "deck_b": "random", "dry_run": True,
+                              "extra_args": ["--deck-a", str(secret)]}),
+                     ("lab", {"deck_a": "random", "deck_b": "random", "dry_run": True,
+                              "deck_pool": "decks/tournament," + str(secret)}),
+                     ("lab", {"deck_a": "user://decks/secret.deck", "deck_b": "random", "dry_run": True}),
+                     ("lab", {"argv": ["--deck-a", "random", "--deck-b", "user://secret.deck"]}),
+                     ("autodeck", {"out": "ws/ad", "dry_run": True, "extra_args": ["--keep", str(secret)]}),
+                     ("autodeck", {"out": "ws/ad", "dry_run": True,
+                                   "extra_args": ["--source", "list", "--list", str(secret)]}),
+                     ("lab_next", {"out": "ws/planted"})]
+            for flag in ("--deck-b", "--control-deck-a", "--control-deck-b"):
+                cases.append(("lab", {"argv": ["--deck-a", "random", flag, str(secret), "--dry-run"]}))
+            for flag in ("--gauntlet", "--matrix", "--field", "--deck-pool"):
+                cases.append(("lab", {"argv": ["--deck-a", "random", flag, str(listed), "--dry-run"]}))
+                cases.append(("lab", {"argv": ["--deck-a", "random", flag, "decks/tournament," + str(secret),
+                                               "--dry-run"]}))
+            for tool, args in cases:
+                with self.subTest(tool=tool, args=args):
+                    result = self.client.call(tool, args)
+                    self.assertTrue(result["isError"], result)
+                    self.assertEqual(result["structuredContent"]["error"]["kind"], "path", result)
+                    self.assertNotIn("OWNER-SECRET-LINE", json.dumps(result))
+            worker = self.client.call("lab", {"argv": ["--worker", str(listed), str(self.home / "stolen.json"),
+                                                       str(self.home / "beat")]})
+            self.assertTrue(worker["isError"], worker)
+            self.assertEqual(worker["structuredContent"]["error"]["flag"], "--worker")
+            self.assertEqual(len(self.calls()), before, "the door was never handed the file")
+        # The door's own spellings still pass the raw route, and a deck in
+        # the workspace is named by its file name there too.
+        self.workspace.mkdir(exist_ok=True)
+        (self.workspace / "raw.deck").write_text("4 Lightning Bolt\n20 Mountain\n", encoding="utf-8")
+        plan = self.client.payload("lab", {"argv": ["--deck-a", "raw.deck", "--deck-b=random",
+                                                    "--gauntlet", "decks/tournament", "--dry-run"]})
+        argv = plan["argv"]
+        self.assertEqual(argv[:6], ["--deck-a", str((self.workspace / "raw.deck").resolve()), "--deck-b", "random",
+                                    "--gauntlet", "decks/tournament"])
+
+    def test_a_tool_writes_only_into_the_workspace_and_the_labs_ledger(self):
+        """The owner's ruling of 2026-11-10 (the gap review, R5 Q1): the
+        server writes into its workspace and the Deck Lab's default ratings
+        ledger (`decks/ratings.txt`), and nowhere else — before, any path
+        under the checkout passed (`convert_deck` onto Shandalar.pck,
+        `--elo-file AGENTS.md`). A bare name is put in the workspace."""
+        (self.home / "decks" / "old.dck").write_text("MicroProse bytes\n", encoding="utf-8")
+        contract = (self.home / "AGENTS.md").read_text(encoding="utf-8")
+        before = len(self.calls())
+        for tool, args in (("write_deck", {"file": "decks/planted.deck", "cards": ["1 Island"], "check": False}),
+                           ("write_deck", {"file": str(self.home / "planted.deck"), "cards": ["1 Island"],
+                                           "check": False}),
+                           ("convert_deck", {"input": "decks/old.dck", "output": str(self.home / "AGENTS.md")}),
+                           ("convert_deck", {"input": "decks/old.dck", "output": str(self.home / "Shandalar.pck")}),
+                           ("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "dry_run": True,
+                                    "extra_args": ["--elo-file", str(self.home / "AGENTS.md")]}),
+                           ("lab", {"argv": ["--deck-a", "a.deck", "--deck-b", "b.deck", "--elo-file=tools/elo.txt"]}),
+                           ("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "out": "DeckLab/results/mine"}),
+                           ("lab", {"argv": ["--deck-a", "a.deck", "--out", str(self.home / "runs")]}),
+                           ("autodeck", {"out": "decks/field"}),
+                           ("lab_resume", {"out": "DeckLab/results/old"}),
+                           ("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "log": "tools/duel.log"}),
+                           ("referee_join", {"table": "T", "deck": "a.deck", "log": str(self.home / "join.log")}),
+                           ("referee_host", {"table": "T", "deck": "a.deck", "log": "decks/host.log"})):
+            with self.subTest(tool=tool, args=args):
+                result = self.client.call(tool, args)
+                self.assertTrue(result["isError"], result)
+                error = result["structuredContent"]["error"]
+                self.assertEqual(error["kind"], "path", error)
+                self.assertIn(str(self.workspace), error["message"])
+        self.assertEqual(len(self.calls()), before, "the door was never asked to write there")
+        self.assertEqual((self.home / "AGENTS.md").read_text(encoding="utf-8"), contract)
+        for left in ("decks/planted.deck", "planted.deck", "Shandalar.pck", "tools/elo.txt", "decks/field",
+                     "DeckLab/results", "runs", "tools/duel.log", "join.log", "decks/host.log"):
+            self.assertFalse((self.home / left).exists(), left)
+        # The Lab's own ledger, by its relative or its absolute name, and a
+        # ledger in the workspace pass; so does a rated run (no --elo-file).
+        ledger = str((self.home / "decks" / "ratings.txt").resolve())
+        for named in ("decks/ratings.txt", ledger, "ws/elo.txt"):
+            with self.subTest(ledger=named):
+                plan = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "dry_run": True,
+                                                   "extra_args": ["--elo-file", named]})
+                self.assertEqual(Path(plan["argv"][plan["argv"].index("--elo-file") + 1]),
+                                 (self.home / named).resolve())
+        # A bare name is put in the workspace — the checkout's own file of
+        # that name is never the one written.
+        bare = self.client.payload("autodeck", {"out": "bare-field", "dry_run": True})
+        self.assertEqual(bare["argv"][:2], ["--out", str((self.workspace / "bare-field").resolve())])
+        converted = self.client.payload("convert_deck", {"input": "decks/old.dck", "output": "AGENTS.md"})
+        self.assertEqual(converted["output"], "ws/AGENTS.md")
+        self.assertEqual((self.home / "AGENTS.md").read_text(encoding="utf-8"), contract)
+        # A next line that names no folder (the AutoDeck's) is given one in
+        # the workspace, as `lab` gives one: it used to go to the Lab's own
+        # default under DeckLab/results/.
+        finished = self.workspace / "finished"
+        finished.mkdir(parents=True, exist_ok=True)
+        (finished / "run.json").write_text(json.dumps({"tool": "autodeck", "exit": 0, "next": {
+            "why": "the field into the Lab", "argv": ["--field", "ws/finished", "--games", "9", "--no-elo"]}}),
+            encoding="utf-8")
+        played = self.client.payload("lab_next", {"out": "ws/finished"})
+        folder = Path(played["argv"][played["argv"].index("--out") + 1])
+        self.assertEqual(folder.parent, (self.workspace / "runs").resolve())
+        self.assertFalse((self.home / "DeckLab").exists())
 
     def test_convert_deck(self):
         (self.home / "old.dck").write_text("bytes", encoding="utf-8")
@@ -1470,7 +1594,8 @@ class FakeDoorTest(unittest.TestCase):
         game = opened["game"]
         self.assertEqual(opened["hello"]["table"], {"host": "Someone", "name": "Kitchen"})
         self.assertEqual(opened["decision"]["n"], 0)
-        log = self.home / "kitchen.log"
+        # A bare name is a file in the workspace (2026-11-10: it was the checkout's).
+        log = self.workspace.resolve() / "kitchen.log"
         self.assertEqual(opened["hello"]["log"], str(log))
         self.assertIn(["referee", "--table", "Kitchen", "--deck", "a.deck", "--log", str(log)], self.calls())
         stopped = self.client.payload("referee_stop", {"game": game})
@@ -1519,7 +1644,8 @@ class FakeDoorTest(unittest.TestCase):
         opened = self.client.payload("referee_host", {"table": "Porch", "deck": "a.deck", "keep": False, "log": "porch.log"})
         self.assertEqual(opened["table"]["access"], "open")
         self.assertIn("listed in every Game Browser", opened["note"])
-        self.assertIn(["referee", "--host", "Porch", "--deck", "a.deck", "--log", str(self.home / "porch.log")], self.calls())
+        self.assertIn(["referee", "--host", "Porch", "--deck", "a.deck", "--log",
+                       str(self.workspace.resolve() / "porch.log")], self.calls())
         self.assertNotIn("kept", self.client.payload("referee_stop", {"game": opened["game"]}))
         bad = self.client.call("referee_host", {"table": "Porch", "deck": "a.deck", "access": "secret"})
         self.assertTrue(bad["isError"])

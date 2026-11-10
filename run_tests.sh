@@ -533,10 +533,23 @@ if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
 	# a TERM left Godot writing the test profile for up to SUITE_TIMEOUT
 	# under the next run. So the suite runs in the background (its `$!` IS
 	# timeout, which passes a TERM on to Godot), tee reads a FIFO, and an
-	# INT or a TERM is trapped, passed on, and waited for.
+	# INT or a TERM is trapped, passed on, and waited for. The traps go in
+	# BEFORE the first `&` (gap review 2026-11-10): a Ctrl-C between a fork
+	# and its trap killed the shell and left Godot running.
 	fifo="$log.fifo"
 	mkfifo "$fifo"
 	trap 'rm -f "$log" "$fifo"' EXIT
+	stop_suite() {
+		local pid
+		for pid in $(jobs -pr); do
+			[ "$pid" = "${tee_pid:-}" ] || kill -TERM "$pid" 2>/dev/null
+		done
+		# No suite yet: no writer ever opens the FIFO, so tee would wait on.
+		[ -n "${suite_pid:-}" ] || kill -TERM "${tee_pid:-}" 2>/dev/null
+		wait
+	}
+	trap 'stop_suite; exit 130' INT
+	trap 'stop_suite; exit 143' TERM
 	started=$SECONDS
 	set +e
 	tee "$log" <"$fifo" &
@@ -548,8 +561,6 @@ if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
 		$selection -gjunit_xml_file="$SHANDALAR_TEST_DATA_HOME/gut-junit.xml" \
 		-gexit "$@" </dev/null >"$fifo" 2>&1 &
 	suite_pid=$!
-	trap 'kill -TERM "$suite_pid" 2>/dev/null; wait; exit 130' INT
-	trap 'kill -TERM "$suite_pid" 2>/dev/null; wait; exit 143' TERM
 	wait "$suite_pid"; status=$?
 	wait "$tee_pid"
 	trap - INT TERM

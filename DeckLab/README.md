@@ -2196,9 +2196,11 @@ lists it and takes it up; since 0.50.6 `referee_host` hosts the table
 itself and answers with how a person finds it — the name their Game
 Browser lists, or the invitation to paste — then `referee_wait` reads
 on until they sit down), the deck file written from rows and checked by the engine
-as it is written, and the path rule (whatever a tool writes lies under
-the checkout or the workspace, `workspace/` beside the door by
-default — and a deck in the workspace is named to every tool by its
+as it is written, and the path rule (whatever a tool writes lies in
+the workspace, `workspace/` beside the door by default, a bare name put
+there, `--elo-file` also allowed the Lab's `decks/ratings.txt`; raw deck
+switches are fenced like a named deck, `user://` paths and `--worker`
+refused; since 2026-11-10 — and a deck in the workspace is named to every tool by its
 bare file name, `write_deck {file: "mine.deck"}` then `lab {deck_a:
 "mine.deck"}`, the server handing the door the absolute path the door
 would not find on its own; since 0.40.35).

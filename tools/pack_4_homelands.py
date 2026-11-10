@@ -30,10 +30,11 @@ TOOL = 'pack_4_homelands.py'
 WORDMARK = ('┌─┐┌─┐┌─┐┬┌─  ┬ ┬', '├─┘├─┤│  ├┴┐  └─┤', '┴  ┴ ┴└─┘┴ ┴    ┴')
 CAPTION = ('Shandalar · gameplay pack 4', 'Homelands — local construction')
 HINT = (
-    'python3 tools/pack_4_homelands.py fetch      # refresh the set data',
     'python3 tools/pack_4_homelands.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_4_homelands.py            # build the local ZIP',
     'python3 tools/pack_4_homelands.py verify     # validate the ZIP',
+    'python3 tools/pack_4_homelands.py fetch      # developer step: may make',
+    '                                             # the pack incompatible',
 )
 
 def read_json(path):

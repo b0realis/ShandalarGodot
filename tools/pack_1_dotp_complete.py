@@ -442,9 +442,10 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=("Commands:\n"
                 "  build    build the deterministic ZIP (default)\n"
-                "  fetch    refresh only Pack 1's four card records from Scryfall\n"
                 "  fetch-art fetch Pack 1's 746 set-specific images from Scryfall\n"
-                "  verify   verify the exact file, layout, names, and counts\n\n"
+                "  verify   verify the exact file, layout, names, and counts\n"
+                "  fetch    refresh only Pack 1's four card records from Scryfall\n"
+                "           (a developer step: may make the pack incompatible)\n\n"
                 + "\n".join(HINT) + "\n\n" + tool_banner.BANNER_HELP))
     tool_banner.add_version_flag(parser, TOOL, __file__)
     parser.add_argument("command", nargs="?", default="build",

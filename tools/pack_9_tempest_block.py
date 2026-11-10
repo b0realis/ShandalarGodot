@@ -60,10 +60,11 @@ MAX_ENTRIES = 2478
 # (the Godot reader's bound is the same constant, TempestBlockPack.MAX_BYTES).
 MAX_BYTES = 384 * 1024 * 1024
 HINT = (
-    'python3 tools/pack_9_tempest_block.py fetch      # refresh the set data',
     'python3 tools/pack_9_tempest_block.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_9_tempest_block.py            # build the local ZIP',
     'python3 tools/pack_9_tempest_block.py verify     # validate the ZIP',
+    'python3 tools/pack_9_tempest_block.py fetch      # developer step: may make',
+    '                                                 # the pack incompatible',
 )
 
 def read_json(path):

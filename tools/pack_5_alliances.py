@@ -30,10 +30,11 @@ TOOL = 'pack_5_alliances.py'
 WORDMARK = ('┌─┐┌─┐┌─┐┬┌─  ┌─┐', '├─┘├─┤│  ├┴┐  └─┐', '┴  ┴ ┴└─┘┴ ┴  └─┘')
 CAPTION = ('Shandalar · gameplay pack 5', 'Alliances — local construction')
 HINT = (
-    'python3 tools/pack_5_alliances.py fetch      # refresh the set data',
     'python3 tools/pack_5_alliances.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_5_alliances.py            # build the local ZIP',
     'python3 tools/pack_5_alliances.py verify     # validate the ZIP',
+    'python3 tools/pack_5_alliances.py fetch      # developer step: may make',
+    '                                             # the pack incompatible',
 )
 
 def read_json(path):

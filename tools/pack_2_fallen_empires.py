@@ -30,10 +30,11 @@ TOOL = 'pack_2_fallen_empires.py'
 WORDMARK = ('┌─┐┌─┐┌─┐┬┌─  ┌─┐', '├─┘├─┤│  ├┴┐  ┌─┘', '┴  ┴ ┴└─┘┴ ┴  └─┘')
 CAPTION = ('Shandalar · gameplay pack 2', 'Fallen Empires — local construction')
 HINT = (
-    'python3 tools/pack_2_fallen_empires.py fetch      # refresh the set data',
     'python3 tools/pack_2_fallen_empires.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_2_fallen_empires.py            # build the local ZIP',
     'python3 tools/pack_2_fallen_empires.py verify     # validate the ZIP',
+    'python3 tools/pack_2_fallen_empires.py fetch      # developer step: may make',
+    '                                                  # the pack incompatible',
 )
 
 def read_json(path):

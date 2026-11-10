@@ -41,10 +41,11 @@ SETS = {'5ed': (449, 434)}
 SHARED_NAMES_FILE = 'shared_names.json'
 MAX_ENTRIES = 1196
 HINT = (
-    'python3 tools/pack_7_fifth_edition.py fetch      # refresh the set data',
     'python3 tools/pack_7_fifth_edition.py fetch-art  # fetch the set artwork',
     'python3 tools/pack_7_fifth_edition.py            # build the local ZIP',
     'python3 tools/pack_7_fifth_edition.py verify     # validate the ZIP',
+    'python3 tools/pack_7_fifth_edition.py fetch      # developer step: may make',
+    '                                                 # the pack incompatible',
 )
 
 def read_json(path):

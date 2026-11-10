@@ -110,12 +110,28 @@ fi
 # trapped, passed on and waited for. Under xvfb-run the pid is xvfb-run,
 # which passes nothing on, so its own children (`timeout`, which passes
 # it to Godot, and Xvfb) get the TERM as well.
+#
+# THE TRAPS GO ON BEFORE THE `&` (the gap review, 2026-11-10). Set on the
+# line after it, a Ctrl-C between the fork and the `trap` (this bash
+# descheduled right after the fork, as on a loaded desk) killed the script
+# at the default disposition: no 130, and Godot, in timeout's own process
+# group, played on. Set first, they find the job by `jobs -pr` — never a
+# `$soak_pid` that may not be set yet, never a pid already reaped
+# (lan_smoke.sh's stop_processes).
+stop_soak() {
+	local pid
+	for pid in $(jobs -pr); do
+		pkill -TERM -P "$pid" 2>/dev/null
+		kill -TERM "$pid" 2>/dev/null
+	done
+	wait
+}
+trap 'stop_soak; exit 130' INT
+trap 'stop_soak; exit 143' TERM
 "${display_runner[@]}" "$GODOT" "${display_options[@]}" \
 	--log-file "$SHANDALAR_TEST_DATA_HOME/soak-engine.log" \
 	-s res://tools/duel_soak.gd -- "$@" > "$log" 2>&1 </dev/null &
 soak_pid=$!
-trap 'pkill -TERM -P "$soak_pid" 2>/dev/null; kill -TERM "$soak_pid" 2>/dev/null; wait; exit 130' INT
-trap 'pkill -TERM -P "$soak_pid" 2>/dev/null; kill -TERM "$soak_pid" 2>/dev/null; wait; exit 143' TERM
 wait "$soak_pid"
 status=$?
 trap - INT TERM

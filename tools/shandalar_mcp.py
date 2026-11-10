@@ -26,11 +26,17 @@ THE RULES IT KEEPS:
   * STDOUT IS THE PROTOCOL'S. The referee's stderr goes to a file under
     the workspace, the Lab's progress is switched off (`--quiet`), and
     this process's own notes go to its stderr.
-  * A PATH A TOOL WRITES LIES UNDER THE CHECKOUT OR THE WORKSPACE — the
-    Lab's `--out`, the AutoDeck's `--out`, a deck `write_deck` makes,
-    the referee's `--log`. A client cannot be pointed at /etc. The
-    workspace (`--workspace`, default `workspace/` beside the door) is
-    where a client's own decks and runs go by default.
+  * A PATH A TOOL WRITES LIES IN THE WORKSPACE — the Lab's `--out` and
+    `--resume`, the AutoDeck's `--out`, a deck `write_deck` makes, the
+    file `convert_deck` writes, the referee's `--log` — and the Lab's
+    `--elo-file` may also name the Lab's own default ledger
+    (`decks/ratings.txt`, which a `rated` run updates). Nothing else is
+    written: not /etc, and not the checkout either (the owner, 2026-11-10;
+    before, any path under the checkout passed, `convert_deck` onto
+    Shandalar.pck and `--elo-file AGENTS.md` among them). A relative path
+    is read against the checkout, as the door reads it; a bare name is
+    put in the workspace (`--workspace`, default `workspace/` beside the
+    door), where a client's own decks and runs go by default.
   * A DECK IS NAMED THE WAY THE DOOR NAMES IT, PLUS THE WORKSPACE. A
     deck argument (`check_deck`, `lab`, `autodeck`'s `keep`, the
     referee's seats) passes as typed when the door will find it — an
@@ -38,12 +44,16 @@ THE RULES IT KEEPS:
     name that is a file or folder in the workspace (a deck `write_deck`
     wrote, an AutoDeck field) is handed over as its absolute path; any
     other word (`random`) passes through untouched.
-  * A DECK A TOOL READS LIES UNDER THE CHECKOUT OR THE WORKSPACE TOO, and
+  * A DECK A TOOL READS LIES UNDER THE CHECKOUT OR THE WORKSPACE, and
     is a deck file (`.deck`, `.dec`, `.dck`, `.txt`) or a folder of them
     — `read_deck`, and every deck argument above. `read_deck` returned
     any file asked for (`/etc/hostname`), and the door's parse errors
     quote the lines of whatever it is handed (the bug campaign c12,
-    h5-6).
+    h5-6). The raw route is fenced the same way (the gap review,
+    2026-11-10): every deck switch in `lab`'s `argv` and in the
+    `extra_args` of `lab` and `autodeck`, each item of a comma list, an
+    engine path (`user://` is the player's profile; only `res://`, the
+    checkout, passes), and the Lab's hidden `--worker` is refused.
   * A TOOL NEVER INVENTS A RESULT. A door that exits 0 is quoted; a
     door that refuses is quoted, `isError: true` with the envelope as
     the structured content; a door without its engine is quoted (exit
@@ -2518,27 +2528,53 @@ class Server:
 
     # ----- paths --------------------------------------------------------------
 
-    def inside(self, text, tool: str, flag: str) -> Path:
-        """A path a tool writes: under the checkout or the workspace."""
+    def reachable(self, text, tool: str, flag: str) -> Path:
+        """A folder a tool reads (`list_decks`, `read_run`): under the
+        checkout or the workspace."""
         if not isinstance(text, str) or not text.strip():
             raise refusal(tool, "option", f"`{flag}` is a path", flag=flag)
         path = Path(text)
         if not path.is_absolute():
             path = self.root / path
         resolved = path.resolve()
-        for home in (self.root, self.workspace):
-            if resolved == home or home in resolved.parents:
-                return resolved
+        if self.within(resolved):
+            return resolved
         raise refusal(tool, "path", f"`{flag}` must lie under {self.root} or {self.workspace}: {text}",
                       flag=flag, path=text)
+
+    def ledger(self) -> Path:
+        """The Deck Lab's own default Elo ledger (`EloLedger.DEFAULT_PATH`,
+        read against the door's folder, where every verb runs)."""
+        return (self.root / "decks" / "ratings.txt").resolve()
+
+    def in_workspace(self, path: Path) -> bool:
+        return path == self.workspace or self.workspace in path.parents
+
+    def writable(self, text, tool: str, flag: str, ledger: bool = False) -> Path:
+        """A path a tool writes (the owner, 2026-11-10): in the workspace and
+        nowhere else — with `ledger`, the Lab's default ledger too. Read
+        against the checkout, as the door reads it; a bare name is put in
+        the workspace, where `write_deck` always put one."""
+        if not isinstance(text, str) or not text.strip():
+            raise refusal(tool, "option", f"`{flag}` is a path", flag=flag)
+        path = Path(text)
+        if not path.is_absolute():
+            path = self.root / path
+            if len(Path(text).parts) == 1 and not self.in_workspace(path.resolve()):
+                path = self.workspace / text
+        resolved = path.resolve()
+        if self.in_workspace(resolved) or (ledger and resolved == self.ledger()):
+            return resolved
+        where = str(self.workspace) + (f" (or be the Deck Lab's ledger, {self.ledger()})" if ledger else "")
+        raise refusal(tool, "path", f"`{flag}` must lie under {where}: {text}", flag=flag, path=text)
 
     def within(self, path: Path) -> bool:
         """Is `path` (resolved) the checkout, the workspace or under either?"""
         return any(path == home or home in path.parents for home in (self.root, self.workspace))
 
     def readable(self, path: Path, typed: str, tool: str, flag: str, folder: bool = True) -> Path:
-        """A deck a tool reads (the bug campaign c12, h5-6): fenced like a
-        write — under the checkout or the workspace — and a deck file by its
+        """A deck a tool reads (the bug campaign c12, h5-6): fenced — under
+        the checkout or the workspace — and a deck file by its
         suffix, or (where `folder`) a folder of them. Returns it resolved."""
         resolved = path.resolve()
         if not self.within(resolved):
@@ -2595,6 +2631,17 @@ class Server:
         text = str(text)
         if not text.strip():
             return text
+        engine = re.match(r"([A-Za-z][A-Za-z0-9+.-]+)://", text)
+        if engine:
+            # AN ENGINE PATH (the gap review, 2026-11-10): the door opens a
+            # `user://` deck as typed — a file in the player's profile, outside
+            # both homes. Only `res://`, the checkout itself, is fenced like a
+            # path under it.
+            if engine.group(1).lower() != "res":
+                raise refusal(tool, "path", f"`{flag}` must lie under {self.root} or {self.workspace}: {text}",
+                              flag=flag, path=text)
+            self.readable(self.root / text[len("res://"):], text, tool, flag)
+            return text
         if Path(text).is_absolute():
             self.readable(Path(text), text, tool, flag)
             return text
@@ -2639,7 +2686,7 @@ class Server:
                        "answer means it did not arrive yet — `referee_wait` reads on")
         packs = prop("string", "the card packs in play: `all`, `none`, or ids `1,3` (unset: the "
                      "game's own setting)")
-        out = prop("string", "the output folder, under the checkout or the workspace")
+        out = prop("string", "the output folder, in the workspace (a bare name is put there)")
         text = prop("string", "what each referee answer's `content` holds, remembered for the game: "
                     "`compact` (default) the table summary as text — the board, your hand, the stack, the "
                     "prompt, the legal answers, the journal, or the end of the game — `json` the JSON "
@@ -2694,9 +2741,9 @@ class Server:
             self._tool("write_deck", "Write a deck file from rows ('4 Lightning Bolt' or "
                        "{count, name}) and check it with the engine: the answer is `check_deck`'s "
                        "— `playable`, the unknown names with the nearest real ones, the packs "
-                       "needed. The file goes under the workspace unless the path says otherwise.",
-                       {"file": prop("string", "the file to write, `.deck`; relative paths land in "
-                                     "the workspace"),
+                       "needed. The file goes in the workspace, and nowhere else.",
+                       {"file": prop("string", "the file to write, `.deck`, in the workspace (a bare "
+                                     "name is put there)"),
                         "name": prop("string", "the deck's name (the `name:` header)"),
                         "cards": {"description": "the main deck: rows of 'COUNT Card Name', "
                                   "objects {count, name}, or one string of lines",
@@ -2722,7 +2769,7 @@ class Server:
                        "format) and `.dck` (the original MicroProse format); the formats come "
                        "from the extensions.",
                        {"input": prop("string", "the deck to read"),
-                        "output": prop("string", "the file to write, under the checkout or the workspace")},
+                        "output": prop("string", "the file to write, in the workspace (a bare name is put there)")},
                        self.tool_convert_deck, required=["input", "output"]),
             self._tool("autodeck", "Build decks by the dozen or the thousand from wishes — the "
                        "field the Lab measures. Every axis takes a comma list of alternatives and "
@@ -2794,7 +2841,8 @@ class Server:
                         "record": prop("string", "keep the engine's log of some games: `losses`, `stalls` or `all`"),
                         "record_max": prop("integer", "at most this many recorded games (default 50)"),
                         "out": out,
-                        "rated": prop("boolean", "update the Elo ledger (default false: `--no-elo`)"),
+                        "rated": prop("boolean", "update the Elo ledger, the Lab's own `decks/ratings.txt` "
+                                       "(default false: `--no-elo`)"),
                         "dry_run": prop("boolean", "the plan as JSON, nothing played"),
                         "argv": prop("array", "a whole Deck Lab line instead of the arguments above "
                                      "— what `run.json`'s `next.argv` holds", items={"type": "string"}),
@@ -2807,7 +2855,7 @@ class Server:
                        "`run.json` says `exit: null` beside a `checkpoint.jsonl`. The games "
                        "already played are kept; the rest are played; the report is written as "
                        "if nothing had happened.",
-                       {"out": prop("string", "the interrupted run's folder"),
+                       {"out": prop("string", "the interrupted run's folder, in the workspace"),
                         "limit": prop("integer", "matchups and standings rows to return (default 50)"),
                         "timeout": prop("number", "seconds to allow the run (default 900)")},
                        self.tool_lab_resume, required=["out"]),
@@ -2842,7 +2890,8 @@ class Server:
                         "rules": prop("string", "the table's rules preset, passed to the referee: `modern`, "
                                       "`modern_mana_burn` (the referee's default) or `fifth`; reported as "
                                       "`hello.rules`"),
-                        "log": prop("string", "write the engine's own log of the duel here at the end"),
+                        "log": prop("string", "write the engine's own log of the duel here at the end "
+                                    "(a file in the workspace)"),
                         "keep": keep, "view": view, "text": text, "timeout": timeout},
                        self.tool_referee_start, required=["deck_a", "deck_b"]),
             self._tool("referee_join", "Sit at a table a person (or another program) hosts in the "
@@ -2860,7 +2909,7 @@ class Server:
                         "wait": prop("integer", "seconds to wait for the table (default 300)"),
                         "turns": prop("integer", "the duel is a draw past this turn"),
                         "log": prop("string", "write the journal this seat saw — every line of the game "
-                                    "as the table told it — here at the end"),
+                                    "as the table told it — here at the end (a file in the workspace)"),
                         "packs": packs, "keep": keep, "view": view, "text": text,
                         "timeout": prop("number", "seconds to wait for the first decision before "
                                         "answering `pending` (default 15)")},
@@ -2887,7 +2936,8 @@ class Server:
                                         "computer's first private IPv4)"),
                         "wait": prop("integer", "seconds to hold the empty chair for a guest (default 300)"),
                         "turns": prop("integer", "the duel is a draw past this turn"),
-                        "log": prop("string", "write the journal your seat saw here at the end"),
+                        "log": prop("string", "write the journal your seat saw here at the end (a file in "
+                                    "the workspace)"),
                         "packs": packs, "keep": keep, "view": view, "text": text,
                         "rules": prop("string", "the table's rules preset: `modern`, `modern_mana_burn` "
                                       "(default) or `fifth` (a joined table plays its host's)"),
@@ -3174,7 +3224,7 @@ class Server:
 
     def tool_convert_deck(self, args: dict) -> dict:
         source = self.deck_arg(args["input"], "convert", "input")
-        target = self.inside(args["output"], "convert", "output")
+        target = self.writable(args["output"], "convert", "output")
         done = self.run("convert", [source, str(target)], timeout=300)
         if done.returncode != 0:
             tail = [line for line in done.stderr.splitlines() if line.strip()][-6:]
@@ -3195,9 +3245,9 @@ class Server:
             if isinstance(typed, str) and typed.strip() == "workspace":
                 folder = self.workspace
             else:
-                folder = self.inside(typed, "list_decks", "folder")
+                folder = self.reachable(typed, "list_decks", "folder")
                 if not folder.is_dir() and not Path(typed).is_absolute():
-                    other = self.inside(str(self.workspace / typed), "list_decks", "folder")
+                    other = self.reachable(str(self.workspace / typed), "list_decks", "folder")
                     if other.is_dir():
                         folder = other
             if not folder.is_dir():
@@ -3282,10 +3332,7 @@ class Server:
         file = str(args["file"])
         if not file.lower().endswith((".deck", ".dec")):
             raise refusal(tool, "option", "`file` ends in .deck (or .dec)", flag="file", path=file)
-        path = Path(file)
-        if not path.is_absolute() and len(path.parts) == 1:
-            path = self.workspace / path
-        target = self.inside(str(path), tool, "file")
+        target = self.writable(file, tool, "file")
         if target.exists() and not args.get("force"):
             raise refusal(tool, "out", f"{self.spoken(target)} is there — `force` overwrites it",
                           exit_code=1, path=self.spoken(target))
@@ -3315,8 +3362,22 @@ class Server:
 
     # ----- the AutoDeck and the Lab ---------------------------------------
 
-    def output_args(self, argv: list[str], tool: str) -> tuple[list[str], Path | None]:
-        """Check EVERY write destination, including repeated/raw/extra flags.
+    # The switches of a Lab or AutoDeck line that name a file: written (the
+    # workspace, `--elo-file` the Lab's ledger too), read as one deck, or
+    # read as a pool — a comma list, a folder or a deck-list file (the gap
+    # review, 2026-11-10, r5-1: only the written ones were checked, so a raw
+    # `--deck-a /anywhere` reached the door, and the last one wins).
+    WRITE_SWITCHES = ("--out", "--resume", "--elo-file")
+    DECK_SWITCHES = ("--deck-a", "--deck-b", "--control-deck-a", "--control-deck-b", "--keep", "--list")
+    POOL_SWITCHES = ("--gauntlet", "--matrix", "--field", "--deck-pool")
+    # `--worker IN OUT [BEAT]` turns the Lab into a fanned-out run's child,
+    # which reads IN and writes OUT wherever they are.
+    WORKER_SWITCH = "--worker"
+
+    def fenced_args(self, argv: list[str], tool: str) -> tuple[list[str], Path | None]:
+        """Check EVERY file a line names, including repeated/raw/extra flags:
+        a destination with `writable`, a deck with `deck_arg`, a pool with
+        `deck_list` — the typed arguments' own fences.
 
         Normalise --flag=value to the CLI's two-argument spelling. The last
         --out is the actual destination, not the first or a structured default.
@@ -3327,7 +3388,10 @@ class Server:
         while index < len(argv):
             arg = argv[index]
             flag, equal, inline = arg.partition("=")
-            if flag not in ("--out", "--resume", "--elo-file"):
+            if flag == self.WORKER_SWITCH:
+                raise refusal(tool, "option", f"`{flag}` is the Lab's own, for the children of a run it "
+                              "fans out; a line cannot start one", flag=flag)
+            if flag not in self.WRITE_SWITCHES + self.DECK_SWITCHES + self.POOL_SWITCHES:
                 checked.append(arg)
                 index += 1
                 continue
@@ -3338,10 +3402,15 @@ class Server:
                 if index >= len(argv) or argv[index].startswith("--"):
                     raise refusal(tool, "option", f"{flag} needs a path", flag=flag)
                 value = argv[index]
-            path = self.inside(value, tool, flag)
-            checked.extend([flag, str(path)])
-            if flag in ("--out", "--resume"):
-                out = path
+            if flag in self.WRITE_SWITCHES:
+                path = self.writable(value, tool, flag, ledger=flag == "--elo-file")
+                checked.extend([flag, str(path)])
+                if flag in ("--out", "--resume"):
+                    out = path
+            elif flag in self.DECK_SWITCHES:
+                checked.extend([flag, self.deck_arg(value, tool, flag)])
+            else:
+                checked.extend([flag, self.deck_list(value, tool, flag)])
             index += 1
         return checked, out
 
@@ -3357,7 +3426,7 @@ class Server:
 
     def tool_autodeck(self, args: dict) -> dict:
         tool = "autodeck"
-        out = self.inside(args["out"], tool, "out")
+        out = self.writable(args["out"], tool, "out")
         argv = ["--out", str(out)]
         args = {**args, "keep": self.deck_arg(args["keep"], tool, "keep")} if args.get("keep") else args
         for key in ("count", "seed", "colors", "max_colors", "sets", "source", "packs", "size",
@@ -3367,7 +3436,7 @@ class Server:
         self.flag(argv, args, "dry_run", "--dry-run")
         argv += self.strings(args["extra_args"], tool, "extra_args") if args.get("extra_args") else []
         argv.append("--quiet")
-        argv, out = self.output_args(argv, tool)
+        argv, out = self.fenced_args(argv, tool)
         timeout = float(args.get("timeout") or DEFAULT_TIMEOUT)
         done = self.run("autodeck", argv, timeout=timeout)
         parsed = self.quote("autodeck", done, require_json="--dry-run" in argv)
@@ -3390,14 +3459,16 @@ class Server:
                  "seed", "jobs", "procs", "packs", "profile_a", "profile_b", "top", "best_of",
                  "sideboard", "rules", "format", "lives", "mulligan", "sweep", "null",
                  "control_deck_a", "control_deck_b", "record", "record_max")
-    LAB_DECKS = ("deck_a", "deck_b", "deck_pool", "control_deck_a", "control_deck_b")
-    LAB_DECK_LISTS = ("gauntlet", "matrix", "field")
+    LAB_DECKS = ("deck_a", "deck_b", "control_deck_a", "control_deck_b")
+    # `deck_pool` is a pool like these (`--deck-pool LIST|DIR`): fenced as
+    # one deck, the items of a comma list went through unchecked (2026-11-10).
+    LAB_DECK_LISTS = ("gauntlet", "matrix", "field", "deck_pool")
 
     def lab_argv(self, args: dict) -> tuple[list[str], Path | None]:
         tool = "lab"
         if args.get("argv"):
             argv = self.strings(args["argv"], tool, "argv")
-            argv, out = self.output_args(argv, tool)
+            argv, out = self.fenced_args(argv, tool)
             if "--resume" not in argv and not args.get("rated") and "--no-elo" not in argv:
                 argv.append("--no-elo")
             if args.get("dry_run") and "--dry-run" not in argv:
@@ -3418,14 +3489,14 @@ class Server:
             self.flag(argv, args, key, "--" + key.replace("_", "-"))
         out = None
         if args.get("out"):
-            out = self.inside(args["out"], tool, "out")
+            out = self.writable(args["out"], tool, "out")
             argv += ["--out", str(out)]
         if not args.get("rated"):
             argv.append("--no-elo")
         self.flag(argv, args, "dry_run", "--dry-run")
         if args.get("extra_args"):
             argv += self.strings(args["extra_args"], tool, "extra_args")
-        argv, actual_out = self.output_args(argv, tool)
+        argv, actual_out = self.fenced_args(argv, tool)
         out = actual_out or out
         # A run the client named no folder for goes to the workspace
         # (2026-10-03). It used to go to the Lab's own default under
@@ -3476,7 +3547,7 @@ class Server:
         return self.run_lab(argv, out, args)
 
     def tool_lab_resume(self, args: dict) -> dict:
-        out = self.inside(args["out"], "lab", "out")
+        out = self.writable(args["out"], "lab", "out")
         return self.run_lab(["--resume", str(out), "--quiet"], out, args)
 
     def read_run(self, out: Path, limit: int) -> dict:
@@ -3507,13 +3578,13 @@ class Server:
         return result
 
     def tool_read_run(self, args: dict) -> dict:
-        out = self.inside(args["out"], "read_run", "out")
+        out = self.reachable(args["out"], "read_run", "out")
         if not out.is_dir():
             raise refusal("read_run", "path", f"not a folder: {args['out']}", path=str(args["out"]))
         return self.read_run(out, int(args.get("limit") or RESULT_LIMIT))
 
     def tool_lab_next(self, args: dict) -> dict:
-        out = self.inside(args["out"], "lab_next", "out")
+        out = self.reachable(args["out"], "lab_next", "out")
         run_file = out / "run.json"
         if not run_file.is_file():
             raise refusal("lab_next", "resume", f"no run.json in {self.spoken(out)}", path=self.spoken(out))
@@ -3522,7 +3593,13 @@ class Server:
         if not isinstance(nxt, dict) or not nxt.get("argv"):
             return {"out": self.spoken(out), "next": None,
                     "why": "nothing is open — every matchup decided, every delta clear"}
-        argv, target = self.output_args(self.strings(nxt["argv"], "lab_next", "argv"), "lab_next")
+        argv, target = self.fenced_args(self.strings(nxt["argv"], "lab_next", "argv"), "lab_next")
+        # A next line that names no folder (the AutoDeck's: the field into
+        # the Lab) is given one in the workspace, as `lab` gives one — it
+        # went to the Lab's own default under DeckLab/results/ (2026-11-10).
+        if target is None and "--resume" not in argv:
+            target = self.default_out("lab")
+            argv += ["--out", str(target)]
         result = self.run_lab(argv + ["--quiet"], target, args)
         result["why"] = nxt.get("why")
         result["from"] = self.spoken(out)
@@ -3744,7 +3821,7 @@ class Server:
         for key in ("seed", "turns", "packs", "rules"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
-            argv += ["--log", str(self.inside(args["log"], tool, "log"))]
+            argv += ["--log", str(self.writable(args["log"], tool, "log"))]
         return self.shown_state(self.open_game(argv, self.view_of(args),
                                                float(args.get("timeout") or DECISION_TIMEOUT),
                                                keep=bool(args.get("keep", False)), text=self.text_of(args)))
@@ -3770,7 +3847,7 @@ class Server:
         for key in ("port", "name", "wait", "turns", "packs"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
-            argv += ["--log", str(self.inside(args["log"], tool, "log"))]
+            argv += ["--log", str(self.writable(args["log"], tool, "log"))]
         return self.shown_state(self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
                                                keep=bool(args.get("keep", True)), text=self.text_of(args),
                                                secrets=secrets))
@@ -3781,7 +3858,7 @@ class Server:
         for key in ("access", "name", "port", "address", "wait", "turns", "packs", "rules"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
-            argv += ["--log", str(self.inside(args["log"], tool, "log"))]
+            argv += ["--log", str(self.writable(args["log"], tool, "log"))]
         state = self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
                                keep=bool(args.get("keep", True)), until_table=True, text=self.text_of(args))
         table = state.get("table")

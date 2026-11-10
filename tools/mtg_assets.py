@@ -386,6 +386,13 @@ def is_tar_name(name: str) -> bool:
     return tar_tail(name) != ""
 
 
+def _anonymous(member: tarfile.TarInfo) -> tarfile.TarInfo:
+    """A tar entry without its builder's user and group."""
+    member.uid = member.gid = 0
+    member.uname = member.gname = ""
+    return member
+
+
 def write_zip(skin: Path, out: Path,
               extras: list[tuple[Path, str]] | None = None,
               inner: str = "") -> int:
@@ -430,9 +437,14 @@ def write_zip(skin: Path, out: Path,
     part = out.with_name(out.name + ".part")
     try:
         if is_tar_name(out.name):
-            with tarfile.open(part, "w:gz", compresslevel=6) as tf:
+            # A LINKED PICTURE GOES IN AS ITS BYTES, as the zip takes it
+            # (`dereference`), and no entry names its builder (the gap
+            # review, 2026-11-10): the tar held the link and its target, an
+            # absolute path often under a home folder, and game/tar_pack.gd
+            # skips every entry that is not a file — the picture was lost.
+            with tarfile.open(part, "w:gz", compresslevel=6, dereference=True) as tf:
                 for path, name in entries:
-                    tf.add(path, str(name), recursive=False)
+                    tf.add(path, str(name), recursive=False, filter=_anonymous)
                     total += path.stat().st_size
         else:
             # ZIP_DEFLATED on art that is already PNG/JPG buys a few percent,

@@ -889,9 +889,12 @@ share one either.
 
 **The rules the server keeps**: stdout is the protocol's (each game's
 stderr goes to `workspace/games/GAME.stderr`); a path a tool writes —
-`out`, `log`, `file`, a conversion's output — lies under the checkout
-or the workspace (`--workspace`, default `workspace/` beside the door,
-ignored by git), or the tool refuses with `kind: "path"`; a deck a tool
+`out`, `log`, `file`, a conversion's output — lies in the workspace
+(`--workspace`, default `workspace/` beside the door, ignored by git; a
+bare name is put there; `--elo-file` may also name the Lab's
+`decks/ratings.txt`), or the tool refuses with `kind: "path"` (since
+2026-11-10; raw deck switches in `argv` / `extra_args` are fenced like
+a named deck, and `user://` paths and `--worker` are refused); a deck a tool
 names (`check_deck`, `lab`, `autodeck`'s `keep`, the referee's seats)
 passes as typed when the door will find it — an absolute path, a path
 under the checkout or under `decks/` — and a bare name that is a file or
