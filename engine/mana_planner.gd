@@ -1567,6 +1567,174 @@ static func auto_tap_sources(game: MtgGame, pid: int,
 	return out
 
 
+## THE COLOUR A PAYMENT CLICK MEANS (GitHub issue #7, a player's report of
+## 2026-11-07). *"I am casting a Whirling Dervish (two green) and I tap
+## Pendelhaven for a green mana, and also want to tap my Savannah for green
+## — and it makes me choose. I think it should automatically select what I
+## need."* A source with several mana abilities — a dual land's two, Birds
+## of Paradise's and City of Brass's five — clicked while a cast waits for
+## its mana (DuelScreen.Mode.PAYING, and a LAN guest's) taps for the colour
+## the bill needs, without the menu, WHEN THE CHOICE IS CLEAR [QoL]:
+##
+##  1. Only options that pay something still owed count (a colour of a pip
+##     the floating mana has not covered, or any colour while generic is
+##     owed), and of those only the ones that leave the REST of the bill
+##     payable from [param others] ([method plan_from] — a Savannah facing
+##     {G}{W} beside a lone Plains is green, because white would strand the
+##     {G}).
+##  2. The options differ only in their colour ([param abilities] — the
+##     same amount, pain, side effect, restriction and cost): one of them
+##     left is it; else the one colour that pays a pip owed (the exchange is
+##     free, so a pip beats generic); else, generic only, the first — unless
+##     it makes more than the generic owed, when the colour of what floats
+##     is the player's to name.
+##  3. The options differ in more (Adarkar Wastes' painless {C} and painful
+##     {W}): only the ONE option that pays anything owed at all, and never
+##     one that spends the source.
+##
+## Anything else — two colours both owed and both leaving the bill payable,
+## a colour-choice ability (Fellwar Stone, whose question the owner's rule
+## of 2026-09-17 keeps: *"you should be asked upon tapping what kind of
+## mana you want it to produce"*), a converter, a restricted {X} — returns
+## `[]`, and the caller asks as it always did. There is no setting: the
+## `Don't auto tap this card` mark belongs to the double-click.
+##
+## [param options]: the clicked source's rows of [method sources], in menu
+## order, and [param abilities] the ManaAbility behind each, in the same
+## order. [param others]: every other row the payment may use, the
+## floating mana's rows among them. [param cost], [param extra] and
+## [param usage_keys]: the bill as [method plan_from] takes it. Returns the
+## option row to tap, or `[]`.
+static func payment_pick(options: Array, others: Array, cost: ManaCost, extra: int,
+		usage_keys: Array, abilities: Array) -> Array:
+	if options.is_empty() or abilities.size() != options.size() \
+			or cost.restricted_x_amount > 0:
+		return []
+	for s in options:
+		if source_chooses_color(s) or source_reveals(s) \
+				or (s.size() > 8 and (not (s[8] is Dictionary) or s[8].get("cost") != null)):
+			return []
+	var owed := _owed_after_floating(cost, extra, others, usage_keys)
+	var useful: Array = []
+	for s in options:
+		if _row_pays(s, owed, usage_keys, false):
+			useful.append(s)
+	var keep: Array = []
+	for s in useful:
+		if not plan_from(others + _row_as_floating(s), cost, extra, usage_keys).is_empty():
+			keep.append(s)
+	if keep.is_empty():
+		return []
+	var pick: Array = []
+	if not _differ_only_in_color(options, abilities):
+		if useful.size() != 1 or (source_rank(keep[0]) & RANK_SPENDS_SOURCE) != 0:
+			return []
+		pick = keep[0]
+	elif keep.size() == 1:
+		pick = keep[0]
+	else:
+		var pips := keep.filter(func(s: Array) -> bool:
+			return _row_pays(s, owed, usage_keys, true))
+		if pips.size() > 1:
+			return []
+		pick = pips[0] if pips.size() == 1 else keep[0]
+	if not _row_pays(pick, owed, usage_keys, true) and options.size() > 1 \
+			and _row_made(pick) > int(owed["generic"]):
+		return []   # what would float is a colour the player names
+	return pick
+
+
+## What [param cost] plus [param extra] generic still asks for once the
+## floating rows of [param rows] (a null instance) have paid what they can:
+## `{pips: {colour: count}, generic: count}` — the sum the duel's bar says
+## (DuelScreen._paying_prompt): a floating colour pays its own pips first,
+## and what is left of it pays generic.
+static func _owed_after_floating(cost: ManaCost, extra: int, rows: Array,
+		usage_keys: Array) -> Dictionary:
+	var have: Dictionary = {}
+	for s in rows:
+		if s[0] == null and source_usable(s, usage_keys):
+			have[int(s[2])] = int(have.get(int(s[2]), 0)) + int(s[3])
+	var pips: Dictionary = {}
+	var spare := 0
+	for color in have:
+		spare += maxi(int(have[color]) - int(cost.colored.get(color, 0)), 0)
+	for color in cost.colored:
+		var short := int(cost.colored[color]) - int(have.get(int(color), 0))
+		if short > 0:
+			pips[int(color)] = short
+	return {"pips": pips, "generic": maxi(cost.generic + extra - spare, 0)}
+
+
+## The mana source row [param s] makes, as `[colour, amount, restriction]`
+## entries — one for a plain row, each output of a coupled one.
+static func _row_outputs(s: Array) -> Array:
+	if s.size() > 8 and s[8] is Dictionary and s[8].has("outputs"):
+		return s[8]["outputs"]
+	return [[int(s[2]), int(s[3]), String(s[5]) if s.size() > 5 else ""]]
+
+
+## How much mana source row [param s] makes, all outputs together.
+static func _row_made(s: Array) -> int:
+	var made := 0
+	for output in _row_outputs(s):
+		made += int(output[1])
+	return made
+
+
+## Does source row [param s] pay something [param owed]
+## ([method _owed_after_floating]) — with [param pip_only], a coloured pip
+## still owed, else a pip or the generic?
+static func _row_pays(s: Array, owed: Dictionary, usage_keys: Array, pip_only: bool) -> bool:
+	if not source_usable(s, usage_keys):
+		return false
+	for output in _row_outputs(s):
+		if int(output[1]) <= 0 or not ManaPool.key_usable(String(output[2]), usage_keys):
+			continue
+		if (owed["pips"] as Dictionary).has(int(output[0])):
+			return true
+		if not pip_only and int(owed["generic"]) > 0:
+			return true
+	return false
+
+
+## Source row [param s]'s mana as rows already floating, so
+## [method plan_from] can ask whether the rest of a bill still plans once
+## it is tapped. Their unit numbers stay clear of the real pool's.
+static func _row_as_floating(s: Array) -> Array:
+	var out: Array = []
+	for output in _row_outputs(s):
+		for k in int(output[1]):
+			out.append([null, PICKED_UNIT_BASE + out.size(), int(output[0]), 1, 0,
+				String(output[2]), 0, 0])
+	return out
+
+
+## The unit index [method _row_as_floating]'s stand-in rows start at.
+const PICKED_UNIT_BASE := 100000
+
+
+## Do the options of one source ([param options], their abilities in
+## [param abilities]) differ in nothing but their colour — a dual land's
+## pair, Birds of Paradise's five, City of Brass's five painful ones?
+static func _differ_only_in_color(options: Array, abilities: Array) -> bool:
+	var first: Array = []
+	for i in options.size():
+		var s: Array = options[i]
+		var a: ManaAbility = abilities[i]
+		var outputs := _row_outputs(s)
+		var shape: Array = [_row_made(s), outputs.size(), source_rank(s),
+			String(s[5]) if s.size() > 5 else "", source_pain(s), a.side_effect.is_valid(),
+			a.taps_source, a.sacrifice_source, a.exile_source, a.life_cost,
+			a.max_per_turn, a.put_counter_kind, a.counter_cost_kind,
+			a.cost.text if a.cost != null else "", a.produces.size()]
+		if i == 0:
+			first = shape
+		elif shape != first:
+			return false
+	return true
+
+
 ## Is this cost nothing at all? (A free cost plans as `[]`, which is also
 ## what "no plan" looks like, so every executor asks this first.)
 static func cost_is_free(cost: ManaCost) -> bool:

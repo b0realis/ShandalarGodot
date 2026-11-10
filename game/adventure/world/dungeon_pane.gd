@@ -156,6 +156,14 @@ const CARD_WIDE := 150.0
 const LOST_CARD_AT := Vector2(75, 166)
 const LOST_CARD_WIDE := 160.0
 const BANNER := Rect2(0, 0, 149, 19)
+## [QoL, GitHub issue #10] THE CARD IN A BOX (the riddle's: "Correct!",
+## "WRONG.  Correct is:") is the Showcase's own card as tall as the page
+## leaves the box room for ([method _fit_box_card]) — at most its full
+## size, 300 × 428, never under the 96-point card it was, which at
+## 1280 × 800 and up left its rules text a few pixels high. A click on it,
+## left or right, reads it full screen.
+const BOX_CARD_MOST := 1.0
+const BOX_CARD_LEAST := 96.0
 ## The treasure's tiles: 8 × 8 page pixels over the 640 × 480 page, and how
 ## long they take [ours: 1997's speed was the machine's].
 const TREASURE_TILES := Vector2i(80, 60)
@@ -182,6 +190,10 @@ var _choices: HFlowContainer
 var _box: PanelContainer
 var _box_words: Label
 var _box_answers: HFlowContainer
+## The card in the box ([method _show_box]) and the spot it stands in,
+## null for none.
+var _box_card: CardPreview
+var _box_spot: Control
 ## What Continue does at a box (none: no Continue).
 var _then := Callable()
 ## A corridor walk's ways still to go.
@@ -956,18 +968,20 @@ func _show_box(lines: Array, at: Vector2, answers: Array = [], card_name := "") 
 		shown.docked = true
 		shown.mouse_filter = Control.MOUSE_FILTER_STOP
 		shown.show_card(CardInstance.new(CardRegistry.get_card(card_name), -1, 0))
-		var wide := 96.0 * clampf(_factor, 0.8, 1.25)
-		var fit := wide / CardPreview.SIZE.x
-		shown.scale = Vector2(fit, fit)
 		shown.gui_input.connect(func(input: InputEvent) -> void:
-			if PaneStyle.right_click(input):
+			if PaneStyle.right_click(input) or _left_press(input):
+				shown.accept_event()
 				card_read.emit(card_name))
 		var spot := Control.new()
+		spot.name = "BoxCardSpot"
 		spot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		spot.custom_minimum_size = CardPreview.SIZE * fit
 		spot.add_child(shown)
 		holder.add_child(spot)
 		column.add_child(holder)
+		_box_card = shown
+		_box_spot = spot
+		_box.set_meta("card_room", width - 28.0)
+		_set_box_card(BOX_CARD_LEAST / CardPreview.SIZE.x)
 	_box_answers = HFlowContainer.new()
 	_box_answers.name = "BoxAnswers"
 	_box_answers.alignment = FlowContainer.ALIGNMENT_CENTER
@@ -987,6 +1001,7 @@ func _show_box(lines: Array, at: Vector2, answers: Array = [], card_name := "") 
 func _place_box() -> void:
 	if not is_instance_valid(_box):
 		return
+	_fit_box_card()
 	_box.size = _box.get_combined_minimum_size()
 	var at: Vector2 = _box.get_meta("at", BOX_AT)
 	var where := at * _factor - _box.size / 2.0
@@ -995,12 +1010,49 @@ func _place_box() -> void:
 	_box.position = where
 
 
+## [QoL, issue #10] The box's card as tall as the page leaves room for:
+## the page less the box's other parts (its words, its answers, its glass)
+## and the 8 points [method _place_box] keeps clear above and below — at
+## most [constant BOX_CARD_MOST] of the Showcase's size, never wider than
+## the box's words, never under [constant BOX_CARD_LEAST] points wide.
+func _fit_box_card() -> void:
+	if not is_instance_valid(_box_card) or not is_instance_valid(_box_spot):
+		return
+	var others := _box.get_combined_minimum_size().y - _box_spot.custom_minimum_size.y
+	var room := view.size.y - 16.0 - others
+	var wide: float = _box.get_meta("card_room", CardPreview.SIZE.x)
+	var fit := minf(minf(room / CardPreview.SIZE.y, wide / CardPreview.SIZE.x), BOX_CARD_MOST)
+	_set_box_card(maxf(fit, BOX_CARD_LEAST / CardPreview.SIZE.x))
+
+
+func _set_box_card(fit: float) -> void:
+	_box_card.scale = Vector2(fit, fit)
+	_box_spot.custom_minimum_size = (CardPreview.SIZE * fit).floor()
+
+
+## The card's scale in the box now (0 for no card) — the Showcase's size
+## times it.
+func box_card_scale() -> float:
+	return _box_card.scale.x if is_instance_valid(_box_card) else 0.0
+
+
+## A left button pressed — not a double click's second press, nor one too
+## soon after the box came ([constant READ_GUARD_MS], the answer's own
+## click must not read the card that took its place).
+func _left_press(input: InputEvent) -> bool:
+	var press := input as InputEventMouseButton
+	return press != null and press.pressed and press.button_index == MOUSE_BUTTON_LEFT \
+		and not press.double_click and Time.get_ticks_msec() >= _guard_until
+
+
 func _hide_box() -> void:
 	if is_instance_valid(_box):
 		PaneStyle.drop(_box)
 	_box = null
 	_box_words = null
 	_box_answers = null
+	_box_card = null
+	_box_spot = null
 
 
 ## The words in the box now ("" none).

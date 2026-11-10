@@ -603,6 +603,12 @@ static func retuned_land_types(inst: CardInstance) -> Array[String]:
 	return []
 
 
+## [QoL, issue #9] The tooltip's heading over the rules a text change
+## (Magical Hack, Sleight of Mind, Quarum Trench Gnomes) rewrote; the
+## printed rules follow under "Printed rules:".
+const CHANGED_RULES := "Rules (changed by a text change):"
+
+
 ## Keep the type label short: the mana stripes share this narrow title band,
 ## so an appended printed name would be cut in half. The tooltip carries it.
 ## Outside the battlefield only the card name is shown.
@@ -1207,11 +1213,19 @@ func refresh() -> void:
 	# it is currently wearing. The overlays are mouse-transparent so the
 	# card stays clickable, which makes this the only place the player
 	# actually reads them.
-	tooltip_text = "%s\n%s" % [d.card_name, d.oracle_text]
+	# [QoL, issue #9] A text change's rules first, the printed ones under
+	# them ([method CardPreview.changed_text]) — plain words: a tooltip
+	# sets no italics, so the heading says what changed them.
+	var changed := CardPreview.changed_text(instance)
+	var rules := d.oracle_text
+	if changed.get("rules_changed", false):
+		rules = "%s\n%s\nPrinted rules:\n%s" % [CHANGED_RULES, changed["rules"], d.oracle_text]
+	tooltip_text = "%s\n%s" % [d.card_name, rules]
 	var land_types := retuned_land_types(instance) if instance.zone == Mtg.Zone.BATTLEFIELD else ([] as Array[String])
 	if not land_types.is_empty():
-		tooltip_text = "%s\nCurrent land %s: %s\nPrinted rules:\n%s" % [d.card_name,
-			"type" if land_types.size() == 1 else "types", _land_type_words(land_types), d.oracle_text]
+		tooltip_text = "%s\nCurrent land %s: %s\n%s" % [d.card_name,
+			"type" if land_types.size() == 1 else "types", _land_type_words(land_types),
+			rules if changed.get("rules_changed", false) else "Printed rules:\n" + d.oracle_text]
 	if instance.prevention > 0:
 		tooltip_text += "\n" + shield_cue()
 	if instance.zone == Mtg.Zone.BATTLEFIELD and instance.cur_cant_phase_out \

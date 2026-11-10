@@ -74,6 +74,14 @@ const BAG_FULL := AdventurePlayer.BAG_FULL
 ## offered.
 const BAG_LOST := "Lost: %s."
 const PICK_LOST := "The card of your choice is lost."
+## [QoL, GitHub issue #10] THE RIDDLE'S CARD at a readable size: beside the
+## creature's face as wide as the page leaves it — from 10 points past the
+## face's frame ([constant EncounterStage.FACE_AT], 230–410) to 10 short of
+## the page's edge, 210 of 1997's points, and as tall as that makes it,
+## centred down the 480-point page (it was 150 wide at (450, 120), its
+## rules a few pixels high). A click on it, left or right, reads it.
+const RIDDLE_CARD_WIDE := 210.0
+const RIDDLE_CARD_AT := Vector2(420.0, (480.0 - RIDDLE_CARD_WIDE * 428.0 / 300.0) / 2.0)
 
 ## The adventure.
 var player: AdventurePlayer
@@ -375,7 +383,15 @@ func answer(index: int) -> void:
 	step = "verdict"
 	stage.clear()
 	stage.creature_face(int(meeting["row"]))
-	stage.card(String(asked.get("card", "")), Vector2(450, 120), 150.0, "RiddleCard")
+	var shown := stage.card(String(asked.get("card", "")), RIDDLE_CARD_AT, RIDDLE_CARD_WIDE, "RiddleCard")
+	if shown != null:
+		var card_name := String(asked.get("card", ""))
+		shown.gui_input.connect(func(input: InputEvent) -> void:
+			var press := input as InputEventMouseButton
+			if press != null and press.pressed and press.button_index == MOUSE_BUTTON_LEFT \
+					and not press.double_click:
+				shown.accept_event()
+				card_read.emit(card_name))
 	say([CardRiddle.verdict(asked, index) if index >= 0 else CardRiddle.WRONG])
 	offer([["go", GO_ON if not _riddle_right else LEAVE, true]])
 

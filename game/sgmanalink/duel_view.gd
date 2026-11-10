@@ -729,8 +729,83 @@ func _click_permanent(inst: CardInstance) -> void:
 	elif not options.is_empty(): _open_ability_menu(inst)
 
 
+## A guest's payment click: the colour the bill needs when that is clear
+## ([method _guest_payment_pick], GitHub issue #7, as at a local table),
+## otherwise the referee's mana options as a menu (one taps at once).
 func _tap_for_payment(inst: CardInstance) -> void:
+	var index := _guest_payment_pick(inst)
+	if index >= 0:
+		_report(game.tap_for_mana(0, inst, index))
+		return
 	_open_ability_menu(inst, true)
+
+
+## THE LOCAL SCREEN'S CHOICE, MADE FROM WHAT THIS SEAT IS SHOWN (issue #7):
+## the index of [param inst]'s mana option to tap, or -1 for the menu. The
+## options are the referee's (the face's `mana` actions — only what the
+## engine would tap now); the bill is the one the bar says
+## ([method DuelScreen._paying_prompt]); [method ManaPlanner.payment_pick]
+## decides. A colour never crosses the wire, so a colour-choice source
+## (Fellwar Stone) is the referee's question as before; and an option is
+## read only when its label is its printed ability's own words: a land a
+## Magical Hack or a Blood Moon has rewritten taps from the menu. The
+## other sources are this seat's own faces read the same way — a source
+## that cannot be read is left out, which can only send a choice back to
+## the menu, never pick a colour the rest of the bill cannot follow.
+func _guest_payment_pick(inst: CardInstance) -> int:
+	if _pending_card == null or inst.controller_id != 0:
+		return -1
+	var payment := _pending_payment()
+	if payment.is_empty():
+		return -1
+	var shown := _guest_mana_rows(inst)
+	if shown.size() < 2 or shown.size() != _guest_mana_options(inst).size():
+		return -1
+	var options: Array = []
+	var abilities: Array = []
+	for pair in shown:
+		options.append(pair[0])
+		abilities.append(pair[1])
+	var others: Array = []
+	var pool := game.players[0].mana_pool
+	for color in Mtg.ManaColor.values():
+		for unit in pool.amount_of(color):
+			others.append([null, unit, color, 1, 0, "", 0, 0])
+	for card in game.players[0].battlefield + game.players[0].hand:
+		if card == inst: continue
+		for pair in _guest_mana_rows(card): others.append(pair[0])
+	var pick := ManaPlanner.payment_pick(options, others, payment["cost"],
+		int(payment["extra"]), payment["usage"], abilities)
+	return -1 if pick.is_empty() else int(pick[1])
+
+
+## The referee's mana options on [param card]'s face.
+func _guest_mana_options(card: CardInstance) -> Array:
+	return projection.faces.get(projection.handle(card.id), {}).get("actions", []) \
+		.filter(func(option: Dictionary) -> bool: return option.kind == "mana")
+
+
+## [param card]'s mana options as planner rows, `[row, ability]` — only the
+## ones whose label is the printed ability's own (`str()` of it: the
+## referee labels its live ability the same way) and that make one fixed
+## colour without a cost, the shape a dual land or Birds of Paradise has.
+func _guest_mana_rows(card: CardInstance) -> Array:
+	var out: Array = []
+	for option in _guest_mana_options(card):
+		var index := int(option.index)
+		if index >= card.cur_mana_abilities.size() or _pending_mana_conflicts(card, index): continue
+		var ability: ManaAbility = card.cur_mana_abilities[index]
+		if str(ability) != String(option.label) or ability.produces.size() != 1 \
+				or ability.cost != null or ability.color_options.is_valid() \
+				or ability.dynamic_color.is_valid() or ability.dynamic_amount.is_valid() \
+				or ability.reveal_filter.is_valid() or ability.any_number_counter_kind != "" \
+				or not ability.object_costs.is_empty() or ability.sacrifice_filter.is_valid() \
+				or ability.life_cost > 0 or ability.counter_cost_kind != "":
+			continue
+		var rank := ManaPlanner.RANK_SPENDS_SOURCE if ability.sacrifice_source or ability.exile_source else 0
+		out.append([[card, index, int(ability.produces[0][0]), int(ability.produces[0][1]),
+			rank, ability.restriction_key, ability.pain, 0], ability])
+	return out
 
 
 func _on_graveyard_card(inst: CardInstance) -> void:

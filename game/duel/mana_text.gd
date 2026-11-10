@@ -228,8 +228,15 @@ static func symbol_metrics(font: Font, font_size: int) -> Array:
 ## keeps `{B}{B}{B}` from being broken across a line (`:412-434`) — and it
 ## also puts the question of how a shaper treats two abutting object
 ## replacement characters beyond reach, which is worth having.
+##
+## [param emphasis] [QoL, issue #9]: `[from, to)` character ranges of
+## [param text] set SLANTED — the words a text change wrote ([method
+## CardPreview.changed_text]). Their letters take [method slanted] of the
+## face; a symbol among them is drawn leaning the same way (`"slanted"` in
+## the result: the objects whose run leans). Empty, the paragraph is built
+## exactly as before, span for span.
 static func build(text: String, font: Font, font_size: int, width: float,
-		line_spacing: int) -> Dictionary:
+		line_spacing: int, emphasis: Array = []) -> Dictionary:
 	var para := TextParagraph.new()
 	para.set_break_flags(WRAP_FLAGS)
 	para.set_width(width)
@@ -239,12 +246,17 @@ static func build(text: String, font: Font, font_size: int, width: float,
 	var side: float = metrics[0]
 	var advance: float = metrics[1]
 	var icons: Dictionary = {}
+	var leaning: Dictionary = {}
 	var pending: Array = []      # abutting symbols, still collecting
+	var pending_lean := false    # ...and whether that run is emphasised
 	var literal := ""            # abutting text, likewise
+	var literal_at := 0          # where in `text` that literal began
+	var slant: Font = slanted(font) if not emphasis.is_empty() else null
 	var key := 0
 
 	var toks := runs(text)
 	var i := 0
+	var at := 0                  # the offset in `text` of toks[i]
 	while i < toks.size():
 		var run: Array = toks[i]
 		var tex: Texture2D = null
@@ -260,18 +272,37 @@ static func build(text: String, font: Font, font_size: int, width: float,
 				tex = ManaIcons.symbol(str(span))
 			else:
 				tex = ManaIcons.symbol(run[1])
+		if tex == null:
+			span = 1             # one token goes back in as its braces
+		var width_of := 0
+		for n in span:
+			var piece: Array = toks[i + n]
+			width_of += String(piece[1]).length() + (2 if piece[0] == "s" else 0)
 		if tex != null:
 			if literal != "":
-				para.add_string(literal, font, font_size)
+				_add_literal(para, literal, literal_at, font, slant, font_size, emphasis)
 				literal = ""
+			var lean := _emphasised(at, at + width_of, emphasis)
+			if not pending.is_empty() and lean != pending_lean:
+				para.add_object(key, Vector2(advance * pending.size(), side),
+					INLINE_ALIGNMENT_CENTER, 1, 0.0)
+				icons[key] = pending
+				if pending_lean:
+					leaning[key] = true
+				key += 1
+				pending = []
 			pending.append(tex)
+			pending_lean = lean
 			i += span
+			at += width_of
 			continue
 		i += 1
 		if not pending.is_empty():
 			para.add_object(key, Vector2(advance * pending.size(), side),
 				INLINE_ALIGNMENT_CENTER, 1, 0.0)
 			icons[key] = pending
+			if pending_lean:
+				leaning[key] = true
 			key += 1
 			pending = []
 		# NO SKIN, or a code the nineteen-cell sheet cannot draw: the
@@ -279,19 +310,86 @@ static func build(text: String, font: Font, font_size: int, width: float,
 		# ACCUMULATES rather than going in run by run, so with no skin at
 		# all the paragraph is one span and shapes character for character
 		# as the plain string the box used to hold.
+		if literal == "":
+			literal_at = at
 		literal += String(run[1]) if run[0] == "t" \
 			else "{" + String(run[1]) + "}"
+		at += width_of
 	if literal != "":
-		para.add_string(literal, font, font_size)
+		_add_literal(para, literal, literal_at, font, slant, font_size, emphasis)
 	if not pending.is_empty():
 		para.add_object(key, Vector2(advance * pending.size(), side),
 			INLINE_ALIGNMENT_CENTER, 1, 0.0)
 		icons[key] = pending
+		if pending_lean:
+			leaning[key] = true
 	# A paragraph with nothing in it has no line at all, which would make
 	# an empty box report zero lines where a Label reports one.
 	if para.get_line_count() == 0:
 		para.add_string(" ", font, font_size)
-	return {"para": para, "icons": icons}
+	return {"para": para, "icons": icons, "slanted": leaning}
+
+
+## [param literal] (which began at [param from] in the whole text) into
+## [param para]: one span, or — where [param emphasis] covers part of it —
+## the upright and the slanted pieces in turn.
+static func _add_literal(para: TextParagraph, literal: String, from: int,
+		font: Font, slant: Font, font_size: int, emphasis: Array) -> void:
+	if emphasis.is_empty() or slant == null:
+		para.add_string(literal, font, font_size)
+		return
+	var cut := 0
+	while cut < literal.length():
+		var lean := _emphasised(from + cut, from + cut + 1, emphasis)
+		var end := cut + 1
+		while end < literal.length() and _emphasised(from + end, from + end + 1, emphasis) == lean:
+			end += 1
+		para.add_string(literal.substr(cut, end - cut), slant if lean else font, font_size)
+		# THE ITALIC CORRECTION: a leaning word's top runs on into the space
+		# after it ("IslandPlains"), so an upright word after it gets back
+		# half the lean of a letter's height. An empty inline box: nothing
+		# is drawn in it ([method _draw] skips a key with no symbols).
+		if lean and end < literal.length():
+			para.add_object("lean_gap_%d" % (from + end),
+				Vector2(ceilf(SLANT * font.get_ascent(font_size) * 0.5), 1.0),
+				INLINE_ALIGNMENT_CENTER, 1, 0.0)
+		cut = end
+
+
+## Whether `[from, to)` overlaps one of [param emphasis]'s ranges.
+static func _emphasised(from: int, to: int, emphasis: Array) -> bool:
+	for range_of in emphasis:
+		if from < int(range_of[1]) and int(range_of[0]) < to:
+			return true
+	return false
+
+
+## How far a slanted letter or symbol leans: the shear Godot's own default
+## theme gives its synthesised italic (x' = x + 0.2 y, y up).
+const SLANT := 0.2
+
+## THE FACE, LEANING — [param font] as a synthesised italic, the face this
+## project ships having no italic of its own (Spectral Regular only). A
+## COPY of a variation rather than a variation over it, for the reason
+## [method GameSkin.emboldened] gives: the trimmed body face keeps its line
+## box. Kept per face (a Font is no card data: the `static var` rule allows it).
+static var _slant_cache: Dictionary = {}
+
+static func slanted(font: Font) -> Font:
+	if font == null:
+		return null
+	var key := font.get_instance_id()
+	if _slant_cache.has(key):
+		return _slant_cache[key]
+	var lean: FontVariation
+	if font is FontVariation:
+		lean = (font as FontVariation).duplicate()
+	else:
+		lean = FontVariation.new()
+		lean.base_font = font
+	lean.variation_transform = Transform2D(Vector2(1.0, SLANT), Vector2(0.0, 1.0), Vector2.ZERO)
+	_slant_cache[key] = lean
+	return lean
 
 
 ## How tall [param text] stands once wrapped to [param width] at
@@ -314,8 +412,18 @@ var text: String = "":
 		text = value
 		_rebuild()
 
+## `[from, to)` ranges of [member text] set slanted ([method build]); empty
+## for none, which is every card a text change has not touched.
+var emphasis: Array = []:
+	set(value):
+		if emphasis == value:
+			return
+		emphasis = value
+		_rebuild()
+
 var _para: TextParagraph = null
 var _icons: Dictionary = {}
+var _leaning: Dictionary = {}
 ## Rebuilt LAZILY. `show_card` sets the text, then the size, then moves the
 ## box — three notifications for one card — and shaping the paragraph three
 ## times over a 897-card sweep is work nobody reads. Nothing outside
@@ -356,9 +464,10 @@ func _ensure() -> void:
 		return
 	var built := build(text, get_theme_font("font"),
 		get_theme_font_size("font_size"), maxf(size.x, 1.0),
-		get_theme_constant("line_spacing"))
+		get_theme_constant("line_spacing"), emphasis)
 	_para = built["para"]
 	_icons = built["icons"]
+	_leaning = built["slanted"]
 	_dirty = false
 
 
@@ -414,7 +523,15 @@ func _draw() -> void:
 				continue
 			var rect := _para.get_line_object_rect(i, key)
 			for n in run.size():
-				draw_texture_rect(run[n], Rect2(
-					rect.position + Vector2(n * advance + pad, 0.0),
-					Vector2(side, side)), false)
+				var cell := Rect2(rect.position + Vector2(n * advance + pad, 0.0),
+					Vector2(side, side))
+				if _leaning.has(key):
+					# Leaning as the letters beside it lean: the top to the
+					# right, about the symbol's own middle (y grows down).
+					var middle := cell.get_center().y
+					draw_set_transform_matrix(Transform2D(Vector2(1.0, 0.0),
+						Vector2(-SLANT, 1.0), Vector2(SLANT * middle, 0.0)))
+				draw_texture_rect(run[n], cell, false)
+				if _leaning.has(key):
+					draw_set_transform_matrix(Transform2D.IDENTITY)
 		y += _para.get_line_size(i).y + spacing

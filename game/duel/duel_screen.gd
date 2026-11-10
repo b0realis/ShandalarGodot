@@ -2915,8 +2915,9 @@ func _click_permanent(inst: CardInstance) -> void:
 
 ## A click on a permanent while a cast is waiting for its mana
 ## ([constant Mode.PAYING]): MANA ONLY. One mana ability taps straight
-## away; several open the same menu the normal click does, with the
-## activated abilities left out of it.
+## away; several tap for the colour the bill needs when that is clear
+## ([method _payment_pick], GitHub issue #7) and otherwise open the same
+## menu the normal click does, with the activated abilities left out of it.
 ## THE ANNOUNCEMENT BRACKET (campaign w7-5, CR 601.2g-h, 603.3): the
 ## pending cast or activation is ANNOUNCED and its mana is now being paid,
 ## so what that mana triggers — City of Brass's damage, Manabarbs, Kudzu,
@@ -2944,6 +2945,12 @@ func _tap_for_payment(inst: CardInstance) -> void:
 		_open_payment_bracket()
 		_report(game.tap_for_mana(_pending_pid, inst))
 		_flush_refresh()   # r1-1: the waiting cast retried before the click returns
+		return
+	var pick := _payment_pick(inst)
+	if not pick.is_empty():
+		_open_payment_bracket()
+		_report(game.tap_for_mana(_pending_pid, inst, int(pick[1])))
+		_flush_refresh()
 		return
 	_open_ability_menu(inst, true)
 	# Permanents with nothing to activate: click is a no-op (hover shows
@@ -3208,19 +3215,8 @@ func _release_held_cast() -> void:
 func _pending_is_reachable() -> bool:
 	if _pending_card == null:
 		return false
-	var payment: Dictionary
-	if _pending_ability_index < 0:
-		# The chosen targets ride along: a spell aimed at a Kaervek's Torch
-		# costs {2} more (Pack 8, [method MtgGame.targets_surcharge]), and
-		# both the mana the cast waits for and the double-click's taps
-		# have to include it.
-		payment = game.spell_payment(_pending_pid, _pending_card.data,
-			_pending_x, maxi(_flatten_pending_targets().size(), 1), _pending_card, _pending_mode,
-			_flatten_pending_targets())
-	elif _pending_ability_index < _pending_card.cur_activated_abilities.size():
-		payment = game.ability_payment(_pending_pid, _pending_card,
-			_pending_ability_index, _pending_x)
-	else:
+	var payment := _pending_payment()
+	if payment.is_empty():
 		return false
 	if ManaPlanner.cost_is_free(payment["cost"]) and int(payment["extra"]) == 0:
 		return false     # free and still refused: not a mana problem
@@ -3234,6 +3230,65 @@ func _pending_is_reachable() -> bool:
 			src.append([null, unit, Mtg.ManaColor.C, 1, false, "", 0, 0])
 	return not ManaPlanner.plan_from(src, payment["cost"],
 		int(payment["extra"]), payment["usage"]).is_empty()
+
+
+## The engine's bill for the pending cast or activation — `{cost, extra,
+## usage}` as [method MtgGame.spell_payment] gives it — or `{}` when the
+## pending ability is gone from its card.
+func _pending_payment() -> Dictionary:
+	if _pending_card == null:
+		return {}
+	if _pending_ability_index < 0:
+		# The chosen targets ride along: a spell aimed at a Kaervek's Torch
+		# costs {2} more (Pack 8, [method MtgGame.targets_surcharge]), and
+		# both the mana the cast waits for and the double-click's taps
+		# have to include it.
+		var targets := _flatten_pending_targets()
+		return game.spell_payment(_pending_pid, _pending_card.data,
+			_pending_x, maxi(targets.size(), 1), _pending_card, _pending_mode, targets)
+	if _pending_ability_index < _pending_card.cur_activated_abilities.size():
+		return game.ability_payment(_pending_pid, _pending_card,
+			_pending_ability_index, _pending_x)
+	return {}
+
+
+## THE COLOUR THE BILL NEEDS (GitHub issue #7, 2026-11-07 — *"it makes me
+## choose. I think it should automatically select what I need"*): the row
+## of [method ManaPlanner.sources] a [constant Mode.PAYING] click on
+## [param inst] taps without its menu, or `[]` to open the menu as before.
+## The planner decides ([method ManaPlanner.payment_pick]); this hands it
+## the clicked source's rows in menu order and every other source the
+## payment may use. Only a source whose every mana ability the planner
+## lists can answer: one it does not model, or one the cast reserves (an
+## Outpost paying for its own Soldier), is the menu's to explain. A seat
+## under a spending rule (Celestial Dawn) keeps the menu too.
+func _payment_pick(inst: CardInstance) -> Array:
+	var pool: ManaPool = game.players[_pending_pid].mana_pool
+	if pool.spend_as_any != 0 or pool.colorless_only != 0:
+		return []
+	var payment := _pending_payment()
+	if payment.is_empty():
+		return []
+	var options: Array = []
+	var others: Array = []
+	for row in _pending_payment_sources():
+		if row[0] == inst:
+			options.append(row)
+		else:
+			others.append(row)
+	var listed: Dictionary = {}
+	for row in options:
+		listed[int(row[1])] = true
+	if listed.size() != inst.cur_mana_abilities.size():
+		return []
+	options.sort_custom(func(a: Array, b: Array) -> bool:
+		return int(a[1]) < int(b[1]) if int(a[1]) != int(b[1]) \
+			else Mtg.WUBRG.find(int(a[2])) < Mtg.WUBRG.find(int(b[2])))
+	var abilities: Array = []
+	for row in options:
+		abilities.append(game.mana_ability_for(_pending_pid, inst, int(row[1])))
+	return ManaPlanner.payment_pick(options, others, payment["cost"],
+		int(payment["extra"]), payment["usage"], abilities)
 
 
 ## A pending activation still needs its source when its costs are paid.

@@ -324,6 +324,11 @@ var _frame_bg: Panel
 var _name_label: Label
 var _cost_holder: Control
 var _type_label: Label
+## [QoL, issue #9] The type line AS A TEXT CHANGE WROTE IT ("Land — Island
+## Plains", the changed word leaning), shown in [member _type_label]'s place
+## only while one did ([method changed_text]); a [ManaText] because a Label
+## cannot set one word apart. Hidden for every other card.
+var _type_changed: ManaText
 var _set_icon: TextureRect
 var _set_text: Label
 var _set_suffix: Label
@@ -628,6 +633,15 @@ func _init() -> void:
 	_type_label.clip_text = true
 	_outline(_type_label)
 	add_child(_type_label)
+	_type_changed = ManaText.new()
+	_type_changed.name = "TypeChanged"
+	_anchor(_type_changed, 0.075, 0.552, 0.845, 0.604)
+	_type_changed.add_theme_font_override("font", _title_font)
+	_type_changed.add_theme_font_size_override("font_size", _type_size)
+	_type_changed.add_theme_color_override("font_outline_color", OUTLINE_INK)
+	_type_changed.add_theme_constant_override("outline_size", OUTLINE_SIZE)
+	_type_changed.visible = false
+	add_child(_type_changed)
 
 	# RULES TEXT inside the frame's white box (60%-91.7%). The flat
 	# no-skin fallback paints that box itself.
@@ -879,6 +893,8 @@ func show_back() -> void:
 	_text_plate.visible = false
 	_dual_land_plate.visible = false
 	_dual_land_plate.texture = null
+	_type_changed.visible = false
+	_type_label.visible = true
 	visible = true
 	face_changed.emit()
 
@@ -922,7 +938,10 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	var frame_key := MiniCard.frame_skin_key(d)
 	var skinned := GameSkin.texture(frame_key) != null
 	_name_label.text = d.card_name
-	_type_label.text = _type_line(d)
+	# [QoL, issue #9] What a text change wrote — never on `Original type`,
+	# which is the card before any spell changed it.
+	var changed := {} if printed else changed_text(inst)
+	_type_label.text = String(changed["type"]) if changed.get("type_changed", false) else _type_line(d)
 	# THE ONE-LINE LADDERS. The original condenses its title and type-line
 	# faces to fit; we step the size down instead, and only for the names
 	# and type lines long enough to need it.
@@ -936,6 +955,7 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 		_fit_one_line(_title_font, _type_label.text, type_w,
 			[_type_size, _type_size - 2, _type_size - 4, _type_size - 6,
 				_type_size - 8]))
+	_lay_out_changed_type(changed)
 	# The set symbol: the printed one for the five expansions, this
 	# project's Roman II and IV for Unlimited and Fourth Edition, and
 	# none for the promos, which letter themselves `PR`.
@@ -949,6 +969,10 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 		else GameSkin.set_label_suffix(shown_set)
 	_set_suffix.visible = _set_suffix.text != ""
 	_oracle.text = d.oracle_text if d.oracle_text != "" else "(no rules text)"
+	_oracle.emphasis = []
+	if changed.get("rules_changed", false):
+		_oracle.text = String(changed["rules"])
+		_oracle.emphasis = changed["rules_marks"]
 	# THE TEXT BOX, then the type in it — in that order, because how big
 	# the box is decides what fits. `Expand` grows it only as far as the
 	# card needs (see [constant TEXT_TOP]); the ladder then takes the
@@ -1057,6 +1081,7 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	for label in [_name_label, _type_label, _pt_label, _set_text, _set_suffix,
 			_artist_label]:
 		label.add_theme_color_override("font_color", BODY_INK)
+	_type_changed.add_theme_color_override("font_color", BODY_INK)
 	for label in [_set_text, _set_suffix]:
 		label.add_theme_color_override("font_color", GameSkin.set_symbol_ink(rarity, legendary))
 	_oracle.add_theme_color_override("font_color", RULES_INK)
@@ -1112,6 +1137,18 @@ func place_beside(anchor_rect: Rect2) -> void:
 
 
 static func _type_line(d: CardData) -> String:
+	var line := _type_head(d)
+	if not d.subtypes.is_empty():
+		var subs := PackedStringArray()
+		for s in d.subtypes:
+			subs.append(String(s).capitalize())
+		line += " — " + " ".join(subs)
+	return line
+
+
+## The type line's part before the dash ("Legendary Land") — [method
+## _type_line] without the subtypes.
+static func _type_head(d: CardData) -> String:
 	var parts := PackedStringArray()
 	if d.supertypes & Mtg.Supertype.LEGENDARY:
 		parts.append("Legendary")
@@ -1124,13 +1161,289 @@ static func _type_line(d: CardData) -> String:
 	for flag in type_names:
 		if d.types & flag:
 			parts.append(type_names[flag])
-	var line := " ".join(parts)
-	if not d.subtypes.is_empty():
-		var subs := PackedStringArray()
-		for s in d.subtypes:
-			subs.append(String(s).capitalize())
-		line += " — " + " ".join(subs)
-	return line
+	return " ".join(parts)
+
+
+## The changed type line in the plain label's place, at the size the
+## label's ladder chose; the plain label again for every other card.
+func _lay_out_changed_type(changed: Dictionary) -> void:
+	var on := bool(changed.get("type_changed", false))
+	_type_changed.visible = on
+	_type_label.visible = not on
+	if not on:
+		_type_changed.text = ""
+		_type_changed.emphasis = []
+		return
+	var points := _type_label.get_theme_font_size("font_size")
+	_type_changed.add_theme_font_size_override("font_size", points)
+	_type_changed.text = String(changed["type"])
+	_type_changed.emphasis = changed["type_marks"]
+	# Where the label sets its one line: centred on the strip, or — a line
+	# box taller than the strip — from the strip's top down, as a Label
+	# grown to its minimum size does. A ManaText draws from its own top and
+	# only the lines that stand whole in it, so it is one shaped line box
+	# tall (the leaning face's included), a pixel to spare.
+	var strip := (0.604 - 0.552) * SIZE.y
+	var shaped: TextParagraph = ManaText.build(_type_changed.text, _title_font, points,
+		(0.845 - 0.075) * SIZE.x, 0, _type_changed.emphasis)["para"]
+	var line := shaped.get_line_size(0).y
+	_type_changed.offset_top = maxf(0.0, roundf((strip - line) / 2.0))
+	_type_changed.offset_bottom = _type_changed.offset_top + ceilf(line - strip) + 1.0
+
+
+# --------------------------------------------------------------------------
+#  [QoL, issue #9] THE TEXT AS A TEXT CHANGE WROTE IT
+# --------------------------------------------------------------------------
+## WHAT THE CARD'S TEXT SAYS NOW, after the text changes on [param inst]
+## (CR 612; [member CardInstance.text_changes] — Magical Hack's land type
+## words, Sleight of Mind's colour words, Quarum Trench Gnomes' mana; Mind
+## Bend and Whim of Volrath write the same kinds), for the Showcase and the
+## small card's tooltip. GitHub issue #9: a hacked Savannah tapped for {U}
+## or {W} while both still read "({T}: Add {G} or {W}.)".
+##
+## `{}` when nothing on the card was rewritten — every card without a text
+## change, a face-down one, one off the battlefield and the stack (where a
+## text change has ended). Otherwise
+## `{type_changed, type, type_marks, rules_changed, rules, rules_marks}`:
+## the type line and the rules text, each with the `[from, to)` ranges of
+## the words the change wrote ([member ManaText.emphasis]).
+##
+## ONLY WHAT THE ENGINE CHANGED IS REWRITTEN, never a guess from the words.
+## A text change here reaches subtypes, landwalk, protection colours and a
+## land's mana (`docs/simplified-cards.md`, "Text changes"), so those are
+## the words rewritten — "Swampwalk" and its reminder's "a Swamp", the
+## colour after "protection from", the mana symbols after "Add", the land
+## type in the type line — and each only where the engine's own layer 3
+## ([method CardInstance.reset_characteristics], run on a scratch copy of
+## the printed card with these changes) really changed that
+## characteristic: a land's {G} becomes {U} only when its mana abilities,
+## so recomputed, make {U} and the printed ones made {G}; Island Fish
+## Jasconius's "an Island" in its attack restriction stays, because the
+## engine's restriction stays. A later layer (Blood Moon, Evil Presence) is
+## no text and is the small card's name band's to show, not this.
+##
+## A LAN guest's card carries the host's text changes as public facts
+## (`sg_text_effects`, [SgCardPresentation]), read here the same way.
+##
+## The 1997 manual put the Showcase on the PRINTED text always (p.118:
+## *"the Showcase always displays the original card text"*); issue #9 asks
+## for the text change there, so this is labelled [QoL], and `Original
+## type` still shows the printed card.
+static func changed_text(inst: CardInstance) -> Dictionary:
+	if inst == null or inst.face_down \
+			or inst.zone not in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.STACK]:
+		return {}
+	var changes: Array = []
+	for change in inst.get_meta("sg_text_effects", inst.text_changes):
+		if String(change.get("kind", "")) in ["land_type", "color_word", "mana_color"]:
+			changes.append(change)
+	if changes.is_empty():
+		return {}
+	var d := inst.data
+	# THE ENGINE'S OWN LAYER 3 on the printed card, nothing after it.
+	var probe := CardInstance.new(d, -1, inst.owner_id)
+	probe.zone = Mtg.Zone.BATTLEFIELD
+	for change in changes:
+		probe.text_changes.append((change as Dictionary).duplicate())
+	probe.reset_characteristics()
+	# Each word as the changes, in order, rewrote it (each rewrites every
+	# instance of its word, a word an earlier one wrote included).
+	var lands := {}
+	for word in Mtg.BASIC_LAND_COLORS:
+		lands[word] = word
+	var colors := {}
+	var mana := {}
+	for c in Mtg.WUBRG:
+		colors[c] = c
+		mana[c] = c
+	mana[Mtg.ManaColor.C] = Mtg.ManaColor.C
+	for change in changes:
+		var kind := String(change["kind"])
+		if kind == "land_type":
+			var from_word := String(change["from"])
+			var to_word := String(change["to"])
+			for word in lands:
+				if lands[word] == from_word:
+					lands[word] = to_word
+			if Mtg.BASIC_LAND_COLORS.has(from_word) and Mtg.BASIC_LAND_COLORS.has(to_word):
+				for c in mana:
+					if int(mana[c]) == int(Mtg.BASIC_LAND_COLORS[from_word]):
+						mana[c] = int(Mtg.BASIC_LAND_COLORS[to_word])
+		elif kind == "color_word":
+			for c in colors:
+				if int(colors[c]) == int(change["from"]):
+					colors[c] = int(change["to"])
+		elif kind == "mana_color":
+			for c in mana:
+				if int(mana[c]) == int(change["from"]):
+					mana[c] = int(change["to"])
+	var out := {"type_changed": false, "type": _type_line(d), "type_marks": [],
+		"rules_changed": false, "rules": d.oracle_text, "rules_marks": []}
+	# THE TYPE LINE: the printed subtypes as the land map rewrote them —
+	# when that is exactly what the engine's subtypes now are.
+	var subtypes: Array[String] = []
+	var rewritten: Array[bool] = []
+	for word in d.subtypes:
+		var now := String(lands.get(word, word))
+		if subtypes.has(now):
+			continue   # "Island Island" is one Island, as the engine keeps it
+		subtypes.append(now)
+		rewritten.append(now != word)
+	if rewritten.has(true) and subtypes == probe.cur_subtypes:
+		var line := _type_head(d) + " —"
+		var marks: Array = []
+		for i in subtypes.size():
+			line += " "
+			var word := subtypes[i].capitalize()
+			if rewritten[i]:
+				marks.append([line.length(), line.length() + word.length()])
+			line += word
+		out["type_changed"] = true
+		out["type"] = line
+		out["type_marks"] = marks
+	# THE RULES TEXT.
+	var text := d.oracle_text
+	var edits: Array = []
+	_landwalk_edits(text, d, probe, lands, edits)
+	_protection_edits(text, d, probe, colors, edits)
+	_mana_edits(text, d, probe, mana, edits)
+	if not edits.is_empty():
+		var done := _apply_edits(text, edits)
+		out["rules_changed"] = true
+		out["rules"] = done["text"]
+		out["rules_marks"] = done["marks"]
+	if not out["type_changed"] and not out["rules_changed"]:
+		return {}
+	return out
+
+
+static func _matching_case(like: String, word: String) -> String:
+	if like != "" and like.left(1) == like.left(1).to_upper():
+		return word.capitalize()
+	return word.to_lower()
+
+
+## "Swampwalk" (and the "a Swamp" of the reminder right after it) where the
+## engine's landwalk now names the type the change wrote.
+static func _landwalk_edits(text: String, d: CardData, probe: CardInstance,
+		lands: Dictionary, edits: Array) -> void:
+	var walk := RegEx.create_from_string("(?i)\\b(plains|island|swamp|mountain|forest)walk\\b")
+	var reminder := RegEx.create_from_string("\\b(an?) (Plains|Island|Swamp|Mountain|Forest)\\b")
+	for m in walk.search_all(text):
+		var printed := m.get_string(1).to_lower()
+		var now := String(lands.get(printed, printed))
+		if now == printed or not d.landwalk.has(printed) or not probe.cur_landwalk.has(now):
+			continue
+		edits.append([m.get_start(), m.get_end(),
+			_matching_case(m.get_string(), now) + "walk"])
+		# The reminder in the parentheses that follow the keyword.
+		var open := m.get_end()
+		while open < text.length() and text[open] in [" ", ","]:
+			open += 1
+		if open >= text.length() or text[open] != "(":
+			continue
+		var close := text.find(")", open)
+		if close < 0:
+			continue
+		for r in reminder.search_all(text, open, close):
+			if r.get_string(2).to_lower() != printed:
+				continue
+			var article := "an" if now.left(1) in ["a", "e", "i", "o", "u"] else "a"
+			edits.append([r.get_start(), r.get_end(), "%s %s" % [article, now.capitalize()]])
+
+
+const _COLOR_WORDS := {"white": Mtg.ManaColor.W, "blue": Mtg.ManaColor.U,
+	"black": Mtg.ManaColor.B, "red": Mtg.ManaColor.R, "green": Mtg.ManaColor.G}
+
+## The colour words after "protection from" (CR 702.16) where the engine's
+## protection now names the colour the change wrote.
+static func _protection_edits(text: String, d: CardData, probe: CardInstance,
+		colors: Dictionary, edits: Array) -> void:
+	var words := "(?:white|blue|black|red|green)"
+	var clause := RegEx.create_from_string("(?i)\\bprotection from (%s(?:(?:,\\s*|\\s+and\\s+|\\s+or\\s+)(?:from\\s+)?%s)*)" % [words, words])
+	var one := RegEx.create_from_string("(?i)\\b(white|blue|black|red|green)\\b")
+	for m in clause.search_all(text):
+		for w in one.search_all(text, m.get_start(1), m.get_end(1)):
+			var printed := int(_COLOR_WORDS[w.get_string(1).to_lower()])
+			var now := int(colors.get(printed, printed))
+			if now == printed or (d.protection_from & printed) == 0 \
+					or (probe.cur_protection & now) == 0:
+				continue
+			edits.append([w.get_start(), w.get_end(),
+				_matching_case(w.get_string(), String(Mtg.COLOR_NAMES[now]))])
+
+
+const _SYMBOL_COLORS := {"W": Mtg.ManaColor.W, "U": Mtg.ManaColor.U,
+	"B": Mtg.ManaColor.B, "R": Mtg.ManaColor.R, "G": Mtg.ManaColor.G,
+	"C": Mtg.ManaColor.C}
+
+## The mana symbols after "Add" — only when the engine's mana abilities,
+## recomputed with the changes, make what the rewritten symbols say and the
+## printed symbols said what the printed abilities make. Anything else is
+## left as printed: no guess.
+static func _mana_edits(text: String, d: CardData, probe: CardInstance,
+		mana: Dictionary, edits: Array) -> void:
+	var printed_made := _fixed_colors(d.mana_abilities)
+	var now_made := _fixed_colors(probe.cur_mana_abilities)
+	if printed_made == now_made:
+		return
+	var clause := RegEx.create_from_string("\\bAdd\\b([^.\\n)]*)")
+	var symbol := RegEx.create_from_string("\\{([WUBRGC])\\}")
+	var said: Array[int] = []
+	var says: Array[int] = []
+	var mine: Array = []
+	for m in clause.search_all(text):
+		for t in symbol.search_all(text, m.get_start(1), m.get_end(1)):
+			var was := int(_SYMBOL_COLORS[t.get_string(1)])
+			var now := int(mana.get(was, was))
+			if not said.has(was):
+				said.append(was)
+			if not says.has(now):
+				says.append(now)
+			if now != was:
+				var letter := ""
+				for code in _SYMBOL_COLORS:
+					if int(_SYMBOL_COLORS[code]) == now:
+						letter = code
+				mine.append([t.get_start(), t.get_end(), "{%s}" % letter])
+	said.sort()
+	says.sort()
+	if said == printed_made and says == now_made:
+		edits.append_array(mine)
+
+
+## The colours [param abilities] make whatever is chosen — the literal ones,
+## not "any colour" (Birds of Paradise has no symbol to rewrite) — sorted.
+static func _fixed_colors(abilities: Array) -> Array[int]:
+	var out: Array[int] = []
+	for ability: ManaAbility in abilities:
+		var chosen := ability.color_options.is_valid() or ability.dynamic_color.is_valid()
+		for i in ability.produces.size():
+			if i == 0 and chosen:
+				continue
+			var c := int(ability.produces[i][0])
+			if not out.has(c):
+				out.append(c)
+	out.sort()
+	return out
+
+
+## [param text] with [param edits] (`[from, to, words]`, never overlapping)
+## applied; `{text, marks}`, the marks where the new words stand.
+static func _apply_edits(text: String, edits: Array) -> Dictionary:
+	edits.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var out := ""
+	var marks: Array = []
+	var at := 0
+	for edit in edits:
+		if int(edit[0]) < at:
+			continue
+		out += text.substr(at, int(edit[0]) - at)
+		marks.append([out.length(), out.length() + String(edit[2]).length()])
+		out += String(edit[2])
+		at = int(edit[1])
+	out += text.substr(at)
+	return {"text": out, "marks": marks}
 
 
 ## A card's PRINTED P/T as the original writes it, quirks included:

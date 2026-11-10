@@ -31,6 +31,41 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## Issues #7–#10 (2026-11-10)
+
+A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
+
+- `docs/issues-7-10-2026-11-10.md`: the four reports, their causes, the
+  fixes and the tests that pin them.
+- `engine/mana_planner.gd`: `ManaPlanner.payment_pick` — the ability (and
+  color) a click made while paying should use, or none when the choice is
+  the player's (issue #7).
+- `game/duel/card_preview.gd` / `game/duel/mana_text.gd`:
+  `CardPreview.changed_text` — the Showcase reads a text change's rewritten
+  type line and rules, only where the engine's layer 3 changed them, the
+  changed words in italics (`ManaText` italic ranges); "Original type" stays
+  printed (issue #9).
+- `test_issue_7_payment_color.gd` (tests/ui): a payment click on a dual land,
+  Birds, City of Brass, Black Lotus or a painland taps the color still owed;
+  the rest of the cost breaks a tie; real choices, extra leftover mana and
+  Fellwar Stone keep the menu or the question; the menu's choice still opens
+  the announcement bracket.
+- `test_issue_7_lan_guest.gd` (tests/ui): at a LAN guest the payment click
+  sends the owed color's option (Savannah for {W}, Birds for {G}); a click
+  outside a payment keeps the menu.
+- `test_issue_7_payment_pick.gd` (tests/unit): `ManaPlanner.payment_pick` —
+  the owed symbol, floating mana first, a tie broken by the other sources,
+  ambiguity, generic with the extra-mana guard, color-choice abilities,
+  options that differ.
+- `test_issue_9_text_change_text.gd` (tests/ui): the Showcase and the
+  tooltip read a hacked Savannah's "{U} or {W}", a hacked basic, landwalk
+  and its reminder, protection, only what the engine changed, nothing for an
+  unchanged card, a LAN guest's card, the slanted face.
+- `test_issue_10_riddle_card_size.gd` (tests/ui): the dungeon riddle box's
+  card at the Showcase's size as far as the page allows (never below
+  1997's), a left or right click reads it, the meeting riddle's card larger
+  beside the face.
+
 ## The gap review (2026-11-10)
 
 The areas the reviews of October left open — the per-set AI tactics, the

@@ -90,9 +90,11 @@ func test_city_of_brass_tapped_by_hand_for_a_waiting_cast_casts_under_its_ping()
 	screen._refresh()
 	screen._on_card_clicked(bears)
 	assert_eq(screen.mode, DuelScreen.Mode.PAYING, "the cast waits for its mana")
-	screen._on_card_clicked(city)                    # five colours: the menu
-	screen._ability_menu.hide()
-	screen._on_ability_chosen(4)                     # {G}
+	# Five colours, and the {G} still owed picks green without the menu
+	# (GitHub issue #7); the menu's own choice opens the bracket too
+	# (tests/ui/test_issue_7_payment_color.gd).
+	screen._on_card_clicked(city)
+	assert_true(city.tapped)
 	assert_true(g.stack.is_empty(), "the ping waits for the cast")
 	assert_true(g.announcement_open(0), "the bracket is open")
 	screen._on_card_clicked(forest)
@@ -106,9 +108,8 @@ func test_an_abandoned_cast_lets_the_ping_go_on() -> void:
 	var bears := _hand("Grizzly Bears")
 	screen._refresh()
 	screen._on_card_clicked(bears)
-	screen._on_card_clicked(city)
-	screen._ability_menu.hide()
-	screen._on_ability_chosen(0)                     # {W}: not enough for the Bears
+	screen._on_card_clicked(city)                    # {G}: the {1} still owed
+	assert_true(city.tapped)
 	assert_true(g.stack.is_empty(), "control: the ping waits")
 	screen._on_cancel()
 	assert_false(g.announcement_open(0), "Cancel closes the bracket")
