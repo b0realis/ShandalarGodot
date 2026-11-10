@@ -31,6 +31,109 @@
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
 
+## The gap review (2026-11-10)
+
+The areas the reviews of October left open — the per-set AI tactics, the
+inner layers, the duel screen, the LAN lobby, the tools, the smaller
+items — read again, every finding proven by a failing check and fixed.
+
+- `docs/gap-review-2026-11-10.md`: the review's record — what had changed
+  since the list, the findings, the owner's rulings, the fixes and the
+  checks that pin them.
+- `test_gap_fix_g1a_fallen_empires.gd` (tests/ai): Vodalian War Machine
+  buys no pump that cannot save it (the crew still untapped against the
+  incoming damage), Tourach's Gate spares a blocked attacker one point
+  from death, Melee never throws away lethal and is charged the face damage
+  it removes; gate-off arms and hidden-card permutations.
+- `test_gap_fix_g1a_alliances.gd` (tests/ai): Phelddagrif buys flying or
+  trample only when it pushes damage past every blocker, priced against
+  its gift (a 1/1 Hippo, 2 life).
+- `test_gap_fix_g1a_masked_targets.gd` (tests/ai): a retarget ranks two
+  masked creatures alike and Deflection's question names no masked card
+  (`cards/sets/ice/_patterns.gd`); the Portal trigger order agrees.
+- `test_gap_fix_g1a_ice_age.gd` (tests/ai): Kjeldoran Royal Guard and the
+  Mercenaries' shield wait for blocks, the Guard counting its own block.
+- `test_gap_fix_g1a_homelands.gd` (tests/ai): Aether Storm's 4 life only
+  for creatures the mana pays for that are worth more; a Clockwork
+  creature that attacks this turn is not wound up.
+- `test_gap_fix_g1b_respond_order.gd` (tests/ai): the counter answers
+  before the Portal, Alliances, Ice Age and Homelands special-spell arms,
+  and the redirect that wins before the counter
+  (`IceAgeTactics.winning_redirect`); the arms unchanged without a
+  counter; gate off keeps the old order.
+- `test_gap_fix_g1b_divided.gd` (tests/ai): the Pack 8/9 stack readers
+  read a divided spell's share (Pyrotechnics) and Fireball's even split,
+  not the total; null arm and lethal-share controls.
+- `test_gap_fix_g1b_intent_share.gd` (tests/ai): `EffectIntent.damage_on`,
+  `damage_from`, `kills_on`, `kills_from` and `divided_evenly`.
+- `test_gap_fix_g1b_alliances_share.gd` (tests/ai): the Alliances readers
+  take a divided spell's share, not its total — the self-bounce answer
+  (`AlliancesTactics.takes_self`) and Force of Will's lethal check
+  (Pyrotechnics' share, Fireball read by name and split evenly); gate off.
+- `test_gap_fix_g1b_portal_turns.gd` (tests/ai): Relentless Assault only
+  after an attack; Last Chance not bought when this turn is lethal;
+  hidden-hand permutations.
+- `test_gap_fix_g1b_licid_mask.gd` (tests/ai): face-down licid hosts keyed
+  alike (`licid_twin_key`); the hidden-card permutation.
+- `test_gap_fix_g2_layers.gd` (tests/unit): CR 613 after the owner's
+  ruling of 2026-11-10 — "loses all abilities" after layers 4 and 5
+  (Kormus Bell under Titania's Song, Humility over a layer-5 effect,
+  Darkest Hour under Opalescence), the later halves of an effect reaching
+  what its first reached (`ContinuousEffects.lock_in` / `locked_in`), the
+  lingering Song's own timestamp, the mass animations' size in layer 7b
+  and Kormus Bell's color in layer 5, the Song against Animate Artifact
+  by timestamp (CR 613.8b).
+- `test_gap_fix_g2_misc.gd` (tests/unit): the 1997 tapped-artifact rule
+  judged again after layer 4 (Animate Artifact on a tapped Meekstone),
+  text changes against granted protection (`CardInstance.text_protection`,
+  CR 612.3), the off-battlefield definition index (`definition_holders`).
+- `test_gap_fix_lead_sleight_of_mind.gd` (tests/cards): Sleight of Mind
+  targets and offers only the color words a card's text prints, never a
+  granted protection.
+- `test_gap_fix_g3_private_hotseat.gd` (tests/ui): at a private hotseat a
+  click acts only for the deciding seat (`DuelScreen._table_actor`) —
+  lands, abilities; Piracy and "any player may" kept.
+- `test_gap_fix_g3_face_down.gd` (tests/ui): face-down permanents in a
+  question and the Showcase — the controller looks
+  (`_controller_may_look`, CR 708.5), anyone else reads `Face-down
+  creature #id`; the hidden-information permutation.
+- `test_gap_fix_g3_popups.gd` (tests/ui): the verdict closes the X
+  question and the tutor picker; the computer waits under the cast's
+  windows (`_cast_window_open`); a seat's own end step at two-human tables.
+- `test_gap_fix_g3_duel_log_place.gd` (tests/ui): the duel log stops above
+  the Situation Bar at every UI scale and size (`DuelLog.keep_above`,
+  `DuelScreen._fit_duel_log`).
+- `test_gap_fix_g4_session_end.gd` (tests/ui): a seat the host ended offers
+  Disconnect and its tabs, a closed host is not retried
+  (`SgLocalClient.stopped`, `host_final`), the table banner says why and
+  offers Leave table; a refused automatic pass keeps the table locked; a
+  closing socket is offline.
+- `test_gap_fix_g4_lobby_keys.gd` (tests/ui): Escape and a pad's B close
+  the lobby's popup first (over the table too), B closes sub-windows and
+  leaves pages, the Master Panel takes and returns the focus.
+- `test_gap_fix_g4_lobby_lists.gd` (tests/ui): Stop LAN search drops a
+  pending table, the friendly deck sizes (`SgTableRules.deck_sizes`), long
+  deck names trimmed in the browser, the picker's line after a reconnect,
+  the waiting room ignores other tables, a hidden computer deck is not
+  added, an armed ruling disarms when its pairing changes.
+- `test_gap_fix_g6_deck_notes.gd` (tests/ui): a deck's notes keep the
+  first line's indent through a file, a `.dec` export and the notes
+  dialog (`DeckModel.notes_as_typed`); OK on unchanged notes is no edit.
+- `test_gap_fix_g6_duel_log_trim.gd` (tests/unit): the running duel log's
+  trim takes a banner only inside its slab, so a long previous duel keeps
+  its tail.
+- `test_gap_fix_g6_illusionary_mask_ante.gd` (tests/cards): with Ante off
+  Illusionary Mask offers no ante card (the owner's ruling), its controller
+  told why privately; a duel for ante masks as before.
+- `tools/test_gap_fix_g5_soak_trap.py`: a Ctrl-C between `duel_soak.sh`'s
+  fork and its trap (strace holds bash) still stops Godot with 130; two
+  controls; skipped without strace.
+- `tools/test_gap_fix_g5_tar_links.py`: `write_zip`'s tar.gz holds a linked
+  picture's bytes, never the link, and no builder's user or group.
+- `tools/test_gap_fix_g5_builder_help.py`: the ten pack builders list
+  `fetch` last, marked a developer step that may make the pack
+  incompatible, in the quick help and `-h`; lines fit 80 columns.
+
 ## The Urza Block, Pack 10 (2026-11-06)
 
 The first two-digit pack: every list of packs keeps it after Pack 9, and
@@ -4839,8 +4942,12 @@ pipe, for a program that speaks the Model Context Protocol.
   says. `Server(door, workspace)`: `run` (the door as a subprocess, cwd
   the checkout, stdin closed), `quote` (the door's own envelope raised
   as `ToolError`, or one synthesized with `kind` `godot`/`run` and the
-  stderr tail), `inside` (THE PATH RULE — a path a tool writes lies
-  under the checkout or the workspace, else `kind: path`), `deck_arg`
+  stderr tail), `writable` (THE PATH RULE, 2026-11-10 — a path a tool writes lies
+  in the workspace, a bare name put there, plus the Lab's
+  `decks/ratings.txt` for `--elo-file`, else `kind: path`), `reachable`
+  (folder reads: the checkout or the workspace), `fenced_args` (every
+  file switch of a raw Lab or AutoDeck line through `deck_arg` /
+  `deck_list`; `--worker` and `user://` refused), `deck_arg`
   / `deck_list` (THE DECK RULE, 0.40.35 — a deck a tool names passes as
   typed when the door will find it, an absolute path or a path under
   the checkout or `decks/`; a bare name that is a file or folder in the

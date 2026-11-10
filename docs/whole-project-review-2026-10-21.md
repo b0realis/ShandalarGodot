@@ -419,7 +419,9 @@ reproduced it yet; each needs a probe before it is fixed.
 
 0.50.45 (`docs/hunt-campaign-2026-10-21.md`) settled the three rulings and
 fixed the items marked *fixed in 0.50.45* below; what is still open is
-carried forward in that record's "Still open".
+carried forward in that record's "Still open". The gap review of
+2026-11-10 (`docs/gap-review-2026-11-10.md`) read the areas this review
+left unread.
 
 ### Waiting on the owner's ruling
 

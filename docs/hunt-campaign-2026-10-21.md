@@ -236,6 +236,11 @@ hunt did not close (`docs/whole-project-review-2026-10-21.md`, "Left
 open", marks what 0.50.45 closed). "Suspected" means seen while reading and
 not proven by a probe; each needs one before it is fixed.
 
+*(2026-11-10, the gap review: the per-set AI tactics, the layers, the duel
+screen, the LAN lobby, the tools and the smaller items were read again —
+what had already been fixed, the 42 defects found and fixed, and what is
+still open are in `docs/gap-review-2026-11-10.md`.)*
+
 ### For the owner
 
 *(2026-10-27, the bug campaign c12: the MCP read fence, the open LAN host,

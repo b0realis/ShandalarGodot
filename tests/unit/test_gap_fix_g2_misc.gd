@@ -129,4 +129,3 @@ func test_a_card_that_left_the_game_drops_out_of_the_walk() -> void:
 	g._instances.erase(held.id)
 	g.recalculate()
 	assert_eq(g.continuous.definition_holders(g), [])
-
