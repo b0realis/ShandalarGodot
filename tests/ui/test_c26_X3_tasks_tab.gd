@@ -10,12 +10,9 @@ const SAVES := "user://adventure_tests_c26_x3_tasks"
 var screen: WorldScreen
 var _guides_before: bool
 var _portal_before: bool
-var _launch_before: bool
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray())
 	_guides_before = WorldHud.guides_wanted()
 	_portal_before = WorldGuides.portal_wanted()
 	Settings.set_value(WorldHud.GUIDES_SETTING, true)
@@ -31,7 +28,6 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	Settings.set_value(WorldHud.GUIDES_SETTING, _guides_before)
 	WorldGuides.want_portal(_portal_before)
 	AdventurePlayer.saves_folder = AdventurePlayer.SAVES_FOLDER

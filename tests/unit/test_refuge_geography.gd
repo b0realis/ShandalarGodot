@@ -1,25 +1,20 @@
 extends GutTest
 
-var _launch_before: bool
-
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 
 func island(seed_text := "48271") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
 	setup.player_name = "Wayfarer"
 	var record := setup.resolve({"pack-2": "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
-	RefugeCampaign.travel(player)
+	_refuge().travel(player)
 	return player
 
 func road_component(world: ShandalarWorld) -> Dictionary:
@@ -42,7 +37,7 @@ func road_component(world: ShandalarWorld) -> Dictionary:
 func test_roads_connect_every_settlement_without_crossing_water_or_cutting_coasts() -> void:
 	var shapes := {}
 	for seed_value in [1, 23, 345, 12345, 48271, 8675309]:
-		var world := RefugeWorld.generate(seed_value, 1, 1)
+		var world := _refuge().generate(seed_value, 1, 1)
 		var roads := road_component(world)
 		var diagonal := false
 		for tile in roads:
@@ -75,7 +70,7 @@ func test_road_prefers_a_pass_around_a_mountain_mass() -> void:
 		for x in range(6, 11):
 			world.page[y * 320 + x] = 5
 	world.start = Vector2i(3, 8) * 32 + Vector2i(16, 16)
-	RefugeRoads.join(world, Vector2i(3, 8), Vector2i(14, 8), {})
+	RegionRoads.join(world, Vector2i(3, 8), Vector2i(14, 8), {})
 	assert_true(road_component(world).has(Vector2i(14, 8)))
 	for y in range(5, 12):
 		for x in range(6, 11):
@@ -130,22 +125,22 @@ func test_dungeon_opens_a_real_board_and_survives_save_and_region_changes() -> v
 	assert_gt(board.cells.size(), 0)
 	assert_string_contains(player.journal.back()["text"], "Vaults of the First Crossing")
 	var before := dungeon.duplicate(true)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var loaded := AdventurePlayer.from_dict(player.to_dict())
 	assert_not_null(loaded)
-	assert_true(RefugeCampaign.travel(loaded))
+	assert_true(_refuge().travel(loaded))
 	assert_eq(loaded.world.encounters[5], before)
 	for attempt in 8:
 		DungeonDoors.leave(loaded, 5, {})
 		var moved: Dictionary = loaded.world.encounters[5]
 		var next := Vector2i(moved["x"], moved["y"])
-		assert_eq(RefugeCampaign.marker(loaded.world, next), "")
+		assert_eq(_refuge().marker(loaded.world, next), "")
 		assert_eq(VisitPane.site_slot(loaded.world, next), -1)
 		assert_eq(loaded.world.road_bits(next.x, next.y), 0)
 		assert_eq(DungeonDoors.at(loaded.world, next), 5)
 	assert_eq(loaded.defeated_wizards, [] as Array[String])
-	assert_eq(loaded.refuge["quests"], [])
-	assert_false(loaded.refuge["liberated"])
+	assert_eq(loaded.expansions["refuge"]["quests"], [])
+	assert_false(loaded.expansions["refuge"]["liberated"])
 
 func test_island_hints_never_reveal_empty_mainland_castles() -> void:
 	var player := island()
@@ -165,3 +160,7 @@ func test_mainland_random_lair_event_types_are_available_on_the_island() -> void
 		events[int(event["event"])] = true
 	for kind in range(5, 19):
 		assert_true(events.has(kind), LairEvent.NAMES[kind])
+
+## The prototype plugin's interpreter ([DataRegion]).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

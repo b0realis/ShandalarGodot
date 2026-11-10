@@ -22,14 +22,11 @@ class Probe extends WorldScreen:
 		return super()
 
 
-var _launch_before: bool
 var _pack_before: bool
 var viewport: SubViewport
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	_pack_before = CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	AdventurePlayer.saves_folder = SAVES
@@ -40,7 +37,6 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, _pack_before)
 	AdventureFinale.movie_forced = -1
 	TileReveal.forced = -1
@@ -68,7 +64,7 @@ func _frames(count := 2) -> void:
 ## An island campaign's hero under [param life_rule], on the mainland.
 func _hero(life_rule: String) -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
 	setup.player_name = "Ysolde Starfall"
@@ -97,7 +93,7 @@ func test_a_lost_one_life_battle_settles_an_island_save() -> void:
 	for on_island in [false, true]:
 		var hero := _hero(AdventurePlayer.LIFE_ONE)
 		if on_island:
-			assert_true(RefugeCampaign.travel(hero), "sailed to the island")
+			assert_true(_refuge().travel(hero), "sailed to the island")
 		var lines := hero.journal.size()
 		# Later, from another save: the final battle began and was lost.
 		HallOfFame.mark_one_life(hero.adventure_id, HallOfFame.FAILED)
@@ -120,7 +116,7 @@ func test_a_won_adventure_saved_on_the_island_asks_end_or_return_again() -> void
 	hero.final = {"result": FinalBattle.WON, "score": 1130, "days": 40, "wins": 30}
 	FinalBattle.open_portal(hero, false)
 	FinalBattle.roam(hero)
-	assert_true(RefugeCampaign.travel(hero), "roaming on: sailed to the island")
+	assert_true(_refuge().travel(hero), "roaming on: sailed to the island")
 	var lines := hero.journal.size()
 	var screen: Probe = await _load(hero)
 	var finale := AdventureFinale.showing(screen)
@@ -144,8 +140,12 @@ func test_a_won_adventure_saved_on_the_island_asks_end_or_return_again() -> void
 func test_the_questions_at_the_door_and_the_fifth_fall_stay_on_the_mainland() -> void:
 	var hero := _hero(AdventurePlayer.LIFE_RELOAD)
 	hero.defeated_wizards.assign(AdventurePlayer.COLORS)
-	assert_true(RefugeCampaign.travel(hero))
+	assert_true(_refuge().travel(hero))
 	var screen: Probe = await _load(hero)
 	assert_null(AdventureFinale.showing(screen), "no portal opens on the island")
 	assert_false(screen.ended())
 	assert_eq(screen.saves, 0)
+
+## The prototype plugin's interpreter ([DataRegion]).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

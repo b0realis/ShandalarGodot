@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saves and compatibility · Adventure plugin guide</title>
+<meta name="description" content="What a save keeps of a plugin, a missing or changed plugin, and what never to change in a released plugin.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html" aria-current="page">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Saves and compatibility</h1>
+<p class="lede">Players keep their adventures for months. This page says what a save holds of your plugin, what happens when the plugin is missing or changed, and what never to change once players have it.</p>
+
+<h2 id="holds">What a save holds</h2>
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 290" role="img" aria-label="world.json is read once, on the first voyage, to make the island; from then on the island is a saved map. Sailing away saves the island's map in the save's regions; sailing back restores that map. The progress record is kept in the save the whole time.">
+<defs><marker id="sv-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker>
+<marker id="sv-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-accent" d="M0,0L10,5L0,10z"/></marker></defs>
+<rect class="d-sunk" x="16" y="30" width="200" height="86" rx="12"/>
+<text class="d-title" x="32" y="56">your plugin</text>
+<text class="d-mono" x="32" y="80">world.json</text>
+<text class="d-small" x="32" y="100">+ the campaign’s seed and salt</text>
+<rect class="d-accent" x="302" y="30" width="200" height="86" rx="12"/>
+<text class="d-accent-text" x="318" y="56">the island, live</text>
+<text class="d-small" x="318" y="78">the hero walks it; its map is</text>
+<text class="d-small" x="318" y="94">the save’s world while there</text>
+<path class="d-line-accent" d="M216,62 H298" marker-end="url(#sv-a)"/>
+<text class="d-accent-text" x="257" y="52" text-anchor="middle">first voyage</text>
+<text class="d-small" x="257" y="82" text-anchor="middle">made once,</text>
+<text class="d-small" x="257" y="96" text-anchor="middle">never again</text>
+<rect class="d-box" x="302" y="176" width="200" height="74" rx="12"/>
+<text class="d-mono" x="318" y="202">regions.my_isle</text>
+<text class="d-small" x="318" y="222">the island’s map, place</text>
+<text class="d-small" x="318" y="238">and clocks, as left</text>
+<path class="d-line" d="M372,116 V172" marker-end="url(#sv-h)"/>
+<text class="d-small" x="364" y="148" text-anchor="end">sail home</text>
+<path class="d-line" d="M432,172 V120" marker-end="url(#sv-h)"/>
+<text class="d-small" x="440" y="148">sail again</text>
+<rect class="d-gold" x="560" y="30" width="184" height="220" rx="12"/>
+<text class="d-gold-text" x="576" y="56">in every save</text>
+<text class="d-mono" x="576" y="84">hero.adventures</text>
+<text class="d-small" x="576" y="102">id, version, name</text>
+<text class="d-small" x="576" y="118">of each ticked plugin</text>
+<text class="d-mono" x="576" y="150">expansions.my_isle</text>
+<text class="d-small" x="576" y="168">quests, stages,</text>
+<text class="d-small" x="576" y="184">reward_choices, pending,</text>
+<text class="d-small" x="576" y="200">your flags</text>
+<text class="d-small" x="576" y="222">kept on both sides</text>
+<text class="d-small" x="576" y="236">of the sea</text>
+</svg></div>
+<figcaption>Where a plugin’s land lives in a save. <code>world.json</code> makes the island once; after that the island is the saved map, so a changed recipe reaches only islands not yet made. The progress record is in the save from the Embark on.</figcaption>
+</figure>
+
+<ul>
+<li><code>hero.adventures</code>: the plugins ticked at the Embark, each <code>{"id", "version", "name"}</code>. The name is kept so the game can name a plugin that has gone missing.</li>
+<li><code>expansions.<i>id</i></code>: the progress record, <code>quests</code> (the indices done), <code>stages</code> (<code>{"0": 1}</code>: quest index to steps done), <code>reward_choices</code>, <code>pending</code> (cards waiting) and each flag you declared.</li>
+<li><code>regions.<i>id</i></code>: the island’s map while the hero is elsewhere. While the hero is on the island, it is the save’s world itself, and the mainland waits in <code>regions.mainland</code>. The island’s map data keeps its port and castle, its town names, its chosen objectives and its pennants.</li>
+</ul>
+
+<h2 id="on">When a plugin is on</h2>
+<p>A plugin’s ships sail for a campaign while it was ticked at that campaign’s Embark, is installed and valid, and every card pack it needs is one of the campaign’s, enabled, and at least the <code>min_version</code> the plugin asks for. When one of those fails, the ship does not sail and, once a launch, the mainland says why in one of these sentences:</p>
+<ul>
+<li>“Ships to <i>The Last Refuge</i> do not sail: the plugin <i>…</i> is not installed.”</li>
+<li>“Ships to <i>…</i> do not sail: the plugin <i>…</i> is refused.”</li>
+<li>“Ships to <i>…</i> do not sail: the plugin <i>…</i> needs <i>Pack 2 · Fallen Empires</i>.”</li>
+<li>“Ships to <i>…</i> do not sail: the plugin <i>…</i> needs <i>Pack 2 · Fallen Empires</i> <i>1.1</i> or newer (installed <i>1.0</i>).”</li>
+<li>“Ships to <i>…</i> do not sail: this adventure was saved with version <i>1.0.0</i> of the plugin <i>…</i>, and the installed version <i>1.1.0</i> cannot read it.”</li>
+</ul>
+
+<h2 id="missing">A plugin missing in the middle of a campaign</h2>
+<p>The save still opens. The land’s progress and map are kept exactly as they were, so putting the plugin back brings everything back. A hero standing on the island finds the game’s own <b>Ship home</b> pane at its port, and a <b>Leave</b> pane at its castle: the ship always takes the hero home. A missing <b>card pack</b> is different: an adventure whose campaign packs are missing still cannot be resumed, as without plugins.</p>
+
+<h2 id="changed">A plugin changed under a save</h2>
+<p>When a player installs a newer version of your plugin, each saved land is read against it:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>The saved land is</th><th>When</th><th>What the game does</th></tr></thead>
+<tbody>
+<tr><td><span class="badge ok">fine</span></td><td class="wrap">It fits the installed version.</td><td class="wrap">Plays on. The saved version in <code>hero.adventures</code> is brought up to the installed one when the save loads.</td></tr>
+<tr><td><span class="badge">changed</span></td><td class="wrap">Whole, but not what the installed version describes: a castle or town slot it asks for is missing from the saved map, a quest index, done count, stage or number of waiting cards is beyond what it counts, or the finale’s flag is on before every quest is done.</td><td class="wrap">Keeps the land. It is carried exactly as saved, its ships do not sail and it has no task or voyage rows; a hero on it finds <b>Ship home</b> and <b>Leave</b> panes that name the saved version and ask for it back. The mainland note says the same. Putting the old version back restores the land on the next load.</td></tr>
+<tr><td><span class="badge no">damaged</span></td><td class="wrap">Broken under any version: its map, region id, palette, names, objectives, pennants or anchorages malformed, the land without its port, its map not 128 site records, or its progress the wrong shape.</td><td class="wrap">The save is refused, as any damaged save is.</td></tr>
+</tbody></table></div>
+<p>So the game keeps the land and lets the hero sail home, but a player who updated and cannot play your island is still a player let down. Keep your updates readable by old saves.</p>
+
+<h2 id="never">What never to change once players have it</h2>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Change</th><th>Effect on saves</th></tr></thead>
+<tbody>
+<tr><td class="wrap">The <code>id</code></td><td class="wrap"><span class="badge no">never</span> A new id is a new plugin: old saves keep the old id’s land, carried and not sailing. For a different campaign, use a new id.</td></tr>
+<tr><td class="wrap">Removing or reordering quests</td><td class="wrap"><span class="badge no">never</span> Quests are saved by their index; a removed one leaves a done count or index the new version does not have, and a moved one hands one quest’s progress to another.</td></tr>
+<tr><td class="wrap">Shortening a quest</td><td class="wrap"><span class="badge no">never</span> A saved stage past the new last step does not fit. Inserting a step moves the meaning of every saved stage after it.</td></tr>
+<tr><td class="wrap">Adding, moving or removing a town slot</td><td class="wrap"><span class="badge no">never</span> Islands already made do not have the new slot, so they no longer fit.</td></tr>
+<tr><td class="wrap">Appending a quest</td><td class="wrap"><span class="badge">careful</span> Fine, unless the finale needs <code>"quests_done": "all"</code>: a save that already won the finale then has its flag on with a quest open.</td></tr>
+<tr><td class="wrap">Renaming or removing a flag</td><td class="wrap"><span class="badge">careful</span> The old value stays in saves, unread; the new flag starts false.</td></tr>
+<tr><td class="wrap">Everything else in <code>world.json</code>: places, villages, names, the dungeon, <code>salt</code>, <code>dice_salt</code></td><td class="wrap"><span class="badge ok">safe</span> Reaches only islands made after the change. A renamed town keeps its old name on an island already made, while its quest panes use the new one.</td></tr>
+<tr><td class="wrap">Words, foes’ decks and life, rewards, panes, talk, pictures, music, the palette</td><td class="wrap"><span class="badge ok">safe</span> Read fresh every time.</td></tr>
+<tr><td class="wrap">A new required card pack</td><td class="wrap"><span class="badge">careful</span> Campaigns that did not tick that pack can no longer sail; the mainland says which pack is needed.</td></tr>
+</tbody></table></div>
+<p>Bump <code>version</code> with every release, and <code>world.json</code>’s <code>layout_version</code> (saved with each island) when the layout changes. Before every release, compare it with the one players have:</p>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py compat dist/old/my_isle.zip dist/my_isle.zip
+<span class="c"># Windows, in the same folder: python tools\adventure_plugin.py compat dist\old\my_isle.zip dist\my_isle.zip</span></code></pre>
+<p><code>compat</code> lists every change that would hold an old save’s land: the id, a town slot added, moved or removed, a quest removed, moved or shortened, a quest appended while the finale needs every quest, the markers. It exits 1 with that list. What old saves carry without harm it prints as notes and exits 0: a place added, moved or removed, a flag renamed or removed, a step that changed kind, and recipe changes that only alter islands not yet made.</p>
+
+<h2 id="versions">Versions the game checks</h2>
+<ul>
+<li><code>api_version</code> newer than the game’s plugin API: refused, “a newer game is needed”.</li>
+<li><code>minimum_game_version</code> newer than the game: refused, naming both versions.</li>
+<li>A card pack in <code>requires</code> the game does not know: refused.</li>
+</ul>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="art-music.html"><span>Previous</span>Art and music</a>
+<a class="next" href="testing.html"><span>Next</span>Testing</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

@@ -83,6 +83,17 @@ extracted builders from outside the source tree, not just their presence.
 Never include artwork caches or generated numbered ZIPs in this tool bundle.
 The older `build_release.sh --package` Linux/web paths use the same staging
 helper, so they also carry the full construction toolkit and README instructions.
+**Adventure plugins (2026-11-10).** `package_release.py --platform` stages
+`expanded_adventure/` — the Last Refuge prototype zip (made by
+`tools/adventure_plugin.py export`, deterministic), its `README.txt` and the
+authors' `GUIDE/` — into the Linux, Windows, macOS, Raspberry Pi 5, Steam
+Deck and ArkOS packages (not Web, Quest or Android), and every package
+carries `tools/adventure_plugin.py`, `game/adventure/plugins/schema_v1.json`
+and the generated `tools/adventure_plugin_cards.json` (card NAMES only). For
+the release page, `python3 tools/package_release.py --adventure-plugins DIR`
+writes the prototype zip alone, an asset Quest and Android players can
+download. The `build_release.sh --package` paths stage only the card-names
+file, not `expanded_adventure/`.
 Only `-with-skin` includes `skin/original_skin.zip`; no package carries card
 pictures. Validate the supplied skin with `tools/skin_catalogue.py --check`.
 The hi-res skin — the same files as `original_skin.zip`, every picture at

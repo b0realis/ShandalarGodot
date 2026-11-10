@@ -935,7 +935,29 @@ static func open_save(path: String, refusal: Array[String] = [], aside := false)
 	var enabled := AdventurePacks.enabled_notice(packs["enabled"])
 	if enabled != "":
 		screen.arrival += "\n" + enabled
+	var away := stranded_note(adventure)
+	if away != "":
+		screen.arrival += "\n" + away
 	return screen
+
+
+## [QoL] A HERO TAKEN UP ON A LAND WHOSE PLUGIN IS MISSING (adventure
+## plugins, 2026-11-10; the plugin spec's §0.5) OR HELD — installed in a
+## version that cannot read the land as it was saved ([method
+## AdventureExpansions.held]; the reviewers' RV2-5): the save opens all the
+## same, and the arrival says why the land is quiet and the way home in the
+## words of its port's own pane ([method AdventureExpansions.stranded_place]).
+## On the mainland the world says it itself ([method
+## AdventureExpansions.mainland_note]). "" for a hero on the mainland or on
+## a land its plugin reads.
+static func stranded_note(adventure: AdventurePlayer) -> String:
+	if adventure == null or adventure.world == null or AdventureRegions.mainland(adventure):
+		return ""
+	var id := AdventureRegions.id(adventure.world)
+	if AdventureExpansions.known(id) and not AdventureExpansions.held(adventure, id):
+		return ""
+	var lines: Array = AdventureExpansions.stranded_place(adventure, "port").get("lines", [])
+	return " ".join(PackedStringArray(lines))
 
 
 func leave() -> void:

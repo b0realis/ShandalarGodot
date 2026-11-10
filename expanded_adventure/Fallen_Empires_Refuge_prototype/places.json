@@ -1,0 +1,56 @@
+{
+	"pictures": {
+		"refuge_harbor": "art/refuge_harbor.png",
+		"refuge_castle": "art/refuge_castle.png"
+	},
+	"voyage": {
+		"arrive_clues": [
+			{"text": "story.gate", "quest": true},
+			{"text": "voyage.free"}
+		],
+		"out_log": "voyage.out",
+		"home_log": "voyage.home"
+	},
+	"markers": {
+		"port": {
+			"name": "Refuge Harbor",
+			"mainland_name": "Sarpadian Anchorage",
+			"picture": "refuge_harbor",
+			"sprite": {"file": "art/refuge_port_map.png", "width": 160},
+			"panes": [
+				{
+					"when": [{"on_region": true}],
+					"lines": ["port.island.ready", {"show": "news"}, {"show": "pending"}],
+					"actions": [{"do": "sail", "label": "port.sail_home"}, {"do": "leave", "label": "port.leave"}]
+				},
+				{
+					"when": [{"flag": "liberated"}],
+					"lines": ["port.free.welcome", "port.free.return", {"show": "pending"}],
+					"actions": [{"do": "sail", "label": "port.sail_out"}, {"do": "leave", "label": "port.leave"}]
+				},
+				{
+					"lines": ["story.origin", "story.voyage", "story.danger", "story.gate", {"show": "pending"}],
+					"actions": [{"do": "sail", "label": "port.sail_out"}, {"do": "leave", "label": "port.leave"}]
+				}
+			]
+		},
+		"castle": {
+			"name": "Castle of the Ebon Crown",
+			"picture": "refuge_castle",
+			"sprite": {"file": "art/refuge_castle_map.png", "width": 192},
+			"banner": {"flag": "liberated", "color": "e0bc60", "anchor": [86, -104], "size": [24, 32]},
+			"panes": [
+				{
+					"when": [{"flag": "liberated"}],
+					"subtitle": "castle.free.subtitle",
+					"lines": ["castle.free.broken", "castle.free.continues"],
+					"actions": [{"do": "rewards"}, {"do": "leave", "label": "castle.leave"}]
+				},
+				{
+					"lines": ["castle.intro", "castle.count", "castle.required", "castle.carry", {"show": "deck_problem"}],
+					"actions": [{"do": "boss", "label": "castle.challenge"}, {"do": "leave", "label": "castle.leave"}, {"do": "rewards"}]
+				}
+			]
+		}
+	}
+}

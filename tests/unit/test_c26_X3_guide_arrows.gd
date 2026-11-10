@@ -12,20 +12,15 @@ const SIEGE := {"tile": Vector2i(12, 30), "kind": "siege", "name": "Kraag Temple
 const QUEST := {"tile": Vector2i(40, 9), "kind": "quest", "name": "Velmar Village"}
 const PORTAL := {"tile": Vector2i(31, 31), "kind": "portal", "name": "Arzakon's Portal"}
 const MONUMENT := {"tile": Vector2i(31, 31), "kind": "monument", "name": "Arzakon's Petrified Portal"}
-
-var _launch_before: bool
 var _portal_before: bool
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray())
 	_portal_before = WorldGuides.portal_wanted()
 	WorldGuides.want_portal(true)
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	WorldGuides.want_portal(_portal_before)
 
 

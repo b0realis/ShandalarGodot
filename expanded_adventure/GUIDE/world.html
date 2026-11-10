@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The world · Adventure plugin guide</title>
+<meta name="description" content="The island recipe in world.json, objectives, and the port and castle markers in places.json.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html" aria-current="page">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>The world</h1>
+<p class="lede"><code>world.json</code> is a recipe, not a map. The game cuts an island from its own 1997 terrain generator and lays your places out with the adventure’s dice: the same island every time for the same campaign, a different one for each new campaign.</p>
+
+<h2 id="made">How an island is made</h2>
+<p>The island is made the first time the hero sails to it, from the campaign’s world seed and your recipe. Its terrain comes first, then the dice are drawn in this order, which <b>is</b> the island:</p>
+<ol>
+<li><b>Terrain.</b> The game runs its world generator for the campaign’s seed XOR the manifest’s <code>region.salt</code>, reads every <code>step</code>-th tile of that world into a <code>side</code> × <code>side</code> square and puts the square at <code>offset</code> on the 64-tile map. The largest connected land is kept; any other land becomes sea, so every place is reachable on foot. The island’s dice are the generated world’s, XOR <code>dice_salt</code>.</li>
+<li><b>The castle.</b> Its aim is <code>castle.from</code> plus a draw under <code>castle.span</code>, x then y. It stands on the land tile nearest the aim.</li>
+<li><b>The port.</b> Aimed the same way from <code>port.from</code> and <code>port.span</code>, on the nearest shore tile (a land tile touching the sea) at least <code>spacing</code> tiles from the castle.</li>
+<li><b>The turn.</b> One draw under <code>towns.turns</code> turns every town aim together by that many quarter turns.</li>
+<li><b>The towns,</b> in list order. Each aim is <code>towns.center</code> plus the town’s turned <code>aim</code> plus a draw under <code>spread</code> less half of it, x then y. The town takes the nearest land tile at least <code>spacing</code> from everything placed, and that tile takes the town’s <code>terrain</code>, which is its color.</li>
+<li><b>The places</b> (<code>places.list</code>), each on a random tile at least <code>places.gap</code> from everything placed (a <code>coastal</code> one on the shore). When nothing fits, the gap shrinks by half a tile until something does.</li>
+<li><b>The villages.</b> Their number is drawn from <code>villages.count</code> (least, most). Village <i>i</i> (from 0) takes slot (<i>i</i> + 1) × <code>slot_step</code> and the <i>i</i>-th name of <code>villages.names</code>; the first one prefers tiles that match <code>first_rule</code>.</li>
+<li><b>Trade.</b> Each town and place gets one trade category from <code>trade</code>, drawn without repeats (none once the list runs out). Then <code>world_magic.offers</code> world magics are dealt to them.</li>
+<li><b>Roads</b> join the places when <code>roads</code> is true.</li>
+<li><b>The dungeon.</b> One of the generated world’s dungeons, number <code>dungeon.from</code> plus a draw under <code>dungeon.choices</code>, with its door on a tile with no site and no road, at least <code>dungeon.gap</code> from everything placed. It is named <code>dungeon.name</code>.</li>
+</ol>
+<p>A span of 0 or 1 draws nothing. Because every draw follows the one before it, adding a place or reordering the towns moves everything drawn after it. Names and objectives use no dice.</p>
+
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 520" role="img" aria-label="The Last Refuge's recipe drawn on its 32-tile square: the castle aimed at the middle, the port aimed at the south shore, five towns aimed around the center, each within a jitter square; places, villages, roads and a dungeon door wherever the dice put them.">
+<defs><marker id="wm-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker></defs>
+<rect class="d-sea" x="46" y="46" width="384" height="384"/>
+<path class="d-grid" d="M94,46 V430 M46,94 H430 M142,46 V430 M46,142 H430 M190,46 V430 M46,190 H430 M238,46 V430 M46,238 H430 M286,46 V430 M46,286 H430 M334,46 V430 M46,334 H430 M382,46 V430 M46,382 H430"/>
+<text class="d-small" x="46" y="38" text-anchor="middle">16</text>
+<text class="d-small" x="38" y="50" text-anchor="end">16</text>
+<text class="d-small" x="142" y="38" text-anchor="middle">24</text>
+<text class="d-small" x="38" y="146" text-anchor="end">24</text>
+<text class="d-small" x="238" y="38" text-anchor="middle">32</text>
+<text class="d-small" x="38" y="242" text-anchor="end">32</text>
+<text class="d-small" x="334" y="38" text-anchor="middle">40</text>
+<text class="d-small" x="38" y="338" text-anchor="end">40</text>
+<text class="d-small" x="430" y="38" text-anchor="middle">48</text>
+<text class="d-small" x="38" y="434" text-anchor="end">48</text>
+<path class="d-land" d="M96,110 C130,74 220,66 280,78 C340,88 398,72 414,128 C430,180 418,240 422,292 C426,346 398,396 344,410 C300,420 270,418 240,416 C190,414 140,404 108,372 C76,340 66,290 70,240 C74,186 62,146 96,110 Z"/>
+<path class="d-road" d="M244,400 L280,364"/>
+<path class="d-road" d="M280,364 L244,244"/>
+<path class="d-road" d="M244,244 L352,280"/>
+<path class="d-road" d="M352,136 L412,172"/>
+<path class="d-road" d="M244,244 L136,148"/>
+<path class="d-road" d="M136,148 L124,304"/>
+<path class="d-road" d="M124,304 L196,352"/>
+<path class="d-road" d="M196,352 L244,400"/>
+<path class="d-road" d="M136,148 L280,124"/>
+<path class="d-road" d="M280,124 L352,136"/>
+<path class="d-road" d="M244,244 L184,220"/>
+<path class="d-road" d="M352,280 L388,340"/>
+<path class="d-road" d="M304,256 L244,244"/>
+<path class="d-road" d="M124,208 L136,148"/>
+<rect class="d-gold" x="214" y="214" width="60" height="60" rx="3" fill-opacity="0.55"/>
+<rect x="236" y="236" width="16" height="16" rx="2" class="d-dot-gold"/>
+<text class="d-gold-text" x="244" y="208" text-anchor="middle">castle</text>
+<line x1="130" y1="433" x2="358" y2="433" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
+<path class="d-line" d="M244,428 V410" marker-end="url(#wm-h)"/>
+<circle cx="244" cy="400" r="7" class="d-dot-accent"/>
+<text class="d-accent-text" x="244" y="452" text-anchor="middle">port aim: x 23 to 41, y 48</text>
+<rect class="d-dash" x="94" y="106" width="84" height="84" rx="4"/>
+<circle cx="136" cy="148" r="7" fill="#f2ead2" stroke="currentColor" stroke-width="1.5"/>
+<text class="d-text" x="136" y="88" text-anchor="middle">Leitbur&#8217;s Rest</text>
+<text class="d-small" x="136" y="102" text-anchor="middle">slot 1 · aim -9,-8</text>
+<rect class="d-dash" x="310" y="94" width="84" height="84" rx="4"/>
+<circle cx="352" cy="136" r="7" fill="#3c7fd0" stroke="currentColor" stroke-width="1.5"/>
+<text class="d-text" x="352" y="76" text-anchor="middle">Vodalian Haven</text>
+<text class="d-small" x="352" y="90" text-anchor="middle">slot 2 · aim 9,-9</text>
+<rect class="d-dash" x="310" y="238" width="84" height="84" rx="4"/>
+<circle cx="352" cy="280" r="7" fill="#3b3442" stroke="currentColor" stroke-width="1.5"/>
+<text class="d-text" x="352" y="220" text-anchor="middle">Freehold of the Hand</text>
+<text class="d-small" x="352" y="234" text-anchor="middle">slot 3 · aim 9,3</text>
+<rect class="d-dash" x="238" y="322" width="84" height="84" rx="4"/>
+<circle cx="280" cy="364" r="7" fill="#cf5338" stroke="currentColor" stroke-width="1.5"/>
+<text class="d-text" x="332" y="368" text-anchor="start">Dwarven Hearth</text>
+<text class="d-small" x="332" y="382" text-anchor="start">slot 4 · aim 3,10</text>
+<rect class="d-dash" x="82" y="262" width="84" height="84" rx="4"/>
+<circle cx="124" cy="304" r="7" fill="#3e9650" stroke="currentColor" stroke-width="1.5"/>
+<text class="d-text" x="124" y="362" text-anchor="middle">Havenwood</text>
+<text class="d-small" x="124" y="376" text-anchor="middle">slot 5 · aim -10,5</text>
+<rect x="407" y="167" width="10" height="10" transform="rotate(45 412 172)" class="d-ring"/>
+<rect x="179" y="215" width="10" height="10" transform="rotate(45 184 220)" class="d-ring"/>
+<rect x="299" y="251" width="10" height="10" transform="rotate(45 304 256)" class="d-ring"/>
+<rect x="119" y="203" width="10" height="10" transform="rotate(45 124 208)" class="d-ring"/>
+<rect x="275" y="119" width="10" height="10" transform="rotate(45 280 124)" class="d-ring"/>
+<rect x="191" y="347" width="10" height="10" transform="rotate(45 196 352)" class="d-ring"/>
+<circle cx="388" cy="340" r="3.6" class="d-dot-muted"/>
+<circle cx="88" cy="256" r="3.6" class="d-dot-muted"/>
+<circle cx="220" cy="88" r="3.6" class="d-dot-muted"/>
+<circle cx="412" cy="292" r="3.6" class="d-dot-muted"/>
+<circle cx="160" cy="388" r="3.6" class="d-dot-muted"/>
+<circle cx="340" cy="196" r="3.6" class="d-dot-muted"/>
+<circle cx="88" cy="124" r="3.6" class="d-dot-muted"/>
+<rect x="166" y="273" width="12" height="14" rx="6" class="d-warn"/>
+<g transform="translate(486,60)">
+<text class="d-title" x="0" y="0">The recipe, drawn</text>
+<rect class="d-gold" x="0" y="18" width="18" height="18" rx="3" fill-opacity="0.55"/><text class="d-text" x="28" y="32">castle aim: from 30,30 + 5 × 5</text>
+<line x1="0" y1="56" x2="18" y2="56" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/><text class="d-text" x="28" y="60">port aim; nearest shore wins</text>
+<rect class="d-dash" x="0" y="74" width="18" height="18" rx="3"/><text class="d-text" x="28" y="88">town aim ± 3 (spread 7)</text>
+<circle cx="9" cy="111" r="7" fill="#cf5338" stroke="currentColor" stroke-width="1.5"/><text class="d-text" x="28" y="116">town, colored by its terrain</text>
+<rect x="4" y="134" width="10" height="10" transform="rotate(45 9 139)" class="d-ring"/><text class="d-text" x="28" y="144">place (slot 22 on the coast)</text>
+<circle cx="9" cy="167" r="3.6" class="d-dot-muted"/><text class="d-text" x="28" y="172">village: 6 to 9 of them</text>
+<path class="d-road" d="M0,195 H18"/><text class="d-text" x="28" y="200">roads join the places</text>
+<rect x="3" y="217" width="12" height="14" rx="6" class="d-warn"/><text class="d-text" x="28" y="228">dungeon door, off the roads</text>
+<text class="d-title" x="0" y="276">The quarter turn</text>
+<text class="d-small" x="0" y="296">turns 4: all five town aims</text>
+<text class="d-small" x="0" y="311">turn together by 0, 1, 2 or 3</text>
+<text class="d-small" x="0" y="326">quarter turns, one draw</text>
+<g transform="translate(222,326)">
+<circle cx="0" cy="0" r="34" class="d-sunk"/>
+<path class="d-line-accent" d="M0,0 L-24,-21" marker-end="url(#wm-h)"/>
+<path class="d-line" d="M0,0 L21,-24" marker-end="url(#wm-h)"/>
+<path class="d-line" d="M0,0 L24,21" marker-end="url(#wm-h)"/>
+<path class="d-line" d="M0,0 L-21,24" marker-end="url(#wm-h)"/>
+<text class="d-accent-text" x="-40" y="-36" text-anchor="middle">0</text>
+<text class="d-small" x="40" y="-36" text-anchor="middle">1</text>
+<text class="d-small" x="40" y="46" text-anchor="middle">2</text>
+<text class="d-small" x="-40" y="46" text-anchor="middle">3</text>
+</g>
+<text class="d-small" x="0" y="400">Leitbur’s Rest’s aim −9,−8 at each turn</text>
+</g>
+</svg></div>
+<figcaption>The Last Refuge’s <code>world.json</code> on its square of the map: tiles 16 to 48 of the 64-tile world, north up. The castle, the port and the towns stand where the recipe aims them (the towns drawn at turn 0); places, villages, roads and the dungeon door are one possible draw of the dice. The coast is the terrain generator’s own and differs for every campaign.</figcaption>
+</figure>
+
+
+<h2 id="recipe">The recipe’s fields</h2>
+<p>Every field but <code>generator</code>, <code>towns</code> and <code>dungeon</code> has a default, and the defaults are the Refuge’s own numbers. The full list, with limits, is on the <a href="reference.html#file-world-json">Reference</a> page; the parts an author changes most:</p>
+<figure class="quote" data-file="world.json" data-pointer="/towns"><figcaption class="src"><b>world.json</b><span>/towns</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"center"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">32</span><span class="j-p">, </span><span class="j-n">32</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"spread"</span><span class="j-p">:</span> <span class="j-n">7</span><span class="j-p">,</span>
+  <span class="j-k">"turns"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">,</span>
+  <span class="j-k">"list"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Leitbur's Rest"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">6</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">-9</span><span class="j-p">, </span><span class="j-n">-8</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Vodalian Haven"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">9</span><span class="j-p">, </span><span class="j-n">-9</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Freehold of the Hand"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">9</span><span class="j-p">, </span><span class="j-n">3</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Dwarven Hearth"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">3</span><span class="j-p">, </span><span class="j-n">10</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Havenwood"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">-10</span><span class="j-p">, </span><span class="j-n">5</span><span class="j-p">]</span><span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>A town’s <code>slot</code> is its identity on the island: quests name their giver by slot, <code>errands_off</code> lists slots, and an objective’s <code>exclude</code> and <code>prefer</code> are slots. There are 128 slots; towns and places take 1 to 127, villages take multiples of <code>slot_step</code>, and no slot may be used twice. <code>terrain</code> is one of the land codes the generator makes:</p>
+<div class="table-wrap"><table class="grid keep" data-schema-table="terrains">
+<thead><tr><th>Terrain</th><th>Color</th><th>Terrain</th><th>Color</th></tr></thead>
+<tbody>
+<tr><td><code>1</code></td><td>blue</td><td><code>8</code></td><td>blue and black</td></tr>
+<tr><td><code>2</code></td><td>green</td><td><code>10</code></td><td>green and white</td></tr>
+<tr><td><code>3</code></td><td>black</td><td><code>13</code></td><td>black and white</td></tr>
+<tr><td><code>5</code></td><td>red</td><td><code>15</code></td><td>red and green</td></tr>
+<tr><td><code>6</code></td><td>white</td><td></td><td></td></tr>
+</tbody></table></div>
+<p>Places are the mainland’s town, city and village services under your own names. A place’s <code>kind</code> is one of:</p>
+<ul class="chips" data-schema="site_kinds"><li><code>village</code></li><li><code>town</code></li><li><code>city</code></li></ul>
+<figure class="quote" data-file="world.json" data-pointer="/places"><figcaption class="src"><b>world.json</b><span>/places</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">4.0</span><span class="j-p">,</span>
+  <span class="j-k">"list"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">22</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Svyelun's Temple"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"city"</span><span class="j-p">, </span><span class="j-k">"coastal"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">43</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Thelon's Oasis"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">58</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Trokair Bazaar"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"city"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">76</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Delif's Shrine"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">80</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Zelyon Tower"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">103</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Farrel's Mill"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="objectives">Objectives</h2>
+<p>An objective is a named rule that picks a site once the island exists: the first site the rule matches, or its <code>prefer</code> slot when that one matches; <code>-1</code> when none does. It uses no dice and moves nothing. It is chosen when the hero first lands and kept in the save. A quest step aims at one as <code>{"objective": "channel", "else": "port"}</code>: the <code>else</code> target is used when nothing matched.</p>
+<figure class="quote" data-file="world.json" data-pointer="/objectives"><figcaption class="src"><b>world.json</b><span>/objectives</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"channel"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"coastal"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">,</span>
+    <span class="j-k">"exclude"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">1</span><span class="j-p">, </span><span class="j-n">2</span><span class="j-p">, </span><span class="j-n">3</span><span class="j-p">, </span><span class="j-n">4</span><span class="j-p">, </span><span class="j-n">5</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"types"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"town"</span><span class="j-p">, </span><span class="j-s">"city"</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"prefer"</span><span class="j-p">:</span> <span class="j-n">22</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"raider"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"near_terrain"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">,</span>
+    <span class="j-k">"radius"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+    <span class="j-k">"road"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">,</span>
+    <span class="j-k">"types"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"village"</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"prefer"</span><span class="j-p">:</span> <span class="j-n">8</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<dl class="terms">
+<dt><code>coastal</code>, <code>road</code></dt><dd>The site touches the sea; the site stands on a road.</dd>
+<dt><code>near_terrain</code>, <code>radius</code></dt><dd>A tile of that terrain within <code>radius</code> tiles (default 2).</dd>
+<dt><code>types</code>, <code>exclude</code></dt><dd>Only these kinds of site; never these slots.</dd>
+<dt><code>prefer</code></dt><dd>The slot chosen when it matches (the Refuge’s channel prefers Svyelun’s Temple, slot 22).</dd>
+</dl>
+
+<h2 id="markers">The port and the castle</h2>
+<p><code>places.json</code> describes the island’s two markers, <code>port</code> and <code>castle</code>; both are required. Each has a <code>name</code>, a <code>picture</code> for its pane, an optional map <code>sprite</code> and <code>banner</code> (<a href="art-music.html">Art and music</a>), and a list of <code>panes</code>. The port also has a <code>mainland_name</code>: the title of its pane at the mainland’s anchorage, where the map labels the ship <b>Ship: <i>region title</i></b>.</p>
+<p>When the hero steps on a marker, the <b>first pane whose <code>when</code> conditions all hold</b> is shown, so put the most particular panes first and leave the last without <code>when</code>. A pane has:</p>
+<ul>
+<li><code>lines</code>: a text key, <code>{"text": key, "when": [...]}</code>, or <code>{"show": ...}</code> for one of <ul class="chips" data-schema="shows"><li><code>news</code></li><li><code>pending</code></li><li><code>deck_problem</code></li></ul>: the region’s news, the waiting-cards line, the reason a duel may not begin yet.</li>
+<li><code>actions</code>, buttons, each one of <ul class="chips" data-schema="actions"><li><code>sail</code></li><li><code>leave</code></li><li><code>boss</code></li><li><code>rewards</code></li></ul> with a <code>label</code> and its own <code>when</code>. <code>sail</code> is the voyage (on the mainland only while the plugin is on for the campaign; on the island always), <code>leave</code> closes the pane, <code>boss</code> starts the finale’s duel when its conditions hold, <code>rewards</code> adds the two reward buttons (choose cards, collect waiting cards).</li>
+<li><code>title</code>, <code>subtitle</code> and <code>picture</code> override the marker’s for this pane.</li>
+</ul>
+<p>The game adds the current quest steps’ buttons on its own: a <code>go</code> step aimed at this marker adds its button and its guidance line, a <code>duel</code> step’s <code>approach</code> its button and line. The Refuge’s castle:</p>
+<figure class="quote" data-file="places.json" data-pointer="/markers/castle"><figcaption class="src"><b>places.json</b><span>/markers/castle</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Castle of the Ebon Crown"</span><span class="j-p">,</span>
+  <span class="j-k">"picture"</span><span class="j-p">:</span> <span class="j-s">"refuge_castle"</span><span class="j-p">,</span>
+  <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_castle_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">192</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"banner"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">,</span>
+    <span class="j-k">"color"</span><span class="j-p">:</span> <span class="j-s">"e0bc60"</span><span class="j-p">,</span>
+    <span class="j-k">"anchor"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">86</span><span class="j-p">, </span><span class="j-n">-104</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"size"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">24</span><span class="j-p">, </span><span class="j-n">32</span><span class="j-p">]</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"panes"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"subtitle"</span><span class="j-p">:</span> <span class="j-s">"castle.free.subtitle"</span><span class="j-p">,</span>
+      <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"castle.free.broken"</span><span class="j-p">, </span><span class="j-s">"castle.free.continues"</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"rewards"</span><span class="j-p">}</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"castle.leave"</span><span class="j-p">}</span><span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"castle.intro"</span><span class="j-p">,</span>
+        <span class="j-s">"castle.count"</span><span class="j-p">,</span>
+        <span class="j-s">"castle.required"</span><span class="j-p">,</span>
+        <span class="j-s">"castle.carry"</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"deck_problem"</span><span class="j-p">}</span>
+      <span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"boss"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"castle.challenge"</span><span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"castle.leave"</span><span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"rewards"</span><span class="j-p">}</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h3 id="voyage">The voyage</h3>
+<p><code>voyage.arrive_clues</code> are journal clues written on every arrival (a quest clue when <code>quest</code> is true); <code>out_log</code> and <code>home_log</code> are the journal lines of each crossing.</p>
+<figure class="quote" data-file="places.json" data-pointer="/voyage"><figcaption class="src"><b>places.json</b><span>/voyage</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"arrive_clues"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"story.gate"</span><span class="j-p">, </span><span class="j-k">"quest"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"voyage.free"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"out_log"</span><span class="j-p">:</span> <span class="j-s">"voyage.out"</span><span class="j-p">,</span>
+  <span class="j-k">"home_log"</span><span class="j-p">:</span> <span class="j-s">"voyage.home"</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="region">The region’s other switches</h2>
+<h3 id="palette">The palette</h3>
+<p>The manifest’s <code>region.palette</code> colors the island’s ground, trees and water; it never changes the terrain itself. It is a built-in name (<code>shandalar</code>, the skin’s own colors, or <code>last_refuge</code>, the Refuge’s drier greens) or an object of your own:</p>
+<pre class="code"><code><span class="j-k">"palette"</span><span class="j-p">:</span> <span class="j-p">{</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Ashen Isle"</span><span class="j-p">,</span>
+  <span class="j-k">"grass"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">0.11</span><span class="j-p">,</span> <span class="j-n">0.55</span><span class="j-p">,</span> <span class="j-n">1.1</span><span class="j-p">,</span> <span class="j-n">0.9</span><span class="j-p">],</span>
+  <span class="j-k">"foliage"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">0.2</span><span class="j-p">,</span> <span class="j-n">0.7</span><span class="j-p">,</span> <span class="j-n">1.0</span><span class="j-p">,</span> <span class="j-n">0.7</span><span class="j-p">],</span>
+  <span class="j-k">"water"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">0.6</span><span class="j-p">,</span> <span class="j-n">1.0</span><span class="j-p">,</span> <span class="j-n">0.95</span><span class="j-p">,</span> <span class="j-n">0.8</span><span class="j-p">],</span>
+  <span class="j-k">"plain"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"2"</span><span class="j-p">:</span> <span class="j-s">"#858855"</span><span class="j-p">,</span> <span class="j-k">"6"</span><span class="j-p">:</span> <span class="j-s">"#c6af78"</span><span class="j-p">},</span>
+  <span class="j-k">"tints"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"roads"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"tint"</span><span class="j-p">:</span> <span class="j-s">"#b09070"</span><span class="j-p">,</span> <span class="j-k">"strength"</span><span class="j-p">:</span> <span class="j-n">0.3</span><span class="j-p">}}</span>
+<span class="j-p">}</span></code></pre>
+<p><code>grass</code>, <code>foliage</code> and <code>water</code> are four numbers: the target hue (0 to 1), a saturation and a brightness multiplier (0 to 4), and the strength (0 to 1); leave one out to keep the skin’s colors. <code>plain</code> maps terrain codes (as text, <code>"0"</code> to <code>"15"</code>) to <code>#rrggbb</code> colors for the minimap and the plain map. <code>tints</code> gives the <code>ground</code>, <code>objects</code> or <code>roads</code> layer a <code>tint</code> and a <code>strength</code> (0 to 1). The game registers the object as the palette <code>plugin:<i>id</i></code>; a save that names it while the plugin is gone draws the island in the skin’s colors.</p>
+
+<h3 id="links">Mana links and music</h3>
+<p><code>region.mana_links</code> (default false) says whether the island’s places can be mana-linked as the mainland’s are. <code>world.json</code>’s optional <code>music</code> names an OGG file of the plugin, played while the hero walks the island (<a href="art-music.html#music">Art and music</a>).</p>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="first-plugin.html"><span>Previous</span>Your first plugin</a>
+<a class="next" href="quests.html"><span>Next</span>Quests and steps</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

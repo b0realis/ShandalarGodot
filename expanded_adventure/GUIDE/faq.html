@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · Adventure plugin guide</title>
+<meta name="description" content="Short answers to the usual questions about adventure plugins.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html" aria-current="page">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>FAQ</h1>
+<p class="lede">Short answers to the questions authors ask first; the pages they link give the long ones.</p>
+<details class="faq" id="q1"><summary>Can a plugin run a script, or a scene?</summary><p>No. The game never loads, runs or mounts anything from a plugin, and a <code>.gd</code>, <code>.tscn</code>, <code>.tres</code>, <code>.pck</code> or any other kind of file not on the list refuses the whole plugin. Everything a plugin does is data the game’s own interpreter reads: steps, conditions and effects from closed lists.</p></details>
+<details class="faq" id="q2"><summary>Can a plugin add new cards?</summary><p>No. Every card a plugin names must be a card of the base game or of a card pack the plugin requires. Card packs are separate downloads with their own rules; a plugin only names the packs it needs, and never withholds or unlocks their cards.</p></details>
+<details class="faq" id="q3"><summary>Does a plugin have to need a card pack?</summary><p>No. With <code>"card_packs": []</code> the plugin is on whenever it is ticked, and every card it names must be a base-game card. The skeleton <code>new</code> writes is such a plugin.</p></details>
+<details class="faq" id="q4"><summary>Can a plugin change the mainland?</summary><p>Not in API 1. It adds an anchorage on the mainland’s coast, its voyage, and its rows in the Tasks list; everything else it holds is on its island.</p></details>
+<details class="faq" id="q5"><summary>Can two plugins be ticked at once?</summary><p>Yes. Each gets its own anchorage on the mainland, the safe shore nearest where the hero starts. When the coast runs out of room, ships share an anchorage, and its pane asks which voyage to take.</p></details>
+<details class="faq" id="q6"><summary>Can I use pictures from the 1997 game, a skin, or card art?</summary><p>No. A plugin carries only pictures that are your own or licensed for sharing. To show a skin picture, name it by its key (<code>visit_city</code> and the others on <a href="art-music.html#keys">Art and music</a>): each player’s own skin draws it.</p></details>
+<details class="faq" id="q7"><summary>Why is my plugin greyed in the window?</summary><p>It was refused. The row lists every problem the first failing stage found, and <code>python3 tools/adventure_plugin.py validate</code> prints the same lines. Fix those, press <b>Rescan</b>, and the next stage may have more to say.</p></details>
+<details class="faq" id="q8"><summary>The window says my plugin was found more than once.</summary><p>The first copy of an id wins: your plugins folder before the one beside the game, and in one folder the zips (by name) before the unpacked folders. Remove the copy you do not want, or export to a folder of its own.</p></details>
+<details class="faq" id="q9"><summary>I changed world.json and my island looks the same.</summary><p>An island is made once, the first time a hero sails there, and then saved with the adventure. Start a new adventure to see a new recipe. Words, foes, rewards and pictures are read fresh after <b>Rescan</b> or the next start; quests too, within the rules of <a href="saves.html#never">Saves and compatibility</a>.</p></details>
+<details class="faq" id="q10"><summary>Will an update of my plugin break players’ saves?</summary><p>Not if you keep to <a href="saves.html#never">the rules</a>: never change the id, never remove, reorder or shorten quests, never add, move or remove a town slot. If an update breaks them anyway, the game keeps the land as saved and lets the hero sail home, and asks for the old version back. Run <code>compat</code> before every release.</p></details>
+<details class="faq" id="q11"><summary>I zipped my plugin on a Mac and it holds __MACOSX and .DS_Store.</summary><p>That litter is passed over: names beginning with <code>.</code>, a <code>__MACOSX</code> folder, <code>Thumbs.db</code> and <code>desktop.ini</code> are neither read nor counted. Still, <code>export</code> makes a clean zip and adds the hashes; prefer it.</p></details>
+<details class="faq" id="q12"><summary>My editor marks a trailing comma in my JSON. Does the game mind?</summary><p>No: the game’s JSON reader, and the tool’s, accept a comma after the last item of a list or object. Other tools may not, so plain JSON without it is the safer habit.</p></details>
+<details class="faq" id="q13"><summary>Can I translate my plugin?</summary><p>Not yet: API 1 reads <code>text.json</code>, in English. The name <code>text.&lt;language&gt;.json</code> is kept for translations in a later version, so do not use it for anything else.</p></details>
+<details class="faq" id="q14"><summary>Where do players on Android or the Quest put plugins?</summary><p>In <code>expanded_adventure/</code> in the game’s corner of the shared storage, beside its <code>cardpacks/</code> folder: <code>Android/data/<i>package</i>/files/expanded_adventure/</code>. Options shows the exact path on its <b>Adventure plugins folder</b> line.</p></details>
+<details class="faq" id="q15"><summary>How big may a plugin be?</summary><p>At most <span data-limit="plugin_bytes">32 MiB</span> and <span data-limit="files">512</span> files; a JSON or text file 1 MiB, nested at most 32 deep; a picture <span data-limit="picture_side">4,096</span> pixels a side; an OGG <span data-limit="ogg_bytes">16 MiB</span>; a text <span data-limit="text_chars">4,000</span> characters. The <a href="reference.html#limits">Reference</a> has the full list.</p></details>
+<details class="faq" id="q16"><summary>May I start my plugin from the Refuge?</summary><p>Yes; it is there to be taken apart, and its license, GPL-3.0, says how it may be shared. Unzip a copy, give it a new <code>id</code>, rename its picture keys and files to begin with that id, and change its <code>region.salt</code>, so it is your island and not a second Refuge. The shipped zip’s <code>plugin.json</code> carries a <code>files</code> list: delete <code>files</code> from your unzipped copy’s <code>plugin.json</code>, or just export, which ignores it and writes a fresh one. Until then <code>validate</code> refuses the folder once a file has changed, and says to remove the list.</p></details>
+<details class="faq" id="q17"><summary>How do I choose a license?</summary><p>Any license that lets players share your plugin. Name it in the manifest’s <code>license</code> (the plugins window shows it) and put its text in <code>LICENSE.txt</code>.</p></details>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="reference.html"><span>Previous</span>Reference</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

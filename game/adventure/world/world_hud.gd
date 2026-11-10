@@ -1386,9 +1386,9 @@ func _choose(entry_name: String) -> void:
 			Settings.set_value(TileReveal.SETTING, not Settings.transitions())
 		"Music":
 			Settings.set_value("music_enabled", not Settings.music_enabled())
-			var music := get_node_or_null(^"/root/ShellMusic")
-			if music != null:
-				music.call(&"play")
+			# The world's music: the land's own track where it has one, the
+			# title's tune otherwise — never both (RV2-8).
+			WorldDuels.world_music(self)
 		"Sound":
 			Settings.set_value("sound_enabled", not Settings.sound_enabled())
 			GameAudio.apply_settings()

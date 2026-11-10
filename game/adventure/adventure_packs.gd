@@ -32,10 +32,12 @@ static func selected(player: AdventurePlayer, pack: String) -> bool:
 	return player != null and player.packs.any(func(row: Variant) -> bool:
 		return row is Dictionary and row.get("id", "") == pack)
 
+## The optional lands that need card pack [param pack] ([method
+## AdventureExpansions.pack_ids]).
 static func adventures(pack: String) -> Array[String]:
 	var out: Array[String] = []
 	for id in AdventureExpansions.definitions():
-		if AdventureExpansions.definition(id).get("pack", "") == pack: out.append(id)
+		if pack in AdventureExpansions.pack_ids(id): out.append(id)
 	return out
 
 ## Selecting cards on Embark enables their installed rules once, when setting out.
@@ -165,19 +167,14 @@ static func enabled_notice(titles: Array[String]) -> String:
 	if titles.is_empty(): return ""
 	return "Card %s enabled for this adventure: %s." % ["pack" if titles.size() == 1 else "packs", ", ".join(titles)]
 
+## Whether [param pack] gives [param player]'s campaign cards now: one of the
+## campaign's, and enabled. A land that needs the pack never holds its cards
+## back (adventure plugins, 2026-11-10, the spec's §0.2: the plugin names
+## the packs it needs; the packs behave as in the vanilla adventure).
 static func offers_cards(player: AdventurePlayer, pack: String) -> bool:
 	if not selected(player, pack): return false
 	var service := AdventureExpansions.packs()
-	if service == null or not service.is_enabled(pack): return false
-	if not player.expanded_adventure: return true
-	var lands := adventures(pack)
-	# Packs without an adventure are still complete card modules.
-	if lands.is_empty(): return true
-	for id in lands:
-		var field: String = AdventureExpansions.definition(id).get("cards_unlock", "liberated")
-		if AdventureRegions.id(player.world) == id or bool(AdventureExpansions.progress(player, id).get(field, false)):
-			return true
-	return false
+	return service != null and service.is_enabled(pack)
 
 ## THE PACKS THAT GIVE [param player]'S CAMPAIGN CARDS NOW, in pack order:
 ## each chosen pack that [method offers_cards] — never Pack 1 nor a pack this
@@ -531,23 +528,3 @@ static func _read_catalogues() -> void:
 		var cards: Array[String] = []
 		cards.assign(carried.keys() if id == FifthEditionPack.ID else own)
 		_own[id] = cards
-
-## Earlier expedition saves predate the independent checkbox. Preserve only
-## adventures evidenced by saved entries/progress/regions, not global settings.
-static func migrate(player: AdventurePlayer, version: int) -> void:
-	if version >= 7: return
-	var lands := {}
-	for id in player.expansions: lands[id] = true
-	for id in player.regions: lands[id] = true
-	lands[AdventureRegions.id(player.world)] = true
-	var extra := player.world.expansion
-	for id in extra.get("entries", {}): lands[id] = true
-	if extra.has("port") and AdventureRegions.mainland(player): lands["refuge"] = true
-	lands.erase(AdventureRegions.MAINLAND)
-	player.expanded_adventure = not lands.is_empty()
-	for id in lands:
-		var pack: String = AdventureExpansions.definition(id).get("pack", "")
-		if pack == "" or selected(player, pack): continue
-		var service := AdventureExpansions.packs()
-		var info: Dictionary = service.info(pack) if service != null else {}
-		player.packs.append({"id": pack, "version": str(info.get("version", ""))})

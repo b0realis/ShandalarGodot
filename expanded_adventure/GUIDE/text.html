@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text and placeholders · Adventure plugin guide</title>
+<meta name="description" content="text.json, the closed list of placeholders, where each is filled, and the engine&#x27;s default words.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html" aria-current="page">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Text and placeholders</h1>
+<p class="lede">Every sentence, title and button of a plugin lives in <code>text.json</code>, by key. The other files name keys, never words, so the story can be read and corrected in one place.</p>
+
+<h2 id="keys">text.json</h2>
+<p>One flat object: key to words. A key is 1 to 64 lower-case letters, digits, <code>_</code> and <code>.</code>; the dots are only for your own grouping. There may be up to 2,000 keys, each text at most <span data-limit="text_chars">4,000</span> characters. A field whose kind is <i>text</i> in the <a href="reference.html">Reference</a> holds a key, and a key named anywhere must exist, or the plugin is refused, naming the place that asked for it.</p>
+<figure class="quote" data-file="text.json" data-pointer="" data-keys="story.gate,quest.bread.title,quest.bread.deliver,status.pledges"><figcaption class="src"><b>text.json</b><span>→ story.gate, quest.bread.title, quest.bread.deliver, status.pledges</span></figcaption><pre class="code wrap"><code><span class="j-p">{</span>
+  <span class="j-k">"story.gate"</span><span class="j-p">:</span> <span class="j-s">"The final challenge needs all five pledges and at least half of your main deck's nonland cards from Fallen Empires. Lands and sideboard do not count. Community rewards can help build one or two colors."</span><span class="j-p">,</span>
+  <span class="j-k">"quest.bread.title"</span><span class="j-p">:</span> <span class="j-s">"The Bread Road"</span><span class="j-p">,</span>
+  <span class="j-k">"quest.bread.deliver"</span><span class="j-p">:</span> <span class="j-s">"Deliver the grain warrant"</span><span class="j-p">,</span>
+  <span class="j-k">"status.pledges"</span><span class="j-p">:</span> <span class="j-s">"The Last Refuge: {pledges} / {quests_total} pledges"</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>Words may hold <code>\n</code> for a new line. Write in American English (“color”, “harbor”); API 1 reads only <code>text.json</code>, and the name <code>text.&lt;language&gt;.json</code> is kept for translations in a later version.</p>
+
+<h2 id="placeholders">Placeholders</h2>
+<p>A word in braces, like <code>{pledges}</code>, is replaced where the text is said. The list is closed; a <code>{word}</code> of lower-case letters, digits and <code>_</code> that is not on it refuses the plugin. Braces around anything else (<code>{ }</code>, <code>{Hero}</code>) are left as written. Nothing in a text is ever evaluated.</p>
+<ul class="chips" data-schema="placeholders"><li><code>pledges</code></li><li><code>quests_total</code></li><li><code>target</code></li><li><code>town</code></li><li><code>title</code></li><li><code>foe</code></li><li><code>life</code></li><li><code>count</code></li><li><code>total</code></li><li><code>required</code></li><li><code>percent</code></li><li><code>left</code></li><li><code>color</code></li><li><code>cards</code></li><li><code>hero</code></li><li><code>region</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Placeholder</th><th>Is replaced by</th></tr></thead>
+<tbody>
+<tr><td><code>{pledges}</code></td><td>the quests done on this island</td></tr>
+<tr><td><code>{quests_total}</code></td><td>the quests on this island</td></tr>
+<tr><td><code>{target}</code></td><td>the name of where the current step leads (in a marker pane or status line: the next target, or <code>target.none</code>)</td></tr>
+<tr><td><code>{town}</code></td><td>the quest’s giver town</td></tr>
+<tr><td><code>{title}</code></td><td>the quest’s title</td></tr>
+<tr><td><code>{foe}</code>, <code>{life}</code></td><td>the foe’s name and life</td></tr>
+<tr><td><code>{count}</code></td><td>a count: the deck gate’s matching cards, waiting cards, reward choices or cards collected</td></tr>
+<tr><td><code>{total}</code>, <code>{required}</code>, <code>{percent}</code></td><td>the deck gate: the main deck’s nonland cards, the matching ones it needs, its percentage</td></tr>
+<tr><td><code>{left}</code></td><td>cards still waiting after collecting</td></tr>
+<tr><td><code>{color}</code>, <code>{cards}</code></td><td>a reward bundle’s label and its cards, comma separated</td></tr>
+<tr><td><code>{hero}</code></td><td>the hero’s name</td></tr>
+<tr><td><code>{region}</code></td><td>the region’s title (the manifest’s <code>region.title</code>)</td></tr>
+</tbody></table></div>
+
+<h3 id="where">Which are filled where</h3>
+<p>Each place a text is said fills its own set. A placeholder that place does not fill is shown as written, braces and all, so check the table before using one:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Where the words are said</th><th>Filled there</th></tr></thead>
+<tbody>
+<tr><td class="wrap">The quest’s pane (petition, epilogue, reward and retry lines, its Accept and Duel buttons), a giver town’s line, the words of a quest’s log effects</td><td class="wrap"><code>{title}</code>, <code>{town}</code>, <code>{foe}</code>, <code>{life}</code>, <code>{pledges}</code>, <code>{quests_total}</code>, <code>{region}</code>, <code>{hero}</code></td></tr>
+<tr><td class="wrap">A step’s guidance (<code>guidance</code>, <code>guide.*</code>)</td><td class="wrap">the same, and <code>{target}</code></td></tr>
+<tr><td class="wrap">The port’s and castle’s pane lines, the status lines, the island’s talk (news, applause, roaming, tribute)</td><td class="wrap"><code>{pledges}</code>, <code>{quests_total}</code>, <code>{target}</code>, <code>{count}</code>, <code>{total}</code>, <code>{required}</code>, <code>{percent}</code>, <code>{region}</code>, <code>{hero}</code></td></tr>
+<tr><td class="wrap">A quest’s task row (<code>task</code>, <code>task.*</code>)</td><td class="wrap"><code>{title}</code>, <code>{town}</code>, <code>{foe}</code>, <code>{life}</code>, <code>{quests_total}</code>, <code>{region}</code>, <code>{target}</code></td></tr>
+<tr><td class="wrap">The finale’s task row (<code>tasks.finale</code>)</td><td class="wrap"><code>{pledges}</code>, <code>{quests_total}</code>, <code>{percent}</code>, <code>{region}</code></td></tr>
+<tr><td class="wrap"><code>deck_line</code></td><td class="wrap"><code>{count}</code>, <code>{total}</code>, <code>{required}</code>, <code>{percent}</code>, <code>{pledges}</code>, <code>{quests_total}</code>, <code>{region}</code></td></tr>
+<tr><td class="wrap"><code>rewards.choose</code>, <code>rewards.claim</code>, <code>rewards.pending_line</code></td><td class="wrap"><code>{count}</code></td></tr>
+<tr><td class="wrap"><code>rewards.offer</code></td><td class="wrap"><code>{color}</code>, <code>{cards}</code></td></tr>
+<tr><td class="wrap"><code>rewards.collected</code></td><td class="wrap"><code>{count}</code>, <code>{left}</code></td></tr>
+<tr><td class="wrap"><code>duel.won_log</code>, <code>duel.lost_log</code></td><td class="wrap"><code>{foe}</code>, <code>{region}</code></td></tr>
+<tr><td class="wrap"><code>duel.title</code></td><td class="wrap"><code>{region}</code></td></tr>
+<tr><td class="wrap">Everything else: pane titles, subtitles and buttons, a step’s button, line and approach, the voyage’s clues and logs, tales, the dungeon’s words, the finale’s results, an epilogue shown as a town’s line or after the duel, the rewards task row</td><td class="wrap">none: a placeholder there is shown as written</td></tr>
+</tbody></table></div>
+
+<h2 id="defaults">The engine’s own words</h2>
+<p>The game says a few things itself: the reward pane’s buttons, the deck problems, the duel’s result pane. Each has plain default words, and a key of the same name in your <code>text.json</code> replaces it. These keys may be named without being in <code>text.json</code>:</p>
+<ul class="chips" data-gd="game/adventure/plugins/plugin_text.gd:DEFAULTS"><li><code>region.subtitle</code></li><li><code>voyage.out</code></li><li><code>voyage.home</code></li><li><code>port.sail_out</code></li><li><code>port.sail_home</code></li><li><code>port.leave</code></li><li><code>castle.leave</code></li><li><code>guide.petition</code></li><li><code>guide.duel</code></li><li><code>guide.done</code></li><li><code>quest.reward_line</code></li><li><code>quest.retry_line</code></li><li><code>quest.secure</code></li><li><code>quest.accept</code></li><li><code>quest.fight</code></li><li><code>quest.back</code></li><li><code>quest.done_log</code></li><li><code>rewards.choose</code></li><li><code>rewards.claim</code></li><li><code>rewards.title</code></li><li><code>rewards.intro</code></li><li><code>rewards.offer</code></li><li><code>rewards.rules</code></li><li><code>rewards.later</code></li><li><code>rewards.pending_line</code></li><li><code>rewards.collected</code></li><li><code>deck.no_pack</code></li><li><code>deck.empty</code></li><li><code>deck.unknown</code></li><li><code>duel.leave_question</code></li><li><code>duel.over</code></li><li><code>duel.won_reward</code></li><li><code>duel.won_again</code></li><li><code>duel.won_log</code></li><li><code>duel.lost_log</code></li><li><code>duel.title</code></li><li><code>duel.victory</code></li><li><code>duel.ended</code></li><li><code>duel.continue</code></li><li><code>target.none</code></li><li><code>task.petition</code></li><li><code>task.duel</code></li><li><code>task.done</code></li><li><code>talk.will_you</code></li></ul>
+<p>The Refuge replaces every one of them with its own voice; <code>region.subtitle</code>, for one, is the subtitle of its panes:</p>
+<figure class="quote" data-file="text.json" data-pointer="" data-keys="region.subtitle,rewards.title,deck.no_pack,duel.won_reward"><figcaption class="src"><b>text.json</b><span>→ region.subtitle, rewards.title, deck.no_pack, duel.won_reward</span></figcaption><pre class="code wrap"><code><span class="j-p">{</span>
+  <span class="j-k">"region.subtitle"</span><span class="j-p">:</span> <span class="j-s">"The Last Refuge"</span><span class="j-p">,</span>
+  <span class="j-k">"rewards.title"</span><span class="j-p">:</span> <span class="j-s">"The Communities' Spells"</span><span class="j-p">,</span>
+  <span class="j-k">"deck.no_pack"</span><span class="j-p">:</span> <span class="j-s">"Enable Pack 2: Fallen Empires in Options to begin this battle."</span><span class="j-p">,</span>
+  <span class="j-k">"duel.won_reward"</span><span class="j-p">:</span> <span class="j-s">" You receive 40 gold and 8 food. Choose six cards in a color of your choice; you may collect them later."</span>
+<span class="j-p">}</span></code></pre></figure>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="foes-rewards.html"><span>Previous</span>Foes and rewards</a>
+<a class="next" href="art-music.html"><span>Next</span>Art and music</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

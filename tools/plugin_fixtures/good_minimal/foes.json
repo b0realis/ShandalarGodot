@@ -1,0 +1,38 @@
+{
+	"foes": {
+		"smuggler": {
+			"name": "The Lantern Smuggler",
+			"life": 16,
+			"face": 32,
+			"deck": {
+				"Mountain": 17,
+				"Mons's Goblin Raiders": 4,
+				"Goblin Balloon Brigade": 3,
+				"Gray Ogre": 4,
+				"Hill Giant": 3,
+				"Dwarven Warriors": 2,
+				"Lightning Bolt": 4,
+				"Shatter": 1,
+				"Firebreathing": 2
+			}
+		},
+		"warden": {
+			"name": "The Warden of the Old Keep",
+			"deck_name": "The Old Keep",
+			"life": 22,
+			"face": 6,
+			"deck": {
+				"Swamp": 17,
+				"Scathe Zombies": 4,
+				"Black Knight": 3,
+				"Bog Wraith": 3,
+				"Hypnotic Specter": 2,
+				"Sengir Vampire": 1,
+				"Dark Ritual": 3,
+				"Terror": 3,
+				"Drain Life": 2,
+				"Unholy Strength": 2
+			}
+		}
+	}
+}

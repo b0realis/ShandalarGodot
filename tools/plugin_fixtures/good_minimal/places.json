@@ -1,0 +1,110 @@
+{
+	"pictures": {},
+	"voyage": {
+		"arrive_clues": [
+			{
+				"text": "voyage.arrive",
+				"quest": true
+			}
+		],
+		"out_log": "voyage.out",
+		"home_log": "voyage.home"
+	},
+	"markers": {
+		"port": {
+			"name": "Island Harbor",
+			"mainland_name": "Island Ferry",
+			"picture": "visit_city",
+			"sprite": {
+				"file": "art/corpus_isle_port_map.png",
+				"width": 96
+			},
+			"panes": [
+				{
+					"when": [
+						{
+							"on_region": true
+						}
+					],
+					"lines": [
+						"port.island",
+						{
+							"show": "pending"
+						}
+					],
+					"actions": [
+						{
+							"do": "sail",
+							"label": "port.sail_home"
+						},
+						{
+							"do": "leave",
+							"label": "port.leave"
+						}
+					]
+				},
+				{
+					"lines": [
+						"port.mainland"
+					],
+					"actions": [
+						{
+							"do": "sail",
+							"label": "port.sail_out"
+						},
+						{
+							"do": "leave",
+							"label": "port.leave"
+						}
+					]
+				}
+			]
+		},
+		"castle": {
+			"name": "The Old Keep",
+			"picture": "visit_castle_black",
+			"sprite": {
+				"file": "art/corpus_isle_castle_map.png",
+				"width": 112
+			},
+			"banner": {
+				"flag": "freed",
+				"color": "e0bc60"
+			},
+			"panes": [
+				{
+					"when": [
+						{
+							"flag": "freed"
+						}
+					],
+					"lines": [
+						"castle.freed"
+					],
+					"actions": [
+						{
+							"do": "leave",
+							"label": "castle.leave"
+						}
+					]
+				},
+				{
+					"lines": [
+						"castle.intro",
+						"castle.count"
+					],
+					"actions": [
+						{
+							"do": "boss",
+							"label": "castle.challenge"
+						},
+						{
+							"do": "leave",
+							"label": "castle.leave"
+						}
+					]
+				}
+			]
+		}
+	}
+}

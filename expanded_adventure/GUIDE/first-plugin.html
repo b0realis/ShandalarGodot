@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your first plugin · Adventure plugin guide</title>
+<meta name="description" content="The new, edit, validate, export, install, tick and play loop, with the real commands.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html" aria-current="page">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Your first plugin</h1>
+<p class="lede">From an empty folder to a duel on your own island, in seven steps. You need the game, Python 3 and a text editor; nothing else is installed.</p>
+
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 232" role="img" aria-label="The author's loop: new, edit, validate, export, install, tick at the Embark, play. Validate sends you back to edit when it lists problems; playing sends you back to edit when you change something.">
+<defs><marker id="fp-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker>
+<marker id="fp-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-warn" d="M0,0L10,5L0,10z"/></marker></defs>
+<rect class="d-accent" x="16" y="70" width="90" height="44" rx="10"/><text class="d-accent-text" x="61" y="97" text-anchor="middle">new</text>
+<text class="d-small" x="61" y="56" text-anchor="middle">tool</text>
+<rect class="d-box" x="122" y="70" width="90" height="44" rx="10"/><text class="d-text" x="167" y="97" text-anchor="middle">edit</text>
+<text class="d-small" x="167" y="56" text-anchor="middle">any text editor</text>
+<rect class="d-accent" x="228" y="70" width="90" height="44" rx="10"/><text class="d-accent-text" x="273" y="97" text-anchor="middle">validate</text>
+<text class="d-small" x="273" y="56" text-anchor="middle">tool</text>
+<rect class="d-accent" x="334" y="70" width="90" height="44" rx="10"/><text class="d-accent-text" x="379" y="97" text-anchor="middle">export</text>
+<text class="d-small" x="379" y="56" text-anchor="middle">tool · the .zip</text>
+<rect class="d-box" x="440" y="70" width="90" height="44" rx="10"/><text class="d-text" x="485" y="97" text-anchor="middle">install</text>
+<text class="d-small" x="485" y="56" text-anchor="middle">plugins folder</text>
+<rect class="d-box" x="546" y="70" width="90" height="44" rx="10"/><text class="d-text" x="591" y="97" text-anchor="middle">tick</text>
+<text class="d-small" x="591" y="56" text-anchor="middle">Embark window</text>
+<rect class="d-gold" x="652" y="70" width="92" height="44" rx="10"/><text class="d-gold-text" x="698" y="97" text-anchor="middle">play</text>
+<text class="d-small" x="698" y="56" text-anchor="middle">a new campaign</text>
+<path class="d-line" d="M106,92 H118" marker-end="url(#fp-h)"/>
+<path class="d-line" d="M212,92 H224" marker-end="url(#fp-h)"/>
+<path class="d-line" d="M318,92 H330" marker-end="url(#fp-h)"/>
+<path class="d-line" d="M424,92 H436" marker-end="url(#fp-h)"/>
+<path class="d-line" d="M530,92 H542" marker-end="url(#fp-h)"/>
+<path class="d-line" d="M636,92 H648" marker-end="url(#fp-h)"/>
+<path class="d-line-warn" d="M262,114 C254,142 186,142 178,118" marker-end="url(#fp-w)"/>
+<text class="d-warn-text" x="230" y="152" text-anchor="middle">problems listed</text>
+<path class="d-dash" d="M690,114 C680,224 142,224 140,118" marker-end="url(#fp-h)"/>
+<text class="d-small" x="412" y="220" text-anchor="middle">change something, export again, Rescan</text>
+</svg></div>
+<figcaption>The loop every plugin is made in. The blue steps are <code>tools/adventure_plugin.py</code>; the game runs the same checks as <code>validate</code> when it finds the plugin.</figcaption>
+</figure>
+
+
+<ol class="steps">
+<li><h3 id="new">Make the skeleton</h3>
+<p>Open a terminal in the game folder (the folder that holds <code>tools/</code>) and ask the tool for a new plugin:</p>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py new my_isle --id my_isle --name "My Isle"
+<span class="c"># Windows, in the same folder: python tools\adventure_plugin.py new my_isle --id my_isle --name "My Isle"</span></code></pre>
+<p>On Windows, type <code>python</code> (or <code>py</code>) instead of <code>python3</code> and <code>\</code> in paths, as the second line shows; every other <code>adventure_plugin.py</code> command on these pages works the same way.</p>
+<p>It writes a folder <code>my_isle/</code> that already loads and plays: a manifest, an island recipe, a port and a castle with small placeholder map pictures, one quest, a finale, a foe for each, and the words for all of it. <code>--id</code> is the plugin’s identity for ever (see below); <code>--name</code> is what players read.</p></li>
+
+<li><h3 id="edit">Edit it</h3>
+<p>Everything is plain JSON and text. Start with the manifest, <code>plugin.json</code>:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>plugin_format</code></td><td class="wrap"><code>1</code>. Required.</td></tr>
+<tr><td><code>api_version</code></td><td class="wrap"><code>1</code>, the plugin API this guide describes. Required. A plugin asking for a newer API than the game reads is refused with “a newer game is needed”.</td></tr>
+<tr><td><code>id</code></td><td class="wrap">1 to 40 lower-case letters, digits or <code>_</code>, a letter first; never <code>mainland</code>. Required. It names your land in every save, begins every picture key (<code>my_isle_harbor</code>) and every button the game makes for it. <b>Never change it once players have it.</b></td></tr>
+<tr><td><code>name</code></td><td class="wrap">At most 100 characters. Required. The plugins window’s title for it.</td></tr>
+<tr><td><code>version</code></td><td class="wrap">1 to 4 numbers joined by dots, like <code>"1.0.0"</code>. Required.</td></tr>
+<tr><td><code>minimum_game_version</code></td><td class="wrap">Optional, numbers and dots. An older game refuses the plugin and says which version it needs.</td></tr>
+<tr><td><code>authors</code></td><td class="wrap">A list of 1 to 16 names. Required.</td></tr>
+<tr><td><code>description</code></td><td class="wrap">One line of at most 300 characters for the plugins window. Required.</td></tr>
+<tr><td><code>license</code>, <code>learning_note</code></td><td class="wrap">Optional text, at most 4,000 characters each. Both are shown in the plugins window.</td></tr>
+<tr><td><code>requires</code></td><td class="wrap">Optional: <code>{"card_packs": [{"id": "pack-2", "min_version": "1.0"}]}</code>, at most 16 packs, each one the game knows. Pack 1 is never part of an adventure and is refused here. <code>min_version</code> is the oldest version of the pack the plugin works with; with an older one installed, the plugin says it needs that version or newer. With no packs, the plugin is on whenever it is ticked, and its cards must all be base-game cards.</td></tr>
+<tr><td><code>region</code></td><td class="wrap">Required: <code>title</code> (required, at most 100 characters), <code>castle_name</code>, <code>salt</code> (0 to 2147483647: which island the terrain generator makes), <code>mana_links</code> (whether the island’s places can take mana links; the Refuge’s cannot), <code>palette</code> (a built-in palette’s name or a palette object; <a href="world.html#palette">The world</a>).</td></tr>
+<tr><td><code>files</code></td><td class="wrap">Leave it out. <code>export</code> writes it into the zip it makes: every file’s SHA-256.</td></tr>
+</tbody></table></div>
+<p>A field the manifest does not know refuses the plugin, so a typo is named instead of being ignored. Then shape the island in <a href="world.html">world.json and places.json</a>, the story in <a href="quests.html">quests.json</a>, the duels in <a href="foes-rewards.html">foes.json and rewards.json</a>, and every word in <a href="text.html">text.json</a>.</p></li>
+
+<li><h3 id="validate">Validate</h3>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py validate my_isle
+<span class="c"># Windows, in the same folder: python tools\adventure_plugin.py validate my_isle</span></code></pre>
+<p>The same checks the game makes, in the same order (<a href="testing.html#stages">Testing</a>). Every problem is a line naming the file and the place in it, for example <code>quests.json: quests[0].foe: foes.json has no tithe_colector.</code> A JSON file that does not parse is named with the line of the mistake, counted from 1. Fix, and run it again until it says the plugin is valid.</p></li>
+
+<li><h3 id="export">Export</h3>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py export my_isle --out dist
+<span class="c"># Windows, in the same folder: python tools\adventure_plugin.py export my_isle --out dist</span></code></pre>
+<p>This writes <code>dist/my_isle.zip</code> (<code>dist/</code> in the current folder is also where it goes without <code>--out</code>): one top folder, the files in sorted order with fixed times, and a manifest carrying every file’s SHA-256 in its <code>files</code> list. The zip is checked again as it is written. Your folder is left as it was. The hashes let the game notice a file changed after export; they are integrity, not a signature.</p></li>
+
+<li><h3 id="install">Install</h3>
+<p>Copy the zip into the plugins folder: the one <b>Options</b> shows on its <b>Adventure plugins folder</b> line, <code>expanded_adventure</code> in the game’s user folder unless you moved it. While you work, the unpacked folder may sit there instead: a folder holding <code>plugin.json</code> is read the same way as a zip.</p>
+<div class="note"><strong>One copy at a time</strong><p>In one folder the zips are read before the folders, and the first copy of an id wins. An exported <code>my_isle.zip</code> beside your working <code>my_isle/</code> folder would be the one played, and the window would list the folder as a copy not used. That is why <code>export</code> refuses an <code>--out</code> that is the folder holding your plugin’s folder: export to <code>dist</code>, as above.</p></div></li>
+
+<li><h3 id="tick">Tick it at the Embark</h3>
+<p>Start a new adventure. At the bottom of the card-pack list press <b>Expanded adventure plugins...</b>. The window of that name lists every plugin found, with its version, authors, description and learning note, and a line for each card pack it needs, such as <b>Needs Pack 2 · Fallen Empires — ticked</b> (or <i>not ticked</i>, <i>not installed</i>). Tick yours; its packs are ticked with it. A refused plugin is greyed with every problem the checks found. <b>Rescan</b> reads the folders again after you change something, <b>Open folder</b> opens the plugins folder, and <b>OK</b> closes the window.</p></li>
+
+<li><h3 id="play">Play</h3>
+<p>Embark. On the mainland your island’s ship waits at an anchorage on the coast near where the hero starts, marked <b>Ship: <i>your region title</i></b>. Walk onto it, read your port’s pane and sail. Your castle, towns and quests are on the island; the ship always takes the hero home.</p>
+<p>The island is made the first time a hero sails there, and from then on it is part of that adventure’s save. To see a change to <code>world.json</code>, start a new adventure, or sail with one that has not been there yet. Changes to words, foes, rewards and pictures show after <b>Rescan</b> or the next start of the game, in new adventures and saved ones alike. A change to the quests or the town slots reaches a saved adventure only within the rules of <a href="saves.html#never">Saves and compatibility</a>: a saved land the new version cannot read is kept as it was and does not sail.</p></li>
+</ol>
+
+<h2 id="smallest">The smallest working content</h2>
+<p>The checks ask for a few things in every plugin. Knowing them saves a round of <code>validate</code>:</p>
+<ul>
+<li><code>world.json</code>: <code>generator: "island"</code>, at least one town in <code>towns.list</code>, and a <code>dungeon</code> with a name.</li>
+<li><code>places.json</code>: a <code>port</code> and a <code>castle</code> marker, each with a name, a picture and at least one pane.</li>
+<li><code>quests.json</code>: the town words (<code>town.line</code>, <code>town.action</code>, <code>town.thanks</code>), at least one quest whose last step is a <code>duel</code>, a <code>finale</code> with its <code>done_flag</code> declared in <code>flags</code>, and the two task rows (<code>tasks.finale</code>, <code>tasks.rewards</code>).</li>
+<li><code>foes.json</code>: every foe a quest or the finale names.</li>
+<li><code>text.json</code>: every key the other files name.</li>
+</ul>
+<p>The demo is a finished example of all of it; its port marker, for one:</p>
+<figure class="quote" data-file="places.json" data-pointer="/markers/port"><figcaption class="src"><b>places.json</b><span>/markers/port</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Refuge Harbor"</span><span class="j-p">,</span>
+  <span class="j-k">"mainland_name"</span><span class="j-p">:</span> <span class="j-s">"Sarpadian Anchorage"</span><span class="j-p">,</span>
+  <span class="j-k">"picture"</span><span class="j-p">:</span> <span class="j-s">"refuge_harbor"</span><span class="j-p">,</span>
+  <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_port_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">160</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"panes"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"on_region"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"port.island.ready"</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"news"</span><span class="j-p">}</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"pending"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"sail"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.sail_home"</span><span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.leave"</span><span class="j-p">}</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"port.free.welcome"</span><span class="j-p">, </span><span class="j-s">"port.free.return"</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"pending"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"sail"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.sail_out"</span><span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.leave"</span><span class="j-p">}</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"story.origin"</span><span class="j-p">,</span>
+        <span class="j-s">"story.voyage"</span><span class="j-p">,</span>
+        <span class="j-s">"story.danger"</span><span class="j-p">,</span>
+        <span class="j-s">"story.gate"</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"pending"</span><span class="j-p">}</span>
+      <span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"sail"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.sail_out"</span><span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.leave"</span><span class="j-p">}</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="index.html"><span>Previous</span>Start here</a>
+<a class="next" href="world.html"><span>Next</span>The world</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

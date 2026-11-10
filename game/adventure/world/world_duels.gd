@@ -118,6 +118,8 @@ func _ready() -> void:
 	duel.leave_confirmed.connect(concede)
 	duel.menu_confirmed.connect(_to_menu)
 	_hold(true)
+	# The land's own track gives way to the duel's, as the title's does.
+	region_music_off(screen if screen != null else self)
 	_dealing = true
 	add_child(duel)
 	_dealing = false
@@ -261,10 +263,13 @@ func _exit_tree() -> void:
 
 
 ## THE WORLD'S BED AGAIN after an adventure duel's panes (the duel stopped
-## it, `DuelScreen._play_music`): `ShellMusic` played, found through the tree
+## it, `DuelScreen._play_music`): the land's own track where it has one
+## ([method region_music]), else `ShellMusic` played, found through the tree
 ## (a tool compiled before the autoloads may load this file).
 static func world_music(node: Node) -> void:
 	if node == null or not node.is_inside_tree():
+		return
+	if region_music(node):
 		return
 	var music := node.get_node_or_null(^"/root/ShellMusic")
 	if music != null:
@@ -276,6 +281,76 @@ static func world_music(node: Node) -> void:
 static func world_music_off(node: Node) -> void:
 	if node == null or not node.is_inside_tree():
 		return
+	region_music_off(node)
 	var music := node.get_node_or_null(^"/root/ShellMusic")
 	if music != null:
 		music.call(&"stop")
+
+
+## THE LAND'S OWN WORLD TRACK (adventure plugins, 2026-11-10; the spec's
+## §4, music): while the hero walks a land whose plugin names a track
+## ([method AdventureExpansions.music]), it plays in place of the title's
+## tune, on the Music bus, looping, as low under the world as that tune
+## sits ([constant WorldSoundscape.BED_DB]); on the mainland, or a land
+## with none, the track stops and the title's tune comes back. The voice is
+## the world's soundscape's child, so it ends with the world. True when the
+## land's track plays (or would, with the music switched off); false when
+## the world's music is the title's — what [param node] (the world screen or
+## a pane over it) leaves to [method world_music].
+static func region_music(node: Node) -> bool:
+	if node == null or not node.is_inside_tree():
+		return false
+	var soundscape := _soundscape(node)
+	if soundscape == null:
+		return false
+	var hero: Variant = soundscape.get(&"player")
+	var tune: AudioStream = AdventureExpansions.music(hero) if hero is AdventurePlayer else null
+	var voice := soundscape.get_node_or_null(^"RegionTune") as AudioStreamPlayer
+	if tune == null:
+		if voice == null:
+			return false
+		voice.queue_free()
+		voice.name = "RegionTuneGone"
+		var shell := node.get_node_or_null(^"/root/ShellMusic")
+		if shell != null:
+			shell.call(&"play")
+		return false
+	var shell := node.get_node_or_null(^"/root/ShellMusic")
+	if shell != null:
+		shell.call(&"stop")
+	if voice == null:
+		GameAudio.ensure_buses()
+		voice = AudioStreamPlayer.new()
+		voice.name = "RegionTune"
+		voice.bus = GameAudio.MUSIC_BUS
+		voice.volume_db = WorldSoundscape.BED_DB
+		soundscape.add_child(voice)
+	if not Settings.music_enabled() or DisplayServer.get_name() == "headless":
+		voice.stop()
+		voice.stream = tune
+		return true
+	if voice.stream != tune or not voice.playing:
+		voice.stream = tune
+		voice.play()
+	return true
+
+
+## The land's track stopped for a screen or a duel with its own music; the
+## next [method world_music] or [method region_music] brings it back.
+static func region_music_off(node: Node) -> void:
+	var soundscape := _soundscape(node) if node != null and node.is_inside_tree() else null
+	var voice := soundscape.get_node_or_null(^"RegionTune") as AudioStreamPlayer if soundscape != null else null
+	if voice != null:
+		voice.stop()
+
+
+## The world's soundscape for [param node]: the world screen's, found up the
+## tree from a pane over it (untyped: this file is the duel host's too).
+static func _soundscape(node: Node) -> Node:
+	var at := node
+	while at != null:
+		var found: Variant = at.get(&"soundscape")
+		if found is Node and is_instance_valid(found):
+			return found
+		at = at.get_parent()
+	return null

@@ -1,0 +1,20 @@
+{
+	"plugin_format": 1,
+	"api_version": 1,
+	"id": "tiny_isle",
+	"name": "Tiny Isle (loader fixture)",
+	"version": "0.1.0",
+	"minimum_game_version": "0.60.19",
+	"authors": ["Shandalar Godot tests"],
+	"license": "Test data, GPL-3.0 like the game.",
+	"description": "The loader's own test plugin: a manifest, placeholder content, one picture, one tune.",
+	"learning_note": "A fixture for the plugin loader's tests, not a playable land.",
+	"requires": {"card_packs": []},
+	"region": {
+		"title": "Tiny Isle",
+		"castle_name": "Tiny Keep",
+		"salt": 7,
+		"mana_links": false,
+		"palette": "shandalar"
+	}
+}

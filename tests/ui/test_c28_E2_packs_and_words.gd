@@ -7,13 +7,10 @@ extends GutTest
 ## a shop's shelves, the first deck and the creatures' decks base cards.
 
 var screen: EmbarkScreen
-var _launch_before: bool
 var _enabled_before: Array[String] = []
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray())
 	_enabled_before = Settings.enabled_card_packs().duplicate()
 	AdventureSetup.forget()
 	screen = load("res://game/adventure/embark_screen.tscn").instantiate()
@@ -22,7 +19,6 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	AdventureSetup.forget()
 	for id in CardPacks.available_ids():
 		if CardPacks.is_enabled(id) != (id in _enabled_before):

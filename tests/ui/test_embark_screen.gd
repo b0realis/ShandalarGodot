@@ -7,12 +7,9 @@ extends GutTest
 ## neither the skin nor the 1997 faces, a dev checkout has both.
 
 var screen: EmbarkScreen
-var _launch_before: bool
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray())
 	AdventureSetup.forget()
 	screen = load("res://game/adventure/embark_screen.tscn").instantiate()
 	add_child_autofree(screen)
@@ -20,7 +17,6 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	AdventureSetup.forget()
 
 
@@ -49,9 +45,13 @@ func test_every_choice_is_on_the_one_screen() -> void:
 	else:
 		assert_not_null(_find("NoPacks"))
 	assert_null(_find("Pack_pack-1"), "Pack 1 is never offered")
-	assert_null(_find("ExpandedAdventure"), "no GUI opt-in for prototype stories")
-	assert_false(screen.setup.expanded_adventure)
+	assert_null(_find("ExpandedAdventure"), "no checkbox for the lands on the screen itself")
+	assert_eq(screen.setup.adventures, [] as Array[String], "no plugin ticked on a first visit")
 	assert_string_contains((_find("PacksAbout") as Label).text, "shops and rewards")
+	# The adventure plugins: one button, at the foot of the packs (the owner,
+	# 2026-11-10; its window: tests/ui/test_plugins_window_*.gd).
+	assert_eq((_find("AdventurePlugins") as Button).text, EmbarkScreen.PLUGINS_BUTTON)
+	assert_null(_find("AdventurePluginsWindow"), "its window only when asked for")
 
 
 func test_the_ground_is_the_portrait_screen_or_its_dark() -> void:
@@ -467,7 +467,12 @@ func test_the_title_menu_opens_it() -> void:
 	assert_true(title.is_inside_tree(), "and still the menu: Escape is Back, not Go test")
 
 
-func test_card_packs_never_enable_prototype_stories_without_launch_flag() -> void:
+## ADVENTURE PLUGINS (2026-11-10; the owner: *"Plugins should get their own
+## popup window for ticking them as not to clutter the main embark screen"*):
+## the screen shows the packs only — no land's words under them or in their
+## tooltips — and the card packs never tick a plugin. Ported from the
+## launch-flag era's two tests, whose flag is retired.
+func test_card_packs_never_tick_a_plugin_and_the_old_preference_is_never_read() -> void:
 	assert_null(_find("ExpandedAdventure"))
 	for id in screen._pack_checks:
 		var check := screen._pack_checks[id] as CheckBox
@@ -475,34 +480,37 @@ func test_card_packs_never_enable_prototype_stories_without_launch_flag() -> voi
 		assert_false(check.button_pressed)
 		assert_false(check.tooltip_text.contains("Optional adventure"))
 	screen.choose_all_packs(true)
-	assert_false(screen.setup.expanded_adventure)
+	assert_eq(screen.setup.adventures, [] as Array[String])
 	screen.randomize_all(RandomNumberGenerator.new())
-	assert_false(screen.setup.expanded_adventure)
+	assert_eq(screen.setup.adventures, [] as Array[String])
 	screen.setup.packs.assign(screen._pack_checks.keys())
 	screen.setup.remember()
 	Settings.set_value(AdventureSetup.KEY_PREFIX + "expanded_adventure", true)
 	var reopened: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
 	add_child_autofree(reopened)
 	await get_tree().process_frame
-	assert_false(reopened.setup.expanded_adventure, "legacy checkbox preference cannot opt in")
+	assert_eq(reopened.setup.adventures, [] as Array[String], "the retired switch's preference cannot tick one")
 	assert_eq(reopened.setup.packs, AdventureSetup.offered_packs(CardPacks.available_ids()),
 		"the packs are kept: a card choice, not a story")
 
-func test_flag_labels_the_prototype_and_preserves_card_pack_choices() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
+
+func test_the_screen_shows_packs_only_and_the_summary_names_ticked_plugins() -> void:
+	screen.setup.adventures = ["refuge"]
+	screen.setup.packs = ["pack-2"]
+	screen.setup.remember()
 	var reopened: EmbarkScreen = load("res://game/adventure/embark_screen.tscn").instantiate()
 	add_child_autofree(reopened)
 	await get_tree().process_frame
-	assert_null(reopened.find_child("ExpandedAdventure", true, false))
-	assert_true(reopened.setup.expanded_adventure)
-	assert_string_contains((reopened.find_child("PacksAbout", true, false) as Label).text, "Prototype game design test")
-	reopened.choose_all_packs(true)
-	assert_eq(reopened.setup.packs, AdventureSetup.offered_packs(CardPacks.available_ids()))
-	reopened.randomize_all(RandomNumberGenerator.new())
-	assert_true(reopened.setup.expanded_adventure)
-	reopened.choose_all_packs(false)
-	assert_true(reopened.setup.packs.is_empty())
-	assert_true(reopened.setup.expanded_adventure, "launch mode does not force pack selection")
+	assert_eq(reopened.setup.adventures, ["refuge"] as Array[String], "ticked plugins are remembered")
+	var about := (reopened.find_child("PacksAbout", true, false) as Label).text
+	assert_string_contains(about, "shops and rewards")
+	assert_false(about.contains("Prototype") or about.contains("lands"), about)
+	for id in reopened._pack_checks:
+		assert_false((reopened._pack_checks[id] as CheckBox).tooltip_text.contains("adventure"), id)
+	var words := reopened.summary(reopened.setup.resolve({"pack-2": "1"}))
+	assert_string_contains(words, "Adventure plugins: %s." % AdventurePlugins.row("refuge")["name"])
+	var plain := AdventureSetup.new()
+	assert_false(reopened.summary(plain.resolve({})).contains("Adventure plugins"), "none ticked: no line")
 
 
 ## WITHOUT THE 1997 ART — the ground and the five symbols are the skin's;

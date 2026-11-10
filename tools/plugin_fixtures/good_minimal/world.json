@@ -1,0 +1,40 @@
+{
+	"generator": "island",
+	"layout_version": 1,
+	"towns": {
+		"list": [
+			{
+				"slot": 1,
+				"name": "Harborwatch",
+				"terrain": 6,
+				"aim": [
+					-9,
+					-8
+				]
+			},
+			{
+				"slot": 2,
+				"name": "Mossford",
+				"terrain": 2,
+				"aim": [
+					9,
+					3
+				]
+			}
+		]
+	},
+	"villages": {
+		"names": [
+			"Reedholm",
+			"Tidecross",
+			"Stonebrook"
+		],
+		"count": [
+			2,
+			3
+		]
+	},
+	"dungeon": {
+		"name": "The Drowned Cellars"
+	}
+}

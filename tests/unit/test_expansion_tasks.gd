@@ -2,21 +2,16 @@ extends GutTest
 ## Shared objectives, mana-link policy, independent region schemas and opponents.
 const BEACON = preload("res://tools/expansion_testing/beacon_region.gd")
 
-var _launch_before: bool
-
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	AdventureExpansions.clear_development()
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 
 func hero(seed_text := "48271") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
 	var record := setup.resolve({"pack-2": "1"})
@@ -27,30 +22,30 @@ func test_only_mainland_links_count_across_travel_and_legacy_saves() -> void:
 	var original := player.mana_links()
 	var magics := player.world_magics.duplicate()
 	var jewels := player.amulets.duplicate()
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.mana_links(), original)
 	TownStatus.put(player.world, 1, TownStatus.LINKED)
 	assert_false(TownStatus.linked(player.world, 1))
 	player.world.sites[2]["status"] = TownStatus.LINKED # legacy prototype save
 	assert_false(TownStatus.linked(player.world, 2))
-	assert_true(RefugeCampaign.finish_quest(player, 0))
+	assert_true(_refuge().finish_quest(player, 0))
 	assert_eq(player.mana_links(), original)
 	assert_eq(player.world_magics, magics)
 	assert_eq(player.amulets, jewels)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var restored := AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
 	assert_not_null(restored)
 	if restored != null: assert_eq(restored.mana_links(), original)
 
 func test_task_selection_moves_with_quest_and_routes_through_return_ship() -> void:
 	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_true(AdventureTasks.select(player, "refuge/pledge:0"))
 	assert_eq(AdventureTasks.guide(player, [])[0]["tile"], Quests.site_tile(player.world, 1))
-	assert_true(RefugeQuests.start(player, 0))
+	assert_true(_refuge().start(player, 0))
 	var port: Array = player.world.expansion["port"]
 	assert_eq(AdventureTasks.guide(player, [])[0]["tile"], Vector2i(port[0], port[1]))
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var selected := AdventureTasks.guide(player, [])
 	var departure: Array = player.world.expansion["entries"]["refuge"]
 	assert_eq(selected[0]["tile"], Vector2i(departure[0], departure[1]))
@@ -58,19 +53,19 @@ func test_task_selection_moves_with_quest_and_routes_through_return_ship() -> vo
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 	assert_true(AdventureTasks.guide(player, []).is_empty(), "do not direct to invisible harbor")
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_true(AdventureTasks.select(player, "mainland/wizard:0"))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 	assert_eq(AdventureTasks.guide(player, [])[0]["tile"], Vector2i(port[0], port[1]))
 
 func test_completed_task_clears_and_clues_outlive_journal_trimming() -> void:
 	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	AdventureTasks.select(player, "refuge/pledge:0")
 	player.log_clue("The vault is north of Havenwood.")
 	player.log_clue("The vault is north of Havenwood.")
 	player.journal.clear()
-	assert_true(RefugeCampaign.finish_quest(player, 0))
+	assert_true(_refuge().finish_quest(player, 0))
 	assert_true(AdventureTasks.guide(player, []).is_empty())
 	assert_eq(player.tracked_task, "")
 	var restored := AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
@@ -84,20 +79,23 @@ func test_completed_task_clears_and_clues_outlive_journal_trimming() -> void:
 func test_geographic_targets_on_several_seeds_and_old_map_repair() -> void:
 	for seed_text in ["5", "37", "82", "48271"]:
 		var player := hero(seed_text)
-		assert_true(RefugeCampaign.travel(player))
-		var channel := RefugeQuests.destination_slot(player, 1)
+		assert_true(_refuge().travel(player))
+		var channel := _refuge().destination_slot(player, 1)
 		if channel >= 0: assert_true(RegionGeography.coast(player.world, Quests.site_tile(player.world, channel)))
-		var raider := RefugeQuests.destination_slot(player, 3)
+		var raider := _refuge().destination_slot(player, 3)
 		if raider != 4: assert_true(RegionObjectives.matches(player.world, Quests.site_tile(player.world, raider), {"road": true, "near_terrain": 5, "radius": 2}))
 		var before := player.world.fingerprint()
 		player.world.expansion["objectives"] = {"channel": {}, "raider": 999}
-		RefugeQuests.ensure_objectives(player)
-		assert_gte(RefugeQuests.destination_slot(player, 1), -1)
+		_refuge().ensure_objectives(player)
+		assert_gte(_refuge().destination_slot(player, 1), -1)
 		assert_eq(player.world.fingerprint(), before)
 
 func test_another_region_needs_no_castle_pledges_art_or_refuge_schema() -> void:
 	assert_true(AdventureExpansions.register_development(BEACON.ID, BEACON.descriptor()))
 	var player := hero()
+	# Ticked at the Embark beside the Refuge (adventure plugins: no switch
+	# ticks every land at once any more).
+	player.adventures = AdventurePlayer.ticked_rows(["refuge", BEACON.ID])
 	AdventureExpansions.initialize(player)
 	assert_true(AdventureRegions.travel(player, BEACON.ID, func() -> ShandalarWorld: return AdventureExpansions.generate(BEACON.ID, 42, 5, 0)))
 	assert_false(player.world.expansion.has("castle"))
@@ -116,19 +114,19 @@ func test_another_region_needs_no_castle_pledges_art_or_refuge_schema() -> void:
 
 func test_roaming_spells_tribute_and_life_are_consistent_and_not_adaptive() -> void:
 	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var meeting := CreatureMeeting.meet(player, 4, 3, 2)
-	RefugeEncounters.roaming(player, meeting)
+	_refuge().roaming_encounter(player, meeting)
 	# Select a stable eligible slot without changing the player or enemy strength.
 	for slot in range(1, 7):
 		meeting["slot"] = slot
-		RefugeEncounters.roaming(player, meeting)
+		_refuge().roaming_encounter(player, meeting)
 		if meeting.has("regional_deck"): break
 	assert_true(meeting.has("regional_deck"))
 	if not meeting.has("regional_deck"): return
 	var first := CreatureMeeting.duel_config(player, meeting)
 	assert_eq(first.decks[1], meeting["regional_deck"])
-	assert_eq(first.lives[1], RefugeEncounters.LIVES[4])
+	assert_eq(first.lives[1], _refuge().foe_for(4)["life"])
 	for card in CreatureMeeting.spell_choices(meeting): assert_true(card in first.decks[1])
 	for card in meeting["creature_ante"]: assert_true(card in first.decks[1])
 	player.next_duel_life = 90
@@ -139,19 +137,19 @@ func test_roaming_spells_tribute_and_life_are_consistent_and_not_adaptive() -> v
 	assert_eq(later.lives[1], first.lives[1])
 	var quest := CreatureMeeting.meet(player, 4, 3, 2)
 	quest["quest"] = true
-	RefugeEncounters.roaming(player, quest)
+	_refuge().roaming_encounter(player, quest)
 	assert_false(quest.has("regional_deck"))
 
 func test_pledges_and_liberation_leave_small_saved_visual_marks() -> void:
 	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_true(RegionPresentation.banner(player.world, Quests.site_tile(player.world, 1)).is_empty())
-	RefugeCampaign.finish_quest(player, 0)
+	_refuge().finish_quest(player, 0)
 	assert_false(RegionPresentation.banner(player.world, Quests.site_tile(player.world, 1)).is_empty())
 	assert_eq(player.world.expansion["banners"].size(), 1)
-	player.refuge["quests"] = [0, 1, 2, 3, 4]
-	player.refuge["liberated"] = true
-	RefugeQuests.refresh_appearance(player)
+	AdventureExpansions.progress(player, "refuge")["quests"] = [0, 1, 2, 3, 4]
+	AdventureExpansions.progress(player, "refuge")["liberated"] = true
+	_refuge().refresh_appearance(player)
 	assert_eq(player.world.expansion["banners"].size(), 6)
 	var restored := AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
 	assert_not_null(restored)
@@ -159,7 +157,7 @@ func test_pledges_and_liberation_leave_small_saved_visual_marks() -> void:
 
 func test_old_link_errand_keeps_other_rewards_without_creating_a_link() -> void:
 	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var links := player.mana_links()
 	var jewels := int(player.amulets.get("blue", 0))
 	player.quest = {"type": Quests.LETTER_LINK, "destination": 22, "giver": 8, "color": 2, "deadline": 200}
@@ -199,9 +197,9 @@ func test_task_deadline_refreshes_at_its_boundary_not_the_calendar_day() -> void
 
 func test_completed_entries_remain_below_new_tasks_after_reload() -> void:
 	var player := hero()
-	RefugeCampaign.travel(player)
+	_refuge().travel(player)
 	AdventureTasks.rows(player)
-	RefugeCampaign.finish_quest(player, 0)
+	_refuge().finish_quest(player, 0)
 	var tasks := AdventureTasks.rows(player)
 	var completed := tasks.filter(func(task: Dictionary) -> bool: return task["id"] == "refuge/pledge:0")[0] as Dictionary
 	assert_eq(completed["status"], "completed")
@@ -222,7 +220,7 @@ func test_completed_entries_remain_below_new_tasks_after_reload() -> void:
 
 func test_errand_completion_and_expiration_have_distinct_saved_outcomes() -> void:
 	var player := hero()
-	RefugeCampaign.travel(player)
+	_refuge().travel(player)
 	player.quest = {"type": Quests.LETTER_AMULET, "destination": 22, "giver": 8, "color": 2, "deadline": 123}
 	assert_false(Quests.complete_at(player, 22).is_empty())
 	var done := AdventureTasks.rows(player).filter(func(task: Dictionary) -> bool: return task["id"] == "refuge/errand:8:123")[0] as Dictionary
@@ -241,7 +239,7 @@ func test_timers_are_colored_and_pause_for_inactive_regions() -> void:
 	var active := AdventureTasks.rows(player).filter(func(task: Dictionary) -> bool: return task["id"] == "mainland/errand:8:10")[0] as Dictionary
 	assert_string_contains(AdventureTasks.timer_text(active), "less than a campaign day")
 	assert_eq(AdventureTasks.timer_color(active), Color("ff9494"))
-	RefugeCampaign.travel(player)
+	_refuge().travel(player)
 	var paused := AdventureTasks.rows(player).filter(func(task: Dictionary) -> bool: return task["id"] == "mainland/errand:8:10")[0] as Dictionary
 	assert_string_contains(AdventureTasks.timer_text(paused), "PAUSED")
 	assert_eq(AdventureTasks.timer_color(paused), Color("9bd8ef"))
@@ -254,11 +252,11 @@ func test_siege_countdown_survives_travel_and_archives_real_outcomes() -> void:
 	var task: Dictionary = AdventureTasks.rows(player).filter(func(item: Dictionary) -> bool: return item["kind"] == "siege")[0]
 	var id: String = task["id"]
 	assert_eq(task["timer_steps"], 24)
-	RefugeCampaign.travel(player)
+	_refuge().travel(player)
 	var paused: Dictionary = AdventureTasks.rows(player).filter(func(item: Dictionary) -> bool: return item["id"] == id)[0]
 	assert_true(paused["paused"])
 	assert_eq(paused["timer_steps"], 24)
-	RefugeCampaign.travel(player)
+	_refuge().travel(player)
 	player.siege_timer = 85
 	var urgent: Dictionary = AdventureTasks.rows(player).filter(func(item: Dictionary) -> bool: return item["id"] == id)[0]
 	assert_eq(urgent["timer_steps"], 3)
@@ -271,3 +269,9 @@ func test_siege_countdown_survives_travel_and_archives_real_outcomes() -> void:
 	assert_ne(next["id"], id)
 	Sieges.resolve(player)
 	assert_eq(player.task_history[next["id"]]["status"], "failed")
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

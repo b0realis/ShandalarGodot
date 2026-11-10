@@ -1,0 +1,140 @@
+{
+	"flags": ["liberated"],
+	"errands_off": [0, 1, 2, 3, 4, 5],
+	"town": {"line": "town.petition", "action": "town.hear", "thanks": "town.thanks"},
+	"quests": [
+		{
+			"giver": 1,
+			"title": "quest.bread.title",
+			"petition": "quest.bread.petition",
+			"epilogue": "quest.bread.epilogue",
+			"banner": "eee5c1",
+			"foe": "tithe_collector",
+			"steps": [
+				{"do": "accept"},
+				{"do": "go", "to": "port", "action": "quest.bread.deliver", "guidance": "quest.bread.guide", "task": "quest.bread.task"},
+				{"do": "duel", "at": "giver"}
+			],
+			"complete": "pledge"
+		},
+		{
+			"giver": 2,
+			"title": "quest.harbor.title",
+			"petition": "quest.harbor.petition",
+			"epilogue": "quest.harbor.epilogue",
+			"banner": "458cbe",
+			"foe": "blockade_captain",
+			"steps": [
+				{"do": "accept"},
+				{"do": "go", "to": {"objective": "channel", "else": "port"}, "action": "quest.harbor.survey",
+					"guidance": "quest.harbor.guide", "task": "quest.harbor.task", "line": "quest.harbor.line"},
+				{"do": "duel", "at": "giver"}
+			],
+			"complete": "pledge"
+		},
+		{
+			"giver": 3,
+			"title": "quest.masters.title",
+			"petition": "quest.masters.petition",
+			"epilogue": "quest.masters.epilogue",
+			"banner": "886e9c",
+			"foe": "pit_overseer",
+			"steps": [
+				{"do": "duel", "at": "giver", "guidance": "guide.petition"}
+			],
+			"complete": "pledge"
+		},
+		{
+			"giver": 4,
+			"title": "quest.mountain.title",
+			"petition": "quest.mountain.petition",
+			"epilogue": "quest.mountain.epilogue",
+			"banner": "be664b",
+			"foe": "tribute_raider",
+			"steps": [
+				{"do": "accept"},
+				{"do": "duel", "at": {"objective": "raider", "else": "giver"}, "guidance": "quest.mountain.guide",
+					"task": "quest.mountain.task", "approach": {"action": "quest.mountain.confront", "line": "quest.mountain.line"}}
+			],
+			"complete": "pledge"
+		},
+		{
+			"giver": 5,
+			"title": "quest.grow.title",
+			"petition": "quest.grow.petition",
+			"epilogue": "quest.grow.epilogue",
+			"banner": "6a9c57",
+			"foe": "sporekeeper",
+			"steps": [
+				{"do": "duel", "at": "giver", "guidance": "guide.petition"}
+			],
+			"complete": "pledge"
+		}
+	],
+	"completions": {
+		"pledge": [
+			{"reward_choice": true},
+			{"gold": 40},
+			{"food": 8},
+			{"refresh_appearance": true},
+			{"log_event": {"event": "quest", "text": "quest.done_log", "done": true}},
+			{"claim_cards": true}
+		]
+	},
+	"finale": {
+		"at": "castle",
+		"foe": "ebon_lord",
+		"conditions": [
+			{"quests_done": "all"},
+			{"not_flag": "liberated"},
+			{"deck_share": {"pack": "pack-2", "percent": 50}}
+		],
+		"effects": [
+			{"set_flag": "liberated"},
+			{"refresh_appearance": true},
+			{"log_event": {"event": "freed", "text": "finale.log"}}
+		],
+		"done_flag": "liberated",
+		"won": "finale.freed",
+		"already": "finale.already",
+		"unmet": "finale.unmet"
+	},
+	"targets": {"after_quests": "castle", "after_finale": "port"},
+	"status": [
+		"status.pledges",
+		{"text": "status.free", "when": [{"flag": "liberated"}]},
+		{"text": "status.seek", "when": [{"not_flag": "liberated"}]},
+		"status.ship"
+	],
+	"deck_line": "deck.line",
+	"tasks": {
+		"finale": {"title": "task.finale.title", "text": "task.finale.text", "done": "task.finale.done"},
+		"rewards": {"title": "task.rewards.title", "text": "task.rewards.text", "done": "task.rewards.done"}
+	},
+	"talk": {
+		"news": [
+			{"text": "talk.news.free", "when": [{"flag": "liberated"}]},
+			"talk.news.bound"
+		],
+		"applause": [
+			{"text": "talk.applause.free", "when": [{"flag": "liberated"}]},
+			"talk.applause.bound"
+		],
+		"roaming": [
+			{"text": "talk.roam.free", "when": [{"flag": "liberated"}]},
+			{"text": "talk.roam.bound", "when": [{"not_flag": "liberated"}]},
+			"talk.will_you"
+		],
+		"tribute": ["talk.tribute.known", "talk.tribute.offer"],
+		"dungeon": "story.vault",
+		"tales": [
+			{"title": "tale.sarpadia.title", "text": "tale.sarpadia"},
+			{"title": "tale.crossing.title", "text": "tale.crossing"},
+			{"title": "tale.bread.title", "text": "tale.bread"},
+			{"title": "tale.coast.title", "text": "tale.coast"},
+			{"title": "tale.freehold.title", "text": "tale.freehold"},
+			{"title": "tale.mountain.title", "text": "tale.mountain"},
+			{"title": "tale.forests.title", "text": "tale.forests"}
+		]
+	}
+}

@@ -22,6 +22,89 @@ const PROFILES := {
 
 var _textures := {}
 
+## PALETTES AN ADVENTURE PLUGIN BRINGS (adventure plugins, 2026-11-10): a
+## plugin's `region.palette` may be an object in the profile shape (its
+## JSON form: `grass`/`foliage`/`water` as four numbers, `plain` as terrain
+## code to `#rrggbb`, `tints` as layer settings), registered at run time as
+## `plugin:<id>` beside the built-in [constant PROFILES]. Read through
+## [method profile_of]; a saved `plugin:<id>` preset whose plugin is gone
+## stays a valid save and draws in the original colors.
+static var _runtime := {}
+const PLUGIN_PREFIX := "plugin:"
+
+
+## The profile [param name] names, built-in or registered; {} for none.
+static func profile_of(name: String) -> Dictionary:
+	return PROFILES.get(name, _runtime.get(name, {}))
+
+
+static func has_profile(name: Variant) -> bool:
+	return name is String and (PROFILES.has(name) or _runtime.has(name))
+
+
+## A preset a save may name: a known one, or a plugin's that may be absent.
+static func _known_preset(name: Variant) -> bool:
+	if has_profile(name): return true
+	if not name is String or not String(name).begins_with(PLUGIN_PREFIX): return false
+	var id := String(name).trim_prefix(PLUGIN_PREFIX)
+	var expression := RegEx.create_from_string("^[a-z][a-z0-9_]{0,39}$")
+	return expression.search(id) != null
+
+
+## Why [param value] (a palette object, JSON values) is not a profile, ""
+## when it is one.
+static func profile_problem(value: Variant) -> String:
+	if not value is Dictionary: return "a palette object is needed."
+	for key in value:
+		if not key in ["name", "grass", "foliage", "water", "plain", "tints"]: return "unknown field %s." % key
+	if value.has("name") and (not value["name"] is String or String(value["name"]).length() > 60): return "name: up to 60 characters."
+	for recipe in ["grass", "foliage", "water"]:
+		if not value.has(recipe): continue
+		var numbers: Variant = value[recipe]
+		if not numbers is Array or numbers.size() != 4: return "%s: four numbers (hue 0-1, saturation and brightness 0-4, strength 0-1)." % recipe
+		for i in 4:
+			var n: Variant = numbers[i]
+			if not (n is float or n is int) or not is_finite(float(n)) or n < 0 or n > (1 if i in [0, 3] else 4):
+				return "%s: four numbers (hue 0-1, saturation and brightness 0-4, strength 0-1)." % recipe
+	if value.has("plain"):
+		if not value["plain"] is Dictionary or value["plain"].size() > 16: return "plain: terrain codes to colors."
+		for key in value["plain"]:
+			if not String(key).is_valid_int() or int(key) < 0 or int(key) > 15 or str(int(key)) != String(key): return "plain: %s is not a terrain code 0-15." % key
+			if not _hex_color(value["plain"][key]): return "plain.%s: a color like #c6af78 is needed." % key
+	if value.has("tints"):
+		if not value["tints"] is Dictionary: return "tints: layer settings are needed."
+		for layer in value["tints"]:
+			if not layer in LAYERS or not _valid_style({layer: value["tints"][layer]}): return "tints.%s: {\"tint\": \"#rrggbb\", \"strength\": 0-1} per layer (ground, objects, roads)." % layer
+	return ""
+
+
+## Register [param value] (see [method profile_problem]) as [param name];
+## the reason it was refused, "" when registered. Built-in names stay.
+static func register_profile(name: String, value: Dictionary) -> String:
+	if PROFILES.has(name): return "%s is a built-in palette." % name
+	var why := profile_problem(value)
+	if why != "": return why
+	var profile := {"name": String(value.get("name", name))}
+	for recipe in ["grass", "foliage", "water"]:
+		if value.has(recipe):
+			var n: Array = value[recipe]
+			profile[recipe] = Vector4(float(n[0]), float(n[1]), float(n[2]), float(n[3]))
+	if value.has("plain"):
+		var plain := {}
+		for key in value["plain"]: plain[int(key)] = Color.from_string(String(value["plain"][key]), Color.WHITE)
+		profile["plain"] = plain
+	if value.has("tints"): profile["tints"] = value["tints"].duplicate(true)
+	if _runtime.get(name) != profile:
+		_runtime[name] = profile
+		_forget_all()
+	return ""
+
+
+static func _hex_color(value: Variant) -> bool:
+	if not value is String: return false
+	var digits := String(value).trim_prefix("#")
+	return digits.length() == 6 and digits.is_valid_hex_number()
+
 static func for_world(world: ShandalarWorld) -> String:
 	if world == null: return SHANDALAR
 	var fallback: String = AdventureExpansions.definition(AdventureRegions.id(world)).get("palette", SHANDALAR)
@@ -44,13 +127,13 @@ static func resolve(world: ShandalarWorld, tile: Vector2i) -> Dictionary:
 	var style := {"preset": for_world(world)}
 	if world == null: return style
 	var appearance: Dictionary = world.expansion.get("appearance", {})
-	if appearance.is_empty() and not PROFILES.get(style["preset"], {}).has("tints"):
+	if appearance.is_empty() and not profile_of(style["preset"]).has("tints"):
 		return style
 	var terrain: Dictionary = appearance.get("terrains", {}).get(str(world.terrain(tile.x, tile.y)), {})
 	var local: Dictionary = appearance.get("tiles", {}).get(tile_key(tile), {})
 	style["preset"] = local.get("preset", terrain.get("preset", style["preset"]))
 	_watch(world, style["preset"])
-	var defaults: Dictionary = PROFILES.get(style["preset"], {}).get("tints", {})
+	var defaults: Dictionary = profile_of(style["preset"]).get("tints", {})
 	for layer in LAYERS:
 		if local.has(layer): style[layer] = local[layer].duplicate(true)
 		elif terrain.has(layer): style[layer] = terrain[layer].duplicate(true)
@@ -76,13 +159,13 @@ static func modulate(style: Dictionary, layer: String) -> Color:
 static func plain(world: ShandalarWorld, terrain: int, original: Color,
 		tile := Vector2i(-1, -1)) -> Color:
 	var style := resolve(world, tile) if tile.x >= 0 else {"preset": for_world(world)}
-	var profile: Dictionary = PROFILES.get(style["preset"], {})
-	var color: Color = profile.get("plain", {}).get(terrain, original)
+	var colors: Dictionary = profile_of(style["preset"])
+	var color: Color = colors.get("plain", {}).get(terrain, original)
 	if terrain in [0, 1, 8]: color = shift(color, style["preset"], "water")
 	return color * modulate(style, "ground")
 
 static func set_preset(world: ShandalarWorld, preset: String) -> bool:
-	if world == null or not PROFILES.has(preset): return false
+	if world == null or not has_profile(preset): return false
 	var appearance: Dictionary = world.expansion.get("appearance", {}).duplicate(true)
 	appearance["preset"] = preset
 	_store(world, appearance)
@@ -133,7 +216,7 @@ static func valid_appearance(value: Variant) -> bool:
 	if not value is Dictionary: return false
 	for key in value:
 		if not key in ["preset", "terrains", "tiles"]: return false
-	if value.has("preset") and not PROFILES.has(value["preset"]): return false
+	if value.has("preset") and not _known_preset(value["preset"]): return false
 	for group in ["terrains", "tiles"]:
 		var entries: Variant = value.get(group, {})
 		if not entries is Dictionary or entries.size() > (16 if group == "terrains" else 4096): return false
@@ -152,7 +235,7 @@ static func _valid_style(style: Variant) -> bool:
 	if not style is Dictionary: return false
 	for key in style:
 		if key == "preset":
-			if not PROFILES.has(style[key]): return false
+			if not _known_preset(style[key]): return false
 		elif key in LAYERS:
 			var layer: Variant = style[key]
 			if not layer is Dictionary or layer.size() != 2: return false
@@ -343,8 +426,8 @@ static func supports(key: String) -> bool:
 	return key in ["world_landtile", "world_cstline1", "world_land", "world_land2",
 		"world_sland", "world_sland2", "world_map_tiles"]
 
-static func _remaps(profile: String) -> bool:
-	var definition: Dictionary = PROFILES.get(profile, {})
+static func _remaps(name: String) -> bool:
+	var definition: Dictionary = profile_of(name)
 	return definition.has("grass") or definition.has("foliage") or definition.has("water")
 
 ## Process full-resolution pixels, including a 2x skin's detail. Only
@@ -451,8 +534,8 @@ static func _shifted(word: int, kind: int, profile: String) -> int:
 	var changed := shift(original, profile, recipe)
 	return changed.r8 | (changed.g8 << 8) | (changed.b8 << 16)
 
-static func shift(color: Color, profile: String, style := "grass") -> Color:
-	if not PROFILES.get(profile, {}).has(style): return color
+static func shift(color: Color, name: String, style := "grass") -> Color:
+	if not profile_of(name).has(style): return color
 	var hue := color.h
 	# Soft edges keep antialiased leaves and mixed grass natural. Existing
 	# yellow stalks remain varied, rather than becoming a flat gold wash.
@@ -464,7 +547,7 @@ static func shift(color: Color, profile: String, style := "grass") -> Color:
 		weight = smoothstep(0.42, 0.48, hue) * (1.0 - smoothstep(0.65, 0.72, hue))
 		weight *= smoothstep(0.08, 0.24, color.s)
 	if weight <= 0.0: return color
-	var recipe: Vector4 = PROFILES[profile][style]
+	var recipe: Vector4 = profile_of(name)[style]
 	weight *= recipe.w
 	return Color.from_hsv(lerpf(hue, recipe.x, weight),
 		lerpf(color.s, color.s * recipe.y, weight),

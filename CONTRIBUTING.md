@@ -77,6 +77,7 @@ cross-export is not a native runtime test; Web must also run in a browser.
 | `decks/` | Bundled deck lists grouped by provenance, plus the committed `ratings.txt` ledger. [Deck provenance](docs/decks-1997.md) explains the groups. |
 | `tests/` | GUT regressions and shared fixtures. `tests/game_test.gd` supplies the `GameTest` harness. |
 | `tools/` | Build, import, packaging and measurement tools. Excluded from the game PCK; approved player tools are copied beside packaged games. |
+| `expanded_adventure/` | Adventure plugins: the Last Refuge prototype (data only) and the authors' guide `GUIDE/`. Excluded from the game PCK (`.gdignore`, export filters); copied beside packaged games. Plugins never carry code — see [adventure plugins](docs/adventure-plugins.md). |
 | `addons/gut/` | Vendored test framework. Keep framework changes separate from game changes. |
 | `assets/` | Local imported 1997 material and card art; not tracked. A fresh clone or worktree has none. |
 | `docs/` | Design, authoring guides, audits and release records. Use the code map rather than keeping another file census here. |
@@ -167,7 +168,9 @@ under test uses the public API and checks its refusal or success.
 Update the code map when adding or moving files/classes, the
 [mechanics catalogue](docs/mechanics.md) for new mechanics, and
 [player files](docs/player-files.md) when adding a persistent path. For a
-numbered pack, use [adding card packs](docs/adding-card-packs.md).
+numbered pack, use [adding card packs](docs/adding-card-packs.md). For
+the adventure-plugin engine (a new condition, effect or hook), read
+[adventure plugins](docs/adventure-plugins.md).
 
 ### Computer-player changes
 

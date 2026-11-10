@@ -1,0 +1,51 @@
+{
+	"generator": "island",
+	"layout_version": 4,
+	"side": 32,
+	"offset": 16,
+	"step": 2,
+	"slot_start": 0,
+	"dice_salt": 5391686,
+	"spacing": 4.0,
+	"castle": {"from": [30, 30], "span": [5, 5]},
+	"port": {"from": [23, 48], "span": [19, 0]},
+	"towns": {
+		"center": [32, 32],
+		"spread": 7,
+		"turns": 4,
+		"list": [
+			{"slot": 1, "name": "Leitbur's Rest", "terrain": 6, "aim": [-9, -8]},
+			{"slot": 2, "name": "Vodalian Haven", "terrain": 1, "aim": [9, -9]},
+			{"slot": 3, "name": "Freehold of the Hand", "terrain": 3, "aim": [9, 3]},
+			{"slot": 4, "name": "Dwarven Hearth", "terrain": 5, "aim": [3, 10]},
+			{"slot": 5, "name": "Havenwood", "terrain": 2, "aim": [-10, 5]}
+		]
+	},
+	"places": {
+		"gap": 4.0,
+		"list": [
+			{"slot": 22, "name": "Svyelun's Temple", "kind": "city", "coastal": true},
+			{"slot": 43, "name": "Thelon's Oasis", "kind": "town"},
+			{"slot": 58, "name": "Trokair Bazaar", "kind": "city"},
+			{"slot": 76, "name": "Delif's Shrine", "kind": "town"},
+			{"slot": 80, "name": "Zelyon Tower", "kind": "town"},
+			{"slot": 103, "name": "Farrel's Mill", "kind": "town"}
+		]
+	},
+	"villages": {
+		"names": ["Anvilholm", "Thrullwick", "Moonwater", "Brassclaw Hollow", "Shellcove",
+			"Tourach's Fall", "Sporeford", "New Icatia", "Warrenmouth"],
+		"count": [6, 9],
+		"slot_step": 8,
+		"gap": 3.0,
+		"first_rule": {"near_terrain": 5, "radius": 2}
+	},
+	"trade": [1, 2, 4, 8, 16, 32, 256, 512, 768, 1024, 1280],
+	"world_magic": {"offers": 3},
+	"roads": true,
+	"dungeon": {"name": "Vaults of the First Crossing", "from": 5, "choices": 10, "gap": 3.0},
+	"objectives": {
+		"channel": {"coastal": true, "exclude": [1, 2, 3, 4, 5], "types": ["town", "city"], "prefer": 22},
+		"raider": {"near_terrain": 5, "radius": 2, "road": true, "types": ["village"], "prefer": 8}
+	}
+}

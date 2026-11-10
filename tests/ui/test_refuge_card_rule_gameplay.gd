@@ -5,16 +5,12 @@ extends GutTest
 const SAVE := "user://refuge_card_rule_gameplay.json"
 var packs_before: Array[String] = []
 
-var _launch_before: bool
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	packs_before = Settings.enabled_card_packs().duplicate()
 	CardPacks.set_enabled("pack-2", true)
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	for path in [SAVE, AdventurePlayer.backup_path(SAVE)]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
 	for id in CardPacks.available_ids():
@@ -36,19 +32,17 @@ func _campaign(rule: String) -> void:
 	setup.color = "green"
 	setup.seed_text = "48271"
 	setup.packs = ["pack-2"]
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.card_rule = rule
 	var record := setup.resolve({"pack-2": "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 	assert_eq(player.card_rule, rule)
 	assert_eq(player.deck_cards().size(), 36, "the real Apprentice starter, below forty")
-	assert_false(AdventurePacks.offers_cards(player, "pack-2"), "mainland remains locked in expanded mode")
-	# The same rule also works with cards-only play, without a story unlock.
-	player.expanded_adventure = false
-	assert_true(AdventurePacks.offers_cards(player, "pack-2"))
-	player.expanded_adventure = true
-	assert_true(RefugeCampaign.travel(player))
-	assert_true(RefugeCampaign.on_island(player))
+	# Adventure plugins (2026-11-10, §0.2): a ticked pack's cards reach the
+	# mainland at once; the plugin neither withholds nor unlocks them.
+	assert_true(AdventurePacks.offers_cards(player, "pack-2"), "the mainland offers the ticked pack's cards")
+	assert_true(_refuge().travel(player))
+	assert_true(_refuge().on_island(player))
 	assert_true(AdventurePacks.offers_cards(player, "pack-2"))
 	var links := player.mana_links()
 	# Funds avoid grinding; the deck, life totals, stock, prices and opponent
@@ -99,7 +93,7 @@ func _campaign(rule: String) -> void:
 	assert_not_null(player)
 	if player == null: return
 	assert_eq(player.card_rule, rule)
-	assert_true(RefugeCampaign.on_island(player))
+	assert_true(_refuge().on_island(player))
 	assert_true(player.deck_cards().has("Thallid"))
 	player.monster_timer = 4 # an ordinary meeting, without a special modifier
 	var meeting := _regional_meeting(player)
@@ -131,11 +125,11 @@ func _campaign(rule: String) -> void:
 	if player == null: return
 	assert_eq(player.cards, owned)
 	assert_eq(player.card_rule, rule)
-	assert_true(RefugeCampaign.travel(player))
-	assert_false(RefugeCampaign.on_island(player))
+	assert_true(_refuge().travel(player))
+	assert_false(_refuge().on_island(player))
 	assert_eq(player.cards, owned, "bringing the collection home never confiscates pack cards")
 	assert_eq(player.mana_links(), links)
-	assert_false(AdventurePacks.offers_cards(player, "pack-2"), "one roaming duel does not liberate the island")
+	assert_true(AdventurePacks.offers_cards(player, "pack-2"), "home, the pack's cards are still offered")
 	gut.p("Pack 2 [%s]: bought %s + traded Thallid; 37-card deck; %s; %s; %d turns; save/load and return OK" % [rule, offer["card"], meeting["regional_name"], report.describe(), report.turns])
 
 func _pack_offer(player: AdventurePlayer) -> Dictionary:
@@ -154,3 +148,7 @@ func _regional_meeting(player: AdventurePlayer) -> Dictionary:
 		var meeting := CreatureMeeting.begin(player, slot)
 		if meeting.has("regional_deck"): return meeting
 	return {}
+
+## The prototype plugin's interpreter ([DataRegion]).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

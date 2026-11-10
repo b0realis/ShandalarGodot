@@ -1,0 +1,3640 @@
+{
+	"format": 1,
+	"about": "THE PLUGIN CORPUS: good and bad adventure plugins that the authoring tool (tools/test_adventure_plugin.py) and the game's own loader (tests/unit/test_plugin_corpus.gd) both judge; each must reach the verdict and the first reason written here. Every case is BUILT by the test: its base folder copied, its own folder laid over it, its edits, additions and removals made, its files hashed, then zipped when it says zip. The recipe's words are listed under recipe.",
+	"recipe": {
+		"base": "a folder of this corpus copied first (good_minimal: what adventure_plugin.py new writes)",
+		"folder": "a folder of this corpus laid over the base, file by file",
+		"edit": "{file: {set: [{path, value}], remove: [path]}}: a JSON file changed; a path is a list of keys and list indexes (an index one past the end appends); a value {$repeat: [text, n]} is text n times, {$list: [value, n]} a list of n values, {$nest: n} n lists nested in each other",
+		"add": "files written: {rel, text} | {rel, hex} | {rel, repeat: [text, n]} | {rel, png: [width, height]} (a PNG header) | {rel, link: target} (a symbolic link) | {rel, dirs: 1} (an empty folder) | {rel, prefix_hex} (bytes put before the file's own); count: n makes n of them, {n} in rel numbering them",
+		"remove": "files deleted after the additions",
+		"hash_files": "true: plugin.json given a files list with the SHA-256 of every other file, as export writes it",
+		"after": "changes once hashed: {rel, append: text} | {rel, delete: true} | an add",
+		"zip": "{top}: the plugin zipped (stored entries) under that top folder, its files in the order of the folder's walk; extra: raw entries added {name | name_hex, text | hex, method, flags, made_by, external, size (claimed, the bytes not), count}; zip64: true writes zip64 end records; raw_text: the zip file is this text",
+		"valid": "the verdict",
+		"reason": "the first problem, exactly; {game_version} is the game's version",
+		"reason_prefix": "the first problem begins so (the JSON parsers' own words differ)"
+	},
+	"base_top": "Corpus_Isle",
+	"cases": [
+		{
+			"name": "good_minimal",
+			"base": "good_minimal",
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_minimal_zip",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle"
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_exported_zip",
+			"base": "good_minimal",
+			"hash_files": true,
+			"zip": {
+				"top": "Corpus_Isle"
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_music",
+			"base": "good_minimal",
+			"folder": "good_music",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"music"
+							],
+							"value": "music/corpus_isle_tide.ogg"
+						}
+					]
+				},
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"pictures",
+								"corpus_isle_harbor"
+							],
+							"value": "art/corpus_isle_harbor.png"
+						},
+						{
+							"path": [
+								"markers",
+								"port",
+								"picture"
+							],
+							"value": "corpus_isle_harbor"
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_music_zip",
+			"base": "good_minimal",
+			"folder": "good_music",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"music"
+							],
+							"value": "music/corpus_isle_tide.ogg"
+						}
+					]
+				},
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"pictures",
+								"corpus_isle_harbor"
+							],
+							"value": "art/corpus_isle_harbor.png"
+						},
+						{
+							"path": [
+								"markers",
+								"port",
+								"picture"
+							],
+							"value": "corpus_isle_harbor"
+						}
+					]
+				}
+			},
+			"hash_files": true,
+			"zip": {
+				"top": "Corpus_Isle"
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_pack",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": [
+								{
+									"id": "pack-2",
+									"min_version": "1.0"
+								}
+							]
+						}
+					]
+				},
+				"foes.json": {
+					"set": [
+						{
+							"path": [
+								"foes",
+								"warden",
+								"deck"
+							],
+							"value": {
+								"Swamp": 17,
+								"Order of the Ebon Hand": 4,
+								"Hymn to Tourach": 4,
+								"Basal Thrull": 4,
+								"Armor Thrull": 3,
+								"Soul Exchange": 2,
+								"Thrull Retainer": 2,
+								"Terror": 2,
+								"Drain Life": 2
+							}
+						}
+					]
+				},
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"finale",
+								"conditions",
+								2
+							],
+							"value": {
+								"deck_share": {
+									"pack": "pack-2",
+									"percent": 50
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_palette_object",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"palette"
+							],
+							"value": {
+								"name": "Mossy",
+								"grass": [
+									0.3,
+									1.0,
+									1.0,
+									0.5
+								],
+								"plain": {
+									"6": "#a49b64"
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_text_defaults",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"port",
+								"panes",
+								1,
+								"actions",
+								1,
+								"label"
+							],
+							"value": "quest.back"
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_manifest_bom",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "plugin.json",
+					"prefix_hex": "efbbbf"
+				}
+			],
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_content_bom",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "world.json",
+					"prefix_hex": "efbbbf"
+				}
+			],
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "litter_folder",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": ".DS_Store",
+					"hex": "00000001"
+				},
+				{
+					"rel": "Thumbs.db",
+					"hex": "ff00"
+				},
+				{
+					"rel": "desktop.ini",
+					"text": "[.ShellClassInfo]"
+				},
+				{
+					"rel": "__MACOSX/._plugin.json",
+					"hex": "00051607"
+				},
+				{
+					"rel": ".hidden/evil.gd",
+					"text": "extends Node"
+				}
+			],
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "litter_zip",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "__MACOSX/Corpus_Isle/._plugin.json",
+						"hex": "00051607"
+					},
+					{
+						"name": "Corpus_Isle/.DS_Store",
+						"hex": "00000001"
+					},
+					{
+						"name": "Corpus_Isle/art/Thumbs.db",
+						"hex": "ff00"
+					},
+					{
+						"name": "Corpus_Isle/.git/config",
+						"text": "[core]"
+					}
+				]
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "kind_gd",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.gd",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.gd: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_gdc",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.gdc",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.gdc: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_gdextension",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.gdextension",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.gdextension: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_tscn",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.tscn",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.tscn: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_scn",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.scn",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.scn: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_tres",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.tres",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.tres: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_res",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.res",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.res: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_import",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.import",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.import: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_remap",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.remap",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.remap: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_pck",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.pck",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.pck: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_so",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.so",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.so: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_dll",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.dll",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.dll: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_dylib",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.dylib",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.dylib: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_exe",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.exe",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.exe: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_js",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "evil.js",
+					"text": "data"
+				}
+			],
+			"valid": false,
+			"reason": "evil.js: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_no_extension",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "LICENSE",
+					"text": "GPL"
+				}
+			],
+			"valid": false,
+			"reason": "LICENSE: this kind of file is not allowed in a plugin (only .json .txt .md .png .jpg .jpeg .webp .ogg)."
+		},
+		{
+			"name": "kind_upper_case_allowed",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "NOTES.TXT",
+					"text": "Notes."
+				}
+			],
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "zip_dotdot",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/../evil.json",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/../evil.json: the path has an empty, . or .. part."
+		},
+		{
+			"name": "zip_absolute",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "/Corpus_Isle/evil.json",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "/Corpus_Isle/evil.json: the path must be relative and use / only (no \\ or :)."
+		},
+		{
+			"name": "zip_backslash",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle\\evil.json",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle\\evil.json: the path must be relative and use / only (no \\ or :)."
+		},
+		{
+			"name": "zip_colon",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/c:evil.json",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/c:evil.json: the path must be relative and use / only (no \\ or :)."
+		},
+		{
+			"name": "zip_control_character",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/a\tb.json",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/a\\tb.json: the path holds a control character."
+		},
+		{
+			"name": "zip_path_too_long",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...: the path is longer than 200 characters."
+		},
+		{
+			"name": "zip_symlink",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/art/link.png",
+						"text": "../plugin.json",
+						"made_by": 798,
+						"external": 2715746304
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/art/link.png: a symbolic link; a plugin holds only plain files and folders."
+		},
+		{
+			"name": "folder_symlink",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "art/link.png",
+					"link": "../plugin.json"
+				}
+			],
+			"valid": false,
+			"reason": "art/link.png: a symbolic link; a plugin holds only plain files and folders."
+		},
+		{
+			"name": "zip64",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"zip64": true
+			},
+			"valid": false,
+			"reason": "Corpus_Isle.zip: a zip64 or damaged zip; save it as a plain zip."
+		},
+		{
+			"name": "zip_encrypted",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/secret.json",
+						"text": "{}",
+						"flags": 1
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/secret.json: encrypted; a plugin's zip is never locked."
+		},
+		{
+			"name": "zip_method",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/packed.json",
+						"text": "{}",
+						"method": 12
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/packed.json: packed in a way this game does not read (only stored or deflated)."
+		},
+		{
+			"name": "zip_duplicate",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/PLUGIN.JSON",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Corpus_Isle/PLUGIN.JSON: two entries have this name."
+		},
+		{
+			"name": "zip_two_tops",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Other/readme.txt",
+						"text": "Hello."
+					}
+				]
+			},
+			"valid": false,
+			"reason": "Every file of a plugin's zip goes inside ONE top folder; found 2 (Corpus_Isle, Other)."
+		},
+		{
+			"name": "zip_root_file",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "stray.txt",
+						"text": "Hello."
+					}
+				]
+			},
+			"valid": false,
+			"reason": "stray.txt: every file of a plugin's zip goes inside one top folder."
+		},
+		{
+			"name": "zip_no_manifest",
+			"base": "good_minimal",
+			"remove": [
+				"plugin.json"
+			],
+			"zip": {
+				"top": "Corpus_Isle"
+			},
+			"valid": false,
+			"reason": "plugin.json is missing from the plugin's top folder."
+		},
+		{
+			"name": "zip_name_not_utf8",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name_hex": "436f727075735f49736c652fff2e6a736f6e",
+						"text": "{}"
+					}
+				]
+			},
+			"valid": false,
+			"reason": "An entry's name is not UTF-8 (436f727075735f49736c652fff2e6a736f6e)."
+		},
+		{
+			"name": "zip_damaged",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"raw_text": "This is a text file that only calls itself a zip."
+			},
+			"valid": false,
+			"reason": "Corpus_Isle.zip is not a whole zip (its list of files is missing)."
+		},
+		{
+			"name": "too_many_files",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "many/note{n}.txt",
+					"text": "x",
+					"count": 505
+				}
+			],
+			"valid": false,
+			"reason": "The plugin holds more than 512 files."
+		},
+		{
+			"name": "too_many_folders",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "deep/d{n}",
+					"dirs": 1,
+					"count": 256
+				}
+			],
+			"valid": false,
+			"reason": "The plugin holds more than 256 folders."
+		},
+		{
+			"name": "zip_too_big",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/art/huge.png",
+						"text": "x",
+						"size": 33554433
+					}
+				]
+			},
+			"valid": false,
+			"reason": "The plugin is bigger than 32 MiB unpacked."
+		},
+		{
+			"name": "text_file_too_big",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "notes.txt",
+					"repeat": [
+						"x",
+						1048577
+					]
+				}
+			],
+			"valid": false,
+			"reason": "notes.txt: 1.0 MiB is bigger than the 1 MiB a text or JSON file may be."
+		},
+		{
+			"name": "ogg_too_big",
+			"base": "good_minimal",
+			"zip": {
+				"top": "Corpus_Isle",
+				"extra": [
+					{
+						"name": "Corpus_Isle/music/big.ogg",
+						"text": "x",
+						"size": 16777217
+					}
+				]
+			},
+			"valid": false,
+			"reason": "music/big.ogg: 16.0 MiB is bigger than the 16 MiB a music file may be."
+		},
+		{
+			"name": "picture_too_large",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "art/big.png",
+					"png": [
+						5000,
+						10
+					]
+				}
+			],
+			"valid": false,
+			"reason": "art/big.png: the picture is 5000 x 10 pixels; 4096 is the most a side may be."
+		},
+		{
+			"name": "picture_not_its_kind",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "art/fake.png",
+					"text": "not a picture"
+				}
+			],
+			"valid": false,
+			"reason": "art/fake.png: not a PNG picture (its first bytes say otherwise)."
+		},
+		{
+			"name": "jpeg_named_webp",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "art/photo.webp",
+					"hex": "ffd8ffe000104a46494600010100000100010000"
+				}
+			],
+			"valid": false,
+			"reason": "art/photo.webp: not a WEBP picture (its first bytes say otherwise)."
+		},
+		{
+			"name": "ogg_not_vorbis",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "music/tune.ogg",
+					"hex": "4f67675300020000000000000000000000000000000000000000014f707573486561640102"
+				}
+			],
+			"valid": false,
+			"reason": "music/tune.ogg: not Ogg Vorbis music."
+		},
+		{
+			"name": "text_not_utf8",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "notes.txt",
+					"hex": "48656c6c6fff"
+				}
+			],
+			"valid": false,
+			"reason": "notes.txt: the text is not UTF-8."
+		},
+		{
+			"name": "manifest_not_utf8",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "plugin.json",
+					"prefix_hex": "ff"
+				}
+			],
+			"valid": false,
+			"reason": "plugin.json: the text is not UTF-8."
+		},
+		{
+			"name": "manifest_not_json",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "plugin.json",
+					"text": "{\n\t\"id\": \"corpus_isle\",\n\t\"name\"\n}"
+				}
+			],
+			"valid": false,
+			"reason": "plugin.json: line 4: Expected ':'"
+		},
+		{
+			"name": "manifest_not_object",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "plugin.json",
+					"text": "[1, 2]"
+				}
+			],
+			"valid": false,
+			"reason": "plugin.json: must be one JSON object { ... }."
+		},
+		{
+			"name": "manifest_null",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "plugin.json",
+					"text": "null"
+				}
+			],
+			"valid": false,
+			"reason": "plugin.json could not be read."
+		},
+		{
+			"name": "manifest_too_deep",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"palette"
+							],
+							"value": {
+								"$nest": 33
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: nested deeper than 32 levels."
+		},
+		{
+			"name": "manifest_unknown_field",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"website"
+							],
+							"value": "https://example.org"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: unknown field \"website\"."
+		},
+		{
+			"name": "manifest_missing_name",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"remove": [
+						[
+							"name"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: the field \"name\" is missing."
+		},
+		{
+			"name": "manifest_plugin_format",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"plugin_format"
+							],
+							"value": 2
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: plugin_format must be 1."
+		},
+		{
+			"name": "manifest_api_zero",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 0
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: api_version must be a whole number from 1."
+		},
+		{
+			"name": "manifest_newer_api",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 2
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "This plugin needs plugin API 2; this game reads API 1. A newer game is needed."
+		},
+		{
+			"name": "manifest_id_pattern",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"id"
+							],
+							"value": "Corpus-Isle"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: id must be 1 to 40 lower-case letters, digits or _, a letter first (not \"mainland\")."
+		},
+		{
+			"name": "manifest_id_mainland",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"id"
+							],
+							"value": "mainland"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: id must be 1 to 40 lower-case letters, digits or _, a letter first (not \"mainland\")."
+		},
+		{
+			"name": "manifest_name_empty",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"name"
+							],
+							"value": " "
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: name must be non-empty text of at most 100 characters."
+		},
+		{
+			"name": "manifest_name_too_long",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"name"
+							],
+							"value": {
+								"$repeat": [
+									"n",
+									101
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: name must be non-empty text of at most 100 characters."
+		},
+		{
+			"name": "manifest_description_too_long",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"description"
+							],
+							"value": {
+								"$repeat": [
+									"d",
+									301
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: description must be text of at most 300 characters."
+		},
+		{
+			"name": "manifest_license_not_text",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"license"
+							],
+							"value": 5
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: license must be text of at most 4000 characters."
+		},
+		{
+			"name": "manifest_learning_note_too_long",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"learning_note"
+							],
+							"value": {
+								"$repeat": [
+									"l",
+									4001
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: learning_note must be text of at most 4000 characters."
+		},
+		{
+			"name": "manifest_version",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"version"
+							],
+							"value": "1.x"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: version must be numbers and dots, like \"1.0.0\"."
+		},
+		{
+			"name": "manifest_version_sign",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"version"
+							],
+							"value": "+1.0"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: version must be numbers and dots, like \"1.0.0\"."
+		},
+		{
+			"name": "manifest_minimum_game_version",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"minimum_game_version"
+							],
+							"value": "soon"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: minimum_game_version must be numbers and dots, like \"0.60.19\"."
+		},
+		{
+			"name": "manifest_newer_game",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"minimum_game_version"
+							],
+							"value": "99.0.0"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "This plugin needs game version 99.0.0 or newer; this is {game_version}."
+		},
+		{
+			"name": "manifest_authors_empty",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"authors"
+							],
+							"value": []
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: authors must be a list of 1 to 16 names."
+		},
+		{
+			"name": "manifest_authors_blank",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"authors"
+							],
+							"value": [
+								"  "
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: authors must be a list of 1 to 16 names."
+		},
+		{
+			"name": "manifest_authors_too_many",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"authors"
+							],
+							"value": {
+								"$list": [
+									"An author",
+									17
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: authors must be a list of 1 to 16 names."
+		},
+		{
+			"name": "manifest_requires_not_object",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires"
+							],
+							"value": []
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: requires must be an object."
+		},
+		{
+			"name": "manifest_requires_unknown_field",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"cards"
+							],
+							"value": []
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: requires: unknown field \"cards\"."
+		},
+		{
+			"name": "manifest_unknown_pack",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": [
+								{
+									"id": "pack-99"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: this game knows no card pack \"pack-99\"."
+		},
+		{
+			"name": "manifest_pack_one",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": [
+								{
+									"id": "pack-1"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: pack-1 is never part of an adventure."
+		},
+		{
+			"name": "manifest_pack_twice",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": [
+								{
+									"id": "pack-2"
+								},
+								{
+									"id": "pack-2"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: pack-2 is named twice in requires.card_packs."
+		},
+		{
+			"name": "manifest_pack_min_version",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": [
+								{
+									"id": "pack-2",
+									"min_version": "new"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: pack-2's min_version must be numbers and dots, like \"1.0\"."
+		},
+		{
+			"name": "manifest_too_many_packs",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": {
+								"$list": [
+									{
+										"id": "pack-2"
+									},
+									17
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: requires.card_packs must be a list of at most 16 packs."
+		},
+		{
+			"name": "manifest_region_not_object",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region"
+							],
+							"value": "Corpus Isle"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region must be an object."
+		},
+		{
+			"name": "manifest_region_unknown_field",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"weather"
+							],
+							"value": "rain"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region: unknown field \"weather\"."
+		},
+		{
+			"name": "manifest_region_title_empty",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"title"
+							],
+							"value": ""
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.title must be non-empty text of at most 100 characters."
+		},
+		{
+			"name": "manifest_region_salt_negative",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"salt"
+							],
+							"value": -1
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.salt must be a whole number from 0 to 2147483647."
+		},
+		{
+			"name": "manifest_region_salt_fraction",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"salt"
+							],
+							"value": 1.5
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.salt must be a whole number from 0 to 2147483647."
+		},
+		{
+			"name": "manifest_region_mana_links",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"mana_links"
+							],
+							"value": "no"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.mana_links must be true or false."
+		},
+		{
+			"name": "manifest_region_palette_unknown",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"palette"
+							],
+							"value": "neon"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.palette \"neon\" is not one of the game's palettes (shandalar, last_refuge), nor a palette object."
+		},
+		{
+			"name": "manifest_region_palette_number",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"palette"
+							],
+							"value": 5
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.palette must be a palette's name or a palette object."
+		},
+		{
+			"name": "manifest_files_not_object",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"files"
+							],
+							"value": []
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: files must be an object of file -> SHA-256."
+		},
+		{
+			"name": "manifest_files_bad_hash",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"files"
+							],
+							"value": {
+								"world.json": "abc"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: files: \"world.json\" needs its SHA-256 as 64 lower-case hex digits."
+		},
+		{
+			"name": "manifest_files_upper_case_hash",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"files"
+							],
+							"value": {
+								"world.json": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: files: \"world.json\" needs its SHA-256 as 64 lower-case hex digits."
+		},
+		{
+			"name": "hash_mismatch",
+			"base": "good_minimal",
+			"hash_files": true,
+			"after": [
+				{
+					"rel": "text.json",
+					"append": "\n"
+				}
+			],
+			"valid": false,
+			"reason": "text.json: its SHA-256 is not the one plugin.json's files list gives (the file changed after export)."
+		},
+		{
+			"name": "hash_listed_missing",
+			"base": "good_minimal",
+			"hash_files": true,
+			"after": [
+				{
+					"rel": "README.txt",
+					"delete": true
+				}
+			],
+			"valid": false,
+			"reason": "README.txt: listed in plugin.json's files but not in the plugin."
+		},
+		{
+			"name": "hash_unlisted_file",
+			"base": "good_minimal",
+			"hash_files": true,
+			"after": [
+				{
+					"rel": "notes.txt",
+					"text": "Added after export."
+				}
+			],
+			"valid": false,
+			"reason": "notes.txt: not in plugin.json's files list."
+		},
+		{
+			"name": "content_missing_file",
+			"base": "good_minimal",
+			"remove": [
+				"foes.json"
+			],
+			"valid": false,
+			"reason": "foes.json is missing."
+		},
+		{
+			"name": "content_not_json",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "text.json",
+					"text": "{\n\t\"a\": \"x\"\n\t\"b\": \"y\"\n}"
+				}
+			],
+			"valid": false,
+			"reason": "text.json: line 3: Expected '}' or ','"
+		},
+		{
+			"name": "good_trailing_commas",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "world.json",
+					"text": "{\n\t\"generator\": \"island\",\n\t\"layout_version\": 1,\n\t\"towns\": {\n\t\t\"list\": [\n\t\t\t{\n\t\t\t\t\"slot\": 1,\n\t\t\t\t\"name\": \"Harborwatch\",\n\t\t\t\t\"terrain\": 6,\n\t\t\t\t\"aim\": [\n\t\t\t\t\t-9,\n\t\t\t\t\t-8\n\t\t\t\t]\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"slot\": 2,\n\t\t\t\t\"name\": \"Mossford\",\n\t\t\t\t\"terrain\": 2,\n\t\t\t\t\"aim\": [\n\t\t\t\t\t9,\n\t\t\t\t\t3\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t},\n\t\"villages\": {\n\t\t\"names\": [\n\t\t\t\"Reedholm\",\n\t\t\t\"Tidecross\",\n\t\t\t\"Stonebrook\"\n\t\t],\n\t\t\"count\": [\n\t\t\t2,\n\t\t\t3,\n\t\t]\n\t},\n\t\"dungeon\": {\n\t\t\"name\": \"The Drowned Cellars\"\n\t},\n}\n"
+				}
+			],
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "content_not_object",
+			"base": "good_minimal",
+			"add": [
+				{
+					"rel": "world.json",
+					"text": "[]"
+				}
+			],
+			"valid": false,
+			"reason": "world.json must hold one object."
+		},
+		{
+			"name": "content_too_deep",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"talk",
+								"tales",
+								0,
+								"title"
+							],
+							"value": {
+								"$nest": 33
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json nests deeper than 32."
+		},
+		{
+			"name": "content_unknown_field",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"weather"
+							],
+							"value": "rain"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json: unknown field weather."
+		},
+		{
+			"name": "content_not_a_whole_number",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"side"
+							],
+							"value": "big"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json.side: a whole number is needed."
+		},
+		{
+			"name": "content_out_of_range",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"side"
+							],
+							"value": 99
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json.side: 99 is outside 8..32."
+		},
+		{
+			"name": "content_number_out_of_range",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"port",
+								"sprite",
+								"width"
+							],
+							"value": 600.5
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "places.json.markers.port.sprite.width: 600.5 is outside 16..512."
+		},
+		{
+			"name": "content_required_missing",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"remove": [
+						[
+							"dungeon"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json: dungeon is required."
+		},
+		{
+			"name": "content_bad_enum",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"towns",
+								"list",
+								0,
+								"terrain"
+							],
+							"value": 4
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json.towns.list[0].terrain: one of 1, 2, 3, 5, 6, 8, 10, 13, 15 is needed."
+		},
+		{
+			"name": "content_list_too_long",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"villages",
+								"count"
+							],
+							"value": [
+								1,
+								2,
+								3
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json.villages.count: 3 entries; 2 to 2 are allowed."
+		},
+		{
+			"name": "unknown_condition",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"port",
+								"panes",
+								0,
+								"when",
+								0
+							],
+							"value": {
+								"weather": "rain"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "places.json.markers.port.panes[0].when[0]: weather is not one of flag, not_flag, stage, quest_done, quests_done, deck_share, on_region, here, rewards_owed, cards_pending."
+		},
+		{
+			"name": "condition_two_keys",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"port",
+								"panes",
+								0,
+								"when",
+								0
+							],
+							"value": {
+								"flag": "freed",
+								"not_flag": "freed"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "places.json.markers.port.panes[0].when[0]: an object with one of flag, not_flag, stage, quest_done, quests_done, deck_share, on_region, here, rewards_owed, cards_pending is needed."
+		},
+		{
+			"name": "unknown_effect",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"finale",
+								"effects",
+								0
+							],
+							"value": {
+								"teleport": true
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json.finale.effects[0]: teleport is not one of set_stage, set_flag, gold, food, reward_choice, claim_cards, log_clue, log_event, refresh_appearance."
+		},
+		{
+			"name": "unknown_completion_effect",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								0
+							],
+							"value": {
+								"teleport": true
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json.quests[0].complete: none of its forms fits (quests.json.quests[0].complete: text in quotes is needed.; quests.json.quests[0].complete[0]: teleport is not one of set_stage, set_flag, gold, food, reward_choice, claim_cards, log_clue, log_event, refresh_appearance.)."
+		},
+		{
+			"name": "bad_card_name",
+			"base": "good_minimal",
+			"edit": {
+				"foes.json": {
+					"set": [
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Lightning Blot"
+							],
+							"value": 1
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "foes.json.foes.smuggler.deck key Lightning Blot: Lightning Blot is not a card of the base game or of a required pack (none)."
+		},
+		{
+			"name": "card_of_a_pack_not_required",
+			"base": "good_minimal",
+			"edit": {
+				"foes.json": {
+					"set": [
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Thallid"
+							],
+							"value": 1
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "foes.json.foes.smuggler.deck key Thallid: Thallid is not a card of the base game or of a required pack (none)."
+		},
+		{
+			"name": "bad_placeholder",
+			"base": "good_minimal",
+			"edit": {
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"castle.count"
+							],
+							"value": "Quests done: {pledgez} of {quests_total}."
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "text.json: castle.count: unknown placeholder {pledgez} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region)."
+		},
+		{
+			"name": "missing_text_key",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"title"
+							],
+							"value": "quest.missing.title"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json.quests[0].title: text.json has no quest.missing.title."
+		},
+		{
+			"name": "text_too_long",
+			"base": "good_minimal",
+			"edit": {
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"tale.keep"
+							],
+							"value": {
+								"$repeat": [
+									"t",
+									4001
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "text.json.tale.keep: 4001 characters; at most 4000 are allowed."
+		},
+		{
+			"name": "text_key_pattern",
+			"base": "good_minimal",
+			"edit": {
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"Tale.Keep"
+							],
+							"value": "A tale."
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "text.json key Tale.Keep: Tale.Keep does not fit ^[a-z0-9_.]{1,64}$."
+		},
+		{
+			"name": "bad_picture_key",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"castle",
+								"picture"
+							],
+							"value": "castle_art"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "places.json.markers.castle.picture: castle_art is neither a picture of places.json nor a skin picture (visit_city, visit_village, visit_dungeon, visit_wiseman, visit_news, visit_buycards, visit_castle_black, visit_castle_blue, visit_castle_green, visit_castle_red, visit_castle_white, visit_lair_black, visit_lair_blue, visit_lair_green, visit_lair_red, visit_lair_white)."
+		},
+		{
+			"name": "picture_key_prefix",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"pictures",
+								"harbor"
+							],
+							"value": "art/corpus_isle_port_map.png"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "places.json: pictures.harbor: a picture key begins with the plugin id and _ (corpus_isle_…)."
+		},
+		{
+			"name": "missing_file_reference",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"port",
+								"sprite",
+								"file"
+							],
+							"value": "art/none.png"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "places.json.markers.port.sprite.file: the plugin has no file art/none.png."
+		},
+		{
+			"name": "file_reference_wrong_kind",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"music"
+							],
+							"value": "art/corpus_isle_port_map.png"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json.music: art/corpus_isle_port_map.png must end in .ogg."
+		},
+		{
+			"name": "bad_hex_color",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"banner"
+							],
+							"value": "green!"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json.quests[0].banner: six hex digits are needed (like e0bc60)."
+		},
+		{
+			"name": "unknown_foe",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"foe"
+							],
+							"value": "nobody"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].foe: foes.json has no nobody."
+		},
+		{
+			"name": "undeclared_flag",
+			"base": "good_minimal",
+			"edit": {
+				"places.json": {
+					"set": [
+						{
+							"path": [
+								"markers",
+								"castle",
+								"panes",
+								0,
+								"when",
+								0
+							],
+							"value": {
+								"flag": "open"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: the flag open is not declared in flags."
+		},
+		{
+			"name": "reserved_flag",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"flags"
+							],
+							"value": [
+								"freed",
+								"quests"
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: flags: quests is a reserved name."
+		},
+		{
+			"name": "last_step_not_duel",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"steps"
+							],
+							"value": [
+								{
+									"do": "accept"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].steps: the last step must be the duel."
+		},
+		{
+			"name": "duel_not_last",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"steps"
+							],
+							"value": [
+								{
+									"do": "duel"
+								},
+								{
+									"do": "duel"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].steps[0]: the duel ends the quest; it must be the last step."
+		},
+		{
+			"name": "accept_not_first",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"steps"
+							],
+							"value": [
+								{
+									"do": "accept"
+								},
+								{
+									"do": "accept"
+								},
+								{
+									"do": "duel"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].steps[1]: only a quest's first step may be accept."
+		},
+		{
+			"name": "go_step_incomplete",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"remove": [
+						[
+							"quests",
+							0,
+							"steps",
+							1,
+							"task"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].steps[1]: a go step needs task."
+		},
+		{
+			"name": "unknown_completion",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"complete"
+							],
+							"value": "pledge"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].complete: quests.json completions has no pledge."
+		},
+		{
+			"name": "giver_not_a_town",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"giver"
+							],
+							"value": 9
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].giver: slot 9 is not a town or place of world.json."
+		},
+		{
+			"name": "target_site_not_a_town",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"steps",
+								1,
+								"to"
+							],
+							"value": {
+								"site": 8
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: site 8 is not a town or place of world.json."
+		},
+		{
+			"name": "unknown_objective",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"steps",
+								1,
+								"to"
+							],
+							"value": {
+								"objective": "beacon"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: the objective beacon is not in world.json objectives."
+		},
+		{
+			"name": "quest_index_out_of_range",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"finale",
+								"conditions",
+								2
+							],
+							"value": {
+								"quest_done": 3
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quest 3 is named; there are 1."
+		},
+		{
+			"name": "face_not_a_creature",
+			"base": "good_minimal",
+			"edit": {
+				"foes.json": {
+					"set": [
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"face"
+							],
+							"value": 99
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "foes.json: foes.smuggler.face: 99 is not a creature row."
+		},
+		{
+			"name": "deck_too_big",
+			"base": "good_minimal",
+			"edit": {
+				"foes.json": {
+					"set": [
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Mountain"
+							],
+							"value": 40
+						},
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Swamp"
+							],
+							"value": 40
+						},
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Island"
+							],
+							"value": 40
+						},
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Forest"
+							],
+							"value": 40
+						},
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Plains"
+							],
+							"value": 40
+						},
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Hill Giant"
+							],
+							"value": 40
+						},
+						{
+							"path": [
+								"foes",
+								"smuggler",
+								"deck",
+								"Gray Ogre"
+							],
+							"value": 40
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "foes.json: foes.smuggler.deck holds 296 cards; 1 to 250 are allowed."
+		},
+		{
+			"name": "roaming_unknown_foe",
+			"base": "good_minimal",
+			"edit": {
+				"foes.json": {
+					"set": [
+						{
+							"path": [
+								"roaming"
+							],
+							"value": {
+								"decks": [
+									{
+										"colors": [
+											"red"
+										],
+										"name": "Raiders",
+										"foe": "pirate"
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "foes.json: roaming.decks[0].foe: no foe pirate."
+		},
+		{
+			"name": "slot_taken_twice",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"towns",
+								"list",
+								1,
+								"slot"
+							],
+							"value": 1
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json: slot 1 is taken twice (towns and towns)."
+		},
+		{
+			"name": "village_names_short",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"villages",
+								"count"
+							],
+							"value": [
+								2,
+								5
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json: villages.names holds 3 names for up to 5 villages."
+		},
+		{
+			"name": "dungeon_past_the_source",
+			"base": "good_minimal",
+			"edit": {
+				"world.json": {
+					"set": [
+						{
+							"path": [
+								"dungeon",
+								"from"
+							],
+							"value": 10
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "world.json: dungeon.from + dungeon.choices reaches past the source's 15 dungeons."
+		},
+		{
+			"name": "deck_share_not_required",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"finale",
+								"conditions",
+								2
+							],
+							"value": {
+								"deck_share": {
+									"pack": "pack-2",
+									"percent": 50
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: deck_share names pack-2, which the manifest does not require."
+		},
+		{
+			"name": "reward_without_bundles",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								4
+							],
+							"value": {
+								"reward_choice": true
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: a reward_choice needs rewards.json bundles."
+		},
+		{
+			"name": "palette_object_bad",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"palette"
+							],
+							"value": {
+								"grass": [
+									1,
+									2
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.palette: grass: four numbers (hue 0-1, saturation and brightness 0-4, strength 0-1)."
+		},
+		{
+			"name": "palette_object_unknown_field",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region",
+								"palette"
+							],
+							"value": {
+								"sky": "#ffffff"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: region.palette: unknown field sky."
+		},
+		{
+			"name": "two_reward_choices",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								4
+							],
+							"value": {
+								"reward_choice": true
+							}
+						},
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								5
+							],
+							"value": {
+								"reward_choice": true
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].complete: one reward_choice at most; a quest owes one reward choice."
+		},
+		{
+			"name": "finale_reward_choice",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"finale",
+								"effects",
+								3
+							],
+							"value": {
+								"reward_choice": true
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: finale.effects: a reward_choice belongs to a quest's completion, not the finale."
+		},
+		{
+			"name": "set_stage_beyond_steps",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								4
+							],
+							"value": {
+								"set_stage": {
+									"quest": 0,
+									"value": 5
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].complete: set_stage: quest 0 has 3 steps; its stage goes up to 2."
+		},
+		{
+			"name": "set_stage_beyond_one_step",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								1
+							],
+							"value": {
+								"giver": 2,
+								"title": "tale.keep.title",
+								"petition": "tale.keep",
+								"epilogue": "tale.keep",
+								"foe": "smuggler",
+								"steps": [
+									{
+										"do": "duel"
+									}
+								]
+							}
+						},
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								4
+							],
+							"value": {
+								"set_stage": {
+									"quest": 1,
+									"value": 1
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].complete: set_stage: quest 1 has 1 step; its stage goes up to 0."
+		},
+		{
+			"name": "finale_flag_outside_finale",
+			"base": "good_minimal",
+			"edit": {
+				"quests.json": {
+					"set": [
+						{
+							"path": [
+								"quests",
+								0,
+								"complete",
+								4
+							],
+							"value": {
+								"set_flag": "freed"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "quests.json: quests[0].complete: set_flag: freed is the finale's flag; only the finale's effects set it."
+		}
+	],
+	"compat_about": "Pairs for adventure_plugin.py compat OLD NEW (tools/test_adventure_plugin.py only): each side a recipe as above; warnings are the lines the tool must print (each holds the text given), notes the note lines it must hold.",
+	"compat": [
+		{
+			"name": "same",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal"
+			},
+			"compatible": true
+		},
+		{
+			"name": "words_and_version",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"plugin.json": {
+						"set": [
+							{
+								"path": [
+									"version"
+								],
+								"value": "0.2.0"
+							}
+						]
+					},
+					"text.json": {
+						"set": [
+							{
+								"path": [
+									"quest.lantern.title"
+								],
+								"value": "The Lantern of the Harbor"
+							}
+						]
+					}
+				}
+			},
+			"compatible": true
+		},
+		{
+			"name": "id_changed",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"plugin.json": {
+						"set": [
+							{
+								"path": [
+									"id"
+								],
+								"value": "other_isle"
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"The id changed (corpus_isle -> other_isle)"
+			]
+		},
+		{
+			"name": "town_removed",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"remove": [
+							[
+								"towns",
+								"list",
+								1
+							]
+						]
+					},
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									0,
+									"steps",
+									1,
+									"to"
+								],
+								"value": "port"
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"slot 2 (Mossford) was removed"
+			],
+			"notes": [
+				"The island recipe changed (towns)"
+			]
+		},
+		{
+			"name": "town_moved",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"towns",
+									"list",
+									1,
+									"slot"
+								],
+								"value": 3
+							}
+						]
+					},
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									0,
+									"steps",
+									1,
+									"to"
+								],
+								"value": {
+									"site": 3
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"Mossford moved from slot 2 to slot 3"
+			],
+			"notes": [
+				"(towns)"
+			]
+		},
+		{
+			"name": "town_added",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"towns",
+									"list",
+									2
+								],
+								"value": {
+									"slot": 3,
+									"name": "Gullhaven",
+									"terrain": 3,
+									"aim": [
+										3,
+										10
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"slot 3 (Gullhaven) was added"
+			],
+			"notes": [
+				"(towns)"
+			]
+		},
+		{
+			"name": "quest_removed",
+			"old": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									1
+								],
+								"value": {
+									"giver": 2,
+									"title": "tale.keep.title",
+									"petition": "tale.keep",
+									"epilogue": "tale.keep",
+									"foe": "smuggler",
+									"steps": [
+										{
+											"do": "duel"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_minimal"
+			},
+			"compatible": false,
+			"warnings": [
+				"quests.json quests[1] (The Old Keep) was removed or replaced"
+			]
+		},
+		{
+			"name": "quests_reordered",
+			"old": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									1
+								],
+								"value": {
+									"giver": 2,
+									"title": "tale.keep.title",
+									"petition": "tale.keep",
+									"epilogue": "tale.keep",
+									"foe": "smuggler",
+									"steps": [
+										{
+											"do": "duel"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									0
+								],
+								"value": {
+									"giver": 2,
+									"title": "tale.keep.title",
+									"petition": "tale.keep",
+									"epilogue": "tale.keep",
+									"foe": "smuggler",
+									"steps": [
+										{
+											"do": "duel"
+										}
+									]
+								}
+							},
+							{
+								"path": [
+									"quests",
+									1
+								],
+								"value": {
+									"giver": 1,
+									"title": "quest.lantern.title",
+									"petition": "quest.lantern.petition",
+									"epilogue": "quest.lantern.epilogue",
+									"banner": "6a9c57",
+									"foe": "smuggler",
+									"steps": [
+										{
+											"do": "accept"
+										},
+										{
+											"do": "go",
+											"to": {
+												"site": 2
+											},
+											"action": "quest.lantern.ask",
+											"guidance": "quest.lantern.guide",
+											"task": "quest.lantern.task",
+											"line": "quest.lantern.line"
+										},
+										{
+											"do": "duel",
+											"at": "giver"
+										}
+									],
+									"complete": [
+										{
+											"gold": 30
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"quests[0] (The Harbor Lantern) moved to quests[1]",
+				"quests[1] (The Old Keep) moved to quests[0]"
+			]
+		},
+		{
+			"name": "steps_shortened",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"remove": [
+							[
+								"quests",
+								0,
+								"steps",
+								1
+							]
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"its steps were shortened from 3 to 2"
+			]
+		},
+		{
+			"name": "steps_changed_kind",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									0,
+									"steps",
+									0
+								],
+								"value": {
+									"do": "go",
+									"to": "port",
+									"action": "quest.lantern.ask",
+									"guidance": "quest.lantern.guide",
+									"task": "quest.lantern.task"
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"its steps changed kind"
+			]
+		},
+		{
+			"name": "quest_appended_finale_needs_all",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"quests",
+									1
+								],
+								"value": {
+									"giver": 2,
+									"title": "tale.keep.title",
+									"petition": "tale.keep",
+									"epilogue": "tale.keep",
+									"foe": "smuggler",
+									"steps": [
+										{
+											"do": "duel"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"1 quest appended while the finale needs every quest: a save that already won the finale holds freed with a quest open, and the game holds that land, its ships not sailing, until the old version is back"
+			]
+		},
+		{
+			"name": "quest_appended_finale_open",
+			"old": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"finale",
+									"conditions"
+								],
+								"value": [
+									{
+										"not_flag": "freed"
+									}
+								]
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"finale",
+									"conditions"
+								],
+								"value": [
+									{
+										"not_flag": "freed"
+									}
+								]
+							},
+							{
+								"path": [
+									"quests",
+									1
+								],
+								"value": {
+									"giver": 2,
+									"title": "tale.keep.title",
+									"petition": "tale.keep",
+									"epilogue": "tale.keep",
+									"foe": "smuggler",
+									"steps": [
+										{
+											"do": "duel"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": true
+		},
+		{
+			"name": "flag_removed",
+			"old": {
+				"base": "good_minimal",
+				"edit": {
+					"quests.json": {
+						"set": [
+							{
+								"path": [
+									"flags"
+								],
+								"value": [
+									"freed",
+									"visited"
+								]
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_minimal"
+			},
+			"compatible": true,
+			"warnings": [],
+			"notes": [
+				"flags: visited was renamed or removed: old saves keep its value under the old name"
+			]
+		},
+		{
+			"name": "recipe_changed",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"dice_salt"
+								],
+								"value": 12345
+							}
+						]
+					},
+					"plugin.json": {
+						"set": [
+							{
+								"path": [
+									"region",
+									"salt"
+								],
+								"value": 99
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"The island recipe changed (dice_salt, plugin.json region.salt)",
+				"a visited island is kept"
+			]
+		},
+		{
+			"name": "place_added",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"places"
+								],
+								"value": {
+									"list": [
+										{
+											"slot": 22,
+											"name": "Gull Rock",
+											"kind": "town"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"world.json places: slot 22 (Gull Rock) was added",
+				"(places)"
+			]
+		},
+		{
+			"name": "place_removed",
+			"old": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"places"
+								],
+								"value": {
+									"list": [
+										{
+											"slot": 22,
+											"name": "Gull Rock",
+											"kind": "town"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_minimal"
+			},
+			"compatible": true,
+			"notes": [
+				"world.json places: slot 22 (Gull Rock) was removed",
+				"(places)"
+			]
+		},
+		{
+			"name": "place_moved",
+			"old": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"places"
+								],
+								"value": {
+									"list": [
+										{
+											"slot": 22,
+											"name": "Gull Rock",
+											"kind": "town"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_minimal",
+				"edit": {
+					"world.json": {
+						"set": [
+							{
+								"path": [
+									"places"
+								],
+								"value": {
+									"list": [
+										{
+											"slot": 23,
+											"name": "Gull Rock",
+											"kind": "town"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"world.json places: Gull Rock moved from slot 22 to slot 23",
+				"(places)"
+			]
+		}
+	]
+}

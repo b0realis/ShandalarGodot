@@ -1,0 +1,136 @@
+{
+	"flags": [
+		"freed"
+	],
+	"errands_off": [
+		1
+	],
+	"town": {
+		"line": "town.petition",
+		"action": "town.hear",
+		"thanks": "town.thanks"
+	},
+	"quests": [
+		{
+			"giver": 1,
+			"title": "quest.lantern.title",
+			"petition": "quest.lantern.petition",
+			"epilogue": "quest.lantern.epilogue",
+			"banner": "6a9c57",
+			"foe": "smuggler",
+			"steps": [
+				{
+					"do": "accept"
+				},
+				{
+					"do": "go",
+					"to": {
+						"site": 2
+					},
+					"action": "quest.lantern.ask",
+					"guidance": "quest.lantern.guide",
+					"task": "quest.lantern.task",
+					"line": "quest.lantern.line"
+				},
+				{
+					"do": "duel",
+					"at": "giver"
+				}
+			],
+			"complete": [
+				{
+					"gold": 30
+				},
+				{
+					"food": 4
+				},
+				{
+					"refresh_appearance": true
+				},
+				{
+					"log_event": {
+						"event": "quest",
+						"text": "quest.done_log",
+						"done": true
+					}
+				}
+			]
+		}
+	],
+	"finale": {
+		"at": "castle",
+		"foe": "warden",
+		"conditions": [
+			{
+				"quests_done": "all"
+			},
+			{
+				"not_flag": "freed"
+			}
+		],
+		"effects": [
+			{
+				"set_flag": "freed"
+			},
+			{
+				"refresh_appearance": true
+			},
+			{
+				"log_event": {
+					"event": "freed",
+					"text": "finale.log"
+				}
+			}
+		],
+		"done_flag": "freed",
+		"won": "finale.won",
+		"already": "finale.already",
+		"unmet": "finale.unmet"
+	},
+	"targets": {
+		"after_quests": "castle",
+		"after_finale": "port"
+	},
+	"status": [
+		"status.quests",
+		{
+			"text": "status.freed",
+			"when": [
+				{
+					"flag": "freed"
+				}
+			]
+		}
+	],
+	"tasks": {
+		"finale": {
+			"title": "task.finale.title",
+			"text": "task.finale.text",
+			"done": "task.finale.done"
+		},
+		"rewards": {
+			"title": "task.rewards.title",
+			"text": "task.rewards.text",
+			"done": "task.rewards.done"
+		}
+	},
+	"talk": {
+		"news": [
+			{
+				"text": "talk.news.freed",
+				"when": [
+					{
+						"flag": "freed"
+					}
+				]
+			},
+			"talk.news"
+		],
+		"tales": [
+			{
+				"title": "tale.keep.title",
+				"text": "tale.keep"
+			}
+		]
+	}
+}

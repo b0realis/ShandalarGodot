@@ -748,7 +748,7 @@ func _number_values() -> Dictionary:
 	# The region named only in a campaign that chose another land (the
 	# owner's ruling of 2026-11-03, "Region only with an island").
 	if regions_named(player):
-		values["road"] += " (%s)" % AdventureExpansions.label(AdventureRegions.id(player.world))
+		values["road"] += " (%s)" % AdventureExpansions.label(AdventureRegions.id(player.world), player)
 	for gem in WorldHud.AMULETS:
 		values[String(gem[0])] = str(int(player.amulets.get(gem[0], 0)))
 	return values
@@ -965,7 +965,7 @@ static func journal_line(entry: Dictionary, player: AdventurePlayer = null) -> S
 	var stamp := "Day %d" % day if day >= 0 else ""
 	var region := String(entry.get("region", ""))
 	if region != "" and (regions_named(player) if player != null else region != AdventureRegions.MAINLAND):
-		stamp += (" · " if stamp != "" else "") + AdventureExpansions.label(region)
+		stamp += (" · " if stamp != "" else "") + AdventureExpansions.label(region, player)
 	var kind: String = entry.get("event", "")
 	var prefix := "Clue: " if kind == "clue" else ("Quest: " if kind == "quest_clue" else "")
 	return (stamp + ": " if stamp != "" else "") + prefix + text.replace("\n", " ")
@@ -1324,8 +1324,15 @@ func _tasks_page() -> void:
 			clock.custom_minimum_size.x = maxf(page_size.x - 28, 200)
 			clock.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			list.add_child(clock)
-		if not done and task["region"] != AdventureRegions.MAINLAND and not AdventureExpansions.enabled(task["region"]) and task["region"] != AdventureRegions.id(player.world):
-			list.add_child(_label("Enable this region's pack to travel there.", 13, GOLD))
+		# Why its ships do not sail, as the mainland note says it (RV2-4: a
+		# pack enabled but too old is no pack to enable).
+		var why := AdventureExpansions.sail_refusal(player, String(task["region"])) \
+			if not done and task["region"] != AdventureRegions.MAINLAND and task["region"] != AdventureRegions.id(player.world) else ""
+		if why != "":
+			var stop := _label(why, 13, GOLD)
+			stop.custom_minimum_size.x = maxf(page_size.x - 28, 200)
+			stop.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			list.add_child(stop)
 	if not finished: _task_clues(list)
 
 ## [QoL] Vector marks stay crisp with either skin and need no font symbol.

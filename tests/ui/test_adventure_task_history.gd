@@ -1,15 +1,11 @@
 extends GutTest
-## Colored task history and the launch-flag-only Pack 2 teleport.
+## Colored task history and the tester's teleport to the first ticked plugin's harbor.
 var screen: WorldScreen
 var previous_guides: bool
 var previous_quest_pane: bool
 const SAVES := "user://task_history_ui_tests"
 
-var _launch_before: bool
-
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	previous_guides = WorldHud.guides_wanted()
 	previous_quest_pane = bool(Settings.get_value(WorldHud.QUEST_SETTING, true))
 	WorldScreen.debug_campaign = false
@@ -17,7 +13,7 @@ func before_each() -> void:
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	AdventurePlayer.saves_folder = SAVES
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
 	screen = load("res://game/adventure/world/world_screen.tscn").instantiate()
@@ -26,7 +22,6 @@ func before_each() -> void:
 	await get_tree().process_frame
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	Settings.set_value(WorldHud.GUIDES_SETTING, previous_guides)
 	Settings.set_value(WorldHud.QUEST_SETTING, previous_quest_pane)
 	WorldScreen.debug_campaign = false
@@ -87,7 +82,7 @@ func test_debug_key_refuses_disabled_pack_or_modal_and_accepts_shifted_layout() 
 	assert_false(WorldScreen._debug_port_key(key))
 
 func test_debug_key_can_return_from_island_to_mainland_harbor() -> void:
-	RefugeCampaign.travel(screen.player)
+	_refuge().travel(screen.player)
 	screen.show_player(screen.player)
 	WorldScreen.debug_campaign = true
 	assert_true(screen._debug_port_pressed(chord()))
@@ -96,9 +91,9 @@ func test_debug_key_can_return_from_island_to_mainland_harbor() -> void:
 	assert_true(screen.player.regions.has("refuge"))
 
 func test_completed_button_is_green_disabled_and_below_active_timer() -> void:
-	RefugeCampaign.travel(screen.player)
+	_refuge().travel(screen.player)
 	screen.show_player(screen.player)
-	RefugeCampaign.finish_quest(screen.player, 0)
+	_refuge().finish_quest(screen.player, 0)
 	screen.player.quest = {"type": Quests.LETTER_AMULET, "destination": 22, "giver": 8, "color": 2, "deadline": 10}
 	screen.hud._show_hero_tab("Tasks")
 	await get_tree().process_frame
@@ -117,7 +112,7 @@ func test_completed_button_is_green_disabled_and_below_active_timer() -> void:
 	assert_eq(timer.get_theme_color("font_color"), Color("ff9494"))
 
 func test_new_task_returns_scroll_to_top_without_timer_tick_jumps() -> void:
-	RefugeCampaign.travel(screen.player)
+	_refuge().travel(screen.player)
 	screen.show_player(screen.player)
 	screen.hud._show_hero_tab("Tasks")
 	var panel := screen.hud.hero_stats
@@ -193,8 +188,14 @@ func test_target_click_switches_guidance_in_vanilla_with_quest_panel_open() -> v
 
 func test_debug_shortcut_respects_cards_only_campaign() -> void:
 	WorldScreen.debug_campaign = true
-	screen.player.expanded_adventure = false
+	screen.player.adventures = []
 	var before := screen.player.position
 	assert_true(screen._debug_port_pressed(chord()))
 	assert_eq(screen.player.position, before)
 	assert_true(AdventureRegions.mainland(screen.player))
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

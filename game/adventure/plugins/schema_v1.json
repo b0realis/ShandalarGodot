@@ -1,0 +1,284 @@
+{
+	"schema": "shandalar-adventure-plugin",
+	"api_version": 1,
+	"about": "The content schema of adventure plugins, API v1: one source of truth for the game's PluginSchema and tools/adventure_plugin.py. Kinds: int, number, bool, string, text (a key of text.json), card (a card name), hex (six hex digits), file (a path inside the plugin), picture (a picture key), enum, array, object, map, oneof, single (an object with exactly one key of its options), ref (a named type). Object fields carry required, default and doc.",
+	"limits": {
+		"plugin_bytes": 33554432,
+		"files": 512,
+		"json_bytes": 1048576,
+		"json_depth": 32,
+		"picture_side": 4096,
+		"ogg_bytes": 16777216,
+		"text_chars": 4000,
+		"id_pattern": "^[a-z][a-z0-9_]{0,39}$",
+		"reserved_ids": ["mainland"],
+		"path_chars": 200
+	},
+	"extensions": {
+		"allowed": [".json", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".ogg"],
+		"pictures": [".png", ".jpg", ".jpeg", ".webp"],
+		"music": [".ogg"]
+	},
+	"placeholders": {
+		"pledges": "quests completed in this region",
+		"quests_total": "quests in this region",
+		"target": "the name of where the current step leads (or the next target)",
+		"town": "the quest's giver town",
+		"title": "the quest's title",
+		"foe": "the foe's name",
+		"life": "the foe's life",
+		"count": "a count: matching deck cards, waiting cards, reward choices or cards collected",
+		"total": "the main deck's nonland cards",
+		"required": "the matching nonland cards the deck gate needs",
+		"percent": "the deck gate's percentage",
+		"left": "cards still held after collecting",
+		"color": "a reward bundle's label",
+		"cards": "a reward bundle's offered cards, comma separated",
+		"hero": "the hero's name",
+		"region": "the region's title"
+	},
+	"skin_pictures": ["visit_city", "visit_village", "visit_dungeon", "visit_wiseman", "visit_news", "visit_buycards",
+		"visit_castle_black", "visit_castle_blue", "visit_castle_green", "visit_castle_red", "visit_castle_white",
+		"visit_lair_black", "visit_lair_blue", "visit_lair_green", "visit_lair_red", "visit_lair_white"],
+	"files": {
+		"world.json": {"required": true, "type": "world", "doc": "The region's generator recipe and its named objectives."},
+		"places.json": {"required": true, "type": "places", "doc": "The region's markers (its port and castle), their pictures, map sprites and panes, and the voyage's words."},
+		"quests.json": {"required": true, "type": "quests", "doc": "Quests and their steps, completions, the finale, targets, status lines, tasks and the region's talk."},
+		"foes.json": {"required": true, "type": "foes", "doc": "Named duel opponents and the roaming creatures' decks."},
+		"rewards.json": {"required": false, "type": "rewards", "doc": "The reward bundles a reward choice offers."},
+		"text.json": {"required": true, "type": "text", "doc": "Every sentence, title and button, by key."}
+	},
+	"types": {
+		"pair": {"kind": "array", "items": {"kind": "int", "min": -64, "max": 64}, "min": 2, "max": 2},
+		"slot": {"kind": "int", "min": 1, "max": 127, "doc": "A site slot of the region's world (1-127)."},
+		"site_kind": {"kind": "enum", "values": ["village", "town", "city"]},
+		"terrain": {"kind": "enum", "values": [1, 2, 3, 5, 6, 8, 10, 13, 15], "doc": "A land terrain code of ShandalarWorld."},
+		"name": {"kind": "string", "min": 1, "max": 60, "doc": "A proper name shown as it is written."},
+		"id": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$"},
+		"flag_name": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$", "doc": "A flag declared in quests.json flags."},
+		"conditions": {"kind": "array", "items": {"kind": "ref", "type": "condition"}, "max": 16, "doc": "All must hold."},
+		"site_rule": {"kind": "object", "fields": {
+			"coastal": {"kind": "bool", "default": false, "doc": "The site touches the sea."},
+			"road": {"kind": "bool", "default": false, "doc": "The site stands on a road."},
+			"near_terrain": {"kind": "int", "min": 0, "max": 15, "doc": "Terrain code within radius."},
+			"radius": {"kind": "int", "min": 0, "max": 8, "default": 2},
+			"exclude": {"kind": "array", "items": {"kind": "int", "min": 0, "max": 127}, "max": 128, "default": []},
+			"types": {"kind": "array", "items": {"kind": "ref", "type": "site_kind"}, "max": 3, "default": ["village", "town", "city"]}
+		}},
+		"objective": {"kind": "object", "fields": {
+			"coastal": {"kind": "bool", "default": false},
+			"road": {"kind": "bool", "default": false},
+			"near_terrain": {"kind": "int", "min": 0, "max": 15},
+			"radius": {"kind": "int", "min": 0, "max": 8, "default": 2},
+			"exclude": {"kind": "array", "items": {"kind": "int", "min": 0, "max": 127}, "max": 128, "default": []},
+			"types": {"kind": "array", "items": {"kind": "ref", "type": "site_kind"}, "max": 3, "default": ["village", "town", "city"]},
+			"prefer": {"kind": "int", "min": -1, "max": 127, "default": -1, "doc": "The slot chosen when it matches; else the first match."}
+		}, "doc": "A named objective: the first site its rule matches (RegionObjectives.site), -1 when none."},
+		"world": {"kind": "object", "fields": {
+			"generator": {"kind": "enum", "values": ["island"], "required": true, "doc": "v1 knows one generator: an island cut from the mainland generator's terrain."},
+			"layout_version": {"kind": "int", "min": 1, "max": 999, "default": 1, "doc": "Saved with the world; bump it when the layout changes."},
+			"side": {"kind": "int", "min": 8, "max": 32, "default": 32, "doc": "The island's square, in tiles."},
+			"offset": {"kind": "int", "min": 0, "max": 32, "default": 16, "doc": "Where the square starts on the 64-tile map."},
+			"step": {"kind": "int", "min": 1, "max": 2, "default": 2, "doc": "Source tiles per island tile."},
+			"slot_start": {"kind": "int", "min": 0, "max": 127, "default": 0},
+			"dice_salt": {"kind": "int", "min": 0, "max": 4294967295, "default": 5391686, "doc": "XORed into the source world's dice for the island's own."},
+			"spacing": {"kind": "number", "min": 1, "max": 16, "default": 4.0, "doc": "Least distance between the castle, port and towns."},
+			"castle": {"kind": "object", "fields": {
+				"from": {"kind": "ref", "type": "pair", "default": [30, 30]},
+				"span": {"kind": "ref", "type": "pair", "default": [5, 5]}}, "default": {}, "doc": "The castle's aim: from + a draw under span, x then y."},
+			"port": {"kind": "object", "fields": {
+				"from": {"kind": "ref", "type": "pair", "default": [23, 48]},
+				"span": {"kind": "ref", "type": "pair", "default": [19, 0]}}, "default": {}, "doc": "The port's aim, on the shore nearest it."},
+			"towns": {"kind": "object", "required": true, "fields": {
+				"center": {"kind": "ref", "type": "pair", "default": [32, 32]},
+				"spread": {"kind": "int", "min": 0, "max": 32, "default": 7},
+				"turns": {"kind": "int", "min": 0, "max": 4, "default": 4, "doc": "Quarter turns drawn for the town aims."},
+				"list": {"kind": "array", "required": true, "min": 1, "max": 16, "items": {"kind": "object", "fields": {
+					"slot": {"kind": "ref", "type": "slot", "required": true},
+					"name": {"kind": "ref", "type": "name", "required": true},
+					"terrain": {"kind": "ref", "type": "terrain", "required": true, "doc": "The town tile's terrain (its color)."},
+					"aim": {"kind": "ref", "type": "pair", "required": true, "doc": "Offset from center before the turns."}}}}}},
+			"places": {"kind": "object", "default": {}, "fields": {
+				"gap": {"kind": "number", "min": 1, "max": 16, "default": 4.0},
+				"list": {"kind": "array", "max": 32, "default": [], "items": {"kind": "object", "fields": {
+					"slot": {"kind": "ref", "type": "slot", "required": true},
+					"name": {"kind": "ref", "type": "name", "required": true},
+					"kind": {"kind": "ref", "type": "site_kind", "required": true},
+					"coastal": {"kind": "bool", "default": false}}}}}},
+			"villages": {"kind": "object", "default": {}, "fields": {
+				"names": {"kind": "array", "max": 15, "default": [], "items": {"kind": "ref", "type": "name"}},
+				"count": {"kind": "array", "items": {"kind": "int", "min": 0, "max": 15}, "min": 2, "max": 2, "default": [0, 0], "doc": "Least and most villages."},
+				"slot_step": {"kind": "int", "min": 1, "max": 16, "default": 8, "doc": "Village i takes slot (i + 1) * slot_step."},
+				"gap": {"kind": "number", "min": 1, "max": 16, "default": 3.0},
+				"first_rule": {"kind": "ref", "type": "site_rule", "default": {}, "doc": "Where the first village prefers to stand."}}},
+			"trade": {"kind": "array", "max": 16, "items": {"kind": "enum", "values": [1, 2, 4, 8, 16, 32, 256, 512, 768, 1024, 1280]},
+				"default": [1, 2, 4, 8, 16, 32, 256, 512, 768, 1024, 1280], "doc": "Trade categories dealt to the towns and places."},
+			"world_magic": {"kind": "object", "default": {}, "fields": {"offers": {"kind": "int", "min": 0, "max": 11, "default": 3}}},
+			"roads": {"kind": "bool", "default": true},
+			"dungeon": {"kind": "object", "required": true, "fields": {
+				"name": {"kind": "ref", "type": "name", "required": true},
+				"from": {"kind": "int", "min": 5, "max": 14, "default": 5},
+				"choices": {"kind": "int", "min": 1, "max": 10, "default": 10, "doc": "The source dungeon is from + a draw under choices."},
+				"gap": {"kind": "number", "min": 1, "max": 16, "default": 3.0}}},
+			"objectives": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "objective"}, "max": 16, "default": {}},
+			"music": {"kind": "file", "class": "music", "doc": "The region's world music, an OGG in the plugin."}
+		}},
+		"sprite": {"kind": "object", "fields": {
+			"file": {"kind": "file", "class": "pictures", "required": true},
+			"width": {"kind": "number", "min": 16, "max": 512, "required": true, "doc": "World pixels; its foot stands on the tile."}}},
+		"banner": {"kind": "object", "fields": {
+			"flag": {"kind": "ref", "type": "flag_name", "required": true},
+			"color": {"kind": "hex", "required": true},
+			"anchor": {"kind": "array", "items": {"kind": "int", "min": -256, "max": 256}, "min": 2, "max": 2, "default": [108, -24], "doc": "The pennant's offset from the tile, in world pixels."},
+			"size": {"kind": "array", "items": {"kind": "int", "min": 1, "max": 256}, "min": 2, "max": 2, "default": [18, 24]}}, "doc": "A pennant over the marker while the flag is set."},
+		"line": {"kind": "oneof", "options": [
+			{"kind": "text"},
+			{"kind": "object", "fields": {"text": {"kind": "text", "required": true}, "when": {"kind": "ref", "type": "conditions", "default": []}}},
+			{"kind": "object", "fields": {"show": {"kind": "enum", "values": ["news", "pending", "deck_problem"], "required": true}, "when": {"kind": "ref", "type": "conditions", "default": []}}}]},
+		"lines": {"kind": "array", "items": {"kind": "ref", "type": "line"}, "max": 16},
+		"action": {"kind": "object", "fields": {
+			"do": {"kind": "enum", "values": ["sail", "leave", "boss", "rewards"], "required": true, "doc": "sail: the voyage; leave: close; boss: the finale's duel; rewards: choose and collect reward cards."},
+			"label": {"kind": "text"},
+			"when": {"kind": "ref", "type": "conditions", "default": []}}},
+		"pane": {"kind": "object", "fields": {
+			"when": {"kind": "ref", "type": "conditions", "default": [], "doc": "The first pane whose conditions hold is shown."},
+			"title": {"kind": "text", "doc": "Default: the marker's name (mainland_name on the mainland)."},
+			"subtitle": {"kind": "text", "doc": "Default: region.subtitle, else the region's title."},
+			"picture": {"kind": "picture"},
+			"lines": {"kind": "ref", "type": "lines", "default": []},
+			"actions": {"kind": "array", "items": {"kind": "ref", "type": "action"}, "max": 8, "default": []}}},
+		"marker": {"kind": "object", "fields": {
+			"name": {"kind": "ref", "type": "name", "required": true},
+			"mainland_name": {"kind": "ref", "type": "name"},
+			"picture": {"kind": "picture", "required": true},
+			"sprite": {"kind": "ref", "type": "sprite"},
+			"banner": {"kind": "ref", "type": "banner"},
+			"panes": {"kind": "array", "items": {"kind": "ref", "type": "pane"}, "min": 1, "max": 8, "required": true}}},
+		"places": {"kind": "object", "fields": {
+			"pictures": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "file", "class": "pictures"}, "max": 32, "default": {}, "doc": "Picture keys (each beginning with the plugin id and _) to their files."},
+			"voyage": {"kind": "object", "default": {}, "fields": {
+				"arrive_clues": {"kind": "array", "max": 4, "default": [], "items": {"kind": "object", "fields": {
+					"text": {"kind": "text", "required": true}, "quest": {"kind": "bool", "default": false}}}},
+				"out_log": {"kind": "text"},
+				"home_log": {"kind": "text"}}},
+			"markers": {"kind": "object", "required": true, "fields": {
+				"port": {"kind": "ref", "type": "marker", "required": true},
+				"castle": {"kind": "ref", "type": "marker", "required": true}}}}},
+		"target": {"kind": "oneof", "options": [
+			{"kind": "enum", "values": ["giver", "port", "castle"]},
+			{"kind": "object", "fields": {"site": {"kind": "ref", "type": "slot", "required": true}}},
+			{"kind": "object", "fields": {"objective": {"kind": "ref", "type": "id", "required": true},
+				"else": {"kind": "enum", "values": ["giver", "port", "castle"], "default": "giver"}}}],
+			"doc": "giver, port, castle, {site: N} or {objective: name, else: giver|port|castle}."},
+		"condition": {"kind": "single", "options": {
+			"flag": {"kind": "ref", "type": "flag_name", "doc": "The flag is set."},
+			"not_flag": {"kind": "ref", "type": "flag_name", "doc": "The flag is not set."},
+			"stage": {"kind": "object", "fields": {"quest": {"kind": "int", "min": 0, "max": 11, "required": true},
+				"min": {"kind": "int", "min": 0, "max": 8, "default": 0}, "max": {"kind": "int", "min": 0, "max": 8, "default": 8}}, "doc": "The quest's stage is within min..max."},
+			"quest_done": {"kind": "int", "min": 0, "max": 11, "doc": "That quest is completed."},
+			"quests_done": {"kind": "oneof", "options": [{"kind": "enum", "values": ["all"]}, {"kind": "int", "min": 0, "max": 12}], "doc": "All quests, or at least N, are completed."},
+			"deck_share": {"kind": "object", "fields": {"pack": {"kind": "string", "pattern": "^pack-[0-9]+$", "required": true},
+				"percent": {"kind": "int", "min": 1, "max": 100, "required": true}}, "doc": "At least percent of the main deck's nonland cards are the required pack's (its trusted card list); at least one nonland; every card known."},
+			"on_region": {"kind": "bool", "doc": "The hero is (true) or is not (false) on this region."},
+			"here": {"kind": "ref", "type": "target", "doc": "The hero stands at the target."},
+			"rewards_owed": {"kind": "bool", "doc": "A reward choice is (true) or is not (false) owed."},
+			"cards_pending": {"kind": "bool", "doc": "Reward cards are (true) or are not (false) waiting."}}},
+		"effect": {"kind": "single", "options": {
+			"set_stage": {"kind": "object", "fields": {"quest": {"kind": "int", "min": 0, "max": 11, "required": true}, "value": {"kind": "int", "min": 0, "max": 8, "required": true}}},
+			"set_flag": {"kind": "ref", "type": "flag_name"},
+			"gold": {"kind": "int", "min": -100000, "max": 100000},
+			"food": {"kind": "int", "min": -1000, "max": 1000},
+			"reward_choice": {"kind": "bool", "doc": "Owe one reward choice for this quest."},
+			"claim_cards": {"kind": "bool", "doc": "Move waiting cards into the bag while it has room."},
+			"log_clue": {"kind": "object", "fields": {"text": {"kind": "text", "required": true}, "quest": {"kind": "bool", "default": false}}},
+			"log_event": {"kind": "object", "fields": {"event": {"kind": "ref", "type": "id", "required": true}, "text": {"kind": "text", "required": true}, "done": {"kind": "bool", "default": false}}},
+			"refresh_appearance": {"kind": "bool", "doc": "Redraw the region's pennants from its progress."}}},
+		"effects": {"kind": "array", "items": {"kind": "ref", "type": "effect"}, "max": 16},
+		"step": {"kind": "object", "fields": {
+			"do": {"kind": "enum", "values": ["accept", "go", "duel"], "required": true, "doc": "accept the petition at the giver; go to a target; duel the quest's foe at a target."},
+			"to": {"kind": "ref", "type": "target", "doc": "go: where."},
+			"at": {"kind": "ref", "type": "target", "doc": "duel: where (default giver)."},
+			"action": {"kind": "text", "doc": "accept and go: the button."},
+			"guidance": {"kind": "text", "doc": "The clue and pane line while this step is current."},
+			"task": {"kind": "text", "doc": "The task row's objective while this step is current."},
+			"line": {"kind": "text", "doc": "go: the pane line at a town target."},
+			"approach": {"kind": "object", "fields": {"action": {"kind": "text", "required": true}, "line": {"kind": "text"}}, "doc": "duel away from the giver: the button and line there that open the quest."}}},
+		"quest": {"kind": "object", "fields": {
+			"giver": {"kind": "ref", "type": "slot", "required": true, "doc": "A town or place slot of world.json."},
+			"title": {"kind": "text", "required": true},
+			"petition": {"kind": "text", "required": true},
+			"epilogue": {"kind": "text", "required": true},
+			"banner": {"kind": "hex", "doc": "The giver's pennant once done."},
+			"foe": {"kind": "ref", "type": "id", "required": true},
+			"steps": {"kind": "array", "items": {"kind": "ref", "type": "step"}, "min": 1, "max": 8, "required": true, "doc": "The stage saved is the number of steps done; the last step is a duel."},
+			"complete": {"kind": "oneof", "options": [{"kind": "ref", "type": "id"}, {"kind": "ref", "type": "effects"}], "default": [], "doc": "Effects on completion, or the name of a completions entry."}}},
+		"talk": {"kind": "object", "default": {}, "fields": {
+			"news": {"kind": "ref", "type": "lines", "default": []},
+			"applause": {"kind": "ref", "type": "lines", "default": []},
+			"roaming": {"kind": "ref", "type": "lines", "default": []},
+			"tribute": {"kind": "ref", "type": "lines", "default": []},
+			"dungeon": {"kind": "text"},
+			"tales": {"kind": "array", "max": 32, "default": [], "items": {"kind": "object", "fields": {
+				"title": {"kind": "text", "required": true}, "text": {"kind": "text", "required": true}}}}}},
+		"task_text": {"kind": "object", "fields": {"title": {"kind": "text", "required": true}, "text": {"kind": "text", "required": true}, "done": {"kind": "text", "required": true}}},
+		"quests": {"kind": "object", "fields": {
+			"flags": {"kind": "array", "items": {"kind": "ref", "type": "flag_name"}, "max": 8, "default": []},
+			"errands_off": {"kind": "array", "items": {"kind": "int", "min": 0, "max": 127}, "max": 128, "default": [], "doc": "Town slots that offer no ordinary errands."},
+			"town": {"kind": "object", "required": true, "fields": {
+				"line": {"kind": "text", "required": true}, "action": {"kind": "text", "required": true}, "thanks": {"kind": "text", "required": true}},
+				"doc": "A giver town's line and the button that replaces its wise man."},
+			"quests": {"kind": "array", "items": {"kind": "ref", "type": "quest"}, "min": 1, "max": 12, "required": true},
+			"completions": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "effects"}, "max": 16, "default": {}},
+			"finale": {"kind": "object", "required": true, "fields": {
+				"at": {"kind": "enum", "values": ["port", "castle"], "default": "castle"},
+				"foe": {"kind": "ref", "type": "id", "required": true},
+				"conditions": {"kind": "ref", "type": "conditions", "default": []},
+				"effects": {"kind": "ref", "type": "effects", "default": []},
+				"done_flag": {"kind": "ref", "type": "flag_name", "required": true},
+				"won": {"kind": "text", "required": true},
+				"already": {"kind": "text", "required": true},
+				"unmet": {"kind": "text", "required": true}}},
+			"targets": {"kind": "object", "default": {}, "fields": {
+				"after_quests": {"kind": "enum", "values": ["port", "castle"], "default": "castle"},
+				"after_finale": {"kind": "enum", "values": ["port", "castle"], "default": "port"}}},
+			"status": {"kind": "ref", "type": "lines", "default": []},
+			"deck_line": {"kind": "text"},
+			"tasks": {"kind": "object", "required": true, "fields": {
+				"finale": {"kind": "ref", "type": "task_text", "required": true},
+				"rewards": {"kind": "ref", "type": "task_text", "required": true}}},
+			"pictures": {"kind": "object", "default": {}, "fields": {
+				"quest": {"kind": "picture", "default": "visit_city"},
+				"rewards": {"kind": "picture", "default": "visit_city"},
+				"result": {"kind": "picture", "default": "visit_city"}}},
+			"talk": {"kind": "ref", "type": "talk", "default": {}}}},
+		"foe": {"kind": "object", "fields": {
+			"name": {"kind": "ref", "type": "name", "required": true},
+			"deck_name": {"kind": "ref", "type": "name", "doc": "Default: the quest's title."},
+			"life": {"kind": "int", "min": 1, "max": 99, "required": true},
+			"face": {"kind": "int", "min": 1, "max": 200, "required": true, "doc": "A CreatureBook row whose face the foe wears."},
+			"deck": {"kind": "map", "keys": {"kind": "card"}, "values": {"kind": "int", "min": 1, "max": 40}, "max": 120, "required": true}}},
+		"roaming_deck": {"kind": "object", "fields": {
+			"colors": {"kind": "array", "items": {"kind": "enum", "values": ["black", "blue", "green", "red", "white"]}, "min": 1, "max": 5, "required": true},
+			"name": {"kind": "ref", "type": "name", "required": true},
+			"foe": {"kind": "ref", "type": "id", "required": true, "doc": "The foe whose deck (and life) the creature takes."},
+			"life": {"kind": "int", "min": 1, "max": 99}}},
+		"foes": {"kind": "object", "fields": {
+			"foes": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "foe"}, "min": 1, "max": 32, "required": true},
+			"roaming": {"kind": "object", "fields": {
+				"min_tier": {"kind": "int", "min": 0, "max": 30, "default": 0, "doc": "Roaming creatures at least this tier (lairs untouched)."},
+				"skip": {"kind": "object", "default": {}, "fields": {
+					"seed": {"kind": "int", "min": 0, "max": 1000, "default": 1},
+					"slot": {"kind": "int", "min": 0, "max": 1000, "default": 17},
+					"row": {"kind": "int", "min": 0, "max": 1000, "default": 1},
+					"every": {"kind": "int", "min": 0, "max": 100, "default": 3}},
+					"doc": "A creature keeps its own deck when (world seed x seed + slot x slot + row x row) mod every is 0; every 0 never skips."},
+				"ante": {"kind": "enum", "values": ["random_nonbasic", "creature"], "default": "random_nonbasic"},
+				"decks": {"kind": "array", "items": {"kind": "ref", "type": "roaming_deck"}, "max": 10, "default": []}}}}},
+		"rewards": {"kind": "object", "fields": {
+			"count": {"kind": "int", "min": 1, "max": 15, "default": 6},
+			"bundles": {"kind": "array", "min": 1, "max": 10, "required": true, "items": {"kind": "object", "fields": {
+				"label": {"kind": "text", "required": true},
+				"cards": {"kind": "array", "items": {"kind": "card"}, "min": 1, "max": 30, "required": true}}}}}},
+		"text": {"kind": "map", "keys": {"kind": "string", "pattern": "^[a-z0-9_.]{1,64}$"}, "values": {"kind": "string", "max": 4000}, "max": 2000}
+	}
+}

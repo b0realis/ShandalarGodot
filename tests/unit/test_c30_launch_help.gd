@@ -1,14 +1,15 @@
 extends GutTest
 ## The game's own `-- --help` (0.60.16, the owner's ask of 2026-11-04):
 ## which launches ask for it, and that it names every switch the game
-## reads.
+## reads. Adventure plugins (2026-11-10): the retired `--expanded-adventure`
+## is accepted and ignored, and the help names it no more.
 
 
 func test_h_and_help_after_the_separator_ask_for_it() -> void:
 	assert_true(MainScreen.wants_help(PackedStringArray(["--help"])))
 	assert_true(MainScreen.wants_help(PackedStringArray(["-h"])))
 	assert_true(MainScreen.wants_help(PackedStringArray(
-		[AdventureExpansions.LAUNCH_FLAG, "-h"])), "beside a play switch")
+		["--expanded-adventure", "-h"])), "beside the retired switch, which is ignored")
 	assert_false(MainScreen.wants_help(PackedStringArray()))
 	assert_false(MainScreen.wants_help(PackedStringArray([MainScreen.DEBUG_WIN_FLAG])))
 
@@ -49,7 +50,9 @@ func test_it_names_every_switch_main_reads() -> void:
 
 func test_it_names_the_other_switches_and_the_variables() -> void:
 	var text := MainScreen.launch_help("1.2.3")
-	for word in [AdventureExpansions.LAUNCH_FLAG, PerfLog.FLAG, PerfLog.ENV,
+	assert_false(text.contains("--expanded-adventure"), "the retired switch: no help line")
+	assert_string_contains(text, "Ctrl+Shift+2 goes to the harbor of")
+	for word in [PerfLog.FLAG, PerfLog.ENV,
 			Settings.HANDHELD_ENV, "SHANDALAR_PACK_", "-h, --help", "1.2.3",
 			"-- "]:
 		assert_string_contains(text, word)

@@ -5,20 +5,15 @@ extends GutTest
 ## ruling of 2026-11-03), and the island's villages and extra towns have
 ## their own names (the owner's polish of 2026-11-03).
 
-var _launch_before: bool
-
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 
 func hero(seed_text := "48271", island := true) -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = island
+	setup.adventures.assign(["refuge"] if island else [])
 	var chosen: Array[String] = []
 	if island: chosen.append("pack-2")
 	setup.packs = chosen
@@ -36,7 +31,7 @@ func reloaded(saved: Dictionary) -> AdventurePlayer:
 func test_the_island_keeps_the_campaigns_seed_text() -> void:
 	var player := hero("Dragonsong")
 	assert_eq(player.world_seed_text, "Dragonsong")
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.world_seed_text, "Dragonsong", "on the island")
 	var saved := player.to_dict()
 	assert_eq(saved["world"]["seed_text"], "Dragonsong", "an island save writes it")
@@ -44,59 +39,29 @@ func test_the_island_keeps_the_campaigns_seed_text() -> void:
 	assert_not_null(loaded)
 	if loaded == null: return
 	assert_eq(loaded.world_seed_text, "Dragonsong", "an island save reads it")
-	assert_true(RefugeCampaign.travel(loaded))
+	assert_true(_refuge().travel(loaded))
 	assert_eq(loaded.world_seed_text, "Dragonsong", "home again")
-	assert_true(RefugeCampaign.travel(loaded))
+	assert_true(_refuge().travel(loaded))
 	assert_eq(loaded.world_seed_text, "Dragonsong", "the island again")
-
-func test_an_island_saved_with_a_blank_seed_gets_it_back() -> void:
-	# 0.60.5–0.60.12 wrote the island's seed text blank (h1-3).
-	var player := hero("Dragonsong")
-	assert_true(RefugeCampaign.travel(player))
-	var saved := player.to_dict()
-	saved["world"]["seed_text"] = ""
-	assert_eq(AdventureRegions.seed_text(saved), "Dragonsong", "the load list's reading")
-	var loaded := reloaded(saved)
-	assert_not_null(loaded)
-	if loaded == null: return
-	assert_eq(loaded.world_seed_text, "Dragonsong", "loaded on the island")
-	# The blank one left behind in the island's snapshot while at home.
-	assert_true(RefugeCampaign.travel(loaded))
-	loaded.regions[RefugeCampaign.ISLAND]["world"]["seed_text"] = ""
-	assert_true(RefugeCampaign.travel(loaded))
-	assert_eq(loaded.world_seed_text, "Dragonsong", "sailed back to it")
-
-
-# ------------------------------------------- h1-5, a save made at landing --
 
 func test_a_region_entered_is_not_a_new_adventure() -> void:
 	var player := hero()
 	assert_eq(player.monster_timer, 0, "a new adventure's clock")
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_ne(player.monster_timer, 0, "the island just landed on")
 	var loaded := reloaded(player.to_dict())
 	assert_not_null(loaded)
 	if loaded == null: return
 	assert_ne(loaded.monster_timer, 0, "its autosave, loaded")
 
-func test_an_old_save_made_at_landing_is_not_a_new_adventure() -> void:
-	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
-	var saved := player.to_dict()
-	saved["clocks"]["monster_timer"] = 0
-	var loaded := reloaded(saved)
-	assert_not_null(loaded)
-	if loaded == null: return
-	assert_ne(loaded.monster_timer, 0)
-
 func test_the_island_keeps_its_own_quiet_clock() -> void:
 	# The island's creatures still wait as on a fresh world: one tick on,
 	# not the mainland's clock.
 	var player := hero()
 	player.monster_timer = 9000
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_lt(player.monster_timer, 32)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.monster_timer, 9000, "the mainland's clock waited")
 
 
@@ -147,7 +112,7 @@ func test_the_islands_villages_and_towns_have_their_own_names() -> void:
 	var kinds := [ShandalarWorld.TOWN, ShandalarWorld.CITY, ShandalarWorld.VILLAGE]
 	var villages_seen := {}
 	for seed_value in [48271, 5, 37, 54, 74, 1997, 31337, 777]:
-		var world := RefugeWorld.generate(seed_value, 5, 1)
+		var world := _refuge().generate(seed_value, 5, 1)
 		var used := {}
 		var villages := 0
 		for slot in world.sites.size():
@@ -167,6 +132,12 @@ func test_the_islands_villages_and_towns_have_their_own_names() -> void:
 		# The extra towns keep the word their picture shows (a temple, …).
 		for slot in [22, 43, 58, 76, 80, 103]:
 			assert_true(WorldNames.site_name(world, slot).ends_with(" " + WorldNames.SECOND_HALVES[slot % 16]))
-		for i in RefugeWorld.TOWNS.size():
-			assert_eq(WorldNames.site_name(world, i + 1), RefugeWorld.TOWNS[i], "the five communities keep theirs")
+		for i in _refuge().quest_count():
+			assert_eq(WorldNames.site_name(world, i + 1), _refuge().giver_name(i), "the five communities keep theirs")
 	assert_gt(villages_seen.size(), 6, "the later villages are named too")
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

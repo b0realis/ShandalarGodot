@@ -7,19 +7,15 @@ extends GutTest
 
 const HALL := "user://adventure_tests_c26_x6_hall.json"
 
-var _launch_before: bool
 var _pack_before: bool
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	_pack_before = CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, _pack_before)
 	if FileAccess.file_exists(HALL):
 		DirAccess.remove_absolute(HALL)
@@ -27,8 +23,8 @@ func after_each() -> void:
 
 func _hero(island: bool, seed_text := "48271") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = island
 	if island:
+		setup.adventures = ["refuge"]
 		setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
 	var record := setup.resolve({"pack-2": "1"} if island else {})
@@ -39,15 +35,15 @@ func _hero(island: bool, seed_text := "48271") -> AdventurePlayer:
 
 func test_the_quest_pane_follows_a_petitions_stages() -> void:
 	var player := _hero(true)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var before := WorldStatus.lines(player)
-	assert_true(RefugeQuests.start(player, 0), "the Bread Road accepted")
+	assert_true(_refuge().start(player, 0), "the Bread Road accepted")
 	var accepted := WorldStatus.lines(player)
 	assert_eq(accepted, WorldStatus.lines_fresh(player), "the pane read again as the petition was accepted")
 	assert_ne(accepted, before)
 	assert_true(accepted.has("Seek Refuge Harbor."), "where the grain warrant goes: %s" % [accepted])
-	player.position = RefugeQuests.destination(player, 0)["tile"] * 32 + Vector2i(16, 16)
-	assert_true(RefugeQuests.deliver(player, 0))
+	player.position = _refuge().destination(player, 0)["tile"] * 32 + Vector2i(16, 16)
+	assert_true(_refuge().deliver(player, 0))
 	var delivered := WorldStatus.lines(player)
 	assert_eq(delivered, WorldStatus.lines_fresh(player), "and again as the warrant was delivered")
 	assert_false(delivered.has("Seek Refuge Harbor."))
@@ -61,10 +57,10 @@ func _travelled() -> AdventurePlayer:
 	var player := _hero(true)
 	player.quest_timer = 40 * WorldStatus.DAY
 	player.journey_time = 40 * WorldStatus.DAY
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	player.quest_timer += 2 * WorldStatus.DAY
 	player.journey_time += 2 * WorldStatus.DAY
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	player.quest_timer += WorldStatus.DAY
 	player.journey_time += WorldStatus.DAY
 	assert_eq(player.quest_timer / WorldStatus.DAY, 41, "the mainland's own clock")
@@ -96,7 +92,7 @@ func test_the_final_record_and_the_hall_count_the_whole_journey() -> void:
 func test_a_one_life_battle_settled_on_an_island_load_counts_the_whole_journey() -> void:
 	var player := _travelled()
 	player.life_rule = AdventurePlayer.LIFE_ONE
-	assert_true(RefugeCampaign.travel(player), "back to the island")
+	assert_true(_refuge().travel(player), "back to the island")
 	HallOfFame.mark_one_life(player.adventure_id, HallOfFame.FAILED, HALL)
 	assert_true(FinalBattle.on_load(player, HALL, "2026-11-03T10:00:00Z"))
 	assert_eq(int(player.final["days"]), 43, "not the island's own 2 days")
@@ -111,32 +107,31 @@ func test_a_moved_dungeon_never_takes_a_hidden_anchorage() -> void:
 	var anchorage := Vector2i(int(point[0]), int(point[1]))
 	assert_true(player.world.is_land(anchorage.x, anchorage.y))
 	assert_false(DungeonDoors.takes_dungeon(player.world, anchorage, player.tile()), "shown: never")
-	AdventureExpansions.read_launch(PackedStringArray())
-	assert_eq(AdventureExpansions.marker(player.world, anchorage), "", "hidden without the flag")
-	assert_false(DungeonDoors.takes_dungeon(player.world, anchorage, player.tile()), "hidden without the flag: never")
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
+	assert_eq(AdventureExpansions.marker(player.world, anchorage), "", "hidden with the pack off")
 	assert_false(DungeonDoors.takes_dungeon(player.world, anchorage, player.tile()), "hidden with the pack off: never")
-	# An older save's `port` alone.
+	# An older save's `port` alone (0.60.19 and before mirrored the
+	# anchorage there; adventure plugins keep only `entries`).
 	var entries: Dictionary = player.world.expansion["entries"]
 	player.world.expansion.erase("entries")
+	player.world.expansion["port"] = point.duplicate()
 	assert_false(DungeonDoors.takes_dungeon(player.world, anchorage, player.tile()), "an older save's port: never")
+	player.world.expansion.erase("port")
 	player.world.expansion["entries"] = entries
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	# The island's harbor and castle.
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	for mark in ["port", "castle"]:
 		var at: Array = player.world.expansion[mark]
 		assert_false(DungeonDoors.takes_dungeon(player.world, Vector2i(int(at[0]), int(at[1])), Vector2i(-1, -1)), mark)
 
 
 func test_arzakons_portal_never_stands_on_a_hidden_anchorage() -> void:
-	AdventureExpansions.read_launch(PackedStringArray())
 	var player := _hero(false)
 	var world := player.world
 	var chosen := FinalBattle.portal_tile(world)
 	assert_true(chosen.x >= 0)
-	# A region's anchorage on that very tile, hidden (no flag).
+	# A region's anchorage on that very tile, hidden (not ticked in this campaign).
 	world.expansion = {"region": AdventureRegions.MAINLAND, "entries": {"refuge": [chosen.x, chosen.y]}}
 	assert_eq(AdventureExpansions.marker(world, chosen), "")
 	var moved := FinalBattle.portal_tile(world)
@@ -164,7 +159,6 @@ func _news_lines(player: AdventurePlayer) -> Array:
 
 
 func test_the_wise_mans_news_is_a_dated_journal_line_never_a_known_clue() -> void:
-	AdventureExpansions.read_launch(PackedStringArray())
 	var player := _hero(false, "4242")
 	var town := _first_town(player.world)
 	assert_true(town >= 0)
@@ -209,3 +203,7 @@ func test_the_wise_mans_news_is_a_dated_journal_line_never_a_known_clue() -> voi
 	for clue in loaded.known_clues:
 		assert_false(String(clue["text"]).contains("not yet defeated"), "read back: %s" % clue)
 	assert_eq(_news_lines(loaded).size(), 1)
+
+## The prototype plugin's interpreter ([DataRegion]).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

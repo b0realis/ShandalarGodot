@@ -1,20 +1,20 @@
 extends GutTest
 ## THE 0.60.13 BUG CAMPAIGN, X4 — packs and saves: a campaign's cards when
 ## its pack is off or gone (h3-1), the load list's days (h1-2), a creature's
-## words on the island without the flag (h2-6), the Help (h3-3) and the shop
-## place whose pack is unavailable (the owner's polish, 2026-11-03).
+## words on the island without the flag (h2-6; ported for adventure plugins,
+## 2026-11-10: the flag is retired, and the island whose plugin is missing is
+## the same land without its words), the Help (h3-3) and the shop place whose
+## pack is unavailable (the owner's polish, 2026-11-03).
 
 const FOLDER := "user://c26_x4_saves"
 
 var _enabled_before: Array[String] = []
-var _launch_before := false
 ## Pack reports taken out of [code]CardPacks._available[/code] by a test, put
 ## back after it: a pack "not installed".
 var _hidden := {}
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
 	_enabled_before = Settings.enabled_card_packs().duplicate()
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	AdventurePlayer.saves_folder = FOLDER
@@ -30,7 +30,6 @@ func after_each() -> void:
 	for id in CardPacks.available_ids():
 		if CardPacks.is_enabled(id) != (id in _enabled_before):
 			CardPacks.set_enabled(id, id in _enabled_before)
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 
 
 func _clear() -> void:
@@ -157,42 +156,26 @@ func test_the_load_list_counts_the_whole_journey_not_the_regions_clock() -> void
 	old.erase("journey")
 	old["version"] = 3
 	assert_eq(int(AdventurePlayer._summary(old)["days"]), 2, "a save from before the journey's clock: its own")
-	old["version"] = 4
-	old["regions"] = {"refuge": {"clocks": {"quest_timer": 5 * WorldStatus.DAY}}}
-	assert_eq(int(AdventurePlayer._summary(old)["days"]), 7, "version 4: the regions summed, as the load sums them")
 
 
 func test_an_island_save_lists_the_days_of_the_whole_journey() -> void:
-	_launch_on()
 	var player := _island_hero()
 	player.quest_timer = 40 * WorldStatus.DAY
 	player.journey_time = 40 * WorldStatus.DAY
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	player.quest_timer += 2 * WorldStatus.DAY
 	player.journey_time += 2 * WorldStatus.DAY
 	var path := player.autosave()
 	assert_eq(int(AdventurePlayer.save_at(path)["days"]), 42, "day 42 on the list, as the hero pane says")
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(int(AdventurePlayer._summary(player.to_dict())["days"]), 42, "and back home")
 
 
-func test_an_old_island_save_lists_its_mainland_seed() -> void:
-	_launch_on()
+func test_an_island_meeting_with_its_plugin_missing_still_has_words() -> void:
 	var player := _island_hero()
-	assert_true(RefugeCampaign.travel(player))
-	var data := player.to_dict()
-	data["world"]["seed_text"] = ""
-	assert_eq(String(AdventurePlayer._summary(data)["seed_text"]), "48271",
-		"an island saved before its seed text was kept (h1-3) shows the mainland's")
-
-
-# ------------------------------------------------------------------ h2-6 --
-
-func test_an_island_meeting_without_the_flag_still_has_words() -> void:
-	_launch_on()
-	var player := _island_hero()
-	assert_true(RefugeCampaign.travel(player), "on the island")
-	AdventureExpansions.read_launch(PackedStringArray())
+	assert_true(_refuge().travel(player), "on the island")
+	AdventurePlugins.folders_override = [FOLDER] as Array[String]
+	AdventurePlugins.scan()
 	var meeting := CreatureMeeting.meet(player, 10, 1, -1, player.position)
 	var said := CreatureMeeting.words(player, meeting)
 	assert_false(said.is_empty(), "a meeting says something")
@@ -200,20 +183,17 @@ func test_an_island_meeting_without_the_flag_still_has_words() -> void:
 	assert_false(" ".join(said).contains("expanded"), "nothing of the prototype")
 	meeting["wins"] = CreatureMeeting.TRIBUTE_WINS
 	assert_eq(CreatureMeeting.words(player, meeting), CreatureMeeting.lines_of(CreatureMeeting.ROAMING_TRIBUTE))
-	_launch_on()
+	AdventurePlugins.folders_override = [] as Array[String]
+	AdventurePlugins.scan()
 	meeting["wins"] = 0
 	assert_ne(CreatureMeeting.words(player, meeting), CreatureMeeting.lines_of(CreatureMeeting.ROAMING),
-		"with the flag the island's own words")
+		"with the plugin the island's own words")
 
 
-func _launch_on() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
-
-
-## A Pack 2 campaign with the island (the flag on), on the mainland.
+## A Pack 2 campaign with the island (its plugin ticked), on the mainland.
 func _island_hero() -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = [FallenEmpiresPack.ID]
 	setup.seed_text = "48271"
 	var record := setup.resolve({FallenEmpiresPack.ID: "1"})
@@ -275,3 +255,9 @@ func _town(player: AdventurePlayer) -> int:
 		if int(player.world.sites[slot]["type"]) in [ShandalarWorld.TOWN, ShandalarWorld.CITY]:
 			return slot
 	return 1
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

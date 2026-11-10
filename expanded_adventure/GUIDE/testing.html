@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testing · Adventure plugin guide</title>
+<meta name="description" content="The four stages of checks, the validator, the Expansion Lab and the test loop in the game.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html" aria-current="page">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Testing</h1>
+<p class="lede">Three tools, from the quickest to the closest to play: the validator, the Expansion Lab, and the game itself.</p>
+
+<h2 id="stages">The checks</h2>
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 250" role="img" aria-label="The four stages of the checks, in order: the package, the manifest, its files list, the content. The first stage with a problem refuses the plugin with every problem of that stage, and the later stages are not run. A plugin that passes all four is valid and can be ticked.">
+<defs><marker id="ts-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker>
+<marker id="ts-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-warn" d="M0,0L10,5L0,10z"/></marker>
+<marker id="ts-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-accent" d="M0,0L10,5L0,10z"/></marker></defs>
+<rect class="d-box" x="16" y="28" width="150" height="92" rx="12"/>
+<text class="d-mono" x="30" y="52">1 package</text>
+<text class="d-small" x="30" y="72">zip or folder, paths,</text>
+<text class="d-small" x="30" y="87">kinds, sizes, pictures’</text>
+<text class="d-small" x="30" y="102">headers, OGG, UTF-8</text>
+<rect class="d-box" x="186" y="28" width="150" height="92" rx="12"/>
+<text class="d-mono" x="200" y="52">2 manifest</text>
+<text class="d-small" x="200" y="72">plugin.json’s fields,</text>
+<text class="d-small" x="200" y="87">API, game version,</text>
+<text class="d-small" x="200" y="102">card packs, region</text>
+<rect class="d-box" x="356" y="28" width="150" height="92" rx="12"/>
+<text class="d-mono" x="370" y="52">3 files</text>
+<text class="d-small" x="370" y="72">when listed: every</text>
+<text class="d-small" x="370" y="87">file’s SHA-256, and</text>
+<text class="d-small" x="370" y="102">every file listed</text>
+<rect class="d-box" x="526" y="28" width="150" height="92" rx="12"/>
+<text class="d-mono" x="540" y="52">4 content</text>
+<text class="d-small" x="540" y="72">the six files’ shapes,</text>
+<text class="d-small" x="540" y="87">cross checks, text keys,</text>
+<text class="d-small" x="540" y="102">card names</text>
+<path class="d-line" d="M166,74 H182" marker-end="url(#ts-h)"/>
+<path class="d-line" d="M336,74 H352" marker-end="url(#ts-h)"/>
+<path class="d-line" d="M506,74 H522" marker-end="url(#ts-h)"/>
+<path class="d-line-accent" d="M676,74 H706" marker-end="url(#ts-a)"/>
+<text class="d-accent-text" x="712" y="70">valid</text>
+<text class="d-small" x="712" y="86">tickable</text>
+<path class="d-line-warn" d="M86,120 V176" marker-end="url(#ts-w)"/>
+<path class="d-line-warn" d="M256,120 V176" marker-end="url(#ts-w)"/>
+<path class="d-line-warn" d="M426,120 V176" marker-end="url(#ts-w)"/>
+<path class="d-line-warn" d="M596,120 V176" marker-end="url(#ts-w)"/>
+<rect class="d-warn" x="16" y="180" width="660" height="52" rx="10"/>
+<text class="d-warn-text" x="32" y="203">refused at the first stage with a problem</text>
+<text class="d-small" x="32" y="221">every problem of that stage listed, one a line; the later stages are not run</text>
+</svg></div>
+<figcaption>The same four stages, in the same order and with the same words, in the game’s loader and in <code>tools/adventure_plugin.py validate</code>. Fix what a stage reports and the next stage may find more.</figcaption>
+</figure>
+
+<p>The package stage is the strictest, and it is about safety:</p>
+<ul>
+<li>A zip holds every file under <b>one</b> top folder (any name; the id is the manifest’s), with <code>plugin.json</code> in it. Plain zip only: no zip64, no encryption, entries stored or deflated, no two entries with one name (letter case ignored), no symbolic links. A folder: no symbolic links.</li>
+<li>Paths: at most 200 characters, relative, with <code>/</code> only, no <code>\</code>, <code>:</code>, control characters, or empty, <code>.</code> or <code>..</code> parts.</li>
+<li>Files of these kinds only, by extension, letter case ignored: <ul class="chips" data-schema="extensions"><li><code>.json</code></li><li><code>.txt</code></li><li><code>.md</code></li><li><code>.png</code></li><li><code>.jpg</code></li><li><code>.jpeg</code></li><li><code>.webp</code></li><li><code>.ogg</code></li></ul> A JSON, <code>.txt</code> or <code>.md</code> file is at most 1 MiB of UTF-8, and JSON nests at most 32 deep; an OGG is Ogg Vorbis and at most <span data-limit="ogg_bytes">16 MiB</span>; a picture’s first bytes name its kind, and it is at most <span data-limit="picture_side">4,096</span> pixels a side.</li>
+<li>At most <span data-limit="files">512</span> files and <span data-limit="plugin_bytes">32 MiB</span> in all, the zip itself no bigger.</li>
+<li>Litter other systems leave is passed over, never read nor counted: any name beginning with <code>.</code>, a <code>__MACOSX</code> folder, <code>Thumbs.db</code> and <code>desktop.ini</code>.</li>
+</ul>
+
+<h2 id="validator">The validator</h2>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py validate my_isle
+<span class="c"># Windows, in the same folder: python tools\adventure_plugin.py validate my_isle</span>
+<span class="out">my_isle: valid (plugin my_isle 0.1.0).</span>
+<span class="prompt">$ </span>python3 tools/adventure_plugin.py validate broken_isle
+<span class="out">broken_isle: refused at the content stage (1 problem).</span>
+<span class="out">quests.json: quests[0].foe: foes.json has no smugler.</span></code></pre>
+<p>It takes a folder or a zip. <code>--json</code> prints one object instead (<code>valid</code>, <code>stage</code>, <code>problems</code>, <code>notes</code>, <code>id</code>, <code>name</code>, <code>version</code>), for your own scripts. The tool reads the game’s own schema, <code>game/adventure/plugins/schema_v1.json</code>, and the game’s card lists, so run it from the game folder (a release or a checkout), or name one with <code>--game DIR</code>, before or after the command. A copy of the tool on its own stops with exit 2 and says where to run it. Where the schema is found but no card lists, it adds the note “Card names were not checked” and checks the rest as usual.</p>
+<p>The tool’s other commands: <code>info</code> prints the manifest and what the plugin holds (towns, quests, foes, texts, files), <code>info --json</code> the same as one object; <code>compat OLD NEW</code> compares two versions for <a href="saves.html#never">saves</a>; <code>guide</code> rewrites this guide’s <a href="reference.html">Reference</a> page from the schema, and <code>guide --check</code> only says whether it is up to date. Every command exits 0 when done, valid or compatible, 1 when refused or incompatible, and 2 on a usage error; <code>--version</code> prints the game version and plugin API it checks for.</p>
+
+<h2 id="lab">The Expansion Lab</h2>
+<p>In a source checkout of the game, the Expansion Lab plays a plugin headless: for each world seed it sails out and back, and checks the terrain, the objectives, the saves, the mana links and that a dormant plugin leaves nothing behind. With <code>--games</code> it also duels your foes and roaming decks with two reference decks at several life totals.</p>
+<pre class="code"><code><span class="prompt">$ </span>./tools/expansion_lab.sh --out lab-my_isle --plugin path/to/my_isle --seeds 5,37,48271</code></pre>
+<p><code>--plugin</code> takes a folder or a zip. The run copies it into <code>plugin/</code> in the results folder, the only plugins folder it sees, and deletes the copy at the end; the plugin’s id is the region, and it must pass the game’s checks first. It needs the card packs your plugin requires (a development run finds them through <code>SHANDALAR_PACK_N</code>). In the middle of a trip it takes away what the land needs, its card pack or, for a plugin that needs none, the plugin itself, and the hero must still sail home. For every seed it then plays your land to its end on the game’s own results, with no duel fought: every quest step by step, the rewards claimed, the finale won, and the adventure saved and read back on the island and at home; the land must come back neither held nor damaged. <code>--games 1</code> also plays your plugin’s duels. It writes <code>results.json</code>, <code>report.txt</code> and <code>engine.log</code>, exits 0 when every check passed, 1 when one failed or the plugin was refused (with its problems), 2 for a path that is not there, and never touches your own profile.</p>
+
+<h2 id="loop">The loop in the game</h2>
+<ol>
+<li>Put the unpacked folder in the plugins folder, with no exported zip of it there.</li>
+<li>Start a new adventure, open <b>Expanded adventure plugins...</b> and look at your row: a refused plugin is greyed with every problem, exactly as the validator prints them. Tick it.</li>
+<li>Play to the part you are working on. Save in a slot before a duel or a step, so you can come back to it.</li>
+<li>Change words, foes, rewards or pictures. Start the game again, or press <b>Rescan</b> in the Embark’s plugins window, then load the slot.</li>
+<li>For a change to the quests or the town slots, follow <a href="saves.html#never">Saves and compatibility</a>: a slot whose land the new version cannot read loads with that land held, so test such changes in a new adventure.</li>
+<li>For a change to <code>world.json</code>, start a new adventure: a made island is part of its save.</li>
+</ol>
+
+<h2 id="release">Before you share it</h2>
+<ul>
+<li><code>validate</code> says valid, in the game folder, so the card names were checked.</li>
+<li><code>export</code> made the zip you share; nothing was changed in it afterwards.</li>
+<li><code>compat</code> against the version players have says compatible.</li>
+<li>The plugin was played from the Embark to its finale in a fresh adventure.</li>
+<li><code>README.txt</code> says what it needs and what it is; <code>LICENSE.txt</code> says how it may be shared; every picture is your own or licensed for it.</li>
+</ul>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="saves.html"><span>Previous</span>Saves and compatibility</a>
+<a class="next" href="refuge.html"><span>Next</span>The Refuge walkthrough</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

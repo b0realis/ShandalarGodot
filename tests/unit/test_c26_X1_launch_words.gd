@@ -1,20 +1,17 @@
 extends GutTest
-## THE OPTIONAL LAND'S LAUNCH WORDS AND A PAD'S LOG LINE (the 0.60.13 bug
-## campaign, X1).
-## - h4-2: every message names the flag as a launch must give it, after the
-##   engine's own `--` — the bare flag, followed literally, left the
-##   prototype off without a word.
-## - h4-3: the tester's teleport (Ctrl+Shift+2 with `--debug-win`) without the
-##   flag says the tester's line, not the island's "… You can still sail
-##   home." on a mainland with no island.
-## - The owner's ruling of 2026-11-03: a campaign that chose the island but
-##   was launched without the flag is told on the mainland how to reach it
+## THE OPTIONAL LAND'S WORDS AND A PAD'S LOG LINE (the 0.60.13 bug campaign,
+## X1; ported for adventure plugins, 2026-11-10: the launch flag the h4-2
+## words named is retired, so they are gone, and what they guarded is held
+## by the plugin-era words).
+## - h4-3: the tester's teleport (Ctrl+Shift+2 with `--debug-win`) says the
+##   tester's own line, never the island's words — now: no plugin ticked,
+##   its card pack not chosen, or not enabled.
+## - The owner's ruling of 2026-11-03, as the lead's of 2026-11-10 keeps it:
+##   a campaign whose ticked land cannot sail is told why on the mainland
 ##   ([method AdventureExpansions.mainland_note]; the screen says it once a
 ##   launch — tests/ui/test_c26_X1_expansion_screen.gd).
 ## - h4-4: the pad's "connected" line goes to stderr: the PadControls
 ##   autoload runs inside every tool, whose stdout is its report.
-
-var _launch_before: bool
 var _pack_before: bool
 
 
@@ -26,22 +23,19 @@ class Catch extends Logger:
 
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	_pack_before = CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, _pack_before)
 
 
-## A hero begun with the flag given: a campaign that chose the island
-## ([param island]) or an ordinary one.
+## A hero of a campaign that ticked the Refuge ([param island]) or an
+## ordinary one.
 func _hero(island := true) -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = island
+	setup.adventures.assign(["refuge"] if island else [])
 	if island:
 		setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
@@ -52,68 +46,55 @@ func _hero(island := true) -> AdventurePlayer:
 	return hero
 
 
-# --------------------------------------------------------------- h4-2 --
+# ------------------------------------------------- the retired flag --
 
-func test_the_restart_words_give_the_flag_after_the_engines_own_dashes() -> void:
-	assert_string_contains(AdventureExpansions.LAUNCH_HELP, "Restart with -- --expanded-adventure ")
-	assert_eq(AdventureExpansions.LAUNCH_ARGS, "-- " + AdventureExpansions.LAUNCH_FLAG)
-	# What follows the engine's `--` is what a launch reads.
-	var words := AdventureExpansions.LAUNCH_ARGS.split(" ")
-	assert_eq(words[0], "--", "the engine's own separator first")
-	AdventureExpansions.read_launch(PackedStringArray())
-	AdventureExpansions.read_launch(words.slice(1))
-	assert_true(AdventureExpansions.launch_enabled, "the rest is the user argument a launch reads")
-
-
-func test_the_island_harbor_without_the_flag_gives_the_whole_flag() -> void:
+func test_the_retired_flag_is_named_nowhere_a_player_reads() -> void:
 	var hero := _hero()
-	assert_true(RefugeCampaign.travel(hero))
-	AdventureExpansions.read_launch(PackedStringArray())
+	assert_true(_refuge().travel(hero))
 	var port: Array = hero.world.expansion["port"]
-	var place := RefugeJourney.describe(hero, Vector2i(port[0], port[1]))
-	assert_string_contains(String(place["lines"][0]), "-- --expanded-adventure",
-		"the harbor's own words (the shared LAUNCH_HELP)")
+	var place := _refuge().describe(hero, Vector2i(port[0], port[1]))
+	assert_false(" ".join(place["lines"]).contains("--expanded-adventure"), "the harbor's words")
+	assert_false(MainScreen.launch_help("1.2.3").contains("--expanded-adventure"), "the launch help's")
+	var source := FileAccess.get_file_as_string("res://game/adventure/expansions/adventure_expansions.gd")
+	assert_false(source.contains("launch_enabled") or source.contains("LAUNCH_"), "no switch left to read")
 
 
 # --------------------------------------------------------------- h4-3 --
 
-func test_the_teleport_on_a_mainland_without_the_flag_says_the_testers_line() -> void:
+func test_the_teleport_on_a_mainland_without_a_plugin_says_the_testers_line() -> void:
 	var hero := _hero(false)
-	AdventureExpansions.read_launch(PackedStringArray())
 	var said := WorldScreen.debug_port_refusal(hero)
-	assert_ne(said, AdventureExpansions.LAUNCH_HELP, "not the island's words")
 	assert_false(said.contains("sail home"), said)
-	assert_eq(said, "Debug: launch with -- --expanded-adventure and select Pack 2 when embarking first.")
+	assert_eq(said, "Debug: tick an adventure plugin when embarking first.")
 
 
 func test_the_teleports_refusals_name_only_what_is_missing() -> void:
 	var island := _hero()
-	assert_eq(WorldScreen.debug_port_refusal(island), "", "flag, island and pack: it goes")
-	AdventureExpansions.read_launch(PackedStringArray())
-	assert_eq(WorldScreen.debug_port_refusal(island), "Debug: launch with -- --expanded-adventure first.")
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
-	assert_eq(WorldScreen.debug_port_refusal(_hero(false)), "Debug: select Pack 2 when embarking first.")
+	assert_eq(WorldScreen.debug_port_land(island), "refuge")
+	assert_eq(WorldScreen.debug_port_refusal(island), "", "plugin and pack: it goes")
+	var no_pack := _hero()
+	no_pack.packs.clear()
+	assert_eq(WorldScreen.debug_port_refusal(no_pack), "Debug: select %s when embarking first." % AdventurePacks.title("pack-2"))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
-	assert_eq(WorldScreen.debug_port_refusal(island), "Debug: enable Pack 2: Fallen Empires in Options first.")
+	assert_eq(WorldScreen.debug_port_refusal(island), "Debug: enable %s in Options first." % AdventurePacks.title("pack-2"))
 
 
 # ------------------------------------------- the owner's ruling, 2026-11-03 --
 
-func test_an_island_campaign_without_the_flag_is_told_the_way_on_the_mainland() -> void:
+func test_a_ticked_land_that_cannot_sail_is_told_on_the_mainland() -> void:
 	var hero := _hero()
-	assert_eq(AdventureExpansions.mainland_note(hero), "", "the flag given: the anchorage is there")
-	AdventureExpansions.read_launch(PackedStringArray())
+	assert_eq(AdventureExpansions.mainland_note(hero), "", "everything there: the anchorage is there")
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 	assert_eq(AdventureExpansions.mainland_note(hero),
-		"Ships to The Last Refuge sail only when the game is started with -- --expanded-adventure.")
+		"Ships to The Last Refuge do not sail: the plugin %s needs %s." % [AdventurePlugins.row("refuge")["name"],
+			AdventurePacks.title("pack-2")])
 
 
-func test_no_note_where_nothing_is_hidden_by_the_flag() -> void:
-	AdventureExpansions.read_launch(PackedStringArray())
+func test_no_note_where_nothing_is_hidden() -> void:
 	assert_eq(AdventureExpansions.mainland_note(_hero(false)), "", "a campaign without the island")
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	var hero := _hero()
-	assert_true(RefugeCampaign.travel(hero))
-	AdventureExpansions.read_launch(PackedStringArray())
+	assert_true(_refuge().travel(hero))
+	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 	assert_eq(AdventureExpansions.mainland_note(hero), "", "on the island its harbor says it")
 	assert_eq(AdventureExpansions.mainland_note(null), "")
 
@@ -130,3 +111,9 @@ func test_a_pads_coming_and_going_is_logged_on_stderr() -> void:
 	if catch.lines.size() == 1:
 		assert_eq(String(catch.lines[0][0]).strip_edges(), "pad 7 gone: -")
 		assert_true(catch.lines[0][1], "on stderr, never in a tool's report")
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

@@ -1,20 +1,15 @@
 extends GutTest
 ## Shared regional state, migrations, dormant content and multi-island travel.
 
-var _launch_before: bool
-
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
 
 func hero(seed_text := "5") -> AdventurePlayer:
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = seed_text
 	setup.card_rule = AdventurePlayer.RULE_CLASSIC
@@ -28,7 +23,7 @@ func test_hero_effects_and_lifetime_counts_survive_travel() -> void:
 	player.lairs_explored = 16
 	player.siege_count = 9
 	player.quest_timer = 320
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.quickening, 75)
 	assert_eq(player.lairs_explored, 16)
 	assert_eq(player.siege_count, 9)
@@ -36,7 +31,7 @@ func test_hero_effects_and_lifetime_counts_survive_travel() -> void:
 	player.quickening = 200
 	player.lairs_explored += 2
 	player.journey_time += 64
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.quickening, 200)
 	assert_eq(player.lairs_explored, 18)
 	assert_eq(WorldStatus.days_on_road(player), 24)
@@ -45,7 +40,7 @@ func test_hero_effects_and_lifetime_counts_survive_travel() -> void:
 func test_first_island_and_reload_offer_identical_legal_treasures() -> void:
 	for seed_text in ["5", "37", "54", "74", "75", "82", "85", "95"]:
 		var player := hero(seed_text)
-		assert_true(RefugeCampaign.travel(player))
+		assert_true(_refuge().travel(player))
 		var before: Array = player.world.encounters[5]["cards"].duplicate()
 		for card in before:
 			assert_false(ClassicBans.is_banned(ShandalarWorld.DUNGEON_CARDS[int(card)][1], player.ban_list))
@@ -55,7 +50,7 @@ func test_first_island_and_reload_offer_identical_legal_treasures() -> void:
 
 func test_nine_inactive_islands_keep_independent_snapshots() -> void:
 	var player := hero()
-	var template := RefugeWorld.generate(48271, 5, 0)
+	var template := _refuge().generate(48271, 5, 0)
 	var fingerprints := {}
 	for index in 9:
 		var region_id := "test_island_%d" % index
@@ -83,29 +78,6 @@ func _with_world(world: ShandalarWorld) -> AdventurePlayer:
 	player.world = world
 	player.position = world.start
 	return player
-
-func test_v4_migration_keeps_visited_maps_and_accumulates_old_counters_once() -> void:
-	var player := hero()
-	assert_true(RefugeCampaign.travel(player))
-	var saved := player.to_dict()
-	saved["version"] = 4
-	saved["refuge"] = saved["expansions"]["refuge"].duplicate(true)
-	saved["refuge"]["regions"] = saved["regions"]
-	saved.erase("regions")
-	saved.erase("expansions")
-	saved.erase("journey")
-	saved["clocks"]["quest_timer"] = 32
-	saved["record"]["lairs_explored"] = 2
-	saved["refuge"]["regions"]["mainland"]["clocks"]["quest_timer"] = 160
-	saved["refuge"]["regions"]["mainland"]["record"]["lairs_explored"] = 7
-	var loaded := AdventurePlayer.from_dict(saved)
-	assert_not_null(loaded)
-	if loaded == null: return
-	assert_eq(loaded.journey_steps(), 192)
-	assert_eq(loaded.lairs_explored, 9)
-	var again := AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(loaded.to_dict())))
-	assert_eq(again.journey_steps(), 192)
-	assert_eq(again.lairs_explored, 9)
 
 func test_disabled_mainland_needs_no_provider_or_art() -> void:
 	CardPacks.set_enabled(FallenEmpiresPack.ID, false)
@@ -148,5 +120,11 @@ func test_departure_menu_and_mainland_score_survive_region_change() -> void:
 	TownStatus.take(player.world, 1, 4)
 	player.siege_count = 4
 	var before := FinalBattle.score_parts(player)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(FinalBattle.score_parts(player), before, "sailing cannot erase score penalties")
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

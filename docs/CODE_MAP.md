@@ -27,9 +27,134 @@
   acquisition fixes and Pack 2's preserved rules versus explicit balance changes.
 - `game/adventure/adventure_packs.gd`: campaign-local card selection, independent
   optional adventure links, cached stock, activation and legacy choice migration.
-- `game/adventure/expansions/refuge_module.gd`: internal prototype descriptor.
 - `tests/unit/test_adventure_packs.gd`: cards-only/expanded modes, selected pools,
   reprints, dormant providers, save migration and missing-pack return travel.
+
+## Adventure plugins (2026-11-10)
+
+The owner's redesign of the expanded adventure: lands are DATA-ONLY plugins —
+JSON, text, pictures, music — found in an `expanded_adventure/` folder, never
+loaded, run or mounted; ticked per campaign in the Embark's own window; card
+packs only a dependency. The Last Refuge is the first plugin, a game-design
+and learning demo. The developer reference is `docs/adventure-plugins.md`;
+the authors' guide is `expanded_adventure/GUIDE/index.html`.
+
+- `game/adventure/plugins/adventure_plugins.gd`: `AdventurePlugins` — the
+  registry: the folders in order (`folders`, `folders_override`), `scan`,
+  staged checks (package, manifest, `files` hashes, content), the `all()`
+  rows with `problems`, `shadowed` and `pack_status`, `valid`, `data`,
+  `descriptor`, `pack_ids`, `revision`; pictures and music decoded from the
+  plugin's bytes (`texture`, `stream`), each re-read against its scan hash.
+- `game/adventure/plugins/plugin_package.gd`: `PluginPackage` — one zip
+  (read from its own central directory: classic, stored or deflated, one top
+  folder, no duplicates, no links) or folder into bytes, under the limits and
+  the extension allowlist; picture headers, Vorbis, UTF-8 and quiet JSON
+  checks; OS litter ignored.
+- `game/adventure/plugins/plugin_schema.gd` / `schema_v1.json`:
+  `PluginSchema` — content schema v1 (shared with `tools/adventure_plugin.py`):
+  validation, normalization, the card-name check, the descriptor
+  (`progress_schema` with `flags` and `complete_flags`).
+- `game/adventure/plugins/data_region.gd`: `DataRegion` — one interpreter per
+  plugin answering every region hook from its data: the stage machine
+  (accept → go → duel), the closed conditions and effects, rewards, panes,
+  roaming, tasks, `music()`.
+- `game/adventure/plugins/island_generator.gd`: `IslandGenerator` — the
+  island recipe's generator and objectives (pinned by its golden test).
+- `game/adventure/plugins/plugin_text.gd`: `PluginText` — a plugin's words,
+  the closed placeholder list, the engine's defaults.
+- `game/adventure/plugins/plugin_journey.gd`: the UI side of a plugin's panes
+  and duels, reached only by `load()` (the model side names no screen).
+- `game/adventure/plugins_window.gd`: `PluginsWindow` — the Embark's
+  "Expanded adventure plugins" window: rows from `AdventurePlugins.all()`
+  (valid first, refused greyed with every problem, shadowed copies, pack
+  versions), ticks that tick their packs, Rescan, Open folder, OK/Escape/B,
+  the focus ring, fit and drag; `where()` shows every path short.
+- `game/adventure/embark_screen.gd`: `PLUGINS_BUTTON` — the one button under
+  the pack list (`open_plugins`, `close_plugins`, `plugins_note`); unticking
+  a pack unticks the plugins that need it.
+- `game/adventure/adventure_setup.gd`: `adventures`, `tick_adventure`,
+  `can_tick`, `packs_ticked_for`, `untick_pack`; the remembered ticks.
+- `game/adventure/expansions/adventure_expansions.gd`: the lands are the valid
+  plugins (and development fixtures); `provider` (a `DataRegion` per
+  plugin), `voyage`, `held`, `stranded_place` (Ship home / Leave),
+  `mainland_note` (a land that cannot sail, and why), `music`; no launch flag.
+- `game/adventure/expansions/expansion_contract.gd` /
+  `adventure_regions.gd`: a saved land judged fine, broken or changed against
+  the installed plugin; a missing or changed plugin's land is held as saved
+  (`player.held_lands`), never costing the save.
+- `game/adventure/adventure_player.gd`: save format 8 — `hero.adventures`
+  rows `{id, version, name}`.
+- `game/adventure/world/world_duels.gd`: `region_music` — a land's own world
+  track.
+- `game/paths.gd`: `expanded_adventure_folder()`; `game/options_screen.gd`:
+  the "Adventure plugins folder" row.
+- `expanded_adventure/README.txt`, `expanded_adventure/.gdignore`: the
+  plugins folder's note for players; the repository's copy is excluded from
+  exports and read only by a development run.
+- `expanded_adventure/Fallen_Empires_Refuge_prototype/`: The Last Refuge —
+  `plugin.json`, `world.json`, `places.json`, `quests.json`, `foes.json`,
+  `rewards.json`, `text.json`, `art/` (the island's own four pictures),
+  `README.txt`, `LICENSE.txt`: a game-design and learning demo.
+- `expanded_adventure/GUIDE/`: the local HTML authors' guide (eleven pages,
+  `guide.css`, `img/`, and `reference.html` written by
+  `tools/adventure_plugin.py guide` from `schema_v1.json` — never edit it by
+  hand; `guide --check` and the tests flag a stale one).
+- `tools/package_release.py` / `tools/test_package_release.py`: stage
+  `expanded_adventure/` (the prototype zip, its README, the guide) into the
+  desktop, Pi, Deck and ArkOS packages, ship the authors' tool, the schema and
+  `tools/adventure_plugin_cards.json` (card names) in every package;
+  `--adventure-plugins DIR` writes the prototype zip as its own asset.
+- `tools/expansion_lab.sh` / `tools/expansion_testing/expansion_lab.gd`:
+  `--plugin ZIP_OR_FOLDER` plays a plugin headless (a refused one exits 1).
+- `tools/expansion_testing/lab_campaign.gd`: the Lab plays each land to its
+  end on the model's results — every quest stage by stage at its own places,
+  each owed reward chosen and claimed, the finale won — then saves and reads
+  back on the island and at home: the land must read FINE, never held.
+- `tools/test_c3_fx_scripts_export_filter.py`: every export preset excludes
+  `expanded_adventure/*`.
+- `docs/adventure-plugins.md`: the developer reference — the rulings, the
+  checks, the API, the data shapes, the hooks, saves, how to add a condition
+  or effect.
+- `tools/adventure_plugin.py`: the authors' tool — `new`, `validate`,
+  `export`, `info`, `compat`, `guide`; the game's staged checks twinned in
+  Python.
+- `tools/test_adventure_plugin.py`: the tool's commands, the corpus verdicts,
+  the twins' drift against the GDScript sources.
+- `tools/test_adventure_guide.py`: the guide held to the code and the
+  prototype — links, no outside requests, quotes equal the prototype's files,
+  lists equal the schema and the GDScript constants.
+- `tools/plugin_fixtures/`: the corpus of good and bad plugins and its
+  `expected.json`, judged alike by the tool and the game.
+- `tests/unit/test_plugin_corpus.gd`: the game's loader judges the corpus as
+  `expected.json` says.
+- `tests/fixtures/adventure_plugins/`: the loader's data-only fixture plugin
+  (`tiny_isle`).
+- `tests/support/plugin_files.gd`, `plugin_zips.gd`,
+  `plugin_music_region.gd`: test helpers — a plugin folder read through
+  `PluginSchema`, zips raw and deflated, a fixture land with a world track.
+- `tests/unit/island_generator_golden.json` /
+  `test_island_generator_golden.gd`: 70 islands (seeds, colors,
+  difficulties) the generator must build exactly.
+- `test_adventure_plugins_package.gd`, `test_adventure_plugins_registry.gd`,
+  `test_adventure_plugins_saves.gd`, `test_adventure_plugins_updates.gd`,
+  `test_adventure_plugins_music.gd` (tests/unit): the reader and its limits;
+  the registry's rows, stages, hashes and pack versions; save format 8, a
+  missing plugin's held land, old vanilla saves; an updated plugin's held
+  land; a land's world track.
+- `test_plugin_schema.gd`, `test_plugin_text.gd`, `test_plugin_palette.gd`,
+  `test_plugin_interpreter.gd` (tests/unit): the content schema, the
+  placeholders, a plugin's own palette (`plugin:<id>`), the interpreter.
+- `test_adventure_plugins_ui.gd` (tests/ui): the Hero page and journal name
+  a missing plugin's land by its saved title, the Tasks tab names a pack too
+  old truly (`AdventureExpansions.sail_refusal`), the Music switch brings
+  back the land's own track.
+- `test_plugin_anchorage_and_packs.gd` (tests/unit): two plugins sharing one
+  anchorage each get their harbor pane; a pack older than the plugin asks
+  is named in the island's panes.
+- `test_plugins_window_rows.gd`, `test_plugins_window_embark.gd`,
+  `test_plugins_window_help_and_resume.gd` (tests/ui): the window's rows and
+  keys, the Embark button and ticking, the Help page and the stranded hero's
+  notice on resume.
 
 ## Issues #7–#10 (2026-11-10)
 
@@ -738,8 +863,9 @@ the shelves, the pack share in every random draw);
 - `game/adventure/expansions/adventure_regions.gd`: the campaign's seed
   text across regions (`seed_text`); a region's first tick is never a new
   adventure; older saves' journal lines carry no region.
-- `game/adventure/expansions/refuge_world.gd`: map generation and the
-  island's own place names (`PLACES`, `VILLAGES`).
+- (the island's generator and its own place names moved into the Last
+  Refuge plugin's `world.json` and `IslandGenerator` on 2026-11-10; see
+  "Adventure plugins (2026-11-10)").
 - `game/adventure/adventure_tasks.gd`: several tasks may guide at once
   (`tracked`, `select`, `toggle`, `GUIDED` in the history; `selected` kept
   for 0.60.12), `guide` (the chosen tasks or the first target, the portal
@@ -814,16 +940,12 @@ the shelves, the pack share in every random draw);
   entry placement, sharing an anchorage when independent coastal space runs out.
 - `game/adventure/expansions/region_roads.gd`: reusable seeded terrain-following
   road network with shared lanes and no water-corner shortcuts.
-- `game/adventure/expansions/refuge_content.gd`: internal content-provider adapter.
-- `game/adventure/expansions/refuge_quests.gd`: internal objective-state implementation.
-- `game/adventure/expansions/refuge_encounters.gd`: internal encounter configuration.
 - `tests/unit/test_adventure_regions.gd`: nine saved regions and entry routes,
   cumulative hero state, migration, banned treasures and dormant providers.
 - `tests/unit/test_refuge_progression.gd`: campaign and content integration regressions.
 - `tests/cards/test_pack_2_refuge_mechanics.gd`: campaign and content integration regressions.
 - `tests/unit/test_refuge_card_availability.gd`: campaign and content integration regressions.
 - `tests/ui/test_refuge_card_rewards.gd`: campaign and content integration regressions.
-- `game/adventure/expansions/refuge_stories.gd`: internal content strings.
 - `tests/unit/test_refuge_quest_audit.gd`: campaign and content integration regressions.
 - `game/adventure/world/world_terrain_palette.gd`: cached regional vegetation/water
   recoloring, named presets, terrain-type and coordinate overrides, validated
@@ -833,13 +955,6 @@ the shelves, the pack share in every random draw);
   inheritance, live updates, occlusion and JSON save validation.
 - `docs/terrain-palettes.md`: reusable preset and tile-style API, examples,
   new-preset recipe, layer boundaries, persistence and caching.
-- `game/adventure/expansions/refuge_roads.gd`: compatibility adapter for the shared road router.
-- `game/adventure/expansions/refuge_world.gd`: internal map-generation adapter.
-- `game/adventure/expansions/refuge_campaign.gd`: internal campaign-state adapter.
-- `game/adventure/expansions/refuge_journey.gd`: internal visit and duel adapter.
-- `game/adventure/expansions/refuge_art.gd`: internal artwork loader.
-- `game/adventure/expansions/art/refuge_harbor.png`, `game/adventure/expansions/art/refuge_castle.png`: internal prototype artwork.
-- `game/adventure/expansions/art/refuge_port_map.png`, `game/adventure/expansions/art/refuge_castle_map.png`: internal prototype artwork.
 - `tests/unit/test_refuge_campaign.gd`: campaign and content integration regressions.
 - `tests/unit/test_refuge_geography.gd`: campaign and content integration regressions.
 - `tests/ui/test_refuge_journey.gd`: campaign and content integration regressions.

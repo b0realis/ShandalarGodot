@@ -1,0 +1,10 @@
+{
+	"count": 6,
+	"bundles": [
+		{"label": "rewards.white", "cards": ["Order of Leitbur", "Icatian Javelineers", "Icatian Infantry", "Icatian Priest", "Farrel's Zealot", "Combat Medic"]},
+		{"label": "rewards.blue", "cards": ["Vodalian Soldiers", "Vodalian Mage", "Merseine", "Homarid Warrior", "High Tide", "Deep Spawn"]},
+		{"label": "rewards.black", "cards": ["Order of the Ebon Hand", "Hymn to Tourach", "Basal Thrull", "Armor Thrull", "Soul Exchange", "Thrull Retainer"]},
+		{"label": "rewards.red", "cards": ["Goblin Chirurgeon", "Goblin Grenade", "Goblin War Drums", "Dwarven Soldier", "Orcish Veteran", "Goblin Warrens"]},
+		{"label": "rewards.green", "cards": ["Thallid", "Thorn Thallid", "Elvish Farmer", "Thallid Devourer", "Spore Flower", "Feral Thallid"]}
+	]
+}

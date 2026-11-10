@@ -17,7 +17,7 @@ static var _rows: Array[Dictionary] = []
 static func rows(player: AdventurePlayer) -> Array[Dictionary]:
 	if player == null or player.world == null: return []
 	var key: Array = [player.get_instance_id(), player.world.get_instance_id(), AdventureExpansions.revision,
-		player.expanded_adventure, player.packs, player.quest, player.quest_timer, player.expansions, player.defeated_wizards, player.portal,
+		AdventurePlugins.revision, player.adventures, player.packs, player.quest, player.quest_timer, player.expansions, player.defeated_wizards, player.portal,
 		player.world.sites, player.world.encounters, player.world.expansion, player.siege_timer, player.siege_count, player.ended, player.task_sequence, WorldStatus.siege_town(player)]
 	for region in player.regions:
 		var saved: Dictionary = player.regions[region]
@@ -37,7 +37,9 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 		if id != active: regions.append(id)
 	for region in regions:
 		var data := world_data(player, region)
-		if region != AdventureRegions.MAINLAND and not AdventureExpansions.launch_enabled:
+		# A land whose plugin is missing now, or whose installed version cannot
+		# read it (§0.5, a land held): only the way home.
+		if region != AdventureRegions.MAINLAND and (not AdventureExpansions.known(region) or AdventureExpansions.held(player, region)):
 			var port: Array = data.get("expansion", {}).get("port", [])
 			if region == active and port.size() == 2:
 				out.append(row("return", region, "Return to Shandalar", "Free passage home is always available.", Vector2i(port[0], port[1]), "navigation"))
@@ -75,7 +77,7 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 			task["paused"] = region != active
 			out.append(task)
 		if region != AdventureRegions.MAINLAND:
-			var content := AdventureExpansions.provider(region)
+			var content := AdventureExpansions.provider_for(player, region)
 			if content != null and content.has_method("task_rows"):
 				out.append_array(content.call("task_rows", data, AdventureExpansions.progress(player, region)))
 			var point: Array = data.get("expansion", {}).get("port", [])
@@ -93,7 +95,7 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 				if player.ended == AdventurePlayer.ENDED_WON: completed(task, "Arzakon has been banished.")
 				out.append(task)
 			for id in AdventureExpansions.definitions():
-				if not AdventureExpansions.launch_enabled: continue
+				if AdventureExpansions.held(player, id): continue
 				var visited: bool = player.regions.has(id) or id == active
 				if not visited and not AdventureExpansions.enabled_for(player, id): continue
 				var point: Array = data.get("expansion", {}).get("entries", {}).get(id, [])

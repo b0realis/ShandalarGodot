@@ -153,11 +153,13 @@ const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
 ## 0x10: a village, a town, a city, a castle, as a wizard holds them or
 ## not; a dungeon never). [ours] And an optional land's ports and castle as
 ## its towns and castles — the mainland's anchorage, its several-voyage
-## form, the island's harbor and the Ebon Crown (the owner's ruling of
+## form, the island's harbor and its castle (the owner's ruling of
 ## 2026-11-03, h1-Q1): a roamer of the island's strength stood at the
-## harbor's door met the hero the moment its pane closed.
+## harbor's door met the hero the moment its pane closed. Every land's
+## markers are `region_port` and `region_castle` ([DataRegion]; adventure
+## plugins, 2026-11-10).
 const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen",
-	"refuge_port", "expansion_port", "refuge_castle"]
+	"region_port", "expansion_port", "region_castle"]
 ## THE WALKING KEYS (the owner's ruling of 2026-10-29), each with its way
 ## on the screen (x right, y down): 1997's arrows, Home, PgUp, PgDn and
 ## End, which set its heading (adventure_input.c 328–353: Up 2, PgUp 3,
@@ -731,19 +733,22 @@ func show_player(adventure: AdventurePlayer) -> void:
 	_show_hero()
 	view.camera = view.hero
 	view.queue_redraw()
+	# The land's own world track, or the title's tune again on the mainland.
+	WorldDuels.region_music(self)
 	_say_mainland_note()
 
 
 ## [QoL] Whether this launch has said [method AdventureExpansions.mainland_note]
-## yet: once a launch, not once a campaign — a later launch without the flag
-## needs the words as much (the owner's ruling of 2026-11-03).
+## yet: once a launch, not once a campaign — a later launch with the plugin
+## still missing needs the words as much (the owner's ruling of 2026-11-03).
 static var mainland_note_said := false
 
-## THE WAY TO THE ISLAND, said once a launch on the mainland of a campaign
-## that chose an optional land but was launched without the flag (the
-## owner's ruling of 2026-11-03): its anchorage is gone, and nothing said
-## why. Under the arrival's words while they show (a save taken up again),
-## else as a notice (a hero sailed home).
+## WHY A TICKED LAND'S SHIPS DO NOT SAIL, said once a launch on the mainland
+## (the owner's ruling of 2026-11-03, for the retired flag; the lead's of
+## 2026-11-10 for plugins): its plugin missing or refused, or a card pack it
+## needs off — its anchorage is gone, and nothing said why. Under the
+## arrival's words while they show (a save taken up again), else as a
+## notice (a hero sailed home).
 func _say_mainland_note() -> void:
 	if mainland_note_said or player == null or hud == null:
 		return
@@ -2228,6 +2233,7 @@ func show_deck(sell_site := -1, looking := false) -> AdventureBuilder:
 	_builder.exit_requested.connect(_save_and_end)
 	add_child(_builder)
 	soundscape.rest(true)
+	WorldDuels.region_music_off(self)
 	_sync_rest()
 	return _builder
 
@@ -2243,9 +2249,7 @@ func _deck_closed() -> void:
 		_builder.queue_free()
 	_builder = null
 	_cover_world(false)
-	var music := get_node_or_null(^"/root/ShellMusic")
-	if music != null:
-		music.call(&"play")
+	WorldDuels.world_music(self)
 	soundscape.rest(false)
 	_show_hero()
 	hud.say("Deck %d: %d cards" % [player.current_deck + 1, hud.cards_in_deck()])
@@ -3125,21 +3129,31 @@ static func _debug_port_key(event: InputEvent) -> bool:
 		and not key.alt_pressed and not key.meta_pressed
 		and (key.keycode in [KEY_2, KEY_KP_2] or key.physical_keycode == KEY_2))
 
-## What stops the tester's teleport for [param hero], "" when nothing does.
-## A launch without the flag gets the tester's own line, never the island's
-## "Restart … You can still sail home." (0.60.13 bug campaign, h4-3: that
-## showed on the mainland of a campaign with no island), and the flag
-## written as a launch must give it, after `--` (h4-2).
+## The land the tester's teleport goes to for [param hero] (adventure
+## plugins, 2026-11-10): the first plugin the campaign ticked that is
+## installed and valid; "" for none.
+static func debug_port_land(hero: AdventurePlayer) -> String:
+	if hero == null:
+		return ""
+	for row: Variant in hero.adventures:
+		if row is Dictionary and AdventureExpansions.known(String(row.get("id", ""))):
+			return String(row["id"])
+	return ""
+
+
+## What stops the tester's teleport for [param hero], "" when nothing does:
+## the tester's own line, never the island's words (0.60.13 bug campaign,
+## h4-3) — no plugin ticked, its card pack not the campaign's, or not
+## enabled.
 static func debug_port_refusal(hero: AdventurePlayer) -> String:
-	var needs: Array[String] = []
-	if not AdventureExpansions.launch_enabled:
-		needs.append("launch with " + AdventureExpansions.LAUNCH_ARGS)
-	if not AdventureExpansions.chosen(hero, "refuge"):
-		needs.append("select Pack 2 when embarking")
-	if not needs.is_empty():
-		return "Debug: %s first." % " and ".join(needs)
-	if not AdventureExpansions.enabled("refuge"):
-		return "Debug: enable Pack 2: Fallen Empires in Options first."
+	var land := debug_port_land(hero)
+	if land == "":
+		return "Debug: tick an adventure plugin when embarking first."
+	for pack in AdventureExpansions.pack_ids(land):
+		if not AdventurePacks.selected(hero, pack):
+			return "Debug: select %s when embarking first." % AdventurePacks.title(pack)
+	if not AdventureExpansions.enabled(land):
+		return "Debug: enable %s in Options first." % " and ".join(AdventureExpansions.pack_ids(land).map(AdventurePacks.title))
 	return ""
 
 
@@ -3158,9 +3172,10 @@ func _debug_port_pressed(event: InputEvent) -> bool:
 			hud.say("Debug: no mainland return map is available.")
 			return true
 	AdventureExpansions.initialize(player)
-	var point: Array = player.world.expansion.get("entries", {}).get("refuge", [])
+	var land := debug_port_land(player)
+	var point: Array = player.world.expansion.get("entries", {}).get(land, [])
 	if point.size() != 2:
-		hud.say("Debug: no Pack 2 harbor was found on this map.")
+		hud.say("Debug: no harbor for %s was found on this map." % AdventureExpansions.label(land, player))
 		return true
 	var port := Vector2i(point[0], point[1])
 	var landing := port
@@ -3179,10 +3194,10 @@ func _debug_port_pressed(event: InputEvent) -> bool:
 	hud.close_panels()
 	show_player(player)
 	player.world.explore_around(port)
-	player.tracked_task = "mainland/voyage:refuge" if not player.regions.has("refuge") else ""
-	player.log_event("debug", "Teleported near the Last Refuge departure harbor.")
+	player.tracked_task = "mainland/voyage:" + land if not player.regions.has(land) else ""
+	player.log_event("debug", "Teleported near the departure harbor for %s." % AdventureExpansions.label(land, player))
 	_show_hero()
 	view.camera = view.hero
 	view.queue_redraw()
-	hud.say("Debug: Pack 2 harbor nearby — visit Sarpadian Anchorage to sail.")
+	hud.say("Debug: the harbor for %s is nearby — visit it to sail." % AdventureExpansions.label(land, player))
 	return true

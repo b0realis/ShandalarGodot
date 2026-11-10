@@ -243,28 +243,31 @@ func test_saved_appearance_round_trips_as_json_and_invalid_styles_are_refused() 
 	assert_null(AdventurePlayer.from_dict(json), "malformed saved coordinates are rejected")
 
 func test_mainland_and_island_keep_independent_saved_styles() -> void:
-	var launch_before := AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	var enabled := CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
 	var record := setup.resolve({"pack-2": "1"})
 	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 	WorldTerrainPalette.tint_tile(player.world, player.tile(), Color("cceeff"), 0.25)
 	var mainland: Dictionary = player.world.expansion["appearance"].duplicate(true)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_false(player.world.expansion.has("appearance"))
 	WorldTerrainPalette.set_preset(player.world, WorldTerrainPalette.SHANDALAR)
 	WorldTerrainPalette.tint_tile(player.world, player.tile(), Color("ffeebb"), 0.4)
 	var island: Dictionary = player.world.expansion["appearance"].duplicate(true)
 	player = AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(player.to_dict())))
 	assert_not_null(player)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.world.expansion["appearance"], mainland)
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_eq(player.world.expansion["appearance"], island)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, enabled)
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if launch_before else PackedStringArray())
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

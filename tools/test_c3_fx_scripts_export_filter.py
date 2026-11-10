@@ -13,6 +13,14 @@ Linux pack. CONTRIBUTING.md: the .pck ships scripts, `cards/data/` and
 every `.deck`, never art. Nothing the game runs loads `res://branding`;
 the window icon and the boot splash live in `game/`.
 
+ADVENTURE PLUGINS (2026-11-10): `expanded_adventure/` holds the prototype
+plugin and the authors' guide as source. A plugin is data the game reads
+from the folder beside it, never from the pack — and the presets' `*.txt`
+include filter would otherwise pull the plugins' README.txt files into
+every .pck (the folder's `.gdignore` keeps it out of the import, not out of
+an include filter). The release packages carry the folder beside the game
+(tools/package_release.py).
+
 The other folders below were already excluded; they are pinned here so a
 preset copied from an older file, or a new preset, cannot drop one of them
 quietly. `test_build_release_sh.py` pins the two run folders
@@ -28,7 +36,12 @@ EXAMPLE = ROOT / "export_presets.cfg.example"
 ## Never in a pack: the suite, the developer tools, the docs, the GUT
 ## addon, the player's own 1997 graphics and card art (`assets/`), and the
 ## README's screenshots and the logo master (`branding/`).
-NEVER_PACKED = ("tests/*", "tools/*", "docs/*", "addons/*", "assets/*", "branding/*")
+NEVER_PACKED = ("tests/*", "tools/*", "docs/*", "addons/*", "assets/*", "branding/*", "expanded_adventure/*")
+## The machine's own presets (gitignored: they name an export template by
+## its absolute path), held to the same list when this checkout has them.
+LOCAL = ROOT / "export_presets.cfg"
+## The Android build's own preset, copied into place by its recipe.
+ANDROID = ROOT / "packaging" / "android" / "export-preset.cfg"
 
 
 def presets(text: str) -> dict:
@@ -65,6 +78,36 @@ class ExportFilterTest(unittest.TestCase):
             for folder in NEVER_PACKED:
                 with self.subTest(preset=name, folder=folder):
                     self.assertIn(folder, entries)
+
+    def test_the_android_template_preset_keeps_the_same_folders_out(self):
+        # packaging/android/export-preset.cfg: the preset an Android build
+        # copies (docs/android-experimental.md), held to the same list.
+        found = presets(ANDROID.read_text(encoding="utf-8"))
+        self.assertTrue(found)
+        for name, entries in found.items():
+            for folder in NEVER_PACKED:
+                with self.subTest(preset=name, folder=folder):
+                    self.assertIn(folder, entries)
+
+    def test_the_local_presets_keep_the_same_folders_out(self):
+        if not LOCAL.is_file():
+            self.skipTest("no local export_presets.cfg in this checkout")
+        for name, entries in presets(LOCAL.read_text(encoding="utf-8")).items():
+            for folder in NEVER_PACKED:
+                with self.subTest(preset=name, folder=folder):
+                    self.assertIn(folder, entries)
+
+    def test_nothing_the_game_runs_loads_a_plugin_as_a_resource(self):
+        # The exclusion is safe while the game reads plugins as bytes from
+        # the folders it searches (game/adventure/plugins/), never through
+        # res://expanded_adventure in an export.
+        users = []
+        for folder in ("game", "engine", "cards", "DeckLab"):
+            for path in sorted((ROOT / folder).rglob("*")):
+                if path.suffix in (".gd", ".tscn", ".tres") and re.search(
+                        r'(load|preload)\(\s*"res://expanded_adventure', path.read_text(encoding="utf-8", errors="replace")):
+                    users.append(str(path.relative_to(ROOT)))
+        self.assertEqual(users, [])
 
     def test_nothing_the_game_runs_loads_branding(self):
         # The exclusion is only safe while this holds: a scene or script

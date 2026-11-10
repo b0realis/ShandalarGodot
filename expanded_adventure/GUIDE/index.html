@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start here · Adventure plugin guide</title>
+<meta name="description" content="What an adventure plugin is, the data-only rule, and the Last Refuge learning demo.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html" aria-current="page">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Make a land for Shandalar</h1>
+<p class="lede">An adventure plugin is a small package of JSON, text, pictures and music that adds an island to the Shandalar adventure, reached by ship from a mainland harbor. This guide shows how one is made, tested and shared.</p>
+
+<h2 id="what">What a plugin is</h2>
+<p>A plugin is a <code>.zip</code> file, or an unpacked folder, with <code>plugin.json</code> at its top. Beside the manifest it holds the island: six content files, and pictures and music if you like. Players drop it into their <code>expanded_adventure</code> folder, open <b>Expanded adventure plugins...</b> at the bottom of the card-pack list on the Embark screen, and tick it. When their campaign begins, a ship waits at an anchorage on the mainland’s coast.</p>
+<p>A plugin may name the card packs it needs. Ticking the plugin ticks those packs. The packs’ cards behave exactly as they do without the plugin: a plugin never withholds a card, unlocks one, or changes what one does.</p>
+
+<div class="rule"><strong>The safety rule</strong>
+<p><b>Data only, never code.</b> The game never loads, runs or mounts anything from a plugin. It reads the files as bytes, checks them, and decodes pictures and music from those bytes in memory. A quest is a list of steps; a condition is one of a closed list; an effect is one of a closed list. Every behavior is the game’s own interpreter reading your data. A <code>.gd</code>, <code>.tscn</code>, <code>.tres</code>, <code>.pck</code>, <code>.dll</code> or <code>.exe</code>, or any other kind of file not on the list, refuses the whole plugin.</p></div>
+
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 300" role="img" aria-label="A plugin's files cross into the game only as bytes. Four stages check them; a problem at any stage refuses the plugin; checked data goes to the game's own interpreter, which builds the island, its panes, quests and duels.">
+<defs><marker id="ix-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker>
+<marker id="ix-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-warn" d="M0,0L10,5L0,10z"/></marker>
+<marker id="ix-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-accent" d="M0,0L10,5L0,10z"/></marker></defs>
+<rect class="d-sunk" x="16" y="44" width="206" height="212" rx="12"/>
+<text class="d-title" x="32" y="70">Your plugin</text>
+<text class="d-small" x="32" y="88">a .zip, or an unpacked folder</text>
+<text class="d-mono" x="32" y="116">plugin.json</text>
+<text class="d-mono" x="32" y="138">world.json</text><text class="d-mono" x="132" y="138">places.json</text>
+<text class="d-mono" x="32" y="160">quests.json</text><text class="d-mono" x="132" y="160">foes.json</text>
+<text class="d-mono" x="32" y="182">rewards.json</text><text class="d-mono" x="132" y="182">text.json</text>
+<text class="d-mono" x="32" y="204">art/*.png</text><text class="d-mono" x="132" y="204">music/*.ogg</text>
+<text class="d-mono" x="32" y="226">README.txt</text><text class="d-mono" x="132" y="226">LICENSE.txt</text>
+<line class="d-fence" x1="238" y1="22" x2="238" y2="282"/>
+<text class="d-gold-text" x="246" y="34">the game reads bytes, never code</text>
+<path class="d-line" d="M222,96 H282" marker-end="url(#ix-h)"/>
+<text class="d-small" x="246" y="88">bytes</text>
+<rect class="d-box" x="286" y="70" width="186" height="50" rx="9"/>
+<text class="d-text" x="302" y="92"><tspan font-weight="700">1</tspan>  The package</text>
+<text class="d-small" x="302" y="109">paths · kinds of file · limits</text>
+<rect class="d-box" x="286" y="140" width="186" height="50" rx="9"/>
+<text class="d-text" x="302" y="162"><tspan font-weight="700">2 · 3</tspan>  The manifest</text>
+<text class="d-small" x="302" y="179">plugin.json · its SHA-256 list</text>
+<rect class="d-box" x="286" y="210" width="186" height="50" rx="9"/>
+<text class="d-text" x="302" y="232"><tspan font-weight="700">4</tspan>  The content</text>
+<text class="d-small" x="302" y="249">schema_v1.json · card names</text>
+<path class="d-line" d="M379,120 V138" marker-end="url(#ix-h)"/>
+<path class="d-line" d="M379,190 V208" marker-end="url(#ix-h)"/>
+<rect class="d-warn" x="520" y="44" width="224" height="58" rx="9"/>
+<text class="d-warn-text" x="536" y="68">Refused, with its reasons</text>
+<text class="d-small" x="536" y="88">.gd .tscn .tres .pck .dll .exe …</text>
+<path class="d-line-warn" d="M472,95 C496,95 498,73 516,73" marker-end="url(#ix-w)"/>
+<text class="d-small" x="478" y="124">any problem</text>
+<rect class="d-accent" x="520" y="150" width="224" height="58" rx="9"/>
+<text class="d-accent-text" x="536" y="174">DataRegion</text>
+<text class="d-small" x="536" y="193">the game’s interpreter, one per plugin</text>
+<path class="d-line-accent" d="M472,226 C498,226 496,180 516,180" marker-end="url(#ix-a)"/>
+<text class="d-small" x="474" y="252">checked</text><text class="d-small" x="474" y="266">data</text>
+<rect class="d-box" x="520" y="226" width="224" height="46" rx="9"/>
+<text class="d-text" x="536" y="254">the island · panes · quests · duels</text>
+<path class="d-line" d="M632,208 V222" marker-end="url(#ix-h)"/>
+</svg></div>
+<figcaption>The whole road a plugin travels. Nothing of it is ever loaded as a resource, run as a script or mounted: the game reads the files as bytes, checks them in four stages and hands the checked data to its own interpreter. A problem at any stage refuses the plugin and the Embark’s window shows why.</figcaption>
+</figure>
+
+
+<h2 id="demo">The Last Refuge: a learning demo</h2>
+<p>The game ships one plugin, <code>Fallen_Empires_Refuge_prototype.zip</code>: <i>The Last Refuge</i>, an island of Sarpadian refugees for players with card pack 2, Fallen Empires. It is a <b>game-design and learning demo</b>, finished and playable, made so that you can play it, read it and take it apart. Its own manifest says so:</p>
+<figure class="quote" data-file="plugin.json" data-pointer="/learning_note"><figcaption class="src"><b>plugin.json</b><span>/learning_note</span></figcaption><pre class="code wrap"><code><span class="j-s">"A game-design and learning demo: original fiction, not official Magic canon and not new official content. It shows every part of the plugin format in one finished, playable island, for plugin authors to read, play and take apart."</span></code></pre></figure>
+<p><a href="refuge.html">The Refuge walkthrough</a> explains every one of its files, line by line.</p>
+
+<h2 id="community">The community makes the lands</h2>
+<p>The game adds no adventure content of its own beyond that demo. New islands, their people, quests and foes are for players to make and share, at their will. This guide, the authoring tool and the game’s checks are here to make that easy and safe.</p>
+
+<h2 id="scope">What a plugin can do in API 1</h2>
+<ul>
+<li><b>One island</b>, cut from the game’s own terrain generator and laid out from your recipe: a port, a castle, towns, places, villages, roads and a dungeon.</li>
+<li><b>Up to 12 quests</b>, each a list of steps (<code>accept</code>, <code>go</code>, <code>duel</code>), with rewards when done, and <b>a finale</b> at the castle or the port.</li>
+<li><b>Foes</b> with fixed decks and life, <b>roaming decks</b> for the island’s creatures, <b>reward bundles</b> of cards.</li>
+<li><b>Every word</b> in <code>text.json</code>, <b>pictures</b> for the port and castle panes and their map sprites, and one <b>music track</b> for walking the island.</li>
+</ul>
+<p>It cannot change the mainland (it touches only the anchorage, the voyage and the Tasks list), add cards, or run anything. Text is English only: <code>text.json</code>; the name <code>text.&lt;language&gt;.json</code> is kept for later versions.</p>
+
+<h2 id="pages">The pages</h2>
+<ul class="cards">
+<li><a href="first-plugin.html"><b>Your first plugin</b><span>From an empty folder to a duel on your own island.</span></a></li>
+<li><a href="world.html"><b>The world</b><span>The island recipe, objectives, the port and the castle.</span></a></li>
+<li><a href="quests.html"><b>Quests and steps</b><span>The stage machine, conditions, effects, the finale.</span></a></li>
+<li><a href="foes-rewards.html"><b>Foes and rewards</b><span>Decks, life, faces, roaming creatures, card bundles.</span></a></li>
+<li><a href="text.html"><b>Text and placeholders</b><span>Every word by key, and the closed list of <code>{placeholders}</code>.</span></a></li>
+<li><a href="art-music.html"><b>Art and music</b><span>Picture sizes and keys, map sprites, pennants, OGG.</span></a></li>
+<li><a href="saves.html"><b>Saves and compatibility</b><span>What a save keeps, what a missing plugin does, what never to change.</span></a></li>
+<li><a href="testing.html"><b>Testing</b><span>The validator, the Expansion Lab, the loop in the game.</span></a></li>
+<li><a href="refuge.html"><b>The Refuge walkthrough</b><span>Every file of the demo, explained.</span></a></li>
+<li><a href="reference.html"><b>Reference</b><span>Every file, field, kind and limit, from the schema.</span></a></li>
+<li><a href="faq.html"><b>FAQ</b><span>Short answers to the usual questions.</span></a></li>
+</ul>
+
+<h2 id="where">Where things are</h2>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>What</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Your plugins</td><td class="wrap">The folder <b>Options</b> names on its <b>Adventure plugins folder</b> line (the <code>expanded_adventure_folder</code> key in <code>settings.cfg</code> moves it). By default <code>expanded_adventure</code> in the game’s user folder: <code>~/.local/share/godot/app_userdata/Shandalar/</code> on Linux, <code>%APPDATA%\Godot\app_userdata\Shandalar\</code> on Windows, <code>~/Library/Application Support/Godot/app_userdata/Shandalar/</code> on macOS.</td></tr>
+<tr><td>The game’s own</td><td class="wrap"><code>expanded_adventure/</code> beside the game: the demo’s zip, a README and this guide.</td></tr>
+<tr><td>In the game</td><td class="wrap"><b>Help</b> has an <b>Adventure plugins</b> page for players: what plugins are, where the folder is, how to tick one, and where this guide is.</td></tr>
+<tr><td>The tool</td><td class="wrap"><code>tools/adventure_plugin.py</code> in the game folder (Python 3, nothing else to install).</td></tr>
+<tr><td>The schema</td><td class="wrap"><code>game/adventure/plugins/schema_v1.json</code>: the one description of the content files that both the game and the tool read. The <a href="reference.html">Reference</a> page is made from it.</td></tr>
+</tbody></table></div>
+</main>
+</div>
+<footer class="pager">
+<a class="next" href="first-plugin.html"><span>Next</span>Your first plugin</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

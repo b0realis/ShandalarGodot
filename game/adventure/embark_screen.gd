@@ -7,7 +7,9 @@ extends Control
 ## CAMPAIGN SETTINGS, the modern rules, behind one button (the owner,
 ## 2026-10-29: *"we just make a button called 'campaign settings' with a
 ## popup and all modern settings with short explanations there"*; [method
-## open_settings]), then `Adventure` or `Leave`.
+## open_settings]), then `Adventure` or `Leave`. The ADVENTURE PLUGINS are
+## behind one button at the foot of the card packs, in a window of their own
+## (the owner, 2026-11-10; [PluginsWindow], [method open_plugins]).
 ##
 ## THE 1997 GAME ASKED ON THREE SCREENS and 1.3 on five (difficulty,
 ## colour, the face designer, the name; `RunAdventureSession`); here it is
@@ -304,6 +306,14 @@ var _difficulty_note: Label
 ## rulings of 2026-11-03: "All of 2–9 at once"; before it, Pack 2 alone).
 var _pack_checks: Dictionary = {}
 var _packs_about: Label
+## THE ADVENTURE PLUGINS (2026-11-10): the one button under the packs, the
+## words naming the plugins a pack unticked took with it, the frame they
+## were said in ([method _say_plugins]) and the window (made when first
+## opened).
+var plugins_button: Button
+var _plugins_words := ""
+var _plugins_window: PluginsWindow
+var _plugins_note_frame := -1
 var _seed_edit: LineEdit
 ## The walking figure: its preview on the portrait, the six part swatches
 ## and the popup a swatch opens ([HeroColors]).
@@ -716,9 +726,18 @@ func _build_journey() -> Control:
 		list.name = "Packs"
 		list.add_theme_constant_override("separation", 0)
 		var packs := _card_packs()
+		# A row a pack, three pixels closer than the theme's own (the adventure
+		# plugins' button under them, 2026-11-10): nine packs and the button
+		# keep the column within 1280 × 800 without the skin's lettering too.
+		var row_face := StyleBoxEmpty.new()
+		row_face.set_content_margin_all(4)
+		row_face.content_margin_top = PACK_ROW_MARGIN
+		row_face.content_margin_bottom = PACK_ROW_MARGIN
 		for id in installed:
 			var info: Dictionary = packs.info(id)
 			var check := CheckBox.new()
+			for state in ["normal", "pressed", "hover", "hover_pressed", "disabled"]:
+				check.add_theme_stylebox_override(state, row_face)
 			check.name = "Pack_" + id
 			check.text = "%s · %s" % [packs.label_for(id), String(info.get("name", id))]
 			check.tooltip_text = "%s\nVersion %s" % [String(info.get("description", "")),
@@ -731,15 +750,29 @@ func _build_journey() -> Control:
 			check.add_theme_icon_override("checked", UiChrome.check_icon(true))
 			check.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
 			check.button_pressed = id in setup.packs
-			var adventures := AdventurePacks.adventures(id)
-			if setup.expanded_adventure and not adventures.is_empty():
-				check.tooltip_text += "\nOptional adventure: " + ", ".join(adventures.map(AdventureExpansions.label))
 			check.toggled.connect(choose_pack.bind(id))
 			list.add_child(check)
 			_pack_checks[id] = check
 		box.add_child(list)
 	_show_pack_mode()
+	box.add_child(_build_plugins_button())
 	return box
+
+
+## THE ADVENTURE PLUGINS' BUTTON, at the foot of the card packs and alone
+## there (the owner, 2026-11-10: *"Plugins should get their own popup window
+## for ticking them as not to clutter the main embark screen. Only button to
+## reach them at the bottom of pack selections."*): it opens their window
+## ([PluginsWindow], [method open_plugins]); its tooltip counts the ticked.
+## The plugins a card pack unticked took with it are named in the words
+## over the packs, for as long as they have it to say ([method _say_plugins]).
+func _build_plugins_button() -> Control:
+	plugins_button = UiChrome.menu_button(PLUGINS_BUTTON, Vector2(300, 30), 17)
+	plugins_button.name = "AdventurePlugins"
+	plugins_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plugins_button.pressed.connect(open_plugins)
+	_show_plugins_button()
+	return plugins_button
 
 
 # ------------------------------------------------------ campaign settings --
@@ -1448,12 +1481,20 @@ func choose_difficulty(level: int) -> void:
 	_show_difficulty()
 
 
+## A pack's box ticked or unticked. Unticked, the plugins that need it go
+## with it ([method AdventureSetup.untick_pack]), and the words over the
+## packs say which.
 func choose_pack(on: bool, id: String) -> void:
 	if not _pack_checks.has(id): return
 	if on and not id in setup.packs:
 		setup.packs.append(id)
+		if Engine.get_process_frames() != _plugins_note_frame:
+			_say_plugins("")
 	elif not on:
-		setup.packs.erase(id)
+		var gone := setup.untick_pack(id)
+		if not gone.is_empty():
+			_say_plugins(PluginsWindow.unticked_words(gone, id))
+			_show_plugins_button()
 
 
 func choose_all_packs(on: bool) -> void:
@@ -1465,11 +1506,104 @@ func choose_all_packs(on: bool) -> void:
 ## pack rulings of 2026-11-03) — its own cards, as a share of the random
 ## cards of shops, duel spoils and lairs: 20% for each pack, 60% at most
 ## for them all; the rest stay base cards.
+## The packs only (the owner, 2026-11-10: the adventure plugins have
+## their own window, reached by one button under the packs) — but for the
+## moment after a pack unticked a plugin: then, in gold, which ([method
+## _say_plugins]). In their place, so the column never grows past the
+## screen (eight packs and the button, 1280 × 800).
 func _show_pack_mode() -> void:
-	_packs_about.add_theme_color_override("font_color", GOLD if setup.expanded_adventure else DIM)
-	_packs_about.text = "Each ticked pack adds its own cards to shops and rewards on Shandalar: 20% of random cards per pack, 60% at most in all. Your first deck uses base cards."
-	if setup.expanded_adventure:
-		_packs_about.text = "Prototype game design test: add available lands and quests. Packs without an adventure add their cards immediately."
+	if _packs_about == null:
+		return
+	if _plugins_words != "":
+		_packs_about.add_theme_color_override("font_color", GOLD)
+		_packs_about.text = _plugins_words
+		return
+	_packs_about.add_theme_color_override("font_color", DIM)
+	_packs_about.text = PACKS_ABOUT
+
+
+const PACKS_ABOUT := "Each ticked pack adds its own cards to shops and rewards on Shandalar: 20% of random cards per pack, 60% at most in all. Your first deck uses base cards."
+
+
+# ------------------------------------------------- the adventure plugins --
+
+const PLUGINS_BUTTON := "Expanded adventure plugins..."
+## A pack row's margin over and under its words (the theme's is 4).
+const PACK_ROW_MARGIN := 2.5
+
+
+## THE PLUGINS' WINDOW OPENS over the screen ([PluginsWindow]): made the
+## first time, then shown again with the registry and the ticks as they
+## stand; the keyboard in it.
+func open_plugins() -> void:
+	if _leaving:
+		return
+	if _plugins_window == null:
+		_plugins_window = PluginsWindow.new()
+		_plugins_window.name = "AdventurePluginsWindow"
+		_plugins_window.packs_ticked.connect(_on_plugin_packs)
+		_plugins_window.changed.connect(_show_plugins_button)
+		_plugins_window.closed.connect(_on_plugins_closed)
+		add_child(_plugins_window)
+	_plugins_window.setup = setup
+	_plugins_window.installed = _installed_packs()
+	_say_plugins("")
+	_plugins_window.open()
+
+
+## OK, Escape or a pad's B: the window closes, the keyboard back on its
+## button.
+func close_plugins() -> void:
+	if plugins_shown():
+		_plugins_window.close()
+
+
+## Whether the plugins' window is up.
+func plugins_shown() -> bool:
+	return _plugins_window != null and _plugins_window.shown()
+
+
+## The packs the window ticked for a plugin, ticked here too (their boxes;
+## [member setup] holds them already).
+func _on_plugin_packs(ids: Array[String]) -> void:
+	for id in ids:
+		if _pack_checks.has(id):
+			(_pack_checks[id] as CheckBox).set_pressed_no_signal(true)
+	_show_plugins_button()
+
+
+func _on_plugins_closed() -> void:
+	_show_plugins_button()
+	if plugins_button != null and plugins_button.is_inside_tree():
+		plugins_button.grab_focus()
+
+
+## The button's tooltip: what the plugins are and how many are ticked.
+func _show_plugins_button() -> void:
+	if plugins_button == null:
+		return
+	plugins_button.tooltip_text = PluginsWindow.button_tip(setup.adventures.size(), AdventurePlugins.all())
+
+
+## THE PLUGINS A PACK TOOK WITH IT, said over the packs in gold ([method
+## _show_pack_mode]) until the plugins' window opens or a pack is ticked
+## later; "" puts the packs' own words back. Words said in one frame (All,
+## None, Randomize untick many packs at once) are kept together.
+func _say_plugins(text: String) -> void:
+	var frame := Engine.get_process_frames()
+	if text == "":
+		_plugins_words = ""
+	elif _plugins_words != "" and frame == _plugins_note_frame:
+		_plugins_words += " " + text
+	else:
+		_plugins_words = text
+	_plugins_note_frame = frame
+	_show_pack_mode()
+
+
+## What [method _say_plugins] says now ("" for nothing).
+func plugins_note() -> String:
+	return _plugins_words
 
 
 func _on_name_changed(text: String) -> void:
@@ -1535,6 +1669,7 @@ func _show_all() -> void:
 	_show_playmat()
 	_show_difficulty()
 	_show_pack_mode()
+	_show_plugins_button()
 
 
 func _show_face() -> void:
@@ -1885,8 +2020,12 @@ func summary(record: Dictionary) -> String:
 			var info: Dictionary = catalogue.info(id) if catalogue != null else {}
 			names.append(String(info.get("name", id)))
 		lines.append("Card packs: %s." % ", ".join(names))
-		if record.get("expanded_adventure", false):
-			lines.append("Expanded adventure: prototype game design test. Optional lands and quests enabled.")
+	var lands: Array[String] = []
+	for row: Variant in record.get("adventures", []):
+		if row is Dictionary and String(row.get("name", "")) != "":
+			lands.append(String(row["name"]))
+	if not lands.is_empty():
+		lines.append("Adventure plugins: %s." % ", ".join(lands))
 	if AdventurePlayer.life_rule_of(record.get("life_rule")) == AdventurePlayer.LIFE_ONE:
 		lines.append(ONE_LIFE_SUMMARY)
 	lines.append(String(HOLD_SUMMARY[AdventurePlayer.card_hold_of(record.get("card_hold"))]))
@@ -1921,6 +2060,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _leaving or not event.is_action_pressed("ui_cancel"):
 		return
 	get_viewport().set_input_as_handled()
+	if plugins_shown():
+		# Escape (a pad's B) is the plugins' window's OK.
+		close_plugins()
+		return
 	if settings_shown():
 		# Escape is the Campaign Settings' Done.
 		close_settings()

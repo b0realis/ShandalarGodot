@@ -95,6 +95,20 @@ creatures' decks stay base cards. All ten packs are available for ordinary
 duels and deck building on native platforms. Published downloads may predate
 these campaign additions.
 
+## Adventure plugins
+
+An **adventure plugin** adds a land to the Shandalar adventure, reached by
+ship from a mainland harbor. It is a small package of data — JSON, text,
+pictures and music, never code — dropped into the `expanded_adventure`
+folder and ticked in Embark's **Expanded adventure plugins...** window; a
+plugin names the card packs it needs, and packs behave exactly as they do
+without it. The game ships one, **The Last Refuge** (Fallen Empires), a
+finished game-design and learning demo for authors to play and take apart;
+new lands are the community's to make. The authors' guide is
+`expanded_adventure/GUIDE/index.html` in the game folder, the tool
+`tools/adventure_plugin.py` (`new`, `validate`, `export`, `compat`), and the
+developer reference [docs/adventure-plugins.md](docs/adventure-plugins.md).
+
 ## Philosophy
 
 **The limitation is the feature.** Preserve the finite early-Magic pool

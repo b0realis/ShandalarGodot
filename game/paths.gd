@@ -26,6 +26,9 @@ extends RefCounted
 ##   skin_folder       loose files the way `import_original.py` lays
 ##                     them out;                     user://original_skin
 ##   cardpacks_folder  every zip in it is mounted at boot; user://cardpacks
+##   expanded_adventure_folder  the adventure plugins (zips or folders,
+##                     data only, never mounted: [AdventurePlugins]);
+##                     user://expanded_adventure
 ##   portraits_folder  the player's own faces, shown with the 1997 ones
 ##                     in the portrait chooser;      user://portraits
 ##   music_folder      the player's own tunes, played among the 1997
@@ -51,6 +54,7 @@ const KEY_SKIN_ZIP := "skin_zip"
 const KEY_USE_SKIN_FOLDER := "use_skin_folder"
 const KEY_SKIN_FOLDER := "skin_folder"
 const KEY_CARDPACKS := "cardpacks_folder"
+const KEY_EXPANDED_ADVENTURE := "expanded_adventure_folder"
 const KEY_PORTRAITS := "portraits_folder"
 const KEY_MUSIC := "music_folder"
 const KEY_TOURNAMENTS := "tournaments_folder"
@@ -59,6 +63,7 @@ const KEY_RECORDS := "records_folder"
 
 const DEFAULT_SKIN_FOLDER := "user://original_skin"
 const DEFAULT_CARDPACKS := "user://cardpacks"
+const DEFAULT_EXPANDED_ADVENTURE := "user://expanded_adventure"
 const DEFAULT_PORTRAITS := "user://portraits"
 const DEFAULT_MUSIC := "user://music"
 const DEFAULT_TOURNAMENTS := "user://tournaments"
@@ -135,6 +140,15 @@ static func skin_folder() -> String:
 ## The card packs: every zip here is mounted at boot ([SkinPack]).
 static func cardpacks_folder() -> String:
 	return _place(KEY_CARDPACKS, player_place(DEFAULT_CARDPACKS, android_files_dir()))
+
+
+## The adventure plugins (adventure plugins, 2026-11-10): the first folder
+## [AdventurePlugins] searches — zips or unpacked folders, read as data and
+## never mounted; beside the card folder in Options (the owner: *"found in
+## 'expanded_adventure' folder in game folder where also card packs
+## reside"*).
+static func expanded_adventure_folder() -> String:
+	return _place(KEY_EXPANDED_ADVENTURE, player_place(DEFAULT_EXPANDED_ADVENTURE, android_files_dir()))
 
 
 ## The player's own portraits ([PortraitLibrary]).

@@ -4,31 +4,29 @@ extends GutTest
 var player: AdventurePlayer
 var pack_was_enabled := false
 
-var _launch_before: bool
 
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	pack_was_enabled = CardPacks.is_enabled(FallenEmpiresPack.ID)
 	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
 	var setup := AdventureSetup.new()
-	setup.expanded_adventure = true
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.seed_text = "48271"
 	var record := setup.resolve({"pack-2": "1"})
 	player = AdventurePlayer.begin(record, AdventureSetup.make_world(record))
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	CardPacks.set_enabled(FallenEmpiresPack.ID, pack_was_enabled)
 
-func test_choose_any_card_list_includes_island_cards_only_when_unlocked() -> void:
+## Adventure plugins (2026-11-10, §0.2): the ticked pack's cards are in the
+## list on the mainland as on the island; the plugin never withholds them.
+func test_choose_any_card_list_includes_the_ticked_packs_cards_everywhere() -> void:
 	var pane := EncounterPane.new()
 	pane.player = player
 	add_child_autofree(pane)
 	pane._pick_any()
-	assert_false(pane._list.cards.has("Thallid"))
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(pane._list.cards.has("Thallid"), "on the mainland")
+	assert_true(_refuge().travel(player))
 	pane._pick_any()
 	assert_true(pane._list.cards.has("Thallid"))
 	assert_true(pane._list.cards.has("Grizzly Bears"))
@@ -36,7 +34,7 @@ func test_choose_any_card_list_includes_island_cards_only_when_unlocked() -> voi
 	await get_tree().process_frame
 
 func test_shop_disables_unknown_saved_card_and_restores_it_when_pack_returns() -> void:
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	CardShop.offers(player, 1)
 	CardShop.town_record(player, 1)["cards"][0] = "Thallid"
 	player.gold = 10000
@@ -59,7 +57,7 @@ func test_shop_disables_unknown_saved_card_and_restores_it_when_pack_returns() -
 	assert_false(pane._buy.disabled)
 
 func test_island_builder_counts_live_nonlands_and_journal_clues_use_distinct_inks() -> void:
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	var builder := AdventureBuilder.new()
 	builder.player = player
 	add_child_autofree(builder)
@@ -86,7 +84,7 @@ func test_island_builder_counts_live_nonlands_and_journal_clues_use_distinct_ink
 	await get_tree().process_frame
 
 func test_stale_trade_is_refused_and_removed_from_the_real_pane() -> void:
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	player.amulets["green"] = 10
 	var pane := CardTradePane.new()
 	pane.player = player
@@ -110,3 +108,7 @@ func test_stale_trade_is_refused_and_removed_from_the_real_pane() -> void:
 	pane.trade_chosen()
 	assert_eq(player.cards.size(), count + 1)
 	assert_eq(player.amulets["green"], 9)
+
+## The prototype plugin's interpreter ([DataRegion]).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

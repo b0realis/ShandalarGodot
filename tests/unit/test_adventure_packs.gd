@@ -1,12 +1,14 @@
 extends GutTest
-## Card modules and optional stories are independent, scoped to a saved campaign.
+## Card modules and optional lands are independent, scoped to a saved campaign.
+## ADVENTURE PLUGINS (2026-11-10, the spec's §0.2 and §0.3): a land is ticked
+## at the Embark — no launch flag — and the card packs it needs behave as in
+## the vanilla adventure, their cards on offer from the first day. Ported
+## from the launch-flag era: the flag's tests became the plugins' (a ticked
+## land, remembered like the packs; the retired flag's preference never
+## read), and the "cards wait for liberation" tests now hold that they do not.
 var previous: Array[String] = []
 
-var _launch_before: bool
-
 func before_each() -> void:
-	_launch_before = AdventureExpansions.launch_enabled
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
 	previous = Settings.enabled_card_packs().duplicate()
 	CardPacks.set_enabled("pack-2", true)
 	CardPacks.set_enabled("pack-3", true)
@@ -14,7 +16,6 @@ func before_each() -> void:
 	AdventureExpansions.refresh()
 
 func after_each() -> void:
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]) if _launch_before else PackedStringArray())
 	for id in CardPacks.available_ids():
 		if CardPacks.is_enabled(id) != (id in previous): CardPacks.set_enabled(id, id in previous)
 	AdventureSetup.forget()
@@ -23,7 +24,7 @@ func after_each() -> void:
 func hero(expanded := false, selected: Array[String] = ["pack-2"]) -> AdventurePlayer:
 	var setup := AdventureSetup.new()
 	setup.seed_text = "48271"
-	setup.expanded_adventure = expanded
+	setup.adventures.assign(["refuge"] if expanded else [])
 	setup.packs = selected
 	var versions := {}
 	for id in selected: versions[id] = "1"
@@ -35,69 +36,49 @@ func hero(expanded := false, selected: Array[String] = ["pack-2"]) -> AdventureP
 func names(rows: Array) -> Array:
 	return rows.map(func(row: Dictionary) -> String: return row["name"])
 
-func test_only_the_exact_launch_flag_enables_new_adventures() -> void:
+func test_plugins_are_ticked_and_remembered_never_the_retired_switch() -> void:
+	assert_true(AdventurePlugins.valid("refuge"), "the prototype is found in a development run: %s" % AdventurePlugins.refusal("refuge"))
 	Settings.set_value(AdventureSetup.KEY_PREFIX + "expanded_adventure", true)
-	for args in [[], ["--debug-win"], ["--expanded-adventure=false"], ["--expanded-adventures"]]:
-		AdventureExpansions.read_launch(PackedStringArray(args))
-		assert_false(AdventureSetup.new().expanded_adventure)
-		assert_false(AdventureSetup.restore(["pack-2"]).expanded_adventure, "old checkbox preference is ignored")
-	AdventureExpansions.read_launch(PackedStringArray(["--debug-win", "--expanded-adventure"]))
+	assert_eq(AdventureSetup.new().adventures, [] as Array[String])
+	assert_eq(AdventureSetup.restore(["pack-2"]).adventures, [] as Array[String], "the old checkbox preference is never read")
 	var setup := AdventureSetup.restore(["pack-2"])
-	assert_true(setup.expanded_adventure)
+	setup.adventures = ["refuge"]
 	setup.packs = ["pack-2"]
 	setup.remember()
-	AdventureExpansions.read_launch(PackedStringArray())
 	var restored := AdventureSetup.restore(["pack-2"])
-	assert_false(restored.expanded_adventure, "next launch never inherits the opt-in")
+	assert_eq(restored.adventures, ["refuge"] as Array[String], "remembered like the packs")
 	assert_eq(restored.packs, ["pack-2"] as Array[String])
-	assert_false(restored.resolve({"pack-2": "1"})["expanded_adventure"])
+	var record := restored.resolve({"pack-2": "1"})
+	assert_eq(record["adventures"].map(func(row: Dictionary) -> String: return row["id"]), ["refuge"])
+	assert_eq(String(record["adventures"][0]["version"]), String(AdventurePlugins.row("refuge")["version"]))
+	assert_false(record.has("expanded_adventure"))
+	Settings.set_value(AdventureSetup.KEY_PREFIX + "plugins", "refuge,not_installed", false)
+	assert_eq(AdventureSetup.restore(["pack-2"]).adventures, ["refuge"] as Array[String], "a plugin gone is dropped")
 
-func test_saved_mainland_story_needs_the_flag_without_losing_progress() -> void:
+func test_a_ticked_land_whose_pack_is_off_keeps_its_progress_and_way_home() -> void:
 	var player := hero(true)
-	player.refuge["quests"] = [0]
+	assert_true(_refuge().travel(player))
+	AdventureExpansions.progress(player, "refuge")["quests"] = [0]
+	AdventureExpansions.progress(player, "refuge")["pending"] = ["Thallid"]
 	var saved := player.to_dict()
-	AdventureExpansions.read_launch(PackedStringArray())
+	CardPacks.set_enabled("pack-2", false)
 	player = AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(saved)))
 	assert_not_null(player)
-	assert_true(player.expanded_adventure, "saved mode is preserved, not converted to cards-only")
-	assert_eq(player.refuge["quests"], [0])
-	assert_true(AdventureExpansions.places(player.world).is_empty())
-	assert_false(RefugeCampaign.travel(player))
-	assert_true(AdventureExpansions.targets(player).is_empty())
-	AdventureTasks.rows(player)
-	assert_true(AdventureExpansions._providers.is_empty(), "ordinary launch does not load story providers")
-	assert_false(AdventurePacks.offers_cards(player, "pack-2"), "omitting the flag cannot bypass the saved card unlock")
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
-	AdventureExpansions.initialize(player)
-	assert_eq(player.world.expansion["entries"], saved["world"]["expansion"]["entries"])
-	assert_true(RefugeCampaign.travel(player))
-	assert_eq(player.refuge["quests"], [0])
-
-func test_saved_island_can_return_without_flag_and_resume_later() -> void:
-	var player := hero(true)
-	assert_true(RefugeCampaign.travel(player))
-	player.refuge["quests"] = [0]
-	player.refuge["pending"] = ["Thallid"]
-	var saved := player.to_dict()
-	AdventureExpansions.read_launch(PackedStringArray())
-	player = AdventurePlayer.from_dict(JSON.parse_string(JSON.stringify(saved)))
-	assert_not_null(player)
-	assert_false(RefugeCampaign.available())
-	assert_string_contains(RefugeCampaign.deck_problem(player), "--expanded-adventure")
+	assert_false(_refuge().available())
+	assert_string_contains(_refuge().deck_problem(player), "Pack 2")
 	var port: Array = player.world.expansion["port"]
-	var place := RefugeJourney.describe(player, Vector2i(port[0], port[1]))
-	assert_eq(place["actions"][0], ["refuge_sail", "Sail to Shandalar", true])
+	var place := _refuge().describe(player, Vector2i(port[0], port[1]))
+	assert_eq(place["actions"][0], ["refuge_sail", "Sail to Shandalar", true], "the ship home always sails")
 	var tasks := AdventureTasks.rows(player)
 	assert_true(tasks.any(func(task: Dictionary) -> bool: return task["id"] == "refuge/return"))
-	assert_false(tasks.any(func(task: Dictionary) -> bool: return task["id"].begins_with("refuge/pledge:") and task["status"] == "active"))
-	assert_true(RefugeCampaign.travel(player))
-	assert_true(AdventureExpansions.places(player.world).is_empty())
-	assert_false(RefugeCampaign.travel(player))
-	AdventureExpansions.read_launch(PackedStringArray([AdventureExpansions.LAUNCH_FLAG]))
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
+	assert_true(AdventureExpansions.places(player.world).is_empty(), "no anchorage while its pack is off")
+	assert_false(_refuge().travel(player))
+	CardPacks.set_enabled("pack-2", true)
+	assert_true(_refuge().travel(player))
 	assert_eq(player.world.seed, int(saved["world"]["seed"]))
-	assert_eq(player.refuge["quests"], [0])
-	assert_eq(player.refuge["pending"], ["Thallid"])
+	assert_eq(AdventureExpansions.progress(player, "refuge")["quests"], [0])
+	assert_eq(AdventureExpansions.progress(player, "refuge")["pending"], ["Thallid"])
 
 func test_cards_only_add_all_fallen_empires_cards_without_adventure_resources() -> void:
 	var player := hero()
@@ -111,12 +92,12 @@ func test_cards_only_add_all_fallen_empires_cards_without_adventure_resources() 
 	assert_true(player.expansions.is_empty())
 	assert_true(player.regions.is_empty())
 	assert_true(AdventureExpansions.places(player.world).is_empty())
-	assert_false(RefugeCampaign.travel(player), "no hidden voyage in cards-only mode")
+	assert_false(_refuge().travel(player), "no hidden voyage in cards-only mode")
 	for pool in [CardShop._draw_rules(player, 1)["stock"], CardTrade.for_trader(player, CardTrade.TOWN), LairEvent.reward_pool(player)]:
 		var cards := names(pool)
 		for card in FallenEmpiresPack.names(): assert_has(cards, card)
 	assert_true(AdventureTasks.rows(player).all(func(row: Dictionary) -> bool: return not row["id"].contains("refuge")))
-	assert_true(AdventureExpansions._providers.is_empty(), "card availability never loads quest code")
+	AdventureExpansions.release_inactive("mainland")
 	assert_true(AdventureExpansions._trims.is_empty(), "no expedition artwork")
 
 func test_campaign_selection_overrides_global_enabled_packs() -> void:
@@ -124,10 +105,10 @@ func test_campaign_selection_overrides_global_enabled_packs() -> void:
 	assert_false(AdventurePacks.offers_cards(player, "pack-2"))
 	assert_false(AdventurePacks.offers_cards(player, "pack-3"))
 	assert_false(names(CardShop._draw_rules(player, 1)["stock"]).has("Thallid"))
-	assert_false(RefugeCampaign.travel(player))
+	assert_false(_refuge().travel(player))
 	var expanded_without_pack := hero(true, [])
 	assert_true(AdventureExpansions.places(expanded_without_pack.world).is_empty())
-	assert_false(RefugeCampaign.travel(expanded_without_pack))
+	assert_false(_refuge().travel(expanded_without_pack))
 
 func test_pack_without_adventure_is_usable_in_both_modes_and_stock_deduplicates() -> void:
 	assert_true(AdventurePacks.adventures("pack-3").is_empty())
@@ -144,17 +125,15 @@ func test_pack_without_adventure_is_usable_in_both_modes_and_stock_deduplicates(
 		for row in AdventurePacks.card_stock("pack-3"):
 			assert_false(CardTrade.in_adventure(row["name"]))
 
-func test_expanded_mode_keeps_local_cards_and_mainland_liberation_gate() -> void:
+func test_a_ticked_land_never_holds_its_packs_cards_back() -> void:
 	var player := hero(true)
-	assert_false(AdventurePacks.offers_cards(player, "pack-2"))
+	assert_true(AdventurePacks.offers_cards(player, "pack-2"), "on the mainland from the first day (§0.2)")
+	assert_has(names(CardTrade.for_trader(player, CardTrade.TOWN)), "Thallid")
 	assert_false(AdventureExpansions.places(player.world).is_empty())
-	assert_true(RefugeCampaign.travel(player))
+	assert_true(_refuge().travel(player))
 	assert_true(AdventurePacks.offers_cards(player, "pack-2"))
-	assert_true(RefugeCampaign.travel(player))
-	assert_false(AdventurePacks.offers_cards(player, "pack-2"))
-	player.refuge["liberated"] = true
-	assert_true(AdventurePacks.offers_cards(player, "pack-2"))
-	assert_false(AdventurePacks.offers_cards(hero(true), "pack-2"), "unlock is per hero")
+	assert_true(_refuge().travel(player))
+	assert_true(AdventurePacks.offers_cards(player, "pack-2"), "not freed, and still on offer")
 
 func test_saved_modes_and_pack_choices_survive_round_trip() -> void:
 	for mode in [false, true]:
@@ -163,36 +142,17 @@ func test_saved_modes_and_pack_choices_survive_round_trip() -> void:
 		var loaded := AdventurePlayer.from_dict(saved)
 		assert_not_null(loaded)
 		if loaded == null: continue
-		assert_eq(loaded.expanded_adventure, mode)
+		assert_eq(AdventureExpansions.ticked(loaded, "refuge"), mode)
 		assert_eq(loaded.packs, player.packs)
-		assert_eq(AdventurePacks.offers_cards(loaded, "pack-2"), not mode)
+		assert_true(AdventurePacks.offers_cards(loaded, "pack-2"))
 		assert_eq(AdventureExpansions.places(loaded.world).is_empty(), not mode)
-
-func test_legacy_expedition_save_keeps_story_and_return_even_with_pack_disabled() -> void:
-	var player := hero(true)
-	assert_true(RefugeCampaign.travel(player))
-	var saved := player.to_dict()
-	saved["version"] = 6
-	saved["hero"].erase("expanded_adventure")
-	saved["hero"]["packs"] = []
-	CardPacks.set_enabled("pack-2", false)
-	var loaded := AdventurePlayer.from_dict(saved)
-	assert_not_null(loaded)
-	if loaded == null: return
-	assert_true(loaded.expanded_adventure)
-	assert_true(AdventurePacks.selected(loaded, "pack-2"))
-	assert_true(RefugeCampaign.travel(loaded))
-	assert_true(AdventureExpansions.places(loaded.world).is_empty())
-	assert_false(RefugeCampaign.travel(loaded))
-	CardPacks.set_enabled("pack-2", true)
-	assert_true(RefugeCampaign.travel(loaded))
 
 func test_old_ordinary_save_stays_ordinary_even_when_packs_are_enabled_globally() -> void:
 	var saved := hero(false, []).to_dict()
 	saved["version"] = 6
-	saved["hero"].erase("expanded_adventure")
+	saved["hero"].erase("adventures")
 	var loaded := AdventurePlayer.from_dict(saved)
-	assert_false(loaded.expanded_adventure)
+	assert_eq(loaded.adventures, [])
 	assert_true(loaded.packs.is_empty())
 	AdventureExpansions.initialize(loaded)
 	assert_true(AdventureExpansions.places(loaded.world).is_empty())
@@ -206,21 +166,9 @@ func test_embarking_activates_selected_card_rules_only() -> void:
 	assert_false(AdventurePacks.activate(["pack-2", "pack-missing"]).is_empty())
 	assert_false(CardPacks.is_enabled("pack-2"), "a missing selection is refused before enabling any pack")
 
-func test_old_unvisited_harbor_keeps_its_pack_and_coordinates() -> void:
-	var saved := hero(true).to_dict()
-	var port: Array = saved["world"]["expansion"]["port"].duplicate()
-	saved["version"] = 6
-	saved["hero"].erase("expanded_adventure")
-	saved["hero"]["packs"] = []
-	var loaded := AdventurePlayer.from_dict(saved)
-	assert_true(loaded.expanded_adventure)
-	assert_true(AdventurePacks.selected(loaded, "pack-2"))
-	assert_eq(loaded.world.expansion["port"], port)
-	assert_false(AdventureExpansions.places(loaded.world).is_empty())
-
 func test_switching_to_cards_only_drops_prior_adventure_provider() -> void:
 	var expanded := hero(true)
-	assert_true(RefugeCampaign.travel(expanded))
+	assert_true(_refuge().travel(expanded))
 	assert_false(AdventureExpansions._providers.is_empty())
 	var ordinary := hero()
 	assert_true(AdventureExpansions._providers.is_empty())
@@ -243,20 +191,29 @@ func test_every_installed_card_module_works_without_its_adventure() -> void:
 	assert_true(player.expansions.is_empty())
 	assert_true(AdventureExpansions._providers.is_empty())
 
-func test_another_pack_can_attach_an_adventure_with_its_own_unlock_field() -> void:
+func test_another_pack_can_attach_a_land_that_needs_it() -> void:
 	var module := preload("res://tools/expansion_testing/beacon_region.gd")
 	var descriptor: Dictionary = module.descriptor()
-	descriptor["pack"] = "pack-3"
-	descriptor["cards_unlock"] = "complete"
+	descriptor["packs"] = ["pack-3"]
 	assert_true(AdventureExpansions.register_development(module.ID, descriptor))
-	var player := hero(true, ["pack-3"])
+	var setup := AdventureSetup.new()
+	setup.seed_text = "48271"
+	setup.adventures = [module.ID] as Array[String]
+	setup.packs = ["pack-3"]
+	var record := setup.resolve({"pack-3": "1"})
+	var player := AdventurePlayer.begin(record, AdventureSetup.make_world(record))
+	AdventureExpansions.initialize(player)
 	assert_eq(AdventurePacks.adventures("pack-3"), [module.ID] as Array[String])
-	assert_false(AdventurePacks.offers_cards(player, "pack-3"))
+	assert_true(AdventurePacks.offers_cards(player, "pack-3"), "its cards from the first day")
 	assert_true(AdventureExpansions._providers.is_empty())
-	player.expansions[module.ID]["complete"] = true
-	assert_true(AdventurePacks.offers_cards(player, "pack-3"))
-	assert_true(AdventurePacks.offers_cards(hero(false, ["pack-3"]), "pack-3"))
+	assert_true(AdventureExpansions.enabled_for(player, module.ID))
 	assert_true(AdventureExpansions.places(hero(true, []).world).is_empty(), "unselected module adds no port")
 	CardPacks.set_enabled("pack-3", false)
 	assert_false(AdventureExpansions.enabled_for(player, module.ID))
 	assert_false(AdventurePacks.offers_cards(player, "pack-3"))
+
+
+## The Last Refuge's content, the plugin's own [DataRegion] (adventure
+## plugins, 2026-11-10: the built-in scripts it replaced are gone).
+func _refuge() -> DataRegion:
+	return AdventureExpansions.provider("refuge") as DataRegion

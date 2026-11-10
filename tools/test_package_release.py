@@ -46,6 +46,16 @@ class PackageReleaseTest(unittest.TestCase):
             json.dumps(sorted(pack.pack_one.assigned_pairs())), encoding='utf-8')
         shutil.copyfile(pack.ROOT / 'docs/card-art-and-packs.md',
                         self.root / 'docs/card-art-and-packs.md')
+        # The adventure plugins' folder (2026-11-10): the corpus's minimal
+        # plugin stands in for the prototype, and a small guide for P6's.
+        shutil.copytree(pack.ROOT / "tools/plugin_fixtures/good_minimal", self.root / pack.PROTOTYPE)
+        (self.root / pack.PLUGIN_README).write_text("Adventure plugins go here.\n", encoding="utf-8")
+        guide = self.root / pack.PLUGIN_GUIDE
+        (guide / "img").mkdir(parents=True)
+        (guide / "index.html").write_text("<!DOCTYPE html><title>Start here</title>\n", encoding="utf-8")
+        (guide / "guide.css").write_text("body { margin: 0; }\n", encoding="utf-8")
+        (guide / "img" / "map.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>\n", encoding="utf-8")
+        (guide / ".DS_Store").write_bytes(b"\x00\x01")
         handheld_sources = {pack.ARKOS_LAUNCHER}
         for files in pack.HANDHELD_FILES.values():
             handheld_sources.update(files.values())
@@ -269,6 +279,108 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertTrue(archive.getinfo(prefix + "quest_fresh_install.sh").external_attr >> 16 & 0o111)
                             self.assertIn("  push_to_quest.sh\n",
                                           archive.read(outer + "SHA256SUMS").decode())
+
+    def test_desktop_packages_carry_the_adventure_plugins_folder(self):
+        import adventure_plugin
+        for platform in pack.PLATFORMS:
+            with self.subTest(platform=platform):
+                self.make_export(platform)
+                for output in self.build(platform):
+                    with zipfile.ZipFile(output) as archive:
+                        prefix = f"Shandalar-1.2.3-{platform}/"
+                        if platform == "arkos-rk3326-experimental":
+                            prefix += "shandalar/"
+                        entries = archive.namelist()
+                        self.assertIn(prefix + "tools/adventure_plugin.py", entries)
+                        self.assertIn(prefix + adventure_plugin.SCHEMA_REL, entries)
+                        cards = json.loads(archive.read(prefix + pack.PLUGIN_CARDS))
+                        self.assertEqual(cards["version"], "1.2.3")
+                        self.assertIn("pack-2", cards["packs"])
+                        plugin = prefix + "expanded_adventure/Fallen_Empires_Refuge_prototype.zip"
+                        mine = [e for e in entries if e.startswith(prefix + "expanded_adventure/")]
+                        if platform not in pack.PLUGIN_PLATFORMS:
+                            self.assertEqual(mine, [], "the Web, the Quest and Android carry no plugins folder")
+                            continue
+                        self.assertEqual(sorted(mine), sorted(prefix + name for name in (
+                            "expanded_adventure/Fallen_Empires_Refuge_prototype.zip", "expanded_adventure/README.txt",
+                            "expanded_adventure/GUIDE/index.html", "expanded_adventure/GUIDE/guide.css",
+                            "expanded_adventure/GUIDE/img/map.svg")), "the guide as it is, its litter left out")
+                        self.assertEqual(archive.getinfo(plugin).compress_type, zipfile.ZIP_STORED)
+                        with tempfile.TemporaryDirectory() as work:
+                            target = Path(work) / "Fallen_Empires_Refuge_prototype.zip"
+                            target.write_bytes(archive.read(plugin))
+                            judged = adventure_plugin.judge(str(target), adventure_plugin.find_game())
+                            self.assertTrue(judged["valid"], judged["problems"])
+                            self.assertEqual(len(judged["manifest"]["files"]), len(judged["files"]) - 1, "exported: hashed")
+
+    def test_the_prototype_zip_is_one_build_and_a_release_asset_of_its_own(self):
+        name, data = pack.prototype_zip(self.root)
+        self.assertEqual(name, "Fallen_Empires_Refuge_prototype.zip")
+        self.assertEqual(pack.prototype_zip(self.root)[1], data, "deterministic")
+        target = pack.write_adventure_plugins(self.out, self.root)
+        self.assertEqual(target.read_bytes(), data)
+        self.assertEqual(pack.write_adventure_plugins(self.out, self.root), target, "the same bytes again are fine")
+        target.write_bytes(b"other")
+        with self.assertRaisesRegex(ValueError, "Refusing to overwrite"):
+            pack.write_adventure_plugins(self.out, self.root)
+        (self.root / pack.PROTOTYPE / "foes.json").unlink()
+        with self.assertRaisesRegex(ValueError, "The prototype plugin is refused: foes.json is missing."):
+            pack.prototype_zip(self.root)
+
+    def test_the_real_prototype_and_guide_are_ready_to_ship(self):
+        name, data = pack.prototype_zip()
+        self.assertLess(len(data), 32 * 1024 * 1024)
+        files = pack.plugin_files()
+        self.assertIn("expanded_adventure/GUIDE/index.html", files)
+        self.assertIn("expanded_adventure/GUIDE/reference.html", files)
+        self.assertIn("expanded_adventure/README.txt", files)
+        result = subprocess.run([sys.executable, str(pack.ROOT / "tools/package_release.py"), "--adventure-plugins",
+                                 self.temp.name], capture_output=True, text=True, timeout=300)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), f"{hashlib.sha256(data).hexdigest()}  {name}")
+
+    def test_a_guide_or_prototype_problem_refuses_the_package(self):
+        self.make_export("linux64")
+        (self.root / pack.PLUGIN_GUIDE / "index.html").unlink()
+        with self.assertRaisesRegex(ValueError, "guide is missing"):
+            self.build("linux64")
+        self.assertFalse(self.out.exists())
+        (self.root / pack.PLUGIN_GUIDE / "index.html").write_text("back", encoding="utf-8")
+        (self.root / pack.PLUGIN_GUIDE / "link.html").symlink_to(self.root / pack.PLUGIN_GUIDE / "index.html")
+        with self.assertRaisesRegex(ValueError, "A link in the authors' guide"):
+            self.build("linux64")
+        (self.root / pack.PLUGIN_GUIDE / "link.html").unlink()
+        (self.root / pack.PROTOTYPE / "evil.gd").write_text("extends Node", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "evil.gd: this kind of file is not allowed"):
+            self.build("linux64")
+        self.assertFalse(self.out.exists())
+        self.make_export("web")
+        self.build("web")
+
+    def test_the_tool_in_an_extracted_release_checks_card_names(self):
+        sets = self.root / "cards" / "sets" / "2ed"
+        sets.mkdir(parents=True)
+        foes = json.loads((self.root / pack.PROTOTYPE / "foes.json").read_text(encoding="utf-8"))
+        for foe in foes["foes"].values():
+            for card in foe["deck"]:
+                (sets / (card.replace(" ", "_").replace("'", "") + ".gd")).write_text(
+                    'func build() -> CardData:\n\treturn CardData.new(%s, "", 0)\n' % json.dumps(card), encoding="utf-8")
+        self.make_export("linux64")
+        output = self.build("linux64")[0]
+        release = Path(self.temp.name) / "extracted"
+        with zipfile.ZipFile(output) as archive:
+            archive.extractall(release)
+        game = release / "Shandalar-1.2.3-linux64"
+        tool = ["python3", "-I", "tools/adventure_plugin.py"]
+        valid = subprocess.run(tool + ["validate", "expanded_adventure/Fallen_Empires_Refuge_prototype.zip"], cwd=game,
+                               capture_output=True, text=True, timeout=120)
+        self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
+        self.assertNotIn("not checked", valid.stderr)
+        version = subprocess.run(tool + ["--version"], cwd=game, capture_output=True, text=True, timeout=60)
+        self.assertIn("Shandalar 1.2.3", version.stdout)
+        made = subprocess.run(tool + ["new", "my_isle", "--id", "my_isle", "--name", "My Isle"], cwd=game,
+                              capture_output=True, text=True, timeout=60)
+        self.assertEqual(made.returncode, 0, made.stdout + made.stderr)
 
     def test_extracted_windows_mcp_discovers_the_console_and_game_version(self):
         self.make_export("windows64")

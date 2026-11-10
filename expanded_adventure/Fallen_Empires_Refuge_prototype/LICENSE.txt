@@ -1,0 +1,11 @@
+The Last Refuge (Fallen Empires prototype) - license
+
+This plugin's text, data and pictures were made for the Shandalar remake
+and are licensed with it under the GNU General Public License, version 3
+(GPL-3.0). The full license text is LICENSE.txt in the game's folder
+(the LICENSE file of the game's source), and also
+https://www.gnu.org/licenses/gpl-3.0.txt.
+
+The plugin holds no card pictures. The card names it lists belong to the
+cards of the game and its card packs; card pictures and card text stay
+with their owners and are never part of this plugin.

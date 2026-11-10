@@ -504,6 +504,14 @@ func _add_card_packs_section(content: VBoxContainer) -> void:
 	content.add_child(manage)
 
 
+## The `Adventure plugins folder:` row's words: the folder, and how many
+## plugins the game found in all its places ([AdventurePlugins]).
+static func adventure_plugins_line(shown: String, count: int) -> String:
+	if count == 0:
+		return "Adventure plugins folder: %s — none found" % shown
+	return "Adventure plugins folder: %s — %d found" % [shown, count]
+
+
 ## THE SKIN AND THE PLAYER'S FOLDERS — `[QoL]`, and the owner's asks of
 ## 2026-09-08: *"we should have a menu options to select asset art skin
 ## by file choosing"*, then: *"it should just say 'skin', point to skin
@@ -596,6 +604,15 @@ func _add_skin_section(content: VBoxContainer) -> void:
 		# and all, so the path the row names can be opened — the same
 		# gesture as the music and portrait folders.
 		SkinPack.ensure_card_folder()
+		# The adventure plugins' folder beside the card folder (adventure
+		# plugins, 2026-11-10): one line, its place and what is found; the
+		# Embark's plugins window ticks them.
+		var plugins := _place_label("AdventurePluginsFolder", "Adventure plugins — a .zip "
+			+ "or a folder each, data only — are found here and ticked in the Embark's "
+			+ "plugins window. The expanded_adventure_folder key in settings.cfg moves it.")
+		plugins.text = adventure_plugins_line(GamePaths.shown(GamePaths.expanded_adventure_folder()),
+			AdventurePlugins.all().size())
+		content.add_child(plugins)
 		content.add_child(_place_label("PortraitsFolder", "A PNG, JPG or WEBP "
 			+ "placed here joins the 1997 faces in the portrait chooser; the file "
 			+ "name is the name."))

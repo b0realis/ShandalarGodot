@@ -1,0 +1,46 @@
+{
+	"foes": {
+		"tithe_collector": {
+			"name": "Ebon Crown Tithe-Collector", "life": 26, "face": 11,
+			"deck": {"Plains": 16, "Icatian Javelineers": 4, "Order of Leitbur": 4, "Icatian Infantry": 4, "Icatian Priest": 3,
+				"Farrel's Zealot": 3, "Swords to Plowshares": 2, "Crusade": 2, "Righteousness": 2}
+		},
+		"blockade_captain": {
+			"name": "The Blockade Captain", "life": 28, "face": 18,
+			"deck": {"Island": 18, "Vodalian Soldiers": 4, "Vodalian Mage": 2, "Homarid": 2, "Homarid Warrior": 2, "High Tide": 3,
+				"Deep Spawn": 2, "Counterspell": 3, "Merseine": 2, "Unsummon": 2}
+		},
+		"pit_overseer": {
+			"name": "The Pit Overseer", "life": 28, "face": 4,
+			"deck": {"Swamp": 16, "Order of the Ebon Hand": 4, "Hymn to Tourach": 4, "Basal Thrull": 4, "Armor Thrull": 3,
+				"Soul Exchange": 2, "Thrull Retainer": 2, "Terror": 2, "Drain Life": 2, "Thrull Champion": 1}
+		},
+		"tribute_raider": {
+			"name": "The Tribute-Raider", "life": 26, "face": 32,
+			"deck": {"Mountain": 16, "Goblin Chirurgeon": 4, "Goblin Balloon Brigade": 4, "Goblins of the Flarg": 4, "Goblin King": 2,
+				"Goblin Grenade": 4, "Goblin War Drums": 2, "Lightning Bolt": 2, "Goblin Warrens": 1, "Dwarven Soldier": 1}
+		},
+		"sporekeeper": {
+			"name": "The Crown's Sporekeeper", "life": 30, "face": 25,
+			"deck": {"Forest": 16, "Thallid": 4, "Thorn Thallid": 3, "Elvish Farmer": 3, "Spore Flower": 2, "Elvish Hunter": 2,
+				"Feral Thallid": 2, "Thallid Devourer": 2, "Giant Growth": 3, "Regrowth": 2, "Hurricane": 1}
+		},
+		"ebon_lord": {
+			"name": "Lord of the Ebon Crown", "deck_name": "The Ebon Crown", "life": 36, "face": 6,
+			"deck": {"Swamp": 16, "Basal Thrull": 4, "Armor Thrull": 3, "Mindstab Thrull": 3, "Thrull Champion": 2, "Soul Exchange": 3,
+				"Order of the Ebon Hand": 3, "Hymn to Tourach": 2, "Terror": 2, "Dark Ritual": 2}
+		}
+	},
+	"roaming": {
+		"min_tier": 12,
+		"skip": {"seed": 1, "slot": 17, "row": 1, "every": 3},
+		"ante": "random_nonbasic",
+		"decks": [
+			{"colors": ["white"], "name": "Icatian Patrol", "foe": "tithe_collector"},
+			{"colors": ["blue"], "name": "Vodalian Expedition", "foe": "blockade_captain"},
+			{"colors": ["black"], "name": "Ebon Remnant", "foe": "pit_overseer"},
+			{"colors": ["red"], "name": "Goblin Tribute-Raiders", "foe": "tribute_raider"},
+			{"colors": ["green"], "name": "Havenwood Spores", "foe": "sporekeeper"}
+		]
+	}
+}

@@ -47,8 +47,16 @@ extends RefCounted
 ## adventure clock. Version 6 retains task selection and known clues independently
 ## of journal history. Version 7 separates campaign card packs from optional
 ## expanded adventures. Older saves preserve evidenced expeditions and visited maps.
+## Version 8 (adventure plugins, 2026-11-10) names the lands a campaign ticked,
+## `hero.adventures` `[{id, version, name}]` ([member adventures]); a land's
+## progress and map whose plugin is missing, or which its installed version
+## cannot read, are carried as they are ([AdventureRegions],
+## [ExpansionContract]); the mainland's anchorages are `entries` alone. The
+## built-in Last Refuge of versions 5–7 was never shipped (the owner,
+## 2026-11-10: *"saves with it do not exist in the wild"*): its shapes are
+## not read, and a vanilla save of any version loads as it always did.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 7
+const FORMAT_VERSION := 8
 ## Where the adventures are saved (tests point it elsewhere): this folder
 ## — on Android `<files>/adventures/` instead, in the app's corner of the
 ## shared storage ([method saves_place]).
@@ -243,7 +251,20 @@ var copy_limit: bool:
 var playmat := {}
 ## The card packs that join this adventure, `[{id, version}]` — ours.
 var packs: Array = []
-var expanded_adventure := false
+## THE ADVENTURE PLUGINS TICKED AT THE EMBARK (adventure plugins,
+## 2026-11-10), `[{id, version, name, title}]`: the version, name and land's
+## title the plugin had when it last read the land, the name and title kept
+## for the words when it is missing ([method AdventureExpansions.label]). A land is on for the campaign while its
+## plugin is installed and valid and its card packs are among [member packs]
+## ([method AdventureExpansions.enabled_for]).
+var adventures: Array = []
+## THE LANDS HELD THIS SESSION (adventure plugins, 2026-11-10): those whose
+## saved map or progress the installed version of their plugin cannot read,
+## found as the save is read ([method AdventureRegions.read]), id → true —
+## carried as they were saved, their ships not sailing, as a missing
+## plugin's land ([method AdventureExpansions.held]). Never saved: the next
+## load with the old version back reads them again.
+var held_lands := {}
 ## THE FINAL BATTLE'S RULE, chosen at the Embark (the owner, 2026-10-27,
 ## round P3: "A setting at Embark"; the names are the owner's) — what a lost
 ## battle against Arzakon leaves ([FinalBattle]):
@@ -486,16 +507,6 @@ var tracked_task := ""
 var known_clues: Array = []
 var task_history: Dictionary = {}
 var task_sequence := 0
-## Compatibility accessor for Last Refuge content; persistence is region-neutral.
-var refuge: Dictionary:
-	get: return expansions.get("refuge", {})
-	set(value):
-		var state := value.duplicate(true)
-		if state.has("regions"):
-			regions = state["regions"]
-			state.erase("regions")
-		if state.is_empty(): expansions.erase("refuge")
-		else: expansions["refuge"] = state
 ## The seed as the player typed or was given it.
 var world_seed_text := ""
 ## The world's fingerprint when it was made, before a tile was explored
@@ -552,7 +563,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.ascetic = record.get("ascetic") is bool and bool(record.get("ascetic"))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
-	player.expanded_adventure = _flag(record.get("expanded_adventure"))
+	player.adventures = _cleaned_adventures(record.get("adventures"))
 	player.world_seed_text = String(record.get("seed_text", str(record.get("seed", 0))))
 	player.game_version = String(ProjectSettings.get_setting("application/config/version", ""))
 	var now := Time.get_unix_time_from_system()
@@ -996,7 +1007,7 @@ func to_dict(include_regions := true) -> Dictionary:
 			"card_hold": card_hold, "ban_list": ban_list, "all_trader_cards": all_trader_cards,
 			"sieges": sieges,
 			"creatures": creatures, "life_start": life_start, "ascetic": ascetic,
-			"playmat": playmat, "packs": packs, "expanded_adventure": expanded_adventure},
+			"playmat": playmat, "packs": packs, "adventures": adventures},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
 		"carried": {"gold": gold, "food": food, "meal_half": meal_half, "amulets": amulets,
@@ -1021,7 +1032,8 @@ func to_dict(include_regions := true) -> Dictionary:
 			"expansion": world.expansion,
 			"seed": world.seed, "seed_text": world_seed_text, "slot_start": world.slot_start,
 			"color": world.color, "difficulty": world.difficulty,
-			"generator": AdventureExpansions.definition(AdventureRegions.id(world)).get("generator", "1997 (1.3)"),
+			"generator": "1997 (1.3)" if AdventureRegions.id(world) == AdventureRegions.MAINLAND \
+				else String(AdventureExpansions.definition(AdventureRegions.id(world)).get("generator", "plugin " + AdventureRegions.id(world))),
 			"made_fingerprint": made_fingerprint, "dice": dice,
 			"start": [world.start.x, world.start.y],
 			"grid": grid,
@@ -1073,7 +1085,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	# in a dungeon replaced as the Embark now replaces it.
 	player.treasures_by_the_ban_list()
 	AdventureRegions.read(player, data)
-	AdventurePacks.migrate(player, int(data["version"]))
+	AdventureExpansions.note_versions(player)
 	AdventureExpansions.sync_choices(player)
 	AdventureTasks.read(player, data.get("tasks"))
 	return player
@@ -1142,7 +1154,44 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	player.ascetic = _flag(hero.get("ascetic"))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
-	player.expanded_adventure = _flag(hero.get("expanded_adventure"))
+	player.adventures = _cleaned_adventures(hero.get("adventures"))
+
+
+## THE TICKED PLUGINS of a save or an Embark record, `[{id, version,
+## name, title}]`: each row a record with a plugin's id ([method
+## AdventurePlugins.valid_id]), its version, name and title as text, an id once,
+## at most [constant MOST_ADVENTURES] — anything else dropped, not the save.
+const MOST_ADVENTURES := 32
+static func _cleaned_adventures(value: Variant) -> Array:
+	var out: Array = []
+	var seen := {}
+	for row: Variant in _list(value):
+		if not row is Dictionary or not row.get("id") is String:
+			continue
+		var id := String(row["id"])
+		if not AdventurePlugins.valid_id(id) or seen.has(id) or out.size() >= MOST_ADVENTURES:
+			continue
+		seen[id] = true
+		out.append({"id": id, "version": _text(row.get("version")).left(24), "name": _text(row.get("name")).left(AdventurePlugins.MAX_NAME),
+			"title": _text(row.get("title")).left(AdventurePlugins.MAX_NAME)})
+	return out
+
+
+## The rows of [member adventures] for lands [param ids] as this game knows
+## them now: each plugin's version and name ([AdventurePlugins]; a
+## development fixture's title).
+static func ticked_rows(ids: Array) -> Array:
+	var out: Array = []
+	for id: Variant in ids:
+		var key := String(id)
+		var row := AdventurePlugins.row(key)
+		var found := String(row.get("id", "")) == key
+		var name := String(row.get("name", "")) if found else ""
+		var title := AdventureExpansions.label(key) if AdventureExpansions.known(key) else ""
+		if name == "":
+			name = title if title != "" else AdventureExpansions.label(key)
+		out.append({"id": key, "version": String(row.get("version", "")) if found else "", "name": name, "title": title})
+	return _cleaned_adventures(out)
 
 
 ## The hero's place, on the map: where the world starts them when the save
@@ -2041,16 +2090,13 @@ static func _summary(data: Dictionary) -> Dictionary:
 ## the hero pane counts them ([method journey_steps]) — not the clock of the
 ## region the save stands in (0.60.13 bug campaign, h1-2: saved on the
 ## island after 40 days on the mainland and 2 there, the list said "day 2").
-## A save from before the journey's clock (version 4 and older) sums its
-## regions' clocks, as the load does ([method AdventureRegions.read]).
+## A save from before the journey's clock (version 4 and older): its one
+## world's clock, as the load reads it ([method AdventureRegions.read]).
 static func _journey_days(data: Dictionary) -> int:
 	var steps := _count(_object(data.get("clocks")).get("quest_timer"))
 	var journey := _object(data.get("journey"))
 	if journey.has("time"):
 		steps = _count(journey["time"])
-	elif _number(data.get("version"), 1) < 5:
-		for region: Variant in _object(AdventureRegions.saved_regions(data)).values():
-			steps += _count(_object(_object(region).get("clocks")).get("quest_timer"))
 	return steps / WorldStatus.DAY
 
 

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Refuge walkthrough · Adventure plugin guide</title>
+<meta name="description" content="Every file of the Last Refuge learning demo, quoted and explained.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html" aria-current="page">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>The Refuge walkthrough</h1>
+<p class="lede"><i>The Last Refuge</i> is the game’s one plugin: a finished island made as a game-design and learning demo. This page reads it file by file, quoting the files as they are.</p>
+
+<div class="note"><strong>Where to find it</strong><p>The game folder’s <code>expanded_adventure/Fallen_Empires_Refuge_prototype.zip</code>. Unzip a copy anywhere to read it, or to start your own from it under a new id: then delete <code>files</code> from your unzipped copy’s <code>plugin.json</code>, or just export, which ignores it. Its island is original fiction, not official Magic canon and not new official content; its five communities draw on the peoples of the Fallen Empires card set.</p></div>
+
+<h2 id="files">The files</h2>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>plugin.json</code></td><td class="wrap">The manifest: id <code>refuge</code>, the card pack it needs, the region’s title, salt and palette.</td></tr>
+<tr><td><code>world.json</code></td><td class="wrap">The island’s recipe: five communities, six places, nine village names, the dungeon, two objectives.</td></tr>
+<tr><td><code>places.json</code></td><td class="wrap">Refuge Harbor and the Castle of the Ebon Crown: pictures, map sprites, the castle’s pennant, the panes; the voyage’s words.</td></tr>
+<tr><td><code>quests.json</code></td><td class="wrap">Five petitions, the shared “pledge” reward, the finale, status, tasks and talk.</td></tr>
+<tr><td><code>foes.json</code></td><td class="wrap">Six foes and the roaming creatures’ five decks.</td></tr>
+<tr><td><code>rewards.json</code></td><td class="wrap">Five bundles of Fallen Empires cards, one per color.</td></tr>
+<tr><td><code>text.json</code></td><td class="wrap">Every sentence, 132 keys.</td></tr>
+<tr><td><code>art/</code></td><td class="wrap">Two pane pictures and two map sprites.</td></tr>
+<tr><td><code>README.txt</code>, <code>LICENSE.txt</code></td><td class="wrap">For players: what it is, what it needs, the story; its license.</td></tr>
+</tbody></table></div>
+
+<h2 id="manifest">plugin.json</h2>
+<figure class="quote" data-file="plugin.json" data-pointer=""><figcaption class="src"><b>plugin.json</b><span>the whole file</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"plugin_format"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span>
+  <span class="j-k">"api_version"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span>
+  <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"refuge"</span><span class="j-p">,</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"The Last Refuge (Fallen Empires prototype)"</span><span class="j-p">,</span>
+  <span class="j-k">"version"</span><span class="j-p">:</span> <span class="j-s">"1.0.0"</span><span class="j-p">,</span>
+  <span class="j-k">"minimum_game_version"</span><span class="j-p">:</span> <span class="j-s">"0.60.19"</span><span class="j-p">,</span>
+  <span class="j-k">"authors"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"Shandalar Godot"</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"license"</span><span class="j-p">:</span> <span class="j-s">"GPL-3.0 (the game's own license; see LICENSE.txt)"</span><span class="j-p">,</span>
+  <span class="j-k">"description"</span><span class="j-p">:</span> <span class="j-s">"Sail to an island of Sarpadian refugees, win five communities' pledges and challenge the Ebon Crown."</span><span class="j-p">,</span>
+  <span class="j-k">"learning_note"</span><span class="j-p">:</span> <span class="j-s">"A game-design and learning demo: original fiction, not official Magic canon and not new official content. It shows every part of the plugin format in one finished, playable island, for plugin authors to read, play and take apart."</span><span class="j-p">,</span>
+  <span class="j-k">"requires"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"card_packs"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"pack-2"</span><span class="j-p">, </span><span class="j-k">"min_version"</span><span class="j-p">:</span> <span class="j-s">"1.0"</span><span class="j-p">}</span><span class="j-p">]</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"region"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"The Last Refuge"</span><span class="j-p">,</span>
+    <span class="j-k">"castle_name"</span><span class="j-p">:</span> <span class="j-s">"Ebon Crown"</span><span class="j-p">,</span>
+    <span class="j-k">"salt"</span><span class="j-p">:</span> <span class="j-n">4605261</span><span class="j-p">,</span>
+    <span class="j-k">"mana_links"</span><span class="j-p">:</span> <span class="j-n">false</span><span class="j-p">,</span>
+    <span class="j-k">"palette"</span><span class="j-p">:</span> <span class="j-s">"last_refuge"</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<ul>
+<li><code>id</code> is <code>refuge</code>: the island’s name in every save, the start of its picture keys (<code>refuge_harbor</code>) and of every button the game makes for it.</li>
+<li><code>requires</code> names Pack 2, Fallen Empires: its cards fill every deck and reward, and the finale asks for a deck of them. Ticking the plugin ticks the pack.</li>
+<li><code>region.salt</code> picks the island’s own terrain from the campaign’s seed; <code>palette</code> is the built-in <code>last_refuge</code>, drier, yellower greens and its own water; <code>mana_links</code> is false, so its places cannot be mana-linked.</li>
+<li>The game’s source folder, quoted here, has no <code>files</code> list; <code>export</code> writes one into the zip, so the shipped zip’s <code>plugin.json</code> has it. In an unzipped copy you edit, delete <code>files</code>, or just export, which ignores it and writes a fresh one.</li>
+</ul>
+
+<h2 id="world">world.json</h2>
+<figure class="quote" data-file="world.json" data-pointer=""><figcaption class="src"><b>world.json</b><span>the whole file</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"generator"</span><span class="j-p">:</span> <span class="j-s">"island"</span><span class="j-p">,</span>
+  <span class="j-k">"layout_version"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">,</span>
+  <span class="j-k">"side"</span><span class="j-p">:</span> <span class="j-n">32</span><span class="j-p">,</span>
+  <span class="j-k">"offset"</span><span class="j-p">:</span> <span class="j-n">16</span><span class="j-p">,</span>
+  <span class="j-k">"step"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+  <span class="j-k">"slot_start"</span><span class="j-p">:</span> <span class="j-n">0</span><span class="j-p">,</span>
+  <span class="j-k">"dice_salt"</span><span class="j-p">:</span> <span class="j-n">5391686</span><span class="j-p">,</span>
+  <span class="j-k">"spacing"</span><span class="j-p">:</span> <span class="j-n">4.0</span><span class="j-p">,</span>
+  <span class="j-k">"castle"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"from"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">30</span><span class="j-p">, </span><span class="j-n">30</span><span class="j-p">]</span><span class="j-p">, </span><span class="j-k">"span"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">5</span><span class="j-p">, </span><span class="j-n">5</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"port"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"from"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">23</span><span class="j-p">, </span><span class="j-n">48</span><span class="j-p">]</span><span class="j-p">, </span><span class="j-k">"span"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">19</span><span class="j-p">, </span><span class="j-n">0</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"towns"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"center"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">32</span><span class="j-p">, </span><span class="j-n">32</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"spread"</span><span class="j-p">:</span> <span class="j-n">7</span><span class="j-p">,</span>
+    <span class="j-k">"turns"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">,</span>
+    <span class="j-k">"list"</span><span class="j-p">:</span> <span class="j-p">[</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Leitbur's Rest"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">6</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">-9</span><span class="j-p">, </span><span class="j-n">-8</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Vodalian Haven"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">9</span><span class="j-p">, </span><span class="j-n">-9</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Freehold of the Hand"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">9</span><span class="j-p">, </span><span class="j-n">3</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Dwarven Hearth"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">3</span><span class="j-p">, </span><span class="j-n">10</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Havenwood"</span><span class="j-p">, </span><span class="j-k">"terrain"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">, </span><span class="j-k">"aim"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">-10</span><span class="j-p">, </span><span class="j-n">5</span><span class="j-p">]</span><span class="j-p">}</span>
+    <span class="j-p">]</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"places"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">4.0</span><span class="j-p">,</span>
+    <span class="j-k">"list"</span><span class="j-p">:</span> <span class="j-p">[</span>
+      <span class="j-p">{</span>
+        <span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">22</span><span class="j-p">,</span>
+        <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Svyelun's Temple"</span><span class="j-p">,</span>
+        <span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"city"</span><span class="j-p">,</span>
+        <span class="j-k">"coastal"</span><span class="j-p">:</span> <span class="j-n">true</span>
+      <span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">43</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Thelon's Oasis"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">58</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Trokair Bazaar"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"city"</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">76</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Delif's Shrine"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">80</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Zelyon Tower"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-p">{</span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">103</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Farrel's Mill"</span><span class="j-p">, </span><span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"town"</span><span class="j-p">}</span>
+    <span class="j-p">]</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"villages"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"names"</span><span class="j-p">:</span> <span class="j-p">[</span>
+      <span class="j-s">"Anvilholm"</span><span class="j-p">, </span><span class="j-s">"Thrullwick"</span><span class="j-p">, </span><span class="j-s">"Moonwater"</span><span class="j-p">, </span><span class="j-s">"Brassclaw Hollow"</span><span class="j-p">, </span><span class="j-s">"Shellcove"</span><span class="j-p">,</span>
+      <span class="j-s">"Tourach's Fall"</span><span class="j-p">, </span><span class="j-s">"Sporeford"</span><span class="j-p">, </span><span class="j-s">"New Icatia"</span><span class="j-p">, </span><span class="j-s">"Warrenmouth"</span>
+    <span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"count"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">6</span><span class="j-p">, </span><span class="j-n">9</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"slot_step"</span><span class="j-p">:</span> <span class="j-n">8</span><span class="j-p">,</span>
+    <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">3.0</span><span class="j-p">,</span>
+    <span class="j-k">"first_rule"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"near_terrain"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">, </span><span class="j-k">"radius"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">}</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"trade"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">1</span><span class="j-p">, </span><span class="j-n">2</span><span class="j-p">, </span><span class="j-n">4</span><span class="j-p">, </span><span class="j-n">8</span><span class="j-p">, </span><span class="j-n">16</span><span class="j-p">, </span><span class="j-n">32</span><span class="j-p">, </span><span class="j-n">256</span><span class="j-p">, </span><span class="j-n">512</span><span class="j-p">, </span><span class="j-n">768</span><span class="j-p">, </span><span class="j-n">1024</span><span class="j-p">, </span><span class="j-n">1280</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"world_magic"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"offers"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"roads"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">,</span>
+  <span class="j-k">"dungeon"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Vaults of the First Crossing"</span><span class="j-p">,</span>
+    <span class="j-k">"from"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">,</span>
+    <span class="j-k">"choices"</span><span class="j-p">:</span> <span class="j-n">10</span><span class="j-p">,</span>
+    <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">3.0</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"objectives"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"channel"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"coastal"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">,</span>
+      <span class="j-k">"exclude"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">1</span><span class="j-p">, </span><span class="j-n">2</span><span class="j-p">, </span><span class="j-n">3</span><span class="j-p">, </span><span class="j-n">4</span><span class="j-p">, </span><span class="j-n">5</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"types"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"town"</span><span class="j-p">, </span><span class="j-s">"city"</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"prefer"</span><span class="j-p">:</span> <span class="j-n">22</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-k">"raider"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"near_terrain"</span><span class="j-p">:</span> <span class="j-n">5</span><span class="j-p">,</span>
+      <span class="j-k">"radius"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+      <span class="j-k">"road"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">,</span>
+      <span class="j-k">"types"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"village"</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"prefer"</span><span class="j-p">:</span> <span class="j-n">8</span>
+    <span class="j-p">}</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<ul>
+<li>The island is 32 tiles square at offset 16, every second tile of the generated world (<code>step</code> 2). <code>layout_version</code> 4 is saved with every island the recipe makes. The same recipe and seed always make the same island; the game’s tests hold this recipe to 70 islands, seed by seed.</li>
+<li>The five towns are the communities that give the five quests, slots 1 to 5, each on the terrain of its color: Leitbur’s Rest white, Vodalian Haven blue, the Freehold of the Hand black, Dwarven Hearth red, Havenwood green. <code>turns: 4</code> turns their arrangement a different way for different campaigns.</li>
+<li>The six places carry the mainland’s services; Svyelun’s Temple (slot 22) stands on the coast, where the harbor quest’s channel prefers it.</li>
+<li>Six to nine villages, the first near red terrain (5) within two tiles, where the Mountain Road’s <code>raider</code> objective prefers to find its village.</li>
+<li><code>objectives</code>: the <code>channel</code> is a coastal town or city that is not one of the five communities, Svyelun’s Temple if it qualifies; the <code>raider</code> is a village on a road near red terrain, the first village if it qualifies.</li>
+</ul>
+
+<h2 id="places">places.json</h2>
+<figure class="quote" data-file="places.json" data-pointer=""><figcaption class="src"><b>places.json</b><span>the whole file</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"pictures"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"refuge_harbor"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_harbor.png"</span><span class="j-p">,</span>
+    <span class="j-k">"refuge_castle"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_castle.png"</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"voyage"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"arrive_clues"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"story.gate"</span><span class="j-p">, </span><span class="j-k">"quest"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"voyage.free"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"out_log"</span><span class="j-p">:</span> <span class="j-s">"voyage.out"</span><span class="j-p">,</span>
+    <span class="j-k">"home_log"</span><span class="j-p">:</span> <span class="j-s">"voyage.home"</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"markers"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"port"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Refuge Harbor"</span><span class="j-p">,</span>
+      <span class="j-k">"mainland_name"</span><span class="j-p">:</span> <span class="j-s">"Sarpadian Anchorage"</span><span class="j-p">,</span>
+      <span class="j-k">"picture"</span><span class="j-p">:</span> <span class="j-s">"refuge_harbor"</span><span class="j-p">,</span>
+      <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_port_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">160</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-k">"panes"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-p">{</span>
+          <span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"on_region"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"port.island.ready"</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"news"</span><span class="j-p">}</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"pending"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"sail"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.sail_home"</span><span class="j-p">}</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.leave"</span><span class="j-p">}</span>
+          <span class="j-p">]</span>
+        <span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span>
+          <span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"port.free.welcome"</span><span class="j-p">, </span><span class="j-s">"port.free.return"</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"pending"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"sail"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.sail_out"</span><span class="j-p">}</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.leave"</span><span class="j-p">}</span>
+          <span class="j-p">]</span>
+        <span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span>
+          <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span>
+            <span class="j-s">"story.origin"</span><span class="j-p">,</span>
+            <span class="j-s">"story.voyage"</span><span class="j-p">,</span>
+            <span class="j-s">"story.danger"</span><span class="j-p">,</span>
+            <span class="j-s">"story.gate"</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"pending"</span><span class="j-p">}</span>
+          <span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"sail"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.sail_out"</span><span class="j-p">}</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"port.leave"</span><span class="j-p">}</span>
+          <span class="j-p">]</span>
+        <span class="j-p">}</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-k">"castle"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Castle of the Ebon Crown"</span><span class="j-p">,</span>
+      <span class="j-k">"picture"</span><span class="j-p">:</span> <span class="j-s">"refuge_castle"</span><span class="j-p">,</span>
+      <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_castle_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">192</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-k">"banner"</span><span class="j-p">:</span> <span class="j-p">{</span>
+        <span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">,</span>
+        <span class="j-k">"color"</span><span class="j-p">:</span> <span class="j-s">"e0bc60"</span><span class="j-p">,</span>
+        <span class="j-k">"anchor"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">86</span><span class="j-p">, </span><span class="j-n">-104</span><span class="j-p">]</span><span class="j-p">,</span>
+        <span class="j-k">"size"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">24</span><span class="j-p">, </span><span class="j-n">32</span><span class="j-p">]</span>
+      <span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-k">"panes"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-p">{</span>
+          <span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"subtitle"</span><span class="j-p">:</span> <span class="j-s">"castle.free.subtitle"</span><span class="j-p">,</span>
+          <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"castle.free.broken"</span><span class="j-p">, </span><span class="j-s">"castle.free.continues"</span><span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"rewards"</span><span class="j-p">}</span><span class="j-p">, </span><span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"castle.leave"</span><span class="j-p">}</span><span class="j-p">]</span>
+        <span class="j-p">}</span><span class="j-p">,</span>
+        <span class="j-p">{</span>
+          <span class="j-k">"lines"</span><span class="j-p">:</span> <span class="j-p">[</span>
+            <span class="j-s">"castle.intro"</span><span class="j-p">,</span>
+            <span class="j-s">"castle.count"</span><span class="j-p">,</span>
+            <span class="j-s">"castle.required"</span><span class="j-p">,</span>
+            <span class="j-s">"castle.carry"</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"show"</span><span class="j-p">:</span> <span class="j-s">"deck_problem"</span><span class="j-p">}</span>
+          <span class="j-p">]</span><span class="j-p">,</span>
+          <span class="j-k">"actions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"boss"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"castle.challenge"</span><span class="j-p">}</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"leave"</span><span class="j-p">, </span><span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"castle.leave"</span><span class="j-p">}</span><span class="j-p">,</span>
+            <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"rewards"</span><span class="j-p">}</span>
+          <span class="j-p">]</span>
+        <span class="j-p">}</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<ul>
+<li>The port’s panes are tried in order. On the island: the ship home. On the mainland, once the island is free: the welcome back. Otherwise: the captain’s story, the danger and the gate, which is what a hero reads first.</li>
+<li>The castle’s free pane shows the reward buttons and the way out; its other pane counts pledges and the deck gate, shows why a duel cannot begin, and offers the challenge.</li>
+<li>The castle flies a gold pennant (<code>e0bc60</code>) once <code>liberated</code> is set, at the anchor that suits its sprite.</li>
+</ul>
+
+<h2 id="quests">quests.json</h2>
+<p>Five quests, each a petition from one community, and between them every shape a quest can take:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>#</th><th>Title</th><th>Giver</th><th>Steps</th><th>Foe</th></tr></thead>
+<tbody>
+<tr><td><code>0</code></td><td>The Bread Road</td><td>Leitbur's Rest (slot 1)</td><td class="wrap">accept → go to port → duel at giver</td><td>Ebon Crown Tithe-Collector, 26 life</td></tr>
+<tr><td><code>1</code></td><td>A Harbor for Both Peoples</td><td>Vodalian Haven (slot 2)</td><td class="wrap">accept → go to objective channel, else port → duel at giver</td><td>The Blockade Captain, 28 life</td></tr>
+<tr><td><code>2</code></td><td>No More Masters</td><td>Freehold of the Hand (slot 3)</td><td class="wrap">duel at giver</td><td>The Pit Overseer, 28 life</td></tr>
+<tr><td><code>3</code></td><td>The Mountain Road</td><td>Dwarven Hearth (slot 4)</td><td class="wrap">accept → duel at objective raider, else giver (with an approach)</td><td>The Tribute-Raider, 26 life</td></tr>
+<tr><td><code>4</code></td><td>Room to Grow</td><td>Havenwood (slot 5)</td><td class="wrap">duel at giver</td><td>The Crown's Sporekeeper, 30 life</td></tr>
+</tbody></table></div>
+<h3 id="bread">The Bread Road: accept, go, duel</h3>
+<figure class="quote" data-file="quests.json" data-pointer="/quests/0"><figcaption class="src"><b>quests.json</b><span>/quests/0</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"giver"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span>
+  <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"quest.bread.title"</span><span class="j-p">,</span>
+  <span class="j-k">"petition"</span><span class="j-p">:</span> <span class="j-s">"quest.bread.petition"</span><span class="j-p">,</span>
+  <span class="j-k">"epilogue"</span><span class="j-p">:</span> <span class="j-s">"quest.bread.epilogue"</span><span class="j-p">,</span>
+  <span class="j-k">"banner"</span><span class="j-p">:</span> <span class="j-s">"eee5c1"</span><span class="j-p">,</span>
+  <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"tithe_collector"</span><span class="j-p">,</span>
+  <span class="j-k">"steps"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"accept"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"go"</span><span class="j-p">,</span>
+      <span class="j-k">"to"</span><span class="j-p">:</span> <span class="j-s">"port"</span><span class="j-p">,</span>
+      <span class="j-k">"action"</span><span class="j-p">:</span> <span class="j-s">"quest.bread.deliver"</span><span class="j-p">,</span>
+      <span class="j-k">"guidance"</span><span class="j-p">:</span> <span class="j-s">"quest.bread.guide"</span><span class="j-p">,</span>
+      <span class="j-k">"task"</span><span class="j-p">:</span> <span class="j-s">"quest.bread.task"</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"duel"</span><span class="j-p">, </span><span class="j-k">"at"</span><span class="j-p">:</span> <span class="j-s">"giver"</span><span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"complete"</span><span class="j-p">:</span> <span class="j-s">"pledge"</span>
+<span class="j-p">}</span></code></pre></figure>
+<h3 id="harbor">A Harbor for Both Peoples: a go step aimed at an objective</h3>
+<figure class="quote" data-file="quests.json" data-pointer="/quests/1"><figcaption class="src"><b>quests.json</b><span>/quests/1</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"giver"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+  <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.title"</span><span class="j-p">,</span>
+  <span class="j-k">"petition"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.petition"</span><span class="j-p">,</span>
+  <span class="j-k">"epilogue"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.epilogue"</span><span class="j-p">,</span>
+  <span class="j-k">"banner"</span><span class="j-p">:</span> <span class="j-s">"458cbe"</span><span class="j-p">,</span>
+  <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"blockade_captain"</span><span class="j-p">,</span>
+  <span class="j-k">"steps"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"accept"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"go"</span><span class="j-p">,</span>
+      <span class="j-k">"to"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"objective"</span><span class="j-p">:</span> <span class="j-s">"channel"</span><span class="j-p">, </span><span class="j-k">"else"</span><span class="j-p">:</span> <span class="j-s">"port"</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-k">"action"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.survey"</span><span class="j-p">,</span>
+      <span class="j-k">"guidance"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.guide"</span><span class="j-p">,</span>
+      <span class="j-k">"task"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.task"</span><span class="j-p">,</span>
+      <span class="j-k">"line"</span><span class="j-p">:</span> <span class="j-s">"quest.harbor.line"</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"duel"</span><span class="j-p">, </span><span class="j-k">"at"</span><span class="j-p">:</span> <span class="j-s">"giver"</span><span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"complete"</span><span class="j-p">:</span> <span class="j-s">"pledge"</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>The channel survey goes to the <code>channel</code> objective, or the port when the island has no qualifying site. Its <code>line</code> is said at a town target.</p>
+<h3 id="masters">No More Masters: a duel alone</h3>
+<figure class="quote" data-file="quests.json" data-pointer="/quests/2"><figcaption class="src"><b>quests.json</b><span>/quests/2</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"giver"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">,</span>
+  <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"quest.masters.title"</span><span class="j-p">,</span>
+  <span class="j-k">"petition"</span><span class="j-p">:</span> <span class="j-s">"quest.masters.petition"</span><span class="j-p">,</span>
+  <span class="j-k">"epilogue"</span><span class="j-p">:</span> <span class="j-s">"quest.masters.epilogue"</span><span class="j-p">,</span>
+  <span class="j-k">"banner"</span><span class="j-p">:</span> <span class="j-s">"886e9c"</span><span class="j-p">,</span>
+  <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"pit_overseer"</span><span class="j-p">,</span>
+  <span class="j-k">"steps"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"duel"</span><span class="j-p">, </span><span class="j-k">"at"</span><span class="j-p">:</span> <span class="j-s">"giver"</span><span class="j-p">, </span><span class="j-k">"guidance"</span><span class="j-p">:</span> <span class="j-s">"guide.petition"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"complete"</span><span class="j-p">:</span> <span class="j-s">"pledge"</span>
+<span class="j-p">}</span></code></pre></figure>
+<h3 id="mountain">The Mountain Road: a duel away from the giver</h3>
+<figure class="quote" data-file="quests.json" data-pointer="/quests/3"><figcaption class="src"><b>quests.json</b><span>/quests/3</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"giver"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">,</span>
+  <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.title"</span><span class="j-p">,</span>
+  <span class="j-k">"petition"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.petition"</span><span class="j-p">,</span>
+  <span class="j-k">"epilogue"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.epilogue"</span><span class="j-p">,</span>
+  <span class="j-k">"banner"</span><span class="j-p">:</span> <span class="j-s">"be664b"</span><span class="j-p">,</span>
+  <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"tribute_raider"</span><span class="j-p">,</span>
+  <span class="j-k">"steps"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"accept"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"duel"</span><span class="j-p">,</span>
+      <span class="j-k">"at"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"objective"</span><span class="j-p">:</span> <span class="j-s">"raider"</span><span class="j-p">, </span><span class="j-k">"else"</span><span class="j-p">:</span> <span class="j-s">"giver"</span><span class="j-p">}</span><span class="j-p">,</span>
+      <span class="j-k">"guidance"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.guide"</span><span class="j-p">,</span>
+      <span class="j-k">"task"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.task"</span><span class="j-p">,</span>
+      <span class="j-k">"approach"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"action"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.confront"</span><span class="j-p">, </span><span class="j-k">"line"</span><span class="j-p">:</span> <span class="j-s">"quest.mountain.line"</span><span class="j-p">}</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"complete"</span><span class="j-p">:</span> <span class="j-s">"pledge"</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>After the petition, the duel waits at the <code>raider</code> village. The <code>approach</code> puts its button and line in that village’s pane, and opens the quest there.</p>
+
+<h3 id="pledge">The pledge, the finale and the rest</h3>
+<p>All five end with the <code>"pledge"</code> completion: one reward choice, 40 gold, 8 food, the pennants redrawn, the journal’s entry, and waiting cards claimed. The finale needs every pledge, the island not yet free, and a main deck whose nonland cards are at least half Fallen Empires:</p>
+<figure class="quote" data-file="quests.json" data-pointer="/finale"><figcaption class="src"><b>quests.json</b><span>/finale</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"at"</span><span class="j-p">:</span> <span class="j-s">"castle"</span><span class="j-p">,</span>
+  <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"ebon_lord"</span><span class="j-p">,</span>
+  <span class="j-k">"conditions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"quests_done"</span><span class="j-p">:</span> <span class="j-s">"all"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"not_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"deck_share"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"pack"</span><span class="j-p">:</span> <span class="j-s">"pack-2"</span><span class="j-p">, </span><span class="j-k">"percent"</span><span class="j-p">:</span> <span class="j-n">50</span><span class="j-p">}</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"effects"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"set_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"refresh_appearance"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"log_event"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"event"</span><span class="j-p">:</span> <span class="j-s">"freed"</span><span class="j-p">, </span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"finale.log"</span><span class="j-p">}</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"done_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">,</span>
+  <span class="j-k">"won"</span><span class="j-p">:</span> <span class="j-s">"finale.freed"</span><span class="j-p">,</span>
+  <span class="j-k">"already"</span><span class="j-p">:</span> <span class="j-s">"finale.already"</span><span class="j-p">,</span>
+  <span class="j-k">"unmet"</span><span class="j-p">:</span> <span class="j-s">"finale.unmet"</span>
+<span class="j-p">}</span></code></pre></figure>
+<figure class="quote" data-file="quests.json" data-pointer="" data-keys="targets,status,deck_line,tasks"><figcaption class="src"><b>quests.json</b><span>→ targets, status, deck_line, tasks</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"targets"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"after_quests"</span><span class="j-p">:</span> <span class="j-s">"castle"</span><span class="j-p">, </span><span class="j-k">"after_finale"</span><span class="j-p">:</span> <span class="j-s">"port"</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"status"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-s">"status.pledges"</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"status.free"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"status.seek"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"not_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-s">"status.ship"</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"deck_line"</span><span class="j-p">:</span> <span class="j-s">"deck.line"</span><span class="j-p">,</span>
+  <span class="j-k">"tasks"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"finale"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"task.finale.title"</span><span class="j-p">,</span>
+      <span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"task.finale.text"</span><span class="j-p">,</span>
+      <span class="j-k">"done"</span><span class="j-p">:</span> <span class="j-s">"task.finale.done"</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-k">"rewards"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"title"</span><span class="j-p">:</span> <span class="j-s">"task.rewards.title"</span><span class="j-p">,</span>
+      <span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"task.rewards.text"</span><span class="j-p">,</span>
+      <span class="j-k">"done"</span><span class="j-p">:</span> <span class="j-s">"task.rewards.done"</span>
+    <span class="j-p">}</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<p><code>errands_off</code> lists slots 0 to 5, so the five communities offer no ordinary errands; <code>talk</code> gives the wise men their news, applause and seven tales, the roaming creatures their words, and the Vaults of the First Crossing theirs:</p>
+<figure class="quote" data-file="quests.json" data-pointer="/talk" data-keys="news,roaming,dungeon"><figcaption class="src"><b>quests.json</b><span>/talk → news, roaming, dungeon</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"news"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"talk.news.free"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-s">"talk.news.bound"</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"roaming"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"talk.roam.free"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"talk.roam.bound"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"not_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-s">"talk.will_you"</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"dungeon"</span><span class="j-p">:</span> <span class="j-s">"story.vault"</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="foes">foes.json</h2>
+<figure class="quote" data-file="foes.json" data-pointer="/foes" data-keys="ebon_lord"><figcaption class="src"><b>foes.json</b><span>/foes → ebon_lord</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"ebon_lord"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Lord of the Ebon Crown"</span><span class="j-p">,</span>
+    <span class="j-k">"deck_name"</span><span class="j-p">:</span> <span class="j-s">"The Ebon Crown"</span><span class="j-p">,</span>
+    <span class="j-k">"life"</span><span class="j-p">:</span> <span class="j-n">36</span><span class="j-p">,</span>
+    <span class="j-k">"face"</span><span class="j-p">:</span> <span class="j-n">6</span><span class="j-p">,</span>
+    <span class="j-k">"deck"</span><span class="j-p">:</span> <span class="j-p">{</span>
+      <span class="j-k">"Swamp"</span><span class="j-p">:</span> <span class="j-n">16</span><span class="j-p">,</span>
+      <span class="j-k">"Basal Thrull"</span><span class="j-p">:</span> <span class="j-n">4</span><span class="j-p">,</span>
+      <span class="j-k">"Armor Thrull"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">,</span>
+      <span class="j-k">"Mindstab Thrull"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">,</span>
+      <span class="j-k">"Thrull Champion"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+      <span class="j-k">"Soul Exchange"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">,</span>
+      <span class="j-k">"Order of the Ebon Hand"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">,</span>
+      <span class="j-k">"Hymn to Tourach"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+      <span class="j-k">"Terror"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+      <span class="j-k">"Dark Ritual"</span><span class="j-p">:</span> <span class="j-n">2</span>
+    <span class="j-p">}</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>Six foes: one per quest at 26 to 30 life, and the Lord of the Ebon Crown at 36, each deck one color of Fallen Empires cards with a few base-game cards and its basic lands. The roaming creatures take the foes’ decks by their own color, from tier 12 up; one creature in three, by a fixed rule of the world, keeps its own:</p>
+<figure class="quote" data-file="foes.json" data-pointer="/roaming"><figcaption class="src"><b>foes.json</b><span>/roaming</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"min_tier"</span><span class="j-p">:</span> <span class="j-n">12</span><span class="j-p">,</span>
+  <span class="j-k">"skip"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"seed"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">, </span><span class="j-k">"slot"</span><span class="j-p">:</span> <span class="j-n">17</span><span class="j-p">, </span><span class="j-k">"row"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">, </span><span class="j-k">"every"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"ante"</span><span class="j-p">:</span> <span class="j-s">"random_nonbasic"</span><span class="j-p">,</span>
+  <span class="j-k">"decks"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"colors"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"white"</span><span class="j-p">]</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Icatian Patrol"</span><span class="j-p">, </span><span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"tithe_collector"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"colors"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"blue"</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Vodalian Expedition"</span><span class="j-p">,</span>
+      <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"blockade_captain"</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"colors"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"black"</span><span class="j-p">]</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Ebon Remnant"</span><span class="j-p">, </span><span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"pit_overseer"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"colors"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"red"</span><span class="j-p">]</span><span class="j-p">,</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Goblin Tribute-Raiders"</span><span class="j-p">,</span>
+      <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"tribute_raider"</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"colors"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"green"</span><span class="j-p">]</span><span class="j-p">, </span><span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Havenwood Spores"</span><span class="j-p">, </span><span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"sporekeeper"</span><span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="rewards">rewards.json</h2>
+<figure class="quote" data-file="rewards.json" data-pointer=""><figcaption class="src"><b>rewards.json</b><span>the whole file</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"count"</span><span class="j-p">:</span> <span class="j-n">6</span><span class="j-p">,</span>
+  <span class="j-k">"bundles"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"rewards.white"</span><span class="j-p">,</span>
+      <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"Order of Leitbur"</span><span class="j-p">, </span><span class="j-s">"Icatian Javelineers"</span><span class="j-p">, </span><span class="j-s">"Icatian Infantry"</span><span class="j-p">,</span>
+        <span class="j-s">"Icatian Priest"</span><span class="j-p">, </span><span class="j-s">"Farrel's Zealot"</span><span class="j-p">, </span><span class="j-s">"Combat Medic"</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"rewards.blue"</span><span class="j-p">,</span>
+      <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"Vodalian Soldiers"</span><span class="j-p">, </span><span class="j-s">"Vodalian Mage"</span><span class="j-p">, </span><span class="j-s">"Merseine"</span><span class="j-p">, </span><span class="j-s">"Homarid Warrior"</span><span class="j-p">,</span>
+        <span class="j-s">"High Tide"</span><span class="j-p">, </span><span class="j-s">"Deep Spawn"</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"rewards.black"</span><span class="j-p">,</span>
+      <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"Order of the Ebon Hand"</span><span class="j-p">, </span><span class="j-s">"Hymn to Tourach"</span><span class="j-p">, </span><span class="j-s">"Basal Thrull"</span><span class="j-p">,</span>
+        <span class="j-s">"Armor Thrull"</span><span class="j-p">, </span><span class="j-s">"Soul Exchange"</span><span class="j-p">, </span><span class="j-s">"Thrull Retainer"</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"rewards.red"</span><span class="j-p">,</span>
+      <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"Goblin Chirurgeon"</span><span class="j-p">, </span><span class="j-s">"Goblin Grenade"</span><span class="j-p">, </span><span class="j-s">"Goblin War Drums"</span><span class="j-p">,</span>
+        <span class="j-s">"Dwarven Soldier"</span><span class="j-p">, </span><span class="j-s">"Orcish Veteran"</span><span class="j-p">, </span><span class="j-s">"Goblin Warrens"</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"rewards.green"</span><span class="j-p">,</span>
+      <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span>
+        <span class="j-s">"Thallid"</span><span class="j-p">, </span><span class="j-s">"Thorn Thallid"</span><span class="j-p">, </span><span class="j-s">"Elvish Farmer"</span><span class="j-p">, </span><span class="j-s">"Thallid Devourer"</span><span class="j-p">,</span>
+        <span class="j-s">"Spore Flower"</span><span class="j-p">, </span><span class="j-s">"Feral Thallid"</span>
+      <span class="j-p">]</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>Each pledge owes one choice of six cards in one color; the hero may take the same color again to build one deck.</p>
+
+<h2 id="text">text.json</h2>
+<p>132 keys, grouped by their first word: <code>region</code>, <code>story</code>, <code>voyage</code>, <code>port</code>, <code>castle</code>, <code>quest</code>, <code>guide</code>, <code>town</code>, <code>rewards</code>, <code>deck</code>, <code>duel</code>, <code>finale</code>, <code>status</code>, <code>target</code>, <code>task</code>, <code>talk</code>, <code>tale</code>. The first thing a hero reads at the mainland anchorage:</p>
+<figure class="quote" data-file="text.json" data-pointer="" data-keys="story.origin,story.voyage,story.danger,story.gate"><figcaption class="src"><b>text.json</b><span>→ story.origin, story.voyage, story.danger, story.gate</span></figcaption><pre class="code wrap"><code><span class="j-p">{</span>
+  <span class="j-k">"story.origin"</span><span class="j-p">:</span> <span class="j-s">"The captain tells of Sarpadia, a distant continent on Dominaria. Refugees carried its traditions to Shandalar before the Great Barrier. Their descendants call this island the Last Refuge; it is not the lost Sarpadia."</span><span class="j-p">,</span>
+  <span class="j-k">"story.voyage"</span><span class="j-p">:</span> <span class="j-s">"This ship crosses only Shandalar's sea. Help five communities resist the Ebon Crown, then challenge its lord. Passage home is always free."</span><span class="j-p">,</span>
+  <span class="j-k">"story.danger"</span><span class="j-p">:</span> <span class="j-s">"This is a dangerous land for experienced adventurers. Its roaming creatures are strong; the Crown's commanders have 26–30 life and its lord has 36. Build your deck and life on the mainland first if needed. Their strength does not follow yours."</span><span class="j-p">,</span>
+  <span class="j-k">"story.gate"</span><span class="j-p">:</span> <span class="j-s">"The final challenge needs all five pledges and at least half of your main deck's nonland cards from Fallen Empires. Lands and sideboard do not count. Community rewards can help build one or two colors."</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="art">art/</h2>
+<div class="pic-row">
+<figure class="pic"><img src="img/refuge_harbor.jpg" width="960" height="526" alt="Refuge Harbor's pane picture."><figcaption><code>art/refuge_harbor.png</code>, 1695 × 928</figcaption></figure>
+<figure class="pic"><img src="img/refuge_castle.jpg" width="960" height="526" alt="The Castle of the Ebon Crown's pane picture."><figcaption><code>art/refuge_castle.png</code>, 1695 × 928</figcaption></figure>
+<figure class="pic sprite"><img src="img/refuge_port_map.webp" width="480" height="356" alt="Refuge Harbor's map sprite."><figcaption><code>art/refuge_port_map.png</code>, drawn 160 wide</figcaption></figure>
+<figure class="pic sprite"><img src="img/refuge_castle_map.webp" width="480" height="315" alt="The castle's map sprite."><figcaption><code>art/refuge_castle_map.png</code>, drawn 192 wide</figcaption></figure>
+</div>
+<p>The pictures were made for this game and share its license. They are shown here smaller than the plugin’s own.</p>
+
+<h2 id="readme">README.txt and LICENSE.txt</h2>
+<p>Plain text for players: what the plugin is, what it needs, the story, the files, and how it may be shared. The license file begins:</p>
+<pre class="code wrap"><code>This plugin's text, data and pictures were made for the Shandalar remake
+and are licensed with it under the GNU General Public License, version 3
+(GPL-3.0). The full license text is LICENSE.txt in the game's folder
+(the LICENSE file of the game's source), and also
+https://www.gnu.org/licenses/gpl-3.0.txt.</code></pre>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="testing.html"><span>Previous</span>Testing</a>
+<a class="next" href="reference.html"><span>Next</span>Reference</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

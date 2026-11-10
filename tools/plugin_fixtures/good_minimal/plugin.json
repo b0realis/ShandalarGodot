@@ -1,0 +1,22 @@
+{
+	"plugin_format": 1,
+	"api_version": 1,
+	"id": "corpus_isle",
+	"name": "Corpus Isle",
+	"version": "0.1.0",
+	"authors": [
+		"Shandalar Godot tests"
+	],
+	"license": "Name the license of your plugin here, and put its text in LICENSE.txt.",
+	"description": "One line for the plugin list: what awaits the hero on this island.",
+	"requires": {
+		"card_packs": []
+	},
+	"region": {
+		"title": "Corpus Isle",
+		"castle_name": "The Old Keep",
+		"salt": 1855988140,
+		"mana_links": false,
+		"palette": "shandalar"
+	}
+}

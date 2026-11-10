@@ -7,6 +7,10 @@ Only platform payloads and explicitly selected player documents are included.
     package_release.py --guard PATH...   read files (and folders, and the
         members of .apk/.aab/.jar/.zip archives) for the builder's home
         folder: exit 0 clean, 1 a home path, 2 a file that could not be read.
+    package_release.py --adventure-plugins DIR   write the prototype adventure
+        plugin's zip (Fallen_Empires_Refuge_prototype.zip, as the desktop
+        packages carry it) into DIR, a release asset of its own for the
+        builds that carry none (Quest, Android): exit 0 written, 1 refused.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ import zlib
 import tool_banner
 import import_manalink
 import pack_1_dotp_complete as pack_one
+import adventure_plugin
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
@@ -111,6 +116,10 @@ TOOLS = ("mtg_assets.py", "import_original.py", "import_manalink.py",
          # The decision-model door (2026-10-04): it imports the MCP server's
          # door route and its menus from beside itself.
          "shandalar_decide.py", "decision_menu.py", "serve_web.py",
+         # The adventure plugins' authoring tool (2026-11-10): new, validate,
+         # export, info, compat, guide — with the schema it reads (below) and
+         # the card names it checks against (PLUGIN_CARDS, written here).
+         "adventure_plugin.py",
          *(name + ".py" for name in PACK_BUILDERS))
 # Explicit metadata allowlist: never recurse into a download/art cache.
 PACK_DATA = {
@@ -127,8 +136,23 @@ PACK_DATA["pack_9_tempest_block"] += ("cards_sth.json", "set_sth.json", "cards_e
                                       "set_exo.json", "shared_names.json")
 PACK_DATA["pack_10_urza_block"] += ("cards_ulg.json", "set_ulg.json", "cards_uds.json",
                                     "set_uds.json", "shared_names.json")
-BUILDER_DATA = tuple(f"cards/data/{code}.json" for code in pack_one.SET_ORDER) + tuple(
+BUILDER_DATA = (adventure_plugin.SCHEMA_REL,) + tuple(f"cards/data/{code}.json" for code in pack_one.SET_ORDER) + tuple(
     f"packaging/card_packs/{pack}/{name}" for pack, names in PACK_DATA.items() for name in names)
+# ADVENTURE PLUGINS (2026-11-10, the spec's §0.8): the packages a desktop
+# runs from get `expanded_adventure/` beside the game — the folder the game
+# searches for plugins — holding the prototype plugin's zip (made here by
+# `adventure_plugin.py export`, validated), the players' README.txt and the
+# authors' guide GUIDE/ (every file it has at packaging time). The Web, the
+# Quest and Android get none; `--adventure-plugins DIR` writes the zip alone.
+PLUGIN_PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel", "raspberry-pi5-arm64",
+                    "steam-deck", "arkos-rk3326-experimental")
+PLUGIN_FOLDER = adventure_plugin.FOLDER_NAME
+PROTOTYPE = PLUGIN_FOLDER + "/Fallen_Empires_Refuge_prototype"
+PLUGIN_README = PLUGIN_FOLDER + "/README.txt"
+PLUGIN_GUIDE = PLUGIN_FOLDER + "/GUIDE"
+# The card names the authoring tool checks a plugin's cards against in a
+# release folder, where no card script is readable (names only).
+PLUGIN_CARDS = "tools/" + adventure_plugin.CARDS_FILE
 BASE_ASSIGNMENTS = "packaging/card_packs/pack_1_dotp_complete/base_assignments.json"
 DECK_MANIFEST = "packaging/bundled_decks.txt"
 LOCAL_PACK = "Pack-1-DotP-complete.zip"
@@ -512,6 +536,59 @@ def player_tool_files(root: Path = ROOT) -> dict[str, Path]:
     return files
 
 
+def prototype_zip(root: Path = ROOT) -> tuple[str, bytes]:
+    """The prototype plugin's zip — its name and bytes — as `adventure_plugin.py
+    export` writes it, checked by the game's own rules first."""
+    try:
+        game = adventure_plugin.find_game(str(root))
+        data, top, result = adventure_plugin.export_bytes(str(root / PROTOTYPE), game)
+    except adventure_plugin.UsageError as error:
+        raise ValueError(f"The prototype plugin cannot be checked: {error}") from error
+    if not data:
+        raise ValueError("The prototype plugin is refused: %s" % (result["problems"] or ["?"])[0])
+    return top + ".zip", data
+
+
+def plugin_files(root: Path = ROOT) -> dict[str, Path]:
+    """expanded_adventure/README.txt and the guide's files, as they are now."""
+    files = {PLUGIN_README: root / PLUGIN_README}
+    guide = root / PLUGIN_GUIDE
+    if not (guide / "index.html").is_file():
+        raise ValueError(f"The authors' guide is missing: {PLUGIN_GUIDE}/index.html")
+    for path in sorted(guide.rglob("*")):
+        relative = path.relative_to(guide)
+        if any(part.startswith(".") for part in relative.parts):
+            continue
+        if path.is_symlink():
+            raise ValueError(f"A link in the authors' guide: {PLUGIN_GUIDE}/{relative.as_posix()}")
+        if path.is_file():
+            files[f"{PLUGIN_GUIDE}/{relative.as_posix()}"] = path
+    for name, path in files.items():
+        if not path.is_file():
+            raise ValueError(f"Missing adventure plugin file: {name}")
+    return files
+
+
+def prototype_sources(root: Path = ROOT) -> list[Path]:
+    """The prototype's own files, for the home guard."""
+    return sorted(p for p in (root / PROTOTYPE).rglob("*") if p.is_file())
+
+
+def write_adventure_plugins(out: Path, root: Path = ROOT) -> Path:
+    """`--adventure-plugins DIR`: the prototype's zip alone, in [out]."""
+    guard_private(prototype_sources(root))
+    name, data = prototype_zip(root)
+    target = out / name
+    if target.is_symlink() or (target.exists() and target.read_bytes() != data):
+        raise ValueError(f"Refusing to overwrite a different {name}")
+    out.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        temporary = target.with_suffix(".part")
+        temporary.write_bytes(data)
+        os.rename(temporary, target)
+    return target
+
+
 def stage_player_tools(folder: Path, root: Path = ROOT) -> None:
     """Also serve build_release.sh's older Linux/web staging path.
 
@@ -522,6 +599,7 @@ def stage_player_tools(folder: Path, root: Path = ROOT) -> None:
     guard_private(list(files.values()))
     contents = {name: path.read_bytes() for name, path in files.items()}
     contents[BASE_ASSIGNMENTS] = pack_one.json_bytes(sorted(pack_one.assigned_pairs(root)))
+    contents[PLUGIN_CARDS] = adventure_plugin.catalogue_bytes(root)
     for name, content in contents.items():
         dest = folder / name
         if dest.is_symlink() or (dest.exists() and dest.read_bytes() != content):
@@ -567,6 +645,13 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
     files.update({name: root / source for name, source in HANDHELD_FILES.get(platform, {}).items()})
     if platform == "arkos-rk3326-experimental":
         guard_private([root / ARKOS_LAUNCHER])
+    plugins = {}
+    if platform in PLUGIN_PLATFORMS:
+        files.update(plugin_files(root))
+        guard_private(prototype_sources(root))
+        zip_name, zip_bytes = prototype_zip(root)
+        plugins[f"{PLUGIN_FOLDER}/{zip_name}"] = zip_bytes
+    cards = adventure_plugin.catalogue_bytes(root)
     guard_private(list(files.values()))
     name = f"Shandalar-{version}-{platform}"
     outputs = [out / f"{name}{suffix}.zip" for suffix in ("", "-with-skin")]
@@ -574,7 +659,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
         raise ValueError("Refusing to overwrite an existing package or partial file")
     out.mkdir(parents=True, exist_ok=True)
     for output, included in zip(outputs, (False, True)):
-        extra = {BASE_ASSIGNMENTS: base_assignments, "VERSION.txt": (version + "\n").encode()}
+        extra = {BASE_ASSIGNMENTS: base_assignments, "VERSION.txt": (version + "\n").encode(),
+                 PLUGIN_CARDS: cards, **plugins}
         readme = (f"SHANDALAR {version}\nGame source commit: {revision}\n\n{START[platform]}\n\n"
                   + (WEB_PLAY if platform in WEB_PLATFORMS else PLAY)
                   + ("Original skin included in skin/original_skin.zip. Leave it zipped.\n"
@@ -675,6 +761,15 @@ def main() -> None:
         if len(sys.argv) < 3:
             sys.exit("package_release.py --guard PATH...: name the files or folders to read")
         sys.exit(guard_main(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "--adventure-plugins":
+        if len(sys.argv) != 3:
+            sys.exit("package_release.py --adventure-plugins DIR: name the folder the zip goes in")
+        try:
+            target = write_adventure_plugins(Path(sys.argv[2]))
+        except (OSError, ValueError, adventure_plugin.UsageError) as error:
+            sys.exit(f"Adventure plugin refused: {error}")
+        print(f"{digest(target)}  {target.name}")
+        sys.exit(0)
     parser = argparse.ArgumentParser(description=__doc__, epilog=tool_banner.BANNER_HELP,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     tool_banner.add_version_flag(parser, "package_release.py", __file__)

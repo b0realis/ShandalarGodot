@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Art and music · Adventure plugin guide</title>
+<meta name="description" content="Picture kinds, sizes and keys, pane pictures, map sprites and their anchors, pennants and OGG music.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html" aria-current="page">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Art and music</h1>
+<p class="lede">A plugin may bring pictures for its panes, sprites for its two markers on the map, and one music track. The game decodes each from its bytes in memory; none is ever imported as a resource.</p>
+
+<h2 id="pictures">Pictures</h2>
+<p>PNG, JPEG or WebP files, at most <span data-limit="picture_side">4,096</span> pixels a side, whose first bytes say the same kind as the extension. With the other files, a plugin holds at most <span data-limit="files">512</span> files and <span data-limit="plugin_bytes">32 MiB</span>. The allowed extensions, for every file:</p>
+<ul class="chips" data-schema="extensions"><li><code>.json</code></li><li><code>.txt</code></li><li><code>.md</code></li><li><code>.png</code></li><li><code>.jpg</code></li><li><code>.jpeg</code></li><li><code>.webp</code></li><li><code>.ogg</code></li></ul>
+
+<h3 id="keys">Picture keys</h3>
+<p>Panes name pictures by key. <code>places.json</code>’s <code>pictures</code> maps each key to a file of the plugin, and every key begins with the plugin’s id and <code>_</code>, so two plugins never collide:</p>
+<figure class="quote" data-file="places.json" data-pointer="/pictures"><figcaption class="src"><b>places.json</b><span>/pictures</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"refuge_harbor"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_harbor.png"</span><span class="j-p">,</span>
+  <span class="j-k">"refuge_castle"</span><span class="j-p">:</span> <span class="j-s">"art/refuge_castle.png"</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>A marker’s <code>picture</code>, a pane’s <code>picture</code> and <code>quests.json</code>’s <code>pictures</code> (the quest, rewards and result panes) take such a key, or one of the skin’s own pictures, drawn from the player’s skin:</p>
+<ul class="chips" data-schema="skin_pictures"><li><code>visit_city</code></li><li><code>visit_village</code></li><li><code>visit_dungeon</code></li><li><code>visit_wiseman</code></li><li><code>visit_news</code></li><li><code>visit_buycards</code></li><li><code>visit_castle_black</code></li><li><code>visit_castle_blue</code></li><li><code>visit_castle_green</code></li><li><code>visit_castle_red</code></li><li><code>visit_castle_white</code></li><li><code>visit_lair_black</code></li><li><code>visit_lair_blue</code></li><li><code>visit_lair_green</code></li><li><code>visit_lair_red</code></li><li><code>visit_lair_white</code></li></ul>
+
+<h3 id="panes">Pane pictures</h3>
+<p>A pane shows its picture in a 512 × 280 frame, scaled between 0.6 and 1.5 times to the window, and the picture is cropped to fill it. Draw at that shape, about 1.83 to 1, and at least 768 × 420 so the largest pane stays sharp; the Refuge’s are 1695 × 928.</p>
+<div class="pic-row">
+<figure class="pic"><img src="img/refuge_harbor.jpg" width="960" height="526" alt="Refuge Harbor: the Refuge's port pane picture, a harbor town at the water."><figcaption><code>refuge_harbor</code>, the port’s pane</figcaption></figure>
+<figure class="pic"><img src="img/refuge_castle.jpg" width="960" height="526" alt="The Castle of the Ebon Crown: the Refuge's castle pane picture."><figcaption><code>refuge_castle</code>, the castle’s pane</figcaption></figure>
+</div>
+
+<h2 id="sprites">Map sprites</h2>
+<p>A marker’s optional <code>sprite</code> is how it stands on the world map: a picture with a transparent background and its <code>width</code> in world pixels (16 to 512; a tile is 128 wide). Without one the marker has no picture on the map.</p>
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 350" role="img" aria-label="How a map sprite stands on its tile: the picture's transparent margins are trimmed, it is drawn at its width in world pixels with its height in proportion, and the middle of its bottom edge stands at 64, 24 in the tile's 128 by 64 box. A pennant is drawn at its anchor offset while its flag is set.">
+<rect class="d-dash" x="150" y="210" width="204.8" height="102.4"/>
+<polygon class="d-land" points="252.4,210.0 354.8,261.2 252.4,312.4 150.0,261.2"/>
+<rect x="132.8" y="136.4" width="52.0" height="112.0" fill="var(--line)"/><rect x="184.8" y="170.4" width="135.2" height="78.0" fill="var(--line)"/><rect x="320.0" y="136.4" width="52.0" height="112.0" fill="var(--line)"/><rect x="214.4" y="80.4" width="76.0" height="168.0" fill="var(--line)"/><rect x="138.8" y="126.4" width="9" height="10" fill="var(--line)"/><rect x="154.8" y="126.4" width="9" height="10" fill="var(--line)"/><rect x="170.8" y="126.4" width="9" height="10" fill="var(--line)"/><rect x="190.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="206.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="222.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="238.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="254.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="270.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="286.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="302.8" y="160.4" width="9" height="10" fill="var(--line)"/><rect x="326.0" y="126.4" width="9" height="10" fill="var(--line)"/><rect x="342.0" y="126.4" width="9" height="10" fill="var(--line)"/><rect x="358.0" y="126.4" width="9" height="10" fill="var(--line)"/><rect x="220.4" y="70.4" width="9" height="10" fill="var(--line)"/><rect x="236.4" y="70.4" width="9" height="10" fill="var(--line)"/><rect x="252.4" y="70.4" width="9" height="10" fill="var(--line)"/><rect x="268.4" y="70.4" width="9" height="10" fill="var(--line)"/>
+<rect x="98.8" y="46.8" width="307.2" height="201.6" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+<rect x="287.6" y="43.6" width="38.4" height="51.2" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-dasharray="4 3"/>
+<path d="M294.6,92.8 V47.6" stroke="currentColor" stroke-width="2.4"/>
+<path d="M295.6,49.6 H321.6 L314.6,58.6 L321.6,67.6 H295.6 Z" fill="#e0bc60" stroke="currentColor" stroke-width="1"/>
+<circle cx="252.4" cy="248.4" r="5.5" class="d-dot-accent"/>
+<text class="d-small" x="150" y="332">the tile’s box, 128 × 64</text>
+<path class="d-line" d="M328,60 H462"/>
+<text class="d-gold-text" x="470" y="64">pennant: anchor 86, −104 · size 24 × 32</text>
+<text class="d-small" x="470" y="80">drawn while the banner’s flag is set</text>
+<path class="d-line" d="M408,137 H462"/>
+<text class="d-accent-text" x="470" y="141">width: sprite.width world pixels</text>
+<text class="d-small" x="470" y="157">castle 192, port 160; the height follows the picture</text>
+<path class="d-line" d="M260,248 H462"/>
+<text class="d-accent-text" x="470" y="252">foot: 64, 24 of the tile’s box</text>
+<text class="d-small" x="470" y="268">the bottom middle of the trimmed picture</text>
+<path class="d-line" d="M357,302 H462"/>
+<text class="d-text" x="470" y="306">the tile the marker stands on</text>
+</svg></div>
+<figcaption>The Refuge’s castle sprite on its tile, to scale: 192 world pixels wide on a tile 128 wide. The picture’s transparent margins are trimmed before it is measured, so the drawing’s own feet decide where it stands.</figcaption>
+</figure>
+
+<div class="pic-row">
+<figure class="pic sprite"><img src="img/refuge_port_map.webp" width="480" height="356" alt="The Refuge's port sprite: a small harbor with a ship, on a transparent background."><figcaption><code>art/refuge_port_map.png</code>, width 160</figcaption></figure>
+<figure class="pic sprite"><img src="img/refuge_castle_map.webp" width="480" height="315" alt="The Refuge's castle sprite: a dark castle on a rock, on a transparent background."><figcaption><code>art/refuge_castle_map.png</code>, width 192</figcaption></figure>
+</div>
+<p>The pictures above are trimmed copies, made small for this guide; the plugin’s own are 1452 × 1083 and 1536 × 1024.</p>
+
+<h3 id="banners">Pennants</h3>
+<p>A marker’s <code>banner</code> flies a pennant of its <code>color</code> over it while its <code>flag</code> is set; <code>anchor</code> is the pennant’s offset in the tile’s box (default 108, −24) and <code>size</code> its size (default 18 × 24). A quest’s <code>banner</code> color flies over its giver town once the quest is done. Pennants are redrawn by the effect <code>refresh_appearance</code> and whenever the hero lands.</p>
+<figure class="quote" data-file="places.json" data-pointer="/markers/castle/banner"><figcaption class="src"><b>places.json</b><span>/markers/castle/banner</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">,</span>
+  <span class="j-k">"color"</span><span class="j-p">:</span> <span class="j-s">"e0bc60"</span><span class="j-p">,</span>
+  <span class="j-k">"anchor"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">86</span><span class="j-p">, </span><span class="j-n">-104</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"size"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">24</span><span class="j-p">, </span><span class="j-n">32</span><span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="music">Music</h2>
+<p><code>world.json</code>’s <code>music</code> names an Ogg Vorbis file of the plugin, at most <span data-limit="ogg_bytes">16 MiB</span>. It loops while the hero walks the island; the mainland’s music plays everywhere else, and duels keep the game’s own. A file named <code>.ogg</code> that is not Vorbis (Opus, say) refuses the plugin. The Refuge has no track of its own.</p>
+<pre class="code"><code><span class="j-k">"music"</span><span class="j-p">:</span> <span class="j-s">"music/my_isle_waves.ogg"</span></code></pre>
+
+<h2 id="rights">What a plugin may carry</h2>
+<div class="rule"><strong>Your own pictures only</strong>
+<p>A plugin never carries card art, pictures of cards, or anything taken from the 1997 game or a skin. Draw your own, or use work whose license lets you share it, and say so in <code>LICENSE.txt</code>. The skin pictures above are named, not shipped: each player’s own skin draws them.</p></div>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="text.html"><span>Previous</span>Text and placeholders</a>
+<a class="next" href="saves.html"><span>Next</span>Saves and compatibility</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

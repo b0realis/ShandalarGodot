@@ -9,9 +9,12 @@ with the original skin, upscaled skins and the plain map fallback.
 | ID | Name | Look |
 | --- | --- | --- |
 | `shandalar` | Shandalar | The chosen skin's original colors. |
+| `last_refuge` | The Last Refuge | Drier, yellower grass and foliage and its own water; the prototype plugin's island. |
 
-The mainland defaults to Shandalar. An explicit choice overrides a region's
-default, including on an already saved map.
+The mainland defaults to Shandalar. Any other region defaults to its
+descriptor's `palette`: for an adventure plugin, its manifest's
+`region.palette` (below). An explicit choice overrides a region's default,
+including on an already saved map.
 
 ```gdscript
 WorldTerrainPalette.set_preset(world, WorldTerrainPalette.SHANDALAR)
@@ -79,9 +82,44 @@ code for the minimap and the plain fallback; their water colors use the same
 water recipe. Optional `tints` supplies default `ground`,
 `objects` or `roads` layer settings in the same format shown above.
 
-Associate a region with that ID in `REGIONS`, or select it with `set_preset`.
-No renderer changes or new skin files are required. Extend the recolor mask or
+A region uses it through its descriptor's `palette` (an adventure plugin names
+it as `region.palette`), or a world selects it with `set_preset`. No renderer
+changes or new skin files are required. Extend the recolor mask or
 sheet selection only when the new look needs to affect a different kind of art.
+
+## A plugin's own palette
+
+An adventure plugin's `region.palette` (its `plugin.json`) is a built-in ID
+or an object in the profile shape, as JSON:
+
+```json
+"palette": {
+  "name": "Ashen Isle",
+  "grass": [0.11, 0.55, 1.1, 0.9],
+  "foliage": [0.2, 0.7, 1.0, 0.7],
+  "water": [0.6, 1.0, 0.95, 0.8],
+  "plain": {"2": "#858855", "6": "#c6af78"},
+  "tints": {"roads": {"tint": "#b09070", "strength": 0.3}}
+}
+```
+
+Every field is optional. `grass`, `foliage` and `water` are four numbers:
+hue 0–1, saturation and brightness multipliers 0–4, strength 0–1. `plain`
+maps terrain codes, as text `"0"`–`"15"`, to colors; `tints` gives the
+`ground`, `objects` or `roads` layer its `{"tint", "strength"}`; `name` is
+at most 60 characters. `WorldTerrainPalette.profile_problem(value)` says what
+is wrong with one ("" when nothing): the plugin's content check refuses the
+plugin with it. `PluginSchema.descriptor` registers a good one with
+`register_profile("plugin:<id>", value)`, which turns the JSON into the
+profile (`Vector4` recipes, `Color` plain colors) and drops the recolored
+sheets cached for that name; the descriptor's `palette` is then
+`plugin:<id>`. A built-in ID is never replaced.
+
+`profile_of(name)` reads a built-in or registered profile ({} for none) and
+`has_profile(name)` asks whether one exists; every renderer reads profiles
+through them. A save may name `plugin:<id>` whatever is installed: while that
+plugin is missing the preset is still a valid save value, and the island is
+drawn in the skin's original colors until it returns.
 
 ## Persistence and cost
 

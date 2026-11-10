@@ -263,7 +263,7 @@ static func _lines_read(player: AdventurePlayer) -> Array:
 		world.encounters.slice(0, 5).hash() if world != null else 0,
 		player.quest.hash(), days_left(player), card_held,
 		besieger.is_empty(), besieger.get("creature", 0), besieger.get("town", -1),
-		player.portal.hash(), player.ended, player.expansions.hash(), AdventureExpansions.launch_enabled,
+		player.portal.hash(), player.ended, player.expansions.hash(), AdventureExpansions.revision,
 		player.next_duel_life_carried, player.next_duel_life, player.next_duel_first_move, player.next_duel_card,
 		player.owns("Ring of the Guardian")]
 

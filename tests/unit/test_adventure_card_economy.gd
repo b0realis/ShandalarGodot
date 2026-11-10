@@ -93,12 +93,19 @@ func test_original_reward_restrictions_do_not_block_shops_or_paid_trades() -> vo
 	assert_eq(CardTrade.amulets_for(CardValue.facts(CardRegistry.get_card("Thallid"))), 1)
 	assert_true(CardShop.may_offer(player, "Thallid"), "the 1997 trade is allowed even when its label is dim")
 
-func test_trade_confirmation_rechecks_region_pack_and_classic_limits() -> void:
-	for cause in ["region", "disabled", "copies"]:
+## Ported for adventure plugins (2026-11-10, the spec's §0.2): a land ticked
+## after the offer no longer holds its pack's cards back, so it is no cause
+## of a refusal any more — the trade goes through, as it would without it.
+func test_trade_confirmation_rechecks_pack_and_classic_limits() -> void:
+	var ticked := hero(AdventurePlayer.RULE_CLASSIC)
+	ticked.amulets["green"] = 10
+	var offered := CardTrade.offer(ticked, "Thallid", CardTrade.TOWN, "green")
+	ticked.adventures = [{"id": "refuge", "version": "", "name": "The Last Refuge"}]
+	assert_true(CardTrade.pay(ticked, offered, CardTrade.TOWN, "green")["traded"], "a ticked land is no refusal")
+	for cause in ["disabled", "copies"]:
 		var player := hero(AdventurePlayer.RULE_CLASSIC)
 		player.amulets["green"] = 10
 		var asked := CardTrade.offer(player, "Thallid", CardTrade.TOWN, "green")
-		if cause == "region": player.expanded_adventure = true
 		if cause == "disabled": CardPacks.set_enabled("pack-2", false)
 		if cause == "copies":
 			for i in 4: player.cards[i]["card"] = "Thallid"
@@ -110,15 +117,22 @@ func test_trade_confirmation_rechecks_region_pack_and_classic_limits() -> void:
 		assert_eq(player.dice, dice, cause + ": no dice spent")
 		CardPacks.set_enabled("pack-2", true)
 
-func test_free_trade_reward_cannot_bypass_unlock_or_treasure_rules() -> void:
+## Ported for adventure plugins (2026-11-10, §0.2): no land holds a pack's
+## cards back, so a ticked land answers a free trade as no land does; a
+## treasure stays out of reach either way.
+func test_free_trade_reward_cannot_bypass_treasure_rules_and_lands_change_nothing() -> void:
 	var player := hero()
-	player.expanded_adventure = true
+	player.adventures = [{"id": "refuge", "version": "", "name": "The Last Refuge"}]
 	player.all_trader_cards = true
+	var plain := hero()
+	plain.all_trader_cards = true
 	var before := player.cards.duplicate(true)
-	for name in ["Thallid", "Black Lotus"]:
-		var asked := CardTrade.offer(player, name, CardTrade.REWARD)
-		assert_false(CardTrade.pay(player, asked, CardTrade.REWARD)["traded"], name)
-		assert_eq(player.cards, before)
+	var asked := CardTrade.offer(player, "Black Lotus", CardTrade.REWARD)
+	assert_false(CardTrade.pay(player, asked, CardTrade.REWARD)["traded"], "Black Lotus")
+	assert_eq(player.cards, before)
+	assert_eq(CardTrade.pay(player, CardTrade.offer(player, "Thallid", CardTrade.REWARD), CardTrade.REWARD)["traded"],
+		CardTrade.pay(plain, CardTrade.offer(plain, "Thallid", CardTrade.REWARD), CardTrade.REWARD)["traded"],
+		"Thallid: the same answer with the land ticked or not")
 
 func test_card_and_skin_changes_invalidate_acquisition_caches() -> void:
 	var before := StarterDeck.cards().duplicate(true)

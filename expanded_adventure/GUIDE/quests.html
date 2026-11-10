@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quests and steps · Adventure plugin guide</title>
+<meta name="description" content="The quest stage machine, steps and targets, conditions, effects, flags and the finale.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html" aria-current="page">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Quests and steps</h1>
+<p class="lede">A quest is an ordered list of steps. The number the save keeps for it is how many steps are done, and the quest is done when its last step, a duel, is won.</p>
+
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 400" role="img" aria-label="The Bread Road as a stage machine: stage 0, accept at the giver; stage 1, go to the port and press its button; stage 2, the duel at the giver, retried on a loss; won, the quest is done and its completion effects run. Below, the finale: three conditions must all hold before the castle's challenge button is live; winning the duel runs its effects.">
+<defs><marker id="qm-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker>
+<marker id="qm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-accent" d="M0,0L10,5L0,10z"/></marker></defs>
+<text class="d-title" x="16" y="24">quests[0], The Bread Road</text>
+<text class="d-small" x="16" y="42">the number saved for it, stages {"0": n}, is the steps done</text>
+<rect class="d-box" x="16" y="62" width="170" height="96" rx="12"/>
+<text class="d-mono" x="32" y="86">stage 0</text>
+<text class="d-accent-text" x="32" y="108">accept</text>
+<text class="d-small" x="32" y="126">at the giver,</text>
+<text class="d-small" x="32" y="141">Leitbur’s Rest</text>
+<rect class="d-box" x="214" y="62" width="176" height="96" rx="12"/>
+<text class="d-mono" x="230" y="86">stage 1</text>
+<text class="d-accent-text" x="230" y="108">go</text>
+<text class="d-small" x="230" y="126">to the port, the button</text>
+<text class="d-small" x="230" y="141">“Deliver the grain warrant”</text>
+<rect class="d-box" x="418" y="62" width="170" height="96" rx="12"/>
+<text class="d-mono" x="434" y="86">stage 2</text>
+<text class="d-accent-text" x="434" y="108">duel</text>
+<text class="d-small" x="434" y="126">at the giver, the foe</text>
+<text class="d-small" x="434" y="141">tithe_collector</text>
+<rect class="d-ok" x="616" y="62" width="128" height="96" rx="12"/>
+<text class="d-mono" x="630" y="86">quests [0]</text>
+<text class="d-title" x="630" y="108">done</text>
+<text class="d-small" x="630" y="126">complete: "pledge",</text>
+<text class="d-small" x="630" y="141">its effects, once</text>
+<path class="d-line-accent" d="M186,110 H210" marker-end="url(#qm-a)"/>
+<path class="d-line-accent" d="M390,110 H414" marker-end="url(#qm-a)"/>
+<path class="d-line-accent" d="M588,110 H612" marker-end="url(#qm-a)"/>
+<text class="d-small" x="200" y="178" text-anchor="middle">Accept pressed</text>
+<text class="d-small" x="402" y="178" text-anchor="middle">button pressed</text>
+<text class="d-small" x="402" y="192" text-anchor="middle">at the target</text>
+<text class="d-small" x="600" y="178" text-anchor="middle">duel won</text>
+<path class="d-dash" d="M466,158 C466,206 534,206 534,162" marker-end="url(#qm-h)"/>
+<text class="d-small" x="500" y="222" text-anchor="middle">lost or drawn: try again</text>
+<line class="d-dash" x1="16" y1="246" x2="744" y2="246"/>
+<text class="d-title" x="16" y="276">The finale, at the castle</text>
+<rect class="d-sunk" x="16" y="292" width="210" height="28" rx="14"/><text class="d-mono" x="121" y="311" text-anchor="middle">quests_done: "all"</text>
+<rect class="d-sunk" x="16" y="326" width="210" height="28" rx="14"/><text class="d-mono" x="121" y="345" text-anchor="middle">not_flag: "liberated"</text>
+<rect class="d-sunk" x="16" y="360" width="210" height="28" rx="14"/><text class="d-mono" x="121" y="379" text-anchor="middle">deck_share: pack-2 · 50%</text>
+<path class="d-line" d="M226,306 C250,306 250,340 268,340" />
+<path class="d-line" d="M226,374 C250,374 250,340 268,340" />
+<path class="d-line" d="M226,340 H268" marker-end="url(#qm-h)"/>
+<text class="d-small" x="247" y="294" text-anchor="middle">all hold</text>
+<rect class="d-box" x="272" y="314" width="180" height="52" rx="10"/>
+<text class="d-text" x="362" y="336" text-anchor="middle">“Challenge the lord”</text>
+<text class="d-small" x="362" y="353" text-anchor="middle">the boss button is live</text>
+<path class="d-line-accent" d="M452,340 H492" marker-end="url(#qm-a)"/>
+<text class="d-small" x="472" y="330" text-anchor="middle">won</text>
+<rect class="d-ok" x="496" y="292" width="248" height="96" rx="12"/>
+<text class="d-title" x="512" y="316">effects, in order</text>
+<text class="d-mono" x="512" y="338">set_flag: "liberated"</text>
+<text class="d-mono" x="512" y="358">refresh_appearance</text>
+<text class="d-mono" x="512" y="378">log_event: "freed"</text>
+</svg></div>
+<figcaption>A quest is a short list of steps and the save holds only how many are done. A loss changes nothing, so the duel can be fought again. The finale is a duel behind conditions; its effects run when it is won with the conditions still holding.</figcaption>
+</figure>
+
+
+<h2 id="steps">Steps</h2>
+<p>A step’s <code>do</code> is one of:</p>
+<ul class="chips" data-schema="steps"><li><code>accept</code></li><li><code>go</code></li><li><code>duel</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Step</th><th>Fields</th><th>What the hero does</th></tr></thead>
+<tbody>
+<tr><td><code>accept</code></td><td class="wrap"><code>action</code> (optional; the button, default <code>quest.accept</code>)</td><td class="wrap">Presses Accept in the quest’s pane at its giver. Only a quest’s <b>first</b> step may be an accept.</td></tr>
+<tr><td><code>go</code></td><td class="wrap"><code>to</code>, <code>action</code>, <code>guidance</code>, <code>task</code> (all required), <code>line</code></td><td class="wrap">Walks to the target and presses the step’s button there. The button appears in the target’s pane; <code>line</code> is the words beside it at a town (the guidance at a marker).</td></tr>
+<tr><td><code>duel</code></td><td class="wrap"><code>at</code> (default the giver), <code>guidance</code>, <code>task</code>, <code>approach</code></td><td class="wrap">Wins a duel against the quest’s <code>foe</code> at the target. Always the <b>last</b> step. Away from the giver, <code>approach</code> gives the button and line there that open the quest’s pane with its Duel button.</td></tr>
+</tbody></table></div>
+<p><code>guidance</code> is the line in the quest’s pane and the clue in the journal while the step is current; <code>task</code> is the Tasks list’s objective. Without them the engine’s words say it (<code>guide.petition</code>, <code>guide.duel</code>, <code>task.petition</code>, <code>task.duel</code>; <a href="text.html#defaults">Text</a>).</p>
+
+<h3 id="targets">Targets</h3>
+<p>A step’s <code>to</code>, <code>at</code> and the <code>here</code> condition take one of:</p>
+<ul>
+<li><code>"giver"</code>, <code>"port"</code> or <code>"castle"</code>;</li>
+<li><code>{"site": 22}</code>, a town or place slot of <code>world.json</code>;</li>
+<li><code>{"objective": "channel", "else": "port"}</code>, the site a named <a href="world.html#objectives">objective</a> chose, or <code>else</code> (default <code>giver</code>) when it chose none.</li>
+</ul>
+
+<h3 id="giver">At the giver town</h3>
+<p>A town that gives a quest shows <code>town.line</code> and, in the wise man’s place, a button labeled <code>town.action</code> (<code>town.thanks</code> once the quest is done). The town’s shops and services stay. The button opens the quest’s pane: the petition (the epilogue once done), the optional <code>quest.reward_line</code>, the step’s guidance, <code>quest.retry_line</code>, the reason a duel cannot begin yet if there is one, and the step’s button: <b>Accept</b> at stage 0 of a quest that begins with accept, else <b>Duel</b>, live when the duel is the current step, the hero stands at its target and the deck can play.</p>
+<p><code>errands_off</code> lists the town slots that offer none of the mainland’s ordinary errands; the Refuge lists slots 0 to 5, so its five communities offer none.</p>
+
+<h3 id="complete">When a quest is done</h3>
+<p><code>complete</code> is a list of effects, or the name of an entry of <code>completions</code> that several quests share. The Refuge’s five quests all finish with <code>"pledge"</code>:</p>
+<figure class="quote" data-file="quests.json" data-pointer="/completions"><figcaption class="src"><b>quests.json</b><span>/completions</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"pledge"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"reward_choice"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"gold"</span><span class="j-p">:</span> <span class="j-n">40</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"food"</span><span class="j-p">:</span> <span class="j-n">8</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"refresh_appearance"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"log_event"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"event"</span><span class="j-p">:</span> <span class="j-s">"quest"</span><span class="j-p">, </span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"quest.done_log"</span><span class="j-p">, </span><span class="j-k">"done"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span>
+    <span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"claim_cards"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+
+<h2 id="conditions">Conditions</h2>
+<p>A condition is an object with exactly one of these keys. Wherever a list of them stands (a pane’s, a line’s or a button’s <code>when</code>, the finale’s <code>conditions</code>), every one must hold; an empty list always holds. At most 16 in a list.</p>
+<ul class="chips" data-schema="conditions"><li><code>flag</code></li><li><code>not_flag</code></li><li><code>stage</code></li><li><code>quest_done</code></li><li><code>quests_done</code></li><li><code>deck_share</code></li><li><code>on_region</code></li><li><code>here</code></li><li><code>rewards_owed</code></li><li><code>cards_pending</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Condition</th><th>Example value</th><th>Holds when</th></tr></thead>
+<tbody>
+<tr><td><code>flag</code></td><td><code>"liberated"</code></td><td class="wrap">The flag is set.</td></tr>
+<tr><td><code>not_flag</code></td><td><code>"liberated"</code></td><td class="wrap">The flag is not set.</td></tr>
+<tr><td><code>stage</code></td><td><code>{"quest": 1, "min": 1, "max": 2}</code></td><td class="wrap">Quest 1’s stage is within min and max (defaults 0 and 8).</td></tr>
+<tr><td><code>quest_done</code></td><td><code>3</code></td><td class="wrap">Quest 3 is done.</td></tr>
+<tr><td><code>quests_done</code></td><td><code>"all" or 3</code></td><td class="wrap">Every quest is done, or at least that many.</td></tr>
+<tr><td><code>deck_share</code></td><td><code>{"pack": "pack-2", "percent": 50}</code></td><td class="wrap">At least that percent of the main deck’s nonland cards are cards of the pack (one the manifest requires). Every card must be known and there must be at least one nonland card.</td></tr>
+<tr><td><code>on_region</code></td><td><code>true</code></td><td class="wrap">The hero is (true) or is not (false) on this island.</td></tr>
+<tr><td><code>here</code></td><td><code>"castle"</code></td><td class="wrap">The hero stands at the target: <code>port</code>, <code>castle</code>, a site or an objective (a <code>giver</code> means nothing outside a quest).</td></tr>
+<tr><td><code>rewards_owed</code></td><td><code>true</code></td><td class="wrap">A reward choice is (true) or is not (false) owed.</td></tr>
+<tr><td><code>cards_pending</code></td><td><code>true</code></td><td class="wrap">Reward cards are (true) or are not (false) waiting for room in the bag.</td></tr>
+</tbody></table></div>
+<p>Quests are named by their place in <code>quests.json</code>’s list, from 0.</p>
+
+<h2 id="effects">Effects</h2>
+<p>An effect is an object with exactly one of these keys, run in order. Effects run when a quest is done (its <code>complete</code>) and when the finale is won (its <code>effects</code>). At most 16 in a list. None of them touches the card packs.</p>
+<ul class="chips" data-schema="effects"><li><code>set_stage</code></li><li><code>set_flag</code></li><li><code>gold</code></li><li><code>food</code></li><li><code>reward_choice</code></li><li><code>claim_cards</code></li><li><code>log_clue</code></li><li><code>log_event</code></li><li><code>refresh_appearance</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Effect</th><th>Example value</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>set_stage</code></td><td><code>{"quest": 1, "value": 2}</code></td><td class="wrap">Sets a quest’s stage, at most that quest’s steps less one; the quest’s new guidance is logged as a quest clue.</td></tr>
+<tr><td><code>set_flag</code></td><td><code>"liberated"</code></td><td class="wrap">Sets the flag. No effect clears a flag, and only the finale’s effects may set the finale’s <code>done_flag</code>.</td></tr>
+<tr><td><code>gold</code></td><td><code>40</code></td><td class="wrap">Gold to the hero, from −100,000 to 100,000; it never falls below 0.</td></tr>
+<tr><td><code>food</code></td><td><code>8</code></td><td class="wrap">Food, from −1,000 to 1,000; never below 0.</td></tr>
+<tr><td><code>reward_choice</code></td><td><code>true</code></td><td class="wrap">Owes one reward choice for the quest being completed: at most one in a quest’s completion, and none in the finale’s effects.</td></tr>
+<tr><td><code>claim_cards</code></td><td><code>true</code></td><td class="wrap">Moves waiting reward cards into the bag while it has room.</td></tr>
+<tr><td><code>log_clue</code></td><td><code>{"text": "key", "quest": true}</code></td><td class="wrap">A clue in the journal (a quest clue when <code>quest</code> is true).</td></tr>
+<tr><td><code>log_event</code></td><td><code>{"event": "quest", "text": "key", "done": true}</code></td><td class="wrap">A line in the journal; <code>event</code> is a word of your own.</td></tr>
+<tr><td><code>refresh_appearance</code></td><td><code>true</code></td><td class="wrap">Redraws the island’s pennants from its progress: quest banners and marker banners.</td></tr>
+</tbody></table></div>
+
+<h2 id="flags">Flags</h2>
+<p>A flag is a switch of your own, declared in <code>quests.json</code>’s <code>flags</code> (at most 8) and saved with the island’s progress, false until an effect sets it. A flag is copied into the island’s map data whenever its appearance is refreshed, so its name may not be one of the names the game already uses there or in the progress record:</p>
+<ul class="chips" data-gd="game/adventure/plugins/plugin_schema.gd:RESERVED_FLAGS"><li><code>region</code></li><li><code>layout_version</code></li><li><code>port</code></li><li><code>castle</code></li><li><code>town_names</code></li><li><code>dungeon_names</code></li><li><code>objectives</code></li><li><code>banners</code></li><li><code>freed_communities</code></li><li><code>entries</code></li><li><code>adventures</code></li><li><code>appearance</code></li><li><code>quests</code></li><li><code>pending</code></li><li><code>stages</code></li><li><code>reward_choices</code></li><li><code>expansion</code></li><li><code>plugin</code></li></ul>
+
+<h2 id="finale">The finale</h2>
+<figure class="quote" data-file="quests.json" data-pointer="/finale"><figcaption class="src"><b>quests.json</b><span>/finale</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"at"</span><span class="j-p">:</span> <span class="j-s">"castle"</span><span class="j-p">,</span>
+  <span class="j-k">"foe"</span><span class="j-p">:</span> <span class="j-s">"ebon_lord"</span><span class="j-p">,</span>
+  <span class="j-k">"conditions"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"quests_done"</span><span class="j-p">:</span> <span class="j-s">"all"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"not_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"deck_share"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"pack"</span><span class="j-p">:</span> <span class="j-s">"pack-2"</span><span class="j-p">, </span><span class="j-k">"percent"</span><span class="j-p">:</span> <span class="j-n">50</span><span class="j-p">}</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"effects"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"set_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"refresh_appearance"</span><span class="j-p">:</span> <span class="j-n">true</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"log_event"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"event"</span><span class="j-p">:</span> <span class="j-s">"freed"</span><span class="j-p">, </span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"finale.log"</span><span class="j-p">}</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"done_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">,</span>
+  <span class="j-k">"won"</span><span class="j-p">:</span> <span class="j-s">"finale.freed"</span><span class="j-p">,</span>
+  <span class="j-k">"already"</span><span class="j-p">:</span> <span class="j-s">"finale.already"</span><span class="j-p">,</span>
+  <span class="j-k">"unmet"</span><span class="j-p">:</span> <span class="j-s">"finale.unmet"</span>
+<span class="j-p">}</span></code></pre></figure>
+<dl class="terms">
+<dt><code>at</code></dt><dd><code>castle</code> (the default) or <code>port</code>: the marker whose <code>boss</code> button starts the duel.</dd>
+<dt><code>foe</code>, <code>conditions</code></dt><dd>The duel, and what must hold for its button to be live (and still hold when it is won).</dd>
+<dt><code>effects</code>, <code>done_flag</code></dt><dd>What a win does, and the flag that says the finale is won; only these effects may set it. When the conditions include <code>"quests_done": "all"</code>, the game also holds a saved <code>done_flag</code> to it: a save with it set and a quest still open does not fit the plugin (<a href="saves.html#never">Saves and compatibility</a>).</dd>
+<dt><code>won</code>, <code>already</code>, <code>unmet</code></dt><dd>The words after the duel: won and freed; won again after the finale was already done; won while the conditions did not hold.</dd>
+</dl>
+<p>The deck gate counts the main deck’s nonland cards of the named pack against all its nonland cards; lands and the sideboard never count. The castle can show the count with the deck gate’s placeholders (<a href="text.html#placeholders">Text</a>): the Refuge’s castle says <q data-text="castle.count">Pledges: {pledges} of {quests_total}. Your main deck: {count} of {total} nonland cards are from Fallen Empires.</q></p>
+
+<h2 id="after">Guidance, status and tasks</h2>
+<dl class="terms">
+<dt><code>targets</code></dt><dd>Where the guide arrow points once every quest is done (<code>after_quests</code>, default the castle) and once the finale’s flag is set (<code>after_finale</code>, default the port).</dd>
+<dt><code>status</code></dt><dd>Lines for the world screen’s status while the hero is on the island; each a text key or <code>{"text": key, "when": [...]}</code>.</dd>
+<dt><code>deck_line</code></dt><dd>A text key shown in the town deck builder on the island, filled with the deck gate’s numbers.</dd>
+<dt><code>tasks</code></dt><dd>The Tasks list: a row per quest (its <code>task</code> words, or the engine’s), a row for the finale (<code>tasks.finale</code>: <code>title</code>, <code>text</code>, <code>done</code>), and, once a quest is done and the plugin has reward bundles, a row for the rewards (<code>tasks.rewards</code>). The rows are read from the save, so they stay right while the hero is on the mainland.</dd>
+<dt><code>talk</code></dt><dd>What the island’s people say: <code>news</code> and <code>applause</code> (the wise man), <code>roaming</code> and <code>tribute</code> (a roaming creature, before and after enough wins), <code>dungeon</code> (the dungeon’s pane), <code>tales</code> (the wise man’s stories: title and text). News and applause show the first of their lines whose conditions hold; roaming and tribute show every one that holds.</dd>
+<dt><code>pictures</code></dt><dd>The quest, rewards and result panes’ pictures; default the skin’s <code>visit_city</code>.</dd>
+</dl>
+<figure class="quote" data-file="quests.json" data-pointer="/status"><figcaption class="src"><b>quests.json</b><span>/status</span></figcaption><pre class="code"><code><span class="j-p">[</span>
+  <span class="j-s">"status.pledges"</span><span class="j-p">,</span>
+  <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"status.free"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"status.seek"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"not_flag"</span><span class="j-p">:</span> <span class="j-s">"liberated"</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-s">"status.ship"</span>
+<span class="j-p">]</span></code></pre></figure>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="world.html"><span>Previous</span>The world</a>
+<a class="next" href="foes-rewards.html"><span>Next</span>Foes and rewards</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

@@ -71,8 +71,11 @@ const STEEL_DARK := Color8(140, 146, 158)
 enum Kind { WALK, VILLAGE, TOWN, CITY, CASTLE, FALLEN, RULED, DUNGEON, LAIR, ARROW, HAND, MOVE, PORTAL,
 	MONUMENT, CREATURE }
 ## The pointer for each kind of place [method VisitPane.describe] gives —
-## and Arzakon's portal, open or petrified ([method AdventureFinale.place_at]).
-const FOR_PLACE := {"refuge_port": Kind.TOWN, "refuge_castle": Kind.CASTLE, "village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
+## and Arzakon's portal, open or petrified ([method AdventureFinale.place_at]);
+## an optional land's harbor and anchorage a town's, its castle a castle's
+## (adventure plugins: `region_port`, `region_castle`, [DataRegion]).
+const FOR_PLACE := {"region_port": Kind.TOWN, "expansion_port": Kind.TOWN, "region_castle": Kind.CASTLE,
+	"village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
 	"castle": Kind.CASTLE, "fallen": Kind.FALLEN, "ruled": Kind.RULED,
 	"dungeon": Kind.DUNGEON, "lair": Kind.LAIR, "portal": Kind.PORTAL, "monument": Kind.MONUMENT}
 

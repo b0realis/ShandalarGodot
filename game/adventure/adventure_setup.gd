@@ -198,8 +198,11 @@ var color := "white"
 var playmat_color := ""
 var playmat_type := RANDOM_TYPE
 var packs: Array[String] = []
-## Launch-only opt-in for new campaigns; saved heroes retain their own mode.
-var expanded_adventure := AdventureExpansions.launch_enabled
+## THE ADVENTURE PLUGINS TICKED (adventure plugins, 2026-11-10; the Embark's
+## plugins window drives it), by id: those installed and valid when the hero
+## sets out join the campaign ([method resolve], [member
+## AdventurePlayer.adventures]); remembered like the packs.
+var adventures: Array[String] = []
 var difficulty := 0
 ## The card rule of the adventure ([member AdventurePlayer.card_rule]): as
 ## 1997 meant it, as 1997 shipped it, or the classic MTG rules.
@@ -400,6 +403,10 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 	for id in packs:
 		if pack_versions.has(id) and not id in IGNORED_PACKS:
 			chosen_packs.append({"id": id, "version": String(pack_versions[id])})
+	var lands: Array[String] = []
+	for id in adventures:
+		if AdventureExpansions.known(id) and not id in lands:
+			lands.append(id)
 	var row := color_row(color)
 	var start := starting_resources(difficulty)
 	start["world_magic"] = String(row.get("world_magic", ""))
@@ -427,7 +434,7 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"ascetic": ascetic,
 		"playmat": {"color": playmat_color_shown(), "type": style},
 		"packs": chosen_packs,
-		"expanded_adventure": expanded_adventure,
+		"adventures": AdventurePlayer.ticked_rows(lands),
 		"start": start,
 	}
 
@@ -453,6 +460,61 @@ static func make_world(record: Dictionary) -> ShandalarWorld:
 		int(record["difficulty"]))
 
 
+## A PLUGIN TICKED (the owner, 2026-11-10: the Embark's plugins window;
+## the plugin spec's §0.4): [param id] joins [member adventures], and every
+## card pack it needs that the adventure offers ([param installed], as
+## [method offered_packs] reads it) joins [member packs]. The packs ticked
+## for it, in its manifest's order: the window says so. A plugin that needs
+## a pack not installed is not ticked ([method can_tick]).
+func tick_adventure(id: String, installed: Array[String]) -> Array[String]:
+	var ticked: Array[String] = []
+	if not can_tick(id, installed):
+		return ticked
+	if not id in adventures:
+		adventures.append(id)
+	for pack in AdventurePlugins.pack_ids(id):
+		if not pack in packs:
+			packs.append(pack)
+			ticked.append(pack)
+	return ticked
+
+
+## Whether plugin [param id] can be ticked: installed, passing every check,
+## and every card pack it needs one of [param installed] that an adventure
+## may take, as new as the plugin asks ([method
+## AdventureExpansions.pack_too_old]: an older one keeps its ships in port).
+static func can_tick(id: String, installed: Array[String]) -> bool:
+	if not AdventurePlugins.valid(id):
+		return false
+	var offered := offered_packs(installed)
+	for pack in AdventurePlugins.pack_ids(id):
+		if not pack in offered:
+			return false
+	return AdventureExpansions.pack_too_old(id).is_empty()
+
+
+## Whether every card pack plugin [param id] needs is ticked here.
+func packs_ticked_for(id: String) -> bool:
+	for pack in AdventurePlugins.pack_ids(id):
+		if not pack in packs:
+			return false
+	return true
+
+
+## A CARD PACK UNTICKED: [param pack] leaves [member packs], and every
+## ticked plugin that needs it leaves [member adventures] with it — a
+## plugin goes with its packs. The plugins unticked, by id: the Embark says
+## so.
+func untick_pack(pack: String) -> Array[String]:
+	packs.erase(pack)
+	var gone: Array[String] = []
+	for id in adventures.duplicate():
+		if pack in AdventurePlugins.pack_ids(id):
+			adventures.erase(id)
+			gone.append(id)
+	return gone
+
+
 ## WRITTEN WHEN THE PLAYER EMBARKS, and read back the next time the
 ## screen opens, so a second visit opens on the hero of the first.
 func remember() -> void:
@@ -463,6 +525,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "playmat_color", playmat_color, false)
 	Settings.set_value(KEY_PREFIX + "playmat_type", playmat_type, false)
 	Settings.set_value(KEY_PREFIX + "packs", ",".join(packs), false)
+	Settings.set_value(KEY_PREFIX + "plugins", ",".join(adventures), false)
 	Settings.set_value(KEY_PREFIX + "figure_colors", HeroColors.to_text(figure_colors), false)
 	Settings.set_value(KEY_PREFIX + "card_rule", card_rule, false)
 	Settings.set_value(KEY_PREFIX + "life_rule", AdventurePlayer.life_rule_of(life_rule), false)
@@ -494,7 +557,17 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 	for id in String(Settings.get_value(KEY_PREFIX + "packs", "")).split(",", false):
 		if id in offered_packs(installed) and not id in setup.packs:
 			setup.packs.append(id)
-	# The former checkbox preference must never enable stories on a normal launch.
+	# The plugins remembered, those still installed and valid. (The retired
+	# switch's preference, `expanded_adventure`, is never read.)
+	for id in String(Settings.get_value(KEY_PREFIX + "plugins", "")).split(",", false):
+		if AdventurePlugins.valid(id) and not id in setup.adventures:
+			setup.adventures.append(id)
+	# A ticked plugin goes with its card packs (the plugins window's rule,
+	# [method tick_adventure]): one whose pack is gone since, or older now
+	# than it asks, is not ticked.
+	for id in setup.adventures.duplicate():
+		if not setup.packs_ticked_for(id) or not can_tick(id, installed):
+			setup.adventures.erase(id)
 	setup.difficulty = clampi(int(Settings.get_value(KEY_PREFIX + "difficulty", 0)),
 		0, DIFFICULTIES.size() - 1)
 	# The rule remembered, else the on/off copy limit remembered before the
@@ -520,7 +593,7 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 ## Every remembered choice, by its key's tail ([constant KEY_PREFIX]).
 ## The old expanded_adventure preference remains only so forget() cleans it.
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
-	"playmat_color", "playmat_type", "packs", "expanded_adventure", "difficulty", "figure_colors", "card_rule", "copy_limit",
+	"playmat_color", "playmat_type", "packs", "plugins", "expanded_adventure", "difficulty", "figure_colors", "card_rule", "copy_limit",
 	"life_rule", "card_hold", "ban_list", "all_trader_cards", "sieges", "creatures", "life_start", "ascetic"]
 
 
