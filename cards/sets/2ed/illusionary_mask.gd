@@ -21,6 +21,12 @@ extends CardScript
 ## masked Shivan Dragon attacked as the 2/2, and a masked blocker
 ## assigned 2.
 ##
+## In a duel NOT played for ante the nine ante cards cannot be cast (the
+## owner's ruling of 2026-10-21, [method MtgGame.not_for_ante_refusal]),
+## and the Mask casts what it hides: with Ante off it offers no ante card
+## (the owner's ruling of 2026-11-10). Effects that PUT a card into play
+## without casting it are not bound by that.
+##
 ## "Activate only as a sorcery" is the full sorcery-timing test (CR 307.1,
 ## via CR 117.1a): the source controller's own turn, a MAIN phase, and an
 ## empty stack. Pinning it to MAIN1 instead would both allow the
@@ -66,16 +72,36 @@ class MaskEffect extends EffectBase:
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,
 			_target: TargetRef, x_value: int = 0) -> void:
 		var candidates: Array[CardInstance] = []
+		# ANTE CARDS WITH ANTE OFF (the owner's ruling of 2026-11-10, gap
+		# review r6-3): the Mask CASTS the creature it hides, and an ante
+		# card "can't be cast" in a duel not played for ante
+		# ([method MtgGame.not_for_ante_refusal]) — so a Tempest Efreet or
+		# Timmerian Fiends is not offered. Where that leaves nothing to
+		# hide, the reason goes to the controller alone (a private line;
+		# the table reads only that nothing was hidden): the hand is theirs
+		# to know.
+		var refused := ""
 		for card in game.players[controller].hand:
 			if card.data.is_creature() and card.data.cost.mana_value() <= x_value:
+				var why := game.not_for_ante_refusal(card)
+				if why != "":
+					if refused == "":
+						refused = why
+					continue
 				candidates.append(card)
 		if candidates.is_empty():
-			game.log_line("Illusionary Mask finds nothing to hide")
+			if refused != "":
+				game.log_line("Illusionary Mask finds nothing to hide — %s" % refused,
+					null, "", controller, "Illusionary Mask finds nothing to hide")
+			else:
+				game.log_line("Illusionary Mask finds nothing to hide")
 			return
 		candidates.sort_custom(MaskEffect._pricier_first)
 		# "You MAY choose": an OPTIONAL ask, and nothing chosen masks nothing.
 		# It was a forced pick until the bug hunt of 2026-10-21 — a seat that
-		# answered nothing had the dearest creature masked for it.
+		# answered nothing had the dearest creature masked for it. The
+		# question names no refused card: its prompt can reach the table
+		# (a "decided for" line, a network seat waiting on it).
 		var chosen := game.agents[controller].choose_card(game, controller,
 			candidates, "Put a creature onto the battlefield face down", true)
 		if chosen == null:

@@ -3501,11 +3501,15 @@ func _open_notes_dialog() -> void:
 	edit.add_theme_color_override("font_color", OriginalDialog.CHOICE_LIT)
 	dialog.body().add_child(edit)
 	dialog.add_button("OK").pressed.connect(func() -> void:
-		if edit.text.strip_edges() != deck.notes:
+		# As typed, the first line's indent too (gap review 2026-11-10,
+		# r6-1): a whole-text `strip_edges()` took it — and so counted OK on
+		# unchanged notes that open on an indented list as an edit.
+		var typed := DeckModel.notes_as_typed(edit.text)
+		if typed != deck.notes:
 			# An undo step of its own: without one, `Undo` jumped past the
 			# note to the edit before it (2026-10-03).
 			_remember(deck.duplicate_model(), "Deck notes")
-			deck.notes = edit.text.strip_edges()
+			deck.notes = typed
 			_dirty = true
 		dialog.dismiss()
 		_say("Deck notes kept — they save with the deck"))

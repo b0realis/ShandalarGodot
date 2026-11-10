@@ -1187,11 +1187,26 @@ static func notes_from_text(text: String) -> String:
 ## and opened again came back as one flush block.
 func note_lines(prefix: String) -> PackedStringArray:
 	var out := PackedStringArray()
-	if notes.strip_edges() == "":
+	var typed := notes_as_typed(notes)
+	if typed == "":
 		return out
-	for line in notes.strip_edges().split("\n"):
+	for line in typed.split("\n"):
 		out.append(("%s %s" % [prefix, line]).strip_edges(false, true))
 	return out
+
+
+## Notes text as it is kept: the blank lines above the first written line
+## and the spaces after the last go, and EVERY line keeps its own indent —
+## the first one's too (gap review 2026-11-10, r6-1: a whole-text
+## `strip_edges()` here and in the Deck notes dialog took the first line's
+## indent, so notes opening on an indented list lost it). "" when nothing
+## is written. The Deck notes dialog keeps what this returns.
+static func notes_as_typed(text: String) -> String:
+	var lines := text.strip_edges(false, true).split("\n")
+	var first := 0
+	while first < lines.size() and lines[first].strip_edges() == "":
+		first += 1
+	return "\n".join(lines.slice(first))
 
 
 ## A note line's text after its prefix: the one space [method note_lines]

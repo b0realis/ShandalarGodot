@@ -24,10 +24,13 @@ extends RefCounted
 ##
 ## THE CAP. One megabyte, trimmed from the FRONT: when an append takes
 ## the file past [constant CAP], the oldest 64 KB and a little more go,
-## and the cut lands on the next game banner where there is one — so
-## the file's first line is a `GAME at` banner, not the middle of a
-## turn. Trimming rewrites the file, which is why it trims a slab and
-## not a line: once a duel per hour, not once a sentence — and writes
+## and the cut lands on a game banner where one falls within the next
+## 64 KB — so the file's first line is a `GAME at` banner, not the middle
+## of a turn. Where none does, the cut stays on its line and a long duel
+## keeps its tail: the search once ran to the end of the file, and a long
+## duel followed by the next one's start went whole (gap review
+## 2026-11-10, r6-2). Trimming rewrites the file, which is why it trims a
+## slab and not a line: once a duel per hour, not once a sentence — and writes
 ## the kept part beside it and renames it over, so no moment of the trim
 ## leaves a cut log on disk ([method _trim]).
 ##
@@ -136,10 +139,20 @@ func _trim(file_path: String) -> void:
 	while total > CAP - SLACK and cut < lines.size():
 		total -= lines[cut].to_utf8_buffer().size() + 1
 		cut += 1
-	for i in range(cut, lines.size() - 1):
+	# A banner WITHIN THE SLAB only — the one the cut falls inside (its
+	# rule a line or two above the cut) or one at most SLACK bytes past it.
+	# The search ran to the end of the file (gap review 2026-11-10, r6-2),
+	# so the next banner after a long duel took that whole duel with it;
+	# now a duel longer than the slab keeps its tail, cut on a line.
+	var past := 0
+	for i in range(maxi(cut - 2, 0), lines.size() - 1):
+		if past > SLACK:
+			break
 		if lines[i] == RULE and lines[i + 1].begins_with("**********  " + BANNER_WORD):
 			cut = i
 			break
+		if i >= cut:
+			past += lines[i].to_utf8_buffer().size() + 1
 	# WHOLE OR NOT AT ALL (2026-10-21): this opened the log for WRITE —
 	# emptied it — and wrote the kept part back, so a crash in between
 	# left an empty or cut log, and a reader saw one. A pending file,
