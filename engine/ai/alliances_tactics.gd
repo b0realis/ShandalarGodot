@@ -198,7 +198,7 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 					# pass, h6-8): Hibernation Sliver's grant paid 2 life and
 					# bounced its own lord from a Twiddle, and from a Capsize
 					# that returned it anyway.
-					if takes_self(g, item, s, e): return result(pilot._own_value(g, s) + 2.0, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
+					if takes_self(g, item, s, e, ref): return result(pilot._own_value(g, s) + 2.0, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
 		&"self_keyword_gift", &"self_keyword":
 			var keyword: int = e.ai_parameters.keyword
 			if s.has_keyword(keyword) or not g.combat.attackers.has(s.id): return {}
@@ -222,17 +222,36 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			# is worth something only while a creature of theirs could
 			# block it; trample only once it is blocked by less toughness
 			# than its power ([method trample_gain]).
+			#
+			# WHAT IT BUYS, LESS WHAT IT GIVES (gap review 2026-11-10,
+			# r1a-3). Phelddagrif handed over a permanent Hippo for one point
+			# of trample over a Hill Giant, and 2 life for flying against a
+			# Storm Crow, which blocks a flyer as well as a walker: the gift
+			# was never charged, trample was a flat 3.5 whatever it pushed
+			# through, and evasion was bought while any creature of theirs
+			# could block — with it as well as without. Now evasion is
+			# bought only when it escapes every blocker it faces ([method
+			# evades_every_blocker], asked under the journal), trample is
+			# the damage it pushes through ([method pushed_value]), and a
+			# `self_keyword_gift` pays for its gift ([method gift_price]).
+			var gift := gift_price(g, pilot, e, keyword) if e.ai_role == &"self_keyword_gift" else 0.0
+			var value := 3.5
 			if keyword == Mtg.Keyword.TRAMPLE:
 				if not blocks_declared(g) or trample_gain(g, s) <= 0: return {}
+				value = pushed_value(g, pilot, trample_gain(g, s))
 			elif keyword == Mtg.Keyword.BANDING:
 				# A band is formed as attackers are DECLARED (CR 702.22c):
 				# banding bought by an attacker already declared joins it to
 				# nothing — Urza's Engine paid {3} for it, alone.
 				return {}
-			elif keyword in [Mtg.Keyword.FLYING, Mtg.Keyword.FEAR, Mtg.Keyword.UNBLOCKABLE] \
-					and not could_be_blocked(g, pilot, s):
-				return {}
-			return result(3.5, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
+			elif keyword in [Mtg.Keyword.FLYING, Mtg.Keyword.FEAR, Mtg.Keyword.UNBLOCKABLE]:
+				if not evades_every_blocker(g, pilot, s, keyword): return {}
+				# A gift is weighed against the damage the escape lands —
+				# after the life it gives them, which resolves first.
+				if gift > 0.0: value = pushed_value(g, pilot, s.cur_power, gift_life(e, keyword))
+			value -= gift
+			if value <= 0.0: return {}
+			return result(value, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
 		&"match_combat_stats":
 			for ref in refs:
 				var i := g.find_instance(ref.instance_id)
@@ -298,7 +317,13 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 ## lives through: no. A BOUNCE: only when the object pays to come back
 ## (buyback — it fizzles into the graveyard instead), or when [param e]
 ## keeps the permanent where it is (shroud, protection).
-static func takes_self(g: MtgGame, item: StackItem, s: CardInstance, e: EffectBase) -> bool:
+##
+## [param ref] is the target of [param item] that names [param s]: the
+## damage read is what THAT target takes — a divided spell's share, not
+## its total (gap review 2026-11-10, r1b-2: 1 point of Pyrotechnics at a
+## 4/4 read as the 4 that kills it). Without it, the item's whole damage.
+static func takes_self(g: MtgGame, item: StackItem, s: CardInstance, e: EffectBase,
+		ref: TargetRef = null) -> bool:
 	if item.kind == Mtg.StackKind.SPELL and item.card != null and item.card.data.is_aura():
 		return EffectIntent.aura_aim(item.card.data) == EffectIntent.Aim.HOSTILE
 	var intent := EffectIntent.read(item.effects, item.card.data.card_name if item.card != null else "")
@@ -309,7 +334,9 @@ static func takes_self(g: MtgGame, item: StackItem, s: CardInstance, e: EffectBa
 	if intent.bounces:
 		return bool(item.cost_paid.get("buyback", false)) or not self_bounce_leaves(e)
 	if s.is_creature():
-		if intent.damage_at(item.x_value) > 0 and not intent.kills(s, item.x_value):
+		var dealt := intent.damage_at(item.x_value) if ref == null else intent.damage_from(item, ref)
+		var killed := intent.kills(s, item.x_value) if ref == null else intent.kills_from(item, s, ref)
+		if dealt > 0 and not killed:
 			return false   # damage it lives through
 		if intent.shrinks() and s.cur_toughness + intent.pump_toughness > s.damage:
 			return false   # a shrink it lives through
@@ -349,8 +376,6 @@ static func shadow_gain(g: MtgGame, pilot, s: CardInstance) -> float:
 		return pilot.LETHAL_WORTH
 	return after - before
 
-## Have this combat's blockers been declared (CR 509) — the moment after
-## which no evasion changes a block?
 ## The damage trample would add for our blocked attacker [param s]: its
 ## power past the lethal damage its blockers need (CR 702.19c). 0 when it
 ## is unblocked — all of it reaches them anyway — or blocked by enough.
@@ -377,6 +402,71 @@ static func could_be_blocked(g: MtgGame, pilot, s: CardInstance) -> bool:
 	return false
 
 
+## Would [param keyword] take our attacker [param s] out of reach of
+## every untapped creature of theirs that could block it now — is there a
+## block to escape, and does the keyword escape all of it (gap review
+## 2026-11-10, r1a-3: flying bought against a Storm Crow)? The keyword is
+## granted under the search journal and unmade; a search already in
+## progress keeps its journal.
+static func evades_every_blocker(g: MtgGame, pilot, s: CardInstance, keyword: int) -> bool:
+	var foe := g.opponent_of(pilot.pid)
+	var blockers: Array[CardInstance] = []
+	for b in g.players[foe].battlefield:
+		if b.is_creature() and not b.tapped \
+				and CombatState.block_illegality(g, b, s, foe, true, pilot.pid) == "":
+			blockers.append(b)
+	if blockers.is_empty():
+		return false   # nothing over there blocks it: nothing to escape
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g.continuous.add_until_eot_keywords(s.id, [keyword])
+	g.recalculate()
+	var escaped := true
+	for b in blockers:
+		if CombatState.block_illegality(g, b, s, foe, true, pilot.pid) == "":
+			escaped = false
+	g.unmake_to(mark)
+	if not nested: g.end_search()
+	return escaped
+
+
+## [param damage] more to their face, on the pilot's scale — the game when
+## it is lethal through their life plus [param life_first], life they gain
+## before it lands.
+static func pushed_value(g: MtgGame, pilot, damage: int, life_first := 0) -> float:
+	var foe := g.opponent_of(pilot.pid)
+	if damage >= g.players[foe].life + life_first:
+		return AiPlayer.LETHAL_WORTH
+	return pilot._face_damage_value(g, damage, foe)
+
+
+## THE GIFT (gap review 2026-11-10, r1a-3): what a `self_keyword_gift`
+## hands target opponent, on the pilot's own scale. The shape names its
+## keyword; its gifts are the shape's own — with trample a 1/1 creature
+## token (Phelddagrif's Hippo, a body that blocks from their next turn on,
+## priced as a token is, [method AiPlayer._token_value]), with flying 2
+## life ([method gift_life], priced as the damage it takes back). The
+## shape's parameters may state them instead: `gift_life` (int) and
+## `gift_token` (Vector2i, power and toughness).
+static func gift_price(g: MtgGame, pilot, e: EffectBase, keyword: int) -> float:
+	var price := 0.0
+	var life := gift_life(e, keyword)
+	if life > 0:
+		price += pilot._face_damage_value(g, life, g.opponent_of(pilot.pid))
+	var token: Vector2i = e.ai_parameters.get("gift_token",
+		Vector2i(1, 1) if keyword == Mtg.Keyword.TRAMPLE else Vector2i.ZERO)
+	if token != Vector2i.ZERO:
+		price += pilot._token_value({"power": token.x, "toughness": token.y})
+	return price
+
+
+## The life a `self_keyword_gift` gives target opponent (see [method gift_price]).
+static func gift_life(e: EffectBase, keyword: int) -> int:
+	return int(e.ai_parameters.get("gift_life", 2 if keyword == Mtg.Keyword.FLYING else 0))
+
+
+## Have this combat's blockers been declared (CR 509) — the moment after
+## which no evasion changes a block?
 static func blocks_declared(g: MtgGame) -> bool:
 	var step := g.current_step()
 	if step == Mtg.Step.DECLARE_BLOCKERS: return not g.awaiting_blockers
@@ -446,10 +536,15 @@ static func special_spell(g: MtgGame, pilot, response := false) -> String:
 				var ref := TargetRef.card(top.card)
 				if not e.target_spec.is_legal(g, ref, s) or not e.affects_spell(top.card): continue
 				var value := Evaluator.card_value(top.card.data)
-				var intent := EffectIntent.read(top.effects)
+				# Read by the card's name (Fireball's damage is card-local)
+				# and per target: what OUR face takes — a divided spell's
+				# share, Fireball's even split (gap review 2026-11-10, r1b-2:
+				# Pyrotechnics' 4 read as lethal with 1 of it at us, half a
+				# Fireball at our last life as no damage at all).
+				var intent := EffectIntent.read(top.effects, top.card.data.card_name if top.card != null else "")
 				var lethal := false
 				for t in top.targets:
-					if t.is_player and t.player_id == pilot.pid and intent.damage_at(top.x_value) >= g.players[pilot.pid].life:
+					if t.is_player and t.player_id == pilot.pid and intent.damage_from(top, t) >= g.players[pilot.pid].life:
 						value += 100.0
 						lethal = true
 				# THE PROFILE'S BAR (2026-10-03): this branch countered

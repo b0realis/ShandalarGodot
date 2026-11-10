@@ -508,8 +508,14 @@ static func licid_stamp(g: MtgGame, pilot) -> String:
 
 ## Two licids with this key are interchangeable for the arm: the same
 ## card in the same visible state.
+##
+## A FACE-DOWN permanent is keyed as one (gap review 2026-11-10, r1b-4):
+## it is a nameless 2/2 with no text (CR 708.2), and its printed name is
+## hidden information (CONTRIBUTING.md rule 8) — two masked hosts were
+## twins or not by the cards under the masks, moving the hosts read and the
+## node budget.
 static func licid_twin_key(s: CardInstance) -> String:
-	return "%s:%d:%d:%d:%d:%d:%d:%d:%s" % [s.data.card_name, int(s.tapped),
+	return "%s:%d:%d:%d:%d:%d:%d:%d:%s" % ["face-down" if s.face_down else s.data.card_name, int(s.tapped),
 		int(s.summoning_sick), s.damage, s.cur_power, s.cur_toughness,
 		s.attachments.size(), s.regeneration_shields, str(s.counters)]
 
@@ -798,8 +804,9 @@ static func licid_doomed(g: MtgGame, pilot, licid: CardInstance, host: CardInsta
 			if t.instance_id == licid.id and (intent.removes or intent.bounces):
 				return true
 			if host != null and t.instance_id == host.id:
+				# A divided spell's SHARE (gap review 2026-11-10, r1b-2).
 				if intent.removes or intent.bounces \
-						or (intent.damage_at(top.x_value) > 0 and intent.kills(host, top.x_value)):
+						or (intent.damage_from(top, t) > 0 and intent.kills_from(top, host, t)):
 					return true
 		return false
 	if host == null or g.combat.attackers.is_empty() \
@@ -1547,8 +1554,9 @@ static func _dying_creature(g: MtgGame, pilot, spec: TargetSpec, s: CardInstance
 			if t == null or t.is_player or t.is_damage or t.is_ability:
 				continue
 			var inst := g.find_instance(t.instance_id)
+			# The share THIS target takes (gap review 2026-11-10, r1b-2).
 			if inst == null or inst.controller_id != pid or not inst.is_creature() \
-					or not intent.kills(inst, top.x_value):
+					or not intent.kills_from(top, inst, t):
 				continue
 			if spec != null and not spec.is_legal(g, TargetRef.card(inst), s):
 				continue
@@ -2040,7 +2048,9 @@ static func spike_threat(g: MtgGame, pilot, spike: CardInstance,
 				return "stack_final"
 			if intent.removes:
 				return "stack_final" if intent.removal_ignores_regeneration else "stack"
-			if intent.damage_at(top.x_value) > 0 and intent.kills(spike, top.x_value):
+			# A divided spell's SHARE, not its total (gap review 2026-11-10,
+			# r1b-2): 1 of Pyrotechnics cashed a 2/2 Spike Feeder out to 0/0.
+			if intent.damage_from(top, t) > 0 and intent.kills_from(top, spike, t):
 				return "stack"
 		return ""
 	if not g.combat.attackers.has(spike.id) and not g.combat.blocks.has(spike.id):
@@ -2296,7 +2306,7 @@ static func _incoming_to(g: MtgGame, pilot, inst: CardInstance) -> int:
 		for t in top.targets:
 			if t != null and not t.is_player and not t.is_damage and not t.is_ability \
 					and t.instance_id == inst.id:
-				return intent.damage_at(top.x_value)
+				return intent.damage_from(top, t)   # its share (gap review 2026-11-10, r1b-2)
 		return 0
 	if g.combat.attackers.is_empty() or g.current_step() != Mtg.Step.DECLARE_BLOCKERS \
 			or g.awaiting_blockers or g.combat_damage_prevented:
@@ -2436,7 +2446,9 @@ static func _removal_aimed_at(g: MtgGame, pilot, inst: CardInstance) -> bool:
 			continue
 		if intent.removes or intent.bounces:
 			return true
-		if intent.damage_at(top.x_value) > 0 and intent.kills(inst, top.x_value):
+		# Its SHARE of a divided spell (gap review 2026-11-10, r1b-2): Cold
+		# Storage exiled a Serra Angel from 1 point of Pyrotechnics.
+		if intent.damage_from(top, t) > 0 and intent.kills_from(top, inst, t):
 			return true
 	return false
 

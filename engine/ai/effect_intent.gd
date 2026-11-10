@@ -30,6 +30,12 @@ var damage_divided: bool = false
 ## Pyrotechnics, Rolling Thunder). Not Fireball's even split, whose
 ## targets carry no share ([method damage_on]).
 var divided_shares: bool = false
+## The division is EVEN, rounded down, over the targets chosen (Fireball):
+## each of N targets takes floor(X / N) — the N fixed as the spell was
+## cast, a vanished target's share lost (the owner's ruling of 2026-10-21,
+## `cards/sets/2ed/fireball.gd`). Public: the X and the targets are
+## announced (gap review 2026-11-10, r1b-2; [method damage_on]).
+var divided_evenly: bool = false
 
 ## Damage the CASTER takes as a side effect (Orcish Artillery 3, Psionic
 ## Blast 2). The price mage-go's `lifeCost*15/life` term charges.
@@ -360,7 +366,7 @@ var needs_own: Callable = Callable()
 const CARD_LOCAL := {
 	"Orcish Artillery": {"damage": 2, "self_damage": 3},
 	"Psionic Blast": {"damage": 4, "self_damage": 2},
-	"Fireball": {"damage_x": true, "divided": true},
+	"Fireball": {"damage_x": true, "divided": true, "evenly": true},
 	"Chain Lightning": {"damage": 3},
 	"Swords to Plowshares": {"removes": true, "ignores_regeneration": true},
 	"Drain Life": {"damage_x": true},
@@ -808,6 +814,8 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.damage_uses_x = true
 		if bool(note.get("divided", false)):
 			intent.damage_divided = true
+		if bool(note.get("evenly", false)):
+			intent.divided_evenly = true
 		if bool(note.get("removes", false)):
 			intent.removes = true
 		if bool(note.get("ignores_regeneration", false)):
@@ -950,11 +958,55 @@ func damage_at(x_value: int) -> int:
 
 ## The damage [param ref] takes at X = [param x_value]: its announced
 ## share of a DIVIDED total ([member TargetRef.amount], fixed as the spell
-## was cast — CR 601.2d, public), else [method damage_at].
-func damage_on(ref: TargetRef, x_value: int) -> int:
+## was cast — CR 601.2d, public); Fireball's even share of the X over the
+## [param chosen] targets it was cast at ([member divided_evenly]; 0 = not
+## known, read as one target); else [method damage_at].
+func damage_on(ref: TargetRef, x_value: int, chosen := 0) -> int:
 	if divided_shares and ref != null and ref.amount > 0:
 		return ref.amount
+	if divided_evenly and chosen > 1:
+		@warning_ignore("integer_division")
+		return damage_at(x_value) / chosen   # rounded down
 	return damage_at(x_value)
+
+
+## The damage [param ref], one target of [param item] (a spell or ability
+## on the stack), takes from it: [method damage_on] at the item's X over
+## the targets chosen with [param ref] (its target group, CR 601.2c).
+## THE SHARE, NOT THE TOTAL (gap review 2026-11-10, r1b-2): the Pack 8/9
+## stack readers read Pyrotechnics' 4 as what its 1-point target takes.
+func damage_from(item: StackItem, ref: TargetRef) -> int:
+	if item == null:
+		return damage_at(0)
+	return damage_on(ref, item.x_value, chosen_with(item, ref))
+
+
+## How many targets were chosen together with [param ref] for [param
+## item]: the size of the target group that holds it, else every target.
+static func chosen_with(item: StackItem, ref: TargetRef) -> int:
+	for group in item.target_groups:
+		if group is Array and (group as Array).has(ref):
+			return (group as Array).size()
+	return item.targets.size()
+
+
+## [method kills] for ONE target of a divided spell: the share [param ref]
+## takes at X = [param x_value] over [param chosen] targets ([method
+## damage_on]), against [param victim]'s toughness left.
+func kills_on(victim: CardInstance, ref: TargetRef, x_value: int, chosen := 0) -> bool:
+	if victim == null or not victim.is_creature():
+		return false
+	if removes or bounces:
+		return true
+	var needed: int = victim.cur_toughness - victim.damage
+	return needed > 0 and damage_on(ref, x_value, chosen) >= needed
+
+
+## [method kills_on] for [param ref], one target of [param item] on the stack.
+func kills_from(item: StackItem, victim: CardInstance, ref: TargetRef) -> bool:
+	if item == null:
+		return kills(victim, 0)
+	return kills_on(victim, ref, item.x_value, chosen_with(item, ref))
 
 
 ## Would the damage at X = [param x_value] finish [param victim] as it

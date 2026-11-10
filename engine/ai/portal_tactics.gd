@@ -47,6 +47,10 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x := 0) -> Vari
 			# Wizard cast it in their upkeep with a lethal 2/2 it would
 			# have attacked with next turn regardless.
 			if g.active_player != pid: return {}
+			# NOT WHEN THIS TURN ALREADY KILLS (gap review 2026-11-10,
+			# r1b-5): the extra turn adds nothing to an attack that is
+			# lethal now but the loss, should they survive it.
+			if this_turn_damage(g, pid) >= foe.life: return {}
 			# Do not buy an ordinary value turn with a guaranteed loss rider.
 			if extra_turn_damage(g, pid) >= foe.life: return A.result(AiPlayer.LETHAL_WORTH * 0.5)
 		&"both_players_draw_x":
@@ -139,6 +143,46 @@ static func extra_turn_damage(g: MtgGame, pid: int) -> int:
 		var power := body.cur_power if body.face_down else mini(body.data.power, body.cur_power)
 		if not blockable: damage += H.DAMAGE.damage_through(g, body, TargetRef.player(1 - pid), maxi(0, power))
 	return damage
+
+
+## The damage [param pid]'s attack still to come THIS turn puts through
+## that no creature of the other seat can stop (public board only; gap
+## review 2026-11-10, r1b-5): before attackers are declared, the creatures
+## that can attack now and none of theirs can block; once declared, the
+## attackers no block stops. 0 in the other seat's turn and once this
+## turn's combat damage is dealt.
+static func this_turn_damage(g: MtgGame, pid: int) -> int:
+	if g.active_player != pid: return 0
+	var step := g.current_step()
+	if step > Mtg.Step.DECLARE_BLOCKERS: return 0
+	var defender := 1 - pid
+	var foe := g.players[defender]
+	var face := TargetRef.player(defender)
+	var damage := 0
+	if not g.combat.attackers.is_empty():
+		for id in g.combat.attackers:
+			var body := g.find_instance(id)
+			if body == null or body.controller_id != pid or not g.is_present(body): continue
+			if g.awaiting_blockers or step < Mtg.Step.DECLARE_BLOCKERS:
+				if _blockable_by(g, body, foe, pid): continue
+			elif g.combat.was_blocked(g.combat.band_of(id)): continue
+			damage += H.DAMAGE.damage_through(g, body, face, maxi(0, body.cur_power))
+		return damage
+	if step == Mtg.Step.DECLARE_ATTACKERS and not g.awaiting_attackers: return 0
+	for body in g.players[pid].creatures():
+		if CombatState.attack_illegality(g, body, defender) != "": continue
+		if not body.cur_attack_costs.is_empty() or body.cur_attack_land_sacrifices > 0: continue
+		if _blockable_by(g, body, foe, pid): continue
+		damage += H.DAMAGE.damage_through(g, body, face, maxi(0, body.cur_power))
+	return damage
+
+
+## Can a creature of [param foe] block [param body] now — read from
+## [param viewer]'s seat (a face-down blocker is the 2/2 it shows)?
+static func _blockable_by(g: MtgGame, body: CardInstance, foe: MtgPlayer, viewer: int) -> bool:
+	for blocker in foe.creatures():
+		if CombatState.block_illegality(g, blocker, body, foe.id, true, viewer) == "": return true
+	return false
 
 
 static func special_spell(g: MtgGame, pilot) -> String:

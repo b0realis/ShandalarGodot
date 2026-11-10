@@ -156,15 +156,23 @@ func test_final_fortune_waits_at_their_end_step_too() -> void:
 func test_final_fortune_is_cast_when_the_extra_turn_wins() -> void:
 	var ai := _ai()
 	_lands(0, "Mountain", 2)
-	put_battlefield(0, "Grizzly Bears")
+	var bears := put_battlefield(0, "Grizzly Bears")
 	var ff := give_hand(0, "Final Fortune")
 	g.players[1].life = 2
 	advance_to_step(Mtg.Step.MAIN1)
+	# The Bears cannot attack THIS turn (gap review 2026-11-10, r1b-5: a
+	# 2/2 that attacks now already wins, and the extra turn adds only the
+	# loss — portal_tactics.gd `this_turn_damage`).
+	bears.summoning_sick = true
 	var choice: Variant = PT.spell_choice(g, ai, ff)
 	assert_true(choice is Dictionary and not choice.is_empty(),
 		"an unblockable 2/2 against 2 life: the extra turn is the game")
 	if choice is Dictionary and not choice.is_empty():
 		assert_gte(float(choice["value"]), AiPlayer.LETHAL_WORTH * 0.5)
+	bears.summoning_sick = false
+	choice = PT.spell_choice(g, ai, ff)
+	assert_true(choice is Dictionary and choice.is_empty(),
+		"the 2/2 attacks for the game this turn: no extra turn bought")
 
 
 func test_their_final_fortune_is_left_to_lose_them_the_game() -> void:

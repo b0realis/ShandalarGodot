@@ -54,8 +54,9 @@ static func _deflection(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x
 	var value := -INF
 	for n in candidates.size():
 		var ref: TargetRef = candidates[n]
-		var i := g.find_instance(ref.instance_id) if not ref.is_player else null
-		labels.append(g.players[ref.player_id].player_name if ref.is_player else (i.data.card_name if i != null else str(ref)))
+		# The engine's own label: a face-down permanent has no name (CR 708.2;
+		# gap review 2026-11-10, r1a-4 — the question named the masked cards).
+		labels.append(g.target_label(ref))
 		var score := retarget_value(g, pid, spell, ref)
 		if score > value:
 			value = score
@@ -76,7 +77,10 @@ static func retarget_value(g: MtgGame, pid: int, spell: CardInstance, ref: Targe
 		var i := g.find_instance(ref.instance_id)
 		if i == null: return -INF
 		owner = i.controller_id
-		value = float(maxi(1, i.data.cost.mana_value())) + maxi(0, i.cur_power) + maxi(0, i.cur_toughness)
+		# The COPIABLE mana value (gap review 2026-11-10, r1a-4): a face-down
+		# permanent's is 0 (CR 708.2); the printed cost under the mask is hidden
+		# (CONTRIBUTING.md rule 8), and two masks ranked apart by it.
+		value = float(maxi(1, g.copiable_data(i).cost.mana_value())) + maxi(0, i.cur_power) + maxi(0, i.cur_toughness)
 	return value if (owner == pid) == helpful else -value
 static func _ghostly(g: MtgGame, _s: CardInstance) -> void: g.ghostly_flame_active = true
 static func _your_life_loss(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool: return int(e.data.player) == s.controller_id and int(e.data.amount) > 0

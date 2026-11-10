@@ -709,9 +709,11 @@ static func save_by_phasing(g: MtgGame, pilot) -> String:
 			continue
 		if dies_when_targeted(victim, g):
 			continue   # it is already gone: its own trigger is on the stack
-		if intent != null and victim.is_creature() and intent.damage_at(top.x_value) > 0 \
+		# The damage THIS target takes — a divided spell's share, not its
+		# total (gap review 2026-11-10, r1b-2).
+		if intent != null and victim.is_creature() and intent.damage_from(top, t) > 0 \
 				and not intent.removes and not intent.bounces \
-				and not intent.kills(victim, top.x_value):
+				and not intent.kills_from(top, victim, t):
 			continue   # damage it lives through is no reason to spend anything
 		var worth: float = pilot._own_value(g, victim)
 		var tools := phase_tools(g, pilot, victim)
@@ -1522,9 +1524,11 @@ static func save_by_ward(g: MtgGame, pilot) -> String:
 		if victim == null or victim.controller_id != pid or not g.is_present(victim) \
 				or dies_when_targeted(victim, g):
 			continue
-		if intent != null and victim.is_creature() and intent.damage_at(top.x_value) > 0 \
+		# Its share of a divided spell (gap review 2026-11-10, r1b-2): a
+		# Mystic Veil went on a Serra Angel that 1 of Pyrotechnics spares.
+		if intent != null and victim.is_creature() and intent.damage_from(top, t) > 0 \
 				and not intent.removes and not intent.bounces \
-				and not intent.kills(victim, top.x_value):
+				and not intent.kills_from(top, victim, t):
 			continue
 		var worth: float = pilot._own_value(g, victim)
 		for inst in g.players[pid].hand:
@@ -1976,11 +1980,13 @@ static func shield_response(g: MtgGame, pilot) -> String:
 		var top: StackItem = g.stack.back()
 		if top.controller != pid and top.card != null:
 			var intent := EffectIntent.read(top.effects, top.card.data.card_name)
-			var dmg := intent.damage_at(top.x_value)
-			if dmg > 0:
+			if intent.damage_at(top.x_value) > 0:
 				for t in top.targets:
 					if t == null or t.is_damage or t.is_ability:
 						continue
+					# What THIS target takes: a divided spell's share (gap
+					# review 2026-11-10, r1b-2).
+					var dmg := intent.damage_from(top, t)
 					if t.is_player:
 						if t.player_id != pid:
 							continue

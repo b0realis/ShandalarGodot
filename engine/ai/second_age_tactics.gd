@@ -87,9 +87,15 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance) -> Variant:
 				if CombatState.attack_illegality(g, body, 1 - pid).is_empty(): attackers += 1
 			return H.result(3.0 * mini(attackers - 1, foe.creatures().size() - 1), [TargetRef.player(1 - pid)]) if attackers >= 2 else {}
 		&"additional_combat":
+			# Relentless Assault untaps only the creatures that ATTACKED this
+			# turn, and its combat comes after this main phase: cast before
+			# anything attacked, the extra combat came first and the turn's
+			# own had nobody left (gap review 2026-11-10, r1b-3). Priced at
+			# the creatures that attacked and can attack again — so never in
+			# the first main phase, before the attack it repeats.
 			var power := 0
 			for body in me.creatures():
-				if (not body.tapped or body.attacked_this_turn) and not body.summoning_sick and not body.cur_cant_attack and not body.has_keyword(Mtg.Keyword.DEFENDER): power += maxi(0, body.cur_power)
+				if body.attacked_this_turn and not body.cur_cant_attack and not body.has_keyword(Mtg.Keyword.DEFENDER): power += maxi(0, body.cur_power)
 			return H.result(float(power)) if power >= 4 else {}
 		&"borrow_land_mana":
 			if g.foreign_land_mana.has(pid): return {}

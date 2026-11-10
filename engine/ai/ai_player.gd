@@ -6991,6 +6991,27 @@ func _respond_action(game: MtgGame) -> String:
 	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance \
 			and not _fumble_spares_the_pool(game):   # campaign fix-ai-c (w6-6)
 		return ""   # a fumbled reaction is no reaction
+	# THE COUNTER FIRST (gap review 2026-11-10, r1b-1; forecasts_tactics):
+	# ahead of EVERY per-set special-spell arm below — Portal / Second Age,
+	# Alliances, Ice Age and Homelands alike. Each arm ran first and spent
+	# what it liked in response to anything, so a Diabolic Edict at their
+	# Bears ate the Island a Counterspell held for their Fireball for 20,
+	# and a Ray of Command or a Broken Visage did the same to a lethal Bolt.
+	# A spell the counter does not answer (under the bar, nothing in hand
+	# to counter it, the mana not there) falls through to the arms as
+	# before. Ahead of the counter only THE REDIRECT THAT WINS (the lead's
+	# ruling: a response that wins beats one that only saves — a Deflection
+	# that sends their lethal spell into their own face, ice_age_tactics.gd
+	# `winning_redirect`). The gate off keeps the null arm's order: the arms
+	# (of which only Ice Age's answers there), then the counter.
+	var counter_first := profile.forecasts_tactics
+	if counter_first:
+		var winning: String = ICE_AGE_TACTICS.winning_redirect(game, self)
+		if winning != "":
+			return winning
+		var countered := _try_counter(game)
+		if countered != "":
+			return countered
 	var portal_response := PORTAL_TACTICS.special_spell(game, self)
 	if portal_response != "": return portal_response
 	var alliances_response := ALLIANCES_TACTICS.special_spell(game, self, true)
@@ -6999,9 +7020,10 @@ func _respond_action(game: MtgGame) -> String:
 	if ice_response != "": return ice_response
 	var homelands_response: String = HOMELANDS_TACTICS.respond(game, self)
 	if homelands_response != "": return homelands_response
-	var counter := _try_counter(game)
-	if counter != "":
-		return counter
+	if not counter_first:
+		var counter := _try_counter(game)
+		if counter != "":
+			return counter
 	# THE MIRAGE BLOCK'S MOMENTS (Pack 8, 2026-10-03): phasing out of a
 	# removal spell or a lost combat, their attacker before blocks, their
 	# blocker at our beginning of combat (mirage_tactics.gd `respond`).
@@ -7751,12 +7773,13 @@ func _save_from_the_stack(game: MtgGame) -> String:
 				or victim.zone != Mtg.Zone.BATTLEFIELD or not victim.is_creature():
 			continue
 		# A DIVIDED spell lands its announced share here (bug hunt
-		# 2026-10-21, [method EffectIntent.damage_on]), not its total.
-		var dealt := intent.damage_on(t, top.x_value)
+		# 2026-10-21, [method EffectIntent.damage_on]), not its total —
+		# and Fireball its even share (gap review 2026-11-10, r1b-2).
+		var dealt := intent.damage_from(top, t)
 		if not intent.removes and not intent.bounces \
 				and dealt < victim.cur_toughness - victim.damage:
 			continue
-		if not intent.kills(victim, top.x_value):
+		if not intent.kills_from(top, victim, t):
 			continue
 		if intent.bounces:
 			continue   # a shield does nothing against Unsummon
@@ -9503,23 +9526,23 @@ func _damage_at_us(game: MtgGame, top: StackItem, intent: EffectIntent) -> int:
 	var total := intent.damage_at(top.x_value)
 	if total <= 0:
 		return 0
-	var at_us := false
+	var at_us: TargetRef = null
 	var others := 0
-	var share := 0
 	for t in top.targets:
 		if t == null:
 			continue
 		if t.is_player and t.player_id == pid:
-			at_us = true
-			share = t.amount
+			at_us = t
 		else:
 			others += 1
-	if not at_us:
+	if at_us == null:
 		return 0
 	# "Divided AS YOU CHOOSE" announces each share as it is cast (CR
-	# 601.2d): ours is on our target (bug hunt 2026-10-21).
-	if intent.divided_shares and share > 0:
-		return share
+	# 601.2d): ours is on our target (bug hunt 2026-10-21) — and
+	# "divided EVENLY" is the X over the targets chosen (Fireball; gap
+	# review 2026-11-10, r1b-2: X=20 at us and three others is 5, not 17).
+	if (intent.divided_shares and at_us.amount > 0) or intent.divided_evenly:
+		return intent.damage_from(top, at_us)
 	if intent.damage_divided and others > 0:
 		return maxi(total - others, 0)
 	return total
@@ -16963,7 +16986,13 @@ func _answered_on_stack(game: MtgGame, victim: CardInstance) -> bool:
 		var grow := 0
 		for j in range(i + 1, game.stack.size()):
 			grow += _stack_toughness_bonus(game.stack[j], victim)
-		var dmg := intent.damage_at(item.x_value)
+		# What the victim's own target takes: a divided spell's share, not
+		# its total (gap review 2026-11-10, r1b-2).
+		var dmg := 0
+		for ref in item.targets:
+			if ref != null and not ref.is_player and not ref.is_damage and not ref.is_ability \
+					and ref.instance_id == victim.id:
+				dmg = maxi(dmg, intent.damage_from(item, ref))
 		if dmg > 0 and dmg >= victim.cur_toughness + grow - victim.damage:
 			return true
 	return false

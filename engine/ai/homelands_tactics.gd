@@ -8,6 +8,40 @@ const DAMAGE := preload("res://engine/ai/ice_age_tactics.gd")
 static func sizes_x(pilot, ability: ActivatedAbility) -> bool:
 	return pilot.profile.forecasts_tactics and not ability.effects.is_empty() and (ability.effects[0] is CreatureRedirectEffect or ability.effects[0].ai_role == &"recharge")
 
+## What the creature cards of [param pilot]'s own hand are worth that its
+## mana pays for together, now — the best first ([method
+## Evaluator.card_value]), each added while the combined cost still has a
+## plan (the Aether Storm reading in [method option]).
+static func ban_lift_worth(g: MtgGame, pilot) -> float:
+	var pid: int = pilot.pid
+	var cards: Array[CardInstance] = []
+	for body in g.players[pid].hand:
+		if body.is_creature(): cards.append(body)
+	cards.sort_custom(func(x: CardInstance, y: CardInstance) -> bool:
+		return Evaluator.card_value(x.data) > Evaluator.card_value(y.data))
+	var sources: Array = pilot._mana_sources(g)
+	var cost: ManaCost = null
+	var extra := 0
+	var worth := 0.0
+	for body in cards:
+		var own := g.spell_cost_for(pid, body.data)
+		var next: ManaCost = own if cost == null else AiPlayer._combined_cost(cost, own)
+		var more := extra + g.spell_surcharge(pid, body.data)
+		if ManaPlanner.plan_from(sources, next, more).is_empty(): continue
+		cost = next
+		extra = more
+		worth += Evaluator.card_value(body.data)
+	return worth
+
+
+## Would the attack declaration send [param body] this turn? Our own turn
+## before attackers are declared only; the deterministic half of the
+## declaration, asked under the journal ([method AiPlayer._would_attack_with]).
+static func attacks_this_turn(g: MtgGame, pilot, body: CardInstance) -> bool:
+	if g.active_player != pilot.pid or not g.combat.attackers.is_empty(): return false
+	if g.current_step() not in [Mtg.Step.UNTAP, Mtg.Step.UPKEEP, Mtg.Step.DRAW, Mtg.Step.MAIN1, Mtg.Step.COMBAT_BEGIN]: return false
+	return bool(pilot._would_attack_with(g, body, [], g.opponent_of(pilot.pid)))
+
 static func result(value: float, targets: Array = [], x := 0) -> Dictionary:
 	return {"value": value, "targets": targets, "x": x}
 
@@ -38,18 +72,36 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			var missing := int(e.ai_parameters.maximum) - int(s.counters.get(e.ai_parameters.kind, 0))
 			for x in range(missing, 0, -1):
 				var pay := g.ability_payment(pid, s, index, x)
-				if not ManaPlanner.plan(g, pid, pay.cost, pay.extra, pay.usage).is_empty(): return result(float(x) + 2.0, [], x)
+				if ManaPlanner.plan(g, pid, pay.cost, pay.extra, pay.usage).is_empty(): continue
+				# THE {T} KEEPS IT HOME (gap review 2026-11-10; the owner's
+				# default of that day): a Clockwork creature wound up at our
+				# upkeep cannot attack this turn, and a 3/3 that would have
+				# swung at an empty board was tapped for one counter. It is
+				# wound up only when the declaration would leave it home.
+				if a.tap_cost and attacks_this_turn(g, pilot, s): return {}
+				return result(float(x) + 2.0, [], x)
 		&"deploy_tribe":
 			if not pilot.profile.plays_engines: return {}
 			for body in me.hand:
 				if not body.has_subtype(e.ai_parameters.subtype) or (body.cur_types & (Mtg.CardType.CREATURE | Mtg.CardType.ARTIFACT | Mtg.CardType.ENCHANTMENT | Mtg.CardType.LAND)) == 0: continue
 				best = better(best, result(Evaluator.card_value(body.data) + 2.0))
 		&"remove_creature_ban":
-			if me.life <= g.ability_life_cost(pilot.pid, s, a) + 3: return {}
-			# Own known creature cards, not the opponent's unseen hand.
-			for body in me.hand:
-				if body.is_creature() and body.data.cost.mana_value() <= pilot._mana_sources(g).size() + me.mana_pool.total():
-					best = better(best, result(Evaluator.card_value(body.data) + 2.0 - g.ability_life_cost(pilot.pid, s, a) * pilot._life_price(me.life)))
+			var life_due := g.ability_life_cost(pilot.pid, s, a)
+			if me.life <= life_due + 3: return {}
+			# WHAT THE LIFE BUYS (gap review 2026-11-10; the owner's default
+			# of that day): "Pay 4 life: destroy this enchantment" was paid
+			# to lift even our OWN Aether Storm for a Grizzly Bears. It is
+			# paid now only in our own main phase, and only when what we then
+			# cast — the creature cards of our own hand our mana pays for
+			# together ([method ban_lift_worth]) — is worth more than the
+			# life ([method AiPlayer._face_damage_value], the price of that
+			# much damage to us): never for one cheap creature. Own known
+			# cards only, never the opponent's unseen hand.
+			if window != "MAIN" or g.active_player != pid or not g.stack.is_empty() \
+					or g.current_step() not in [Mtg.Step.MAIN1, Mtg.Step.MAIN2]: return {}
+			var worth := ban_lift_worth(g, pilot)
+			var price: float = pilot._face_damage_value(g, life_due, pid)
+			if worth > price: best = result(worth - price)
 		&"stat_counter", &"stat_debuff", &"counter_host":
 			if role == &"counter_host":
 				var host := g.find_instance(s.attached_to)

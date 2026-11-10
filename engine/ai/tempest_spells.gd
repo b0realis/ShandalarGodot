@@ -1414,8 +1414,7 @@ static func growing_shield_on_stack(g: MtgGame, pilot, inst: CardInstance, e: Ef
 	if top == null or top.controller == pilot.pid or top.kind != Mtg.StackKind.SPELL:
 		return ""
 	var intent := _spell_intent(top)
-	var amount := intent.damage_at(top.x_value)
-	if amount <= 0:
+	if intent.damage_at(top.x_value) <= 0:
 		return ""
 	for ref in top.targets:
 		if ref == null or ref.is_player:
@@ -1423,6 +1422,10 @@ static func growing_shield_on_stack(g: MtgGame, pilot, inst: CardInstance, e: Ef
 		var body := g.find_instance(ref.instance_id)
 		if body == null or body.controller_id != pilot.pid or not body.is_creature():
 			continue
+		# What THIS body takes — a divided spell's share, which is also the
+		# X the shield needs (gap review 2026-11-10, r1b-2: Temper was
+		# sized at Pyrotechnics' whole 4 for the 1 point a 1/1 took).
+		var amount := intent.damage_from(top, ref)
 		if body.damage + amount < body.cur_toughness:
 			continue
 		return _shield(g, pilot, inst, e, body, amount, float(pilot._own_value(g, body)) + float(amount))

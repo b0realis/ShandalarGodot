@@ -144,6 +144,13 @@ static func option(game: MtgGame, pilot, source: CardInstance, index: int,
 			var attacker := game.find_instance(id)
 			if attacker.cur_toughness - attacker.damage <= 1: return {}
 			if not game.combat.was_blocked(game.combat.band_of(id)): gain += 2.0
+			# THE -1 ON A BLOCKED ATTACKER (gap review 2026-11-10, r1a-2;
+			# [member AiProfile.forecasts_tactics]): a Hill Giant behind a
+			# Grizzly Bears lives by one point of toughness, and the Gate's
+			# -1 killed it for two Bears' worth of extra damage. An attacker
+			# the -1 turns from "lives" into "dies" is priced as lost.
+			elif pilot.profile.forecasts_tactics and _one_point_from_death(game, pilot, attacker):
+				gain -= pilot._own_value(game, attacker)
 		return _result(gain + 1.0) if gain > 0.0 else {}
 	if name == "Vodalian War Machine" and index == 1:
 		if not reacting:
@@ -152,7 +159,19 @@ static func option(game: MtgGame, pilot, source: CardInstance, index: int,
 		if not combat: return {}
 		if not game.combat.attackers.has(source.id) and game.combat.attackers_blocked_by(source.id).is_empty(): return {}
 		var gain := 2.0
-		if pilot._dies_in_combat(game, source): gain += pilot._own_value(game, source)
+		if pilot._dies_in_combat(game, source):
+			# THE PUMP THAT SAVES NOTHING (gap review 2026-11-10, r1a-1;
+			# [member AiProfile.forecasts_tactics]). Every Merfolk tapped
+			# for the Machine is destroyed when it dies, and a 0/4 in front
+			# of a Craw Wurm was pumped with its one Merfolk anyway: both
+			# died. The pump is bought while the untapped crew can still
+			# lift its toughness past the damage coming (each activation
+			# reads the board again once the last one has resolved), never
+			# once it cannot.
+			if pilot.profile.forecasts_tactics \
+					and _pumps_to_survive(game, pilot, source, effect) > _crew(game, pilot, source, ability):
+				return {}
+			gain += pilot._own_value(game, source)
 		return _result(gain)
 	if reacting:
 		return null  # shared combat policies handle the ordinary effects
@@ -287,6 +306,40 @@ static func _best_friend(game: MtgGame, pilot, source: CardInstance, spec: Targe
 		if friend == null or friend.controller_id != pilot.pid: continue
 		if best == null or pilot._own_value(game, friend) > pilot._own_value(game, best): best = friend
 	return best
+
+## The combat damage the declared blocks deal [param body], after the
+## prevention already on it ([method AiPlayer._combat_damage_to]).
+static func _combat_incoming(game: MtgGame, pilot, body: CardInstance) -> int:
+	return maxi(int(pilot._combat_damage_to(game, body)) - body.prevention, 0)
+
+
+## Does [param body] live through the declared combat by exactly one point
+## of toughness — dead at one less (r1a-2, Tourach's Gate's -1)?
+static func _one_point_from_death(game: MtgGame, pilot, body: CardInstance) -> bool:
+	if body.cur_indestructible: return false
+	var incoming := _combat_incoming(game, pilot, body)
+	return incoming > 0 and incoming == body.cur_toughness - body.damage - 1
+
+
+## How many activations of [param pump] (a self "+N/+M") [param body] needs
+## to live through the declared combat — at least one (r1a-1).
+static func _pumps_to_survive(game: MtgGame, pilot, body: CardInstance, pump: EffectBase) -> int:
+	var per := 1
+	if pump is PumpEffect: per = maxi((pump as PumpEffect).toughness, 1)
+	var short := _combat_incoming(game, pilot, body) - (body.cur_toughness - body.damage) + 1
+	return maxi(1, ceili(float(short) / float(per)))
+
+
+## The untapped permanents [param pilot] could tap for [param ability]'s
+## "tap an untapped … you control" cost (the War Machine's crew).
+static func _crew(game: MtgGame, pilot, source: CardInstance, ability: ActivatedAbility) -> int:
+	if not ability.tap_permanent_filter.is_valid(): return 0
+	var crew := 0
+	for perm in game.players[pilot.pid].battlefield:
+		if not perm.tapped and (perm != source or not ability.tap_cost) and ability.tap_permanent_filter.call(perm):
+			crew += 1
+	return crew
+
 
 static func _unblocked_damage(game: MtgGame) -> int:
 	var damage := 0

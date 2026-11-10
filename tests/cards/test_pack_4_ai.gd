@@ -33,6 +33,9 @@ func test_ai_locks_a_tapped_enemy_and_null_keeps_old_policy() -> void:
 func test_ai_recharges_clockwork_only_up_to_missing_counters() -> void:
 	var clockwork := put_battlefield(0, "Clockwork Steed")
 	g.remove_counters(clockwork, "+1/+0", 3)
+	# A 1/3 does not attack into a 3/3, so the {T} costs no attack (gap
+	# review 2026-11-10: it is wound up only when it stays home).
+	put_battlefield(1, "Hill Giant")
 	advance_to_next_turn()
 	advance_to_step(Mtg.Step.UPKEEP)
 	add_mana(0, Mtg.ManaColor.C, 5)

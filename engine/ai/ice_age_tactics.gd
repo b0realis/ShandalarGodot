@@ -149,6 +149,10 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		return result(3.0, [candidates[0]]) if not candidates.is_empty() else {}
 	if name == "Mercenaries":
 		if not reacting or s.controller_id == pid: return {}
+		# BEFORE THE BLOCKS NOTHING IS UNBLOCKED (gap review 2026-11-10,
+		# r1a-5; [member AiProfile.forecasts_tactics]): {3} was paid at the
+		# declaration against an attacker our blocker could still stop.
+		if pilot.profile.forecasts_tactics and not _blocks_declared(g): return {}
 		for shield in g.players[pid].prevention_shield_filters:
 			if String(shield.desc) == "Mercenaries": return {}
 		if g.combat.attackers.has(s.id) and not g.combat.was_blocked(g.combat.band_of(s.id)):
@@ -156,6 +160,13 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		return {}
 	if name == "Kjeldoran Royal Guard":
 		if not reacting or g.active_player == pid or g.players[pid].combat_damage_redirect >= 0: return {}
+		# THE GUARD WAITS FOR THE BLOCKS (gap review 2026-11-10, r1a-5;
+		# [member AiProfile.forecasts_tactics]): at the declaration every
+		# attacker read as unblocked, and the Guard tapped itself out of the
+		# block it stood there to make. After the blocks, the damage its own
+		# block takes counts with the damage it takes over.
+		var reads_blocks: bool = pilot.profile.forecasts_tactics
+		if reads_blocks and not _blocks_declared(g): return {}
 		var damage := 0
 		for id in g.combat.attackers:
 			var i := g.find_instance(id)
@@ -163,7 +174,8 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		if damage <= 0: return {}
 		if damage >= g.players[pid].life: return result(1000.0)
 		var value: float = float(damage) * pilot._life_price(g.players[pid].life)
-		if damage >= s.cur_toughness - s.damage: value -= pilot._own_value(g, s)
+		var taken := damage + (int(pilot._combat_damage_to(g, s)) if reads_blocks else 0)
+		if taken >= s.cur_toughness - s.damage: value -= pilot._own_value(g, s)
 		return result(value + 2.0) if value > 0 else {}
 	if name == "Elkin Bottle":
 		# Only our own main phase gives both land and sorcery hits a use
@@ -506,11 +518,24 @@ static func retarget_value(g: MtgGame, pilot, spell: CardInstance, ref: TargetRe
 	var old: float = load("res://cards/sets/ice/_patterns.gd").retarget_value(g, pilot.pid, spell, ref)
 	if not pilot.profile.forecasts_tactics: return old
 	var item := g.find_stack_item(spell)
-	if item == null or item.effects.size() != 1 or not item.effects[0] is DamageEffect: return old
-	var effect: DamageEffect = item.effects[0]
-	var damage := item.x_value + effect.x_bonus if effect.use_x else effect.amount
-	if effect.divided_amount_at(g, spell, item.x_value) > 0: damage = ref.amount
-	var through := damage_through(g, spell, ref, damage, effect.unpreventable_to_creatures)
+	if item == null or item.effects.size() != 1: return old
+	var damage := 0
+	var unpreventable := false
+	if item.effects[0] is DamageEffect:
+		var effect: DamageEffect = item.effects[0]
+		damage = item.x_value + effect.x_bonus if effect.use_x else effect.amount
+		if effect.divided_amount_at(g, spell, item.x_value) > 0: damage = ref.amount
+		unpreventable = effect.unpreventable_to_creatures
+	else:
+		# A CARD-LOCAL damage spell (Fireball: X at its one target), read by
+		# its name (gap review 2026-11-10, the winning redirect): ranked by
+		# the first-pass table, a Fireball for 20 went into their Serra
+		# Angel rather than their face.
+		var intent := EffectIntent.read(item.effects, spell.data.card_name)
+		if intent.removes or intent.bounces or item.targets.size() != 1 \
+				or intent.damage_at(item.x_value) <= 0: return old
+		damage = intent.damage_from(item, item.targets[0])
+	var through := damage_through(g, spell, ref, damage, unpreventable)
 	if through <= 0: return 0.0
 	var who := ref.player_id
 	var value := 0.0
@@ -570,6 +595,28 @@ static func melee_blocks(g: MtgGame, pilot) -> Dictionary:
 		baseline = value
 	return blocks
 
+## THE DAMAGE MELEE GIVES UP (gap review 2026-11-10, r1a-6;
+## [member AiProfile.forecasts_tactics]). "Whenever a creature attacks and
+## isn't blocked this combat, untap it and remove it from combat": every
+## attacker Melee leaves unblocked deals nothing, so the face damage the
+## declared attack would land through their best blocks ([method
+## AiPlayer._damage_through_blocks], the defender's damage-stopping
+## answer — the least it lands) is what the spell costs on top of its mana.
+## Cast into a lethal attack it threw the game away: -1.0 when that damage
+## is lethal, and Melee is not cast.
+static func melee_forfeit(g: MtgGame, pilot) -> float:
+	var foe := g.opponent_of(pilot.pid)
+	var attackers: Array[CardInstance] = pilot._declared_attackers(g)
+	var blockers: Array[CardInstance] = pilot._untapped_creatures(g, foe)
+	var through: int = pilot._damage_through_blocks(g, attackers, blockers, foe)
+	if through >= g.players[foe].life: return -1.0
+	return pilot._face_damage_value(g, through, foe)
+
+## Have this combat's blockers been declared (the Alliances module's
+## reading, CR 509)?
+static func _blocks_declared(g: MtgGame) -> bool:
+	return bool(load("res://engine/ai/alliances_tactics.gd").blocks_declared(g))
+
 static func respond(g: MtgGame, pilot) -> String:
 	var pid: int = pilot.pid
 	if pilot.profile.forecasts_tactics and g.stack.is_empty():
@@ -603,6 +650,35 @@ static func respond(g: MtgGame, pilot) -> String:
 	var best := current
 	for ref in g.single_spell_retargets(top.card): best = maxf(best, retarget_value(g, pilot, top.card, ref))
 	if best <= current + 2.0: return ""
+	return _deflect(g, pilot, top)
+
+
+## THE REDIRECT THAT WINS (gap review 2026-11-10, the lead's ruling: a
+## response that WINS beats one that only saves). Their spell on top of
+## the stack with a single target, which a Deflection in hand can move
+## onto the opponent's face for at least their life ([method
+## retarget_value] reads it lethal) — asked by `AiPlayer._respond_action`
+## BEFORE its counter. Every other answer of [method respond] stays after
+## the counter. Public reads only (the spell, its X and target, the board's
+## prevention); "" with the gate off.
+static func winning_redirect(g: MtgGame, pilot) -> String:
+	if not pilot.profile.forecasts_tactics or g.stack.is_empty(): return ""
+	var pid: int = pilot.pid
+	var top: StackItem = g.stack.back()
+	if top.kind != Mtg.StackKind.SPELL or top.controller == pid or top.targets.size() != 1: return ""
+	var wins := false
+	for ref in g.single_spell_retargets(top.card):
+		if ref.is_player and ref.player_id != pid \
+				and retarget_value(g, pilot, top.card, ref) >= AiPlayer.LETHAL_WORTH:
+			wins = true
+	if not wins: return ""
+	return _deflect(g, pilot, top)
+
+
+## Cast a Deflection from hand at [param top] (its new target is chosen as
+## it resolves, by [method retarget_value] through the pilot's chooser).
+static func _deflect(g: MtgGame, pilot, top: StackItem) -> String:
+	var pid: int = pilot.pid
 	for card in g.playable_cards(pid):
 		if card.data.card_name != "Deflection" or pilot._cast_gate(g, card) != "": continue
 		var payment := g.spell_payment(pid, card.data, 0, 1, card)
@@ -625,6 +701,10 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x: int, mode: i
 		if g.current_step() != Mtg.Step.DECLARE_ATTACKERS or g.active_player != pid or g.block_chooser_override >= 0: return {}
 		var blocks := melee_blocks(g, pilot)
 		var gain := block_score(g, pilot, blocks)
+		if pilot.profile.forecasts_tactics:
+			var lost := melee_forfeit(g, pilot)
+			if lost < 0.0: return {}
+			gain -= lost
 		return {"x": 0, "targets": [], "value": gain} if gain > 5.0 else {}
 	if name == "Gaze of Pain":
 		if g.current_step() != Mtg.Step.MAIN1: return {}

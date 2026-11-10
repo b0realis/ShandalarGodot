@@ -16,7 +16,10 @@ func test_last_chance_is_not_an_ordinary_time_walk() -> void:
 	var s := give_hand(0, "Last Chance")
 	var a := pilot()
 	assert_eq(a._size_and_aim(g, s, EffectIntent.read(s.data.spell_effects), 0, 0), {})
-	put_battlefield(0, "Phantom Warrior")
+	# Summoning sick: they cannot attack THIS turn, so only the extra turn
+	# can kill (gap review 2026-11-10, r1b-5: a turn that is lethal now is
+	# no reason to buy the loss — portal_tactics.gd `this_turn_damage`).
+	put_battlefield(0, "Phantom Warrior", true)
 	g.players[1].life = 2
 	assert_false(T.spell_choice(g, a, s).is_empty())
 	g.players[1].life = 6
@@ -24,10 +27,13 @@ func test_last_chance_is_not_an_ordinary_time_walk() -> void:
 	g.continuous.add_until_eot_pump(body.id, 4, 0)
 	g.recalculate()
 	assert_eq(T.spell_choice(g, a, s), {}, "temporary power will expire before the extra turn")
-	put_battlefield(0, "Deep-Sea Serpent")
+	var serpent := put_battlefield(0, "Deep-Sea Serpent", true)
 	assert_eq(T.spell_choice(g, a, s), {}, "the Serpent still needs the defending player to control an Island")
 	put_battlefield(1, "Island")
 	assert_false(T.spell_choice(g, a, s).is_empty(), "a legal Serpent attack can now supply lethal")
+	body.summoning_sick = false
+	serpent.summoning_sick = false
+	assert_eq(T.spell_choice(g, a, s), {}, "this turn's attack already kills: no extra turn bought")
 
 func test_dynamic_mountain_damage_chooses_a_kill() -> void:
 	put_battlefield(0, "Mountain")

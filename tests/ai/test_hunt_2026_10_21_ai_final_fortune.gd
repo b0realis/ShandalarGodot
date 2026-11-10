@@ -68,11 +68,20 @@ func test_not_at_their_end_step() -> void:
 	assert_eq((board[1] as CardInstance).zone, Mtg.Zone.HAND)
 
 
-## THE CONTROL: in our own turn the extra turn is a second attack.
+## THE CONTROL: in our own turn the extra turn is a second attack — when
+## the Bears cannot attack THIS turn (gap review 2026-11-10, r1b-5: a 2/2
+## that attacks now already wins, and the extra turn adds only the loss).
 func test_in_our_own_turn_the_extra_turn_wins() -> void:
 	var board := _board()
 	advance_to_step(Mtg.Step.MAIN1)
+	var bears: CardInstance = g.players[0].battlefield.filter(
+		func(c: CardInstance) -> bool: return c.data.card_name == "Grizzly Bears")[0]
+	bears.summoning_sick = true
 	var choice: Variant = PT.spell_choice(g, board[0], board[1])
 	assert_true(choice is Dictionary and not (choice as Dictionary).is_empty())
 	if choice is Dictionary and not (choice as Dictionary).is_empty():
 		assert_gte(float(choice["value"]), AiPlayer.LETHAL_WORTH * 0.5)
+	bears.summoning_sick = false
+	choice = PT.spell_choice(g, board[0], board[1])
+	assert_true(choice is Dictionary and (choice as Dictionary).is_empty(),
+		"the 2/2 attacks for the game this turn: no extra turn bought")

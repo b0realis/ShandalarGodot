@@ -74,8 +74,12 @@ func test_no_gift_into_an_empty_board() -> void:
 
 
 ## THE CONTROL: blocked by Grizzly Bears, trample puts two of its four
-## through — worth the Hippo they get after blocks.
+## through — at their two life, the game, worth the Hippo they get after
+## blocks. (At twenty, two points no longer pay for a permanent 1/1: the
+## gift is charged since the gap review of 2026-11-10, r1a-3,
+## `tests/ai/test_gap_fix_g1a_alliances.gd`.)
 func test_trample_is_bought_once_the_bears_block() -> void:
+	g.players[1].life = 2
 	var grif: CardInstance = _attack(true, true)[0]
 	assert_true(grif.has_keyword(Mtg.Keyword.TRAMPLE), "two damage past a 2/2")
 	assert_eq(A.trample_gain(g, grif), 2)
