@@ -690,8 +690,10 @@ func _master_controls(ready: int) -> void:
 	controls.add_child(SgLobbyStyle.label("Progress is saved on this host. There is no automatic host migration or public ranking.", 14))
 
 
-func _confirm_button(parent: Node, caption: String, op: String, extra: Dictionary, explanation: String) -> Button:
-	var key := op + str(extra)
+## [param state] joins the arming key: a control armed over one state of
+## its subject is disarmed when that state changes ([method _ruling_controls]).
+func _confirm_button(parent: Node, caption: String, op: String, extra: Dictionary, explanation: String, state := "") -> Button:
+	var key := op + str(extra) + state
 	var button := SgLobbyStyle.button("Confirm: " + caption if _confirm == key else caption, func() -> void:
 		if _confirm == key:
 			_confirm = ""
@@ -828,6 +830,12 @@ func _build_roster() -> void:
 ## a withdrawal, and the ledger flags whichever it was.
 func _ruling_controls(card: Node, pair: Dictionary) -> void:
 	if _view.phase not in ["running", "complete"] or pair.status == "bye": return
+	# AN ARMED RULING IS ARMED OVER ONE STATE OF ITS PAIRING (gap review
+	# 2026-11-10, R4 Q2, the lead's default): "Declare X winner" clicked
+	# once over a live game became "Confirm: Correct: X wins" when the game
+	# ended — one more click overturned a result the organiser had not seen.
+	# The pairing's status and game join the key, so a change disarms it.
+	var state := "/%s/%d" % [String(pair.status), int(pair.get("game", 0))]
 	for seat in 2:
 		var pid := int(pair.players[seat])
 		var player := _entrant(pid)
@@ -836,10 +844,10 @@ func _ruling_controls(card: Node, pair: Dictionary) -> void:
 		if pair.status == "finished":
 			if int(pair.winner) == pid: continue
 			button = _confirm_button(card, "Correct: %s wins" % player.name, "t_rule", {"pair": int(pair.id), "winner": pid},
-				"Overturn this result and record %s as the winner? The correction is flagged for every player." % player.name)
+				"Overturn this result and record %s as the winner? The correction is flagged for every player." % player.name, state)
 		else:
 			button = _confirm_button(card, "Declare %s winner" % player.name, "t_rule", {"pair": int(pair.id), "winner": pid},
-				"End this series now with %s as the winner? A game in progress ends at once, and the ruling is flagged for every player." % player.name)
+				"End this series now with %s as the winner? A game in progress ends at once, and the ruling is flagged for every player." % player.name, state)
 		# A forty-character name must not widen the card past the hall: the
 		# caption trims, the tooltip keeps the whole sentence.
 		button.custom_minimum_size = Vector2(0, 36)

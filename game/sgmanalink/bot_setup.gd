@@ -10,6 +10,8 @@ var _unfair: CheckBox
 var _count: SpinBox
 var _pace: OptionButton
 var _deck: Dictionary = {}
+## The index in the build's deck list of [member _deck], or -1.
+var _chosen := -1
 var _fair_level := 3
 
 
@@ -102,7 +104,8 @@ func build(maximum: int, decks: Array, previous: Dictionary = {}) -> void:
 	choose.disabled = true
 	add_child(choose)
 	var select := func(index: int) -> void:
-		var source: Dictionary = decks[int(list.get_item_metadata(index))]
+		_chosen = int(list.get_item_metadata(index))
+		var source: Dictionary = decks[_chosen]
 		_deck = SgDeckCatalog.payload(source)
 		detail.text = SgLobby._deck_text(_deck)
 		choose.set_meta("available", true)
@@ -112,10 +115,24 @@ func build(maximum: int, decks: Array, previous: Dictionary = {}) -> void:
 	var fill := func(query: String) -> void:
 		draft.query = query
 		list.clear()
+		var shown := false
 		for i in decks.size():
 			if not query.is_empty() and not String(decks[i].name).to_lower().contains(query.to_lower()): continue
 			list.add_item(decks[i].name)
 			list.set_item_metadata(list.item_count - 1, i)
+			if i == _chosen and not _deck.is_empty():
+				list.select(list.item_count - 1)
+				shown = true
+		# A DECK THE SEARCH HID IS NO LONGER CHOSEN (gap review 2026-11-10,
+		# R4-12), as in the lobby's own deck picker: Add computer seat(s)
+		# added a deck nobody could see. One still listed stays chosen.
+		if not shown and not _deck.is_empty():
+			_deck = {}
+			_chosen = -1
+			draft.deck = {}
+			detail.text = ""
+			choose.set_meta("available", false)
+			choose.disabled = true
 		changed.emit(draft.duplicate(true))
 	search.text_changed.connect(fill)
 	fill.call(search.text)

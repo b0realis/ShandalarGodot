@@ -170,12 +170,15 @@ static func window(owner: Control, title: String, node_name := "") -> VBoxContai
 		frame.offset_bottom = wanted.y
 	sheet.visibility_changed.connect(fit)
 	sheet.resized.connect(fit)
-	# A click on the sheet outside the panel closes it, like Escape.
+	# A click on the sheet outside the panel closes it, like Escape — and
+	# like a pad's B, which arrives as `ui_cancel` and not as a key (gap
+	# review 2026-11-10, R4-11).
 	sheet.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			sheet.hide()
 			sheet.accept_event()
-		elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		elif (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE) \
+				or (not event is InputEventKey and event.is_action_pressed("ui_cancel", false, true)):
 			sheet.hide()
 			sheet.accept_event())
 	frame.gui_input.connect(func(event: InputEvent) -> void:

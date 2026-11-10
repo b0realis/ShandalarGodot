@@ -12,6 +12,9 @@ signal leave_requested
 signal hall_requested
 signal tournament_requested
 signal mpn_requested
+## Leave table on a table whose host has ended the seat for good: the lobby
+## forgets the seat and comes back (gap review 2026-11-10, R4-2).
+signal disconnect_requested
 
 var projection := SgDuelProjection.new()
 var _room: Dictionary = {}
@@ -40,6 +43,11 @@ var _result_seen := false
 var _hosting := false
 var _announcement_refused := false
 var _tournament_panel_open := false
+## Why the client stopped, or "" while it still reconnects by itself; and
+## whether that was the host's last word ([member SgLocalClient.host_final]).
+var _ended := ""
+var _final := false
+var _banner_button: Button
 
 
 func _ready() -> void:
@@ -59,10 +67,16 @@ func export_mpn() -> void:
 	mpn_requested.emit()
 
 
-func present(room: Dictionary, online: bool, busy: bool, hosting := false) -> void:
+## [param ended] is the client's reason when it has stopped
+## ([method SgLocalClient.stopped]), "" while it still reconnects by itself;
+## [param final] that it was the host's last word, which no Reconnect
+## answers (gap review 2026-11-10, R4-2).
+func present(room: Dictionary, online: bool, busy: bool, hosting := false, ended := "", final := false) -> void:
 	_hosting = hosting
 	_online = online
 	_busy = busy
+	_ended = "" if online else ended
+	_final = not online and not ended.is_empty() and final
 	if _presenting:
 		projection.locked = true
 		return
@@ -218,7 +232,7 @@ func _refresh() -> void:
 	# combat/target/payment instruction. Even a brief ACK wait used to flash
 	# over the phase message on every action.
 	_network_badge.text = "Tournament" if _room.has("tournament") else "Online"
-	if not _online: _network_badge.text = "Reconnect"
+	if not _online: _network_badge.text = "Offline" if _final else "Reconnect"
 	elif not _room.connected[0] or not _room.connected[1]: _network_badge.text = "Suspended"
 	elif _busy or _awaiting_ack: _network_badge.text = "Sending…"
 	_network_badge.tooltip_text = _connection_message() + ("\nClick for the Tournament Hall and duel controls.\n" if _room.has("tournament") else "\nClick for connection controls.\n") \
@@ -234,16 +248,33 @@ func _update_banner() -> void:
 	var suspended: bool = _online and not (_room.connected[0] and _room.connected[1])
 	_connection_banner.visible = not _online or suspended or String(_room.get("tournament", {}).get("hold", "")) != ""
 	if not _connection_banner.visible: return
-	_banner_text.text = _connection_message() + ("\nThe game reconnects by itself; Reconnect tries at once." if not _online
+	_banner_text.text = _connection_message() + (_offline_advice() if not _online
 		else ("\nThe referee keeps the table exactly as it stands." if String(_room.get("tournament", {}).get("hold", "")) != ""
 		else "\nThe referee keeps the table; play resumes when both seats are back."))
+	# A HOST'S LAST WORD IS NOT RETRIED (gap review 2026-11-10, R4-2): the
+	# banner kept "Reconnecting… The game reconnects by itself" over a host
+	# that had closed, its reason shown nowhere; Reconnect asked it again.
+	_banner_button.text = "Leave table" if _final else "Reconnect"
 	_connection_banner.reset_size()
 	var area := _board_area()
 	var origin := get_global_rect().position
 	_connection_banner.position = Vector2(area.position.x + (area.size.x - _connection_banner.size.x) * 0.5, area.position.y + 12) - origin
 
 
+## The banner's second line while offline: what happens next.
+func _offline_advice() -> String:
+	if _ended.is_empty(): return "\nThe game reconnects by itself; Reconnect tries at once."
+	return "\nLeave the table to return to SGManalink." if _final else "\nReconnect tries again."
+
+
+func _on_banner_button() -> void:
+	if _final: disconnect_requested.emit()
+	else: reconnect_requested.emit()
+
+
 func _connection_message() -> String:
+	# A client that has stopped says why: its reason is the host's or its own.
+	if not _online and not _ended.is_empty(): return _ended + " Your last confirmed table is shown."
 	if not _online: return "Reconnecting to the host. Your last confirmed table is shown."
 	var hold := String(_room.get("tournament", {}).get("hold", ""))
 	if hold == "storage": return "Tournament paused: the organiser must retry saving progress."
@@ -512,7 +543,13 @@ func _submit_pending() -> void:
 
 func show_notice(message: String) -> void:
 	_awaiting_ack = false
-	projection.locked = false
+	# NOT SENT IS NOT REFUSED (gap review 2026-11-10, R4-3). The lobby
+	# refuses on the spot while the connection is down or busy
+	# ([constant SgLocalClient.NOT_CONNECTED]): nothing reached the referee,
+	# so the table stays locked until the next view ([method present]) says
+	# it may act. Unlocked here, an automatic pass was sent again in the
+	# same frame, refused again, without end — the game crashed.
+	projection.locked = message == SgLocalClient.NOT_CONNECTED
 	if _sent_op == "submit" and MtgGame.is_unpaid_refusal(message) and _pending_card != null:
 		mode = Mode.PAYING
 		_paying_pool = _payment_pool_state()
@@ -974,10 +1011,10 @@ func _build_network_controls() -> void:
 	_banner_text.custom_minimum_size.x = 520
 	_banner_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.add_child(_banner_text)
-	var retry := OriginalDialog.button("Reconnect", Vector2(110, 30))
-	retry.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	retry.pressed.connect(reconnect_requested.emit)
-	line.add_child(retry)
+	_banner_button = OriginalDialog.button("Reconnect", Vector2(110, 30))
+	_banner_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_banner_button.pressed.connect(_on_banner_button)
+	line.add_child(_banner_button)
 	add_child(_connection_banner)
 	resized.connect(func() -> void: _update_banner())
 
@@ -1008,7 +1045,8 @@ func _show_connection() -> void:
 	column.add_child(facts)
 	column.add_child(Control.new())
 	for entry in [["Revealed information", _show_information], ["Special actions", _show_specials],
-		["Reconnect", reconnect_requested.emit], ["Duel menu", _toggle_pause]]:
+		["Leave table", disconnect_requested.emit] if _final else ["Reconnect", reconnect_requested.emit],
+		["Duel menu", _toggle_pause]]:
 		var button := OriginalDialog.choice_line(entry[0])
 		var callback: Callable = entry[1]
 		button.pressed.connect(func() -> void:
@@ -1079,6 +1117,13 @@ func _modal_open() -> bool:
 ## one thing — it closes the panel.
 func _on_control(event: InputEvent) -> void:
 	if _tournament_panel_open:
+		return
+	# NOR A TABLE UNDER THE LOBBY'S POPUP (gap review 2026-11-10, R4-4):
+	# Export MPN's answer is the lobby's, on top of the table; the lobby's
+	# Escape (or B) closes it ([method SgLobby._back]), and no
+	# key reaches the table while it is up — Escape opened the Pause window
+	# under it.
+	if get_parent() != null and UiChrome.open_popup(get_parent()) != null:
 		return
 	super._on_control(event)
 # --- end repo check 2026-10-13 fx-code ---

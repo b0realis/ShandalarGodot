@@ -89,6 +89,10 @@ var _leave_room := ""
 ## [member _leave_room] until the connection can carry it.
 var _return_hall: Dictionary = {}
 var _room_copy: Button
+## The deck picker's line from before the connection was lost, said again
+## once it is back (gap review 2026-11-10, R4-9).
+var _deck_status_online := ""
+const DECKS_OFFLINE := "Connection lost. Your selection is kept while you reconnect."
 
 
 func _ready() -> void:
@@ -338,7 +342,7 @@ func _build_host(page: VBoxContainer) -> void:
 	_rules_window.add_child(_rules_setup)
 	_rules_setup.build()
 	_rules_label.text = SgTableRules.brief(_rules_setup.value())
-	_rules_window.add_child(_label("Full implemented card pool  ·  40–250 cards  ·  Single duel", 15))
+	_rules_window.add_child(_label("Full implemented card pool  ·  %s  ·  Single duel" % SgTableRules.deck_sizes(), 15))
 	_rules_window.add_child(_label("Both players confirm Ready before play begins. Your guest needs the same game version and enabled packs: " + SgCompatibility.summary() + ".", 15))
 	_network_window = SgLobbyStyle.window(page, "Network settings", "NetworkWindow")
 	_host_controls = VBoxContainer.new()
@@ -561,24 +565,46 @@ func _restore_focus() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if is_instance_valid(_master_overlay):
-			_close_master()
-		elif _window_open():
-			_close_windows()
-		elif is_instance_valid(_deck_picker):
-			_close_decks()
-		elif is_instance_valid(_duel):
-			# THE TABLE ANSWERS ITS OWN ESCAPE (repository check 2026-10-13):
-			# it is this lobby's child, so it had the key first
-			# ([method DuelScreen._unhandled_key_input]). Handing it on again
-			# toggled the Pause window twice in one press, and over the mini
-			# help opened the Pause window as the help closed.
-			pass
-		elif _page not in ["home", "room"]:
-			_show_page("home")
-		else:
-			_close()
-		get_viewport().set_input_as_handled()
+		_back()
+
+
+## AND SO IS A PAD'S B (gap review 2026-11-10, R4-11): B, like the Quest's
+## back gesture, arrives as `ui_cancel` and not as a key — the title and the
+## Options screen answer it, and the lobby did not: B closed none of its
+## windows and left no page. A key keeps its own way in, above.
+func _unhandled_input(event: InputEvent) -> void:
+	if not event is InputEventKey and event.is_action_pressed("ui_cancel", false, true):
+		_back()
+
+
+## Escape's ladder, one rung per press. The table, a child, had the key
+## first and answers its own.
+func _back() -> void:
+	# THE POPUP ON TOP IS THE FIRST RUNG (R4-4): Export MPN's answer
+	# stayed up while the key acted on the page, or the table, under it.
+	# Its cancel action (or its only one) answers, as on the title.
+	var popup := UiChrome.open_popup(self)
+	if popup != null:
+		if popup.has_meta(&"cancel_button"): UiChrome.dismiss_popup(popup)
+		else: popup.queue_free()
+	elif is_instance_valid(_master_overlay):
+		_close_master()
+	elif _window_open():
+		_close_windows()
+	elif is_instance_valid(_deck_picker):
+		_close_decks()
+	elif is_instance_valid(_duel):
+		# THE TABLE ANSWERS ITS OWN ESCAPE (repository check 2026-10-13):
+		# it is this lobby's child, so it had the key first
+		# ([method DuelScreen._unhandled_key_input]). Handing it on again
+		# toggled the Pause window twice in one press, and over the mini
+		# help opened the Pause window as the help closed.
+		pass
+	elif _page not in ["home", "room"]:
+		_show_page("home")
+	else:
+		_close()
+	get_viewport().set_input_as_handled()
 
 
 func _window_open() -> bool:
@@ -646,7 +672,8 @@ func _host_tournament(options: Dictionary, restore_path: String) -> void:
 
 
 func _close_master() -> void:
-	if is_instance_valid(_master_overlay):
+	var was_open := is_instance_valid(_master_overlay)
+	if was_open:
 		_master_overlay.get_parent().remove_child(_master_overlay)
 		_master_overlay.queue_free()
 	_master_overlay = null
@@ -655,6 +682,9 @@ func _close_master() -> void:
 	if is_instance_valid(_duel):
 		_duel._tournament_panel_open = false
 		_duel.focus_action()
+	elif was_open and _expand_tournament.is_visible_in_tree():
+		# Back on the button that opened it (R4-8).
+		_expand_tournament.grab_focus()
 
 
 func _open_master() -> void:
@@ -674,7 +704,8 @@ func _open_master() -> void:
 	column.add_theme_constant_override("separation", 14)
 	margin.add_child(column)
 	var toolbar := SgLobbyStyle.row(column)
-	toolbar.add_child(SgLobbyStyle.button("Back to duel" if is_instance_valid(_duel) else "Back to hall", _close_master))
+	var back := SgLobbyStyle.button("Back to duel" if is_instance_valid(_duel) else "Back to hall", _close_master)
+	toolbar.add_child(back)
 	if is_instance_valid(_duel):
 		toolbar.add_child(SgLobbyStyle.button("Duel controls", func() -> void:
 			_close_master()
@@ -700,6 +731,9 @@ func _open_master() -> void:
 	scroll.add_child(_master_panel)
 	if is_instance_valid(_duel): _duel._tournament_panel_open = true
 	_master_panel.present(client.state.tournament, client.online, client.busy(), service != null)
+	# THE FOCUS GOES ON TOP (gap review 2026-11-10, R4-8): it stayed on the
+	# hall's button under the opaque panel, where Enter pressed it again.
+	back.grab_focus()
 
 
 func _start_service() -> void:
@@ -758,6 +792,9 @@ func _scan_lan() -> void:
 	if _discovery.scanning:
 		_discovery.stop()
 		_selected_host = {}
+		# ...and the table name pending at it (gap review 2026-11-10, R4-5):
+		# kept, it seated the player at the next host's table of that name.
+		_pending_join = ""
 	else:
 		var result := _discovery.scan()
 		_notice.text = "Searching the LAN for tables." \
@@ -900,9 +937,15 @@ func _refresh() -> void:
 			var back := String(_return_hall.event)
 			_return_hall = {}
 			_send({"op": "t_return", "event": back})
-	if not room.is_empty():
+	# A SEAT THE HOST HAS ENDED IS NO ROOM TO HOLD (gap review 2026-11-10,
+	# R4-1): an expired seat or a closed host left the guest on the dead
+	# waiting room with its tabs hidden and Leave greyed. The last room
+	# stays to read, the tabs come back, and the room offers Disconnect.
+	var stopped := client.stopped()
+	var seated := not room.is_empty() and not stopped
+	if seated:
 		_page = "room"
-	elif not _room_id.is_empty():
+	elif room.is_empty() and not _room_id.is_empty():
 		_page = "tournament" if not event.is_empty() else "browser"
 	if is_instance_valid(_deck_picker) and (String(room.get("id", "")) != _deck_room_id or not room.get("game", {}).is_empty()):
 		_close_decks()
@@ -924,6 +967,7 @@ func _refresh() -> void:
 					UiChrome.explain_popup(self, "Export MPN", "Wait for the connection, then try again.")
 				else: client.mpn.start(String(client.state.room.get("id", "")), String(client.state.room.get("mpn", ""))))
 			_duel.reconnect_requested.connect(client.reconnect)
+			_duel.disconnect_requested.connect(_disconnect)
 			_duel.exit_requested.connect(func() -> void: queue_free())
 			_duel.leave_requested.connect(func() -> void:
 				_leave_room = String(client.state.room.get("id", ""))
@@ -933,7 +977,8 @@ func _refresh() -> void:
 					"event": String(client.state.get("tournament", {}).get("id", ""))}
 				_queue_refresh())
 			_duel.tournament_requested.connect(_open_master)
-		_duel.present(room, client.online, client.busy(), service != null)
+		_duel.present(room, client.online, client.busy(), service != null,
+			client.status if stopped else "", client.host_final)
 	elif is_instance_valid(_duel):
 		_duel.queue_free()
 		_duel = null
@@ -979,6 +1024,8 @@ func _refresh() -> void:
 		# ([method _scan_lan]; repository check 2026-10-13): its host is no
 		# longer listed, and must not refuse a pasted invitation.
 		_selected_host = {}
+		# Its pending table goes too, unless a connection to it is under way (R4-5).
+		if not client.online and not client.connecting(): _pending_join = ""
 	_connect_button.disabled = client.online or client.busy() or client.connecting()
 	_connect_button.text = "Connected" if client.online else ("Connecting…" if client.connecting() else ("Reconnect" if client.has_session() else "Connect"))
 	_code.editable = not locked
@@ -990,8 +1037,8 @@ func _refresh() -> void:
 	for key in _pages:
 		_pages[key].visible = key == _page
 		_navigation[key].set_pressed_no_signal(key == _page)
-		_navigation[key].disabled = not room.is_empty() or (key == "identity" and locked)
-	_navigation_bar.visible = room.is_empty()
+		_navigation[key].disabled = seated or (key == "identity" and locked)
+	_navigation_bar.visible = not seated
 	if is_instance_valid(_deck_picker):
 		if not _deck_submission.is_empty() and not client.busy():
 			if room.get("deck", {}) == _deck_submission:
@@ -1001,7 +1048,13 @@ func _refresh() -> void:
 				_deck_status.text = _notice.text if not _notice.text.is_empty() else "Deck choice not confirmed. Please try again."
 		if is_instance_valid(_deck_picker):
 			_deck_use.disabled = not client.online or client.busy() or _deck_selected.is_empty()
-			if not client.online: _deck_status.text = "Connection lost. Your selection is kept while you reconnect."
+			if not client.online:
+				if _deck_status.text != DECKS_OFFLINE:
+					_deck_status_online = _deck_status.text
+					_deck_status.text = DECKS_OFFLINE
+			elif _deck_status.text == DECKS_OFFLINE:
+				# Back online: the line from before (R4-9).
+				_deck_status.text = _deck_status_online
 	if playing: return
 	# Stable rows avoid focus/scroll churn on ACKs and repeated discoveries.
 	var adverts: Array = []
@@ -1012,8 +1065,14 @@ func _refresh() -> void:
 		for key in _discovery.others: adverts.append(_discovery.others[key].host)
 	var room_display := room.duplicate(true)
 	room_display.erase("revision")
-	var snapshot := {"page":_page, "room":room_display, "rooms":client.state.rooms,
-		"hosts":adverts, "selected":_selected_host, "online":client.online, "locked":locked}
+	# Only the Game Browser lists the host's tables and the LAN's hosts: the
+	# host's waiting room was rebuilt whenever ANOTHER table at its host
+	# changed, and the search it was typing in lost its focus (gap review
+	# 2026-11-10, R4-10).
+	var browsing := _page == "browser"
+	var snapshot := {"page":_page, "room":room_display, "rooms":client.state.rooms if browsing else [],
+		"hosts":adverts if browsing else [], "selected":_selected_host if browsing else {},
+		"online":client.online, "locked":locked, "stopped":stopped, "final":client.host_final}
 	if snapshot == _body_snapshot:
 		_update_lobby_actions()
 		return
@@ -1044,14 +1103,22 @@ func _disconnect() -> void:
 	_host_pending = false
 	_tournament_pending.clear()
 	_tournament_id = ""
+	# A Disconnect from an ended seat's room returns to the Overview too,
+	# not to wherever leaving that room leads (R4-1).
+	_room_id = ""
 	_show_page("home")
 
 
 func _waiting_room(room: Dictionary) -> void:
 	var fixed: bool = room.get("decks", "own") == "fixed"
 	var header := SgLobbyStyle.column(_body, String(room.name), false)
-	header.add_child(SgLobbyStyle.label(("Both seats play the assigned deck: %s." % room.get("fixed_deck", "") if fixed
-		else "Choose your deck.") + " Confirm when you are ready to play.", 17, true))
+	var lead := ("Both seats play the assigned deck: %s." % room.get("fixed_deck", "") if fixed
+		else "Choose your deck.") + " Confirm when you are ready to play."
+	# An ended seat is told what is left to do, not to choose a deck (R4-1).
+	if client.stopped():
+		lead = "This seat has ended. Disconnect to find another table." if client.host_final \
+			else "Not connected. Reconnect to try again, or Disconnect to find another table."
+	header.add_child(SgLobbyStyle.label(lead, 17, true))
 	# The host sees how guests reach this table, and Copy invitation right
 	# there — nobody hunts for it (owner's word, 2026-09-18).
 	if service != null and int(room.seat) == 0:
@@ -1065,6 +1132,12 @@ func _waiting_room(room: Dictionary) -> void:
 		_room_copy.name = "RoomCopyInvitation"
 		_room_copy.disabled = _invitation_text().is_empty()
 		access.add_child(_room_copy)
+	if client.stopped():
+		# The status line above says why the seat ended; the way out is here
+		# (R4-1). A host's last word is not asked again (R4-1, R4-2).
+		var way_out := SgLobbyStyle.row(header)
+		if not client.host_final: way_out.add_child(_button("Reconnect", client.reconnect))
+		way_out.add_child(_button("Disconnect", _disconnect))
 	var players := SgLobbyStyle.row(_body)
 	for seat in 2:
 		var column := VBoxContainer.new()
@@ -1111,7 +1184,7 @@ func _waiting_room(room: Dictionary) -> void:
 	var note := SgLobbyStyle.column(_body, "", false)
 	note.add_child(SgLobbyStyle.label("Deck contents go to the referee, not your opponent. Changing a deck or opponent clears human Ready marks; computer seats stay ready. Disconnected human seats are held for 5 minutes.", 15, true))
 	note.add_child(SgLobbyStyle.label("Friendly and unrated. Play with a host you trust: their computer runs the referee.", 15, true))
-	if not client.online: note.add_child(_button("Reconnect", client.reconnect))
+	if not client.online and not client.stopped(): note.add_child(_button("Reconnect", client.reconnect))
 
 
 func _network_button(text: String, callback: Callable, available := true) -> Button:
@@ -1134,6 +1207,7 @@ func _close_decks() -> void:
 	_deck_panel = null
 	_deck_use = null
 	_deck_status = null
+	_deck_status_online = ""
 	_deck_room_id = ""
 	_deck_selected.clear()
 	_deck_submission.clear()
@@ -1266,7 +1340,7 @@ func _browser() -> void:
 				_cell(table, String(entry.name), true)
 				var host := _cell(table, String(advert.name))
 				host.tooltip_text = "%s:%d" % [advert.address, int(advert.port)]
-				_cell(table, String(entry.decks))
+				_deck_cell(table, String(entry.decks))
 				table.add_child(_invite_only_mark(not SgLanDiscovery.open_host(advert)))
 				var brief := _advert_brief(advert)
 				var build := _cell(table, brief if not brief.is_empty() else "Same as yours")
@@ -1307,7 +1381,7 @@ func _browser() -> void:
 	for room: Dictionary in client.state.rooms:
 		_cell(table, String(room.name), true)
 		_cell(table, String(room.host))
-		_cell(table, _table_rules_cell(room))
+		_deck_cell(table, _table_rules_cell(room))
 		_cell(table, "Open" if room.open else "Taken")
 		table.add_child(_network_button("Join" if room.open else "In use", func() -> void:
 			_send({"op":"join", "room":room.id}), room.open))
@@ -1334,6 +1408,27 @@ func _table(parent: Node, captions: Array) -> GridContainer:
 		var caption := _cell(table, captions[i], i == 0, 13)
 		caption.add_theme_color_override("font_color", UiChrome.ACCENT)
 	return table
+
+
+## A DECKS cell (gap review 2026-11-10, R4-7): a deck name runs to 128
+## characters on the wire, and the unwrapped cell widened the window past
+## the screen, Join with it. The cell is as wide as its bounded lines (the
+## deck rule, the rules readout), shares any slack with DUEL, and trims an
+## assigned deck's name to that; the tooltip keeps the whole text.
+func _deck_cell(table: GridContainer, text: String) -> Label:
+	var cell := _cell(table, text)
+	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cell.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var font := cell.get_theme_font("font")
+	var font_size := cell.get_theme_font_size("font_size")
+	var widest := 160.0
+	for line in text.split("\n"):
+		if line.begins_with("Assigned: "): continue
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+	cell.custom_minimum_size.x = ceilf(widest) + 2.0
+	cell.tooltip_text = text
+	cell.mouse_filter = Control.MOUSE_FILTER_PASS
+	return cell
 
 
 func _cell(table: GridContainer, text: String, wide := false, font_size := 16) -> Label:

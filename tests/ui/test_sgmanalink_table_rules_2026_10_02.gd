@@ -108,7 +108,8 @@ func test_the_standard_table_is_the_table_every_host_opened_before() -> void:
 	assert_true(standard.forks.free_damage_assignment, "and divided combat damage freely")
 	assert_eq(SgTableRules.options(standard).preset(), RulesOptions.DEFAULT_PRESET)
 	assert_eq(SgTableRules.brief(standard), "Modern rules, mana burn on  ·  20 life")
-	assert_eq(SgTableRules.summary(standard), "Full implemented card pool  ·  40–250 cards  ·  20 life\nModern rules, mana burn on  ·  Single duel")
+	# The referee's casual floor, and the 40 it advises (gap review 2026-11-10, R4-6).
+	assert_eq(SgTableRules.summary(standard), "Full implemented card pool  ·  8–250 cards (40+ advised)  ·  20 life\nModern rules, mana burn on  ·  Single duel")
 	var duel := SgPracticeMatch.new(42)
 	assert_eq(duel.game.players[0].life, 20)
 	assert_eq(duel.game.rules.preset(), RulesOptions.DEFAULT_PRESET, "a match without table rules plays the standard table")

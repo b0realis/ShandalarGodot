@@ -133,9 +133,17 @@ static func detail(rules: Dictionary) -> String:
 	return "  ·  ".join(parts)
 
 
+## The deck sizes a friendly table takes, as the referee checks them
+## ([method SgDeckCatalog.validate]: the casual floor up to 250 cards) and
+## the size it advises. The line used to say 40–250, a floor the referee
+## does not hold a friendly table to (gap review 2026-11-10, R4-6).
+static func deck_sizes() -> String:
+	return "%d–250 cards (%d+ advised)" % [DeckModel.CASUAL_MIN_CARDS, DeckModel.MIN_CARDS]
+
+
 ## The waiting room's column: the pool and deck bounds every table shares,
 ## then this table's life and rules.
 static func summary(rules: Dictionary) -> String:
-	var text := "Full implemented card pool  ·  40–250 cards  ·  %d life\n%s  ·  Single duel" % [life(rules), preset_label(rules)]
+	var text := "Full implemented card pool  ·  %s  ·  %d life\n%s  ·  Single duel" % [deck_sizes(), life(rules), preset_label(rules)]
 	if options(rules).preset() == "custom": text += "\n" + detail(rules)
 	return text

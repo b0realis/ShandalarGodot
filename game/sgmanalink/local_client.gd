@@ -18,6 +18,12 @@ var status := "Not connected"
 var command_error := ""
 var online := false
 var guest := ""
+## THE HOST'S LAST WORD (gap review 2026-11-10, R4-1/R4-2): true once the
+## host closed its tables or refused this seat for good (a fatal answer),
+## when asking the same host again cannot bring the seat back. A view the
+## host could not send (its own check, VIEW_REFUSED) is not final.
+## Cleared by a new visit ([method forget]).
+var host_final := false
 var _socket: WebSocketPeer
 var _port := 0
 var _access := ""
@@ -135,6 +141,7 @@ func forget() -> void:
 	_backoff = 500
 	_unavailable_since = 0
 	_unanswered = 0
+	host_final = false
 	state = {"rooms": [], "room": {}}
 	status = "Not connected"
 
@@ -155,8 +162,18 @@ func connecting() -> bool:
 	return _wanted and not online
 
 
+## A seat and no connection, and no retry under way: the host ended it, or
+## this client stopped on an answer it cannot use ([member status] says
+## which). Only Reconnect or Disconnect move it on (gap review 2026-11-10,
+## R4-1).
+func stopped() -> bool:
+	return has_session() and not _wanted and not online
+
+
 func reconnect() -> void:
-	if _port == 0 or not has_session():
+	# A host that closed its tables or refused this seat for good is not
+	# asked again: its answer stays on screen (R4-1).
+	if _port == 0 or not has_session() or host_final:
 		return
 	if _socket != null:
 		_socket.close(-1)
@@ -241,6 +258,7 @@ func poll() -> void:
 		if _socket.get_close_code() == SgLocalServer.HOST_CLOSED_CODE:
 			_wanted = false
 			online = false
+			host_final = true
 			status = SgLocalServer.HOST_CLOSED
 			changed.emit()
 			return
@@ -274,6 +292,23 @@ func poll() -> void:
 			_retry_at = now + _backoff
 			_backoff = mini(_backoff * 2, 8000)
 			_connect()
+		return
+	# A CLOSING CONNECTION IS OFFLINE (gap review 2026-11-10, R4-3): it
+	# takes no command ([method command]), and while [member online] stayed
+	# set a table's automatic pass was refused on the spot and re-driven in
+	# the same frame without end. Lost from here; the CLOSED poll that
+	# follows reads its close code and retries as for any lost connection.
+	if connection == WebSocketPeer.STATE_CLOSING:
+		if online:
+			online = false
+			status = "Connection lost; reconnecting..."
+			_retry_at = now + _backoff
+			# The CLOSED poll reads the same loss, not a host that never answered.
+			_opened = now
+			changed.emit()
+		elif now - _opened > 5000:
+			# A close that never completes is cut; the CLOSED poll retries.
+			_socket.close(-1)
 		return
 	if not online and now - _opened > 5000:
 		_socket.close(-1)
@@ -364,6 +399,7 @@ func poll() -> void:
 				_wanted = false
 				online = false
 				status = message.error
+				if has_session() and message.error != SgLocalServer.VIEW_REFUSED: host_final = true
 				# A seat resumed at a host that restarted: an older host
 				# answers its stale access code "Invalid invitation" — the
 				# seat is gone, and the guest is told so (2026-10-12).
