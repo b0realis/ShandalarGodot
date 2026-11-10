@@ -29,8 +29,10 @@ extends CardScript
 ## list so make things as simple as possible").
 
 
+## Only what the card's TEXT prints is a colour word: a protection another
+## effect granted is not (CR 612.3; gap review 2026-11-10).
 static func _has_a_color_word(inst: CardInstance) -> bool:
-	return inst.cur_protection != 0
+	return inst.text_protection() != 0
 
 
 func build() -> CardData:
@@ -54,10 +56,12 @@ class SleightEffect extends EffectBase:
 		if victim == null or (victim.zone != Mtg.Zone.BATTLEFIELD
 				and victim.zone != Mtg.Zone.STACK):
 			return
-		# The colour words the text carries, in WUBRG order.
+		# The colour words the text carries, in WUBRG order — never a
+		# protection another effect granted.
 		var present: Array[int] = []
+		var worded := victim.text_protection()
 		for c in Mtg.WUBRG:
-			if (victim.cur_protection & c) != 0:
+			if (worded & c) != 0:
 				present.append(c)
 		if present.is_empty():
 			return

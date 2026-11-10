@@ -1013,6 +1013,12 @@ func reset_characteristics() -> void:
 
 ## CR 613 layer 3, applied right after the printed values are restored.
 func _apply_text_changes() -> void:
+	# A colour word lives in the TEXT, so only the printed protection is
+	# rewritten; a protection another effect granted with no duration
+	# ([member added_protection], Rainbow Knights) is no text and keeps its
+	# colour (CR 612.3 — gap review 2026-11-10, r2-7). It is OR'd back after.
+	var worded := data.protection_from
+	var rewords := false
 	for change in text_changes:
 		match String(change["kind"]):
 			"land_type":
@@ -1052,10 +1058,8 @@ func _apply_text_changes() -> void:
 					if not intrinsic.is_empty():
 						cur_mana_abilities = intrinsic
 			"color_word":
-				var from_color := int(change["from"])
-				var to_color := int(change["to"])
-				if (cur_protection & from_color) != 0:
-					cur_protection = (cur_protection & ~from_color) | to_color
+				worded = _reworded(worded, change)
+				rewords = true
 			"mana_color":
 				var was := int(change["from"])
 				var now := int(change["to"])
@@ -1070,6 +1074,29 @@ func _apply_text_changes() -> void:
 					# used to lose the tap, the cost and the side effect.
 					retuned.append(ability.retuned(was, now) if swapped else ability)
 				cur_mana_abilities = retuned
+	if rewords:
+		cur_protection = worded | added_protection
+
+
+## The protection colours this permanent's TEXT names: the printed ones
+## ([member CardData.protection_from]) as its colour-word text changes have
+## rewritten them (CR 612, Sleight of Mind) — never a protection another
+## effect granted ([member added_protection], a layer-6 grant). What a
+## colour-word change can reach; gap review 2026-11-10 (r2-7).
+func text_protection() -> int:
+	var worded := data.protection_from
+	for change in text_changes:
+		if String(change["kind"]) == "color_word":
+			worded = _reworded(worded, change)
+	return worded
+
+
+## [param mask] with [param change]'s colour word replaced, if it has it.
+static func _reworded(mask: int, change: Dictionary) -> int:
+	var from_color := int(change["from"])
+	if (mask & from_color) == 0:
+		return mask
+	return (mask & ~from_color) | int(change["to"])
 
 
 ## Replace this permanent's live land type and the mana it taps for —

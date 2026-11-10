@@ -313,10 +313,12 @@ func reading_abilities() -> StaticAbility:
 
 
 ## Does this static REMOVE abilities (CR 613 layer 6 — Titania's Song's
-## "each noncreature artifact loses all abilities")? Layer 6 precedes every
-## P/T layer, and an ability that has been removed contributes nothing in
-## ANY layer, so these run FIRST and every later pass skips a source whose
-## abilities are gone.
+## "each noncreature artifact loses all abilities")? Since the gap review of
+## 2026-11-10 (the owner's ruling: CR 613) these run AFTER layers 4 and 5,
+## so the type and color effects of the cards they silence apply first
+## (Kormus Bell under the Song still makes 1/1 black creatures); the passes
+## after them (layer 6 on, and the later halves of an effect, CR 613.6)
+## skip a source whose abilities are gone.
 ##
 ## THE CONTRACT: the callback raises [member CardInstance.cur_abilities_silenced]
 ## on every permanent it affects, and nothing else ([method
@@ -331,9 +333,10 @@ func reading_abilities() -> StaticAbility:
 ##   mana/activated/triggered abilities — printed or granted EARLIER — go,
 ##   and a grant made LATER (an Aura attached after Humility, a Jump cast
 ##   after it, a Life Matrix activation) survives.
-## - When: a silencer that also retypes ([method changing_types], the
-##   Song) runs before layer 4 as it always did; a pure one (Humility) runs
-##   after it, so it reaches a Forest Living Lands made a creature.
+## - When: every silencer runs after layers 4 and 5, so it reaches a Forest
+##   Living Lands made a creature; a silencer's retyping half (the Song's
+##   "is an artifact creature") is a [method changing_types] static of its
+##   own, ordered by timestamp with the other layer-4 writers.
 var silences_abilities: bool = false
 
 ## Fluent: mark this static as an ability remover.

@@ -527,16 +527,20 @@ func test_a_retyped_land_is_not_animated_by_its_old_type() -> void:
 
 
 func test_titanias_song_silences_a_type_changing_static() -> void:
-	# "Each noncreature artifact loses all abilities" is CR 613 layer 6,
-	# which precedes every P/T layer — so a silenced Kormus Bell animates
-	# nothing, whichever of the two entered first.
+	# "Each noncreature artifact loses all abilities" is CR 613 layer 6.
+	# The 2026-09 audit read that as "a silenced Kormus Bell animates
+	# nothing"; the owner's ruling of 2026-11-10 (gap review, r2-1) follows
+	# CR 613.1/613.6 instead: the Bell's layer-4 effect applied before the
+	# removal, and it started there, so its colour and size still apply.
 	var swamp := put_battlefield(0, "Swamp")
-	put_battlefield(0, "Kormus Bell")
+	var bell := put_battlefield(0, "Kormus Bell")
 	g.recalculate()
 	assert_true(swamp.is_creature())
 	put_battlefield(1, "Titania's Song")
 	g.recalculate()
-	assert_false(swamp.is_creature(), "the Bell lost its ability")
+	assert_true(bell.cur_abilities_silenced, "the Bell lost its ability")
+	assert_true(swamp.is_creature(), "after its layer-4 effect had applied")
+	assert_eq([swamp.cur_power, swamp.cur_toughness], [1, 1])
 
 
 func test_meekstone_sees_counters_a_creature_entered_with() -> void:

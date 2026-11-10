@@ -1960,7 +1960,7 @@ func battlefield_with_statics() -> Array[CardInstance]:
 
 ## The battlefield permanents carrying a TYPE-CHANGING static (CR 613 layer
 ## 4) — Blood Moon, Evil Presence, Kormus Bell, Titania's Song — or an
-## ability-REMOVING one (layer 6), which the pipeline runs before them.
+## ability-REMOVING one (layer 6), which the pipeline runs after layer 5.
 ## Usually empty, which is why the pipeline's first passes cost nothing.
 func battlefield_with_type_statics() -> Array[CardInstance]:
 	all_battlefield()

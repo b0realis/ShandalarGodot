@@ -23,17 +23,18 @@ extends RefCounted
 ##   graveyard-top copies         layer 1             (Volrath's Shapeshifter)
 ##   reset to printed             (and CR 613 layer 3 text changes)
 ##   animations                   layer 4, floating   (Mishra's Factory)
-##   silencers that also retype   layer 6 (dependency) (Titania's Song)
-##   type-changing statics        layer 4             (Blood Moon, Kormus Bell)
+##   type-changing statics        layer 4             (Blood Moon, Kormus Bell,
+##                                                     Titania's Song)
 ##   floating statics             the same layers     (Titania's Song, once gone)
 ##   type changes that SET types  layer 4, by stamp   (Opal Caryatid, Soul
 ##                                                     Sculptor — Pack 10)
 ##   card-type readers            layer 4 (dependency) (Opalescence)
-##   "loses all abilities"        layer 6 (dependency) (Humility)
+##   colour changes               layer 5             (Touch of Darkness,
+##                                                     Kormus Bell's black)
+##   "loses all abilities"        layer 6 (dependency) (Titania's Song, Humility)
 ##   base-P/T sets, BY TIMESTAMP  layer 7a/7b         (Nightmare, Humility's
 ##                                                     1/1, Island of Wak-Wak,
 ##                                                     an animation's 2/2)
-##   colour changes               layer 5             (Touch of Darkness)
 ##   LAYER 6, WHOLE, BY TIMESTAMP (Flight, Jump, Radjan Spirit, Hammerheim,
 ##                                 Humility's strip, Life Matrix, protection)
 ##   P/T definitions that count   layer 7a after 6    (Dauthi Warlord)
@@ -75,8 +76,20 @@ extends RefCounted
 ## abilities in layer 6 contributes nothing in the later layers — except the
 ## later halves of an effect that already STARTED: a keyed static half
 ## ([method StaticAbility.part_of]) that ran in layer 4 or as a silencer
-## keeps its 7b/7c halves. Humility made a creature by Opalescence humbles
-## itself and still sets every creature 1/1 ([member _started]).
+## keeps its 6/7b/7c halves. Humility made a creature by Opalescence humbles
+## itself and still sets every creature 1/1 ([member _started]); a half that
+## decides whom it affects in its first layer names them there
+## ([method lock_in]), and its later halves reach the same set.
+##
+## "LOSES ALL ABILITIES" IS LAYER 6, AND ONLY LAYER 6 (the owner's ruling of
+## 2026-11-10, CR 613.1 / 613.6 — the gap review's r2-1). The layer-4 and
+## layer-5 effects of the permanents a silencer reaches have applied before
+## it: a Kormus Bell under Titania's Song still makes the Swamps 1/1 black
+## creatures, a Darkest Hour humbled by Humility still paints every creature
+## black. What the removal stops is the victim's layer-6 and layer-7 effects
+## (a lord's islandwalk and its +1/+1) — unless they are later halves of an
+## effect that started earlier. The 2026-09 audit's contrary ruling (its row
+## 33) is lifted.
 
 ## How long a floating effect lasts (CR 611.2b — a one-shot effect that
 ## creates a continuous effect states its own duration).
@@ -251,11 +264,24 @@ var _type_changes: Array[Dictionary] = []
 var _event_watch := 0
 
 ## Pack 10 E3 — CR 613.6, DERIVED (rebuilt by every [method recalculate],
-## never journaled): source instance id → {part key: true} for each keyed
-## static half ([member StaticAbility.part_key]) that has RUN this
-## recalculation in layer 4 or as a silencer. A silenced source's other
-## halves with a started key still apply in the later layers.
+## never journaled): source instance id → {part key: {instance id: true}}
+## for each keyed static half ([member StaticAbility.part_key]) that has RUN
+## this recalculation in layer 4 or as a silencer — the inner set the
+## objects that half applied to ([method lock_in]; empty when the half
+## names none). A silenced source's other halves with a started key still
+## apply in the later layers.
 var _started: Dictionary = {}
+
+## Gap review 2026-11-10 (r2-8) — the cards that carry a characteristic
+## definition ([member CardData.characteristic_definition], CR 604.3), which
+## the off-battlefield pass of [method recalculate] walks instead of every
+## card in the game: see [method _definition_index]. A CACHE, not game state
+## — it checks its own key on every use — so it lives in this object's
+## METADATA ([constant _DEFINITION_INDEX]), outside its script variables:
+## [GameSnapshot], the search journal and the audits that fingerprint every
+## script variable leave it alone, and a probe or a rewind that changes the
+## game's cards changes the key it is checked against.
+const _DEFINITION_INDEX := &"definition_index"
 
 
 ## Active until-end-of-turn / until-end-of-combat KEYWORD GRANTS ("gains
@@ -513,19 +539,25 @@ func add_until_eot_keywords(instance_id: int, keywords: Array,
 ## (Pack 10 E3): an event that ends it — Soul Sculptor's "loses all
 ## abilities until a player casts a creature spell", see
 ## [constant Duration.UNTIL_EVENT].
+##
+## [param ts] (gap review 2026-11-10, r2-2): the timestamp the effect
+## carries. Omitted, it is stamped now — an effect a spell or ability creates
+## as it resolves is that new. An effect that CONTINUES a static ability
+## after its source left ("this effect continues until end of turn",
+## Titania's Song) keeps the timestamp it already had, its source's
+## [member CardInstance.layer_timestamp] (CR 613.7a): a Humility that
+## arrived after the Song is still the newer effect, and a Jump cast after
+## the Song still beats the Song's removal once the Song is gone.
 func add_floating_static(source: CardInstance, ability: StaticAbility,
 		lasts := Duration.END_OF_TURN, lasts_pid := -1,
 		until_end_of_combat := false, bound_instance_id := -1,
-		ends_on: Dictionary = {}) -> void:
+		ends_on: Dictionary = {}, ts := -1) -> void:
 	_rec(&"_floating_statics")
 	_floating_statics.append(_ending_on({
 		"instance_id": bound_instance_id, "source": source, "ability": ability,
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid,
-		# A floating static is created by its source LEAVING, which is later
-		# than every permanent still on the table entered — so its layer-6
-		# half sorts after theirs (CR 613.7).
-		"ts": _stamp(),
+		"ts": ts if ts >= 0 else _stamp(),
 	}, ends_on))
 
 
@@ -930,15 +962,17 @@ static func parse_pt_counter(kind: String) -> Vector2i:
 	return Vector2i(int(halves[0]), int(halves[1]))
 
 
-## The six sub-passes [method recalculate] runs the static abilities in,
-## named so [method _floating_statics_pass] can be asked for one of them.
-## The order is CR 613's layer order as this pipeline resolves it: ability
-## removal (layer 6) before the two layer-4 retypers, then the layer-7a/7b
-## setters, then everything else — and last of all the statics that READ a
-## power or toughness ([member StaticAbility.reads_pt]), which every P/T
-## layer has to have finished with before their question can be answered.
+## The sub-passes [method recalculate] runs the static abilities in, named
+## so [method _floating_statics_pass] can be asked for one of them. The
+## order is CR 613's layer order as this pipeline resolves it: the layer-4
+## land retypers and their readers, the other layer-4 writers, the card-type
+## readers, layer 5 (its own pass), ability removal (layer 6's dependency
+## half), the layer-7a/7b setters, then everything else — and last of all
+## the statics that READ a power or toughness ([member
+## StaticAbility.reads_pt]), which every P/T layer has to have finished with
+## before their question can be answered.
 enum _StaticPass { SILENCE, LAND_TYPES, LAND_TYPE_READERS, TYPES, BASE_PT, REST,
-	PT_READERS, SILENCE_LATE, BASE_PT_READERS, TYPE_READERS }
+	PT_READERS, BASE_PT_READERS, TYPE_READERS }
 
 
 ## Run the FLOATING statics ([member _floating_statics]) that belong to
@@ -1053,13 +1087,15 @@ func _floating_statics_pass(game: MtgGame, which: int) -> void:
 ## colour pass ([method _layer_five]).
 static func _runs_in(ability: StaticAbility, which: int) -> bool:
 	match which:
-		# Pack 9 E5: a silencer that ALSO retypes (Titania's Song) keeps the
-		# early pass its layer-4 half needs; a pure one (Humility) runs after
-		# layer 4, so it reaches what layer 4 made a creature (CR 613.1).
+		# Every "loses all abilities", after layers 4 and 5 (gap review
+		# 2026-11-10, r2-1; CR 613.1): it reaches what layer 4 made a
+		# creature, and the layer-4/5 effects of what it silences have
+		# applied. A card whose one ability also changes types prints the
+		# two halves as two statics (Titania's Song): the type half is a
+		# layer-4 writer, the removal this pass. (A static flagged both
+		# runs here only, after layer 4 — split it.)
 		_StaticPass.SILENCE:
-			return ability.silences_abilities and ability.changes_types
-		_StaticPass.SILENCE_LATE:
-			return ability.silences_abilities and not ability.changes_types
+			return ability.silences_abilities
 		_StaticPass.LAND_TYPES:
 			return ability.changes_land_types and not ability.reads_land_types
 		_StaticPass.LAND_TYPE_READERS:
@@ -1103,12 +1139,22 @@ static func _runs_in(ability: StaticAbility, which: int) -> bool:
 ## [member CardInstance.color_override_ts]). Celestial Dawn's "nonland
 ## permanents you control are white" and a Dwarven Song cast afterwards:
 ## the later one wins, whichever it is.
+##
+## Layer 5 runs BEFORE the silence pass (gap review 2026-11-10, r2-1): a
+## permanent that loses its abilities in layer 6 still paints here (Darkest
+## Hour humbled by Humility). What is silenced already is a permanent with
+## no abilities from the start — face down (CR 708.2), or a land a layer-4
+## retyper made a basic type (CR 305.7) — unless the colour is a later half
+## of an effect that started earlier (CR 613.6).
 func _layer_five(game: MtgGame) -> void:
 	var entries: Array[Dictionary] = []
 	for inst in game.battlefield_with_statics():
-		if inst.cur_abilities_silenced:
+		var quiet := inst.cur_abilities_silenced
+		if quiet and not _started.has(inst.id):
 			continue
 		for ability in inst.data.static_abilities:
+			if quiet and not _continues(inst, ability):
+				continue
 			if ability.changes_colors and not _tap_suspended(inst, ability):
 				entries.append({"ts": inst.layer_timestamp, "static": ability, "source": inst})
 	for entry in _floating_statics:
@@ -1250,7 +1296,7 @@ func _layer_six(game: MtgGame) -> void:
 		entries.append({"ts": int(loss.get("ts", 0)), "loss": loss})
 	for inst in game.battlefield_with_ability_statics():
 		if inst.cur_abilities_silenced:
-			continue   # Titania's Song silenced it in the first pass
+			continue   # a silencer reached it (the silence pass, 2a5)
 		for ability in inst.data.static_abilities:
 			if ability.changes_abilities and not ability.changes_types \
 					and not ability.silences_abilities \
@@ -1453,8 +1499,10 @@ func recalculate(game: MtgGame) -> void:
 	# CREATURES, and Jade Statue and Xenic Poltergeist both animate through
 	# the registry above. Judged before it, this read pass-1 types and
 	# suspended a Cursed Rack the Poltergeist had just made a creature —
-	# while the comment here claimed the opposite. What it still misses is
-	# a permanent animated by a STATIC in pass 2a, which has not run yet.
+	# while the comment here claimed the opposite. A permanent a STATIC
+	# animates in layer 4 (Animate Artifact) is excepted from layer 5 on,
+	# where the rule is judged again (gap review 2026-11-10, r2-6); its own
+	# layer-4 statics, if it has any, were stopped before it became one.
 	# The mark is the ARTIFACT's; each pass below then skips its statics
 	# one by one, except a static that is about being tapped ([method
 	# _tap_suspended] — campaign fix-engine, w4-1/w2-1).
@@ -1466,28 +1514,26 @@ func recalculate(game: MtgGame) -> void:
 
 	# Pass 2: static abilities, in battlefield order (entry order — our
 	# arrays append on entry, so iteration order IS timestamp order).
-	# THREE sub-passes, because CR 613.1 orders layers before timestamps:
+	# Sub-passes, because CR 613.1 orders layers before timestamps:
 	#   2a — layer 4: statics that change TYPES or subtypes (Blood Moon,
 	#        Evil Presence, Kormus Bell, Titania's Song). Everything that
 	#        counts land types or animates must see the retuned board.
+	#   2a' — layer 5 (colours), then the layer-6 dependency half of every
+	#        "loses all abilities" (Titania's Song, Humility).
 	#   2b — layer 7a/7b: statics that SET a base P/T (Nightmare's
 	#        characteristic-defining ability, Keldon Warlord).
 	#   2c — everything else, notably the layer-7c anthems (Crusade, Bad
 	#        Moon) that add ON TOP of a set base whatever entered first.
 	# Only the permanents that CARRY a static are worth walking (the game
 	# keeps that short list beside its battlefield cache).
-	# "Loses all abilities" (Titania's Song) is itself a layer-6 effect, so
-	# a source silenced in 2a contributes nothing in 2b or 2c.
+	# "Loses all abilities" is a layer-6 effect (CR 613.1f): a source it
+	# silences has applied its layer-4 and layer-5 effects already and
+	# contributes nothing in 6 or 7 — except the later halves of an effect
+	# that started earlier (CR 613.6, [method _continues]). Until the gap
+	# review of 2026-11-10 (r2-1) the Song ran ahead of layer 4 and Humility
+	# ahead of layer 5, so a silenced Kormus Bell animated nothing.
 	var static_sources := game.battlefield_with_statics()
 	var type_sources := game.battlefield_with_type_statics()
-	# 2a-0 — LAYER 6, the part that must come first: an ability that has
-	# been REMOVED (Titania's Song) contributes nothing in any layer, so
-	# every pass below skips a silenced source. Since Pack 9 E5 this is the
-	# silencers that ALSO retype (the Song's "becomes an artifact
-	# creature" is its layer-4 half); a pure "loses all abilities"
-	# (Humility) runs after layer 4, below. Each one's victims are noted
-	# for the timestamped strip in [method _layer_six].
-	_silence_pass(game, _StaticPass.SILENCE, type_sources)
 	# 2a-1 — LAYER 4, retypers first: "nonbasic lands are Mountains"
 	# and "enchanted land is a Swamp" REPLACE a land's basic types, and
 	# everything that animates or counts those types has to see the
@@ -1566,36 +1612,50 @@ func recalculate(game: MtgGame) -> void:
 	# ([method _layer_four_readers]).
 	_layer_four_writers(game, type_sources)
 	_layer_four_readers(game, type_sources)
-	# 2a-3 — LAYER 6's DEPENDENCY HALF for a pure "loses all abilities"
-	# (Pack 9 E5, Humility): it applies to what layer 4 left a creature
-	# (Living Lands' Forests, an animated Mishra's Factory), and a source it
-	# silences contributes nothing in any later layer — CR 613.8a: removing
-	# an ability changes the existence of that ability's effect, so the
-	# remover goes first whatever the timestamps. WHAT it removes, and when,
-	# is the timestamped strip in [method _layer_six].
-	_silence_pass(game, _StaticPass.SILENCE_LATE, type_sources)
+	# The 1997 tapped-artifact rule, JUDGED AGAIN now that layer 4 has
+	# settled (gap review 2026-11-10, r2-6): an artifact a static made a
+	# creature (Animate Artifact on a tapped Meekstone) is an artifact
+	# creature, and those are excepted. Only lifted, never raised: a mark
+	# raised here would stop the later halves of a layer-4 effect that has
+	# already applied.
+	if game.rules.tapped_artifacts_stop:
+		for inst in battlefield:
+			if inst.cur_statics_suspended and inst.is_creature():
+				inst.cur_statics_suspended = false
+
+	# Pass 2a4: COLOUR changes (CR 613 layer 5) — after every type change
+	# and before the anthems, which read colour (Bad Moon must see a
+	# Touch-of-Darkness'd bear, and Kormus Bell's black Swamps). INDEFINITE
+	# changes ride on CardInstance.color_override and were already restored
+	# in pass 1; these are the floating until-end-of-turn ones, applied in
+	# creation order so the last spell cast wins — and, since Pack 8, the
+	# layer-5 STATICS (Celestial Dawn, Kormus Bell's black) among them in
+	# timestamp order ([method _layer_five]), with the indefinite ones
+	# applied again at their own stamps beside them (the bug campaign c12,
+	# h3-5). BEFORE the silencers (gap review 2026-11-10, r2-1): layer 5
+	# precedes layer 6, so a permanent that loses its abilities still paints.
+	_layer_five(game)
+
+	# 2a5 — LAYER 6's DEPENDENCY HALF of every "loses all abilities"
+	# (Titania's Song's removal, Humility): it applies to what layer 4 left a
+	# creature (Living Lands' Forests, an animated Mishra's Factory, the
+	# artifacts the Song's own layer-4 half animated), and a source it
+	# silences contributes nothing in layers 6 and 7 — CR 613.8a: removing an
+	# ability changes the existence of that ability's effect, so the remover
+	# goes first whatever the timestamps. WHAT it removes, and when, is the
+	# timestamped strip in [method _layer_six].
+	_silence_pass(game, type_sources)
 
 	# Pass 2b: LAYER 7a/7b IN TIMESTAMP ORDER (CR 613.4a-b, 613.7) — the
 	# static base-P/T setters (Nightmare's characteristic-defining ability,
-	# Humility's 1/1), the floating ones (Island of Wak-Wak, Singing Tree,
-	# Sorceress Queen) and an animation's P/T (Mishra's Factory's 2/2), on
-	# one clock: a Factory animated after Humility is a 2/2, one animated
-	# before it a 1/1. Before Pack 9 the floating sets simply ran after
-	# every static, which is the same answer whenever no static setter
-	# reaches other permanents. See [method _layer_seven_b].
+	# Humility's 1/1, the mass animations' 1/1), the floating ones (Island of
+	# Wak-Wak, Singing Tree, Sorceress Queen) and an animation's P/T
+	# (Mishra's Factory's 2/2), on one clock: a Factory animated after
+	# Humility is a 2/2, one animated before it a 1/1. Before Pack 9 the
+	# floating sets simply ran after every static, which is the same answer
+	# whenever no static setter reaches other permanents. See
+	# [method _layer_seven_b].
 	_layer_seven_b(game, static_sources)
-
-	# Pass 2b3: COLOUR changes (CR 613 layer 5) — after the type-changing
-	# statics (whose animations paint their own colour, Kormus Bell's black)
-	# and before the anthems, which read colour (Bad Moon must see a
-	# Touch-of-Darkness'd bear). INDEFINITE changes ride on
-	# CardInstance.color_override and were already restored in pass 1; these
-	# are the floating until-end-of-turn ones, applied in creation order so
-	# the last spell cast wins — and, since Pack 8, the layer-5 STATICS
-	# (Celestial Dawn) among them in timestamp order ([method _layer_five]),
-	# with the indefinite ones applied again at their own stamps beside them
-	# (the bug campaign c12, h3-5).
-	_layer_five(game)
 
 	# Pass 2b4: LAYER 6 WHOLE, IN TIMESTAMP ORDER (CR 613.6, 613.7) — the
 	# ability grants and the ability losses, floating and printed alike.
@@ -1635,11 +1695,11 @@ func recalculate(game: MtgGame) -> void:
 	for inst in static_sources:
 		var silenced := inst.cur_abilities_silenced
 		if silenced and not _started.has(inst.id):
-			continue   # Titania's Song silenced it in an earlier pass
+			continue   # a silencer reached it in the silence pass (2a5)
 		for ability in inst.data.static_abilities:
 			if silenced and not _continues(inst, ability):
 				continue   # Pack 10 E3: only a started effect goes on (CR 613.6)
-			# The silencers ran first, in 2a-0; they do not run again here,
+			# The silencers ran in 2a5; they do not run again here,
 			# and neither does a layer-6 grant — pass 2c-0 above took it.
 			# A static that READS a power waits for pass 5, below; a
 			# layer-5 colour changer already ran in [method _layer_five].
@@ -1736,9 +1796,13 @@ func recalculate(game: MtgGame) -> void:
 	_floating_statics_pass(game, _StaticPass.PT_READERS)
 	# Characteristic definitions work in every zone. Ordinary battlefield
 	# statics must not run here: a lord in hand grants no battlefield bonus.
-	for id in game._instances:
-		var card: CardInstance = game._instances[id]
-		if card.zone != Mtg.Zone.BATTLEFIELD and card.data.characteristic_definition.is_valid():
+	# Only the cards that carry one are walked ([method definition_holders],
+	# gap review 2026-11-10, r2-8) — the libraries are most of the game's
+	# cards and almost none of them has a definition.
+	for card in _definition_index(game):
+		if card.zone != Mtg.Zone.BATTLEFIELD \
+				and card.data.characteristic_definition.is_valid() \
+				and is_same(game._instances.get(card.id, null), card):
 			card.data.characteristic_definition.call(game, card)
 	# Layer 5 OUTSIDE the battlefield (Celestial Dawn) — one test on a
 	# board without it; see [method _offzone_colors].
@@ -1786,20 +1850,23 @@ func recalculate(game: MtgGame) -> void:
 
 # ------------------------------------------------- Pack 9 E5: layers --
 
-## The silencers ("loses all abilities") the two silence passes ran THIS
+## The silencers ("loses all abilities") the silence pass ran THIS
 ## recalculation, as {ts, victims: Array[CardInstance]}: what each removed
 ## and at what timestamp, for [method _layer_six] to strip in order.
 ## DERIVED — rebuilt by every [method recalculate], never journaled.
 var _silence_strips: Array[Dictionary] = []
 
 
-## Run the silencers of sub-pass [param which] (the early one for a
-## silencer that also retypes, the late one for a pure "loses all
-## abilities"): live, floating and functioning-on-the-stack alike, in
-## timestamp order (CR 613.7). A LIVE silencer whose own source an earlier
-## one has just silenced contributes nothing (CR 613.8a-b: each depends on
-## the other, and timestamp order breaks the loop).
-func _silence_pass(game: MtgGame, which: int, type_sources: Array[CardInstance]) -> void:
+## Run every silencer ("loses all abilities" — Humility, Titania's Song's
+## removal) after layers 4 and 5: live, floating and functioning-on-the-
+## stack alike, in timestamp order (CR 613.7). A LIVE silencer whose own
+## source an earlier one has just silenced contributes nothing (CR
+## 613.8a-b: each depends on the other, and timestamp order breaks the
+## loop) — unless it is the later half of an effect that started in layer 4
+## (CR 613.6): the Song's removal still reaches the artifacts its type half
+## animated after a Humility humbled the Song.
+func _silence_pass(game: MtgGame, type_sources: Array[CardInstance]) -> void:
+	var which := _StaticPass.SILENCE
 	var entries: Array[Dictionary] = []
 	for inst in type_sources:
 		for ability in inst.data.static_abilities:
@@ -1821,17 +1888,15 @@ func _silence_pass(game: MtgGame, which: int, type_sources: Array[CardInstance])
 		return
 	if entries.size() > 1:
 		entries.sort_custom(_by_timestamp_then_entry)
-	if entries.size() > 1 and which == _StaticPass.SILENCE_LATE:
-		# Pack 10 E3 — CR 613.8a-b: a floating PURE silencer (Soul
-		# Sculptor's "loses all abilities until ...") or one functioning
-		# from the stack can never lose its own ability, so a LIVE silencer
-		# whose source it reaches depends on it and applies after it
-		# whatever the timestamps: a Humility that a Sculptor's effect
-		# humbled never starts. Only the run order moves; each strip keeps
-		# its own timestamp for layer 6, and a pure silencer only raises
-		# flags, so nothing else can tell. (Not the early pass: a silencer
-		# that also retypes — Titania's Song — changes what the next one
-		# applies to, and there timestamp order decides, CR 613.8b.)
+	if entries.size() > 1:
+		# Pack 10 E3 — CR 613.8a-b: a floating silencer (Soul Sculptor's
+		# "loses all abilities until ...", the lingering Song's removal) or
+		# one functioning from the stack can never lose its own ability, so
+		# a LIVE silencer whose source it reaches depends on it and applies
+		# after it whatever the timestamps: a Humility that a Sculptor's
+		# effect humbled never starts. Only the run order moves; each strip
+		# keeps its own timestamp for layer 6, and a silencer only raises
+		# flags, so nothing else can tell.
 		var ordered: Array[Dictionary] = []
 		for entry in entries:
 			if not entry.has("live"):
@@ -1843,7 +1908,8 @@ func _silence_pass(game: MtgGame, which: int, type_sources: Array[CardInstance])
 	var battlefield: Array[CardInstance] = game.all_battlefield()
 	for entry in entries:
 		var source: CardInstance = entry["source"]
-		if entry.has("live") and source.cur_abilities_silenced:
+		if entry.has("live") and source.cur_abilities_silenced \
+				and not _continues(source, entry["ability"]):
 			continue
 		_run_silencer(game, battlefield, entry["ability"], source, int(entry["ts"]))
 		_note_started(source, entry["ability"])
@@ -2137,8 +2203,80 @@ func _note_started(source: CardInstance, ability: StaticAbility) -> void:
 	if ability.part_key == &"" or source == null:
 		return
 	var keys: Dictionary = _started.get(source.id, {})
-	keys[ability.part_key] = true
+	if not keys.has(ability.part_key):
+		keys[ability.part_key] = {}
 	_started[source.id] = keys
+
+
+## CR 613.6 — "it will continue to be applied to the same set of objects".
+## The first half of a keyed effect (its layer-4 type, [method
+## StaticAbility.part_of]) names each object it applies to, as it applies;
+## the later halves ask [method locked_in] instead of deciding again — so
+## Titania's Song removes the abilities of, and sizes, exactly the artifacts
+## it animated, and Kormus Bell paints and sizes exactly its Swamps. A later
+## half whose first half did not run this recalculation (a tapped artifact
+## under the 1997 rule, a face-down source) reaches nothing. DERIVED, in
+## [member _started], rebuilt by every [method recalculate] (gap review
+## 2026-11-10, r2-1/r2-4).
+func lock_in(source: CardInstance, key: StringName, inst: CardInstance) -> void:
+	if source == null or inst == null or key == &"":
+		return
+	var keys: Dictionary = _started.get(source.id, {})
+	var objects: Dictionary = keys.get(key, {})
+	objects[inst.id] = true
+	keys[key] = objects
+	_started[source.id] = keys
+
+
+## Did the first half of [param source]'s effect [param key] apply to
+## [param inst] this recalculation? See [method lock_in].
+func locked_in(source: CardInstance, key: StringName, inst: CardInstance) -> bool:
+	if source == null or inst == null:
+		return false
+	var keys: Dictionary = _started.get(source.id, {})
+	var objects: Variant = keys.get(key, null)
+	return objects is Dictionary and (objects as Dictionary).has(inst.id)
+
+
+## The ids of the cards in the game whose card carries a characteristic
+## definition (CR 604.3) — the cards the off-battlefield pass of [method
+## recalculate] walks (gap review 2026-11-10, r2-8: it used to walk every
+## card, libraries included, on every recalculation). A copy.
+func definition_holders(game: MtgGame) -> Array:
+	var ids: Array = []
+	for card in _definition_index(game):
+		ids.append(card.id)
+	return ids
+
+
+## The cards [method recalculate]'s off-battlefield pass walks, rebuilt
+## first when the game's cards changed since they were listed. The cache is
+## [cards, key]: key = [the game's next instance id, its number of cards, the
+## newest card (or null)] — a new card bumps the id, a card gone for good
+## lowers the count, and a rewind that hands an id out again hands it to a
+## NEW object, so the newest differs; any of them rebuilds the list. A card
+## counts when its current or its printed definition carries one; the pass
+## asks again, of the current one and of the game still holding the card,
+## as it calls it.
+func _definition_index(game: MtgGame) -> Array[CardInstance]:
+	var instances: Dictionary = game._instances
+	var newest: Variant = instances.get(game._next_instance_id - 1, null)
+	# has_meta first: get_meta with a null default reports an error.
+	var cached: Variant = get_meta(_DEFINITION_INDEX) if has_meta(_DEFINITION_INDEX) else null
+	if cached is Array:
+		var key: Array = cached[1]
+		if int(key[0]) == game._next_instance_id and int(key[1]) == instances.size() \
+				and is_same(key[2], newest):
+			return cached[0]
+	var cards: Array[CardInstance] = []
+	for id in instances:
+		var card: CardInstance = instances[id]
+		if card.data.characteristic_definition.is_valid() \
+				or (card.printed_data != null
+					and card.printed_data.characteristic_definition.is_valid()):
+			cards.append(card)
+	set_meta(_DEFINITION_INDEX, [cards, [game._next_instance_id, instances.size(), newest]])
+	return cards
 
 
 ## Has a "loses all abilities" effect NEWER than [param stamp] (a value from
@@ -2168,17 +2306,29 @@ func _continues(source: CardInstance, ability: StaticAbility) -> bool:
 
 
 ## LAYER 4's writers after the land retypers: the type-changing statics
-## (Living Lands, Kormus Bell, Animate Artifact's creature type), the
-## floating and stack ones, and — Pack 10 E3 — the type changes that SET a
-## card type ([member _type_changes]). Without a type change on the board
-## this is the pass as it always ran (battlefield order, which is entry
-## order, then the floating ones). With one, every writer joins ONE list in
-## timestamp order (CR 613.7), the animations' type half included (pass 1
-## added it already; adding it again at its own stamp is how an animation
-## made AFTER a type change still adds its types, and one made before it is
-## overwritten — adding a type twice changes nothing).
+## (Living Lands, Kormus Bell, Animate Artifact's creature type, Titania's
+## Song's), the floating and stack ones, and — Pack 10 E3 — the type changes
+## that SET a card type ([member _type_changes]). With only live writers on
+## the board this is the pass as it always ran (battlefield order, which is
+## entry order). Otherwise every writer joins ONE list in timestamp order
+## (CR 613.7), the animations' type half included (pass 1 added it already;
+## adding it again at its own stamp is how an animation made AFTER a type
+## change still adds its types, and one made before it is overwritten —
+## adding a type twice changes nothing). A floating writer keeps its own
+## age there (gap review 2026-11-10): the lingering Song, older than an
+## Animate Artifact attached after it, still applies first.
+##
+## TITANIA'S SONG AND ANIMATE ARTIFACT (the gap review's Q2, CR 613.8b):
+## each changes whether the other applies — the Aura's "as long as enchanted
+## artifact isn't a creature", the Song's "each noncreature artifact" — a
+## dependency loop, so they apply in timestamp order, which is this list's
+## order: the older one wins. That is why the Song's type half is a writer
+## here and not a card-type reader ([method _layer_four_readers]): nothing
+## else in the pool makes a noncreature artifact a creature in layer 4 (Jade
+## Statue, Karn and Xenic Poltergeist animate through [member _animations],
+## pass 1, before every static).
 func _layer_four_writers(game: MtgGame, type_sources: Array[CardInstance]) -> void:
-	if _type_changes.is_empty():
+	if _type_changes.is_empty() and not _floating_writers():
 		for inst in type_sources:
 			if inst.cur_abilities_silenced:
 				continue
@@ -2187,7 +2337,6 @@ func _layer_four_writers(game: MtgGame, type_sources: Array[CardInstance]) -> vo
 						and not _tap_suspended(inst, ability):
 					ability.apply.call(game, inst)
 					_note_started(inst, ability)
-		_floating_statics_pass(game, _StaticPass.TYPES)
 		return
 	var entries: Array[Dictionary] = []
 	for inst in type_sources:
@@ -2233,6 +2382,19 @@ func _layer_four_writers(game: MtgGame, type_sources: Array[CardInstance]) -> vo
 				continue
 			entry["ability"].apply.call(game, source)
 			_note_started(source, entry["ability"])
+
+
+## Is a floating static, or one functioning from the stack, among the
+## layer-4 writers? Then [method _layer_four_writers] sorts them in.
+func _floating_writers() -> bool:
+	for entry in _floating_statics:
+		if _runs_in(entry["ability"], _StaticPass.TYPES):
+			return true
+	for spell in _stack_sources:
+		for stacked in spell.data.stack_static_abilities:
+			if _runs_in(stacked, _StaticPass.TYPES):
+				return true
+	return false
 
 
 ## LAYER 4's CARD-TYPE READERS (Pack 10 E3, [member
