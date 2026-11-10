@@ -1843,14 +1843,17 @@ func _on_card_clicked(inst: CardInstance) -> void:
 		# comes before every other, so a click on a phased-out Illusionary
 		# Mask creature filled the Showcase with the card and named it on
 		# the bar — what the hover, the card menu and the piles all keep.
+		# Its controller may look at it (gap review 2026-11-10, CR 708.5 —
+		# [method _controller_may_look]).
+		var shown := _may_show_face(inst)
 		if _card_preview != null:
-			if inst.face_down:
+			if not shown:
 				_card_preview.show_back()
 			else:
 				_card_preview.show_card(inst)
 		_report("%s is phased out. %s." % [
 			MtgGame.FACE_DOWN_NAME.left(1).to_upper() + MtgGame.FACE_DOWN_NAME.substr(1) \
-				if inst.face_down else inst.data.card_name,
+				if not shown else inst.data.card_name,
 			MiniCard.phase_note(game, inst)])
 		return
 	match mode:
@@ -1890,7 +1893,20 @@ func _on_card_clicked(inst: CardInstance) -> void:
 			# may tap, and for an ability its card hands to any player or to
 			# its controller's opponents (campaign w5-7: Ifh-Bíff Efreet,
 			# Land's Edge, Mercenaries, Clergy of the Holy Nimbus).
-			if not _is_human(inst.controller_id) and not (_is_human(game.priority_player) and game.may_tap_foreign_land(game.priority_player, inst)) \
+			#
+			# AT A PRIVATE HOTSEAT BOTH SEATS ARE HUMAN (gap review
+			# 2026-11-10, r3-1), so "is its controller human?" let the seat
+			# deciding tap the OTHER seat's lands — the mana floated in that
+			# seat's pool and burned it a life at the step's end under the
+			# 1997 rules — and start its abilities, paid by their controller.
+			# There a card answers the seat at the screen only when it is
+			# that seat's own, or under the same two allowances.
+			if config.private_hotseat():
+				var actor := _table_actor()
+				if inst.controller_id != actor and not game.may_tap_foreign_land(actor, inst) \
+						and not (inst.zone == Mtg.Zone.BATTLEFIELD and _offers_foreign_ability(actor, inst)):
+					return
+			elif not _is_human(inst.controller_id) and not (_is_human(game.priority_player) and game.may_tap_foreign_land(game.priority_player, inst)) \
 					and not (inst.zone == Mtg.Zone.BATTLEFIELD and _offers_foreign_ability(_foreign_actor(), inst)):
 				return
 			if inst.zone == Mtg.Zone.HAND:
@@ -2857,6 +2873,18 @@ func _foreign_actor() -> int:
 	return _human_seat()
 
 
+## THE SEAT A CLICK ON THE TABLE ACTS FOR outside a cast's payment (gap
+## review 2026-11-10, r3-1): at a private hotseat the seat deciding at the
+## screen ([method _private_decision_seat]) — whoever the engine's priority
+## happens to sit with between two beats — and elsewhere the seat holding
+## priority, as it always was. What a land lent by Piracy is tapped for,
+## and whose ability menu is a seat's own.
+func _table_actor() -> int:
+	if config != null and config.private_hotseat():
+		return _private_decision_seat()
+	return game.priority_player
+
+
 ## Does [param inst] — a permanent [param seat] does not control — carry an
 ## activated ability its card lets [param seat] activate ([method
 ## _may_activate]: "any player may activate this ability", "only your
@@ -2871,7 +2899,7 @@ func _offers_foreign_ability(seat: int, inst: CardInstance) -> bool:
 
 
 func _click_permanent(inst: CardInstance) -> void:
-	if game.may_tap_foreign_land(game.priority_player, inst):
+	if game.may_tap_foreign_land(_table_actor(), inst):
 		_open_ability_menu(inst, true)
 		return
 	var mana_count := inst.cur_mana_abilities.size()
@@ -3799,6 +3827,15 @@ func _clear_pending(cast := false) -> void:
 	var bracket_pid := _pending_pid if _pending_card != null and not _network_opponent() else -1
 	mode = Mode.NORMAL
 	_close_mode_overlay()
+	# ...AND THE CAST'S OTHER TWO WINDOWS (gap review 2026-11-10, r3-3): the
+	# X question and the tutor picker ask about the cast this drops, and
+	# the duel's verdict ([method _on_game_over]) left both standing over
+	# the End of Duel window.
+	if _x_dialog != null:
+		if is_instance_valid(_x_dialog):
+			_x_dialog.dismiss()
+		_x_dialog = null
+	_close_search_dialog()
 	_pending_card = null
 	_pending_specs = []
 	_pending_slots = []
@@ -4185,7 +4222,8 @@ func _open_search_dialog(search: SearchLibraryEffect) -> void:
 
 func _close_search_dialog() -> void:
 	if _search_dialog != null:
-		_search_dialog.dismiss()
+		if is_instance_valid(_search_dialog):
+			_search_dialog.dismiss()
 		_search_dialog = null
 
 
@@ -5219,8 +5257,8 @@ func _maybe_schedule_ai() -> void:
 	# a player who walks away does not come back to three lost turns.
 	if _ai_pending or _toss_active or is_paused() or _fullscreen_card_open() \
 			or mini_help_open() or _ai_seat_to_act() == -1 \
-			or _question_holds_duel() \
-			or not is_inside_tree():   # f-minihelp; c12 h4-1; a screen on its way out ([method _refresh])
+			or _question_holds_duel() or _cast_window_open() \
+			or not is_inside_tree():   # f-minihelp; c12 h4-1; gap review r3 Q2; a screen on its way out ([method _refresh])
 		return
 	_ai_pending = true
 	var mine := _humans.has(game.active_player)
@@ -5229,6 +5267,18 @@ func _maybe_schedule_ai() -> void:
 	wait = maxf(wait, _opponent_action_wait())
 	get_tree().create_timer(wait).timeout.connect(
 		_ai_step, CONNECT_ONE_SHOT)
+
+
+## THE COMPUTER WAITS FOR A CAST'S OWN QUESTION (gap review 2026-11-10;
+## the owner's default): while a human seat's X question, tutor picker or
+## mode menu is open, as it waits under the Pause window, the mini help and
+## the card reader. A player may reach for an instant while the computer
+## still holds priority ([method _start_cast]), and the computer's dwell
+## ran on under the window — a Titania's Song could resolve under an
+## ability's X question ([method _on_x_confirmed]). Each window's own OK
+## and Cancel redraw, and the redraw arms a fresh dwell.
+func _cast_window_open() -> bool:
+	return _x_dialog != null or _search_dialog != null or _mode_overlay != null
 
 
 func _ai_step() -> void:
@@ -5247,7 +5297,7 @@ func _ai_step() -> void:
 	# campaign c12, h4-1): [method _close_pause] armed this dwell on its
 	# way to opening one, and it played a turn under it.
 	if is_paused() or _fullscreen_card_open() or _toss_active or mini_help_open() \
-			or _question_holds_duel():   # f-minihelp; c12 h4-1
+			or _question_holds_duel() or _cast_window_open():   # f-minihelp; c12 h4-1; gap review r3 Q2
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
@@ -5453,20 +5503,28 @@ static func offers_keep_order(choice: PlayerChoice) -> bool:
 ## Altar) must be able to name either — so those are listed one line per
 ## object, told apart by the number the card's own ID tag shows (Ctrl+T),
 ## and answered by INSTANCE ID (2026-09-02).
+##
+## A FACE-DOWN PERMANENT (gap review 2026-11-10, r3-2) is listed by
+## [method _candidate_name]: another seat's as [constant FACE_DOWN_LINE] —
+## a Clone's question named the computer's Illusionary Mask creature, and a
+## face-up namesake beside it grew an ID tag that gave it away too, so
+## namesakes are counted by the words SHOWN — and the chooser's own by its
+## name (CR 708.5). Either is told apart by its ID tag, the one thing that
+## tells face-down permanents apart on the table (CR 708.6).
 static func choice_card_lines(choice: PlayerChoice) -> Array:
 	var lines: Array = []
 	var seen := {}
 	var namesakes := {}
 	var copies_seen := {}
 	for inst in choice.candidates:
-		var card_name: String = (inst as CardInstance).data.card_name
+		var card_name := _candidate_name(inst, choice.pid)
 		namesakes[card_name] = int(namesakes.get(card_name, 0)) + 1
 	for inst in choice.candidates:
 		var card: CardInstance = inst
-		var card_name := card.data.card_name
+		var card_name := _candidate_name(card, choice.pid)
 		if card.zone == Mtg.Zone.BATTLEFIELD:
 			var label := card_name
-			if int(namesakes[card_name]) > 1:
+			if card.face_down or int(namesakes[card_name]) > 1:
 				label += " #%d" % card.id
 			lines.append({"label": label, "answer": card.id})
 			continue
@@ -5482,6 +5540,25 @@ static func choice_card_lines(choice: PlayerChoice) -> Array:
 		seen[card_name] = true
 		lines.append({"label": card_name, "answer": card_name})
 	return lines
+
+
+## A face-down battlefield candidate another seat controls: the SGManalink
+## table's own words for it (`SgDuelActions.target_label`).
+const FACE_DOWN_LINE := "Face-down creature"
+## The chooser's own face-down permanent: its name, and that it is face
+## down — a copy of it copies a nameless 2/2 (CR 708.2), not the card.
+const FACE_DOWN_OWN_LINE := "%s (face down)"
+
+
+## The words a CARD question lists [param card] by for the seat
+## [param chooser] (gap review 2026-11-10, r3-2): its name, but for a
+## face-down permanent — which only its controller may look at (CR 708.5).
+static func _candidate_name(card: CardInstance, chooser: int) -> String:
+	if not card.face_down or card.zone != Mtg.Zone.BATTLEFIELD:
+		return card.data.card_name
+	if card.controller_id == chooser:
+		return FACE_DOWN_OWN_LINE % card.data.card_name
+	return FACE_DOWN_LINE
 
 
 ## The line above the options: the question in the caller's own words, or
@@ -6628,7 +6705,11 @@ func _instant_window_reason() -> String:
 		Mtg.Step.FIRST_STRIKE_DAMAGE:
 			return "first-strike damage has been dealt"
 		Mtg.Step.END:
-			if game.active_player != _human_seat():
+			# THE SEAT THE SCREEN SERVES (gap review 2026-11-10, r3-4):
+			# [method _human_seat] is seat 0 at every table of two humans,
+			# so seat 1's own end step read as its opponent's. The Situation
+			# Bar asks [method _viewing_seat] there, and so does this.
+			if game.active_player != _viewing_seat():
 				return "their turn is ending"
 	return ""
 
@@ -7497,11 +7578,13 @@ func _on_x_confirmed() -> void:
 	var per_x: int = maxi(_pending_card.data.cost.x_count, 1)
 	if _pending_ability_index >= 0:
 		# THE ABILITY CAN GO WHILE THE WINDOW IS UP. An AI seat's dwell
-		# runs on under this dialog ([method _maybe_schedule_ai] waits only
-		# on the Pause window), so a Titania's Song resolving here empties
-		# `cur_activated_abilities` and the index the menu handed us is
-		# past its end — which read as an out-of-bounds error instead of a
-		# refusal. There is nothing left to activate, so the activation
+		# ran on under this dialog until the gap review of 2026-11-10
+		# ([method _cast_window_open] holds it now), and the duel still
+		# runs on under it at an SGManalink table, so a Titania's Song
+		# resolving here empties `cur_activated_abilities` and the index
+		# the menu handed us is past its end — which read as an
+		# out-of-bounds error instead of a refusal. There is nothing left
+		# to activate, so the activation
 		# goes the same silent way the vanished card above does; the engine
 		# answers the same question with "no such ability".
 		if _pending_ability_index >= _pending_card.cur_activated_abilities.size():
@@ -7545,14 +7628,17 @@ func _on_x_confirmed() -> void:
 ## cast the player is in the middle of paying for.
 func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 	_ability_menu.clear()
-	var actor := _pending_pid if mode == Mode.PAYING else game.priority_player
+	var actor := _pending_pid if mode == Mode.PAYING else _table_actor()
 	var borrowed := inst.controller_id != actor and game.may_tap_foreign_land(actor, inst)
 	if borrowed: mana_only = true
 	# THE OTHER SEAT'S PERMANENT (campaign w5-7) offers only what its card
 	# hands this seat — "any player may activate", "only your opponents
 	# may"; its mana is its controller's. And on a seat's own permanent an
-	# ability only its opponents may use is greyed, not offered.
-	var foreign := not borrowed and mode != Mode.PAYING and not _is_human(inst.controller_id)
+	# ability only its opponents may use is greyed, not offered. At a
+	# private hotseat the other seat is human too (gap review 2026-11-10,
+	# r3-1): its permanent is just as foreign to the seat at the screen.
+	var foreign := not borrowed and mode != Mode.PAYING and (not _is_human(inst.controller_id)
+		or (config.private_hotseat() and inst.controller_id != actor))
 	var who := _foreign_actor() if foreign else inst.controller_id
 	var id := 0
 	for ability in inst.cur_mana_abilities:
@@ -7621,6 +7707,12 @@ func _on_ability_chosen(id: int) -> void:
 	if ability_index >= inst.cur_activated_abilities.size():
 		return   # the board changed under the open menu
 	var ability: ActivatedAbility = inst.cur_activated_abilities[ability_index]
+	# NOR ONE THE MENU GREYED AS NOT THIS SEAT'S (gap review 2026-11-10,
+	# r3-1): the same question [method _open_ability_menu] asked of it.
+	var who := _foreign_actor() if bool(_ability_menu.get_meta("foreign", false)) \
+		else inst.controller_id
+	if not _may_activate(who, inst, ability):
+		return
 	# campaign 2026-10-12 f-duel (r1-3): chosen although greyed (a menu the
 	# board changed under, a pad, a script) — refused with the reason
 	# before anything is pending or paid, the way a spell is.
@@ -9072,6 +9164,7 @@ func _open_duel_log() -> void:
 		metas.append(shown[1])
 	window.fill(lines, metas)
 	_duel_log = window
+	_fit_duel_log()   # gap review 2026-11-10, r3-5: clear of the Situation Bar
 	if _log_button != null:
 		_log_button.set_pressed_no_signal(true)
 
@@ -9079,6 +9172,23 @@ func _open_duel_log() -> void:
 func _close_duel_log() -> void:
 	if duel_log_is_open():
 		_duel_log.dismiss()   # -> _on_duel_log_closed, once
+
+
+## How far above the Situation Bar's top edge the log stops (r3-5).
+const DUEL_LOG_BAR_GAP := 6.0
+
+
+## THE LOG STOPS ABOVE THE SITUATION BAR (gap review 2026-11-10, r3-5;
+## [method DuelLog.keep_above]): opened, at a new UI scale and on a new
+## screen size. The bar's top edge is where its anchor puts it — the
+## seam, less its own offset — and stays there at every scale, the bar
+## growing down from it ([method _pivot_situation_bar]); read from the
+## anchor, not the laid-out rect, so a resize is right in the same frame.
+func _fit_duel_log() -> void:
+	if not duel_log_is_open() or _situation_bar == null:
+		return
+	var bar_top := size.y * _situation_bar.anchor_top + _situation_bar.offset_top
+	_duel_log.keep_above(bar_top - DUEL_LOG_BAR_GAP)
 
 
 ## The window is going — by its own `×`, by `L`, by the strip button or
@@ -9149,6 +9259,8 @@ func _looking_seat() -> int:
 func _may_show_face(inst: CardInstance) -> bool:
 	if not inst.face_down:
 		return true
+	if inst.zone == Mtg.Zone.BATTLEFIELD:
+		return _controller_may_look(inst)
 	if inst.zone != Mtg.Zone.EXILE or inst.exile_visible_to < 0:
 		return false
 	# An OPEN table of two humans (no hotseat privacy): both people are at
@@ -9161,6 +9273,27 @@ func _may_show_face(inst: CardInstance) -> bool:
 	var seat := _looking_seat()
 	return seat >= 0 and inst.exile_visible_to == seat
 # --- end the bug campaign c12, h4-6 ---
+
+
+## THE CONTROLLER'S LOOK (gap review 2026-11-10; the owner's default):
+## *"You may look at face-down spells you control on the stack and
+## face-down permanents you control at any time"* (CR 708.5). So the
+## Showcase and the question's big card show a face-down permanent's face
+## to its controller — never to another seat, and at a private hotseat
+## only while that seat is the one looking ([method _looking_seat]). At an
+## OPEN table of two humans no seat is ever known to be the one looking —
+## both people share the screen, whoever decides — so nothing shows there,
+## as before. The table keeps the card back for everyone
+## ([method _make_card]). Not at an SGManalink table: the referee sends a
+## face-down permanent as a nameless face to both seats, so there is no
+## face here to show.
+func _controller_may_look(inst: CardInstance) -> bool:
+	var seat := inst.controller_id
+	if game == null or config == null or _network_opponent() or not _is_human(seat):
+		return false
+	if not config.private_hotseat() and _is_human(0) and _is_human(1):
+		return false
+	return _looking_seat() == seat
 
 
 ## Is [param viewer]'s look the local viewer's to read right now?
@@ -9833,7 +9966,8 @@ func _on_card_menu_chosen(id: int) -> void:
 				# door left open, and it named an Illusionary Mask creature
 				# to whoever right-clicked it — the exact information the
 				# card exists to hide (`docs/card-states.md` §5.1).
-				if _card_menu_inst.face_down:
+				# ...BUT TO ITS CONTROLLER (gap review 2026-11-10, CR 708.5).
+				if not _may_show_face(_card_menu_inst):
 					_card_preview.show_back()
 				else:
 					_card_preview.show_card(_card_menu_inst, "",
@@ -10412,6 +10546,7 @@ func _apply_ui_scale() -> void:
 			_scale_dialog(child)
 		elif child is DuelLog:
 			(child as DuelLog).set_ui_scale(s)
+			_fit_duel_log()   # r3-5
 		elif child is DuelPause:
 			(child as DuelPause).set_ui_scale(s)   # k3-3
 	# The question's dialog stands on its scrim (k3-3).
@@ -11421,6 +11556,10 @@ func _make_card(inst: CardInstance, chain_item: StackItem = null) -> MiniCard:
 	# blanks the card's characteristics for everybody — CR 708.2), so this
 	# takes the only reading that cannot leak. See [member
 	# MiniCard.face_down] for what changes the day the engine can answer.
+	# (The table only: the Showcase and a question show the card to its
+	# controller — CR 708.5, gap review 2026-11-10, [method
+	# _controller_may_look] — since one seat at a time is known to be
+	# looking there, and the table is drawn for both.)
 	w.face_down = inst.face_down
 	# The points of a division dialled onto this card so far — see
 	# [member MiniCard.pending_damage] and [method _pending_damage_for].
@@ -11447,7 +11586,7 @@ func _make_card(inst: CardInstance, chain_item: StackItem = null) -> MiniCard:
 	# Hovering ANY visible card docks its enlarged view in the sidebar
 	# (the original's examine behavior; the last card persists).
 	w.mouse_entered.connect(func() -> void:
-		if _card_preview != null and not w.face_down:
+		if _card_preview != null and _widget_shows_face(w, inst):
 			_card_preview.show_card(inst))
 	w.mouse_exited.connect(func() -> void:
 		if _card_preview == null:
@@ -11484,6 +11623,19 @@ func _make_card(inst: CardInstance, chain_item: StackItem = null) -> MiniCard:
 	# performs the card's action. See [method _on_card_look].
 	w.gui_input.connect(_on_card_look.bind(w, inst))
 	return w
+
+
+## May a hover or a right-press on [param w] put [param inst] in the
+## Showcase? A widget drawn face up, always; one drawn as a card back,
+## only when it is a back because the card is FACE DOWN IN THE GAME and
+## its controller is the one looking (gap review 2026-11-10, CR 708.5 —
+## [method _controller_may_look]). A hidden hand's card is a back on the
+## widget alone ([member MiniCard.face_down], set by the hand rebuild) and
+## stays one.
+func _widget_shows_face(w: MiniCard, inst: CardInstance) -> bool:
+	if not w.face_down:
+		return true
+	return inst.face_down and _may_show_face(inst)
 
 
 ## Put the top of the spell chain in the Showcase, if anything is on it
@@ -11562,7 +11714,7 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 	if mb.button_index != MOUSE_BUTTON_RIGHT:
 		return
 	if mb.pressed:
-		if not w.face_down and _card_preview != null:
+		if _widget_shows_face(w, inst) and _card_preview != null:
 			_card_preview.show_card(inst)
 		# The lift, held only while the button is. z_index, not a reparent:
 		# the card stays exactly where the row put it and simply stops
@@ -13130,6 +13282,7 @@ func _build_ui() -> void:
 	# ...and never past the screen's edge (0.50.65 bug campaign, k3-4).
 	msg_row.minimum_size_changed.connect(_fit_prompt)
 	resized.connect(_fit_prompt)
+	resized.connect(_fit_duel_log)   # gap review 2026-11-10, r3-5
 	# The chain's entries keep off the bar, wherever its sentence takes it
 	# (the bug campaign c12, h4-2).
 	_chain_box.keep_clear = msg_panel

@@ -491,6 +491,35 @@ func set_ui_scale(value: float) -> void:
 	scale = Vector2(value, value)
 	if is_inside_tree():
 		_clamp_on_screen()
+	_fit_height()
+
+
+## THE SITUATION BAR'S ROW STAYS CLEAR (gap review 2026-11-10, r3-5). The
+## bar is drawn over this window (z 90 over its 50), and at a UI scale of
+## 130% and more a log opened at the upper right of a 1280x800 table grew
+## down under it — the bar then covered the NEWEST lines, the ones the log
+## follows. [param limit_y] is the screen's y that the window's drawn
+## bottom may reach (the bar's top edge, less a gap): a window whose top is
+## above it is shortened to stop there, down to its least height, and one
+## the player put below it keeps its full height. Set by the screen when
+## the window opens, when the UI scale changes and when the screen is
+## resized; a drag moves the window and leaves its height as it is.
+func keep_above(limit_y: float) -> void:
+	_limit_y = limit_y
+	_fit_height()
+
+
+## The bottom [method keep_above] set; below zero, none.
+var _limit_y := -1.0
+
+
+func _fit_height() -> void:
+	var full := SIZE.y
+	if _limit_y < 0.0 or position.y >= _limit_y:
+		size.y = full
+		return
+	var room := (_limit_y - position.y) / maxf(scale.y, 0.01)
+	size.y = clampf(floorf(room), custom_minimum_size.y, full)
 
 
 ## Where the window opens: where the player last left it, or else the
@@ -506,3 +535,4 @@ func place(default_at: Vector2) -> void:
 		if saved is Vector2:
 			position = saved
 	_clamp_on_screen()
+	_fit_height()

@@ -105,7 +105,7 @@ constants are RATIOS of `MiniCard.SIZE` rather than pixel counts.
 | **Mana stripes** | `06_stripe_one`, `07_stripe_two`, `07b_stripe_lotus` | One diagonal slash per colour the card can tap for. Every colour owns a **fixed slot** along the bar — W U B R G C, left to right, 9px apart — so a card that makes several shows several, each in its own place. Black Lotus wears all five. | Whenever the card has mana abilities. Dimmed under the tap wash when the card is tapped. | `MiniCard._rebuild_stripes`, `stripe_texture` | **1997** — `Manastripes.pic` -> `mana_stripes` (54x126 = six 54x21 cells). The importer records that the original drew this strip on a card's **hand row**; drawing it on the table card too is **ours**, because one widget serves both. |
 | **The ID tag** | `08_id_tag` | The card's unique id for this duel, top-right of the art. *"...toggles the display of each card's unique ID code. This can be useful when you need to determine exactly which of several otherwise identical cards is the target of a specific spell or effect."* (`Duel.hlp`, **Territory**.) | Only while `Show ID tags` (Ctrl+T) is on — off by default. Shown even on a face-down card, which is the whole point of it. | `MiniCard.refresh`, `_id_tag` | **1997 feature** (`@MENU_TERRITORY` entry 18, `@MENU_SMALLCARD` entry 5, `UIStrings.txt:942`); the placement and the lettering are **ours**. |
 | **Hover** | `04_hovered` | The pointer is on this card (or on its row in a pile). The whole widget lifts by a 1.25 multiply. Names outside the hand turn yellow; hand names retain their playability color ([QoL], issue #3). | `hovered`. In a pile the row's holder pushes it down, because the card itself is mouse-transparent there. | `MiniCard._apply_modulate`, `CardPile._on_card_hover` | **Ours** (from the owner's 1997 screenshot). |
-| **The card back** | `05_face_down` | A card whose face is hidden. No name, no art, no tooltip, no stripes, no state overlays — *a card back tells the table nothing about itself.* | `MiniCard.face_down`, carried from `CardInstance.face_down` by `DuelScreen._make_card`, `CardPile._make_card` and `GraveyardView._card` (2026-09-04, §5.1). An Illusionary Mask creature and a card exiled face down wear it, **to every seat**. It is still clickable on the battlefield: a face-down permanent attacks, blocks and is targeted. | `MiniCard._apply_face_down_style` | **1997** — `Cardback.pic` -> `card_back`. |
+| **The card back** | `05_face_down` | A card whose face is hidden. No name, no art, no tooltip, no stripes, no state overlays — *a card back tells the table nothing about itself.* | `MiniCard.face_down`, carried from `CardInstance.face_down` by `DuelScreen._make_card`, `CardPile._make_card` and `GraveyardView._card` (2026-09-04, §5.1). An Illusionary Mask creature and a card exiled face down wear it, **to every seat** (on the table; its controller may look at it in the Showcase since 2026-11-10, §5.1). It is still clickable on the battlefield: a face-down permanent attacks, blocks and is targeted. | `MiniCard._apply_face_down_style` | **1997** — `Cardback.pic` -> `card_back`. |
 
 ### 3.2 Tapped
 
@@ -385,6 +385,16 @@ every masked creature face UP in those modes. So the table takes **the
 reading that cannot leak**: a card back to everyone. The `Show ID tags`
 overlay still draws on a face-down card, which is what tells two masked
 creatures apart until the engine can answer properly.
+
+**Since the gap review of 2026-11-10 its controller may look (CR 708.5).**
+The table still draws a face-down permanent as a back to every seat, but
+the Showcase, the card menu's Show full card and a question's big card
+show its face to its controller while that seat is the one looking
+(against the computer; at a private hotseat after Show hand) —
+`DuelScreen._controller_may_look`. Never to another seat, at an open
+two-human table, or at an SGManalink table (the referee sends that seat
+no identity). A question lists it as `Name (face down) #id` to its
+controller and `Face-down creature #id` to anyone else.
 
 **Two consequences worth knowing.** (a) `refresh()` used to `disabled =
 true` every face-down widget; harmless while nothing set the flag, but a
