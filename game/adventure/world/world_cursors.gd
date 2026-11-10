@@ -24,10 +24,14 @@ extends RefCounted
 ## `IDC_ARROW`), so these are drawn [QoL], in the Embark screen's gold on a
 ## dark outline: drawn large, edges smoothed, then made cursor-sized.
 ##
-## TWO SIZES (0.60.18; Options' Hi-res cursors, [method Settings.hi_res_cursors],
-## on by default): each pointer is worn at [constant SIZE] pixels, 1997's
-## size, or at twice that — the same drawing made pointer-sized once for
-## each.
+## ONE SIZE, AND THE PLAYER'S COLOUR (the owner, 2026-11-10: *"One normal
+## cursor for all"*, *"remove high res switch, use normal size"*): each
+## pointer is worn at [constant SIZE] pixels, and its gold — the arrow,
+## the hand, the four arrows, the walker, the hilt, the gold on a place —
+## is Options' `Cursor color` ([method Settings.cursor_color], Gold by
+## default); a dark colour (Black) is outlined light instead of in ink, so
+## it still shows on a dark map. The 0.60.18 switch that wore them twice as
+## large is gone.
 ##
 ## HOW THEY ARE PAINTED. Each pointer is a few shapes ([method shapes]),
 ## laid at four times the size and outlined together in ink: a pixel takes
@@ -75,19 +79,32 @@ const FOR_PLACE := {"refuge_port": Kind.TOWN, "refuge_castle": Kind.CASTLE, "vil
 static var _made := {}
 ## Whether the hand and the four arrows are worn for their shapes.
 static var _shapes_on := false
+## The colour the hand and the four arrows were worn in.
+static var _shapes_color := ""
 
 
-## The pointer picture for [param kind] at the size worn ([method
-## Settings.cursor_scale]), made once for each: its drawing made
+## The pointer picture for [param kind] in the colour chosen ([method
+## Settings.cursor_color]), made once for each: its drawing made
 ## pointer-sized, edges smoothed.
 static func image(kind: Kind) -> Image:
-	var scale := Settings.cursor_scale()
-	var key := Vector2i(kind, scale)
+	var key := "%d %s" % [kind, Settings.cursor_color_name()]
 	if not _made.has(key):
 		var picture := drawing(kind)
-		picture.resize(SIZE * scale, SIZE * scale, Image.INTERPOLATE_LANCZOS)
+		picture.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
 		_made[key] = picture
 	return _made[key]
+
+
+## The pointers' gold: the colour Options names ([method
+## Settings.cursor_color]).
+static func _gold() -> Color:
+	return Settings.cursor_color()
+
+
+## The outline: ink round a light colour, and a light line round a dark
+## one (Black), so the pointer shows on the dark parts of the map.
+static func _ink() -> Color:
+	return INK if _gold().get_luminance() > 0.3 else Color8(226, 220, 206)
 
 
 ## [param kind]'s pointer drawn large ([constant DRAWN] pixels across),
@@ -133,7 +150,7 @@ static func shapes(kind: Kind) -> Array:
 		Kind.ARROW:
 			return [["poly", PackedVector2Array([Vector2(10, 6), Vector2(10, 104),
 				Vector2(36, 80), Vector2(54, 120), Vector2(72, 112), Vector2(54, 74),
-				Vector2(88, 74)]), GOLD]]
+				Vector2(88, 74)]), _gold()]]
 	return []
 
 
@@ -144,12 +161,12 @@ static func outline(kind: Kind) -> float:
 
 
 ## Where the pointer points: the walker's feet, the arrow's tip, a place's
-## middle — at the size worn ([method image]).
+## middle.
 static func hotspot(kind: Kind) -> Vector2:
-	return _point(kind) * Settings.cursor_scale()
+	return _point(kind)
 
 
-## [method hotspot] at 1997's size.
+## [method hotspot]'s table.
 static func _point(kind: Kind) -> Vector2:
 	match kind:
 		Kind.WALK:
@@ -167,8 +184,10 @@ static func _point(kind: Kind) -> Vector2:
 ## what is clicked and what is dragged, while the world is on show.
 static func wear(kind: Kind) -> void:
 	Input.set_custom_mouse_cursor(image(kind), Input.CURSOR_ARROW, hotspot(kind))
-	if not _shapes_on:
+	# Worn again in a new colour when Options changed it meanwhile.
+	if not _shapes_on or _shapes_color != Settings.cursor_color_name():
 		_shapes_on = true
+		_shapes_color = Settings.cursor_color_name()
 		Input.set_custom_mouse_cursor(image(Kind.HAND), Input.CURSOR_POINTING_HAND, hotspot(Kind.HAND))
 		Input.set_custom_mouse_cursor(image(Kind.MOVE), Input.CURSOR_MOVE, hotspot(Kind.MOVE))
 
@@ -196,9 +215,9 @@ static func _walker() -> Array:
 		[Vector2(64, 46), Vector2(48, 64), 6.0],      # the back arm
 		[Vector2(64, 46), Vector2(82, 60), 6.0],      # the front arm
 	]
-	var parts: Array = [["circle", [Vector2(70, 24), 13.0], GOLD]]
+	var parts: Array = [["circle", [Vector2(70, 24), 13.0], _gold()]]
 	for limb in limbs:
-		parts.append(["capsule", limb, GOLD])
+		parts.append(["capsule", limb, _gold()])
 	return parts
 
 
@@ -225,7 +244,7 @@ static func _city() -> Array:
 		["rect", Rect2(10, 60, 14, 12), STONE], ["rect", Rect2(36, 60, 14, 12), STONE],
 		["rect", Rect2(78, 60, 14, 12), STONE], ["rect", Rect2(104, 60, 14, 12), STONE],
 		["rect", Rect2(48, 34, 32, 86), STONE],
-		["poly", PackedVector2Array([Vector2(42, 38), Vector2(64, 2), Vector2(86, 38)]), GOLD],
+		["poly", PackedVector2Array([Vector2(42, 38), Vector2(64, 2), Vector2(86, 38)]), _gold()],
 		["poly", PackedVector2Array([Vector2(52, 120), Vector2(52, 96), Vector2(64, 86),
 			Vector2(76, 96), Vector2(76, 120)]), DARK],
 	]
@@ -259,8 +278,8 @@ static func _dome() -> Array:
 		["rect", Rect2(22, 84, 84, 38), STONE_DARK],
 		["circle", [Vector2(64, 86), 40.0], DOME],
 		["rect", Rect2(22, 86, 84, 36), STONE_DARK],
-		["poly", PackedVector2Array([Vector2(58, 48), Vector2(64, 10), Vector2(70, 48)]), GOLD],
-		["circle", [Vector2(64, 70), 9.0], GOLD],
+		["poly", PackedVector2Array([Vector2(58, 48), Vector2(64, 10), Vector2(70, 48)]), _gold()],
+		["circle", [Vector2(64, 70), 9.0], _gold()],
 		["circle", [Vector2(64, 70), 4.0], DARK],
 	]
 
@@ -290,9 +309,9 @@ static func _sword() -> Array:
 		["poly", PackedVector2Array([tip, shoulder + across * 8.0, base + across * 8.0, base - across * 8.0,
 			shoulder - across * 8.0]), STEEL_DARK],
 		["poly", PackedVector2Array([tip, shoulder + across * 8.0, base + across * 8.0, base]), STEEL],
-		["capsule", [base + across * 22.0, base - across * 22.0, 6.0], GOLD],
+		["capsule", [base + across * 22.0, base - across * 22.0, 6.0], _gold()],
 		["capsule", [base + along * 4.0, base + along * 26.0, 4.8], WOOD],
-		["circle", [base + along * 32.0, 8.0], GOLD],
+		["circle", [base + along * 32.0, 8.0], _gold()],
 	]
 
 
@@ -300,12 +319,12 @@ static func _sword() -> Array:
 ## and three fingers folded at the right.
 static func _hand() -> Array:
 	return [
-		["rect", Rect2(36, 12, 18, 62), GOLD], ["circle", [Vector2(45, 12), 9.0], GOLD],
-		["rect", Rect2(34, 58, 68, 46), GOLD], ["circle", [Vector2(68, 102), 30.0], GOLD],
-		["circle", [Vector2(62, 60), 9.0], GOLD], ["circle", [Vector2(79, 62), 9.0], GOLD],
-		["circle", [Vector2(94, 66), 8.0], GOLD],
+		["rect", Rect2(36, 12, 18, 62), _gold()], ["circle", [Vector2(45, 12), 9.0], _gold()],
+		["rect", Rect2(34, 58, 68, 46), _gold()], ["circle", [Vector2(68, 102), 30.0], _gold()],
+		["circle", [Vector2(62, 60), 9.0], _gold()], ["circle", [Vector2(79, 62), 9.0], _gold()],
+		["circle", [Vector2(94, 66), 8.0], _gold()],
 		["poly", PackedVector2Array([Vector2(36, 72), Vector2(14, 58), Vector2(6, 68),
-			Vector2(34, 102)]), GOLD],
+			Vector2(34, 102)]), _gold()],
 		["rect", Rect2(70, 56, 2, 16), INK], ["rect", Rect2(87, 58, 2, 16), INK],
 	]
 
@@ -313,11 +332,11 @@ static func _hand() -> Array:
 ## The four arrows of a pane to drag.
 static func _move() -> Array:
 	return [
-		["rect", Rect2(58, 26, 12, 76), GOLD], ["rect", Rect2(26, 58, 76, 12), GOLD],
-		["poly", PackedVector2Array([Vector2(64, 4), Vector2(84, 30), Vector2(44, 30)]), GOLD],
-		["poly", PackedVector2Array([Vector2(64, 124), Vector2(84, 98), Vector2(44, 98)]), GOLD],
-		["poly", PackedVector2Array([Vector2(4, 64), Vector2(30, 44), Vector2(30, 84)]), GOLD],
-		["poly", PackedVector2Array([Vector2(124, 64), Vector2(98, 44), Vector2(98, 84)]), GOLD],
+		["rect", Rect2(58, 26, 12, 76), _gold()], ["rect", Rect2(26, 58, 76, 12), _gold()],
+		["poly", PackedVector2Array([Vector2(64, 4), Vector2(84, 30), Vector2(44, 30)]), _gold()],
+		["poly", PackedVector2Array([Vector2(64, 124), Vector2(84, 98), Vector2(44, 98)]), _gold()],
+		["poly", PackedVector2Array([Vector2(4, 64), Vector2(30, 44), Vector2(30, 84)]), _gold()],
+		["poly", PackedVector2Array([Vector2(124, 64), Vector2(98, 44), Vector2(98, 84)]), _gold()],
 	]
 
 
@@ -360,7 +379,7 @@ static func _portal(stone: bool) -> Array:
 static func _layers(parts: Array, ink_width: float) -> Image:
 	var image := Image.create_empty(DRAWN, DRAWN, false, Image.FORMAT_RGBA8)
 	for part in parts:
-		_paint_rows(image, part, ink_width, INK)
+		_paint_rows(image, part, ink_width, _ink())
 	for part in parts:
 		_paint_rows(image, part, 0.0, part[2])
 	return image

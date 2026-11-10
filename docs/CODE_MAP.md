@@ -905,10 +905,14 @@ the shelves, the pack share in every random draw);
   `WorldScreen.save_now` / `save_into_slot` / `autosave` / `quick_save`;
   `_show_quicksave_notice` shows the two-second confirmation above the map
   and town; `PaneStyle.QUICK_BLUE` marks it and the Quickslot rows.
-  HI-RES CURSORS (0.60.18): `Settings.hi_res_cursors` / `cursor_scale` /
-  `HI_RES_CURSORS` (Options' switch, on by default), worn by
-  `WorldCursors.image` / `hotspot` (32 or 64 px) and the duel's
-  `_set_target_cursor`; `tests/ui/test_options_display.gd`.
+  CURSOR COLOR (0.60.19, in place of 0.60.18's Hi-res cursors switch):
+  `Settings.CURSOR_COLOR` / `CURSOR_COLORS` / `cursor_color_name` /
+  `cursor_color` (Options' list, Gold by default), worn by `WorldCursors`
+  (`image` at its one 32-px size, `_gold`, `_ink` — a light outline round a
+  dark colour); the duel's `_set_target_cursor` wears 1997's 61-px frame in
+  its own colours; `tests/ui/test_options_display.gd`,
+  `test_cursor_color_2026_11_10.gd` (with the Booster Draft's gold building
+  time, `DraftSetup._emphasize_time`).
   GOING FOR A CREATURE (0.60.18): `WorldView.creature_under` (the creature
   drawn under a point), `WorldCursors.Kind.CREATURE` (the sword),
   `WorldScreen.engage` / `_follow_chase` / `_chase` (a click on it chases

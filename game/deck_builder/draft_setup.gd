@@ -200,6 +200,8 @@ func _ready() -> void:
 		var old: Variant = saved.get(spec[0], DraftPoolConfig.defaults()[spec[0]])
 		spin.value = float(old) if (old is int or old is float) and is_finite(float(old)) else float(DraftPoolConfig.defaults()[spec[0]])
 		spin.name = "Draft_" + String(spec[0])
+		if spec[0] == "minutes":
+			_emphasize_time(labels, spin)
 		fields[spec[0]] = spin
 		spin.value_changed.connect(func(_value: float) -> void: _refresh())
 		row.add_child(spin)
@@ -249,6 +251,24 @@ func _ready() -> void:
 ## 2026-10): it runs inside a box's `value_changed`, while that box's line
 ## edit still shows the OLD number, and committing it undid the step at
 ## once — an arrow click on Boosters left it at 3.
+## THE CLOCK STANDS OUT (the owner, 2026-11-10: the building time "can
+## stay as is just also color it gold so it is not missed on silver
+## background … or emphasize it somehow"): its words and its number in
+## gold, the number's well rimmed in gold.
+static func _emphasize_time(labels: VBoxContainer, spin: SpinBox) -> void:
+	for word in labels.get_children():
+		(word as Label).add_theme_color_override("font_color", UiChrome.CHOSEN)
+	var line := spin.get_line_edit()
+	line.add_theme_color_override("font_color", UiChrome.CHOSEN)
+	for state in ["normal", "focus"]:
+		var well := line.get_theme_stylebox(state)
+		if well is StyleBoxFlat:
+			var rimmed := (well as StyleBoxFlat).duplicate() as StyleBoxFlat
+			rimmed.border_color = UiChrome.CHOSEN
+			rimmed.set_border_width_all(2)
+			line.add_theme_stylebox_override(state, rimmed)
+
+
 func options(commit := true) -> Dictionary:
 	var out: Dictionary = {}
 	for key in fields:

@@ -280,21 +280,24 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(transitions)
 	content.add_child(transitions)
 
-	# `[QoL]` HI-RES CURSORS (0.60.18; the owner, 2026-11-05: *"Just options
-	# with highres cursors default!!"*) — the pointers the game draws
-	# itself, at twice their 1997 size or at it ([method
-	# Settings.hi_res_cursors]).
-	var cursors := CheckButton.new()
-	cursors.name = "HiResCursors"
-	cursors.text = "Hi-res cursors"
-	cursors.tooltip_text = "The game's own pointers — the adventure's " \
-		+ "walker, places and sword, and the duel's targeting crosshair — " \
-		+ "at twice the 1997 size, sharp. Off: the 1997 size."
-	cursors.button_pressed = Settings.hi_res_cursors()
-	cursors.toggled.connect(func(on: bool) -> void:
-		Settings.set_value(Settings.HI_RES_CURSORS, on))
-	UiChrome.shadowed_button(cursors)
-	content.add_child(cursors)
+	# `[QoL]` CURSOR COLOR (the owner, 2026-11-10, in place of 0.60.18's
+	# Hi-res cursors switch: *"One normal cursor for all. Only setting that
+	# would be useful is all ingame cursor colours"*) — the colour of the
+	# adventure's own pointers ([method Settings.cursor_color]).
+	var cursor_row := HBoxContainer.new()
+	cursor_row.add_theme_constant_override("separation", 8)
+	cursor_row.add_child(UiChrome.body_label("Cursor color:"))
+	var cursor_color := OptionButton.new()
+	cursor_color.name = "CursorColor"
+	for color_name in Settings.CURSOR_COLORS:
+		cursor_color.add_item(String(color_name))
+	cursor_color.select(Settings.CURSOR_COLORS.keys().find(Settings.cursor_color_name()))
+	cursor_color.tooltip_text = "The color of the adventure's own pointers: " \
+		+ "the arrow, the hand, the walker, the sword and the places."
+	cursor_color.item_selected.connect(func(index: int) -> void:
+		Settings.set_value(Settings.CURSOR_COLOR, cursor_color.get_item_text(index)))
+	cursor_row.add_child(cursor_color)
+	content.add_child(cursor_row)
 
 	# `[QoL]` TOUCH CONTROLS — the finger-as-mouse layer (`TouchControls`,
 	# `game/input/touch_controls.gd`) for the web export on a tablet or a

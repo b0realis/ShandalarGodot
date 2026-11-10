@@ -207,30 +207,32 @@ func test_the_autoload_that_leaves_last_enters_first_and_applies_it() -> void:
 		"and it is GameDisplay that puts it there")
 
 
-## HI-RES CURSORS (0.60.18; the owner, 2026-11-05: *"Just options with
-## highres cursors default!!"*): on by default and unwritten; the switch
-## stores the choice, and the pointers are worn at twice 1997's size or at
-## it, their points with them.
-func test_hi_res_cursors_are_on_by_default_and_the_switch_sets_their_size() -> void:
-	var had: Variant = Settings.get_value(Settings.HI_RES_CURSORS, null) \
-		if Settings.has_value(Settings.HI_RES_CURSORS) else null
-	Settings.clear_value(Settings.HI_RES_CURSORS)
+## CURSOR COLOR (the owner, 2026-11-10, in place of 0.60.18's Hi-res
+## cursors switch: "One normal cursor for all … all ingame cursor colours"):
+## Gold by default and unwritten; the list stores the name, and the
+## adventure's pointers wear it at their one, normal size.
+func test_cursor_color_is_gold_by_default_and_the_list_sets_it() -> void:
+	var had: Variant = Settings.get_value(Settings.CURSOR_COLOR, null) \
+		if Settings.has_value(Settings.CURSOR_COLOR) else null
+	Settings.clear_value(Settings.CURSOR_COLOR)
 	var fresh: Control = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(fresh)
 	await get_tree().process_frame
-	var switch := fresh.find_child("HiResCursors", true, false) as CheckButton
-	assert_not_null(switch)
-	if switch != null:
-		assert_true(switch.button_pressed, "on by default")
-		assert_false(Settings.has_value(Settings.HI_RES_CURSORS), "and not written")
-		assert_eq(WorldCursors.image(WorldCursors.Kind.WALK).get_size(), Vector2i(64, 64), "twice 1997's")
-		assert_eq(WorldCursors.hotspot(WorldCursors.Kind.WALK), Vector2(30, 60), "the walker's feet")
-		switch.button_pressed = false
-		assert_false(Settings.hi_res_cursors(), "stored")
-		assert_true(Settings.has_value(Settings.HI_RES_CURSORS))
-		assert_eq(WorldCursors.image(WorldCursors.Kind.WALK).get_size(), Vector2i(32, 32), "1997's size")
-		assert_eq(WorldCursors.hotspot(WorldCursors.Kind.WALK), Vector2(15, 30))
+	assert_null(fresh.find_child("HiResCursors", true, false), "the size switch is gone")
+	var colors := fresh.find_child("CursorColor", true, false) as OptionButton
+	assert_not_null(colors)
+	if colors != null:
+		assert_eq(colors.item_count, Settings.CURSOR_COLORS.size())
+		assert_eq(colors.get_item_text(colors.selected), "Gold", "Gold by default")
+		assert_false(Settings.has_value(Settings.CURSOR_COLOR), "and not written")
+		assert_eq(WorldCursors.image(WorldCursors.Kind.WALK).get_size(), Vector2i(32, 32), "one size")
+		assert_eq(WorldCursors.hotspot(WorldCursors.Kind.WALK), Vector2(15, 30), "the walker's feet")
+		var blue := Settings.CURSOR_COLORS.keys().find("Electric blue")
+		colors.select(blue)
+		colors.item_selected.emit(blue)
+		assert_eq(Settings.cursor_color_name(), "Electric blue", "stored by name")
+		assert_eq(WorldCursors.image(WorldCursors.Kind.WALK).get_size(), Vector2i(32, 32), "still one size")
 	if had == null:
-		Settings.clear_value(Settings.HI_RES_CURSORS)
+		Settings.clear_value(Settings.CURSOR_COLOR)
 	else:
-		Settings.set_value(Settings.HI_RES_CURSORS, had)
+		Settings.set_value(Settings.CURSOR_COLOR, had)

@@ -48,7 +48,7 @@ func test_every_pointer_is_the_same_to_the_pixel() -> void:
 		var reference := _painted_pixel_by_pixel(kind)
 		var drawn := WorldCursors.drawing(kind)
 		assert_eq(_first_difference(drawn, reference), "", "%s drawn as before" % name)
-		var size := WorldCursors.SIZE * Settings.cursor_scale()
+		var size := WorldCursors.SIZE
 		reference.resize(size, size, Image.INTERPOLATE_LANCZOS)
 		assert_eq(WorldCursors.image(kind).get_data(), reference.get_data(), "%s worn as before" % name)
 

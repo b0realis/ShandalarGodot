@@ -3835,36 +3835,27 @@ func _exit_tree() -> void:
 ## Whether the crosshair is the pointer right now — kept so the teardown
 ## above never touches a cursor some other screen owns.
 var _target_cursor_active := false
-## The size [member _target_cursor] was made at ([method Settings.cursor_scale]).
-var _target_cursor_scale := 0
 
 
 ## Swap in the original 1997 targeting cursor (first 61x61 frame of
 ## Target.pic) while picking targets; restore the system cursor after.
-## HI-RES CURSORS (0.60.18, Options, on by default — [method
-## Settings.hi_res_cursors]): twice the size, from the 2x skin's own pixels
-## when it is worn, else the 1997 frame's pixels doubled.
+## AT ITS ONE, NORMAL SIZE (the owner, 2026-11-10: "the target icon … is
+## too large (2x approx)", "remove high res switch, use normal size"): the
+## 1997 frame's own 61 pixels, worn by the 2x skin too — the system draws a
+## cursor in screen pixels, so a 2x picture would be twice the size
+## (GameSkin, THE 2x PICTURES). Its colours stay 1997's: Options' `Cursor
+## color` is the adventure's pointers' alone.
 func _set_target_cursor(active: bool) -> void:
 	_target_cursor_active = active
 	if not active:
 		Input.set_custom_mouse_cursor(null)
 		return
-	var scale := Settings.cursor_scale()
-	if _target_cursor == null or _target_cursor_scale != scale:
+	if _target_cursor == null:
 		var sheet := GameSkin.texture("target_cursor")
 		if sheet == null:
 			return
-		# The 1997 frame: the system draws a cursor in screen pixels, so a
-		# 2x one is twice the size (GameSkin, THE 2x PICTURES).
 		var cell := Rect2i(0, 0, sheet.get_height(), sheet.get_height())
-		var frame := GameSkin.original(sheet).get_region(cell)
-		if scale > 1:
-			if GameSkin.scale_of(sheet) == scale:
-				frame = sheet.get_image().get_region(GameSkin.image_rect(sheet, cell))
-			else:
-				frame.resize(cell.size.x * scale, cell.size.y * scale, Image.INTERPOLATE_NEAREST)
-		_target_cursor = ImageTexture.create_from_image(frame)
-		_target_cursor_scale = scale
+		_target_cursor = ImageTexture.create_from_image(GameSkin.original(sheet).get_region(cell))
 	Input.set_custom_mouse_cursor(_target_cursor, Input.CURSOR_ARROW,
 		_target_cursor.get_size() / 2.0)
 

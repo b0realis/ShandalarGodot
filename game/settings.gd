@@ -704,21 +704,40 @@ static func sfx_volume_db() -> float:
 static func transitions() -> bool:
 	return get_value("transitions", true)
 
-## [QoL] `Hi-res cursors` on the Options screen (0.60.18; the owner,
-## 2026-11-05: *"all cursors should adapt to original skin graphics or
-## highres"*, *"Just options with highres cursors default!!"*): every
-## pointer the game draws itself — the adventure's ([WorldCursors]) and the
-## duel's targeting crosshair — worn at twice its 1997 size. On by default;
-## off, 1997's size.
-const HI_RES_CURSORS := "hi_res_cursors"
+## [QoL] `Cursor color` on the Options screen (the owner, 2026-11-10:
+## *"One normal cursor for all. Only setting that would be useful is all
+## ingame cursor colours (now it is golden but lets also have some colors
+## available)"*): the colour the adventure's own pointers wear
+## ([WorldCursors]) — the arrow, the hand, the four arrows, the walker, the
+## sword's hilt and the gold on the places. The duel's targeting crosshair
+## keeps 1997's colours (*"Colourchange should ignore duel crosshair"*), and
+## menus and the duel keep the system arrow. Gold, the pointers' own, by
+## default. Every pointer is worn at its one, normal size: the `Hi-res
+## cursors` switch of 0.60.18 is gone (*"remove high res switch, use normal
+## size"*), and a settings file that still names it is simply not read.
+const CURSOR_COLOR := "cursor_color"
+## The colours offered, in the Options list's order (a name is what is
+## stored).
+const CURSOR_COLORS := {
+	"Gold": Color8(236, 196, 116),
+	"Electric blue": Color8(56, 170, 255),
+	"Green": Color8(96, 204, 92),
+	"Red": Color8(226, 66, 54),
+	"Orange": Color8(246, 150, 42),
+	"Purple": Color8(170, 98, 234),
+	"White": Color8(246, 246, 246),
+	"Black": Color8(30, 30, 30),
+}
 
-static func hi_res_cursors() -> bool:
-	return get_value(HI_RES_CURSORS, true)
+## The chosen cursor colour's name (one of [constant CURSOR_COLORS]; Gold
+## when nothing, or nothing known, is stored).
+static func cursor_color_name() -> String:
+	var stored: Variant = get_value(CURSOR_COLOR, "Gold")
+	return String(stored) if stored is String and CURSOR_COLORS.has(stored) else "Gold"
 
-## How many times its 1997 size a pointer is worn: 2 with [method
-## hi_res_cursors], else 1.
-static func cursor_scale() -> int:
-	return 2 if hi_res_cursors() else 1
+## The chosen cursor colour ([method cursor_color_name]).
+static func cursor_color() -> Color:
+	return CURSOR_COLORS[cursor_color_name()]
 
 ## Seconds between AI actions in vs-AI play (demo mode has its own knob
 ## on the battle-setup screen).

@@ -88,10 +88,10 @@ func test_the_portal_and_the_monument_have_their_own_pointers() -> void:
 	assert_eq(WorldCursors.FOR_PLACE["monument"], WorldCursors.Kind.MONUMENT)
 	var open := WorldCursors.image(WorldCursors.Kind.PORTAL)
 	var stone := WorldCursors.image(WorldCursors.Kind.MONUMENT)
-	assert_eq(open.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE) * Settings.cursor_scale())
+	assert_eq(open.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE))
 	assert_ne(open.get_data(), stone.get_data(), "open and petrified differ")
 	assert_ne(open.get_data(), WorldCursors.image(WorldCursors.Kind.CASTLE).get_data(), "not a castle's")
-	assert_eq(WorldCursors.hotspot(WorldCursors.Kind.PORTAL), Vector2(16, 16) * Settings.cursor_scale(),
+	assert_eq(WorldCursors.hotspot(WorldCursors.Kind.PORTAL), Vector2(16, 16),
 		"a place's middle")
 
 

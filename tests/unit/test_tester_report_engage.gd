@@ -83,7 +83,7 @@ func test_the_creature_gone_for_is_met_however_the_hero_stands() -> void:
 
 func test_the_sword_is_its_own_pointer() -> void:
 	var sword := WorldCursors.image(WorldCursors.Kind.CREATURE)
-	assert_eq(sword.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE) * Settings.cursor_scale())
+	assert_eq(sword.get_size(), Vector2i(WorldCursors.SIZE, WorldCursors.SIZE))
 	assert_gt(sword.get_pixelv(Vector2i(WorldCursors.hotspot(WorldCursors.Kind.CREATURE)) + Vector2i(1, 1)).a, 0.0,
 		"its point is where it points")
 	assert_ne(sword.get_data(), WorldCursors.image(WorldCursors.Kind.WALK).get_data())
