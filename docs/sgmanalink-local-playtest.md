@@ -102,7 +102,10 @@ a visit; use **Overview -> Disconnect** to end or cancel that visit before
 choosing another name.
 
 Auto-payment pauses for a mana source's colour/cost question and resumes after
-your answer. Automatic X respects **Don't auto tap** marks, coloured X costs,
+your answer. Clicking a Fellwar Stone, a Reflecting Pool or a dual land while a
+cast waits for its mana makes the colour the cost still owes (0.60.19); a card
+you marked **Don't auto tap this card** (right-click it on your table) asks
+every time, as in 1997. Automatic X respects **Don't auto tap** marks, coloured X costs,
 cost modifiers and target-count charges. You can still select X and tap manually.
 Repeated additional costs, such as Taste of Paradise, have an explicit payment
 count. Life-X, such as Fire Covenant, starts at zero and must be chosen manually;

@@ -83,7 +83,12 @@ func test_the_help_has_a_page_for_the_adventure_plugins() -> void:
 func test_the_casting_page_tells_the_mana_a_many_colored_source_gives() -> void:
 	var casting := _page("Casting spells and the Spell Chain")
 	assert_string_contains(casting, "clicking a dual land, Birds of Paradise or City of Brass taps it for the color the cost still needs")
-	assert_string_contains(casting, "(Fellwar Stone always asks)")
+	# The owner, 2026-11-11: the Stone and the Pool pick the color owed
+	# unless marked Don't auto tap.
+	assert_string_contains(casting, "Fellwar Stone and Reflecting Pool make the color the cost still needs too")
+	assert_string_contains(casting, "a Stone or Pool you marked Don't auto tap this card asks for its color")
+	assert_string_contains(casting, "The button with a struck-through tap arrow under the large card")
+	assert_false(casting.contains("colour"))
 
 
 func test_a_hero_taken_up_on_a_missing_plugins_island_is_told_the_way_home() -> void:

@@ -54,7 +54,7 @@ func test_three_generic_with_a_forest_uses_the_forest_and_the_sacrifice() -> voi
 	assert_eq(tap_plan.size(), 2)
 	assert_true(tap_plan.has([forest, 0]))
 	assert_true(tap_plan.has([vein, 1]))
-	var auto := _rows(ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(g, 0),
+	var auto := _rows(ManaPlanner.plan_from(ManaPlanner.sources(g, 0),
 		ManaCost.parse("{3}"), 0))
 	assert_eq(auto.size(), 2, "the player's auto-tap finds it too")
 	assert_true(auto.has([vein, 1]))

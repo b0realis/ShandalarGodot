@@ -1499,8 +1499,7 @@ static func source_key(s: Array) -> String:
 ## this plan is counting on, which [method run_plan] hands to
 ## [method MtgGame.tap_for_mana] so the tap makes what the plan priced.
 ## A colour the source does not offer is ignored there and the tap asks
-## instead: that is how [method auto_tap_sources]' generic-only row
-## ({C}) leaves the question to the player.
+## instead.
 ##
 ## A REVEAL source (Metalworker) adds a fourth entry, the mana the row
 ## counts — `[instance, ability_index, -1, amount]` (the colour entry -1,
@@ -1528,45 +1527,6 @@ static func source_reveals(s: Array) -> bool:
 		and s[0].cur_mana_abilities[int(s[1])].reveal_filter.is_valid()
 
 
-## The source list a PLAYER's auto-tap plans over — the duel's double-click
-## and SGManalink's autopay — which is [method sources] with THE OWNER'S
-## RULE FOR FELLWAR STONE (2026-09-17) applied: *"Fellwar Stone should tap
-## automatically only for a colourless mana request, or if we know the
-## opponent only has land of the colour we know. If Fellwar Stone can
-## produce many mana types, you should be asked upon tapping what kind of
-## mana you want it to produce."*
-##
-## So a choice source offering ONE colour keeps its row (the colour is
-## known, and the tap asks nothing — [method MtgGame.tap_for_mana]); one
-## offering SEVERAL is collapsed to a single {C} row, which the fast path
-## can spend only on generic mana and whose tap, told a colour the Stone
-## does not offer, puts the question to the player. The AI's plans keep
-## the full per-colour list: a heuristic seat answers its own question
-## with the colour its plan picked.
-static func auto_tap_sources(game: MtgGame, pid: int,
-		excluded: Dictionary = {}) -> Array:
-	var src := sources(game, pid, excluded)
-	var rows_per_source: Dictionary = {}
-	for s in src:
-		if source_chooses_color(s):
-			var key := source_key(s)
-			rows_per_source[key] = int(rows_per_source.get(key, 0)) + 1
-	var out: Array = []
-	var collapsed: Dictionary = {}
-	for s in src:
-		if not source_chooses_color(s) or int(rows_per_source.get(source_key(s), 0)) < 2:
-			out.append(s)
-			continue
-		var key := source_key(s)
-		if collapsed.has(key):
-			continue
-		collapsed[key] = true
-		var generic_only: Array = s.duplicate()
-		generic_only[2] = Mtg.ManaColor.C
-		out.append(generic_only)
-	return out
-
-
 ## THE COLOUR A PAYMENT CLICK MEANS (GitHub issue #7, a player's report of
 ## 2026-11-07). *"I am casting a Whirling Dervish (two green) and I tap
 ## Pendelhaven for a green mana, and also want to tap my Savannah for green
@@ -1592,26 +1552,32 @@ static func auto_tap_sources(game: MtgGame, pid: int,
 ##     {W}): only the ONE option that pays anything owed at all, and never
 ##     one that spends the source.
 ##
+## A COLOUR-CHOICE ability (Fellwar Stone, Reflecting Pool — one row per
+## colour on offer, [method sources]) is picked the same way, its rows
+## differing only in colour (the owner, 2026-11-11: *"Yes make them auto
+## select"*), UNLESS the player marked the card `Don't auto tap this card`
+## ([param asks_color]): that mark keeps the 1997 question, *"you should
+## be asked upon tapping what kind of mana you want it to produce"* (the
+## owner's rule of 2026-09-17). A dual land keeps its pick under the mark.
+##
 ## Anything else — two colours both owed and both leaving the bill payable,
-## a colour-choice ability (Fellwar Stone, whose question the owner's rule
-## of 2026-09-17 keeps: *"you should be asked upon tapping what kind of
-## mana you want it to produce"*), a converter, a restricted {X} — returns
-## `[]`, and the caller asks as it always did. There is no setting: the
-## `Don't auto tap this card` mark belongs to the double-click.
+## a converter, a restricted {X} — returns `[]`, and the caller asks as it
+## always did.
 ##
 ## [param options]: the clicked source's rows of [method sources], in menu
 ## order, and [param abilities] the ManaAbility behind each, in the same
 ## order. [param others]: every other row the payment may use, the
 ## floating mana's rows among them. [param cost], [param extra] and
 ## [param usage_keys]: the bill as [method plan_from] takes it. Returns the
-## option row to tap, or `[]`.
+## option row to tap, or `[]`; a colour-choice row's colour ([code]row[2][/code])
+## is the one to hand [method MtgGame.tap_for_mana] as `chosen`.
 static func payment_pick(options: Array, others: Array, cost: ManaCost, extra: int,
-		usage_keys: Array, abilities: Array) -> Array:
+		usage_keys: Array, abilities: Array, asks_color := false) -> Array:
 	if options.is_empty() or abilities.size() != options.size() \
 			or cost.restricted_x_amount > 0:
 		return []
 	for s in options:
-		if source_chooses_color(s) or source_reveals(s) \
+		if (asks_color and source_chooses_color(s)) or source_reveals(s) \
 				or (s.size() > 8 and (not (s[8] is Dictionary) or s[8].get("cost") != null)):
 			return []
 	var owed := _owed_after_floating(cost, extra, others, usage_keys)
@@ -1744,9 +1710,10 @@ static func cost_is_free(cost: ManaCost) -> bool:
 ## Execute [param tap_plan] — tap every real source in it, in order.
 ## Floating-mana entries (a null instance) are already in the pool. A
 ## colour-choice step ([method step_of]) tells the tap its colour. Stops
-## at a tap that HOLDS THE DUEL OPEN on a question (a player's Fellwar
-## Stone asked its colour): every tap after it would be refused while the
-## question stands, so the caller finishes the plan once it is answered
+## at a tap that HOLDS THE DUEL OPEN on a question (a source whose tap
+## still asks a player something): every tap after it would be refused
+## while the question stands, so the caller finishes the plan once it is
+## answered
 ## (DuelScreen._auto_tap_for_pending, SgDuelActions.autopay). Returns
 ## true when every step ran.
 ##

@@ -453,7 +453,8 @@ func act(pid: int, action: Dictionary) -> String:
 			var card := _card(pid, action.card)
 			if card == null: return "Card unavailable."
 			_paying(pid)
-			return game.tap_for_mana(pid, card, int(action.index))
+			# A colour the source does not offer is asked, as with none.
+			return game.tap_for_mana(pid, card, int(action.index), int(action.get("color", -1)))
 		"autopay", "autoprepare":
 			var excluded := {}
 			for handle in action.excluded:

@@ -913,12 +913,16 @@ does the asking, once, before anything is paid, and hands the answer to
 `produce_into_for(..., forced_color)`. It asks only when there is a choice
 (2026-09-17): one colour on offer is made outright, and a PLAN that priced
 a colour tells the tap which (`ManaPlanner.sources` lists the Stone once
-per colour, its step carries the one picked). The human's double-click
-plans over `ManaPlanner.auto_tap_sources` instead, where a Stone with
-several colours is generic-only — the owner's rule: the Stone auto-taps
-for a colourless request or a known colour, and with several colours on
-offer the player is asked; the gesture waits for the answer rather than
-submitting the cast under the question (ROADMAP 2026-09-17).
+per colour, its step carries the one picked). Since 2026-11-11 the human's
+double-click plans over the same list (the owner: *"Yes make them auto
+select"* — `ManaPlanner.auto_tap_sources`, 2026-09-17's generic-only view
+of a many-coloured Stone, is gone), and a payment click on the Stone or a
+Reflecting Pool makes the colour the bill still needs
+(`ManaPlanner.payment_pick`). A card the player marked `Don't auto tap this
+card` keeps the question: the double-click never taps it, and a click asks
+as in 1997. A gesture that does meet a question (a mana battery's count)
+still waits for the answer rather than submitting the cast under it
+(ROADMAP 2026-09-17).
 
 The auto-tap and the computer opponent spend a source that makes two
 kinds of mana at once (a Karoo's {C}{G}) on a cost that uses all of it, so

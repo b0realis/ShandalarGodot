@@ -562,7 +562,7 @@ func _ai_plan(text: String) -> Array:
 	return ManaPlanner.plan(g, 0, ManaCost.parse(text), 0)
 
 func _human_plan(text: String) -> Array:
-	return ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(g, 0), ManaCost.parse(text), 0)
+	return ManaPlanner.plan_from(ManaPlanner.sources(g, 0), ManaCost.parse(text), 0)
 
 
 func test_null_rod_stops_artifact_mana_and_the_planner_leaves_it_out() -> void:

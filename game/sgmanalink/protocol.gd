@@ -28,7 +28,10 @@ extends RefCounted
 ## and `prepare` ops; and each face says whether a zone permission covers
 ## it (`zone_playable`: a graveyard land under Yawgmoth's Will). Cycling
 ## and the Urza block's new questions ride the existing `ability` action
-## and question kinds.
+## and question kinds. A `mana` command may name the colour of a
+## colour-choice source (`color`, optional — Fellwar Stone, Reflecting
+## Pool, 2026-11-11); without it the referee asks as before. Added to 31
+## before any build that speaks 31 was released.
 const VERSION := 31
 const SUBPROTOCOL := "sgmanalink-local-v31"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
@@ -238,6 +241,7 @@ static func valid(message: Dictionary) -> bool:
 	# THE TABLE RULES (2026-10-02): optional on a host command, so a sender
 	# that says nothing opens the standard table.
 	if op == "host" and action.has("rules"): keys.append("rules")
+	if op == "mana" and action.has("color"): keys.append("color")
 	if not exact(action, keys):
 		return false
 	if op.begins_with("t_") and not token(action.event): return false
@@ -251,7 +255,9 @@ static func valid(message: Dictionary) -> bool:
 		"t_rule": return integer(action.pair, 1, SgTournament.MAX_PAIR_ID) and integer(action.winner, 1)
 		"t_choose": return integer(action.index, 0, 15)
 		"order": return action.play is bool
-		"mana": return short_text(action.card, 16) and integer(action.index, 0, 63)
+		"mana":
+			return short_text(action.card, 16) and integer(action.index, 0, 63) \
+				and (not action.has("color") or integer(action.color, 1, 63))
 		"autopay": return handles(action.excluded) and integer(action.count, 1, MAX_CARDS)
 		"autoprepare":
 			return short_text(action.card, 16) and action.kind in ["spell", "ability"] \

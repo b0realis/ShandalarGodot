@@ -156,6 +156,43 @@ the authors' guide is `expanded_adventure/GUIDE/index.html`.
   keys, the Embark button and ticking, the Help page and the stranded hero's
   notice on resume.
 
+## Don't auto tap marks and the Stone's color (2026-11-11)
+
+The owner's answers of 2026-11-11: Fellwar Stone and Reflecting Pool pick
+the color owed unless the card is marked `Don't auto tap this card`, and a
+button under the large card shows the marks. The record is the follow-up in
+`docs/issues-7-10-2026-11-10.md` (#7).
+
+- `game/duel/no_auto_tap_mark.gd`: `NoAutoTapMark` — the picture (the tap
+  arrow struck through in red, one texture for the small card, the button
+  and Help), the reserve strip's switch and its kept setting
+  (`duel_show_no_auto_tap`).
+- `game/duel/mini_card.gd`: `MiniCard.no_auto_tap` puts the mark at the
+  card's middle right, under the damage marker.
+- `game/duel/duel_screen.gd`: `_place_on_strip` lays the strip's five
+  buttons out (4px apart, `STRIP_LEFT_ROOM` left for a test duel's `Restart
+  test` and a LAN table's badge at `STRIP_LABEL_FONT`);
+  `_shows_no_auto_tap` and `_on_no_auto_tap_toggled`; a marked card stands
+  out of its pile while the marks are shown (`_rebuild_field`);
+  `_tap_for_payment` hands a color-choice source the color `payment_pick`
+  chose; `_pending_payment_sources` is one list for the window, the yellow
+  name and the double-click.
+- `engine/mana_planner.gd`: `payment_pick(..., asks_color)` picks a
+  color-choice row unless the card is marked; `auto_tap_sources` is gone.
+- `game/sgmanalink/`: a guest's `mana` command may name a color-choice
+  source's color (`color`, optional, protocol 31 — `SgProtocol.valid`,
+  `SgPracticeMatch`, `SgDuelProjection.tap_for_mana`); the guest's rows list
+  a Stone once per color its board offers (`SgDuelView._guest_mana_rows`);
+  the badge fits the strip's left end.
+- `game/help/help_pages.gd`: the mark on "Icons — the small card"
+  (`SRC_NO_AUTO_TAP`), the casting page and the small card's mini help.
+- `test_no_auto_tap_marks.gd` (tests/ui): the switch under the large card,
+  five buttons and a test duel's strip in one row untouched, the LAN
+  badge's words fitting, the kept setting, the mark at the middle right of
+  a marked card only while shown and never on the opponent's, a marked land
+  out of its pile, the menu's tick showing at once, the hint when nothing is
+  marked, the picture.
+
 ## Issues #7–#10 (2026-11-10)
 
 A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
@@ -172,12 +209,15 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   printed (issue #9).
 - `test_issue_7_payment_color.gd` (tests/ui): a payment click on a dual land,
   Birds, City of Brass, Black Lotus or a painland taps the color still owed;
-  the rest of the cost breaks a tie; real choices, extra leftover mana and
-  Fellwar Stone keep the menu or the question; the menu's choice still opens
-  the announcement bracket.
+  the rest of the cost breaks a tie; real choices and extra leftover mana
+  keep the menu or the question, and so does a Fellwar Stone marked Don't
+  auto tap (an unmarked one makes the color owed, 2026-11-11); the menu's
+  choice still opens the announcement bracket.
 - `test_issue_7_lan_guest.gd` (tests/ui): at a LAN guest the payment click
-  sends the owed color's option (Savannah for {W}, Birds for {G}); a click
-  outside a payment keeps the menu.
+  sends the owed color's option (Savannah for {W}, Birds for {G}), and a
+  Fellwar Stone's color in the `mana` command unless it is marked
+  (2026-11-11); a click outside a payment keeps the menu; the wire takes a
+  `mana` command with or without a color.
 - `test_issue_7_payment_pick.gd` (tests/unit): `ManaPlanner.payment_pick` —
   the owed symbol, floating mana first, a tie broken by the other sources,
   ambiguity, generic with the extra-mana guard, color-choice abilities,
@@ -6894,12 +6934,11 @@ shandalar/
 │   │                          colour on offer (2026-09-17); step_of() puts
 │   │                          the colour a plan priced on its step and
 │   │                          run_step() hands it to tap_for_mana, so the
-│   │                          tap asks nothing; auto_tap_sources() is the
-│   │                          human's double-click list, where a Stone with
-│   │                          several colours is one generic-only row (the
-│   │                          owner's rule: auto-tap only for a colourless
-│   │                          request or a known colour, else ask);
-│   │                          run_plan() reports a hold.
+│   │                          tap asks nothing; since 2026-11-11 the
+│   │                          human's double-click plans over the same
+│   │                          list (auto_tap_sources() and its generic-only
+│   │                          Stone are gone; a Stone marked Don't auto tap
+│   │                          is left out of it); run_plan() reports a hold.
 │   │                          Since 2026-10-07 (campaign): generic mana
 │   │                          is paid with the LEAST SURPLUS in tiers —
 │   │                          nothing spent, painful, stays tapped, tap
@@ -9840,13 +9879,15 @@ shandalar/
 │    (a release nothing, a key on the pad's road nothing) and a rebound
 │    key (Pause moved to P) being the one the duel listens for;
 │    tests/ui/test_fellwar_stone_auto_tap.gd — FELLWAR STONE UNDER THE
-│    DOUBLE-CLICK (2026-09-17): the Stone's colour question holding the
-│    cast instead of dropping it (answered -> cast; cancelled -> parked in
-│    Mode.PAYING and finished by hand), a generic cost using the Stone but
-│    still asking, a coloured pip never auto-tapped from a choice yet
-│    yellow and castable by hand, lands preferred over the Stone, one
-│    colour on offer tapping without a question, and the planner's
-│    per-colour rows against auto_tap_sources' collapsed list;
+│    DOUBLE-CLICK AND THE PAYMENT CLICK (2026-09-17; the owner's rule of
+│    2026-11-11): an unmarked Stone pays the gesture's {1}, a generic
+│    cost and a {R} pip without a question, and a payment click makes the
+│    pip owed (or the first colour for generic); a click outside a
+│    payment still asks; lands preferred over the Stone; a Stone marked
+│    Don't auto tap left out of the gesture and asking on a click
+│    (answered -> cast; cancelled -> the cast kept); one colour on offer
+│    asking nothing; Reflecting Pool the same; the per-colour rows and the
+│    colour on the plan's step;
 │    tests/ui/test_casting_flow.gd — the 1997 casting flow: click the
 │    spell then tap the lands (Mode.PAYING and its `Tap %s` prompt, the
 │    sources lighting, Done refusing to pass priority under a waiting

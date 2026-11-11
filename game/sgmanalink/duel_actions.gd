@@ -131,7 +131,7 @@ static func ability_refusal(g: MtgGame, pid: int, card: CardInstance, index: int
 	var due := g.ability_payment(pid, card, index, 0)
 	if ManaPlanner.cost_is_free(due.cost) and int(due.extra) <= 0: return ""
 	if SgPayment.can_pay_now(g, pid, due, "ability"): return ""
-	var plan := ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(g, pid, source_excluded(card, ability)),
+	var plan := ManaPlanner.plan_from(ManaPlanner.sources(g, pid, source_excluded(card, ability)),
 		due.cost, int(due.extra), due.usage)
 	if not plan.is_empty(): return ""
 	return "not enough mana (%s)" % ability.cost.text
@@ -572,10 +572,9 @@ func autopay(pid: int, excluded: Dictionary, count: int) -> String:
 	var sources_out := excluded
 	if draft.kind == "ability" and int(draft.index) < draft.card.cur_activated_abilities.size():
 		sources_out = source_excluded(draft.card, draft.card.cur_activated_abilities[draft.index], excluded)
-	# The auto-tap's own view of the sources: a Fellwar Stone with several
-	# colours on offer is generic-only here, so its tap asks the seat what
-	# kind of mana instead of picking a colour for them (2026-09-17).
-	var plan := ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(game, pid, sources_out),
+	# The full source list: a Fellwar Stone the seat did not mark `Don't
+	# auto tap this card` makes the colour the plan priced (2026-11-11).
+	var plan := ManaPlanner.plan_from(ManaPlanner.sources(game, pid, sources_out),
 		due.cost, int(due.extra), due.usage)
 	# THE ANNOUNCEMENT BRACKET (whole-game campaign 2026-10-07, w7-5): the
 	# seat is paying for its announced spell or ability (CR 601.2g), so

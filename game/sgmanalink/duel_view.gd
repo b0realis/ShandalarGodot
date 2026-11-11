@@ -733,34 +733,41 @@ func _click_permanent(inst: CardInstance) -> void:
 ## ([method _guest_payment_pick], GitHub issue #7, as at a local table),
 ## otherwise the referee's mana options as a menu (one taps at once).
 func _tap_for_payment(inst: CardInstance) -> void:
-	var index := _guest_payment_pick(inst)
-	if index >= 0:
-		_report(game.tap_for_mana(0, inst, index))
+	var pick := _guest_payment_pick(inst)
+	if not pick.is_empty():
+		_report(game.tap_for_mana(0, inst, int(pick[1]),
+			int(pick[2]) if ManaPlanner.source_chooses_color(pick) else -1))
 		return
 	_open_ability_menu(inst, true)
 
 
 ## THE LOCAL SCREEN'S CHOICE, MADE FROM WHAT THIS SEAT IS SHOWN (issue #7):
-## the index of [param inst]'s mana option to tap, or -1 for the menu. The
+## the row of [param inst]'s mana option to tap, or `[]` for the menu. The
 ## options are the referee's (the face's `mana` actions — only what the
 ## engine would tap now); the bill is the one the bar says
 ## ([method DuelScreen._paying_prompt]); [method ManaPlanner.payment_pick]
-## decides. A colour never crosses the wire, so a colour-choice source
-## (Fellwar Stone) is the referee's question as before; and an option is
-## read only when its label is its printed ability's own words: a land a
-## Magical Hack or a Blood Moon has rewritten taps from the menu. The
-## other sources are this seat's own faces read the same way — a source
-## that cannot be read is left out, which can only send a choice back to
-## the menu, never pick a colour the rest of the bill cannot follow.
-func _guest_payment_pick(inst: CardInstance) -> int:
+## decides. A colour-choice source (Fellwar Stone, Reflecting Pool) picks
+## its colour from the colours this seat's board offers it (2026-11-11) —
+## the `mana` command names it, and a colour the referee's board does not
+## offer is asked there as before — unless the seat marked it `Don't auto
+## tap this card`. An option is read only when its label is its printed
+## ability's own words: a land a Magical Hack or a Blood Moon has
+## rewritten taps from the menu. The other sources are this seat's own
+## faces read the same way — a source that cannot be read is left out,
+## which can only send a choice back to the menu, never pick a colour the
+## rest of the bill cannot follow.
+func _guest_payment_pick(inst: CardInstance) -> Array:
 	if _pending_card == null or inst.controller_id != 0:
-		return -1
+		return []
 	var payment := _pending_payment()
 	if payment.is_empty():
-		return -1
+		return []
 	var shown := _guest_mana_rows(inst)
-	if shown.size() < 2 or shown.size() != _guest_mana_options(inst).size():
-		return -1
+	var indices := {}
+	for pair in shown:
+		indices[int(pair[0][1])] = true
+	if shown.size() < 2 or indices.size() != _guest_mana_options(inst).size():
+		return []
 	var options: Array = []
 	var abilities: Array = []
 	for pair in shown:
@@ -774,9 +781,8 @@ func _guest_payment_pick(inst: CardInstance) -> int:
 	for card in game.players[0].battlefield + game.players[0].hand:
 		if card == inst: continue
 		for pair in _guest_mana_rows(card): others.append(pair[0])
-	var pick := ManaPlanner.payment_pick(options, others, payment["cost"],
-		int(payment["extra"]), payment["usage"], abilities)
-	return -1 if pick.is_empty() else int(pick[1])
+	return ManaPlanner.payment_pick(options, others, payment["cost"],
+		int(payment["extra"]), payment["usage"], abilities, _no_auto_tap.has(inst.id))
 
 
 ## The referee's mana options on [param card]'s face.
@@ -795,16 +801,28 @@ func _guest_mana_rows(card: CardInstance) -> Array:
 		var index := int(option.index)
 		if index >= card.cur_mana_abilities.size() or _pending_mana_conflicts(card, index): continue
 		var ability: ManaAbility = card.cur_mana_abilities[index]
+		var choice := ability.color_options.is_valid()
 		if str(ability) != String(option.label) or ability.produces.size() != 1 \
-				or ability.cost != null or ability.color_options.is_valid() \
-				or ability.dynamic_color.is_valid() or ability.dynamic_amount.is_valid() \
+				or ability.cost != null or ability.dynamic_color.is_valid() \
+				or (ability.dynamic_amount.is_valid() and not choice) \
 				or ability.reveal_filter.is_valid() or ability.any_number_counter_kind != "" \
 				or not ability.object_costs.is_empty() or ability.sacrifice_filter.is_valid() \
 				or ability.life_cost > 0 or ability.counter_cost_kind != "":
 			continue
 		var rank := ManaPlanner.RANK_SPENDS_SOURCE if ability.sacrifice_source or ability.exile_source else 0
-		out.append([[card, index, int(ability.produces[0][0]), int(ability.produces[0][1]),
-			rank, ability.restriction_key, ability.pain, 0], ability])
+		var amount := int(ability.produces[0][1])
+		var colors: Array = [int(ability.produces[0][0])]
+		if choice:
+			# One row per colour this seat's board offers it, as
+			# [method ManaPlanner.sources] lists it (2026-11-11).
+			colors = ability.color_options.call(game, card)
+			if ability.dynamic_amount.is_valid():
+				amount = ability.amount_for(game, card, 0)
+			if amount <= 0:
+				continue
+		for color in colors:
+			out.append([[card, index, int(color), amount,
+				rank, ability.restriction_key, ability.pain, 0], ability])
 	return out
 
 
@@ -1065,8 +1083,11 @@ func _build_network_controls() -> void:
 		rows.get_parent().resized.connect(_refit_network_combat, CONNECT_DEFERRED)
 	_network_badge = Button.new()
 	_network_badge.text = "Online"
-	_network_badge.custom_minimum_size = Vector2(105, 30)
+	# The strip's left end, beside five buttons (2026-11-11): its longest
+	# word, "Tournament", fits at the strip's label size.
+	_network_badge.custom_minimum_size = Vector2(DuelScreen.STRIP_LEFT_ROOM, 30)
 	OriginalDialog.dress_bar_button(_network_badge)
+	_network_badge.add_theme_font_size_override("font_size", DuelScreen.STRIP_LABEL_FONT)
 	_network_badge.position = Vector2(4, 4)
 	_network_badge.tooltip_text = "Unrated player-hosted duel. Your opponent's hidden hand and library are not sent to this client. The host runs the referee."
 	_network_badge.pressed.connect(func() -> void:

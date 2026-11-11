@@ -193,13 +193,15 @@ func test_online_protection_badges_map_both_seats_and_clear_live(seat = use_para
 	assert_null(badge._dialog)
 
 
+## The auto-payment meets a question and waits for it: a Green Mana
+## Battery's count (until 2026-11-11 a Fellwar Stone's colour, which an
+## unmarked Stone now makes as the plan priced it).
 func test_auto_payment_waits_for_color_and_resumes_once() -> void:
 	advance_to_step(Mtg.Step.MAIN1)
 	var bears := give_hand(0, "Grizzly Bears")
 	put_battlefield(0, "Forest")
-	put_battlefield(0, "Fellwar Stone")
-	put_battlefield(1, "Mountain")
-	put_battlefield(1, "Island")
+	var battery := put_battlefield(0, "Green Mana Battery")
+	battery.counters["charge"] = 1
 	var screen := _screen()
 	screen._on_card_clicked(_local(screen, bears))
 	screen._auto_cast(_local(screen, bears))
@@ -207,7 +209,7 @@ func test_auto_payment_waits_for_color_and_resumes_once() -> void:
 	assert_not_null(g.awaiting_choice)
 	assert_eq(commands.size(), 2, "only prepare and autopay before the question")
 	assert_eq(refusals, [])
-	screen._on_choice_option(0)
+	screen._on_choice_option(0)   # spend no counter: the Forest and one {G}
 	await _pump()
 	assert_null(g.awaiting_choice)
 	assert_eq(g.stack.size(), 1)

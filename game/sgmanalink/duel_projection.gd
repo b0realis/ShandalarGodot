@@ -350,8 +350,13 @@ func play_land(_pid: int, inst: CardInstance) -> String:
 ## A colour never crosses the wire: the host's own plan is what tells a
 ## Fellwar Stone its colour (SgDuelActions.autopay), and a hand tap from
 ## this seat is asked through the host's question like any other.
-func tap_for_mana(_pid: int, inst: CardInstance, ability_index := 0, _chosen := -1) -> String:
-	return send({"op": "mana", "card": handle(inst.id), "index": ability_index})
+## [param chosen]: a colour-choice source's colour, picked from the bill
+## (2026-11-11); without one the referee asks, as it always did.
+func tap_for_mana(_pid: int, inst: CardInstance, ability_index := 0, chosen := -1) -> String:
+	var action := {"op": "mana", "card": handle(inst.id), "index": ability_index}
+	if chosen > 0:
+		action["color"] = chosen
+	return send(action)
 
 
 ## CASTING FROM THE GRAVEYARD (Pack 8 — Bösium Strip) is the referee's

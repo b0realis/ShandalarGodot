@@ -85,9 +85,9 @@ func _ai_plan(text: String) -> Array:
 
 
 ## The human seat's auto-cast view (the double-click and the castable
-## highlight both plan over [method ManaPlanner.auto_tap_sources]).
+## highlight both plan over [method ManaPlanner.sources]).
 func _human_plan(text: String) -> Array:
-	return ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(g, 0), ManaCost.parse(text), 0)
+	return ManaPlanner.plan_from(ManaPlanner.sources(g, 0), ManaCost.parse(text), 0)
 
 
 func _pays(text: String) -> bool:

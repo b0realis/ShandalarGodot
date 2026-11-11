@@ -118,7 +118,9 @@ the game log is its own window (`DuelLog`, `L`), not a sidebar list; the
 stack is the Spell Chain, a column of small cards at the board's left,
 not a horizontal strip; and the bar's button is the 1997 Done (Begin at
 the combat offer), not Pass / Confirm. `game/duel/duel_screen.gd` is the
-current layout.)
+current layout. 2026-11-11: the strip under the large card holds five
+buttons — Arrange, Expand, Log, Duel Screen Options and the Don't auto
+tap marks' switch — 4 px apart, `DuelScreen._place_on_strip`.)
 
 ### 3b. Reference: how the ORIGINAL duel screen composes (owner's screenshots)
 
@@ -3577,6 +3579,29 @@ Shipped 2026-09-07 (the v0.18.0-dev playtest, all `[QoL]`):
   free. The owner: *"like an aura (mini card behind a creature) just
   last only one turn … "prevent 3" red letter in center of the card so
   player knows."*
+
+Shipped 2026-11-11 (0.60.19, the owner's answers):
+- **The Don't auto tap marks on the table** — the fifth button on the
+  strip under the large card (`NoAutoTapMark`, the setting
+  `duel_show_no_auto_tap`, off at first) shows every card of a seat at the
+  screen marked `Don't auto tap this card` (`@MENU_SMALLCARD` entry 4,
+  right-click a card on your table; choose it again to clear it) with a
+  clockwise tap arrow struck through in red at its middle right
+  (`MiniCard.no_auto_tap`, drawn once as a texture the button and Help
+  share). While the marks show, a marked land stands out of its pile, as
+  an enchanted card or one with counters does, so the card in front never
+  hides its mark. Shown with nothing marked, the prompt says how to mark
+  one. The owner: *"a circular right pointing arrow that is crossed with
+  one red line icon is shown on the middle right of every minicard on
+  your table that has dont auto-tap enabled."* To fit five buttons the
+  strip's gap went from 6 to 4 px; a test duel's Restart test and a LAN
+  table's connection badge use 12 px text.
+- **Fellwar Stone and Reflecting Pool make the colour owed** — on a
+  payment click and under the double-click auto-cast
+  (`ManaPlanner.payment_pick`, the full `ManaPlanner.sources` list; the
+  generic-only Stone row of 2026-09-17 is gone). A card marked Don't auto
+  tap keeps the 1997 question every time; a dual land keeps its issue #7
+  pick under the mark.
 
 Wishlist (ordered; each is a self-contained follow-up). (2026-10-27:
 several are built since — the phase stops (`game/duel/phase_stops.gd`, on

@@ -57,7 +57,7 @@ func _ai_plan(text: String) -> Array:
 	return ManaPlanner.plan(g, 0, ManaCost.parse(text), 0)
 
 func _human_plan(text: String) -> Array:
-	return ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(g, 0), ManaCost.parse(text), 0)
+	return ManaPlanner.plan_from(ManaPlanner.sources(g, 0), ManaCost.parse(text), 0)
 
 func _mana_index(inst: CardInstance, color: int) -> int:
 	for i in inst.cur_mana_abilities.size():
@@ -379,10 +379,10 @@ func test_reflecting_pool_follows_a_painland_and_the_planner_reads_it() -> void:
 	assert_true(barrens.tapped)
 	assert_false(_ai_plan("{B}").is_empty())
 	assert_true(_ai_plan("{U}").is_empty())
-	# The owner's rule for colour-choice sources (Fellwar Stone, 2026-09-17):
-	# several types on offer, the player's auto-tap spends it only on
-	# generic mana and the tap asks; one type on offer, it is known.
-	assert_true(_human_plan("{G}").is_empty())
+	# The owner's rule for colour-choice sources (2026-11-11, replacing
+	# 2026-09-17's generic-only rule): the player's auto-tap makes the
+	# colour its plan priced, so the Pool plans for either type on offer.
+	assert_false(_human_plan("{G}").is_empty())
 	assert_false(_human_plan("{1}").is_empty())
 	assert_true(ManaPlanner.plan_and_pay(g, 0, ManaCost.parse("{G}")))
 	assert_true(pool.tapped)

@@ -6,7 +6,7 @@ extends GameTest
 
 ## The pick for [param inst] against [param cost_text] from seat 0's
 ## sources, the clicked source's rows in menu order.
-func _pick(inst: CardInstance, cost_text: String) -> Array:
+func _pick(inst: CardInstance, cost_text: String, asks_color := false) -> Array:
 	var options: Array = []
 	var others: Array = []
 	for row in ManaPlanner.sources(g, 0):
@@ -18,7 +18,8 @@ func _pick(inst: CardInstance, cost_text: String) -> Array:
 	var abilities: Array = []
 	for row in options:
 		abilities.append(g.mana_ability_for(0, inst, int(row[1])))
-	return ManaPlanner.payment_pick(options, others, ManaCost.parse(cost_text), 0, [], abilities)
+	return ManaPlanner.payment_pick(options, others, ManaCost.parse(cost_text), 0, [], abilities,
+		asks_color)
 
 
 func _color(pick: Array) -> int:
@@ -65,11 +66,26 @@ func test_a_colour_that_pays_nothing_owed_is_never_picked() -> void:
 	assert_eq(_pick(tundra, "{G}"), [], "neither white nor blue pays a {G}")
 
 
-func test_a_colour_choice_ability_keeps_its_question() -> void:
+func test_a_colour_choice_ability_picks_the_colour_owed() -> void:
+	# The owner, 2026-11-11: "Yes make them auto select".
 	var stone := put_battlefield(0, "Fellwar Stone")
 	put_battlefield(1, "Plains")
 	put_battlefield(1, "Island")
-	assert_eq(_pick(stone, "{W}"), [], "the owner's rule of 2026-09-17: the Stone asks")
+	assert_eq(_color(_pick(stone, "{W}")), Mtg.ManaColor.W)
+	assert_eq(_color(_pick(stone, "{U}")), Mtg.ManaColor.U)
+	assert_eq(_color(_pick(stone, "{1}")), Mtg.ManaColor.W, "generic: the first colour on offer")
+	assert_eq(_pick(stone, "{G}"), [], "no colour on offer pays a {G}")
+
+
+func test_the_dont_auto_tap_mark_keeps_the_stones_question() -> void:
+	# ...unless the player marked it: the 1997 question, every time.
+	var stone := put_battlefield(0, "Fellwar Stone")
+	put_battlefield(1, "Plains")
+	put_battlefield(1, "Island")
+	assert_eq(_pick(stone, "{W}", true), [])
+	var savannah := put_battlefield(0, "Savannah")
+	assert_eq(_color(_pick(savannah, "{W}", true)), Mtg.ManaColor.W,
+		"a dual land keeps its pick under the mark (issue #7)")
 
 
 func test_options_that_differ_pick_only_the_one_that_pays() -> void:

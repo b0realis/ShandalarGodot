@@ -498,6 +498,12 @@ var _arranged: Array[bool] = [false, false]
 ## whose second half exists purely to widen the mark from lands to every
 ## mana source — so ours applies to every mana source too.
 var _no_auto_tap: Dictionary = {}
+## THE MARKS ON THE TABLE (the owner, 2026-11-11): the reserve strip's
+## switch ([NoAutoTapMark.button]) and whether it shows them — a marked
+## card of a seat at the screen then wears [NoAutoTapMark] at its middle
+## right ([member MiniCard.no_auto_tap]) and stands out of its pile.
+var _no_auto_tap_button: Button = null
+var _show_no_auto_tap := false
 
 # ------------------------------------- MOVING A CARD BY HAND (§2.3b) --
 #
@@ -2942,14 +2948,23 @@ func _tap_for_payment(inst: CardInstance) -> void:
 	if mana_count == 1:
 		if _pending_mana_conflicts(inst, 0):
 			return
+		# A COLOUR-CHOICE source (Fellwar Stone, Reflecting Pool) makes the
+		# colour the bill still needs, unless the player marked it `Don't
+		# auto tap this card` (the owner, 2026-11-11); -1 lets it ask.
+		var chosen := -1
+		if inst.cur_mana_abilities[0].color_options.is_valid():
+			var color_pick := _payment_pick(inst)
+			if not color_pick.is_empty():
+				chosen = int(color_pick[2])
 		_open_payment_bracket()
-		_report(game.tap_for_mana(_pending_pid, inst))
+		_report(game.tap_for_mana(_pending_pid, inst, 0, chosen))
 		_flush_refresh()   # r1-1: the waiting cast retried before the click returns
 		return
 	var pick := _payment_pick(inst)
 	if not pick.is_empty():
 		_open_payment_bracket()
-		_report(game.tap_for_mana(_pending_pid, inst, int(pick[1])))
+		_report(game.tap_for_mana(_pending_pid, inst, int(pick[1]),
+			int(pick[2]) if ManaPlanner.source_chooses_color(pick) else -1))
 		_flush_refresh()
 		return
 	_open_ability_menu(inst, true)
@@ -3288,7 +3303,7 @@ func _payment_pick(inst: CardInstance) -> Array:
 	for row in options:
 		abilities.append(game.mana_ability_for(_pending_pid, inst, int(row[1])))
 	return ManaPlanner.payment_pick(options, others, payment["cost"],
-		int(payment["extra"]), payment["usage"], abilities)
+		int(payment["extra"]), payment["usage"], abilities, _no_auto_tap.has(inst.id))
 
 
 ## A pending activation still needs its source when its costs are paid.
@@ -3305,15 +3320,14 @@ func _pending_mana_conflicts(inst: CardInstance, mana_index: int) -> bool:
 
 
 ## The sources the pending cast may be paid from, minus [param excluded]
-## and minus whatever the cast itself needs untapped. [param auto] is the
-## DOUBLE-CLICK's view ([method ManaPlanner.auto_tap_sources]): a Fellwar
-## Stone with several colours on offer is generic-only there, so the
-## gesture never picks its colour — the player is asked (2026-09-17).
-## Reachability and the yellow name keep the full model, so a {R} spell
-## facing that Stone is still castable by hand.
-func _pending_payment_sources(excluded: Dictionary = {}, auto := false) -> Array:
-	var sources := ManaPlanner.auto_tap_sources(game, _pending_pid, excluded) if auto \
-		else ManaPlanner.sources(game, _pending_pid, excluded)
+## and minus whatever the cast itself needs untapped. One list for the
+## window, the yellow name and the double-click: since 2026-11-11 a Fellwar
+## Stone the gesture may touch makes the colour its plan priced (the owner:
+## *"Yes make them auto select"*), so the gesture no longer sees it as
+## generic-only; a Stone marked `Don't auto tap this card` is out of the
+## gesture's list altogether and asks when tapped by hand.
+func _pending_payment_sources(excluded: Dictionary = {}) -> Array:
+	var sources := ManaPlanner.sources(game, _pending_pid, excluded)
 	return sources.filter(func(row: Array) -> bool:
 		return row[0] == null or not _pending_mana_conflicts(row[0], int(row[1])))
 
@@ -3492,10 +3506,10 @@ func _auto_x_budget() -> int:
 	var cost: ManaCost = _pending_card.data.cost
 	if _pending_ability_index >= 0:
 		cost = _pending_card.cur_activated_abilities[_pending_ability_index].cost
-	var budget := _x_budget(_no_auto_tap, true)
+	var budget := _x_budget(_no_auto_tap)
 	if _pending_ability_index < 0 and _pending_card.data.repeated_additional_cost != "":
 		# The spin counts PAYMENTS for this card, as the window's does.
-		return _repeat_budget(budget, _no_auto_tap, true)
+		return _repeat_budget(budget, _no_auto_tap)
 	# "ALL of the mana you have" buys no more X than there are targets for
 	# (H8-7, the window's own bound — [method _x_target_ceiling]).
 	var x_targets := _x_target_ceiling()
@@ -3526,11 +3540,8 @@ func _auto_x_budget() -> int:
 ## pre-filled X = 3 that the buyback row cannot pay — and Heartstone's
 ## floored reduction too: two lands pay a creature's {X} at X = 3, and the
 ## window stopped at 2 (Skeleton Scavengers could not regenerate).
-## [param auto] is the double-click's source list (see
-## [method _pending_payment_sources]) — the gesture can only count on
-## the mana it will tap for without asking.
-func _x_budget(excluded: Dictionary, auto := false) -> int:
-	var src := _pending_payment_sources(excluded, auto)
+func _x_budget(excluded: Dictionary) -> int:
+	var src := _pending_payment_sources(excluded)
 	var per_x := 1
 	if _pending_ability_index >= 0:
 		if _pending_ability_index >= _pending_card.cur_activated_abilities.size():
@@ -3561,8 +3572,8 @@ func _x_budget(excluded: Dictionary, auto := false) -> int:
 ## reason — before it was, the gesture handed the spin the raw generic
 ## budget, and seven Forests bought "3 additional payments" of a ten-mana
 ## bill the auto-tapper could not meet.
-func _repeat_budget(budget: int, excluded: Dictionary, auto := false) -> int:
-	var src := _pending_payment_sources(excluded, auto)
+func _repeat_budget(budget: int, excluded: Dictionary) -> int:
+	var src := _pending_payment_sources(excluded)
 	var repeat_count := 0
 	while repeat_count <= budget:
 		var payment := game.spell_payment(_pending_pid, _pending_card.data,
@@ -3583,11 +3594,11 @@ func _repeat_budget(budget: int, excluded: Dictionary, auto := false) -> int:
 ## hand — which is the same place a single click leaves them, so the
 ## gesture can never cost them the cast.
 ##
-## A SOURCE THAT ASKS holds the gesture, not the cast (2026-09-17). The
-## plan is built over [method ManaPlanner.auto_tap_sources], so the only
-## question it can run into is Fellwar Stone's *"What kind of mana?"* for
-## a generic pip with several colours on offer; the engine holds the duel
-## open for the answer, and the cast is neither submitted (the engine
+## A SOURCE THAT ASKS holds the gesture, not the cast (2026-09-17). Since
+## 2026-11-11 the plan tells a Fellwar Stone the colour it priced, so the
+## Stone's *"What kind of mana?"* no longer reaches the gesture; any tap
+## that still asks a question holds it the same way: the engine holds the
+## duel open for the answer, and the cast is neither submitted (the engine
 ## would refuse it — *"waiting for a choice"* — and the refusal dropped
 ## it, leaving the mana already made to burn) nor abandoned: it waits in
 ## [member _auto_resume] and [method _refresh] picks it up once the
@@ -3608,7 +3619,7 @@ func _auto_tap_for_pending() -> void:
 	else:
 		payment = game.ability_payment(_pending_pid, _pending_card,
 			_pending_ability_index, _pending_x)
-	var tap_plan := ManaPlanner.plan_from(_pending_payment_sources(_no_auto_tap, true),
+	var tap_plan := ManaPlanner.plan_from(_pending_payment_sources(_no_auto_tap),
 		payment["cost"], int(payment["extra"]), payment["usage"])
 	_open_payment_bracket()   # campaign w7-5: the taps' triggers wait for the cast
 	if not ManaPlanner.run_plan(game, _pending_pid, tap_plan,
@@ -9703,7 +9714,11 @@ func _build_test_strip() -> void:
 	row.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	row.offset_left = 4.0
 	row.offset_top = 4.0
-	var again := OriginalDialog.button(RESTART_TEST, Vector2(88, ArrangeButton.FACE.y))
+	# At the strip's LEFT LABEL SIZE ([constant STRIP_LABEL_FONT]): since
+	# 2026-11-11 five buttons share the row, and at 14px it ran under the
+	# fifth.
+	var again := OriginalDialog.button(RESTART_TEST, Vector2(0, ArrangeButton.FACE.y))
+	again.add_theme_font_size_override("font_size", STRIP_LABEL_FONT)
 	again.name = "RestartTest"
 	again.focus_mode = Control.FOCUS_NONE
 	again.tooltip_text = "%s: this duel is a test — it began from the position on the Test hands screen, and nothing about it is recorded. %s: the same test again from its start, the same position and the same shuffle." % [TEST_CAPTION, RESTART_TEST]
@@ -11233,7 +11248,11 @@ func _rebuild_field(pid: int) -> void:
 			# across the ART, which a covered card in a pile does not show,
 			# and when it comes back is in its tooltip, which a pile row
 			# does not carry. A slot of its own, for the same reason.
-			if _fan_steps(inst) > 0 or _carries_counters(inst) or inst.phased_out:
+			# ...AND ONE WEARING THE DON'T AUTO TAP MARK while the marks are
+			# shown (2026-11-11): the mark rides at the card's middle
+			# right, which a covered card does not show either.
+			if _fan_steps(inst) > 0 or _carries_counters(inst) or inst.phased_out \
+					or _shows_no_auto_tap(inst):
 				_flush_pile(container, waiting)
 				waiting = []
 				container.add_child(_make_widget(inst))
@@ -11531,6 +11550,39 @@ func _hand_order(pid: int) -> Array:
 ## The sidebar toggle: the whole table at once, which is the control the
 ## owner specified. No engine call — *"This has no effect on the duel, it
 ## just makes things neater"* (`Duel.hlp`, topic **Territory**).
+## The words the bar flashes when the marks are shown and no card on the
+## table wears one — the moment a player is most likely asking where the
+## mark comes from.
+const NO_AUTO_TAP_NONE := "No card on your table is marked. To mark one, right-click it and choose Don't auto tap this card."
+
+
+## The reserve strip's switch (the owner, 2026-11-11): show or hide the
+## `Don't auto tap this card` marks. [NoAutoTapMark.button] has already
+## kept the choice.
+func _on_no_auto_tap_toggled(pressed: bool) -> void:
+	_show_no_auto_tap = pressed
+	var any := false
+	for pid in 2:
+		for inst in _table_cards(pid):
+			if _shows_no_auto_tap(inst):
+				any = true
+	if pressed and not any:
+		_report(NO_AUTO_TAP_NONE)
+	else:
+		_report("Don't auto tap marks: %s" % ("on" if pressed else "off"))
+	_refresh()
+
+
+## Does [param inst] wear the `Don't auto tap this card` mark on the table
+## now? While the strip shows the marks: a marked permanent, face up, that
+## a seat at the screen controls — the seat that may mark it at all
+## ([method _open_card_menu]'s rule).
+func _shows_no_auto_tap(inst: CardInstance) -> bool:
+	return _show_no_auto_tap and _no_auto_tap.has(inst.id) \
+		and inst.zone == Mtg.Zone.BATTLEFIELD and not inst.face_down \
+		and _is_human(inst.controller_id)
+
+
 func _on_arrange_toggled(pressed: bool) -> void:
 	for pid in 2:
 		_arranged[pid] = pressed
@@ -11616,6 +11668,8 @@ func _make_card(inst: CardInstance, chain_item: StackItem = null) -> MiniCard:
 	# _controller_may_look] — since one seat at a time is known to be
 	# looking there, and the table is drawn for both.)
 	w.face_down = inst.face_down
+	# The `Don't auto tap this card` mark, while the strip shows the marks.
+	w.no_auto_tap = chain_item == null and _shows_no_auto_tap(inst)
 	# The points of a division dialled onto this card so far — see
 	# [member MiniCard.pending_damage] and [method _pending_damage_for].
 	w.pending_damage = _pending_damage_for(inst.id)
@@ -12854,6 +12908,25 @@ func _block_refusal(blocker: CardInstance, attacker: CardInstance, defender: int
 	return CombatState.block_illegality(game, blocker, attacker, defender, true, _viewing_seat())
 
 
+## THE RESERVE STRIP'S ROW (2026-11-11, when the fifth button came): the
+## [param k]-th button from the right, [constant STRIP_GAP] apart and
+## [constant STRIP_GAP] from the column's inner edge, riding 4px under the
+## large card. Five 38px faces leave the strip's left end
+## ([constant STRIP_LEFT_ROOM]) to a test duel's `Restart test` and a LAN
+## table's connection badge, both at [constant STRIP_LABEL_FONT].
+const STRIP_GAP := 4.0
+const STRIP_LEFT_ROOM := 82.0
+const STRIP_LABEL_FONT := 12
+
+func _place_on_strip(btn: Control, k: int) -> void:
+	btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	btn.offset_left = -(ArrangeButton.FACE.x + STRIP_GAP) * k
+	btn.offset_right = btn.offset_left + ArrangeButton.FACE.x
+	btn.offset_top = 4.0
+	btn.offset_bottom = 4.0 + ArrangeButton.FACE.y
+	_qol_reserve.add_child(btn)
+
+
 # ================================================================= UI build --
 # The whole layout in code — see design doc §3 for the diagram this follows
 # and §2 for why (skinnable later without scene surgery).
@@ -12909,12 +12982,7 @@ func _build_ui() -> void:
 	# under the card, so the rest of the strip stays free for the controls
 	# that follow it.
 	_arrange_button = ArrangeButton.create(_on_arrange_toggled)
-	_arrange_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_arrange_button.offset_left = -ArrangeButton.FACE.x - 4.0
-	_arrange_button.offset_top = 4.0
-	_arrange_button.offset_right = -4.0
-	_arrange_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
-	_qol_reserve.add_child(_arrange_button)
+	_place_on_strip(_arrange_button, 1)
 	# EXPAND, GIVEN THE SAME DOOR. The toggle is the original's own
 	# (`@MENU_FULLCARD` entry 1) but its only door was a right-click on the
 	# Showcase's text area — a gesture nobody finds, which is why the
@@ -12929,33 +12997,26 @@ func _build_ui() -> void:
 	# (caught by screenshotting it, 2026-09-05). The reserve is a thin
 	# strip between the card and the player's block; it has width to spare
 	# and no height, so the QoL controls run ACROSS it.
-	_expand_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_expand_button.offset_left = -ArrangeButton.FACE.x * 2.0 - 10.0
-	_expand_button.offset_top = 4.0
-	_expand_button.offset_right = -ArrangeButton.FACE.x - 10.0
-	_expand_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
-	_qol_reserve.add_child(_expand_button)
+	_place_on_strip(_expand_button, 2)
 	# THE LOG, the strip's third tenant, running across it like the two
 	# before it (§ THE DUEL LOG): the window's switch, beside Expand.
 	_log_button = DuelLog.button(_on_log_button_toggled)
-	_log_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_log_button.offset_left = -ArrangeButton.FACE.x * 3.0 - 16.0
-	_log_button.offset_top = 4.0
-	_log_button.offset_right = -ArrangeButton.FACE.x * 2.0 - 16.0
-	_log_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
-	_qol_reserve.add_child(_log_button)
+	_place_on_strip(_log_button, 3)
 	# THE DUEL SCREEN'S OWN OPTIONS, the fourth tenant (the polish pass,
 	# 2026-10-28). The owner: *"All new duel screen options should be only
 	# accessible via a dedicated button under a large card in the duel
 	# screen."* One button, one window ([DuelScreenOptions]), and no other
 	# door anywhere.
 	_screen_options_button = DuelScreenOptions.button(_open_screen_options)
-	_screen_options_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_screen_options_button.offset_left = -ArrangeButton.FACE.x * 4.0 - 22.0
-	_screen_options_button.offset_top = 4.0
-	_screen_options_button.offset_right = -ArrangeButton.FACE.x * 3.0 - 22.0
-	_screen_options_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
-	_qol_reserve.add_child(_screen_options_button)
+	_place_on_strip(_screen_options_button, 4)
+	# THE DON'T AUTO TAP MARKS, the fifth tenant (the owner, 2026-11-11):
+	# *"Under big cards lets have another button to show or hide don't
+	# autotap cards."* Pressed, every card a seat at the screen has marked
+	# `Don't auto tap this card` wears the struck-through tap arrow
+	# ([NoAutoTapMark]); the switch is kept between duels.
+	_show_no_auto_tap = NoAutoTapMark.shown()
+	_no_auto_tap_button = NoAutoTapMark.button(_on_no_auto_tap_toggled)
+	_place_on_strip(_no_auto_tap_button, 5)
 	# A TEST says so, and offers its restart, at the strip's left.
 	if config != null and config.is_test():
 		_build_test_strip()

@@ -355,6 +355,8 @@ func test_participating_organiser_keeps_host_alive_on_result_and_can_open_master
 		if node is Button and node.text == "Tournament": tournament_button = node
 	assert_not_null(tournament_button)
 	assert_false(tournament_button.get_global_rect().intersects(screen._log_button.get_global_rect()), "Tournament control cannot cover the duel log")
+	assert_false(tournament_button.get_global_rect().intersects(screen._no_auto_tap_button.get_global_rect()),
+		"nor the Don't auto tap switch beside it (2026-11-11)")
 	watch_signals(screen)
 	tournament_button.pressed.emit()
 	assert_signal_emitted(screen, "tournament_requested")

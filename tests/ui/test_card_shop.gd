@@ -54,14 +54,26 @@ func test_buy_cards_in_a_town() -> void:
 	var cards := CardShop.offers(player, slot)
 	assert_eq((shop.find_child("Offers", true, false) as Node).get_child_count(), cards.size(), "a place for each card")
 	assert_eq((shop.find_child("ShopGold", true, false) as Label).text, "GOLD: %d" % player.gold)
+	# NOT THE SELLER'S HINT (2026-11-11): the card [CardHints] hints at
+	# wears "✦" on its tag. Which cards the town draws hangs on the hero's
+	# dice, and the world's clock (real frame time, [method
+	# WorldScreen.advance]) may have spent some before the visit — after a
+	# slow first frame the hint fell on the first card that is not a land,
+	# so that card is passed over here, and the hint's own tag is read below.
+	var hinted := String(CardHints.current(player, slot).get("card", ""))
 	var pick := -1
 	for i in cards.size():
-		if not cards[i] in CardShop.LANDS:
+		if not cards[i] in CardShop.LANDS and cards[i] != hinted:
 			pick = i
 			break
+	assert_gte(pick, 0, "a card on offer that is neither a land nor the hint")
 	var price := CardShop.price_at(player, slot, cards[pick])
 	var tag := ((shop.find_child("Offers", true, false) as Node).get_child(pick).find_child("Price", true, false) as Label)
 	assert_eq(tag.text, "%d gold" % price, "its price tag")
+	if hinted != "" and hinted in cards:
+		var at := cards.find(hinted)
+		var star := ((shop.find_child("Offers", true, false) as Node).get_child(at).find_child("Price", true, false) as Label)
+		assert_eq(star.text, "✦ %d gold" % CardShop.price_at(player, slot, hinted), "the hint's tag wears the star")
 	shop.choose(pick)
 	assert_eq(shop.ask_text(), "Buy %s for %d gold?" % [cards[pick], price], "the 1997 question")
 	player.gold = price + 7

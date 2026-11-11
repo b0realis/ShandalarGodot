@@ -114,3 +114,57 @@ func test_a_guests_click_outside_a_payment_still_opens_the_menu() -> void:
 	screen._ability_menu.hide()
 	assert_eq(_mana_sent().size(), 0)
 	assert_false(savannah.tapped)
+
+
+## A guest's Fellwar Stone facing a Plains and an Island, Savannah Lions
+## waiting for its {W} (the owner, 2026-11-11: "Yes make them auto select").
+func _stone_payment(marked: bool) -> SgDuelView:
+	advance_to_step(Mtg.Step.MAIN1)
+	var lions := give_hand(0, "Savannah Lions")
+	var stone := put_battlefield(0, "Fellwar Stone")
+	put_battlefield(1, "Plains")
+	put_battlefield(1, "Island")
+	var screen := _screen()
+	await _pump()
+	if marked:
+		screen._no_auto_tap[_local(screen, stone).id] = true
+	screen._on_card_clicked(_local(screen, lions))
+	await _pump()
+	assert_eq(screen.mode, DuelScreen.Mode.PAYING)
+	screen._on_card_clicked(_local(screen, stone))
+	await _pump()
+	return screen
+
+
+func test_a_guests_fellwar_stone_names_the_colour_owed() -> void:
+	var screen: SgDuelView = await _stone_payment(false)
+	assert_eq(_mana_sent().size(), 1)
+	if _mana_sent().size() == 1:
+		assert_eq(int(_mana_sent()[0].get("color", -1)), Mtg.ManaColor.W,
+			"the mana command names white")
+	assert_null(g.awaiting_choice, "the referee asked nothing")
+	assert_eq(g.stack.size(), 1, "the referee cast the Lions")
+	assert_eq(g.players[0].mana_pool.total(), 0)
+	screen._ability_menu.hide()
+
+
+func test_a_guests_marked_fellwar_stone_is_asked_by_the_referee() -> void:
+	var screen: SgDuelView = await _stone_payment(true)
+	assert_eq(_mana_sent().size(), 1)
+	if _mana_sent().size() == 1:
+		assert_false(_mana_sent()[0].has("color"), "no colour: the mark keeps the question")
+	assert_not_null(g.awaiting_choice, "What kind of mana? is the guest's")
+	assert_eq(g.cancel_choice(), "")
+	screen._ability_menu.hide()
+
+
+func test_the_wire_takes_a_mana_command_with_or_without_a_colour() -> void:
+	var message := {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "r1",
+		"revision": 1, "action": {"op": "mana", "card": "c1", "index": 0}}
+	assert_true(SgProtocol.valid(message), "without a colour")
+	message.action["color"] = Mtg.ManaColor.W
+	assert_true(SgProtocol.valid(message), "with one")
+	message.action["color"] = 0
+	assert_false(SgProtocol.valid(message), "no colour is 0")
+	message.action["color"] = "white"
+	assert_false(SgProtocol.valid(message))

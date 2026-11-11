@@ -245,6 +245,17 @@ as individual results. Current CI configuration is in
 manual runs use eight Linux GUT shards, Python tests, boot and offline-Web
 checks. Local test-scope policy does not reduce CI coverage.
 
+To run CI's eight deals on one machine without eight processes at once,
+give each `SHARDS=8 SHARD=i` run its OWN fresh profile — its own `HOME`,
+`XDG_DATA_HOME` and absolute `SHANDALAR_TEST_DATA_HOME` (see Profile
+isolation) — and run a few at a time (`xargs -P 4`). A fresh profile has
+no JUnit timings, so every run deals the same round-robin CI deals; a
+profile with timings would deal differently and could miss or repeat a
+script. One `SHARD=i` run checks only its own deal: add up the `Shard i of
+8: N of M scripts.` lines yourself and match them to M. Fewer processes
+over the whole suite (`SHARDS=2`) need a `SUITE_TIMEOUT` well above the
+default.
+
 **Trust the runner's exit status, not GUT's printed summary.** GUT can skip
 an unparseable script and still print success. The wrapper also rejects
 parse/compile errors, missing test bases, `ERROR:`/`SCRIPT ERROR:` output,
@@ -395,6 +406,13 @@ otherwise Godot treats that CSV catalogue as a translation table.
 - The duel screen coalesces engine changes into a refresh once per frame.
   UI tests must wait a frame or call `_refresh()` before inspecting it;
   drive screen AI through `_ai_step()`, not `_ais[pid].act()`.
+- The adventure's world clock runs on real frame time
+  (`WorldScreen.advance`): every frame a world screen is in the tree may
+  spend the hero's dice. A test that waits a frame must not assume which
+  cards a town draws, which card the seller hints at or where a creature
+  stands; read them from the game (`CardShop.offers`, `CardHints.current`)
+  instead. A slow first frame changed a town's cards in one deal and not
+  in another (`test_card_shop.gd`, 2026-11-11).
 - Fresh clones/worktrees lack ignored assets. Import or link the intended
   local assets and rerun a bounded Godot import before art-dependent
   checks. Set `GODOT` explicitly when the sibling tools path does not exist.

@@ -91,6 +91,7 @@ const SRC_CURSOR := "cursor"   ## the targeting cursor.
 const SRC_COUNTER := "counter" ## `row` — one counter stone off the 1997 strip.
 const SRC_DRAWN := "drawn"     ## no texture: the game draws this in code.
 const SRC_SHADOW := "shadow"   ## the shadow badge, which [MiniCard] paints itself.
+const SRC_NO_AUTO_TAP := "no_auto_tap"   ## the Don't auto tap mark ([NoAutoTapMark]).
 
 
 ## The reference, in reading order: the newcomer's primer first, then the
@@ -364,7 +365,8 @@ static func _page_casting() -> Dictionary:
 			["Counterspell", "3 · Give both players a chance to respond", "Spells and abilities wait on the Spell Chain. When both players pass, the newest item resolves first. Then both players get another chance to act."]]),
 		_heading("Paying manually"),
 		_text("When the prompt asks for mana, click your mana sources to pay. A tap ability cannot use an already-tapped permanent. Cancel before submitting if you want to abandon the spell."),
-		_text("While a spell waits for its mana, clicking a dual land, Birds of Paradise or City of Brass taps it for the color the cost still needs; you are asked only when the choice is really yours (Fellwar Stone always asks)."),
+		_text("While a spell waits for its mana, clicking a dual land, Birds of Paradise or City of Brass taps it for the color the cost still needs; you are asked only when the choice is really yours. Fellwar Stone and Reflecting Pool make the color the cost still needs too, and so does automatic mana payment; a Stone or Pool you marked Don't auto tap this card asks for its color whenever you tap it."),
+		_text("Don't auto tap this card, on a card's right-click menu, keeps that mana source out of automatic mana payment until you choose it again; you can still tap the card yourself. The button with a struck-through tap arrow under the large card shows which of your cards wear the mark."),
 		_heading("Targets are checked again"),
 		_text("A spell or ability with no legal targets left does not resolve. A creature with protection can make a matching colored target illegal. Not all effects target: an effect that affects all creatures can still affect protected ones."),
 		_text("A spell that divides its damage, such as Fireball, splits it among all the targets chosen when it is cast. A target gone when it resolves loses its share; the others take no more."),
@@ -901,6 +903,15 @@ static func _page_icons_small_card() -> Dictionary:
 				+ "it right now, and WHITE when you could not. It also "
 				+ "turns yellow under the pointer.",
 				{"src": SRC_DRAWN}, "Aa"),
+			_icon("A tap arrow struck through in red — Don't auto tap",
+				"You marked this card Don't auto tap this card: right-click "
+				+ "a card on your table and choose it, and choose it again "
+				+ "to clear the mark. Automatic mana payment leaves the card "
+				+ "alone; you can still tap it yourself. The mark shows at "
+				+ "the card's right edge while the button with this picture, "
+				+ "under the large card, is pressed, and a marked land then "
+				+ "stands on its own instead of in its pile.",
+				{"src": SRC_NO_AUTO_TAP}, "no auto tap", 34.0),
 		]},
 	]}
 
@@ -1877,6 +1888,8 @@ static func icon_texture(spec: Dictionary) -> Texture2D:
 			return MiniCard.badge_from_slot(int(spec.get("slot", -1)))
 		SRC_SHADOW:
 			return MiniCard.shadow_badge()
+		SRC_NO_AUTO_TAP:
+			return NoAutoTapMark.texture()
 		SRC_STRIPE:
 			return MiniCard.stripe_texture(int(spec.get("color", 0)))
 		SRC_SPRITE:
@@ -2099,7 +2112,9 @@ static func mini(subject: String) -> Dictionary:
 				+ "button on a card to lift it above the cards around it. "
 				+ "Don't auto tap this card keeps a mana source out of "
 				+ "automatic mana payment until you clear the mark; you can "
-				+ "still tap it yourself. On a copy, such as a Clone, "
+				+ "still tap it yourself, and the button with a struck-through "
+				+ "tap arrow under the large card shows the marked cards. On a "
+				+ "copy, such as a Clone, "
 				+ "Original type shows the copy's own card. The marks a "
 				+ "small card can wear are explained in Help under Icons — "
 				+ "the small card.",

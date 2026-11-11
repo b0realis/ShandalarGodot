@@ -262,8 +262,8 @@ func test_a_click_outside_a_payment_still_opens_the_menu() -> void:
 	assert_eq(g.players[0].mana_pool.total(), 0)
 
 
-func test_a_fellwar_stone_still_asks_its_colour() -> void:
-	# The owner's rule of 2026-09-17 (tests/ui/test_fellwar_stone_auto_tap.gd).
+## Savannah Lions in hand, a Fellwar Stone facing a Plains and an Island.
+func _stone_stage() -> CardInstance:
 	var g: MtgGame = screen.game
 	var lions := _stage("Savannah Lions", ["Fellwar Stone"])
 	for land in ["Plains", "Island"]:
@@ -272,7 +272,26 @@ func test_a_fellwar_stone_still_asks_its_colour() -> void:
 		g._instances[c.id] = c
 		g._put_on_battlefield(c, 1)
 	screen._refresh()
+	return lions
+
+
+func test_a_fellwar_stone_makes_the_colour_owed() -> void:
+	# The owner, 2026-11-11: "Yes make them auto select"
+	# (tests/ui/test_fellwar_stone_auto_tap.gd).
+	var g: MtgGame = screen.game
+	var lions := _stone_stage()
 	screen._on_card_clicked(lions)
 	screen._on_card_clicked(_on_table("Fellwar Stone"))
-	assert_not_null(g.awaiting_choice, "What kind of mana? is still the player's")
+	assert_null(g.awaiting_choice, "the bill names white")
+	screen._refresh()
+	assert_eq(g.stack.size(), 1, "the Lions were cast")
+
+
+func test_a_marked_fellwar_stone_still_asks_its_colour() -> void:
+	var g: MtgGame = screen.game
+	var lions := _stone_stage()
+	screen._no_auto_tap[_on_table("Fellwar Stone").id] = true
+	screen._on_card_clicked(lions)
+	screen._on_card_clicked(_on_table("Fellwar Stone"))
+	assert_not_null(g.awaiting_choice, "Don't auto tap this card keeps What kind of mana?")
 	assert_eq(g.cancel_choice(), "")

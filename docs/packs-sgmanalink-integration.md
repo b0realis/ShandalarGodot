@@ -221,3 +221,12 @@ use existing question kinds and reach a guest seat (`tests/unit/test_sgmanalink_
 Okk's attack and block restrictions are not sent: the networked screen
 offers Okk, and the referee refuses a declaration that breaks them with its
 reason.
+
+**One optional key, inside protocol 31 (2026-11-10/11).** A guest's `mana`
+command may name the colour (`color`, a colour bit 1–63, `SgProtocol.valid`)
+for a colour-choice source — Fellwar Stone, Reflecting Pool — clicked while
+a cast waits for its mana, so it makes the colour the bill still owes as it
+does at a local table (issue #7's pick, then the owner's 2026-11-11 answer).
+A card the guest marked `Don't auto tap this card` sends no colour and is
+asked as before; so is a colour the referee's board does not offer. No
+released build spoke 31 (v0.60.16 speaks 30), so the version did not move.

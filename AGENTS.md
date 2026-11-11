@@ -493,8 +493,10 @@ among its candidates (one that is not there refuses the line, nothing
 tapped, the candidates named), then prepares and pays (X as large as
 the mana allows, as `autoprepare` always did) and submits; `targets:
 []` for a spell or ability with no slots. A question the payment holds
-the duel on (a Fellwar Stone's colour, which Forest to return) ends the
-line there: answer it, then `submit`.
+the duel on (a mana source's colour the plan leaves open, which Forest
+to return) ends the line there: answer it, then `submit`. A Fellwar
+Stone or Reflecting Pool no longer asks here: the plan names the colour
+the bill still owes (0.60.19).
 
 **A table** (`--join`, `--table`): the same pipe at a table the game
 hosts — a person, or another program. `--join` takes the LAN invitation

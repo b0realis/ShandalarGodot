@@ -184,6 +184,27 @@ var pending_damage := 0:
 		if _pending_count != null:
 			_refresh_pending()
 
+## THE `Don't auto tap this card` MARK ON THE CARD ITSELF (the owner,
+## 2026-11-11): the tap arrow struck through in red at the card's middle
+## right ([NoAutoTapMark]). The screen sets it on a rebuild ([method
+## DuelScreen._make_card]) for a marked card of a seat at the screen while
+## the reserve strip's switch shows the marks; built the first time it is
+## wanted, and drawn UNDER the damage marker, which it would otherwise
+## cover on a wounded Llanowar Elves.
+var no_auto_tap := false:
+	set(value):
+		if no_auto_tap == value:
+			return
+		no_auto_tap = value
+		if value and _no_auto_tap_mark == null:
+			_no_auto_tap_mark = NoAutoTapMark.for_card()
+			add_child(_no_auto_tap_mark)
+			if _damage_icon != null:
+				move_child(_no_auto_tap_mark, _damage_icon.get_index())
+		if _no_auto_tap_mark != null:
+			_no_auto_tap_mark.visible = value
+var _no_auto_tap_mark: TextureRect = null
+
 ## The colour of the damage still to come — cool where marked damage is
 ## warm ([member _damage_count]'s salmon), and not the yellow of the
 ## OPTIONAL ring the same card is wearing while it is a candidate.

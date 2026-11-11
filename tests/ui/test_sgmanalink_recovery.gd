@@ -62,14 +62,17 @@ func _install() -> void:
 	server._publish()
 	await _until(func() -> bool: return ui._built)
 
+## A MANA QUESTION THE AUTO-PAYMENT HAS TO WAIT FOR: Grizzly Bears paid
+## from a Green Mana Battery with one charge counter, whose tap asks how
+## many counters to spend. (Until 2026-11-11 this was a Fellwar Stone's
+## colour; an unmarked Stone now makes the colour the plan priced.)
 func _color_question() -> CardInstance:
 	await _connect()
 	advance_to_step(Mtg.Step.MAIN1)
 	var bears := give_hand(0, "Grizzly Bears")
 	put_battlefield(0, "Forest")
-	put_battlefield(0, "Fellwar Stone")
-	put_battlefield(1, "Mountain")
-	put_battlefield(1, "Island")
+	var battery := put_battlefield(0, "Green Mana Battery")
+	battery.counters["charge"] = 1
 	await _install()
 	var card := ui.game.find_instance(ui.projection.local_id(referee._handle(0, bears)))
 	ui._on_card_clicked(card)
@@ -86,7 +89,7 @@ func test_color_question_lost_ack_reconnect_and_single_cast() -> void:
 	for i in 20: await get_tree().process_frame
 	assert_eq(sent, [], "no submission loop while the question is open")
 	a.set_process(false)
-	ui._on_choice_option(0)
+	ui._on_choice_option(0)   # spend no counter: the Forest and one {G}
 	await _until(func() -> bool: return g.awaiting_choice == null)
 	a._socket.close(-1)
 	a.set_process(true)

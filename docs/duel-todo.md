@@ -1964,7 +1964,9 @@ shape" had not looked at:**
    nowhere to put the question.** Two shapes do it: a colour CHOICE
    (Fellwar Stone — with SEVERAL colours on offer; since 2026-09-17 one
    colour asks nothing and is planned like any land, and a plan's own
-   step names the colour it priced) and a mana battery with charge
+   step names the colour it priced; since 2026-11-11 a player's own
+   double-click and payment click name it too, unless the Stone is marked
+   `Don't auto tap this card`) and a mana battery with charge
    counters on it (CR 601.2b). Proven at the site rather than argued:
 
    ```

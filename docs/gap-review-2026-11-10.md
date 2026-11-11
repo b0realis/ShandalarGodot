@@ -175,5 +175,6 @@ duels, clean.
 
 - At an SGManalink table a seat cannot look at its own face-down
   permanent (the referee sends no identity; a protocol change).
-- A Clockwork creature wound up in its controller's upkeep stays tapped
-  and cannot block; the computer weighs only the attack.
+- ~~A Clockwork creature wound up in its controller's upkeep stays tapped
+  and cannot block; the computer weighs only the attack.~~ Ruled
+  2026-11-11, the owner: *"Yes, oldschool!"* — it stays as it is.

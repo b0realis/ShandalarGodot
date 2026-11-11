@@ -18973,6 +18973,41 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-11 — The Don't auto tap marks, and the Stone's colour (0.60.19)
+
+The owner's answers to the gap review of 2026-11-10
+([gap-review-2026-11-10.md](gap-review-2026-11-10.md)):
+
+- **Clockwork stays tapped** after its upkeep wind-up — *"Yes,
+  oldschool!"*; nothing changed.
+- **Fellwar Stone and Reflecting Pool make the colour owed** — *"Yes make
+  them auto select - only if you have dont auto-tap this card setting"*,
+  ruled as: an unmarked card picks the colour still owed on a payment
+  click and under the double-click (`ManaPlanner.payment_pick`, the full
+  `ManaPlanner.sources` list; `auto_tap_sources` is gone); a card marked
+  `Don't auto tap this card` asks every time, as in 1997. A LAN guest's
+  `mana` command may name the colour (optional `color`, inside protocol 31).
+- **The marks on the table** — *"Under big cards lets have another button
+  to show or hide don't autotap cards"*: the reserve strip's fifth button
+  (`NoAutoTapMark`, setting `duel_show_no_auto_tap`) puts a struck-through
+  tap arrow at the middle right of every marked card on your table; a
+  marked land stands out of its pile while they show. The mark itself is
+  still set by right-clicking a card on your table → `Don't auto tap this
+  card` (`@MENU_SMALLCARD` entry 4). Help: the casting page, the small
+  card's icons and its mini help.
+- **The plugin loader** — *"Ok as long as basic testing and design are
+  checked"*: checked (no plugin bytes reach `load()`; pictures and music
+  decoded from buffers; relative `/` paths only; limits read from the
+  central directory before inflating; a file's extension must match its
+  first bytes); the 15 plugin scripts and the tool's 34 Python tests green.
+- **A test repaired**: `test_card_shop.gd` priced the seller's hinted card
+  as a plain one; the town's cards hang on how far the world's clock (real
+  frame time) ran before the visit, and in one local deal the hint fell on
+  the card it read. It now passes over the hint and checks the hint's star.
+
+Gate: 1,405 scripts, **18,813/18,813 tests, 821,291 asserts**, CI's
+eight deals run locally four at a time; Python 1,022, exit 0.
+
 ## 2026-11-06 — Pack 10: the Urza block (0.60.19)
 
 The owner asked for *"a final (for now) card pack 10. Urza's pack. It will
