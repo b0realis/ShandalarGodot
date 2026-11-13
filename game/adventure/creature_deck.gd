@@ -88,6 +88,19 @@ const FALLBACK_ROW := 39
 ## names and counts only.
 static var _read := {}
 
+## A BUILD WITHOUT THE CREATURES' DECKS (issue #16, 2026-11-13; the owner:
+## "Add a warning, then close"). The deck files are not Godot resources, so
+## an export carries them only when its preset's include filter names them —
+## the presets of `export_presets.cfg.example` do (`*.deck, *.txt,
+## cards/data/*.json, packaging/card_packs/*/*.json`); a preset made afresh
+## in the editor does not, and every creature then dueled with no card and
+## lost at its first draw, said nowhere. The title screen says this once a
+## start ([method untold_missing]); a whole build says nothing.
+const MISSING_TITLE := "Missing game files"
+const MISSING_WORDS := "This copy of the game was built without the creatures' decks (decks/1997/originals), so every creature in the adventure would duel with no cards and lose at once. If you exported the game yourself, copy export_presets.cfg.example to export_presets.cfg in the project folder and export again: its presets include the files the game needs (*.deck, *.txt, cards/data/*.json and packaging/card_packs/*/*.json). Running the project from the Godot editor works as it is."
+## Whether the title screen has said [constant MISSING_WORDS] this run.
+static var _missing_told := false
+
 
 ## THE CREATURE'S MAINDECK: every card, expanded ("4 Swamp" four times), in
 ## the 1997 file's order — the deck as data, every name as the file spells
@@ -286,3 +299,21 @@ static func _deck_of(row: int) -> Dictionary:
 ## Forget the files read (a test).
 static func forget() -> void:
 	_read.clear()
+
+
+## [constant MISSING_WORDS] when this build lacks the creatures' decks — the
+## file every missing deck falls back to (the Centaur Shaman's, [constant
+## FALLBACK_ROW]; [param path] in its place for a test) is not there — else "".
+static func missing_words(path := "") -> String:
+	var probe := path if path != "" else CreatureBook.deck_path(FALLBACK_ROW)
+	return "" if probe != "" and FileAccess.file_exists(probe) else MISSING_WORDS
+
+
+## [method missing_words] the first time it has something to say in a run,
+## "" after — the title screen's notice, once a start.
+static func untold_missing(path := "") -> String:
+	if _missing_told:
+		return ""
+	var words := missing_words(path)
+	_missing_told = words != ""
+	return words

@@ -237,7 +237,10 @@ Reports on GitHub; the record is `docs/issues-12-16-2026-11-13.md`: #12
 answered (the 1997 dungeon treasure placement), #13 fixed by the Campaign
 Settings' Negative life is survivable (`CreatureMeeting.campaign_rules`,
 `DuelConfig.rule_forks`; see the Campaign Settings entry), #15 answered,
-#16 waiting on the reporter's files.
+#16 a self-made export without the creatures' `.deck` files: a build
+without them now says so once on the title (`CreatureDeck.missing_words` /
+`untold_missing` / `MISSING_WORDS`, `main.gd` `_tell_missing_files`;
+`tests/unit/test_issue16_missing_decks.gd`).
 
 ## The gap review (2026-11-10)
 

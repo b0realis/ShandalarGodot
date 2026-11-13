@@ -58,7 +58,11 @@ for scripted probes. The game runs without imported art or a skin.
 
 For exports, copy `export_presets.cfg.example` to the ignored
 `export_presets.cfg` and configure the official export templates and local
-paths. Follow [release builds](docs/release-builds.md) for the target matrix,
+paths. Its include filter (`*.deck, *.txt, cards/data/*.json,
+packaging/card_packs/*/*.json`) carries data files that are not Godot
+resources; a preset made afresh in the editor leaves them out, and without
+the creatures' decks every adventure duel is won at once (issue #16). Such a
+build says "Missing game files" on the title screen. Follow [release builds](docs/release-builds.md) for the target matrix,
 signing, packaging and verification. Export templates are not needed for
 normal editor play or headless engine tests.
 

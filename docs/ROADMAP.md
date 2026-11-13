@@ -18996,8 +18996,12 @@ the owner: *"Yes fix issues, ignore future suggestions"*.
 - **#16, every duel won at once** — the reporter's video shows a self-built
   0.60.19 `main` and an opponent with an empty library. Likely cause: an
   export without the presets of `export_presets.cfg.example`, whose include
-  filter carries the creatures' `.deck` files; the reporter was told how to
-  export, and asked for a new-adventure test, the logs and the Export zip.
+  filter carries the creatures' `.deck` files. The reporter confirmed it (run
+  from the editor, the decks are there); their log, MPN record and Export
+  zip, examined as data, are sound. The owner: *"Add a warning, then
+  close"* — a build without the decks now says so once on the title
+  ("Missing game files", `CreatureDeck.untold_missing`); a whole build says
+  nothing.
 
 ## 2026-11-11 — The Don't auto tap marks, and the Stone's colour (0.60.19)
 

@@ -398,6 +398,7 @@ func _ready() -> void:
 	# --- campaign 2026-10-12 f-settings: settings.cfg trouble, said once ---
 	_c2_fsettings_tell_problem()
 	# --- end campaign 2026-10-12 f-settings ---
+	_tell_missing_files()
 
 
 ## THE SCREENS THE BUTTONS OPEN COMPILE IN THE BACKGROUND TOO (2026-09-30):
@@ -1435,3 +1436,13 @@ func _c2_fsettings_tell_problem() -> void:
 	if problem != "":
 		UiChrome.explain_popup(self, "Options", problem, 560.0)
 # --- end campaign 2026-10-12 f-settings ---
+
+
+## A BUILD MISSING THE CREATURES' DECKS IS SAID HERE, ONCE A START (issue
+## #16, 2026-11-13): an export made without the project's presets left them
+## out, and every adventure duel was won at once with nothing said
+## ([method CreatureDeck.untold_missing]). A whole build says nothing.
+func _tell_missing_files() -> void:
+	var words := CreatureDeck.untold_missing()
+	if words != "":
+		UiChrome.explain_popup(self, CreatureDeck.MISSING_TITLE, words, 560.0)
