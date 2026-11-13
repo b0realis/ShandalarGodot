@@ -231,6 +231,18 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   1997's), a left or right click reads it, the meeting riddle's card larger
   beside the face.
 
+## A broken NEAREST resize in Pillow (2026-11-13)
+
+- `tools/upscale_skin.py`: `nearest` — every NEAREST resize (the edge
+  padding in `pad`, the pixel doubling in `doubled`) goes through it. The
+  security build python3-pil 12.1.1-2ubuntu1.5 (2026-11-13) raises
+  SystemError on any NEAREST resize; only then `nearest` scales with the
+  affine transform Pillow's resize runs inside, the same pixels. A working
+  Pillow never reaches it.
+- `tools/test_upscale_skin.py`: the stand-in engine and the doubled
+  oracles take the same way; +1 test (`nearest` against a plain pixel
+  pick in five modes, the fallback forced by a resize that raises).
+
 ## Issues #12–#16 (2026-11-13)
 
 Reports on GitHub; the record is `docs/issues-12-16-2026-11-13.md`: #12

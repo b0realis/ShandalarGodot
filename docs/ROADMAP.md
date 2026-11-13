@@ -18973,6 +18973,18 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-13 — The hi-res skin tool on a broken Pillow (0.60.19)
+
+The security update python3-pil 12.1.1-2ubuntu1.5 (Ubuntu, 2026-11-13)
+makes every NEAREST resize raise SystemError — 22 of
+`tools/test_upscale_skin.py`'s tests broke on the desk, and the tool
+itself with them. The owner: *"Fix pillow problem"*. The security build
+stays installed; `upscale_skin.nearest` falls back, only on that error, to
+the affine transform Pillow's resize runs inside — the same pixels, proven
+against a plain pixel pick in five modes on the broken build and on the
+official Pillow 12.1.1 wheel. CI's runner has no Pillow, so these tests
+run on a desk only.
+
 ## 2026-11-13 — Issues #12–#16, and Negative life in the Campaign Settings (0.60.19)
 
 New reports on GitHub ([issues-12-16-2026-11-13.md](issues-12-16-2026-11-13.md));

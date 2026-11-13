@@ -472,6 +472,20 @@ def pad_size(key: str, size: tuple[int, int]) -> int:
     return PAD
 
 
+def nearest(image: "Image.Image", size: tuple[int, int]) -> "Image.Image":
+    """[param image] resized to [param size] with Image.NEAREST. A Pillow
+    whose NEAREST resize is broken (python3-pil 12.1.1-2ubuntu1.5 of
+    2026-11-13 raises SystemError on every one) gets the same scaling as
+    the affine transform Pillow's resize runs inside; a working Pillow
+    never reaches it."""
+    try:
+        return image.resize(size, Image.NEAREST)
+    except SystemError:
+        w, h = image.size
+        return image.transform(size, Image.AFFINE, (w / size[0], 0, 0, 0, h / size[1], 0),
+                               Image.NEAREST)
+
+
 def pad(image: "Image.Image", n: int, wrap: bool) -> "Image.Image":
     """[param image] with [param n] pixels of border on every side: its
     own neighbouring copies when [param wrap] (n is at most its size),
@@ -484,10 +498,10 @@ def pad(image: "Image.Image", n: int, wrap: bool) -> "Image.Image":
                 out.paste(image, (n + tx * w, n + ty * h))
         return out
     out.paste(image, (n, n))
-    out.paste(image.crop((0, 0, w, 1)).resize((w, n), Image.NEAREST), (n, 0))
-    out.paste(image.crop((0, h - 1, w, h)).resize((w, n), Image.NEAREST), (n, n + h))
-    out.paste(image.crop((0, 0, 1, h)).resize((n, h), Image.NEAREST), (0, n))
-    out.paste(image.crop((w - 1, 0, w, h)).resize((n, h), Image.NEAREST), (n + w, n))
+    out.paste(nearest(image.crop((0, 0, w, 1)), (w, n)), (n, 0))
+    out.paste(nearest(image.crop((0, h - 1, w, h)), (w, n)), (n, n + h))
+    out.paste(nearest(image.crop((0, 0, 1, h)), (n, h)), (0, n))
+    out.paste(nearest(image.crop((w - 1, 0, w, h)), (n, h)), (n + w, n))
     for (sx, sy), (tx, ty) in (((0, 0), (0, 0)), ((w - 1, 0), (n + w, 0)),
                                ((0, h - 1), (0, n + h)), ((w - 1, h - 1), (n + w, n + h))):
         out.paste(image.getpixel((sx, sy)), (tx, ty, tx + n, ty + n))
@@ -799,7 +813,7 @@ def reusable(source: Path, skin: Path, keys: list[str]) -> tuple[dict[str, Path]
 def doubled(picture: "Image.Image") -> "Image.Image":
     """[param picture] at twice the size, each pixel a 2x2 block of itself
     (DOUBLED); its mode and transparency kept."""
-    big = picture.resize((picture.width * SCALE, picture.height * SCALE), Image.NEAREST)
+    big = nearest(picture, (picture.width * SCALE, picture.height * SCALE))
     if "transparency" in picture.info:
         big.info["transparency"] = picture.info["transparency"]
     return big

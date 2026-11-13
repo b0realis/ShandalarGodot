@@ -28,6 +28,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 from contextlib import redirect_stderr
 from pathlib import Path
 
@@ -58,7 +59,11 @@ for path in sorted(Path(arg("-i")).glob("*.png")):
     if kept.is_dir():
         kept.joinpath(path.name).write_bytes(path.read_bytes())
     picture = Image.open(path).convert("RGB")
-    big = picture.resize((picture.width * scale, picture.height * scale), Image.NEAREST)
+    size = (picture.width * scale, picture.height * scale)
+    try:
+        big = picture.resize(size, Image.NEAREST)
+    except SystemError:  # a broken NEAREST resize: upscale_skin.nearest's way
+        big = picture.transform(size, Image.AFFINE, (1 / scale, 0, 0, 0, 1 / scale, 0), Image.NEAREST)
     red, green, blue = big.split()
     red = red.point(lambda v: min(255, v + 40))
     Image.merge("RGB", (red, green, blue)).save(Path(arg("-o")) / path.name)
@@ -78,7 +83,7 @@ def doubled(picture, tint=0):
     """[param picture] with every pixel doubled — a 2x copy of it — its
     blue moved by [param tint], so a reused copy is known by its bytes
     while still being a copy of the same picture."""
-    big = picture.resize((picture.width * 2, picture.height * 2), Image.NEAREST)
+    big = up.nearest(picture, (picture.width * 2, picture.height * 2))
     if tint:
         bands = list(big.split())
         bands[2] = bands[2].point(lambda v: min(255, v + tint))
@@ -159,6 +164,39 @@ class PictureTest(unittest.TestCase):
         self.assertEqual(out.getpixel((4, 0)), picture.getpixel((1, 0)))
         self.assertEqual(out.getpixel((0, 4)), picture.getpixel((0, 1)))
         self.assertEqual(out.getpixel((4, 4)), picture.getpixel((1, 1)))
+
+    def test_nearest_picks_the_same_pixels_where_pillow_s_nearest_is_broken(self):
+        # 2026-11-13: python3-pil 12.1.1-2ubuntu1.5 raised SystemError on
+        # every NEAREST resize. up.nearest falls back to the affine transform
+        # only then; both ways, output pixel x is source pixel
+        # floor((x + 0.5) * w / W) — the sizes here keep that exact.
+        def picked(picture, size):
+            (w, h), (big_w, big_h) = picture.size, size
+            out = Image.new(picture.mode, size)
+            for y in range(big_h):
+                for x in range(big_w):
+                    out.putpixel((x, y), picture.getpixel((int((x + 0.5) * w / big_w),
+                                                           int((y + 0.5) * h / big_h))))
+            return out
+
+        sizes = (((3, 2), (6, 4)), ((5, 3), (20, 12)), ((4, 1), (4, 7)),
+                 ((1, 5), (3, 5)), ((8, 6), (4, 3)), ((4, 4), (4, 4)))
+        for mode in ("RGBA", "RGB", "LA", "L", "P"):
+            for small, size in sizes:
+                picture = Image.new(mode, small)
+                picture.frombytes(bytes((i * 37 + 11) % 256 for i in range(len(picture.tobytes()))))
+                if mode == "P":
+                    picture.putpalette(bytes(range(256)) * 3)
+                want = picked(picture, size).tobytes()
+                with mock.patch.object(Image.Image, "resize", side_effect=SystemError) as broken:
+                    fell_back = up.nearest(picture, size)
+                self.assertTrue(broken.called, "control: the broken resize was tried first")
+                for way, got in (("this Pillow", up.nearest(picture, size)), ("the fallback", fell_back)):
+                    where = "%s %s -> %s, %s" % (mode, small, size, way)
+                    self.assertEqual((got.mode, got.size), (mode, size), where)
+                    self.assertEqual(got.tobytes(), want, where)
+                    if mode == "P":
+                        self.assertEqual(got.getpalette(), picture.getpalette(), where)
 
     def test_only_the_repeated_textures_get_a_wide_wrap(self):
         self.assertEqual(up.pad_size("title_background", (640, 480)), up.PAD)
@@ -600,7 +638,7 @@ class RunTest(unittest.TestCase):
         with zipfile.ZipFile(out) as archive:
             big = self.picture(archive, "panel_stone.png")
             note = archive.comment.decode()
-        self.assertEqual(big.tobytes(), stone.resize((80, 60), Image.NEAREST).tobytes(),
+        self.assertEqual(big.tobytes(), up.nearest(stone, (80, 60)).tobytes(),
                          "every 1997 pixel a 2x2 block of itself: the dither kept")
         self.assertIn("doubled  1 pixel for pixel", note)
         # And an old copy of it is not reused: it was the model's.
@@ -628,7 +666,7 @@ class RunTest(unittest.TestCase):
             for name in names:
                 self.assertNotIn(name + ".png", self.seen(), "the model never sees " + name)
                 self.assertEqual(self.picture(archive, name + ".png").tobytes(),
-                                 grain.resize((64, 32), Image.NEAREST).tobytes(),
+                                 up.nearest(grain, (64, 32)).tobytes(),
                                  name + ": every 1997 pixel a 2x2 block of itself")
         self.assertNotIn("world_sland", up.DOUBLED, "the ground halves stay with their uprights")
 
