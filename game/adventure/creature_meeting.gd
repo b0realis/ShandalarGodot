@@ -836,6 +836,7 @@ static func duel_config(player: AdventurePlayer, meeting: Dictionary) -> DuelCon
 	config.rng_seed = randi() | 1
 	config.apply_deck_colors()
 	hero_playmat(config, player)
+	campaign_rules(config, player)
 	return config
 
 
@@ -853,6 +854,19 @@ static func hero_playmat(config: DuelConfig, player: AdventurePlayer) -> void:
 	var style: Variant = mat.get("type", "")
 	if color is String and style is String and (color != "" or style != ""):
 		config.territories[0] = {"color": color, "type": style}
+
+
+## THE CAMPAIGN'S DUEL RULES on [param config] ([member
+## DuelConfig.rule_forks]), in every adventure duel beside [method
+## hero_playmat]: "Negative life is survivable", ticked in the Campaign
+## Settings ([member AdventurePlayer.life_checked_at_phase_end]; the owner's
+## ruling of 2026-11-13 on issue #13), plays whatever Options → Rules says —
+## life at 0 or less loses only as the phase ends, so the gain of a duel's
+## last blow (Spirit Link's) still counts, and a dungeon carries it. Unticked,
+## the Options decide, as before.
+static func campaign_rules(config: DuelConfig, player: AdventurePlayer) -> void:
+	if player != null and player.life_checked_at_phase_end:
+		config.rule_forks["life_checked_at_phase_end"] = true
 
 
 ## THE DECK IN USE MADE UP TO THE DIFFICULTY'S LEAST ([constant DECK_LEAST],

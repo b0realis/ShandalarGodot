@@ -82,6 +82,12 @@ static func prepare(game: MtgGame, config: DuelConfig, duel_seed: int) -> void:
 	# defaults: "the player's own rules options apply to adventure duels").
 	for fork in RulesOptions.FORKS:
 		game.rules.set_fork(fork["key"], Settings.rule(fork["key"]))
+	# The duel's own forks over them ([member DuelConfig.rule_forks]): an
+	# adventure's Campaign Settings (2026-11-13). Unknown keys are ignored.
+	for key: Variant in config.rule_forks:
+		var on: Variant = config.rule_forks[key]
+		if key is String and on is bool:
+			game.rules.set_fork(key, on)
 	var preset: String = game.rules.preset()
 	if preset != "modern":
 		game.log_line("Rules: %s" % RulesOptions.preset_label(preset))

@@ -218,6 +218,18 @@ const START_SUMMARY := {
 	AdventurePlayer.START_LINKS: "Starting life: a life for each mana link, as in 1997.",
 	AdventurePlayer.START_BASE: "Starting life: 10, and the World Magics' bonuses, before your mana links.",
 }
+## NEGATIVE LIFE IS SURVIVABLE [ours, the owner's ruling of 2026-11-13 on
+## issue #13: "Add this setting to campaign settings and explain it!"]: a box
+## ([member AdventurePlayer.life_checked_at_phase_end]), the 1997 rule of
+## Options → Rules ([RulesOptions], `life_checked_at_phase_end`) for every
+## duel of the adventure.
+var _negative_life: CheckBox
+const NEGATIVE_LIFE_BOX := "Negative life is survivable"
+const NEGATIVE_LIFE_TIP := "The 1997 rule, in every duel of this adventure: a duelist at 0 life or less loses only when the phase ends, and lives on if they gain life back before then. Life gained from the blow that ends a duel, such as Spirit Link's, still counts, and in a dungeon it is carried to the next room. Unticked, the Rules in Options decide, as for every other duel; by default 0 life loses at once, before any such gain. Poison counters are not affected."
+const NEGATIVE_LIFE_ON_LINE := "Life at 0 or less loses only as the phase ends, as in 1997."
+const NEGATIVE_LIFE_OFF_LINE := "The Rules in Options decide when life at 0 loses."
+const NEGATIVE_LIFE_SUMMARY := "Negative life is survivable: life at 0 or less loses only as the phase ends, as in 1997."
+const NEGATIVE_LIFE_SHORT := "Negative life survivable"
 ## THE ASCETIC HERO [ours, the owner's ruling of 2026-10-29]: a box.
 var _ascetic: CheckBox
 const ASCETIC_BOX := "Eat half as much"
@@ -812,6 +824,7 @@ func _build_settings() -> Control:
 	body.add_child(_build_sieges())
 	body.add_child(_build_creatures())
 	body.add_child(_build_life_start())
+	body.add_child(_build_negative_life())
 	body.add_child(_build_ascetic())
 	_as_1997 = _settings_dialog.add_button(AS_1997_WORDS)
 	_as_1997.name = "As1997"
@@ -836,14 +849,17 @@ const SETTING_NAME_WIDTH := 132
 const SETTINGS_TITLE := "Campaign Settings"
 const SETTINGS_BUTTON := "Campaign Settings..."
 ## The rows, in the owner's order (2026-10-29), by the names of their
-## choices' nodes.
+## choices' nodes; Negative life is survivable (2026-11-13) under the
+## starting life, the other row of the duels' life.
 const SETTING_ROWS: Array[String] = ["LifeRule", "CardRule", "BanList", "AllTraderCards", "CardHold", "Sieges",
-	"Creatures", "LifeStart", "Ascetic"]
+	"Creatures", "LifeStart", "NegativeLife", "Ascetic"]
 const AS_1997_WORDS := "As 1997"
-const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reload allowed, copies not counted, the 1998 ban list, original traders, a 500-card bag, accelerating sieges, hunting creatures, links-only life and normal food use. The ban list is inactive under this card rule. Selected card packs are unchanged."
+const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reload allowed, copies not counted, the 1998 ban list, original traders, a 500-card bag, accelerating sieges, hunting creatures, links-only life, negative life survivable and normal food use. The ban list is inactive under this card rule. Selected card packs are unchanged."
 ## WHAT "AS 1997" CHOOSES, each row the 1997 game's own: the card rule as
 ## it shipped (no copy limit), the 500-card bag, the sieges' 1997 clock, the
-## creatures hunting, a life for each link, the food as eaten. Two rows had
+## creatures hunting, a life for each link, the food as eaten, and life
+## checked as each phase ends (the 1997 rules' own, manual p.174: Negative
+## life is survivable). Two rows had
 ## no choice in 1997 and take the nearest: the final battle "Reload
 ## allowed" (1997 ended the program after the battle and its Resume took up
 ## the last save, from before the fifth castle — a retry from further back,
@@ -852,7 +868,7 @@ const AS_1997_TIP := "Reset these campaign settings to their 1997 choices: reloa
 const AS_1997 := {"life_rule": AdventurePlayer.LIFE_RELOAD, "card_rule": AdventurePlayer.RULE_SHIPPED,
 	"ban_list": ClassicBans.OLD, "all_trader_cards": false, "card_hold": AdventurePlayer.HOLD_1997,
 	"sieges": AdventurePlayer.SIEGES_1997, "creatures": AdventurePlayer.CREATURES_HUNT,
-	"life_start": AdventurePlayer.START_LINKS, "ascetic": false}
+	"life_start": AdventurePlayer.START_LINKS, "life_checked_at_phase_end": true, "ascetic": false}
 
 
 ## A SETTING'S ROW: its name, dim, in a column of its own and beside it
@@ -1170,6 +1186,44 @@ func _show_all_trader_cards() -> void:
 	_show_settings_summary()
 
 
+## NEGATIVE LIFE IS SURVIVABLE [ours, the owner's ruling of 2026-11-13;
+## [member AdventureSetup.life_checked_at_phase_end], [member
+## AdventurePlayer.life_checked_at_phase_end], [method
+## CreatureMeeting.campaign_rules]]: a box, off by default (Options → Rules
+## decides), ticked by As 1997.
+func _build_negative_life() -> Control:
+	_negative_life = CheckBox.new()
+	_negative_life.text = NEGATIVE_LIFE_BOX
+	_negative_life.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+	_negative_life.add_theme_color_override("font_hover_color", OriginalDialog.CHOICE_LIT)
+	_negative_life.add_theme_color_override("font_pressed_color", OriginalDialog.CHOICE_LIT)
+	_negative_life.add_theme_color_override("font_hover_pressed_color", OriginalDialog.CHOICE_LIT)
+	_negative_life.add_theme_color_override("font_focus_color", OriginalDialog.CHOICE_LIT)
+	_negative_life.add_theme_font_size_override("font_size", 15)
+	_negative_life.add_theme_icon_override("checked", UiChrome.check_icon(true))
+	_negative_life.add_theme_icon_override("unchecked", UiChrome.check_icon(false))
+	_negative_life.tooltip_text = NEGATIVE_LIFE_TIP
+	var row := _setting_row("NegativeLife", "Life at 0", _negative_life)
+	_negative_life.toggled.connect(choose_negative_life)
+	_show_negative_life()
+	return row
+
+
+## Negative life is survivable chosen ([param on]) or not.
+func choose_negative_life(on: bool) -> void:
+	setup.life_checked_at_phase_end = on
+	_show_negative_life()
+
+
+func _show_negative_life() -> void:
+	if _negative_life == null:
+		return
+	_negative_life.set_pressed_no_signal(setup.life_checked_at_phase_end)
+	_explain_line("NegativeLife", NEGATIVE_LIFE_ON_LINE if setup.life_checked_at_phase_end
+		else NEGATIVE_LIFE_OFF_LINE, NEGATIVE_LIFE_TIP)
+	_show_settings_summary()
+
+
 ## THE ASCETIC HERO [ours, the owner's ruling of 2026-10-29: "The option
 ## halves food consumption by the hero"; [member AdventureSetup.ascetic],
 ## [member AdventurePlayer.ascetic]]: a box, off by default.
@@ -1215,6 +1269,7 @@ func _show_settings() -> void:
 	_show_sieges()
 	_show_creatures()
 	_show_life_start()
+	_show_negative_life()
 	_show_ascetic()
 
 
@@ -1228,6 +1283,7 @@ func as_1997() -> void:
 	setup.sieges = String(AS_1997["sieges"])
 	setup.creatures = String(AS_1997["creatures"])
 	setup.life_start = String(AS_1997["life_start"])
+	setup.life_checked_at_phase_end = bool(AS_1997["life_checked_at_phase_end"])
 	setup.ascetic = bool(AS_1997["ascetic"])
 	_show_settings()
 
@@ -1305,6 +1361,8 @@ static func settings_line(chosen: AdventureSetup) -> String:
 		parts.append(String(RULE_SHORT[chosen.card_rule]))
 	if chosen.life_start == AdventurePlayer.START_BASE:
 		parts.append(START_SHORT)
+	if chosen.life_checked_at_phase_end:
+		parts.append(NEGATIVE_LIFE_SHORT)
 	if chosen.ascetic:
 		parts.append(ASCETIC_SHORT)
 	if chosen.card_hold == AdventurePlayer.HOLD_UNLIMITED:
@@ -1327,6 +1385,7 @@ static func settings_words(chosen: AdventureSetup) -> String:
 		"Sieges: %s" % SIEGE_NAMES[AdventurePlayer.sieges_of(chosen.sieges)],
 		"Creatures: %s" % CREATURE_NAMES[AdventurePlayer.creatures_of(chosen.creatures)],
 		"Starting life: %s" % START_NAMES[AdventurePlayer.life_start_of(chosen.life_start)],
+		"Negative life is survivable: %s" % ("on" if chosen.life_checked_at_phase_end else "off"),
 		"Ascetic hero: %s" % ("on" if chosen.ascetic else "off")]
 	return "\n".join(lines)
 
@@ -2032,6 +2091,8 @@ func summary(record: Dictionary) -> String:
 	lines.append(String(SIEGE_SUMMARY[AdventurePlayer.sieges_of(record.get("sieges"))]))
 	lines.append(String(CREATURE_SUMMARY[AdventurePlayer.creatures_of(record.get("creatures"))]))
 	lines.append(String(START_SUMMARY[AdventurePlayer.life_start_of(record.get("life_start"))]))
+	if record.get("life_checked_at_phase_end") is bool and bool(record.get("life_checked_at_phase_end")):
+		lines.append(NEGATIVE_LIFE_SUMMARY)
 	if record.get("ascetic") is bool and bool(record.get("ascetic")):
 		lines.append(ASCETIC_SUMMARY)
 	if record.get("all_trader_cards") is bool and bool(record.get("all_trader_cards")):

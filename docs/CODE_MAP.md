@@ -231,6 +231,14 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   1997's), a left or right click reads it, the meeting riddle's card larger
   beside the face.
 
+## Issues #12–#16 (2026-11-13)
+
+Reports on GitHub; the record is `docs/issues-12-16-2026-11-13.md`: #12
+answered (the 1997 dungeon treasure placement), #13 fixed by the Campaign
+Settings' Negative life is survivable (`CreatureMeeting.campaign_rules`,
+`DuelConfig.rule_forks`; see the Campaign Settings entry), #15 answered,
+#16 waiting on the reporter's files.
+
 ## The gap review (2026-11-10)
 
 The areas the reviews of October left open — the per-set AI tactics, the
@@ -1688,6 +1696,19 @@ the shelves, the pack share in every random draw);
   `tests/unit/test_c19_A1_creatures.gd`,
   `tests/ui/test_c19_A1_campaign_settings.gd`,
   `tests/ui/test_c19_A1_life_shown.gd`.
+- Negative life is survivable as a campaign setting (0.60.19, the owner's
+  ruling of 2026-11-13 on issue #13): `EmbarkScreen._build_negative_life` /
+  `choose_negative_life` / `NEGATIVE_LIFE_*` (the `NegativeLife` row, "Life
+  at 0", under Starting life; `AS_1997` ticks it);
+  `AdventureSetup.life_checked_at_phase_end`,
+  `AdventurePlayer.life_checked_at_phase_end` (`hero.life_checked_at_phase_end`
+  in a version 8 save, absent = off); `CreatureMeeting.campaign_rules`,
+  called beside every `hero_playmat` (meetings, lairs, ruled towns, dungeon
+  rooms and castles, plugin lands, the final battle), puts the fork in
+  `DuelConfig.rule_forks`, which `DuelOpening.prepare` plays over the
+  Options' forks (a key that is not a fork, or a value that is not a
+  switch, is ignored). Tests: `tests/unit/test_issue13_negative_life.gd`,
+  `tests/ui/test_c19_A1_campaign_settings.gd`.
 - Adventure duel-start emphasis (2026-10-31 playtest):
   `DuelIntro.build` / `_highlight_go` / `GO_ACCENT` (wider Go, smaller
   Concede, larger Go lettering and a permanent gold rim; existing focus,

@@ -11,7 +11,8 @@ extends RefCounted
 ## difficulty; and the rules: the card rule (2026-10-24), the final
 ## battle's rule (2026-10-27, part C), the card hold, the Classic rule's
 ## ban list and the sieges' pace (2026-10-28); the creatures' way, the
-## duels' starting life and the ascetic hero (2026-10-29). The 1997 game asked three
+## duels' starting life and the ascetic hero (2026-10-29); Negative life is
+## survivable (2026-11-13, issue #13). The 1997 game asked three
 ## of these on three screens (difficulty, colour, face); version 1.3
 ## designed the face and typed the name; the rest is ours, and every row
 ## below says which it is.
@@ -240,6 +241,10 @@ var life_start := AdventurePlayer.START_LINKS
 ## THE ASCETIC HERO ([member AdventurePlayer.ascetic]) — the owner's
 ## setting of 2026-10-29; off, 1997's, for a new adventure.
 var ascetic := false
+## NEGATIVE LIFE IS SURVIVABLE in the adventure's duels ([member
+## AdventurePlayer.life_checked_at_phase_end]) — the owner's setting of
+## 2026-11-13; off for a new adventure (the Options decide), on under As 1997.
+var life_checked_at_phase_end := false
 var seed_text := ""
 ## The walking figure's colours, `{part: key}` ([HeroColors]); a part not
 ## named keeps its 1997 colour.
@@ -432,6 +437,7 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 		"creatures": AdventurePlayer.creatures_of(creatures),
 		"life_start": AdventurePlayer.life_start_of(life_start),
 		"ascetic": ascetic,
+		"life_checked_at_phase_end": life_checked_at_phase_end,
 		"playmat": {"color": playmat_color_shown(), "type": style},
 		"packs": chosen_packs,
 		"adventures": AdventurePlayer.ticked_rows(lands),
@@ -536,6 +542,7 @@ func remember() -> void:
 	Settings.set_value(KEY_PREFIX + "creatures", AdventurePlayer.creatures_of(creatures), false)
 	Settings.set_value(KEY_PREFIX + "life_start", AdventurePlayer.life_start_of(life_start), false)
 	Settings.set_value(KEY_PREFIX + "ascetic", ascetic, false)
+	Settings.set_value(KEY_PREFIX + "life_checked_at_phase_end", life_checked_at_phase_end, false)
 	Settings.set_value(KEY_PREFIX + "difficulty", difficulty)
 
 
@@ -587,6 +594,8 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 	setup.life_start = AdventurePlayer.life_start_of(Settings.get_value(KEY_PREFIX + "life_start", null))
 	var ascetic_kept: Variant = Settings.get_value(KEY_PREFIX + "ascetic", false)
 	setup.ascetic = ascetic_kept is bool and bool(ascetic_kept)
+	var life_kept: Variant = Settings.get_value(KEY_PREFIX + "life_checked_at_phase_end", false)
+	setup.life_checked_at_phase_end = life_kept is bool and bool(life_kept)
 	return setup
 
 
@@ -594,7 +603,8 @@ static func restore(installed: Array[String]) -> AdventureSetup:
 ## The old expanded_adventure preference remains only so forget() cleans it.
 const REMEMBERED: Array[String] = ["portrait", "name", "walker", "color",
 	"playmat_color", "playmat_type", "packs", "plugins", "expanded_adventure", "difficulty", "figure_colors", "card_rule", "copy_limit",
-	"life_rule", "card_hold", "ban_list", "all_trader_cards", "sieges", "creatures", "life_start", "ascetic"]
+	"life_rule", "card_hold", "ban_list", "all_trader_cards", "sieges", "creatures", "life_start", "ascetic",
+	"life_checked_at_phase_end"]
 
 
 ## Forget the remembered hero, so the screen opens on the defaults.

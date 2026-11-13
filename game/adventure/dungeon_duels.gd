@@ -574,6 +574,7 @@ static func duel_config(player: AdventurePlayer, run: Variant, duel: Dictionary)
 	config.rng_seed = randi() | 1
 	config.apply_deck_colors()
 	CreatureMeeting.hero_playmat(config, player)
+	CreatureMeeting.campaign_rules(config, player)
 	return config
 
 

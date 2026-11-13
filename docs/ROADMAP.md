@@ -18973,6 +18973,32 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-13 — Issues #12–#16, and Negative life in the Campaign Settings (0.60.19)
+
+New reports on GitHub ([issues-12-16-2026-11-13.md](issues-12-16-2026-11-13.md));
+the owner: *"Yes fix issues, ignore future suggestions"*.
+
+- **#13, Spirit Link's last-blow life not carried in a dungeon** — under
+  the modern rules the duel ends at 0 life before the Spirit Link triggers
+  of that blow resolve; the 1997 fork `life_checked_at_phase_end` lets them
+  resolve. The owner: *"Add this setting to campaign settings and explain
+  it!"* — the Campaign Settings' **Life at 0** row, a box **Negative life
+  is survivable** (off for a new adventure, ticked by As 1997), plays the
+  1997 rule in every duel of the adventure over Options → Rules
+  (`AdventurePlayer.life_checked_at_phase_end`,
+  `CreatureMeeting.campaign_rules` beside every `hero_playmat`,
+  `DuelConfig.rule_forks`, `DuelOpening.prepare`). Help, the row's line
+  and tooltip explain it; saved in the hero's record, absent = off.
+- **#12, a dungeon with one treasure card** — the 1997 placement (28 cards,
+  ten dungeons, three places each); explained with the generator's numbers
+  and closed, as the owner chose.
+- **#15, suggestions** — the owner's reply posted, left open.
+- **#16, every duel won at once** — the reporter's video shows a self-built
+  0.60.19 `main` and an opponent with an empty library. Likely cause: an
+  export without the presets of `export_presets.cfg.example`, whose include
+  filter carries the creatures' `.deck` files; the reporter was told how to
+  export, and asked for a new-adventure test, the logs and the Export zip.
+
 ## 2026-11-11 — The Don't auto tap marks, and the Stone's colour (0.60.19)
 
 The owner's answers to the gap review of 2026-11-10

@@ -102,6 +102,13 @@ var mulligan_rule := ""
 ## first." / "and has chosen to draw first." False keeps ours — the
 ## computer always takes the play.
 var ai_random_play_or_draw := false
+## THE DUEL'S OWN RULES FORKS, `{fork key: bool}` ([constant
+## RulesOptions.FORKS]), played over the player's Options → Rules
+## ([method DuelOpening.prepare]); `{}`, the default, leaves the Options'
+## answer for every fork. An adventure's Campaign Settings put "Negative
+## life is survivable" here for every duel of the adventure ([method
+## CreatureMeeting.campaign_rules]; the owner, 2026-11-13, issue #13).
+var rule_forks := {}
 # --- end part B (W2) ---
 
 ## THE MATCH PARAMETERS the original's screen sets beside `&Ante`
@@ -216,6 +223,7 @@ func for_test(test_position: DuelPosition, seed_value: int, show_hands := false)
 	out.unfair = unfair.duplicate()
 	out.pace = pace
 	out.panel_colors = panel_colors.duplicate()
+	out.rule_forks = rule_forks.duplicate()
 	out.deck_format = deck_format
 	out.hotseat_privacy = false
 	out.ante = 0

@@ -55,6 +55,9 @@ extends RefCounted
 ## built-in Last Refuge of versions 5–7 was never shipped (the owner,
 ## 2026-11-10: *"saves with it do not exist in the wild"*): its shapes are
 ## not read, and a vanilla save of any version loads as it always did.
+## Version 8 carries Negative life is survivable too (2026-11-13, before 8
+## shipped), `hero.life_checked_at_phase_end` ([member
+## life_checked_at_phase_end]); absent, off.
 const FORMAT := "shandalar-adventure"
 const FORMAT_VERSION := 8
 ## Where the adventures are saved (tests point it elsewhere): this folder
@@ -313,6 +316,16 @@ var life_start := START_LINKS
 ## a meal. Fruit of Sustenance's gift in the forests is as it was. An
 ## adventure from before the choice: off.
 var ascetic := false
+## NEGATIVE LIFE IS SURVIVABLE in every duel of the adventure, chosen at the
+## Embark [ours, the owner's ruling of 2026-11-13 on issue #13: "Add this
+## setting to campaign settings and explain it!"]: on, the 1997 rule (the
+## rules fork `life_checked_at_phase_end`, [RulesOptions]) plays whatever
+## Options → Rules says — a duelist at 0 life or less loses only as the phase
+## ends, so the life gained from a duel's last blow (Spirit Link's) still
+## counts, and a dungeon carries it ([method CreatureMeeting.campaign_rules]).
+## Off, the Options decide, as before. An adventure from before the choice:
+## off.
+var life_checked_at_phase_end := false
 
 
 # --------------------------------------------------------------- where --
@@ -561,6 +574,7 @@ static func begin(record: Dictionary, made: ShandalarWorld) -> AdventurePlayer:
 	player.creatures = creatures_of(record.get("creatures"))
 	player.life_start = life_start_of(record.get("life_start"))
 	player.ascetic = record.get("ascetic") is bool and bool(record.get("ascetic"))
+	player.life_checked_at_phase_end = _flag(record.get("life_checked_at_phase_end"))
 	player.playmat = (record.get("playmat", {}) as Dictionary).duplicate(true)
 	player.packs = (record.get("packs", []) as Array).duplicate(true)
 	player.adventures = _cleaned_adventures(record.get("adventures"))
@@ -1007,6 +1021,7 @@ func to_dict(include_regions := true) -> Dictionary:
 			"card_hold": card_hold, "ban_list": ban_list, "all_trader_cards": all_trader_cards,
 			"sieges": sieges,
 			"creatures": creatures, "life_start": life_start, "ascetic": ascetic,
+			"life_checked_at_phase_end": life_checked_at_phase_end,
 			"playmat": playmat, "packs": packs, "adventures": adventures},
 		"where": {"x": position.x, "y": position.y, "tile": [tile().x, tile().y],
 			"facing": facing, "entered": [entered_tile.x, entered_tile.y]},
@@ -1152,6 +1167,8 @@ static func _read_hero(player: AdventurePlayer, hero: Dictionary) -> void:
 	player.creatures = creatures_of(hero.get("creatures"))
 	player.life_start = life_start_of(hero.get("life_start"))
 	player.ascetic = _flag(hero.get("ascetic"))
+	# A save from before Negative life is survivable (2026-11-13): off.
+	player.life_checked_at_phase_end = _flag(hero.get("life_checked_at_phase_end"))
 	player.playmat = _whole(_object(hero.get("playmat")))
 	player.packs = _whole(_list(hero.get("packs")))
 	player.adventures = _cleaned_adventures(hero.get("adventures"))

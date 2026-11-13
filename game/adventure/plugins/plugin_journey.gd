@@ -113,6 +113,7 @@ static func duel_config(region: DataRegion, player: AdventurePlayer, quest: int)
 		config.start_in_play = [[player.next_duel_card], []]
 	config.apply_deck_colors()
 	CreatureMeeting.hero_playmat(config, player)
+	CreatureMeeting.campaign_rules(config, player)
 	return config
 
 

@@ -2142,3 +2142,27 @@ without mouse motion. Native mouse input with the original skin confirmed
 Craw Wurm stays neutral while hovered; that capture exited cleanly.
 The issue remains open for confirmation against the reporter's original
 sequence. No public comment was posted and no release was rebuilt.
+
+### Follow-up: GitHub issue #13 — Negative life is survivable (2026-11-13)
+
+The report: at 46 life in the Cave of the Ice Worm, a Juggernaut wearing two
+Spirit Links dealt the killing blow, and the hero left at 46, not 56. Under
+the modern rules (the default) the duel ends the moment the creature's life
+reaches 0, as a state-based action, before the two Spirit Link triggers of
+that blow resolve; `DungeonDuels.settle` then carries the life the duel
+ended at. With the 1997 rules fork `life_checked_at_phase_end` ("Negative
+life is survivable", manual p.174) the creature lives until combat ends, the
+gains resolve and the hero leaves at 56 — both pinned by
+`tests/unit/test_issue13_negative_life.gd`.
+
+The owner's ruling: *"Add this setting to campaign settings and explain
+it!"* The Campaign Settings' row **Life at 0** (`NegativeLife`, under
+Starting life) is a box, **Negative life is survivable**, off for a new
+adventure and ticked by As 1997; its line, its tooltip and the Help's
+Campaign Settings page say what it does. Ticked, every duel of the
+adventure plays the 1997 life check whatever Options → Rules says
+(`AdventurePlayer.life_checked_at_phase_end` → `CreatureMeeting.campaign_rules`
+→ `DuelConfig.rule_forks` → `DuelOpening.prepare`); unticked, the Options
+decide, as before. Saved in the hero's record; a save from before it reads
+off. Campaign settings are chosen at the Embark, so an adventure begun
+before it keeps Options → Rules as its way to the 1997 rule.
