@@ -231,6 +231,15 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   1997's), a left or right click reads it, the meeting riddle's card larger
   beside the face.
 
+## 0.70.0 "Urza's Block" (2026-11-16)
+
+- `project.godot` `config/version` 0.70.0; `export_presets.cfg.example`
+  and `packaging/android/export-preset.cfg` `version/code` 70000
+  (`tools/build_android.py` `version_code`).
+- `docs/releases/0.70.0.md` (was 0.60.19.md) gathers 0.60.17–0.60.19 for
+  the packaged RELEASE_NOTES.md. Code comments that say 0.60.19 name the
+  same work; Pack 10's `minimum_game_version` stays 0.60.19.
+
 ## A broken NEAREST resize in Pillow (2026-11-13)
 
 - `tools/upscale_skin.py`: `nearest` — every NEAREST resize (the edge
@@ -803,7 +812,7 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
   emblems, reprints and providers, the archive contract, the engine
   review, the AI review, known limits, verification and the commands that
   reproduce it.
-- `docs/releases/0.60.19.md`: Pack 10 — the Urza block (Urza's Saga,
+- `docs/releases/0.70.0.md`: Pack 10 — the Urza block (Urza's Saga,
   Urza's Legacy, Urza's Destiny; 591 new cards), echo, cycling, the
   enchantments that become creatures, untap mana, arriving together, the
   fixes on the way, and taking an adventure to another device.

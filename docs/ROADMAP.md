@@ -18973,6 +18973,20 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-16 — 0.70.0 "Urza's Block": 0.60.19 released under its milestone number
+
+The owner: *"Bump version to 0.70.0 and release: “ShandalarGodot 0.70.0 -
+Urza’s Block”"*. 0.60.17–0.60.19 were never published; their work ships
+as **0.70.0** (`project.godot`; the Android version code 70000 in both
+Android presets). The comments, commits and records that say 0.60.19 keep
+that name: it is 0.70.0's working name. Pack 10's manifest keeps
+`minimum_game_version` 0.60.19, so a Pack 10 zip built from `main` stays
+valid (Options → Card Packs compares it with the bundled manifest).
+`docs/releases/0.70.0.md` (was 0.60.19.md), the package's
+RELEASE_NOTES.md, gathers everything since 0.60.16, 0.60.17's and
+0.60.18's notes included (0.60.18's Hi-res cursors switch, gone again in
+0.60.19, left out). The player-facing LAN and player-files docs say 0.70.0.
+
 ## 2026-11-13 — The hi-res skin tool on a broken Pillow (0.60.19)
 
 The security update python3-pil 12.1.1-2ubuntu1.5 (Ubuntu, 2026-11-13)
