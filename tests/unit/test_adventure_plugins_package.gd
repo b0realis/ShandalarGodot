@@ -214,9 +214,11 @@ func test_utf8_is_checked_without_the_engine_complaining() -> void:
 
 
 func test_json_is_parsed_quietly_within_its_limits() -> void:
-	var good := PluginPackage.json("a.json", "﻿{\"n\": [1, 2]}".to_utf8_buffer())
-	assert_eq(good["problem"], "", "a byte-order mark is allowed")
-	assert_eq(good["value"], {"n": [1.0, 2.0]})
+	var plain := "{\"n\": [1, 2]}".to_utf8_buffer()
+	for bytes in [plain, PackedByteArray([0xef, 0xbb, 0xbf]) + plain]:
+		var good := PluginPackage.json("a.json", bytes)
+		assert_eq(good["problem"], "", "JSON works with and without a byte-order mark")
+		assert_eq(good["value"], {"n": [1.0, 2.0]})
 	var bad := PluginPackage.json("b.json", "{\n\"n\": [1, 2,\n".to_utf8_buffer())
 	assert_string_contains(String(bad["problem"]), "b.json: line ")
 	# "FILE: line N: MESSAGE", lines counted from 1 as an editor counts them

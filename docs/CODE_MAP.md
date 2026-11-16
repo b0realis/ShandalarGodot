@@ -6412,6 +6412,9 @@ checks pages, Wasm and errors. `docs/setup-web.txt` explains hosting and
 - `docs/releases/0.20.0.md`: player announcement, platform downloads,
   fair-play pledge, scope, limitations and community thanks.
 - `docs/release-builds.md`: repeatable cross-platform export and packaging.
+- `tools/test_adventure_plugin.py::CompiledExportTest`: opt-in compiled-PCK
+  regression for the game's plugin JSON loader. Godot 4.7.2 empties a BOM
+  string constant during export; the loader constructs it at runtime.
 - `packaging/handhelds/steam-deck.sh`, `arkos.sh`, `shandalar.gptk`:
   native SteamOS launcher and experimental ArkOS/WestonPack launcher with
   scoped controller-to-mouse mapping, portable saves and owned-mount cleanup;

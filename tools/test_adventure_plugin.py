@@ -15,6 +15,9 @@ the .gd sources and fails the moment one copy stops matching.
 
 No Godot, no network. Run from the repo root:
     python3 -m unittest discover -s tools -p 'test_adventure_plugin.py'
+
+Also exercise the game's parser in a compiled PCK (no export templates
+needed): set SHANDALAR_PLUGIN_EXPORT_GODOT to the Godot editor binary.
 """
 from __future__ import annotations
 
@@ -817,6 +820,72 @@ class DriftTest(unittest.TestCase):
         sources_flat = sources.replace('\\"', '"')
         missing = [p for p in sorted(phrases) if p.replace('\\"', '"') not in sources_flat]
         self.assertEqual(missing, [], "tool sentences the game does not say")
+
+
+@unittest.skipUnless(os.environ.get("SHANDALAR_PLUGIN_EXPORT_GODOT"),
+                     "set SHANDALAR_PLUGIN_EXPORT_GODOT for the compiled-export check")
+class CompiledExportTest(unittest.TestCase):
+    def test_plugin_json_survives_compiled_export(self):
+        # A source-only test cannot catch a BOM constant decoded as an empty
+        # string in Godot's token buffer (4.7.2). Exercise the actual loader,
+        # with BOM bytes constructed at runtime so the fixture survives too.
+        godot = os.environ["SHANDALAR_PLUGIN_EXPORT_GODOT"]
+        with tempfile.TemporaryDirectory(prefix="plugin-export-") as work:
+            folder = Path(work)
+            shutil.copyfile(ROOT / "game/adventure/plugins/plugin_package.gd", folder / "package.gd")
+            (folder / "project.godot").write_text(
+                'config_version=5\n[application]\n'
+                'config/name="Shandalar Plugin Export Regression"\n'
+                'run/main_scene="res://probe.tscn"\n', encoding="utf-8")
+            (folder / "probe.tscn").write_text(
+                '[gd_scene load_steps=2 format=3]\n'
+                '[ext_resource type="Script" path="res://probe.gd" id="1"]\n'
+                '[node name="Probe" type="Node"]\nscript = ExtResource("1")\n', encoding="utf-8")
+            (folder / "probe.gd").write_text('''extends Node
+const Package = preload("res://package.gd")
+func _ready():
+	var checks := 0
+	for value in ['{"plugin_format":1}', "{}", "[]", "null", '{"title":"Éire"}']:
+		for bom in [false, true]:
+			var bytes = value.to_utf8_buffer()
+			if bom:
+				bytes = PackedByteArray([0xef, 0xbb, 0xbf]) + bytes
+			var result = Package.json("probe.json", bytes)
+			if result.problem != "" or result.value != JSON.parse_string(value):
+				printerr("PLUGIN JSON FAILED: ", result)
+				get_tree().quit(1)
+				return
+			checks += 1
+	for value in ["{", "[1,]bad", "invalid"]:
+		if Package.json("probe.json", value.to_utf8_buffer()).problem == "":
+			printerr("INVALID PLUGIN JSON ACCEPTED")
+			get_tree().quit(1)
+			return
+		checks += 1
+	print("PLUGIN JSON EXPORT: ", checks, " checks passed")
+	get_tree().quit()
+''', encoding="utf-8")
+            (folder / "export_presets.cfg").write_text(
+                '[preset.0]\nname="Parser"\nplatform="Linux"\n'
+                'export_filter="all_resources"\ninclude_filter=""\nexclude_filter="*.pck,*.log"\n'
+                'script_export_mode=2\n[preset.0.options]\n'
+                'binary_format/architecture="x86_64"\n', encoding="utf-8")
+            env = dict(os.environ)
+            env.pop("GODOT_EDITOR_CUSTOM_FEATURES", None)
+            pack = folder / "parser.pck"
+            for label, args in [
+                ("export", ["--path", str(folder), "--export-pack", "Parser", str(pack)]),
+                ("run", ["--main-pack", str(pack), "--quit-after", "30"]),
+            ]:
+                result = subprocess.run(
+                    [godot, "--headless", "--log-file", str(folder / (label + ".log")), *args],
+                    cwd=folder, env=env, stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", timeout=180)
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn("ERROR:", result.stdout)
+                if label == "run":
+                    self.assertIn("PLUGIN JSON EXPORT: 13 checks passed", result.stdout)
 
 
 if __name__ == "__main__":

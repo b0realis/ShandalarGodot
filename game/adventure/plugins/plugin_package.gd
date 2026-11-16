@@ -295,7 +295,10 @@ static func json(rel: String, bytes: PackedByteArray) -> Dictionary:
 	if not is_utf8(bytes):
 		return {"value": null, "problem": "%s: the text is not UTF-8." % rel}
 	var text := bytes.get_string_from_utf8()
-	if text.begins_with("﻿"):
+	# Godot 4.7.2 strips a leading BOM from exported string constants,
+	# even a Unicode escape: an empty prefix would remove JSON's first
+	# character. Construct the character at runtime for compiled exports.
+	if text.begins_with(String.chr(0xfeff)):
 		text = text.substr(1)
 	var parser := JSON.new()
 	if parser.parse(text) != OK:

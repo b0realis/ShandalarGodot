@@ -219,6 +219,14 @@ such an exception (2026-10-04).
    (repeat the packager for `macos` and `macos-intel`; `windows64` and
    `web` likewise if built there). Check `codesign --verify --deep --strict`
    on each app and `lipo -info` on its binary, and smoke-boot each app.
+   In a packaged desktop game, open **Embark → Expanded adventure
+   plugins…** and confirm the bundled prototype is listed without a
+   validation error. Source-only tests miss compiled-script differences.
+   Run the small export regression before building either machine's half:
+   `SHANDALAR_PLUGIN_EXPORT_GODOT=/path/to/godot python3 tools/test_adventure_plugin.py CompiledExportTest`.
+   It exports the real JSON loader into a temporary PCK and runs 13
+   checks, including files with and without a UTF-8 byte-order mark;
+   no export templates or player profile are used.
 3. **Merge the checksums:** `gh release download vX.Y.Z --pattern SHA256SUMS`,
    add the new ZIPs' lines (`shasum -a 256 Shandalar-X.Y.Z-*.zip`), sort by
    file name, and run `shasum -a 256 -c SHA256SUMS` over every file you hold.
