@@ -195,6 +195,7 @@ const SET_LABELS := {
 	"usg": "Urza's Saga",
 	"ulg": "Urza's Legacy",
 	"uds": "Urza's Destiny",
+	"comm": "Community cards",
 	"2ed": "Unlimited",
 	"arn": "Arabian nights",
 	"atq": "Antiquities",

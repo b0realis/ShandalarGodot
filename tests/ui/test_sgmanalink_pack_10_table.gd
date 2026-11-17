@@ -134,8 +134,10 @@ func _on_top(pid: int, card_name: String) -> CardInstance:
 # ======================================================= the version stamp --
 
 func test_protocol_31_and_the_urza_block_rules_revision() -> void:
-	assert_eq(SgProtocol.VERSION, 31)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v31")
+	# 31 brought the Urza block's table; 32 (2026-11-17) followed with an
+	# optional stamp key and room-view seat pair, the rules revision kept.
+	assert_eq(SgProtocol.VERSION, 32)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v32")
 	assert_eq(SgCompatibility.RULES_REVISION, "sgmanalink-urza-block-2026-11-06")
 	assert_true(SgCompatibility.valid_stamp(SgCompatibility.stamp()), "the stamp's rules text fits the wire")
 	assert_true(SgProtocol.subprotocols().has("sgmanalink-local-v30"),

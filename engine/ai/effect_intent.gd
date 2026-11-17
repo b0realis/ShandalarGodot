@@ -1226,8 +1226,8 @@ static func aura_aim(data: CardData) -> int:
 		return Aim.FRIENDLY
 	# Structural signals: a card that already states this about itself
 	# never needs a row in the table.
-	if data.aura_steals:
-		return Aim.HOSTILE          # Control Magic, Steal Artifact
+	if data.aura_steals or data.ai_aura_hostile:
+		return Aim.HOSTILE          # Control Magic, Steal Artifact, a community card's
 	if data.aura_reanimates or data.aura_graveyard_entry:
 		return Aim.FRIENDLY         # Animate Dead — the host is in a graveyard
 	if data.aura_grants_protection != 0 or data.aura_protection_memory_key != "":

@@ -31,6 +31,18 @@ static func available(casual := true) -> Array:
 	return result
 
 
+## The community cards [param deck] holds (its main deck and sideboard),
+## each once, sorted — a deck with any is tagged "community" at the table.
+static func community_cards(deck: Dictionary) -> Array[String]:
+	var found: Array[String] = []
+	for zone in ["cards", "sideboard"]:
+		for card_name in deck.get(zone, []):
+			if CommunityCards.is_community(String(card_name)) and not found.has(String(card_name)):
+				found.append(String(card_name))
+	found.sort()
+	return found
+
+
 static func payload(deck: Dictionary) -> Dictionary:
 	var out := {"name": deck.name, "cards": deck.cards.duplicate(), "sideboard": deck.sideboard.duplicate()}
 	var printings := DeckPrintings.keep_present(deck.get("printings", {}), deck.cards + deck.sideboard)

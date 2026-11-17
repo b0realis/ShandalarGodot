@@ -101,6 +101,10 @@ static func room(value: Variant) -> bool:
 	if value.has("tournament"):
 		fields.append("tournament")
 		if not SgTournamentProtocol.context(value.tournament): return false
+	# The seats whose decks hold community cards (2026-11-17), optional.
+	if value.has("community"):
+		fields.append("community")
+		if not pair(value.community, true): return false
 	if not SgProtocol.exact(value, fields) \
 		or not SgProtocol.short_text(value.id, 16) or not SgProtocol.short_text(value.name) \
 		or not SgProtocol.integer(value.seat, 0, 1) or not SgProtocol.integer(value.revision) \

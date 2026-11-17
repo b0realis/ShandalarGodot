@@ -845,6 +845,32 @@ func _needed_text_top(text: String, size: int) -> float:
 	return clampf(top, TEXT_TOP_EXPANDED, TEXT_TOP)
 
 
+## A community card's border ([CommunityCards.border_color]): a thin edge
+## over the frame, black, white or silver; no other card wears one.
+var _community_border: Panel
+
+func _wear_border(d: CardData) -> void:
+	var community := d.set_code == CommunityCard.SET_CODE
+	if not community:
+		if _community_border != null:
+			_community_border.visible = false
+		return
+	if _community_border == null:
+		_community_border = Panel.new()
+		_community_border.name = "CommunityBorder"
+		_community_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_anchor(_community_border, 0, 0, 1, 1)
+		add_child(_community_border)
+	var box := StyleBoxFlat.new()
+	box.draw_center = false
+	box.border_color = CommunityCards.border_color(d.card_name)
+	box.set_border_width_all(5)
+	box.set_corner_radius_all(9)
+	_community_border.add_theme_stylebox_override("panel", box)
+	_community_border.visible = true
+	move_child(_community_border, get_child_count() - 1)
+
+
 ## The frame's own rules plate as a stretchable texture — the band the
 ## frame paints its text box on, cut out once per frame key.
 static var _plate_cache: Dictionary = {}
@@ -961,7 +987,8 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	# none for the promos, which letter themselves `PR`.
 	var rarity: String = printing.get("rarity", CardRegistry.rarity_of(d.card_name, shown_set))
 	var legendary := (d.supertypes & Mtg.Supertype.LEGENDARY) != 0
-	_set_icon.texture = GameSkin.set_icon(shown_set, rarity, legendary)
+	_set_icon.texture = CommunityCards.icon_texture(d.card_name, rarity) \
+		if shown_set == CommunityCard.SET_CODE else GameSkin.set_icon(shown_set, rarity, legendary)
 	_set_icon.visible = _set_icon.texture != null
 	_set_text.text = "" if _set_icon.visible else GameSkin.set_label(shown_set)
 	_set_text.visible = not _set_icon.visible
@@ -970,6 +997,12 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	_set_suffix.visible = _set_suffix.text != ""
 	_oracle.text = d.oracle_text if d.oracle_text != "" else "(no rules text)"
 	_oracle.emphasis = []
+	# Flavor, in italics under the rules (a card made in the card creator).
+	if d.flavor_text != "":
+		var at := _oracle.text.length() + 1
+		_oracle.text += "\n" + d.flavor_text
+		_oracle.emphasis = [[at, _oracle.text.length()]]
+	_wear_border(d)
 	if changed.get("rules_changed", false):
 		_oracle.text = String(changed["rules"])
 		_oracle.emphasis = changed["rules_marks"]

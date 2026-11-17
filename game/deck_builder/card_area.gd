@@ -1949,7 +1949,7 @@ func _bind_cell(cell: Cell, data: CardData, count: int) -> void:
 			if not fresh or art != null:
 				cell.face.art_override = art
 				cell.face.refresh()
-			cell.tooltip_text = "%s\n%s" % [data.card_name, data.oracle_text]
+			cell.tooltip_text = "%s\n%s%s" % [data.card_name, data.oracle_text, CommunityCards.tooltip_extra(data)]
 	elif cell.face != null and cell.printing_set != printing_set:
 		cell.face.art_override = CardPrintings.texture(data.card_name, printing_set)
 		cell.face.refresh()

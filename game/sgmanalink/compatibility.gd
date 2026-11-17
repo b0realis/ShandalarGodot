@@ -22,8 +22,11 @@ static func fingerprint() -> String:
 	for name in names:
 		var card := CardRegistry.get_card(name)
 		catalogue.append([name, str(card.cost), card.oracle_text, card.types, card.power, card.toughness])
+	# A community card is pinned by what plays of it (its spec), not only by
+	# its printed lines (two cards may print alike and differ by a subtype).
 	_fingerprint = JSON.stringify([SgProtocol.VERSION, RULES_REVISION,
-		ProjectSettings.get_setting("application/config/version", ""), catalogue]).sha256_text()
+		ProjectSettings.get_setting("application/config/version", ""), catalogue,
+		community_mark()]).sha256_text()
 	_cache_key = cache_key
 	return _fingerprint
 
@@ -43,12 +46,77 @@ static func enabled_packs() -> Array:
 
 
 ## Readable, bounded facts about this build. Wire-safe: short ASCII only.
+## A game that holds community cards adds their mark ([method
+## community_mark]); one without them sends the stamp it always did.
 static func stamp() -> Dictionary:
-	return {"game": game_version(), "rules": RULES_REVISION, "packs": enabled_packs()}
+	var out := {"game": game_version(), "rules": RULES_REVISION, "packs": enabled_packs()}
+	var mark := community_mark()
+	if mark != "":
+		out["community"] = mark
+	return out
+
+
+## The first words of a community-card difference — the lobby says it in red.
+const COMMUNITY_WORDS := "Community cards differ"
+
+
+## The community cards this game holds, as `count-digest` ("" for none):
+## both players need the same ones, and this names the difference the
+## catalogue digest only detects.
+static func community_mark() -> String:
+	var names := CardRegistry.community_names()
+	names.sort()
+	var specs: Array = []
+	for name in names:
+		specs.append(CommunityCards.spec_of(name))
+	return mark_of(specs)
+
+
+## The mark of [param specs], the cards' specs in the order of their names
+## ("" for none) — the same words on both computers for the same cards.
+static func mark_of(specs: Array) -> String:
+	if specs.is_empty():
+		return ""
+	var rows: Array = []
+	for spec in specs:
+		rows.append(_playing_spec(spec if spec is Dictionary else {}))
+	return "%d-%s" % [rows.size(), JSON.stringify(rows, "", true).sha256_text().left(12)]
+
+
+## One community card's digest over what of it plays (64 hex digits): two
+## players' cards of one name with the same digest are the same card at a
+## table ([SgCardTransfer] compares them card by card).
+static func card_digest(spec: Dictionary) -> String:
+	return JSON.stringify(_playing_spec(spec), "", true).sha256_text()
+
+
+## What of a community card plays — all but its look, flavor, artist, set
+## name and rarity: two players' cards that differ there may meet; any
+## other difference (a subtype, legendary, a rule) is another card.
+static func _playing_spec(spec: Dictionary) -> Dictionary:
+	var out := spec.duplicate(true)
+	for key in ["look", "flavor", "artist", "set_name", "rarity", "format", "version"]:
+		out.erase(key)
+	return out
+
+
+static func community_differs(mine: Dictionary, theirs: Dictionary) -> bool:
+	return String(mine.get("community", "")) != String(theirs.get("community", ""))
+
+
+static func _community_count(mark: String) -> String:
+	if mark == "":
+		return "no community cards"
+	var n := int(mark.get_slice("-", 0))
+	return "%d community card%s" % [n, "" if n == 1 else "s"]
 
 
 static func valid_stamp(value: Variant) -> bool:
-	if not value is Dictionary or not SgProtocol.exact(value, ["game", "rules", "packs"]) \
+	var keys := ["game", "rules", "packs"]
+	if value is Dictionary and value.has("community"):
+		keys.append("community")
+		if not plain(value.community, 24): return false
+	if not value is Dictionary or not SgProtocol.exact(value, keys) \
 		or not plain(value.game, 24) or not plain(value.rules, 48) \
 		or not value.packs is Array or value.packs.size() > MAX_PACKS:
 		return false
@@ -99,6 +167,14 @@ static func difference(mine: Dictionary, theirs: Dictionary, them := "The host")
 	if mine.rules != theirs.rules:
 		return "%s runs a different build of Shandalar %s (rules %s; yours is %s). Both players need the same build." \
 			% [them, theirs.game, theirs.rules, mine.rules]
+	if community_differs(mine, theirs):
+		var mine_c := String(mine.get("community", ""))
+		var their_c := String(theirs.get("community", ""))
+		var counts := "%s has %s; you have %s" % [them, _community_count(their_c), _community_count(mine_c)]
+		if mine_c != "" and mine_c.get_slice("-", 0) == their_c.get_slice("-", 0):
+			counts = "%s has %s, as you do, but not the same ones" % [them, _community_count(their_c)]
+		return "%s: %s. Both players need the same community cards — the same card zips in community_cards." \
+			% [COMMUNITY_WORDS, counts]
 	return ""
 
 
@@ -108,6 +184,7 @@ static func brief(mine: Dictionary, theirs: Dictionary) -> String:
 	if mine.game != theirs.game: return "Shandalar %s" % theirs.game
 	if mine.packs != theirs.packs: return "No card packs" if theirs.packs.is_empty() else pack_labels(theirs.packs)
 	if mine.rules != theirs.rules: return "Different build"
+	if community_differs(mine, theirs): return "Community cards"
 	return ""
 
 

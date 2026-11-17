@@ -276,9 +276,10 @@ func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> 
 	# companions, counted target slots. 29 (whole-game campaign,
 	# 2026-10-07): a choice's lines name their board cards. 30: the MPN
 	# download. 31 (Pack 10, 2026-11-06): the library top a seat may see
-	# (`library_top`) and each face's `zone_playable`.
-	assert_eq(SgProtocol.VERSION, 31)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v31")
+	# (`library_top`) and each face's `zone_playable`. 32 (2026-11-17): an
+	# optional stamp key and an optional room-view seat pair.
+	assert_eq(SgProtocol.VERSION, 32)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v32")
 	assert_eq(SgLanDiscovery.MAX_PACKET, 16384, "room for the certificate inside an open advert")
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}

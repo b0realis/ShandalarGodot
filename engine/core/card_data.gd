@@ -45,6 +45,11 @@ var keywords: Array[int] = []
 ## living documentation: tests compare behavior against this text.
 var oracle_text: String = ""
 
+## Flavor text, shown in italics under the rules where the card has any
+## (a card made in the game's card creator, [CommunityCard]); no rule reads
+## it.
+var flavor_text: String = ""
+
 ## Set code of the FOLDER this card's file lives in — a Scryfall code
 ## ("2ed", "4ed", "arn", "atq", "leg", "drk", "past", "phpr"), filled in by
 ## the CardRegistry loader. It is NOT the card's original printing: ask
@@ -120,6 +125,11 @@ var aura_target: TargetSpec = null
 ## controls the host (control changes on attach, reverts to the owner
 ## when the aura leaves — both handled engine-side in MtgGame).
 var aura_steals: bool = false
+
+## An Aura that harms or takes its host, said as data (a community card's:
+## [CommunityCard] knows what it built) — [method EffectIntent.aura_aim]
+## aims it at the opponent's side.
+var ai_aura_hostile: bool = false
 
 ## MODAL spell: choose-one modes, each {label: String, effects: Array}.
 ## Non-empty marks the card modal; spell_effects is then unused. The mode

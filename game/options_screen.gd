@@ -154,6 +154,12 @@ func _ready() -> void:
 	draw.pressed.connect(func() -> void: DrawSetup.draw_on(self))
 	content.add_child(draw)
 
+	if not OS.has_feature("web"):
+		var forge := UiChrome.menu_button("Create a card", Vector2(320, 36))
+		forge.name = "CreateCard"
+		forge.pressed.connect(func() -> void: CardForgeScreen.open_on(self))
+		content.add_child(forge)
+
 	content.add_child(UiChrome.body_label("Hand display:"))
 	var hand_style := OptionButton.new()
 	hand_style.add_item("Fan of cards", 0)

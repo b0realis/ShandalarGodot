@@ -16,6 +16,8 @@ func prepare(folder: String, pool: SealedPool, options: Dictionary) -> String:
 			return "The draft recipe does not match the dealt pool."
 		for key in DraftRecipe.OPTION_KEYS:
 			if options.get(key) != pool.draft_recipe.options[key]: return "Draft options do not match the dealt recipe."
+		if DraftPoolConfig.community_boosters(options) != DraftRecipe.community_boosters(pool.draft_recipe):
+			return "Draft options do not match the dealt recipe."
 	var refusal := GamePaths.draft_folder_refusal(folder)
 	if refusal != "": return refusal
 	folder = ProjectSettings.globalize_path(GamePaths.expand(folder.strip_edges())).simplify_path()

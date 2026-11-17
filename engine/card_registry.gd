@@ -49,6 +49,13 @@ static var _expansion_sets: Dictionary = {}
 static var _expansion_scripts: Array = []
 static var _expansion_records: Array = []
 static var _pack_rarities: Dictionary = {}
+## THE COMMUNITY CARDS ([CommunityCard]): their specs and records as plain
+## data, built again on every load ([method configure_community]); the
+## names that were taken (a name the pool already has is skipped).
+static var _community_specs: Array = []
+static var _community_records: Array = []
+static var _community_names: Array[String] = []
+static var _community_skipped: Array[String] = []
 
 ## Root folder scanned for set subfolders.
 const SETS_ROOT := "res://cards/sets"
@@ -199,6 +206,7 @@ static func _load_all(how := "") -> void:
 			_load_optional_script(spec)
 	for spec in _expansion_scripts:
 		_load_optional_script(spec)
+	_load_community()
 	_report = "card pool: %d cards in %d ms%s" % [
 		_cards.size(), Time.get_ticks_msec() - started, how]
 	_loaded = true
@@ -440,6 +448,79 @@ static func optional_pack_enabled() -> bool:
 
 
 ## New expansions are independent of Pack 1's completion of the base sets.
+## THE COMMUNITY CARDS before the next load: [param specs] are card specs
+## a player made ([CommunityCard.problems] found them whole), [param
+## records] their `{name, set, rarity, artist}` rows. Plain data only; the
+## cards are built from it on every load, after every other set, and a name
+## the pool already has is skipped ([method community_skipped]).
+static func configure_community(specs: Array, records: Array) -> void:
+	if _loaded or is_loading():
+		unload()
+	_community_specs = specs.duplicate(true)
+	_community_records = records.duplicate(true)
+
+
+static func _load_community() -> void:
+	_community_names.clear()
+	_community_skipped.clear()
+	# A name the pool has in any case ("lightning bolt") stays the game's.
+	var taken := {}
+	for name in _cards:
+		taken[String(name).to_lower()] = true
+	for spec in _community_specs:
+		if not spec is Dictionary or not CommunityCard.problems(spec).is_empty():
+			continue
+		var name := String(spec["name"]).strip_edges()
+		if taken.has(name.to_lower()):
+			_community_skipped.append(name)
+			continue
+		var data := CommunityCard.build(spec)
+		if data == null:
+			continue
+		taken[name.to_lower()] = true
+		data.set_code = CommunityCard.SET_CODE
+		data.script_set = CommunityCard.SET_CODE
+		data.artist = String(spec.get("artist", ""))
+		register(data)
+		_community_names.append(name)
+
+
+## The community cards in the pool, by name.
+static func community_names() -> Array[String]:
+	ensure_loaded()
+	return _community_names.duplicate()
+
+
+## lowercase name → name, for [method game_name_like] (rebuilt per pool).
+static var _lower_names: Dictionary = {}
+static var _lower_revision := -1
+
+
+## Whether [param card_name] is a community card the pool took.
+static func has_community(card_name: String) -> bool:
+	ensure_loaded()
+	return _community_names.has(card_name)
+
+
+## The game's own card named [param card_name] in any case ("" for none):
+## a community card may not take a game card's name, however it is spelled.
+static func game_name_like(card_name: String) -> String:
+	ensure_loaded()
+	if _lower_revision != revision or _lower_names.size() != _cards.size():
+		_lower_names.clear()
+		for name in _cards:
+			_lower_names[String(name).to_lower()] = String(name)
+		_lower_revision = revision
+	var found := String(_lower_names.get(card_name.strip_edges().to_lower(), ""))
+	return "" if found == "" or _community_names.has(found) else found
+
+
+## The community cards left out because the pool already had their name.
+static func community_skipped() -> Array[String]:
+	ensure_loaded()
+	return _community_skipped.duplicate()
+
+
 ## All paths come from trusted game code, never from a user-supplied ZIP.
 static func configure_expansion_packs(sets: Dictionary, scripts: Array,
 		records: Array) -> void:
@@ -454,6 +535,10 @@ static func extra_set_order() -> Array[String]:
 	var codes: Array[String] = []
 	for code in _expansion_sets:
 		codes.append(String(code))
+	# The set shows once the pool took a community card (not for zips that
+	# were all left out); before the pool is built, the specs say.
+	if not _community_specs.is_empty() and (not _loaded or not _community_names.is_empty()):
+		codes.append(CommunityCard.SET_CODE)
 	return codes
 
 
@@ -469,6 +554,8 @@ static func active_set_order() -> Array[String]:
 static func card_in_set(card_name: String, set_code: String, include_completion := true,
 		include_original := true) -> bool:
 	ensure_loaded()
+	if set_code == CommunityCard.SET_CODE:
+		return _community_names.has(card_name)
 	if _expansion_sets.has(set_code):
 		return _cards.has(card_name) and _expansion_sets[set_code].get("names", []).has(card_name)
 	var data: CardData = _cards.get(card_name)
@@ -499,6 +586,10 @@ static func is_completion_card(card_name: String) -> bool:
 static func names_in_set(set_code: String) -> Array[String]:
 	ensure_loaded()
 	var out: Array[String] = []
+	if set_code == CommunityCard.SET_CODE:
+		out.assign(_community_names)
+		out.sort()
+		return out
 	if _expansion_sets.has(set_code):
 		for name in _expansion_sets[set_code].get("names", []):
 			if _cards.has(name):
@@ -680,8 +771,8 @@ static func _ensure_printings() -> void:
 	# The base snapshots intentionally omit the four physical/manual cards.
 	# A validated enabled pack provides their printing metadata here, before
 	# its dormant implementations ask [method artist_of] during loading.
-	if _optional_enabled or not _expansion_records.is_empty():
-		for entry in _optional_records + _expansion_records:
+	if _optional_enabled or not _expansion_records.is_empty() or not _community_records.is_empty():
+		for entry in _optional_records + _expansion_records + _community_records:
 			if not (entry is Dictionary):
 				continue
 			var name := String(entry.get("name", ""))

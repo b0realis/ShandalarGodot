@@ -24,6 +24,10 @@ const GOLD := Color8(187, 158, 98)
 const PALE := Color8(235, 222, 191)
 const MUTED := Color8(180, 180, 157)
 const DARK := Color8(27, 34, 29)
+## Community cards at the table (2026-11-17): a deck's red tag and the
+## red of a difference — dark red on paper, the duel's warning red on stone.
+const COMMUNITY_RED := Color8(158, 32, 28)
+const WARNING_RED := Color8(255, 100, 100)
 
 ## The colours a control's lettering may wear: INK on paper, PALE on
 ## the dark sections, the stone frame and the windows.
@@ -343,3 +347,26 @@ static func rich_text(node: RichTextLabel) -> void:
 	node.add_theme_constant_override("line_separation", 3)
 	var font := GameSkin.font("font_body")
 	if font != null: node.add_theme_font_override("normal_font", font)
+
+
+## THE RED TAG of a deck that holds community cards: "community" in pale
+## letters on a red pill.
+static func community_tag() -> PanelContainer:
+	var tag := PanelContainer.new()
+	tag.name = "CommunityTag"
+	tag.tooltip_text = "This deck holds community cards: both players need the same ones."
+	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var pill := StyleBoxFlat.new()
+	pill.bg_color = COMMUNITY_RED
+	pill.set_corner_radius_all(9)
+	pill.content_margin_left = 9
+	pill.content_margin_right = 9
+	pill.content_margin_top = 1
+	pill.content_margin_bottom = 2
+	tag.add_theme_stylebox_override("panel", pill)
+	var words := UiChrome.body_label("community", 13)
+	words.add_theme_color_override("font_color", PALE)
+	words.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+	words.set_meta("sg_ink", PALE)
+	tag.add_child(words)
+	return tag

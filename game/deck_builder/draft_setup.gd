@@ -17,6 +17,11 @@ var _holds_window_close := false
 ## The pool half of [member status], kept for [method _refresh_folder_note].
 var _pool_status := ""
 var _pool_ok := false
+## [QoL] The Community boosters row and its count, outside [member fields]:
+## shown only while the pool holds community cards ([method _refresh]), and
+## only then part of [method options].
+var community_row: Control
+var community_field: SpinBox
 
 
 ## The draft session a setup starts. Its window close is the session's as
@@ -180,6 +185,7 @@ func _ready() -> void:
 	var saved: Variant = Settings.get_value(DraftPoolConfig.OPTIONS, DraftPoolConfig.defaults())
 	if not saved is Dictionary: saved = DraftPoolConfig.defaults()
 	for spec in [["boosters", "Boosters", "15 cards · 1 rare, 3 uncommon, 10 common, 1 basic land", 12],
+		[DraftRecipe.COMMUNITY_OPTION, "Community boosters", "15 cards · only your community cards: 1 rare or mythic, 3 uncommon, 10 common, and 1 basic land", DraftRecipe.MOST_COMMUNITY_BOOSTERS],
 		["starters", "Starter / tournament packs", "60 cards · 3 rare, 9 uncommon, 26 common, 22 basic lands", 12],
 		["free_lands", "Extra lands of each basic type", "This many Plains, Islands, Swamps, Mountains and Forests", 30],
 		["extras", "Extra random cards", "Any rarity from your eligible pool, without duplicates", 60],
@@ -197,12 +203,18 @@ func _ready() -> void:
 		spin.min_value = 1 if spec[0] == "minutes" else 0
 		spin.max_value = spec[3]
 		spin.step = 1
-		var old: Variant = saved.get(spec[0], DraftPoolConfig.defaults()[spec[0]])
-		spin.value = float(old) if (old is int or old is float) and is_finite(float(old)) else float(DraftPoolConfig.defaults()[spec[0]])
+		var fallback: Variant = DraftPoolConfig.defaults().get(spec[0], 0)
+		var old: Variant = saved.get(spec[0], fallback)
+		spin.value = float(old) if (old is int or old is float) and is_finite(float(old)) else float(fallback)
 		spin.name = "Draft_" + String(spec[0])
 		if spec[0] == "minutes":
 			_emphasize_time(labels, spin)
-		fields[spec[0]] = spin
+		if spec[0] == DraftRecipe.COMMUNITY_OPTION:
+			community_row = row
+			community_field = spin
+			row.visible = false
+		else:
+			fields[spec[0]] = spin
 		spin.value_changed.connect(func(_value: float) -> void: _refresh())
 		row.add_child(spin)
 		body.add_child(row)
@@ -275,16 +287,31 @@ func options(commit := true) -> Dictionary:
 		if commit:
 			fields[key].apply()
 		out[key] = int(fields[key].value)
+	if community_row != null and community_row.visible:
+		if commit:
+			community_field.apply()
+		out[DraftRecipe.COMMUNITY_OPTION] = int(community_field.value)
 	return out
 
 
 func _refresh() -> void:
 	if pool_summary == null or status == null or folder == null: return
 	var names := DraftPoolConfig.selected()
+	if community_row != null:
+		community_row.visible = DraftPoolConfig.has_community(names)
 	pool_summary.text = "%d eligible cards from %d sets · remembered for next time" % [names.size(), _sets_holding(names)]
 	var config := options(false)
 	var refusal := DraftPoolConfig.validate(config, names)
-	var total := int(config.boosters) * 15 + int(config.starters) * 60 + int(config.free_lands) * 5 + int(config.extras)
+	var community := DraftPoolConfig.community_boosters(config)
+	var total := (int(config.boosters) + community) * 15 + int(config.starters) * 60 + int(config.free_lands) * 5 + int(config.extras)
+	# A small community set fills or repeats; the summary says which.
+	if community > 0 and refusal == "":
+		var lands := 0
+		for land in SealedPool.LAND_NAMES:
+			lands += int(names.has(land))
+		var note := SealedPool.community_note(SealedPool.community_sheets(names), lands)
+		if note != "":
+			pool_summary.text += "\n" + note
 	_pool_ok = refusal == ""
 	_pool_status = refusal if refusal != "" else "%d cards to build with · aim for at least %d cards in your deck" % [total, DeckModel.MIN_CARDS]
 	_refresh_folder_note()
@@ -394,7 +421,9 @@ func _launch() -> void:
 		return
 	var pool := DraftPoolConfig.deal(config, names)
 	if pool == null:
-		status.text = "Randomness is unavailable. Please try again."
+		# A pool the recipe cannot record says why; otherwise the seed failed.
+		var why := DraftRecipe.refusal(config, names)
+		status.text = why if why != "" else "Randomness is unavailable. Please try again."
 		return
 	var store := DraftStore.new()
 	refusal = store.prepare(folder.text, pool, config)
@@ -402,7 +431,11 @@ func _launch() -> void:
 		status.text = refusal
 		return
 	GamePaths.set_drafts_folder(folder.text)
-	Settings.set_value(DraftPoolConfig.OPTIONS, config)
+	# A hidden Community boosters row keeps its count for the next time.
+	var remembered := config.duplicate()
+	if not remembered.has(DraftRecipe.COMMUNITY_OPTION) and community_field != null and int(community_field.value) > 0:
+		remembered[DraftRecipe.COMMUNITY_OPTION] = int(community_field.value)
+	Settings.set_value(DraftPoolConfig.OPTIONS, remembered)
 	launching = true
 	window.hide()
 	# The quit after a close goes through this setup ([class Session]).

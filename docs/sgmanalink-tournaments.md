@@ -150,7 +150,7 @@ checkpoint and the recovery codes below.
 Recovery requires a matching build and the same enabled gameplay packs. Earlier
 development checkpoints remain untouched but are not migrated across a changed
 build fingerprint. Use matching 0.50.37 builds and enabled packs for recovery
-(2026-10-27: matching builds of one version; protocol 31 since 0.70.0).
+(2026-10-27: matching builds of one version; protocol 31 since 0.70.0, 32 since 2026-11-17).
 Computer entries retain their settings and are recreated without recovery codes.
 
 **Tournament setup → Save folder** offers a typed path, **Browse…** and

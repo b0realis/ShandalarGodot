@@ -32,8 +32,16 @@ extends RefCounted
 ## colour-choice source (`color`, optional — Fellwar Stone, Reflecting
 ## Pool, 2026-11-11); without it the referee asks as before. Added to 31
 ## before any build that speaks 31 was released.
-const VERSION := 31
-const SUBPROTOCOL := "sgmanalink-local-v31"
+## 32 (2026-11-17): the build stamp may carry an optional `community` key
+## and the room view an optional `community` seat pair; an older build
+## would drop such a stamp, so it lists a 32 host as another version.
+## Before any hello, a connection holding the access code may ask for the
+## host's community cards ([SgCardTransfer]): their list (`cards`: each
+## card's name, playing digest and zip size, and the host's mark) and
+## each card's zip in chunks (`card`, by name and offset). The host serves
+## only the zips of its own cards, by name; no path crosses the wire.
+const VERSION := 32
+const SUBPROTOCOL := "sgmanalink-local-v32"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]
@@ -220,6 +228,12 @@ static func valid(message: Dictionary) -> bool:
 			and token(message.access) and (literal(message.resume, "") or token(message.resume)) \
 			and nickname(message.nickname) and token(message.build) and SgCompatibility.valid_stamp(message.stamp)
 	if literal(message.get("type"), "abandon"): return exact(message, ["v", "type"])
+	# THE COMMUNITY CARDS' TRANSFER (32, 2026-11-17), before any hello.
+	if literal(message.get("type"), "cards"):
+		return exact(message, ["v", "type", "access"]) and token(message.access)
+	if literal(message.get("type"), "card"):
+		return exact(message, ["v", "type", "access", "name", "offset"]) and token(message.access) \
+			and SgCardTransfer.card_name(message.name) and integer(message.offset, 0, CommunityCards.MAX_ZIP)
 	if literal(message.get("type"), "mpn"):
 		return exact(message, ["v", "type", "room", "record", "offset"]) \
 			and short_text(message.room, 16) and message.record is String \

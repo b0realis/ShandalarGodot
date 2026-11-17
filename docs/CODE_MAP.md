@@ -231,6 +231,132 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   1997's), a left or right click reads it, the meeting riddle's card larger
   beside the face.
 
+## Community card data (2026-11-17)
+
+- `engine/community/community_card.gd` (`CommunityCard`): a card as plain
+  data — `problems(spec)` (the JSON shape first, `_shape_problems`/`_want`:
+  a field of the wrong kind is a problem, never a crash), `build(spec)` (keywords, protection, landwalk,
+  the card rules of `CARD_RULES` — echo, cycling, cumulative upkeep,
+  buyback, rampage, enters tapped / with counters, can't be countered,
+  can't block, Walls, extra blocks, extra life — stock effects via
+  `effect_of` with X amounts, `ActivatedAbility` with `TIMINGS`,
+  `ManaAbility`, the trigger adapter `_trigger` with its target order
+  `_order` (`_helpful`: a shrinking pump is harm), anthem, lord, tribe and
+  cost statics, Auras (`_add_enchant`: creature, land, artifact or
+  permanent; +P/+T, keywords, protection, can't attack or block, doesn't
+  untap, control — `CardData.ai_aura_hostile` aims a harmful one at the
+  opponent's side through `EffectIntent.aura_aim`), "Choose one" spells
+  (`modal`, `_ai_mode`), activated costs (sacrifice a creature, land or
+  artifact, discard, remove +1/+1 counters) and shared abilities (`shared`:
+  the Sliver shape, `_add_activated`), mana of any color, mana costs, pain
+  and sacrifice (`_add_mana`), pay-or-sacrifice upkeep (`_upkeep_cost`);
+  the trusted effects `EachOpponent`, `DrainEffect`, `SelfCounters`,
+  `StealEffect`, `EdictEffect`, `OnItself` (a targeted stock effect on the
+  card itself), `UnlessCounter` ("unless its controller pays"),
+  `rules_text`; catalogues `TYPES`, `KEYWORDS`, `EFFECTS`, `TRIGGERS`,
+  `STATICS`, `CARD_RULES`, `TIMINGS`, `SACRIFICES`, `ENCHANTS`,
+  `MANA_CHOICES`; set code `comm`.
+- `engine/community/card_balance.gd` (`CardBalance`): `advice(spec)` —
+  suggestions set beside the pool's own cards by mana value (size, power,
+  keywords, damage / cards / life per price, mana, anthems, Auras, effects,
+  rules length, cost), read from rules text on both sides; `corpus()`
+  counted once per pool of the game's own cards; the rules of thumb
+  (`_thumb_rows`, `THUMB_TOPIC`) from the 2026-11-17 study of the whole
+  pool; patterns compiled once (`_rx`); both sides read with the card's
+  name as CARDNAME and reminder text left out, a creature's size with the
+  counters it enters with. It also compares a card with its own color:
+  creature size and keywords by color only where the all-colors row calls
+  them unusual, and color-pie hints (LOW or HIGH only) for effects at most
+  a tenth as common in the card's color as in their home color; gold
+  creatures beside gold creatures, gold effects beside each of the card's
+  colors; `color_flagged` counts the game's own cards that would get a
+  color line.
+- `game/community_cards.gd` (`CommunityCards`): zips (`card.json`, art,
+  set icon) in `user://community_cards/` and beside the game, read with
+  `PluginPackage.read(path, "card.json")`; picture guidelines `ART_GUIDE`,
+  `ICON_GUIDE` (`art_problem`, `icon_problem` read the size from the
+  header, `picture_size`; signatures checked before decoding); names told
+  apart in any case; `_by_name`; textures kept while a zip is unchanged
+  (`_stamps`); the crop (`crop_region`, `crop_of`, `cropped`); `configure`
+  hands specs and records to `CardRegistry.configure_community`;
+  `art_texture`, `icon_texture`, `border_color`, `frame_of`,
+  `tooltip_extra` (the set's name in card tooltips); `write_zip`, `save`
+  (over the card's own zip, `own_path_of`, else a free file name,
+  `_free_path`), `delete_own`; the editor's draft (`set_draft`). Set zips
+  (`set.json` and a folder a card: `is_set_zip`, `read_set`,
+  `write_set_zip`, `cards_of_set`; a card saved alone is read before the
+  set's copy); `install(bytes, replace)` (a zip from elsewhere, checked in
+  a side folder first; never a set), `import_file`, `found_like`,
+  `zip_bytes_of` (one card's zip, a set's card packed alone);
+  `_entries_problem` (a zip's own list held to a card's files and their
+  sizes before anything is inflated); writes go beside first
+  (`_put_in_place`); `examples()` — the example cards shipped in
+  `game/community_examples/` (in every export preset's include filter),
+  shown in the creator's Open list and played only once saved.
+- `game/card_forge_screen.gd` (`CardForgeScreen`): the editor screen
+  (card, cost and type, rules, look; the large card, the small card and the
+  card reader; New, Open (with a search, `filter_open_list`), Import,
+  Validate, Save, Save as, Export (the card or its whole set), Delete,
+  Done; Undo and Redo, `_remember`), opened by Options' `CreateCard`
+  button; saving, importing and deleting wait for the LAN catalogue lock
+  (`CardPacks.change_refusal`).
+- LAN (protocol 32): `SgCompatibility.community_mark` (what plays of each
+  card, `_playing_spec`, also in `fingerprint`; an optional `community` key
+  in the stamp, only when there are any; `community_differs`,
+  `COMMUNITY_WORDS` in `difference` and `brief`), `SgDeckCatalog.community_cards`,
+  the room view's optional `community` seat pair (`local_server.gd`,
+  `SgViewProtocol.room`), the lobby's red tag (`SgLobbyStyle.community_tag`,
+  `COMMUNITY_RED`, `WARNING_RED`) and its notice setter `_notice_text`.
+  `game/sgmanalink/card_transfer.gd` (`SgCardTransfer`): the host's
+  community cards fetched from the lobby on a connection of its own (the
+  `cards` and `card` messages of `SgProtocol.valid`, the access code in
+  each). Host: `shelf`, `shelf_row`, `sendable`, `bytes_of` (a set card
+  packed alone, `CommunityCards.zip_bytes_of`), `list_reply`,
+  `chunk_reply`; wire checks `card_name`, `valid_list`, `valid_chunk`,
+  `valid_target`, `target_of_invitation`. Guest: `mine`, `plan`,
+  `plan_text`, `apply` (every zip checked first; own cards moved to
+  `community_cards/set_aside`, never deleted; `CommunityCards.install`,
+  refresh, the marks compared; the batch undone on a problem); `ask_list`,
+  `download`, `cancel`; `MAX_CARDS` 200, `MAX_TOTAL` 96 MiB, `CHUNK`
+  512 KiB, `MIN_CHUNK`, an overall deadline; `_check` reads a zip's own
+  list first (a card's files only); listed sizes of set cards are upper
+  bounds; a replaced card is copied aside and saved over (copies a scan
+  shadowed are seen through `CommunityCards` rows' `shadowed`); the batch
+  record `set_aside/.batch.json` (`left_batch`, `restore_batch`,
+  `dismiss_batch`) offered back when the lobby opens. Hooks: `SgLocalServer._transfer`, `_card_shelf`,
+  `_sending_bytes`, `community_rows`; `SgLocalClient.transfer_target`,
+  `connect_target`; `SgCompatibility.mark_of`, `card_digest`; the lobby's
+  `GetHostCards` row (`_community_host`, `_update_community_row`,
+  `_get_host_cards`, `_confirm_host_cards`, `_install_host_cards`).
+- Hooks: `CardRegistry` (`_community_specs`, `_load_community` — a game
+  card's name in any case stays the game's —, `community_names`,
+  `community_skipped`, `has_community`, `game_name_like`, `comm` in
+  `extra_set_order` once a card was taken),
+  `CardData.flavor_text`, `PluginPackage.read`'s `manifest` argument,
+  `CardPacks.art_texture` and `_configure_registry`, `MiniCard._chosen_frame`,
+  `CardPreview._wear_border` and the flavor line, the Deck Builder's
+  Extras row and `DeckFilter.SET_LABELS`, the tooltips of `MiniCard`,
+  the Deck Builder's card area and its deck list.
+- Boosters: `SealedPool` puts community cards on the sheets by their own
+  rarity, a mythic on the rare sheet (`_printed_slot`); community boosters
+  (`community_boosters`, `community_rarity`, `community_sheets`,
+  `community_count`, the frozen `community_booster` with
+  `COMMUNITY_FALLBACK` and `MYTHIC_ODDS`, `community_note`); `DraftRecipe`'s
+  optional `COMMUNITY_OPTION` with its `community` sheets
+  (`_community_refusal`, `community_boosters`), fingerprinted only when
+  present, so recipes without it are unchanged v1, community sheets of
+  community cards only; `MAX_ELIGIBLE` 8192, `_unsealed`, `refusal`;
+  `DraftPoolConfig`
+  (`community_boosters`, `has_community`), the setup's `community_row` and
+  `community_field` (shown only while the pool holds a community card),
+  `DraftStore.prepare`'s option check, `DraftAudit` (`MOST_CARDS`,
+  `MOST_PACKS`, `_community_named`, `_listed`; names no pack explains are
+  listed by `_absent_refusal`).
+- Tests: `tests/cards/test_community_card.gd`,
+  `tests/unit/test_community_cards.gd`, `tests/unit/test_card_balance.gd`,
+  `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
+  `tests/ui/test_sgmanalink_community_transfer.gd`.
+
 ## The portable game (0.70.1, 2026-11-17)
 
 Issue #5's Options-menu follow-up. The owner: *"Lets implement a portable option in menu! That means that all

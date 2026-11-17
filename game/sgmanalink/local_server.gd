@@ -134,6 +134,22 @@ var own_addresses := PackedStringArray()
 ## (h6-1): an entry outlives its session, so a count of live sessions
 ## alone would let one computer register again after every abandon.
 var _entries_from: Dictionary = {}
+## THE COMMUNITY CARDS THIS HOST SENDS (2026-11-17): a guest whose cards
+## differ gets them from the lobby ([SgCardTransfer], [method _transfer]).
+## Read from this game's own scan once per pool; a test's host stands in
+## its own `{name, path, spec}` rows here. No network command reaches it.
+var community_rows: Array = []
+var _shelf: Array = []
+var _shelf_revision := -1
+## The list a guest reads, made once per pool.
+var _list_reply: Dictionary = {}
+## The zips sent this pool, `{name, bytes}`, the latest last, at most
+## [constant SENDING_BYTES] in all: one card's bytes stay the same for every
+## chunk of it, and a card of a set zip is packed once, not on each request
+## ([method CommunityCards.zip_bytes_of] packs it anew each time).
+const SENDING_BYTES := 64 * 1024 * 1024
+var _sending: Array = []
+var _sending_size := 0
 
 
 ## Local organiser entry point, deliberately not a remote command. A visitor
@@ -281,6 +297,11 @@ func stop() -> void:
 	_bot_due.clear()
 	_bot_reading.clear()
 	_entries_from.clear()
+	_shelf = []
+	_shelf_revision = -1
+	_list_reply = {}
+	_sending.clear()
+	_sending_size = 0
 	_flush_queued = false
 	access_code = ""
 	port = 0
@@ -658,6 +679,9 @@ func _send(id: int, message: Dictionary) -> void:
 func _receive(id: int, message: Dictionary) -> void:
 	var sid := int(_peers[id].session)
 	if sid == 0:
+		if message.type in ["cards", "card"]:
+			_transfer(id, message)
+			return
 		if message.type != "hello" or message.access != access_code:
 			# A seat resumed with an access code this host never gave out:
 			# the host it was seated at has restarted since (2026-10-12).
@@ -771,6 +795,84 @@ func _receive(id: int, message: Dictionary) -> void:
 	var changed := current_room != old_room or int(_rooms.get(current_room, {}).get("revision", -1)) != old_revision
 	if current_room != old_room and not old_room.is_empty(): _publish(old_room, 0, true)
 	_publish(current_room if changed else "", sid, action_changes_listings(message.action.op) and changed)
+
+
+## THE HOST'S COMMUNITY CARDS FOR A GUEST WHOSE CARDS DIFFER (2026-11-17):
+## a connection that has not said hello, holding the access code, reads
+## the list and each card's zip in chunks ([SgCardTransfer]) — never a
+## session, a table or a path. Only a request answered with what it asked
+## for gives the connection another [constant HELLO_MS]; a refused one does
+## not. Each chunk request counts as at least a whole chunk's work, however
+## little it asks for. A connection reads at most
+## [constant SgCardTransfer.MAX_LISTS] lists and one transfer's bytes and
+## one zip more; past that it is told so and let go.
+func _transfer(id: int, message: Dictionary) -> void:
+	if message.access != access_code:
+		_reject(id, INVALID_INVITATION)
+		return
+	var peer: Dictionary = _peers[id]
+	var reply: Dictionary
+	if message.type == "cards":
+		peer.lists = int(peer.get("lists", 0)) + 1
+		if int(peer.lists) > SgCardTransfer.MAX_LISTS:
+			_reject(id, SgCardTransfer.TOO_MANY)
+			return
+		reply = _card_list()
+	else:
+		var served := int(peer.get("served", 0))
+		if served >= SgCardTransfer.MAX_TOTAL + CommunityCards.MAX_ZIP:
+			_reject(id, SgCardTransfer.TOO_MANY)
+			return
+		var row := SgCardTransfer.shelf_row(_card_shelf(), String(message.name))
+		reply = SgCardTransfer.chunk_reply(row, String(message.name), int(message.offset), _sending_bytes(row))
+		peer.served = served + maxi(SgCardTransfer.CHUNK, String(reply.data).length() / 4 * 3)
+	if String(reply.error) == "":
+		peer.waited = 0
+	_send(id, reply)
+
+
+## [param row]'s zip, kept while this pool lasts ([member _sending]).
+func _sending_bytes(row: Dictionary) -> PackedByteArray:
+	if not SgCardTransfer.sendable(row):
+		return PackedByteArray()
+	for kept: Dictionary in _sending:
+		if String(kept["name"]) == String(row["name"]):
+			_sending.erase(kept)
+			_sending.append(kept)
+			return kept["bytes"]
+	var bytes := SgCardTransfer.bytes_of(row)
+	if bytes.is_empty():
+		return bytes
+	_sending.append({"name": String(row["name"]), "bytes": bytes})
+	_sending_size += bytes.size()
+	while _sending_size > SENDING_BYTES and _sending.size() > 1:
+		var gone: Dictionary = _sending.pop_front()
+		var gone_bytes: PackedByteArray = gone["bytes"]
+		_sending_size -= gone_bytes.size()
+	return bytes
+
+
+## The cards this host may send, read once per pool (the catalogue is
+## locked while it hosts); nothing is packed to list them.
+func _card_shelf() -> Array:
+	if not community_rows.is_empty():
+		return SgCardTransfer.shelf(community_rows)
+	if _shelf_revision != CardRegistry.revision:
+		_shelf = SgCardTransfer.shelf()
+		_shelf_revision = CardRegistry.revision
+		_list_reply = {}
+		_sending.clear()
+		_sending_size = 0
+	return _shelf
+
+
+func _card_list() -> Dictionary:
+	if not community_rows.is_empty():
+		return SgCardTransfer.list_reply(_card_shelf())
+	var cards := _card_shelf()
+	if _list_reply.is_empty():
+		_list_reply = SgCardTransfer.list_reply(cards)
+	return _list_reply
 
 
 func action_changes_listings(op: String) -> bool:
@@ -1146,6 +1248,11 @@ func _state(sid: int) -> Dictionary:
 		var record := _record_of(own)
 		if record != null:
 			view.mpn = record.record_id
+		# A seat whose deck holds community cards is tagged at the table.
+		var community := [not SgDeckCatalog.community_cards(own.decks[0]).is_empty(),
+			not SgDeckCatalog.community_cards(own.decks[1]).is_empty()]
+		if community[0] or community[1]:
+			view.community = community
 		if _is_bot(own.seats[0]) or _is_bot(own.seats[1]):
 			view.bots = []
 			for sid_value: int in own.seats:

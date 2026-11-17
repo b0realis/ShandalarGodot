@@ -1189,6 +1189,13 @@ func _open_extra_sets() -> void:
 			if filter.set_on("uds") != on:
 				filter.toggle_set("uds"),
 		"Urza's Destiny (1999): 143 distinct cards, the Urza block's third set.\nIts own artwork and switch within Pack 10; other filters still apply.")
+	# The cards players made, only while there are some ([CommunityCards]).
+	if CardRegistry.extra_set_order().has(CommunityCard.SET_CODE):
+		_extra_source_row(body, "Community", "Community cards", true,
+			filter.set_on(CommunityCard.SET_CODE), func(on: bool) -> void:
+				if filter.set_on(CommunityCard.SET_CODE) != on:
+					filter.toggle_set(CommunityCard.SET_CODE),
+			"Cards made by players and shared as zips in the community_cards folder.\nOther set, colour, type and search filters still apply.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 
@@ -5913,7 +5920,7 @@ func _hand_card(card_name: String) -> Control:
 			filter.preferred_printing(data))
 		card.refresh()
 		face = card
-		holder.tooltip_text = "%s\n%s" % [data.card_name, data.oracle_text]
+		holder.tooltip_text = "%s\n%s%s" % [data.card_name, data.oracle_text, CommunityCards.tooltip_extra(data)]
 	face.size = MiniCard.SIZE
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face.focus_mode = Control.FOCUS_NONE

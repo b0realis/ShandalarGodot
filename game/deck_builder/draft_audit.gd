@@ -4,6 +4,10 @@ extends RefCounted
 ## A local receipt is evidence to compare, not a signature or trusted referee.
 
 const MAX_CARDS := 1110 # 12 boosters + 12 starters + 150 lands + 60 extras.
+## [QoL] With community boosters on top (12 more boosters of 15): the
+## largest pool and the most packs a pool file or deck may hold.
+const MOST_CARDS := MAX_CARDS + DraftRecipe.MOST_COMMUNITY_BOOSTERS * 15
+const MOST_PACKS := 26 + DraftRecipe.MOST_COMMUNITY_BOOSTERS
 const POOL_BYTES := 1048576
 const DECK_BYTES := DraftRecipe.MAX_BYTES
 const TRUST_NOTE := "Checks pool membership, not deck-format legality or identity. The organiser must retain the original pool or fingerprint before building. A recipe or hash supplied afterwards can be replaced by the player."
@@ -35,8 +39,11 @@ static func reconstruct_text(text: String, expected_fingerprint := "") -> Dictio
 	if not result.ok: return result
 	result["receipt"] = receipt
 	var options: Dictionary = embedded.recipe.options
-	result.message += "\n\nReconstructed from seed: %s\n%d boosters · %d starters · %d extra lands per type · %d random extras · %d minutes\nFingerprint: %s" % [
-		embedded.recipe.seed, int(options.boosters), int(options.starters), int(options.free_lands), int(options.extras), int(options.minutes), embedded.recipe.fingerprint]
+	var community := DraftRecipe.community_boosters(embedded.recipe)
+	result.message += "\n\nReconstructed from seed: %s\n%d boosters · %d starters%s · %d extra lands per type · %d random extras · %d minutes\nFingerprint: %s" % [
+		embedded.recipe.seed, int(options.boosters), int(options.starters),
+		" · %d community boosters" % community if community > 0 else "",
+		int(options.free_lands), int(options.extras), int(options.minutes), embedded.recipe.fingerprint]
 	result.message += "\nMatches the judge's retained fingerprint." if expected_fingerprint != "" else "\nUnanchored replay: no pre-draft fingerprint was supplied."
 	for pack in replay.pool.packs:
 		result.message += "\n\n%s (%d cards)\n%s" % [pack.title, pack.cards.size(), ", ".join(pack.cards)]
@@ -89,7 +96,7 @@ static func check(receipt: Variant, deck_text: String, expected_fingerprint := "
 		if not token.is_valid_int() or token.length() > 4 or token.to_int() < 1:
 			return _failure("Invalid deck card count. Choose a native .deck or .dec text file.")
 		total += token.to_int()
-		if total > MAX_CARDS: return _failure("Deck and sideboard exceed the largest possible draft pool.")
+		if total > MOST_CARDS: return _failure("Deck and sideboard exceed the largest possible draft pool.")
 	var deck := DeckList.new()
 	deck.parse(deck_text)
 	if not deck.errors.is_empty():
@@ -111,15 +118,15 @@ static func pool_refusal(receipt: Variant) -> String:
 		return "Invalid or unsupported draft pool file."
 	var counts: Variant = receipt.get("counts")
 	var packs: Variant = receipt.get("packs")
-	if not counts is Dictionary or counts.is_empty() or counts.size() > MAX_CARDS \
-			or not packs is Array or packs.is_empty() or packs.size() > 26:
+	if not counts is Dictionary or counts.is_empty() or counts.size() > MOST_CARDS \
+			or not packs is Array or packs.is_empty() or packs.size() > MOST_PACKS:
 		return "Invalid pool counts or pack list."
 	CardRegistry.ensure_loaded()
 	var expected: Dictionary = {}
 	var total := 0
 	var absent: Array[String] = []
 	for card_name in counts:
-		if not card_name is String or not _whole(counts[card_name], MAX_CARDS):
+		if not card_name is String or not _whole(counts[card_name], MOST_CARDS):
 			return "Pool contains an unknown card or an invalid quantity."
 		if not CardRegistry.has_card(card_name):
 			absent.append(String(card_name))
@@ -127,15 +134,15 @@ static func pool_refusal(receipt: Variant) -> String:
 		expected[card_name] = int(counts[card_name])
 		total += int(counts[card_name])
 	if not absent.is_empty():
-		return _absent_refusal(absent)
-	if total > MAX_CARDS: return "Pool exceeds the largest supported draft."
+		return _absent_refusal(absent, receipt)
+	if total > MOST_CARDS: return "Pool exceeds the largest supported draft."
 	var actual: Dictionary = {}
 	var dealt := 0
 	for pack in packs:
 		if not pack is Dictionary or not pack.get("title") is String or not pack.get("cards") is Array:
 			return "Invalid pack contents in pool file."
 		dealt += pack.cards.size()
-		if dealt > MAX_CARDS: return "Pack contents exceed the largest supported draft."
+		if dealt > MOST_CARDS: return "Pack contents exceed the largest supported draft."
 		for card_name in pack.cards:
 			if not card_name is String or not expected.has(card_name): return "Pack contents do not match pool counts."
 			actual[card_name] = int(actual.get(card_name, 0)) + 1
@@ -147,15 +154,68 @@ static func pool_refusal(receipt: Variant) -> String:
 ## that has the pack switched off; name the shelf it wants instead of
 ## calling the file corrupt (2026-09-17). The pack identities are trusted
 ## game data, so this reads correctly with the ZIP absent as well.
-static func _absent_refusal(names: Array[String]) -> String:
-	var labels: Array[String] = []
-	for id in CardPacks.packs_required_by(names):
-		labels.append(CardPacks.label_for(id))
-	if labels.is_empty():
-		return "Pool contains an unknown card or an invalid quantity."
-	return ("This draft pool needs %s: %d of its card names are not in play here. "
-		+ "Enable %s in Options > Card Packs and check again.") % [" and ".join(labels),
-		names.size(), "it" if labels.size() == 1 else "them"]
+##
+## [QoL] A NAME NO PACK EXPLAINS is listed itself — a community card a
+## pool dealt (through any booster) is not here, or a name this game does
+## not have — and it is never counted as the pack's. A name the recipe's
+## community sheets hold is called a community card.
+static func _absent_refusal(names: Array[String], receipt: Dictionary = {}) -> String:
+	var community := _community_named(names, receipt.get("recipe"))
+	var rest: Array[String] = []
+	for card_name in names:
+		if not community.has(card_name):
+			rest.append(card_name)
+	# One ask for the usual cases (no pack at all, or every name a pack's);
+	# name by name only when packs are wanted, to find the names none explains.
+	var pack_names: Array[String] = []
+	var unknown: Array[String] = []
+	if rest.is_empty() or CardPacks.packs_required_by(rest).is_empty():
+		unknown = rest
+	else:
+		for card_name in rest:
+			if CardPacks.packs_required_by([card_name] as Array[String]).is_empty():
+				unknown.append(card_name)
+			else:
+				pack_names.append(card_name)
+	var parts: Array[String] = []
+	if not pack_names.is_empty():
+		var labels: Array[String] = []
+		for id in CardPacks.packs_required_by(pack_names):
+			labels.append(CardPacks.label_for(id))
+		parts.append(("This draft pool needs %s: %d of its card names are not in play here. "
+			+ "Enable %s in Options > Card Packs and check again.") % [" and ".join(labels),
+			pack_names.size(), "it" if labels.size() == 1 else "them"])
+	if not community.is_empty():
+		parts.append("%s community cards that are not here: %s." % [
+			"It also needs" if not parts.is_empty() else "This draft pool needs", _listed(community)])
+	if not unknown.is_empty():
+		parts.append("%s unknown card names that are not in play here: %s." % [
+			"It also has" if not parts.is_empty() else "Pool contains", _listed(unknown)])
+	return " ".join(parts)
+
+
+## [param names] sorted, the first ten of them and how many more.
+static func _listed(names: Array[String]) -> String:
+	var sorted: Array[String] = names.duplicate()
+	sorted.sort()
+	var shown := ", ".join(PackedStringArray(sorted.slice(0, 10)))
+	return shown if sorted.size() <= 10 else "%s and %d more" % [shown, sorted.size() - 10]
+
+
+## The names of [param names] that [param recipe]'s community sheets hold.
+static func _community_named(names: Array[String], recipe: Variant) -> Array[String]:
+	var out: Array[String] = []
+	if not recipe is Dictionary or not recipe.get("community") is Dictionary:
+		return out
+	for tier in DraftRecipe.COMMUNITY_TIERS:
+		var sheet: Variant = recipe.community.get(tier)
+		if not sheet is Array:
+			continue
+		for card_name in names:
+			if sheet.has(card_name) and not out.has(card_name):
+				out.append(card_name)
+	out.sort()
+	return out
 
 
 static func _whole(value: Variant, maximum: int) -> bool:

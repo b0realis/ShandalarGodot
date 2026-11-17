@@ -89,6 +89,35 @@ func connect_local(local_port: int, code: String, temporary_name := "") -> Error
 	return _connect()
 
 
+## Where this client connects, or last tried to: `{address, port, access,
+## tls}`, {} before any — kept after a refusal at the hello until
+## [method forget]. The lobby's card transfer ([SgCardTransfer]) opens its
+## own connection there.
+func transfer_target() -> Dictionary:
+	if _port == 0 or _access.is_empty():
+		return {}
+	return {"address": _address, "port": _port, "access": _access, "tls": _tls_options}
+
+
+## Connect again to [param target] ([method transfer_target]) with a fresh
+## build fingerprint: after the community cards came, the same host.
+func connect_target(target: Dictionary, temporary_name := "") -> Error:
+	var clean_name := temporary_name.strip_edges()
+	if OS.has_feature("web") or not SgCardTransfer.valid_target(target) or not SgProtocol.nickname(clean_name):
+		return ERR_INVALID_PARAMETER
+	forget()
+	build_fingerprint = SgCompatibility.fingerprint()
+	build_stamp = SgCompatibility.stamp()
+	CardPacks.lock_catalogue(self)
+	_address = String(target.address)
+	_port = int(target.port)
+	_access = String(target.access)
+	_tls_options = target.tls
+	_nickname = clean_name
+	_wanted = true
+	return _connect()
+
+
 func _connect() -> Error:
 	_socket = WebSocketPeer.new()
 	# Every earlier version too: an older host completes the handshake by

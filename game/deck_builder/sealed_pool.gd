@@ -56,6 +56,14 @@ extends RefCounted
 ## THIS IS NOT THE DECK. [member counts] is what you HOLD; the deck the
 ## builder makes from it is the [DeckModel] as ever, and the builder's
 ## screen is what refuses a fifth copy of a card the pool dealt four of.
+##
+## [QoL] COMMUNITY CARDS ([CommunityCards], the set
+## [constant CommunityCard.SET_CODE]) sit on the sheets by their own card's
+## rarity, a MYTHIC on the rare sheet. A COMMUNITY BOOSTER
+## ([method community_booster]) is a booster of community cards alone, its
+## basic land off the ordinary land sheet; a small set fills a short slot
+## from other community cards and repeats a card only when the whole set
+## is smaller than the pack.
 
 ## The owner's booster, slot by slot, in the order a pack is fanned.
 const BOOSTER := {"rare": 1, "uncommon": 3, "land": 1, "common": 10}
@@ -66,6 +74,18 @@ const STARTER := {"rare": 3, "uncommon": 9, "common": 26, "land": 22}
 const SLOT_ORDER: Array[String] = ["rare", "uncommon", "common", "land"]
 ## The five basic lands, in the deck builder's own colour order.
 const LAND_NAMES: Array[String] = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
+## The rarities a community card is made at ([constant CommunityCard.RARITIES]),
+## the sheets of a community booster, rarest first.
+const COMMUNITY_TIERS: Array[String] = ["mythic", "rare", "uncommon", "common"]
+## A community booster's rare slot holds a mythic about one time in this
+## many, when the set has both.
+const MYTHIC_ODDS := 8
+## Where a community booster's short slot looks next: the next rarity down
+## first, then up, so no card repeats while the set has one unused. A land
+## slot with no basic land in the pool takes a community card.
+const COMMUNITY_FALLBACK := {"rare": ["uncommon", "common"],
+	"uncommon": ["common", "rare", "mythic"], "common": ["uncommon", "rare", "mythic"],
+	"land": ["common", "uncommon", "rare", "mythic"]}
 
 ## The owner's defaults: *"boosters … default 3"*, *"tournament packs …
 ## default 1"*, *"each land type (default 0)"*, *"totally random cards
@@ -82,6 +102,8 @@ const MOST_EXTRAS := 60
 
 var boosters := DEFAULT_BOOSTERS
 var starters := DEFAULT_STARTERS
+## Boosters of community cards only ([method community_booster]).
+var community_boosters := 0
 ## Of EACH basic land type.
 var free_lands := DEFAULT_FREE_LANDS
 ## Cards drawn from the whole library, any rarity.
@@ -102,7 +124,7 @@ var draft_recipe: Dictionary = {}
 ## How many cards the settings deal — the number the window shows before
 ## the dice are thrown.
 func card_total() -> int:
-	return boosters * pack_size(BOOSTER) + starters * pack_size(STARTER) \
+	return (boosters + community_boosters) * pack_size(BOOSTER) + starters * pack_size(STARTER) \
 		+ free_lands * LAND_NAMES.size() + extras
 
 
@@ -122,11 +144,15 @@ static func pack_size(shape: Dictionary) -> int:
 static func sheets(library: Array) -> Dictionary:
 	var out := {"rare": [], "uncommon": [], "common": [], "land": []}
 	var placed := {}
+	# The community names once, not a registry ask per card.
+	var community := {}
+	for card_name in CardRegistry.community_names():
+		community[card_name] = true
 	for data in library:
 		if data == null or placed.has(data.card_name):
 			continue
 		placed[data.card_name] = true
-		var tier := "land" if LAND_NAMES.has(data.card_name) else DeckStats.rarity_of(data.card_name)
+		var tier := _printed_slot(data.card_name, community.has(data.card_name))
 		if out.has(tier):
 			out[tier].append(data.card_name)
 	for slot in out:
@@ -149,6 +175,19 @@ func deal(library: Array, roll: int) -> void:
 		_open("Starter Pack %d" % (i + 1), STARTER, sheet, rng)
 	for i in boosters:
 		_open("Booster Pack %d" % (i + 1), BOOSTER, sheet, rng)
+	if community_boosters > 0:
+		var library_names: Array = []
+		for data in library:
+			if data != null:
+				library_names.append(data.card_name)
+		var community := community_sheets(library_names)
+		# No community card to deal: no community booster, and the count
+		# says so, so [method card_total] is still what was dealt.
+		if community_count(community) == 0:
+			community_boosters = 0
+		var pick := func(bound: int) -> int: return rng.randi_range(0, bound - 1)
+		for i in community_boosters:
+			_keep("Community Booster %d" % (i + 1), community_booster(community, sheet["land"], pick))
 	if free_lands > 0:
 		var lands: Array[String] = []
 		for land in LAND_NAMES:
@@ -242,10 +281,161 @@ func slot_counts() -> Dictionary:
 static func slot_of(card_name: String) -> String:
 	if not CardRegistry.has_card(card_name):
 		return ""
+	var tier := _printed_slot(card_name, CardRegistry.has_community(card_name))
+	return tier if SLOT_ORDER.has(tier) else ""
+
+
+## The sheet [param card_name]'s printed rarity names, unchecked: a basic
+## land's own; a COMMUNITY CARD's ([param community]) by its own card
+## ([method community_rarity]), a mythic on the rare sheet — read before
+## the game's rarity table, which may list a name a community card took;
+## any other by [method DeckStats.rarity_of].
+static func _printed_slot(card_name: String, community: bool) -> String:
 	if LAND_NAMES.has(card_name):
 		return "land"
-	var tier := DeckStats.rarity_of(card_name)
-	return tier if SLOT_ORDER.has(tier) else ""
+	if community:
+		var word := community_rarity(card_name)
+		return "rare" if word == "mythic" else word
+	return DeckStats.rarity_of(card_name)
+
+
+# ----------------------------------------- [QoL] the community booster --
+
+## A community card's printed rarity, one of [constant COMMUNITY_TIERS]
+## (its card's own, recorded under [constant CommunityCard.SET_CODE];
+## common when the record says nothing else).
+static func community_rarity(card_name: String) -> String:
+	var word := CardRegistry.rarity_of(card_name, CommunityCard.SET_CODE)
+	return word if COMMUNITY_TIERS.has(word) else "common"
+
+
+## The community cards among [param names], once each, by
+## [constant COMMUNITY_TIERS] — each sheet sorted, so a seed means the same
+## booster whatever order the names came in.
+static func community_sheets(names: Array) -> Dictionary:
+	var out := {}
+	for tier in COMMUNITY_TIERS:
+		out[tier] = []
+	var placed := {}
+	for value in names:
+		var card_name := String(value)
+		if placed.has(card_name) or LAND_NAMES.has(card_name) or not CardRegistry.has_community(card_name):
+			continue
+		placed[card_name] = true
+		out[community_rarity(card_name)].append(card_name)
+	for tier in out:
+		out[tier].sort()
+	return out
+
+
+## Community cards on [param sheets] ([method community_sheets]), all sheets together.
+static func community_count(sheets: Dictionary) -> int:
+	var n := 0
+	for tier in COMMUNITY_TIERS:
+		n += (sheets.get(tier, []) as Array).size()
+	return n
+
+
+## ONE COMMUNITY BOOSTER: [constant BOOSTER]'s fifteen slots, every card a
+## community card off [param sheets] ([method community_sheets]) but the
+## basic land, which comes off [param lands] — the ordinary land sheet,
+## with replacement as ever. [param pick] answers a whole number below the
+## one it is given: the dealer's own randomness, so [DraftRecipe] replays a
+## booster with its frozen counter words and [method deal] with its seed.
+##
+## THE RARE SLOT is a mythic about one time in [constant MYTHIC_ODDS] when
+## the set has mythics and rares, and whichever it has otherwise.
+## A SMALL SET is never refused. Every slot draws its own sheet first,
+## without replacement; a slot left short then takes the next rarity down,
+## then up ([constant COMMUNITY_FALLBACK]); and only once the whole set is
+## used does a fresh copy of it come in, so a card repeats only when the
+## set is smaller than the pack, and only after every card came once.
+##
+## FROZEN: a draft recipe replays this at every check, with its own frozen
+## [param shape] ([constant DraftRecipe.BOOSTER]). A change to it, to
+## [constant MYTHIC_ODDS] or to [constant COMMUNITY_FALLBACK] changes old
+## pools, and needs a new [constant DraftRecipe.ALGORITHM].
+static func community_booster(sheets: Dictionary, lands: Array, pick: Callable,
+		shape: Dictionary = BOOSTER) -> Array[String]:
+	var left := {}
+	for tier in COMMUNITY_TIERS:
+		left[tier] = (sheets.get(tier, []) as Array).duplicate()
+	var whole := community_count(sheets)
+	var top := "rare"
+	if not left["mythic"].is_empty() and (left["rare"].is_empty() or int(pick.call(MYTHIC_ODDS)) == 0):
+		top = "mythic"
+	var own := {"rare": [top], "uncommon": ["uncommon"], "common": ["common"]}
+	var drawn := {}
+	for slot in SLOT_ORDER:
+		drawn[slot] = []
+	var rounds := 0
+	while true:
+		for slot in SLOT_ORDER:
+			var want := int(shape[slot])
+			if slot == "land":
+				while drawn[slot].size() < want and not lands.is_empty():
+					drawn[slot].append(String(lands[int(pick.call(lands.size()))]))
+				continue
+			for tier in own[slot]:
+				_take(drawn[slot], left[tier], want - drawn[slot].size(), pick)
+		var short := false
+		for slot in SLOT_ORDER:
+			for tier in COMMUNITY_FALLBACK[slot]:
+				_take(drawn[slot], left[tier], int(shape[slot]) - drawn[slot].size(), pick)
+			short = short or drawn[slot].size() < int(shape[slot])
+		rounds += 1
+		# Short after both passes means every sheet is used up: the set is
+		# smaller than the pack, and a fresh copy of it fills the rest.
+		if not short or whole == 0 or rounds > pack_size(shape):
+			break
+		for tier in COMMUNITY_TIERS:
+			left[tier] = (sheets.get(tier, []) as Array).duplicate()
+	var out: Array[String] = []
+	for slot in SLOT_ORDER:
+		var cards: Array[String] = []
+		cards.assign(drawn[slot])
+		cards.sort()
+		out.append_array(cards)
+	return out
+
+
+## Up to [param count] names off [param sheet] into [param into], each
+## taken out of [param sheet] — a uniform pick among what is left, and
+## the last name moved into its place.
+static func _take(into: Array, sheet: Array, count: int, pick: Callable) -> void:
+	for _i in mini(count, sheet.size()):
+		var j := int(pick.call(sheet.size()))
+		into.append(String(sheet[j]))
+		sheet[j] = sheet[sheet.size() - 1]
+		sheet.pop_back()
+
+
+## What a community booster makes do with, as the setup's summary says it
+## — "" when every slot comes off its own sheet. [param lands] is how many
+## basic lands the land sheet holds.
+static func community_note(sheets: Dictionary, lands: int) -> String:
+	var whole := community_count(sheets)
+	if whole == 0:
+		return ""
+	var slots := pack_size(BOOSTER) - (int(BOOSTER["land"]) if lands > 0 else 0)
+	if whole == 1:
+		return "Community boosters: 1 community card for %d slots, so it repeats within a pack." % slots
+	if whole < slots:
+		return "Community boosters: %d community cards for %d slots, so some repeat within a pack." % [whole, slots]
+	var short: Array[String] = []
+	if (sheets.get("rare", []) as Array).size() + (sheets.get("mythic", []) as Array).size() < int(BOOSTER["rare"]):
+		short.append("rare")
+	for tier in ["uncommon", "common"]:
+		if (sheets.get(tier, []) as Array).size() < int(BOOSTER[tier]):
+			short.append(tier)
+	var parts: Array[String] = []
+	if not short.is_empty():
+		var listed: String = short[-1] if short.size() == 1 \
+			else "%s and %s" % [", ".join(short.slice(0, -1)), short[-1]]
+		parts.append("too few %s cards, so other community cards fill those slots" % listed)
+	if lands <= 0:
+		parts.append("no basic land in Card pool, so a community card takes the land slot")
+	return "" if parts.is_empty() else "Community boosters: %s." % "; ".join(parts)
 
 
 ## The tally in a sentence: "105 cards — 6 rare, 18 uncommon, 56 common,

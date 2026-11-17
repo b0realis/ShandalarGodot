@@ -12,6 +12,34 @@ var _nickname: LineEdit
 var _room_name: LineEdit
 var _status: Label
 var _notice: Label
+## What the notice line says. A community-card difference is said in red
+## (both players need the same community cards); every other notice in
+## the line's own ink.
+var _notice_text: String:
+	get:
+		return _notice.text if is_instance_valid(_notice) else ""
+	set(value):
+		if not is_instance_valid(_notice):
+			return
+		_notice.text = value
+		if value.begins_with(SgCompatibility.COMMUNITY_WORDS):
+			_notice.add_theme_color_override("font_color", SgLobbyStyle.WARNING_RED)
+		elif _notice.has_meta("sg_ink"):
+			_notice.add_theme_color_override("font_color", _notice.get_meta("sg_ink"))
+		_update_community_row()
+
+## THE HOST'S COMMUNITY CARDS (2026-11-17). The host whose community cards
+## differ from this game's — `{target, advert, table}`: where it listens,
+## and the Game Browser's advert and table when it was found there — and
+## the transfer that fetches its cards ([SgCardTransfer]). The red notice
+## offers [member _community_button] while one is known.
+var _community_host: Dictionary = {}
+var _community_words := ""
+var _community_plan: Dictionary = {}
+var _transfer: SgCardTransfer
+var _community_row: HBoxContainer
+var _community_button: Button
+var _community_cancel: Button
 var _body: VBoxContainer
 var _start: Button
 var _connect_button: Button
@@ -106,7 +134,7 @@ func _ready() -> void:
 		UiChrome.explain_popup(self, "Export MPN", message))
 	client.refused.connect(func(reason: String) -> void:
 		_host_pending = false
-		_notice.text = reason
+		_notice_text = reason
 		_report_to_master(reason)
 		if is_instance_valid(_duel): _duel.show_notice(reason))
 	_shell = Control.new()
@@ -176,6 +204,28 @@ func _ready() -> void:
 	_notice = SgLobbyStyle.label("", 15, true)
 	_notice.custom_minimum_size.y = 20
 	column.add_child(_notice)
+	_transfer = SgCardTransfer.new()
+	_transfer.name = "CardTransfer"
+	add_child(_transfer)
+	_transfer.listed.connect(_confirm_host_cards)
+	_transfer.downloaded.connect(_install_host_cards)
+	_transfer.failed.connect(func(reason: String) -> void:
+		_notice_text = "%s still: %s" % [SgCompatibility.COMMUNITY_WORDS, reason]
+		_queue_refresh())
+	_transfer.progressed.connect(func(words: String) -> void: _notice_text = words)
+	_community_row = SgLobbyStyle.row(column)
+	_community_row.name = "CommunityRow"
+	_community_button = _button("Get the host's cards…", _get_host_cards, Vector2(230, 36))
+	_community_button.name = "GetHostCards"
+	_community_button.tooltip_text = "Asks the host which community cards it has, then says what would change here before anything does."
+	_community_row.add_child(_community_button)
+	_community_cancel = _button("Cancel", _cancel_host_cards, Vector2(120, 36))
+	_community_cancel.name = "CancelHostCards"
+	_community_row.add_child(_community_cancel)
+	_community_row.hide()
+	# A transfer a crash cut short is offered back as it was (2026-11-17).
+	if SgCardTransfer.left_batch():
+		_offer_restore.call_deferred()
 	var footer := SgLobbyStyle.label("DESKTOP LAN  /  DUELS & TOURNAMENTS  /  UNRATED", 13, true)
 	footer.add_theme_color_override("font_color", SgLobbyStyle.GOLD)
 	column.add_child(footer)
@@ -428,6 +478,10 @@ func _deck_chooser(parent: Control, prefix: String, caption: String, choose: Cal
 			list.add_item("%s (%d)" % [deck.name, deck.cards.size()])
 			list.set_item_metadata(list.item_count - 1, index)
 			list.set_item_tooltip(list.item_count - 1, deck.group)
+			if not SgDeckCatalog.community_cards(deck).is_empty():
+				list.set_item_text(list.item_count - 1, "%s (%d)  · community" % [deck.name, deck.cards.size()])
+				list.set_item_custom_fg_color(list.item_count - 1, SgLobbyStyle.COMMUNITY_RED)
+				list.set_item_tooltip(list.item_count - 1, "%s\nHolds community cards: both players need the same ones." % deck.group)
 	search.text_changed.connect(refill)
 	# The catalogue is read when the window first opens, not when the lobby does.
 	var sheet: Control = parent.get_meta("sg_window")
@@ -452,10 +506,10 @@ func _invitation_text() -> String:
 func _copy_invitation() -> void:
 	var text := _invitation_text()
 	if text.is_empty():
-		_notice.text = "Host a table first; the invitation exists once your host is running."
+		_notice_text = "Host a table first; the invitation exists once your host is running."
 		return
 	DisplayServer.clipboard_set(text)
-	_notice.text = "Invitation copied. Send it privately; clipboard history may retain it."
+	_notice_text = "Invitation copied. Send it privately; clipboard history may retain it."
 
 
 func _build_browser(page: VBoxContainer) -> void:
@@ -517,17 +571,17 @@ func _close_windows() -> void:
 
 func _save_identity() -> void:
 	if client.has_session() or client.online or client.connecting() or service != null:
-		_notice.text = "Finish this visit before changing your identity."
+		_notice_text = "Finish this visit before changing your identity."
 		return
 	var result := SgIdentity.save_name(_nickname.text, _remember.button_pressed)
 	if not result.is_empty():
-		_notice.text = result
+		_notice_text = result
 		return
 	_nickname.text = _nickname.text.strip_edges()
 	_identity_name = _nickname.text
 	_identity_remember = _remember.button_pressed
 	_show_page("home")
-	_notice.text = "Identity selected. " + ("Name remembered on this device."
+	_notice_text = "Identity selected. " + ("Name remembered on this device."
 		if _remember.button_pressed and not _nickname.text.is_empty() else "Name used for this visit only.")
 
 
@@ -535,14 +589,14 @@ func _show_page(page: String) -> void:
 	if page not in ["home", "identity", "host", "browser", "room", "tournament"]:
 		return
 	if page == "identity" and (client.has_session() or client.online or client.connecting() or service != null):
-		_notice.text = "Your current guest name stays fixed until you disconnect."
+		_notice_text = "Your current guest name stays fixed until you disconnect."
 		return
 	if _page == "identity" and page != "identity":
 		_nickname.text = _identity_name
 		_remember.button_pressed = _identity_remember
 	_page = page
 	_content_scroll.scroll_vertical = 0
-	_notice.text = ""
+	_notice_text = ""
 	_confirm_close = false
 	_close_windows()
 	_refresh()
@@ -635,10 +689,10 @@ func _address_summary() -> String:
 
 func _host_game() -> void:
 	if not SgProtocol.short_text(_room_draft.strip_edges()):
-		_notice.text = "Room names use up to 32 letters, numbers, spaces, - and _."
+		_notice_text = "Room names use up to 32 letters, numbers, spaces, - and _."
 		return
 	if _host_decks.selected == 1 and _host_deck.is_empty():
-		_notice.text = "Choose the deck both players will use, or switch to Bring your own deck."
+		_notice_text = "Choose the deck both players will use, or switch to Bring your own deck."
 		SgLobbyStyle.open_window(_host_deck_window)
 		return
 	if client.online:
@@ -663,7 +717,7 @@ func _host_tournament(options: Dictionary, restore_path: String) -> void:
 		"folder": GamePaths.tournaments_folder()}
 	if service == null:
 		if client.has_session() or client.online or client.connecting():
-			_notice.text = "Disconnect from the other host before hosting your own tournament."
+			_notice_text = "Disconnect from the other host before hosting your own tournament."
 			_tournament_pending.clear()
 			return
 		_start_lan(not _tournament_panel.invite_only)
@@ -744,14 +798,14 @@ func _start_service() -> void:
 	var result := candidate.start_local(int(_port.value))
 	if result != OK:
 		candidate.queue_free()
-		_notice.text = "Cannot start on this port. Choose a free port."
+		_notice_text = "Cannot start on this port. Choose a free port."
 		return
 	service = candidate
 	_port.value = service.port
 	_code.text = service.access_code
 	_selected_host = {}
 	SgLobbyStyle.close_window(_network_window)
-	_notice.text = "Local service started. Use its access code and port in a second window on this computer."
+	_notice_text = "Local service started. Use its access code and port in a second window on this computer."
 	_connect_local()
 
 
@@ -762,7 +816,7 @@ func _start_lan(open := true) -> void:
 		return
 	var address := _interfaces.get_item_text(_interfaces.selected)
 	if not SgLanInvite.local_addresses().has(address):
-		_notice.text = "Connect this computer to a private IPv4 LAN first."
+		_notice_text = "Connect this computer to a private IPv4 LAN first."
 		return
 	var candidate := SgLocalServer.new()
 	add_child(candidate)
@@ -770,17 +824,17 @@ func _start_lan(open := true) -> void:
 		_nickname.text.strip_edges(), SgLanDiscovery.PORT, open)
 	if result != OK:
 		candidate.queue_free()
-		_notice.text = "Cannot host on this address and port. Check the network or choose another port."
+		_notice_text = "Cannot host on this address and port. Check the network or choose another port."
 		return
 	service = candidate
 	_port.value = service.port
 	_code.text = service.invitation()
 	_selected_host = {}
 	_pending_join = ""
-	_notice.text = ("LAN host started. Players on your network join from their Game Browser." if service.open_to_lan \
+	_notice_text = ("LAN host started. Players on your network join from their Game Browser." if service.open_to_lan \
 		else "LAN host started. Copy invitation and send it to your opponent.") + " Closing ends all hosted games."
 	if service.discovery_error != OK:
-		_notice.text += " Discovery is unavailable; the invitation still connects directly."
+		_notice_text += " Discovery is unavailable; the invitation still connects directly."
 	_connect_local()
 
 
@@ -797,7 +851,7 @@ func _scan_lan() -> void:
 		_pending_join = ""
 	else:
 		var result := _discovery.scan()
-		_notice.text = "Searching the LAN for tables." \
+		_notice_text = "Searching the LAN for tables." \
 			if result == OK else "Cannot scan this network. Connect by invitation instead."
 	_refresh()
 
@@ -807,19 +861,31 @@ func _scan_lan() -> void:
 ## table. An invitation-only host needs its invitation pasted first.
 func _join_advert(advert: Dictionary, table_name: String) -> void:
 	if client.online or client.busy() or client.connecting() or client.has_session(): return
+	if _transfer.busy():
+		_notice_text = "Wait for the host's community cards first."
+		return
+	# Another host now: the last one's refusal and its offer go with it.
+	client.forget()
+	_community_host = {}
 	var mismatch := _advert_mismatch(advert)
 	if not mismatch.is_empty():
-		_notice.text = mismatch
+		# An open host published its invitation: its cards can be fetched.
+		if mismatch.begins_with(SgCompatibility.COMMUNITY_WORDS) and SgLanDiscovery.open_host(advert):
+			var target := SgCardTransfer.target_of_invitation(String(advert.invitation))
+			if not target.is_empty():
+				_community_host = {"target": target, "advert": advert.duplicate(true), "table": table_name}
+				_community_words = mismatch
+		_notice_text = mismatch
 		return
 	if not _valid_nickname(): return
 	_selected_host = advert.duplicate(true)
 	_pending_join = table_name
 	if SgLanDiscovery.open_host(advert):
 		if client.connect_invitation(String(advert.invitation), _nickname.text) == OK:
-			_notice.text = "Connecting to %s…" % advert.name
+			_notice_text = "Connecting to %s…" % advert.name
 		else:
 			_pending_join = ""
-			_notice.text = "Cannot connect to this host. LAN play requires the desktop game."
+			_notice_text = "Cannot connect to this host. LAN play requires the desktop game."
 	else:
 		_open_invite_window(String(advert.name))
 	_refresh()
@@ -831,14 +897,18 @@ func _connect_local() -> void:
 	if client.has_session():
 		client.reconnect()
 		return
+	if _transfer.busy():
+		_notice_text = "Wait for the host's community cards first."
+		return
 	if not _valid_nickname():
 		return
+	_community_host = {}
 	var invitation := _code.text.strip_edges()
 	var result: Error
 	if invitation.begins_with(SgLanInvite.PREFIX):
 		var other_version := SgLanInvite.version_mismatch(SgLanInvite.protocol(invitation))
 		if not other_version.is_empty():
-			_notice.text = other_version
+			_notice_text = other_version
 			return
 		var data := SgLanInvite.parse(invitation)
 		if not _selected_host.is_empty() and (data.is_empty() \
@@ -846,22 +916,22 @@ func _connect_local() -> void:
 			or data.fingerprint != _selected_host.fingerprint):
 			# The search button clears the selection ([method _scan_lan]);
 			# it reads "Stop LAN search" while a host can be selected.
-			_notice.text = "This invitation does not match the selected host. Choose Stop LAN search to join it directly."
+			_notice_text = "This invitation does not match the selected host. Choose Stop LAN search to join it directly."
 			return
 		result = client.connect_invitation(invitation, _nickname.text)
 	else:
 		if not _selected_host.is_empty():
-			_notice.text = "Paste the complete LAN invitation from the host, not a local access code."
+			_notice_text = "Paste the complete LAN invitation from the host, not a local access code."
 			return
 		result = client.connect_local(int(_port.value), invitation, _nickname.text)
 	if result != OK:
-		_notice.text = "Paste a complete invitation from the current host. LAN play requires the desktop game."
+		_notice_text = "Paste a complete invitation from the current host. LAN play requires the desktop game."
 
 
 func _valid_nickname() -> bool:
 	if SgProtocol.nickname(_nickname.text.strip_edges()):
 		return true
-	_notice.text = "Temporary names use up to 20 letters, numbers, spaces, - or _. Leave blank for a guest name."
+	_notice_text = "Temporary names use up to 20 letters, numbers, spaces, - or _. Leave blank for a guest name."
 	return false
 
 
@@ -870,8 +940,8 @@ func _close() -> void:
 	if not _confirm_close and (service != null or not room.is_empty() or client.has_session()):
 		_confirm_close = true
 		_close_button.text = "Confirm close"
-		_notice.text = "Closing forgets this temporary seat. If you host, all your games end. "
-		_notice.text += "Click Confirm close to continue."
+		_notice_text = "Closing forgets this temporary seat. If you host, all your games end. "
+		_notice_text += "Click Confirm close to continue."
 		return
 	queue_free()
 
@@ -891,7 +961,7 @@ func _refresh() -> void:
 		var pending := _tournament_pending.duplicate(true)
 		_tournament_pending.clear()
 		var error := service.open_tournament(pending.options, client._resume, pending.folder, pending.path)
-		_notice.text = error if not error.is_empty() else ("Tournament opened. Players on your network register from their Game Browser; entrants should save their recovery codes."
+		_notice_text = error if not error.is_empty() else ("Tournament opened. Players on your network register from their Game Browser; entrants should save their recovery codes."
 			if service.open_to_lan else "Tournament opened. Copy invitation and send it to every entrant; they should save their recovery codes.")
 	var event: Dictionary = client.state.get("tournament", {})
 	# The host's own seat is the organiser's: a live event on this service
@@ -900,7 +970,7 @@ func _refresh() -> void:
 	if service != null and client.online and not client.busy() and not event.is_empty() \
 			and not bool(event.get("organiser", false)):
 		if service.reclaim_tournament(client._resume).is_empty():
-			_notice.text = "Tournament controls recovered for this seat."
+			_notice_text = "Tournament controls recovered for this seat."
 	if String(event.get("id", "")) != _tournament_id:
 		_tournament_id = String(event.get("id", ""))
 		_close_master()
@@ -918,7 +988,7 @@ func _refresh() -> void:
 				_send({"op": "join", "room": listed.id})
 				break
 		if not found and not wanted.is_empty():
-			_notice.text = "The table “%s” is no longer open. Pick another on this host." % wanted
+			_notice_text = "The table “%s” is no longer open. Pick another on this host." % wanted
 	# OK on a friendly result leaves its room (2026-10-03) as soon as the
 	# connection can say so: a reconnecting or busy client sends it later.
 	if not _leave_room.is_empty():
@@ -995,6 +1065,17 @@ func _refresh() -> void:
 	_connection_controls.visible = not playing
 	_status.text = client.status + ("  ·  " + client.guest if client.online else "")
 	_status.add_theme_color_override("font_color", SgLobbyStyle.PALE if client.online else SgLobbyStyle.MUTED)
+	# THE HOST REFUSED THIS GAME'S COMMUNITY CARDS at the hello: said red,
+	# and the notice offers to get the host's (2026-11-17).
+	if client.status.begins_with(SgCompatibility.COMMUNITY_WORDS) and not client.online:
+		_status.add_theme_color_override("font_color", SgLobbyStyle.WARNING_RED)
+		if not client.connecting() and _community_host.is_empty() and not _transfer.busy():
+			var target := client.transfer_target()
+			if not target.is_empty():
+				_community_host = {"target": target, "advert": {}, "table": ""}
+				_community_words = client.status
+				_notice_text = client.status
+	_update_community_row()
 	_identity_summary.text = "Your name at the table  ·  " + (_identity_name if not _identity_name.is_empty() else "Guest")
 	if _page == "home": _address_facts.text = _address_summary()
 	var locked := client.online or client.has_session() or client.connecting() or service != null
@@ -1012,6 +1093,11 @@ func _refresh() -> void:
 	_host_deck_button.visible = _host_decks.selected == 1
 	_host_deck_label.visible = _host_decks.selected == 1
 	_host_deck_label.text = "No deck chosen yet" if _host_deck.is_empty() else String(_host_deck.name)
+	if not _host_deck.is_empty() and not SgDeckCatalog.community_cards(_host_deck).is_empty():
+		_host_deck_label.text += "  · community"
+		_host_deck_label.add_theme_color_override("font_color", SgLobbyStyle.COMMUNITY_RED)
+	elif _host_deck_label.has_meta("sg_ink"):
+		_host_deck_label.add_theme_color_override("font_color", _host_deck_label.get_meta("sg_ink"))
 	_access_hint.text = "Only players you send the invitation to can join." if _invite_only.button_pressed \
 		else "Anyone on your network sees this table in their Game Browser and joins with a click."
 	_copy.disabled = _invitation_text().is_empty()
@@ -1095,6 +1181,8 @@ func _disconnect() -> void:
 		service.queue_free()
 		service = null
 	client.forget()
+	_transfer.cancel()
+	_community_host = {}
 	_code.text = ""
 	_selected_host.clear()
 	_pending_join = ""
@@ -1107,6 +1195,119 @@ func _disconnect() -> void:
 	# not to wherever leaving that room leads (R4-1).
 	_room_id = ""
 	_show_page("home")
+
+
+## THE HOST'S COMMUNITY CARDS (2026-11-17): the red notice of a difference
+## offers to get them while the host is known, greyed while they come.
+func _update_community_row() -> void:
+	if not is_instance_valid(_community_row) or _transfer == null:
+		return
+	var busy := _transfer.busy()
+	_community_row.visible = not _community_host.is_empty() \
+		and (busy or _notice.text.begins_with(SgCompatibility.COMMUNITY_WORDS))
+	_community_button.disabled = busy or client.online or client.connecting()
+	_community_cancel.visible = busy
+
+
+## Stop getting the host's cards: nothing here has changed yet.
+func _cancel_host_cards() -> void:
+	if not _transfer.busy():
+		return
+	_transfer.cancel()
+	_community_plan = {}
+	_notice_text = "%s still: getting the host's cards was cancelled. Nothing here changed." \
+		% SgCompatibility.COMMUNITY_WORDS
+
+
+## A transfer of community cards a crash cut short: put the cards back as
+## they were before it, or keep them as they are now ([SgCardTransfer]).
+func _offer_restore() -> void:
+	if not is_inside_tree() or not SgCardTransfer.left_batch():
+		return
+	UiChrome.action_popup(self, "Community cards",
+		"A transfer of community cards from a host was cut short. Put your cards back as they were before it?\n"
+		+ "Your set-aside cards are in %s either way." % GamePaths.shown(SgCardTransfer.aside_folder()), [
+		{"label": "Put them back", "name": "RestoreCards", "callable": func() -> void:
+			_notice_text = SgCardTransfer.restore_batch()
+			client.build_fingerprint = SgCompatibility.fingerprint()
+			client.build_stamp = SgCompatibility.stamp()
+			_body_snapshot = {}
+			_queue_refresh()},
+		{"label": "Keep them", "name": "KeepCards", "cancel": true, "callable": func() -> void:
+			SgCardTransfer.dismiss_batch()}], 560.0)
+
+
+## Ask the host for its list; nothing here changes before the player says so.
+func _get_host_cards() -> void:
+	if _community_host.is_empty() or _transfer.busy() or client.online or client.connecting():
+		return
+	if _transfer.ask_list(_community_host.target) != OK:
+		_notice_text = "%s still: the host cannot be reached. Try joining again." % SgCompatibility.COMMUNITY_WORDS
+		return
+	_notice_text = "Asking the host which community cards it has…"
+
+
+## The host's list came: say exactly what would happen, and ask.
+func _confirm_host_cards(plan: Dictionary) -> void:
+	_notice_text = _community_words
+	var body := SgCardTransfer.plan_text(plan)
+	if not SgCardTransfer.has_work(plan):
+		UiChrome.explain_popup(self, "The host's community cards", body, 580.0)
+		return
+	UiChrome.action_popup(self, "The host's community cards", body, [
+		{"label": "Get the cards", "name": "GetCards", "callable": _download_host_cards.bind(plan)},
+		{"label": "Cancel", "name": "Cancel", "cancel": true}], 580.0)
+
+
+func _download_host_cards(plan: Dictionary) -> void:
+	if _community_host.is_empty() or _transfer.busy():
+		return
+	_community_plan = plan.duplicate(true)
+	if (plan.want as Array).is_empty():
+		_install_host_cards({})
+		return
+	if _transfer.download(_community_host.target, plan) != OK:
+		_notice_text = "%s still: the host cannot be reached. Try joining again." % SgCompatibility.COMMUNITY_WORDS
+		return
+	_notice_text = "Getting the host's community cards…"
+
+
+## THE ZIPS ARE HERE, IN MEMORY: every connection closes first (the card
+## catalogue is locked while one is open), then the cards are set aside
+## and installed ([method SgCardTransfer.apply]) and the pool rebuilt; once
+## this game's community mark is the host's, it joins the host again.
+func _install_host_cards(zips: Dictionary) -> void:
+	var plan := _community_plan
+	var host := _community_host.duplicate()
+	_community_plan = {}
+	if plan.is_empty() or host.is_empty():
+		return
+	client.forget()
+	_notice_text = "Installing the host's community cards…"
+	# A frame to say so: the pool is rebuilt on the spot.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	var result := SgCardTransfer.apply(plan, zips)
+	client.build_fingerprint = SgCompatibility.fingerprint()
+	client.build_stamp = SgCompatibility.stamp()
+	_build_facts.text = SgCompatibility.summary()
+	_body_snapshot = {}
+	if String(result.problem) != "":
+		_notice_text = "%s still: the host's cards were not installed. %s" % [SgCompatibility.COMMUNITY_WORDS, result.problem]
+	elif not bool(result.matched):
+		_notice_text = String(result.message)
+	else:
+		_community_host = {}
+		if client.connect_target(host.target, _nickname.text) == OK:
+			if not (host.advert as Dictionary).is_empty():
+				_selected_host = (host.advert as Dictionary).duplicate(true)
+				_pending_join = String(host.table)
+			_notice_text = String(result.message) + " Joining the host again…"
+		else:
+			_notice_text = String(result.message) + " Join the host again from the Game Browser."
+	_queue_refresh()
 
 
 func _waiting_room(room: Dictionary) -> void:
@@ -1155,7 +1356,17 @@ func _waiting_room(room: Dictionary) -> void:
 		# yet; an empty seat has nobody to play it.
 		var deck_line := "Deck: " + String(room.deck_names[seat])
 		if room.names[seat] == "Empty seat": deck_line = "Deck: —"
-		column.add_child(_label(deck_line, 17))
+		var marks: Array = room.get("community", [false, false])
+		if bool(marks[seat]) and room.names[seat] != "Empty seat":
+			var deck_row := HBoxContainer.new()
+			deck_row.add_theme_constant_override("separation", 10)
+			var deck_label := _label(deck_line, 17)
+			deck_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			deck_row.add_child(deck_label)
+			deck_row.add_child(SgLobbyStyle.community_tag())
+			column.add_child(deck_row)
+		else:
+			column.add_child(_label(deck_line, 17))
 	var rules := SgLobbyStyle.column(_body, "Duel rules")
 	rules.add_child(_label(SgTableRules.summary(SgTableRules.normalize(room.get("rules", {}))), 16))
 	var actions := SgLobbyStyle.row(rules)
@@ -1293,6 +1504,10 @@ func _open_decks() -> void:
 			list.add_item("%s (%d)" % [deck.name, deck.cards.size()])
 			list.set_item_metadata(list.item_count - 1, index)
 			list.set_item_tooltip(list.item_count - 1, deck.group)
+			if not SgDeckCatalog.community_cards(deck).is_empty():
+				list.set_item_text(list.item_count - 1, "%s (%d)  · community" % [deck.name, deck.cards.size()])
+				list.set_item_custom_fg_color(list.item_count - 1, SgLobbyStyle.COMMUNITY_RED)
+				list.set_item_tooltip(list.item_count - 1, "%s\nHolds community cards: both players need the same ones." % deck.group)
 		_deck_status.text = "%d decks available" % list.item_count if list.item_count > 0 else "No matching decks. Try a shorter name."
 	search.text_changed.connect(refill)
 	refill.call("")
@@ -1303,6 +1518,9 @@ static func _deck_text(deck: Dictionary) -> String:
 	var result := "%s\n%d cards · %d sideboard\n" % [deck.name, deck.cards.size(), deck.sideboard.size()]
 	var warning := DeckModel.size_advice(deck.cards.size())
 	if not warning.is_empty(): result += warning + "\n"
+	var community := SgDeckCatalog.community_cards(deck)
+	if not community.is_empty():
+		result += "Community cards: %s. Both players need the same community cards.\n" % ", ".join(community)
 	for zone in ["cards", "sideboard"]:
 		var counts := {}
 		for card_name in deck[zone]: counts[card_name] = int(counts.get(card_name, 0)) + 1
@@ -1345,6 +1563,9 @@ func _browser() -> void:
 				var brief := _advert_brief(advert)
 				var build := _cell(table, brief if not brief.is_empty() else "Same as yours")
 				build.add_theme_color_override("font_color", UiChrome.ACCENT if not brief.is_empty() else SgLobbyStyle.GOLD.darkened(0.45))
+				if brief == "Community cards":
+					build.add_theme_color_override("font_color", SgLobbyStyle.COMMUNITY_RED)
+					build.tooltip_text = _advert_mismatch(advert)
 				var join := _button("Join" if entry.open else "In play", _join_advert.bind(advert.duplicate(true), String(entry.table)), Vector2(100,34))
 				join.disabled = not entry.open or client.connecting() or client.has_session()
 				table.add_child(join)
@@ -1363,7 +1584,7 @@ func _browser() -> void:
 			var build := _cell(table, SgCompatibility.protocol_brief(int(other.protocol), String(other.game)))
 			build.add_theme_color_override("font_color", UiChrome.ACCENT)
 			build.tooltip_text = why
-			var join := _button("Other version", func() -> void: _notice.text = why, Vector2(100, 34))
+			var join := _button("Other version", func() -> void: _notice_text = why, Vector2(100, 34))
 			join.tooltip_text = why
 			table.add_child(join)
 		return
@@ -1469,11 +1690,11 @@ func _advert_brief(advert: Dictionary) -> String:
 
 func _send(action: Dictionary) -> bool:
 	_confirm_close = false
-	_notice.text = ""
+	_notice_text = ""
 	_report_to_master("")
 	if not client.command(action):
 		var reason := client.command_error
-		_notice.text = reason
+		_notice_text = reason
 		_report_to_master(reason)
 		if is_instance_valid(_duel):
 			_duel.show_notice(reason)

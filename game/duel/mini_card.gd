@@ -1241,7 +1241,7 @@ func refresh() -> void:
 	var rules := d.oracle_text
 	if changed.get("rules_changed", false):
 		rules = "%s\n%s\nPrinted rules:\n%s" % [CHANGED_RULES, changed["rules"], d.oracle_text]
-	tooltip_text = "%s\n%s" % [d.card_name, rules]
+	tooltip_text = "%s\n%s%s" % [d.card_name, rules, CommunityCards.tooltip_extra(d)]
 	var land_types := retuned_land_types(instance) if instance.zone == Mtg.Zone.BATTLEFIELD else ([] as Array[String])
 	if not land_types.is_empty():
 		tooltip_text = "%s\nCurrent land %s: %s\n%s" % [d.card_name,
@@ -2149,6 +2149,15 @@ func _frame_color() -> Color:
 ## Frame tint for a card (STATIC — StackHand strips and the CardPreview
 ## reuse the same identity colors).
 static func frame_color(d: CardData) -> Color:
+	match _chosen_frame(d):
+		"white": return FRAME_COLORS[Mtg.ManaColor.W]
+		"blue": return FRAME_COLORS[Mtg.ManaColor.U]
+		"black": return FRAME_COLORS[Mtg.ManaColor.B]
+		"red": return FRAME_COLORS[Mtg.ManaColor.R]
+		"green": return FRAME_COLORS[Mtg.ManaColor.G]
+		"gold": return FRAME_GOLD
+		"artifact": return FRAME_ARTIFACT
+		"land": return FRAME_LAND
 	if d.is_land():
 		return FRAME_LAND
 	var mask := d.color_mask()
@@ -2210,8 +2219,17 @@ static func _made_of(cache: Dictionary, key: Variant, source: Texture2D) -> Arra
 
 ## Which original-skin frame key fits this card (see the importer
 ## MANIFEST). STATIC so the CardPreview shares the mapping.
+## The frame a community card asked for ([CommunityCards.frame_of]),
+## "auto" for every other card.
+static func _chosen_frame(d: CardData) -> String:
+	return CommunityCards.frame_of(d.card_name) if d.set_code == CommunityCard.SET_CODE else "auto"
+
+
 static func frame_skin_key(d: CardData) -> String:
-	if d.is_land():
+	var chosen := _chosen_frame(d)
+	if chosen in ["white", "blue", "black", "red", "green", "gold", "artifact"]:
+		return "card_frame_" + chosen
+	if chosen == "land" or d.is_land():
 		# Land frames come per produced color in the original; duals show
 		# their first ability's color (a faithful-enough pick).
 		if not d.mana_abilities.is_empty():

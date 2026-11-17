@@ -63,11 +63,11 @@ const LITTER_FOLDER := "__macosx"
 ## "folder", top: the zip's top folder ("" for a folder)}`; any problem
 ## refuses the plugin. `files` holds what could be read within the limits
 ## even then (the manifest shown in a refused plugin's row), never more.
-static func read(path: String) -> Dictionary:
+static func read(path: String, manifest := MANIFEST) -> Dictionary:
 	if DirAccess.dir_exists_absolute(path):
-		return _read_folder(path)
+		return _read_folder(path, manifest)
 	if path.get_extension().to_lower() == "zip" and FileAccess.file_exists(path):
-		return _read_zip(path)
+		return _read_zip(path, manifest)
 	var out := _empty("folder")
 	out["problems"] = ["%s: not a .zip file or a folder." % path.get_file()]
 	return out
@@ -341,7 +341,7 @@ static func sha256(bytes: PackedByteArray) -> String:
 
 # ------------------------------------------------------------- a folder --
 
-static func _read_folder(path: String) -> Dictionary:
+static func _read_folder(path: String, manifest := MANIFEST) -> Dictionary:
 	var out := _empty("folder")
 	var problems: Array[String] = out["problems"]
 	var found: Array[String] = []
@@ -386,8 +386,9 @@ static func _read_folder(path: String) -> Dictionary:
 	if found.size() > MAX_FILES:
 		problems.append("The plugin holds more than %d files." % MAX_FILES)
 		return out
-	if not MANIFEST in found:
-		problems.append("%s is missing from the plugin's top folder." % MANIFEST)
+	if not manifest in found:
+		problems.append(("%s is missing from the plugin's top folder." % manifest) if manifest == MANIFEST
+			else ("%s is missing from the package's top folder." % manifest))
 	var total := 0
 	for rel in found:
 		var problem := path_problem(rel)
@@ -483,7 +484,7 @@ static func zip_entries(path: String) -> Dictionary:
 	return {"entries": entries, "problem": ""}
 
 
-static func _read_zip(path: String) -> Dictionary:
+static func _read_zip(path: String, manifest := MANIFEST) -> Dictionary:
 	var out := _empty("zip")
 	var problems: Array[String] = out["problems"]
 	var listed := zip_entries(path)
@@ -549,8 +550,9 @@ static func _read_zip(path: String) -> Dictionary:
 		problems.append("The plugin holds more than %d files." % MAX_FILES)
 	if total > MAX_TOTAL:
 		problems.append("The plugin is bigger than 32 MiB unpacked.")
-	if not keep.any(func(row: Dictionary) -> bool: return row["rel"] == MANIFEST):
-		problems.append("%s is missing from the plugin's top folder." % MANIFEST)
+	if not keep.any(func(row: Dictionary) -> bool: return row["rel"] == manifest):
+		problems.append(("%s is missing from the plugin's top folder." % manifest) if manifest == MANIFEST
+			else ("%s is missing from the package's top folder." % manifest))
 	if tops.size() == 1:
 		out["top"] = String(tops.keys()[0])
 	if tops.size() > 1 or keep.size() > MAX_FILES or total > MAX_TOTAL:

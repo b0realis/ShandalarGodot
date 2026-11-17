@@ -898,6 +898,9 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 
 
 func art_texture(card_name: String, set_code: String, full_card := false, number := "") -> Texture2D:
+	# A community card's art comes from its own zip ([CommunityCards]).
+	if set_code == CommunityCard.SET_CODE:
+		return CommunityCards.art_texture(card_name)
 	var path := art_path(card_name, set_code, full_card, number)
 	if path == "":
 		return null
@@ -1219,6 +1222,8 @@ func _configure_registry() -> void:
 				scripts.append(spec)
 			records.append_array(report.cards)
 	CardRegistry.configure_expansion_packs(sets, scripts, records)
+	# The cards players made, after every pack ([CommunityCards]).
+	CommunityCards.configure()
 
 
 ## Sets whose basic lands ship several numbered illustrations.
