@@ -115,12 +115,13 @@ static func shelf(rows: Array = []) -> Array:
 		for row: Dictionary in found:
 			var card_id := String(row["name"])
 			var spec: Variant = row["spec"]
-			var from_set := bool(row.get("set", false))
-			var file := "" if from_set else ProjectSettings.globalize_path(String(row["path"]))
+			# Every card is sent packed afresh from its files, as Export
+			# writes it — never the host's own zip, which may carry what a
+			# guest refuses (a Mac's litter, a second art).
 			var size := 0
 			if measure:
-				size = _bound_of(card_id, spec if spec is Dictionary else {}) if from_set else _size_of(file)
-			out.append(_shelf_row(card_id, spec, size, file))
+				size = _bound_of(card_id, spec if spec is Dictionary else {})
+			out.append(_shelf_row(card_id, spec, size, ""))
 	else:
 		for row in rows:
 			if row is Dictionary and card_name(row.get("name")):
@@ -360,9 +361,12 @@ static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionar
 	for card_id in have:
 		lower_mine[String(card_id).to_lower()] = String(card_id)
 	var listed := {}
+	var listed_lower := {}
+	var coming := {}
 	for row: Array in rows:
 		var card_id := String(row[0])
 		listed[card_id] = true
+		listed_lower[card_id.to_lower()] = true
 		var kind := "add"
 		var yours_id := String(lower_mine.get(card_id.to_lower(), ""))
 		if yours_id == card_id:
@@ -388,6 +392,7 @@ static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionar
 			(out["later"] as Array).append(card_id)
 			continue
 		(out["want"] as Array).append([card_id, String(row[1]), size])
+		coming[card_id.to_lower()] = true
 		out["bytes"] = int(out["bytes"]) + size
 		(out[kind] as Array).append(card_id)
 		if kind == "replace" and String((have[card_id] as Dictionary)["stays"]) != "":
@@ -395,7 +400,10 @@ static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionar
 	var names := have.keys()
 	names.sort()
 	for card_id in names:
-		if not listed.has(card_id):
+		# Yours spelled otherwise than the host's stays unless the host's
+		# comes now (too large, or left for later, it would leave neither).
+		var lower := String(card_id).to_lower()
+		if not listed.has(card_id) and not (listed_lower.has(lower) and not coming.has(lower)):
 			var left := _left_of(have[card_id])
 			(out[left if left != "" else "set_aside"] as Array).append(String(card_id))
 	return out
@@ -530,7 +538,8 @@ static func apply(p: Dictionary, zips: Dictionary) -> Dictionary:
 		if String(result["problem"]) != "":
 			out["problem"] = "%s could not be installed: %s%s" % [row[0], result["problem"], _undo(done, installed)]
 			return out
-		installed.append(ProjectSettings.globalize_path(String(result["path"])))
+		var put := ProjectSettings.globalize_path(String(result["path"]))
+		installed.append([put, _stamp(put)])
 		if not moves.is_empty():
 			_write_batch(moves, installed)
 	_forget_batch()
@@ -650,23 +659,45 @@ static func _undo(done: Array, installed: Array) -> String:
 	for move: Array in done:
 		if move[2] == "copy":
 			copied[String(move[0])] = true
+	# An installed zip changed since (a card saved over it after a cut-short
+	# batch) is the player's work now: set aside, never deleted.
+	var stamps := {}
+	for entry: Array in installed:
+		stamps[String(entry[0])] = String(entry[1])
 	var own := GamePaths.shown(ProjectSettings.globalize_path(CommunityCards.own_folder()))
+	var aside := GamePaths.shown(aside_folder())
+	var taken := {}
 	for i in range(installed.size() - 1, -1, -1):
-		var path := String(installed[i])
+		var path := String(installed[i][0])
 		if copied.has(path) or not FileAccess.file_exists(path):
+			continue
+		if _stamp(path) != String(stamps[path]):
+			var kept := _aside_path(path.get_file(), taken)
+			if kept == "" or DirAccess.rename_absolute(path, kept) != OK:
+				left.append("the host's %s in %s" % [path.get_file(), own])
+			else:
+				left.append("a card saved since, %s in %s" % [kept.get_file(), aside])
 			continue
 		if DirAccess.remove_absolute(path) != OK:
 			left.append("the host's %s in %s" % [path.get_file(), own])
-	var aside := GamePaths.shown(aside_folder())
 	for i in range(done.size() - 1, -1, -1):
 		var move: Array = done[i]
 		var from := String(move[0])
 		var to := String(move[1])
 		if not FileAccess.file_exists(to):
 			continue
-		if move[2] == "copy" and FileAccess.file_exists(from) and DirAccess.remove_absolute(from) != OK:
-			left.append("yours, %s in %s" % [to.get_file(), aside])
-			continue
+		if move[2] == "copy" and FileAccess.file_exists(from):
+			var gone := false
+			if stamps.has(from) and _stamp(from) != String(stamps[from]):
+				var kept := _aside_path(from.get_file(), taken)
+				gone = kept != "" and DirAccess.rename_absolute(from, kept) == OK
+				if gone:
+					left.append("a card saved since, %s in %s" % [kept.get_file(), aside])
+			else:
+				gone = DirAccess.remove_absolute(from) == OK
+			if not gone:
+				left.append("yours, %s in %s" % [to.get_file(), aside])
+				continue
 		if FileAccess.file_exists(from) or DirAccess.rename_absolute(to, from) != OK:
 			left.append("yours, %s in %s" % [to.get_file(), aside])
 	_forget_batch()
@@ -705,6 +736,11 @@ static func _result_text(p: Dictionary, matched: bool) -> String:
 ## made so far, in the set-aside folder, written before anything moves and
 ## gone when the batch is done or undone. One left behind is a batch a
 ## crash cut short: the lobby offers to put it back ([method restore_batch]).
+## What tells a file apart from when it was installed: size and time.
+static func _stamp(path: String) -> String:
+	return "%d|%d" % [_size_of(path), FileAccess.get_modified_time(path)]
+
+
 static func batch_path() -> String:
 	return aside_folder().path_join(BATCH)
 
@@ -755,11 +791,12 @@ static func restore_batch() -> String:
 				whole = false
 				break
 			moves.append(move)
-		for path: Variant in record["installed"]:
-			if not path is String or String(path).get_base_dir() != own or not String(path).ends_with(".zip"):
+		for entry: Variant in record["installed"]:
+			if not entry is Array or entry.size() != 2 or not entry[0] is String or not entry[1] is String \
+					or String(entry[0]).get_base_dir() != own or not String(entry[0]).ends_with(".zip"):
 				whole = false
 				break
-			installed.append(path)
+			installed.append(entry)
 	if not whole:
 		_forget_batch()
 		return "The record of the cut-short card transfer could not be read, so nothing was moved. Your set-aside cards are in %s." \

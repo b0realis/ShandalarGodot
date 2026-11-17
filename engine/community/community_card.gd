@@ -195,16 +195,19 @@ const EFFECTS := {
 		"a_land", "a_card"]},
 }
 ## The keywords that hinder the creature that has them.
-const HINDERING := ["defender", "must_attack"]
+const HINDERING := ["defender", "must_attack", "phasing"]
 ## Effects a triggered ability may not use.
 const NOT_IN_TRIGGERS := ["counter", "fog", "counter_ability", "shield", "animate"]
 ## Effects only an activated ability may use (a land or an artifact
 ## becoming a creature for the turn).
 const ACTIVATED_ONLY := ["animate"]
+## Effects an activated ability may not use: mana is made by a mana ability
+## (CR 605: it never uses the stack and is used while paying).
+const NOT_IN_ACTIVATED := ["add_mana"]
 ## The effects that help what they target (a trigger offers its own side
 ## first for these, the opponent's first for the rest — the computer takes
 ## the first).
-const HELPFUL := ["pump", "counters", "regenerate", "untap", "draw", "gain_life", "prevent", "landwalk"]
+const HELPFUL := ["pump", "counters", "regenerate", "untap", "draw", "gain_life", "prevent", "landwalk", "raise"]
 ## How each target is said.
 const TARGET_WORDS := {"any": "any target", "creature": "target creature",
 	"creature_attacking": "target attacking creature", "creature_flying": "target creature with flying",
@@ -242,7 +245,8 @@ static func static_info(what: String) -> Dictionary:
 ## (a mode of a "Choose one —" spell is a "spell").
 static func effect_allowed(id: String, kind: String) -> bool:
 	return EFFECTS.has(id) and not (kind == "trigger" and id in NOT_IN_TRIGGERS) \
-		and not (kind != "activated" and id in ACTIVATED_ONLY)
+		and not (kind != "activated" and id in ACTIVATED_ONLY) \
+		and not (kind == "activated" and id in NOT_IN_ACTIVATED)
 
 
 ## A fresh effect of [param id] for an ability of [param kind].
@@ -341,6 +345,9 @@ static func problems(spec: Variant) -> Array[String]:
 	for c in _list(s.get("protection")):
 		if not PROTECTIONS.has(c):
 			out.append("Protection is from white, blue, black, red or green.")
+	if not (_list(s.get("protection")).is_empty() and _list(s.get("landwalk")).is_empty()) \
+			and not types.has("creature"):
+		out.append("Protection and landwalk are for creatures.")
 	for l in _list(s.get("landwalk")):
 		if not LANDS.has(l):
 			out.append("Landwalk is plainswalk, islandwalk, swampwalk, mountainwalk or forestwalk.")
@@ -660,7 +667,8 @@ static func _rule_problems(out: Array[String], rules: Variant, types: Array[Stri
 				if n < int(info["range"][0]) or n > int(info["range"][1]):
 					out.append("%s is %d to %d." % [info["label"], info["range"][0], info["range"][1]])
 			"cost":
-				if not cost_ok(String(rules[id])) or String(rules[id]).contains("{X}"):
+				if not cost_ok(String(rules[id])) or String(rules[id]).contains("{X}") \
+						or ManaCost.parse(String(rules[id])).mana_value() == 0:
 					out.append("%s needs a mana cost like {1}{R}." % info["label"])
 
 
@@ -678,8 +686,12 @@ static func _effects_problems(out: Array[String], where: String, effects: Varian
 		var id := String(e["effect"])
 		var info: Dictionary = EFFECTS[id]
 		if not effect_allowed(id, context):
-			out.append(where + ("%s is not offered in a triggered ability." if context == "trigger"
-				else "%s is for an activated ability.") % info["label"])
+			var said := "%s is for an activated ability."
+			if context == "trigger":
+				said = "%s is not offered in a triggered ability."
+			elif id in NOT_IN_ACTIVATED:
+				said = "%s is a mana ability's: add one with + Mana."
+			out.append(where + said % info["label"])
 		if info.has("unless"):
 			var toll := int(e.get("unless", 0))
 			if toll < int(info["unless"][0]) or toll > int(info["unless"][1]):
@@ -734,7 +746,7 @@ static func _effects_problems(out: Array[String], where: String, effects: Varian
 			out.append(where + "\"attacks each combat if able\" is not offered here.")
 		if id == "pump" and int(e.get("power", 0)) == 0 and int(e.get("toughness", 0)) == 0 \
 				and not granted.is_empty() and granted.all(func(k: String) -> bool: return k in HINDERING):
-			out.append(where + "giving only defender or \"attacks each combat\" is an Aura's.")
+			out.append(where + "giving only defender, phasing or \"attacks each combat\" is an Aura's.")
 		if info.has("color") and not MANA_COLORS.has(String(e.get("color", ""))):
 			out.append(where + "choose the mana's color.")
 		if info.has("token"):
@@ -761,19 +773,28 @@ static func _pt_problems(out: Array[String], where: String, a: Dictionary) -> vo
 static func cost_ok(cost: String, may_be_empty := false) -> bool:
 	if cost == "":
 		return may_be_empty
-	var re := RegEx.create_from_string("^(\\{(?:[0-9]{1,2}|[WUBRGX])\\})+$")
-	if re.search(cost) == null:
+	if _rx("^(\\{(?:[0-9]{1,2}|[WUBRGX])\\})+$").search(cost) == null:
 		return false
 	return ManaCost.parse(cost).mana_value() <= 16 and cost.count("{") <= 8
 
 
 static func _name_ok(name: String) -> bool:
-	return RegEx.create_from_string("^[A-Za-z0-9][A-Za-z0-9 ',\\-]*$").search(name) != null \
+	return _rx("^[A-Za-z0-9][A-Za-z0-9 ',\\-]*$").search(name) != null \
 		and not name.contains("  ")
 
 
 static func _word_ok(word: String) -> bool:
-	return RegEx.create_from_string("^[A-Za-z]{1,20}$").search(word) != null
+	return _rx("^[A-Za-z]{1,20}$").search(word) != null
+
+
+## Each pattern compiled once (a spec is checked on every keystroke).
+static var _patterns: Dictionary = {}
+
+
+static func _rx(pattern: String) -> RegEx:
+	if not _patterns.has(pattern):
+		_patterns[pattern] = RegEx.create_from_string(pattern)
+	return _patterns[pattern]
 
 
 static func _list(value: Variant) -> Array[String]:
@@ -852,7 +873,8 @@ static func _upkeep_cost(name: String, cost: String) -> TriggeredAbility:
 		func(game: MtgGame, source: CardInstance, _ev: GameEvent) -> void:
 			if source.zone != Mtg.Zone.BATTLEFIELD:
 				return
-			if EffectBase.unless_paid(game, source.controller_id, toll, "Pay %s to keep %s?" % [cost, name]):
+			if EffectBase.unless_paid(game, game.controller_acting_for(source), toll,
+					"Pay %s to keep %s?" % [cost, name]):
 				return
 			game.sacrifice_permanent(source),
 		"At the beginning of your upkeep, sacrifice %s unless you pay %s." % [name, cost],
@@ -898,7 +920,8 @@ static func _add_activated(data: CardData, a: Dictionary) -> void:
 	var effects: Array = []
 	for e in a["effects"]:
 		effects.append(effect_of(e))
-	var own_text := _sentence(ability_text(a, "this creature" if shared != "" else data.card_name, shared != ""))
+	var kinds: Array = ["creature"] if shared != "" else _kinds_of(data)
+	var own_text := _sentence(ability_text(a, "this creature" if shared != "" else data.card_name, shared != "", kinds))
 	var ability := ActivatedAbility.new(String(a.get("cost", "")), bool(a.get("tap", false)), effects, own_text)
 	if bool(a.get("sacrifice", false)):
 		ability.with_sacrifice_cost()
@@ -936,6 +959,15 @@ static func _basic_types(spec: Dictionary) -> Array[String]:
 		for sub in _list(spec.get("subtypes")):
 			if BASIC_COLORS.has(sub.to_lower()) and not out.has(sub.to_lower()):
 				out.append(sub.to_lower())
+	return out
+
+
+## The card's types by their catalogue words ("creature", "artifact", …).
+static func _kinds_of(data: CardData) -> Array:
+	var out: Array = []
+	for word in TYPES:
+		if data.is_type(int(TYPES[word])):
+			out.append(word)
 	return out
 
 
@@ -993,18 +1025,19 @@ static func _ai_mode(game: MtgGame, pid: int, card_name: String, helps: Array) -
 				continue
 			var helpful := bool((helps[m] as Array)[j]) if j < (helps[m] as Array).size() else false
 			var side := false
+			# Every target looked at: a creature or a card on the right side
+			# is a fuller aim than a player ("any target" lists players too).
 			for ref in spec.legal_targets(game, inst):
 				var mine := false
 				if ref.is_player:
 					mine = ref.player_id == pid
 				else:
 					var target := game.find_instance(ref.instance_id)
-					mine = target != null and target.controller_id == pid
+					mine = target != null and (target.controller_id == pid or target.zone == Mtg.Zone.GRAVEYARD
+						and target.owner_id == pid)
 				if mine == helpful:
-					# A creature or a spell is a fuller aim than a player.
 					side = true
 					aimed = aimed or not ref.is_player
-					break
 			if not side:
 				fits = false
 				break
@@ -1133,7 +1166,9 @@ static func effect_of(e: Dictionary) -> EffectBase:
 			return OnItself.new(walk) if target == "self" else walk
 		"lose_keyword":
 			var lost := _list(e.get("keywords"))
-			return LoseAbilityEffect.new([KEYWORDS[lost[0]]], String(KEYWORD_WORDS[lost[0]]))
+			var loses := LoseAbilityEffect.new([KEYWORDS[lost[0]]], String(KEYWORD_WORDS[lost[0]]))
+			loses.ai_helpful = _helpful(e)
+			return loses
 		"animate":
 			var sub := String(e.get("subtype", "")).to_lower()
 			return AnimateSelfEffect.new(Mtg.CardType.CREATURE, int(e.get("power", 2)), int(e.get("toughness", 2)),
@@ -1317,7 +1352,9 @@ static func _trigger(a: Dictionary, name: String) -> TriggeredAbility:
 	for i in effects.size():
 		slots.append(-1)
 	var resolve := func(g: MtgGame, source: CardInstance, _ev: GameEvent) -> void:
-		var controller := source.controller_id
+		# The trigger's controller, not the card's now (a stolen creature
+		# that died is its owner's again; its trigger is still the thief's).
+		var controller := g.controller_acting_for(source)
 		for i in effects.size():
 			var effect: EffectBase = effects[i]
 			if slots[i] < 0:
@@ -1370,12 +1407,13 @@ static func _order(helpful: bool) -> Callable:
 
 
 static func _rank(g: MtgGame, s: CardInstance, ref: TargetRef, helpful: bool) -> int:
+	var seat := g.controller_acting_for(s)
 	var mine := false
 	if ref.is_player:
-		mine = ref.player_id == s.controller_id
+		mine = ref.player_id == seat
 	else:
 		var inst := g.find_instance(ref.instance_id)
-		mine = inst != null and inst.controller_id == s.controller_id
+		mine = inst != null and inst.controller_id == seat
 	return (0 if mine else 1) if helpful else (1 if mine else 0)
 
 
@@ -1480,7 +1518,9 @@ class OnItself extends EffectBase:
 
 	func resolve(game: MtgGame, source: CardInstance, controller: int, _target: TargetRef,
 			x_value: int = 0) -> void:
-		if game.is_present(source):
+		# The card that activated it, not a new one of the same name (CR 400.7).
+		if game.is_present(source) \
+				and source.layer_timestamp == int(game.cost_paid("_source_timestamp", source.layer_timestamp)):
 			inner.resolve(game, source, controller, TargetRef.card(source), x_value)
 
 	func describe() -> String:
@@ -1564,7 +1604,8 @@ class SelfCounters extends EffectBase:
 
 	func resolve(game: MtgGame, source: CardInstance, _controller: int, _target: TargetRef,
 			_x_value: int = 0) -> void:
-		if game.is_present(source):
+		if game.is_present(source) \
+				and source.layer_timestamp == int(game.cost_paid("_source_timestamp", source.layer_timestamp)):
 			game.add_counters(source, "+1/+1", amount)
 
 
@@ -1664,7 +1705,7 @@ static func rules_text(spec: Dictionary) -> String:
 			match String(a.get("kind", "")):
 				"spell": line = _sentence(effects_text(a.get("effects", []), name, "spell"))
 				"modal": line = modal_text(a, name)
-				"activated", "trigger": line = _sentence(ability_text(a, name))
+				"activated", "trigger": line = _sentence(ability_text(a, name, false, _list(spec.get("types"))))
 				"mana": line = _sentence(mana_text(a, name))
 				"static": line = _sentence(static_text(a))
 				"enchant": line = _sentence(enchant_text(a))
@@ -1676,14 +1717,16 @@ static func rules_text(spec: Dictionary) -> String:
 ## An activated or triggered ability's sentence. A SHARED activated
 ## ability ("All Sliver creatures have …") is quoted whole; [param inner]
 ## asks for the quoted ability alone, as each creature that has it reads it.
-static func ability_text(a: Dictionary, name: String, inner := false) -> String:
+## [param kinds]: the card's own types ("Sacrifice another creature" only
+## when the card is one).
+static func ability_text(a: Dictionary, name: String, inner := false, kinds: Array = []) -> String:
 	if String(a.get("kind", "")) == "trigger":
 		var when := String(TRIGGERS.get(String(a.get("when", "")), "")).replace("CARDNAME", name)
 		return "%s, %s" % [when, _lower_first(effects_text(a.get("effects", []), name, "trigger"), name)]
 	var shared := String(a.get("shared", ""))
 	if shared != "" and not inner:
 		return "All %s creatures have \"%s\"" % [_type_word(shared),
-			_sentence(ability_text(a, "this creature", true))]
+			_sentence(ability_text(a, "this creature", true, ["creature"]))]
 	var self_name := name
 	var parts: Array[String] = []
 	if String(a.get("cost", "")) != "":
@@ -1694,7 +1737,8 @@ static func ability_text(a: Dictionary, name: String, inner := false) -> String:
 		parts.append("Sacrifice %s" % self_name)
 	var sac := String(a.get("sacrifice_what", ""))
 	if SACRIFICES.has(sac):
-		parts.append("Sacrifice %s" % ("another " + sac if bool(a.get("sacrifice", false)) else SACRIFICES[sac]))
+		var another := bool(a.get("sacrifice", false)) and kinds.has(sac)
+		parts.append("Sacrifice %s" % ("another " + sac if another else SACRIFICES[sac]))
 	var discard := int(a.get("discard", 0))
 	if discard > 0:
 		parts.append("Discard %s" % _cards(discard))
@@ -1772,7 +1816,8 @@ static func enchant_text(a: Dictionary) -> String:
 	if p != 0 or t != 0 or not _list(a.get("keywords")).is_empty():
 		lines.append("Enchanted creature %s." % _gets_and_has(a, false))
 	if String(a.get("protection", "")) != "":
-		lines.append("Enchanted creature has protection from %s." % String(a["protection"]))
+		lines.append("Enchanted creature has protection from %s. This effect doesn't remove this Aura." \
+			% String(a["protection"]))
 	if bool(a.get("pacify", false)):
 		lines.append("Enchanted creature can't attack or block.")
 	if bool(a.get("frozen", false)):
@@ -1933,7 +1978,7 @@ static func effect_text(e: Dictionary, name: String, _context: String) -> String
 		"draw_later":
 			return "Draw %s at the beginning of the next turn's upkeep" % _cards(n)
 		"search":
-			return "Search your library for %s, reveal it, put it into your hand, then shuffle" % target_words(target)
+			return "Search your library for %s, put it into your hand, then shuffle" % target_words(target)
 	return ""
 
 

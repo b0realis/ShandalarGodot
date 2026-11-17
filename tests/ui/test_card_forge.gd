@@ -277,3 +277,30 @@ func test_the_file_fixes_of_the_round_4_hunt() -> void:
 	assert_eq(grid.get_children().filter(func(t: Control) -> bool: return t.visible).size(), 1, "words by their beginning")
 	forge._close_dialog()
 	DirAccess.remove_absolute(set_path)
+
+
+func test_the_fixes_of_the_round_5_pass() -> void:
+	var forge: CardForgeScreen = await _open()
+	forge.take_picture("icon", _picture("icon.png", 64, 64))
+	# Opening a card never changes it: an Aura that only steals stays so.
+	var thief := CardForgeScreen.blank()
+	thief.merge({"name": "Forge Test Wolf", "types": ["enchantment"], "subtypes": [], "cost": "{2}{U}{U}",
+		"abilities": [{"kind": "enchant", "control": true}]}, true)
+	forge.load_spec(thief, {}, forge.icon)
+	assert_false((forge.spec["abilities"][0] as Dictionary).has("power"), "no -10/-10 written in")
+	assert_string_contains(forge._preview._oracle.text, "You control enchanted creature.")
+	# One Escape never throws unsaved work away.
+	forge.close()
+	assert_not_null(forge.find_child("ForgeLeaveWindow", true, false), "asked first")
+	assert_true(is_instance_valid(forge) and forge.is_inside_tree(), "still open")
+	forge._close_dialog()
+	# Leave to replace is for the card the prompt named only.
+	forge.save_card()
+	(forge._fields["name"] as LineEdit).text = "Forge Test Fox"
+	forge._changed()
+	forge.save_card()
+	forge.save_as("Forge Test Wolf")
+	assert_not_null(forge.find_child("ForgeOverwriteWindow", true, false))
+	forge._close_dialog()
+	forge.save_card("Forge Test Wolf")
+	assert_eq(CommunityCards.spec_of("Forge Test Fox").get("name"), "Forge Test Fox", "a leave for the Wolf saves no Fox over")

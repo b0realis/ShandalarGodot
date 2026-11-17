@@ -295,3 +295,13 @@ func test_discards_counters_and_sacrifices_are_part_of_a_price() -> void:
 	assert_eq(int(CardBalance._ability("Remove two +1/+1 counters from CARDNAME: Draw a card.")["price"]), 1)
 	assert_eq(int(CardBalance._ability("{T}, Discard two cards, Pay 4 life: Draw three cards.")["price"]), 4)
 	assert_eq(int(CardBalance._ability("{T}, Sacrifice CARDNAME, Sacrifice a land: Add {R}{R}.")["price"]), 3)
+
+
+func test_the_round_5_balance_fixes() -> void:
+	var anthem := CardBalance.advice(_spec({"name": "Bal Anthem", "cost": "{W}", "types": ["enchantment"],
+		"abilities": [{"kind": "static", "what": "anthem", "power": 5, "toughness": 5}]}))
+	assert_true(anthem.any(func(r: Dictionary) -> bool: return String(r["level"]) in [CardBalance.HIGH, CardBalance.VERY_HIGH]),
+		"a +5/+5 anthem for one mana is measured")
+	var wall := CardBalance.advice(_spec({"name": "Bal Wall", "cost": "{G}", "types": ["creature"], "power": 0,
+		"toughness": 3, "keywords": ["defender", "reach"]}))
+	assert_false(String(wall[0]["level"]) == CardBalance.VERY_HIGH, "a one-mana wall with reach is no alarm")

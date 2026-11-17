@@ -696,8 +696,8 @@ func test_the_list_packs_nothing_and_a_set_s_card_comes_alone() -> void:
 	var sizes := {}
 	for row: Array in got[0]["cards"]:
 		sizes[String(row[0])] = int(row[2])
-	assert_eq(sizes["Single Moss"], FileAccess.get_file_as_bytes(single).size(), "a single zip's exact size")
-	for card in ["Set Moss A", "Set Moss B"]:
+	# Every card is sent packed afresh, its listed size the most it can be.
+	for card in ["Single Moss", "Set Moss A", "Set Moss B"]:
 		assert_gte(sizes[card], CommunityCards.zip_bytes_of(card).size(), "at most: " + card)
 	assert_true(is_same(server._card_list(), server._card_list()), "made once a pool")
 	ws.close()
@@ -739,12 +739,14 @@ func test_a_cut_short_batch_is_put_back_from_the_lobby() -> void:
 	var aside := SgCardTransfer.aside_folder()
 	var new_moss := _own.path_join("new_moss.zip")
 	var moves := [[extra, aside.path_join("extra.zip"), "move"], [fire, aside.path_join("fire.zip"), "copy"]]
-	assert_true(SgCardTransfer._write_batch(moves, [fire, new_moss]))
+	assert_true(SgCardTransfer._write_batch(moves, []))
 	# The batch got this far: both set aside, Fire Moss saved over, New Moss in.
 	DirAccess.rename_absolute(extra, aside.path_join("extra.zip"))
 	DirAccess.copy_absolute(fire, aside.path_join("fire.zip"))
 	_zip(_own, "fire.zip", _spec("Fire Moss", {"power": 5}))
 	_zip(_own, "new_moss.zip", _spec("New Moss"))
+	assert_true(SgCardTransfer._write_batch(moves, [[fire, SgCardTransfer._stamp(fire)],
+		[new_moss, SgCardTransfer._stamp(new_moss)]]))
 	CommunityCards.refresh()
 	assert_true(SgCardTransfer.left_batch())
 	# No host here: nothing holds the catalogue.
@@ -766,7 +768,7 @@ func test_a_cut_short_batch_is_put_back_from_the_lobby() -> void:
 	# A record that names a place outside the own folder moves nothing.
 	var outside := _root.path_join("beside/elsewhere.zip")
 	_zip(_root.path_join("beside"), "elsewhere.zip", _spec("Far Moss"))
-	assert_true(SgCardTransfer._write_batch([[outside, aside.path_join("elsewhere.zip"), "move"]], [outside]))
+	assert_true(SgCardTransfer._write_batch([[outside, aside.path_join("elsewhere.zip"), "move"]], [[outside, "0|0"]]))
 	DirAccess.copy_absolute(outside, aside.path_join("elsewhere.zip"))
 	assert_string_contains(SgCardTransfer.restore_batch(), "could not be read")
 	assert_true(FileAccess.file_exists(outside), "not removed")

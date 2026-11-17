@@ -255,7 +255,9 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   card itself), `UnlessCounter` ("unless its controller pays"),
   `rules_text`; catalogues `TYPES`, `KEYWORDS`, `EFFECTS`, `TRIGGERS`,
   `STATICS`, `CARD_RULES`, `TIMINGS`, `SACRIFICES`, `ENCHANTS`,
-  `MANA_CHOICES`; set code `comm`.
+  `MANA_CHOICES`, `HINDERING`, `NOT_IN_ACTIVATED` (mana only from a mana
+  ability); triggers resolve and rank for `MtgGame.controller_acting_for`;
+  patterns compiled once (`_rx`); set code `comm`.
 - `engine/community/card_balance.gd` (`CardBalance`): `advice(spec)` —
   suggestions set beside the pool's own cards by mana value (size, power,
   keywords, damage / cards / life per price, mana, anthems, Auras, effects,
@@ -270,7 +272,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   a tenth as common in the card's color as in their home color; gold
   creatures beside gold creatures, gold effects beside each of the card's
   colors; `color_flagged` counts the game's own cards that would get a
-  color line.
+  color line; `_gift_keywords` leaves defender, must-attack and phasing
+  out of a creature's keywords.
 - `game/community_cards.gd` (`CommunityCards`): zips (`card.json`, art,
   set icon) in `user://community_cards/` and beside the game, read with
   `PluginPackage.read(path, "card.json")`; picture guidelines `ART_GUIDE`,
@@ -290,17 +293,22 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `zip_bytes_of` (one card's zip, a set's card packed alone);
   `_entries_problem` (a zip's own list held to a card's files and their
   sizes before anything is inflated); writes go beside first
-  (`_put_in_place`); `examples()` — the example cards shipped in
+  (`_put_in_place`: the part read whole, the old file moved aside until
+  the new one is in); the scan's memory `_read_cache` (`_rows_of`,
+  `_zip_key`: rows kept while a zip's time, size and entries' CRC-32 stay
+  the same); `saved_spec` (never the draft), `made_art`; `examples()` — the example cards shipped in
   `game/community_examples/` (in every export preset's include filter),
   shown in the creator's Open list and played only once saved.
 - `game/card_forge_screen.gd` (`CardForgeScreen`): the editor screen
   (card, cost and type, rules, look; the large card, the small card and the
   card reader; New, Open (with a search, `filter_open_list`), Import,
   Validate, Save, Save as, Export (the card or its whole set), Delete,
-  Done; Undo and Redo, `_remember`), opened by Options' `CreateCard`
+  Done in the arrows' purple, asking first when `has_unsaved`; Undo and
+  Redo, `_remember`, panels and pictures kept when unchanged; the Open
+  list fills its art over frames, `_fill_art_later`), opened by Options' `CreateCard`
   button; saving, importing and deleting wait for the LAN catalogue lock
   (`CardPacks.change_refusal`).
-- LAN (protocol 32): `SgCompatibility.community_mark` (what plays of each
+- LAN (protocol 32): `SgCompatibility.community_mark` (counted once per pool from the saved cards; what plays of each
   card, `_playing_spec`, also in `fingerprint`; an optional `community` key
   in the stamp, only when there are any; `community_differs`,
   `COMMUNITY_WORDS` in `difference` and `brief`), `SgDeckCatalog.community_cards`,
@@ -317,7 +325,9 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `plan_text`, `apply` (every zip checked first; own cards moved to
   `community_cards/set_aside`, never deleted; `CommunityCards.install`,
   refresh, the marks compared; the batch undone on a problem); `ask_list`,
-  `download`, `cancel`; `MAX_CARDS` 200, `MAX_TOTAL` 96 MiB, `CHUNK`
+  `download`, `cancel`; every card sent packed afresh (`_bound_of`), installs recorded
+  with their stamp so an undo sets aside a card saved since; `MAX_CARDS`
+  200, `MAX_TOTAL` 96 MiB, `CHUNK`
   512 KiB, `MIN_CHUNK`, an overall deadline; `_check` reads a zip's own
   list first (a card's files only); listed sizes of set cards are upper
   bounds; a replaced card is copied aside and saved over (copies a scan
@@ -330,7 +340,7 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `_get_host_cards`, `_confirm_host_cards`, `_install_host_cards`).
 - Hooks: `CardRegistry` (`_community_specs`, `_load_community` — a game
   card's name in any case stays the game's —, `community_names`,
-  `community_skipped`, `has_community`, `game_name_like`, `comm` in
+  `community_skipped`, `has_community` (`_community_set`), `game_name_like`, `comm` in
   `extra_set_order` once a card was taken),
   `CardData.flavor_text`, `PluginPackage.read`'s `manifest` argument,
   `CardPacks.art_texture` and `_configure_registry`, `MiniCard._chosen_frame`,

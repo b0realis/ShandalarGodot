@@ -302,7 +302,7 @@ func test_every_trigger_static_and_effect_of_the_catalogue_builds() -> void:
 		var e := CommunityCard.effect_defaults(id, kind)
 		var spec := _spec({"name": "Ash Test", "abilities": [{"kind": kind, "cost": "{1}", "tap": true,
 			"effects": [e]}]})
-		if id in ["counter", "fog", "extra_turn", "counter_ability"]:
+		if id in ["counter", "fog", "extra_turn", "counter_ability", "add_mana"]:
 			spec = _spec({"name": "Ash Test", "types": ["instant"], "abilities": [{"kind": "spell",
 				"effects": [CommunityCard.effect_defaults(id, "spell")]}]})
 		elif id == "animate":
@@ -605,7 +605,7 @@ func test_the_rule_fixes_of_the_round_4_hunt() -> void:
 		"only defender to give is an Aura's")
 	var twin := _card({"name": "Twin Altar", "types": ["artifact"], "cost": "{2}", "abilities": [{"kind": "activated",
 		"cost": "", "sacrifice": true, "sacrifice_what": "creature", "effects": [{"effect": "draw", "amount": 2}]}]})
-	assert_eq(twin.oracle_text, "Sacrifice Twin Altar, Sacrifice another creature: Draw two cards.")
+	assert_eq(twin.oracle_text, "Sacrifice Twin Altar, Sacrifice a creature: Draw two cards.", "an artifact sacrifices a creature, not another")
 	assert_false(twin.activated_abilities[0].sacrifice_may_be_source, "one body pays one cost")
 	var grow := _card({"types": ["instant"], "abilities": [{"kind": "spell", "effects": [
 		{"effect": "set_pt", "power": 7, "toughness": 7, "target": "creature"}]}]})
@@ -652,3 +652,59 @@ func test_counter_unless_takes_nothing_for_an_uncounterable_spell() -> void:
 	var pool_before := g.players[1].mana_pool.total()
 	leak.spell_effects[0].resolve(g, null, 0, TargetRef.card(hard))
 	assert_eq(g.players[1].mana_pool.total(), pool_before, "no toll asked for a spell that can't be countered")
+
+
+func test_the_example_cart_saves_a_hill_giant_from_a_bolt() -> void:
+	var rows := CommunityCards.examples()
+	assert_eq(rows.size(), 1)
+	assert_eq(String(rows[0]["spec"]["set_name"]), "Wheel of Fortune")
+	var cart := put_synthetic(0, CommunityCard.build(rows[0]["spec"]))
+	var giant := put_battlefield(0, "Hill Giant")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_ok(g.activate_ability(0, cart, 0, [TargetRef.card(giant)]))
+	resolve_stack()
+	assert_true(cart.tapped, "the cart taps")
+	var bolt := give_hand(1, "Lightning Bolt")
+	add_mana(1, Mtg.ManaColor.R, 1)
+	g.priority_player = 1
+	assert_ok(g.cast_spell(1, bolt, [TargetRef.card(giant)]))
+	resolve_stack()
+	assert_eq(giant.zone, Mtg.Zone.BATTLEFIELD, "3 damage less the 1 prevented: the 3/3 lives")
+	assert_eq(giant.damage, 2)
+
+
+# ------------------------------------- the round-5 bug pass (2026-11-17) --
+
+func test_the_rule_fixes_of_the_round_5_pass() -> void:
+	# A stolen creature's "dies" trigger is the thief's: its life goes to them.
+	var mourner := put_synthetic(1, _card({"name": "Ash Mourner", "abilities": [{"kind": "trigger", "when": "dies",
+		"effects": [{"effect": "gain_life", "amount": 5}]}]}))
+	g.change_control(mourner, 0)
+	g.destroy(mourner)
+	resolve_stack()
+	assert_eq([g.players[0].life, g.players[1].life], [25, 20], "the controller when it died gains")
+	for extra in [{"types": ["artifact"], "cost": "{2}", "abilities": [{"kind": "activated", "cost": "", "tap": true,
+				"effects": [{"effect": "add_mana", "amount": 1, "color": "green"}]}]},
+			{"rules": {"echo": "{0}"}}, {"rules": {"upkeep_cost": "{0}"}},
+			{"types": ["sorcery"], "landwalk": ["island"], "abilities": [{"kind": "spell", "effects": [
+				{"effect": "draw", "amount": 1}]}]}]:
+		assert_false(CommunityCard.problems(_spec(extra)).is_empty(), str(extra))
+	var wake := _card({"types": ["instant"], "abilities": [{"kind": "spell", "effects": [
+		{"effect": "lose_keyword", "keywords": ["defender"], "target": "creature"}]}]})
+	assert_true(wake.spell_effects[0].ai_helpful, "losing defender is a gift")
+	var phase := _card({"name": "Ash Phase", "types": ["enchantment"], "abilities": [{"kind": "enchant",
+		"keywords": ["phasing"]}]})
+	assert_eq(EffectIntent.aura_aim(phase), EffectIntent.Aim.HOSTILE)
+	var ward := _card({"name": "Ash Ward", "types": ["enchantment"], "abilities": [{"kind": "enchant", "protection": "white"}]})
+	assert_string_contains(ward.oracle_text, "This effect doesn't remove this Aura.")
+	var tutor := _card({"types": ["sorcery"], "abilities": [{"kind": "spell", "effects": [
+		{"effect": "search", "target": "a_card"}]}]})
+	assert_eq(tutor.oracle_text, "Search your library for a card, put it into your hand, then shuffle.")
+
+
+func test_a_mode_burns_a_creature_rather_than_a_player() -> void:
+	put_battlefield(1, "Grizzly Bears")
+	var charm := give_synthetic(0, _card({"name": "Ash Choice", "types": ["instant"], "cost": "{R}", "abilities": [
+		{"kind": "modal", "modes": [{"effects": [{"effect": "gain_life", "amount": 1}]},
+			{"effects": [{"effect": "damage", "amount": 3, "target": "any"}]}]}]}))
+	assert_eq(charm.data.ai_mode_picker.call(g, 0), 1, "the Bears are the aim")

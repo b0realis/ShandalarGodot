@@ -477,7 +477,7 @@ static func zip_entries(path: String) -> Dictionary:
 		# 120000) of the 0xF000 mask a symbolic link.
 		var link := (made_by >> 8) == 3 and ((external >> 16) & 0xF000) == 0xA000
 		entries.append({"name": name, "raw": raw, "size": size, "packed": packed, "method": method,
-			"flags": flags, "link": link})
+			"flags": flags, "link": link, "crc": directory.decode_u32(at + 16)})
 		at += 46 + skip
 		if entries.size() > MAX_FILES + MAX_FOLDERS:
 			return {"entries": [], "problem": "%s holds more than %d files." % [path.get_file(), MAX_FILES]}

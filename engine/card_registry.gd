@@ -55,6 +55,8 @@ static var _pack_rarities: Dictionary = {}
 static var _community_specs: Array = []
 static var _community_records: Array = []
 static var _community_names: Array[String] = []
+## The same names as a set (asked once per card by sheets and filters).
+static var _community_set: Dictionary = {}
 static var _community_skipped: Array[String] = []
 
 ## Root folder scanned for set subfolders.
@@ -462,6 +464,7 @@ static func configure_community(specs: Array, records: Array) -> void:
 
 static func _load_community() -> void:
 	_community_names.clear()
+	_community_set.clear()
 	_community_skipped.clear()
 	# A name the pool has in any case ("lightning bolt") stays the game's.
 	var taken := {}
@@ -483,6 +486,7 @@ static func _load_community() -> void:
 		data.artist = String(spec.get("artist", ""))
 		register(data)
 		_community_names.append(name)
+		_community_set[name] = true
 
 
 ## The community cards in the pool, by name.
@@ -499,7 +503,7 @@ static var _lower_revision := -1
 ## Whether [param card_name] is a community card the pool took.
 static func has_community(card_name: String) -> bool:
 	ensure_loaded()
-	return _community_names.has(card_name)
+	return _community_set.has(card_name)
 
 
 ## The game's own card named [param card_name] in any case ("" for none):
@@ -512,7 +516,7 @@ static func game_name_like(card_name: String) -> String:
 			_lower_names[String(name).to_lower()] = String(name)
 		_lower_revision = revision
 	var found := String(_lower_names.get(card_name.strip_edges().to_lower(), ""))
-	return "" if found == "" or _community_names.has(found) else found
+	return "" if found == "" or _community_set.has(found) else found
 
 
 ## The community cards left out because the pool already had their name.
@@ -555,7 +559,7 @@ static func card_in_set(card_name: String, set_code: String, include_completion 
 		include_original := true) -> bool:
 	ensure_loaded()
 	if set_code == CommunityCard.SET_CODE:
-		return _community_names.has(card_name)
+		return _community_set.has(card_name)
 	if _expansion_sets.has(set_code):
 		return _cards.has(card_name) and _expansion_sets[set_code].get("names", []).has(card_name)
 	var data: CardData = _cards.get(card_name)

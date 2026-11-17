@@ -124,7 +124,7 @@ static func _thumb_rows(rows: Array[Dictionary], data: CardData, mv: int, spec: 
 			say.call(VERY_HIGH, "power at most cost + 3 (here %d; yours %d) — only Phyrexian Dreadnought, Lord of Tresserhorn and Endless Wurm have more." % [e + 3, body.x])
 		if body.y > 2 * e + 4:
 			say.call(VERY_HIGH, "toughness at most 2 x cost + 4 (here %d; yours %d) — only Phyrexian Dreadnought and Shield Sphere have more." % [2 * e + 4, body.y])
-		var keywords := data.keywords.size()
+		var keywords := _gift_keywords(data)
 		if keywords > 3:
 			say.call(VERY_HIGH, "at most 3 keywords — no card of the game has more (yours has %d)." % keywords)
 		elif keywords >= 2 and mv <= 1:
@@ -240,7 +240,7 @@ static func _creature_rows(rows: Array[Dictionary], c: Dictionary, data: CardDat
 				"text": "No creature of the game has more %s than %d (%s); yours has %d." % [side[0],
 					most["value"], most["name"], side[1]]})
 	var keywords: Dictionary = (c["keywords"] as Dictionary).get(mini(mv, TOP_SHELF), {})
-	var count := data.keywords.size()
+	var count := _gift_keywords(data)
 	if not keywords.is_empty() and count > 0:
 		if count > int(keywords["max"]):
 			rows.append({"level": VERY_HIGH, "topic": "Keywords",
@@ -555,7 +555,7 @@ static func _color_size_rows(rows: Array[Dictionary], c: Dictionary, data: CardD
 	var kw_shelf := mini(mv, TOP_SHELF)
 	var all_keywords: Dictionary = (c["keywords"] as Dictionary).get(kw_shelf, {})
 	var keywords: Dictionary = (group["keyword_count"] as Dictionary).get(kw_shelf, {})
-	var count := data.keywords.size()
+	var count := _gift_keywords(data)
 	if count > 0 and not all_keywords.is_empty() and count > _at(all_keywords["values"], USUAL_KEYWORDS) \
 			and not keywords.is_empty() and (keywords["values"] as Array).size() >= COLOR_SHELF_MIN:
 		var most := _at(keywords["values"], COLOR_USUAL)
@@ -744,7 +744,7 @@ static func corpus() -> Dictionary:
 				c["costs_top_name"] = card_name
 			read[card_name] = _count_color(by_color[_color_key(data)], data, rules_text, shelf, card_name)
 		if data.is_type(Mtg.CardType.CREATURE):
-			_add(c["keywords"], shelf, data.keywords.size(), card_name)
+			_add(c["keywords"], shelf, _gift_keywords(data), card_name)
 			if not _is_star(data, rules_text):
 				var body := _body(data)
 				_add(c["size"], shelf, body.x + body.y, card_name, "%d/%d" % [body.x, body.y])
@@ -812,7 +812,7 @@ static func _count_color(group: Dictionary, data: CardData, rules_text: String, 
 		if not seen.has(k):
 			seen[k] = true
 			keywords[k] = int(keywords.get(k, 0)) + 1
-	_add(group["keyword_count"], shelf, data.keywords.size(), card_name)
+	_add(group["keyword_count"], shelf, _gift_keywords(data), card_name)
 	if _is_star(data, rules_text):
 		return found
 	var body := _body(data)
@@ -1004,10 +1004,21 @@ static func _mana_made(effect: String) -> int:
 
 
 ## An anthem's bonus (power + toughness) in [param line], 0 for none.
+## The keywords a creature is helped by: defender, "attacks each combat"
+## and phasing are drawbacks (counted so by [method _drawbacks]), never a
+## gift — on the card's side and the game's alike.
+static func _gift_keywords(data: CardData) -> int:
+	var n := 0
+	for k in data.keywords:
+		if not k in [Mtg.Keyword.DEFENDER, Mtg.Keyword.MUST_ATTACK, Mtg.Keyword.PHASING]:
+			n += 1
+	return n
+
+
 static func _anthem(line: String) -> int:
 	if line.contains("until end of turn") or line.contains("Enchanted") or line.contains("Equipped"):
 		return 0
-	var hit := _rx("creatures (?:you control )?get \\+(\\d+)/\\+(\\d+)").search(line)
+	var hit := _rx("(?i)creatures (?:you control )?get \\+(\\d+)/\\+(\\d+)").search(line)
 	return int(hit.get_string(1)) + int(hit.get_string(2)) if hit != null else 0
 
 

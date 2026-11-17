@@ -52,6 +52,12 @@ static var _textures: Dictionary = {}
 ## name → the zip it was read from, as path|modified|size: a texture made
 ## for a card is kept over a scan while its zip stays the same.
 static var _stamps: Dictionary = {}
+## THE SCAN'S MEMORY: path → {key, rows} — each zip's rows as read, kept
+## while its key (modified time, size, and each entry's name, size and
+## CRC-32 from the zip's own list) stays the same, so a scan after a Save
+## reads again only the zip that changed. The rows are copied out, never
+## handed over (the scan marks second copies on its copy).
+static var _read_cache: Dictionary = {}
 ## THE DRAFT: the card the creator is making, shown live before it is
 ## saved — its spec and pictures answer for its name ([method set_draft]).
 static var _draft: Dictionary = {}
@@ -92,6 +98,8 @@ static func scan() -> void:
 	_rows.clear()
 	_files.clear()
 	_by_name.clear()
+	# Only the zips still there are remembered past this scan.
+	var cache := {}
 	var old_stamps := _stamps
 	_stamps = {}
 	# Names are told apart regardless of case ("Elf Lord" and "ELF LORD").
@@ -115,12 +123,7 @@ static func scan() -> void:
 			else:
 				singles.append(path)
 		for path in singles + sets:
-			var found: Array[Dictionary] = []
-			if sets.has(path):
-				found = read_set(path)
-			else:
-				found.append(read(path))
-			for row in found:
+			for row in _rows_of(path, sets.has(path), cache):
 				var card := String(row["name"])
 				if (row["problems"] as Array).is_empty() and seen.has(card.to_lower()):
 					row["problems"] = ["A card named %s was found first in %s." % [card,
@@ -134,12 +137,47 @@ static func scan() -> void:
 					_stamps[card] = "%s|%d|%d" % [path, FileAccess.get_modified_time(path), _size_of(path)]
 				row.erase("files")
 				_rows.append(row)
+	_read_cache = cache
 	# The textures of a card whose zip changed (or went) are made again.
 	for key in _textures.keys():
 		var card := String(key).get_slice("|", 1)
 		if not _stamps.has(card) or old_stamps.get(card, "") != _stamps[card]:
 			_textures.erase(key)
 	_scanned = true
+
+
+## The rows of the zip at [param path] — read again only when its key
+## changed since the last scan ([member _read_cache]); copies either way.
+static func _rows_of(path: String, as_set: bool, cache: Dictionary) -> Array[Dictionary]:
+	var key := _zip_key(path)
+	var kept: Dictionary = _read_cache.get(path, {})
+	var rows: Array[Dictionary] = []
+	if key != "" and String(kept.get("key", "")) == key:
+		rows.assign(kept["rows"])
+	else:
+		if as_set:
+			rows = read_set(path)
+		else:
+			rows.append(read(path))
+	if key != "":
+		cache[path] = {"key": key, "rows": rows}
+	var out: Array[Dictionary] = []
+	for row in rows:
+		var copy := row.duplicate()
+		copy["problems"] = (row["problems"] as Array).duplicate()
+		out.append(copy)
+	return out
+
+
+## What tells a zip apart from its last scan ("" when it can't be read).
+static func _zip_key(path: String) -> String:
+	var listed := PluginPackage.zip_entries(path)
+	if String(listed["problem"]) != "":
+		return ""
+	var parts: Array[String] = ["%d|%d" % [FileAccess.get_modified_time(path), _size_of(path)]]
+	for entry: Dictionary in listed["entries"]:
+		parts.append("%s:%d:%d" % [entry["name"], int(entry["size"]), int(entry.get("crc", 0))])
+	return "|".join(parts)
 
 
 static func _size_of(path: String) -> int:
@@ -366,6 +404,13 @@ static func spec_of(card_name: String) -> Dictionary:
 	return row.get("spec", {})
 
 
+## The SAVED spec of [param card_name], never the card being made ({} when
+## none) — what plays at a LAN table.
+static func saved_spec(card_name: String) -> Dictionary:
+	_ensure()
+	return (_by_name.get(card_name, {}) as Dictionary).get("spec", {})
+
+
 static func _is_draft(card_name: String) -> bool:
 	return not _draft.is_empty() and String(_draft.get("name", "")).strip_edges() == card_name
 
@@ -589,6 +634,14 @@ static func art_texture(card_name: String) -> Texture2D:
 	return _textures[key]
 
 
+## The art of [param card_name] when it is made already (null when it is
+## not: nothing is decoded here) — for a list that fills its art later.
+static func made_art(card_name: String) -> Texture2D:
+	if _is_draft(card_name):
+		return null
+	return _textures.get("art|" + card_name)
+
+
 ## [param card_name]'s set icon, the creator's own picture.
 static func icon_texture(card_name: String, _rarity := "") -> Texture2D:
 	if _is_draft(card_name):
@@ -675,21 +728,39 @@ static func write_zip(path: String, spec: Dictionary, art: Dictionary, icon: Dic
 	if not art.is_empty():
 		var kind := String(art["kind"]).to_lower()
 		entries.append(["art." + ("jpg" if kind == "jpeg" else kind), art["bytes"]])
+	var failed := false
 	for entry in entries:
-		zip.start_file(top + "/" + String(entry[0]))
-		zip.write_file(entry[1])
-		zip.close_file()
-	zip.close()
+		failed = zip.start_file(top + "/" + String(entry[0])) != OK or zip.write_file(entry[1]) != OK \
+			or zip.close_file() != OK or failed
+	failed = zip.close() != OK or failed
+	if failed:
+		DirAccess.remove_absolute(path)
+		return "%s could not be written." % GamePaths.shown(final_path)
 	return _put_in_place(path, final_path)
 
 
-## Move the written [param part] over [param path] ("" when done).
+## Move the written [param part] over [param path] ("" when done): the
+## part must read as a whole zip first (a full disk leaves a cut one), and
+## the old file is moved aside, not deleted, until the new one is in place.
 static func _put_in_place(part: String, path: String) -> String:
-	if FileAccess.file_exists(path) and DirAccess.remove_absolute(path) != OK:
+	var listed := PluginPackage.zip_entries(part)
+	if String(listed["problem"]) != "" or (listed["entries"] as Array).is_empty():
 		DirAccess.remove_absolute(part)
-		return "%s could not be replaced." % GamePaths.shown(path)
+		return "%s could not be written whole." % GamePaths.shown(path)
+	var old := path + ".old"
+	var had := FileAccess.file_exists(path)
+	if had:
+		DirAccess.remove_absolute(old)
+		if DirAccess.rename_absolute(path, old) != OK:
+			DirAccess.remove_absolute(part)
+			return "%s could not be replaced." % GamePaths.shown(path)
 	if DirAccess.rename_absolute(part, path) != OK:
+		if had:
+			DirAccess.rename_absolute(old, path)
+		DirAccess.remove_absolute(part)
 		return "%s could not be written." % GamePaths.shown(path)
+	if had:
+		DirAccess.remove_absolute(old)
 	return ""
 
 
@@ -804,26 +875,24 @@ static func install(bytes: PackedByteArray, replace := false) -> Dictionary:
 		DirAccess.remove_absolute(side)
 		out["problem"] = String(problems[0])
 		return out
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
-	if DirAccess.rename_absolute(side, path) != OK:
-		DirAccess.remove_absolute(side)
-		out["problem"] = "%s could not be written." % GamePaths.shown(path)
+	var why := _put_in_place(side, path)
+	if why != "":
+		out["problem"] = why
 		return out
 	out["path"] = path
 	return out
 
 
 ## THE ZIP OF ONE CARD, as it would be shared ([] when there is no such
-## card): its own zip's bytes, or — a card of a set zip — the card packed
-## alone, as Export writes it.
+## card): the card packed alone from its files, as Export writes it.
 static func zip_bytes_of(card_name: String) -> PackedByteArray:
 	_ensure()
 	var row: Dictionary = _by_name.get(card_name, {})
 	if row.is_empty():
 		return PackedByteArray()
-	if not row.get("set", false):
-		return FileAccess.get_file_as_bytes(String(row["path"]))
+	# Always packed afresh from the card's files, as Export writes it: a
+	# zip of its own may carry what another game refuses (a Mac's litter,
+	# a second art).
 	var dir := ensure_own_folder().path_join(".incoming")
 	DirAccess.make_dir_recursive_absolute(dir)
 	var out := dir.path_join("card_out.zip")
@@ -896,9 +965,8 @@ static func write_set_zip(path: String, set_name: String, cards: Array) -> Strin
 	if zip.open(path + ".part") != OK:
 		return "%s could not be written." % GamePaths.shown(path)
 	var manifest := {"format": SET_FORMAT, "version": 1, "name": set_name.strip_edges(), "cards": folders}
-	zip.start_file(top + "/" + SET_MANIFEST)
-	zip.write_file(JSON.stringify(manifest, "\t", false).to_utf8_buffer())
-	zip.close_file()
+	var failed := zip.start_file(top + "/" + SET_MANIFEST) != OK \
+		or zip.write_file(JSON.stringify(manifest, "\t", false).to_utf8_buffer()) != OK or zip.close_file() != OK
 	for i in cards.size():
 		var card: Dictionary = cards[i]
 		var entries := [[MANIFEST, JSON.stringify(card["spec"], "\t", false).to_utf8_buffer()],
@@ -907,10 +975,12 @@ static func write_set_zip(path: String, set_name: String, cards: Array) -> Strin
 			var kind := String(card["art"]["kind"]).to_lower()
 			entries.append(["art." + ("jpg" if kind == "jpeg" else kind), card["art"]["bytes"]])
 		for entry in entries:
-			zip.start_file("%s/%s/%s" % [top, folders[i], entry[0]])
-			zip.write_file(entry[1])
-			zip.close_file()
-	zip.close()
+			failed = zip.start_file("%s/%s/%s" % [top, folders[i], entry[0]]) != OK \
+				or zip.write_file(entry[1]) != OK or zip.close_file() != OK or failed
+	failed = zip.close() != OK or failed
+	if failed:
+		DirAccess.remove_absolute(path + ".part")
+		return "%s could not be written." % GamePaths.shown(path)
 	return _put_in_place(path + ".part", path)
 
 

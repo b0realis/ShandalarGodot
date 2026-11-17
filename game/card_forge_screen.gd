@@ -57,6 +57,9 @@ var _restoring := false
 ## a new card or an example): Save goes over it, never over another card
 ## unasked.
 var _saved_name := ""
+## The card as last saved, opened or begun ({spec, art, icon}): Done and
+## Escape ask first when the card differs from it.
+var _clean: Dictionary = {}
 
 
 ## Open the creator over everything, [param previous] (Options) hidden
@@ -452,6 +455,7 @@ static func blank() -> Dictionary:
 func new_card() -> void:
 	_saved_name = ""
 	load_spec(blank(), {}, {})
+	_mark_clean()
 	_say("A new card. Choose its set icon and its art on the Card page.")
 
 
@@ -463,6 +467,7 @@ func load_spec(card: Dictionary, p_art: Dictionary, p_icon: Dictionary) -> void:
 	if not shape.is_empty():
 		_say("This card cannot be opened: %s" % shape[0])
 		return
+	var old := spec
 	spec = card.duplicate(true)
 	for key in ["supertypes", "subtypes", "keywords", "protection", "landwalk", "abilities"]:
 		if not spec.get(key) is Array:
@@ -473,13 +478,30 @@ func load_spec(card: Dictionary, p_art: Dictionary, p_icon: Dictionary) -> void:
 		spec["look"] = {}
 	if not (spec["look"] as Dictionary).get("art") is Dictionary:
 		spec["look"]["art"] = {"zoom": 1.0, "x": 0.5, "y": 0.5}
+	# WHAT DID NOT CHANGE IS KEPT (an undo of a typed letter): the ability
+	# panels and the card rules are built again only when theirs changed —
+	# the panels write into the very arrays they were built over, so the
+	# old ones stay in the card — and a picture is decoded again only when
+	# it is another picture.
+	var same_abilities: bool = not _rules_box.get_children().is_empty() and old.get("abilities") is Array \
+		and old["abilities"] == spec["abilities"]
+	var same_rules: bool = not _rules_box.get_children().is_empty() and old.get("rules") is Dictionary \
+		and old["rules"] == spec["rules"]
+	if same_abilities:
+		spec["abilities"] = old["abilities"]
+	if same_rules:
+		spec["rules"] = old["rules"]
+	if p_art != art or (_art_texture == null and not p_art.is_empty()):
+		_art_texture = CommunityCards.texture_from(p_art["bytes"], String(p_art["kind"])) if not p_art.is_empty() else null
+	if p_icon != icon or (_icon_texture == null and not p_icon.is_empty()):
+		_icon_texture = CommunityCards.texture_from(p_icon["bytes"], String(p_icon["kind"])) if not p_icon.is_empty() else null
 	art = p_art.duplicate()
 	icon = p_icon.duplicate()
-	_art_texture = CommunityCards.texture_from(art["bytes"], String(art["kind"])) if not art.is_empty() else null
-	_icon_texture = CommunityCards.texture_from(icon["bytes"], String(icon["kind"])) if not icon.is_empty() else null
 	_fill()
-	_rebuild_rules()
-	_rebuild_abilities()
+	if not same_rules:
+		_rebuild_rules()
+	if not same_abilities:
+		_rebuild_abilities()
 	refresh()
 
 
@@ -798,7 +820,7 @@ func _ability_panel(a: Dictionary, index: int) -> Control:
 				return t.replace("CARDNAME", "it")))
 		"mana":
 			head.add_child(_color_pick(a, "color", CommunityCard.MANA_CHOICES, {"any": "Any color"}))
-			head.add_child(_small_spin(a, "amount", 1, 3))
+			head.add_child(_small_spin(a, "amount", 1, 3, 1))
 			head.add_child(UiChrome.body_label("Cost", 13))
 			var mana_cost := LineEdit.new()
 			mana_cost.placeholder_text = "none"
@@ -827,7 +849,7 @@ func _ability_panel(a: Dictionary, index: int) -> Control:
 			if info.get("spell_type", false):
 				head.add_child(_color_pick(a, "spell_type", CommunityCard.SPELL_TYPES))
 				head.add_child(UiChrome.body_label("less by", 13))
-				head.add_child(_small_spin(a, "amount", int(info["amount"][0]), int(info["amount"][1])))
+				head.add_child(_small_spin(a, "amount", int(info["amount"][0]), int(info["amount"][1]), 1))
 			if info.get("pt", true):
 				_pt_and_keywords(head, a)
 		"enchant":
@@ -921,7 +943,6 @@ func _catalog_pick(holder: Dictionary, key: String, catalog: Dictionary, words :
 		pick.add_item(words.call(text) if words.is_valid() else text)
 		pick.set_item_metadata(pick.item_count - 1, id)
 	_select(pick, String(holder.get(key, catalog.keys()[0])))
-	holder[key] = _picked(pick)
 	pick.item_selected.connect(func(_i: int) -> void:
 		holder[key] = _picked(pick)
 		# Only the static's kind changes what its panel holds.
@@ -963,7 +984,7 @@ func _effect_row(kind: String, effects: Array, e: Dictionary, index: int) -> Con
 			refresh())
 		row.add_child(target)
 	if info.has("amount"):
-		row.add_child(_small_spin(e, "amount", int(info["amount"][0]), int(info["amount"][1])))
+		row.add_child(_small_spin(e, "amount", int(info["amount"][0]), int(info["amount"][1]), 1))
 	if info.get("x", false) and kind != "trigger":
 		var x := CheckBox.new()
 		x.name = "ForgeX"
@@ -981,9 +1002,9 @@ func _effect_row(kind: String, effects: Array, e: Dictionary, index: int) -> Con
 		_pt_and_keywords(row, e)
 	if info.has("base"):
 		row.add_child(UiChrome.body_label("P", 13))
-		row.add_child(_small_spin(e, "power", 0, 20))
+		row.add_child(_small_spin(e, "power", 0, 20, 2))
 		row.add_child(UiChrome.body_label("T", 13))
-		row.add_child(_small_spin(e, "toughness", 1, 20))
+		row.add_child(_small_spin(e, "toughness", 1, 20, 2))
 	if info.has("subtype") and not info.has("token"):
 		row.add_child(_word_edit(e, "subtype", "creature type"))
 	if info.has("unless"):
@@ -996,8 +1017,8 @@ func _effect_row(kind: String, effects: Array, e: Dictionary, index: int) -> Con
 	if info.has("shield"):
 		row.add_child(_color_pick(e, "color", CommunityCard.PROTECTIONS, {}, "from a ", " source"))
 	if info.has("token"):
-		row.add_child(_small_spin(e, "power", 0, 20))
-		row.add_child(_small_spin(e, "toughness", 1, 20))
+		row.add_child(_small_spin(e, "power", 0, 20, 1))
+		row.add_child(_small_spin(e, "toughness", 1, 20, 1))
 		row.add_child(_color_pick(e, "color", ["colorless", "white", "blue", "black", "red", "green"]))
 		row.add_child(_word_edit(e, "subtype", "creature type", "soldier"))
 		row.add_child(_keyword_pick(e, true))
@@ -1046,12 +1067,14 @@ func _keyword_pick(holder: Dictionary, optional: bool) -> OptionButton:
 	return keyword
 
 
-func _small_spin(holder: Dictionary, key: String, low: int, high: int) -> SpinBox:
+## A number field over [param key]: shows [param fallback] (the builder's
+## own default) for a missing key and writes only when changed — opening a
+## card never changes it.
+func _small_spin(holder: Dictionary, key: String, low: int, high: int, fallback := 0) -> SpinBox:
 	var spin := SpinBox.new()
 	spin.min_value = low
 	spin.max_value = high
-	spin.value = clampi(int(holder.get(key, low)), low, high)
-	holder[key] = int(spin.value)
+	spin.set_value_no_signal(clampi(int(holder.get(key, fallback)), low, high))
 	spin.value_changed.connect(func(v: float) -> void:
 		holder[key] = int(v)
 		refresh())
@@ -1069,7 +1092,6 @@ func _color_pick(holder: Dictionary, key: String, colors: Array, words := {}, be
 		pick.add_item(String(words[c]) if words.has(c) else before + shown + after)
 		pick.set_item_metadata(pick.item_count - 1, c)
 	_select(pick, String(holder.get(key, colors[0])))
-	holder[key] = _picked(pick)
 	pick.item_selected.connect(func(_i: int) -> void:
 		holder[key] = _picked(pick)
 		# What else the choice changes, before the card is shown (one undo).
@@ -1107,7 +1129,7 @@ func _say(text: String) -> void:
 
 
 ## Save into the community_cards folder; the card joins the set at once.
-func save_card(replace := false) -> void:
+func save_card(replacing := "") -> void:
 	if not problems().is_empty():
 		return
 	# A table open at LAN holds the card catalogue still (the packs' lock).
@@ -1117,14 +1139,17 @@ func save_card(replace := false) -> void:
 		return
 	var card_name := String(spec["name"]).strip_edges()
 	var other := CommunityCards.found_like(card_name)
-	if not replace and other != "" and other.to_lower() != _saved_name.to_lower():
-		_ask_overwrite(other, func() -> void: save_card(true))
+	# Leave to go over another card is for the card the prompt named: a
+	# name typed behind the prompt is asked about again.
+	if other != "" and other.to_lower() != _saved_name.to_lower() and other.to_lower() != replacing.to_lower():
+		_ask_overwrite(other, func() -> void: save_card(other))
 		return
 	var why := CommunityCards.save(spec, art, icon)
 	if why != "":
 		_say(why)
 		return
 	_saved_name = card_name
+	_mark_clean()
 	CommunityCards.refresh()
 	_say("Saved in %s. %s is in the Community cards set now." % [
 		GamePaths.shown(CommunityCards.own_folder()), String(spec["name"]).strip_edges()])
@@ -1167,7 +1192,9 @@ func set_cards() -> Array[Dictionary]:
 	if set_name == "":
 		return out
 	for card in CommunityCards.cards_of_set(set_name):
-		if String((card["spec"] as Dictionary).get("name", "")).strip_edges() != card_name:
+		var saved := String((card["spec"] as Dictionary).get("name", "")).strip_edges().to_lower()
+		# This card stands in for its saved copy, renamed or not.
+		if saved != card_name.to_lower() and saved != _saved_name.to_lower():
 			out.append(card)
 	out.append({"spec": spec, "art": art, "icon": icon})
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -1235,6 +1262,15 @@ func take_picture(which: String, path: String) -> String:
 	var kind := path.get_extension().to_lower()
 	if kind == "jpeg":
 		kind = "jpg"
+	# Too big is said before the file is read into memory.
+	var limit := int((CommunityCards.ICON_GUIDE if which == "icon" else CommunityCards.ART_GUIDE)["bytes"])
+	var opened := FileAccess.open(path, FileAccess.READ)
+	if opened != null and opened.get_length() > limit:
+		var big := "The %s is at most %s (this one is %s)." % ["set icon" if which == "icon" else "art",
+			PortableMode.size_words(limit), PortableMode.size_words(opened.get_length())]
+		_say(big)
+		return big
+	opened = null
 	var bytes := FileAccess.get_file_as_bytes(path)
 	var why := CommunityCards.icon_problem(bytes, kind) if which == "icon" \
 		else CommunityCards.art_problem(bytes, kind)
@@ -1381,7 +1417,7 @@ func ask_save_as() -> void:
 
 ## Save the card as [param new_name] (the old one stays as it was saved;
 ## a card already of that name is replaced only when asked).
-func save_as(new_name: String, replace := false) -> void:
+func save_as(new_name: String, replacing := "") -> void:
 	var refusal := CardPacks.change_refusal()
 	if refusal != "":
 		_say(refusal.replace("changing or rescanning card packs", "saving a card"))
@@ -1394,14 +1430,14 @@ func save_as(new_name: String, replace := false) -> void:
 		_say(found[0])
 		return
 	var other := CommunityCards.found_like(String(spec["name"]))
-	if not replace and other != "" and other.to_lower() != _saved_name.to_lower():
+	if other != "" and other.to_lower() != _saved_name.to_lower() and other.to_lower() != replacing.to_lower():
 		spec["name"] = was
-		_ask_overwrite(other, func() -> void: save_as(new_name, true))
+		_ask_overwrite(other, func() -> void: save_as(new_name, other))
 		return
 	_close_dialog()
 	_fill()
 	refresh()
-	save_card(true)
+	save_card(other)
 
 
 ## Ask before a save goes over [param other], another saved card.
@@ -1531,9 +1567,13 @@ func open_list() -> void:
 			_close_dialog())
 		tile.set_meta("haystack", " example" + _haystack(data, row["spec"]))
 		grid.add_child(tile)
+	# Art not made yet is filled in over the next frames (a hundred cards'
+	# pictures decoded first kept the list from showing).
+	var later: Array = []
 	for row in CommunityCards.playable():
 		var card_name := String(row["name"])
-		if not CardRegistry.has_card(card_name):
+		# A zip named like a game card is left out: the pool has the game's.
+		if not CardRegistry.has_community(card_name):
 			continue
 		var data := CardRegistry.get_card(card_name)
 		var tile := Button.new()
@@ -1541,7 +1581,10 @@ func open_list() -> void:
 		tile.custom_minimum_size = MiniCard.SIZE
 		tile.tooltip_text = "%s%s" % [card_name, CommunityCards.tooltip_extra(data)]
 		var mini := MiniCard.new(CardInstance.new(data, -1, 0))
-		mini.art_override = CommunityCards.art_texture(card_name)
+		mini.art_override = CommunityCards.made_art(card_name)
+		if mini.art_override == null:
+			mini.art_override = _no_art()
+			later.append([mini, card_name])
 		mini.size = MiniCard.SIZE
 		mini.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		mini.focus_mode = Control.FOCUS_NONE
@@ -1560,6 +1603,37 @@ func open_list() -> void:
 	add_child(dialog)
 	var rows := ceili(grid.get_child_count() / 4.0)
 	_fit_dialog(dialog, scroll, clampf(rows * (MiniCard.SIZE.y + 10), MiniCard.SIZE.y, 400))
+	if not later.is_empty():
+		_fill_art_later(later)
+
+
+## The empty picture a tile shows until its art is made.
+static var _blank: Texture2D = null
+
+
+static func _no_art() -> Texture2D:
+	if _blank == null:
+		var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		_blank = ImageTexture.create_from_image(image)
+	return _blank
+
+
+## Make the Open list's art a few pictures a frame (about 8 ms each frame),
+## stopping when the list is gone.
+func _fill_art_later(later: Array) -> void:
+	var start := Time.get_ticks_msec()
+	for item in later:
+		if Time.get_ticks_msec() - start > 8:
+			await get_tree().process_frame
+			start = Time.get_ticks_msec()
+		var held: Variant = item[0]
+		if not is_instance_valid(held) or (held as Node).is_queued_for_deletion():
+			return
+		var mini := held as MiniCard
+		var made := CommunityCards.art_texture(String(item[1]))
+		if made != null:
+			mini.art_override = made
+			mini.refresh()
 
 
 ## What the Open list's search reads of a card: its name, set, types,
@@ -1629,6 +1703,7 @@ func open_example(row: Dictionary) -> void:
 	var files: Dictionary = row["files"]
 	load_spec(row["spec"], files.get("art", {}), files.get("icon", {}))
 	_saved_name = ""
+	_mark_clean()
 	_say("The example %s — change it, then Save to play it." % String(row["spec"]["name"]))
 
 
@@ -1639,6 +1714,7 @@ func open_card(card_name: String) -> void:
 	var files := CommunityCards.files_of(card_name)
 	load_spec(found, files.get("art", {}), files.get("icon", {}))
 	_saved_name = card_name
+	_mark_clean()
 	_say("Opened %s." % card_name)
 
 
@@ -1682,7 +1758,34 @@ func _close_dialog() -> void:
 		refresh()
 
 
-func close() -> void:
+func _mark_clean() -> void:
+	_clean = {"spec": spec.duplicate(true), "art": art, "icon": icon}
+
+
+## Whether the card differs from the one last saved, opened or begun.
+func has_unsaved() -> bool:
+	return not _clean.is_empty() and (_clean["spec"] != spec or _clean["art"] != art or _clean["icon"] != icon)
+
+
+## Leave the creator — asking first when the card has unsaved changes
+## (one Escape, an Android back gesture, never throws work away).
+func close(force := false) -> void:
+	if not force and has_unsaved():
+		_close_dialog()
+		var dialog := OriginalDialog.create("Leave", Vector2(470, 190))
+		dialog.name = "ForgeLeaveWindow"
+		var words := UiChrome.body_label("%s has changes that are not saved. Leave the card creator anyway?" \
+			% String(spec.get("name", "")).strip_edges(), 14)
+		words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		words.custom_minimum_size.x = 430
+		dialog.body().add_child(words)
+		GauntletOptions.fit(dialog.add_button("Leave")).pressed.connect(func() -> void:
+			_close_dialog()
+			close(true))
+		GauntletOptions.fit(dialog.add_button("Stay")).pressed.connect(_close_dialog)
+		_dialog = dialog
+		add_child(dialog)
+		return
 	CommunityCards.clear_draft()
 	if is_instance_valid(_previous):
 		_previous.visible = true

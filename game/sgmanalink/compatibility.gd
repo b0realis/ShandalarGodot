@@ -64,12 +64,22 @@ const COMMUNITY_WORDS := "Community cards differ"
 ## both players need the same ones, and this names the difference the
 ## catalogue digest only detects.
 static func community_mark() -> String:
+	# Counted once per card pool (the lobby asks for every table row), from
+	# the saved cards — never the one the creator is making.
+	if _mark_revision == CardRegistry.revision and _mark_revision >= 0:
+		return _mark
 	var names := CardRegistry.community_names()
 	names.sort()
 	var specs: Array = []
 	for name in names:
-		specs.append(CommunityCards.spec_of(name))
-	return mark_of(specs)
+		specs.append(CommunityCards.saved_spec(name))
+	_mark = mark_of(specs)
+	_mark_revision = CardRegistry.revision
+	return _mark
+
+
+static var _mark := ""
+static var _mark_revision := -1
 
 
 ## The mark of [param specs], the cards' specs in the order of their names
