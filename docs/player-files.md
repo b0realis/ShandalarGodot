@@ -12,14 +12,32 @@ running duel log, `duel_log.txt`, is kept beside the executable so it is
 where you look for it (and under `user://` instead when that directory
 cannot be written). Draft and tournament saves can also use a folder you explicitly choose.
 
-**A portable game.** The Windows download's `Shandalar-portable.bat`
-(0.60.17) starts the game with `APPDATA` and `LOCALAPPDATA` pointed at
-`userdata\` in the game folder, so `user://` becomes
-`userdata\Godot\app_userdata\Shandalar\` there and everything above travels
-with the folder: settings, decks, adventures, the Hall of Fame, the logs.
-Godot reads `user://` from those variables on Windows. On Linux the same is
-`XDG_DATA_HOME="$PWD/userdata" ./run.sh`. A folder chosen in Options is
-saved as a full path, so it may need choosing again on another computer.
+**A portable game** (0.70.1). A folder named `portable` in the game
+folder — beside `Shandalar.exe`, `run.sh` or `Shandalar.app` — makes the
+game keep everything above inside it: settings, decks, adventures, the Hall
+of Fame, the game records, the skins and card packs added in Options, the
+adventure plugins and the logs. Options › Portable game makes a game
+portable (everything copied in, then a restart) and stops it (everything
+copied back to the computer's folder, the folder renamed `portable-off`;
+nothing is deleted); a portable game started with an empty folder offers
+`Copy this computer's games in...`. The engine builds `user://` from the
+system's data folder before any script runs — `APPDATA` on Windows,
+`XDG_DATA_HOME` on Linux, `HOME` (+ `Library/Application Support`) on
+macOS — so a portable game runs with that variable pointed into the
+folder: `user://` is `portable\Godot\app_userdata\Shandalar\` on Windows,
+`portable/godot/app_userdata/Shandalar/` on Linux and
+`portable/Library/Application Support/Godot/app_userdata/Shandalar/` on
+macOS. The launchers set it before the engine starts (`run.sh` and the
+tools' scripts, the Steam Deck's launcher, every `.bat`; the system's own
+value kept as `SHANDALAR_SYSTEM_<NAME>`); `Shandalar.exe` or
+`Shandalar.app` opened as they are start once more inside the folder,
+leaving only the engine's start-up log and shader cache (about 1 MB) of
+that first start in the system's folder (`game/portable_mode.gd`). The Windows
+`Shandalar-portable.bat` makes the folder and starts the game portable; an
+old `userdata\` from 0.60.17–0.70.0 becomes `portable\`. Not on the web,
+Android, the Meta Quest or ArkOS (whose launcher keeps the data in its
+port folder already). A folder chosen in Options is saved as a full path,
+so it may need choosing again on another computer.
 
 In configurable paths, `~` uses `HOME`, or `USERPROFILE` when `HOME` is
 absent (a native Windows launch). If neither is known, the spelling is

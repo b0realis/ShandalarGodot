@@ -8,6 +8,16 @@
 # Options choice, once made, is kept over these.
 set -eu
 cd -- "$(dirname -- "$0")"
+# The portable game (0.70.1): a portable folder here keeps everything the
+# game keeps (tools/package_release.py PORTABLE_SH_LINUX, the same lines).
+if [ -d portable ] && [ -z "${SHANDALAR_PORTABLE:-}" ]; then
+	SHANDALAR_SYSTEM_XDG_DATA_HOME="${XDG_DATA_HOME:-}"
+	SHANDALAR_SYSTEM_XDG_CACHE_HOME="${XDG_CACHE_HOME:-}"
+	SHANDALAR_PORTABLE="$(pwd -P)/portable"
+	XDG_DATA_HOME="$SHANDALAR_PORTABLE"
+	XDG_CACHE_HOME="$SHANDALAR_PORTABLE/cache"
+	export SHANDALAR_SYSTEM_XDG_DATA_HOME SHANDALAR_SYSTEM_XDG_CACHE_HOME SHANDALAR_PORTABLE XDG_DATA_HOME XDG_CACHE_HOME
+fi
 export SHANDALAR_HANDHELD=steam-deck
 # A bare -h/--help is the engine's own; this hands it to the game's list.
 case "${1:-}" in -h | --help) exec ./Shandalar.x86_64 --headless --no-header -- --help ;; esac

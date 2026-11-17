@@ -181,8 +181,12 @@ see *Handheld defaults*). It does not overwrite your Options or controller
 bindings. Gaming Mode also controls the outer game window.
 
 Saves/settings use the normal Linux `~/.local/share/godot/app_userdata/Shandalar`
-location (or the `XDG_DATA_HOME` location if you deliberately set one). No
-Steam account integration or cloud saves are installed by this package.
+location (or the `XDG_DATA_HOME` location if you deliberately set one). A
+`portable` folder in the game folder keeps them there instead, to carry the
+whole game folder to another machine (Options › Portable game makes it;
+after it, start the game from Steam again — the launcher points the game
+into the folder). No Steam account integration or cloud saves are installed
+by this package.
 
 ## RK3326 / R36 Ultra on ArkOS — experimental
 

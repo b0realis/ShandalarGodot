@@ -6,6 +6,7 @@ import shutil
 import stat
 import subprocess
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -188,15 +189,43 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn("-- --auto-deck %*", archive.read(prefix + "auto_deck.bat").decode())
                             self.assertIn("-- --lab-query %*", archive.read(prefix + "lab_query.bat").decode())
                             self.assertIn("-- --referee %*", archive.read(prefix + "referee.bat").decode())
-                            # The portable start (issue #5): user:// beside the game.
+                            # The portable start (issue #5; the portable folder since
+                            # 0.70.1): makes portable\, an old userdata\ becoming it,
+                            # and starts the game with user:// inside it.
                             portable = archive.read(prefix + "Shandalar-portable.bat").decode()
                             self.assertNotIn("\n", portable.replace("\r\n", ""))
-                            self.assertIn('set "APPDATA=%~dp0userdata"\r\n', portable)
-                            self.assertIn('set "LOCALAPPDATA=%~dp0userdata"\r\n', portable)
+                            self.assertIn('if not exist "%~dp0portable\\" mkdir "%~dp0portable"\r\n', portable)
+                            self.assertIn('move "%~dp0userdata" "%~dp0portable" >nul\r\n', portable)
+                            self.assertIn(pack.PORTABLE_BAT, portable)
+                            self.assertLess(portable.index("mkdir"), portable.index(pack.PORTABLE_BAT))
+                            self.assertNotIn('set "APPDATA=%~dp0userdata"', portable)
                             self.assertTrue(portable.endswith('start "" "%~dp0Shandalar.exe" %*\r\n'))
                             self.assertIn("Shandalar-portable.bat", readme)
+                            # Every batch door runs portable too, after its cd.
+                            for door in ("deck_lab.bat", "auto_deck.bat", "lab_query.bat", "referee.bat"):
+                                text = archive.read(prefix + door).decode()
+                                self.assertIn('cd /d "%~dp0"\r\n' + pack.PORTABLE_BAT, text, door)
                         else:
                             self.assertNotIn(prefix + "Shandalar-portable.bat", entries)
+                        # The portable game (0.70.1): every shell door carries
+                        # the system's lines right after its cd; the README
+                        # says so on a desktop and nowhere else.
+                        if platform in pack.LINUX_BINARIES or platform in pack.MAC_PLATFORMS:
+                            lines = pack.PORTABLE_SH_MACOS if platform in pack.MAC_PLATFORMS else pack.PORTABLE_SH_LINUX
+                            for door in ("run.sh", "deck_lab.sh", "auto_deck.sh", "lab_query.sh",
+                                         "referee.sh", "shandalar.sh"):
+                                if platform == "arkos-rk3326-experimental" and door == "run.sh":
+                                    continue
+                                text = archive.read(prefix + door).decode()
+                                if platform == "steam-deck" and door == "run.sh":
+                                    self.assertIn(lines, text, "the Steam Deck's own launcher")
+                                    self.assertLess(text.index(lines), text.index("exec ./Shandalar.x86_64"))
+                                    continue
+                                self.assertIn('cd -- "$(dirname -- "$0")"\n' + lines, text, door)
+                        if platform in pack.PORTABLE_PLATFORMS:
+                            self.assertIn(pack.PORTABLE_LINE, readme)
+                        else:
+                            self.assertNotIn("Portable: Options > Portable game", readme)
                         if platform in pack.MAC_PLATFORMS:
                             entry = archive.getinfo(prefix + "Shandalar.app/Contents/MacOS/Shandalar")
                             self.assertEqual(entry.external_attr >> 16 & 0o777, 0o755)
@@ -819,6 +848,63 @@ class DispatcherRefusalTest(unittest.TestCase):
                     if verb == "caf\u00e9".encode():
                         self.assertEqual(error["verb"], "caf\u00e9", "valid UTF-8 is kept")
 
+
+
+class PortableLinesTest(unittest.TestCase):
+    """THE PORTABLE GAME (0.70.1): the launchers point the engine at
+    portable/ with the same variables the game sets when it starts itself
+    there (game/portable_mode.gd, PortableMode.OVERRIDDEN and env_for)."""
+
+    def test_the_launchers_set_what_the_game_sets(self):
+        source = (pack.ROOT / "game" / "portable_mode.gd").read_text(encoding="utf-8")
+        block = re.search(r"const OVERRIDDEN := \{(.*?)\n\}", source, re.S).group(1)
+        systems = dict(re.findall(r'"(\w+)": \[([^\]]*)\]', block))
+        self.assertEqual(set(systems), {"windows", "linux", "macos"})
+        self.assertIn('const ENV_PORTABLE := "SHANDALAR_PORTABLE"', source)
+        self.assertIn('const SYSTEM_PREFIX := "SHANDALAR_SYSTEM_"', source)
+        lines = {"windows": pack.PORTABLE_BAT, "linux": pack.PORTABLE_SH_LINUX,
+                 "macos": pack.PORTABLE_SH_MACOS}
+        for system, names in systems.items():
+            for name in re.findall(r'"(\w+)"', names):
+                self.assertIn(name + "=", lines[system], (system, name))
+                self.assertIn("SHANDALAR_SYSTEM_" + name + "=", lines[system], (system, name))
+            self.assertIn("SHANDALAR_PORTABLE=", lines[system])
+        # Linux's cache folder is the game's too: env_for joins "cache".
+        self.assertIn('XDG_CACHE_HOME="$SHANDALAR_PORTABLE/cache"', pack.PORTABLE_SH_LINUX)
+        self.assertIn('out["XDG_CACHE_HOME"] = native.path_join("cache")', source)
+
+    def test_the_lines_parse_and_the_steam_deck_carries_them(self):
+        deck = (pack.ROOT / "packaging" / "handhelds" / "steam-deck.sh").read_text(encoding="utf-8")
+        self.assertIn(pack.PORTABLE_SH_LINUX, deck)
+        for lines in (pack.PORTABLE_SH_LINUX, pack.PORTABLE_SH_MACOS):
+            checked = subprocess.run(["sh", "-n"], input="set -eu\n" + lines, text=True,
+                                     capture_output=True)
+            self.assertEqual(checked.returncode, 0, checked.stderr)
+        # A folder such as "Program Files (x86)" must not end a block.
+        self.assertNotIn("(", pack.PORTABLE_BAT)
+        self.assertTrue(pack.PORTABLE_BAT.endswith(":shandalar_start\r\n"))
+        self.assertNotIn("\n", pack.PORTABLE_BAT.replace("\r\n", ""))
+
+    def test_a_portable_game_in_a_folder_runs_inside_it(self):
+        # The Linux lines, run for real: a game folder with portable/ gets
+        # XDG_DATA_HOME inside it and keeps the system's own value; one
+        # without is left alone.
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp) / "Shandalar 0.70.1"
+            game.mkdir()
+            script = ('cd -- "$1"\n' + pack.PORTABLE_SH_LINUX
+                      + 'printf "%s|%s|%s" "${XDG_DATA_HOME:-}" "${SHANDALAR_SYSTEM_XDG_DATA_HOME:-}" '
+                      + '"${SHANDALAR_PORTABLE:-}"\n')
+            env = {k: v for k, v in os.environ.items() if not k.startswith("SHANDALAR_")}
+            env["XDG_DATA_HOME"] = "/home/you/.local/share"
+            plain = subprocess.run(["sh", "-c", script, "sh", str(game)], env=env,
+                                   capture_output=True, text=True, check=True).stdout
+            self.assertEqual(plain, "/home/you/.local/share||")
+            (game / "portable").mkdir()
+            inside = subprocess.run(["sh", "-c", script, "sh", str(game)], env=env,
+                                    capture_output=True, text=True, check=True).stdout
+            real = str((game / "portable").resolve())
+            self.assertEqual(inside, f"{real}|/home/you/.local/share|{real}")
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,6 +30,16 @@ extends Node
 ## again: before the autoloads that read it. And the opt-in timing log
 ## ([PerfLog], 2026-10-08) is asked here: nothing at all unless this
 ## launch asked for it.
+##
+## THE PORTABLE GAME (2026-11-17) goes first of all, in `_init`, before
+## any autoload is ready: a game whose folder holds `portable/` and was
+## opened without its launcher starts once more inside that folder and
+## this start ends before a setting, a skin or a card pack is read
+## ([method PortableMode.enter_at_start]).
+
+
+func _init() -> void:
+	PortableMode.enter_at_start()
 
 
 func _ready() -> void:

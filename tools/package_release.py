@@ -39,6 +39,47 @@ MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64",
                   "steam-deck": "Shandalar.x86_64",
                   "arkos-rk3326-experimental": "Shandalar.arm64"}
+# THE PORTABLE GAME (0.70.1, the owner 2026-11-17: "all data for game
+# working are in the game folder itself ... in portable folder under main
+# game folder"): a game folder holding portable/ runs with the engine's
+# data folder pointed into it. Godot builds user:// from APPDATA on
+# Windows, XDG_DATA_HOME on Linux and HOME on macOS (game/portable_mode.gd,
+# PortableMode.env_for, which a start without a launcher uses and which
+# tools/test_package_release.py holds these to); the system's own values
+# are kept as SHANDALAR_SYSTEM_<NAME>. Each launcher runs them after its
+# cd into the game folder; pwd -P names it as the engine will.
+PORTABLE_SH_LINUX = (
+    'if [ -d portable ] && [ -z "${SHANDALAR_PORTABLE:-}" ]; then\n'
+    '\tSHANDALAR_SYSTEM_XDG_DATA_HOME="${XDG_DATA_HOME:-}"\n'
+    '\tSHANDALAR_SYSTEM_XDG_CACHE_HOME="${XDG_CACHE_HOME:-}"\n'
+    '\tSHANDALAR_PORTABLE="$(pwd -P)/portable"\n'
+    '\tXDG_DATA_HOME="$SHANDALAR_PORTABLE"\n'
+    '\tXDG_CACHE_HOME="$SHANDALAR_PORTABLE/cache"\n'
+    '\texport SHANDALAR_SYSTEM_XDG_DATA_HOME SHANDALAR_SYSTEM_XDG_CACHE_HOME SHANDALAR_PORTABLE XDG_DATA_HOME XDG_CACHE_HOME\n'
+    'fi\n')
+PORTABLE_SH_MACOS = (
+    'if [ -d portable ] && [ -z "${SHANDALAR_PORTABLE:-}" ]; then\n'
+    '\tSHANDALAR_SYSTEM_HOME="${HOME:-}"\n'
+    '\tSHANDALAR_PORTABLE="$(pwd -P)/portable"\n'
+    '\tHOME="$SHANDALAR_PORTABLE"\n'
+    '\texport SHANDALAR_SYSTEM_HOME SHANDALAR_PORTABLE HOME\n'
+    'fi\n')
+# Labels and goto, not a parenthesised block: a folder such as
+# "Program Files (x86)" would end a block at its first ")".
+PORTABLE_BAT = (
+    'if not exist "%~dp0portable\\" goto :shandalar_start\r\n'
+    'if defined SHANDALAR_PORTABLE goto :shandalar_start\r\n'
+    'set "SHANDALAR_SYSTEM_APPDATA=%APPDATA%"\r\n'
+    'set "SHANDALAR_SYSTEM_LOCALAPPDATA=%LOCALAPPDATA%"\r\n'
+    'set "SHANDALAR_PORTABLE=%~dp0portable"\r\n'
+    'set "APPDATA=%~dp0portable"\r\n'
+    'set "LOCALAPPDATA=%~dp0portable"\r\n'
+    ':shandalar_start\r\n')
+PORTABLE_LINE = ("Portable: Options > Portable game keeps everything the game keeps (settings,\n"
+                 "decks, adventures, added skins and card packs) in a portable folder inside\n"
+                 "this one, to copy anywhere; a folder named portable made here does the same.")
+
+PORTABLE_PLATFORMS = ("linux64", "windows64", "raspberry-pi5-arm64", "steam-deck") + MAC_PLATFORMS
 HANDHELD_FILES = {
     "android-arm64-experimental": {
         "ANDROID.md": "docs/android-experimental.md",
@@ -164,8 +205,8 @@ START = {
     "windows64": "Windows x86-64: extract the whole folder, then open Shandalar.exe.\n"
                  "Keep Shandalar.pck beside it. The executable is unsigned.\n"
                  "Shandalar.console.exe is the optional terminal launcher.\n"
-                 "Shandalar-portable.bat starts it with its settings and saves kept in\n"
-                 "userdata\\ inside this folder instead of AppData, e.g. on a USB stick.",
+                 "Shandalar-portable.bat starts it portable, everything kept in portable\\\n"
+                 "inside this folder instead of AppData, e.g. on a USB stick.",
     "macos": "macOS: extract the whole folder, then open Shandalar.app.\n"
              "Universal: Apple Silicon and Intel. Ad-hoc signed, not notarized.\n"
              "macOS may require explicit approval to open a downloaded app.\n"
@@ -661,7 +702,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
     for output, included in zip(outputs, (False, True)):
         extra = {BASE_ASSIGNMENTS: base_assignments, "VERSION.txt": (version + "\n").encode(),
                  PLUGIN_CARDS: cards, **plugins}
-        readme = (f"SHANDALAR {version}\nGame source commit: {revision}\n\n{START[platform]}\n\n"
+        portable = (PORTABLE_LINE + "\n\n") if platform in PORTABLE_PLATFORMS else ""
+        readme = (f"SHANDALAR {version}\nGame source commit: {revision}\n\n{START[platform]}\n\n{portable}"
                   + (WEB_PLAY if platform in WEB_PLATFORMS else PLAY)
                   + ("Original skin included in skin/original_skin.zip. Leave it zipped.\n"
                      if included else "Original skin not included. The fallback appearance is fully playable.\n")
@@ -683,7 +725,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
         extra["README.txt"] += ("\n\n" + asset_guide.read_text(encoding="utf-8")).encode()
         if platform in LINUX_BINARIES or platform in MAC_PLATFORMS:
             binary = "./" + LINUX_BINARIES[platform] if platform in LINUX_BINARIES else "./Shandalar.app/Contents/MacOS/Shandalar"
-            prefix = '#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$0")"\n'
+            prefix = '#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$0")"\n' + (
+                PORTABLE_SH_MACOS if platform in MAC_PLATFORMS else PORTABLE_SH_LINUX)
             # A bare -h/--help is the engine's own (it prints Godot's options
             # and exits before the game runs): run.sh hands it to the game's
             # own list, `-- --help` (0.60.16, main.gd launch_help).
@@ -704,24 +747,25 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                 "python tools/shandalar_mcp.py (use the full script path from other folders).\n"
                 "The server finds Shandalar.console.exe automatically; Bash is not required.\n"
                 "Keep VERSION.txt and the whole extracted release together. See AGENTS.md.\n").encode()
-            extra["deck_lab.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+            extra["deck_lab.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n" + PORTABLE_BAT +
                                      "Shandalar.console.exe --headless --no-header -- --deck-lab %*\r\n").encode()
-            extra["auto_deck.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+            extra["auto_deck.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n" + PORTABLE_BAT +
                                       "Shandalar.console.exe --headless --no-header -- --auto-deck %*\r\n").encode()
-            extra["lab_query.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+            extra["lab_query.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n" + PORTABLE_BAT +
                                       "Shandalar.console.exe --headless --no-header -- --lab-query %*\r\n").encode()
-            extra["referee.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+            extra["referee.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n" + PORTABLE_BAT +
                                     "Shandalar.console.exe --headless --no-header -- --referee %*\r\n").encode()
-            # A portable game (issue #5, 0.60.17): Godot builds user:// from
-            # the APPDATA variable on Windows (OS_Windows::get_config_path,
-            # its cache from LOCALAPPDATA), so pointing both at userdata\
-            # here keeps every write in the extracted folder.
+            # The portable start (issue #5, 0.60.17; the portable folder
+            # since 0.70.1): makes portable\ (an old userdata\ becomes it)
+            # and starts the game inside it (PORTABLE_BAT).
             extra["Shandalar-portable.bat"] = ("@echo off\r\n"
-                                               "rem Shandalar with its settings and saves in userdata\\ beside this\r\n"
-                                               "rem file instead of AppData: a portable game, e.g. on a USB stick.\r\n"
+                                               "rem Starts Shandalar portable: everything it keeps stays in portable\\\r\n"
+                                               "rem in this folder. Options > Portable game does the same in the game.\r\n"
                                                "cd /d \"%~dp0\"\r\n"
-                                               "set \"APPDATA=%~dp0userdata\"\r\n"
-                                               "set \"LOCALAPPDATA=%~dp0userdata\"\r\n"
+                                               "if exist \"%~dp0userdata\\\" if not exist \"%~dp0portable\\\" "
+                                               "move \"%~dp0userdata\" \"%~dp0portable\" >nul\r\n"
+                                               "if not exist \"%~dp0portable\\\" mkdir \"%~dp0portable\"\r\n"
+                                               + PORTABLE_BAT +
                                                "start \"\" \"%~dp0Shandalar.exe\" %*\r\n").encode()
         if platform == "steam-deck":
             # Use the reviewed launcher rather than the generic Linux one.

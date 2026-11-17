@@ -250,7 +250,11 @@ static func expand(path: String) -> String:
 ## with an isolated environment, 2026-09-13). Never invent a root path
 ## when neither home is known; browsers can keep using user:// instead.
 static func _home_dir() -> String:
-	var home := OS.get_environment("HOME")
+	# A portable game on macOS runs with HOME pointed into its portable
+	# folder ([PortableMode]); `~` stays the player's own home.
+	var home := OS.get_environment(PortableMode.SYSTEM_PREFIX + "HOME")
+	if home == "":
+		home = OS.get_environment("HOME")
 	if home == "":
 		home = OS.get_environment("USERPROFILE")
 	home = home.replace("\\", "/")

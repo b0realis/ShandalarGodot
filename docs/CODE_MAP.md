@@ -231,6 +231,52 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   1997's), a left or right click reads it, the meeting riddle's card larger
   beside the face.
 
+## The portable game (0.70.1, 2026-11-17)
+
+Issue #5's Options-menu follow-up. The owner: *"Lets implement a portable option in menu! That means that all
+data for game working are in the game folder itself."*
+
+- `game/portable_mode.gd` (`PortableMode`): a `portable` folder in the
+  game folder (`game_folder`, beside the executable or `Shandalar.app`)
+  makes `user://` live inside it. `env_for` points the engine's data folder
+  there by system (`APPDATA`/`LOCALAPPDATA`, `XDG_DATA_HOME`/
+  `XDG_CACHE_HOME`, `HOME`; `OVERRIDDEN`, the system's own values kept as
+  `SHANDALAR_SYSTEM_<NAME>`, `SHANDALAR_PORTABLE` the folder);
+  `env_restored` gives them back; `user_dir_in` / `system_user_dir` name
+  `user://` inside and outside; `plan` decides a start ("stay", "enter",
+  "failed": never twice, nor into a folder that cannot be written,
+  `can_write` / `write_problem`, macOS App Translocation named);
+  `enter_at_start` (the first thing `Lifecycle._init` does) starts a
+  launcher-less exported desktop game once more inside the folder and ends
+  the first start before anything is read; `retire` renames a folder that
+  stopped being portable to `portable-off` (`off_name`), by the next start
+  when Windows still holds its log (`SHANDALAR_PORTABLE_RETIRE`);
+  `measure` / `start_copy` (`Copy`, a worker; `logs/` left out; a file of
+  the same name replaced, nothing else touched; refused without room) /
+  `progress_line` / `size_words`. `available` — exported desktop games
+  with a window, not ArkOS; `available_override` / `folder_override` for
+  tests.
+- `game/lifecycle.gd`: `_init` calls `PortableMode.enter_at_start`.
+- `game/options_screen.gd`: `_add_portable_section` after the skin rows —
+  `PortableLine` (`portable_line`), `PortableButton` (`PORTABLE_MAKE` /
+  `PORTABLE_STOP`), `PortableBring` on a portable game whose computer has
+  data (`PORTABLE_BRING`); `ask_portable` → `PortableWindow` with
+  `portable_question` and `PortableGo`, or why not; `_run_portable` copies
+  (`portable_route`), switches the variables and restarts
+  (`_restart_after_portable`: a desk relaunches, a handheld quits for its
+  launcher).
+- `game/paths.gd`: `_home_dir` reads `SHANDALAR_SYSTEM_HOME` first, so `~`
+  stays the player's home on a portable Mac.
+- `game/help/help_pages.gd`: the Saved adventures page's portable paragraph.
+- `tools/package_release.py`: `PORTABLE_SH_LINUX`, `PORTABLE_SH_MACOS`,
+  `PORTABLE_BAT` in every launcher after its `cd`; `Shandalar-portable.bat`
+  makes `portable\` (an old `userdata\` becomes it); `PORTABLE_LINE` in the
+  README of `PORTABLE_PLATFORMS`. `packaging/handhelds/steam-deck.sh`
+  carries the Linux lines.
+- Tests: `tests/unit/test_portable_mode.gd`, `tests/ui/test_portable_options.gd`;
+  `tools/test_package_release.py` (`PortableLinesTest`: the launchers' lines
+  set the game's own variables, parse, and run for real).
+
 ## 0.70.0 "Urza's Block" (2026-11-16)
 
 - `project.godot` `config/version` 0.70.0; `export_presets.cfg.example`

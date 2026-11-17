@@ -118,6 +118,8 @@ func _ready() -> void:
 
 	_add_skin_section(content)
 
+	_add_portable_section(content)
+
 	_add_card_back_section(content)
 
 	_add_card_packs_section(content)
@@ -750,6 +752,205 @@ func _on_skin_transfer(fraction: float) -> void:
 		return
 	line.text = SkinPack.transfer_line(fraction)
 	line.visible = SkinPack.busy()
+
+
+## THE PORTABLE GAME — the owner, 2026-11-17: *"Lets implement a portable
+## option in menu! That means that all data for game working are in the
+## game folder itself. The portable option would then store all things in
+## portable folder under main game folder! So easy to copy and take
+## around."* ([PortableMode]). A desktop game only. One line says where
+## the game keeps everything now; the button makes the game portable
+## (everything copied into `portable/`, then a restart inside it) or stops
+## it (everything copied back to the computer's folder, `portable/`
+## renamed `portable-off`, a restart); a portable game also offers to copy
+## the computer's games in — for a folder made by hand or by
+## `Shandalar-portable.bat`, which start with nothing. Each asks first,
+## shows the copy as it goes, and deletes nothing.
+const PORTABLE_MAKE := "Make this game portable..."
+const PORTABLE_STOP := "Stop being portable..."
+const PORTABLE_BRING := "Copy this computer's games in..."
+
+var _portable_dialog: OriginalDialog
+
+
+func _add_portable_section(content: VBoxContainer) -> void:
+	if not PortableMode.available():
+		return
+	content.add_child(UiChrome.body_label("Portable game:"))
+	var active := PortableMode.active()
+	var line := UiChrome.body_label(portable_line(active, GamePaths.shown(OS.get_user_data_dir()),
+		PortableMode.start_problem, PortableMode.start_note), 13)
+	line.name = "PortableLine"
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(line)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var main_button := UiChrome.menu_button(PORTABLE_STOP if active else PORTABLE_MAKE, Vector2(300, 34), 15)
+	main_button.name = "PortableButton"
+	main_button.tooltip_text = ("Copy everything back to this computer and stop keeping it in the game folder."
+		if active else "Keep everything in a portable folder inside the game folder, to copy it anywhere.")
+	main_button.pressed.connect(func() -> void: ask_portable("stop" if active else "make"))
+	row.add_child(main_button)
+	if active and DirAccess.dir_exists_absolute(_portable_system_dir()):
+		var bring := UiChrome.menu_button(PORTABLE_BRING, Vector2(300, 34), 15)
+		bring.name = "PortableBring"
+		bring.tooltip_text = "Copy the settings, decks and adventures this computer keeps " \
+			+ "into the portable folder, replacing files of the same name."
+		bring.pressed.connect(func() -> void: ask_portable("bring"))
+		row.add_child(bring)
+	content.add_child(row)
+
+
+## The section's line: where everything is kept, and what the start said.
+static func portable_line(active: bool, where: String, problem: String, note: String) -> String:
+	var text := ("This game is portable: its settings, decks, adventures and everything else "
+		+ "it keeps are in %s, inside the game folder. Copy the whole game folder to take "
+		+ "it anywhere.") % where if active else ("Your settings, decks and adventures are "
+		+ "kept in %s. A portable game keeps everything in a portable folder inside the "
+		+ "game folder instead, to copy to a USB stick or another computer.") % where
+	for extra in [problem, note]:
+		if String(extra) != "":
+			text += "\n" + String(extra)
+	return text
+
+
+## The computer's own `user://` while the game runs portable.
+static func _portable_system_dir() -> String:
+	return PortableMode.system_user_dir(PortableMode.platform(), OS.get_user_data_dir(),
+		PortableMode.env_now())
+
+
+## Where a copy goes from and to, for [param what] ("make", "stop",
+## "bring"): `{from, to}`.
+static func portable_route(what: String) -> Dictionary:
+	var here := OS.get_user_data_dir()
+	match what:
+		"make":
+			return {"from": here, "to": PortableMode.user_dir_in(PortableMode.platform(),
+				PortableMode.folder(), here)}
+		"stop":
+			return {"from": here, "to": _portable_system_dir()}
+	return {"from": _portable_system_dir(), "to": here}
+
+
+## The question before a copy, for [param what].
+static func portable_question(what: String, size: String, to: String) -> String:
+	match what:
+		"make":
+			return ("Everything the game keeps — settings, decks, adventures, the Hall of Fame, "
+				+ "the skins and card packs added in Options, the game records — is copied "
+				+ "into %s (%s), and the game starts again from there. What is on this "
+				+ "computer stays where it is.") % [to, size]
+		"stop":
+			return ("Everything in the portable folder (%s) is copied back to this computer, "
+				+ "into %s, replacing files of the same name there. The portable folder is "
+				+ "then renamed portable-off, and the game starts again. Nothing is "
+				+ "deleted.") % [size, to]
+	return ("Everything this computer keeps for the game (%s) is copied into the portable "
+		+ "folder, replacing files of the same name there, and the game starts again.") % size
+
+
+## Ask, then copy and restart.
+func ask_portable(what: String) -> void:
+	if is_instance_valid(_portable_dialog):
+		return
+	Settings.flush()
+	var route := portable_route(what)
+	if String(route["to"]) == "":
+		_portable_window(what, "This computer's own folder could not be found.", false)
+		return
+	if what == "make" and not PortableMode.can_write(PortableMode.folder()):
+		_portable_window(what, PortableMode.write_problem(PortableMode.folder()), false)
+		return
+	var found := PortableMode.measure(String(route["from"]))
+	var size := "%d files, %s" % [(found["files"] as Array).size(), PortableMode.size_words(int(found["bytes"]))]
+	_portable_window(what, portable_question(what, size, GamePaths.shown(String(route["to"]))), true)
+
+
+func _portable_title(what: String) -> String:
+	match what:
+		"make":
+			return "Make this game portable"
+		"stop":
+			return "Stop being portable"
+	return "Copy this computer's games in"
+
+
+## The window: [param text], and with [param go] "Copy and restart" and
+## Cancel; without, a plain Close.
+func _portable_window(what: String, text: String, go: bool) -> void:
+	var dialog := OriginalDialog.create(_portable_title(what), Vector2(560, 220))
+	dialog.name = "PortableWindow"
+	var words := UiChrome.body_label(text, 14)
+	words.name = "PortableWords"
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.custom_minimum_size.x = 520
+	dialog.body().add_child(words)
+	if go:
+		var copy_button := GauntletOptions.fit(dialog.add_button("Copy and restart"))
+		copy_button.name = "PortableGo"
+		copy_button.pressed.connect(func() -> void: _run_portable(what))
+		GauntletOptions.fit(dialog.add_button("Cancel")).pressed.connect(_close_portable)
+	else:
+		GauntletOptions.fit(dialog.add_button("Close")).pressed.connect(_close_portable)
+	_portable_dialog = dialog
+	add_child(dialog)
+	dialog.fit_height()
+
+
+func _close_portable() -> void:
+	if is_instance_valid(_portable_dialog):
+		_portable_dialog.dismiss()
+	_portable_dialog = null
+
+
+## The copy, shown as it goes; then the switch and the restart. A copy
+## that fails says why and changes nothing.
+func _run_portable(what: String) -> void:
+	var dialog := _portable_dialog
+	var words := dialog.find_child("PortableWords", true, false) as Label
+	for button in dialog.find_children("*", "Button", true, false):
+		(button as Button).disabled = true
+	var route := portable_route(what)
+	var job := PortableMode.start_copy(String(route["from"]), String(route["to"]))
+	while true:
+		var p := job.progress()
+		words.text = PortableMode.progress_line(p)
+		if bool(p["finished"]):
+			break
+		await get_tree().create_timer(0.1).timeout
+	job.wait()
+	var p := job.progress()
+	if String(p["error"]) != "":
+		_close_portable()
+		_portable_window(what, "Nothing was changed. " + String(p["error"]), false)
+		return
+	var system := PortableMode.platform()
+	match what:
+		"make":
+			PortableMode.apply_env(PortableMode.env_for(system, PortableMode.folder(), PortableMode.env_now()))
+		"stop":
+			var dir := PortableMode.folder()
+			var env := PortableMode.env_now()
+			PortableMode.apply_env(PortableMode.env_restored(system, env))
+			# Renamed now where the system allows it with the engine's log
+			# open in it; else by the start that follows ([method
+			# PortableMode.retire]).
+			if not PortableMode.retire(dir):
+				OS.set_environment(PortableMode.ENV_RETIRE, dir)
+	_restart_after_portable(what)
+
+
+## Start again where the copy put everything ([method SkinPack.restart_way]):
+## a desk relaunches; a handheld's launcher starts it again.
+func _restart_after_portable(what: String) -> void:
+	if SkinPack.restart_way(false, Settings.handheld()) == "quit":
+		_close_portable()
+		_portable_window(what, "Done. Start the game again from its launcher.", false)
+		_portable_dialog.closed.connect(func() -> void: get_tree().quit())
+		return
+	OS.set_restart_on_exit(true, SkinPack.relaunch_args())
+	get_tree().quit()
 
 
 ## THE CARD BACK — `[QoL]`, the owner's two asks of 2026-10-19: *"for

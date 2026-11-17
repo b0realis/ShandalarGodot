@@ -18973,6 +18973,35 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-17 — A portable game (0.70.1)
+
+Issue #5's follow-up (2026-11-04, its reporter, after the
+`Shandalar-portable.bat` answer: *"it might be more consistent to have the
+portable mode to be enabled from within the options menu itself"*). The owner: *"Lets implement a portable option in menu! That means that all
+data for game working are in the game folder itself. The portable option
+would then store all things in portable folder under main game folder! So
+easy to copy and take around. It would become a full self-sustained
+package. Go babay"*.
+
+- **The rule:** a folder named `portable` in the game folder; everything
+  the game and the engine keep lives in it. Godot 4.7.2 builds `user://`
+  from `APPDATA` (Windows), `XDG_DATA_HOME` (Linux) and `HOME` (macOS)
+  before any script runs (read in its source), so a portable game runs with
+  that variable pointed into the folder. The launchers set it; a start
+  without one (`Shandalar.exe`, `Shandalar.app`) starts itself once more
+  inside the folder from `Lifecycle._init`, before anything is read — only
+  the engine's start-up log and shader cache (about 1 MB) of that first
+  start stay in the system's folder (measured on an exported Linux build). The Steam Deck's launcher sets it itself (a game that started
+  twice is one Steam would lose track of).
+- **Options › Portable game:** where everything is kept; Make this game
+  portable... (copy in, restart), Stop being portable... (copy back,
+  rename `portable-off`, restart), Copy this computer's games in... on a
+  portable game. Asked first, the copy shown as it goes, nothing deleted.
+- **Windows:** `Shandalar-portable.bat` now makes `portable\` (an old
+  `userdata\` becomes it); every `.bat` door runs portable too.
+- Not on the web, Android, the Meta Quest or ArkOS (its launcher keeps the
+  data in its port folder already), nor in a checkout or a test.
+
 ## 2026-11-16 — 0.70.0 "Urza's Block": 0.60.19 released under its milestone number
 
 The owner: *"Bump version to 0.70.0 and release: “ShandalarGodot 0.70.0 -
