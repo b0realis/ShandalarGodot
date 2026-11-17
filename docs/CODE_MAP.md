@@ -298,7 +298,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `_zip_key`: rows kept while a zip's time, size and entries' CRC-32 stay
   the same); `saved_spec` (never the draft), `made_art`; `examples()` — the example cards shipped in
   `game/community_examples/` (in every export preset's include filter),
-  shown in the creator's Open list and played only once saved.
+  shown in the creator's Open list and played only once saved; a short
+  `.txt` beside each zip says it is a study example (only zips are read).
 - `game/card_forge_screen.gd` (`CardForgeScreen`): the editor screen
   (card, cost and type, rules, look; the large card, the small card and the
   card reader; New, Open (with a search, `filter_open_list`), Import,
