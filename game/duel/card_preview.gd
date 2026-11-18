@@ -846,7 +846,10 @@ func _needed_text_top(text: String, size: int) -> float:
 
 
 ## A community card's border ([CommunityCards.border_color]): a thin edge
-## over the frame, black, white or silver; no other card wears one.
+## over the frame, black, white or silver; no other card wears one. It lies
+## on the frame and UNDER the art and the lettering (owner 2026-11-18: on
+## top of everything it cut the tops off the name, which starts within
+## five pixels of the card's edge).
 var _community_border: Panel
 
 func _wear_border(d: CardData) -> void:
@@ -868,7 +871,7 @@ func _wear_border(d: CardData) -> void:
 	box.set_corner_radius_all(9)
 	_community_border.add_theme_stylebox_override("panel", box)
 	_community_border.visible = true
-	move_child(_community_border, get_child_count() - 1)
+	move_child(_community_border, _frame_bg.get_index() + 1)
 
 
 ## The frame's own rules plate as a stretchable texture — the band the

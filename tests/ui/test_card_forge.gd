@@ -229,6 +229,44 @@ func test_the_example_card_opens_whole_and_saves() -> void:
 	assert_string_contains(forge._preview._oracle.text, "Prevent the next 1 damage that would be dealt to target creature this turn.")
 	forge.save_card()
 	assert_true(CardRegistry.has_card("Battle Apothecary Cart"), "saved, it plays")
+	# The owner, 2026-11-18: saved, the example showed twice in the Open
+	# list — "the saved one overwrites the preset".
+	# (Asked of the list up now: a window closed waits for the frame's end.)
+	forge.open_list()
+	assert_null(forge._dialog.find_child("ForgeOpenExample_battle_apothecary_cart", true, false),
+		"the example saved is not offered again")
+	assert_not_null(forge._dialog.find_child("ForgeOpen_battle_apothecary_cart", true, false),
+		"the saved card is, once")
+	forge._close_dialog()
+	CommunityCards.delete_own("Battle Apothecary Cart")
+	CommunityCards.refresh()
+	forge.open_list()
+	assert_not_null(forge._dialog.find_child("ForgeOpenExample_battle_apothecary_cart", true, false),
+		"deleted, the example is back")
+	forge._close_dialog()
+
+
+func test_the_reasons_under_the_card_and_its_name_read_clearly() -> void:
+	# The owner, 2026-11-18: the red reasons under the card were "unreadable
+	# superimposed red/white" (the menus' pale seat), and the card's name
+	# was cut off at the top (its border lay over the lettering).
+	var forge: CardForgeScreen = await _open()
+	var reasons: Label = forge._problems
+	assert_string_contains(reasons.text, "set icon", "a new card has a reason to show")
+	assert_lt(reasons.get_theme_color("font_shadow_color").get_luminance(), 0.2,
+		"a dark seat under the red")
+	forge.open_list()
+	(forge.find_child("ForgeOpenExample_battle_apothecary_cart", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	var preview: CardPreview = forge._preview
+	var border := preview.find_child("CommunityBorder", false, false) as Control
+	assert_not_null(border, "a community card wears its border")
+	assert_true(border.visible)
+	assert_gt(border.get_index(), preview._frame_bg.get_index(), "over the frame")
+	assert_lt(border.get_index(), preview._name_label.get_index(), "under the name")
+	assert_lt(border.get_index(), preview._art.get_index(), "under the art")
+	preview.show_card(CardInstance.new(CardRegistry.get_card("Ornithopter"), -1, 0))
+	assert_false(border.visible, "a game card wears none")
 
 
 

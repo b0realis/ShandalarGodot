@@ -172,6 +172,12 @@ func _build_previews() -> void:
 	_problems.custom_minimum_size.x = CardPreview.SIZE.x - 12
 	_problems.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_problems.add_theme_color_override("font_color", Color(1.0, 0.62, 0.55))
+	# A DARK seat on this dark ground (owner 2026-11-18: "unreadable
+	# superimposed red/white"): the menus' pale seat, two pixels off, drew
+	# every red letter twice.
+	_problems.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	_problems.add_theme_constant_override("shadow_offset_x", 1)
+	_problems.add_theme_constant_override("shadow_offset_y", 1)
 	reasons.add_child(_problems)
 
 
@@ -1720,8 +1726,12 @@ func open_list() -> void:
 	grid.add_theme_constant_override("v_separation", 10)
 	scroll.add_child(grid)
 	dialog.body().add_child(scroll)
-	# The game's own examples first, to start from.
+	# The game's own examples first, to start from — but an example saved
+	# under its own name is that saved card now, shown once below (owner
+	# 2026-11-18: "the saved one overwrites the preset").
 	for row in CommunityCards.examples():
+		if CommunityCards.found_like(String(row["spec"].get("name", ""))) != "":
+			continue
 		var example := row
 		var data := CommunityCard.build(row["spec"])
 		data.set_code = CommunityCard.SET_CODE

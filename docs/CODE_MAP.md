@@ -206,7 +206,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `CardPreview.changed_text` — the Showcase reads a text change's rewritten
   type line and rules, only where the engine's layer 3 changed them, the
   changed words in italics (`ManaText` italic ranges); "Original type" stays
-  printed (issue #9).
+  printed (issue #9). `_wear_border`: a community card's border lies on
+  the frame, under the art and the lettering.
 - `test_issue_7_payment_color.gd` (tests/ui): a payment click on a dual land,
   Birds, City of Brass, Black Lotus or a painland taps the color still owed;
   the rest of the cost breaks a tie; real choices and extra leftover mana
@@ -308,7 +309,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `_zip_key`: rows kept while a zip's time, size and entries' CRC-32 stay
   the same); `saved_spec` (never the draft), `made_art`; `examples()` — the example cards shipped in
   `game/community_examples/` (in every export preset's include filter),
-  shown in the creator's Open list and played only once saved; a short
+  shown in the creator's Open list and played only once saved (one saved
+  under its own name shows once, as the saved card); a short
   `.txt` beside each zip says it is a study example (only zips are read).
   Set icons by the game's set symbol tiers (`ICON_TIERS`: common,
   uncommon, rare, legendary — a mythic or legendary card's): one picture
@@ -330,7 +332,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   a table, `_advice_line`/`_advice_box`: the summary on top, then Verdict,
   Check, Yours and the game's cards, the worst first; four set icon
   slots, `ForgeChooseIcon_<tier>`, `clear_icon`, `_icon_words`, an empty
-  slot showing the icon it falls back to, faded), opened by Options' `CreateCard`
+  slot showing the icon it falls back to, faded; the reasons under the
+  card, `ForgeProblems`, on a dark seat), opened by Options' `CreateCard`
   button; saving, importing and deleting wait for the LAN catalogue lock
   (`CardPacks.change_refusal`).
 - LAN (protocol 32): `SgCompatibility.community_mark` (counted once per pool from the saved cards; what plays of each
