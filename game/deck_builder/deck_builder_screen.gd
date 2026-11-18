@@ -1195,7 +1195,7 @@ func _open_extra_sets() -> void:
 			filter.set_on(CommunityCard.SET_CODE), func(on: bool) -> void:
 				if filter.set_on(CommunityCard.SET_CODE) != on:
 					filter.toggle_set(CommunityCard.SET_CODE),
-			"Cards made by players and shared as zips in the community_cards folder.\nOther set, colour, type and search filters still apply.")
+			"Cards made by players and shared as zips in the community_cards folder.\nOther set, color, type and search filters still apply.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 

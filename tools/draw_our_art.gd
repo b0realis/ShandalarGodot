@@ -155,6 +155,8 @@ func _init() -> void:
 	_write(_stone_medallion(false, _hammer()), dir, "filter_ulg_off.png")
 	_write(_stone_medallion(true, _flask()), dir, "filter_uds_on.png")
 	_write(_stone_medallion(false, _flask()), dir, "filter_uds_off.png")
+	_write(_stone_medallion(true, _community()), dir, "filter_comm_on.png")
+	_write(_stone_medallion(false, _community()), dir, "filter_comm_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -618,6 +620,69 @@ func _flask() -> Array:
 		{"op": "sub", "poly": PackedVector2Array([
 			Vector2(0.385, 0.58), Vector2(0.34, 0.835), Vector2(0.255, 0.815)])},
 	]
+
+
+## COMMUNITY CARDS — three figures, head and shoulders: two behind, one
+## in front with a gap cut round it so the three read apart at 48 px.
+## Every shoulder corner stays within 0.53 of the middle, inside the
+## stone medallion's gold ring.
+func _community() -> Array:
+	var ops: Array = []
+	for side in [-1.0, 1.0]:
+		var cx: float = 0.5 + side * 0.25
+		ops.append({"op": "add", "poly": _circle_poly(Vector2(cx, 0.36), 0.095, 32)})
+		ops.append({"op": "add", "poly": _bust(Vector2(cx, 0.76), 0.165, 0.24)})
+	ops.append({"op": "sub", "poly": _circle_poly(Vector2(0.5, 0.41), 0.15, 32)})
+	ops.append({"op": "sub", "poly": _bust(Vector2(0.5, 0.92), 0.255, 0.35)})
+	ops.append({"op": "add", "poly": _circle_poly(Vector2(0.5, 0.41), 0.115, 32)})
+	ops.append({"op": "add", "poly": _bust(Vector2(0.5, 0.86), 0.215, 0.29)})
+	return ops
+
+
+## Shoulders: a half ellipse standing on [param base].
+func _bust(base: Vector2, half_width: float, height: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for n in 25:
+		var a := PI + PI * float(n) / 24.0
+		out.append(base + Vector2(cos(a) * half_width, sin(a) * height))
+	return out
+
+
+## SPARE COMMUNITY MARKS, kept for later and written nowhere: the two
+## shapes shown beside the three figures when those were chosen
+## (2026-11-18). Either draws in the stone medallion as it stands, e.g.
+## `_stone_medallion(true, _spare_quill())`.
+##
+## A quill: a feather vane split by its shaft, notched along its edge,
+## the bare shaft running on into a cut nib; tilted up to the right.
+func _spare_quill() -> Array:
+	var ops: Array = [{"op": "add", "poly": _almond(Vector2(0.0, 0.0), Vector2(0.78, 0.0), 0.15, 0.11, 24)}]
+	for x in [0.22, 0.42]:
+		ops.append({"op": "sub", "poly": PackedVector2Array([
+			Vector2(x, -0.20), Vector2(x + 0.10, -0.20), Vector2(x - 0.02, -0.07)])})
+	ops.append({"op": "sub", "poly": PackedVector2Array([
+		Vector2(0.30, 0.20), Vector2(0.40, 0.20), Vector2(0.28, 0.06)])})
+	ops.append({"op": "sub", "poly": PackedVector2Array([
+		Vector2(0.04, -0.012), Vector2(0.74, -0.012), Vector2(0.74, 0.012), Vector2(0.04, 0.012)])})
+	ops.append({"op": "add", "poly": PackedVector2Array([
+		Vector2(-0.30, 0.0), Vector2(-0.20, -0.028), Vector2(0.06, -0.028), Vector2(0.06, 0.028),
+		Vector2(-0.20, 0.028)])})
+	return _fit_tilted(ops, deg_to_rad(-45.0), 0.14)
+
+
+## A cart wheel: rim, eight spokes and a hub with its axle hole.
+func _spare_cart_wheel() -> Array:
+	var c := Vector2(0.5, 0.5)
+	var ops: Array = [{"op": "add", "poly": _circle_poly(c, 0.46, 64)},
+		{"op": "sub", "poly": _circle_poly(c, 0.35, 64)}]
+	for n in 8:
+		var d := Vector2.from_angle(TAU * float(n) / 8.0)
+		var s := Vector2(-d.y, d.x) * 0.04
+		ops.append({"op": "add", "poly": PackedVector2Array([
+			c + s, c + d * 0.40 + s, c + d * 0.40 - s, c - s])})
+	ops.append({"op": "add", "poly": _circle_poly(c, 0.12, 32)})
+	ops.append({"op": "sub", "poly": _circle_poly(c, 0.05, 24)})
+	return ops
 
 
 ## A circle as a polygon, so the stone medallion (polygons only) can carve it.

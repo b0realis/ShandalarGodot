@@ -173,6 +173,17 @@ polygons in this script.
 | `filter_uds_on.png` | Urza's Destiny — flask carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_flask`, `_stone_medallion`) | GPL-3.0 | `0d3aa3f98082fe6bce282bcc214a12336289e84323c781dc03096a349b71caf2` |
 | `filter_uds_off.png` | Urza's Destiny — matching dim stone flask, 48x48 | `tools/draw_our_art.gd` (`_flask`, `_stone_medallion`) | GPL-3.0 | `04d9b1ccda33c934c4637f1e978a8ad3c8f92f396486952490b5d2112297825f` |
 
+The community cards' medallion is three figures, head and shoulders, two
+behind and one in front with a gap cut round it, carved by `_community`
+into the same stone. Two spare marks drawn for the same switch, a quill
+(`_spare_quill`) and a cart wheel (`_spare_cart_wheel`), stay in the
+script for later and are written nowhere.
+
+| File | Artwork | Generator | License | SHA-256 |
+|---|---|---|---|---|
+| `filter_comm_on.png` | Community cards — three figures carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_community`, `_stone_medallion`) | GPL-3.0 | `26dd428a0e0d0dfbf01e2ff0bfbc7bcec96fa7558c8ad761b85de5d2c59626ed` |
+| `filter_comm_off.png` | Community cards — matching dim stone figures, 48x48 | `tools/draw_our_art.gd` (`_community`, `_stone_medallion`) | GPL-3.0 | `bdf36c6d9c1cee3b5ecea121b2636a2ad9a2d5cc5d121e9a54d3c59898bf7b2a` |
+
 The card-variant medallion floats at 32px just below the large card's lower-right
 corner, over the unchanged information area. Its overlapping frames distinguish artwork selection
 from Pack 1's fanned-card pool emblem. The transparent circular edge,

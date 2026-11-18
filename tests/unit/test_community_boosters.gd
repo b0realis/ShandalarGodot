@@ -30,7 +30,7 @@ func before_all() -> void:
 
 
 func before_each() -> void:
-	for key in [DraftPoolConfig.SETTING, DraftPoolConfig.OPTIONS]:
+	for key in [DraftPoolConfig.SETTING, DraftPoolConfig.OPTIONS, DeckBuilderScreen.EXTRAS_SETTING]:
 		_saved[key] = Settings.get_value(key, 0) if Settings.has_value(key) else null
 		Settings.clear_value(key)
 	_root = ProjectSettings.globalize_path(ROOT)
@@ -478,3 +478,35 @@ func test_the_row_is_hidden_without_community_cards() -> void:
 	assert_false(setup.community_row.visible)
 	assert_false(setup.options().has(DraftRecipe.COMMUNITY_OPTION))
 	assert_false(setup.pool_summary.text.contains("Community"))
+
+
+# --------------------------------------------- the deck editor's Extras --
+
+func test_the_extras_community_row_wears_its_own_medallion_and_switches_the_set() -> void:
+	_make_set({"common": 1})
+	var screen: DeckBuilderScreen = load("res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	screen._open_extra_sets()
+	assert_not_null(screen.find_child("ExtraSourceRow_Community", true, false), "the row is there")
+	assert_not_null(GameSkin.our_art("filter_comm_on"))
+	assert_not_null(GameSkin.our_art("filter_comm_off"))
+	for state in ["On", "Off"]:
+		var tile := screen.find_child("ExtraCommunity" + state, true, false) as Button
+		assert_not_null(tile, state)
+		if tile == null:
+			return
+		var lit := tile.get_theme_stylebox("pressed") as StyleBoxTexture
+		var dim := tile.get_theme_stylebox("normal") as StyleBoxTexture
+		assert_not_null(lit, "a carved medallion, not a blank tile")
+		assert_not_null(dim)
+		if lit == null or dim == null:
+			return
+		assert_eq(lit.texture, GameSkin.our_art("filter_comm_on"))
+		assert_eq(dim.texture, GameSkin.our_art("filter_comm_off"))
+		assert_string_contains(tile.tooltip_text, "color, type")
+	assert_true(screen.filter.set_on(CommunityCard.SET_CODE))
+	(screen.find_child("ExtraCommunityOff", true, false) as Button).pressed.emit()
+	assert_false(screen.filter.set_on(CommunityCard.SET_CODE), "Off hides the community cards")
+	(screen.find_child("ExtraCommunityOn", true, false) as Button).pressed.emit()
+	assert_true(screen.filter.set_on(CommunityCard.SET_CODE))

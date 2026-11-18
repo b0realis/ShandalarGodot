@@ -580,6 +580,10 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
   `filter_{usg,ulg,uds}_{on,off}.png`: the gold gears, hammer and flask and
   their carved-stone medallions; drawn by `tools/draw_our_art.gd`
   (`_gears`, `_hammer`, `_flask`), hashed in `game/art/README.md`.
+- `game/art/filter_comm_{on,off}.png`: the community cards' carved-stone
+  medallion (three figures) for the Extras window's Community row; drawn by
+  `tools/draw_our_art.gd` (`_community`, with the spare `_spare_quill` and
+  `_spare_cart_wheel` kept unwritten), hashed in `game/art/README.md`.
 - `tools/pack_10_urza_block.py`, `tools/test_pack_10_urza_block.py`:
   pinned-printing fetcher over the three sets, deterministic local builder
   and bounded archive validation tests.
