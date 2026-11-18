@@ -2,7 +2,9 @@ Battle Apothecary Cart - a study example
 
 This card is a study example of a community card, not part of any official
 set. Its zip shows how one is laid out: one folder named after the card,
-holding card.json (the card itself), art.jpg (its picture) and icon.png
-(its set icon). Study it, change it, make your own.
+holding card.json (the card itself), art.jpg (its picture) and its set
+icon for each rarity: icon_common.png, icon_uncommon.png, icon_rare.png
+and icon_legendary.png - one wheel drawn white with a black outline,
+colored white, silver, gold and purple. Study it, change it, make your own.
 
 Set: Wheel of Fortune. Art: Caduceus.

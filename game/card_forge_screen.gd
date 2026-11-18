@@ -339,10 +339,20 @@ func _guide(box: Container, text: String) -> void:
 func _build_card_page(box: VBoxContainer) -> void:
 	_line(_row(box, "Name"), "name", 360, CommunityCard.LIMITS["name"])
 	_line(_row(box, "Set name"), "set_name", 360, CommunityCard.LIMITS["set_name"])
-	# FOUR SET ICONS, by the game's set symbol tiers (owner 2026-11-18):
-	# one alone is every rarity's; a rarity without its own wears the first
-	# one given, shown faded in its slot.
-	var icon_row := _row(box, "Set icons")
+	# THE SET ICON (owner 2026-11-18): one picture drawn white with a black
+	# outline is colored for each rarity ([method CommunityCards.rarity_icons]);
+	# one in color is every rarity's as it is.
+	var one_row := _row(box, "Set icon")
+	var choose_one := UiChrome.menu_button("Choose set icon...", Vector2(180, 32), 14)
+	choose_one.name = "ForgeChooseIcon"
+	choose_one.tooltip_text = "Draw it white with a black outline: it is colored for each rarity."
+	choose_one.pressed.connect(func() -> void: _pick_file("icon"))
+	one_row.add_child(choose_one)
+	_label(one_row, "", 13).name = "ForgeIconLabel"
+	# FOUR SET ICONS, by the game's set symbol tiers: one alone is every
+	# rarity's; a rarity without its own wears the first one given, shown
+	# faded in its slot; each can take a picture of its own.
+	var icon_row := _row(box, "By rarity")
 	for tier in CommunityCards.ICON_TIERS:
 		var slot := HBoxContainer.new()
 		slot.add_theme_constant_override("separation", 4)
@@ -364,9 +374,9 @@ func _build_card_page(box: VBoxContainer) -> void:
 		clear.pressed.connect(func() -> void: clear_icon(tier))
 		slot.add_child(clear)
 		icon_row.add_child(slot)
-	_label(box, "", 13).name = "ForgeIconLabel"
-	_guide(box, CommunityCards.ICON_WORDS + " One icon alone is used for every rarity; " \
-		+ "a rarity without its own uses the first one given.")
+	_guide(box, CommunityCards.ICON_WORDS + " Draw it white with a black outline and it is colored " \
+		+ "for each rarity (white, silver, gold, purple); a picture in color is used as it is for every " \
+		+ "rarity. Each rarity can also take a picture of its own.")
 	_options(_row(box, "Rarity"), "rarity", CommunityCard.RARITIES)
 	_line(_row(box, "Illustration (Illus.)"), "artist", 360, CommunityCard.LIMITS["artist"]) \
 		.placeholder_text = "the name printed after Illus."
@@ -1356,9 +1366,18 @@ func take_picture(which: String, path: String) -> String:
 	if why != "":
 		_say(why)
 		return why
-	if is_icon:
-		# "icon" alone is the common one: one icon, every rarity.
-		var tier := which.trim_prefix("icon_") if which.begins_with("icon_") else CommunityCards.ICON_TIERS[0]
+	var colored := false
+	if which == "icon":
+		# THE ONE SET ICON: black and white is colored for each rarity, a
+		# picture in color is every rarity's as it is.
+		colored = CommunityCards.is_outline_picture(bytes, kind)
+		icon = CommunityCards.rarity_icons(bytes, kind) if colored \
+			else {CommunityCards.ICON_TIERS[0]: {"bytes": bytes, "kind": kind}}
+		_icon_textures = {}
+		for tier in icon:
+			_icon_textures[tier] = CommunityCards.texture_from(icon[tier]["bytes"], String(icon[tier]["kind"]))
+	elif is_icon:
+		var tier := which.trim_prefix("icon_")
 		if not CommunityCards.ICON_TIERS.has(tier):
 			return "No such set icon: %s." % tier
 		icon = icon.duplicate()
@@ -1369,7 +1388,11 @@ func take_picture(which: String, path: String) -> String:
 		_art_texture = CommunityCards.texture_from(bytes, kind)
 	_fill()
 	refresh()
-	_say("%s: %s." % ["Set icon" if is_icon else "Art", path.get_file()])
+	if which == "icon":
+		_say("Set icon: %s — %s." % [path.get_file(), "colored for each rarity" if colored
+			else "in color, used as it is for every rarity (draw it white with a black outline to color it by rarity)"])
+	else:
+		_say("%s: %s." % ["Set icon" if is_icon else "Art", path.get_file()])
 	return ""
 
 

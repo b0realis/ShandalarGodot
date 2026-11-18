@@ -340,3 +340,20 @@ func test_four_set_icons_one_for_all() -> void:
 	forge.clear_icon("rare")
 	assert_eq(forge.icon.keys(), ["legendary"])
 
+
+func test_one_black_and_white_icon_becomes_four() -> void:
+	var forge: CardForgeScreen = await _open()
+	var drawn := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	drawn.fill(Color(0, 0, 0, 0))
+	for y in range(8, 56):
+		for x in range(8, 56):
+			var edge := x < 12 or x > 51 or y < 12 or y > 51
+			drawn.set_pixel(x, y, Color.BLACK if edge else Color.WHITE)
+	var path := _root.path_join("outline.png")
+	drawn.save_png(path)
+	assert_eq(forge.take_picture("icon", path), "")
+	assert_eq(forge.icon.keys(), CommunityCards.ICON_TIERS as Array, "colored for each rarity")
+	assert_string_contains((forge.find_child("ForgeIconLabel", true, false) as Label).text, "Own icons")
+	assert_eq(forge.take_picture("icon", _picture("red.png", 64, 64)), "")
+	assert_eq(forge.icon.keys(), ["common"], "a picture in color: one for every rarity")
+

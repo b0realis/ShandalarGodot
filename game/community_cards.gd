@@ -496,6 +496,68 @@ static func art_problem(bytes: PackedByteArray, kind: String) -> String:
 	return ""
 
 
+## THE RARE RAMP a black-and-white icon is colored with (dark, lit): gold,
+## beside the game's own white, silver and purple
+## ([constant GameSkin.SET_SYMBOL_RAMPS]).
+const RARE_RAMP := [Color(0.52, 0.34, 0.07), Color(1.0, 0.88, 0.50)]
+## The rim black lines become: the game's set symbols' own.
+const ICON_RIM := Color(0.10, 0.09, 0.12)
+
+
+## Whether the set icon [param bytes] is drawn in black and white (shades
+## of grey, with some white in it) — the kind [method rarity_icons] colors
+## — rather than in colors of its own.
+static func is_outline_picture(bytes: PackedByteArray, kind: String) -> bool:
+	var image := image_from(bytes, kind)
+	if image == null:
+		return false
+	image.convert(Image.FORMAT_RGBA8)
+	var opaque := 0
+	var grey := 0
+	var light := 0
+	for y in image.get_height():
+		for x in image.get_width():
+			var p := image.get_pixel(x, y)
+			if p.a < 0.5:
+				continue
+			opaque += 1
+			if p.s < 0.12 or p.v < 0.15:
+				grey += 1
+			if p.get_luminance() > 0.6:
+				light += 1
+	return opaque > 0 and grey * 100 >= opaque * 97 and light * 20 >= opaque
+
+
+## THE FOUR RARITY ICONS made from one black-and-white set icon: its black
+## becomes the dark rim, its white the tier's color — white, silver, gold,
+## purple — lit from above, the way the game's own set symbols are.
+static func rarity_icons(bytes: PackedByteArray, kind: String) -> Dictionary:
+	var source := image_from(bytes, kind)
+	var out := {}
+	if source == null:
+		return out
+	source.convert(Image.FORMAT_RGBA8)
+	var bottom := float(maxi(source.get_height() - 1, 1))
+	for tier in ICON_TIERS:
+		var ramp: Array = GameSkin.SET_SYMBOL_RAMPS.get(tier, RARE_RAMP)
+		var dark: Color = ramp[0]
+		var lit: Color = ramp[1]
+		var image := source.duplicate() as Image
+		for y in image.get_height():
+			var shade := 1.0 - 0.3 * float(y) / bottom
+			for x in image.get_width():
+				var p := image.get_pixel(x, y)
+				if p.a == 0.0:
+					continue
+				var light := p.get_luminance()
+				var ink := ICON_RIM.lerp(dark, light / 0.4) if light < 0.4 \
+					else dark.lerp(lit, (light - 0.4) / 0.6 * shade)
+				ink.a = p.a
+				image.set_pixel(x, y, ink)
+		out[tier] = {"bytes": image.save_png_to_buffer(), "kind": "png"}
+	return out
+
+
 ## Whether [param file] is a card's set icon: `icon.png`, or one of the
 ## tiers' (`icon_rare.webp`).
 static func is_icon_file(file: String) -> bool:

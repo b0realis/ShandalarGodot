@@ -358,7 +358,9 @@ func test_the_example_card_ships_whole() -> void:
 	assert_eq(data.cost.mana_value(), 2)
 	assert_eq(data.oracle_text, "{T}: Prevent the next 1 damage that would be dealt to target creature this turn.")
 	assert_eq(CommunityCards.art_problem(rows[0]["files"]["art"]["bytes"], "jpg"), "", "the art by the guidelines")
-	assert_eq(CommunityCards.icon_problem(rows[0]["files"]["icon"]["bytes"], "png"), "")
+	assert_eq(CommunityCards.icons_problem(rows[0]["files"]["icon"]), "")
+	assert_eq(CommunityCards.icon_tiers(rows[0]["files"]["icon"]).keys(), CommunityCards.ICON_TIERS as Array,
+		"its wheel colored for each rarity")
 	assert_false(CardRegistry.has_card("Battle Apothecary Cart"), "an example is not in the pool until saved")
 
 
@@ -410,4 +412,40 @@ func test_a_card_of_four_icons_is_written_and_read_whole() -> void:
 	assert_eq(CommunityCards.write_zip(path, spec, {}, {}), "Choose the set icon first.")
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(dir)
+
+
+## A set icon drawn white with a black outline: a white disc in a black ring.
+func _outline_icon() -> Dictionary:
+	var picture := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	picture.fill(Color(0, 0, 0, 0))
+	for y in 64:
+		for x in 64:
+			var d := Vector2(x - 31.5, y - 31.5).length()
+			if d <= 22.0:
+				picture.set_pixel(x, y, Color.WHITE)
+			elif d <= 27.0:
+				picture.set_pixel(x, y, Color.BLACK)
+	return {"bytes": picture.save_png_to_buffer(), "kind": "png"}
+
+
+func test_a_black_and_white_icon_is_colored_for_each_rarity() -> void:
+	var drawn := _outline_icon()
+	assert_true(CommunityCards.is_outline_picture(drawn["bytes"], "png"))
+	assert_false(CommunityCards.is_outline_picture(_icon_of(Color(0.8, 0.2, 0.1))["bytes"], "png"),
+		"a picture in color is used as it is")
+	assert_false(CommunityCards.is_outline_picture(_icon_of(Color.BLACK)["bytes"], "png"),
+		"all black has no white to color")
+	var made := CommunityCards.rarity_icons(drawn["bytes"], "png")
+	assert_eq(made.keys(), CommunityCards.ICON_TIERS as Array)
+	var middle := {}
+	for tier in made:
+		assert_eq(CommunityCards.icon_problem(made[tier]["bytes"], "png"), "", tier + " follows the guidelines")
+		var image := CommunityCards.image_from(made[tier]["bytes"], "png")
+		middle[tier] = image.get_pixel(32, 20)
+		assert_lt(image.get_pixel(32, 7).get_luminance(), 0.2, tier + ": the outline stays dark")
+		assert_eq(image.get_pixel(0, 0).a, 0.0, "the ground stays clear")
+	assert_gt(middle["common"].get_luminance(), 0.9, "common: white")
+	assert_gt(middle["rare"].r, middle["rare"].b + 0.3, "rare: gold")
+	assert_gt(middle["legendary"].b, middle["legendary"].g + 0.2, "legendary: purple")
+	assert_gt(middle["uncommon"].b, middle["uncommon"].r, "uncommon: a cool silver")
 

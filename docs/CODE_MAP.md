@@ -316,7 +316,10 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `icon_tiers`, `icon_for_tier` (its own, else the first given),
   `icon_pack`, `icon_entries`, `icons_problem`, `is_icon_file`,
   `icon_tier_of`; `icon_texture(card, tier)` (the card view passes
-  `GameSkin.set_symbol_tier` of the card's own spec's rarity).
+  `GameSkin.set_symbol_tier` of the card's own spec's rarity). One icon
+  drawn white with a black outline (`is_outline_picture`) is colored into
+  the four (`rarity_icons`: `GameSkin.SET_SYMBOL_RAMPS` and `RARE_RAMP`,
+  black to `ICON_RIM`, lit from above); the example cart's wheel is one.
 - `game/card_forge_screen.gd` (`CardForgeScreen`): the editor screen
   (card, cost and type, rules, look; the large card, the small card and the
   card reader; New, Open (with a search, `filter_open_list`), Import,
