@@ -80,3 +80,27 @@ func test_the_dice_are_silent() -> void:
 	screen.randomize_seat(1, _rng(5))
 	assert_eq(screen._format_note.text, before,
 		"no report of what was drawn (the owner's ruling, 2026-11-05)")
+
+
+func test_at_a_hotseat_table_seat_twos_dice_roll_its_own_mat() -> void:
+	# The owner, 2026-11-18: each hotseat seat has its own territory row.
+	var keep := {}
+	for key in ["PlayerTerritoryColor", DuelOptions.SEAT_TWO_COLOR_KEY, DuelOptions.SEAT_TWO_TYPE_KEY]:
+		keep[key] = Settings.get_value(key, null) if Settings.has_value(key) else null
+	DuelOptions.set_territory_color("Blue")
+	DuelOptions.set_seat_territory_color(1, "Red")
+	screen._apply_mode(SetupScreen.BattleMode.VS_AI)
+	screen.randomize_seat(1, _rng(5))
+	assert_eq(DuelOptions.seat_territory_color(1), "Red",
+		"against the computer seat 2 has no row to roll")
+	screen._apply_mode(SetupScreen.BattleMode.HOTSEAT)
+	screen.randomize_seat(1, _rng(5))
+	assert_eq(DuelOptions.seat_territory_color(1), DuelOptions.DECK_COLOR,
+		"at a hotseat table seat 2's mat follows its deck")
+	assert_eq(DuelOptions.territory_color(), "Blue", "seat 1's is left alone")
+	for key in keep:
+		if keep[key] == null:
+			Settings.clear_value(key)
+		else:
+			Settings.set_value(key, keep[key])
+

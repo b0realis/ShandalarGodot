@@ -392,6 +392,33 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.2 (2026-11-18): Hotseat territories, the number menus
+
+The owner: *"Magic battle hotseat shoudl have your territory setting for
+seat 1 and seat 2!"* and, of the Deck Builder's right-click Cost, Power and
+Toughness windows, *"bottom button is out of place"*.
+
+- `game/duel/duel_options.gd`: `SEAT_TWO_COLOR_KEY` / `SEAT_TWO_TYPE_KEY`,
+  `seat_territory_color` / `set_seat_territory_color` /
+  `seat_territory_type` / `set_seat_territory_type` (seat 1's are the
+  original's `PlayerTerritoryColor` / `PlayerTerritoryType`);
+  `ground_color_for` and `ground_for` take `two_humans`, where each seat
+  answers to its own pair.
+- `game/duel/duel_screen.gd`: `_ground_choice` passes
+  `config.hotseat_privacy` as `two_humans`.
+- `game/setup_screen.gd`: `_build_territory_row(seat)`,
+  `_territory_caption`, `_territory_rows` / `_territory_captions` /
+  `_territory_colors` / `_territory_types` / `_territory_previews`; seat
+  2's row shows in Hotseat only (`_apply_mode`), and `randomize_seat` rolls
+  it there.
+- `game/deck_builder/deck_builder_screen.gd`: `_open_filter_menu` grows the
+  window to what it holds (`OriginalDialog.fit_height`).
+- Version 0.70.2, Android version code 70002; `docs/releases/0.70.2.md`
+  (was `0.70.1.md`: 0.70.1 was never published).
+- Tests: `tests/ui/test_territory_ground.gd` (+3),
+  `tests/ui/test_setup_dice_2026_11_07.gd` (+1),
+  `tests/ui/test_deck_builder.gd` (+1).
+
 ## The portable game (0.70.1, 2026-11-17)
 
 Issue #5's Options-menu follow-up. The owner: *"Lets implement a portable option in menu! That means that all
@@ -10958,7 +10985,8 @@ shandalar/
 │    Settings, the Duel Options panel and the battle-setup screen's [QoL]
 │    pair are two views of ONE value, and only your own half answers to
 │    it (Duel.hlp: "You cannot do anything to change the background in
-│    your opponent's territory");
+│    your opponent's territory") — except at a hotseat table, where seat
+│    2 has a row and a pair of its own (2026-11-18);
 │    tests/ui/test_deck_sound.gd — the Deck Builder's bed and its grind:
 │    "the first song" is the LIBRARY's order and stable across calls (the
 │    random LocMus it replaced would pass a weaker test), an Options track
@@ -12440,8 +12468,9 @@ shandalar/
 │   │                          Options panel's own two lists (colour x
 │   │                          style) with a live preview at the board
 │   │                          half's aspect, in a place the original had
-│   │                          none; ONE control for both seats and ONE
-│   │                          value with the panel, via DuelOptions
+│   │                          none; ONE value with the panel, via
+│   │                          DuelOptions; at a hotseat table seat 2
+│   │                          gets a row and a value of its own
 │   │                          Builds a DuelConfig (_build_config, every
 │   │                          refusal a null); free play goes to the
 │   │                          duel screen, a match to MatchScreen. A

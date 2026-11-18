@@ -160,6 +160,13 @@ var _deck_colors: Dictionary = {}
 var _territory_color: OptionButton
 var _territory_type: OptionButton
 var _territory_preview: Control
+## Both seats' rows, by seat — seat 2's is shown at a hotseat table only
+## (the owner, 2026-11-18); the three above are seat 1's.
+var _territory_rows: Array[Control] = []
+var _territory_captions: Array[Label] = []
+var _territory_colors: Array[OptionButton] = []
+var _territory_types: Array[OptionButton] = []
+var _territory_previews: Array[Control] = []
 
 const DIFFICULTIES := ["Apprentice", "Magician", "Sorcerer", "Wizard"]
 
@@ -656,7 +663,8 @@ func _build_ui() -> void:
 
 		seats.add_child(UiChrome.panel_around(seat_row, 10.0))
 	content.add_child(seats)
-	content.add_child(_build_territory_row())
+	content.add_child(_build_territory_row(0))
+	content.add_child(_build_territory_row(1))
 
 	# `Opponent:` (`Program/Text.res:2854`) — the original's own label over
 	# the five FORMAT radio buttons, which are the first thing its screen
@@ -828,8 +836,10 @@ func _on_deck_chosen(pid: int) -> void:
 ## ([method AdventureSetup.random_name]), and its own face from the
 ## library. Seat 1's dice also roll YOUR territory background: its colour
 ## `Deck color`, so it matches the deck drawn, in one of that colour's
-## three arts; the opponent's half always follows its own deck (`Duel.hlp`,
-## the reason it has no picker). Silent, as the Embark screen's Randomize
+## three arts; against the computer the opponent's half always follows its
+## own deck (`Duel.hlp`, the reason it has no picker there), and at a
+## hotseat table seat 2's dice roll seat 2's own row the same way (the
+## owner, 2026-11-18). Silent, as the Embark screen's Randomize
 ## is (the owner's ruling of 2026-11-05). [param rng] is for tests.
 func randomize_seat(pid: int, rng: RandomNumberGenerator = null) -> void:
 	if rng == null:
@@ -852,12 +862,12 @@ func randomize_seat(pid: int, rng: RandomNumberGenerator = null) -> void:
 	if not faces.is_empty():
 		Settings.set_value(PORTRAIT_KEY % pid, String(faces[rng.randi_range(0, faces.size() - 1)]["id"]))
 		_update_portrait(pid)
-	if pid == 0 and _territory_color != null:
-		DuelOptions.set_territory_color(DuelOptions.DECK_COLOR)
-		_territory_color.select(maxi(0, DuelOptions.TERRITORY_COLORS.find(DuelOptions.DECK_COLOR)))
+	if pid < _territory_colors.size() and (pid == 0 or _mode == BattleMode.HOTSEAT):
+		DuelOptions.set_seat_territory_color(pid, DuelOptions.DECK_COLOR)
+		_territory_colors[pid].select(maxi(0, DuelOptions.TERRITORY_COLORS.find(DuelOptions.DECK_COLOR)))
 		var style := rng.randi_range(0, DuelOptions.TERRITORY_TYPES.size() - 1)
-		DuelOptions.set_territory_type(String(DuelOptions.TERRITORY_TYPES[style]["label"]))
-		_territory_type.select(style)
+		DuelOptions.set_seat_territory_type(pid, String(DuelOptions.TERRITORY_TYPES[style]["label"]))
+		_territory_types[pid].select(style)
 	_on_deck_chosen(pid)
 
 
@@ -867,88 +877,112 @@ func randomize_seat(pid: int, rng: RandomNumberGenerator = null) -> void:
 ## that one are two views of one value and cannot disagree. Change it
 ## here, open the panel mid-duel, and the panel opens on what was chosen.
 ##
-## ONE CONTROL, NOT ONE PER SEAT. `Your territory background` is
-## possessive and singular, and `Duel.hlp`, **Dueling Options**, is
+## A SECOND ROW FOR SEAT 2, AT A HOTSEAT TABLE ONLY (the owner,
+## 2026-11-18: "Magic battle hotseat should have your territory setting for
+## seat 1 and seat 2!"). Against the computer `Your territory background`
+## is possessive and singular, and `Duel.hlp`, **Dueling Options**, is
 ## explicit about the other half: *"You cannot do anything to change the
 ## background in your opponent's territory; it matches the predominant
-## color in her deck."* A picker per seat would be a second value that
-## could contradict the first.
-func _build_territory_row() -> Control:
+## color in her deck."* At a hotseat table both halves are a player's, so
+## each chooses its own: seat 1's row is the one above, captioned `Seat 1
+## …` there, and seat 2's writes keys of its own ([method
+## DuelOptions.seat_territory_color]). [method _apply_mode] shows it.
+func _build_territory_row(seat := 0) -> Control:
 	var row := HBoxContainer.new()
+	row.name = "TerritoryRow%d" % (seat + 1)
 	row.add_theme_constant_override("separation", 8)
-	row.add_child(UiChrome.body_label(
-		"" + DuelOptions.TERRITORY_LABEL + ":"))
-	_territory_color = OptionButton.new()
+	var caption := UiChrome.body_label(_territory_caption(seat))
+	row.add_child(caption)
+	var colors := OptionButton.new()
+	colors.name = "TerritoryColor%d" % (seat + 1)
 	for name in DuelOptions.TERRITORY_COLORS:
-		_territory_color.add_item(name)
-	_territory_color.select(maxi(0,
-		DuelOptions.TERRITORY_COLORS.find(DuelOptions.territory_color())))
-	_territory_color.tooltip_text = "The predominant colour of YOUR half " \
-		+ "of the table. Your opponent's always follows her own deck."
-	_territory_color.item_selected.connect(func(index: int) -> void:
-		DuelOptions.set_territory_color(DuelOptions.TERRITORY_COLORS[index])
+		colors.add_item(name)
+	colors.select(maxi(0,
+		DuelOptions.TERRITORY_COLORS.find(DuelOptions.seat_territory_color(seat))))
+	colors.tooltip_text = ("The predominant color of YOUR half of the table. "
+		+ "Against the computer, its half always follows its own deck.") if seat == 0 \
+		else "The predominant color of seat 2's half of the table."
+	colors.item_selected.connect(func(index: int) -> void:
+		DuelOptions.set_seat_territory_color(seat, DuelOptions.TERRITORY_COLORS[index])
 		_update_territory_preview())
-	row.add_child(_territory_color)
-	_territory_type = OptionButton.new()
+	row.add_child(colors)
+	var styles := OptionButton.new()
+	styles.name = "TerritoryType%d" % (seat + 1)
 	for entry in DuelOptions.TERRITORY_TYPES:
-		_territory_type.add_item(String(entry["label"]))
-	_territory_type.select(maxi(0, _type_index()))
-	_territory_type.tooltip_text = \
-		"Which of the three background arts that colour wears."
-	_territory_type.item_selected.connect(func(index: int) -> void:
-		DuelOptions.set_territory_type(
+		styles.add_item(String(entry["label"]))
+	styles.select(maxi(0, _type_index(seat)))
+	styles.tooltip_text = "Which of the three background arts that color wears."
+	styles.item_selected.connect(func(index: int) -> void:
+		DuelOptions.set_seat_territory_type(seat,
 			String(DuelOptions.TERRITORY_TYPES[index]["label"]))
 		_update_territory_preview())
-	row.add_child(_territory_type)
+	row.add_child(styles)
 	# THE PREVIEW, at the board half's own proportions (914x400 at
 	# 1280x800, i.e. 2.285) so a `Line drawing` is cropped here exactly as
 	# it will be cropped there — a preview that lied about the framing
 	# would be worse than none.
-	_territory_preview = Control.new()
-	_territory_preview.custom_minimum_size = TERRITORY_PREVIEW
-	_territory_preview.clip_contents = true
-	row.add_child(UiChrome.panel_around(_territory_preview, 3.0))
+	var preview := Control.new()
+	preview.custom_minimum_size = TERRITORY_PREVIEW
+	preview.clip_contents = true
+	row.add_child(UiChrome.panel_around(preview, 3.0))
+	_territory_rows.append(row)
+	_territory_captions.append(caption)
+	_territory_colors.append(colors)
+	_territory_types.append(styles)
+	_territory_previews.append(preview)
+	if seat == 0:
+		_territory_color = colors
+		_territory_type = styles
+		_territory_preview = preview
 	_update_territory_preview()
 	return row
 
 
-## Which style is selected, by index into [constant
-## DuelOptions.TERRITORY_TYPES].
-func _type_index() -> int:
-	var chosen := DuelOptions.territory_type()
+## What a seat's territory row is called: `Your territory background`
+## against the computer, `Seat N territory background` at a hotseat table.
+func _territory_caption(seat: int) -> String:
+	if _mode == BattleMode.HOTSEAT:
+		return "Seat %d territory background:" % (seat + 1)
+	return DuelOptions.TERRITORY_LABEL + ":"
+
+
+## Which style seat [param seat]'s row has selected, by index into
+## [constant DuelOptions.TERRITORY_TYPES].
+func _type_index(seat := 0) -> int:
+	var chosen := DuelOptions.seat_territory_type(seat)
 	for i in DuelOptions.TERRITORY_TYPES.size():
 		if DuelOptions.TERRITORY_TYPES[i]["label"] == chosen:
 			return i
 	return 1
 
 
-## Repaint the preview from the two pickers. `Deck color` resolves against
-## SEAT 1's deck, because seat 1 is the seat a human takes in every mode
-## but the demo (`DuelScreen._human_seat` picks the first human seat, and
-## seat 2 is the AI's) — so the preview shows the half the player will
-## actually be sitting behind.
+## Repaint each row's preview from its two pickers. `Deck color` resolves
+## against that seat's own deck: seat 1's row is the half a human sits
+## behind in every mode but the demo (`DuelScreen._human_seat` picks the
+## first human seat, and seat 2 is the AI's), and seat 2's row is shown
+## only at a hotseat table, where seat 2 is a player too.
 func _update_territory_preview() -> void:
-	if _territory_preview == null:
-		return
-	for child in _territory_preview.get_children():
-		_territory_preview.remove_child(child)
-		child.queue_free()
-	var meta: Variant = _deck_options[0].get_selected_metadata()
-	var deck_color := "white"
-	# A pooled row (`group:…`) is not a deck file yet — read as one it
-	# was a file that does not load, so always "white" (bug pass
-	# 2026-10-03). Like `<random deck>`, it keeps the default.
-	if meta != null and str(meta) != "" and not str(meta).begins_with(GROUP_RANDOM):
-		deck_color = _color_of(str(meta))
-	_territory_preview.add_child(TerritoryGround.node(
-		DuelOptions.ground_color_for(0, 0, deck_color),
-		DuelOptions.territory_type()))
-	_name_the_deck_color(deck_color)
+	for seat in _territory_previews.size():
+		var preview: Control = _territory_previews[seat]
+		for child in preview.get_children():
+			preview.remove_child(child)
+			child.queue_free()
+		var meta: Variant = _deck_options[seat].get_selected_metadata()
+		var deck_color := "white"
+		# A pooled row (`group:…`) is not a deck file yet — read as one it
+		# was a file that does not load, so always "white" (bug pass
+		# 2026-10-03). Like `<random deck>`, it keeps the default.
+		if meta != null and str(meta) != "" and not str(meta).begins_with(GROUP_RANDOM):
+			deck_color = _color_of(str(meta))
+		var ground := DuelOptions.ground_for(seat, 0, deck_color, {}, seat == 1)
+		preview.add_child(TerritoryGround.node(String(ground["color"]),
+			String(ground["type"])))
+		_name_the_deck_color(seat, deck_color)
 
 
 ## SAY WHAT `Deck color` RESOLVES TO. It is the shipped default and it
 ## already does the thing — your half of the table takes your deck's
-## dominant colour, the same rule that picks the duelist portrait above it
+## dominant color, the same rule that picks the duelist portrait above it
 ## — but the entry read `Deck color` whatever deck was chosen, so a player
 ## could not see that it was already answered (asked 2026-09-03: "can the
 ## territory background be pre-filled by a dominant colour?"). It now
@@ -958,14 +992,14 @@ func _update_territory_preview() -> void:
 ## ([constant DuelOptions.DECK_COLOR]) — the handler maps by INDEX — so
 ## what lands in the settings file is unchanged and a saved preference
 ## still means "follow my deck", not "red, that once".
-func _name_the_deck_color(deck_color: String) -> void:
-	if _territory_color == null:
+func _name_the_deck_color(seat: int, deck_color: String) -> void:
+	if seat >= _territory_colors.size():
 		return
+	var colors: OptionButton = _territory_colors[seat]
 	var row := DuelOptions.TERRITORY_COLORS.find(DuelOptions.DECK_COLOR)
-	if row < 0 or row >= _territory_color.item_count:
+	if row < 0 or row >= colors.item_count:
 		return
-	_territory_color.set_item_text(row, "%s (%s)" % [
-		DuelOptions.DECK_COLOR, deck_color])
+	colors.set_item_text(row, "%s (%s)" % [DuelOptions.DECK_COLOR, deck_color])
 
 
 ## THE DUELIST'S FACE for one seat: the 1997 portrait
@@ -1718,6 +1752,12 @@ func _apply_mode(mode: int) -> void:
 		if _is_auto_name(_name_edits[pid].text):
 			_name_edits[pid].text = _default_name(pid, mode)
 	_pace_row.visible = mode == BattleMode.DEMO
+	# SEAT 2'S OWN TERRITORY ROW, at a hotseat table only (the owner,
+	# 2026-11-18): see [method _build_territory_row].
+	for seat in _territory_captions.size():
+		_territory_captions[seat].text = _territory_caption(seat)
+	if _territory_rows.size() > 1:
+		_territory_rows[1].visible = mode == BattleMode.HOTSEAT
 
 
 ## `[QoL]` WHAT YOU PLAYED LAST IS WHAT YOU OPEN ON. The owner, 2026-09-07:

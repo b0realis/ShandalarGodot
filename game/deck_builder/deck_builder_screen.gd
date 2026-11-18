@@ -4194,6 +4194,11 @@ func _open_filter_menu(request: Dictionary) -> void:
 	else:
 		dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
+	# GROW TO WHAT IS IN IT (owner 2026-11-18). The height above counts the
+	# lines only, not the `Number` row under them, so Casting Cost, Power
+	# and Toughness hung their `Done` off the bottom of the stone — more so
+	# under a bigger UI. The window grows to its column, never shrinks.
+	dialog.fit_height()
 
 
 ## `[x] Elf` / `[  ] Elf` — the checked-line convention this screen's own

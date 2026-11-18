@@ -480,6 +480,46 @@ static func set_territory_type(name: String) -> void:
 	Settings.set_value("PlayerTerritoryType", name)
 
 
+## SEAT 2'S OWN, AT A HOTSEAT TABLE (the owner, 2026-11-18: "Magic battle
+## hotseat should have your territory setting for seat 1 and seat 2!").
+## Against the computer the other half follows its deck, as `Duel.hlp`
+## says; at a hotseat table both halves are a player's, so seat 2 chooses
+## its own. Seat 1's pair is the original's own value above; seat 2's are
+## keys of ours. [Ours: the 1997 game had no hotseat.]
+const SEAT_TWO_COLOR_KEY := "Seat2TerritoryColor"
+const SEAT_TWO_TYPE_KEY := "Seat2TerritoryType"
+
+
+## Seat [param seat]'s territory color: seat 1's is [method
+## territory_color], seat 2's its own (`Deck color` until chosen).
+static func seat_territory_color(seat: int) -> String:
+	if seat == 0:
+		return territory_color()
+	return String(Settings.get_value(SEAT_TWO_COLOR_KEY, DECK_COLOR))
+
+
+static func set_seat_territory_color(seat: int, name: String) -> void:
+	if seat == 0:
+		set_territory_color(name)
+	else:
+		Settings.set_value(SEAT_TWO_COLOR_KEY, name)
+
+
+## Seat [param seat]'s territory style: seat 1's is [method
+## territory_type], seat 2's its own (`Pattern` until chosen).
+static func seat_territory_type(seat: int) -> String:
+	if seat == 0:
+		return territory_type()
+	return String(Settings.get_value(SEAT_TWO_TYPE_KEY, "Pattern"))
+
+
+static func set_seat_territory_type(seat: int, name: String) -> void:
+	if seat == 0:
+		set_territory_type(name)
+	else:
+		Settings.set_value(SEAT_TWO_TYPE_KEY, name)
+
+
 ## One row of [constant TERRITORY_TYPES] by its 1997 label. An unknown
 ## label answers with `Pattern`, which is what an unreadable
 ## `PlayerTerritoryType` should fall back to: the middle of the three, and
@@ -510,11 +550,13 @@ static func ground_key(color_name: String, type_label := "") -> String:
 ## colour. The player's own answers to `PlayerTerritoryColor`; the
 ## opponent's never does — *"You cannot do anything to change the
 ## background in your opponent's territory; it matches the predominant
-## color in her deck."*
-static func ground_color_for(pid: int, human_seat: int, deck_color: String) -> String:
-	if pid != human_seat:
+## color in her deck."* At a hotseat table ([param two_humans]) each seat
+## answers to its own ([method seat_territory_color]).
+static func ground_color_for(pid: int, human_seat: int, deck_color: String,
+		two_humans := false) -> String:
+	if pid != human_seat and not two_humans:
 		return deck_color
-	var chosen := territory_color()
+	var chosen := seat_territory_color(pid if two_humans else 0)
 	if chosen == DECK_COLOR:
 		return deck_color
 	return chosen.to_lower()
@@ -529,17 +571,18 @@ static func ground_color_for(pid: int, human_seat: int, deck_color: String) -> S
 ## the Embark screen). Whatever it leaves out, or names wrongly, is the
 ## Duel Options' own answer — [method ground_color_for] and [method
 ## territory_type], so a plain duel, whose entries are `{}`, is dressed
-## exactly as before. [Ours: the 1997 game had one ground per player's
-## settings and no adventure playmat.]
+## exactly as before. [param two_humans]: a hotseat duel, where each seat
+## answers to its own pair ([method seat_territory_color]). [Ours: the 1997
+## game had one ground per player's settings and no adventure playmat.]
 static func ground_for(pid: int, human_seat: int, deck_color: String,
-		seat_entry: Dictionary) -> Dictionary:
+		seat_entry: Dictionary, two_humans := false) -> Dictionary:
 	var color := ""
 	var asked: Variant = seat_entry.get("color", "")
 	if asked is String and is_ground_color(asked):
 		color = (asked as String).to_lower()
 	else:
-		color = ground_color_for(pid, human_seat, deck_color)
-	var type_label := territory_type()
+		color = ground_color_for(pid, human_seat, deck_color, two_humans)
+	var type_label := seat_territory_type(pid if two_humans else 0)
 	var style: Variant = seat_entry.get("type", "")
 	if style is String and _type_index_or_none(style) >= 0:
 		type_label = style

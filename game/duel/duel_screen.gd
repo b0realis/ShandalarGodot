@@ -10754,12 +10754,13 @@ func _ground_node(pid: int) -> Control:
 
 
 ## The `{color, type}` seat [param pid]'s half wears (the bug campaign
-## c12: [member DuelConfig.territories]).
+## c12: [member DuelConfig.territories]). At a hotseat table each seat
+## wears its own choice (the owner, 2026-11-18).
 func _ground_choice(pid: int) -> Dictionary:
 	var entry: Variant = config.territories[pid] \
 		if pid < config.territories.size() else {}
 	return DuelOptions.ground_for(pid, _human_seat(), config.panel_colors[pid],
-		entry if entry is Dictionary else {})
+		entry if entry is Dictionary else {}, config.hotseat_privacy)
 
 
 ## Repaint one half's ground from the current Duel Options (§6.4). The

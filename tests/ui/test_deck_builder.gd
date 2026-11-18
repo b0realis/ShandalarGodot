@@ -3262,6 +3262,25 @@ func test_the_check_menus_keep_their_own_done_button() -> void:
 	_answer("Done")
 
 
+func test_the_number_menus_keep_done_on_the_stone() -> void:
+	# Owner 2026-11-18: Casting Cost, Power and Toughness carry a `Number`
+	# row under their lines, which the window's height did not count, so
+	# their `Done` hung off the bottom edge.
+	var other: Array = screen._filter_bar.group_buttons("Other Filters")
+	var titles := ["Casting Cost", "Power", "Toughness"]
+	for i in 3:
+		_right_click(other[i])
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var dialog: OriginalDialog = screen.open_dialogs()[0]
+		var foot: Control = dialog._buttons
+		var bottom := dialog._column.position.y + foot.position.y + foot.size.y
+		assert_true(bottom <= dialog.size.y - OriginalDialog.MARGIN + 0.5,
+			"%s: Done ends at %.0f in a window %.0f tall" % [titles[i], bottom, dialog.size.y])
+		_answer("Done")
+		await get_tree().process_frame
+
+
 # --------------------------------------------- [QoL] the Cost switch --
 #
 # *"For the visual type players lets also add mana cost icons overlay (as

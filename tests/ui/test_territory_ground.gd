@@ -252,3 +252,85 @@ func test_the_duel_dresses_both_halves_and_redresses_on_a_change() -> void:
 	assert_eq(screen._free_layers[0], free0)
 	assert_eq(holder0.get_child_count(), 3, "ground, rows, free layer")
 	await get_tree().process_frame   # the replaced ground's queue_free
+
+
+# ------------------------------------------- a hotseat table: two seats --
+#
+# The owner, 2026-11-18: "Magic battle hotseat should have your territory
+# setting for seat 1 and seat 2!"
+
+const BOTH_SEATS := ["PlayerTerritoryColor", "PlayerTerritoryType",
+	DuelOptions.SEAT_TWO_COLOR_KEY, DuelOptions.SEAT_TWO_TYPE_KEY]
+
+
+func test_at_a_hotseat_table_each_half_answers_to_its_own_seat() -> void:
+	for key in BOTH_SEATS:
+		_touch(key)
+	DuelOptions.set_seat_territory_color(0, "White")
+	DuelOptions.set_seat_territory_type(0, "Pattern")
+	DuelOptions.set_seat_territory_color(1, "Red")
+	DuelOptions.set_seat_territory_type(1, "Line drawing")
+	assert_eq(DuelOptions.territory_color(), "White", "seat 1's is the original's own value")
+	assert_eq(String(Settings.get_value(DuelOptions.SEAT_TWO_COLOR_KEY, "")), "Red",
+		"seat 2's is a key of its own")
+	assert_eq(DuelOptions.ground_for(0, 0, "green", {}, true),
+		{"color": "white", "type": "Pattern"})
+	assert_eq(DuelOptions.ground_for(1, 0, "green", {}, true),
+		{"color": "red", "type": "Line drawing"})
+	assert_eq(DuelOptions.ground_for(1, 0, "green", {}),
+		{"color": "green", "type": "Pattern"},
+		"against the computer the other half still follows its deck")
+	DuelOptions.set_seat_territory_color(1, DuelOptions.DECK_COLOR)
+	assert_eq(DuelOptions.ground_for(1, 0, "blue", {}, true)["color"], "blue",
+		"seat 2's Deck color follows seat 2's deck")
+	assert_eq(DuelOptions.ground_for(1, 0, "blue", {"color": "black"}, true)["color"], "black",
+		"a caller's own entry still wins")
+
+
+func test_a_hotseat_duel_paints_seat_two_from_its_own_row() -> void:
+	for key in BOTH_SEATS:
+		_touch(key)
+	DuelOptions.set_seat_territory_color(1, "Red")
+	DuelOptions.set_seat_territory_type(1, "Mana symbols")
+	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	screen.config.panel_colors[1] = "green"
+	screen.config.hotseat_privacy = false
+	assert_eq(screen._ground_choice(1)["color"], "green", "against the computer: its deck")
+	screen.config.hotseat_privacy = true
+	assert_eq(screen._ground_choice(1), {"color": "red", "type": "Mana symbols"},
+		"at a hotseat table: seat 2's own")
+
+
+func test_the_setup_screen_shows_seat_two_a_row_at_a_hotseat_table() -> void:
+	for key in BOTH_SEATS:
+		_touch(key)
+	DuelOptions.set_seat_territory_color(0, "White")
+	DuelOptions.set_seat_territory_color(1, "Green")
+	var setup: SetupScreen = load("res://game/setup_screen.tscn").instantiate()
+	add_child_autofree(setup)
+	await get_tree().process_frame
+	assert_eq(setup._territory_rows.size(), 2)
+	setup._apply_mode(SetupScreen.BattleMode.VS_AI)
+	assert_false(setup._territory_rows[1].visible, "against the computer: one row")
+	assert_eq(setup._territory_captions[0].text, DuelOptions.TERRITORY_LABEL + ":")
+	setup._apply_mode(SetupScreen.BattleMode.HOTSEAT)
+	assert_true(setup._territory_rows[1].visible, "a hotseat table: a row for each seat")
+	assert_eq(setup._territory_captions[0].text, "Seat 1 territory background:")
+	assert_eq(setup._territory_captions[1].text, "Seat 2 territory background:")
+	assert_eq(setup._territory_colors[1].selected, DuelOptions.TERRITORY_COLORS.find("Green"),
+		"seat 2's row opens on seat 2's own")
+	var black := DuelOptions.TERRITORY_COLORS.find("Black")
+	setup._territory_colors[1].select(black)
+	setup._territory_colors[1].item_selected.emit(black)
+	setup._territory_types[1].select(0)
+	setup._territory_types[1].item_selected.emit(0)
+	assert_eq(DuelOptions.seat_territory_color(1), "Black")
+	assert_eq(DuelOptions.seat_territory_type(1), "Line drawing")
+	assert_eq(DuelOptions.territory_color(), "White", "seat 1's own is left alone")
+	assert_eq(setup._territory_previews[1].get_child_count(), 1, "seat 2's preview")
+	setup._apply_mode(SetupScreen.BattleMode.DEMO)
+	assert_false(setup._territory_rows[1].visible, "an AI demo: one row")
+	await get_tree().process_frame
+

@@ -18973,6 +18973,41 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-18 — Hotseat: a territory for each seat; version 0.70.2
+
+The owner: *"Magic battle hotseat shoudl have your territory setting for
+seat 1 and seat 2!"* Against the computer the 1997 rule stands: `Your
+territory background` is the player's, and the opponent's half follows its
+own deck (`Duel.hlp`). At a hotseat table both halves are a player's, so
+Magic Battle shows two rows there, `Seat 1 territory background` and
+`Seat 2 territory background`, each with its color, art and preview:
+
+- Seat 1's row is the same value as the Duel Options panel's
+  (`PlayerTerritoryColor` / `PlayerTerritoryType`); seat 2's has keys of
+  its own (`Seat2TerritoryColor` / `Seat2TerritoryType`), `Deck color` and
+  `Pattern` until chosen (`DuelOptions.seat_territory_color`).
+- The duel paints seat 2's half from its own pair when the duel is a hotseat
+  one (`DuelScreen._ground_choice`, `config.hotseat_privacy`), in a match
+  and a resumed match too.
+- Seat 2's die rolls seat 2's row in Hotseat (`Deck color`, one of its
+  three arts); in the other modes the row is hidden and left alone.
+- Help (Magic Battle's dice) says so.
+
+Version 0.70.2 (Android version code 70002). 0.70.1 was never published,
+so its notes became `docs/releases/0.70.2.md`, with this, the Extras 1997
+and All buttons and the number menus added.
+
+## 2026-11-18 — The number menus keep Done on the stone (0.70.2)
+
+The owner, with a photo: *"In deck editor cost power and toughness filter
+right click open a window and bottom button is out of place."* The
+right-click menus of Casting Cost, Power and Toughness were made tall
+enough for their lines but not for the `Number` row under them, so `Done`
+hung off the bottom of the window (at 1280 × 800: 260 needed in 234, 228
+in 208). The window now grows to what it holds once it opens
+(`DeckBuilderScreen._open_filter_menu`, `OriginalDialog.fit_height`);
+`test_the_number_menus_keep_done_on_the_stone` checks all three.
+
 ## 2026-11-18 — Extras: 1997 and All (0.70.1)
 
 The owner: *"at the top implement 2 buttons side by side: one is 1997
