@@ -708,3 +708,132 @@ func test_a_mode_burns_a_creature_rather_than_a_player() -> void:
 		{"kind": "modal", "modes": [{"effects": [{"effect": "gain_life", "amount": 1}]},
 			{"effects": [{"effect": "damage", "amount": 3, "target": "any"}]}]}]}))
 	assert_eq(charm.data.ai_mode_picker.call(g, 0), 1, "the Bears are the aim")
+
+
+# ------------------------------------------- shuffle in, each player draws --
+
+func test_a_twister_reads_and_plays_as_timetwister() -> void:
+	var data := _card({"name": "Zyx Twister", "cost": "{2}{U}", "types": ["sorcery"], "abilities": [
+		{"kind": "spell", "effects": [
+			{"effect": "shuffle_in", "from": "hand_and_graveyard", "target": "each_player"},
+			{"effect": "draw", "amount": 7, "target": "each_player"}]}]})
+	assert_eq(data.oracle_text,
+		"Each player shuffles their hand and graveyard into their library, then draws seven cards.")
+	var twister := give_synthetic(0, data)
+	advance_to_step(Mtg.Step.MAIN1)
+	for pid in 2:
+		for i in 2:
+			var gone := give_hand(pid, "Grizzly Bears")
+			g.players[pid].hand.erase(gone)
+			gone.zone = Mtg.Zone.GRAVEYARD
+			g.players[pid].graveyard.append(gone)
+	var cards := [0, 0]
+	for pid in 2:
+		var p := g.players[pid]
+		cards[pid] = p.hand.size() + p.graveyard.size() + p.library.size() - (1 if pid == 0 else 0)
+	add_mana(0, Mtg.ManaColor.U, 3)
+	assert_ok(g.cast_spell(0, twister, []))
+	resolve_stack()
+	for pid in 2:
+		var p := g.players[pid]
+		assert_eq(p.hand.size(), 7, "player %d draws seven" % pid)
+		assert_eq(p.hand.size() + p.library.size(), cards[pid], "every card shuffled back in")
+	assert_eq(g.players[0].graveyard.size(), 1, "only the twister itself, after it resolved")
+	assert_eq(g.players[1].graveyard.size(), 0)
+
+
+func test_shuffle_a_graveyard_or_a_hand_and_each_player_draws_x() -> void:
+	var cane := _card({"name": "Zyx Cane", "cost": "{1}", "types": ["artifact"], "abilities": [
+		{"kind": "activated", "cost": "", "tap": true, "effects": [
+			{"effect": "shuffle_in", "from": "graveyard", "target": "you"}]}]})
+	assert_eq(cane.oracle_text, "{T}: Shuffle your graveyard into your library.")
+	var staff := put_synthetic(0, cane)
+	var gone := give_hand(0, "Grizzly Bears")
+	g.players[0].hand.erase(gone)
+	gone.zone = Mtg.Zone.GRAVEYARD
+	g.players[0].graveyard.append(gone)
+	var hand := g.players[0].hand.size()
+	assert_ok(g.activate_ability(0, staff, 0))
+	resolve_stack()
+	assert_eq(g.players[0].graveyard.size(), 0, "the graveyard went back")
+	assert_eq(g.players[0].hand.size(), hand, "the hand stayed")
+	var winds := _card({"name": "Zyx Winds", "cost": "{X}{U}", "types": ["sorcery"], "abilities": [
+		{"kind": "spell", "effects": [
+			{"effect": "shuffle_in", "from": "hand", "target": "player"},
+			{"effect": "draw", "x": true, "target": "each_player"}]}]})
+	assert_eq(winds.oracle_text,
+		"Target player shuffles their hand into their library and each player draws X cards.")
+	var spell := give_synthetic(0, winds)
+	advance_to_step(Mtg.Step.MAIN1)
+	var mine := g.players[0].hand.size() - 1
+	add_mana(0, Mtg.ManaColor.U, 3)
+	assert_ok(g.cast_spell(0, spell, [TargetRef.player(1)], 2))
+	resolve_stack()
+	assert_eq(g.players[1].hand.size(), 2, "their hand went back, then they drew two")
+	assert_eq(g.players[0].hand.size(), mine + 2, "and so did the caster draw two")
+	assert_false(CommunityCard.problems(_spec({"types": ["sorcery"], "abilities": [{"kind": "spell",
+		"effects": [{"effect": "shuffle_in", "from": "library", "target": "you"}]}]})).is_empty(),
+		"only the hand and graveyard, the graveyard or the hand")
+
+
+# --------------------------------------- search: how many, what, and where --
+
+func test_a_search_for_up_to_two_creature_cards_and_for_x_cards() -> void:
+	var one := _card({"name": "Zyx Tutor", "cost": "{1}{B}", "types": ["sorcery"], "abilities": [
+		{"kind": "spell", "effects": [{"effect": "search", "target": "a_creature"}]}]})
+	assert_eq(one.oracle_text, "Search your library for a creature card, put it into your hand, then shuffle.",
+		"one card off the library reads as it always did")
+	var two := _card({"name": "Zyx Hunt", "cost": "{2}{G}", "types": ["sorcery"], "abilities": [
+		{"kind": "spell", "effects": [{"effect": "search", "target": "a_creature", "amount": 2, "where": "library"}]}]})
+	assert_eq(two.oracle_text,
+		"Search your library for up to two creature cards, put them into your hand, then shuffle.")
+	var x := _card({"name": "Zyx Gather", "cost": "{X}{G}", "types": ["sorcery"], "abilities": [
+		{"kind": "spell", "effects": [{"effect": "search", "target": "a_card", "x": true}]}]})
+	assert_eq(x.oracle_text, "Search your library for up to X cards, put them into your hand, then shuffle.")
+	var bear := _make_instance(0, "Grizzly Bears")
+	bear.zone = Mtg.Zone.LIBRARY
+	g.players[0].library.append(bear)
+	var hunt := give_synthetic(0, two)
+	advance_to_step(Mtg.Step.MAIN1)
+	var hand := g.players[0].hand.size() - 1
+	var library := g.players[0].library.size()
+	add_mana(0, Mtg.ManaColor.G, 3)
+	assert_ok(g.cast_spell(0, hunt, []))
+	resolve_stack()
+	assert_eq(g.players[0].hand.size(), hand + 1, "the one creature found; the second search finds none")
+	assert_true(g.players[0].hand.has(bear))
+	assert_eq(g.players[0].library.size(), library - 1)
+
+
+func test_a_certain_card_from_the_graveyard_or_the_library() -> void:
+	var back := _card({"name": "Zyx Recall", "cost": "{1}{G}", "types": ["sorcery"], "abilities": [
+		{"kind": "spell", "effects": [{"effect": "search", "target": "a_named", "named": "Grizzly Bears",
+			"amount": 2, "where": "graveyard"}]}]})
+	assert_eq(back.oracle_text, "Return up to two cards named Grizzly Bears from your graveyard to your hand.")
+	for card_name in ["Grizzly Bears", "Grizzly Bears", "Forest"]:
+		var gone := give_hand(0, card_name)
+		g.players[0].hand.erase(gone)
+		gone.zone = Mtg.Zone.GRAVEYARD
+		g.players[0].graveyard.append(gone)
+	var spell := give_synthetic(0, back)
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.G, 2)
+	assert_ok(g.cast_spell(0, spell, []))
+	resolve_stack()
+	var names: Array = g.players[0].hand.map(func(i: CardInstance) -> String: return i.data.card_name)
+	assert_eq(names.count("Grizzly Bears"), 2, "both Bears back")
+	assert_eq(g.players[0].graveyard.map(func(i: CardInstance) -> String: return i.data.card_name),
+		["Forest", "Zyx Recall"], "the Forest stays")
+	var named := _card({"name": "Zyx Seek", "cost": "{B}", "types": ["instant"], "abilities": [
+		{"kind": "spell", "effects": [{"effect": "search", "target": "a_named", "named": "Shivan Dragon"}]}]})
+	assert_eq(named.oracle_text,
+		"Search your library for a card named Shivan Dragon, put it into your hand, then shuffle.")
+	assert_true(named.spell_effects[0] is SearchLibraryEffect,
+		"one card off the library: the duel's own library picker")
+	for bad in [{"target": "a_named"}, {"target": "a_named", "named": "Bad{name}"},
+			{"target": "a_card", "where": "exile"}]:
+		var e := {"effect": "search"}
+		e.merge(bad)
+		assert_false(CommunityCard.problems(_spec({"types": ["sorcery"], "abilities": [{"kind": "spell",
+			"effects": [e]}]})).is_empty(), str(bad))
+

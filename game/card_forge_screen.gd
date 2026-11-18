@@ -980,9 +980,23 @@ func _effect_row(kind: String, effects: Array, e: Dictionary, index: int) -> Con
 			target.set_item_metadata(target.item_count - 1, t)
 		_select(target, String(e.get("target", info["targets"][0])))
 		target.item_selected.connect(func(_i: int) -> void:
+			var was := String(e.get("target", ""))
 			e["target"] = _picked(target)
+			if info.has("named") and (was == "a_named") != (e["target"] == "a_named"):
+				_rebuild_abilities()   # the name field comes and goes
 			refresh())
 		row.add_child(target)
+		if info.has("named") and String(e.get("target", "")) == "a_named":
+			var named := LineEdit.new()
+			named.name = "ForgeSearchName"
+			named.placeholder_text = "card name"
+			named.text = String(e.get("named", ""))
+			named.custom_minimum_size.x = 170
+			named.max_length = CommunityCard.LIMITS["name"]
+			named.text_changed.connect(func(t: String) -> void:
+				e["named"] = t.strip_edges()
+				refresh())
+			row.add_child(named)
 	if info.has("amount"):
 		row.add_child(_small_spin(e, "amount", int(info["amount"][0]), int(info["amount"][1]), 1))
 	if info.get("x", false) and kind != "trigger":
@@ -1016,6 +1030,10 @@ func _effect_row(kind: String, effects: Array, e: Dictionary, index: int) -> Con
 		row.add_child(_keyword_pick(e, false))
 	if info.has("shield"):
 		row.add_child(_color_pick(e, "color", CommunityCard.PROTECTIONS, {}, "from a ", " source"))
+	if info.has("from"):
+		row.add_child(_color_pick(e, "from", CommunityCard.SHUFFLE_FROM, CommunityCard.SHUFFLE_FROM_WORDS))
+	if info.has("where"):
+		row.add_child(_color_pick(e, "where", CommunityCard.SEARCH_WHERE, CommunityCard.SEARCH_WHERE_WORDS))
 	if info.has("token"):
 		row.add_child(_small_spin(e, "power", 0, 20, 1))
 		row.add_child(_small_spin(e, "toughness", 1, 20, 1))
@@ -1487,44 +1505,107 @@ const ADVICE_COLORS := {CardBalance.OK: Color8(150, 220, 140), CardBalance.LOW: 
 
 
 ## THE VALIDATOR: the card beside the game's own cards ([CardBalance]) —
-## suggestions only, one a line, the worst colored red.
+## suggestions only, as a TABLE (owner 2026-11-18: "more like in table so
+## it is easier to read"): the summary on top in its level's color, then
+## one row a suggestion — Verdict, Check, the card's own number and the
+## game's cards — the worst first, the rows striped.
 func validate_card() -> void:
 	if not CommunityCard.problems(spec).is_empty():
 		return
 	_close_dialog()
-	var dialog := OriginalDialog.create("Suggestions", Vector2(720, 560))
+	var rows := CardBalance.advice(spec)
+	var summary: Dictionary = rows.pop_front()
+	var dialog := OriginalDialog.create("Suggestions", Vector2(860, 600))
 	dialog.name = "ForgeValidateWindow"
+	var banner := PanelContainer.new()
+	banner.name = "ForgeAdviceSummary"
+	var level := String(summary["level"])
+	banner.add_theme_stylebox_override("panel", _advice_box(Color(0, 0, 0, 0.32),
+		ADVICE_COLORS.get(level, Color.WHITE)))
+	var said := UiChrome.body_label(String(summary["text"]), 15)
+	said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	said.custom_minimum_size.x = 780
+	said.add_theme_color_override("font_color", ADVICE_COLORS.get(level, Color.WHITE))
+	banner.add_child(said)
+	dialog.body().add_child(banner)
+	var header := _advice_line(["Verdict", "Check", "Yours", "The game's cards"], Color(0, 0, 0, 0.45))
+	header.name = "ForgeAdviceHeader"
+	dialog.body().add_child(header)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(680, 440)
+	scroll.custom_minimum_size = Vector2(800, 400)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var box := VBoxContainer.new()
 	box.name = "ForgeAdvice"
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_theme_constant_override("separation", 6)
+	box.add_theme_constant_override("separation", 0)
 	scroll.add_child(box)
 	dialog.body().add_child(scroll)
-	for row in CardBalance.advice(spec):
-		var level := String(row["level"])
-		var line := HBoxContainer.new()
-		line.add_theme_constant_override("separation", 10)
-		var tag := UiChrome.body_label(String(CardBalance.LEVEL_WORDS.get(level, level)), 14)
-		tag.custom_minimum_size.x = 86
-		tag.add_theme_color_override("font_color", ADVICE_COLORS.get(level, Color.BLACK))
-		line.add_child(tag)
-		var words := UiChrome.body_label("%s: %s" % [row["topic"], row["text"]], 14)
-		words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		words.custom_minimum_size.x = 560
-		line.add_child(words)
+	var order := {CardBalance.VERY_HIGH: 0, CardBalance.HIGH: 1, CardBalance.LOW: 2, CardBalance.OK: 3}
+	var ranked: Array = []
+	for i in rows.size():
+		ranked.append([int(order.get(String(rows[i]["level"]), 4)), i])
+	ranked.sort_custom(func(a: Array, b: Array) -> bool:
+		return int(a[0]) < int(b[0]) or (int(a[0]) == int(b[0]) and int(a[1]) < int(b[1])))
+	for pair in ranked:
+		var row: Dictionary = rows[int(pair[1])]
+		var shade := Color(1, 1, 1, 0.07) if box.get_child_count() % 2 == 0 else Color(0, 0, 0, 0.0)
+		var line := _advice_line([String(CardBalance.LEVEL_WORDS.get(row["level"], row["level"])),
+			String(row["topic"]), String(row.get("yours", "")), CardBalance.game_words(row)], shade)
+		((line.get_child(0) as HBoxContainer).get_child(0) as Label).add_theme_color_override(
+			"font_color", ADVICE_COLORS.get(String(row["level"]), Color.WHITE))
 		box.add_child(line)
 	GauntletOptions.fit(dialog.add_button("Close")).pressed.connect(_close_dialog)
 	_dialog = dialog
 	add_child(dialog)
-	# As tall as its lines (about 80 letters a line), never past the screen.
-	var lines := 0
-	for row in box.get_children():
-		lines += ceili(((row as Control).get_child(1) as Label).text.length() / 80.0)
-	_fit_dialog(dialog, scroll, clampf(lines * 21 + box.get_child_count() * 6, 80, 440))
+	# As tall as its rows (about 60 letters a line in the last column),
+	# never past the screen.
+	var height := 0.0
+	for pair in ranked:
+		height += 10.0 + 19.0 * ceilf(CardBalance.game_words(rows[int(pair[1])]).length() / 60.0)
+	# The summary and the header stand above the scrolling rows.
+	scroll.custom_minimum_size.y = clampf(height, 80, 400)
+	dialog.size.y = scroll.custom_minimum_size.y + 210
+	dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
+	dialog.fit_height()
+
+
+## The table's columns, in pixels; the last one takes the rest.
+const ADVICE_COLUMNS: Array[int] = [86, 150, 84, 440]
+
+
+## One row of the suggestions table: [param cells] in the four columns on
+## a [param shade] ground, the last cell wrapping.
+func _advice_line(cells: Array, shade: Color) -> PanelContainer:
+	var line := PanelContainer.new()
+	line.add_theme_stylebox_override("panel", _advice_box(shade, Color(0, 0, 0, 0)))
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 12)
+	line.add_child(columns)
+	for i in cells.size():
+		var cell := UiChrome.body_label(String(cells[i]), 14)
+		cell.custom_minimum_size.x = ADVICE_COLUMNS[i]
+		cell.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		cell.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		cell.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		if i == cells.size() - 1:
+			cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		columns.add_child(cell)
+	return line
+
+
+## A row's ground: [param fill], with a 4-pixel bar of [param edge] down
+## its left side when that is not clear.
+static func _advice_box(fill: Color, edge: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.content_margin_left = 10
+	box.content_margin_right = 8
+	box.content_margin_top = 5
+	box.content_margin_bottom = 5
+	if edge.a > 0.0:
+		box.border_width_left = 4
+		box.border_color = edge
+	return box
 
 
 ## The cards found, as small cards, to open one.

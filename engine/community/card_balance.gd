@@ -107,8 +107,8 @@ const THUMB_TOPIC := "Rule of thumb"
 
 static func _thumb_rows(rows: Array[Dictionary], data: CardData, mv: int, spec: Dictionary,
 		types: Array[String], rules: Dictionary) -> void:
-	var say := func(level: String, text: String) -> void:
-		rows.append({"level": level, "topic": THUMB_TOPIC, "text": text})
+	var say := func(level: String, text: String, yours: String) -> void:
+		rows.append({"level": level, "topic": THUMB_TOPIC, "text": text, "yours": yours})
 	var rules_text := _rules_of(data)
 	if data.cost != null and data.cost.has_x:
 		pass
@@ -117,31 +117,31 @@ static func _thumb_rows(rows: Array[Dictionary], data: CardData, mv: int, spec: 
 		var body := _body(data)
 		var size := body.x + body.y
 		if size > 2 * e + 4:
-			say.call(VERY_HIGH, "power + toughness at most 2 x cost + 4 (here %d; yours %d). Only 6 of the game's 3,684 cards are bigger, all with a heavy drawback (Phyrexian Dreadnought, Lord of Tresserhorn, Endless Wurm, Aboroth, Primeval Force, Denizen of the Deep)." % [2 * e + 4, size])
+			say.call(VERY_HIGH, "power + toughness at most 2 x cost + 4 (here %d; yours %d). Only 6 of the game's 3,684 cards are bigger, all with a heavy drawback (Phyrexian Dreadnought, Lord of Tresserhorn, Endless Wurm, Aboroth, Primeval Force, Denizen of the Deep)." % [2 * e + 4, size], str(size))
 		elif size > 2 * e + 1:
-			say.call(HIGH, "power + toughness at most 2 x cost + 1 (here %d; yours %d) — 96 in 100 of the game's creatures keep to it." % [2 * e + 1, size])
+			say.call(HIGH, "power + toughness at most 2 x cost + 1 (here %d; yours %d) — 96 in 100 of the game's creatures keep to it." % [2 * e + 1, size], str(size))
 		if body.x > e + 3:
-			say.call(VERY_HIGH, "power at most cost + 3 (here %d; yours %d) — only Phyrexian Dreadnought, Lord of Tresserhorn and Endless Wurm have more." % [e + 3, body.x])
+			say.call(VERY_HIGH, "power at most cost + 3 (here %d; yours %d) — only Phyrexian Dreadnought, Lord of Tresserhorn and Endless Wurm have more." % [e + 3, body.x], str(body.x))
 		if body.y > 2 * e + 4:
-			say.call(VERY_HIGH, "toughness at most 2 x cost + 4 (here %d; yours %d) — only Phyrexian Dreadnought and Shield Sphere have more." % [2 * e + 4, body.y])
+			say.call(VERY_HIGH, "toughness at most 2 x cost + 4 (here %d; yours %d) — only Phyrexian Dreadnought and Shield Sphere have more." % [2 * e + 4, body.y], str(body.y))
 		var keywords := _gift_keywords(data)
 		if keywords > 3:
-			say.call(VERY_HIGH, "at most 3 keywords — no card of the game has more (yours has %d)." % keywords)
+			say.call(VERY_HIGH, "at most 3 keywords — no card of the game has more (yours has %d)." % keywords, str(keywords))
 		elif keywords >= 2 and mv <= 1:
-			say.call(VERY_HIGH, "one keyword at most for 0 or 1 mana — no card of the game has two (yours has %d)." % keywords)
+			say.call(VERY_HIGH, "one keyword at most for 0 or 1 mana — no card of the game has two (yours has %d)." % keywords, str(keywords))
 		elif keywords >= 3 and mv <= 3:
-			say.call(HIGH, "3 keywords for 3 mana or less — only Kjeldoran Skyknight (and one is banding).")
+			say.call(HIGH, "3 keywords for 3 mana or less — only Kjeldoran Skyknight (and one is banding).", str(keywords))
 	var spell := types.has("instant") or types.has("sorcery")
 	if spell and not (data.cost != null and data.cost.has_x):
 		var amounts := _amounts(rules_text)
 		if int(amounts.get("damage", 0)) > mv + 2:
-			say.call(VERY_HIGH, "a spell deals at most cost + 2 damage (here %d; yours %d) — only Goblin Grenade and Reckless Abandon deal more, and both sacrifice a creature." % [mv + 2, amounts["damage"]])
+			say.call(VERY_HIGH, "a spell deals at most cost + 2 damage (here %d; yours %d) — only Goblin Grenade and Reckless Abandon deal more, and both sacrifice a creature." % [mv + 2, amounts["damage"]], str(amounts["damage"]))
 		if int(amounts.get("draw", 0)) > mv + 2:
-			say.call(VERY_HIGH, "a spell draws at most cost + 1 cards (here %d; yours %d) — past cost + 2 only Contract from Below, Timetwister and Wheel of Fortune, which all cost their caster dearly." % [mv + 1, amounts["draw"]])
+			say.call(VERY_HIGH, "a spell draws at most cost + 1 cards (here %d; yours %d) — past cost + 2 only Contract from Below, Timetwister and Wheel of Fortune, which all cost their caster dearly." % [mv + 1, amounts["draw"]], str(amounts["draw"]))
 		elif int(amounts.get("draw", 0)) > mv + 1:
-			say.call(HIGH, "a spell draws at most cost + 1 cards (here %d; yours %d) — only Ancestral Recall, Brainstorm, Goblin Lore and the wheels draw more." % [mv + 1, amounts["draw"]])
+			say.call(HIGH, "a spell draws at most cost + 1 cards (here %d; yours %d) — only Ancestral Recall, Brainstorm, Goblin Lore and the wheels draw more." % [mv + 1, amounts["draw"]], str(amounts["draw"]))
 		if int(amounts.get("life", 0)) > 2 * mv + 2:
-			say.call(VERY_HIGH, "a spell gains at most 2 x cost + 2 life (here %d; yours %d) — no card of the game gains more." % [2 * mv + 2, amounts["life"]])
+			say.call(VERY_HIGH, "a spell gains at most 2 x cost + 2 life (here %d; yours %d) — no card of the game gains more." % [2 * mv + 2, amounts["life"]], str(amounts["life"]))
 	for line in rules_text.split("\n", false):
 		var ability := _ability(line)
 		if not ability.is_empty() and String(ability["effect"]).begins_with("Add ") \
@@ -149,25 +149,44 @@ static func _thumb_rows(rows: Array[Dictionary], data: CardData, mv: int, spec: 
 			var n := _mana_made(String(ability["effect"]))
 			if types.has("land"):
 				if n >= 3:
-					say.call(VERY_HIGH, "a land taps for 1 mana, 2 at most — only the Urza lands, Mishra's Workshop and Scorched Ruins make 3 or more (yours %d)." % n)
+					say.call(VERY_HIGH, "a land taps for 1 mana, 2 at most — only the Urza lands, Mishra's Workshop and Scorched Ruins make 3 or more (yours %d)." % n, str(n))
 				elif n == 2:
-					say.call(HIGH, "a land taps for 1 mana — the lands that make 2 pay for it (pain, a bounce, depletion).")
+					say.call(HIGH, "a land taps for 1 mana — the lands that make 2 pay for it (pain, a bounce, depletion).", str(n))
 			elif n > mv + 2:
-				say.call(VERY_HIGH, "a permanent taps for at most cost + 2 mana (here %d; yours %d) — no card of the game makes more." % [mv + 2, n])
+				say.call(VERY_HIGH, "a permanent taps for at most cost + 2 mana (here %d; yours %d) — no card of the game makes more." % [mv + 2, n], str(n))
 			elif types.has("creature") and mv <= 2 and n > 1:
-				say.call(HIGH, "a creature of 2 mana or less taps for 1 mana — only Soldevi Machinist makes 2.")
+				say.call(HIGH, "a creature of 2 mana or less taps for 1 mana — only Soldevi Machinist makes 2.", str(n))
 		var anthem := _anthem(line)
 		if anthem > 4:
-			say.call(VERY_HIGH, "an anthem gives +1/+1 — none of the game's gives more than +2/+2 (yours +%d in all)." % anthem)
+			say.call(VERY_HIGH, "an anthem gives +1/+1 — none of the game's gives more than +2/+2 (yours +%d in all)." % anthem, "+%d" % anthem)
 		elif anthem > 2:
-			say.call(HIGH, "an anthem gives +1/+1 — only Jihad and Thran Weaponry give more, both with a price.")
+			say.call(HIGH, "an anthem gives +1/+1 — only Jihad and Thran Weaponry give more, both with a price.", "+%d" % anthem)
 		var aura := _aura(line)
 		if aura > 2 * mv + 2:
-			say.call(VERY_HIGH, "an Aura gives at most 2 x cost + 2 in all (here %d; yours %d) — only Unstable Mutation gives more, and it shrinks after." % [2 * mv + 2, aura])
+			say.call(VERY_HIGH, "an Aura gives at most 2 x cost + 2 in all (here %d; yours %d) — only Unstable Mutation gives more, and it shrinks after." % [2 * mv + 2, aura], "+%d" % aura)
 	if not types.has("land") and mv > 9:
-		say.call(HIGH, "a cost of 9 at most — only Aladdin's Lamp and Polar Kraken cost more.")
+		say.call(HIGH, "a cost of 9 at most — only Aladdin's Lamp and Polar Kraken cost more.", str(mv))
 	if rules_text.split("\n", false).size() > 5:
-		say.call(HIGH, "5 lines of rules at most — only Tidal Influence has more.")
+		say.call(HIGH, "5 lines of rules at most — only Tidal Influence has more.", str(rules_text.split("\n", false).size()))
+
+
+## A row's sentence without its own "yours ..." clause — for a table that
+## shows the card's number ([code]row["yours"][/code]) in a column of its
+## own: "...; yours has 9." and " (yours has 4)" go, "(here 10; yours 12)"
+## reads "(here 10)". A row without a number keeps its whole sentence.
+static func game_words(row: Dictionary) -> String:
+	var text := String(row.get("text", ""))
+	if String(row.get("yours", "")) == "":
+		return text
+	if _yours_rx.is_empty():
+		_yours_rx = [RegEx.create_from_string(";\\s*yours\\b[^.;)]*"),
+			RegEx.create_from_string("\\s*\\(yours\\b[^)]*\\)")]
+	for rx: RegEx in _yours_rx:
+		text = rx.sub(text, "", true)
+	return text
+
+
+static var _yours_rx: Array[RegEx] = []
 
 
 static func _rank(level: String) -> int:
@@ -194,16 +213,16 @@ static func _cost_rows(rows: Array[Dictionary], c: Dictionary, mv: int, spec: Di
 	var top := int(costs[-1])
 	var at_least := costs.size() - costs.bsearch(mv)
 	if mv > top:
-		rows.append({"level": VERY_HIGH, "topic": "Mana cost",
+		rows.append({"yours": str(mv), "level": VERY_HIGH, "topic": "Mana cost",
 			"text": "No card of the game costs more than %d (%s); yours costs %d." % [top, c["costs_top_name"], mv]})
 	elif mv >= 7 and at_least * 50 < costs.size():
-		rows.append({"level": HIGH, "topic": "Mana cost",
+		rows.append({"yours": str(mv), "level": HIGH, "topic": "Mana cost",
 			"text": "Only %d of the game's %d cards cost %d or more." % [at_least, costs.size(), mv]})
 	elif mv == 0 and not String(spec.get("cost", "")).contains("{X}"):
-		rows.append({"level": HIGH, "topic": "Mana cost",
+		rows.append({"yours": str(mv), "level": HIGH, "topic": "Mana cost",
 			"text": "Cards that cost nothing are rare: %d of the game's %d." % [int(c["free"]), costs.size()]})
 	else:
-		rows.append({"level": OK, "topic": "Mana cost", "text": "A cost of %d is usual." % mv})
+		rows.append({"yours": str(mv), "level": OK, "topic": "Mana cost", "text": "A cost of %d is usual." % mv})
 
 
 static func _creature_rows(rows: Array[Dictionary], c: Dictionary, data: CardData, mv: int,
@@ -220,36 +239,36 @@ static func _creature_rows(rows: Array[Dictionary], c: Dictionary, data: CardDat
 		var usual := _at(values, USUAL)
 		var small := _at(values, 1.0 - USUAL)
 		if size > int(bucket["max"]):
-			rows.append({"level": VERY_HIGH, "topic": "Size",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": VERY_HIGH, "topic": "Size",
 				"text": "The biggest %s creature of the game is %s (%s); yours is %d/%d." % [said,
 					bucket["max_name"], bucket["max_shown"], body.x, body.y]})
 		elif size > usual:
-			rows.append({"level": HIGH, "topic": "Size",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": HIGH, "topic": "Size",
 				"text": "9 in 10 of the game's %s creatures have power + toughness %d or less; yours has %d." % [said, usual, size]})
 		elif size < small:
-			rows.append({"level": LOW, "topic": "Size",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": LOW, "topic": "Size",
 				"text": "9 in 10 of the game's %s creatures have power + toughness %d or more; yours has %d." % [said, small, size]})
 		else:
-			rows.append({"level": OK, "topic": "Size",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": OK, "topic": "Size",
 				"text": "%d/%d is a usual size for a %s creature (most are %d to %d in power + toughness)." % [
 					body.x, body.y, said, small, usual]})
 	for side in [["power", body.x], ["toughness", body.y]]:
 		var most: Dictionary = c["most_" + String(side[0])]
 		if int(side[1]) > int(most["value"]):
-			rows.append({"level": VERY_HIGH, "topic": String(side[0]).capitalize(),
+			rows.append({"yours": str(side[1]), "level": VERY_HIGH, "topic": String(side[0]).capitalize(),
 				"text": "No creature of the game has more %s than %d (%s); yours has %d." % [side[0],
 					most["value"], most["name"], side[1]]})
 	var keywords: Dictionary = (c["keywords"] as Dictionary).get(mini(mv, TOP_SHELF), {})
 	var count := _gift_keywords(data)
 	if not keywords.is_empty() and count > 0:
 		if count > int(keywords["max"]):
-			rows.append({"level": VERY_HIGH, "topic": "Keywords",
+			rows.append({"yours": str(count), "level": VERY_HIGH, "topic": "Keywords",
 				"text": "No %d-mana creature of the game has more than %d keyword%s (%s); yours has %d." % [
 					mini(mv, TOP_SHELF), keywords["max"], "" if int(keywords["max"]) == 1 else "s",
 					keywords["max_name"], count]})
 		elif count > _at(keywords["values"], USUAL_KEYWORDS):
 			var most := _at(keywords["values"], USUAL_KEYWORDS)
-			rows.append({"level": HIGH, "topic": "Keywords",
+			rows.append({"yours": str(count), "level": HIGH, "topic": "Keywords",
 				"text": "Almost all of the game's %d-mana creatures have %d keyword%s or fewer; yours has %d." % [
 					mini(mv, TOP_SHELF), most, "" if most == 1 else "s", count]})
 
@@ -280,7 +299,7 @@ static func _text_rows(rows: Array[Dictionary], c: Dictionary, data: CardData, m
 			_bonus_row(rows, c["aura"], aura, mini(mv, TOP_SHELF), "Aura", "%d-mana Auras")
 		var clauses := _clauses(line)
 		if clauses > int(c["clauses_max"]):
-			rows.append({"level": VERY_HIGH, "topic": "Effects",
+			rows.append({"yours": str(clauses), "level": VERY_HIGH, "topic": "Effects",
 				"text": "No line of the game's cards does more than %d things; \"%s\" does %d." % [
 					c["clauses_max"], _short(line), clauses]})
 	var things := 0
@@ -288,11 +307,11 @@ static func _text_rows(rows: Array[Dictionary], c: Dictionary, data: CardData, m
 		things += _clauses(line)
 	_effects_row(rows, c, things, mini(mv, TOP_SHELF), land)
 	if lines.size() > int(c["lines_max"]):
-		rows.append({"level": VERY_HIGH, "topic": "Rules text",
+		rows.append({"yours": str(lines.size()), "level": VERY_HIGH, "topic": "Rules text",
 			"text": "No card of the game has more than %d lines of rules (%s); yours has %d." % [
 				c["lines_max"], c["lines_max_name"], lines.size()]})
 	elif lines.size() > int(c["lines_rare"]):
-		rows.append({"level": HIGH, "topic": "Rules text",
+		rows.append({"yours": str(lines.size()), "level": HIGH, "topic": "Rules text",
 			"text": "Only 1 in 100 of the game's cards has %d lines of rules or more." % lines.size()})
 
 
@@ -304,14 +323,14 @@ static func _effects_row(rows: Array[Dictionary], c: Dictionary, n: int, shelf: 
 	var said := "lands" if land else "%d-mana cards" % shelf
 	var usual := _at(bucket["values"], USUAL)
 	if n > int(bucket["max"]):
-		rows.append({"level": VERY_HIGH, "topic": "Effects",
+		rows.append({"yours": str(n), "level": VERY_HIGH, "topic": "Effects",
 			"text": "None of the game's %s does more than %d things (%s); yours does %d." % [said, bucket["max"],
 				bucket["max_name"], n]})
 	elif n > usual:
-		rows.append({"level": HIGH, "topic": "Effects",
+		rows.append({"yours": str(n), "level": HIGH, "topic": "Effects",
 			"text": "9 in 10 of the game's %s do %d things or fewer; yours does %d." % [said, usual, n]})
 	else:
-		rows.append({"level": OK, "topic": "Effects", "text": "%d things is usual for %s." % [n, said]})
+		rows.append({"yours": str(n), "level": OK, "topic": "Effects", "text": "%d %s usual for %s." % [n, "thing is" if n == 1 else "things are", said]})
 
 
 static func _amount_rows(rows: Array[Dictionary], table: Dictionary, amounts: Dictionary, shelf: int,
@@ -326,22 +345,22 @@ static func _amount_rows(rows: Array[Dictionary], table: Dictionary, amounts: Di
 		if bucket.is_empty():
 			var best := _best_below(table[kind], shelf)
 			if best.is_empty() or n > int(best["max"]):
-				rows.append({"level": VERY_HIGH, "topic": topic,
+				rows.append({"yours": str(n), "level": VERY_HIGH, "topic": topic,
 					"text": "None of the game's %s or cheaper %s %d %s." % [said, verb + "s" if verb != "give" else "gives", n, unit]})
 			else:
-				rows.append({"level": OK, "topic": topic, "text": "%d %s is in reach of the game's cheaper cards (%s)." % [n, unit, best["max_name"]]})
+				rows.append({"yours": str(n), "level": OK, "topic": topic, "text": "%d %s is in reach of the game's cheaper cards (%s)." % [n, unit, best["max_name"]]})
 			continue
 		var usual := _at(bucket["values"], USUAL)
 		if n > int(bucket["max"]):
-			rows.append({"level": VERY_HIGH, "topic": topic,
+			rows.append({"yours": str(n), "level": VERY_HIGH, "topic": topic,
 				"text": "The game's %s %s at most %d %s (%s); yours %s %d." % [said, verb, bucket["max"], unit,
 					bucket["max_name"], verb + "s" if verb != "give" else "gives", n]})
 		elif n > usual:
-			rows.append({"level": HIGH, "topic": topic,
+			rows.append({"yours": str(n), "level": HIGH, "topic": topic,
 				"text": "9 in 10 of the game's %s %s %d %s or less; yours %s %d." % [said, verb, usual, unit,
 					verb + "s" if verb != "give" else "gives", n]})
 		else:
-			rows.append({"level": OK, "topic": topic, "text": "%d %s is usual for %s." % [n, unit, said]})
+			rows.append({"yours": str(n), "level": OK, "topic": topic, "text": "%d %s is usual for %s." % [n, unit, said]})
 
 
 static func _best_below(table: Dictionary, shelf: int) -> Dictionary:
@@ -356,17 +375,17 @@ static func _mana_row(rows: Array[Dictionary], c: Dictionary, n: int, shelf: Str
 	var bucket: Dictionary = (c["mana"] as Dictionary).get(shelf, {})
 	var said := "lands" if shelf == "land" else "%s-mana permanents" % shelf
 	if bucket.is_empty():
-		rows.append({"level": HIGH, "topic": "Mana",
+		rows.append({"yours": str(n), "level": HIGH, "topic": "Mana",
 			"text": "None of the game's %s taps for mana; yours makes %d." % [said, n]})
 	elif n > int(bucket["max"]):
-		rows.append({"level": VERY_HIGH, "topic": "Mana",
+		rows.append({"yours": str(n), "level": VERY_HIGH, "topic": "Mana",
 			"text": "The game's %s tap for at most %d mana (%s); yours makes %d." % [said, bucket["max"], bucket["max_name"], n]})
 	elif n > _at(bucket["values"], USUAL):
-		rows.append({"level": HIGH, "topic": "Mana",
+		rows.append({"yours": str(n), "level": HIGH, "topic": "Mana",
 			"text": "9 in 10 of the game's %s tap for %d mana or less (%s makes %d); yours makes %d." % [said,
 				_at(bucket["values"], USUAL), bucket["max_name"], bucket["max"], n]})
 	else:
-		rows.append({"level": OK, "topic": "Mana", "text": "%d mana from {T} is usual for %s." % [n, said]})
+		rows.append({"yours": str(n), "level": OK, "topic": "Mana", "text": "%d mana from {T} is usual for %s." % [n, said]})
 
 
 static func _bonus_row(rows: Array[Dictionary], table: Dictionary, n: int, shelf: int, topic: String,
@@ -376,19 +395,19 @@ static func _bonus_row(rows: Array[Dictionary], table: Dictionary, n: int, shelf
 	if bucket.is_empty():
 		var best := _best_below(table, shelf)
 		var top := int(best.get("max", 2))
-		rows.append({"level": VERY_HIGH if n > top else OK, "topic": topic,
+		rows.append({"yours": "+%d" % n, "level": VERY_HIGH if n > top else OK, "topic": topic,
 			"text": ("The game's cheaper anthems and Auras give at most +%d in all; yours gives +%d." % [top, n])
 				if n > top else "+%d in all is in reach of the game's cards." % n})
 	elif n > int(bucket["max"]):
-		rows.append({"level": VERY_HIGH, "topic": topic,
+		rows.append({"yours": "+%d" % n, "level": VERY_HIGH, "topic": topic,
 			"text": "The game's %s give at most +%d power and toughness in all (%s); yours gives +%d." % [said,
 				bucket["max"], bucket["max_name"], n]})
 	elif n > _at(bucket["values"], USUAL):
-		rows.append({"level": HIGH, "topic": topic,
+		rows.append({"yours": "+%d" % n, "level": HIGH, "topic": topic,
 			"text": "9 in 10 of the game's %s give +%d in all or less; yours gives +%d." % [said,
 				_at(bucket["values"], USUAL), n]})
 	else:
-		rows.append({"level": OK, "topic": topic, "text": "+%d in all is usual for %s." % [n, said]})
+		rows.append({"yours": "+%d" % n, "level": OK, "topic": topic, "text": "+%d in all is usual for %s." % [n, said]})
 
 
 static func _short(line: String) -> String:
@@ -533,23 +552,23 @@ static func _color_size_rows(rows: Array[Dictionary], c: Dictionary, data: CardD
 		var most := _at(bucket["values"], COLOR_USUAL)
 		var least := _at(bucket["values"], 1.0 - COLOR_USUAL)
 		if size > int(bucket["max"]):
-			rows.append({"level": HIGH, "topic": "Size by color",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": HIGH, "topic": "Size by color",
 				"text": "The biggest %s creature of the game is %s (%s); yours is %d/%d." % [said,
 					bucket["max_name"], bucket["max_shown"], body.x, body.y]})
 		elif size > most:
-			rows.append({"level": HIGH, "topic": "Size by color",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": HIGH, "topic": "Size by color",
 				"text": "Almost all of the game's %s creatures have power + toughness %d or less; yours has %d." % [said, most, size]})
 		elif size < least:
-			rows.append({"level": LOW, "topic": "Size by color",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": LOW, "topic": "Size by color",
 				"text": "Almost all of the game's %s creatures have power + toughness %d or more; yours has %d." % [said, least, size]})
 		else:
-			rows.append({"level": OK, "topic": "Size by color",
+			rows.append({"yours": "%d/%d (%d)" % [body.x, body.y, size], "level": OK, "topic": "Size by color",
 				"text": "%d/%d is in reach of the game's %s creatures (almost all are %d to %d in power + toughness)." % [
 					body.x, body.y, said, least, most]})
 		for side in [["power", body.x], ["toughness", body.y]]:
 			var top: Dictionary = (group[side[0]] as Dictionary).get(shelf, {})
 			if not top.is_empty() and int(side[1]) > int(top["max"]):
-				rows.append({"level": HIGH, "topic": "%s by color" % String(side[0]).capitalize(),
+				rows.append({"yours": str(side[1]), "level": HIGH, "topic": "%s by color" % String(side[0]).capitalize(),
 					"text": "No %s creature of the game has more than %d %s (%s); yours has %d." % [said,
 						top["max"], side[0], top["max_name"], side[1]]})
 	var kw_shelf := mini(mv, TOP_SHELF)
@@ -561,15 +580,15 @@ static func _color_size_rows(rows: Array[Dictionary], c: Dictionary, data: CardD
 		var most := _at(keywords["values"], COLOR_USUAL)
 		var plural := func(n: int) -> String: return "keyword" if n == 1 else "keywords"
 		if count > int(keywords["max"]):
-			rows.append({"level": HIGH, "topic": "Keywords by color",
+			rows.append({"yours": str(count), "level": HIGH, "topic": "Keywords by color",
 				"text": "No %d-mana %s creature of the game has more than %d %s (%s); yours has %d." % [
 					kw_shelf, color, keywords["max"], plural.call(int(keywords["max"])), keywords["max_name"], count]})
 		elif count > most:
-			rows.append({"level": HIGH, "topic": "Keywords by color",
+			rows.append({"yours": str(count), "level": HIGH, "topic": "Keywords by color",
 				"text": "Almost all of the game's %d-mana %s creatures have %d %s or fewer; yours has %d." % [
 					kw_shelf, color, most, plural.call(most), count]})
 		else:
-			rows.append({"level": OK, "topic": "Keywords by color",
+			rows.append({"yours": str(count), "level": OK, "topic": "Keywords by color",
 				"text": "%d %s is in reach of the game's %d-mana %s creatures (%s has %d)." % [count,
 					plural.call(count), kw_shelf, color, keywords["max_name"], keywords["max"]]})
 
@@ -652,7 +671,7 @@ static func _pie_row(rows: Array[Dictionary], c: Dictionary, home: Dictionary, c
 		var of_them := "of them" if colors.size() == 1 else "of the %s ones" % COLOR_WORDS[kindest]
 		text = "%s %s %s %s (%s %s; %s)." % ["Almost no" if level == HIGH else "Few", who, noun, does,
 			_percent(share), of_them, home_said]
-	rows.append({"level": level, "topic": PIE_TOPIC, "text": text})
+	rows.append({"level": level, "topic": PIE_TOPIC, "text": text, "yours": does})
 
 
 ## "13%", or "0.5%" under one in a hundred.

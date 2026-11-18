@@ -115,10 +115,21 @@ func test_card_rules_and_the_validator() -> void:
 	var advice := forge.find_child("ForgeAdvice", true, false) as VBoxContainer
 	assert_not_null(advice, "the suggestions window")
 	var said := ""
+	var first_level := ""
 	for row in advice.get_children():
-		said += (row.get_child(0) as Label).text + " " + (row.get_child(1) as Label).text + "\n"
-	assert_string_contains(said, "Very high")
-	assert_string_contains(said, "Size:")
+		var cells := (row.get_child(0) as HBoxContainer).get_children()
+		assert_eq(cells.size(), 4, "verdict, check, yours, the game's cards")
+		if first_level == "":
+			first_level = (cells[0] as Label).text
+		said += " | ".join(PackedStringArray(cells.map(func(c: Node) -> String: return (c as Label).text))) + "\n"
+	assert_eq(first_level, "Very high", "the worst first")
+	assert_string_contains(said, "Very high | Size | 40/40 (80) | ")
+	assert_false(said.contains("yours"), "the card's number has a column of its own")
+	var summary := forge.find_child("ForgeAdviceSummary", true, false) as PanelContainer
+	assert_not_null(summary, "the summary on top")
+	assert_string_contains((summary.get_child(0) as Label).text, "Probably too strong")
+	var header := forge.find_child("ForgeAdviceHeader", true, false) as PanelContainer
+	assert_eq(((header.get_child(0) as HBoxContainer).get_child(2) as Label).text, "Yours")
 	assert_false((forge.find_child("ForgeSave", true, false) as Button).disabled, "only a suggestion")
 
 

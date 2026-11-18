@@ -253,6 +253,14 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   the trusted effects `EachOpponent`, `DrainEffect`, `SelfCounters`,
   `StealEffect`, `EdictEffect`, `OnItself` (a targeted stock effect on the
   card itself), `UnlessCounter` ("unless its controller pays"),
+  `ShuffleIn` (hand and graveyard, graveyard or hand into the library;
+  you, a target player or each player — `SHUFFLE_FROM`), `EachPlayerDraws`
+  (a shuffle then a draw for the same players said as one sentence,
+  `_shuffle_then_draw`), `FindCards` (search for up to N or X cards, or a
+  card named one way — `search_words`, `_search_filter` — in the library
+  or the graveyard, `SEARCH_WHERE`; one card off the library stays a
+  `SearchLibraryEffect` for the duel's own picker; `ai_role` `search` is
+  read by `EffectIntent`),
   `rules_text`; catalogues `TYPES`, `KEYWORDS`, `EFFECTS`, `TRIGGERS`,
   `STATICS`, `CARD_RULES`, `TIMINGS`, `SACRIFICES`, `ENCHANTS`,
   `MANA_CHOICES`, `HINDERING`, `NOT_IN_ACTIVATED` (mana only from a mana
@@ -273,7 +281,9 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   creatures beside gold creatures, gold effects beside each of the card's
   colors; `color_flagged` counts the game's own cards that would get a
   color line; `_gift_keywords` leaves defender, must-attack and phasing
-  out of a creature's keywords.
+  out of a creature's keywords. Each row but the summary carries the
+  card's own number apart (`yours`); `game_words(row)` is its sentence
+  without it, for the editor's table.
 - `game/community_cards.gd` (`CommunityCards`): zips (`card.json`, art,
   set icon) in `user://community_cards/` and beside the game, read with
   `PluginPackage.read(path, "card.json")`; picture guidelines `ART_GUIDE`,
@@ -306,7 +316,9 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   Validate, Save, Save as, Export (the card or its whole set), Delete,
   Done in the arrows' purple, asking first when `has_unsaved`; Undo and
   Redo, `_remember`, panels and pictures kept when unchanged; the Open
-  list fills its art over frames, `_fill_art_later`), opened by Options' `CreateCard`
+  list fills its art over frames, `_fill_art_later`; Validate's window is
+  a table, `_advice_line`/`_advice_box`: the summary on top, then Verdict,
+  Check, Yours and the game's cards, the worst first), opened by Options' `CreateCard`
   button; saving, importing and deleting wait for the LAN catalogue lock
   (`CardPacks.change_refusal`).
 - LAN (protocol 32): `SgCompatibility.community_mark` (counted once per pool from the saved cards; what plays of each

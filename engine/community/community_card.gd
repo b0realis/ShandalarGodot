@@ -152,7 +152,8 @@ const EFFECTS := {
 	"damage": {"label": "Deal damage", "amount": [1, 20], "x": true,
 		"targets": ["any", "creature", "creature_attacking", "creature_flying", "player", "opponent",
 			"each_opponent", "each_creature", "each_creature_and_player"]},
-	"draw": {"label": "Draw cards", "amount": [1, 7], "x": true, "targets": ["you", "player"]},
+	"draw": {"label": "Draw cards", "amount": [1, 7], "x": true, "targets": ["you", "player", "each_player"]},
+	"shuffle_in": {"label": "Shuffle into library", "from": true, "targets": ["each_player", "you", "player"]},
 	"gain_life": {"label": "Gain life", "amount": [1, 20], "x": true, "targets": ["you", "player"]},
 	"lose_life": {"label": "Lose life", "amount": [1, 20], "targets": ["opponent", "player", "each_opponent"]},
 	"drain": {"label": "Drain life", "amount": [1, 20], "targets": ["opponent", "each_opponent"]},
@@ -191,9 +192,16 @@ const EFFECTS := {
 	"lose_keyword": {"label": "Lose a keyword", "lose": true, "targets": ["creature"]},
 	"animate": {"label": "Become a creature", "base": true, "subtype": true},
 	"draw_later": {"label": "Draw cards next upkeep", "amount": [1, 3]},
-	"search": {"label": "Search for a card", "targets": ["a_creature", "an_artifact", "an_enchantment",
-		"a_land", "a_card"]},
+	"search": {"label": "Search for a card", "amount": [1, 3], "x": true, "where": true, "named": true,
+		"targets": ["a_creature", "an_artifact", "an_enchantment", "a_land", "a_card", "a_named"]},
 }
+## Where "Search for a card" looks, and how each is said.
+const SEARCH_WHERE := ["library", "graveyard"]
+const SEARCH_WHERE_WORDS := {"library": "in your library", "graveyard": "in your graveyard"}
+## What "Shuffle into library" takes back, and how each is said.
+const SHUFFLE_FROM := ["hand_and_graveyard", "graveyard", "hand"]
+const SHUFFLE_FROM_WORDS := {"hand_and_graveyard": "hand and graveyard", "graveyard": "graveyard",
+	"hand": "hand"}
 ## The keywords that hinder the creature that has them.
 const HINDERING := ["defender", "must_attack", "phasing"]
 ## Effects a triggered ability may not use.
@@ -213,7 +221,7 @@ const TARGET_WORDS := {"any": "any target", "creature": "target creature",
 	"creature_attacking": "target attacking creature", "creature_flying": "target creature with flying",
 	"creature_nonblack": "target nonblack creature", "creature_nonartifact": "target nonartifact creature",
 	"creature_tapped": "target tapped creature", "player": "target player", "opponent": "target opponent",
-	"each_opponent": "each opponent", "each_creature": "each creature",
+	"each_opponent": "each opponent", "each_player": "each player", "each_creature": "each creature",
 	"each_creature_and_player": "each creature and each player", "you": "you",
 	"artifact": "target artifact", "enchantment": "target enchantment",
 	"artifact_or_enchantment": "target artifact or enchantment", "land": "target land",
@@ -225,7 +233,7 @@ const TARGET_WORDS := {"any": "any target", "creature": "target creature",
 	"creature_card": "target creature card in your graveyard", "to_hand": "put it into your hand",
 	"to_battlefield": "put it onto the battlefield", "ability": "target activated ability",
 	"a_creature": "a creature card", "an_artifact": "an artifact card", "an_enchantment": "an enchantment card",
-	"a_land": "a land card", "a_card": "a card"}
+	"a_land": "a land card", "a_card": "a card", "a_named": "a card named..."}
 
 const LIMITS := {"abilities": 6, "effects": 4, "name": 40, "artist": 60, "set_name": 40,
 	"flavor": 200, "subtypes": 3, "subtype": 20, "power": [0, 99], "pt_change": [-10, 10]}
@@ -273,6 +281,10 @@ static func effect_defaults(id: String, kind: String) -> Dictionary:
 		e["keywords"] = ["flying"]
 	if info.has("shield"):
 		e["color"] = "red"
+	if info.has("from"):
+		e["from"] = SHUFFLE_FROM[0]
+	if info.has("where"):
+		e["where"] = SEARCH_WHERE[0]
 	return e
 
 
@@ -588,7 +600,7 @@ static func _effects_shape(out: Array[String], holder: Dictionary, where: String
 			continue
 		var e: Dictionary = effects[j]
 		_want(out, e, "effect", "text", false, at)
-		for key in ["target", "color", "subtype", "land"]:
+		for key in ["target", "color", "subtype", "land", "from", "where", "named"]:
 			_want(out, e, key, "text", true, at)
 		for key in ["amount", "power", "toughness", "unless"]:
 			_want(out, e, key, "whole", true, at)
@@ -711,6 +723,14 @@ static func _effects_problems(out: Array[String], where: String, effects: Varian
 				out.append(where + "choose the keyword it loses.")
 		if info.has("shield") and not PROTECTIONS.has(String(e.get("color", ""))):
 			out.append(where + "choose the color of the source.")
+		if info.has("from") and not SHUFFLE_FROM.has(String(e.get("from", SHUFFLE_FROM[0]))):
+			out.append(where + "shuffle the hand and graveyard, the graveyard or the hand.")
+		if info.has("where") and not SEARCH_WHERE.has(String(e.get("where", SEARCH_WHERE[0]))):
+			out.append(where + "search the library or the graveyard.")
+		if info.has("named") and String(e.get("target", "")) == "a_named":
+			var wanted := String(e.get("named", "")).strip_edges()
+			if wanted == "" or wanted.length() > LIMITS["name"] or not _name_ok(wanted):
+				out.append(where + "name the card it looks for (letters, digits, spaces and ' , -).")
 		var target := String(e.get("target", (info["targets"] as Array)[0] if info.has("targets") else ""))
 		if info.has("targets") and not (info["targets"] as Array).has(target):
 			out.append(where + "%s cannot target \"%s\"." % [info["label"], target])
@@ -1084,8 +1104,15 @@ static func effect_of(e: Dictionary) -> EffectBase:
 			var any := DamageEffect.new(n).any_target()
 			return any.x_damage() if x else any
 		"draw":
+			if target == "each_player":
+				return EachPlayerDraws.new(n, x)
 			var draw := DrawEffect.new(n).target_player() if target == "player" else DrawEffect.new(n)
 			return draw.x_cards() if x else draw
+		"shuffle_in":
+			var back := ShuffleIn.new(String(e.get("from", SHUFFLE_FROM[0])), target)
+			if target == "player":
+				back.target_spec = TargetSpec.player()
+			return back
 		"gain_life":
 			var gain := GainLifeEffect.new(n).target_player() if target == "player" else GainLifeEffect.new(n)
 			return gain.x_amount() if x else gain
@@ -1176,8 +1203,13 @@ static func effect_of(e: Dictionary) -> EffectBase:
 		"draw_later":
 			return DelayedDrawEffect.new(n)
 		"search":
-			var wanted := target_words(target)
-			return SearchLibraryEffect.new(wanted, _search_filter(target))
+			var filter := _search_filter(target, String(e.get("named", "")))
+			var place := String(e.get("where", SEARCH_WHERE[0]))
+			if place == "library" and not x and n <= 1:
+				# One card off the library: the duel's own library picker
+				# opens before the cast, as for Demonic Tutor.
+				return SearchLibraryEffect.new(search_words(e, target, 1, false), filter)
+			return FindCards.new(place, maxi(n, 1), x, filter, search_words(e, target, n, x))
 		"add_mana":
 			return AddManaEffect.new(int(MANA_COLORS[String(e["color"])]), n)
 		"mill":
@@ -1223,8 +1255,11 @@ static func effect_of(e: Dictionary) -> EffectBase:
 
 
 ## What a library search may find, by [param target].
-static func _search_filter(target: String) -> Callable:
+static func _search_filter(target: String, named := "") -> Callable:
 	match target:
+		"a_named":
+			var wanted := named.strip_edges().to_lower()
+			return func(i: CardInstance) -> bool: return i.data.card_name.to_lower() == wanted
 		"a_creature": return func(i: CardInstance) -> bool: return i.data.is_type(Mtg.CardType.CREATURE)
 		"an_artifact": return func(i: CardInstance) -> bool: return i.data.is_type(Mtg.CardType.ARTIFACT)
 		"an_enchantment": return func(i: CardInstance) -> bool: return i.data.is_type(Mtg.CardType.ENCHANTMENT)
@@ -1578,6 +1613,109 @@ class EachOpponent extends EffectBase:
 			game.adjust_life(controller, lost)
 
 
+## "Search your library for up to N ... cards, put them into your hand,
+## then shuffle" or "Return [up to N] ... from your graveyard to your
+## hand": one question a card as it resolves (the duel asks the player
+## each), stopping at the first one not taken.
+class FindCards extends EffectBase:
+	var place := "library"
+	var amount := 1
+	var use_x := false
+	var filter: Callable
+	var description := "a card"
+
+	func _init(p_place: String, p_amount: int, p_x: bool, p_filter: Callable, p_description: String) -> void:
+		place = p_place
+		amount = p_amount
+		use_x = p_x
+		filter = p_filter
+		description = p_description
+		ai_role = &"search"
+
+	func resolve(game: MtgGame, _source: CardInstance, controller: int, _target: TargetRef,
+			x_value: int = 0) -> void:
+		var n := x_value if use_x else amount
+		var p := game.players[controller]
+		if place == "graveyard":
+			for _i in n:
+				var candidates: Array[CardInstance] = []
+				for inst in p.graveyard:
+					if not filter.is_valid() or filter.call(inst):
+						candidates.append(inst)
+				if candidates.is_empty():
+					return
+				var chosen := game.agents[controller].choose_card(game, controller, candidates,
+					"Return %s from your graveyard to your hand" % description, true)
+				if chosen == null:
+					return
+				game.return_from_graveyard_to_hand(chosen)
+			return
+		for _i in n:
+			var before := p.library.size()
+			game.search_library(controller, filter, "Search your library for %s" % description, false, false)
+			if p.library.size() == before:
+				break
+		game.shuffle_library(controller)
+
+	func describe() -> String:
+		if place == "graveyard":
+			return "return %s from your graveyard to your hand" % description
+		return "search your library for %s, then shuffle" % description
+
+
+## "Each player draws N (or X) cards", the active player first.
+class EachPlayerDraws extends EffectBase:
+	var amount := 1
+	var use_x := false
+
+	func _init(p_amount: int, p_x: bool) -> void:
+		amount = p_amount
+		use_x = p_x
+
+	func resolve(game: MtgGame, _source: CardInstance, _controller: int, _target: TargetRef,
+			x_value: int = 0) -> void:
+		for pid in [game.active_player, game.opponent_of(game.active_player)]:
+			game.draw_cards(pid, x_value if use_x else amount)
+
+	func describe() -> String:
+		return "each player draws %s card(s)" % ("X" if use_x else str(amount))
+
+
+## "Shuffle your hand and graveyard into your library" — or only the
+## graveyard, or only the hand; for you, a target player or each player
+## (the active player first). A spell shuffling its own controller's
+## graveyard in is itself on the stack, so it goes to the graveyard after
+## (CR 608.2m), as Timetwister does.
+class ShuffleIn extends EffectBase:
+	var from := "hand_and_graveyard"
+	var who := "each_player"
+
+	func _init(p_from: String, p_who: String) -> void:
+		from = p_from
+		who = p_who
+
+	func resolve(game: MtgGame, _source: CardInstance, controller: int, target: TargetRef,
+			_x_value: int = 0) -> void:
+		var pids: Array = [game.active_player, game.opponent_of(game.active_player)]
+		if who == "you":
+			pids = [controller]
+		elif who == "player":
+			if target == null or not target.is_player:
+				return
+			pids = [target.player_id]
+		for pid in pids:
+			match from:
+				"graveyard":
+					game.shuffle_graveyard_into_library(pid)
+				"hand":
+					game.shuffle_hand_into_library(pid)
+				_:
+					game.shuffle_hand_and_graveyard_into_library(pid)
+
+	func describe() -> String:
+		return "shuffle %s into library" % from.replace("_", " ")
+
+
 ## "Target opponent loses N life and you gain N life."
 class DrainEffect extends EffectBase:
 	var amount := 1
@@ -1849,15 +1987,39 @@ static func _gets_and_has(a: Dictionary, plural: bool) -> String:
 static func effects_text(effects: Variant, name: String, context: String) -> String:
 	var parts: Array[String] = []
 	if effects is Array:
-		for e in effects:
+		var list: Array = effects
+		var i := 0
+		while i < list.size():
+			var e: Variant = list[i]
 			if e is Dictionary:
-				parts.append(effect_text(e, name, context))
+				var part := effect_text(e, name, context)
+				var next: Variant = list[i + 1] if i + 1 < list.size() else null
+				if _shuffle_then_draw(e, next):
+					# Timetwister's "..., then draws seven cards": the same
+					# players shuffle and draw, said once.
+					var drawn := effect_text(next, name, context)
+					part += ", then " + (drawn.trim_prefix("Each player ") if drawn.begins_with("Each player ")
+						else drawn.left(1).to_lower() + drawn.substr(1))
+					i += 1
+				parts.append(part)
+			i += 1
 	if parts.is_empty():
 		return ""
 	var text := parts[0]
 	for i in range(1, parts.size()):
 		text += (" and " if parts.size() == 2 else ", then ") + _lower_first(parts[i], name)
 	return text
+
+
+## Whether [param e] shuffles into a library and [param next] then draws
+## for the same players — each player, or you — to be said as one.
+static func _shuffle_then_draw(e: Variant, next: Variant) -> bool:
+	if not (e is Dictionary and next is Dictionary):
+		return false
+	if String(e.get("effect", "")) != "shuffle_in" or String(next.get("effect", "")) != "draw":
+		return false
+	var who := String(e.get("target", "each_player"))
+	return who in ["each_player", "you"] and String(next.get("target", "you")) == who
 
 
 static func effect_text(e: Dictionary, name: String, _context: String) -> String:
@@ -1874,7 +2036,17 @@ static func effect_text(e: Dictionary, name: String, _context: String) -> String
 			return "%s deals %s damage to %s" % [name, amount, target_words(target)]
 		"draw":
 			var cards := "X cards" if x else _cards(n)
+			if target == "each_player":
+				return "Each player draws %s" % cards
 			return ("Target player draws %s" if target == "player" else "Draw %s") % cards
+		"shuffle_in":
+			var what := String(SHUFFLE_FROM_WORDS.get(String(e.get("from", SHUFFLE_FROM[0])), "hand and graveyard"))
+			match target:
+				"you":
+					return "Shuffle your %s into your library" % what
+				"player":
+					return "Target player shuffles their %s into their library" % what
+			return "Each player shuffles their %s into their library" % what
 		"gain_life":
 			return ("Target player gains %s life" if target == "player" else "You gain %s life") % amount
 		"lose_life":
@@ -1978,7 +2150,11 @@ static func effect_text(e: Dictionary, name: String, _context: String) -> String
 		"draw_later":
 			return "Draw %s at the beginning of the next turn's upkeep" % _cards(n)
 		"search":
-			return "Search your library for %s, put it into your hand, then shuffle" % target_words(target)
+			var what := search_words(e, target, n, x)
+			if String(e.get("where", SEARCH_WHERE[0])) == "graveyard":
+				return "Return %s from your graveyard to your hand" % what
+			return "Search your library for %s, put %s into your hand, then shuffle" % [what,
+				"them" if x or n > 1 else "it"]
 	return ""
 
 
@@ -1986,6 +2162,18 @@ static func effect_text(e: Dictionary, name: String, _context: String) -> String
 static func _type_word(word: String) -> String:
 	word = word.strip_edges()
 	return word.left(1).to_upper() + word.substr(1).to_lower()
+
+
+## What a search looks for: "a creature card", "a card named Shivan
+## Dragon", "up to two land cards", "up to X cards".
+static func search_words(e: Dictionary, target: String, n: int, x: bool) -> String:
+	var named := String(e.get("named", "")).strip_edges()
+	if not x and n <= 1:
+		return ("a card named %s" % named) if target == "a_named" else target_words(target)
+	var many := {"a_creature": "creature cards", "an_artifact": "artifact cards",
+		"an_enchantment": "enchantment cards", "a_land": "land cards", "a_card": "cards",
+		"a_named": "cards named %s" % named}
+	return "up to %s %s" % ["X" if x else _number(n), String(many.get(target, "cards"))]
 
 
 static func _cards(n: int) -> String:

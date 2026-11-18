@@ -305,3 +305,25 @@ func test_the_round_5_balance_fixes() -> void:
 	var wall := CardBalance.advice(_spec({"name": "Bal Wall", "cost": "{G}", "types": ["creature"], "power": 0,
 		"toughness": 3, "keywords": ["defender", "reach"]}))
 	assert_false(String(wall[0]["level"]) == CardBalance.VERY_HIGH, "a one-mana wall with reach is no alarm")
+
+
+func test_every_row_but_the_summary_carries_the_card_s_own_number_apart() -> void:
+	var giant := {"format": CommunityCard.FORMAT, "version": 1, "name": "Zyx Table Giant",
+		"cost": "{3}{G}", "types": ["creature"], "power": 9, "toughness": 9,
+		"keywords": ["trample", "vigilance", "reach", "first_strike"], "abilities": []}
+	var rows := CardBalance.advice(giant)
+	assert_eq(String(rows[0]["topic"]), "Summary")
+	assert_false(rows[0].has("yours"))
+	for row in rows.slice(1):
+		assert_true(row.has("yours"), String(row["text"]))
+		var words := CardBalance.game_words(row)
+		if String(row["topic"]) != CardBalance.PIE_TOPIC:
+			assert_false(words.contains("yours"), words)
+		assert_false(words.contains("; ."), words)
+	var size := rows.filter(func(r: Dictionary) -> bool: return String(r["topic"]) == "Size")
+	assert_eq(String(size[0]["yours"]), "9/9 (18)")
+	var thumb := rows.filter(func(r: Dictionary) -> bool:
+		return String(r["topic"]) == CardBalance.THUMB_TOPIC and String(r["text"]).begins_with("power + toughness"))
+	assert_string_contains(CardBalance.game_words(thumb[0]), "(here ")
+	assert_false(CardBalance.game_words(thumb[0]).contains("; yours"))
+

@@ -758,7 +758,7 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.sweeper = e
 		elif e is AnimateSelfEffect:
 			intent.animates = e
-		elif e is SearchLibraryEffect:
+		elif e is SearchLibraryEffect or e.ai_role == &"search":
 			intent.searches = true   # priced by card_value; a card off the library
 		elif e is ExtraTurnEffect:
 			intent.extra_turns += 1   # priced by card_value; a draw step off the library
