@@ -23,6 +23,13 @@ const SET_FORMAT := "shandalar-community-set"
 const SET_MAX_CARDS := 150
 const ART_NAMES: Array[String] = ["art.png", "art.jpg", "art.webp"]
 const ICON_NAMES: Array[String] = ["icon.png", "icon.webp"]
+## THE FOUR SET ICONS a card may give, by the game's own set symbol tiers
+## ([method GameSkin.set_symbol_tier]: a mythic or a legendary card wears
+## the legendary one) — `icon_common.png` and the like. A card's icon is
+## ONE picture (`icon.png`, every rarity) or a picture for each of some
+## tiers; a rarity without its own wears the first one given, in this
+## order ([method icon_for_tier]).
+const ICON_TIERS: Array[String] = ["common", "uncommon", "rare", "legendary"]
 
 ## The art window of the large card is 255 by 198 (9:7).
 const ART_ASPECT := 255.0 / 198.0
@@ -62,7 +69,7 @@ static var _read_cache: Dictionary = {}
 ## saved — its spec and pictures answer for its name ([method set_draft]).
 static var _draft: Dictionary = {}
 static var _draft_art: Texture2D = null
-static var _draft_icon: Texture2D = null
+static var _draft_icons: Dictionary = {}
 
 
 # ------------------------------------------------------------ the places --
@@ -240,7 +247,7 @@ static func _entries_problem(path: String, as_set: bool) -> String:
 		var depth := 2 if file == SET_MANIFEST or not as_set else 3
 		var limit := _limit_of(file)
 		if parts.size() != depth or limit < 0 or (file == SET_MANIFEST) != (as_set and depth == 2):
-			return "%s: a card zip holds only card.json, its art and its set icon%s." % [name,
+			return "%s: a card zip holds only card.json, its art and its set icons%s." % [name,
 				" (a set zip: set.json and a folder a card)" if as_set else ""]
 		if int(entry["size"]) > limit:
 			return "%s is bigger than a card's file may be." % name
@@ -253,7 +260,7 @@ static func _limit_of(file: String) -> int:
 		return 256 * 1024
 	if file in ART_NAMES:
 		return int(ART_GUIDE["bytes"])
-	if file in ICON_NAMES:
+	if is_icon_file(file):
 		return int(ICON_GUIDE["bytes"])
 	return -1
 
@@ -339,15 +346,31 @@ static func _card_row(row: Dictionary, files: Dictionary) -> Dictionary:
 				problems.append(why)
 			pictures["art"] = {"bytes": files[art], "kind": art.get_extension()}
 			break
+	var one := {}
 	for icon in ICON_NAMES:
 		if files.has(icon):
 			var why := icon_problem(files[icon], icon.get_extension())
 			if why != "":
 				problems.append(why)
-			pictures["icon"] = {"bytes": files[icon], "kind": icon.get_extension()}
+			one = {"bytes": files[icon], "kind": icon.get_extension()}
 			break
+	var tiers := {}
+	for file in files:
+		var tier := icon_tier_of(String(file))
+		if tier != "" and not tiers.has(tier):
+			var why := icon_problem(files[file], String(file).get_extension())
+			if why != "":
+				problems.append(why)
+			tiers[tier] = {"bytes": files[file], "kind": String(file).get_extension()}
+	# An icon.png beside tier icons serves the rarities without their own.
+	if not one.is_empty() and not tiers.is_empty() and not tiers.has(ICON_TIERS[0]):
+		tiers[ICON_TIERS[0]] = one
+	if not tiers.is_empty():
+		pictures["icon"] = icon_pack(tiers)
+	elif not one.is_empty():
+		pictures["icon"] = one
 	if not pictures.has("icon"):
-		problems.append("The set icon is missing (icon.png or icon.webp).")
+		problems.append("The set icon is missing (icon.png or icon.webp, or icon_common.png and the like).")
 	row["files"] = pictures
 	return row
 
@@ -471,6 +494,87 @@ static func art_problem(bytes: PackedByteArray, kind: String) -> String:
 	if aspect < float(ART_GUIDE["aspect"][0]) or aspect > float(ART_GUIDE["aspect"][1]):
 		return "The art is %d x %d: its shape must be near 9:7 (best 765 x 594)." % [size.x, size.y]
 	return ""
+
+
+## Whether [param file] is a card's set icon: `icon.png`, or one of the
+## tiers' (`icon_rare.webp`).
+static func is_icon_file(file: String) -> bool:
+	return ICON_NAMES.has(file) or icon_tier_of(file) != ""
+
+
+## The tier of the icon file [param file] ("" when it is none of theirs).
+static func icon_tier_of(file: String) -> String:
+	for tier in ICON_TIERS:
+		for kind in ICON_GUIDE["kinds"]:
+			if file == "icon_%s.%s" % [tier, kind]:
+				return tier
+	return ""
+
+
+## A card's icon as tiers: one picture is the common one (and so every
+## rarity's), a set of tiers is kept as given.
+static func icon_tiers(icon: Dictionary) -> Dictionary:
+	if icon.has("bytes"):
+		return {ICON_TIERS[0]: icon}
+	var out := {}
+	for tier in ICON_TIERS:
+		if icon.get(tier) is Dictionary and (icon[tier] as Dictionary).has("bytes"):
+			out[tier] = icon[tier]
+	return out
+
+
+## The picture a card of [param tier] wears: its own, else the first given
+## (common, uncommon, rare, legendary) — one icon alone is every rarity's.
+## A "mythic" tier is the legendary one.
+static func icon_for_tier(icon: Dictionary, tier: String) -> Dictionary:
+	var tiers := icon_tiers(icon)
+	var own := "legendary" if tier == "mythic" else tier
+	if tiers.has(own):
+		return tiers[own]
+	for each in ICON_TIERS:
+		if tiers.has(each):
+			return tiers[each]
+	return {}
+
+
+## Tiers as a card keeps them: one picture when only one is given (so a
+## card of one icon is written as every card was, `icon.png`).
+static func icon_pack(tiers: Dictionary) -> Dictionary:
+	var given := icon_tiers(tiers)
+	if given.size() == 1:
+		return given.values()[0]
+	return given
+
+
+## Every picture of a card's icon.
+static func icon_pictures(icon: Dictionary) -> Array:
+	return icon_tiers(icon).values()
+
+
+## Why [param icon] cannot be a card's ("" when it can): at least one
+## picture, each following the guidelines.
+static func icons_problem(icon: Dictionary) -> String:
+	var tiers := icon_tiers(icon)
+	if tiers.is_empty():
+		return "Choose the set icon first."
+	for tier in tiers:
+		var why := icon_problem(tiers[tier]["bytes"], String(tiers[tier]["kind"]))
+		if why != "":
+			return why
+	return ""
+
+
+## A card's icon as zip entries: `icon.png` for one, `icon_<tier>.png`
+## for each of several.
+static func icon_entries(icon: Dictionary) -> Array:
+	var packed := icon_pack(icon)
+	if packed.has("bytes"):
+		return [["icon." + String(packed["kind"]).to_lower(), packed["bytes"]]]
+	var out := []
+	for tier in ICON_TIERS:
+		if packed.has(tier):
+			out.append(["icon_%s.%s" % [tier, String(packed[tier]["kind"]).to_lower()], packed[tier]["bytes"]])
+	return out
 
 
 ## Why [param bytes] cannot be a set icon ("" when it can).
@@ -642,15 +746,32 @@ static func made_art(card_name: String) -> Texture2D:
 	return _textures.get("art|" + card_name)
 
 
-## [param card_name]'s set icon, the creator's own picture.
-static func icon_texture(card_name: String, _rarity := "") -> Texture2D:
+## [param card_name]'s set icon for the set symbol [param tier] (common,
+## uncommon, rare or legendary — [method GameSkin.set_symbol_tier]), the
+## creator's own picture ([method icon_for_tier]).
+static func icon_texture(card_name: String, tier := "") -> Texture2D:
 	if _is_draft(card_name):
-		return _draft_icon
+		var own := "legendary" if tier == "mythic" else tier
+		if _draft_icons.has(own):
+			return _draft_icons[own]
+		for each in ICON_TIERS:
+			if _draft_icons.has(each):
+				return _draft_icons[each]
+		return null
 	_ensure()
-	var key := "icon|" + card_name
+	var tiers := icon_tiers((_files.get(card_name, {}) as Dictionary).get("icon", {}))
+	var used := "legendary" if tier == "mythic" else tier
+	if not tiers.has(used):
+		used = ""
+		for each in ICON_TIERS:
+			if tiers.has(each):
+				used = each
+				break
+	if used == "":
+		return null
+	var key := "icon|%s|%s" % [card_name, used]
 	if not _textures.has(key):
-		var icon: Dictionary = (_files.get(card_name, {}) as Dictionary).get("icon", {})
-		_textures[key] = texture_from(icon["bytes"], String(icon["kind"])) if not icon.is_empty() else null
+		_textures[key] = texture_from(tiers[used]["bytes"], String(tiers[used]["kind"]))
 	return _textures[key]
 
 
@@ -677,17 +798,18 @@ static func tooltip_extra(data: CardData) -> String:
 	return "\nSet: %s (community card)" % set_name if set_name != "" else "\nCommunity card"
 
 
-## Show [param spec] and its pictures as the card being made.
-static func set_draft(spec: Dictionary, art: Texture2D, icon: Texture2D) -> void:
+## Show [param spec] and its pictures as the card being made ([param
+## icons]: tier → texture, the tiers given).
+static func set_draft(spec: Dictionary, art: Texture2D, icons: Dictionary) -> void:
 	_draft = spec.duplicate(true)
 	_draft_art = art
-	_draft_icon = icon
+	_draft_icons = icons.duplicate()
 
 
 static func clear_draft() -> void:
 	_draft = {}
 	_draft_art = null
-	_draft_icon = null
+	_draft_icons = {}
 
 
 # ---------------------------------------------------- saving and sharing --
@@ -708,9 +830,7 @@ static func write_zip(path: String, spec: Dictionary, art: Dictionary, icon: Dic
 	var problems := CommunityCard.problems(spec)
 	if not problems.is_empty():
 		return problems[0]
-	if icon.is_empty():
-		return "Choose the set icon first."
-	var why := icon_problem(icon["bytes"], String(icon["kind"]))
+	var why := icons_problem(icon)
 	if why == "" and not art.is_empty():
 		why = art_problem(art["bytes"], String(art["kind"]))
 	if why != "":
@@ -723,8 +843,8 @@ static func write_zip(path: String, spec: Dictionary, art: Dictionary, icon: Dic
 	path += ".part"
 	if zip.open(path) != OK:
 		return "%s could not be written." % GamePaths.shown(final_path)
-	var entries := [[MANIFEST, JSON.stringify(spec, "\t", false).to_utf8_buffer()],
-		["icon." + String(icon["kind"]).to_lower(), icon["bytes"]]]
+	var entries := [[MANIFEST, JSON.stringify(spec, "\t", false).to_utf8_buffer()]]
+	entries.append_array(icon_entries(icon))
 	if not art.is_empty():
 		var kind := String(art["kind"]).to_lower()
 		entries.append(["art." + ("jpg" if kind == "jpeg" else kind), art["bytes"]])
@@ -941,9 +1061,10 @@ static func write_set_zip(path: String, set_name: String, cards: Array) -> Strin
 		if names.has(lower):
 			return "Two cards of the set are named %s." % String(spec["name"]).strip_edges()
 		names[lower] = true
-		if (card["icon"] as Dictionary).is_empty():
+		if icon_tiers(card["icon"]).is_empty():
 			return "%s has no set icon." % String(spec["name"])
-		total += ((card["icon"] as Dictionary)["bytes"] as PackedByteArray).size()
+		for picture: Dictionary in icon_pictures(card["icon"]):
+			total += (picture["bytes"] as PackedByteArray).size()
 		if not (card["art"] as Dictionary).is_empty():
 			total += ((card["art"] as Dictionary)["bytes"] as PackedByteArray).size()
 		var folder := file_name(String(spec["name"]))
@@ -969,8 +1090,8 @@ static func write_set_zip(path: String, set_name: String, cards: Array) -> Strin
 		or zip.write_file(JSON.stringify(manifest, "\t", false).to_utf8_buffer()) != OK or zip.close_file() != OK
 	for i in cards.size():
 		var card: Dictionary = cards[i]
-		var entries := [[MANIFEST, JSON.stringify(card["spec"], "\t", false).to_utf8_buffer()],
-			["icon." + String(card["icon"]["kind"]).to_lower(), card["icon"]["bytes"]]]
+		var entries := [[MANIFEST, JSON.stringify(card["spec"], "\t", false).to_utf8_buffer()]]
+		entries.append_array(icon_entries(card["icon"]))
 		if not (card["art"] as Dictionary).is_empty():
 			var kind := String(card["art"]["kind"]).to_lower()
 			entries.append(["art." + ("jpg" if kind == "jpeg" else kind), card["art"]["bytes"]])

@@ -149,11 +149,12 @@ static func _size_of(path: String) -> int:
 static func _bound_of(card: String, spec: Dictionary) -> int:
 	var files := CommunityCards.files_of(card)
 	var sizes: Array[int] = [JSON.stringify(spec, "\t", false).to_utf8_buffer().size()]
-	for key in ["art", "icon"]:
-		var picture: Dictionary = files.get(key, {})
-		if not picture.is_empty():
-			var bytes: PackedByteArray = picture["bytes"]
-			sizes.append(bytes.size())
+	var pictures: Array = CommunityCards.icon_pictures(files.get("icon", {}))
+	if not (files.get("art", {}) as Dictionary).is_empty():
+		pictures.append(files["art"])
+	for picture: Dictionary in pictures:
+		var bytes: PackedByteArray = picture["bytes"]
+		sizes.append(bytes.size())
 	var top := CommunityCards.file_name(String(spec.get("name", card))).length()
 	var bound := 22 + 1024
 	for n in sizes:
@@ -612,7 +613,7 @@ static func _plain_card_zip(path: String) -> String:
 		if folder_entry:
 			continue
 		var file := parts[1]
-		if not CommunityCards.ART_NAMES.has(file) and not CommunityCards.ICON_NAMES.has(file) \
+		if not CommunityCards.ART_NAMES.has(file) and not CommunityCards.is_icon_file(file) \
 				and file != CommunityCards.MANIFEST:
 			return "it holds %s besides the card's own files" % file.left(60)
 		if files.has(file):
@@ -624,10 +625,10 @@ static func _plain_card_zip(path: String) -> String:
 	for each in files:
 		if CommunityCards.ART_NAMES.has(String(each)):
 			arts += 1
-		elif CommunityCards.ICON_NAMES.has(String(each)):
+		elif CommunityCards.is_icon_file(String(each)):
 			icons += 1
-	if not files.has(CommunityCards.MANIFEST) or arts > 1 or icons != 1:
-		return "a card zip holds its card.json, one icon and at most one art"
+	if not files.has(CommunityCards.MANIFEST) or arts > 1 or icons < 1:
+		return "a card zip holds its card.json, its set icons and at most one art"
 	if unpacked > MAX_UNPACKED:
 		return "it unpacks to %s; a card zip's files are at most %s" % [PortableMode.size_words(unpacked),
 			PortableMode.size_words(MAX_UNPACKED)]

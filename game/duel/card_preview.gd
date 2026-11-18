@@ -986,8 +986,12 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	# project's Roman II and IV for Unlimited and Fourth Edition, and
 	# none for the promos, which letter themselves `PR`.
 	var rarity: String = printing.get("rarity", CardRegistry.rarity_of(d.card_name, shown_set))
+	if shown_set == CommunityCard.SET_CODE:
+		# A community card's rarity is its own spec's — the card being made
+		# is in no registry yet (four set icons, 2026-11-18).
+		rarity = String(CommunityCards.spec_of(d.card_name).get("rarity", rarity))
 	var legendary := (d.supertypes & Mtg.Supertype.LEGENDARY) != 0
-	_set_icon.texture = CommunityCards.icon_texture(d.card_name, rarity) \
+	_set_icon.texture = CommunityCards.icon_texture(d.card_name, GameSkin.set_symbol_tier(rarity, legendary)) \
 		if shown_set == CommunityCard.SET_CODE else GameSkin.set_icon(shown_set, rarity, legendary)
 	_set_icon.visible = _set_icon.texture != null
 	_set_text.text = "" if _set_icon.visible else GameSkin.set_label(shown_set)

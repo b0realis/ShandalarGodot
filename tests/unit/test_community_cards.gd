@@ -360,3 +360,54 @@ func test_the_example_card_ships_whole() -> void:
 	assert_eq(CommunityCards.art_problem(rows[0]["files"]["art"]["bytes"], "jpg"), "", "the art by the guidelines")
 	assert_eq(CommunityCards.icon_problem(rows[0]["files"]["icon"]["bytes"], "png"), "")
 	assert_false(CardRegistry.has_card("Battle Apothecary Cart"), "an example is not in the pool until saved")
+
+
+# ------------------------------------------------------------ four icons --
+
+func _icon_of(color: Color) -> Dictionary:
+	var picture := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	picture.fill(color)
+	return {"bytes": picture.save_png_to_buffer(), "kind": "png"}
+
+
+func test_one_icon_is_every_rarity_s_and_four_set_rarities_apart() -> void:
+	var red := _icon_of(Color.RED)
+	var blue := _icon_of(Color.BLUE)
+	var gold := _icon_of(Color.GOLD)
+	assert_eq(CommunityCards.icon_for_tier(red, "rare"), red, "one icon: every rarity")
+	var two := {"uncommon": blue, "legendary": gold}
+	assert_eq(CommunityCards.icon_for_tier(two, "common"), blue, "no own: the first given")
+	assert_eq(CommunityCards.icon_for_tier(two, "rare"), blue)
+	assert_eq(CommunityCards.icon_for_tier(two, "legendary"), gold)
+	assert_eq(CommunityCards.icon_for_tier(two, "mythic"), gold, "a mythic wears the legendary one")
+	assert_eq(CommunityCards.icon_pack({"rare": red}), red, "one given is kept as one")
+	assert_eq(CommunityCards.icon_entries({"rare": red}).map(func(e: Array) -> String: return String(e[0])),
+		["icon.png"], "and written as every card was")
+	assert_eq(CommunityCards.icon_entries(two).map(func(e: Array) -> String: return String(e[0])),
+		["icon_uncommon.png", "icon_legendary.png"])
+	assert_true(CommunityCards.is_icon_file("icon_rare.webp"))
+	assert_false(CommunityCards.is_icon_file("icon_mythic.png"), "the tiers are the set symbol's")
+
+
+func test_a_card_of_four_icons_is_written_and_read_whole() -> void:
+	var dir := "user://four_icons_test"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path := dir.path_join("four.zip")
+	var spec := {"format": CommunityCard.FORMAT, "version": 1, "name": "Zyx Four Icons", "cost": "{1}{G}",
+		"types": ["creature"], "power": 2, "toughness": 2, "rarity": "rare", "abilities": []}
+	var icons := {"common": _icon_of(Color.WHITE), "uncommon": _icon_of(Color.SILVER),
+		"rare": _icon_of(Color.GOLD), "legendary": _icon_of(Color.PURPLE)}
+	assert_eq(CommunityCards.write_zip(path, spec, {}, icons), "")
+	var listed := PluginPackage.zip_entries(path)
+	var names: Array = (listed["entries"] as Array).map(func(e: Dictionary) -> String:
+		return String(e["name"]).get_file())
+	for tier in CommunityCards.ICON_TIERS:
+		assert_true(names.has("icon_%s.png" % tier), tier)
+	var row := CommunityCards.read(path)
+	assert_eq(row["problems"], [] as Array[String])
+	assert_eq(CommunityCards.icon_tiers(row["files"]["icon"]).size(), 4)
+	assert_eq(CommunityCards.icon_for_tier(row["files"]["icon"], "uncommon"), icons["uncommon"])
+	assert_eq(CommunityCards.write_zip(path, spec, {}, {}), "Choose the set icon first.")
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(dir)
+

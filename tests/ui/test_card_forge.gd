@@ -315,3 +315,28 @@ func test_the_fixes_of_the_round_5_pass() -> void:
 	forge._close_dialog()
 	forge.save_card("Forge Test Wolf")
 	assert_eq(CommunityCards.spec_of("Forge Test Fox").get("name"), "Forge Test Fox", "a leave for the Wolf saves no Fox over")
+
+
+func test_four_set_icons_one_for_all() -> void:
+	var forge: CardForgeScreen = await _open()
+	for tier in CommunityCards.ICON_TIERS:
+		assert_not_null(forge.find_child("ForgeChooseIcon_" + tier, true, false), tier + " has its upload")
+	assert_eq(forge.take_picture("icon_rare", _picture("rare.png", 64, 64)), "")
+	assert_eq(forge.icon.keys(), ["rare"])
+	assert_string_contains((forge.find_child("ForgeIconLabel", true, false) as Label).text, "every rarity")
+	assert_eq((forge.find_child("ForgeIconShown_common", true, false) as TextureRect).texture,
+		forge._icon_textures["rare"], "the common slot shows the one icon, faded")
+	assert_almost_eq((forge.find_child("ForgeIconShown_common", true, false) as TextureRect).modulate.a, 0.35, 0.01)
+	assert_eq(forge.take_picture("icon_legendary", _picture("legend.png", 64, 64)), "")
+	assert_string_contains((forge.find_child("ForgeIconLabel", true, false) as Label).text, "Own icons: rare, legendary.")
+	forge.spec["rarity"] = "mythic"
+	forge.refresh()
+	assert_eq(forge._preview._set_icon.texture, forge._icon_textures["legendary"],
+		"a mythic card being made wears the legendary icon")
+	forge.spec["rarity"] = "uncommon"
+	forge.refresh()
+	assert_eq(forge._preview._set_icon.texture, forge._icon_textures["rare"],
+		"an uncommon one, without its own, the first given")
+	forge.clear_icon("rare")
+	assert_eq(forge.icon.keys(), ["legendary"])
+

@@ -31,7 +31,8 @@ var spec: Dictionary = {}
 var art := {}
 var icon := {}
 var _art_texture: Texture2D = null
-var _icon_texture: Texture2D = null
+## The set icons given, tier → texture ([constant CommunityCards.ICON_TIERS]).
+var _icon_textures: Dictionary = {}
 
 var _preview: CardPreview
 var _mini_holder: Control
@@ -338,19 +339,34 @@ func _guide(box: Container, text: String) -> void:
 func _build_card_page(box: VBoxContainer) -> void:
 	_line(_row(box, "Name"), "name", 360, CommunityCard.LIMITS["name"])
 	_line(_row(box, "Set name"), "set_name", 360, CommunityCard.LIMITS["set_name"])
-	var icon_row := _row(box, "Set icon")
-	var icon_shown := TextureRect.new()
-	icon_shown.name = "ForgeIconShown"
-	icon_shown.custom_minimum_size = Vector2(32, 32)
-	icon_shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_shown.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_row.add_child(icon_shown)
-	var choose_icon := UiChrome.menu_button("Choose set icon...", Vector2(180, 32), 14)
-	choose_icon.name = "ForgeChooseIcon"
-	choose_icon.pressed.connect(func() -> void: _pick_file("icon"))
-	icon_row.add_child(choose_icon)
-	_label(icon_row, "", 13).name = "ForgeIconLabel"
-	_guide(box, CommunityCards.ICON_WORDS)
+	# FOUR SET ICONS, by the game's set symbol tiers (owner 2026-11-18):
+	# one alone is every rarity's; a rarity without its own wears the first
+	# one given, shown faded in its slot.
+	var icon_row := _row(box, "Set icons")
+	for tier in CommunityCards.ICON_TIERS:
+		var slot := HBoxContainer.new()
+		slot.add_theme_constant_override("separation", 4)
+		var shown := TextureRect.new()
+		shown.name = "ForgeIconShown_" + tier
+		shown.custom_minimum_size = Vector2(32, 32)
+		shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		shown.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		slot.add_child(shown)
+		var choose := UiChrome.menu_button(tier.capitalize() + "...", Vector2(100, 32), 14)
+		choose.name = "ForgeChooseIcon_" + tier
+		choose.tooltip_text = "The set icon of a %s card." % tier \
+			if tier != "legendary" else "The set icon of a mythic or a legendary card."
+		choose.pressed.connect(func() -> void: _pick_file("icon_" + tier))
+		slot.add_child(choose)
+		var clear := UiChrome.menu_button("x", Vector2(28, 32), 13)
+		clear.name = "ForgeClearIcon_" + tier
+		clear.tooltip_text = "No own %s icon" % tier
+		clear.pressed.connect(func() -> void: clear_icon(tier))
+		slot.add_child(clear)
+		icon_row.add_child(slot)
+	_label(box, "", 13).name = "ForgeIconLabel"
+	_guide(box, CommunityCards.ICON_WORDS + " One icon alone is used for every rarity; " \
+		+ "a rarity without its own uses the first one given.")
 	_options(_row(box, "Rarity"), "rarity", CommunityCard.RARITIES)
 	_line(_row(box, "Illustration (Illus.)"), "artist", 360, CommunityCard.LIMITS["artist"]) \
 		.placeholder_text = "the name printed after Illus."
@@ -493,10 +509,13 @@ func load_spec(card: Dictionary, p_art: Dictionary, p_icon: Dictionary) -> void:
 		spec["rules"] = old["rules"]
 	if p_art != art or (_art_texture == null and not p_art.is_empty()):
 		_art_texture = CommunityCards.texture_from(p_art["bytes"], String(p_art["kind"])) if not p_art.is_empty() else null
-	if p_icon != icon or (_icon_texture == null and not p_icon.is_empty()):
-		_icon_texture = CommunityCards.texture_from(p_icon["bytes"], String(p_icon["kind"])) if not p_icon.is_empty() else null
+	var given := CommunityCards.icon_tiers(p_icon)
+	if given != icon or (_icon_textures.size() != given.size()):
+		_icon_textures = {}
+		for tier in given:
+			_icon_textures[tier] = CommunityCards.texture_from(given[tier]["bytes"], String(given[tier]["kind"]))
 	art = p_art.duplicate()
-	icon = p_icon.duplicate()
+	icon = given
 	_fill()
 	if not same_rules:
 		_rebuild_rules()
@@ -525,9 +544,50 @@ func _fill() -> void:
 		for item in checks:
 			(checks[item] as CheckBox).button_pressed = (spec.get(key, []) as Array).has(item)
 	(find_child("ForgeArtLabel", true, false) as Label).text = _picture_words(art, "No art yet.")
-	(find_child("ForgeIconLabel", true, false) as Label).text = _picture_words(icon, "No set icon yet.")
-	(find_child("ForgeIconShown", true, false) as TextureRect).texture = _icon_texture
+	(find_child("ForgeIconLabel", true, false) as Label).text = _icon_words()
+	var first := ""
+	for tier in CommunityCards.ICON_TIERS:
+		if icon.has(tier):
+			first = tier
+			break
+	for tier in CommunityCards.ICON_TIERS:
+		var shown := find_child("ForgeIconShown_" + tier, true, false) as TextureRect
+		shown.texture = _icon_textures.get(tier, _icon_textures.get(first))
+		shown.modulate.a = 1.0 if icon.has(tier) else 0.35
+		var clear := find_child("ForgeClearIcon_" + tier, true, false) as Button
+		clear.disabled = not icon.has(tier)
+		clear.modulate.a = 1.0 if icon.has(tier) else 0.0   # keeps its place, shows nothing
 	_filling = false
+
+
+## What the set icons are: none yet, one for every rarity, or which
+## rarities have their own.
+func _icon_words() -> String:
+	if icon.is_empty():
+		return "No set icon yet."
+	if icon.size() == 1:
+		return "One set icon for every rarity: %s" % _picture_words(icon.values()[0], "")
+	var own: Array[String] = []
+	var first := ""
+	for tier in CommunityCards.ICON_TIERS:
+		if icon.has(tier):
+			own.append(tier)
+			if first == "":
+				first = tier
+	var rest := CommunityCards.ICON_TIERS.size() - own.size()
+	return "Own icons: %s.%s" % [", ".join(own),
+		(" The other rarities use the %s one." % first) if rest > 0 else ""]
+
+
+## Take back the [param tier] set icon: the rarity wears the first one
+## given again.
+func clear_icon(tier: String) -> void:
+	if not icon.has(tier):
+		return
+	icon.erase(tier)
+	_icon_textures.erase(tier)
+	_fill()
+	refresh()
 
 
 func _picture_words(picture: Dictionary, none: String) -> String:
@@ -636,7 +696,7 @@ func refresh() -> void:
 	if not own.is_empty():
 		return
 	var data := card_data()
-	CommunityCards.set_draft(spec, _art_texture, _icon_texture)
+	CommunityCards.set_draft(spec, _art_texture, _icon_textures)
 	_preview.show_card(CardInstance.new(data, -1, 0))
 	# One small card, shown each card made (not one made per keystroke).
 	var mini := _mini_holder.get_child(0) as MiniCard if _mini_holder.get_child_count() > 0 else null
@@ -1263,7 +1323,7 @@ func _pick_file(which: String) -> void:
 	box.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	box.access = FileDialog.ACCESS_FILESYSTEM
 	box.use_native_dialog = true
-	box.filters = PackedStringArray(["*.png, *.webp ; Set icon"] if which == "icon"
+	box.filters = PackedStringArray(["*.png, *.webp ; Set icon"] if which.begins_with("icon")
 		else ["*.png, *.jpg, *.jpeg, *.webp ; Art"])
 	box.file_selected.connect(func(path: String) -> void:
 		take_picture(which, path)
@@ -1281,29 +1341,35 @@ func take_picture(which: String, path: String) -> String:
 	if kind == "jpeg":
 		kind = "jpg"
 	# Too big is said before the file is read into memory.
-	var limit := int((CommunityCards.ICON_GUIDE if which == "icon" else CommunityCards.ART_GUIDE)["bytes"])
+	var is_icon := which.begins_with("icon")
+	var limit := int((CommunityCards.ICON_GUIDE if is_icon else CommunityCards.ART_GUIDE)["bytes"])
 	var opened := FileAccess.open(path, FileAccess.READ)
 	if opened != null and opened.get_length() > limit:
-		var big := "The %s is at most %s (this one is %s)." % ["set icon" if which == "icon" else "art",
+		var big := "The %s is at most %s (this one is %s)." % ["set icon" if is_icon else "art",
 			PortableMode.size_words(limit), PortableMode.size_words(opened.get_length())]
 		_say(big)
 		return big
 	opened = null
 	var bytes := FileAccess.get_file_as_bytes(path)
-	var why := CommunityCards.icon_problem(bytes, kind) if which == "icon" \
+	var why := CommunityCards.icon_problem(bytes, kind) if is_icon \
 		else CommunityCards.art_problem(bytes, kind)
 	if why != "":
 		_say(why)
 		return why
-	if which == "icon":
-		icon = {"bytes": bytes, "kind": kind}
-		_icon_texture = CommunityCards.texture_from(bytes, kind)
+	if is_icon:
+		# "icon" alone is the common one: one icon, every rarity.
+		var tier := which.trim_prefix("icon_") if which.begins_with("icon_") else CommunityCards.ICON_TIERS[0]
+		if not CommunityCards.ICON_TIERS.has(tier):
+			return "No such set icon: %s." % tier
+		icon = icon.duplicate()
+		icon[tier] = {"bytes": bytes, "kind": kind}
+		_icon_textures[tier] = CommunityCards.texture_from(bytes, kind)
 	else:
 		art = {"bytes": bytes, "kind": kind}
 		_art_texture = CommunityCards.texture_from(bytes, kind)
 	_fill()
 	refresh()
-	_say("%s: %s." % ["Set icon" if which == "icon" else "Art", path.get_file()])
+	_say("%s: %s." % ["Set icon" if is_icon else "Art", path.get_file()])
 	return ""
 
 

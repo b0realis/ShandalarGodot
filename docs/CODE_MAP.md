@@ -310,6 +310,13 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `game/community_examples/` (in every export preset's include filter),
   shown in the creator's Open list and played only once saved; a short
   `.txt` beside each zip says it is a study example (only zips are read).
+  Set icons by the game's set symbol tiers (`ICON_TIERS`: common,
+  uncommon, rare, legendary — a mythic or legendary card's): one picture
+  (`icon.png`, every rarity) or one each (`icon_<tier>.png`);
+  `icon_tiers`, `icon_for_tier` (its own, else the first given),
+  `icon_pack`, `icon_entries`, `icons_problem`, `is_icon_file`,
+  `icon_tier_of`; `icon_texture(card, tier)` (the card view passes
+  `GameSkin.set_symbol_tier` of the card's own spec's rarity).
 - `game/card_forge_screen.gd` (`CardForgeScreen`): the editor screen
   (card, cost and type, rules, look; the large card, the small card and the
   card reader; New, Open (with a search, `filter_open_list`), Import,
@@ -318,7 +325,9 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   Redo, `_remember`, panels and pictures kept when unchanged; the Open
   list fills its art over frames, `_fill_art_later`; Validate's window is
   a table, `_advice_line`/`_advice_box`: the summary on top, then Verdict,
-  Check, Yours and the game's cards, the worst first), opened by Options' `CreateCard`
+  Check, Yours and the game's cards, the worst first; four set icon
+  slots, `ForgeChooseIcon_<tier>`, `clear_icon`, `_icon_words`, an empty
+  slot showing the icon it falls back to, faded), opened by Options' `CreateCard`
   button; saving, importing and deleting wait for the LAN catalogue lock
   (`CardPacks.change_refusal`).
 - LAN (protocol 32): `SgCompatibility.community_mark` (counted once per pool from the saved cards; what plays of each
