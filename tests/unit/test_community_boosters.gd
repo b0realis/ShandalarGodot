@@ -505,8 +505,113 @@ func test_the_extras_community_row_wears_its_own_medallion_and_switches_the_set(
 		assert_eq(lit.texture, GameSkin.our_art("filter_comm_on"))
 		assert_eq(dim.texture, GameSkin.our_art("filter_comm_off"))
 		assert_string_contains(tile.tooltip_text, "color, type")
-	assert_true(screen.filter.set_on(CommunityCard.SET_CODE))
-	(screen.find_child("ExtraCommunityOff", true, false) as Button).pressed.emit()
-	assert_false(screen.filter.set_on(CommunityCard.SET_CODE), "Off hides the community cards")
+	assert_false(screen.filter.set_on(CommunityCard.SET_CODE), "community cards start off")
 	(screen.find_child("ExtraCommunityOn", true, false) as Button).pressed.emit()
-	assert_true(screen.filter.set_on(CommunityCard.SET_CODE))
+	assert_true(screen.filter.set_on(CommunityCard.SET_CODE), "their own switch turns them on")
+	(screen.find_child("ExtraCommunityOff", true, false) as Button).pressed.emit()
+	assert_false(screen.filter.set_on(CommunityCard.SET_CODE), "and off again")
+
+
+func _builder() -> DeckBuilderScreen:
+	var screen: DeckBuilderScreen = load("res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	return screen
+
+
+func _shows_community(screen: DeckBuilderScreen) -> bool:
+	screen._refresh_inventory()
+	for entry in screen._inventory._visible_entries():
+		if String(entry[0].card_name).begins_with(PREFIX):
+			return true
+	return false
+
+
+func _press(screen: DeckBuilderScreen, button_name: String) -> void:
+	(screen.find_child(button_name, true, false) as Button).pressed.emit()
+
+
+## Every source the bulk buttons move, as the filter has it now.
+func _bulk_state(screen: DeckBuilderScreen) -> Array:
+	var out: Array = [screen.filter.original_cards_on]
+	if CardRegistry.optional_pack_enabled():
+		out.append(screen.filter.completion_pack_on)
+	for code in screen._bulk_codes():
+		out.append(screen.filter.set_on(code))
+	return out
+
+
+func test_community_cards_start_off_and_no_bulk_command_turns_them_on() -> void:
+	_make_set({"common": 2})
+	var screen: DeckBuilderScreen = await _builder()
+	assert_false(screen.filter.set_on(CommunityCard.SET_CODE), "off at the opening")
+	assert_false(_shows_community(screen), "and not in the Inventory")
+	assert_false(screen.filter.active(), "off is where they start, not a narrowing")
+	screen._open_extra_sets()
+	assert_false(screen._bulk_codes().has(CommunityCard.SET_CODE))
+	for button_name in ["ExtraOnly1997", "ExtraAll", "ExtraAll"]:
+		_press(screen, button_name)
+		assert_false(screen.filter.set_on(CommunityCard.SET_CODE), button_name + " leaves them off")
+	screen.filter.select_all()
+	assert_false(screen.filter.set_on(CommunityCard.SET_CODE), "the strip's Select All too")
+	assert_true(_pressed_named(screen, "ExtraCommunityOff"), "the row still says Off")
+	# Switched on by hand, they stay on through every bulk command.
+	_press(screen, "ExtraCommunityOn")
+	assert_true(_shows_community(screen))
+	for button_name in ["ExtraOnly1997", "ExtraAll", "ExtraAll"]:
+		_press(screen, button_name)
+		assert_true(screen.filter.set_on(CommunityCard.SET_CODE), button_name + " leaves them on")
+	assert_true(_pressed_named(screen, "ExtraCommunityOn"))
+	screen._refresh_inventory()
+	assert_eq(Settings.get_value(DeckBuilderScreen.EXTRAS_SETTING, {}).get("community"), true,
+		"remembered under its own key")
+
+
+func _pressed_named(screen: DeckBuilderScreen, button_name: String) -> bool:
+	return (screen.find_child(button_name, true, false) as Button).button_pressed
+
+
+func test_a_hand_turned_on_switch_comes_back_but_an_old_save_s_does_not() -> void:
+	_make_set({"common": 1})
+	Settings.set_value(DeckBuilderScreen.EXTRAS_SETTING,
+		{"original": true, "pack1": true, "sets": {CommunityCard.SET_CODE: true}}, false)
+	var old: DeckBuilderScreen = await _builder()
+	assert_false(old.filter.set_on(CommunityCard.SET_CODE),
+		"a save from when they started on is not a hand on the switch")
+	Settings.set_value(DeckBuilderScreen.EXTRAS_SETTING,
+		{"original": true, "pack1": true, "sets": {}, "community": true}, false)
+	var turned: DeckBuilderScreen = await _builder()
+	assert_true(turned.filter.set_on(CommunityCard.SET_CODE), "switched on by hand, it stays on")
+	assert_true(_shows_community(turned))
+
+
+func test_1997_shows_the_originals_alone_and_all_turns_everything_on_then_off() -> void:
+	_make_set({"common": 1})
+	var screen: DeckBuilderScreen = await _builder()
+	screen._open_extra_sets()
+	var bulk := screen.find_child("ExtraBulkRow", true, false) as HBoxContainer
+	assert_not_null(bulk, "the two buttons sit above the switches")
+	if bulk == null:
+		return
+	assert_eq((bulk.get_child(0) as Button).text, "1997")
+	assert_eq((bulk.get_child(1) as Button).text, "All")
+	assert_false((bulk.get_child(0) as Button).toggle_mode, "one press, not a switch")
+	assert_false((bulk.get_child(1) as Button).toggle_mode)
+	# With or without packs: one source off, so not everything is on.
+	_press(screen, "ExtraOriginalOff")
+	_press(screen, "ExtraAll")
+	assert_false(_bulk_state(screen).has(false), "All: every source on")
+	assert_true(_pressed_named(screen, "ExtraOriginalOn"), "the row follows at once")
+	_press(screen, "ExtraAll")
+	assert_false(_bulk_state(screen).has(true), "All again, every one on: all off")
+	assert_true(_pressed_named(screen, "ExtraOriginalOff"))
+	assert_eq(screen._inventory.entry_count(), 0, "nothing on, nothing shown")
+	_press(screen, "ExtraAll")
+	assert_false(_bulk_state(screen).has(false), "and on again")
+	_press(screen, "ExtraOnly1997")
+	var only := [true]
+	for _i in _bulk_state(screen).size() - 1:
+		only.append(false)
+	assert_eq(_bulk_state(screen), only, "1997: the 1997 cards on, every pack off")
+	assert_true(_pressed_named(screen, "ExtraOriginalOn"))
+	assert_eq(screen._inventory.entry_count(), 897, "only the 1997 cards")

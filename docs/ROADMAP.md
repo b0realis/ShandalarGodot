@@ -18973,6 +18973,21 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-18 — Extras: 1997 and All (0.70.1)
+
+The owner: *"at the top implement 2 buttons side by side: one is 1997
+(selects only original cards on press and deselects all other) and ALL
+(selects/deselects all) - both buttons are just one state press not on/off
+toggle"*. The Deck Builder's Extras window now has them above its
+switches, in view however far the list is scrolled
+(`DeckBuilderScreen._extra_bulk_row`):
+
+- **1997**: the original cards on, Pack 1 and every pack's sets off.
+- **All**: every source on; when every one is on already, all of them off
+  (nothing shown until one is switched back on).
+- The switches below follow at once, and the next opening remembers the
+  result like any switch (`deck_builder_extras`).
+
 ## 2026-11-17 — A portable game (0.70.1)
 
 Issue #5's follow-up (2026-11-04, its reporter, after the

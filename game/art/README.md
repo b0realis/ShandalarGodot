@@ -175,9 +175,10 @@ polygons in this script.
 
 The community cards' medallion is three figures, head and shoulders, two
 behind and one in front with a gap cut round it, carved by `_community`
-into the same stone. Two spare marks drawn for the same switch, a quill
-(`_spare_quill`) and a cart wheel (`_spare_cart_wheel`), stay in the
-script for later and are written nowhere.
+into the same stone. Three spare marks drawn for the same switch, a quill
+(`_spare_quill`), a cart wheel (`_spare_cart_wheel`) and the Manalink
+mark (`_spare_manalink`), stay in the script for later; they are never
+written here, only into a folder named with `-- --spares=<folder>`.
 
 | File | Artwork | Generator | License | SHA-256 |
 |---|---|---|---|---|

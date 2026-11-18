@@ -510,8 +510,11 @@ func select_all() -> void:
 		colors[color] = true
 	for type_flag in TYPE_ORDER:
 		types[type_flag] = true
+	# Community cards keep their own switch (owner 2026-11-18): only it
+	# turns them on, never a bulk command.
 	for code in CardRegistry.active_set_order():
-		sets[code] = true
+		if code != CommunityCard.SET_CODE:
+			sets[code] = true
 	gold = true
 	# The Gold button's mini-menu mode too (2026-10-03): `Matching all
 	# selected color buttons` survived, and with all five colours lit no
@@ -567,8 +570,9 @@ func active() -> bool:
 	for type_flag in types:
 		if not types[type_flag]:
 			return true
+	# Community cards off is where they start, not a narrowing.
 	for code in sets:
-		if not sets[code]:
+		if not sets[code] and code != CommunityCard.SET_CODE:
 			return true
 	return not gold or gold_mode != Gold.ALL or _needle != "" or cost_mode != Cost.OFF \
 		or power_mode != Rank.OFF or toughness_mode != Rank.OFF \

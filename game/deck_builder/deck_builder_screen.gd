@@ -1097,8 +1097,9 @@ func _open_extra_sets() -> void:
 	scroll.name = "ExtraSetsScroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	dialog.body().add_child(scroll)
 	var body := VBoxContainer.new()
+	dialog.body().add_child(_extra_bulk_row(body))
+	dialog.body().add_child(scroll)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
 	body.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1200,6 +1201,87 @@ func _open_extra_sets() -> void:
 	_show_dialog(dialog)
 
 
+## [QoL] TWO ONE-PRESS BUTTONS over the switches (owner 2026-11-18), kept
+## in view above the scrolling rows: `1997` shows the original cards alone
+## (every pack off), `All` turns every source on — or, when every one is on
+## already, all of them off. Neither moves Community cards: those start
+## off and only their own switch turns them on ([method _restore_extras]).
+func _extra_bulk_row(rows: VBoxContainer) -> HBoxContainer:
+	var bulk := HBoxContainer.new()
+	bulk.name = "ExtraBulkRow"
+	bulk.alignment = BoxContainer.ALIGNMENT_CENTER
+	bulk.add_theme_constant_override("separation", 14)
+	var only_1997 := OriginalDialog.button("1997", Vector2(96, 30))
+	only_1997.name = "ExtraOnly1997"
+	only_1997.tooltip_text = "Only the original 1997 cards: every pack switched off.\n" \
+		+ "Community cards keep their own switch."
+	only_1997.pressed.connect(func() -> void: _bulk_extras(true, false, rows))
+	bulk.add_child(only_1997)
+	var every := OriginalDialog.button("All", Vector2(96, 30))
+	every.name = "ExtraAll"
+	every.tooltip_text = "Every source on; when all are on already, all off.\n" \
+		+ "Community cards keep their own switch."
+	every.pressed.connect(func() -> void:
+		var on := not _bulk_all_on()
+		_bulk_extras(on, on, rows))
+	bulk.add_child(every)
+	return bulk
+
+
+## The expansions the bulk buttons move: every one on offer but the
+## community cards.
+func _bulk_codes() -> Array[String]:
+	var out: Array[String] = []
+	for code in CardRegistry.extra_set_order():
+		if code != CommunityCard.SET_CODE:
+			out.append(code)
+	return out
+
+
+## Whether every source the bulk buttons move is on (Pack 1 counts only
+## while it is enabled — its row is greyed out otherwise).
+func _bulk_all_on() -> bool:
+	if not filter.original_cards_on:
+		return false
+	if CardRegistry.optional_pack_enabled() and not filter.completion_pack_on:
+		return false
+	for code in _bulk_codes():
+		if not filter.set_on(code):
+			return false
+	return true
+
+
+## The 1997 cards to [param original], Pack 1 and every expansion but the
+## community cards to [param packs]; the rows below show it at once.
+func _bulk_extras(original: bool, packs: bool, rows: VBoxContainer) -> void:
+	filter.original_cards_on = original
+	if CardRegistry.optional_pack_enabled():
+		filter.completion_pack_on = packs
+	for code in _bulk_codes():
+		if filter.set_on(code) != packs:
+			filter.toggle_set(code)
+	for row in rows.get_children():
+		var id := String(row.name).trim_prefix("ExtraSourceRow_")
+		var on_button := row.find_child("Extra%sOn" % id, true, false) as Button
+		var off_button := row.find_child("Extra%sOff" % id, true, false) as Button
+		if on_button == null or off_button == null:
+			continue
+		var lit := not on_button.disabled and _extra_source_on(id)
+		on_button.set_pressed_no_signal(lit)
+		off_button.set_pressed_no_signal(not lit)
+	_refresh_inventory()
+
+
+## Whether the Extras row [param id] is on right now.
+func _extra_source_on(id: String) -> bool:
+	match id:
+		"Original":
+			return filter.original_cards_on
+		"Pack1":
+			return filter.completion_pack_on
+	return filter.set_on(String(FilterBar.SOURCE_KEYS.get(id, "")))
+
+
 ## Matching radio pairs: one lit medallion per source. Always show every
 ## row, even without its ZIP, so the layout does not jump between profiles.
 func _extra_source_row(body: VBoxContainer, id: String, title: String,
@@ -1247,12 +1329,21 @@ func _extra_source_row(body: VBoxContainer, id: String, title: String,
 ## Only the expansion codes on offer right now are written: a pack that is
 ## off in Options has no switch to remember, and its cards come back on,
 ## as [method _on_card_packs_changed] promises, when it is enabled again.
+##
+## COMMUNITY CARDS ARE REMEMBERED APART, under `community`, and only
+## while there are some (owner 2026-11-18: off unless the player switches
+## them on): a `sets` entry for them, which every save wrote while they
+## started on, is not read.
 func _extras_state() -> Dictionary:
 	var sets := {}
-	for code in CardRegistry.extra_set_order():
-		sets[code] = filter.set_on(code)
-	return {"original": filter.original_cards_on,
+	var state := {"original": filter.original_cards_on,
 		"pack1": filter.completion_pack_on, "sets": sets}
+	for code in CardRegistry.extra_set_order():
+		if code == CommunityCard.SET_CODE:
+			state["community"] = filter.set_on(code)
+		else:
+			sets[code] = filter.set_on(code)
+	return state
 
 
 ## Put the remembered Extras switches back on [member filter], before the
@@ -1266,6 +1357,10 @@ func _extras_state() -> Dictionary:
 ## word reads as meant (yes/no/on/off/true/false/1/0) and anything else as
 ## on, the opening state.
 func _restore_extras() -> void:
+	# Community cards start off, whether or not any are in the pool yet:
+	# a set that turns up later keeps the switch it already has
+	# ([method _on_card_packs_changed]).
+	filter.sets[CommunityCard.SET_CODE] = false
 	var saved: Variant = Settings.get_value(EXTRAS_SETTING, {})
 	if saved is Dictionary and not saved.is_empty():
 		filter.original_cards_on = Settings.coerce(saved.get("original", true), true)
@@ -1273,8 +1368,10 @@ func _restore_extras() -> void:
 		var sets: Variant = saved.get("sets", {})
 		if sets is Dictionary:
 			for code in CardRegistry.extra_set_order():
-				if sets.has(code) and filter.set_on(code) != Settings.coerce(sets[code], true):
+				if code != CommunityCard.SET_CODE and sets.has(code) \
+						and filter.set_on(code) != Settings.coerce(sets[code], true):
 					filter.toggle_set(code)
+		filter.sets[CommunityCard.SET_CODE] = Settings.coerce(saved.get("community", false), false)
 	_saved_extras = _extras_state()
 
 

@@ -187,6 +187,16 @@ func _init() -> void:
 			[_spider(), SPIDER_LIT, SPIDER_DARK],
 			[_hourglass(), MARK_LIT, MARK_DARK]], RIM),
 		dir, "poison_counter.png")
+	# The spare community marks, written only when asked, and never into
+	# `game/art/`: `-- --spares=<folder>`.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--spares="):
+			var spares := arg.trim_prefix("--spares=")
+			DirAccess.make_dir_recursive_absolute(spares)
+			for pair in [["quill", _spare_quill()], ["cart_wheel", _spare_cart_wheel()],
+					["manalink", _spare_manalink()]]:
+				_write(_stone_medallion(true, pair[1]), spares, "spare_%s_on.png" % pair[0])
+				_write(_stone_medallion(false, pair[1]), spares, "spare_%s_off.png" % pair[0])
 	quit()
 
 
@@ -648,9 +658,11 @@ func _bust(base: Vector2, half_width: float, height: float) -> PackedVector2Arra
 	return out
 
 
-## SPARE COMMUNITY MARKS, kept for later and written nowhere: the two
-## shapes shown beside the three figures when those were chosen
-## (2026-11-18). Either draws in the stone medallion as it stands, e.g.
+## SPARE COMMUNITY MARKS, kept for later (owner 2026-11-18: "save all
+## other icons"): the shapes shown beside the three figures when those
+## were chosen — a quill, a cart wheel and the Manalink mark. Not written
+## into `game/art/`; `-- --spares=<folder>` writes their stone medallions
+## there, and each draws as it stands, e.g.
 ## `_stone_medallion(true, _spare_quill())`.
 ##
 ## A quill: a feather vane split by its shaft, notched along its edge,
@@ -683,6 +695,49 @@ func _spare_cart_wheel() -> Array:
 	ops.append({"op": "add", "poly": _circle_poly(c, 0.12, 32)})
 	ops.append({"op": "sub", "poly": _circle_poly(c, 0.05, 24)})
 	return ops
+
+
+## The Manalink mark ([ManalinkGlobe], `manalink_globe.png`) carved into
+## stone: the wire globe on the left — equator, two latitudes and three
+## meridians cut through it — and the sky's great four-pointed star with
+## a small one above it on the right, a gap cut round the globe.
+func _spare_manalink() -> Array:
+	var g := Vector2(0.37, 0.40)
+	var r := 0.31
+	var ops: Array = []
+	ops.append({"op": "add", "poly": _sparkle(Vector2(0.73, 0.71), 0.22, 0.03)})
+	ops.append({"op": "add", "poly": _sparkle(Vector2(0.82, 0.26), 0.115, 0.015)})
+	ops.append({"op": "sub", "poly": _circle_poly(g, r + 0.045, 64)})
+	ops.append({"op": "add", "poly": _circle_poly(g, r, 64)})
+	var w := 0.022
+	for dy in [-0.155, 0.0, 0.155]:
+		var half: float = sqrt(maxf(r * r - dy * dy, 0.0))
+		ops.append({"op": "sub", "poly": PackedVector2Array([
+			Vector2(g.x - half, g.y + dy - w), Vector2(g.x + half, g.y + dy - w),
+			Vector2(g.x + half, g.y + dy + w), Vector2(g.x - half, g.y + dy + w)])})
+	ops.append({"op": "sub", "poly": PackedVector2Array([
+		Vector2(g.x - w, g.y - r), Vector2(g.x + w, g.y - r),
+		Vector2(g.x + w, g.y + r), Vector2(g.x - w, g.y + r)])})
+	for side in [-1.0, 1.0]:
+		ops.append({"op": "sub", "poly": _strip(Vector2(g.x, g.y - r + 0.01),
+			Vector2(g.x + side * 0.30, g.y), Vector2(g.x, g.y + r - 0.01), 0.02, 0.02, 20)})
+	return ops
+
+
+## A four-pointed star: four tips [param arm] out along the axes, each
+## flank a curve bent in toward a point [param pinch] out on the diagonal.
+func _sparkle(c: Vector2, arm: float, pinch: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for i in 4:
+		var a := deg_to_rad(90.0 * float(i) - 90.0)
+		var tip := c + Vector2.from_angle(a) * arm
+		var next := c + Vector2.from_angle(a + PI / 2.0) * arm
+		var bend := c + Vector2.from_angle(a + PI / 4.0) * pinch
+		for n in 16:
+			var t := float(n) / 16.0
+			var u := 1.0 - t
+			out.append(tip * (u * u) + bend * (2.0 * u * t) + next * (t * t))
+	return out
 
 
 ## A circle as a polygon, so the stone medallion (polygons only) can carve it.

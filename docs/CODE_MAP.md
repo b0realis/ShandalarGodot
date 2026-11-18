@@ -580,10 +580,17 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
   `filter_{usg,ulg,uds}_{on,off}.png`: the gold gears, hammer and flask and
   their carved-stone medallions; drawn by `tools/draw_our_art.gd`
   (`_gears`, `_hammer`, `_flask`), hashed in `game/art/README.md`.
+- `game/deck_builder/deck_builder_screen.gd` Extras window: `_extra_bulk_row`
+  (the one-press 1997 and All buttons over the switches), `_bulk_codes`,
+  `_bulk_all_on`, `_bulk_extras`, `_extra_source_on`; the community
+  cards' switch starts off, is moved by no bulk command (nor
+  `DeckFilter.select_all`) and is remembered under its own `community`
+  key; `FilterBar.SOURCE_KEYS` names each row's medallion.
 - `game/art/filter_comm_{on,off}.png`: the community cards' carved-stone
   medallion (three figures) for the Extras window's Community row; drawn by
-  `tools/draw_our_art.gd` (`_community`, with the spare `_spare_quill` and
-  `_spare_cart_wheel` kept unwritten), hashed in `game/art/README.md`.
+  `tools/draw_our_art.gd` (`_community`; the spare `_spare_quill`,
+  `_spare_cart_wheel` and `_spare_manalink` are written only into a
+  `-- --spares=<folder>`), hashed in `game/art/README.md`.
 - `tools/pack_10_urza_block.py`, `tools/test_pack_10_urza_block.py`:
   pinned-printing fetcher over the three sets, deterministic local builder
   and bounded archive validation tests.

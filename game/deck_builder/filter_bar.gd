@@ -445,6 +445,12 @@ static func _paint_extra_medallion(button: Button, code: String) -> void:
 
 ## Square, bevelled pack tiles follow the original set strip. Emblems stay
 ## clear of the On/Off captions; 1997 uses numerals like Unlimited/promos.
+## The Extras rows' ids and the key of each one's medallion art
+## (`filter_<key>_on/off`): a set code, or `source` (the 1997 cards) and
+## `pack1`.
+const SOURCE_KEYS := {"Original": "source", "Pack1": "pack1", "Pack2": "fem", "Pack3": "ice", "Pack4": "hml", "Pack5": "all", "Pack6": "por", "SecondAge": "p02", "Pack7": "5ed", "Pack8": "mir", "Visions": "vis", "Weatherlight": "wth", "Pack9": "tmp", "Stronghold": "sth", "Exodus": "exo", "Pack10": "usg", "Legacy": "ulg", "Destiny": "uds", "Community": "comm"}
+
+
 static func dress_source_medallion(button: Button, source: String) -> void:
 	button.custom_minimum_size = Vector2(48, 48)
 	button.focus_mode = Control.FOCUS_ALL
@@ -453,7 +459,7 @@ static func dress_source_medallion(button: Button, source: String) -> void:
 	var face := GameSkin.font("font_body")
 	if face != null:
 		button.add_theme_font_override("font", face)
-	var key: String = {"Original": "source", "Pack1": "pack1", "Pack2": "fem", "Pack3": "ice", "Pack4": "hml", "Pack5": "all", "Pack6": "por", "SecondAge": "p02", "Pack7": "5ed", "Pack8": "mir", "Visions": "vis", "Weatherlight": "wth", "Pack9": "tmp", "Stronghold": "sth", "Exodus": "exo", "Pack10": "usg", "Legacy": "ulg", "Destiny": "uds", "Community": "comm"}[source]
+	var key: String = SOURCE_KEYS[source]
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		var selected: bool = state.contains("pressed")
 		var art := GameSkin.our_art("filter_" + key + ("_on" if selected else "_off"))
