@@ -18973,6 +18973,24 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-19 — The big card's type line always under its name
+
+The owner: *"The type font should be always [a bit] smaller no?"* It was,
+by design — 1997 set the name in BigCardTitle 17 pt and the type line in
+BigCardSubtitle 15 pt, and the card ports that as 22 over 20 — except where
+a long name steps down its one-line ladder to fit: the type line did not
+follow, so a card with a long name and a short type printed its type
+bigger than its name (18 under 20). Three mockups (now; two sizes under
+the name; that and one size smaller everywhere): the owner picked the
+second.
+
+- `CardPreview.show_card`: the type line's size is its own ladder's fit,
+  and never more than the name's size less the 1997 gap
+  (`_name_size - _type_size`, 2). Cards whose name keeps its full size
+  are unchanged.
+- `tests/ui/test_card_preview.gd`: `test_the_type_line_stays_two_sizes_under_the_name`
+  (every card in the pool; some long name must have stepped down).
+
 ## 2026-11-19 — The big card's type line: one baseline for every card
 
 The owner, comparing two big cards: one type line *"sliiightly lower"*,

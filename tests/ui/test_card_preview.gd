@@ -496,3 +496,20 @@ func test_every_type_line_stands_on_one_baseline() -> void:
 	for text in baselines:
 		assert_almost_eq(float(baselines[text]), CardPreview.TYPE_BASELINE * CardPreview.SIZE.y, 0.01,
 			"'%s' stands on the line" % text)
+
+
+## THE TYPE LINE ALWAYS BELOW THE NAME (owner 2026-11-19, from mockups):
+## a long name steps down its ladder, and the type line now follows it,
+## two sizes under — never bigger than the name it sits beneath.
+func test_the_type_line_stays_two_sizes_under_the_name() -> void:
+	var gap := _preview._name_size - _preview._type_size
+	assert_eq(gap, 2, "1997's 17 pt name over a 15 pt type line")
+	var shrunk := 0
+	for card_name in CardRegistry.all_names():
+		_show(card_name)
+		var name_points := _preview._name_label.get_theme_font_size("font_size")
+		var type_points := _preview._type_label.get_theme_font_size("font_size")
+		if name_points < _preview._name_size:
+			shrunk += 1
+		assert_lte(type_points, name_points - gap, "'%s': its type under its name" % card_name)
+	assert_gt(shrunk, 0, "some long name stepped down, and its type line with it")

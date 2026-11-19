@@ -994,10 +994,17 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 			[_name_size, _name_size - 2, _name_size - 4, _name_size - 6,
 				_name_size - 8]))
 	var type_w := (0.845 - 0.075) * SIZE.x
+	# THE TYPE LINE ALWAYS BELOW THE NAME (owner 2026-11-19, picked from
+	# mockups): 1997 set it 15 pt to the name's 17, and so does
+	# [member _type_size] to [member _name_size] — but a long name steps down
+	# its ladder and the type line did not follow, so a card could print
+	# its type bigger than its name. It stays two sizes under the name the
+	# card wears, as well as fitting its own strip.
+	var name_points := _name_label.get_theme_font_size("font_size")
+	var type_points := _fit_one_line(_title_font, _type_label.text, type_w,
+		[_type_size, _type_size - 2, _type_size - 4, _type_size - 6, _type_size - 8])
 	_type_label.add_theme_font_size_override("font_size",
-		_fit_one_line(_title_font, _type_label.text, type_w,
-			[_type_size, _type_size - 2, _type_size - 4, _type_size - 6,
-				_type_size - 8]))
+		mini(type_points, name_points - (_name_size - _type_size)))
 	_seat_type_line()
 	_lay_out_changed_type(changed)
 	# The set symbol: the printed one for the five expansions, this
