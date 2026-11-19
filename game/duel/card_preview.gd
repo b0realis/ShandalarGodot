@@ -629,7 +629,8 @@ func _init() -> void:
 	_anchor(_type_label, 0.075, 0.552, 0.845, 0.604)
 	_type_label.add_theme_font_override("font", _title_font)
 	_type_label.add_theme_font_size_override("font_size", _type_size)
-	_type_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Set on [constant TYPE_BASELINE] by [method _seat_type_line].
+	_type_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_type_label.clip_text = true
 	_outline(_type_label)
 	add_child(_type_label)
@@ -997,6 +998,7 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 		_fit_one_line(_title_font, _type_label.text, type_w,
 			[_type_size, _type_size - 2, _type_size - 4, _type_size - 6,
 				_type_size - 8]))
+	_seat_type_line()
 	_lay_out_changed_type(changed)
 	# The set symbol: the printed one for the five expansions, this
 	# project's Roman II and IV for Unlimited and Fourth Edition, and
@@ -1240,8 +1242,36 @@ func _lay_out_changed_type(changed: Dictionary) -> void:
 	var shaped: TextParagraph = ManaText.build(_type_changed.text, _title_font, points,
 		(0.845 - 0.075) * SIZE.x, 0, _type_changed.emphasis)["para"]
 	var line := shaped.get_line_size(0).y
-	_type_changed.offset_top = maxf(0.0, roundf((strip - line) / 2.0))
+	# On the plain label's baseline ([method _seat_type_line]).
+	_type_changed.offset_top = roundf(_type_top_for(shaped.get_line_ascent(0)))
 	_type_changed.offset_bottom = _type_changed.offset_top + ceilf(line - strip) + 1.0
+
+
+## THE TYPE LINE'S BASELINE, one for every card (owner 2026-11-19: the
+## community card's "Artifact" a sliiightly lower, a game card's "Artifact
+## Creature — Golem" sliiiightly higher). The title face has no dash, so a
+## line with "—" took a taller fallback face's line box and sat about
+## seven pixels lower than a line without one; centred on the strip, the
+## one without sat at 0.587 of the card, the one with at 0.603. Every line
+## now stands on the same baseline between the two.
+const TYPE_BASELINE := 0.593
+
+
+## How far below the strip's top a line whose shaped ascent is
+## [param ascent] starts, to stand on [constant TYPE_BASELINE].
+static func _type_top_for(ascent: float) -> float:
+	return (TYPE_BASELINE - 0.552) * SIZE.y - ascent
+
+
+## The plain type label on [constant TYPE_BASELINE], at the size its
+## ladder chose, its box one line tall (a pixel to spare) so nothing clips.
+func _seat_type_line() -> void:
+	var points := _type_label.get_theme_font_size("font_size")
+	var shaped := TextLine.new()
+	shaped.add_string(_type_label.text, _title_font, points)
+	var strip := (0.604 - 0.552) * SIZE.y
+	_type_label.offset_top = _type_top_for(shaped.get_line_ascent())
+	_type_label.offset_bottom = _type_label.offset_top + ceilf(shaped.get_size().y - strip) + 1.0
 
 
 # --------------------------------------------------------------------------

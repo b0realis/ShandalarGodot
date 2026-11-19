@@ -18973,6 +18973,24 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-19 — The big card's type line: one baseline for every card
+
+The owner, comparing two big cards: one type line *"sliiightly lower"*,
+the other *"sliiiightly higher"*. The cause was the dash: the title face
+has no "—", so a type line with one (`Creature — Angel`) took a taller
+fallback face's line box, the label grew past its strip and set the line
+about seven pixels lower than a line without one (`Instant`, `Artifact`).
+Centred on the strip, the one without stood at 0.587 of the card, the one
+with at 0.603.
+
+- `CardPreview.TYPE_BASELINE` (0.593, between the two): `_seat_type_line`
+  sets the plain label on it from the shaped line's own ascent
+  (`_type_top_for`), its box one line tall so nothing clips; the changed
+  type line of a text change (`_lay_out_changed_type`, issue #9) stands on
+  the same baseline.
+- `tests/ui/test_card_preview.gd`: `test_every_type_line_stands_on_one_baseline`
+  (Serra Angel, Grizzly Bears, Lightning Bolt, Black Lotus).
+
 ## 2026-11-18 — Hotseat: a territory for each seat; version 0.70.2
 
 The owner: *"Magic battle hotseat shoudl have your territory setting for

@@ -475,3 +475,24 @@ func test_with_no_imported_sheet_the_card_falls_back_to_the_braces() -> void:
 	ManaIcons._atlas_cache.clear()
 	assert_eq((built["icons"] as Dictionary).size(), 0, "nothing is drawn")
 	assert_eq(visible, lines, "and the braces still fit the box")
+
+
+## ONE BASELINE FOR EVERY TYPE LINE (owner 2026-11-19: a community card's
+## "Artifact" a sliiightly lower, a game card's "Artifact Creature — Golem"
+## sliiiightly higher). The title face has no dash; a line with "—" took
+## the taller fallback face's line box and sat about seven pixels lower.
+func test_every_type_line_stands_on_one_baseline() -> void:
+	var baselines := {}
+	for card_name in ["Serra Angel", "Lightning Bolt", "Grizzly Bears", "Black Lotus"]:
+		_show(card_name)
+		var label: Label = _preview._type_label
+		var shaped := TextLine.new()
+		shaped.add_string(label.text, _preview._title_font, label.get_theme_font_size("font_size"))
+		assert_eq(label.vertical_alignment, VERTICAL_ALIGNMENT_TOP)
+		assert_gte(label.size.y, shaped.get_size().y, "'%s' is not clipped" % label.text)
+		baselines[label.text] = label.position.y + shaped.get_line_ascent()
+	assert_eq(baselines.keys().filter(func(t: String) -> bool: return t.contains("—")).size(), 2,
+		"two lines with a dash, two without")
+	for text in baselines:
+		assert_almost_eq(float(baselines[text]), CardPreview.TYPE_BASELINE * CardPreview.SIZE.y, 0.01,
+			"'%s' stands on the line" % text)
