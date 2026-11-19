@@ -265,8 +265,13 @@ func test_the_reasons_under_the_card_and_its_name_read_clearly() -> void:
 	assert_gt(border.get_index(), preview._frame_bg.get_index(), "over the frame")
 	assert_lt(border.get_index(), preview._name_label.get_index(), "under the name")
 	assert_lt(border.get_index(), preview._art.get_index(), "under the art")
+	# The owner, 2026-11-19: the name "a biiit lower" — the cost with it.
+	assert_almost_eq(preview._name_label.anchor_top, CardPreview.NAME_ROW.x + CardPreview.COMMUNITY_ROW_DROP, 0.0001)
+	assert_almost_eq(preview._cost_holder.anchor_top, CardPreview.COST_ROW.x + CardPreview.COMMUNITY_ROW_DROP, 0.0001)
 	preview.show_card(CardInstance.new(CardRegistry.get_card("Ornithopter"), -1, 0))
 	assert_false(border.visible, "a game card wears none")
+	assert_almost_eq(preview._name_label.anchor_top, CardPreview.NAME_ROW.x, 0.0001, "a game card's name stays put")
+	assert_almost_eq(preview._cost_holder.anchor_bottom, CardPreview.COST_ROW.y, 0.0001)
 
 
 

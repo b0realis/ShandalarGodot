@@ -583,7 +583,7 @@ func _init() -> void:
 
 	# NAME + COST on the frame's TOP BORDER (no band behind them).
 	_name_label = Label.new()
-	_anchor(_name_label, 0.055, 0.002, 0.68, 0.060)
+	_anchor(_name_label, 0.055, NAME_ROW.x, 0.68, NAME_ROW.y)
 	_name_label.add_theme_font_size_override("font_size", _name_size)
 	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_name_label.clip_text = true
@@ -591,7 +591,7 @@ func _init() -> void:
 	_outline(_name_label)
 	add_child(_name_label)
 	_cost_holder = Control.new()
-	_anchor(_cost_holder, 0.68, 0.004, 0.945, 0.058)
+	_anchor(_cost_holder, 0.68, COST_ROW.x, 0.945, COST_ROW.y)
 	add_child(_cost_holder)
 
 	# SET SYMBOL at the right-hand end of that middle border, just below
@@ -852,8 +852,21 @@ func _needed_text_top(text: String, size: int) -> float:
 ## five pixels of the card's edge).
 var _community_border: Panel
 
+## The name's and the cost's rows on the top border (top, bottom), and how
+## much lower both sit on a community card (owner 2026-11-19: "a biiit
+## lower") — its border takes the edge the name starts at; game cards keep
+## the measured rows.
+const NAME_ROW := Vector2(0.002, 0.060)
+const COST_ROW := Vector2(0.004, 0.058)
+const COMMUNITY_ROW_DROP := 3.0 / CARD_H
+
 func _wear_border(d: CardData) -> void:
 	var community := d.set_code == CommunityCard.SET_CODE
+	var drop := COMMUNITY_ROW_DROP if community else 0.0
+	_name_label.anchor_top = NAME_ROW.x + drop
+	_name_label.anchor_bottom = NAME_ROW.y + drop
+	_cost_holder.anchor_top = COST_ROW.x + drop
+	_cost_holder.anchor_bottom = COST_ROW.y + drop
 	if not community:
 		if _community_border != null:
 			_community_border.visible = false

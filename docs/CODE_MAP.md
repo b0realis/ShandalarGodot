@@ -207,7 +207,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   type line and rules, only where the engine's layer 3 changed them, the
   changed words in italics (`ManaText` italic ranges); "Original type" stays
   printed (issue #9). `_wear_border`: a community card's border lies on
-  the frame, under the art and the lettering.
+  the frame, under the art and the lettering, and its name and cost rows
+  (`NAME_ROW`, `COST_ROW`) sit `COMMUNITY_ROW_DROP` lower.
 - `test_issue_7_payment_color.gd` (tests/ui): a payment click on a dual land,
   Birds, City of Brass, Black Lotus or a painland taps the color still owed;
   the rest of the cost breaks a tie; real choices and extra leftover mana
