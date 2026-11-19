@@ -18973,6 +18973,42 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-19 — A player's report: one tune under a plugin's duel; Extras in the adventure, and Only
+
+A player's report on 0.70 and the Last Refuge plugin: *"in the battles …
+two songs playing simultaneously and I am trying to complete the
+pledge"*, and *"the filters in the deck editor is missing some of the sets
+to be able to show like ONLY homelands or only Fallen Empires"*. The
+owner: go for both.
+
+- **One tune under every adventure duel.** The Last Refuge's pledge duels
+  and its Ebon Crown duel are fought in the giver's town, and the town's
+  own tune (the place's tune, `WorldSoundscape`) played on under the
+  duel's — the slip a ruled town once had (part B, H2-2), which every
+  mainland duel already rested. `WorldDuels` now rests the place's tune as
+  any duel is dealt (`WorldDuels.place_tune_off`), whoever holds it;
+  `PluginJourney._result` brings it back, the hero in the town again.
+- **Extras in the adventure's Deck Builder** (the 2026-10-23 ruling
+  reversed: Extras was absent there, and the set strip holds the eight
+  1997 sets alone, so a hero's Fallen Empires or Homelands cards could not
+  be shown apart). It filters the hero's own cards and never adds one; it
+  offers only the sets the hero's cards were first printed in
+  (`DeckFilter.first_printed_in` — the Forests nearly every pack reprints
+  are 1997's), in a window sized to its rows (`_extras_height`); its
+  switches start all on at each visit and are never written, so the free
+  builder's stay its own. A town's bar fits Sell and Extras together.
+- **Only**, on every Extras row in both builders: that source on and every
+  other off (`DeckBuilderScreen._only_extra_source`); the color, type and
+  search filters stay. The rows' gap 14 → 10 so the longest title, both
+  medallions and Only fit the narrowest panel (390 px).
+- Help (the adventure's deck builder), `pages/` (Extras), player-files,
+  the plugin doc and the adventure notes say so.
+- Tests: `test_refuge_journey.gd` (`test_the_town_s_tune_rests_under_a_pledge_duel`),
+  `test_adventure_builder.gd` (`test_extras_shows_the_hero_s_cards_one_set_alone`;
+  Extras now shown), `test_pack_2_fallen_empires.gd`
+  (`test_only_shows_one_source_alone`), `test_c3_f7_builder_opening.gd`
+  (Sell and Extras fit a town's bar).
+
 ## 2026-11-19 — The big card's type line always under its name
 
 The owner: *"The type font should be always [a bit] smaller no?"* It was,

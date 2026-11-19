@@ -1087,6 +1087,25 @@ static func _sets_holding(card_name: String, completion: bool, original: bool) -
 	return (_set_tables[index] as Dictionary).get(card_name, PackedStringArray())
 
 
+## Whether [param card_name] was first printed in the Extras source
+## [param source] ([constant FilterBar.SOURCE_KEYS]'s values: `source` the
+## 1997 cards, `pack1` Pack 1's new names, else a set code) — its own
+## printing ([member CardData.set_code]), not a reprint: the Forests a hero
+## holds are 1997's, though Ice Age, Portal and most packs print them too.
+## What the adventure's Extras asks of the hero's cards ([method
+## AdventureBuilder._offers_source]).
+static func first_printed_in(card_name: String, source: String) -> bool:
+	if not CardRegistry.has_card(card_name):
+		return false
+	var code := CardRegistry.get_card(card_name).set_code
+	match source:
+		"source":
+			return CardRegistry.SET_ORDER.has(code) and not CardRegistry.is_completion_card(card_name)
+		"pack1":
+			return CardRegistry.optional_pack_enabled() and CardRegistry.is_completion_card(card_name)
+	return code == source
+
+
 ## ONE PASS PER SET, NOT ONE ASK PER CARD PER SET. [method
 ## CardRegistry.card_in_set] can only admit a name to a set it is listed
 ## in — an expansion's names, Pack 1's completed set lists

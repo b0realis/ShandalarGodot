@@ -950,7 +950,10 @@ opt-in engine. What was found and fixed:
   creature again (the lair is spent as it is entered). A duel over as it is
   dealt (a hero at no life) reaches its pane (its end deferred while it is
   dealt). [Ours: 1997 slip] a ruled town's duel rests the town's tune, as a
-  meeting's and a lair's do — 1997 played both tunes at once.
+  meeting's and a lair's do — 1997 played both tunes at once. Since
+  2026-11-19 `WorldDuels` itself rests the place's tune as any duel is
+  dealt (a player's report: the Last Refuge's pledge duels, fought in the
+  giver's town, still played both); bringing it back stays the holder's.
 - **Saves.** Closing the window under a news flash saves nothing (it held
   half a tick; the last save stands and its dice bring the news again).
   The autosave made as a creature is met with no card to stake is kept, as
@@ -1914,6 +1917,10 @@ s30 is a guide only.)
   `StarterDeck` (the first deck by the 1997 rules), `AdventureBuilder`,
   `HeroStats`. "Built: the first deck, the deck builder and the hero's
   stats".
+- **2026-11-19** — A player's report (*"show like ONLY homelands or only
+  Fallen Empires"*) and the owner's go: Extras is back in the adventure's
+  deck builder as a filter of the hero's own cards — only the sets they
+  were first printed in, each row with its Only, nothing remembered.
 - **2026-10-23** — Owner: the journal scrolls (gold bar); every tab of the
   hero pane the Hero tab's size; "check how whole gui/map works on
   different resolutions", "smaller (steam deck) resolutions" and touch,

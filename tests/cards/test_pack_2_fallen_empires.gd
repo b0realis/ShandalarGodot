@@ -85,6 +85,28 @@ func test_each_extra_can_be_hidden_without_disabling_packs_or_editing_the_deck()
 	assert_true((screen.find_child("ExtraPack1Off", true, false) as Button).button_pressed)
 	assert_eq(screen._inventory.entry_count(), 897)
 
+func test_only_shows_one_source_alone() -> void:
+	# A player's report, 2026-11-19: *"show like ONLY homelands or only
+	# Fallen Empires"*.
+	var screen: DeckBuilderScreen = load("res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	screen._open_extra_sets()
+	var only_fe := screen.find_child("ExtraPack2Only", true, false) as Button
+	assert_not_null(only_fe)
+	if only_fe == null:
+		return
+	assert_true((screen.find_child("ExtraPack1Only", true, false) as Button).disabled, "Pack 1 is off")
+	only_fe.pressed.emit()
+	assert_eq(screen._inventory.entry_count(), 102, "Fallen Empires alone")
+	assert_false(screen.filter.original_cards_on)
+	assert_true((screen.find_child("ExtraPack2On", true, false) as Button).button_pressed)
+	assert_true((screen.find_child("ExtraOriginalOff", true, false) as Button).button_pressed)
+	(screen.find_child("ExtraOriginalOnly", true, false) as Button).pressed.emit()
+	assert_eq(screen._inventory.entry_count(), 897, "the 1997 cards alone")
+	assert_true((screen.find_child("ExtraPack2Off", true, false) as Button).button_pressed)
+	assert_eq(CardRegistry.size(), 999, "filtering does not unload cards")
+
 func test_pack_only_view_includes_added_reprints_and_uses_their_artwork() -> void:
 	CardPacks.set_enabled(CardPacks.ID, true)
 	var filter := DeckFilter.new()

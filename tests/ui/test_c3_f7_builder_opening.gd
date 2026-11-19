@@ -203,8 +203,11 @@ func test_a_town_s_builder_still_sells_and_hides_the_doors() -> void:
 		return
 	assert_eq(sell.get_index(), builder._command_row.get_node("DoneButton").get_index() - 1,
 		"just before Done")
-	for door in ["LoadButton", "ExtrasButton"]:
-		assert_false((builder._command_row.get_node(door) as Control).visible, door + " hidden")
+	assert_false((builder._command_row.get_node("LoadButton") as Control).visible, "Load hidden")
+	assert_true((builder._command_row.get_node("ExtrasButton") as Control).visible, "Extras filters")
+	assert_true(builder._command_row.get_combined_minimum_size().x <= builder._command_row.size.x + 0.5,
+		"Sell and Extras fit the bar: %s of %s" % [builder._command_row.get_combined_minimum_size().x,
+		builder._command_row.size.x])
 	assert_false(builder._dice_button.visible)
 	assert_false(builder._pool_button.visible)
 	builder._show_in_showcase(CardRegistry.get_card("Shivan Dragon"))

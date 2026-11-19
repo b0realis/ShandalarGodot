@@ -15,8 +15,15 @@ extends DeckBuilderScreen
 ##  - the three slots are the hero's three decks (1997 marks each owned
 ##    copy with the decks it is in, so a copy may be in more than one); the
 ##    deck in use is the one on the surface when the builder closes;
-##  - no door to a card the hero does not own: no Extras, Load, sealed
-##    dice, AutoDeck pool, proxies, import, new decks, drafts or sideboard;
+##  - no door to a card the hero does not own: no Load, sealed dice,
+##    AutoDeck pool, proxies, import, new decks, drafts or sideboard;
+##  - EXTRAS AS A FILTER OF THE HERO'S OWN CARDS (a player's report and the
+##    owner, 2026-11-19: *"show like ONLY homelands or only Fallen
+##    Empires"* — the set strip holds the eight 1997 sets alone): it only
+##    narrows the Inventory, never adds a card; it offers only the sets
+##    the hero's cards were first printed in ([method _offers_source]); its switches start
+##    with every source on at each visit and are never written
+##    ([method _remember_extras]), so the free builder's stay its own;
 ##  - the title slab says the deck's name — a click renames it (the owner:
 ##    *"the deck 1 name can also be renamed"*), and the hero keeps the name
 ##    with the deck — and the hero's gold in words, "GOLD: %d", as the 1997
@@ -86,6 +93,8 @@ const BACK_TO_WORLD := "Return to the world"
 const NOT_HERE := "The adventure's decks are built from your own cards."
 ## Said when an artwork is chosen: the hero's decks keep no printing.
 const NO_ARTWORK := "The adventure's decks keep no choice of artwork."
+## The Extras button's tip here: a filter of the hero's cards (the class doc).
+const EXTRAS_TIP := "Show your cards by set: the 1997 cards, a pack, or one set alone"
 ## The 1997 adventure builder's title field (`@GOLDTITLE`).
 const GOLD_TITLE := "GOLD: %d"
 ## The 1997 adventure builder's line on a card's mini-menu in a town
@@ -175,10 +184,12 @@ func _before_first_fill() -> void:
 	# lists as everywhere else.
 	filter.ban_list = ClassicBans.key_of(player.ban_list) \
 		if player.card_rule == AdventurePlayer.RULE_CLASSIC else ""
-	for door in ["LoadButton", "ExtrasButton"]:
-		var button := _command_row.get_node_or_null(door) as Control
-		if button != null:
-			button.hide()
+	var load_button := _command_row.get_node_or_null(^"LoadButton") as Control
+	if load_button != null:
+		load_button.hide()
+	var extras := _command_row.get_node_or_null(^"ExtrasButton") as Control
+	if extras != null:
+		extras.tooltip_text = EXTRAS_TIP
 	_dice_button.hide()
 	_pool_button.hide()
 	_variant_button.hide()
@@ -505,6 +516,19 @@ func _restore_extras() -> void:
 
 func _remember_extras() -> void:
 	pass
+
+
+## The Extras rows of the sets the hero's cards were first printed in (the
+## class doc) — not every set that reprints one of them, or the hero's
+## Forests would offer nearly every pack.
+func _offers_source(id: String) -> bool:
+	if player == null:
+		return true
+	var source := String(FilterBar.SOURCE_KEYS.get(id, ""))
+	for card_name in owned_counts(player):
+		if DeckFilter.first_printed_in(String(card_name), source):
+			return true
+	return false
 
 
 func _with_tome() -> bool:

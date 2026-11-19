@@ -293,7 +293,9 @@ that would hold old saves' land.
 
 `world.music` (an OGG of the plugin) plays while the hero walks the island
 (`world_duels.gd`'s region music, `AdventureExpansions.music`); the
-mainland's music everywhere else. Pictures are decoded on demand by key
+mainland's music everywhere else. A plugin's duels rest the region track
+and the place's tune like every adventure duel (`WorldDuels.host`,
+`WorldDuels.place_tune_off`): the duel's own music alone. Pictures are decoded on demand by key
 (`AdventureExpansions.picture`: a plugin's `pictures` key, else the skin's)
 and map sprites by `AdventureExpansions.map_op`: the picture's used rect,
 `width` world pixels wide, its foot at (64, 24) of the 128 × 64 tile box.

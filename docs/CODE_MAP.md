@@ -85,7 +85,8 @@ the authors' guide is `expanded_adventure/GUIDE/index.html`.
 - `game/adventure/adventure_player.gd`: save format 8 — `hero.adventures`
   rows `{id, version, name}`.
 - `game/adventure/world/world_duels.gd`: `region_music` — a land's own world
-  track.
+  track; `place_tune_off` — the place's tune at rest under every duel as it
+  is dealt (`PluginJourney._result` brings it back).
 - `game/paths.gd`: `expanded_adventure_folder()`; `game/options_screen.gd`:
   the "Adventure plugins folder" row.
 - `expanded_adventure/README.txt`, `expanded_adventure/.gdignore`: the
@@ -641,10 +642,14 @@ The first two-digit pack: every list of packs keeps it after Pack 9, and
   (`_gears`, `_hammer`, `_flask`), hashed in `game/art/README.md`.
 - `game/deck_builder/deck_builder_screen.gd` Extras window: `_extra_bulk_row`
   (the one-press 1997 and All buttons over the switches), `_bulk_codes`,
-  `_bulk_all_on`, `_bulk_extras`, `_extra_source_on`; the community
-  cards' switch starts off, is moved by no bulk command (nor
-  `DeckFilter.select_all`) and is remembered under its own `community`
-  key; `FilterBar.SOURCE_KEYS` names each row's medallion.
+  `_bulk_all_on`, `_bulk_extras`, `_extra_source_on`; each row's `Only`
+  (`_only_extra_source`: that source on, every other off), `_sync_extra_rows`,
+  `_offers_source` (every row here; the adventure's own sets) and
+  `_extras_height` (`EXTRAS_H`, `EXTRAS_CHROME`, `EXTRAS_ROW`: the window
+  sized to few rows); the community cards' switch starts off, is turned
+  on by no bulk command (nor `DeckFilter.select_all`) and is remembered
+  under its own `community` key; `FilterBar.SOURCE_KEYS` names each row's
+  medallion.
 - `game/art/filter_comm_{on,off}.png`: the community cards' carved-stone
   medallion (three figures) for the Extras window's Community row; drawn by
   `tools/draw_our_art.gd` (`_community`; the spare `_spare_quill`,
@@ -1571,7 +1576,8 @@ the shelves, the pack share in every random draw);
 - `game/deck_builder/adventure_builder.gd`: `AdventureBuilder`, the deck
   builder over the hero's own cards (a `SealedPool` of `AdventurePlayer.cards`,
   the three decks, `write_back`, the gold on the title slab, `ALLOWED`;
-  signals `closed`, `exit_requested`); the base builder's seams for it:
+  signals `closed`, `exit_requested`; Extras as a filter of the hero's
+  cards, `_offers_source` by `DeckFilter.first_printed_in`, `EXTRAS_TIP`); the base builder's seams for it:
   `_menu_entries`, `_with_tome`, `_format_offences`, `_size_advice`,
   `_pool_caption`, `_before_first_fill` (a subclass's decks and pool put
   in before the first fill; `_put_pool_in_force` sets a pool without

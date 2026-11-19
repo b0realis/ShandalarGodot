@@ -267,6 +267,10 @@ const SEALED_SETS_SETTING := "sealed_sets"
 ## be selected"*). One dictionary, `{"original": bool, "pack1": bool,
 ## "sets": {code: bool}}` — see [method _extras_state].
 const EXTRAS_SETTING := "deck_builder_extras"
+## The Extras window's height at most, and its parts ([method _extras_height]).
+const EXTRAS_H := 720.0
+const EXTRAS_CHROME := 155.0
+const EXTRAS_ROW := 78.0
 
 const MARGIN := 8.0
 const HEADER_H := 50.0
@@ -1090,7 +1094,7 @@ static func _style_emerald_done(button: Button) -> void:
 func _open_extra_sets() -> void:
 	if _dialog_busy():
 		return
-	var dialog := OriginalDialog.create("Extras", Vector2(460, 720))
+	var dialog := OriginalDialog.create("Extras", Vector2(460, _extras_height()))
 	dialog.name = "ExtraSetsDialog"
 	dialog.set_meta("extra_sets", true)
 	var scroll := ScrollContainer.new()
@@ -1260,6 +1264,29 @@ func _bulk_extras(original: bool, packs: bool, rows: VBoxContainer) -> void:
 	for code in _bulk_codes():
 		if filter.set_on(code) != packs:
 			filter.toggle_set(code)
+	_sync_extra_rows(rows)
+	_refresh_inventory()
+
+
+## [QoL] ONE SOURCE ALONE (a player's report, 2026-11-19: *"show like ONLY
+## homelands or only Fallen Empires"*): each row's `Only` turns row
+## [param id] on and every other source off — the 1997 cards, Pack 1, every
+## expansion and the community cards; the rows show it at once. The
+## colour, type and search filters stay as they are.
+func _only_extra_source(id: String, rows: VBoxContainer) -> void:
+	var code := String(FilterBar.SOURCE_KEYS.get(id, ""))
+	filter.original_cards_on = id == "Original"
+	if CardRegistry.optional_pack_enabled():
+		filter.completion_pack_on = id == "Pack1"
+	for each in CardRegistry.extra_set_order():
+		if filter.set_on(each) != (each == code):
+			filter.toggle_set(each)
+	_sync_extra_rows(rows)
+	_refresh_inventory()
+
+
+## The Extras rows' medallions lit as [member filter] now stands.
+func _sync_extra_rows(rows: VBoxContainer) -> void:
 	for row in rows.get_children():
 		var id := String(row.name).trim_prefix("ExtraSourceRow_")
 		var on_button := row.find_child("Extra%sOn" % id, true, false) as Button
@@ -1269,7 +1296,6 @@ func _bulk_extras(original: bool, packs: bool, rows: VBoxContainer) -> void:
 		var lit := not on_button.disabled and _extra_source_on(id)
 		on_button.set_pressed_no_signal(lit)
 		off_button.set_pressed_no_signal(not lit)
-	_refresh_inventory()
 
 
 ## Whether the Extras row [param id] is on right now.
@@ -1282,14 +1308,21 @@ func _extra_source_on(id: String) -> bool:
 	return filter.set_on(String(FilterBar.SOURCE_KEYS.get(id, "")))
 
 
-## Matching radio pairs: one lit medallion per source. Always show every
-## row, even without its ZIP, so the layout does not jump between profiles.
+## Matching radio pairs: one lit medallion per source, and its `Only`
+## ([method _only_extra_source]). Here every row shows, even without its
+## ZIP, so the layout does not jump between profiles; the adventure's
+## builder offers only the sets the hero's cards were first printed in
+## ([method _offers_source]).
 func _extra_source_row(body: VBoxContainer, id: String, title: String,
 		available: bool, on: bool, pick: Callable, cue: String) -> void:
+	if not _offers_source(id):
+		return
 	var row := HBoxContainer.new()
 	row.name = "ExtraSourceRow_" + id
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
+	# 10, not 14, since `Only` joined the row: the longest title, the two
+	# medallions and `Only` still fit the narrowest panel (390 px).
+	row.add_theme_constant_override("separation", 10)
 	var label := OriginalDialog.label(title, 17)
 	label.custom_minimum_size.x = 170
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1322,7 +1355,34 @@ func _extra_source_row(body: VBoxContainer, id: String, title: String,
 		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		choice.add_child(caption)
 		row.add_child(choice)
+	var only := OriginalDialog.button("Only", Vector2(50, 30))
+	only.name = "Extra%sOnly" % id
+	only.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	only.disabled = not available
+	only.tooltip_text = "Only %s: every other source off.\nOther set, color, type and search filters still apply." % title
+	only.pressed.connect(func() -> void:
+		if available:
+			_only_extra_source(id, body))
+	row.add_child(only)
 	body.add_child(row)
+
+
+## Whether the Extras window offers the row [param id]: here every one.
+func _offers_source(_id: String) -> bool:
+	return true
+
+
+## The Extras window's height: [constant EXTRAS_H], or less when it offers
+## few rows (the adventure's, [method _offers_source]) — no empty slab
+## under three. [constant EXTRAS_CHROME] is the title, the `1997`/`All`
+## row and Close, with a few pixels to spare; [constant EXTRAS_ROW] a row
+## (its medallions and captions, 66) and the gap under it (12).
+func _extras_height() -> float:
+	var rows := 0
+	for id in FilterBar.SOURCE_KEYS:
+		if _offers_source(String(id)):
+			rows += 1
+	return minf(EXTRAS_H, EXTRAS_CHROME + rows * EXTRAS_ROW - 12.0)
 
 
 ## The Extras switches as one dictionary — see [constant EXTRAS_SETTING].

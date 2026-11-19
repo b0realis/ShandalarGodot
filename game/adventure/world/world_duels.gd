@@ -41,7 +41,12 @@ extends Control
 ##
 ## The world's own music (`ShellMusic`, the soundscape) is the holder's to
 ## bring back when its panes are done ([method world_music]): after a
-## creature's duel the spoils' tunes play first, as 1997's did.
+## creature's duel the spoils' tunes play first, as 1997's did. The place's
+## tune RESTS UNDER EVERY DUEL as it is dealt ([method WorldSoundscape.rest]),
+## whoever holds it — a player's report, 2026-11-19: the Last Refuge's
+## pledges were fought in the giver's town with its tune still on, two
+## tunes over each other, as the ruled town's once were (the playtest of
+## part B, H2-2). Bringing it back stays the holder's.
 
 ## The duel is over: played out, or conceded ([member conceded]; the report
 ## then a loss).
@@ -118,8 +123,10 @@ func _ready() -> void:
 	duel.leave_confirmed.connect(concede)
 	duel.menu_confirmed.connect(_to_menu)
 	_hold(true)
-	# The land's own track gives way to the duel's, as the title's does.
+	# The land's own track gives way to the duel's, as the title's does;
+	# the place's tune rests (the class doc).
 	region_music_off(screen if screen != null else self)
+	place_tune_off(screen if screen != null else self)
 	_dealing = true
 	add_child(duel)
 	_dealing = false
@@ -333,6 +340,14 @@ static func region_music(node: Node) -> bool:
 		voice.stream = tune
 		voice.play()
 	return true
+
+
+## The place's tune (the town's, the castle's: [WorldSoundscape]) at rest
+## under a duel; [method WorldSoundscape.rest] false brings it back.
+static func place_tune_off(node: Node) -> void:
+	var soundscape := _soundscape(node) if node != null and node.is_inside_tree() else null
+	if soundscape != null and soundscape.has_method(&"rest"):
+		soundscape.call(&"rest", true)
 
 
 ## The land's track stopped for a screen or a duel with its own music; the

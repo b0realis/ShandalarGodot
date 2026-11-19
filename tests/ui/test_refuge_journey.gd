@@ -216,6 +216,34 @@ func test_town_petition_opens_full_duel_and_result_only_rewards_once() -> void:
 	assert_eq(screen._visit.place["name"], _refuge().giver_name(0))
 	assert_true(Sieges.calm(screen.player))
 
+func test_the_town_s_tune_rests_under_a_pledge_duel() -> void:
+	# A player's report, 2026-11-19: two songs at once in the Last Refuge's
+	# battles — the giver's town tune played on under the duel's.
+	assert_true(_refuge().travel(screen.player))
+	var town: Dictionary = screen.player.world.sites[3]
+	screen.player.position = Vector2i(town["x"], town["y"]) * 32 + Vector2i(16, 16)
+	screen.show_player(screen.player)
+	screen.soundscape.hear_places()
+	assert_eq(screen.soundscape.site, 3, "the town's tune is heard in the town")
+	screen.visit(screen.player.tile())
+	await choose("refuge_quest")
+	await choose("refuge_fight")
+	var host: WorldDuels
+	for child in screen.get_children():
+		if child is WorldDuels and not child.is_queued_for_deletion(): host = child
+	assert_not_null(host)
+	if host == null: return
+	assert_eq(screen.soundscape.site, -1, "the town's tune rests under the duel")
+	assert_eq(screen.soundscape.level, 0)
+	var report := DuelReport.new()
+	report.finished = true
+	report.result = DuelReport.WIN
+	report.winner = 0
+	host._finish(report)
+	await get_tree().process_frame
+	assert_eq(screen.soundscape.site, 3, "heard again, the hero in the town again")
+
+
 func test_castle_art_scale_and_count_gate_are_visible() -> void:
 	assert_true(_refuge().travel(screen.player))
 	var point: Array = screen.player.world.expansion["castle"]

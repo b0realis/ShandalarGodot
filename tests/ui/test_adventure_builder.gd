@@ -28,10 +28,17 @@ func before_each() -> void:
 	await get_tree().process_frame
 
 
+func after_each() -> void:
+	for pack in [FallenEmpiresPack.ID, IceAgePack.ID]:
+		if CardPacks.is_enabled(pack):
+			CardPacks.set_enabled(pack, false)
+
+
 func test_the_doors_to_other_cards_are_gone() -> void:
-	for door in ["ExtrasButton", "LoadButton"]:
-		var button := builder.find_child(door, true, false) as Control
-		assert_true(button == null or not button.visible, door + " absent")
+	var load_button := builder.find_child("LoadButton", true, false) as Control
+	assert_true(load_button == null or not load_button.visible, "LoadButton absent")
+	# Extras stays (owner 2026-11-19): a filter of the hero's own cards.
+	assert_true((builder.find_child("ExtrasButton", true, false) as Control).visible, "Extras filters")
 	assert_false(builder._dice_button.visible, "no sealed dice")
 	assert_false(builder._pool_button.visible, "no AutoDeck pool")
 	assert_eq(builder.find_child("DoneButton", true, false).visible, true, "Done stays")
@@ -41,6 +48,58 @@ func test_the_doors_to_other_cards_are_gone() -> void:
 	builder._run_command("Load deck")
 	assert_eq(builder._menu_entries(), [DeckBuilderScreen.MENU_BACK, "Return to the world", "Exit game"]
 		as Array[String], "Escape's menu: back to the world")
+
+
+func test_extras_shows_the_hero_s_cards_one_set_alone() -> void:
+	# A player's report, 2026-11-19: *"show like ONLY homelands or only
+	# Fallen Empires"* — the set strip holds the eight 1997 sets alone.
+	CardPacks.set_enabled(FallenEmpiresPack.ID, true)
+	# Ice Age prints Forests too: the hero's are 1997's, and no Ice Age row.
+	CardPacks.set_enabled(IceAgePack.ID, true)
+	assert_true(CardRegistry.card_in_set("Forest", "ice"), "Ice Age reprints Forest")
+	var free_switches: Variant = Settings.get_value(DeckBuilderScreen.EXTRAS_SETTING, {})
+	var hero := _hero()
+	hero.cards.append({"card": "Thallid", "decks": []})
+	var held := AdventureBuilder.new()
+	held.player = hero
+	add_child_autofree(held)
+	await get_tree().process_frame
+	assert_eq(_shown(held), ["Shivan Dragon", "Thallid"], "every source on as it opens")
+	var extras := held._command_row.get_node("ExtrasButton") as Button
+	assert_true(extras.visible)
+	assert_eq(extras.tooltip_text, AdventureBuilder.EXTRAS_TIP)
+	extras.pressed.emit()
+	await get_tree().process_frame
+	var dialog := held.find_child("ExtraSetsDialog", true, false) as OriginalDialog
+	assert_lt(dialog.size.y, DeckBuilderScreen.EXTRAS_H, "no empty slab under two rows")
+	var scroll := dialog.find_child("ExtraSetsScroll", true, false) as ScrollContainer
+	assert_false(scroll.get_v_scroll_bar().visible, "both rows in view, no scrollbar")
+	assert_not_null(held.find_child("ExtraSourceRow_Original", true, false))
+	assert_not_null(held.find_child("ExtraSourceRow_Pack2", true, false), "a set the hero holds cards of")
+	for id in ["Pack1", "Pack3", "Pack4", "Pack10"]:
+		assert_null(held.find_child("ExtraSourceRow_" + id, true, false), id + ": no card first printed there")
+	var only_fe := held.find_child("ExtraPack2Only", true, false) as Button
+	assert_not_null(only_fe)
+	if only_fe == null: return
+	only_fe.pressed.emit()
+	assert_eq(_shown(held), ["Thallid"], "Fallen Empires alone")
+	assert_true((held.find_child("ExtraPack2On", true, false) as Button).button_pressed)
+	assert_true((held.find_child("ExtraOriginalOff", true, false) as Button).button_pressed)
+	(held.find_child("ExtraOriginalOnly", true, false) as Button).pressed.emit()
+	assert_eq(_shown(held), ["Shivan Dragon"], "the 1997 cards alone")
+	assert_true((held.find_child("ExtraPack2Off", true, false) as Button).button_pressed)
+	held.refresh()
+	assert_eq(Settings.get_value(DeckBuilderScreen.EXTRAS_SETTING, {}), free_switches,
+		"the free builder's switches are its own")
+	assert_eq(hero.cards.size(), 9, "a filter never adds or takes a card")
+
+
+func _shown(on: AdventureBuilder) -> Array:
+	var names := []
+	for entry in on._inventory._visible_entries():
+		names.append(entry[0].card_name)
+	names.sort()
+	return names
 
 
 func test_the_title_says_the_deck_and_the_gold() -> void:

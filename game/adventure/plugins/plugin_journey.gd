@@ -139,6 +139,10 @@ static func _result(region: DataRegion, screen: WorldScreen, index: int, report:
 	screen.autosave()
 	screen._show_hero()
 	WorldDuels.world_music(screen)
+	# The place's tune, at rest under the duel ([method WorldDuels.place_tune_off]),
+	# heard again: the hero stands in the town again.
+	if screen.soundscape != null:
+		screen.soundscape.rest(false)
 	var marker: Dictionary = region.data().get("places", {}).get("markers", {}).get(String(finale.get("at", "castle")), {})
 	var picture := String(marker.get("picture", "visit_city")) if index < 0 \
 		else String(region.data().get("quests", {}).get("pictures", {}).get("result", "visit_city"))
