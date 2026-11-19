@@ -401,6 +401,14 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.3 (2026-11-19): one tune, Extras and Only, the type line
+
+- Version 0.70.3, Android version code 70003; `docs/releases/0.70.3.md`.
+- What it gathers is mapped in its own rows: `WorldDuels.place_tune_off`
+  (the adventure world's duels), `AdventureBuilder` and the Deck Builder's
+  Extras (`_only_extra_source`, `DeckFilter.first_printed_in`), and
+  `CardPreview`'s type line (`TYPE_BASELINE`, the size under the name).
+
 ## 0.70.2 (2026-11-18): Hotseat territories, the number menus
 
 The owner: *"Magic battle hotseat shoudl have your territory setting for

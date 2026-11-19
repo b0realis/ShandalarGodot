@@ -18973,6 +18973,15 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-19 — Version 0.70.3
+
+The owner: *"bump the version and lets make a new release!"* Version
+0.70.3 (Android version code 70003) gathers the three entries below it: one
+tune under every adventure duel, Extras in the adventure's Deck Builder
+with Only on every Extras row, and the big card's type line on one
+baseline, always under its name's size. Its notes are
+`docs/releases/0.70.3.md`. LAN stays protocol 32.
+
 ## 2026-11-19 — A player's report: one tune under a plugin's duel; Extras in the adventure, and Only
 
 A player's report on 0.70 and the Last Refuge plugin: *"in the battles …
