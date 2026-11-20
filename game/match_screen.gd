@@ -818,7 +818,10 @@ func _pile_column(heading: String, from_main: bool) -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# The line the arrows reach scrolls into view (2026-11-20).
+	scroll.follow_focus = true
 	var rows := VBoxContainer.new()
+	rows.name = "Rows"
 	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows.add_theme_constant_override("separation", 0)
 	scroll.add_child(rows)
@@ -881,5 +884,51 @@ func move_one(pid: int, card_name: String, from_main: bool) -> String:
 func _move_one(card_name: String, from_main: bool) -> void:
 	if _sb_pid < 0:
 		return
+	var held := _sideboard_line_held()
 	move_one(_sb_pid, card_name, from_main)
 	_refresh_sideboard()
+	if held.x >= 0:
+		_hold_sideboard_line(held.x, held.y)
+
+
+## THE KEYS STAY IN THE PILE (the owner, 2026-11-20: *"you should be able
+## to go through the menu with up and down arrow. This holds true for all
+## selection menus in magic battles"*). A move redraws both piles, and the
+## line that held the keys went with them: Enter moved one copy and the
+## arrows then had nothing to walk from. The pile (0 your deck, 1 the
+## sideboard) and the row of the line holding the keys, or (-1, -1).
+func _sideboard_line_held() -> Vector2i:
+	if _sb_columns == null or not is_inside_tree():
+		return Vector2i(-1, -1)
+	var held := get_viewport().gui_get_focus_owner()
+	if held == null or not _sb_columns.is_ancestor_of(held):
+		return Vector2i(-1, -1)
+	for pile in _sb_columns.get_child_count():
+		var rows := _sideboard_rows(pile)
+		if rows != null and rows.is_ancestor_of(held):
+			return Vector2i(pile, held.get_index())
+	return Vector2i(-1, -1)
+
+
+## Give the keys back to row [param row] of pile [param pile] after a
+## redraw — the line that took its place, or the pile's last when the row
+## is gone; the other pile's first line when this pile is now empty, and
+## Done when both are.
+func _hold_sideboard_line(pile: int, row: int) -> void:
+	for side in [pile, 1 - pile]:
+		var rows := _sideboard_rows(side)
+		if rows == null:
+			continue
+		var lines: Array = rows.get_children().filter(func(n: Node) -> bool: return n is BaseButton)
+		if lines.is_empty():
+			continue
+		(lines[clampi(row if side == pile else 0, 0, lines.size() - 1)] as Control).grab_focus()
+		return
+	if is_instance_valid(_sb_done):
+		_sb_done.grab_focus()
+
+
+func _sideboard_rows(pile: int) -> VBoxContainer:
+	if _sb_columns == null or pile < 0 or pile >= _sb_columns.get_child_count():
+		return null
+	return _sb_columns.get_child(pile).find_child("Rows", true, false) as VBoxContainer

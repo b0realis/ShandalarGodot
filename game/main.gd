@@ -84,11 +84,6 @@ var _pending_open := ""
 var _waiting_button: Button = null
 var _waiting_text := ""
 var _pack_notice: Control
-var _shandalar_notice: Control
-## The Shandalar button's notice ([method _open_shandalar_notice]).
-const SHANDALAR_NOTICE_TITLE := "Shandalar — still in development"
-const SHANDALAR_ISSUES := "github.com/b0realis/ShandalarGodot/issues"
-const SHANDALAR_NOTICE := "The Shandalar adventure is still being built and tested. It can be played from Embark to the end now: the world, its towns, quests, lairs, creatures and sieges, the castles, the dungeons and the final battle.\n\nPlease tell us what you notice — anything that seems wrong, breaks, or could be better — as an issue on the project's GitHub page:\n" + SHANDALAR_ISSUES
 var _pack_warning: Control
 var _version_label: Label
 
@@ -213,10 +208,14 @@ func _ready() -> void:
 	# THE ADVENTURE'S FRONT DOOR (M5, `docs/ROADMAP.md`): the Embark
 	# screen, where a new adventure's hero is made
 	# (`game/adventure/embark_screen.gd`); Adventure there makes the world
-	# and sets the hero walking in it.
+	# and sets the hero walking in it. Straight there (the owner,
+	# 2026-11-20: *"remove Shandalar - still in development warning window
+	# when clicking Shandalar in main menu!"*); the notice it opened first
+	# since 2026-10-27 is gone.
 	var shandalar := _menu_button("Shandalar")
 	shandalar.tooltip_text = "Embark on an adventure in the world of Shandalar."
-	shandalar.pressed.connect(_open_shandalar_notice.bind(shandalar))
+	shandalar.pressed.connect(
+		_open.bind("res://game/adventure/embark_screen.tscn", shandalar))
 	box.add_child(shandalar)
 
 	# THE ADVENTURES SAVED (2026-10-22): an adventure is saved the moment
@@ -530,31 +529,14 @@ func _request_disable_pack(id: String) -> void:
 	_pack_warning.tree_exited.connect(func() -> void: _pack_warning = null)
 
 
-## THE ADVENTURE IS STILL BEING BUILT (the owner, 2026-10-27: "when you
-## click Shandalar in the main menu make a popup that this is still in
-## development and ask the player to report observations and issues on the
-## projects repository! Then offer button go test and back!"): Go test
-## opens the Embark screen ([param button], the Shandalar button, waits for
-## the card pool as before); Back, or Escape, stays on the menu.
-func _open_shandalar_notice(button: Button) -> void:
-	if is_instance_valid(_shandalar_notice):
-		return
-	_shandalar_notice = UiChrome.action_popup(self, SHANDALAR_NOTICE_TITLE, SHANDALAR_NOTICE, [
-		{"label": "Go test", "name": "GoTest",
-			"callable": _open.bind("res://game/adventure/embark_screen.tscn", button)},
-		{"label": "Back", "name": "Back", "cancel": true},
-	], 540.0)
-
-
 # --- the bug campaign c12, h4-9 + h1-3: Escape closes the title's popups ---
 ## ESCAPE CLOSES THE POPUP ON TOP (the bug campaign c12, h4-9 and h1-3):
-## the new Shandalar notice (its `Back`), a pack's notice and its warning,
-## a set badge's window. Escape, a pad's B, the
-## Quest's back gesture and the R36's Start all arrive as `ui_cancel`, and
-## this screen had no ear for it — the notice's own words say Escape stays
-## on the menu. The popup's cancel action (or its only one) runs, else it
-## simply closes ([method UiChrome.dismiss_popup]), as on the Options
-## screen (`options_screen.gd`). With no popup up the key is left alone:
+## a pack's notice and its warning, a set badge's window (and, while it
+## stood, the Shandalar notice's `Back`). Escape, a pad's B, the Quest's
+## back gesture and the R36's Start all arrive as `ui_cancel`, and this
+## screen had no ear for it. The popup's cancel action (or its only one)
+## runs, else it simply closes ([method UiChrome.dismiss_popup]), as on
+## the Options screen (`options_screen.gd`). With no popup up the key is left alone:
 ## the title is the way out of nowhere. The lobby takes its own Escape
 ## first (`lobby.gd`, `_unhandled_key_input`).
 func _unhandled_input(event: InputEvent) -> void:

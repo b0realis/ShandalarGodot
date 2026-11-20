@@ -216,6 +216,8 @@ var _life_menu: PopupMenu = null
 var _face_flipped: Array[bool] = [false, false]
 var _search_dialog: OriginalDialog            # library picker (tutors)
 var _search_list: ItemList
+## The picker's large card, left ([method _open_search_dialog]).
+var _search_face: CardPreview = null
 var _over_dialog: OriginalDialog = null       # the duel's last word
 ## True from the moment the duel ends until the End of Duel window has
 ## been dismissed — the window itself only exists after the death
@@ -4163,8 +4165,10 @@ func _open_mode_menu(inst: CardInstance) -> void:
 	# ruling) — as the network client greys it (SgDuelActions.open_modes).
 	var payer := _pending_pid if _pending_card == inst else inst.controller_id
 	var rows := game.payment_rows(payer, inst)
+	var walk: Array = []
 	for i in rows.size():
 		var opt := OriginalDialog.choice_line(payment_row_label(rows[i]))
+		walk.append(opt)
 		var why := game.payment_row_refusal(payer, inst, i)
 		if why == "" or MtgGame.is_unpaid_refusal(why):
 			var announce := game.spell_announce_refusal(payer, inst, 0, i)
@@ -4191,8 +4195,12 @@ func _open_mode_menu(inst: CardInstance) -> void:
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	back.pressed.connect(_on_mode_canceled)
 	lines.add_child(back)
+	walk.append(back)
 	dialog.add_child(lines)
 	add_child(dialog)
+	# The arrows walk the open rows and Cancel ([method _walk_selection]).
+	OriginalDialog.walk_lines(dialog, walk)
+	_free_keys_from_table(dialog)
 
 
 ## A PAYMENT ROW IN A PLAYER'S WORDS (Pack 9). The engine's label as it
@@ -4242,11 +4250,33 @@ func _on_mode_chosen(id: int) -> void:
 ## is asking above it, and offers `@DIALOGBUTTONS`' OK and Cancel.
 ## Winbk_Changetext's blue knotwork is the original's ground for a dialog
 ## that asks the player to pick from a LIST, which is exactly this one.
+##
+## THE LARGE CARD, LEFT (the owner, 2026-11-20: *"When casting vampiric
+## tutor. The selection menu should show the cards you are hovering over
+## in big card on the left!"*). The question window has shown the card
+## behind a name since 2026-11-07 ([method _preview_choice_line]); this
+## picker opens before the cast and was the one list without it. The card
+## shows the tutor first, then the name under the pointer, the selected
+## name when the pointer leaves the list, and the row the arrows reach.
+## The knotwork is tiled, so the window only grows wider to hold it.
+const SEARCH_SIZE := Vector2(640, 452)
+
+
 func _open_search_dialog(search: SearchLibraryEffect) -> void:
 	if _search_dialog != null:
 		_search_dialog.queue_free()
 	_search_dialog = OriginalDialog.create(
-		_pending_card.data.card_name, Vector2(392, 452), "panel_knot")
+		_pending_card.data.card_name, SEARCH_SIZE, "panel_knot")
+	# DOCKED, as the question window's: it lives in the window.
+	_search_face = CardPreview.new()
+	_search_face.docked = true
+	_search_face.scale = Vector2(0.9, 0.9)
+	var card_size := CardPreview.SIZE * _search_face.scale
+	_search_face.position = Vector2(OriginalDialog.MARGIN + 2,
+		(SEARCH_SIZE.y - card_size.y) / 2.0)
+	_search_dialog.add_child(_search_face)
+	_search_dialog.leave_left(_search_face.position.x + card_size.x + 14)
+	_preview_choice_line(_search_face, _pending_card)
 	_search_dialog.body().add_child(
 		OriginalDialog.label("Select target card.", 15))
 	# The effect's own English narrows the ask ("a basic land card") — but
@@ -4271,22 +4301,72 @@ func _open_search_dialog(search: SearchLibraryEffect) -> void:
 	# is listed in must say nothing until then — the rule SGManalink's
 	# hidden-zone questions already follow (`SgDuelActions._choice_entries`,
 	# "sorted by name (never library order)").
+	# Each name's card for the large card is the copy with the LOWEST ID —
+	# never the first in library order, which would say which printing
+	# lies higher when two of a name wear different art.
 	var names: Array[String] = []
+	var faces := {}
 	for inst in game.players[_pending_pid].library:
 		if search.filter.is_valid() and not search.filter.call(inst):
 			continue
-		if not names.has(inst.data.card_name):
-			names.append(inst.data.card_name)
+		var card_name := inst.data.card_name
+		if not names.has(card_name):
+			names.append(card_name)
+		if not faces.has(card_name) or inst.id < (faces[card_name] as CardInstance).id:
+			faces[card_name] = inst
 	names.sort()
 	for card_name in names:
-		_search_list.add_item(card_name)
+		var row := _search_list.add_item(card_name)
+		_search_list.set_item_metadata(row, faces[card_name])
+	_search_list.gui_input.connect(_on_search_list_input)
+	_search_list.mouse_exited.connect(_show_search_pick)
+	_search_list.item_selected.connect(_show_search_pick.unbind(1))
+	# Enter on the walked row, or a double click, is the OK.
+	_search_list.item_activated.connect(_on_search_activated.unbind(1))
 	_search_dialog.body().add_child(_search_list)
-	_search_dialog.add_button("OK").pressed.connect(_on_search_confirmed)
-	_search_dialog.add_button("Cancel").pressed.connect(_on_search_canceled)
+	var ok := _search_dialog.add_button("OK")
+	ok.pressed.connect(_on_search_confirmed)
+	var cancel := _search_dialog.add_button("Cancel")
+	cancel.pressed.connect(_on_search_canceled)
 	add_child(_search_dialog)
+	OriginalDialog.walk_lines(_search_dialog, [_search_list, ok, cancel])
+	_free_keys_from_table(_search_dialog)
+
+
+## Enter on the picker's walked row (or a double click on one) is its OK.
+## An [ItemList] does not mark the Enter it activates on as spent, and the
+## key went on to the table as Done: the pick was made and the cast passed
+## at once.
+func _on_search_activated() -> void:
+	if is_inside_tree():
+		get_viewport().set_input_as_handled()
+	_on_search_confirmed()
+
+
+## The pointer over the picker's list: the name under it, big; between
+## names (the list's foot), what [method _show_search_pick] shows.
+func _on_search_list_input(event: InputEvent) -> void:
+	if not event is InputEventMouseMotion or _search_list == null:
+		return
+	var row := _search_list.get_item_at_position((event as InputEventMouseMotion).position, true)
+	if row < 0:
+		_show_search_pick()
+	else:
+		_preview_choice_line(_search_face, _search_list.get_item_metadata(row))
+
+
+## The picker's large card at rest: the selected name's card, or the
+## tutor's own when nothing is selected.
+func _show_search_pick() -> void:
+	if _search_list == null or not is_instance_valid(_search_list):
+		return
+	var picked := _search_list.get_selected_items()
+	_preview_choice_line(_search_face,
+		_search_list.get_item_metadata(picked[0]) if not picked.is_empty() else _pending_card)
 
 
 func _close_search_dialog() -> void:
+	_search_face = null
 	if _search_dialog != null:
 		if is_instance_valid(_search_dialog):
 			_search_dialog.dismiss()
@@ -5708,6 +5788,8 @@ func _open_choice_overlay() -> void:
 	if not _humans.has(choice.pid) or DisplayServer.get_name() == "headless":
 		return
 	_choice_picks = PackedInt32Array()
+	_choice_walking = false
+	_choice_focus = -1
 	_build_choice_overlay(choice)
 
 
@@ -5775,6 +5857,8 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(235, 240)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# ...and the line the arrows reach scrolls into view.
+	scroll.follow_focus = true
 	var column := VBoxContainer.new()
 	column.custom_minimum_size.x = 219
 	scroll.add_child(column)
@@ -5787,6 +5871,7 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 		var revealed := OriginalDialog.label(String(info.title) + "\n" + "\n".join(info.cards), 14)
 		revealed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		column.add_child(revealed)
+	var walk: Array = []
 	for i in labels.size():
 		# s30's `fmt.Sprintf("%d. %s", i+1, opt.Label)` and its number keys
 		# — except on a NUMBER question, whose lines are their own numbers
@@ -5798,12 +5883,18 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 			text += "  *"
 		var line := OriginalDialog.choice_line(text)
 		line.pressed.connect(_on_choice_option.bind(i))
+		line.focus_entered.connect(_note_choice_focus.bind(i))
 		var shown := choice_line_card(choice, i)
 		if face != null and shown != null:
+			line.set_meta(CHOICE_CARD_META, shown)
 			line.mouse_entered.connect(_preview_choice_line.bind(face, shown))
 			line.focus_entered.connect(_preview_choice_line.bind(face, shown))
-			line.mouse_exited.connect(_preview_choice_line.bind(face, asking))
+		if face != null:
+			# The pointer leaving goes back to the line the arrows hold, or
+			# else to the question's own card.
+			line.mouse_exited.connect(_preview_choice_rest.bind(face, asking))
 		column.add_child(line)
+		walk.append(line)
 	if choice.is_cost and not choice.adverse:
 		# A COST question can be backed out of — nothing is paid until the
 		# whole cost is known (CR 601.2h; MtgGame.cancel_choice). "Cancel"
@@ -5813,7 +5904,15 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 		var back := OriginalDialog.button("Cancel")
 		back.pressed.connect(_withdraw_choice)
 		lines.add_child(back)
+		walk.append(back)
 	dialog.add_child(lines)
+	OriginalDialog.walk_lines(dialog, walk)
+	_free_keys_from_table(dialog)
+	# A WINDOW REDRAWN UNDER THE ARROWS keeps them on the same line: a
+	# discard's tick or a colour's redraws the whole window.
+	if _choice_walking and _choice_focus >= 0 and _choice_focus < walk.size() \
+			and walk[_choice_focus] is Control and (walk[_choice_focus] as Control).is_visible_in_tree():
+		(walk[_choice_focus] as Control).grab_focus()
 	_add_private_hide_action(scrim)
 	if help_gave_way:   # repository check 2026-10-13 fx-code (c1-1)
 		_settle_question(scrim)
@@ -5835,6 +5934,93 @@ func _preview_choice_line(face: CardPreview, inst: CardInstance) -> void:
 		face.show_card(inst)
 	else:
 		face.show_back()
+
+
+# --- 2026-11-20: the arrows walk every selection window ---
+## Where a question's line keeps the card it names ([method choice_line_card]).
+const CHOICE_CARD_META := &"choice_card"
+## The held question's line the keys are on ([method _note_choice_focus]),
+## -1 for none; with [member _choice_walking], what a redraw of the window
+## gives the keys back to.
+var _choice_focus := -1
+## Has the player walked the held question's lines with the arrows? Only
+## then does a redraw hand the keys back — a line a CLICK focused (every
+## button takes the focus on a click) must not answer a later Space.
+var _choice_walking := false
+
+
+func _note_choice_focus(index: int) -> void:
+	_choice_focus = index
+
+
+## The question window's large card when the pointer leaves a line: the
+## card of the line the arrows hold, or else [param asking]'s.
+func _preview_choice_rest(face: CardPreview, asking: CardInstance) -> void:
+	var held := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	if held != null and _choice_overlay != null and _choice_overlay.is_ancestor_of(held) \
+			and held.has_meta(CHOICE_CARD_META):
+		_preview_choice_line(face, held.get_meta(CHOICE_CARD_META))
+	else:
+		_preview_choice_line(face, asking)
+
+
+## THE SELECTION WINDOW THE ARROWS WALK, the topmost of: the held
+## question, the tutor picker, the mode menu. Null when none is up.
+func _selection_window() -> Control:
+	if _choice_overlay != null and is_instance_valid(_choice_overlay):
+		for child in _choice_overlay.get_children():
+			if child.has_meta(OriginalDialog.WALK_META):
+				return child
+	if _search_dialog != null and is_instance_valid(_search_dialog):
+		return _search_dialog
+	if _mode_overlay != null and is_instance_valid(_mode_overlay):
+		return _mode_overlay
+	return null
+
+
+## UP OR DOWN WITH A SELECTION WINDOW UP (the owner, 2026-11-20: *"you
+## should be able to go through the menu with up and down arrow. This
+## holds true for all selection menus in magic battles"*). The first press
+## gives the window's first line the keys (Down) or its last (Up); from
+## there the engine's own focus walk steps the lines
+## ([method OriginalDialog.walk_lines]), the large card follows the line,
+## and Enter answers it. The keyboard's arrows always; a pad's D-pad when
+## the pad pointer is off (with it on, the D-pad hops the pointer over
+## the same lines, [PadControls]). True when the press was spent here.
+func _walk_selection(event: InputEvent) -> bool:
+	var down := event.is_action_pressed(&"ui_down", false, true)
+	if not down and not event.is_action_pressed(&"ui_up", false, true):
+		return false
+	var window := _selection_window()
+	if window == null or not OriginalDialog.start_walk(window, down):
+		return false
+	if _choice_overlay != null and _choice_overlay.is_ancestor_of(window):
+		_choice_walking = true
+	return true
+
+
+## A SELECTION WINDOW TAKES THE KEYS FROM THE TABLE. A card or a bar
+## button keeps the keyboard focus after a click (every [BaseButton]
+## takes it), and then the engine walks the TABLE on an arrow before the
+## duel sees it, and Space or Enter presses that card under the window.
+## So the focus is let go when [param window] opens — unless it is in a
+## window above the table (the Pause window, the reader, the mini help,
+## another dialog) or in a text field.
+func _free_keys_from_table(window: Control) -> void:
+	if not is_inside_tree():
+		return
+	var held := get_viewport().gui_get_focus_owner()
+	if held == null or window.is_ancestor_of(held) or held is LineEdit or held is TextEdit:
+		return
+	if is_paused() or mini_help_open() or _fullscreen_card_open():
+		return
+	var up := held.get_parent()
+	while up != null and up != self:
+		if up is OriginalDialog or up is Window:
+			return
+		up = up.get_parent()
+	held.release_focus()
+# --- end 2026-11-20 ---
 
 
 ## Does [param choice] list cards by name (a search, a pick, a discard, a
@@ -14293,6 +14479,9 @@ func _on_control(event: InputEvent) -> void:
 	# behind the same gate — and the reader closes on the same key.
 	if Controls.pressed(event, "duel_read") and _fullscreen_card != null \
 			and _fullscreen_card.open_card(true):
+		return
+	# The arrows walk a selection window (2026-11-20, [method _walk_selection]).
+	if _walk_selection(event):
 		return
 	# s30's choice overlay answers to the NUMBER KEYS (`duel.go:2643-2649`
 	# — `ebiten.Key1 + ebiten.Key(i)` for the first nine options), and so

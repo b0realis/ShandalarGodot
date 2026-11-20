@@ -1150,6 +1150,7 @@ func _show_connection() -> void:
 			callback.call())
 		column.add_child(button)
 	dialog.add_child(column)
+	_walk_network_window(dialog, column)
 
 
 func _show_information() -> void:
@@ -1187,6 +1188,25 @@ func _show_specials() -> void:
 		column.add_child(button)
 	if column.get_child_count() == 0: column.add_child(OriginalDialog.label("No special actions available.", 14))
 	dialog.add_child(column)
+	_walk_network_window(dialog, column)
+
+
+## The arrows walk a table menu's lines and its Close, as every selection
+## window of the duel ([method DuelScreen._walk_selection], 2026-11-20).
+func _walk_network_window(dialog: OriginalDialog, column: Control) -> void:
+	var lines: Array = []
+	for child in column.get_children():
+		if child is BaseButton: lines.append(child)
+	lines.append_array(dialog.foot_buttons())
+	OriginalDialog.walk_lines(dialog, lines)
+	_free_keys_from_table(dialog)
+
+
+## The table's own window is on top of every other while it is open.
+func _selection_window() -> Control:
+	if is_instance_valid(_network_dialog):
+		return _network_dialog
+	return super._selection_window()
 
 
 func _network_window(title: String, size := Vector2(560, 420)) -> OriginalDialog:

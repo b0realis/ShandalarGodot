@@ -18973,6 +18973,64 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-20 — No in-development notice before Embark
+
+The owner: *"remove Shandalar - still in development warning window when
+clicking Shandalar in main menu!"* The main menu's Shandalar opens the
+Embark screen at once (`main.gd`, through `_open`, which waits for the card
+pool as every door does); the notice it opened first since 2026-10-27
+(Go test / Back, with the GitHub issues page) is gone, and so is its line
+on Help's Embark page. Tests: `tests/ui/test_embark_screen.gd`
+(`test_the_title_menu_opens_it`: straight to Embark) and
+`tests/ui/test_c2_f_shell_popups.gd`, whose focus check now opens a popup
+of its own over the title.
+
+## 2026-11-20 — The tutor's list shows its cards; the arrows walk every selection window
+
+The owner: *"When casting vampiric tutor. The selection menu should show
+the cards you are hovering over in big card on the left! Also you should be
+able to go through the menu with up and down arrow. This holds true for all
+selection menus in magic battles."*
+
+- **The tutor picker's large card.** The list of the library a tutor
+  opens before its cast (`DuelScreen._open_search_dialog`) was the one list
+  of names left without the card behind them when the 2026-11-07 change
+  gave it to the question window, the Sideboard window and Test hands'
+  picker. The picker keeps its 1997 knotwork, now 640 wide (was 392), with
+  the large card on its left (`_search_face`): the tutor first, then the
+  name under the pointer, the selected name once the pointer leaves the
+  list, and the row the arrows reach. A name shows its copy with the
+  lowest id, never the first in library order (CONTRIBUTING rule 8).
+- **The arrows.** `OriginalDialog.walk_lines` chains a window's lines: Up
+  and Down wrap round, Left, Right and Tab stay in the window (Godot would
+  otherwise hand the focus to a card of the table under it), disabled
+  lines are skipped, and a walked line wears the window's focus ring.
+  `DuelScreen._walk_selection` gives the first Down the first line of the
+  topmost selection window (Up the last): the question window, the tutor
+  picker, the mode menu, and SGManalink's table menus
+  (`SgDuelView._walk_network_window`). Nothing is focused as a window
+  opens, so a Space pressed to pass does not answer a question that pops
+  up. Enter (or Space) takes the walked line; in the picker Enter or a
+  double click is OK. The large card follows the walked line, and the
+  pointer leaving a line goes back to it. A window that opens lets go of a
+  table card's focus (`_free_keys_from_table`), so the arrow reaches the
+  window, not the table. A discard's or a color's redraw keeps the keys on
+  the same line only when the player was walking with them
+  (`_choice_walking`): a line a click focused must not answer a later
+  Space.
+- **Found on the way:** an `ItemList` does not mark the Enter it activates
+  on as spent, so Enter on the picker would have picked and then gone on
+  to the table as Done (`_on_search_activated` marks it).
+- **The Sideboard window** between duels already walked by Godot's own
+  focus ring from Done, but a move redrew both piles and the keys went
+  with the line: they now stay on the same row
+  (`MatchScreen._sideboard_line_held` / `_hold_sideboard_line`), and the
+  piles scroll to the walked line.
+- A pad: with the pad pointer on, the D-pad hops the pointer over the same
+  lines, as before; with it off, the D-pad walks them as the arrows do.
+- Tests: `tests/ui/test_selection_walk_2026_11_20.gd` (9, real key events
+  through the viewport); the related UI scripts rerun green.
+
 ## 2026-11-19 — Version 0.70.3
 
 The owner: *"bump the version and lets make a new release!"* Version

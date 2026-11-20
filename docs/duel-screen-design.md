@@ -1540,6 +1540,17 @@ generic chooser and that is the nearest thing it had. The options scroll,
 because a library search offers thirty names where an upkeep cost offers
 two and the window is one size.
 
+**THE ARROWS AND THE LARGE CARD (`[QoL]`, the owner, 2026-11-20).** Up and
+Down walk the lines of every selection window of the duel — this overlay,
+the tutor picker, the mode menu, SGManalink's table menus — and Enter takes
+the walked line (`OriginalDialog.walk_lines` / `start_walk`,
+`DuelScreen._walk_selection`). The first arrow starts the walk; nothing is
+focused as a window opens, so a Space pressed to pass never answers a
+question that pops up. The large card on the window's left shows the card
+of the name under the pointer or of the walked line; the tutor picker,
+which opens before the cast on Winbk_Changetext's knotwork, carries one
+too, the window grown to 640 wide to hold it.
+
 It is raised from `_refresh()`, not from any one call site, which is the
 other half of the fix: the old foreseen-question dialog only opened when
 the player clicked Done (`_on_pass`), so a question reached during a Run To,

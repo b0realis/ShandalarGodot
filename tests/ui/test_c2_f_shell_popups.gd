@@ -5,8 +5,8 @@ extends GutTest
 ## A [method UiChrome.action_popup] grabbed the focus for its first button
 ## and did nothing else: the arrows walked the ring OFF the popup onto the
 ## buttons under the veil (Enter then pressed a covered button), and when
-## the popup closed the ring went to nothing — the title after the
-## Shandalar placeholder or a set badge, Options after rebinding a key —
+## the popup closed the ring went to nothing — the title after a popup
+## over it or a set badge, Options after rebinding a key —
 ## so the keyboard and a D-pad with the pad pointer off had nothing left
 ## to move from.
 
@@ -129,33 +129,36 @@ func test_a_popup_opened_by_a_popup_keeps_the_ring() -> void:
 	assert_eq(_focus(), ok, "the closing popup does not take the ring off the new one")
 
 
-## The title's popup here is the Shandalar notice (Go test / Back). It was
-## Save / Load's "No adventure has been saved yet" until the 0.60.19 bug
-## pass (h9-1): Save / Load opens the list now, saves or none, so that
-## its Import is always within reach.
-func test_the_title_gets_the_ring_back_after_the_placeholder() -> void:
+## The title's popup here is a two-button one the test opens over the
+## title. It was the Shandalar notice (Go test / Back) until the owner took
+## that notice away (2026-11-20), and Save / Load's "No adventure has been
+## saved yet" before the 0.60.19 bug pass (h9-1).
+func test_the_title_gets_the_ring_back_after_the_popup() -> void:
 	var menu: Control = load("res://game/main.tscn").instantiate()
 	add_child_autofree(menu)
 	await get_tree().process_frame
-	var placeholder: Button = null
+	var door: Button = null
 	for n in menu.find_children("*", "Button", true, false):
 		if (n as Button).text == "Shandalar":
-			placeholder = n
-	assert_not_null(placeholder)
-	placeholder.grab_focus()
-	_key(KEY_ENTER)
+			door = n
+	assert_not_null(door)
+	door.grab_focus()
+	UiChrome.action_popup(menu, "Probe", "Two buttons over the title.", [
+		{"label": "First", "name": "First"},
+		{"label": "Back", "name": "Back", "cancel": true},
+	])
 	await get_tree().process_frame
-	assert_true(_focus() is Button and (_focus() as Button).name == "GoTest", "the notice's first button holds the ring")
+	assert_true(_focus() is Button and (_focus() as Button).name == "First", "the popup's first button holds the ring")
 	_key(KEY_DOWN)
 	await get_tree().process_frame
-	assert_true(_focus() is Button and (_focus() as Button).name == "GoTest", "Down cannot reach the menu under the veil")
+	assert_true(_focus() is Button and (_focus() as Button).name == "First", "Down cannot reach the menu under the veil")
 	_key(KEY_RIGHT)
 	await get_tree().process_frame
 	assert_true(_focus() is Button and (_focus() as Button).name == "Back", "Right walks to Back")
 	_key(KEY_ENTER)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_eq(_focus(), placeholder, "after the popup closes the ring is back on the button")
+	assert_eq(_focus(), door, "after the popup closes the ring is back on the button")
 
 
 func test_rebinding_a_key_leaves_the_ring_on_its_slot() -> void:

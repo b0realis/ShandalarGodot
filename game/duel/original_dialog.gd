@@ -1145,6 +1145,94 @@ static func choice_line(text: String) -> Button:
 	return line
 
 
+# ------------------------------------------------- the arrows walk a list --
+
+## Where a window keeps the lines the arrows walk ([method walk_lines]).
+const WALK_META := &"walk_lines"
+
+
+## THE ARROWS WALK THE LINES (the owner, 2026-11-20: *"you should be able
+## to go through the menu with up and down arrow. This holds true for all
+## selection menus in magic battles"*). [param lines] are [param window]'s
+## lines in the order they are read, top to bottom, the window's own
+## buttons last. Up and Down step along them and wrap round at either
+## end; Left, Right and Tab never leave them, so a step can never land on
+## a card of the table under the window (Godot otherwise hands the focus
+## to the nearest control in that direction, wherever it is). A line
+## wears the window's focus ring ([method focus_ring]) while it holds the
+## keys, and Enter (or Space, `ui_accept`) presses it.
+##
+## Nothing is focused here: the first arrow starts the walk
+## ([method start_walk]). A question that pops up while the player is
+## pressing Space to pass must not take that Space as an answer.
+## Disabled buttons are left out; call this once every line is a child
+## of [param window] (the paths are relative). An [ItemList] in the
+## lines walks its own rows and hands the focus on at its first and last.
+static func walk_lines(window: Control, lines: Array) -> void:
+	var walk: Array[Control] = []
+	for line in lines:
+		if line is Control and is_instance_valid(line) \
+				and not (line is BaseButton and (line as BaseButton).disabled):
+			walk.append(line)
+	window.set_meta(WALK_META, walk)
+	var n := walk.size()
+	for i in n:
+		var line := walk[i]
+		line.focus_mode = Control.FOCUS_ALL
+		var up := line.get_path_to(walk[(i - 1 + n) % n])
+		var down := line.get_path_to(walk[(i + 1) % n])
+		line.focus_neighbor_top = up
+		line.focus_neighbor_bottom = down
+		line.focus_previous = up
+		line.focus_next = down
+		line.focus_neighbor_left = NodePath(".")
+		line.focus_neighbor_right = NodePath(".")
+		if line is Button and (line as Button).flat:
+			line.add_theme_stylebox_override("focus", focus_ring())
+
+
+## The first arrow on [param window]: the keys go to its first line
+## ([param down]) or its last, and an [ItemList] there selects its first
+## or last row. False when the window has no line to walk, is hidden, or
+## already holds the keys (the engine's own walk moves them then).
+static func start_walk(window: Control, down: bool) -> bool:
+	if window == null or not is_instance_valid(window) or not window.is_visible_in_tree() \
+			or not window.has_meta(WALK_META):
+		return false
+	var walk: Array = window.get_meta(WALK_META)
+	var live: Array[Control] = []
+	for line in walk:
+		if is_instance_valid(line) and (line as Control).is_visible_in_tree():
+			live.append(line)
+	if live.is_empty():
+		return false
+	var owner := window.get_viewport().gui_get_focus_owner()
+	if owner != null and live.has(owner):
+		return false
+	var first: Control = live[0] if down else live[live.size() - 1]
+	# A list starts inside itself, on the row in the direction pressed.
+	for line in live:
+		if line is ItemList and (line as ItemList).item_count > 0:
+			first = line
+			break
+	first.grab_focus()
+	if first is ItemList:
+		var list := first as ItemList
+		var row := 0 if down else list.item_count - 1
+		list.select(row)
+		list.ensure_current_is_visible()
+		list.item_selected.emit(row)
+	return true
+
+
+## LEAVE [param width] PIXELS ON THE LEFT for something the window draws
+## there itself — the tutor picker's large card — and lay the title, the
+## body and the buttons out in what is left.
+func leave_left(width: float) -> void:
+	if _column != null:
+		_column.offset_left = width
+
+
 # ------------------------------------------------------------ the dialog --
 
 ## Build a centred modal on [param panel_key]'s ground. `title_text` is
@@ -1273,7 +1361,9 @@ func fit_height() -> void:
 	# width now so the measurement below is the one the sort will make —
 	# and say so upward: sizing a line folds it afresh but leaves the
 	# containers' cached measure of it as it was, at one letter a row.
-	var width := size.x - 2 * MARGIN
+	# (The column's own width: [method leave_left] can take more than the
+	# margin off its left.)
+	var width := size.x - _column.offset_left + _column.offset_right
 	for line in _column.get_children() + _body.get_children():
 		if line is Label and line.autowrap_mode != TextServer.AUTOWRAP_OFF:
 			line.size = Vector2(width, 0)
@@ -1297,6 +1387,15 @@ func add_button(text: String) -> Button:
 	var btn := button(text)
 	_buttons.add_child(btn)
 	return btn
+
+
+## The buttons on the dialog's foot, left to right.
+func foot_buttons() -> Array:
+	var out: Array = []
+	if _buttons != null:
+		for child in _buttons.get_children():
+			if child is BaseButton: out.append(child)
+	return out
 
 
 ## Give the keyboard — and a pad's D-pad, which walks the same focus —

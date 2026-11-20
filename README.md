@@ -77,7 +77,7 @@ The release page has setup instructions and SHA-256 checksums;
 [handheld](docs/handhelds.md), [Android](docs/android-experimental.md) and
 [web](docs/setup-web.txt) guides cover their platform details.
 
-For the adventure, choose **Shandalar → Go test** and create a hero.
+For the adventure, choose **Shandalar** and create a hero.
 It is playable from beginning to end and still being playtested.
 The in-game **Help** covers duels, deck building and adventure play.
 

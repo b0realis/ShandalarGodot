@@ -72,7 +72,9 @@ triggers, the D-pad and the sticks belong to the pointer while it is on.
 With the pointer off, the D-pad and the left stick move the engine's focus
 ring over the menus' buttons and A presses the focused one; the shell,
 Options, the battle setup and the gauntlet's startup window each start the
-ring on their first button, for the keyboard too.
+ring on their first button, for the keyboard too. In a duel a question, a
+tutor's list of the library or a spell's modes start the ring on the first
+D-pad press (Down the first line, Up the last), as the arrow keys do.
 
 A pad click lands where the pointer is: on the button that has the focus
 when the pad alone is in use, or wherever a mouse or trackpad last put the

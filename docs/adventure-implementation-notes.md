@@ -1250,6 +1250,9 @@ rolls, a size smaller each until they fit, and the purse's numbers sit on
   back!"* — the main menu's Shandalar opens that notice first
   (`main.gd` `_open_shandalar_notice`, `SHANDALAR_NOTICE`, the GitHub
   issues page); Go test opens the Embark screen, Back (or Escape) stays.
+  **Removed on 2026-11-20** (the owner: *"remove Shandalar - still in
+  development warning window when clicking Shandalar in main menu!"*): the
+  main menu's Shandalar opens the Embark screen at once.
 
 ## Built: the bug campaign c12 (0.50.61, 2026-10-27)
 

@@ -401,6 +401,45 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## The arrows walk the selection windows; the tutor's large card (2026-11-20)
+
+The owner: *"When casting vampiric tutor. The selection menu should show
+the cards you are hovering over in big card on the left! Also you should be
+able to go through the menu with up and down arrow. This holds true for all
+selection menus in magic battles."*
+
+- `game/duel/original_dialog.gd`: `WALK_META`, `walk_lines` (wrap-round
+  Up/Down, Left/Right/Tab stay, disabled lines skipped, `focus_ring` on a
+  flat line), `start_walk` (the first arrow; an `ItemList` selects its
+  first or last row), `leave_left` (room for a card on the window's left),
+  `foot_buttons`; `fit_height` measures the column's own width.
+- `game/duel/duel_screen.gd`: the tutor picker's large card —
+  `SEARCH_SIZE`, `_search_face`, `_on_search_list_input`,
+  `_show_search_pick`, `_on_search_activated` (Enter or a double click is
+  OK, and the Enter is spent); the walk — `CHOICE_CARD_META`,
+  `_choice_focus`, `_choice_walking`, `_note_choice_focus`,
+  `_preview_choice_rest`, `_selection_window`, `_walk_selection` (called
+  from `_on_control` after the reader key), `_free_keys_from_table`.
+- `game/sgmanalink/duel_view.gd`: `_walk_network_window`,
+  `_selection_window` (the table's own window first).
+- `game/match_screen.gd`: `_sideboard_line_held`, `_hold_sideboard_line`,
+  `_sideboard_rows`; the piles' scrolls follow the focus.
+- Tests: `tests/ui/test_selection_walk_2026_11_20.gd`.
+
+## No in-development notice before Embark (2026-11-20)
+
+The owner: *"remove Shandalar - still in development warning window when
+clicking Shandalar in main menu!"*
+
+- `game/main.gd`: the title's `Shandalar` opens the Embark screen through
+  `_open`; `_open_shandalar_notice`, `_shandalar_notice`,
+  `SHANDALAR_NOTICE_TITLE`, `SHANDALAR_ISSUES` and `SHANDALAR_NOTICE` are
+  gone.
+- Tests: `tests/ui/test_embark_screen.gd` (`test_the_title_menu_opens_it`:
+  straight to Embark), `tests/ui/test_c2_f_shell_popups.gd`
+  (`test_the_title_gets_the_ring_back_after_the_popup`, a popup the test
+  opens over the title).
+
 ## 0.70.3 (2026-11-19): one tune, Extras and Only, the type line
 
 - Version 0.70.3, Android version code 70003; `docs/releases/0.70.3.md`.
@@ -1715,7 +1754,7 @@ the shelves, the pack share in every random draw);
   packs greyed until the World Lords are built; removed in 0.60.7, the
   packs chosen on Embark since 0.60.14), `game/main.gd`
   `_open_shandalar_notice` / `SHANDALAR_NOTICE` (the in-development
-  notice before Embark). Tests:
+  notice before Embark; removed 2026-11-20). Tests:
   `tests/unit/test_q1_dungeon_doors.gd`, `tests/unit/test_q1_world_dungeons.gd`,
   `tests/ui/test_q1_world_doors.gd`, `tests/ui/test_q1_world_dungeons.gd`,
   `tests/ui/test_q1_world_dungeons_skin.gd`, `tests/ui/test_q1_world_keys.gd`,
@@ -2183,9 +2222,9 @@ the shelves, the pack share in every random draw);
 - `game/adventure/red_arrow.gd`: `RedArrow`, the drawn red arrow button.
 - `game/adventure/hourglass.gd`: `Hourglass`, the drawn hourglass that runs
   and turns over while a world is made (`phase`).
-- `game/main.gd`: the title's `Shandalar` opens the in-development notice
-  first (`_open_shandalar_notice`, 0.50.61); its Go test opens the Embark
-  screen.
+- `game/main.gd`: the title's `Shandalar` opens the Embark screen
+  (`_open`); the in-development notice it opened first from 0.50.61
+  (`_open_shandalar_notice`) was removed on 2026-11-20.
 - `game/skin.gd` `SIZES`, `tools/import_original.py` `PIC_SCREENS` /
   `NOT_READ`, `tools/skin_catalogue.py`: the skin picture
   `adventure_hero_background` (`Menu4.pic`); `character_select_background`

@@ -262,6 +262,7 @@ static func _page_table() -> Dictionary:
 		_heading("The prompt tells you what to do next"),
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
 		_text("A question that takes a color or colors (Dream Coat, Prismatic Lace, Shyft) ticks each color you click; Done. answers with all you ticked."),
+		_text("In a window that lists choices (a question, a tutor's list of your library, a spell's modes), Up and Down walk the lines and Enter takes the one that is lit. The large card on the window's left shows the card of the name under the pointer, or of the line you are on."),
 		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect, a licid's cost to end its effect, and the permanent sacrificed to ignore Volrath's Curse or Damping Engine. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
 		_heading("Keep these keys handy"),
 		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again; a click on the card does the same unless Options, Display turns that off. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
@@ -455,7 +456,7 @@ static func _adventure_pages() -> Array:
 
 static func _page_embark() -> Dictionary:
 	return {"title": "Shandalar — a new adventure", "blocks": [
-		_text("Shandalar on the main menu first says that the adventure is still in development, and where to tell us what you notice: as an issue on the project's GitHub page. Go test opens Embark to the world of Shandalar, where your hero is made; Back stays on the menu. Every choice is on the one screen, the campaign's modern settings behind one button. The pages after this one tell the world and each of its parts."),
+		_text("Shandalar on the main menu opens Embark to the world of Shandalar, where your hero is made. Every choice is on the one screen, the campaign's modern settings behind one button. The pages after this one tell the world and each of its parts."),
 		_heading("Your hero"),
 		_text("The red arrows beside the face walk the faces: the fourteen heroes of the 1997 game first, then every other face the game has. A hero comes with their own name; type yours over it, up to 25 characters. On the map chooses the figure that walks the world map: Male, Female, or Other, one of the two drawn when the world is made. Until you choose, a 1997 hero walks as themselves. Under it, Hair, Skin, Body, Arms, Pants and Boots each open their colors for the figure, and 1997 puts it back in the old game's own; the figure walks under them as you choose."),
 		_heading("Your magic"),
