@@ -18973,6 +18973,62 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-21 — Places plugins: an old adventurer's hut and a conjuration wizard guild
+
+The owner asked whether *"a new type of town or interaction place"* could be
+a plugin — *"one would supply an icon and rules"* — then ruled: a plugin of
+its own, its places *"placed on other islands or on mainland if used"*; a
+dungeon one raises *"separate from the main quest"*, holding the plugin
+creator's cards; *"saves work"*; and two places shipped as finished places
+and studies: *"An old adventurers hut"* (an old man, once a planeswalker
+who played Shandalar and was drawn into this world, tells for 1000 gold
+where a dungeon lies that nobody else knows of) and a *"conjuration wizard
+guild"* (a copy of a card for 2000, then 4000, 8000, 12000 gold, *"and
+after that they do not offer the service any more"*).
+
+- **Adventure plugin API 2: sites plugins.** `kind: "sites"` in
+  `plugin.json`, content `sites.json` + `text.json`: places (a picture, a
+  map sprite, panes chosen by conditions), actions (`effects`, `copy_card`,
+  `leave`) with a ladder of prices after which an action is gone, flags,
+  and dungeons (`spawn_dungeon`: name, color, size, rules, 1–6 cards,
+  distance). Checked by the same staged loader and schema as the islands
+  (`schema_v1.json`'s `site_files` and `sites_` types).
+- **Placed once, on the plugin's own dice**: on the mainland near a road,
+  and on each island sailed to when the place's `where` says so, kept in
+  that land's `world.expansion.sites`; a campaign without them, and every
+  1997 draw of one with them, unchanged (the world's fingerprint and the
+  adventure's dice pinned by the tests).
+- **A raised dungeon** is a new encounter slot after the 1997 fifteen
+  (`WorldClues.MOST_SLOTS` 48): everything about it known, its treasure the
+  plugin's cards, from then on an ordinary dungeon; the doors, the board and
+  the map reach it, 1997's dice walks keep their fifteen.
+- **Save version 9**: the sites plugins' progress (`sites`) and a ticked
+  sites plugin's kind in its row. A missing sites plugin hides its places
+  and keeps its progress; its dungeon stays.
+- **The two places** ship beside the Refuge in `expanded_adventure/`:
+  `Old_Adventurers_Hut/` and `Conjuration_Wizard_Guild/`, each with its own
+  art; neither needs a card pack.
+- Docs: `docs/adventure-plugins.md` (*Sites plugins (API 2)*), the authors'
+  guide's `sites.html`, Help's Adventure plugins page,
+  `expanded_adventure/README.txt`, CODE_MAP. Tests:
+  `tests/unit/test_site_plugins_2026_11_21.gd`; the authoring tool's twin
+  checks and corpus.
+- **Tools for places** (the owner: *"expand our plugin toolset with tools
+  so community can build its own places"*): `tools/adventure_plugin.py`
+  gets `new --kind sites`, `add-place`, `add-dungeon`, `walk` (a place
+  played as text without the game) and `art` (advice on a plugin's
+  pictures); the Lab plays a sites plugin; the releases carry the three
+  plugins' zips. Gate: 8 shards, 18,989 tests, green on the desk.
+
+## 2026-11-21 — Version 0.70.4
+
+The owner: *"Ok bump the version."* Version 0.70.4 (Android version code
+70004) gathers the entries below it — and the places plugins above, built
+the same day: the tutor's list with its large card and the arrows walking
+every selection window of the duel, and the main menu's Shandalar opening
+Embark without the in-development notice. Its notes are
+`docs/releases/0.70.4.md`. LAN stays protocol 32; 0.70.4 plays only 0.70.4.
+
 ## 2026-11-20 — No in-development notice before Embark
 
 The owner: *"remove Shandalar - still in development warning window when

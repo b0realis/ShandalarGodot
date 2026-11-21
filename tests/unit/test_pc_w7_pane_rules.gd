@@ -61,7 +61,9 @@ func test_1997_s_icons_are_the_world_s_own_frames() -> void:
 	assert_eq(CluesPane.icon_parts(2), [["world_castles2", 4], ["world_castles2", 0]], "the green one")
 	var pair := WorldView.dungeon_frames(5)
 	assert_eq(CluesPane.icon_parts(5), [pair[1], pair[0]], "a dungeon's marker pair, ground first")
-	assert_eq(CluesPane.icon_parts(15), [], "no such slot")
+	# A slot past the fifteen is a sites plugin's raised dungeon (adventure
+	# plugin API 2, 2026-11-21): it wears a 1997 dungeon's look.
+	assert_eq(CluesPane.icon_parts(15), [pair[1], pair[0]], "a raised dungeon's icon is a 1997 one")
 
 
 func test_the_news_line_names_the_towns_as_said() -> void:

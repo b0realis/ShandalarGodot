@@ -1,0 +1,11 @@
+{
+	"shrine.subtitle": "A shrine by the road",
+	"shrine.intro": "A small stone shrine stands by the road. A lantern burns in it, though no keeper is near.",
+	"shrine.offer": "Travelers leave gold in its bowl, and find their packs heavier with food when they move on.",
+	"shrine.again": "The lantern flares as you come near, as if it knows you.",
+	"shrine.bless": "Leave {price} gold in the bowl ({uses_left} left)",
+	"shrine.blessed": "You leave {price} gold in the bowl. When you lift your pack, it is heavier: six days of food.",
+	"shrine.spent": "The lantern has gone out. The bowl is cold and empty.",
+	"shrine.log": "Left {price} gold at the wayside shrine.",
+	"shrine.leave": "Leave"
+}

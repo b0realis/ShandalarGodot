@@ -108,7 +108,7 @@ const ENTERED := "Entered %s (%s)"
 static func at(world: ShandalarWorld, tile: Vector2i) -> int:
 	if world == null or world.tile_flags(tile.x, tile.y) & ShandalarWorld.DUNGEON == 0:
 		return -1
-	for index in mini(world.encounters.size(), SLOTS):
+	for index in mini(world.encounters.size(), WorldClues.MOST_SLOTS):
 		var slot: Dictionary = world.encounters[index]
 		if int(slot.get("x", -1)) != tile.x or int(slot.get("y", -1)) != tile.y:
 			continue
@@ -136,7 +136,7 @@ static func castle_of(world: ShandalarWorld, site: int) -> int:
 ## for no such slot.
 static func enter(player: AdventurePlayer, index: int) -> Dictionary:
 	var world := player.world if player != null else null
-	if world == null or index < 0 or index >= mini(world.encounters.size(), SLOTS):
+	if world == null or index < 0 or index >= mini(world.encounters.size(), WorldClues.MOST_SLOTS):
 		return {}
 	var slot: Dictionary = world.encounters[index]
 	if index < CASTLES:
@@ -169,7 +169,7 @@ static func entered(world: ShandalarWorld, index: int) -> int:
 static func leave(player: AdventurePlayer, index: int, result: Dictionary) -> Array[Dictionary]:
 	var news: Array[Dictionary] = []
 	var world := player.world if player != null else null
-	if world == null or index < 0 or index >= mini(world.encounters.size(), SLOTS):
+	if world == null or index < 0 or index >= mini(world.encounters.size(), WorldClues.MOST_SLOTS):
 		return news
 	if index >= CASTLES:
 		move(player, index)
@@ -242,6 +242,8 @@ static func expansion_place(world: ShandalarWorld, tile: Vector2i) -> bool:
 		points.append_array((entries as Dictionary).values())
 	for mark in ["port", "castle"]:
 		points.append(world.expansion.get(mark))
+	# A sites plugin's places (adventure plugin API 2), shown or not.
+	points.append_array(AdventureSites.points(world))
 	for point: Variant in points:
 		if AdventureRegions.valid_point(point) and Vector2i(int(point[0]), int(point[1])) == tile:
 			return true

@@ -1,0 +1,15 @@
+{
+	"hut.subtitle": "A hut in the woods",
+	"hut.intro": "Smoke curls from a hut half swallowed by the trees. Inside, by a small fire, sits a very old man.",
+	"hut.story": "\"I was a planeswalker once, from a world far from this one,\" he says. \"There I sat before a glowing window and played at Shandalar, a game of wizards and cards. One night the game played me instead. It drew me through, and here I have stayed ever since.\"",
+	"hut.peace": "\"I am done with duels and wizards' wars. I want only peace now, and a warm fire.\"",
+	"hut.offer": "\"But I still know things nobody else in Shandalar knows. For 1000 gold I will tell you where a dungeon lies that no wise man has ever heard of.\"",
+	"hut.pay": "Pay {price} gold for the secret",
+	"hut.leave": "Leave",
+	"hut.told": "He counts the gold, then draws a map in the ashes of the hearth. \"{dungeon}. I found it long ago, in my old world, when this was only a game. Mind its guardians. The cards I left there are yours, if you can take them.\"",
+	"hut.marked": "The way to {dungeon} is marked on your map.",
+	"hut.waiting": "The old man looks up from the fire. \"You know the way to {dungeon}. Go, before its guardians grow bolder.\"",
+	"hut.cleared": "\"So you found my old treasures,\" the old man smiles. \"Keep them well. I have nothing left to sell, only peace, and that I keep for myself.\"",
+	"hut.clue": "The old man in the woods told you where {dungeon} lies.",
+	"hut.log": "Paid the old man in the woods 1000 gold for the way to {dungeon}."
+}

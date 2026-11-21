@@ -78,12 +78,14 @@ func _screen(player: AdventurePlayer) -> Node:
 	return autofree(screen)
 
 
-func test_a_campaign_saves_its_ticked_plugins_as_version_8() -> void:
+## Version 8 named the ticked plugins; 9 (adventure plugin API 2, 2026-11-21)
+## adds the sites plugins' progress and keeps an island's row as 8 wrote it.
+func test_a_campaign_saves_its_ticked_plugins_as_version_8_and_on() -> void:
 	var player := hero()
 	assert_eq(player.adventures, [{"id": BEACON.ID, "version": "", "name": "Beacon Test Island", "title": "Beacon Test Island"}])
 	var saved := _round_trip(player)
-	assert_eq(int(saved["version"]), 8)
-	assert_eq(AdventurePlayer.FORMAT_VERSION, 8)
+	assert_eq(int(saved["version"]), 9)
+	assert_eq(AdventurePlayer.FORMAT_VERSION, 9)
 	assert_eq(saved["hero"]["adventures"], player.adventures)
 	assert_false((saved["hero"] as Dictionary).has("expanded_adventure"), "the bool of version 7 is gone")
 	var loaded := AdventurePlayer.from_dict(saved)

@@ -39,7 +39,18 @@ extends RefCounted
 ## list). [member revision] counts the scans.
 
 ## The plugin API this game reads. A plugin asking for a newer one is refused.
-const API_VERSION := 1
+## API 2 (2026-11-21) brings the sites plugins ([constant KIND_SITES]):
+## places of their own on the mainland and on other plugins' islands; every
+## API 1 plugin reads as before.
+const API_VERSION := 2
+## A plugin's kind (the manifest's `kind`, API 2): an island reached by ship
+## ([constant KIND_ISLAND], the default and API 1's only kind), or places that
+## stand on the lands a campaign has ([constant KIND_SITES], [AdventureSites]).
+const KIND_ISLAND := "island"
+const KIND_SITES := "sites"
+const KINDS: Array[String] = [KIND_ISLAND, KIND_SITES]
+## The first API a sites plugin may declare.
+const SITES_API := 2
 ## The manifest's own format.
 const PLUGIN_FORMAT := 1
 ## The folder's name, beside the game and in the repository.
@@ -49,9 +60,10 @@ const FOLDER_NAME := "expanded_adventure"
 const ID_PATTERN := "^[a-z][a-z0-9_]{0,39}$"
 const RESERVED_IDS: Array[String] = ["mainland"]
 ## The manifest's fields: those a plugin must give, and every one it may.
+## `region` is required of an island alone ([method manifest_problems]).
 const REQUIRED_FIELDS: Array[String] = ["plugin_format", "api_version", "id", "name", "version",
 	"authors", "description", "region"]
-const FIELDS: Array[String] = ["plugin_format", "api_version", "id", "name", "version",
+const FIELDS: Array[String] = ["plugin_format", "api_version", "kind", "id", "name", "version",
 	"minimum_game_version", "authors", "license", "description", "learning_note", "requires",
 	"region", "files"]
 const REGION_FIELDS: Array[String] = ["title", "castle_name", "salt", "mana_links", "palette"]
@@ -328,7 +340,7 @@ static func _row(path: String, kind: String) -> Dictionary:
 	var shadowed: Array[String] = []
 	var authors: Array[String] = []
 	return {"id": "", "name": path.get_file().get_basename() if kind == "zip" else path.get_file(),
-		"version": "", "api": 0, "path": path, "kind": kind, "description": "", "authors": authors,
+		"version": "", "api": 0, "path": path, "kind": kind, "plugin_kind": KIND_ISLAND, "description": "", "authors": authors,
 		"license": "", "learning_note": "", "requires": {"card_packs": []}, "problems": problems,
 		"shadowed": shadowed}
 
@@ -381,6 +393,11 @@ static func _add(path: String) -> void:
 	var plugin: Dictionary = _plugins[id]
 	plugin["hashes"] = hashes
 	plugin["data"] = content.get("data", {})
+	if manifest_kind(manifest) == KIND_SITES:
+		var sites: Dictionary = content.get("descriptor", {}) if content_reader.is_valid() \
+			else PluginSchema.site_descriptor(manifest, plugin["data"])
+		plugin["descriptor"] = _site_descriptor(manifest, sites)
+		return
 	var schema: Dictionary = content.get("descriptor", {}) if content_reader.is_valid() \
 		else PluginSchema.descriptor(manifest, plugin["data"])
 	plugin["descriptor"] = _descriptor(manifest, schema)
@@ -399,6 +416,8 @@ static func _fill(row: Dictionary, manifest: Dictionary) -> void:
 	var api: Variant = manifest.get("api_version")
 	if _whole(api):
 		row["api"] = int(api)
+	if manifest.get("kind") is String and String(manifest["kind"]) in KINDS:
+		row["plugin_kind"] = String(manifest["kind"])
 	var authors: Variant = manifest.get("authors")
 	if authors is Array:
 		for author: Variant in authors:
@@ -440,6 +459,61 @@ static func _descriptor(manifest: Dictionary, schema: Dictionary) -> Dictionary:
 	return out
 
 
+## A SITES PLUGIN'S DESCRIPTOR ([AdventureSites] reads it):
+## [param schema]'s ([method PluginSchema.site_descriptor]) with the
+## manifest's word for what it leaves out — never a land's (no title, no
+## port, no progress schema): `kind` "sites", `id`, `version`, `name`,
+## `packs`, `pack`, `salt`, `pictures`, `sprites` (`{site: [file, width]}`),
+## `sites` (`{site: {name, where, gap}}`), `plugin: true`.
+static func _site_descriptor(manifest: Dictionary, schema: Dictionary) -> Dictionary:
+	var out: Dictionary = schema.duplicate(true)
+	var packs: Array[String] = []
+	for need: Variant in (manifest.get("requires", {}) as Dictionary).get("card_packs", []):
+		packs.append(String(need["id"]))
+	var defaults := {"version": String(manifest["version"]), "name": String(manifest["name"]),
+		"packs": packs, "pack": packs[0] if not packs.is_empty() else "", "salt": 0,
+		"pictures": {}, "sprites": {}, "sites": {}}
+	for key in defaults:
+		if not out.has(key):
+			out[key] = defaults[key]
+	out["plugin"] = true
+	out["kind"] = KIND_SITES
+	out["id"] = String(manifest["id"])
+	return out
+
+
+## The kind [param manifest] declares ([constant KINDS]); an island when it
+## names none.
+static func manifest_kind(manifest: Dictionary) -> String:
+	var kind: Variant = manifest.get("kind", KIND_ISLAND)
+	return String(kind) if kind is String and String(kind) in KINDS else KIND_ISLAND
+
+
+## The kind of plugin [param id] ([constant KIND_ISLAND] or [constant
+## KIND_SITES]), "" for one this game does not hold valid.
+static func kind(id: String) -> String:
+	return manifest_kind(manifest(id)) if valid(id) else ""
+
+
+## The valid island plugins (the lands [AdventureExpansions] knows), in the
+## order found.
+static func land_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id in ids():
+		if kind(id) == KIND_ISLAND:
+			out.append(id)
+	return out
+
+
+## The valid sites plugins ([AdventureSites]), in the order found.
+static func site_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id in ids():
+		if kind(id) == KIND_SITES:
+			out.append(id)
+	return out
+
+
 # ------------------------------------------------------ the manifest --
 
 ## WHAT IS WRONG WITH A MANIFEST (§2 of the plugin spec), one problem a
@@ -455,11 +529,19 @@ static func manifest_problems(value: Variant) -> Array[String]:
 	for key: Variant in manifest:
 		if not key is String or not key in FIELDS:
 			out.append("plugin.json: unknown field \"%s\"." % str(key))
+	var sites := manifest.get("kind") is String and String(manifest["kind"]) == KIND_SITES
 	for key in REQUIRED_FIELDS:
-		if not manifest.has(key):
+		if not manifest.has(key) and not (sites and key == "region"):
 			out.append("plugin.json: the field \"%s\" is missing." % key)
 	if not out.is_empty():
 		return out
+	if manifest.has("kind") and (not manifest["kind"] is String or not String(manifest["kind"]) in KINDS):
+		out.append("plugin.json: kind must be one of %s." % ", ".join(KINDS))
+	if sites:
+		if manifest.has("region"):
+			out.append("plugin.json: a sites plugin has no region; its places are described in sites.json.")
+		if _whole(manifest["api_version"]) and int(manifest["api_version"]) < SITES_API:
+			out.append("plugin.json: a sites plugin needs api_version %d or newer." % SITES_API)
 	if not _whole(manifest["plugin_format"]) or int(manifest["plugin_format"]) != PLUGIN_FORMAT:
 		out.append("plugin.json: plugin_format must be %d." % PLUGIN_FORMAT)
 	if not _whole(manifest["api_version"]) or int(manifest["api_version"]) < 1:
@@ -487,7 +569,8 @@ static func manifest_problems(value: Variant) -> Array[String]:
 		out.append("plugin.json: authors must be a list of 1 to %d names." % MAX_AUTHORS)
 	if manifest.has("requires"):
 		out.append_array(_requires_problems(manifest["requires"]))
-	out.append_array(_region_problems(manifest["region"]))
+	if not sites:
+		out.append_array(_region_problems(manifest["region"]))
 	if manifest.has("files"):
 		var files: Variant = manifest["files"]
 		if not files is Dictionary:

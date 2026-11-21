@@ -1,0 +1,125 @@
+{
+	"salt": 1213141,
+	"pictures": {
+		"old_hut_hut": "art/old_hut_hut.png"
+	},
+	"dungeons": {
+		"forgotten_vault": {
+			"name": "The Forgotten Vault",
+			"color": "random",
+			"size": "large",
+			"rules": [],
+			"cards": [
+				"Old Man of the Sea",
+				"Planar Gate",
+				"Mirror Universe"
+			],
+			"distance": {
+				"min": 8,
+				"max": 22
+			}
+		}
+	},
+	"sites": {
+		"hut": {
+			"name": "Old Adventurer's Hut",
+			"where": [
+				"mainland"
+			],
+			"picture": "old_hut_hut",
+			"sprite": {
+				"file": "art/old_hut_map.png",
+				"width": 104
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "forgotten_vault",
+								"state": "cleared"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.cleared"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "forgotten_vault",
+								"state": "open"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.waiting"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.intro",
+						"hut.story",
+						"hut.peace",
+						"hut.offer"
+					],
+					"actions": [
+						{
+							"id": "secret",
+							"do": "effects",
+							"label": "hut.pay",
+							"prices": [
+								1000
+							],
+							"effects": [
+								{
+									"spawn_dungeon": "forgotten_vault"
+								},
+								{
+									"log_clue": {
+										"text": "hut.clue"
+									}
+								},
+								{
+									"log_event": {
+										"event": "old_hut",
+										"text": "hut.log"
+									}
+								}
+							],
+							"result": [
+								"hut.told",
+								"hut.marked"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				}
+			]
+		}
+	}
+}

@@ -1,0 +1,15 @@
+{
+	"plugin_format": 1,
+	"api_version": 2,
+	"kind": "sites",
+	"id": "old_hut",
+	"name": "An Old Adventurer's Hut",
+	"version": "1.0.0",
+	"minimum_game_version": "0.70.4",
+	"authors": [
+		"Shandalar Godot"
+	],
+	"license": "GPL-3.0 (the game's own license; see LICENSE.txt)",
+	"description": "A hut in the woods of Shandalar. The old man inside sells, for 1000 gold, the way to a dungeon nobody else knows of.",
+	"learning_note": "A self-contained place, and a study for the places players wish for: one sites plugin with one place, three panes, a price paid once and a dungeon raised from the plugin's own card list. Original fiction, not official Magic canon."
+}

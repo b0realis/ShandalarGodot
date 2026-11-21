@@ -58,8 +58,12 @@ extends RefCounted
 ## Version 8 carries Negative life is survivable too (2026-11-13, before 8
 ## shipped), `hero.life_checked_at_phase_end` ([member
 ## life_checked_at_phase_end]); absent, off.
+## Version 9 (adventure plugin API 2, 2026-11-21; the owner: *"Yes saves
+## work!"*) carries the sites plugins' progress, `sites` ([member sites]), and
+## a ticked plugin's kind in its row of `hero.adventures`; a save from before
+## reads none and every row an island's.
 const FORMAT := "shandalar-adventure"
-const FORMAT_VERSION := 8
+const FORMAT_VERSION := 9
 ## Where the adventures are saved (tests point it elsewhere): this folder
 ## — on Android `<files>/adventures/` instead, in the app's corner of the
 ## shared storage ([method saves_place]).
@@ -268,6 +272,14 @@ var adventures: Array = []
 ## plugin's land ([method AdventureExpansions.held]). Never saved: the next
 ## load with the old version back reads them again.
 var held_lands := {}
+## THE SITES PLUGINS' PROGRESS (adventure plugin API 2, 2026-11-21), by
+## plugin id: `{uses: {"<site>.<action>": n}, flags: [names], dungeons:
+## {"<land>:<dungeon>": slot}}` ([DataSites]). Kept as it is when its plugin
+## is missing, so putting it back goes on where it was.
+var sites := {}
+## The most sites plugins' records a save keeps, and their parts' sizes.
+const MOST_SITES := 32
+const MOST_SITE_KEYS := 256
 ## THE FINAL BATTLE'S RULE, chosen at the Embark (the owner, 2026-10-27,
 ## round P3: "A setting at Embark"; the names are the owner's) — what a lost
 ## battle against Arzakon leaves ([FinalBattle]):
@@ -1009,6 +1021,7 @@ func to_dict(include_regions := true) -> Dictionary:
 		"version": FORMAT_VERSION,
 		"regions": regions if include_regions else {},
 		"expansions": expansions if include_regions else {},
+		"sites": self.sites,
 		"journey": {"time": journey_steps()},
 		"tasks": {"selected": tracked_task, "clues": known_clues, "history": task_history, "sequence": task_sequence},
 		"about": "One adventure in the world of Shandalar: the hero, what they carry, their record, the clocks, and the world as it now stands. The world's grid is 128 rows of 64 tile bytes in hex: rows 0-63 the tiles (terrain in the low four bits; 0x10 a site, 0x20 a road, 0x40 a dungeon, 0x80 explored), rows 64-127 the roads leaving each tile, a bit per direction.",
@@ -1099,6 +1112,7 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	# A Classic adventure from before the ruling: a banned treasure still
 	# in a dungeon replaced as the Embark now replaces it.
 	player.treasures_by_the_ban_list()
+	player.sites = _cleaned_sites(data.get("sites"))
 	AdventureRegions.read(player, data)
 	AdventureExpansions.note_versions(player)
 	AdventureExpansions.sync_choices(player)
@@ -1189,8 +1203,46 @@ static func _cleaned_adventures(value: Variant) -> Array:
 		if not AdventurePlugins.valid_id(id) or seen.has(id) or out.size() >= MOST_ADVENTURES:
 			continue
 		seen[id] = true
-		out.append({"id": id, "version": _text(row.get("version")).left(24), "name": _text(row.get("name")).left(AdventurePlugins.MAX_NAME),
-			"title": _text(row.get("title")).left(AdventurePlugins.MAX_NAME)})
+		var cleaned := {"id": id, "version": _text(row.get("version")).left(24), "name": _text(row.get("name")).left(AdventurePlugins.MAX_NAME),
+			"title": _text(row.get("title")).left(AdventurePlugins.MAX_NAME)}
+		# The kind (API 2) only for a sites plugin: an island's row reads
+		# as every row always did.
+		if row.get("kind") is String and String(row["kind"]) == AdventurePlugins.KIND_SITES:
+			cleaned["kind"] = AdventurePlugins.KIND_SITES
+		out.append(cleaned)
+	return out
+
+
+## THE SITES PLUGINS' PROGRESS of a save ([member sites]): by plugin id
+## ([method AdventurePlugins.valid_id]), each `{uses, flags, dungeons}` —
+## the uses whole counts from 0 under keys of text, the flags names, the
+## dungeons slots of the dungeon slots — anything else dropped, not the
+## save; at most [constant MOST_SITES] plugins and [constant MOST_SITE_KEYS]
+## of each part.
+static func _cleaned_sites(value: Variant) -> Dictionary:
+	var out := {}
+	var saved := _object(value)
+	for id: Variant in saved:
+		if not id is String or not AdventurePlugins.valid_id(String(id)) or out.size() >= MOST_SITES:
+			continue
+		var record := _object(saved[id])
+		var uses := {}
+		var counted := _object(record.get("uses"))
+		for key: Variant in counted:
+			if key is String and String(key).length() <= 80 and _is_number(counted[key]) and uses.size() < MOST_SITE_KEYS:
+				uses[key] = clampi(_number(counted[key]), 0, DataSites.MOST_USES)
+		var flags: Array = []
+		for flag: Variant in _list(record.get("flags")):
+			if flag is String and String(flag).length() <= 40 and not flag in flags and flags.size() < MOST_SITE_KEYS:
+				flags.append(flag)
+		var dungeons := {}
+		var raised := _object(record.get("dungeons"))
+		for key: Variant in raised:
+			if key is String and String(key).length() <= 90 and _is_number(raised[key]) and dungeons.size() < MOST_SITE_KEYS:
+				var slot := _number(raised[key])
+				if slot >= 0 and slot < WorldClues.MOST_SLOTS:
+					dungeons[key] = slot
+		out[id] = {"uses": uses, "flags": flags, "dungeons": dungeons}
 	return out
 
 
@@ -1207,7 +1259,11 @@ static func ticked_rows(ids: Array) -> Array:
 		var title := AdventureExpansions.label(key) if AdventureExpansions.known(key) else ""
 		if name == "":
 			name = title if title != "" else AdventureExpansions.label(key)
-		out.append({"id": key, "version": String(row.get("version", "")) if found else "", "name": name, "title": title})
+		var made := {"id": key, "version": String(row.get("version", "")) if found else "", "name": name, "title": title}
+		if found and AdventurePlugins.kind(key) == AdventurePlugins.KIND_SITES:
+			made["kind"] = AdventurePlugins.KIND_SITES
+			made["title"] = ""
+		out.append(made)
 	return _cleaned_adventures(out)
 
 

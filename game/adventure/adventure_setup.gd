@@ -410,7 +410,8 @@ func resolve(pack_versions: Dictionary, rolled := 0) -> Dictionary:
 			chosen_packs.append({"id": id, "version": String(pack_versions[id])})
 	var lands: Array[String] = []
 	for id in adventures:
-		if AdventureExpansions.known(id) and not id in lands:
+		# An island plugin's land, or a sites plugin's places (API 2).
+		if (AdventureExpansions.known(id) or AdventureSites.known(id)) and not id in lands:
 			lands.append(id)
 	var row := color_row(color)
 	var start := starting_resources(difficulty)

@@ -35,17 +35,21 @@ static var _places: Array[Dictionary] = []
 static var _trims := {}
 
 
+## Land [param id]'s descriptor: a development fixture's, an island
+## plugin's — never a sites plugin's, which is no land ([AdventureSites]).
 static func definition(id: String) -> Dictionary:
 	if _development.has(id):
 		return _development[id]
+	if AdventurePlugins.kind(id) != AdventurePlugins.KIND_ISLAND:
+		return {}
 	return AdventurePlugins.descriptor(id)
 
 
-## Every land this game knows now: the valid plugins in the order found,
-## then the development fixtures.
+## Every land this game knows now: the valid island plugins in the order
+## found, then the development fixtures.
 static func definitions() -> Dictionary:
 	var out := {}
-	for id in AdventurePlugins.ids():
+	for id in AdventurePlugins.land_ids():
 		out[id] = AdventurePlugins.descriptor(id)
 	for id in _development:
 		out[id] = _development[id]
@@ -196,6 +200,13 @@ static func refresh(_pack := "", _enabled := false) -> void:
 	# Scripts contain no preloaded textures; release dormant providers too.
 	_providers.clear()
 	_trims.clear()
+	AdventureSites.refresh()
+
+
+## The places' list made again on its next reading (a place put on a land,
+## [method AdventureSites.place_here]).
+static func forget_places() -> void:
+	_places_key.clear()
 
 
 ## THE LAND'S CONTENT: [param id]'s own [DataRegion] for a plugin, made
@@ -233,7 +244,9 @@ static func initialize(player: AdventurePlayer) -> void:
 	if player == null or player.world == null: return
 	sync_choices(player)
 	release_inactive(AdventureRegions.id(player.world))
-	if not AdventureRegions.mainland(player): return
+	if not AdventureRegions.mainland(player):
+		AdventureSites.place_here(player)
+		return
 	var entries: Dictionary = player.world.expansion.get("entries", {})
 	for id in definitions():
 		if not enabled_for(player, id): continue
@@ -246,6 +259,8 @@ static func initialize(player: AdventurePlayer) -> void:
 	if not entries.is_empty():
 		player.world.expansion["entries"] = entries
 		player.world.expansion["region"] = AdventureRegions.MAINLAND
+	# A sites plugin's places after the anchorages, which they keep away from.
+	AdventureSites.place_here(player)
 	_places_key.clear()
 
 
@@ -256,6 +271,7 @@ static func release_inactive(active: String) -> void:
 
 static func entered(player: AdventurePlayer) -> void:
 	sync_choices(player)
+	AdventureSites.place_here(player)
 	# Keep only the active region's script. Unvisited content has no runtime state.
 	var id := AdventureRegions.id(player.world)
 	for key in _providers.keys():
@@ -302,7 +318,7 @@ static func mainland_note(player: AdventurePlayer) -> String:
 		return ""
 	var lines: Array[String] = []
 	for row: Variant in player.adventures:
-		if row is Dictionary and row.get("id") is String:
+		if row is Dictionary and row.get("id") is String and not sites_row(row):
 			var why := sail_refusal(player, String(row["id"]))
 			if why != "":
 				lines.append(why)
@@ -314,7 +330,7 @@ static func mainland_note(player: AdventurePlayer) -> String:
 ## not installed, refused, unable to read the saved land, or a card pack it
 ## needs not the campaign's, off, or older than it asks. "" when they sail.
 static func sail_refusal(player: AdventurePlayer, id: String) -> String:
-	if player == null or not ticked(player, id) or enabled_for(player, id):
+	if player == null or not ticked(player, id) or enabled_for(player, id) or AdventureSites.known(id):
 		return ""
 	var name := plugin_name(id, player)
 	var title := label(id, player)
@@ -334,6 +350,16 @@ static func sail_refusal(player: AdventurePlayer, id: String) -> String:
 		return "Ships to %s do not sail: the plugin %s needs %s %s or newer (installed %s)." % [
 			title, name, String(old["title"]), String(old["min_version"]), String(old["version"])]
 	return ""
+
+
+## Whether ticked row [param row] ([member AdventurePlayer.adventures]) is
+## a sites plugin's — no land, never a voyage: by the installed plugin's
+## kind, else by the kind the save wrote for it (API 2; none: an island).
+static func sites_row(row: Dictionary) -> bool:
+	var id := String(row.get("id", ""))
+	if AdventurePlugins.valid(id):
+		return AdventurePlugins.kind(id) == AdventurePlugins.KIND_SITES
+	return String(row.get("kind", AdventurePlugins.KIND_ISLAND)) == AdventurePlugins.KIND_SITES
 
 
 ## "version 1.0.0", or "another version" when the save does not say.
@@ -412,6 +438,8 @@ static func places(world: ShandalarWorld) -> Array[Dictionary]:
 			var point: Variant = world.expansion.get(kind)
 			if AdventureRegions.valid_point(point):
 				_places.append({"id": id, "kind": kind, "point": point, "name": "Ship" if kind == "port" else String(definition(id).get("castle_name", "Castle"))})
+	# A sites plugin's places, on the mainland and the islands alike.
+	_places.append_array(AdventureSites.places(world))
 	return _places
 
 
@@ -428,6 +456,8 @@ static func marker(world: ShandalarWorld, tile: Vector2i) -> String:
 static func describe(player: AdventurePlayer, tile: Vector2i) -> Dictionary:
 	var mark := marker(player.world, tile)
 	if mark == "": return {}
+	if AdventureSites.owns(mark):
+		return AdventureSites.describe(player, tile)
 	for place in places(player.world):
 		if tile == Vector2i(place["point"][0], place["point"][1]) and place.get("destinations", []).size() > 1:
 			return departure_place(place["destinations"])
@@ -488,7 +518,7 @@ static func action_owner(action: String) -> String:
 static func is_action(action: String) -> bool:
 	if action == HOME_ACTION or action == LEAVE_ACTION: return true
 	if action.begins_with(VISIT_ACTION): return definitions().has(action.get_slice(":", 1))
-	return action_owner(action) != ""
+	return action_owner(action) != "" or AdventureSites.action_owner(action) != ""
 
 
 ## THE SCREEN ARRIVES UNTYPED (0.60.13 bug campaign, h5-1). This directory
@@ -526,6 +556,8 @@ static func act(screen: Node, action: String, place: Dictionary) -> bool:
 		screen._sync_rest()
 		return true
 	var owner := action_owner(action)
+	if AdventureSites.action_owner(action).length() > owner.length():
+		return AdventureSites.act(screen, action, place)
 	if owner != "":
 		var content := provider_for(screen.player, owner)
 		return content.call("act", screen, action, place) if content != null else true
@@ -567,6 +599,9 @@ static func picture(key: String) -> Texture2D:
 		var pictures: Variant = info.get("pictures", {})
 		if pictures is Dictionary and (pictures as Dictionary).has(key):
 			return _texture(id, info, String(pictures[key]))
+	var site_picture := AdventureSites.picture(key)
+	if site_picture != null:
+		return site_picture
 	return GameSkin.texture(key)
 
 
@@ -582,6 +617,8 @@ static func _texture(id: String, info: Dictionary, path: String) -> Texture2D:
 ## `[texture, destination, source]`, its foot on the tile's middle, its
 ## width the descriptor's in world pixels; [] when it has no sprite.
 static func map_op(mark: String) -> Array:
+	if AdventureSites.owns(mark):
+		return AdventureSites.map_op(mark)
 	var id := mark.get_slice(":", 0)
 	var info := definition(id)
 	var sprites: Variant = info.get("sprites", {})

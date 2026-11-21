@@ -1,0 +1,84 @@
+{
+	"salt": 5171923,
+	"pictures": {
+		"conjuration_guild_tower": "art/conjuration_guild_tower.png"
+	},
+	"sites": {
+		"tower": {
+			"name": "Conjuration Wizard Guild",
+			"where": [
+				"mainland",
+				"islands"
+			],
+			"picture": "conjuration_guild_tower",
+			"sprite": {
+				"file": "art/conjuration_guild_map.png",
+				"width": 92
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"used_up": "copy"
+						}
+					],
+					"subtitle": "guild.subtitle",
+					"lines": [
+						"guild.intro",
+						"guild.closed"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "guild.leave"
+						}
+					]
+				},
+				{
+					"subtitle": "guild.subtitle",
+					"lines": [
+						"guild.intro",
+						"guild.offer",
+						{
+							"text": "guild.again",
+							"when": [
+								{
+									"used": {
+										"action": "copy",
+										"min": 1
+									}
+								}
+							]
+						},
+						"guild.rule"
+					],
+					"actions": [
+						{
+							"id": "copy",
+							"do": "copy_card",
+							"label": "guild.copy",
+							"prices": [
+								2000,
+								4000,
+								8000,
+								12000
+							],
+							"pick_title": "guild.pick_title",
+							"pick_line": "guild.pick_line",
+							"result": [
+								"guild.done"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "guild.leave"
+						}
+					]
+				}
+			]
+		}
+	}
+}

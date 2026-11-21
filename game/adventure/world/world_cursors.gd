@@ -74,7 +74,7 @@ enum Kind { WALK, VILLAGE, TOWN, CITY, CASTLE, FALLEN, RULED, DUNGEON, LAIR, ARR
 ## and Arzakon's portal, open or petrified ([method AdventureFinale.place_at]);
 ## an optional land's harbor and anchorage a town's, its castle a castle's
 ## (adventure plugins: `region_port`, `region_castle`, [DataRegion]).
-const FOR_PLACE := {"region_port": Kind.TOWN, "expansion_port": Kind.TOWN, "region_castle": Kind.CASTLE,
+const FOR_PLACE := {"region_port": Kind.TOWN, "expansion_port": Kind.TOWN, "region_castle": Kind.CASTLE, "site": Kind.TOWN,
 	"village": Kind.VILLAGE, "town": Kind.TOWN, "city": Kind.CITY,
 	"castle": Kind.CASTLE, "fallen": Kind.FALLEN, "ruled": Kind.RULED,
 	"dungeon": Kind.DUNGEON, "lair": Kind.LAIR, "portal": Kind.PORTAL, "monument": Kind.MONUMENT}

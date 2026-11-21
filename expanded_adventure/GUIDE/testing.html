@@ -9,7 +9,7 @@
 </head>
 <body>
 <!-- guide:masthead -->
-<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 1</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 2</small></span></a><span class="tag">Local guide · works offline</span></div></header>
 <!-- /guide:masthead -->
 <div class="layout">
 <!-- guide:toc -->
@@ -24,13 +24,14 @@
 <li><a href="saves.html">Saves and compatibility</a></li>
 <li><a href="testing.html" aria-current="page">Testing</a></li>
 <li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="sites.html">Places: sites plugins</a></li>
 <li><a href="reference.html">Reference</a></li>
 <li><a href="faq.html">FAQ</a></li>
 </ol></nav>
 <!-- /guide:toc -->
 <main class="page" id="top">
 <h1>Testing</h1>
-<p class="lede">Three tools, from the quickest to the closest to play: the validator, the Expansion Lab, and the game itself.</p>
+<p class="lede">Three tools, from the quickest to the closest to play: the validator, the Expansion Lab, and the game itself. A sites plugin has a fourth, quicker still: <a href="sites.html#tool-walk">a walk of its places as text</a>.</p>
 
 <h2 id="stages">The checks</h2>
 
@@ -92,13 +93,13 @@
 <span class="prompt">$ </span>python3 tools/adventure_plugin.py validate broken_isle
 <span class="out">broken_isle: refused at the content stage (1 problem).</span>
 <span class="out">quests.json: quests[0].foe: foes.json has no smugler.</span></code></pre>
-<p>It takes a folder or a zip. <code>--json</code> prints one object instead (<code>valid</code>, <code>stage</code>, <code>problems</code>, <code>notes</code>, <code>id</code>, <code>name</code>, <code>version</code>), for your own scripts. The tool reads the game’s own schema, <code>game/adventure/plugins/schema_v1.json</code>, and the game’s card lists, so run it from the game folder (a release or a checkout), or name one with <code>--game DIR</code>, before or after the command. A copy of the tool on its own stops with exit 2 and says where to run it. Where the schema is found but no card lists, it adds the note “Card names were not checked” and checks the rest as usual.</p>
-<p>The tool’s other commands: <code>info</code> prints the manifest and what the plugin holds (towns, quests, foes, texts, files), <code>info --json</code> the same as one object; <code>compat OLD NEW</code> compares two versions for <a href="saves.html#never">saves</a>; <code>guide</code> rewrites this guide’s <a href="reference.html">Reference</a> page from the schema, and <code>guide --check</code> only says whether it is up to date. Every command exits 0 when done, valid or compatible, 1 when refused or incompatible, and 2 on a usage error; <code>--version</code> prints the game version and plugin API it checks for.</p>
+<p>It takes a folder or a zip. <code>--json</code> prints one object instead (<code>valid</code>, <code>stage</code>, <code>problems</code>, <code>notes</code>, <code>plugin_kind</code>, <code>id</code>, <code>name</code>, <code>version</code>), for your own scripts. The tool reads the game’s own schema, <code>game/adventure/plugins/schema_v1.json</code>, and the game’s card lists, so run it from the game folder (a release or a checkout), or name one with <code>--game DIR</code>, before or after the command. A copy of the tool on its own stops with exit 2 and says where to run it. Where the schema is found but no card lists, it adds the note “Card names were not checked” and checks the rest as usual.</p>
+<p>The tool’s other commands: <code>info</code> prints the manifest and what the plugin holds (towns, quests, foes, texts, files; for a sites plugin its places, their actions and its dungeons), <code>info --json</code> the same as one object; <code>compat OLD NEW</code> compares two versions for <a href="saves.html#never">saves</a>; for a sites plugin, <code>add-place</code> and <code>add-dungeon</code> add a place or a dungeon to its folder, <code>walk</code> plays its places as text without the game, and <code>art</code> gives advice on pane pictures and map sprites, an island’s too (<a href="sites.html#tools">Tools for places</a>); <code>guide</code> rewrites this guide’s <a href="reference.html">Reference</a> page from the schema, and <code>guide --check</code> only says whether it is up to date. Every command exits 0 when done, valid or compatible, 1 when refused or incompatible, and 2 on a usage error; <code>--version</code> prints the game version and plugin API it checks for.</p>
 
 <h2 id="lab">The Expansion Lab</h2>
 <p>In a source checkout of the game, the Expansion Lab plays a plugin headless: for each world seed it sails out and back, and checks the terrain, the objectives, the saves, the mana links and that a dormant plugin leaves nothing behind. With <code>--games</code> it also duels your foes and roaming decks with two reference decks at several life totals.</p>
 <pre class="code"><code><span class="prompt">$ </span>./tools/expansion_lab.sh --out lab-my_isle --plugin path/to/my_isle --seeds 5,37,48271</code></pre>
-<p><code>--plugin</code> takes a folder or a zip. The run copies it into <code>plugin/</code> in the results folder, the only plugins folder it sees, and deletes the copy at the end; the plugin’s id is the region, and it must pass the game’s checks first. It needs the card packs your plugin requires (a development run finds them through <code>SHANDALAR_PACK_N</code>). In the middle of a trip it takes away what the land needs, its card pack or, for a plugin that needs none, the plugin itself, and the hero must still sail home. For every seed it then plays your land to its end on the game’s own results, with no duel fought: every quest step by step, the rewards claimed, the finale won, and the adventure saved and read back on the island and at home; the land must come back neither held nor damaged. <code>--games 1</code> also plays your plugin’s duels. It writes <code>results.json</code>, <code>report.txt</code> and <code>engine.log</code>, exits 0 when every check passed, 1 when one failed or the plugin was refused (with its problems), 2 for a path that is not there, and never touches your own profile.</p>
+<p><code>--plugin</code> takes a folder or a zip. The run copies it into <code>plugin/</code> in the results folder, the only plugins folder it sees, and deletes the copy at the end; the plugin’s id is the region, and it must pass the game’s checks first. It needs the card packs your plugin requires (a development run finds them through <code>SHANDALAR_PACK_N</code>). In the middle of a trip it takes away what the land needs, its card pack or, for a plugin that needs none, the plugin itself, and the hero must still sail home. For every seed it then plays your land to its end on the game’s own results, with no duel fought: every quest step by step, the rewards claimed, the finale won, and the adventure saved and read back on the island and at home; the land must come back neither held nor damaged. <code>--games 1</code> also plays your plugin’s duels. A sites plugin is played its own way (<a href="sites.html#testing">Places: sites plugins</a>). It writes <code>results.json</code>, <code>report.txt</code> and <code>engine.log</code>, exits 0 when every check passed, 1 when one failed or the plugin was refused (with its problems), 2 for a path that is not there, and never touches your own profile.</p>
 
 <h2 id="loop">The loop in the game</h2>
 <ol>
@@ -123,7 +124,7 @@
 <footer class="pager">
 <a class="prev" href="saves.html"><span>Previous</span>Saves and compatibility</a>
 <a class="next" href="refuge.html"><span>Next</span>The Refuge walkthrough</a>
-<p>Shandalar · the adventure plugin authors’ guide, for plugin API 1. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 2. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
 </footer>
 </body>
 </html>

@@ -1994,9 +1994,11 @@ func _portal_op(origin: Vector2, ground: bool, twice: bool) -> Array:
 
 ## DUNGEON [param index] (5–14)'s marker: `[[sheet, frame] of the upright,
 ## [sheet, frame] of its ground half]` — the pair `(index − 5) · 2` of
-## [constant DUNGEON_LOOKS]; `[]` for a slot that is no dungeon.
+## [constant DUNGEON_LOOKS]; `[]` for a slot that is no dungeon. A slot past
+## 14 (a sites plugin's dungeon, [constant WorldClues.MOST_SLOTS]) wears the
+## look of slot 5 + (index − 5) mod 10.
 static func dungeon_frames(index: int) -> Array:
-	var pair := (index - 5) * 2
+	var pair := (index - 5) * 2 if index < 15 else ((index - 5) % 10) * 2
 	if pair < 0 or pair + 1 >= DUNGEON_LOOKS.size():
 		return []
 	return [_location(DUNGEON_LOOKS[pair]), _location(DUNGEON_LOOKS[pair + 1])]

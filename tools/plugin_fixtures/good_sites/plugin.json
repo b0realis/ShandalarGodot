@@ -1,0 +1,16 @@
+{
+	"plugin_format": 1,
+	"api_version": 2,
+	"kind": "sites",
+	"id": "corpus_sites",
+	"name": "Corpus Sites",
+	"version": "0.1.0",
+	"authors": [
+		"Shandalar Godot tests"
+	],
+	"license": "Name the license of your plugin here, and put its text in LICENSE.txt.",
+	"description": "One line for the plugin list: what the hero finds at this place.",
+	"requires": {
+		"card_packs": []
+	}
+}

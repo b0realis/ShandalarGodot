@@ -1,7 +1,10 @@
 # Adventure plugins — the developer reference
 
 Adventure plugins (0.60.19) are data-only packages that add an island to the
-adventure, reached by ship from a mainland harbor. This page is for whoever
+adventure, reached by ship from a mainland harbor; since API 2 (0.70.4) a
+**sites plugin** adds places instead — a hut, a guild's tower — that stand
+on the mainland and on the islands ([Sites plugins](#sites-plugins-api-2)).
+This page is for whoever
 works on the game's side of them: the loader, the interpreter, the saves and
 the tools. Plugin **authors** have their own guide, shipped with the game:
 [`expanded_adventure/GUIDE/index.html`](../expanded_adventure/GUIDE/index.html)
@@ -42,14 +45,20 @@ them."*
    `tests/unit/test_island_generator_golden.gd` pins `IslandGenerator` to 70
    fingerprints of the prototype's island (seeds × colors × difficulties).
 7. **API 1 scope:** islands reached by ship. Mainland touch points: the
-   anchorage, its pane, the voyage, the Tasks rows.
+   anchorage, its pane, the voyage, the Tasks rows. **API 2** (0.70.4, the
+   owner, 2026-11-21) adds the sites plugins, a kind of their own: places on
+   the lands a campaign has, never a land themselves.
 8. **Shipping:** the desktop releases carry `expanded_adventure/`
    (`Fallen_Empires_Refuge_prototype.zip`, `README.txt`, `GUIDE/`) beside the
    game, and `tools/adventure_plugin.py` with its card lists. The guide holds
    no card art and no 1997 or skin picture.
 9. **The prototype is a game-design and learning demo** (its manifest's
    `learning_note`, its README, the plugins window, the guide). The project
-   adds no adventure content of its own.
+   adds no adventure content of its own — but for the two places the owner
+   asked for on 2026-11-21 (*"No the project is a self contained new place!
+   (As a study for other places the players wish)"*): **An Old Adventurer's
+   Hut** and the **Conjuration Wizard Guild**, sites plugins shipped beside
+   the Refuge, each a finished place and a study.
 
 ## Where the code is
 
@@ -68,7 +77,10 @@ them."*
 | `game/adventure/expansions/expansion_contract.gd` | `ExpansionContract` | The provider fence, the progress schema, opaque progress bounds. |
 | `game/adventure/world/world_terrain_palette.gd` | `WorldTerrainPalette` | Built-in palettes and a plugin's own, registered as `plugin:<id>` ([terrain palettes](terrain-palettes.md)). |
 | `game/adventure/plugins_window.gd` | `PluginsWindow` | The Embark's plugins window. |
-| `tools/adventure_plugin.py` | — | `new`, `validate`, `export`, `info`, `compat`, `guide`: the authoring tool and the Python twin of the checks. |
+| `game/adventure/expansions/adventure_sites.gd` | `AdventureSites` | API 2: the sites plugins on for a campaign, their places put on each land (`world.expansion.sites`), the places' markers, panes, buttons, pictures and sprites. |
+| `game/adventure/plugins/data_sites.gd` | `DataSites` | API 2: a sites plugin's interpreter, model side — panes, conditions, effects, the prices, a copy, a dungeon raised. |
+| `game/adventure/plugins/site_journey.gd` | `SiteJourney` | API 2: what a place's buttons do on the world screen (the copy's card list), reached from `DataSites` by `load()` only. |
+| `tools/adventure_plugin.py` | — | `new` (`--kind sites` for places), `validate`, `export`, `info`, `compat`, `guide`, and for places `add-place`, `add-dungeon`, `walk` (a place played as text, without the game) and `art` (advice on the pictures): the authoring tool and the Python twin of the checks. |
 
 ## Discovery
 
@@ -158,7 +170,11 @@ A refused plugin is still a row of `all()`, so the window can say why.
 
 ## The registry API (`AdventurePlugins`)
 
-- `API_VERSION := 1`, `PLUGIN_FORMAT := 1`, `FOLDER_NAME`, `ID_PATTERN`.
+- `API_VERSION := 2`, `PLUGIN_FORMAT := 1`, `FOLDER_NAME`, `ID_PATTERN`;
+  `KIND_ISLAND`, `KIND_SITES`, `SITES_API` (2).
+- `kind(id)`, `manifest_kind(manifest)`, `land_ids()` (the islands
+  `AdventureExpansions` knows), `site_ids()` (the sites plugins
+  `AdventureSites` knows); `ids()` lists both.
 - `scan()`, `folders()`, `candidates(folder)`.
 - `all() -> Array[Dictionary]`: rows `{id, name, version, api, path, kind
   ("zip"/"folder"), description, authors, license, learning_note, requires:
@@ -243,8 +259,9 @@ waiting cards to `max_pending` (the Refuge's `stage_limits` are
 `[2, 2, 0, 1, 0]`); a flag in `complete_flags` (the finale's `done_flag` when
 the finale needs `"quests_done": "all"`) is on only with every quest done.
 
-**Save version 8** (`AdventurePlayer.FORMAT_VERSION`) is the format that
-records the ticked plugins: `hero.adventures` `[{id, version, name}]`, the
+**Save version 8** (`AdventurePlayer.FORMAT_VERSION` 8; 9 since API 2,
+which adds the sites plugins' progress) is the format that records the
+ticked plugins: `hero.adventures` `[{id, version, name}]`, the
 version and name each plugin had when its land was last read (the name kept
 for the words when it is missing). The mainland's anchorages are
 `world.expansion.entries`; `regions` holds each inactive land's snapshot and
@@ -334,6 +351,103 @@ and
    page (`tools/test_adventure_guide.py` checks both lists against the
    schema).
 
+## Sites plugins (API 2)
+
+The owner, 2026-11-21: *"Is it possible to add a new type of town or
+interaction place as a plugin? For example one would supply an icon and
+rules."* Then: *"this separate plugin can be placed on other islands or on
+mainland if used"*; a dungeon it raises is *"separate from the main quest
+and hold[s] from the list of plugin creator"*; and *"Yes saves work!"*.
+
+**The manifest.** `kind: "sites"` with `api_version` 2 or newer; no
+`region` (refused). Its content is `sites.json` and `text.json`
+(`schema_v1.json`'s `site_files` and its `sites_` types); every other rule
+of the manifest, the package and the files list is the island's.
+
+**`sites.json`.** `salt`, `flags` (declared, all off at the start),
+`pictures` (keys beginning with the plugin's id), `dungeons` (by key:
+`name`, `color` or `random`, `size`, `rules`, 1–6 `cards` of the base game
+or a required pack, `distance` from the place in tiles) and `sites` (by
+key, 1–8): `name`, `where` (`mainland`, `islands`), `picture`, `sprite`,
+`gap`, and 1–8 `panes`, the first whose `when` holds shown — its `title`,
+`subtitle`, `picture`, `lines` and up to 8 `actions`. An action has an `id`
+(its uses are counted by it, the same id the same action in every pane),
+`do` (`effects`, `copy_card` or `leave`), a `label`, `when`, `prices`,
+`effects`, `result` (the lines after it is done) and, for a copy,
+`pick_title` and `pick_line`.
+
+**Prices.** The n-th use of an action costs its n-th price; once every
+price is paid the action is gone from its pane. An action without prices
+is free and never used up. A button is ready when the hero carries the
+price (and, for a copy, a card may be copied and the bag has room); a
+press that cannot be done pays nothing and says why (`site.no_gold`,
+`site.bag_full`, `site.no_cards`, `site.no_room`).
+
+The closed sets:
+<!-- site_conditions -->conditions `flag`, `not_flag`, `gold_at_least`, `on_mainland`, `used`, `used_up`, `dungeon`<!-- /site_conditions -->
+and
+<!-- site_effects -->effects `set_flag`, `clear_flag`, `gold`, `food`, `log_clue`, `log_event`, `spawn_dungeon`<!-- /site_effects -->.
+The placeholders `{price}`, `{uses_left}`, `{gold}`, `{card}` and
+`{dungeon}` join the list.
+
+**Where a place stands** (`AdventureSites.place_here`, from
+`AdventureExpansions.initialize` on the mainland — after the anchorages —
+and from `entered` on an island): once, the first time the hero is on a
+land whose kind its `where` names, on a tile of the start's land (the
+mainland's start, the island's port) with no site, road or dungeon, at
+least `gap` tiles from every town, castle, dungeon, anchorage and place,
+next to a road when such a tile is. The tile is drawn on the plugin's own
+dice (`AdventureSites.dice_for`: the land's seed, the plugin's salt and
+the place's key, FNV-1a), never the adventure's or the world's: a campaign
+without sites plugins, and every 1997 draw of one with them, is as before
+(`tests/unit/test_site_plugins_2026_11_21.gd` pins the fingerprint and the
+dice). The tile is kept in that land's `world.expansion.sites`,
+`{"<plugin>:<site>": [x, y]}`; a moved dungeon never takes it
+(`DungeonDoors.expansion_place`).
+
+**On the map and in the panes.** A place is a marker `<plugin>:<site>` of
+`AdventureExpansions.places` (drawn by `map_op` from its `sprite`, listed
+on the map and the minimap); its pane's kind is `site` (it pushes the
+creatures back as a town does). Its buttons are `<plugin>_act:<site>:<action>`,
+`<plugin>_back:<site>` and `<plugin>_leave`; `AdventureExpansions.act`
+hands the longest owner of a button its press.
+
+**A dungeon raised** (`DataSites.spawn`): a new encounter slot after the
+1997 fifteen (`WorldClues.MOST_SLOTS`, 48 in all; on an island after its
+six), its tile drawn on the plugin's dice within the dungeon's `distance`
+of the place (else the nearest such tiles past its `min`), its color, size
+and rules the plugin's, its treasure the plugin's cards by name
+(`left_cards`, as cards put back in a dungeon are kept), its name in the
+land's `dungeon_names`, and every clue of it known. From then on it is an
+ordinary dungeon of the land: entered, moved when left, drawn and listed
+as any. The doors, the board and the map look to `MOST_SLOTS`; 1997's dice
+walks (the hint's pick, the marks' fading) keep their fifteen. A slot past
+14 wears the look of slot 5 + (index − 5) mod 10. One dungeon of a key is
+open on a land at a time; an action whose dungeon cannot be raised (no
+slot, no tile) pays nothing.
+
+**A copy** (`DataSites.copy_card`): one more of a card the hero holds
+(`DataSites.copyable`: under the Classic MTG rules none they hold every
+copy of, the wise man's rule), into the bag (`AdventurePlayer.add_card`).
+
+**Progress and saves.** `AdventurePlayer.sites`, by plugin id: `{uses:
+{"<site>.<action>": n}, flags: [names], dungeons: {"<land>:<dungeon>":
+slot}}` — the uses the plugin's as a whole (the Guild's towers on two lands
+share one count). **Save version 9** writes it as `sites` and a sites
+plugin's row of `hero.adventures` with `kind: "sites"`; a save from before
+reads none, and every row an island's. A sites plugin missing or refused:
+its places hide (their tiles kept), its progress is kept, a dungeon it
+raised stays an ordinary dungeon, and the save opens; it never has a ship,
+a mainland note or a Tasks row (`AdventureExpansions.sites_row`).
+
+**The shipped places.** `expanded_adventure/Old_Adventurers_Hut/` (id
+`old_hut`): on the mainland; 1000 gold, once, raise *The Forgotten Vault*
+(large, its color drawn, 8–22 tiles away) holding Old Man of the Sea,
+Planar Gate and Mirror Universe; three panes by the vault's state.
+`expanded_adventure/Conjuration_Wizard_Guild/` (id `conjuration_guild`):
+on the mainland and every island; a copy for 2000, 4000, 8000 and 12000
+gold, then no more. Neither needs a card pack.
+
 ## Tests
 
 - Loader: `tests/unit/test_adventure_plugins_package.gd`,
@@ -344,6 +458,10 @@ and
   `test_island_generator_golden.gd` (data `island_generator_golden.json`).
 - The Refuge's behaviour: `test_refuge_*.gd`, `test_c26_X6_*.gd` and the UI
   tests that name it; the fixture plugin `tests/fixtures/adventure_plugins/tiny_isle/`.
+- Sites plugins (API 2): `tests/unit/test_site_plugins_2026_11_21.gd` —
+  the manifest's kind, the content checks, the places on the mainland and
+  an island with the 1997 world and dice unchanged, the hut's vault, the
+  guild's four copies, the buttons, save version 9, a missing plugin.
 - Both validators on one corpus: `tests/unit/test_plugin_corpus.gd`,
   `tools/test_adventure_plugin.py`.
 - The authors' guide against the code and the prototype:

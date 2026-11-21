@@ -51,6 +51,12 @@ const ONE_DECK_RULE := 0x20
 ## The castle and dungeon slots the pick and the forgetting walk (1997's
 ## fifteen, `g_castle_dungeon_slots`).
 const SLOTS := 15
+## THE SLOTS A DUNGEON MAY STAND IN (adventure plugin API 2, 2026-11-21): the
+## fifteen, then those a sites plugin raises ([method DataSites.spawn]),
+## appended after them. The doors, the board and the map look this far;
+## 1997's dice — the hint's pick, the marks' fading — walk the fifteen
+## alone, so a raised dungeon never moves a draw of theirs.
+const MOST_SLOTS := 48
 ## A slot's key for the cards the hero left behind in it (names, in the
 ## order left; the class's notes).
 const LEFT_CARDS := "left_cards"
@@ -254,7 +260,7 @@ static func on_world(world: ShandalarWorld) -> Array[Dictionary]:
 	if world == null:
 		return out
 	for index in known(world):
-		if index < 5 or index >= SLOTS:
+		if index < 5 or index >= MOST_SLOTS:
 			continue
 		var slot: Dictionary = world.encounters[index]
 		var x := int(slot.get("x", -1))

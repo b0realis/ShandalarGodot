@@ -1,7 +1,7 @@
 {
 	"schema": "shandalar-adventure-plugin",
-	"api_version": 1,
-	"about": "The content schema of adventure plugins, API v1: one source of truth for the game's PluginSchema and tools/adventure_plugin.py. Kinds: int, number, bool, string, text (a key of text.json), card (a card name), hex (six hex digits), file (a path inside the plugin), picture (a picture key), enum, array, object, map, oneof, single (an object with exactly one key of its options), ref (a named type). Object fields carry required, default and doc.",
+	"api_version": 2,
+	"about": "The content schema of adventure plugins, API v1 and v2 (v2 adds the sites plugins: site_files and the sites_ types): one source of truth for the game's PluginSchema and tools/adventure_plugin.py. Kinds: int, number, bool, string, text (a key of text.json), card (a card name), hex (six hex digits), file (a path inside the plugin), picture (a picture key), enum, array, object, map, oneof, single (an object with exactly one key of its options), ref (a named type). Object fields carry required, default and doc.",
 	"limits": {
 		"plugin_bytes": 33554432,
 		"files": 512,
@@ -35,7 +35,12 @@
 		"color": "a reward bundle's label",
 		"cards": "a reward bundle's offered cards, comma separated",
 		"hero": "the hero's name",
-		"region": "the region's title"
+		"region": "the region's title",
+		"price": "a site action's price in gold, this time",
+		"uses_left": "how many more times a site action with prices can be done",
+		"gold": "the gold the hero carries",
+		"card": "the card a site copied",
+		"dungeon": "the name of the dungeon a site spawned"
 	},
 	"skin_pictures": ["visit_city", "visit_village", "visit_dungeon", "visit_wiseman", "visit_news", "visit_buycards",
 		"visit_castle_black", "visit_castle_blue", "visit_castle_green", "visit_castle_red", "visit_castle_white",
@@ -48,6 +53,10 @@
 		"rewards.json": {"required": false, "type": "rewards", "doc": "The reward bundles a reward choice offers."},
 		"text.json": {"required": true, "type": "text", "doc": "Every sentence, title and button, by key."}
 	},
+	"site_files": {
+		"sites.json": {"required": true, "type": "sites_file", "doc": "A sites plugin's places: their pictures, map sprites, panes and services, its flags and the dungeons its places tell of."},
+		"text.json": {"required": true, "type": "text", "doc": "Every sentence, title and button, by key."}
+	},
 	"types": {
 		"pair": {"kind": "array", "items": {"kind": "int", "min": -64, "max": 64}, "min": 2, "max": 2},
 		"slot": {"kind": "int", "min": 1, "max": 127, "doc": "A site slot of the region's world (1-127)."},
@@ -55,7 +64,7 @@
 		"terrain": {"kind": "enum", "values": [1, 2, 3, 5, 6, 8, 10, 13, 15], "doc": "A land terrain code of ShandalarWorld."},
 		"name": {"kind": "string", "min": 1, "max": 60, "doc": "A proper name shown as it is written."},
 		"id": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$"},
-		"flag_name": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$", "doc": "A flag declared in quests.json flags."},
+		"flag_name": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$", "doc": "A flag declared in quests.json flags (an island) or sites.json flags (a sites plugin)."},
 		"conditions": {"kind": "array", "items": {"kind": "ref", "type": "condition"}, "max": 16, "doc": "All must hold."},
 		"site_rule": {"kind": "object", "fields": {
 			"coastal": {"kind": "bool", "default": false, "doc": "The site touches the sea."},
@@ -279,6 +288,71 @@
 			"bundles": {"kind": "array", "min": 1, "max": 10, "required": true, "items": {"kind": "object", "fields": {
 				"label": {"kind": "text", "required": true},
 				"cards": {"kind": "array", "items": {"kind": "card"}, "min": 1, "max": 30, "required": true}}}}}},
-		"text": {"kind": "map", "keys": {"kind": "string", "pattern": "^[a-z0-9_.]{1,64}$"}, "values": {"kind": "string", "max": 4000}, "max": 2000}
+		"text": {"kind": "map", "keys": {"kind": "string", "pattern": "^[a-z0-9_.]{1,64}$"}, "values": {"kind": "string", "max": 4000}, "max": 2000},
+		"sites_file": {"kind": "object", "fields": {
+			"salt": {"kind": "int", "min": 0, "max": 2147483647, "default": 0, "doc": "Mixed into the dice that place the sites and their dungeons, so two plugins never stand on the same tiles by the same draw."},
+			"flags": {"kind": "array", "items": {"kind": "ref", "type": "flag_name"}, "max": 32, "default": [], "doc": "The plugin's own flags, all off at the start of a campaign."},
+			"pictures": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "file", "class": "pictures"}, "max": 32, "default": {}, "doc": "Picture keys (each beginning with the plugin id and _) to their files."},
+			"dungeons": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "sites_dungeon"}, "max": 8, "default": {}, "doc": "The dungeons a site's spawn_dungeon can raise, by key."},
+			"sites": {"kind": "map", "keys": {"kind": "ref", "type": "sites_key"}, "values": {"kind": "ref", "type": "sites_place"}, "min": 1, "max": 8, "required": true, "doc": "The places, by id."}
+		}},
+		"sites_key": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+		"sites_place": {"kind": "object", "fields": {
+			"name": {"kind": "ref", "type": "name", "required": true, "doc": "The place's name on the map and its pane's title."},
+			"where": {"kind": "array", "items": {"kind": "enum", "values": ["mainland", "islands"]}, "min": 1, "max": 2, "default": ["mainland"], "doc": "mainland: one on Shandalar's mainland; islands: one on each island plugin's island the campaign sails to."},
+			"picture": {"kind": "picture", "required": true, "doc": "The pane's picture."},
+			"sprite": {"kind": "ref", "type": "sprite", "required": true, "doc": "The map's sprite."},
+			"gap": {"kind": "int", "min": 1, "max": 8, "default": 3, "doc": "Tiles it keeps from towns, castles, dungeons and other places."},
+			"panes": {"kind": "array", "items": {"kind": "ref", "type": "sites_pane"}, "min": 1, "max": 8, "required": true}
+		}},
+		"sites_pane": {"kind": "object", "fields": {
+			"when": {"kind": "ref", "type": "sites_conditions", "default": [], "doc": "The first pane whose conditions hold is shown."},
+			"title": {"kind": "text", "doc": "Default: the site's name."},
+			"subtitle": {"kind": "text", "doc": "Default: the plugin's name."},
+			"picture": {"kind": "picture", "doc": "Default: the site's picture."},
+			"lines": {"kind": "ref", "type": "sites_lines", "default": []},
+			"actions": {"kind": "array", "items": {"kind": "ref", "type": "sites_action"}, "max": 8, "default": []}
+		}},
+		"sites_line": {"kind": "oneof", "options": [{"kind": "text"}, {"kind": "object", "fields": {"text": {"kind": "text", "required": true}, "when": {"kind": "ref", "type": "sites_conditions", "default": []}}}]},
+		"sites_lines": {"kind": "array", "items": {"kind": "ref", "type": "sites_line"}, "max": 16},
+		"sites_action": {"kind": "object", "fields": {
+			"id": {"kind": "ref", "type": "sites_key", "required": true, "doc": "The action's own name in its site: its uses are counted by it."},
+			"do": {"kind": "enum", "values": ["effects", "copy_card", "leave"], "required": true, "doc": "effects: pay and apply the effects; copy_card: pay and copy one of the hero's cards they pick; leave: close."},
+			"label": {"kind": "text", "doc": "The button; {price} and {uses_left} are filled."},
+			"when": {"kind": "ref", "type": "sites_conditions", "default": []},
+			"prices": {"kind": "array", "items": {"kind": "int", "min": 0, "max": 1000000}, "max": 16, "default": [], "doc": "The gold each use costs, in turn; once all are used the action is gone. Empty: free, and never used up."},
+			"effects": {"kind": "ref", "type": "sites_effects", "default": []},
+			"result": {"kind": "ref", "type": "sites_lines", "default": [], "doc": "The lines shown once the action is done; none: the place's pane again."},
+			"pick_title": {"kind": "text", "doc": "copy_card: the card list's title."},
+			"pick_line": {"kind": "text", "doc": "copy_card: the line under it."}
+		}},
+		"sites_conditions": {"kind": "array", "items": {"kind": "ref", "type": "sites_condition"}, "max": 16, "doc": "All must hold."},
+		"sites_condition": {"kind": "single", "options": {
+			"flag": {"kind": "ref", "type": "flag_name", "doc": "The flag is set."},
+			"not_flag": {"kind": "ref", "type": "flag_name", "doc": "The flag is not set."},
+			"gold_at_least": {"kind": "int", "min": 0, "max": 1000000, "doc": "The hero carries at least this much gold."},
+			"on_mainland": {"kind": "bool", "doc": "The place stands on the mainland (true) or on an island (false)."},
+			"used": {"kind": "object", "fields": {"action": {"kind": "ref", "type": "sites_key", "required": true}, "min": {"kind": "int", "min": 0, "max": 1000, "default": 0}, "max": {"kind": "int", "min": 0, "max": 1000, "default": 1000}}, "doc": "This site's action was done min..max times."},
+			"used_up": {"kind": "ref", "type": "sites_key", "doc": "This site's action has used all its prices."},
+			"dungeon": {"kind": "object", "fields": {"dungeon": {"kind": "ref", "type": "id", "required": true}, "state": {"kind": "enum", "values": ["none", "open", "cleared"], "required": true}}, "doc": "The dungeon this plugin raised on this land: none yet, open (still holding cards) or cleared."}
+		}},
+		"sites_effects": {"kind": "array", "items": {"kind": "ref", "type": "sites_effect"}, "max": 16},
+		"sites_effect": {"kind": "single", "options": {
+			"set_flag": {"kind": "ref", "type": "flag_name"},
+			"clear_flag": {"kind": "ref", "type": "flag_name"},
+			"gold": {"kind": "int", "min": -100000, "max": 100000},
+			"food": {"kind": "int", "min": -1000, "max": 1000},
+			"log_clue": {"kind": "object", "fields": {"text": {"kind": "text", "required": true}}},
+			"log_event": {"kind": "object", "fields": {"event": {"kind": "ref", "type": "id", "required": true}, "text": {"kind": "text", "required": true}, "done": {"kind": "bool", "default": false}}},
+			"spawn_dungeon": {"kind": "ref", "type": "id", "doc": "Raise the named dungeon on this land, its place, creatures and rules known, unless it is open there already."}
+		}},
+		"sites_dungeon": {"kind": "object", "fields": {
+			"name": {"kind": "ref", "type": "name", "required": true},
+			"color": {"kind": "enum", "values": ["black", "blue", "green", "red", "white", "random"], "default": "random", "doc": "Its creatures' color."},
+			"size": {"kind": "enum", "values": ["small", "large"], "default": "small", "doc": "Its creatures' size."},
+			"rules": {"kind": "array", "items": {"kind": "enum", "values": ["no_color", "no_artifacts", "no_instants", "life_carries", "life_adds"]}, "max": 5, "default": [], "doc": "no_color: no cards of its color; no_artifacts; no_instants: no instants or interrupts; life_carries: life losses carried over; life_adds: remaining life added to the next duel."},
+			"cards": {"kind": "array", "items": {"kind": "card"}, "min": 1, "max": 6, "required": true, "doc": "Its treasure: cards of the base game or of a required pack."},
+			"distance": {"kind": "object", "default": {}, "fields": {"min": {"kind": "int", "min": 2, "max": 40, "default": 6}, "max": {"kind": "int", "min": 4, "max": 64, "default": 24}}, "doc": "How far from the place it lies, in tiles."}
+		}}
 	}
 }

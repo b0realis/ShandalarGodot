@@ -401,6 +401,76 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.4 (2026-11-21): places plugins, the tutor's large card, the arrows, Embark at once
+
+- Version 0.70.4, Android version code 70004; `docs/releases/0.70.4.md`.
+- What it gathers is mapped in the rows below: the sites plugins (API 2)
+  and the two places shipped with them, the tutor picker's large card and
+  the arrows in every selection window of the duel
+  (`OriginalDialog.walk_lines`, `DuelScreen._walk_selection`), and the
+  title's Shandalar opening Embark without the notice (`main.gd`).
+
+## Sites plugins: places on the lands (adventure plugin API 2, 2026-11-21)
+
+The owner: *"Is it possible to add a new type of town or interaction place
+as a plugin? For example one would supply an icon and rules."* — then the
+two places: an old adventurer's hut (1000 gold for a dungeon nobody knows
+of) and a conjuration wizard guild (a copy of a card for 2000, 4000, 8000,
+12000 gold, then never). Reference: `docs/adventure-plugins.md`, *Sites
+plugins (API 2)*.
+
+- `game/adventure/plugins/adventure_plugins.gd`: `API_VERSION` 2,
+  `KIND_ISLAND`/`KIND_SITES`/`KINDS`, `SITES_API`; `manifest_problems`
+  (`kind`; a sites plugin's `region` refused, its API at least 2),
+  `manifest_kind`, `kind`, `land_ids`, `site_ids`, `_site_descriptor`; a
+  row's `plugin_kind`.
+- `game/adventure/plugins/schema_v1.json`: `site_files`, the `sites_`
+  types, the placeholders `price`, `uses_left`, `gold`, `card`, `dungeon`.
+- `game/adventure/plugins/plugin_schema.gd`: `read`'s sites branch,
+  `_read_sites`, `site_descriptor`, `_check_sites`,
+  `_check_site_conditions`; `_check_words`, `_check_pictures`,
+  `_check_cards` shared with the islands.
+- `game/adventure/plugins/plugin_text.gd`: the `site.*` defaults.
+- `game/adventure/expansions/adventure_sites.gd`: `AdventureSites` — `on`,
+  `on_ids`, `provider`, `place_here`, `spot`, `dice_for`, `fnv`, `places`,
+  `points`, `owns`, `describe`, `action_owner`, `act`, `picture`, `map_op`.
+- `game/adventure/plugins/data_sites.gd`: `DataSites` — `describe`,
+  `refusal`, `result_place`, `do_effects`, `copy_card`, `copyable`,
+  `apply`, `price`, `uses`, `uses_left`, `dungeon_state`, `spawn`,
+  `_dungeon_tile`.
+- `game/adventure/plugins/site_journey.gd`: `SiteJourney` — the buttons on
+  the world screen, the copy's card list.
+- `game/adventure/expansions/adventure_expansions.gd`: `definition` and
+  `definitions` islands only; `initialize` and `entered` place the sites;
+  `places`, `describe`, `is_action`, `act`, `picture`, `map_op` take them
+  in; `forget_places`, `sites_row` (no ship, no mainland note).
+- `game/adventure/world/world_clues.gd` `MOST_SLOTS` (48);
+  `game/adventure/dungeon_doors.gd` (`at`, `enter`, `leave` to it;
+  `expansion_place` keeps the places), `game/adventure/dungeon_board.gd`
+  (`enter`), `game/adventure/world/world_view.gd` (`dungeon_frames` past
+  slot 14).
+- `game/adventure/adventure_player.gd`: `FORMAT_VERSION` 9, `sites`,
+  `_cleaned_sites`, a row's `kind`; `game/adventure/adventure_setup.gd`
+  (`resolve` keeps a ticked sites plugin).
+- `game/adventure/world/world_screen.gd` `PUSHING_PLACES` and
+  `game/adventure/world/world_cursors.gd` `FOR_PLACE`: the pane kind `site`.
+- `game/help/help_pages.gd`: Adventure plugins, *A plugin's places* and
+  *The plugins that come with the game*.
+- `expanded_adventure/Old_Adventurers_Hut/`, `expanded_adventure/Conjuration_Wizard_Guild/`:
+  the two places (`plugin.json`, `sites.json`, `text.json`, `art/`, README,
+  LICENSE).
+- `tools/adventure_plugin.py`: the sites twin of every check, `new --kind
+  sites`, and the places' tools — `add-place`, `add-dungeon`, `walk` (the
+  panes, prices and effects played as text; held to `data_sites.gd` by a
+  drift test) and `art` (the pictures' size, the sprite's alpha, scale and
+  foot); `tools/plugin_fixtures/good_sites/` and the sites cases of
+  `expected.json`; `tools/expansion_testing/` (the Lab plays a sites
+  plugin); `tools/package_release.py` (`PLACES`, `shipped_zips`: three
+  plugin zips); the guide's `sites.html`.
+- Tests: `tests/unit/test_site_plugins_2026_11_21.gd`,
+  `tools/test_adventure_plugin.py`, `tools/test_adventure_guide.py`,
+  `tools/test_package_release.py`.
+
 ## The arrows walk the selection windows; the tutor's large card (2026-11-20)
 
 The owner: *"When casting vampiric tutor. The selection menu should show

@@ -23,6 +23,14 @@ A plugin land (--plugin, or the Refuge) is also played to its end per seed
 on the model's own results, no duel fought: every quest stage by stage,
 its rewards claimed, the finale won, then saved and read back on the island
 and at home; the land must be neither held nor damaged.
+A sites plugin (plugin API 2) has no land: --plugin plays its places
+instead, per seed: placed on a fresh mainland and on a small test island
+with the 1997 world and dice untouched, every button its panes offer
+pressed with gold enough (each price paid, each use counted, used up when
+its prices are), every dungeon it raises checked (on the map, enterable,
+its cards), the adventure saved and read back, and the plugin taken away
+(its places hidden, its progress and dungeons kept). --games, --trips and
+--region do not apply to it.
 --games N adds N games per hero deck x life total x regional opponent,
 using fair Wizard pilots and alternating first seats. N=0 skips duels.
 Writes results.json, report.txt and engine.log. Never writes ratings.

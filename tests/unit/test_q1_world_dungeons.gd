@@ -96,5 +96,8 @@ func test_the_marker_pairs_are_1997_s() -> void:
 	assert_eq(WorldView.dungeon_frames(11), [["world_locatn05", 2], ["world_locatn05", 8]])
 	assert_eq(WorldView.dungeon_frames(14), [["world_locatn03", 17], ["world_locatn03", 23]])
 	assert_eq(WorldView.dungeon_frames(4), [], "a castle has none")
-	assert_eq(WorldView.dungeon_frames(15), [], "nor a slot past the dungeons")
+	# A slot past the fifteen is a sites plugin's dungeon (adventure plugin
+	# API 2, 2026-11-21): it wears the look of slot 5 + (index − 5) mod 10.
+	assert_eq(WorldView.dungeon_frames(15), WorldView.dungeon_frames(5), "a raised dungeon wears a 1997 look")
+	assert_eq(WorldView.dungeon_frames(26), WorldView.dungeon_frames(6))
 	assert_eq(WorldView.DUNGEON_LOOKS.size(), 20, "1997's first twenty, two for each dungeon")

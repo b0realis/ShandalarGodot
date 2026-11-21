@@ -47,8 +47,10 @@ static func read(manifest: Dictionary, files: Dictionary) -> Dictionary:
 	var id := String(manifest.get("id", ""))
 	var refs := {"text": [], "card": [], "picture": [], "file": []}
 	var content := {}
-	for name in spec["files"]:
-		var rule: Dictionary = spec["files"][name]
+	var sites := AdventurePlugins.manifest_kind(manifest) == AdventurePlugins.KIND_SITES
+	var listed: Dictionary = spec["site_files"] if sites else spec["files"]
+	for name in listed:
+		var rule: Dictionary = listed[name]
 		if not files.has(name):
 			if bool(rule.get("required", false)): problems.append("%s is missing." % name)
 			continue
@@ -60,6 +62,8 @@ static func read(manifest: Dictionary, files: Dictionary) -> Dictionary:
 		content[name] = value
 	if not problems.is_empty():
 		return {"data": {}, "problems": problems}
+	if sites:
+		return _read_sites(manifest, content, refs, files)
 	var data := {
 		"id": id,
 		"manifest": manifest.duplicate(true),
@@ -338,11 +342,115 @@ static func _num(value: Variant) -> String:
 	return str(int(value)) if float(value) == floorf(float(value)) else str(value)
 
 
+# ------------------------------------------------------ a sites plugin --
+
+## A SITES PLUGIN'S CONTENT (API 2) read from its checked files: `{id,
+## manifest, sites, text, packs}`, `sites` being `sites.json` normalized,
+## and its cross checks — the words, the pictures, the cards, the flags,
+## the actions and the dungeons named.
+static func _read_sites(manifest: Dictionary, content: Dictionary, refs: Dictionary, files: Dictionary) -> Dictionary:
+	var problems: Array[String] = []
+	var id := String(manifest.get("id", ""))
+	var data := {"id": id, "kind": AdventurePlugins.KIND_SITES, "manifest": manifest.duplicate(true),
+		"sites": content["sites.json"], "text": content["text.json"], "packs": _packs(manifest)}
+	_check_words(data["text"], refs, problems)
+	_check_pictures(id, "sites.json", data["sites"]["pictures"], refs, problems)
+	_check_cards(data["packs"], refs, problems)
+	_check_sites(data["sites"], problems)
+	if not problems.is_empty():
+		return {"data": {}, "problems": problems}
+	return {"data": data, "problems": problems}
+
+
+## The [AdventureSites] descriptor of a validated sites plugin: `id`,
+## `plugin`, `kind`, `packs`, `pack`, `salt`, `pictures`, `sprites`
+## (`{site: [file, width]}`) and `sites` (`{site: {name, where, gap}}`).
+static func site_descriptor(manifest: Dictionary, data: Dictionary) -> Dictionary:
+	if data.is_empty(): return {}
+	var file: Dictionary = data["sites"]
+	var sprites := {}
+	var places := {}
+	for key in file["sites"]:
+		var site: Dictionary = file["sites"][key]
+		sprites[key] = [String(site["sprite"]["file"]), float(site["sprite"]["width"])]
+		places[key] = {"name": String(site["name"]), "where": (site["where"] as Array).duplicate(), "gap": int(site["gap"])}
+	var packs: Array = data.get("packs", [])
+	return {"id": String(manifest.get("id", data.get("id", ""))), "plugin": true, "kind": AdventurePlugins.KIND_SITES,
+		"version": String(manifest.get("version", "")), "name": String(manifest.get("name", "")),
+		"pack": String(packs[0]) if not packs.is_empty() else "", "packs": packs.duplicate(),
+		"salt": int(file["salt"]), "pictures": (file["pictures"] as Dictionary).duplicate(), "sprites": sprites, "sites": places}
+
+
+## A sites plugin's own checks: the flags its conditions and effects name
+## are declared, the actions a condition names stand in the same site
+## (`used_up` one with prices), the dungeons named exist, an action's id is
+## its site's once, a dungeon's nearest no farther than its farthest.
+static func _check_sites(file: Dictionary, problems: Array[String]) -> void:
+	var flags: Array = file["flags"]
+	var dungeons: Dictionary = file["dungeons"]
+	for key in dungeons:
+		var distance: Dictionary = dungeons[key]["distance"]
+		if int(distance["min"]) > int(distance["max"]):
+			problems.append("sites.json: dungeons.%s.distance: min %d is more than max %d." % [key, int(distance["min"]), int(distance["max"])])
+	for key in file["sites"]:
+		var site: Dictionary = file["sites"][key]
+		var at := "sites.json: sites.%s" % key
+		var actions := {}
+		for p in site["panes"].size():
+			for a in site["panes"][p]["actions"].size():
+				var action: Dictionary = site["panes"][p]["actions"][a]
+				var name := String(action["id"])
+				if actions.has(name) and actions[name] != action:
+					problems.append("%s.panes[%d].actions[%d].id: %s names another action of this site; an id is one action (the same action may stand in several panes)." % [at, p, a, name])
+				elif not actions.has(name):
+					actions[name] = action
+		for p in site["panes"].size():
+			var pane: Dictionary = site["panes"][p]
+			var here := "%s.panes[%d]" % [at, p]
+			_check_site_conditions(pane["when"], here + ".when", flags, actions, dungeons, problems)
+			for l in pane["lines"].size():
+				if pane["lines"][l] is Dictionary:
+					_check_site_conditions(pane["lines"][l]["when"], "%s.lines[%d].when" % [here, l], flags, actions, dungeons, problems)
+			for a in pane["actions"].size():
+				var action: Dictionary = pane["actions"][a]
+				var spot := "%s.actions[%d]" % [here, a]
+				_check_site_conditions(action["when"], spot + ".when", flags, actions, dungeons, problems)
+				for l in action["result"].size():
+					if action["result"][l] is Dictionary:
+						_check_site_conditions(action["result"][l]["when"], "%s.result[%d].when" % [spot, l], flags, actions, dungeons, problems)
+				for e in action["effects"].size():
+					var effect: Dictionary = action["effects"][e]
+					var name: String = effect.keys()[0]
+					match name:
+						"set_flag", "clear_flag":
+							if not effect[name] in flags: problems.append("%s.effects[%d].%s: no flag %s in sites.json flags." % [spot, e, name, effect[name]])
+						"spawn_dungeon":
+							if not dungeons.has(effect[name]): problems.append("%s.effects[%d].spawn_dungeon: no dungeon %s in sites.json dungeons." % [spot, e, effect[name]])
+				if String(action["do"]) != "effects" and not (action["effects"] as Array).is_empty():
+					problems.append("%s.effects: only an action that does effects has effects." % spot)
+
+
+static func _check_site_conditions(conditions: Array, at: String, flags: Array, actions: Dictionary, dungeons: Dictionary, problems: Array[String]) -> void:
+	for i in conditions.size():
+		var name: String = conditions[i].keys()[0]
+		var value: Variant = conditions[i][name]
+		match name:
+			"flag", "not_flag":
+				if not value in flags: problems.append("%s[%d].%s: no flag %s in sites.json flags." % [at, i, name, value])
+			"used":
+				if not actions.has(value["action"]): problems.append("%s[%d].used: this site has no action %s." % [at, i, value["action"]])
+			"used_up":
+				if not actions.has(value): problems.append("%s[%d].used_up: this site has no action %s." % [at, i, value])
+				elif (actions[value]["prices"] as Array).is_empty(): problems.append("%s[%d].used_up: the action %s has no prices, so it is never used up." % [at, i, value])
+			"dungeon":
+				if not dungeons.has(value["dungeon"]): problems.append("%s[%d].dungeon: no dungeon %s in sites.json dungeons." % [at, i, value["dungeon"]])
+
+
 # ------------------------------------------------------ the cross checks --
 
-static func _cross_check(data: Dictionary, refs: Dictionary, _files: Dictionary, problems: Array[String]) -> void:
-	var id: String = data["id"]
-	var words: Dictionary = data["text"]
+## Every text names placeholders of the closed list, and every text key
+## named is one of text.json's (or an engine default's).
+static func _check_words(words: Dictionary, refs: Dictionary, problems: Array[String]) -> void:
 	for key in words:
 		var unknown := PluginText.unknown_placeholders(String(words[key]))
 		if not unknown.is_empty():
@@ -350,18 +458,30 @@ static func _cross_check(data: Dictionary, refs: Dictionary, _files: Dictionary,
 	for pair in refs["text"]:
 		if not words.has(pair[0]) and not PluginText.DEFAULTS.has(pair[0]):
 			problems.append("%s: text.json has no %s." % [pair[1], pair[0]])
-	var pictures: Dictionary = data["places"]["pictures"]
+
+
+## Picture keys begin with the plugin's id; every picture named is one of
+## [param pictures] (the plugin's, listed in [param file]) or a skin's.
+static func _check_pictures(id: String, file: String, pictures: Dictionary, refs: Dictionary, problems: Array[String]) -> void:
 	for key in pictures:
 		if not String(key).begins_with(id + "_"):
-			problems.append("places.json: pictures.%s: a picture key begins with the plugin id and _ (%s_…)." % [key, id])
+			problems.append("%s: pictures.%s: a picture key begins with the plugin id and _ (%s_…)." % [file, key, id])
 	var skin: Array = schema()["skin_pictures"]
 	for pair in refs["picture"]:
 		if not pictures.has(pair[0]) and not pair[0] in skin:
-			problems.append("%s: %s is neither a picture of places.json nor a skin picture (%s)." % [pair[1], pair[0], ", ".join(skin)])
-	var packs: Array = data["packs"]
+			problems.append("%s: %s is neither a picture of %s nor a skin picture (%s)." % [pair[1], pair[0], file, ", ".join(skin)])
+
+
+static func _check_cards(packs: Array, refs: Dictionary, problems: Array[String]) -> void:
 	for pair in refs["card"]:
 		if not card_known(String(pair[0]), packs):
 			problems.append("%s: %s is not a card of the base game or of a required pack (%s)." % [pair[1], pair[0], ", ".join(packs) if not packs.is_empty() else "none"])
+
+
+static func _cross_check(data: Dictionary, refs: Dictionary, _files: Dictionary, problems: Array[String]) -> void:
+	_check_words(data["text"], refs, problems)
+	_check_pictures(String(data["id"]), "places.json", data["places"]["pictures"], refs, problems)
+	_check_cards(data["packs"], refs, problems)
 	_check_world(data["world"], problems)
 	_check_quests(data, problems)
 	_check_foes(data, problems)

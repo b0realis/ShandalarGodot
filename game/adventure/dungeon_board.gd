@@ -429,7 +429,7 @@ var maze_dice := 0
 static func enter(player: AdventurePlayer, setup: Dictionary, seed_value := -1) -> DungeonBoard:
 	var world := player.world if player != null else null
 	var at := int(setup.get("index", -1))
-	if world == null or at < 0 or at >= mini(world.encounters.size(), WorldClues.SLOTS):
+	if world == null or at < 0 or at >= mini(world.encounters.size(), WorldClues.MOST_SLOTS):
 		return null
 	var slot: Dictionary = world.encounters[at]
 	var board := DungeonBoard.new()

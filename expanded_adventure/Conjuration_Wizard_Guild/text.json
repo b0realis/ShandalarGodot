@@ -1,0 +1,13 @@
+{
+	"guild.subtitle": "A wizards' tower",
+	"guild.intro": "Behind a low wall stands a tower of grey stone, its high windows bright with conjured light. Robed conjurers bow you inside.",
+	"guild.offer": "\"The Conjuration Wizard Guild copies any card you carry, true to the last stroke of its art,\" the guild master says. \"The work is costly, and it grows costlier: 2000 gold, then 4000, then 8000, then 12000. After that the guild's law allows no more.\"",
+	"guild.again": "\"Welcome back. The conjurers remember your face.\"",
+	"guild.rule": "A copy follows the card rules of your adventure, and needs room in your bag.",
+	"guild.copy": "Copy a card ({price} gold, {uses_left} left)",
+	"guild.pick_title": "Pick a card to copy",
+	"guild.pick_line": "The guild's conjurers copy it for {price} gold.",
+	"guild.done": "The conjurers chant over your {card} until a second one lies beside it, warm as fresh ink. A copy of {card} is yours, for {price} gold.",
+	"guild.closed": "\"We have copied four cards for you,\" the guild master says, \"and the guild's law allows no more. Go well.\"",
+	"guild.leave": "Leave"
+}

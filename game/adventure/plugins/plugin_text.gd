@@ -11,7 +11,8 @@ extends RefCounted
 ## them out; any of them a plugin's text.json names replaces the default.
 
 const PLACEHOLDERS: Array[String] = ["pledges", "quests_total", "target", "town", "title", "foe", "life",
-	"count", "total", "required", "percent", "left", "color", "cards", "hero", "region"]
+	"count", "total", "required", "percent", "left", "color", "cards", "hero", "region",
+	"price", "uses_left", "gold", "card", "dungeon"]
 
 ## The keys the interpreter speaks with, and what it says without them.
 const DEFAULTS := {
@@ -59,6 +60,18 @@ const DEFAULTS := {
 	"task.duel": "Defeat {foe} at {target}.",
 	"task.done": "Done at {town}.",
 	"talk.will_you": "Will you...",
+	"site.leave": "Leave",
+	"site.back": "Return",
+	"site.pay": "Pay {price} gold",
+	"site.pick_title": "Pick a card",
+	"site.pick_line": "A copy of it for {price} gold.",
+	"site.no_gold": "You need {price} gold for this; you carry {gold}.",
+	"site.bag_full": "Your bag is full; make room in it first.",
+	"site.no_cards": "You have no card that may be copied.",
+	"site.no_room": "No place on this land can hold a new dungeon.",
+	"site.done": "It is done.",
+	"site.copied": "A copy of {card} is yours.",
+	"site.copied_log": "{card} copied for {price} gold.",
 }
 
 

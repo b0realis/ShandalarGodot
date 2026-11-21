@@ -157,9 +157,9 @@ const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
 ## 2026-11-03, h1-Q1): a roamer of the island's strength stood at the
 ## harbor's door met the hero the moment its pane closed. Every land's
 ## markers are `region_port` and `region_castle` ([DataRegion]; adventure
-## plugins, 2026-11-10).
+## plugins, 2026-11-10); a sites plugin's place is `site` ([DataSites], API 2).
 const PUSHING_PLACES := ["village", "town", "city", "ruled", "castle", "fallen",
-	"region_port", "expansion_port", "region_castle"]
+	"region_port", "expansion_port", "region_castle", "site"]
 ## THE WALKING KEYS (the owner's ruling of 2026-10-29), each with its way
 ## on the screen (x right, y down): 1997's arrows, Home, PgUp, PgDn and
 ## End, which set its heading (adventure_input.c 328–353: Up 2, PgUp 3,

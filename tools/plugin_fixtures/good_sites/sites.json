@@ -1,0 +1,93 @@
+{
+	"salt": 216285643,
+	"flags": [],
+	"pictures": {
+		"corpus_sites_shrine": "art/corpus_sites_shrine.png"
+	},
+	"dungeons": {},
+	"sites": {
+		"shrine": {
+			"name": "Wayside Shrine",
+			"where": [
+				"mainland",
+				"islands"
+			],
+			"picture": "corpus_sites_shrine",
+			"sprite": {
+				"file": "art/corpus_sites_shrine_map.png",
+				"width": 80
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"used_up": "bless"
+						}
+					],
+					"subtitle": "shrine.subtitle",
+					"lines": [
+						"shrine.intro",
+						"shrine.spent"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "shrine.leave"
+						}
+					]
+				},
+				{
+					"subtitle": "shrine.subtitle",
+					"lines": [
+						"shrine.intro",
+						"shrine.offer",
+						{
+							"text": "shrine.again",
+							"when": [
+								{
+									"used": {
+										"action": "bless",
+										"min": 1
+									}
+								}
+							]
+						}
+					],
+					"actions": [
+						{
+							"id": "bless",
+							"do": "effects",
+							"label": "shrine.bless",
+							"prices": [
+								20,
+								40,
+								80
+							],
+							"effects": [
+								{
+									"food": 6
+								},
+								{
+									"log_event": {
+										"event": "shrine",
+										"text": "shrine.log"
+									}
+								}
+							],
+							"result": [
+								"shrine.blessed"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "shrine.leave"
+						}
+					]
+				}
+			]
+		}
+	}
+}

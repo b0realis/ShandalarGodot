@@ -50,6 +50,9 @@ class PackageReleaseTest(unittest.TestCase):
         # The adventure plugins' folder (2026-11-10): the corpus's minimal
         # plugin stands in for the prototype, and a small guide for P6's.
         shutil.copytree(pack.ROOT / "tools/plugin_fixtures/good_minimal", self.root / pack.PROTOTYPE)
+        # The places (2026-11-21): the corpus's sites skeleton stands in for each.
+        for place in pack.PLACES:
+            shutil.copytree(pack.ROOT / "tools/plugin_fixtures/good_sites", self.root / place)
         (self.root / pack.PLUGIN_README).write_text("Adventure plugins go here.\n", encoding="utf-8")
         guide = self.root / pack.PLUGIN_GUIDE
         (guide / "img").mkdir(parents=True)
@@ -331,24 +334,31 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertEqual(mine, [], "the Web, the Quest and Android carry no plugins folder")
                             continue
                         self.assertEqual(sorted(mine), sorted(prefix + name for name in (
-                            "expanded_adventure/Fallen_Empires_Refuge_prototype.zip", "expanded_adventure/README.txt",
+                            "expanded_adventure/Fallen_Empires_Refuge_prototype.zip",
+                            "expanded_adventure/Old_Adventurers_Hut.zip", "expanded_adventure/Conjuration_Wizard_Guild.zip",
+                            "expanded_adventure/README.txt",
                             "expanded_adventure/GUIDE/index.html", "expanded_adventure/GUIDE/guide.css",
                             "expanded_adventure/GUIDE/img/map.svg")), "the guide as it is, its litter left out")
-                        self.assertEqual(archive.getinfo(plugin).compress_type, zipfile.ZIP_STORED)
-                        with tempfile.TemporaryDirectory() as work:
-                            target = Path(work) / "Fallen_Empires_Refuge_prototype.zip"
-                            target.write_bytes(archive.read(plugin))
-                            judged = adventure_plugin.judge(str(target), adventure_plugin.find_game())
-                            self.assertTrue(judged["valid"], judged["problems"])
-                            self.assertEqual(len(judged["manifest"]["files"]), len(judged["files"]) - 1, "exported: hashed")
+                        for shipped in (plugin, prefix + "expanded_adventure/Old_Adventurers_Hut.zip",
+                                        prefix + "expanded_adventure/Conjuration_Wizard_Guild.zip"):
+                            self.assertEqual(archive.getinfo(shipped).compress_type, zipfile.ZIP_STORED)
+                            with tempfile.TemporaryDirectory() as work:
+                                target = Path(work) / shipped.split("/")[-1]
+                                target.write_bytes(archive.read(shipped))
+                                judged = adventure_plugin.judge(str(target), adventure_plugin.find_game())
+                                self.assertTrue(judged["valid"], judged["problems"])
+                                self.assertEqual(len(judged["manifest"]["files"]), len(judged["files"]) - 1, "exported: hashed")
 
     def test_the_prototype_zip_is_one_build_and_a_release_asset_of_its_own(self):
         name, data = pack.prototype_zip(self.root)
         self.assertEqual(name, "Fallen_Empires_Refuge_prototype.zip")
         self.assertEqual(pack.prototype_zip(self.root)[1], data, "deterministic")
-        target = pack.write_adventure_plugins(self.out, self.root)
+        targets = pack.write_adventure_plugins(self.out, self.root)
+        self.assertEqual([t.name for t in targets], ["Fallen_Empires_Refuge_prototype.zip",
+                                                     "Old_Adventurers_Hut.zip", "Conjuration_Wizard_Guild.zip"])
+        target = targets[0]
         self.assertEqual(target.read_bytes(), data)
-        self.assertEqual(pack.write_adventure_plugins(self.out, self.root), target, "the same bytes again are fine")
+        self.assertEqual(pack.write_adventure_plugins(self.out, self.root), targets, "the same bytes again are fine")
         target.write_bytes(b"other")
         with self.assertRaisesRegex(ValueError, "Refusing to overwrite"):
             pack.write_adventure_plugins(self.out, self.root)
@@ -357,8 +367,9 @@ class PackageReleaseTest(unittest.TestCase):
             pack.prototype_zip(self.root)
 
     def test_the_real_prototype_and_guide_are_ready_to_ship(self):
-        name, data = pack.prototype_zip()
-        self.assertLess(len(data), 32 * 1024 * 1024)
+        zips = pack.shipped_zips()
+        for _name, data in zips:
+            self.assertLess(len(data), 32 * 1024 * 1024)
         files = pack.plugin_files()
         self.assertIn("expanded_adventure/GUIDE/index.html", files)
         self.assertIn("expanded_adventure/GUIDE/reference.html", files)
@@ -366,7 +377,8 @@ class PackageReleaseTest(unittest.TestCase):
         result = subprocess.run([sys.executable, str(pack.ROOT / "tools/package_release.py"), "--adventure-plugins",
                                  self.temp.name], capture_output=True, text=True, timeout=300)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), f"{hashlib.sha256(data).hexdigest()}  {name}")
+        self.assertEqual(result.stdout.strip().splitlines(),
+                         [f"{hashlib.sha256(data).hexdigest()}  {name}" for name, data in zips])
 
     def test_a_guide_or_prototype_problem_refuses_the_package(self):
         self.make_export("linux64")

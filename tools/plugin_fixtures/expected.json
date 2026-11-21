@@ -1048,13 +1048,13 @@
 							"path": [
 								"api_version"
 							],
-							"value": 2
+							"value": 3
 						}
 					]
 				}
 			},
 			"valid": false,
-			"reason": "This plugin needs plugin API 2; this game reads API 1. A newer game is needed."
+			"reason": "This plugin needs plugin API 3; this game reads API 2. A newer game is needed."
 		},
 		{
 			"name": "manifest_id_pattern",
@@ -2093,7 +2093,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "text.json: castle.count: unknown placeholder {pledgez} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region)."
+			"reason": "text.json: castle.count: unknown placeholder {pledgez} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon)."
 		},
 		{
 			"name": "missing_text_key",
@@ -2956,6 +2956,1571 @@
 			},
 			"valid": false,
 			"reason": "quests.json: quests[0].complete: set_flag: freed is the finale's flag; only the finale's effects set it."
+		},
+		{
+			"name": "good_sites",
+			"base": "good_sites",
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_zip",
+			"base": "good_sites",
+			"zip": {
+				"top": "Corpus_Isle"
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_exported_zip",
+			"base": "good_sites",
+			"hash_files": true,
+			"zip": {
+				"top": "Corpus_Isle"
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_every_condition_and_effect",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"flags"
+							],
+							"value": [
+								"told",
+								"spent"
+							]
+						},
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Shrine Vault",
+									"color": "green",
+									"size": "large",
+									"rules": [
+										"no_artifacts",
+										"life_carries"
+									],
+									"cards": [
+										"Lightning Bolt",
+										"Llanowar Elves"
+									],
+									"distance": {
+										"min": 6,
+										"max": 20
+									}
+								}
+							}
+						},
+						{
+							"path": [
+								"sites",
+								"cellar"
+							],
+							"value": {
+								"name": "Shrine Cellar",
+								"where": [
+									"islands"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"gap": 4,
+								"panes": [
+									{
+										"when": [
+											{
+												"dungeon": {
+													"dungeon": "vault",
+													"state": "open"
+												}
+											}
+										],
+										"title": "cellar.title",
+										"lines": [
+											"cellar.open"
+										],
+										"actions": [
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									},
+									{
+										"when": [
+											{
+												"flag": "told"
+											},
+											{
+												"on_mainland": false
+											}
+										],
+										"lines": [
+											"cellar.told",
+											{
+												"text": "cellar.rich",
+												"when": [
+													{
+														"gold_at_least": 500
+													}
+												]
+											}
+										],
+										"actions": [
+											{
+												"id": "copy",
+												"do": "copy_card",
+												"label": "cellar.copy",
+												"prices": [
+													100,
+													200
+												],
+												"when": [
+													{
+														"not_flag": "spent"
+													}
+												],
+												"pick_title": "cellar.pick",
+												"pick_line": "cellar.pick_line",
+												"result": [
+													"cellar.copied"
+												]
+											},
+											{
+												"id": "raise",
+												"do": "effects",
+												"label": "cellar.raise",
+												"prices": [
+													50
+												],
+												"effects": [
+													{
+														"spawn_dungeon": "vault"
+													},
+													{
+														"set_flag": "spent"
+													},
+													{
+														"clear_flag": "told"
+													},
+													{
+														"gold": 10
+													},
+													{
+														"food": -1
+													},
+													{
+														"log_clue": {
+															"text": "cellar.clue"
+														}
+													},
+													{
+														"log_event": {
+															"event": "cellar",
+															"text": "cellar.log",
+															"done": true
+														}
+													}
+												],
+												"result": [
+													"cellar.raised",
+													{
+														"text": "cellar.rich",
+														"when": [
+															{
+																"used": {
+																	"action": "raise",
+																	"min": 1,
+																	"max": 1
+																}
+															}
+														]
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									},
+									{
+										"lines": [
+											"cellar.closed",
+											{
+												"text": "cellar.spent",
+												"when": [
+													{
+														"used_up": "raise"
+													}
+												]
+											}
+										],
+										"actions": [
+											{
+												"id": "tell",
+												"do": "effects",
+												"label": "cellar.tell",
+												"effects": [
+													{
+														"set_flag": "told"
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"cellar.title"
+							],
+							"value": "The cellar under {dungeon}"
+						},
+						{
+							"path": [
+								"cellar.open"
+							],
+							"value": "The cellar door stands open. {dungeon} waits below."
+						},
+						{
+							"path": [
+								"cellar.told"
+							],
+							"value": "The keeper of the cellar nods to {hero}."
+						},
+						{
+							"path": [
+								"cellar.rich"
+							],
+							"value": "You carry {gold} gold."
+						},
+						{
+							"path": [
+								"cellar.copy"
+							],
+							"value": "Copy a card ({price} gold, {uses_left} left)"
+						},
+						{
+							"path": [
+								"cellar.pick"
+							],
+							"value": "Pick a card"
+						},
+						{
+							"path": [
+								"cellar.pick_line"
+							],
+							"value": "A copy for {price} gold."
+						},
+						{
+							"path": [
+								"cellar.copied"
+							],
+							"value": "A copy of {card} is yours."
+						},
+						{
+							"path": [
+								"cellar.raise"
+							],
+							"value": "Open the old door ({price} gold)"
+						},
+						{
+							"path": [
+								"cellar.clue"
+							],
+							"value": "{dungeon} lies under the shrine of {region}."
+						},
+						{
+							"path": [
+								"cellar.log"
+							],
+							"value": "Opened the way to {dungeon}."
+						},
+						{
+							"path": [
+								"cellar.raised"
+							],
+							"value": "The door grinds open on {dungeon}."
+						},
+						{
+							"path": [
+								"cellar.closed"
+							],
+							"value": "A cellar door, barred."
+						},
+						{
+							"path": [
+								"cellar.spent"
+							],
+							"value": "Nothing more lies behind the door."
+						},
+						{
+							"path": [
+								"cellar.tell"
+							],
+							"value": "Ask about the door"
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_pack",
+			"base": "good_sites",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"requires",
+								"card_packs"
+							],
+							"value": [
+								{
+									"id": "pack-2",
+									"min_version": "1.0"
+								}
+							]
+						}
+					]
+				},
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Thrull Vault",
+									"cards": [
+										"Thallid",
+										"Lightning Bolt"
+									]
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_same_action_in_two_panes",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"actions",
+								1
+							],
+							"value": {
+								"id": "bless",
+								"do": "effects",
+								"label": "shrine.bless",
+								"prices": [
+									20,
+									40,
+									80
+								],
+								"effects": [
+									{
+										"food": 6
+									},
+									{
+										"log_event": {
+											"event": "shrine",
+											"text": "shrine.log"
+										}
+									}
+								],
+								"result": [
+									"shrine.blessed"
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_text_defaults",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"label"
+							],
+							"value": "site.pay"
+						},
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"actions",
+								0,
+								"label"
+							],
+							"value": "site.leave"
+						},
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								1,
+								"label"
+							],
+							"value": "site.leave"
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_island_kind",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"kind"
+							],
+							"value": "island"
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_island_api_two",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 2
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "kind_unknown",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"kind"
+							],
+							"value": "town"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: kind must be one of island, sites."
+		},
+		{
+			"name": "kind_not_text",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"kind"
+							],
+							"value": 2
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: kind must be one of island, sites."
+		},
+		{
+			"name": "kind_misspelled_sites",
+			"base": "good_sites",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"kind"
+							],
+							"value": "Sites"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: the field \"region\" is missing."
+		},
+		{
+			"name": "sites_with_region",
+			"base": "good_sites",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"region"
+							],
+							"value": {
+								"title": "Corpus Sites"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: a sites plugin has no region; its places are described in sites.json."
+		},
+		{
+			"name": "sites_api_one",
+			"base": "good_sites",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 1
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "plugin.json: a sites plugin needs api_version 2 or newer."
+		},
+		{
+			"name": "sites_newer_api",
+			"base": "good_sites",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "This plugin needs plugin API 3; this game reads API 2. A newer game is needed."
+		},
+		{
+			"name": "sites_island_files_only",
+			"base": "good_minimal",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"kind"
+							],
+							"value": "sites"
+						},
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 2
+						}
+					],
+					"remove": [
+						[
+							"region"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json is missing."
+		},
+		{
+			"name": "sites_missing_text",
+			"base": "good_sites",
+			"remove": [
+				"text.json"
+			],
+			"valid": false,
+			"reason": "text.json is missing."
+		},
+		{
+			"name": "sites_not_json",
+			"base": "good_sites",
+			"add": [
+				{
+					"rel": "sites.json",
+					"text": "{\n\t\"salt\": 1\n\t\"sites\": {}\n}\n"
+				}
+			],
+			"valid": false,
+			"reason": "sites.json: line 3: Expected '}' or ','"
+		},
+		{
+			"name": "sites_unknown_field",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"weather"
+							],
+							"value": "rain"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: unknown field weather."
+		},
+		{
+			"name": "sites_site_unknown_field",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"music"
+							],
+							"value": "music/x.ogg"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine: unknown field music."
+		},
+		{
+			"name": "sites_none",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites"
+							],
+							"value": {}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites: 0 entries; 1 to 8 are allowed."
+		},
+		{
+			"name": "sites_key_pattern",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"Shrine"
+							],
+							"value": {
+								"name": "Old Well",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_village",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"shrine.intro"
+										],
+										"actions": [
+											{
+												"id": "leave",
+												"do": "leave",
+												"label": "shrine.leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					],
+					"remove": [
+						[
+							"sites",
+							"shrine"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites key Shrine: Shrine does not fit ^[a-z][a-z0-9_]{0,31}$."
+		},
+		{
+			"name": "sites_no_sprite",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"remove": [
+						[
+							"sites",
+							"shrine",
+							"sprite"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine: sprite is required."
+		},
+		{
+			"name": "sites_sprite_width",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"sprite",
+								"width"
+							],
+							"value": 600.5
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.sprite.width: 600.5 is outside 16..512."
+		},
+		{
+			"name": "sites_bad_where",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"where"
+							],
+							"value": [
+								"sea"
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.where[0]: one of mainland, islands is needed."
+		},
+		{
+			"name": "sites_where_empty",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"where"
+							],
+							"value": []
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.where: 0 entries; 1 to 2 are allowed."
+		},
+		{
+			"name": "sites_gap_out_of_range",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"gap"
+							],
+							"value": 12
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.gap: 12 is outside 1..8."
+		},
+		{
+			"name": "sites_bad_do",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"do"
+							],
+							"value": "sail"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[1].actions[0].do: one of effects, copy_card, leave is needed."
+		},
+		{
+			"name": "sites_action_without_id",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"remove": [
+						[
+							"sites",
+							"shrine",
+							"panes",
+							1,
+							"actions",
+							1,
+							"id"
+						]
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[1].actions[1]: id is required."
+		},
+		{
+			"name": "sites_too_many_prices",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"prices"
+							],
+							"value": {
+								"$list": [
+									10,
+									17
+								]
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[1].actions[0].prices: 17 entries; 0 to 16 are allowed."
+		},
+		{
+			"name": "sites_negative_price",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"prices"
+							],
+							"value": [
+								-5
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[1].actions[0].prices[0]: -5 is outside 0..1000000."
+		},
+		{
+			"name": "sites_unknown_condition",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"when"
+							],
+							"value": [
+								{
+									"weather": "rain"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[0].when[0]: weather is not one of flag, not_flag, gold_at_least, on_mainland, used, used_up, dungeon."
+		},
+		{
+			"name": "sites_island_condition",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"when"
+							],
+							"value": [
+								{
+									"quest_done": 0
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[0].when[0]: quest_done is not one of flag, not_flag, gold_at_least, on_mainland, used, used_up, dungeon."
+		},
+		{
+			"name": "sites_unknown_effect",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"effects",
+								0
+							],
+							"value": {
+								"set_stage": {
+									"quest": 0,
+									"value": 1
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[1].actions[0].effects[0]: set_stage is not one of set_flag, clear_flag, gold, food, log_clue, log_event, spawn_dungeon."
+		},
+		{
+			"name": "sites_picture_prefix",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"pictures"
+							],
+							"value": {
+								"shrine": "art/corpus_sites_shrine.png"
+							}
+						},
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"picture"
+							],
+							"value": "shrine"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: pictures.shrine: a picture key begins with the plugin id and _ (corpus_sites_…)."
+		},
+		{
+			"name": "sites_bad_picture",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"picture"
+							],
+							"value": "shrine_art"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.picture: shrine_art is neither a picture of sites.json nor a skin picture (visit_city, visit_village, visit_dungeon, visit_wiseman, visit_news, visit_buycards, visit_castle_black, visit_castle_blue, visit_castle_green, visit_castle_red, visit_castle_white, visit_lair_black, visit_lair_blue, visit_lair_green, visit_lair_red, visit_lair_white)."
+		},
+		{
+			"name": "sites_missing_picture_file",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"pictures",
+								"corpus_sites_shrine"
+							],
+							"value": "art/none.png"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.pictures.corpus_sites_shrine: the plugin has no file art/none.png."
+		},
+		{
+			"name": "sites_missing_text_key",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"label"
+							],
+							"value": "shrine.pray"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.shrine.panes[1].actions[0].label: text.json has no shrine.pray."
+		},
+		{
+			"name": "sites_bad_placeholder",
+			"base": "good_sites",
+			"edit": {
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"shrine.bless"
+							],
+							"value": "Leave {prise} gold in the bowl"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "text.json: shrine.bless: unknown placeholder {prise} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon)."
+		},
+		{
+			"name": "sites_card_of_a_pack_not_required",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Vault",
+									"cards": [
+										"Thallid"
+									]
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.dungeons.vault.cards[0]: Thallid is not a card of the base game or of a required pack (none)."
+		},
+		{
+			"name": "sites_bad_card_name",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Vault",
+									"cards": [
+										"Lightning Blot"
+									]
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.dungeons.vault.cards[0]: Lightning Blot is not a card of the base game or of a required pack (none)."
+		},
+		{
+			"name": "sites_dungeon_without_cards",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Vault",
+									"cards": []
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.dungeons.vault.cards: 0 entries; 1 to 6 are allowed."
+		},
+		{
+			"name": "sites_dungeon_bad_color",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Shrine Vault",
+									"cards": [
+										"Lightning Bolt"
+									],
+									"color": "purple"
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.dungeons.vault.color: one of black, blue, green, red, white, random is needed."
+		},
+		{
+			"name": "sites_dungeon_distance",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"dungeons"
+							],
+							"value": {
+								"vault": {
+									"name": "The Shrine Vault",
+									"cards": [
+										"Lightning Bolt"
+									],
+									"distance": {
+										"min": 30,
+										"max": 10
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: dungeons.vault.distance: min 30 is more than max 10."
+		},
+		{
+			"name": "sites_spawn_no_dungeon",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"effects",
+								2
+							],
+							"value": {
+								"spawn_dungeon": "vault"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[1].actions[0].effects[2].spawn_dungeon: no dungeon vault in sites.json dungeons."
+		},
+		{
+			"name": "sites_undeclared_flag",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								0,
+								"effects",
+								2
+							],
+							"value": {
+								"set_flag": "blessed"
+							}
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[1].actions[0].effects[2].set_flag: no flag blessed in sites.json flags."
+		},
+		{
+			"name": "sites_undeclared_flag_condition",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"lines",
+								2,
+								"when"
+							],
+							"value": [
+								{
+									"flag": "blessed"
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[1].lines[2].when[0].flag: no flag blessed in sites.json flags."
+		},
+		{
+			"name": "sites_used_unknown_action",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"lines",
+								2,
+								"when",
+								0,
+								"used",
+								"action"
+							],
+							"value": "pray"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[1].lines[2].when[0].used: this site has no action pray."
+		},
+		{
+			"name": "sites_used_up_unknown_action",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"when",
+								0,
+								"used_up"
+							],
+							"value": "pray"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[0].when[0].used_up: this site has no action pray."
+		},
+		{
+			"name": "sites_used_up_without_prices",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"when",
+								0,
+								"used_up"
+							],
+							"value": "leave"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[0].when[0].used_up: the action leave has no prices, so it is never used up."
+		},
+		{
+			"name": "sites_dungeon_condition_unknown",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"when"
+							],
+							"value": [
+								{
+									"dungeon": {
+										"dungeon": "vault",
+										"state": "open"
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[0].when[0].dungeon: no dungeon vault in sites.json dungeons."
+		},
+		{
+			"name": "sites_action_id_twice",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								1,
+								"id"
+							],
+							"value": "bless"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[1].actions[1].id: bless names another action of this site; an id is one action (the same action may stand in several panes)."
+		},
+		{
+			"name": "sites_effects_on_a_leave",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								0,
+								"actions",
+								0,
+								"effects"
+							],
+							"value": [
+								{
+									"food": 1
+								}
+							]
+						},
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								1,
+								"effects"
+							],
+							"value": [
+								{
+									"food": 1
+								}
+							]
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[0].actions[0].effects: only an action that does effects has effects."
+		},
+		{
+			"name": "sites_leave_labels_differ",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"shrine",
+								"panes",
+								1,
+								"actions",
+								1,
+								"label"
+							],
+							"value": "site.leave"
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.shrine.panes[1].actions[1].id: leave names another action of this site; an id is one action (the same action may stand in several panes)."
 		}
 	],
 	"compat_about": "Pairs for adventure_plugin.py compat OLD NEW (tools/test_adventure_plugin.py only): each side a recipe as above; warnings are the lines the tool must print (each holds the text given), notes the note lines it must hold.",
@@ -3634,6 +5199,489 @@
 			"notes": [
 				"world.json places: Gull Rock moved from slot 22 to slot 23",
 				"(places)"
+			]
+		},
+		{
+			"name": "sites_same",
+			"old": {
+				"base": "good_sites"
+			},
+			"new": {
+				"base": "good_sites"
+			},
+			"compatible": true
+		},
+		{
+			"name": "sites_words_and_version",
+			"old": {
+				"base": "good_sites"
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"plugin.json": {
+						"set": [
+							{
+								"path": [
+									"version"
+								],
+								"value": "0.2.0"
+							}
+						]
+					},
+					"text.json": {
+						"set": [
+							{
+								"path": [
+									"shrine.intro"
+								],
+								"value": "A shrine of grey stone."
+							}
+						]
+					}
+				}
+			},
+			"compatible": true
+		},
+		{
+			"name": "sites_kind_changed",
+			"old": {
+				"base": "good_minimal"
+			},
+			"new": {
+				"base": "good_sites"
+			},
+			"compatible": false,
+			"warnings": [
+				"The id changed (corpus_isle -> corpus_sites)",
+				"The kind changed (island -> sites)"
+			]
+		},
+		{
+			"name": "sites_site_removed",
+			"old": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"sites",
+									"well"
+								],
+								"value": {
+									"name": "Old Well",
+									"where": [
+										"mainland"
+									],
+									"picture": "visit_village",
+									"sprite": {
+										"file": "art/corpus_sites_shrine_map.png",
+										"width": 64
+									},
+									"panes": [
+										{
+											"lines": [
+												"shrine.intro"
+											],
+											"actions": [
+												{
+													"id": "leave",
+													"do": "leave",
+													"label": "shrine.leave"
+												}
+											]
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_sites"
+			},
+			"compatible": false,
+			"warnings": [
+				"sites.json sites: well (Old Well) was removed"
+			]
+		},
+		{
+			"name": "sites_site_renamed",
+			"old": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"sites",
+									"well"
+								],
+								"value": {
+									"name": "Old Well",
+									"where": [
+										"mainland"
+									],
+									"picture": "visit_village",
+									"sprite": {
+										"file": "art/corpus_sites_shrine_map.png",
+										"width": 64
+									},
+									"panes": [
+										{
+											"lines": [
+												"shrine.intro"
+											],
+											"actions": [
+												{
+													"id": "leave",
+													"do": "leave",
+													"label": "shrine.leave"
+												}
+											]
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"sites",
+									"spring"
+								],
+								"value": {
+									"name": "Old Well",
+									"where": [
+										"mainland"
+									],
+									"picture": "visit_village",
+									"sprite": {
+										"file": "art/corpus_sites_shrine_map.png",
+										"width": 64
+									},
+									"panes": [
+										{
+											"lines": [
+												"shrine.intro"
+											],
+											"actions": [
+												{
+													"id": "leave",
+													"do": "leave",
+													"label": "shrine.leave"
+												}
+											]
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"sites.json sites: well (Old Well) was renamed to spring"
+			]
+		},
+		{
+			"name": "sites_site_added",
+			"old": {
+				"base": "good_sites"
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"sites",
+									"well"
+								],
+								"value": {
+									"name": "Old Well",
+									"where": [
+										"mainland"
+									],
+									"picture": "visit_village",
+									"sprite": {
+										"file": "art/corpus_sites_shrine_map.png",
+										"width": 64
+									},
+									"panes": [
+										{
+											"lines": [
+												"shrine.intro"
+											],
+											"actions": [
+												{
+													"id": "leave",
+													"do": "leave",
+													"label": "shrine.leave"
+												}
+											]
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"sites.json sites: well (Old Well) was added"
+			]
+		},
+		{
+			"name": "sites_action_renamed",
+			"old": {
+				"base": "good_sites"
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"sites",
+									"shrine",
+									"panes",
+									1,
+									"actions",
+									0,
+									"id"
+								],
+								"value": "pray"
+							},
+							{
+								"path": [
+									"sites",
+									"shrine",
+									"panes",
+									0,
+									"when",
+									0,
+									"used_up"
+								],
+								"value": "pray"
+							},
+							{
+								"path": [
+									"sites",
+									"shrine",
+									"panes",
+									1,
+									"lines",
+									2,
+									"when",
+									0,
+									"used",
+									"action"
+								],
+								"value": "pray"
+							}
+						]
+					}
+				}
+			},
+			"compatible": false,
+			"warnings": [
+				"sites.json sites.shrine: the action bless was removed or renamed"
+			]
+		},
+		{
+			"name": "sites_prices_changed",
+			"old": {
+				"base": "good_sites"
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"sites",
+									"shrine",
+									"panes",
+									1,
+									"actions",
+									0,
+									"prices"
+								],
+								"value": [
+									20,
+									40
+								]
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"the action bless's prices changed (20, 40, 80 -> 20, 40)",
+				"finds it used up"
+			]
+		},
+		{
+			"name": "sites_dungeon_removed",
+			"old": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"dungeons"
+								],
+								"value": {
+									"vault": {
+										"name": "The Shrine Vault",
+										"cards": [
+											"Lightning Bolt"
+										]
+									}
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_sites"
+			},
+			"compatible": false,
+			"warnings": [
+				"sites.json dungeons: vault (The Shrine Vault) was removed or renamed"
+			]
+		},
+		{
+			"name": "sites_dungeon_changed",
+			"old": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"dungeons"
+								],
+								"value": {
+									"vault": {
+										"name": "The Shrine Vault",
+										"cards": [
+											"Lightning Bolt"
+										]
+									}
+								}
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"dungeons"
+								],
+								"value": {
+									"vault": {
+										"name": "The Shrine Vault",
+										"cards": [
+											"Llanowar Elves"
+										],
+										"size": "large"
+									}
+								}
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"sites.json dungeons: vault changed (size, cards)"
+			]
+		},
+		{
+			"name": "sites_flag_removed",
+			"old": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"flags"
+								],
+								"value": [
+									"told"
+								]
+							}
+						]
+					}
+				}
+			},
+			"new": {
+				"base": "good_sites"
+			},
+			"compatible": true,
+			"notes": [
+				"sites.json flags: told was renamed or removed"
+			]
+		},
+		{
+			"name": "sites_salt_and_where_changed",
+			"old": {
+				"base": "good_sites"
+			},
+			"new": {
+				"base": "good_sites",
+				"edit": {
+					"sites.json": {
+						"set": [
+							{
+								"path": [
+									"salt"
+								],
+								"value": 7
+							},
+							{
+								"path": [
+									"sites",
+									"shrine",
+									"where"
+								],
+								"value": [
+									"mainland"
+								]
+							}
+						]
+					}
+				}
+			},
+			"compatible": true,
+			"notes": [
+				"sites.json sites.shrine: where no longer names islands",
+				"sites.json salt changed"
 			]
 		}
 	]

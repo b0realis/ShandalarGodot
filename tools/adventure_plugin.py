@@ -5,9 +5,11 @@ An adventure plugin is DATA ONLY: JSON, text, PNG/JPEG/WebP pictures and
 Ogg Vorbis music, as a folder or a .zip with one top folder. The game reads
 it from its `expanded_adventure/` folder and never runs anything in it.
 
-    adventure_plugin.py new FOLDER --id ID --name NAME [--author NAME]
+    adventure_plugin.py new FOLDER --id ID --name NAME [--author NAME] [--kind island|sites]
         a minimal plugin that loads and plays: one quest, two foes, a port
-        and a castle with small placeholder map pictures.
+        and a castle with small placeholder map pictures; with --kind
+        sites, a sites plugin (API 2) of one place, its pane picture and
+        map sprite small placeholders.
     adventure_plugin.py validate PLUGIN [--json]
         the game's own checks, in the game's order: the package, the
         manifest, its files list, the content (card names included).
@@ -20,7 +22,21 @@ it from its `expanded_adventure/` folder and never runs anything in it.
     adventure_plugin.py info PLUGIN [--json]
         the manifest and what the plugin holds.
     adventure_plugin.py compat OLD NEW
-        every change in NEW that makes saves made with OLD unusable.
+        every change in NEW that makes saves made with OLD unusable (for a
+        sites plugin: every change that loses saved progress).
+    adventure_plugin.py add-place FOLDER --id KEY --name NAME [--where mainland,islands]
+            [--service effects|copy|none] [--prices 100,200]
+        add a place to a sites plugin folder: its panes, its service, its
+        words, a stand-in pane picture and map sprite.
+    adventure_plugin.py add-dungeon FOLDER --id KEY --name NAME --cards "A,B,C" [--color random]
+            [--size small|large] [--rules ...] [--min 6 --max 24] [--place KEY --action ID --price N]
+        add a dungeon to a sites plugin folder; with --place, a button of
+        that place raises it, with panes for it open and cleared.
+    adventure_plugin.py walk PLUGIN [--site KEY] [--gold N] [--json]
+        a sites plugin's places played as text, without the game: each
+        pane, each button pressed in turn, each dungeon raised and cleared.
+    adventure_plugin.py art PLUGIN [--json]
+        advice on the pane pictures and map sprites (never a refusal).
     adventure_plugin.py guide [--out DIR] [--check]
         write the guide's reference page (GUIDE/reference.html) from
         game/adventure/plugins/schema_v1.json.
@@ -65,14 +81,26 @@ HERE = Path(__file__).resolve().parent
 # schema_v1.json, the one file the game and this tool share.
 # --------------------------------------------------------------------------
 
-API_VERSION = 1
+## API 2 (2026-11-21) brings the sites plugins (KIND_SITES): places of their
+## own on the mainland and on other plugins' islands; every API 1 plugin
+## reads as before.
+API_VERSION = 2
+## A plugin's kind (the manifest's `kind`, API 2): an island reached by ship
+## (the default and API 1's only kind), or places that stand on the lands a
+## campaign has.
+KIND_ISLAND = "island"
+KIND_SITES = "sites"
+KINDS = [KIND_ISLAND, KIND_SITES]
+## The first API a sites plugin may declare.
+SITES_API = 2
 PLUGIN_FORMAT = 1
 FOLDER_NAME = "expanded_adventure"
 ID_PATTERN = "^[a-z][a-z0-9_]{0,39}$"
 RESERVED_IDS = ["mainland"]
+## `region` is required of an island alone (manifest_problems).
 REQUIRED_FIELDS = ["plugin_format", "api_version", "id", "name", "version", "authors", "description", "region"]
-FIELDS = ["plugin_format", "api_version", "id", "name", "version", "minimum_game_version", "authors", "license",
-          "description", "learning_note", "requires", "region", "files"]
+FIELDS = ["plugin_format", "api_version", "kind", "id", "name", "version", "minimum_game_version", "authors",
+          "license", "description", "learning_note", "requires", "region", "files"]
 REGION_FIELDS = ["title", "castle_name", "salt", "mana_links", "palette"]
 MAX_NAME = 100
 MAX_LINE = 300
@@ -101,7 +129,7 @@ RESERVED_FLAGS = ["region", "layout_version", "port", "castle", "town_names", "d
 MARKERS = ["port", "castle"]
 
 PLACEHOLDERS = ["pledges", "quests_total", "target", "town", "title", "foe", "life", "count", "total", "required",
-                "percent", "left", "color", "cards", "hero", "region"]
+                "percent", "left", "color", "cards", "hero", "region", "price", "uses_left", "gold", "card", "dungeon"]
 ## The engine's own sentences, said when a plugin's text.json leaves them out.
 TEXT_DEFAULTS = {
     "region.subtitle": "",
@@ -148,6 +176,18 @@ TEXT_DEFAULTS = {
     "task.duel": "Defeat {foe} at {target}.",
     "task.done": "Done at {town}.",
     "talk.will_you": "Will you...",
+    "site.leave": "Leave",
+    "site.back": "Return",
+    "site.pay": "Pay {price} gold",
+    "site.pick_title": "Pick a card",
+    "site.pick_line": "A copy of it for {price} gold.",
+    "site.no_gold": "You need {price} gold for this; you carry {gold}.",
+    "site.bag_full": "Your bag is full; make room in it first.",
+    "site.no_cards": "You have no card that may be copied.",
+    "site.no_room": "No place on this land can hold a new dungeon.",
+    "site.done": "It is done.",
+    "site.copied": "A copy of {card} is yours.",
+    "site.copied_log": "{card} copied for {price} gold.",
 }
 
 PALETTES = ["shandalar", "last_refuge"]
@@ -169,7 +209,7 @@ GUIDE_PAGES = [("index.html", "Start here"), ("first-plugin.html", "Your first p
                ("foes-rewards.html", "Foes and rewards"), ("text.html", "Text and placeholders"),
                ("art-music.html", "Art and music"), ("saves.html", "Saves and compatibility"),
                ("testing.html", "Testing"), ("refuge.html", "The Refuge walkthrough"),
-               ("reference.html", "Reference"), ("faq.html", "FAQ")]
+               ("sites.html", "Places: sites plugins"), ("reference.html", "Reference"), ("faq.html", "FAQ")]
 
 
 class UsageError(Exception):
@@ -1174,11 +1214,19 @@ def manifest_problems(value, game: Game) -> list:
     for key in manifest:
         if key not in FIELDS:
             out.append("plugin.json: unknown field \"%s\"." % key)
+    sites = isinstance(manifest.get("kind"), str) and manifest["kind"] == KIND_SITES
     for key in REQUIRED_FIELDS:
-        if key not in manifest:
+        if key not in manifest and not (sites and key == "region"):
             out.append("plugin.json: the field \"%s\" is missing." % key)
     if out:
         return out
+    if "kind" in manifest and (not isinstance(manifest["kind"], str) or manifest["kind"] not in KINDS):
+        out.append("plugin.json: kind must be one of %s." % ", ".join(KINDS))
+    if sites:
+        if "region" in manifest:
+            out.append("plugin.json: a sites plugin has no region; its places are described in sites.json.")
+        if whole(manifest["api_version"]) and int(manifest["api_version"]) < SITES_API:
+            out.append("plugin.json: a sites plugin needs api_version %d or newer." % SITES_API)
     if not whole(manifest["plugin_format"]) or int(manifest["plugin_format"]) != PLUGIN_FORMAT:
         out.append("plugin.json: plugin_format must be %d." % PLUGIN_FORMAT)
     if not whole(manifest["api_version"]) or int(manifest["api_version"]) < 1:
@@ -1206,7 +1254,8 @@ def manifest_problems(value, game: Game) -> list:
         out.append("plugin.json: authors must be a list of 1 to %d names." % MAX_AUTHORS)
     if "requires" in manifest:
         out.extend(_requires_problems(manifest["requires"], game))
-    out.extend(_region_problems(manifest["region"]))
+    if not sites:
+        out.extend(_region_problems(manifest["region"]))
     if "files" in manifest:
         files = manifest["files"]
         if not isinstance(files, dict):
@@ -1217,6 +1266,13 @@ def manifest_problems(value, game: Game) -> list:
                         or digest != digest.lower():
                     out.append("plugin.json: files: \"%s\" needs its SHA-256 as 64 lower-case hex digits." % rel)
     return out
+
+
+def manifest_kind(manifest: dict) -> str:
+    """AdventurePlugins.manifest_kind: the kind [manifest] declares; an
+    island when it names none (or none of KINDS)."""
+    kind = manifest.get("kind", KIND_ISLAND)
+    return kind if isinstance(kind, str) and kind in KINDS else KIND_ISLAND
 
 
 # --------------------------------------------------------------------------
@@ -1353,7 +1409,9 @@ class Content:
         ident = str(manifest.get("id", "")) if isinstance(manifest.get("id", ""), str) else ""
         refs = self._refs()
         content = {}
-        for name, rule in spec["files"].items():
+        sites = manifest_kind(manifest) == KIND_SITES
+        listed = spec["site_files"] if sites else spec["files"]
+        for name, rule in listed.items():
             if name not in files:
                 if rule.get("required", False):
                     problems.append("%s is missing." % name)
@@ -1367,6 +1425,8 @@ class Content:
             content[name] = value
         if problems:
             return {"data": {}, "problems": problems}
+        if sites:
+            return self._read_sites(manifest, content, refs)
         data = {"id": ident, "manifest": manifest, "world": content["world.json"], "places": content["places.json"],
                 "quests": content["quests.json"], "foes": content["foes.json"],
                 "rewards": content.get("rewards.json", {"count": 6, "bundles": []}), "text": content["text.json"],
@@ -1539,8 +1599,16 @@ class Content:
     # ------------------------------------------------------ cross checks --
 
     def _cross_check(self, data: dict, refs: dict, problems: list) -> None:
-        ident = data["id"]
-        words = data["text"]
+        self._check_words(data["text"], refs, problems)
+        self._check_pictures(data["id"], "places.json", data["places"]["pictures"], refs, problems)
+        self._check_cards(data["packs"], refs, problems)
+        self._check_world(data["world"], problems)
+        self._check_quests(data, problems)
+        self._check_foes(data, problems)
+
+    def _check_words(self, words: dict, refs: dict, problems: list) -> None:
+        """PluginSchema._check_words: every text names placeholders of the
+        closed list, and every text key named is text.json's (or a default's)."""
         for key, template in words.items():
             unknown = unknown_placeholders(str(template))
             if unknown:
@@ -1549,15 +1617,20 @@ class Content:
         for key, path in refs["text"]:
             if key not in words and key not in TEXT_DEFAULTS:
                 problems.append("%s: text.json has no %s." % (path, key))
-        pictures = data["places"]["pictures"]
+
+    def _check_pictures(self, ident: str, file: str, pictures: dict, refs: dict, problems: list) -> None:
+        """PluginSchema._check_pictures: picture keys begin with the plugin's
+        id; every picture named is one of [pictures] (listed in [file]) or a skin's."""
         for key in pictures:
             if not str(key).startswith(ident + "_"):
-                problems.append("places.json: pictures.%s: a picture key begins with the plugin id and _ (%s_…)." % (key, ident))
+                problems.append("%s: pictures.%s: a picture key begins with the plugin id and _ (%s_…)." % (file, key, ident))
         skin = self.schema["skin_pictures"]
         for key, path in refs["picture"]:
             if key not in pictures and key not in skin:
-                problems.append("%s: %s is neither a picture of places.json nor a skin picture (%s)." % (path, key, ", ".join(skin)))
-        packs = data["packs"]
+                problems.append("%s: %s is neither a picture of %s nor a skin picture (%s)." % (path, key, file, ", ".join(skin)))
+
+    def _check_cards(self, packs: list, refs: dict, problems: list) -> None:
+        """PluginSchema._check_cards (and the tool's note when it holds no card lists)."""
         if not self.game.has_cards and refs["card"]:
             self.notes.append("Card names were not checked (%d named): %s holds no card lists. Run the tool in a "
                               "game checkout or a release folder, or name one with --game DIR."
@@ -1566,9 +1639,97 @@ class Content:
             if not self.game.card_known(card, packs):
                 problems.append("%s: %s is not a card of the base game or of a required pack (%s)."
                                 % (path, card, ", ".join(packs) if packs else "none"))
-        self._check_world(data["world"], problems)
-        self._check_quests(data, problems)
-        self._check_foes(data, problems)
+
+    # ------------------------------------------------------ a sites plugin --
+
+    def _read_sites(self, manifest: dict, content: dict, refs: dict) -> dict:
+        """PluginSchema._read_sites: a sites plugin's content (API 2), {id,
+        kind, manifest, sites, text, packs}, and its cross checks — the
+        words, the pictures, the cards, the flags, the actions and the
+        dungeons named."""
+        problems: list[str] = []
+        ident = str(manifest.get("id", "")) if isinstance(manifest.get("id", ""), str) else ""
+        data = {"id": ident, "kind": KIND_SITES, "manifest": manifest, "sites": content["sites.json"],
+                "text": content["text.json"], "packs": packs_of(manifest)}
+        self._check_words(data["text"], refs, problems)
+        self._check_pictures(ident, "sites.json", data["sites"]["pictures"], refs, problems)
+        self._check_cards(data["packs"], refs, problems)
+        self._check_sites(data["sites"], problems)
+        if problems:
+            return {"data": {}, "problems": problems}
+        return {"data": data, "problems": problems}
+
+    def _check_sites(self, file: dict, problems: list) -> None:
+        """PluginSchema._check_sites: the flags its conditions and effects
+        name are declared, the actions a condition names stand in the same
+        site (used_up one with prices), the dungeons named exist, an action's
+        id is its site's once, a dungeon's nearest no farther than its farthest."""
+        flags = file["flags"]
+        dungeons = file["dungeons"]
+        for key, dungeon in dungeons.items():
+            distance = dungeon["distance"]
+            if int(distance["min"]) > int(distance["max"]):
+                problems.append("sites.json: dungeons.%s.distance: min %d is more than max %d."
+                                % (key, int(distance["min"]), int(distance["max"])))
+        for key, site in file["sites"].items():
+            at = "sites.json: sites.%s" % key
+            actions: dict = {}
+            for p, pane in enumerate(site["panes"]):
+                for a, action in enumerate(pane["actions"]):
+                    name = str(action["id"])
+                    if name in actions and actions[name] != action:
+                        problems.append("%s.panes[%d].actions[%d].id: %s names another action of this site; an id is "
+                                        "one action (the same action may stand in several panes)." % (at, p, a, name))
+                    elif name not in actions:
+                        actions[name] = action
+            for p, pane in enumerate(site["panes"]):
+                here = "%s.panes[%d]" % (at, p)
+                self._check_site_conditions(pane["when"], here + ".when", flags, actions, dungeons, problems)
+                for l, line in enumerate(pane["lines"]):
+                    if isinstance(line, dict):
+                        self._check_site_conditions(line["when"], "%s.lines[%d].when" % (here, l), flags, actions,
+                                                    dungeons, problems)
+                for a, action in enumerate(pane["actions"]):
+                    spot = "%s.actions[%d]" % (here, a)
+                    self._check_site_conditions(action["when"], spot + ".when", flags, actions, dungeons, problems)
+                    for l, line in enumerate(action["result"]):
+                        if isinstance(line, dict):
+                            self._check_site_conditions(line["when"], "%s.result[%d].when" % (spot, l), flags, actions,
+                                                        dungeons, problems)
+                    for e, effect in enumerate(action["effects"]):
+                        name = next(iter(effect))
+                        if name in ("set_flag", "clear_flag"):
+                            if effect[name] not in flags:
+                                problems.append("%s.effects[%d].%s: no flag %s in sites.json flags." % (spot, e, name, effect[name]))
+                        elif name == "spawn_dungeon":
+                            if effect[name] not in dungeons:
+                                problems.append("%s.effects[%d].spawn_dungeon: no dungeon %s in sites.json dungeons."
+                                                % (spot, e, effect[name]))
+                    if str(action["do"]) != "effects" and action["effects"]:
+                        problems.append("%s.effects: only an action that does effects has effects." % spot)
+
+    @staticmethod
+    def _check_site_conditions(conditions: list, at: str, flags: list, actions: dict, dungeons: dict,
+                               problems: list) -> None:
+        for i, condition in enumerate(conditions):
+            name = next(iter(condition))
+            value = condition[name]
+            if name in ("flag", "not_flag"):
+                if value not in flags:
+                    problems.append("%s[%d].%s: no flag %s in sites.json flags." % (at, i, name, value))
+            elif name == "used":
+                if value["action"] not in actions:
+                    problems.append("%s[%d].used: this site has no action %s." % (at, i, value["action"]))
+            elif name == "used_up":
+                if value not in actions:
+                    problems.append("%s[%d].used_up: this site has no action %s." % (at, i, value))
+                elif not actions[value]["prices"]:
+                    problems.append("%s[%d].used_up: the action %s has no prices, so it is never used up." % (at, i, value))
+            elif name == "dungeon":
+                if value["dungeon"] not in dungeons:
+                    problems.append("%s[%d].dungeon: no dungeon %s in sites.json dungeons." % (at, i, value["dungeon"]))
+
+    # ---------------------------------------------------- an island's checks --
 
     @staticmethod
     def _claim_slot(slots: dict, slot: int, part: str, problems: list) -> None:
@@ -1809,6 +1970,25 @@ def packs_of(manifest: dict) -> list:
     return out
 
 
+def site_descriptor(manifest: dict, data: dict) -> dict:
+    """PluginSchema.site_descriptor with AdventurePlugins._site_descriptor's
+    defaults: what the game's AdventureSites reads of a valid sites plugin
+    — id, plugin, kind, version, name, pack, packs, salt, pictures, sprites
+    ({site: [file, width]}) and sites ({site: {name, where, gap}})."""
+    if not data:
+        return {}
+    file = data["sites"]
+    packs = list(data.get("packs", []))
+    return {"id": str(manifest.get("id", data.get("id", ""))), "plugin": True, "kind": KIND_SITES,
+            "version": str(manifest.get("version", "")), "name": str(manifest.get("name", "")),
+            "pack": packs[0] if packs else "", "packs": packs, "salt": int(file["salt"]),
+            "pictures": dict(file["pictures"]),
+            "sprites": {key: [str(site["sprite"]["file"]), float(site["sprite"]["width"])]
+                        for key, site in file["sites"].items()},
+            "sites": {key: {"name": str(site["name"]), "where": list(site["where"]), "gap": int(site["gap"])}
+                      for key, site in file["sites"].items()}}
+
+
 # --------------------------------------------------------------------------
 # THE STAGES, in the game's order (AdventurePlugins._add)
 # --------------------------------------------------------------------------
@@ -1973,10 +2153,15 @@ SPRITE_COLORS = {".": (0, 0, 0, 0), "#": (38, 32, 28, 255), "s": (150, 146, 136,
                  "w": (236, 230, 214, 255), "b": (128, 88, 52, 255), "p": (150, 112, 70, 255)}
 
 
+## The API an island skeleton (new) declares: the first, every island's.
+ISLAND_API = 1
+
+
 def skeleton(ident: str, name: str, author: str, game_version: str) -> dict:
     """The files of a minimal plugin: {rel: bytes}."""
     salt = int.from_bytes(hashlib.sha256(ident.encode("utf-8")).digest()[:4], "big") & 0x7FFFFFFF
-    manifest = {"plugin_format": PLUGIN_FORMAT, "api_version": API_VERSION, "id": ident, "name": name,
+    # An island needs nothing past API 1, so a game that reads only API 1 reads it too.
+    manifest = {"plugin_format": PLUGIN_FORMAT, "api_version": ISLAND_API, "id": ident, "name": name,
                 "version": "0.1.0"}
     if game_version:
         manifest["minimum_game_version"] = game_version
@@ -2122,6 +2307,151 @@ def skeleton(ident: str, name: str, author: str, game_version: str) -> dict:
     }
 
 
+## A sites skeleton's map sprite, 32 x 32 pixel art: a wayside shrine with
+## a lantern, its foot on the bottom rows. Each letter one pixel of
+## SPRITE_COLORS (and SHRINE_COLORS).
+SHRINE_ROWS = [
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "...............##...............",
+    "..............#rr#..............",
+    ".............#rrrr#.............",
+    "............#rrrrrr#............",
+    "...........#rrrrrrrr#...........",
+    "..........#rrrrrrrrrr#..........",
+    ".........##############.........",
+    "..........#ssssssssss#..........",
+    "..........#ss######ss#..........",
+    "..........#s#llllll#s#..........",
+    "..........#s#llyyll#s#..........",
+    "..........#s#lyyyyl#s#..........",
+    "..........#s#llyyll#s#..........",
+    "..........#s#llllll#s#..........",
+    "..........#ss######ss#..........",
+    "..........#ssssssssss#..........",
+    "..........#ssssssssss#..........",
+    "..........#ssssssssss#..........",
+    ".........##############.........",
+    "........#gggggggggggggg#........",
+    "........################........",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+]
+SHRINE_COLORS = dict(SPRITE_COLORS, r=(140, 62, 44, 255), l=(52, 40, 30, 255))
+
+
+def _site_picture(sprite_rows: list, colors: dict) -> bytes:
+    """A small pane picture for a sites skeleton, 128 x 70 (the pane's shape,
+    about 1.83 to 1): an evening sky over a meadow, the sprite drawn twice
+    its size in the middle."""
+    width, height, horizon = 128, 70, 46
+    pixels = []
+    for y in range(height):
+        row = []
+        for x in range(width):
+            if y < horizon:
+                t = y / horizon
+                row.append((int(70 + 150 * t), int(92 + 90 * t), int(150 + 40 * t), 255))
+            else:
+                t = (y - horizon) / (height - horizon)
+                row.append((int(96 - 40 * t), int(126 - 50 * t), int(64 - 24 * t), 255))
+        pixels.append(row)
+    left, top = (width - 2 * len(sprite_rows[0])) // 2, horizon + 4 - 2 * 24
+    for sy, line in enumerate(sprite_rows):
+        for sx, letter in enumerate(line):
+            color = colors[letter]
+            if color[3] == 0:
+                continue
+            for dy in (0, 1):
+                for dx in (0, 1):
+                    y, x = top + 2 * sy + dy, left + 2 * sx + dx
+                    if 0 <= y < height and 0 <= x < width:
+                        pixels[y][x] = color
+    return png_bytes(width, height, pixels)
+
+
+def site_skeleton(ident: str, name: str, author: str, game_version: str) -> dict:
+    """The files of a minimal sites plugin (API 2): {rel: bytes} — one place,
+    a wayside shrine on the mainland and on every island, whose service
+    costs 20, 40 and 80 gold and is then used up."""
+    salt = int.from_bytes(hashlib.sha256(ident.encode("utf-8")).digest()[:4], "big") & 0x7FFFFFFF
+    manifest = {"plugin_format": PLUGIN_FORMAT, "api_version": SITES_API, "kind": KIND_SITES, "id": ident,
+                "name": name, "version": "0.1.0"}
+    if game_version:
+        manifest["minimum_game_version"] = game_version
+    manifest.update({
+        "authors": [author],
+        "license": "Name the license of your plugin here, and put its text in LICENSE.txt.",
+        "description": "One line for the plugin list: what the hero finds at this place.",
+        "requires": {"card_packs": []},
+    })
+    picture = "%s_shrine" % ident
+    sites = {
+        "salt": salt,
+        "flags": [],
+        "pictures": {picture: "art/%s_shrine.png" % ident},
+        "dungeons": {},
+        "sites": {
+            "shrine": {
+                "name": "Wayside Shrine",
+                "where": ["mainland", "islands"],
+                "picture": picture,
+                "sprite": {"file": "art/%s_shrine_map.png" % ident, "width": 80},
+                "gap": 3,
+                "panes": [
+                    {"when": [{"used_up": "bless"}], "subtitle": "shrine.subtitle",
+                     "lines": ["shrine.intro", "shrine.spent"],
+                     "actions": [{"id": "leave", "do": "leave", "label": "shrine.leave"}]},
+                    {"subtitle": "shrine.subtitle",
+                     "lines": ["shrine.intro", "shrine.offer",
+                               {"text": "shrine.again", "when": [{"used": {"action": "bless", "min": 1}}]}],
+                     "actions": [
+                         {"id": "bless", "do": "effects", "label": "shrine.bless", "prices": [20, 40, 80],
+                          "effects": [{"food": 6}, {"log_event": {"event": "shrine", "text": "shrine.log"}}],
+                          "result": ["shrine.blessed"]},
+                         {"id": "leave", "do": "leave", "label": "shrine.leave"}]},
+                ],
+            },
+        },
+    }
+    text = {
+        "shrine.subtitle": "A shrine by the road",
+        "shrine.intro": "A small stone shrine stands by the road. A lantern burns in it, though no keeper is near.",
+        "shrine.offer": "Travelers leave gold in its bowl, and find their packs heavier with food when they move on.",
+        "shrine.again": "The lantern flares as you come near, as if it knows you.",
+        "shrine.bless": "Leave {price} gold in the bowl ({uses_left} left)",
+        "shrine.blessed": "You leave {price} gold in the bowl. When you lift your pack, it is heavier: six days of food.",
+        "shrine.spent": "The lantern has gone out. The bowl is cold and empty.",
+        "shrine.log": "Left {price} gold at the wayside shrine.",
+        "shrine.leave": "Leave",
+    }
+    readme = ("%s\n%s\n\nA sites plugin for Shandalar (plugin API 2), made with tools/adventure_plugin.py new\n"
+              "--kind sites: one place, a wayside shrine on the mainland and on every island.\n\n"
+              "Edit the JSON files, then check and package the plugin:\n"
+              "    python3 tools/adventure_plugin.py validate %s\n"
+              "    python3 tools/adventure_plugin.py export %s --out dist\n"
+              "Put the zip (or this folder) in the game's expanded_adventure/ folder and tick it\n"
+              "in the Embark window's plugin list. The guide in expanded_adventure/GUIDE/\n"
+              "(sites.html) explains every file and field.\n") % (name, "=" * min(len(name), 72), ident, ident)
+
+    def encode(value) -> bytes:
+        return (json.dumps(value, indent="\t", ensure_ascii=False) + "\n").encode("utf-8")
+
+    return {
+        "plugin.json": encode(manifest), "sites.json": encode(sites), "text.json": encode(text),
+        "README.txt": readme.encode("utf-8"),
+        "art/%s_shrine.png" % ident: _site_picture(SHRINE_ROWS, SHRINE_COLORS),
+        "art/%s_shrine_map.png" % ident: _sprite(SHRINE_ROWS, SHRINE_COLORS),
+    }
+
+
 def command_new(args, game: Game) -> int:
     folder = Path(args.folder)
     if not valid_id(args.id):
@@ -2135,7 +2465,7 @@ def command_new(args, game: Game) -> int:
     if folder.exists() and (not folder.is_dir() or any(folder.iterdir())):
         raise UsageError("%s already exists; new writes a new folder." % folder)
     game.schema()   # the plugin is checked once written: no schema, nothing written
-    files = skeleton(args.id, name, author, game.version)
+    files = (site_skeleton if args.kind == KIND_SITES else skeleton)(args.id, name, author, game.version)
     for rel, data in sorted(files.items()):
         target = folder / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2167,6 +2497,7 @@ def report(result: dict) -> dict:
     manifest = result["manifest"]
     return {"path": result["path"], "valid": result["valid"], "stage": result["stage"],
             "problems": result["problems"], "notes": result["notes"], "kind": result["kind"],
+            "plugin_kind": manifest_kind(manifest),
             "id": manifest.get("id") if isinstance(manifest.get("id"), str) else "",
             "name": manifest.get("name") if isinstance(manifest.get("name"), str) else "",
             "version": manifest.get("version") if isinstance(manifest.get("version"), str) else ""}
@@ -2198,13 +2529,23 @@ def summary(result: dict) -> dict:
         extension = get_extension(rel).lower()
         kinds["json" if extension == "json" else "pictures" if extension in PICTURES
               else "music" if extension == "ogg" else "text"] += 1
-    out = {"path": result["path"], "kind": result["kind"], "valid": result["valid"], "stage": result["stage"],
-           "problems": result["problems"], "notes": result["notes"],
+    out = {"path": result["path"], "kind": result["kind"], "plugin_kind": manifest_kind(manifest),
+           "valid": result["valid"], "stage": result["stage"], "problems": result["problems"], "notes": result["notes"],
            "manifest": {key: _plain(manifest[key]) for key in FIELDS if key in manifest and key != "files"},
            "hashes": len(manifest.get("files", {})) if isinstance(manifest.get("files"), dict) else 0,
            "files": len(files), "bytes": sum(len(b) for b in files.values()), "by_kind": kinds}
     data = result["data"]
-    if data:
+    if data and data.get("kind") == KIND_SITES:
+        out["content"] = {"sites": {key: {"name": site["name"], "where": site["where"], "gap": site["gap"],
+                                          "panes": len(site["panes"]),
+                                          "actions": sorted({str(a["id"]) for pane in site["panes"]
+                                                             for a in pane["actions"]})}
+                                    for key, site in data["sites"]["sites"].items()},
+                          "dungeons": {key: {"name": d["name"], "cards": d["cards"]}
+                                       for key, d in data["sites"]["dungeons"].items()},
+                          "flags": data["sites"]["flags"], "pictures": len(data["sites"]["pictures"]),
+                          "texts": len(data["text"]), "descriptor": site_descriptor(manifest, data)}
+    elif data:
         out["content"] = {"towns": len(data["world"]["towns"]["list"]), "places": len(data["world"]["places"]["list"]),
                           "villages": data["world"]["villages"]["count"], "quests": len(data["quests"]["quests"]),
                           "flags": data["quests"]["flags"], "foes": len(data["foes"]["foes"]),
@@ -2220,8 +2561,8 @@ def command_info(args, game: Game) -> int:
         return 0 if facts["valid"] else 1
     manifest = facts["manifest"]
     lines = ["%s (%s)" % (facts["path"], facts["kind"])]
-    for key in ("id", "name", "version", "api_version", "minimum_game_version", "description", "learning_note",
-                "license"):
+    for key in ("id", "name", "version", "api_version", "kind", "minimum_game_version", "description",
+                "learning_note", "license"):
         if key in manifest:
             lines.append("  %-21s %s" % (key + ":", _plain(manifest[key])))
     if isinstance(manifest.get("authors"), list):
@@ -2234,7 +2575,19 @@ def command_info(args, game: Game) -> int:
     lines.append("  %-21s %d (%d JSON, %d text, %d pictures, %d music), %s; %s" % (
         "files:", facts["files"], by["json"], by["text"], by["pictures"], by["music"], _bytes_text(facts["bytes"]),
         "%d hashed in plugin.json" % facts["hashes"] if facts["hashes"] else "no files list (a folder in the works)"))
-    if "content" in facts:
+    if "content" in facts and facts["plugin_kind"] == KIND_SITES:
+        c = facts["content"]
+        lines.append("  %-21s %d place%s, %d dungeon%s, %d flag%s, %d picture%s; %d texts" % (
+            "content:", len(c["sites"]), "" if len(c["sites"]) == 1 else "s", len(c["dungeons"]),
+            "" if len(c["dungeons"]) == 1 else "s", len(c["flags"]), "" if len(c["flags"]) == 1 else "s",
+            c["pictures"], "" if c["pictures"] == 1 else "s", c["texts"]))
+        for key, site in c["sites"].items():
+            lines.append("  %-21s %s, on %s, gap %d; %d pane%s; actions %s" % (
+                "place " + key + ":", site["name"], " and ".join(site["where"]), site["gap"], site["panes"],
+                "" if site["panes"] == 1 else "s", ", ".join(site["actions"]) if site["actions"] else "none"))
+        for key, dungeon in c["dungeons"].items():
+            lines.append("  %-21s %s, holding %s" % ("dungeon " + key + ":", dungeon["name"], ", ".join(dungeon["cards"])))
+    elif "content" in facts:
         c = facts["content"]
         lines.append("  %-21s %d towns, %d places, %d-%d villages; %d quests; %d foes; %d reward bundles; %d texts%s" % (
             "content:", c["towns"], c["places"], c["villages"][0], c["villages"][1], c["quests"], c["foes"],
@@ -2338,6 +2691,15 @@ def compatibility(old: dict, new: dict) -> tuple[list, list]:
     if old["id"] != new["id"]:
         warnings.append("The id changed (%s -> %s): saves name the plugin by its id, so to them the new version is "
                         "another plugin and the old one is missing." % (old["id"], new["id"]))
+    old_kind, new_kind = old.get("kind", KIND_ISLAND), new.get("kind", KIND_ISLAND)
+    if old_kind != new_kind:
+        warnings.append("The kind changed (%s -> %s): saves keep an island's land and a sites plugin's progress "
+                        "apart, so nothing a save holds of the old version is read by the new one."
+                        % (old_kind, new_kind))
+        return warnings, notes
+    if new_kind == KIND_SITES:
+        site_compatibility(old, new, warnings, notes)
+        return warnings, notes
     # A town is a site a visited island must have (the schema's
     # required_sites); a place, never required, is a note.
     for part in ("towns", "places"):
@@ -2408,6 +2770,91 @@ def compatibility(old: dict, new: dict) -> tuple[list, list]:
     return warnings, notes
 
 
+def _site_actions(site: dict) -> dict:
+    """A place's actions by id, each as its first pane gives it."""
+    out: dict = {}
+    for pane in site["panes"]:
+        for action in pane["actions"]:
+            out.setdefault(str(action["id"]), action)
+    return out
+
+
+def site_compatibility(old: dict, new: dict, warnings: list, notes: list) -> None:
+    """What a new version of a sites plugin does to saves made with the old
+    one. A save keeps, by the plugin's id (DataSites, AdventureSites): each
+    place's tile by its key (`world.expansion.sites`, "<plugin>:<site>"),
+    each action's uses by "<site>.<action>", the flags set by name, and each
+    dungeon raised by "<land>:<dungeon key>". A key or id gone loses what
+    was kept under it (warnings); the rest reaches saves without harm (notes)."""
+    before, after = old["sites"], new["sites"]
+    old_sites, new_sites = before["sites"], after["sites"]
+    by_name = {str(site["name"]): key for key, site in new_sites.items()}
+    for key, site in old_sites.items():
+        if key in new_sites:
+            continue
+        renamed = by_name.get(str(site["name"]))
+        if renamed is not None and renamed not in old_sites:
+            warnings.append("sites.json sites: %s (%s) was renamed to %s: saves keep its tile and its actions' uses "
+                            "by its key, so the old place is hidden, the new one is placed again and starts with "
+                            "none used." % (key, site["name"], renamed))
+        else:
+            warnings.append("sites.json sites: %s (%s) was removed: saves keep its tile and its actions' uses, which "
+                            "nothing reads now." % (key, site["name"]))
+    renamed_to = {by_name.get(str(site["name"])) for key, site in old_sites.items() if key not in new_sites}
+    for key, site in new_sites.items():
+        if key not in old_sites and key not in renamed_to:
+            notes.append("sites.json sites: %s (%s) was added: it is placed on each land its where names the next "
+                         "time a save is loaded or the hero lands there." % (key, site["name"]))
+    for key, site in old_sites.items():
+        if key not in new_sites:
+            continue
+        old_actions, new_actions = _site_actions(site), _site_actions(new_sites[key])
+        for action, entry in old_actions.items():
+            if action not in new_actions:
+                # A leave is never counted; every other action's uses are.
+                if str(entry["do"]) != "leave":
+                    warnings.append("sites.json sites.%s: the action %s was removed or renamed: saves count its uses "
+                                    "by its id (%s.%s), so a renamed action starts again from none used, at its first "
+                                    "price." % (key, action, key, action))
+                continue
+            was, now = list(entry["prices"]), list(new_actions[action]["prices"])
+            if was != now and (was or now):
+                notes.append("sites.json sites.%s: the action %s's prices changed (%s -> %s): a save's uses so far "
+                             "are kept, and its next use costs the new list's price at that place%s."
+                             % (key, action, ", ".join(str(p) for p in was) or "free", ", ".join(str(p) for p in now)
+                                or "free", "; a save that used more than the new list holds finds it used up"
+                                if len(now) < len(was) and now else ""))
+        old_where, new_where = list(site["where"]), list(new_sites[key]["where"])
+        for land in old_where:
+            if land not in new_where:
+                notes.append("sites.json sites.%s: where no longer names %s: a place already standing there in a "
+                             "save stays, and lands not yet visited get none." % (key, land))
+        if int(site["gap"]) != int(new_sites[key]["gap"]):
+            notes.append("sites.json sites.%s: gap changed (%d -> %d): a place already standing keeps its tile; "
+                         "only lands where it is not placed yet use the new gap."
+                         % (key, int(site["gap"]), int(new_sites[key]["gap"])))
+    old_dungeons, new_dungeons = before["dungeons"], after["dungeons"]
+    for key, dungeon in old_dungeons.items():
+        if key not in new_dungeons:
+            warnings.append("sites.json dungeons: %s (%s) was removed or renamed: saves keep a raised one by its key "
+                            "(\"<land>:%s\"); it stays an ordinary dungeon of its land, which the plugin no longer "
+                            "knows as its own." % (key, dungeon["name"], key))
+        elif new_dungeons[key] != dungeon:
+            changed = [field for field in ("name", "color", "size", "rules", "cards", "distance")
+                       if new_dungeons[key].get(field) != dungeon.get(field)]
+            notes.append("sites.json dungeons: %s changed (%s): one already raised in a save keeps its name, "
+                         "creatures, rules and cards; only those raised from now on are the new ones."
+                         % (key, ", ".join(changed)))
+    for flag in before["flags"]:
+        if flag not in after["flags"]:
+            notes.append("sites.json flags: %s was renamed or removed: old saves keep it set under the old name, and "
+                         "the new version starts without it." % flag)
+    if int(before["salt"]) != int(after["salt"]):
+        notes.append("sites.json salt changed (%d -> %d): places already standing in a save keep their tiles; only "
+                     "lands where they are not placed yet, and dungeons raised from now on, draw new ones."
+                     % (int(before["salt"]), int(after["salt"])))
+
+
 def command_compat(args, game: Game) -> int:
     old = judge(_existing(args.old), game)
     new = judge(_existing(args.new), game)
@@ -2424,6 +2871,11 @@ def command_compat(args, game: Game) -> int:
         print(line)
     for line in notes:
         print("note: " + line)
+    if warnings and old["data"].get("kind") == KIND_SITES == new["data"].get("kind"):
+        print("%d change%s lose%s progress that saves of %s %s keep, with %s %s." % (
+            len(warnings), "" if len(warnings) == 1 else "s", "s" if len(warnings) == 1 else "", old["data"]["id"],
+            old["manifest"]["version"], new["data"]["id"], new["manifest"]["version"]))
+        return 1
     if warnings:
         print("%d change%s make%s saves of %s %s unusable with %s %s." % (
             len(warnings), "" if len(warnings) == 1 else "s", "s" if len(warnings) == 1 else "", old["data"]["id"],
@@ -2518,7 +2970,7 @@ class Reference:
             if kind == "text":
                 parts.append("a key of text.json")
             if kind == "picture":
-                parts.append("a places.json picture key or a skin picture")
+                parts.append("a picture key of places.json or sites.json, or a skin picture")
             if kind == "card":
                 parts.append("base game or a required pack")
         elif kind == "enum":
@@ -2614,10 +3066,18 @@ class Reference:
         schema = self.schema
         limits = schema["limits"]
         files = schema["files"]
+        site_files = {name: rule for name, rule in schema.get("site_files", {}).items()
+                      if not (name in files and files[name].get("type") == rule.get("type"))}
+        shared = [name for name in schema.get("site_files", {}) if name not in site_files]
         mini = ['<li><a href="#manifest">plugin.json</a></li>']
         mini += ['<li><a href="#file-%s">%s</a></li>' % (_e(n.replace(".", "-")), _e(n)) for n in files]
+        mini += ['<li><a href="#file-%s">%s</a> (sites)</li>' % (_e(n.replace(".", "-")), _e(n)) for n in site_files]
         mini += ['<li><a href="#types">Named types</a></li>', '<li><a href="#type-condition">Conditions</a></li>',
-                 '<li><a href="#type-effect">Effects</a></li>', '<li><a href="#placeholders">Placeholders</a></li>',
+                 '<li><a href="#type-effect">Effects</a></li>']
+        if "sites_condition" in self.types:
+            mini += ['<li><a href="#type-sites_condition">Site conditions</a></li>',
+                     '<li><a href="#type-sites_effect">Site effects</a></li>']
+        mini += ['<li><a href="#placeholders">Placeholders</a></li>',
                  '<li><a href="#text-defaults">Built-in texts</a></li>', '<li><a href="#limits">Limits</a></li>',
                  '<li><a href="#extensions">Files allowed</a></li>', '<li><a href="#skin-pictures">Skin pictures</a></li>']
         body = []
@@ -2629,11 +3089,17 @@ class Reference:
                     '<code>game/adventure/plugins/schema_v1.json</code>.</p>')
         body.append('<nav class="mini-toc" aria-label="On this page"><ol>%s</ol></nav>' % "".join(mini))
         body.append(self.manifest_section())
-        for name, rule in files.items():
+        for name, rule in list(files.items()) + list(site_files.items()):
             spec = self.types[rule["type"]]
             anchor = "file-" + name.replace(".", "-")
             body.append('<section class="ref-file" id="%s-section">' % _e(anchor))
             body.append('<h2 id="%s">%s</h2>' % (_e(anchor), _e(name)))
+            if name in site_files:
+                body.append("<p>A file of a sites plugin (<code>\"kind\": \"sites\"</code>, API %d), whose "
+                            "content is %s and none of an island’s files.%s</p>" % (SITES_API, " and ".join(
+                                "<code>%s</code>" % _e(n) for n in schema["site_files"]), "".join(
+                                " Its <code>%s</code> is the same file as an island’s: <a href=\"#file-%s\">%s</a>."
+                                % (_e(n), _e(n.replace(".", "-")), _e(n)) for n in shared)))
             body.append("<p>%s %s Its shape is the type <a class=\"kind\" href=\"#type-%s\">%s</a>.</p>" % (
                 _e(rule.get("doc", "")), "Required." if rule.get("required") else "Optional.",
                 _e(rule["type"]), _e(rule["type"])))
@@ -2697,7 +3163,7 @@ class Reference:
         body.append('<section id="skin-pictures"><h2>Skin pictures</h2><p>A picture key may name one of the game '
                     'skin\'s own pictures instead of a picture of the plugin.</p><ul class="chips">%s</ul></section>'
                     % "".join("<li><code>%s</code></li>" % _e(x) for x in schema["skin_pictures"]))
-        pager = ('<footer class="pager"><a class="prev" href="refuge.html"><span>Previous</span>The Refuge walkthrough'
+        pager = ('<footer class="pager"><a class="prev" href="sites.html"><span>Previous</span>Places: sites plugins'
                  '</a><a class="next" href="faq.html"><span>Next</span>FAQ</a></footer>')
         return ("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" "
                 "content=\"width=device-width, initial-scale=1\">\n<title>Reference · Adventure plugin guide</title>\n"
@@ -2709,8 +3175,12 @@ class Reference:
     def manifest_section(self) -> str:
         rows = [
             ("plugin_format", "int", True, "", "always %d" % PLUGIN_FORMAT, "The manifest's own format."),
-            ("api_version", "int", True, "", "from 1; this game reads API %d" % API_VERSION,
+            ("api_version", "int", True, "", "from 1; this game reads API %d; a sites plugin %d or newer"
+             % (API_VERSION, SITES_API),
              "The plugin API it is written for; a newer one than the game reads refuses it."),
+            ("kind", "enum", False, "", "%s (the default) or %s" % (KIND_ISLAND, KIND_SITES),
+             "What the plugin adds: an island reached by ship, or places that stand on the lands (API %d; a "
+             "sites plugin has no region, and its content is sites.json and text.json)." % SITES_API),
             ("id", "string", True, "", "matches %s; never %s" % (ID_PATTERN, ", ".join(RESERVED_IDS)),
              "The plugin's identity: saves name it, picture keys begin with it. Never change it."),
             ("name", "string", True, "", "1 to %d characters" % MAX_NAME, "The name in the plugin list."),
@@ -2725,9 +3195,10 @@ class Reference:
              "A dimmer line under the description (the prototype says it is a learning demo)."),
             ("requires", "object", False, "", "card_packs: up to %d of {\"id\": \"pack-N\", \"min_version\": \"1.0\"}"
              % MAX_PACKS, "The card packs it needs; never Pack 1. A plugin never withholds or unlocks their cards."),
-            ("region", "object", True, "", "title (required), castle_name, salt (0 to 2147483647), mana_links, palette",
+            ("region", "object", KIND_ISLAND, "", "title (required), castle_name, salt (0 to 2147483647), mana_links, "
+             "palette",
              "The island: its title, the castle's name, the salt that makes its island its own, whether mana links "
-             "work there, its palette (%s, or a palette object)." % ", ".join(PALETTES)),
+             "work there, its palette (%s, or a palette object). A sites plugin has none." % ", ".join(PALETTES)),
             ("files", "map", False, "", "file -> 64 lower-case hex digits",
              "Written by export: the SHA-256 of every other file; any change after export refuses the plugin."),
         ]
@@ -2739,7 +3210,9 @@ class Reference:
         body = "\n".join("<tr><td data-label=\"Field\"><code>%s</code></td><td data-label=\"Kind\">%s</td>"
                          "<td data-label=\"Required / default\">%s</td><td data-label=\"Limits\">%s</td>"
                          "<td class=\"doc\" data-label=\"What it is\">%s</td></tr>" % (
-                             _e(n), kind(k), '<span class="req">required</span>' if r else "optional", _e(lim), _e(doc))
+                             _e(n), kind(k), '<span class="req">required</span>' if r is True
+                             else '<span class="req">required</span> of an %s' % _e(r) if r else "optional",
+                             _e(lim), _e(doc))
                          for n, k, r, _, lim, doc in rows)
         return ('<section class="ref-file" id="manifest-section"><h2 id="manifest">plugin.json</h2><p>The manifest. '
                 'Any field not listed here refuses the plugin, so a misspelled field is named, not ignored.</p>'
@@ -2799,6 +3272,807 @@ def command_guide(args, game: Game) -> int:
 
 
 # --------------------------------------------------------------------------
+# TOOLS FOR PLACES — add-place, add-dungeon (a sites plugin's folder edited),
+# walk (its places played without the game), art (its pictures looked at)
+# --------------------------------------------------------------------------
+
+## A place's and an action's key (schema_v1.json's sites_key), a dungeon's (id).
+SITES_KEY_PATTERN = "^[a-z][a-z0-9_]{0,31}$"
+SERVICES = ["effects", "copy", "none"]
+DUNGEON_COLORS = ["black", "blue", "green", "red", "white", "random"]
+DUNGEON_SIZES = ["small", "large"]
+DUNGEON_RULES = ["no_color", "no_artifacts", "no_instants", "life_carries", "life_adds"]
+
+
+def _read_json_file(path: Path):
+    """A plugin's JSON file as the game reads it, whole numbers kept whole."""
+    value, _, message = parse_json(utf8_string(path.read_bytes()).lstrip("﻿"), ints=True)
+    if message is not None or not isinstance(value, dict):
+        raise UsageError("%s could not be read as one JSON object." % path)
+    return value
+
+
+def _json_bytes(value) -> bytes:
+    return (json.dumps(value, indent="\t", ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def _sites_folder(folder: str, game: Game, command: str) -> tuple[Path, dict, dict, dict]:
+    """The valid sites plugin folder [folder] for an editing command:
+    (path, manifest, sites.json, text.json), the two files as written."""
+    path = Path(_existing(folder))
+    if not path.is_dir():
+        raise UsageError("%s: %s edits a plugin folder (unzip a zip first)." % (folder, command))
+    result = judge(str(path), game)
+    if not result["valid"]:
+        raise UsageError("%s is refused at the %s stage (%s): make it valid first; see validate."
+                         % (folder, result["stage"], result["problems"][0]))
+    if manifest_kind(result["manifest"]) != KIND_SITES:
+        raise UsageError("%s is an island plugin: %s works on a sites plugin (new --kind sites makes one)."
+                         % (folder, command))
+    return path, result["manifest"], _read_json_file(path / "sites.json"), _read_json_file(path / "text.json")
+
+
+def _commit_edit(path: Path, game: Game, writes: dict) -> list:
+    """[writes] ({rel: bytes}) written into plugin folder [path] and the
+    folder judged; a refused result puts every file back as it was (a new
+    one removed) and returns its problems, [] when the plugin is valid."""
+    before = {rel: (path / rel).read_bytes() if (path / rel).is_file() else None for rel in writes}
+    for rel, data in writes.items():
+        (path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (path / rel).write_bytes(data)
+    result = judge(str(path), game)
+    for note in result["notes"]:
+        print("note: " + note, file=sys.stderr)
+    if result["valid"]:
+        return []
+    for rel, data in before.items():
+        if data is None:
+            (path / rel).unlink()
+        else:
+            (path / rel).write_bytes(data)
+    return result["problems"]
+
+
+def _new_texts(text: dict, words: dict) -> None:
+    for key in words:
+        if key in text:
+            raise UsageError("text.json already has %s: choose another id, or remove that text first." % key)
+    text.update(words)
+
+
+def _int_list(value: str, option: str, low: int, high: int) -> list:
+    out = []
+    for part in value.split(","):
+        part = part.strip()
+        if not is_valid_int(part) or not low <= int(part) <= high:
+            raise UsageError("%s takes whole numbers from %d to %d, joined by commas." % (option, low, high))
+        out.append(int(part))
+    return out
+
+
+def _word_list(value: str, option: str, allowed: list) -> list:
+    out = []
+    for part in value.split(","):
+        part = part.strip()
+        if part not in allowed:
+            raise UsageError("%s takes %s, joined by commas." % (option, ", ".join(allowed)))
+        if part not in out:
+            out.append(part)
+    return out
+
+
+def command_add_place(args, game: Game) -> int:
+    path, manifest, sites, text = _sites_folder(args.folder, game, "add-place")
+    ident, key = str(manifest["id"]), args.id
+    if re.search(SITES_KEY_PATTERN, key) is None:
+        raise UsageError("--id must be 1 to 32 lower-case letters, digits or _, a letter first.")
+    if key in sites.get("sites", {}):
+        raise UsageError("%s already has a place %s." % (args.folder, key))
+    name = strip_edges(args.name)
+    if not name or len(name) > 60:
+        raise UsageError("--name must be non-empty text of at most 60 characters.")
+    where = _word_list(args.where, "--where", ["mainland", "islands"])
+    if args.service == "none" and args.prices:
+        raise UsageError("--prices needs a service: --service effects or --service copy.")
+    prices = _int_list(args.prices, "--prices", 0, 1000000) if args.prices else \
+        {"effects": [100], "copy": [500], "none": []}[args.service]
+    picture = "%s_%s" % (ident, key)
+    files = {"art/%s.png" % picture: _site_picture(SHRINE_ROWS, SHRINE_COLORS),
+             "art/%s_map.png" % picture: _sprite(SHRINE_ROWS, SHRINE_COLORS)}
+    if picture in sites.get("pictures", {}):
+        raise UsageError("sites.json already has a picture %s." % picture)
+    for rel in files:
+        if (path / rel).exists():
+            raise UsageError("%s already exists in %s." % (rel, args.folder))
+    leave = {"id": "leave", "do": "leave", "label": key + ".leave"}
+    words = {key + ".intro": "%s. Write here what the hero sees on arriving." % name, key + ".leave": "Leave"}
+    panes = [{"lines": [key + ".intro"], "actions": [leave]}]
+    if args.service == "effects":
+        action = {"id": "service", "do": "effects", "label": key + ".pay", "prices": prices,
+                  "effects": [{"log_event": {"event": key, "text": key + ".log"}}], "result": [key + ".done"]}
+        words.update({key + ".offer": "Write here what this place offers, and for how much.",
+                      key + ".pay": "Pay {price} gold ({uses_left} left)",
+                      key + ".done": "You pay {price} gold. Write here what the hero gets for it.",
+                      key + ".log": "Paid {price} gold at %s." % name})
+    elif args.service == "copy":
+        action = {"id": "copy", "do": "copy_card", "label": key + ".copy", "prices": prices,
+                  "pick_title": key + ".pick_title", "pick_line": key + ".pick_line", "result": [key + ".copied"]}
+        words.update({key + ".offer": "Write here who copies a card of the hero's, and for how much.",
+                      key + ".copy": "Copy a card ({price} gold, {uses_left} left)",
+                      key + ".pick_title": "Pick a card to copy",
+                      key + ".pick_line": "A copy of it for {price} gold.",
+                      key + ".copied": "A copy of {card} is yours, for {price} gold."})
+    if args.service != "none":
+        panes = [{"lines": [key + ".intro", key + ".offer"], "actions": [action, leave]}]
+        if prices:
+            words[key + ".spent"] = "Write here what the place says once its service is used up."
+            panes.insert(0, {"when": [{"used_up": action["id"]}], "lines": [key + ".intro", key + ".spent"],
+                             "actions": [leave]})
+        else:
+            # No prices: free, and never used up; its label counts nothing.
+            words[action["label"]] = "Use the service" if args.service == "effects" else "Copy a card"
+    _new_texts(text, words)
+    sites.setdefault("pictures", {})[picture] = "art/%s.png" % picture
+    sites.setdefault("sites", {})[key] = {
+        "name": name, "where": where, "picture": picture,
+        "sprite": {"file": "art/%s_map.png" % picture, "width": 80}, "gap": 3, "panes": panes}
+    files.update({"sites.json": _json_bytes(sites), "text.json": _json_bytes(text)})
+    problems = _commit_edit(path, game, files)
+    if problems:
+        for problem in problems:
+            print(problem)
+        print("%s: the place was not added; nothing was changed." % args.folder, file=sys.stderr)
+        return 1
+    print("Added the place %s (%s) to %s: on %s, %s; %d texts (%s.*), art/%s.png and art/%s_map.png "
+          "(stand-ins to paint over)." % (key, name, args.folder, " and ".join(where),
+                                          "no service" if args.service == "none" else "a %s service%s" % (
+                                              args.service, " for %s gold" % ", ".join(str(p) for p in prices)
+                                              if prices else ", free"), len(words), key, picture, picture))
+    print("Next: write its words in text.json, then\n    python3 tools/adventure_plugin.py walk %s --site %s"
+          % (args.folder, key))
+    return 0
+
+
+def command_add_dungeon(args, game: Game) -> int:
+    path, manifest, sites, text = _sites_folder(args.folder, game, "add-dungeon")
+    key = args.id
+    if re.search(ID_PATTERN, key) is None:
+        raise UsageError("--id must be 1 to 40 lower-case letters, digits or _, a letter first.")
+    if key in sites.get("dungeons", {}):
+        raise UsageError("%s already has a dungeon %s." % (args.folder, key))
+    name = strip_edges(args.name)
+    if not name or len(name) > 60:
+        raise UsageError("--name must be non-empty text of at most 60 characters.")
+    cards = [strip_edges(card) for card in args.cards.split(",") if strip_edges(card)]
+    if not 1 <= len(cards) <= 6:
+        raise UsageError("--cards takes 1 to 6 card names, joined by commas.")
+    if args.min > args.max:
+        raise UsageError("--min %d is more than --max %d." % (args.min, args.max))
+    if not args.place and (args.action or args.price is not None):
+        raise UsageError("--action and --price need --place: the place whose button raises the dungeon.")
+    recipe = {"name": name, "color": args.color, "size": args.size,
+              "rules": _word_list(args.rules, "--rules", DUNGEON_RULES) if args.rules else [],
+              "cards": cards, "distance": {"min": args.min, "max": args.max}}
+    sites.setdefault("dungeons", {})[key] = recipe
+    said = "Added the dungeon %s (%s) to %s: %s, %s, holding %s, %d to %d tiles from its place." % (
+        key, name, args.folder, args.color, args.size, ", ".join(cards), args.min, args.max)
+    if args.place:
+        place = sites.get("sites", {}).get(args.place)
+        if not isinstance(place, dict):
+            raise UsageError("%s has no place %s (its places: %s)." % (args.folder, args.place,
+                                                                       ", ".join(sites.get("sites", {}))))
+        action_id = args.action or key[:32]
+        if re.search(SITES_KEY_PATTERN, action_id) is None:
+            raise UsageError("--action must be 1 to 32 lower-case letters, digits or _, a letter first.")
+        panes = place["panes"]
+        found = [action for pane in panes for action in pane.get("actions", []) if action.get("id") == action_id]
+        leave = next((dict(action) for pane in panes for action in pane.get("actions", [])
+                      if action.get("do") == "leave"), {"id": "leave", "do": "leave"})
+        home = next((pane for pane in panes if not pane.get("when")), panes[-1])
+        words = {key + ".open": "The way to {dungeon} is known to you. Write here what the place says while it waits.",
+                 key + ".cleared": "You have cleared {dungeon}. Write here what the place says then."}
+        if found:
+            if any(action.get("do") != "effects" for action in found):
+                raise UsageError("The action %s of %s does %s; only an effects action can raise a dungeon."
+                                 % (action_id, args.place, found[0].get("do")))
+            for action in found:
+                action["effects"] = [{"spawn_dungeon": key}] + list(action.get("effects", []))
+                if args.price is not None and not action.get("prices"):
+                    action["prices"] = [args.price]
+            how = "the action %s now raises it" % action_id
+        else:
+            price = 1000 if args.price is None else args.price
+            words.update({key + ".pay": "Pay {price} gold for the way to the dungeon",
+                          key + ".told": "The way to {dungeon} is marked on your map.",
+                          key + ".clue": "You were told where {dungeon} lies."})
+            action = {"id": action_id, "do": "effects", "label": key + ".pay", "prices": [price],
+                      "effects": [{"spawn_dungeon": key}, {"log_clue": {"text": key + ".clue"}}],
+                      "result": [key + ".told"]}
+            buttons = home.setdefault("actions", [])
+            at = next((i for i, entry in enumerate(buttons) if entry.get("do") == "leave"), len(buttons))
+            buttons.insert(at, action)
+            how = "a new action %s raises it for %d gold" % (action_id, price)
+        # The Hut's three panes: cleared, open, and the place's own after them.
+        for state in ("open", "cleared"):
+            pane = {"when": [{"dungeon": {"dungeon": key, "state": state}}]}
+            for field in ("title", "subtitle", "picture"):
+                if field in home:
+                    pane[field] = home[field]
+            pane["lines"] = ["%s.%s" % (key, state)]
+            pane["actions"] = [dict(leave)]
+            panes.insert(0, pane)
+        _new_texts(text, words)
+        said += " At %s %s; two panes added before its others (cleared, open); %d texts (%s.*)." % (
+            args.place, how, len(words), key)
+    problems = _commit_edit(path, game, {"sites.json": _json_bytes(sites), "text.json": _json_bytes(text)})
+    if problems:
+        for problem in problems:
+            print(problem)
+        print("%s: the dungeon was not added; nothing was changed." % args.folder, file=sys.stderr)
+        return 1
+    print(said)
+    if not args.place:
+        print("No place raises it yet: name one with --place, or add {\"spawn_dungeon\": \"%s\"} to an action's effects." % key)
+    return 0
+
+
+# ---------------------------------------------------------------- walk --
+
+## DataSites.MOST_USES: the most an action is counted.
+MOST_USES = 1000
+## The card a walk's hero carries to be copied, and what the walk calls the hero.
+WALK_CARD = "Stand-in Card"
+WALK_HERO = "Hero"
+
+
+class SiteWalk:
+    """DataSites, mirrored (game/adventure/plugins/data_sites.gd): a place's
+    pane choice, conditions, prices and effects on a hero of the tool's own
+    — gold, the uses counted, the flags set, each dungeon none, open or
+    cleared — with no world: a dungeon raised always finds room, and the
+    hero always holds one card that may be copied and has room for its copy."""
+
+    def __init__(self, data: dict, gold: int, mainland: bool = True):
+        self.data, self.file, self.words = data, data["sites"], data["text"]
+        self.gold, self.food, self.mainland = gold, 0, mainland
+        self.uses: dict = {}
+        self.flags: list = []
+        self.dungeons: dict = {}
+        self.journal: list = []
+        self.copies: list = []
+
+    def say(self, key: str, values: dict | None = None) -> str:
+        """PluginText.say: the plugin's words, else the engine's, filled."""
+        if key == "":
+            return ""
+        out = str(self.words.get(key, TEXT_DEFAULTS.get(key, "")))
+        for name, value in (values or {}).items():
+            out = out.replace("{" + str(name) + "}", str(value))
+        return out
+
+    def site(self, key: str) -> dict:
+        return self.file["sites"].get(key, {})
+
+    def action_of(self, site: str, action: str) -> dict:
+        for pane in self.site(site).get("panes", []):
+            for entry in pane.get("actions", []):
+                if str(entry["id"]) == action:
+                    return entry
+        return {}
+
+    def used(self, site: str, action: str) -> int:
+        return int(self.uses.get(site + "." + action, 0))
+
+    def price(self, site: str, action: dict) -> int:
+        """Its next price, 0 when it has none, -1 when every price is paid."""
+        prices = action.get("prices", [])
+        if not prices:
+            return 0
+        done = self.used(site, str(action["id"]))
+        return int(prices[done]) if done < len(prices) else -1
+
+    def used_up(self, site: str, action: dict) -> bool:
+        return self.price(site, action) < 0
+
+    def uses_left(self, site: str, action: dict) -> int:
+        prices = action.get("prices", [])
+        if not prices:
+            return -1
+        return max(0, len(prices) - self.used(site, str(action["id"])))
+
+    def dungeon_state(self, key: str) -> str:
+        return self.dungeons.get(key, "none")
+
+    def holds(self, site: str, conditions: list) -> bool:
+        return all(self._holds(site, condition) for condition in conditions)
+
+    def _holds(self, site: str, condition: dict) -> bool:
+        key = next(iter(condition))
+        value = condition[key]
+        if key == "flag":
+            return value in self.flags
+        if key == "not_flag":
+            return value not in self.flags
+        if key == "gold_at_least":
+            return self.gold >= int(value)
+        if key == "on_mainland":
+            return self.mainland == bool(value)
+        if key == "used":
+            done = self.used(site, str(value["action"]))
+            return int(value.get("min", 0)) <= done <= int(value.get("max", MOST_USES))
+        if key == "used_up":
+            return self.used_up(site, self.action_of(site, str(value)))
+        if key == "dungeon":
+            return self.dungeon_state(str(value["dungeon"])) == str(value["state"])
+        return False
+
+    def values(self, site: str, action: dict | None = None, more: dict | None = None) -> dict:
+        out = {"hero": WALK_HERO, "gold": self.gold, "region": "Shandalar" if self.mainland else "the island"}
+        if action:
+            out["price"] = max(0, self.price(site, action))
+            left = self.uses_left(site, action)
+            out["uses_left"] = left if left >= 0 else ""
+        for key, recipe in self.file["dungeons"].items():
+            if self.dungeon_state(key) != "none":
+                out["dungeon"] = str(recipe["name"])
+        out.update(more or {})
+        return out
+
+    def lines(self, site: str, entries: list, filled: dict) -> list:
+        out = []
+        for entry in entries:
+            if isinstance(entry, str):
+                out.append(self.say(entry, filled))
+            elif self.holds(site, entry.get("when", [])):
+                out.append(self.say(str(entry["text"]), filled))
+        return out
+
+    def refusal(self, site: str, action: dict) -> str:
+        if not action or not self.holds(site, action.get("when", [])) or self.used_up(site, action):
+            return self.say("site.done")
+        cost = self.price(site, action)
+        if self.gold < cost:
+            return self.say("site.no_gold", {"price": cost, "gold": self.gold})
+        return ""
+
+    def describe(self, site: str) -> dict:
+        """The pane shown: the first whose when holds; its buttons {id, do,
+        label, ready, why}."""
+        place = self.site(site)
+        pane = next((option for option in place["panes"] if self.holds(site, option.get("when", []))), {})
+        filled = self.values(site)
+        buttons = []
+        for action in pane.get("actions", []):
+            if not self.holds(site, action.get("when", [])):
+                continue
+            if str(action["do"]) == "leave":
+                buttons.append({"id": str(action["id"]), "do": "leave", "ready": True, "why": "",
+                                "label": self.say(str(action.get("label", "site.leave")))})
+                continue
+            if self.used_up(site, action):
+                continue
+            why = self.refusal(site, action)
+            buttons.append({"id": str(action["id"]), "do": str(action["do"]), "ready": why == "", "why": why,
+                            "label": self.say(str(action.get("label", "site.pay")), self.values(site, action))})
+        return {"pane": place["panes"].index(pane) if pane else -1,
+                "title": self.say(str(pane["title"]), filled) if "title" in pane else str(place["name"]),
+                "subtitle": self.say(str(pane["subtitle"]), filled) if "subtitle" in pane
+                else str(self.data["manifest"].get("name", self.data["id"])),
+                "picture": str(pane.get("picture", place["picture"])),
+                "lines": self.lines(site, pane.get("lines", []), filled), "buttons": buttons}
+
+    def result(self, lines: list) -> dict:
+        return {"lines": lines, "buttons": [self.say("site.back"), self.say("site.leave")]}
+
+    def press(self, site: str, name: str) -> dict:
+        """DataSites.do_effects / copy_card: {paid, lines, buttons, raised,
+        journal, copied, refused}."""
+        entry = self.action_of(site, name)
+        out = {"action": name, "do": str(entry.get("do", "")), "paid": 0, "raised": [], "journal": [], "copied": "",
+               "refused": ""}
+        why = self.refusal(site, entry)
+        if why:
+            out.update(self.result([why]), refused=why)
+            return out
+        cost = self.price(site, entry)
+        filled = self.values(site, entry)
+        marks = len(self.journal)
+        if out["do"] == "copy_card":
+            self.gold -= cost
+            self._count(site, name)
+            self.copies.append(WALK_CARD)
+            filled = self.values(site, None, {"price": cost, "card": WALK_CARD})
+            self.journal.append(self.say("site.copied_log", filled))
+            lines = self.lines(site, entry.get("result", []), filled) or [self.say("site.copied", filled)]
+            out.update(self.result(lines), paid=cost, copied=WALK_CARD, journal=self.journal[marks:])
+            return out
+        self.gold -= cost
+        self._count(site, name)
+        for effect in entry.get("effects", []):
+            key = next(iter(effect))
+            value = effect[key]
+            if key == "set_flag":
+                if value not in self.flags:
+                    self.flags.append(str(value))
+            elif key == "clear_flag":
+                if value in self.flags:
+                    self.flags.remove(value)
+            elif key == "gold":
+                self.gold = max(0, self.gold + int(value))
+            elif key == "food":
+                self.food = max(0, self.food + int(value))
+            elif key == "spawn_dungeon":
+                if self.dungeon_state(str(value)) != "open":
+                    self.dungeons[str(value)] = "open"
+                    out["raised"].append(str(value))
+            elif key in ("log_clue", "log_event"):
+                self.journal.append(self.say(str(value["text"]), self.values(site, None, filled)))
+        out.update(paid=cost, journal=self.journal[marks:])
+        if entry.get("result"):
+            out.update(self.result(self.lines(site, entry["result"], self.values(site, None, {"price": cost}))))
+        else:
+            out.update(lines=[], buttons=[])
+        return out
+
+    def _count(self, site: str, action: str) -> None:
+        key = site + "." + action
+        self.uses[key] = min(MOST_USES, int(self.uses.get(key, 0)) + 1)
+
+    def state(self) -> dict:
+        return {"gold": self.gold, "food": self.food, "uses": dict(self.uses), "flags": list(self.flags),
+                "dungeons": dict(self.dungeons)}
+
+
+def walk_site(data: dict, site: str, gold: int) -> dict:
+    """One place walked: {site, name, land, steps}. A step is a pane (as
+    shown), a press (what it did, and the pane after), or a clear (an open
+    dungeon cleared by the hero, away from the place)."""
+    place = data["sites"]["sites"][site]
+    mainland = "mainland" in place["where"]
+    walk = SiteWalk(data, 0, mainland)
+    steps = []
+    poor = walk.describe(site)
+    if any(not button["ready"] for button in poor["buttons"]):
+        steps.append(dict(poor, kind="pane", note="with no gold", state=walk.state()))
+    walk.gold = gold
+    pressed: dict = {}
+    for _ in range(64):
+        pane = walk.describe(site)
+        steps.append(dict(pane, kind="pane", note="", state=walk.state()))
+        choice = None
+        for button in pane["buttons"]:
+            if button["do"] == "leave" or not button["ready"]:
+                continue
+            prices = walk.action_of(site, button["id"]).get("prices", [])
+            if pressed.get(button["id"], 0) < (len(prices) if prices else 2):
+                choice = button
+                break
+        if choice is not None:
+            pressed[choice["id"]] = pressed.get(choice["id"], 0) + 1
+            done = walk.press(site, choice["id"])
+            steps.append(dict(done, kind="press", label=choice["label"], state=walk.state()))
+            continue
+        opened = [key for key, state in walk.dungeons.items() if state == "open"]
+        if not opened:
+            break
+        walk.dungeons[opened[0]] = "cleared"
+        steps.append({"kind": "clear", "dungeon": opened[0], "name": str(data["sites"]["dungeons"][opened[0]]["name"]),
+                      "state": walk.state()})
+    return {"site": site, "name": str(place["name"]), "land": "mainland" if mainland else "island", "gold": gold,
+            "steps": steps}
+
+
+def _walk_text(run: dict) -> list:
+    out = ["%s (%s), on %s, the hero carrying %d gold" % (run["name"], run["site"], "the mainland"
+                                                         if run["land"] == "mainland" else "an island", run["gold"])]
+
+    def pane(step: dict, pad: str) -> None:
+        out.append("%s[%s | %s]  picture %s" % (pad, step["title"], step["subtitle"], step["picture"]))
+        for line in step["lines"]:
+            out.append("%s  %s" % (pad, line))
+        for button in step["buttons"]:
+            out.append("%s  (%s) %s%s" % (pad, "x" if button["ready"] else " ", button["label"],
+                                          "" if button["ready"] else "   not ready: " + button["why"]))
+
+    count = 0
+    for step in run["steps"]:
+        if step["kind"] == "pane":
+            count += 1
+            out.append("  %d. The pane%s (pane %d of sites.json; %d gold)" % (
+                count, ", " + step["note"] if step["note"] else "", step["pane"], step["state"]["gold"]))
+            pane(step, "     ")
+        elif step["kind"] == "press":
+            count += 1
+            if step["refused"]:
+                out.append("  %d. Press \"%s\": refused, nothing paid" % (count, step["label"]))
+            else:
+                out.append("  %d. Press \"%s\": %d gold paid, %d left; %s used %d time%s" % (
+                    count, step["label"], step["paid"], step["state"]["gold"], step["action"],
+                    step["state"]["uses"].get(run["site"] + "." + step["action"], 0),
+                    "" if step["state"]["uses"].get(run["site"] + "." + step["action"], 0) == 1 else "s"))
+            for key in step["raised"]:
+                out.append("     dungeon raised: %s (open)" % key)
+            if step["copied"]:
+                out.append("     card copied: %s" % step["copied"])
+            for line in step["journal"]:
+                out.append("     journal: %s" % line)
+            for line in step["lines"]:
+                out.append("       %s" % line)
+            if step["buttons"]:
+                out.append("       %s" % "  ".join("(x) " + label for label in step["buttons"]))
+            else:
+                out.append("       (no result lines: the place's pane again)")
+        else:
+            count += 1
+            out.append("  %d. The hero clears %s (%s): cleared" % (count, step["name"], step["dungeon"]))
+    last = run["steps"][-1]["state"]
+    out.append("  End: %d gold; uses %s; flags %s; dungeons %s." % (
+        last["gold"], ", ".join("%s %d" % pair for pair in last["uses"].items()) or "none",
+        ", ".join(last["flags"]) or "none", ", ".join("%s %s" % pair for pair in last["dungeons"].items()) or "none"))
+    return out
+
+
+def command_walk(args, game: Game) -> int:
+    result = judge(_existing(args.plugin), game)
+    if result["valid"] and manifest_kind(result["manifest"]) != KIND_SITES:
+        raise UsageError("%s is an island plugin: walk plays a sites plugin's places." % args.plugin)
+    if result["valid"] and args.site and args.site not in result["data"]["sites"]["sites"]:
+        raise UsageError("%s has no place %s (its places: %s)." % (args.plugin, args.site,
+                                                                   ", ".join(result["data"]["sites"]["sites"])))
+    if args.gold < 0:
+        raise UsageError("--gold must be 0 or more.")
+    runs = []
+    if result["valid"]:
+        for site in ([args.site] if args.site else list(result["data"]["sites"]["sites"])):
+            runs.append(walk_site(result["data"], site, args.gold))
+    if args.json:
+        print(json.dumps(dict(report(result), sites=runs), ensure_ascii=False, indent="\t"))
+        return 0 if result["valid"] else 1
+    if not result["valid"]:
+        for problem in result["problems"]:
+            print(problem)
+        print("%s: refused at the %s stage; a walk needs a valid plugin." % (args.plugin, result["stage"]), file=sys.stderr)
+        return 1
+    print("A walk without the game: every dungeon finds room, the hero holds one card to copy (%s), "
+          "(x) is a button that can be pressed." % WALK_CARD)
+    for run in runs:
+        print("\n" + "\n".join(_walk_text(run)))
+    return 0
+
+
+# ----------------------------------------------------------------- art --
+
+## The 1997 pane's picture frame, and a tile's width in world pixels.
+PANE_WIDTH, PANE_HEIGHT, TILE_WIDTH = 512, 280, 128
+## The most pixels art decodes (a bigger PNG is measured by its header alone).
+ART_MOST_PIXELS = 4096 * 4096
+
+
+def png_alpha(data: bytes):
+    """A PNG's alpha, row by row, decoded with zlib and the five filters:
+    (width, height, rows) with rows a list of bytes (one alpha a pixel), rows
+    None for a PNG with no alpha at all; or a string saying why it was not
+    checked (interlaced, 16-bit, a bit depth under 8, damaged)."""
+    if picture_kind(data) != "png" or len(data) < 33 or data[12:16] != b"IHDR":
+        return "not a PNG"
+    width, height, depth, color, _, _, interlace = struct.unpack(">IIBBBBB", data[16:29])
+    if interlace:
+        return "an interlaced PNG"
+    if depth != 8:
+        return "a %d-bit PNG" % depth
+    if color not in (0, 2, 3, 4, 6) or width * height > ART_MOST_PIXELS or width == 0 or height == 0:
+        return "a PNG of a kind not read here"
+    packed, table, at = [], None, 8
+    while at + 8 <= len(data):
+        size = _be32(data, at)
+        kind = data[at + 4:at + 8]
+        body = data[at + 8:at + 8 + size]
+        if kind == b"IDAT":
+            packed.append(body)
+        elif kind == b"tRNS":
+            table = body
+        elif kind == b"IEND":
+            break
+        at += 12 + size
+    if color in (0, 2):
+        return "a PNG with one transparent color" if table is not None else (width, height, None)
+    if color == 3 and table is None:
+        return width, height, None
+    bpp = {3: 1, 4: 2, 6: 4}[color]
+    stride = width * bpp
+    try:
+        raw = zlib.decompress(b"".join(packed))
+    except zlib.error:
+        return "a damaged PNG"
+    if len(raw) < (stride + 1) * height:
+        return "a damaged PNG"
+    lookup = (table + b"\xff" * 256)[:256] if color == 3 else None
+    rows, prev = [], bytes(stride)
+    for y in range(height):
+        start = y * (stride + 1)
+        kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+        if kind == 1:
+            for i in range(bpp, stride):
+                line[i] = (line[i] + line[i - bpp]) & 255
+        elif kind == 2:
+            line = bytearray((a + b) & 255 for a, b in zip(line, prev))
+        elif kind == 3:
+            for i in range(stride):
+                line[i] = (line[i] + (((line[i - bpp] if i >= bpp else 0) + prev[i]) >> 1)) & 255
+        elif kind == 4:
+            for i in range(stride):
+                a = line[i - bpp] if i >= bpp else 0
+                b = prev[i]
+                c = prev[i - bpp] if i >= bpp else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        elif kind != 0:
+            return "a damaged PNG"
+        prev = bytes(line)
+        rows.append(prev.translate(lookup) if lookup else prev[bpp - 1::bpp])
+    return width, height, rows
+
+
+def pane_picture_advice(rel: str, data: bytes) -> dict:
+    """A pane picture's size and shape against the pane's 512 x 280 frame."""
+    width, height = picture_size(data)
+    out = {"file": rel, "width": width, "height": height, "aspect": round(width / height, 2) if height else 0,
+           "warnings": []}
+    wanted = PANE_WIDTH / PANE_HEIGHT
+    if height and abs(width / height - wanted) / wanted > 0.10:
+        out["warnings"].append("its shape is %.2f : 1; the pane's frame is %d x %d, about %.2f : 1, and the picture "
+                               "is cropped to fill it (the %s are cut)." % (
+                                   width / height, PANE_WIDTH, PANE_HEIGHT, wanted,
+                                   "sides" if width / height > wanted else "top and bottom"))
+    if width < PANE_WIDTH:
+        out["warnings"].append("it is %d pixels wide; under %d it is stretched and looks soft (768 x 420 or more "
+                               "stays sharp in the largest pane)." % (width, PANE_WIDTH))
+    return out
+
+
+def sprite_advice(rel: str, data: bytes, drawn: float) -> dict:
+    """A map sprite as the game draws it: its alpha, the rectangle used once
+    its transparent margins are trimmed, its scale at [drawn] world pixels,
+    and where its foot stands."""
+    width, height = picture_size(data)
+    out = {"file": rel, "width": width, "height": height, "drawn_width": _plain(float(drawn)), "checked": True,
+           "warnings": [], "notes": []}
+    if drawn > TILE_WIDTH:
+        out["warnings"].append("it is drawn %s world pixels wide; a tile is %d x %d, so it overlaps the tiles "
+                               "beside it: right for a landmark, crowded for a small place."
+                               % (fmt_num(drawn), TILE_WIDTH, TILE_WIDTH // 2))
+    decoded = png_alpha(data) if picture_kind(data) == "png" else "a %s picture" % picture_kind(data).upper()
+    if isinstance(decoded, str):
+        out["checked"] = False
+        out["notes"].append("its transparency was not checked (%s)." % decoded)
+        if picture_kind(data) == "jpg":
+            out["warnings"].append("a JPEG has no transparency: the sprite is drawn as a block. Use a PNG or WebP.")
+        return out
+    _, _, rows = decoded
+    if rows is None:
+        out.update(transparent=0.0, used=[0, 0, width, height])
+        out["warnings"].append("it has no transparency: its background is drawn as a block on the map. Save it "
+                               "as a PNG with a transparent background.")
+        rows = [b"\xff" * width] * height
+    else:
+        clear = sum(row.count(0) for row in rows)
+        out["transparent"] = round(clear / float(width * height), 3)
+        if clear == 0:
+            out["warnings"].append("no pixel is transparent: its background is drawn as a block on the map.")
+    spans = [(y, len(row) - len(row.lstrip(b"\x00")), len(row.rstrip(b"\x00"))) for y, row in enumerate(rows)
+             if row.strip(b"\x00")]
+    if not spans:
+        out["warnings"].append("every pixel is transparent: nothing is drawn.")
+        return out
+    left, right = min(s[1] for s in spans), max(s[2] for s in spans)
+    top, bottom = spans[0][0], spans[-1][0] + 1
+    used_w, used_h = right - left, bottom - top
+    out["used"] = [left, top, used_w, used_h]
+    scale = used_w / float(drawn)
+    out["scale"] = round(scale, 3)
+    out["drawn_height"] = round(drawn * used_h / float(used_w), 1)
+    whole = round(scale)
+    grown = round(1.0 / scale)
+    if scale < 1 and abs(1.0 / scale - grown) < 0.02:
+        out["notes"].append("each source pixel is drawn %d world pixels wide: a whole number, so pixel art stays "
+                            "crisp." % grown)
+    elif whole >= 1 and abs(scale - whole) < 0.02:
+        out["notes"].append("%d source pixel%s to a world pixel: a whole number, so pixel art stays crisp." % (
+            whole, "" if whole == 1 else "s"))
+    else:
+        near = sorted({max(1, int(scale)), int(scale) + 1})
+        out["notes"].append("%.2f source pixels to a world pixel; a whole number keeps pixel art crisp (width %s)."
+                            % (scale, " or ".join(fmt_num(round(used_w / float(n), 1)) for n in reversed(near))))
+    # The foot: the solid pixels of the lowest rows, against the middle of
+    # the trimmed picture's bottom edge (which stands on the tile).
+    depth = max(1, min(8, used_h // 25))
+    solid = [x for row in rows[bottom - depth:bottom] for x in range(left, right) if row[x] >= 128]
+    if solid:
+        foot = (min(solid) + max(solid) + 1) / 2.0
+        off = foot - (left + used_w / 2.0)
+        out["foot_offset"] = round(off / scale, 1)
+        if abs(off) > 0.10 * used_w:
+            out["warnings"].append("its foot stands %s world pixels to the %s of the middle of its bottom edge, the "
+                                   "point that stands on the tile: the building will look off its tile." % (
+                                       fmt_num(round(abs(off) / scale, 1)), "right" if off > 0 else "left"))
+    return out
+
+
+def art_report(result: dict) -> list:
+    """The pictures of a valid plugin, place by place: [{place, name,
+    picture, sprite}] — a sites plugin's places, an island's two markers."""
+    data, files = result["data"], result["files"]
+    if data.get("kind") == KIND_SITES:
+        pictures = data["sites"]["pictures"]
+        places = [(key, site) for key, site in data["sites"]["sites"].items()]
+    else:
+        pictures = data["places"]["pictures"]
+        places = [(kind, data["places"]["markers"][kind]) for kind in MARKERS]
+    out = []
+    for key, place in places:
+        row = {"place": key, "name": str(place["name"]), "picture": None, "sprite": None}
+        picture = str(place["picture"])
+        if picture in pictures:
+            row["picture"] = dict(pane_picture_advice(str(pictures[picture]), files[str(pictures[picture])]), key=picture)
+        else:
+            row["picture"] = {"key": picture, "skin": True, "warnings": []}
+        sprite = place.get("sprite")
+        if isinstance(sprite, dict):
+            row["sprite"] = sprite_advice(str(sprite["file"]), files[str(sprite["file"])], float(sprite["width"]))
+        out.append(row)
+    return out
+
+
+def command_art(args, game: Game) -> int:
+    result = judge(_existing(args.plugin), game)
+    rows = art_report(result) if result["valid"] else []
+    warnings = sum(len(part["warnings"]) for row in rows for part in (row["picture"], row["sprite"]) if part)
+    if args.json:
+        print(json.dumps(dict(report(result), art=rows, warnings=warnings), ensure_ascii=False, indent="\t"))
+        return 0 if result["valid"] else 1
+    if not result["valid"]:
+        for problem in result["problems"]:
+            print(problem)
+        print("%s: refused at the %s stage; art looks at a valid plugin's pictures." % (args.plugin, result["stage"]),
+              file=sys.stderr)
+        return 1
+    for row in rows:
+        print("%s (%s)" % (row["name"], row["place"]))
+        picture = row["picture"]
+        if picture.get("skin"):
+            print("  pane picture  %s, a skin picture: each player's own skin draws it." % picture["key"])
+        else:
+            print("  pane picture  %s: %d x %d, %.2f : 1 (the pane's frame is %d x %d, %.2f : 1)" % (
+                picture["file"], picture["width"], picture["height"], picture["aspect"], PANE_WIDTH, PANE_HEIGHT,
+                PANE_WIDTH / PANE_HEIGHT))
+        for warning in picture["warnings"]:
+            print("    advice: " + warning)
+        sprite = row["sprite"]
+        if sprite is None:
+            print("  map sprite    none: the place has no picture on the map.")
+            continue
+        print("  map sprite    %s: %d x %d, drawn %s world pixels wide (a tile is %d x %d)" % (
+            sprite["file"], sprite["width"], sprite["height"], fmt_num(sprite["drawn_width"]), TILE_WIDTH,
+            TILE_WIDTH // 2))
+        if "used" in sprite and "scale" in sprite:
+            print("    trimmed to %d x %d at %d, %d (%d%% of the picture transparent); drawn %s x %s; its foot %s" % (
+                sprite["used"][2], sprite["used"][3], sprite["used"][0], sprite["used"][1],
+                round(100 * sprite.get("transparent", 0.0)), fmt_num(sprite["drawn_width"]),
+                fmt_num(sprite["drawn_height"]),
+                "in the middle" if abs(sprite.get("foot_offset", 0.0)) < 0.05 else "%s world pixel%s %s of the middle" % (
+                    fmt_num(abs(sprite["foot_offset"])), "" if abs(sprite["foot_offset"]) == 1 else "s",
+                    "right" if sprite["foot_offset"] > 0 else "left")))
+        for note in sprite["notes"]:
+            print("    " + note)
+        for warning in sprite["warnings"]:
+            print("    advice: " + warning)
+    print("%d piece%s of advice. Advice only: art never refuses a plugin (validate does that)." % (
+        warnings, "" if warnings == 1 else "s"))
+    return 0
+
+
+# --------------------------------------------------------------------------
 # the command line
 # --------------------------------------------------------------------------
 
@@ -2813,7 +4087,8 @@ class _Parser(argparse.ArgumentParser):
 
 def parser() -> argparse.ArgumentParser:
     top = _Parser(prog=TOOL, description=__doc__.split("\n\n")[0],
-                  epilog="Exit codes: 0 done or valid or compatible; 1 refused or incompatible; 2 a usage error.",
+                  epilog="A place, step by step: new --kind sites, add-place, add-dungeon, walk, art, validate, export. "
+                         "Exit codes: 0 done or valid or compatible; 1 refused or incompatible; 2 a usage error.",
                   formatter_class=argparse.RawDescriptionHelpFormatter)
     top.add_argument("-V", "--version", action="store_true", help="print the game version and plugin API, and exit")
     top.add_argument("--game", metavar="DIR", help="a game checkout or release folder (default: the one around this tool)")
@@ -2828,6 +4103,8 @@ def parser() -> argparse.ArgumentParser:
     made.add_argument("--id", required=True, help="the plugin id: a-z, 0-9 and _, a letter first, up to 40")
     made.add_argument("--name", required=True, help="the name in the plugin list")
     made.add_argument("--author", default="Unnamed author", help="the author's name")
+    made.add_argument("--kind", choices=KINDS, default=KIND_ISLAND,
+                      help="island (the default): an island reached by ship; sites: places on the lands (API 2)")
     check = commands.add_parser("validate", parents=[common], help="the game's own checks; problems one per line")
     check.add_argument("plugin", help="a plugin folder or .zip")
     check.add_argument("--json", action="store_true", help="one JSON object on stdout")
@@ -2840,6 +4117,35 @@ def parser() -> argparse.ArgumentParser:
     compat = commands.add_parser("compat", parents=[common], help="what a new version does to saves made with an old one")
     compat.add_argument("old")
     compat.add_argument("new")
+    place = commands.add_parser("add-place", parents=[common], help="add a place to a sites plugin folder")
+    place.add_argument("folder")
+    place.add_argument("--id", required=True, help="the place's key: a-z, 0-9 and _, a letter first, up to 32")
+    place.add_argument("--name", required=True, help="its name on the map, up to 60 characters")
+    place.add_argument("--where", default="mainland", help="mainland, islands or mainland,islands (default mainland)")
+    place.add_argument("--service", choices=SERVICES, default="effects",
+                       help="its button: effects (pay, then effects), copy (copy a card) or none (default effects)")
+    place.add_argument("--prices", default="", help="the service's prices in gold, in turn, like 100,200")
+    vault = commands.add_parser("add-dungeon", parents=[common], help="add a dungeon to a sites plugin folder")
+    vault.add_argument("folder")
+    vault.add_argument("--id", required=True, help="the dungeon's key: a-z, 0-9 and _, a letter first, up to 40")
+    vault.add_argument("--name", required=True, help="its name, up to 60 characters")
+    vault.add_argument("--cards", required=True, help="its treasure: 1 to 6 card names, joined by commas")
+    vault.add_argument("--color", choices=DUNGEON_COLORS, default="random")
+    vault.add_argument("--size", choices=DUNGEON_SIZES, default="small")
+    vault.add_argument("--rules", default="", help="any of %s, joined by commas" % ", ".join(DUNGEON_RULES))
+    vault.add_argument("--min", type=int, default=6, help="nearest, in tiles from its place (default 6)")
+    vault.add_argument("--max", type=int, default=24, help="farthest, in tiles (default 24)")
+    vault.add_argument("--place", default="", help="a place whose button raises it (the Hut's three panes are added)")
+    vault.add_argument("--action", default="", help="with --place: the action's id (an existing effects action is extended)")
+    vault.add_argument("--price", type=int, default=None, help="with --place: the gold it costs (default 1000)")
+    walk = commands.add_parser("walk", parents=[common], help="play a sites plugin's places as text, without the game")
+    walk.add_argument("plugin", help="a sites plugin folder or .zip")
+    walk.add_argument("--site", default="", help="one place only")
+    walk.add_argument("--gold", type=int, default=100000, help="the gold the hero carries (default 100000)")
+    walk.add_argument("--json", action="store_true")
+    art = commands.add_parser("art", parents=[common], help="advice on a plugin's pane pictures and map sprites")
+    art.add_argument("plugin", help="a plugin folder or .zip")
+    art.add_argument("--json", action="store_true")
     guide = commands.add_parser("guide", parents=[common], help="write GUIDE/reference.html from the schema")
     guide.add_argument("--out", metavar="DIR", help="the guide's folder (default: expanded_adventure/GUIDE)")
     guide.add_argument("--check", action="store_true", help="exit 1 when reference.html is not up to date")
@@ -2863,7 +4169,8 @@ def main(argv: list | None = None) -> int:
             parser().print_help()
             return 2
         return {"new": command_new, "validate": command_validate, "export": command_export, "info": command_info,
-                "compat": command_compat, "guide": command_guide}[args.command](args, game)
+                "compat": command_compat, "guide": command_guide, "add-place": command_add_place,
+                "add-dungeon": command_add_dungeon, "walk": command_walk, "art": command_art}[args.command](args, game)
     except UsageError as error:
         print("%s: %s" % (TOOL, error), file=sys.stderr)
         if "--json" in argv:

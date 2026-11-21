@@ -14,13 +14,17 @@ tests hold it to the code and the prototype instead of trusting it:
   script, every picture is one of the prototype's own four (never card art
   or a skin's), every link and `#anchor` lands;
 - every page carries the same masthead and page list, marking itself;
-- every quoted prototype file (`<figure class="quote" data-file
-  data-pointer>`) is the real file's value at that place, every quoted text
-  (`<q data-text>`) the real `text.json` words, every list drawn from the
-  schema (`data-schema`) or from a GDScript constant (`data-gd`) the real
-  list, every limit (`data-limit`) the schema's;
+- every quoted plugin file (`<figure class="quote" data-file
+  data-pointer>`: the prototype's, or with `data-plugin` one of the shipped
+  sites plugins') is the real file's value at that place, every quoted text
+  (`<q data-text>`, `data-plugin` likewise) the real `text.json` words,
+  every list drawn from the schema (`data-schema`) or from a GDScript
+  constant (`data-gd`) the real list, every limit (`data-limit`) the
+  schema's; the sites page's table of the game's own words (`site.*`) is
+  `plugin_text.gd`'s;
 - `docs/adventure-plugins.md`'s table of hooks names only methods
-  `DataRegion` has, and every hook it has.
+  `DataRegion` has, and every hook it has; its lists of conditions and
+  effects, an island's and a sites plugin's, are the schema's.
 No network, no Godot.
 """
 
@@ -34,6 +38,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 GUIDE = ROOT / "expanded_adventure" / "GUIDE"
 PROTO = ROOT / "expanded_adventure" / "Fallen_Empires_Refuge_prototype"
+## The shipped sites plugins (API 2), which sites.html quotes (data-plugin).
+SITE_PLUGINS = ("Old_Adventurers_Hut", "Conjuration_Wizard_Guild")
+PLUGIN_TEXT = ROOT / "game" / "adventure" / "plugins" / "plugin_text.gd"
 SCHEMA_PATH = ROOT / "game" / "adventure" / "plugins" / "schema_v1.json"
 DATA_REGION = ROOT / "game" / "adventure" / "plugins" / "data_region.gd"
 DEV_DOC = ROOT / "docs" / "adventure-plugins.md"
@@ -46,7 +53,7 @@ PICTURES = {"img/refuge_harbor.jpg", "img/refuge_castle.jpg",
 ## `tools/adventure_plugin.py guide`.
 PAGES = ["index.html", "first-plugin.html", "world.html", "quests.html", "foes-rewards.html",
          "text.html", "art-music.html", "saves.html", "testing.html", "refuge.html",
-         "reference.html", "faq.html"]
+         "sites.html", "reference.html", "faq.html"]
 EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)", re.I)
 
 
@@ -96,7 +103,8 @@ class Page(HTMLParser):
             self.sources.append(a["href"])
         if tag == "figure" and "data-file" in a:
             self._stack.append(("figure", {"file": a["data-file"], "pointer": a.get("data-pointer", ""),
-                                           "keys": a.get("data-keys"), "text": "", "on": False}))
+                                           "keys": a.get("data-keys"), "plugin": a.get("data-plugin"),
+                                           "text": "", "on": False}))
         elif tag == "pre" and self._stack and self._stack[-1][0] == "figure":
             self._stack[-1][1]["on"] = True
         elif tag == "ul" and ("data-schema" in a or "data-gd" in a):
@@ -106,7 +114,7 @@ class Page(HTMLParser):
         elif tag == "span" and "data-limit" in a:
             self._stack.append(("span", {"limit": a["data-limit"], "text": ""}))
         elif tag == "q" and "data-text" in a:
-            self._stack.append(("q", {"key": a["data-text"], "text": ""}))
+            self._stack.append(("q", {"key": a["data-text"], "plugin": a.get("data-plugin"), "text": ""}))
         elif tag == "table" and "data-schema-table" in a:
             self._stack.append(("table", {"schema": a["data-schema-table"], "codes": [], "code": None}))
         elif tag == "code" and self._stack and self._stack[-1][0] == "table":
@@ -174,7 +182,26 @@ def schema_values(key: str) -> list:
         "roaming_colors": lambda: types["roaming_deck"]["fields"]["colors"]["items"]["values"],
         "trade": lambda: types["world"]["fields"]["trade"]["items"]["values"],
         "ante": lambda: types["foes"]["fields"]["roaming"]["fields"]["ante"]["values"],
+        # API 2, a sites plugin's.
+        "site_files": lambda: list(spec["site_files"]),
+        "site_where": lambda: types["sites_place"]["fields"]["where"]["items"]["values"],
+        "site_actions": lambda: types["sites_action"]["fields"]["do"]["values"],
+        "site_conditions": lambda: list(types["sites_condition"]["options"]),
+        "site_effects": lambda: list(types["sites_effect"]["options"]),
+        "dungeon_colors": lambda: types["sites_dungeon"]["fields"]["color"]["values"],
+        "dungeon_sizes": lambda: types["sites_dungeon"]["fields"]["size"]["values"],
+        "dungeon_rules": lambda: types["sites_dungeon"]["fields"]["rules"]["items"]["values"],
+        "dungeon_states": lambda: types["sites_condition"]["options"]["dungeon"]["fields"]["state"]["values"],
     }[key]()
+
+
+def plugin_folder(name: str | None) -> Path:
+    """The folder a quote names: a shipped sites plugin, else the prototype."""
+    if name is None:
+        return PROTO
+    if name not in SITE_PLUGINS:
+        raise AssertionError(f"data-plugin names {name}, not a shipped plugin")
+    return ROOT / "expanded_adventure" / name
 
 
 def gd_constant(spec: str) -> list[str]:
@@ -295,24 +322,27 @@ class TheGuideStandsAlone(unittest.TestCase):
 class TheGuideSaysWhatTheGameDoes(unittest.TestCase):
     def test_every_quoted_file_is_the_real_file(self):
         count = 0
+        plugins = set()
         for name in hand_pages():
             _, page = read_page(name)
             for quote in page.quotes:
-                with self.subTest(page=name, file=quote["file"], pointer=quote["pointer"]):
-                    real = json.loads((PROTO / quote["file"]).read_text(encoding="utf-8"))
+                with self.subTest(page=name, plugin=quote["plugin"], file=quote["file"], pointer=quote["pointer"]):
+                    plugins.add(quote["plugin"])
+                    real = json.loads((plugin_folder(quote["plugin"]) / quote["file"]).read_text(encoding="utf-8"))
                     value = at_pointer(real, quote["pointer"])
                     if quote["keys"]:
                         value = {key: value[key] for key in quote["keys"].split(",")}
                     self.assertEqual(json.loads(html.unescape(quote["text"])), value)
                     count += 1
         self.assertGreater(count, 30, "the walkthrough quotes the prototype")
+        self.assertEqual(plugins, {None, *SITE_PLUGINS}, "the sites page quotes both shipped sites plugins")
 
     def test_every_quoted_sentence_is_the_real_words(self):
-        words = json.loads((PROTO / "text.json").read_text(encoding="utf-8"))
         for name in hand_pages():
             _, page = read_page(name)
             for quote in page.texts:
-                with self.subTest(page=name, key=quote["key"]):
+                with self.subTest(page=name, plugin=quote["plugin"], key=quote["key"]):
+                    words = json.loads((plugin_folder(quote["plugin"]) / "text.json").read_text(encoding="utf-8"))
                     self.assertEqual(quote["text"], words[quote["key"]])
 
     def test_every_list_is_the_schemas_or_the_codes(self):
@@ -330,8 +360,41 @@ class TheGuideSaysWhatTheGameDoes(unittest.TestCase):
                     self.assertEqual(listed["items"], real)
         for needed in ("placeholders", "conditions", "effects", "steps", "extensions",
                        "game/adventure/plugins/plugin_text.gd:DEFAULTS",
-                       "game/adventure/plugins/plugin_schema.gd:RESERVED_FLAGS"):
+                       "game/adventure/plugins/plugin_schema.gd:RESERVED_FLAGS",
+                       "site_files", "site_where", "site_actions", "site_conditions", "site_effects",
+                       "dungeon_colors", "dungeon_sizes", "dungeon_rules", "dungeon_states"):
             self.assertIn(needed, seen)
+
+    def test_the_sites_page_gives_the_games_own_words_for_places(self):
+        """The sites page's table of `site.*` keys is plugin_text.gd's
+        DEFAULTS, key for key and word for word."""
+        source = PLUGIN_TEXT.read_text(encoding="utf-8")
+        block = source[source.index("const DEFAULTS := {"):]
+        block = block[:block.index("\n}\n")]
+        defaults = {key: json.loads('"%s"' % value) for key, value
+                    in re.findall(r'^\t"(site\.[a-z_]+)":\s*"((?:[^"\\]|\\.)*)",?$', block, re.M)}
+        self.assertGreaterEqual(len(defaults), 10)
+        text, _ = read_page("sites.html")
+        rows = dict(re.findall(r"<tr><td><code>(site\.[a-z_]+)</code></td><td[^>]*>(.*?)</td></tr>", text))
+        self.assertEqual(sorted(rows), sorted(defaults))
+        for key, words in defaults.items():
+            self.assertEqual(html.unescape(re.sub(r"<[^>]+>", "", rows[key])), words, key)
+
+    def test_the_sites_page_names_every_sites_field(self):
+        """Every field of a sites plugin's types is named on its page."""
+        text, _ = read_page("sites.html")
+        types = schema()["types"]
+        for name in ("sites_file", "sites_place", "sites_pane", "sites_action", "sites_dungeon"):
+            for field in types[name]["fields"]:
+                with self.subTest(type=name, field=field):
+                    self.assertIn("<code>%s</code>" % field, text)
+        self.assertIn("<code>kind</code>", text)
+        for sentence in ("plugin.json: kind must be one of island, sites.",
+                         "plugin.json: a sites plugin needs api_version 2 or newer.",
+                         "plugin.json: a sites plugin has no region; its places are described in sites.json."):
+            self.assertIn(sentence, text)
+            self.assertIn(sentence, (ROOT / "game/adventure/plugins/adventure_plugins.gd").read_text(encoding="utf-8")
+                          .replace("%s", "island, sites").replace("%d", "2"))
 
     def test_every_table_of_codes_is_the_schemas(self):
         for name in hand_pages():
@@ -370,13 +433,39 @@ class TheGuideSaysWhatTheGameDoes(unittest.TestCase):
         for name in hand_pages():
             text, _ = read_page(name)
             plain = html.unescape(re.sub(r"<[^>]+>", "", text))
-            named.update(re.findall(r"python3 tools/adventure_plugin\.py (\w+)", plain))
-        self.assertTrue({"new", "validate", "export", "compat"} <= named, named)
+            named.update(re.findall(r"python3 tools/adventure_plugin\.py ([\w-]+)", plain))
+        self.assertTrue({"new", "validate", "export", "compat", "add-place", "add-dungeon", "walk", "art"} <= named, named)
         for command in named:
             self.assertRegex(tool, r'add_parser\(\s*"' + command + '"', command)
         # The options the pages use.
-        for option in ("--id", "--name", "--out", "--json", "--game"):
+        for option in ("--id", "--name", "--out", "--json", "--game", "--kind", "--where", "--service", "--prices",
+                       "--cards", "--place", "--price", "--action", "--site", "--gold", "--color", "--size", "--rules",
+                       "--min", "--max"):
             self.assertIn('"' + option + '"', tool, option)
+
+
+class TheToolsOutputIsReal(unittest.TestCase):
+    def test_the_walk_and_art_snippets_are_what_the_tool_prints(self):
+        """Each output line the sites page shows under a `walk` or `art`
+        of a shipped plugin is a line the tool prints for it now."""
+        import subprocess
+        import sys
+        text, _ = read_page("sites.html")
+        blocks = re.findall(r'<pre class="code[^"]*"><code><span class="prompt">\$ </span>python3 tools/adventure_plugin\.py '
+                            r'(walk|art) (expanded_adventure/\w+)\n(.*?)</code></pre>', text, re.S)
+        self.assertEqual(sorted(verb for verb, _, _ in blocks), ["art", "walk"])
+        for verb, plugin, body in blocks:
+            with self.subTest(command=verb, plugin=plugin):
+                result = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "adventure_plugin.py"), verb, plugin],
+                                        capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT), timeout=120)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                real = result.stdout.splitlines()
+                shown = [html.unescape(line) for line in re.findall(r'<span class="out">(.*?)</span>', body)]
+                self.assertGreater(len(shown), 4)
+                at = 0
+                for line in shown:
+                    self.assertIn(line, real[at:], "not printed (or out of order): " + line)
+                    at = real.index(line, at) + 1
 
 
 class TheDeveloperReference(unittest.TestCase):
@@ -396,8 +485,9 @@ class TheDeveloperReference(unittest.TestCase):
 
     def test_the_conditions_and_effects_named_are_the_schemas(self):
         doc = DEV_DOC.read_text(encoding="utf-8")
-        for group in ("conditions", "effects"):
+        for group in ("conditions", "effects", "site_conditions", "site_effects"):
             line = between(doc, f"<!-- {group} -->", f"<!-- /{group} -->")
+            self.assertTrue(line, f"docs/adventure-plugins.md has the {group} markers")
             self.assertEqual(re.findall(r"`(\w+)`", line), schema_values(group), group)
 
 

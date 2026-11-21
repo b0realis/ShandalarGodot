@@ -7,10 +7,11 @@ Only platform payloads and explicitly selected player documents are included.
     package_release.py --guard PATH...   read files (and folders, and the
         members of .apk/.aab/.jar/.zip archives) for the builder's home
         folder: exit 0 clean, 1 a home path, 2 a file that could not be read.
-    package_release.py --adventure-plugins DIR   write the prototype adventure
-        plugin's zip (Fallen_Empires_Refuge_prototype.zip, as the desktop
-        packages carry it) into DIR, a release asset of its own for the
-        builds that carry none (Quest, Android): exit 0 written, 1 refused.
+    package_release.py --adventure-plugins DIR   write the shipped adventure
+        plugins' zips (Fallen_Empires_Refuge_prototype.zip, Old_Adventurers_Hut.zip
+        and Conjuration_Wizard_Guild.zip, as the desktop packages carry them)
+        into DIR, release assets of their own for the builds that carry none
+        (Quest, Android): exit 0 written, 1 refused.
 """
 from __future__ import annotations
 
@@ -189,6 +190,10 @@ PLUGIN_PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel
                     "steam-deck", "arkos-rk3326-experimental")
 PLUGIN_FOLDER = adventure_plugin.FOLDER_NAME
 PROTOTYPE = PLUGIN_FOLDER + "/Fallen_Empires_Refuge_prototype"
+# The places (sites plugins, adventure plugin API 2, the owner's 2026-11-21):
+# shipped beside the prototype, each its own zip, each checked as it is.
+PLACES = (PLUGIN_FOLDER + "/Old_Adventurers_Hut", PLUGIN_FOLDER + "/Conjuration_Wizard_Guild")
+SHIPPED_PLUGINS = (PROTOTYPE,) + PLACES
 PLUGIN_README = PLUGIN_FOLDER + "/README.txt"
 PLUGIN_GUIDE = PLUGIN_FOLDER + "/GUIDE"
 # The card names the authoring tool checks a plugin's cards against in a
@@ -580,14 +585,24 @@ def player_tool_files(root: Path = ROOT) -> dict[str, Path]:
 def prototype_zip(root: Path = ROOT) -> tuple[str, bytes]:
     """The prototype plugin's zip — its name and bytes — as `adventure_plugin.py
     export` writes it, checked by the game's own rules first."""
+    return plugin_zip(PROTOTYPE, "The prototype plugin", root)
+
+
+def plugin_zip(folder: str, what: str, root: Path = ROOT) -> tuple[str, bytes]:
+    """Shipped plugin [folder]'s zip, its name and bytes, as `export` writes it."""
     try:
         game = adventure_plugin.find_game(str(root))
-        data, top, result = adventure_plugin.export_bytes(str(root / PROTOTYPE), game)
+        data, top, result = adventure_plugin.export_bytes(str(root / folder), game)
     except adventure_plugin.UsageError as error:
-        raise ValueError(f"The prototype plugin cannot be checked: {error}") from error
+        raise ValueError(f"{what} cannot be checked: {error}") from error
     if not data:
-        raise ValueError("The prototype plugin is refused: %s" % (result["problems"] or ["?"])[0])
+        raise ValueError(f"{what} is refused: %s" % (result["problems"] or ["?"])[0])
     return top + ".zip", data
+
+
+def shipped_zips(root: Path = ROOT) -> list[tuple[str, bytes]]:
+    """Every shipped plugin's zip: the prototype's, then the places'."""
+    return [prototype_zip(root)] + [plugin_zip(folder, "The place " + folder.split("/")[-1], root) for folder in PLACES]
 
 
 def plugin_files(root: Path = ROOT) -> dict[str, Path]:
@@ -611,23 +626,29 @@ def plugin_files(root: Path = ROOT) -> dict[str, Path]:
 
 
 def prototype_sources(root: Path = ROOT) -> list[Path]:
-    """The prototype's own files, for the home guard."""
-    return sorted(p for p in (root / PROTOTYPE).rglob("*") if p.is_file())
+    """The shipped plugins' own files, for the home guard."""
+    return sorted(p for folder in SHIPPED_PLUGINS for p in (root / folder).rglob("*") if p.is_file())
 
 
-def write_adventure_plugins(out: Path, root: Path = ROOT) -> Path:
-    """`--adventure-plugins DIR`: the prototype's zip alone, in [out]."""
+def write_adventure_plugins(out: Path, root: Path = ROOT) -> list[Path]:
+    """`--adventure-plugins DIR`: the shipped plugins' zips alone, in [out]
+    (every one checked before any is written)."""
     guard_private(prototype_sources(root))
-    name, data = prototype_zip(root)
-    target = out / name
-    if target.is_symlink() or (target.exists() and target.read_bytes() != data):
-        raise ValueError(f"Refusing to overwrite a different {name}")
+    zips = shipped_zips(root)
+    for name, data in zips:
+        target = out / name
+        if target.is_symlink() or (target.exists() and target.read_bytes() != data):
+            raise ValueError(f"Refusing to overwrite a different {name}")
     out.mkdir(parents=True, exist_ok=True)
-    if not target.exists():
-        temporary = target.with_suffix(".part")
-        temporary.write_bytes(data)
-        os.rename(temporary, target)
-    return target
+    targets = []
+    for name, data in zips:
+        target = out / name
+        if not target.exists():
+            temporary = target.with_suffix(".part")
+            temporary.write_bytes(data)
+            os.rename(temporary, target)
+        targets.append(target)
+    return targets
 
 
 def stage_player_tools(folder: Path, root: Path = ROOT) -> None:
@@ -690,8 +711,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
     if platform in PLUGIN_PLATFORMS:
         files.update(plugin_files(root))
         guard_private(prototype_sources(root))
-        zip_name, zip_bytes = prototype_zip(root)
-        plugins[f"{PLUGIN_FOLDER}/{zip_name}"] = zip_bytes
+        for zip_name, zip_bytes in shipped_zips(root):
+            plugins[f"{PLUGIN_FOLDER}/{zip_name}"] = zip_bytes
     cards = adventure_plugin.catalogue_bytes(root)
     guard_private(list(files.values()))
     name = f"Shandalar-{version}-{platform}"
@@ -807,12 +828,13 @@ def main() -> None:
         sys.exit(guard_main(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "--adventure-plugins":
         if len(sys.argv) != 3:
-            sys.exit("package_release.py --adventure-plugins DIR: name the folder the zip goes in")
+            sys.exit("package_release.py --adventure-plugins DIR: name the folder the zips go in")
         try:
-            target = write_adventure_plugins(Path(sys.argv[2]))
+            targets = write_adventure_plugins(Path(sys.argv[2]))
         except (OSError, ValueError, adventure_plugin.UsageError) as error:
             sys.exit(f"Adventure plugin refused: {error}")
-        print(f"{digest(target)}  {target.name}")
+        for target in targets:
+            print(f"{digest(target)}  {target.name}")
         sys.exit(0)
     parser = argparse.ArgumentParser(description=__doc__, epilog=tool_banner.BANNER_HELP,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)

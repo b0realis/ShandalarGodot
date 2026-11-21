@@ -2,8 +2,9 @@ Expanded adventure plugins
 ==========================
 
 This folder holds adventure plugins: small packages of new lands for the
-Shandalar adventure, reached by ship from a mainland harbor. A plugin is a
-.zip file (or an unpacked folder) with a plugin.json at its top.
+Shandalar adventure, reached by ship from a mainland harbor, and of new
+places (sites plugins) that stand on the mainland and on those lands. A
+plugin is a .zip file (or an unpacked folder) with a plugin.json at its top.
 
 INSTALLING A PLUGIN
 Put the plugin's .zip in your plugins folder: the folder Options shows on
@@ -19,7 +20,8 @@ greyed, with the reason.
 
 If a plugin goes missing in the middle of an adventure, the save still
 opens. The plugin's progress is kept, and a hero on its island finds a
-ship home at the port. Put the plugin back to go on.
+ship home at the port; a missing sites plugin's places are hidden until it
+is back. Put the plugin back to go on.
 
 THE PROTOTYPE
 Fallen_Empires_Refuge_prototype.zip, "The Last Refuge", is a game-design
@@ -27,8 +29,18 @@ and learning demo: original fiction, not official Magic canon and not new
 official content. It needs card pack 2, Fallen Empires. Play it, then read
 it: every file is explained in the guide.
 
+THE PLACES
+Old_Adventurers_Hut.zip, "An Old Adventurer's Hut": a hut in the mainland's
+woods. For 1000 gold the old man inside tells you where a dungeon lies that
+nobody else knows of. Conjuration_Wizard_Guild.zip, "Conjuration Wizard
+Guild": a wizards' tower on the mainland and on every island, whose
+conjurers copy a card you carry for 2000 gold, then 4000, 8000 and 12000,
+and then never again. Neither needs a card pack. Each is a finished place,
+and a study for the places players wish for.
+
 MAKING YOUR OWN
 GUIDE/index.html is the authors' guide: how a plugin is made, tested and
-packed, with the full reference of every file. Open it in any web browser;
+packed, with the full reference of every file; GUIDE/sites.html tells how a
+sites plugin's places are made. Open it in any web browser;
 it needs no internet. The tool it uses is tools/adventure_plugin.py in the
 game folder.

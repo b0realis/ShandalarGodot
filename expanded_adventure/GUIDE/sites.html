@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Places: sites plugins · Adventure plugin guide</title>
+<meta name="description" content="Sites plugins (plugin API 2): places of your own on the mainland and on the islands, their panes, services, prices and dungeons.">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- guide:masthead -->
+<header class="masthead"><div class="bar"><a class="home" href="index.html"><svg class="emblem" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#1f4a57" stroke="#7fc3d4" stroke-width="1.5"/><path d="M9 25c2-5 6-7 10-6.5s5-3 9-2.5 4 4 3 7-5 4-9 3.5-6 1.5-9 0.5-4.5-0.5-4-2z" fill="#e0b45c"/><path d="M21 9v10.5" stroke="#f3ede0" stroke-width="1.3"/><path d="M21.6 10l5.4 8h-5.4z" fill="#f3ede0"/><path d="M7 29.5c3 1.4 6 1.4 9 0s6-1.4 9 0 6 1.4 9 0" fill="none" stroke="#7fc3d4" stroke-width="1.2"/></svg><span class="title">Adventure plugins<small>The authors’ guide · plugin API 2</small></span></a><span class="tag">Local guide · works offline</span></div></header>
+<!-- /guide:masthead -->
+<div class="layout">
+<!-- guide:toc -->
+<nav class="toc" aria-label="Guide pages"><ol>
+<li><a href="index.html">Start here</a></li>
+<li><a href="first-plugin.html">Your first plugin</a></li>
+<li><a href="world.html">The world</a></li>
+<li><a href="quests.html">Quests and steps</a></li>
+<li><a href="foes-rewards.html">Foes and rewards</a></li>
+<li><a href="text.html">Text and placeholders</a></li>
+<li><a href="art-music.html">Art and music</a></li>
+<li><a href="saves.html">Saves and compatibility</a></li>
+<li><a href="testing.html">Testing</a></li>
+<li><a href="refuge.html">The Refuge walkthrough</a></li>
+<li><a href="sites.html" aria-current="page">Places: sites plugins</a></li>
+<li><a href="reference.html">Reference</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ol></nav>
+<!-- /guide:toc -->
+<main class="page" id="top">
+<h1>Places: sites plugins</h1>
+<p class="lede">A sites plugin adds places, not a land: a hut in the woods, a wizards’ tower, a shrine by the road. Each place is a picture, a sprite on the map and panes of buttons. It stands on Shandalar’s mainland, on the islands a campaign sails to, or on both.</p>
+
+<h2 id="what">What a sites plugin is</h2>
+<p>A sites plugin is a plugin of its own kind, new in plugin API 2. It has no island, no ship, no port, no quests and no row in the Tasks list. It has places. A player ticks it at the Embark like any plugin, and its places stand in every adventure it is ticked for.</p>
+<p>A place offers services. A service has a price in gold, and it can raise a dungeon, set a flag, give gold or food, write in the journal, or copy one of the hero’s cards. A price can climb with each use, and a service can end when its last price is paid.</p>
+<p>The safety rule is the same as an island’s: <b>data only, never code</b>. A place is a list of panes, a condition is one of a closed list, an effect is one of a closed list, and the game’s own interpreter reads them. A sites plugin may need card packs, as an island may (<code>requires</code>), and every card it names must be a card of the base game or of a pack it needs.</p>
+<p>The game ships two, each a finished place and a study to read: <b>An Old Adventurer’s Hut</b> and the <b>Conjuration Wizard Guild</b>. They are <a href="#examples">walked through below</a>.</p>
+
+<figure class="diagram"><div class="canvas">
+<svg viewBox="0 0 760 236" role="img" aria-label="A press of a place's button: the hero walks onto the place; its pane is the first whose conditions hold; a button is offered when its own conditions hold and it is not used up; pressing it pays its price and counts the use; then its effects run or a card is copied; the result pane offers Return and Leave. A press that cannot be done pays nothing and says why. Return shows the place's pane again.">
+<defs><marker id="st-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0L10,5L0,10z"/></marker>
+<marker id="st-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-warn" d="M0,0L10,5L0,10z"/></marker>
+<marker id="st-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-accent" d="M0,0L10,5L0,10z"/></marker></defs>
+<path class="d-dash" d="M690,60 C690,4 194,4 194,56" marker-end="url(#st-h)"/>
+<text class="d-small" x="442" y="44" text-anchor="middle">Return: the place’s pane again, the use counted</text>
+<rect class="d-box" x="16" y="60" width="108" height="64" rx="10"/>
+<text class="d-text" x="70" y="84" text-anchor="middle">The place</text>
+<text class="d-small" x="70" y="102" text-anchor="middle">its sprite on</text>
+<text class="d-small" x="70" y="116" text-anchor="middle">the map</text>
+<rect class="d-box" x="140" y="60" width="108" height="64" rx="10"/>
+<text class="d-text" x="194" y="84" text-anchor="middle">Its pane</text>
+<text class="d-small" x="194" y="102" text-anchor="middle">the first whose</text>
+<text class="d-small" x="194" y="116" text-anchor="middle">when holds</text>
+<rect class="d-accent" x="264" y="60" width="108" height="64" rx="10"/>
+<text class="d-accent-text" x="318" y="84" text-anchor="middle">A button</text>
+<text class="d-small" x="318" y="102" text-anchor="middle">its when holds,</text>
+<text class="d-small" x="318" y="116" text-anchor="middle">not used up</text>
+<rect class="d-accent" x="388" y="60" width="108" height="64" rx="10"/>
+<text class="d-accent-text" x="442" y="84" text-anchor="middle">Pressed</text>
+<text class="d-small" x="442" y="102" text-anchor="middle">the price paid,</text>
+<text class="d-small" x="442" y="116" text-anchor="middle">the use counted</text>
+<rect class="d-gold" x="512" y="60" width="108" height="64" rx="10"/>
+<text class="d-gold-text" x="566" y="84" text-anchor="middle">Effects</text>
+<text class="d-small" x="566" y="102" text-anchor="middle">in order; or a</text>
+<text class="d-small" x="566" y="116" text-anchor="middle">card copied</text>
+<rect class="d-ok" x="636" y="60" width="108" height="64" rx="10"/>
+<text class="d-text" x="690" y="84" text-anchor="middle">The result</text>
+<text class="d-small" x="690" y="102" text-anchor="middle">its lines, then</text>
+<text class="d-small" x="690" y="116" text-anchor="middle">Return · Leave</text>
+<path class="d-line" d="M124,92 H136" marker-end="url(#st-h)"/>
+<path class="d-line" d="M248,92 H260" marker-end="url(#st-h)"/>
+<path class="d-line-accent" d="M372,92 H384" marker-end="url(#st-a)"/>
+<path class="d-line-accent" d="M496,92 H508" marker-end="url(#st-a)"/>
+<path class="d-line" d="M620,92 H632" marker-end="url(#st-h)"/>
+<path class="d-line-warn" d="M442,124 V164" marker-end="url(#st-w)"/>
+<rect class="d-warn" x="318" y="168" width="248" height="52" rx="9"/>
+<text class="d-warn-text" x="442" y="190" text-anchor="middle">Cannot be done</text>
+<text class="d-small" x="442" y="208" text-anchor="middle">nothing is paid; the pane says why</text>
+</svg></div>
+<figcaption>What one press of a place’s button does. The place, its panes, its buttons and what they do are all data in <code>sites.json</code>; the words are keys of <code>text.json</code>.</figcaption>
+</figure>
+
+<h2 id="manifest">The manifest</h2>
+<p><code>plugin.json</code> is an island’s manifest (<a href="first-plugin.html#edit">Your first plugin</a>) with three differences:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>kind</code></td><td class="wrap"><code>"sites"</code>. Without it a plugin is an island (<code>"island"</code> is the default).</td></tr>
+<tr><td><code>api_version</code></td><td class="wrap"><code>2</code> or newer; a sites plugin declaring API 1 is refused. A game older than API 2 refuses every sites plugin: it names <code>kind</code> as a field it does not know.</td></tr>
+<tr><td><code>region</code></td><td class="wrap">None. A sites plugin has no island to name, and a <code>region</code> refuses it.</td></tr>
+</tbody></table></div>
+<p>Everything else is as for an island: <code>id</code>, <code>name</code>, <code>version</code>, <code>authors</code>, <code>description</code>, <code>license</code>, <code>learning_note</code>, <code>requires</code>, <code>minimum_game_version</code>, and the <code>files</code> list that <code>export</code> writes. The id begins every picture key and every button the game makes for the plugin, and saves keep the plugin’s progress under it: never change it. The Hut’s manifest:</p>
+<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="plugin.json" data-pointer="" data-keys="plugin_format,api_version,kind,id,name,version,minimum_game_version"><figcaption class="src"><b>Old_Adventurers_Hut/plugin.json</b><span>→ plugin_format, api_version, kind, id, name, version, minimum_game_version</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"plugin_format"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span>
+  <span class="j-k">"api_version"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span>
+  <span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"sites"</span><span class="j-p">,</span>
+  <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"old_hut"</span><span class="j-p">,</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"An Old Adventurer's Hut"</span><span class="j-p">,</span>
+  <span class="j-k">"version"</span><span class="j-p">:</span> <span class="j-s">"1.0.0"</span><span class="j-p">,</span>
+  <span class="j-k">"minimum_game_version"</span><span class="j-p">:</span> <span class="j-s">"0.70.4"</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>A wrong manifest is named in one of these sentences:</p>
+<ul>
+<li><code>plugin.json: kind must be one of island, sites.</code></li>
+<li><code>plugin.json: a sites plugin needs api_version 2 or newer.</code></li>
+<li><code>plugin.json: a sites plugin has no region; its places are described in sites.json.</code></li>
+</ul>
+
+<h2 id="files">Its files</h2>
+<p>A sites plugin’s content is two files:</p>
+<ul class="chips" data-schema="site_files"><li><code>sites.json</code></li><li><code>text.json</code></li></ul>
+<p><code>sites.json</code> holds its places, their pictures and sprites, panes and services, its flags and its dungeons. <code>text.json</code> is the same file as an island’s: every sentence, title and button by key (<a href="text.html">Text and placeholders</a>). Beside them go the pictures, a <code>README.txt</code> and a <code>LICENSE.txt</code>. An island’s files (<code>world.json</code> and the rest) are not read in a sites plugin. The package rules, the limits and the files list are an island’s (<a href="testing.html#stages">Testing</a>).</p>
+
+<h2 id="sites-json">sites.json, field by field</h2>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>salt</code></td><td class="wrap">A whole number from 0 to 2147483647, default 0. Mixed into the plugin’s own dice, which place its places and its dungeons. Give each plugin its own, so two plugins never draw the same tiles.</td></tr>
+<tr><td><code>flags</code></td><td class="wrap">The plugin’s own switches, at most 32, all off at the start of a campaign (<a href="#flags">Flags</a>).</td></tr>
+<tr><td><code>pictures</code></td><td class="wrap">Picture keys to files of the plugin, at most 32. Every key begins with the plugin’s id and <code>_</code>, as an island’s do (<a href="art-music.html#keys">Art and music</a>).</td></tr>
+<tr><td><code>dungeons</code></td><td class="wrap">The dungeons its places can raise, by key, at most 8 (<a href="#dungeons">Dungeons</a>).</td></tr>
+<tr><td><code>sites</code></td><td class="wrap">Required: its places, by key, 1 to 8. A key is 1 to 32 lower-case letters, digits or <code>_</code>, a letter first. Saves know a place by its key: never change it.</td></tr>
+</tbody></table></div>
+
+<h3 id="place">A place</h3>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td class="wrap">Required, at most 60 characters, shown as written. The place’s name on the map, and its pane’s title unless the pane gives one.</td></tr>
+<tr><td><code>where</code></td><td class="wrap">Which lands it stands on: <code>mainland</code>, <code>islands</code> or both. Default <code>["mainland"]</code> (<a href="#where">Where places stand</a>).</td></tr>
+<tr><td><code>picture</code></td><td class="wrap">Required: the pane’s picture, a picture key of <code>sites.json</code> or a skin picture.</td></tr>
+<tr><td><code>sprite</code></td><td class="wrap">Required: how it stands on the map, <code>{"file": "art/…png", "width": 104}</code>, its width 16 to 512 world pixels (a tile is 128 wide). It stands on its tile as a marker’s sprite does: the picture’s transparent margins trimmed, the middle of its bottom edge on the tile (<a href="art-music.html#sprites">Map sprites</a>).</td></tr>
+<tr><td><code>gap</code></td><td class="wrap">1 to 8 tiles, default 3: how far it keeps from towns, castles, dungeons and other places.</td></tr>
+<tr><td><code>panes</code></td><td class="wrap">Required, 1 to 8 (<a href="#panes">Panes</a>).</td></tr>
+</tbody></table></div>
+
+<h2 id="where">Where places stand</h2>
+<p>A place’s <code>where</code> takes either or both of:</p>
+<ul class="chips" data-schema="site_where"><li><code>mainland</code></li><li><code>islands</code></li></ul>
+<p><code>mainland</code> puts one on Shandalar’s mainland. <code>islands</code> puts one on the island of every island plugin the campaign sails to. A place with both is one place in many spots: its uses are counted once for all of them.</p>
+<ol>
+<li><b>When.</b> On the mainland, when the campaign begins; a place new to an adventure (a new place in an update of the plugin) the next time the adventure is loaded. On an island, the first time the hero lands there.</li>
+<li><b>Which tile.</b> A land tile of the land the hero starts on (on an island, the port’s land): no town, road or dungeon on it, and at least <code>gap</code> tiles from every town, village, castle, dungeon, anchorage, harbor and other place. Next to a road when such a tile exists, so the hero walks past it.</li>
+<li><b>The dice.</b> The tile is drawn on the plugin’s own dice, seeded from the campaign’s seed, the plugin’s <code>salt</code> and the place’s key. The same campaign seed puts it on the same tile every time. The adventure’s own dice are never touched: with a sites plugin ticked, the towns, dungeons, creatures and every draw of the game are the same as without it.</li>
+<li><b>Kept.</b> Once placed, the tile is saved with the land and the place never moves. When no tile fits, the place does not stand on that land. A land holds at most 64 places.</li>
+</ol>
+<p>On the map the place is drawn by its sprite and listed on the map and the minimap. Walking onto it opens its pane, which pushes the wandering creatures back as a town’s does. Its places stand while the plugin is ticked for the adventure, installed and valid, and every card pack it needs is one of the campaign’s, switched on and as new as the plugin asks.</p>
+
+<h2 id="panes">Panes and their when</h2>
+<p>A place shows <b>the first of its panes whose <code>when</code> holds</b>. A <code>when</code> is a list of <a href="#conditions">conditions</a> that must all hold, and an empty one always holds. So list the special panes first and end with one that has no <code>when</code>. The Hut chooses its pane by its dungeon’s state: cleared, open, or not yet raised.</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>when</code></td><td class="wrap">Conditions, at most 16. Default <code>[]</code>, which always holds.</td></tr>
+<tr><td><code>title</code></td><td class="wrap">A text key. Default: the place’s <code>name</code>.</td></tr>
+<tr><td><code>subtitle</code></td><td class="wrap">A text key. Default: the plugin’s <code>name</code> from its manifest.</td></tr>
+<tr><td><code>picture</code></td><td class="wrap">A picture key. Default: the place’s <code>picture</code>.</td></tr>
+<tr><td><code>lines</code></td><td class="wrap">At most 16. Each a text key, or <code>{"text": "key", "when": [...]}</code>: a line said only while its conditions hold.</td></tr>
+<tr><td><code>actions</code></td><td class="wrap">The pane’s buttons, at most 8 (<a href="#actions">Actions</a>).</td></tr>
+</tbody></table></div>
+
+<h2 id="actions">Actions</h2>
+<p>An action is a button. Its <code>do</code> is one of:</p>
+<ul class="chips" data-schema="site_actions"><li><code>effects</code></li><li><code>copy_card</code></li><li><code>leave</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>do</th><th>What a press does</th></tr></thead>
+<tbody>
+<tr><td><code>effects</code></td><td class="wrap">Pays the price, counts the use, then runs the action’s <code>effects</code> in order. Then the pane shows its <code>result</code> lines with a <b>Return</b> and a <b>Leave</b> button; without <code>result</code>, the place’s pane comes back at once.</td></tr>
+<tr><td><code>copy_card</code></td><td class="wrap">Lists the hero’s cards under <code>pick_title</code> and <code>pick_line</code>. The card picked is copied into the bag, the price paid and the use counted; then the <code>result</code> lines (default <code>site.copied</code>), and the journal says <code>site.copied_log</code>. Only a card the hero holds can be copied, and under the Classic MTG rules not one they already hold every copy of that the rules allow: the wise man’s rule for his copy. The copy needs room in the bag.</td></tr>
+<tr><td><code>leave</code></td><td class="wrap">Closes the pane. It costs nothing and is never counted.</td></tr>
+</tbody></table></div>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>id</code></td><td class="wrap">Required: 1 to 32 lower-case letters, digits or <code>_</code>, a letter first. The action’s name in its place. Its uses are counted by it, and conditions name it.</td></tr>
+<tr><td><code>do</code></td><td class="wrap">Required: <code>effects</code>, <code>copy_card</code> or <code>leave</code>.</td></tr>
+<tr><td><code>label</code></td><td class="wrap">The button’s text key. Default <code>site.pay</code> (“Pay {price} gold”), and <code>site.leave</code> for a leave.</td></tr>
+<tr><td><code>when</code></td><td class="wrap">Conditions; the button is offered only while they hold. Default <code>[]</code>.</td></tr>
+<tr><td><code>prices</code></td><td class="wrap">At most 16 prices in gold, each 0 to 1,000,000. Default <code>[]</code>: free, and never used up (<a href="#prices">Prices</a>).</td></tr>
+<tr><td><code>effects</code></td><td class="wrap">At most 16 <a href="#effects">effects</a>. Only an action that does <code>effects</code> has them.</td></tr>
+<tr><td><code>result</code></td><td class="wrap">Lines shown once the action is done, written as a pane’s lines. Default <code>[]</code>.</td></tr>
+<tr><td><code>pick_title</code>, <code>pick_line</code></td><td class="wrap"><code>copy_card</code> only: the card list’s title and the line under it. Defaults <code>site.pick_title</code> and <code>site.pick_line</code>.</td></tr>
+</tbody></table></div>
+<p>A button the hero cannot use now is shown grayed: they lack its price, or, for a copy, hold no card that may be copied or have no room in the bag. Should a press still fail, nothing is paid and the pane says why (<code>site.no_gold</code>, <code>site.bag_full</code>, <code>site.no_cards</code>, <code>site.no_room</code>).</p>
+<div class="note"><strong>One id, one action</strong><p>The same action may stand in several panes, written the same in each, field for field. Two different actions with one id refuse the plugin, and so do two <code>leave</code> buttons with one id that differ in any field, a label say: <code>sites.json: sites.shrine.panes[1].actions[1].id: leave names another action of this site; an id is one action (the same action may stand in several panes).</code> Copy a button word for word into every pane, or give it another id.</p></div>
+
+<h2 id="prices">Prices, and how an action is used up</h2>
+<p>The first use of an action costs its first price, the second use its second price, and so on. <b>Once every price is paid, the action is used up</b>: its button is gone from every pane, and the condition <code>used_up</code> holds for it. An action with no prices is free and never used up. A price of 0 is a free use that still counts.</p>
+<p>Uses are counted for the plugin as a whole. The Guild’s tower stands on the mainland and on every island, and all its towers share one count: four copies in all, wherever they are made. The Guild’s copy action:</p>
+<figure class="quote" data-plugin="Conjuration_Wizard_Guild" data-file="sites.json" data-pointer="/sites/tower/panes/1/actions/0"><figcaption class="src"><b>Conjuration_Wizard_Guild/sites.json</b><span>/sites/tower/panes/1/actions/0</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"copy"</span><span class="j-p">,</span>
+  <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"copy_card"</span><span class="j-p">,</span>
+  <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"guild.copy"</span><span class="j-p">,</span>
+  <span class="j-k">"prices"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">2000</span><span class="j-p">, </span><span class="j-n">4000</span><span class="j-p">, </span><span class="j-n">8000</span><span class="j-p">, </span><span class="j-n">12000</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"pick_title"</span><span class="j-p">:</span> <span class="j-s">"guild.pick_title"</span><span class="j-p">,</span>
+  <span class="j-k">"pick_line"</span><span class="j-p">:</span> <span class="j-s">"guild.pick_line"</span><span class="j-p">,</span>
+  <span class="j-k">"result"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"guild.done"</span><span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>Its label, <q data-plugin="Conjuration_Wizard_Guild" data-text="guild.copy">Copy a card ({price} gold, {uses_left} left)</q>, reads “Copy a card (2000 gold, 4 left)” the first time and “(12000 gold, 1 left)” the last.</p>
+
+<h2 id="conditions">Conditions</h2>
+<p>A condition is an object with exactly one of these keys. In a list, every one must hold; an empty list always holds. At most 16 in a list. These are a sites plugin’s own: an island’s conditions (<code>stage</code>, <code>quest_done</code> and the rest, <a href="quests.html#conditions">Quests and steps</a>) are not read here, and these are not read in an island.</p>
+<ul class="chips" data-schema="site_conditions"><li><code>flag</code></li><li><code>not_flag</code></li><li><code>gold_at_least</code></li><li><code>on_mainland</code></li><li><code>used</code></li><li><code>used_up</code></li><li><code>dungeon</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Condition</th><th>Example value</th><th>Holds when</th></tr></thead>
+<tbody>
+<tr><td><code>flag</code></td><td><code>"told"</code></td><td class="wrap">The flag is set. It must be one of <code>sites.json</code>’s <code>flags</code>.</td></tr>
+<tr><td><code>not_flag</code></td><td><code>"told"</code></td><td class="wrap">The flag is not set.</td></tr>
+<tr><td><code>gold_at_least</code></td><td><code>1000</code></td><td class="wrap">The hero carries at least that much gold (0 to 1,000,000).</td></tr>
+<tr><td><code>on_mainland</code></td><td><code>true</code></td><td class="wrap">The place stands on the mainland (true) or on an island (false).</td></tr>
+<tr><td><code>used</code></td><td><code>{"action": "copy", "min": 1}</code></td><td class="wrap">This place’s action was done at least <code>min</code> and at most <code>max</code> times (defaults 0 and 1000).</td></tr>
+<tr><td><code>used_up</code></td><td><code>"copy"</code></td><td class="wrap">This place’s action has used all its prices. Only an action with prices can be used up; naming one without is refused.</td></tr>
+<tr><td><code>dungeon</code></td><td><code>{"dungeon": "vault", "state": "open"}</code></td><td class="wrap">The plugin’s dungeon of that key, on the land the hero stands on, is in that state: <code>none</code> (not raised here), <code>open</code> (it still holds cards) or <code>cleared</code>.</td></tr>
+</tbody></table></div>
+<p>The states of <code>dungeon</code>:</p>
+<ul class="chips" data-schema="dungeon_states"><li><code>none</code></li><li><code>open</code></li><li><code>cleared</code></li></ul>
+
+<h2 id="effects">Effects</h2>
+<p>An effect is an object with exactly one of these keys. An action’s effects run in order, after its price is paid. At most 16 in a list. Like the conditions, these are a sites plugin’s own.</p>
+<ul class="chips" data-schema="site_effects"><li><code>set_flag</code></li><li><code>clear_flag</code></li><li><code>gold</code></li><li><code>food</code></li><li><code>log_clue</code></li><li><code>log_event</code></li><li><code>spawn_dungeon</code></li></ul>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Effect</th><th>Example value</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>set_flag</code></td><td><code>"told"</code></td><td class="wrap">Sets the flag.</td></tr>
+<tr><td><code>clear_flag</code></td><td><code>"told"</code></td><td class="wrap">Clears it.</td></tr>
+<tr><td><code>gold</code></td><td><code>50</code></td><td class="wrap">Gold to the hero, from −100,000 to 100,000; it never falls below 0.</td></tr>
+<tr><td><code>food</code></td><td><code>6</code></td><td class="wrap">Food, from −1,000 to 1,000; never below 0.</td></tr>
+<tr><td><code>log_clue</code></td><td><code>{"text": "key"}</code></td><td class="wrap">A clue in the journal.</td></tr>
+<tr><td><code>log_event</code></td><td><code>{"event": "hut", "text": "key", "done": false}</code></td><td class="wrap">A line in the journal; <code>event</code> is a word of your own.</td></tr>
+<tr><td><code>spawn_dungeon</code></td><td><code>"vault"</code></td><td class="wrap">Raises the dungeon of that key on this land, unless one of it is open here already (<a href="#dungeons">Dungeons</a>). When no dungeon can be raised here, the whole action is refused and nothing is paid.</td></tr>
+</tbody></table></div>
+
+<h2 id="flags">Flags</h2>
+<p>A flag is a switch of your own, declared in <code>sites.json</code>’s <code>flags</code> (at most 32). Every flag is off at the start of a campaign. Effects set and clear it, and conditions read it. A plugin’s flags are one set for the whole adventure, the same on every land. A flag a condition or effect names that <code>flags</code> does not declare refuses the plugin.</p>
+
+<h2 id="dungeons">Dungeons</h2>
+<p>A dungeon of <code>sites.json</code> is a recipe that <code>spawn_dungeon</code> raises. It belongs to no quest. Its treasure is the cards the plugin lists.</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Field</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td class="wrap">Required, at most 60 characters. Its name on the map, in its pane and in <code>{dungeon}</code>.</td></tr>
+<tr><td><code>color</code></td><td class="wrap">Its creatures’ color, default <code>random</code> (drawn on the plugin’s dice when it is raised).</td></tr>
+<tr><td><code>size</code></td><td class="wrap">Its creatures’ size, default <code>small</code>.</td></tr>
+<tr><td><code>rules</code></td><td class="wrap">Up to 5 of the 1997 dungeon rules: <code>no_color</code> (no cards of its color), <code>no_artifacts</code>, <code>no_instants</code> (no instants or interrupts), <code>life_carries</code> (life lost carries over), <code>life_adds</code> (life left is added to the next duel). Default none.</td></tr>
+<tr><td><code>cards</code></td><td class="wrap">Required: its treasure, 1 to 6 cards of the base game or of a card pack the plugin requires.</td></tr>
+<tr><td><code>distance</code></td><td class="wrap">How far from the place it lies, in tiles: <code>min</code> 2 to 40 (default 6), <code>max</code> 4 to 64 (default 24). <code>min</code> may not be more than <code>max</code>.</td></tr>
+</tbody></table></div>
+<p>The colors, sizes and rules:</p>
+<ul class="chips" data-schema="dungeon_colors"><li><code>black</code></li><li><code>blue</code></li><li><code>green</code></li><li><code>red</code></li><li><code>white</code></li><li><code>random</code></li></ul>
+<ul class="chips" data-schema="dungeon_sizes"><li><code>small</code></li><li><code>large</code></li></ul>
+<ul class="chips" data-schema="dungeon_rules"><li><code>no_color</code></li><li><code>no_artifacts</code></li><li><code>no_instants</code></li><li><code>life_carries</code></li><li><code>life_adds</code></li></ul>
+<p><b>How one is raised.</b> It rises on the land the hero stands on, on a land tile of the place’s own land where a dungeon may stand, at least <code>min</code> and at most <code>max</code> tiles from the hero. When no tile is within that distance, it takes one of the nearest tiles past <code>min</code>. The tile is drawn on the plugin’s dice. Its color, size, rules, cards and name are the recipe’s, and <b>everything about it is known</b>: its place on the map, its creatures and its rules, as if the hero had heard every clue.</p>
+<p><b>Then it is an ordinary dungeon.</b> The hero enters it, fights its creatures and takes its cards as in any dungeon. It is drawn on the map and listed with the others, and it moves when left, as 1997’s dungeons do. It belongs to the land, not to the plugin: if the plugin goes missing, the dungeon stays.</p>
+<ul>
+<li>One dungeon of a key is open on a land at a time. Once it is cleared, a new <code>spawn_dungeon</code> of that key raises a new one, on a new draw. To sell a dungeon once, give its action one price, as the Hut does.</li>
+<li>A land holds at most 48 castles and dungeons in all, the game’s own counted. When the land is full, or no tile fits, the action is refused with <code>site.no_room</code> and nothing is paid.</li>
+<li>Put <code>spawn_dungeon</code> before a <code>log_clue</code> or <code>log_event</code> whose words name <code>{dungeon}</code>: the name is known only once the dungeon is raised.</li>
+</ul>
+
+<h2 id="words">Words and placeholders</h2>
+<p><code>text.json</code> works as an island’s (<a href="text.html">Text and placeholders</a>). API 2 adds five placeholders for places:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Placeholder</th><th>Is replaced by</th></tr></thead>
+<tbody>
+<tr><td><code>{price}</code></td><td class="wrap">An action’s price this time; after a press, the price just paid.</td></tr>
+<tr><td><code>{uses_left}</code></td><td class="wrap">How many more times the action can be done; empty for an action without prices.</td></tr>
+<tr><td><code>{gold}</code></td><td class="wrap">The gold the hero carries.</td></tr>
+<tr><td><code>{card}</code></td><td class="wrap">The card just copied.</td></tr>
+<tr><td><code>{dungeon}</code></td><td class="wrap">The name of the dungeon this plugin raised on this land (with several, the last of <code>sites.json</code>’s dungeons that stands here).</td></tr>
+</tbody></table></div>
+<p>A place also fills <code>{hero}</code>, the hero’s name, and <code>{region}</code>, the land’s title: “Shandalar” on the mainland, the island’s title on an island. Each place fills its own set; a placeholder not filled there is shown as written:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Where the words are said</th><th>Filled there</th></tr></thead>
+<tbody>
+<tr><td class="wrap">A pane’s title, subtitle and lines</td><td class="wrap"><code>{hero}</code>, <code>{gold}</code>, <code>{region}</code>, <code>{dungeon}</code></td></tr>
+<tr><td class="wrap">The label of an <code>effects</code> or <code>copy_card</code> action; a copy’s <code>pick_title</code> and <code>pick_line</code></td><td class="wrap">the same, and <code>{price}</code>, <code>{uses_left}</code></td></tr>
+<tr><td class="wrap">An <code>effects</code> action’s <code>result</code> lines</td><td class="wrap"><code>{hero}</code>, <code>{gold}</code> (once paid), <code>{region}</code>, <code>{dungeon}</code>, <code>{price}</code> (the price paid)</td></tr>
+<tr><td class="wrap">The words of its <code>log_clue</code> and <code>log_event</code></td><td class="wrap"><code>{hero}</code>, <code>{gold}</code> and <code>{uses_left}</code> (as before the press), <code>{region}</code>, <code>{dungeon}</code>, <code>{price}</code></td></tr>
+<tr><td class="wrap">A copy’s <code>result</code> lines, <code>site.copied</code>, <code>site.copied_log</code></td><td class="wrap"><code>{hero}</code>, <code>{gold}</code>, <code>{region}</code>, <code>{dungeon}</code>, <code>{price}</code>, <code>{card}</code></td></tr>
+<tr><td class="wrap"><code>site.no_gold</code></td><td class="wrap"><code>{price}</code>, <code>{gold}</code></td></tr>
+<tr><td class="wrap">A <code>leave</code>’s label, the Return and Leave buttons, every other refusal</td><td class="wrap">none</td></tr>
+</tbody></table></div>
+<p>The game’s own words for places. A key of the same name in your <code>text.json</code> replaces the default, and these keys may be named without being written there:</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Key</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td><code>site.leave</code></td><td class="wrap">Leave</td></tr>
+<tr><td><code>site.back</code></td><td class="wrap">Return</td></tr>
+<tr><td><code>site.pay</code></td><td class="wrap">Pay <code>{price}</code> gold</td></tr>
+<tr><td><code>site.pick_title</code></td><td class="wrap">Pick a card</td></tr>
+<tr><td><code>site.pick_line</code></td><td class="wrap">A copy of it for <code>{price}</code> gold.</td></tr>
+<tr><td><code>site.no_gold</code></td><td class="wrap">You need <code>{price}</code> gold for this; you carry <code>{gold}</code>.</td></tr>
+<tr><td><code>site.bag_full</code></td><td class="wrap">Your bag is full; make room in it first.</td></tr>
+<tr><td><code>site.no_cards</code></td><td class="wrap">You have no card that may be copied.</td></tr>
+<tr><td><code>site.no_room</code></td><td class="wrap">No place on this land can hold a new dungeon.</td></tr>
+<tr><td><code>site.done</code></td><td class="wrap">It is done.</td></tr>
+<tr><td><code>site.copied</code></td><td class="wrap">A copy of <code>{card}</code> is yours.</td></tr>
+<tr><td><code>site.copied_log</code></td><td class="wrap"><code>{card}</code> copied for <code>{price}</code> gold.</td></tr>
+</tbody></table></div>
+
+<h2 id="saves">Progress and saves</h2>
+<p>Save version 9 keeps a sites plugin’s progress, all of it under the plugin’s id:</p>
+<ul>
+<li><code>hero.adventures</code>: the plugin’s row, as an island’s, with <code>"kind": "sites"</code>.</li>
+<li><code>sites.<i>id</i></code>: <code>uses</code>, each action’s count by <code>"<i>place</i>.<i>action</i>"</code>; <code>flags</code>, the names set; <code>dungeons</code>, each dungeon raised by <code>"<i>land</i>:<i>dungeon</i>"</code>.</li>
+<li>Each land’s map keeps its places’ tiles (<code>expansion.sites</code>, by <code>"<i>plugin</i>:<i>place</i>"</code>), and a raised dungeon is part of its land like any dungeon.</li>
+</ul>
+<p>A save from before version 9 opens with no sites progress. <b>A plugin missing in the middle of a campaign</b>: the save still opens, its places hide, and their tiles and the plugin’s progress are kept, so putting it back brings everything back. A dungeon it raised stays an ordinary dungeon. A sites plugin never has a ship, a note on the mainland or a Tasks row, so nothing else changes. A card pack it needs switched off hides its places the same way.</p>
+<p><b>Updates.</b> Saves know a sites plugin by its id, a place by its key, an action by its id and a raised dungeon by its key. Change one of them and what was saved under it is lost: a renamed action starts again from its first price. Everything else is safe: words, pictures, panes, conditions and effects are read fresh; a new place is placed on the next load; prices may change (a save’s uses so far are kept); a new <code>salt</code>, <code>gap</code> or <code>where</code> reaches only lands where the place is not placed yet. Compare every release with the one players have:</p>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py compat dist/old/my_places.zip dist/my_places.zip</code></pre>
+<p>For a sites plugin <code>compat</code> lists a place removed or renamed, an action id removed and a dungeon key removed, and exits 1. It notes, and exits 0 for, a place added, prices changed, a dungeon recipe changed, a flag removed, and a new <code>where</code>, <code>gap</code> or <code>salt</code>.</p>
+
+<h2 id="examples">The two examples, walked through</h2>
+<p>Both are in the game folder’s <code>expanded_adventure/</code>, need no card pack, and are original fiction, not official Magic canon.</p>
+
+<h3 id="hut">An Old Adventurer’s Hut</h3>
+<p>A hut in the mainland’s woods. The very old man inside was a planeswalker once, from another world. For 1000 gold, once, he tells the hero where a dungeon lies that nobody else knows of. The plugin holds one place, one dungeon, three panes and one service. Its dungeon first:</p>
+<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/dungeons"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>/dungeons</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"forgotten_vault"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"The Forgotten Vault"</span><span class="j-p">,</span>
+    <span class="j-k">"color"</span><span class="j-p">:</span> <span class="j-s">"random"</span><span class="j-p">,</span>
+    <span class="j-k">"size"</span><span class="j-p">:</span> <span class="j-s">"large"</span><span class="j-p">,</span>
+    <span class="j-k">"rules"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"Old Man of the Sea"</span><span class="j-p">, </span><span class="j-s">"Planar Gate"</span><span class="j-p">, </span><span class="j-s">"Mirror Universe"</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"distance"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"min"</span><span class="j-p">:</span> <span class="j-n">8</span><span class="j-p">, </span><span class="j-k">"max"</span><span class="j-p">:</span> <span class="j-n">22</span><span class="j-p">}</span>
+  <span class="j-p">}</span>
+<span class="j-p">}</span></code></pre></figure>
+<p><i>The Forgotten Vault</i> is large, its color drawn when it rises, 8 to 22 tiles from the hut, and its treasure is three cards. The place stands on the mainland alone:</p>
+<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/sites/hut" data-keys="name,where,picture,sprite,gap"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>→ name, where, picture, sprite, gap</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Old Adventurer's Hut"</span><span class="j-p">,</span>
+  <span class="j-k">"where"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"mainland"</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"picture"</span><span class="j-p">:</span> <span class="j-s">"old_hut_hut"</span><span class="j-p">,</span>
+  <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/old_hut_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">104</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">3</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>Its three panes are chosen by the vault’s state on this land, the special ones first. While the vault is <code>cleared</code>, the pane says: <q data-plugin="Old_Adventurers_Hut" data-text="hut.cleared">"So you found my old treasures," the old man smiles. "Keep them well. I have nothing left to sell, only peace, and that I keep for myself."</q> While it is <code>open</code>: <q data-plugin="Old_Adventurers_Hut" data-text="hut.waiting">The old man looks up from the fire. "You know the way to {dungeon}. Go, before its guardians grow bolder."</q> Before it is raised, the last pane, with no <code>when</code>, tells his story and makes his offer:</p>
+<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/sites/hut/panes/2/actions/0"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>/sites/hut/panes/2/actions/0</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"secret"</span><span class="j-p">,</span>
+  <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"effects"</span><span class="j-p">,</span>
+  <span class="j-k">"label"</span><span class="j-p">:</span> <span class="j-s">"hut.pay"</span><span class="j-p">,</span>
+  <span class="j-k">"prices"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-n">1000</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"effects"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span><span class="j-k">"spawn_dungeon"</span><span class="j-p">:</span> <span class="j-s">"forgotten_vault"</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"log_clue"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"hut.clue"</span><span class="j-p">}</span><span class="j-p">}</span><span class="j-p">,</span>
+    <span class="j-p">{</span><span class="j-k">"log_event"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"event"</span><span class="j-p">:</span> <span class="j-s">"old_hut"</span><span class="j-p">, </span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"hut.log"</span><span class="j-p">}</span><span class="j-p">}</span>
+  <span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"result"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"hut.told"</span><span class="j-p">, </span><span class="j-s">"hut.marked"</span><span class="j-p">]</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>One price, so the secret is sold once. The press pays 1000 gold, raises the vault, writes a clue and a journal line, and shows the two <code>result</code> lines. <code>spawn_dungeon</code> comes first, so the clue can name the vault: <q data-plugin="Old_Adventurers_Hut" data-text="hut.clue">The old man in the woods told you where {dungeon} lies.</q> The button’s label is <q data-plugin="Old_Adventurers_Hut" data-text="hut.pay">Pay {price} gold for the secret</q>. Every pane’s <code>leave</code> is written the same, as one action.</p>
+
+<h3 id="guild">Conjuration Wizard Guild</h3>
+<p>A wizards’ tower whose conjurers copy a card the hero carries, for 2000, 4000, 8000 and 12000 gold, and then never again. Its tower stands on the mainland and on every island:</p>
+<figure class="quote" data-plugin="Conjuration_Wizard_Guild" data-file="sites.json" data-pointer="/sites/tower" data-keys="name,where,picture,sprite,gap"><figcaption class="src"><b>Conjuration_Wizard_Guild/sites.json</b><span>→ name, where, picture, sprite, gap</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Conjuration Wizard Guild"</span><span class="j-p">,</span>
+  <span class="j-k">"where"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"mainland"</span><span class="j-p">, </span><span class="j-s">"islands"</span><span class="j-p">]</span><span class="j-p">,</span>
+  <span class="j-k">"picture"</span><span class="j-p">:</span> <span class="j-s">"conjuration_guild_tower"</span><span class="j-p">,</span>
+  <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/conjuration_guild_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">92</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">3</span>
+<span class="j-p">}</span></code></pre></figure>
+<p>Two panes. The first holds once the copy action is used up: <q data-plugin="Conjuration_Wizard_Guild" data-text="guild.closed">"We have copied four cards for you," the guild master says, "and the guild's law allows no more. Go well."</q> The second offers the copy (quoted <a href="#prices">above</a>), and a line that greets a returning hero only after the first copy:</p>
+<figure class="quote" data-plugin="Conjuration_Wizard_Guild" data-file="sites.json" data-pointer="/sites/tower/panes/1/lines"><figcaption class="src"><b>Conjuration_Wizard_Guild/sites.json</b><span>/sites/tower/panes/1/lines</span></figcaption><pre class="code"><code><span class="j-p">[</span>
+  <span class="j-s">"guild.intro"</span><span class="j-p">,</span>
+  <span class="j-s">"guild.offer"</span><span class="j-p">,</span>
+  <span class="j-p">{</span><span class="j-k">"text"</span><span class="j-p">:</span> <span class="j-s">"guild.again"</span><span class="j-p">, </span><span class="j-k">"when"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">{</span><span class="j-k">"used"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"action"</span><span class="j-p">:</span> <span class="j-s">"copy"</span><span class="j-p">, </span><span class="j-k">"min"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">}</span><span class="j-p">}</span><span class="j-p">]</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-s">"guild.rule"</span>
+<span class="j-p">]</span></code></pre></figure>
+<p>The copy’s <code>result</code> line names the card and the price paid: <q data-plugin="Conjuration_Wizard_Guild" data-text="guild.done">The conjurers chant over your {card} until a second one lies beside it, warm as fresh ink. A copy of {card} is yours, for {price} gold.</q></p>
+
+<h2 id="tools">Tools for places</h2>
+<p>The authoring tool builds a place with you, step by step. Each step is one command of <code>tools/adventure_plugin.py</code>, run in the game folder; on Windows type <code>python</code> and <code>\</code> as on the <a href="first-plugin.html#new">first page</a>. The loop:</p>
+<ul class="chips"><li><code>new --kind sites</code></li><li><code>add-place</code></li><li><code>add-dungeon</code></li><li><code>walk</code></li><li><code>art</code></li><li><code>validate</code></li><li>the Lab</li><li><code>export</code></li></ul>
+<ol class="steps">
+<li><h3 id="tool-new">Start a sites plugin</h3>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py new my_places --id my_places --name "My Places" --kind sites</code></pre>
+<p>It writes a sites plugin that loads and plays: one place, a wayside shrine on the mainland and on every island, whose service costs 20, 40 and 80 gold and is then used up, with a small stand-in picture and map sprite.</p></li>
+
+<li><h3 id="tool-add-place">Add a place</h3>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-place my_places --id tower --name "Glass Tower" --where mainland,islands --service copy --prices 300,600</code></pre>
+<p><code>add-place</code> writes the place into <code>sites.json</code>: a pane with an intro line, the service and a Leave button, and for a priced service the pane shown once it is used up. Its words go into <code>text.json</code> as <code>tower.*</code>, ready to rewrite, and a stand-in pane picture and map sprite into <code>art/</code>, their picture key registered. <code>--service</code> is <code>effects</code> (the default: pay, then effects), <code>copy</code> (copy a card) or <code>none</code>; <code>--where</code> is <code>mainland</code> (the default), <code>islands</code> or both; <code>--prices</code> are the prices in turn. An id the plugin already has, or an island plugin, is refused in one line. The two JSON files are written again whole, tab-indented.</p></li>
+
+<li><h3 id="tool-add-dungeon">Add a dungeon</h3>
+<pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-dungeon my_places --id cellar --name "The Dry Cellar" --cards "Lightning Bolt,Llanowar Elves" --size large --place tower --price 250</code></pre>
+<p><code>add-dungeon</code> adds the recipe: <code>--cards</code> (1 to 6, joined by commas), <code>--color</code>, <code>--size</code>, <code>--rules</code>, <code>--min</code> and <code>--max</code>. With <code>--place</code> it also gives that place a button that raises the dungeon for <code>--price</code> gold (default 1000), and the Hut’s three panes: two new panes before the place’s others, for the dungeon cleared and open, with their words. <code>--action</code> names the button; name an effects action the place already has and <code>spawn_dungeon</code> is put first in its effects instead. The card names are checked as <code>validate</code> checks them, and an edit that would refuse the plugin changes nothing.</p></li>
+
+<li><h3 id="tool-walk">Walk it</h3>
+<p><code>walk</code> plays each place as text, without the game. It shows the pane with no gold, then presses every ready service in turn, clears each dungeon it raised, and shows the pane after each step: the words filled in, each button pressable <code>(x)</code> or not, and why not. The Hut:</p>
+<pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py walk expanded_adventure/Old_Adventurers_Hut
+<span class="out">Old Adventurer's Hut (hut), on the mainland, the hero carrying 100000 gold</span>
+<span class="out">  1. The pane, with no gold (pane 2 of sites.json; 0 gold)</span>
+<span class="out">     [Old Adventurer's Hut | A hut in the woods]  picture old_hut_hut</span>
+<span class="out">       "But I still know things nobody else in Shandalar knows. For 1000 gold I will tell you where a dungeon lies that no wise man has ever heard of."</span>
+<span class="out">       ( ) Pay 1000 gold for the secret   not ready: You need 1000 gold for this; you carry 0.</span>
+<span class="c">  ...</span>
+<span class="out">       (x) Pay 1000 gold for the secret</span>
+<span class="out">       (x) Leave</span>
+<span class="out">  3. Press "Pay 1000 gold for the secret": 1000 gold paid, 99000 left; secret used 1 time</span>
+<span class="out">     dungeon raised: forgotten_vault (open)</span>
+<span class="c">  ...</span>
+<span class="out">       The way to The Forgotten Vault is marked on your map.</span>
+<span class="out">       (x) Return  (x) Leave</span>
+<span class="out">  4. The pane (pane 1 of sites.json; 99000 gold)</span>
+<span class="out">     [Old Adventurer's Hut | A hut in the woods]  picture old_hut_hut</span>
+<span class="out">       The old man looks up from the fire. "You know the way to The Forgotten Vault. Go, before its guardians grow bolder."</span>
+<span class="out">       (x) Leave</span>
+<span class="out">  5. The hero clears The Forgotten Vault (forgotten_vault): cleared</span>
+<span class="out">  6. The pane (pane 0 of sites.json; 99000 gold)</span>
+<span class="out">     [Old Adventurer's Hut | A hut in the woods]  picture old_hut_hut</span></code></pre>
+<p>The walk follows the game’s own rules for panes, conditions, prices and effects. It has no world: a dungeon always finds room, and the hero always holds one card to copy. <code>--site KEY</code> walks one place, <code>--gold N</code> sets the hero’s gold (default 100000; try a small sum to see what the hero cannot afford), <code>--json</code> prints the steps for your own scripts.</p></li>
+
+<li><h3 id="tool-art">Look at the art</h3>
+<p><code>art</code> measures the pictures and gives advice. It never refuses a plugin. The Guild:</p>
+<pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py art expanded_adventure/Conjuration_Wizard_Guild
+<span class="out">Conjuration Wizard Guild (tower)</span>
+<span class="out">  pane picture  art/conjuration_guild_tower.png: 1024 x 560, 1.83 : 1 (the pane's frame is 512 x 280, 1.83 : 1)</span>
+<span class="out">  map sprite    art/conjuration_guild_map.png: 320 x 400, drawn 92 world pixels wide (a tile is 128 x 64)</span>
+<span class="out">    trimmed to 276 x 384 at 22, 13 (48% of the picture transparent); drawn 92 x 128; its foot in the middle</span>
+<span class="out">    3 source pixels to a world pixel: a whole number, so pixel art stays crisp.</span>
+<span class="out">0 pieces of advice. Advice only: art never refuses a plugin (validate does that).</span></code></pre>
+<ul>
+<li><b>The pane picture.</b> The pane’s frame is 512 × 280, about 1.83 to 1, and the picture is cropped to fill it. Advice comes for another shape, and for a picture under 512 pixels wide.</li>
+<li><b>The map sprite.</b> Its transparent margins are trimmed, and the rest is drawn <code>width</code> world pixels wide; a tile is 128 × 64. Advice comes for a sprite with no transparency (its background would be drawn as a block), for a foot that is not in the middle of the bottom edge (the point that stands on the tile), and for a width over 128.</li>
+<li><b>The scale.</b> The source pixels to one world pixel. A whole number, as the Hut’s and the Guild’s 3, keeps pixel art crisp; otherwise <code>art</code> names the widths that would make it whole.</li>
+</ul>
+<p>A PNG’s transparency is read; for a JPEG, a WebP or an unusual PNG <code>art</code> says what it did not check. It reads an island plugin’s port and castle the same way.</p></li>
+
+<li><h3 id="testing">Validate, the Lab, export</h3>
+<p><code>validate</code>, <code>info</code>, <code>export</code> and <code>compat</code> work on a sites plugin as on an island (<a href="testing.html#validator">Testing</a>). <code>info</code> lists its places, where they stand, their actions and its dungeons. A sites problem names the place in <code>sites.json</code>, for example <code>sites.json: sites.shrine.panes[1].actions[0].effects[2].spawn_dungeon: no dungeon vault in sites.json dungeons.</code></p>
+<p>In a source checkout, <code>./tools/expansion_lab.sh --out lab-my_places --plugin my_places</code> then plays the plugin in the game itself, headless, for each seed (<a href="testing.html#lab">Testing</a>): it places the places on a fresh mainland and on a small test island, opens each pane and presses every button it offers with gold enough, checks every dungeon raised, saves and reads the adventure back, and takes the plugin away to see its places hide and its progress kept.</p>
+<p>Last, in the game: put the folder in the plugins folder, start a new adventure, tick the plugin in <b>Expanded adventure plugins...</b> and embark. A place on the mainland stands near a road; open the map to find it. For a place on the islands, tick an island plugin too and sail there. After a change to words, panes or prices, <b>Rescan</b> or start the game again and load your save; a place is placed once, so a new <code>salt</code>, <code>gap</code> or <code>where</code> shows in a new adventure. Then <code>export</code> the zip to share.</p></li>
+</ol>
+</main>
+</div>
+<footer class="pager">
+<a class="prev" href="refuge.html"><span>Previous</span>The Refuge walkthrough</a>
+<a class="next" href="reference.html"><span>Next</span>Reference</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 2. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+</footer>
+</body>
+</html>

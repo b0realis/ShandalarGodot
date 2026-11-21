@@ -1,0 +1,15 @@
+{
+	"plugin_format": 1,
+	"api_version": 2,
+	"kind": "sites",
+	"id": "conjuration_guild",
+	"name": "Conjuration Wizard Guild",
+	"version": "1.0.0",
+	"minimum_game_version": "0.70.4",
+	"authors": [
+		"Shandalar Godot"
+	],
+	"license": "GPL-3.0 (the game's own license; see LICENSE.txt)",
+	"description": "A wizards' tower whose conjurers copy a card you carry: 2000 gold, then 4000, 8000 and 12000, and then never again.",
+	"learning_note": "A self-contained place, and a study for the places players wish for: one sites plugin whose place stands on the mainland and on every island, with a service whose price climbs and then ends. Original fiction, not official Magic canon."
+}
