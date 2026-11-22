@@ -2362,6 +2362,25 @@ func cast(key: int) -> Dictionary:
 	return result
 
 
+## THE HERO CARRIED TO [param tile] (a place's `teleport`, adventure plugin
+## API 3; [code]site_journey.gd[/code], which chose a free tile of the
+## hero's own landmass): set down there as a cast sets them down
+## ([method cast]) — the walk stopped, the keys let go, the entry latch and
+## the step cleared, the land around seen, the view on the hero.
+func carry_hero_to(tile: Vector2i) -> void:
+	if player == null or not world.is_land(tile.x, tile.y):
+		return
+	_disarm_keys()
+	walk.stop()
+	player.position = tile * 32 + Vector2i(16, 16)
+	player.entered_tile = Vector2i(-1, -1)
+	player.step = 0
+	world.explore_around(tile)
+	view.camera = Vector2(player.position)
+	_show_hero()
+	view.queue_redraw()
+
+
 ## Whether casting key [param key] will set the hero down elsewhere, by
 ## [WorldMagic]'s own rules: Leap of Fate whenever it can be cast, Sword of
 ## Resistance when a town is besieged.

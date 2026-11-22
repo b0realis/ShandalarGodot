@@ -39,7 +39,8 @@ STUDIES = {"Gamblers_Den": "gamblers_den", "Riddle_Stone": "riddle_stone",
 ## The recipes, as the corpus holds them: two plugins of five places each
 ## (a sites plugin has at most eight places).
 RECIPE_CASES = {"good_sites_api3_recipes_one": ["lore", "gift", "healer", "toll", "gambler"],
-                "good_sites_api3_recipes_two": ["riddle", "collector", "duelist", "shop", "quest"]}
+                "good_sites_api3_recipes_two": ["riddle", "collector", "duelist", "shop", "quest"],
+                "good_sites_api3_recipes_three": ["traveler", "teacher"]}
 
 
 def recipe_case(name: str, recipes: list) -> dict:
@@ -506,7 +507,7 @@ class EditCommands(Work):
                 (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--prices", "5", "--free"], 2, "--prices and --free"),
                 (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--when", "weather=fine"], 2, "no such condition"),
                 (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--when", "gold_at_least=lots"], 2, "takes a whole number"),
-                (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--effect", "teleport=home"], 2, "no such effect"),
+                (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--effect", "summon=home"], 2, "no such effect"),
                 (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--effect", "counter=wins"], 2, "NAME+N, NAME-N or NAME:N"),
                 (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--needs", "gold=5"], 2, "a need is card=NAME"),
                 (["add-action", "Corpus_Sites", "--place", "shrine", "--id", "x", "--outcome", "gold=5"], 2, "WEIGHT | EFFECTS | WORDS"),
@@ -780,7 +781,7 @@ class Recipes(Work):
         listed = self.tool("add-place", "--list-recipes").stdout.splitlines()
         self.assertEqual([line.split()[0] for line in listed], list(ap.RECIPES))
         self.assertEqual(list(ap.RECIPES), ["lore", "gift", "healer", "toll", "gambler", "riddle", "collector", "duelist",
-                                           "shop", "quest"])
+                                           "shop", "quest", "traveler", "teacher"])
         self.assertTrue(all(len(line) > 30 for line in listed))
         self.assertEqual(self.tool("add-place", "Corpus_Sites", "--id", "x", ok=False).returncode, 2)
 
@@ -797,6 +798,8 @@ class Recipes(Work):
             "duelist": (["--win"], lambda s, h: s["gold"] == 1000 + 3 * 50 and s["counters"] == {"p_duelist_wins": 3}),
             "shop": (["--cards", "Glasses of Urza"], lambda s, h: s["gold"] == 1000 - 300 - 200 + 60 and s["cards"][1:] == ["Jayemdae Tome", "Rod of Ruin"]),
             "quest": (["--cards", "Healing Salve"], lambda s, h: s["flags"] == ["p_quest_asked", "p_quest_done"] and s["gold"] == 1200),
+            "traveler": ([], lambda s, h: s["gold"] == 800 and s["uses"] == {"p_traveler.ride": 2}),
+            "teacher": (["--gold", "2000"], lambda s, h: s["magics"] == ["Dwarven Pick"] and s["life_bonus"] == 3 and s["gold"] == 2000 - 800 - 900),
         }
         for group in RECIPE_CASES.values():
             shutil.rmtree(self.folder)
@@ -812,7 +815,7 @@ class Recipes(Work):
                     self.assertEqual((self.folder / "art" / ("corpus_sites_%s_map.png" % key)).read_bytes(),
                                      ap._sprite(*ap.PLACE_LOOKS[look]), "the recipe's own stand-in look")
                     words = {k: v for k, v in self.text().items() if k.startswith(key + ".")}
-                    self.assertGreaterEqual(len(words), 5)
+                    self.assertGreaterEqual(len(words), 4)
                     self.assertFalse([v for v in words.values() if ap.STAND_IN_MARK in v], "readable sentences, not stand-ins")
                     options, proof = proofs[recipe]
                     walked = self.tool("walk", "Corpus_Sites", "--site", key, "--gold", "1000", "--json", *options)
@@ -883,7 +886,7 @@ class Walks(Work):
         data = ap.judge(str(path), self.game)["data"]
         hero = ap.walk_hero(data, 500, {"food": 9, "flags": [], "counters": {"wins": 3}, "cards": ["Lightning Bolt", "Lightning Bolt", "Gray Ogre"],
                                         "amulets": {"red": 2, "blue": 1}, "color": "red", "magics": ["Dwarven Pick"], "day": 5,
-                                        "wizards": 1, "difficulty": 1, "plugins": ["old_hut"]})
+                                        "wizards": 1, "difficulty": 1, "plugins": ["old_hut"], "linked": True})
         self.assertEqual(hero.pane_of("den"), data["sites"]["sites"]["den"]["panes"][0], "three wins, and a red hero")
         hero.counters["wins"] = 0
         hero.uses["shrine.bless"] = 1
@@ -891,7 +894,8 @@ class Walks(Work):
         self.assertEqual(pane["lines"], ["A low den under a hill.", "Day 5: the den is quiet.", "You carry 9 food and 3 amulets.",
                                          "You carry 500 gold."], "one_of by the den's uses (0) and by day (5); every condition of the line holds")
         self.assertEqual([(b["id"], b["ready"]) for b in pane["buttons"]],
-                         [("ask", True), ("bribe", True), ("gamble", True), ("fight", True), ("buy", True), ("sell", True), ("leave", True)])
+                         [("ask", True), ("bribe", True), ("gamble", True), ("fight", True), ("buy", True), ("sell", True), ("ride", False),
+                          ("leave", True)], "the ride would link a town that is linked already")
         self.assertEqual(pane["buttons"][2]["label"], "Throw the bones (10 gold, 2 left; Lightning Bolt)")
         self.assertEqual(pane["buttons"][3]["label"], "Fight The Den Keeper (12 life) for 25 gold")
         hero.roll_choice = 2
@@ -1045,7 +1049,9 @@ class CheatSheet(unittest.TestCase):
         self.assertEqual([row[0] for row in self.rows["fields"]],
                          list(types["sites_file"]["fields"]) + list(types["sites_pane"]["fields"]) + list(types["sites_action"]["fields"]))
         shown = [row[0] for row in self.rows["placeholders"]]
-        self.assertEqual(shown, [name for name in self.schema["placeholders"] if name not in ap.ISLAND_PLACEHOLDERS])
+        # {town} and {title} are an island's words that two kinds of a place's action fill too.
+        self.assertEqual(shown, [name for name in self.schema["placeholders"]
+                                 if name not in ap.ISLAND_PLACEHOLDERS or name in ("town", "title")])
         for group in ("conditions", "effects", "actions", "needs"):
             for row in self.rows[group]:
                 self.assertIn("<code>%s</code>" % row[0], self.page, row[0])
@@ -1088,6 +1094,7 @@ class CheatSheet(unittest.TestCase):
         work = Path(tempfile.mkdtemp(prefix="plugin-c1122-"))
         try:
             (work / "deck.txt").write_text("12 Mountain\n4 Lightning Bolt\n", encoding="utf-8")
+            (work / "answers.txt").write_text("The Mill\nlore\n", encoding="utf-8")
             import shlex
             named = set()
             for name, line in ap.COMMAND_EXAMPLES:
@@ -1100,14 +1107,14 @@ class CheatSheet(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, line + "\n" + result.stdout + result.stderr)
             self.assertEqual(named, {"new", "add-place", "add-pane", "add-action", "add-flag", "add-counter", "add-foe",
                                      "add-dungeon", "set-text", "set-info", "remove-place", "walk", "art", "validate",
-                                     "info", "export", "compat", "guide"})
+                                     "info", "export", "compat", "guide", "wizard", "preview"})
             helped = run_tool("--help").stdout
             for name in named:
                 self.assertIn(name, helped)
                 self.assertEqual(run_tool(name, "--help").returncode, 0, name)
             judged = ap.judge(str(work / "My_Places"), self.game)
             self.assertTrue(judged["valid"], judged["problems"])
-            self.assertEqual(sorted(judged["data"]["sites"]["sites"]), ["den", "well"])
+            self.assertEqual(sorted(judged["data"]["sites"]["sites"]), ["den", "mill", "ring", "well"])
         finally:
             shutil.rmtree(work, ignore_errors=True)
 

@@ -71,6 +71,20 @@ static func sites() -> Dictionary:
 					leave()]}]}}}
 
 
+## [method sites] with a guild pane of round 3's words: a journey, a World
+## Magic, a mana link and a life bonus, and the texts they speak with.
+static func sites_r3() -> Dictionary:
+	var content := sites()
+	(content["sites"]["inn"]["panes"] as Array).insert(0, {"id": "guild", "actions": [
+		{"id": "travel", "do": "effects", "effects": [{"gold": 1}, {"teleport": {"to": "nearest_town"}}], "result": ["inn.hello"]},
+		{"id": "to_cellar", "do": "effects", "prices": [5, 5], "effects": [{"teleport": {"to": "dungeon:cellar"}}]},
+		{"id": "magic", "do": "effects", "prices": [300, 300], "effects": [{"world_magic": "Dwarven Pick"}]},
+		{"id": "link", "do": "effects", "prices": [200, 200, 200], "effects": [{"mana_link": "nearest_town"}]},
+		{"id": "vigor", "do": "effects", "prices": [100, 100, 100, 100, 100], "effects": [{"life_bonus": 3}]},
+		leave()]})
+	return content
+
+
 static func picture() -> PackedByteArray:
 	var image := Image.create(48, 40, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))

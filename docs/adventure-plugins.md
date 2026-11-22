@@ -93,7 +93,7 @@ them."*
 | `game/adventure/expansions/adventure_sites.gd` | `AdventureSites` | API 2: the sites plugins on for a campaign, their places put on each land (`world.expansion.sites`), the places' markers, panes, buttons, pictures and sprites. API 3: `task_rows` and `targets`, the plugins' Tasks rows and map targets. |
 | `game/adventure/plugins/data_sites.gd` | `DataSites` | API 2: a sites plugin's interpreter, model side — panes, conditions, effects, the prices, a copy, a dungeon raised. API 3: counters, needs, talk panes, the roll, a duel's stake and result, card trades, the Tasks rows. |
 | `game/adventure/plugins/site_journey.gd` | `SiteJourney` | API 2: what a place's buttons do on the world screen (the copy's card list), reached from `DataSites` by `load()` only. API 3: a place's duel through `WorldDuels`, a trade's card list. |
-| `tools/adventure_plugin.py` | — | `new` (`--kind sites` for places), `validate`, `export`, `info`, `compat`, `guide`, and for places `add-place` (with its ten `--recipe`s), `add-action`, `add-pane`, `add-flag`, `add-counter`, `add-foe`, `set-text`, `set-info`, `remove-place`, `add-dungeon`, `walk` (a place played as text, without the game) and `art` (advice on the pictures): the authoring tool and the Python twin of the checks. |
+| `tools/adventure_plugin.py` | — | `new` (`--kind sites` for places), `validate`, `export`, `info`, `compat`, `guide`, and for places `add-place` (with its twelve `--recipe`s and `--set`), `wizard` (a place made by answering questions), `add-action`, `add-pane`, `add-flag`, `add-counter`, `add-foe`, `set-text`, `set-info`, `remove-place`, `add-dungeon`, `walk` (a place played as text, without the game), `preview` (every pane as one HTML page) and `art` (advice on the pictures): the authoring tool and the Python twin of the checks. |
 
 ## Discovery
 
@@ -466,8 +466,8 @@ listed in the schema's `v3_words`, by where they stand:
 | a line | `one_of` |
 | an action's `do` | `talk`, `duel`, `buy_card`, `sell_card` |
 | an action's fields | `needs`, `to`, `foe`, `win`, `lose`, `count`, `cards`, `stock` |
-| conditions | `has_card`, `amulets`, `hero_color`, `owns_magic`, `food_at_least`, `gold_below`, `day_at_least`, `wizards_defeated`, `at_peace`, `difficulty`, `plugin_on`, `counter`, `site_used`, `gift_waiting`, `any` |
-| effects | `counter`, `amulet`, `give_card`, `next_duel`, `roll`, `reveal_map` |
+| conditions | `has_card`, `amulets`, `hero_color`, `owns_magic`, `food_at_least`, `gold_below`, `day_at_least`, `wizards_defeated`, `at_peace`, `difficulty`, `plugin_on`, `counter`, `site_used`, `gift_waiting`, `any`; since 0.70.7 `life_bonus_below`, `town_linked` |
+| effects | `counter`, `amulet`, `give_card`, `next_duel`, `roll`, `reveal_map`; since 0.70.7 `world_magic`, `mana_link`, `life_bonus`, `teleport` |
 
 **A plugin that uses one of them must declare `"api_version": 3`.**
 `PluginSchema._check_api` refuses one that declares less, once per word and
@@ -488,6 +488,14 @@ for a word it does not know, or skip it. The tool's edit commands set the
 number by themselves the moment a command adds such a word, and say so;
 `info` lists a plugin's API 3 words (`api_3_words`). A plugin that asks
 for an API newer than the game's (4 today) is refused the same way.
+
+**The six words of 0.70.7** (`life_bonus_below`, `town_linked`,
+`world_magic`, `mana_link`, `life_bonus`, `teleport`) are words of API 3
+too; the API number did not move. A 0.70.6 game reads API 3 but does not
+know them, so it refuses a plugin that uses one at the content stage, with
+a shape problem that names the word. A plugin that uses one should
+therefore also say `"minimum_game_version": "0.70.7"`, which every game
+answers plainly; the tool does not write that line by itself.
 
 ### `sites.json`
 
@@ -564,6 +572,10 @@ nothing, counts nothing and says why:
 | `site.no_room` | no slot or tile for a dungeon to raise |
 | `site.dungeon_open` | a priced action whose dungeon is already open on this land (0.70.6: the price used to be taken for nothing) |
 | `site.no_stock`, `site.nothing_to_sell` | a trade with nothing to trade now |
+| `site.magic_owned` (0.70.7) | a `world_magic` the hero already owns |
+| `site.no_link` (0.70.7) | a `mana_link` on a land without mana links, or with no town that can take one |
+| `site.life_full` (0.70.7) | a `life_bonus` when the places have added 10 already |
+| `site.no_way` (0.70.7) | a `teleport` whose target is not on this land, or has no free tile beside it |
 
 A duel is also refused while the hero has no deck to fight with
 (`DataSites.deck_problem`, as `DataRegion.deck_problem`).
@@ -571,9 +583,9 @@ A duel is also refused while the hero has no deck to fight with
 ### Conditions and effects
 
 The closed sets:
-<!-- site_conditions -->conditions `flag`, `not_flag`, `gold_at_least`, `on_mainland`, `used`, `used_up`, `dungeon`, `has_card`, `amulets`, `hero_color`, `owns_magic`, `food_at_least`, `gold_below`, `day_at_least`, `wizards_defeated`, `at_peace`, `difficulty`, `plugin_on`, `counter`, `site_used`, `gift_waiting`, `any`<!-- /site_conditions -->
+<!-- site_conditions -->conditions `flag`, `not_flag`, `gold_at_least`, `on_mainland`, `used`, `used_up`, `dungeon`, `has_card`, `amulets`, `hero_color`, `owns_magic`, `food_at_least`, `gold_below`, `day_at_least`, `wizards_defeated`, `at_peace`, `difficulty`, `plugin_on`, `counter`, `site_used`, `gift_waiting`, `any`, `life_bonus_below`, `town_linked`<!-- /site_conditions -->
 and
-<!-- site_effects -->effects `set_flag`, `clear_flag`, `gold`, `food`, `log_clue`, `log_event`, `spawn_dungeon`, `counter`, `amulet`, `give_card`, `next_duel`, `roll`, `reveal_map`<!-- /site_effects -->.
+<!-- site_effects -->effects `set_flag`, `clear_flag`, `gold`, `food`, `log_clue`, `log_event`, `spawn_dungeon`, `counter`, `amulet`, `give_card`, `next_duel`, `roll`, `reveal_map`, `world_magic`, `mana_link`, `life_bonus`, `teleport`<!-- /site_effects -->.
 The first seven conditions and the first seven effects are API 2's. A
 `when` is a list of at most 16 conditions, all of which must hold; it may
 stand on a pane, a line, an action, a result line and a task.
@@ -597,6 +609,8 @@ The conditions of API 3 (`DataSites._holds`):
 | `site_used` | `{"site", "action", "min": 1, "max": 1000}` | another place's action was done that often; both must exist |
 | `gift_waiting` | bool | a gift for the next duel already waits |
 | `any` | `[condition, …]` | at least one of 1–8 holds; no `any` inside an `any` |
+| `life_bonus_below` (0.70.7) | int | 1–10; the life the places have added to the hero's duels is less |
+| `town_linked` (0.70.7) | `"nearest_town"` | the town or city nearest the place on this land has a mana link; there is no negative form, so the "already linked" pane goes first |
 
 The effects of API 3 (`DataSites.apply`, `effects_now`); an action's
 effects run in order, at most 16, once it is paid:
@@ -609,6 +623,68 @@ effects run in order, at most 16, once it is paid:
 | `next_duel` | `{"life": 5}`, `{"first_move": true}` or `{"card": "X"}` | exactly one; life 1–20; the gift the lairs give, spent by the next duel of any kind |
 | `roll` | `{"outcomes": [{"weight": 1, "effects": [], "result": []}, …]}` | 2–6 outcomes, each weight 1–100: one is drawn, its effects applied and its lines shown after the action's |
 | `reveal_map` | `{"around": "place" \| "dungeon:<key>", "radius": 4}` | radius 1–8; nothing while the dungeon is not raised |
+| `world_magic` (0.70.7) | `"Dwarven Pick"` | one of the twelve World Magics, the hero's as if bought |
+| `mana_link` (0.70.7) | `"nearest_town"` | a mana link with the nearest town or city that can take one |
+| `life_bonus` (0.70.7) | int | 1–3 an effect; life added to the start of every duel, 10 at most in all |
+| `teleport` (0.70.7) | `{"to": "nearest_town" \| "start" \| "place:<site>" \| "dungeon:<key>"}` | the hero carried there; an action's last effect |
+
+#### World Magic, mana link, life bonus, teleport (0.70.7)
+
+Four effects that reach into the adventure itself, each with its guards.
+`"nearest_town"` means, for all three words that take it, the nearest
+**town or city** — never a village — to the place on the land the hero
+walks (`DataSites.nearest_town`).
+
+- **`world_magic`** gives the hero the World Magic as the seller's own
+  sale does (`WorldMagicShop.buy`): the name joins `world_magics`, and
+  **the vanilla seller no longer stocks it** — its
+  `world_magic_sites` entry is set to 0 on the land the hero walks and,
+  when that is an island, on every saved land's map too — so it is never
+  paid for twice anywhere. The journal says "Bought WM: …" under the
+  game's own `magic` event. Refused before paying when the hero owns it
+  already (`site.magic_owned`, `{title}` the Magic's name).
+- **`mana_link`** links the nearest town or city **that can take one**
+  (`TownStatus.put(world, slot, LINKED)`): one without a link, that no
+  wizard rules and that is not the town under siege — a siege's own count
+  of the link is never disturbed. This may be another town than the one
+  `town_linked` reads, which is simply the nearest. Refused before paying
+  where the land has no mana links (an island whose plugin says so) or no
+  town qualifies (`site.no_link`). `{town}` is the town it would link.
+- **`life_bonus`** adds to `AdventurePlayer.life_bonus`, a number of the
+  hero's, not of the plugin: 0 to 10 (`LIFE_BONUS_MOST`) from **all
+  plugins together**. Every duel reads it through one function,
+  `AdventurePlayer.duel_start_life()` (base, links, bonus); the dungeon
+  and castle room duels take their base from the same function
+  (`DungeonDuels.life_parts`), and the hero's page and the ankh's tip say
+  what the places added (`world_hud.gd`). It is paid for, so it **stays
+  when its plugin is gone**. An effect asking past the cap is paid in
+  full and gives what room is left — at 9 of 10 a bonus of 3 gives 1 —
+  and at 10 the action is refused before paying (`site.life_full`).
+  `life_bonus_below` lets a pane stop offering it, `{life_bonus}` says it.
+- **`teleport`** stands only in the `effects` of an action that does
+  `effects`, and **last** there — not in a roll's outcome, a duel's branch
+  or a talk; it may be free. `to` is `nearest_town`, `start` (the land's
+  start tile), `place:<site>` (another place of this
+  plugin, not the place itself) or `dungeon:<key>` (once raised). Where
+  it leads is worked out before anything is paid
+  (`DataSites.teleport_target`, `teleport_tile`): the nearest free tile
+  within 3 of the target and never the target's own (`start` itself when
+  free), **on the hero's own landmass**, never water, a town, a dungeon,
+  a place, a lair, the portal or the tile the hero stands on. No dice are
+  cast. A target not on this land, or with no such tile, refuses the
+  action (`site.no_way`), nothing paid. Then the action's other effects
+  run, the hero is set down (`WorldScreen.carry_hero_to`, as a cast sets
+  them down, the entry latch and the step cleared; it refuses water
+  itself), the pane closes, the world is saved as on leaving a place, and
+  any `result` lines are spoken on the world screen, since the pane is
+  gone.
+
+The checker's sentences for them (`_check_site_effects`): "this is given
+without end; give the action prices (a ladder that ends) or needs."; "a
+teleport stands in the effects of an action that does effects, not in a
+roll, a duel or a talk."; "a teleport is the action's last effect; the
+pane closes with it."; "…to: no place X in sites.json sites."; "…to: X is
+this place itself."; "…to: no dungeon X in sites.json dungeons."
 
 `log_event` (API 2) changed with 0.70.6: the event is written as
 `"<plugin id>:<event>"` (`DataSites.apply`). Before, a plugin's own word
@@ -620,7 +696,8 @@ written by an older game still display.
 ### The anti-exploit rules
 
 - **A gift needs a price or a need.** An action that gives a card
-  (`give_card`) or amulets (`amulet` with a count above 0) must have
+  (`give_card`), amulets (`amulet` with a count above 0) or, since
+  0.70.7, a World Magic, a mana link or a life bonus must have
   `prices` or `needs`, or the plugin is refused
   (`PluginSchema._check_site_effects`' `priced`): a list of prices ends,
   and a need must be found again each time. Gold given without either
@@ -715,7 +792,12 @@ task's conditions may ask the gold, the cards or the day.
 
 API 2 brought `{price}`, `{uses_left}`, `{gold}`, `{card}` and
 `{dungeon}`; API 3 adds `{food}`, `{amulets}` (all colors together) and
-`{day}`, and fills four more (`DataSites.values`):
+`{day}`, 0.70.7 `{life_bonus}` (the life the places have added to the
+hero's duels, 0 to 10), and more are filled (`DataSites.values`):
+
+- `{town}` (0.70.7): on an action with a `mana_link`, the town it would
+  link; on one with a `teleport` to `nearest_town`, that town.
+- `{title}` (0.70.7): on an action with a `world_magic`, the Magic's name.
 
 - `{count}`: the counter the action changes or its `when` asks about, in
   a line the one that line asks about, else the pane's, else the plugin's
@@ -759,6 +841,10 @@ plugin's `text.json` (`PluginText.DEFAULTS`); the twelve of API 2 are
 | `site.nothing_to_sell` | You hold no card that is wanted here. |
 | `site.bought`, `site.sold` | {card} is yours for {price} gold. / You sell {card} for {price} gold. |
 | `site.bought_log`, `site.sold_log` | {card} bought for {price} gold. / {card} sold for {price} gold. |
+| `site.no_way` (0.70.7) | There is no way there from here. |
+| `site.magic_owned` (0.70.7) | {title} is yours already. |
+| `site.no_link` (0.70.7) | No town of this land can be linked now. |
+| `site.life_full` (0.70.7) | No place can add to your life any more. |
 
 ### On the land
 
@@ -863,9 +949,16 @@ record:
   `"<site>.<action>#<hash>"`, the hash eight hex digits of the card's
   name (`AdventureSites.fnv`).
 
+- **The life bonus** (0.70.7) is not in the plugin's record at all: it is
+  the hero's, saved as `duels.life_bonus` only when above 0, clamped to
+  0–10 on load. A save without it is the save it was; a game older than
+  0.70.7 drops it. A World Magic taught and a town linked are the
+  adventure's own state, saved where the game always saved them.
+
 A sites plugin missing or refused: its places hide (their tiles kept), its
 progress is kept, counters and all, a dungeon it raised stays an ordinary
-dungeon, and the save opens; it never has a ship or a mainland note
+dungeon, a life bonus, a World Magic and a mana link it sold stay the
+hero's, and the save opens; it never has a ship or a mainland note
 (`AdventureExpansions.sites_row`), and its Tasks rows are gone with it.
 An API 3 plugin under a game that reads only API 2 is such a refused
 plugin.
@@ -884,7 +977,8 @@ the result would be refused, and says which command comes next.
 | Command | Does |
 |---|---|
 | `new --kind sites` | a sites plugin that loads and plays; names the next commands, a path with a space quoted |
-| `add-place` | a place: `--recipe` (below), or `--service effects \| copy \| none` with `--prices` or `--free` (a button that costs nothing and is never used up); `--where`, `--look shrine \| tent \| stone \| gate \| ring` (the stand-in pictures), `--list-recipes` |
+| `wizard` | a place by questions and answers (below) |
+| `add-place` | a place: `--recipe` (below) with `--set NAME=VALUE` for one of the recipe's numbers or names (`--set price=75`; a wrong name lists the recipe's own), or `--service effects \| copy \| none` with `--prices` or `--free` (a button that costs nothing and is never used up); `--where`, `--look shrine \| tent \| stone \| gate \| ring` (the stand-in pictures), `--list-recipes` |
 | `add-action` | a button: `--do effects \| talk \| duel \| copy \| buy \| sell \| leave`, `--prices` or `--free`, any number of `--effect K=V`, `--needs K=V` and `--when K=V` (`"A \| B"`: one of them), 2–6 `--outcome "WEIGHT \| EFFECTS \| WORDS"` for a roll, `--label` and `--result` as plain words, `--pane` (a number, a pane's id, or `all`), `--to`, `--foe`, `--win`, `--lose`, `--win-effect`, `--lose-effect`, `--count`, `--cards "NAME=PRICE; …"`, `--stock` |
 | `add-pane` | a pane with an `--id` (a talk opens it) or a `--when`, its `--line`s, `--title`, `--subtitle` |
 | `add-flag`, `add-counter` | declare a name |
@@ -893,6 +987,7 @@ the result would be refused, and says which command comes next.
 | `remove-place` | a place out again, with its words, its pictures and whatever only it used |
 | `add-dungeon` | a dungeon recipe, and with `--place` its button and panes; at a place that already has a service both now stay reachable |
 | `walk` | the places played as text, without the game |
+| `preview` | every pane of the plugin as one HTML page (below) |
 | `art`, `validate`, `info`, `export`, `compat` | as before, knowing API 3 |
 | `guide` | writes `GUIDE/reference.html` and `GUIDE/cheatsheet.html` from the schema; `--check` exits 1 when either is stale |
 
@@ -913,6 +1008,26 @@ rewrite. `--card` names the card of a gift, collector, quest or shop;
 | `duelist` | a duel for a wager against the place's own champion | `duel`, a foe with a deck, `win` and `lose`, a counter |
 | `shop` | a stall that sells a few cards and buys one | `buy_card` with `stock`, `sell_card` |
 | `quest` | an errand: accept it, bring a card, be paid | `talk`, two flags, `has_card`, `needs`, `log_event`, a task |
+| `traveler` (0.70.7) | a ride for a fare: the hero is carried to the nearest town, or to where the journey began | `teleport` to `nearest_town` and to `start`, prices |
+| `teacher` (0.70.7) | a World Magic taught once for a price, and three lessons that each add a life to every duel | `world_magic`, `owns_magic`, `life_bonus`, `life_bonus_below` |
+
+**`wizard`** (0.70.7) makes a place by asking questions with numbered
+answers and defaults: plugin name, place name, one of twelve recipes, that
+recipe's few numbers and names, where it stands. It writes through the
+same code as `new` and `add-place`, validates, walks, and prints the next
+commands. With an existing FOLDER it adds a place. `--answers FILE`
+answers from a file (one a line, an empty line taking the default);
+without a terminal it exits 2. Nothing is written before the last answer.
+
+**`preview`** (0.70.7) writes one HTML page (default `preview/<id>.html`;
+`--out DIR`, `--site KEY` for one place, `--open` to show it in the
+browser) showing every pane of a sites plugin as the game lays it out:
+picture, words filled for a sample hero, each `when` in plain words, each
+button with what it does, then dungeons, opponents, Tasks rows and
+warnings. The page needs no network and runs no script; plugin text is
+always escaped. A picture past `PREVIEW_EMBED` (400 KiB) is named, not
+embedded. `tools/plugin_fixtures/preview/corpus_sites.html` is the page of
+the corpus's sites plugin, which the tool must write byte for byte.
 
 **`walk`** follows the game's rules for panes, conditions, prices, needs
 and effects (held to `data_sites.gd` by a drift test). Its hero can be
@@ -1011,6 +1126,16 @@ the three JSON files they write with the shipped ones:
   cases, the hints and warnings, the edit commands, the ten recipes, the
   walk's options, `info` and `compat`, the cheat sheet, the guide's page,
   the study plugins made again from their READMEs.
+- The four effects of 0.70.7: `tests/unit/test_c1122_places_r3.gd` — the
+  words checked, a World Magic had as if bought and never paid for twice,
+  a link made with the nearest town that can take one and refused where
+  none can, the life bonus in every duel up to ten and saved, a journey's
+  landing tile and its refusal; `tests/ui/test_c1122_places_r3_ui.gd` —
+  the hero set down beside the town with the pane closed, a journey that
+  leads nowhere, never water; `tools/test_c1122_places_tool_r3.py` —
+  `preview` (the fixture page, no script, escaped words, every word in
+  plain words), `wizard` (answers from a file, every recipe, nothing
+  written on a wrong answer, no terminal), `--set`, the two recipes.
 - The zip reader (0.70.6): `tests/unit/test_c1122_files.gd` — the zips of
   two lists, refused before anything is unpacked.
 - The review of 2026-11-21: `tests/unit/test_review_2026_11_21_sites.gd`

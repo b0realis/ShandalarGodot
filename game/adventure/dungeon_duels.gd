@@ -492,7 +492,9 @@ static func draw_stake(player: AdventurePlayer, duel: Dictionary) -> bool:
 ## duel's change — counted from the duel's start, so it starts from the
 ## base too). The board's "life you carry" is `total`.
 static func life_parts(player: AdventurePlayer, run: Variant) -> Dictionary:
-	var out := {"base": player.life_base(), "links": player.mana_links(),
+	# The base is the duel's own start less the links, so a place's life bonus
+	# ([member AdventurePlayer.life_bonus], 0.70.7) counts in a dungeon too.
+	var out := {"base": player.duel_start_life() - player.mana_links(), "links": player.mana_links(),
 		"carried": player.next_duel_life_carried, "gift": player.next_duel_life,
 		"pool": int(read(run, "life_pool", 0))}
 	out["total"] = int(out["base"]) + int(out["links"]) + int(out["carried"]) + int(out["gift"]) \

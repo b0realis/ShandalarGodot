@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corpus Sites · preview</title>
+<style>
+:root { --bg: #1b1712; --panel: #262018; --ink: #efe6d2; --muted: #b3a68b; --line: #4a3f2e; --gold: #e0b45c;
+  --accent: #7fc3d4; --ok: #9fcf8a; --warn: #e79a7a; --font: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+h1 { font-size: 1.9rem; margin: 0 0 0.2rem; color: var(--gold); }
+h2 { font-size: 1.45rem; margin: 2.6rem 0 0.4rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--gold); }
+h3 { font-size: 1.05rem; margin: 1.6rem 0 0.5rem; color: var(--accent); font-family: var(--mono); font-weight: 600; }
+p { margin: 0.4rem 0; }
+code { font: 0.88em var(--mono); background: #322a1f; border-radius: 4px; padding: 0.05em 0.3em; }
+.lede, .note { color: var(--muted); }
+.cap { display: block; font: 0.78rem/1.4 var(--mono); color: var(--muted); margin: 0.1rem 0 0.25rem; }
+.cap b { color: var(--accent); font-weight: 600; }
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; max-width: 34rem; overflow: hidden; }
+.pane .frame { aspect-ratio: 512 / 280; background: #120f0b; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font: 0.85rem var(--mono); text-align: center; }
+.pane .frame img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
+.pane .head { padding: 0.7rem 1rem 0; }
+.pane .title { font-size: 1.25rem; color: var(--gold); margin: 0; }
+.pane .subtitle { color: var(--muted); margin: 0; font-style: italic; }
+.pane .lines { padding: 0.5rem 1rem 0.2rem; }
+.pane .lines p { margin: 0.45rem 0; }
+.pane ul.turns { margin: 0.2rem 0 0.5rem 1.2rem; padding: 0; }
+.buttons { padding: 0.4rem 1rem 1rem; display: grid; gap: 0.7rem; }
+.button .face { display: inline-block; border: 1px solid var(--gold); color: var(--gold); border-radius: 6px;
+  padding: 0.3rem 0.8rem; background: #2f271b; }
+.button .does { display: block; font-size: 0.92rem; color: var(--ink); margin-top: 0.25rem; }
+.button .says { display: block; font-size: 0.92rem; color: var(--muted); margin-top: 0.15rem; }
+table { border-collapse: collapse; margin: 0.5rem 0; }
+td, th { border: 1px solid var(--line); padding: 0.3rem 0.6rem; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.warn { color: var(--warn); }
+@media (max-width: 560px) { main { padding: 1rem 0.6rem 3rem; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Corpus Sites</h1>
+<p class="lede">One line for the plugin list: what the hero finds at this place.</p>
+<p class="note">A preview written by <code>adventure_plugin.py preview</code>: every pane of every place, as the game lays it out. The words are filled for a hero named Hero who carries 1000 gold, 10 food and 2 amulets on day 12, with every counter at 0; a price shown is the first of its list. Plugin <code>corpus_sites</code> 0.1.0, plugin API 2.</p>
+<section class="place" id="place-shrine"><h2>Wayside Shrine</h2>
+<p class="note">Place <code>shrine</code>, on the mainland and every island; it keeps 3 tiles from towns, dungeons and other places.</p>
+<h3 id="pane-shrine-0">pane 0</h3>
+<span class="cap">shown when: bless used up</span>
+<div class="pane"><div class="frame"><img alt="art/corpus_sites_shrine.png" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAABGCAYAAAAEj5xiAAAC4UlEQVR42u3a2UuUYRzF8fOHRHQVLbbbYi5J0YplmVjWZJaUiIiJmJnYgoQlFiUympm5pTaaqVlaVtBFEARdBEX/zelqAgde1PIZec/vufhczMC8wvc5M4MzgwORKD27cPhclJ5dyDnfTs8u5F7ooGcXTpY8pmcXCi510rMLhaVP6NmFSFkXPbtQXN5Fzy6UVDylZxcuV3bTotWrVsxhtQPKqp7RosQBWO2AiuoeWhI/8JaslDni91vrgSs1vbRkvgFY64Hq2j5aEHTwQUOw0gVX6/ppwWIHYKULrtf3U9lCDz5oCOp90NAwQGX/OwD1Prh18zkV/evBBw1BtRMabw9S0VIPQLUTmhqHqGSpDj5oCGq90HxnmEpcD0CtF+43vaCCxI92XVPphkf3YlSQ7AGodENbc4xK4gcUbb27pOLXVeuF9pYRKnE9ALVe6HwwSiVBA1jsS3zQ49V6ofvhSypxPQC1XuhtHaOSxAOM305ds3JRgq6j1gsDba+oxPUA1HphKDpOJQsdwK9YxhwLHYBaL4x0jFOJ6wGo9cJY5wSVzDeAxIMPGkLQddR6YaJrkkpcD0CtF6a6X1OJ67cAtV6Y6ZmiEtcDUOuF2b43VOL630C1Xvg08JZKXA9ArRc+D05TieuPgtV64cvwNJW4HoBaL3yNzVCJ66+D1Xrh2+g7KnE9ALVe+D72nkpcD0CtF36Mz1KJ6wGo9cLPyQ9U4noAar3we+ojlbgegFovFN/IpoJk/yxcpRuK6vdQQbIHoNINkboshtnfZ+S17KSK/92w98PZ2kyG2XIPIOz9UFiTwTBL9kt/orD3w6nqdIbZcg8g7P1QULWbnl3Ir0yjZxfyKnbRswsnynfSswu5ZTvo2YWjpdvp2YWcS6n07MKRi9vo2YVDxVvp2YWDRVvo2YX9kc307MK+M5vo2YW9pzfSswvZBRvo2YWs/BR6diEzbz09u5B+fB09u5B2bC09u/4Aq2qzU/mjzIwAAAAASUVORK5CYII="></div><div class="head"><p class="title">Wayside Shrine</p><p class="subtitle">A shrine by the road</p></div>
+<div class="lines"><p>A small stone shrine stands by the road. A lantern burns in it, though no keeper is near.</p><p>The lantern has gone out. The bowl is cold and empty.</p></div><div class="buttons">
+<div class="button"><span class="face">Leave</span><span class="does">closes the pane</span>
+</div>
+</div></div>
+<h3 id="pane-shrine-1">pane 1</h3>
+<span class="cap">shown otherwise</span>
+<div class="pane"><div class="frame"><img alt="art/corpus_sites_shrine.png" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAABGCAYAAAAEj5xiAAAC4UlEQVR42u3a2UuUYRzF8fOHRHQVLbbbYi5J0YplmVjWZJaUiIiJmJnYgoQlFiUympm5pTaaqVlaVtBFEARdBEX/zelqAgde1PIZec/vufhczMC8wvc5M4MzgwORKD27cPhclJ5dyDnfTs8u5F7ooGcXTpY8pmcXCi510rMLhaVP6NmFSFkXPbtQXN5Fzy6UVDylZxcuV3bTotWrVsxhtQPKqp7RosQBWO2AiuoeWhI/8JaslDni91vrgSs1vbRkvgFY64Hq2j5aEHTwQUOw0gVX6/ppwWIHYKULrtf3U9lCDz5oCOp90NAwQGX/OwD1Prh18zkV/evBBw1BtRMabw9S0VIPQLUTmhqHqGSpDj5oCGq90HxnmEpcD0CtF+43vaCCxI92XVPphkf3YlSQ7AGodENbc4xK4gcUbb27pOLXVeuF9pYRKnE9ALVe6HwwSiVBA1jsS3zQ49V6ofvhSypxPQC1XuhtHaOSxAOM305ds3JRgq6j1gsDba+oxPUA1HphKDpOJQsdwK9YxhwLHYBaL4x0jFOJ6wGo9cJY5wSVzDeAxIMPGkLQddR6YaJrkkpcD0CtF6a6X1OJ67cAtV6Y6ZmiEtcDUOuF2b43VOL630C1Xvg08JZKXA9ArRc+D05TieuPgtV64cvwNJW4HoBaL3yNzVCJ66+D1Xrh2+g7KnE9ALVe+D72nkpcD0CtF36Mz1KJ6wGo9cLPyQ9U4noAar3we+ojlbgegFovFN/IpoJk/yxcpRuK6vdQQbIHoNINkboshtnfZ+S17KSK/92w98PZ2kyG2XIPIOz9UFiTwTBL9kt/orD3w6nqdIbZcg8g7P1QULWbnl3Ir0yjZxfyKnbRswsnynfSswu5ZTvo2YWjpdvp2YWcS6n07MKRi9vo2YVDxVvp2YWDRVvo2YX9kc307MK+M5vo2YW9pzfSswvZBRvo2YWs/BR6diEzbz09u5B+fB09u5B2bC09u/4Aq2qzU/mjzIwAAAAASUVORK5CYII="></div><div class="head"><p class="title">Wayside Shrine</p><p class="subtitle">A shrine by the road</p></div>
+<div class="lines"><p>A small stone shrine stands by the road. A lantern burns in it, though no keeper is near.</p><p>Travelers leave gold in its bowl, and find their packs heavier with food when they move on.</p><span class="cap"><b>shown when:</b> bless done 1 or more</span><p>The lantern flares as you come near, as if it knows you.</p></div><div class="buttons">
+<div class="button"><span class="face">Leave 20 gold in the bowl (3 left)</span><span class="does">pays 20, 40, 80 gold in turn, 3 times in all; +6 food, a line in the journal (“Left {price} gold at the wayside shrine.”)</span>
+<span class="says"><b>then says:</b> You leave 20 gold in the bowl. When you lift your pack, it is heavier: six days of food.</span>
+</div>
+<div class="button"><span class="face">Leave</span><span class="does">closes the pane</span>
+</div>
+</div></div>
+</section>
+<section id="warnings"><h2>Warnings</h2><p class="warn">plugin.json: license still holds the tool&#x27;s stand-in words: name your plugin&#x27;s license.</p><p class="warn">plugin.json: description still holds the tool&#x27;s stand-in words: say in one line what the hero finds.</p><p class="warn">art: 2 pictures are the tool&#x27;s stand-ins to paint over: art/corpus_sites_shrine.png, art/corpus_sites_shrine_map.png (art PLUGIN gives advice on sizes).</p></section>
+</main>
+</body>
+</html>

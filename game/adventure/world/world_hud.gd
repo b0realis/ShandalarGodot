@@ -1141,7 +1141,7 @@ func hero_lines() -> Array[String]:
 	var links := player.mana_links()
 	lines.append("%d gold · %d food · %d mana %s" % [player.gold, player.food, links,
 		"link" if links == 1 else "links"])
-	if player.life_start == AdventurePlayer.START_BASE:
+	if player.life_start == AdventurePlayer.START_BASE or player.life_bonus > 0:
 		lines.append(DUELS_START % player.duel_start_life())
 	var gems: Array[String] = []
 	for gem in AMULETS:
@@ -1525,7 +1525,8 @@ func _hide_tip() -> void:
 func base_life_words(key: String) -> String:
 	if key != "ankh" or player == null or player.life_start != AdventurePlayer.START_BASE:
 		return ""
-	return " " + DUELS_START % player.duel_start_life() + " That is 10, and the World Magics' bonuses, before your links."
+	var places := " A place's teaching adds %d of it." % player.life_bonus if player.life_bonus > 0 else ""
+	return " " + DUELS_START % player.duel_start_life() + " That is 10, and the World Magics' bonuses, before your links." + places
 
 
 ## What World Magic [param magic] does, in its 1997 words ([constant

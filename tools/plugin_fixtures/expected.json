@@ -2093,7 +2093,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "text.json: castle.count: unknown placeholder {pledgez} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon, food, amulets, day)."
+			"reason": "text.json: castle.count: unknown placeholder {pledgez} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon, food, amulets, day, life_bonus)."
 		},
 		{
 			"name": "missing_text_key",
@@ -3949,7 +3949,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "sites.json.sites.shrine.panes[0].when[0]: weather is not one of flag, not_flag, gold_at_least, on_mainland, used, used_up, dungeon, has_card, amulets, hero_color, owns_magic, food_at_least, gold_below, day_at_least, wizards_defeated, at_peace, difficulty, plugin_on, counter, site_used, gift_waiting, any."
+			"reason": "sites.json.sites.shrine.panes[0].when[0]: weather is not one of flag, not_flag, gold_at_least, on_mainland, used, used_up, dungeon, has_card, amulets, hero_color, owns_magic, food_at_least, gold_below, day_at_least, wizards_defeated, at_peace, difficulty, plugin_on, counter, site_used, gift_waiting, any, life_bonus_below, town_linked."
 		},
 		{
 			"name": "sites_island_condition",
@@ -3975,7 +3975,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "sites.json.sites.shrine.panes[0].when[0]: quest_done is not one of flag, not_flag, gold_at_least, on_mainland, used, used_up, dungeon, has_card, amulets, hero_color, owns_magic, food_at_least, gold_below, day_at_least, wizards_defeated, at_peace, difficulty, plugin_on, counter, site_used, gift_waiting, any."
+			"reason": "sites.json.sites.shrine.panes[0].when[0]: quest_done is not one of flag, not_flag, gold_at_least, on_mainland, used, used_up, dungeon, has_card, amulets, hero_color, owns_magic, food_at_least, gold_below, day_at_least, wizards_defeated, at_peace, difficulty, plugin_on, counter, site_used, gift_waiting, any, life_bonus_below, town_linked."
 		},
 		{
 			"name": "sites_unknown_effect",
@@ -4005,7 +4005,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "sites.json.sites.shrine.panes[1].actions[0].effects[0]: set_stage is not one of set_flag, clear_flag, gold, food, log_clue, log_event, spawn_dungeon, counter, amulet, give_card, next_duel, roll, reveal_map."
+			"reason": "sites.json.sites.shrine.panes[1].actions[0].effects[0]: set_stage is not one of set_flag, clear_flag, gold, food, log_clue, log_event, spawn_dungeon, counter, amulet, give_card, next_duel, roll, reveal_map, world_magic, mana_link, life_bonus, teleport."
 		},
 		{
 			"name": "sites_picture_prefix",
@@ -4114,7 +4114,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "text.json: shrine.bless: unknown placeholder {prise} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon, food, amulets, day)."
+			"reason": "text.json: shrine.bless: unknown placeholder {prise} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon, food, amulets, day, life_bonus)."
 		},
 		{
 			"name": "sites_card_of_a_pack_not_required",
@@ -4639,6 +4639,12 @@
 													},
 													{
 														"gift_waiting": false
+													},
+													{
+														"life_bonus_below": 10
+													},
+													{
+														"town_linked": "nearest_town"
 													}
 												]
 											}
@@ -4837,6 +4843,30 @@
 												"cards": {
 													"Gray Ogre": 15
 												}
+											},
+											{
+												"id": "ride",
+												"do": "effects",
+												"label": "den.ride",
+												"prices": [
+													5
+												],
+												"effects": [
+													{
+														"world_magic": "Dwarven Pick"
+													},
+													{
+														"mana_link": "nearest_town"
+													},
+													{
+														"life_bonus": 2
+													},
+													{
+														"teleport": {
+															"to": "place:shrine"
+														}
+													}
+												]
 											},
 											{
 												"id": "leave",
@@ -5081,6 +5111,12 @@
 								"den.task_done"
 							],
 							"value": "The keeper is beaten."
+						},
+						{
+							"path": [
+								"den.ride"
+							],
+							"value": "Learn {title}, link {town} and ride on (+{life_bonus} life so far)"
 						}
 					]
 				},
@@ -5791,7 +5827,7 @@
 							"path": [
 								"p_healer.spent"
 							],
-							"value": "\"I have no more blessings for you. Three is all one traveler may carry from here.\""
+							"value": "\"I have no more blessings for you. One traveler may carry only so many from here.\""
 						},
 						{
 							"path": [
@@ -5833,7 +5869,7 @@
 							"path": [
 								"p_toll.terms"
 							],
-							"value": "\"A hundred gold opens the gate,\" the keeper says, \"or one amulet. You carry {amulets}.\""
+							"value": "\"100 gold opens the gate,\" the keeper says, \"or one amulet. You carry {amulets}.\""
 						},
 						{
 							"path": [
@@ -5905,7 +5941,7 @@
 							"path": [
 								"p_gambler.offer"
 							],
-							"value": "\"Fifty gold a throw,\" he says. \"Three ways to fall: nothing, seventy-five, or a hundred and fifty. Five throws, and then I pack up.\""
+							"value": "\"50 gold a throw,\" he says. \"Three ways to fall: nothing, 75, or 150. 5 throws, and then I pack up.\""
 						},
 						{
 							"path": [
@@ -5947,7 +5983,7 @@
 							"path": [
 								"p_gambler.spent"
 							],
-							"value": "The gambler has packed his cup and dice. \"Five throws, I said. Luck needs its rest.\""
+							"value": "The gambler has packed his cup and dice. \"5 throws, I said. Luck needs its rest.\""
 						}
 					]
 				}
@@ -6662,7 +6698,7 @@
 							"path": [
 								"p_collector.wants"
 							],
-							"value": "\"I am looking for Llanowar Elves,\" the collector says. \"I pay 150 gold for each copy, and I need three.\""
+							"value": "\"I am looking for Llanowar Elves,\" the collector says. \"I pay 150 gold for each copy, and I need 3.\""
 						},
 						{
 							"path": [
@@ -6692,7 +6728,7 @@
 							"path": [
 								"p_collector.spent"
 							],
-							"value": "\"Three copies, as I wished. My set is whole,\" the collector says, and closes the chests."
+							"value": "\"Every copy I wished for. My set is whole,\" the collector says, and closes the chests."
 						},
 						{
 							"path": [
@@ -6710,7 +6746,7 @@
 							"path": [
 								"p_duelist.offer"
 							],
-							"value": "The champion leans on the ropes. \"Fifty gold says you cannot beat me. Win, and you take a hundred. Three bouts, no more.\""
+							"value": "The champion leans on the ropes. \"50 gold says you cannot beat me. Win, and you take 100. 3 bouts, no more.\""
 						},
 						{
 							"path": [
@@ -6740,7 +6776,7 @@
 							"path": [
 								"p_duelist.spent"
 							],
-							"value": "The ropes are down and the crowd has gone home. Three bouts were all the champion had in him."
+							"value": "The ropes are down and the crowd has gone home. The champion has no more bouts in him."
 						},
 						{
 							"path": [
@@ -6873,6 +6909,275 @@
 								"p_quest.task_done"
 							],
 							"value": "Done: Healing Salve was brought to The Quest."
+						}
+					]
+				}
+			},
+			"valid": true,
+			"reason": ""
+		},
+		{
+			"name": "good_sites_api3_recipes_three",
+			"base": "good_sites",
+			"edit": {
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				},
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"p_traveler"
+							],
+							"value": {
+								"name": "The Traveler",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 80
+								},
+								"gap": 3,
+								"panes": [
+									{
+										"lines": [
+											"p_traveler.intro",
+											"p_traveler.offer"
+										],
+										"actions": [
+											{
+												"id": "ride",
+												"do": "effects",
+												"label": "p_traveler.ride",
+												"when": [
+													{
+														"gold_at_least": 100
+													}
+												],
+												"effects": [
+													{
+														"gold": -100
+													},
+													{
+														"teleport": {
+															"to": "nearest_town"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave",
+												"label": "p_traveler.leave"
+											}
+										]
+									}
+								]
+							}
+						},
+						{
+							"path": [
+								"sites",
+								"p_teacher"
+							],
+							"value": {
+								"name": "The Teacher",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 80
+								},
+								"gap": 3,
+								"panes": [
+									{
+										"lines": [
+											"p_teacher.intro",
+											"p_teacher.offer",
+											{
+												"text": "p_teacher.known",
+												"when": [
+													{
+														"owns_magic": "Dwarven Pick"
+													}
+												]
+											},
+											{
+												"text": "p_teacher.lessons",
+												"when": [
+													{
+														"life_bonus_below": 10
+													}
+												]
+											}
+										],
+										"actions": [
+											{
+												"id": "learn",
+												"do": "effects",
+												"label": "p_teacher.learn",
+												"prices": [
+													800
+												],
+												"effects": [
+													{
+														"world_magic": "Dwarven Pick"
+													}
+												],
+												"result": [
+													"p_teacher.learned"
+												]
+											},
+											{
+												"id": "lesson",
+												"do": "effects",
+												"label": "p_teacher.lesson",
+												"prices": [
+													300,
+													300,
+													300
+												],
+												"when": [
+													{
+														"life_bonus_below": 10
+													}
+												],
+												"effects": [
+													{
+														"life_bonus": 1
+													}
+												],
+												"result": [
+													"p_teacher.stronger"
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave",
+												"label": "p_teacher.leave"
+											}
+										]
+									}
+								]
+							}
+						},
+						{
+							"path": [
+								"flags"
+							],
+							"value": []
+						},
+						{
+							"path": [
+								"counters"
+							],
+							"value": []
+						},
+						{
+							"path": [
+								"foes"
+							],
+							"value": {}
+						},
+						{
+							"path": [
+								"tasks"
+							],
+							"value": {}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"p_traveler.leave"
+							],
+							"value": "Leave"
+						},
+						{
+							"path": [
+								"p_traveler.intro"
+							],
+							"value": "The Traveler. A carter waits beside a cart with high wheels, the mule already in harness."
+						},
+						{
+							"path": [
+								"p_traveler.offer"
+							],
+							"value": "\"100 gold, and I take you to the nearest town,\" the carter says. \"No questions, no stops. You carry {gold}.\""
+						},
+						{
+							"path": [
+								"p_traveler.ride"
+							],
+							"value": "Ride to {town} (100 gold)"
+						},
+						{
+							"path": [
+								"p_teacher.leave"
+							],
+							"value": "Leave"
+						},
+						{
+							"path": [
+								"p_teacher.intro"
+							],
+							"value": "The Teacher. An old mage sits cross-legged on a flat rock, eyes closed, and speaks before you do."
+						},
+						{
+							"path": [
+								"p_teacher.offer"
+							],
+							"value": "\"I teach one thing that can be carried, and one that cannot,\" the mage says. \"Dwarven Pick, for 800 gold. And the long breath, which adds to your life in every duel.\""
+						},
+						{
+							"path": [
+								"p_teacher.known"
+							],
+							"value": "The mage opens one eye. \"Dwarven Pick is yours already. That lesson is done.\""
+						},
+						{
+							"path": [
+								"p_teacher.lessons"
+							],
+							"value": "\"The long breath has given you {life_bonus} more life so far. No one learns more than ten.\""
+						},
+						{
+							"path": [
+								"p_teacher.learn"
+							],
+							"value": "Learn {title} ({price} gold)"
+						},
+						{
+							"path": [
+								"p_teacher.learned"
+							],
+							"value": "The mage speaks for an hour, and draws one sign in the dust. {title} is yours."
+						},
+						{
+							"path": [
+								"p_teacher.lesson"
+							],
+							"value": "Take a lesson in the long breath ({price} gold, {uses_left} left)"
+						},
+						{
+							"path": [
+								"p_teacher.stronger"
+							],
+							"value": "You breathe as you are told until the stars come out. You will begin every duel with {life_bonus} more life than before you met the mage."
 						}
 					]
 				}
@@ -15897,6 +16202,1582 @@
 			"reason": "sites.json.tasks: 9 entries; 0 to 8 are allowed."
 		},
 		{
+			"name": "sites_api3_world_magic_without_end",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"world_magic": "Dwarven Pick"
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].world_magic: this is given without end; give the action prices (a ladder that ends) or needs."
+		},
+		{
+			"name": "sites_api3_world_magic_unknown",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"prices": [
+													5
+												],
+												"effects": [
+													{
+														"world_magic": "Staff of Plenty"
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].effects[0].world_magic: one of Sleight of Hand, Haggler's Coin, Conjurer's Will, Amulet of Swampwalk, Leap of Fate, Tome of Enlightenment, Quickening, Fruit of Sustenance, Staff of Thunder, Dwarven Pick, Sword of Resistance, Ring of the Guardian is needed."
+		},
+		{
+			"name": "sites_api3_mana_link_without_end",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"mana_link": "nearest_town"
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].mana_link: this is given without end; give the action prices (a ladder that ends) or needs."
+		},
+		{
+			"name": "sites_api3_mana_link_elsewhere",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"prices": [
+													5
+												],
+												"effects": [
+													{
+														"mana_link": "start"
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].effects[0].mana_link: one of nearest_town is needed."
+		},
+		{
+			"name": "sites_api3_life_bonus_without_end",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"life_bonus": 1
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].life_bonus: this is given without end; give the action prices (a ladder that ends) or needs."
+		},
+		{
+			"name": "sites_api3_life_bonus_four",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"prices": [
+													5
+												],
+												"effects": [
+													{
+														"life_bonus": 4
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].effects[0].life_bonus: 4 is outside 1..3."
+		},
+		{
+			"name": "sites_api3_life_bonus_below_eleven",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"when": [
+													{
+														"life_bonus_below": 11
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].when[0].life_bonus_below: 11 is outside 1..10."
+		},
+		{
+			"name": "sites_api3_town_linked_elsewhere",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"when": [
+													{
+														"town_linked": "start"
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].when[0].town_linked: one of nearest_town is needed."
+		},
+		{
+			"name": "sites_api3_teleport_not_last",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {
+															"to": "start"
+														}
+													},
+													{
+														"gold": 1
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].teleport: a teleport is the action's last effect; the pane closes with it."
+		},
+		{
+			"name": "sites_api3_teleport_in_a_roll",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"roll": {
+															"outcomes": [
+																{
+																	"effects": [
+																		{
+																			"teleport": {
+																				"to": "start"
+																			}
+																		}
+																	]
+																},
+																{}
+															]
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].roll.outcomes[0].effects[0].teleport: a teleport stands in the effects of an action that does effects, not in a roll, a duel or a talk."
+		},
+		{
+			"name": "sites_api3_teleport_in_a_talk",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "talk",
+												"label": "den.go",
+												"to": "back",
+												"effects": [
+													{
+														"teleport": {
+															"to": "start"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									},
+									{
+										"id": "back",
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].teleport: a teleport stands in the effects of an action that does effects, not in a roll, a duel or a talk."
+		},
+		{
+			"name": "sites_api3_teleport_in_a_duel",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "duel",
+												"label": "den.go",
+												"foe": "keeper",
+												"win": {
+													"effects": [
+														{
+															"teleport": {
+																"to": "start"
+															}
+														}
+													]
+												}
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						},
+						{
+							"path": [
+								"foes"
+							],
+							"value": {
+								"keeper": {
+									"name": "The Den Keeper",
+									"life": 12,
+									"face": 3,
+									"deck": {
+										"Mountain": 12,
+										"Lightning Bolt": 4,
+										"Gray Ogre": 4
+									}
+								}
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].win.effects[0].teleport: a teleport stands in the effects of an action that does effects, not in a roll, a duel or a talk."
+		},
+		{
+			"name": "sites_api3_teleport_to_no_place",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {
+															"to": "place:tower"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].teleport.to: no place tower in sites.json sites."
+		},
+		{
+			"name": "sites_api3_teleport_to_itself",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {
+															"to": "place:den"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].teleport.to: den is this place itself."
+		},
+		{
+			"name": "sites_api3_teleport_to_no_dungeon",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {
+															"to": "dungeon:vault"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].teleport.to: no dungeon vault in sites.json dungeons."
+		},
+		{
+			"name": "sites_api3_teleport_bad_to",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {
+															"to": "town:3"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].effects[0].teleport.to: town:3 does not fit ^(nearest_town|start|place:[a-z][a-z0-9_]{0,31}|dungeon:[a-z][a-z0-9_]{0,39})$."
+		},
+		{
+			"name": "sites_api3_teleport_without_to",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				},
+				"plugin.json": {
+					"set": [
+						{
+							"path": [
+								"api_version"
+							],
+							"value": 3
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json.sites.den.panes[0].actions[0].effects[0].teleport: to is required."
+		},
+		{
+			"name": "sites_api3_teleport_needs_api_3",
+			"base": "good_sites",
+			"edit": {
+				"sites.json": {
+					"set": [
+						{
+							"path": [
+								"sites",
+								"den"
+							],
+							"value": {
+								"name": "The Den",
+								"where": [
+									"mainland"
+								],
+								"picture": "visit_wiseman",
+								"sprite": {
+									"file": "art/corpus_sites_shrine_map.png",
+									"width": 64
+								},
+								"panes": [
+									{
+										"lines": [
+											"den.intro"
+										],
+										"actions": [
+											{
+												"id": "go",
+												"do": "effects",
+												"label": "den.go",
+												"effects": [
+													{
+														"teleport": {
+															"to": "start"
+														}
+													}
+												]
+											},
+											{
+												"id": "leave",
+												"do": "leave"
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				},
+				"text.json": {
+					"set": [
+						{
+							"path": [
+								"den.intro"
+							],
+							"value": "A low den under a hill."
+						},
+						{
+							"path": [
+								"den.go"
+							],
+							"value": "Go on"
+						},
+						{
+							"path": [
+								"den.said"
+							],
+							"value": "It is said."
+						}
+					]
+				}
+			},
+			"valid": false,
+			"reason": "sites.json: sites.den.panes[0].actions[0].effects[0].teleport: \"teleport\" is a word of plugin API 3, and plugin.json declares api_version 2. Set \"api_version\": 3 there (the plugin then needs a game that reads API 3)."
+		},
+		{
 			"name": "sites_api3_placeholder_still_unknown",
 			"base": "good_sites",
 			"edit": {
@@ -15974,7 +17855,7 @@
 				}
 			},
 			"valid": false,
-			"reason": "text.json: den.said: unknown placeholder {amulet}, {days} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon, food, amulets, day)."
+			"reason": "text.json: den.said: unknown placeholder {amulet}, {days} (the list: pledges, quests_total, target, town, title, foe, life, count, total, required, percent, left, color, cards, hero, region, price, uses_left, gold, card, dungeon, food, amulets, day, life_bonus)."
 		}
 	],
 	"compat_about": "Pairs for adventure_plugin.py compat OLD NEW (tools/test_adventure_plugin.py only): each side a recipe as above; warnings are the lines the tool must print (each holds the text given), notes the note lines it must hold.",

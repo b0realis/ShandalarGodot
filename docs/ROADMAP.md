@@ -18973,6 +18973,74 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-22 — Version 0.70.7
+
+Version 0.70.7 (Android version code 70007) gathers the entry below it:
+four more things a places plugin's place can do — carry the hero, teach a
+World Magic, link a town's mana, raise the life duels start at — and the
+authoring tool's wizard and preview. Its notes are
+`docs/releases/0.70.7.md`. LAN stays protocol 32; 0.70.7 plays only
+0.70.7.
+
+## 2026-11-22 — Places: a traveler, a teacher, a town's link, a life lesson; preview and wizard
+
+The four effects the API 3 batch had left for later, each one reaching
+into the adventure itself and so each with its guards, and two tools that
+let an author see and make a place without reading a manual first. All six
+new words are words of API 3; the number did not move, and a plugin that
+uses one should name 0.70.7 as its `minimum_game_version`.
+
+- **`teleport`** carries the hero to the nearest town or city, the land's
+  start, another place of the plugin or a dungeon it raised. It is an
+  action's last effect; the landing tile is a free one within 3 of the
+  target, on the hero's own landmass, never water, a town, a dungeon, a
+  place, a lair or the portal (`DataSites.teleport_tile`,
+  `WorldScreen.carry_hero_to`), and no dice are cast. The pane closes and
+  the world is saved as on leaving.
+- **`world_magic`** gives a World Magic as the seller's own sale does, and
+  takes it out of the vanilla seller's stock, so it is never paid for
+  twice.
+- **`mana_link`** links the nearest town or city that can take one: never
+  one a wizard rules or the town under siege, never on a land without
+  mana links.
+- **`life_bonus`** adds 1–3 to the life every duel starts at, 10 at most
+  from all plugins together (`AdventurePlayer.life_bonus`,
+  `LIFE_BONUS_MOST`). It is read through `duel_start_life()` alone — the
+  dungeon and castle room duels now take their base from it too
+  (`DungeonDuels.life_parts`) — shown on the hero's page and in the
+  ankh's tip, saved as an optional `duels.life_bonus` (the format stays
+  9), and kept when its plugin is gone.
+- **Refusals before paying**, as for every word of API 3: a Magic owned
+  (`site.magic_owned`), no town to link (`site.no_link`), the bonus full
+  (`site.life_full`), no way there (`site.no_way`). A World Magic, a link
+  and a life bonus need a price or a need on their action, like every
+  gift.
+- **Two conditions**: `life_bonus_below` and `town_linked`; the
+  placeholder `{life_bonus}`, and `{town}` and `{title}` filled on the
+  actions that link, carry or teach.
+- **`preview`** (`tools/adventure_plugin.py`) writes one HTML page showing
+  every pane of a sites plugin as the game lays it out: picture, words
+  filled for a sample hero, each `when` in plain words, each button with
+  what it does, then dungeons, opponents, Tasks rows and warnings. The
+  page needs no network and runs no script; plugin text is always
+  escaped.
+- **`wizard`** makes a place by asking questions with numbered answers and
+  defaults — plugin name, place name, one of twelve recipes, that recipe's
+  few numbers and names, where it stands — and writes through the same
+  code as `new` and `add-place`; `--answers FILE` answers from a file, and
+  nothing is written before the last answer. `add-place --set NAME=VALUE`
+  sets the same numbers and names from the command line.
+- **Two more recipes**, twelve in all: `traveler` (a ride for a fare) and
+  `teacher` (a World Magic taught once, and three lessons that each add a
+  life to every duel).
+- **Two study places repainted**: the Wandering Collector's pane picture,
+  and the Duelist's Ring's pane picture and map sprite.
+- Docs: `docs/adventure-plugins.md`, the authors' guide's `sites.html` and
+  `cheatsheet.html`, `docs/player-files.md`, CODE_MAP ("0.70.7"). Tests:
+  `tests/unit/test_c1122_places_r3.gd`,
+  `tests/ui/test_c1122_places_r3_ui.gd`,
+  `tools/test_c1122_places_tool_r3.py`.
+
 ## 2026-11-22 — Version 0.70.6
 
 Version 0.70.6 (Android version code 70006) gathers the entry below it:

@@ -50,7 +50,22 @@ static func _service(sites: DataSites, screen: Node, site_key: String, action: S
 	var entry := sites.action_of(site_key, action)
 	match String(entry.get("do", "")):
 		"effects", "talk":
+			# A JOURNEY (`teleport`, the action's last effect): where it leads is
+			# read before anything is paid — the action is refused when it leads
+			# nowhere — and the hero is set down there once its other effects
+			# are done; the pane is closed, and the world saved as on leaving.
+			var journey := DataSites.teleport_of(entry)
+			var landing := sites.teleport_tile(player, site_key, journey) if not journey.is_empty() else Vector2i(-1, -1)
 			var after := sites.do_effects(player, site_key, action)
+			if sites.applied and landing.x >= 0 and screen.has_method(&"carry_hero_to"):
+				screen.call(&"carry_hero_to", landing)
+				_refresh_hud(screen)
+				var hud: Variant = screen.get(&"hud")
+				if not (entry.get("result", []) as Array).is_empty() and hud is Object and (hud as Object).has_method(&"say"):
+					(hud as Object).call(&"say", " ".join(after.get("lines", [])))
+				screen._visit_tile = Vector2i(-1, -1)
+				screen._after_leaving()
+				return
 			# A talk that only opens its pane changed nothing: nothing to save.
 			if not DataSites.plain_talk(entry):
 				screen.autosave()

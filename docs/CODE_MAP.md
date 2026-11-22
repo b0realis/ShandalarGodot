@@ -136,6 +136,15 @@ the authors' guide is `expanded_adventure/GUIDE/index.html`.
   ten recipes of `add-place`, `walk`'s options and its never-reached list,
   `info` and `compat`, the cheat sheet and the guide's places page, and
   the four study plugins made again from their READMEs. No Godot.
+- `tools/test_c1122_places_tool_r3.py`: the tool's additions of 0.70.7 —
+  `preview` (its page equal to the fixture
+  `tools/plugin_fixtures/preview/corpus_sites.html`, standing alone,
+  running nothing, a plugin's words never markup), `wizard` (answers from
+  a file, every recipe with its defaults, nothing written on a wrong
+  answer, never waiting for a terminal that is not there), `add-place
+  --set`, the recipes `traveler` and `teacher`, and the words
+  `world_magic`, `mana_link`, `life_bonus`, `teleport` in `walk`,
+  `validate`, the cheat sheet and the guide's page. No Godot.
 - `tools/plugin_fixtures/`: the corpus of good and bad plugins and its
   `expected.json`, judged alike by the tool and the game.
 - `tests/unit/test_plugin_corpus.gd`: the game's loader judges the corpus as
@@ -413,6 +422,83 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/unit/test_community_cards.gd`, `tests/unit/test_card_balance.gd`,
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
+
+## 0.70.7 (2026-11-22): places — a traveler, a teacher, a link, a life lesson; preview and wizard
+
+Version 0.70.7, Android version code 70007; `docs/releases/0.70.7.md`.
+Reference: `docs/adventure-plugins.md`, *World Magic, mana link, life
+bonus, teleport (0.70.7)* and the tool's `preview` and `wizard`.
+
+- `game/adventure/plugins/schema_v1.json`: `v3_words` and the options gain
+  the conditions `life_bonus_below`, `town_linked` and the effects
+  `world_magic`, `mana_link`, `life_bonus`, `teleport`; the placeholder
+  `life_bonus`. Still `api_version` 3.
+- `game/adventure/plugins/plugin_schema.gd`: `_check_site_effects` — a
+  World Magic, a mana link and a life bonus need prices or needs; a
+  teleport stands last in the effects of an action that does effects, its
+  `place:` and `dungeon:` exist, its place is not the place itself.
+- `game/adventure/plugins/plugin_text.gd`: `PLACEHOLDERS` with
+  `life_bonus`; `site.no_way`, `site.magic_owned`, `site.no_link`,
+  `site.life_full`.
+- `game/adventure/plugins/data_sites.gd`: `nearest_town` (the nearest
+  town or city; `linkable`: one without a link, a ruler or a siege, on a
+  land with mana links), `teleport_of`, `teleport_target`, `teleport_tile`
+  (a free tile within 3 of the target, on the hero's landmass, no dice);
+  `_effects_problem` with `site_key` (the four refusals before paying);
+  `apply`'s `world_magic` (the seller's stock cleared, on every saved
+  land's map from an island), `mana_link`, `life_bonus`; `_holds`'
+  `life_bonus_below`, `town_linked`; `values` fills `life_bonus`, `town`,
+  `title`.
+- `game/adventure/plugins/site_journey.gd`: `_service` carries the hero
+  once a teleport's other effects are done, closes the pane, saves as on
+  leaving and speaks the result lines through the HUD.
+- `game/adventure/world/world_screen.gd`: `carry_hero_to(tile)` (the hero
+  set down as a cast sets them down; never on water).
+- `game/adventure/adventure_player.gd`: `life_bonus`, `LIFE_BONUS_MOST`
+  (10); `duel_start_life` adds it; saved as `duels.life_bonus` only when
+  above 0 (`to_dict`, `_read_duels`); the format stays 9.
+- `game/adventure/dungeon_duels.gd`: `life_parts`' base is
+  `duel_start_life()` less the links, so the bonus counts in dungeon and
+  castle room duels. `game/adventure/world/world_hud.gd`: the hero's page
+  shows the "duels start at" line whenever there is a bonus, and the
+  ankh's tip says what a place's teaching adds.
+- `tools/adventure_plugin.py`: the twin of the six words (`MOST_LIFE_BONUS`,
+  `WALK_TOWN`); the recipes `traveler` and `teacher` (twelve in all),
+  `RECIPE_OPTIONS`, `recipe_options`, `add-place --set NAME=VALUE`,
+  `STOCK_DECKS`; `preview` (`command_preview`, `preview_html`,
+  `condition_words`, `when_words`, `effect_words`, `effects_words`,
+  `action_words`, `PREVIEW_HERO`, `PREVIEW_EMBED`, `PREVIEW_CSS`);
+  `wizard` (`command_wizard`, `--answers`); `COMMANDS`.
+- `tools/plugin_fixtures/preview/corpus_sites.html`: the preview page of
+  the corpus's sites plugin, which `preview` must write byte for byte;
+  `tools/plugin_fixtures/expected.json`: the cases of the six words, the
+  placeholder lists ending `life_bonus`.
+- `expanded_adventure/GUIDE/`: `sites.html`, `cheatsheet.html`,
+  `reference.html`, `text.html` with the six words, the two recipes,
+  `preview` and `wizard`. `expanded_adventure/Wandering_Collector/art/`
+  (the pane picture) and `expanded_adventure/Duelists_Ring/art/` (the pane
+  picture and the map sprite) repainted.
+- `tools/test_c1122_places_tool_r3.py` (new): `preview`, `wizard`,
+  `--set`, the two recipes and the six words in the tool. Changed:
+  `tools/test_c1122_places_tool.py`, `tools/test_adventure_plugin.py`.
+- Tests: `tests/unit/test_c1122_places_r3.gd` (the checks, a World Magic,
+  a link and its refusals, the life bonus in every duel and in the save,
+  a journey's landing and refusal), `tests/ui/test_c1122_places_r3_ui.gd`
+  (the hero carried and the pane closed, a journey that leads nowhere,
+  never water); changed: `tests/support/c1122_places_fixture.gd`
+  (`sites_r3()`).
+
+Community card data, the same day:
+
+- `engine/community/card_import.gd` (`CardImport`, new): `from_card(data)`
+  (`spec`, `exact`, `kept`, `dropped`, `notes`), `can_start`, `quality`,
+  `quality_of`, `problems_of`, `norm`; `SYNONYMS`, `NEEDS_EFFECT`.
+- `game/card_forge_screen.gd`: `import_file_box`, `game_sources`,
+  `open_game_cards`, `pick_game_source`, `show_game_card`,
+  `game_cards_back`, `start_from_game`, `game_quality`; `SOURCE_TITLES`,
+  `IMPORT_SCRIPT`, `QUALITY_WORDS`, `QUALITY_COLORS`, `GAME_COLORS`.
+- Tests: `tests/cards/test_c1122_import.gd`,
+  `tests/ui/test_c1122_editor_import.gd`.
 
 ## 0.70.6 (2026-11-22): places plugins, API 3
 

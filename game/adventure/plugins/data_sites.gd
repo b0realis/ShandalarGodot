@@ -49,6 +49,10 @@ var id := ""
 var revision := 0
 var _data := {}
 var _per_land := {}
+## Whether the last [method do_effects] paid and applied its action.
+var applied := false
+var _landmass_key := []
+var _landmass := {}
 
 
 func _init(plugin_id: String) -> void:
@@ -345,6 +349,10 @@ func _holds(player: AdventurePlayer, site_key: String, condition: Dictionary) ->
 				if _holds(player, site_key, option):
 					return true
 			return false
+		"life_bonus_below": return player.life_bonus < int(value)
+		"town_linked":
+			var town := nearest_town(player, site_key)
+			return town >= 0 and TownStatus.linked(player.world, town)
 	return false
 
 
@@ -378,6 +386,7 @@ func values(player: AdventurePlayer, site_key: String, action := {}, more := {},
 	out["food"] = player.food
 	out["amulets"] = player.amulet_count()
 	out["day"] = day(player)
+	out["life_bonus"] = player.life_bonus
 	var about := dungeon_about(action, pane)
 	if about != "":
 		out["dungeon"] = dungeon_word(player, about)
@@ -395,6 +404,17 @@ func values(player: AdventurePlayer, site_key: String, action := {}, more := {},
 		var card := card_about(action)
 		if card != "":
 			out["card"] = card
+		# {town}: the town a link would be made with (else the nearest), or a
+		# journey's; {title}: the World Magic given.
+		for effect: Dictionary in all_effects(action):
+			if effect.has("mana_link") or (effect.has("teleport") and String(effect["teleport"].get("to", "")) == "nearest_town"):
+				var town := nearest_town(player, site_key, effect.has("mana_link"))
+				if town < 0:
+					town = nearest_town(player, site_key)
+				if town >= 0:
+					out["town"] = WorldNames.site_name(player.world, town)
+			elif effect.has("world_magic"):
+				out["title"] = String(effect["world_magic"])
 	out.merge(more, true)
 	return out
 
@@ -567,13 +587,13 @@ func refusal(player: AdventurePlayer, site_key: String, action: Dictionary) -> S
 			if copyable(player).is_empty():
 				return say("site.no_cards")
 		"effects", "talk":
-			return _effects_problem(player, action, effects_now(player, site_key, action)["effects"])
+			return _effects_problem(player, action, effects_now(player, site_key, action)["effects"], site_key)
 		"duel":
 			var deck := deck_problem(player)
 			if deck != "":
 				return deck
 			for branch in ["win", "lose"]:
-				var why := _effects_problem(player, action, action.get(branch, {}).get("effects", []))
+				var why := _effects_problem(player, action, action.get(branch, {}).get("effects", []), site_key)
 				if why != "":
 					return why
 		"buy_card":
@@ -709,7 +729,7 @@ func rolled(player: AdventurePlayer, site_key: String, entry: Dictionary, roll: 
 ## already (the campaign of 2026-11-22: the price was taken for nothing), a
 ## card and no room in the bag or no more copies allowed ([method
 ## CardShop.classic_allows]), a gift for the next duel while one waits.
-func _effects_problem(player: AdventurePlayer, action: Dictionary, effects: Array) -> String:
+func _effects_problem(player: AdventurePlayer, action: Dictionary, effects: Array, site_key := "") -> String:
 	var given := 0
 	var rule := {}
 	var rule_read := false
@@ -734,6 +754,18 @@ func _effects_problem(player: AdventurePlayer, action: Dictionary, effects: Arra
 			"next_duel":
 				if player.duel_gift_waiting():
 					return say("site.gift_waiting")
+			"world_magic":
+				if player.owns(String(value)):
+					return say("site.magic_owned", {"title": value})
+			"mana_link":
+				if nearest_town(player, site_key, true) < 0:
+					return say("site.no_link")
+			"life_bonus":
+				if player.life_bonus >= AdventurePlayer.LIFE_BONUS_MOST:
+					return say("site.life_full")
+			"teleport":
+				if teleport_tile(player, site_key, value).x < 0:
+					return say("site.no_way")
 	return ""
 
 
@@ -773,6 +805,7 @@ static func plain_talk(entry: Dictionary) -> bool:
 ## the place's pane again; a talk: the pane it names), or why it could not
 ## be done — nothing paid then.
 func do_effects(player: AdventurePlayer, site_key: String, action: String) -> Dictionary:
+	applied = false
 	var entry := action_of(site_key, action)
 	if entry.is_empty() or not String(entry["do"]) in ["effects", "talk"]:
 		return describe(player, site_key)
@@ -791,6 +824,7 @@ func do_effects(player: AdventurePlayer, site_key: String, action: String) -> Di
 	_pay(player, entry, cost)
 	_count(player, site_key, action)
 	apply(player, site_key, now["effects"], filled)
+	applied = true
 	if talk:
 		return describe(player, site_key, String(entry.get("to", "")))
 	var lines: Array = (entry.get("result", []) as Array) + (now["result"] as Array)
@@ -1037,6 +1071,125 @@ func apply(player: AdventurePlayer, site_key: String, effects: Array, filled := 
 					elif bool(value.get("first_move", false)): player.next_duel_first_move = true
 					elif value.has("card"): player.next_duel_card = String(value["card"])
 			"reveal_map": _reveal(player, site_key, value)
+			"world_magic":
+				# As the seller's own sale ([method WorldMagicShop.buy]): the
+				# hero's, and sold nowhere any more — on this land, and on the
+				# mainland's saved map when the hero is away from it.
+				var magic := String(value)
+				var index := AdventurePlayer.WORLD_MAGICS.find(magic)
+				if index >= 0 and not player.owns(magic):
+					player.world_magics.append(magic)
+					if index < player.world.world_magic_sites.size():
+						player.world.world_magic_sites[index] = 0
+					for region: Variant in player.regions:
+						var saved: Variant = player.regions[region].get("world", {}).get("world_magic_sites") if player.regions[region] is Dictionary else null
+						if saved is Array and index < (saved as Array).size():
+							saved[index] = 0
+					player.log_event("magic", "Bought WM: %s" % magic)
+			"mana_link":
+				var town := nearest_town(player, site_key, true)
+				if town >= 0:
+					TownStatus.put(player.world, town, TownStatus.LINKED)
+			"life_bonus":
+				player.life_bonus = clampi(player.life_bonus + int(value), 0, AdventurePlayer.LIFE_BONUS_MOST)
+			# "teleport" moves the hero on the world screen (site_journey.gd).
+
+
+# ----------------------------------------------- towns and journeys --
+
+## THE TOWN OR CITY NEAREST PLACE [param site_key] on this land (its slot,
+## −1 for none) — with [param linkable] the nearest a mana link can be made
+## with: the land has mana links, the town has none, no wizard holds it and
+## none besieges it (a siege's own count of the link is never disturbed).
+func nearest_town(player: AdventurePlayer, site_key: String, linkable := false) -> int:
+	var world := player.world
+	if linkable and not AdventureExpansions.mana_links_allowed(world):
+		return -1
+	var here := _here(player, site_key)
+	var besieged := WorldStatus.siege_town(player) if linkable else -1
+	var best := -1
+	var distance := INF
+	for slot in world.sites.size():
+		if not TownStatus.is_town(world, slot):
+			continue
+		if linkable and (TownStatus.has(world, slot, TownStatus.LINKED) or TownStatus.ruled(world, slot) or slot == besieged):
+			continue
+		var gap := here.distance_squared_to(Vector2i(int(world.sites[slot]["x"]), int(world.sites[slot]["y"])))
+		if gap < distance:
+			distance = gap
+			best = slot
+	return best
+
+
+## The teleport [param entry] ends with, {} for none.
+static func teleport_of(entry: Dictionary) -> Dictionary:
+	for effect: Dictionary in entry.get("effects", []):
+		if effect.has("teleport"):
+			return effect["teleport"]
+	return {}
+
+
+## The tile a teleport's `to` names on this land, (−1, −1) for none here:
+## the nearest town or city, the land's start, another place of this plugin
+## standing here, a dungeon of it raised here.
+func teleport_target(player: AdventurePlayer, site_key: String, to: String) -> Vector2i:
+	var world := player.world
+	if to == "nearest_town":
+		var town := nearest_town(player, site_key)
+		return Vector2i(int(world.sites[town]["x"]), int(world.sites[town]["y"])) if town >= 0 else Vector2i(-1, -1)
+	if to == "start":
+		return world.start_tile()
+	if to.begins_with("place:"):
+		var placed: Variant = world.expansion.get(AdventureSites.KEY, {})
+		var point: Variant = (placed as Dictionary).get(id + ":" + to.trim_prefix("place:")) if placed is Dictionary else null
+		return Vector2i(int(point[0]), int(point[1])) if AdventureRegions.valid_point(point) else Vector2i(-1, -1)
+	if to.begins_with("dungeon:"):
+		var index := dungeon_index(player, to.trim_prefix("dungeon:"))
+		return Vector2i(int(world.encounters[index].get("x", -1)), int(world.encounters[index].get("y", -1))) if index >= 0 else Vector2i(-1, -1)
+	return Vector2i(-1, -1)
+
+
+## WHERE A TELEPORT SETS THE HERO DOWN ([param value] its `{to}`): the free
+## tile nearest its target ([method teleport_target]) within three tiles —
+## beside it, never on it, so its pane does not open by itself (the land's
+## start itself when it is free) — land of the hero's own landmass
+## ([method RegionGeography.component]: never across water), with no town,
+## dungeon, place, lair or portal on it and not the hero's own.
+## (−1, −1) when the target is not on this land or no such tile is.
+func teleport_tile(player: AdventurePlayer, site_key: String, value: Dictionary) -> Vector2i:
+	var world := player.world
+	var to := String(value.get("to", ""))
+	var target := teleport_target(player, site_key, to)
+	if target.x < 0:
+		return Vector2i(-1, -1)
+	var key := [world.get_instance_id(), player.tile()]
+	if key != _landmass_key:
+		_landmass_key = key
+		_landmass = {}
+		for tile in RegionGeography.component(world, player.tile()):
+			_landmass[tile] = true
+	var taken := {}
+	for tile in AdventureSites.blocked_tiles(player):
+		taken[tile] = true
+	for point: Variant in AdventureSites.points(world):
+		taken[Vector2i(int(point[0]), int(point[1]))] = true
+	var options: Array[Vector2i] = []
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var tile := target + Vector2i(dx, dy)
+			if tile == target and to != "start":
+				continue
+			if not _landmass.has(tile) or taken.has(tile) or AdventureExpansions.marker(world, tile) != "" \
+					or world.tile_flags(tile.x, tile.y) & (ShandalarWorld.SITE | ShandalarWorld.DUNGEON) != 0:
+				continue
+			options.append(tile)
+	if options.is_empty():
+		return Vector2i(-1, -1)
+	options.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var far_a := a.distance_squared_to(target)
+		var far_b := b.distance_squared_to(target)
+		return far_a < far_b if far_a != far_b else (a.y < b.y if a.y != b.y else a.x < b.x))
+	return options[0]
 
 
 ## THE MAP UNCOVERED around the place (or a raised dungeon of the plugin's,

@@ -27,11 +27,12 @@ it from its `expanded_adventure/` folder and never runs anything in it.
         every change in NEW that makes saves made with OLD unusable (for a
         sites plugin: every change that loses saved progress).
     adventure_plugin.py add-place FOLDER --id KEY --name NAME [--where mainland,islands]
-            [--recipe lore|gift|healer|toll|gambler|riddle|collector|duelist|shop|quest]
+            [--recipe lore|gift|healer|toll|gambler|riddle|collector|duelist|shop|quest|traveler|teacher]
+            [--set NAME=VALUE]...
             [--service effects|copy|none] [--prices 100,200 | --free]
         add a place to a sites plugin folder: with --recipe a whole place
         of that kind, its sentences plain ones to rewrite (--list-recipes
-        prints the ten); with --service one button; its words, a stand-in
+        prints the twelve); with --service one button; its words, a stand-in
         pane picture and map sprite.
     adventure_plugin.py add-action FOLDER --place KEY --id ID [--do effects|talk|duel|copy|buy|sell]
             [--prices 100,200] [--effect K=V]... [--needs K=V]... [--when K=V]... [--label WORDS] [--result WORDS]
@@ -56,6 +57,13 @@ it from its `expanded_adventure/` folder and never runs anything in it.
         pane, each button pressed in turn, each dungeon raised and cleared,
         every roll's outcomes, and what the walk never reached (walk --help
         lists what its hero can be given).
+    adventure_plugin.py preview PLUGIN [--site KEY] [--out DIR] [--open]
+        one HTML page (DIR: preview/ unless named) that shows every pane of
+        a sites plugin's places as the game lays it out: picture, words,
+        each when in plain words, each button and what it does.
+    adventure_plugin.py wizard [FOLDER] [--answers FILE]
+        make a place by answering questions: a new plugin, or one more
+        place in FOLDER. Nothing is written before the last answer.
     adventure_plugin.py art PLUGIN [--json]
         advice on the pane pictures and map sprites (never a refusal).
     adventure_plugin.py guide [--out DIR] [--check]
@@ -123,7 +131,7 @@ SITES_API = 2
 SITES_WORDS_API = 3
 ## The first game version that reads plugin API 3: what a plugin of API 3
 ## names as its minimum_game_version.
-SITES_WORDS_GAME = "0.70.6"
+SITES_WORDS_GAME = "0.70.7"
 PLUGIN_FORMAT = 1
 FOLDER_NAME = "expanded_adventure"
 ID_PATTERN = "^[a-z][a-z0-9_]{0,39}$"
@@ -161,7 +169,7 @@ MARKERS = ["port", "castle"]
 
 PLACEHOLDERS = ["pledges", "quests_total", "target", "town", "title", "foe", "life", "count", "total", "required",
                 "percent", "left", "color", "cards", "hero", "region", "price", "uses_left", "gold", "card", "dungeon",
-                "food", "amulets", "day"]
+                "food", "amulets", "day", "life_bonus"]
 ## The engine's own sentences, said when a plugin's text.json leaves them out.
 TEXT_DEFAULTS = {
     "region.subtitle": "",
@@ -247,6 +255,10 @@ TEXT_DEFAULTS = {
     "site.sold": "You sell {card} for {price} gold.",
     "site.bought_log": "{card} bought for {price} gold.",
     "site.sold_log": "{card} sold for {price} gold.",
+    "site.no_way": "There is no way there from here.",
+    "site.magic_owned": "{title} is yours already.",
+    "site.no_link": "No town of this land can be linked now.",
+    "site.life_full": "No place can add to your life any more.",
 }
 
 PALETTES = ["shandalar", "last_refuge"]
@@ -1941,6 +1953,7 @@ class Content:
         for key, site in file["sites"].items():
             at = "sites.json: sites.%s" % key
             actions = every[key]
+            known["site"] = key
             panes: dict = {}
             opening = -1
             for p, pane in enumerate(site["panes"]):
@@ -2062,14 +2075,14 @@ class Content:
             if not action["cards"]:
                 problems.append("%s: %s needs \"cards\": each card and its price." % (spot, kind))
         priced = bool(action["prices"]) or bool(action["needs"])
-        self._check_site_effects(action["effects"], spot + ".effects", known, actions, priced, 0, problems)
+        self._check_site_effects(action["effects"], spot + ".effects", known, actions, priced, 0, problems, kind)
         for branch in ("win", "lose"):
             self._check_site_effects(action[branch]["effects"], "%s.%s.effects" % (spot, branch), known, actions, priced,
                                      2, problems)
             self._check_site_lines(action[branch]["result"], "%s.%s.result" % (spot, branch), known, actions, problems)
 
     def _check_site_effects(self, effects: list, at: str, known: dict, actions: dict, priced: bool, inside: int,
-                            problems: list) -> None:
+                            problems: list, kind: str = "effects") -> None:
         rolls = 0
         for e, effect in enumerate(effects):
             name = next(iter(effect))
@@ -2106,6 +2119,22 @@ class Content:
                 around = str(value["around"])
                 if around.startswith("dungeon:") and around[len("dungeon:"):] not in known["dungeons"]:
                     problems.append("%s.around: no dungeon %s in sites.json dungeons." % (spot, around[len("dungeon:"):]))
+            elif name in ("world_magic", "mana_link", "life_bonus"):
+                if not priced:
+                    problems.append("%s: this is given without end; give the action prices (a ladder that ends) or needs." % spot)
+            elif name == "teleport":
+                to = str(value["to"])
+                if inside != 0 or kind != "effects":
+                    problems.append("%s: a teleport stands in the effects of an action that does effects, not in a roll, a duel or a talk." % spot)
+                elif e != len(effects) - 1:
+                    problems.append("%s: a teleport is the action's last effect; the pane closes with it." % spot)
+                if to.startswith("place:"):
+                    if to[len("place:"):] not in known["sites"]:
+                        problems.append("%s.to: no place %s in sites.json sites." % (spot, to[len("place:"):]))
+                    elif to[len("place:"):] == str(known.get("site", "")):
+                        problems.append("%s.to: %s is this place itself." % (spot, to[len("place:"):]))
+                elif to.startswith("dungeon:") and to[len("dungeon:"):] not in known["dungeons"]:
+                    problems.append("%s.to: no dungeon %s in sites.json dungeons." % (spot, to[len("dungeon:"):]))
             elif name == "roll":
                 rolls += 1
                 if inside == 1:
@@ -4014,18 +4043,105 @@ RECIPES = {
     "duelist": ("ring", "a duel for a wager of gold against the place's own champion, and a counter of wins"),
     "shop": ("tent", "a stall that sells a few cards and buys one"),
     "quest": ("shrine", "an errand: accept it, bring a card (--card), be paid; with a row in the Tasks list"),
+    "traveler": ("gate", "a ride for a fare: the hero is carried to the nearest town, or to where the journey began"),
+    "teacher": ("stone", "a World Magic taught once for a price, and three lessons that each add a life to every duel"),
 }
 ## What --service named before the recipes: the same three, kept as written.
 SERVICES = ["effects", "copy", "none"]
 RECIPE_CARD = {"gift": "", "collector": "Llanowar Elves", "quest": "Healing Salve", "shop": "Jayemdae Tome"}
 CHAMPION_DECK = {"Mountain": 16, "Lightning Bolt": 4, "Mons's Goblin Raiders": 4, "Ironclaw Orcs": 4, "Gray Ogre": 4,
                  "Hill Giant": 4, "Disintegrate": 2, "Fireball": 2}
+## Five plain decks of the base game's cards, 40 each, for a recipe's
+## opponent (and the wizard's small menu): one a color.
+STOCK_DECKS = {
+    "red": CHAMPION_DECK,
+    "green": {"Forest": 16, "Llanowar Elves": 4, "Grizzly Bears": 4, "Scryb Sprites": 4, "Giant Growth": 4,
+              "War Mammoth": 4, "Craw Wurm": 2, "Giant Spider": 2},
+    "white": {"Plains": 16, "Savannah Lions": 4, "Benalish Hero": 4, "White Knight": 4, "Pearled Unicorn": 4,
+              "Mesa Pegasus": 4, "Serra Angel": 2, "Swords to Plowshares": 2},
+    "blue": {"Island": 16, "Merfolk of the Pearl Trident": 4, "Phantom Monster": 4, "Wall of Air": 4,
+             "Unsummon": 4, "Water Elemental": 4, "Air Elemental": 2, "Counterspell": 2},
+    "black": {"Swamp": 16, "Drudge Skeletons": 4, "Scathe Zombies": 4, "Black Knight": 4, "Bog Wraith": 4,
+              "Terror": 4, "Sengir Vampire": 2, "Dark Ritual": 2},
+}
+## A recipe's numbers and names: (name, kind, its default, the wizard's
+## question). add-place --set NAME=VALUE sets one; the wizard asks each.
+RECIPE_OPTIONS = {
+    "gift": [("card", "card", "", "A card to give (Enter: five days of food and a white amulet instead)")],
+    "healer": [("prices", "prices", [40, 60, 90], "The price of each blessing in gold, in turn, joined by commas")],
+    "toll": [("price", "int", 100, "The toll in gold"), ("color", "color", "green", "The hero's color that passes free")],
+    "gambler": [("price", "int", 50, "The gold a throw costs"), ("throws", "count", 5, "How many throws before he packs up")],
+    "riddle": [("reward", "int", 100, "The gold the right answer pays")],
+    "collector": [("card", "card", "Llanowar Elves", "The card the collector wants"),
+                  ("pay", "int", 150, "The gold paid for each copy"), ("copies", "count", 3, "How many copies are wanted")],
+    "duelist": [("foe", "text", "The Champion", "The opponent's name"),
+                ("deck", "deck", "red", "The opponent's deck"), ("life", "life", 20, "The opponent's life (1 to 99)"),
+                ("wager", "int", 50, "The gold wagered on each duel"), ("prize", "int", 100, "The gold a win pays"),
+                ("bouts", "count", 3, "How many duels before the ring closes")],
+    "shop": [("card", "card", "Jayemdae Tome", "A card the stall sells"), ("price", "int", 300, "Its price in gold")],
+    "quest": [("card", "card", "Healing Salve", "The card the hero is asked to bring"),
+              ("reward", "int", 200, "The gold paid for it")],
+}
+RECIPE_OPTIONS.update({
+    "traveler": [("fare", "int", 100, "The fare in gold"), ("to", "choice", "nearest_town", "Where the ride goes")],
+    "teacher": [("magic", "magic", "Dwarven Pick", "The World Magic taught"), ("price", "int", 800, "Its price in gold"),
+                ("lesson", "int", 300, "The price of each life lesson in gold")],
+})
+RECIPE_CHOICES: dict = {"to": {"nearest_town": "the nearest town or city", "start": "where the journey began"}}
 
 
-def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = "green") -> dict:
+def recipe_options(recipe: str, given: dict | None = None) -> dict:
+    """A recipe's numbers and names: its own (RECIPE_OPTIONS), with [given]
+    laid over them, each checked as its kind asks."""
+    out = {}
+    known = RECIPE_OPTIONS.get(recipe, [])
+    given = dict(given or {})
+    for name, kind, default, _ in known:
+        value = given.pop(name, default)
+        if kind == "int":
+            if not is_valid_int(str(value)) or not 0 <= int(value) <= 100000:
+                raise UsageError("%s=%s: a whole number from 0 to 100000 is needed." % (name, value))
+            value = int(value)
+        elif kind == "count":
+            if not is_valid_int(str(value)) or not 1 <= int(value) <= 16:
+                raise UsageError("%s=%s: a whole number from 1 to 16 is needed." % (name, value))
+            value = int(value)
+        elif kind == "life":
+            if not is_valid_int(str(value)) or not 1 <= int(value) <= 99:
+                raise UsageError("%s=%s: a whole number from 1 to 99 is needed." % (name, value))
+            value = int(value)
+        elif kind == "prices":
+            value = _int_list(str(value), name, 0, 1000000) if not isinstance(value, list) else value
+        elif kind == "color" and value not in AMULET_COLORS:
+            raise UsageError("%s=%s: one of %s is needed." % (name, value, ", ".join(AMULET_COLORS)))
+        elif kind == "deck" and value not in STOCK_DECKS:
+            raise UsageError("%s=%s: one of %s is needed." % (name, value, ", ".join(STOCK_DECKS)))
+        elif kind == "choice" and value not in RECIPE_CHOICES[name]:
+            raise UsageError("%s=%s: one of %s is needed." % (name, value, ", ".join(RECIPE_CHOICES[name])))
+        elif kind in ("text", "card", "magic"):
+            value = strip_edges(str(value))
+            if kind != "card" and (not value or len(value) > 60):
+                raise UsageError("%s: non-empty text of at most 60 characters is needed." % name)
+        out[name] = value
+    if given:
+        raise UsageError("The recipe %s has no %s (it has: %s)." % (recipe, ", ".join(given),
+                                                                    ", ".join(n for n, _, _, _ in known) or "nothing to set"))
+    return out
+
+
+def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = "green",
+                 options: dict | None = None) -> dict:
     """The parts of a recipe's place: {panes, words, flags, counters, foes,
     tasks}; every text key begins with the place's key, every flag and
-    counter too."""
+    counter too. [options]: the recipe's numbers and names (RECIPE_OPTIONS)."""
+    given = dict(options or {})
+    names = [n for n, _, _, _ in RECIPE_OPTIONS.get(recipe, [])]
+    if card and "card" in names:
+        given.setdefault("card", card)
+    if color and "color" in names:
+        given.setdefault("color", color)
+    o = recipe_options(recipe, given)
+    card, color = o.get("card", card), o.get("color", color)
     k = key + "."
     leave = {"id": "leave", "do": "leave", "label": k + "leave"}
     words = {k + "leave": "Leave"}
@@ -4073,7 +4189,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
         out["panes"] = [
             {"lines": [k + "intro", k + "offer", {"text": k + "waiting", "when": [{"gift_waiting": True}]},
                        {"text": k + "spent", "when": [{"used_up": "bless"}]}],
-             "actions": [{"id": "bless", "do": "effects", "label": k + "bless", "prices": [40, 60, 90],
+             "actions": [{"id": "bless", "do": "effects", "label": k + "bless", "prices": list(o["prices"]),
                           "when": [{"gift_waiting": False}], "effects": [{"next_duel": {"life": 5}}],
                           "result": [k + "blessed"]},
                          {"id": "bread", "do": "effects", "label": k + "bread", "when": [{"gold_at_least": 10}],
@@ -4083,7 +4199,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
             k + "offer": "\"I can lay a blessing on you for your next duel,\" she says, \"or sell you bread for "
                          "the road. You carry {food} days of food.\"",
             k + "waiting": "\"A blessing already rests on you. Fight your duel first; then come back.\"",
-            k + "spent": "\"I have no more blessings for you. Three is all one traveler may carry from here.\"",
+            k + "spent": "\"I have no more blessings for you. One traveler may carry only so many from here.\"",
             k + "bless": "Ask for a blessing ({price} gold, {uses_left} left)",
             k + "blessed": "She lays a hand on your brow. You will begin your next duel with five more life.",
             k + "bread": "Buy bread for three days (10 gold)",
@@ -4099,7 +4215,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
                          dict(leave)]},
             {"lines": [k + "intro", k + "terms", {"text": k + "kin", "when": [{"hero_color": color}]},
                        {"text": k + "late", "when": [{"day_at_least": 30}]}],
-             "actions": [dict({"id": "pay", "do": "effects", "label": k + "pay", "prices": [100]}, **passing),
+             "actions": [dict({"id": "pay", "do": "effects", "label": k + "pay", "prices": [o["price"]]}, **passing),
                          dict({"id": "amulet", "do": "effects", "label": k + "amulet",
                                "needs": [{"amulets": {"color": "any", "count": 1}}],
                                "when": [{"amulets": {"color": "any", "min": 1}}, {"not_flag": opened}]}, **passing),
@@ -4107,7 +4223,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
                                "when": [{"hero_color": color}, {"not_flag": opened}]}, **passing), dict(leave)]}]
         words.update({
             k + "intro": "%s. A keeper with a halberd bars the way." % name,
-            k + "terms": "\"A hundred gold opens the gate,\" the keeper says, \"or one amulet. You carry {amulets}.\"",
+            k + "terms": "\"%d gold opens the gate,\" the keeper says, \"or one amulet. You carry {amulets}.\"" % o["price"],
             k + "kin": "The keeper looks at your colors and lowers the halberd. \"A %s mage? Your kind pass free.\"" % color,
             k + "late": "\"Day {day} of your journey, and you are still on the road? Few last so long.\"",
             k + "pay": "Pay the toll ({price} gold)",
@@ -4119,28 +4235,30 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
             k + "shown": "From the tower you see the land for miles around, and mark it on your map."})
     elif recipe == "gambler":
         plays = named("plays")
+        # The house never loses: on average a throw pays back its price.
+        small, big = o["price"] * 3 // 2, o["price"] * 3
         out["counters"] = [plays]
         out["panes"] = [
             {"when": [{"used_up": "bet"}], "lines": [k + "intro", k + "spent"], "actions": [dict(leave)]},
             {"lines": [k + "intro", k + "offer", {"text": k + "count", "when": [{"counter": {"name": plays, "min": 1}}]}],
-             "actions": [{"id": "bet", "do": "effects", "label": k + "bet", "prices": [50, 50, 50, 50, 50],
+             "actions": [{"id": "bet", "do": "effects", "label": k + "bet", "prices": [o["price"]] * o["throws"],
                           "effects": [{"counter": {"name": plays, "add": 1}},
                                       {"roll": {"outcomes": [
                                           {"weight": 3, "effects": [], "result": [k + "lost"]},
-                                          {"weight": 2, "effects": [{"gold": 75}], "result": [k + "won"]},
-                                          {"weight": 1, "effects": [{"gold": 150}], "result": [k + "jackpot"]}]}}],
+                                          {"weight": 2, "effects": [{"gold": small}], "result": [k + "won"]},
+                                          {"weight": 1, "effects": [{"gold": big}], "result": [k + "jackpot"]}]}}],
                           "result": [k + "rolled"]}, dict(leave)]}]
         words.update({
             k + "intro": "%s. A man with quick hands rattles three bone dice in a cup." % name,
-            k + "offer": "\"Fifty gold a throw,\" he says. \"Three ways to fall: nothing, seventy-five, or a "
-                         "hundred and fifty. Five throws, and then I pack up.\"",
+            k + "offer": "\"%d gold a throw,\" he says. \"Three ways to fall: nothing, %d, or %d. %d throws, and "
+                         "then I pack up.\"" % (o["price"], small, big, o["throws"]),
             k + "count": "You have thrown {count} times.",
             k + "bet": "Throw the dice ({price} gold, {uses_left} left)",
             k + "rolled": "You put down {price} gold. The dice rattle and fall.",
             k + "lost": "Low numbers. He sweeps your gold away with a shrug.",
-            k + "won": "A fair throw! He counts out 75 gold.",
-            k + "jackpot": "Three sixes! He pays out 150 gold and looks at the dice twice.",
-            k + "spent": "The gambler has packed his cup and dice. \"Five throws, I said. Luck needs its rest.\""})
+            k + "won": "A fair throw! He counts out %d gold." % small,
+            k + "jackpot": "Three sixes! He pays out %d gold and looks at the dice twice." % big,
+            k + "spent": "The gambler has packed his cup and dice. \"%d throws, I said. Luck needs its rest.\"" % o["throws"]})
     elif recipe == "riddle":
         solved, tries = named("solved"), named("tries")
         out["flags"], out["counters"] = [solved], [tries]
@@ -4150,7 +4268,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
             {"lines": [k + "intro", k + "riddle", {"text": k + "tries", "when": [{"counter": {"name": tries, "min": 1}}]}],
              "actions": [dict(wrong, id="answer_a", label=k + "answer_a"),
                          {"id": "answer_b", "do": "talk", "to": "right", "label": k + "answer_b",
-                          "when": [{"not_flag": solved}], "effects": [{"set_flag": solved}, {"gold": 100}]},
+                          "when": [{"not_flag": solved}], "effects": [{"set_flag": solved}, {"gold": o["reward"]}]},
                          dict(wrong, id="answer_c", label=k + "answer_c"), dict(leave)]},
             {"id": "wrong", "lines": [k + "wrong"], "actions": [dict(leave)]},
             {"id": "right", "lines": [k + "right"], "actions": [dict(leave)]}]
@@ -4162,7 +4280,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
             k + "answer_b": "\"A map.\"",
             k + "answer_c": "\"A painting.\"",
             k + "wrong": "The rock stays cold and still. That was not the answer. Come back and try again.",
-            k + "right": "The words glow, and a hollow opens in the rock: 100 gold lies inside, yours for the answer.",
+            k + "right": "The words glow, and a hollow opens in the rock: %d gold lies inside, yours for the answer." % o["reward"],
             k + "silent": "The words have faded. The rock has told its riddle and keeps no other."})
     elif recipe == "collector":
         trades = named("trades")
@@ -4171,44 +4289,44 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
             {"when": [{"used_up": "trade"}], "lines": [k + "intro", k + "spent"], "actions": [dict(leave)]},
             {"lines": [k + "intro", k + "wants", {"text": k + "have", "when": [{"has_card": {"card": card, "min": 1}}]},
                        {"text": k + "count", "when": [{"counter": {"name": trades, "min": 1}}]}],
-             "actions": [{"id": "trade", "do": "effects", "label": k + "trade", "prices": [0, 0, 0],
+             "actions": [{"id": "trade", "do": "effects", "label": k + "trade", "prices": [0] * o["copies"],
                           "needs": [{"card": card}], "when": [{"has_card": {"card": card, "min": 1}}],
-                          "effects": [{"gold": 150}, {"counter": {"name": trades, "add": 1}}],
+                          "effects": [{"gold": o["pay"]}, {"counter": {"name": trades, "add": 1}}],
                           "result": [k + "traded"]}, dict(leave)]}]
         words.update({
             k + "intro": "%s. A traveler sits among open chests, every one full of cards sorted by color." % name,
-            k + "wants": "\"I am looking for %s,\" the collector says. \"I pay 150 gold for each copy, and I "
-                         "need three.\"" % card,
+            k + "wants": "\"I am looking for %s,\" the collector says. \"I pay %d gold for each copy, and I "
+                         "need %d.\"" % (card, o["pay"], o["copies"]),
             k + "have": "The collector's eyes light up. \"You have one! I can see it in your bag.\"",
             k + "count": "You have sold the collector {count} so far.",
-            k + "trade": "Hand over {card} for 150 gold ({uses_left} left)",
-            k + "traded": "The collector takes {card} with both hands and counts out 150 gold.",
-            k + "spent": "\"Three copies, as I wished. My set is whole,\" the collector says, and closes the chests."})
+            k + "trade": "Hand over {card} for %d gold ({uses_left} left)" % o["pay"],
+            k + "traded": "The collector takes {card} with both hands and counts out %d gold." % o["pay"],
+            k + "spent": "\"Every copy I wished for. My set is whole,\" the collector says, and closes the chests."})
     elif recipe == "duelist":
         wins, foe = named("wins"), named("champ")
         out["counters"] = [wins]
-        out["foes"] = {foe: {"name": "The Champion", "deck_name": "The Champion's Deck", "life": 20, "face": 3,
-                             "deck": dict(CHAMPION_DECK)}}
+        out["foes"] = {foe: {"name": o["foe"], "deck_name": "%s's Deck" % o["foe"], "life": o["life"], "face": 3,
+                             "deck": dict(STOCK_DECKS[o["deck"]])}}
         out["panes"] = [
             {"when": [{"used_up": "duel"}], "lines": [k + "intro", k + "spent"], "actions": [dict(leave)]},
             {"lines": [k + "intro", k + "offer", {"text": k + "wins", "when": [{"counter": {"name": wins, "min": 1}}]}],
-             "actions": [{"id": "duel", "do": "duel", "foe": foe, "label": k + "duel", "prices": [50, 50, 50],
-                          "win": {"effects": [{"gold": 100}, {"counter": {"name": wins, "add": 1}}],
+             "actions": [{"id": "duel", "do": "duel", "foe": foe, "label": k + "duel", "prices": [o["wager"]] * o["bouts"],
+                          "win": {"effects": [{"gold": o["prize"]}, {"counter": {"name": wins, "add": 1}}],
                                   "result": [k + "won"]},
                           "lose": {"effects": [], "result": [k + "lost"]}}, dict(leave)]}]
         words.update({
             k + "intro": "%s. Ropes mark a square of trampled grass, and a crowd waits around it." % name,
-            k + "offer": "The champion leans on the ropes. \"Fifty gold says you cannot beat me. Win, and you take a "
-                         "hundred. Three bouts, no more.\"",
+            k + "offer": "The champion leans on the ropes. \"%d gold says you cannot beat me. Win, and you take "
+                         "%d. %d bouts, no more.\"" % (o["wager"], o["prize"], o["bouts"]),
             k + "wins": "You have won {count} bouts here.",
             k + "duel": "Wager {price} gold against {foe} ({uses_left} left)",
-            k + "won": "The crowd roars. {foe} pays you 100 gold without a word.",
+            k + "won": "The crowd roars. {foe} pays you %d gold without a word." % o["prize"],
             k + "lost": "{foe} pockets your wager. \"Come back when you have learned something.\"",
-            k + "spent": "The ropes are down and the crowd has gone home. Three bouts were all the champion had in him."})
+            k + "spent": "The ropes are down and the crowd has gone home. The champion has no more bouts in him."})
     elif recipe == "shop":
         out["panes"] = [
             {"lines": [k + "intro", k + "offer"],
-             "actions": [{"id": "buy", "do": "buy_card", "label": k + "buy", "cards": {card: 300, "Rod of Ruin": 200},
+             "actions": [{"id": "buy", "do": "buy_card", "label": k + "buy", "cards": {card: o["price"], "Rod of Ruin": 200} if card != "Rod of Ruin" else {card: o["price"]},
                           "stock": 1, "result": [k + "bought"]},
                          {"id": "sell", "do": "sell_card", "label": k + "sell", "cards": {"Glasses of Urza": 60},
                           "result": [k + "sold"]}, dict(leave)]}]
@@ -4231,7 +4349,7 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
              "lines": [k + "intro", k + "waiting", {"text": k + "have", "when": [{"has_card": {"card": card, "min": 1}}]}],
              "actions": [{"id": "give", "do": "effects", "label": k + "give", "prices": [0], "needs": [{"card": card}],
                           "when": [{"has_card": {"card": card, "min": 1}}],
-                          "effects": [{"set_flag": done}, {"gold": 200},
+                          "effects": [{"set_flag": done}, {"gold": o["reward"]},
                                       {"log_event": {"event": key, "text": k + "done_log", "done": True}}],
                           "result": [k + "reward"]}, dict(leave)]},
             {"lines": [k + "intro", k + "plea"],
@@ -4247,13 +4365,48 @@ def place_recipe(recipe: str, key: str, name: str, card: str = "", color: str = 
             k + "waiting": "\"Have you found %s yet? He grows weaker.\"" % card,
             k + "have": "She sees the card in your bag and catches her breath.",
             k + "give": "Give her {card}",
-            k + "reward": "She presses 200 gold into your hands. \"It is all we have. He will live, because of you.\"",
+            k + "reward": "She presses %d gold into your hands. \"It is all we have. He will live, because of you.\"" % o["reward"],
             k + "thanks": "\"He is walking again,\" she says, and for the first time her hands are still.",
             k + "clue": "A woman at %s asked you to bring her %s." % (name, card),
             k + "done_log": "Brought %s to %s." % (card, name),
             k + "task_title": "An errand for %s" % name,
             k + "task_text": "Bring %s to %s." % (card, name),
             k + "task_done": "Done: %s was brought to %s." % (card, name)})
+    elif recipe == "traveler":
+        town = o["to"] == "nearest_town"
+        out["panes"] = [
+            {"lines": [k + "intro", k + "offer"],
+             "actions": [{"id": "ride", "do": "effects", "label": k + "ride", "when": [{"gold_at_least": o["fare"]}],
+                          "effects": [{"gold": -o["fare"]}, {"teleport": {"to": o["to"]}}]}, dict(leave)]}]
+        words.update({
+            k + "intro": "%s. A carter waits beside a cart with high wheels, the mule already in harness." % name,
+            k + "offer": "\"%d gold, and I take you %s,\" the carter says. \"No questions, no stops. You carry {gold}.\""
+                         % (o["fare"], "to {town}" if town else "back to where your road began"),
+            k + "ride": "Ride to %s (%d gold)" % ("{town}" if town else "where your journey began", o["fare"])})
+        if town:
+            # {town} is the action's own: the pane's line names no town.
+            words[k + "offer"] = "\"%d gold, and I take you to the nearest town,\" the carter says. \"No questions, " \
+                                 "no stops. You carry {gold}.\"" % o["fare"]
+    elif recipe == "teacher":
+        out["panes"] = [
+            {"lines": [k + "intro", k + "offer", {"text": k + "known", "when": [{"owns_magic": o["magic"]}]},
+                       {"text": k + "lessons", "when": [{"life_bonus_below": MOST_LIFE_BONUS}]}],
+             "actions": [{"id": "learn", "do": "effects", "label": k + "learn", "prices": [o["price"]],
+                          "effects": [{"world_magic": o["magic"]}], "result": [k + "learned"]},
+                         {"id": "lesson", "do": "effects", "label": k + "lesson", "prices": [o["lesson"]] * 3,
+                          "when": [{"life_bonus_below": MOST_LIFE_BONUS}], "effects": [{"life_bonus": 1}],
+                          "result": [k + "stronger"]}, dict(leave)]}]
+        words.update({
+            k + "intro": "%s. An old mage sits cross-legged on a flat rock, eyes closed, and speaks before you do." % name,
+            k + "offer": "\"I teach one thing that can be carried, and one that cannot,\" the mage says. \"%s, for "
+                         "%d gold. And the long breath, which adds to your life in every duel.\"" % (o["magic"], o["price"]),
+            k + "known": "The mage opens one eye. \"%s is yours already. That lesson is done.\"" % o["magic"],
+            k + "lessons": "\"The long breath has given you {life_bonus} more life so far. No one learns more than ten.\"",
+            k + "learn": "Learn {title} ({price} gold)",
+            k + "learned": "The mage speaks for an hour, and draws one sign in the dust. {title} is yours.",
+            k + "lesson": "Take a lesson in the long breath ({price} gold, {uses_left} left)",
+            k + "stronger": "You breathe as you are told until the stars come out. You will begin every duel with "
+                            "{life_bonus} more life than before you met the mage."})
     return out
 
 
@@ -4465,6 +4618,12 @@ def parse_effect(words: str, game: Game, text: dict, stem: str) -> dict:
         around, colon, radius = value.rpartition(":") if value.rpartition(":")[2].strip().isdigit() else (value, "", "")
         around = (around if colon else value).strip()
         return {name: dict({"around": around}, **({"radius": int(radius)} if colon else {}))}
+    if name == "life_bonus":
+        if not is_valid_int(value):
+            raise UsageError("%s takes a whole number, like life_bonus=1." % option)
+        return {name: int(value)}
+    if name == "teleport":
+        return {name: {"to": value}}
     if name == "log_clue":
         return {name: {"text": _say(text, stem + "_clue", value)}}
     if name == "log_event":
@@ -4888,12 +5047,18 @@ def command_add_place(args, game: Game) -> int:
             raise UsageError("%s already exists in %s." % (rel, args.folder))
     made = ""
     if args.recipe:
-        card = strip_edges(args.card) or RECIPE_CARD.get(args.recipe, "")
+        card = strip_edges(args.card)
         if args.card and args.recipe not in RECIPE_CARD:
             raise UsageError("--card belongs to the recipes %s." % ", ".join(RECIPE_CARD))
         if args.color and args.recipe != "toll":
             raise UsageError("--color belongs to the recipe toll.")
-        parts = place_recipe(args.recipe, key, name, card, args.color or "green")
+        chosen = dict(getattr(args, "recipe_options", None) or {})
+        for words in args.set:
+            option, sign, value = words.partition("=")
+            if not sign:
+                raise UsageError("--set takes NAME=VALUE, like --set price=75.")
+            chosen[option.strip()] = value.strip()
+        parts = place_recipe(args.recipe, key, name, card if args.card else "", args.color, chosen)
         panes, words = parts["panes"], parts["words"]
         for group in ("flags", "counters"):
             for entry in parts[group]:
@@ -5096,6 +5261,13 @@ class SiteWalk:
         self.difficulty = 0
         self.plugins: list = [str(data.get("id", ""))]
         self.gift = ""
+        ## API 3's later words: the life the places have added, whether the
+        ## nearest town is mana-linked (and whether one can be), and where a
+        ## teleport has carried the hero.
+        self.life_bonus = 0
+        self.linked = False
+        self.can_link = True
+        self.carried = ""
         ## How a duel ends ("win" or "lose") and which outcome a roll takes
         ## (0: the likeliest; n: the n-th).
         self.duel_outcome = "win"
@@ -5248,6 +5420,10 @@ class SiteWalk:
             return (self.gift != "") == bool(value)
         if key == "any":
             return any(self._holds(site, inner) for inner in value)
+        if key == "life_bonus_below":
+            return self.life_bonus < int(value)
+        if key == "town_linked":
+            return self.linked
         return False
 
     @staticmethod
@@ -5311,7 +5487,7 @@ class SiteWalk:
                pane: dict | None = None) -> dict:
         action = action or {}
         out = {"hero": WALK_HERO, "gold": self.gold, "region": "Shandalar" if self.mainland else "the island",
-               "food": self.food, "amulets": self.amulet_count(), "day": self.day}
+               "food": self.food, "amulets": self.amulet_count(), "day": self.day, "life_bonus": self.life_bonus}
         about = self.dungeon_about(action, pane)
         if about:
             out["dungeon"] = str(self.file["dungeons"].get(about, {}).get("name", about))
@@ -5328,6 +5504,13 @@ class SiteWalk:
             card = self.card_about(action)
             if card:
                 out["card"] = card
+            # {town}: the town a link would be made with, or a journey's;
+            # {title}: the World Magic given.
+            for effect in self.all_effects(action):
+                if "mana_link" in effect or ("teleport" in effect and str(effect["teleport"].get("to", "")) == "nearest_town"):
+                    out["town"] = WALK_TOWN
+                elif "world_magic" in effect:
+                    out["title"] = str(effect["world_magic"])
         out.update(more or {})
         return out
 
@@ -5481,6 +5664,20 @@ class SiteWalk:
                 return self.say("site.dungeon_open", {"dungeon": self.file["dungeons"].get(key, {}).get("name", key)})
             if "next_duel" in effect and self.gift:
                 return self.say("site.gift_waiting")
+            if "world_magic" in effect and str(effect["world_magic"]) in self.magics:
+                return self.say("site.magic_owned", {"title": effect["world_magic"]})
+            if "mana_link" in effect and (self.linked or not self.can_link):
+                return self.say("site.no_link")
+            if "life_bonus" in effect and self.life_bonus >= MOST_LIFE_BONUS:
+                return self.say("site.life_full")
+            if "teleport" in effect:
+                to = str(effect["teleport"].get("to", ""))
+                kind, _, name = to.partition(":")
+                # A walk has no map: a place of the plugin is there when it
+                # stands on this land, a dungeon once it is raised.
+                if (kind == "place" and ("mainland" if self.mainland else "islands") not in self.site(name).get("where", [])) \
+                        or (kind == "dungeon" and self.dungeon_state(name) == "none"):
+                    return self.say("site.no_way")
         return ""
 
     def refusal(self, site: str, action: dict) -> str:
@@ -5596,6 +5793,25 @@ class SiteWalk:
                     self.gift = "%d more life" % max(1, min(20, int(value["life"]))) if "life" in value else \
                         "the first move" if value.get("first_move") else "%s in play" % value.get("card", "")
                     out["gift"] = self.gift
+            elif key == "world_magic":
+                if str(value) not in self.magics:
+                    self.magics.append(str(value))
+                    out["learned"].append(str(value))
+                    self.journal.append("Bought WM: %s" % value)
+            elif key == "mana_link":
+                if not self.linked and self.can_link:
+                    self.linked = True
+                    out["linked"] = WALK_TOWN
+            elif key == "life_bonus":
+                self.life_bonus = max(0, min(MOST_LIFE_BONUS, self.life_bonus + int(value)))
+                out["life_bonus"] = self.life_bonus
+            elif key == "teleport":
+                to = str(value.get("to", ""))
+                kind, _, name = to.partition(":")
+                self.carried = WALK_TOWN if to == "nearest_town" else "where the journey began" if to == "start" \
+                    else str(self.site(name).get("name", name)) if kind == "place" \
+                    else str(self.file["dungeons"].get(name, {}).get("name", name))
+                out["carried"] = self.carried
             elif key == "reveal_map":
                 around = str(value.get("around", "place"))
                 if around.startswith("dungeon:") and self.dungeon_state(around[len("dungeon:"):]) == "none":
@@ -5610,7 +5826,7 @@ class SiteWalk:
         entry = self.action_of(site, name)
         out = {"action": name, "do": str(entry.get("do", "")), "paid": 0, "raised": [], "journal": [], "copied": "",
                "refused": "", "to": "", "taken": [], "given": [], "gift": "", "revealed": [], "rolls": [], "duel": "",
-               "traded": "", "earned": 0}
+               "traded": "", "earned": 0, "learned": [], "linked": "", "life_bonus": 0, "carried": ""}
         why = self.refusal(site, entry)
         do = out["do"]
         if not why and do == "buy_card" and self.gold < self.offer(site, entry)[1]:
@@ -5705,9 +5921,19 @@ class SiteWalk:
             out["cards"] = list(self.cards)
         if self.gift:
             out["gift"] = self.gift
+        if self.life_bonus:
+            out["life_bonus"] = self.life_bonus
+        if self.linked:
+            out["linked"] = True
+        if self.magics:
+            out["magics"] = list(self.magics)
         return out
 
 
+## AdventurePlayer.LIFE_BONUS_MOST: the most life all places together add.
+MOST_LIFE_BONUS = 10
+## What a walk calls the nearest town.
+WALK_TOWN = "the nearest town"
 ## DataSites.MOST_AMULETS: the most amulets of one color a gift leaves the hero with.
 MOST_AMULETS = 99
 ## The colors of the amulets, and the button a kind of action wears when it names none.
@@ -5741,6 +5967,8 @@ def walk_hero(data: dict, gold: int = 0, options: dict | None = None) -> SiteWal
     walk.difficulty = int(options.get("difficulty", 0))
     walk.plugins += list(options.get("plugins", []))
     walk.gift = "a gift" if options.get("gift") else ""
+    walk.life_bonus = int(options.get("life_bonus", 0))
+    walk.linked = bool(options.get("linked", False))
     walk.duel_outcome = str(options.get("outcome", "win"))
     walk.roll_choice = int(options.get("roll", 0))
     return walk
@@ -5932,6 +6160,8 @@ def walk_hint(conditions: list) -> str:
             options.append("--difficulty %d" % int(value["min"]))
         elif name == "on_mainland":
             options.append("--land %s" % ("mainland" if value else "island"))
+        elif name == "town_linked":
+            options.append("--linked")
     return " (try %s)" % " ".join(dict.fromkeys(options)) if options else ""
 
 
@@ -5995,6 +6225,14 @@ def _walk_text(run: dict) -> list:
                 out.append("     for the next duel: %s" % step["gift"])
             for patch in step["revealed"]:
                 out.append("     map uncovered: %s" % patch)
+            for magic in step["learned"]:
+                out.append("     World Magic learned: %s" % magic)
+            if step["linked"]:
+                out.append("     mana link made with %s" % step["linked"])
+            if step["life_bonus"]:
+                out.append("     life at the start of every duel: +%d now" % step["life_bonus"])
+            if step["carried"]:
+                out.append("     the pane closes; the hero is carried to %s (the walk steps back in)" % step["carried"])
             for line in step["journal"]:
                 out.append("     journal: %s" % line)
             for line in step["lines"]:
@@ -6021,6 +6259,12 @@ def _walk_text(run: dict) -> list:
         more += "; amulets %s" % ", ".join("%s %d" % pair for pair in last["amulets"].items())
     if last.get("cards"):
         more += "; cards %s" % ", ".join(last["cards"][1:] or ["none of the walk's own"])
+    if last.get("magics"):
+        more += "; World Magics %s" % ", ".join(last["magics"])
+    if last.get("life_bonus"):
+        more += "; life bonus +%d" % last["life_bonus"]
+    if last.get("linked"):
+        more += "; the nearest town linked"
     out.append("  End: %d gold; uses %s; flags %s; dungeons %s%s." % (
         last["gold"], ", ".join("%s %d" % (key.replace("@" + run["land"], ""), n) if not key.endswith("@" + other)
                                 else "%s %d on %s" % (key.replace("@" + other, ""), n, "the mainland" if other == "mainland"
@@ -6068,8 +6312,9 @@ def walk_options(args, data: dict) -> dict:
     if args.win and args.lose:
         raise UsageError("--win and --lose: a duel ends one way; name one.")
     out = {"food": args.food, "flags": flags, "counters": counters, "cards": _names(args.cards), "amulets": amulets,
-           "magics": _names(args.magic), "day": args.day, "wizards": args.wizards, "peace": args.peace,
-           "difficulty": args.difficulty, "plugins": _names(args.plugin), "gift": args.gift, "roll": args.roll}
+           "magics": _names(args.magic) + _names(args.magics), "day": args.day, "wizards": args.wizards, "peace": args.peace,
+           "difficulty": args.difficulty, "plugins": _names(args.plugin), "gift": args.gift, "roll": args.roll,
+           "life_bonus": args.life_bonus, "linked": args.linked}
     if args.color:
         out["color"] = args.color
     if args.win or args.lose:
@@ -6246,7 +6491,7 @@ def site_warnings(manifest: dict, data: dict, files: dict) -> list:
     """Every warning for a valid sites plugin, one sentence each."""
     file, text = data["sites"], data["text"]
     out: list = []
-    always = {"hero", "gold", "region", "food", "amulets", "day"}
+    always = {"hero", "gold", "region", "food", "amulets", "day", "life_bonus"}
     uses: dict = {}     # text key -> [(where, allowed placeholders)]
 
     def use(key, where: str, allowed: set) -> None:
@@ -6334,6 +6579,10 @@ def site_warnings(manifest: dict, data: dict, files: dict) -> list:
                 gives_card = any("give_card" in e for e in effects) or any("card" in n for n in action.get("needs", []))
                 if gives_card:
                     mine.add("card")
+                if any("world_magic" in e for e in effects):
+                    mine.add("title")
+                if any("mana_link" in e or ("teleport" in e and e["teleport"].get("to") == "nearest_town") for e in effects):
+                    mine.add("town")
                 if "label" in action:
                     use(action["label"], spot + ".label", mine)
                     if not priced and do != "leave":
@@ -6421,7 +6670,7 @@ def site_warnings(manifest: dict, data: dict, files: dict) -> list:
                 out.append("text.json: %s is used nowhere in sites.json." % key)
             continue
         for word in found:
-            if word in ISLAND_PLACEHOLDERS:
+            if word in ISLAND_PLACEHOLDERS and not any(word in allowed for _, allowed in uses[key]):
                 out.append("text.json: %s: {%s} is filled in an island plugin's texts only; a place shows it as "
                            "it is written." % (key, word))
                 continue
@@ -6456,6 +6705,8 @@ def site_warnings(manifest: dict, data: dict, files: dict) -> list:
 
 ## Where a placeholder is filled, said when a text uses it elsewhere.
 PLACEHOLDER_HOMES = {
+    "town": "{town} is filled in an action that teleports to the nearest town or makes a mana link.",
+    "title": "{title} is filled in an action that teaches a World Magic.",
     "price": "{price} is filled in the label, the result and the journal lines of an action with prices, not in a "
              "pane's own lines.",
     "uses_left": "{uses_left} is filled in the label of an action with prices.",
@@ -6483,13 +6734,16 @@ CHEAT_WHEN = {
     "owns_magic": "owns_magic=Dwarven Pick", "food_at_least": "food_at_least=10", "gold_below": "gold_below=100",
     "day_at_least": "day_at_least=30", "wizards_defeated": "wizards_defeated=2", "at_peace": "at_peace=true",
     "difficulty": "difficulty=0-1", "plugin_on": "plugin_on=old_hut", "counter": "counter=wins:3",
-    "site_used": "site_used=hut.secret", "gift_waiting": "gift_waiting=false", "any": "flag=told | gold_at_least=500"}
+    "site_used": "site_used=hut.secret", "gift_waiting": "gift_waiting=false", "any": "flag=told | gold_at_least=500",
+    "life_bonus_below": "life_bonus_below=10", "town_linked": "town_linked=nearest_town"}
 ## An effect as add-action --effect takes it.
 CHEAT_EFFECT = {
     "set_flag": "set_flag=told", "clear_flag": "clear_flag=told", "gold": "gold=-100", "food": "food=6",
     "spawn_dungeon": "spawn_dungeon=vault", "log_clue": "log_clue=The old man told you of a vault.",
     "log_event": "log_event=Paid at the shrine.", "counter": "counter=wins+1", "amulet": "amulet=red",
-    "give_card": "give_card=Shivan Dragon", "next_duel": "next_duel=life:5", "reveal_map": "reveal_map=place:4"}
+    "give_card": "give_card=Shivan Dragon", "next_duel": "next_duel=life:5", "reveal_map": "reveal_map=place:4",
+    "world_magic": "world_magic=Dwarven Pick", "mana_link": "mana_link=nearest_town", "life_bonus": "life_bonus=1",
+    "teleport": "teleport=nearest_town"}
 CHEAT_NEED = {"card": "card=Black Lotus", "amulets": "amulets=any:3", "food": "food=5"}
 ## An action of each kind, as it stands in sites.json, and the command that writes one like it.
 CHEAT_DO = {
@@ -6527,6 +6781,9 @@ CHEAT_PLACEHOLDERS = {
     "food": ("You carry {food} days of food.", "everywhere"),
     "amulets": ("You carry {amulets} amulets.", "everywhere"),
     "day": ("Day {day} of your journey.", "everywhere"),
+    "life_bonus": ("The places have added {life_bonus} life to your duels.", "everywhere"),
+    "town": ("Ride to {town} (100 gold)", "an action that teleports to the nearest town or makes a mana link"),
+    "title": ("Learn {title} ({price} gold)", "an action that teaches a World Magic"),
     "price": ("Pay {price} gold", "an action with prices: its label, result and journal lines"),
     "uses_left": ("Pay {price} gold ({uses_left} left)", "the label of an action with prices"),
     "card": ("A copy of {card} is yours.", "the result of a copy or a trade; an action that gives or needs a card"),
@@ -6612,10 +6869,16 @@ def cheat_rows(game: Game) -> dict:
         for name, spec in types[type_name]["fields"].items():
             out["fields"].append((name, label, doc(spec), api(group, name)))
     for name, words in schema["placeholders"].items():
+        if name in ("town", "title"):
+            words = {"town": "the nearest town or city, in an action that goes there or links it",
+                     "title": "the World Magic an action teaches"}[name]
         if name in CHEAT_PLACEHOLDERS:
             out["placeholders"].append((name, CHEAT_PLACEHOLDERS[name][0], CHEAT_PLACEHOLDERS[name][1], words))
         elif name not in ISLAND_PLACEHOLDERS:
             out["placeholders"].append((name, "... {%s} ..." % name, "", words))
+    # {town} and {title} are an island's words that a place fills in two kinds of action.
+    order = list(schema["placeholders"])
+    out["placeholders"].sort(key=lambda row: order.index(row[0]))
     return out
 
 
@@ -6707,6 +6970,7 @@ COMMAND_EXAMPLES = [
     ("new", "new My_Places --id my_places --name \"My Places\" --kind sites"),
     ("add-place", "add-place My_Places --id den --name \"The Gambler's Den\" --recipe gambler"),
     ("add-place", "add-place My_Places --list-recipes"),
+    ("add-place", "add-place My_Places --id ring --name \"The Ring\" --recipe duelist --set \"foe=Big Olaf\" --set deck=green --set wager=75"),
     ("add-place", "add-place My_Places --id well --name \"The Old Well\" --service effects --free --where mainland,islands"),
     ("add-pane", "add-pane My_Places --place well --id depths --line \"Far below, something glitters.\""),
     ("add-action", "add-action My_Places --place well --id look --do talk --to depths --label \"Look down the well\""),
@@ -6721,6 +6985,8 @@ COMMAND_EXAMPLES = [
     ("set-text", "set-text My_Places well.intro \"A well older than the road. Its rope is new.\""),
     ("remove-place", "remove-place My_Places --id shrine"),
     ("set-info", "set-info My_Places --description \"A well, a den and a ring by the road.\" --license \"CC BY 4.0\" --version 1.0.0"),
+    ("wizard", "wizard My_Places --answers answers.txt"),
+    ("preview", "preview My_Places"),
     ("walk", "walk My_Places"),
     ("walk", "walk My_Places --site well --press wish,wish,look --gold 50"),
     ("walk", "walk My_Places --site den --roll 3"),
@@ -6969,6 +7235,638 @@ def command_art(args, game: Game) -> int:
 # the command line
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# preview — a sites plugin's places as one page to look at: every pane as
+# the game lays it out, every button with what it does in plain words
+# --------------------------------------------------------------------------
+
+## A picture up to this size is put into the page itself; a bigger one is
+## named by its path beside the page (a folder) or left as a frame (a zip).
+PREVIEW_EMBED = 400 * 1024
+## The hero a preview fills the words with.
+PREVIEW_HERO = {"gold": 1000, "food": 10, "amulets": {"red": 1, "white": 1}, "day": 12}
+PREVIEW_CSS = """
+:root { --bg: #1b1712; --panel: #262018; --ink: #efe6d2; --muted: #b3a68b; --line: #4a3f2e; --gold: #e0b45c;
+  --accent: #7fc3d4; --ok: #9fcf8a; --warn: #e79a7a; --font: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+h1 { font-size: 1.9rem; margin: 0 0 0.2rem; color: var(--gold); }
+h2 { font-size: 1.45rem; margin: 2.6rem 0 0.4rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--gold); }
+h3 { font-size: 1.05rem; margin: 1.6rem 0 0.5rem; color: var(--accent); font-family: var(--mono); font-weight: 600; }
+p { margin: 0.4rem 0; }
+code { font: 0.88em var(--mono); background: #322a1f; border-radius: 4px; padding: 0.05em 0.3em; }
+.lede, .note { color: var(--muted); }
+.cap { display: block; font: 0.78rem/1.4 var(--mono); color: var(--muted); margin: 0.1rem 0 0.25rem; }
+.cap b { color: var(--accent); font-weight: 600; }
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; max-width: 34rem; overflow: hidden; }
+.pane .frame { aspect-ratio: 512 / 280; background: #120f0b; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font: 0.85rem var(--mono); text-align: center; }
+.pane .frame img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
+.pane .head { padding: 0.7rem 1rem 0; }
+.pane .title { font-size: 1.25rem; color: var(--gold); margin: 0; }
+.pane .subtitle { color: var(--muted); margin: 0; font-style: italic; }
+.pane .lines { padding: 0.5rem 1rem 0.2rem; }
+.pane .lines p { margin: 0.45rem 0; }
+.pane ul.turns { margin: 0.2rem 0 0.5rem 1.2rem; padding: 0; }
+.buttons { padding: 0.4rem 1rem 1rem; display: grid; gap: 0.7rem; }
+.button .face { display: inline-block; border: 1px solid var(--gold); color: var(--gold); border-radius: 6px;
+  padding: 0.3rem 0.8rem; background: #2f271b; }
+.button .does { display: block; font-size: 0.92rem; color: var(--ink); margin-top: 0.25rem; }
+.button .says { display: block; font-size: 0.92rem; color: var(--muted); margin-top: 0.15rem; }
+table { border-collapse: collapse; margin: 0.5rem 0; }
+td, th { border: 1px solid var(--line); padding: 0.3rem 0.6rem; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.warn { color: var(--warn); }
+@media (max-width: 560px) { main { padding: 1rem 0.6rem 3rem; } }
+"""
+
+
+def _join_words(parts: list, last: str = "and") -> str:
+    parts = [part for part in parts if part]
+    if len(parts) <= 1:
+        return "".join(parts)
+    return "%s %s %s" % (", ".join(parts[:-1]), last, parts[-1])
+
+
+def _between_words(value: dict, low_default: int, what: str) -> str:
+    low, high = int(value.get("min", low_default)), int(value.get("max", MOST_USES))
+    if high >= MOST_USES:
+        return "%s %d or more" % (what, low) if low > 0 else "%s anything" % what
+    return "%s %d" % (what, low) if low == high else "%s %d to %d" % (what, low, high)
+
+
+def condition_words(condition: dict) -> str:
+    """A condition in plain words: "flag told", "gold ≥ 500"."""
+    name = next(iter(condition))
+    value = condition[name]
+    if name == "flag":
+        return "flag %s" % value
+    if name == "not_flag":
+        return "not flag %s" % value
+    if name == "gold_at_least":
+        return "gold ≥ %d" % int(value)
+    if name == "gold_below":
+        return "gold < %d" % int(value)
+    if name == "food_at_least":
+        return "food ≥ %d" % int(value)
+    if name == "day_at_least":
+        return "day ≥ %d" % int(value)
+    if name == "wizards_defeated":
+        return "wizards defeated ≥ %d" % int(value)
+    if name == "on_mainland":
+        return "on the mainland" if value else "on an island"
+    if name == "at_peace":
+        return "at peace" if value else "not yet at peace"
+    if name == "gift_waiting":
+        return "a gift waits for the next duel" if value else "no gift waits for the next duel"
+    if name == "used":
+        return _between_words(value, 0, "%s done" % value["action"])
+    if name == "used_up":
+        return "%s used up" % value
+    if name == "dungeon":
+        return "dungeon %s %s" % (value["dungeon"], "not raised" if value["state"] == "none" else value["state"])
+    if name == "has_card":
+        return "holds %s%s" % ("%d × " % int(value["min"]) if int(value.get("min", 1)) > 1 else "", value["card"])
+    if name == "amulets":
+        color = str(value.get("color", "any"))
+        return "amulets%s ≥ %d" % ("" if color == "any" else " (%s)" % color, int(value.get("min", 1)))
+    if name == "hero_color":
+        return "the hero is %s" % value
+    if name == "owns_magic":
+        return "owns %s" % value
+    if name == "difficulty":
+        return "difficulty %d to %d" % (int(value.get("min", 0)), int(value.get("max", 3)))
+    if name == "plugin_on":
+        return "plugin %s is on" % value
+    if name == "counter":
+        return _between_words(value, 0, "counter %s is" % value["name"])
+    if name == "site_used":
+        return _between_words(value, 1, "%s.%s done" % (value["site"], value["action"]))
+    if name == "life_bonus_below":
+        return "life bonus < %d" % int(value)
+    if name == "town_linked":
+        return "the nearest town is mana-linked" if value else "the nearest town is not mana-linked"
+    if name == "any":
+        return "one of (%s)" % "; ".join(condition_words(inner) for inner in value)
+    return "%s %s" % (name, json.dumps(value, ensure_ascii=False))
+
+
+def when_words(conditions: list) -> str:
+    return ", ".join(condition_words(condition) for condition in conditions)
+
+
+def _gold_words(amount: int) -> str:
+    return "%s%d gold" % ("+" if amount >= 0 else "−", abs(amount))
+
+
+def effect_words(effect: dict, file: dict, say) -> str:
+    """An effect in plain words; [say] gives a text key's words."""
+    name = next(iter(effect))
+    value = effect[name]
+    if name == "gold":
+        return _gold_words(int(value))
+    if name == "food":
+        return "%s%d food" % ("+" if int(value) >= 0 else "−", abs(int(value)))
+    if name == "set_flag":
+        return "sets flag %s" % value
+    if name == "clear_flag":
+        return "clears flag %s" % value
+    if name == "counter":
+        if "set" in value:
+            return "counter %s = %d" % (value["name"], int(value["set"]))
+        return "counter %s %s%d" % (value["name"], "+" if int(value.get("add", 0)) >= 0 else "−", abs(int(value.get("add", 0))))
+    if name == "amulet":
+        count = int(value.get("count", 1))
+        return "%s%d %s amulet%s" % ("+" if count >= 0 else "−", abs(count), value["color"], "" if abs(count) == 1 else "s")
+    if name == "give_card":
+        return "gives the card %s" % value
+    if name == "next_duel":
+        return "for the next duel: %s" % ("%d more life" % int(value["life"]) if "life" in value else
+                                         "the first move" if value.get("first_move") else "%s in play" % value.get("card", ""))
+    if name == "spawn_dungeon":
+        return "raises the dungeon %s" % file["dungeons"].get(value, {}).get("name", value)
+    if name == "reveal_map":
+        around = str(value.get("around", "place"))
+        return "uncovers the map %d tiles around %s" % (int(value.get("radius", 4)), "the place" if around == "place" else
+                                                       file["dungeons"].get(around.partition(":")[2], {}).get("name", around))
+    if name == "log_clue":
+        return "a clue in the journal (“%s”)" % say(value["text"])
+    if name == "log_event":
+        return "a line in the journal (“%s”)" % say(value["text"])
+    if name == "teleport":
+        to = str(value.get("to", "")) if isinstance(value, dict) else str(value)
+        kind, _, key = to.partition(":")
+        return "carries the hero to %s" % ("the nearest town" if to == "nearest_town" else "where the journey began" if to == "start"
+                                           else file["sites"].get(key, {}).get("name", key) if kind == "place"
+                                           else file["dungeons"].get(key, {}).get("name", key))
+    if name == "world_magic":
+        return "teaches the World Magic %s" % value
+    if name == "mana_link":
+        return "links the nearest town's mana to the hero"
+    if name == "life_bonus":
+        return "+%d life in every duel from now on" % int(value)
+    if name == "roll":
+        outcomes = value.get("outcomes", [])
+        total = sum(max(1, int(o.get("weight", 1))) for o in outcomes)
+        return "rolls: " + ", ".join("%d in %d %s" % (max(1, int(o.get("weight", 1))), total,
+                                                      effects_words(o.get("effects", []), file, say) or "nothing")
+                                     for o in outcomes)
+    return "%s %s" % (name, json.dumps(value, ensure_ascii=False))
+
+
+def effects_words(effects: list, file: dict, say) -> str:
+    return ", ".join(effect_words(effect, file, say) for effect in effects)
+
+
+def action_words(action: dict, file: dict, say) -> str:
+    """What a button does, in one plain sentence."""
+    do = str(action["do"])
+    if do == "leave":
+        return "closes the pane"
+    parts = []
+    prices = [int(p) for p in action.get("prices", [])]
+    if prices:
+        ladder = ("%d gold" % prices[0] if len(set(prices)) == 1 else "%s gold in turn" % ", ".join(str(p) for p in prices)) \
+            if any(prices) else "nothing"
+        parts.append("%s %s, %s" % ("stakes" if do == "duel" else "pays", ladder,
+                                    "once" if len(prices) == 1 else "%d times in all" % len(prices)))
+    elif do not in ("buy_card", "sell_card"):
+        parts.append("free, any number of times")
+    needs = []
+    for need in action.get("needs", []):
+        if "card" in need:
+            needs.append("the card %s" % need["card"])
+        elif "amulets" in need:
+            count, color = int(need["amulets"].get("count", 1)), str(need["amulets"].get("color", "any"))
+            needs.append("%d %samulet%s" % (count, "" if color == "any" else color + " ", "" if count == 1 else "s"))
+        elif "food" in need:
+            needs.append("%d food" % int(need["food"]))
+    if needs:
+        parts.append("takes " + _join_words(needs))
+    if do == "copy_card":
+        parts.append("copies a card the hero picks")
+    elif do in ("buy_card", "sell_card"):
+        cards = ", ".join("%s for %d gold" % (card, int(price)) for card, price in action.get("cards", {}).items())
+        parts.append("%s: %s%s" % ("sells the hero a card" if do == "buy_card" else "buys a card the hero holds", cards,
+                                   "; %d of each" % int(action["stock"]) if "stock" in action else ""))
+    elif do == "duel":
+        foe = file.get("foes", {}).get(str(action.get("foe", "")), {})
+        parts.append("duel %s (%d life)" % (foe.get("name", action.get("foe", "")), int(foe.get("life", 20))))
+        for side in ("win", "lose"):
+            parts.append("%s: %s" % (side, effects_words(action.get(side, {}).get("effects", []), file, say) or "nothing"))
+        if str(action.get("count", "press")) == "win":
+            parts.append("counted when won")
+    else:
+        done = effects_words(action.get("effects", []), file, say)
+        if done:
+            parts.append(done)
+        if do == "talk":
+            parts.append("opens the pane %s" % action.get("to", ""))
+    return "; ".join(parts)
+
+
+def preview_html(result: dict, only: str = "", page_dir: Path | None = None) -> str:
+    """The preview page of the valid sites plugin [result] (a judgement):
+    one self-contained HTML document, the same bytes for the same plugin.
+    Every word of the plugin is escaped: a plugin's text is never markup."""
+    data, files, manifest = result["data"], result["files"], result["manifest"]
+    file = data["sites"]
+    hero = walk_hero(data, PREVIEW_HERO["gold"], {"food": PREVIEW_HERO["food"], "amulets": PREVIEW_HERO["amulets"],
+                                                 "day": PREVIEW_HERO["day"]})
+    e = lambda value: html.escape(str(value), quote=True)
+
+    def say(key) -> str:
+        return hero.say(str(key))
+
+    def cap(label: str, words: str) -> str:
+        return '<span class="cap"><b>%s</b> %s</span>' % (e(label), e(words)) if words else ""
+
+    def picture(key: str) -> str:
+        rel = file["pictures"].get(key)
+        if rel is None:
+            return '<div class="frame">the player’s skin draws %s</div>' % e(key)
+        blob = files.get(rel, b"")
+        kind = picture_kind(blob)
+        if kind and len(blob) <= PREVIEW_EMBED:
+            import base64
+            mime = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}.get(kind, "image/" + kind)
+            return '<div class="frame"><img alt="%s" src="data:%s;base64,%s"></div>' % (
+                e(rel), mime, base64.b64encode(blob).decode("ascii"))
+        if result["kind"] == "folder" and page_dir is not None:
+            link = os.path.relpath(Path(result["path"]).resolve() / rel, page_dir.resolve()).replace(os.sep, "/")
+            from urllib.parse import quote
+            return '<div class="frame"><img alt="%s" src="%s"></div>' % (e(rel), e(quote(link)))
+        return '<div class="frame">%s (%s; too big to put into this page)</div>' % (e(rel), e(_bytes_text(len(blob))))
+
+    def lines_html(site: str, lines: list, filled: dict) -> str:
+        out = []
+        for line in lines:
+            if isinstance(line, str):
+                out.append("<p>%s</p>" % e(hero.say(line, filled)))
+                continue
+            own = filled
+            asked = SiteWalk.named_condition(line.get("when", []), "counter")
+            if isinstance(asked, dict):
+                own = dict(filled, count=hero.counter(str(asked["name"])))
+            when = cap("shown when:", when_words(line.get("when", [])))
+            if "one_of" in line:
+                out.append('%s<span class="cap"><b>one of these, in turn</b> %s</span><ul class="turns">%s</ul>' % (
+                    when, e("the next one each day" if str(line.get("by", "day")) == "day"
+                            else "the next one each time a button of the place is used"),
+                    "".join("<li>%s</li>" % e(hero.say(str(key), own)) for key in line["one_of"])))
+            else:
+                out.append("%s<p>%s</p>" % (when, e(hero.say(str(line["text"]), own))))
+        return "".join(out)
+
+    body = ["<h1>%s</h1>" % e(manifest.get("name", data["id"])),
+            '<p class="lede">%s</p>' % e(manifest.get("description", "")),
+            '<p class="note">A preview written by <code>%s preview</code>: every pane of every place, as the game lays '
+            'it out. The words are filled for a hero named %s who carries %d gold, %d food and %d amulets on day %d, '
+            'with every counter at 0; a price shown is the first of its list. Plugin <code>%s</code> %s, plugin API %d.</p>'
+            % (e(TOOL), e(WALK_HERO), PREVIEW_HERO["gold"], PREVIEW_HERO["food"], sum(PREVIEW_HERO["amulets"].values()),
+               PREVIEW_HERO["day"], e(data["id"]), e(manifest.get("version", "")), int(manifest.get("api_version", 1)))]
+    for key, site in file["sites"].items():
+        if only and key != only:
+            continue
+        body.append('<section class="place" id="place-%s"><h2>%s</h2>' % (e(key), e(site["name"])))
+        body.append('<p class="note">Place <code>%s</code>, on %s; it keeps %d tiles from towns, dungeons and other '
+                    'places.</p>' % (e(key), e(_join_words(["the mainland" if land == "mainland" else "every island"
+                                                           for land in site["where"]])), int(site["gap"])))
+        plain = [pane for pane in site["panes"] if "id" not in pane]
+        for p, pane in enumerate(site["panes"]):
+            if "id" in pane:
+                opened = [str(a["id"]) for a in _site_actions(site).values() if a.get("to") == pane["id"]]
+                how = "opened by the button%s %s" % ("" if len(opened) == 1 else "s", _join_words(opened)) if opened \
+                    else "no button opens it"
+                if pane.get("when"):
+                    how += ", while: " + when_words(pane["when"])
+            elif pane.get("when"):
+                how = "shown when: " + when_words(pane["when"])
+            else:
+                how = "shown otherwise" if len(plain) > 1 else "always shown"
+            filled = hero.values(key, None, None, pane)
+            body.append('<h3 id="pane-%s-%d">pane %d%s</h3>' % (e(key), p, p, " · id %s" % e(pane["id"]) if "id" in pane else ""))
+            body.append('<span class="cap">%s</span>' % e(how))
+            body.append('<div class="pane">%s<div class="head"><p class="title">%s</p><p class="subtitle">%s</p></div>'
+                        % (picture(str(pane.get("picture", site["picture"]))),
+                           e(hero.say(str(pane["title"]), filled) if "title" in pane else site["name"]),
+                           e(hero.say(str(pane["subtitle"]), filled) if "subtitle" in pane
+                             else manifest.get("name", data["id"]))))
+            body.append('<div class="lines">%s</div><div class="buttons">' % lines_html(key, pane["lines"], filled))
+            for action in pane["actions"]:
+                words = hero.values(key, action)
+                label = hero.say(str(action.get("label", "site.leave")) if str(action["do"]) == "leave"
+                                 else SiteWalk.label_key(action), words)
+                body.append('<div class="button">%s<span class="face">%s</span><span class="does">%s</span>' % (
+                    cap("shown when:", when_words(action["when"])), e(label), e(action_words(action, file, say))))
+                after = dict(words, price=words.get("price", 0))
+                for where, lines in action_line_lists(action, ""):
+                    if not lines:
+                        continue
+                    tag = "win" if where.startswith(".win") else "lose" if where.startswith(".lose") else \
+                        "outcome %d" % (int(re.findall(r"outcomes\[(\d+)\]", where)[-1]) + 1) if "outcomes[" in where else ""
+                    body.append('<span class="says"><b>%s</b> %s</span>' % (
+                        e("then says%s:" % (" (%s)" % tag if tag else "")),
+                        " ".join(e(hero.say(line if isinstance(line, str) else str(line.get("text", (line.get("one_of") or [""])[0])),
+                                            dict(after, card=after.get("card", "the card")))) for line in lines)))
+                body.append("</div>")
+            body.append("</div></div>")
+        body.append("</section>")
+    if not only:
+        if file["dungeons"]:
+            body.append('<section id="dungeons"><h2>Dungeons</h2><table><tr><th>Dungeon</th><th>Creatures</th><th>Rules</th>'
+                        '<th>Treasure</th><th>From its place</th></tr>')
+            for key, dungeon in file["dungeons"].items():
+                body.append("<tr><td>%s <code>%s</code></td><td>%s, %s</td><td>%s</td><td>%s</td><td>%d to %d tiles</td></tr>" % (
+                    e(dungeon["name"]), e(key), e(dungeon["color"]), e(dungeon["size"]), e(", ".join(dungeon["rules"]) or "none"),
+                    e(", ".join(dungeon["cards"])), int(dungeon["distance"]["min"]), int(dungeon["distance"]["max"])))
+            body.append("</table></section>")
+        if file.get("foes"):
+            body.append('<section id="foes"><h2>Opponents</h2><table><tr><th>Opponent</th><th>Life</th><th>Deck</th></tr>')
+            for key, foe in file["foes"].items():
+                body.append("<tr><td>%s <code>%s</code></td><td>%d</td><td>%s%d cards: %s</td></tr>" % (
+                    e(foe["name"]), e(key), int(foe["life"]), e(foe["deck_name"] + ", ") if "deck_name" in foe else "",
+                    sum(int(n) for n in foe["deck"].values()),
+                    e(", ".join("%d %s" % (int(n), card) for card, n in foe["deck"].items()))))
+            body.append("</table></section>")
+        if file.get("tasks"):
+            body.append('<section id="tasks"><h2>Tasks rows</h2><table><tr><th>Title</th><th>While open</th><th>Once done</th>'
+                        '<th>Guides to</th><th>Listed when</th><th>Done when</th></tr>')
+            for key, task in file["tasks"].items():
+                at = str(task.get("at", ""))
+                kind, _, name = at.partition(":")
+                body.append("<tr><td>%s <code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                    e(say(task["title"])), e(key), e(say(task["text"])), e(say(task.get("done", task["text"]))),
+                    e(file["sites"].get(name, {}).get("name", name) if kind == "place" else
+                      file["dungeons"].get(name, {}).get("name", name) if kind == "dungeon" else "nowhere"),
+                    e(when_words(task.get("when", [])) or "always"), e(when_words(task.get("done_when", [])) or "never")))
+            body.append("</table></section>")
+        if file["flags"] or file.get("counters"):
+            body.append('<section id="names"><h2>Flags and counters</h2><p>Flags: %s. Counters: %s.</p></section>' % (
+                e(", ".join(file["flags"]) or "none"), e(", ".join(file.get("counters", [])) or "none")))
+        if result.get("warnings"):
+            body.append('<section id="warnings"><h2>Warnings</h2>%s</section>' % "".join(
+                '<p class="warn">%s</p>' % e(warning) for warning in result["warnings"]))
+    return ("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" "
+            "content=\"width=device-width, initial-scale=1\">\n<title>%s · preview</title>\n<style>%s</style>\n</head>\n"
+            "<body>\n<main>\n%s\n</main>\n</body>\n</html>\n"
+            % (e(manifest.get("name", data["id"])), PREVIEW_CSS, "\n".join(body)))
+
+
+def command_preview(args, game: Game) -> int:
+    result = judge(_existing(args.plugin), game)
+    if result["valid"] and manifest_kind(result["manifest"]) != KIND_SITES:
+        raise UsageError("%s is an island plugin: preview shows a sites plugin's places." % args.plugin)
+    if not result["valid"]:
+        for problem in result["problems"]:
+            print(problem)
+        print("%s: refused at the %s stage; a preview needs a valid plugin." % (args.plugin, result["stage"]), file=sys.stderr)
+        return 1
+    if args.site and args.site not in result["data"]["sites"]["sites"]:
+        raise UsageError("%s has no place %s (its places: %s)." % (args.plugin, args.site,
+                                                                   ", ".join(result["data"]["sites"]["sites"])))
+    out = Path(args.out if args.out else "preview")
+    if out.exists() and not out.is_dir():
+        raise UsageError("--out %s is not a folder." % out)
+    source = Path(result["path"]).resolve()
+    if result["kind"] == "folder" and (out.resolve() == source or source in out.resolve().parents):
+        raise UsageError("--out must be outside the plugin folder: an .html file inside it would refuse the plugin.")
+    out.mkdir(parents=True, exist_ok=True)
+    target = out / ("%s%s.html" % (result["data"]["id"], "_" + args.site if args.site else ""))
+    page = preview_html(result, args.site, out)
+    _write_whole(target, page.encode("utf-8"))
+    places = [args.site] if args.site else list(result["data"]["sites"]["sites"])
+    print("Wrote %s (%s): %d place%s, %d pane%s. Open it in a browser; nothing in it asks the network for anything."
+          % (target, _bytes_text(len(page.encode("utf-8"))), len(places), "" if len(places) == 1 else "s",
+             sum(len(result["data"]["sites"]["sites"][key]["panes"]) for key in places),
+             "" if sum(len(result["data"]["sites"]["sites"][key]["panes"]) for key in places) == 1 else "s"))
+    if args.open:
+        import webbrowser
+        webbrowser.open(target.resolve().as_uri())
+    return 0
+
+
+# --------------------------------------------------------------------------
+# wizard — a place made by answering questions
+# --------------------------------------------------------------------------
+
+class _Quit(Exception):
+    """The wizard was left before it wrote anything."""
+
+
+class _Asker:
+    """The wizard's questions: read from a terminal, or from a file of
+    answers (one a line; an empty line, or the file's end, takes the
+    default). "q" leaves at any question."""
+
+    def __init__(self, answers: list | None):
+        self.answers = answers
+        self.at = 0
+
+    def read(self) -> str:
+        if self.answers is None:
+            try:
+                return input("> ")
+            except EOFError as error:
+                raise _Quit() from error
+        line = self.answers[self.at] if self.at < len(self.answers) else ""
+        self.at += 1
+        print("> " + line)
+        return line
+
+    def ask(self, question: str, default: str = "", choices: list | None = None, check=None) -> str:
+        """[choices]: [(value, words)], answered by number or by value.
+        [check]: a function that raises UsageError for a wrong answer."""
+        for _ in range(100):
+            print()
+            print(question + (" [%s]" % default if default != "" and not choices else ""))
+            for n, (value, words) in enumerate(choices or [], 1):
+                print("  %2d. %-10s %s%s" % (n, value, words, "   (Enter)" if value == default else ""))
+            answer = strip_edges(self.read())
+            if answer.lower() in ("q", "quit"):
+                raise _Quit()
+            if answer == "":
+                answer = default
+            elif choices and is_valid_int(answer) and 1 <= int(answer) <= len(choices):
+                answer = choices[int(answer) - 1][0]
+            problem = ""
+            if choices and answer not in [value for value, _ in choices]:
+                problem = "Answer with a number from 1 to %d." % len(choices)
+            elif check is not None:
+                try:
+                    check(answer)
+                except UsageError as error:
+                    problem = str(error)
+            if not problem:
+                return answer
+            if self.answers is not None:
+                raise UsageError("wizard: answer %d (%s) does not fit \"%s\": %s" % (self.at, answer, question, problem))
+            print(problem)
+        raise _Quit()
+
+
+def _slug(name: str, most: int) -> str:
+    out = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    out = re.sub(r"^(the|a|an)_", "", out)
+    if not out or not out[0].isalpha():
+        out = "p_" + out
+    return out[:most].rstrip("_") or "place"
+
+
+def _run_quiet(argv: list, game: Game) -> tuple:
+    """A command of this tool run inside the tool: (exit code, what it printed)."""
+    import contextlib
+    args = parser().parse_args(argv)
+    said, erred = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(said), contextlib.redirect_stderr(erred):
+        code = COMMANDS[args.command](args, game)
+    return code, said.getvalue() + erred.getvalue()
+
+
+def command_wizard(args, game: Game) -> int:
+    answers = None
+    if args.answers:
+        try:
+            answers = utf8_string(Path(args.answers).read_bytes()).lstrip("﻿").splitlines()
+        except OSError as error:
+            raise UsageError("--answers %s could not be read (%s)." % (args.answers, error)) from error
+    elif not sys.stdin.isatty():
+        raise UsageError("wizard asks its questions at a terminal, and this is none: run it in a terminal window, or "
+                         "give it the answers with --answers FILE (one answer a line; an empty line takes the default).")
+    game.schema()
+    asker = _Asker(answers)
+    folder = Path(args.folder) if args.folder else None
+    adding = folder is not None and folder.is_dir() and any(folder.iterdir())
+    try:
+        print("A place for Shandalar, made by answering a few questions. Enter takes the answer in [brackets] or "
+              "marked (Enter); q leaves, and nothing is written until the last question is answered.")
+        if adding:
+            _, manifest, sites, _ = _sites_folder(str(folder), game, "wizard")
+            print("\nAdding a place to %s (plugin %s, its places: %s)." % (folder, manifest["id"], ", ".join(sites["sites"])))
+            if len(sites["sites"]) >= 8:
+                raise UsageError("%s already has eight places, the most a sites plugin holds." % folder)
+            ident, taken = str(manifest["id"]), set(sites["sites"])
+        else:
+            def name_check(value: str) -> None:
+                if not value or len(value) > MAX_NAME:
+                    raise UsageError("A name is 1 to %d characters." % MAX_NAME)
+            plugin_name = asker.ask("What is your plugin called? (its name in the game's plugin list)", "My Places", None, name_check)
+            author = asker.ask("Who made it? (your name, as its author)", "Unnamed author", None, name_check)
+            ident = _slug(plugin_name, 30)
+            if not valid_id(ident):
+                ident = "my_" + ident[:27]
+            if folder is None:
+                folder = Path(re.sub(r"[^A-Za-z0-9]+", "_", plugin_name).strip("_") or "My_Places")
+            if folder.exists() and (not folder.is_dir() or any(folder.iterdir())):
+                raise UsageError("%s already exists and is not a sites plugin folder; name another folder: wizard FOLDER." % folder)
+            taken = set()
+
+        def place_check(value: str) -> None:
+            if not value or len(value) > 60:
+                raise UsageError("A place's name is 1 to 60 characters.")
+        place_name = asker.ask("What is the place called? (its name on the map)", "The Old Inn", None, place_check)
+        key = _slug(place_name, max(1, min(24, 39 - len(ident))))
+        stem, n = key, 1
+        while key in taken:
+            n += 1
+            key = "%s%d" % (stem, n)
+        recipe = asker.ask("What kind of place is it?", "lore", [(name, line) for name, (_, line) in RECIPES.items()])
+        chosen = {}
+        for name, kind, default, question in RECIPE_OPTIONS.get(recipe, []):
+            shown = ",".join(str(v) for v in default) if isinstance(default, list) else str(default)
+            choices = None
+            if kind == "deck":
+                choices = [(deck, "%d cards: %s" % (sum(cards.values()), ", ".join(list(cards)[1:4]) + ", ..."))
+                           for deck, cards in STOCK_DECKS.items()]
+            elif kind == "color":
+                choices = [(color, "") for color in AMULET_COLORS]
+            elif kind == "choice":
+                choices = [(value, words) for value, words in RECIPE_CHOICES[name].items()]
+            elif kind == "magic":
+                choices = [(value, "") for value in game.schema()["types"]["sites_condition"]["options"]["owns_magic"]["values"]]
+
+            def check(value: str, name=name, kind=kind) -> None:
+                recipe_options(recipe, dict(chosen, **{name: value}))
+                if kind == "card" and value and not game.card_known(value, []):
+                    near = close_names(value, game.base or ())
+                    raise UsageError("%s is not a card of the base game%s." % (value, "; did you mean %s?" % ", ".join(near) if near else ""))
+            chosen[name] = asker.ask(question + ("" if choices else "."), shown, choices, check)
+        where = asker.ask("Where does it stand?", "mainland", [("mainland", "once, on Shandalar's mainland"),
+                                                              ("islands", "once on every island plugin's island"),
+                                                              ("both", "on the mainland and on every island")])
+        go = asker.ask("Write it now?", "yes", [("yes", "write the %s" % ("place into %s" % folder if adding else "plugin into %s" % folder)),
+                                               ("no", "leave, and write nothing")])
+        if go != "yes":
+            raise _Quit()
+    except (_Quit, KeyboardInterrupt):
+        print("\nLeft the wizard; nothing was written.")
+        return 1
+    place_args = ["add-place", "FOLDER", "--id", key, "--name", place_name, "--recipe", recipe,
+                  "--where", "mainland,islands" if where == "both" else where]
+    for name, value in chosen.items():
+        default = next(d for n, _, d, _ in RECIPE_OPTIONS[recipe] if n == name)
+        if str(value) != (",".join(str(v) for v in default) if isinstance(default, list) else str(default)):
+            place_args += ["--set", "%s=%s" % (name, value)]
+    steps = [place_args] if adding else [["new", "FOLDER", "--id", ident, "--name", plugin_name, "--author", author, "--kind", "sites"],
+                                         place_args, ["remove-place", "FOLDER", "--id", "shrine"]]
+    # ALL OR NOTHING: a new plugin is built in a folder of its own beside
+    # the one asked for and moved there whole; a place added to a plugin is
+    # one add-place, which puts every file back when it is refused.
+    target = folder
+    work = target if adding else Path(tempfile.mkdtemp(prefix="." + target.name + ".", suffix=".part",
+                                                       dir=str(target.resolve().parent)))
+    build = work if adding else work / target.name
+    try:
+        for step in steps:
+            code, said = _run_quiet([str(build) if part == "FOLDER" else part for part in step], game)
+            if code != 0:
+                print(said.strip())
+                print("\nThe wizard could not write the %s; nothing was written." % ("place" if adding else "plugin"), file=sys.stderr)
+                return 1
+        if not adding:
+            if target.exists():
+                target.rmdir()
+            os.replace(build, target)
+    except KeyboardInterrupt:
+        print("\nLeft the wizard; nothing was written.")
+        return 1
+    finally:
+        if not adding:
+            shutil.rmtree(work, ignore_errors=True)
+    result = judge(str(target), game)
+    quoted = _quoted(target)
+    print("\nDone: %s %s. The place %s (%s) is the recipe %s, on %s." % (
+        "added to" if adding else "wrote", target, key, place_name, recipe,
+        "the mainland and every island" if where == "both" else "the mainland" if where == "mainland" else "every island"))
+    print("The same, as commands:")
+    for step in steps:
+        print("    python3 tools/%s %s" % (TOOL, " ".join(quoted if part == "FOLDER" else _quoted(part) for part in step)))
+    print("\nChecked as the game checks it: %s%s." % (
+        "valid" if result["valid"] else "REFUSED: " + (result["problems"] or ["?"])[0],
+        ", with %d warning%s (its stand-in pictures and words to make your own; validate lists them)"
+        % (len(result["warnings"]), "" if len(result["warnings"]) == 1 else "s") if result.get("warnings") else ""))
+    if result["valid"]:
+        run = walk_site(result["data"], key, 100000, "island" if where == "islands" else "mainland")
+        missed = never_reached(result["data"], key, [run])
+        presses = [step for step in run["steps"] if step["kind"] == "press"]
+        print("Walked without the game: %d pane%s shown, %d button%s pressed%s." % (
+            len(run["seen"]["panes"]), "" if len(run["seen"]["panes"]) == 1 else "s", len(presses),
+            "" if len(presses) == 1 else "s",
+            "; %d thing%s not reached by a plain hero (walk says how)" % (len(missed), "" if len(missed) == 1 else "s")
+            if missed else "; everything reached"))
+    print("\nNext:\n"
+          "    python3 tools/%s preview %s            see every pane as a page (open preview/%s.html)\n"
+          "    python3 tools/%s walk %s --site %s     play it as text\n"
+          "    python3 tools/%s set-text %s %s.intro \"Your own words.\"\n"
+          "    python3 tools/%s art %s                advice for your own pictures in %s/art/\n"
+          "    python3 tools/%s set-info %s --description \"...\" --license \"...\"\n"
+          "    python3 tools/%s export %s --out dist  pack it; put the zip into the game's expanded_adventure folder\n"
+          "    python3 tools/%s wizard %s             add another place"
+          % (TOOL, quoted, ident, TOOL, quoted, key, TOOL, quoted, key, TOOL, quoted, quoted, TOOL, quoted, TOOL, quoted,
+             TOOL, quoted))
+    return 0 if result["valid"] else 1
 def version_line(game: Game) -> str:
     return "%s — Shandalar %s (adventure plugin API %d)" % (TOOL, game.version or "version unknown", API_VERSION)
 
@@ -6980,7 +7878,7 @@ class _Parser(argparse.ArgumentParser):
 
 def parser() -> argparse.ArgumentParser:
     top = _Parser(prog=TOOL, description=__doc__.split("\n\n")[0],
-                  epilog="A place, step by step: new --kind sites, add-place --recipe, add-action, add-pane, set-text, "
+                  epilog="The short way to a place: wizard, then preview. Step by step: new --kind sites, add-place --recipe, add-action, add-pane, set-text, "
                          "add-dungeon, walk, art, validate, export. "
                          "Exit codes: 0 done or valid or compatible; 1 refused or incompatible; 2 a usage error.",
                   formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -7020,6 +7918,9 @@ def parser() -> argparse.ArgumentParser:
                        help="a whole place to rewrite: " + ", ".join(RECIPES) + " (see --list-recipes)")
     place.add_argument("--list-recipes", action="store_true", help="print the recipes, one line each, and exit")
     place.add_argument("--card", default="", help="with --recipe gift, collector, quest or shop: the card it is about")
+    place.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+                       help="with --recipe: one of its numbers or names, like --set price=75 (the wizard asks for each; "
+                            "a wrong name lists the recipe's own)")
     place.add_argument("--color", default="", choices=[""] + AMULET_COLORS,
                        help="with --recipe toll: the hero's color that passes free (default green)")
     place.add_argument("--look", default="", choices=[""] + list(PLACE_LOOKS),
@@ -7129,6 +8030,10 @@ def parser() -> argparse.ArgumentParser:
     walk.add_argument("--amulets", action="append", default=[], metavar="COLOR=N", help="amulets the hero carries, like red=2")
     walk.add_argument("--color", default="", help="the hero's color (default white)")
     walk.add_argument("--magic", action="append", default=[], metavar="NAME", help="a World Magic the hero owns")
+    walk.add_argument("--magics", action="append", default=[], metavar="\"A,B\"", help="World Magics the hero owns")
+    walk.add_argument("--life-bonus", type=int, default=0, metavar="N",
+                      help="the life the places have added to the hero's start already, 0 to 10 (default 0)")
+    walk.add_argument("--linked", action="store_true", help="the nearest town is mana-linked already")
     walk.add_argument("--day", type=int, default=0, help="the day of the journey (default 0, its first)")
     walk.add_argument("--wizards", type=int, default=0, help="wizards defeated (default 0)")
     walk.add_argument("--peace", action="store_true", help="the land is at peace (at_peace holds)")
@@ -7146,11 +8051,31 @@ def parser() -> argparse.ArgumentParser:
     art = commands.add_parser("art", parents=[common], help="advice on a plugin's pane pictures and map sprites")
     art.add_argument("plugin", help="a plugin folder or .zip")
     art.add_argument("--json", action="store_true")
+    look = commands.add_parser("preview", parents=[common],
+                               help="write one HTML page that shows every pane of a sites plugin's places")
+    look.add_argument("plugin", help="a sites plugin folder or .zip")
+    look.add_argument("--site", default="", help="one place only")
+    look.add_argument("--out", metavar="DIR", help="where the page goes (default: preview/ in the current folder)")
+    look.add_argument("--open", action="store_true", help="open the page in the browser once written")
+    wiz = commands.add_parser("wizard", parents=[common],
+                              help="make a place by answering questions (a new plugin, or one more place in FOLDER)")
+    wiz.add_argument("folder", nargs="?", default="", help="the plugin's folder (default: named after the plugin)")
+    wiz.add_argument("--answers", metavar="FILE", default="",
+                     help="the answers, one a line, instead of asking (an empty line takes the default)")
     guide = commands.add_parser("guide", parents=[common],
                                 help="write GUIDE/reference.html and GUIDE/cheatsheet.html from the schema")
     guide.add_argument("--out", metavar="DIR", help="the guide's folder (default: expanded_adventure/GUIDE)")
     guide.add_argument("--check", action="store_true", help="exit 1 when a written page is not up to date")
     return top
+
+
+COMMANDS = {"new": command_new, "validate": command_validate, "export": command_export, "info": command_info,
+            "compat": command_compat, "guide": command_guide, "add-place": command_add_place,
+            "add-dungeon": command_add_dungeon, "walk": command_walk, "art": command_art,
+            "add-action": command_add_action, "add-pane": command_add_pane, "add-flag": command_add_flag,
+            "add-counter": command_add_counter, "add-foe": command_add_foe, "set-text": command_set_text,
+            "remove-place": command_remove_place, "set-info": command_set_info,
+            "preview": command_preview, "wizard": command_wizard}
 
 
 def main(argv: list | None = None) -> int:
@@ -7169,12 +8094,7 @@ def main(argv: list | None = None) -> int:
         if args.command is None:
             parser().print_help()
             return 2
-        return {"new": command_new, "validate": command_validate, "export": command_export, "info": command_info,
-                "compat": command_compat, "guide": command_guide, "add-place": command_add_place,
-                "add-dungeon": command_add_dungeon, "walk": command_walk, "art": command_art,
-                "add-action": command_add_action, "add-pane": command_add_pane, "add-flag": command_add_flag,
-                "add-counter": command_add_counter, "add-foe": command_add_foe, "set-text": command_set_text,
-                "remove-place": command_remove_place, "set-info": command_set_info}[args.command](args, game)
+        return COMMANDS[args.command](args, game)
     except UsageError as error:
         print("%s: %s" % (TOOL, error), file=sys.stderr)
         if "--json" in argv:

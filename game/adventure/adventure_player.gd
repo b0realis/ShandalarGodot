@@ -395,6 +395,13 @@ var next_duel_life := 0
 var next_duel_life_carried := 0
 ## A card the next duel starts with in play, "" for none (0x224C0 above 5).
 var next_duel_card := ""
+## [Ours] THE LIFE THE PLACES HAVE ADDED for good (a sites plugin's
+## `life_bonus` effect, 2026-11-22): 0 to [constant LIFE_BONUS_MOST] from
+## all plugins together, counted in [method duel_start_life]. Paid for, so
+## it stays when its plugin is gone. Saved only when above 0 (`duels`'
+## `life_bonus`; an older game drops it).
+var life_bonus := 0
+const LIFE_BONUS_MOST := 10
 ## The first move in the next duel (0x224C0 = 0).
 var next_duel_first_move := false
 ## THE VICTORY LOG (0x21D28): each duel won against a roaming creature,
@@ -785,7 +792,8 @@ func life_base() -> int:
 
 
 ## THE LIFE EVERY ADVENTURE DUEL STARTS FROM, before the next duel's lives:
-## [method life_base] and the mana links ([method mana_links]) — 1997's
+## [method life_base], the mana links ([method mana_links]) and what the
+## places added for good ([member life_bonus], ours) — 1997's
 ## `CountDuelPoolEligibleTowns` under "Links only". THE ONE READER: a
 ## meeting's, a lair's, a ruled town's, a dungeon room's (its life pool
 ## counts from it), a castle's and the final battle's life
@@ -793,7 +801,7 @@ func life_base() -> int:
 ## the carried lives' start ([DuelSpoils]) and the purse's life on the
 ## pre-duel screens ([method EncounterStage.purse]).
 func duel_start_life() -> int:
-	return life_base() + mana_links()
+	return life_base() + mana_links() + clampi(life_bonus, 0, LIFE_BONUS_MOST)
 
 
 ## Whether a link a siege took comes back with its town ([constant
@@ -1018,7 +1026,7 @@ func to_dict(include_regions := true) -> Dictionary:
 		sites.append({"slot": slot, "kind": SITE_KINDS[clampi(int(site["type"]), 0, 5)],
 			"type": int(site["type"]), "x": int(site["x"]), "y": int(site["y"]),
 			"trade": int(site["trade"]), "status": int(site["status"])})
-	return {
+	var out := {
 		"format": FORMAT,
 		"version": FORMAT_VERSION,
 		"regions": regions if include_regions else {},
@@ -1075,6 +1083,10 @@ func to_dict(include_regions := true) -> Dictionary:
 			"shops": shops,
 		},
 	}
+	# Only when a place added any: a save without it is the save it was.
+	if life_bonus > 0:
+		out["duels"]["life_bonus"] = clampi(life_bonus, 0, LIFE_BONUS_MOST)
+	return out
 
 
 ## THE ADVENTURE FROM A SAVE, or null when [param data] is not one this
@@ -1331,6 +1343,7 @@ static func _read_duels(player: AdventurePlayer, duels: Dictionary) -> void:
 	player.next_duel_life_carried = _number(duels.get("next_duel_life_carried"))
 	player.next_duel_card = _text(duels.get("next_duel_card"))
 	player.next_duel_first_move = _flag(duels.get("next_duel_first_move"))
+	player.life_bonus = clampi(_number(duels.get("life_bonus")), 0, LIFE_BONUS_MOST)
 	player.duel_victories = _victories(duels.get("victories"))
 	var learned := _object(duels.get("creature_deck_colors"))
 	for i in COLORS.size():

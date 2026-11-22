@@ -5,7 +5,7 @@
 	"id": "riddle_stone",
 	"name": "The Riddle Stone",
 	"version": "1.0.0",
-	"minimum_game_version": "0.70.6",
+	"minimum_game_version": "0.70.7",
 	"authors": [
 		"Shandalar Godot"
 	],

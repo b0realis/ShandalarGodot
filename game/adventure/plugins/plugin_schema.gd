@@ -424,6 +424,7 @@ static func _check_sites(file: Dictionary, problems: Array[String], api := 3) ->
 		var site: Dictionary = file["sites"][key]
 		var at := "sites.json: sites.%s" % key
 		var actions: Dictionary = all[key]
+		known["site"] = key
 		var panes := {}
 		var opening := -1
 		for p in site["panes"].size():
@@ -541,7 +542,7 @@ static func _check_site_action(action: Dictionary, spot: String, known: Dictiona
 		"buy_card", "sell_card":
 			if (action["cards"] as Dictionary).is_empty(): problems.append("%s: %s needs \"cards\": each card and its price." % [spot, kind])
 	var priced: bool = not (action["prices"] as Array).is_empty() or not (action["needs"] as Array).is_empty()
-	_check_site_effects(action["effects"], spot + ".effects", known, actions, priced, 0, problems)
+	_check_site_effects(action["effects"], spot + ".effects", known, actions, priced, 0, problems, kind)
 	for branch in ["win", "lose"]:
 		_check_site_effects(action[branch]["effects"], "%s.%s.effects" % [spot, branch], known, actions, priced, 2, problems)
 		_check_site_lines(action[branch]["result"], "%s.%s.result" % [spot, branch], known, actions, problems)
@@ -550,7 +551,7 @@ static func _check_site_action(action: Dictionary, spot: String, known: Dictiona
 ## A list of effects' checks. [param priced]: its action has prices or
 ## needs; [param inside] 0 an action's own list, 1 a roll's outcome, 2 a
 ## duel's branch.
-static func _check_site_effects(effects: Array, at: String, known: Dictionary, actions: Dictionary, priced: bool, inside: int, problems: Array[String]) -> void:
+static func _check_site_effects(effects: Array, at: String, known: Dictionary, actions: Dictionary, priced: bool, inside: int, problems: Array[String], kind := "effects") -> void:
 	var rolls := 0
 	for e in effects.size():
 		var effect: Dictionary = effects[e]
@@ -577,6 +578,17 @@ static func _check_site_effects(effects: Array, at: String, known: Dictionary, a
 					if value.has(gift): gifts += 1
 				if gifts != 1: problems.append("%s: exactly one of life, first_move or card is needed (one gift waits at a time)." % spot)
 				elif value.has("first_move") and not bool(value["first_move"]): problems.append("%s: first_move is true, or left out." % spot)
+			"world_magic", "mana_link", "life_bonus":
+				if not priced: problems.append("%s: this is given without end; give the action prices (a ladder that ends) or needs." % spot)
+			"teleport":
+				var to := String(value["to"])
+				if inside != 0 or kind != "effects": problems.append("%s: a teleport stands in the effects of an action that does effects, not in a roll, a duel or a talk." % spot)
+				elif e != effects.size() - 1: problems.append("%s: a teleport is the action's last effect; the pane closes with it." % spot)
+				if to.begins_with("place:"):
+					if not known["sites"].has(to.trim_prefix("place:")): problems.append("%s.to: no place %s in sites.json sites." % [spot, to.trim_prefix("place:")])
+					elif to.trim_prefix("place:") == String(known.get("site", "")): problems.append("%s.to: %s is this place itself." % [spot, to.trim_prefix("place:")])
+				elif to.begins_with("dungeon:") and not known["dungeons"].has(to.trim_prefix("dungeon:")):
+					problems.append("%s.to: no dungeon %s in sites.json dungeons." % [spot, to.trim_prefix("dungeon:")])
 			"reveal_map":
 				var around := String(value["around"])
 				if around.begins_with("dungeon:") and not known["dungeons"].has(around.trim_prefix("dungeon:")):

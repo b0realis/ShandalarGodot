@@ -43,7 +43,8 @@
 		"dungeon": "the name of the dungeon a site's action or pane is about",
 		"food": "the food the hero carries",
 		"amulets": "the amulets the hero carries, all colors together",
-		"day": "the day of the journey"
+		"day": "the day of the journey",
+		"life_bonus": "the life the places have added to the hero's start in every duel (0 to 10)"
 	},
 	"v3_words": {
 		"file": ["counters", "foes", "tasks"],
@@ -51,8 +52,8 @@
 		"line": ["one_of"],
 		"action": ["needs", "to", "foe", "win", "lose", "count", "cards", "stock"],
 		"do": ["talk", "duel", "buy_card", "sell_card"],
-		"condition": ["has_card", "amulets", "hero_color", "owns_magic", "food_at_least", "gold_below", "day_at_least", "wizards_defeated", "at_peace", "difficulty", "plugin_on", "counter", "site_used", "gift_waiting", "any"],
-		"effect": ["counter", "amulet", "give_card", "next_duel", "roll", "reveal_map"]
+		"condition": ["has_card", "amulets", "hero_color", "owns_magic", "food_at_least", "gold_below", "day_at_least", "wizards_defeated", "at_peace", "difficulty", "plugin_on", "counter", "site_used", "gift_waiting", "any", "life_bonus_below", "town_linked"],
+		"effect": ["counter", "amulet", "give_card", "next_duel", "roll", "reveal_map", "world_magic", "mana_link", "life_bonus", "teleport"]
 	},
 	"skin_pictures": ["visit_city", "visit_village", "visit_dungeon", "visit_wiseman", "visit_news", "visit_buycards",
 		"visit_castle_black", "visit_castle_blue", "visit_castle_green", "visit_castle_red", "visit_castle_white",
@@ -390,7 +391,9 @@
 			"counter": {"kind": "object", "fields": {"name": {"kind": "ref", "type": "flag_name", "required": true}, "min": {"kind": "int", "min": 0, "max": 1000, "default": 0}, "max": {"kind": "int", "min": 0, "max": 1000, "default": 1000}}, "doc": "API 3. The counter (declared in sites.json counters) is within min..max."},
 			"site_used": {"kind": "object", "fields": {"site": {"kind": "ref", "type": "sites_key", "required": true}, "action": {"kind": "ref", "type": "sites_key", "required": true}, "min": {"kind": "int", "min": 0, "max": 1000, "default": 1}, "max": {"kind": "int", "min": 0, "max": 1000, "default": 1000}}, "doc": "API 3. The action of another place of this plugin was done min..max times."},
 			"gift_waiting": {"kind": "bool", "doc": "API 3. A gift for the next duel (extra life, the first move or a card in play) already waits (true) or none does (false)."},
-			"any": {"kind": "array", "items": {"kind": "ref", "type": "sites_condition"}, "min": 1, "max": 8, "doc": "API 3. At least one of these holds. No any inside an any."}
+			"any": {"kind": "array", "items": {"kind": "ref", "type": "sites_condition"}, "min": 1, "max": 8, "doc": "API 3. At least one of these holds. No any inside an any."},
+			"life_bonus_below": {"kind": "int", "min": 1, "max": 10, "doc": "API 3. The life the places have added to the hero's start (life_bonus, 10 at most) is less than this."},
+			"town_linked": {"kind": "enum", "values": ["nearest_town"], "doc": "API 3. The town or city nearest this place on this land has the hero's mana link."}
 		}},
 		"sites_effects": {"kind": "array", "items": {"kind": "ref", "type": "sites_effect"}, "max": 16},
 		"sites_effect": {"kind": "single", "options": {
@@ -406,7 +409,11 @@
 			"give_card": {"kind": "card", "doc": "API 3. One copy of the card into the hero's bag. Refused before anything is paid when the bag is full or the campaign's card rules allow no more copies. Needs prices or needs on its action."},
 			"next_duel": {"kind": "object", "fields": {"life": {"kind": "int", "min": 1, "max": 20}, "first_move": {"kind": "bool"}, "card": {"kind": "card"}}, "doc": "API 3. A gift for the hero's next duel, one of: life (extra life), first_move true, card (begins in play). Refused before anything is paid while a gift already waits."},
 			"roll": {"kind": "object", "fields": {"outcomes": {"kind": "array", "min": 2, "max": 6, "required": true, "items": {"kind": "object", "fields": {"weight": {"kind": "int", "min": 1, "max": 100, "default": 1}, "effects": {"kind": "ref", "type": "sites_effects", "default": []}, "result": {"kind": "ref", "type": "sites_lines", "default": []}}}}}, "doc": "API 3. One outcome by its weight, drawn on the plugin's own dice for this land, place, action and use (the same after a reload): its effects are applied and its result lines shown after the action's. One roll an action, none inside a roll or a duel's win or lose."},
-			"reveal_map": {"kind": "object", "fields": {"around": {"kind": "string", "pattern": "^(place|dungeon:[a-z][a-z0-9_]{0,39})$", "default": "place"}, "radius": {"kind": "int", "min": 1, "max": 8, "default": 4}}, "doc": "API 3. The map uncovered within radius tiles of this place, or of dungeon:<a dungeon of this plugin> once it is raised."}
+			"reveal_map": {"kind": "object", "fields": {"around": {"kind": "string", "pattern": "^(place|dungeon:[a-z][a-z0-9_]{0,39})$", "default": "place"}, "radius": {"kind": "int", "min": 1, "max": 8, "default": 4}}, "doc": "API 3. The map uncovered within radius tiles of this place, or of dungeon:<a dungeon of this plugin> once it is raised."},
+			"world_magic": {"kind": "enum", "values": ["Sleight of Hand", "Haggler's Coin", "Conjurer's Will", "Amulet of Swampwalk", "Leap of Fate", "Tome of Enlightenment", "Quickening", "Fruit of Sustenance", "Staff of Thunder", "Dwarven Pick", "Sword of Resistance", "Ring of the Guardian"], "doc": "API 3. The World Magic is the hero's, and its seller sells it no more. Refused before anything is paid when it is owned. Needs prices or needs on its action."},
+			"mana_link": {"kind": "enum", "values": ["nearest_town"], "doc": "API 3. A mana link with the nearest town or city of this land that has none, is held by no wizard and is not besieged. Refused before anything is paid where the land has no mana links or no such town. Needs prices or needs on its action."},
+			"life_bonus": {"kind": "int", "min": 1, "max": 3, "doc": "API 3. This much more life at the start of every duel, for good; 10 at most from all places together. Refused before anything is paid at 10. Needs prices or needs on its action."},
+			"teleport": {"kind": "object", "fields": {"to": {"kind": "string", "pattern": "^(nearest_town|start|place:[a-z][a-z0-9_]{0,31}|dungeon:[a-z][a-z0-9_]{0,39})$", "required": true}}, "doc": "API 3. The pane closes and the hero stands beside the nearest town or city, where the journey began, another place of this plugin (place:<id>) or a raised dungeon of it (dungeon:<key>) — on this land and landmass. Refused before anything is paid when there is no such target here. The last effect of an action that does effects; not in a roll or a duel."}
 		}},
 		"sites_dungeon": {"kind": "object", "fields": {
 			"name": {"kind": "ref", "type": "name", "required": true},

@@ -226,14 +226,14 @@ func _build_previews() -> void:
 	var reader := UiChrome.menu_button("Card reader", Vector2(150, 34), 15)
 	reader.name = "ForgeReader"
 	reader.tooltip_text = "The card as the card reader shows it, large."
-	reader.position = Vector2(MARGIN + MiniCard.SIZE.x + 12, below + 4)
+	reader.position = Vector2(MARGIN + MiniCard.SIZE.x + 12, below)
 	reader.pressed.connect(open_reader)
 	add_child(reader)
 	for row in [["Undo", "ForgeUndo", undo, 0.0], ["Redo", "ForgeRedo", redo, 78.0]]:
 		var step := UiChrome.menu_button(String(row[0]), Vector2(72, 30), 14)
 		step.name = String(row[1])
 		step.tooltip_text = "%s the last change (Ctrl+%s)." % [row[0], "Z" if row[0] == "Undo" else "Y"]
-		step.position = Vector2(MARGIN + MiniCard.SIZE.x + 12 + float(row[3]), below + 46)
+		step.position = Vector2(MARGIN + MiniCard.SIZE.x + 12 + float(row[3]), below + 40)
 		step.pressed.connect(row[2])
 		step.add_theme_color_override("font_disabled_color", Color8(150, 140, 125))
 		add_child(step)
@@ -241,7 +241,9 @@ func _build_previews() -> void:
 	# THE TEST DUEL's button, under them (the footer is full).
 	var test := UiChrome.menu_button("Test duel", Vector2(150, 26), 14)
 	test.name = "ForgeTest"
-	test.position = Vector2(MARGIN + MiniCard.SIZE.x + 12, below + 80)
+	# Three rows in the small card's height, with room for the taller buttons
+	# the game draws without the 1997 skin (they stood 3 px into the reasons).
+	test.position = Vector2(MARGIN + MiniCard.SIZE.x + 12, below + 74)
 	test.pressed.connect(test_duel)
 	test.add_theme_color_override("font_disabled_color", Color8(150, 140, 125))
 	test.tooltip_text = "Play the card as it stands against the computer: it is in your hand, with the lands to cast it. Nothing is saved."
@@ -2296,6 +2298,27 @@ func _step_to(snap: Dictionary) -> void:
 
 ## Take a shared card zip (or a set zip) into the community_cards folder.
 func import_card() -> void:
+	var dialog := OriginalDialog.create("Import", Vector2(470, 170))
+	dialog.name = "ForgeImportChoice"
+	var words := UiChrome.body_label("A shared card or set zip, or one of the game's own cards to start from?", 14)
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.custom_minimum_size.x = 430
+	dialog.body().add_child(words)
+	var from_file := GauntletOptions.fit(dialog.add_button("From a file..."))
+	from_file.name = "ForgeImportFile"
+	from_file.pressed.connect(func() -> void:
+		_close_dialog()
+		import_file_box())
+	var from_game := GauntletOptions.fit(dialog.add_button("From a game card..."))
+	from_game.name = "ForgeImportGame"
+	from_game.disabled = _importer() == null
+	from_game.pressed.connect(open_game_cards)
+	GauntletOptions.fit(dialog.add_button("Cancel")).pressed.connect(_close_dialog)
+	_show(dialog, from_file)
+
+
+## The file box for a shared card zip or set zip.
+func import_file_box() -> void:
 	var box := _file_box("ForgeImportBox", FileDialog.FILE_MODE_OPEN_FILE, ["*.zip ; Card or set zip"])
 	box.file_selected.connect(func(path: String) -> void:
 		import_asked(path)
@@ -2303,6 +2326,456 @@ func import_card() -> void:
 	box.canceled.connect(box.queue_free)
 	add_child(box)
 	box.popup_centered_ratio(0.6)
+
+
+# ------------------------------------------------- from a game card --
+
+## THE GAME'S SOURCES a card may be started from, as the Deck Builder's
+## Extras window lists them ([constant FilterBar.SOURCE_KEYS], its order
+## and its medallions) and titles them; the cards players made are not
+## among them.
+const SOURCE_TITLES := {"Original": "1997", "Pack1": "tDotP Pack 1", "Pack2": "Fallen E. Pack 2",
+	"Pack3": "Ice Age Pack 3", "Pack4": "Homelands Pack 4", "Pack5": "Alliances Pack 5",
+	"Pack6": "Portal Pack 6", "SecondAge": "Second Age Pack 6", "Pack7": "Fifth Ed. Pack 7",
+	"Pack8": "Mirage Pack 8", "Visions": "Visions Pack 8", "Weatherlight": "Weatherlight Pack 8",
+	"Pack9": "Tempest Pack 9", "Stronghold": "Stronghold Pack 9", "Exodus": "Exodus Pack 9",
+	"Pack10": "Urza's Saga Pack 10", "Legacy": "Urza's Legacy Pack 10", "Destiny": "Urza's Destiny Pack 10"}
+const IMPORT_SCRIPT := "res://engine/community/card_import.gd"
+## What reads a game card into a draft (`from_card`, `can_start`,
+## `quality`): the engine's, or the one a test puts here.
+static var importer_override: Variant = null
+## The source last chosen, for the session.
+static var _last_source := "Original"
+## How a card comes over, by [code]quality[/code]: its words and its mark.
+const QUALITY_WORDS := ["frame only", "comes over in part", "comes over whole"]
+const QUALITY_COLORS := [Color8(150, 150, 150), Color8(240, 190, 80), Color8(120, 210, 120)]
+const GAME_COLORS := [["W", "White", "white"], ["U", "Blue", "blue"], ["B", "Black", "black"],
+	["R", "Red", "red"], ["G", "Green", "green"], ["C", "Colorless", "colorless"]]
+## The window's parts while it is up, and the run of its lazy tile maker.
+var _game_grid: GridContainer = null
+var _game_scroll: ScrollContainer = null
+var _game_browse: Control = null
+var _game_detail: Control = null
+var _game_search: LineEdit = null
+var _game_count: Label = null
+var _game_colors := {}
+var _game_run := 0
+
+
+static func _importer() -> Variant:
+	if importer_override != null:
+		return importer_override
+	return load(IMPORT_SCRIPT) if ResourceLoader.exists(IMPORT_SCRIPT) else null
+
+
+## The sources in the Deck Builder's order: `{id, title, available,
+## names}` each — a pack not switched on is listed, without cards.
+static func game_sources() -> Array[Dictionary]:
+	CardRegistry.ensure_loaded()
+	var extra := CardRegistry.extra_set_order()
+	var out: Array[Dictionary] = []
+	for id: String in FilterBar.SOURCE_KEYS:
+		if not SOURCE_TITLES.has(id):
+			continue   # the cards players made
+		var names: Array[String] = []
+		var available := true
+		if id == "Original":
+			for card_name: String in CardRegistry.all_names():
+				if CardRegistry.has_community(card_name) or CardRegistry.is_completion_card(card_name):
+					continue
+				if CardRegistry.SET_ORDER.has(CardRegistry.get_card(card_name).set_code):
+					names.append(card_name)
+		elif id == "Pack1":
+			available = CardRegistry.optional_pack_enabled()
+			if available:
+				for card_name: String in CardRegistry.all_names():
+					if CardRegistry.is_completion_card(card_name):
+						names.append(card_name)
+		else:
+			var code := String(FilterBar.SOURCE_KEYS[id])
+			available = extra.has(code)
+			if available:
+				names = CardRegistry.names_in_set(code)
+				names.sort()
+		out.append({"id": id, "title": String(SOURCE_TITLES[id]), "available": available, "names": names})
+	return out
+
+
+## START FROM A GAME CARD: one window — the sources on the left, the
+## chosen one's cards on the right under a search field and a color row;
+## a card chosen shows, in the same window, what of it comes over
+## ([method show_game_card]).
+func open_game_cards() -> void:
+	if _importer() == null:
+		_say("The game's cards cannot be read here.")
+		return
+	var dialog := OriginalDialog.create("Start from a game card", Vector2(1216, 640))
+	dialog.name = "ForgeGameCardWindow"
+	_game_browse = HBoxContainer.new()
+	_game_browse.name = "ForgeGameBrowse"
+	_game_browse.add_theme_constant_override("separation", 14)
+	_game_browse.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog.body().add_child(_game_browse)
+	_game_detail = HBoxContainer.new()
+	_game_detail.name = "ForgeGameDetail"
+	_game_detail.add_theme_constant_override("separation", 18)
+	_game_detail.visible = false
+	dialog.body().add_child(_game_detail)
+	# The sources.
+	var sets_scroll := ScrollContainer.new()
+	sets_scroll.custom_minimum_size = Vector2(290, 454)
+	sets_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sets_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sets_scroll.follow_focus = true
+	var sets := VBoxContainer.new()
+	sets.name = "ForgeGameSets"
+	sets.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sets.add_theme_constant_override("separation", 2)
+	sets_scroll.add_child(sets)
+	_game_browse.add_child(sets_scroll)
+	var sources := game_sources()
+	var group := ButtonGroup.new()
+	var first: Button = null
+	var chosen: Button = null
+	for source in sources:
+		var id := String(source["id"])
+		var row := Button.new()
+		row.name = "ForgeGameSet_" + id
+		row.toggle_mode = true
+		row.button_group = group
+		row.custom_minimum_size = Vector2(250, 44)
+		row.disabled = not bool(source["available"])
+		row.tooltip_text = "%s — %d cards" % [source["title"], (source["names"] as Array).size()] \
+			if bool(source["available"]) else "%s is not switched on (Options, Card packs)." % source["title"]
+		var line := HBoxContainer.new()
+		line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		line.offset_left = 6
+		line.offset_right = -12
+		line.add_theme_constant_override("separation", 8)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var medal := Button.new()
+		FilterBar.dress_source_medallion(medal, id)
+		# Plain letters: no seat under the medallion's numerals.
+		medal.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+		medal.add_theme_constant_override("shadow_offset_x", 0)
+		medal.add_theme_constant_override("shadow_offset_y", 0)
+		medal.custom_minimum_size = Vector2(36, 36)
+		medal.add_theme_font_size_override("font_size", 17)
+		medal.focus_mode = Control.FOCUS_NONE
+		medal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		medal.toggle_mode = true
+		medal.button_pressed = bool(source["available"])
+		line.add_child(medal)
+		var title := UiChrome.body_label(String(source["title"]), 14)
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		title.clip_text = true
+		line.add_child(title)
+		var amount := UiChrome.body_label(str((source["names"] as Array).size()) if bool(source["available"]) else "off", 13)
+		amount.modulate.a = 0.75
+		line.add_child(amount)
+		line.modulate.a = 1.0 if bool(source["available"]) else 0.45
+		row.add_child(line)
+		row.pressed.connect(func() -> void: pick_game_source(source))
+		sets.add_child(row)
+		if bool(source["available"]):
+			if first == null:
+				first = row
+			if id == _last_source:
+				chosen = row
+	# The cards.
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 8)
+	_game_browse.add_child(right)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 6)
+	right.add_child(top)
+	_game_search = LineEdit.new()
+	_game_search.name = "ForgeGameSearch"
+	_game_search.placeholder_text = "Search: a name, a type, a word of the rules"
+	_game_search.custom_minimum_size.x = 400
+	_game_search.clear_button_enabled = true
+	_game_search.text_changed.connect(func(_t: String) -> void: _filter_game_cards())
+	_game_search.text_submitted.connect(func(_t: String) -> void:
+		var seen := _game_grid.get_children().filter(func(t: Node) -> bool: return (t as Control).visible)
+		if seen.size() == 1:
+			(seen[0] as Button).pressed.emit())
+	top.add_child(_game_search)
+	_game_colors = {}
+	for color in GAME_COLORS:
+		var chip := Button.new()
+		chip.name = "ForgeGameColor_" + String(color[2])
+		chip.text = String(color[0])
+		chip.tooltip_text = "%s cards only" % color[1]
+		chip.toggle_mode = true
+		chip.custom_minimum_size = Vector2(34, 30)
+		chip.toggled.connect(func(_on: bool) -> void: _filter_game_cards())
+		top.add_child(chip)
+		_game_colors[String(color[2])] = chip
+	_game_count = UiChrome.body_label("", 13)
+	_game_count.name = "ForgeGameCount"
+	_game_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_game_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	top.add_child(_game_count)
+	_game_scroll = ScrollContainer.new()
+	_game_scroll.name = "ForgeGameScroll"
+	_game_scroll.custom_minimum_size = Vector2(6 * (MiniCard.SIZE.x + 10) + 6, 454)
+	_game_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_game_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_game_scroll.follow_focus = true
+	_game_grid = GridContainer.new()
+	_game_grid.name = "ForgeGameGrid"
+	_game_grid.columns = 6
+	_game_grid.add_theme_constant_override("h_separation", 10)
+	_game_grid.add_theme_constant_override("v_separation", 10)
+	_game_scroll.add_child(_game_grid)
+	_game_scroll.get_v_scroll_bar().value_changed.connect(func(_v: float) -> void: _dress_game_tiles())
+	right.add_child(_game_scroll)
+	GauntletOptions.fit(dialog.add_button("Cancel")).pressed.connect(_close_dialog)
+	_show(dialog, _game_search)
+	var start := chosen if chosen != null else first
+	if start != null:
+		start.button_pressed = true
+		start.pressed.emit()
+
+
+## Show the cards of [param source] (a row of [method game_sources]): a
+## bare tile each at once — its small card is made when it scrolls into
+## view ([method _dress_game_tiles]), so a set of 600 opens at once.
+func pick_game_source(source: Dictionary) -> void:
+	if not is_instance_valid(_game_grid):
+		return
+	_last_source = String(source["id"])
+	for tile in _game_grid.get_children():
+		_game_grid.remove_child(tile)
+		tile.queue_free()
+	for card_name: String in source["names"]:
+		var data := CardRegistry.get_card(card_name)
+		var tile := Button.new()
+		tile.name = "ForgeGame_" + CommunityCards.file_name(card_name)
+		tile.custom_minimum_size = MiniCard.SIZE
+		tile.tooltip_text = card_name
+		var types: Array[String] = []
+		for word: String in CommunityCard.TYPES:
+			if data.types & int(CommunityCard.TYPES[word]):
+				types.append(word)
+		tile.set_meta("haystack", _haystack(data, {"types": types, "subtypes": data.subtypes}))
+		tile.set_meta("card", card_name)
+		var mask := data.color_mask()
+		var colors: Array[String] = []
+		for color in GAME_COLORS:
+			if CommunityCard.COLORS.has(color[2]) and mask & int(CommunityCard.COLORS[color[2]]):
+				colors.append(String(color[2]))
+		tile.set_meta("colors", colors if not colors.is_empty() else ["colorless"])
+		tile.pressed.connect(func() -> void: show_game_card(card_name))
+		_game_grid.add_child(tile)
+	_game_scroll.scroll_vertical = 0
+	_filter_game_cards()
+
+
+## The search and the color row over the tiles; then the ones in view get
+## their small cards.
+func _filter_game_cards() -> void:
+	if not is_instance_valid(_game_grid):
+		return
+	filter_open_list(_game_grid, _game_search.text)
+	var wanted: Array[String] = []
+	for color: String in _game_colors:
+		if (_game_colors[color] as Button).button_pressed:
+			wanted.append(color)
+	var seen := 0
+	for tile in _game_grid.get_children():
+		var shown := (tile as Control).visible
+		if shown and not wanted.is_empty():
+			var colors: Array = tile.get_meta("colors", [])
+			shown = wanted.any(func(color: String) -> bool: return colors.has(color))
+			(tile as Control).visible = shown
+		if shown:
+			seen += 1
+	var all := _game_grid.get_child_count()
+	_game_count.text = ("%d of %d" % [seen, all]) if seen != all else ("1 card" if all == 1 else "%d cards" % all)
+	_dress_game_tiles()
+
+
+## Give the tiles in view (and a row past it) their small card and their
+## mark, a few a frame (about 8 ms each frame, from the next frame on: the
+## grid is laid out by then).
+func _dress_game_tiles() -> void:
+	_game_run += 1
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(_game_grid) or not is_instance_valid(_game_scroll):
+		set_process(false)
+		return
+	var start := Time.get_ticks_msec()
+	var top := float(_game_scroll.scroll_vertical) - MiniCard.SIZE.y
+	var bottom := float(_game_scroll.scroll_vertical) + _game_scroll.size.y + MiniCard.SIZE.y
+	for tile in _game_grid.get_children():
+		var one := tile as Button
+		if one.is_queued_for_deletion() or not one.visible or one.has_meta("dressed") \
+				or one.position.y + one.size.y < top or one.position.y > bottom:
+			continue
+		_dress_game_tile(one)
+		if Time.get_ticks_msec() - start > 8:
+			return   # the rest next frame
+	set_process(false)
+
+
+func _dress_game_tile(tile: Button) -> void:
+	tile.set_meta("dressed", true)
+	var card_name := String(tile.get_meta("card"))
+	var data := CardRegistry.get_card(card_name)
+	var mini := MiniCard.new(CardInstance.new(data, -1, 0))
+	mini.size = MiniCard.SIZE
+	mini.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mini.focus_mode = Control.FOCUS_NONE
+	tile.add_child(mini)
+	mini.refresh()
+	var importer: Variant = _importer()
+	var able := bool(importer.can_start(data))
+	var level := game_quality(int(importer.quality(data))) if able else 0
+	var mark := Panel.new()
+	mark.name = "ForgeGameMark"
+	var dot := StyleBoxFlat.new()
+	dot.bg_color = QUALITY_COLORS[level]
+	dot.set_corner_radius_all(7)
+	dot.set_border_width_all(2)
+	dot.border_color = Color(0, 0, 0, 0.8)
+	mark.add_theme_stylebox_override("panel", dot)
+	mark.size = Vector2(14, 14)
+	mark.position = Vector2(4, MiniCard.SIZE.y - 18)   # clear of the power and toughness
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.add_child(mark)
+	tile.set_meta("quality", level)
+	tile.tooltip_text = "%s — %s" % [card_name, QUALITY_WORDS[level] if able else "cannot be started from"]
+	tile.modulate.a = 1.0 if able else 0.5
+
+
+## A quality (0 to 100) as one of three: 0 frame only, 1 in part, 2 whole.
+static func game_quality(quality: int) -> int:
+	return 2 if quality >= 100 else (1 if quality > 0 else 0)
+
+
+## WHAT COMES OVER of the game card [param card_name], in the same window:
+## the draft as it would look (no picture: the game's are never copied),
+## the clauses kept, the ones left out in the card's own words, and Start.
+func show_game_card(card_name: String) -> void:
+	if not is_instance_valid(_game_detail) or not CardRegistry.has_card(card_name):
+		return
+	var data := CardRegistry.get_card(card_name)
+	var importer: Variant = _importer()
+	if not bool(importer.can_start(data)):
+		_say("%s cannot be started from." % card_name)
+		return
+	var result: Dictionary = importer.from_card(data)
+	var card: Dictionary = result.get("spec", {})
+	for child in _game_detail.get_children():
+		_game_detail.remove_child(child)
+		child.queue_free()
+	var seat := Control.new()
+	seat.custom_minimum_size = CardPreview.SIZE
+	_game_detail.add_child(seat)
+	if CommunityCard.problems(card).is_empty():
+		var built := CommunityCard.build(card)
+		built.set_code = CommunityCard.SET_CODE
+		var big := CardPreview.new()
+		big.docked = true
+		seat.add_child(big)
+		big.show_card(CardInstance.new(built, -1, 0))
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(760, 454)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var words := VBoxContainer.new()
+	words.name = "ForgeGameWords"
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_theme_constant_override("separation", 12)
+	scroll.add_child(words)
+	_game_detail.add_child(scroll)
+	var kept: Array = result.get("kept", [])
+	var dropped: Array = result.get("dropped", [])
+	var head := UiChrome.body_label("%s — %s" % [card_name, "comes over whole" if bool(result.get("exact", false))
+		else ("comes over in part" if not kept.is_empty() else "frame only: its name, cost and types")], 18)
+	head.name = "ForgeGameHead"
+	words.add_child(head)
+	_game_list(words, "ForgeGameKept", "Comes over", kept, Color8(150, 220, 140))
+	_game_list(words, "ForgeGameDropped", "Left out — add them yourself or leave them", dropped, Color8(240, 190, 80))
+	_game_list(words, "ForgeGameNotes", "", result.get("notes", []), Color8(190, 185, 172))
+	var note := UiChrome.body_label("The picture is not copied: the draft needs art and a set icon of your own, and a name of its own.", 13)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size.x = 720
+	note.modulate.a = 0.75
+	words.add_child(note)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 12)
+	var start := UiChrome.menu_button("Start from this", Vector2(170, 36), 15)
+	start.name = "ForgeGameStart"
+	start.pressed.connect(func() -> void:
+		_close_dialog()
+		_guarded("Start from %s anyway?" % card_name, func() -> void: start_from_game(card_name)))
+	buttons.add_child(start)
+	var back := UiChrome.menu_button("Back", Vector2(110, 36), 15)
+	back.name = "ForgeGameBack"
+	back.pressed.connect(game_cards_back)
+	buttons.add_child(back)
+	words.add_child(buttons)
+	_game_browse.visible = false
+	_game_detail.visible = true
+	_default = start
+	_refocus()
+
+
+func _game_list(box: Container, list_name: String, title: String, lines: Array, color: Color) -> void:
+	if lines.is_empty():
+		return
+	var list := VBoxContainer.new()
+	list.name = list_name
+	list.add_theme_constant_override("separation", 2)
+	if title != "":
+		list.add_child(UiChrome.body_label(title, 15))
+	for text in lines:
+		var line := UiChrome.body_label(("• " if title != "" else "") + String(text), 15)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size.x = 720
+		line.add_theme_color_override("font_color", color)
+		list.add_child(line)
+	box.add_child(list)
+
+
+## One level back in the window: from a card to the cards. False when the
+## cards are showing already (Escape then closes the window).
+func game_cards_back() -> bool:
+	if not is_instance_valid(_game_detail) or not _game_detail.visible:
+		return false
+	_game_detail.visible = false
+	_game_browse.visible = true
+	_default = _game_search
+	_refocus()
+	return true
+
+
+## A NEW CARD begun from the game's [param card_name]: what of it comes
+## over, with no picture and no saved name; the keyboard in the Name field,
+## the name selected — it needs one of its own.
+func start_from_game(card_name: String) -> bool:
+	var importer: Variant = _importer()
+	if importer == null or not CardRegistry.has_card(card_name):
+		return false
+	var result: Dictionary = importer.from_card(CardRegistry.get_card(card_name))
+	CommunityCards.clear_draft()
+	if not load_spec(result.get("spec", {}), {}, {}):
+		refresh()
+		return false
+	_saved_name = ""
+	_begin_card()
+	_tabs.current_tab = 0
+	var name_field := _fields["name"] as LineEdit
+	name_field.grab_focus()
+	name_field.select_all()
+	_say("Started from %s — give it a name of its own and your own art." % card_name)
+	return true
 
 
 ## Import the zip at [param path] as the Import button and a drop do:
@@ -3195,6 +3668,14 @@ func ask_delete(card_name := "", from_list := false) -> void:
 func _close_dialog() -> void:
 	var was_list := is_instance_valid(_dialog) and _dialog.name == "ForgeOpenWindow"
 	if is_instance_valid(_dialog):
+		if _dialog.name == &"ForgeGameCardWindow":
+			_game_run += 1   # its tile maker stops
+			_game_grid = null
+			_game_scroll = null
+			_game_browse = null
+			_game_detail = null
+			_game_search = null
+			_game_count = null
 		# It is freed at the frame's end: the next prompt of the same kind,
 		# put up before then, keeps its own name.
 		_dialog.name = "ForgeClosed"
@@ -3259,6 +3740,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		if is_instance_valid(_dialog):
-			_close_dialog()
+			# One level at a time: a game card's summary, then its window.
+			if not game_cards_back():
+				_close_dialog()
 		else:
 			close()

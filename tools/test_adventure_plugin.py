@@ -901,8 +901,9 @@ class PlaceToolsTest(unittest.TestCase):
         self.assertEqual([w for pair in re.findall(r'^\t\t"(\w+)"(?:, "(\w+)")?:', holds, re.M) for w in pair if w],
                          list(schema["sites_condition"]["options"]))
         apply = source[source.index("func apply("):source.index("func _reveal(")]
-        self.assertEqual(sorted(re.findall(r'^\t\t\t"(\w+)"', apply, re.M) + ["roll"]),
-                         sorted(schema["sites_effect"]["options"]), "a roll is drawn before apply (effects_now)")
+        self.assertEqual(sorted(re.findall(r'^\t\t\t"(\w+)"', apply, re.M) + ["roll", "teleport"]),
+                         sorted(schema["sites_effect"]["options"]),
+                         "a roll is drawn before apply (effects_now); a teleport moves the hero on the world screen")
         tool = SCRIPT.read_text(encoding="utf-8")
         walk = tool[tool.index("class SiteWalk:"):tool.index("def walk_site(")]
         for option in list(schema["sites_condition"]["options"]) + list(schema["sites_effect"]["options"]) \

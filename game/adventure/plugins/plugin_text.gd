@@ -12,7 +12,7 @@ extends RefCounted
 
 const PLACEHOLDERS: Array[String] = ["pledges", "quests_total", "target", "town", "title", "foe", "life",
 	"count", "total", "required", "percent", "left", "color", "cards", "hero", "region",
-	"price", "uses_left", "gold", "card", "dungeon", "food", "amulets", "day"]
+	"price", "uses_left", "gold", "card", "dungeon", "food", "amulets", "day", "life_bonus"]
 
 ## The keys the interpreter speaks with, and what it says without them.
 const DEFAULTS := {
@@ -100,6 +100,10 @@ const DEFAULTS := {
 	"site.sold": "You sell {card} for {price} gold.",
 	"site.bought_log": "{card} bought for {price} gold.",
 	"site.sold_log": "{card} sold for {price} gold.",
+	"site.no_way": "There is no way there from here.",
+	"site.magic_owned": "{title} is yours already.",
+	"site.no_link": "No town of this land can be linked now.",
+	"site.life_full": "No place can add to your life any more.",
 }
 
 
