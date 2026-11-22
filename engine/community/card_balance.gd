@@ -91,8 +91,34 @@ static func advice(spec: Dictionary) -> Array[Dictionary]:
 	var data := CommunityCard.build(masked)
 	var rows := _rows_of(c, data)
 	_coverage_rows(rows, spec)
+	_original_row(rows, spec, data)
 	rows.push_front(_summary(rows, c))
 	return rows
+
+
+## A card that keeps a game card's rules is set beside that card: cheaper
+## or larger than the original with the same rules is said.
+const ORIGINAL_TOPIC := "The original"
+static func _original_row(rows: Array[Dictionary], spec: Dictionary, data: CardData) -> void:
+	var base := CommunityCard.base_of(spec)
+	if base == null or data == null:
+		return
+	var said: Array[String] = []
+	var better := false
+	if not data.is_land() and data.cost != null and base.cost != null:
+		var mine := data.cost.mana_value()
+		var theirs := base.cost.mana_value()
+		if mine != theirs:
+			said.append("costs %d %s" % [absi(mine - theirs), "less" if mine < theirs else "more"])
+			better = better or mine < theirs
+	if data.is_creature() and (data.power != base.power or data.toughness != base.toughness):
+		said.append("is %d/%d where it is %d/%d" % [data.power, data.toughness, base.power, base.toughness])
+		better = better or data.power + data.toughness > base.power + base.toughness
+	var mine_text := data.cost.text if data.cost != null else ""
+	rows.append({"level": HIGH if better else OK, "topic": ORIGINAL_TOPIC,
+		"yours": mine_text if not data.is_creature() else "%s %d/%d" % [mine_text, data.power, data.toughness],
+		"text": "Keeps the rules of %s%s." % [base.card_name,
+			" as it is" if said.is_empty() else ", and " + " and ".join(said)]})
 
 
 ## The same table for a card as built ([param data]) — one of the game's

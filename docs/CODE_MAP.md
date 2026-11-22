@@ -423,6 +423,46 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.8 (2026-11-22): a round ring; a card that keeps a card's rules
+
+Version 0.70.8, Android version code 70008; `docs/releases/0.70.8.md`.
+
+- `expanded_adventure/Duelists_Ring/art/duelists_ring_ring_map.png`: the
+  round stone ring of the window, on the map.
+- `engine/core/card_data.gd`: `copy_named(new_name)` — every field of a
+  card under another name (abilities shared, the lists its own).
+- `engine/card_registry.gd`: `game_card(name)` (the game's own card, never
+  a community one), `community_waiting()` (cards left out because the
+  card whose rules they keep is not in the pool now).
+- `engine/community/community_card.gd`: the field `rules_of` — `build`
+  starts from that game card's copy (its script), takes the spec's cost,
+  power and toughness and subtypes, and adds the spec's keywords, rules
+  and abilities on top; `rules_text` is the card's own text under the new
+  name, then the additions; `base_of(spec)`; `pool_problems(spec)` (the
+  card absent, other card types, an {X} gained or lost — asked per pool,
+  apart from `problems`, which stays the same whatever packs are on).
+- `engine/community/card_import.gd`: `whole(data)` — the frame and
+  `rules_of`.
+- `engine/community/card_balance.gd`: the row `ORIGINAL_TOPIC`, the card
+  beside the one whose rules it keeps.
+- `game/card_forge_screen.gd`: `start_from_game(name, keep_rules)`,
+  `kept_rules_of()`, `free_kept_rules()`, the line `ForgeKept` over the
+  Rules page; `game/community_cards.gd`: `skipped_notice` names the
+  waiting cards.
+- `engine/card_registry.gd`: `name_key(name)` — a name as it is compared
+  (lower case, accents plain, letters and digits only); `game_name_like`
+  and the pool's load use it, `CommunityCards.game_card_like` too (packs
+  switched off included), and `CommunityCards.write_zip` refuses such a
+  name (its last argument writes the stranger's zip a test needs).
+- `game/deck_builder/sample_hand.gd`: `trials(deck, runs, seed)` — many
+  opening hands counted; `game/deck_builder/deck_builder_screen.gd`:
+  the Hand page's **1000 hands** button (`StatsThousandHands`),
+  `_stats_trials`, `TRIAL_RUNS`.
+- Tests: `tests/cards/test_c1122_keep_rules.gd`,
+  `tests/ui/test_c1122_editor_import.gd`,
+  `tests/unit/test_community_cards.gd`, `tests/unit/test_sample_hand.gd`,
+  `tests/ui/test_sample_hand_page.gd`.
+
 ## 0.70.7 (2026-11-22): places — a traveler, a teacher, a link, a life lesson; preview and wizard
 
 Version 0.70.7, Android version code 70007; `docs/releases/0.70.7.md`.

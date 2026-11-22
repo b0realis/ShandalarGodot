@@ -247,3 +247,29 @@ func test_the_hand_survives_a_page_swap_but_not_a_reopening() -> void:
 	screen._show_stats_page(5, _tabs())
 	assert_not_null(screen._sample)
 	assert_true(screen._sample != sample, "a fresh one")
+
+
+func test_a_thousand_hands_are_dealt_and_shown_in_place_of_the_cards() -> void:
+	_fill("Mountain", 20)
+	_fill("Lightning Bolt", 4)
+	_fill("Hill Giant", 16)
+	_open_hand_page()
+	var many := screen._stats_pages.find_child("StatsThousandHands", true, false) as Button
+	assert_eq(many.text, "1000 hands")
+	many.pressed.emit()
+	assert_eq(int(screen._trials["runs"]), 1000)
+	assert_eq(_faces().size(), 0, "the count stands where the cards stood")
+	var said := "\n".join(PackedStringArray(_page_labels()))
+	for words in ["1000 opening hands of 7, dealt and counted", "0 lands", "7 lands", "Keepable (2-5 lands)",
+			"Which lands came", "Mountain", "a source of red", "a play on turn one", "The spells seen most",
+			"Hill Giant"]:
+		assert_string_contains(said, words)
+	assert_false(said.contains("every color your spells ask for"), "one color: no such line")
+	# Nothing wider than the page.
+	for node in _walk(screen._stats_pages):
+		if node is HBoxContainer:
+			assert_true((node as Control).get_combined_minimum_size().x <= 560.0, str(node))
+	# A new hand brings the cards back.
+	_page_button("New hand").pressed.emit()
+	assert_true(screen._trials.is_empty())
+	assert_eq(_faces().size(), 7)

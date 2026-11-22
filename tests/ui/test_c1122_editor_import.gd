@@ -142,7 +142,8 @@ func test_the_window_lists_sets_and_makes_tiles_as_they_come_into_view() -> void
 		assert_eq(_reader.asked, dressed.size(), "and only they were measured")
 	var first := forge._game_grid.get_child(0) as Button
 	assert_not_null(first.find_child("ForgeGameMark", true, false), "its mark")
-	assert_true(CardForgeScreen.QUALITY_WORDS.any(func(w: String) -> bool: return first.tooltip_text.ends_with(w)) \
+	assert_true(CardForgeScreen.QUALITY_WORDS.any(func(w: String) -> bool:
+		return first.tooltip_text.trim_suffix(", or keeps its rules whole").ends_with(w)) \
 		or first.tooltip_text.ends_with("cannot be started from"), first.tooltip_text)
 	assert_eq([CardForgeScreen.game_quality(0), CardForgeScreen.game_quality(40), CardForgeScreen.game_quality(100)], [0, 1, 2])
 	# Scrolled, the ones now in view are made.
@@ -257,6 +258,69 @@ func test_a_card_shows_what_comes_over_and_start_begins_a_new_card() -> void:
 	assert_eq(String(forge.spec["name"]), "Serra Angel")
 	(forge._dialog.find_child("ForgeLeaveGo", true, false) as Button).pressed.emit()
 	assert_eq(String(forge.spec["name"]), "Savannah Lions")
+
+
+func test_a_card_the_maker_cannot_say_keeps_its_rules_whole() -> void:
+	if not ResourceLoader.exists(CardForgeScreen.IMPORT_SCRIPT):
+		pass_test("the engine's reader is not here")
+		return
+	var forge := await _open()
+	# A card the maker's words say whole has the one way in.
+	forge.open_game_cards()
+	forge.show_game_card("Grizzly Bears")
+	assert_null(forge._game_detail.find_child("ForgeGameWhole", true, false))
+	assert_eq((forge._game_detail.find_child("ForgeGameStart", true, false) as Button).text, "Start from this")
+	# One they do not has two, the whole card first.
+	forge.show_game_card("Cockatrice")
+	var whole := forge._game_detail.find_child("ForgeGameWhole", true, false) as Button
+	assert_not_null(whole)
+	assert_eq(get_viewport().gui_get_focus_owner(), whole, "the whole card is the default")
+	assert_string_contains((forge._game_detail.find_child("ForgeGameWholeWords", true, false) as Label).text, "exactly as Cockatrice does")
+	whole.pressed.emit()
+	assert_false(is_instance_valid(forge._dialog))
+	assert_eq(forge.kept_rules_of(), "Cockatrice")
+	var row := forge.find_child("ForgeKept", true, false) as Control
+	assert_true(row.visible)
+	assert_string_contains((row.get_node("ForgeKeptWords") as Label).text, "Keeps the rules of Cockatrice whole")
+	for item in forge._fields["types"]:
+		assert_true((forge._fields["types"][item] as CheckBox).disabled, "its card types are held")
+	# Renamed, cheaper, with trample on top: a whole card, the cockatrice's rules in it.
+	(forge._fields["name"] as LineEdit).text = "Import Test Wolf"
+	(forge._fields["cost"] as LineEdit).text = "{3}{R}{R}"
+	forge._changed()
+	(forge._fields["keywords"]["trample"] as CheckBox).button_pressed = true
+	forge._changed()
+	forge.take_picture("icon", _icon())
+	assert_eq(forge.problems(), [] as Array[String])
+	assert_eq(String(forge.spec["rules_of"]), "Cockatrice")
+	var built := CommunityCard.build(forge.spec)
+	assert_eq(built.cost.text, "{3}{R}{R}")
+	assert_true(built.keywords.has(Mtg.Keyword.FLYING) and built.keywords.has(Mtg.Keyword.TRAMPLE))
+	assert_eq(built.triggered_abilities.size(), CardRegistry.get_card("Cockatrice").triggered_abilities.size())
+	forge.save_card()
+	assert_eq(String(CommunityCards.saved_spec("Import Test Wolf").get("rules_of", "")), "Cockatrice", "saved with it")
+	assert_true(CardRegistry.has_community("Import Test Wolf"))
+	assert_eq(CardRegistry.get_card("Import Test Wolf").triggered_abilities.size(), built.triggered_abilities.size())
+	# An {X} its rules read may not leave the cost.
+	forge.start_from_game("Fireball", true)
+	(forge._fields["cost"] as LineEdit).text = "{R}"
+	forge._changed()
+	assert_string_contains(forge._problems.text, "keeps {X}")
+	# Let go: the maker's own words, every part of it open again.
+	forge.start_from_game("Cockatrice", true)
+	(forge.find_child("ForgeKeptFree", true, false) as Button).pressed.emit()
+	assert_eq(forge._dialog.name, &"ForgeFreeWindow")
+	(forge._dialog.find_child("ForgeFreeYes", true, false) as Button).pressed.emit()
+	assert_eq(forge.kept_rules_of(), "")
+	assert_false(row.visible)
+	assert_true((forge.spec["keywords"] as Array).has("flying"))
+	for item in forge._fields["types"]:
+		assert_false((forge._fields["types"][item] as CheckBox).disabled)
+	# A new blank card holds nothing of it.
+	forge.start_from_game("Cockatrice", true)
+	forge.start_from_game("Grizzly Bears")
+	assert_eq(forge.kept_rules_of(), "")
+	assert_false(row.visible)
 
 
 func _icon() -> String:

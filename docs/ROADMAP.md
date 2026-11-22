@@ -18973,6 +18973,53 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-22 — Version 0.70.8
+
+Version 0.70.8 (Android version code 70008). Its notes are
+`docs/releases/0.70.8.md`. LAN stays protocol 32; 0.70.8 plays only
+0.70.8.
+
+- **The Duelist's Ring's map sprite is a round ring** (owner's ruling: the
+  sprite follows the window, not the window the sprite): a low dry-stone
+  wall with a gap at the front, posts and two ropes round it, the two
+  banners behind; same size, trimmed box and foot as before
+  (`expanded_adventure/Duelists_Ring/art/duelists_ring_ring_map.png`,
+  384 x 320).
+- **A card that keeps a card's rules** (`rules_of` in a card's data; see
+  CODE_MAP "0.70.8"): `CardData.copy_named`, `CardRegistry.game_card` and
+  `community_waiting`, `CommunityCard.base_of` / `pool_problems`,
+  `CardImport.whole`, `CardBalance.ORIGINAL_TOPIC`. Why: of the base
+  pool's 897 cards the words could say 264 whole; the 826 clauses left
+  out were 723 different wordings, one card each, so no number of new
+  words closes the gap — the card's own script does. Whether the pool has
+  the card is asked on every load, never kept with the file, so a pack
+  switched off makes such a card wait and switched on brings it back.
+  Tests: `tests/cards/test_c1122_keep_rules.gd`,
+  `tests/ui/test_c1122_editor_import.gd`.
+- **No card passes for one of the game's** (owner: "game cards cannot be
+  overwritten, and even named the same"). The guard compared names in
+  any case; it now compares them by `CardRegistry.name_key` — lower case,
+  accents plain, letters and digits only — so "Dandan", "serra-angel"
+  and "Will o the Wisp" are the game's cards too, in play or in a pack
+  switched off (`CommunityCards.game_card_like`, which the editor now
+  asks everywhere). It holds at every door: the editor's problems and
+  test duel, Import and a LAN table's transfer, the pool's load (the card
+  is left out and named), and last `CommunityCards.write_zip`, which
+  writes no such file at all. Two community cards are told apart as
+  before. A card that keeps a game card's rules is a copy: the game's
+  own card object is never changed (tested). Tests:
+  `tests/unit/test_community_cards.gd`.
+- **1000 hands** on the Stats window's Hand page:
+  `SampleHand.trials(deck, runs, seed)` deals whole shuffles as the
+  sample hand does and counts lands per hand, the 1997 mulligan hands,
+  the keepable ones, each land name (hands and copies), a source of each
+  color the deck's spells ask for and all of them, a play on turn one
+  and by turn two and a spell the hand's lands pay for (by count), a
+  creature, the average cost held and the spells seen most;
+  `DeckBuilderScreen._stats_trials` draws it in place of the cards.
+  Dealt, not computed: the Draws page stays the exact arithmetic. Tests:
+  `tests/unit/test_sample_hand.gd`, `tests/ui/test_sample_hand_page.gd`.
+
 ## 2026-11-22 — Version 0.70.7
 
 Version 0.70.7 (Android version code 70007) gathers the entry below it:

@@ -338,6 +338,23 @@ func _init(p_name: String = "", p_cost: String = "", p_types: int = 0) -> void:
 	types = p_types
 
 
+## THE SAME CARD UNDER ANOTHER NAME: every field of this one (its
+## abilities are shared, as every copy of a card shares them; the lists
+## that hold them are its own), for a card that keeps this one's rules.
+func copy_named(new_name: String) -> CardData:
+	var out := CardData.new(new_name, "", types)
+	for property in get_property_list():
+		if (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
+			continue
+		var key := String(property["name"])
+		var value: Variant = get(key)
+		if value is Array or value is Dictionary:
+			value = value.duplicate()
+		out.set(key, value)
+	out.card_name = new_name
+	return out
+
+
 # ---------------------------------------------------------------- builders --
 
 ## Set printed power/toughness. Creatures only.

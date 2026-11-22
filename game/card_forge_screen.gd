@@ -548,6 +548,24 @@ func _build_cost_page(box: VBoxContainer) -> void:
 
 
 func _build_rules_page(box: VBoxContainer) -> void:
+	# A card that keeps a game card's rules whole says so first: what is
+	# below is added on top of them.
+	var kept := HBoxContainer.new()
+	kept.name = "ForgeKept"
+	kept.visible = false
+	kept.add_theme_constant_override("separation", 12)
+	var words := UiChrome.body_label("", 15)
+	words.name = "ForgeKeptWords"
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_theme_color_override("font_color", Color8(150, 220, 140))
+	kept.add_child(words)
+	var free := UiChrome.menu_button("Let its rules go", Vector2(170, 32), 14)
+	free.name = "ForgeKeptFree"
+	free.tooltip_text = "Keep only what the maker's own words can say of it; every part of that can then be changed."
+	free.pressed.connect(func() -> void: _guarded_free())
+	kept.add_child(free)
+	box.add_child(kept)
 	_label(box, "Keywords (creatures)")
 	_checks(box, "keywords", CommunityCard.KEYWORDS.keys(), 5, CommunityCard.KEYWORD_WORDS)
 	_label(box, "Protection from")
@@ -705,6 +723,7 @@ func _fill() -> void:
 		var checks: Dictionary = _fields[key]
 		for item in checks:
 			(checks[item] as CheckBox).button_pressed = (spec.get(key, []) as Array).has(item)
+	_fill_kept()
 	(find_child("ForgeArtLabel", true, false) as Label).text = _picture_words(art, "No art yet.")
 	(find_child("ForgeIconLabel", true, false) as Label).text = _icon_words()
 	var first := ""
@@ -846,8 +865,10 @@ func problems() -> Array[String]:
 ## has (in any case), the set icon still to choose.
 func _all_problems(own: Array[String]) -> Array[String]:
 	var out := own.duplicate()
+	if own.is_empty():
+		out.append_array(CommunityCard.pool_problems(spec))
 	var card_name := String(spec.get("name", "")).strip_edges()
-	var game_card := CardRegistry.game_name_like(card_name) if card_name != "" else ""
+	var game_card := CommunityCards.game_card_like(card_name) if card_name != "" else ""
 	if game_card != "":
 		out.append("A card named %s is already in the game." % game_card)
 	if icon.is_empty():
@@ -861,7 +882,7 @@ func refresh() -> void:
 	var own := CommunityCard.problems(spec)
 	var found := _all_problems(own)
 	var typed := String(spec.get("name", "")).strip_edges()
-	var game_card := CardRegistry.game_name_like(typed) if typed != "" else ""
+	var game_card := CommunityCards.game_card_like(typed) if typed != "" else ""
 	_problems.text = "\n".join(found)
 	_problems.visible = not found.is_empty()
 	# Asked only of a whole card (it has none otherwise).
@@ -2124,7 +2145,7 @@ func test_duel() -> Control:
 	_close_dialog()
 	var data := card_data()
 	# The game's own card of that name is never stood in for.
-	if CardRegistry.game_name_like(data.card_name) != "":
+	if CommunityCards.game_card_like(data.card_name) != "":
 		_say("A card named %s is already in the game." % data.card_name)
 		return null
 	CardRegistry.ensure_loaded()
@@ -2649,7 +2670,8 @@ func _dress_game_tile(tile: Button) -> void:
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tile.add_child(mark)
 	tile.set_meta("quality", level)
-	tile.tooltip_text = "%s — %s" % [card_name, QUALITY_WORDS[level] if able else "cannot be started from"]
+	tile.tooltip_text = "%s — %s" % [card_name, (QUALITY_WORDS[level] + ("" if level == 2 or not importer.has_method("whole")
+		else ", or keeps its rules whole")) if able else "cannot be started from"]
 	tile.modulate.a = 1.0 if able else 0.5
 
 
@@ -2710,11 +2732,27 @@ func show_game_card(card_name: String) -> void:
 	words.add_child(note)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 12)
-	var start := UiChrome.menu_button("Start from this", Vector2(170, 36), 15)
+	var exact := bool(result.get("exact", false))
+	var can_keep: bool = not exact and importer.has_method("whole")
+	var start := UiChrome.menu_button("Start from this" if not can_keep else "Only what comes over", Vector2(170 if not can_keep else 210, 36), 15)
 	start.name = "ForgeGameStart"
 	start.pressed.connect(func() -> void:
 		_close_dialog()
 		_guarded("Start from %s anyway?" % card_name, func() -> void: start_from_game(card_name)))
+	if can_keep:
+		# THE WHOLE CARD, as the game plays it: its rules kept, not rewritten.
+		var why := UiChrome.body_label("Or keep its rules whole: the draft plays exactly as %s does — you give it a name, a cost, power and toughness and art of your own, and may add keywords and abilities on top. Its own rules stay as they are." % card_name, 14)
+		why.name = "ForgeGameWholeWords"
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		why.custom_minimum_size.x = 720
+		why.add_theme_color_override("font_color", Color8(150, 220, 140))
+		words.add_child(why)
+		var whole := UiChrome.menu_button("Keep its rules whole", Vector2(210, 36), 15)
+		whole.name = "ForgeGameWhole"
+		whole.pressed.connect(func() -> void:
+			_close_dialog()
+			_guarded("Start from %s anyway?" % card_name, func() -> void: start_from_game(card_name, true)))
+		buttons.add_child(whole)
 	buttons.add_child(start)
 	var back := UiChrome.menu_button("Back", Vector2(110, 36), 15)
 	back.name = "ForgeGameBack"
@@ -2723,7 +2761,7 @@ func show_game_card(card_name: String) -> void:
 	words.add_child(buttons)
 	_game_browse.visible = false
 	_game_detail.visible = true
-	_default = start
+	_default = start if not can_keep else (buttons.get_child(0) as Button)
 	_refocus()
 
 
@@ -2759,11 +2797,13 @@ func game_cards_back() -> bool:
 ## A NEW CARD begun from the game's [param card_name]: what of it comes
 ## over, with no picture and no saved name; the keyboard in the Name field,
 ## the name selected — it needs one of its own.
-func start_from_game(card_name: String) -> bool:
+func start_from_game(card_name: String, keep_rules := false) -> bool:
 	var importer: Variant = _importer()
 	if importer == null or not CardRegistry.has_card(card_name):
 		return false
-	var result: Dictionary = importer.from_card(CardRegistry.get_card(card_name))
+	var data := CardRegistry.get_card(card_name)
+	var result: Dictionary = importer.whole(data) if keep_rules and importer.has_method("whole") \
+		else importer.from_card(data)
 	CommunityCards.clear_draft()
 	if not load_spec(result.get("spec", {}), {}, {}):
 		refresh()
@@ -2775,6 +2815,86 @@ func start_from_game(card_name: String) -> bool:
 	name_field.grab_focus()
 	name_field.select_all()
 	_say("Started from %s — give it a name of its own and your own art." % card_name)
+	return true
+
+
+## The game card whose rules the card on screen keeps whole ("" for none).
+func kept_rules_of() -> String:
+	return String(spec.get("rules_of", "")).strip_edges() if spec.get("rules_of", "") is String else ""
+
+
+## What a card that keeps a game card's rules shows of it: the line over
+## the Rules page, and its card types held as that card has them.
+func _fill_kept() -> void:
+	var base := kept_rules_of()
+	var row := find_child("ForgeKept", true, false) as Control
+	if row != null:
+		row.visible = base != ""
+		(row.get_node("ForgeKeptWords") as Label).text = ("Keeps the rules of %s whole, as the game plays them. " \
+			+ "Its name, cost, power and toughness, subtypes and look are yours; what you tick or add here comes on top.") % base
+	var checks: Dictionary = _fields["types"]
+	for item in checks:
+		(checks[item] as CheckBox).disabled = base != ""
+		(checks[item] as CheckBox).tooltip_text = "" if base == "" else "A card that keeps %s's rules keeps its card types." % base
+
+
+## LET THE KEPT RULES GO: the card becomes what the maker's own words say
+## of the game card (its name, cost, look and the rest as they are now).
+func _guarded_free() -> void:
+	var base := kept_rules_of()
+	var importer: Variant = _importer()
+	if base == "" or importer == null or not CardRegistry.has_card(base):
+		return
+	var result: Dictionary = importer.from_card(CardRegistry.get_card(base))
+	var left: Array = result.get("dropped", [])
+	_confirm_free("Let the rules of %s go? %s" % [base, "Every clause of it can be said in the maker's words."
+		if left.is_empty() else "%d of its clauses cannot be said in the maker's words and will be left out." % left.size()],
+		func() -> void: free_kept_rules())
+
+
+func _confirm_free(question: String, then: Callable) -> void:
+	var dialog := OriginalDialog.create("Let its rules go", Vector2(520, 200))
+	dialog.name = "ForgeFreeWindow"
+	var text := UiChrome.body_label(question, 14)
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.custom_minimum_size.x = 480
+	dialog.body().add_child(text)
+	var yes := GauntletOptions.fit(dialog.add_button("Let them go"))
+	yes.name = "ForgeFreeYes"
+	yes.pressed.connect(func() -> void:
+		_close_dialog()
+		then.call())
+	var stay := GauntletOptions.fit(dialog.add_button("Cancel"))
+	stay.pressed.connect(_close_dialog)
+	_show(dialog, stay)
+
+
+## The card on screen without the kept rules: the blocks the maker's words
+## say of that game card, under what the card already is. False for none.
+func free_kept_rules() -> bool:
+	var base := kept_rules_of()
+	var importer: Variant = _importer()
+	if base == "" or importer == null or not CardRegistry.has_card(base):
+		return false
+	var said: Dictionary = (importer.from_card(CardRegistry.get_card(base)) as Dictionary).get("spec", {})
+	var card := spec.duplicate(true)
+	card.erase("rules_of")
+	for key in ["keywords", "protection", "landwalk"]:
+		var have: Array = card.get(key, [])
+		for item in said.get(key, []):
+			if not have.has(item):
+				have.append(item)
+		card[key] = have
+	var rules: Dictionary = (said.get("rules", {}) as Dictionary).duplicate(true)
+	rules.merge(card.get("rules", {}), true)
+	card["rules"] = rules
+	card["abilities"] = (said.get("abilities", []) as Array).duplicate(true) + (card.get("abilities", []) as Array)
+	if not card.has("subtypes") or (card["subtypes"] as Array).is_empty():
+		card["subtypes"] = (said.get("subtypes", []) as Array).duplicate()
+	if not load_spec(card, art, icon):
+		return false
+	_changed()
+	_say("The rules of %s were let go: the card is the maker's own words now." % base)
 	return true
 
 

@@ -222,3 +222,57 @@ func test_a_proxy_is_in_the_deal_and_is_not_a_land() -> void:
 	assert_eq(sample.hand.count("Not A Card At All"), 2, "and are dealt by name")
 	assert_eq(sample.lands_in_hand(), 5, "the sample cannot know what they stand for")
 	assert_false(sample.is_mulligan_hand())
+
+
+# ------------------------------------------------- many hands, counted --
+
+func test_a_thousand_hands_are_counted() -> void:
+	_fill("Mountain", 16)
+	_fill("Forest", 8)
+	_fill("Lightning Bolt", 4)
+	_fill("Grizzly Bears", 4)
+	_fill("Hill Giant", 4)
+	_fill("Craw Wurm", 4)
+	var t := SampleHand.trials(deck, 1000, 7)
+	assert_eq([t["runs"], t["hand"]], [1000, 7])
+	var lands: Array = t["lands"]
+	assert_eq(lands.size(), 8)
+	var total := 0
+	var weighted := 0
+	for k in lands.size():
+		total += int(lands[k])
+		weighted += k * int(lands[k])
+	assert_eq(total, 1000, "every hand is in one row")
+	assert_almost_eq(float(t["average_lands"]), weighted / 1000.0, 0.0001)
+	assert_almost_eq(float(t["average_lands"]), 7.0 * 24 / 40, 0.15, "near what the deck says")
+	assert_eq(int(t["no_land"]), int(lands[0]))
+	assert_eq(int(t["all_land"]), int(lands[7]))
+	assert_eq(int(t["keepable"]), int(lands[2]) + int(lands[3]) + int(lands[4]) + int(lands[5]))
+	# Which lands: both, the Mountain in more hands.
+	var names: Array = t["land_names"]
+	assert_eq([names[0]["name"], names[1]["name"]], ["Mountain", "Forest"])
+	assert_true(int(names[0]["hands"]) > int(names[1]["hands"]) and int(names[0]["hands"]) <= 1000)
+	assert_true(int(names[0]["copies"]) >= int(names[0]["hands"]))
+	# The colors the spells ask for are red and green, and no other.
+	var colors: Array = t["colors"]
+	assert_eq(colors.map(func(row: Dictionary) -> int: return int(row["color"])), [Mtg.ManaColor.R, Mtg.ManaColor.G])
+	assert_eq(int(colors[0]["hands"]), int(names[0]["hands"]), "a red source is a Mountain here")
+	assert_true(int(t["every_color"]) <= int(colors[1]["hands"]))
+	# Something to play: each a narrower hand than the next.
+	assert_true(int(t["turn_one"]) <= int(t["turn_two"]) and int(t["turn_two"]) <= int(t["castable"]))
+	assert_true(int(t["castable"]) <= 1000 - int(lands[0]))
+	assert_true(int(t["creature"]) > 500)
+	assert_true(float(t["average_cost"]) > 1.0 and float(t["average_cost"]) < 6.0)
+	assert_eq((t["seen"] as Array).size(), 4, "the four spells, no land among them")
+	# The same seed, the same count; nothing of the deck moved.
+	assert_eq(SampleHand.trials(deck, 1000, 7), t)
+	assert_eq(deck.total(), 40)
+
+
+func test_the_edges_of_the_count() -> void:
+	assert_eq(SampleHand.trials(deck, 1000, 1), {}, "an empty deck")
+	_fill("Mountain", 3)
+	var small := SampleHand.trials(deck, 50, 1)
+	assert_eq([small["hand"], small["lands"], small["all_land"]], [3, [0, 0, 0, 50], 50])
+	assert_eq(small["colors"], [], "no spell asks for a color")
+	assert_eq([small["castable"], small["creature"], small["average_cost"]], [0, 0, 0.0])

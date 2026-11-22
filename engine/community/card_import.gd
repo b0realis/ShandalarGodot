@@ -923,3 +923,19 @@ static func _pattern(source: String) -> RegEx:
 	if not _rx.has(source):
 		_rx[source] = RegEx.create_from_string(source)
 	return _rx[source]
+
+
+# --------------------------------------------------------- the rules whole --
+
+## THE DRAFT THAT KEEPS [param data]'s RULES WHOLE: its frame, and
+## `rules_of` — the card itself under another name, the game's own script,
+## where [method from_card] could only say a part. `{spec, notes}`.
+static func whole(data: CardData) -> Dictionary:
+	var notes: Array[String] = []
+	var spec := _frame(data, notes)
+	spec["rules_of"] = data.card_name
+	# Subtypes that could not all be written stay the card's own.
+	if notes.has("Not every subtype could be kept."):
+		spec.erase("subtypes")
+		notes.erase("Not every subtype could be kept.")
+	return {"spec": spec, "notes": notes}

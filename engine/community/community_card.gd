@@ -526,6 +526,12 @@ static func problems(spec: Variant) -> Array[String]:
 	for l in _list(s.get("landwalk")):
 		if not LANDS.has(l):
 			out.append("Landwalk is plainswalk, islandwalk, swampwalk, mountainwalk or forestwalk.")
+	# A card that keeps a game card's rules: whether the pool has that card
+	# now is not asked here ([method pool_problems]) — a card is the same
+	# card whichever packs are switched on.
+	var kept := String(s.get("rules_of", "")).strip_edges()
+	if s.has("rules_of") and (kept == "" or kept.length() > 60):
+		out.append("rules_of names a game card (1 to 60 characters).")
 	_look_problems(out, s.get("look", {}))
 	_rule_problems(out, s.get("rules", {}), types)
 	if s.get("rules") is Dictionary and (s["rules"] as Dictionary).has("enters_x_counters") \
@@ -720,7 +726,9 @@ static func problems(spec: Variant) -> Array[String]:
 					out.append(where + "choose what the Aura does.")
 			_:
 				out.append(where + "unknown kind \"%s\"." % kind)
-	if spell_like and spells + modals == 0:
+	if kept != "" and modals + auras > 0:
+		out.append("A card that keeps %s's rules takes abilities on top, not a second \"Choose one\" or Aura." % kept)
+	if spell_like and spells + modals == 0 and kept == "":
 		out.append("An instant or a sorcery needs a spell effect.")
 	if modals > 1 or (modals == 1 and spells > 0):
 		out.append("A \"Choose one\" spell has its modes and nothing else.")
@@ -728,6 +736,46 @@ static func problems(spec: Variant) -> Array[String]:
 		out.append("Buyback is not offered on a \"Choose one\" spell.")
 	if auras > 1:
 		out.append("An Aura enchants one thing: one Aura ability.")
+	return out
+
+
+## THE CARD WHOSE RULES IT KEEPS (`rules_of`): the game's own card of
+## that name, null when the spec names none or the pool has none such now.
+static func base_of(spec: Dictionary) -> CardData:
+	var base_name := String(spec.get("rules_of", "")).strip_edges() if spec.get("rules_of", "") is String else ""
+	return CardRegistry.game_card(base_name) if base_name != "" else null
+
+
+## WHAT THE POOL OF NOW SAYS of a card that keeps a game card's rules
+## ([] for any other card): that card must be in the pool, and what its
+## rules lean on stays as it has it — its card types, an {X} in its cost,
+## a power and toughness its rules set. Asked on every load of the pool
+## and by the editor; never kept with the card's file.
+static func pool_problems(spec: Variant) -> Array[String]:
+	var out: Array[String] = []
+	if not spec is Dictionary or not spec.get("rules_of", "") is String:
+		return out
+	var s: Dictionary = spec
+	var base_name := String(s.get("rules_of", "")).strip_edges()
+	if base_name == "":
+		return out
+	var base := base_of(s)
+	if base == null:
+		out.append("It keeps the rules of \"%s\", a card the game does not have now (is its pack switched on?)." % base_name.left(60))
+		return out
+	var mask := 0
+	for t in _list(s.get("types")):
+		mask |= int(TYPES.get(t, 0))
+	if mask != base.types:
+		out.append("A card that keeps %s's rules keeps its card types." % base.card_name)
+	var cost := String(s.get("cost", "")) if s.get("cost", "") is String else ""
+	var base_cost := base.cost.text if base.cost != null else ""
+	if (mask & Mtg.CardType.LAND) == 0 and base_cost.contains("{X}") != cost.contains("{X}"):
+		out.append("%s's rules read %s: the mana cost %s." % [base.card_name,
+			"X" if base_cost.contains("{X}") else "no X",
+			"keeps {X}" if base_cost.contains("{X}") else "has no {X}"])
+	if (s.get("rules") is Dictionary and (s["rules"] as Dictionary).has("pt_count")) and base.characteristic_definition.is_valid():
+		out.append("%s's rules set its power and toughness already." % base.card_name)
 	return out
 
 
@@ -751,7 +799,7 @@ static func _shape_problems(s: Dictionary) -> Array[String]:
 		_want(out, s, key, "words", true)
 	for key in ["power", "toughness"]:
 		_want(out, s, key, "whole", true)
-	for key in ["rarity", "artist", "set_name", "flavor"]:
+	for key in ["rarity", "artist", "set_name", "flavor", "rules_of"]:
 		_want(out, s, key, "text", true)
 	if _want(out, s, "look", "object", true):
 		var look: Dictionary = s["look"]
@@ -1165,15 +1213,45 @@ static func build(spec: Dictionary) -> CardData:
 	for t in _list(spec.get("types")):
 		types |= int(TYPES[t])
 	var name := String(spec["name"]).strip_edges()
-	var data := CardData.new(name, String(spec.get("cost", "")), types)
-	if types & Mtg.CardType.CREATURE:
-		data.pt(int(spec.get("power", 1)), int(spec.get("toughness", 1)))
+	var data: CardData
+	var kept := String(spec.get("rules_of", "")).strip_edges() != ""
+	if kept:
+		# THE RULES OF A GAME CARD, WHOLE: that card under this name — its
+		# own abilities, the game's script — with this card's cost, power
+		# and toughness and subtypes, and whatever the spec adds on top.
+		var base := base_of(spec)
+		if base == null:
+			# The pool has no such card now ([method pool_problems] says so
+			# and the pool leaves the card out): its frame, to be looked at.
+			var shown := CardData.new(name, String(spec.get("cost", "")), types)
+			if types & Mtg.CardType.CREATURE:
+				shown.pt(int(spec.get("power", 1)), int(spec.get("toughness", 1)))
+			shown.with_subtypes(_list(spec.get("subtypes")))
+			shown.oracle(rules_text(spec))
+			shown.flavor_text = String(spec.get("flavor", ""))
+			return shown
+		data = base.copy_named(name)
+		data.artist = ""   # nothing of the game card's picture comes with it
+		data.set_code = ""
+		types = data.types
+		if (types & Mtg.CardType.LAND) == 0:
+			data.cost = ManaCost.parse(String(spec.get("cost", "")))
+		if (types & Mtg.CardType.CREATURE) and not base.characteristic_definition.is_valid():
+			data.pt(int(spec.get("power", base.power)), int(spec.get("toughness", base.toughness)))
+		if spec.has("subtypes") and (types & (Mtg.CardType.CREATURE | Mtg.CardType.LAND)):
+			data.subtypes.clear()
+	else:
+		data = CardData.new(name, String(spec.get("cost", "")), types)
+		if types & Mtg.CardType.CREATURE:
+			data.pt(int(spec.get("power", 1)), int(spec.get("toughness", 1)))
 	if _list(spec.get("supertypes")).has("legendary"):
 		data.with_supertypes(Mtg.Supertype.LEGENDARY)
-	data.with_subtypes(_list(spec.get("subtypes")))
+	if not kept or data.subtypes.is_empty():
+		data.with_subtypes(_list(spec.get("subtypes")))
 	var kws: Array = []
 	for k in _list(spec.get("keywords")):
-		kws.append(KEYWORDS[k])
+		if not data.keywords.has(KEYWORDS[k]):
+			kws.append(KEYWORDS[k])
 	data.with_keywords(kws)
 	var mask := 0
 	for c in _list(spec.get("protection")):
@@ -1183,7 +1261,7 @@ static func build(spec: Dictionary) -> CardData:
 	if not _list(spec.get("landwalk")).is_empty():
 		data.with_landwalk(_list(spec.get("landwalk")))
 	# A land of a basic type taps for its color (a dual land's way).
-	if types & Mtg.CardType.LAND:
+	if (types & Mtg.CardType.LAND) and not kept:
 		for basic in _basic_types(spec):
 			data.mana(ManaAbility.new(int(MANA_COLORS[BASIC_COLORS[basic]])))
 	for a in spec.get("abilities", []):
@@ -2715,6 +2793,21 @@ static func _scaled(e: Dictionary, times: int) -> Dictionary:
 ## THE RULES TEXT, written from the blocks: the keywords line, protection
 ## and landwalk, the card rules, then each ability's sentence, one a line.
 static func rules_text(spec: Dictionary) -> String:
+	var base := base_of(spec)
+	if base == null:
+		var missing := String(spec.get("rules_of", "")).strip_edges() if spec.get("rules_of", "") is String else ""
+		return _own_text(spec) if missing == "" else "(The rules of %s, a card the game does not have now.)" % missing
+	# The card's own words under this card's name, then what was added.
+	var name := String(spec.get("name", "")).strip_edges()
+	var kept := base.oracle_text if name == "" else base.oracle_text.replace(base.card_name, name)
+	var more := spec.duplicate()
+	more.erase("subtypes")   # a kept land's types tap as its own rules say
+	var added := _own_text(more)
+	return kept if added == "" else (added if kept == "" else kept + "\n" + added)
+
+
+## The rules text of what the spec itself says (without a kept card's).
+static func _own_text(spec: Dictionary) -> String:
 	var name := String(spec.get("name", "")).strip_edges()
 	var lines: Array[String] = []
 	var words: Array[String] = []

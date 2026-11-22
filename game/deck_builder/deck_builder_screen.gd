@@ -5441,6 +5441,7 @@ func _open_stats() -> void:
 	# A fresh deal each time the window opens: the deck may have changed
 	# since the last one, and a sample from the old deck would lie.
 	_sample = null
+	_trials = {}
 	for i in STATS_PAGES.size():
 		# 88 wide: six of them and five gaps fill the 560 the scroller has,
 		# and `Matchups` still sits inside its bevel at that width.
@@ -5636,6 +5637,10 @@ var _stats_pages: VBoxContainer = null
 ## the Mana page and come back to the same seven. Dealt on the page's
 ## first showing; dropped when the window opens again.
 var _sample: SampleHand = null
+
+## What a thousand opening hands held ([method SampleHand.trials]), while
+## the Hand page shows it in place of the cards; {} for the hand itself.
+var _trials: Dictionary = {}
 
 
 ## Swap to page [param index], and let the tab row show which one it is.
@@ -6018,6 +6023,7 @@ func _stats_page_hand(page: VBoxContainer) -> void:
 	buttons.add_theme_constant_override("separation", 8)
 	var fresh := OriginalDialog.button("New hand", Vector2(96, 24))
 	fresh.pressed.connect(func() -> void:
+		_trials = {}
 		sample.new_hand()
 		_refill_hand_page())
 	buttons.add_child(fresh)
@@ -6025,16 +6031,29 @@ func _stats_page_hand(page: VBoxContainer) -> void:
 		Vector2(112, 24))
 	again.disabled = not sample.may_mulligan()
 	again.pressed.connect(func() -> void:
+		_trials = {}
 		sample.mulligan()
 		_refill_hand_page())
 	buttons.add_child(again)
 	var draw := OriginalDialog.button("Next turn", Vector2(96, 24))
 	draw.disabled = sample.library_size() == 0
 	draw.pressed.connect(func() -> void:
+		_trials = {}
 		sample.next_turn()
 		_refill_hand_page())
 	buttons.add_child(draw)
+	# A THOUSAND OPENING HANDS, dealt and counted: what one hand cannot say.
+	var many := OriginalDialog.button("%d hands" % TRIAL_RUNS, Vector2(104, 24))
+	many.name = "StatsThousandHands"
+	many.tooltip_text = "Deal %d opening hands of seven and count what they held." % TRIAL_RUNS
+	many.pressed.connect(func() -> void:
+		_trials = SampleHand.trials(deck, TRIAL_RUNS)
+		_refill_hand_page())
+	buttons.add_child(many)
 	page.add_child(buttons)
+	if not _trials.is_empty():
+		_stats_trials(page, _trials)
+		return
 	# The cards, four to a row: 4 x 132 and three 8 px gaps is 552 of the
 	# scroller's 560. A CardArea would bring paging, badges and a drag
 	# payload the page has no use for; the faces are dressed the way its
@@ -6048,6 +6067,61 @@ func _stats_page_hand(page: VBoxContainer) -> void:
 	if sample.hand.is_empty():
 		page.add_child(OriginalDialog.label(
 			"An empty hand — the seventh mulligan draws nothing.", 12))
+
+
+## How many opening hands the Hand page's count deals.
+const TRIAL_RUNS := 1000
+const TRIAL_COLOR_WORDS := {Mtg.ManaColor.W: "white", Mtg.ManaColor.U: "blue", Mtg.ManaColor.B: "black",
+	Mtg.ManaColor.R: "red", Mtg.ManaColor.G: "green"}
+
+
+## WHAT A THOUSAND OPENING HANDS HELD ([param t], [method
+## SampleHand.trials]), under the Hand page's buttons in place of the
+## cards: the lands as bars, the hands that fail, which lands came, the
+## colors the hand's mana made, what there was to play, the spells seen
+## most. Dealt, not computed: press again and the last digit moves.
+func _stats_trials(page: VBoxContainer, t: Dictionary) -> void:
+	var runs := int(t["runs"])
+	var share := func(n: int) -> String: return "%d  (%s)" % [n, _pct(float(n) / runs)]
+	page.add_child(_stats_head("%d opening hands of %d, dealt and counted" % [runs, int(t["hand"])]))
+	var lands: Array = t["lands"]
+	for k in lands.size():
+		page.add_child(_bar_row("%d land%s" % [k, "" if k == 1 else "s"], int(lands[k]), runs,
+			Color8(196, 176, 120) if k >= 2 and k <= 5 else Color8(150, 120, 110),
+			"%d  (%s)" % [int(lands[k]), _pct(float(lands[k]) / runs)], false))
+	page.add_child(_stats_line("Lands in a hand, on average", "%.2f" % float(t["average_lands"])))
+	page.add_child(_stats_line("Keepable (2-5 lands)", share.call(int(t["keepable"]))))
+	page.add_child(_stats_line("   no land at all", share.call(int(t["no_land"]))))
+	page.add_child(_stats_line("   nothing but land", share.call(int(t["all_land"]))))
+	var names: Array = t["land_names"]
+	if not names.is_empty():
+		page.add_child(_stats_head("Which lands came"))
+		page.add_child(OriginalDialog.label("Hands that held at least one, and how many a hand that had it held.", 12))
+		for row: Dictionary in names.slice(0, 10):
+			page.add_child(_stats_line("   " + String(row["name"]), "%s,  %.2f each" % [share.call(int(row["hands"])),
+				float(row["copies"]) / maxi(int(row["hands"]), 1)]))
+		if names.size() > 10:
+			page.add_child(OriginalDialog.label("   and %d more." % (names.size() - 10), 12))
+	var colors: Array = t["colors"]
+	if not colors.is_empty():
+		page.add_child(_stats_head("The mana the hand could make"))
+		for row: Dictionary in colors:
+			page.add_child(_stats_line("   a source of %s" % String(TRIAL_COLOR_WORDS.get(int(row["color"]), "?")),
+				share.call(int(row["hands"]))))
+		if colors.size() > 1:
+			page.add_child(_stats_line("   every color your spells ask for", share.call(int(t["every_color"]))))
+	page.add_child(_stats_head("Something to play"))
+	page.add_child(OriginalDialog.label("By the number of lands in the hand; colors are counted above.", 12))
+	page.add_child(_stats_line("   a play on turn one", share.call(int(t["turn_one"]))))
+	page.add_child(_stats_line("   a play by turn two", share.call(int(t["turn_two"]))))
+	page.add_child(_stats_line("   a spell its own lands pay for", share.call(int(t["castable"]))))
+	page.add_child(_stats_line("   a creature in hand", share.call(int(t["creature"]))))
+	page.add_child(_stats_line("Mana value of a spell held, on average", "%.2f" % float(t["average_cost"])))
+	var seen: Array = t["seen"]
+	if not seen.is_empty():
+		page.add_child(_stats_head("The spells seen most"))
+		for row: Dictionary in seen.slice(0, 6):
+			page.add_child(_stats_line("   " + String(row["name"]), share.call(int(row["hands"]))))
 
 
 ## The Hand page again, after a button: the page holder is emptied and

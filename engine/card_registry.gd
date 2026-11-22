@@ -58,6 +58,7 @@ static var _community_names: Array[String] = []
 ## The same names as a set (asked once per card by sheets and filters).
 static var _community_set: Dictionary = {}
 static var _community_skipped: Array[String] = []
+static var _community_waiting: Array[String] = []
 
 ## Root folder scanned for set subfolders.
 const SETS_ROOT := "res://cards/sets"
@@ -466,15 +467,26 @@ static func _load_community() -> void:
 	_community_names.clear()
 	_community_set.clear()
 	_community_skipped.clear()
+	_community_waiting.clear()
 	# A name the pool has in any case ("lightning bolt") stays the game's.
+	# A GAME CARD'S NAME STAYS THE GAME'S, however it is spelled ([method
+	# name_key]: "serra-angel", "Dandan"); two community cards are told
+	# apart as before, in any case.
+	var game := {}
 	var taken := {}
 	for name in _cards:
+		game[name_key(String(name))] = true
 		taken[String(name).to_lower()] = true
 	for spec in _community_specs:
 		if not spec is Dictionary or not CommunityCard.problems(spec).is_empty():
 			continue
 		var name := String(spec["name"]).strip_edges()
-		if taken.has(name.to_lower()):
+		# A card that keeps the rules of a card not in the pool now (its
+		# pack is off) waits, and is said with the ones left out.
+		if not CommunityCard.pool_problems(spec).is_empty():
+			_community_waiting.append(name)
+			continue
+		if taken.has(name.to_lower()) or game.has(name_key(name)):
 			_community_skipped.append(name)
 			continue
 		var data := CommunityCard.build(spec)
@@ -489,6 +501,15 @@ static func _load_community() -> void:
 		_community_set[name] = true
 
 
+## The game's own card named exactly [param card_name], null for none
+## and for a community card: what a community card may keep the rules of.
+static func game_card(card_name: String) -> CardData:
+	ensure_loaded()
+	if not _cards.has(card_name) or _community_set.has(card_name):
+		return null
+	return _cards[card_name]
+
+
 ## The community cards in the pool, by name.
 static func community_names() -> Array[String]:
 	ensure_loaded()
@@ -498,6 +519,7 @@ static func community_names() -> Array[String]:
 ## lowercase name → name, for [method game_name_like] (rebuilt per pool).
 static var _lower_names: Dictionary = {}
 static var _lower_revision := -1
+static var _lower_count := -1
 
 
 ## Whether [param card_name] is a community card the pool took.
@@ -506,17 +528,45 @@ static func has_community(card_name: String) -> bool:
 	return _community_set.has(card_name)
 
 
-## The game's own card named [param card_name] in any case ("" for none):
-## a community card may not take a game card's name, however it is spelled.
+## A NAME AS IT IS COMPARED, so that no card can pass for one of the
+## game's: lower case, accents written plain, and nothing but letters and
+## digits — "Serra  Angel", "serra-angel", "Dandan" and "Will o the Wisp"
+## are the game's Serra Angel, Dandân and Will-o'-the-Wisp.
+const _PLAIN := {"á": "a", "à": "a", "â": "a", "ä": "a", "ã": "a", "å": "a", "é": "e", "è": "e", "ê": "e",
+	"ë": "e", "í": "i", "ì": "i", "î": "i", "ï": "i", "ó": "o", "ò": "o", "ô": "o", "ö": "o", "õ": "o",
+	"ú": "u", "ù": "u", "û": "u", "ü": "u", "ç": "c", "ñ": "n", "æ": "ae", "œ": "oe", "ß": "ss"}
+static func name_key(card_name: String) -> String:
+	var out := ""
+	for ch in card_name.to_lower():
+		var c := String(_PLAIN.get(ch, ch))
+		for one in c:
+			var code := one.unicode_at(0)
+			if (code >= 97 and code <= 122) or (code >= 48 and code <= 57):
+				out += one
+	return out
+
+
+## The game's own card [param card_name] would pass for ("" for none): the
+## same name in any case, with or without its accents, spaces and signs
+## ([method name_key]). A community card may not take a game card's name,
+## however it is spelled — the game's cards are never replaced.
 static func game_name_like(card_name: String) -> String:
 	ensure_loaded()
-	if _lower_revision != revision or _lower_names.size() != _cards.size():
+	if _lower_revision != revision or _lower_count != _cards.size():
 		_lower_names.clear()
 		for name in _cards:
-			_lower_names[String(name).to_lower()] = String(name)
+			if not _community_set.has(name):
+				_lower_names[name_key(String(name))] = String(name)
 		_lower_revision = revision
-	var found := String(_lower_names.get(card_name.strip_edges().to_lower(), ""))
-	return "" if found == "" or _community_set.has(found) else found
+		_lower_count = _cards.size()
+	return String(_lower_names.get(name_key(card_name), ""))
+
+
+## The community cards left out because the game card whose rules they
+## keep is not in the pool now.
+static func community_waiting() -> Array[String]:
+	ensure_loaded()
+	return _community_waiting.duplicate()
 
 
 ## The community cards left out because the pool already had their name.

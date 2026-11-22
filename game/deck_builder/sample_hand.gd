@@ -146,6 +146,119 @@ static func is_land_name(card_name: String) -> bool:
 	return data != null and data.is_land()
 
 
+## MANY OPENING HANDS, COUNTED: [param runs] fresh sevens of [param deck]
+## (each a whole shuffle, as [method new_hand] deals), and what they held.
+## The Draws page says what the arithmetic knows; this says what only
+## dealing shows — which lands came, whether the hand's lands made the
+## colors its spells ask for, whether it had anything to play.
+##
+## `{runs, hand, lands: [hands with 0..hand lands], average_lands,
+## no_land, all_land, keepable (2 to 5), land_names: [{name, hands,
+## copies}], colors: [{color, hands}] (a source of each color the deck's
+## spells ask for), every_color, creature, turn_one, turn_two (a spell of
+## that cost or less, and the lands for it, by count), castable (a spell
+## the hand's own lands pay for, by count), average_cost (of the spells
+## held), seen: [{name, hands}] (the spells held most often)}`; `hands`
+## are counts of [param runs]. {} for an empty deck.
+static func trials(deck: DeckModel, runs := 1000, p_seed := -1) -> Dictionary:
+	var sample := SampleHand.new(deck, p_seed)
+	if sample.deck_size() == 0 or runs <= 0:
+		return {}
+	# What each name is, asked once.
+	var facts := {}
+	var wanted := {}
+	for card_name in deck.names():
+		var data := DeckModel._card(card_name)
+		var fact := {"land": false, "creature": false, "cost": 0, "makes": []}
+		if data != null:
+			fact["land"] = data.is_land()
+			fact["creature"] = data.is_creature()
+			fact["cost"] = data.cost.mana_value() if data.cost != null and not data.is_land() else 0
+			fact["makes"] = MiniCard.mana_colors(data)
+			if not data.is_land() and data.cost != null:
+				for color in Mtg.WUBRG:
+					if (data.cost.color_mask() & color) != 0:
+						wanted[color] = true
+		facts[card_name] = fact
+	var size := mini(7, sample.deck_size())
+	var lands: Array[int] = []
+	lands.resize(size + 1)
+	lands.fill(0)
+	var land_hands := {}
+	var land_copies := {}
+	var color_hands := {}
+	for color in wanted:
+		color_hands[color] = 0
+	var seen := {}
+	var out := {"runs": runs, "hand": size, "no_land": 0, "all_land": 0, "keepable": 0, "every_color": 0,
+		"creature": 0, "turn_one": 0, "turn_two": 0, "castable": 0}
+	var land_total := 0
+	var cost_total := 0
+	var spell_total := 0
+	for run in runs:
+		sample._deal(size)
+		var n := 0
+		var made := {}
+		var held := {}
+		var creature := false
+		var cheapest := 99
+		for card_name in sample.hand:
+			var fact: Dictionary = facts.get(card_name, {})
+			held[card_name] = int(held.get(card_name, 0)) + 1
+			for color: int in fact.get("makes", []):
+				made[color] = true
+			if bool(fact.get("land", false)):
+				n += 1
+				land_copies[card_name] = int(land_copies.get(card_name, 0)) + 1
+			else:
+				creature = creature or bool(fact.get("creature", false))
+				cheapest = mini(cheapest, int(fact.get("cost", 0)))
+				cost_total += int(fact.get("cost", 0))
+				spell_total += 1
+		for card_name in held:
+			if bool((facts.get(card_name, {}) as Dictionary).get("land", false)):
+				land_hands[card_name] = int(land_hands.get(card_name, 0)) + 1
+			else:
+				seen[card_name] = int(seen.get(card_name, 0)) + 1
+		lands[n] += 1
+		land_total += n
+		out["no_land"] += 1 if n == 0 else 0
+		out["all_land"] += 1 if n == size else 0
+		out["keepable"] += 1 if n >= 2 and n <= 5 else 0
+		out["creature"] += 1 if creature else 0
+		out["turn_one"] += 1 if n >= 1 and cheapest <= 1 else 0
+		out["turn_two"] += 1 if (n >= 1 and cheapest <= 1) or (n >= 2 and cheapest <= 2) else 0
+		out["castable"] += 1 if n >= 1 and cheapest <= n else 0
+		var every := true
+		for color in color_hands:
+			if made.has(color):
+				color_hands[color] += 1
+			else:
+				every = false
+		out["every_color"] += 1 if every else 0
+	out["lands"] = lands
+	out["average_lands"] = float(land_total) / runs
+	out["average_cost"] = float(cost_total) / spell_total if spell_total > 0 else 0.0
+	var land_rows: Array = []
+	for card_name in land_hands:
+		land_rows.append({"name": card_name, "hands": int(land_hands[card_name]), "copies": int(land_copies[card_name])})
+	land_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a["hands"] > b["hands"] if a["hands"] != b["hands"] else String(a["name"]) < String(b["name"]))
+	out["land_names"] = land_rows
+	var color_rows: Array = []
+	for color in Mtg.WUBRG:
+		if color_hands.has(color):
+			color_rows.append({"color": color, "hands": int(color_hands[color])})
+	out["colors"] = color_rows
+	var seen_rows: Array = []
+	for card_name in seen:
+		seen_rows.append({"name": card_name, "hands": int(seen[card_name])})
+	seen_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a["hands"] > b["hands"] if a["hands"] != b["hands"] else String(a["name"]) < String(b["name"]))
+	out["seen"] = seen_rows
+	return out
+
+
 ## Shuffle the whole deck and draw [param count] off the top. Turn one.
 func _deal(count: int) -> void:
 	turn = 1

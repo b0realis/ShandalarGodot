@@ -678,7 +678,7 @@ func test_a_name_of_any_card_pack_is_refused_and_a_left_out_card_is_said() -> vo
 		# A card of a pack that is switched off now: not in the pool, refused all the same.
 		assert_eq(CardRegistry.game_name_like(off), "")
 		var zip := _root.path_join("clash.zip")
-		assert_eq(CommunityCards.write_zip(zip, _spec(off), {}, _icon()), "")
+		assert_eq(CommunityCards.write_zip(zip, _spec(off), {}, _icon(), true), "")
 		var done := CommunityCards.import_file(zip)
 		assert_eq(done["names"], [] as Array[String])
 		assert_string_contains(String(done["problems"][0]), "already in the game")

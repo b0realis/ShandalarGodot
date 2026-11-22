@@ -168,7 +168,7 @@ func test_the_crop_cuts_the_art_window_and_moves_and_zooms() -> void:
 
 
 func test_a_name_the_game_already_has_is_left_out() -> void:
-	CommunityCards.write_zip(_root.path_join("a/bolt.zip"), _spec("Lightning Bolt"), _art(), _icon())
+	CommunityCards.write_zip(_root.path_join("a/bolt.zip"), _spec("Lightning Bolt"), _art(), _icon(), true)
 	CommunityCards.refresh()
 	assert_eq(CardRegistry.community_skipped(), ["Lightning Bolt"] as Array[String])
 	assert_eq(CardRegistry.get_card("Lightning Bolt").set_code, "2ed", "the game's own card stays")
@@ -262,7 +262,7 @@ func test_saving_goes_over_the_card_s_own_zip_and_never_over_another_card() -> v
 func test_names_are_told_apart_in_any_case() -> void:
 	CommunityCards.write_zip(_root.path_join("a/one.zip"), _spec("Elf Lord"), _art(), _icon())
 	CommunityCards.write_zip(_root.path_join("b/two.zip"), _spec("ELF LORD"), _art(), _icon())
-	CommunityCards.write_zip(_root.path_join("a/bolt.zip"), _spec("lightning bolt"), _art(), _icon())
+	CommunityCards.write_zip(_root.path_join("a/bolt.zip"), _spec("lightning bolt"), _art(), _icon(), true)
 	CommunityCards.refresh()
 	assert_true(CardRegistry.has_card("Elf Lord"))
 	assert_false(CardRegistry.has_card("ELF LORD"), "the second spelling is refused")
@@ -271,8 +271,34 @@ func test_names_are_told_apart_in_any_case() -> void:
 	assert_eq(CardRegistry.game_name_like("Elf Lord"), "", "a community card is not a game card")
 
 
+func test_no_card_passes_for_one_of_the_game_s_however_it_is_spelled() -> void:
+	# Accents written plain, other spacing, other signs: the game's card.
+	for pair in [["Dandan", "Dandân"], ["serra-angel", "Serra Angel"],
+			["SerraAngel", "Serra Angel"], ["Will o the Wisp", "Will-o'-the-Wisp"], ["Lightning, Bolt", "Lightning Bolt"]]:
+		if not CardRegistry.has_card(String(pair[1])):
+			continue
+		assert_eq(CardRegistry.game_name_like(String(pair[0])), String(pair[1]))
+		assert_eq(CommunityCards.game_card_like(String(pair[0])), String(pair[1]))
+		# Its file is never written by the game...
+		var path := _root.path_join("a/like.zip")
+		assert_eq(CommunityCards.write_zip(path, _spec(String(pair[0])), _art(), _icon()),
+			"A card named %s is already in the game." % String(pair[1]))
+		assert_false(FileAccess.file_exists(path))
+		# ...and one made elsewhere is left out of the pool.
+		CommunityCards.write_zip(path, _spec(String(pair[0])), _art(), _icon(), true)
+		CommunityCards.refresh()
+		assert_false(CardRegistry.has_community(String(pair[0])), String(pair[0]))
+		assert_true(CardRegistry.community_skipped().has(String(pair[0])))
+		DirAccess.remove_absolute(path)
+	CommunityCards.refresh()
+	# The game's card is the object it was, with its own cost.
+	var bolt := CardRegistry.get_card("Lightning Bolt")
+	assert_eq([bolt.card_name, bolt.cost.text], ["Lightning Bolt", "{R}"])
+	assert_eq(CardRegistry.game_name_like("Serra Angle"), "", "another name is another card")
+
+
 func test_a_zip_named_like_a_game_card_tags_nothing() -> void:
-	CommunityCards.write_zip(_root.path_join("a/bears.zip"), _spec("Grizzly Bears"), _art(), _icon())
+	CommunityCards.write_zip(_root.path_join("a/bears.zip"), _spec("Grizzly Bears"), _art(), _icon(), true)
 	CommunityCards.refresh()
 	assert_false(CommunityCards.is_community("Grizzly Bears"))
 	assert_false(CardRegistry.extra_set_order().has(CommunityCard.SET_CODE), "no empty Community row")

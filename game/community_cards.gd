@@ -1309,8 +1309,8 @@ static func game_card_like(card_name: String) -> String:
 				HomelandsPack.names(), AlliancesPack.names(), PortalPack.names(), FifthEditionPack.names(),
 				MirageBlockPack.names(), TempestBlockPack.names(), UrzaBlockPack.names()]:
 			for each in names:
-				_pack_names[String(each).to_lower()] = String(each)
-	return String(_pack_names.get(card_name.strip_edges().to_lower(), ""))
+				_pack_names[CardRegistry.name_key(String(each))] = String(each)
+	return String(_pack_names.get(CardRegistry.name_key(card_name), ""))
 
 
 ## One line for a screen to show when community cards are left out of the
@@ -1318,17 +1318,25 @@ static func game_card_like(card_name: String) -> String:
 ## card pack switched on since the card was made or taken.
 static func skipped_notice() -> String:
 	var names := CardRegistry.community_skipped()
-	if names.is_empty():
-		return ""
-	names.sort()
-	var shown := ", ".join(names.slice(0, 6)) + (" and %d more" % (names.size() - 6) if names.size() > 6 else "")
-	return "Not in play, as the game has %s of the same name: %s. Decks play the game's card; rename yours to use it." \
-		% ["a card" if names.size() == 1 else "cards", shown]
+	var lines: Array[String] = []
+	if not names.is_empty():
+		names.sort()
+		var shown := ", ".join(names.slice(0, 6)) + (" and %d more" % (names.size() - 6) if names.size() > 6 else "")
+		lines.append("Not in play, as the game has %s of the same name: %s. Decks play the game's card; rename yours to use it." \
+			% ["a card" if names.size() == 1 else "cards", shown])
+	# A card that keeps the rules of a game card whose pack is off now.
+	var waiting := CardRegistry.community_waiting()
+	if not waiting.is_empty():
+		waiting.sort()
+		var shown := ", ".join(waiting.slice(0, 6)) + (" and %d more" % (waiting.size() - 6) if waiting.size() > 6 else "")
+		lines.append("Not in play until the card pack of the game card whose rules %s is switched on: %s." \
+			% ["it keeps" if waiting.size() == 1 else "they keep", shown])
+	return " ".join(lines)
 
 
 ## Write [param spec], its art and its icon (`{bytes, kind}` each, the art
 ## may be {}) as one zip at [param path]: "" when written, else why not.
-static func write_zip(path: String, spec: Dictionary, art: Dictionary, icon: Dictionary) -> String:
+static func write_zip(path: String, spec: Dictionary, art: Dictionary, icon: Dictionary, as_made_elsewhere := false) -> String:
 	var problems := CommunityCard.problems(spec)
 	if not problems.is_empty():
 		return problems[0]
@@ -1340,6 +1348,13 @@ static func write_zip(path: String, spec: Dictionary, art: Dictionary, icon: Dic
 		why = art_problem(art["bytes"], String(art["kind"]))
 	if why != "":
 		return why
+	# THE LAST DOOR: no file of a card that would pass for one of the
+	# game's is ever written, whoever asks.
+	# ([param as_made_elsewhere]: a test writes the zip a stranger's tool
+	# would, to see it refused where it is read.)
+	var game_card := "" if as_made_elsewhere else game_card_like(String(spec["name"]))
+	if game_card != "":
+		return "A card named %s is already in the game." % game_card
 	var top := file_name(String(spec["name"]))
 	var zip := ZIPPacker.new()
 	# Written beside, then put in place: a failed write never loses the
