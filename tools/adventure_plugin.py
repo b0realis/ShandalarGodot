@@ -7644,7 +7644,7 @@ def command_preview(args, game: Game) -> int:
              "" if sum(len(result["data"]["sites"]["sites"][key]["panes"]) for key in places) == 1 else "s"))
     if args.open:
         import webbrowser
-        webbrowser.open(target.resolve().as_uri())
+        webbrowser.open_new_tab(target.resolve().as_uri())
     return 0
 
 
